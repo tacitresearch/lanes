@@ -30,6 +30,7 @@ import Tests.Auth
 import Tests.Clients
 import Tests.Lease
 import Tests.Lint
+import Tests.Oracle.All
 
 /-!
 The test driver behind `lake test`: the pure tests and the live runtime tests, well under a
@@ -73,12 +74,13 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.Fair.tests ++ Tests.Codec.tests ++ Tests.Durable.fileTests ++ Tests.Split.tests
     ++ Tests.Peers.tests ++ Tests.Courier.tests ++ Tests.Mailbox.tests ++ Tests.Batch.tests
     ++ Tests.Crypto.tests ++ Tests.Auth.tests ++ Tests.Clients.tests ++ Tests.Lease.tests
+    ++ Tests.Oracle.unitTests
   match args with
   | [] =>
-    let pure := pure ++ (← Tests.Lint.tests)
+    let pure := pure ++ (← Tests.Lint.tests) ++ (← Tests.Oracle.replayAll)
     failures pure
     report (pure ++ (← live)) pure.length
-  | ["fast"] => report (pure ++ (← Tests.Lint.tests))
+  | ["fast"] => report (pure ++ (← Tests.Lint.tests) ++ (← Tests.Oracle.replayAll))
   | ["live"] => report (← live)
   | ["journal-child", path] =>
     Tests.Durable.child path

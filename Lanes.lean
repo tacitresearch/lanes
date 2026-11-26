@@ -49,6 +49,7 @@ public import Lanes.Check.SearchSound
 public import Lanes.Check.System
 public import Lanes.Check.SystemSound
 public import Lanes.Check.WorldEquiv
+public import Lanes.Data.Base64
 public import Lanes.Data.Codec
 public import Lanes.Data.Declare
 public import Lanes.Data.Enum

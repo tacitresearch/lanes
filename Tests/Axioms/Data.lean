@@ -6,6 +6,25 @@ import Lanes.Semantics
 
 /-! The axiom gate (rule 5.5, see `Tests/Axioms.lean`) for the theorems of `Lanes/Data/`. -/
 
+-- Lanes.Data.Base64
+/-- info: 'Lanes.Base64.decode_eq_some_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Base64.decode_eq_some_iff
+
+/-- info: 'Lanes.Base64.decode_encode' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Base64.decode_encode
+
+/-- info: 'Lanes.Base64.allowed_of_mem_encode' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Base64.allowed_of_mem_encode
+
+/-- info: 'Lanes.Base64.length_encode' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Base64.length_encode
+
+/-- info: 'Lanes.Base64.decode_eq_none_of_not_allowed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Base64.decode_eq_none_of_not_allowed
+
+/-- info: 'Lanes.Base64.decode_eq_none_of_length' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Base64.decode_eq_none_of_length
+
 -- Lanes.Data.Codec
 /-- info: 'Lanes.Codec.extTreeMap' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Codec.extTreeMap
