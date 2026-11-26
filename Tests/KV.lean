@@ -77,8 +77,4 @@ def tests : List (String × Bool) :=
           | _ => false)
       | _ => false) ]
 
-/-- The counterexample for the cached variant, for the test log. -/
-def cachedReport : String :=
-  (check true).renderSystem
-
 end Tests.KV

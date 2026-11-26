@@ -1,0 +1,15 @@
+/-
+Copyright (c) 2026 The Lanes Authors. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+-/
+import Tests.Election
+
+/-! The larger model checks. Deterministic: run once per commit, never in a repeat loop. -/
+
+def main : IO UInt32 := do
+  let results := Tests.Election.tests
+  for (name, ok) in results do
+    if !ok then IO.println s!"FAIL {name}"
+  let failed := results.countP (!·.2)
+  IO.println s!"{results.length - failed} passed, {failed} failed"
+  return if failed == 0 then 0 else 1

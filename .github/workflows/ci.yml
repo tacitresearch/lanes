@@ -20,6 +20,8 @@ jobs:
         run: lake exe lanes lint
       - name: Test
         run: lake test
+      - name: Model checks
+        run: lake exe lanesCheck
       - name: Generated app builds and passes its checks
         run: |
           lake exe lanes new demo-app --dir "$RUNNER_TEMP/demo-app" --lanes-path "$GITHUB_WORKSPACE"

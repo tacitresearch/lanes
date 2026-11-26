@@ -14,14 +14,15 @@ departed from the design document, with reasons.
 - Encode invariants in types first, theorems second, runtime asserts only at adapters.
 - Never add sorry, partial, unsafe or an axiom without listing it in TRUSTED.md.
 - On an unexpected state, emit stop; do not add defensive fallbacks.
-- Run `lake build && lake test` before claiming a task is done.
+- Run `lake build && lake test && lake exe lanesCheck` before claiming a task is done.
 
 ## Build
 
 ```bash
 lake exe cache get   # prebuilt Mathlib; never build Mathlib from source
 lake build           # the library
-lake test            # checker, scheduler, runtime and example regression tests
+lake test            # pure tests and live runtime tests, under a second
+lake exe lanesCheck  # larger model checks, about 10 s, deterministic: run once, never in a loop
 lake exe lanes lint  # LANES_STYLE checks
 ```
 
