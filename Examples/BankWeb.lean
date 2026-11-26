@@ -11,7 +11,7 @@ import Examples.Bank
 The bank reference app served over HTTP with a server-rendered page. All state stays in the
 account actors. The browser holds no logic: HTMX swaps in the HTML fragments the server sends.
 
-Run with `lake exe bankWeb` and open http://127.0.0.1:8080.
+Run with `lake exe bankWeb` (`Examples/BankWebMain.lean`) and open http://127.0.0.1:8080.
 -/
 
 namespace Examples.BankWeb
@@ -27,7 +27,7 @@ def toAcct (n : Nat) : Option Acct :=
 def parseAcct (s : String) : Option Acct :=
   s.toNat? >>= toAcct
 
-/-- Links and request matching both come from these, so they cannot disagree. -/
+/-! Links and request matching both come from these routes, so they cannot disagree. -/
 namespace Routes
 
 def home : Http.Route Unit := .get .root
@@ -36,15 +36,17 @@ def transfer : Http.Route Unit := .post (.seg "transfer")
 
 end Routes
 
-/-- One account row. It loads its balance when the page loads and after every transfer. -/
+/-- Sent by a completed transfer; the balances listen for it and reload. -/
+def transferred : String := "transferred"
+
 def AccountRow (account : Acct) : Html :=
   <tr>
     <td>{s!"Account {account}"}</td>
-    <td hx-get={Routes.account.link account} hx-trigger="load, transferred from:body">"…"</td>
+    <td {Hx.request Routes.account account} {Hx.trigger [.load, .fromBody (.event transferred)]}>"…"</td>
   </tr>
 
 def TransferForm : Html :=
-  <form hx-post={Routes.transfer.link ()} hx-target="#result">
+  <form {Hx.request Routes.transfer ()} {Hx.target "#result"}>
     <label>"From " <input name="src" type="number" min="0" max="2" value="0" required/></label>
     <label>" to " <input name="dst" type="number" min="0" max="2" value="1" required/></label>
     <label>" amount " <input name="amount" type="number" min="0" value="10" required/></label>
@@ -79,29 +81,21 @@ def parseTransfer (id : Http.ReqId) (r : Http.Request) : Option (Transfer Acct) 
 
 def bridge : Http.Bridge (sig Acct) where
   decode id r :=
-    if (Routes.home.match? r).isSome then .error (.html Page.document)
-    else if let some n := Routes.account.match? r then
-      match toAcct n with
-      | some account => .ok (.balance id account)
-      | none => .error (.text "no such account\n" 404)
-    else if (Routes.transfer.match? r).isSome then
-      match parseTransfer id r with
-      | some t => .ok (.transfer t)
-      | none => .error (.html (<span class="error">"Invalid transfer."</span>).render 400)
-    else .error (.text "not found\n" 404)
+    (Http.dispatch [
+      Routes.home.handle fun () _ => .error (.html Page.document),
+      Routes.account.handle fun n _ =>
+        match toAcct n with
+        | some account => .ok (.balance id account)
+        | none => .error (.text "no such account\n" 404),
+      Routes.transfer.handle fun () r =>
+        match parseTransfer id r with
+        | some t => .ok (.transfer t)
+        | none => .error (.html (<span class="error">"Invalid transfer."</span>).render 400)
+    ] r).getD (.error (.text "not found\n" 404))
   encode out :=
     let response := Http.Response.html (OutcomeView out.outcome).render
-    -- A completed transfer tells the page to reload the balances.
     some (out.req, match out.outcome with
-      | .accepted => response.withHeader "hx-trigger" "transferred"
+      | .accepted => response.trigger transferred
       | _ => response)
 
 end Examples.BankWeb
-
-open Lanes Examples.Bank Examples.BankWeb in
-def main (args : List String) : IO Unit := do
-  let port := (args.head? >>= String.toNat?).getD 8080
-  let server ← (Http.serve (bank Acct 100) bridge { port := port.toUInt16 }).block
-  IO.println s!"Lanes Bank listening on http://127.0.0.1:{server.port.getD 0}"
-  (← IO.getStdout).flush
-  server.wait.block

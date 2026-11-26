@@ -75,8 +75,20 @@ def pre {α : Type} (name : String) (p : Path α) : Path α where
 
 end Path
 
+/-- The methods a route can have. `HEAD` and `OPTIONS` are answered by the server, not routed. -/
+inductive Verb where
+  | get | post | put | patch | delete
+  deriving DecidableEq, Repr, Hashable
+
+def Verb.method : Verb → Method
+  | .get => .get
+  | .post => .post
+  | .put => .put
+  | .patch => .patch
+  | .delete => .delete
+
 structure Route (α : Type) where
-  method : Method
+  verb : Verb
   path : Path α
 
 namespace Route
@@ -86,11 +98,12 @@ variable {α : Type}
 def get (path : Path α) : Route α := ⟨.get, path⟩
 def post (path : Path α) : Route α := ⟨.post, path⟩
 def put (path : Path α) : Route α := ⟨.put, path⟩
+def patch (path : Path α) : Route α := ⟨.patch, path⟩
 def delete (path : Path α) : Route α := ⟨.delete, path⟩
 
 /-- The value a request carries for this route, if the route matches it entirely. -/
 def match? (r : Route α) (request : Request) : Option α :=
-  if request.method = r.method then
+  if request.method = r.verb.method then
     match r.path.parse request.path with
     | some (a, []) => some a
     | _ => none
@@ -99,9 +112,13 @@ def match? (r : Route α) (request : Request) : Option α :=
 def link (r : Route α) (a : α) : String :=
   "/" ++ "/".intercalate ((r.path.print a).map percentEncode)
 
+/-- What to do with a request this route matches. -/
+def handle {β : Type} (r : Route α) (f : α → Request → β) (request : Request) : Option β :=
+  (r.match? request).map (f · request)
+
 /-- A request made from a route's link is matched by that route, with the same value. -/
 theorem match?_link (r : Route α) (a : α) (request : Request)
-    (hmethod : request.method = r.method) (hpath : request.path = r.path.print a) :
+    (hmethod : request.method = r.verb.method) (hpath : request.path = r.path.print a) :
     r.match? request = some a := by
   have := r.path.sound a []
   simp only [List.append_nil] at this
@@ -115,5 +132,9 @@ theorem decode_link_segments (r : Route α) (a : α) :
   | cons s rest ih => simp [List.mapM_cons, percentDecode_percentEncode, ih]
 
 end Route
+
+/-- The answer of the first handler that matches, as built with `Route.handle`. -/
+def dispatch {β : Type} (handlers : List (Request → Option β)) (request : Request) : Option β :=
+  handlers.findSome? (· request)
 
 end Lanes.Http

@@ -21,6 +21,8 @@ at the template line, and hover and go-to-definition work inside templates.
 - Text is a string literal: `<p>"Hello"</p>`. It is escaped when rendered.
 - `{term}` splices a Lean term as a child (any `ToHtml` type) or as an attribute value (any
   `ToAttr` type). A `Bool` attribute value adds or omits the attribute.
+- `{term}` among the attributes splices a `List Html.Attr`, such as the `Hx` vocabulary gives.
+- `<>…</>` is a fragment: several nodes with no element around them.
 - Attribute names may contain hyphens (`hx-post`, `data-id`) and may be Lean keywords (`class`,
   `for`, `open`).
 - A tag name follows its `<` with no space. With a space, `a < b` is a comparison as usual.
@@ -41,10 +43,12 @@ declare_syntax_cat lanesElem
 scoped syntax sepBy1(rawIdent, "-") "=" str : lanesAttr
 scoped syntax sepBy1(rawIdent, "-") "=" "{" term "}" : lanesAttr
 scoped syntax sepBy1(rawIdent, "-") : lanesAttr
+scoped syntax "{" term "}" : lanesAttr
 /-- `<tag attrs/>`. No space is allowed between `<` and the tag name: that is what tells a tag
 from a comparison such as `count < limit`. -/
 scoped syntax "<" noWs rawIdent lanesAttr* "/>" : lanesElem
 scoped syntax "<" noWs rawIdent lanesAttr* ">" lanesChild* "</" rawIdent ">" : lanesElem
+scoped syntax "<>" lanesChild* "</>" : lanesElem
 scoped syntax str : lanesChild
 scoped syntax "{" term "}" : lanesChild
 scoped syntax lanesElem : lanesChild
@@ -58,13 +62,14 @@ private meta def expandAttr : Syntax → MacroM (TSyntax `term)
     `(Lanes.ToAttr.toAttr $(quote (attrName parts)) ($v : String))
   | `(lanesAttr| $[$parts]-* = { $v }) => `(Lanes.ToAttr.toAttr $(quote (attrName parts)) $v)
   | `(lanesAttr| $[$parts]-*) => `(Lanes.ToAttr.toAttr $(quote (attrName parts)) true)
+  | `(lanesAttr| { $attrs }) => `(($attrs : List Lanes.Html.Attr))
   | _ => Macro.throwUnsupported
 
 private meta def applyArg (f : TSyntax `term) : Syntax → MacroM (TSyntax `term)
   | `(lanesAttr| $name:ident = $v:str) => `($f ($name := $v))
   | `(lanesAttr| $name:ident = { $v }) => `($f ($name := $v))
   | `(lanesAttr| $name:ident) => `($f ($name := true))
-  | stx => Macro.throwErrorAt stx "a component argument needs a plain name, without hyphens"
+  | stx => Macro.throwErrorAt stx "a component argument needs a plain name, without hyphens or braces"
 
 private meta def expandChild : Syntax → MacroM (TSyntax `term)
   | `(lanesChild| $s:str) => `(Lanes.Html.text $s)
@@ -78,6 +83,9 @@ private meta def isComponent (tag : Syntax) : Bool :=
   | [] => false
 
 private meta def expandElem : Syntax → MacroM (TSyntax `term)
+  | `(lanesElem| <> $children* </>) => do
+    let children ← children.mapM (expandChild ·.raw)
+    `(Lanes.Html.fragment [$children,*])
   | `(lanesElem| <$tag $attrs* />) => do
     if isComponent tag then
       attrs.foldlM (fun f a => applyArg f a.raw) (⟨tag.raw⟩ : TSyntax `term)

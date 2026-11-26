@@ -9,11 +9,22 @@ is in `{{Name}}.Counter`.
 open Lanes {{Name}}
 open scoped Lanes.Html
 
+/-! Links, htmx attributes and request matching all come from these routes. -/
+namespace Routes
+
+def home : Http.Route Unit := .get .root
+def count : Http.Route Unit := .get (.seg "count")
+def increment : Http.Route Unit := .post (.seg "increment")
+
+end Routes
+
 def CounterView (response : Response) : Html :=
   <div id="counter">
     <p>{s!"Count: {response.value}"}</p>
     {if response.applied then Html.empty else <p class="error">"The counter is at its limit."</p>}
-    <button hx-post="/increment" hx-target="#counter" hx-swap="outerHTML">"Add one"</button>
+    <button {Hx.request Routes.increment ()} {Hx.target "#counter"} {Hx.swap .outerHTML}>
+      "Add one"
+    </button>
   </div>
 
 def Page : Html :=
@@ -25,18 +36,19 @@ def Page : Html :=
     </head>
     <body>
       <h1>"{{name}}"</h1>
-      <div id="counter" hx-get="/count" hx-trigger="load" hx-swap="outerHTML"></div>
+      <div id="counter" {Hx.request Routes.count ()} {Hx.trigger [.load]} {Hx.swap .outerHTML}>
+      </div>
     </body>
   </html>
 
 /-- Requests are parsed here, once (rule 2.2). -/
 def bridge : Http.Bridge sig where
   decode id request :=
-    match request.method, request.path with
-    | .get, [] => .error (.html Page.document)
-    | .get, ["count"] => .ok (.read id)
-    | .post, ["increment"] => .ok (.increment id)
-    | _, _ => .error (.text "not found\n" 404)
+    (Http.dispatch [
+      Routes.home.handle fun () _ => .error (.html Page.document),
+      Routes.count.handle fun () _ => .ok (.read id),
+      Routes.increment.handle fun () _ => .ok (.increment id)
+    ] request).getD (.error (.text "not found\n" 404))
   encode response := some (response.req, .html (CounterView response).render)
 
 def main (args : List String) : IO Unit := do

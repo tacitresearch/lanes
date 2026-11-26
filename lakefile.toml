@@ -1,6 +1,6 @@
 name = "lanes"
 version = "0.1.0"
-defaultTargets = ["Lanes", "Examples", "Tests", "lanes", "lanesTest", "lanesCheck"]
+defaultTargets = ["Lanes", "Examples", "Tests", "lanes", "lanesTest", "lanesCheck", "bankWeb"]
 testDriver = "lanesTest"
 
 [[require]]
@@ -29,7 +29,7 @@ root = "Tests.CheckMain"
 
 [[lean_exe]]
 name = "bankWeb"
-root = "Examples.BankWeb"
+root = "Examples.BankWebMain"
 
 [[lean_lib]]
 name = "LanesCli"

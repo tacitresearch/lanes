@@ -231,3 +231,44 @@ Why: the first adapter kept the waiting table in a mutex and the deadline in a p
 `select`. A review found two defects there. As an actor the logic is checked together with the
 application: `Tests/Gate.lean` explores every race between a response and its deadline and
 shows each request is answered exactly once, and `gate_bounded` proves the table's bound.
+
+## D20. History variables are ghosts with an erasure theorem
+
+`Lanes/Actors/Ghost.lean`. A `Ghost` gives each actor a history, updated on every step from the
+state and the message. `SysState.erase_step` proves the system with ghosts takes exactly the
+steps of the system without them, so `System.Invariant.of_ghost` carries an invariant proved
+with histories to the real system.
+
+Why: protocol safety often needs the past ("this node voted for that candidate in term 3").
+The alternatives were to store the history in the actor's real state, which costs memory at run
+time and changes the code being verified, or to prove about traces, which is heavy. A ghost
+costs nothing at run time, and there is a theorem saying so.
+
+## D21. A proof rule for invariants no fault can break
+
+`Lanes/Actors/Monotone.lean`. `System.Inductive.of_monotone` proves an invariant under every
+environment model from five cases: the blank state, an input, an actor's step, an actor's
+recovery, and that removing messages, timers and outputs keeps it.
+
+Why: a direct proof has eight event cases and must reason about erased messages, filtered
+mailboxes and crashes, although loss, duplication, reordering and crashes can only remove
+things or replay a step. This is the usual "the network is a set of messages ever sent"
+argument of Raft and Paxos proofs, stated once for the Lanes semantics. It does not fit
+invariants that count messages in flight, such as conservation of money; those are false under
+loss anyway and are proved directly for a faultless environment.
+
+## D22. Routes are values with a proof; htmx attributes come from them
+
+`Lanes/Http/Route.lean`, `Lanes/Html/Htmx.lean`. A `Path α` is a printer and a parser with a
+proof that parsing what was printed gives the value back. `Route.match?_link` follows for every
+route. Views take URLs and htmx attributes from routes (`Hx.request route value`), and a
+request is decoded with `Http.dispatch` over the same routes.
+
+Why: a view that hard-codes `hx-post="/transfer"` and a decoder that matches `["transfers"]`
+is a bug no type catches. With one value for both, a link to a missing route does not compile,
+and `POST` to a `GET` route cannot be written.
+
+Templ features taken: components, fragments (`<>…</>`), attribute splices (`{attrs}`),
+conditional classes (`Html.classes`). Not taken: bare text children. Lean's tokenizer would
+split arbitrary text into Lean tokens, so text is a string literal.
+

@@ -3,6 +3,7 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
+import Examples.BankWeb
 
 /-! Tests of HTML templates, rendering and HTTP request decoding. -/
 
@@ -63,6 +64,46 @@ def tests : List (String × Bool) :=
       (<script src="/app.js"></script> : Html).render == "<script src=\"/app.js\"></script>"),
     ("html: document adds the doctype",
       (<html></html> : Html).document == "<!DOCTYPE html><html></html>"),
+    ("html: a fragment renders its children with nothing around them",
+      (<><b>"a"</b>"b"</>).render == "<b>a</b>b"),
+    ("html: a class list keeps the names whose condition holds",
+      (<a class={Html.classes [("btn", true), ("active", false), ("wide", true)]}/>).render
+        == "<a class=\"btn wide\"></a>"),
+    ("htmx: the attribute name and the URL both come from the route",
+      let transfer : Http.Route Nat := .post ("transfer" /> .nat)
+      (<form {Hx.request transfer 7} {Hx.target "#result"} {Hx.swap .outerHTML}/>).render
+        == "<form hx-post=\"/transfer/7\" hx-target=\"#result\" hx-swap=\"outerHTML\"></form>"),
+    ("htmx: triggers render in htmx's syntax",
+      (<td {Hx.trigger [.load, .fromBody (.event "saved"), .every 5]}/>).render
+        == "<td hx-trigger=\"load, saved from:body, every 5s\"></td>"),
+    ("route: dispatch answers with the first route that matches",
+      let account : Http.Route Nat := .get ("accounts" /> .nat)
+      let home : Http.Route Unit := .get .root
+      let handlers := [home.handle fun () _ => "home", account.handle fun n _ => s!"account {n}"]
+      Http.dispatch handlers { method := .get, path := ["accounts", "3"] } == some "account 3"
+        && Http.dispatch handlers { method := .get, path := [] } == some "home"
+        && Http.dispatch handlers { method := .post, path := [] } == none),
+    ("bank web: every request the page can make is decoded to the message it means",
+      let get (path : List String) : Http.Request := { method := .get, path }
+      let form : Http.Request :=
+        { method := .post, path := ["transfer"], body := "src=0&dst=1&amount=10".toUTF8 }
+      open Examples.BankWeb Examples.Bank in
+      (match bridge.decode 7 (get ["accounts", "2"]) with
+        | .ok (.balance 7 account) => account == 2
+        | _ => false)
+      && (match bridge.decode 8 form with
+        | .ok (.transfer t) => t.req == 8 && t.src == 0 && t.dst == 1 && t.amount == 10
+        | _ => false)
+      && (match bridge.decode 9 (get ["accounts", "3"]) with
+        | .error response => response.status == 404
+        | _ => false)
+      && (match bridge.decode 9 (get []) with
+        | .error response => response.status == 200
+        | _ => false)),
+    ("bank web: the page asks for balances and posts transfers at its own routes",
+      let page := Examples.BankWeb.Page.render
+      page.contains "hx-get=\"/accounts/2\" hx-trigger=\"load, transferred from:body\""
+        && page.contains "<form hx-post=\"/transfer\" hx-target=\"#result\">"),
     ("route: a link is matched by its own route and by no other",
       let account : Http.Route Nat := .get ("accounts" /> .nat)
       let transfer : Http.Route Unit := .post (.seg "transfer")

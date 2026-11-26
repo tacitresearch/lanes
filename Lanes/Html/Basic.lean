@@ -124,6 +124,10 @@ def renderAll : List Html → String
 
 end
 
+/-- The names whose condition holds: `class={classes [("btn", true), ("active", isActive)]}`. -/
+def classes (names : List (String × Bool)) : List String :=
+  names.filterMap fun (name, on) => if on then some name else none
+
 def document (page : Html) : String :=
   "<!DOCTYPE html>" ++ page.render
 
@@ -150,6 +154,8 @@ class ToAttr (α : Type) where
   toAttr : String → α → List Html.Attr
 
 instance : ToAttr String := ⟨fun name v => [⟨name, some v⟩]⟩
+/-- Joined with spaces, as a class list is. -/
+instance : ToAttr (List String) := ⟨fun name v => [⟨name, some (" ".intercalate v)⟩]⟩
 instance : ToAttr Nat := ⟨fun name v => [⟨name, some (toString v)⟩]⟩
 instance : ToAttr Int := ⟨fun name v => [⟨name, some (toString v)⟩]⟩
 instance : ToAttr Bool := ⟨fun name v => if v then [⟨name, none⟩] else []⟩

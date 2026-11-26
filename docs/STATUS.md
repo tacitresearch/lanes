@@ -10,14 +10,14 @@ Last updated: 2026-11-27.
 | Area | What exists | Where |
 | --- | --- | --- |
 | Actor API | `Actor`, `Signature`, `Effect`, `System`, `EnvModel`; `actor_invariant` tactic | `Lanes/Actors/{Actor,System}.lean` |
-| Semantics | One executable step function; per-event lemmas; per-actor invariants lift to systems | `Lanes/Actors/{World,Step,Lift}.lean` |
+| Semantics | One executable step function; per-event lemmas; per-actor invariants lift to systems; ghost histories with an erasure theorem; a five-case proof rule for invariants that hold under every fault | `Lanes/Actors/{World,Step,Lift,Ghost,Monotone}.lean` |
 | Deterministic scheduler | Seeded runs, replayable event lists, drivers for the outside world | `Lanes/Actors/Scheduler.lean` |
-| Model checker | Breadth-first, exact states, `always`/`sometimes`, constraints, deadlock, coverage, shortest traces; refinement to a `Service` without a mapping. Proved: it lists exactly the enabled events of a state, merging states is safe, and the spec monitor accepts exactly what the spec allows | `Lanes/Check/`, `Lanes/Semantics/Monitor.lean` |
+| Model checker | Breadth-first, exact states, `always`/`sometimes`, constraints, deadlock, coverage, shortest traces; refinement to a `Service` without a mapping. Proved: it lists exactly the enabled events of a state, merging states is safe, the spec monitor accepts exactly what the spec allows, and for the search engine a complete PASS means the property holds in every reachable state and every reported trace is real (`Check/SearchSound.lean`). Joining these for `Check.system` is in progress | `Lanes/Check/`, `Lanes/Semantics/Monitor.lean` |
 | Runtime | A kernel of pure functions proved to follow the semantics (`Kernel.run1_sound`), inside a 156-line shell: one task per shard, bounded inbox, timers | `Lanes/Actors/{Kernel,KernelSound,Runtime}.lean` |
 | Proof layer | `Spec`, `Refines` (weak simulation with a label map), `of_map`, `trans`, trace inclusion; system semantics as a CSLib `LTS`; `Service.spec`; sum lemmas | `Lanes/Semantics/` |
 | Behaviours | `Server` (request and reply), with `Server.implements` proved | `Lanes/Behaviours/Server.lean`, `Lanes/Semantics/Service.lean` |
-| Web | HTTP/1.1 adapter whose logic is the gate actor (each request answered exactly once, model-checked); requests and responses as data; `Html` with escaping proved safe, URL attributes checked at render (tested, not proved); scoped template macro | `Lanes/Http/`, `Lanes/Env/Http.lean`, `Lanes/Html/` |
-| Data | `Enum`, JSON (parser, printers, `ToJson`/`FromJson`), all total and `Std`-only | `Lanes/Data/` |
+| Web | HTTP/1.1 adapter whose logic is the gate actor (each request answered exactly once, model-checked); requests and responses as data; `Html` with escaping proved safe, URL attributes checked at render (tested, not proved); scoped template macro with components, fragments and attribute splices; typed routes (`Route.match?_link`, `percentDecode_percentEncode` proved); htmx attributes as typed values taken from routes | `Lanes/Http/`, `Lanes/Env/Http.lean`, `Lanes/Html/` |
+| Data | `Enum`, JSON (parser, printers, `ToJson`/`FromJson`), majority quorums (`Quorum.majority_inter`), all total and `Std`-only | `Lanes/Data/` |
 | Tooling | `lanes new`, `lanes lint` (text-level), `lanes check`; CI workflow; axiom gate | `LanesCli/`, `.github/workflows/ci.yml`, `Tests/Axioms.lean` |
 
 ## Reference apps
@@ -43,8 +43,8 @@ Last updated: 2026-11-27.
 
 ## Next, in order
 
-1. Prove election safety for all instances. It needs the quorum library (majority intersection
-   on Mathlib's `Finset.card`), which Raft needs too.
+1. Prove election safety for all instances and every environment, with the ghost, monotone
+   and quorum libraries (in progress).
 2. Counterexample-to-induction finder and `inv_split`, then `lanes prove`.
 3. Refinement proof for the key-value store with front ends (the first multi-actor refinement).
 4. Persistence adapter, so `Actor.recover` is backed by storage, then crash faults in the runtime.
