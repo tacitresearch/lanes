@@ -23,7 +23,7 @@ toolchain, the operating system and the hardware.
 The runtime's decisions are not in this table: routing, start, stop, which mail a stopped
 actor loses, which timer is due, how long to sleep, how much to do before looking at the inbox
 again, and when the shard is idle. They are in `Lanes/Actors/Kernel.lean` and proved in
-`Lanes/Actors/KernelSound.lean`. Nor are the HTTP adapter's (which requests are waiting, when
+`Lanes/Actors/KernelSound.lean` and `Lanes/Actors/KernelTimers.lean`. Nor are the HTTP adapter's (which requests are waiting, when
 one times out, when too many are pending): they are the gate actor in `Lanes/Http/Gate.lean`,
 proved in `Lanes/Http/GateSound.lean` to answer each arrival at most once and model-checked in
 `Tests/Gate.lean`.
@@ -39,8 +39,15 @@ proved in `Lanes/Http/GateSound.lean` to answer each arrival at most once and mo
   outputs to the adapter as the kernel gave them, and that an input it reports is the one that
   arrived.
 - **Progress.** That a queued input is eventually handled and a pending timer eventually fires
-  is not proved. It rests on the inbox delivering, the clock advancing, and on the kernel's
-  agenda holding every pending timer, which is tested (`Tests/Runtime.lean`) and not yet proved.
+  is not proved as a statement about time. It rests on the inbox delivering, the clock advancing
+  and the shell calling the kernel again when its sleep ends, which are assumed. The kernel's
+  part is proved. `Kernel.exec_wellFormed`: after any sequence of kernel operations the agenda
+  holds exactly the pending timers. From that (`Kernel.WellFormed`): while a pending timer is due
+  the kernel does not tell the shell to sleep, and its next step fires a timer due no later
+  (`wait_of_due`, `step_of_due`, `runBatch_of_due`); whenever it says there is work, a step does
+  some (`step_events_ne_nil`); it says to sleep until exactly the earliest pending deadline
+  (`wait_for_ms`), and without limit only when no message is queued and no timer is pending
+  (`wait_forever`); and it reports idle exactly then (`quiet_iff`).
 - **What the gate guarantees, and under what.** *At most once* is proved. In every run of
   `gated sys`, for every system, bridge and configuration, no request id is output more often
   than it was input (`Http.answered_le_arrived`). The environment may crash and restart every

@@ -81,6 +81,39 @@ by `lake build`, not linked into the test executable.
 /-- info: 'Lanes.Kernel.exec_reachable' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Kernel.exec_reachable
 
+/-- info: 'Lanes.Kernel.boot_wellFormed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.boot_wellFormed
+
+/-- info: 'Lanes.Kernel.WellFormed.apply' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.WellFormed.apply
+
+/-- info: 'Lanes.Kernel.exec_wellFormed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.exec_wellFormed
+
+/-- info: 'Lanes.Kernel.WellFormed.runBatch' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.WellFormed.runBatch
+
+/-- info: 'Lanes.Kernel.WellFormed.wait_of_due' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.WellFormed.wait_of_due
+
+/-- info: 'Lanes.Kernel.WellFormed.step_of_due' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.WellFormed.step_of_due
+
+/-- info: 'Lanes.Kernel.WellFormed.runBatch_of_due' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.WellFormed.runBatch_of_due
+
+/-- info: 'Lanes.Kernel.WellFormed.step_events_ne_nil' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.WellFormed.step_events_ne_nil
+
+/-- info: 'Lanes.Kernel.WellFormed.quiet_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.WellFormed.quiet_iff
+
+/-- info: 'Lanes.Kernel.WellFormed.wait_for_ms' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.WellFormed.wait_for_ms
+
+/-- info: 'Lanes.Kernel.WellFormed.wait_forever' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.WellFormed.wait_forever
+
 /-- info: 'Lanes.System.Inductive.of_monotone' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Inductive.of_monotone
 

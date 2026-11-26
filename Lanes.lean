@@ -9,6 +9,7 @@ public import Lanes.Actors.Lift
 public import Lanes.Actors.Inspect
 public import Lanes.Actors.Kernel
 public import Lanes.Actors.KernelSound
+public import Lanes.Actors.KernelTimers
 public import Lanes.Actors.Scheduler
 public import Lanes.Actors.Service
 public import Lanes.Actors.Step

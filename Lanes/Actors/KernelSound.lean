@@ -177,7 +177,7 @@ theorem fire_eq (k : Kernel sys) (i : σ.Id) (msg : σ.Msg i) (due : Due) :
               .output
           outputs := (((k.unschedule [due]).setCell i
             { (k.cell i) with timers := (k.cell i).timers.eraseP (·.1 = msg) }).handle i msg).2 }
-      else { kernel := k.unschedule [due] } := rfl
+      else { kernel := k } := rfl
 
 theorem runBatch_succ (k : Kernel sys) (fuel : Nat) :
     k.runBatch (fuel + 1) =

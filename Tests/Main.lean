@@ -9,6 +9,7 @@ import Tests.Runtime
 import Tests.Html
 import Tests.KV
 import Tests.Gate
+import Tests.Kernel
 import Tests.Web
 
 /-!
@@ -27,7 +28,7 @@ def report (results : List (String × Bool)) : IO UInt32 := do
 
 def main (args : List String) : IO UInt32 := do
   let pure := Tests.Engine.tests ++ Tests.Bank.tests ++ Tests.Json.tests ++ Tests.Html.tests
-    ++ Tests.KV.tests ++ Tests.Gate.tests
+    ++ Tests.KV.tests ++ Tests.Gate.tests ++ Tests.Kernel.tests
   match args with
   | [] => report (pure ++ (← Tests.Runtime.tests) ++ (← Tests.Web.tests))
   | ["fast"] => report pure

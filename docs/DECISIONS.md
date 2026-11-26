@@ -327,6 +327,17 @@ Consequences:
   thread that is not a daemon. `Http.Server.stop` stops the runtime.
 - Every kernel operation is total and consumes the kernel: there is no "nothing to do" result
   that would force the caller to keep a second reference.
-- Not yet proved: that the agenda holds exactly the pending timers. Soundness does not depend
-  on it (`fire_sound` holds for any timer the agenda could name); promptness does.
+- The agenda holds exactly the pending timers, whatever the shell does
+  (`Kernel.exec_wellFormed`, in `Lanes/Actors/KernelTimers.lean`). Soundness does not depend on
+  it (`fire_sound` holds for any timer the shell could name); promptness does. From it: a timer
+  that is due is fired and not slept through, a kernel that says there is work does some, the
+  shell sleeps until exactly the earliest deadline, and idle means nothing queued and nothing
+  pending (`Kernel.WellFormed.wait_of_due`, `step_of_due`, `step_events_ne_nil`, `wait_for_ms`,
+  `quiet_iff`).
+- Proving it found a defect. `Kernel.fire` erased the agenda entry at the `due` it was given
+  before looking whether the timer it was given was pending. A shell that fired a real `due` at
+  another actor or for another message made the kernel forget the timer that `due` belonged to:
+  it stayed pending, never fired, and the shard counted as idle. `fire` now leaves the agenda as
+  it is unless the timer is pending (`Tests/Kernel.lean`). The shell in `Runtime.lean` reaches
+  `fire` only through `step`, which names the agenda's own entry, so it could not do this.
 

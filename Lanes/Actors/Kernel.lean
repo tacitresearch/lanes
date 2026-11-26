@@ -16,7 +16,7 @@ a queue of messages and an agenda of timers. It runs one shard: one thread, no c
 each kernel operation is a run of `SysState.step`. The shell around it only moves data.
 
 Time is data: the shell tells the kernel what the clock says (`advance`) and the kernel says
-which timers are due (`fireDue`) and how long nothing will be (`wait`). The kernel never keeps
+which timers are due (`step`) and how long nothing will be (`wait`). The kernel never keeps
 emitted outputs. It hands them to the shell, which is the semantics' `emit` followed at once by
 `output`.
 -/
@@ -151,12 +151,13 @@ def run1 (k : Kernel sys) : Step sys :=
       { kernel := k, events := .start e.dst :: outs.map .output, outputs := outs }
 
 /-- The timer for `msg` at `due` goes off. It counts only if that timer is still pending: one
-that was cancelled or armed again is ignored. -/
+that was cancelled or armed again is ignored, and the agenda is left as it is, because the shell
+may name a `due` that is another timer's. -/
 def fire (k : Kernel sys) (i : σ.Id) (msg : σ.Msg i) (due : Due) : Step sys :=
   let c := k.cell i
-  let k := k.unschedule [due]
   if c.up && c.timers.contains (msg, due) then
-    let (k, outs) := (k.setCell i { c with timers := c.timers.eraseP (·.1 = msg) }).handle i msg
+    let (k, outs) := ((k.unschedule [due]).setCell i
+      { c with timers := c.timers.eraseP (·.1 = msg) }).handle i msg
     { kernel := k, events := .timeout i msg :: outs.map .output, outputs := outs }
   else { kernel := k }
 
