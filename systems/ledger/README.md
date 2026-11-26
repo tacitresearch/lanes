@@ -266,9 +266,13 @@ round of framework work is planned from this.
 
 ### What the ledger would want next
 
-- **Background jobs**: interest and statements, sending mail, ending sessions in bulk, and
-  above all CPU-heavy pure work such as PBKDF2 run off the shard: a job effect with a response
-  message, retries and an idempotency key, whose runner is an adapter with a model.
+- ~~**Background jobs**~~: added in Lanes as the jobs actor (`Lanes/Behaviours/Jobs.lean`): a
+  job named by its requester's key, attempts that carry the key, retries after a backoff, a
+  deadline per attempt and a bound on jobs in flight, with a pool of workers as its adapter and
+  every job admitted proved answered in a fair run. The password's Argon2id stays in
+  `Bridge.prepare`: what a job is asked is journalled, and a password must never be (D44);
+  `prepare` already runs on the request's own task, off the shard's thread, once. Interest,
+  statements, mail and ending sessions in bulk are jobs or timers when the ledger has them.
 - **Server push**: the transfers page polls every three seconds; a stream of events per
   session (SSE first) as outputs the gate keeps open would let a transfer show the moment it
   is booked.

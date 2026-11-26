@@ -44,3 +44,6 @@
   (`Kernel.exec_wellFormed`, `Kernel.WellFormed.wait_of_due`, `step_of_due`, `wait_for_ms`).
   That the clock advances and the shell's sleep ends is assumed (see `TRUSTED.md`).
 - The kernel's message queue has no bound of its own (see `TRUSTED.md`).
+- Work outside a step goes through the jobs actor (`Lanes.Jobs`). On a journal, a job whose
+  result was not journalled when the process died is attempted again with its key, so a far
+  side that must not act twice has to deduplicate by it.
