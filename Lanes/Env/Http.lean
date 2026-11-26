@@ -5,9 +5,9 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Std.Http
-public import Std.Data.HashMap
 public import Lanes.Env.Journal
 public import Lanes.Http.Front
+public import Lanes.Http.Waiting
 
 /-!
 The HTTP server adapter: the IO around the gate. It reads a request, gives it an id no other
@@ -54,7 +54,7 @@ structure Server (system : System τ) [Hashable τ.Id] where
   private mk ::
   private runtime : Runtime system
   private http : Std.Http.Server
-  private waiting : Mutex (Std.HashMap ReqId (IO.Promise Response))
+  private waiting : Mutex (Waiting (IO.Promise Response))
 
 /-- `HEAD` is handled as `GET`; its response is sent without the body. -/
 private def toMethod? : Std.Http.Method → Option Method
@@ -97,10 +97,12 @@ The server's loop, for any system with a gate in it: `enter` is how a request en
 something else to do. A shard that ends on an error takes the server down with it: requests in
 flight are answered `503`, and `Server.wait` throws.
 
-Request ids are never used twice, also across restarts and after the journal is cut. They
-start at the number of entries in the shard's history and go up by one for each request the
-shard admits, in the order it admits them. Every request that leaves a trace in the system has
-an entry of its own, so the history at the next start is longer than the last such id.
+Which id a request gets, who waits on it and who is answered is `Waiting`, pure and proved: ids
+are handed out in order from the start it is given, never twice, and a request the shard does
+not take gives its id back. Here the start is the number of entries in the shard's history.
+Every request that leaves a trace in the system has an entry of its own, so the history at the
+next start is longer than the last such id, and ids stay fresh across restarts and after the
+journal is cut.
 -/
 private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig)
     (runtimeConfig : Runtime.Config) (log : Option (Journal.Log system))
@@ -108,17 +110,13 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
     Async (Server system) := do
   let some addr := Std.Net.IPv4Addr.ofString config.host
     | throw (IO.userError s!"lanes: {config.host} is not an IPv4 address")
-  let waiting : Mutex (Std.HashMap ReqId (IO.Promise Response)) ← Mutex.new {}
-  let nextId ← IO.mkRef ((log.map (·.index)).getD 0)
+  let waiting ← Mutex.new (Waiting.start ((log.map (·.index)).getD 0))
   let runtime ← Runtime.start system runtimeConfig (journal := log) fun out => do
     match onOutput out with
     | .inr other => other
     | .inl (id, response) =>
-      let waiter ← waiting.atomically do
-        let waiter := (← get).get? id
-        modify (·.erase id)
-        return waiter
-      if let some waiter := waiter then waiter.resolve response
+      if let some waiter := (← waiting.atomically (modifyGet (·.answer id))) then
+        waiter.resolve response
   let handler := Std.Http.Server.Handler.ofFn fun req => do
     let some request ← readRequest config.maxBodyBytes req
       | respond (Response.text "method not allowed\n" 405)
@@ -126,12 +124,9 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
     let send := fun (r : Response) => respond (if headOnly then { r with body := .empty } else r)
     let waiter ← IO.Promise.new
     let admitted ← waiting.atomically do
-      let id ← nextId.get
-      modify (·.insert id waiter)
-      if ← runtime.tryInput (enter (id, request)) then
-        nextId.set (id + 1)
-        return true
-      modify (·.erase id)
+      let id ← modifyGet (·.wait waiter)
+      if ← runtime.tryInput (enter (id, request)) then return true
+      modify (·.release id)
       return false
     if admitted then send ((← await waiter.result?).getD busy) else send busy
   let httpConfig : Std.Http.Config := { maxBodySize := config.maxBodyBytes }
@@ -141,8 +136,7 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
       throw e
   background do
     if (← runtime.ended).isSome then
-      let left ← waiting.atomically (modifyGet fun waiting => (waiting.values, {}))
-      for waiter in left do waiter.resolve busy
+      for (_, waiter) in ← waiting.atomically (modifyGet Waiting.drain) do waiter.resolve busy
       http.shutdown
   return { runtime, http, waiting }
 
@@ -195,8 +189,7 @@ flight are answered `503` by the underlying server. -/
 def stop (server : Server system) : Async Unit := do
   server.http.shutdownAndWait
   server.runtime.stop
-  let left ← server.waiting.atomically (modifyGet fun waiting => (waiting.values, {}))
-  for waiter in left do waiter.resolve busy
+  for (_, waiter) in ← server.waiting.atomically (modifyGet Waiting.drain) do waiter.resolve busy
 
 /-- The events performed, if the runtime was started with `record`. For conformance tests. -/
 def trace (server : Server system) : BaseIO (Array (Event τ)) :=

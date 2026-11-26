@@ -16,6 +16,7 @@ import Tests.Web
 import Tests.Join
 import Tests.Frame
 import Tests.Durable
+import Tests.Ending
 import Tests.Clock
 import Tests.HttpClient
 import Tests.Codec
@@ -52,13 +53,13 @@ def main (args : List String) : IO UInt32 := do
   match args with
   | [] =>
     report (pure ++ (← Tests.Runtime.tests) ++ (← Tests.Web.tests) ++ (← Tests.Durable.tests)
-      ++ (← Tests.Clock.live.block) ++ (← Tests.HttpClient.live.block)
+      ++ (← Tests.Ending.tests) ++ (← Tests.Clock.live.block) ++ (← Tests.HttpClient.live.block)
       ++ (← Tests.Cluster.tests) ++ (← Tests.Peers.live.block)
       ++ (← Tests.Fronted.live.block) ++ (← Tests.Fronted.durable.block))
   | ["fast"] => report pure
   | ["live"] =>
     report ((← Tests.Runtime.tests) ++ (← Tests.Web.tests) ++ (← Tests.Durable.tests)
-      ++ (← Tests.Clock.live.block) ++ (← Tests.HttpClient.live.block)
+      ++ (← Tests.Ending.tests) ++ (← Tests.Clock.live.block) ++ (← Tests.HttpClient.live.block)
       ++ (← Tests.Cluster.tests) ++ (← Tests.Peers.live.block)
       ++ (← Tests.Fronted.live.block) ++ (← Tests.Fronted.durable.block))
   | ["journal-child", path] =>
