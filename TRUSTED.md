@@ -13,12 +13,20 @@ toolchain, the operating system and the hardware.
 
 | What | Where | Why it is trusted | How it is checked |
 | --- | --- | --- | --- |
-| The runtime shell | `Lanes/Actors/Runtime.lean`, 202 lines | It takes commands from an inbox, reads the clock, calls the kernel and hands the kernel's outputs to the adapter. That it hands them on unchanged, all of them and in order, is not proved. Nor is its stopping: that `stop` ends the shard and leaves no caller waiting. | `Tests/Runtime.lean`: one input's several outputs and the boot outputs compared exactly; recorded events replayed through `SysState.run`; timers, back-pressure, stopping an idle and a busy shard. `Tests/Scale.lean`: a message costs the same at 1,000 and 100,000 actors. |
+| The runtime shell | `Lanes/Actors/Runtime.lean`, 233 lines | It takes commands from an inbox, reads the clock, calls the kernel and hands the kernel's outputs to the adapter. That it hands them on unchanged, all of them and in order, is not proved. Nor is its stopping: that `stop` ends the shard and leaves no caller waiting. With a journal, it is trusted to append what it asked the kernel before it hands the outputs over. | `Tests/Runtime.lean`: one input's several outputs and the boot outputs compared exactly; recorded events replayed through `SysState.run`; timers, back-pressure, stopping an idle and a busy shard. `Tests/Scale.lean`: a message costs the same at 1,000 and 100,000 actors. `Tests/Durable.lean`: see the next row. |
+| The journal's file | `Lanes/Env/Journal.lean`, 54 lines | It reads the file at start, rewrites it without a damaged tail, appends and flushes. A flush reaches the operating system, not the disk: Lean's `IO` has no `fsync`. | `Tests/Durable.lean`: restart from the journal; a journal cut at eight places; a child process killed with SIGKILL while working, after which every request it had answered is in the journal and the state is the one the journal describes. |
 | The HTTP adapter's IO | `Lanes/Env/Http.lean`, 133 lines | It reads requests from sockets, gives each an id no other has, hands them to the gated system and writes the gate's one response for each. It answers `HEAD` as `GET` without the body, `405` for other methods and, when the inbox is full, `503` itself. | `Tests/Web.lean`, over a socket: fifty requests at once, `HEAD`, `405`, `413`, links with awkward text decoded by the real server, and stopping with a request in flight. The `503` for a full inbox is not tested. |
 | The template macro | `Lanes/Html/Syntax.lean`, 113 lines | It turns template syntax into `Html` values. What it produces is type-checked, but that it produces the element the template shows is not proved. | `Tests/Html.lean` compares rendered templates with the expected text. |
 
 `lanes lint` fails when one of these files grows past the line count given here (rule
 `trusted-size`), so trusted code cannot grow without this file changing.
+
+What a journal file means is not in this table either. The format, that reading back what was
+written gives the entries (`Journal.decode_encode`), that a file cut at any byte gives the
+entries wholly written before the cut (`Journal.decode_torn`), and that recovery rebuilds
+exactly the kernel those entries lead to (`Journal.recover_kernel`) are proved in
+`Lanes/Actors/Journal.lean` and `Lanes/Data/Frame.lean`. A checksum makes it unlikely, not
+impossible, that a damaged entry is taken for a good one.
 
 The runtime's decisions are not in this table: routing, start, stop, which mail a stopped
 actor loses, which timer is due, how long to sleep, how much to do before looking at the inbox
@@ -73,8 +81,10 @@ proved in `Lanes/Http/GateSound.lean` to answer each arrival at most once and mo
   once on two requests and shows each precondition is needed: a reused id is answered twice,
   a duplicating link from outside answers one arrival twice, and a gate that crashes leaves a
   request unanswered.
-- **In-memory durability.** `Actor.recover` receives the actor's last state. The kernel keeps
-  that state in memory, so it survives an actor stopping itself but not the process dying.
+- **Durability.** Without a journal, the kernel keeps actor state in memory and it is lost with
+  the process. With one, the shard returns in the state the journal describes: it survives the
+  death of the process, not loss of power, since nothing is synced to disk. Outputs handed over
+  shortly before the death may be handed over again.
 - **Environment model.** One shard stays within `Kernel.env`: reliable ordered links, no
   crashes other than an actor stopping itself. Properties proved under a stronger model than
   that do not apply to a running system.

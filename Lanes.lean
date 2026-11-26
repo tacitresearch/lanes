@@ -34,6 +34,7 @@ public import Lanes.Data.Frame
 public import Lanes.Data.Json
 public import Lanes.Data.Quorum
 public import Lanes.Env.Http
+public import Lanes.Env.Journal
 public import Lanes.Html.Basic
 public import Lanes.Html.Htmx
 public import Lanes.Html.Syntax

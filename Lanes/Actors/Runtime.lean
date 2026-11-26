@@ -6,7 +6,7 @@ module
 
 public import Std.Async
 public import Std.Sync
-public import Lanes.Actors.KernelSound
+public import Lanes.Actors.Journal
 
 /-!
 The runtime is a shell around the kernel: one task that takes commands from an inbox, tells the
@@ -40,6 +40,17 @@ structure Runtime.Config where
   semantics. -/
   record : Bool := false
 
+/-- What a durable shard needs of its journal's storage. `Lanes.Journal.Store.open` gives one
+backed by a file. -/
+structure Journal.Log (σ : Signature) where
+  /-- The entries written before this start. -/
+  past : List (Journal.Entry σ)
+  /-- Returns once the entries will survive the process. -/
+  append : List (Journal.Entry σ) → IO Unit
+  /-- Writes entries that may be lost with the process. -/
+  note : List (Journal.Entry σ) → IO Unit
+  close : IO Unit
+
 private inductive Cmd (sys : System σ) where
   | input (x : σ.In)
   | idle (timers : Bool) (done : IO.Promise Bool)
@@ -55,7 +66,6 @@ structure Runtime (sys : System σ) [Hashable σ.Id] where
   private config : Runtime.Config
   private inbox : CloseableChannel (Cmd sys)
   private log : IO.Ref (Array (Event σ))
-  private epoch_ms : Nat
   private finished : IO.Promise Unit
 
 namespace Runtime
@@ -71,9 +81,6 @@ private def handOver (onOutput : σ.Out → Async Unit) (outputs : List σ.Out) 
   for out in outputs do
     try onOutput out
     catch e => IO.eprintln s!"lanes: output handler failed: {e}"
-
-private def now (rt : Runtime sys) : BaseIO Nat :=
-  return (← IO.monoMsNow) - rt.epoch_ms
 
 /-- Blocks the calling thread, which is the shard's own. -/
 private def take (rt : Runtime sys) : Kernel.Wait → IO (Taken sys)
@@ -97,41 +104,60 @@ of behaviour shows: Lean never updates an object in place once another thread ma
 state held across an `await` is handed to the task system. A kernel kept that way is copied,
 actor table and all, on every step (`Tests/Scale.lean`). Here it is created on this thread and
 never leaves it; only commands, events and outputs cross.
+
+With a journal, the kernel starts as the journal describes (`Journal.recover`), and what it is
+asked is appended before any output of it is handed over.
 -/
 private def loop (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
-    (waiting : IO.Ref (Array (Bool × IO.Promise Bool))) : IO Unit := do
-  let (start, outputs) := Kernel.boot sys
-  rt.record (outputs.map .output)
-  (handOver onOutput outputs).block
+    (waiting : IO.Ref (Array (Bool × IO.Promise Bool))) (journal : Option (Journal.Log σ)) :
+    IO Unit := do
+  let (start, outputs) := match journal with
+    | some log => Journal.recover sys log.past
+    | none => Kernel.boot sys
+  if journal.isNone then rt.record (outputs.map .output)
+  let handOver := fun (outputs : List σ.Out) => do
+    (handOver onOutput outputs).block
+    if let some log := journal then unless outputs.isEmpty do log.note [.handed]
+  handOver outputs
+  let since := start.clock_ms
+  let epoch ← IO.monoMsNow
+  let clock : BaseIO Nat := return since + ((← IO.monoMsNow) - epoch)
   let kernel ← IO.mkRef start
   repeat
-    let now ← rt.now
+    let now ← clock
     let wait ← kernel.modifyGet fun k => let k := k.advance now; (k.wait, k)
+    let mut input : Option σ.In := none
     match ← rt.take wait with
     | .closed => break
     | .nothing => pure ()
     | .command (.input x) =>
       rt.record (← kernel.modifyGet fun k => let r := k.accept x; (r.events, r.kernel))
+      input := some x
     | .command (.idle timers done) => waiting.modify (·.push (timers, done))
     | .command (.peek i reply) => reply.resolve (← kernel.modifyGet fun k => ((k.cell i).state, k))
-    let now ← rt.now
+    let now ← clock
     let batch := max 1 rt.config.batch
     let (events, outputs, quiet, still) ← kernel.modifyGet fun k =>
       match (k.advance now).runBatch batch with
       | { kernel, events, outputs } =>
         ((events, outputs, kernel.quiet false, kernel.quiet true), kernel)
+    if let some log := journal then
+      unless input.isNone && events.isEmpty do
+        log.append (.advance now :: input.toList.map .input ++ [.batch batch])
     rt.record events
-    (handOver onOutput outputs).block
+    handOver outputs
     let reached := fun (timers : Bool) => if timers then still else quiet
     for (timers, done) in ← waiting.get do
       if reached timers then done.resolve true
     waiting.modify (·.filter fun (timers, _) => !reached timers)
 
 /-- However the loop ends, nobody is left waiting on it. -/
-private def run (rt : Runtime sys) (onOutput : σ.Out → Async Unit) : IO Unit := do
+private def run (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
+    (journal : Option (Journal.Log σ)) : IO Unit := do
   let waiting ← IO.mkRef #[]
-  try rt.loop onOutput waiting
+  try rt.loop onOutput waiting journal
   catch e => discard (IO.eprintln s!"lanes: the shard stopped on an error: {e}").toBaseIO
+  if let some log := journal then discard log.close.toBaseIO
   discard <| (rt.inbox.close : EIO _ Unit).toBaseIO
   for (_, done) in ← waiting.get do done.resolve false
   rt.finished.resolve ()
@@ -145,16 +171,21 @@ and a handler must not call `input`, `idle`, `state` or `stop`, which wait for t
 
 A timer counts from the clock reading at the start of the batch of work that armed it, so it
 can fire early by as long as that batch took. Steps are pure and short, so this is small, but
-nothing may depend on a timer not firing early: the semantics lets one fire at any moment. -/
+nothing may depend on a timer not firing early: the semantics lets one fire at any moment.
+
+With a `journal` the shard is durable: it starts in the state the journal describes, and every
+input it accepts is in the journal before any output it causes is handed over. Outputs handed
+over shortly before the process died may be handed over again, so a handler that must not
+repeat itself has to tell. The kernel's clock stands still while the process is down. -/
 def start (sys : System σ) [Hashable σ.Id] (config : Runtime.Config := {})
-    (onOutput : σ.Out → Async Unit := fun _ => pure ()) : Async (Runtime sys) := do
+    (onOutput : σ.Out → Async Unit := fun _ => pure ())
+    (journal : Option (Journal.Log σ) := none) : Async (Runtime sys) := do
   let rt : Runtime sys := {
     config
     inbox := ← CloseableChannel.new (some config.inboxCapacity)
     log := ← IO.mkRef #[]
-    epoch_ms := ← IO.monoMsNow
     finished := ← IO.Promise.new }
-  discard <| IO.asTask (prio := .dedicated) (rt.run onOutput)
+  discard <| IO.asTask (prio := .dedicated) (rt.run onOutput journal)
   return rt
 
 private def send (rt : Runtime sys) (c : Cmd sys) : Async Unit := do

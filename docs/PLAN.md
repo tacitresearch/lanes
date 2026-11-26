@@ -228,6 +228,9 @@ mark are handed over again after a restart.
 Done when: the bank, killed with `kill -9` in the middle of transfers and started again, has
 the balances the journal says, and the test that does this is in CI.
 
+**Done.** `Tests/Durable.lean` does exactly that. Next for durability: snapshots, releasing
+idle actors, a sync primitive, and batching several inputs per flush.
+
 ### A.2 Composition: join two systems, and what survives it
 
 `System.join a b wiring` is one `System`, so every tool applies to it. Its actors are those of

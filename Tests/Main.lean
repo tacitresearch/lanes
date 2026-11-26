@@ -13,6 +13,7 @@ import Tests.Kernel
 import Tests.Web
 import Tests.Join
 import Tests.Frame
+import Tests.Durable
 
 /-!
 The test driver behind `lake test`: the pure tests and the live runtime tests, well under a
@@ -33,9 +34,13 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.KV.tests ++ Tests.Gate.tests ++ Tests.Join.tests ++ Tests.Kernel.tests
     ++ Tests.Frame.tests
   match args with
-  | [] => report (pure ++ (← Tests.Runtime.tests) ++ (← Tests.Web.tests))
+  | [] => report (pure ++ (← Tests.Runtime.tests) ++ (← Tests.Web.tests) ++ (← Tests.Durable.tests))
   | ["fast"] => report pure
-  | ["live"] => report ((← Tests.Runtime.tests) ++ (← Tests.Web.tests))
+  | ["live"] =>
+    report ((← Tests.Runtime.tests) ++ (← Tests.Web.tests) ++ (← Tests.Durable.tests))
+  | ["journal-child", path] =>
+    Tests.Durable.child path
+    return 0
   | _ =>
     IO.eprintln "usage: lanesTest [fast|live]"
     return 2
