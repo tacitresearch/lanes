@@ -6,7 +6,7 @@ module
 
 public import Std.Async
 public import Lanes.Actors.Runtime
-public import Lanes.Actors.Shard
+public import Lanes.Actors.Courier
 
 /-!
 Shards of one system in different processes, joined by TCP. Each process runs `System.shard`
@@ -19,10 +19,11 @@ again from its journal, sent twice. Within one connection parcels arrive in orde
 that runs on this must be correct over `Link.network`, which is what its checks and proofs
 should assume for links between actors on different shards.
 
-What a parcel is as bytes, and that a stream cut anywhere reads as the parcels sent before the
-cut, is `Parcel.receive_send`, proved. Trusted here: connecting, sending, receiving, and that
-nothing arrives which was not sent. There is no authentication: listen only where every sender
-is trusted.
+Nothing is decided here. `Lanes.Peers.Courier` decides, a pure function that the model checker
+runs against a network that fails; this file tells it what happened and does what it answers.
+Trusted here: that an event is reported when the thing happened, that an action is done as
+asked, and that nothing arrives which was not sent. There is no authentication: listen only
+where every sender is trusted.
 -/
 
 public section
@@ -33,13 +34,6 @@ open Std Std.Async
 
 variable {σ : Signature}
 
-structure Address where
-  /-- An IPv4 address. -/
-  host : String := "127.0.0.1"
-  port : UInt16
-  deriving DecidableEq, Repr, Hashable
-
-/-- Every limit is explicit (rule 2.6). -/
 structure Config (σ : Signature) where
   /-- Where this process takes parcels. Port `0` picks a free one. -/
   listen : Address
@@ -48,62 +42,76 @@ structure Config (σ : Signature) where
   home : σ.Id → BaseIO (Option Address)
   id : Codec σ.Id
   msg : ∀ i, Codec (σ.Msg i)
-  /-- Parcels waiting to be sent to one process. Beyond it they are dropped. -/
-  queue : Nat := 1024
-  /-- A parcel larger than this ends the connection it arrives on. -/
-  maxParcelBytes : Nat := 16777216
-  /-- How long to leave a process alone after failing to reach it. -/
-  retry_ms : Nat := 100
+  limits : Limits := {}
+
+private abbrev Happened := Event × Option TCP.Socket.Client
 
 structure _root_.Lanes.Peers (σ : Signature) where
   private mk ::
   private config : Config σ
   private server : TCP.Socket.Server
-  private lanes : Mutex (Std.HashMap Address (CloseableChannel ByteArray))
-  private accepted : IO.Ref (Nat × Std.HashMap Nat TCP.Socket.Client)
-  private stopped : IO.Ref Bool
+  private events : CloseableChannel Happened
+  private ended : IO.Promise Unit
   /-- The port in use, which `listen` may have left to the system to choose. -/
   port : UInt16
 
 private def address (a : Address) : Option Std.Net.SocketAddress :=
   (Std.Net.IPv4Addr.ofString a.host).map fun ip => .v4 ⟨ip, a.port⟩
 
-/-- Sends what is queued for one process, in order. While the process cannot be reached, what
-is queued is dropped, so that what is sent once it can be is fresh. -/
-private def sender (retry_ms : Nat) (to : Std.Net.SocketAddress) (lane : CloseableChannel ByteArray) :
-    Async Unit := do
-  let mut socket : Option TCP.Socket.Client := none
-  repeat
-    let some bytes ← await (← lane.recv) | break
-    try
-      let live ← match socket with
-        | some live => pure live
-        | none => do
-          let fresh ← TCP.Socket.Client.mk
-          fresh.connect to
-          pure fresh
-      socket := some live
-      live.send bytes
-    catch _ =>
-      if let some broken := socket then try broken.close catch _ => pure ()
-      socket := none
-      Async.sleep (.ofNat retry_ms)
-      while (← lane.tryRecv).isSome do pure ()
-  if let some live := socket then try live.close catch _ => pure ()
+private def quietly (action : Async Unit) : Async Unit :=
+  try action catch _ => pure ()
 
-private def receiver (config : Config σ) (deliver : Parcel σ → Async Unit)
-    (client : TCP.Socket.Client) : Async Unit := do
-  let mut received := ByteArray.empty
-  try
-    repeat
-      let some arrived ← client.recv? 65536 | break
-      received := received ++ arrived
-      let some (parcels, taken) := Parcel.receive config.id config.msg received | break
-      for parcel in parcels do deliver parcel
-      received := received.extract taken received.size
-      if received.size > config.maxParcelBytes then break
-  catch _ => pure ()
-  try client.close catch _ => pure ()
+private def post (events : CloseableChannel Happened) (event : Event)
+    (fresh : Option TCP.Socket.Client := none) : BaseIO Unit :=
+  discard <| events.trySend (event, fresh)
+
+/-- Tell the courier what happened and do what it answers, one event at a time. Every socket is
+in `sockets` from the moment it exists, so the `close` the courier asks for at `stop` reaches
+it whatever it was in the middle of. -/
+private def run (config : Config σ) (deliver : Parcel σ → Async Unit)
+    (events : CloseableChannel Happened) : Async Unit := do
+  let mut courier : Courier := {}
+  let mut sockets : Std.HashMap Conn TCP.Socket.Client := {}
+  repeat
+    let some (event, fresh) ← await (← events.recv) | break
+    let (next, actions) := courier.step config.limits (Parcel.receive config.id config.msg) event
+    courier := next
+    for action in actions do
+      match action with
+      | .dial conn to =>
+        let socket ← TCP.Socket.Client.mk
+        sockets := sockets.insert conn socket
+        background do
+          try
+            let some target := address to | throw (IO.userError "lanes: not an IPv4 address")
+            socket.connect target
+            post events (.connected conn)
+          catch _ => post events (.broken conn (← IO.monoMsNow))
+      | .write conn bytes =>
+        match sockets[conn]? with
+        | some socket => background do
+          try
+            socket.send bytes
+            post events (.written conn)
+          catch _ => post events (.broken conn (← IO.monoMsNow))
+        | none => post events (.broken conn (← IO.monoMsNow))
+      | .close conn =>
+        if let some socket := sockets[conn]? then quietly socket.close
+        sockets := sockets.erase conn
+      | .adopt conn =>
+        if let some socket := fresh then
+          sockets := sockets.insert conn socket
+          background do
+            try
+              repeat
+                let some bytes ← socket.recv? 65536 | break
+                post events (.received conn bytes)
+            catch _ => pure ()
+            post events (.broken conn (← IO.monoMsNow))
+      | .refuse => if let some socket := fresh then quietly socket.close
+      | .deliver parcel => deliver parcel
+    if courier.stopped then break
+  discard <| (events.close : EIO _ Unit).toBaseIO
 
 /-- Listen for parcels and hand each to `deliver`. -/
 def start (config : Config σ) (deliver : Parcel σ → Async Unit) : Async (Peers σ) := do
@@ -112,44 +120,31 @@ def start (config : Config σ) (deliver : Parcel σ → Async Unit) : Async (Pee
   let server ← TCP.Socket.Server.mk
   server.bind listen
   server.listen 128
-  let stopped ← IO.mkRef false
-  let accepted ← IO.mkRef (0, {})
+  let events ← CloseableChannel.new
+  let ended ← IO.Promise.new
+  background do
+    quietly (run config deliver events)
+    ended.resolve ()
   background do
     try
-      repeat
-        let client ← server.accept
-        let key ← accepted.modifyGet fun (next, live) => (next, (next + 1, live.insert next client))
-        background do
-          receiver config deliver client
-          accepted.modify fun (next, live) => (next, live.erase key)
+      repeat post events .accepted (some (← server.accept))
     catch _ => pure ()
-  return { config, server, stopped, accepted, lanes := ← Mutex.new {}
-           port := (← server.getSockName).port }
+  return { config, server, events, ended, port := (← server.getSockName).port }
 
 /-- Send a parcel to the process that hosts its receiver. It does not wait for the network: the
-parcel is queued, and dropped if the queue is full or nobody hosts the receiver. -/
+courier queues the parcel or drops it. -/
 def send (peers : Peers σ) (parcel : Parcel σ) : Async Unit := do
   let some home ← peers.config.home parcel.1 | return
-  let some to := address home | return
   unless Parcel.fits peers.config.id peers.config.msg parcel do return
-  if ← peers.stopped.get then return
-  let lane ← peers.lanes.atomically do
-    if let some lane := (← get).get? home then return lane
-    let lane ← CloseableChannel.new (some peers.config.queue)
-    modify (·.insert home lane)
-    background (sender peers.config.retry_ms to lane)
-    return lane
-  discard <| lane.trySend (Parcel.send peers.config.id peers.config.msg [parcel])
+  post peers.events
+    (.send home (Parcel.send peers.config.id peers.config.msg [parcel]) (← IO.monoMsNow))
 
 /-- Stop listening and sending, and end every connection, so that whoever was sending here
-finds out and connects again to whatever listens next. -/
+finds out and connects again to whatever listens next. Returns when that is done. -/
 def stop (peers : Peers σ) : Async Unit := do
-  peers.stopped.set true
-  try peers.server.close catch _ => pure ()
-  for client in ← peers.accepted.modifyGet fun (next, live) => (live.values, (next, {})) do
-    try client.close catch _ => pure ()
-  let lanes ← peers.lanes.atomically (modifyGet fun lanes => (lanes.values, {}))
-  for lane in lanes do discard <| (lane.close : EIO _ Unit).toBaseIO
+  quietly peers.server.close
+  post peers.events .stop
+  discard <| await peers.ended.result?
 
 /--
 Run a shard of `sys` in this process: the actors `hosts` says, on a runtime, with parcels to

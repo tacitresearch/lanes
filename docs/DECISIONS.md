@@ -723,6 +723,18 @@ that hosts the receiver; a parcel that arrives is an input.
   any system that runs on several machines has to survive loss and duplication anyway, since a
   machine can fail. So the adapter stays small, and the system's checks and proofs are the
   place where loss is dealt with: they assume `Link.network` between shards.
+- *The decisions are a pure function, the courier* (`Lanes/Actors/Courier.lean`). The first
+  version kept its queues, its reconnecting and its idea of `stop` in IO, and the first system
+  run on it found the bug there: a stopped shard kept its accepted connections, so the others
+  went on sending to nobody. The transport is now `Courier.step`: the handler reports events
+  (a parcel to send, connected, written, broken, accepted, received, stop) and performs the
+  actions it gets back (dial, write, close, adopt, refuse, deliver). The model checker runs
+  the courier against a network that fails at any moment, 49,000 states, and checks: one
+  write at a time on a connection, writes started in the order asked and none twice, a
+  bounded queue, nothing lost unless a connection failed or the queue was full, nothing open
+  after `stop`. It also refuted a claim: parcels are not delivered in the order sent, because
+  a write on a connection that then fails may still go out while the next parcel takes a new
+  connection. The link is unordered, which is what `Link.network` says.
 - *Reading the stream is pure.* `Parcel.receive` takes what has arrived so far and gives the
   parcels wholly received and the bytes they took. `Parcel.receive_send`: a stream cut at any
   byte reads as exactly the parcels sent before the cut. The IO loop appends, calls it and

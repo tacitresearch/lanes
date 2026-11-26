@@ -49,8 +49,14 @@ MUTANTS = [
      "try Async.race attempt patience", "try attempt"),
     ("http client: the socket of a call given up on is left open", "Lanes/Env/HttpClient.lean",
      "  finally socket.close", "  finally pure ()"),
-    ("peers: accepted connections left open at stop", "Lanes/Env/Peers.lean",
-     "    try client.close catch _ => pure ()\n  let lanes", "    pure ()\n  let lanes"),
+    ("courier: stop leaves accepted connections open", "Lanes/Actors/Courier.lean",
+     "(c.dialed.keys ++ c.inbound.keys).map .close", "c.dialed.keys.map .close"),
+    ("courier: a second write is started while one is under way", "Lanes/Actors/Courier.lean",
+     "(c.setWire to { w with line := .up conn true }, [.write conn bytes])",
+     "(c, [.write conn bytes])"),
+    ("courier: the queue has no limit", "Lanes/Actors/Courier.lean",
+     "  if w.waiting.length < limits.queue then c.setWire",
+     "  if w.waiting.length < limits.queue + 9 then c.setWire"),
 ]
 
 

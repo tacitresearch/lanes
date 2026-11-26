@@ -115,10 +115,12 @@ function; the theorem that two shards are the one system; a transport between pr
   connections open. Every one of these was a decision made in IO code. Three adapters now
   have the right shape. The HTTP server's logic is an actor, the gate. The journal's is a pure
   function over a model of its two files, with a crash-consistency theorem, and the IO runs
-  the writes it is given. The HTTP client's reading is a pure function. The transport does not
-  have it yet: its queues, its reconnecting and what `stop` ends are IO. **Rule from here on:
-  an adapter is an actor or a pure function that decides, a model of the outside it talks to,
-  and a handler that only performs.** The transport is next to be rebuilt that way.
+  the writes it is given. The HTTP client's reading is a pure function. The transport did not
+  have it: its queues, its reconnecting and what `stop` ends were IO. **Rule from here on: an
+  adapter is an actor or a pure function that decides, a model of the outside it talks to, and
+  a handler that only performs.** The transport was rebuilt that way the same night (the
+  courier, D30), and the model checker run against a failing network found a property of mine
+  that was false.
 - *A snapshot is a restart without the crash.* The plan asked for a theorem that kernels alike
   in everything observable behave alike, because a restored hash map is not the saved one.
   Making the running shard go on with the restored kernel removed the need: both sides compute
@@ -138,7 +140,7 @@ function; the theorem that two shards are the one system; a transport between pr
 **What to watch.**
 
 - *Trusted and unproved code is about 1,500 lines*, three times what it was at the end of
-  phase A: the transport (173), the HTTP wire format (411, part proved), the journal and
+  phase A: the transport's handler (168), the HTTP wire format (411, part proved), the journal and
   snapshot IO. The pure cores behind them are proved, but the count is the wrong way round
   for a framework whose point is the opposite, and the rule above is how it comes down.
 - *Proof volume.* The join, the split and the disk model are 1,800, 1,300 and 660 lines.
@@ -150,9 +152,9 @@ function; the theorem that two shards are the one system; a transport between pr
 - *Two gates* until the hand-built one is retired in favour of the gate joined by the general
   operator; a process with both an HTTP front and peers needs the joined one.
 
-**Verdict.** The direction holds and the order changes a little: the transport as an actor
-and the lemma library come before more batteries, because Raft's proofs and Raft's deployment
-both stand on them.
+**Verdict.** The direction holds and the order changes a little: the lemma library comes
+before more batteries, because Raft's proofs stand on it, and no adapter is added from here
+on without its deciding function and its model.
 
 ## Serious applications
 
