@@ -773,37 +773,6 @@ theorem System.SteadyBoot.of_running (env : EnvModel σ)
 
 namespace SysState
 
-/-- `c` after actor `i` moves to `r.1` with effects `r.2` as it starts, when stopping loses no
-message. -/
-private def startedWith (c : SysState sys) (i : σ.Id) (r : sys.State i × List (Effect σ i)) :
-    SysState sys where
-  state := update c.state i r.1
-  up := update c.up i !(r.2.any Effect.isStop)
-  net := c.net ++ Effect.sends i r.2
-  timers := update c.timers i
-    (if r.2.any Effect.isStop then [] else Effect.retime r.2 (c.timers i))
-  outbox := c.outbox ++ Effect.emits r.2
-
-private def started (c : SysState sys) (i : σ.Id) : SysState sys :=
-  c.startedWith i ((sys.actor i).recover (c.state i))
-
-private theorem startActor_eq_started (c : SysState sys) (i : σ.Id)
-    (h : ((sys.actor i).recover (c.state i)).2.any Effect.isStop = true →
-      ∀ src, (env.link src i).lossy = true) : c.startActor env i = c.started i := by
-  simp only [startActor, settle_eq, started, startedWith]
-  split
-  · next hstop =>
-    have hkept : ∀ l : List (Envelope σ),
-        l.filter (fun e => decide (e.dst ≠ i) || (env.link e.src e.dst).lossy) = l := fun l =>
-      List.filter_eq_self.mpr fun e _ => by
-        by_cases he : e.dst = i
-        · simp [he, h hstop e.src]
-        · simp [he]
-    simp only [down, hkept, update_update, hstop, Bool.not_true]
-  · next hstop =>
-    simp only [Bool.not_eq_true] at hstop
-    simp only [hstop, Bool.not_false]
-
 private theorem startedWith_comm (c : SysState sys) {i k : σ.Id} (h : i ≠ k)
     (ri : sys.State i × List (Effect σ i)) (rk : sys.State k × List (Effect σ k)) :
     Equiv env ((c.startedWith i ri).startedWith k rk) ((c.startedWith k rk).startedWith i ri) := by

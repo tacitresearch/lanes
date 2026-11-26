@@ -13,7 +13,9 @@ public import Lanes.Data.List
 `SysState.settle` performs a step's effects one at a time. `SysState.settle_eq` says what that
 leaves: the messages the effects send (`Effect.sends`), the timers after them (`Effect.retime`)
 and the outputs they emit (`Effect.emits`), each added at once. A proof that follows a state
-through a step rewrites with it and then reasons about lists.
+through a step rewrites with it and then reasons about lists. `SysState.started` is a start in
+that form, without the case on whether the actor stops, for when stopping loses no message
+(`startActor_eq_started`).
 
 The rest is runs whose result is known: inputs put in, outputs handed over.
 -/
@@ -150,6 +152,37 @@ theorem settle_erase (c : SysState sys) (i : σ.Id) (r : sys.State i × List (Ef
     refine ⟨by simp [hmem, hlossy], ?_⟩
     rw [List.erase_filter, List.erase_append_left _ hmem]
   · exact ⟨by simp [hmem], by rw [List.erase_append_left _ hmem]⟩
+
+/-- `c` after actor `i` moves to `r.1` with effects `r.2` as it starts, when stopping loses no
+message. -/
+def startedWith (c : SysState sys) (i : σ.Id) (r : sys.State i × List (Effect σ i)) :
+    SysState sys where
+  state := update c.state i r.1
+  up := update c.up i !(r.2.any Effect.isStop)
+  net := c.net ++ Effect.sends i r.2
+  timers := update c.timers i
+    (if r.2.any Effect.isStop then [] else Effect.retime r.2 (c.timers i))
+  outbox := c.outbox ++ Effect.emits r.2
+
+def started (c : SysState sys) (i : σ.Id) : SysState sys :=
+  c.startedWith i ((sys.actor i).recover (c.state i))
+
+theorem startActor_eq_started (c : SysState sys) (i : σ.Id)
+    (h : ((sys.actor i).recover (c.state i)).2.any Effect.isStop = true →
+      ∀ src, (env.link src i).lossy = true) : c.startActor env i = c.started i := by
+  simp only [startActor, settle_eq, started, startedWith]
+  split
+  · next hstop =>
+    have hkept : ∀ l : List (Envelope σ),
+        l.filter (fun e => decide (e.dst ≠ i) || (env.link e.src e.dst).lossy) = l := fun l =>
+      List.filter_eq_self.mpr fun e _ => by
+        by_cases he : e.dst = i
+        · simp [he, h hstop e.src]
+        · simp [he]
+    simp only [down, hkept, update_update, hstop, Bool.not_true]
+  · next hstop =>
+    simp only [Bool.not_eq_true] at hstop
+    simp only [hstop, Bool.not_false]
 
 /-- Arming timers keeps those armed and arms each. -/
 theorem mem_timers_performAll_after {α : Type} (c : SysState sys) (i : σ.Id) (delay_ms : Nat)
