@@ -231,6 +231,25 @@ the balances the journal says, and the test that does this is in CI.
 **Done.** `Tests/Durable.lean` does exactly that. Next for durability: snapshots, releasing
 idle actors, a sync primitive, and batching several inputs per flush.
 
+#### Snapshots (designed, not built)
+
+A snapshot is the kernel written down: each cell (state, whether it is up, its timers with
+their deadlines), the queue, the clock, the next token and whose turn it is. The agenda is not
+saved; it is what `Kernel.WellFormed` says it is, the pending timers. Recovery restores the
+snapshot and replays the journal written after it; the switch to a new snapshot is one rename.
+
+It needs two codecs from the application, for an actor's state and for a message, each over
+all actors at once (`Codec ((i : σ.Id) × sys.State i)`). Writing those by hand is the cost, and
+is why a declaration macro that defines a type together with its codec comes first.
+
+The theorem is not `restore (snapshot k) = k`: a hash map restored is not the same value. It is
+that the two cannot be told apart: the same `abs`, timers, clock, token and turn, and that
+kernels alike in those stay alike under every operation with the same events and outputs. The
+second half is a lemma about the kernel worth having anyway.
+
+Releasing idle actors is a different thing and waits for shards: a cell that is not in memory
+has to be brought back before a batch that needs it, and the kernel cannot do IO.
+
 ### A.2 Composition: join two systems, and what survives it
 
 `System.join a b wiring` is one `System`, so every tool applies to it. Its actors are those of
