@@ -529,6 +529,32 @@ private theorem torn_append (hkept : Kept input c system history lost mark)
       ByteArray.extract_append, Frame.extract_of_size_le (Nat.le_add_right ..), Nat.zero_sub,
       Nat.add_sub_cancel_left]
 
+/-- The mark of a save is in the history once all its bytes are written. -/
+private theorem torn_mark (hkept : Kept input c system history lost mark)
+    (hjournal : disk.journal = file input system (history.drop lost))
+    (hsnapshot : disk.snapshot = memo c system history mark)
+    (hfits : ∀ entry ∈ [Entry.snapshot history.length], Entry.fits input entry = true)
+    (part : Nat) :
+    Torn sys input c system
+      (history ++ if part < (encode input [.snapshot history.length]).size then []
+        else [.snapshot history.length])
+      (disk.apply (.append ((encode input [.snapshot history.length]).extract 0 part))) := by
+  have htorn := torn_append hkept hjournal hsnapshot hfits Kept.placed_mark part
+  have hsize : (encode input [.snapshot history.length]).size
+      = 8 + (Entry.bytes input (.snapshot history.length)).size := by
+    simp [encode, write]
+  by_cases hpart : part < (encode input [.snapshot history.length]).size
+  · have hnone : Frame.whole (write input [.snapshot history.length]) part = 0 := by
+      simp [write, Frame.whole]
+      omega
+    rw [hnone] at htorn
+    simpa [hpart] using htorn
+  · have hone : Frame.whole (write input [.snapshot history.length]) part = 1 := by
+      simp [write, Frame.whole]
+      omega
+    rw [hone] at htorn
+    simpa [hpart] using htorn
+
 /-- A turn's append, done whole, leaves the files of a running shard. -/
 theorem Holds.append (h : Holds sys input c system history disk) {entries : List (Entry σ)}
     (hfits : ∀ entry ∈ entries, Entry.fits input entry = true)
@@ -584,23 +610,9 @@ theorem Holds.save_crash (h : Holds sys input c system history disk)
     simpa using hmark
   match done with
   | 0 =>
-    have htorn := torn_append hkept hjournal hsnapshot hfits Kept.placed_mark part
-    have hsize : (encode input [.snapshot history.length]).size
-        = 8 + (Entry.bytes input (.snapshot history.length)).size := by
-      simp [encode, write]
     show Torn sys input c system _
       (disk.apply (.append ((encode input [.snapshot history.length]).extract 0 part)))
-    by_cases hpart : part < (encode input [.snapshot history.length]).size
-    · have hnone : Frame.whole (write input [.snapshot history.length]) part = 0 := by
-        simp [write, Frame.whole]
-        omega
-      rw [hnone] at htorn
-      simpa [hpart] using htorn
-    · have hone : Frame.whole (write input [.snapshot history.length]) part = 1 := by
-        simp [write, Frame.whole]
-        omega
-      rw [hone] at htorn
-      simpa [hpart] using htorn
+    simpa using torn_mark hkept hjournal hsnapshot hfits part
   | 1 =>
     simpa [saveWrites, appendWrites, crash] using
       (holds_append hkept hjournal hsnapshot hfits Kept.placed_mark).torn
