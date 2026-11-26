@@ -133,6 +133,7 @@ itself, and `Server.implements` proves it refines the spec for every interleavin
 ## Documents
 
 - `docs/STATUS.md`: what works today and what is next.
+- `docs/ROADMAP.md`: the phases ahead and the open design questions.
 - `docs/PLAN.md`: what is being done now and why.
 - `docs/DESIGN.md`: what Lanes is and the build plan.
 - `LANES_STYLE.md`: design and code rules, each with its reason.
