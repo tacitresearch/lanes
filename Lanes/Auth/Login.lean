@@ -111,7 +111,7 @@ def close (s : Sessions) (id : Nat) : Sessions :=
 def live (s : Sessions) (id : Nat) : Bool :=
   s.ids.contains id
 
-theorem length_startle (s : Sessions) (limit id : Nat) : (s.start limit id).1.ids.length ≤ limit :=
+theorem length_start_le (s : Sessions) (limit id : Nat) : (s.start limit id).1.ids.length ≤ limit :=
   List.length_take_le ..
 
 theorem live_open (s : Sessions) {limit : Nat} (id : Nat) (h : 0 < limit) :

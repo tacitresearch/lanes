@@ -7,8 +7,11 @@ testDriver = "ledgerCheck"
 name = "lanes"
 path = "../.."
 
+# `Ledger.Proofs` is a root of its own so that `lake build` builds the proofs and the
+# executables, which import `Ledger`, do not link them.
 [[lean_lib]]
 name = "Ledger"
+roots = ["Ledger", "Ledger.Proofs"]
 
 # Model checks, run by `lake test`. Check before you prove (LANES_STYLE rule 5.1).
 [[lean_exe]]
