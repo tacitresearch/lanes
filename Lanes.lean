@@ -65,6 +65,7 @@ public import Lanes.Http.Gate
 public import Lanes.Http.GateSound
 public import Lanes.Http.Route
 public import Lanes.Http.Wire
+public import Lanes.Http.WireSound
 
 /-!
 The Lanes runtime layer: everything an application's executable code needs. It imports only

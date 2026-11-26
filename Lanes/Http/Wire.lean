@@ -14,7 +14,8 @@ bytes over a socket, and asks `Response.read` after each arrival whether to go o
 The writer frames the request itself: the caller's headers cannot change where the message ends
 or add a line (`Request.fields_framing`, `Request.head_plain`). The reader is total, never
 reads outside the bytes it is given, and answers `none` to anything it does not understand.
-It is tested, not proved.
+`Response.wire` and `Response.wireChunked` write responses the way a server does, so that
+`Lanes.Http.WireSound` can say what the reader makes of them and of every start of them.
 -/
 
 @[expose] public section
@@ -34,6 +35,10 @@ def plain (c : Char) : Bool :=
 
 def visible (c : Char) : Bool :=
   33 ≤ c.val && c.val ≤ 126
+
+/-- The blanks a header's value may have around it. -/
+def ows (c : Char) : Bool :=
+  c == ' ' || c == '\t'
 
 /-- Whether a header of this name says where a message ends or whom it is for. The writer
 sets those itself. -/
@@ -77,7 +82,7 @@ private theorem toLower_eq_iff (s t : String) :
     s.toLower = t ↔ s.toList.map Char.toLower = t.toList := by
   rw [← String.toList_inj, String.toLower, String.toList_map]
 
-private theorem visible_of_tokenChar {c : Char} (h : tokenChar c) : visible c := by
+theorem visible_of_tokenChar {c : Char} (h : tokenChar c) : visible c := by
   rcases Bool.or_eq_true _ _ |>.mp h with alnum | symbol
   · simp only [Char.isAlphanum, Char.isAlpha, Char.isUpper, Char.isLower, Char.isDigit, visible,
       Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq, UInt32.le_iff_toNat_le,
@@ -87,7 +92,7 @@ private theorem visible_of_tokenChar {c : Char} (h : tokenChar c) : visible c :=
   · have all : "!#$%&'*+-.^_`|~".toList.all visible = true := by decide
     exact List.all_eq_true.mp all c (List.contains_iff_mem.mp symbol)
 
-private theorem plain_of_visible {c : Char} (h : visible c) : plain c := by
+theorem plain_of_visible {c : Char} (h : visible c) : plain c := by
   simp only [visible, plain, Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq,
     UInt32.le_iff_toNat_le, bne_iff_ne, ne_eq, beq_iff_eq] at *
   refine .inr ⟨h.1 |> Nat.le_trans (by decide), ?_⟩
@@ -227,6 +232,43 @@ theorem head_plain (r : Request) (host : String) (sent : (r.wire host).isSome) :
 
 end Request
 
+namespace Response
+
+/-- Whether the reader gives this header back as it is written: its name is a lowercase token
+and frames nothing, and its value has no control character but tab and no blank at either
+end. -/
+def kept (field : String × String) : Bool :=
+  token field.1 && field.1.toLower == field.1 && field.1 != "content-length"
+    && field.1 != "transfer-encoding" && field.2.toList.all plain
+    && !(field.2.toList.head?.any ows) && !(field.2.toList.getLast?.any ows)
+
+/-- Whether the writer can send this response so that the reader reads it back: a final status
+of three digits, no body where the status allows none, a length of at most eighteen digits,
+and headers the reader keeps. -/
+def writable (r : Response) : Bool :=
+  200 ≤ r.status && r.status < 1000 && (r.body.size == 0 || !(r.status == 204 || r.status == 304))
+    && r.body.size < 10 ^ 18 && r.headers.all kept
+
+/-- The head of `r`, its own headers after `framing`, ended by its blank line. -/
+def headWire (r : Response) (framing : String) : ByteArray :=
+  ("\r\n".intercalate (("HTTP/1.1 " ++ toString r.status ++ " ") :: framing
+    :: r.headers.map fun (name, value) => name ++ ": " ++ value) ++ "\r\n\r\n").toUTF8
+
+/-- The bytes of `r` as a server sends it, framed by its length. -/
+def wire (r : Response) : ByteArray :=
+  r.headWire ("Content-Length: " ++ toString r.body.size) ++ r.body
+
+def chunk (data : ByteArray) : ByteArray :=
+  (String.ofList (Nat.toDigits 16 data.size) ++ "\r\n").toUTF8 ++ data ++ "\r\n".toUTF8
+
+/-- The bytes of `r` with its body sent as `chunks`, which must make it up; `r.body` itself is
+not read. -/
+def wireChunked (r : Response) (chunks : List ByteArray) : ByteArray :=
+  r.headWire "Transfer-Encoding: chunked" ++ chunks.foldl (· ++ chunk ·) .empty
+    ++ "0\r\n\r\n".toUTF8
+
+end Response
+
 /-- What a reader makes of the bytes it has so far: it needs more, or it is done, with a value
 or with `none` for bytes that are no good. -/
 inductive Reading (α : Type) where
@@ -275,65 +317,84 @@ def chunkSizeDigits_max : Nat := 16
 
 def chunkExtensionBytes_max : Nat := 256
 
+/-- Where the CRLF of a size line whose digits end at `pos` should be: after blanks, and after
+the extension if a `;` starts one. -/
+def sizeLineEnd (bytes : ByteArray) (pos : Nat) : Nat :=
+  let blanksEnd := skip bytes (fun b => b == 32 || b == 9) chunkExtensionBytes_max pos
+  if bytes[blanksEnd]? == some 59 then
+    skip bytes (fun b => b == 9 || (32 ≤ b && b != 127)) chunkExtensionBytes_max blanksEnd
+  else blanksEnd
+
 /-- The size of the chunk whose size line starts at `pos`, and where its data starts. The
 extension is skipped. -/
 def chunkHead (bytes : ByteArray) (pos : Nat) : Reading (Nat × Nat) :=
   let (size, digitsEnd) := hex bytes chunkSizeDigits_max pos 0
   if digitsEnd == pos then
     if pos < bytes.size then .done none else .more
-  else
-    let blanksEnd := skip bytes (fun b => b == 32 || b == 9) chunkExtensionBytes_max digitsEnd
-    let lineEnd :=
-      if bytes[blanksEnd]? == some 59 then
-        skip bytes (fun b => b == 9 || (32 ≤ b && b != 127)) chunkExtensionBytes_max blanksEnd
-      else blanksEnd
-    (crlf bytes lineEnd).map (size, ·)
+  else (crlf bytes (sizeLineEnd bytes digitsEnd)).map (size, ·)
 
-/-- The chunked body from `pos` on, added to `body`. `fuel` bounds the number of chunks. The
-trailer after the last chunk is skipped unread, up to its blank line. -/
-def dechunk (bytes : ByteArray) : (fuel pos : Nat) → (body : ByteArray) → Reading ByteArray
+/-- The chunked body from `pos` on, added to `body`, and the index after it. `fuel` bounds the
+number of chunks. The trailer after the last chunk is skipped unread, up to its blank line. -/
+def dechunk (bytes : ByteArray) : (fuel pos : Nat) → (body : ByteArray) → Reading (ByteArray × Nat)
   | 0, _, _ => .done none
   | fuel + 1, pos, body =>
     match chunkHead bytes pos with
     | .more => .more
     | .done none => .done none
-    | .done (some (0, start)) =>
-      match crlf bytes start with
-      | .done none => if (headEnd bytes start).isSome then .done (some body) else .more
-      | ending => ending.map fun _ => body
     | .done (some (size, start)) =>
-      match crlf bytes (start + size) with
-      | .done (some next) => dechunk bytes fuel next (body ++ bytes.extract start (start + size))
-      | .done none => .done none
-      | .more => .more
+      if size = 0 then
+        match crlf bytes start with
+        | .done none =>
+          match headEnd bytes start with
+          | some stop => .done (some (body, stop))
+          | none => .more
+        | ending => ending.map (body, ·)
+      else
+        match crlf bytes (start + size) with
+        | .done (some next) => dechunk bytes fuel next (body ++ bytes.extract start (start + size))
+        | .done none => .done none
+        | .more => .more
 
 /-- The number that one to eighteen ASCII digits write. `String.toNat?` would also take `1_0`. -/
 def decimal? (s : String) : Option Nat :=
   if s != "" && s.length ≤ 18 && s.toList.all Char.isDigit then
-    some (s.toList.foldl (fun n c => n * 10 + (c.toNat - '0'.toNat)) 0)
+    some (Nat.ofDigitChars 10 s.toList 0)
   else none
 
-def statusLine? (line : String) : Option Nat :=
-  match line.splitOn " " with
-  | version :: code :: _ =>
-    if (version == "HTTP/1.1" || version == "HTTP/1.0") && code.length == 3 then
-      (decimal? code).filter (100 ≤ ·)
+/-- The lines of `text` split at each CRLF, after the `line` begun and the lines `done`, which
+are reversed. -/
+def splitLines : (text line : List Char) → (done : List (List Char)) → List (List Char)
+  | [], line, done => (line.reverse :: done).reverse
+  | '\r' :: '\n' :: rest, line, done => splitLines rest [] (line.reverse :: done)
+  | c :: rest, line, done => splitLines rest (c :: line) done
+
+/-- The status of a status line. A bare CR or another control character in the reason is
+refused (RFC 9112, 2.2). -/
+def statusLine? : List Char → Option Nat
+  | 'H' :: 'T' :: 'T' :: 'P' :: '/' :: '1' :: '.' :: minor :: ' ' :: code =>
+    let (digits, reason) := code.splitAt 3
+    if (minor == '0' || minor == '1') && digits.length == 3 && reason.head?.all (· == ' ')
+        && reason.all plain then
+      (decimal? (String.ofList digits)).filter (100 ≤ ·)
     else none
   | _ => none
+
+def trimOws (chars : List Char) : List Char :=
+  ((chars.dropWhile ows).reverse.dropWhile ows).reverse
 
 /-- A header, its name in lowercase and its value trimmed. The name is a token right up to the
 colon, so a line that continues the one before it and a blank before the colon are refused. -/
-def headerLine? (line : String) : Option (String × String) :=
-  match line.splitOn ":" with
-  | name :: value :: rest =>
-    let value := ":".intercalate (value :: rest)
-    if token name && value.toList.all plain then some (name.toLower, value.trimAscii.toString)
+def headerLine? (line : List Char) : Option (String × String) :=
+  let name := String.ofList (line.takeWhile (· != ':'))
+  match line.dropWhile (· != ':') with
+  | _ :: value =>
+    if token name && value.all plain then some (name.toLower, String.ofList (trimOws value))
     else none
-  | _ => none
+  | [] => none
 
 /-- The status and the headers of a head given without its blank line. -/
-def head? (text : String) : Option (Nat × List (String × String)) :=
-  match text.splitOn "\r\n" with
+def head? (text : List Char) : Option (Nat × List (String × String)) :=
+  match splitLines text [] [] with
   | statusLine :: headerLines => do
     let status ← statusLine? statusLine
     let headers ← headerLines.mapM headerLine?
@@ -345,7 +406,7 @@ inductive Framing where
   | chunked
   | toEnd
 
-/-- Where the body ends (RFC 7230, 3.3.3): `none` unless the headers say so in one way. -/
+/-- Where the body ends (RFC 9112, 6.3): `none` unless the headers say so in one way. -/
 def framing? (status : Nat) (headers : List (String × String)) : Option Framing :=
   let codings := (headers.filter (·.1 == "transfer-encoding")).map (·.2.toLower)
   let lengths := (headers.filter (·.1 == "content-length")).map (decimal? ·.2)
@@ -359,14 +420,14 @@ def framing? (status : Nat) (headers : List (String × String)) : Option Framing
     | _, _ => none
 
 /-- The response whose head starts at `pos`, or the one after it when that one is interim
-(`1xx`). `fuel` bounds the number of interim responses. -/
-def readFrom (bytes : ByteArray) (ended : Bool) : (fuel pos : Nat) → Reading Response
+(`1xx`), and the index just after it. `fuel` bounds the number of interim responses. -/
+def readFrom (bytes : ByteArray) (ended : Bool) : (fuel pos : Nat) → Reading (Response × Nat)
   | 0, _ => .done none
   | fuel + 1, pos =>
     match headEnd bytes pos with
     | none => .more
     | some bodyStart =>
-      match (String.fromUTF8? (bytes.extract pos (bodyStart - 4))).bind head? with
+      match (String.fromUTF8? (bytes.extract pos (bodyStart - 4))).bind (head? ·.toList) with
       | none => .done none
       | some (status, headers) =>
         if status < 200 then readFrom bytes ended fuel bodyStart
@@ -375,32 +436,36 @@ def readFrom (bytes : ByteArray) (ended : Bool) : (fuel pos : Nat) → Reading R
           | none => .done none
           | some (.length length) =>
             if bodyStart + length ≤ bytes.size then
-              .done (some { status, headers, body := bytes.extract bodyStart (bodyStart + length) })
+              let body := bytes.extract bodyStart (bodyStart + length)
+              .done (some ({ status, headers, body }, bodyStart + length))
             else .more
           | some .chunked =>
-            (dechunk bytes (bytes.size + 1) bodyStart .empty).map ({ status, headers, body := · })
+            (dechunk bytes (bytes.size + 1) bodyStart .empty).map
+              fun (body, stop) => ({ status, headers, body }, stop)
           | some .toEnd =>
             if ended then
-              .done (some { status, headers, body := bytes.extract bodyStart bytes.size })
+              .done (some ({ status, headers, body := bytes.extract bodyStart bytes.size },
+                bytes.size))
             else .more
 
 /-- What the bytes received so far amount to, where `ended` says that no more will come: the
-response, as soon as its last byte is there; `none` for more than `limit` bytes, for what
-cannot become a response, and for a response cut short; or that more is needed. -/
+response, as soon as its last byte is there, if it ends within `limit` bytes; `none` for a
+response that does not, for more than `limit` bytes without a response, for what cannot become
+a response, and for a response cut short; or that more is needed. -/
 def Response.read (limit : Nat) (bytes : ByteArray) (ended : Bool) : Reading Response :=
-  if bytes.size > limit then .done none
-  else
-    match readFrom bytes ended (bytes.size + 1) 0 with
-    | .more => if ended then .done none else .more
-    | done => done
+  match readFrom bytes ended (bytes.size + 1) 0 with
+  | .done (some (response, stop)) => if stop ≤ limit then .done (some response) else .done none
+  | .done none => .done none
+  | .more => if ended || limit < bytes.size then .done none else .more
 
 /-- A reader that asks again only on `more` stops when the connection ends. -/
 theorem Response.read_ended (limit : Nat) (bytes : ByteArray) :
     Response.read limit bytes true ≠ .more := by
   unfold Response.read
   split
+  · split <;> simp
   · simp
-  · split <;> simp_all
+  · simp
 
 /-- The one response in all the bytes of a connection. -/
 def Response.parse (bytes : ByteArray) : Option Response :=
