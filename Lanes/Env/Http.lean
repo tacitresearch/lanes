@@ -15,7 +15,7 @@ request has, hands it as an input to a system that has the gate in it, and write
 response the gate gives for it. Which requests are waiting, when one times out and when the
 system is too busy are the gate's decisions, not this file's.
 
-There is one loop, `serveOn`, for both systems with a gate: `gated sys`, whose only outputs are
+There is one loop, `serveOn`, for both systems with a gate: `served sys`, whose only outputs are
 responses (`serve`, `serveWith`), and `fronted sys`, which also puts out what is no response and
 takes inputs that are no request (`serveFronted`).
 
@@ -143,9 +143,9 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
 /-- `serve` on a journal that is already open. -/
 def serveWith (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : ServerConfig := {})
     (runtimeConfig : Runtime.Config := {})
-    (log : Option (Journal.Log (gated sys bridge config.gate))) :
-    Async (Server (gated sys bridge config.gate)) :=
-  serveOn (gated sys bridge config.gate) config runtimeConfig log id .inl
+    (log : Option (Journal.Log (served sys bridge config.gate))) :
+    Async (Server (served sys bridge config.gate)) :=
+  serveOn (served sys bridge config.gate) config runtimeConfig log id .inl
 
 /-- Serve `sys` behind a gate it shares the process with other things: an output of `sys` that
 the bridge does not read as a response comes to `onOutput`, and `Server.tryInput` hands `sys`
@@ -162,16 +162,23 @@ structure Saving (sys : System σ) where
   actors : Kernel.Image.Codecs sys
   out : Codec σ.Out
 
+/-- The name `serve` writes in its journal: the application's, and the configuration the gate's
+step function reads. A journal of another gate, or of the gate `serve` ran before D42, is
+refused. -/
+def ServerConfig.journalName (config : ServerConfig) : String :=
+  s!"{config.system}, behind a gate of {config.gate.requestTimeout_ms} ms and "
+    ++ s!"{config.gate.maxPending} requests"
+
 /-- Returns once the server is listening. Each request is answered exactly once by the gate.
 With a journal and `saving`, the kernel is saved from time to time and the journal cut
 (`Runtime.Config.snapshotEvery`); with a journal alone, the journal only grows. -/
 def serve (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : ServerConfig := {})
     (runtimeConfig : Runtime.Config := {}) (saving : Option (Saving sys) := none) :
-    Async (Server (gated sys bridge config.gate)) := do
+    Async (Server (served sys bridge config.gate)) := do
   let log ← config.journal.mapM fun path =>
-    Journal.Store.open (sys := gated sys bridge config.gate)
-      { path, input := Codec.pair Codec.nat Request.codec, system := config.system
-        actors := saving.map fun s => gatedActors s.actors s.out bridge config.gate }
+    Journal.Store.open (sys := served sys bridge config.gate)
+      { path, input := Codec.pair Codec.nat Request.codec, system := config.journalName
+        actors := saving.map fun s => servedActors s.actors s.out bridge config.gate }
   try serveWith sys bridge config runtimeConfig log
   catch e =>
     if let some log := log then discard log.close.toBaseIO

@@ -12,7 +12,9 @@ public import Lanes.Http.Front
 /-!
 `fronted sys` answers no request more often than it arrived (`fronted_answered_le_arrived`)
 and keeps the deadline of every waiting request armed (`fronted_deadlines_armed`), for every
-system behind the gate, and both proofs look at the gate alone.
+system behind the gate, and both proofs look at the gate alone. Both carry to `served sys`, the
+system `Http.serve` runs, through its hidden inputs and outputs (`served_answered_le_arrived`,
+`served_deadlines_armed`).
 
 The second is an invariant of the gate's state, so `System.Invariant.join_left` carries it
 into the join as it is. The first counts events, and takes more.
@@ -74,6 +76,26 @@ def Armed {sys : System σ} {bridge : Bridge σ} {config : GateConfig}
     ∀ id ∈ (c.state (.inl ()) : List ReqId), GateMsg.expire id ∈ c.timers (.inl ())
 
 end Fronted
+
+namespace Served
+
+def arrived (events : List (Event (servedSig σ))) : List ReqId :=
+  events.filterMap fun
+    | .input (id, _) => some id
+    | _ => none
+
+def answered (events : List (Event (servedSig σ))) : List ReqId :=
+  events.filterMap fun
+    | .output (id, _) => some id
+    | _ => none
+
+/-- While the gate is up, every pending request has its deadline armed. -/
+def Armed {sys : System σ} {bridge : Bridge σ} {config : GateConfig}
+    (c : SysState (served sys bridge config)) : Prop :=
+  c.up (.inl ()) = true →
+    ∀ id ∈ (c.state (.inl ()) : List ReqId), GateMsg.expire id ∈ c.timers (.inl ())
+
+end Served
 
 end Lanes.Http
 
@@ -585,5 +607,64 @@ theorem kernel_fronted_answered_le_arrived (sys : System σ) (bridge : Bridge σ
   fronted_answered_le_arrived rfl (Kernel.exec_reachable _ ops).1 id
 
 end Fronted
+
+/-! From `fronted sys` to `served sys`, the system `Http.serve` runs. -/
+
+section Served
+
+variable {env : EnvModel (servedSig σ)}
+
+/-- `served sys` answers no request more often than it arrived, under the assumptions of
+`fronted_answered_le_arrived`. -/
+theorem served_answered_le_arrived (henv : (env.link none (.inl ())).duplicating = false)
+    {events : List (Event (servedSig σ))} {c : SysState (served sys bridge config)}
+    (hrun : (SysState.init (served sys bridge config) env).run env events = some c)
+    (id : ReqId) :
+    (Served.answered events).count id ≤ (Served.arrived events).count id := by
+  obtain ⟨frontedEvents, c', hfronted, -, hunder⟩ := SysState.run_filterMapIO hrun
+  have hanswered : Served.answered events = Fronted.answered frontedEvents := by
+    refine hunder.filterMap_eq fun ev ev' h => ?_
+    cases ev with
+    | output out =>
+      obtain ⟨out', rfl, hout'⟩ := h
+      rcases out' with answer | out' <;> cases hout'
+      rfl
+    | _ =>
+      cases h
+      rfl
+  have harrived : Served.arrived events = Fronted.arrived frontedEvents := by
+    refine hunder.filterMap_eq fun ev ev' h => ?_
+    cases ev with
+    | output out =>
+      obtain ⟨out', rfl, -⟩ := h
+      rfl
+    | _ =>
+      cases h
+      rfl
+  rw [hanswered, harrived]
+  exact fronted_answered_le_arrived henv hfronted id
+
+theorem served_deadlines_armed (sys : System σ) (bridge : Bridge σ) (config : GateConfig)
+    (env : EnvModel (servedSig σ)) : (served sys bridge config).Invariant env Served.Armed :=
+  System.Invariant.filterMapIO (fronted_deadlines_armed sys bridge config env.under)
+
+/-- When the ids that arrive are distinct, as the server's are, no id is answered twice. -/
+theorem served_answered_nodup (henv : (env.link none (.inl ())).duplicating = false)
+    {events : List (Event (servedSig σ))} {c : SysState (served sys bridge config)}
+    (hrun : (SysState.init (served sys bridge config) env).run env events = some c)
+    (hdistinct : (Served.arrived events).Nodup) : (Served.answered events).Nodup :=
+  List.nodup_iff_count.mpr fun id =>
+    Nat.le_trans (served_answered_le_arrived henv hrun id) (List.nodup_iff_count.mp hdistinct id)
+
+/-- The same of the events the runtime's kernel reports, whatever the shell does with it. -/
+theorem kernel_served_answered_le_arrived (sys : System σ) (bridge : Bridge σ)
+    (config : GateConfig) [Hashable (servedSig σ).Id]
+    (ops : List (Kernel.Op (servedSig σ))) (id : ReqId) :
+    let booted := Kernel.boot (served sys bridge config)
+    let events := booted.2.map .output ++ (booted.1.exec ops).events
+    (Served.answered events).count id ≤ (Served.arrived events).count id :=
+  served_answered_le_arrived rfl (Kernel.exec_reachable _ ops).1 id
+
+end Served
 
 end Lanes.Http

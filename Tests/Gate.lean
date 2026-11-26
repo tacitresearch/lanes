@@ -5,8 +5,9 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import Lanes
 
 /-!
-Model checks of the HTTP gate in front of a one-actor echo service. Timers may fire at any
-moment in the model, so every race between a response and its deadline is explored.
+Model checks of `Http.served`, the system `Http.serve` runs, in front of a one-actor echo
+service. Timers may fire at any moment in the model, so every race between a response and its
+deadline is explored.
 -/
 
 namespace Tests.Gate
@@ -23,9 +24,12 @@ def bridge : Bridge echoSig where
   decode id request := if request.path == ["bad"] then .error (.text "bad" 400) else .ok id
   encode id := some (id, .text "ok")
 
-instance : (gatedSig echoSig).Inspect := by instance_by_cases
-instance (config : GateConfig) : (gated (Server.system echo) bridge config).Inspect := by
-  instance_by_cases
+instance : echoSig.Inspect := {}
+instance : (Server.system echo).Inspect := {}
+instance : (servedSig echoSig).Inspect := .served
+instance (config : GateConfig) : (served (Server.system echo) bridge config).Inspect := .served
+
+abbrev gateId : (servedSig echoSig).Id := .inl ()
 
 /-- The outside world: requests still to send, and the status each answered request got. -/
 structure Client where
@@ -33,7 +37,7 @@ structure Client where
   answered : List (ReqId × Nat)
   deriving DecidableEq, Hashable
 
-def client (requests : List (ReqId × Request)) : Driver (gatedSig echoSig) Client where
+def client (requests : List (ReqId × Request)) : Driver (servedSig echoSig) Client where
   init := { toSend := requests, answered := [] }
   inputs c := (List.range c.toSend.length).filterMap fun k =>
     c.toSend[k]?.map fun x => (x, { c with toSend := c.toSend.eraseIdx k })
@@ -41,36 +45,37 @@ def client (requests : List (ReqId × Request)) : Driver (gatedSig echoSig) Clie
 
 def get (path : List String) : Request := { method := .get, path }
 
-abbrev GatedWorld (config : GateConfig) := World (gated (Server.system echo) bridge config) Client
+abbrev ServedWorld (config : GateConfig) := World (served (Server.system echo) bridge config) Client
 
-/-- Ingredients of `Http.pending_leaves`, which the checker cannot check as a whole: the
+/-- Ingredients of `Http.served_pending_leaves`, which the checker cannot check as a whole: the
 deadline of a pending request is enabled while the gate is up, and firing it removes the
 request. -/
-def deadlinesFire {config : GateConfig} (env : EnvModel (gatedSig echoSig))
-    (w : GatedWorld config) : Bool :=
-  !w.state.up none ||
-    (w.state.state none).all fun id =>
-      match w.state.step env (.timeout none (.expire id)) with
-      | some c => !(c.state none).contains id
+def deadlinesFire {config : GateConfig} (env : EnvModel (servedSig echoSig))
+    (w : ServedWorld config) : Bool :=
+  !w.state.up gateId ||
+    (w.state.state gateId).all fun id =>
+      match w.state.step env (.timeout gateId (.expire id)) with
+      | some c => !(c.state gateId).contains id
       | none => false
 
-/-- The fourth ingredient of `Http.pending_leaves`: while the gate is up, no delivery and no
-timer arms the deadline of a pending request again. The runtime would start its delay again,
-and fairness obliges a timer to fire only if it is left alone. -/
-def deadlinesLeftAlone {config : GateConfig} (w : GatedWorld config) : Bool :=
-  let leaves (ev : Event (gatedSig echoSig)) : Bool :=
-    (w.state.state none).all fun id => !(w.state.arms ev).contains (.timeout none (.expire id))
-  !w.state.up none ||
+/-- The fourth ingredient of `Http.served_pending_leaves`: while the gate is up, no delivery
+and no timer arms the deadline of a pending request again. The runtime would start its delay
+again, and fairness obliges a timer to fire only if it is left alone. -/
+def deadlinesLeftAlone {config : GateConfig} (w : ServedWorld config) : Bool :=
+  let leaves (ev : Event (servedSig echoSig)) : Bool :=
+    (w.state.state gateId).all fun id =>
+      !(w.state.arms ev).contains (.timeout gateId (.expire id))
+  !w.state.up gateId ||
     (w.state.net.all fun e => leaves (.deliver e))
-      && (w.state.timers none).all fun msg => leaves (.timeout none msg)
+      && (w.state.timers gateId).all fun msg => leaves (.timeout gateId msg)
 
-def deadlinesOfPending {config : GateConfig} (w : GatedWorld config) : Bool :=
-  (w.state.timers none).all fun
-    | .expire id => (w.state.state none).contains id
+def deadlinesOfPending {config : GateConfig} (w : ServedWorld config) : Bool :=
+  (w.state.timers gateId).all fun
+    | .expire id => (w.state.state gateId).contains id
     | _ => false
 
-def pendingWhileUp {config : GateConfig} (w : GatedWorld config) : Bool :=
-  w.state.up none && !(w.state.state none).isEmpty
+def pendingWhileUp {config : GateConfig} (w : ServedWorld config) : Bool :=
+  w.state.up gateId && !(w.state.state gateId).isEmpty
 
 /-- A request leaves the pending list only in a step that emits its answer. -/
 def leavingIsAnswered : Bool :=
@@ -78,14 +83,14 @@ def leavingIsAnswered : Bool :=
     [.arrive 1 (get []), .arrive 3 (get []), .answer 1, .answer 3, .expire 1, .expire 2,
       .expire 3]
   [[], [1], [1, 2], [2, 1]].all fun pending => messages.all fun msg =>
-    let (pending', effects) := (gate (Server.system echo) bridge {}).step pending msg
+    let (pending', effects) := (gateActor bridge {}).step pending msg
     pending.all fun id => pending'.contains id || effects.any fun
-      | .emit out => out.1 == id
+      | .emit (.inl out) => out.1 == id
       | _ => false
 
 def check (config : GateConfig) (requests : List (ReqId × Request)) (mustSee : Nat := 200)
-    (env : EnvModel (gatedSig echoSig) := {}) (maxCrashes : Nat := 0) :=
-  Check.system (gated (Server.system echo) bridge config)
+    (env : EnvModel (servedSig echoSig) := {}) (maxCrashes : Nat := 0) :=
+  Check.system (served (Server.system echo) bridge config)
     { env, driver := client requests, maxCrashes }
     [ .sometimes s!"a request gets {mustSee}" fun w => w.driver.answered.any (·.2 == mustSee),
       .always "no request is answered twice" fun w =>
@@ -93,7 +98,8 @@ def check (config : GateConfig) (requests : List (ReqId × Request)) (mustSee : 
       .sometimes "a request is answered by the system" fun w =>
         w.driver.answered.any (·.2 == 200),
       .sometimes "a request times out" fun w => w.driver.answered.any (·.2 == 504),
-      .always "a gate that cannot crash stays up" fun w => env.mayCrash none || w.state.up none,
+      .always "a gate that cannot crash stays up" fun w =>
+        env.mayCrash gateId || w.state.up gateId,
       .always "a pending request's deadline can fire, and firing it removes the request"
         (deadlinesFire env),
       .always "an armed deadline is that of a pending request" deadlinesOfPending,
@@ -104,26 +110,27 @@ def check (config : GateConfig) (requests : List (ReqId × Request)) (mustSee : 
         && requests.all fun r => w.driver.answered.any (·.1 == r.1) }
 
 def answeredAtMostAsOftenAsArrived {config : GateConfig} (requests : List (ReqId × Request))
-    (w : GatedWorld config) : Bool :=
+    (w : ServedWorld config) : Bool :=
   requests.all fun (id, _) =>
     w.driver.answered.countP (·.1 == id) + w.driver.toSend.countP (·.1 == id)
       ≤ requests.countP (·.1 == id)
 
-def deadlinesArmed {config : GateConfig} (w : GatedWorld config) : Bool :=
-  !w.state.up none ||
-    (w.state.state none).all fun id => (w.state.timers none).contains (.expire id)
+def deadlinesArmed {config : GateConfig} (w : ServedWorld config) : Bool :=
+  !w.state.up gateId ||
+    (w.state.state gateId).all fun id => (w.state.timers gateId).contains (.expire id)
 
-/-- The gate crashes and restarts and every link loses and reorders. `answered_le_arrived`
-allows all of it, and duplication on every link but the one from outside to the gate. -/
-def hostile (duplicating : Option (Option Unit) → Option Unit → Bool) :
-    EnvModel (gatedSig echoSig) where
+/-- Every actor crashes and restarts and every link loses and reorders.
+`served_answered_le_arrived` allows all of it, and duplication on every link but the one from
+outside to the gate. -/
+def hostile (duplicating : Option (servedSig echoSig).Id → (servedSig echoSig).Id → Bool) :
+    EnvModel (servedSig echoSig) where
   link src dst := { ordered := false, lossy := true, duplicating := duplicating src dst }
   mayCrash _ := true
   restarts _ := true
 
-def checkArrivals (requests : List (ReqId × Request)) (env : EnvModel (gatedSig echoSig))
+def checkArrivals (requests : List (ReqId × Request)) (env : EnvModel (servedSig echoSig))
     (maxDepth : Option Nat := none) :=
-  Check.system (gated (Server.system echo) bridge {})
+  Check.system (served (Server.system echo) bridge {})
     { env, driver := client requests, maxCrashes := 1 }
     [ .always "no request is answered more often than it arrived"
         (answeredAtMostAsOftenAsArrived requests),
@@ -142,10 +149,10 @@ def tests : List (String × Bool) :=
   let refused := check {} [(1, get ["bad"]), (2, get [])] (mustSee := 400)
   let full := check { maxPending := 1 } [(1, get []), (2, get [])] (mustSee := 503)
   let reused := check {} [(1, get []), (1, get [])]
-  let crashing := check {} [(1, get [])] (env := { mayCrash := (·.isNone) }) (maxCrashes := 1)
+  let crashing := check {} [(1, get [])] (env := { mayCrash := (· == gateId) }) (maxCrashes := 1)
   let twice := [(1, get []), (1, get ["bad"])]
   let lossy := checkArrivals twice (hostile fun _ _ => false)
-  let duplicating := checkArrivals twice (hostile fun src dst => src.isSome || dst.isSome)
+  let duplicating := checkArrivals twice (hostile fun src dst => src.isSome || dst != gateId)
     (maxDepth := some 12)
   let duplicatedOutside := checkArrivals [(1, get ["bad"])] (hostile fun _ _ => true)
     (maxDepth := some 8)
@@ -162,7 +169,7 @@ def tests : List (String × Bool) :=
       | some (.deadlock _) => true
       | _ => false),
     ("gate: no id is answered more often than it arrived and pending deadlines stay armed, "
-        ++ "though the gate crashes and links lose and reorder",
+        ++ "though actors crash and links lose and reorder",
       lossy.ok && lossy.complete && lossy.witnesses.length == 2),
     ("gate: the same when every link but the one from outside duplicates, to depth 12",
       duplicating.ok && duplicating.witnesses.length == 2),
