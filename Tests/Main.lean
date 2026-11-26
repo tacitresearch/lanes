@@ -24,6 +24,7 @@ import Tests.Peers
 import Tests.Courier
 import Tests.Mailbox
 import Tests.Split
+import Tests.Batch
 
 /-!
 The test driver behind `lake test`: the pure tests and the live runtime tests, well under a
@@ -45,7 +46,7 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.KV.tests ++ Tests.Gate.tests ++ Tests.Fronted.tests ++ Tests.Join.tests
     ++ Tests.Kernel.tests ++ Tests.Frame.tests ++ Tests.Clock.tests ++ Tests.HttpClient.tests
     ++ Tests.Fair.tests ++ Tests.Codec.tests ++ Tests.Durable.fileTests ++ Tests.Split.tests
-    ++ Tests.Peers.tests ++ Tests.Courier.tests ++ Tests.Mailbox.tests
+    ++ Tests.Peers.tests ++ Tests.Courier.tests ++ Tests.Mailbox.tests ++ Tests.Batch.tests
   match args with
   | [] =>
     report (pure ++ (← Tests.Runtime.tests) ++ (← Tests.Web.tests) ++ (← Tests.Durable.tests)

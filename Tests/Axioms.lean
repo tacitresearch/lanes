@@ -6,6 +6,7 @@ import Lanes.Semantics
 import Examples.BankProofs
 import Examples.ElectionProofs
 import Examples.WatchdogProofs
+import Tests.BatchProofs
 
 /-!
 The axiom gate (rule 5.5). Each headline theorem may depend only on Lean's three standard
@@ -474,3 +475,9 @@ by `lake build`, not linked into the test executable.
 
 /-- info: 'Lanes.SysState.Loses.settle' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.SysState.Loses.settle
+
+/-- info: 'Tests.Batch.implements' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Tests.Batch.implements
+
+/-- info: 'Tests.Batch.implements_withPast' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Tests.Batch.implements_withPast
