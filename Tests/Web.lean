@@ -57,10 +57,10 @@ def serveTest : Async (List (String × Bool)) := do
     ("web: once each request is answered none is in flight", left == 0),
     ("web: HEAD is answered as GET without the body",
       head.startsWith "HTTP/1.1 200" && !head.endsWith "ok"),
-    ("web: a method no application handles is refused", options.startsWith "HTTP/1.1 405") ]
+    ("web: a method no application handles is refused", options.startsWith "HTTP/1.1 501") ]
 
 /-! Links through a real server: what `Route.link` prints, sent over a socket and decoded by
-`Std.Http`, must match the route it came from with the value it was printed from. -/
+the server's reader, must match the route it came from with the value it was printed from. -/
 
 def echoSlug : Route Slug := .get ("echo" /> .slug)
 

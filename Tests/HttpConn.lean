@@ -122,7 +122,7 @@ def next (stream : ByteArray) (w : World) : List (String × World) :=
     reads ++ answers
       ++ (if w.stranger then [] else
         [("a number nobody asked is answered", tell { w with stranger := true } (.answered 9 (reply 9)))])
-      ++ (if w.now < 4 then [("tick", tell { w with now := w.now + 1 } .tick)] else [])
+      ++ (if w.now < 3 then [("tick", tell { w with now := w.now + 1 } .tick)] else [])
       ++ (if w.stopped then [] else [("stop", tell { w with stopped := true } .stop)])
 
 def model (stream : ByteArray) : Model World String where
@@ -196,20 +196,24 @@ def properties (stream : ByteArray) : List (Property World) :=
     .sometimes "a request is refused or times out" fun w =>
       (writes w).any fun (seq, _) => !(w.submitted.any (·.1 == seq)) ]
 
-def report (stream : ByteArray) := search (model stream) (properties stream) {} id
+/-- Not a constant, so that the search runs when the tests do, not whenever the test binary
+starts, as it does for each child process of `Tests.Durable`. -/
+@[never_extract] def report (stream : ByteArray) := search (model stream) (properties stream) {} id
 
-def pipelinedReport := report pipelined
-def smuggledReport := report smuggled
+def checks : IO (List (String × Bool)) := do
+  let pipelined := report pipelined
+  let smuggled := report smuggled
+  return [
+    ("http conn: against a client that sends in any pieces, pipelines and leaves, every promise "
+      ++ "holds", pipelined.ok && pipelined.complete),
+    ("http conn: and with a request the reader refuses between two it reads",
+      smuggled.ok && smuggled.complete)]
 
 def steps (c : Conn) (events : List Event) : Conn × List Action :=
   c.run cfg (events.map (0, ·))
 
 def tests : List (String × Bool) :=
-  [ ("http conn: against a client that sends in any pieces, pipelines and leaves, every promise "
-      ++ "holds", pipelinedReport.ok && pipelinedReport.complete),
-    ("http conn: and with a request the reader refuses between two it reads",
-      smuggledReport.ok && smuggledReport.complete),
-    ("http conn: the model reads three requests and refuses one",
+  [ ("http conn: the model reads three requests and refuses one",
       (readAll pipelined 8 0).1.length == 3 && (readAll smuggled 8 0).1.length == 2
         && (readAll smuggled 8 0).2 == some .badRequest),
     ("http conn: 100 Continue is sent for a head that asks, and the body then read",

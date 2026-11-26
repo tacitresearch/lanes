@@ -79,10 +79,12 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.ReadRequest.tests ++ Tests.HttpConn.tests
   match args with
   | [] =>
-    let pure := pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.Lint.tests)
+    let pure := pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.HttpConn.checks)
+      ++ (← Tests.Lint.tests)
     failures pure
     report (pure ++ (← live)) pure.length
-  | ["fast"] => report (pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.Lint.tests))
+  | ["fast"] => report (pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.HttpConn.checks)
+      ++ (← Tests.Lint.tests))
   | ["live"] => report (← live)
   | ["journal-child", path] =>
     Tests.Durable.child path
