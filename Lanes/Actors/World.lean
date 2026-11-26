@@ -49,6 +49,14 @@ def update {ι : Type} [DecidableEq ι] {β : ι → Type} (f : (i : ι) → β 
     {i j : ι} (v : β i) (h : j ≠ i) : update f i v j = f j := by
   simp [update, h]
 
+/-- Writing back the value already there changes nothing. -/
+@[simp] theorem update_eq_self {ι : Type} [DecidableEq ι] {β : ι → Type} (f : (i : ι) → β i)
+    (i : ι) : update f i (f i) = f := by
+  funext j
+  by_cases h : j = i
+  · subst h; simp
+  · simp [h]
+
 variable {σ : Signature}
 
 /-- The global state of a system. -/

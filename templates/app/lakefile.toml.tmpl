@@ -1,6 +1,6 @@
 name = "{{name}}"
 version = "0.1.0"
-defaultTargets = ["{{name}}"]
+defaultTargets = ["{{Name}}", "{{name}}"]
 testDriver = "check"
 
 [[require]]
@@ -9,6 +9,7 @@ name = "lanes"
 
 [[lean_lib]]
 name = "{{Name}}"
+globs = ["{{Name}}.+"]
 
 # The application.
 [[lean_exe]]

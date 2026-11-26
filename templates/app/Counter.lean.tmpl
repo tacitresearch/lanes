@@ -35,33 +35,29 @@ structure Config where
   /-- The counter never exceeds this (rule 2.6: bounded everything). -/
   limit : Nat := 1000
 
-/-- The system has one actor. -/
-abbrev sig : Signature where
-  Id := Unit
-  Msg _ := Request
-  In := Request
-  Out := Response
+/-- The interface: requests in, responses out, one actor. -/
+abbrev sig : Signature := Server.sig Request Response
 
-/-- The counter actor. Its state is the count. -/
-def counter (config : Config) : sig.Actor () Nat where
+/--
+The spec: what each request does, as if requests were handled one at a time. This is the part
+to review. It is also the implementation, because the `Server` behaviour runs it as an actor.
+-/
+def service (config : Config) : Service sig Nat where
   init := 0
   step count
     | .increment req =>
-      if count < config.limit then (count + 1, [.emit ⟨req, count + 1, true⟩])
-      else (count, [.emit ⟨req, count, false⟩])
-    | .read req => (count, [.emit ⟨req, count, true⟩])
-  recover count := (count, [])
+      if count < config.limit then (count + 1, [⟨req, count + 1, true⟩])
+      else (count, [⟨req, count, false⟩])
+    | .read req => (count, [⟨req, count, true⟩])
 
-/-- The system. -/
-abbrev system (config : Config) : System sig where
-  State _ := Nat
-  actor _ := counter config
-  accept request := ⟨(), request⟩
+/-- The system: the service behind a mailbox. -/
+abbrev system (config : Config) : System sig :=
+  Server.system (service config)
 
 /-- The counter never exceeds its limit. -/
 theorem counter_le_limit (config : Config) :
-    (counter config).Invariant fun count => count ≤ config.limit := by
-  actor_invariant [counter]
+    (Server.actor (service config)).Invariant fun count => count ≤ config.limit := by
+  actor_invariant [Server.actor, service]
 
 /-- In every reachable state of the system, under any environment model. -/
 theorem system_le_limit (config : Config) (env : EnvModel sig) :

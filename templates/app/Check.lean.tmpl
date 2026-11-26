@@ -16,8 +16,10 @@ def requests : List Request :=
   [.increment 1, .increment 2, .increment 3, .read 4]
 
 def main : IO UInt32 := do
-  let report := Check.system (system { limit := 2 }) { driver := Driver.anyOrder requests }
-    [ .always "the counter never exceeds its limit" fun w => w.state.state () ≤ 2,
+  let report := Check.system (system { limit := 2 })
+    { driver := (service { limit := 2 }).monitored (Driver.anyOrder requests) }
+    [ Check.refines "every response is allowed by the spec",
+      .always "the counter never exceeds its limit" fun w => w.state.state () ≤ 2,
       .sometimes "the counter reaches its limit" fun w => w.state.state () == 2,
       .sometimes "an increment is refused" fun w => w.state.outbox.any (!·.applied) ]
   IO.println report.renderSystem

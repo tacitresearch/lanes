@@ -19,6 +19,7 @@ of unfolding the step function.
   `step_output`, `step_crash`, `step_start`: one `iff` per event.
 - `SysState.mem_of_deliverable`: a deliverable message is in flight.
 - `SysState.performAll_nil`, `performAll_cons`: effects are performed in order.
+- `SysState.performAll_emit`: what a step that only emits outputs does.
 -/
 
 public section
@@ -32,6 +33,20 @@ variable {σ : Signature} {sys : System σ} {env : EnvModel σ} {c c' : SysState
 @[simp] theorem performAll_cons (c : SysState sys) (i : σ.Id) (eff : Effect σ i)
     (effs : List (Effect σ i)) :
     c.performAll i (eff :: effs) = (c.perform i eff).performAll i effs := rfl
+
+/-- Emitting outputs appends them to the outbox and touches nothing else. -/
+theorem performAll_emit (c : SysState sys) (i : σ.Id) (outs : List σ.Out) :
+    c.performAll i (outs.map .emit) = { c with outbox := c.outbox ++ outs } := by
+  induction outs generalizing c with
+  | nil => simp
+  | cons out outs ih => simp [ih, perform, List.append_assoc]
+
+/-- A list of emits never asks to stop. -/
+theorem any_isStop_emit {i : σ.Id} (outs : List σ.Out) :
+    (outs.map (Effect.emit (self := i))).any Effect.isStop = false := by
+  induction outs with
+  | nil => rfl
+  | cons out outs ih => simp [Effect.isStop, ih]
 
 /-- A deliverable message is in flight. -/
 theorem mem_of_deliverable {e : Envelope σ} (h : c.deliverable env e = true) : e ∈ c.net := by

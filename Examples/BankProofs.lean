@@ -36,15 +36,6 @@ def Conserved (c : SysState (bank A opening)) : Prop :=
   (∑ a : A, (c.state a).balance) + (c.net.map inFlight).sum = Fintype.card A * opening ∧
     ∀ a : A, c.timers a = []
 
-/-- The environment models conservation holds under: nothing is lost, duplicated or crashed. -/
-structure Faultless (env : EnvModel (sig A)) : Prop where
-  /-- No link loses messages. -/
-  lossless : ∀ src dst, (env.link src dst).lossy = false
-  /-- No link duplicates messages. -/
-  noDuplicates : ∀ src dst, (env.link src dst).duplicating = false
-  /-- No account crashes. -/
-  noCrashes : ∀ a, env.mayCrash a = false
-
 /-- What handling a message does to the whole state: the money moved, and nothing else that
 `Conserved` reads. -/
 theorem handle_spec (env : EnvModel (sig A)) (c : SysState (bank A opening)) (a : A)
@@ -59,21 +50,19 @@ theorem handle_spec (env : EnvModel (sig A)) (c : SysState (bank A opening)) (a 
     by_cases h : (amount : Int) ≤ (c.state a).balance
     · simp [SysState.handle, SysState.settle, SysState.perform, Effect.isStop, bank, account, h,
         sum_update (fun _ (s : Account) => s.balance), inFlight]
-    · simp [SysState.handle, SysState.settle, SysState.perform, Effect.isStop, bank, account, h,
-        sum_update (fun _ (s : Account) => s.balance)]
+    · simp [SysState.handle, SysState.settle, SysState.perform, Effect.isStop, bank, account, h]
   | credit amount =>
     simp [SysState.handle, SysState.settle, bank, account,
       sum_update (fun _ (s : Account) => s.balance)]
     omega
   | query req =>
-    simp [SysState.handle, SysState.settle, SysState.perform, Effect.isStop, bank, account,
-      sum_update (fun _ (s : Account) => s.balance)]
+    simp [SysState.handle, SysState.settle, SysState.perform, Effect.isStop, bank, account]
 
 /--
 Money is conserved in every reachable state of the bank, for any accounts and any opening
 balance, as long as the environment loses, duplicates and crashes nothing.
 -/
-theorem money_conserved (env : EnvModel (sig A)) (henv : Faultless env) :
+theorem money_conserved (env : EnvModel (sig A)) (henv : env.Faultless) :
     (bank A opening).Invariant env Conserved := by
   apply System.Inductive.invariant
   constructor
@@ -81,8 +70,7 @@ theorem money_conserved (env : EnvModel (sig A)) (henv : Faultless env) :
   · rintro c ev c' ⟨hsum, htimers⟩ hstep
     cases ev with
     | input x =>
-      rw [SysState.step_input] at hstep
-      subst hstep
+      obtain rfl := SysState.step_input.mp hstep
       refine ⟨?_, htimers⟩
       cases x <;> simpa [bank, inFlight] using hsum
     | deliver e =>

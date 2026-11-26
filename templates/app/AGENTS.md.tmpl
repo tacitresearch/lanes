@@ -21,7 +21,8 @@ lake exe {{name}} 8080  # run
 
 ## Layout
 
-- `{{Name}}/`: logic. Actors, specs and proofs. Pure: no IO.
+- `{{Name}}/Counter.lean`: logic. The spec, the actor and its invariant. Pure: no IO.
+- `{{Name}}/Proofs.lean`: proofs that need `Lanes.Semantics`, such as refinement to the spec.
 - `Check.lean`: model checks on small instances, run by `lake test`.
 - `Main.lean`: the edge. HTTP, HTML views, `main`.
 

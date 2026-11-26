@@ -24,6 +24,7 @@ spawn effect and no registry in the semantics.
 - `Envelope σ`: a message in flight.
 - `System σ`: an actor for every identity, plus the routing of external inputs.
 - `Link`, `EnvModel σ`: the assumptions about links and crashes that a property is proved under.
+- `EnvModel.Faultless`: nothing lost, duplicated or crashed.
 -/
 
 @[expose] public section
@@ -210,6 +211,21 @@ def reliable : EnvModel σ := {}
 /-- Every link between two actors is a network link; links from the outside stay reliable. -/
 def distributed : EnvModel σ where
   link src _ := if src.isSome then Link.network else Link.reliable
+
+/-- An environment that loses nothing, duplicates nothing and crashes nothing. Messages may
+still be reordered where a link is not ordered. This is the assumption of properties that hold
+inside one process. -/
+structure Faultless (env : EnvModel σ) : Prop where
+  /-- No link loses messages. -/
+  lossless : ∀ src dst, (env.link src dst).lossy = false
+  /-- No link duplicates messages. -/
+  noDuplicates : ∀ src dst, (env.link src dst).duplicating = false
+  /-- No actor crashes. -/
+  noCrashes : ∀ i, env.mayCrash i = false
+
+/-- The reliable environment is faultless. -/
+theorem reliable_faultless : (reliable : EnvModel σ).Faultless :=
+  ⟨fun _ _ => rfl, fun _ _ => rfl, fun _ => rfl⟩
 
 end EnvModel
 

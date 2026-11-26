@@ -40,7 +40,7 @@ def validName (name : String) : Bool :=
 def files : List (String × String) :=
   [ ("lakefile.toml", include_str "../templates/app/lakefile.toml.tmpl"),
     ("{{Name}}/Counter.lean", include_str "../templates/app/Counter.lean.tmpl"),
-    ("{{Name}}.lean", "import {{Name}}.Counter\n"),
+    ("{{Name}}/Proofs.lean", include_str "../templates/app/Proofs.lean.tmpl"),
     ("Check.lean", include_str "../templates/app/Check.lean.tmpl"),
     ("Main.lean", include_str "../templates/app/Main.lean.tmpl"),
     ("AGENTS.md", include_str "../templates/app/AGENTS.md.tmpl"),
