@@ -45,6 +45,28 @@ namespace Kernel
 
 variable {sys : System σ} [Hashable σ.Id]
 
+private theorem get?_ofList_toList {α : Type} {β : α → Type} [DecidableEq α] [Hashable α]
+    (m : Std.DHashMap α β) (a : α) : (Std.DHashMap.ofList m.toList).get? a = m.get? a := by
+  cases h : m.get? a with
+  | some b =>
+    rw [Std.DHashMap.get?_ofList_of_mem (k := a) (by simp) Std.DHashMap.distinct_keys_toList
+      (Std.DHashMap.mem_toList_iff_get?_eq_some.mpr h)]
+    rfl
+  | none =>
+    refine Std.DHashMap.get?_ofList_of_contains_eq_false ?_
+    rw [Std.DHashMap.map_fst_toList_eq_keys, Std.DHashMap.contains_keys,
+      Std.DHashMap.contains_eq_isSome_get?, h]
+    rfl
+
+theorem cell_image_kernel (k : Kernel sys) : k.image.kernel.cell = k.cell := by
+  funext i
+  simp [cell, image, Image.kernel, get?_ofList_toList]
+
+/-- A kernel restored from its image stands for the same system state. -/
+theorem abs_image_kernel (k : Kernel sys) (ob : List σ.Out) : k.image.kernel.abs ob = k.abs ob := by
+  simp only [abs, cell_image_kernel]
+  simp [image, Image.kernel, Fifo.toList]
+
 theorem cell_setCell (k : Kernel sys) (i : σ.Id) (c : Cell sys i) :
     (k.setCell i c).cell = update k.cell i c := by
   funext j
@@ -468,6 +490,7 @@ theorem apply_sound (k : Kernel sys) (op : Op σ) :
   | step => exact step_sound k
   | batch fuel => exact runBatch_sound k fuel
   | fire i msg due => exact fire_sound k i msg due
+  | snapshot => exact congrArg some (abs_image_kernel k []).symm
 
 theorem exec_sound (k : Kernel sys) (ops : List (Op σ)) :
     (k.abs).run env (k.exec ops).events = some ((k.exec ops).kernel.abs) := by
@@ -558,6 +581,7 @@ theorem apply_outputs (k : Kernel sys) (op : Op σ) :
   | step => exact step_outputs k
   | batch fuel => exact runBatch_outputs k fuel
   | fire i msg due => exact fire_outputs k i msg due
+  | snapshot => rfl
 
 /-- The outputs a shell is handed are the outputs of the run, no more, no fewer, in order. -/
 theorem exec_outputs (k : Kernel sys) (ops : List (Op σ)) :

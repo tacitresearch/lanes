@@ -83,6 +83,16 @@ def map (c : Codec β) (to : α → β) (back : β → Option α) (h : ∀ a, ba
     return (a, rest)
   sound a rest := by simp [c.sound, h]
 
+/-- A pair whose second part's type, and so its codec, depends on the first. -/
+def sigma {ι : Type} {β : ι → Type} (a : Codec ι) (b : ∀ i, Codec (β i)) :
+    Codec ((i : ι) × β i) where
+  write x := a.write x.1 ++ (b x.1).write x.2
+  read records := do
+    let (i, rest) ← a.read records
+    let (v, rest) ← (b i).read rest
+    return (⟨i, v⟩, rest)
+  sound x rest := by simp [List.append_assoc, a.sound, (b x.1).sound]
+
 def bool : Codec Bool :=
   nat.map (fun b => if b then 1 else 0)
     (fun n => if n = 0 then some false else if n = 1 then some true else none)

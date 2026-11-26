@@ -212,6 +212,31 @@ def runBatch (k : Kernel sys) : (fuel : Nat) → Step sys
 def quiet (k : Kernel sys) (timers : Bool) : Bool :=
   k.queue.isEmpty && (!timers || k.agenda.isEmpty)
 
+/-- A kernel written down, as a snapshot holds it. -/
+structure Image (sys : System σ) where
+  cells : List ((i : σ.Id) × Cell sys i)
+  queue : List (Envelope σ)
+  agenda : List (Due × ((i : σ.Id) × σ.Msg i))
+  nextToken : Nat
+  clock_ms : Nat
+  timerTurn : Bool
+
+def image (k : Kernel sys) : Image sys where
+  cells := k.cells.toList
+  queue := k.queue.toList
+  agenda := k.agenda.toList
+  nextToken := k.nextToken
+  clock_ms := k.clock_ms
+  timerTurn := k.timerTurn
+
+def Image.kernel (img : Image sys) : Kernel sys where
+  cells := .ofList img.cells
+  queue := { front := img.queue }
+  agenda := .ofList img.agenda
+  nextToken := img.nextToken
+  clock_ms := img.clock_ms
+  timerTurn := img.timerTurn
+
 /-- Everything a shell can ask of a kernel. -/
 inductive Op (σ : Signature) where
   | input (x : σ.In)
@@ -219,6 +244,12 @@ inductive Op (σ : Signature) where
   | step
   | batch (fuel : Nat)
   | fire (i : σ.Id) (msg : σ.Msg i) (due : Due)
+  /-- The kernel becomes the one its image restores. That is the same system state
+  (`Kernel.abs_image_kernel`), but not the same value: a hash map built again is laid out
+  differently. A shard that saves an image goes on with the restored kernel, so that a shard
+  started from the saved image computes the very same values, and no theorem is needed that
+  two kernels alike in everything observable behave alike. -/
+  | snapshot
 
 def apply (k : Kernel sys) : Op σ → Step sys
   | .input x => k.accept x
@@ -226,6 +257,7 @@ def apply (k : Kernel sys) : Op σ → Step sys
   | .step => k.step
   | .batch fuel => k.runBatch fuel
   | .fire i msg due => k.fire i msg due
+  | .snapshot => { kernel := k.image.kernel }
 
 def exec (k : Kernel sys) : List (Op σ) → Step sys
   | [] => { kernel := k }
