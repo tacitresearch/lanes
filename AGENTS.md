@@ -24,8 +24,28 @@ lake exe cache get   # prebuilt Mathlib; never build Mathlib from source
 lake build           # the library
 lake test            # pure tests and live runtime tests, a few seconds
 lake exe lanesCheck  # larger model checks, random runs and the scale benchmark, about 20 s: run once, never in a loop
-lake exe lanes lint  # LANES_STYLE checks
+lake exe lanes lint  # LANES_STYLE checks, and that generated files are up to date
+lake exe lanes lint --fix  # rewrite the generated files: line counts, decisions' index, STATUS
 ```
+
+## Parallel branches
+
+Several agents work at once, each on a branch that is merged into the main branch. The layout
+gives independent changes disjoint files; keep it that way.
+
+- Commit after every step that builds.
+- Before reporting, merge the main branch and run the checks again.
+- A new decision is a new file `docs/decisions/new-<slug>.md` whose first line is
+  `# D?. Title`. Do not choose its number: `lake exe lanes lint --fix --main` numbers it on the
+  main branch after the merge.
+- A change of status goes in its area's fragment, `docs/status/areas/<area>.md` or
+  `docs/status/apps/<app>.md` (the row on the first line, the area's known limits after it).
+  `docs/STATUS.md` is generated; do not edit it.
+- An axiom gate goes in `Tests/Axioms/<Area>.lean`, under the line naming its module; a lemma
+  about lists at the end of its topic's file in `Lanes/Data/List/`.
+- Never type a count: the line counts in `TRUSTED.md` and `README.md` are written by
+  `lake exe lanes lint --fix`. A conflict in a generated file is resolved by taking either side
+  and running `lake exe lanes lint --fix`.
 
 The toolchain is pinned in `lean-toolchain` and follows CSLib's. Dependencies are pinned in
 `lake-manifest.json`; upgrade them deliberately, CSLib first.
