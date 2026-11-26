@@ -57,6 +57,22 @@ stated of the entry points is what the helpers are for, and the inventory says w
 point carries each. A definition of another module is not covered by being called: it is that
 module's entry point, and it has statements of its own or it has none.
 
+*Amendment: abbreviations of predicates, and theorems' matchers.* A predicate abbreviation in a
+statement (an `abbrev` whose value is a `Prop`) is read as its body, in whatever module it is,
+and through such abbreviations in that body: `System.ImplementsOnce sys env svc key` is
+`sys.Refines env (svc.once key)` to Lean at reducible transparency, and it is that statement
+written shorter, not an entry point of its module. Other predicates (`Refines`, `Invariant`) are
+not read through, and neither is an `abbrev` of a value: a system is an `abbrev` so that instance
+search sees its state, and reading `fronted` and `System.shard` through would call
+`Actor.mapEff`, `shardEffect` and `System.shard` proved by being called. Following every
+predicate's value instead would credit what the semantics' own predicates run, `Effect.isStop`
+among them, to every theorem about a system. Separately, the definitions Lean writes for a
+theorem's proof (its matchers, filed under the theorem's name or a private copy of it) are part
+of the proof: they neither run nor state, so they no longer keep a definition a theorem's proof
+matches on from being a spec. Those matchers are what left `Service.once` and `Service.Once.take`
+with status none: the two are specs, and so are eight definitions the inventory had given as
+proved. `Tests/Inventory.lean` checks both rules on facts written by hand.
+
 *Alternatives.* An attribute `@[proves f]` on theorems says what a gate says, with more
 ceremony, with code in the library to define it, and without checking axioms. Counting every
 theorem whose statement mentions a definition is computed too, but calls SHA-256 proved by its
