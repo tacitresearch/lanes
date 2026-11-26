@@ -90,7 +90,8 @@ def flakyTest : Async (List (String × Bool)) := do
   discard <| Async.concurrentlyAll clients
   rt.idle (timers := true)
   let events ← rt.trace
-  let some c ← replay flaky rt | return [("flaky: the semantics accepts the trace", false)]
+  let some c ← replay flaky rt
+    | rt.stop; return [("flaky: the semantics accepts the trace", false)]
   let collectorState ← rt.state .collector
   let workerStates ← (List.finRange 3).mapM fun k => rt.state (.worker k)
   let stops := events.toList.countP fun
@@ -305,6 +306,52 @@ def batchTest : Async (List (String × Bool)) := do
   rt.stop
   return results
 
+/-! The one thing the shell is trusted for: handing outputs on, all of them, in order. -/
+
+abbrev burstSig : Signature where
+  Id := Unit
+  Msg _ := Nat
+  In := Nat
+  Out := Nat
+
+abbrev burst : System burstSig where
+  State _ := Unit
+  actor _ := { init := (), step := fun _ n => ((), [.emit n, .emit (n + 1), .emit (n + 2)]),
+               recover := fun _ => ((), [.emit 99]) }
+  accept x := ⟨(), x⟩
+  boot := [()]
+
+def outputsTest : Async (List (String × Bool)) := do
+  let outputs ← IO.mkRef #[]
+  let rt ← Runtime.start burst {} fun out => outputs.modify (·.push out)
+  rt.input 10
+  rt.input 20
+  rt.idle
+  rt.stop
+  return [("outputs: every output is handed over once, in order, boot's included",
+    (← outputs.get) == #[99, 10, 11, 12, 20, 21, 22])]
+
+/-! A shard that always has work must still stop. -/
+
+abbrev pingSig : Signature where
+  Id := Bool
+  Msg _ := Unit
+  In := Unit
+
+abbrev ping : System pingSig where
+  State _ := Nat
+  actor self := { init := 0, step := fun s _ => (s + 1, [.send (!self) ()]),
+                  recover := fun s => (s, []) }
+  accept _ := ⟨true, ()⟩
+
+def busyStopTest : Async (List (String × Bool)) := do
+  let rt ← Runtime.start ping
+  rt.input ()
+  Async.sleep 20
+  rt.stop
+  return [("stop: a shard that never runs out of work still ends",
+    (← throws (rt.input ())) && !(← rt.tryInput ()))]
+
 def tests : IO (List (String × Bool)) := do
   let a ← flakyTest.block
   let b ← bankTest.block
@@ -314,6 +361,8 @@ def tests : IO (List (String × Bool)) := do
   let f ← backPressureTest.block
   let g ← stopTest.block
   let h ← batchTest.block
-  return a ++ b ++ c ++ d ++ e ++ f ++ g ++ h
+  let i ← outputsTest.block
+  let j ← busyStopTest.block
+  return a ++ b ++ c ++ d ++ e ++ f ++ g ++ h ++ i ++ j
 
 end Tests.Runtime

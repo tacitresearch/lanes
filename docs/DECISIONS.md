@@ -293,6 +293,11 @@ Templ features taken: components, fragments (`<>…</>`), attribute splices (`{a
 conditional classes (`Html.classes`). Not taken: bare text children. Lean's tokenizer would
 split arbitrary text into Lean tokens, so text is a string literal.
 
+A `Path` also carries a proof that no segment it prints is empty, `.` or `..`. Those do not
+survive a URL: an empty first segment makes `//host`, which a browser reads as another site, and
+browsers remove dot segments however they are escaped. Free text in a path is therefore a
+`Slug`, which cannot be one of them, and a number matches only in its canonical spelling.
+
 ## D23. Time is data, and a shard is a thread
 
 *Refines D18, after a second independent review.*
@@ -325,6 +330,8 @@ Consequences:
 
 - A program whose `main` returns without stopping its runtimes does not exit, as with any
   thread that is not a daemon. `Http.Server.stop` stops the runtime.
+- `stop` means stop now: the shard finishes the commands already handed over and one batch,
+  then ends, even if actors still have messages for each other. Draining could never end.
 - Every kernel operation is total and consumes the kernel: there is no "nothing to do" result
   that would force the caller to keep a second reference.
 - The agenda holds exactly the pending timers, whatever the shell does

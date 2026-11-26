@@ -46,7 +46,7 @@ instance (config : GateConfig) : (gated (Server.system echo) bridge config).Insp
 structure Client where
   toSend : List (ReqId × Request)
   answered : List (ReqId × Nat)
-  deriving BEq, Hashable
+  deriving DecidableEq, Hashable
 
 def client (requests : List (ReqId × Request)) : Driver (gatedSig echoSig) Client where
   init := { toSend := requests, answered := [] }

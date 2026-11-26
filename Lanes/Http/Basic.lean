@@ -16,9 +16,10 @@ keeps handlers pure and keeps the young `Std.Http` API behind one thin wrapper.
 
 namespace Lanes.Http
 
-/-- The request methods an application can handle. Others are refused by the adapter. -/
+/-- The request methods an application sees. The adapter answers `HEAD` as `GET` without the
+body and refuses the rest with `405`. -/
 inductive Method where
-  | get | head | post | put | patch | delete | options
+  | get | post | put | patch | delete
   deriving DecidableEq, Repr, Hashable
 
 /-- Bodies print as text when they are UTF-8 and as a byte count otherwise. Low priority, so a

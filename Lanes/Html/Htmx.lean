@@ -23,7 +23,7 @@ namespace Lanes.Hx
 
 open Lanes.Http
 
-def verbAttr : Verb → String
+def methodAttr : Method → String
   | .get => "hx-get"
   | .post => "hx-post"
   | .put => "hx-put"
@@ -31,7 +31,7 @@ def verbAttr : Verb → String
   | .delete => "hx-delete"
 
 def request {α : Type} (route : Route α) (a : α) : List Html.Attr :=
-  [⟨verbAttr route.verb, some (route.link a)⟩]
+  [⟨methodAttr route.method, some (route.link a)⟩]
 
 /-- A CSS selector, or one of htmx's `this`, `closest …`, `find …`, `next …`, `previous …`. -/
 def target (selector : String) : List Html.Attr :=
@@ -69,14 +69,20 @@ inductive Trigger where
   | fromBody (inner : Trigger)
   deriving Repr
 
+/-- htmx reads `name[expression]` in a trigger as JavaScript to run, so an event name keeps
+only what a name needs. -/
+def eventName (name : String) : String :=
+  String.ofList (name.toList.filter fun c =>
+    c.isAlphanum || c == '-' || c == '_' || c == ':' || c == '.')
+
 def Trigger.render : Trigger → String
   | .load => "load"
   | .click => "click"
   | .change => "change"
   | .submit => "submit"
   | .revealed => "revealed"
-  | .event name => name
-  | .every seconds => s!"every {seconds}s"
+  | .event name => eventName name
+  | .every seconds => s!"every {max 1 seconds}s"
   | .fromBody inner => inner.render ++ " from:body"
 
 def trigger (triggers : List Trigger) : List Html.Attr :=
@@ -107,7 +113,7 @@ def Request.isHtmx (r : Request) : Bool :=
 
 /-- Fire `event` on the page when the response arrives; views listen with `Hx.Trigger.event`. -/
 def Response.trigger (r : Response) (event : String) : Response :=
-  r.withHeader "hx-trigger" event
+  r.withHeader "hx-trigger" (Hx.eventName event)
 
 /-- Make the browser go to `route`, as a redirect does for a request htmx did not make. -/
 def Response.hxRedirect {α : Type} (r : Response) (route : Route α) (a : α) : Response :=

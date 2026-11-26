@@ -178,6 +178,26 @@ pinned by a test:
 | No theorem mentioned the kernel's commands | Fixed: there are no commands; `Kernel.exec_outputs` |
 | Back-pressure, timer delay and `stop` were untested | Tested without depending on timing |
 
+A third review (2026-11-27), of the rewritten runtime and the web layer, found six defects:
+
+| Finding | Outcome |
+| --- | --- |
+| `Server.stop` with a request in flight panicked and the process could not exit | Fixed: waiters are released at stop and never awaited unsafely; tested over a socket |
+| Due timers starved messages | In progress: the kernel alternates, with a fairness theorem |
+| `stop` never ended a shard that always has work | Fixed: a closed inbox ends the loop; `stop` returns when the shard has ended; tested |
+| `HEAD` and `OPTIONS` got the application's 404 | Fixed: `HEAD` is `GET` without the body, other methods get `405`; tested |
+| A timer could fire early by the length of its batch | Documented on `Runtime.start`: nothing may depend on a timer not firing early |
+| A link with an empty or dot segment did not round-trip and could name another host | Fixed: a `Path` carries a proof that its segments are clean; text segments are `Slug`s; tested through the real server |
+| The shell's one duty, handing outputs on, was not tested | Tested: several outputs per batch and boot outputs compared exactly |
+| `exec_reachable` was cited for a loop that calls `runBatch` | In progress: `batch` becomes an operation the theorem covers |
+| `Kernel.fire` could drop another timer's agenda entry | Fixed, found independently by the agenda proof |
+| `system_sound` did not reach the gate check | Fixed: `Tests/SystemSound.lean` applies it |
+| An htmx event name built from data could carry script | Fixed: names are filtered; tested |
+
+Not done from that review: `election_safety` speaks of leaders that coexist, not of a term
+having had two leaders at different times; a duplicate attribute from a splice renders twice;
+`trusted-size` accepts only the exact wording `` `path`, N lines ``.
+
 1. Comment rule in `AGENTS.md`; strip comments; split the test binaries.
 2. Proofs of the checker and the monitor (section 2).
 3. Shard kernel, its refinement theorem, simulation harness; port the conformance tests; delete

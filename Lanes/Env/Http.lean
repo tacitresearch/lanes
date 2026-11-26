@@ -44,15 +44,15 @@ structure Server (sys : System σ) (bridge : Bridge σ) (config : ServerConfig)
   private mk ::
   private runtime : Runtime (gated sys bridge config.gate)
   private http : Std.Http.Server
+  private waiting : Mutex (Std.HashMap ReqId (IO.Promise Response))
 
+/-- `HEAD` is handled as `GET`; its response is sent without the body. -/
 private def toMethod? : Std.Http.Method → Option Method
-  | .get => some .get
-  | .head => some .head
+  | .get | .head => some .get
   | .post => some .post
   | .put => some .put
   | .patch => some .patch
   | .delete => some .delete
-  | .options => some .options
   | _ => none
 
 /-- Header names or values that are not valid HTTP are left out. -/
@@ -97,16 +97,18 @@ def serve (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : Serv
   let handler := Std.Http.Server.Handler.ofFn fun req => do
     let some request ← readRequest config.maxBodyBytes req
       | respond (Response.text "method not allowed\n" 405)
+    let headOnly := req.line.method == .head
+    let send := fun (r : Response) => respond (if headOnly then { r with body := .empty } else r)
     let id ← nextId.modifyGet fun n => (n, n + 1)
     let waiter ← IO.Promise.new
     waiting.atomically (modify (·.insert id waiter))
-    if ← runtime.tryInput (id, request) then respond (← await waiter)
+    if ← runtime.tryInput (id, request) then send ((← await waiter.result?).getD busy)
     else
       waiting.atomically (modify (·.erase id))
-      respond busy
+      send busy
   let httpConfig : Std.Http.Config := { maxBodySize := config.maxBodyBytes }
   let http ← Std.Http.Server.serve (.v4 ⟨addr, config.port⟩) handler httpConfig
-  return { runtime, http }
+  return { runtime, http, waiting }
 
 namespace Server
 
@@ -115,11 +117,13 @@ variable {sys : System σ} {bridge : Bridge σ} {config : ServerConfig} [Hashabl
 def port (server : Server sys bridge config) : Option UInt16 :=
   server.http.localAddr.map (·.port)
 
-/-- Stop accepting connections and wait for the open ones to end. Requests in flight are
-answered `503` by the underlying server. -/
+/-- Stop accepting connections, wait for the open ones to end, and stop the shard. Requests in
+flight are answered `503` by the underlying server. -/
 def stop (server : Server sys bridge config) : Async Unit := do
   server.http.shutdownAndWait
   server.runtime.stop
+  let left ← server.waiting.atomically (modifyGet fun waiting => (waiting.values, {}))
+  for waiter in left do waiter.resolve busy
 
 def wait (server : Server sys bridge config) : Async Unit :=
   server.http.waitShutdown

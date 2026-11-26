@@ -76,6 +76,9 @@ def tests : List (String × Bool) :=
     ("htmx: triggers render in htmx's syntax",
       (<td {Hx.trigger [.load, .fromBody (.event "saved"), .every 5]}/>).render
         == "<td hx-trigger=\"load, saved from:body, every 5s\"></td>"),
+    ("htmx: an event name cannot carry a script filter",
+      (<td {Hx.trigger [.event "saved[alert(1)]", .every 0]}/>).render
+        == "<td hx-trigger=\"savedalert1, every 1s\"></td>"),
     ("route: dispatch answers with the first route that matches",
       let account : Http.Route Nat := .get ("accounts" /> .nat)
       let home : Http.Route Unit := .get .root
@@ -114,9 +117,18 @@ def tests : List (String × Bool) :=
         && account.match? { request with path := ["accounts", "x"] } == none
         && account.match? { request with method := .post } == none),
     ("route: a link escapes what a segment may not carry",
-      let file : Http.Route String := .get ("files" /> .str)
-      file.link "a/b c%é~" == "/files/a%2Fb%20c%25%C3%A9~"
+      let file : Http.Route Http.Slug := .get ("files" /> .slug)
+      (Http.Slug.ofString? "a/b c%é~").map file.link == some "/files/a%2Fb%20c%25%C3%A9~"
         && Http.percentDecode (Http.percentEncode "a/b c%é~") == some "a/b c%é~"),
+    ("route: an empty or dot segment is not a slug, so no link can name another host",
+      ["", ".", ".."].all (fun s => (Http.Slug.ofString? s).isNone)
+        && (Http.Route.get ("files" /> .slug)).match?
+            { method := .get, path := ["files", ".."] } == none),
+    ("route: a number has one spelling",
+      let account : Http.Route Nat := .get ("accounts" /> .nat)
+      account.match? { method := .get, path := ["accounts", "7"] } == some 7
+        && account.match? { method := .get, path := ["accounts", "007"] } == none
+        && account.match? { method := .get, path := ["accounts", "1_000"] } == none),
     ("http: form data decodes percent escapes and plus",
       Http.parseForm "name=Ada+Lovelace&q=a%26b%3Dc&flag" ==
         [("name", "Ada Lovelace"), ("q", "a&b=c"), ("flag", "")]),

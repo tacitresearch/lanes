@@ -4,9 +4,10 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Tests.Bank
 import Tests.Election
+import Tests.Gate
 
 /-!
-`Check.system_sound` applied to the bank and election checks of the test suite: what their PASS
+`Check.system_sound` applied to the bank, election and gate checks of the test suite: what their PASS
 means, as theorems. The kernel cannot run the search, so the PASS itself stays a hypothesis.
 -/
 
@@ -56,5 +57,30 @@ example (hfailure : (check {} 1).failure = none) (hcomplete : (check {} 1).compl
   rcases hp with rfl | rfl | rfl <;> exact h.eq_of_quiet fun _ => rfl
 
 end Election
+
+section Gate
+
+open Tests.Gate Lanes.Http
+
+instance (config : GateConfig) : ∀ i, @LawfulBEq
+    ((gated (Server.system echo) bridge config).State i)
+    (System.Inspect.beqState (sys := gated (Server.system echo) bridge config) i)
+  | none => inferInstanceAs (LawfulBEq (List ReqId))
+  | some _ => inferInstanceAs (LawfulBEq Unit)
+
+def twoRequests : List (ReqId × Request) := [(1, get []), (2, get [])]
+
+example (hfailure : (check {} twoRequests).failure = none)
+    (hcomplete : (check {} twoRequests).complete = true)
+    {w : World (gated (Server.system echo) bridge {}) Client}
+    (hw : Scenario.Reachable (gated (Server.system echo) bridge {})
+      { driver := client twoRequests } (fun _ => true) w) :
+    ((w.driver.answered.map (·.1)).eraseDups.length == w.driver.answered.length) = true := by
+  refine Check.system_sound _ _ _ ?_ (fun _ _ _ => rfl) hfailure hcomplete (.tail _ (.head _)) hw
+  intro p hp a b h
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at hp
+  rcases hp with rfl | rfl | rfl | rfl <;> exact h.eq_of_quiet fun _ => rfl
+
+end Gate
 
 end Tests.SystemSound

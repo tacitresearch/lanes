@@ -56,6 +56,7 @@ structure Runtime (sys : System σ) [Hashable σ.Id] where
   private inbox : CloseableChannel (Cmd sys)
   private log : IO.Ref (Array (Event σ))
   private epoch_ms : Nat
+  private finished : IO.Promise Unit
 
 namespace Runtime
 
@@ -76,9 +77,10 @@ private def now (rt : Runtime sys) : BaseIO Nat :=
 
 /-- Blocks the calling thread, which is the shard's own. -/
 private def take (rt : Runtime sys) : Kernel.Wait → IO (Taken sys)
-  | .none => return match ← rt.inbox.tryRecv with
-    | some c => .command c
-    | none => .nothing
+  | .none => do
+    match ← rt.inbox.tryRecv with
+    | some c => return .command c
+    | none => return if ← rt.inbox.isClosed then .closed else .nothing
   | .forever => return match ← IO.wait (← rt.inbox.recv) with
     | some c => .command c
     | none => .closed
@@ -96,12 +98,12 @@ state held across an `await` is handed to the task system. A kernel kept that wa
 actor table and all, on every step (`Tests/Scale.lean`). Here it is created on this thread and
 never leaves it; only commands, events and outputs cross.
 -/
-private def loop (rt : Runtime sys) (onOutput : σ.Out → Async Unit) : IO Unit := do
+private def loop (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
+    (waiting : IO.Ref (Array (Bool × IO.Promise Bool))) : IO Unit := do
   let (start, outputs) := Kernel.boot sys
   rt.record (outputs.map .output)
   (handOver onOutput outputs).block
   let kernel ← IO.mkRef start
-  let mut waiting : Array (Bool × IO.Promise Bool) := #[]
   repeat
     let now ← rt.now
     let wait ← kernel.modifyGet fun k => let k := k.advance now; (k.wait, k)
@@ -110,7 +112,7 @@ private def loop (rt : Runtime sys) (onOutput : σ.Out → Async Unit) : IO Unit
     | .nothing => pure ()
     | .command (.input x) =>
       rt.record (← kernel.modifyGet fun k => let r := k.accept x; (r.events, r.kernel))
-    | .command (.idle timers done) => waiting := waiting.push (timers, done)
+    | .command (.idle timers done) => waiting.modify (·.push (timers, done))
     | .command (.peek i reply) => reply.resolve (← kernel.modifyGet fun k => ((k.cell i).state, k))
     let now ← rt.now
     let batch := max 1 rt.config.batch
@@ -120,27 +122,39 @@ private def loop (rt : Runtime sys) (onOutput : σ.Out → Async Unit) : IO Unit
         ((events, outputs, kernel.quiet false, kernel.quiet true), kernel)
     rt.record events
     (handOver onOutput outputs).block
-    for (timers, done) in waiting do
-      if (if timers then still else quiet) then done.resolve true
-    waiting := waiting.filter fun (timers, _) => !(if timers then still else quiet)
-  for (_, done) in waiting do done.resolve false
+    let reached := fun (timers : Bool) => if timers then still else quiet
+    for (timers, done) in ← waiting.get do
+      if reached timers then done.resolve true
+    waiting.modify (·.filter fun (timers, _) => !reached timers)
+
+/-- However the loop ends, nobody is left waiting on it. -/
+private def run (rt : Runtime sys) (onOutput : σ.Out → Async Unit) : IO Unit := do
+  let waiting ← IO.mkRef #[]
+  try rt.loop onOutput waiting
+  catch e => discard (IO.eprintln s!"lanes: the shard stopped on an error: {e}").toBaseIO
+  discard <| (rt.inbox.close : EIO _ Unit).toBaseIO
+  for (_, done) in ← waiting.get do done.resolve false
+  rt.finished.resolve ()
 
 /-- Boot a system on one shard, which runs on a thread of its own until `stop`. A program whose
 `main` returns without stopping its runtimes does not exit.
 
 Each output goes to `onOutput`, and the shard waits for it: a slow handler holds every actor up,
-and a handler must not call `input`, `idle` or `state`, which wait for the shard. `tryInput` is
-safe. -/
+and a handler must not call `input`, `idle`, `state` or `stop`, which wait for the shard.
+`tryInput` is safe.
+
+A timer counts from the clock reading at the start of the batch of work that armed it, so it
+can fire early by as long as that batch took. Steps are pure and short, so this is small, but
+nothing may depend on a timer not firing early: the semantics lets one fire at any moment. -/
 def start (sys : System σ) [Hashable σ.Id] (config : Runtime.Config := {})
     (onOutput : σ.Out → Async Unit := fun _ => pure ()) : Async (Runtime sys) := do
   let rt : Runtime sys := {
     config
     inbox := ← CloseableChannel.new (some config.inboxCapacity)
     log := ← IO.mkRef #[]
-    epoch_ms := ← IO.monoMsNow }
-  discard <| IO.asTask (prio := .dedicated) do
-    try rt.loop onOutput
-    catch e => IO.eprintln s!"lanes: the shard stopped on an error: {e}"
+    epoch_ms := ← IO.monoMsNow
+    finished := ← IO.Promise.new }
+  discard <| IO.asTask (prio := .dedicated) (rt.run onOutput)
   return rt
 
 private def send (rt : Runtime sys) (c : Cmd sys) : Async Unit := do
@@ -162,7 +176,7 @@ def tryInput (rt : Runtime sys) (x : σ.In) : Async Bool :=
 def idle (rt : Runtime sys) (timers : Bool := false) : Async Unit := do
   let done ← IO.Promise.new
   rt.send (.idle timers done)
-  unless ← await done do throw stopped
+  unless (← await done.result?) == some true do throw stopped
 
 /-- The events performed so far. Empty unless `Config.record` is on. -/
 def trace (rt : Runtime sys) : BaseIO (Array (Event σ)) :=
@@ -173,12 +187,15 @@ def state (rt : Runtime sys) (i : σ.Id) : Async (sys.State i) := do
   have : Nonempty (sys.State i) := ⟨(sys.actor i).init⟩
   let reply ← IO.Promise.new
   rt.send (.peek i reply)
-  await reply
+  let some state ← await reply.result? | throw stopped
+  return state
 
-/-- Stop taking commands. The shard handles what was already handed over and ends; timers still
-pending never fire. -/
+/-- Stop, and return when the shard has ended. It takes no more commands, finishes those already
+handed over and at most one more batch of work, then ends. Messages still queued between actors
+are abandoned and pending timers never fire. -/
 def stop (rt : Runtime sys) : Async Unit := do
   discard <| (rt.inbox.close : EIO _ Unit).toBaseIO
+  discard <| await rt.finished.result?
 
 end Runtime
 
