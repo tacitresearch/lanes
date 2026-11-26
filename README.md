@@ -100,6 +100,11 @@ a view cannot link or post to a route that does not exist.
 
 ## What is proved, and what is trusted
 
+The rule is that everything Lanes ships is proved against a spec, or binds or performs something
+named in `TRUSTED.md` (`docs/decisions/D45-everything-is-proved.md`); the checker finds bugs
+before a proof is attempted, and a theorem is the evidence. `docs/ARCHITECTURE.md` says where each
+piece is proved. Not there yet: `systems/ledger` is checked on instances, not proved.
+
 - **The runtime's logic.** Every decision the runtime makes is a pure function, and whatever
   the IO loop around it does, the system stays in a state the semantics allows
   (`Kernel.exec_reachable`).
@@ -122,8 +127,9 @@ a view cannot link or post to a route that does not exist.
   decides is a pure function, run by the model checker against a network that fails.
 - **The HTTP gate.** `Http.serve` runs the system with the gate joined in front of it, and the
   theorems are about that system, for every system and bridge: no request is answered more
-  often than it arrived, a waiting request keeps its deadline armed, and in a fair run every
-  request the gate admits is answered (`Http.served_answered_le_arrived`,
+  often than it arrived where the link from outside does not repeat it, a waiting request keeps
+  its deadline armed, and in a fair run in which the gate does not crash every request the gate
+  admits is answered (`Http.served_answered_le_arrived`,
   `Http.served_deadlines_armed`, `Http.served_pending_answered`). A bridge's `prepare` runs
   before a request is journalled, so a password or a cookie need never reach the disk.
 - **The HTTP client's wire format.** What the reader makes of a response written as a server
@@ -156,7 +162,8 @@ only what came after the last save; that this gives the same state has a proof t
 `systems/raft-kv` is a replicated key-value store: Raft, as the step function of one actor.
 It is checked against the map it replicates, and proved to be that one map to its clients,
 for every number of nodes and every fault the model has: links that lose, repeat and reorder
-messages, and nodes that crash and come back with what they had. It runs as three processes
+messages, and nodes that crash and come back with what they had. One premise remains: a
+client's request is not repeated on its way to a node (`RaftKV.implementsMachine`). It runs as three processes
 that survive their leaders being killed, each saving its state and cutting its journal as it
 goes. A node that comes back without its journal is outside the model, and does lose what was
 acknowledged, so a node is not started without one unless it is told it is new:
@@ -173,11 +180,14 @@ lake exe raftNode new 0 8800 node0.journal 7810 7811 7812   # one node; without 
 ## Build Lanes itself
 
 ```bash
-lake exe cache get
+lake exe cache get   # prebuilt Mathlib, once
 lake build
-lake test
+lake test            # a few seconds
+lake exe lanesCheck  # the larger model checks, about 20 s
 lake exe lanes lint
 ```
+
+`AGENTS.md` has the rules and the layout of the repository.
 
 ## A spec in five lines, checked without a refinement mapping
 
@@ -208,13 +218,16 @@ itself, and `Server.implements` proves it refines the spec for every interleavin
 
 ## Documents
 
-- `docs/STATUS.md`: what works today and what is next.
-- `docs/ROADMAP.md`: the phases ahead and the open design questions.
-- `docs/PLAN.md`: what is being done now and why.
 - `docs/ARCHITECTURE.md`: the pieces, how a request goes through them, and where each is proved.
-- `docs/decisions/`: decisions taken during implementation, one file each.
+- `docs/STATUS.md`: what works today, area by area, and its known limits.
+- `docs/PLAN.md`: what is being done now and why.
+- `docs/ROADMAP.md`: the direction, the phases and the standing risks.
+- `docs/STDLIB.md`: the standard library, triaged from Go's.
+- `docs/decisions/`: why each piece is the way it is, one file per decision.
 - `TRUSTED.md`: everything that is trusted rather than proved.
 - `AGENTS.md`: the rules, for agents and people: build and checks, design, code, proofs.
+- `docs/RUNNERS.md`: the CI machine for the heavy jobs.
+- `docs/history/`: the plan and the reviews as they were written, out of the reading path.
 
 ## License
 
