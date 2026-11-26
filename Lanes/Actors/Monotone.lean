@@ -67,6 +67,21 @@ theorem mem_armed {effs : List (Effect σ i)} {msg : σ.Msg i} :
     cases eff <;> simp only [List.mem_cons, ih, reduceCtorEq, false_or]
     simp only [after.injEq, exists_or, exists_eq_left]
 
+theorem emits_map_emit (outs : List σ.Out) : emits (outs.map (emit (self := i))) = outs := by
+  induction outs with
+  | nil => rfl
+  | cons out outs ih => simpa [emits] using ih
+
+theorem sends_map_emit (outs : List σ.Out) : sends i (outs.map emit) = [] := by
+  induction outs with
+  | nil => rfl
+  | cons out outs ih => simp [sends]
+
+theorem armed_map_emit (outs : List σ.Out) : armed (outs.map (emit (self := i))) = [] := by
+  induction outs with
+  | nil => rfl
+  | cons out outs ih => simp [armed]
+
 end Effect
 
 namespace SysState
@@ -290,6 +305,65 @@ theorem Inductive.of_monotone {P : SysState sys → Prop} (env : EnvModel σ)
     | start i =>
       obtain ⟨_, _, rfl⟩ := step_start.mp hstep
       exact below _ _ (recover c i hc) (Below.startActor c env i)
+
+/-- The five cases of `Inductive.of_monotone` as one value, so that proofs of them can be
+combined (`Monotone.and`) before an environment model is chosen. -/
+structure Monotone (sys : System σ) (P : SysState sys → Prop) : Prop where
+  blank : P (SysState.blank sys)
+  below : ∀ c c', P c → c'.Below c → P c'
+  input : ∀ c x, P c →
+    P { c with net := c.net ++ [⟨none, (sys.accept x).1, (sys.accept x).2⟩] }
+  step : ∀ c i msg, P c → ((∃ src, ⟨src, i, msg⟩ ∈ c.net) ∨ msg ∈ c.timers i) →
+    P (c.grow i ((sys.actor i).step (c.state i) msg))
+  recover : ∀ c i, P c → P (c.grow i ((sys.actor i).recover (c.state i)))
+
+namespace Monotone
+
+variable {P Q : SysState sys → Prop}
+
+theorem to_inductive (h : sys.Monotone P) (env : EnvModel σ) : sys.Inductive env P :=
+  .of_monotone env h.blank h.below h.input h.step h.recover
+
+theorem invariant (h : sys.Monotone P) (env : EnvModel σ) : sys.Invariant env P :=
+  (h.to_inductive env).invariant
+
+/-- Add `Q` to a property already shown. Each case of `Q` may use `P` of the state it starts
+from and of the state it ends in. -/
+theorem and (hP : sys.Monotone P) (blank : Q (SysState.blank sys))
+    (below : ∀ c c', P c → Q c → c'.Below c → Q c')
+    (input : ∀ c x, P c → Q c →
+      Q { c with net := c.net ++ [⟨none, (sys.accept x).1, (sys.accept x).2⟩] })
+    (step : ∀ c i msg, P c → P (c.grow i ((sys.actor i).step (c.state i) msg)) → Q c →
+      ((∃ src, ⟨src, i, msg⟩ ∈ c.net) ∨ msg ∈ c.timers i) →
+        Q (c.grow i ((sys.actor i).step (c.state i) msg)))
+    (recover : ∀ c i, P c → P (c.grow i ((sys.actor i).recover (c.state i))) → Q c →
+      Q (c.grow i ((sys.actor i).recover (c.state i)))) :
+    sys.Monotone fun c => P c ∧ Q c where
+  blank := ⟨hP.blank, blank⟩
+  below c c' h hbelow := ⟨hP.below c c' h.1 hbelow, below c c' h.1 h.2 hbelow⟩
+  input c x h := ⟨hP.input c x h.1, input c x h.1 h.2⟩
+  step c i msg h hpending :=
+    ⟨hP.step c i msg h.1 hpending, step c i msg h.1 (hP.step c i msg h.1 hpending) h.2 hpending⟩
+  recover c i h := ⟨hP.recover c i h.1, recover c i h.1 (hP.recover c i h.1) h.2⟩
+
+/-- Timers carry only what actors arm: a message no actor arms never arrives as a timer. -/
+theorem timers (sys : System σ) {T : (i : σ.Id) → σ.Msg i → Prop}
+    (step : ∀ i s msg delay m, Effect.after delay m ∈ ((sys.actor i).step s msg).2 → T i m)
+    (recover : ∀ i s delay m, Effect.after delay m ∈ ((sys.actor i).recover s).2 → T i m) :
+    sys.Monotone fun c => ∀ i m, m ∈ c.timers i → T i m where
+  blank := fun _ _ h => nomatch h
+  below _ _ h hbelow := fun i m hm => h i m (hbelow.timers i m hm)
+  input _ _ h := h
+  step c i msg h _ := fun j m hm => by
+    rcases SysState.mem_grow_timers.mp hm with hold | ⟨rfl, delay, hnew⟩
+    · exact h j m hold
+    · exact step j _ msg delay m hnew
+  recover c i h := fun j m hm => by
+    rcases SysState.mem_grow_timers.mp hm with hold | ⟨rfl, delay, hnew⟩
+    · exact h j m hold
+    · exact recover j _ delay m hnew
+
+end Monotone
 
 end System
 

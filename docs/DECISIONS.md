@@ -272,11 +272,21 @@ The alternatives were to store the history in the actor's real state, which cost
 time and changes the code being verified, or to prove about traces, which is heavy. A ghost
 costs nothing at run time, and there is a theorem saying so.
 
+`Lanes/Actors/Past.lean` has the one ghost most proofs want: `Ghost.past` keeps every state an
+actor has left, and `SysState.seen` is those with the present one. Proofs that state the past
+over `seen` share a ghost, so one can use the other's invariant; with a ghost each they could
+not be combined. The Raft proofs (`systems/raft-kv/RaftKV/Proofs/`) are written this way.
+
 ## D21. A proof rule for invariants no fault can break
 
 `Lanes/Actors/Monotone.lean`. `System.Inductive.of_monotone` proves an invariant under every
 environment model from five cases: the blank state, an input, an actor's step, an actor's
 recovery, and that removing messages, timers and outputs keeps it.
+
+`System.Monotone` is the five cases as a value. `Monotone.and` adds a property to one already
+shown, each case assuming the first of the state it starts from and ends in, so an invariant is
+built in layers without restating the earlier ones. `Monotone.timers` is the layer nearly every
+protocol starts from: timers carry only what actors arm.
 
 Why: a direct proof has eight event cases and must reason about erased messages, filtered
 mailboxes and crashes, although loss, duplication, reordering and crashes can only remove

@@ -6,6 +6,7 @@ public import Lanes.Actors.Cluster
 public import Lanes.Actors.Disk
 public import Lanes.Actors.Ghost
 public import Lanes.Actors.Monotone
+public import Lanes.Actors.Past
 public import Lanes.Actors.Outside
 public import Lanes.Actors.System
 public import Lanes.Actors.World

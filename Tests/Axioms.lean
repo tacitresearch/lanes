@@ -241,6 +241,21 @@ by `lake build`, not linked into the test executable.
 /-- info: 'Lanes.System.Invariant.of_ghost' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Invariant.of_ghost
 
+/-- info: 'Lanes.System.Invariant.to_ghost' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Invariant.to_ghost
+
+/-- info: 'Lanes.System.Monotone.invariant' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Monotone.invariant
+
+/-- info: 'Lanes.System.Monotone.and' depends on axioms: [propext, Classical.choice] -/
+#guard_msgs in #print axioms Lanes.System.Monotone.and
+
+/-- info: 'Lanes.System.Monotone.timers' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Monotone.timers
+
+/-- info: 'Lanes.SysState.mem_seen_grow_of_mem' depends on axioms: [propext, Classical.choice] -/
+#guard_msgs in #print axioms Lanes.SysState.mem_seen_grow_of_mem
+
 /-- info: 'Lanes.Quorum.majority_inter' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Quorum.majority_inter
 
