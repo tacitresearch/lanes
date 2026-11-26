@@ -70,11 +70,6 @@ section Chosen
 variable {c : SysState (recording N config machine)} {i : N} {msg : Option (Msg N C)}
   {s' : Node N C M} {effs : List (Effect (sig N C R) i)} {term : Nat} {pfx : List (Entry N C)}
 
-theorem Replicating.timers (h : Replicating c) : Timers c := h.1.1.1
-theorem Replicating.votes (h : Replicating c) : Votes c := h.1.1.2
-theorem Replicating.terms (h : Replicating c) : Terms c := h.1.2
-theorem Replicating.logs (h : Replicating c) : Logs c := h.2
-
 /-- `pfx` is the start of a leader's log up to an entry of the leader's term, and some majority
 has held it in that term or may yet. -/
 def Choosable (c : SysState (recording N config machine)) (term : Nat)
@@ -200,18 +195,6 @@ theorem blank : Safe (SysState.blank (recording N config machine)) := by
     simp [isLeader, SysState.blank, recording, System.withPast, System.withGhost, node] at hleader
   exact ⟨fun term pfx h => (hnone term pfx h).elim, fun term pfx h => (hnone term pfx h).elim,
     fun term pfx h => (hnone term pfx h).elim⟩
-
-theorem below {c' : SysState (recording N config machine)} (hc : Safe c) (hbelow : c'.Below c) :
-    Safe c' := by
-  obtain ⟨hstate, _, _, _⟩ := hbelow
-  refine ⟨?_, ?_, ?_⟩ <;> simp only [Choosable, Held, Led, VotedFor, SysState.seen, hstate]
-  · exact hc.leaders
-  · exact hc.holders
-  · exact hc.voters
-
-theorem input (hc : Safe c) (x : Request N C) :
-    Safe { c with net := c.net ++ [⟨none, x.via, .propose x.req x.cmd⟩] } :=
-  ⟨hc.leaders, hc.holders, hc.voters⟩
 
 /-- A leader's log, of a term no earlier, has what is choosable or is itself the start of it. -/
 theorem prefix_of_led (hr : Replicating c) (hk : Safe c) (hch : Choosable c term pfx) {later : Nat}
@@ -461,7 +444,8 @@ end Safe
 
 theorem safe_monotone (hup : config.votesForUpToDateOnly = true) :
     (recording N config machine).Monotone fun c => (Replicating c ∧ Standing c) ∧ Safe c := by
-  refine standing_monotone.and .blank (fun _ _ _ hk => hk.below) (fun _ x _ hk => hk.input x) ?_ ?_
+  refine standing_monotone.and_state .blank
+    (fun _ _ _ _ _ hk => ⟨hk.leaders, hk.holders, hk.voters⟩) ?_ ?_
   · exact fun c i msg hp hp' hk hpending => hk.grow hp.1 hp.2 hup hp'.1.votes hp'.2
       (step_moves config Enum.all machine i _ msg) (hp.1.timers.pending hpending)
   · exact fun c i hp hp' hk => hk.grow hp.1 hp.2 hup hp'.1.votes hp'.2
@@ -484,21 +468,6 @@ variable {c : SysState (recording N config machine)}
 theorem blank : Commits (SysState.blank (recording N config machine)) := by
   constructor <;>
     simp [SysState.blank, recording, System.withPast, System.withGhost, node, Committed]
-
-theorem below {c' : SysState (recording N config machine)} (hc : Commits c)
-    (hbelow : c'.Below c) : Commits c' := by
-  obtain ⟨hstate, hnet, _, _⟩ := hbelow
-  refine ⟨?_, ?_⟩ <;> simp only [Committed, Chosen, Held, Led, SysState.seen, hstate]
-  · exact hc.nodes
-  · exact fun src dst term leader prev prevTerm entries commit h =>
-      hc.appends src dst term leader prev prevTerm entries commit (hnet _ h)
-
-theorem input (hc : Commits c) (x : Request N C) :
-    Commits { c with net := c.net ++ [⟨none, x.via, .propose x.req x.cmd⟩] } := by
-  refine ⟨hc.nodes, fun src dst term leader prev prevTerm entries commit h => ?_⟩
-  rcases List.mem_append.mp h with h | h
-  · exact hc.appends src dst term leader prev prevTerm entries commit h
-  · simp at h
 
 variable {term : Nat} {pfx : List (Entry N C)}
 
@@ -649,14 +618,20 @@ theorem grow (hr : Replicating c) (hk : Safe c) (hc : Commits c)
 end Commits
 
 /-- Everything the proof of commitment keeps. -/
-def Committing (c : SysState (recording N config machine)) : Prop :=
-  ((Replicating c ∧ Standing c) ∧ Safe c) ∧ Commits c
+structure Committing (c : SysState (recording N config machine)) : Prop where
+  replicating : Replicating c
+  standing : Standing c
+  safe : Safe c
+  commits : Commits c
 
 theorem committing_monotone (hup : config.votesForUpToDateOnly = true)
     (hown : config.commitsOwnTermOnly = true) :
     (recording N config machine).Monotone Committing := by
-  refine (safe_monotone hup).and .blank (fun _ _ _ hc => hc.below) (fun _ x _ hc => hc.input x)
-    ?_ ?_
+  refine ((safe_monotone hup).and_net .blank (fun _ _ _ _ _ hc hnet => ⟨hc.nodes,
+    fun src dst term leader prev prevTerm entries commit h => hc.appends src dst term leader prev
+      prevTerm entries commit (mem_of_not_propose hnet h nofun)⟩) ?_ ?_).of_iff fun c =>
+    ⟨fun h => ⟨⟨⟨h.replicating, h.standing⟩, h.safe⟩, h.commits⟩, fun ⟨⟨⟨hr, hs⟩, hk⟩, hc⟩ =>
+      ⟨hr, hs, hk, hc⟩⟩
   · exact fun c i msg hp hp' hc hpending => hc.grow hp.1.1 hp.2 hown hp'.1.2
       (step_moves config Enum.all machine i _ msg) (hp.1.1.timers.pending hpending)
   · exact fun c i hp hp' hc => hc.grow hp.1.1 hp.2 hown hp'.1.2
@@ -722,26 +697,26 @@ theorem leader_completeness :
       ∀ term pfx, Chosen c term pfx → ∀ a, ∀ p ∈ c.seen a, isLeader p = true → term < p.term →
         pfx <+: p.log :=
   fun c hc term pfx hchosen =>
-    ((committing_monotone hup hown).invariant env c hc).1.2.leaders term pfx hchosen.choosable
+    ((committing_monotone hup hown).invariant env c hc).safe.leaders term pfx hchosen.choosable
 
 /-- What a node has committed, a majority held in some term up to the node's. -/
 theorem committed_chosen :
     (recording N config machine).Invariant env fun c =>
       ∀ a, Committed c (c.state a).1.term ((c.state a).1.log.take (c.state a).1.commit) :=
-  fun c hc a => (((committing_monotone hup hown).invariant env c hc).2.nodes a).2
+  fun c hc a => (((committing_monotone hup hown).invariant env c hc).commits.nodes a).2
 
 theorem commit_le_length :
     (cluster N config machine).Invariant env fun c =>
       ∀ a, (c.state a).commit ≤ (c.state a).log.length :=
   .of_ghost (.past _) fun c hc a =>
-    (((committing_monotone hup hown).invariant env c hc).2.nodes a).1
+    (((committing_monotone hup hown).invariant env c hc).commits.nodes a).1
 
 theorem committed_agree :
     (cluster N config machine).Invariant env fun c => ∀ a b,
       (c.state a).log.take (min (c.state a).commit (c.state b).commit) =
         (c.state b).log.take (min (c.state a).commit (c.state b).commit) := by
   refine .of_ghost (.past _) fun c hc a b => ?_
-  obtain ⟨⟨⟨hr, _⟩, hk⟩, hcommits⟩ := (committing_monotone hup hown).invariant env c hc
+  obtain ⟨hr, _, hk, hcommits⟩ := (committing_monotone hup hown).invariant env c hc
   obtain ⟨hlenA, hA⟩ := hcommits.nodes a
   obtain ⟨hlenB, hB⟩ := hcommits.nodes b
   show (c.state a).1.log.take (min (c.state a).1.commit (c.state b).1.commit) =
@@ -759,7 +734,7 @@ theorem leader_complete :
       (c.state a).term ≤ (c.state l).term →
         (c.state l).log.take (c.state a).commit = (c.state a).log.take (c.state a).commit := by
   refine .of_ghost (.past _) fun c hc l a hleader hle => ?_
-  obtain ⟨⟨⟨hr, _⟩, hk⟩, hcommits⟩ := (committing_monotone hup hown).invariant env c hc
+  obtain ⟨hr, _, hk, hcommits⟩ := (committing_monotone hup hown).invariant env c hc
   obtain ⟨hlen, hcommitted⟩ := hcommits.nodes a
   exact (take_eq_of_take_prefix hlen (hcommitted.in_leader hr hk hleader hle)).2
 

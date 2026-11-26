@@ -131,15 +131,8 @@ theorem erase_step (env : EnvModel σ) (c : SysState (sys.withGhost g)) (ev : Ev
       (by rw [erase_startActor]; rfl)
 
 theorem erase_init (sys : System σ) (g : Ghost sys) (env : EnvModel σ) :
-    (SysState.init (sys.withGhost g) env).erase = SysState.init sys env := by
-  have hfold : ∀ (ids : List σ.Id) (c : SysState (sys.withGhost g)),
-      (ids.foldl (fun c i => c.startActor env i) c).erase
-        = ids.foldl (fun c i => c.startActor env i) c.erase := by
-    intro ids
-    induction ids with
-    | nil => exact fun _ => rfl
-    | cons i ids ih => exact fun c => by rw [List.foldl_cons, ih, erase_startActor, List.foldl_cons]
-  exact hfold _ _
+    (SysState.init (sys.withGhost g) env).erase = SysState.init sys env :=
+  (List.foldl_hom erase fun c i => (erase_startActor env c i).symm).symm
 
 end SysState
 

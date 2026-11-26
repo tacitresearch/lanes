@@ -5,7 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Lanes.Actors.Lift
-public import Lanes.Actors.Step
+public import Lanes.Actors.Run
 
 /-!
 # Invariants that survive every fault
@@ -19,6 +19,10 @@ only removes messages and timers or replays a step.
 semantics under an arbitrary environment model, the proof has five cases: the blank state, an
 input, an actor's `step`, an actor's `recover`, and that the property still holds when
 messages, timers and outputs are removed. The result holds under every `EnvModel`.
+
+A proof is built in layers (`Monotone.and`), each using those under it. A layer that reads only
+the actors' states and the messages in flight, as most do, is added with `Monotone.and_net` or
+`Monotone.and_state`, which leave only the steps to prove.
 -/
 
 @[expose] public section
@@ -26,63 +30,6 @@ messages, timers and outputs are removed. The result holds under every `EnvModel
 namespace Lanes
 
 variable {σ : Signature} {sys : System σ}
-
-namespace Effect
-
-variable {i : σ.Id}
-
-def sends (i : σ.Id) (effs : List (Effect σ i)) : List (Envelope σ) :=
-  effs.filterMap fun
-    | .send to msg => some ⟨some i, to, msg⟩
-    | _ => none
-
-def armed (effs : List (Effect σ i)) : List (σ.Msg i) :=
-  effs.filterMap fun
-    | .after _ msg => some msg
-    | _ => none
-
-def emits (effs : List (Effect σ i)) : List σ.Out :=
-  effs.filterMap fun
-    | .emit out => some out
-    | _ => none
-
-theorem mem_sends {effs : List (Effect σ i)} {e : Envelope σ} :
-    e ∈ sends i effs ↔ e.src = some i ∧ .send e.dst e.msg ∈ effs := by
-  obtain ⟨src, dst, msg⟩ := e
-  induction effs with
-  | nil => simp [sends]
-  | cons eff effs ih =>
-    simp only [sends, List.filterMap_cons, List.mem_cons] at ih ⊢
-    cases eff <;> simp only [List.mem_cons, ih, reduceCtorEq, false_or]
-    simp only [Envelope.mk.injEq, send.injEq]
-    exact ⟨fun h => h.elim (fun h => ⟨h.1, .inl h.2⟩) fun h => ⟨h.1, .inr h.2⟩,
-      fun h => h.2.elim (fun h' => .inl ⟨h.1, h'⟩) fun h' => .inr ⟨h.1, h'⟩⟩
-
-theorem mem_armed {effs : List (Effect σ i)} {msg : σ.Msg i} :
-    msg ∈ armed effs ↔ ∃ delay, .after delay msg ∈ effs := by
-  induction effs with
-  | nil => simp [armed]
-  | cons eff effs ih =>
-    simp only [armed, List.filterMap_cons, List.mem_cons] at ih ⊢
-    cases eff <;> simp only [List.mem_cons, ih, reduceCtorEq, false_or]
-    simp only [after.injEq, exists_or, exists_eq_left]
-
-theorem emits_map_emit (outs : List σ.Out) : emits (outs.map (emit (self := i))) = outs := by
-  induction outs with
-  | nil => rfl
-  | cons out outs ih => simpa [emits] using ih
-
-theorem sends_map_emit (outs : List σ.Out) : sends i (outs.map emit) = [] := by
-  induction outs with
-  | nil => rfl
-  | cons out outs ih => simp [sends]
-
-theorem armed_map_emit (outs : List σ.Out) : armed (outs.map (emit (self := i))) = [] := by
-  induction outs with
-  | nil => rfl
-  | cons out outs ih => simp [armed]
-
-end Effect
 
 namespace SysState
 
@@ -255,15 +202,8 @@ theorem Inductive.of_monotone {P : SysState sys → Prop} (env : EnvModel σ)
       P (c.grow i ((sys.actor i).step (c.state i) msg)))
     (recover : ∀ c i, P c → P (c.grow i ((sys.actor i).recover (c.state i)))) :
     sys.Inductive env P where
-  init := by
-    have hstart : ∀ c i, P c → P (c.startActor env i) := fun c i hc =>
-      below _ _ (recover c i hc) (Below.startActor c env i)
-    have hfold : ∀ (ids : List σ.Id) c, P c → P (ids.foldl (fun c i => c.startActor env i) c) := by
-      intro ids
-      induction ids with
-      | nil => exact fun _ h => h
-      | cons i ids ih => exact fun c hc => ih _ (hstart c i hc)
-    exact hfold _ _ blank
+  init := init_induction blank fun c i hc =>
+    below _ _ (recover c i hc) (Below.startActor c env i)
   step c ev c' hc hstep := by
     cases ev with
     | input x => obtain rfl := step_input.mp hstep; exact input c x hc
@@ -346,6 +286,51 @@ theorem and (hP : sys.Monotone P) (blank : Q (SysState.blank sys))
     ⟨hP.step c i msg h.1 hpending, step c i msg h.1 (hP.step c i msg h.1 hpending) h.2 hpending⟩
   recover c i h := ⟨hP.recover c i h.1, recover c i h.1 (hP.recover c i h.1) h.2⟩
 
+/-- `Monotone.and` for a layer that reads the actors' states and asks something of each message
+in flight, which every input meets. `net` says so: `Q` survives any change of what is in flight
+that brings no message but inputs, and any change of timers, outputs and which actors are up.
+Nothing then has to be shown of removing messages or of an input. -/
+theorem and_net (hP : sys.Monotone P) (blank : Q (SysState.blank sys))
+    (net : ∀ c up net timers outbox, Q c →
+      (∀ e ∈ net, e ∈ c.net ∨ ∃ x, e = ⟨none, (sys.accept x).1, (sys.accept x).2⟩) →
+        Q { c with up, net, timers, outbox })
+    (step : ∀ c i msg, P c → P (c.grow i ((sys.actor i).step (c.state i) msg)) → Q c →
+      ((∃ src, ⟨src, i, msg⟩ ∈ c.net) ∨ msg ∈ c.timers i) →
+        Q (c.grow i ((sys.actor i).step (c.state i) msg)))
+    (recover : ∀ c i, P c → P (c.grow i ((sys.actor i).recover (c.state i))) → Q c →
+      Q (c.grow i ((sys.actor i).recover (c.state i)))) :
+    sys.Monotone fun c => P c ∧ Q c :=
+  hP.and blank
+    (fun c c' _ hq hbelow =>
+      (congrArg Q (SysState.ext' hbelow.state rfl rfl rfl rfl : c' = { c with
+        up := c'.up, net := c'.net, timers := c'.timers, outbox := c'.outbox })).mpr
+        (net c _ _ _ _ hq fun e he => .inl (hbelow.net e he)))
+    (fun c x _ hq => net c c.up _ c.timers c.outbox hq fun _ he =>
+      (List.mem_append.mp he).imp_right fun he => ⟨x, List.mem_singleton.mp he⟩)
+    step recover
+
+/-- `Monotone.and` for a layer that reads only the actors' states, which is what `state` says. -/
+theorem and_state (hP : sys.Monotone P) (blank : Q (SysState.blank sys))
+    (state : ∀ c up net timers outbox, Q c → Q { c with up, net, timers, outbox })
+    (step : ∀ c i msg, P c → P (c.grow i ((sys.actor i).step (c.state i) msg)) → Q c →
+      ((∃ src, ⟨src, i, msg⟩ ∈ c.net) ∨ msg ∈ c.timers i) →
+        Q (c.grow i ((sys.actor i).step (c.state i) msg)))
+    (recover : ∀ c i, P c → P (c.grow i ((sys.actor i).recover (c.state i))) → Q c →
+      Q (c.grow i ((sys.actor i).recover (c.state i)))) :
+    sys.Monotone fun c => P c ∧ Q c :=
+  hP.and_net blank (fun c up net timers outbox hq _ => state c up net timers outbox hq) step
+    recover
+
+/-- The same property under another name. Layers added with `and` nest, and a proof that uses
+the third of four reads `h.1.1.2`; give the stack a structure with a field for each layer and
+it reads `h.votes`. -/
+theorem of_iff (hP : sys.Monotone P) (h : ∀ c, Q c ↔ P c) : sys.Monotone Q where
+  blank := (h _).mpr hP.blank
+  below c c' hc hbelow := (h _).mpr (hP.below c c' ((h _).mp hc) hbelow)
+  input c x hc := (h _).mpr (hP.input c x ((h _).mp hc))
+  step c i msg hc hpending := (h _).mpr (hP.step c i msg ((h _).mp hc) hpending)
+  recover c i hc := (h _).mpr (hP.recover c i ((h _).mp hc))
+
 /-- Timers carry only what actors arm: a message no actor arms never arrives as a timer. -/
 theorem timers (sys : System σ) {T : (i : σ.Id) → σ.Msg i → Prop}
     (step : ∀ i s msg delay m, Effect.after delay m ∈ ((sys.actor i).step s msg).2 → T i m)
@@ -366,5 +351,27 @@ theorem timers (sys : System σ) {T : (i : σ.Id) → σ.Msg i → Prop}
 end Monotone
 
 end System
+
+namespace SysState
+
+variable {T : (i : σ.Id) → σ.Msg i → Prop} {c : SysState sys} {i : σ.Id}
+
+/-- The message an actor is handling, `none` for a recovery, is in flight to it or is a timer
+of the kind `T`. This is what a `step` case knows once `Monotone.timers` has shown that every
+armed timer is of that kind, in a form that a recovery meets too. -/
+def Pending (T : (i : σ.Id) → σ.Msg i → Prop) (c : SysState sys) (i : σ.Id)
+    (msg : Option (σ.Msg i)) : Prop :=
+  ∀ m, msg = some m → (∃ src, ⟨src, i, m⟩ ∈ c.net) ∨ T i m
+
+theorem pending_none : c.Pending T i none :=
+  nofun
+
+theorem Pending.of_timers (ht : ∀ i m, m ∈ c.timers i → T i m) {m : σ.Msg i}
+    (h : (∃ src, ⟨src, i, m⟩ ∈ c.net) ∨ m ∈ c.timers i) : c.Pending T i (some m) := by
+  intro m' hm
+  obtain rfl := Option.some.inj hm
+  exact h.imp id (ht i _)
+
+end SysState
 
 end Lanes

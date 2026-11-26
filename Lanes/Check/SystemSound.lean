@@ -196,14 +196,6 @@ theorem Scenario.reachable_iff [Enum σ.Id] {sc : Scenario σ D} {constraint : W
       (Check.model sys sc).Reachable (fun n => constraint n.world) (.of w) :=
   ⟨Reachable.model, fun h => by simpa using Reachable.of_model h⟩
 
-theorem NetEquiv.toPerm {env : EnvModel σ} {a b : List (Envelope σ)} (h : NetEquiv env a b) :
-    a.Perm b := by
-  rw [List.perm_iff_count]
-  intro e
-  have hself : onLink e.src e.dst e = true := by simp [onLink]
-  rw [← List.count_filter (l := a) hself, ← List.count_filter (l := b) hself]
-  exact (h.perm e.src e.dst).count_eq e
-
 theorem SysState.Equiv.trafficHash_eq [σ.Inspect] {env : EnvModel σ} {a b : SysState sys}
     (h : SysState.Equiv env a b) : a.trafficHash = b.trafficHash := by
   have hnet := h.net.toPerm.foldl_eq'
@@ -477,17 +469,6 @@ inductive Scenario.Run [Enum σ.Id] (sys : System σ) (sc : Scenario σ D)
   | step {events : List (Event σ)} {w w' : World sys D} {ev : Event σ} :
     Run sys sc constraint events w → (ev, w') ∈ w.next sc → constraint w' = true →
     Run sys sc constraint (events ++ [ev]) w'
-
-theorem SysState.run_append (env : EnvModel σ) (c : SysState sys)
-    (events events' : List (Event σ)) :
-    c.run env (events ++ events') = (c.run env events).bind fun c' => c'.run env events' := by
-  induction events generalizing c with
-  | nil => rfl
-  | cons ev events ih =>
-    simp only [List.cons_append, SysState.run]
-    cases c.step env ev with
-    | none => rfl
-    | some c' => exact ih c'
 
 namespace Scenario
 

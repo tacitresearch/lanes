@@ -26,15 +26,6 @@ public section
 
 namespace Lanes
 
-private theorem update_update {ι : Type} [DecidableEq ι] {β : ι → Type} (f : (i : ι) → β i)
-    (i : ι) (a b : β i) : update (update f i a) i b = update f i b := by
-  funext j
-  by_cases h : j = i
-  · subst h; simp
-  · simp [h]
-
-/-! `Std` proves nothing about `minEntry?`, so this looks inside the tree, once. -/
-
 private theorem minEntry?_eq_head?_toList {α β : Type} {cmp : α → α → Ordering}
     (t : Std.TreeMap α β cmp) : t.minEntry? = t.toList.head? := by
   open Std.DTreeMap.Internal in

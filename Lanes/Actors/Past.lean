@@ -69,6 +69,20 @@ theorem mem_seen_grow_of_mem {j : σ.Id} {p : sys.State j} (h : p ∈ c.seen j) 
     exact List.mem_cons_of_mem _ h
   · rwa [seen_grow_of_ne hj]
 
+/-- Where every actor has states of one type, as the nodes of a cluster do: after a step or a
+recovery of actor `i`, an actor has been in the states it had been in, and `i` in the new one. -/
+theorem mem_seen_grow {S : Type} {actor : (i : σ.Id) → σ.Actor i S}
+    {accept : σ.In → (i : σ.Id) × σ.Msg i} {boot : List σ.Id}
+    {c : SysState (System.withPast ⟨fun _ => S, actor, accept, boot⟩)} {i j : σ.Id} {s' p : S}
+    {effs : List (Effect σ i)} :
+    p ∈ (c.grow i ((s', c.seen i), effs)).seen j ↔ p ∈ c.seen j ∨ (j = i ∧ p = s') := by
+  by_cases hj : j = i
+  · subst hj
+    rw [seen_grow_self]
+    simp [or_comm]
+  · rw [seen_grow_of_ne hj]
+    simp [hj]
+
 end SysState
 
 end Lanes

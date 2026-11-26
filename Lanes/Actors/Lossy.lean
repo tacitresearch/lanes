@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Actors.JoinSound
+public import Lanes.Actors.Run
 
 /-!
 # More loss, no fewer states

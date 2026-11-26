@@ -35,7 +35,7 @@ The toolchain is pinned in `lean-toolchain` and follows CSLib's. Dependencies ar
 | Path | Contents | May import |
 | --- | --- | --- |
 | `Lanes/Actors/` | `Actor`, `Signature`, `Effect`, `System`, the world step function, scheduler, runtime | `Std` only |
-| `Lanes/Data/` | Small data utilities (`Enum`) and the JSON library (`Json`) | `Std` only |
+| `Lanes/Data/` | Small data utilities (`Enum`, list lemmas in `List`) and the JSON library (`Json`) | `Std` only |
 | `Lanes/Check/` | Model checker | `Std` only |
 | `Lanes/Http/`, `Lanes/Html/` | HTTP requests and responses as data; HTML values and template syntax | `Std` only |
 | `Lanes/Env/` | Adapters to the outside world (HTTP server) | `Std` only |
@@ -81,3 +81,11 @@ and Mathlib's `<i` token breaks `<input>` in templates, so keep views and `main`
   `templates/`, touch `LanesCli/New.lean` and rebuild `lanes`. CI builds a generated app.
 - Check before you prove: every invariant gets an `always` property and a `sometimes` vacuity
   check in a test before its proof is attempted (rules 5.1, 5.3).
+- A lemma that does not mention the system a proof is about does not stay in that proof's file,
+  private or not. Facts about lists go in `Lanes/Data/List.lean`; about `update`, `SysState`,
+  `run` and `Reachable` beside their definitions in `Lanes/Actors/World.lean`; a step or a run
+  in closed form in `Lanes/Actors/Run.lean`; `NetEquiv` and `SysState.Equiv` in
+  `Lanes/Actors/Equiv.lean`. Look there, and in core `List`, before proving a helper.
+- A layer of a `Monotone` proof that reads states and messages in flight is added with
+  `Monotone.and_net` (or `and_state`), not with `below` and `input` lemmas of its own; a stack
+  of more than two layers gets a structure through `Monotone.of_iff`.

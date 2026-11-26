@@ -145,6 +145,8 @@ With it, the recorded trace ordered by step number is a run of `SysState.step`, 
 (`step_deliver`, `step_drop`, …). A system invariant proof cases on the event and rewrites with
 these; conservation proofs add `sum_update` and `sum_map_erase` from `Lanes/Semantics/Sums.lean`.
 `Examples/BankProofs.lean` is the worked example and the shape `lanes prove` will generate.
+`Lanes/Actors/Run.lean` has the step in closed form (`SysState.settle_eq`: what the effects
+send, arm and emit, added at once), for proofs that follow a state through a step.
 
 ## D15. JSON is a `Std`-only port of `Lean.Data.Json`
 
@@ -287,6 +289,15 @@ recovery, and that removing messages, timers and outputs keeps it.
 shown, each case assuming the first of the state it starts from and ends in, so an invariant is
 built in layers without restating the earlier ones. `Monotone.timers` is the layer nearly every
 protocol starts from: timers carry only what actors arm.
+
+Most layers read the actors' states and ask something of each message in flight, and for
+those the cases about removing and about an input say nothing new. `Monotone.and_net` takes
+one fact in their place: the layer survives any change of what is in flight that brings no
+message but inputs. `Monotone.and_state` is the same for a layer that reads only the states.
+Layers added this way nest as `((A ∧ B) ∧ C) ∧ D`; `Monotone.of_iff` gives the stack a
+structure with a field for each layer, so that a proof reads `h.votes` and not `h.1.1.2`.
+`SysState.Pending` is what a step case knows of the message handled once the timers layer is
+in: it is in flight, or one of the timers actors arm.
 
 Why: a direct proof has eight event cases and must reason about erased messages, filtered
 mailboxes and crashes, although loss, duplication, reordering and crashes can only remove
@@ -783,7 +794,8 @@ parcels would be swallowed, and a process could not have both an HTTP front and 
   function and has nowhere to send them, so `System.filterMapIO` was added: `mapIO` whose
   output map may answer `none`. `SysState.run_filterMapIO` and `System.Invariant.filterMapIO`:
   a system behind hidden inputs and outputs does nothing it does not do in the open, event for
-  event.
+  event. `mapIO` is now defined as `filterMapIO` that hides nothing, so both theorems are
+  about it too.
 - *At most once, by projection.* `Gate.answered_le_handled`: alone, in every environment and
   whatever arrives on its two inputs, the gate hands over no more answers to an id than it
   handles arrivals of that id. `fronted_answered_le_arrived` is that statement carried into

@@ -19,19 +19,6 @@ namespace Lanes
 
 variable {σ : Signature}
 
-theorem apply_update {ι : Type} [DecidableEq ι] {β γ : ι → Type} (f : (j : ι) → β j → γ j)
-    (g : (j : ι) → β j) (i : ι) (v : β i) :
-    (fun j => f j (update g i v j)) = update (fun j => f j (g j)) i (f i v) := by
-  funext j
-  by_cases h : j = i
-  · subst h; simp
-  · simp [h]
-
-theorem SysState.ext' {sys : System σ} {a b : SysState sys} (hstate : a.state = b.state)
-    (hup : a.up = b.up) (hnet : a.net = b.net) (htimers : a.timers = b.timers)
-    (houtbox : a.outbox = b.outbox) : a = b := by
-  cases a; cases b; simp_all
-
 theorem map_fst_eraseP {α β : Type} [DecidableEq α] (l : List (α × β)) (a : α) :
     (l.eraseP (·.1 = a)).map (·.1) = (l.map (·.1)).erase a := by
   induction l with
@@ -422,54 +409,6 @@ theorem step_sound (k : Kernel sys) :
   split
   · exact fire_sound { k with timerTurn := false } _ _ _
   · exact run1_sound { k with timerTurn := true }
-
-omit [Hashable σ.Id] in
-theorem _root_.Lanes.SysState.run_append (envm : EnvModel σ) (c : SysState sys)
-    (a b : List (Event σ)) : c.run envm (a ++ b) = (c.run envm a).bind (·.run envm b) := by
-  induction a generalizing c with
-  | nil => rfl
-  | cons ev a ih =>
-    simp only [List.cons_append, SysState.run]
-    cases c.step envm ev with
-    | none => rfl
-    | some c' => simpa using ih c'
-
-omit [Hashable σ.Id] in
-theorem _root_.Lanes.System.Reachable.run {envm : EnvModel σ} {c c' : SysState sys}
-    {evs : List (Event σ)} (h : sys.Reachable envm c) (hrun : c.run envm evs = some c') :
-    sys.Reachable envm c' := by
-  induction evs generalizing c with
-  | nil => simp only [SysState.run, Option.some.injEq] at hrun; exact hrun ▸ h
-  | cons ev evs ih =>
-    simp only [SysState.run] at hrun
-    cases hstep : c.step envm ev with
-    | none => simp [hstep] at hrun
-    | some c₁ => exact ih (h.step ev hstep) (by simpa [hstep] using hrun)
-
-omit [Hashable σ.Id] in
-/-- Induction along a run, for properties that relate the events so far to the state reached. -/
-theorem _root_.Lanes.System.Reachable.run_induction {envm : EnvModel σ}
-    {P : List (Event σ) → SysState sys → Prop} {c c' : SysState sys} {events : List (Event σ)}
-    (hc : sys.Reachable envm c) (hrun : c.run envm events = some c') (start : P [] c)
-    (step : ∀ evs c₁ ev c₂, sys.Reachable envm c₁ → P evs c₁ → c₁.step envm ev = some c₂ →
-      P (evs ++ [ev]) c₂) : P events c' := by
-  suffices h : ∀ (rest evs : List (Event σ)) (c₁ : SysState sys), sys.Reachable envm c₁ →
-      P evs c₁ → c₁.run envm rest = some c' → P (evs ++ rest) c' from h events [] c hc start hrun
-  intro rest
-  induction rest with
-  | nil =>
-    intro evs c₁ _ hP hrun
-    simp only [SysState.run, Option.some.injEq] at hrun
-    simpa [← hrun] using hP
-  | cons ev rest ih =>
-    intro evs c₁ hc₁ hP hrun
-    simp only [SysState.run] at hrun
-    cases hstep : c₁.step envm ev with
-    | none => simp [hstep] at hrun
-    | some c₂ =>
-      have h := ih (evs ++ [ev]) c₂ (hc₁.step ev hstep) (step evs c₁ ev c₂ hc₁ hP hstep)
-        (by simpa [hstep] using hrun)
-      simpa using h
 
 theorem runBatch_sound (k : Kernel sys) (fuel : Nat) :
     (k.abs).run env (k.runBatch fuel).events = some ((k.runBatch fuel).kernel.abs) := by

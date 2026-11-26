@@ -4,7 +4,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Actors.KernelSound
+public import Lanes.Actors.Step
+public import Lanes.Data.List
 
 /-!
 # What a run shows a system doing
@@ -74,18 +75,6 @@ public section
 namespace Lanes
 
 variable {σ : Signature} {sys : System σ} {env : EnvModel σ} {p : Kind σ}
-
-private theorem countP_erase_add {α : Type} [BEq α] [LawfulBEq α] (q : α → Bool) {l : List α}
-    {a : α} (h : a ∈ l) : (l.erase a).countP q + (q a).toNat = l.countP q := by
-  induction l with
-  | nil => simp at h
-  | cons b l ih =>
-    by_cases hb : b = a
-    · subst hb
-      cases hq : q b <;> simp [hq]
-    · have := ih (by simpa [Ne.symm hb] using h)
-      simp only [List.erase_cons, beq_iff_eq, hb, ↓reduceIte, List.countP_cons]
-      omega
 
 /-- Handing an output over takes exactly that one output from those waiting. -/
 theorem SysState.countP_outbox_of_output {c c' : SysState sys} {out : σ.Out} (q : σ.Out → Bool)

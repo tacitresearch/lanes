@@ -67,22 +67,6 @@ variable {c : SysState (recording N config machine)}
 theorem blank : Terms (SysState.blank (recording N config machine)) := by
   constructor <;> simp [SysState.blank, recording, System.withPast, System.withGhost, node]
 
-theorem below {c' : SysState (recording N config machine)} (hc : Terms c) (hbelow : c'.Below c) :
-    Terms c' := by
-  obtain ⟨hstate, hnet, _, _⟩ := hbelow
-  refine ⟨?_, ?_⟩
-  · rw [hstate]
-    exact hc.logs
-  · exact fun src dst term leader prev prevTerm entries commit h =>
-      hc.appends src dst term leader prev prevTerm entries commit (hnet _ h)
-
-theorem input (hc : Terms c) (x : Request N C) :
-    Terms { c with net := c.net ++ [⟨none, x.via, .propose x.req x.cmd⟩] } := by
-  refine ⟨hc.logs, fun src dst term leader prev prevTerm entries commit h => ?_⟩
-  rcases List.mem_append.mp h with h | h
-  · exact hc.appends src dst term leader prev prevTerm entries commit h
-  · simp at h
-
 theorem grow (hc : Terms c) {i : N} {msg : Option (Msg N C)} {s' : Node N C M}
     {effs : List (Effect (sig N C R) i)}
     (hmoves : Moves config Enum.all i (c.state i).1 msg s' effs)
@@ -119,7 +103,9 @@ end Terms
 
 theorem terms_monotone :
     (recording N config machine).Monotone fun c => (Timers c ∧ Votes c) ∧ Terms c := by
-  refine votes_monotone.and .blank (fun _ _ _ hc => hc.below) (fun _ x _ hc => hc.input x) ?_ ?_
+  refine votes_monotone.and_net .blank (fun _ _ _ _ _ hc hnet => ⟨hc.logs,
+    fun src dst term leader prev prevTerm entries commit h => hc.appends src dst term leader prev
+      prevTerm entries commit (mem_of_not_propose hnet h nofun)⟩) ?_ ?_
   · intro c i msg hp _ hc hpending
     refine hc.grow (step_moves config Enum.all machine i _ msg) ?_
     intro term leader prev prevTerm entries commit hmsg
@@ -380,25 +366,6 @@ theorem blank : Logs (SysState.blank (recording N config machine)) := by
       isLeader, Sourced]
   exact fun _ k hk hzero => absurd hzero (Nat.ne_of_gt hk)
 
-theorem below {c' : SysState (recording N config machine)} (hc : Logs c) (hbelow : c'.Below c) :
-    Logs c' := by
-  obtain ⟨hstate, hnet, _, _⟩ := hbelow
-  refine ⟨?_, ?_, ?_, ?_, ?_⟩ <;> simp only [Sourced, Led, SysState.seen, hstate]
-  · exact hc.grows
-  · exact hc.chain
-  · exact hc.sourced
-  · exact hc.sorted
-  · exact fun src dst term leader prev prevTerm entries commit h =>
-      hc.appends src dst term leader prev prevTerm entries commit (hnet _ h)
-
-theorem input (hc : Logs c) (x : Request N C) :
-    Logs { c with net := c.net ++ [⟨none, x.via, .propose x.req x.cmd⟩] } := by
-  refine ⟨hc.grows, hc.chain, hc.sourced, hc.sorted,
-    fun src dst term leader prev prevTerm entries commit h => ?_⟩
-  rcases List.mem_append.mp h with h | h
-  · exact hc.appends src dst term leader prev prevTerm entries commit h
-  · simp at h
-
 theorem led_sourced (hc : Logs c) {term : Nat} {l : List (Entry N C)} (h : Led c term l) :
     Sourced c l := by
   obtain ⟨a, p, hp, _, _, rfl⟩ := h
@@ -415,14 +382,12 @@ def Cut (c : SysState (recording N config machine)) (msg : Option (Msg N C)) : P
 theorem cut_none : Cut c (none : Option (Msg N C)) :=
   nofun
 
-theorem cut_pending (hc : Logs c) (ht : Timers c) {msg : Msg N C}
-    (hpending : (∃ src, (⟨src, i, msg⟩ : Envelope (sig N C R)) ∈ c.net) ∨ msg ∈ c.timers i) :
-    Cut c (some msg) := by
+theorem cut_of_pending (hc : Logs c) (h : Pending c i msg) : Cut c msg := by
   intro term leader prev prevTerm entries commit hmsg
-  obtain rfl := Option.some.inj hmsg
-  rcases hpending with ⟨src, hnet⟩ | htimer
+  rcases h _ hmsg with ⟨src, hnet⟩ | h | h
   · exact hc.appends src i term leader prev prevTerm entries commit hnet
-  · exact nomatch ht i _ htimer
+  · cases h
+  · cases h
 
 /-- What a follower has after taking an `append` cut from the leader's log `l`: its own log if
 that holds all of `l`, and `l` if not. -/
@@ -540,13 +505,21 @@ theorem grow (hv : Votes c) (ht : Terms c) (hc : Logs c)
 end Logs
 
 /-- `Timers`, `Votes`, `Terms` and `Logs`: what the proofs of commitment start from. -/
-def Replicating (c : SysState (recording N config machine)) : Prop :=
-  ((Timers c ∧ Votes c) ∧ Terms c) ∧ Logs c
+structure Replicating (c : SysState (recording N config machine)) : Prop where
+  timers : Timers c
+  votes : Votes c
+  terms : Terms c
+  logs : Logs c
 
 theorem replicating_monotone : (recording N config machine).Monotone Replicating := by
-  refine terms_monotone.and .blank (fun _ _ _ hc => hc.below) (fun _ x _ hc => hc.input x) ?_ ?_
+  refine (terms_monotone.and_net .blank (fun _ _ _ _ _ hc hnet => ⟨hc.grows, hc.chain,
+    hc.sourced, hc.sorted, fun src dst term leader prev prevTerm entries commit h =>
+      hc.appends src dst term leader prev prevTerm entries commit
+        (mem_of_not_propose hnet h nofun)⟩) ?_ ?_).of_iff fun c =>
+    ⟨fun h => ⟨⟨⟨h.timers, h.votes⟩, h.terms⟩, h.logs⟩, fun ⟨⟨⟨ht, hv⟩, hterms⟩, hl⟩ =>
+      ⟨ht, hv, hterms, hl⟩⟩
   · exact fun c i msg hp _ hc hpending => hc.grow hp.1.2 hp.2
-      (step_moves config Enum.all machine i _ msg) (hc.cut_pending hp.1.1 hpending)
+      (step_moves config Enum.all machine i _ msg) (hc.cut_of_pending (hp.1.1.pending hpending))
   · exact fun c i hp _ hc => hc.grow hp.1.2 hp.2 (recover_moves config Enum.all machine i _)
       Logs.cut_none
 
@@ -554,8 +527,9 @@ theorem log_matching (config : Config) (machine : Machine C R M) (env : EnvModel
     (cluster N config machine).Invariant env fun c =>
       ∀ a b, Matching (c.state a).log (c.state b).log := by
   refine .of_ghost (.past _) fun c hc a b => ?_
-  obtain ⟨⟨⟨_, hv⟩, _⟩, hl⟩ := replicating_monotone.invariant env c hc
-  exact hl.matching hv (hl.sourced a _ (c.mem_seen_self a)) (hl.sourced b _ (c.mem_seen_self b))
+  have hr := replicating_monotone.invariant env c hc
+  exact hr.logs.matching hr.votes (hr.logs.sourced a _ (c.mem_seen_self a))
+    (hr.logs.sourced b _ (c.mem_seen_self b))
 
 theorem logMatching_invariant (config : Config) (machine : Machine C R M)
     (env : EnvModel (sig N C R)) :
