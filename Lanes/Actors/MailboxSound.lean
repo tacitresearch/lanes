@@ -22,14 +22,12 @@ variable {α W : Type}
 inductive Op (α W : Type) where
   | offer (x : α)
   | offerOrWait (x : α) (room : W)
-  | urge (x : α)
   | take
   | rest (wake : W)
   | close
 
 inductive Reply (α W : Type) where
   | offered (answer : Offered W)
-  | urged (answer : Option (Option W))
   | took (taken : Taken α W)
   | rested (asleep : Bool)
   | closed (wake : List W)
@@ -38,7 +36,6 @@ def Op.apply (capacity : Nat) : Op α W → Mailbox α W → Reply α W × Mailb
   | .offer x, m => ((.offered (m.offer capacity x).1), (m.offer capacity x).2)
   | .offerOrWait x room, m =>
     ((.offered (m.offerOrWait capacity x room).1), (m.offerOrWait capacity x room).2)
-  | .urge x, m => ((.urged (m.urge x).1), (m.urge x).2)
   | .take, m => ((.took m.take.1), m.take.2)
   | .rest wake, m => ((.rested (m.rest wake).1), (m.rest wake).2)
   | .close, m => ((.closed m.close.1), m.close.2)
@@ -54,19 +51,15 @@ def Reachable (capacity : Nat) (m : Mailbox α W) : Prop :=
 
 /-- Something went in. -/
 def Reply.admitted : Reply α W → Bool
-  | .offered (.taken _) | .urged (some _) => true
+  | .offered (.taken _) => true
   | _ => false
 
 /-- Whoever the shell is to wake on this reply. -/
 def Reply.woken : Reply α W → List W
-  | .offered (.taken wake) | .urged (some wake) => wake.toList
+  | .offered (.taken wake) => wake.toList
   | .took taken => taken.wake
   | .closed wake => wake
   | _ => []
-
-def Op.urgentIn : Op α W → Reply α W → List α
-  | .urge x, .urged (some _) => [x]
-  | _, _ => []
 
 def Op.boundedIn : Op α W → Reply α W → List α
   | .offer x, .offered (.taken _) | .offerOrWait x _, .offered (.taken _) => [x]
@@ -85,10 +78,6 @@ def Op.resetsSleeper : Op α W → Bool
   | .rest _ | .close => true
   | _ => false
 
-/-- What came in from other shards during `ops`, in the order it came. -/
-def urgentIn (capacity : Nat) (ops : List (Op α W)) (m : Mailbox α W) : List α :=
-  (List.zipWith Op.urgentIn ops (exec capacity ops m).1).flatten
-
 /-- What was taken in under the bound during `ops`, in the order it came. -/
 def boundedIn (capacity : Nat) (ops : List (Op α W)) (m : Mailbox α W) : List α :=
   (List.zipWith Op.boundedIn ops (exec capacity ops m).1).flatten
@@ -105,7 +94,7 @@ structure Sound (capacity : Nat) (m : Mailbox α W) : Prop where
   /-- A sender waits only while the bounded lane is full. -/
   waiting_full : m.waiting ≠ [] → capacity ≤ m.items.length
   /-- The shard sleeps only on an open mailbox with nothing in it. -/
-  asleep_empty : m.sleeper.isSome → m.items = [] ∧ m.urgent = [] ∧ m.closed = false
+  asleep_empty : m.sleeper.isSome → m.items = [] ∧ m.closed = false
   /-- Nobody sleeps on or waits for a closed mailbox. -/
   closed_quiet : m.closed = true → m.sleeper = none ∧ m.waiting = []
 
@@ -129,21 +118,17 @@ theorem offer_taken {x : α} {wake : Option W} (h : (m.offer capacity x).1 = .ta
     wake = m.sleeper := by
   cases hc : m.closed <;> by_cases hr : m.count < capacity <;> simp_all [offer]
 
-theorem urge_some {x : α} {wake : Option W} (h : (m.urge x).1 = some wake) :
-    wake = m.sleeper := by
-  cases hc : m.closed <;> simp_all [urge]
-
 theorem rest_eq_true_iff {wake : W} :
-    (m.rest wake).1 = true ↔ m.closed = false ∧ m.items = [] ∧ m.urgent = [] := by
-  cases hc : m.closed <;> cases hi : m.items <;> cases hu : m.urgent <;> simp [rest, hc, hi, hu]
+    (m.rest wake).1 = true ↔ m.closed = false ∧ m.items = [] := by
+  cases hc : m.closed <;> cases hi : m.items <;> simp [rest, hc, hi]
 
 /-- The shard stays awake while something is waiting to be taken or the mailbox is closed. -/
 theorem rest_eq_false {wake : W} (h : m.closed = true ∨ m.take.1.batch ≠ []) :
     (m.rest wake).1 = false := by
   cases hr : (m.rest wake).1
   · rfl
-  · obtain ⟨hc, hi, hu⟩ := rest_eq_true_iff.mp hr
-    simp [take, hc, hi, hu] at h
+  · obtain ⟨hc, hi⟩ := rest_eq_true_iff.mp hr
+    simp [take, hc, hi] at h
 
 theorem sound_empty : Sound capacity ({} : Mailbox α W) where
   count_eq := rfl
@@ -162,9 +147,6 @@ theorem Sound.apply (h : Sound capacity m) (op : Op α W) :
     cases hc : m.closed <;> by_cases hr : m.count < capacity <;>
       simp only [Op.apply, offerOrWait, offer, hc, hr, ↓reduceIte, Bool.false_eq_true] <;>
       rcases hwait' with hw | hw <;> refine ⟨?_, ?_, ?_, ?_, ?_⟩ <;> simp_all <;> omega
-  | urge x =>
-    cases hc : m.closed <;> simp only [Op.apply, urge, hc, ↓reduceIte, Bool.false_eq_true] <;>
-      refine ⟨?_, ?_, ?_, ?_, ?_⟩ <;> simp_all
   | take => refine ⟨?_, ?_, ?_, ?_, ?_⟩ <;> simp_all [Op.apply, take]
   | rest wake =>
     cases hr : (m.rest wake).1
@@ -173,8 +155,8 @@ theorem Sound.apply (h : Sound capacity m) (op : Op α W) :
         split <;> simp_all
       simp only [Op.apply, this]
       exact ⟨hcount, hbound, hwait, hasleep, hclosed⟩
-    · obtain ⟨hc, hi, hu⟩ := rest_eq_true_iff.mp hr
-      simp only [Op.apply, rest, hc, hi, hu, List.isEmpty_nil, Bool.not_true, Bool.or_self,
+    · obtain ⟨hc, hi⟩ := rest_eq_true_iff.mp hr
+      simp only [Op.apply, rest, hc, hi, List.isEmpty_nil, Bool.not_true, Bool.or_self,
         Bool.false_eq_true, ↓reduceIte]
       refine ⟨?_, ?_, ?_, ?_, ?_⟩ <;> simp_all
   | close => refine ⟨?_, ?_, ?_, ?_, ?_⟩ <;> simp_all [Op.apply, close]
@@ -197,11 +179,6 @@ variable {capacity : Nat}
 
 @[simp] theorem exec_nil (m : Mailbox α W) : exec capacity [] m = ([], m) := rfl
 
-theorem urgentIn_cons (op : Op α W) (ops : List (Op α W)) (m : Mailbox α W) :
-    urgentIn capacity (op :: ops) m
-      = op.urgentIn (op.apply capacity m).1 ++ urgentIn capacity ops (op.apply capacity m).2 :=
-  rfl
-
 theorem boundedIn_cons (op : Op α W) (ops : List (Op α W)) (m : Mailbox α W) :
     boundedIn capacity (op :: ops) m
       = op.boundedIn (op.apply capacity m).1 ++ boundedIn capacity ops (op.apply capacity m).2 :=
@@ -212,22 +189,13 @@ theorem waitedIn_cons (op : Op α W) (ops : List (Op α W)) (m : Mailbox α W) :
       = op.waitedIn (op.apply capacity m).1 ++ waitedIn capacity ops (op.apply capacity m).2 :=
   rfl
 
-private theorem apply_urgent (m : Mailbox α W) {op : Op α W} (h : op ≠ .take) :
-    (op.apply capacity m).2.urgent.reverse
-      = m.urgent.reverse ++ op.urgentIn (op.apply capacity m).1 := by
-  cases op <;> first
-    | exact absurd rfl h
-    | cases hc : m.closed <;> by_cases hr : m.count < capacity <;>
-        simp only [Op.apply, offer, offerOrWait, urge, rest, close, hc, hr, ↓reduceIte,
-          Bool.false_eq_true, Bool.true_or, Bool.false_or] <;> (try split) <;> simp_all [Op.urgentIn]
-
 private theorem apply_items (m : Mailbox α W) {op : Op α W} (h : op ≠ .take) :
     (op.apply capacity m).2.items.reverse
       = m.items.reverse ++ op.boundedIn (op.apply capacity m).1 := by
   cases op <;> first
     | exact absurd rfl h
     | cases hc : m.closed <;> by_cases hr : m.count < capacity <;>
-        simp only [Op.apply, offer, offerOrWait, urge, rest, close, hc, hr, ↓reduceIte,
+        simp only [Op.apply, offer, offerOrWait, rest, close, hc, hr, ↓reduceIte,
           Bool.false_eq_true, Bool.true_or, Bool.false_or] <;> (try split) <;> simp_all [Op.boundedIn]
 
 private theorem apply_waiting (m : Mailbox α W) {op : Op α W} (htake : op ≠ .take)
@@ -237,16 +205,8 @@ private theorem apply_waiting (m : Mailbox α W) {op : Op α W} (htake : op ≠ 
     | exact absurd rfl htake
     | exact absurd rfl hclose
     | cases hc : m.closed <;> by_cases hr : m.count < capacity <;>
-        simp only [Op.apply, offer, offerOrWait, urge, rest, hc, hr, ↓reduceIte,
+        simp only [Op.apply, offer, offerOrWait, rest, hc, hr, ↓reduceIte,
           Bool.false_eq_true, Bool.true_or, Bool.false_or] <;> (try split) <;> simp_all [Op.waitedIn]
-
-theorem exec_urgent (m : Mailbox α W) {ops : List (Op α W)} (h : ∀ op ∈ ops, op ≠ .take) :
-    (exec capacity ops m).2.urgent.reverse = m.urgent.reverse ++ urgentIn capacity ops m := by
-  induction ops generalizing m with
-  | nil => simp [urgentIn]
-  | cons op ops ih =>
-    rw [urgentIn_cons, exec, ih _ fun o ho => h o (List.mem_cons_of_mem _ ho),
-      apply_urgent m (h op List.mem_cons_self), List.append_assoc]
 
 theorem exec_items (m : Mailbox α W) {ops : List (Op α W)} (h : ∀ op ∈ ops, op ≠ .take) :
     (exec capacity ops m).2.items.reverse = m.items.reverse ++ boundedIn capacity ops m := by
@@ -267,13 +227,12 @@ theorem exec_waiting (m : Mailbox α W) {ops : List (Op α W)}
       apply_waiting m hop.1 hop.2]
     simp [List.reverse_append, Op.waitedIn_reverse]
 
-/-- What a `take` returns is exactly what was taken in since the last `take`: what came from
-other shards first, then the rest, each in the order it went in. -/
+/-- What a `take` returns is exactly what was taken in since the last `take`, in the order it
+went in. -/
 theorem batch_since_take (m : Mailbox α W) {ops : List (Op α W)} (h : ∀ op ∈ ops, op ≠ .take) :
-    (exec capacity ops m.take.2).2.take.1.batch
-      = urgentIn capacity ops m.take.2 ++ boundedIn capacity ops m.take.2 := by
+    (exec capacity ops m.take.2).2.take.1.batch = boundedIn capacity ops m.take.2 := by
   simp only [take] at h ⊢
-  rw [exec_urgent _ h, exec_items _ h]
+  rw [exec_items _ h]
   rfl
 
 /-- A `take` wakes every sender that waited for room since the last `take`, each as often as it
@@ -301,7 +260,7 @@ private theorem apply_sleeper (m : Mailbox α W) {op : Op α W} (hrest : op.rese
   | close => simp [Op.resetsSleeper] at hrest
   | _ =>
     cases hc : m.closed <;> by_cases hr : m.count < capacity <;>
-      simp only [Op.apply, offer, offerOrWait, urge, take, hc, hr, ↓reduceIte,
+      simp only [Op.apply, offer, offerOrWait, take, hc, hr, ↓reduceIte,
         Bool.false_eq_true] at hquiet ⊢ <;> simp_all [Reply.admitted]
 
 theorem exec_sleeper (m : Mailbox α W) {ops : List (Op α W)} (hrest : ∀ op ∈ ops, op.resetsSleeper = false)
@@ -337,7 +296,7 @@ theorem woken_after_rest {m : Mailbox α W} {wake : W} (hrest : (m.rest wake).1 
     | close => simp [Op.apply, Reply.admitted] at h
     | _ =>
       cases hc : m'.closed <;> by_cases hr : m'.count < capacity <;>
-        simp only [Op.apply, offer, offerOrWait, urge, hc, hr, hsleeper, ↓reduceIte,
+        simp only [Op.apply, offer, offerOrWait, hc, hr, hsleeper, ↓reduceIte,
           Bool.false_eq_true] at h ⊢ <;> simp_all [Reply.admitted, Reply.woken]
   · simp [Op.apply, close, hsleeper, Reply.woken]
 
@@ -361,7 +320,7 @@ theorem after_close (m : Mailbox α W) (ops : List (Op α W)) :
         ∧ (op.apply capacity m).2.closed = true ∧ (op.apply capacity m).2.sleeper = none
         ∧ (op.apply capacity m).2.waiting = [] := by
       cases op <;>
-        simp [Op.apply, offer, offerOrWait, urge, take, rest, close, Reply.admitted, Reply.woken,
+        simp [Op.apply, offer, offerOrWait, take, rest, close, Reply.admitted, Reply.woken,
           hclosed, hsleeper, hwaiting]
     obtain ⟨h1, h2, h3, h4, h5⟩ := hop
     obtain ⟨hr, hc, hs, hw⟩ := ih _ h3 h4 h5
@@ -385,8 +344,8 @@ theorem Reachable.bounded (h : Reachable capacity m) : m.items.length ≤ capaci
 /-- The shard never sleeps on what has arrived. -/
 theorem Reachable.asleep_empty (h : Reachable capacity m) (hs : m.sleeper.isSome) :
     m.take.1.batch = [] ∧ m.closed = false := by
-  obtain ⟨hi, hu, hc⟩ := h.sound.asleep_empty hs
-  simp [take, hi, hu, hc]
+  obtain ⟨hi, hc⟩ := h.sound.asleep_empty hs
+  simp [take, hi, hc]
 
 /-- With room for one, no sender waits for room while the shard sleeps: it would wait for a
 `take` that never comes. -/
