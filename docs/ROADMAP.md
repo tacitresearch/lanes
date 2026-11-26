@@ -147,7 +147,7 @@ function; the theorem that two shards are the one system; a transport between pr
   phase A: the transport's handler (168), the HTTP wire format (411, part proved), the journal and
   snapshot IO. The pure cores behind them are proved, but the count is the wrong way round
   for a framework whose point is the opposite, and the rule above is how it comes down.
-- *Proof volume.* The join, the split and the disk model are 1,700, 1,100 and 650 lines.
+- *Proof volume.* The join, the split and the disk model are 1,700, 1,050 and 650 lines.
   The lemmas agents reported missing each time (updates of functions, erasing under a map,
   a step in closed form, permutations of the net, reachability up to `Equiv` closed under
   steps) are in the core now: `Lanes/Data/List.lean` and `Lanes/Actors/{World,Run,Equiv}.lean`.
