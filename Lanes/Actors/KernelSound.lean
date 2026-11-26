@@ -282,6 +282,16 @@ theorem run1_sound {k : Kernel sys} {r : Step sys} (h : k.run1 = some r) :
       simp only [SysState.run, hstep, Option.bind_some]
       exact run_outputs env ((k.startActor e.dst).1.abs) _
 
+/-- The kernel is never stuck with mail queued: it can step exactly when its queue is not
+empty. -/
+theorem run1_eq_none_iff (k : Kernel sys) : k.run1 = none ↔ (k.abs).net = [] := by
+  unfold run1
+  split
+  · next h => simpa using Fifo.pop?_eq_none.mp h
+  · next e rest h =>
+    have := Fifo.toList_of_pop? h
+    split <;> simp [this]
+
 /-- A timer firing is the semantics' `timeout` event if its token is still pending, and nothing
 at all otherwise. -/
 theorem fire_sound (k : Kernel sys) (i : σ.Id) (msg : σ.Msg i) (token : Nat) :
