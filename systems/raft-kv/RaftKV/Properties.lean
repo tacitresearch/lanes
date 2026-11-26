@@ -55,9 +55,15 @@ def leaderComplete (c : Cluster N config machine) : Bool :=
     !isLeader (c.state l) || (c.state a).term > (c.state l).term
       || (c.state l).log.take (c.state a).commit == (c.state a).log.take (c.state a).commit
 
-def wellFormed (c : Cluster N config machine) : Bool :=
-  (Enum.all (α := N)).all fun a =>
-    (c.state a).applied ≤ (c.state a).commit && (c.state a).commit ≤ (c.state a).log.length
-      && (c.state a).log.all (·.term ≤ (c.state a).term)
+def appliedWithinCommit (c : Cluster N config machine) : Bool :=
+  (Enum.all (α := N)).all fun a => (c.state a).applied ≤ (c.state a).commit
+
+/-- Holds only because a leader never replaces a committed entry: it is leader completeness seen
+from a follower. -/
+def commitWithinLog (c : Cluster N config machine) : Bool :=
+  (Enum.all (α := N)).all fun a => (c.state a).commit ≤ (c.state a).log.length
+
+def entryTermsWithinTerm (c : Cluster N config machine) : Bool :=
+  (Enum.all (α := N)).all fun a => (c.state a).log.all (·.term ≤ (c.state a).term)
 
 end RaftKV

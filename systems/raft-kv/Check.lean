@@ -38,7 +38,9 @@ def props (config : Config) : List (Check.Property (W config)) :=
     .always "logs that agree on a term agree before it" fun w => logMatching w.state,
     .always "committed entries agree" fun w => committedAgree w.state,
     .always "a leader has every committed entry" fun w => leaderComplete w.state,
-    .always "applied ≤ committed ≤ logged" fun w => wellFormed w.state,
+    .always "applied ≤ committed" fun w => appliedWithinCommit w.state,
+    .always "committed ≤ logged" fun w => commitWithinLog w.state,
+    .always "no entry is of a later term than its node" fun w => entryTermsWithinTerm w.state,
     .sometimes "a leader is elected" fun w =>
       (Enum.all (α := N)).any fun a => isLeader (w.state.state a),
     .sometimes "a write is answered" fun w => w.state.outbox.any fun r => r.res == .ok,
