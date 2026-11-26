@@ -29,3 +29,9 @@ jobs:
           mkdir -p .lake && ln -s "$GITHUB_WORKSPACE/.lake/packages" .lake/packages
           lake build
           lake test
+      - name: systems/raft-kv builds and passes its checks
+        run: |
+          cd systems/raft-kv
+          mkdir -p .lake && ln -s "$GITHUB_WORKSPACE/.lake/packages" .lake/packages
+          lake build
+          lake test

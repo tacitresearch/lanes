@@ -471,3 +471,30 @@ Snapshots are built (A.1 above, D29). Checker v2 is open.
   that the runtime's runs are fair is assumed. Deadlock-freedom of the kernel is a safety
   property and is checkable.
 - The shell, `Std.Async`, `Std.Http`, the Lean runtime and compiler.
+
+## Phase C: `systems/raft-kv`
+
+Started before phase B is finished, because it is what says which parts of B matter.
+
+Done: the protocol as one actor, generic over the machine it replicates
+(`systems/raft-kv/RaftKV/Protocol.lean`); the spec, which is the machine; the invariants of
+Raft's safety argument as checkable functions; model checks on three nodes against the spec
+and the invariants, with witnesses; one seeded bug found.
+
+What it has shown about the framework so far:
+
+- The spec and the refinement check needed nothing new: the service monitor that checked the
+  key-value store with front ends checks Raft.
+- The checker's speed is the limit. One crash on three nodes in one term is six million
+  states and takes ten minutes; two terms with a crash is out of reach. Checker v2 is what
+  phase C needs first from phase B.
+- A state of the node cannot derive `DecidableEq` when the replicated machine's state is a
+  function, so its `BEq` is written by hand, and the lawfulness the checker's theorem asks for
+  will have to be proved by hand too. `Inspect` should derive both.
+- A heartbeat makes the state space infinite unless the messages in flight are bounded by a
+  constraint. A checker option that bounds the net would say so in one place.
+
+Next: the proofs, starting with election safety carried over from the election example, then
+log matching; the seeded old-term commit bug found by the checker; the node-to-node transport,
+so that three processes run it.
+

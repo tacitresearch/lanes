@@ -28,6 +28,7 @@ Last updated: 2026-11-27.
 | Bank (`Examples/Bank.lean`) | Conservation on 2 accounts; lost-credit bug found under lossy links; runs on the runtime and over HTTP | Balance never negative (all environments); money conserved for any number of accounts in a faultless environment |
 | Key-value store (`Examples/KV.lean`) | Refines the map spec; stale-read bug of a read cache found | Not yet |
 | Leader election (`Examples/Election.lean`) | At most one leader per term on 3 nodes with reordering and a crash (165k states); split-brain bug found | At most one leader per term for any number of nodes and terms under every environment model: loss, duplication, reordering, crashes (`Examples/ElectionProofs.lean`) |
+| Raft key-value store (`systems/raft-kv`, a package of its own) | Refines the map it replicates, with election safety, log matching, agreement on committed entries and leader completeness, on 3 nodes: reliable links and two terms (695k states), unordered links (846k), unordered links with a crash and restart (6.0M); a node that votes for a candidate with a shorter log is caught in 15 steps | Not yet |
 | Watchdog (`Examples/Watchdog.lean`) | Under the fair scheduler a dog whose keeper keeps pinging never barks, and one whose keeper rests barks | There is a fair run in which the keeper pings forever, the dog's timer is pending at every position and the dog never barks; in every run that fires each timer that stays pending, it barks (`Examples/WatchdogProofs.lean`) |
 
 ## Against the DESIGN exit criteria

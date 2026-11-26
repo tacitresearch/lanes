@@ -1,0 +1,16 @@
+name = "raftKv"
+version = "0.1.0"
+defaultTargets = ["RaftKV", "raftCheck"]
+testDriver = "raftCheck"
+
+[[require]]
+name = "lanes"
+path = "../.."
+
+[[lean_lib]]
+name = "RaftKV"
+
+# Model checks, run by `lake test`. Check before you prove (LANES_STYLE rule 5.1).
+[[lean_exe]]
+name = "raftCheck"
+root = "Check"
