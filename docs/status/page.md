@@ -38,7 +38,8 @@ Update them in the same change that moves an item; `lake exe lanes lint --fix` w
    that takes per-state, per-message and per-timer predicates and discharges `below` itself, a
    frame lemma for the actors that did not move, and projections for ghost state.
 2. Counterexample-to-induction finder and `inv_split`, then `lanes prove`.
-3. Releasing idle actors.
+3. Releasing an idle actor that is not at its initial state: its state saved to storage when
+   it rests and read back by the start its next message brings (the persistence adapter).
 4. What `systems/ledger` asks of the framework (its README's friction log): requests prepared
    before the journal, specs with time, `Service` without the system's signature.
 

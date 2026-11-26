@@ -5,12 +5,14 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import Lanes
 
 /-!
-Releasing actors at rest (`Kernel.rest`, `DECISIONS.md` D44), checked before it is proved
-(rule 5.1). A client churns through actors, one per identity, and a kernel that releases them
-is driven side by side with one that keeps every actor it started, through every sequence of
-operations up to a bound: both hand over the same outputs, report the same events but for
-starts, and hold the same actors in the same states. Then at scale, on the kernel alone and on
-a live shard: a hundred thousand identities are touched and the kernel stays small.
+Releasing actors at rest (`Kernel.rest`, `docs/decisions/new-release-actors-at-rest.md`),
+checked before it is proved (rule 5.1). A client churns through actors, one per identity, and a
+kernel that releases them is driven side by side with one that keeps every actor it started,
+through every sequence of operations up to a bound: both hand over the same outputs, report the
+same events but for starts, and hold the same actors in the same states. Under a shell that does
+anything, the releasing kernel is checked against the semantics instead. Then at scale, on the
+kernel alone and on a live shard: a hundred thousand identities are touched and the kernel stays
+small.
 -/
 
 namespace Tests.Release

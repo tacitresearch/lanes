@@ -187,6 +187,12 @@ code is being cut back by moving what it decides into proved functions (the HTTP
 runtime's batch, the server's table of waiting requests, the mailbox and the courier), and
 declaration sugar for codecs and instances, the boilerplate Raft showed.
 
+The kernel now releases an actor that is back where a start puts it
+(`docs/decisions/new-release-actors-at-rest.md`), which bounds a system whose identities are
+mostly touched once. Releasing an idle actor in any other state is phase D's database: its
+state saved when it rests and read back by the start its next message brings, with a theorem
+that this too is a start the semantics allows.
+
 ## Serious applications
 
 `Examples/` holds small pieces, one idea each, that run in seconds. Serious applications live

@@ -6,7 +6,8 @@ import Ledger.Spec
 One actor per user name, `user n`, holds that user's record: credential, failed attempts and
 sessions. One actor, `ledger`, holds the book. A request goes to the user it names, which
 decides it (`User.decide`) and tells the ledger: either the reply, or the operation to serve as
-that user. The ledger answers every request.
+that user. The ledger answers every request. A name nobody has signed up leaves its user vacant,
+which is where a start puts it, so the kernel lets it go (`Release.lean`).
 
 That the ledger answers even what the user decided is what makes the system the spec: a user's
 requests reach the ledger in the order the user decided them, so each takes effect, as the

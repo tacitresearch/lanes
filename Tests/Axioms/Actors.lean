@@ -205,6 +205,9 @@ import Lanes.Semantics
 /-- info: 'Lanes.Kernel.exec_append' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Kernel.exec_append
 
+/-- info: 'Lanes.Kernel.exec_visible' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.exec_visible
+
 -- Lanes.Actors.KernelTimers
 /-- info: 'Lanes.Kernel.WellFormed.image' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Kernel.WellFormed.image
@@ -314,6 +317,13 @@ import Lanes.Semantics
 -- Lanes.Actors.Past
 /-- info: 'Lanes.SysState.mem_seen_grow_of_mem' depends on axioms: [propext, Classical.choice] -/
 #guard_msgs in #print axioms Lanes.SysState.mem_seen_grow_of_mem
+
+-- Lanes.Actors.Release
+/-- info: 'Lanes.SysState.Released.visible' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SysState.Released.visible
+
+/-- info: 'Lanes.SysState.Leads.reachable' depends on axioms: [propext, Classical.choice] -/
+#guard_msgs in #print axioms Lanes.SysState.Leads.reachable
 
 -- Lanes.Actors.Shard
 /-- info: 'Lanes.Parcel.receive_send' depends on axioms: [propext, Classical.choice, Quot.sound] -/

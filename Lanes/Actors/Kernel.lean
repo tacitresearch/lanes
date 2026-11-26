@@ -124,8 +124,9 @@ def settle (k : Kernel sys) (i : σ.Id) (r : sys.State i × List (Effect σ i)) 
 
 /-- Actor `i` leaves memory when it is at rest: up, with no timers, in a state that starting it
 gives (`Actor.fresh`). Its next message starts it again as it was, so nothing can tell
-(`DECISIONS.md` D44). Mail still queued for it is no reason to keep it: finding out would take a
-look through the queue, and its next message starts it as any other would. -/
+(`docs/decisions/new-release-actors-at-rest.md`). Mail still queued for it is no reason to keep
+it: finding out would take a look through the queue, and its next message starts it as any
+other would. -/
 def rest (k : Kernel sys) (i : σ.Id) : Kernel sys :=
   let c := k.cell i
   if (sys.actor i).fresh c.state && c.up && c.timers.isEmpty then
