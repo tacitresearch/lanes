@@ -156,7 +156,8 @@ def account (config : Config N) :
   pend := asked
   held _ xs := ↑xs
   value state net xs v := v.book = state .ledger ∧ ∀ n,
-    decideAll config n (v.users n) (xs.filter (·.name = n)) = (state (.user n), net.filterMap (told n))
+    decideAll config n (v.users n) (xs.filter (·.name = n)) =
+      (state (.user n), net.filterMap (told n))
 
 theorem told_eq_none {e : Envelope (sig N C)} (n : N) (h : e.dst ≠ .ledger) : told n e = none := by
   obtain ⟨src, dst, msg⟩ := e
@@ -189,7 +190,8 @@ theorem user_step (hc : Untimed config) (n : N) (s : Option (Profile C)) (req : 
     (ask : Ask C) : ((system N C config).actor (.user n)).step s (.ask req ask) =
       ((User.decide config n req s ask).1,
         .send .ledger ((User.decide config n req s ask).2.1.msg n req) ::
-          (User.decide config n req s ask).2.2.closed.map fun session => .cancel (.expire session)) := by
+          (User.decide config n req s ask).2.2.closed.map fun session =>
+            .cancel (.expire session)) := by
   simp [system, user, timerEffects_untimed hc, tell_viaLedger]
 
 theorem sends_tell (n : N) (m : LedgerMsg N) (closed : List Sid) :
@@ -202,7 +204,8 @@ theorem sends_tell (n : N) (m : LedgerMsg N) (closed : List Sid) :
 
 theorem emits_tell (n : N) (m : LedgerMsg N) (closed : List Sid) :
     Effect.emits (.send Id.ledger m ::
-      closed.map fun session => (.cancel (.expire session) : Effect (sig N C) (Id.user n))) = [] := by
+      closed.map fun session => (.cancel (.expire session) : Effect (sig N C) (Id.user n))) =
+      [] := by
   induction closed with
   | nil => rfl
   | cons s closed ih => simp [Effect.emits]
@@ -235,7 +238,8 @@ variable {env : EnvModel (sig N C)}
 /-- A user decides a request: it joins the witness, and the user's link to the ledger carries
 what the user decided. -/
 theorem moves_decide (hc : Untimed config) {c : SysState (system N C config)} {n : N}
-    {req : ReqId} {ask : Ask C} (hmem : (⟨none, .user n, .ask req ask⟩ : Envelope (sig N C)) ∈ c.net) :
+    {req : ReqId} {ask : Ask C}
+    (hmem : (⟨none, .user n, .ask req ask⟩ : Envelope (sig N C)) ∈ c.net) :
     (account config).Moves (spec N C config) c
       (({ c with net := c.net.erase ⟨none, .user n, .ask req ask⟩ }).grow (.user n)
         (((system N C config).actor (.user n)).step (c.state (.user n)) (.ask req ask))) := by
@@ -244,7 +248,8 @@ theorem moves_decide (hc : Untimed config) {c : SysState (system N C config)} {n
   refine ⟨xs ++ [.ofAsk n req ask], [], ⟨?_, fun k => ?_⟩, le_of_eq ?_, le_of_eq ?_⟩
   · simpa [SysState.grow] using hbook
   · simp only [Service.run_nil, SysState.grow, sends_tell, List.filter_append,
-      List.filterMap_append, filterMap_erase_of_none (rfl : told k ⟨none, .user n, .ask req ask⟩ = none)]
+      List.filterMap_append,
+      filterMap_erase_of_none (rfl : told k ⟨none, .user n, .ask req ask⟩ = none)]
     by_cases hk : n = k
     · subst hk
       simp [decideAll_concat, husers, told]
@@ -305,7 +310,8 @@ theorem moves_serve (hlink : ∀ n, env.link (some (.user n)) .ledger = .reliabl
 omit [DecidableEq N] in
 /-- A decision the book serves leaves the user's record as it was. -/
 theorem decide_serve {n : N} {req : ReqId} {u : Option (Profile C)} {ask : Ask C} {op : Op}
-    (h : (User.decide config n req u ask).2.1 = .serve op) : (User.decide config n req u ask).1 = u := by
+    (h : (User.decide config n req u ask).2.1 = .serve op) :
+    (User.decide config n req u ask).1 = u := by
   cases u with
   | none => cases ask <;> simp [User.decide] at h
   | some p =>
@@ -326,7 +332,8 @@ def answered (config : Config N) :
   | users, x :: xs =>
     match (User.decide config x.name x.req (users x.name) x.ask).2.1 with
     | .reply _ =>
-      x :: answered config (update users x.name (User.decide config x.name x.req (users x.name) x.ask).1) xs
+      x :: answered config
+        (update users x.name (User.decide config x.name x.req (users x.name) x.ask).1) xs
     | .serve _ => answered config users xs
 
 theorem answered_sublist (users : N → Option (Profile C)) (xs : List (Request N C)) :

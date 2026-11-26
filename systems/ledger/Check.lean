@@ -325,7 +325,8 @@ def main (args : List String) : IO UInt32 := do
       "a log-out racing a transfer, with requests lost and reordered and a crash anywhere"
       (fun r => r.ok && r.complete)
       fun _ => check untimed .viaLedger logOutRace (raceWitnesses .viaLedger) lossyIn 1)
-    results := results.push (← timed "transfers between two users, with links to the ledger that lose"
+    results := results.push (← timed
+      "transfers between two users, with links to the ledger that lose"
       (fun r => r.ok && r.complete)
       fun _ => check untimed .viaLedger transfers [] lossyToLedger)
   if all || args.contains "bridge" then

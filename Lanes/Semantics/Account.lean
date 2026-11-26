@@ -51,7 +51,8 @@ variable {In Out S T : Type}
 /-- The inputs `xs` taking effect in order from `v`: the value after, and the outputs. -/
 def run (svc : Service In Out S T) (v : S) : List In → S × List Out
   | [] => (v, [])
-  | x :: xs => ((svc.run (svc.step v x).1 xs).1, (svc.step v x).2 ++ (svc.run (svc.step v x).1 xs).2)
+  | x :: xs =>
+    ((svc.run (svc.step v x).1 xs).1, (svc.step v x).2 ++ (svc.run (svc.step v x).1 xs).2)
 
 /-- No input, no change. -/
 @[simp] theorem run_nil (svc : Service In Out S T) (v : S) : svc.run v [] = (v, []) := rfl

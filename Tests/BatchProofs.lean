@@ -10,8 +10,9 @@ The server of `Tests/Batch.lean` implements its service, for every service and u
 environment that does not hand a request over twice, lossy links and crashes included.
 
 It has no refinement mapping: one step of it is several of the service, and a lost request
-stays pending in the service. So `Refines.of_map` does not apply, and this is the small case of
-`System.Refines.of_steps`. `System.Refines.to_ghost` and `of_ghost` carry the result to the
+stays pending in the service. So `Refines.of_map` does not apply; the standard simulation
+(`Lanes.Account`) does, with the queue held in the server's state and a flush the queue taking
+effect. `System.Refines.to_ghost` and `of_ghost` carry the result to the
 server with its history and back. Built by `lake build`, not linked into the test executable.
 -/
 
@@ -21,107 +22,39 @@ open Lanes Cslib
 
 variable {In Out S : Type} [DecidableEq In] [DecidableEq Out]
 
-def waiting (net : List (Envelope (sig In Out))) : List In :=
-  net.filterMap fun e =>
-    match (e.msg : Msg In) with
+omit [DecidableEq In] [DecidableEq Out] in
+theorem serve_eq_run (svc : Service In Out S) (s : S) (queue : List In) :
+    serve svc s queue = svc.run s queue := by
+  induction queue generalizing s with
+  | nil => rfl
+  | cons x queue ih => simp [serve, Service.run, ih]
+
+/-- The requests still to be served are pending in the service: those on their way and those
+queued. -/
+def account (svc : Service In Out S) : Account (system svc) S Unit where
+  pend e := match (e.msg : Msg In) with
     | .request x => some x
     | .flush => none
+  held state _ := ↑(state ()).2
+  value state _ _ v := v = (state ()).1
 
-theorem waiting_erase {net : List (Envelope (sig In Out))} {src : Option Unit} {x : In}
-    (h : (⟨src, (), .request x⟩ : Envelope (sig In Out)) ∈ net) :
-    (x ::ₘ ↑(waiting (net.erase ⟨src, (), .request x⟩)) : Multiset In) = ↑(waiting net) := by
-  have hperm : (waiting net).Perm (x :: waiting (net.erase ⟨src, (), .request x⟩)) :=
-    (List.perm_cons_erase h).filterMap _
-  exact (Multiset.coe_eq_coe.mpr hperm).symm
-
-/-- The requests still to be served are pending in the service: at least those on their way
-and those queued. -/
-structure Sim {svc : Service In Out S} (c : SysState (system svc))
-    (t : Service.Abs In Out S) : Prop where
-  value : t.value = (c.state ()).1
-  outbox : t.outbox = ↑c.outbox
-  pending : (↑(waiting c.net) : Multiset In) + ↑(c.state ()).2 ≤ t.pending
-
-/-- The service serves a queue in as many internal steps as it is long. -/
-theorem serves (svc : Service In Out S) (queue : List In) :
-    ∀ (t : Service.Abs In Out S) (rest : Multiset In), rest + ↑queue ≤ t.pending →
-      ∃ t', svc.spec.lts.τSTr t t' ∧ t'.value = (serve svc t.value queue).1 ∧
-        t'.outbox = t.outbox + ↑(serve svc t.value queue).2 ∧ rest ≤ t'.pending := by
-  induction queue with
-  | nil => exact fun t rest h => ⟨t, .refl, rfl, by simp [serve], by simpa using h⟩
-  | cons x queue ih =>
-    intro t rest h
-    rw [← Multiset.cons_coe, Multiset.add_cons] at h
-    obtain ⟨t', ht', hvalue, houtbox, hrest⟩ := ih
-      ⟨(svc.step t.value x).1, t.pending.erase x, t.outbox + (svc.step t.value x).2⟩ rest
-      (by simpa using Multiset.erase_le_erase x h)
-    refine ⟨t', .head ⟨x, Multiset.mem_of_le h (Multiset.mem_cons_self _ _), rfl⟩ ht', hvalue, ?_,
-      hrest⟩
-    rw [houtbox, serve, ← Multiset.coe_add, add_assoc]
-
-namespace Sim
-
-variable {svc : Service In Out S} {c : SysState (system svc)}
-  {t : Service.Abs In Out S}
-
-theorem loses {c' : SysState (system svc)} (h : Sim c t) (hl : c'.Loses c) : Sim c' t where
-  value := by rw [hl.state]; exact h.value
-  outbox := by rw [hl.outbox]; exact h.outbox
-  pending := by
-    rw [hl.state]
-    exact (add_le_add_left (Multiset.coe_le.mpr (hl.net.filterMap _).subperm) _).trans h.pending
-
-theorem recover (h : Sim c t) : Sim (c.grow () ((actor svc).recover (c.state ()))) t where
-  value := by rw [SysState.grow_state_self]; exact h.value
-  outbox := h.outbox.trans (congrArg _ (List.append_nil _).symm)
-  pending := by
-    rw [SysState.grow_state_self]
-    show (↑(waiting (c.net ++ [])) : Multiset In) + ↑(c.state ()).2 ≤ t.pending
-    rw [List.append_nil]
-    exact h.pending
-
-/-- The server handles `m`, taken from `net`, which is what was in flight without it. -/
-theorem step (h : Sim c t) {net : List (Envelope (sig In Out))} (m : Msg In)
-    (hsub : net.Sublist c.net)
-    (htaken : ∀ x, m = .request x → (x ::ₘ ↑(waiting net) : Multiset In) ≤ ↑(waiting c.net)) :
-    ∃ t', svc.spec.lts.τSTr t t' ∧
-      Sim (({ c with net := net }).grow () ((actor svc).step (c.state ()) m)) t' := by
-  have hless : (↑(waiting net) : Multiset In) ≤ ↑(waiting c.net) :=
-    Multiset.coe_le.mpr (hsub.filterMap _).subperm
-  cases m with
-  | request x =>
-    refine ⟨t, .refl, by rw [SysState.grow_state_self]; exact h.value,
-      h.outbox.trans (congrArg _ (List.append_nil _).symm), ?_⟩
-    rw [SysState.grow_state_self]
-    show (↑(waiting (net ++ [])) : Multiset In) + ↑((c.state ()).2 ++ [x]) ≤ t.pending
-    have heq : (↑(waiting net) : Multiset In) + ↑((c.state ()).2 ++ [x]) =
-        (x ::ₘ ↑(waiting net)) + ↑(c.state ()).2 := by
-      rw [← Multiset.coe_add, ← Multiset.singleton_add, Multiset.coe_singleton]
-      abel
-    rw [List.append_nil, heq]
-    exact (add_le_add_left (htaken x rfl) _).trans h.pending
-  | flush =>
-    obtain ⟨t', ht', hvalue, houtbox, hrest⟩ := serves svc (c.state ()).2 t ↑(waiting net)
-      ((add_le_add_left hless _).trans h.pending)
-    have hemits : Effect.emits (((actor svc).step (c.state ()) .flush).2) =
-        (serve svc (c.state ()).1 (c.state ()).2).2 := by
-      show Effect.emits (List.map _ _ ++ [_]) = _
-      rw [Effect.emits_append, Effect.emits_map_emit (σ := sig In Out) (i := ())]
-      exact List.append_nil _
-    have hsends : Effect.sends (σ := sig In Out) () (((actor svc).step (c.state ()) .flush).2) =
-        [] := by
-      show Effect.sends (σ := sig In Out) () (List.map _ _ ++ [_]) = _
-      rw [Effect.sends_append, Effect.sends_map_emit (σ := sig In Out) (i := ())]
-      rfl
-    refine ⟨t', ht', by rw [SysState.grow_state_self, hvalue, h.value]; rfl, ?_, ?_⟩
-    · show t'.outbox = ↑(c.outbox ++ Effect.emits ((actor svc).step (c.state ()) .flush).2)
-      rw [hemits, houtbox, h.outbox, h.value, Multiset.coe_add]
-    · rw [SysState.grow_state_self]
-      show (↑(waiting (net ++ Effect.sends () _)) : Multiset In) + ↑([] : List In) ≤ t'.pending
-      rw [hsends, List.append_nil]
-      simpa using hrest
-
-end Sim
+/-- The queue is served: it takes effect, from the network `net` the server leaves. -/
+theorem flush_moves {svc : Service In Out S} {c : SysState (system svc)}
+    {net : List (Envelope (sig In Out))} (hsub : net.Sublist c.net) :
+    (account svc).Moves svc c
+      (({ c with net := net }).grow () ((actor svc).step (c.state ()) .flush)) := by
+  rintro _ v rfl
+  refine ⟨(), (c.state ()).2, ?_, ?_, le_of_eq ?_⟩
+  · simp [account, SysState.grow, actor, serve_eq_run]
+  · simp only [Account.pending, account, SysState.grow, actor, update_self]
+    rw [Effect.sends_append, Effect.sends_map_emit (σ := sig In Out) (i := ())]
+    simp only [Effect.sends, List.filterMap_cons, List.filterMap_nil, List.append_nil,
+      Multiset.coe_nil, add_zero]
+    exact add_le_add (Multiset.coe_le.mpr (hsub.filterMap _).subperm) le_rfl
+  · simp only [Account.owed, account, SysState.grow, actor]
+    rw [Effect.emits_append, Effect.emits_map_emit (σ := sig In Out) (i := ()),
+      Effect.sends_append, Effect.sends_map_emit (σ := sig In Out) (i := ())]
+    simp [serve_eq_run, Effect.emits, Effect.sends]
 
 /-- The one timer is `flush`, and requests come from outside. -/
 def Tame {svc : Service In Out S} (c : SysState (system svc)) : Prop :=
@@ -148,41 +81,36 @@ theorem tame_invariant (svc : Service In Out S) (env : EnvModel (sig In Out)) :
 
 theorem implements (svc : Service In Out S) (env : EnvModel (sig In Out))
     (henv : (env.link none ()).duplicating = false) : (system svc).Implements env svc := by
-  refine System.Refines.of_steps (tame_invariant svc env) Sim ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
-  · refine ⟨⟨svc.init, 0, 0⟩, rfl, SysState.init_induction (env := env)
-      (P := fun c => Sim c ⟨svc.init, 0, 0⟩) ⟨rfl, rfl, ?_⟩
-      fun c i h => h.recover.loses (SysState.Loses.startActor c env i)⟩
-    simp [SysState.blank, waiting, actor]
-  · exact fun c c' t h hl => h.loses hl
-  · intro c t x _ h
-    refine ⟨{ t with pending := x ::ₘ t.pending }, .single rfl, h.value, h.outbox, ?_⟩
-    show (↑(waiting (c.net ++ [⟨none, (), .request x⟩])) : Multiset In) + _ ≤ x ::ₘ t.pending
-    have hw : waiting (c.net ++ [(⟨none, (), .request x⟩ : Envelope (sig In Out))]) =
-        waiting c.net ++ [x] := by simp [waiting]
-    have heq : (↑(waiting c.net ++ [x]) : Multiset In) + ↑(c.state ()).2 =
-        x ::ₘ (↑(waiting c.net) + ↑(c.state ()).2) := by
-      rw [← Multiset.coe_add, ← Multiset.singleton_add, Multiset.coe_singleton]
-      abel
-    rw [hw, heq]
-    exact Multiset.cons_le_cons x h.pending
-  · intro c t out _ h hmem
-    have hin : out ∈ t.outbox := h.outbox ▸ Multiset.mem_coe.mpr hmem
-    refine ⟨{ t with outbox := t.outbox.erase out }, .single ⟨hin, rfl⟩, h.value, ?_, h.pending⟩
-    show t.outbox.erase out = ↑(c.outbox.erase out)
-    rw [h.outbox, Multiset.coe_erase]
-  · rintro c t ⟨src, ⟨⟩, m⟩ _ h hmem
-    exact h.step m List.erase_sublist fun x hm => by
-      subst hm
-      exact le_of_eq (waiting_erase hmem)
-  · rintro c t ⟨src, ⟨⟩, m⟩ ⟨_, hnet⟩ h hmem hdup
-    refine h.step (net := c.net) m (List.Sublist.refl _) fun x hm => ?_
-    obtain rfl : src = none := hnet _ hmem
+  refine (account svc).implements (tame_invariant svc env)
+    ⟨(), by simp [account, SysState.init, SysState.startActor, SysState.settle, SysState.blank,
+      SysState.perform, Effect.isStop, actor], by simp [Account.pending, account, SysState.init,
+      SysState.startActor, SysState.settle, SysState.blank, SysState.perform, Effect.isStop, actor],
+      by simp [Account.owed, account, SysState.init, SysState.startActor, SysState.settle,
+        SysState.blank, SysState.perform, Effect.isStop, actor]⟩
+    (fun _ => ⟨rfl, rfl⟩) (fun _ _ _ _ _ h => h) ?_ ?_
+    (fun _ _ _ _ _ => .of_loses ⟨rfl, List.erase_sublist, fun _ _ h => h, rfl⟩ fun _ _ h => h)
+    (fun c i _ => .of_loses (SysState.Loses.down env c i) fun _ _ h => h)
+    (fun c ⟨⟩ m ⟨htimers, _⟩ hmem => by
+      obtain rfl := htimers () m hmem
+      exact flush_moves (List.Sublist.refl _))
+    (fun c ⟨⟩ _ => .quiet (fun _ _ h => by simpa [account] using h) rfl rfl (fun _ => by simp)
+      (fun _ => rfl))
+  · rintro c ⟨src, ⟨⟩, m⟩ _ hd
+    have hmem := SysState.mem_of_deliverable hd
+    cases m with
+    | request x =>
+      refine .of_le fun _ v h => ⟨(), by simpa [account, SysState.grow, actor] using h,
+        le_of_eq ?_, le_of_eq ?_⟩
+      · simp only [Account.pending, account, SysState.grow, actor, update_self,
+          Multiset.coe_eq_coe.mpr (filterMap_perm_erase hmem)]
+        simp [Effect.sends, ← Multiset.coe_add]
+        rw [← Multiset.cons_coe, ← Multiset.singleton_add]
+        abel
+      · simp [Account.owed, account, SysState.grow, actor, Effect.emits]
+    | flush => exact flush_moves List.erase_sublist
+  · rintro c ⟨src, ⟨⟩, m⟩ ⟨_, hnet⟩ hd hdup
+    obtain rfl : src = none := hnet _ (SysState.mem_of_deliverable hd)
     simp [henv] at hdup
-  · rintro c t ⟨⟩ m ⟨htimers, _⟩ h hmem
-    refine h.step (net := c.net) m (List.Sublist.refl _) fun x hm => ?_
-    exact nomatch (htimers () m hmem).symm.trans hm
-  · rintro c t ⟨⟩ _ h
-    exact ⟨t, .refl, h.recover⟩
 
 /-- The same of the server that remembers every state it has been in, and back. -/
 theorem implements_withPast (svc : Service In Out S) (env : EnvModel (sig In Out))
