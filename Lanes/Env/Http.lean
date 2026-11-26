@@ -120,7 +120,6 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
   let handler := Std.Http.Server.Handler.ofFn fun req => do
     let some request ← readRequest config.maxBodyBytes req
       | respond (Response.text "method not allowed\n" 405)
-    let request := prepare request
     let headOnly := req.line.method == .head
     let send := fun (r : Response) => respond (if headOnly then { r with body := .empty } else r)
     let waiter ← IO.Promise.new
