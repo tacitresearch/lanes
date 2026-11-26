@@ -4,8 +4,8 @@ Lanes is a framework for building verified software in Lean 4: actors with pure 
 semantics, a model checker, proofs, and adapters. Read `docs/DESIGN.md` for the plan,
 `docs/STATUS.md` for what exists, `docs/ROADMAP.md` for the phases ahead, `docs/PLAN.md` for what
 is being done next and why, and
-`LANES_STYLE.md` for the rules. `docs/DECISIONS.md` records where the implementation settled or
-departed from the design document, with reasons.
+`LANES_STYLE.md` for the rules. `docs/decisions/` records where the implementation settled or
+departed from the design document, with reasons, one file per decision.
 
 ## Lanes rules for agents
 

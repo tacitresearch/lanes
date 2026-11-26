@@ -79,7 +79,7 @@ structure Options (S : Type) where
   terminal : S → Bool := fun _ => false
   /-- Compute successors in tasks, on as many cores as there are. The report is the same
   either way. Off by default: where it was measured the tasks cost more than they gain
-  (docs/DECISIONS.md, D33). -/
+  (`docs/decisions/` D33). -/
   tasks : Bool := false
 
 structure Trace (S L : Type) where

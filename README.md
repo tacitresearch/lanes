@@ -7,7 +7,7 @@ per actor, nothing shares state, and IO happens only at the edges. The same step
 in production, in the simulator, in the model checker and in the proofs.
 
 > Status: early. `docs/STATUS.md` lists what works today against the plan in `docs/DESIGN.md`;
-> `docs/DECISIONS.md` records what has been settled.
+> `docs/decisions/` records what has been settled, one file per decision.
 
 ## A system in three parts
 
@@ -203,7 +203,7 @@ itself, and `Server.implements` proves it refines the spec for every interleavin
 - `docs/PLAN.md`: what is being done now and why.
 - `docs/DESIGN.md`: what Lanes is and the build plan.
 - `LANES_STYLE.md`: design and code rules, each with its reason.
-- `docs/DECISIONS.md`: decisions taken during implementation.
+- `docs/decisions/`: decisions taken during implementation, one file each.
 - `TRUSTED.md`: everything that is trusted rather than proved.
 - `AGENTS.md`: how to work in this repository.
 
