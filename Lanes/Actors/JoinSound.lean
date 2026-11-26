@@ -7,7 +7,7 @@ module
 public import Lanes.Actors.Join
 public import Lanes.Actors.KernelSound
 public import Lanes.Actors.Monotone
-public import Lanes.Check.Equiv
+public import Lanes.Actors.Equiv
 
 /-!
 # What survives a join

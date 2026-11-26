@@ -6,7 +6,7 @@ module
 
 public import Lanes.Actors.Scheduler
 public import Lanes.Check.Complete
-public import Lanes.Check.Equiv
+public import Lanes.Actors.Equiv
 
 /-!
 `World.next` is what the checker and the scheduler explore: the system's enabled events, the

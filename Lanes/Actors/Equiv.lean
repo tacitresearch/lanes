@@ -7,10 +7,15 @@ module
 public import Lanes.Actors.Step
 
 /-!
-The checker treats two states as the same when they differ only in the order of messages that
-no actor can tell apart: across links always, and within a link when the link is unordered.
-`SysState.Equiv` is that relation, and `Equiv.step` proves it is safe to merge such states: they
-enable the same events and lead to equivalent states.
+Two states are the same to every actor when they differ only in the order of messages that no
+actor can tell apart: across links always, and within a link when the link is unordered. The
+net is one list, so a state records that order although nothing observes it.
+`SysState.Equiv` is the relation that forgets it, and `Equiv.step` proves it is a bisimulation:
+equivalent states enable the same events and lead to equivalent states.
+
+The checker merges states by it. So do theorems about systems put together: a join seen from
+one side, or shards seen as one system, is a state of that system up to this relation, not up
+to equality.
 -/
 
 @[expose] public section
