@@ -25,6 +25,19 @@ import Lanes.Semantics
 /-- info: 'Lanes.Base64.decode_eq_none_of_length' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Base64.decode_eq_none_of_length
 
+-- Lanes.Data.Civil
+/-- info: 'Lanes.Civil.ofDays_toDays' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Civil.ofDays_toDays
+
+/-- info: 'Lanes.Civil.toDays_ofDays' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Civil.toDays_ofDays
+
+/-- info: 'Lanes.Civil.ofUnix_toUnix' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Civil.ofUnix_toUnix
+
+/-- info: 'Lanes.Civil.toUnix_ofUnix' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Civil.toUnix_ofUnix
+
 -- Lanes.Data.Codec
 /-- info: 'Lanes.Codec.extTreeMap' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Codec.extTreeMap
@@ -89,3 +102,11 @@ import Lanes.Semantics
 -- Lanes.Data.Quorum
 /-- info: 'Lanes.Quorum.majority_inter' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Quorum.majority_inter
+
+-- Lanes.Data.TimeFormat
+/-- info: 'Lanes.TimeFormat.parseRfc3339_print' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.TimeFormat.parseRfc3339_print
+
+/-- info: 'Lanes.TimeFormat.parseHttpDate_print' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.TimeFormat.parseHttpDate_print
+
