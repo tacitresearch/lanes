@@ -125,6 +125,10 @@ def stop (server : Server sys bridge config) : Async Unit := do
   let left ← server.waiting.atomically (modifyGet fun waiting => (waiting.values, {}))
   for waiter in left do waiter.resolve busy
 
+/-- The events performed, if the runtime was started with `record`. For conformance tests. -/
+def trace (server : Server sys bridge config) : BaseIO (Array (Event (gatedSig σ))) :=
+  server.runtime.trace
+
 def wait (server : Server sys bridge config) : Async Unit :=
   server.http.waitShutdown
 

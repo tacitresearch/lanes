@@ -28,7 +28,7 @@ def fetch (port : UInt16) (path : String) (method : String := "GET") (body : Str
   return (String.fromUTF8? received).getD ""
 
 def serveTest : Async (List (String × Bool)) := do
-  let server ← serve (Server.system echo) bridge { port := 0 }
+  let server ← serve (Server.system echo) bridge { port := 0 } { record := true }
   let some port := server.port | return [("web: the server reports its port", false)]
   let ok ← fetch port "/"
   let refused ← fetch port "/bad"
@@ -36,7 +36,16 @@ def serveTest : Async (List (String × Bool)) := do
   let head ← fetch port "/" (method := "HEAD")
   let options ← fetch port "/" (method := "OPTIONS")
   server.stop
+  let events := (← server.trace).toList
+  let inputs := events.countP fun
+    | .input _ => true
+    | _ => false
+  let atMost (n : Nat) : Outside (gatedSig echoSig) Nat :=
+    { init := 0, allow := fun seen _ => if seen < n then some (seen + 1) else none }
   return [
+    ("web: the server does only what the gate's model of its outside allows",
+      (Http.outside echoSig).allows events && inputs == 53),
+    ("web: a model the run does not fit is rejected", !(atMost 10).allows events),
     ("web: a request is answered through the gate",
       ok.startsWith "HTTP/1.1 200" && ok.endsWith "ok"),
     ("web: a request the bridge refuses gets its response",

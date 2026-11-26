@@ -251,12 +251,17 @@ on it is not the composite's.
 Refinement as a precongruence (if `a` refines `A` then the join with `a` refines the join with
 `A`) comes after, from the same projection.
 
-### A.3 The outside world: adapters with a model
+### A.3 The outside world: adapters with a model (D26)
 
-An adapter is a pair: an actor (or a small system) that models what the outside may do, which
-the checker explores joined to the application, and an IO implementation. A conformance test
-runs the implementation and replays what it did through the model. The gate and its server are
-the first pair; a second, real one (an HTTP client or a database) decides the interface.
+**Done for the pattern and two adapters.** An `Outside` says what something outside may do; the
+checker explores against it and a recorded run is tested against it. The HTTP server is tested
+against `Http.outside` (ids are never reused) over a real socket, and the clock adapter
+(`Lanes/Env/Clock.lean`) is the first outbound one: model, handler, a model-checked
+application and a conformance test.
+
+Next: an adapter that does real work for applications (an HTTP client, then a database),
+which needs response parsing as pure, tested code; and a theorem that a run the model allows is
+one the checker's scenario covers.
 
 ### A.4 Time and liveness
 

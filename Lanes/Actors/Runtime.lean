@@ -162,7 +162,8 @@ private def run (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
   for (_, done) in ← waiting.get do done.resolve false
   rt.finished.resolve ()
 
-/-- Boot a system on one shard, which runs on a thread of its own until `stop`. A program whose
+/-- Boot a system on one shard, which runs on a thread of its own until `stop`. The handler is
+given the runtime, so that an adapter can answer an output with an input (`tryInput`). A program whose
 `main` returns without stopping its runtimes does not exit.
 
 Each output goes to `onOutput`, and the shard waits for it: a slow handler holds every actor up,
@@ -177,16 +178,22 @@ With a `journal` the shard is durable: it starts in the state the journal descri
 input it accepts is in the journal before any output it causes is handed over. Outputs handed
 over shortly before the process died may be handed over again, so a handler that must not
 repeat itself has to tell. The kernel's clock stands still while the process is down. -/
-def start (sys : System σ) [Hashable σ.Id] (config : Runtime.Config := {})
-    (onOutput : σ.Out → Async Unit := fun _ => pure ())
+def startWith (sys : System σ) [Hashable σ.Id] (config : Runtime.Config := {})
+    (onOutput : Runtime sys → σ.Out → Async Unit)
     (journal : Option (Journal.Log σ) := none) : Async (Runtime sys) := do
   let rt : Runtime sys := {
     config
     inbox := ← CloseableChannel.new (some config.inboxCapacity)
     log := ← IO.mkRef #[]
     finished := ← IO.Promise.new }
-  discard <| IO.asTask (prio := .dedicated) (rt.run onOutput journal)
+  discard <| IO.asTask (prio := .dedicated) (rt.run (onOutput rt) journal)
   return rt
+
+/-- `startWith` for a handler that only consumes outputs. -/
+def start (sys : System σ) [Hashable σ.Id] (config : Runtime.Config := {})
+    (onOutput : σ.Out → Async Unit := fun _ => pure ())
+    (journal : Option (Journal.Log σ) := none) : Async (Runtime sys) :=
+  startWith sys config (fun _ => onOutput) journal
 
 private def send (rt : Runtime sys) (c : Cmd sys) : Async Unit := do
   match ← await (← rt.inbox.send c) with

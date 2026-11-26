@@ -3,6 +3,7 @@ module
 public import Lanes.Actors.Actor
 public import Lanes.Actors.Ghost
 public import Lanes.Actors.Monotone
+public import Lanes.Actors.Outside
 public import Lanes.Actors.System
 public import Lanes.Actors.World
 public import Lanes.Actors.Lift
@@ -33,6 +34,7 @@ public import Lanes.Data.Fifo
 public import Lanes.Data.Frame
 public import Lanes.Data.Json
 public import Lanes.Data.Quorum
+public import Lanes.Env.Clock
 public import Lanes.Env.Http
 public import Lanes.Env.Journal
 public import Lanes.Html.Basic

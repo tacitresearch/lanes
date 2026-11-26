@@ -6,6 +6,7 @@ module
 
 public import Lanes.Actors.System
 public import Lanes.Http.Basic
+public import Lanes.Actors.Outside
 
 /-!
 The gate is the HTTP adapter's logic as an actor. It sits in front of a system: it parses each
@@ -154,5 +155,12 @@ abbrev gated (sys : System σ) (bridge : Bridge σ) (config : GateConfig := {}) 
     | some i => (sys.actor i).mapEff fun eff => [liftEffect eff]
   accept x := ⟨none, .arrive x.1 x.2⟩
   boot := none :: sys.boot.map some
+
+/-- What the gate assumes of whoever sends it requests: an id is used once. The gate's
+at-most-once guarantee is stated for exactly these runs (`answered_nodup`), and the server
+adapter is tested to stay within them. -/
+def outside (σ : Signature) : Outside (gatedSig σ) (List ReqId) where
+  init := []
+  allow used x := if x.1 ∈ used then none else some (x.1 :: used)
 
 end Lanes.Http
