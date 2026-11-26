@@ -33,11 +33,16 @@ model checks are a separate binary, `lanesCheck`, because their results are comp
 program starts.
 -/
 
-def report (results : List (String × Bool)) : IO UInt32 := do
-  let results := results ++ [("no shard is left running when the tests end",
-    (← Lanes.Runtime.running) == 0)]
+def failures (results : List (String × Bool)) : IO Unit := do
   for (name, ok) in results do
     if !ok then IO.println s!"FAIL {name}"
+  (← IO.getStdout).flush
+
+/-- `shown` results at the start have had their failures printed already. -/
+def report (results : List (String × Bool)) (shown : Nat := 0) : IO UInt32 := do
+  let results := results ++ [("no shard is left running when the tests end",
+    (← Lanes.Runtime.running) == 0)]
+  failures (results.drop shown)
   let failed := results.countP (!·.2)
   IO.println s!"{results.length - failed} passed, {failed} failed"
   (← IO.getStdout).flush
@@ -62,7 +67,9 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.Fair.tests ++ Tests.Codec.tests ++ Tests.Durable.fileTests ++ Tests.Split.tests
     ++ Tests.Peers.tests ++ Tests.Courier.tests ++ Tests.Mailbox.tests ++ Tests.Batch.tests
   match args with
-  | [] => report (pure ++ (← live))
+  | [] =>
+    failures pure
+    report (pure ++ (← live)) pure.length
   | ["fast"] => report pure
   | ["live"] => report (← live)
   | ["journal-child", path] =>

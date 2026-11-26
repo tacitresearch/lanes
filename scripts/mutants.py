@@ -226,12 +226,13 @@ def verdict(check):
         return "nobuild", f"does not build ({errors[0] if errors else 'no error reported'})"
     code, out = sh(check["run"], check["cwd"], check["limit_s"])
     failed = [line[5:] for line in out.splitlines() if line.startswith("FAIL ")]
-    if code is None:
-        return "hung", f"no test failed and the run had not ended after {check['limit_s']} s"
     asserted = [name for name in failed if ": threw " not in name]
     if asserted:
         more = f", and {len(failed) - 1} more" if len(failed) > 1 else ""
-        return "failed", f"FAIL {asserted[0]}{more}"
+        hang = f"; the run then hung past {check['limit_s']} s" if code is None else ""
+        return "failed", f"FAIL {asserted[0]}{more}{hang}"
+    if code is None:
+        return "hung", f"no test failed and the run had not ended after {check['limit_s']} s"
     if failed:
         return "crashed", f"no test failed and one threw ({failed[0]})"
     if code != 0:
