@@ -64,6 +64,13 @@ theorem settle_up_of_ne {i k : σ.Id} (r : sys.State i × List (Effect σ i)) (h
   · intro c' hc'
     simpa [down, h] using hc'
 
+theorem settle_up_of_running {i : σ.Id} {r : sys.State i × List (Effect σ i)}
+    (h : r.2.any Effect.isStop = false) (k : σ.Id) : (c.settle env i r).up k = c.up k := by
+  unfold settle
+  simp only [h, Bool.false_eq_true, ↓reduceIte]
+  exact performAll_induction (P := fun c' => c'.up k = c.up k) rfl fun c' eff _ hc' => by
+    cases eff <;> exact hc'
+
 theorem settle_timers_of_ne {i k : σ.Id} (r : sys.State i × List (Effect σ i)) (h : k ≠ i) :
     (c.settle env i r).timers k = c.timers k := by
   apply settle_induction (P := fun c' => c'.timers k = c.timers k) rfl
@@ -193,5 +200,87 @@ theorem step_start {i : σ.Id} :
     simp only [Bool.and_eq_true, Bool.not_eq_true', Bool.or_eq_true] at h
     simp only [reduceCtorEq, false_iff, not_and]
     exact fun h₁ h₂ => absurd ⟨h₁, h₂⟩ h
+
+/-- An actor that never stops itself stays up for as long as the environment does not crash
+it. -/
+theorem up_of_step {i : σ.Id} {ev : Event σ} (hcrash : env.mayCrash i = false)
+    (hruns : ∀ s msg, ((sys.actor i).step s msg).2.any Effect.isStop = false)
+    (hup : c.up i = true) (hstep : c.step env ev = some c') : c'.up i = true := by
+  have hhandle (c : SysState sys) (j : σ.Id) (msg : σ.Msg j) (hc : c.up i = true) :
+      (c.handle env j msg).up i = true := by
+    by_cases hj : i = j
+    · subst hj
+      rw [handle, settle_up_of_running (hruns _ _)]
+      exact hc
+    · rw [handle, settle_up_of_ne _ hj]
+      exact hc
+  cases ev with
+  | input x =>
+    obtain rfl := step_input.mp hstep
+    exact hup
+  | deliver e =>
+    obtain ⟨_, _, rfl⟩ := step_deliver.mp hstep
+    exact hhandle _ _ _ hup
+  | duplicate e =>
+    obtain ⟨_, _, _, rfl⟩ := step_duplicate.mp hstep
+    exact hhandle _ _ _ hup
+  | drop e =>
+    obtain ⟨_, _, rfl⟩ := step_drop.mp hstep
+    exact hup
+  | timeout j msg =>
+    obtain ⟨_, _, rfl⟩ := step_timeout.mp hstep
+    exact hhandle _ _ _ hup
+  | output out =>
+    obtain ⟨_, rfl⟩ := step_output.mp hstep
+    exact hup
+  | crash j =>
+    obtain ⟨_, hmay, rfl⟩ := step_crash.mp hstep
+    have hj : i ≠ j := by
+      rintro rfl
+      simp [hcrash] at hmay
+    simpa [down, hj] using hup
+  | start j =>
+    obtain ⟨hdown, _, rfl⟩ := step_start.mp hstep
+    have hj : i ≠ j := by
+      rintro rfl
+      simp [hup] at hdown
+    rw [startActor, settle_up_of_ne _ hj]
+    simpa [hj] using hup
+
+/-- An emitted output stays in the outbox until it is handed over. -/
+theorem mem_outbox_of_step {out : σ.Out} {ev : Event σ} (hout : out ∈ c.outbox)
+    (hstep : c.step env ev = some c') (hev : ev ≠ .output out) : out ∈ c'.outbox := by
+  have hsettle (c : SysState sys) (j : σ.Id) (r : sys.State j × List (Effect σ j))
+      (hc : out ∈ c.outbox) : out ∈ (c.settle env j r).outbox := by
+    refine settle_induction (P := fun c' => out ∈ c'.outbox) hc ?_ fun _ h => h
+    intro c' eff _ hc'
+    cases eff with
+    | emit out' => exact List.mem_append_left _ hc'
+    | _ => exact hc'
+  cases ev with
+  | input x =>
+    obtain rfl := step_input.mp hstep
+    exact hout
+  | deliver e =>
+    obtain ⟨_, _, rfl⟩ := step_deliver.mp hstep
+    exact hsettle _ _ _ hout
+  | duplicate e =>
+    obtain ⟨_, _, _, rfl⟩ := step_duplicate.mp hstep
+    exact hsettle _ _ _ hout
+  | drop e =>
+    obtain ⟨_, _, rfl⟩ := step_drop.mp hstep
+    exact hout
+  | timeout j msg =>
+    obtain ⟨_, _, rfl⟩ := step_timeout.mp hstep
+    exact hsettle _ _ _ hout
+  | output out' =>
+    obtain ⟨_, rfl⟩ := step_output.mp hstep
+    exact (List.mem_erase_of_ne fun h => hev (congrArg Event.output h.symm)).mpr hout
+  | crash j =>
+    obtain ⟨_, _, rfl⟩ := step_crash.mp hstep
+    exact hout
+  | start j =>
+    obtain ⟨_, _, rfl⟩ := step_start.mp hstep
+    exact hsettle _ _ _ hout
 
 end Lanes.SysState

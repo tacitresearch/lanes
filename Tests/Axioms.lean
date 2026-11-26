@@ -27,6 +27,15 @@ by `lake build`, not linked into the test executable.
 /-- info: 'Lanes.System.reachable_iff' depends on axioms: [propext, Classical.choice] -/
 #guard_msgs in #print axioms Lanes.System.reachable_iff
 
+/-- info: 'Lanes.System.LeadsTo.ensures_of_invariant' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.LeadsTo.ensures_of_invariant
+
+/-- info: 'Lanes.System.LeadsTo.trans' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.LeadsTo.trans
+
+/-- info: 'Lanes.System.Run.Fair.output_taken' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Run.Fair.output_taken
+
 /-- info: 'Lanes.Html.escape_safe' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Html.escape_safe
 

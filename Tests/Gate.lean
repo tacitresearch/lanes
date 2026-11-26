@@ -56,6 +56,33 @@ def client (requests : List (ReqId × Request)) : Driver (gatedSig echoSig) Clie
 
 def get (path : List String) : Request := { method := .get, path }
 
+abbrev GatedWorld (config : GateConfig) := World (gated (Server.system echo) bridge config) Client
+
+/-- The ingredients of `Http.pending_leaves`, which the checker cannot check as a whole: the
+deadline of a pending request is enabled while the gate is up, and firing it removes the
+request. -/
+def deadlinesFire {config : GateConfig} (env : EnvModel (gatedSig echoSig))
+    (w : GatedWorld config) : Bool :=
+  !w.state.up none ||
+    (w.state.state none).all fun id =>
+      match w.state.step env (.timeout none (.expire id)) with
+      | some c => !(c.state none).contains id
+      | none => false
+
+def pendingWhileUp {config : GateConfig} (w : GatedWorld config) : Bool :=
+  w.state.up none && !(w.state.state none).isEmpty
+
+/-- A request leaves the pending list only in a step that emits its answer. -/
+def leavingIsAnswered : Bool :=
+  let messages : List (GateMsg echoSig) :=
+    [.arrive 1 (get []), .arrive 3 (get []), .answer 1, .answer 3, .expire 1, .expire 2,
+      .expire 3]
+  [[], [1], [1, 2], [2, 1]].all fun pending => messages.all fun msg =>
+    let (pending', effects) := (gate (Server.system echo) bridge {}).step pending msg
+    pending.all fun id => pending'.contains id || effects.any fun
+      | .emit out => out.1 == id
+      | _ => false
+
 def check (config : GateConfig) (requests : List (ReqId × Request)) (mustSee : Nat := 200)
     (env : EnvModel (gatedSig echoSig) := {}) (maxCrashes : Nat := 0) :=
   Check.system (gated (Server.system echo) bridge config)
@@ -65,12 +92,14 @@ def check (config : GateConfig) (requests : List (ReqId × Request)) (mustSee : 
         (w.driver.answered.map (·.1)).eraseDups.length == w.driver.answered.length,
       .sometimes "a request is answered by the system" fun w =>
         w.driver.answered.any (·.2 == 200),
-      .sometimes "a request times out" fun w => w.driver.answered.any (·.2 == 504) ]
+      .sometimes "a request times out" fun w => w.driver.answered.any (·.2 == 504),
+      .always "a gate that cannot crash stays up" fun w => env.mayCrash none || w.state.up none,
+      .always "a pending request's deadline can fire, and firing it removes the request"
+        (deadlinesFire env),
+      .sometimes "a request is pending while the gate is up" pendingWhileUp ]
     { checkDeadlock := true
       terminal := fun w => w.driver.toSend.isEmpty
         && requests.all fun r => w.driver.answered.any (·.1 == r.1) }
-
-abbrev GatedWorld (config : GateConfig) := World (gated (Server.system echo) bridge config) Client
 
 def answeredAtMostAsOftenAsArrived {config : GateConfig} (requests : List (ReqId × Request))
     (w : GatedWorld config) : Bool :=
@@ -97,8 +126,9 @@ def checkArrivals (requests : List (ReqId × Request)) (env : EnvModel (gatedSig
     [ .always "no request is answered more often than it arrived"
         (answeredAtMostAsOftenAsArrived requests),
       .always "every pending request has its deadline armed" deadlinesArmed,
-      .sometimes "a request is pending while the gate is up" fun w =>
-        w.state.up none && !(w.state.state none).isEmpty,
+      .always "a pending request's deadline can fire, and firing it removes the request"
+        (deadlinesFire env),
+      .sometimes "a request is pending while the gate is up" pendingWhileUp,
       .sometimes "an id that arrived twice is answered twice" fun w =>
         w.driver.answered.countP (·.1 == 1) == 2 ]
     { maxDepth }
@@ -116,7 +146,7 @@ def tests : List (String × Bool) :=
   let duplicatedOutside := checkArrivals [(1, get ["bad"])] (hostile fun _ _ => true)
     (maxDepth := some 8)
   [ ("gate: each request is answered exactly once, whatever the timers do",
-      two.ok && two.complete && two.witnesses.length == 3),
+      two.ok && two.complete && two.witnesses.length == 4),
     ("gate: a request the bridge refuses is answered without entering the system",
       refused.ok && refused.complete),
     ("gate: beyond maxPending a request gets 503 and is still answered exactly once",
@@ -135,6 +165,11 @@ def tests : List (String × Bool) :=
     ("gate: at most once per arrival needs the link from outside not to duplicate",
       match duplicatedOutside.failure with
       | some (.violated "no request is answered more often than it arrived" _) => true
-      | _ => false) ]
+      | _ => false),
+    ("gate: a pending request's deadline can fire and firing it removes the request, with and "
+        ++ "without faults, and a gate that cannot crash stays up",
+      two.ok && two.complete && full.ok && full.complete && lossy.ok && lossy.complete),
+    ("gate: a request leaves the pending list only in a step that emits its answer",
+      leavingIsAnswered) ]
 
 end Tests.Gate
