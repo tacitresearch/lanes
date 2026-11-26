@@ -134,6 +134,9 @@ def tests : List (String × Bool) :=
         [("name", "Ada Lovelace"), ("q", "a&b=c"), ("flag", "")]),
     ("http: a malformed escape is dropped, not guessed",
       Http.parseForm "a=%zz&b=1" == [("b", "1")]),
+    ("http: a form written by encodeForm decodes to its fields",
+      let fields := [("name", "Ada Lovelace"), ("q", "a&b=c+d"), ("é", "%41"), ("", "")]
+      Http.parseForm (Http.encodeForm fields) == fields),
     ("http: percent decoding handles UTF-8",
       Http.percentDecode "caf%C3%A9" == some "café") ]
 
