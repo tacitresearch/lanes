@@ -13,8 +13,8 @@ A single-threaded scheduler that runs a system by applying `SysState.step` to on
 at a time, chosen by a seeded generator. The same seed gives the same run. Every run yields its
 list of events, which replays through `SysState.run`.
 
-It serves as the test and replay harness, as random simulation for instances too large to check
-exhaustively, and as the reference the concurrent runtime's traces are checked against.
+It serves as the test and replay harness, and as random simulation for instances too large to
+check exhaustively.
 -/
 
 @[expose] public section

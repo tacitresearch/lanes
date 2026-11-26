@@ -3,7 +3,7 @@
 Where the implementation stands against `DESIGN.md`. Update this file in the same change that
 moves an item.
 
-Last updated: 2026-11-26.
+Last updated: 2026-11-27.
 
 ## Working
 
@@ -12,11 +12,11 @@ Last updated: 2026-11-26.
 | Actor API | `Actor`, `Signature`, `Effect`, `System`, `EnvModel`; `actor_invariant` tactic | `Lanes/Actors/{Actor,System}.lean` |
 | Semantics | One executable step function; per-event lemmas; per-actor invariants lift to systems | `Lanes/Actors/{World,Step,Lift}.lean` |
 | Deterministic scheduler | Seeded runs, replayable event lists, drivers for the outside world | `Lanes/Actors/Scheduler.lean` |
-| Model checker | Breadth-first, exact states, `always`/`sometimes`, constraints, deadlock, coverage, shortest traces; refinement to a `Service` without a mapping | `Lanes/Check/` |
+| Model checker | Breadth-first, exact states, `always`/`sometimes`, constraints, deadlock, coverage, shortest traces; refinement to a `Service` without a mapping. Proved: it lists exactly the enabled events of a state, merging states is safe, and the spec monitor accepts exactly what the spec allows | `Lanes/Check/`, `Lanes/Semantics/Monitor.lean` |
 | Runtime | A kernel of pure functions proved to follow the semantics (`Kernel.run1_sound`), inside a 156-line shell: one task per shard, bounded inbox, timers | `Lanes/Actors/{Kernel,KernelSound,Runtime}.lean` |
 | Proof layer | `Spec`, `Refines` (weak simulation with a label map), `of_map`, `trans`, trace inclusion; system semantics as a CSLib `LTS`; `Service.spec`; sum lemmas | `Lanes/Semantics/` |
 | Behaviours | `Server` (request and reply), with `Server.implements` proved | `Lanes/Behaviours/Server.lean`, `Lanes/Semantics/Service.lean` |
-| Web | HTTP/1.1 adapter whose logic is the gate actor (each request answered exactly once, model-checked); requests and responses as data; `Html` with proved escaping and URL checking; scoped template macro | `Lanes/Http/`, `Lanes/Env/Http.lean`, `Lanes/Html/` |
+| Web | HTTP/1.1 adapter whose logic is the gate actor (each request answered exactly once, model-checked); requests and responses as data; `Html` with escaping proved safe, URL attributes checked at render (tested, not proved); scoped template macro | `Lanes/Http/`, `Lanes/Env/Http.lean`, `Lanes/Html/` |
 | Data | `Enum`, JSON (parser, printers, `ToJson`/`FromJson`), all total and `Std`-only | `Lanes/Data/` |
 | Tooling | `lanes new`, `lanes lint` (text-level), `lanes check`; CI workflow; axiom gate | `LanesCli/`, `.github/workflows/ci.yml`, `Tests/Axioms.lean` |
 

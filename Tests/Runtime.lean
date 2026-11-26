@@ -161,7 +161,6 @@ abbrev flood : System floodSig where
 def floodTest : Async (List (String × Bool)) := do
   let config : Runtime.Config := { record := true, inboxCapacity := 2 }
   let rt ← Runtime.start flood config
-  -- Both actors flood themselves and each other at once: a cycle of full mailboxes.
   discard <| Async.concurrentlyAll #[rt.input (0, 200), rt.input (1, 200)]
   rt.idle
   let states ← (List.finRange 2).mapM fun k => rt.state k
@@ -175,7 +174,7 @@ def floodTest : Async (List (String × Bool)) := do
       | none => false) ]
 
 /-! Admission: `tryInput` either accepts an input or refuses it and leaves no trace of it. Whether
-a given call finds the mailbox full depends on timing, so the test checks what must hold either
+a given call finds the inbox full depends on timing, so the test checks what must hold either
 way. -/
 
 def busyTest : Async (List (String × Bool)) := do
