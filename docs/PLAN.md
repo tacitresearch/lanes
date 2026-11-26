@@ -417,8 +417,32 @@ unrelated messages that the checker's state merging already allows (`SysState.Eq
 Durable clusters come after: each shard numbers what it sends to each other shard, and after a
 restart a shard is sent again what the receiver's journal does not have.
 
-**Done so far:** `System.shard`, the cluster and its router, tested (D28). Open: the theorem,
-a journal for clusters, and a measurement of what the threads buy on an idle machine.
+**Done so far:** `System.shard`, the cluster and its router, tested (D28). And the theorem at
+the level of the semantics, for two shards (`Lanes/Actors/ShardSound.lean`): `System.split sys
+hosts` is the two shards joined with every parcel of one an input of the other, and in a run
+where each input from outside goes to the shard that hosts its receiver, every state, read as
+one state (`SysState.merged`), is a state of `sys` up to `SysState.Equiv`
+(`System.SplitReachable.merged`). One event of the split is one event of `sys`, and the copies
+that only forward never run. Invariants of `sys` hold of the split (`System.Invariant.split`),
+those proved for every environment with no condition on booting (`split_of_forall`,
+`split_state`).
+
+What the proof found: the statement needs an assumption on booting (`System.SteadyBoot`),
+because shards boot one after another and a boot actor that stops as it starts loses whatever
+was already sent to it; and it is exact only up to the order of equal outputs of different
+shards. Both have counterexamples in `Tests/Split.lean`.
+
+**Open:**
+
+- *N shards.* A split in two can be split again, but `System.split (System.split sys h) h'` is
+  a system over a larger signature, not over `sys`; the N-shard statement needs either an
+  N-ary join or the theorem restated for a shard of a split.
+- *The kernel-level statement.* That one runtime per shard and the router implement the join:
+  the states of the kernels together, with the parcels in the router's lanes, stand for a state
+  of `System.split`, and every step of a shard or of the router is a run of it. The theorem
+  above then gives the run of `sys`. Each shard's kernel is already proved to follow
+  `System.shard`; what is missing is the router as a pure function and its refinement.
+- A journal for clusters, and a measurement of what the threads buy on an idle machine.
 
 ### B.2 Node to node
 

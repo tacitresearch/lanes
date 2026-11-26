@@ -330,3 +330,30 @@ by `lake build`, not linked into the test executable.
 
 /-- info: 'Lanes.System.Reachable.right_of_quiet_boot' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Reachable.right_of_quiet_boot
+
+/-- info: 'Lanes.System.Reachable.lossy' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Reachable.lossy
+
+/-- info: 'Lanes.SysState.AtHome.step' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SysState.AtHome.step
+
+/-- info: 'Lanes.SysState.init_merged_equiv' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SysState.init_merged_equiv
+
+/-- info: 'Lanes.System.SplitReachable.merged_of_init' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.SplitReachable.merged_of_init
+
+/-- info: 'Lanes.System.SplitReachable.merged' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.SplitReachable.merged
+
+/-- info: 'Lanes.System.Invariant.split' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Invariant.split
+
+/-- info: 'Lanes.System.Invariant.split_state' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Invariant.split_state
+
+/-- info: 'Lanes.System.SplitReachable.merged_exact' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.SplitReachable.merged_exact
+
+/-- info: 'Lanes.System.Invariant.split_of_forall' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Invariant.split_of_forall

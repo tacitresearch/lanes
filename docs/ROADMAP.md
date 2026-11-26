@@ -86,7 +86,8 @@ a `sometimes` property), and once the checker rejected a property its author bel
   nothing can observe, and reachability is stated up to equality. The projection proof for
   joins paid for this twice: the left side needed a hidden relation to get an exact statement,
   and the right side is true only up to that unobservable order (`SysState.Equiv`), because a
-  join boots one side first. The shard theorem will be up to the same relation. Decided:
+  join boots one side first. The shard theorem is up to the same relation
+  (`System.SplitReachable.merged`). Decided:
   the relation is in the core now (`Lanes/Actors/Equiv.lean`) and theorems about systems put
   together are stated up to it. A queue per link would make states canonical, but it would
   touch every proof in the core for no new guarantee.
