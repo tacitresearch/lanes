@@ -40,9 +40,32 @@ leader is stopped, the other two elect one of themselves and go on answering, an
 node comes back from its journal and catches up. `RaftKV/Deploy.lean` has what a node needs as
 a process: the codecs for its messages and `startNode`.
 
+## What is proved
+
+In `RaftKV/Proofs/`, for every finite set of nodes, every machine, every `Config` (the two
+bug-seeding switches on or off) and every environment model (loss, duplication, reordering,
+crashes and restarts), in every reachable state:
+
+| Theorem | Says |
+| --- | --- |
+| `election_safety`, `electionSafety_invariant` | No two nodes lead the same term. The second is `electionSafety c = true`, the function the checker evaluates. |
+| `applied_le_commit` | A node has applied no more than it has committed. |
+| `entry_term_le` | No entry is of a later term than the node that holds it. |
+| `leader_append_only`, `leader_log_grows` | A node that leads a term before and after a step has kept every entry it had. |
+| `log_matching`, `logMatching_invariant` | Two logs that agree on the term of an entry agree on everything up to it. The second is `logMatching c = true`. |
+
+The proofs give each node a ghost history of the states it has left and use the monotone proof
+rule, so one argument covers every fault. `Proofs/Axioms.lean` holds them to Lean's three
+standard axioms. `lake build` builds them; `raftCheck` does not link them.
+
 ## What is not here yet
 
-- Proofs. The invariants are checked on small instances, not proved for all.
+- The rest of the proofs: agreement on committed entries, leader completeness and refinement to
+  `spec`, which are checked on small instances only and hold only with both switches on. So is
+  `commit ≤ log.length`, the last part of `wellFormed`: a follower's log gets shorter when a
+  leader's entries replace its own, and that this never reaches a committed entry is leader
+  completeness. With `votesForUpToDateOnly` off it is false: a leader elected without two
+  committed entries replaces them, in a follower that has committed both, with its one.
 - A binary per node with an HTTP front. The nodes run joined by TCP, but a process cannot yet
   have both peers and the HTTP gate; that needs the gate as a system joined to the shard.
 - Election timeouts that differ by themselves. Each node is given its own in its configuration.

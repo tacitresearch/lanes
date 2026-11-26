@@ -512,7 +512,12 @@ What it has shown about the framework so far:
   stopped shard's accepted connections stayed open, so the others kept sending to nobody. A
   protocol checked against loss did not care; the adapter was wrong, and is fixed with a test.
 
-Next: the proofs, starting with election safety carried over from the election example, then
-log matching; the seeded old-term commit bug found by the checker; the node-to-node transport,
+Proved since (about a thousand lines, one ghost history of the states each node has left,
+the monotone rule, no case for any fault): election safety and log matching, for every
+cluster, configuration and environment. `commit ≤ log.length` turned out to be false with a
+bug switch off and, with it on, to be leader completeness in disguise: the checked property
+`wellFormed` bundled facts of three different strengths.
+
+Next: leader completeness, agreement on committed entries and refinement to the spec; the seeded old-term commit bug found by the checker; the node-to-node transport,
 so that three processes run it.
 

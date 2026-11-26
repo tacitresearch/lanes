@@ -7,8 +7,11 @@ testDriver = "raftCheck"
 name = "lanes"
 path = "../.."
 
+# `RaftKV.Proofs` is a root of its own so that `lake build` builds the proofs and `raftCheck`,
+# which imports `RaftKV`, does not link them.
 [[lean_lib]]
 name = "RaftKV"
+roots = ["RaftKV", "RaftKV.Proofs"]
 
 # Model checks, run by `lake test`. Check before you prove (LANES_STYLE rule 5.1).
 [[lean_exe]]
