@@ -222,7 +222,9 @@ theorem.
   `Service.once` is the spec, `Lanes/Behaviours/Once.lean` the memo that meets it, and
   `System.Refines.of_handles` the relation rule that a duplicated message cannot break. The
   key-value store implements it with no premise on its links
-  (`Examples.KV.implements_once`).
+  (`Examples.KV.implements_once`), and so does Raft with the memo in its replicated machine
+  (`RaftKV.implementsMachine_once`). `System.Refines.filterMapIO` carries a refinement through
+  hiding outputs the spec allows at any time (`Spec.showing`).
 - Liveness (`Lanes/Semantics/Liveness.lean`, D27): infinite runs (`System.Run`), weak fairness
   per obligation (`System.Run.Fair`), `System.LeadsTo` and its rule
   (`System.LeadsTo.ensures_of_invariant`). Every finite run extends to a fair one
@@ -272,7 +274,8 @@ also served over HTTP by `Examples/BankWeb.lean`), a key-value store with front 
 (`Examples/Election.lean`) and a watchdog (`Examples/Watchdog.lean`). `systems/` holds serious
 applications, each its own Lake package that requires Lanes as a user would (`systems/README.md`):
 `systems/raft-kv`, a replicated key-value store proved to implement the map it replicates
-(`RaftKV.implementsMachine`), and `systems/ledger`, a multi-user web ledger. `lanes new`
+(`RaftKV.implementsMachine`), and `once` of it in every environment with the memo in the map
+(`RaftKV.implementsMachine_once`), and `systems/ledger`, a multi-user web ledger. `lanes new`
 (`LanesCli/New.lean`, `templates/app/`) creates an application; `lanes lint`
 (`LanesCli/Lint.lean`) checks the rules of `AGENTS.md` that the text can show, the generated files
 and the inventory (`LanesCli/Inventory.lean`).
