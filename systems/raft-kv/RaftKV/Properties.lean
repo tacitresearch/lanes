@@ -46,14 +46,14 @@ def committedAgree (c : Cluster N config machine) : Bool :=
     let n := min (c.state a).commit (c.state b).commit
     (c.state a).log.take n == (c.state b).log.take n
 
-/-- A leader has every entry committed anywhere in a term up to its own. -/
+/-- A leader has every entry that a node no further on in terms knows to be committed. Raft's
+leader completeness speaks of the term an entry was committed in, which no state records. A
+node learns of a commitment in that term or a later one, so its own term bounds it: this is
+what of leader completeness can be read off a state. -/
 def leaderComplete (c : Cluster N config machine) : Bool :=
   pairs fun l a =>
-    !isLeader (c.state l) ||
-      (List.range (c.state a).commit).all fun i =>
-        match (c.state a).log[i]? with
-        | some entry => entry.term > (c.state l).term || (c.state l).log[i]? == some entry
-        | none => false
+    !isLeader (c.state l) || (c.state a).term > (c.state l).term
+      || (c.state l).log.take (c.state a).commit == (c.state a).log.take (c.state a).commit
 
 def wellFormed (c : Cluster N config machine) : Bool :=
   (Enum.all (α := N)).all fun a =>
