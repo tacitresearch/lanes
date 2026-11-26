@@ -341,6 +341,17 @@ Consequences:
   shell sleeps until exactly the earliest deadline, and idle means nothing queued and nothing
   pending (`Kernel.WellFormed.wait_of_due`, `step_of_due`, `step_events_ne_nil`, `wait_for_ms`,
   `quiet_iff`).
+- A timer that is due and a message that is queued take turns (`Kernel.timerTurn`,
+  `Kernel.timerNext`). The first version always fired the due timer, and a later review showed
+  what that costs: an actor that arms `after 0` again in its timer's handler, or enough periodic
+  timers that one is always due, kept every message waiting for ever. Always taking the message
+  would starve timers the same way. With turns, each waits for at most one step of the other
+  kind (`Kernel.WellFormed.step_of_queued`, `step_of_due`). One bit of state is enough and the
+  bound is the smallest there is; counters or priorities would need a policy nobody has asked
+  for.
+- The batch of work the shell asks for is a kernel operation like the others (`Kernel.Op.batch`),
+  so `Kernel.exec_reachable`, `exec_outputs` and `exec_wellFormed` are about the calls the shell
+  makes, not about single steps it never makes.
 - Proving it found a defect. `Kernel.fire` erased the agenda entry at the `due` it was given
   before looking whether the timer it was given was pending. A shell that fired a real `due` at
   another actor or for another message made the kernel forget the timer that `due` belonged to:

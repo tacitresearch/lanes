@@ -49,6 +49,8 @@ structure Kernel (sys : System σ) [Hashable σ.Id] where
   clock_ms : Nat := 0
   /-- The pending timers of every cell, earliest first. -/
   agenda : Std.TreeMap Kernel.Due ((i : σ.Id) × σ.Msg i) := ∅
+  /-- Who goes first when a timer is due and a message is queued. -/
+  timerTurn : Bool := true
 
 namespace Kernel
 
@@ -165,11 +167,19 @@ def fire (k : Kernel sys) (i : σ.Id) (msg : σ.Msg i) (due : Due) : Step sys :=
 def advance (k : Kernel sys) (now_ms : Nat) : Kernel sys :=
   { k with clock_ms := max k.clock_ms now_ms }
 
-/-- One unit of work: the earliest timer if it is due, else the oldest message. -/
+/-- The timer to fire now, if a timer is what comes next: the earliest, when it is due and it
+is the timers' turn or no message is queued. -/
+def timerNext (k : Kernel sys) : Option (Due × (i : σ.Id) × σ.Msg i) :=
+  k.agenda.minEntry?.filter fun (due, _) =>
+    due.deadline_ms ≤ k.clock_ms && (k.timerTurn || k.queue.isEmpty)
+
+/-- One unit of work: the earliest timer if it is due, or the oldest message. When both are
+there they take turns, because a timer that is always due would otherwise keep every message
+waiting, and a queue that is never empty every timer. -/
 def step (k : Kernel sys) : Step sys :=
-  match k.agenda.minEntry? with
-  | some (due, ⟨i, msg⟩) => if due.deadline_ms ≤ k.clock_ms then k.fire i msg due else k.run1
-  | none => k.run1
+  match k.timerNext with
+  | some (due, ⟨i, msg⟩) => ({ k with timerTurn := false }).fire i msg due
+  | none => ({ k with timerTurn := true }).run1
 
 /-- How long the shell may sleep when no input arrives. -/
 inductive Wait where
@@ -207,12 +217,14 @@ inductive Op (σ : Signature) where
   | input (x : σ.In)
   | advance (now_ms : Nat)
   | step
+  | batch (fuel : Nat)
   | fire (i : σ.Id) (msg : σ.Msg i) (due : Due)
 
 def apply (k : Kernel sys) : Op σ → Step sys
   | .input x => k.accept x
   | .advance now_ms => { kernel := k.advance now_ms }
   | .step => k.step
+  | .batch fuel => k.runBatch fuel
   | .fire i msg due => k.fire i msg due
 
 def exec (k : Kernel sys) : List (Op σ) → Step sys

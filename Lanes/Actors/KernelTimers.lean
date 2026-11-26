@@ -11,10 +11,15 @@ import Std.Data.DTreeMap.Internal.WF.Lemmas
 /-!
 The kernel's agenda holds exactly the timers its actors have pending (`Kernel.WellFormed`),
 from boot and whatever a shell does (`Kernel.exec_wellFormed`). So, by the theorems of
-`Kernel.WellFormed`: a timer that is due is fired and not slept through (`wait_of_due`,
-`step_of_due`), a kernel that says there is work does some (`step_events_ne_nil`), idle means
-nothing queued and nothing pending (`quiet_iff`), and the shell sleeps until the earliest
-deadline, no longer and no shorter (`wait_for_ms`).
+`Kernel.WellFormed`: a timer that is due is not slept through (`wait_of_due`), a kernel that
+says there is work does some (`step_events_ne_nil`), idle means nothing queued and nothing
+pending (`quiet_iff`), and the shell sleeps until the earliest deadline, no longer and no
+shorter (`wait_for_ms`).
+
+Timers and messages take turns, so neither starves the other: the oldest message is served by
+the next step or the one after (`step_of_queued`), and so is a timer that is due
+(`step_of_due`). Each has one exception, which is the semantics' and not the scheduler's: the
+step that went first stopped the message's receiver, or disarmed the timer.
 -/
 
 public section
@@ -203,6 +208,162 @@ private theorem forall_cell {P : (j : σ.Id) → Cell sys j → Prop} {i : σ.Id
     exact hi
   · rw [update_of_ne _ _ hj]
     exact hrest j hj
+
+/-- `k'` is `k` at the same time and turn, with messages added at the back of the queue. -/
+private structure Sent (k k' : Kernel sys) : Prop where
+  clock : k'.clock_ms = k.clock_ms
+  turn : k'.timerTurn = k.timerTurn
+  queue : ∃ sent, k'.queue.toList = k.queue.toList ++ sent
+
+private theorem performAll_sent (k : Kernel sys) (i : σ.Id) (effs : List (Effect σ i)) :
+    Sent k (k.performAll i effs).1 := by
+  rw [performAll_eq]
+  generalize ([] : List σ.Out) = outs
+  induction effs generalizing k outs with
+  | nil => exact ⟨rfl, rfl, [], (List.append_nil _).symm⟩
+  | cons eff effs ih =>
+    obtain ⟨hclock, hturn, later, hlater⟩ := ih (k.perform i eff).1 (outs ++ (k.perform i eff).2)
+    have hone : Sent k (k.perform i eff).1 := by
+      cases eff with
+      | send to msg => exact ⟨rfl, rfl, [_], Fifo.toList_push _ _⟩
+      | _ => exact ⟨rfl, rfl, [], (List.append_nil _).symm⟩
+    obtain ⟨sent, hsent⟩ := hone.queue
+    exact ⟨hclock.trans hone.clock, hturn.trans hone.turn, sent ++ later,
+      by rw [List.foldl_cons, hlater, hsent, List.append_assoc]⟩
+
+/-- What actor `i` handling a message leaves as it was: the clock, whose turn it is, and the
+oldest message, unless that one was for `i` and `i` stopped. -/
+private structure Kept (i : σ.Id) (k k' : Kernel sys) : Prop where
+  clock : k'.clock_ms = k.clock_ms
+  turn : k'.timerTurn = k.timerTurn
+  oldest : ∀ e rest, k.queue.toList = e :: rest →
+    (∃ rest', k'.queue.toList = e :: rest') ∨ e.dst = i ∧ (k'.cell i).up = false
+
+private theorem settle_kept (k : Kernel sys) (i : σ.Id) (r : sys.State i × List (Effect σ i)) :
+    Kept i k (k.settle i r).1 := by
+  obtain ⟨hclock, hturn, sent, hsent⟩ :=
+    performAll_sent (k.setCell i { (k.cell i) with state := r.1 }) i r.2
+  replace hsent : _ = k.queue.toList ++ sent := hsent
+  rw [settle_eq]
+  generalize (k.setCell i { (k.cell i) with state := r.1 }).performAll i r.2 = p
+    at hclock hturn hsent ⊢
+  dsimp only
+  split
+  · refine ⟨hclock, hturn, fun e rest hq => ?_⟩
+    by_cases hi : e.dst = i
+    · exact .inr ⟨hi, by simp [down, cell_setCell]⟩
+    · refine .inl ⟨(rest ++ sent).filter fun e => decide (e.dst ≠ i), ?_⟩
+      show (p.1.queue.filter fun e => decide (e.dst ≠ i)).toList = _
+      rw [Fifo.toList_filter, hsent, hq, List.cons_append,
+        List.filter_cons_of_pos (by simpa using hi)]
+  · exact ⟨hclock, hturn, fun e rest hq => .inl ⟨rest ++ sent, by rw [hsent, hq]; rfl⟩⟩
+
+private theorem handle_kept (k : Kernel sys) (i : σ.Id) (msg : σ.Msg i) :
+    Kept i k (k.handle i msg).1 :=
+  settle_kept k i _
+
+private theorem fire_kept (k : Kernel sys) (i : σ.Id) (msg : σ.Msg i) (due : Due) :
+    Kept i k (k.fire i msg due).kernel := by
+  rw [fire_eq]
+  split
+  · obtain ⟨hclock, hturn, holdest⟩ := handle_kept ((k.unschedule [due]).setCell i
+      { (k.cell i) with timers := (k.cell i).timers.eraseP (·.1 = msg) }) i msg
+    exact ⟨hclock, hturn, holdest⟩
+  · exact ⟨rfl, rfl, fun e rest hq => .inl ⟨rest, hq⟩⟩
+
+private theorem run1_kept (k : Kernel sys) :
+    k.run1.kernel.clock_ms = k.clock_ms ∧ k.run1.kernel.timerTurn = k.timerTurn := by
+  rw [run1_eq]
+  split
+  · exact ⟨rfl, rfl⟩
+  · rename_i e rest _
+    split
+    · exact ⟨(handle_kept { k with queue := rest } e.dst e.msg).clock,
+        (handle_kept { k with queue := rest } e.dst e.msg).turn⟩
+    · exact ⟨(settle_kept (k.setCell e.dst { (k.cell e.dst) with up := true }) e.dst _).clock,
+        (settle_kept (k.setCell e.dst { (k.cell e.dst) with up := true }) e.dst _).turn⟩
+
+private theorem run1_serves {e : Envelope σ} {rest : List (Envelope σ)}
+    (hq : k.queue.toList = e :: rest) :
+    k.run1.events = .deliver e :: k.run1.outputs.map .output
+      ∨ k.run1.events = .start e.dst :: k.run1.outputs.map .output := by
+  rw [run1_eq]
+  split
+  · rename_i hpop
+    rw [Fifo.pop?_eq_none.mp hpop] at hq
+    cases hq
+  · rename_i e' rest' hpop
+    obtain ⟨rfl, -⟩ := List.cons.inj ((Fifo.toList_of_pop? hpop).symm.trans hq)
+    split
+    · exact .inl rfl
+    · exact .inr rfl
+
+theorem timerNext_eq_some_iff {t : Due × (i : σ.Id) × σ.Msg i} :
+    k.timerNext = some t ↔ k.agenda.minEntry? = some t ∧ t.1.deadline_ms ≤ k.clock_ms
+      ∧ (k.timerTurn = true ∨ k.queue.isEmpty = true) := by
+  simp [timerNext, Option.filter_eq_some_iff]
+
+theorem timerNext_of_minKey? {first : Due} (hmin : k.agenda.minKey? = some first)
+    (hdue : first.deadline_ms ≤ k.clock_ms)
+    (hturn : k.timerTurn = true ∨ k.queue.isEmpty = true) :
+    ∃ i msg, k.timerNext = some (first, ⟨i, msg⟩) := by
+  rw [minKey?_eq_map_minEntry?] at hmin
+  obtain ⟨⟨first, i, msg⟩, hentry, rfl⟩ := Option.map_eq_some_iff.mp hmin
+  exact ⟨i, msg, timerNext_eq_some_iff.mpr ⟨hentry, hdue, hturn⟩⟩
+
+theorem timerNext_eq_none (hturn : ¬ (k.timerTurn = true ∨ k.queue.isEmpty = true)) :
+    k.timerNext = none :=
+  Option.eq_none_iff_forall_ne_some.mpr fun _ hnext => hturn (timerNext_eq_some_iff.mp hnext).2.2
+
+theorem step_of_timerNext {due : Due} {i : σ.Id} {msg : σ.Msg i}
+    (hnext : k.timerNext = some (due, ⟨i, msg⟩)) :
+    k.step = ({ k with timerTurn := false }).fire i msg due := by
+  unfold Kernel.step
+  rw [hnext]
+
+theorem step_of_timerNext_none (hnext : k.timerNext = none) :
+    k.step = ({ k with timerTurn := true }).run1 := by
+  unfold Kernel.step
+  rw [hnext]
+
+theorem step_clock (k : Kernel sys) : k.step.kernel.clock_ms = k.clock_ms := by
+  unfold Kernel.step
+  split
+  · exact (fire_kept { k with timerTurn := false } _ _ _).clock
+  · exact (run1_kept { k with timerTurn := true }).1
+
+/-- The next turn goes to the side that did not just have one. -/
+theorem step_timerTurn (k : Kernel sys) : k.step.kernel.timerTurn = k.timerNext.isNone := by
+  unfold Kernel.step
+  split
+  · rename_i hnext
+    rw [hnext]
+    exact (fire_kept { k with timerTurn := false } _ _ _).turn
+  · rename_i hnext
+    rw [hnext]
+    exact (run1_kept { k with timerTurn := true }).2
+
+/-- The next step handles `e`, or starts its receiver so that it can be handled. -/
+@[expose] def Serves (k : Kernel sys) (e : Envelope σ) : Prop :=
+  k.step.events = .deliver e :: k.step.outputs.map .output
+    ∨ k.step.events = .start e.dst :: k.step.outputs.map .output
+
+/-- The next step fires a timer due no later than `due`. -/
+@[expose] def Fires (k : Kernel sys) (due : Due) : Prop :=
+  ∃ i msg first, (msg, first) ∈ (k.cell i).timers ∧ first.deadline_ms ≤ due.deadline_ms
+    ∧ k.step.events = .timeout i msg :: k.step.outputs.map .output
+
+/-- On the queue's turn the oldest message is served, whatever is due. -/
+theorem serves_of_queueTurn {e : Envelope σ} {rest : List (Envelope σ)}
+    (hq : k.queue.toList = e :: rest) (hturn : k.timerTurn = false) : k.Serves e := by
+  have hqueue : k.queue.isEmpty = false := by
+    cases hempty : k.queue.isEmpty
+    · rfl
+    · rw [(Fifo.isEmpty_iff _).mp hempty] at hq
+      cases hq
+  unfold Serves
+  rw [step_of_timerNext_none (timerNext_eq_none (by simp [hturn, hqueue]))]
+  exact run1_serves hq
 
 /-- The agenda and the cells agree on which timers are pending. -/
 structure WellFormed (k : Kernel sys) : Prop where
@@ -432,28 +593,14 @@ theorem fire (h : k.WellFormed) (i : σ.Id) (msg : σ.Msg i) (due : Due) :
       exact hfire.1
   · exact h
 
+theorem turn (h : k.WellFormed) (timerTurn : Bool) : ({ k with timerTurn }).WellFormed :=
+  h.congr rfl rfl rfl
+
 theorem step (h : k.WellFormed) : k.step.kernel.WellFormed := by
   unfold Kernel.step
   split
-  · split
-    · exact h.fire _ _ _
-    · exact h.run1
-  · exact h.run1
-
-/-- Every operation a shell can perform keeps the agenda and the cells in agreement. -/
-theorem apply (h : k.WellFormed) (op : Op σ) : (k.apply op).kernel.WellFormed := by
-  cases op with
-  | input x => exact h.accept x
-  | advance now_ms => exact h.advance now_ms
-  | step => exact h.step
-  | fire i msg due => exact h.fire i msg due
-
-theorem exec (h : k.WellFormed) (ops : List (Op σ)) : (k.exec ops).kernel.WellFormed := by
-  induction ops generalizing k with
-  | nil => exact h
-  | cons op ops ih =>
-    rw [exec_cons]
-    exact ih (h.apply op)
+  · exact (h.turn false).fire _ _ _
+  · exact (h.turn true).run1
 
 theorem runBatch (h : k.WellFormed) (fuel : Nat) : (k.runBatch fuel).kernel.WellFormed := by
   induction fuel generalizing k with
@@ -463,6 +610,22 @@ theorem runBatch (h : k.WellFormed) (fuel : Nat) : (k.runBatch fuel).kernel.Well
     split
     · exact ih h.step
     · exact h
+
+/-- Every operation a shell can perform keeps the agenda and the cells in agreement. -/
+theorem apply (h : k.WellFormed) (op : Op σ) : (k.apply op).kernel.WellFormed := by
+  cases op with
+  | input x => exact h.accept x
+  | advance now_ms => exact h.advance now_ms
+  | step => exact h.step
+  | batch fuel => exact h.runBatch fuel
+  | fire i msg due => exact h.fire i msg due
+
+theorem exec (h : k.WellFormed) (ops : List (Op σ)) : (k.exec ops).kernel.WellFormed := by
+  induction ops generalizing k with
+  | nil => exact h
+  | cons op ops ih =>
+    rw [exec_cons]
+    exact ih (h.apply op)
 
 end WellFormed
 
@@ -537,19 +700,20 @@ theorem minKey?_of_mem (h : k.WellFormed) {i : σ.Id} {msg : σ.Msg i} {due : Du
     cases hm
   | some first => exact ⟨first, rfl, (h.earliest hmin).2 i msg due hm⟩
 
-/-- When the agenda's first timer is due, `step` fires it. -/
-theorem step_of_minKey? (h : k.WellFormed) {first : Due} (hmin : k.agenda.minKey? = some first)
-    (hdue : first.deadline_ms ≤ k.clock_ms) :
-    ∃ i msg, (msg, first) ∈ (k.cell i).timers
-      ∧ k.step.events = .timeout i msg :: k.step.outputs.map .output := by
-  rw [minKey?_eq_map_minEntry?] at hmin
-  obtain ⟨⟨due, i, msg⟩, hentry, rfl⟩ := Option.map_eq_some_iff.mp hmin
-  have hm := h.pending _ i msg (getElem?_of_minEntry? hentry)
-  refine ⟨i, msg, hm, ?_⟩
-  unfold Kernel.step
-  rw [hentry]
-  dsimp only
-  rw [ite_eq_left hdue, fire_eq, ite_eq_left (by simp [h.up_of_mem hm, hm])]
+theorem fire_events (h : k.WellFormed) {i : σ.Id} {msg : σ.Msg i} {due : Due}
+    (hm : (msg, due) ∈ (k.cell i).timers) :
+    (k.fire i msg due).events = .timeout i msg :: (k.fire i msg due).outputs.map .output := by
+  rw [fire_eq, ite_eq_left (by simp [h.up_of_mem hm, hm])]
+
+theorem timerNext_pending (h : k.WellFormed) {due : Due} {i : σ.Id} {msg : σ.Msg i}
+    (hnext : k.timerNext = some (due, ⟨i, msg⟩)) : (msg, due) ∈ (k.cell i).timers :=
+  h.pending _ i msg (getElem?_of_minEntry? (timerNext_eq_some_iff.mp hnext).1)
+
+theorem step_events_of_timerNext (h : k.WellFormed) {due : Due} {i : σ.Id} {msg : σ.Msg i}
+    (hnext : k.timerNext = some (due, ⟨i, msg⟩)) :
+    k.step.events = .timeout i msg :: k.step.outputs.map .output := by
+  rw [step_of_timerNext hnext]
+  exact (h.turn false).fire_events (h.timerNext_pending hnext)
 
 /-- No lost timer: while a pending timer is due, the shell is told not to sleep. -/
 theorem wait_of_due (h : k.WellFormed) {i : σ.Id} {msg : σ.Msg i} {due : Due}
@@ -562,55 +726,100 @@ theorem wait_of_due (h : k.WellFormed) {i : σ.Id} {msg : σ.Msg i} {due : Due}
   · rw [hmin]
     exact ite_eq_left (Nat.le_trans hle hdue)
 
-/-- No lost timer: while a pending timer is due, `step` fires a timer, one due no later. -/
+/-- On the timers' turn, or with no message queued, a timer that is due means one due no later
+fires. -/
+theorem fires_of_timerTurn (h : k.WellFormed) {i : σ.Id} {msg : σ.Msg i} {due : Due}
+    (hm : (msg, due) ∈ (k.cell i).timers) (hdue : due.deadline_ms ≤ k.clock_ms)
+    (hturn : k.timerTurn = true ∨ k.queue.isEmpty = true) : k.Fires due := by
+  obtain ⟨first, hmin, hle⟩ := h.minKey?_of_mem hm
+  obtain ⟨j, m, hnext⟩ := timerNext_of_minKey? hmin (Nat.le_trans hle hdue) hturn
+  exact ⟨j, m, first, h.timerNext_pending hnext, hle, h.step_events_of_timerNext hnext⟩
+
+/--
+Messages are not starved. The oldest message is served by the next step, or by the one after
+when a timer went first. The exception is the semantics' own: that timer's handler stopped the
+message's receiver, and a stopped actor's mail is lost.
+-/
+theorem step_of_queued (h : k.WellFormed) {e : Envelope σ} {rest : List (Envelope σ)}
+    (hq : k.queue.toList = e :: rest) :
+    k.Serves e ∨ k.step.kernel.Serves e
+      ∨ (k.step.kernel.cell e.dst).up = false
+        ∧ ∃ msg, k.step.events = .timeout e.dst msg :: k.step.outputs.map .output := by
+  cases hnext : k.timerNext with
+  | none =>
+    refine .inl ?_
+    unfold Serves
+    rw [step_of_timerNext_none hnext]
+    exact run1_serves hq
+  | some t =>
+    obtain ⟨first, i, msg⟩ := t
+    have hkept := fire_kept { k with timerTurn := false } i msg first
+    rw [← step_of_timerNext hnext] at hkept
+    rcases hkept.oldest e rest hq with ⟨rest', hq'⟩ | ⟨rfl, hdown⟩
+    · exact .inr (.inl (serves_of_queueTurn hq' hkept.turn))
+    · exact .inr (.inr ⟨hdown, msg, h.step_events_of_timerNext hnext⟩)
+
+/--
+Timers are not starved. While a pending timer is due, a timer due no later is fired by the next
+step, or by the one after when a message went first. The exception: handling that message
+disarmed the timer, by cancelling it, arming it again or stopping its actor.
+-/
 theorem step_of_due (h : k.WellFormed) {i : σ.Id} {msg : σ.Msg i} {due : Due}
     (hm : (msg, due) ∈ (k.cell i).timers) (hdue : due.deadline_ms ≤ k.clock_ms) :
-    ∃ j m first, (m, first) ∈ (k.cell j).timers ∧ first.deadline_ms ≤ due.deadline_ms
-      ∧ k.step.events = .timeout j m :: k.step.outputs.map .output := by
-  obtain ⟨first, hmin, hle⟩ := h.minKey?_of_mem hm
-  obtain ⟨j, m, hfirst, hstep⟩ := h.step_of_minKey? hmin (Nat.le_trans hle hdue)
-  exact ⟨j, m, first, hfirst, hle, hstep⟩
+    k.Fires due ∨ k.step.kernel.Fires due ∨ (msg, due) ∉ (k.step.kernel.cell i).timers := by
+  by_cases hturn : k.timerTurn = true ∨ k.queue.isEmpty = true
+  · exact .inl (h.fires_of_timerTurn hm hdue hturn)
+  · have hturn' : k.step.kernel.timerTurn = true := by
+      rw [step_timerTurn, timerNext_eq_none hturn]
+      rfl
+    by_cases hm' : (msg, due) ∈ (k.step.kernel.cell i).timers
+    · exact .inr (.inl (h.step.fires_of_timerTurn hm' (by rw [step_clock]; exact hdue)
+        (.inl hturn')))
+    · exact .inr (.inr hm')
 
-/-- No lost timer: while a pending timer is due, a batch of work begins by firing a timer. -/
+/-- No lost timer: while a pending timer is due, a batch of two steps or more fires a timer,
+unless its first step handled a message that disarmed that one. -/
 theorem runBatch_of_due (h : k.WellFormed) {i : σ.Id} {msg : σ.Msg i} {due : Due}
     (hm : (msg, due) ∈ (k.cell i).timers) (hdue : due.deadline_ms ≤ k.clock_ms) (fuel : Nat) :
-    ∃ j m later, (k.runBatch (fuel + 1)).events = .timeout j m :: later := by
-  obtain ⟨j, m, -, -, -, hstep⟩ := h.step_of_due hm hdue
-  rw [runBatch_succ, ite_eq_left (h.wait_of_due hm hdue)]
-  exact ⟨j, m, _, by rw [hstep]; rfl⟩
+    (∃ j m, .timeout j m ∈ (k.runBatch (fuel + 2)).events)
+      ∨ (msg, due) ∉ (k.step.kernel.cell i).timers := by
+  by_cases hm' : (msg, due) ∈ (k.step.kernel.cell i).timers
+  · have hwait := h.step.wait_of_due hm' (by rw [step_clock]; exact hdue)
+    rw [runBatch_succ, ite_eq_left (h.wait_of_due hm hdue), runBatch_succ, ite_eq_left hwait]
+    rcases h.step_of_due hm hdue with ⟨j, m, -, -, -, hstep⟩ | ⟨j, m, -, -, -, hstep⟩ | hgone
+    · exact .inl ⟨j, m, by simp [hstep]⟩
+    · exact .inl ⟨j, m, by simp [hstep]⟩
+    · exact absurd hm' hgone
+  · exact .inr hm'
+
+theorem wait_eq_none_iff : k.wait = .none ↔
+    k.queue.isEmpty = false
+      ∨ ∃ first, k.agenda.minKey? = some first ∧ first.deadline_ms ≤ k.clock_ms := by
+  unfold wait
+  cases k.queue.isEmpty
+  · simp
+  · cases k.agenda.minKey? with
+    | none => simp
+    | some first => by_cases hdue : first.deadline_ms ≤ k.clock_ms <;> simp [hdue]
 
 /-- No spin: when the shell is told not to sleep, `step` does something. -/
 theorem step_events_ne_nil (h : k.WellFormed) (hwait : k.wait = .none) : k.step.events ≠ [] := by
-  have hrun1 : k.queue.isEmpty = false → k.run1.events ≠ [] := fun hqueue hnil => by
-    rw [run1_events_eq_nil_iff, abs_net, ← Fifo.isEmpty_iff, hqueue] at hnil
-    cases hnil
-  cases hmin : k.agenda.minKey? with
+  cases hnext : k.timerNext with
+  | some t =>
+    obtain ⟨first, i, msg⟩ := t
+    rw [h.step_events_of_timerNext hnext]
+    exact List.cons_ne_nil _ _
   | none =>
-    have hentry : k.agenda.minEntry? = none := by
-      simpa [minKey?_eq_map_minEntry?] using hmin
     have hqueue : k.queue.isEmpty = false := by
-      cases hq : k.queue.isEmpty
-      · rfl
-      · simp [wait, hq, hmin] at hwait
-    unfold Kernel.step
-    rw [hentry]
-    exact hrun1 hqueue
-  | some first =>
-    by_cases hdue : first.deadline_ms ≤ k.clock_ms
-    · obtain ⟨i, msg, -, hstep⟩ := h.step_of_minKey? hmin hdue
-      rw [hstep]
-      exact List.cons_ne_nil _ _
-    · have hqueue : k.queue.isEmpty = false := by
-        cases hq : k.queue.isEmpty
-        · rfl
-        · simp [wait, hq, hmin, hdue] at hwait
-      rw [minKey?_eq_map_minEntry?] at hmin
-      obtain ⟨⟨due, i, msg⟩, hentry, rfl⟩ := Option.map_eq_some_iff.mp hmin
-      unfold Kernel.step
-      rw [hentry]
-      dsimp only
-      rw [ite_eq_right hdue]
-      exact hrun1 hqueue
+      rcases wait_eq_none_iff.mp hwait with hqueue | ⟨first, hmin, hdue⟩
+      · exact hqueue
+      · refine Bool.not_eq_true _ ▸ fun hempty => ?_
+        obtain ⟨i, msg, hsome⟩ := timerNext_of_minKey? hmin hdue (.inr hempty)
+        cases hnext.symm.trans hsome
+    rw [step_of_timerNext_none hnext]
+    intro hnil
+    rw [run1_events_eq_nil_iff, abs_net, ← Fifo.isEmpty_iff] at hnil
+    exact Bool.noConfusion (hqueue.symm.trans hnil)
 
 /-- Idle means idle: no message is queued and no timer is pending. -/
 theorem quiet_iff (h : k.WellFormed) :

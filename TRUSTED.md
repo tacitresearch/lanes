@@ -31,10 +31,13 @@ proved in `Lanes/Http/GateSound.lean` to answer each arrival at most once and mo
 ## Assumptions the runtime makes
 
 - **The shell passes things on unchanged.** `Kernel.exec_reachable` proves that any sequence
-  of kernel operations, in any order, with any inputs, any clock readings and timers fired
-  early, late, twice or never armed, leaves the kernel in a state the semantics can reach, and
-  that the events it reported are a run reaching it. `Kernel.exec_outputs` proves the outputs
-  it hands the shell are exactly the outputs of that run. So no property of reachable states
+  of kernel operations, in any order, with any inputs, any clock readings, batches of work of
+  any size and timers fired early, late, twice or never armed, leaves the kernel in a state the
+  semantics can reach, and that the events it reported are a run reaching it.
+  `Kernel.exec_outputs` proves the outputs it hands the shell are exactly the outputs of that
+  run. The operations are the calls the shell makes (`Kernel.Op`: `input`, `advance`, `batch`),
+  so the theorems are about the shell's loop as it is written, and `Kernel.exec_append` says a
+  list of operations run in two parts is the same run. So no property of reachable states
   depends on the inbox, the clock or the scheduler. What is assumed is that the shell gives
   outputs to the adapter as the kernel gave them, and that an input it reports is the one that
   arrived.
@@ -43,11 +46,18 @@ proved in `Lanes/Http/GateSound.lean` to answer each arrival at most once and mo
   and the shell calling the kernel again when its sleep ends, which are assumed. The kernel's
   part is proved. `Kernel.exec_wellFormed`: after any sequence of kernel operations the agenda
   holds exactly the pending timers. From that (`Kernel.WellFormed`): while a pending timer is due
-  the kernel does not tell the shell to sleep, and its next step fires a timer due no later
-  (`wait_of_due`, `step_of_due`, `runBatch_of_due`); whenever it says there is work, a step does
-  some (`step_events_ne_nil`); it says to sleep until exactly the earliest pending deadline
-  (`wait_for_ms`), and without limit only when no message is queued and no timer is pending
-  (`wait_forever`); and it reports idle exactly then (`quiet_iff`).
+  the kernel does not tell the shell to sleep (`wait_of_due`); whenever it says there is work, a
+  step does some (`step_events_ne_nil`); it says to sleep until exactly the earliest pending
+  deadline (`wait_for_ms`), and without limit only when no message is queued and no timer is
+  pending (`wait_forever`); and it reports idle exactly then (`quiet_iff`). A timer that is due
+  and a message that is queued take turns, so neither starves the other. The oldest queued
+  message is delivered, or its receiver started, by the next step or the one after
+  (`step_of_queued`); the exception is that the timer which went first stopped the receiver,
+  whose mail the semantics drops. While a pending timer is due, a timer due no later is fired
+  by the next step or the one after (`step_of_due`, `runBatch_of_due`); the exception is that
+  the message which went first cancelled that timer, armed it again or stopped its actor. So a
+  due timer may wait for one message, and the oldest message for one timer. No bound is proved
+  for a message that is not the oldest, or from the start of a receiver to its delivery.
 - **What the gate guarantees, and under what.** *At most once* is proved. In every run of
   `gated sys`, for every system, bridge and configuration, no request id is output more often
   than it was input (`Http.answered_le_arrived`). The environment may crash and restart every

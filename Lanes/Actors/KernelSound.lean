@@ -193,6 +193,16 @@ theorem exec_cons (k : Kernel sys) (op : Op σ) (ops : List (Op σ)) :
         events := (k.apply op).events ++ ((k.apply op).kernel.exec ops).events
         outputs := (k.apply op).outputs ++ ((k.apply op).kernel.exec ops).outputs } := rfl
 
+/-- Running one list of operations and then another is running both. -/
+theorem exec_append (k : Kernel sys) (a b : List (Op σ)) :
+    k.exec (a ++ b) =
+      { kernel := ((k.exec a).kernel.exec b).kernel
+        events := (k.exec a).events ++ ((k.exec a).kernel.exec b).events
+        outputs := (k.exec a).outputs ++ ((k.exec a).kernel.exec b).outputs } := by
+  induction a generalizing k with
+  | nil => rfl
+  | cons op a ih => simp only [List.cons_append, exec_cons, ih, List.append_assoc]
+
 private theorem abs_foldl_perform (i : σ.Id) (effs : List (Effect σ i)) :
     ∀ (k : Kernel sys) (cs : List σ.Out) (ob : List σ.Out),
       let r := effs.foldl
@@ -388,18 +398,8 @@ theorem step_sound (k : Kernel sys) :
     (k.abs).run env k.step.events = some (k.step.kernel.abs) := by
   unfold step
   split
-  · split
-    · exact fire_sound k _ _ _
-    · exact run1_sound k
-  · exact run1_sound k
-
-theorem apply_sound (k : Kernel sys) (op : Op σ) :
-    (k.abs).run env (k.apply op).events = some ((k.apply op).kernel.abs) := by
-  cases op with
-  | input x => exact accept_sound k x
-  | advance now_ms => rfl
-  | step => exact step_sound k
-  | fire i msg due => exact fire_sound k i msg due
+  · exact fire_sound { k with timerTurn := false } _ _ _
+  · exact run1_sound { k with timerTurn := true }
 
 omit [Hashable σ.Id] in
 theorem _root_.Lanes.SysState.run_append (envm : EnvModel σ) (c : SysState sys)
@@ -449,14 +449,6 @@ theorem _root_.Lanes.System.Reachable.run_induction {envm : EnvModel σ}
         (by simpa [hstep] using hrun)
       simpa using h
 
-theorem exec_sound (k : Kernel sys) (ops : List (Op σ)) :
-    (k.abs).run env (k.exec ops).events = some ((k.exec ops).kernel.abs) := by
-  induction ops generalizing k with
-  | nil => rfl
-  | cons op ops ih =>
-    simp only [exec_cons, SysState.run_append, apply_sound, Option.bind_some]
-    exact ih _
-
 theorem runBatch_sound (k : Kernel sys) (fuel : Nat) :
     (k.abs).run env (k.runBatch fuel).events = some ((k.runBatch fuel).kernel.abs) := by
   induction fuel generalizing k with
@@ -468,6 +460,23 @@ theorem runBatch_sound (k : Kernel sys) (fuel : Nat) :
       exact ih _
     · rfl
 
+theorem apply_sound (k : Kernel sys) (op : Op σ) :
+    (k.abs).run env (k.apply op).events = some ((k.apply op).kernel.abs) := by
+  cases op with
+  | input x => exact accept_sound k x
+  | advance now_ms => rfl
+  | step => exact step_sound k
+  | batch fuel => exact runBatch_sound k fuel
+  | fire i msg due => exact fire_sound k i msg due
+
+theorem exec_sound (k : Kernel sys) (ops : List (Op σ)) :
+    (k.abs).run env (k.exec ops).events = some ((k.exec ops).kernel.abs) := by
+  induction ops generalizing k with
+  | nil => rfl
+  | cons op ops ih =>
+    simp only [exec_cons, SysState.run_append, apply_sound, Option.bind_some]
+    exact ih _
+
 theorem boot_sound (sys : System σ) :
     (SysState.init sys env).run env ((boot sys).2.map .output) = some ((boot sys).1.abs) := by
   rw [← abs_boot]
@@ -475,9 +484,9 @@ theorem boot_sound (sys : System σ) :
 
 /--
 Whatever a shell does with a kernel, in any order: any inputs, any clock readings, work at any
-time, timers fired early, late, twice or never armed. The kernel is still in a state the
-semantics can reach, and the events it reported are a run that reaches it. Nothing is assumed
-about the shell, the inbox or the clock.
+time and in batches of any size, timers fired early, late, twice or never armed. The kernel is
+still in a state the semantics can reach, and the events it reported are a run that reaches it.
+Nothing is assumed about the shell, the inbox or the clock.
 -/
 theorem exec_reachable (sys : System σ) (ops : List (Op σ)) :
     (SysState.init sys env).run env ((boot sys).2.map .output ++ ((boot sys).1.exec ops).events)
@@ -528,25 +537,8 @@ theorem run1_outputs (k : Kernel sys) : Event.outputs k.run1.events = k.run1.out
 theorem step_outputs (k : Kernel sys) : Event.outputs k.step.events = k.step.outputs := by
   unfold step
   split
-  · split
-    · exact fire_outputs k _ _ _
-    · exact run1_outputs k
-  · exact run1_outputs k
-
-theorem apply_outputs (k : Kernel sys) (op : Op σ) :
-    Event.outputs (k.apply op).events = (k.apply op).outputs := by
-  cases op with
-  | input x => rfl
-  | advance now_ms => rfl
-  | step => exact step_outputs k
-  | fire i msg due => exact fire_outputs k i msg due
-
-/-- The outputs a shell is handed are the outputs of the run, no more, no fewer, in order. -/
-theorem exec_outputs (k : Kernel sys) (ops : List (Op σ)) :
-    Event.outputs (k.exec ops).events = (k.exec ops).outputs := by
-  induction ops generalizing k with
-  | nil => rfl
-  | cons op ops ih => simp only [exec_cons, Event.outputs_append, apply_outputs, ih]
+  · exact fire_outputs { k with timerTurn := false } _ _ _
+  · exact run1_outputs { k with timerTurn := true }
 
 theorem runBatch_outputs (k : Kernel sys) (fuel : Nat) :
     Event.outputs (k.runBatch fuel).events = (k.runBatch fuel).outputs := by
@@ -557,6 +549,22 @@ theorem runBatch_outputs (k : Kernel sys) (fuel : Nat) :
     split
     · simp only [Event.outputs_append, step_outputs, ih]
     · rfl
+
+theorem apply_outputs (k : Kernel sys) (op : Op σ) :
+    Event.outputs (k.apply op).events = (k.apply op).outputs := by
+  cases op with
+  | input x => rfl
+  | advance now_ms => rfl
+  | step => exact step_outputs k
+  | batch fuel => exact runBatch_outputs k fuel
+  | fire i msg due => exact fire_outputs k i msg due
+
+/-- The outputs a shell is handed are the outputs of the run, no more, no fewer, in order. -/
+theorem exec_outputs (k : Kernel sys) (ops : List (Op σ)) :
+    Event.outputs (k.exec ops).events = (k.exec ops).outputs := by
+  induction ops generalizing k with
+  | nil => rfl
+  | cons op ops ih => simp only [exec_cons, Event.outputs_append, apply_outputs, ih]
 
 end Kernel
 

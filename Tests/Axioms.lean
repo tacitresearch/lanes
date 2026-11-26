@@ -81,6 +81,9 @@ by `lake build`, not linked into the test executable.
 /-- info: 'Lanes.Kernel.exec_reachable' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Kernel.exec_reachable
 
+/-- info: 'Lanes.Kernel.exec_append' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.exec_append
+
 /-- info: 'Lanes.Kernel.boot_wellFormed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Kernel.boot_wellFormed
 
@@ -95,6 +98,9 @@ by `lake build`, not linked into the test executable.
 
 /-- info: 'Lanes.Kernel.WellFormed.wait_of_due' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Kernel.WellFormed.wait_of_due
+
+/-- info: 'Lanes.Kernel.WellFormed.step_of_queued' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.WellFormed.step_of_queued
 
 /-- info: 'Lanes.Kernel.WellFormed.step_of_due' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Kernel.WellFormed.step_of_due
