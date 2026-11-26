@@ -13,6 +13,8 @@ checked before it was proved: every state the split reaches, read as one state, 
 states the system reaches alone, compared as the checker compares states. The bank has its two
 accounts on different shards; `relay` adds boot actors, timers and `stop`.
 
+The same comparisons run on three shards (`System.shards`, `Lanes/Actors/ShardsSound.lean`).
+
 Two systems show where the statement stops. `fragile` has a boot actor that stops as it starts:
 the split boots one shard before the other, so a message is kept that the system alone loses.
 `chorus` has two actors that say the same thing: the split can hand over the newer of two equal
@@ -52,42 +54,55 @@ def explored {σ : Signature} {sys : System σ} {env : EnvModel σ} [σ.Inspect]
     (search : Check.Search (UpTo sys env) (Event σ)) : Bool :=
   search.complete && search.head ≥ search.queue.size
 
-structure Compared (σ : Signature) (sys : System σ) (hosts : σ.Id → Bool) (env : EnvModel σ)
-    [σ.Inspect] [sys.Inspect] [(splitSig σ).Inspect] [(sys.split hosts).Inspect] where
+/-- The system alone and on shards, explored within the same bound on the one state. -/
+structure Compared {σ τ : Signature} (sys : System σ) (env : EnvModel σ) (shards : System τ)
+    (shardsEnv : EnvModel τ) [σ.Inspect] [sys.Inspect] [τ.Inspect] [shards.Inspect] where
   alone : Check.Search (UpTo sys env) (Event σ)
-  split : Check.Search (UpTo (sys.split hosts) (env.split hosts)) (Event (splitSig σ))
+  split : Check.Search (UpTo shards shardsEnv) (Event τ)
+  merged : SysState shards → SysState sys
 
 section Compare
 
-variable {σ : Signature} {sys : System σ} {hosts : σ.Id → Bool} {env : EnvModel σ}
-  [σ.Inspect] [sys.Inspect] [(splitSig σ).Inspect] [(sys.split hosts).Inspect]
+variable {σ τ : Signature} {sys : System σ} {env : EnvModel σ} {shards : System τ}
+  {shardsEnv : EnvModel τ} [σ.Inspect] [sys.Inspect] [τ.Inspect] [shards.Inspect]
 
 /-- `sys` alone and split by `hosts`, each explored within the same bound on the one state,
 with the inputs of the split given to the shard that hosts their receiver. -/
-def compare (sys : System σ) [sys.Inspect] (hosts : σ.Id → Bool) [(sys.split hosts).Inspect]
-    (env : EnvModel σ) (inputs : List σ.In) (within : SysState sys → Bool) :
-    Compared σ sys hosts env where
+def compare (sys : System σ) [sys.Inspect] (hosts : σ.Id → Bool) [(splitSig σ).Inspect]
+    [(sys.split hosts).Inspect] (env : EnvModel σ) (inputs : List σ.In)
+    (within : SysState sys → Bool) : Compared sys env (sys.split hosts) (env.split hosts) where
   alone := explore sys env inputs within
   split := explore (sys.split hosts) (env.split hosts) (inputs.map (Split.route sys hosts))
     fun c => within c.merged
+  merged := SysState.merged
+
+/-- The same on `n` shards. -/
+def compareShards {n : Nat} (sys : System σ) [sys.Inspect] (hosts : σ.Id → Fin n)
+    [(shardsSig σ n).Inspect] [(sys.shards hosts).Inspect] (env : EnvModel σ)
+    (inputs : List σ.In) (within : SysState sys → Bool) :
+    Compared sys env (sys.shards hosts) (env.shards hosts) where
+  alone := explore sys env inputs within
+  split := explore (sys.shards hosts) (env.shards hosts) (inputs.map (Shards.route sys hosts))
+    fun c => within c.unsharded
+  merged := SysState.unsharded
 
 namespace Compared
 
-def complete (r : Compared σ sys hosts env) : Bool :=
+def complete (r : Compared sys env shards shardsEnv) : Bool :=
   explored r.alone && explored r.split
 
-/-- Every state of the split, merged, is a state of the system alone. -/
-def sound (r : Compared σ sys hosts env) : Bool :=
-  r.split.queue.all fun v => r.alone.contains ⟨v.path.last.state.merged⟩
+/-- Every state on the shards, merged, is a state of the system alone. -/
+def sound (r : Compared sys env shards shardsEnv) : Bool :=
+  r.split.queue.all fun v => r.alone.contains ⟨r.merged v.path.last.state⟩
 
-/-- The split loses no behaviour: every state of the system alone is a state of the split,
+/-- The shards lose no behaviour: every state of the system alone is a state on the shards,
 merged. -/
-def full (r : Compared σ sys hosts env) : Bool :=
+def full (r : Compared sys env shards shardsEnv) : Bool :=
   let merged : Std.HashSet (UpTo sys env) :=
-    r.split.queue.foldl (fun seen v => seen.insert ⟨v.path.last.state.merged⟩) {}
+    r.split.queue.foldl (fun seen v => seen.insert ⟨r.merged v.path.last.state⟩) {}
   r.alone.queue.all fun v => merged.contains v.path.last
 
-def somewhere (r : Compared σ sys hosts env) (p : SysState (sys.split hosts) → Bool) : Bool :=
+def somewhere (r : Compared sys env shards shardsEnv) (p : SysState shards → Bool) : Bool :=
   r.split.queue.any fun v => p v.path.last.state
 
 end Compared
@@ -126,15 +141,15 @@ inductive RelayMsg where
   | halt
   deriving DecidableEq, Repr, Hashable
 
-/-- Two boot actors that greet each other when they start, again on a timer, and stop when told
-to from outside. The state says whether a greeting was received. -/
-abbrev relaySig : Signature where
-  Id := Fin 2
+/-- Boot actors in a ring that greet the next one when they start, again on a timer, and stop
+when told to from outside. The state says whether a greeting was received. -/
+abbrev relaySig (n : Nat) [NeZero n] : Signature where
+  Id := Fin n
   Msg _ := RelayMsg
-  In := Fin 2
-  Out := Fin 2
+  In := Fin n
+  Out := Fin n
 
-abbrev relay : System relaySig where
+abbrev relay (n : Nat) [NeZero n] : System (relaySig n) where
   State _ := Bool
   actor i :=
     { init := false
@@ -145,24 +160,24 @@ abbrev relay : System relaySig where
         | .halt => (s, [.cancel .tick, .stop])
       recover := fun s => (s, [.send (i + 1) .ping, .after 10 .tick]) }
   accept i := ⟨i, .halt⟩
-  boot := [0, 1]
+  boot := List.finRange n
 
-instance : relaySig.Inspect := {}
-instance : relay.Inspect := {}
+instance {n : Nat} [NeZero n] : (relaySig n).Inspect := {}
+instance {n : Nat} [NeZero n] : (relay n).Inspect := {}
 
 /-- The left shard hosts actor 1, so the split boots the two in the other order. -/
 def relayHosts : Fin 2 → Bool := (· == 1)
 
-instance : (splitSig relaySig).Inspect := .split
-instance : (relay.split relayHosts).Inspect := .split
+instance : (splitSig (relaySig 2)).Inspect := .split
+instance : ((relay 2).split relayHosts).Inspect := .split
 
-def relayEnv : EnvModel relaySig where
+def relayEnv (n : Nat) [NeZero n] : EnvModel (relaySig n) where
   link src dst := if src == some 0 then Link.network else if dst == 0 then Link.unordered else {}
   mayCrash i := i == 0
   restarts i := i == 1
 
 def relayCompared :=
-  compare relay relayHosts relayEnv [1] fun c => c.net.length ≤ 2 && c.outbox.length ≤ 1
+  compare (relay 2) relayHosts (relayEnv 2) [1] fun c => c.net.length ≤ 2 && c.outbox.length ≤ 1
 
 /-- `true` stops the first time it starts. `false` boots before it and sends it a message,
 which is lost with that stop. -/
@@ -265,6 +280,92 @@ def chorusAlone :=
   Tests.Join.explore chorus {} [true, false] fun c =>
     c.state true ≤ 2 && c.state false ≤ 1 && c.net.length ≤ 3 && c.outbox.length ≤ 3
 
+/-! The same on three shards (`Lanes/Actors/ShardsSound.lean`): the bank with an account on
+each, the relay with three actors each on the shard after its own, and `fragile` on two of
+three shards. -/
+
+section Three
+
+open Examples.Bank
+
+abbrev Bank3 := bank (Fin 3) 1
+
+instance : (sig (Fin 3)).Inspect := {}
+instance : Bank3.Inspect := {}
+instance : (shardsSig (sig (Fin 3)) 3).Inspect := .shards
+instance : (Bank3.shards id).Inspect := .shards
+
+def faulty3 : EnvModel (sig (Fin 3)) where
+  link src _ := if src.isSome then Link.network else Link.reliable
+  mayCrash _ := true
+
+def bank3Compared (env : EnvModel (sig (Fin 3))) (inputs : List (Request (Fin 3))) :=
+  compareShards Bank3 id env inputs fun c =>
+    c.net.length ≤ 2 && c.outbox.length ≤ 1
+      && (Enum.all (α := Fin 3)).all fun a => (c.state a).balance ≤ 2
+
+def bank3Reliable := bank3Compared {} [.transfer ⟨1, 0, 1, 1⟩, .transfer ⟨2, 1, 2, 1⟩]
+
+def bank3Faulty := bank3Compared faulty3 [.transfer ⟨1, 0, 1, 1⟩, .transfer ⟨2, 1, 2, 1⟩]
+
+def relay3Hosts : Fin 3 → Fin 3 := (· + 1)
+
+instance : (shardsSig (relaySig 3) 3).Inspect := .shards
+instance : ((relay 3).shards relay3Hosts).Inspect := .shards
+
+def relay3Compared :=
+  compareShards (relay 3) relay3Hosts (relayEnv 3) [1] fun c =>
+    c.net.length ≤ 3 && c.outbox.length ≤ 1
+
+/-- `true` on the first shard, `false` on the last, so `true` boots first. -/
+def fragile3Hosts : Bool → Fin 3 := fun b => if b then 0 else 2
+
+instance : (shardsSig fragileSig 3).Inspect := .shards
+instance : (fragile.shards fragile3Hosts).Inspect := .shards
+
+def fragile3Compared :=
+  compareShards fragile fragile3Hosts {} [] fun c => c.net.length ≤ 2 && c.state true ≤ 3
+
+def fragile3Lossy :=
+  compareShards fragile fragile3Hosts { link := fun _ _ => { lossy := true } } [] fun c =>
+    c.net.length ≤ 2 && c.state true ≤ 3
+
+/-- On three shards as on two, the theorem needs its assumption on booting. -/
+theorem fragile_shards_not_alone :
+    ∃ c, fragile.ShardsReachable fragile3Hosts {} c ∧
+      ¬∃ c', fragile.Reachable {} c' ∧ SysState.Equiv {} c' c.unsharded := by
+  refine ⟨_, System.ShardsReachable.init.step (.start (0, true)) rfl rfl, ?_⟩
+  rintro ⟨c', hc', hequiv⟩
+  have hstate := congrFun hequiv.state true
+  rw [fragile_alone hc'] at hstate
+  exact absurd hstate (by decide)
+
+def threeShards : List (String × Bool) :=
+  [ ("shards: the bank on three shards reaches only states of the bank, reliable links",
+      bank3Reliable.complete && bank3Reliable.sound && bank3Reliable.full),
+    ("shards: the bank on three shards reaches only states of the bank, with crashes and loss",
+      bank3Faulty.complete && bank3Faulty.sound && bank3Faulty.full),
+    ("shards: a credit crosses from the second shard to the third",
+      bank3Faulty.somewhere fun c => c.net.contains ⟨some (1, 1), (2, 2), .credit 1⟩),
+    ("shards: the relay on three shards reaches only states of the relay",
+      relay3Compared.complete && relay3Compared.sound && relay3Compared.full),
+    ("shards: the relay is seen stopped and with a timer armed on a shard",
+      relay3Compared.somewhere (fun c => !c.up (1, 0) && c.timers (1, 0) == [])
+      && relay3Compared.somewhere fun c => c.state (0, 2) && c.timers (0, 2) == [.tick]),
+    ("shards: no copy that only forwards ever runs, on three shards",
+      relay3Compared.split.queue.all fun v =>
+        let c := v.path.last.state
+        (Enum.all (α := Fin 3 × Fin 3)).all (fun x => Shards.atHome (σ := relaySig 3) relay3Hosts x || !c.up x)
+          && c.net.all fun e => e.atHomeAll relay3Hosts),
+    ("shards: a boot actor that stops as it starts keeps a message on three shards",
+      (SysState.init (fragile.shards fragile3Hosts) (EnvModel.shards {} fragile3Hosts)).unsharded.net
+        == [⟨some false, true, ()⟩]
+      && fragile3Compared.complete && !fragile3Compared.sound),
+    ("shards: where the link to it is lossy, three shards are the system again",
+      fragile3Lossy.complete && fragile3Lossy.sound && fragile3Lossy.full) ]
+
+end Three
+
 section Bank
 
 open Examples.Bank
@@ -321,6 +422,6 @@ def tests : List (String × Bool) :=
         c.merged.outbox == [0, 1] && Tests.Join.explored chorusAlone
           && !chorusAlone.contains ⟨c.merged⟩
           && chorusAlone.queue.any fun v => v.path.last.state.equiv {} c.merged
-      | none => false) ]
+      | none => false) ] ++ threeShards
 
 end Tests.Split
