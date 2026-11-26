@@ -25,6 +25,10 @@ def cart (items : List (String × Nat)) : Html :=
     <br/>
   </div>
 
+/-- Comparisons still parse next to templates: `<` followed by a space is never a tag. -/
+def badge (count limit : Nat) : Html :=
+  if count < limit then <span class="ok">{count}</span> else <span class="full">"full"</span>
+
 def tests : List (String × Bool) :=
   [ ("html: elements, components, spliced lists and attributes render",
       (cart [("apple", 2)]).render ==
@@ -41,6 +45,9 @@ def tests : List (String × Bool) :=
         "<a href=\"&quot;&gt;&lt;script&gt;\">x</a>"),
     ("html: a tag name built at run time cannot inject markup",
       (Html.element "div><script" [] []).render == "<divscript></divscript>"),
+    ("html: a comparison before a template is still a comparison",
+      (badge 1 2).render == "<span class=\"ok\">1</span>"
+        && (badge 2 2).render == "<span class=\"full\">full</span>"),
     ("html: document adds the doctype",
       (<html></html> : Html).document == "<!DOCTYPE html><html></html>"),
     ("http: form data decodes percent escapes and plus",

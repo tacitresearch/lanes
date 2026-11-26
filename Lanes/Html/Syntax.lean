@@ -30,6 +30,7 @@ at the template line, and hover and go-to-definition work inside templates.
   `ToAttr` type). A `Bool` attribute value adds or omits the attribute.
 - Attribute names may contain hyphens (`hx-post`, `data-id`) and may be Lean keywords (`class`,
   `for`, `open`).
+- A tag name follows its `<` with no space. With a space, `a < b` is a comparison as usual.
 -/
 
 public section
@@ -51,10 +52,11 @@ syntax sepBy1(rawIdent, "-") "=" str : lanesAttr
 syntax sepBy1(rawIdent, "-") "=" "{" term "}" : lanesAttr
 /-- A bare name: a boolean attribute that is present. -/
 syntax sepBy1(rawIdent, "-") : lanesAttr
-/-- `<tag attrs/>`. -/
-syntax "<" rawIdent lanesAttr* "/>" : lanesElem
+/-- `<tag attrs/>`. No space is allowed between `<` and the tag name: that is what tells a tag
+from a comparison such as `count < limit`. -/
+syntax "<" noWs rawIdent lanesAttr* "/>" : lanesElem
 /-- `<tag attrs>children</tag>`. -/
-syntax "<" rawIdent lanesAttr* ">" lanesChild* "</" rawIdent ">" : lanesElem
+syntax "<" noWs rawIdent lanesAttr* ">" lanesChild* "</" rawIdent ">" : lanesElem
 /-- Text. -/
 syntax str : lanesChild
 /-- A spliced term. -/

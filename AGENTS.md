@@ -20,7 +20,8 @@ departed from the design document, with reasons.
 ```bash
 lake exe cache get   # prebuilt Mathlib; never build Mathlib from source
 lake build           # the library
-lake test            # checker, scheduler and example regression tests
+lake test            # checker, scheduler, runtime and example regression tests
+lake exe lanes lint  # LANES_STYLE checks
 ```
 
 The toolchain is pinned in `lean-toolchain` and follows CSLib's. Dependencies are pinned in
@@ -36,6 +37,8 @@ The toolchain is pinned in `lean-toolchain` and follows CSLib's. Dependencies ar
 | `Lanes/Http/`, `Lanes/Html/` | HTTP requests and responses as data; HTML values and template syntax | `Std` only |
 | `Lanes/Env/` | Adapters to the outside world (HTTP server) | `Std` only |
 | `Lanes/Semantics/` | The semantics as a CSLib `LTS`, refinement | CSLib, Mathlib |
+| `LanesCli/` | The `lanes` command: `new`, `lint`, `check` | `Std` only |
+| `templates/app/` | The application `lanes new` creates; embedded in the `lanes` binary | |
 | `Examples/` | Reference apps, checked and proved | anything |
 | `Tests/` | Regression tests run by `lake test` | anything |
 
@@ -52,5 +55,11 @@ and Mathlib's `<i` token breaks `<input>` in templates, so keep views and `main`
   docstring stating what it defines.
 - One actor step handles one message. Branch on the message once, at the top (rule 4).
 - Define a concrete system with `abbrev`, so instance resolution can see its `State`.
+- Prove per-actor invariants with `actor_invariant [myActor]`; it leaves the cases it cannot
+  close as goals.
+- In templates a tag name follows `<` with no space (`<div>`); `a < b` with a space is a
+  comparison.
+- Templates are embedded with `include_str`, which Lake does not track: after editing
+  `templates/`, touch `LanesCli/New.lean` and rebuild `lanes`. CI builds a generated app.
 - Check before you prove: every invariant gets an `always` property and a `sometimes` vacuity
   check in a test before its proof is attempted (rules 5.1, 5.3).

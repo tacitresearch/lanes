@@ -112,18 +112,7 @@ abbrev bank (A : Type) [DecidableEq A] (opening : Nat) : System (sig A) where
 /-- A balance is never negative. -/
 theorem Account.balance_nonneg (opening : Nat) (self : A) :
     (account opening self).Invariant fun s => 0 ≤ s.balance := by
-  apply Actor.Inductive.invariant
-  constructor
-  · simp [account]
-  · intro s m h
-    cases m with
-    | transfer req dst amount =>
-      simp only [account]
-      split <;> simp <;> omega
-    | credit amount => simp only [account]; omega
-    | query req => exact h
-  · intro s h
-    exact h
+  actor_invariant [account]
 
 /-- In every reachable state of the bank, under any environment model, no balance is negative. -/
 theorem balance_nonneg (opening : Nat) (env : EnvModel (sig A)) (a : A) :

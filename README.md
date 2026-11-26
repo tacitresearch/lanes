@@ -6,9 +6,10 @@ Lanes is a framework for building verified software in Lean 4. Every actor runs 
 nothing shares state, and the runtime merges traffic only at the edges. The same step function
 runs in production, in the simulator, in the model checker and in the proofs.
 
-> Status: early. The actor core, the semantics, the deterministic scheduler and the model
-> checker work today. See `docs/DESIGN.md` for the full plan and `docs/DECISIONS.md` for what
-> has been settled.
+> Status: early. Working today: the actor core and its semantics, the deterministic scheduler,
+> the model checker, the concurrent runtime, the HTTP adapter, HTML templates, refinement theory
+> on CSLib, and `lanes new` / `lanes lint`. See `docs/DESIGN.md` for the full plan and
+> `docs/DECISIONS.md` for what has been settled.
 
 ## A system in three parts
 
@@ -44,12 +45,38 @@ FAIL: "money is conserved" is violated after 4 steps
   4. drop 0 → 1: credit 1
 ```
 
-## Build
+## Start an application
+
+```bash
+lake exe lanes new my-app
+cd my-app
+lake exe cache get   # prebuilt Mathlib, once
+lake test            # model checks
+lake exe my-app      # serves http://127.0.0.1:8080
+```
+
+The generated app is a counter service: a spec-sized actor, its invariant proved in one line, a
+model check with vacuity witnesses, and a server-rendered page.
+
+## Views are Lean
+
+```lean
+def CounterView (response : Response) : Html :=
+  <div id="counter">
+    <p>{s!"Count: {response.value}"}</p>
+    <button hx-post="/increment" hx-target="#counter" hx-swap="outerHTML">"Add one"</button>
+  </div>
+```
+
+Templates are a Lean macro: no generate step, errors on the template line, text escaped by type.
+
+## Build Lanes itself
 
 ```bash
 lake exe cache get
 lake build
 lake test
+lake exe lanes lint
 ```
 
 ## Documents
@@ -57,6 +84,7 @@ lake test
 - `docs/DESIGN.md`: what Lanes is and the build plan.
 - `LANES_STYLE.md`: design and code rules, each with its reason.
 - `docs/DECISIONS.md`: decisions taken during implementation.
+- `TRUSTED.md`: everything that is trusted rather than proved.
 - `AGENTS.md`: how to work in this repository.
 
 ## License

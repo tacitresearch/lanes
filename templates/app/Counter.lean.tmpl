@@ -1,0 +1,71 @@
+import Lanes
+
+/-!
+# A counter service
+
+The spec, the actor and its proof. This file is logic only: no IO (LANES_STYLE rule 2.4).
+-/
+
+namespace {{Name}}
+
+open Lanes
+
+/-- Identifies a client request, so its response can be matched to it. -/
+abbrev ReqId := Nat
+
+/-- What a client may ask. -/
+inductive Request where
+  /-- Add one to the counter. -/
+  | increment (req : ReqId)
+  /-- Read the counter. -/
+  | read (req : ReqId)
+  deriving DecidableEq, Repr, Hashable
+
+/-- The answer to request `req`. -/
+structure Response where
+  req : ReqId
+  /-- The value of the counter after the request. -/
+  value : Nat
+  /-- Whether the request was applied. An increment at the limit is refused. -/
+  applied : Bool
+  deriving DecidableEq, Repr, Hashable
+
+/-- Explicit configuration (rule 2.5). -/
+structure Config where
+  /-- The counter never exceeds this (rule 2.6: bounded everything). -/
+  limit : Nat := 1000
+
+/-- The system has one actor. -/
+abbrev sig : Signature where
+  Id := Unit
+  Msg _ := Request
+  In := Request
+  Out := Response
+
+/-- The counter actor. Its state is the count. -/
+def counter (config : Config) : sig.Actor () Nat where
+  init := 0
+  step count
+    | .increment req =>
+      if count < config.limit then (count + 1, [.emit ⟨req, count + 1, true⟩])
+      else (count, [.emit ⟨req, count, false⟩])
+    | .read req => (count, [.emit ⟨req, count, true⟩])
+  recover count := (count, [])
+
+/-- The system. -/
+abbrev system (config : Config) : System sig where
+  State _ := Nat
+  actor _ := counter config
+  accept request := ⟨(), request⟩
+
+/-- The counter never exceeds its limit. -/
+theorem counter_le_limit (config : Config) :
+    (counter config).Invariant fun count => count ≤ config.limit := by
+  actor_invariant [counter]
+
+/-- In every reachable state of the system, under any environment model. -/
+theorem system_le_limit (config : Config) (env : EnvModel sig) :
+    (system config).Invariant env fun c => c.state () ≤ config.limit :=
+  System.invariant_of_actor (system config) () (counter_le_limit config) env
+
+end {{Name}}

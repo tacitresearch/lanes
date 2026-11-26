@@ -1,0 +1,48 @@
+import Lanes
+import {{Name}}.Counter
+
+/-!
+The edge of the application: HTTP in, HTML out. Everything here is an action; the logic it calls
+is in `{{Name}}.Counter`.
+-/
+
+open Lanes {{Name}}
+
+/-- The page fragment showing the counter. -/
+def CounterView (response : Response) : Html :=
+  <div id="counter">
+    <p>{s!"Count: {response.value}"}</p>
+    {if response.applied then Html.empty else <p class="error">"The counter is at its limit."</p>}
+    <button hx-post="/increment" hx-target="#counter" hx-swap="outerHTML">"Add one"</button>
+  </div>
+
+/-- The page. -/
+def Page : Html :=
+  <html lang="en">
+    <head>
+      <meta charset="utf-8"/>
+      <title>"{{name}}"</title>
+      <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    </head>
+    <body>
+      <h1>"{{name}}"</h1>
+      <div id="counter" hx-get="/count" hx-trigger="load" hx-swap="outerHTML"></div>
+    </body>
+  </html>
+
+/-- Requests are parsed here, once (rule 2.2). -/
+def bridge : Http.Bridge sig where
+  decode id request :=
+    match request.method, request.path with
+    | .get, [] => .error (.html Page.document)
+    | .get, ["count"] => .ok (.read id)
+    | .post, ["increment"] => .ok (.increment id)
+    | _, _ => .error (.text "not found\n" 404)
+  encode response := some (response.req, .html (CounterView response).render)
+
+def main (args : List String) : IO Unit := do
+  let port := (args.head? >>= String.toNat?).getD 8080
+  let server ← (Http.serve (system {}) bridge { port := port.toUInt16 }).block
+  IO.println s!"{{name}} listening on http://127.0.0.1:{server.port.getD 0}"
+  (← IO.getStdout).flush
+  server.wait.block

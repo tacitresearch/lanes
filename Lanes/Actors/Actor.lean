@@ -21,6 +21,7 @@ their effects into a concrete system (`Actor.mapEff`). Actors that live in a `Sy
 - `Actor.Reachable`: the states an actor can be in, over every message sequence and every crash.
 - `Actor.Invariant`, `Actor.Inductive`: per-actor invariants and the induction principle that
   proves them, with the obligation shape `P s → P (A.step s m).1`.
+- `actor_invariant`: a tactic for that obligation.
 -/
 
 @[expose] public section
@@ -157,5 +158,28 @@ theorem Invariant.mapEff {Eff' : Type} (f : Eff → List Eff') {A : Actor S Msg 
   fun s hs => h s hs.of_mapEff
 
 end Actor
+
+/--
+`actor_invariant [defs]` proves a goal `A.Invariant P` by induction: `P` holds initially, every
+message preserves it and recovery preserves it. It splits on the message, unfolds the listed
+definitions (normally the actor itself) and closes each case with `grind`, which splits the
+`if`s of the handler and does the arithmetic.
+
+Cases it cannot close are left as goals, one per message constructor, with the actor unfolded.
+-/
+syntax (name := actorInvariant) "actor_invariant" (" [" Lean.Parser.Tactic.simpLemma,* "]")? :
+  tactic
+
+macro_rules
+  | `(tactic| actor_invariant [$defs,*]) => `(tactic|
+      (apply Lanes.Actor.Inductive.invariant
+       refine ⟨?_, ?_, ?_⟩
+       · first | (simp [$defs,*]; done) | skip
+       · intro s m h
+         cases m <;> (try simp only [$defs,*]) <;> (try simp only [$defs,*] at h) <;>
+           first | grind | skip
+       · intro s h
+         (try simp only [$defs,*]) <;> first | grind | skip))
+  | `(tactic| actor_invariant) => `(tactic| actor_invariant [])
 
 end Lanes
