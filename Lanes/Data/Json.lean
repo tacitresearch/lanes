@@ -8,6 +8,7 @@ public import Lanes.Data.Json.Basic
 public import Lanes.Data.Json.Parser
 public import Lanes.Data.Json.Printer
 public import Lanes.Data.Json.Classes
+public import Lanes.Data.Json.Grammar
 
 /-!
 # JSON

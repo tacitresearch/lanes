@@ -76,10 +76,10 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.Crypto.tests ++ Tests.Auth.tests ++ Tests.Clients.tests ++ Tests.Lease.tests
   match args with
   | [] =>
-    let pure := pure ++ (← Tests.Lint.tests)
+    let pure := pure ++ (← Tests.Lint.tests) ++ (← Tests.Json.suite)
     failures pure
     report (pure ++ (← live)) pure.length
-  | ["fast"] => report (pure ++ (← Tests.Lint.tests))
+  | ["fast"] => report (pure ++ (← Tests.Lint.tests) ++ (← Tests.Json.suite))
   | ["live"] => report (← live)
   | ["journal-child", path] =>
     Tests.Durable.child path

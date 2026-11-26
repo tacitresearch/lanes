@@ -14,8 +14,10 @@ public import Lanes.Data.Json.Basic
 # JSON parser
 
 `Json.parse` reads one JSON document (RFC 8259) from a string. It is strict: no trailing commas,
-no leading zeros, no raw control characters in strings, no unpaired `\u` surrogates, no duplicate
-object keys, and nothing but whitespace after the value.
+no leading zeros, no raw control characters in strings, no unpaired `\u` surrogates, and nothing
+but whitespace after the value. An object is built by `Json.mkObj`, so a key given twice keeps its
+last value, as in Go's `encoding/json` and JavaScript's `JSON.parse`: RFC 8259 allows the text,
+and the JSON test suite counts it as valid.
 
 Every function here is total. The original is written in `Std.Internal.Parsec`, whose loops are
 `partial`: a `Parsec` result does not say that the position moved forward, so nothing shows the
@@ -324,10 +326,7 @@ def fields (depth maxDigits : Nat) (start p : s.Pos) (h : start < p)
         fields depth maxDigits start p5 (by pos_order) (acc.push (name, fieldValue))
       | none =>
         match accept (· == '}') p3 with
-        | some ⟨q, hq⟩ =>
-          match mkObj? (acc.push (name, fieldValue)).toList with
-          | .ok object => .ok (object, ⟨q, by pos_order⟩)
-          | .error e => fail start e
+        | some ⟨q, hq⟩ => .ok (mkObj (acc.push (name, fieldValue)).toList, ⟨q, by pos_order⟩)
         | none => fail p3 "',' or '}' expected"
     | .error e => .error e
   | .error e => .error e
