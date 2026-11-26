@@ -28,6 +28,7 @@ import Tests.Batch
 import Tests.Crypto
 import Tests.Auth
 import Tests.Clients
+import Tests.Lint
 import Tests.Release
 
 /-!
@@ -75,9 +76,10 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.Crypto.tests ++ Tests.Auth.tests ++ Tests.Clients.tests ++ Tests.Release.tests
   match args with
   | [] =>
+    let pure := pure ++ (← Tests.Lint.tests)
     failures pure
     report (pure ++ (← live)) pure.length
-  | ["fast"] => report pure
+  | ["fast"] => report (pure ++ (← Tests.Lint.tests))
   | ["live"] => report (← live)
   | ["journal-child", path] =>
     Tests.Durable.child path

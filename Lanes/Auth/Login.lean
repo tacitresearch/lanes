@@ -56,13 +56,11 @@ def Password.digest (config : Password) (user password : String) : Digest :=
 /-- Failed log-ins since the account was last unlocked. At `limit` the account locks, and stays
 locked until the application unlocks it, by a timer or by hand. -/
 lanes_data structure Attempts where
-  failures : Nat
-  locked : Bool
+  failures : Nat := 0
+  locked : Bool := false
   deriving DecidableEq, Repr, Hashable, Codable
 
 namespace Attempts
-
-def none : Attempts := ⟨0, false⟩
 
 def fail (a : Attempts) (limit : Nat) : Attempts :=
   let failures := a.failures + 1
@@ -71,7 +69,7 @@ def fail (a : Attempts) (limit : Nat) : Attempts :=
 def succeed (a : Attempts) : Attempts :=
   { a with failures := 0 }
 
-def unlock : Attempts := none
+def unlock : Attempts := {}
 
 /-- What a run of log-ins can do: never more than `limit` failures are counted, and an account
 with that many is locked. -/
@@ -93,12 +91,10 @@ end Attempts
 /-- A user's open sessions, newest first, at most `limit` of them: opening one more closes the
 oldest. A session is named by a number the application never uses twice. -/
 lanes_data structure Sessions where
-  ids : List Nat
+  ids : List Nat := []
   deriving DecidableEq, Repr, Hashable, Codable
 
 namespace Sessions
-
-def none : Sessions := ⟨[]⟩
 
 /-- The sessions after `id` is opened, and those it closed. -/
 def start (s : Sessions) (limit id : Nat) : Sessions × List Nat :=

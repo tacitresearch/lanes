@@ -28,9 +28,9 @@ namespace Lanes
   all := (Enum.all (α := α)).map f
   complete b := h b ▸ List.mem_map_of_mem (Enum.complete (g b))
 
-syntax lanesDataField := ppLine (docComment)? ident " : " term
+syntax lanesDataField := ppLine (docComment)? ident " : " term (" := " term)?
 syntax lanesDataArgs := " (" ident+ " : " term ")"
-syntax lanesDataCtor := ppLine (docComment)? "| " ident lanesDataArgs*
+syntax lanesDataCtor := ppLine (docComment)? "| " rawIdent lanesDataArgs*
 syntax lanesDataDeriving := ppLine "deriving " ident,+
 
 syntax (name := lanesDataStructure) (docComment)? "lanes_data " "structure " ident
@@ -121,6 +121,21 @@ meta def comparedByBEq (p : Params) (types : Array (TSyntax `term)) : Array Iden
     types.any (fun t => t.raw.isIdent && t.raw.getId == x.getId)
       && !types.any fun t => !t.raw.isIdent && (t.raw.find? (·.getId == x.getId)).isSome
 
+/-- What `lanes_data` derives takes each field by its type alone, so it refuses a field whose
+type names an earlier one, such as a proof about it. -/
+meta def independent (ours : Array Name) (names : Array Ident) (types : Array (TSyntax `term)) :
+    MacroM Unit := do
+  if ours.isEmpty then return
+  for h : k in [0:types.size] do
+    let named? := names.extract 0 k |>.find? fun n =>
+      (types[k].raw.find? fun s =>
+        s.isIdent && s.getId.eraseMacroScopes.getRoot == n.getId.eraseMacroScopes).isSome
+    if let some named := named? then
+      let classes := ", ".intercalate (ours.toList.map fun c => s!"`{c}`")
+      Macro.throwErrorAt types[k] s!"lanes_data: this type names `{named.getId}`, and \
+        {classes} takes each field by its type alone. Put the property in the type of \
+        `{named.getId}` instead, as a subtype `\{x : α // p x}`, or both in a sigma type."
+
 meta def enum (p : Params) (applied : TSyntax `term) (code : TSyntax `term)
     (to back : TSyntax `term) : MacroM (TSyntax `command) := do
   let instBinders := p.binders ++ (← classBinders ``Lanes.Enum p.types)
@@ -133,13 +148,14 @@ open Lean Declare in
 macro_rules
   | `(lanesDataStructure|
       $[$doc:docComment]? lanes_data structure $T $bs:bracketedBinder* where
-        $[$[$fdocs:docComment]? $fields : $types]* $[deriving $classes,*]?) => do
+        $[$[$fdocs:docComment]? $fields : $types $[:= $defaults]?]* $[deriving $classes,*]?) => do
     let p ← params bs
     let (lean, ours) := splitDeriving (classes.map (·.getElems) |>.getD #[])
+    independent ours fields types
     let pargs := p.args
     let applied ← `($T $pargs*)
     let decl ← `(command| $[$doc:docComment]? structure $T:ident $bs:bracketedBinder* where
-      $[$[$fdocs:docComment]? $fields:ident : $types]*)
+      $[$[$fdocs:docComment]? $fields:ident : $types $[:= $defaults]?]*)
     let mut cmds := #[decl] ++ (← leanDeriving T lean)
     if ours.contains `Codable then
       let codecs ← types.mapM fun t => `((Lanes.Codable.codec : Lanes.Codec $t))
@@ -147,7 +163,7 @@ macro_rules
     if ours.contains `Enum then
       let r := mkIdent (← Macro.addMacroScope `r)
       let projections ← fields.mapM fun f => `($r.$f:ident)
-      let values : Array (TSyntax `term) := fields.map fun f => ⟨f.raw⟩
+      let values ← Codec.fresh fields
       cmds := cmds.push (← enum p applied (← productType types)
         (← `(fun $r => $(← Codec.tuple projections)))
         (← `(fun $(← Codec.tuple values) => { $[$fields:ident := $values],* })))
@@ -168,7 +184,7 @@ macro_rules
               eq_of_beq := by
                 intro $a:ident $b:ident h
                 change $same = true at h
-                cases $a:ident; cases $b:ident; simpa [and_assoc] using h)]
+                cases $a:ident; cases $b:ident; simpa [and_assoc, Subtype.ext_iff] using h)]
     return mkNullNode (cmds.map (·.raw))
 
 open Lean Declare in
@@ -189,6 +205,7 @@ macro_rules
       (xs.zip ts).foldl (init := #[]) fun acc (ys, _) => acc ++ ys
     let argTypes : Array (Array (TSyntax `term)) := (argss.zip tyss).map fun (xs, ts) =>
       (xs.zip ts).foldl (init := #[]) fun acc (ys, t) => acc ++ ys.map fun _ => t
+    for (xs, ts) in args.zip argTypes do independent ours xs ts
     if ours.contains `Codable then
       let codecs ← argTypes.mapM (·.mapM fun t => `((Lanes.Codable.codec : Lanes.Codec $t)))
       cmds := cmds ++
@@ -199,7 +216,7 @@ macro_rules
       let mut backs : Array (TSyntax `term) := #[]
       for k in [0:n] do
         let ctor := mkIdent (T.getId ++ ctors[k]!.getId)
-        let vars : Array (TSyntax `term) := args[k]!.map fun a => ⟨a.raw⟩
+        let vars ← Codec.fresh args[k]!
         let injected ← Codec.inject k n (← Codec.tuple vars)
         cases := cases.push (← if vars.isEmpty then pure injected
           else `(fun $vars* => $injected))

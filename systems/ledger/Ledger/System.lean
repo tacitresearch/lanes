@@ -26,7 +26,7 @@ lanes_data inductive Id (N : Type) where
   deriving DecidableEq, Repr, Hashable, Codable, Enum
 
 lanes_data inductive UserMsg (C : Type) where
-  | ask (req : ReqId) (question : Ask C)
+  | ask (req : ReqId) (ask : Ask C)
   | unlock
   | expire (session : Sid)
   deriving DecidableEq, Repr, Hashable, Codable
@@ -102,7 +102,7 @@ def user (config : Config N) (answering : Answering) (self : N) :
   fresh_recover u h := by cases u <;> simp_all [rearm]
 
 def ledger (config : Config N) : (sig N C).Actor .ledger (Book N) where
-  init := .empty
+  init := {}
   step b
     | .answer req reply => (b, [.emit ⟨req, reply⟩])
     | .serve req owner op =>
