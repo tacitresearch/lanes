@@ -126,6 +126,12 @@ theorem any_isStop_map {τ : Signature} {j : τ.Id} {f : Effect σ i → Effect 
 
 end Effect
 
+/-- An input, a loss or a hand-over: an event that changes no actor's state, starts or stops no
+actor and arms no timer. -/
+def Event.quiet : Event σ → Bool
+  | .input _ | .drop _ | .output _ => true
+  | _ => false
+
 namespace SysState
 
 variable {env : EnvModel σ}
@@ -270,6 +276,87 @@ theorem run_outputs_filter (env : EnvModel σ) (c : SysState sys) (kept : σ.Out
       simp only [Option.bind_some, List.erase_append_right _ hnot, List.erase_cons_head]
       simpa [hout] using ih pre hpre
 
+theorem run_quiet {evs : List (Event σ)} (hquiet : ∀ ev ∈ evs, ev.quiet = true)
+    {c c' : SysState sys} (hrun : c.run env evs = some c') :
+    c'.state = c.state ∧ c'.up = c.up ∧ c'.timers = c.timers := by
+  induction evs generalizing c with
+  | nil =>
+    simp only [run, Option.some.injEq] at hrun
+    exact hrun ▸ ⟨rfl, rfl, rfl⟩
+  | cons ev evs ih =>
+    simp only [run] at hrun
+    cases hstep : c.step env ev with
+    | none => simp [hstep] at hrun
+    | some c₁ =>
+      obtain ⟨h₁, h₂, h₃⟩ := ih (fun ev' h => hquiet ev' (List.mem_cons_of_mem _ h))
+        (by simpa [hstep] using hrun)
+      have hq := hquiet ev List.mem_cons_self
+      have : c₁.state = c.state ∧ c₁.up = c.up ∧ c₁.timers = c.timers := by
+        cases ev with
+        | input x => obtain rfl := step_input.mp hstep; exact ⟨rfl, rfl, rfl⟩
+        | drop e => obtain ⟨_, _, rfl⟩ := step_drop.mp hstep; exact ⟨rfl, rfl, rfl⟩
+        | output out => obtain ⟨_, rfl⟩ := step_output.mp hstep; exact ⟨rfl, rfl, rfl⟩
+        | _ => cases hq
+      exact ⟨h₁.trans this.1, h₂.trans this.2.1, h₃.trans this.2.2⟩
+
+theorem run_take {c c' : SysState sys} {evs : List (Event σ)} (hrun : c.run env evs = some c')
+    (j : Nat) : ∃ d, c.run env (evs.take j) = some d ∧ d.run env (evs.drop j) = some c' := by
+  rw [← List.take_append_drop j evs, run_append] at hrun
+  cases h : c.run env (evs.take j) with
+  | none => simp [h] at hrun
+  | some d => exact ⟨d, rfl, by simpa [h] using hrun⟩
+
+theorem mem_settle_net {c : SysState sys} {i : σ.Id} {r : sys.State i × List (Effect σ i)}
+    {e : Envelope σ} (he : e ∈ (c.settle env i r).net) : e ∈ c.net ∨ e.src = some i := by
+  rcases List.mem_append.mp ((settle_net_sublist env c i r).subset he) with h | h
+  · exact .inl h
+  · exact .inr (Effect.mem_sends.mp h).1
+
 end SysState
+
+/-- A message from outside in flight is an input the system accepted. -/
+theorem System.Reachable.accepted {env : EnvModel σ} {c : SysState sys} (h : sys.Reachable env c)
+    {e : Envelope σ} (he : e ∈ c.net) (hsrc : e.src = none) :
+    ∃ x, (⟨none, (sys.accept x).1, (sys.accept x).2⟩ : Envelope σ) = e := by
+  let P (c : SysState sys) : Prop := ∀ e ∈ c.net, e.src = none →
+    ∃ x, (⟨none, (sys.accept x).1, (sys.accept x).2⟩ : Envelope σ) = e
+  have hsettle (c : SysState sys) (i : σ.Id) (r : sys.State i × List (Effect σ i)) (hc : P c) :
+      P (c.settle env i r) := fun e he hsrc =>
+    (SysState.mem_settle_net he).elim (fun h => hc e h hsrc) fun h => by simp [h] at hsrc
+  suffices hall : P c from hall e he hsrc
+  clear he hsrc
+  induction h with
+  | init =>
+    exact SysState.init_induction (P := P) (by simp [P, SysState.blank])
+      fun c i hc => hsettle { c with up := update c.up i true } i _ hc
+  | @step c c' ev _ hstep ih =>
+    cases ev with
+    | input x =>
+      obtain rfl := SysState.step_input.mp hstep
+      intro e he hsrc
+      rcases List.mem_append.mp he with he | he
+      · exact ih e he hsrc
+      · exact ⟨x, (List.mem_singleton.mp he).symm⟩
+    | deliver e' =>
+      obtain ⟨_, _, rfl⟩ := SysState.step_deliver.mp hstep
+      exact hsettle _ _ _ fun e he => ih e (List.mem_of_mem_erase he)
+    | duplicate e' =>
+      obtain ⟨_, _, _, rfl⟩ := SysState.step_duplicate.mp hstep
+      exact hsettle _ _ _ ih
+    | drop e' =>
+      obtain ⟨_, _, rfl⟩ := SysState.step_drop.mp hstep
+      exact fun e he => ih e (List.mem_of_mem_erase he)
+    | timeout i msg =>
+      obtain ⟨_, _, rfl⟩ := SysState.step_timeout.mp hstep
+      exact hsettle _ _ _ ih
+    | output out =>
+      obtain ⟨_, rfl⟩ := SysState.step_output.mp hstep
+      exact ih
+    | crash i =>
+      obtain ⟨_, _, rfl⟩ := SysState.step_crash.mp hstep
+      exact fun e he => ih e (List.mem_filter.mp he).1
+    | start i =>
+      obtain ⟨_, _, rfl⟩ := SysState.step_start.mp hstep
+      exact hsettle _ _ _ ih
 
 end Lanes
