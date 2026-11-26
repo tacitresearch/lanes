@@ -75,6 +75,13 @@ structure Runtime (sys : System σ) [Hashable σ.Id] where
   private log : IO.Ref (Array (Event σ))
   private finished : IO.Promise (Option IO.Error)
 
+private initialize live : IO.Ref Nat ← IO.mkRef 0
+
+/-- How many shards are running in this process. A shard that is started and never stopped
+keeps the process from ending, so a program, and a test, can ask. -/
+def Runtime.running : BaseIO Nat :=
+  live.get
+
 namespace Runtime
 
 variable {sys : System σ} [Hashable σ.Id]
@@ -197,7 +204,8 @@ private def loop (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
     waiting.modify (·.filter fun (timers, _) => !reached timers)
 
 /-- However the loop ends, nobody is left waiting on it: not those it had heard from, and not
-those whose commands it never took. -/
+those whose commands it never took. Those are taken out of the inbox and dropped, and a caller
+waits on a promise that answers when it is dropped. -/
 private def run (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
     (journal : Option (Journal.Log sys)) : IO Unit := do
   let waiting ← IO.mkRef #[]
@@ -206,9 +214,9 @@ private def run (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
     discard (IO.eprintln s!"lanes: the shard stopped on an error: {e}").toBaseIO
   if let some log := journal then discard log.close.toBaseIO
   for wake in ← rt.inbox.modifyGet Mailbox.close do wake.resolve ()
-  for command in (← rt.inbox.modifyGet Mailbox.take).batch do
-    if let .idle _ heard := command then heard.resolve false
+  discard <| rt.inbox.modifyGet Mailbox.take
   for (_, done) in ← waiting.get do done.resolve false
+  live.modify (· - 1)
   rt.finished.resolve (match error with | .error e => some e | .ok () => none)
 
 /-- Boot a system on one shard, which runs on a thread of its own until `stop`. The handler is
@@ -235,6 +243,7 @@ def startWith (sys : System σ) [Hashable σ.Id] (config : Runtime.Config := {})
     inbox := ← IO.mkRef {}
     log := ← IO.mkRef #[]
     finished := ← IO.Promise.new }
+  live.modify (· + 1)
   discard <| IO.asTask (prio := .dedicated) (rt.run (onOutput rt) journal)
   return rt
 
