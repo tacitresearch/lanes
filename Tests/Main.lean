@@ -38,7 +38,7 @@ def main (args : List String) : IO UInt32 := do
   let pure := Tests.Engine.tests ++ Tests.Bank.tests ++ Tests.Json.tests ++ Tests.Html.tests
     ++ Tests.KV.tests ++ Tests.Gate.tests ++ Tests.Join.tests ++ Tests.Kernel.tests
     ++ Tests.Frame.tests ++ Tests.Clock.tests ++ Tests.HttpClient.tests ++ Tests.Fair.tests
-    ++ Tests.Codec.tests
+    ++ Tests.Codec.tests ++ Tests.Durable.fileTests
   match args with
   | [] =>
     report (pure ++ (← Tests.Runtime.tests) ++ (← Tests.Web.tests) ++ (← Tests.Durable.tests)

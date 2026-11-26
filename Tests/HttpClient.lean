@@ -93,7 +93,7 @@ def clients : Outside callerSig (List Nat × List (Nat × Option Nat)) where
     | .done id status => (d.1, (id, status) :: d.2)
     | .call .. => d
 
-def world := clients.both (Client.outside port)
+def world := clients.both (Client.outside port) fun x => x matches .fetch ..
 
 instance : callerSig.Inspect := {}
 instance : caller.Inspect := {}

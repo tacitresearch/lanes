@@ -59,14 +59,12 @@ def after (outside : Outside σ D) (events : List (Event σ)) : Option D :=
 def allows (outside : Outside σ D) (events : List (Event σ)) : Bool :=
   (outside.after events).isSome
 
-/-- Two things outside at once: an input is allowed if either may send it. Where both may, the
-first is taken to have sent it. -/
-def both (a : Outside σ D) (b : Outside σ E) : Outside σ (D × E) where
+/-- Two things outside at once, each sending its own kind of input: `first` says which inputs
+are the first one's. A kind of input that both may send has no model as a pair, because the
+model would have to guess who sent it, and a guess loses runs. -/
+def both (a : Outside σ D) (b : Outside σ E) (first : σ.In → Bool) : Outside σ (D × E) where
   init := (a.init, b.init)
-  allow d x :=
-    match a.allow d.1 x with
-    | some d₁ => some (d₁, d.2)
-    | none => (b.allow d.2 x).map (d.1, ·)
+  allow d x := if first x then (a.allow d.1 x).map (·, d.2) else (b.allow d.2 x).map (d.1, ·)
   observe d out := (a.observe d.1 out, b.observe d.2 out)
 
 /-- Every input the checker explores is one the model allows, with the same memory after. -/

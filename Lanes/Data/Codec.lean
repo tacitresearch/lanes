@@ -84,7 +84,8 @@ def map (c : Codec β) (to : α → β) (back : β → Option α) (h : ∀ a, ba
   sound a rest := by simp [c.sound, h]
 
 def bool : Codec Bool :=
-  nat.map (fun b => if b then 1 else 0) (fun n => if n = 0 then some false else some true)
+  nat.map (fun b => if b then 1 else 0)
+    (fun n => if n = 0 then some false else if n = 1 then some true else none)
     (by intro b; cases b <;> rfl)
 
 def fin {n : Nat} : Codec (Fin n) :=

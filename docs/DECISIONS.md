@@ -395,7 +395,13 @@ What it costs:
 - Outputs produced after the last sync mark may be handed over again after a restart: outputs
   are delivered at least once, and an adapter that must not repeat itself needs to deduplicate.
 - Replaying a journal with changed code gives a different state. Upgrades will go through a
-  snapshot.
+  snapshot. Until then the journal's header carries a name the application chooses for the
+  system and its version, and a file with another name is refused.
+- Opening a journal never repairs it. A write that did not finish is cut off, because that is
+  what the death of the process leaves and it is proved to be all it leaves
+  (`Journal.open?_cut`). Anything else that is wrong is refused and left alone: the first
+  version cut the file at the first entry it could not read, which deleted a journal that was
+  opened with the wrong codec.
 - Time is the kernel's time. Timers do not advance while the process is down.
 
 What a shard does in one turn (take an input if there is one, do a batch of work, and say what

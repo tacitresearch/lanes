@@ -24,6 +24,49 @@ def scratch (name : String) : IO System.FilePath := do
   let dir := (← IO.getEnv "TMPDIR").getD "/tmp"
   return s!"{dir}/lanes-{name}-{← IO.monoNanosNow}.journal"
 
+def remove (path : System.FilePath) : IO Unit := do
+  for file in [path, path.addExtension "lock", path.addExtension "cut"] do
+    if ← file.pathExists then IO.FS.removeFile file
+
+/-! `Journal.open?` on the compiled code: every cut, and every flipped bit, of a small journal. -/
+
+def entries : List (Journal.Entry (sig (Fin 3))) :=
+  [.advance 5, .input (.transfer ⟨1, 0, 1, 3⟩), .batch 64, .handed, .advance 9,
+    .input (.transfer ⟨2, 1, 2, 300⟩), .batch 64]
+
+def written (entries : List (Journal.Entry (sig (Fin 3)))) : List ByteArray :=
+  Journal.write (Request.codec Codec.fin) entries
+
+def opened (system : String) (bytes : ByteArray) :=
+  Journal.open? (σ := sig (Fin 3)) (Request.codec Codec.fin) system bytes
+
+def flip (bytes : ByteArray) (bit : Nat) : ByteArray :=
+  bytes.set! (bit / 8) (bytes[bit / 8]! ^^^ (1 <<< (bit % 8)).toUInt8)
+
+def fileTests : List (String × Bool) :=
+  let file := Journal.file (Request.codec Codec.fin) "bank" entries
+  [ ("journal: a file cut at any byte opens and gives a prefix of what was written, and all of "
+      ++ "it when nothing is cut",
+      (List.range (file.size + 1)).all fun n =>
+        match opened "bank" (file.extract 0 n) with
+        | .ok (found, size) =>
+          size ≤ n && written found == (written entries).take found.length
+            && (n < file.size || found.length == entries.length)
+        | .error _ => false),
+    ("journal: no flipped bit gives an entry that was not written",
+      (List.range (file.size * 8)).all fun bit =>
+        match opened "bank" (flip file bit) with
+        | .ok (found, _) => written found == (written entries).take found.length
+        | .error _ => true),
+    ("journal: a flipped bit inside an entry is damage, and is refused",
+      (opened "bank" (flip file (8 * (file.size - 3)))).toOption.isNone),
+    ("journal: another system's journal is refused",
+      (match opened "ledger" file with | .error .foreign => true | _ => false)),
+    ("journal: a journal written with another codec is refused, not cut",
+      (match Journal.open? (σ := sig Bool) (Request.codec Codec.bool) "bank" file with
+        | .error (.unreadable 5) => true
+        | _ => false)) ]
+
 def balances (rt : Runtime Bank3) : Async (List Int) :=
   (List.finRange 3).mapM fun a => return (← rt.state a).balance
 
@@ -46,7 +89,7 @@ def restartTest : Async (List (String × Bool)) := do
   rt.idle
   let later ← balances rt
   rt.stop
-  IO.FS.removeFile path
+  remove path
   return [
     ("durable: a shard started again from its journal is in the state it was in",
       before == [40, 160, 100] && after == before),
@@ -70,7 +113,7 @@ def torn (file : ByteArray) (keep : Nat) : Async Bool := do
   rt.idle
   let again ← balances rt
   rt.stop
-  IO.FS.removeFile path
+  remove path
   let moved := 100 - recovered[0]!
   return recovered.sum == 300 && moved % 3 == 0 && moved ≤ 60 && recovered[1]! == 100 + moved
     && again == [recovered[0]! + 7, recovered[1]!, recovered[2]! - 7]
@@ -83,7 +126,7 @@ def tornTest : Async (List (String × Bool)) := do
   rt.idle
   rt.stop
   let file ← IO.FS.readBinFile path
-  IO.FS.removeFile path
+  remove path
   let cuts := [0, 1, 9, file.size / 3, file.size / 2, file.size - 9, file.size - 1, file.size]
   let results ← cuts.mapM (torn file)
   return [("durable: a journal cut anywhere recovers a state it passed through, and what is "
@@ -120,7 +163,7 @@ def killTest : Async (List (String × Bool)) := do
   rt.idle
   let recovered ← balances rt
   rt.stop
-  IO.FS.removeFile path
+  remove path
   return [
     ("durable: after SIGKILL, every request the bank had answered is in its journal",
       acknowledged.size == 300 && acknowledged.all (answered.contains ·)),
@@ -128,7 +171,112 @@ def killTest : Async (List (String × Bool)) := do
       recovered.sum == 300
         && recovered == (List.finRange 3).map fun a => (replayed.kernel.cell a).state.balance) ]
 
+/-- A journal is one process's: the second to open it is refused, whatever it would have read.
+And a journal that is refused is left exactly as it was. -/
+def refusalTest : Async (List (String × Bool)) := do
+  let path ← scratch "refusal"
+  let seen ← IO.mkRef #[]
+  let rt ← start path seen
+  for n in [0:5] do rt.input (.transfer ⟨n, 0, 2, 3⟩)
+  rt.idle
+  let second ← ((store path).open).toBaseIO
+  rt.stop
+  let before ← IO.FS.readBinFile path
+  let foreign ← ({ store path with system := "another" } : Journal.Store _).open.toBaseIO
+  let other : Journal.Store (sig Bool) := { path, input := Request.codec Codec.bool }
+  let codec ← other.open.toBaseIO
+  IO.FS.writeBinFile path (flip before (8 * (before.size / 2)))
+  let damaged ← ((store path).open).toBaseIO
+  IO.FS.writeBinFile path before
+  let again ← ((store path).open).toBaseIO
+  let reopened ← match again with
+    | .ok log => do log.close; pure (decide (log.past.length > 5))
+    | .error _ => pure false
+  let after ← IO.FS.readBinFile path
+  remove path
+  let refused := fun (r : Except IO.Error (Journal.Log _)) => r.toOption.isNone
+  return [
+    ("durable: a journal in use is refused to a second opener", refused second),
+    ("durable: another system's journal, one written with another codec, and a damaged one "
+      ++ "are each refused", refused foreign && codec.toOption.isNone && refused damaged),
+    ("durable: a refused journal is left as it was, and opens again", reopened && after == before) ]
+
+/-! What the shard does with its journal, on a journal held in memory. -/
+
+def throws {α : Type} (action : Async α) : Async Bool := do
+  try discard action; return false
+  catch _ => return true
+
+def within {α : Type} (ms : Nat) (action : Async α) : Async (Option α) :=
+  Async.race (some <$> action) (do Async.sleep (.ofNat ms); return none)
+
+/-- A journal in memory. Its `append` fails from call number `failAt` on. -/
+def memory (past : List (Journal.Entry (sig (Fin 3)))) (failAt : Option Nat := none) :
+    IO (Journal.Log (sig (Fin 3)) × IO.Ref (Array Nat)) := do
+  let durable ← IO.mkRef #[]
+  let calls ← IO.mkRef 0
+  let log : Journal.Log (sig (Fin 3)) := {
+    past
+    append := fun entries => do
+      let call ← calls.modifyGet fun n => (n, n + 1)
+      if failAt.any (· ≤ call) then throw (IO.userError "no room on the device")
+      for entry in entries do
+        if let .input (.transfer t) := entry then durable.modify (·.push t.req)
+    note := fun _ => pure ()
+    close := pure () }
+  return (log, durable)
+
+def orderTest : Async (List (String × Bool)) := do
+  let (log, durable) ← memory []
+  let checked ← IO.mkRef #[]
+  let rt ← Runtime.start Bank3 {} (journal := some log) fun response => do
+    checked.modify (·.push ((← durable.get).contains response.req))
+  for n in [0:20] do rt.input (.transfer ⟨n, 0, 1, 3⟩)
+  rt.idle
+  rt.stop
+  let checked ← checked.get
+  return [("durable: an input is in the journal before any output it caused is handed over",
+    checked.size == 20 && checked.all (·))]
+
+def rehandTest : Async (List (String × Bool)) := do
+  let past : List (Journal.Entry (sig (Fin 3))) :=
+    [.advance 0, .input (.transfer ⟨7, 0, 1, 3⟩), .batch 64, .handed,
+      .advance 1, .input (.transfer ⟨8, 0, 1, 3⟩), .batch 64]
+  let run := fun (past : List (Journal.Entry (sig (Fin 3)))) => do
+    let (log, _) ← memory past
+    let seen ← IO.mkRef #[]
+    let rt ← Runtime.start Bank3 {} (journal := some log) fun response =>
+      seen.modify (·.push response.req)
+    rt.idle
+    rt.stop
+    seen.get
+  return [
+    ("durable: outputs produced and not marked as handed over are handed over after a restart",
+      (← run past) == #[8]),
+    ("durable: and those that were marked are not", (← run (past ++ [.handed])) == #[]) ]
+
+/-- The journal stops taking writes. The shard must end, say so, and leave nobody waiting:
+neither those it had heard from nor those whose commands it never took. -/
+def failTest : Async (List (String × Bool)) := do
+  let (log, _) ← memory [] (failAt := some 2)
+  let seen ← IO.mkRef #[]
+  let rt ← Runtime.start Bank3 {} (journal := some log) fun response =>
+    seen.modify (·.push response.req)
+  let waiters ← (List.range 8).mapM fun n => do
+    discard <| rt.tryInput (.transfer ⟨n, 0, 1, 3⟩)
+    let done ← IO.Promise.new
+    background do done.resolve (← throws rt.idle)
+    return done
+  let released ← waiters.mapM fun done => within 2000 (await done.result?)
+  let error ← within 2000 rt.ended
+  return [
+    ("durable: when the journal cannot be written the shard ends and says why",
+      (error.map (·.isSome)) == some true),
+    ("durable: nothing is handed over that is not in the journal", (← seen.get).size ≤ 2),
+    ("durable: and nobody is left waiting for it", released.all (·.isSome)) ]
+
 def tests : IO (List (String × Bool)) := do
-  return (← restartTest.block) ++ (← tornTest.block) ++ (← killTest.block)
+  return (← restartTest.block) ++ (← tornTest.block) ++ (← refusalTest.block)
+    ++ (← orderTest.block) ++ (← rehandTest.block) ++ (← failTest.block) ++ (← killTest.block)
 
 end Tests.Durable

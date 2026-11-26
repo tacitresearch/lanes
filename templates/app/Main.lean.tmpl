@@ -51,11 +51,14 @@ def bridge : Http.Bridge sig where
     ] request).getD (.error (.text "not found\n" 404))
   encode response := some (response.req, .html (CounterView response).render)
 
-/-- `{{name}} [port] [journal]`. With a journal file the counter survives the process. -/
+/-- `{{name}} [port] [journal]`. With a journal file the counter survives the process. A
+journal is replayed through `step`, so change the number in `system` whenever a change to a
+step function should not be applied to what is already in the journal. -/
 def main (args : List String) : IO Unit := do
   let port := (args.head? >>= String.toNat?).getD 8080
   let journal := args[1]?.map System.FilePath.mk
-  let server ← (Http.serve (system {}) bridge { port := port.toUInt16, journal }).block
+  let config : Http.ServerConfig := { port := port.toUInt16, journal, system := "{{name}} 1" }
+  let server ← (Http.serve (system {}) bridge config).block
   IO.println s!"{{name}} listening on http://127.0.0.1:{server.port.getD 0}"
   (← IO.getStdout).flush
   server.wait.block

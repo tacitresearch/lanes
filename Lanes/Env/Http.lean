@@ -39,6 +39,10 @@ structure ServerConfig where
   /-- Where to keep a journal. With one, the system behind the server survives the process:
   it starts in the state it was in (`DECISIONS.md` D24). -/
   journal : Option System.FilePath := none
+  /-- The application's name for the system and the version of its step functions. A journal
+  written under another name is refused: replayed through other step functions it would give
+  another state. -/
+  system : String := ""
 
 /-- The runtime is private because the gate answers each request once only if request ids are
 never reused, and `serve` is what allocates them. -/
@@ -91,14 +95,14 @@ private def freshId (past : List (Journal.Entry (gatedSig σ))) : ReqId :=
     | .input (id, _) => max next (id + 1)
     | _ => next
 
-/-- Returns once the server is listening. Each request is answered exactly once by the gate. -/
-def serve (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : ServerConfig := {})
-    (runtimeConfig : Runtime.Config := {}) : Async (Server sys bridge config) := do
+/-- `serve` on a journal that is already open. A shard that ends on an error takes the server
+down with it: requests in flight are answered `503`, and `Server.wait` throws. -/
+def serveWith (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : ServerConfig := {})
+    (runtimeConfig : Runtime.Config := {}) (log : Option (Journal.Log (gatedSig σ))) :
+    Async (Server sys bridge config) := do
   let some addr := Std.Net.IPv4Addr.ofString config.host
     | throw (IO.userError s!"lanes: {config.host} is not an IPv4 address")
   let waiting : Mutex (Std.HashMap ReqId (IO.Promise Response)) ← Mutex.new {}
-  let log ← config.journal.mapM fun path =>
-    Journal.Store.open (σ := gatedSig σ) { path, input := Codec.pair Codec.nat Request.codec }
   let nextId ← IO.mkRef (freshId ((log.map (·.past)).getD []))
   let runtime ← Runtime.start (gated sys bridge config.gate) runtimeConfig (journal := log)
       fun (id, response) => do
@@ -120,8 +124,27 @@ def serve (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : Serv
       waiting.atomically (modify (·.erase id))
       send busy
   let httpConfig : Std.Http.Config := { maxBodySize := config.maxBodyBytes }
-  let http ← Std.Http.Server.serve (.v4 ⟨addr, config.port⟩) handler httpConfig
+  let http ← try Std.Http.Server.serve (.v4 ⟨addr, config.port⟩) handler httpConfig
+    catch e =>
+      runtime.stop
+      throw e
+  background do
+    if (← runtime.ended).isSome then
+      let left ← waiting.atomically (modifyGet fun waiting => (waiting.values, {}))
+      for waiter in left do waiter.resolve busy
+      http.shutdown
   return { runtime, http, waiting }
+
+/-- Returns once the server is listening. Each request is answered exactly once by the gate. -/
+def serve (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : ServerConfig := {})
+    (runtimeConfig : Runtime.Config := {}) : Async (Server sys bridge config) := do
+  let log ← config.journal.mapM fun path =>
+    Journal.Store.open (σ := gatedSig σ)
+      { path, input := Codec.pair Codec.nat Request.codec, system := config.system }
+  try serveWith sys bridge config runtimeConfig log
+  catch e =>
+    if let some log := log then discard log.close.toBaseIO
+    throw e
 
 namespace Server
 
@@ -142,8 +165,11 @@ def stop (server : Server sys bridge config) : Async Unit := do
 def trace (server : Server sys bridge config) : BaseIO (Array (Event (gatedSig σ))) :=
   server.runtime.trace
 
-def wait (server : Server sys bridge config) : Async Unit :=
+/-- Returns when the server has shut down, and throws if the shard ended on an error, so that a
+`main` that waits here exits with a failure and can be started again. -/
+def wait (server : Server sys bridge config) : Async Unit := do
   server.http.waitShutdown
+  if let some e ← server.runtime.ended then throw e
 
 end Server
 

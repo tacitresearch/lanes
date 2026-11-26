@@ -13,9 +13,9 @@ The journal of a shard: everything it asks of its kernel, in order. The kernel i
 function of those requests, so replaying a journal gives back the state it describes, and that
 is how a shard survives its process (`DECISIONS.md` D24).
 
-This file is the pure part: what an entry is, how a journal becomes the bytes of a file, that
-reading the file back gives the entries, or the entries before a cut if the file was cut short,
-and that `recover` rebuilds the kernel the entries describe.
+This file is the pure part: what an entry is, how a journal becomes the bytes of a file, which
+files are opened and which refused (`open?`), that a file cut short by a crash opens and gives
+the entries before the cut, and that `recover` rebuilds the kernel the entries describe.
 -/
 
 @[expose] public section
@@ -102,37 +102,110 @@ theorem read_prefix (input : Codec σ.In) {entries : List (Entry σ)}
     read_write input fun e he => h e (List.mem_of_mem_take he)]
   exact List.take_prefix k entries
 
-/-- A journal file: the entries, a frame each, end to end. -/
+/-- What is appended to a journal file for `entries`: a frame each. -/
 def encode (input : Codec σ.In) (entries : List (Entry σ)) : ByteArray :=
   Frame.encode (write input entries)
-
-def decode (input : Codec σ.In) (file : ByteArray) : List (Entry σ) :=
-  read input (Frame.decode file)
 
 theorem encode_append (input : Codec σ.In) (a b : List (Entry σ)) :
     encode input (a ++ b) = encode input a ++ encode input b := by
   simp [encode, write, Frame.encode_append]
 
-private theorem write_fits (input : Codec σ.In) {entries : List (Entry σ)}
+/-- The first frame of a journal file. A journal is a list of requests, and means something only
+to the step functions that answered them, so `system` is the application's name for those: a
+file with another name is refused. -/
+def header (system : String) : ByteArray :=
+  ("lanes journal 1\n" ++ system).toUTF8
+
+def file (input : Codec σ.In) (system : String) (entries : List (Entry σ)) : ByteArray :=
+  Frame.encode (header system :: write input entries)
+
+theorem file_eq (input : Codec σ.In) (system : String) (entries : List (Entry σ)) :
+    file input system entries = Frame.one (header system) ++ encode input entries :=
+  Frame.encode_cons ..
+
+inductive Refusal where
+  /-- The file is not a journal of `system`. -/
+  | foreign
+  /-- An entry is intact on disk and cannot be read: it was written with another codec. -/
+  | unreadable (entry : Nat)
+  /-- A frame is all there and does not check. -/
+  | damaged (byte : Nat)
+  deriving DecidableEq, Repr
+
+/--
+The entries of a journal file and the bytes that hold them. Bytes after those are a write that
+did not finish, which is what the death of the process leaves (`open?_cut`), and may be cut off.
+Everything else that is wrong is refused, never repaired: cutting a file at the first thing
+that cannot be read would delete a journal that was opened with the wrong codec.
+-/
+def open? (input : Codec σ.In) (system : String) (bytes : ByteArray) :
+    Except Refusal (List (Entry σ) × Nat) :=
+  match Frame.decode bytes with
+  | [] => if Frame.unfinished bytes 0 then .ok ([], 0) else .error (.damaged 0)
+  | first :: payloads =>
+    let entries := read input payloads
+    let size := Frame.span (first :: payloads)
+    if first ≠ header system then .error .foreign
+    else if entries.length < payloads.length then .error (.unreadable entries.length)
+    else if Frame.unfinished bytes size then .ok (entries, size)
+    else .error (.damaged size)
+
+private theorem frames_fit (input : Codec σ.In) {system : String} {entries : List (Entry σ)}
+    (hsystem : Frame.fits (header system) = true)
     (h : ∀ entry ∈ entries, Entry.fits input entry = true) :
-    ∀ p ∈ write input entries, p.size < 2 ^ 32 := by
+    ∀ p ∈ header system :: write input entries, p.size < 2 ^ 32 := by
   intro p hp
-  obtain ⟨entry, hentry, rfl⟩ := List.mem_map.mp hp
-  have := h entry hentry
-  simp only [Entry.fits, Bool.and_eq_true] at this
-  exact Frame.fits_iff.mp this.2
+  rcases List.mem_cons.mp hp with rfl | hp
+  · exact Frame.fits_iff.mp hsystem
+  · obtain ⟨entry, hentry, rfl⟩ := List.mem_map.mp hp
+    have := h entry hentry
+    simp only [Entry.fits, Bool.and_eq_true] at this
+    exact Frame.fits_iff.mp this.2
 
-theorem decode_encode (input : Codec σ.In) {entries : List (Entry σ)}
-    (h : ∀ entry ∈ entries, Entry.fits input entry = true) :
-    decode input (encode input entries) = entries := by
-  rw [decode, encode, Frame.decode_encode (write_fits input h), read_write input h]
-
-/-- A journal file cut off at any byte, as when the process dies during a write, reads back as
-the entries wholly written before the cut: never a wrong entry, never one out of order. -/
-theorem decode_torn (input : Codec σ.In) {entries : List (Entry σ)}
+/-- A journal file cut off at any byte, as when the process dies during a write, opens, and
+gives exactly the entries wholly written before the cut: never a refusal, never a wrong entry,
+never one out of order. -/
+theorem open?_cut (input : Codec σ.In) {system : String} {entries : List (Entry σ)}
+    (hsystem : Frame.fits (header system) = true)
     (h : ∀ entry ∈ entries, Entry.fits input entry = true) (n : Nat) :
-    decode input ((encode input entries).extract 0 n) <+: entries :=
-  read_prefix input h (Frame.decode_take (write_fits input h) n)
+    open? input system ((file input system entries).extract 0 n)
+      = .ok (entries.take (Frame.whole (header system :: write input entries) n - 1),
+          Frame.span ((header system :: write input entries).take
+            (Frame.whole (header system :: write input entries) n))) := by
+  have hfit := frames_fit input hsystem h
+  have hdecode := Frame.decode_take_eq hfit n
+  have htail := Frame.unfinished_take hfit n
+  unfold open? file
+  generalize Frame.whole (header system :: write input entries) n = m at hdecode htail ⊢
+  cases m with
+  | zero =>
+    rw [hdecode]
+    simpa [Frame.span] using htail
+  | succ j =>
+    rw [hdecode]
+    simp only [List.take_succ_cons] at htail ⊢
+    have hread : read input ((write input entries).take j) = entries.take j := by
+      rw [write, ← List.map_take, ← write,
+        read_write input fun e he => h e (List.mem_of_mem_take he)]
+    have hlen : ((write input entries).take j).length = (entries.take j).length := by
+      simp [write]
+    simp only [ne_eq, not_true_eq_false, ↓reduceIte, hread, hlen, Nat.lt_irrefl, htail,
+      Nat.add_sub_cancel]
+
+theorem open?_file (input : Codec σ.In) {system : String} {entries : List (Entry σ)}
+    (hsystem : Frame.fits (header system) = true)
+    (h : ∀ entry ∈ entries, Entry.fits input entry = true) :
+    open? input system (file input system entries)
+      = .ok (entries, (file input system entries).size) := by
+  have hfit := frames_fit input hsystem h
+  unfold open?
+  rw [file, Frame.decode_encode hfit]
+  have hlen : (write input entries).length = entries.length := by simp [write]
+  have htail : Frame.unfinished (Frame.encode (header system :: write input entries))
+      (Frame.span (header system :: write input entries)) = true :=
+    Frame.unfinished_of_size_le (by rw [Frame.size_encode]; exact Nat.le_refl _)
+  simp only [ne_eq, not_true_eq_false, ↓reduceIte, read_write input h, hlen, Nat.lt_irrefl,
+    htail, Frame.size_encode]
 
 /-! Recovery: replay the entries through the kernel. -/
 
@@ -224,6 +297,39 @@ theorem recover_outputs (sys : System σ) (past : List (Entry σ)) :
     ∃ handed, (Kernel.boot sys).2 ++ ((Kernel.boot sys).1.exec (ops past)).outputs
       = handed ++ (recover sys past).2 :=
   (foldl_replay1 past (Kernel.boot sys).1 (Kernel.boot sys).2).2
+
+/-- Replaying entries with no mark among them keeps every output they produce. -/
+theorem replay_unmarked {sys : System σ} (k : Kernel sys) (pending : List σ.Out)
+    {rest : List (Entry σ)} (h : ∀ entry ∈ rest, entry.op?.isSome) :
+    rest.foldl replay1 (k, pending)
+      = ((k.exec (ops rest)).kernel, pending ++ (k.exec (ops rest)).outputs) := by
+  induction rest generalizing k pending with
+  | nil => simp [ops, Kernel.exec]
+  | cons entry rest ih =>
+    have hrest := fun e he => h e (List.mem_cons_of_mem _ he)
+    cases entry with
+    | handed => simpa [Entry.op?] using h .handed List.mem_cons_self
+    | advance now_ms =>
+      rw [List.foldl_cons, replay1_advance, ih _ _ hrest]
+      simp [ops, Entry.op?, Kernel.exec_cons, Kernel.apply]
+    | input x =>
+      rw [List.foldl_cons, replay1_input, ih _ _ hrest]
+      simp [ops, Entry.op?, Kernel.exec_cons, Kernel.apply, List.append_assoc]
+    | batch fuel =>
+      rw [List.foldl_cons, replay1_batch, ih _ _ hrest]
+      simp [ops, Entry.op?, Kernel.exec_cons, Kernel.apply, List.append_assoc]
+
+/-- What is handed over again after a restart is exactly what was produced after the last
+`handed` mark: nothing from before it, and everything since. So an output that was produced and
+not marked is never lost, and one that was marked is never repeated. -/
+theorem recover_handed (sys : System σ) (past : List (Entry σ)) {rest : List (Entry σ)}
+    (h : ∀ entry ∈ rest, entry.op?.isSome) :
+    (recover sys (past ++ .handed :: rest)).2
+      = ((recover sys past).1.exec (ops rest)).outputs := by
+  rw [recover, List.foldl_append, List.foldl_cons, ← recover]
+  obtain ⟨k, pending⟩ := recover sys past
+  rw [replay1_handed, replay_unmarked k [] h]
+  rfl
 
 /-! One turn of a shard, as a pure function: everything the shell asks of the kernel between two
 looks at its inbox, and what it must write in the journal for it. -/

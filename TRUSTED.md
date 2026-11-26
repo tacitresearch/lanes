@@ -13,23 +13,28 @@ toolchain, the operating system and the hardware.
 
 | What | Where | Why it is trusted | How it is checked |
 | --- | --- | --- | --- |
-| The runtime shell | `Lanes/Actors/Runtime.lean`, 258 lines | It takes commands from an inbox, reads the clock, calls the kernel and hands the kernel's outputs to the adapter. That it hands them on unchanged, all of them and in order, is not proved. Nor is its stopping: that `stop` ends the shard and leaves no caller waiting. With a journal, it is trusted to append the entries each turn gives it before it hands that turn's outputs over. What a turn asks of the kernel and which entries describe it are not the shell's: they are `Journal.turn`, proved (`Journal.turns_kernel`). | `Tests/Runtime.lean`: one input's several outputs and the boot outputs compared exactly; recorded events replayed through `SysState.run`; timers, back-pressure, stopping an idle and a busy shard. `Tests/Scale.lean`: a message costs the same at 1,000 and 100,000 actors. `Tests/Durable.lean`: see the next row. |
+| The runtime shell | `Lanes/Actors/Runtime.lean`, 271 lines | It takes commands from an inbox, reads the clock, calls the kernel and hands the kernel's outputs to the adapter. That it hands them on unchanged, all of them and in order, is not proved. Nor is its ending: that `stop`, or a journal that cannot be written, ends the shard and leaves no caller waiting. With a journal, it is trusted to append the entries each turn gives it before it hands that turn's outputs over, and to hand over at start the outputs `Journal.recover` says were not marked as handed over. What a turn asks of the kernel and which entries describe it are not the shell's: they are `Journal.turn`, proved (`Journal.turns_kernel`). | `Tests/Runtime.lean`: one input's several outputs and the boot outputs compared exactly; recorded events replayed through `SysState.run`; timers, back-pressure, stopping an idle and a busy shard. `Tests/Scale.lean`: a message costs the same at 1,000 and 100,000 actors. `Tests/Durable.lean`, on a journal held in memory: every input is in the journal before an output it caused is handed over; outputs not marked as handed over are handed over after a restart and marked ones are not; when a write fails the shard ends, reports the error and releases every caller, also those whose commands it had not yet taken. Each of these fails on the mutant that breaks it. |
 | The router between shards | `Lanes/Actors/Cluster.lean`, 106 lines | It starts one runtime per shard and carries each parcel a shard puts out to the shard that hosts its receiver. That a parcel arrives once, at the right shard, in the order sent, is not proved; nor yet that the shards together behave as the one system (the theorem is planned, `PLAN.md` B.1). | `Tests/Cluster.lean`: the bank on four shards with transfers crossing between them, ordered floods across three shards, and the same results from one shard and from four. |
-| The journal's file | `Lanes/Env/Journal.lean`, 54 lines | It reads the file at start, rewrites it without a damaged tail, appends and flushes. A flush reaches the operating system, not the disk: Lean's `IO` has no `fsync`. | `Tests/Durable.lean`: restart from the journal; a journal cut at eight places; a child process killed with SIGKILL while working, after which every request it had answered is in the journal and the state is the one the journal describes. |
-| The HTTP adapter's IO | `Lanes/Env/Http.lean`, 150 lines | It reads requests from sockets, gives each an id no other has, hands them to the gated system and writes the gate's one response for each. It answers `HEAD` as `GET` without the body, `405` for other methods and, when the inbox is full, `503` itself. | `Tests/Web.lean`, over a socket: fifty requests at once, `HEAD`, `405`, `413`, links with awkward text decoded by the real server, stopping with a request in flight, and the bank restarted on its journal. The `503` for a full inbox is not tested. |
-| The clock adapter's handler | `Lanes/Env/Clock.lean`, 54 lines | It reads the monotonic clock and hands the time back as an input. | `Tests/Clock.lean` checks a recorded run against `Clock.outside`, the model the checker explores. |
+| The journal's file | `Lanes/Env/Journal.lean`, 88 lines | It takes a lock beside the journal before it reads anything, reads the file, cuts off in place a write that did not finish (keeping the bytes beside the journal as `.cut`), appends and flushes. Which files open and which are refused is not its decision: that is `Journal.open?`, proved. A flush reaches the operating system, not the disk: Lean's `IO` has no `fsync`. | `Tests/Durable.lean`: restart from the journal; a journal cut at eight places; a second opener refused while the first holds the journal; another system's journal, one written with another codec and one with a flipped bit each refused and left byte for byte as they were; a child process killed with SIGKILL while working, after which every request it had answered is in the journal and the state is the one the journal describes. |
+| The HTTP adapter's IO | `Lanes/Env/Http.lean`, 176 lines | It reads requests from sockets, gives each an id no other has, hands them to the gated system and writes the gate's one response for each. It answers `HEAD` as `GET` without the body, `405` for other methods and, when the inbox is full, `503` itself. When the shard ends on an error it answers the requests in flight `503` and shuts down, and `wait` throws. | `Tests/Web.lean`, over a socket: fifty requests at once, `HEAD`, `405`, `413`, links with awkward text decoded by the real server, stopping with a request in flight, the bank restarted on its journal with no request id used twice, a port already taken (the journal is left free and the process can exit), and a journal that stops taking writes (every request is answered and the server ends with the error). The `503` for a full inbox is not tested. |
+| The clock adapter's handler | `Lanes/Env/Clock.lean`, 77 lines | It reads the wall clock and hands the time back as an input, never a time earlier than one it gave, nor, started on a journal, earlier than the last one in it. | `Tests/Clock.lean` checks a recorded run against `Clock.outside`, the model the checker explores, with a clock started on a journal whose last time is in the future. |
 | The HTTP client adapter's handler | `Lanes/Env/HttpClient.lean`, 90 lines | It opens a socket, sends a request, reads the answer within a deadline and a size limit, and hands it back as an input. The wire format it sends and reads is pure code in `Lanes/Http/Wire.lean`, tested, not proved. | `Tests/HttpClient.lean`: real calls to a real server, a closed port and a bad address, and the recorded run checked against `Client.outside`. |
 | The template macro | `Lanes/Html/Syntax.lean`, 113 lines | It turns template syntax into `Html` values. What it produces is type-checked, but that it produces the element the template shows is not proved. | `Tests/Html.lean` compares rendered templates with the expected text. |
 
 `lanes lint` fails when one of these files grows past the line count given here (rule
 `trusted-size`), so trusted code cannot grow without this file changing.
 
-What a journal file means is not in this table either. The format, that reading back what was
-written gives the entries (`Journal.decode_encode`), that a file cut at any byte gives the
-entries wholly written before the cut (`Journal.decode_torn`), and that recovery rebuilds
-exactly the kernel those entries lead to (`Journal.recover_kernel`) are proved in
-`Lanes/Actors/Journal.lean` and `Lanes/Data/Frame.lean`. A checksum makes it unlikely, not
-impossible, that a damaged entry is taken for a good one.
+What a journal file means is not in this table either. Proved in `Lanes/Actors/Journal.lean`
+and `Lanes/Data/Frame.lean`: a file reads back as the entries written (`Journal.open?_file`); a
+file cut at any byte opens, is never refused, and gives exactly the entries wholly written
+before the cut (`Journal.open?_cut`); recovery rebuilds exactly the kernel those entries lead to
+(`Journal.recover_kernel`); and what is handed over again is exactly what was produced after
+the last mark (`Journal.recover_handed`). A file that is not a cut journal of this system is
+refused, not repaired: a frame that is all there and does not check, an intact entry the codec
+cannot read, a header that names another system. Two things are not excluded. A checksum makes
+it unlikely, not impossible, that a damaged entry is taken for a good one. And damage to the
+length field of the last frames can look like a write that did not finish; what is cut off
+then is kept in the `.cut` file, not deleted.
 
 The runtime's decisions are not in this table: routing, start, stop, which mail a stopped
 actor loses, which timer is due, how long to sleep, how much to do before looking at the inbox
@@ -93,7 +98,11 @@ proved in `Lanes/Http/GateSound.lean` to answer each arrival at most once and mo
 - **Durability.** Without a journal, the kernel keeps actor state in memory and it is lost with
   the process. With one, the shard returns in the state the journal describes: it survives the
   death of the process, not loss of power, since nothing is synced to disk. Outputs handed over
-  shortly before the death may be handed over again.
+  shortly before the death may be handed over again. An output counts as handed over when its
+  handler was called: a handler that throws is not called again for it. A journal is a list of
+  requests and means what the step functions that answered them make of it: replayed through
+  changed step functions it gives another state, silently, unless the application changes the
+  `system` name it opens the journal under, which makes the old file refused.
 - **Environment model.** One shard stays within `Kernel.env`: reliable ordered links, no
   crashes other than an actor stopping itself. Properties proved under a stronger model than
   that do not apply to a running system.

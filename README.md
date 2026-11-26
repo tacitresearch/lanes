@@ -84,10 +84,12 @@ a view cannot link or post to a route that does not exist.
 - **The runtime's logic.** Every decision the runtime makes is a pure function, and whatever
   the IO loop around it does, the system stays in a state the semantics allows
   (`Kernel.exec_reachable`).
-- **Durability.** A shard with a journal comes back after `kill -9` in the state it was in.
-  The file format, reading a file cut short by a crash, and recovery are proved
-  (`Journal.decode_torn`, `Journal.recover_kernel`); because recovery is a replay through the
-  same pure kernel, a restart is not a fault the proofs have to account for.
+- **Durability.** A shard with a journal comes back after `kill -9` in the state its journal
+  describes. Proved: the file format, that a file cut short by a crash opens and gives what
+  was written before the cut, that anything else wrong with a file is refused, and that
+  recovery rebuilds the kernel (`Journal.open?_cut`, `Journal.recover_kernel`). Because
+  recovery is a replay through the same pure kernel, a restart is not a fault the proofs have
+  to account for. Trusted: that the file holds what the shell wrote.
 - **The model checker.** It lists exactly the enabled events, merging states is safe, a
   reported trace is real, and a complete PASS of the search means the property holds in every
   reachable state (`Check.search_sound`).
@@ -95,7 +97,7 @@ a view cannot link or post to a route that does not exist.
   variables cost nothing at run time (`Invariant.of_ghost`). Invariants about states and
   messages need five cases, not eight, and hold under loss, duplication, reordering and crashes
   (`Inductive.of_monotone`).
-- **Trusted.** About 530 lines of IO and macro code, listed with their sizes in `TRUSTED.md`;
+- **Trusted.** About 920 lines of IO and macro code, listed with their sizes in `TRUSTED.md`;
   `lanes lint` fails if they grow.
 
 ## Kill it and start it again
@@ -109,7 +111,8 @@ curl http://127.0.0.1:8080/accounts/2     # 142
 ```
 
 The journal holds what the system was asked, not its state. Starting again replays it through
-the same pure functions, so the system is back where it was, and that it is has a proof.
+the same pure functions, so the system is back in the state the journal describes, and that
+has a proof.
 
 ## Build Lanes itself
 

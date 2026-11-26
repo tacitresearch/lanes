@@ -196,7 +196,32 @@ A third review (2026-11-27), of the rewritten runtime and the web layer, found s
 | `system_sound` did not reach the gate check | Fixed: `Tests/SystemSound.lean` applies it |
 | An htmx event name built from data could carry script | Fixed: names are filtered; tested |
 
-Not done from that review: `election_safety` speaks of leaders that coexist, not of a term
+A fourth review (2026-11-26), of phase A, could not break anything that is proved: sixty
+SIGKILLs at random moments, four million entries, lost inputs, long timers, parser fuzzing.
+Every defect it found was in trusted IO or in code that is tested and not proved, and three of
+its mutants passed the whole test suite. The lesson is the one the first review taught, applied
+one layer further out: a decision made in IO code is a decision nobody proved. What a journal
+file means when it is opened was such a decision, and is a pure function now.
+
+| Finding | Outcome |
+| --- | --- |
+| A journal opened with another codec, or with one flipped bit, was cut at the first unreadable entry and lost for good | Fixed: `Journal.open?` cuts only a write that did not finish and refuses everything else, with the theorem that a crash never causes a refusal (`open?_cut`); a header names the system; tested, and the file is byte for byte as it was |
+| A second process could start on a journal the first was still writing | Fixed: the lock is a file beside the journal, taken before anything is read; the tail is cut in place, not by renaming; tested |
+| When a journal write failed the shard died, the server kept running and callers hung | Fixed: the shard releases every caller, reports the error (`Runtime.ended`), and the server answers what is in flight and ends; tested on the runtime and over a socket |
+| `serve` on a taken port left a shard running and the journal locked | Fixed and tested |
+| The clock adapter left its model after a restart on a journal | Fixed: wall time that never goes back, started no earlier than the journal's last time; tested |
+| `Outside.both` lost runs when both sides could send the same input | Fixed: the caller says whose each input is; a pair of models cannot guess |
+| Outputs before the journal write, nothing handed over again after a restart, no lock, ids from zero: each mutant passed every test | Each now fails a test; `Journal.recover_handed` proves which outputs are handed over again, where the old theorem allowed none |
+| `Journal.decode_torn` said "a prefix", which the empty list satisfies | Replaced by `open?_cut`, which says which prefix |
+| HTTP client: leaked sockets on timeout, quadratic chunk parsing, header injection in the writer, a lenient response parser | In progress |
+
+Not fixed, and written down as limits: `Kernel.performAll` appends outputs one at a time, so a
+step that emits tens of thousands of outputs is quadratic; a pending timer makes the shard
+wait with a select and costs about 120 µs per input; a timer loses the time since the last
+journal entry as well as the time the process was down; `System.join` leaves wired inputs open
+to the outside until `mapIO` hides them; the gate is not yet built with `join`.
+
+Not done from the third review: `election_safety` speaks of leaders that coexist, not of a term
 having had two leaders at different times; a duplicate attribute from a splice renders twice;
 `trusted-size` accepts only the exact wording `` `path`, N lines ``.
 

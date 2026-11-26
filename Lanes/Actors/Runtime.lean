@@ -70,7 +70,7 @@ structure Runtime (sys : System σ) [Hashable σ.Id] where
   private inbox : CloseableChannel (Cmd sys)
   private peers : CloseableChannel (Cmd sys)
   private log : IO.Ref (Array (Event σ))
-  private finished : IO.Promise Unit
+  private finished : IO.Promise (Option IO.Error)
 
 namespace Runtime
 
@@ -162,17 +162,24 @@ private def loop (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
       if reached timers then done.resolve true
     waiting.modify (·.filter fun (timers, _) => !reached timers)
 
-/-- However the loop ends, nobody is left waiting on it. -/
+/-- However the loop ends, nobody is left waiting on it: not those it had heard from, and not
+those whose commands it never took. -/
 private def run (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
     (journal : Option (Journal.Log σ)) : IO Unit := do
   let waiting ← IO.mkRef #[]
-  try rt.loop onOutput waiting journal
-  catch e => discard (IO.eprintln s!"lanes: the shard stopped on an error: {e}").toBaseIO
+  let error ← (rt.loop onOutput waiting journal).toBaseIO
+  if let .error e := error then
+    discard (IO.eprintln s!"lanes: the shard stopped on an error: {e}").toBaseIO
   if let some log := journal then discard log.close.toBaseIO
-  discard <| (rt.inbox.close : EIO _ Unit).toBaseIO
-  discard <| (rt.peers.close : EIO _ Unit).toBaseIO
+  for channel in [rt.inbox, rt.peers] do
+    discard <| (channel.close : EIO _ Unit).toBaseIO
+    repeat
+      match ← channel.tryRecv with
+      | some (.idle _ done) => done.resolve false
+      | some _ => pure ()
+      | none => break
   for (_, done) in ← waiting.get do done.resolve false
-  rt.finished.resolve ()
+  rt.finished.resolve (match error with | .error e => some e | .ok () => none)
 
 /-- Boot a system on one shard, which runs on a thread of its own until `stop`. The handler is
 given the runtime, so that an adapter can answer an output with an input (`tryInput`). A program whose
@@ -252,6 +259,12 @@ are abandoned and pending timers never fire. -/
 def stop (rt : Runtime sys) : Async Unit := do
   discard <| (rt.inbox.close : EIO _ Unit).toBaseIO
   discard <| await rt.finished.result?
+
+/-- Wait until the shard has ended, and say whether an error ended it. A shard ends on an error
+when its journal cannot be written: it must not hand over outputs it could not make durable.
+Whoever owns the shard should then end the process, so that it is started again. -/
+def ended (rt : Runtime sys) : Async (Option IO.Error) := do
+  return (← await rt.finished.result?).join
 
 end Runtime
 

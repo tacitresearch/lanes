@@ -11,7 +11,7 @@ The framing of a journal file. A frame is one record: its length in four bytes, 
 FNV-1a checksum of its payload in four bytes, then the payload. A file is frames end to end.
 `decode` gives back the payloads of every whole, intact frame from the start, so a file whose
 last write was torn loses only the records that were not fully written, and bytes after good
-frames never change them. A checksum makes it unlikely, not impossible, that a damaged frame is
+frames never change them. `unfinished` tells a torn write from damage. A checksum makes it unlikely, not impossible, that a damaged frame is
 taken for a good one.
 -/
 
@@ -364,5 +364,76 @@ theorem decode_take_eq {payloads : List ByteArray} (h : ∀ p ∈ payloads, p.si
 theorem decode_take {payloads : List ByteArray} (h : ∀ p ∈ payloads, p.size < 2 ^ 32) (n : Nat) :
     decode ((encode payloads).extract 0 n) <+: payloads :=
   decode_take_eq h n ▸ List.take_prefix ..
+
+/-- The bytes that `payloads` take up as frames. -/
+def span (payloads : List ByteArray) : Nat :=
+  (payloads.map (8 + ·.size)).sum
+
+theorem size_encode (payloads : List ByteArray) : (encode payloads).size = span payloads := by
+  induction payloads with
+  | nil => rfl
+  | cons p ps ih =>
+    rw [encode_cons, ByteArray.size_append, size_one, ih]
+    simp [span]
+
+/-- Whether what stands at `pos` is nothing, or the start of a frame that was not written to its
+end. A file that was only appended to and then cut ends so (`unfinished_take`); a frame that is
+all there and does not check is damage, and is not this. -/
+@[no_expose] def unfinished (bytes : ByteArray) (pos : Nat) : Bool :=
+  if h : pos + 8 ≤ bytes.size then bytes.size < pos + 8 + u32At bytes pos (by omega) else true
+
+theorem unfinished_of_size_le {bytes : ByteArray} {pos : Nat} (h : bytes.size ≤ pos) :
+    unfinished bytes pos = true := by
+  unfold unfinished
+  split
+  · omega
+  · rfl
+
+private theorem unfinished_append_right (a b : ByteArray) (pos : Nat) :
+    unfinished (a ++ b) (a.size + pos) = unfinished b pos := by
+  unfold unfinished
+  have hiff : a.size + pos + 8 ≤ (a ++ b).size ↔ pos + 8 ≤ b.size := by
+    rw [ByteArray.size_append]
+    omega
+  have hs : (a ++ b).size = a.size + b.size := ByteArray.size_append
+  by_cases h : pos + 8 ≤ b.size
+  · have h' := hiff.mpr h
+    simp only [h, h', ↓reduceDIte, u32At_append_right, decide_eq_decide]
+    omega
+  · have h' := mt hiff.mp h
+    simp only [h, h', ↓reduceDIte]
+
+theorem unfinished_take {payloads : List ByteArray} (h : ∀ p ∈ payloads, p.size < 2 ^ 32)
+    (n : Nat) :
+    unfinished ((encode payloads).extract 0 n) (span (payloads.take (whole payloads n)))
+      = true := by
+  induction payloads generalizing n with
+  | nil => simp [whole, span, unfinished]
+  | cons p ps ih =>
+    have hp := h p (by simp)
+    rw [encode_cons, whole]
+    split
+    · rename_i hn
+      rw [ByteArray.extract_append, extract_of_size_le (by simpa using hn), size_one,
+        Nat.zero_sub, List.take_succ_cons]
+      have hspan : span (p :: ps.take (whole ps (n - (8 + p.size))))
+          = (one p).size + span (ps.take (whole ps (n - (8 + p.size)))) := by
+        simp [span]
+      rw [hspan, unfinished_append_right]
+      exact ih (fun q hq => h q (by simp [hq])) _
+    · rename_i hn
+      unfold unfinished
+      split
+      · rename_i h8
+        have hsize : ∀ h', u32At (one p ++ encode ps) 0 h' = p.size := fun _ => by
+          have shape : one p ++ encode ps
+              = u32 p.size ++ (u32 (checksum p).toNat ++ (p ++ encode ps)) := by
+            simp [one, stamped, ByteArray.append_assoc]
+          simp only [shape]
+          exact u32At_u32 _ hp
+        simp only [List.take_zero, span, List.map_nil, List.sum_nil, Nat.zero_add, u32At_extract,
+          hsize, ByteArray.size_extract, decide_eq_true_eq]
+        omega
+      · rfl
 
 end Lanes.Frame

@@ -65,7 +65,7 @@ def clients : Outside stampSig (List Nat × List Nat) where
     | .stamped _ time_ms => (d.1, time_ms :: d.2)
     | .ask _ => d
 
-def world := clients.both (Lanes.Clock.outside port)
+def world := clients.both (Lanes.Clock.outside port) fun x => x matches .stamp ..
 
 instance : stampSig.Inspect := {}
 instance (ahead : Bool) : (stamper ahead).Inspect := {}
@@ -89,11 +89,16 @@ def tests : List (String × Bool) :=
       | some (.violated "no stamp is ahead of the clock" _) => true
       | _ => false) ]
 
+/-- Later than any wall clock will say while this test is of use. -/
+def future : Nat := 99999999999999
+
 def live : Async (List (String × Bool)) := do
   let given ← IO.mkRef 0
   let all ← IO.Promise.new
+  let past : List (Journal.Entry stampSig) := [.input (.time 0 5), .input (.time 1 future), .handed]
+  let clock ← Lanes.Clock.Wall.start (Lanes.Clock.latest port past)
   let rt ← Runtime.startWith stamper { record := true } fun rt out => do
-    Lanes.Clock.handler port rt out
+    Lanes.Clock.handler clock port rt out
     if out matches .stamped .. then
       if (← given.modifyGet fun n => (n + 1, n + 1)) == 20 then all.resolve ()
   for id in [0:20] do rt.input (.stamp id)
@@ -107,6 +112,8 @@ def live : Async (List (String × Bool)) := do
   return [
     ("clock: the real clock does only what its model allows", world.allows events),
     ("clock: every stamp was given, in the order the kernel made them",
-      stamps.length == 20 && stamps.Pairwise (· ≤ ·) && stamps.all (· > 0)) ]
+      stamps.length == 20 && stamps.Pairwise (· ≤ ·) && stamps.all (· > 0)),
+    ("clock: a clock started on a journal gives no time before the last one in it",
+      stamps.all (future ≤ ·)) ]
 
 end Tests.Clock
