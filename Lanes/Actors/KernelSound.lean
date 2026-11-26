@@ -65,14 +65,10 @@ theorem cell_setCell (k : Kernel sys) (i : σ.Id) (c : Cell sys i) :
   · have h' : ¬ i = j := fun h' => h h'.symm
     simp [cell, setCell, Std.DHashMap.get?_insert, h, h']
 
-theorem rest_eq (k : Kernel sys) (i : σ.Id) :
-    k.rest i = if (sys.actor i).fresh (k.cell i).state && (k.cell i).up && (k.cell i).timers.isEmpty
-      then { k with cells := k.cells.erase i } else k := rfl
-
 theorem cell_rest (k : Kernel sys) (i : σ.Id) :
     (k.rest i).cell = k.cell ∨ ((sys.actor i).fresh (k.cell i).state = true ∧ (k.cell i).up = true
       ∧ (k.cell i).timers = [] ∧ (k.rest i).cell = update k.cell i { state := (sys.actor i).init }) := by
-  rw [rest_eq]
+  simp only [rest]
   split
   · rename_i hrest
     simp only [Bool.and_eq_true, List.isEmpty_iff] at hrest
@@ -86,19 +82,19 @@ theorem cell_rest (k : Kernel sys) (i : σ.Id) :
   · exact .inl rfl
 
 @[simp] theorem rest_queue (k : Kernel sys) (i : σ.Id) : (k.rest i).queue = k.queue := by
-  rw [rest_eq]; split <;> rfl
+  simp only [rest]; split <;> rfl
 
 @[simp] theorem rest_agenda (k : Kernel sys) (i : σ.Id) : (k.rest i).agenda = k.agenda := by
-  rw [rest_eq]; split <;> rfl
+  simp only [rest]; split <;> rfl
 
 @[simp] theorem rest_nextToken (k : Kernel sys) (i : σ.Id) : (k.rest i).nextToken = k.nextToken := by
-  rw [rest_eq]; split <;> rfl
+  simp only [rest]; split <;> rfl
 
 @[simp] theorem rest_clock (k : Kernel sys) (i : σ.Id) : (k.rest i).clock_ms = k.clock_ms := by
-  rw [rest_eq]; split <;> rfl
+  simp only [rest]; split <;> rfl
 
 @[simp] theorem rest_timerTurn (k : Kernel sys) (i : σ.Id) : (k.rest i).timerTurn = k.timerTurn := by
-  rw [rest_eq]; split <;> rfl
+  simp only [rest]; split <;> rfl
 
 @[simp] theorem abs_state (k : Kernel sys) (ob : List σ.Out) :
     (k.abs ob).state = fun i => (k.cell i).state := rfl
