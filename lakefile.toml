@@ -10,6 +10,7 @@ rev = "910210f7d155e22a2244591e394bd16fbb0ddbb3"
 
 [[lean_lib]]
 name = "Lanes"
+roots = ["Lanes", "Lanes.Semantics"]
 
 [[lean_lib]]
 name = "Examples"
@@ -21,3 +22,7 @@ globs = ["Tests.+"]
 [[lean_exe]]
 name = "lanesTest"
 root = "Tests.Main"
+
+[[lean_exe]]
+name = "bankWeb"
+root = "Examples.BankWeb"

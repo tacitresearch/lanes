@@ -15,10 +15,10 @@ instance : (sig (Fin 2)).Inspect := {}
 instance : (bank (Fin 2) 2).Inspect := {}
 
 abbrev Bank2 := bank (Fin 2) 2
-abbrev W := World Bank2 (List (Transfer (Fin 2)))
+abbrev W := World Bank2 (List (Request (Fin 2)))
 
-def transfers : List (Transfer (Fin 2)) :=
-  [⟨1, 0, 1, 1⟩, ⟨2, 1, 0, 3⟩, ⟨3, 0, 1, 2⟩]
+def transfers : List (Request (Fin 2)) :=
+  [.transfer ⟨1, 0, 1, 1⟩, .transfer ⟨2, 1, 0, 3⟩, .transfer ⟨3, 0, 1, 2⟩]
 
 def props : List (Check.Property W) :=
   [ .always "money is conserved" fun w => conserved w.state,

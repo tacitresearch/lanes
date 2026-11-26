@@ -33,12 +33,16 @@ The toolchain is pinned in `lean-toolchain` and follows CSLib's. Dependencies ar
 | `Lanes/Actors/` | `Actor`, `Signature`, `Effect`, `System`, the world step function, scheduler, runtime | `Std` only |
 | `Lanes/Data/` | Small data utilities (`Enum`) | `Std` only |
 | `Lanes/Check/` | Model checker | `Std` only |
+| `Lanes/Http/`, `Lanes/Html/` | HTTP requests and responses as data; HTML values and template syntax | `Std` only |
+| `Lanes/Env/` | Adapters to the outside world (HTTP server) | `Std` only |
 | `Lanes/Semantics/` | The semantics as a CSLib `LTS`, refinement | CSLib, Mathlib |
 | `Examples/` | Reference apps, checked and proved | anything |
 | `Tests/` | Regression tests run by `lake test` | anything |
 
-Runtime modules never import Mathlib or CSLib (design decision 5): app binaries stay small and
-compile fast. Only proof modules pay for Mathlib.
+Runtime modules never import Mathlib or CSLib (design decision 5). `import Lanes` is the runtime
+layer and gives a binary of a few megabytes; `import Lanes.Semantics` is the proof layer.
+Importing the proof layer from executable code links all of Mathlib into the binary (over 150 MB),
+and Mathlib's `<i` token breaks `<input>` in templates, so keep views and `main` on `import Lanes`.
 
 ## Conventions
 

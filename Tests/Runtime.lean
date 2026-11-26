@@ -121,7 +121,7 @@ def bankTest : Async (List (String × Bool)) := do
   let rt ← Runtime.start (bank (Fin 3) 100) config fun _ => responses.modify (· + 1)
   let clients := (List.finRange 3).toArray.map fun (k : Fin 3) => (do
     for n in [0:200] do
-      rt.input ⟨k.val * 1000 + n, k, k + 1, n % 7⟩ : Async Unit)
+      rt.input (.transfer ⟨k.val * 1000 + n, k, k + 1, n % 7⟩) : Async Unit)
   discard <| Async.concurrentlyAll clients
   rt.idle
   let balances ← (List.finRange 3).mapM fun a => rt.state a

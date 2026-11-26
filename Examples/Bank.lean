@@ -36,12 +36,22 @@ structure Transfer (A : Type) where
   amount : Nat
   deriving DecidableEq, Repr, Hashable
 
+/-- What the outside may ask of the bank. -/
+inductive Request (A : Type) where
+  /-- Move money between two accounts. -/
+  | transfer (t : Transfer A)
+  /-- Read the balance of an account. -/
+  | balance (req : ReqId) (account : A)
+  deriving DecidableEq, Repr, Hashable
+
 /-- The answer to a transfer request. -/
 inductive Outcome where
   /-- The source account was debited and the credit is on its way. -/
   | accepted
   /-- The source account did not hold enough money. -/
   | insufficient
+  /-- The answer to a balance query. -/
+  | balance (amount : Int)
   deriving DecidableEq, Repr, Hashable
 
 /-- A response to the client that sent request `req`. -/
@@ -56,13 +66,15 @@ inductive Msg (A : Type) where
   | transfer (req : ReqId) (dst : A) (amount : Nat)
   /-- Money arriving from another account. -/
   | credit (amount : Nat)
+  /-- Report this account's balance. -/
+  | query (req : ReqId)
   deriving DecidableEq, Repr, Hashable
 
 /-- The system's interface: one actor per account name, transfers in, responses out. -/
 abbrev sig (A : Type) [DecidableEq A] : Signature where
   Id := A
   Msg _ := Msg A
-  In := Transfer A
+  In := Request A
   Out := Response
 
 /-- The private state of an account. -/
@@ -85,13 +97,17 @@ def account (opening : Nat) (self : A) : (sig A).Actor self Account where
           [.send dst (.credit amount), .emit ⟨req, .accepted⟩])
       else (s, [.emit ⟨req, .insufficient⟩])
     | .credit amount => ({ balance := s.balance + amount }, [])
+    | .query req => (s, [.emit ⟨req, .balance s.balance⟩])
   recover s := (s, [])
 
-/-- The bank: an account behind every name. A transfer request goes to its source account. -/
+/-- The bank: an account behind every name. A transfer request goes to its source account and a balance query
+to the account it asks about. -/
 abbrev bank (A : Type) [DecidableEq A] (opening : Nat) : System (sig A) where
   State _ := Account
   actor := account opening
-  accept t := ⟨t.src, .transfer t.req t.dst t.amount⟩
+  accept
+    | .transfer t => ⟨t.src, .transfer t.req t.dst t.amount⟩
+    | .balance req account => ⟨account, .query req⟩
 
 /-- A balance is never negative. -/
 theorem Account.balance_nonneg (opening : Nat) (self : A) :
@@ -105,6 +121,7 @@ theorem Account.balance_nonneg (opening : Nat) (self : A) :
       simp only [account]
       split <;> simp <;> omega
     | credit amount => simp only [account]; omega
+    | query req => exact h
   · intro s h
     exact h
 
@@ -122,7 +139,7 @@ def total {opening : Nat} (c : SysState (bank A opening)) : Int :=
   ((Enum.all (α := A)).map fun a => (c.state a).balance).sum
     + (c.net.map fun e => match e.msg with
         | .credit amount => (amount : Int)
-        | .transfer .. => 0).sum
+        | .transfer .. | .query _ => 0).sum
 
 /-- Money is conserved: the total is what the accounts opened with. -/
 def conserved {opening : Nat} (c : SysState (bank A opening)) : Bool :=
