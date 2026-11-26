@@ -28,29 +28,17 @@ The search design follows the sequential engine of Veil (verse-lab/veil, Apache-
 The search is written to be proved, not as a loop: a `Check.Search` value is threaded through
 `Search.start` (store the initial states), `Search.run` (expand one stored state per unit of
 fuel) and `Search.report`. `Lanes.Check.SearchSound` proves what a report claims.
-
-## Main definitions
-
-- `Check.Model`: initial states and successors.
-- `Check.Property`: `always` (an invariant) and `sometimes` (a state that must be reachable).
-- `Check.Options`: bounds, state constraint, deadlock checking.
-- `Check.search`: run the search and return a `Check.Report`.
 -/
 
 @[expose] public section
 
 namespace Lanes.Check
 
-/-- A transition system given by executable initial states and successors. -/
 structure Model (S L : Type) where
-  /-- The initial states. -/
   init : List S
-  /-- The successors of a state, each with the label of the step taken. -/
   next : S → List (L × S)
 
-/-- A property of the states of a model. -/
 inductive Property (S : Type) where
-  /-- `p` must hold in every reachable state. -/
   | always (name : String) (p : S → Bool)
   /--
   `p` must hold in some reachable state. Paired with an invariant, this is its vacuity check
@@ -62,7 +50,6 @@ namespace Property
 
 variable {S : Type}
 
-/-- The name of a property. -/
 def name : Property S → String
   | .always n _ | .sometimes n _ => n
 
@@ -71,7 +58,6 @@ def holds : Property S → S → Bool
 
 end Property
 
-/-- Bounds and switches for a search. -/
 structure Options (S : Type) where
   /-- States violating the constraint are dropped: neither counted, checked nor expanded. -/
   constraint : S → Bool := fun _ => true
@@ -82,52 +68,38 @@ structure Options (S : Type) where
   maxStates : Nat := 10000000
   /-- Report a state with no successors as a deadlock, unless `terminal` holds of it. -/
   checkDeadlock : Bool := false
-  /-- States that are allowed to have no successors. -/
   terminal : S → Bool := fun _ => false
 
-/-- A path through a model: an initial state and the steps taken from it. -/
 structure Trace (S L : Type) where
-  /-- The initial state. -/
   init : S
-  /-- Each step's label and the state it leads to. -/
   steps : List (L × S)
 
 namespace Trace
 
 variable {S L : Type}
 
-/-- The last state of a trace. -/
 def last (t : Trace S L) : S :=
   match t.steps.getLast? with
   | some (_, s) => s
   | none => t.init
 
-/-- The labels along a trace. -/
 def labels (t : Trace S L) : List L :=
   t.steps.map (·.1)
 
 end Trace
 
-/-- Why a search failed. -/
 inductive Failure (S L : Type) where
-  /-- An `always` property is false in the last state of the trace. -/
   | violated (property : String) (trace : Trace S L)
-  /-- The last state of the trace has no successors and is not terminal. -/
   | deadlock (trace : Trace S L)
-  /-- These `sometimes` properties hold in no state that was explored. -/
   | unreached (properties : List String)
 
-/-- The result of a search. -/
 structure Report (S L : Type) where
-  /-- The first failure found, if any. -/
   failure : Option (Failure S L)
   /-- A shortest trace to a witness of each `sometimes` property that was reached. -/
   witnesses : List (String × Trace S L)
-  /-- Distinct states seen. -/
   states : Nat
   /-- Transitions taken, counting those that lead to an already seen state. -/
   transitions : Nat
-  /-- The largest depth of a state seen. -/
   depth : Nat
   /-- Whether every reachable state within the constraint was explored. If `false`, a bound
   cut the search short and a passing result covers only the part explored. -/
@@ -139,7 +111,6 @@ namespace Report
 
 variable {S L : Type}
 
-/-- Whether the search found no failure. -/
 def ok (r : Report S L) : Bool :=
   r.failure.isNone
 
