@@ -433,7 +433,8 @@ theorem Projects.leadsTo (h : v.Projects env env') {P Q : SysState sys → Prop}
 /-- What `r'` shows at a position from `f n` on, `r` shows at a position from `n` on. -/
 theorem Sees.shown_after {r : sys.Run env} {r' : sys'.Run env'} {f : ℕ → ℕ} (hsees : v.Sees r r' f)
     {n p : ℕ} (hp : f n ≤ p) {ev' : Event σ'} {x : α} (hev : r'.event p = some ev')
-    (hx : v.shows' ev' = some x) : ∃ m, n ≤ m ∧ ∃ ev, r.event m = some ev ∧ v.shows ev = some x := by
+    (hx : v.shows' ev' = some x) :
+    ∃ m, n ≤ m ∧ ∃ ev, r.event m = some ev ∧ v.shows ev = some x := by
   obtain ⟨m, hm, ev, hev, hshows⟩ := hsees.shown p ev' x hev hx
   exact ⟨m, Nat.lt_succ_iff.mp (hsees.mono.lt_iff_lt.mp (hp.trans_lt hm)), ev, hev, hshows⟩
 

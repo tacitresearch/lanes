@@ -1767,7 +1767,8 @@ private theorem thinLeft_erase_outside (e : Envelope (joinSig σ τ))
     (he : ∀ u, e.left? = some u → u.src = none) :
     ({ c with net := c.net.erase e } : SysState (a.join b w)).thinLeft = c.thinLeft := by
   refine SysState.ext' rfl rfl ?_ rfl rfl
-  show ((c.net.erase e).filterMap Envelope.left?).filter _ = (c.net.filterMap Envelope.left?).filter _
+  show ((c.net.erase e).filterMap Envelope.left?).filter _
+    = (c.net.filterMap Envelope.left?).filter _
   rw [List.filter_filterMap, List.filter_filterMap, filterMap_erase_of_none]
   cases h : e.left? with
   | none => rfl
@@ -1943,7 +1944,8 @@ private theorem mem_timeouts_left {i i' : σ.Id} {msg : σ.Msg i'} (effs : List 
 
 private theorem not_mem_timeouts_inr {i : σ.Id} {j : τ.Id} {msg : σ.Msg i}
     (effs : List (Effect (joinSig σ τ) (.inr j))) :
-    Event.timeout (σ := joinSig σ τ) (.inl i) msg ∉ Effect.timeouts (σ := joinSig σ τ) (.inr j) effs := by
+    Event.timeout (σ := joinSig σ τ) (.inl i) msg ∉
+      Effect.timeouts (σ := joinSig σ τ) (.inr j) effs := by
   simp only [Effect.timeouts, List.mem_filterMap, not_exists, not_and]
   intro eff _
   cases eff <;> simp
@@ -1957,7 +1959,8 @@ structure Wiring.Block (w : Wiring σ τ) (env : EnvModel (joinSig σ τ))
   run : c.thinLeft.run env.left evs = some c'.thinLeft
   shown : evs.filterMap w.shown = ev.leftDeed.toList
   taken : ∀ e, ev.left? = some e → e ∈ evs
-  arms : ∀ i msg, Event.timeout (σ := joinSig σ τ) (.inl i) msg ∈ c.arms ev → ∃ j, ∃ hj : j < evs.length, ∃ d,
+  arms : ∀ i msg, Event.timeout (σ := joinSig σ τ) (.inl i) msg ∈ c.arms ev →
+    ∃ j, ∃ hj : j < evs.length, ∃ d,
     c.thinLeft.run env.left (evs.take j) = some d ∧ Event.timeout i msg ∈ d.arms evs[j]
   near : ∀ j d, c.thinLeft.run env.left (evs.take j) = some d →
     (d.state = c.left.state ∧ d.up = c.left.up) ∨ (d.state = c'.left.state ∧ d.up = c'.left.up)
@@ -1966,7 +1969,8 @@ namespace Wiring.Block
 
 private theorem nil {ev : Event (joinSig σ τ)} (hthin : c'.thinLeft = c.thinLeft)
     (hdeed : ev.leftDeed = none) (hleft : ev.left? = none)
-    (harms : ∀ i msg, Event.timeout (σ := joinSig σ τ) (.inl i) msg ∉ c.arms ev) : Wiring.Block w env c c' ev [] where
+    (harms : ∀ i msg, Event.timeout (σ := joinSig σ τ) (.inl i) msg ∉ c.arms ev) :
+    Wiring.Block w env c c' ev [] where
   run := by rw [hthin]; rfl
   shown := by rw [hdeed]; rfl
   taken e h := by simp [hleft] at h
@@ -2097,7 +2101,8 @@ private theorem outside_main {c₁ : SysState (a.join b w)} {i : σ.Id} {msg : �
     rfl
   exact ⟨_, Wiring.Block.handle (c₁ := c₁) (r := (a.actor i).step (c.state (.inl i)) msg)
     (pre := [.input x]) (mid := []) hx (by simp [Event.quiet]) (by simp [run, hdeliver])
-    (by simp) hc' (fun out hout => hc.left_unwired out (by simpa [SysState.left, houtbox] using hout))
+    (by simp) hc'
+    (fun out hout => hc.left_unwired out (by simpa [SysState.left, houtbox] using hout))
     (by rw [hshown]; rfl) htaken harms⟩
 
 private theorem block_deliver (hc : (a.join b w).Reachable env c) {e : Envelope (joinSig σ τ)}
@@ -2176,7 +2181,8 @@ private theorem block_drop {e : Envelope (joinSig σ τ)} (hstep : c.step env (.
         simp [Envelope.left?, hsrc] at hu; rw [← hu]) rfl rfl hnone⟩
     rcases src with _ | s | j'
     · exact outside rfl
-    · refine ⟨_, .single (e := .drop ⟨some s, i, msg⟩) ?_ rfl (fun e h => by simp [Event.left?] at h)
+    · refine ⟨_, .single (e := .drop ⟨some s, i, msg⟩) ?_ rfl
+        (fun e h => by simp [Event.left?] at h)
         hnone⟩
       exact step_drop.mpr ⟨hlossy, List.mem_filter.mpr ⟨List.mem_filterMap.mpr ⟨_, hmem, rfl⟩, rfl⟩,
         thinLeft_erase_inside⟩
@@ -2191,7 +2197,8 @@ private theorem block_timeout (hc : (a.join b w).Reachable env c) {i : σ.Id ⊕
   | inl i =>
     have hthin : ({ c with timers := update c.timers (.inl i) ((c.timers (.inl i)).erase msg) } :
         SysState (a.join b w)).thinLeft
-        = { c.thinLeft with timers := update c.thinLeft.timers i ((c.thinLeft.timers i).erase msg) } :=
+        = { c.thinLeft with
+            timers := update c.thinLeft.timers i ((c.thinLeft.timers i).erase msg) } :=
       SysState.ext' rfl rfl rfl (update_inl c.timers i _) rfl
     exact inside_main hc (step_timeout (c := c.thinLeft) (env := env.left) |>.mpr
         ⟨hup, hmem, by rw [hthin]; rfl⟩) rfl rfl rfl
@@ -2201,7 +2208,8 @@ private theorem block_timeout (hc : (a.join b w).Reachable env c) {i : σ.Id ⊕
         SysState (a.join b w)).thinLeft = c.thinLeft :=
       SysState.ext' rfl rfl rfl
         (funext fun k => update_inr_inl c.timers j ((c.timers (.inr j)).erase msg) k) rfl
-    exact ⟨[], .nil ((thinLeft_settle_inr _ j ((b.actor j).step (c.state (.inr j)) msg)).trans hthin)
+    exact ⟨[], .nil
+      ((thinLeft_settle_inr _ j ((b.actor j).step (c.state (.inr j)) msg)).trans hthin)
       rfl rfl
       fun i' m => not_mem_timeouts_inr _⟩
 
@@ -2322,7 +2330,8 @@ theorem exists_block (hc : (a.join b w).Reachable env c) {ev : Event (joinSig σ
 /-- The join starts, seen from `a` without the messages from outside, where `a` alone starts
 once it has handed over the outputs the wiring routes to `b`. -/
 theorem init_thinLeft (env : EnvModel (joinSig σ τ)) :
-    ∃ evs, (SysState.init a env.left).run env.left evs = some (SysState.init (a.join b w) env).thinLeft
+    ∃ evs, (SysState.init a env.left).run env.left evs
+        = some (SysState.init (a.join b w) env).thinLeft
       ∧ ∀ ev ∈ evs, ev.quiet = true ∧ w.shown ev = none := by
   have hfold : SysState.init (a.join b w) env
       = b.boot.foldl (fun c j => c.startActor env (.inr j))

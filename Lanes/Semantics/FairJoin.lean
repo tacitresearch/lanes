@@ -14,7 +14,8 @@ public import Lanes.Semantics.Projection
 `SysState.run_left` says that a finite run of `a.join b w`, seen from `a`, is a run of `a` alone
 that shows the same deeds. This file gives the same of fair runs: every fair run of the join is
 seen as a fair run of `a` alone under `EnvModel.left` (`System.Run.Fair.left`), so what `a` alone
-leads to, it leads to in every join (`System.LeadsTo.join_left`).
+leads to, it leads to in every join (`System.LeadsTo.join_left`). The same holds behind hidden
+inputs and outputs (`System.underView_projects`), which is the other half of what `fronted` is.
 
 The view is the thinnest one: the join seen from `a` with the messages from outside in flight
 left out (`SysState.thinLeft`). Alone, `a` is given each message from outside just before the
@@ -37,6 +38,7 @@ join arms it alone, so a wait the join does not start again `a` alone does not e
 
 - `Obligation.inl`: an obligation of `a` alone as one of the join.
 - `Wiring.leftView`: the join seen from `a`.
+- `System.underView`: `sys.filterMapIO input output` seen as `sys`.
 
 ## Main statements
 
@@ -44,6 +46,8 @@ join arms it alone, so a wait the join does not start again `a` alone does not e
 - `System.Run.Fair.left`: a fair run of the join is seen as a fair run of `a` alone, state for
   state at corresponding positions and with the same deeds up to them.
 - `System.LeadsTo.join_left`: leads-to about the actors of `a` holds of `a` in every join.
+- `System.underView_projects`, `System.LeadsTo.filterMapIO`: the same behind other inputs and
+  outputs, when `output` shows different outputs differently.
 -/
 
 @[expose] public section
@@ -64,12 +68,27 @@ def Obligation.inl : Obligation σ → Obligation (joinSig σ τ)
 
 /-- The event that meets an obligation of the join that stands for one of `a` is, seen from `a`,
 the event that meets that one. -/
-theorem Obligation.left?_inl (ob : Obligation σ) : (ob.inl (τ := τ)).event.left? = some ob.event := by
+theorem Obligation.left?_inl (ob : Obligation σ) :
+    (ob.inl (τ := τ)).event.left? = some ob.event := by
   cases ob with
   | deliver e =>
     obtain ⟨src, i, msg⟩ := e
     cases src <;> rfl
   | _ => rfl
+
+/-- The only event of a join that shows `a` handing over an output is that output handed over. -/
+theorem Event.leftDeed_eq_output {ev : Event (joinSig σ τ)} {out : σ.Out}
+    (h : ev.leftDeed = some (.output out)) : ev = .output (.inl out) := by
+  cases ev with
+  | output o =>
+    rcases o with o | o
+    · simp only [Event.leftDeed, Option.some.injEq, Deed.output.injEq] at h
+      rw [h]
+    · simp [Event.leftDeed] at h
+  | deliver e | duplicate e =>
+    obtain ⟨_, i | j, _⟩ := e <;> simp [Event.leftDeed] at h
+  | timeout i msg => rcases i with i | j <;> simp [Event.leftDeed] at h
+  | _ => simp [Event.leftDeed] at h
 
 /-- The join seen from its left system `a`, without the messages from outside in flight: states
 agree on the actors of `a`, and the join's events show the deeds of `a`. -/
@@ -221,7 +240,8 @@ def System.underView (sys : System σ) (input : In → σ.In) (output : σ.Out �
 stands for, then the hidden outputs it emitted handed over. -/
 private theorem underView_block
     (hinj : ∀ o₁ o₂ x, output o₁ = some x → output o₂ = some x → o₁ = o₂)
-    {d d' : SysState (sys.filterMapIO input output)} {c : SysState sys} {ev : Event (σ.withIO In Out)}
+    {d d' : SysState (sys.filterMapIO input output)} {c : SysState sys}
+    {ev : Event (σ.withIO In Out)}
     (hrel : (sys.underView input output).rel d c) (hstep : d.step env ev = some d') :
     ∃ evs c', (sys.underView input output).Block env.under d (some ev) d' c evs c' := by
   obtain ⟨rfl, hshown⟩ := hrel
@@ -333,7 +353,8 @@ theorem System.LeadsTo.filterMapIO
     (h : sys.LeadsTo env.under (fun c => P c.state c.up) fun c => Q c.state c.up) :
     (sys.filterMapIO input output).LeadsTo env (fun d => P d.state d.up)
       fun d => Q d.state d.up :=
-  (System.underView_projects hinj env).leadsTo (fun _ _ hrel hP => by obtain ⟨rfl, -⟩ := hrel; exact hP)
+  (System.underView_projects hinj env).leadsTo
+    (fun _ _ hrel hP => by obtain ⟨rfl, -⟩ := hrel; exact hP)
     (fun _ _ ⟨hstate, hup⟩ hQ => hstate ▸ hup ▸ hQ) h
 
 end Hidden

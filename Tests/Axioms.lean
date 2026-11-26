@@ -131,6 +131,42 @@ by `lake build`, not linked into the test executable.
 /-- info: 'Lanes.Http.kernel_fronted_answered_le_arrived' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.kernel_fronted_answered_le_arrived
 
+/-- info: 'Lanes.SysState.exists_block' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SysState.exists_block
+
+/-- info: 'Lanes.System.View.Projects.fair_run' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.View.Projects.fair_run
+
+/-- info: 'Lanes.System.View.Projects.leadsTo' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.View.Projects.leadsTo
+
+/-- info: 'Lanes.Wiring.leftView_projects' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Wiring.leftView_projects
+
+/-- info: 'Lanes.System.Run.Fair.left' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Run.Fair.left
+
+/-- info: 'Lanes.System.LeadsTo.join_left' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.LeadsTo.join_left
+
+/-- info: 'Lanes.System.underView_projects' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.underView_projects
+
+/-- info: 'Lanes.System.LeadsTo.filterMapIO' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.LeadsTo.filterMapIO
+
+/-- info: 'Lanes.Http.Gate.pending_leaves' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Gate.pending_leaves
+
+/-- info: 'Lanes.Http.Gate.pending_answered' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Gate.pending_answered
+
+/-- info: 'Lanes.Http.fronted_pending_leaves' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.fronted_pending_leaves
+
+/-- info: 'Lanes.Http.fronted_pending_answered' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.fronted_pending_answered
+
 /-- info: 'Lanes.Http.Route.match?_link' depends on axioms: [propext, Classical.choice] -/
 #guard_msgs in #print axioms Lanes.Http.Route.match?_link
 
