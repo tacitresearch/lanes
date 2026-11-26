@@ -10,7 +10,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Area | Definitions | proved | trusted | checked | tested | spec | none |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `Lanes/Actors` | 334 | 167 | 10 | 36 | 19 | 78 | 24 |
+| `Lanes/Actors` | 334 | 168 | 10 | 36 | 19 | 78 | 23 |
 | `Lanes/Auth` | 27 | 7 | 0 | 0 | 16 | 1 | 3 |
 | `Lanes/Behaviours` | 8 | 8 | 0 | 0 | 0 | 0 | 0 |
 | `Lanes/Check` | 91 | 54 | 0 | 25 | 0 | 10 | 2 |
@@ -18,9 +18,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Env` | 24 | 0 | 24 | 0 | 0 | 0 | 0 |
 | `Lanes/Html` | 42 | 2 | 0 | 0 | 28 | 0 | 12 |
 | `Lanes/Http` | 141 | 72 | 1 | 9 | 33 | 12 | 14 |
-| `Lanes/Semantics` | 42 | 10 | 0 | 0 | 0 | 29 | 3 |
+| `Lanes/Semantics` | 53 | 12 | 0 | 0 | 0 | 38 | 3 |
 | `LanesCli` | 102 | 0 | 0 | 0 | 18 | 0 | 84 |
-| All | 1024 | 377 | 40 | 74 | 227 | 133 | 173 |
+| All | 1035 | 380 | 40 | 74 | 227 | 142 | 172 |
 
 ## `Lanes/Actors/Actor.lean`
 
@@ -340,7 +340,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `SysState.grow` | proved | `SysState.Loses.settle`, `SysState.mem_seen_grow_of_mem`, `System.Inductive.of_monotone` and 3 more |
+| `SysState.grow` | proved | `Account.Moves.grow`, `Account.Moves.handle`, `Account.implements` and 7 more |
 | `SysState.Pending` | spec | a predicate |
 
 ## `Lanes/Actors/Outside.lean`
@@ -365,7 +365,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Effect.sends` | none |  |
+| `Effect.sends` | proved | `Account.Moves.grow`, `Account.Moves.handle` |
 | `Effect.armed` | none |  |
 | `Effect.emits` | none |  |
 | `Effect.retime` | spec | used only in statements |
@@ -492,7 +492,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Effect.isStop` | none |  |
 | `Effect.instDecidableEq` | proved | its type, `Decidable` |
-| `Envelope.instDecidableEq` | proved | `System.Refines.of_steps` |
+| `Envelope.instDecidableEq` | proved | `Account.Moves.handle`, `Account.implements`, `System.Refines.of_events` and 3 more |
 | `Envelope.sameLink` | none |  |
 | `Link.reliable` | proved | `Examples.Watchdog.exists_fair_run_never_barks`, `Examples.Watchdog.impatient_barks` |
 | `Link.network` | checked | `Tests/Bank.lean`, `Tests/Election.lean`, `Tests/Join.lean` and 1 more |
@@ -504,20 +504,20 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `update` | proved | through `SysState.init`, `SysState.run` and 3 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 33 more |
+| `update` | proved | through `SysState.down`, `SysState.init` and 4 more: `Account.implements`, `Check.system_violated` and 36 more |
 | `Event.timed` | spec | used only in statements |
 | `Event.visible` | spec | used only in statements |
 | `SysState.blank` | proved | `System.Inductive.of_monotone`, `System.Monotone.and` |
 | `SysState.hasMail` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 25 more |
-| `SysState.perform` | proved | through `SysState.init`, `SysState.run` and 3 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 33 more |
-| `SysState.performAll` | proved | through `SysState.init`, `SysState.run` and 3 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 33 more |
-| `SysState.down` | proved | through `SysState.init`, `SysState.run` and 3 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 33 more |
+| `SysState.perform` | proved | through `SysState.init`, `SysState.run` and 3 more: `Account.implements`, `Check.system_violated` and 35 more |
+| `SysState.performAll` | proved | through `SysState.init`, `SysState.run` and 3 more: `Account.implements`, `Check.system_violated` and 35 more |
+| `SysState.down` | proved | `Account.implements`, `System.Refines.of_events`, `linkMsgs_down` |
 | `SysState.settle` | proved | `SysState.Loses.settle` |
 | `SysState.handle` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 25 more |
-| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and 2 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 32 more |
-| `SysState.deliverable` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 25 more |
+| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and 2 more: `Account.implements`, `Check.system_violated` and 34 more |
+| `SysState.deliverable` | proved | `Account.implements`, `System.Refines.of_events`, `linkMsgs_of_deliverable` |
 | `SysState.step` | proved | `Http.Gate.answered_of_leaves`, `Http.Gate.deadline_not_restarted`, `Shards.AtHome.step` and 7 more |
-| `SysState.init` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and 16 more |
+| `SysState.init` | proved | `Account.implements`, `Check.system_violated`, `Http.Gate.answered_le_handled` and 18 more |
 | `SysState.run` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and 13 more |
 | `System.Invariant` | spec | a predicate |
 
@@ -1292,6 +1292,17 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Response.wireAfter` | proved | `Http.Response.read_wireAfter`, `Http.Response.read_wireAfter_extract` |
 | `Http.Response.wireToEnd` | proved | `Http.Response.read_wireToEnd`, `Http.Response.read_wireToEnd_open` |
 
+## `Lanes/Semantics/Account.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Service.run` | spec | used only in statements |
+| `Account.pending` | proved | `Account.Moves.of_le` |
+| `Account.owed` | proved | `Account.Moves.of_le` |
+| `Account.Sim` | spec | a predicate |
+| `Account.Moves` | spec | a predicate |
+| `Account.Handles` | spec | a predicate |
+
 ## `Lanes/Semantics/FairJoin.lean`
 
 | Definition | Status | Evidence |
@@ -1311,6 +1322,13 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `System.fairChoice` | spec | used only in statements |
 | `System.fairSchedule` | spec | used only in statements |
 | `System.Run.fairAfter` | spec | used only in statements |
+
+## `Lanes/Semantics/Link.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Envelope.on` | spec | used only in statements |
+| `linkMsgs` | spec | used only in statements |
 
 ## `Lanes/Semantics/Liveness.lean`
 
@@ -1363,7 +1381,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Spec.lts` | proved | `Check.Monitor.complete`, `Check.Monitor.ok_iff`, `Check.Monitor.sound` and 6 more |
+| `Spec.lts` | proved | `Check.Monitor.complete`, `Check.Monitor.ok_iff`, `Check.Monitor.sound` and 8 more |
 | `Spec.Reachable` | spec | a predicate |
 | `Spec.Invariant` | spec | a predicate |
 | `Refines` | spec | a predicate |
@@ -1372,10 +1390,18 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Service.spec` | proved | `Check.Monitor.complete`, `Check.Monitor.ok_iff`, `Check.Monitor.sound` and 1 more |
+| `Service.spec` | proved | `Check.Monitor.complete`, `Check.Monitor.ok_iff`, `Check.Monitor.sound` and 2 more |
 | `Service.Stable` | spec | a predicate |
+| `Service.Only` | spec | a predicate |
+| `Service.Took` | spec | a predicate |
 | `System.Implements` | spec | a predicate |
 | `Server.abs` | spec | used only in statements |
+
+## `Lanes/Semantics/Simulation.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `System.Stops` | spec | a predicate |
 
 ## `Lanes/Semantics/System.lean`
 

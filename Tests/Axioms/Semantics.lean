@@ -13,6 +13,15 @@ import Lanes.Semantics
 /-- info: 'Lanes.Account.implements' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Account.implements
 
+/-- info: 'Lanes.Account.Moves.of_le' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Account.Moves.of_le
+
+/-- info: 'Lanes.Account.Moves.handle' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Account.Moves.handle
+
+/-- info: 'Lanes.Account.Moves.grow' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Account.Moves.grow
+
 -- Lanes.Semantics.FairJoin
 /-- info: 'Lanes.Wiring.leftView_projects' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Wiring.leftView_projects
@@ -70,6 +79,16 @@ import Lanes.Semantics
 /-- info: 'Lanes.Http.served_pending_answered' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.served_pending_answered
 
+-- Lanes.Semantics.Link
+/-- info: 'Lanes.linkMsgs_of_deliverable' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Lanes.linkMsgs_of_deliverable
+
+/-- info: 'Lanes.linkMsgs_erase_self' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Lanes.linkMsgs_erase_self
+
+/-- info: 'Lanes.linkMsgs_down' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.linkMsgs_down
+
 -- Lanes.Semantics.Liveness
 /-- info: 'Lanes.System.LeadsTo.ensures_of_invariant' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.LeadsTo.ensures_of_invariant
@@ -126,6 +145,10 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Refines.traces' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Refines.traces
+
+-- Lanes.Semantics.Sent
+/-- info: 'Lanes.System.traced' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.traced
 
 -- Lanes.Semantics.Service
 /-- info: 'Lanes.Server.implements' depends on axioms: [propext, Classical.choice, Quot.sound] -/
