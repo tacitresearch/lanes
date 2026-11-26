@@ -173,9 +173,30 @@ install_elan() {
 }
 
 # Jobs run as the runner user; with the instance's credentials they could read TOKEN_SECRET.
+# The rule does not survive a reboot, so a unit puts it back before the network is up, and each
+# runner's service requires that unit: after any boot, no job runs before the rule is there.
 block_metadata() {
-  local rule=(OUTPUT -d 169.254.169.254 -m owner --uid-owner "$RUNNER_USER" -j REJECT)
-  iptables -C "${rule[@]}" 2>/dev/null || iptables -A "${rule[@]}"
+  local rule="OUTPUT -d 169.254.169.254 -m owner --uid-owner $RUNNER_USER -j REJECT"
+  # shellcheck disable=SC2086
+  iptables -C $rule 2>/dev/null || iptables -A $rule
+  printf '%s\n' '[Unit]' \
+    "Description=Keep the Lanes runners' jobs from the instance's credentials" \
+    'DefaultDependencies=no' 'Before=network-pre.target' 'Wants=network-pre.target' \
+    '[Service]' 'Type=oneshot' 'RemainAfterExit=yes' \
+    "ExecStart=/bin/sh -c 'iptables -C $rule 2>/dev/null || iptables -A $rule'" \
+    '[Install]' 'WantedBy=sysinit.target' >/etc/systemd/system/lanes-block-metadata.service
+  systemctl daemon-reload
+  systemctl enable lanes-block-metadata.service
+}
+
+# The service of the runner in $1 starts only after the rule is in place, and not if it failed.
+order_after_block() {
+  local unit
+  unit=$(cat "$1/.service")
+  mkdir -p "/etc/systemd/system/$unit.d"
+  printf '%s\n' '[Unit]' 'Requires=lanes-block-metadata.service' \
+    'After=lanes-block-metadata.service' >"/etc/systemd/system/$unit.d/lanes.conf"
+  systemctl daemon-reload
 }
 
 setup_runners() {
@@ -208,7 +229,9 @@ setup_runners() {
     for kv in "ELAN_HOME=$ELAN_DIR" "LANES_SHARED=$SHARED"; do
       grep -qx "$kv" "$dir/.env" 2>/dev/null || echo "$kv" >>"$dir/.env"
     done
-    (cd "$dir" && { [ -f .service ] || ./svc.sh install "$RUNNER_USER"; } && ./svc.sh start)
+    (cd "$dir" && { [ -f .service ] || ./svc.sh install "$RUNNER_USER"; })
+    order_after_block "$dir"
+    (cd "$dir" && ./svc.sh start)
   done
   say "$count runners labelled $LABELS for $REPO"
 }

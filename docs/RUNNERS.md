@@ -51,6 +51,12 @@ drops runners that have been offline for 14 days).
 
 ## How it works
 
+The role trusts a token whose subject names the repository by its ids as well as its name:
+GitHub writes it `repo:tacitresearch@316370654/lanes@1472755265:ref:refs/heads/main`, so a
+repository made later under the same name cannot assume the role. The stack's `GitHubOwnerId`
+and `GitHubRepositoryId` are those ids; another repository's are the `repository_owner_id` and
+`repository_id` claims of its tokens.
+
 `mutants.yml` decides where to run in its first job (`.github/actions/runner`):
 
 | Variables set | Route | Jobs run on |
