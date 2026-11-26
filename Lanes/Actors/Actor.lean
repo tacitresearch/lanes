@@ -38,7 +38,7 @@ structure Actor (S Msg Eff : Type) where
   /--
   States that starting the actor anew gives, with nothing to do. An actor in one of them, with
   no timers, can be released from memory, since starting it again gives it back
-  (`docs/decisions/new-release-actors-at-rest.md`). The default declares none.
+  (`docs/decisions/D51-release-actors-at-rest.md`). The default declares none.
   -/
   fresh : S → Bool := fun _ => false
   fresh_recover : ∀ s, fresh s = true → recover init = (s, []) := by

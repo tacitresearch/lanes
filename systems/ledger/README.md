@@ -175,7 +175,7 @@ round of framework work is planned from this.
 - **Releasing idle actors**: an actor declares the states a start gives it (`Actor.fresh`), and
   the kernel drops one that is in such a state with no timers once it has handled a message,
   proved to change nothing anyone can see (`Kernel.exec_visible`,
-  `docs/decisions/new-release-actors-at-rest.md`). `user n` declares its vacant state, which a
+  `docs/decisions/D51-release-actors-at-rest.md`). `user n` declares its vacant state, which a
   log-in for an unknown name leaves as it is, so twenty thousand guesses leave the kernel
   holding the ledger alone (`Release.lean`, checked when it is built).
 

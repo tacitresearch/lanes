@@ -152,5 +152,49 @@ theorem forall_of_takeWhile_length {p : α → Bool} : ∀ {l : List α},
       · exact hy
       · exact forall_of_takeWhile_length h x hx
     · simp [hy] at h
+theorem mem_intercalate {sep : List α} {ls : List (List α)} {x : α}
+    (h : x ∈ sep.intercalate ls) : x ∈ sep ∨ ∃ l ∈ ls, x ∈ l := by
+  match ls with
+  | [] => cases h
+  | [l] => exact .inr ⟨l, by simp, by simpa using h⟩
+  | l :: l' :: rest =>
+    rw [List.intercalate_cons_cons] at h
+    simp only [List.mem_append] at h
+    rcases h with (h | h) | h
+    · exact .inr ⟨l, by simp, h⟩
+    · exact .inl h
+    · rcases mem_intercalate h with h | ⟨m, hm, hx⟩
+      · exact .inl h
+      · exact .inr ⟨m, List.mem_cons_of_mem _ hm, hx⟩
+
+theorem mem_intercalate_of_two_le {sep : List α} {ls : List (List α)} {x : α} (hx : x ∈ sep)
+    (h : 2 ≤ ls.length) : x ∈ sep.intercalate ls := by
+  match ls, h with
+  | l :: l' :: rest, _ => rw [List.intercalate_cons_cons]; simp [hx]
+
+theorem takeWhile_beq_eq_replicate [BEq α] [LawfulBEq α] (a : α) (l : List α) :
+    l.takeWhile (· == a) = List.replicate (l.takeWhile (· == a)).length a := by
+  induction l with
+  | nil => rfl
+  | cons x l ih =>
+    by_cases h : x = a
+    · subst h; simp only [List.takeWhile_cons, beq_self_eq_true, ite_true, List.length_cons,
+        List.replicate_succ]
+      exact congrArg _ ih
+    · simp [h]
+
+theorem takeWhile_append_of_forall {p : α → Bool} {l₁ l₂ : List α} (h : ∀ x ∈ l₁, p x = true) :
+    (l₁ ++ l₂).takeWhile p = l₁ ++ l₂.takeWhile p := by
+  induction l₁ with
+  | nil => rfl
+  | cons x l ih =>
+    simp [h x (by simp), ih fun y hy => h y (by simp [hy])]
+
+theorem dropWhile_append_of_forall {p : α → Bool} {l₁ l₂ : List α} (h : ∀ x ∈ l₁, p x = true) :
+    (l₁ ++ l₂).dropWhile p = l₂.dropWhile p := by
+  induction l₁ with
+  | nil => rfl
+  | cons x l ih =>
+    simp [h x (by simp), ih fun y hy => h y (by simp [hy])]
 
 end Lanes

@@ -33,7 +33,7 @@ jobs:
         with:
           runner: ${{ vars.LANES_RUNNER }}
 
-  # Order follows LANES_STYLE section 6: build, lint, model checks and tests.
+  # Order follows AGENTS.md, "Build and checks": build, lint, model checks and tests.
   compile:
     needs: runner
     runs-on: ${{ fromJSON(needs.runner.outputs.label) }}
@@ -76,6 +76,22 @@ jobs:
       - uses: ./.github/actions/lean
       - name: Model checks
         run: lake exe lanesCheck
+
+  oracle:
+    needs: [runner, compile]
+    runs-on: ${{ fromJSON(needs.runner.outputs.label) }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          clean: false
+      - uses: ./.github/actions/lean
+      # Our parsers against Go's standard library on generated inputs; Go fetches the toolchain
+      # `oracle/go.mod` pins. It fails only on a difference no decision covers.
+      - name: Against Go, fixed seed
+        run: lake exe lanesOracle --cases 20000
+      - name: Against Go, a new seed each run
+        run: lake exe lanesOracle --cases 20000 --seed ${{ github.run_id }}
 
   test:
     needs: [runner, compile]
@@ -158,7 +174,7 @@ jobs:
   # The one check branch protection requires. A job that is skipped counts as passed there, so
   # this job always runs and fails unless every job before it succeeded.
   build:
-    needs: [runner, compile, check, test, raft-kv, ledger]
+    needs: [runner, compile, check, oracle, test, raft-kv, ledger]
     if: always()
     runs-on: ubuntu-latest
     steps:

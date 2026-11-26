@@ -14,13 +14,13 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Auth` | 27 | 7 | 0 | 0 | 16 | 1 | 3 |
 | `Lanes/Behaviours` | 8 | 8 | 0 | 0 | 0 | 0 | 0 |
 | `Lanes/Check` | 91 | 54 | 0 | 25 | 0 | 10 | 2 |
-| `Lanes/Data` | 213 | 57 | 5 | 4 | 113 | 3 | 31 |
+| `Lanes/Data` | 324 | 153 | 5 | 4 | 120 | 11 | 31 |
 | `Lanes/Env` | 24 | 0 | 24 | 0 | 0 | 0 | 0 |
 | `Lanes/Html` | 42 | 2 | 0 | 0 | 28 | 0 | 12 |
 | `Lanes/Http` | 176 | 100 | 1 | 9 | 35 | 17 | 14 |
 | `Lanes/Semantics` | 42 | 10 | 0 | 0 | 0 | 29 | 3 |
-| `LanesCli` | 102 | 0 | 0 | 0 | 18 | 0 | 84 |
-| All | 1064 | 408 | 40 | 74 | 229 | 140 | 173 |
+| `LanesCli` | 108 | 0 | 0 | 0 | 24 | 0 | 84 |
+| All | 1181 | 504 | 40 | 74 | 242 | 148 | 173 |
 
 ## `Lanes/Actors/Actor.lean`
 
@@ -727,6 +727,59 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Event.isInternal` | none |  |
 | `World.quiet` | spec | used only in statements |
 
+## `Lanes/Data/Base64.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Base64.Alphabet.last` | proved | through `Base64.decode`, `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 4 more |
+| `Base64.Alphabet.code` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 2 more |
+| `Base64.Alphabet.char` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 2 more |
+| `Base64.Alphabet.valueOf` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
+| `Base64.Alphabet.value?` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
+| `Base64.Encoding.std` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
+| `Base64.Encoding.rawStd` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
+| `Base64.Encoding.url` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
+| `Base64.Encoding.rawUrl` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
+| `Base64.sextet` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 2 more |
+| `Base64.byte` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
+| `Base64.pad` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 2 more |
+| `Base64.encodeList` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 2 more |
+| `Base64.full` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
+| `Base64.tail1` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
+| `Base64.tail2` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
+| `Base64.decodeList` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
+| `Base64.encode` | proved | `Base64.allowed_of_mem_encode`, `Base64.decode_encode`, `Base64.decode_eq_some_iff` and 1 more |
+| `Base64.decode` | proved | `Base64.decode_encode`, `Base64.decode_eq_none_of_length`, `Base64.decode_eq_none_of_not_allowed` and 1 more |
+| `Base64.Encoding.Allowed` | spec | a predicate |
+| `Base64.encodedLength` | proved | `Base64.decode_eq_none_of_length`, `Base64.length_encode` |
+
+## `Lanes/Data/Civil.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Civil.isLeap` | proved | through `Civil.Date.toDays`, `Civil.DateTime` and 1 more: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 3 more |
+| `Civil.daysInMonth` | proved | through `Civil.Date.toDays`, `Civil.DateTime` and 1 more: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 3 more |
+| `Civil.Valid` | spec | a predicate |
+| `Civil.instDecidableValid` | proved | its type, `Decidable` |
+| `Civil.Date.mk?` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Time.lean` |
+| `Civil.marchMonth` | proved | through `Civil.Date.toDays`, `Civil.DateTime.toUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 2 more |
+| `Civil.ofMarchMonth` | proved | through `Civil.Date.ofDays`, `Civil.DateTime.ofUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 2 more |
+| `Civil.daysBefore` | proved | through `Civil.Date.toDays`, `Civil.DateTime.toUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 2 more |
+| `Civil.marchLength` | spec | used only in statements |
+| `Civil.dayOfEra` | proved | through `Civil.Date.toDays`, `Civil.DateTime.toUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 2 more |
+| `Civil.daysFrom` | proved | through `Civil.Date.toDays`, `Civil.DateTime.toUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 2 more |
+| `Civil.Date.toDays` | proved | `Civil.ofDays_toDays`, `Civil.toDays_ofDays` |
+| `Civil.yearOfEra` | proved | through `Civil.Date.ofDays`, `Civil.DateTime.ofUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 2 more |
+| `Civil.civilOf` | proved | through `Civil.Date.ofDays`, `Civil.DateTime.ofUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 2 more |
+| `Civil.civil` | proved | through `Civil.Date.ofDays`, `Civil.DateTime.ofUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 2 more |
+| `Civil.LongYear` | spec | a predicate |
+| `Civil.Date.ofDays` | proved | `Civil.ofDays_toDays`, `Civil.toDays_ofDays` |
+| `Civil.Date.weekday` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Time.lean` |
+| `Civil.TimeOfDay.seconds` | proved | through `Civil.DateTime.toUnix`: `Civil.ofUnix_toUnix`, `Civil.toUnix_ofUnix` |
+| `Civil.TimeOfDay.ofSeconds` | proved | through `Civil.DateTime.ofUnix`: `Civil.ofUnix_toUnix`, `Civil.toUnix_ofUnix` |
+| `Civil.DateTime.toUnix` | proved | `Civil.ofUnix_toUnix`, `Civil.toUnix_ofUnix` |
+| `Civil.DateTime.ofUnix` | proved | `Civil.ofUnix_toUnix`, `Civil.toUnix_ofUnix` |
+
 ## `Lanes/Data/Codec.lean`
 
 | Definition | Status | Evidence |
@@ -785,6 +838,22 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Declare.independent` | none |  |
 | `Declare.enum` | none |  |
 
+## `Lanes/Data/Digits.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Digits.join` | proved | `Digits.join_split` |
+| `Digits.split` | proved | `Digits.join_split` |
+| `Digits.digits` | proved | through `Digits.toChars`: `Digits.head_toChars`, `Digits.ofChars?_toChars` |
+| `Digits.char` | proved | through `Digits.fixed`, `Digits.toChars`: `Digits.head_toChars`, `Digits.ofChars?_fixed` and 1 more |
+| `Digits.valueOf` | proved | through `Digits.ofChars?`: `Digits.ofChars?_fixed`, `Digits.ofChars?_toChars` |
+| `Digits.value?` | proved | through `Digits.ofChars?`: `Digits.ofChars?_fixed`, `Digits.ofChars?_toChars` |
+| `Digits.lower` | spec | used only in statements |
+| `Digits.values?` | proved | through `Digits.ofChars?`: `Digits.ofChars?_fixed`, `Digits.ofChars?_toChars` |
+| `Digits.ofChars?` | proved | `Digits.ofChars?_fixed`, `Digits.ofChars?_toChars` |
+| `Digits.toChars` | proved | `Digits.head_toChars`, `Digits.ofChars?_toChars` |
+| `Digits.fixed` | proved | `Digits.ofChars?_fixed` |
+
 ## `Lanes/Data/Enum.lean`
 
 | Definition | Status | Evidence |
@@ -834,19 +903,52 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Hmac.Pads.of` | tested | `Tests/Crypto.lean` |
 | `Hmac.reference` | tested | `Tests/Crypto.lean` |
 | `Bytes.sameReference` | tested | `Tests/Crypto.lean` |
-| `Bytes.hexDigit` | tested | `Tests/Crypto.lean` |
-| `Bytes.hex` | tested | `Tests/Crypto.lean` |
-| `Bytes.nibble?` | tested | `Tests/Crypto.lean` |
-| `Bytes.unhexList` | tested | `Tests/Crypto.lean` |
-| `Bytes.unhex?` | tested | `Tests/Crypto.lean` |
+| `Bytes.hexDigit` | tested | `Tests/Crypto.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` and 1 more |
+| `Bytes.hex` | tested | `Tests/Crypto.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` and 1 more |
+| `Bytes.nibble?` | tested | `Tests/Crypto.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Bytes.unhexList` | tested | `Tests/Crypto.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Bytes.unhex?` | tested | `Tests/Crypto.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+
+## `Lanes/Data/Ip.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Ip.octet?` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
+| `Ip.parse4` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
+| `Ip.print4` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 2 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 3 more |
+| `Ip.hexGroup?` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
+| `Ip.groups?` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
+| `Ip.expand` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
+| `Ip.fields?` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
+| `Ip.parse6` | proved | through `Ip.Prefix.parse`, `Ip.parse`: `Ip.Prefix.parse_print`, `Ip.parse_print` |
+| `Ip.parse` | proved | `Ip.parse_print` |
+| `Ip.zeroRun` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
+| `Ip.runAt` | proved | `Ip.longestZeroRun_none`, `Ip.longestZeroRun_some` |
+| `Ip.longestZeroRun` | proved | `Ip.longestZeroRun_none`, `Ip.longestZeroRun_some` |
+| `Ip.withEllipsis` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 2 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 3 more |
+| `Ip.hexFields` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 2 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 3 more |
+| `Ip.fields` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 2 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 3 more |
+| `Ip.mappedPrefix` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 2 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 3 more |
+| `Ip.print6` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 2 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 3 more |
+| `Ip.print` | proved | `Ip.parse_print` |
+| `Ip.Found` | spec | a predicate |
+| `Ip.Addr.width` | proved | `Ip.Prefix.contains_iff` |
+| `Ip.Addr.toNat` | spec | used only in statements |
+| `Ip.mask` | proved | through `Ip.Prefix.contains`, `Ip.Prefix.masked`: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 1 more |
+| `Ip.Addr.masked` | proved | through `Ip.Prefix.contains`, `Ip.Prefix.masked`: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 1 more |
+| `Ip.Prefix.masked` | proved | `Ip.Prefix.contains_masked`, `Ip.Prefix.masked_masked` |
+| `Ip.Prefix.contains` | proved | `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` |
+| `Ip.Prefix.print` | proved | `Ip.Prefix.parse_print` |
+| `Ip.decimal?` | proved | through `Ip.Prefix.parse`: `Ip.Prefix.parse_print` |
+| `Ip.Prefix.parse` | proved | `Ip.Prefix.parse_print` |
 
 ## `Lanes/Data/Json/Basic.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `JsonNumber.ofDecimal` | tested | `Tests/Json.lean` |
-| `JsonNumber.fromInt` | tested | `Tests/Json.lean` |
-| `JsonNumber.fromNat` | tested | `Tests/Json.lean` |
+| `JsonNumber.ofDecimal` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` and 1 more |
+| `JsonNumber.fromInt` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` and 1 more |
+| `JsonNumber.fromNat` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` and 1 more |
 | `JsonNumber.ofScientific` | tested | `Tests/Json.lean` |
 | `JsonNumber.instCoeNat` | none |  |
 | `JsonNumber.instCoeInt` | none |  |
@@ -855,8 +957,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `JsonNumber.instOfScientific` | tested | `Tests/Json.lean` |
 | `JsonNumber.instNeg` | tested | `Tests/Json.lean` |
 | `JsonNumber.instHashable` | tested | `Tests/Json.lean` |
-| `JsonNumber.toInt?` | tested | `Tests/Json.lean` |
-| `JsonNumber.toNat?` | tested | `Tests/Json.lean` |
+| `JsonNumber.toInt?` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Time.lean` |
+| `JsonNumber.toNat?` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Time.lean` |
 | `JsonNumber.maxLeadingZeros` | none |  |
 | `JsonNumber.toString` | none |  |
 | `JsonNumber.instToString` | none |  |
@@ -877,22 +979,22 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Json.instCoeString` | none |  |
 | `Json.instCoeBool` | none |  |
 | `Json.instOfNat` | tested | `Tests/Json.lean` |
-| `Json.sortFields` | tested | `Tests/Json.lean` |
-| `Json.dedupFields` | tested | `Tests/Json.lean` |
-| `Json.duplicateKey?` | tested | `Tests/Json.lean` |
-| `Json.mkObj` | tested | `Tests/Json.lean` |
-| `Json.mkObj?` | tested | `Tests/Json.lean` |
+| `Json.sortFields` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` and 2 more |
+| `Json.dedupFields` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` and 2 more |
+| `Json.duplicateKey?` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.mkObj` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` and 2 more |
+| `Json.mkObj?` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
 | `Json.isNull` | tested | `Tests/Json.lean` |
-| `Json.getObj?` | tested | `Tests/Json.lean` |
+| `Json.getObj?` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` and 1 more |
 | `Json.getArr?` | tested | `Tests/Json.lean` |
-| `Json.getStr?` | tested | `Tests/Json.lean` |
-| `Json.getNum?` | tested | `Tests/Json.lean` |
-| `Json.getNat?` | tested | `Tests/Json.lean` |
-| `Json.getInt?` | tested | `Tests/Json.lean` |
-| `Json.getBool?` | tested | `Tests/Json.lean` |
-| `Json.getObjVal?` | tested | `Tests/Json.lean` |
+| `Json.getStr?` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.getNum?` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Time.lean` |
+| `Json.getNat?` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Time.lean` |
+| `Json.getInt?` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Time.lean` |
+| `Json.getBool?` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.getObjVal?` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` and 1 more |
 | `Json.getArrVal?` | tested | `Tests/Json.lean` |
-| `Json.getObjValD` | tested | `Tests/Json.lean` |
+| `Json.getObjValD` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` and 1 more |
 
 ## `Lanes/Data/Json/Classes.lean`
 
@@ -929,43 +1031,43 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Json.Parser.fail` | tested | `Tests/Json.lean` |
-| `Json.Parser.next?` | tested | `Tests/Json.lean` |
-| `Json.Parser.accept` | tested | `Tests/Json.lean` |
-| `Json.Parser.skipWsFrom` | tested | `Tests/Json.lean` |
-| `Json.Parser.skipWs` | tested | `Tests/Json.lean` |
-| `Json.Parser.acceptAll` | tested | `Tests/Json.lean` |
-| `Json.Parser.hexDigit?` | tested | `Tests/Json.lean` |
-| `Json.Parser.hexDigit` | tested | `Tests/Json.lean` |
-| `Json.Parser.hex4` | tested | `Tests/Json.lean` |
-| `Json.Parser.lowSurrogate` | tested | `Tests/Json.lean` |
-| `Json.Parser.escape` | tested | `Tests/Json.lean` |
-| `Json.Parser.strFrom` | tested | `Tests/Json.lean` |
-| `Json.Parser.str` | tested | `Tests/Json.lean` |
-| `Json.Parser.digitsFrom` | tested | `Tests/Json.lean` |
-| `Json.Parser.whole` | tested | `Tests/Json.lean` |
-| `Json.Parser.fraction` | tested | `Tests/Json.lean` |
-| `Json.Parser.exponent` | tested | `Tests/Json.lean` |
-| `Json.Parser.num` | tested | `Tests/Json.lean` |
-| `Json.Parser.literal` | tested | `Tests/Json.lean` |
-| `Json.Parser.key` | tested | `Tests/Json.lean` |
-| `Json.Parser.value` | tested | `Tests/Json.lean` |
+| `Json.Parser.fail` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.next?` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.accept` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.skipWsFrom` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.skipWs` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.acceptAll` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.hexDigit?` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.hexDigit` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.hex4` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.lowSurrogate` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.escape` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.strFrom` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.str` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.digitsFrom` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.whole` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.fraction` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.exponent` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.num` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.literal` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.key` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.value` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
 | `Json.Parser.elements` | spec | used only in statements |
 | `Json.Parser.fields` | spec | used only in statements |
-| `Json.Parser.document` | tested | `Tests/Json.lean` |
-| `Json.parse` | tested | `Tests/Json.lean` |
+| `Json.Parser.document` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.parse` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
 
 ## `Lanes/Data/Json/Printer.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Json.needsEscape` | tested | `Tests/Json.lean` |
-| `Json.escapeChar` | tested | `Tests/Json.lean` |
-| `Json.escape` | tested | `Tests/Json.lean` |
-| `Json.renderString` | tested | `Tests/Json.lean` |
-| `Json.separate` | tested | `Tests/Json.lean` |
-| `Json.compressTo` | tested | `Tests/Json.lean` |
-| `Json.compress` | tested | `Tests/Json.lean` |
+| `Json.needsEscape` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.escapeChar` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.escape` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.renderString` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.separate` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.compressTo` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.compress` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
 | `Json.newline` | tested | `Tests/Json.lean` |
 | `Json.prettyTo` | tested | `Tests/Json.lean` |
 | `Json.pretty` | tested | `Tests/Json.lean` |
@@ -1009,6 +1111,40 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Bytes.same` | trusted | TRUSTED.md: The C |
 | `randomBytes` | trusted | TRUSTED.md: The C |
 | `Argon2id.hash` | trusted | TRUSTED.md: The C |
+
+## `Lanes/Data/TimeFormat.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `TimeFormat.isDigit` | proved | through `TimeFormat.parseHttpDate`, `TimeFormat.parseRfc3339`: `TimeFormat.parseHttpDate_print`, `TimeFormat.parseRfc3339_print` |
+| `TimeFormat.num?` | proved | through `TimeFormat.parseHttpDate`, `TimeFormat.parseRfc3339`: `TimeFormat.parseHttpDate_print`, `TimeFormat.parseRfc3339_print` |
+| `TimeFormat.Timestamp.toUnix` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Time.lean` |
+| `TimeFormat.d2` | proved | through `TimeFormat.printHttpDate?`, `TimeFormat.printRfc3339?`: `TimeFormat.parseHttpDate_print`, `TimeFormat.parseRfc3339_print` |
+| `TimeFormat.d4` | proved | through `TimeFormat.printHttpDate?`, `TimeFormat.printRfc3339?`: `TimeFormat.parseHttpDate_print`, `TimeFormat.parseRfc3339_print` |
+| `TimeFormat.clock` | proved | through `TimeFormat.printHttpDate?`, `TimeFormat.printRfc3339?`: `TimeFormat.parseHttpDate_print`, `TimeFormat.parseRfc3339_print` |
+| `TimeFormat.trimZeros` | proved | through `TimeFormat.printRfc3339?`: `TimeFormat.parseRfc3339_print` |
+| `TimeFormat.fractionChars` | proved | through `TimeFormat.printRfc3339?`: `TimeFormat.parseRfc3339_print` |
+| `TimeFormat.offsetChars` | proved | through `TimeFormat.printRfc3339?`: `TimeFormat.parseRfc3339_print` |
+| `TimeFormat.rfc3339Chars` | proved | through `TimeFormat.printRfc3339?`: `TimeFormat.parseRfc3339_print` |
+| `TimeFormat.InRange` | spec | a predicate |
+| `TimeFormat.instDecidableInRange` | proved | its type, `Decidable` |
+| `TimeFormat.printRfc3339?` | proved | `TimeFormat.parseRfc3339_print` |
+| `TimeFormat.clock?` | proved | through `TimeFormat.parseHttpDate`, `TimeFormat.parseRfc3339`: `TimeFormat.parseHttpDate_print`, `TimeFormat.parseRfc3339_print` |
+| `TimeFormat.fraction?` | proved | through `TimeFormat.parseHttpDate`, `TimeFormat.parseRfc3339`: `TimeFormat.parseHttpDate_print`, `TimeFormat.parseRfc3339_print` |
+| `TimeFormat.offset?` | proved | through `TimeFormat.parseHttpDate`, `TimeFormat.parseRfc3339`: `TimeFormat.parseHttpDate_print`, `TimeFormat.parseRfc3339_print` |
+| `TimeFormat.parseRfc3339` | proved | `TimeFormat.parseRfc3339_print` |
+| `TimeFormat.dayNames` | proved | through `TimeFormat.printHttpDate?`: `TimeFormat.parseHttpDate_print` |
+| `TimeFormat.longDayNames` | proved | through `TimeFormat.parseHttpDate`: `TimeFormat.parseHttpDate_print` |
+| `TimeFormat.monthNames` | proved | through `TimeFormat.printHttpDate?`: `TimeFormat.parseHttpDate_print` |
+| `TimeFormat.nameOf?` | proved | through `TimeFormat.parseHttpDate`: `TimeFormat.parseHttpDate_print` |
+| `TimeFormat.imfChars` | proved | through `TimeFormat.printHttpDate?`: `TimeFormat.parseHttpDate_print` |
+| `TimeFormat.printHttpDate?` | proved | `TimeFormat.parseHttpDate_print` |
+| `TimeFormat.checked` | proved | through `TimeFormat.parseHttpDate`: `TimeFormat.parseHttpDate_print` |
+| `TimeFormat.imf?` | proved | through `TimeFormat.parseHttpDate`: `TimeFormat.parseHttpDate_print` |
+| `TimeFormat.fullYear` | proved | through `TimeFormat.parseHttpDate`: `TimeFormat.parseHttpDate_print` |
+| `TimeFormat.rfc850?` | proved | through `TimeFormat.parseHttpDate`: `TimeFormat.parseHttpDate_print` |
+| `TimeFormat.asctime?` | proved | through `TimeFormat.parseHttpDate`: `TimeFormat.parseHttpDate_print` |
+| `TimeFormat.parseHttpDate` | proved | `TimeFormat.parseHttpDate_print` |
 
 ## `Lanes/Env/Clock.lean`
 
@@ -1542,6 +1678,12 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Cli.Lint.checkFile` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.sourceFiles` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.checkC` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.codeSpans` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.firstBraces` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.expandBraces` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.citedPaths` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.citingDocs` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.checkLinks` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.parseFinding` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.inventory` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.lint` | tested | `Tests/Lint.lean` |

@@ -1,4 +1,4 @@
-# D?. An actor at rest is released, and the kernel's theorems hold up to the starts that bring it back
+# D51. An actor at rest is released, and the kernel's theorems hold up to the starts that bring it back
 
 `Lanes/Actors/{Actor,Release,Kernel,KernelSound,KernelTimers}.lean`, `Tests/Release.lean`,
 `systems/ledger/Release.lean`. The kernel started an actor at its first message and kept its
