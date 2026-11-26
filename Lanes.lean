@@ -18,6 +18,7 @@ public import Lanes.Check.EquivDecide
 public import Lanes.Check.Monitor
 public import Lanes.Check.Search
 public import Lanes.Check.System
+public import Lanes.Check.WorldEquiv
 public import Lanes.Data.Enum
 public import Lanes.Data.Fifo
 public import Lanes.Data.Json

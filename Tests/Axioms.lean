@@ -56,6 +56,9 @@ by `lake build`, not linked into the test executable.
 /-- info: 'Lanes.SysState.equiv_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.SysState.equiv_iff
 
+/-- info: 'Lanes.World.Equiv.next' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.World.Equiv.next
+
 /-- info: 'Lanes.Server.implements' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Server.implements
 
