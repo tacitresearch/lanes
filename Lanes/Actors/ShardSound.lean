@@ -5,7 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Lanes.Actors.Shard
-public import Lanes.Actors.JoinSound
+public import Lanes.Actors.Lossy
 
 /-!
 # A system split across two shards behaves as the one system
@@ -982,5 +982,52 @@ theorem System.Invariant.split {P : SysState sys → Prop} (h : sys.Invariant en
     (hc : sys.SplitReachable hosts env c) : P c.merged :=
   let ⟨c', hc', hequiv⟩ := hc.merged hboot
   hP c' _ hequiv (h c' hc')
+
+theorem System.SplitReachable.run {evs : List (Event (splitSig σ))}
+    {c c' : SysState (sys.split hosts)} (h : sys.SplitReachable hosts env c)
+    (hevs : ∀ ev ∈ evs, ev.routed sys hosts = true)
+    (hrun : c.run (env.split hosts) evs = some c') : sys.SplitReachable hosts env c' := by
+  induction evs generalizing c with
+  | nil =>
+    simp only [SysState.run, Option.some.injEq] at hrun
+    exact hrun ▸ h
+  | cons ev evs ih =>
+    simp only [SysState.run] at hrun
+    cases hstep : c.step (env.split hosts) ev with
+    | none => simp [hstep] at hrun
+    | some c₁ =>
+      exact ih (h.step ev (hevs ev List.mem_cons_self) hstep)
+        (fun e he => hevs e (List.mem_cons_of_mem _ he)) (by simpa [hstep] using hrun)
+
+/-- A well-routed run stays one when every link may also lose messages. -/
+theorem System.SplitReachable.lossy (h : sys.SplitReachable hosts env c) :
+    sys.SplitReachable hosts env.lossy c := by
+  have henv : env.lossy.split hosts = (env.split hosts).lossy := rfl
+  have hdrops : ∀ drops : List (Envelope (splitSig σ)),
+      ∀ ev ∈ drops.map Event.drop, ev.routed sys hosts = true := by
+    intro drops ev hev
+    obtain ⟨d, -, rfl⟩ := List.mem_map.mp hev
+    rfl
+  induction h with
+  | init =>
+    obtain ⟨drops, hrun⟩ := SysState.init_lossy (sys.split hosts) (env.split hosts)
+    rw [← henv] at hrun
+    exact System.SplitReachable.init.run (hdrops drops) hrun
+  | step ev _ hev hstep ih =>
+    obtain ⟨drops, hrun⟩ := SysState.step_lossy hstep
+    rw [← henv] at hrun
+    refine ih.run (fun e he => ?_) hrun
+    rcases List.mem_cons.mp he with rfl | he
+    · exact hev
+    · exact hdrops drops e he
+
+/-- An invariant of the actor states of `sys`, proved for every environment, holds of the
+actor states of the split. Nothing is asked of booting: the invariant is used where every link
+is lossy, and there the order in which boot actors start cannot be told. -/
+theorem System.Invariant.split_state {Q : ((i : σ.Id) → sys.State i) → Prop}
+    (h : ∀ env, sys.Invariant env fun c => Q c.state) (hc : sys.SplitReachable hosts env c) :
+    Q c.merged.state := by
+  obtain ⟨c', hc', hequiv⟩ := hc.lossy.merged fun _ _ _ _ _ => rfl
+  exact hequiv.state ▸ h env.lossy c' hc'
 
 end Lanes

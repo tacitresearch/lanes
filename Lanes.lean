@@ -15,6 +15,7 @@ public import Lanes.Actors.JoinSound
 public import Lanes.Actors.Journal
 public import Lanes.Actors.Kernel
 public import Lanes.Actors.KernelSound
+public import Lanes.Actors.Lossy
 public import Lanes.Actors.KernelTimers
 public import Lanes.Actors.Scheduler
 public import Lanes.Actors.Shard
