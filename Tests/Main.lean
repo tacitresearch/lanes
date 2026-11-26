@@ -19,6 +19,7 @@ import Tests.Durable
 import Tests.Ending
 import Tests.Clock
 import Tests.HttpClient
+import Tests.ReadRequest
 import Tests.Codec
 import Tests.Peers
 import Tests.Courier
@@ -76,13 +77,13 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.Fair.tests ++ Tests.Codec.tests ++ Tests.Durable.fileTests ++ Tests.Split.tests
     ++ Tests.Peers.tests ++ Tests.Courier.tests ++ Tests.Mailbox.tests ++ Tests.Batch.tests
     ++ Tests.Crypto.tests ++ Tests.Auth.tests ++ Tests.Clients.tests ++ Tests.Lease.tests
-    ++ Tests.Release.tests
+    ++ Tests.Release.tests ++ Tests.ReadRequest.tests
   match args with
   | [] =>
-    let pure := pure ++ (← Tests.Lint.tests)
+    let pure := pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.Lint.tests)
     failures pure
     report (pure ++ (← live)) pure.length
-  | ["fast"] => report (pure ++ (← Tests.Lint.tests))
+  | ["fast"] => report (pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.Lint.tests))
   | ["live"] => report (← live)
   | ["journal-child", path] =>
     Tests.Durable.child path
