@@ -151,6 +151,22 @@ theorem settle_erase (c : SysState sys) (i : σ.Id) (r : sys.State i × List (Ef
     rw [List.erase_filter, List.erase_append_left _ hmem]
   · exact ⟨by simp [hmem], by rw [List.erase_append_left _ hmem]⟩
 
+/-- Arming timers keeps those armed and arms each. -/
+theorem mem_timers_performAll_after {α : Type} (c : SysState sys) (i : σ.Id) (delay_ms : Nat)
+    (f : α → σ.Msg i) (xs : List α) {msg : σ.Msg i}
+    (h : msg ∈ c.timers i ∨ ∃ x ∈ xs, msg = f x) :
+    msg ∈ (c.performAll i (xs.map fun x => .after delay_ms (f x))).timers i := by
+  induction xs generalizing c with
+  | nil => simpa using h
+  | cons x xs ih =>
+    apply ih
+    simp only [perform, update_self]
+    rcases h with h | ⟨x', hx', rfl⟩
+    · exact .inl (by split <;> simp [h])
+    · rcases List.mem_cons.mp hx' with rfl | hx'
+      · exact .inl (by split <;> simp [*])
+      · exact .inr ⟨x', hx', rfl⟩
+
 theorem run_inputs (env : EnvModel σ) (c : SysState sys) (xs : List σ.In) :
     c.run env (xs.map .input) = some { c with
       net := c.net ++ xs.map fun x => ⟨none, (sys.accept x).1, (sys.accept x).2⟩ } := by

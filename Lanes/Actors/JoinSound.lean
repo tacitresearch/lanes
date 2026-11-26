@@ -365,14 +365,11 @@ theorem sends_left (effs : List (Effect σ i)) :
   induction effs with
   | nil => rfl
   | cons eff effs ih =>
-    have head : (Effect.sends (σ := joinSig σ τ) (.inl i) [w.left b eff]).filterMap
-        Envelope.left? = Effect.sends i [eff] := by
-      cases eff with
-      | emit out => cases h : w.toRight out <;> simp [Effect.sends, Wiring.left, h, Envelope.left?]
-      | _ => simp [Effect.sends, Wiring.left, Envelope.left?]
-    rw [List.flatMap_cons, show eff :: effs = [eff] ++ effs from rfl]
-    simp only [Effect.sends, List.filterMap_append] at head ih ⊢
-    rw [head, ih]
+    cases eff with
+    | emit out =>
+      cases h : w.toRight out <;>
+        simp_all [Effect.sends, Wiring.left, Envelope.left?, List.filterMap_cons]
+    | _ => simp_all [Effect.sends, Wiring.left, Envelope.left?]
 
 theorem emits_left (effs : List (Effect σ i)) :
     (Effect.emits (effs.flatMap fun eff => [w.left b eff])).filterMap Sum.getLeft?
@@ -380,14 +377,9 @@ theorem emits_left (effs : List (Effect σ i)) :
   induction effs with
   | nil => rfl
   | cons eff effs ih =>
-    have head : (Effect.emits [w.left b eff]).filterMap Sum.getLeft?
-        = (Effect.emits [eff]).filter fun out => (w.toRight out).isNone := by
-      cases eff with
-      | emit out => cases h : w.toRight out <;> simp [Effect.emits, Wiring.left, h]
-      | _ => simp [Effect.emits, Wiring.left]
-    rw [List.flatMap_cons, show eff :: effs = [eff] ++ effs from rfl]
-    simp only [Effect.emits, List.filterMap_append, List.filter_append] at head ih ⊢
-    rw [head, ih]
+    cases eff with
+    | emit out => cases h : w.toRight out <;> simp_all [Effect.emits, Wiring.left]
+    | _ => simp_all [Effect.emits, Wiring.left]
 
 theorem retime_left (effs : List (Effect σ i)) (timers : List (σ.Msg i)) :
     Effect.retime (σ := joinSig σ τ) (i := .inl i) (effs.flatMap fun eff => [w.left b eff]) timers
@@ -395,14 +387,9 @@ theorem retime_left (effs : List (Effect σ i)) (timers : List (σ.Msg i)) :
   induction effs generalizing timers with
   | nil => rfl
   | cons eff effs ih =>
-    have head : Effect.retime (σ := joinSig σ τ) (i := .inl i) [w.left b eff] timers
-        = Effect.retime [eff] timers := by
-      cases eff with
-      | emit out => cases h : w.toRight out <;> simp [Effect.retime, Wiring.left, h]
-      | _ => simp [Effect.retime, Wiring.left]
-    rw [List.flatMap_cons, show eff :: effs = [eff] ++ effs from rfl]
-    simp only [Effect.retime, List.foldl_append] at head ih ⊢
-    rw [head, ih]
+    cases eff with
+    | emit out => cases h : w.toRight out <;> simp_all [Effect.retime, Wiring.left]
+    | _ => simp_all [Effect.retime, Wiring.left]
 
 theorem isStop_left (effs : List (Effect σ i)) :
     (effs.flatMap fun eff => [w.left b eff]).any Effect.isStop = effs.any Effect.isStop :=
@@ -419,18 +406,12 @@ theorem sends_right_left (effs : List (Effect τ j)) :
   induction effs with
   | nil => rfl
   | cons eff effs ih =>
-    have head : (Effect.sends (σ := joinSig σ τ) (.inr j) [w.right a eff]).filterMap
-        Envelope.left?
-        = ((Effect.emits [eff]).filterMap w.toLeft).map fun x =>
-            ⟨none, (a.accept x).1, (a.accept x).2⟩ := by
-      cases eff with
-      | emit out =>
-        cases h : w.toLeft out <;>
-          simp [Effect.sends, Effect.emits, Wiring.right, h, Envelope.left?]
-      | _ => simp [Effect.sends, Effect.emits, Wiring.right, Envelope.left?]
-    rw [List.flatMap_cons, show eff :: effs = [eff] ++ effs from rfl]
-    simp only [Effect.sends, Effect.emits, List.filterMap_append, List.map_append] at head ih ⊢
-    rw [head, ih]
+    cases eff with
+    | emit out =>
+      cases h : w.toLeft out <;> simp_all [Effect.sends, Effect.emits, Wiring.right, Envelope.left?]
+    | send to msg =>
+      simp_all [Effect.sends, Effect.emits, Wiring.right, Envelope.left?, List.filterMap_cons]
+    | _ => simp_all [Effect.sends, Effect.emits, Wiring.right]
 
 theorem emits_right_left (effs : List (Effect τ j)) :
     (Effect.emits (effs.flatMap fun eff => [w.right a eff])).filterMap Sum.getLeft?
@@ -669,9 +650,8 @@ private theorem Shows.step {env : EnvModel σ} {t : List (Deed σ)} {x x' : SysS
     (ev : Event σ) (h : Shows a env w t x) (hstep : x.step env ev = some x') :
     Shows a env w (t ++ (w.shown ev).toList) x' := by
   obtain ⟨evs, hrun, rfl⟩ := h
-  refine ⟨evs ++ [ev], by simp [SysState.run_append, hrun, SysState.run, hstep], ?_⟩
-  rw [List.filterMap_append]
-  cases h : w.shown ev <;> simp [h]
+  exact ⟨evs ++ [ev], by simp [SysState.run_append, hrun, SysState.run, hstep],
+    filterMap_concat _ _ _⟩
 
 namespace Seen
 
@@ -1083,11 +1063,7 @@ theorem SysState.run_left {evs : List (Event (joinSig σ τ))}
       Seen env w (Shows a env.left w) (evs.filterMap Event.leftDeed) c.left) .init h
       (Seen.init env) ?_
     intro evs c₁ ev c₂ _ hseen hstep
-    have hsnoc : (evs ++ [ev]).filterMap Event.leftDeed
-        = evs.filterMap Event.leftDeed ++ ev.leftDeed.toList := by
-      rw [List.filterMap_append]
-      cases h : ev.leftDeed <;> simp [h]
-    exact hsnoc ▸ hseen.step hstep
+    exact filterMap_concat Event.leftDeed evs ev ▸ hseen.step hstep
   exact hseen.reach _ (Thin.refl _)
 
 /-- Every reachable state of a join, seen from its left system, is a state that system reaches

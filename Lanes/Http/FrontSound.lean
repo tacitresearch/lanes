@@ -308,21 +308,6 @@ private theorem armed_handle {c : SysState (gateSystem bridge config)} (msg : Ga
     · armed
     · armed
 
-private theorem mem_timers_arm (delay_ms : Nat) (ids : List ReqId)
-    (c : SysState (gateSystem bridge config)) (msg : GateMsg σ)
-    (h : msg ∈ c.timers () ∨ ∃ id ∈ ids, msg = .expire id) :
-    msg ∈ (c.performAll () (ids.map fun id => .after delay_ms (.expire id))).timers () := by
-  induction ids generalizing c with
-  | nil => simpa using h
-  | cons id ids ih =>
-    apply ih
-    simp only [SysState.perform, update_self]
-    rcases h with h | ⟨id', hid', rfl⟩
-    · exact .inl (by split <;> simp [h])
-    · rcases List.mem_cons.mp hid' with rfl | hid'
-      · exact .inl (by split <;> simp [*])
-      · exact .inr ⟨id', hid', rfl⟩
-
 private theorem armed_start (c : SysState (gateSystem bridge config)) :
     Armed (c.startActor env ()) := by
   intro _ id hid
@@ -331,7 +316,7 @@ private theorem armed_start (c : SysState (gateSystem bridge config)) :
         Effect.isStop = false := by
     simp [List.any_map, Effect.isStop]
   simp [SysState.startActor, SysState.settle, gateActor, hrunning] at hid ⊢
-  exact mem_timers_arm _ _ _ _ (.inr ⟨id, hid, rfl⟩)
+  exact SysState.mem_timers_performAll_after _ _ _ _ _ (.inr ⟨id, hid, rfl⟩)
 
 /-- The gate alone cannot forget a pending request, in any environment: while it is up the
 request's deadline is armed. -/
@@ -450,10 +435,6 @@ private theorem onlyPut (sys : System σ) (bridge : Bridge σ) (config : GateCon
   recover
     | .inl (), pending => avoids_left id (by simp [gateActor, tame])
     | .inr _, _ => avoids_right id _
-
-private theorem filterMap_cons_toList {α β : Type} (f : α → Option β) (a : α) (l : List α) :
-    (a :: l).filterMap f = (f a).toList ++ l.filterMap f := by
-  cases h : f a <;> simp [h]
 
 /-- The gate's deeds alone are its deeds in the join: what the wiring hides is no answer. -/
 private theorem shown_answered (events : List (Event (gateSig σ))) :

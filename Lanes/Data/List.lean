@@ -93,6 +93,14 @@ theorem exists_filterMap_erase [DecidableEq α] [DecidableEq β] {f : α → Opt
         have hx : x ≠ a := fun hxa => hy (by simpa [hxa, hfa] using hfx.symm)
         exact ⟨a, List.mem_cons_of_mem _ ha, hfa, by simp [hx, hfx, heq, hy]⟩
 
+theorem filterMap_cons_toList (f : α → Option β) (a : α) (l : List α) :
+    (a :: l).filterMap f = (f a).toList ++ l.filterMap f := by
+  cases h : f a <;> simp [h]
+
+theorem filterMap_concat (f : α → Option β) (l : List α) (a : α) :
+    (l ++ [a]).filterMap f = l.filterMap f ++ (f a).toList := by
+  cases h : f a <;> simp [h]
+
 theorem filterMap_filter_of_none {f : α → Option β} {p : α → Bool}
     (h : ∀ x, p x = false → f x = none) (l : List α) :
     (l.filter p).filterMap f = l.filterMap f := by
