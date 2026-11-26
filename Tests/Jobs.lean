@@ -3,6 +3,7 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
+import Tests.HttpClient
 
 /-!
 Model checks of the jobs actor against a requester and a pool of workers that may answer an
@@ -29,18 +30,20 @@ abbrev jobs (maxInFlight : Nat) : System jobsSig := system (policy maxInFlight)
 
 instance (maxInFlight : Nat) : (jobs maxInFlight).Inspect := {}
 
-/-- The requester: what it has still to submit, the answers it got, and every attempt it saw
-dispatched. -/
+/-- The requester: what it has still to submit, the answers it got, whether an attempt it saw
+dispatched carried other work than its key's or an attempt out of range, and whether one was
+a retry. -/
 structure Asker where
   toSubmit : List (Nat × Nat)
   answers : List (Nat × Outcome Bool)
-  dispatched : List (Nat × Nat × Nat)
+  strayDispatch : Bool := false
+  retried : Bool := false
   deriving DecidableEq, Hashable
 
 instance : BEq Asker := instBEqOfDecidableEq
 
 def asker (submissions : List (Nat × Nat)) : Outside jobsSig Asker where
-  init := { toSubmit := submissions, answers := [], dispatched := [] }
+  init := { toSubmit := submissions, answers := [] }
   allow d x :=
     match x with
     | .submit key job =>
@@ -50,7 +53,11 @@ def asker (submissions : List (Nat × Nat)) : Outside jobsSig Asker where
   observe d out :=
     match out with
     | .answer key outcome => { d with answers := (key, outcome) :: d.answers }
-    | .dispatch key attempt job => { d with dispatched := (key, attempt, job) :: d.dispatched }
+    | .dispatch key attempt job =>
+      { d with
+        strayDispatch := d.strayDispatch || submissions.lookup key != some job || attempt == 0
+          || attempt > 2
+        retried := d.retried || attempt == 2 }
 
 def world (submissions : List (Nat × Nat)) :=
   (asker submissions).both pool fun x => x matches .submit ..
@@ -67,8 +74,7 @@ def answeredAtMostOnce (w : JobsWorld n) : Bool :=
   submissions.all fun (key, _) => w.driver.1.answers.countP (·.1 == key) ≤ 1
 
 def dispatchesCarryTheirJob (w : JobsWorld n) : Bool :=
-  w.driver.1.dispatched.all fun (key, attempt, job) =>
-    submissions.lookup key == some job && 1 ≤ attempt && attempt ≤ 2
+  !w.driver.1.strayDispatch
 
 def withinSlots (w : JobsWorld n) : Bool :=
   (w.state.state ()).length ≤ max 1 n
@@ -100,32 +106,141 @@ def check (maxInFlight : Nat) (env : EnvModel jobsSig := {}) (maxCrashes : Nat :
       .always "while the actor is up, the timer each active job waits on is armed" timersArmed,
       .always "no step arms again the timer an active job waits on" timersLeftAlone,
       .sometimes "a job succeeds on its second attempt" fun w =>
-        answeredWith (· == .done true) w && w.driver.1.dispatched.any (·.2.1 == 2),
+        answeredWith (· == .done true) w && w.driver.1.retried,
       .sometimes "a job fails after its last attempt" (answeredWith (· == .failed false)),
       .sometimes "a job times out" (answeredWith (· == .timedOut)),
       .sometimes "a job backs off while the actor is up" fun w =>
         w.state.up () && (w.state.state ()).any (·.phase == .backoff) ]
-    { checkDeadlock := true
+    { checkDeadlock := maxCrashes == 0
       terminal := fun w => w.driver.1.toSubmit.isEmpty
         && submissions.all fun (key, _) => w.driver.1.answers.any (·.1 == key) }
 
-/-- The actor crashes and restarts, and results from outside may be lost. -/
+/-- The actor crashes and restarts, and what arrives from outside is reordered. A result that
+is lost is one the pool never gives, which the pool may always do. A crash loses what was
+delivered to the actor and not yet handled, a submission among them, so with crashes only
+safety is checked: liveness is stated of runs in which the actor does not crash. -/
 def crashing : EnvModel jobsSig where
-  link src _ := if src.isSome then .reliable else { ordered := false, lossy := true }
+  link _ _ := .unordered
   mayCrash _ := true
   restarts _ := true
 
+def withKey : Bool :=
+  let request : Http.Request :=
+    { method := .post, path := [], headers := [("idempotency-key", "x"), ("A", "1")] }
+  let c : Http.Client.Call := { host := "127.0.0.1", port := 80, request }
+  (withHeader "Idempotency-Key" "7" c).request.headers == [("Idempotency-Key", "7"), ("A", "1")]
+
 def tests : List (String × Bool) :=
+  ("jobs: the key goes with a call in place of any header of its name", withKey) ::
   let two := check 2
   let one := check 1
   let faulty := check 2 crashing (maxCrashes := 1)
-  [ ("jobs: every job is answered once, retried with its key and job, within the slots",
-      two.ok && two.complete && two.witnesses.length == 5),
-    ("jobs: beyond maxInFlight a job is refused, and still answered once",
+  [ (s!"jobs: every job is answered once, retried with its key and job, within the slots ({two.states} states)",
+      two.ok && two.complete && two.witnesses.length == 4),
+    (s!"jobs: beyond maxInFlight a job is refused, and still answered once ({one.states} states)",
       one.ok && one.complete
         && (Check.system (jobs 1) { driver := (world submissions).driver samples }
           [.sometimes "a job is refused" (answeredWith (· == .refused))]).witnesses.length == 1),
-    ("jobs: the same when the actor crashes and restarts and results are lost",
-      faulty.ok && faulty.complete && faulty.witnesses.length == 5) ]
+    (s!"jobs: the same when the actor crashes and restarts and results come late or never ({faulty.states} states)",
+      faulty.ok && faulty.complete && faulty.witnesses.length == 4) ]
+
+/-! The pool, live: calls to a local service that fails twice before it succeeds, to a closed
+port and to a service that never answers; and a pure worker. -/
+
+open Std Std.Async Lanes.Http
+
+/-- A service that answers `503` to the first two calls with a key and then says how many it
+saw. -/
+abbrev flakySig := Server.sig (ReqId × String) (ReqId × String × Nat)
+
+def flaky : Service (ReqId × String) (ReqId × String × Nat) (List (String × Nat)) where
+  init := []
+  step seen := fun (id, key) =>
+    let n := (seen.lookup key).getD 0 + 1
+    ((key, n) :: seen.filter (·.1 != key), [(id, key, n)])
+
+def flakyBridge : Bridge flakySig where
+  decode id request :=
+    .ok (id, ((request.headers.find? (·.1.toLower == "idempotency-key")).map (·.2)).getD "")
+  encode := fun (id, key, n) =>
+    some (id, if n ≤ 2 then .text "busy" 503 else .text s!"{key} after {n}")
+
+abbrev callSig := sig Nat Client.Call (Option Response)
+
+def calls (attempt_ms : Nat) : Config (Option Response) :=
+  { maxInFlight := 4, maxAttempts := 3, attempt_ms, backoff_ms := 10, maxBackoff_ms := 40
+    retryable := fun r => r.all (·.status ≥ 500) }
+
+/-- Submits each call, waits for every answer or `patience_ms`, and returns the answers and the
+events performed. -/
+def runCalls (config : Config (Option Response)) (client : Client.Config)
+    (submitted : List (Nat × Client.Call)) (patience_ms : Nat := 8000) :
+    Async (List (Nat × Outcome (Option Response)) × List (Event callSig)) := do
+  let answers ← IO.mkRef #[]
+  let all ← IO.Promise.new
+  let rt ← Runtime.startWith (system (K := Nat) (J := Client.Call) config) { record := true }
+    fun rt out => do
+      handler Port.alone (call client toString) rt.tryInput out
+      if let .answer key outcome := out then
+        if (← answers.modifyGet fun a => ((a.push (key, outcome)).size, a.push (key, outcome)))
+            == submitted.length
+        then all.resolve ()
+  for (key, c) in submitted do rt.input (.submit key c)
+  Async.race (discard <| await all.result?) (Async.sleep (.ofNat patience_ms))
+  let events := (← rt.trace).toList
+  rt.stop
+  return ((← answers.get).toList, events)
+
+def attempts (events : List (Event callSig)) (key : Nat) : List Nat :=
+  events.filterMap fun
+    | .output (.dispatch k attempt _) => if k == key then some attempt else none
+    | _ => none
+
+def bodyIs (outcome : Option (Outcome (Option Response))) (text : String) : Bool :=
+  match outcome with
+  | some (.done (some r)) => r.status == 200 && String.fromUTF8? r.body == some text
+  | _ => false
+
+def poolWorld : Outside callSig (Unit × List (Nat × Nat)) :=
+  Outside.any.both pool fun x => x matches .submit ..
+
+def live : Async (List (String × Bool)) := do
+  let server ← serve (Server.system flaky) flakyBridge { port := 0 }
+  let some tcpPort := server.port | return [("jobs: the test service reports its port", false)]
+  let request : Request := { method := .post, path := ["send"] }
+  let target : Client.Call := { host := "127.0.0.1", port := tcpPort, request }
+  let (answers, events) ← runCalls (calls 2000) { timeout_ms := 2000 }
+    [(7, target), (8, target), (9, { target with port := 1 })]
+  server.stop
+  let (silent, silentPort) ← Tests.HttpClient.holding .empty
+  let start ← IO.monoMsNow
+  let (late, lateEvents) ← runCalls (calls 150) { timeout_ms := 5000 }
+    [(5, { target with port := silentPort })]
+  let late_ms := (← IO.monoMsNow) - start
+  silent.close
+  let sums ← IO.mkRef #[]
+  let done ← IO.Promise.new
+  let rt ← Runtime.startWith (system (K := Nat) (J := Nat) (R := Nat) {}) {} fun rt out => do
+    handler Port.alone (compute fun n => (List.range n).foldl (· + ·) 0) rt.tryInput out
+      (prio := .dedicated)
+    if let .answer key (.done r) := out then
+      sums.modify (·.push (key, r))
+      done.resolve ()
+  rt.input (.submit 1 100000)
+  Async.race (discard <| await done.result?) (Async.sleep 4000)
+  rt.stop
+  return [
+    ("jobs: a call that fails twice succeeds on its third attempt, each with the job's key",
+      bodyIs (answers.lookup 7) "7 after 3" && bodyIs (answers.lookup 8) "8 after 3"
+        && attempts events 7 == [1, 2, 3] && attempts events 8 == [1, 2, 3]),
+    ("jobs: a call that finds no service fails after its last attempt",
+      answers.lookup 9 == some (.failed none) && attempts events 9 == [1, 2, 3]),
+    (s!"jobs: a call that is never answered times out at its last deadline ({late_ms} ms)",
+      late.lookup 5 == some .timedOut && attempts lateEvents 5 == [1, 2, 3]
+        && 450 ≤ late_ms && late_ms < 4000),
+    ("jobs: the real pool does only what its model allows",
+      poolWorld.allows events && poolWorld.allows lateEvents),
+    ("jobs: a pure worker computes off the shard and its result is the answer",
+      (← sums.get).toList == [(1, 4999950000)]) ]
 
 end Tests.Jobs

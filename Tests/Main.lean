@@ -68,7 +68,7 @@ def live : IO (List (String × Bool)) := do
     ++ (← safely "full inbox" Tests.Fronted.busyTest) ++ (← safely "node" Tests.Fronted.nodeTest)
     ++ (← safely "node on a journal" Tests.Fronted.nodeDurable)
     ++ (← safely "fronted on a journal" Tests.Fronted.durable)
-    ++ (← safely "release" Tests.Release.liveTests)
+    ++ (← safely "release" Tests.Release.liveTests) ++ (← safely "jobs" Tests.Jobs.live)
     ++ (← Tests.Crypto.live)
 
 def main (args : List String) : IO UInt32 := do
