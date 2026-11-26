@@ -16,7 +16,8 @@ The functions here decide who is refused, who waits and who is woken; the shell
 lists are kept newest first, because a list is extended without copying it, and an object that
 several threads can see is never updated in place.
 
-`W` is whatever wakes a sleeper: a promise in the shell, a number in the tests.
+`W` is whatever wakes a sleeper: a promise in the shell, a number in the tests. What these
+functions decide is proved in `Lanes/Actors/MailboxSound.lean`.
 -/
 
 @[expose] public section

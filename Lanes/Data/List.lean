@@ -8,7 +8,8 @@ module
 Facts about lists that proofs about systems share: what `erase` does under `map`, `filter`,
 `filterMap` and `countP`. Messages in flight, timers and outputs waiting are lists, and an event
 takes one element out, so every proof that reads a state through a map or a filter needs these.
-Then `take` and `drop` of a log and of a start of it.
+Then `take` and `drop` of a log and of a start of it, and a log read by a monitor that may
+reject it (`foldlM` into `Option`).
 -/
 
 public section
@@ -151,5 +152,31 @@ theorem getElem?_of_prefix {a b : List α} (h : a <+: b) {k : Nat} {x : α}
   obtain ⟨rest, rfl⟩ := h
   rw [List.getElem?_append_left (List.getElem?_eq_some_iff.mp hx).1]
   exact hx
+
+theorem foldlM_append_some {M : Type} {f : M → α → Option M} {l₁ l₂ : List α} {m t : M}
+    (h : (l₁ ++ l₂).foldlM f m = some t) :
+    ∃ m', l₁.foldlM f m = some m' ∧ l₂.foldlM f m' = some t := by
+  rw [List.foldlM_append] at h
+  cases h₁ : l₁.foldlM f m with
+  | none => simp [h₁] at h
+  | some m' => exact ⟨m', rfl, by simpa [h₁] using h⟩
+
+theorem foldlM_cons_some {M : Type} {f : M → α → Option M} {x : α} {l : List α} {m t : M}
+    (h : (x :: l).foldlM f m = some t) : ∃ m', f m x = some m' ∧ l.foldlM f m' = some t := by
+  simp only [List.foldlM_cons] at h
+  cases h₁ : f m x with
+  | none => simp [h₁] at h
+  | some m' => exact ⟨m', rfl, by simpa [h₁] using h⟩
+
+/-- What each accepted element keeps, a whole accepted list keeps. -/
+theorem foldlM_some_inv {M : Type} {f : M → α → Option M} {l : List α} {m t : M} (P : M → Prop)
+    (hstep : ∀ m x m', x ∈ l → P m → f m x = some m' → P m') (hm : P m)
+    (h : l.foldlM f m = some t) : P t := by
+  induction l generalizing m with
+  | nil => simp only [List.foldlM_nil] at h; exact Option.some.inj h ▸ hm
+  | cons x l ih =>
+    obtain ⟨m', hx, hl⟩ := foldlM_cons_some h
+    exact ih (fun m y m'' hy => hstep m y m'' (List.mem_cons_of_mem _ hy))
+      (hstep m x m' List.mem_cons_self hm hx) hl
 
 end Lanes

@@ -21,6 +21,7 @@ public import Lanes.Actors.Snapshot
 public import Lanes.Actors.Kernel
 public import Lanes.Actors.KernelSound
 public import Lanes.Actors.Lossy
+public import Lanes.Actors.CourierSound
 public import Lanes.Actors.MailboxSound
 public import Lanes.Actors.MapIOSound
 public import Lanes.Actors.KernelTimers

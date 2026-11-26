@@ -15,9 +15,9 @@ and decides nothing: when to connect, what waits and what is dropped, one write 
 connection, how long to leave a process alone after failing to reach it, what a stream of bytes
 is as parcels, and what `stop` ends.
 
-Because it is a function, the model checker runs it against a network that may fail at any
-moment (`Tests/Courier.lean`): nothing is written twice or out of order, and nothing stays open
-after `stop`.
+Because it is a function, what it promises is proved of it for every limit and every sequence
+of events (`Lanes/Actors/CourierSound.lean`), and the model checker runs it together with a
+handler and a network that may fail at any moment (`Tests/Courier.lean`).
 -/
 
 @[expose] public section
