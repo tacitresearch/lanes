@@ -515,3 +515,26 @@ Consequences:
   `Tests/Gate.lean`, not proved).
 - The checker cannot check a leads-to property. Until it has a lasso search, the premises of
   the rule are checked as `always` properties (`Tests/Gate.lean`).
+
+## D28. A shard is a system, and a cluster is runtimes with a router
+
+`Lanes/Actors/Shard.lean`, `Lanes/Actors/Cluster.lean`. `System.shard sys hosts` is `sys` as a
+shard that hosts some of its actors sees it: a message to an actor hosted elsewhere leaves as
+an output (a parcel), a parcel arriving is an input, and an actor not hosted only forwards. A
+cluster starts one ordinary runtime per shard and routes parcels between them, on a lane that is
+never full so that two shards cannot block each other.
+
+Why not a kernel that knows about shards: the kernel and its proofs stay as they are, each
+shard keeps the journal it already has, and the same `System.shard` with a router over a socket
+is a system spread over machines. The work moves to one theorem, that shards and parcels in
+flight together stand for a state of the one system, which is about composition and not about
+any kernel.
+
+Consequences:
+
+- Outputs of different shards are not ordered among themselves.
+- A cluster has no journal yet. Each shard would journal the parcels it receives, so messages
+  need a codec, and a restarted shard must be sent again what its journal does not have.
+- Back-pressure is at each shard's outside inbox. Between shards nothing is refused, so a
+  shard that falls behind is noticed only by its queue.
+

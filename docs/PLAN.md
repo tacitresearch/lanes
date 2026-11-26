@@ -353,6 +353,9 @@ unrelated messages that the checker's state merging already allows (`SysState.Eq
 Durable clusters come after: each shard numbers what it sends to each other shard, and after a
 restart a shard is sent again what the receiver's journal does not have.
 
+**Done so far:** `System.shard`, the cluster and its router, tested (D28). Open: the theorem,
+a journal for clusters, and a measurement of what the threads buy on an idle machine.
+
 ### B.2 Node to node
 
 The same `System.shard` with a router that speaks over a socket is a system spread over

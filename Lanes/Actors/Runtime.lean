@@ -39,6 +39,9 @@ structure Runtime.Config where
   /-- Keep the events performed, for tests. By `Kernel.exec_reachable` they are a run of the
   semantics. -/
   record : Bool := false
+  /-- Whether the shard is one of several (`Lanes.Cluster`). It then also takes inputs from the
+  other shards, on a lane that is never full, so that two shards cannot block each other. -/
+  clustered : Bool := false
 
 /-- What a durable shard needs of its journal's storage. `Lanes.Journal.Store.open` gives one
 backed by a file. -/
@@ -65,6 +68,7 @@ structure Runtime (sys : System σ) [Hashable σ.Id] where
   private mk ::
   private config : Runtime.Config
   private inbox : CloseableChannel (Cmd sys)
+  private peers : CloseableChannel (Cmd sys)
   private log : IO.Ref (Array (Event σ))
   private finished : IO.Promise Unit
 
@@ -83,20 +87,28 @@ private def handOver (onOutput : σ.Out → Async Unit) (outputs : List σ.Out) 
     catch e => IO.eprintln s!"lanes: output handler failed: {e}"
 
 /-- Blocks the calling thread, which is the shard's own. -/
-private def take (rt : Runtime sys) : Kernel.Wait → IO (Taken sys)
-  | .none => do
+private def take (rt : Runtime sys) (wait : Kernel.Wait) : IO (Taken sys) := do
+  if rt.config.clustered then
+    if let some c ← rt.peers.tryRecv then return .command c
+  let taken := fun (c : Option (Cmd sys)) => match c with
+    | some c => Taken.command c
+    | none => .closed
+  let command := fun (c : Option (Cmd sys)) => (pure (taken c) : Async (Taken sys))
+  match wait with
+  | .none =>
     match ← rt.inbox.tryRecv with
     | some c => return .command c
     | none => return if ← rt.inbox.isClosed then .closed else .nothing
-  | .forever => return match ← IO.wait (← rt.inbox.recv) with
-    | some c => .command c
-    | none => .closed
+  | .forever =>
+    if rt.config.clustered then
+      Async.block (Selectable.one #[
+        .case rt.peers.recvSelector command, .case rt.inbox.recvSelector command])
+    else return taken (← IO.wait (← rt.inbox.recv))
   | .for_ms ms => Async.block do
-    Selectable.one #[
-      .case rt.inbox.recvSelector fun
-        | some c => pure (.command c)
-        | none => pure .closed,
+    let sources := #[.case rt.inbox.recvSelector command,
       .case (← Selector.sleep (.ofNat ms)) fun _ => pure .nothing]
+    Selectable.one (if rt.config.clustered then sources.push (.case rt.peers.recvSelector command)
+      else sources)
 
 /--
 The shard's loop, on a thread of its own. It is not an `Async` task, for a reason that no test
@@ -158,6 +170,7 @@ private def run (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
   catch e => discard (IO.eprintln s!"lanes: the shard stopped on an error: {e}").toBaseIO
   if let some log := journal then discard log.close.toBaseIO
   discard <| (rt.inbox.close : EIO _ Unit).toBaseIO
+  discard <| (rt.peers.close : EIO _ Unit).toBaseIO
   for (_, done) in ← waiting.get do done.resolve false
   rt.finished.resolve ()
 
@@ -183,6 +196,7 @@ def startWith (sys : System σ) [Hashable σ.Id] (config : Runtime.Config := {})
   let rt : Runtime sys := {
     config
     inbox := ← CloseableChannel.new (some config.inboxCapacity)
+    peers := ← CloseableChannel.new
     log := ← IO.mkRef #[]
     finished := ← IO.Promise.new }
   discard <| IO.asTask (prio := .dedicated) (rt.run (onOutput rt) journal)
@@ -207,6 +221,11 @@ def input (rt : Runtime sys) (x : σ.In) : Async Unit :=
 busy or has stopped. -/
 def tryInput (rt : Runtime sys) (x : σ.In) : Async Bool :=
   rt.inbox.trySend (.input x)
+
+/-- Hand over an input from another shard. It is never refused for want of room; `false` means
+the shard has stopped. -/
+def peer (rt : Runtime sys) (x : σ.In) : BaseIO Bool :=
+  rt.peers.trySend (.input x)
 
 /-- Wait until everything handed over so far is handled and no message is queued. With
 `timers`, also until no timer is pending. Throws if the runtime stops first. -/

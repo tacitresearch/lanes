@@ -18,6 +18,7 @@ import Tests.Durable
 import Tests.Clock
 import Tests.HttpClient
 import Tests.Codec
+import Tests.Cluster
 
 /-!
 The test driver behind `lake test`: the pure tests and the live runtime tests, well under a
@@ -41,11 +42,13 @@ def main (args : List String) : IO UInt32 := do
   match args with
   | [] =>
     report (pure ++ (← Tests.Runtime.tests) ++ (← Tests.Web.tests) ++ (← Tests.Durable.tests)
-      ++ (← Tests.Clock.live.block) ++ (← Tests.HttpClient.live.block))
+      ++ (← Tests.Clock.live.block) ++ (← Tests.HttpClient.live.block)
+      ++ (← Tests.Cluster.tests))
   | ["fast"] => report pure
   | ["live"] =>
     report ((← Tests.Runtime.tests) ++ (← Tests.Web.tests) ++ (← Tests.Durable.tests)
-      ++ (← Tests.Clock.live.block) ++ (← Tests.HttpClient.live.block))
+      ++ (← Tests.Clock.live.block) ++ (← Tests.HttpClient.live.block)
+      ++ (← Tests.Cluster.tests))
   | ["journal-child", path] =>
     Tests.Durable.child path
     return 0

@@ -2,6 +2,7 @@ module
 
 public import Lanes.Actors.Actor
 public import Lanes.Actors.FairScheduler
+public import Lanes.Actors.Cluster
 public import Lanes.Actors.Ghost
 public import Lanes.Actors.Monotone
 public import Lanes.Actors.Outside
@@ -15,6 +16,7 @@ public import Lanes.Actors.Kernel
 public import Lanes.Actors.KernelSound
 public import Lanes.Actors.KernelTimers
 public import Lanes.Actors.Scheduler
+public import Lanes.Actors.Shard
 public import Lanes.Actors.Service
 public import Lanes.Actors.Step
 public import Lanes.Actors.Runtime
