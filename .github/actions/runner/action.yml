@@ -1,18 +1,39 @@
-name: Runner label
+name: Runner
 description: >
-  The `runs-on` of the jobs that build, as JSON: the repository variable LANES_RUNNER, passed
-  in as `runner` (a label such as `lanes`, or a JSON list such as `["self-hosted", "lanes"]`), or
-  `ubuntu-latest` when it is unset. A pull request from a fork always gets `ubuntu-latest`: its
-  code must never run on a self-hosted runner.
+  Where the jobs that build run, from repository variables (docs/RUNNERS.md). `route` is
+  `box` when an AWS role and the instance id of the warm runner machine are given (the workflow
+  starts and stops it; its runners carry the label `lanes`), `fresh` when an AWS role and an
+  instance type are given instead (the workflow launches a machine for this run and terminates
+  it), `manual` when only LANES_RUNNER is set (a label, or a JSON list of labels, of runners
+  someone else keeps up), and `hosted` otherwise: ubuntu-latest. A pull request from a fork is
+  always `hosted`: its code must never run on a self-hosted runner.
 inputs:
   runner:
-    description: The value of `vars.LANES_RUNNER`, which a composite action cannot read itself.
+    description: vars.LANES_RUNNER, which a composite action cannot read itself.
+    required: false
+    default: ""
+  aws-role:
+    description: vars.LANES_AWS_ROLE_ARN; empty in a workflow that does not start machines.
+    required: false
+    default: ""
+  aws-instance-id:
+    description: vars.LANES_AWS_INSTANCE_ID, the warm runner machine.
+    required: false
+    default: ""
+  aws-instance-type:
+    description: vars.LANES_AWS_INSTANCE_TYPE, for a machine launched for each run.
     required: false
     default: ""
 outputs:
   label:
     description: The value for `runs-on`, as JSON.
     value: ${{ steps.label.outputs.label }}
+  route:
+    description: hosted, manual, box or fresh.
+    value: ${{ steps.label.outputs.route }}
+  run-label:
+    description: The label of the runners of a machine launched for this run.
+    value: ${{ steps.label.outputs.run-label }}
 runs:
   using: composite
   steps:
@@ -20,17 +41,35 @@ runs:
       shell: bash
       env:
         LANES_RUNNER: ${{ inputs.runner }}
+        AWS_ROLE: ${{ inputs.aws-role }}
+        AWS_INSTANCE_ID: ${{ inputs.aws-instance-id }}
+        AWS_INSTANCE_TYPE: ${{ inputs.aws-instance-type }}
+        RUN_LABEL: lanes-run-${{ github.run_id }}-${{ github.run_attempt }}
         FORK: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
       run: |
         python3 - <<'EOF' >> "$GITHUB_OUTPUT"
         import json, os, sys
-        value = os.environ["LANES_RUNNER"].strip()
-        if os.environ["FORK"] == "true" or not value:
-            value = "ubuntu-latest"
-        if value.startswith("["):
+        env = {k: os.environ[k].strip() for k in
+               ("LANES_RUNNER", "AWS_ROLE", "AWS_INSTANCE_ID", "AWS_INSTANCE_TYPE", "RUN_LABEL")}
+        def labels(value):
+            if not value.startswith("["):
+                return value
             value = json.loads(value)
             if not value or not all(isinstance(l, str) for l in value):
                 sys.exit(f"LANES_RUNNER must be a label or a JSON list of labels, not {value}")
-        print(f"label={json.dumps(value)}")
-        print(f"runs-on: {json.dumps(value)}", file=sys.stderr)
+            return value
+        if os.environ["FORK"] == "true":
+            route, label = "hosted", "ubuntu-latest"
+        elif env["AWS_ROLE"] and env["AWS_INSTANCE_ID"]:
+            route, label = "box", labels(env["LANES_RUNNER"] or '["self-hosted", "lanes"]')
+        elif env["AWS_ROLE"] and env["AWS_INSTANCE_TYPE"]:
+            route, label = "fresh", ["self-hosted", env["RUN_LABEL"]]
+        elif env["LANES_RUNNER"]:
+            route, label = "manual", labels(env["LANES_RUNNER"])
+        else:
+            route, label = "hosted", "ubuntu-latest"
+        print(f"label={json.dumps(label)}")
+        print(f"route={route}")
+        print(f"run-label={env['RUN_LABEL']}")
+        print(f"route {route}, runs-on: {json.dumps(label)}", file=sys.stderr)
         EOF

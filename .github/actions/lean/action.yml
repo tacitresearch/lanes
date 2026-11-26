@@ -1,21 +1,26 @@
 name: Lean
 description: >
-  Installs elan, which installs the toolchain of `lean-toolchain` on first use, and restores
-  `.lake/packages` (Mathlib, prebuilt, and the other dependencies, built) and `.lake/build`. The
-  packages are keyed on the toolchain and the manifest and fetched with `lake exe cache get` when
-  missing; the build is keyed on the commit and restored from the newest earlier one otherwise,
-  so Lake rebuilds only what changed. With `system`, `systems/<system>` gets the root's packages
-  and its own build back the same way. Saving is left to the jobs that build: see the keys in
-  the outputs.
+  Installs elan and the toolchain of `lean-toolchain`, and gives the job `.lake/packages`
+  (Mathlib, prebuilt, and the other dependencies, built) and a `.lake/build` to start from, so
+  Lake rebuilds only what changed. On a runner set up by scripts/ec2-runner.sh (LANES_SHARED is
+  set) the packages are the machine's shared ones, made once per toolchain and manifest, and
+  the build is the one the job's work directory kept, or the machine's warm one. Elsewhere both
+  come from the Actions cache: the packages keyed on the toolchain and the manifest (fetched with
+  `lake exe cache get` when missing), the build on the commit, falling back to the newest
+  earlier one. With `system`, `systems/<system>` gets the same packages and its own build back.
+  Saving is left to the jobs that build, when `warm` is not true: see the keys in the outputs.
 inputs:
   system:
     description: A directory under `systems/` whose build to restore as well.
     required: false
     default: ""
 outputs:
+  warm:
+    description: Whether the machine's shared packages are used; then nothing is to be saved.
+    value: ${{ steps.shared.outputs.warm }}
   packages-hit:
-    description: Whether `.lake/packages` was restored for exactly this toolchain and manifest.
-    value: ${{ steps.packages.outputs.cache-hit }}
+    description: Whether `.lake/packages` is there for exactly this toolchain and manifest.
+    value: ${{ steps.shared.outputs.warm == 'true' || steps.packages.outputs.cache-hit == 'true' }}
   packages-key:
     description: The key to save `.lake/packages` under.
     value: ${{ steps.keys.outputs.packages }}
@@ -28,7 +33,7 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Install elan
+    - name: Install elan and the toolchain
       shell: bash
       run: |
         elan_home="${ELAN_HOME:-$HOME/.elan}"
@@ -37,6 +42,9 @@ runs:
             | sh -s -- -y --no-modify-path --default-toolchain none
         fi
         echo "$elan_home/bin" >> "$GITHUB_PATH"
+        # Runners on one machine share elan: one of them installs a new toolchain at a time.
+        flock "$elan_home/.lanes-toolchain.lock" \
+          "$elan_home/bin/elan" toolchain install "$(cat lean-toolchain)"
     - id: keys
       shell: bash
       env:
@@ -51,27 +59,68 @@ runs:
           echo "system-prefix=lake-system-$SYSTEM-"
           echo "system=lake-system-$SYSTEM-$SHA"
         } >> "$GITHUB_OUTPUT"
+    - id: shared
+      name: The machine's shared packages
+      shell: bash
+      env:
+        SYSTEM: ${{ inputs.system }}
+      run: |
+        if [ -z "${LANES_SHARED:-}" ]; then echo "warm=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+        export PATH="${ELAN_HOME:-$HOME/.elan}/bin:$PATH"
+        key=$(cat lean-toolchain lake-manifest.json | sha256sum | cut -c1-16)
+        dir="$LANES_SHARED/$key"
+        mkdir -p .lake
+        exec 9>"$LANES_SHARED/lock"
+        flock 9
+        if [ ! -f "$dir/ready" ]; then
+          echo "Making the shared packages for $key"
+          rm -rf "$dir" .lake/packages
+          mkdir -p "$dir/packages"
+          ln -sfn "$dir/packages" .lake/packages
+          lake exe cache get
+          # Builds the dependencies' modules that Lanes imports, so that jobs only read them.
+          lake build Lanes || echo "::warning::Lanes does not build; what it would have built of the dependencies is built later, by the jobs"
+          touch "$dir/ready"
+        fi
+        flock -u 9
+        if [ "$(readlink .lake/packages || true)" != "$dir/packages" ]; then
+          rm -rf .lake/packages
+          ln -s "$dir/packages" .lake/packages
+        fi
+        if [ ! -d .lake/build ] && [ -d "$dir/build" ]; then cp -a "$dir/build" .lake/build; fi
+        if [ -n "$SYSTEM" ]; then
+          mkdir -p "systems/$SYSTEM/.lake"
+          ln -sfn "$GITHUB_WORKSPACE/.lake/packages" "systems/$SYSTEM/.lake/packages"
+          if [ ! -d "systems/$SYSTEM/.lake/build" ] && [ -d "$dir/systems/$SYSTEM/build" ]; then
+            cp -a "$dir/systems/$SYSTEM/build" "systems/$SYSTEM/.lake/build"
+          fi
+        fi
+        echo "warm=true" >> "$GITHUB_OUTPUT"
     - id: packages
-      uses: actions/cache/restore@v4
+      if: steps.shared.outputs.warm != 'true'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: .lake/packages
         key: ${{ steps.keys.outputs.packages }}
-    - uses: actions/cache/restore@v4
+    - if: steps.shared.outputs.warm != 'true'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: .lake/build
         key: ${{ steps.keys.outputs.build }}
         restore-keys: ${{ steps.keys.outputs.build-prefix }}
     - name: Fetch Mathlib's build
-      if: steps.packages.outputs.cache-hit != 'true'
+      if: steps.shared.outputs.warm != 'true' && steps.packages.outputs.cache-hit != 'true'
       shell: bash
       run: lake exe cache get
-    - if: inputs.system != ''
+    - if: steps.shared.outputs.warm != 'true' && inputs.system != ''
       shell: bash
+      env:
+        SYSTEM: ${{ inputs.system }}
       run: |
-        mkdir -p "systems/${{ inputs.system }}/.lake"
-        ln -sfn "$GITHUB_WORKSPACE/.lake/packages" "systems/${{ inputs.system }}/.lake/packages"
-    - if: inputs.system != ''
-      uses: actions/cache/restore@v4
+        mkdir -p "systems/$SYSTEM/.lake"
+        ln -sfn "$GITHUB_WORKSPACE/.lake/packages" "systems/$SYSTEM/.lake/packages"
+    - if: steps.shared.outputs.warm != 'true' && inputs.system != ''
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: systems/${{ inputs.system }}/.lake/build
         key: ${{ steps.keys.outputs.system }}

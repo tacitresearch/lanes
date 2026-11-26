@@ -1,9 +1,10 @@
 name: CI
 
 # Jobs that build run on `vars.LANES_RUNNER` (a label or a JSON list of labels), or on
-# ubuntu-latest when it is unset; a pull request from a fork always runs on ubuntu-latest. See
-# docs/RUNNERS.md. `build` builds everything once; the other jobs restore its build and run in
-# parallel.
+# ubuntu-latest when it is unset; a pull request from a fork always runs on ubuntu-latest. CI
+# does not start the warm runner machine (mutants.yml does): point LANES_RUNNER at it only while
+# it is kept running. See docs/RUNNERS.md. `build` builds everything once; the other jobs
+# restore its build and run in parallel.
 
 on:
   push:
@@ -24,7 +25,7 @@ jobs:
     outputs:
       label: ${{ steps.runner.outputs.label }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           sparse-checkout: .github
       - id: runner
@@ -38,17 +39,20 @@ jobs:
     runs-on: ${{ fromJSON(needs.runner.outputs.label) }}
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          clean: false
       - id: lean
         uses: ./.github/actions/lean
       - name: Build
         run: lake build --wfail
       - if: steps.lean.outputs.packages-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .lake/packages
           key: ${{ steps.lean.outputs.packages-key }}
-      - uses: actions/cache/save@v4
+      - if: steps.lean.outputs.warm != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .lake/build
           key: ${{ steps.lean.outputs.build-key }}
@@ -60,7 +64,9 @@ jobs:
     runs-on: ${{ fromJSON(needs.runner.outputs.label) }}
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          clean: false
       - uses: ./.github/actions/lean
       - name: Model checks
         run: lake exe lanesCheck
@@ -70,7 +76,9 @@ jobs:
     runs-on: ${{ fromJSON(needs.runner.outputs.label) }}
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          clean: false
       - uses: ./.github/actions/lean
       - name: Test
         run: lake test
@@ -90,14 +98,17 @@ jobs:
       run:
         working-directory: systems/raft-kv
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          clean: false
       - id: lean
         uses: ./.github/actions/lean
         with:
           system: raft-kv
       - name: Build
         run: lake build
-      - uses: actions/cache/save@v4
+      - if: steps.lean.outputs.warm != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: systems/raft-kv/.lake/build
           key: ${{ steps.lean.outputs.system-key }}
@@ -116,14 +127,17 @@ jobs:
       run:
         working-directory: systems/ledger
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          clean: false
       - id: lean
         uses: ./.github/actions/lean
         with:
           system: ledger
       - name: Build
         run: lake build
-      - uses: actions/cache/save@v4
+      - if: steps.lean.outputs.warm != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: systems/ledger/.lake/build
           key: ${{ steps.lean.outputs.system-key }}

@@ -2,7 +2,13 @@ name: Mutants
 
 # The mutation gate of scripts/mutants.py, every mutant, in shards that run in parallel. Runs
 # nightly on the default branch, by hand, and on a pull request that carries the label
-# `mutants` (again on each push to it). Jobs that build run on `vars.LANES_RUNNER`, as in CI.
+# `mutants` (again on each push to it).
+#
+# Where it runs (docs/RUNNERS.md): with LANES_AWS_ROLE_ARN, LANES_AWS_REGION and
+# LANES_AWS_INSTANCE_ID set, on the warm runner machine of infra/lanes-ci.yaml, which `start`
+# starts and `stop` stops; with LANES_AWS_INSTANCE_TYPE instead of the instance id, on a machine
+# launched for the run and terminated after it (slower: it starts cold); with only LANES_RUNNER,
+# on those runners; with none of them, or for a fork's pull request, on ubuntu-latest.
 
 on:
   schedule:
@@ -12,7 +18,12 @@ on:
       shards:
         description: How many jobs to split the mutants among
         required: false
-        default: "8"
+        default: "16"
+      hosted:
+        description: Run on GitHub's runners, whatever the variables say
+        type: boolean
+        required: false
+        default: false
   pull_request:
     types: [labeled, opened, synchronize, reopened]
 
@@ -34,10 +45,12 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       label: ${{ steps.runner.outputs.label }}
+      route: ${{ steps.runner.outputs.route }}
+      run-label: ${{ steps.runner.outputs.run-label }}
       count: ${{ steps.shards.outputs.count }}
       shards: ${{ steps.shards.outputs.shards }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           sparse-checkout: |
             .github
@@ -45,10 +58,13 @@ jobs:
       - id: runner
         uses: ./.github/actions/runner
         with:
-          runner: ${{ vars.LANES_RUNNER }}
+          runner: ${{ !inputs.hosted && vars.LANES_RUNNER || '' }}
+          aws-role: ${{ !inputs.hosted && vars.LANES_AWS_ROLE_ARN || '' }}
+          aws-instance-id: ${{ vars.LANES_AWS_INSTANCE_ID }}
+          aws-instance-type: ${{ vars.LANES_AWS_INSTANCE_TYPE }}
       - id: shards
         env:
-          SHARDS: ${{ inputs.shards || '8' }}
+          SHARDS: ${{ inputs.shards || '16' }}
         run: |
           python3 - <<'EOF' >> "$GITHUB_OUTPUT"
           import json, os, subprocess, sys
@@ -68,13 +84,50 @@ jobs:
           print(f"{len(names())} mutants in {n} shards", file=sys.stderr)
           EOF
 
-  # Builds the code as it is once and saves it, so that each shard starts from this build.
-  build:
+  start:
     needs: plan
+    if: needs.plan.outputs.route == 'box' || needs.plan.outputs.route == 'fresh'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: |
+            .github
+            scripts
+      - uses: ./.github/actions/box
+        with:
+          mode: start
+          route: ${{ needs.plan.outputs.route }}
+          role-arn: ${{ vars.LANES_AWS_ROLE_ARN }}
+          region: ${{ vars.LANES_AWS_REGION }}
+          instance-id: ${{ vars.LANES_AWS_INSTANCE_ID }}
+          instance-type: ${{ vars.LANES_AWS_INSTANCE_TYPE }}
+          image: ${{ vars.LANES_AWS_AMI }}
+          subnet: ${{ vars.LANES_AWS_SUBNET }}
+          security-group: ${{ vars.LANES_AWS_SECURITY_GROUP }}
+          labels: ${{ needs.plan.outputs.label }}
+          run-label: ${{ needs.plan.outputs.run-label }}
+          runner-token: ${{ secrets.LANES_RUNNER_PAT }}
+          github-token: ${{ github.token }}
+
+  # Builds the code as it is once, so that each shard starts from this build: on GitHub's
+  # runners through the Actions cache, on the warm machine through the work directories.
+  build:
+    needs: [plan, start]
+    if: >-
+      !cancelled() && needs.plan.result == 'success' &&
+      (needs.start.result == 'success' || needs.start.result == 'skipped')
     runs-on: ${{ fromJSON(needs.plan.outputs.label) }}
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          clean: false
       - id: lean
         uses: ./.github/actions/lean
         with:
@@ -84,21 +137,24 @@ jobs:
           lake build lanesTest
           (cd systems/raft-kv && lake build raftNode raftProcs raftLive)
       - if: steps.lean.outputs.packages-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .lake/packages
           key: ${{ steps.lean.outputs.packages-key }}
-      - uses: actions/cache/save@v4
+      - if: steps.lean.outputs.warm != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .lake/build
           key: ${{ steps.lean.outputs.build-key }}
-      - uses: actions/cache/save@v4
+      - if: steps.lean.outputs.warm != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: systems/raft-kv/.lake/build
           key: ${{ steps.lean.outputs.system-key }}
 
   shard:
     needs: [plan, build]
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ${{ fromJSON(needs.plan.outputs.label) }}
     timeout-minutes: 240
     strategy:
@@ -106,7 +162,9 @@ jobs:
       matrix:
         shard: ${{ fromJSON(needs.plan.outputs.shards) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          clean: false
       - uses: ./.github/actions/lean
         with:
           system: raft-kv
@@ -114,12 +172,12 @@ jobs:
         run: >-
           python3 scripts/mutants.py --all --baseline
           --shard ${{ matrix.shard }}/${{ needs.plan.outputs.count }}
-          --json verdicts-${{ matrix.shard }}.json
+          --json "$RUNNER_TEMP/verdicts-${{ matrix.shard }}.json"
       - if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: verdicts-${{ matrix.shard }}
-          path: verdicts-${{ matrix.shard }}.json
+          path: ${{ runner.temp }}/verdicts-${{ matrix.shard }}.json
           if-no-files-found: ignore
 
   # Fails on a mutant that survives, only hangs, is stale, or has no verdict (its shard failed
@@ -127,13 +185,13 @@ jobs:
   verdict:
     needs: [plan, shard]
     if: ${{ !cancelled() && needs.plan.result == 'success' }}
-    runs-on: ${{ fromJSON(needs.plan.outputs.label) }}
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           sparse-checkout: scripts
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         continue-on-error: true
         with:
           pattern: verdicts-*
@@ -146,3 +204,28 @@ jobs:
           status=${PIPESTATUS[0]}
           { echo '```'; cat verdicts.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           exit "$status"
+
+  stop:
+    needs: [plan, start, build, shard]
+    if: always() && (needs.plan.outputs.route == 'box' || needs.plan.outputs.route == 'fresh')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: .github
+      - uses: ./.github/actions/box
+        with:
+          mode: stop
+          route: ${{ needs.plan.outputs.route }}
+          role-arn: ${{ vars.LANES_AWS_ROLE_ARN }}
+          region: ${{ vars.LANES_AWS_REGION }}
+          instance-id: ${{ vars.LANES_AWS_INSTANCE_ID }}
+          labels: ${{ needs.plan.outputs.label }}
+          run-label: ${{ needs.plan.outputs.run-label }}
+          runner-token: ${{ secrets.LANES_RUNNER_PAT }}
+          github-token: ${{ github.token }}
