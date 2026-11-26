@@ -143,6 +143,11 @@ def abuse : Script :=
     (logIn 9 0, [8]), (act 10 0 7 .accounts, [9]), (act 11 0 3 .accounts, [10]),
     (act 12 1 3 (.openAccount .eur true), [11]), (act 13 1 3 .audit, [11]), (signUp 14 0, [11]) ]
 
+/-- The administrator pays `1` while `1` asks for its accounts, and `1`'s session may end at any
+moment. -/
+def expiryRace : Script :=
+  setup ++ [(act 9 0 3 (.transfer 0 2 5), [8]), (act 10 1 4 .accounts, [8])]
+
 def answered (w : World' config answering) (req : ReqId) (reply : Reply N) : Bool :=
   w.state.outbox.any fun r => r.req == req && r.reply == reply
 
@@ -286,6 +291,12 @@ def main (args : List String) : IO UInt32 := do
         | some (.violated "every response is one the spec allows" _) => true
         | _ => false)
       fun _ => checkLeaky)
+    results := results.push (← timed
+      "a session ending while a view is on its way: the view sees a payment asked after the end"
+      (fun r => match r.failure with
+        | some (.violated "every response is one the spec allows" _) => true
+        | _ => false)
+      fun _ => check timed' .viaLedger expiryRace [])
   if args.contains "timed-crash" then
     results := results.push (← timed "with timers and a crash anywhere"
       (fun r => r.ok && r.complete)

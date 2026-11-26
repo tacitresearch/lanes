@@ -171,7 +171,7 @@ lake exe lanes lint
 ## A spec in five lines, checked without a refinement mapping
 
 ```lean
-def spec : Service (sig K V F) (K → Option V) where
+def spec : Service (Request K V F) (Response V) (K → Option V) where
   init _ := none
   step store r :=
     match r.op with

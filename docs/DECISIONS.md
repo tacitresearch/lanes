@@ -1334,7 +1334,7 @@ Consequences and limits:
   therefore be refused rather than read (a new `ServerConfig.system`), or cut fresh by the old
   server first.
 
-## D42. A spec names its inputs and outputs, and time passes in it as deadlines the system's timers are
+## D43. A spec names its inputs and outputs, and time passes in it as deadlines the system's timers are
 
 The ledger (`systems/ledger/README.md`, friction log) found two limits of `Service`.
 
@@ -1342,7 +1342,11 @@ The ledger (`systems/ledger/README.md`, friction log) found two limits of `Servi
 the inputs and outputs, so it is written before the actors exist, and the system-level notions
 take the signature's: `System.Implements sys env svc` asks `svc : Service σ.In σ.Out S`, the
 monitor is `Check.Monitor In Out S`, and `Visible In Out` is what the outside world sees. Every
-statement is the old one with `σ` read as `σ.In` and `σ.Out`.
+statement is the old one with `σ` read as `σ.In` and `σ.Out`. One thing is lost at call sites: a
+spec no longer fixes the signature, so where nothing else in the arguments does before a
+hypothesis about a check is unified, the signature is named (`Check.refines_sound (σ := sig K V
+F) spec ...` in `Tests/SystemSound.lean` and `systems/raft-kv/RaftKVProofs/Checked.lean`);
+without it the elaborator unfolds the check itself and runs out of time.
 
 *Time.* The semantics has no clock: an armed timer may fire at any moment, in any order with the
 others, whatever its delay (`SysState.step`, `.timeout`). Time shows in a run only as timers
@@ -1383,6 +1387,10 @@ shows a timer firing as `fire t`, `Event.visible` is `Event.timed` with no deadl
 `System.Implements sys env svc deadlines` is refinement along it. The driver sees timers fire
 (`Driver.timeout`), as it sees outputs: the clock is part of the outside world.
 
+A system's timer that a run fires is seen by the driver and the checker as an event of the
+outside world (`Driver.timeout`, `Scenario.Reachable.timeout`), like an output, so the merging of
+worlds keeps the monitor's state apart for each (`Driver.Respects.timeout`).
+
 The monitor stays exact and finite. The spec's internal steps are still only pending inputs
 taking effect, so the closure is the one of before; a deadline passing keeps the candidates in
 which it is armed, fires it, and closes again, since inputs pending after it may take effect
@@ -1402,3 +1410,16 @@ Limits:
 - *A system's timer that is no armed deadline is a violation.* A timer that fires after what it
   ends is over (a session's expiry after its log-out) must be cancelled, or not be named a
   deadline.
+- *A deadline passes where its timer fires.* A system that decides a request at one actor and
+  serves it at another, as the ledger does (the user checks the session, the ledger serves),
+  refines a spec without deadlines, but not one whose deadline is seen at the deciding actor:
+  a request decided before the deadline and served after it can see a request that arrived
+  after the deadline (`systems/ledger`, found in 43 steps). The cure is to let the deadline pass
+  where requests are served, by naming the delivery of a notice as the deadline; `Deadlines`
+  names timers only, and extending it to deliveries is the next step.
+
+Used: the ledger's spec (`systems/ledger/Ledger/Spec.lean`) has a lock lifting and a session
+ending as deadlines, and its system is checked against them with its timers firing at any
+moment (12,577 states, pass); a lockout that does not lock is found in 26 steps. A lease in
+`Tests/Lease.lean` refines its spec with its timer named the lapse, and does not when the timer
+is not named or the lease is freed before the timer fires.

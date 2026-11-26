@@ -12,17 +12,17 @@ public import Lanes.Check.Search
 # Checking a system against a service spec
 
 `Service.monitored` wraps a driver so that the model checker also checks refinement to a
-`Service`: on every explored run, the inputs sent and outputs seen so far must be explainable by
-the spec. No refinement mapping is needed.
+`Service`: on every explored run, the inputs sent, the outputs seen and the deadlines passed so
+far must be explainable by the spec. No refinement mapping is needed.
 
 The monitor keeps every state the spec could be in given what has been observed. An input adds
 itself to `pending` in each candidate, and then any pending inputs may take effect in any order.
 An output keeps only the candidates that were waiting to deliver it. A timer that is a deadline
-of the spec firing keeps the candidates in which that deadline is armed, passes it, and closes
-again. If no candidate is left,
-the system has done something the spec does not allow, and the checker reports the trace. This
-is the subset construction on the spec, the same idea as the linearizability checkers Porcupine
-and Jepsen's Knossos, run inside the search instead of on recorded histories.
+of the spec keeps, when it fires, the candidates in which that deadline is armed, passes it in
+each, and closes them again, since inputs pending may take effect after it. If no candidate is
+left, the system has done something the spec does not allow, and the checker reports the trace.
+This is the subset construction on the spec, the same idea as the linearizability checkers
+Porcupine and Jepsen's Knossos, run inside the search instead of on recorded histories.
 
 A monitor's candidates are a set kept as a list. The list never holds two states that are the
 same up to `Service.State.equiv`, and the type says so (`Monitor.distinct`): that is what makes

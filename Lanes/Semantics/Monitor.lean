@@ -11,9 +11,9 @@ public import Lanes.Semantics.Service
 # The spec monitor is exact
 
 `Lanes.Check.Monitor` is the model checker's refinement check. This file proves that its
-candidates are exactly the states `Service.spec` can be in after the observed inputs,
-outputs and deadlines passing, so the monitor runs out of candidates exactly when the spec does not allow what was
-observed.
+candidates are exactly the states `Service.spec` can be in after the observed inputs, outputs
+and deadlines passing, so the monitor runs out of candidates exactly when the spec does not
+allow what was observed.
 
 The checker works on lists and `Service.spec` on multisets; `Service.State.toAbs` relates them.
 Soundness holds for any `BEq` on the spec state, because candidates are only ever dropped as
@@ -106,7 +106,8 @@ theorem State.toAbs_eq_of_equiv [BEq S] [LawfulBEq S] {a b : State In Out S}
   simp [State.toAbs, hvalue, Multiset.coe_eq_coe.mpr hpending, Multiset.coe_eq_coe.mpr houtbox]
 
 /-- A pending input taking effect is an internal step of the spec. -/
-theorem spec_tr_apply (svc : Service In Out S T) (st : State In Out S) {x : In} (hx : x ∈ st.pending) :
+theorem spec_tr_apply (svc : Service In Out S T) (st : State In Out S) {x : In}
+    (hx : x ∈ st.pending) :
     svc.spec.lts.Tr st.toAbs none (svc.apply st x).toAbs :=
   ⟨x, Multiset.mem_coe.mpr hx, toAbs_apply svc st x⟩
 
@@ -182,7 +183,8 @@ open Service
 
 omit [DecidableEq Out] in
 /-- The members of `expand`. -/
-theorem mem_expand {svc : Service In Out S T} {frontier : List (State In Out S)} {t : State In Out S} :
+theorem mem_expand {svc : Service In Out S T} {frontier : List (State In Out S)}
+    {t : State In Out S} :
     t ∈ expand svc frontier ↔ ∃ f ∈ frontier, ∃ x ∈ f.pending, svc.apply f x = t := by
   simp [expand]
 
@@ -220,7 +222,8 @@ def after (svc : Service In Out S T) (obs : List (Visible In Out T)) : Monitor I
   obs.foldl (observe svc) (start svc)
 
 /-- `insertAll` never drops a known state. -/
-theorem mem_insertAll_of_mem {known new : List (State In Out S)} {t : State In Out S} (h : t ∈ known) :
+theorem mem_insertAll_of_mem {known new : List (State In Out S)} {t : State In Out S}
+    (h : t ∈ known) :
     t ∈ insertAll known new := by
   induction new generalizing known with
   | nil => exact h
@@ -298,8 +301,8 @@ theorem mem_foldl_closeStep {svc : Service In Out S T} (l : List Nat)
 
 /-- Every state `close` returns is reached from one it was given by internal steps of the
 spec. -/
-theorem close_sound (svc : Service In Out S T) {states : List (State In Out S)} {st : State In Out S}
-    (h : st ∈ close svc states) :
+theorem close_sound (svc : Service In Out S T) {states : List (State In Out S)}
+    {st : State In Out S} (h : st ∈ close svc states) :
     ∃ seed ∈ states, svc.spec.lts.τSTr seed.toAbs st.toAbs := by
   rw [close_eq] at h
   suffices hfold : ∀ (l : List Nat) (acc : List (State In Out S) × List (State In Out S)),
@@ -370,7 +373,8 @@ theorem Closing.step [LawfulBEq S] {svc : Service In Out S T} {n : Nat}
 
 /-- Enough rounds use up the budget. -/
 theorem Closing.foldl [LawfulBEq S] {svc : Service In Out S T} :
-    ∀ (l : List Nat) {acc : List (State In Out S) × List (State In Out S)}, Closing svc l.length acc →
+    ∀ (l : List Nat) {acc : List (State In Out S) × List (State In Out S)},
+      Closing svc l.length acc →
       Closing svc 0 (l.foldl (fun acc _ => closeStep svc acc) acc)
   | [], _, h => h
   | _ :: l, _, h => Closing.foldl l h.step
@@ -378,8 +382,8 @@ theorem Closing.foldl [LawfulBEq S] {svc : Service In Out S T} :
 omit [BEq S] in
 /-- With no rounds to go the known states are closed under the spec's internal steps. -/
 theorem Closing.exists_of_τSTr {svc : Service In Out S T}
-    {acc : List (State In Out S) × List (State In Out S)} (h : Closing svc 0 acc) {s : State In Out S}
-    (hs : s ∈ acc.1) {a : Abs In Out S} (hτ : svc.spec.lts.τSTr s.toAbs a) :
+    {acc : List (State In Out S) × List (State In Out S)} (h : Closing svc 0 acc)
+    {s : State In Out S} (hs : s ∈ acc.1) {a : Abs In Out S} (hτ : svc.spec.lts.τSTr s.toAbs a) :
     ∃ t ∈ acc.1, t.toAbs = a := by
   induction hτ with
   | refl => exact ⟨s, hs, rfl⟩
@@ -409,7 +413,8 @@ theorem close_complete [LawfulBEq S] (svc : Service In Out S T) {states : List (
   exact (Closing.foldl _ hinit).exists_of_τSTr (mem_foldl_closeStep _ ht) hτ
 
 /-- Observing one more event. -/
-theorem after_concat (svc : Service In Out S T) (obs : List (Visible In Out T)) (e : Visible In Out T) :
+theorem after_concat (svc : Service In Out S T) (obs : List (Visible In Out T))
+    (e : Visible In Out T) :
     after svc (obs ++ [e]) = observe svc (after svc obs) e := by
   simp [after]
 
@@ -440,8 +445,8 @@ theorem sound (svc : Service In Out S T) {obs : List (Visible In Out T)} {st : S
       exact ⟨s.toAbs, seed.toAbs, ih hs, State.fire_eq_some hfire, hτ⟩
 
 /-- Every state the spec can be in after these observations is a candidate. -/
-theorem complete [LawfulBEq S] (svc : Service In Out S T) {obs : List (Visible In Out T)} {a : Abs In Out S}
-    (h : svc.spec.lts.SMTr ⟨svc.init, 0, 0⟩ (obs.map some) a) :
+theorem complete [LawfulBEq S] (svc : Service In Out S T) {obs : List (Visible In Out T)}
+    {a : Abs In Out S} (h : svc.spec.lts.SMTr ⟨svc.init, 0, 0⟩ (obs.map some) a) :
     ∃ st ∈ (after svc obs).candidates, st.toAbs = a := by
   induction obs using List.reverseRecOn generalizing a with
   | nil =>

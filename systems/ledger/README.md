@@ -103,6 +103,7 @@ does not have armed.
 | The same with timers that fire at any moment, checked against the deadlines | 12,577 | pass |
 | The same with a crash anywhere (`ledgerCheck timed-crash`, 11 s) | 88,546 | pass |
 | The same with a lockout that does not lock | | found in 26 steps |
+| A payment to `1` and a view by `1` racing the end of `1`'s session | | not the spec: found in 43 steps |
 
 Also tested, without a socket: a session cookie makes an act of its user whatever the form
 says; a cookie whose payload is changed does not verify; a form token of another session is
@@ -194,7 +195,15 @@ round of framework work is planned from this.
    pointing at the declaration and not saying why. Plain `inductive` takes both.
 3. **`lanes_data` takes no default field values**, so `{}` no longer builds an `Attempts`, a
    `Sessions` or a `Book`; each got a constant (`Attempts.none`, `Sessions.none`, `Book.empty`).
-4. `omega` did not close `e.account < b.accounts.length, ¬ k < b.accounts.length ⊢ ¬ e.account
+4. **With deadlines the system is not its spec.** A view that `user 1` decided while its
+   session was live reaches the ledger after a payment the administrator asked once the
+   session had ended, and shows it: the spec puts the view before the session's end and the
+   payment after (`Check.lean`, found in 43 steps). The user decides at one moment and the
+   ledger serves at a later one, and a deadline that passes between them is seen at the user.
+   The cure is the one that made the untimed system linearizable: let the deadline pass where
+   the request is served, the ledger handling the user's notice that the session ended. A
+   `Deadlines` names only timers today (D43), so that needs deadlines on deliveries.
+5. `omega` did not close `e.account < b.accounts.length, ¬ k < b.accounts.length ⊢ ¬ e.account
    = k` where `k : AccountId` and `abbrev AccountId := Nat` (`Ledger/Proofs/Book.lean`,
    `openAccount_sound`); a term did.
 

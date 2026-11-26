@@ -25,8 +25,9 @@ variable {σ : Signature}
 
 /--
 A model of the outside world: which inputs may arrive next and what it remembers of the
-outputs it sees and of the timers it sees fire, since the clock is outside too. Drivers may choose among several inputs; that choice exists only in the
-simulator and the model checker, never in an actor.
+outputs it sees and of the timers it sees fire, since the clock is outside too. Drivers may
+choose among several inputs; that choice exists only in the simulator and the model checker,
+never in an actor.
 -/
 structure Driver (σ : Signature) (D : Type) where
   init : D

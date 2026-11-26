@@ -65,7 +65,8 @@ def State.ret (st : State In Out S) (out : Out) : Option (State In Out S) :=
 def State.fire (svc : Service In Out S T) (st : State In Out S) (t : T) :
     Option (State In Out S) :=
   if svc.armed st.value t then
-    some { st with value := (svc.fire st.value t).1, outbox := st.outbox ++ (svc.fire st.value t).2 }
+    let r := svc.fire st.value t
+    some { st with value := r.1, outbox := st.outbox ++ r.2 }
   else none
 
 end Service
