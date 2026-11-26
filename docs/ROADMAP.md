@@ -37,7 +37,7 @@ the mistakes in A and B while they are cheap to fix.
 - **The Lean runtime is the production target for now.** If it becomes a reference
   implementation instead, the kernel is run from another host and the investment moves to
   proofs. Nothing in phase A depends on the answer.
-- **Everything is proved** (`docs/decisions/new-everything-is-proved.md`). This replaces "library
+- **Everything is proved** (`docs/decisions/D45-everything-is-proved.md`). This replaces "library
   and protocol code is proved; application code is model-checked and proves its key invariants".
 
 ## Standing risks
@@ -202,7 +202,7 @@ or the application needs its own releases.
 ## Decided after stepping back (2026-11-26)
 
 Lanes is for software an agent writes and nobody reads line by line, so its claim has to rest on
-proofs, not on checks, tests or review (`docs/decisions/new-everything-is-proved.md`). The order
+proofs, not on checks, tests or review (`docs/decisions/D45-everything-is-proved.md`). The order
 of work changes with it:
 
 1. **Proving an application becomes cheap enough to be routine.** A simulation-relation library

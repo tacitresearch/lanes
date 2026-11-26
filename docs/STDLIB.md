@@ -1,7 +1,7 @@
 # The standard library, triaged from Go's
 
 Go's standard library covers what an application needs without third-party packages. Lanes
-wants the same coverage, with everything proved (`docs/decisions/new-everything-is-proved.md`,
+wants the same coverage, with everything proved (`docs/decisions/D45-everything-is-proved.md`,
 on the branch `claude/roadmap-proved`). This page goes through every public package of Go 1.24
 (`go list std`, 172 packages without `internal` and `vendor`), plus the `golang.org/x` packages
 most web applications take, and says for each where Lanes gets it.
