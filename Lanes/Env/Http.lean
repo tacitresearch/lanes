@@ -12,8 +12,9 @@ public import Lanes.Http.Waiting
 /-!
 The HTTP server adapter: the IO around the gate. It reads a request, prepares it as the bridge
 says (`Bridge.prepare`), gives it an id no other request has, hands it as an input to a system
-that has the gate in it, and writes the one response the gate gives for it. Which requests are waiting, when one times out and when the
-system is too busy are the gate's decisions, not this file's.
+that has the gate in it, and writes the one response the gate gives for it. Which requests are
+waiting, when one times out and when the system is too busy are the gate's decisions, not this
+file's.
 
 There is one loop, `serveOn`, for both systems with a gate: `served sys`, whose only outputs are
 responses (`serve`, `serveWith`), and `fronted sys`, which also puts out what is no response and
@@ -106,7 +107,8 @@ journal is cut.
 -/
 private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig)
     (runtimeConfig : Runtime.Config) (log : Option (Journal.Log system))
-    (prepare : Request → Request) (enter : ReqId × Request → τ.In) (onOutput : τ.Out → (ReqId × Response) ⊕ Async Unit) :
+    (prepare : Request → Request) (enter : ReqId × Request → τ.In)
+    (onOutput : τ.Out → (ReqId × Response) ⊕ Async Unit) :
     Async (Server system) := do
   let some addr := Std.Net.IPv4Addr.ofString config.host
     | throw (IO.userError s!"lanes: {config.host} is not an IPv4 address")

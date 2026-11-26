@@ -116,10 +116,16 @@ a view cannot link or post to a route that does not exist.
 - **Several shards and processes.** Any number of shards joined behave as the one system
   (`System.SplitReachable.merged` for two, `System.ShardsReachable.unsharded` for `n`). A transport joins shards in different processes; what it
   decides is a pure function, run by the model checker against a network that fails.
+- **The HTTP gate.** `Http.serve` runs the system with the gate joined in front of it, and the
+  theorems are about that system, for every system and bridge: no request is answered more
+  often than it arrived, a waiting request keeps its deadline armed, and in a fair run every
+  request the gate admits is answered (`Http.served_answered_le_arrived`,
+  `Http.served_deadlines_armed`, `Http.served_pending_answered`). A bridge's `prepare` runs
+  before a request is journalled, so a password or a cookie need never reach the disk.
 - **The HTTP client's wire format.** What the reader makes of a response written as a server
   writes it, and of every start of one, is proved, and so are its size limit and its ending
   (`Response.read_wire`, `Response.read_more`).
-- **Trusted.** About 1,150 lines of IO and macro code and a 439-line HTTP wire format whose
+- **Trusted.** About 1,160 lines of IO and macro code and a 439-line HTTP wire format whose
   reading is proved for what a server's writer sends and only tested for other forms, listed with their sizes in `TRUSTED.md`; `lanes lint` fails if they
   grow, and `scripts/mutants.py` holds the known ways of breaking that code, each of which has
   to fail a test. It is a list, not a measure: a review found sixteen more, which are in it now,

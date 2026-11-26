@@ -54,8 +54,9 @@ Last updated: 2026-11-27.
    frame lemma for the actors that did not move, and projections for ghost state.
 2. Counterexample-to-induction finder and `inv_split`, then `lanes prove`.
 3. Releasing idle actors.
-4. What `systems/ledger` asks of the framework (its README's friction log): requests prepared
-   before the journal, specs with time, `Service` without the system's signature.
+4. What `systems/ledger` asks of the framework (its README's friction log): specs with time,
+   `Service` without the system's signature, and a place for slow work that is not a function
+   of one request.
 
 ## Known limits
 
@@ -68,11 +69,6 @@ Last updated: 2026-11-27.
 - `lanes lint` is text-level. `no-io-in-step`, `bounded`, `field-leak` and `fn-length` need the
   elaborator and are not implemented.
 - Templates take text children as string literals (`<p>"text"</p>`), not bare text.
-- The journal of `Http.serve` holds the raw requests the gate received, so a web application's
-  passwords and session cookies are on disk in plain text until a snapshot cuts the journal,
-  and a bridge's costly work (a password digest) runs on the shard's thread and again on every
-  replay. The remedy is a pure `prepare` applied before a request enters the journal
-  (`systems/ledger/README.md`, friction log).
 - No TLS, WebSockets or database adapter. The HTTP client speaks plain HTTP/1.1 to IPv4
   addresses; call past the local network through a proxy.
 - The gate keeps waiting requests in a list, so each request costs time linear in `maxPending`.
