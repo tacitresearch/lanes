@@ -383,15 +383,19 @@ def dutiesTest : Async (List (String × Bool)) := do
   let throwing ← Runtime.start clockSystem {} fun out => do
     if out == 2 then throw (IO.userError "this handler fails on 2")
     seen.modify (·.push out)
-  for n in [1:4] do throwing.input (.echo n)
-  let alive ← soon 2000 throwing.idle
+  let alive ← soon 2000 do
+    try
+      for n in [1:4] do throwing.input (.echo n)
+      throwing.idle
+      pure true
+    catch _ => pure false
   throwing.stop
   return [
     ("stop: commands handed over before it are finished", ended.isSome
       && (← outputs.get) == #[0, 1, 2, 3, 4, 5]),
     ("inbox: a capacity of zero still takes an input", taken.isSome),
     ("outputs: a handler that throws does not end the shard, and is not called again for that "
-      ++ "output", alive.isSome && (← seen.get) == #[1, 3]) ]
+      ++ "output", alive == some true && (← seen.get) == #[1, 3]) ]
 
 /-- A shard started on a journal goes on from the journal's clock, so a timer armed after the
 restart is due after its delay, not after the uptime of the run before. And a shard whose

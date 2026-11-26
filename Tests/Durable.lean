@@ -404,7 +404,8 @@ def snapshotTest : Async (List (String × Bool)) := do
   rt.idle
   let last ← balances rt
   rt.stop
-  IO.FS.removeFile (path.addExtension "snapshot")
+  let saved ← (path.addExtension "snapshot").pathExists
+  if saved then IO.FS.removeFile (path.addExtension "snapshot")
   let orphan ← IO.mkRef #[]
   let rt ← startSaving path orphan 8
   let refused ← within 2000 rt.ended
@@ -412,7 +413,7 @@ def snapshotTest : Async (List (String × Bool)) := do
   remove path
   return [
     ("snapshot: the journal is cut when the kernel is saved",
-      kept < 20 && (savedAt.map fun index => decide (index > 20)) == some true),
+      saved && kept < 20 && (savedAt.map fun index => decide (index > 20)) == some true),
     ("snapshot: a shard started from a snapshot is in the state it was in",
       before == [40, 160, 100] && after == before),
     ("snapshot: outputs handed over before the save are not handed over again",

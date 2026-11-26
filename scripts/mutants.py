@@ -115,6 +115,42 @@ MUTANTS = [
     ("node: an output that is neither a response nor a parcel is dropped",
      "Lanes/Env/Node.lean",
      "        | .inl out => onOutput out", "        | .inl _ => pure ()"),
+    ("peers: the end of an accepted connection is not reported", "Lanes/Env/Peers.lean",
+     """          background (listen events conn socket fun bytes =>
+            discard <| post events (.received conn bytes))
+""",
+     """          background do
+            try
+              repeat
+                let some bytes ← socket.recv? 65536 | break
+                discard <| post events (.received conn bytes)
+            catch _ => pure ()
+"""),
+    ("peers: a connection that cannot be made is not reported", "Lanes/Env/Peers.lean",
+     """              listen events conn socket fun _ => pure ()
+            catch _ => discard <| post events (.broken conn (← IO.monoMsNow))
+""",
+     """              listen events conn socket fun _ => pure ()
+            catch _ => pure ()
+"""),
+    ("peers: a connection this side made is not read", "Lanes/Env/Peers.lean",
+     """              discard <| post events (.connected conn)
+              listen events conn socket fun _ => pure ()
+""",
+     "              discard <| post events (.connected conn)\n"),
+    ("peers: a parcel over the limit is sent", "Lanes/Env/Peers.lean",
+     "\n      && bytes.size ≤ peers.config.limits.maxParcelBytes then", " then"),
+    ("peers: what the courier asks for at once is done last first", "Lanes/Env/Peers.lean",
+     "    for action in actions do", "    for action in actions.reverse do"),
+    ("peers: a shard with peers does not use its journal", "Lanes/Env/Peers.lean",
+     "runtimeConfig (journal := journal) fun", "runtimeConfig (journal := none) fun"),
+    ("node: the journal is not used", "Lanes/Env/Node.lean",
+     "config runtimeConfig (log := log) fun", "config runtimeConfig (log := none) fun"),
+    ("node: a parcel the shard puts out is not sent", "Lanes/Env/Node.lean",
+     "        | .inr parcel => peers.send parcel", "        | .inr _ => pure ()"),
+    ("node: a parcel that arrives is not handed to the shard", "Lanes/Env/Node.lean",
+     "  ready.resolve fun parcel => discard <| server.tryInput (.inr parcel)",
+     "  ready.resolve fun _ => pure ()"),
 ]
 
 
@@ -147,9 +183,10 @@ def sh(cmd, cwd=".", limit_s=1800):
 
 def verdict(check):
     """How the check ends on the code as it now is, and a word about it."""
-    code, _ = sh(check["build"], check["cwd"])
+    code, out = sh(check["build"], check["cwd"])
     if code != 0:
-        return "nobuild", "does not build"
+        errors = [line.strip() for line in out.splitlines() if "error:" in line]
+        return "nobuild", f"does not build ({errors[0] if errors else 'no error reported'})"
     code, out = sh(check["run"], check["cwd"], check["limit_s"])
     failed = [line[5:] for line in out.splitlines() if line.startswith("FAIL ")]
     if code is None:

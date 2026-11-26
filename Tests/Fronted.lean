@@ -3,6 +3,7 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
+import Tests.Durable
 import Tests.Web
 import Examples.BankWeb
 
@@ -385,6 +386,32 @@ def nodeTest : Async (List (String × Bool)) := do
       answer.startsWith "HTTP/1.1 200" && (← memos.get) == #[0]),
     ("fronted: a process whose server cannot start stops listening for parcels too",
       failed && free) ]
+
+/-- One process of the bank, with a front and peers, on a journal, stopped and started again. -/
+def nodeDurable : Async (List (String × Bool)) := do
+  let path ← Tests.Durable.scratch "node"
+  let here (_ : Acct) : Bool := true
+  let msg := (actors (Codec.fin (n := 3)) 100).msg
+  let fetched (method path' body : String) : Async String := do
+    try
+      let log ← Journal.Store.open
+        (sys := fronted ((bank Acct 100).shard here) Examples.BankWeb.bridge.shard {})
+        { path
+          input := Codec.sum (Codec.pair Codec.nat Request.codec)
+            (Codec.sum (Examples.Bank.Request.codec Codec.fin) (Codec.sigma Codec.fin msg)) }
+      let (server, peers) ← serveShard (bank Acct 100) here Examples.BankWeb.bridge
+        { listen := { port := 0 }, home := fun _ => pure none, id := Codec.fin, msg }
+        { port := 0 } (log := some log)
+      let answer ← Tests.Web.fetch (server.port.getD 0) path' (method := method) (body := body)
+      peers.stop
+      server.stop
+      return answer
+    catch e => return toString e
+  let moved ← fetched "POST" "/transfer" "src=0&dst=1&amount=30"
+  let after ← fetched "GET" "/accounts/1" ""
+  Tests.Durable.remove path
+  return [("fronted: a process with a front and peers on a journal comes back in the state it "
+    ++ "was in", moved.startsWith "HTTP/1.1 200" && after.endsWith "<span>130</span>")]
 
 /-! A fronted system on a journal: stop the server, start another on the same journal. -/
 

@@ -46,9 +46,10 @@ def report (results : List (String × Bool)) : IO UInt32 := do
 def live : IO (List (String × Bool)) := do
   return (← Tests.Runtime.tests) ++ (← Tests.Web.tests) ++ (← Tests.Durable.tests)
     ++ (← Tests.Clock.live.block) ++ (← Tests.HttpClient.live.block)
-    ++ (← Tests.Cluster.tests) ++ (← Tests.Peers.live.block)
-    ++ (← Tests.Fronted.live.block) ++ (← Tests.Fronted.busyTest.block)
-    ++ (← Tests.Fronted.nodeTest.block) ++ (← Tests.Fronted.durable.block)
+    ++ (← Tests.Cluster.tests) ++ (← Tests.Peers.live.block) ++ (← Tests.Peers.durable.block)
+    ++ (← Tests.Peers.transport.block) ++ (← Tests.Fronted.live.block)
+    ++ (← Tests.Fronted.busyTest.block) ++ (← Tests.Fronted.nodeTest.block)
+    ++ (← Tests.Fronted.nodeDurable.block) ++ (← Tests.Fronted.durable.block)
 
 def main (args : List String) : IO UInt32 := do
   let pure := Tests.Engine.tests ++ Tests.Bank.tests ++ Tests.Json.tests ++ Tests.Html.tests
