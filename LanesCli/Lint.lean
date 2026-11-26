@@ -14,8 +14,8 @@ Source-level checks of the LANES_STYLE rules that can be decided from the text o
 - `trusted-size` (rule 5.5): a file that `TRUSTED.md` lists as `` `path`, N lines `` has at most
   `N` lines, so trusted code cannot grow without the list changing.
 - `layering` (rule 1.6): files that import Mathlib, CSLib or a proof module (`Lanes.Semantics`,
-  `App.Proofs`) live in a proof directory or are named `…Proofs.lean`, so executable code never
-  links them.
+  `App.Proofs`) live in a proof directory, one named `…Proofs` included, or are named
+  `…Proofs.lean`, so executable code never links them.
 
 Comments and string literals are ignored. The checks that need the elaborator (`no-io-in-step`,
 `bounded`, `field-leak`) are not implemented yet.
@@ -102,7 +102,7 @@ def proofDirs : List String :=
 
 def isProofFile (file : System.FilePath) : Bool :=
   file.components.any fun part =>
-    proofDirs.contains part || part.endsWith "Proofs.lean"
+    proofDirs.contains part || part.endsWith "Proofs" || part.endsWith "Proofs.lean"
       || proofDirs.any fun dir => part == dir ++ ".lean"
 
 def importsProofModule (line : String) : Bool :=
