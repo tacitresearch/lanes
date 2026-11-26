@@ -10,7 +10,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Area | Definitions | proved | trusted | checked | tested | spec | none |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `Lanes/Actors` | 334 | 167 | 10 | 36 | 19 | 78 | 24 |
+| `Lanes/Actors` | 339 | 170 | 10 | 36 | 19 | 80 | 24 |
 | `Lanes/Auth` | 27 | 7 | 0 | 0 | 16 | 1 | 3 |
 | `Lanes/Behaviours` | 8 | 8 | 0 | 0 | 0 | 0 | 0 |
 | `Lanes/Check` | 91 | 54 | 0 | 25 | 0 | 10 | 2 |
@@ -20,7 +20,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Http` | 176 | 100 | 1 | 9 | 35 | 17 | 14 |
 | `Lanes/Semantics` | 42 | 10 | 0 | 0 | 0 | 29 | 3 |
 | `LanesCli` | 108 | 0 | 0 | 0 | 24 | 0 | 84 |
-| All | 1176 | 501 | 40 | 74 | 242 | 146 | 173 |
+| All | 1181 | 504 | 40 | 74 | 242 | 148 | 173 |
 
 ## `Lanes/Actors/Actor.lean`
 
@@ -256,22 +256,23 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Kernel.cell` | proved | `Batch.run_peek`, `Kernel.WellFormed.runBatch_of_due`, `Kernel.WellFormed.step_of_due` and 3 more |
-| `Kernel.setCell` | proved | through `Kernel.apply`, `Kernel.boot` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 23 more |
-| `Kernel.abs` | spec | used only in statements |
-| `Kernel.env` | proved | `Kernel.abs_boot`, `Kernel.accept_sound`, `Kernel.exec_reachable` and 3 more |
-| `Kernel.unschedule` | proved | through `Kernel.apply`, `Kernel.boot` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 23 more |
-| `Kernel.perform` | proved | through `Kernel.apply`, `Kernel.boot` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 23 more |
-| `Kernel.performAll` | proved | through `Kernel.apply`, `Kernel.boot` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 23 more |
-| `Kernel.down` | proved | through `Kernel.apply`, `Kernel.boot` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 23 more |
-| `Kernel.settle` | proved | through `Kernel.apply`, `Kernel.boot` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 23 more |
-| `Kernel.handle` | proved | through `Kernel.apply`, `Kernel.exec` and 4 more: `Batch.run_handed`, `Batch.run_kernel` and 21 more |
-| `Kernel.startActor` | proved | through `Kernel.apply`, `Kernel.boot` and 4 more: `Batch.run_handed`, `Batch.run_kernel` and 22 more |
-| `Kernel.boot` | proved | `Http.kernel_fronted_answered_le_arrived`, `Http.kernel_served_answered_le_arrived`, `Journal.recover_kernel` and 5 more |
+| `Kernel.setCell` | proved | through `Kernel.apply`, `Kernel.boot` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 24 more |
+| `Kernel.abs` | proved | `Kernel.WellFormed.quiet_iff`, `Kernel.WellFormed.wait_forever`, `Kernel.abs_boot` and 7 more |
+| `Kernel.env` | proved | `Kernel.abs_boot`, `Kernel.accept_sound`, `Kernel.exec_reachable` and 4 more |
+| `Kernel.unschedule` | proved | through `Kernel.apply`, `Kernel.boot` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 24 more |
+| `Kernel.perform` | proved | through `Kernel.apply`, `Kernel.boot` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 24 more |
+| `Kernel.performAll` | proved | through `Kernel.apply`, `Kernel.boot` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 24 more |
+| `Kernel.down` | proved | through `Kernel.apply`, `Kernel.boot` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 24 more |
+| `Kernel.settle` | proved | through `Kernel.apply`, `Kernel.boot` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 24 more |
+| `Kernel.rest` | proved | through `Kernel.apply`, `Kernel.exec` and 4 more: `Batch.run_handed`, `Batch.run_kernel` and 22 more |
+| `Kernel.handle` | proved | through `Kernel.apply`, `Kernel.exec` and 4 more: `Batch.run_handed`, `Batch.run_kernel` and 22 more |
+| `Kernel.startActor` | proved | through `Kernel.apply`, `Kernel.boot` and 4 more: `Batch.run_handed`, `Batch.run_kernel` and 23 more |
+| `Kernel.boot` | proved | `Http.kernel_fronted_answered_le_arrived`, `Http.kernel_served_answered_le_arrived`, `Journal.recover_kernel` and 6 more |
 | `Kernel.accept` | proved | `Kernel.accept_sound` |
 | `Kernel.run1` | proved | `Kernel.run1_sound` |
 | `Kernel.fire` | proved | `Kernel.fire_sound` |
-| `Kernel.advance` | proved | through `Kernel.apply`, `Kernel.exec`: `Batch.run_handed`, `Batch.run_kernel` and 12 more |
-| `Kernel.timerNext` | proved | through `Kernel.apply`, `Kernel.exec` and 2 more: `Batch.run_handed`, `Batch.run_kernel` and 19 more |
+| `Kernel.advance` | proved | through `Kernel.apply`, `Kernel.exec`: `Batch.run_handed`, `Batch.run_kernel` and 13 more |
+| `Kernel.timerNext` | proved | through `Kernel.apply`, `Kernel.exec` and 2 more: `Batch.run_handed`, `Batch.run_kernel` and 20 more |
 | `Kernel.step` | proved | `Kernel.WellFormed.runBatch_of_due`, `Kernel.WellFormed.step_events_ne_nil`, `Kernel.WellFormed.step_of_due` and 1 more |
 | `Kernel.wait` | proved | `Kernel.WellFormed.step_events_ne_nil`, `Kernel.WellFormed.wait_for_ms`, `Kernel.WellFormed.wait_forever` and 1 more |
 | `Kernel.runBatch` | proved | `Kernel.WellFormed.runBatch`, `Kernel.WellFormed.runBatch_of_due`, `Kernel.runBatch_outputs` and 1 more |
@@ -279,7 +280,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Kernel.image` | proved | `Batch.flush_save`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save` and 4 more |
 | `Kernel.Image.kernel` | proved | `Batch.flush_save`, `Kernel.WellFormed.image`, `Kernel.abs_image_kernel` |
 | `Kernel.apply` | proved | `Kernel.WellFormed.apply` |
-| `Kernel.exec` | proved | `Batch.run_handed`, `Batch.run_kernel`, `Batch.settle_kernel` and 10 more |
+| `Kernel.exec` | proved | `Batch.run_handed`, `Batch.run_kernel`, `Batch.settle_kernel` and 11 more |
 
 ## `Lanes/Actors/KernelSound.lean`
 
@@ -360,6 +361,15 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Ghost.past` | spec | used only in statements |
 | `System.withPast` | spec | used only in statements |
 | `SysState.seen` | spec | used only in statements |
+
+## `Lanes/Actors/Release.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Event.awake` | proved | `Event.filterMap_eq_of_awake` |
+| `SysState.Same` | spec | a predicate |
+| `SysState.release` | spec | used only in statements |
+| `SysState.Leads` | spec | a predicate |
 
 ## `Lanes/Actors/Run.lean`
 
@@ -504,21 +514,21 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `update` | proved | through `SysState.init`, `SysState.run` and 3 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 33 more |
+| `update` | proved | through `SysState.init`, `SysState.run` and 3 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 32 more |
 | `Event.timed` | spec | used only in statements |
 | `Event.visible` | spec | used only in statements |
 | `SysState.blank` | proved | `System.Inductive.of_monotone`, `System.Monotone.and` |
-| `SysState.hasMail` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 25 more |
-| `SysState.perform` | proved | through `SysState.init`, `SysState.run` and 3 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 33 more |
-| `SysState.performAll` | proved | through `SysState.init`, `SysState.run` and 3 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 33 more |
-| `SysState.down` | proved | through `SysState.init`, `SysState.run` and 3 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 33 more |
+| `SysState.hasMail` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 23 more |
+| `SysState.perform` | proved | through `SysState.init`, `SysState.run` and 3 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 32 more |
+| `SysState.performAll` | proved | through `SysState.init`, `SysState.run` and 3 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 32 more |
+| `SysState.down` | proved | through `SysState.init`, `SysState.run` and 3 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 32 more |
 | `SysState.settle` | proved | `SysState.Loses.settle` |
-| `SysState.handle` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 25 more |
-| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and 2 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 32 more |
-| `SysState.deliverable` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 25 more |
+| `SysState.handle` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 23 more |
+| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and 2 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 31 more |
+| `SysState.deliverable` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 23 more |
 | `SysState.step` | proved | `Http.Gate.answered_of_leaves`, `Http.Gate.deadline_not_restarted`, `Shards.AtHome.step` and 7 more |
 | `SysState.init` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and 16 more |
-| `SysState.run` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and 13 more |
+| `SysState.run` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and 11 more |
 | `System.Invariant` | spec | a predicate |
 
 ## `Lanes/Auth/Login.lean`
@@ -655,7 +665,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Check.Property.holds` | proved | `Check.refines_sound`, `Check.refines_traces`, `Check.system_sound` and 1 more |
 | `Check.Trace.last` | proved | `Check.search_deadlock`, `Check.search_reached`, `Check.search_violated` and 2 more |
 | `Check.Trace.labels` | proved | `Check.system_violated` |
-| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 11 more |
+| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 12 more |
 | `Check.Path.last` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
 | `Check.Path.toTraceAux` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
 | `Check.Path.toTrace` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
@@ -869,7 +879,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Fifo.pop?` | none |  |
 | `Fifo.filter` | none |  |
 | `Fifo.length` | proved | `Peers.Courier.Reachable.queue_le` |
-| `Fifo.isEmpty` | checked | `Tests/Courier.lean`, `Tests/Kernel.lean` |
+| `Fifo.isEmpty` | checked | `Tests/Courier.lean`, `Tests/Kernel.lean`, `Tests/Release.lean` |
 
 ## `Lanes/Data/Frame.lean`
 

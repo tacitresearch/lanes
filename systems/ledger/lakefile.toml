@@ -1,6 +1,6 @@
 name = "ledger"
 version = "0.1.0"
-defaultTargets = ["Ledger", "ledgerCheck", "ledger", "ledgerLive"]
+defaultTargets = ["Ledger", "Release", "ledgerCheck", "ledger", "ledgerLive"]
 testDriver = "ledgerCheck"
 
 [[require]]
@@ -12,6 +12,10 @@ path = "../.."
 [[lean_lib]]
 name = "Ledger"
 roots = ["Ledger", "Ledger.Proofs"]
+
+# Strangers' actors are released: checked by `#guard` when it is built.
+[[lean_lib]]
+name = "Release"
 
 # Model checks, run by `lake test`. Check before you prove (Lanes rule 5.1).
 [[lean_exe]]

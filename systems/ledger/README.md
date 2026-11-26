@@ -172,6 +172,12 @@ round of framework work is planned from this.
   `script` gives real-time order, which is what makes a stale read a violation; it also keeps
   the state space small. Tested on the key-value store (`Tests/Clients.lean`).
 - **A list lemma**: `Lanes.sum_map_set` in `Lanes/Data/List/Basic.lean`.
+- **Releasing idle actors**: an actor declares the states a start gives it (`Actor.fresh`), and
+  the kernel drops one that is in such a state with no timers once it has handled a message,
+  proved to change nothing anyone can see (`Kernel.exec_visible`,
+  `docs/decisions/D51-release-actors-at-rest.md`). `user n` declares its vacant state, which a
+  log-in for an unknown name leaves as it is, so twenty thousand guesses leave the kernel
+  holding the ledger alone (`Release.lean`, checked when it is built).
 
 ### Broken
 
@@ -237,9 +243,12 @@ round of framework work is planned from this.
 - **Conservation across actors would not cover real names.** The bank proves conservation
   over a `Fintype` of accounts; `String` names are not one. With the book in one actor the
   question did not arise, but sharding the book needs sums over the actors that have started.
-- **A user actor for every name ever tried.** A log-in for a name nobody has creates the cell
-  `user n`, and the runtime never releases an actor (`docs/STATUS.md`), so a stranger can grow
-  the kernel without bound by guessing names.
+- **A user actor for every name ever tried.** A log-in for a name nobody has created the cell
+  `user n`, and the runtime never released an actor, so a stranger could grow the kernel
+  without bound by guessing names. Fixed (above): a vacant user is released. A user who signed
+  up stays in memory for good, since releasing it needs its record saved elsewhere. The
+  journal's name (`Main.lean`) should change with this, since the kernel now replays an old
+  journal differently.
 - **Unbounded state.** Entries grow forever (rule 2.6 has nothing to say to a ledger), accounts
   are a `List` looked up by index, every snapshot writes the whole book, and the transfers page
   lists every entry of the user.
@@ -265,7 +274,8 @@ round of framework work is planned from this.
   is booked.
 - **A database adapter**: the book outgrows memory and its snapshot; it wants entries by
   account as a derived index with a theorem tying it to the entries (rule 1.1), paged queries,
-  and user actors released to storage when idle.
+  and the actors of users who signed up released to storage when idle and read back on their
+  next request.
 - **A sharded book**: transfers across shards need locks or two-phase commit to stay
   linearizable; the checker already shows what goes wrong without them.
 

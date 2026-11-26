@@ -24,8 +24,9 @@ review. The order of work:
    bound (D46); what is not needed.
 4. **Trusted and assumed things keep shrinking**: our own HTTP/1.1 request reader in place of
    `Std.Http`'s, exactly-once requests in place of the premise that links from clients do not
-   duplicate, idle actors released. `fsync` and cryptography bound to libsodium are done (D46);
-   exactly-once requests are in for the key-value store (D48).
+   duplicate, idle actors saved to storage when they rest. `fsync` and cryptography bound to
+   libsodium are done (D46); exactly-once requests are in for the key-value store (D48); actors
+   back where a start puts them are released (`docs/decisions/D51-release-actors-at-rest.md`).
 5. **Specs are what a person reviews.** Each system's spec and its premises sit in one place, and
    a person reads them before any public claim.
 

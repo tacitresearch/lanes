@@ -325,7 +325,7 @@ private theorem foldl_replay1 {sys : System σ} (past : List (Entry σ)) (k : Ke
 
 /-- Recovery rebuilds exactly the kernel that the journal's requests lead to from boot. By
 `Kernel.exec_reachable` that is a state the semantics reaches by the events those requests
-reported: the run before the crash, continued. -/
+reported, with actors at rest released: the run before the crash, continued. -/
 theorem recover_kernel (sys : System σ) (past : List (Entry σ)) :
     (recover sys past).1 = ((Kernel.boot sys).1.exec (ops past)).kernel :=
   (foldl_replay1 past (Kernel.boot sys).1 (Kernel.boot sys).2).1

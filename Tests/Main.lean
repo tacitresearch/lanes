@@ -31,6 +31,7 @@ import Tests.Auth
 import Tests.Clients
 import Tests.Lease
 import Tests.Lint
+import Tests.Release
 import Tests.Oracle.All
 
 /-!
@@ -67,6 +68,7 @@ def live : IO (List (String × Bool)) := do
     ++ (← safely "full inbox" Tests.Fronted.busyTest) ++ (← safely "node" Tests.Fronted.nodeTest)
     ++ (← safely "node on a journal" Tests.Fronted.nodeDurable)
     ++ (← safely "fronted on a journal" Tests.Fronted.durable)
+    ++ (← safely "release" Tests.Release.liveTests)
     ++ (← Tests.Crypto.live)
 
 def main (args : List String) : IO UInt32 := do
@@ -76,7 +78,7 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.Fair.tests ++ Tests.Codec.tests ++ Tests.Durable.fileTests ++ Tests.Split.tests
     ++ Tests.Peers.tests ++ Tests.Courier.tests ++ Tests.Mailbox.tests ++ Tests.Batch.tests
     ++ Tests.Crypto.tests ++ Tests.Auth.tests ++ Tests.Clients.tests ++ Tests.Lease.tests
-    ++ Tests.ReadRequest.tests ++ Tests.Oracle.unitTests
+    ++ Tests.Release.tests ++ Tests.ReadRequest.tests ++ Tests.Oracle.unitTests
   match args with
   | [] =>
     let pure := pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.Lint.tests)
