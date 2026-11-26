@@ -30,7 +30,7 @@ lake exe lanes inventory --list none  # the definitions of Lanes/ without eviden
 ```
 
 `docs/INVENTORY.md` gives every public definition a status, read from the built modules
-(`docs/decisions/new-the-inventory-is-computed.md`). A theorem makes what it states proved when
+(`docs/decisions/D47-the-inventory-is-computed.md`). A theorem makes what it states proved when
 it has an axiom gate. A new definition of `Lanes/` with no theorem, test or row of `TRUSTED.md`
 fails `lanes lint` unless it is on `docs/inventory-none.md` under a heading that says why; when
 one there gets evidence, take it off.

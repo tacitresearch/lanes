@@ -3,7 +3,7 @@
 Every public definition of `Lanes` and `LanesCli`, with its status and the evidence for it.
 Generated from the built modules by `lake exe lanes lint --fix` (`LanesCli/Inventory.lean`);
 do not edit. What each status means, and what is not listed, is in
-`docs/decisions/new-the-inventory-is-computed.md`. The definitions of `Lanes/` with status
+`docs/decisions/D47-the-inventory-is-computed.md`. The definitions of `Lanes/` with status
 none are on `docs/inventory-none.md`, which only shrinks.
 
 ## Summary

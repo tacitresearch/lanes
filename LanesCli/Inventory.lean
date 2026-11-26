@@ -9,7 +9,7 @@ import Lean
 
 Every public definition of `Lanes` and `LanesCli` with one status and its evidence, read from the
 built modules: `docs/INVENTORY.md`. The rules are those of
-`docs/decisions/new-the-inventory-is-computed.md`. This module imports `Lean`, so only the
+`docs/decisions/D47-the-inventory-is-computed.md`. This module imports `Lean`, so only the
 `lanesInventory` executable links it; `lanes` starts that with `lake exe`.
 -/
 
@@ -422,7 +422,7 @@ def render (es : Array Entry) : String := Id.run do
     ++ "Every public definition of `Lanes` and `LanesCli`, with its status and the evidence for it.\n"
     ++ "Generated from the built modules by `lake exe lanes lint --fix` (`LanesCli/Inventory.lean`);\n"
     ++ "do not edit. What each status means, and what is not listed, is in\n"
-    ++ "`docs/decisions/new-the-inventory-is-computed.md`. The definitions of `Lanes/` with status\n"
+    ++ "`docs/decisions/D47-the-inventory-is-computed.md`. The definitions of `Lanes/` with status\n"
     ++ "none are on `docs/inventory-none.md`, which only shrinks.\n\n"
     ++ "## Summary\n\n" ++ summary es
   let modules := (es.map (·.module)).toList.eraseDups
