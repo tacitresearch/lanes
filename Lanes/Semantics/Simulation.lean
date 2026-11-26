@@ -30,6 +30,8 @@ internal steps of the spec. The rules here make that usable for a `System`.
   environment has.
 - `System.Refines.of_steps`: refinement of a system in the cases of `Inductive.of_monotone`,
   for a relation that losing messages and timers cannot break.
+- `System.Refines.of_handles`: the same with handling a message as one case, whether the message
+  stays in flight or not, in every environment.
 -/
 
 @[expose] public section
@@ -292,6 +294,34 @@ theorem Refines.of_steps {inv : SysState sys → Prop} (hinv : sys.Invariant env
     (fun c t i msg hc h hmem => by
       obtain ⟨t', ht', h'⟩ := timeout c t i msg hc h hmem
       exact ⟨t', (LTS.sTr_τSTr_iff spec.lts).mpr ht', h'⟩) recover
+
+/--
+`of_steps` with a delivery, a duplicate and a timeout as one case: an actor handles a message in
+flight or a timer armed, with any part of the network left (`net`). A relation that reads
+messages in flight as a set proves this as easily for the message kept as for the message
+taken, and the statement then holds in every environment, whatever the links duplicate.
+-/
+theorem Refines.of_handles {inv : SysState sys → Prop} (hinv : sys.Invariant env inv)
+    (rel : SysState sys → S → Prop)
+    (init : ∃ t, spec.init t ∧ rel (SysState.init sys env) t)
+    (loses : ∀ c c' t, rel c t → c'.Loses c → rel c' t)
+    (input : ∀ c t x, inv c → rel c t → ∃ t', spec.lts.STr t (some (.input x)) t' ∧
+      rel { c with net := c.net ++ [⟨none, (sys.accept x).1, (sys.accept x).2⟩] } t')
+    (output : ∀ c t out, inv c → rel c t → out ∈ c.outbox →
+      ∃ t', spec.lts.STr t (some (.output out)) t' ∧
+        rel { c with outbox := c.outbox.erase out } t')
+    (handle : ∀ c t (net : List (Envelope σ)) i (msg : σ.Msg i), inv c → rel c t →
+      net.Sublist c.net → ((∃ src, (⟨src, i, msg⟩ : Envelope σ) ∈ c.net) ∨ msg ∈ c.timers i) →
+      ∃ t', spec.lts.τSTr t t' ∧
+        rel (({ c with net }).grow i ((sys.actor i).step (c.state i) msg)) t')
+    (recover : ∀ c t i, inv c → rel c t → ∃ t', spec.lts.τSTr t t' ∧
+      rel (c.grow i ((sys.actor i).recover (c.state i))) t') :
+    sys.Refines env spec :=
+  Refines.of_steps hinv rel init loses input output
+    (fun c t e hc h he => handle c t _ e.dst e.msg hc h List.erase_sublist (.inl ⟨e.src, he⟩))
+    (fun c t e hc h he _ => handle c t c.net e.dst e.msg hc h (.refl _) (.inl ⟨e.src, he⟩))
+    (fun c t i msg hc h hm => handle c t c.net i msg hc h (.refl _) (.inr hm))
+    recover
 
 end System
 

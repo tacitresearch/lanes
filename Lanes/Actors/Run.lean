@@ -74,6 +74,13 @@ theorem mem_armed {effs : List (Effect σ i)} {msg : σ.Msg i} :
     cases eff <;> simp only [List.mem_cons, ih, reduceCtorEq, false_or]
     simp only [after.injEq, exists_or, exists_eq_left]
 
+theorem mem_emits {effs : List (Effect σ i)} {out : σ.Out} : out ∈ emits effs ↔ .emit out ∈ effs := by
+  induction effs with
+  | nil => simp [emits]
+  | cons eff effs ih =>
+    simp only [emits, List.filterMap_cons, List.mem_cons] at ih ⊢
+    cases eff <;> simp [ih, eq_comm]
+
 theorem emits_map_emit (outs : List σ.Out) : emits (outs.map (emit (self := i))) = outs := by
   induction outs with
   | nil => rfl

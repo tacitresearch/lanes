@@ -9,6 +9,7 @@ public import Lanes.Semantics.FrontLive
 public import Lanes.Semantics.Liveness
 public import Lanes.Semantics.Monitor
 public import Lanes.Semantics.MonitorSound
+public import Lanes.Semantics.Once
 public import Lanes.Semantics.Projection
 public import Lanes.Semantics.Refinement
 public import Lanes.Semantics.Service
