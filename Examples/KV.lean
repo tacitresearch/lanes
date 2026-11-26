@@ -126,4 +126,15 @@ abbrev system (K V F : Type) [DecidableEq K] [DecidableEq V] [DecidableEq F] (ca
     | .store => store
   accept r := ⟨.front r.via, .request r⟩
 
+/-- The run the checker finds with caching and one front end: a read is cached, a write is
+acknowledged, and the next read is served from the cache. -/
+def staleRead (k : K) (v : V) (f : F) : List (Event (sig K V F)) :=
+  [.input ⟨1, f, .get k⟩, .start (.front f), .deliver ⟨none, .front f, .request ⟨1, f, .get k⟩⟩,
+    .start .store, .deliver ⟨some (.front f), .store, .get 1 k f⟩,
+    .deliver ⟨some .store, .front f, .got 1 k none⟩,
+    .input ⟨2, f, .put k v⟩, .deliver ⟨none, .front f, .request ⟨2, f, .put k v⟩⟩,
+    .deliver ⟨some (.front f), .store, .put 2 k v⟩, .output ⟨2, .ok⟩,
+    .input ⟨3, f, .get k⟩, .deliver ⟨none, .front f, .request ⟨3, f, .get k⟩⟩,
+    .output ⟨3, .value none⟩]
+
 end Examples.KV
