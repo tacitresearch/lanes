@@ -37,3 +37,10 @@ jobs:
           lake test
           lake exe raftLive
           lake exe raftProcs
+      - name: systems/ledger builds and passes its checks
+        run: |
+          cd systems/ledger
+          mkdir -p .lake && ln -s "$GITHUB_WORKSPACE/.lake/packages" .lake/packages
+          lake build
+          lake test
+          lake exe ledgerLive

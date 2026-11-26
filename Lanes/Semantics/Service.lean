@@ -62,6 +62,32 @@ def spec (svc : Service σ S) : Spec (Abs σ S) (Option (Visible σ)) where
     | none => ∃ x ∈ st.pending,
         st' = ⟨(svc.step st.value x).1, st.pending.erase x, st.outbox + (svc.step st.value x).2⟩
 
+/-- `P` survives any pending input taking effect: the spec's internal steps keep it. -/
+def Stable (svc : Service σ S) (P : Abs σ S → Prop) : Prop :=
+  ∀ a x, x ∈ a.pending → P a →
+    P ⟨(svc.step a.value x).1, a.pending.erase x, a.outbox + (svc.step a.value x).2⟩
+
+/-- What every pending input taking effect keeps, any number of internal steps keep. -/
+theorem Stable.τSTr {svc : Service σ S} {P : Abs σ S → Prop} (hP : svc.Stable P)
+    {a b : Abs σ S} (h : svc.spec.lts.τSTr a b) (ha : P a) : P b := by
+  induction h with
+  | refl => exact ha
+  | tail _ htr ih =>
+    obtain ⟨x, hx, rfl⟩ := htr
+    exact hP _ x hx ih
+
+/-- A visible step of the spec, with internal steps around it, from where `P` holds to where `Q`
+holds, when both are stable. This is how a trace is followed one label at a time. -/
+theorem Stable.sTr {svc : Service σ S} {P Q : Abs σ S → Prop} {e : Visible σ}
+    (hP : svc.Stable P) (hQ : svc.Stable Q) (step : ∀ a b, P a → svc.spec.Tr a (some e) b → Q b)
+    {a b : Abs σ S} (h : svc.spec.lts.STr a (some e) b) (ha : P a) : Q b := by
+  generalize hμ : some e = μ at h
+  cases h with
+  | refl => cases hμ
+  | tr h₁ htr h₂ =>
+    subst hμ
+    exact hQ.τSTr h₂ (step _ _ (hP.τSTr h₁ ha) htr)
+
 end Service
 
 /--

@@ -5,6 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import Lanes.Semantics
 import Examples.BankProofs
 import Examples.ElectionProofs
+import Examples.KVProofs
 import Examples.WatchdogProofs
 import Tests.BatchProofs
 
@@ -602,6 +603,27 @@ by `lake build`, not linked into the test executable.
 /-- info: 'Lanes.System.Invariant.split_of_forall' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Invariant.split_of_forall
 
+/-- info: 'Lanes.Shards.AtHome.step' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Shards.AtHome.step
+
+/-- info: 'Lanes.SysState.init_unsharded_equiv' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SysState.init_unsharded_equiv
+
+/-- info: 'Lanes.System.ShardsReachable.unsharded_of_init' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.ShardsReachable.unsharded_of_init
+
+/-- info: 'Lanes.System.ShardsReachable.unsharded' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.ShardsReachable.unsharded
+
+/-- info: 'Lanes.System.Invariant.shards' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Invariant.shards
+
+/-- info: 'Lanes.System.Invariant.shards_of_forall' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Invariant.shards_of_forall
+
+/-- info: 'Lanes.System.Invariant.shards_state' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Invariant.shards_state
+
 /-- info: 'Lanes.Refines.of_invariant' does not depend on any axioms -/
 #guard_msgs in #print axioms Lanes.Refines.of_invariant
 
@@ -667,3 +689,12 @@ by `lake build`, not linked into the test executable.
 
 /-- info: 'Lanes.Http.Response.read_wireToEnd_open' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.Response.read_wireToEnd_open
+
+/-- info: 'Examples.KV.implements' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Examples.KV.implements
+
+/-- info: 'Examples.KV.caching_not_implements' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Examples.KV.caching_not_implements
+
+/-- info: 'Lanes.System.Refines.traces_of_run' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Refines.traces_of_run

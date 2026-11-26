@@ -72,6 +72,11 @@ theorem filterMap_erase_perm [DecidableEq α] [DecidableEq β] {f : α → Optio
   have h := ((List.perm_cons_erase ha).filterMap f).erase b
   rwa [List.filterMap_cons_some hb, List.erase_cons_head] at h
 
+theorem filterMap_perm_erase [DecidableEq α] {f : α → Option β} {l : List α} {a : α}
+    (ha : a ∈ l) : (l.filterMap f).Perm ((f a).toList ++ (l.erase a).filterMap f) := by
+  have h := (List.perm_cons_erase ha).filterMap f
+  cases hfa : f a <;> simp_all
+
 /-- Erasing `b` from what `f` shows of `l` is erasing from `l` the first element shown as `b`. -/
 theorem exists_filterMap_erase [DecidableEq α] [DecidableEq β] {f : α → Option β} {b : β} :
     ∀ l : List α, b ∈ l.filterMap f →
@@ -336,5 +341,34 @@ theorem afterFirst_of_cons_sublist [DecidableEq α] {a : α} {l p : List α} (h 
       rcases h with _ | ⟨_, h⟩ | ⟨_, h⟩
       · exact ih ‹_›
       · exact absurd rfl hx
+
+/-- `List.mem_of_mem_erase` for the `BEq` that a `DecidableEq` gives, which is not the one
+instance search finds for a sum or a product. -/
+theorem mem_of_mem_erase [DecidableEq α] {l : List α} {a x : α} (h : x ∈ l.erase a) : x ∈ l :=
+  List.mem_of_mem_erase h
+
+theorem flatMap_singletons {γ : Type} (f : α → β) (g : β → γ) (l : List α) :
+    (l.flatMap fun a => [f a]).flatMap (fun b => [g b]) = l.map fun a => g (f a) := by
+  induction l with
+  | nil => rfl
+  | cons a l ih => simp [List.flatMap_cons, ih]
+
+/-- Replacing one element changes a sum by the difference. -/
+theorem sum_map_set (f : α → Int) {l : List α} {i : Nat} {a : α} (v : α) (h : l[i]? = some a) :
+    ((l.set i v).map f).sum + f a = (l.map f).sum + f v := by
+  induction l generalizing i with
+  | nil => simp at h
+  | cons x l ih =>
+    cases i with
+    | zero =>
+      simp only [List.getElem?_cons_zero, Option.some.injEq] at h
+      subst h
+      simp only [List.set_cons_zero, List.map_cons, List.sum_cons]
+      omega
+    | succ i =>
+      simp only [List.getElem?_cons_succ] at h
+      have := ih h
+      simp only [List.set_cons_succ, List.map_cons, List.sum_cons]
+      omega
 
 end Lanes

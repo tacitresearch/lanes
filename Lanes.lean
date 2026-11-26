@@ -29,11 +29,15 @@ public import Lanes.Actors.KernelTimers
 public import Lanes.Actors.Scheduler
 public import Lanes.Actors.Shard
 public import Lanes.Actors.ShardSound
+public import Lanes.Actors.ShardsSound
 public import Lanes.Actors.Service
 public import Lanes.Actors.Step
 public import Lanes.Actors.Run
 public import Lanes.Actors.Runtime
+public import Lanes.Auth.Login
+public import Lanes.Auth.Token
 public import Lanes.Behaviours.Server
+public import Lanes.Check.Clients
 public import Lanes.Check.Complete
 public import Lanes.Actors.Equiv
 public import Lanes.Check.EquivDecide
@@ -50,9 +54,11 @@ public import Lanes.Data.Declare
 public import Lanes.Data.Enum
 public import Lanes.Data.Fifo
 public import Lanes.Data.Frame
+public import Lanes.Data.Hmac
 public import Lanes.Data.Json
 public import Lanes.Data.List
 public import Lanes.Data.Quorum
+public import Lanes.Data.Sha256
 public import Lanes.Env.Clock
 public import Lanes.Env.Http
 public import Lanes.Env.HttpClient
@@ -63,6 +69,7 @@ public import Lanes.Html.Basic
 public import Lanes.Html.Htmx
 public import Lanes.Html.Syntax
 public import Lanes.Http.Basic
+public import Lanes.Http.Cookie
 public import Lanes.Http.Front
 public import Lanes.Http.FrontSound
 public import Lanes.Http.Gate

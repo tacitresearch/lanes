@@ -198,16 +198,6 @@ namespace Lanes
 
 variable {σ : Signature} {sys : System σ} {hosts : σ.Id → Bool} {env : EnvModel σ}
 
-private theorem mem_of_mem_erase {α : Type} [DecidableEq α] {l : List α} {a x : α}
-    (h : x ∈ l.erase a) : x ∈ l :=
-  List.mem_of_mem_erase h
-
-private theorem flatMap_singletons {α β γ : Type} (f : α → β) (g : β → γ) (l : List α) :
-    (l.flatMap fun a => [f a]).flatMap (fun b => [g b]) = l.map fun a => g (f a) := by
-  induction l with
-  | nil => rfl
-  | cons a l ih => simp [List.flatMap_cons, ih]
-
 private theorem pick_update_inl {γ : σ.Id ⊕ σ.Id → Type} {β : σ.Id → Type}
     (l : ∀ i, γ (.inl i) → β i) (r : ∀ i, γ (.inr i) → β i) (f : (x : σ.Id ⊕ σ.Id) → γ x)
     {i : σ.Id} (h : hosts i = true) (v : γ (.inl i)) :
@@ -796,12 +786,12 @@ private theorem started_comm (c : SysState sys) {i k : σ.Id} (h : i ≠ k) :
   simp only [started, hk, hi]
   exact startedWith_comm c h _ _
 
-private theorem Equiv.started {a b : SysState sys} (h : Equiv env a b) (i : σ.Id) :
+theorem Equiv.started {a b : SysState sys} (h : Equiv env a b) (i : σ.Id) :
     Equiv env (a.started i) (b.started i) := by
   simp only [SysState.started, SysState.startedWith, ← h.state, ← h.up, ← h.timers]
   exact ⟨rfl, rfl, rfl, h.net.append _, h.outbox.append_right _⟩
 
-private theorem Equiv.boot (l : List σ.Id) {a b : SysState sys} (h : Equiv env a b) :
+theorem Equiv.boot (l : List σ.Id) {a b : SysState sys} (h : Equiv env a b) :
     Equiv env (l.foldl SysState.started a) (l.foldl SysState.started b) := by
   induction l generalizing a b with
   | nil => exact h
@@ -818,7 +808,7 @@ private theorem boot_started (l : List σ.Id) (i : σ.Id) (hl : ∀ k ∈ l, k �
 
 /-- Booting in any order that keeps each side's own order leaves the same state, up to the
 order of messages on different links. -/
-private theorem boot_sorted (p : σ.Id → Bool) (l : List σ.Id) (c : SysState sys) :
+theorem boot_sorted (p : σ.Id → Bool) (l : List σ.Id) (c : SysState sys) :
     Equiv env (l.foldl started c)
       ((l.filter p ++ l.filter fun i => !p i).foldl started c) := by
   induction l generalizing c with
@@ -838,7 +828,7 @@ private theorem boot_sorted (p : σ.Id → Bool) (l : List σ.Id) (c : SysState 
         List.cons_append, List.foldl_cons]
       exact ih (c.started i)
 
-private theorem boot_eq_started (hboot : sys.SteadyBoot env) (l : List σ.Id)
+theorem boot_eq_started (hboot : sys.SteadyBoot env) (l : List σ.Id)
     (hl : ∀ i ∈ l, i ∈ sys.boot) (c : SysState sys) :
     l.foldl (fun c i => c.startActor env i) c = l.foldl started c := by
   induction l generalizing c with
