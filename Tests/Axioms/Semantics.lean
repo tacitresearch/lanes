@@ -63,6 +63,20 @@ import Lanes.Semantics
 /-- info: 'Lanes.Http.served_pending_answered' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.served_pending_answered
 
+-- Lanes.Semantics.JobsLive
+/-- info: 'Lanes.Jobs.active_leaves' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Jobs.active_leaves
+
+/-- info: 'Lanes.Jobs.active_answered' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Jobs.active_answered
+
+/-- info: 'Lanes.Jobs.submitted_answered' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Jobs.submitted_answered
+
+/-- info: 'Lanes.Jobs.attach_active_leaves' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Jobs.attach_active_leaves
+
+
 -- Lanes.Semantics.Liveness
 /-- info: 'Lanes.System.LeadsTo.ensures_of_invariant' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.LeadsTo.ensures_of_invariant
@@ -75,6 +89,12 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.System.Run.Impatient.fair' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Run.Impatient.fair
+
+/-- info: 'Lanes.System.LeadsTo.induction' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.LeadsTo.induction
+
+/-- info: 'Lanes.System.LeadsTo.exists_left' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.LeadsTo.exists_left
 
 -- Lanes.Semantics.Monitor
 /-- info: 'Lanes.Check.Monitor.sound' depends on axioms: [propext, Classical.choice, Quot.sound] -/
