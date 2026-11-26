@@ -118,7 +118,7 @@ def importsProofModule (line : String) : Bool :=
 def checkFile (root file : System.FilePath) (trusted : String) : IO (List Finding) := do
   let src ← IO.FS.readFile file
   let relative := (file.toString.dropPrefix (root.toString ++ "/")).toString
-  let listed := (trusted.splitOn relative).length > 1
+  let listed := Generated.occursIn relative.toUTF8 trusted.toUTF8
   let code := stripCommentsAndStrings src
   let mut findings : List Finding := []
   for (text, k) in (code.splitOn "\n").zipIdx do

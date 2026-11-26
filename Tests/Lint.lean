@@ -31,7 +31,7 @@ def project (root : System.FilePath) : IO Unit := do
   write root "docs/decisions/README.md" "# Decisions\n\nPreamble.\n"
   write root "docs/decisions/D1-first.md" "# D1. First\n\nText.\n"
   write root "docs/decisions/D2-second.md" "# D2. Second, `code`\n\nMore text.\n"
-  write root "docs/decisions/new-third.md" "# D?. Third\n\nNewest.\n"
+  write root "docs/decisions/new-third.md" "# D?. Third\n\nNewest, after `new-third.md`.\n"
   write root "docs/status/page.md" page
   write root "docs/status/areas/runtime.md"
     "| Runtime | a kernel (`docs/decisions/new-third.md`) |\n\n- Runtime limit.\n  Continued.\n"
@@ -85,8 +85,8 @@ def fixTests (root : System.FilePath) : IO (List (String × Bool)) := do
       unnumbered.findings.any fun f => f.rule == "decisions"
         && f.file.toString == "docs/decisions/new-third.md"),
     ("lint --fix --main: the new decision is numbered, and its references, index and page follow",
-      numbered.findings.isEmpty && gone && third == "# D3. Third\n\nNewest.\n"
-        && statusAfter == expectedStatus "D3-third.md" && indexAfter == expectedIndex true),
+      numbered.findings.isEmpty && gone
+        && third == "# D3. Third\n\nNewest, after `D3-third.md`.\n" && statusAfter == expectedStatus "D3-third.md" && indexAfter == expectedIndex true),
     ("lint --fix --main: a second run changes nothing",
       numberedAgain.fixed.isEmpty && numberedAgain.findings.isEmpty)]
 
@@ -116,6 +116,9 @@ def tests : IO (List (String × Bool)) := do
     return results ++ [
       ("withCommas", Generated.withCommas 1587 == "1,587" && Generated.withCommas 50 == "50"
         && Generated.withCommas 1000000 == "1,000,000"),
+      ("replaceName: a reference is rewritten, the end of another name is not",
+        Generated.replaceName "D4-new-one.md, `new-one.md` (new-one.md)" "new-one.md" "D5-one.md"
+          == "D4-new-one.md, `D5-one.md` (D5-one.md)"),
       ("roundedTotal", Generated.roundedTotal 1587 == 1600 && Generated.roundedTotal 1574 == 1550)]
   finally
     for dir in [root, other] do

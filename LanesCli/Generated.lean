@@ -23,7 +23,8 @@ namespace Lanes.Cli.Generated
 
 inductive Change where
   | write (text : String)
-  | rename (new : String)
+  /-- The file moves to `new` and then holds `text`. -/
+  | move (new text : String)
 
 /-- A change to the file at `path`, relative to the project's root, and what `lanes lint`
 reports while it is not made. -/
@@ -54,8 +55,27 @@ def sortStrings (xs : List String) : List String :=
 def charsFrom (s : String) (n : Nat) : String :=
   String.ofList (s.toList.drop n)
 
-def replaceAll (s old new : String) : String :=
-  new.intercalate (s.splitOn old)
+/-- Whether `part` occurs in `whole`. `String.splitOn` takes seconds over every file. -/
+def occursIn (part whole : ByteArray) : Bool := Id.run do
+  if part.size > whole.size then return false
+  for i in [0:whole.size - part.size + 1] do
+    let mut same := true
+    for j in [0:part.size] do
+      if whole[i + j]! != part[j]! then
+        same := false
+        break
+    if same then return true
+  return false
+
+/-- `s` with each `old` that does not continue a name replaced by `new`: `new-one.md` in
+`D4-new-one.md` stays. -/
+def replaceName (s old new : String) : String :=
+  if !occursIn old.toUTF8 s.toUTF8 then s
+  else match s.splitOn old with
+    | [] => s
+    | first :: rest => rest.foldl (init := first) fun done part =>
+      let continues := done.toList.getLast?.any fun c => c.isAlphanum || c == '-' || c == '_'
+      done ++ (if continues then old else new) ++ part
 
 /-- A write that changes nothing is no edit. -/
 def writeIfChanged (root : System.FilePath) (path text rule message : String) :
@@ -232,17 +252,18 @@ def numberPlan (root : System.FilePath) (decisions : List Decision) : IO (List E
   let named := fresh.zipIdx.map fun (d, k) => (d, next + k, s!"D{next + k}-{d.slug}.md")
   let mut edits : List Edit := []
   let unnumbered := "has no number: run `lake exe lanes lint --fix --main` on the main branch"
+  let refer := fun text => named.foldl (fun t (d, _, name) => replaceName t d.file name) text
   for (d, n, name) in named do
-    edits := edits ++ [⟨s!"{decisionsDir}/{d.file}", .rename s!"{decisionsDir}/{name}",
-        "decisions", unnumbered⟩,
-      ⟨s!"{decisionsDir}/{name}", .write s!"# D{n}. {d.title}\n{d.body}", "decisions",
-        unnumbered⟩]
-  let renamed := fresh.map fun d => s!"{decisionsDir}/{d.file}"
+    edits := edits ++ [⟨s!"{decisionsDir}/{d.file}",
+      .move s!"{decisionsDir}/{name}" (refer s!"# D{n}. {d.title}\n{d.body}"), "decisions",
+      unnumbered⟩]
+  -- The status page is generated from its fragments, which are rewritten here.
+  let skip := "docs/STATUS.md" :: fresh.map fun d => s!"{decisionsDir}/{d.file}"
   for file in ← textFiles root do
     let path := (file.toString.dropPrefix (root.toString ++ "/")).toString
-    if renamed.contains path then continue
+    if skip.contains path then continue
     let text ← IO.FS.readFile file
-    let fixed := named.foldl (fun t (d, _, name) => replaceAll t d.file name) text
+    let fixed := refer text
     if fixed != text then
       edits := edits ++ [⟨path, .write fixed, "decisions",
         "refers to a decision that has no number yet"⟩]
@@ -326,12 +347,14 @@ def plan (root : System.FilePath) (main : Bool) : IO Plan := do
 def Edit.describe (e : Edit) : String :=
   match e.change with
   | .write _ => s!"{e.path}: rewritten"
-  | .rename new => s!"{e.path}: renamed to {new}"
+  | .move new _ => s!"{e.path}: renamed to {new}"
 
 def apply (root : System.FilePath) (e : Edit) : IO Unit :=
   match e.change with
   | .write text => IO.FS.writeFile (root / e.path) text
-  | .rename new => IO.FS.rename (root / e.path) (root / new)
+  | .move new text => do
+    IO.FS.writeFile (root / new) text
+    IO.FS.removeFile (root / e.path)
 
 /-- Apply plans until one has no edits, and return the edits made. Each round reads what the
 last one wrote: a decision numbered in one round is in the index of the next. -/
@@ -341,7 +364,7 @@ def fix (root : System.FilePath) (main : Bool) : IO (List Edit) := do
     let p ← plan root main
     if p.edits.isEmpty then return done
     for e in p.edits do apply root e
-    done := done ++ p.edits
+    done := done ++ p.edits.filter fun e => !done.any (·.describe == e.describe)
   throw (IO.userError "lanes lint --fix: the generated files did not settle")
 
 end Lanes.Cli.Generated
