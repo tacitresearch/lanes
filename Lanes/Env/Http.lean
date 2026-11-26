@@ -10,9 +10,9 @@ public import Lanes.Http.Front
 public import Lanes.Http.Waiting
 
 /-!
-The HTTP server adapter: the IO around the gate. It reads a request, gives it an id no other
-request has, hands it as an input to a system that has the gate in it, and writes the one
-response the gate gives for it. Which requests are waiting, when one times out and when the
+The HTTP server adapter: the IO around the gate. It reads a request, prepares it as the bridge
+says (`Bridge.prepare`), gives it an id no other request has, hands it as an input to a system
+that has the gate in it, and writes the one response the gate gives for it. Which requests are waiting, when one times out and when the
 system is too busy are the gate's decisions, not this file's.
 
 There is one loop, `serveOn`, for both systems with a gate: `served sys`, whose only outputs are
@@ -106,7 +106,7 @@ journal is cut.
 -/
 private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig)
     (runtimeConfig : Runtime.Config) (log : Option (Journal.Log system))
-    (enter : ReqId × Request → τ.In) (onOutput : τ.Out → (ReqId × Response) ⊕ Async Unit) :
+    (prepare : Request → Request) (enter : ReqId × Request → τ.In) (onOutput : τ.Out → (ReqId × Response) ⊕ Async Unit) :
     Async (Server system) := do
   let some addr := Std.Net.IPv4Addr.ofString config.host
     | throw (IO.userError s!"lanes: {config.host} is not an IPv4 address")
@@ -120,6 +120,7 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
   let handler := Std.Http.Server.Handler.ofFn fun req => do
     let some request ← readRequest config.maxBodyBytes req
       | respond (Response.text "method not allowed\n" 405)
+    let request := prepare request
     let headOnly := req.line.method == .head
     let send := fun (r : Response) => respond (if headOnly then { r with body := .empty } else r)
     let waiter ← IO.Promise.new
@@ -145,7 +146,7 @@ def serveWith (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : 
     (runtimeConfig : Runtime.Config := {})
     (log : Option (Journal.Log (served sys bridge config.gate))) :
     Async (Server (served sys bridge config.gate)) :=
-  serveOn (served sys bridge config.gate) config runtimeConfig log id .inl
+  serveOn (served sys bridge config.gate) config runtimeConfig log bridge.prepare id .inl
 
 /-- Serve `sys` behind a gate it shares the process with other things: an output of `sys` that
 the bridge does not read as a response comes to `onOutput`, and `Server.tryInput` hands `sys`
@@ -154,7 +155,8 @@ def serveFronted (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config
     (runtimeConfig : Runtime.Config := {}) (onOutput : σ.Out → Async Unit := fun _ => pure ())
     (log : Option (Journal.Log (fronted sys bridge config.gate)) := none) :
     Async (Server (fronted sys bridge config.gate)) :=
-  serveOn (fronted sys bridge config.gate) config runtimeConfig log .inl (Sum.map id onOutput)
+  serveOn (fronted sys bridge config.gate) config runtimeConfig log bridge.prepare .inl
+    (Sum.map id onOutput)
 
 /-- What `serve` needs to save the kernel and cut the journal: how the system's actors and its
 outputs are written. -/

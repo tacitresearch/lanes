@@ -31,6 +31,12 @@ structure Bridge (σ : Signature) where
   decode : ReqId → Request → Except Response σ.In
   /-- The request an output answers, or `none` for an output that is not an HTTP response. -/
   encode : σ.Out → Option (ReqId × Response)
+  /-- What the server makes of a request before it gives it an id, on the request's own task:
+  the system, its journal and its theorems see only what this returns. A secret is turned here
+  into what the system needs of it (a password into its digest, a cookie into the user it
+  verifies), so it is never journalled, and work too slow for the shard's one thread is done
+  here, once, not again at every replay. -/
+  prepare : Request → Request := id
 
 structure GateConfig where
   requestTimeout_ms : Nat := 30000

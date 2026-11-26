@@ -144,6 +144,7 @@ def Bridge.shard (bridge : Bridge σ) : Bridge (shardSig σ) where
   encode
     | .inl out => bridge.encode out
     | .inr _ => none
+  prepare := bridge.prepare
 
 /-- How the actors of a fronted system are written to a snapshot, given how the system's own
 are, and its outputs, which may be on their way to the gate. -/

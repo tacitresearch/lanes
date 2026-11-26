@@ -13,11 +13,11 @@ namespace Tests.Web
 open Lanes Lanes.Http Std Std.Async Tests.Gate
 
 /-- Std has no HTTP client, so this speaks HTTP/1.1 over a TCP socket. -/
-def fetch (port : UInt16) (path : String) (method : String := "GET") (body : String := "") :
-    Async String := do
+def fetch (port : UInt16) (path : String) (method : String := "GET") (body : String := "")
+    (headers : String := "") : Async String := do
   let socket ← TCP.Socket.Client.mk
   socket.connect (.v4 ⟨.ofParts 127 0 0 1, port⟩)
-  let head := s!"{method} {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n"
+  let head := s!"{method} {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n{headers}"
   let length := if body.isEmpty then "" else s!"Content-Length: {body.utf8ByteSize}\r\n"
   socket.send (head ++ length ++ "\r\n" ++ body).toUTF8
   let mut received := ByteArray.empty
@@ -182,6 +182,33 @@ def oldJournalTest : Async (List (String × Bool)) := do
         ++ "not of \"echo 1, behind a gate of 30000 ms and 1024 requests\""),
     ("web: and is left as it was", after == old) ]
 
+/-- A bridge whose `prepare` takes a secret header out and says on the path that it did. -/
+def guarded : Bridge echoSig :=
+  { bridge with
+    prepare := fun r =>
+      if r.headers.any (·.1 == "x-secret") then
+        { r with headers := r.headers.filter (·.1 != "x-secret"), path := ["bad"] }
+      else r }
+
+def prepareTest : Async (List (String × Bool)) := do
+  let dir := (← IO.getEnv "TMPDIR").getD "/tmp"
+  let journal : System.FilePath := s!"{dir}/lanes-web-prepare-{← IO.monoNanosNow}.journal"
+  let server ← serve (Server.system echo) guarded { port := 0, journal := some journal }
+  let some port := server.port | return [("web: the server reports its port", false)]
+  let secret ← fetch port "/" (headers := "X-Secret: hunter2hunter2\r\n")
+  let plain ← fetch port "/"
+  server.stop
+  let bytes := (← IO.FS.readBinFile journal).data.toList
+  let holds (text : String) := (List.range bytes.length).any fun k =>
+    text.toUTF8.data.toList.isPrefixOf (bytes.drop k)
+  for file in [journal, journal.addExtension "lock"] do
+    if ← file.pathExists then IO.FS.removeFile file
+  return [
+    ("web: the system sees a request as the bridge prepared it",
+      secret.startsWith "HTTP/1.1 400" && plain.startsWith "HTTP/1.1 200"),
+    ("web: and the journal holds the prepared request, not what was sent",
+      !holds "hunter2hunter2" && !holds "x-secret" && holds "bad") ]
+
 /-- The journal stops taking writes while the server runs. A request in flight is answered, the
 server shuts down, and `wait` fails, so that the process ends and can be started again. -/
 def journalFailTest : Async (List (String × Bool)) := do
@@ -212,6 +239,7 @@ def journalFailTest : Async (List (String × Bool)) := do
 
 def tests : IO (List (String × Bool)) := do
   return (← serveTest.block) ++ (← linkTest.block) ++ (← deadlineTest.block)
-    ++ (← durableTest.block) ++ (← oldJournalTest.block) ++ (← journalFailTest.block)
+    ++ (← durableTest.block) ++ (← oldJournalTest.block) ++ (← prepareTest.block)
+    ++ (← journalFailTest.block)
 
 end Tests.Web
