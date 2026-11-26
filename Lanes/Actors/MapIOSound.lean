@@ -15,7 +15,8 @@ public import Lanes.Actors.KernelSound
 outputs waiting those that are shown. `SysState.run_filterMapIO` proves that every run of
 `sys.filterMapIO input output` is a run of `sys`, event for event (`Event.AllUnder`): an input
 is the input it stands for, an output is an output of `sys` shown as it, and every other event
-is itself. So whatever is proved of every run of `sys` holds of it behind other inputs and outputs.
+is itself. So whatever is proved of every run of `sys` holds of it behind other inputs and outputs,
+and so do its invariants (`System.Invariant.filterMapIO`).
 -/
 
 @[expose] public section
@@ -307,5 +308,28 @@ theorem run_filterMapIO {events : List (Event (σ.withIO In Out))}
       exact ⟨ev' :: events', c', by simp [run, hstep', hrun'], hover, hunder, hall⟩
 
 end SysState
+
+namespace System
+
+/-- Every reachable state of `sys.filterMapIO input output` is a reachable state of `sys`, seen
+through the new inputs and outputs. -/
+theorem Reachable.under {d : SysState (sys.filterMapIO input output)}
+    (h : (sys.filterMapIO input output).Reachable env d) :
+    ∃ c, sys.Reachable env.under c ∧ c.over input output = d := by
+  induction h with
+  | init => exact ⟨_, .init, SysState.over_init⟩
+  | step ev _ hstep ih =>
+    obtain ⟨c, hc, rfl⟩ := ih
+    obtain ⟨ev', c', -, hstep', hover⟩ := SysState.step_under hstep
+    exact ⟨c', hc.step ev' hstep', hover⟩
+
+/-- What is proved of a system holds of it behind other inputs and outputs. -/
+theorem Invariant.filterMapIO {P : SysState (sys.filterMapIO input output) → Prop}
+    (h : sys.Invariant env.under fun c => P (c.over input output)) :
+    (sys.filterMapIO input output).Invariant env P := fun _ hd =>
+  let ⟨c, hc, hover⟩ := hd.under
+  hover ▸ h c hc
+
+end System
 
 end Lanes

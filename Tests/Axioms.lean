@@ -121,6 +121,12 @@ by `lake build`, not linked into the test executable.
 /-- info: 'Lanes.Http.fronted_answered_nodup' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.fronted_answered_nodup
 
+/-- info: 'Lanes.Http.Gate.deadlines_armed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Gate.deadlines_armed
+
+/-- info: 'Lanes.Http.fronted_deadlines_armed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.fronted_deadlines_armed
+
 /-- info: 'Lanes.Http.kernel_fronted_answered_le_arrived' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.kernel_fronted_answered_le_arrived
 
@@ -339,6 +345,9 @@ by `lake build`, not linked into the test executable.
 
 /-- info: 'Lanes.System.handled_le_put' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.handled_le_put
+
+/-- info: 'Lanes.System.Invariant.filterMapIO' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Invariant.filterMapIO
 
 /-- info: 'Lanes.System.Invariant.join_left' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Invariant.join_left

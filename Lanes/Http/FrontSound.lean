@@ -9,8 +9,12 @@ public import Lanes.Actors.MapIOSound
 public import Lanes.Http.Front
 
 /-!
-`fronted sys` answers no request more often than it arrived (`fronted_answered_le_arrived`),
-for every system behind the gate, and the proof looks at the gate alone.
+`fronted sys` answers no request more often than it arrived (`fronted_answered_le_arrived`)
+and keeps the deadline of every waiting request armed (`fronted_deadlines_armed`), for every
+system behind the gate, and both proofs look at the gate alone.
+
+The second is an invariant of the gate's state, so `System.Invariant.join_left` carries it
+into the join as it is. The first counts events, and takes more.
 
 Alone, the gate answers no request more often than it handles an arrival of it
 (`Gate.answered_le_handled`): in every environment, whatever arrives on its two inputs. That is
@@ -43,6 +47,11 @@ def handled (shown : List (Deed (gateSig σ))) : List ReqId :=
     | .handle _ (.arrive id _) => some id
     | _ => none
 
+/-- While the gate is up, every pending request has its deadline armed. -/
+def Armed {bridge : Bridge σ} {config : GateConfig} (c : SysState (gateSystem bridge config)) :
+    Prop :=
+  c.up () = true → ∀ id ∈ (c.state () : List ReqId), GateMsg.expire id ∈ c.timers ()
+
 end Gate
 
 namespace Fronted
@@ -56,6 +65,12 @@ def answered (events : List (Event (frontedSig σ))) : List ReqId :=
   events.filterMap fun
     | .output (.inl (id, _)) => some id
     | _ => none
+
+/-- While the gate is up, every pending request has its deadline armed. -/
+def Armed {sys : System σ} {bridge : Bridge σ} {config : GateConfig}
+    (c : SysState (fronted sys bridge config)) : Prop :=
+  c.up (.inl ()) = true →
+    ∀ id ∈ (c.state (.inl ()) : List ReqId), GateMsg.expire id ∈ c.timers (.inl ())
 
 end Fronted
 
@@ -246,6 +261,114 @@ theorem answered_le_handled (env : EnvModel (gateSig σ)) {events : List (Event 
   have h := owed_event (env := env) id hstep
   rw [handled_snoc, answered_snoc]
   omega
+
+local macro "armed" : tactic => `(tactic|
+  (simp [Armed, SysState.settle, SysState.perform, Effect.isStop] <;>
+    first
+    | done
+    | grind [List.Nodup.mem_erase_iff]
+    | skip))
+
+/-- A firing deadline has left the timers when the gate handles it, hence `≠ msg`. -/
+private theorem armed_handle {c : SysState (gateSystem bridge config)} (msg : GateMsg σ)
+    (hnodup : List.Nodup (c.state ()))
+    (h : ∀ id ∈ (c.state () : List ReqId), GateMsg.expire id ≠ msg →
+      GateMsg.expire id ∈ c.timers ()) :
+    Armed (c.handle env () msg) := by
+  cases msg with
+  | arrive id' request =>
+    replace h := fun id hid => h id hid nofun
+    simp only [SysState.handle, gateActor, Gate.step]
+    split
+    · armed
+    · split
+      · armed
+      · split
+        · armed
+        · armed
+          intro _
+          split
+          · next harmed => exact ⟨harmed, h⟩
+          · exact ⟨by simp, fun id hid => List.mem_append_left _ (h id hid)⟩
+  | answer out =>
+    replace h := fun id hid => h id hid nofun
+    simp only [SysState.handle, gateActor, Gate.step]
+    split
+    · split
+      · armed
+        intro _ id hid
+        obtain ⟨hne, hid⟩ := hnodup.mem_erase_iff.mp hid
+        exact (List.mem_erase_of_ne (by simpa using hne)).mpr (h id hid)
+      · armed
+    · armed
+  | expire id' =>
+    simp only [SysState.handle, gateActor, Gate.step]
+    split
+    · armed
+    · armed
+
+private theorem mem_timers_arm (delay_ms : Nat) (ids : List ReqId)
+    (c : SysState (gateSystem bridge config)) (msg : GateMsg σ)
+    (h : msg ∈ c.timers () ∨ ∃ id ∈ ids, msg = .expire id) :
+    msg ∈ (c.performAll () (ids.map fun id => .after delay_ms (.expire id))).timers () := by
+  induction ids generalizing c with
+  | nil => simpa using h
+  | cons id ids ih =>
+    apply ih
+    simp only [SysState.perform, update_self]
+    rcases h with h | ⟨id', hid', rfl⟩
+    · exact .inl (by split <;> simp [h])
+    · rcases List.mem_cons.mp hid' with rfl | hid'
+      · exact .inl (by split <;> simp [*])
+      · exact .inr ⟨id', hid', rfl⟩
+
+private theorem armed_start (c : SysState (gateSystem bridge config)) :
+    Armed (c.startActor env ()) := by
+  intro _ id hid
+  have hrunning : ((c.state () : List ReqId).map fun id =>
+      (Effect.after config.requestTimeout_ms (.expire id) : Effect (gateSig σ) ())).any
+        Effect.isStop = false := by
+    simp [List.any_map, Effect.isStop]
+  simp [SysState.startActor, SysState.settle, gateActor, hrunning] at hid ⊢
+  exact mem_timers_arm _ _ _ _ (.inr ⟨id, hid, rfl⟩)
+
+/-- The gate alone cannot forget a pending request, in any environment: while it is up the
+request's deadline is armed. -/
+theorem deadlines_armed (bridge : Bridge σ) (config : GateConfig) (env : EnvModel (gateSig σ)) :
+    (gateSystem bridge config).Invariant env Armed := by
+  intro c hc
+  induction hc with
+  | init => exact armed_start (env := env) (SysState.blank _)
+  | @step c c' ev hc hstep ih =>
+    have hnodup : List.Nodup (c.state ()) :=
+      (System.invariant_of_actor _ () (gateActor_bounded bridge config) env c hc).2
+    cases ev with
+    | input x =>
+      obtain rfl := SysState.step_input.mp hstep
+      exact ih
+    | deliver e =>
+      obtain ⟨hup, _, rfl⟩ := SysState.step_deliver.mp hstep
+      exact armed_handle (c := { c with net := c.net.erase e }) e.msg hnodup
+        fun id hid _ => ih hup id hid
+    | duplicate e =>
+      obtain ⟨hup, _, _, rfl⟩ := SysState.step_duplicate.mp hstep
+      exact armed_handle e.msg hnodup fun id hid _ => ih hup id hid
+    | drop e =>
+      obtain ⟨_, _, rfl⟩ := SysState.step_drop.mp hstep
+      exact ih
+    | timeout i msg =>
+      obtain ⟨hup, _, rfl⟩ := SysState.step_timeout.mp hstep
+      refine armed_handle msg hnodup fun id hid hne => ?_
+      simpa using (List.mem_erase_of_ne hne).mpr (ih hup id hid)
+    | output out =>
+      obtain ⟨_, rfl⟩ := SysState.step_output.mp hstep
+      exact ih
+    | crash i =>
+      obtain ⟨_, _, rfl⟩ := SysState.step_crash.mp hstep
+      simp [Armed, SysState.down]
+    | start i =>
+      obtain ⟨_, _, rfl⟩ := SysState.step_start.mp hstep
+      exact armed_start c
 
 end Gate
 
@@ -455,6 +578,12 @@ theorem fronted_answered_le_arrived (henv : (env.link none (.inl ())).duplicatin
   refine Nat.le_trans (Gate.answered_le_handled _ hgate id) ?_
   rw [← (shown_answered gateEvents).2, hshown, handled_left]
   exact System.handled_le_put (onlyPut sys bridge config id) hlink hwired
+
+/-- The gate cannot forget a pending request behind which anything sits: what
+`Gate.deadlines_armed` says of the gate alone holds of it in the join. -/
+theorem fronted_deadlines_armed (sys : System σ) (bridge : Bridge σ) (config : GateConfig)
+    (env : EnvModel (frontedSig σ)) : (fronted sys bridge config).Invariant env Fronted.Armed :=
+  System.Invariant.filterMapIO (Gate.deadlines_armed bridge config env.under.left).join_left
 
 /-- When the ids that arrive are distinct, as the adapter's are, no id is answered twice. -/
 theorem fronted_answered_nodup (henv : (env.link none (.inl ())).duplicating = false)
