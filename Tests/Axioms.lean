@@ -206,6 +206,39 @@ by `lake build`, not linked into the test executable.
 /-- info: 'Lanes.Parcel.receive_send' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Parcel.receive_send
 
+/-- info: 'Lanes.Mailbox.Reachable.sound' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Mailbox.Reachable.sound
+
+/-- info: 'Lanes.Mailbox.Reachable.offer_full_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Mailbox.Reachable.offer_full_iff
+
+/-- info: 'Lanes.Mailbox.Reachable.bounded' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Mailbox.Reachable.bounded
+
+/-- info: 'Lanes.Mailbox.Reachable.asleep_empty' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Mailbox.Reachable.asleep_empty
+
+/-- info: 'Lanes.Mailbox.Reachable.not_asleep_waiting' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Mailbox.Reachable.not_asleep_waiting
+
+/-- info: 'Lanes.Mailbox.rest_eq_false' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Lanes.Mailbox.rest_eq_false
+
+/-- info: 'Lanes.Mailbox.batch_since_take' depends on axioms: [propext, Classical.choice] -/
+#guard_msgs in #print axioms Lanes.Mailbox.batch_since_take
+
+/-- info: 'Lanes.Mailbox.wake_since_take' depends on axioms: [propext, Classical.choice] -/
+#guard_msgs in #print axioms Lanes.Mailbox.wake_since_take
+
+/-- info: 'Lanes.Mailbox.close_since_take' depends on axioms: [propext, Classical.choice] -/
+#guard_msgs in #print axioms Lanes.Mailbox.close_since_take
+
+/-- info: 'Lanes.Mailbox.woken_after_rest' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Mailbox.woken_after_rest
+
+/-- info: 'Lanes.Mailbox.after_close' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Mailbox.after_close
+
 /-- info: 'Lanes.Journal.turns_kernel' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Journal.turns_kernel
 
