@@ -12,6 +12,7 @@ import Tests.Gate
 import Tests.Kernel
 import Tests.Web
 import Tests.Join
+import Tests.Frame
 
 /-!
 The test driver behind `lake test`: the pure tests and the live runtime tests, well under a
@@ -30,6 +31,7 @@ def report (results : List (String × Bool)) : IO UInt32 := do
 def main (args : List String) : IO UInt32 := do
   let pure := Tests.Engine.tests ++ Tests.Bank.tests ++ Tests.Json.tests ++ Tests.Html.tests
     ++ Tests.KV.tests ++ Tests.Gate.tests ++ Tests.Join.tests ++ Tests.Kernel.tests
+    ++ Tests.Frame.tests
   match args with
   | [] => report (pure ++ (← Tests.Runtime.tests) ++ (← Tests.Web.tests))
   | ["fast"] => report pure
