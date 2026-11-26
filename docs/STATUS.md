@@ -84,8 +84,8 @@ Last updated: 2026-11-27.
   side, is a fair run of that side.
 - Behind `Http.serveShard` a response must be put out by an actor of the process that took the
   request. Request ids are each process's own, so a response put out on another shard reaches
-  that shard's gate, which may be waiting on the same id for another client. Nothing checks
-  this.
+  that shard's gate, which may be waiting on the same id for another client. Nothing prevents
+  this; `Tests/Fronted.lean` shows the mild case, a `504` at the front that took the request.
 - The runtime never releases an actor: every identity ever addressed keeps its cell in the
   kernel. A session-per-user system grows without bound. Releasing an actor means its state must
   live somewhere else, so this waits for the persistence adapter.

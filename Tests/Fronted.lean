@@ -282,7 +282,7 @@ def live : Async (List (String × Bool)) := do
       home := fun account => return (← peerPorts.get)[shardOf account]?.map fun port => { port }
       id := Codec.fin, msg := (actors Codec.fin 100).msg }
     let (server, peers) ← serveShard (bank Acct 100) (shardOf · == k) Examples.BankWeb.bridge
-      peers { port := 0 } { record := true }
+      peers { port := 0, gate := { requestTimeout_ms := 300 } } { record := true }
     peerPorts.modify (·.push peers.port)
     nodes := nodes.push {
       port := server.port.getD 0
@@ -302,11 +302,12 @@ def live : Async (List (String × Bool)) := do
   let back ← Tests.Web.fetch second.port "/transfer" (method := "POST")
     (body := "src=1&dst=2&amount=5")
   let returned ← settles first "/accounts/2" "105"
+  let elsewhere ← Tests.Web.fetch second.port "/accounts/0"
   for node in nodes do node.stop
   let traces ← nodes.toList.mapM (·.trace)
-  let parcelsIn (events : List (Event (frontedSig (shardSig (sig Acct))))) : Nat :=
+  let creditsIn (events : List (Event (frontedSig (shardSig (sig Acct))))) : Nat :=
     events.countP fun
-      | .input (.inr (.inr _)) => true
+      | .input (.inr (.inr ⟨_, .credit _⟩)) => true
       | _ => false
   return [
     ("fronted: a transfer posted to one front between accounts on different shards is answered",
@@ -315,9 +316,12 @@ def live : Async (List (String × Bool)) := do
       credited && debited.endsWith "<span>70</span>"),
     ("fronted: the same the other way", back.startsWith "HTTP/1.1 200" && returned),
     ("fronted: each credit entered the other shard as a parcel, past its gate",
-      traces.map parcelsIn == [1, 1]),
+      traces.map creditsIn == [1, 1]),
     ("fronted: each front does only what the gate's model of its outside allows",
-      traces.all (frontedOutside (shardSig (sig Acct))).allows) ]
+      traces.all (frontedOutside (shardSig (sig Acct))).allows),
+    ("fronted: a known limit, a response put out on another shard does not come back to the "
+        ++ "front that took the request, which answers 504",
+      elsewhere.startsWith "HTTP/1.1 504") ]
 
 /-! A fronted system on a journal: stop the server, start another on the same journal. -/
 

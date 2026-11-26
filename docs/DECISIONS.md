@@ -786,8 +786,10 @@ Consequences and limits:
 - *A response has to be put out where the request came in.* Request ids are each process's
   own. A response put out by an actor on another shard reaches that shard's gate, which drops
   it or, worse, has another client waiting under the same id. A system spread over processes
-  must bring the answer back to an actor of the process that took the request. Nothing checks
-  this yet; giving each front its own range of ids would turn the wrong answer into a `504`.
+  must bring the answer back to an actor of the process that took the request. Nothing
+  prevents the mistake yet. `Tests/Fronted.lean` shows the mild case: a balance asked through
+  the front of the shard that does not host the account is answered `504`. Giving each front
+  its own range of ids would make every case the mild one.
 - *`gated` is still there.* Its theorems (`GateSound`, `GateLive`) are about its own steps.
   Liveness is what keeps it: `Http.pending_answered` is about fair runs, and there is no
   theorem yet that a fair run of a join, seen from one side, is a fair run of that side.
