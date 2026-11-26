@@ -161,11 +161,13 @@ def compact [Enum σ.Id] (c : SysState sys) : SysState sys :=
 
 variable [σ.Inspect] [sys.Inspect]
 
+/-- Checks the link of every message on either side, so a link that carries messages on only
+one side is not missed. -/
 def netEquiv (env : EnvModel σ) (a b : List (Envelope σ)) : Bool :=
-  a.length == b.length && a.all fun e =>
-    let onLinkA := a.filter e.sameLink
-    let onLinkB := b.filter e.sameLink
-    if (env.link e.src e.dst).ordered then onLinkA == onLinkB else onLinkA.isPerm onLinkB
+  let sameOnLinkOf := fun (e : Envelope σ) =>
+    if (env.link e.src e.dst).ordered then a.filter e.sameLink == b.filter e.sameLink
+    else (a.filter e.sameLink).isPerm (b.filter e.sameLink)
+  a.all sameOnLinkOf && b.all sameOnLinkOf
 
 /-- Message order only counts where the link model makes it observable. -/
 def equiv (env : EnvModel σ) (a b : SysState sys) : Bool :=

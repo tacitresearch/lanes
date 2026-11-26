@@ -66,8 +66,8 @@ theorems, and their repeated tests go away:
 | Claim | Status |
 | --- | --- |
 | Every state the checker explores is a real step | Proved |
-| The checker lists every enabled event (`candidates` is complete) | To prove |
-| State equality used for deduplication is a bisimulation | To prove |
+| The checker lists every enabled event | Proved (`SysState.mem_successors_iff`) |
+| States the checker merges enable the same events and step to states it merges | Proved (`SysState.Equiv.step`, `SysState.equiv_iff`) |
 | PASS and complete ⇒ the invariant holds in every reachable state of the instance | To prove |
 | A reported trace is a real run ending in a violation | To prove |
 | `states ≤ maxStates` | To prove |
