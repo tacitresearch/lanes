@@ -30,7 +30,7 @@ bytes is that more is needed or what is read from all of them (`readFrom_extract
 
 namespace Lanes.Http
 
-private theorem ne_13_of_ne_cr {cs : List Char} (h : ∀ c ∈ cs, c ≠ '\r') :
+theorem ne_13_of_ne_cr {cs : List Char} (h : ∀ c ∈ cs, c ≠ '\r') :
     ∀ b ∈ cs.flatMap String.utf8EncodeChar, b ≠ 13 := by
   intro b hb e
   obtain ⟨c, hc, hbc⟩ := List.mem_flatMap.mp hb
@@ -252,7 +252,7 @@ theorem extract_head (pre : ByteArray) (text : String) (t : ByteArray) :
     ← String.size_toByteArray, extract_append_front]
   rfl
 
-private theorem splitLines_append {l : List Char} (h : ∀ c ∈ l, c ≠ '\r') (rest line : List Char)
+theorem splitLines_append {l : List Char} (h : ∀ c ∈ l, c ≠ '\r') (rest line : List Char)
     (done : List (List Char)) :
     splitLines (l ++ rest) line done = splitLines rest (l.reverse ++ line) done := by
   induction l generalizing line with
@@ -263,7 +263,7 @@ private theorem splitLines_append {l : List Char} (h : ∀ c ∈ l, c ≠ '\r') 
       ih fun c hc => h c (List.mem_cons_of_mem _ hc)]
     simp
 
-private theorem splitLines_intercalate : ∀ {ls : List (List Char)}, ls ≠ [] →
+theorem splitLines_intercalate : ∀ {ls : List (List Char)}, ls ≠ [] →
     (∀ l ∈ ls, ∀ c ∈ l, c ≠ '\r') → ∀ done : List (List Char),
     splitLines (['\r', '\n'].intercalate ls) [] done = done.reverse ++ ls
   | [l], _, h, done => by

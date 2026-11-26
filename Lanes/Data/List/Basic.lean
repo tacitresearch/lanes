@@ -78,4 +78,41 @@ theorem forall_mem_intercalate {p : α → Prop} {sep : List α} (hsep : ∀ x �
       · exact hsep x hx
     · exact forall_mem_intercalate hsep (ls := l' :: ls) (fun y hy => h y (by simp_all)) x hx
 
+theorem mapM_ok_mem {ε : Type} {f : α → Except ε β} :
+    ∀ {l : List α} {r : List β}, l.mapM f = .ok r → ∀ x ∈ l, ∃ y, f x = .ok y
+  | [], _, _, x, hx => by simp at hx
+  | x :: l, r, h, y, hy => by
+    rw [List.mapM_cons] at h
+    cases hx : f x with
+    | error e => simp [hx, bind, Except.bind] at h
+    | ok v =>
+      cases hl : l.mapM f with
+      | error e => simp [hx, hl, bind, Except.bind] at h
+      | ok vs =>
+        rcases List.mem_cons.mp hy with rfl | hy
+        · exact ⟨v, hx⟩
+        · exact mapM_ok_mem hl y hy
+
+theorem forall_mem_takeWhile {p : α → Bool} : ∀ {l : List α}, ∀ x ∈ l.takeWhile p, p x = true
+  | [], x, hx => by simp at hx
+  | y :: l, x, hx => by
+    rw [List.takeWhile_cons] at hx
+    split at hx
+    · rcases List.mem_cons.mp hx with rfl | hx
+      · assumption
+      · exact forall_mem_takeWhile x hx
+    · simp at hx
+
+theorem dropWhile_head {p : α → Bool} : ∀ {l : List α} {x : α} {rest : List α},
+    l.dropWhile p = x :: rest → p x = false
+  | [], _, _, h => by simp at h
+  | y :: l, x, rest, h => by
+    rw [List.dropWhile_cons] at h
+    split at h
+    · exact dropWhile_head h
+    · rename_i hy
+      simp only [List.cons.injEq] at h
+      rw [← h.1]
+      simpa using hy
+
 end Lanes

@@ -813,6 +813,59 @@ theorem findL_lines (t : List UInt8) : ∀ {ls : List (List Char)}, ls ≠ [] �
       List.length_nil]
     omega
 
+theorem findL_crlf_noCR : ∀ {x : List UInt8}, (∀ b ∈ x, b ≠ 13) → ∀ t,
+    findL [13, 10] (x ++ 13 :: 10 :: t) = some x.length
+  | [], _, t => by simp [findL]
+  | b :: x, h, t => by
+    have hfirst : (b :: (x ++ 13 :: 10 :: t)).take 2 ≠ [13, 10] := by
+      have := h b (by simp)
+      simp [this]
+    have ih := findL_crlf_noCR (x := x) (fun b hb => h b (List.mem_cons_of_mem _ hb)) t
+    rw [List.cons_append, findL]
+    simp only [List.length_cons, List.length_nil, Nat.reduceAdd, hfirst, ↓reduceIte, ih,
+      Option.map_some]
+
+theorem findL_skip_noCR : ∀ {x : List UInt8}, (∀ b ∈ x, b ≠ 13) → ∀ y : List UInt8,
+    findL [13, 10, 13, 10] (x ++ y) = (findL [13, 10, 13, 10] y).map (· + x.length)
+  | [], _, y => by simp
+  | b :: x, h, y => by
+    have hfirst : (b :: (x ++ y)).take 4 ≠ [13, 10, 13, 10] := by
+      have := h b (by simp)
+      simp [this]
+    have ih := findL_skip_noCR (x := x) (fun b hb => h b (List.mem_cons_of_mem _ hb)) y
+    rw [List.cons_append, findL]
+    simp only [List.length_cons, List.length_nil, Nat.reduceAdd, hfirst, ↓reduceIte, ih,
+      Option.map_map]
+    congr 1
+
+theorem findL_lines_noCR (t : List UInt8) : ∀ {ls : List (List Char)}, ls ≠ [] →
+    (∀ l ∈ ls, l ≠ [] ∧ ∀ c ∈ l, c ≠ '\r') →
+    findL [13, 10, 13, 10] ((['\r', '\n'].intercalate ls).flatMap String.utf8EncodeChar
+        ++ 13 :: 10 :: 13 :: 10 :: t)
+      = some ((['\r', '\n'].intercalate ls).flatMap String.utf8EncodeChar).length
+  | [l], _, h => by
+    rw [List.intercalate_singleton, findL_skip_noCR (ne_13_of_ne_cr (h l (by simp)).2)]
+    simp [findL]
+  | l :: l' :: ls, _, h => by
+    have hl := h l (by simp)
+    have hl' := h l' (by simp)
+    have hrest := findL_lines_noCR t (ls := l' :: ls) (by simp) fun x hx => h x (by simp_all)
+    obtain ⟨c, cs, hc⟩ := List.exists_cons_of_ne_nil hl'.1
+    obtain ⟨b, bs, hb⟩ := List.exists_cons_of_ne_nil (String.utf8EncodeChar_ne_nil (c := c))
+    have hb0 : b ≠ 13 :=
+      ne_13_of_ne_cr (cs := [c]) (by simpa using hl'.2 c (by simp [hc])) b (by simp [hb])
+    have htake : ((['\r', '\n'].intercalate (l' :: ls)).flatMap String.utf8EncodeChar
+        ++ 13 :: 10 :: 13 :: 10 :: t).take 2 ≠ [13, 10] := by
+      cases ls with
+      | nil => simp [hc, hb, hb0]
+      | cons l'' ls => simp [List.intercalate_cons_cons, hc, hb, hb0]
+    rw [List.intercalate_cons_cons, List.flatMap_append, List.flatMap_append, crlf_flatMap,
+      List.append_assoc, List.append_assoc, findL_skip_noCR (ne_13_of_ne_cr hl.2),
+      List.cons_append, List.cons_append, List.nil_append, findL_crlf_skip htake, hrest]
+    simp only [Option.map_some, Option.some.injEq, List.length_append, List.length_cons,
+      List.length_nil]
+    omega
+
 theorem splitLines_noLF {l : List Char} (hl : ∀ c ∈ l, c ≠ '\n') (rest : List Char) :
     ∀ (line : List Char) (done : List (List Char)),
       splitLines (l ++ '\r' :: '\n' :: rest) line done
@@ -880,10 +933,11 @@ private theorem headWire_toList (lines : List String) :
   rw [headWire, String.toUTF8_eq_toByteArray, data_toList_toByteArray, String.toList_append,
     List.flatMap_append, hsep, lines_toList]
 
-/-- A head written as lines that are not empty and have no LF is read as those lines, unless a
-limit refuses it. -/
+/-- A head written as lines that are not empty, and none of which has an LF or none of which has
+a CR, is read as those lines, unless a limit refuses it. -/
 theorem readHead_headWire (limits : Limits) (pre rest : ByteArray) {lines : List String}
-    (hne : lines ≠ []) (hlines : ∀ l ∈ lines, l ≠ "" ∧ ∀ c ∈ l.toList, c ≠ '\n') :
+    (hne : lines ≠ []) (hlines : ∀ l ∈ lines, l ≠ "")
+    (hclean : (∀ l ∈ lines, ∀ c ∈ l.toList, c ≠ '\n') ∨ (∀ l ∈ lines, ∀ c ∈ l.toList, c ≠ '\r')) :
     readHead limits (pre ++ (headWire lines ++ rest)) pre.size =
       if limits.line_max < (lines.headD "").utf8ByteSize then .refuse .uriTooLong
       else if limits.head_max < ("\r\n".intercalate lines).utf8ByteSize + 4 then
@@ -893,10 +947,34 @@ theorem readHead_headWire (limits : Limits) (pre rest : ByteArray) {lines : List
         | .error why => .refuse why
         | .ok head => .done head (pre.size + ("\r\n".intercalate lines).utf8ByteSize + 4) := by
   obtain ⟨l₀, more, rfl⟩ := List.exists_cons_of_ne_nil hne
-  have hls : ∀ l ∈ (l₀ :: more).map String.toList, l ≠ [] ∧ ∀ c ∈ l, c ≠ '\n' := by
+  have hls : ∀ l ∈ (l₀ :: more).map String.toList, l ≠ [] := by
     intro l hl
     obtain ⟨s, hs, rfl⟩ := List.mem_map.mp hl
-    exact ⟨fun e => (hlines s hs).1 (String.toList_inj.mp (e.trans (by simp))), (hlines s hs).2⟩
+    exact fun e => hlines s hs (String.toList_inj.mp (e.trans (by simp)))
+  have hmapped : ∀ {p : Char → Prop}, (∀ l ∈ l₀ :: more, ∀ c ∈ l.toList, p c) →
+      ∀ l ∈ (l₀ :: more).map String.toList, ∀ c ∈ l, p c := by
+    intro p h l hl
+    obtain ⟨s, hs, rfl⟩ := List.mem_map.mp hl
+    exact h s hs
+  have hfirst : ∀ t, findL [13, 10] (l₀.toList.flatMap String.utf8EncodeChar ++ 13 :: 10 :: t)
+      = some (l₀.toList.flatMap String.utf8EncodeChar).length := by
+    rcases hclean with h | h
+    · exact findL_crlf (ne_10_of_ne_lf (h l₀ (by simp)))
+    · exact findL_crlf_noCR (ne_13_of_ne_cr (h l₀ (by simp)))
+  have hblank : ∀ t, findL [13, 10, 13, 10]
+      ((['\r', '\n'].intercalate ((l₀ :: more).map String.toList)).flatMap String.utf8EncodeChar
+        ++ 13 :: 10 :: 13 :: 10 :: t)
+      = some ((['\r', '\n'].intercalate ((l₀ :: more).map String.toList)).flatMap
+          String.utf8EncodeChar).length := by
+    intro t
+    rcases hclean with h | h
+    · exact findL_lines t (by simp) fun l hl => ⟨hls l hl, hmapped h l hl⟩
+    · exact findL_lines_noCR t (by simp) fun l hl => ⟨hls l hl, hmapped h l hl⟩
+  have hsplit : splitLines (['\r', '\n'].intercalate ((l₀ :: more).map String.toList)) [] []
+      = (l₀ :: more).map String.toList := by
+    rcases hclean with h | h
+    · simpa using splitLines_intercalate_noLF (by simp) (hmapped h) []
+    · simpa using splitLines_intercalate (by simp) (hmapped h) []
   generalize hE : (['\r', '\n'].intercalate ((l₀ :: more).map String.toList)).flatMap
     String.utf8EncodeChar = E
   have hEsize : E.length = ("\r\n".intercalate (l₀ :: more)).utf8ByteSize := by
@@ -934,8 +1012,7 @@ theorem readHead_headWire (limits : Limits) (pre rest : ByteArray) {lines : List
       (pre.size + limits.line_max + 2)
       = if l₀.utf8ByteSize ≤ limits.line_max then some (pre.size + l₀.utf8ByteSize) else none := by
     obtain ⟨Z, hz⟩ := hZ rest.data.toList
-    rw [find_eq (by simp), hdrop, hEW, List.append_assoc, hz,
-      findL_crlf (ne_10_of_ne_lf (hls _ (by simp)).2), hE₀]
+    rw [find_eq (by simp), hdrop, hEW, List.append_assoc, hz, hfirst, hE₀]
     simp only [Option.bind_some, List.length_cons, List.length_nil]
     by_cases h : l₀.utf8ByteSize ≤ limits.line_max
     · simp only [h, ↓reduceIte, show pre.size + l₀.utf8ByteSize + 2 ≤ pre.size + limits.line_max + 2
@@ -945,7 +1022,7 @@ theorem readHead_headWire (limits : Limits) (pre rest : ByteArray) {lines : List
   have hfind₂ : find (pre ++ (headWire (l₀ :: more) ++ rest)) [13, 10, 13, 10] pre.size
       (pre.size + limits.head_max)
       = if E.length + 4 ≤ limits.head_max then some (pre.size + E.length) else none := by
-    rw [find_eq (by simp), hdrop, ← hE, findL_lines _ (by simp) hls, hE]
+    rw [find_eq (by simp), hdrop, ← hE, hblank, hE]
     simp only [Option.bind_some, List.length_cons, List.length_nil]
     by_cases h : E.length + 4 ≤ limits.head_max
     · simp only [h, ↓reduceIte, show pre.size + E.length + 4 ≤ pre.size + limits.head_max by omega]
@@ -964,8 +1041,7 @@ theorem readHead_headWire (limits : Limits) (pre rest : ByteArray) {lines : List
           = ("\r\n".intercalate (l₀ :: more) ++ "\r\n\r\n").toUTF8 ++ rest := rfl
       rw [hwire, hEsize, extract_head, String.toUTF8_eq_toByteArray, fromUTF8?_toByteArray]
       simp only []
-      rw [lines_toList, splitLines_intercalate_noLF (by simp) (fun l hl => (hls l hl).2) []]
-      simp only [List.reverse_nil, List.nil_append]
+      rw [lines_toList, hsplit]
       rfl
     · simp only [hhead, ↓reduceIte] at hfind₂
       rw [find_none_from _ hfind₂ _ (by omega)]
@@ -1436,7 +1512,8 @@ theorem read_wire {limits : Limits} {r : Request} {host : String} {w : ByteArray
     rw [headWire, String.toUTF8_eq_toByteArray, String.size_toByteArray, String.utf8ByteSize_append]
     rfl
   unfold read
-  rw [hbytes, readHead_headWire limits pre _ hne (lines_wire hsent)]
+  rw [hbytes, readHead_headWire limits pre _ hne (fun l hl => (lines_wire hsent l hl).1)
+    (.inl fun l hl => (lines_wire hsent l hl).2)]
   simp only [show ¬ limits.line_max < ((r.head host).headD "").utf8ByteSize by omega,
     show ¬ limits.head_max < ("\r\n".intercalate (r.head host)).utf8ByteSize + 4 by omega,
     ↓reduceIte, hparse]
@@ -1475,6 +1552,323 @@ theorem read_wire_extract {limits : Limits} {r : Request} {host : String} {w : B
     have := (read_done e).2.1
     simp only [ByteArray.size_append, ByteArray.size_extract] at this
     omega
+
+end Request
+
+/-! What a head the reader takes is made of, and the heads it refuses -/
+
+namespace Request
+
+theorem pieces_ne_nil (sep : Char) : ∀ l, pieces sep l ≠ []
+  | [] => by simp [pieces]
+  | c :: l => by
+    simp only [pieces]
+    split <;> simp
+
+theorem intercalate_pieces (sep : Char) : ∀ l, [sep].intercalate (pieces sep l) = l
+  | [] => rfl
+  | c :: l => by
+    have ih := intercalate_pieces sep l
+    obtain ⟨p, ps, hps⟩ := List.exists_cons_of_ne_nil (pieces_ne_nil sep l)
+    simp only [pieces, hps, List.headD_cons, List.tail_cons]
+    rw [hps] at ih
+    split
+    · rename_i h
+      rw [List.intercalate_cons_cons, ih, h]
+      rfl
+    · cases ps with
+      | nil => simpa using ih
+      | cons q ps =>
+        rw [List.intercalate_cons_cons] at ih ⊢
+        rw [← ih]
+        rfl
+
+private theorem clean_of_visible {c : Char} (h : visible c = true) : c ≠ '\r' ∧ c ≠ '\n' := by
+  constructor <;> (rintro rfl; exact absurd h (by decide))
+
+private theorem clean_of_plain {c : Char} (h : plain c = true) : c ≠ '\r' ∧ c ≠ '\n' := by
+  constructor <;> (rintro rfl; exact absurd h (by decide))
+
+/-- The name of a field line the reader takes is a token right up to its colon, and the line
+has neither CR nor LF. -/
+theorem headerLine?_some {line : List Char} {field : String × String}
+    (h : headerLine? line = some field) :
+    token (String.ofList (line.takeWhile (· != ':'))) = true
+      ∧ field.1 = (String.ofList (line.takeWhile (· != ':'))).toLower
+      ∧ ∀ c ∈ line, c ≠ '\r' ∧ c ≠ '\n' := by
+  simp only [headerLine?] at h
+  split at h
+  · rename_i x value hd
+    split at h
+    · rename_i hc
+      simp only [Bool.and_eq_true] at hc
+      cases h
+      refine ⟨hc.1, rfl, fun c hc' => ?_⟩
+      rw [← List.takeWhile_append_dropWhile (p := (· != ':')) (l := line), hd] at hc'
+      rcases List.mem_append.mp hc' with hc' | hc'
+      · have htok := hc.1
+        simp only [token, Bool.and_eq_true, List.all_eq_true, String.toList_ofList] at htok
+        exact clean_of_visible (visible_of_tokenChar (htok.2 c hc'))
+      · rcases List.mem_cons.mp hc' with rfl | hc'
+        · have := dropWhile_head hd
+          simp only [bne_eq_false_iff_eq] at this
+          rw [this]
+          decide
+        · exact clean_of_plain (List.all_eq_true.mp hc.2 c hc')
+    · cases h
+  · cases h
+
+private theorem method?_clean {m : List Char} {mh : Method × Bool} (h : method? m = .ok mh) :
+    ∀ c ∈ m, c ≠ '\r' ∧ c ≠ '\n' := by
+  have hm : m = (String.ofList m).toList := String.toList_ofList.symm
+  simp only [method?] at h
+  split at h <;> rename_i heq
+  all_goals first
+    | (rw [hm, heq]; decide)
+    | (split at h <;> cases h)
+
+private theorem version?_clean {v : List Char} {version : Version} (h : version? v = .ok version) :
+    ∀ c ∈ v, c ≠ '\r' ∧ c ≠ '\n' := by
+  simp only [version?] at h
+  split at h
+  · decide
+  · decide
+  · split at h <;> cases h
+  · cases h
+
+private theorem target?_clean {t : List Char} {pq : List String × List (String × String)}
+    (h : target? t = .ok pq) : ∀ c ∈ t, c ≠ '\r' ∧ c ≠ '\n' := by
+  simp only [target?] at h
+  split at h
+  · rename_i rest
+    split at h
+    · rename_i hall
+      intro c hc
+      rcases List.mem_cons.mp hc with rfl | hc
+      · decide
+      · have := List.all_eq_true.mp hall c hc
+        constructor <;> (rintro rfl; exact absurd this (by decide))
+    · cases h
+  · cases h
+
+/-- A head the reader takes has neither CR nor LF in any of its lines: a bare CR or LF is never
+read as part of a line or as the end of one. -/
+theorem parseHead_clean {limits : Limits} {lines : List (List Char)} {head : Head}
+    (h : parseHead limits lines = .ok head) : ∀ l ∈ lines, ∀ c ∈ l, c ≠ '\r' ∧ c ≠ '\n' := by
+  cases lines with
+  | nil => simp [parseHead] at h
+  | cons line fieldLines =>
+    obtain ⟨m, t, v, hp, hv, hm, -, hf, -, -, -, hpq⟩ := parseHead_ok h
+    intro l hl c hc
+    rcases List.mem_cons.mp hl with rfl | hl
+    · rw [← intercalate_pieces ' ' l, hp] at hc
+      refine forall_mem_intercalate (p := fun c => c ≠ '\r' ∧ c ≠ '\n') (by decide)
+        (fun part hpart => ?_) c hc
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hpart
+      rcases hpart with rfl | rfl | rfl
+      · exact method?_clean hm
+      · exact target?_clean hpq
+      · exact version?_clean hv
+    · obtain ⟨field, hfield⟩ := mapM_ok_mem hf l hl
+      simp only [fieldLine?] at hfield
+      split at hfield
+      · rename_i field' hl'
+        exact (headerLine?_some hl').2.2 c hc
+      · cases hfield
+
+private theorem fieldLines_names {fieldLines : List (List Char)} :
+    ∀ {fields : List (String × String)}, fieldLines.mapM fieldLine? = .ok fields →
+      fields.map (·.1) = fieldLines.map (fun l => (String.ofList (l.takeWhile (· != ':'))).toLower)
+        ∧ ∀ l ∈ fieldLines, token (String.ofList (l.takeWhile (· != ':'))) = true := by
+  induction fieldLines with
+  | nil => intro fields h; cases h; simp
+  | cons l ls ih =>
+    intro fields h
+    rw [List.mapM_cons] at h
+    cases hl : fieldLine? l with
+    | error e => simp [hl, bind, Except.bind] at h
+    | ok f =>
+      cases hls : ls.mapM fieldLine? with
+      | error e => simp [hl, hls, bind, Except.bind] at h
+      | ok fs =>
+        simp only [hl, hls, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
+        subst h
+        simp only [fieldLine?] at hl
+        split at hl
+        · rename_i f' hf'
+          cases hl
+          obtain ⟨htok, hname, -⟩ := headerLine?_some hf'
+          obtain ⟨ih₁, ih₂⟩ := ih hls
+          refine ⟨by simp [hname, ih₁], fun l' hl' => ?_⟩
+          rcases List.mem_cons.mp hl' with rfl | hl'
+          · exact htok
+          · exact ih₂ l' hl'
+        · cases hl
+
+private theorem framing?_both {limits : Limits} {version : Version}
+    {fields : List (String × String)} (hl : "content-length" ∈ fields.map (·.1))
+    (hc : "transfer-encoding" ∈ fields.map (·.1)) {framing : Framing} :
+    framing? limits version fields ≠ .ok framing := by
+  have hl' : (fields.filter (·.1 == "content-length")).map (·.2) ≠ [] := by
+    obtain ⟨f, hf, e⟩ := List.mem_map.mp hl
+    intro hnil
+    have := List.filter_eq_nil_iff.mp (List.map_eq_nil_iff.mp hnil) f hf
+    simp [e] at this
+  have hc' : (fields.filter (·.1 == "transfer-encoding")).map (·.2) ≠ [] := by
+    obtain ⟨f, hf, e⟩ := List.mem_map.mp hc
+    intro hnil
+    have := List.filter_eq_nil_iff.mp (List.map_eq_nil_iff.mp hnil) f hf
+    simp [e] at this
+  simp only [framing?]
+  generalize (fields.filter (·.1 == "content-length")).map (·.2) = lengths at hl'
+  generalize (fields.filter (·.1 == "transfer-encoding")).map (·.2) = codings at hc'
+  obtain ⟨c, cs, rfl⟩ := List.exists_cons_of_ne_nil hc'
+  obtain ⟨l, ls, rfl⟩ := List.exists_cons_of_ne_nil hl'
+  simp
+
+private theorem framing?_twoLengths {limits : Limits} {version : Version}
+    {fields : List (String × String)}
+    (h : 2 ≤ ((fields.map (·.1)).filter (· == "content-length")).length) {framing : Framing} :
+    framing? limits version fields ≠ .ok framing := by
+  have hlen : 2 ≤ ((fields.filter (·.1 == "content-length")).map (·.2)).length := by
+    rw [List.length_map]
+    rw [List.filter_map, List.length_map] at h
+    exact h
+  simp only [framing?]
+  generalize (fields.filter (·.1 == "content-length")).map (·.2) = lengths at hlen
+  generalize (fields.filter (·.1 == "transfer-encoding")).map (·.2) = codings
+  match lengths, hlen with
+  | _ :: _ :: _, _ => cases codings <;> simp
+
+/-- The name a reader that splits a field line at its first colon sees, without the blanks
+around it and in lowercase. -/
+def fieldName (line : String) : String :=
+  (String.ofList (trimOws (line.toList.takeWhile (· != ':')))).toLower
+
+/-- A head of lines that the reader cannot take is refused, whatever follows it: never read,
+and never waited on. -/
+theorem read_headWire_refuse {limits : Limits} (pre rest : ByteArray) {lines : List String}
+    (hne : lines ≠ []) (hlines : ∀ l ∈ lines, l ≠ "")
+    (hclean : (∀ l ∈ lines, ∀ c ∈ l.toList, c ≠ '\n') ∨ (∀ l ∈ lines, ∀ c ∈ l.toList, c ≠ '\r'))
+    (h : ∀ head, parseHead limits (lines.map String.toList) ≠ .ok head) :
+    ∃ why, read limits (pre ++ (headWire lines ++ rest)) pre.size = .refuse why := by
+  have hr : ∃ why, readHead limits (pre ++ (headWire lines ++ rest)) pre.size = .refuse why := by
+    rw [readHead_headWire limits pre rest hne hlines hclean]
+    by_cases h₁ : limits.line_max < (lines.headD "").utf8ByteSize
+    · exact ⟨.uriTooLong, by simp only [h₁, ↓reduceIte]⟩
+    · by_cases h₂ : limits.head_max < ("\r\n".intercalate lines).utf8ByteSize + 4
+      · exact ⟨.fieldsTooLarge, by simp only [h₁, h₂, ↓reduceIte]⟩
+      · simp only [h₁, h₂, ↓reduceIte]
+        cases hp : parseHead limits (lines.map String.toList) with
+        | error why => exact ⟨why, rfl⟩
+        | ok head => exact absurd hp (h head)
+  obtain ⟨why, hw⟩ := hr
+  unfold read
+  rw [hw]
+  exact ⟨why, rfl⟩
+
+private theorem names_of_ok {limits : Limits} {lines : List String} {head : Head}
+    (h : parseHead limits (lines.map String.toList) = .ok head) :
+    head.fields.map (·.1) = lines.tail.map fieldName
+      ∧ framing? limits head.version head.fields = .ok head.framing
+      ∧ ∀ l ∈ lines.tail, token (String.ofList (l.toList.takeWhile (· != ':'))) = true := by
+  cases lines with
+  | nil => simp [parseHead] at h
+  | cons line more =>
+    obtain ⟨-, -, -, -, -, -, -, hf, -, -, hfr, -⟩ := parseHead_ok h
+    obtain ⟨hnames, htokens⟩ := fieldLines_names hf
+    have htokens' : ∀ l ∈ more, token (String.ofList (l.toList.takeWhile (· != ':'))) = true :=
+      fun l hl => htokens _ (List.mem_map.mpr ⟨l, hl, rfl⟩)
+    refine ⟨?_, hfr, htokens'⟩
+    rw [hnames, List.map_map, List.tail_cons]
+    refine List.map_congr_left fun l hl => ?_
+    have htok := htokens' l hl
+    simp only [token, Bool.and_eq_true, List.all_eq_true, String.toList_ofList] at htok
+    simp only [Function.comp_apply, fieldName]
+    rw [trimOws_of_forall fun c hc => ows_of_visible (visible_of_tokenChar (htok.2 c hc))]
+
+/-- A head with a `Content-Length` and a `Transfer-Encoding`, in either order, with any values
+and any blanks around the names, is refused, whatever follows it (CL.TE and TE.CL). -/
+theorem read_lengthAndCoding {limits : Limits} (pre rest : ByteArray) {lines : List String}
+    (hlines : ∀ l ∈ lines, l ≠ "" ∧ ∀ c ∈ l.toList, c ≠ '\n')
+    (hlength : ∃ l ∈ lines.tail, fieldName l = "content-length")
+    (hcoding : ∃ l ∈ lines.tail, fieldName l = "transfer-encoding") :
+    ∃ why, read limits (pre ++ (headWire lines ++ rest)) pre.size = .refuse why := by
+  have hne : lines ≠ [] := by rintro rfl; simp at hlength
+  refine read_headWire_refuse pre rest hne (fun l hl => (hlines l hl).1)
+    (.inl fun l hl => (hlines l hl).2) fun head hp => ?_
+  obtain ⟨hnames, hfr, -⟩ := names_of_ok hp
+  obtain ⟨l, hl, el⟩ := hlength
+  obtain ⟨c, hc, ec⟩ := hcoding
+  exact framing?_both (by rw [hnames]; exact List.mem_map.mpr ⟨l, hl, el⟩)
+    (by rw [hnames]; exact List.mem_map.mpr ⟨c, hc, ec⟩) hfr
+
+/-- A head with two `Content-Length` fields is refused, whether their values differ or not. -/
+theorem read_twoLengths {limits : Limits} (pre rest : ByteArray) {lines : List String}
+    (hlines : ∀ l ∈ lines, l ≠ "" ∧ ∀ c ∈ l.toList, c ≠ '\n')
+    (htwo : 2 ≤ (lines.tail.filter (fieldName · == "content-length")).length) :
+    ∃ why, read limits (pre ++ (headWire lines ++ rest)) pre.size = .refuse why := by
+  have hne : lines ≠ [] := by rintro rfl; simp at htwo
+  refine read_headWire_refuse pre rest hne (fun l hl => (hlines l hl).1)
+    (.inl fun l hl => (hlines l hl).2) fun head hp => ?_
+  obtain ⟨hnames, hfr, -⟩ := names_of_ok hp
+  refine framing?_twoLengths ?_ hfr
+  rw [hnames, List.filter_map, List.length_map]
+  exact htwo
+
+/-- A field line with a blank before its first colon is refused: a blank between a name and
+its colon (RFC 9112, 5.1), and a line that starts with a blank, which folds it into the one
+before it (obs-fold, RFC 9112, 5.2). -/
+theorem read_blankInName {limits : Limits} (pre rest : ByteArray) {lines : List String}
+    (hlines : ∀ l ∈ lines, l ≠ "" ∧ ∀ c ∈ l.toList, c ≠ '\n')
+    (hblank : ∃ l ∈ lines.tail, (l.toList.takeWhile (· != ':')).any ows = true) :
+    ∃ why, read limits (pre ++ (headWire lines ++ rest)) pre.size = .refuse why := by
+  have hne : lines ≠ [] := by rintro rfl; simp at hblank
+  refine read_headWire_refuse pre rest hne (fun l hl => (hlines l hl).1)
+    (.inl fun l hl => (hlines l hl).2) fun head hp => ?_
+  obtain ⟨-, -, htokens⟩ := names_of_ok hp
+  obtain ⟨l, hl, hany⟩ := hblank
+  have htok := htokens l hl
+  simp only [token, Bool.and_eq_true, List.all_eq_true, String.toList_ofList] at htok
+  obtain ⟨c, hc, hows⟩ := List.any_eq_true.mp hany
+  have := ows_of_visible (visible_of_tokenChar (htok.2 c hc))
+  rw [this] at hows
+  cases hows
+
+theorem read_fold {limits : Limits} (pre rest : ByteArray) {lines : List String}
+    (hlines : ∀ l ∈ lines, l ≠ "" ∧ ∀ c ∈ l.toList, c ≠ '\n')
+    (hfold : ∃ l ∈ lines.tail, l.toList.head? = some ' ' ∨ l.toList.head? = some '\t') :
+    ∃ why, read limits (pre ++ (headWire lines ++ rest)) pre.size = .refuse why := by
+  obtain ⟨l, hl, hhead⟩ := hfold
+  refine read_blankInName pre rest hlines ⟨l, hl, ?_⟩
+  cases hcs : l.toList with
+  | nil => rw [hcs] at hhead; simp at hhead
+  | cons c cs =>
+    rw [hcs] at hhead
+    simp only [List.head?_cons, Option.some.injEq] at hhead
+    rcases hhead with rfl | rfl <;> simp [ows]
+
+/-- A head with a bare CR in it, a CR not followed by LF, is refused (RFC 9112, 2.2). -/
+theorem read_bareCR {limits : Limits} (pre rest : ByteArray) {lines : List String}
+    (hlines : ∀ l ∈ lines, l ≠ "" ∧ ∀ c ∈ l.toList, c ≠ '\n')
+    (hcr : ∃ l ∈ lines, '\r' ∈ l.toList) :
+    ∃ why, read limits (pre ++ (headWire lines ++ rest)) pre.size = .refuse why := by
+  have hne : lines ≠ [] := by rintro rfl; simp at hcr
+  refine read_headWire_refuse pre rest hne (fun l hl => (hlines l hl).1)
+    (.inl fun l hl => (hlines l hl).2) fun head hp => ?_
+  obtain ⟨l, hl, hc⟩ := hcr
+  exact (parseHead_clean hp l.toList (List.mem_map.mpr ⟨l, hl, rfl⟩) '\r' hc).1 rfl
+
+/-- A head with a bare LF in it, which some parsers take for the end of a line, is refused. -/
+theorem read_bareLF {limits : Limits} (pre rest : ByteArray) {lines : List String}
+    (hlines : ∀ l ∈ lines, l ≠ "" ∧ ∀ c ∈ l.toList, c ≠ '\r')
+    (hlf : ∃ l ∈ lines, '\n' ∈ l.toList) :
+    ∃ why, read limits (pre ++ (headWire lines ++ rest)) pre.size = .refuse why := by
+  have hne : lines ≠ [] := by rintro rfl; simp at hlf
+  refine read_headWire_refuse pre rest hne (fun l hl => (hlines l hl).1)
+    (.inr fun l hl => (hlines l hl).2) fun head hp => ?_
+  obtain ⟨l, hl, hc⟩ := hlf
+  exact (parseHead_clean hp l.toList (List.mem_map.mpr ⟨l, hl, rfl⟩) '\n' hc).2 rfl
 
 end Request
 
