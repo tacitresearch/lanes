@@ -1105,3 +1105,49 @@ transport's courier over an in-memory link, not a second router.
 The inbox's lane that is never refused (`Mailbox.urge`, `Runtime.peer`) was there for it and has
 no user now; it goes next.
 
+
+## D38. Types are declared inside a command that derives what Lean's handlers cannot
+
+Around Raft's one actor stood a codec for each of its eight types, written field by field
+beside the declaration, and a `BEq` with its law written by hand for the node, whose machine
+may be a function. Lean derives instances with handlers that run in the elaborator, and an
+application that imports `Lean` to run one of its own links it, 137 MB even through
+`meta import` (D15). A macro sees syntax only, so it cannot read the fields of a type declared
+elsewhere. So the declaration is
+written inside the command: `lanes_data structure …` and `lanes_data inductive …` expand to the
+ordinary declaration, pass the classes Lean knows to `deriving instance`, and derive three
+themselves from the text of the fields and constructors.
+
+- `Codable`, a class beside the structure `Codec`. `Codec` stays a value that journals,
+  snapshots and transports are given; the class lets a derived codec find each field's by its
+  type, and has instances for the built-in types, `Fin n`, `Option`, `List`, pairs, sums,
+  sigma types and `Std.ExtTreeMap`. `T.codec` takes a codec for each type parameter, so
+  `Request.codec Codec.fin` still reads as it did, and the instance applies it to the
+  parameters' instances. The codec is the one `Codec.struct%` or `Codec.sum%` builds, with the
+  same field codecs a person wrote, so the law holds by construction and the records are the
+  same: journals and snapshots of raft-kv and the bank read as before. Raft's node, messages and
+  answers were compared with the hand-written codecs, and `Tests/Codec.lean` compares one on
+  every run.
+- `Enum`, through a nested sum of products of the constructors' arguments, listed and mapped
+  back.
+- `LawfulBEq`, for a structure: `==` field by field, and its law. Lean's own
+  `deriving BEq, ReflBEq, LawfulBEq` asks `BEq` of every type parameter, and so of `Entry N C`
+  inside the node's log, which then needs a derived `BEq` of its own beside the one
+  `DecidableEq` gives. The command asks `BEq` (and `LawfulBEq`) only of a parameter that is a
+  field's whole type and appears in no other, and `DecidableEq` of the rest, which is the
+  context the node's hand-written instance had.
+
+The command accepts fields `x : T` and arguments `(x y : T)`, with docstrings; a type with
+defaults, `extends`, indices or recursion is declared as usual and given a codec with the
+macros. Errors in what it derives are reported on the command, not on a field.
+
+Instances defined by cases on an identity, for systems whose actors have different messages or
+states, were a `match` with `inferInstanceAs` per class and per identity. The tactic
+`instance_by_cases` introduces the identity, takes it apart where instance search fails, and
+fills `Signature.Inspect` and `System.Inspect` the same way.
+
+In the examples, tests, the template and raft-kv, 144 lines of codecs, `BEq`, `Enum` and
+per-identity instances became 16. `raftNode` grew by 3 KB, `bankWeb` by 3 KB, and `lanes` is
+unchanged. Not done: a system's `Inspect` still takes one line for its signature and one for
+itself (a macro cannot name the signature of a system with parameters), and Raft's effects are
+still annotated `(N := N) (C := C) (R := R)`, because `Eff` takes the node's identity only.

@@ -56,6 +56,22 @@ lake exe my-app      # serves http://127.0.0.1:8080
 The generated app is a counter service: a spec-sized actor, its invariant proved in one line, a
 model check with vacuity witnesses, and a server-rendered page.
 
+Its types are declared with `lanes_data`, which writes the declaration and derives from the same
+text a codec that carries its round-trip law, so the journal and its snapshots need no code of
+their own:
+
+```lean
+lanes_data structure Response where
+  req : ReqId
+  value : Nat
+  applied : Bool
+  deriving DecidableEq, Repr, Hashable, Codable
+```
+
+`deriving Enum` lists the values of a finite type, such as the identities of a system's actors,
+and `deriving LawfulBEq` compares a structure that holds a function field by field. `AGENTS.md`
+says what is accepted.
+
 ## Views are Lean
 
 ```lean

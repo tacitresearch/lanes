@@ -35,7 +35,7 @@ The toolchain is pinned in `lean-toolchain` and follows CSLib's. Dependencies ar
 | Path | Contents | May import |
 | --- | --- | --- |
 | `Lanes/Actors/` | `Actor`, `Signature`, `Effect`, `System`, the world step function, scheduler, runtime | `Std` only |
-| `Lanes/Data/` | Small data utilities (`Enum`, list lemmas in `List`) and the JSON library (`Json`) | `Std` only |
+| `Lanes/Data/` | Small data utilities (`Enum`, list lemmas in `List`), codecs and `lanes_data` (`Codec`, `Declare`), and the JSON library (`Json`) | `Std` only |
 | `Lanes/Check/` | Model checker | `Std` only |
 | `Lanes/Http/`, `Lanes/Html/` | HTTP requests and responses as data; HTML values and template syntax | `Std` only |
 | `Lanes/Env/` | Adapters to the outside world (HTTP server) | `Std` only |
@@ -49,6 +49,43 @@ Runtime modules never import Mathlib or CSLib (design decision 5). `import Lanes
 layer and gives a binary of a few megabytes; `import Lanes.Semantics` is the proof layer.
 Importing the proof layer from executable code links all of Mathlib into the binary (over 150 MB),
 and Mathlib's `<i` token breaks `<input>` in templates, so keep views and `main` on `import Lanes`.
+
+## Declaring a type for a system
+
+Declare the messages, inputs, outputs and states of a system with `lanes_data`. It is the
+ordinary declaration with a prefix, and its `deriving` clause also takes three classes Lean
+cannot derive without linking `Lean` into the binary:
+
+```lean
+lanes_data structure Entry (N C : Type) where
+  term : Nat
+  /-- The node that took the command from its client. -/
+  origin : N
+  cmd : C
+  deriving DecidableEq, Repr, Hashable, Codable
+
+lanes_data inductive Id (F : Type) where
+  | front (f : F)
+  | store
+  deriving DecidableEq, Repr, Hashable, Enum
+```
+
+- `Codable` gives `Entry.codec : Codec N → Codec C → Codec (Entry N C)` and
+  `instance [Codable N] [Codable C] : Codable (Entry N C)`; `Codec.of T` is the instance's codec.
+  Every field's type needs a `Codable` instance: `Nat`, `Int`, `String`, `Bool`, `Unit`,
+  `ByteArray`, `Fin n`, `Option`, `List`, pairs, sums, sigma types, `Std.ExtTreeMap`, and types
+  declared this way. The law holds by construction (`Codec.struct%`, `Codec.sum%`).
+- `Enum` lists every value, from `Enum` instances of the constructors' arguments.
+- `LawfulBEq` gives a structure a `BEq` that compares field by field, and its law, for a structure
+  that holds a function on an `Enum` type and so has no `DecidableEq`. A type parameter that is a
+  field's whole type is compared with its own `BEq`; any other needs `DecidableEq`.
+
+Constructor arguments are written `(x y : T)`, fields `x : T`, each with an optional docstring.
+Default values, `extends`, indices and recursive types are not accepted: declare those with
+`structure` or `inductive` and write the codec with `Codec.struct%` or `Codec.sum%`.
+
+A family of instances defined by cases on an identity, such as `∀ i, DecidableEq (Msg i)` or the
+`Inspect` of a system whose actors have different messages or states, is `by instance_by_cases`.
 
 ## Conventions
 
