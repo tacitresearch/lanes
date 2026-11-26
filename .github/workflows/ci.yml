@@ -34,7 +34,7 @@ jobs:
           runner: ${{ vars.LANES_RUNNER }}
 
   # Order follows LANES_STYLE section 6: build, lint, model checks and tests.
-  build:
+  compile:
     needs: runner
     runs-on: ${{ fromJSON(needs.runner.outputs.label) }}
     timeout-minutes: 90
@@ -66,7 +66,7 @@ jobs:
           git diff --exit-code
 
   check:
-    needs: [runner, build]
+    needs: [runner, compile]
     runs-on: ${{ fromJSON(needs.runner.outputs.label) }}
     timeout-minutes: 30
     steps:
@@ -78,7 +78,7 @@ jobs:
         run: lake exe lanesCheck
 
   test:
-    needs: [runner, build]
+    needs: [runner, compile]
     runs-on: ${{ fromJSON(needs.runner.outputs.label) }}
     timeout-minutes: 30
     steps:
@@ -100,7 +100,7 @@ jobs:
           lake test
 
   raft-kv:
-    needs: [runner, build]
+    needs: [runner, compile]
     runs-on: ${{ fromJSON(needs.runner.outputs.label) }}
     timeout-minutes: 90
     defaults:
@@ -129,7 +129,7 @@ jobs:
         run: lake exe raftProcs
 
   ledger:
-    needs: [runner, build]
+    needs: [runner, compile]
     runs-on: ${{ fromJSON(needs.runner.outputs.label) }}
     timeout-minutes: 90
     defaults:
@@ -154,3 +154,17 @@ jobs:
         run: lake test
       - name: Over HTTP, killed and started again
         run: lake exe ledgerLive
+
+  # The one check branch protection requires. A job that is skipped counts as passed there, so
+  # this job always runs and fails unless every job before it succeeded.
+  build:
+    needs: [runner, compile, check, test, raft-kv, ledger]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every job passed
+        env:
+          RESULTS: ${{ toJSON(needs.*.result) }}
+        run: |
+          echo "$RESULTS"
+          python3 -c 'import json, os, sys; r = json.loads(os.environ["RESULTS"]); sys.exit(0 if r and all(x == "success" for x in r) else 1)'
