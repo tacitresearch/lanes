@@ -16,7 +16,7 @@ Usage:
   lanes new <name> [--dir <path>] [--lanes-path <path>] [--rev <rev>]
       Create a new application.
   lanes lint [--fix] [--main] [<path>]
-      Check a project against the LANES_STYLE rules, and the files derived from others.
+      Check a project against the rules of Lanes (AGENTS.md), and the files derived from others.
       --fix rewrites the derived files: line counts, the decisions' index, docs/STATUS.md.
       --main numbers new decisions (with --fix) or reports them: use it on the main branch.
   lanes check

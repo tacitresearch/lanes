@@ -11,17 +11,25 @@ lake exe {{name}} 8080  # run
 lake exe {{name}} 8080 app.journal  # run, and keep state across restarts
 ```
 
-## Lanes rules for agents
+## Rules for agents
 
-- Read LANES_STYLE.md before writing code. Cite rule numbers in PR descriptions when a rule shaped a choice.
-- Write or update the spec first; model-check it before writing the implementation or a proof.
-- step is pure: no IO. New external work = new Effect constructor + response message.
-- Encode invariants in types first, theorems second, runtime asserts only at adapters.
-- Never add sorry, partial, unsafe or an axiom without listing it in TRUSTED.md.
-- On an unexpected state, emit stop; do not add defensive fallbacks.
-- Run `lanes lint && lake test` before claiming a task is done.
+The rules are Lanes' own, numbered as the code cites them (rule 2.4): the `AGENTS.md` of the
+Lanes package this application requires (in .lake/packages/lanes once Lake has fetched it, or
+[on GitHub](https://github.com/tacitresearch/lanes/blob/main/AGENTS.md)), sections Design, Code
+and Proofs. The ones every change here meets:
+
+- Write or update the spec first, and model-check it before the implementation or a proof
+  (rules 1.2, 5.1). Pair every `always` property with a `sometimes` (rule 5.3).
+- `step` is pure: no IO. Work outside the system is an output to an adapter, and its answer comes
+  back as an input (rule 2.4).
+- Encode invariants in types first, theorems second, runtime checks only at adapters (rule 2.1).
+- Bound every queue, map and retry in its type or `Config` (rule 2.6).
+- Never add `sorry`, `partial`, `unsafe` or an axiom without listing it in `TRUSTED.md`
+  (rule 5.5).
+- On an unexpected state, emit `stop`; do not add defensive fallbacks (rule 3.1).
 - Write almost no comments. A comment is for a *why* that a name, a type or a theorem cannot
   carry. If code needs explaining, rename or restructure it.
+- Run `lake build && lake test && lake exe lanes lint` before claiming a task is done.
 
 ## Layout
 

@@ -41,7 +41,6 @@ def files : List (String × String) :=
     ("AGENTS.md", include_str "../templates/app/AGENTS.md.tmpl"),
     ("TRUSTED.md", include_str "../templates/app/TRUSTED.md.tmpl"),
     (".gitignore", include_str "../templates/app/gitignore.tmpl"),
-    ("LANES_STYLE.md", include_str "../LANES_STYLE.md"),
     ("lean-toolchain", include_str "../lean-toolchain") ]
 
 def fill (name : String) (source : Source) (text : String) : String :=
