@@ -1182,8 +1182,8 @@ cannot tell whether a name in a type is an earlier field or a constant, and a fi
 codec has nothing to write for a proof. The command finds a field's name in a later field's
 type by text and refuses it, with an error that names the field and says to use a subtype; it
 refuses only when it derives one of its own classes, so `deriving DecidableEq` alone still
-passes the structure to Lean. With these, `lanesTest` grew by 41 KB, the new tests included,
-and links no more of `Lean` than before.
+passes the structure to Lean. `lanesTest` grew by 37 KB, all of it the new tests; its other
+code and `bankWeb` are 64 bytes smaller, and neither links `Lean`.
 
 Instances defined by cases on an identity, for systems whose actors have different messages or
 states, were a `match` with `inferInstanceAs` per class and per identity. The tactic
