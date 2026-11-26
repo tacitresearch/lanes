@@ -10,17 +10,17 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Area | Definitions | proved | trusted | checked | tested | spec | none |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `Lanes/Actors` | 339 | 171 | 10 | 36 | 19 | 80 | 23 |
+| `Lanes/Actors` | 339 | 166 | 10 | 36 | 19 | 85 | 23 |
 | `Lanes/Auth` | 27 | 7 | 0 | 0 | 16 | 1 | 3 |
 | `Lanes/Behaviours` | 8 | 8 | 0 | 0 | 0 | 0 | 0 |
 | `Lanes/Check` | 91 | 54 | 0 | 25 | 0 | 10 | 2 |
-| `Lanes/Data` | 348 | 241 | 5 | 4 | 44 | 25 | 29 |
+| `Lanes/Data` | 348 | 233 | 5 | 4 | 44 | 33 | 29 |
 | `Lanes/Env` | 24 | 0 | 24 | 0 | 0 | 0 | 0 |
 | `Lanes/Html` | 42 | 2 | 0 | 0 | 28 | 0 | 12 |
-| `Lanes/Http` | 176 | 100 | 1 | 9 | 35 | 17 | 14 |
-| `Lanes/Semantics` | 53 | 12 | 0 | 0 | 0 | 38 | 3 |
-| `LanesCli` | 108 | 0 | 0 | 0 | 24 | 0 | 84 |
-| All | 1216 | 595 | 40 | 74 | 166 | 171 | 170 |
+| `Lanes/Http` | 176 | 99 | 1 | 9 | 35 | 18 | 14 |
+| `Lanes/Semantics` | 53 | 9 | 0 | 0 | 0 | 43 | 1 |
+| `LanesCli` | 110 | 0 | 0 | 0 | 42 | 0 | 68 |
+| All | 1218 | 578 | 40 | 74 | 184 | 190 | 152 |
 
 ## `Lanes/Actors/Actor.lean`
 
@@ -195,11 +195,11 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `instDecidableEqJoinMsg` | proved | its type, `Decidable` |
 | `joinSig` | proved | `SysState.exists_block`, `SysState.run_left`, `System.Invariant.join_left` and 9 more |
-| `Wiring.left` | proved | through `System.filterMapIO`, `System.join`: `SysState.exists_block`, `SysState.run_filterMapIO` and 14 more |
-| `Wiring.right` | proved | through `System.join`: `SysState.exists_block`, `SysState.run_left` and 10 more |
+| `Wiring.left` | proved | through `SysState.over`, `System.filterMapIO` and 3 more: `SysState.exists_block`, `SysState.run_filterMapIO` and 14 more |
+| `Wiring.right` | proved | through `System.join`, `Wiring.leftView`: `SysState.exists_block`, `SysState.run_left` and 10 more |
 | `System.join` | proved | `SysState.exists_block`, `SysState.run_left`, `System.Invariant.join_left` and 9 more |
 | `Signature.withIO` | proved | `SysState.run_filterMapIO`, `System.Invariant.filterMapIO`, `System.LeadsTo.filterMapIO` and 1 more |
-| `Effect.filterMapOut` | proved | through `System.filterMapIO`: `SysState.run_filterMapIO`, `System.Invariant.filterMapIO` and 2 more |
+| `Effect.filterMapOut` | proved | through `SysState.over`, `System.filterMapIO` and 1 more: `SysState.run_filterMapIO`, `System.Invariant.filterMapIO` and 2 more |
 | `System.filterMapIO` | proved | `SysState.run_filterMapIO`, `System.Invariant.filterMapIO`, `System.LeadsTo.filterMapIO` and 1 more |
 | `System.mapIO` | checked | `Tests/Join.lean` |
 | `instHashableSum_lanes` | checked | `Tests/Fronted.lean`, `Tests/Join.lean` |
@@ -213,14 +213,14 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Envelope.left?` | proved | through `SysState.left`, `SysState.thinLeft`: `SysState.run_left`, `System.Invariant.join_left` and 3 more |
+| `Envelope.left?` | proved | through `SysState.left`, `SysState.thinLeft` and 1 more: `SysState.run_left`, `System.Invariant.join_left` and 4 more |
 | `Envelope.right?` | proved | through `SysState.right`: `System.Invariant.join_right`, `System.Reachable.right` and 1 more |
 | `EnvModel.left` | proved | `SysState.run_left`, `System.Invariant.join_left`, `System.LeadsTo.join_left` and 3 more |
 | `EnvModel.right` | proved | `System.Invariant.join_right`, `System.Reachable.right`, `System.Reachable.right_of_quiet_boot` |
 | `SysState.left` | proved | `SysState.run_left`, `System.Invariant.join_left`, `System.LeadsTo.join_left` and 1 more |
 | `SysState.right` | proved | `System.Invariant.join_right`, `System.Reachable.right`, `System.Reachable.right_of_quiet_boot` |
 | `SysState.thinLeft` | proved | `System.LeadsTo.join_left`, `System.Run.Fair.left` |
-| `Event.left?` | proved | through `Event.leftDeed`: `SysState.run_left`, `System.Run.Fair.left` |
+| `Event.left?` | proved | through `Event.leftDeed`, `Wiring.leftView`: `SysState.run_left`, `System.Run.Fair.left` and 1 more |
 | `Event.leftDeed` | proved | `SysState.run_left`, `System.Run.Fair.left` |
 | `Wiring.shown` | proved | `SysState.run_left`, `System.Run.Fair.left` |
 | `Wiring.wired` | spec | used only in statements |
@@ -299,7 +299,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `EnvModel.lossy` | proved | `System.Invariant.shards_of_forall`, `System.Invariant.split_of_forall`, `System.Reachable.lossy` |
+| `EnvModel.lossy` | spec | used only in statements |
 
 ## `Lanes/Actors/Mailbox.lean`
 
@@ -330,10 +330,10 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Envelope.over` | proved | through `SysState.over`: `SysState.run_filterMapIO`, `System.Invariant.filterMapIO` |
+| `Envelope.over` | spec | used only in statements |
 | `Envelope.under` | spec | used only in statements |
-| `EnvModel.under` | proved | `SysState.run_filterMapIO`, `System.Invariant.filterMapIO`, `System.LeadsTo.filterMapIO` and 1 more |
-| `SysState.over` | proved | `SysState.run_filterMapIO`, `System.Invariant.filterMapIO` |
+| `EnvModel.under` | spec | used only in statements |
+| `SysState.over` | spec | used only in statements |
 | `Event.Under` | spec | a predicate |
 | `Event.AllUnder` | spec | a predicate |
 
@@ -366,7 +366,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Event.awake` | proved | `Event.filterMap_eq_of_awake` |
+| `Event.awake` | spec | used only in statements |
 | `SysState.Same` | spec | a predicate |
 | `SysState.release` | spec | used only in statements |
 | `SysState.Leads` | spec | a predicate |
@@ -751,7 +751,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Base64.encode` | proved | `Base64.allowed_of_mem_encode`, `Base64.decode_encode`, `Base64.decode_eq_some_iff` and 1 more |
 | `Base64.decode` | proved | `Base64.decode_encode`, `Base64.decode_eq_none_of_length`, `Base64.decode_eq_none_of_not_allowed` and 1 more |
 | `Base64.Encoding.Allowed` | spec | a predicate |
-| `Base64.encodedLength` | proved | `Base64.decode_eq_none_of_length`, `Base64.length_encode` |
+| `Base64.encodedLength` | spec | used only in statements |
 
 ## `Lanes/Data/Civil.lean`
 
@@ -979,8 +979,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Json.instCoeString` | none |  |
 | `Json.instCoeBool` | none |  |
 | `Json.instOfNat` | tested | `Tests/Json.lean` |
-| `Json.sortFields` | proved | through `Json.mkObj`: `Json.getObjVal?_mkObj` |
-| `Json.dedupFields` | proved | through `Json.mkObj`: `Json.getObjVal?_mkObj` |
+| `Json.sortFields` | proved | through `Json.depth`, `Json.mkObj` and 1 more: `Json.getObjVal?_mkObj`, `Json.parse_complete` and 6 more |
+| `Json.dedupFields` | proved | through `Json.depth`, `Json.mkObj` and 1 more: `Json.getObjVal?_mkObj`, `Json.parse_complete` and 6 more |
 | `Json.duplicateKey?` | tested | `Tests/Json.lean` |
 | `Json.mkObj` | proved | `Json.getObjVal?_mkObj` |
 | `Json.mkObj?` | tested | `Tests/Json.lean` |
@@ -1041,10 +1041,10 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Json.Grammar.Unescaped` | spec | a predicate |
 | `Json.Grammar.Spaced.Ws` | spec | a predicate |
 | `Json.Grammar.Text` | spec | a predicate |
-| `Json.normalize` | proved | `Json.parse_complete`, `Json.parse_compress`, `Json.parse_iff` and 2 more |
-| `Json.depth` | proved | `Json.parse_compress`, `Json.parse_pretty`, `Json.text_compress` and 1 more |
-| `JsonNumber.digits` | proved | `Json.number_toString` |
-| `Json.digits` | proved | `Json.parse_compress`, `Json.parse_pretty`, `Json.text_compress` and 1 more |
+| `Json.normalize` | spec | used only in statements |
+| `Json.depth` | spec | used only in statements |
+| `JsonNumber.digits` | spec | used only in statements |
+| `Json.digits` | spec | used only in statements |
 
 ## `Lanes/Data/Json/Parser.lean`
 
@@ -1073,8 +1073,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Json.Parser.literal` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
 | `Json.Parser.key` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
 | `Json.Parser.value` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.elements` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.fields` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
+| `Json.Parser.elements` | spec | used only in statements |
+| `Json.Parser.fields` | spec | used only in statements |
 | `Json.Parser.document` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
 | `Json.parse` | proved | `Json.parse_complete`, `Json.parse_compress`, `Json.parse_iff` and 2 more |
 
@@ -1082,7 +1082,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Json.Parser.rest` | proved | `Json.Parser.rest_eq_nil`, `Json.Parser.rest_next` |
+| `Json.Parser.rest` | spec | used only in statements |
 | `Json.Parser.NoWs` | spec | a predicate |
 | `Json.Parser.NumStop` | spec | a predicate |
 | `Json.Parser.ValueStart` | spec | a predicate |
@@ -1423,7 +1423,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Request.fits` | proved | `Http.Request.read_wire`, `Http.Request.read_wire_extract` |
 | `Http.Request.sent` | proved | `Http.Request.read_wire` |
 | `Http.Request.headWire` | spec | used only in statements |
-| `Http.findL` | proved | `Http.findL_lines` |
+| `Http.findL` | spec | used only in statements |
 | `Http.encodedChar` | spec | used only in statements |
 | `Http.Request.fieldName` | spec | used only in statements |
 | `Http.Request.hexByte` | spec | used only in statements |
@@ -1532,11 +1532,11 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Obligation.inl` | proved | through `Wiring.leftView`: `Wiring.leftView_projects` |
-| `Wiring.leftView` | proved | `Wiring.leftView_projects` |
+| `Obligation.inl` | spec | used only in statements |
+| `Wiring.leftView` | spec | used only in statements |
 | `SysState.unhidden` | spec | used only in statements |
 | `SysState.hidden` | spec | used only in statements |
-| `System.underView` | proved | `System.underView_projects` |
+| `System.underView` | spec | used only in statements |
 
 ## `Lanes/Semantics/FairRuns.lean`
 
@@ -1588,8 +1588,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Service.Once.take` | none |  |
-| `Service.once` | none |  |
+| `Service.Once.take` | spec | used only in statements |
+| `Service.once` | spec | used only in statements |
 | `System.ImplementsOnce` | spec | a predicate |
 | `Once.Server.Covered` | spec | a predicate |
 
@@ -1615,7 +1615,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Service.spec` | proved | `Check.Monitor.complete`, `Check.Monitor.ok_iff`, `Check.Monitor.sound` and 2 more |
+| `Service.spec` | proved | `Account.implements`, `Check.Monitor.complete`, `Check.Monitor.ok_iff` and 8 more |
 | `Service.Stable` | spec | a predicate |
 | `Service.Only` | spec | a predicate |
 | `Service.Took` | spec | a predicate |
@@ -1632,7 +1632,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `System.sem` | proved | `System.reachable_iff` |
+| `System.sem` | proved | `Account.implements`, `Examples.KV.caching_not_implements`, `Examples.KV.implements` and 12 more |
 | `System.Refines` | spec | a predicate |
 
 ## `LanesCli/Generated.lean`
@@ -1687,27 +1687,29 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Cli.Inventory.noneFile` | none |  |
 | `Cli.Inventory.sortStrings` | none |  |
 | `Cli.Inventory.moduleOfPath` | none |  |
-| `Cli.Inventory.pathOfModule` | none |  |
+| `Cli.Inventory.pathOfModule` | tested | `Tests/Inventory.lean` |
 | `Cli.Inventory.modulesIn` | none |  |
 | `Cli.Inventory.imports` | none |  |
-| `Cli.Inventory.gates` | none |  |
+| `Cli.Inventory.gates` | tested | `Tests/Inventory.lean` |
 | `Cli.Inventory.trustedRows` | none |  |
-| `Cli.Inventory.owner` | none |  |
-| `Cli.Inventory.shapeOf` | none |  |
+| `Cli.Inventory.owner` | tested | `Tests/Inventory.lean` |
+| `Cli.Inventory.shapeOf` | tested | `Tests/Inventory.lean` |
 | `Cli.Inventory.specTypes` | none |  |
-| `Cli.Inventory.reportTypes` | none |  |
-| `Cli.Inventory.libraryRoots` | none |  |
-| `Cli.Inventory.isLibrary` | none |  |
-| `Cli.Inventory.ranges` | none |  |
-| `Cli.Inventory.inDeriving` | none |  |
-| `Cli.Inventory.generatedParsers` | none |  |
-| `Cli.Inventory.readFacts` | none |  |
-| `Cli.Inventory.isProp` | none |  |
+| `Cli.Inventory.reportTypes` | tested | `Tests/Inventory.lean` |
+| `Cli.Inventory.libraryRoots` | tested | `Tests/Inventory.lean` |
+| `Cli.Inventory.isLibrary` | tested | `Tests/Inventory.lean` |
+| `Cli.Inventory.ranges` | tested | `Tests/Inventory.lean` |
+| `Cli.Inventory.inDeriving` | tested | `Tests/Inventory.lean` |
+| `Cli.Inventory.generatedParsers` | tested | `Tests/Inventory.lean` |
+| `Cli.Inventory.ofTheorem` | tested | `Tests/Inventory.lean` |
+| `Cli.Inventory.readFacts` | tested | `Tests/Inventory.lean` |
+| `Cli.Inventory.isProp` | tested | `Tests/Inventory.lean` |
 | `Cli.Inventory.isType` | none |  |
-| `Cli.Inventory.usersOf` | none |  |
-| `Cli.Inventory.specs` | none |  |
-| `Cli.Inventory.covers` | none |  |
-| `Cli.Inventory.provedBy` | none |  |
+| `Cli.Inventory.usersOf` | tested | `Tests/Inventory.lean` |
+| `Cli.Inventory.specs` | tested | `Tests/Inventory.lean` |
+| `Cli.Inventory.covers` | tested | `Tests/Inventory.lean` |
+| `Cli.Inventory.statement` | tested | `Tests/Inventory.lean` |
+| `Cli.Inventory.provedBy` | tested | `Tests/Inventory.lean` |
 | `Cli.Inventory.isOutside` | none |  |
 | `Cli.Inventory.reach` | none |  |
 | `Cli.Inventory.exercised` | none |  |

@@ -1,4 +1,4 @@
-# D?. A JSON key given twice keeps its last value
+# D53. A JSON key given twice keeps its last value
 
 The parser refused an object that gave a key twice. RFC 8259 allows such a text (its names
 "SHOULD be unique"), JSONTestSuite counts `{"a":"b","a":"c"}` as valid (`y_object_duplicated_key`),
