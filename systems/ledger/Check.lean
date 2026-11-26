@@ -6,10 +6,11 @@ import Ledger
 Two users, `0` the administrator and `1`, two accounts each, with a right credential and a wrong
 one. Each scenario is a list of requests, each sent once the requests it lists have been
 answered, as a user who waits for a page does; the rest race. The monitor checks every
-response against the spec (`Ledger.spec`), and every state is checked against the safety
-properties of `Ledger.Spec` and of the actors.
+response, and every lock lifting and session ending, against the spec (`Ledger.spec`), and
+every state is checked against the safety properties of `Ledger.Spec` and of the actors.
 
-`ledgerCheck` prints each report and fails if one is not as expected.
+`ledgerCheck` prints each report and fails if one is not as expected. `ledgerCheck timed-crash`
+runs the scenario with timers and a crash anywhere, which `lake test` leaves out for its size.
 -/
 
 namespace Ledger.Check
@@ -35,7 +36,8 @@ def clients (script : Script) : Driver (sig N C) (Waiting (Request N C)) :=
   Driver.after (fun out => some out.req) script
 
 abbrev World' (config : Config N) (answering : Answering) :=
-  World (system N C config answering) (Waiting (Request N C) × Check.Monitor (sig N C) (SpecState N C))
+  World (system N C config answering)
+    (Waiting (Request N C) × Check.Monitor (Request N C) (Response N) (SpecState N C))
 
 def untimed : Config N :=
   { admin := 0, maxAccounts := 2, maxSessions := 2, maxFailures := 2, lockout_ms := none,
@@ -83,11 +85,10 @@ end Properties
 
 def check (config : Config N) (answering : Answering) (script : Script)
     (witnesses : List (Check.Property (World' config answering)))
-    (env : EnvModel (sig N C) := {}) (maxCrashes : Nat := 0) (refining : Bool := true) :=
+    (env : EnvModel (sig N C) := {}) (maxCrashes : Nat := 0) :=
   Check.system (system N C config answering)
-    { env, maxCrashes, driver := (spec N C config).monitored (clients script) }
-    ((if refining then props config answering script else (props config answering script).drop 1)
-      ++ witnesses)
+    { env, maxCrashes, driver := (spec N C config).monitored (clients script) deadlines }
+    (props config answering script ++ witnesses)
 
 /-- Links between actors that reorder: what several shards joined by TCP give. -/
 def reordering : EnvModel (sig N C) where
@@ -223,11 +224,37 @@ end Bridge
 
 def timedWitnesses : List (Check.Property (World' timed' .viaLedger)) :=
   [ .sometimes "a lock lifts" fun w => answered w 6 (.loggedIn 1 6),
-    .sometimes "a session ends on its own" fun w => answered w 12 .noSession ]
+    .sometimes "a lock holds" fun w => answered w 6 .locked,
+    .sometimes "a session ends on its own" fun w => answered w 12 .noSession,
+    .sometimes "a session lasts" fun w => answered w 12 .forbidden ]
 
-def timed {config : Config N} {answering : Answering} (name : String)
-    (ok : Check.Report (World' config answering) (Event (sig N C)) → Bool)
-    (report : Unit → Check.Report (World' config answering) (Event (sig N C))) : IO Bool := do
+/-- A user that decides a log-in as if the account were open: a lockout that does not lock,
+though failures are counted and the lock's timer is armed. -/
+def ignoreLock : UserMsg C → Option (Profile C) → Option (Profile C)
+  | .ask _ (.logIn _), some p => some { p with attempts := { p.attempts with locked := false } }
+  | _, u => u
+
+abbrev leaky (config : Config N) : System (sig N C) where
+  State
+    | .user _ => Option (Profile C)
+    | .ledger => Book N
+  actor
+    | .user n =>
+      let honest := user config .viaLedger n
+      { honest with step := fun u msg => honest.step (ignoreLock msg u) msg }
+    | .ledger => ledger config
+  accept r := ⟨.user r.name, .ask r.req r.ask⟩
+
+instance (config : Config N) : (leaky config).Inspect := by instance_by_cases
+
+def checkLeaky :=
+  Check.system (leaky timed')
+    { driver := (spec N C timed').monitored (clients abuse) deadlines }
+    [Check.refines "every response is one the spec allows"]
+
+def timed {sys : System (sig N C)} [sys.Inspect] {D : Type} (name : String)
+    (ok : Check.Report (World sys D) (Event (sig N C)) → Bool)
+    (report : Unit → Check.Report (World sys D) (Event (sig N C))) : IO Bool := do
   let start ← IO.monoMsNow
   let r := report ()
   let passed := ok r
@@ -253,7 +280,16 @@ def main (args : List String) : IO UInt32 := do
       fun _ => check untimed .viaLedger abuse abuseWitnesses)
     results := results.push (← timed "with timers: sessions end and locks lift at any moment"
       (fun r => r.ok && r.complete)
-      fun _ => check timed' .viaLedger abuse (timedWitnesses) (refining := false))
+      fun _ => check timed' .viaLedger abuse timedWitnesses)
+    results := results.push (← timed "the same, with a lockout that does not lock"
+      (fun r => match r.failure with
+        | some (.violated "every response is one the spec allows" _) => true
+        | _ => false)
+      fun _ => checkLeaky)
+  if args.contains "timed-crash" then
+    results := results.push (← timed "with timers and a crash anywhere"
+      (fun r => r.ok && r.complete)
+      fun _ => check timed' .viaLedger abuse [] crashing 1)
   if all || args.contains "faults" then
     results := results.push (← timed "a log-out racing a transfer, with links that reorder"
       (fun r => match r.failure with

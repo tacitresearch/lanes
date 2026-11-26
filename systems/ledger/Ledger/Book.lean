@@ -100,7 +100,7 @@ structure Config (N : Type) where
   maxSessions : Nat := 4
   maxFailures : Nat := 5
   /-- How long an account stays locked after `maxFailures` failed log-ins. With `none` it stays
-  locked: the spec has no time, so its model checks run without timers. -/
+  locked. -/
   lockout_ms : Option Nat := some 300000
   /-- How long a session lasts. With `none` it lasts until log-out or until it is the oldest of
   more than `maxSessions`. -/

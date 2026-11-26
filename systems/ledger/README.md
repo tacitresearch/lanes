@@ -39,8 +39,14 @@ proofs state:
 | A reply to a user shows only that user's records (the audit aside) | `Reply.onlyOf` |
 | Sessions and failed attempts stay within their bounds | `Auth.Sessions`, `Auth.Attempts.Bounded` |
 
-The spec has no time, so the lockout after failed log-ins and the end of a session, both
-timers, are not in it (friction log).
+Time passes in the spec as deadlines (`Deadline`): a locked account's lock lifting and a live
+session ending, armed while the account is locked and the session live, read from the user's
+record. The system's timers `unlock` and `expire` are those deadlines passing
+(`Ledger.deadlines`), so the checker sees a lock lift or a session end at the moment the timer
+fires and holds the spec to it: before the lock's deadline the account refuses even the right
+credential, and after a session's it serves the session nothing. How long a lock or a session
+lasts is the timer's delay (`Config.lockout_ms`, `session_ms`), which the semantics does not
+model, so that is not checked.
 
 ## The actors, and why
 
@@ -79,8 +85,11 @@ request.
 `Check.lean`, run by `lake test`, on two users (`0` the administrator, `1`), two accounts each,
 two currencies, a right credential and a wrong one. Each scenario is a script of requests, each
 sent once the requests it names are answered (`Driver.after`), the rest racing; every response
-is checked against the spec by the monitor and every state against every property, with a
-`sometimes` witness for each case of interest.
+and every lock lifting or session ending is checked against the spec by the monitor and every
+state against every property, with a `sometimes` witness for each case of interest. The seeded
+lockout decides a log-in as if the account were open, though it counts the failures and arms
+the lock's timer: the checker finds it when the session it opened ends, a deadline the spec
+does not have armed.
 
 | Scenario | States | Result |
 | --- | --- | --- |
@@ -91,7 +100,9 @@ is checked against the spec by the monitor and every state against every propert
 | The same, answered by the user actor | | stale view found in 42 steps |
 | The same with links that reorder | | stale view found in 47 steps |
 | Locks, evictions, a session used for another user, refusals | 199 | pass |
-| The same with timers that fire at any moment (no refinement: the spec has no time) | 11,081 | pass |
+| The same with timers that fire at any moment, checked against the deadlines | 12,577 | pass |
+| The same with a crash anywhere (`ledgerCheck timed-crash`, 11 s) | 88,546 | pass |
+| The same with a lockout that does not lock | | found in 26 steps |
 
 Also tested, without a socket: a session cookie makes an act of its user whatever the form
 says; a cookie whose payload is changed does not verify; a form token of another session is
@@ -189,12 +200,13 @@ round of framework work is planned from this.
 
 ### Clumsy
 
-- **A `Service` needs the system's signature**, though it reads only `In` and `Out`; the spec
-  cannot be a `Service` until the actors' identities and messages exist, so `Ledger.spec` sits
-  in `Ledger/System.lean` and the spec file holds only its step (`SpecState.step`).
-- **A `Service` has no time.** Lockouts and session ends cannot be specified, so refinement is
-  checked with them off (`Config.lockout_ms`, `session_ms` set to `none`) and the timed system
-  only against properties. Every web application with sessions will meet this.
+- ~~**A `Service` needs the system's signature**~~, though it reads only `In` and `Out`.
+  Fixed: `Service In Out S` (D43), and `Ledger.spec` is in `Ledger/Spec.lean`, before the
+  actors.
+- ~~**A `Service` has no time.**~~ Lockouts and session ends could not be specified, so
+  refinement was checked with them off and the timed system only against properties. Fixed: a
+  `Service` has deadlines, and the timed system is checked against them (D43). What is still
+  not checked is how long a lock or a session lasts.
 - **The bridge's `encode` sees only the output.** Forms carry a token bound to the session, so
   only `decode`, which has the request, can render them; the system's replies render data
   without forms. The transfer form therefore cannot offer the user's accounts in a list, and an
@@ -248,8 +260,9 @@ round of framework work is planned from this.
 
 1. `Bridge.prepare`, as above: the most important change, and a security one.
 2. Let `encode` see what `decode` chose to keep of the request.
-3. `Service In Out S` over inputs and outputs alone, so a spec can come first.
-4. Specs with time, or with internal steps, so sessions and lockouts can be specified.
+3. ~~`Service In Out S` over inputs and outputs alone, so a spec can come first.~~ Done (D43).
+4. ~~Specs with time, or with internal steps, so sessions and lockouts can be specified.~~ Done:
+   deadlines (D43).
 5. A bridge result that says what it means: answered here, or entered as an input.
 6. Sums over the actors a state has started, for invariants across actors with infinitely
    many identities.
