@@ -24,13 +24,14 @@ def env : EnvModel (sig N) where
   mayCrash _ := true
   restarts _ := true
 
-def check (config : Config) (maxCrashes : Nat) :=
+def check (config : Config) (maxCrashes : Nat) (tasks : Bool := false) :=
   Check.system (cluster N config) { env, driver := Driver.silent, maxCrashes }
     [ .always "at most one leader per term" fun w => atMostOneLeaderPerTerm w.state,
       .sometimes "a leader is elected" fun w => hasLeader w.state,
       .sometimes "a second term is reached" fun w =>
         (Enum.all (α := N)).any fun a => (w.state.state a).term == 2 ]
-    { constraint := fun w => (Enum.all (α := N)).all fun a => (w.state.state a).term ≤ 2 }
+    { constraint := fun w => (Enum.all (α := N)).all fun a => (w.state.state a).term ≤ 2
+      tasks }
 
 /-! Five nodes over a lossy, duplicating network with three crashes are too many states to
 explore, so they get seeded random runs. -/
@@ -74,5 +75,27 @@ def tests : List (String × Bool) :=
       match buggy.failure with
       | some (.violated "at most one leader per term" _) => true
       | _ => false) ]
+
+/-- The checker's speed, on the check above with one crash: 164,847 states. The crash budget
+is read from a reference so that the check runs here and not when the program starts. -/
+def speed : IO (List (String × Bool)) := do
+  let crashes ← (← IO.mkRef 1).get
+  let t0 ← IO.monoMsNow
+  let report := check {} crashes
+  let states := report.states
+  let elapsed := (← IO.monoMsNow) - t0
+  IO.println s!"check: {states} states and {report.transitions} transitions in {elapsed} ms, \
+    {states * 1000 / max elapsed 1} states per second"
+  return [("election: the check with one crash explores 164,847 states", states == 164847)]
+
+/-- With tasks the report is the one without them: `Check.Search.explore_eq` proves it, and
+this runs it, on a check large enough to use tasks. -/
+def tasksTests : IO (List (String × Bool)) := do
+  let crashes ← (← IO.mkRef 0).get
+  let plain := check {} crashes
+  let inTasks := check {} crashes (tasks := true)
+  return [("election: computing successors in tasks gives the same report",
+    plain.states == 24345 && inTasks.renderSystem == plain.renderSystem
+      && inTasks.witnesses.map (·.2.labels.length) == plain.witnesses.map (·.2.labels.length))]
 
 end Tests.Election

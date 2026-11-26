@@ -78,7 +78,7 @@ def complete (r : Compared σ sys hosts env) : Bool :=
 
 /-- Every state of the split, merged, is a state of the system alone. -/
 def sound (r : Compared σ sys hosts env) : Bool :=
-  r.split.queue.all fun v => r.alone.seen.contains ⟨v.path.last.state.merged⟩
+  r.split.queue.all fun v => r.alone.contains ⟨v.path.last.state.merged⟩
 
 /-- The split loses no behaviour: every state of the system alone is a state of the split,
 merged. -/
@@ -319,7 +319,7 @@ def tests : List (String × Bool) :=
       match chorusSplit with
       | some c =>
         c.merged.outbox == [0, 1] && Tests.Join.explored chorusAlone
-          && !chorusAlone.seen.contains ⟨c.merged⟩
+          && !chorusAlone.contains ⟨c.merged⟩
           && chorusAlone.queue.any fun v => v.path.last.state.equiv {} c.merged
       | none => false) ]
 

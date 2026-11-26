@@ -60,6 +60,18 @@ example (hfailure : (check {} 1).failure = none) (hcomplete : (check {} 1).compl
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hp
   rcases hp with rfl | rfl | rfl <;> exact h.eq_of_quiet fun _ => rfl
 
+/-- The same of the check run in tasks: the theorem is about the search whatever the option. -/
+example (hfailure : (check {} 1 (tasks := true)).failure = none)
+    (hcomplete : (check {} 1 (tasks := true)).complete = true) {w : World (cluster N {}) Unit}
+    (hw : Scenario.Reachable (cluster N {}) { env, driver := Driver.silent, maxCrashes := 1 }
+      (fun w => (Enum.all (α := N)).all fun a => (w.state.state a).term ≤ 2) w) :
+    atMostOneLeaderPerTerm w.state = true := by
+  refine Check.system_sound _ _ _ ?_ (fun _ _ h => h.eq_of_quiet fun _ => rfl) hfailure hcomplete
+    (.head _) hw
+  intro p hp a b h
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at hp
+  rcases hp with rfl | rfl | rfl <;> exact h.eq_of_quiet fun _ => rfl
+
 end Election
 
 section Gate

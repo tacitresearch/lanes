@@ -139,7 +139,7 @@ def frontStates (inputs : List FrontIn) :=
 
 def seenFromFront (inputs : List FrontIn) : Bool :=
   let alone := frontStates inputs
-  explored alone && joinedStates.queue.all fun v => alone.seen.contains ⟨v.path.last.state.left⟩
+  explored alone && joinedStates.queue.all fun v => alone.contains ⟨v.path.last.state.left⟩
 
 def backStates :=
   explore back faulty.right [3] fun c => c.net.length ≤ 4 && c.outbox.length ≤ 1
@@ -323,11 +323,11 @@ def tests : List (String × Bool) :=
       frontCheck.ok && frontCheck.complete),
     ("join: every state of the join, seen from the back, is a state of the back alone",
       explored backStates
-      && joinedStates.queue.all fun v => backStates.seen.contains ⟨v.path.last.state.right⟩),
+      && joinedStates.queue.all fun v => backStates.contains ⟨v.path.last.state.right⟩),
     ("join: the side that boots second sees an input older than its own first message",
       (SysState.init heralded {}).right.net == [⟨none, (), false⟩, ⟨some (), (), true⟩]
       && explored keeperStates
-      && !keeperStates.seen.contains ⟨(SysState.init heralded {}).right⟩),
+      && !keeperStates.contains ⟨(SysState.init heralded {}).right⟩),
     ("join: the side that boots second reaches that state alone, up to message order",
       keeperStates.queue.any fun v =>
         v.path.last.state.equiv keeperEnv (SysState.init heralded {}).right),

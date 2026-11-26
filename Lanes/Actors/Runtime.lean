@@ -40,10 +40,6 @@ structure Runtime.Config where
   /-- Keep the events performed, for tests. By `Kernel.exec_reachable` they are a run of the
   semantics. -/
   record : Bool := false
-  /-- How many times a shard with nothing to do looks at its inbox before it goes to sleep.
-  Waking a sleeping thread costs far more than looking, so a shard that is fed steadily should
-  not sleep between inputs. At least one look is taken. -/
-  spin : Nat := 2000
   /-- With a journal that can save the kernel: how many entries to write between two saves.
   After a save the journal is cut, so this bounds how much a restart replays. -/
   snapshotEvery : Nat := 65536
@@ -101,9 +97,8 @@ private def take (rt : Runtime sys) (wait : Kernel.Wait) : IO (List (Cmd sys) ×
     let taken ← rt.inbox.modifyGet Mailbox.take
     for room in taken.wake do room.resolve ()
     return (taken.batch, taken.closed)
-  for _ in [0:if wait == .none then 1 else max 1 rt.config.spin] do
-    let (batch, closed) ← grab
-    if wait == .none || closed || !batch.isEmpty then return (batch, closed)
+  let (batch, closed) ← grab
+  if wait == .none || closed || !batch.isEmpty then return (batch, closed)
   let wake ← IO.Promise.new
   if ← rt.inbox.modifyGet (Mailbox.rest wake) then
     match wait with
@@ -256,8 +251,10 @@ private def offer (rt : Runtime sys) (c : Cmd sys) : BaseIO Bool := do
     return true
   | _ => return false
 
-/-- Waits while the inbox is full. -/
+/-- Waits while the inbox is full. The wait is rare and the offer is not, and making a promise
+to wait on costs far more than an offer, so the offer is tried first. -/
 private def send (rt : Runtime sys) (c : Cmd sys) : Async Unit := do
+  if ← rt.offer c then return
   repeat
     let room ← IO.Promise.new
     match ← rt.inbox.modifyGet (Mailbox.offerOrWait rt.config.inboxCapacity c room) with

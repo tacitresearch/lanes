@@ -52,39 +52,6 @@ instance {α β : Type} [Enum α] [Enum β] : Enum (α × β) where
     simp only [List.mem_flatMap, List.mem_map]
     exact ⟨p.1, complete p.1, p.2, complete p.2, rfl⟩
 
-def tabulateOn {ι : Type} [DecidableEq ι] {β : ι → Type} (f : (i : ι) → β i) :
-    (l : List ι) → (i : ι) → i ∈ l → β i
-  | [], _, h => nomatch h
-  | j :: l, i, h =>
-    let v := f j
-    let rest := tabulateOn f l
-    if hij : i = j then hij ▸ v
-    else rest i (by cases h with | head => exact absurd rfl hij | tail _ h => exact h)
-
-/--
-Rebuild a function on a finite type as a table of already computed values. The result is equal
-to `f` (`tabulate_eq`) but no longer refers to `f`, so chains of function updates do not grow
-across a long run.
--/
-def tabulate {ι : Type} [DecidableEq ι] [Enum ι] {β : ι → Type} (f : (i : ι) → β i) :
-    (i : ι) → β i :=
-  let table := tabulateOn f (all (α := ι))
-  fun i => table i (complete i)
-
-theorem tabulateOn_eq {ι : Type} [DecidableEq ι] {β : ι → Type} (f : (i : ι) → β i)
-    (l : List ι) (i : ι) (h : i ∈ l) : tabulateOn f l i h = f i := by
-  induction l with
-  | nil => nomatch h
-  | cons j l ih =>
-    simp only [tabulateOn]
-    split
-    · next hij => subst hij; rfl
-    · exact ih _
-
-@[simp] theorem tabulate_eq {ι : Type} [DecidableEq ι] [Enum ι] {β : ι → Type}
-    (f : (i : ι) → β i) : tabulate f = f :=
-  funext fun i => tabulateOn_eq f _ i _
-
 /-- Low priority, so a more specific instance wins. -/
 instance (priority := low) funBEq {α β : Type} [Enum α] [BEq β] : BEq (α → β) where
   beq f g := (all (α := α)).all fun a => f a == g a

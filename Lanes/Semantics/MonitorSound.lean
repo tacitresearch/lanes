@@ -172,7 +172,7 @@ theorem Monitor.eq_after_of_run [Enum σ.Id] {svc : Service σ S} {driver : Driv
       rw [show List.filterMap Event.visible [_] = [] from rfl, List.append_nil]
       exact ih
 
-variable [Hashable D] [EquivBEq D] [LawfulHashable D] [Hashable S]
+variable [Hashable D] [EquivBEq D] [Hashable S]
   [∀ i, LawfulBEq (sys.State i)]
 
 /--
@@ -180,8 +180,7 @@ A complete PASS of a refinement check is sound: in every world of the checked in
 monitor still has a candidate.
 
 Actor states and the spec's state must compare with `==` exactly when they are equal. The state
-of the wrapped driver needs only an equivalence `==`, with a matching hash, that the driver
-respects. The properties and the constraint must not tell merged worlds apart; for the
+of the wrapped driver needs only an equivalence `==` that the driver respects. The properties and the constraint must not tell merged worlds apart; for the
 refinement property itself that is `World.Equiv.holds_refines`.
 -/
 theorem refines_sound (svc : Service σ S) {driver : Driver σ D} (hdriver : driver.Respects)

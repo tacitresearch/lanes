@@ -27,19 +27,41 @@ namespace Lanes.Check
 
 variable {σ : Signature}
 
-/-- A world tagged with the environment model its equality is taken under. -/
-structure Node (sys : System σ) (env : EnvModel σ) (D : Type) where
+/--
+A world tagged with the environment model its equality is taken under.
+
+`slots` is the part of the world held in functions, as a list: the actors' states, whether they
+are up and their timers. Hashing and comparing walk it instead of looking each actor up in
+three functions on either side. `Node.of` computes it once and reads the world's functions
+from it, so a stored world is compact.
+-/
+structure Node (sys : System σ) (env : EnvModel σ) (D : Type) [Enum σ.Id] where
   world : World sys D
+  slots : List (Slot sys)
+  slots_eq : slots = (Enum.all (α := σ.Id)).map (Slot.of world.state)
 
 variable {sys : System σ} {D : Type}
 
+def Node.of [Enum σ.Id] {env : EnvModel σ} (world : World sys D) : Node sys env D :=
+  let slots := Slots.of world.state
+  { world := { world with state := world.state.compactWith slots }
+    slots := slots.list
+    slots_eq := by
+      change (Slots.of world.state).list = List.map
+        (Slot.of (world.state.compactWith (Slots.of world.state))) Enum.all
+      rw [SysState.compactWith_of]
+      rfl }
+
 instance [σ.Inspect] [sys.Inspect] [BEq D] {env : EnvModel σ} : BEq (Node sys env D) where
   beq a b := a.world.crashes == b.world.crashes && a.world.driver == b.world.driver
-    && a.world.state.equiv env b.world.state
+    && Slot.allSame a.slots b.slots
+    && SysState.netEquiv env a.world.state.net b.world.state.net
+    && a.world.state.outbox.isPerm b.world.state.outbox
 
 instance [σ.Inspect] [sys.Inspect] [Hashable D] {env : EnvModel σ} :
     Hashable (Node sys env D) where
-  hash a := mixHash a.world.state.hash (mixHash (hash a.world.driver) (hash a.world.crashes))
+  hash a := mixHash (mixHash (a.slots.foldl Slot.hash 7) a.world.state.trafficHash)
+    (mixHash (hash a.world.driver) (hash a.world.crashes))
 
 def Trace.map {S S' L : Type} (f : S → S') (t : Trace S L) : Trace S' L where
   init := f t.init
@@ -56,8 +78,8 @@ def Report.map {S S' L : Type} (f : S → S') (r : Report S L) : Report S' L :=
 /-- The transition system that `system` searches. -/
 def model [Enum σ.Id] (sys : System σ) {D : Type} (sc : Scenario σ D) :
     Model (Node sys sc.env D) (Event σ) where
-  init := [⟨World.init sys sc⟩]
-  next n := (n.world.next sc).map fun (ev, w) => (ev, ⟨w⟩)
+  init := [.of (World.init sys sc)]
+  next n := (n.world.next sc).map fun (ev, w) => (ev, .of w)
 
 /--
 Properties are stated over the `World`: the system state and the driver's state. The result
@@ -74,7 +96,8 @@ def system [σ.Inspect] (sys : System σ) [sys.Inspect] {D : Type} [BEq D] [Hash
       maxDepth := opts.maxDepth
       maxStates := opts.maxStates
       checkDeadlock := opts.checkDeadlock
-      terminal := fun n => opts.terminal n.world }
+      terminal := fun n => opts.terminal n.world
+      tasks := opts.tasks }
   (search (model sys sc) props' opts' Event.kind Event.kinds).map (·.world)
 
 def Trace.render {S L : Type} (showState : S → String) (showLabel : L → String)
