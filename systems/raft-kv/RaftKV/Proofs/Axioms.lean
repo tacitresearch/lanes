@@ -5,6 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import RaftKV.Proofs.Election
 import RaftKV.Proofs.Log
 import RaftKV.Proofs.Commit
+import RaftKV.Proofs.Applied
 
 /-!
 The axiom gate (rule 5.5). Each headline theorem may depend only on Lean's three standard
@@ -64,3 +65,18 @@ axioms. If a `sorry` or a new axiom reaches one of them, this file stops compili
 
 /-- info: 'RaftKV.leaderComplete_invariant' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms RaftKV.leaderComplete_invariant
+
+/-- info: 'RaftKV.step_serves' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms RaftKV.step_serves
+
+/-- info: 'RaftKV.recover_serves' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms RaftKV.recover_serves
+
+/-- info: 'RaftKV.applied_eq_commit' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms RaftKV.applied_eq_commit
+
+/-- info: 'RaftKV.machine_eq_run' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms RaftKV.machine_eq_run
+
+/-- info: 'RaftKV.applied_agree' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms RaftKV.applied_agree
