@@ -217,12 +217,12 @@ private theorem blankAt_lines (t : List UInt8) : ∀ {ls : List (List Char)}, ls
       List.length_nil]
     omega
 
-private theorem lines_toList {lines : List String} :
+theorem lines_toList {lines : List String} :
     ("\r\n".intercalate lines).toList = ['\r', '\n'].intercalate (lines.map String.toList) := by
   rw [String.toList_intercalate]
   rfl
 
-private theorem drop_append_front (pre bytes : ByteArray) :
+theorem drop_append_front (pre bytes : ByteArray) :
     (pre ++ bytes).data.toList.drop pre.size = bytes.data.toList := by
   rw [ByteArray.data_append, Array.toList_append]
   exact List.drop_left' (by simp)
@@ -245,7 +245,7 @@ private theorem headEnd_head (pre : ByteArray) {lines : List String} (hne : line
       ne_cr_of_plain ?_⟩
     exact List.all_eq_true.mp this.2 c hc
 
-private theorem extract_head (pre : ByteArray) (text : String) (t : ByteArray) :
+theorem extract_head (pre : ByteArray) (text : String) (t : ByteArray) :
     (pre ++ ((text ++ "\r\n\r\n").toUTF8 ++ t)).extract pre.size (pre.size + text.utf8ByteSize)
       = text.toUTF8 := by
   rw [String.toUTF8_eq_toByteArray, String.toByteArray_append, ByteArray.append_assoc,
@@ -538,12 +538,12 @@ theorem readFrom_wire {r : Response} (hr : r.writable = true) (pre tail : ByteAr
 
 /-! Bytes cut at `n` -/
 
-private theorem crlf_of_le {bytes : ByteArray} {pos : Nat} (h : bytes.size ≤ pos) :
+theorem crlf_of_le {bytes : ByteArray} {pos : Nat} (h : bytes.size ≤ pos) :
     crlf bytes pos = .more := by
   unfold crlf
   simp only [show ¬ pos + 1 < bytes.size by omega, show ¬ pos < bytes.size by omega, ↓reduceDIte]
 
-private theorem crlf_extract (bytes : ByteArray) (n pos : Nat) :
+theorem crlf_extract (bytes : ByteArray) (n pos : Nat) :
     crlf (bytes.extract 0 n) pos = .more ∨ crlf (bytes.extract 0 n) pos = crlf bytes pos := by
   have hsize := size_extract_zero bytes n
   unfold crlf
@@ -579,7 +579,7 @@ private theorem skip_extract (bytes : ByteArray) (n : Nat) (keep : UInt8 → Boo
       rw [size_extract_zero]
       omega
 
-private theorem hex_extract (bytes : ByteArray) (n : Nat) :
+theorem hex_extract (bytes : ByteArray) (n : Nat) :
     ∀ fuel pos value, hex (bytes.extract 0 n) fuel pos value = hex bytes fuel pos value
       ∨ (bytes.extract 0 n).size ≤ (hex (bytes.extract 0 n) fuel pos value).2
   | 0, pos, value => .inl rfl
@@ -735,7 +735,7 @@ private theorem headEnd_bound {bytes : ByteArray} {pos stop : Nat}
     have : bytes.data.size = bytes.size := rfl
     omega
 
-private theorem crlf_bound {bytes : ByteArray} {pos stop : Nat}
+theorem crlf_bound {bytes : ByteArray} {pos stop : Nat}
     (h : crlf bytes pos = .done (some stop)) : stop = pos + 2 ∧ stop ≤ bytes.size := by
   unfold crlf at h
   split at h
@@ -746,7 +746,7 @@ private theorem crlf_bound {bytes : ByteArray} {pos stop : Nat}
     · split at h <;> cases h
     · cases h
 
-private theorem le_hex (bytes : ByteArray) :
+theorem le_hex (bytes : ByteArray) :
     ∀ fuel pos value, pos ≤ (hex bytes fuel pos value).2
   | 0, pos, value => Nat.le_refl _
   | fuel + 1, pos, value => by
@@ -1117,7 +1117,7 @@ end Response
 
 /-! Chunks -/
 
-private theorem hex_digits (bytes : ByteArray) :
+theorem hex_digits (bytes : ByteArray) :
     ∀ (ds : List Nat) (fuel pos value : Nat), ds.length ≤ fuel →
       (∀ i (hi : i < ds.length),
         bytes[pos + i]?.bind (fun b => hexValue? (Char.ofNat b.toNat)) = some ds[i]) →
@@ -1228,7 +1228,7 @@ private theorem toByteArray_digits {cs : List Char} (h : ∀ c ∈ cs, ∃ d < 1
     rw [List.flatMap_cons, (digit_byte hd).1, ih fun c hc => h c (List.mem_cons_of_mem _ hc)]
     rfl
 
-private theorem crlf_of_getElem? {bytes : ByteArray} {q : Nat} (h0 : bytes[q]? = some 13)
+theorem crlf_of_getElem? {bytes : ByteArray} {q : Nat} (h0 : bytes[q]? = some 13)
     (h1 : bytes[q + 1]? = some 10) : crlf bytes q = .done (some (q + 2)) := by
   obtain ⟨hq0, e0⟩ := getElem_of_getElem? h0
   obtain ⟨hq1, e1⟩ := getElem_of_getElem? h1

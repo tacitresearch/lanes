@@ -77,6 +77,11 @@ structure Limits where
   chunks_max : Nat := 4096
   deriving Repr
 
+/-- The most bytes a request within `limits` takes: its head, its body, and twenty bytes of
+framing for each chunk. The reader never needs more to answer (`Request.read_more`). -/
+def Limits.message_max (limits : Limits) : Nat :=
+  max (limits.line_max + 2) limits.head_max + limits.body_max + 20 * (limits.chunks_max + 1)
+
 inductive Version where
   | http10
   | http11
