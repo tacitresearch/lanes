@@ -117,7 +117,7 @@ jobs:
 
   # Builds the code as it is once, so that each shard starts from this build: on GitHub's
   # runners through the Actions cache, on the warm machine through the work directories.
-  build:
+  mutants-build:
     needs: [plan, start]
     if: >-
       !cancelled() && needs.plan.result == 'success' &&
@@ -153,8 +153,8 @@ jobs:
           key: ${{ steps.lean.outputs.system-key }}
 
   shard:
-    needs: [plan, build]
-    if: ${{ !cancelled() && needs.build.result == 'success' }}
+    needs: [plan, mutants-build]
+    if: ${{ !cancelled() && needs.mutants-build.result == 'success' }}
     runs-on: ${{ fromJSON(needs.plan.outputs.label) }}
     timeout-minutes: 240
     strategy:
@@ -206,7 +206,7 @@ jobs:
           exit "$status"
 
   stop:
-    needs: [plan, start, build, shard]
+    needs: [plan, start, mutants-build, shard]
     if: always() && (needs.plan.outputs.route == 'box' || needs.plan.outputs.route == 'fresh')
     runs-on: ubuntu-latest
     timeout-minutes: 30
