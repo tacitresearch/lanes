@@ -14,13 +14,13 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Auth` | 27 | 7 | 0 | 0 | 16 | 1 | 3 |
 | `Lanes/Behaviours` | 8 | 8 | 0 | 0 | 0 | 0 | 0 |
 | `Lanes/Check` | 91 | 54 | 0 | 25 | 0 | 10 | 2 |
-| `Lanes/Data` | 237 | 142 | 5 | 4 | 40 | 17 | 29 |
+| `Lanes/Data` | 237 | 145 | 5 | 4 | 37 | 17 | 29 |
 | `Lanes/Env` | 24 | 0 | 24 | 0 | 0 | 0 | 0 |
 | `Lanes/Html` | 42 | 2 | 0 | 0 | 28 | 0 | 12 |
 | `Lanes/Http` | 176 | 100 | 1 | 9 | 35 | 17 | 14 |
 | `Lanes/Semantics` | 42 | 10 | 0 | 0 | 0 | 29 | 3 |
 | `LanesCli` | 108 | 0 | 0 | 0 | 24 | 0 | 84 |
-| All | 1089 | 490 | 40 | 74 | 162 | 152 | 171 |
+| All | 1089 | 493 | 40 | 74 | 159 | 152 | 171 |
 
 ## `Lanes/Actors/Actor.lean`
 
@@ -867,10 +867,10 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Json.instCoeString` | none |  |
 | `Json.instCoeBool` | none |  |
 | `Json.instOfNat` | tested | `Tests/Json.lean` |
-| `Json.sortFields` | tested | `Tests/Json.lean` |
-| `Json.dedupFields` | tested | `Tests/Json.lean` |
+| `Json.sortFields` | proved | through `Json.mkObj`: `Json.getObjVal?_mkObj` |
+| `Json.dedupFields` | proved | through `Json.mkObj`: `Json.getObjVal?_mkObj` |
 | `Json.duplicateKey?` | tested | `Tests/Json.lean` |
-| `Json.mkObj` | tested | `Tests/Json.lean` |
+| `Json.mkObj` | proved | `Json.getObjVal?_mkObj` |
 | `Json.mkObj?` | tested | `Tests/Json.lean` |
 | `Json.isNull` | proved | `Json.isNull_iff` |
 | `Json.getObj?` | spec | used only in statements |
@@ -880,7 +880,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Json.getNat?` | proved | `Json.getNat?_eq_ok` |
 | `Json.getInt?` | proved | `Json.getInt?_eq_ok` |
 | `Json.getBool?` | proved | `Json.getBool?_eq_ok` |
-| `Json.getObjVal?` | proved | `Json.getObjVal?_eq_ok` |
+| `Json.getObjVal?` | proved | `Json.getObjVal?_eq_ok`, `Json.getObjVal?_mkObj` |
 | `Json.getArrVal?` | proved | `Json.getArrVal?_eq_ok` |
 | `Json.getObjValD` | tested | `Tests/Json.lean` |
 

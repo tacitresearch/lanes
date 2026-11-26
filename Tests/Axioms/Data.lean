@@ -63,6 +63,9 @@ import Lanes.Semantics
 /-- info: 'Lanes.Json.getObjVal?_eq_ok' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Json.getObjVal?_eq_ok
 
+/-- info: 'Lanes.Json.getObjVal?_mkObj' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Json.getObjVal?_mkObj
+
 -- Lanes.Data.Json.Classes
 /-- info: 'Lanes.fromJson?_toJson_json' does not depend on any axioms -/
 #guard_msgs in #print axioms Lanes.fromJson?_toJson_json

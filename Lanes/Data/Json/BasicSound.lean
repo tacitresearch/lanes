@@ -90,4 +90,72 @@ theorem getObjVal?_eq_ok {j : Json} {key : String} {v : Json} :
       simp [hf]
   | _ => simp [getObjVal?]
 
+/-! ### Objects built by `mkObj` -/
+
+theorem find?_dedupFields {key : String} : ∀ {l : List (String × Json)},
+    l.Pairwise (fun a b => a.1 ≤ b.1) →
+    (dedupFields l).find? (·.1 == key) = (l.filter (·.1 == key)).getLast?
+  | [], _ => rfl
+  | [a], _ => by
+    by_cases hk : a.1 = key <;> simp [dedupFields, hk]
+  | a :: b :: rest, h => by
+    have ih := find?_dedupFields (key := key) (l := b :: rest) (List.pairwise_cons.mp h).2
+    by_cases hab : a.1 = b.1
+    · simp only [dedupFields, hab, ↓reduceIte]
+      rw [ih]
+      by_cases hk : b.1 = key <;> simp [hab, hk]
+    · simp only [dedupFields, hab, ↓reduceIte, List.find?_cons]
+      by_cases hk : a.1 = key
+      · have hnone : (b :: rest).filter (·.1 == key) = [] := by
+          rw [List.filter_eq_nil_iff]
+          intro c hc hck
+          simp only [beq_iff_eq] at hck
+          have hab' : a.1 ≤ b.1 := (List.pairwise_cons.mp h).1 b (by simp)
+          rcases List.mem_cons.mp hc with rfl | hc
+          · exact hab (hk.trans hck.symm)
+          · have hbc : b.1 ≤ c.1 := (List.pairwise_cons.mp (List.pairwise_cons.mp h).2).1 c hc
+            exact hab (Std.le_antisymm hab' (by rw [hk, ← hck]; exact hbc))
+        have : (a :: b :: rest).filter (·.1 == key) = [a] := by
+          rw [List.filter_cons, hnone]; simp [hk]
+        simp [hk, this]
+      · have hk' : (a.1 == key) = false := by simpa using hk
+        simp [hk', ih, List.filter_cons]
+
+theorem filter_sortFields (key : String) (l : List (String × Json)) :
+    (sortFields l).filter (·.1 == key) = l.filter (·.1 == key) := by
+  have trans : ∀ a b c : String × Json, decide (a.1 ≤ b.1) → decide (b.1 ≤ c.1) →
+      decide (a.1 ≤ c.1) := by
+    intro a b c h1 h2
+    simp only [decide_eq_true_eq] at *
+    exact Std.le_trans h1 h2
+  have total : ∀ a b : String × Json, (decide (a.1 ≤ b.1) || decide (b.1 ≤ a.1)) := by
+    intro a b
+    rcases Std.le_total (a := a.1) (b := b.1) with h | h <;> simp [h]
+  have hpw : (l.filter (·.1 == key)).Pairwise (fun a b => decide (a.1 ≤ b.1)) := by
+    refine List.Pairwise.imp_of_mem ?_ (List.pairwise_of_forall (R := fun _ _ => True) (by simp))
+    intro a b ha hb _
+    simp only [List.mem_filter, beq_iff_eq] at ha hb
+    rw [ha.2, hb.2]
+    simp
+  have hsub := (List.sublist_mergeSort trans total hpw List.filter_sublist).filter
+    (fun a : String × Json => a.1 == key)
+  rw [List.filter_filter] at hsub
+  simp only [Bool.and_self] at hsub
+  have hlen : ((sortFields l).filter (·.1 == key)).length = (l.filter (·.1 == key)).length :=
+    ((List.mergeSort_perm l _).filter _).length_eq
+  exact (hsub.eq_of_length hlen.symm).symm
+
+/-- `mkObj` keeps, of the fields with one key, the last. -/
+theorem getObjVal?_mkObj {fields : List (String × Json)} {key : String} {v : Json} :
+    (mkObj fields).getObjVal? key = .ok v ↔
+      ((fields.filter (·.1 == key)).getLast?).map (·.2) = some v := by
+  have hpw : (sortFields fields).Pairwise (fun a b => a.1 ≤ b.1) := by
+    have := List.pairwise_mergeSort (le := fun a b : String × Json => decide (a.1 ≤ b.1))
+      (fun a b c h1 h2 => by simp only [decide_eq_true_eq] at *; exact Std.le_trans h1 h2)
+      (fun a b => by rcases Std.le_total (a := a.1) (b := b.1) with h | h <;> simp [h]) fields
+    exact this.imp (by simp)
+  rw [mkObj, getObjVal?_eq_ok]
+  simp only [obj.injEq, exists_eq_left', List.find?_toArray, find?_dedupFields hpw,
+    filter_sortFields]
+
 end Lanes.Json
