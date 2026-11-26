@@ -329,6 +329,40 @@ Still open, roughly in the order it will be needed:
 - **Checking.** The checker has no lasso search, so a leads-to property cannot be checked
   before it is proved. `Tests/Gate.lean` checks the three premises of the rule instead.
 
+## Phase B: scale
+
+### B.1 Shards are a composition, not a new kernel
+
+A shard runs an ordinary system on the ordinary kernel and runtime. `System.shard sys hosts` is
+`sys` seen from one shard: the actors it hosts are themselves, except that a message to an
+actor hosted elsewhere leaves as an output carrying the envelope, and an envelope arriving from
+elsewhere is an input. An actor the shard does not host only forwards, so a misrouted message
+is passed on and never handled twice. Nothing in the kernel changes, and each shard's journal
+is the journal it already has, with envelopes among its inputs (so messages need a codec).
+
+A cluster is one runtime per shard plus a router that carries each envelope output to the
+inbox of the shard that hosts its receiver. Envelopes between shards travel on a lane of their
+own that is never full, so two shards cannot block each other; back-pressure stays at the
+outside inbox.
+
+The theorem to prove is about kernels, where order is kept: the state of all shards together,
+with the envelopes in flight between them, stands for a state of `sys`, and every step of any
+shard or of the router is a run of `sys` under reliable ordered links, up to the reordering of
+unrelated messages that the checker's state merging already allows (`SysState.Equiv`).
+
+Durable clusters come after: each shard numbers what it sends to each other shard, and after a
+restart a shard is sent again what the receiver's journal does not have.
+
+### B.2 Node to node
+
+The same `System.shard` with a router that speaks over a socket is a system spread over
+machines. The link is then lossy and unordered, which is `EnvModel.distributed`: what holds
+there is what was proved for every environment, such as election safety.
+
+### B.3 Snapshots, then checker v2
+
+Designed under A.1 above.
+
 ## Decisions that are yours
 
 - **One thread per shard** (section 1). This is the large one. I will start it after steps 1
