@@ -25,7 +25,8 @@ a node crashes, is the choice of the event.
 
 - `SysState sys`: actor states, which actors are up, messages in flight, pending timers and
   outputs not yet handed to the outside.
-- `Event σ`: the steps a system can take.
+- `Event σ`: the steps a system can take, and `Event.visible`, the part of a step the outside
+  world sees.
 - `SysState.step`: apply one event, or `none` if it is not enabled.
 - `SysState.init`: the state of a freshly booted system.
 - `System.Reachable`: the states a system can reach under an environment model.
@@ -81,6 +82,19 @@ inductive Event (σ : Signature) : Type where
   | crash (i : σ.Id)
   /-- Actor `i` starts, running its `recover`. -/
   | start (i : σ.Id)
+
+/-- What the outside world can see of a system: the inputs it sends and the outputs it gets. -/
+inductive Visible (σ : Signature) : Type where
+  /-- An input arrived. -/
+  | input (x : σ.In)
+  /-- An output was handed over. -/
+  | output (out : σ.Out)
+
+/-- The visible part of an event. Everything but inputs and outputs is internal (`none`). -/
+def Event.visible : Event σ → Option (Visible σ)
+  | .input x => some (.input x)
+  | .output out => some (.output out)
+  | _ => none
 
 namespace SysState
 
