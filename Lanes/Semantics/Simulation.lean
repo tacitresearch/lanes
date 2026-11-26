@@ -86,7 +86,7 @@ theorem of_lift [HasTau L₂] {impl : Spec S₁ L₁} {impl' : Spec S₁' L₁} 
 end Refines
 
 variable {σ : Signature} {sys : System σ} {env : EnvModel σ} {S : Type}
-  {spec : Spec S (Option (Visible σ))}
+  {spec : Spec S (Option (Visible σ.In σ.Out))}
 
 namespace System
 

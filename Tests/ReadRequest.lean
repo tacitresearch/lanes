@@ -220,7 +220,18 @@ def limitTests : List (String × Bool) :=
       | .done incoming stop => incoming.request.body.size == 4096 && stop == wire.size
       | _ => false) ]
 
+def headTests : List (String × Bool) :=
+  let expecting := head ["POST / HTTP/1.1", "Host: a", "Expect: 100-CONTINUE", "Content-Length: 5"]
+  [ ("read request: the head says it expects 100 Continue before its body has arrived",
+      match Request.readHead {} expecting 0, Request.read {} expecting 0 with
+      | .done h start, .more => h.expectsContinue && start == expecting.size
+      | _, _ => false),
+    ("read request: a head without Expect does not",
+      match Request.readHead {} (head ["POST / HTTP/1.1", "Host: a", "Content-Length: 5"]) 0 with
+      | .done h _ => !h.expectsContinue
+      | _ => false) ]
+
 def tests : List (String × Bool) :=
-  roundTripTests ++ smugglingTests ++ limitTests
+  roundTripTests ++ smugglingTests ++ limitTests ++ headTests
 
 end Tests.ReadRequest

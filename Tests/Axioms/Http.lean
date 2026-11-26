@@ -10,6 +10,10 @@ import Lanes.Semantics
 /-- info: 'Lanes.Http.percentDecode_percentEncode' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.percentDecode_percentEncode
 
+-- Lanes.Http.Front
+/-- info: 'Lanes.Http.gateActor_bounded' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.gateActor_bounded
+
 -- Lanes.Http.FrontSound
 /-- info: 'Lanes.Http.Gate.answered_le_handled' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.Gate.answered_le_handled
@@ -29,27 +33,26 @@ import Lanes.Semantics
 /-- info: 'Lanes.Http.kernel_fronted_answered_le_arrived' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.kernel_fronted_answered_le_arrived
 
--- Lanes.Http.Gate
-/-- info: 'Lanes.Http.gate_bounded' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Http.gate_bounded
+/-- info: 'Lanes.Http.served_answered_le_arrived' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.served_answered_le_arrived
 
+/-- info: 'Lanes.Http.served_answered_nodup' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.served_answered_nodup
+
+/-- info: 'Lanes.Http.kernel_served_answered_le_arrived' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.kernel_served_answered_le_arrived
+
+/-- info: 'Lanes.Http.served_deadlines_armed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.served_deadlines_armed
+
+-- Lanes.Http.Gate
 /-- info: 'Lanes.Http.Gate.step_bounded' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.Gate.step_bounded
 
--- Lanes.Http.GateSound
-/-- info: 'Lanes.Http.answered_le_arrived' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Http.answered_le_arrived
-
-/-- info: 'Lanes.Http.answered_nodup' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Http.answered_nodup
-
-/-- info: 'Lanes.Http.kernel_answered_le_arrived' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Http.kernel_answered_le_arrived
-
-/-- info: 'Lanes.Http.deadlines_armed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Http.deadlines_armed
-
 -- Lanes.Http.ReadRequestSound
+/-- info: 'Lanes.Http.findL_lines' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.findL_lines
+
 /-- info: 'Lanes.Http.Request.read_extract' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.Request.read_extract
 

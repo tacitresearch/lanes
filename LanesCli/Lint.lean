@@ -11,13 +11,17 @@ Source-level checks of the LANES_STYLE rules that can be decided from the text o
 
 - `no-sorry` (rule 4): no `sorry` or `admit`.
 - `trusted-listed` (rule 5.5): `partial`, `unsafe`, `axiom`, `panic!`, `@[implemented_by]` and
-  `@[extern]` appear only in files named in `TRUSTED.md`.
+  `@[extern]` appear only in files named in `TRUSTED.md`, and so does every C file, all of
+  which is trusted.
 - `trusted-size` (rule 5.5): a file that `TRUSTED.md` lists as `` `path`, N lines `` has `N`
   lines, so trusted code cannot grow without the list changing; `--fix` rewrites the counts.
 - `decisions`, `status`: the files `LanesCli/Generated.lean` derives agree with their sources.
 - `layering` (rule 1.6): files that import Mathlib, CSLib or a proof module (`Lanes.Semantics`,
   `App.Proofs`) live in a proof directory, one named `…Proofs` included, or are named
   `…Proofs.lean`, so executable code never links them.
+- `inventory`, `inventory-none`, in Lanes itself: `docs/INVENTORY.md` is up to date, and every
+  definition of `Lanes/` without evidence is on `docs/inventory-none.md`. These read the built
+  modules, so `lanesInventory`, which links `Lean`, does them; `--fix` has it rewrite the file.
 
 Comments and string literals are ignored. The checks that need the elaborator (`no-io-in-step`,
 `bounded`, `field-leak`) are not implemented yet.
@@ -144,11 +148,17 @@ def checkFile (root file : System.FilePath) (trusted : String) : IO (List Findin
               ++ "(rule 1.6)"⟩ :: findings
   return findings.reverse
 
-def sourceFiles (root : System.FilePath) : IO (Array System.FilePath) := do
+def sourceFiles (root : System.FilePath) (extension : String := "lean") :
+    IO (Array System.FilePath) := do
   let files ← root.walkDir fun dir =>
     let name := dir.fileName.getD ""
     return !(name.startsWith "." || name == "templates")
-  return (files.filter fun f => f.extension == some "lean").qsort (·.toString < ·.toString)
+  return (files.filter fun f => f.extension == some extension).qsort (·.toString < ·.toString)
+
+def checkC (root file : System.FilePath) (trusted : String) : List Finding :=
+  let relative := (file.toString.dropPrefix (root.toString ++ "/")).toString
+  if (trusted.splitOn relative).length > 1 then []
+  else [⟨relative, 1, "trusted-listed", "C in a file that TRUSTED.md does not name (rule 5.5)"⟩]
 
 structure Options where
   /-- Rewrite the generated files instead of reporting them. -/
@@ -161,6 +171,33 @@ structure Report where
   fixed : List Generated.Edit
   files : Nat
 
+/-- `path:line: [rule] message`, as `lanesInventory` prints a finding. -/
+def parseFinding (text : String) : Option Finding := do
+  let (place, rest) ← match text.splitOn ": [" with
+    | place :: rest@(_ :: _) => some (place, ": [".intercalate rest)
+    | _ => none
+  let (file, line) ← match place.splitOn ":" with
+    | [file, line] => line.toNat?.map (file, ·)
+    | _ => none
+  let (rule, message) ← match rest.splitOn "] " with
+    | rule :: message@(_ :: _) => some (rule, "] ".intercalate message)
+    | _ => none
+  return ⟨file, line, rule, message⟩
+
+/-- The inventory's findings, in Lanes itself: a project with `Lanes.lean` and the inventory's
+program. They need the built modules and `Lean`, so `lanesInventory` finds them. -/
+def inventory (root : System.FilePath) (fix : Bool) : IO (List Finding) := do
+  if !(← (root / "Lanes.lean").pathExists) || !(← (root / "LanesCli" / "Inventory.lean").pathExists)
+  then return []
+  let mode := if fix then "--fix" else "--check"
+  let out ← IO.Process.output
+    { cmd := "lake", args := #["exe", "lanesInventory", mode], cwd := some root }
+  let findings := (out.stdout.splitOn "\n").filterMap parseFinding
+  if out.exitCode != 0 && findings.isEmpty then
+    return [⟨"docs/INVENTORY.md", 1, "inventory",
+      s!"`lake exe lanesInventory` failed: {(out.stderr ++ out.stdout).trimAscii}"⟩]
+  return findings
+
 def lint (root : System.FilePath) (options : Options := {}) : IO Report := do
   let fixed ← if options.fix then Generated.fix root options.main else pure []
   let plan ← Generated.plan root options.main
@@ -170,8 +207,10 @@ def lint (root : System.FilePath) (options : Options := {}) : IO Report := do
   let trustedFile := root / "TRUSTED.md"
   let trusted ← if ← trustedFile.pathExists then IO.FS.readFile trustedFile else pure ""
   let files ← sourceFiles root
+  findings := findings ++ (← sourceFiles root "c").toList.flatMap (checkC root · trusted)
   for file in files do
     findings := findings ++ (← checkFile root file trusted)
+  findings := findings ++ (← inventory root options.fix)
   return ⟨findings, fixed, files.size⟩
 
 def run (root : System.FilePath) (options : Options := {}) : IO Nat := do

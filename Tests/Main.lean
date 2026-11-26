@@ -29,6 +29,7 @@ import Tests.Batch
 import Tests.Crypto
 import Tests.Auth
 import Tests.Clients
+import Tests.Lease
 import Tests.Lint
 
 /-!
@@ -65,6 +66,7 @@ def live : IO (List (String × Bool)) := do
     ++ (← safely "full inbox" Tests.Fronted.busyTest) ++ (← safely "node" Tests.Fronted.nodeTest)
     ++ (← safely "node on a journal" Tests.Fronted.nodeDurable)
     ++ (← safely "fronted on a journal" Tests.Fronted.durable)
+    ++ (← Tests.Crypto.live)
 
 def main (args : List String) : IO UInt32 := do
   let pure := Tests.Engine.tests ++ Tests.Bank.tests ++ Tests.Json.tests ++ Tests.Html.tests
@@ -72,7 +74,7 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.Kernel.tests ++ Tests.Frame.tests ++ Tests.Clock.tests ++ Tests.HttpClient.tests
     ++ Tests.Fair.tests ++ Tests.Codec.tests ++ Tests.Durable.fileTests ++ Tests.Split.tests
     ++ Tests.Peers.tests ++ Tests.Courier.tests ++ Tests.Mailbox.tests ++ Tests.Batch.tests
-    ++ Tests.Crypto.tests ++ Tests.Auth.tests ++ Tests.Clients.tests
+    ++ Tests.Crypto.tests ++ Tests.Auth.tests ++ Tests.Clients.tests ++ Tests.Lease.tests
     ++ Tests.ReadRequest.tests
   match args with
   | [] =>

@@ -31,13 +31,13 @@ abbrev sig (In Out : Type) [DecidableEq In] [DecidableEq Out] : Signature where
 
 variable {In Out S : Type} [DecidableEq In] [DecidableEq Out]
 
-def serve (svc : Service (sig In Out) S) (s : S) : List In → S × List Out
+def serve (svc : Service In Out S) (s : S) : List In → S × List Out
   | [] => (s, [])
   | x :: xs =>
     ((serve svc (svc.step s x).1 xs).1, (svc.step s x).2 ++ (serve svc (svc.step s x).1 xs).2)
 
 /-- The value and the queue are durable. -/
-def actor (svc : Service (sig In Out) S) : (sig In Out).Actor () (S × List In) where
+def actor (svc : Service In Out S) : (sig In Out).Actor () (S × List In) where
   init := (svc.init, [])
   step s
     | .request x => ((s.1, s.2 ++ [x]), [])
@@ -46,7 +46,7 @@ def actor (svc : Service (sig In Out) S) : (sig In Out).Actor () (S × List In) 
         (serve svc s.1 s.2).2.map (Effect.emit (σ := sig In Out)) ++ [.after 10 .flush])
   recover s := (s, [.after 10 .flush])
 
-abbrev system (svc : Service (sig In Out) S) : System (sig In Out) where
+abbrev system (svc : Service In Out S) : System (sig In Out) where
   State _ := S × List In
   actor _ := actor svc
   accept x := ⟨(), .request x⟩
@@ -54,7 +54,7 @@ abbrev system (svc : Service (sig In Out) S) : System (sig In Out) where
 
 /-- Each request is answered with the requests before it, so the order they took effect in
 shows. -/
-def history : Service (sig (Fin 2) (List (Fin 2))) (List (Fin 2)) where
+def history : Service (Fin 2) (List (Fin 2)) (List (Fin 2)) where
   init := []
   step s x := (s ++ [x], [s])
 

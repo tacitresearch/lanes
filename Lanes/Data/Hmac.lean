@@ -7,12 +7,11 @@ module
 public import Lanes.Data.Sha256
 
 /-!
-HMAC-SHA-256 (RFC 2104) and PBKDF2-HMAC-SHA-256 (RFC 8018), in pure Lean, with what a signed
-token needs around them: hex, and a comparison that reads every byte whatever it finds.
+HMAC-SHA-256 (RFC 2104) in pure Lean, with what a signed token needs around it: hex, and a
+comparison that reads every byte whatever it finds.
 
-A `Hmac.Key` holds the state after each padded key block, so a key is hashed once and each MAC
-costs two blocks more than its message. PBKDF2 does nothing else, so its cost is two blocks per
-iteration. Tested against RFC 4231 and RFC 7914 in `Tests/Crypto.lean`.
+These are the references: programs use libsodium's (`hmac`, `Bytes.same`,
+`Lanes/Data/Sodium.lean`), and `Tests/Crypto.lean` checks they agree. Tested against RFC 4231.
 -/
 
 @[expose] public section
@@ -21,46 +20,34 @@ namespace Lanes
 
 namespace Hmac
 
-structure Key where
+/-- The SHA-256 states after each padded key block. -/
+structure Pads where
   inner : Sha256.State
   outer : Sha256.State
 
 def blockOf (key : ByteArray) (pad : UInt8) : Vector UInt32 16 :=
-  let key := if key.size > 64 then Sha256.hash key else key
+  let key := if key.size > 64 then Sha256.reference key else key
   let bytes : ByteArray := ⟨Array.ofFn fun (k : Fin 64) => (key[k.val]?.getD 0) ^^^ pad⟩
   have h : bytes.size = 64 := Array.size_ofFn
   Sha256.blockAt bytes 0 (by omega)
 
-def Key.of (key : ByteArray) : Key where
+def Pads.of (key : ByteArray) : Pads where
   inner := Sha256.compress Sha256.initial (blockOf key 0x36)
   outer := Sha256.compress Sha256.initial (blockOf key 0x5c)
 
-def Key.mac (key : Key) (msg : ByteArray) : ByteArray :=
-  (Sha256.digestFrom key.outer 64 (Sha256.digestFrom key.inner 64 msg).bytes).bytes
+def reference (key msg : ByteArray) : ByteArray :=
+  let pads := Pads.of key
+  (Sha256.digestFrom pads.outer 64 (Sha256.digestFrom pads.inner 64 msg).bytes).bytes
 
-theorem size_mac (key : Key) (msg : ByteArray) : (key.mac msg).size = 32 :=
+theorem size_reference (key msg : ByteArray) : (reference key msg).size = 32 :=
   Sha256.size_bytes _
 
 end Hmac
 
-def hmac (key msg : ByteArray) : ByteArray :=
-  (Hmac.Key.of key).mac msg
-
 namespace Bytes
 
-def xor (a b : ByteArray) : ByteArray :=
-  ⟨Array.ofFn fun (k : Fin a.size) => a[k] ^^^ (b[k.val]?.getD 0)⟩
-
-theorem size_xor (a b : ByteArray) : (xor a b).size = a.size :=
-  Array.size_ofFn
-
-def bigEndian32 (n : Nat) : ByteArray :=
-  ⟨#[(n >>> 24).toUInt8, (n >>> 16).toUInt8, (n >>> 8).toUInt8, n.toUInt8]⟩
-
-/-- Whether two byte strings are equal, reading every byte of `a` whatever it finds, so that
-how long it takes says nothing of where they differ. That the compiled code keeps to this is
-trusted (`TRUSTED.md`). -/
-def same (a b : ByteArray) : Bool :=
+/-- Whether two byte strings are equal, reading every byte of `a` whatever it finds. -/
+def sameReference (a b : ByteArray) : Bool :=
   a.size == b.size
     && (List.finRange a.size).foldl (fun acc k => acc ||| (a[k] ^^^ (b[k.val]?.getD 0))) 0 == 0
 
@@ -70,8 +57,8 @@ private theorem foldl_or_eq_zero {n : Nat} (f : Fin n → UInt8) (l : List (Fin 
   | nil => simp
   | cons k l ih => simp [ih, and_assoc]
 
-theorem same_iff (a b : ByteArray) : same a b = true ↔ a = b := by
-  simp only [same, Bool.and_eq_true, beq_iff_eq, foldl_or_eq_zero, List.mem_finRange,
+theorem sameReference_iff (a b : ByteArray) : sameReference a b = true ↔ a = b := by
+  simp only [sameReference, Bool.and_eq_true, beq_iff_eq, foldl_or_eq_zero, List.mem_finRange,
     forall_const, true_and, UInt8.xor_eq_zero_iff]
   constructor
   · rintro ⟨hsize, heach⟩
@@ -126,23 +113,5 @@ theorem unhex?_hex (bytes : ByteArray) : unhex? (hex bytes) = some bytes := by
   simp [unhex?, hex, unhexList_hex]
 
 end Bytes
-
-namespace Pbkdf2
-
-def block (key : Hmac.Key) (salt : ByteArray) (iterations index : Nat) : ByteArray :=
-  let first := key.mac (salt ++ Bytes.bigEndian32 index)
-  ((List.range (iterations - 1)).foldl (fun (u, t) _ =>
-    let u := key.mac u
-    (u, Bytes.xor t u)) (first, first)).2
-
-end Pbkdf2
-
-/-- PBKDF2 with HMAC-SHA-256: `length` bytes derived from `password` and `salt`. The cost is two
-SHA-256 blocks per iteration and 32 bytes of output. -/
-def pbkdf2 (password salt : ByteArray) (iterations length : Nat) : ByteArray :=
-  let key := Hmac.Key.of password
-  let blocks := (List.range ((length + 31) / 32)).foldl
-    (fun acc k => acc ++ Pbkdf2.block key salt iterations (k + 1)) ByteArray.empty
-  blocks.extract 0 length
 
 end Lanes
