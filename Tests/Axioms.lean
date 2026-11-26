@@ -456,3 +456,21 @@ by `lake build`, not linked into the test executable.
 
 /-- info: 'Lanes.System.Invariant.split_of_forall' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Invariant.split_of_forall
+
+/-- info: 'Lanes.Refines.of_invariant' does not depend on any axioms -/
+#guard_msgs in #print axioms Lanes.Refines.of_invariant
+
+/-- info: 'Lanes.Refines.of_lift' does not depend on any axioms -/
+#guard_msgs in #print axioms Lanes.Refines.of_lift
+
+/-- info: 'Lanes.System.Refines.of_ghost' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Refines.of_ghost
+
+/-- info: 'Lanes.System.Refines.to_ghost' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Refines.to_ghost
+
+/-- info: 'Lanes.System.Refines.of_steps' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Refines.of_steps
+
+/-- info: 'Lanes.SysState.Loses.settle' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SysState.Loses.settle
