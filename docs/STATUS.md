@@ -17,7 +17,7 @@ Last updated: 2026-11-27.
 | Proof layer | `Spec`, `Refines` (weak simulation with a label map), `of_map`, `trans`, trace inclusion; system semantics as a CSLib `LTS`; `Service.spec`; sum lemmas | `Lanes/Semantics/` |
 | Behaviours | `Server` (request and reply), with `Server.implements` proved | `Lanes/Behaviours/Server.lean`, `Lanes/Semantics/Service.lean` |
 | Web | HTTP/1.1 adapter whose logic is the gate actor. Proved for every system, bridge and configuration: an arrival is answered at most once in any environment whose link from outside to the gate does not duplicate (`Http.answered_le_arrived`, with crashes, loss, reordering and duplication elsewhere allowed), and a waiting request keeps its deadline armed (`Http.deadlines_armed`). Answered exactly once is model-checked on two requests, not proved; requests and responses as data; `Html` with escaping proved safe, URL attributes checked at render (tested, not proved); scoped template macro with components, fragments and attribute splices; typed routes (`Route.match?_link`, `percentDecode_percentEncode` proved); htmx attributes as typed values taken from routes | `Lanes/Http/`, `Lanes/Env/Http.lean`, `Lanes/Html/` |
-| Adapters | `Outside`: what something outside may do, explored by the checker and tested against recorded runs of the real thing (`Outside.allows`). The HTTP server passes against the gate's assumption; a clock adapter with model, handler and conformance test | `Lanes/Actors/Outside.lean`, `Lanes/Env/Clock.lean`, `Tests/{Web,Clock}.lean` |
+| Adapters | `Outside`: what something outside may do, explored by the checker and tested against recorded runs of the real thing (`Outside.allows`). The HTTP server passes against the gate's assumption; a clock adapter and an HTTP client adapter (HTTP/1.1, no TLS), each with model, handler and conformance test | `Lanes/Actors/Outside.lean`, `Lanes/Env/{Clock,HttpClient}.lean`, `Lanes/Http/Wire.lean` |
 | Data | `Enum`, JSON (parser, printers, `ToJson`/`FromJson`), majority quorums, `Codec` (records with a round-trip law, kept by pairs, sums, lists and maps), `Frame` (length and checksum framing with the torn-write theorem) (`Quorum.majority_inter`), all total and `Std`-only | `Lanes/Data/` |
 | Tooling | `lanes new`, `lanes lint` (text-level, and the size of trusted files), `lanes check`; CI on every push to the pull request (build with warnings as errors, lint, tests, model checks, a generated app); axiom gate | `LanesCli/`, `.github/workflows/ci.yml`, `Tests/Axioms.lean` |
 
@@ -59,7 +59,8 @@ Last updated: 2026-11-27.
 - `lanes lint` is text-level. `no-io-in-step`, `bounded`, `field-leak` and `fn-length` need the
   elaborator and are not implemented.
 - Templates take text children as string literals (`<p>"text"</p>`), not bare text.
-- No TLS, HTTP client, WebSockets or database adapter. `Std.Http` has no client.
+- No TLS, WebSockets or database adapter. The HTTP client speaks plain HTTP/1.1 to IPv4
+  addresses; call past the local network through a proxy.
 - The gate keeps waiting requests in a list, so each request costs time linear in `maxPending`.
 - A journal survives the death of the process, not loss of power: Lean's `IO` has no `fsync`.
 - No snapshots: a journal grows without bound and a restart replays all of it.

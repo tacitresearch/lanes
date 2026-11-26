@@ -36,6 +36,7 @@ public import Lanes.Data.Json
 public import Lanes.Data.Quorum
 public import Lanes.Env.Clock
 public import Lanes.Env.Http
+public import Lanes.Env.HttpClient
 public import Lanes.Env.Journal
 public import Lanes.Html.Basic
 public import Lanes.Html.Htmx
@@ -44,6 +45,7 @@ public import Lanes.Http.Basic
 public import Lanes.Http.Gate
 public import Lanes.Http.GateSound
 public import Lanes.Http.Route
+public import Lanes.Http.Wire
 
 /-!
 The Lanes runtime layer: everything an application's executable code needs. It imports only

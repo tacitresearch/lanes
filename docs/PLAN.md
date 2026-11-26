@@ -259,9 +259,11 @@ against `Http.outside` (ids are never reused) over a real socket, and the clock 
 (`Lanes/Env/Clock.lean`) is the first outbound one: model, handler, a model-checked
 application and a conformance test.
 
-Next: an adapter that does real work for applications (an HTTP client, then a database),
-which needs response parsing as pure, tested code; and a theorem that a run the model allows is
-one the checker's scenario covers.
+The HTTP client (`Lanes/Env/HttpClient.lean`, wire format in `Lanes/Http/Wire.lean`) is the
+first adapter that does work for applications: HTTP/1.1 without TLS, one request per
+connection.
+
+Next: a database adapter; TLS; and proofs for the wire format (what is written is read back).
 
 ### A.4 Time and liveness
 
