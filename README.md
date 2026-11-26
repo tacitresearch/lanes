@@ -6,8 +6,8 @@ Lanes is a framework for building verified software in Lean 4. Logic is a pure s
 per actor, nothing shares state, and IO happens only at the edges. The same step function runs
 in production, in the simulator, in the model checker and in the proofs.
 
-> Status: early. `docs/STATUS.md` lists what works today against the plan in `docs/DESIGN.md`;
-> `docs/decisions/` records what has been settled, one file per decision.
+> Status: early. `docs/STATUS.md` lists what works today, `docs/ARCHITECTURE.md` how the pieces
+> fit and where each is proved, and `docs/decisions/` what has been settled, one file per decision.
 
 ## A system in three parts
 
@@ -211,7 +211,7 @@ itself, and `Server.implements` proves it refines the spec for every interleavin
 - `docs/STATUS.md`: what works today and what is next.
 - `docs/ROADMAP.md`: the phases ahead and the open design questions.
 - `docs/PLAN.md`: what is being done now and why.
-- `docs/DESIGN.md`: what Lanes is and the build plan.
+- `docs/ARCHITECTURE.md`: the pieces, how a request goes through them, and where each is proved.
 - `docs/decisions/`: decisions taken during implementation, one file each.
 - `TRUSTED.md`: everything that is trusted rather than proved.
 - `AGENTS.md`: the rules, for agents and people: build and checks, design, code, proofs.
