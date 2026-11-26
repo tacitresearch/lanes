@@ -13,6 +13,7 @@ public import Lanes.Actors.System
 public import Lanes.Actors.World
 public import Lanes.Actors.Lift
 public import Lanes.Actors.Inspect
+public import Lanes.Actors.ByCases
 public import Lanes.Actors.Join
 public import Lanes.Actors.JoinSound
 public import Lanes.Actors.Journal
@@ -42,6 +43,7 @@ public import Lanes.Check.System
 public import Lanes.Check.SystemSound
 public import Lanes.Check.WorldEquiv
 public import Lanes.Data.Codec
+public import Lanes.Data.Declare
 public import Lanes.Data.Enum
 public import Lanes.Data.Fifo
 public import Lanes.Data.Frame
