@@ -76,8 +76,9 @@ commit.
 | Path | Contents | May import |
 | --- | --- | --- |
 | `Lanes/Actors/` | `Actor`, `Signature`, `Effect`, `System`, the world step function, scheduler, runtime | `Std` only |
-| `Lanes/Data/` | Small data utilities (`Enum`; lemmas about lists in `List/`, strings in `Utf8` and byte arrays in `ByteArray`), codecs and `lanes_data` (`Codec`, `Declare`), the JSON library (`Json`), SHA-256, HMAC and PBKDF2 (`Sha256`, `Hmac`) | `Std` only |
+| `Lanes/Data/` | Small data utilities (`Enum`; lemmas about lists in `List/`, strings in `Utf8` and byte arrays in `ByteArray`), codecs and `lanes_data` (`Codec`, `Declare`), the JSON library (`Json`), SHA-256 and HMAC in Lean (`Sha256`, `Hmac`), the references of what `Sodium` binds from libsodium | `Std` only |
 | `Lanes/Auth/` | Signed tokens, form tokens, password digests, failed attempts, sessions | `Std` only |
+| `native/` | The C that binds libsodium and `fsync` (`lanes.c`), every line of it trusted and counted in `TRUSTED.md` | libsodium, the C library |
 | `Lanes/Check/` | Model checker | `Std` only |
 | `Lanes/Http/`, `Lanes/Html/` | HTTP requests and responses as data; HTML values and template syntax | `Std` only |
 | `Lanes/Env/` | Adapters to the outside world (HTTP server) | `Std` only |

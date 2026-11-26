@@ -124,7 +124,7 @@ def prepare (s : Settings) (r : Http.Request) : Http.Request :=
   let digest := match r.field? "name" >>= Name.ofString?, r.field? "password" with
     | some name, some password =>
       [(passwordDigest, if password.length < s.minPassword then "short"
-        else Bytes.hex (s.password.digest name.text password).bytes)]
+        else (s.password.digest name.text password).hex)]
     | _, _ => []
   { r with
     headers := kept ++ session.toList ++ digest
@@ -285,8 +285,8 @@ def credentials (s : Settings) (r : Http.Request) : Except Http.Response (Name �
   | some _, some "short" =>
     .error (page (LoginPage (some (Error s!"A password has at least {s.minPassword} characters."))) 400)
   | some name, some digest =>
-    match Bytes.unhex? digest with
-    | some bytes => .ok (name, ⟨bytes⟩)
+    match Auth.Digest.ofHex? digest with
+    | some digest => .ok (name, digest)
     | none => .error badName
   | _, _ => .error badName
 

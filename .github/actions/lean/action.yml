@@ -33,6 +33,11 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: libsodium, which Lanes links
+      shell: bash
+      run: |
+        pkg-config --exists libsodium 2>/dev/null \
+          || { sudo apt-get update -q && sudo apt-get install -yq libsodium-dev pkg-config; }
     - name: Install elan and the toolchain
       shell: bash
       run: |

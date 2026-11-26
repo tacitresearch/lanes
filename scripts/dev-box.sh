@@ -27,7 +27,8 @@ home=$(getent passwd "$DEV_USER" | cut -d: -f6)
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -q
-apt-get install -yq build-essential git curl ca-certificates python3 zstd tmux ripgrep sudo
+apt-get install -yq build-essential git curl ca-certificates python3 zstd tmux ripgrep sudo \
+  libsodium-dev pkg-config
 
 as_dev() { sudo -u "$DEV_USER" -H env PATH="$home/.local/bin:$home/.elan/bin:/usr/local/bin:/usr/bin:/bin" "$@"; }
 

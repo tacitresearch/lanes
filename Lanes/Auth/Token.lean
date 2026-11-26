@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Data.Hmac
+public import Lanes.Data.Sodium
 
 /-!
 Signed tokens: a payload and its HMAC-SHA-256 tag under a server key, for a named purpose, so a
@@ -17,6 +17,20 @@ token is the assumption that HMAC-SHA-256 is a pseudorandom function (`TRUSTED.m
 -/
 
 @[expose] public section
+
+namespace Lanes.Hmac
+
+/-- A key of the server's, which has no `Repr` so that it is not printed. -/
+structure Key where
+  bytes : ByteArray
+
+def Key.of (key : ByteArray) : Key := ⟨key⟩
+
+def Key.mac (key : Key) (msg : ByteArray) : ByteArray := hmac key.bytes msg
+
+theorem size_mac (key : Key) (msg : ByteArray) : (key.mac msg).size = 32 := size_hmac _ _
+
+end Lanes.Hmac
 
 namespace Lanes.Auth
 

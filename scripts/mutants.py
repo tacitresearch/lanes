@@ -185,6 +185,16 @@ MUTANTS = [
      "Lanes/Actors/Courier.lean",
      "    | none => if c.dialed.contains conn then (c, []) else (c, [.close conn])",
      "    | none => (c, [.close conn])"),
+    ("libsodium: the comparison reads only the first byte", "native/lanes.c",
+     "sodium_memcmp(lean_sarray_cptr(a), lean_sarray_cptr(b), size) == 0",
+     "sodium_memcmp(lean_sarray_cptr(a), lean_sarray_cptr(b), size != 0) == 0"),
+    ("libsodium: sha-256 of half the message", "native/lanes.c",
+     "crypto_hash_sha256(lean_sarray_cptr(out), lean_sarray_cptr(msg), lean_sarray_size(msg));",
+     "crypto_hash_sha256(lean_sarray_cptr(out), lean_sarray_cptr(msg), lean_sarray_size(msg) / 2);"),
+    ("libsodium: an hmac key cut to a block", "native/lanes.c",
+     "crypto_auth_hmacsha256_init(&state, lean_sarray_cptr(key), lean_sarray_size(key));",
+     "crypto_auth_hmacsha256_init(&state, lean_sarray_cptr(key),\n"
+     "        lean_sarray_size(key) > 64 ? 64 : lean_sarray_size(key));"),
 ]
 
 
