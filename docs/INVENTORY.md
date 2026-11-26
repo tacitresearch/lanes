@@ -19,8 +19,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Html` | 42 | 2 | 0 | 0 | 28 | 0 | 12 |
 | `Lanes/Http` | 176 | 100 | 1 | 9 | 35 | 17 | 14 |
 | `Lanes/Semantics` | 42 | 10 | 0 | 0 | 0 | 29 | 3 |
-| `LanesCli` | 102 | 0 | 0 | 0 | 18 | 0 | 84 |
-| All | 1059 | 405 | 40 | 74 | 229 | 138 | 173 |
+| `LanesCli` | 108 | 0 | 0 | 0 | 24 | 0 | 84 |
+| All | 1065 | 405 | 40 | 74 | 235 | 138 | 173 |
 
 ## `Lanes/Actors/Actor.lean`
 
@@ -1532,6 +1532,12 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Cli.Lint.checkFile` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.sourceFiles` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.checkC` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.codeSpans` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.firstBraces` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.expandBraces` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.citedPaths` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.citingDocs` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.checkLinks` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.parseFinding` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.inventory` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.lint` | tested | `Tests/Lint.lean` |
