@@ -58,6 +58,23 @@ variable [σ.Inspect]
 instance : Hashable (Envelope σ) where
   hash e := mixHash (hash e.src) (mixHash (hash e.dst) (hash e.msg))
 
+/-- Effects are state of an actor that remembers what it did (`Once.actor`). -/
+instance {i : σ.Id} : Hashable (Effect σ i) where
+  hash
+    | .send to msg => mixHash 1 (mixHash (hash to) (hash msg))
+    | .emit out => mixHash 2 (hash out)
+    | .after delay msg => mixHash 3 (mixHash (hash delay) (hash msg))
+    | .cancel msg => mixHash 4 (hash msg)
+    | .stop => 5
+
+instance {i : σ.Id} : Repr (Effect σ i) where
+  reprPrec
+    | .send to msg, _ => s!"send {reprStr to} ({reprStr msg})"
+    | .emit out, _ => s!"emit ({reprStr out})"
+    | .after delay msg, _ => s!"after {delay} ({reprStr msg})"
+    | .cancel msg, _ => s!"cancel ({reprStr msg})"
+    | .stop, _ => "stop"
+
 /--
 Drop namespace prefixes from printed values: `Examples.Bank.Msg.credit 1` becomes `credit 1`.
 Traces are read by people and agents, and the prefixes are noise. Text inside string literals is
