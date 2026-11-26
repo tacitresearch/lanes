@@ -978,4 +978,504 @@ theorem readHead_headWire (limits : Limits) (pre rest : ByteArray) {lines : List
 end Request
 
 
+/-! Requests `Request.wire` writes, read back -/
+
+theorem pieces_of_forall {sep : Char} : ∀ {l : List Char}, (∀ c ∈ l, c ≠ sep) → pieces sep l = [l]
+  | [], _ => rfl
+  | c :: l, h => by
+    rw [pieces, pieces_of_forall fun d hd => h d (List.mem_cons_of_mem _ hd)]
+    simp [h c List.mem_cons_self]
+
+theorem pieces_append {sep : Char} : ∀ {l : List Char}, (∀ c ∈ l, c ≠ sep) → ∀ rest,
+    pieces sep (l ++ sep :: rest) = l :: pieces sep rest
+  | [], _, rest => by simp [pieces]
+  | c :: l, h, rest => by
+    rw [List.cons_append, pieces, pieces_append (fun d hd => h d (List.mem_cons_of_mem _ hd))]
+    simp [h c List.mem_cons_self]
+
+theorem pieces_intercalate {sep : Char} : ∀ {ls : List (List Char)}, ls ≠ [] →
+    (∀ l ∈ ls, ∀ c ∈ l, c ≠ sep) → pieces sep ([sep].intercalate ls) = ls
+  | [l], _, h => by rw [List.intercalate_singleton, pieces_of_forall (h l (by simp))]
+  | l :: l' :: ls, _, h => by
+    rw [List.intercalate_cons_cons, List.append_assoc, List.singleton_append,
+      pieces_append (h l (by simp)), pieces_intercalate (by simp) (fun x hx => h x (by simp_all))]
+
+/-- The characters `percentEncode` writes. -/
+def encodedChar (c : Char) : Bool :=
+  c.isAlphanum || "-._~%".toList.contains c
+
+theorem percentEncodeByte_encoded : ∀ b : UInt8, (percentEncodeByte b).all encodedChar := by
+  decide
+
+theorem encoded_percentEncode (s : String) : ∀ c ∈ (percentEncode s).toList, encodedChar c := by
+  intro c hc
+  simp only [percentEncode, String.toList_ofList, List.mem_flatMap] at hc
+  obtain ⟨b, -, hb⟩ := hc
+  exact List.all_eq_true.mp (percentEncodeByte_encoded b) c hb
+
+theorem ne_of_encoded {c : Char} (h : encodedChar c = true) :
+    c ≠ '/' ∧ c ≠ '?' ∧ c ≠ '&' ∧ c ≠ '=' ∧ c ≠ '+' ∧ c ≠ ' ' ∧ c ≠ ':' ∧ c ≠ '\t'
+      ∧ Request.pchar c = true := by
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  all_goals first
+    | (rintro rfl; exact absurd h (by decide))
+    | (simp only [encodedChar, Bool.or_eq_true] at h
+       simp only [Request.pchar, Bool.or_eq_true]
+       rcases h with h | h
+       · exact .inl h
+       · refine .inr ?_
+         have : ∀ d ∈ "-._~%".toList, "-._~!$&'()*+,;=:@%".toList.contains d = true := by decide
+         exact this c (List.contains_iff_mem.mp h))
+
+theorem trimOws_of_forall {v : List Char} (h : ∀ c ∈ v, ows c = false) : trimOws v = v := by
+  have hd : ∀ {l : List Char}, (∀ c ∈ l, ows c = false) → l.dropWhile ows = l := by
+    intro l hl
+    cases l with
+    | nil => rfl
+    | cons c l => exact List.dropWhile_cons_of_neg (by simp [hl c List.mem_cons_self])
+  rw [trimOws, hd h, hd (fun c hc => h c (List.mem_reverse.mp hc)), List.reverse_reverse]
+
+theorem headerLine?_field {name value : String} (hname : token name = true)
+    (hvalue : value.toList.all plain = true) :
+    headerLine? (name ++ ": " ++ value).toList
+      = some (name.toLower, String.ofList (trimOws value.toList)) := by
+  have hcolon : ∀ c ∈ name.toList, (c != ':') = true := by
+    intro c hc
+    simp only [token, Bool.and_eq_true, List.all_eq_true] at hname
+    refine bne_iff_ne.mpr fun e => ?_
+    subst e
+    exact absurd (hname.2 _ hc) (by decide)
+  have hline : (name ++ ": " ++ value).toList = name.toList ++ ':' :: ' ' :: value.toList := by
+    simp
+  have hplain : (' ' :: value.toList).all plain = true := by simpa [plain] using hvalue
+  rw [headerLine?, hline, List.takeWhile_append_of_pos hcolon,
+    List.dropWhile_append_of_pos hcolon, List.takeWhile_cons_of_neg (by decide),
+    List.dropWhile_cons_of_neg (by decide), List.append_nil, String.ofList_toList]
+  simp only [hname, hplain, Bool.and_self, ↓reduceIte]
+  rw [trimOws, List.dropWhile_cons_of_pos (by decide)]
+  rfl
+
+
+namespace Request
+
+private def methodWord : Method → String
+  | .get => "GET"
+  | .post => "POST"
+  | .put => "PUT"
+  | .patch => "PATCH"
+  | .delete => "DELETE"
+
+private theorem head_eq (r : Request) (host : String) :
+    r.head host = (methodWord r.method ++ " " ++ r.target ++ " HTTP/1.1")
+      :: (r.fields host).map fun field => field.1 ++ ": " ++ field.2 := by
+  cases hm : r.method <;> simp [head, methodWord, hm]
+
+private theorem method?_word (m : Method) : method? (methodWord m).toList = .ok (m, false) := by
+  cases m <;> simp [method?, methodWord]
+
+private theorem word_ne_space (m : Method) : ∀ c ∈ (methodWord m).toList, c ≠ ' ' := by
+  cases m <;> decide
+
+private theorem encoded_ne {s : String} :
+    ∀ c ∈ (percentEncode s).toList, c ≠ '/' ∧ c ≠ '?' ∧ c ≠ '&' ∧ c ≠ '=' ∧ c ≠ '+'
+      ∧ c ≠ ' ' ∧ c ≠ ':' ∧ c ≠ '\t' ∧ pchar c = true :=
+  fun c hc => ne_of_encoded (encoded_percentEncode s c hc)
+
+private theorem queryPart?_encoded (s : String) :
+    queryPart? (percentEncode s).toList = some s := by
+  have hplus : ∀ c ∈ (percentEncode s).toList, (if c = '+' then ' ' else c) = c :=
+    fun c hc => by simp [(encoded_ne c hc).2.2.2.2.1]
+  rw [queryPart?, List.map_congr_left hplus, List.map_id', String.ofList_toList,
+    percentDecode_percentEncode]
+
+private theorem pair?_encoded (k v : String) :
+    pair? ((percentEncode k).toList ++ '=' :: (percentEncode v).toList) = some (k, v) := by
+  have hk : ∀ c ∈ (percentEncode k).toList, (c != '=') = true :=
+    fun c hc => bne_iff_ne.mpr (encoded_ne c hc).2.2.2.1
+  simp [pair?, List.takeWhile_append_of_pos hk, List.dropWhile_append_of_pos hk,
+    queryPart?_encoded]
+
+private theorem percentEncode_ne_nil {s : String} (h : s ≠ "") : (percentEncode s).toList ≠ [] := by
+  intro e
+  simp only [percentEncode, String.toList_ofList, List.flatMap_eq_nil_iff] at e
+  apply h
+  have hb : s.toUTF8.data.toList = [] := by
+    cases hs : s.toUTF8.data.toList with
+    | nil => rfl
+    | cons b bs =>
+      have := e b (by rw [hs]; exact List.mem_cons_self)
+      simp [percentEncodeByte] at this
+      split at this <;> simp at this
+  have : s.toUTF8.size = 0 := by
+    have := congrArg List.length hb
+    simpa using this
+  rw [String.toUTF8_eq_toByteArray, String.size_toByteArray] at this
+  exact String.utf8ByteSize_eq_zero_iff.mp this
+
+private theorem segments?_path {path : List String} (h : path ≠ [""]) :
+    segments? (['/'].intercalate (path.map fun s => (percentEncode s).toList)) = some path := by
+  have hsep : ∀ l ∈ path.map (fun s => (percentEncode s).toList), ∀ c ∈ l, c ≠ '/' := by
+    intro l hl c hc
+    obtain ⟨s, -, rfl⟩ := List.mem_map.mp hl
+    exact (encoded_ne c hc).1
+  have hdecode : (path.map fun s => (percentEncode s).toList).mapM
+      (fun s => percentDecode (String.ofList s)) = some path := by
+    rw [List.mapM_map, mapM_some (g := id) fun s _ => by
+      simp [String.ofList_toList, percentDecode_percentEncode]]
+    simp
+  cases path with
+  | nil => rfl
+  | cons s more =>
+    have hne : ['/'].intercalate ((s :: more).map fun s => (percentEncode s).toList) ≠ [] := by
+      cases more with
+      | nil =>
+        have : s ≠ "" := fun e => h (by rw [e])
+        simpa using percentEncode_ne_nil this
+      | cons s' more => simp [List.intercalate_cons_cons]
+    rw [segments?, ite_eq_right (by simpa using hne), pieces_intercalate (by simp) hsep, hdecode]
+
+private theorem query?_query {query : List (String × String)} (h : query ≠ []) :
+    query? (['&'].intercalate (query.map fun (k, v) =>
+      (percentEncode k).toList ++ '=' :: (percentEncode v).toList)) = some query := by
+  obtain ⟨⟨k, v⟩, more, rfl⟩ := List.exists_cons_of_ne_nil h
+  have hsep : ∀ l ∈ ((k, v) :: more).map (fun (k, v) =>
+      (percentEncode k).toList ++ '=' :: (percentEncode v).toList), ∀ c ∈ l, c ≠ '&' := by
+    intro l hl c hc
+    obtain ⟨⟨k, v⟩, -, rfl⟩ := List.mem_map.mp hl
+    simp only [List.mem_append, List.mem_cons] at hc
+    rcases hc with hc | rfl | hc
+    · exact (encoded_ne c hc).2.2.1
+    · decide
+    · exact (encoded_ne c hc).2.2.1
+  have hne : ['&'].intercalate (((k, v) :: more).map fun (k, v) =>
+      (percentEncode k).toList ++ '=' :: (percentEncode v).toList) ≠ [] := by
+    cases more with
+    | nil => simp
+    | cons p more => simp [List.intercalate_cons_cons]
+  rw [query?, ite_eq_right (by simpa using hne), pieces_intercalate (by simp) hsep, List.mapM_map,
+    mapM_some (g := id) fun ⟨k, v⟩ _ => pair?_encoded k v]
+  simp
+
+theorem target?_target (r : Request) (h : r.path ≠ [""]) :
+    target? r.target.toList = .ok (r.path, r.query) := by
+  generalize hP : ['/'].intercalate (r.path.map fun s => (percentEncode s).toList) = P
+  have hPchars : ∀ c ∈ P, c ≠ '?' ∧ targetChar c = true := by
+    rw [← hP]
+    refine forall_mem_intercalate (by decide) fun l hl c hc => ?_
+    obtain ⟨s, -, rfl⟩ := List.mem_map.mp hl
+    have := encoded_ne c hc
+    exact ⟨this.2.1, by simp [targetChar, this.2.2.2.2.2.2.2.2]⟩
+  have hpath : (String.intercalate "/" (r.path.map percentEncode)).toList = P := by
+    rw [← hP, String.toList_intercalate, List.map_map]
+    rfl
+  have hq : ∀ c ∈ P, (c != '?') = true := fun c hc => bne_iff_ne.mpr (hPchars c hc).1
+  have hsegments : segments? P = some r.path := by rw [← hP]; exact segments?_path h
+  have htake : P.takeWhile (· != '?') = P := by
+    simpa using List.takeWhile_append_of_pos (l₂ := []) hq
+  have hdrop : P.dropWhile (· != '?') = [] := by
+    simpa using List.dropWhile_append_of_pos (l₂ := []) hq
+  cases hquery : r.query with
+  | nil =>
+    have htarget : r.target.toList = '/' :: P := by
+      simp [target, hquery, String.toList_append, hpath]
+    rw [htarget, target?, List.all_eq_true.mpr fun c hc => (hPchars c hc).2]
+    simp only [↓reduceIte, htake, hdrop, hsegments, query?, List.drop_nil, List.isEmpty_nil]
+  | cons p more =>
+    generalize hA : ['&'].intercalate ((p :: more).map fun (k, v) =>
+      (percentEncode k).toList ++ '=' :: (percentEncode v).toList) = A
+    have hAchars : ∀ c ∈ A, targetChar c = true := by
+      rw [← hA]
+      refine forall_mem_intercalate (by decide) fun l hl c hc => ?_
+      obtain ⟨⟨k, v⟩, -, rfl⟩ := List.mem_map.mp hl
+      simp only [List.mem_append, List.mem_cons] at hc
+      rcases hc with hc | rfl | hc
+      · simp [targetChar, (encoded_ne c hc).2.2.2.2.2.2.2.2]
+      · decide
+      · simp [targetChar, (encoded_ne c hc).2.2.2.2.2.2.2.2]
+    have hpairs : ((p :: more).map fun (k, v) => percentEncode k ++ "=" ++ percentEncode v).map
+        String.toList = (p :: more).map fun (k, v) =>
+          (percentEncode k).toList ++ '=' :: (percentEncode v).toList := by
+      rw [List.map_map]
+      exact List.map_congr_left fun ⟨k, v⟩ _ => by simp [String.toList_append]
+    have htarget : r.target.toList = '/' :: (P ++ '?' :: A) := by
+      have e : r.target = "/" ++ "/".intercalate (r.path.map percentEncode)
+          ++ ("?" ++ "&".intercalate (r.query.map fun (k, v) =>
+            percentEncode k ++ "=" ++ percentEncode v)) := by
+        simp [target, hquery]
+      rw [e, String.toList_append, String.toList_append, String.toList_append, hpath,
+        String.toList_intercalate, hquery, hpairs, show ("&" : String).toList = ['&'] from rfl, hA]
+      rfl
+    rw [htarget, target?]
+    have hall : (P ++ '?' :: A).all targetChar = true := by
+      simp only [List.all_append, List.all_cons, List.all_eq_true.mpr fun c hc => (hPchars c hc).2,
+        List.all_eq_true.mpr hAchars]
+      decide
+    have hqA : query? A = some (p :: more) := by
+      rw [← hA]
+      exact query?_query (by simp)
+    have ht : List.takeWhile (fun x => x != '?') ('?' :: A) = [] := by simp
+    have hd : List.dropWhile (fun x => x != '?') ('?' :: A) = '?' :: A := by simp
+    simp only [hall, ↓reduceIte, List.takeWhile_append_of_pos hq, List.dropWhile_append_of_pos hq,
+      ht, hd, List.append_nil, List.drop_one, List.tail_cons, hsegments, hqA]
+
+end Request
+
+namespace Request
+
+private theorem toLower_eq_iff' (s t : String) :
+    s.toLower = t ↔ s.toList.map Char.toLower = t.toList := by
+  rw [← String.toList_inj, String.toLower, String.toList_map]
+
+private def readField (field : String × String) : String × String :=
+  (field.1.toLower, String.ofList (trimOws field.2.toList))
+
+private theorem fieldLine_mem {r : Request} {host : String} {field : String × String}
+    (h : field ∈ r.fields host) : field.1 ++ ": " ++ field.2 ∈ r.head host := by
+  rw [head_eq]
+  exact List.mem_cons_of_mem _ (List.mem_map.mpr ⟨field, h, rfl⟩)
+
+private theorem value_plain {r : Request} {host : String} (hsent : (r.wire host).isSome)
+    {field : String × String} (h : field ∈ r.fields host) : field.2.toList.all plain = true := by
+  have := head_plain r host hsent _ (fieldLine_mem h)
+  simp only [String.toList_append, List.all_append, Bool.and_eq_true] at this
+  exact this.2
+
+private theorem ows_of_visible {c : Char} (h : visible c = true) : ows c = false := by
+  simp only [visible, Bool.and_eq_true, decide_eq_true_eq] at h
+  simp only [ows, Bool.or_eq_false_iff, beq_eq_false_iff_ne, ne_eq]
+  constructor <;> intro e <;> rw [e] at h <;> exact absurd h.1 (by decide)
+
+private theorem filter_host (r : Request) (host : String) :
+    (r.fields host).filter (·.1.toLower == "host") = [("Host", host)] := by
+  have narrowed : (r.fields host).filter (·.1.toLower == "host")
+      = ((r.fields host).filter (frames ·.1)).filter (·.1.toLower == "host") := by
+    rw [List.filter_filter]
+    apply List.filter_congr
+    intro field _
+    by_cases h : field.1.toLower = "host" <;> simp [h, frames]
+  rw [narrowed, fields_framing]
+  simp [toLower_eq_iff']
+
+private theorem filter_length (r : Request) (host : String) :
+    (r.fields host).filter (·.1.toLower == "content-length")
+      = [("Content-Length", toString r.body.size)] := by
+  have narrowed : (r.fields host).filter (·.1.toLower == "content-length")
+      = ((r.fields host).filter (frames ·.1)).filter (·.1.toLower == "content-length") := by
+    rw [List.filter_filter]
+    apply List.filter_congr
+    intro field _
+    by_cases h : field.1.toLower = "content-length" <;> simp [h, frames]
+  rw [narrowed, fields_framing]
+  simp [toLower_eq_iff']
+
+private theorem filter_coding (r : Request) (host : String) :
+    (r.fields host).filter (·.1.toLower == "transfer-encoding") = [] :=
+  List.filter_eq_nil_iff.mpr fun field hf => by
+    simpa using r.fields_transferEncoding host field hf
+
+private theorem filter_read (fields : List (String × String)) (name : String) :
+    ((fields.map readField).filter (·.1 == name)).map (·.2)
+      = (fields.filter (·.1.toLower == name)).map fun f => String.ofList (trimOws f.2.toList) := by
+  rw [List.filter_map, List.map_map]
+  rfl
+
+private theorem digits_ne {n : Nat} : ∀ c ∈ (toString n).toList, ows c = false ∧ c ≠ '\t' := by
+  intro c hc
+  have hd : c.isDigit = true := by
+    simp only [Nat.toString_eq_repr, Nat.toList_repr] at hc
+    exact Nat.isDigit_of_mem_toDigits (by decide) (by decide) hc
+  simp only [Char.isDigit, Bool.and_eq_true, decide_eq_true_eq] at hd
+  have h1 := Char.le_def.mp hd.1
+  refine ⟨?_, fun e => by rw [e] at h1; exact absurd h1 (by decide)⟩
+  simp only [ows, Bool.or_eq_false_iff, beq_eq_false_iff_ne, ne_eq]
+  constructor <;> intro e <;> rw [e] at h1 <;> exact absurd h1 (by decide)
+
+private theorem fieldLines_wire {r : Request} {host : String} (hsent : (r.wire host).isSome) :
+    (((r.fields host).map fun field => field.1 ++ ": " ++ field.2).map String.toList).mapM
+      fieldLine? = .ok ((r.fields host).map readField) := by
+  rw [List.map_map, List.mapM_map]
+  refine mapM_ok fun field hf => ?_
+  simp only [Function.comp_apply, fieldLine?,
+    headerLine?_field (r.fields_token host field hf) (value_plain hsent hf)]
+  rfl
+
+private theorem host?_wire {r : Request} {host : String} (hvisible : host.toList.all visible = true)
+    (hne : host ≠ "") (hchars : host.toList.all hostChar = true) :
+    host? .http11 ((r.fields host).map readField) = .ok () := by
+  have htrim : String.ofList (trimOws host.toList) = host := by
+    rw [trimOws_of_forall fun c hc => ows_of_visible (List.all_eq_true.mp hvisible c hc),
+      String.ofList_toList]
+  simp only [host?, filter_read, filter_host, List.map_cons, List.map_nil, htrim]
+  simp [hne, hchars]
+
+private theorem framing?_wire {limits : Limits} {r : Request} {host : String}
+    (hbody : r.body.size ≤ limits.body_max) (hdigits : r.body.size < 10 ^ 18) :
+    framing? limits .http11 ((r.fields host).map readField) = .ok (.length r.body.size) := by
+  have htrim : String.ofList (trimOws (toString r.body.size).toList) = toString r.body.size := by
+    rw [trimOws_of_forall fun c hc => (digits_ne c hc).1, String.ofList_toList]
+  simp only [framing?, filter_read, filter_length, filter_coding, List.map_cons, List.map_nil,
+    htrim, decimal?_toString hdigits, show ¬ limits.body_max < r.body.size by omega, ↓reduceIte]
+
+theorem tabbedFraming_wire (r : Request) (host : String) :
+    tabbedFraming (((r.fields host).map fun field => field.1 ++ ": " ++ field.2).map
+      String.toList) = false := by
+  simp only [tabbedFraming, List.map_map, List.any_map, List.any_eq_false, Function.comp_apply,
+    Bool.and_eq_true, not_and]
+  intro field hf hname
+  have htoken := r.fields_token host field hf
+  have hcolon : ∀ c ∈ field.1.toList, (c != ':') = true := by
+    intro c hc
+    simp only [token, Bool.and_eq_true, List.all_eq_true] at htoken
+    refine bne_iff_ne.mpr fun e => ?_
+    subst e
+    exact absurd (htoken.2 _ hc) (by decide)
+  have hline : (field.1 ++ ": " ++ field.2).toList = field.1.toList ++ ':' :: ' ' :: field.2.toList :=
+    by simp
+  rw [hline, List.takeWhile_append_of_pos hcolon, List.takeWhile_cons_of_neg (by decide),
+    List.append_nil, String.ofList_toList] at hname
+  have hlength : field.1.toLower = "content-length" := by
+    have hcoding := r.fields_transferEncoding host field hf
+    simp only [List.contains_iff_mem, List.mem_cons, List.not_mem_nil, or_false] at hname
+    exact hname.resolve_right hcoding
+  have : field ∈ (r.fields host).filter (·.1.toLower == "content-length") :=
+    List.mem_filter.mpr ⟨hf, by simp [hlength]⟩
+  rw [filter_length, List.mem_singleton] at this
+  subst this
+  simp only [String.toList_append, List.contains_iff_mem, List.mem_append, not_or]
+  refine ⟨⟨by decide, by decide⟩, fun h => (digits_ne _ h).2 rfl⟩
+
+private theorem parseHead_wire {limits : Limits} {r : Request} {host : String} (hsent : (r.wire host).isSome)
+    (hvisible : host.toList.all visible = true) (hne : host ≠ "")
+    (hfits : r.fits limits host = true) :
+    parseHead limits ((r.head host).map String.toList)
+      = .ok { method := r.method, headOnly := false, path := r.path, query := r.query,
+              version := .http11, fields := (r.fields host).map readField,
+              framing := .length r.body.size } := by
+  simp only [fits, Bool.and_eq_true, decide_eq_true_eq, bne_iff_ne, ne_eq] at hfits
+  obtain ⟨⟨⟨⟨⟨⟨-, -⟩, hcount⟩, hbody⟩, hdigits⟩, hchars⟩, hpath⟩ := hfits
+  have htarget : ∀ c ∈ r.target.toList, c ≠ ' ' := by
+    intro c hc e
+    have := List.all_eq_true.mp r.target_visible c hc
+    rw [e] at this
+    exact absurd this (by decide)
+  have hpieces : pieces ' ' (methodWord r.method ++ " " ++ r.target ++ " HTTP/1.1").toList
+      = [(methodWord r.method).toList, r.target.toList, "HTTP/1.1".toList] := by
+    have e : (methodWord r.method ++ " " ++ r.target ++ " HTTP/1.1").toList
+        = (methodWord r.method).toList ++ ' ' :: (r.target.toList ++ ' ' :: "HTTP/1.1".toList) := by
+      simp
+    rw [e, pieces_append (word_ne_space _), pieces_append htarget, pieces_of_forall (by decide)]
+  rw [head_eq, List.map_cons]
+  exact parseHead_of hpieces rfl (method?_word _) (by simpa using hcount) (fieldLines_wire hsent)
+    (host?_wire hvisible hne hchars) (tabbedFraming_wire r host) (framing?_wire hbody hdigits)
+    (target?_target r hpath)
+
+end Request
+
+namespace Request
+
+private theorem elements_close : elements ["close"] = ["close"] := by
+  simp only [elements, List.flatMap_cons, List.flatMap_nil, List.append_nil,
+    pieces_of_forall (show ∀ c ∈ "close".toList, c ≠ ',' by decide), List.map_cons, List.map_nil,
+    trimOws_of_forall (show ∀ c ∈ "close".toList, ows c = false by decide), String.ofList_toList]
+  rw [List.cons.injEq, toLower_eq_iff']
+  exact ⟨by decide, rfl⟩
+
+private theorem close_wire (r : Request) (host : String) :
+    ((r.fields host).map readField).any (fun (name, value) =>
+      name == "connection" && (elements [value]).contains "close") = true := by
+  have hread : readField ("Connection", "close") = ("connection", "close") := by
+    simp only [readField, trimOws_of_forall (show ∀ c ∈ "close".toList, ows c = false by decide),
+      String.ofList_toList, Prod.mk.injEq, and_true]
+    rw [toLower_eq_iff']
+    decide
+  refine List.any_eq_true.mpr ⟨("connection", "close"), List.mem_map.mpr
+    ⟨("Connection", "close"), by simp [fields], hread⟩, ?_⟩
+  simp [elements_close]
+
+private theorem lines_wire {r : Request} {host : String} (hsent : (r.wire host).isSome) :
+    ∀ l ∈ r.head host, l ≠ "" ∧ ∀ c ∈ l.toList, c ≠ '\n' := by
+  intro l hl
+  have hplain := head_plain r host hsent l hl
+  refine ⟨fun e => ?_, fun c hc e => ?_⟩
+  · rw [head_eq] at hl
+    rcases List.mem_cons.mp hl with rfl | hl
+    · have := congrArg String.length e
+      simp at this
+    · obtain ⟨field, -, rfl⟩ := List.mem_map.mp hl
+      have := congrArg String.length e
+      simp at this
+  · have := List.all_eq_true.mp hplain c hc
+    rw [e] at this
+    exact absurd this (by decide)
+
+/-- What `Request.wire` writes is read back as written, with its names in lowercase and the
+blanks around its values left out, as soon as its last byte is there, wherever it starts in
+the bytes and whatever follows it. -/
+theorem read_wire {limits : Limits} {r : Request} {host : String} {w : ByteArray}
+    (hw : r.wire host = some w) (hfits : r.fits limits host = true) (pre tail : ByteArray) :
+    read limits (pre ++ (w ++ tail)) pre.size = .done (r.sent host) (pre.size + w.size) := by
+  have hsent : (r.wire host).isSome := by rw [hw]; rfl
+  have hhost : host ≠ "" ∧ host.toList.all visible = true := by
+    simp only [wire] at hw
+    split at hw
+    · rename_i h
+      simpa using h
+    · cases hw
+  have hwire : w = headWire (r.head host) ++ r.body := by
+    have hb : (host != "") = true := by simpa using hhost.1
+    simp only [wire, hb, hhost.2, Bool.and_self, ↓reduceIte, Option.some.injEq] at hw
+    exact hw.symm
+  have hfits' := hfits
+  simp only [fits, Bool.and_eq_true, decide_eq_true_eq] at hfits'
+  obtain ⟨⟨⟨⟨⟨⟨hline, hhead⟩, -⟩, -⟩, -⟩, -⟩, -⟩ := hfits'
+  have hparse := parseHead_wire hsent hhost.2 hhost.1 hfits
+  have hne : r.head host ≠ [] := by rw [head_eq]; simp
+  have hbytes : pre ++ (w ++ tail) = pre ++ (headWire (r.head host) ++ (r.body ++ tail)) := by
+    rw [hwire, ByteArray.append_assoc]
+  have hsize : (headWire (r.head host)).size = ("\r\n".intercalate (r.head host)).utf8ByteSize + 4 := by
+    rw [headWire, String.toUTF8_eq_toByteArray, String.size_toByteArray, String.utf8ByteSize_append]
+    rfl
+  unfold read
+  rw [hbytes, readHead_headWire limits pre _ hne (lines_wire hsent)]
+  simp only [show ¬ limits.line_max < ((r.head host).headD "").utf8ByteSize by omega,
+    show ¬ limits.head_max < ("\r\n".intercalate (r.head host)).utf8ByteSize + 4 by omega,
+    ↓reduceIte, hparse]
+  have hbody : (pre ++ (headWire (r.head host) ++ (r.body ++ tail))).extract
+      (pre.size + ("\r\n".intercalate (r.head host)).utf8ByteSize + 4)
+      (pre.size + ("\r\n".intercalate (r.head host)).utf8ByteSize + 4 + r.body.size) = r.body := by
+    rw [← ByteArray.append_assoc]
+    have := extract_append_front (pre ++ headWire (r.head host)) r.body tail
+    rwa [ByteArray.size_append, hsize, ← Nat.add_assoc] at this
+  simp only [ByteArray.size_append, hsize, show pre.size + ("\r\n".intercalate (r.head host)).utf8ByteSize
+    + 4 + r.body.size ≤ pre.size + (("\r\n".intercalate (r.head host)).utf8ByteSize + 4
+      + (r.body.size + tail.size)) by omega, ↓reduceIte, hbody, hwire]
+  have hclose := close_wire r host
+  congr 1
+  · simp only [Head.incoming, Head.close, hclose, Bool.or_true, sent]
+    rfl
+  · omega
+
+/-- Every strict start of what `Request.wire` writes, wherever it starts, needs more. -/
+theorem read_wire_extract {limits : Limits} {r : Request} {host : String} {w : ByteArray}
+    (hw : r.wire host = some w) (hfits : r.fits limits host = true) (pre : ByteArray) {n : Nat}
+    (hn : n < w.size) : read limits (pre ++ w.extract 0 n) pre.size = .more := by
+  have hwhole := read_wire hw hfits pre .empty
+  rw [ByteArray.append_empty] at hwhole
+  have hcut : (pre ++ w).extract 0 (pre.size + n) = pre ++ w.extract 0 n := by
+    apply ByteArray.ext
+    apply Array.toList_inj.mp
+    have hpre : pre.data.toList.length = pre.size := by simp
+    rw [toList_extract_zero, ByteArray.data_append, ByteArray.data_append, Array.toList_append,
+      Array.toList_append, toList_extract_zero, List.take_append, hpre,
+      List.take_of_length_le (by omega), Nat.add_sub_cancel_left]
+  rcases read_extract limits (pre ++ w) (pre.size + n) pre.size with e | e
+  · rw [hcut] at e
+    exact e
+  · rw [hcut, hwhole] at e
+    have := (read_done e).2.1
+    simp only [ByteArray.size_append, ByteArray.size_extract] at this
+    omega
+
+end Request
+
 end Lanes.Http

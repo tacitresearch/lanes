@@ -59,4 +59,23 @@ theorem sum_map_set (f : α → Int) {l : List α} {i : Nat} {a : α} (v : α) (
       simp only [List.set_cons_succ, List.map_cons, List.sum_cons]
       omega
 
+theorem mapM_ok {ε : Type} {f : α → Except ε β} {g : α → β} :
+    ∀ {l : List α}, (∀ x ∈ l, f x = .ok (g x)) → l.mapM f = .ok (l.map g)
+  | [], _ => rfl
+  | x :: l, h => by
+    rw [List.mapM_cons, h x List.mem_cons_self, mapM_ok fun y hy => h y (List.mem_cons_of_mem _ hy)]
+    rfl
+
+theorem forall_mem_intercalate {p : α → Prop} {sep : List α} (hsep : ∀ x ∈ sep, p x) :
+    ∀ {ls : List (List α)}, (∀ l ∈ ls, ∀ x ∈ l, p x) → ∀ x ∈ sep.intercalate ls, p x
+  | [], _, x, hx => by simp at hx
+  | [l], h, x, hx => by simp only [List.intercalate_singleton] at hx; exact h l (by simp) x hx
+  | l :: l' :: ls, h, x, hx => by
+    rw [List.intercalate_cons_cons] at hx
+    rcases List.mem_append.mp hx with hx | hx
+    · rcases List.mem_append.mp hx with hx | hx
+      · exact h l (by simp) x hx
+      · exact hsep x hx
+    · exact forall_mem_intercalate hsep (ls := l' :: ls) (fun y hy => h y (by simp_all)) x hx
+
 end Lanes
