@@ -23,18 +23,20 @@ structure Codec (α : Type) where
 
 namespace Codec
 
-def nat : Codec Nat where
-  encode n := (toString n).toUTF8
-  decode bytes := (String.fromUTF8? bytes).bind String.toNat?
-  sound n := by
-    have h : String.fromUTF8? (toString n).toUTF8 = some (toString n) := by
-      simp [String.fromUTF8?, String.fromUTF8, (toString n).isValidUTF8]
-    simp [h]
+theorem fromUTF8?_toUTF8 (s : String) : String.fromUTF8? s.toUTF8 = some s := by
+  simp [String.fromUTF8?, String.fromUTF8, s.isValidUTF8]
 
 def string : Codec String where
   encode s := s.toUTF8
   decode := String.fromUTF8?
-  sound s := by simp [String.fromUTF8?, String.fromUTF8, s.isValidUTF8]
+  sound := fromUTF8?_toUTF8
+
+def nat : Codec Nat where
+  encode n := (toString n).toUTF8
+  decode bytes := (String.fromUTF8? bytes).bind String.toNat?
+  sound n := by
+    rw [fromUTF8?_toUTF8]
+    simp
 
 end Codec
 
