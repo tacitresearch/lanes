@@ -197,6 +197,53 @@ def checkGate (inputs : List (gateSig deskSig).In) (env : EnvModel (gateSig desk
         w.driver.answered.count 1 == 2 ]
     { maxDepth }
 
+/-! The premises of `Gate.pending_leaves`, which `fronted_pending_leaves` and
+`fronted_pending_answered` carry into `fronted sys`, checked on the gate alone with the link from
+outside that a join gives it. -/
+
+abbrev GateWorld := World (gateSystem bridge {}) GateClient
+
+def gateDeadlinesFire (env : EnvModel (gateSig deskSig)) (w : GateWorld) : Bool :=
+  !w.state.up () ||
+    (w.state.state ()).all fun id =>
+      match w.state.step env (.timeout () (.expire id)) with
+      | some c => !(c.state ()).contains id
+      | none => false
+
+def gateDeadlinesArmed (w : GateWorld) : Bool :=
+  !w.state.up () || (w.state.state ()).all fun id => (w.state.timers ()).contains (.expire id)
+
+def gateDeadlinesLeftAlone (w : GateWorld) : Bool :=
+  let leaves (ev : Event (gateSig deskSig)) : Bool :=
+    (w.state.state ()).all fun id => !(w.state.arms ev).contains (.timeout () (.expire id))
+  !w.state.up () ||
+    (w.state.net.all fun e => leaves (.deliver e) && leaves (.duplicate e))
+      && (w.state.timers ()).all fun msg => leaves (.timeout () msg)
+
+def checkGateLive (inputs : List (gateSig deskSig).In) (env : EnvModel (gateSig deskSig))
+    (maxDepth : Option Nat := none) :=
+  Check.system (gateSystem bridge {}) { env, driver := gateClient inputs }
+    [ .always "a gate that cannot crash stays up" fun w => env.mayCrash () || w.state.up (),
+      .always "every pending request has its deadline armed" gateDeadlinesArmed,
+      .always "a pending request's deadline can fire, and firing it removes the request"
+        (gateDeadlinesFire env),
+      .always "no step arms a pending request's deadline again" gateDeadlinesLeftAlone,
+      .sometimes "a request is pending while the gate is up" fun w =>
+        w.state.up () && !(w.state.state ()).isEmpty ]
+    { maxDepth }
+
+/-- A request leaves the gate's pending list only in a step that emits its answer. -/
+def gateLeavingIsAnswered : Bool :=
+  let request : Request := { method := .get, path := [] }
+  let messages : List (GateMsg deskSig) :=
+    [.arrive 1 request, .arrive 3 request, .answer (.reply 1), .answer (.reply 3),
+      .answer (.memo 1), .expire 1, .expire 2, .expire 3]
+  [[], [1], [1, 2], [2, 1]].all fun pending => messages.all fun msg =>
+    let (pending', effects) := (gateActor bridge {}).step pending msg
+    pending.all fun id => pending'.contains id || effects.any fun
+      | .emit (.inl out) => out.1 == id
+      | _ => false
+
 def tests : List (String × Bool) :=
   let arriving : List (gateSig deskSig).In :=
     [.inl (1, { method := .get, path := [] }), .inl (1, { method := .get, path := ["bad"] }),
@@ -206,6 +253,10 @@ def tests : List (String × Bool) :=
       mayCrash := fun _ => true, restarts := fun _ => true }
   let aloneInJoin := checkGate [.inl (1, { method := .get, path := ["bad"] })]
     (EnvModel.left ({} : EnvModel (joinSig (gateSig deskSig) deskSig))) (maxDepth := some 8)
+  let liveInJoin := checkGateLive
+    [.inl (1, { method := .get, path := [] }), .inl (2, { method := .get, path := [] }),
+      .inr (.reply 1), .inr (.memo 2)]
+    (EnvModel.left ({} : EnvModel (joinSig (gateSig deskSig) deskSig))) (maxDepth := some 9)
   let two := check {} [get 1, get 2]
   let noted := check {} [get 1, .inr (.note 7)]
   let refused := check {} [get 1 ["bad"], get 2] (mustSee := 400)
@@ -253,7 +304,12 @@ def tests : List (String × Bool) :=
         ++ "answered twice",
       match aloneInJoin.failure with
       | some (.violated "no request is answered more often than it arrived" _) => true
-      | _ => false) ]
+      | _ => false),
+    ("gate alone, on that link: a pending request's deadline stays armed, can fire and is "
+        ++ "armed again by no step, and a gate that cannot crash stays up, to depth 9",
+      liveInJoin.ok && liveInJoin.witnesses.length == 1),
+    ("gate alone: a request leaves the pending list only in a step that emits its answer",
+      gateLeavingIsAnswered) ]
 
 /-! The bank on two shards, accounts 0 and 2 on the first and account 1 on the second. -/
 

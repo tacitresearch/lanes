@@ -8,6 +8,7 @@ public import Lanes.Actors.Join
 public import Lanes.Actors.Deed
 public import Lanes.Actors.Run
 public import Lanes.Actors.Equiv
+public import Lanes.Actors.FairScheduler
 
 /-!
 # What survives a join
@@ -98,6 +99,19 @@ def right (c : SysState (a.join b w)) : SysState b where
   outbox := c.outbox.filterMap Sum.getRight?
 
 end SysState
+
+/-- The join seen from `a` with the messages from outside in flight left out: what `a` alone
+reaches when each message from outside is put in just before the join delivers it. -/
+def SysState.thinLeft (c : SysState (a.join b w)) : SysState a :=
+  { c.left with net := c.left.net.filter fun e => e.src.isSome }
+
+/-- The event of `a` alone that meets the obligation an event of the join meets, if any. -/
+def Event.left? : Event (joinSig σ τ) → Option (Event σ)
+  | .deliver e => e.left?.map .deliver
+  | .timeout (.inl i) msg => some (.timeout i msg)
+  | .start (.inl i) => some (.start i)
+  | .output (.inl out) => some (.output out)
+  | _ => none
 
 /-- What an event of a join shows the left system doing. -/
 def Event.leftDeed : Event (joinSig σ τ) → Option (Deed σ)
@@ -1711,5 +1725,649 @@ theorem System.Invariant.join_right_state {Q : ((j : τ.Id) → b.State j) → P
   exact hQ
 
 end Right
+
+section Thinned
+
+/-! Seen from `a` without the messages from outside, a run of the join is a run of `a` alone
+step by step: each step of the join is a short run of `a` (`Wiring.Block`) from the view before
+it to the view after it. -/
+
+variable {σ τ : Signature} {a : System σ} {b : System τ} {w : Wiring σ τ}
+  {env : EnvModel (joinSig σ τ)} {c c' : SysState (a.join b w)}
+
+private theorem Thin.inside (l : List (Envelope σ)) : Thin (l.filter fun e => e.src.isSome) l := by
+  induction l with
+  | nil => exact .nil
+  | cons e l ih =>
+    cases h : e.src with
+    | none =>
+      rw [List.filter_cons_of_neg (by simp [h])]
+      exact .skip h ih
+    | some s =>
+      rw [List.filter_cons_of_pos (by simp [h])]
+      exact .keep e ih
+
+/-- No output that the wiring routes to `b` waits in the join. -/
+theorem System.Reachable.left_unwired (h : (a.join b w).Reachable env c) :
+    ∀ out ∈ c.left.outbox, w.toRight out = none := by
+  have hseen : ∃ t, Seen env w (Shows a env.left w) t c.left := by
+    induction h with
+    | init => exact ⟨_, Seen.init env⟩
+    | step ev _ hstep ih => exact ih.elim fun t h => ⟨_, h.step hstep⟩
+  obtain ⟨t, hseen⟩ := hseen
+  exact hseen.tidy
+
+/-- The outputs of `effs` that the wiring routes to `b`, handed over. -/
+def Wiring.wired (w : Wiring σ τ) {i : σ.Id} (effs : List (Effect σ i)) : List (Event σ) :=
+  ((Effect.emits effs).filter fun out => !(w.toRight out).isNone).map .output
+
+namespace SysState
+
+private theorem thinLeft_erase_outside (e : Envelope (joinSig σ τ))
+    (he : ∀ u, e.left? = some u → u.src = none) :
+    ({ c with net := c.net.erase e } : SysState (a.join b w)).thinLeft = c.thinLeft := by
+  refine SysState.ext' rfl rfl ?_ rfl rfl
+  show ((c.net.erase e).filterMap Envelope.left?).filter _
+    = (c.net.filterMap Envelope.left?).filter _
+  rw [List.filter_filterMap, List.filter_filterMap, filterMap_erase_of_none]
+  cases h : e.left? with
+  | none => rfl
+  | some u => simp [he u h]
+
+private theorem thinLeft_erase_inside {s i : σ.Id} {msg : σ.Msg i} :
+    ({ c with net := c.net.erase ⟨some (.inl s), .inl i, msg⟩ } : SysState (a.join b w)).thinLeft
+      = { c.thinLeft with net := c.thinLeft.net.erase ⟨some s, i, msg⟩ } := by
+  refine SysState.ext' rfl rfl ?_ rfl rfl
+  show ((c.net.erase _).filterMap Envelope.left?).filter _
+    = ((c.net.filterMap Envelope.left?).filter _).erase _
+  rw [filterMap_erase (fun e' => Envelope.left?_eq_inside e') c.net, filter_erase_of_pos _ _ rfl]
+
+private theorem thinLeft_append_outside (l : List (Envelope (joinSig σ τ)))
+    (c : SysState (a.join b w)) (hl : ∀ e ∈ l, ∀ u, e.left? = some u → u.src = none) :
+    ({ c with net := c.net ++ l } : SysState (a.join b w)).thinLeft = c.thinLeft := by
+  refine SysState.ext' rfl rfl ?_ rfl rfl
+  show ((c.net ++ l).filterMap Envelope.left?).filter _ = (c.net.filterMap Envelope.left?).filter _
+  rw [List.filterMap_append, List.filter_append, List.append_right_eq_self, List.filter_eq_nil_iff]
+  intro u hu
+  obtain ⟨e, he, heu⟩ := List.mem_filterMap.mp hu
+  simp [hl e he u heu]
+
+private theorem inside_down (i : σ.Id) (l : List (Envelope (joinSig σ τ))) :
+    ((l.filter fun e => decide (e.dst ≠ .inl i) || (env.link e.src e.dst).lossy).filterMap
+        Envelope.left?).filter (fun e => e.src.isSome)
+      = ((l.filterMap Envelope.left?).filter fun e => e.src.isSome).filter
+          fun e => decide (e.dst ≠ i) || (env.left.link e.src e.dst).lossy := by
+  rw [List.filter_filterMap, List.filterMap_filter, List.filter_filterMap, List.filter_filterMap]
+  congr 1
+  funext e
+  obtain ⟨src, k | j, msg⟩ := e
+  · rcases src with _ | s | j'
+    · simp [Envelope.left?, Option.filter]
+    · simp only [Envelope.left?, Option.bind_some, Sum.getLeft?_inl]
+      simp [Option.filter, EnvModel.left]
+    · simp [Envelope.left?, Option.filter]
+  · simp [Envelope.left?]
+
+private theorem thinLeft_down (i : σ.Id) :
+    (c.down env (.inl i)).thinLeft = c.thinLeft.down env.left i :=
+  SysState.ext' rfl (update_inl c.up i false) (inside_down i c.net) (update_inl c.timers i []) rfl
+
+/-- A step of an actor of `a` in the join, seen without the messages from outside, is the same
+step of `a` alone, followed by handing over the outputs the wiring routes to `b`. -/
+private theorem thinLeft_settle (c : SysState (a.join b w)) (i : σ.Id)
+    (r : a.State i × List (Effect σ i)) (htidy : ∀ out ∈ c.left.outbox, w.toRight out = none) :
+    (c.thinLeft.settle env.left i r).run env.left (w.wired r.2)
+      = some (c.settle env (.inl i) (r.1, r.2.flatMap fun eff => [w.left b eff])).thinLeft := by
+  have inside : (Effect.sends i r.2).filter (fun e => e.src.isSome) = Effect.sends i r.2 :=
+    List.filter_eq_self.mpr fun e he => by simp [(Effect.mem_sends.mp he).1]
+  have hsettle : c.thinLeft.settle env.left i r =
+      { (c.settle env (.inl i) (r.1, r.2.flatMap fun eff => [w.left b eff])).thinLeft with
+        outbox := c.left.outbox ++ Effect.emits r.2 } := by
+    rw [settle_eq]
+    unfold thinLeft
+    rw [left_settle]
+    split
+    · refine SysState.ext' rfl rfl ?_ ?_ rfl
+      · show (c.thinLeft.net ++ Effect.sends i r.2).filter _ = _
+        rw [inside_down, List.filterMap_append, Wiring.sends_left,
+          List.filter_append (p := fun e : Envelope σ => e.src.isSome), inside]
+        rfl
+      · simp only [down, update_update]
+    · refine SysState.ext' rfl rfl ?_ rfl rfl
+      show c.thinLeft.net ++ Effect.sends i r.2 = _
+      rw [List.filter_append (p := fun e : Envelope σ => e.src.isSome), inside]
+      rfl
+  rw [hsettle]
+  have hrun := SysState.run_outputs_filter env.left
+    { (c.settle env (.inl i) (r.1, r.2.flatMap fun eff => [w.left b eff])).thinLeft with
+      outbox := c.left.outbox ++ Effect.emits r.2 }
+    (fun out => (w.toRight out).isNone) c.left.outbox (Effect.emits r.2)
+    (fun out hout => by simp [htidy out hout])
+  refine hrun.trans (congrArg some (SysState.ext' rfl rfl rfl rfl ?_))
+  show c.left.outbox ++ _
+    = (c.settle env (.inl i) (r.1, r.2.flatMap fun eff => [w.left b eff])).left.outbox
+  rw [left_settle]
+  split <;> rfl
+
+private theorem thinLeft_settle_inr (c : SysState (a.join b w)) (j : τ.Id)
+    (r : b.State j × List (Effect τ j)) :
+    (c.settle env (.inr j) (r.1, r.2.flatMap fun eff => [w.right a eff])).thinLeft
+      = c.thinLeft := by
+  unfold thinLeft
+  rw [left_settle_inr]
+  refine SysState.ext' rfl rfl ?_ rfl rfl
+  show (c.left.net ++ _).filter _ = c.left.net.filter _
+  rw [List.filter_append, List.append_right_eq_self, List.filter_eq_nil_iff]
+  intro u hu
+  obtain ⟨x, -, rfl⟩ := List.mem_map.mp hu
+  simp
+
+private theorem thinLeft_start_inr (c : SysState (a.join b w)) (j : τ.Id) :
+    (c.startActor env (.inr j)).thinLeft = c.thinLeft := by
+  have hleft : ({ c with up := update c.up (.inr j) true } : SysState (a.join b w)).thinLeft
+      = c.thinLeft :=
+    SysState.ext' rfl (funext fun k => update_inr_inl c.up j true k) rfl rfl rfl
+  exact (thinLeft_settle_inr (c := { c with up := update c.up (.inr j) true }) j
+    ((b.actor j).recover (c.state (.inr j)))).trans hleft
+
+/-- A message between actors of `a` that is deliverable without the messages from outside is
+deliverable in the join. -/
+theorem deliverable_of_thinLeft {e : Envelope σ}
+    (h : c.thinLeft.deliverable env.left e = true) :
+    ∃ s, e.src = some s ∧ c.deliverable env ⟨some (.inl s), .inl e.dst, e.msg⟩ = true := by
+  have hmem := mem_of_deliverable h
+  obtain ⟨hleft, hsrc⟩ := List.mem_filter.mp hmem
+  obtain ⟨src, i, msg⟩ := e
+  obtain ⟨s, rfl⟩ := Option.isSome_iff_exists.mp hsrc
+  refine ⟨s, rfl, ?_⟩
+  have hlink : env.left.link (some s) i = env.link (some (.inl s)) (.inl i) := rfl
+  simp only [deliverable, hlink] at h ⊢
+  split at h
+  · next hord =>
+    simp only [hord, ↓reduceIte]
+    have hsame : (fun e : Envelope (joinSig σ τ) =>
+        (e.left?.filter fun e => e.src.isSome).any (Envelope.sameLink ⟨some s, i, msg⟩))
+        = Envelope.sameLink (⟨some (.inl s), .inl i, msg⟩ : Envelope (joinSig σ τ)) := by
+      funext e
+      obtain ⟨src, k | j, m⟩ := e
+      · rcases src with _ | s' | j' <;> simp [Envelope.left?, Envelope.sameLink, Option.filter]
+      · simp [Envelope.left?, Envelope.sameLink]
+    have hfind : c.thinLeft.net.find? (Envelope.sameLink ⟨some s, i, msg⟩)
+        = some ⟨some s, i, msg⟩ := by simpa using h
+    change ((c.net.filterMap Envelope.left?).filter _).find? _ = _ at hfind
+    rw [List.filter_filterMap, List.find?_filterMap, hsame] at hfind
+    cases hE : c.net.find?
+        (Envelope.sameLink (⟨some (.inl s), .inl i, msg⟩ : Envelope (joinSig σ τ))) with
+    | none => simp [hE] at hfind
+    | some E =>
+      rw [hE, Option.bind_some] at hfind
+      have hEu : E.left? = some ⟨some s, i, msg⟩ := by
+        cases hl : E.left? with
+        | none => simp [hl] at hfind
+        | some u =>
+          rw [hl] at hfind
+          simp only [Option.filter] at hfind
+          split at hfind <;> simp_all
+      simp [(Envelope.left?_eq_inside E).mp hEu]
+  · next hord =>
+    simp only [hord] at h ⊢
+    obtain ⟨E, hE, hEu⟩ := List.mem_filterMap.mp hleft
+    simpa [(Envelope.left?_eq_inside E).mp hEu] using hE
+
+theorem hasMail_of_thinLeft {i : σ.Id} (h : c.thinLeft.hasMail i = true) :
+    c.hasMail (.inl i) = true := by
+  simp only [hasMail, List.any_eq_true, decide_eq_true_eq] at h ⊢
+  obtain ⟨u, hu, rfl⟩ := h
+  obtain ⟨E, hE, hEu⟩ := List.mem_filterMap.mp (List.mem_filter.mp hu).1
+  refine ⟨E, hE, ?_⟩
+  obtain ⟨src, k | j, msg⟩ := E
+  · simp only [Envelope.left?, Option.some.injEq] at hEu
+    rw [← hEu]
+  · simp [Envelope.left?] at hEu
+
+end SysState
+
+private theorem mem_timeouts_left {i i' : σ.Id} {msg : σ.Msg i'} (effs : List (Effect σ i))
+    (h : Event.timeout (σ := joinSig σ τ) (.inl i') msg ∈
+      Effect.timeouts (σ := joinSig σ τ) (.inl i) (effs.flatMap fun eff => [w.left b eff])) :
+    Event.timeout i' msg ∈ Effect.timeouts i effs := by
+  simp only [Effect.timeouts, List.mem_filterMap, List.mem_flatMap, List.mem_singleton] at h ⊢
+  obtain ⟨_, ⟨eff, heff, rfl⟩, h⟩ := h
+  refine ⟨eff, heff, ?_⟩
+  cases eff with
+  | after d m =>
+    simp only [Wiring.left, Option.some.injEq, Event.timeout.injEq, Sum.inl.injEq] at h
+    obtain ⟨rfl, h⟩ := h
+    simp [eq_of_heq h]
+  | emit out => cases hw : w.toRight out <;> simp [Wiring.left, hw] at h
+  | _ => simp [Wiring.left] at h
+
+private theorem not_mem_timeouts_inr {i : σ.Id} {j : τ.Id} {msg : σ.Msg i}
+    (effs : List (Effect (joinSig σ τ) (.inr j))) :
+    Event.timeout (σ := joinSig σ τ) (.inl i) msg ∉
+      Effect.timeouts (σ := joinSig σ τ) (.inr j) effs := by
+  simp only [Effect.timeouts, List.mem_filterMap, not_exists, not_and]
+  intro eff _
+  cases eff <;> simp
+
+/-- What `a` alone does for a step `ev` of the join from `c` to `c'`, seen without the messages
+from outside: a run between the two views that shows what `ev` shows of `a`, takes the
+obligation `ev` meets, arms the timers of `a` that `ev` arms, and passes only through states
+whose actors are as in `c` or as in `c'`. -/
+structure Wiring.Block (w : Wiring σ τ) (env : EnvModel (joinSig σ τ))
+    (c c' : SysState (a.join b w)) (ev : Event (joinSig σ τ)) (evs : List (Event σ)) : Prop where
+  run : c.thinLeft.run env.left evs = some c'.thinLeft
+  shown : evs.filterMap w.shown = ev.leftDeed.toList
+  taken : ∀ e, ev.left? = some e → e ∈ evs
+  arms : ∀ i msg, Event.timeout (σ := joinSig σ τ) (.inl i) msg ∈ c.arms ev →
+    ∃ j, ∃ hj : j < evs.length, ∃ d,
+    c.thinLeft.run env.left (evs.take j) = some d ∧ Event.timeout i msg ∈ d.arms evs[j]
+  near : ∀ j d, c.thinLeft.run env.left (evs.take j) = some d →
+    (d.state = c.left.state ∧ d.up = c.left.up) ∨ (d.state = c'.left.state ∧ d.up = c'.left.up)
+
+namespace Wiring.Block
+
+private theorem nil {ev : Event (joinSig σ τ)} (hthin : c'.thinLeft = c.thinLeft)
+    (hdeed : ev.leftDeed = none) (hleft : ev.left? = none)
+    (harms : ∀ i msg, Event.timeout (σ := joinSig σ τ) (.inl i) msg ∉ c.arms ev) :
+    Wiring.Block w env c c' ev [] where
+  run := by rw [hthin]; rfl
+  shown := by rw [hdeed]; rfl
+  taken e h := by simp [hleft] at h
+  arms i msg h := absurd h (harms i msg)
+  near j d h := by
+    simp only [List.take_nil, SysState.run, Option.some.injEq] at h
+    exact .inl (h ▸ ⟨rfl, rfl⟩)
+
+private theorem single {ev : Event (joinSig σ τ)} {e : Event σ}
+    (hstep : c.thinLeft.step env.left e = some c'.thinLeft)
+    (hshown : (w.shown e).toList = ev.leftDeed.toList)
+    (htaken : ∀ e', ev.left? = some e' → e' = e)
+    (harms : ∀ i msg, Event.timeout (σ := joinSig σ τ) (.inl i) msg ∉ c.arms ev) :
+    Wiring.Block w env c c' ev [e] where
+  run := by simp [SysState.run, hstep]
+  shown := by rw [filterMap_cons_toList, List.filterMap_nil, List.append_nil, hshown]
+  taken e' h := by simp [htaken e' h]
+  arms i msg h := absurd h (harms i msg)
+  near j d h := by
+    cases j with
+    | zero =>
+      simp only [List.take_zero, SysState.run, Option.some.injEq] at h
+      exact .inl (h ▸ ⟨rfl, rfl⟩)
+    | succ j =>
+      simp only [List.take_succ_cons, List.take_nil, SysState.run, hstep, Option.bind_some,
+        Option.some.injEq] at h
+      exact .inr (h ▸ ⟨rfl, rfl⟩)
+
+private theorem handle {ev : Event (joinSig σ τ)} {c₁ : SysState (a.join b w)} {i : σ.Id}
+    {r : a.State i × List (Effect σ i)} {pre mid : List (Event σ)} {main : Event σ}
+    {x : SysState a} (hpre : c.thinLeft.run env.left pre = some x)
+    (hpreq : ∀ e ∈ pre, e.quiet = true)
+    (hmain : x.run env.left (main :: mid) = some (c₁.thinLeft.settle env.left i r))
+    (hmidq : ∀ e ∈ mid, e.quiet = true)
+    (hc' : c' = c₁.settle env (.inl i) (r.1, r.2.flatMap fun eff => [w.left b eff]))
+    (htidy : ∀ out ∈ c₁.left.outbox, w.toRight out = none)
+    (hshown : (pre ++ main :: mid).filterMap w.shown = ev.leftDeed.toList)
+    (htaken : ∀ e, ev.left? = some e → e = main)
+    (harms : ∀ i' msg, Event.timeout (σ := joinSig σ τ) (.inl i') msg ∈ c.arms ev →
+      Event.timeout i' msg ∈ x.arms main) :
+    Wiring.Block w env c c' ev (pre ++ main :: (mid ++ w.wired r.2)) := by
+  have hwired : ∀ e ∈ w.wired r.2, e.quiet = true := by
+    intro e he
+    obtain ⟨_, -, rfl⟩ := List.mem_map.mp he
+    rfl
+  obtain ⟨y, hy, hymid⟩ : ∃ y, x.step env.left main = some y ∧
+      y.run env.left mid = some (c₁.thinLeft.settle env.left i r) := by
+    simp only [SysState.run] at hmain
+    cases hstep : x.step env.left main with
+    | none => simp [hstep] at hmain
+    | some y => exact ⟨y, rfl, by simpa [hstep] using hmain⟩
+  have hy' : y.run env.left (mid ++ w.wired r.2) = some c'.thinLeft := by
+    rw [SysState.run_append, hymid, Option.bind_some, hc', SysState.thinLeft_settle c₁ i r htidy]
+  have hrun : c.thinLeft.run env.left (pre ++ main :: (mid ++ w.wired r.2))
+      = some c'.thinLeft := by
+    rw [SysState.run_append, hpre, Option.bind_some]
+    simp only [SysState.run, hy, Option.bind_some, hy']
+  have hyc := SysState.run_quiet
+    (fun e he => (List.mem_append.mp he).elim (hmidq e) (hwired e)) hy'
+  refine ⟨hrun, ?_, fun e h => by simp [htaken e h], fun i' msg h => ?_, fun j d h => ?_⟩
+  · have hw : (w.wired r.2).filterMap w.shown = [] := List.filterMap_eq_nil_iff.mpr (shown_wired _)
+    rw [← List.cons_append, ← List.append_assoc, List.filterMap_append, hshown, hw,
+      List.append_nil]
+  · exact ⟨pre.length, by simp, x, by simpa using hpre, by simpa using harms i' msg h⟩
+  · by_cases hj : j ≤ pre.length
+    · rw [List.take_append_of_le_length hj] at h
+      have := SysState.run_quiet (fun e he => hpreq e (List.mem_of_mem_take he)) h
+      exact .inl ⟨this.1, this.2.1⟩
+    · obtain ⟨k, rfl⟩ : ∃ k, j = pre.length + (k + 1) := ⟨j - pre.length - 1, by omega⟩
+      rw [List.take_append, List.take_of_length_le (by omega), SysState.run_append, hpre,
+        Option.bind_some, show pre.length + (k + 1) - pre.length = k + 1 by omega,
+        List.take_succ_cons, SysState.run, hy, Option.bind_some] at h
+      have hd := SysState.run_quiet (fun e he =>
+        (List.mem_append.mp (List.mem_of_mem_take he)).elim (hmidq e) (hwired e)) h
+      exact .inr ⟨hd.1.trans hyc.1.symm, hd.2.1.trans hyc.2.1.symm⟩
+
+end Wiring.Block
+
+namespace SysState
+
+/-- A message from outside to an actor of `a`, put in from outside alone. -/
+private theorem put_outside (hc : (a.join b w).Reachable env c) {u : Envelope σ}
+    (hu : u ∈ c.left.net) (hsrc : u.src = none) :
+    ∃ x, c.thinLeft.run env.left [.input x] = some { c.thinLeft with net := c.thinLeft.net ++ [u] }
+      ∧ u ∉ c.thinLeft.net := by
+  obtain ⟨x, hx⟩ := hc.left.accepted hu hsrc
+  refine ⟨x, ?_, fun h => ?_⟩
+  · have hin := (step_input (c := c.thinLeft) (env := env.left) (x := x)).mpr rfl
+    rw [hx] at hin
+    simp only [run, hin, Option.bind_some]
+  · have := (List.mem_filter.mp h).2
+    rw [hsrc] at this
+    cases this
+
+private theorem inside_main {c₁ : SysState (a.join b w)} {i : σ.Id}
+    {r : a.State i × List (Effect σ i)} {main : Event σ} {ev : Event (joinSig σ τ)}
+    (hc : (a.join b w).Reachable env c)
+    (hmain : c.thinLeft.step env.left main = some (c₁.thinLeft.settle env.left i r))
+    (hc' : c' = c₁.settle env (.inl i) (r.1, r.2.flatMap fun eff => [w.left b eff]))
+    (houtbox : c₁.outbox = c.outbox) (hshown : (w.shown main).toList = ev.leftDeed.toList)
+    (htaken : ∀ e, ev.left? = some e → e = main)
+    (harms : ∀ i' msg, Event.timeout (σ := joinSig σ τ) (.inl i') msg ∈ c.arms ev →
+      Event.timeout i' msg ∈ c.thinLeft.arms main) :
+    ∃ evs, Wiring.Block w env c c' ev evs :=
+  ⟨_, Wiring.Block.handle (pre := []) (mid := []) rfl (by simp)
+    (by simp [run, hmain]) (by simp) hc'
+    (fun out hout => hc.left_unwired out (by simpa [SysState.left, houtbox] using hout))
+    (by simpa [filterMap_cons_toList] using hshown) htaken harms⟩
+
+private theorem outside_main {c₁ : SysState (a.join b w)} {i : σ.Id} {msg : σ.Msg i}
+    {ev : Event (joinSig σ τ)} (hc : (a.join b w).Reachable env c)
+    (hu : (⟨none, i, msg⟩ : Envelope σ) ∈ c.left.net) (hup : c.up (.inl i) = true)
+    (hc₁ : c₁.thinLeft = c.thinLeft)
+    (hc' : c' = c₁.settle env (.inl i) (((a.actor i).step (c.state (.inl i)) msg).1,
+      ((a.actor i).step (c.state (.inl i)) msg).2.flatMap fun eff => [w.left b eff]))
+    (houtbox : c₁.outbox = c.outbox) (hshown : ev.leftDeed = some (.handle i msg))
+    (htaken : ∀ e, ev.left? = some e → e = .deliver ⟨none, i, msg⟩)
+    (harms : ∀ i' m, Event.timeout (σ := joinSig σ τ) (.inl i') m ∈ c.arms ev →
+      Event.timeout i' m ∈ Effect.timeouts i ((a.actor i).step (c.state (.inl i)) msg).2) :
+    ∃ evs, Wiring.Block w env c c' ev evs := by
+  obtain ⟨x, hx, hnot⟩ := put_outside hc hu rfl
+  have hlink : env.left.link none i = Link.network := rfl
+  have hdeliver : ({ c.thinLeft with net := c.thinLeft.net ++ [⟨none, i, msg⟩] } : SysState a).step
+      env.left (.deliver ⟨none, i, msg⟩)
+        = some (c₁.thinLeft.settle env.left i ((a.actor i).step (c.state (.inl i)) msg)) := by
+    refine step_deliver.mpr ⟨hup, by simp [deliverable, hlink, Link.network], ?_⟩
+    rw [hc₁, List.erase_append_right _ hnot, List.erase_cons_head, List.append_nil]
+    rfl
+  exact ⟨_, Wiring.Block.handle (c₁ := c₁) (r := (a.actor i).step (c.state (.inl i)) msg)
+    (pre := [.input x]) (mid := []) hx (by simp [Event.quiet]) (by simp [run, hdeliver])
+    (by simp) hc'
+    (fun out hout => hc.left_unwired out (by simpa [SysState.left, houtbox] using hout))
+    (by rw [hshown]; rfl) htaken harms⟩
+
+private theorem block_deliver (hc : (a.join b w).Reachable env c) {e : Envelope (joinSig σ τ)}
+    (hstep : c.step env (.deliver e) = some c') :
+    ∃ evs, Wiring.Block w env c c' (.deliver e) evs := by
+  obtain ⟨hup, hdel, rfl⟩ := step_deliver.mp hstep
+  have hmem := mem_of_deliverable hdel
+  obtain ⟨src, i | j, msg⟩ := e
+  · have harms (x : SysState a) (hx : x.state = c.left.state) (src' : Option σ.Id) (i' : σ.Id)
+        (m : σ.Msg i') (h : Event.timeout (σ := joinSig σ τ) (.inl i') m ∈
+          c.arms (.deliver ⟨src, .inl i, msg⟩)) :
+        Event.timeout i' m ∈ x.arms (.deliver ⟨src', i, msg⟩) := by
+      simp only [arms, hx]
+      exact mem_timeouts_left _ h
+    have outside (hsrc : src.bind Sum.getLeft? = none) :
+        ∃ evs, Wiring.Block w env c (({ c with net := c.net.erase ⟨src, .inl i, msg⟩ } :
+          SysState (a.join b w)).handle env (.inl i) msg) (.deliver ⟨src, .inl i, msg⟩) evs :=
+      outside_main hc (hsrc ▸ List.mem_filterMap.mpr ⟨_, hmem, rfl⟩) hup
+        (thinLeft_erase_outside _ fun u hu => by simp [Envelope.left?, hsrc] at hu; rw [← hu])
+        rfl rfl rfl (fun e h => by simpa [Event.left?, Envelope.left?, hsrc, eq_comm] using h)
+        fun i' m h => harms c.left rfl none i' m h
+    rcases src with _ | s | j'
+    · exact outside rfl
+    · have hdel' : c.thinLeft.deliverable env.left ⟨some s, i, msg⟩ = true :=
+        deliverable_left (Thin.inside _) hdel
+      exact inside_main hc (step_deliver (c := c.thinLeft) (env := env.left)
+          (e := ⟨some s, i, msg⟩) |>.mpr ⟨hup, hdel', by rw [← thinLeft_erase_inside]; rfl⟩)
+        rfl rfl rfl (fun e h => by simpa [Event.left?, Envelope.left?, eq_comm] using h)
+        fun i' m h => harms _ rfl _ i' m h
+    · exact outside rfl
+  · refine ⟨[], .nil ?_ rfl rfl fun i' m => not_mem_timeouts_inr _⟩
+    exact (thinLeft_settle_inr _ j ((b.actor j).step (c.state (.inr j)) msg)).trans
+      (thinLeft_erase_outside _ (by simp [Envelope.left?]))
+
+private theorem block_duplicate (hc : (a.join b w).Reachable env c) {e : Envelope (joinSig σ τ)}
+    (hstep : c.step env (.duplicate e) = some c') :
+    ∃ evs, Wiring.Block w env c c' (.duplicate e) evs := by
+  obtain ⟨hup, hdup, hdel, rfl⟩ := step_duplicate.mp hstep
+  have hmem := mem_of_deliverable hdel
+  obtain ⟨src, i | j, msg⟩ := e
+  · have harms (x : SysState a) (hx : x.state = c.left.state) (e : Event σ)
+        (he : x.arms e = Effect.timeouts i ((a.actor i).step (x.state i) msg).2) (i' : σ.Id)
+        (m : σ.Msg i') (h : Event.timeout (σ := joinSig σ τ) (.inl i') m ∈
+          c.arms (.duplicate ⟨src, .inl i, msg⟩)) :
+        Event.timeout i' m ∈ x.arms e := by
+      rw [he, hx]
+      exact mem_timeouts_left _ h
+    have outside (hsrc : src.bind Sum.getLeft? = none) :
+        ∃ evs, Wiring.Block w env c (c.handle env (.inl i) msg) (.duplicate ⟨src, .inl i, msg⟩)
+          evs :=
+      outside_main hc (hsrc ▸ List.mem_filterMap.mpr ⟨_, hmem, rfl⟩) hup rfl rfl rfl rfl
+        (fun e h => by simp [Event.left?] at h)
+        fun i' m h => harms c.left rfl (.deliver ⟨none, i, msg⟩) rfl i' m h
+    rcases src with _ | s | j'
+    · exact outside rfl
+    · have hdel' : c.thinLeft.deliverable env.left ⟨some s, i, msg⟩ = true :=
+        deliverable_left (Thin.inside _) hdel
+      exact inside_main (c₁ := c) hc (step_duplicate (c := c.thinLeft) (env := env.left)
+          (e := ⟨some s, i, msg⟩) |>.mpr ⟨hup, hdup, hdel', rfl⟩)
+        rfl rfl rfl (fun e h => by simp [Event.left?] at h)
+        fun i' m h => harms c.thinLeft rfl (.duplicate ⟨some s, i, msg⟩) rfl i' m h
+    · exact outside rfl
+  · exact ⟨[], .nil (thinLeft_settle_inr _ j ((b.actor j).step (c.state (.inr j)) msg)) rfl rfl
+      fun i' m => not_mem_timeouts_inr _⟩
+
+private theorem block_drop {e : Envelope (joinSig σ τ)} (hstep : c.step env (.drop e) = some c') :
+    ∃ evs, Wiring.Block w env c c' (.drop e) evs := by
+  obtain ⟨hlossy, hmem, rfl⟩ := step_drop.mp hstep
+  have hnone : ∀ i msg, Event.timeout (σ := joinSig σ τ) (.inl i) msg ∉ c.arms (.drop e) :=
+    fun _ _ h => by simp [arms] at h
+  obtain ⟨src, i | j, msg⟩ := e
+  · have outside (hsrc : src.bind Sum.getLeft? = none) :
+        ∃ evs, Wiring.Block w env c { c with net := c.net.erase ⟨src, .inl i, msg⟩ }
+          (.drop ⟨src, .inl i, msg⟩) evs :=
+      ⟨[], .nil (thinLeft_erase_outside _ fun u hu => by
+        simp [Envelope.left?, hsrc] at hu; rw [← hu]) rfl rfl hnone⟩
+    rcases src with _ | s | j'
+    · exact outside rfl
+    · refine ⟨_, .single (e := .drop ⟨some s, i, msg⟩) ?_ rfl
+        (fun e h => by simp [Event.left?] at h)
+        hnone⟩
+      exact step_drop.mpr ⟨hlossy, List.mem_filter.mpr ⟨List.mem_filterMap.mpr ⟨_, hmem, rfl⟩, rfl⟩,
+        thinLeft_erase_inside⟩
+    · exact outside rfl
+  · exact ⟨[], .nil (thinLeft_erase_outside _ (by simp [Envelope.left?])) rfl rfl hnone⟩
+
+private theorem block_timeout (hc : (a.join b w).Reachable env c) {i : σ.Id ⊕ τ.Id}
+    {msg : (joinSig σ τ).Msg i} (hstep : c.step env (.timeout i msg) = some c') :
+    ∃ evs, Wiring.Block w env c c' (.timeout i msg) evs := by
+  obtain ⟨hup, hmem, rfl⟩ := step_timeout.mp hstep
+  cases i with
+  | inl i =>
+    have hthin : ({ c with timers := update c.timers (.inl i) ((c.timers (.inl i)).erase msg) } :
+        SysState (a.join b w)).thinLeft
+        = { c.thinLeft with
+            timers := update c.thinLeft.timers i ((c.thinLeft.timers i).erase msg) } :=
+      SysState.ext' rfl rfl rfl (update_inl c.timers i _) rfl
+    exact inside_main hc (step_timeout (c := c.thinLeft) (env := env.left) |>.mpr
+        ⟨hup, hmem, by rw [hthin]; rfl⟩) rfl rfl rfl
+      (fun e h => by simpa [Event.left?, eq_comm] using h) fun i' m h => mem_timeouts_left _ h
+  | inr j =>
+    have hthin : ({ c with timers := update c.timers (.inr j) ((c.timers (.inr j)).erase msg) } :
+        SysState (a.join b w)).thinLeft = c.thinLeft :=
+      SysState.ext' rfl rfl rfl
+        (funext fun k => update_inr_inl c.timers j ((c.timers (.inr j)).erase msg) k) rfl
+    exact ⟨[], .nil
+      ((thinLeft_settle_inr _ j ((b.actor j).step (c.state (.inr j)) msg)).trans hthin)
+      rfl rfl
+      fun i' m => not_mem_timeouts_inr _⟩
+
+private theorem block_output (hc : (a.join b w).Reachable env c) {out : σ.Out ⊕ τ.Out}
+    (hstep : c.step env (.output out) = some c') :
+    ∃ evs, Wiring.Block w env c c' (.output out) evs := by
+  obtain ⟨hmem, rfl⟩ := step_output.mp hstep
+  have hnone : ∀ i msg, Event.timeout (σ := joinSig σ τ) (.inl i) msg ∉ c.arms (.output out) :=
+    fun _ _ h => by simp [arms] at h
+  cases out with
+  | inl out =>
+    have hleft : out ∈ c.thinLeft.outbox := List.mem_filterMap.mpr ⟨_, hmem, rfl⟩
+    have houtbox := filterMap_erase (f := Sum.getLeft?) (a := (.inl out : σ.Out ⊕ τ.Out))
+      (b := out) (fun x => by cases x <;> simp) c.outbox
+    refine ⟨_, .single (e := .output out) (step_output.mpr ⟨hleft, ?_⟩) ?_
+      (fun e h => by simpa [Event.left?, eq_comm] using h) hnone⟩
+    · exact SysState.ext' rfl rfl rfl rfl houtbox
+    · simp [Wiring.shown, Event.deed, Event.leftDeed, hc.left_unwired out hleft, Option.filter]
+  | inr out =>
+    exact ⟨[], .nil (SysState.ext' rfl rfl rfl rfl (filterMap_erase_of_none rfl c.outbox)) rfl rfl
+      hnone⟩
+
+private theorem block_crash {i : σ.Id ⊕ τ.Id} (hstep : c.step env (.crash i) = some c') :
+    ∃ evs, Wiring.Block w env c c' (.crash i) evs := by
+  obtain ⟨hup, hcrash, rfl⟩ := step_crash.mp hstep
+  have hnone : ∀ i' msg, Event.timeout (σ := joinSig σ τ) (.inl i') msg ∉ c.arms (.crash i) :=
+    fun _ _ h => by simp [arms] at h
+  cases i with
+  | inl i =>
+    exact ⟨_, .single (e := .crash i) (step_crash.mpr ⟨hup, hcrash, thinLeft_down i⟩) rfl
+      (fun e h => by simp [Event.left?] at h) hnone⟩
+  | inr j =>
+    have hleft : (c.down env (.inr j)).left = c.left :=
+      SysState.ext' rfl (funext fun k => update_inr_inl c.up j false k)
+        (filterMap_filter_of_none SysState.left?_of_dropped c.net)
+        (funext fun k => update_inr_inl c.timers j [] k) rfl
+    refine ⟨[], .nil ?_ rfl rfl hnone⟩
+    unfold thinLeft
+    rw [hleft]
+
+private theorem block_start (hc : (a.join b w).Reachable env c) {i : σ.Id ⊕ τ.Id}
+    (hstep : c.step env (.start i) = some c') :
+    ∃ evs, Wiring.Block w env c c' (.start i) evs := by
+  obtain ⟨hdown, hmail, rfl⟩ := step_start.mp hstep
+  cases i with
+  | inl i =>
+    have hthin : ({ c with up := update c.up (.inl i) true } : SysState (a.join b w)).thinLeft
+        = { c.thinLeft with up := update c.thinLeft.up i true } :=
+      SysState.ext' rfl (update_inl c.up i true) rfl rfl rfl
+    by_cases hmail' : c.thinLeft.hasMail i = true ∨ env.left.restarts i = true
+    · exact inside_main hc (step_start (c := c.thinLeft) (env := env.left) |>.mpr
+          ⟨hdown, hmail', by rw [hthin]; rfl⟩) rfl rfl rfl
+        (fun e h => by simpa [Event.left?, eq_comm] using h) fun i' m h => mem_timeouts_left _ h
+    · have hjoin : c.hasMail (.inl i) = true := hmail.resolve_right fun h => hmail' (.inr h)
+      obtain ⟨e, he, hdst⟩ : ∃ e ∈ c.net, e.dst = .inl i := by
+        simpa [SysState.hasMail] using hjoin
+      obtain ⟨src, k | j, msg⟩ := e
+      · obtain rfl : k = i := by simpa using hdst
+        have hu : (⟨src.bind Sum.getLeft?, k, msg⟩ : Envelope σ) ∈ c.left.net :=
+          List.mem_filterMap.mpr ⟨_, he, rfl⟩
+        have hsrc : src.bind Sum.getLeft? = none := by
+          cases hb : src.bind Sum.getLeft? with
+          | none => rfl
+          | some s' =>
+            refine absurd (.inl ?_) hmail'
+            simp only [hasMail, List.any_eq_true, decide_eq_true_eq]
+            rw [hb] at hu
+            exact ⟨_, List.mem_filter.mpr ⟨hu, rfl⟩, rfl⟩
+        rw [hsrc] at hu
+        obtain ⟨x, hx, hnot⟩ := put_outside hc hu rfl
+        have hlossy : (env.left.link none k).lossy = true := rfl
+        let x' : SysState a :=
+          { c.thinLeft with
+            net := c.thinLeft.net ++ [⟨none, k, msg⟩]
+            up := update c.thinLeft.up k true }
+        obtain ⟨hkept, heq⟩ := SysState.settle_erase (env := env.left) x' k
+          ((a.actor k).recover (c.state (.inl k))) (e := ⟨none, k, msg⟩) (by simp [x']) hlossy
+        have hx' : ({ x' with net := x'.net.erase ⟨none, k, msg⟩ } : SysState a)
+            = ({ c with up := update c.up (.inl k) true } : SysState (a.join b w)).thinLeft := by
+          rw [hthin]
+          simp [x', List.erase_append_right _ hnot]
+        have hmain : ({ c.thinLeft with net := c.thinLeft.net ++ [⟨none, k, msg⟩] } :
+            SysState a).run env.left [.start k, .drop ⟨none, k, msg⟩]
+            = some (({ c with up := update c.up (.inl k) true } :
+              SysState (a.join b w)).thinLeft.settle env.left k
+                ((a.actor k).recover (c.state (.inl k)))) := by
+          have hstart : ({ c.thinLeft with net := c.thinLeft.net ++ [⟨none, k, msg⟩] } :
+              SysState a).step env.left (.start k) = some (x'.settle env.left k
+                ((a.actor k).recover (c.state (.inl k)))) :=
+            step_start.mpr ⟨hdown, .inl (by simp [hasMail]), rfl⟩
+          rw [← hx', heq]
+          simp only [run, hstart, Option.bind_some, step_drop.mpr ⟨hlossy, hkept, rfl⟩]
+        exact ⟨_, Wiring.Block.handle (pre := [.input x]) (mid := [.drop ⟨none, k, msg⟩]) hx
+          (by simp [Event.quiet]) hmain (by simp [Event.quiet]) rfl hc.left_unwired rfl
+          (fun e h => by simpa [Event.left?, eq_comm] using h)
+          fun i' m h => mem_timeouts_left _ h⟩
+      · simp at hdst
+  | inr j =>
+    exact ⟨[], .nil (thinLeft_start_inr c j) rfl rfl fun i' m => not_mem_timeouts_inr _⟩
+
+/-- Every step of the join from a reachable state is a run of `a` alone between the views
+without the messages from outside. -/
+theorem exists_block (hc : (a.join b w).Reachable env c) {ev : Event (joinSig σ τ)}
+    (hstep : c.step env ev = some c') : ∃ evs, Wiring.Block w env c c' ev evs := by
+  cases ev with
+  | input x =>
+    obtain rfl := step_input.mp hstep
+    refine ⟨[], .nil ?_ rfl rfl fun _ _ h => by simp [arms] at h⟩
+    cases x <;> exact thinLeft_append_outside _ _ (by simp [Envelope.left?])
+  | deliver e => exact block_deliver hc hstep
+  | duplicate e => exact block_duplicate hc hstep
+  | drop e => exact block_drop hstep
+  | timeout i msg => exact block_timeout hc hstep
+  | output out => exact block_output hc hstep
+  | crash i => exact block_crash hstep
+  | start i => exact block_start hc hstep
+
+/-- The join starts, seen from `a` without the messages from outside, where `a` alone starts
+once it has handed over the outputs the wiring routes to `b`. -/
+theorem init_thinLeft (env : EnvModel (joinSig σ τ)) :
+    ∃ evs, (SysState.init a env.left).run env.left evs
+        = some (SysState.init (a.join b w) env).thinLeft
+      ∧ ∀ ev ∈ evs, ev.quiet = true ∧ w.shown ev = none := by
+  have hfold : SysState.init (a.join b w) env
+      = b.boot.foldl (fun c j => c.startActor env (.inr j))
+        (a.boot.foldl (fun c i => c.startActor env (.inl i)) (SysState.blank (a.join b w))) := by
+    simp [SysState.init, List.foldl_append, List.foldl_map]
+  obtain ⟨xs, hxs⟩ := Seen.boot_inr (env := env) b.boot
+    (a.boot.foldl (fun c i => c.startActor env (.inl i)) (SysState.blank (a.join b w)))
+  obtain ⟨n, hn, h⟩ := Seen.boot (env := env) a.boot (SysState.blank (a.join b w))
+    (Thin.inside _)
+  obtain rfl : n = [] := by
+    cases hn
+    rfl
+  obtain ⟨outbox', ho', heq⟩ := h [] rfl
+  have hinit : SysState.init a env.left = { (a.boot.foldl (fun c i => c.startActor env (.inl i))
+      (SysState.blank (a.join b w))).thinLeft with outbox := [] ++ outbox' } := heq
+  have hB : (b.boot.foldl (fun c j => c.startActor env (.inr j))
+      (a.boot.foldl (fun c i => c.startActor env (.inl i)) (SysState.blank (a.join b w)))).thinLeft
+      = (a.boot.foldl (fun c i => c.startActor env (.inl i))
+        (SysState.blank (a.join b w))).thinLeft := by
+    unfold thinLeft
+    rw [hxs]
+    refine SysState.ext' rfl rfl ?_ rfl rfl
+    show List.filter _ (_ ++ _) = List.filter _ _
+    rw [List.filter_append, List.append_right_eq_self, List.filter_eq_nil_iff]
+    intro u hu
+    obtain ⟨x, -, rfl⟩ := List.mem_map.mp hu
+    simp
+  refine ⟨(outbox'.filter fun out => !(w.toRight out).isNone).map .output, ?_, fun ev hev => ?_⟩
+  · rw [hinit, SysState.run_outputs_filter _ _ _ [] outbox' (by simp), List.nil_append, ho', hfold,
+      hB]
+    rfl
+  · obtain ⟨out, hout, rfl⟩ := List.mem_map.mp hev
+    exact ⟨rfl, shown_wired outbox' _ hev⟩
+
+end SysState
+
+end Thinned
 
 end Lanes
