@@ -10,6 +10,18 @@ local macro "pos_order" : tactic =>
   `(tactic| ((try simp only [String.Pos.lt_iff_remainingBytes_lt,
       String.Pos.le_iff_remainingBytes_le] at *); omega))
 
+/-!
+What `Json.parse` accepts, against the grammar of `Grammar`:
+
+- it accepts every JSON text within its limits, as `Json.normalize` of the text's meaning
+  (`parse_complete`), so it reads back what the printers write (`parse_compress`,
+  `parse_pretty`).
+
+The parser works on positions of one string; `Parser.rest p` is the characters from `p` on, and
+each scanning function is shown to read exactly the part of the grammar it is for, whatever
+follows it but a continuation of a number (`Parser.NumStop`).
+-/
+
 @[expose] public section
 
 namespace Lanes.Json
@@ -369,6 +381,356 @@ theorem num_complete {md : Nat} {p : s.Pos} {cs t : List Char} {n : JsonNumber}
     rw [hnum, unsigned, ew]
     simp only [ef, ee, Nat.ofDigitChars_append]
 
+
+/-! ### Values -/
+
+/-- The characters a value can start with. -/
+def ValueStart (c : Char) : Prop :=
+  c = 'n' ∨ c = 't' ∨ c = 'f' ∨ c = '"' ∨ c = '[' ∨ c = '{' ∨ c = '-' ∨ IsDigit c
+
+theorem value_head {md d : Nat} {cs : List Char} {v : Json} (hv : Value md d cs v) :
+    ∃ c r, cs = c :: r ∧ ValueStart c := by
+  cases hv with
+  | null => exact ⟨_, _, rfl, by simp [ValueStart]⟩
+  | true => exact ⟨_, _, rfl, by simp [ValueStart]⟩
+  | false => exact ⟨_, _, rfl, by simp [ValueStart]⟩
+  | str => exact ⟨_, _, rfl, by simp [ValueStart]⟩
+  | emptyArr => exact ⟨_, _, rfl, by simp [ValueStart]⟩
+  | arr => exact ⟨_, _, rfl, by simp [ValueStart]⟩
+  | emptyObj => exact ⟨_, _, rfl, by simp [ValueStart]⟩
+  | obj => exact ⟨_, _, rfl, by simp [ValueStart]⟩
+  | num _ hn =>
+    cases hn with
+    | @mk int frac _ exp _ _ negative hi _ _ _ _ _ =>
+      obtain ⟨d, int', rfl⟩ := List.exists_cons_of_ne_nil hi.1.1
+      cases negative
+      · exact ⟨d, int' ++ (frac ++ exp), by simp, by simp [ValueStart, hi.1.2 d (by simp)]⟩
+      · exact ⟨'-', d :: (int' ++ (frac ++ exp)), by simp, by simp [ValueStart]⟩
+
+theorem ValueStart.not_ws {c : Char} (h : ValueStart c) : ¬IsWs c ∧ c ≠ ']' ∧ c ≠ '}' := by
+  rcases h with rfl | rfl | rfl | rfl | rfl | rfl | rfl | ⟨h1, h2⟩
+  any_goals decide
+  refine ⟨?_, ?_, ?_⟩
+  · rintro (rfl | rfl | rfl | rfl) <;> exact absurd h1 (by decide)
+  · rintro rfl; exact absurd h2 (by decide)
+  · rintro rfl; exact absurd h2 (by decide)
+
+theorem noWs_of_value {md d : Nat} {cs t : List Char} {v : Json} (hv : Value md d cs v) :
+    NoWs (cs ++ t) := by
+  obtain ⟨c, r, rfl, hc⟩ := value_head hv
+  intro c' hc'
+  simp at hc'
+  exact hc' ▸ hc.not_ws.1
+
+theorem ws_append {w w' : List Char} (h : Ws w) (h' : Ws w') : Ws (w ++ w') := by
+  intro c hc
+  rcases List.mem_append.mp hc with hc | hc
+  · exact h c hc
+  · exact h' c hc
+
+theorem numStop_ws {w r : List Char} {c : Char} (hw : Ws w) (hc : c = ',' ∨ c = ']' ∨ c = '}') :
+    NumStop (w ++ c :: r) := by
+  cases w with
+  | nil =>
+    intro c' hc'
+    simp at hc'
+    subst hc'
+    rcases hc with rfl | rfl | rfl <;> decide
+  | cons d w =>
+    intro c' hc'
+    simp only [List.cons_append, List.head?_cons, Option.some.injEq] at hc'
+    subst hc'
+    rcases hw _ (List.mem_cons_self ..) with h | h | h | h <;> rw [h] <;> decide
+
+theorem noWs_sep {c : Char} {r : List Char} (hc : c = ',' ∨ c = ':' ∨ c = ']' ∨ c = '}') :
+    NoWs (c :: r) := by
+  intro c' hc'
+  simp at hc'
+  subst hc'
+  rcases hc with rfl | rfl | rfl | rfl <;> decide
+
+theorem key_complete {p : s.Pos} {cs ds w₁ w₂ t : List Char} (hc : Chars cs ds) (hw₁ : Ws w₁)
+    (hw₂ : Ws w₂) (ht : NoWs t) (h : rest p = '"' :: cs ++ '"' :: (w₁ ++ ':' :: (w₂ ++ t))) :
+    ∃ q, key p = .ok (String.ofList ds, q) ∧ rest q.1 = t := by
+  obtain ⟨⟨p1, h1⟩, e1, r1⟩ := str_complete hc h
+  have r2 := skipWs_ws (p := p1) r1 hw₁ (noWs_sep (by simp))
+  obtain ⟨⟨p3, h3⟩, e3, r3⟩ := accept_cons (accepted := (· == ':')) r2 (by decide)
+  have r4 := skipWs_ws (p := p3) r3 hw₂ ht
+  refine ⟨⟨(skipWs p3).1, String.Pos.lt_of_lt_of_le (String.Pos.lt_of_lt_of_le
+    (lt_of_le_of_lt' h1 (lt_of_le_of_lt' (skipWs p1).2 h3)) (String.Pos.le_refl _))
+    (skipWs p3).2⟩, ?_, r4⟩
+  rw [key, e1]
+  simp [e3]
+
+/-- The value an `IH` hypothesis promises the parser reads. -/
+def Reads (md d : Nat) (cs : List Char) (v : Json) : Prop :=
+  ∀ {p : s.Pos} {t : List Char}, rest p = cs ++ t → NumStop t →
+    ∃ q, value d md p = .ok (v.normalize, q) ∧ rest q.1 = t
+
+theorem elements_complete {md d : Nat} {close t : List Char} (hclose : Ws close) :
+    ∀ (xs : List (Spaced × Json)) (x : Spaced × Json),
+    (∀ e ∈ x :: xs, e.1.Ws) → (∀ e ∈ x :: xs, ∀ r, NoWs (e.1.text ++ r)) →
+    (∀ e ∈ x :: xs, Reads (s := s) md d e.1.text e.2) →
+    ∀ {start p : s.Pos} (hp : start < p) (acc : Array Json),
+    rest p = x.1.text ++ (x.1.after ++ ((xs.map fun e => ',' :: e.1.chars).flatten ++
+      (close ++ ']' :: t))) →
+    ∃ q, elements d md start p hp acc =
+      .ok (.arr (acc ++ ((x :: xs).map (·.2.normalize)).toArray), q) ∧ rest q.1 = t
+  | [], x, hw, _, ih, start, p, hp, acc, h => by
+    have hwx := (hw x (by simp)).2
+    obtain ⟨⟨p1, h1⟩, e1, r1⟩ := ih x (by simp) (by simpa using h)
+      (numStop_ws (r := t) (ws_append hwx hclose) (by simp))
+    have r2 := skipWs_ws (p := p1) (by simpa using r1) (ws_append hwx hclose) (noWs_sep (by simp))
+    have ha : accept (· == ',') (skipWs p1).1 = none := accept_none fun c t' hct => by
+      rw [r2] at hct; simp at hct; rw [← hct.1]; decide
+    obtain ⟨⟨q, hq⟩, eq, rq⟩ := accept_cons (accepted := (· == ']')) r2 (by decide)
+    refine ⟨⟨q, String.Pos.le_of_lt (String.Pos.lt_of_lt_of_le hp (String.Pos.le_trans h1
+      (String.Pos.le_of_lt (lt_of_le_of_lt' (skipWs p1).2 hq))))⟩, ?_, rq⟩
+    rw [elements, e1]
+    simp [ha, eq]
+  | y :: ys, x, hw, hh, ih, start, p, hp, acc, h => by
+    have hwx := (hw x (by simp)).2
+    obtain ⟨⟨p1, h1⟩, e1, r1⟩ := ih x (by simp) (by simpa using h)
+      (numStop_ws (r := y.1.chars ++ (ys.map fun e => ',' :: e.1.chars).flatten ++ close ++
+        ']' :: t) hwx (by simp))
+    have r2 := skipWs_ws (p := p1) (by simpa using r1) hwx (noWs_sep (by simp))
+    obtain ⟨⟨p3, h3⟩, e3, r3⟩ := accept_cons (accepted := (· == ',')) r2 (by decide)
+    have r4 := skipWs_ws (p := p3) (by simpa [Spaced.chars] using r3) (hw y (by simp)).1
+      (hh y (by simp) _)
+    obtain ⟨q, eq, rq⟩ := elements_complete hclose ys y (fun e he => hw e (by simp [he]))
+      (fun e he => hh e (by simp [he])) (fun e he => ih e (by simp [he]))
+      (start := start) (p := (skipWs p3).1)
+      (String.Pos.lt_of_lt_of_le hp (String.Pos.le_trans h1 (String.Pos.le_trans (skipWs p1).2
+        (String.Pos.le_trans (String.Pos.le_of_lt h3) (skipWs p3).2))))
+      (acc.push x.2.normalize) (by simpa [Spaced.chars] using r4)
+    refine ⟨q, ?_, rq⟩
+    rw [elements, e1]
+    simp [e3, eq]
+
+theorem fields_complete {md d : Nat} {close t : List Char} (hclose : Ws close) :
+    ∀ (ms : List Member) (m : Member),
+    (∀ e ∈ m :: ms, e.key.Ws ∧ e.value.Ws) →
+    (∀ e ∈ m :: ms, ∃ cs, e.key.text = '"' :: cs ++ ['"'] ∧ Chars cs e.name) →
+    (∀ e ∈ m :: ms, ∀ r, NoWs (e.value.text ++ r)) →
+    (∀ e ∈ m :: ms, Reads (s := s) md d e.value.text e.json) →
+    ∀ {start p : s.Pos} (hp : start < p) (acc : Array (String × Json)),
+    rest p = m.key.text ++ (m.key.after ++ ':' :: (m.value.chars ++
+      ((ms.map fun e => ',' :: e.chars).flatten ++ (close ++ '}' :: t)))) →
+    ∃ q, fields d md start p hp acc =
+      .ok (mkObj (acc.toList ++ (m :: ms).map fun e => (String.ofList e.name, e.json.normalize)),
+        q) ∧ rest q.1 = t
+  | ms, m, hw, hk, hh, ih, start, p, hp, acc, h => by
+    obtain ⟨⟨hkb, hka⟩, hvb, hva⟩ := hw m (by simp)
+    obtain ⟨cs, hcs, hchars⟩ := hk m (by simp)
+    obtain ⟨⟨p1, h1⟩, e1, r1⟩ := key_complete (p := p) hchars hka hvb (hh m (by simp) _)
+      (by simpa [hcs, Spaced.chars] using h)
+    have after : Ws m.value.after := hva
+    cases ms with
+    | nil =>
+      obtain ⟨⟨p2, h2⟩, e2, r2⟩ := ih m (by simp) r1
+        (by simpa using numStop_ws (r := t) (c := '}') (ws_append after hclose) (by simp))
+      have r3 := skipWs_ws (p := p2) (by simpa using r2) (ws_append after hclose)
+        (noWs_sep (by simp))
+      have ha : accept (· == ',') (skipWs p2).1 = none := accept_none fun c t' hct => by
+        rw [r3] at hct; simp at hct; rw [← hct.1]; decide
+      obtain ⟨⟨q, hq⟩, eq, rq⟩ := accept_cons (accepted := (· == '}')) r3 (by decide)
+      refine ⟨⟨q, String.Pos.le_of_lt (String.Pos.lt_of_lt_of_le hp (String.Pos.le_trans
+        (String.Pos.le_of_lt h1) (String.Pos.le_trans h2
+          (String.Pos.le_of_lt (lt_of_le_of_lt' (skipWs p2).2 hq)))))⟩, ?_, rq⟩
+      rw [fields, e1]
+      simp [e2, ha, eq]
+    | cons y ys =>
+      obtain ⟨⟨p2, h2⟩, e2, r2⟩ := ih m (by simp) r1
+        (by simpa using numStop_ws (r := y.chars ++ ((ys.map fun e => ',' :: e.chars).flatten ++
+          (close ++ '}' :: t))) (c := ',') after (by simp))
+      have r3 := skipWs_ws (p := p2) (by simpa using r2) after (noWs_sep (by simp))
+      obtain ⟨⟨p4, h4⟩, e4, r4⟩ := accept_cons (accepted := (· == ',')) r3 (by decide)
+      obtain ⟨⟨yb, -⟩, -⟩ := hw y (by simp)
+      obtain ⟨ycs, hycs, -⟩ := hk y (by simp)
+      have r5 := skipWs_ws (p := p4) (by simpa [Member.chars, Spaced.chars] using r4) yb
+        (by rw [hycs]; intro c hc; simp at hc; subst hc; decide)
+      obtain ⟨q, eq, rq⟩ := fields_complete hclose ys y (fun e he => hw e (by simp [he]))
+        (fun e he => hk e (by simp [he])) (fun e he => hh e (by simp [he]))
+        (fun e he => ih e (by simp [he])) (start := start) (p := (skipWs p4).1)
+        (String.Pos.lt_of_lt_of_le hp (String.Pos.le_trans (String.Pos.le_of_lt h1)
+          (String.Pos.le_trans h2 (String.Pos.le_trans (skipWs p2).2
+            (String.Pos.le_trans (String.Pos.le_of_lt h4) (skipWs p4).2)))))
+        (acc.push (String.ofList m.name, m.json.normalize))
+        (by simpa [Member.chars, Spaced.chars] using r5)
+      refine ⟨q, ?_, rq⟩
+      rw [fields, e1]
+      simp [e2, e4, eq]
+
+theorem number_head {md : Nat} {cs : List Char} {n : JsonNumber} (hn : Number md cs n) :
+    ∃ c r, cs = c :: r ∧ (c = '-' ∨ IsDigit c) := by
+  cases hn with
+  | @mk int frac _ exp _ _ negative hi _ _ _ _ _ =>
+    obtain ⟨d, int', rfl⟩ := List.exists_cons_of_ne_nil hi.1.1
+    cases negative
+    · exact ⟨d, int' ++ (frac ++ exp), by simp, .inr (hi.1.2 d (by simp))⟩
+    · exact ⟨'-', d :: (int' ++ (frac ++ exp)), by simp, .inl rfl⟩
+
+theorem value_num {md d : Nat} {cs t : List Char} {n : JsonNumber} (hn : Number md cs n)
+    {p : s.Pos} (h : rest p = cs ++ t) (ht : NumStop t) :
+    ∃ q, value d md p = .ok ((Json.num n).normalize, q) ∧ rest q.1 = t := by
+  obtain ⟨q, eq, rq⟩ := num_complete hn h ht
+  obtain ⟨c, r, rfl, hc⟩ := number_head hn
+  obtain ⟨⟨p1, h1⟩, e1, _⟩ := next?_cons h
+  refine ⟨q, ?_, rq⟩
+  rw [value, e1]
+  split <;> rename_i heq
+  case h_7 =>
+    simp only [Option.some.injEq, Prod.mk.injEq] at heq
+    obtain ⟨rfl, -⟩ := heq
+    have : (c == '-' || decide ('0' ≤ c ∧ c ≤ '9')) = true := by
+      rcases hc with rfl | hc
+      · rfl
+      · simp [show '0' ≤ c ∧ c ≤ '9' from hc]
+    simp only [this, ↓reduceIte, eq]
+    simp [normalize]
+  case h_8 => simp at heq
+  all_goals
+    simp only [Option.some.injEq, Prod.mk.injEq] at heq
+    obtain ⟨rfl, -⟩ := heq
+    rcases hc with h | h
+    · exact absurd h (by decide)
+    · exact absurd h (by simp only [IsDigit]; decide)
+
+/-- The parser reads every value of the grammar, within its limits, as `Json.normalize` of its
+meaning, whatever follows it but a continuation of a number. -/
+theorem value_complete {md d : Nat} {cs : List Char} {v : Json} (hv : Value md d cs v) :
+    Reads (s := s) md d cs v := by
+  induction hv with
+  | null d =>
+    intro p t h _
+    obtain ⟨⟨p1, h1⟩, e1, _⟩ := next?_cons h
+    obtain ⟨q, eq, rq⟩ := acceptAll_append (cs := ['n', 'u', 'l', 'l']) h
+    refine ⟨q, ?_, rq⟩
+    rw [value, e1]
+    simp [literal, eq, normalize]
+  | true d =>
+    intro p t h _
+    obtain ⟨⟨p1, h1⟩, e1, _⟩ := next?_cons h
+    obtain ⟨q, eq, rq⟩ := acceptAll_append (cs := ['t', 'r', 'u', 'e']) h
+    refine ⟨q, ?_, rq⟩
+    rw [value, e1]
+    simp [literal, eq, normalize]
+  | false d =>
+    intro p t h _
+    obtain ⟨⟨p1, h1⟩, e1, _⟩ := next?_cons h
+    obtain ⟨q, eq, rq⟩ := acceptAll_append (cs := ['f', 'a', 'l', 's', 'e']) h
+    refine ⟨q, ?_, rq⟩
+    rw [value, e1]
+    simp [literal, eq, normalize]
+  | num d hn => intro p t h ht; exact value_num hn h ht
+  | str d hc =>
+    intro p t h _
+    obtain ⟨⟨p1, h1⟩, e1, _⟩ := next?_cons h
+    obtain ⟨q, eq, rq⟩ := str_complete hc (by simpa using h)
+    refine ⟨q, ?_, rq⟩
+    rw [value, e1]
+    simp [eq, normalize]
+  | emptyArr d hw =>
+    intro p t h _
+    obtain ⟨⟨p1, h1⟩, e1, r1⟩ := next?_cons h
+    have r2 := skipWs_ws (p := p1) (by simpa using r1) hw (noWs_sep (r := t) (by simp))
+    obtain ⟨⟨q, hq⟩, eq, rq⟩ := accept_cons (accepted := (· == ']')) r2 (by decide)
+    refine ⟨⟨q, String.Pos.le_of_lt (String.Pos.lt_trans h1
+      (lt_of_le_of_lt' (skipWs p1).2 hq))⟩, ?_, rq⟩
+    rw [value, e1]
+    simp [eq, normalize]
+  | emptyObj d hw =>
+    intro p t h _
+    obtain ⟨⟨p1, h1⟩, e1, r1⟩ := next?_cons h
+    have r2 := skipWs_ws (p := p1) (by simpa using r1) hw (noWs_sep (r := t) (by simp))
+    obtain ⟨⟨q, hq⟩, eq, rq⟩ := accept_cons (accepted := (· == '}')) r2 (by decide)
+    refine ⟨⟨q, String.Pos.le_of_lt (String.Pos.lt_trans h1
+      (lt_of_le_of_lt' (skipWs p1).2 hq))⟩, ?_, rq⟩
+    rw [value, e1]
+    simp [eq, normalize, mkObj, sortFields, dedupFields]
+  | @arr d elems close hne hws hvals hclose ih =>
+    intro p t h _
+    obtain ⟨x, xs, rfl⟩ := List.exists_cons_of_ne_nil hne
+    obtain ⟨⟨p1, h1⟩, e1, r1⟩ := next?_cons h
+    obtain ⟨c, r, hcr, hc⟩ := value_head (hvals x (by simp))
+    have r2 := skipWs_ws (p := p1) (w := x.1.before)
+      (t := x.1.text ++ (x.1.after ++ ((xs.map fun e => ',' :: e.1.chars).flatten ++
+        (close ++ ']' :: t))))
+      (by simpa [intercalate_cons_eq, Spaced.chars, Function.comp_def] using r1) (hws x (by simp)).1
+      (noWs_of_value (hvals x (by simp)))
+    have ha : accept (· == ']') (skipWs p1).1 = none := accept_none fun c' t' hct => by
+      rw [r2, hcr] at hct
+      simp at hct
+      rw [← hct.1]
+      simpa using hc.not_ws.2.1
+    obtain ⟨q, eq, rq⟩ := elements_complete hclose xs x hws
+      (fun e he _ => noWs_of_value (hvals e he)) ih (start := p) (p := (skipWs p1).1)
+      (String.Pos.lt_of_lt_of_le h1 (skipWs p1).2) #[] r2
+    refine ⟨q, ?_, rq⟩
+    rw [value, e1]
+    simp [ha, eq, normalize, Function.comp_def]
+  | @obj d members close hne hws hkeys hvals hclose ih =>
+    intro p t h _
+    obtain ⟨m, ms, rfl⟩ := List.exists_cons_of_ne_nil hne
+    obtain ⟨⟨p1, h1⟩, e1, r1⟩ := next?_cons h
+    obtain ⟨cs, hcs, _⟩ := hkeys m (by simp)
+    have r2 := skipWs_ws (p := p1) (w := m.key.before)
+      (t := m.key.text ++ (m.key.after ++ ':' :: (m.value.chars ++
+        ((ms.map fun e => ',' :: e.chars).flatten ++ (close ++ '}' :: t)))))
+      (by simpa [intercalate_cons_eq, Member.chars, Spaced.chars, Function.comp_def] using r1)
+      (hws m (by simp)).1.1
+      (by rw [hcs]; intro c hc; simp at hc; subst hc; decide)
+    have ha : accept (· == '}') (skipWs p1).1 = none := accept_none fun c' t' hct => by
+      rw [r2, hcs] at hct
+      simp at hct
+      rw [← hct.1]
+      decide
+    obtain ⟨q, eq, rq⟩ := fields_complete hclose ms m hws hkeys
+      (fun e he _ => noWs_of_value (hvals e he)) ih (start := p) (p := (skipWs p1).1)
+      (String.Pos.lt_of_lt_of_le h1 (skipWs p1).2) #[] r2
+    refine ⟨q, ?_, rq⟩
+    rw [value, e1]
+    simp [ha, eq, normalize, Function.comp_def]
+
+theorem numStop_of_ws {w : List Char} (hw : Ws w) : NumStop w := by
+  cases w with
+  | nil => intro c hc; simp at hc
+  | cons d w =>
+    intro c hc
+    simp only [List.head?_cons, Option.some.injEq] at hc
+    subst hc
+    rcases hw _ (List.mem_cons_self ..) with h | h | h | h <;> rw [h] <;> decide
+
 end Parser
+
+open Parser in
+/-- The parser accepts every JSON text of the grammar within its limits, and reads it as
+`Json.normalize` of its meaning: objects sorted by key, the last value of a repeated key kept. -/
+theorem parse_complete {maxDepth maxDigits : Nat} {cs : List Char} {v : Json}
+    (h : Text maxDepth maxDigits cs v) :
+    parse (String.ofList cs) maxDepth maxDigits = .ok v.normalize := by
+  obtain ⟨w₁, t, w₂, rfl, hw₁, hw₂, hv⟩ := h
+  have r0 : rest (String.ofList (w₁ ++ t ++ w₂)).startPos = w₁ ++ (t ++ w₂) := by
+    simp [rest_startPos]
+  have r1 := skipWs_ws r0 hw₁ (noWs_of_value hv)
+  obtain ⟨⟨q, hq⟩, e, r2⟩ := value_complete hv r1 (numStop_of_ws hw₂)
+  have r3 := skipWs_ws (t := []) (by simpa using r2) hw₂ (by intro c hc; simp at hc)
+  rw [parse, document]
+  simp [e, rest_eq_nil.mp r3]
+
+/-- `parse (compress j) = .ok j.normalize`, for every value within the parser's limits. -/
+theorem parse_compress (j : Json) {maxDepth maxDigits : Nat} (hd : j.depth ≤ maxDepth)
+    (hm : j.digits ≤ maxDigits) : parse (compress j) maxDepth maxDigits = .ok j.normalize := by
+  have := parse_complete (cs := (compress j).toList)
+    ⟨[], _, [], by simp, nofun, nofun, value_compress j hd hm⟩
+  rwa [String.ofList_toList] at this
+
+theorem parse_pretty (j : Json) (indent : Nat) {maxDepth maxDigits : Nat}
+    (hd : j.depth ≤ maxDepth) (hm : j.digits ≤ maxDigits) :
+    parse (j.pretty indent) maxDepth maxDigits = .ok j.normalize := by
+  have := parse_complete (cs := (j.pretty indent).toList)
+    ⟨[], _, [], by simp [pretty], nofun, nofun, value_prettyTo indent j 0 hd hm⟩
+  rwa [String.ofList_toList] at this
+
 
 end Lanes.Json
