@@ -101,6 +101,22 @@ def crashing : EnvModel (sig N C R) where
   mayCrash _ := true
   restarts _ := true
 
+/-- Between nodes, messages may be lost. -/
+def lossy : EnvModel (sig N C R) where
+  link src _ := if src.isSome then { lossy := true } else Link.reliable
+
+/-- Between nodes, messages may be lost, reordered and handled twice. -/
+def network : EnvModel (sig N C R) :=
+  .distributed
+
+/-- A client's request may be lost on its way in, and requests overtake one another. -/
+def lossyClients : EnvModel (sig N C R) where
+  link src _ := if src.isSome then Link.unordered else { ordered := false, lossy := true }
+
+/-- Outside what `ImplementsMachine` assumes: a client's request may be handed to a node twice. -/
+def repeatingClients : EnvModel (sig N C R) where
+  link src _ := if src.isSome then Link.reliable else { duplicating := true }
+
 /-- Two writes through two nodes: enough for a leader of a later term to hold an entry of an
 earlier one that another leader has replaced. -/
 def twoWrites : List (Request N C) :=
@@ -144,6 +160,18 @@ def deep : List (String × IO Bool) :=
       check {} unordered writeThenRead { maxTerm := 1 } (auxiliary {})),
     ("unordered links and a crash, one term", run "unordered links and a crash, one term" fun _ =>
       check {} crashing writeThenRead { maxTerm := 1, maxCrashes := 1 }),
+    ("lossy links between nodes, one term", run "lossy links between nodes, one term" fun _ =>
+      check {} lossy writeThenRead { maxTerm := 1, maxNet := 3 }),
+    ("lossy, reordering and repeating links between nodes, one term",
+      run "lossy, reordering and repeating links between nodes, one term" fun _ =>
+        check {} network writeThenRead { maxTerm := 1, maxNet := 3 }),
+    ("requests lost and reordered on the way in, one term",
+      run "requests lost and reordered on the way in, one term" fun _ =>
+        check {} lossyClients writeThenRead { maxTerm := 1, maxNet := 3 }),
+    ("outside the assumption: a request handed to a node twice",
+      run "outside the assumption: a request handed to a node twice"
+        (expect := some "the cluster is the map it replicates") fun _ =>
+        check {} repeatingClients writeThenRead { maxTerm := 1, maxNet := 3 }),
     ("seeded: a leader commits an entry of an earlier term by counting",
       run "seeded: a leader commits an entry of an earlier term by counting"
         (expect := some "a leader has every committed entry") fun _ =>
