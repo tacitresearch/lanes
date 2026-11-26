@@ -36,11 +36,6 @@ section Lists
 
 omit [DecidableEq N] [DecidableEq C] [DecidableEq R] [Enum N]
 
-theorem termAt_of_prefix {a b : List (Entry N C)} (h : a <+: b) {k : Nat} (hk : k ≤ a.length) :
-    termAt a k = termAt b k := by
-  obtain ⟨rest, rfl⟩ := h
-  exact (termAt_append_left a rest hk).symm
-
 theorem termAt_mem {log : List (Entry N C)} {k : Nat} (hk : 0 < k) (hlen : k ≤ log.length) :
     ∃ entry ∈ log, entry.term = termAt log k := by
   have h : k - 1 < log.length := by omega
@@ -74,14 +69,14 @@ variable {c : SysState (recording N config machine)} {i : N} {msg : Option (Msg 
 has held it in that term or may yet. -/
 def Choosable (c : SysState (recording N config machine)) (term : Nat)
     (pfx : List (Entry N C)) : Prop :=
-  pfx ≠ [] ∧ termAt pfx pfx.length = term ∧ (∃ l, Led c term l ∧ pfx <+: l) ∧
+  pfx ≠ [] ∧ termAt pfx pfx.length = term ∧ Within c term pfx ∧
     ∃ quorum, Quorum.isMajority Enum.all quorum = true ∧
       ∀ v ∈ quorum, Held c v term pfx ∨ (c.state v).1.term ≤ term
 
 /-- A majority has held `pfx` in `term`: it is committed, whether or not anyone knows. -/
 def Chosen (c : SysState (recording N config machine)) (term : Nat)
     (pfx : List (Entry N C)) : Prop :=
-  pfx ≠ [] ∧ termAt pfx pfx.length = term ∧ (∃ l, Led c term l ∧ pfx <+: l) ∧
+  pfx ≠ [] ∧ termAt pfx pfx.length = term ∧ Within c term pfx ∧
     ∃ quorum, Quorum.isMajority Enum.all quorum = true ∧ ∀ v ∈ quorum, Held c v term pfx
 
 theorem Chosen.choosable (h : Chosen c term pfx) : Choosable c term pfx :=
@@ -89,8 +84,7 @@ theorem Chosen.choosable (h : Chosen c term pfx) : Choosable c term pfx :=
 
 theorem Chosen.grow (h : Chosen c term pfx) :
     Chosen (c.grow i ((s', c.seen i), effs)) term pfx :=
-  ⟨h.1, h.2.1, h.2.2.1.imp fun _ hl => ⟨hl.1.grow, hl.2⟩,
-    h.2.2.2.imp fun _ hq => ⟨hq.1, fun v hv => (hq.2 v hv).grow⟩⟩
+  ⟨h.1, h.2.1, h.2.2.1.grow, h.2.2.2.imp fun _ hq => ⟨hq.1, fun v hv => (hq.2 v hv).grow⟩⟩
 
 /-- What is committed as far as a node in `term` can know: a start of something chosen in a term
 up to its own. -/
@@ -101,6 +95,11 @@ def Committed (c : SysState (recording N config machine)) (term : Nat)
 theorem Committed.grow (h : Committed c term pfx) :
     Committed (c.grow i ((s', c.seen i), effs)) term pfx :=
   h.imp id fun ⟨chosenTerm, chosen, hle, hchosen, hp⟩ => ⟨chosenTerm, chosen, hle, hchosen.grow, hp⟩
+
+theorem Committed.mono (h : Committed c term pfx) {pfx' : List (Entry N C)} (hp : pfx' <+: pfx) :
+    Committed c term pfx' :=
+  h.elim (fun hnil => .inl (List.prefix_nil.mp (hnil ▸ hp)))
+    fun ⟨chosenTerm, chosen, hle, hchosen, hpc⟩ => .inr ⟨chosenTerm, chosen, hle, hchosen, hp.trans hpc⟩
 
 theorem Committed.later (h : Committed c term pfx) {later : Nat} (hle : term ≤ later) :
     Committed c later pfx :=
@@ -207,6 +206,15 @@ theorem prefix_of_led (hr : Replicating c) (hk : Safe c) (hch : Choosable c term
     · exact List.prefix_or_prefix_of_prefix hpl h
   · obtain ⟨a, p, hp, hleader, rfl, rfl⟩ := hled
     exact .inl (hk.leaders term pfx hch a p hp hleader hlt)
+
+/-- The same of a start of such a log, which is what a follower takes from one batch. -/
+theorem prefix_of_within (hr : Replicating c) (hk : Safe c) (hch : Choosable c term pfx)
+    {later : Nat} {l : List (Entry N C)} (hwithin : Within c later l) (hle : term ≤ later) :
+    pfx <+: l ∨ l <+: pfx := by
+  obtain ⟨whole, hled, hstart⟩ := hwithin
+  rcases prefix_of_led hr hk hch hled hle with h | h
+  · exact List.prefix_or_prefix_of_prefix h hstart
+  · exact .inr (hstart.trans h)
 
 /-- A candidate whose log is not behind that of a node with something choosable has it too. -/
 theorem up_to_date (hr : Replicating c) (hk : Safe c) (hch : Choosable c term pfx)
@@ -324,7 +332,7 @@ theorem holder_moved (hr : Replicating c) (hk : Safe c)
     rcases hr.logs.accepted hr.votes hled hprev hlen hterm hlog with h | h
     · exact h.2 ▸ hown
     · rw [h.2]
-      exact (prefix_of_led hr hk hch hled hle).resolve_right fun hlp => h.1 (hlp.trans hown)
+      exact (prefix_of_within hr hk hch hled hle).resolve_right fun hlp => h.1 (hlp.trans hown)
 
 end Safe
 
@@ -452,13 +460,14 @@ theorem safe_monotone (hup : config.votesForUpToDateOnly = true) :
       (recover_moves config Enum.all machine i _) pending_none
 
 /-- The invariant of the commit index, given the rest: a node has committed a start of its log
-that is committed, and an `append` in flight claims no more of its leader's log. -/
+that is committed, and an `append` in flight claims no more of its leader's log, of which it
+carries a batch. -/
 structure Commits (c : SysState (recording N config machine)) : Prop where
   nodes : ∀ a, (c.state a).1.commit ≤ (c.state a).1.log.length ∧
     Committed c (c.state a).1.term ((c.state a).1.log.take (c.state a).1.commit)
   appends : ∀ src dst term leader prev prevTerm entries commit,
     (⟨src, dst, .append term leader prev prevTerm entries commit⟩ : Envelope (sig N C R)) ∈ c.net →
-      ∃ l, Led c term l ∧ prev ≤ l.length ∧ prevTerm = termAt l prev ∧ entries = l.drop prev ∧
+      ∃ l, Led c term l ∧ prev ≤ l.length ∧ prevTerm = termAt l prev ∧ entries <+: l.drop prev ∧
         commit ≤ l.length ∧ Committed c term (l.take commit)
 
 namespace Commits
@@ -471,25 +480,27 @@ theorem blank : Commits (SysState.blank (recording N config machine)) := by
 
 variable {term : Nat} {pfx : List (Entry N C)}
 
-/-- A leader's log, of a term no earlier, has what is committed or is itself the start of it. -/
-theorem in_led (hr : Replicating c) (hk : Safe c) (hcommitted : Committed c term pfx)
-    {later : Nat} {l : List (Entry N C)} (hled : Led c later l) (hle : term ≤ later) :
+/-- A start of a leader's log, of a term no earlier, has what is committed or is itself the
+start of it. -/
+theorem in_within (hr : Replicating c) (hk : Safe c) (hcommitted : Committed c term pfx)
+    {later : Nat} {l : List (Entry N C)} (hled : Within c later l) (hle : term ≤ later) :
     pfx <+: l ∨ l <+: pfx := by
   rcases hcommitted with rfl | ⟨chosenTerm, chosen, hct, hchosen, hpc⟩
   · exact .inl List.nil_prefix
-  · rcases hk.prefix_of_led hr hchosen.choosable hled (Nat.le_trans hct hle) with h | h
+  · rcases hk.prefix_of_within hr hchosen.choosable hled (Nat.le_trans hct hle) with h | h
     · exact .inl (hpc.trans h)
     · exact List.prefix_or_prefix_of_prefix hpc h
 
 variable {i : N} {msg : Option (Msg N C)} {s' : Node N C M} {effs : List (Effect (sig N C R) i)}
 
-/-- A leader's log that replaces a follower's has what the follower had committed. -/
+/-- The start of a leader's log that replaces a follower's has what the follower had
+committed. -/
 theorem kept (hr : Replicating c) (hk : Safe c) (hc : Commits c)
     (hmoves : Moves config Enum.all i (c.state i).1 msg s' effs) {l : List (Entry N C)}
-    (hled : Led c s'.term l) (hnot : ¬l <+: (c.state i).1.log) :
+    (hled : Within c s'.term l) (hnot : ¬l <+: (c.state i).1.log) :
     (c.state i).1.commit ≤ l.length ∧
       l.take (c.state i).1.commit = (c.state i).1.log.take (c.state i).1.commit := by
-  rcases in_led hr hk (hc.nodes i).2 hled hmoves.term_le with h | h
+  rcases in_within hr hk (hc.nodes i).2 hled hmoves.term_le with h | h
   · exact take_eq_of_take_prefix (hc.nodes i).1 h
   · exact absurd (h.trans (List.take_prefix _ _)) hnot
 
@@ -541,10 +552,10 @@ theorem advanced (hown : config.commitsOwnTermOnly = true)
       exact hheld.mono (List.take_prefix_take_left hindex)
 
 /-- A follower that takes an `append` has committed a start of its log, as far as the leader
-said and it had before. -/
+said of what it sent, and it had before. -/
 theorem taken (hr : Replicating c) (hk : Safe c) (hc : Commits c)
     (hmoves : Moves config Enum.all i (c.state i).1 msg s' effs) {l : List (Entry N C)}
-    {prev commit : Nat} (hled : Led c s'.term l) (hprev : prev ≤ (c.state i).1.log.length)
+    {prev commit : Nat} (hled : Within c s'.term l) (hprev : prev ≤ (c.state i).1.log.length)
     (hlen : prev ≤ l.length) (hterm : termAt (c.state i).1.log prev = termAt l prev)
     (hlog : s'.log =
       (c.state i).1.log.take prev ++ merge ((c.state i).1.log.drop prev) (l.drop prev))
@@ -584,13 +595,17 @@ theorem node_moved (hr : Replicating c) (hk : Safe c) (hc : Commits c)
   · exact ⟨hle, .inr ⟨s'.term, _, Nat.le_refl _,
       advanced hown hs' hle (by omega) hrole hmajority hterm, List.prefix_refl _⟩⟩
   · rcases hpending _ hmsg with ⟨src, hnet⟩ | h | h
-    · obtain ⟨l, hled, hlen, hterm, rfl, hclaimed, hcommitted⟩ :=
+    · obtain ⟨l, hled, hlen, hterm, hbatch, hclaimed, hcommitted⟩ :=
         hc.appends src i _ leader prev _ _ commit hnet
-      have hindex : prev + (l.drop prev).length = l.length := by
+      obtain ⟨cut, hcut, hcutlen, hcutterm, rfl⟩ := exists_cut hlen hbatch
+      have hindex : prev + (cut.drop prev).length = cut.length := by
         rw [List.length_drop]
         omega
-      rw [hindex, Nat.min_eq_left hclaimed] at hcommit
-      exact hc.taken hr hk hmoves hled hprev hlen hterm hlog hclaimed hcommitted hcommit
+      rw [hindex] at hcommit
+      refine hc.taken hr hk hmoves ⟨l, hled, hcut⟩ hprev (by omega) (hterm.trans hcutterm.symm)
+        hlog (Nat.min_le_right _ _) ?_ hcommit
+      rw [← take_of_prefix hcut (Nat.min_le_right _ _)]
+      exact hcommitted.mono (List.take_prefix_take_left (Nat.min_le_left _ _))
     · cases h
     · cases h
 

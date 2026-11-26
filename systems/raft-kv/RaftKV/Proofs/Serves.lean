@@ -124,9 +124,10 @@ variable (config : Config) (nodes : List N) (machine : Machine C R M) (self : N)
 local macro "serves" : tactic => `(tactic|
   (refine ⟨?_, fun h => ?_, ?_⟩
    · simp [applyCommitted_eq_run, lead] <;> grind
-   · simp [applyCommitted_eq_run, lead, armElection, broadcast, appendTo, Effect.emits_map,
-       Effect.emits_nil, Effect.emits_append, Effect.emits_cons, drop_take_of_le _ h, Machine.replies]
-   · simp [applyCommitted_eq_run, lead, armElection, broadcast, appendTo]))
+   · simp [applyCommitted_eq_run, lead, armElection, broadcast, abreast, appendTo, appendFrom,
+       Effect.emits_map, Effect.emits_nil, Effect.emits_append, Effect.emits_cons,
+       drop_take_of_le _ h, Machine.replies]
+   · simp [applyCommitted_eq_run, lead, armElection, broadcast, abreast, appendTo, appendFrom]))
 
 theorem onElectionTimeout_serves (s : Node N C M) :
     Serves machine self s (some .electionTimeout)

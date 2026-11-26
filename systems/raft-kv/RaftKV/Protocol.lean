@@ -14,9 +14,14 @@ One node is one actor, and its step function is all of the protocol: elections, 
 commitment and applying. It follows Ongaro's Raft with these choices:
 
 - A leader keeps one number per follower, how much of the follower's log is known to match its
-  own, and sends what follows that. So a follower is first sent the leader's whole log, and
-  nothing is ever refused and retried. Sending less on first contact is an optimisation this
-  version does not have.
+  own, and sends what follows that, at most `maxAppend` entries in one message. A follower
+  acknowledges where what it was sent ends, and an acknowledgement that tells the leader
+  something new brings the next batch. Nothing is ever refused and retried.
+- A new leader knows of no follower's log. It sends each the end of its own, which a follower
+  that was up to date takes at once. One that is not ignores it, and is sent the log from its
+  start, batch by batch, from the first heartbeat on.
+- A new entry goes at once to the followers that hold all before it. One that is behind gets it
+  in its turn.
 - Only grants and acknowledgements are sent. A node learns of a later term from the requests of
   that term.
 - The node that took a command from its client answers it, when it applies the entry.
@@ -67,6 +72,19 @@ instance {N C M : Type} [DecidableEq N] [DecidableEq C] [BEq M] : BEq (Node N C 
   beq a b := a.term == b.term && a.votedFor == b.votedFor && a.log == b.log
     && a.commit == b.commit && a.applied == b.applied && a.machine == b.machine && a.role == b.role
 
+instance {N C M : Type} [DecidableEq N] [DecidableEq C] [BEq M] [LawfulBEq M] :
+    LawfulBEq (Node N C M) where
+  rfl {a} := by
+    change (a.term == a.term && a.votedFor == a.votedFor && a.log == a.log && a.commit == a.commit
+      && a.applied == a.applied && a.machine == a.machine && a.role == a.role) = true
+    simp
+  eq_of_beq {a b} h := by
+    change (a.term == b.term && a.votedFor == b.votedFor && a.log == b.log && a.commit == b.commit
+      && a.applied == b.applied && a.machine == b.machine && a.role == b.role) = true at h
+    cases a
+    cases b
+    simpa [and_assoc] using h
+
 inductive Msg (N C : Type) where
   | electionTimeout
   | heartbeat
@@ -106,6 +124,9 @@ structure Config where
   /-- Whether a leader commits by counting only entries of its own term. Turn off only to seed a
   bug: an entry of an earlier term on a majority can still be overwritten. -/
   commitsOwnTermOnly : Bool := true
+  /-- The most entries one `append` carries; zero counts as one. Entries are not measured, so
+  this many of the largest must fit in one message of the transport. -/
+  maxAppend : Nat := 8
 
 /-- To its clients, the cluster is the machine. -/
 def spec {N C R M : Type} [DecidableEq N] [DecidableEq C] [DecidableEq R]
@@ -161,14 +182,23 @@ def applyCommitted (s : Node N C M) : Node N C M × List (Eff self (N := N) (C :
     ({ s with machine := result.1, applied := s.applied + 1 },
       if entry.origin = self then effs ++ [.emit ⟨entry.req, result.2⟩] else effs)
 
+/-- One batch: the entries after `prev`, as many as an `append` carries. -/
+def appendFrom (s : Node N C M) (prev : Nat) (p : N) : Eff self (N := N) (C := C) (R := R) :=
+  .send p (.append s.term self prev (termAt s.log prev)
+    ((s.log.drop prev).take (max 1 config.maxAppend)) s.commit)
+
 def appendTo (s : Node N C M) (matched : List (N × Nat)) (p : N) :
     Eff self (N := N) (C := C) (R := R) :=
-  let prev := min (matchedOf matched p) s.log.length
-  .send p (.append s.term self prev (termAt s.log prev) (s.log.drop prev) s.commit)
+  appendFrom config self s (min (matchedOf matched p) s.log.length) p
 
 def broadcast (s : Node N C M) (matched : List (N × Nat)) :
     List (Eff self (N := N) (C := C) (R := R)) :=
-  (nodes.filter (· ≠ self)).map (appendTo self s matched)
+  (nodes.filter (· ≠ self)).map (appendTo config self s matched)
+
+/-- The followers known to hold all of the leader's log. Sending a batch on every proposal to
+one that is behind as well would make each write cost a batch for every node that is down. -/
+def abreast (s : Node N C M) (matched : List (N × Nat)) : List N :=
+  (nodes.filter (· ≠ self)).filter (s.log.length ≤ matchedOf matched ·)
 
 /-- The nodes whose logs are known to hold entry `index` of the leader's log: itself and the
 followers that acknowledged it. -/
@@ -198,7 +228,9 @@ def enterTerm (s : Node N C M) (term : Nat) :
 def lead (s : Node N C M) : Node N C M × List (Eff self (N := N) (C := C) (R := R)) :=
   let s := advanceCommit config nodes self { s with role := .leader [] } []
   let (s, answers) := applyCommitted machine self s
-  (s, answers ++ [.cancel .electionTimeout] ++ broadcast nodes self s []
+  let tail := s.log.length - max 1 config.maxAppend
+  (s, answers ++ [.cancel .electionTimeout]
+    ++ (nodes.filter (· ≠ self)).map (appendFrom config self s tail)
     ++ [.after config.heartbeat_ms .heartbeat])
 
 def onElectionTimeout (s : Node N C M) :
@@ -257,10 +289,12 @@ def onAppended (s : Node N C M) (term : Nat) (follower : N) (index : Nat) :
   match s.role with
   | .leader matched =>
     if term == s.term then
+      let news := matchedOf matched follower < index
       let matched := raise matched follower index
       let s := advanceCommit config nodes self { s with role := .leader matched } matched
       let (s, answers) := applyCommitted machine self s
-      (s, if index < s.log.length then answers ++ [appendTo self s matched follower] else answers)
+      (s, if news && index < s.log.length then
+        answers ++ [appendTo config self s matched follower] else answers)
     else (s, [])
   | _ => (s, [])
 
@@ -268,10 +302,11 @@ def onPropose (s : Node N C M) (req : ReqId) (cmd : C) :
     Node N C M × List (Eff self (N := N) (C := C) (R := R)) :=
   match s.role with
   | .leader matched =>
+    let abreast := abreast nodes self s matched
     let s := { s with log := s.log ++ [{ term := s.term, origin := self, req, cmd }] }
     let s := advanceCommit config nodes self s matched
     let (s, answers) := applyCommitted machine self s
-    (s, answers ++ broadcast nodes self s matched)
+    (s, answers ++ abreast.map (appendTo config self s matched))
   | _ => (s, [])
 
 def node : (sig N C R).Actor self (Node N C M) where
@@ -281,7 +316,8 @@ def node : (sig N C R).Actor self (Node N C M) where
     | .electionTimeout => onElectionTimeout config nodes machine self s
     | .heartbeat =>
       match s.role with
-      | .leader matched => (s, broadcast nodes self s matched ++ [.after config.heartbeat_ms .heartbeat])
+      | .leader matched =>
+        (s, broadcast config nodes self s matched ++ [.after config.heartbeat_ms .heartbeat])
       | _ => (s, [])
     | .requestVote term candidate lastIndex last =>
       onRequestVote config self s term candidate lastIndex last

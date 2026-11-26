@@ -132,6 +132,12 @@ def appendsCut (c : Cluster N config machine) : Bool :=
           && entries.isPrefixOf (s.log.drop prev) && commit ≤ s.commit)
     | _ => true
 
+def appendsBounded (c : Cluster N config machine) : Bool :=
+  c.net.all fun e =>
+    match e.msg with
+    | .append _ _ _ _ entries _ => entries.length ≤ max 1 config.maxAppend
+    | _ => true
+
 /-! What the proof that the cluster is the machine uses of a state. -/
 
 omit [DecidableEq N] [DecidableEq C] [DecidableEq R] [Enum N] in

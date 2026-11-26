@@ -113,8 +113,8 @@ def inflight (net : List (Envelope (sig N C R))) : List (Request N C) :=
     | .propose req cmd => some ⟨req, e.dst, cmd⟩
     | _ => none
 
-/-- `entry` is entry `k + 1` of some node's log or of the log an `append` in flight was cut
-from. -/
+/-- `entry` is entry `k + 1` of some node's log or of the log of which an `append` in flight
+carries a batch. -/
 def Present (c : SysState (recording N config machine)) (k : Nat) (entry : Entry N C) : Prop :=
   (∃ a, (c.state a).1.log[k]? = some entry) ∨
     ∃ src dst term leader prev prevTerm entries commit,
@@ -258,7 +258,8 @@ theorem Present.of_grow {net : List (Envelope (sig N C R))} (hsub : ∀ e ∈ ne
   · rcases SysState.mem_grow_net.mp hmem with hold | ⟨_, hnew⟩
     · exact .inl (.inr ⟨src, dst, term, leader, prev, prevTerm, entries, commit, hsub _ hold,
         hk, hentry⟩)
-    · obtain ⟨_, _, _, _, rfl, _⟩ := hmoves.sent _ hnew
+    · obtain ⟨_, _, _, _, hbatch, _⟩ := hmoves.sent _ hnew
+      have hentry := getElem?_of_prefix hbatch hentry
       rw [List.getElem?_drop, show prev + (k - prev) = k by omega] at hentry
       exact Present.of_moved hserves hpending hentry
 

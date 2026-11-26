@@ -32,7 +32,12 @@ structure Bounds where
 abbrev W (config : Config) :=
   World (cluster N config (store K V)) (List (Request N C) × Check.Monitor (sig N C R) M)
 
-def props (config : Config) : List (Check.Property (W config)) :=
+def Bounds.holds {config : Config} (bounds : Bounds) (w : W config) : Bool :=
+  w.state.net.length ≤ bounds.maxNet
+    && (Enum.all (α := N)).all fun a =>
+      (w.state.state a).term ≤ bounds.maxTerm && (w.state.state a).log.length ≤ bounds.maxLog
+
+def safety (config : Config) : List (Check.Property (W config)) :=
   [ Check.refines "the cluster is the map it replicates",
     .always "at most one leader per term" fun w => electionSafety w.state,
     .always "logs that agree on a term agree before it" fun w => logMatching w.state,
@@ -44,15 +49,21 @@ def props (config : Config) : List (Check.Property (W config)) :=
     .always "applied = committed" fun w => appliedAllCommitted w.state,
     .always "a machine is the map run over what its node has applied" fun w =>
       machinesRun w.state,
-    .always "requests in flight came from clients" fun w => requestsFromClients w.state,
-    .sometimes "a leader is elected" fun w =>
+    .always "requests in flight came from clients" fun w => requestsFromClients w.state ]
+
+/-- What every instance reaches, whatever its requests. -/
+def witnesses (config : Config) : List (Check.Property (W config)) :=
+  [ .sometimes "a leader is elected" fun w =>
       (Enum.all (α := N)).any fun a => isLeader (w.state.state a),
     .sometimes "a write is answered" fun w => w.state.outbox.any fun r => r.res == .ok,
-    .sometimes "a read sees the written value" fun w =>
-      w.state.outbox.any fun r => r.res == .value (some 1),
     .sometimes "a follower commits" fun w =>
       (Enum.all (α := N)).any fun a =>
         !isLeader (w.state.state a) && (w.state.state a).commit > 0 ]
+
+def props (config : Config) : List (Check.Property (W config)) :=
+  safety config ++ witnesses config ++
+    [ .sometimes "a read sees the written value" fun w =>
+        w.state.outbox.any fun r => r.res == .value (some 1) ]
 
 /-- What the proofs in `RaftKV/Proofs` use on the way, checked before it was proved
 (rule 5.1), with a witness that each speaks of something. -/
@@ -74,7 +85,8 @@ def auxiliary (config : Config) : List (Check.Property (W config)) :=
     .sometimes "an acknowledgement of an entry is in flight" fun w =>
       w.state.net.any fun e => match e.msg with | .appended _ _ m => m > 0 | _ => false,
     .sometimes "an append in flight says an entry is committed" fun w =>
-      w.state.net.any fun e => match e.msg with | .append _ _ _ _ _ commit => commit > 0 | _ => false ]
+      w.state.net.any fun e => match e.msg with | .append _ _ _ _ _ commit => commit > 0 | _ => false,
+    .always "an append carries no more than a batch" fun w => appendsBounded w.state ]
 
 /-- A candidate with a log needs a second term. -/
 def candidateWithLog (config : Config) : Check.Property (W config) :=
@@ -82,20 +94,45 @@ def candidateWithLog (config : Config) : Check.Property (W config) :=
     (Enum.all (α := N)).any fun a =>
       (w.state.state a).role matches .candidate _ && (w.state.state a).log.length > 0
 
+/-- Needs `maxAppend` below the bound on logs. -/
+def partBatch (config : Config) : Check.Property (W config) :=
+  .sometimes "an append carries less than its leader has to send" fun w =>
+    w.state.net.any fun e =>
+      match e.msg with
+      | .append term leader prev _ entries _ =>
+        let s := w.state.state leader
+        isLeader s && s.term == term && prev + entries.length < s.log.length
+      | _ => false
+
+/-- A new leader's first `append` to a follower that is behind. Needs a second term. -/
+def pastTheEnd (config : Config) : Check.Property (W config) :=
+  .sometimes "an append starts past the end of the log it is sent to" fun w =>
+    w.state.net.any fun e =>
+      match e.msg with
+      | .append _ _ prev _ _ _ => (w.state.state e.dst).log.length < prev
+      | _ => false
+
 def check (config : Config) (env : EnvModel (sig N C R)) (requests : List (Request N C))
     (bounds : Bounds := {}) (properties : List (Check.Property (W config)) := props config) :=
   Check.system (cluster N config (store K V))
     { env, driver := (spec (store K V)).monitored (Driver.anyOrder requests)
-      maxCrashes := bounds.maxCrashes } properties
-    { constraint := fun w =>
-        w.state.net.length ≤ bounds.maxNet
-          && (Enum.all (α := N)).all fun a =>
-            (w.state.state a).term ≤ bounds.maxTerm && (w.state.state a).log.length ≤ bounds.maxLog }
+      maxCrashes := bounds.maxCrashes } properties { constraint := bounds.holds }
 
 def reliable : EnvModel (sig N C R) := {}
 
 def writeThenRead : List (Request N C) :=
   [⟨1, 0, .put 0 1⟩, ⟨2, 0, .get 0⟩]
+
+def readElsewhere : List (Request N C) :=
+  [⟨1, 0, .put 0 1⟩, ⟨2, 1, .get 0⟩]
+
+/-- One entry to an `append`, so that a follower two entries behind is brought on in two
+messages, with elections in between. -/
+def single : Config := { maxAppend := 1 }
+
+def restarting : EnvModel (sig N C R) where
+  mayCrash _ := true
+  restarts _ := true
 
 def unordered : EnvModel (sig N C R) where
   link _ _ := Link.unordered
@@ -150,7 +187,14 @@ def quick : List (String × IO Bool) :=
     ("seeded: a node votes for a candidate whose log is behind",
       run "seeded: a node votes for a candidate whose log is behind"
         (expect := some "a leader has every committed entry") fun _ =>
-        check { votesForUpToDateOnly := false } reliable writeThenRead { maxTerm := 2 }) ]
+        check { votesForUpToDateOnly := false } reliable writeThenRead { maxTerm := 2 }),
+    ("batches of one, reliable links, one term",
+      run "batches of one, reliable links, one term" fun _ =>
+        check single reliable writeThenRead { maxTerm := 1, maxNet := 3 }
+          (props single ++ [partBatch single])),
+    ("what the proofs use, batches of one, one term",
+      run "what the proofs use, batches of one, one term" fun _ =>
+        check single reliable writeThenRead { maxTerm := 1, maxNet := 3 } (auxiliary single)) ]
 
 /-- Checks that take minutes: `lake exe raftCheck deep`. -/
 def deep : List (String × IO Bool) :=
@@ -172,6 +216,38 @@ def deep : List (String × IO Bool) :=
     ("requests lost and reordered on the way in, one term",
       run "requests lost and reordered on the way in, one term" fun _ =>
         check {} lossyClients writeThenRead { maxTerm := 1, maxNet := 3 }),
+    ("batches of one, reliable links, two terms",
+      run "batches of one, reliable links, two terms" fun _ =>
+        check single reliable writeThenRead { maxTerm := 2 }
+          (props single ++ [partBatch single, pastTheEnd single])),
+    ("batches of one, unordered links, one term",
+      run "batches of one, unordered links, one term" fun _ =>
+        check single unordered writeThenRead { maxTerm := 1 } (props single ++ [partBatch single])),
+    ("what the proofs use, batches of one, two terms",
+      run "what the proofs use, batches of one, two terms" fun _ =>
+        check single reliable writeThenRead { maxTerm := 2 }
+          (auxiliary single ++ [candidateWithLog single])),
+    ("what the proofs use, batches of one, unordered links",
+      run "what the proofs use, batches of one, unordered links" fun _ =>
+        check single unordered writeThenRead { maxTerm := 1 } (auxiliary single)),
+    ("batches of one, unordered links and a crash, one term",
+      run "batches of one, unordered links and a crash, one term" fun _ =>
+        check single crashing writeThenRead { maxTerm := 1, maxCrashes := 1 }),
+    ("batches of one, lossy, reordering and repeating links between nodes, one term",
+      run "batches of one, lossy, reordering and repeating links between nodes, one term" fun _ =>
+        check single network writeThenRead { maxTerm := 1, maxNet := 3 }),
+    ("reliable links and a crash, two terms",
+      run "reliable links and a crash, two terms" fun _ =>
+        check {} restarting writeThenRead { maxTerm := 2, maxCrashes := 1 }),
+    ("a write through one node and a read through another, two terms",
+      run "a write through one node and a read through another, two terms" fun _ =>
+        check {} reliable readElsewhere { maxTerm := 2 }),
+    ("two writes through two nodes, two terms",
+      run "two writes through two nodes, two terms" fun _ =>
+        check {} reliable twoWrites { maxTerm := 2 } (safety {} ++ witnesses {})),
+    ("reliable links and two crashes, one term",
+      run "reliable links and two crashes, one term" fun _ =>
+        check {} restarting writeThenRead { maxTerm := 1, maxCrashes := 2 }),
     ("outside the assumption: a request handed to a node twice",
       run "outside the assumption: a request handed to a node twice"
         (expect := some "the cluster is the map it replicates") fun _ =>

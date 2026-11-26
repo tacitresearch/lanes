@@ -54,7 +54,7 @@ theorem blank : Logged (SysState.blank (recording N config machine)) [] := by
 theorem of_state {c' : SysState (recording N config machine)} (h : Logged c log)
     (hstate : c'.state = c.state) : Logged c' log := by
   obtain ⟨hcommitted, hupper, happlied, hmachine⟩ := h
-  refine ⟨?_, ?_, ?_, ?_⟩ <;> simp only [Committed, Chosen, Held, Led, SysState.seen, hstate]
+  refine ⟨?_, ?_, ?_, ?_⟩ <;> simp only [Committed, Chosen, Within, Held, Led, SysState.seen, hstate]
   · exact hcommitted
   · exact hupper
   · exact happlied

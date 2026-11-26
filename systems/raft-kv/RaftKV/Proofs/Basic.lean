@@ -186,7 +186,7 @@ def Sent (i : N) (s : Node N C M) : Effect (sig N C R) i → Prop
   | .send dst (.vote term voter) => voter = i ∧ term = s.term ∧ s.votedFor = some dst
   | .send _ (.append term _ prev prevTerm entries commit) =>
     isLeader s = true ∧ term = s.term ∧ prev ≤ s.log.length ∧ prevTerm = termAt s.log prev
-      ∧ entries = s.log.drop prev ∧ commit = s.commit
+      ∧ entries <+: s.log.drop prev ∧ commit = s.commit
   | .after _ msg => msg = .electionTimeout ∨ msg = .heartbeat
   | _ => True
 
@@ -255,6 +255,9 @@ structure Moves (config : Config) (nodes : List N) (i : N) (s : Node N C M)
           index = prev + entries.length ∧ prev ≤ s.log.length ∧
           s'.log = s.log.take prev ++ merge (s.log.drop prev) entries
   sent : ∀ eff ∈ effs, Sent i s' eff
+  batch : ∀ dst term leader prev prevTerm entries commit,
+    Effect.send (σ := sig N C R) dst (.append term leader prev prevTerm entries commit) ∈ effs →
+      entries.length ≤ max 1 config.maxAppend
 
 section Step
 
@@ -262,7 +265,8 @@ variable (config : Config) (nodes : List N) (machine : Machine C R M) (self : N)
 
 /-- Proves `Moves` of one branch of a handler. -/
 local macro "moves" : tactic => `(tactic|
-  (constructor <;> simp [Sent, armElection, broadcast, appendTo, lead, isLeader] <;>
+  (constructor <;>
+    simp [Sent, armElection, broadcast, abreast, appendTo, appendFrom, lead, isLeader] <;>
     first
     | grind [applyCommitted_applied_le, advanceCommit_spec]
     | exact fun h => applied_le_advanceCommit _ _ _ _ _ _ h))

@@ -11,7 +11,7 @@ The proof of commitment (`Proofs/Commit.lean`) rests on two exchanges being trut
 `Config`. A request for a vote tells the length and last term of the log its candidate stands
 with, and a candidate stands in a term with one log, none of whose entries is of that term. An
 acknowledgement, in flight or counted by a leader in its `matched`, is of entries the follower
-held while in the leader's term (`Held`). `Standing` is the invariant that says so, as one more
+held while in the leader's term (`Held`): the leader's log as far as the batch it took went. `Standing` is the invariant that says so, as one more
 layer on `Replicating`.
 -/
 
@@ -191,8 +191,10 @@ theorem acked_moved (hv : Votes c) (hl : Logs c)
     rcases hl.accepted hv hled hprev hlen hterm hlog with h | h
     · exact h.2 ▸ h.1
     · exact h.2 ▸ List.prefix_refl _
-  refine ⟨l, hled.grow, by omega, s', mem_seen_grow.mpr (.inr ⟨rfl, rfl⟩), rfl, ?_⟩
-  rw [hindex, List.take_length]
+  obtain ⟨whole, hwhole, hstart⟩ := hled
+  have := hstart.length_le
+  refine ⟨whole, hwhole.grow, by omega, s', mem_seen_grow.mpr (.inr ⟨rfl, rfl⟩), rfl, ?_⟩
+  rw [hindex, ← List.prefix_iff_eq_take.mp hstart]
   exact hprefix
 
 theorem matched_moved (hv : Votes c) (hl : Logs c) (hc : Standing c)

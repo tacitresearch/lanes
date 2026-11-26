@@ -30,6 +30,12 @@ axioms. If a `sorry` or a new axiom reaches one of them, this file stops compili
 /-- info: 'RaftKV.entry_term_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms RaftKV.entry_term_le
 
+/-- info: 'RaftKV.append_bounded' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms RaftKV.append_bounded
+
+/-- info: 'RaftKV.appendsBounded_invariant' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms RaftKV.appendsBounded_invariant
+
 /-- info: 'RaftKV.leader_append_only' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms RaftKV.leader_append_only
 
