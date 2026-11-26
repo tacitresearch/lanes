@@ -59,7 +59,7 @@ inductive FrontMsg (K V F : Type) where
   deriving DecidableEq, Repr, Hashable
 
 inductive StoreMsg (K V F : Type) where
-  | put (req : ReqId) (key : K) (value : V)
+  | put (req : ReqId) (key : K) (value : V) (via : F)
   | get (req : ReqId) (key : K) (replyTo : F)
   deriving DecidableEq, Repr, Hashable
 
@@ -92,7 +92,7 @@ def spec (K V F : Type) [DecidableEq K] [DecidableEq V] [DecidableEq F] :
 def store : (sig K V F).Actor .store (K → Option V) where
   init _ := none
   step data
-    | .put req key value =>
+    | .put req key value _ =>
       (fun k => if k = key then some value else data k, [.emit ⟨req, .ok⟩])
     | .get req key replyTo => (data, [.send (.front replyTo) (.got req key (data key))])
   recover data := (data, [])
@@ -107,7 +107,7 @@ def front (caching : Bool) (self : F) : (sig K V F).Actor (.front self) (List (K
   step cache
     | .request r =>
       match r.op with
-      | .put key value => (cache, [.send .store (.put r.req key value)])
+      | .put key value => (cache, [.send .store (.put r.req key value self)])
       | .get key =>
         match (if caching then cache.lookup key else none) with
         | some value => (cache, [.emit ⟨r.req, .value value⟩])
@@ -133,8 +133,33 @@ def staleRead (k : K) (v : V) (f : F) : List (Event (sig K V F)) :=
     .start .store, .deliver ⟨some (.front f), .store, .get 1 k f⟩,
     .deliver ⟨some .store, .front f, .got 1 k none⟩,
     .input ⟨2, f, .put k v⟩, .deliver ⟨none, .front f, .request ⟨2, f, .put k v⟩⟩,
-    .deliver ⟨some (.front f), .store, .put 2 k v⟩, .output ⟨2, .ok⟩,
+    .deliver ⟨some (.front f), .store, .put 2 k v f⟩, .output ⟨2, .ok⟩,
     .input ⟨3, f, .get k⟩, .deliver ⟨none, .front f, .request ⟨3, f, .get k⟩⟩,
     .output ⟨3, .value none⟩]
+
+/-! ## Requests named by their client
+
+A front end is a client's session: the requests through `f` are numbered by their `req`, in
+order. The store remembers, per front end, the last request it acted on and what it did
+(`Once.actor`), so a request handed over twice, on any link, takes effect once. -/
+
+def requestKey (r : Request K V F) : F × ReqId := (r.via, r.req)
+
+def storeKey : StoreMsg K V F → Option (F × ReqId)
+  | .put req _ _ via => some (via, req)
+  | .get req _ replyTo => some (replyTo, req)
+
+abbrev OnceStore (K V F : Type) [DecidableEq K] [DecidableEq V] [DecidableEq F] :=
+  (K → Option V) × Once.Memo F (Effect (sig K V F) .store)
+
+abbrev onceSystem (K V F : Type) [DecidableEq K] [DecidableEq V] [DecidableEq F] :
+    System (sig K V F) where
+  State
+    | .front _ => List (K × Option V)
+    | .store => OnceStore K V F
+  actor
+    | .front f => front false f
+    | .store => Once.actor store storeKey
+  accept r := ⟨.front r.via, .request r⟩
 
 end Examples.KV

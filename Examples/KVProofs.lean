@@ -30,13 +30,9 @@ open Lanes
 
 variable {K V F : Type} [DecidableEq K] [DecidableEq V] [DecidableEq F]
 
-def sender : Option (Id F) → Option F
-  | some (.front f) => some f
-  | _ => none
-
 def pend : Envelope (sig K V F) → Option (Request K V F)
   | ⟨_, .front f, .request r⟩ => some ⟨r.req, f, r.op⟩
-  | ⟨src, .store, .put req key value⟩ => (sender src).map fun f => ⟨req, f, .put key value⟩
+  | ⟨_, .store, .put req key value via⟩ => some ⟨req, via, .put key value⟩
   | ⟨_, .store, .get req key replyTo⟩ => some ⟨req, replyTo, .get key⟩
   | _ => none
 
@@ -44,35 +40,16 @@ def owed : Envelope (sig K V F) → Option (Response V)
   | ⟨_, .front _, .got req _ value⟩ => some ⟨req, .value value⟩
   | _ => none
 
-/-- No timer is armed, and what goes to the store comes from a front end. -/
+/-- No timer is armed. -/
 def Tame (c : SysState (system K V F false)) : Prop :=
-  (∀ i m, m ∈ c.timers i → False) ∧ ∀ e ∈ c.net, e.dst = .store → ∃ f, e.src = some (.front f)
+  ∀ i m, m ∈ c.timers i → False
 
 theorem tame_invariant (env : EnvModel (sig K V F)) :
-    (system K V F false).Invariant env Tame := by
-  have htimers := System.Monotone.timers (system K V F false) (T := fun _ _ => False)
+    (system K V F false).Invariant env Tame :=
+  (System.Monotone.timers (system K V F false) (T := fun _ _ => False)
     (fun i s msg delay m h => by
       cases i <;> cases msg <;> simp [system, front, store] at h; split at h <;> simp at h)
-    (fun i s delay m h => by cases i <;> simp [system, front, store] at h)
-  refine (htimers.and_net (Q := fun c : SysState (system K V F false) =>
-    ∀ e ∈ c.net, e.dst = Id.store → ∃ f, e.src = some (Id.front f))
-    (fun _ h => nomatch h) ?_ ?_ ?_).invariant env
-  · intro c up net timers outbox h hnet e he hdst
-    rcases hnet e he with he | ⟨x, rfl⟩
-    · exact h e he hdst
-    · cases hdst
-  · intro c i msg _ _ h _ e he hdst
-    rcases SysState.mem_grow_net.mp he with he | ⟨hsrc, he⟩
-    · exact h e he hdst
-    · obtain ⟨src, dst, m⟩ := e
-      cases hdst
-      cases i with
-      | front f => exact ⟨f, hsrc⟩
-      | store => cases msg <;> simp [system, store] at he
-  · intro c i _ _ h e he hdst
-    rcases SysState.mem_grow_net.mp he with he | ⟨_, he⟩
-    · exact h e he hdst
-    · cases i <;> simp [system, front, store] at he
+    (fun i s delay m h => by cases i <;> simp [system, front, store] at h)).invariant env
 
 abbrev Abs (K V F : Type) [DecidableEq K] [DecidableEq V] [DecidableEq F] :=
   Service.Abs (sig K V F) (K → Option V)
@@ -161,7 +138,7 @@ theorem implements (env : EnvModel (sig K V F))
     refine ⟨{ t with outbox := t.outbox.erase out }, .single ⟨hin, rfl⟩, h.value, h.pending, ?_⟩
     have := Multiset.erase_le_erase out h.outbox
     rwa [Multiset.erase_add_left_pos _ (Multiset.mem_coe.mpr hmem), Multiset.coe_erase] at this
-  · rintro c t ⟨src, dst, msg⟩ ⟨_, hstore⟩ h hmem
+  · rintro c t ⟨src, dst, msg⟩ _ h hmem
     cases dst with
     | front f =>
       cases msg with
@@ -171,14 +148,13 @@ theorem implements (env : EnvModel (sig K V F))
       | got req key value => exact ⟨t, .refl, h.forward hmem (by simp) rfl rfl rfl rfl⟩
     | store =>
       cases msg with
-      | put req key value =>
-        obtain ⟨f, rfl⟩ := hstore _ hmem rfl
-        exact h.take hmem (x := ⟨req, f, .put key value⟩) rfl rfl (by simp; rfl) rfl rfl rfl rfl
+      | put req key value via =>
+        exact h.take hmem (x := ⟨req, via, .put key value⟩) rfl rfl (by simp; rfl) rfl rfl rfl rfl
       | get req key replyTo =>
         exact h.take hmem (x := ⟨req, replyTo, .get key⟩) rfl rfl (by simp; rfl) rfl rfl rfl rfl
   · intro c t e _ _ _ hdup
     simp [henv] at hdup
-  · intro c t i msg ⟨htimers, _⟩ _ hmem
+  · intro c t i msg htimers _ hmem
     exact (htimers i msg hmem).elim
   · intro c t i _ h
     refine ⟨t, .refl, h.mono ?_ ?_ ?_⟩ <;> cases i <;>

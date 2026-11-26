@@ -26,6 +26,7 @@ abbrev F := Fin 2
 
 instance : (sig K V F).Inspect := by instance_by_cases
 instance (caching : Bool) : (system K V F caching).Inspect := by instance_by_cases
+instance : (onceSystem K V F).Inspect := by instance_by_cases
 
 /-- Read through front end 0, write through front end 1, read through front end 0 again. -/
 def requests : List (Request K V F) :=
@@ -64,12 +65,60 @@ def violated (r : Check.Report (W false) (Event (sig K V F))) : Bool :=
   | some (.violated "every response is allowed by the map spec" _) => true
   | _ => false
 
+def violated' {sys : System (sig K V F)}
+    (r : Check.Report (World sys (List (Request K V F) × Check.Monitor (sig K V F) (K → Option V)))
+      (Event (sig K V F))) : Bool :=
+  match r.failure with
+  | some (.violated "every response is allowed by the map spec" _) => true
+  | _ => false
+
 def stale (r : Check.Report (W true) (Event (sig K V F))) : Bool :=
   match r.failure with
   | some (.violated "every response is allowed by the map spec" t) =>
     (match t.labels.getLast? with
       | some (.output ⟨3, .value none⟩) => true
       | _ => false)
+  | _ => false
+
+/-! ## Requests named by their client -/
+
+/-- Every link loses, reorders and hands messages over twice, and every actor may crash. -/
+def chaos : EnvModel (sig K V F) where
+  link _ _ := Link.network
+  mayCrash _ := true
+  restarts _ := true
+
+/-- Write 1, then 0, then read, all through front end 0: if the first write took effect again
+after the second, the read would see 1. -/
+def overwrite : List (Request K V F) :=
+  [⟨1, 0, .put 0 1⟩, ⟨2, 0, .put 0 0⟩, ⟨3, 0, .get 0⟩]
+
+/-- `overwrite` with the first write sent again after the second. -/
+def retried : List (Request K V F) :=
+  [⟨1, 0, .put 0 1⟩, ⟨2, 0, .put 0 0⟩, ⟨1, 0, .put 0 1⟩, ⟨3, 0, .get 0⟩]
+
+abbrev OW (sys : System (sig K V F)) :=
+  World sys (List (Request K V F) × Check.OnceMonitor (sig K V F) (K → Option V) (F × ReqId))
+
+def onceProps (sys : System (sig K V F)) : List (Check.Property (OW sys)) :=
+  [ Check.refinesOnce "every response is allowed by the map spec, once per request",
+    .sometimes "a read sees the written value" fun w =>
+      w.state.outbox.any fun r => r.res == .value (some 1),
+    .sometimes "an answer is waiting twice" fun w =>
+      w.state.outbox.any fun r => w.state.outbox.count r ≥ 2 ]
+
+/-- The client sends its requests in order, one after another's arrival: a duplicate is the
+link's, or a retry the list makes. -/
+def checkOnce (sys : System (sig K V F)) [sys.Inspect] (env : EnvModel (sig K V F))
+    (reqs : List (Request K V F)) (maxCrashes := 0) (depth := 12) :=
+  Check.system sys
+    { env, driver := (spec K V F).onceMonitored requestKey (Driver.script reqs), maxCrashes }
+    (onceProps sys) { maxDepth := some depth }
+
+def violatedOnce {sys : System (sig K V F)} (r : Check.Report (OW sys) (Event (sig K V F))) :
+    Bool :=
+  match r.failure with
+  | some (.violated "every response is allowed by the map spec, once per request" _) => true
   | _ => false
 
 def tests : List (String × Bool) :=
@@ -95,6 +144,26 @@ def tests : List (String × Bool) :=
       match (check true {} 0 alone).failure with
       | some (.violated _ t) =>
         t.labels.map Event.render == (staleRead (0 : K) (1 : V) (0 : F)).map Event.render
-      | _ => false) ]
+      | _ => false),
+    ("kv once: with every link duplicating, the store that remembers refines the map spec once per request",
+      let r := checkOnce (onceSystem K V F) (repeating fun _ _ => true) requests
+      r.ok && r.witnesses.length == 2),
+    ("kv once: and with every link losing and reordering too, and a crash",
+      let r := checkOnce (onceSystem K V F) chaos overwrite 1 10
+      r.ok && r.witnesses.length == 2),
+    ("kv once: a client that retries its first write after its second gets one effect of each",
+      let r := checkOnce (onceSystem K V F) {} retried 0 20
+      !violatedOnce r && r.complete),
+    ("kv once: without the memo, that retry takes effect again and the read sees it",
+      violatedOnce (checkOnce (system K V F false) {} retried 0 20)),
+    ("kv once: without the memo, a request handed to the store twice takes effect twice: a read is answered with two values",
+      violatedOnce (checkOnce (system K V F false)
+        { link := fun src dst => { ordered := false, duplicating := src.isSome && decide (dst = .store) } }
+        overwrite 0 17)),
+    ("kv once: with the memo, the map spec without `once` is still broken: an answer is handed over twice",
+      violated' (Check.system (onceSystem K V F)
+        { env := repeating fun _ _ => true,
+          driver := (spec K V F).monitored (Driver.anyOrder requests) }
+        [Check.refines "every response is allowed by the map spec"] { maxDepth := some 14 })) ]
 
 end Tests.KV
