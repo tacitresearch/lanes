@@ -7,7 +7,9 @@ import Examples.Bank
 
 /-! Codecs built by the combinators, by the two macros and by `lanes_data`: what is written is
 read back, with what followed it left over. The law is proved; these run the compiled code. Then
-what else `lanes_data` derives: `Enum`, and `LawfulBEq` for a structure holding a function. -/
+what else `lanes_data` derives: `Enum`, and `LawfulBEq` for a structure holding a function; and
+what it accepts: constructors named by keywords, arguments named like their constructor, default
+values, and subtypes, with the error for a proof beside the field it is about. -/
 
 namespace Tests.Codec
 
@@ -48,6 +50,44 @@ lanes_data structure Table (V : Type) where
   version : Nat
   default : V
   deriving LawfulBEq
+
+lanes_data inductive Door where
+  | open (wide : Bool)
+  | close
+  | «end»
+  deriving DecidableEq, Repr, Enum, Codable
+
+lanes_data inductive Ask where
+  | ask (ask : Shape)
+  | both (both : Bool) (ask : Door)
+  deriving DecidableEq, Codable
+
+lanes_data structure Tally where
+  hits : Nat := 0
+  doors : List Door := [.close]
+  owner : String
+  deriving DecidableEq, Codable
+
+def Handle.valid (s : String) : Bool :=
+  0 < s.length && s.toList.all Char.isLower
+
+abbrev Handle := {s : String // Handle.valid s}
+
+lanes_data structure Member where
+  handle : Handle
+  rank : {k : Fin 4 // k ≠ 0}
+  deriving DecidableEq, Repr, Hashable, Codable, LawfulBEq
+
+/--
+error: lanes_data: this type names `text`, and `Codable` takes each field by its type alone.
+Put the property in the type of `text` instead, as a subtype `{x : α // p x}`, or both in a
+sigma type.
+-/
+#guard_msgs (whitespace := lax) in
+lanes_data structure Checked where
+  text : String
+  valid : Handle.valid text = true
+  deriving Codable
 
 def shapes : List Shape :=
   [ .dot, .circle ⟨-3, 4, some "a/b é"⟩ 7, .path [] true,
@@ -109,6 +149,26 @@ def tests : List (String × Bool) :=
       let table : Table (Option Nat) := { rows := fun k => k.val, version := 1, default := none }
       table == { table with rows := fun k => k.val + 0 }
         && !(table == { table with rows := fun k => if k = 1 then 2 else k.val })
-        && !(table == { table with version := 2 })) ]
+        && !(table == { table with version := 2 })),
+    ("lanes_data: a constructor may be named by a keyword, as in `inductive`",
+      Enum.all (α := Door) == [.open false, .open true, .close, .end]
+        && Enum.all.all fun (door : Door) =>
+          (Codec.of Door).read ((Codec.of Door).write door) == some (door, [])),
+    ("lanes_data: an argument may be named like its constructor",
+      [Ask.ask (.circle ⟨1, 2, none⟩ 3), .both true .end].all fun ask =>
+        (Codec.of Ask).read ((Codec.of Ask).write ask ++ trailing) == some (ask, trailing)),
+    ("lanes_data: fields with defaults are left out of a structure instance, and written",
+      let tally : Tally := { owner := "o" }
+      tally.hits == 0 && tally.doors == [.close]
+        && (Codec.of Tally).read ((Codec.of Tally).write tally) == some (tally, [])),
+    ("subtype: a value is written as its value, and read back only with its property",
+      let member : Member := ⟨⟨"ada", rfl⟩, ⟨2, by decide⟩⟩
+      let codec := Codec.of Member
+      codec.read (codec.write member ++ trailing) == some (member, trailing)
+        && codec.write member == ["ada".toUTF8, "2".toUTF8]
+        && (codec.read ["Ada".toUTF8, "2".toUTF8]).isNone
+        && (codec.read ["ada".toUTF8, "0".toUTF8]).isNone
+        && member == { member with handle := ⟨"ada", rfl⟩ }
+        && (Enum.all (α := {k : Fin 4 // k ≠ 0})).map (·.val) == [1, 2, 3]) ]
 
 end Tests.Codec
