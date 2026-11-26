@@ -9,15 +9,15 @@ like writes, which is what makes them linearizable without more protocol. -/
 
 namespace RaftKV
 
-inductive Op (K V : Type) where
+lanes_data inductive Op (K V : Type) where
   | put (key : K) (value : V)
   | get (key : K)
-  deriving DecidableEq, Repr, Hashable
+  deriving DecidableEq, Repr, Hashable, Codable
 
-inductive Res (V : Type) where
+lanes_data inductive Res (V : Type) where
   | ok
   | value (v : Option V)
-  deriving DecidableEq, Repr, Hashable
+  deriving DecidableEq, Repr, Hashable, Codable
 
 def store (K V : Type) [DecidableEq K] : Machine (Op K V) (Res V) (K → Option V) where
   init _ := none
