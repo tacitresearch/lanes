@@ -9,7 +9,7 @@ import Tests.Scale
 loop. -/
 
 def main : IO UInt32 := do
-  let results := Tests.Election.tests ++ (← Tests.Scale.tests)
+  let results := Tests.Election.tests ++ Tests.Election.fuzzTests ++ (← Tests.Scale.tests)
   for (name, ok) in results do
     if !ok then IO.println s!"FAIL {name}"
   let failed := results.countP (!·.2)

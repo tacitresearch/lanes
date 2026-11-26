@@ -17,6 +17,7 @@ public import Lanes.Behaviours.Server
 public import Lanes.Check.Complete
 public import Lanes.Check.Equiv
 public import Lanes.Check.EquivDecide
+public import Lanes.Check.Fuzz
 public import Lanes.Check.Monitor
 public import Lanes.Check.Search
 public import Lanes.Check.SearchSound

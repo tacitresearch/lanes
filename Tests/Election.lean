@@ -32,6 +32,34 @@ def check (config : Config) (maxCrashes : Nat) :=
         (Enum.all (α := N)).any fun a => (w.state.state a).term == 2 ]
     { constraint := fun w => (Enum.all (α := N)).all fun a => (w.state.state a).term ≤ 2 }
 
+/-! Five nodes over a lossy, duplicating network with three crashes are too many states to
+explore, so they get seeded random runs. -/
+
+def env5 : EnvModel (sig (Fin 5)) where
+  link _ _ := Link.network
+  mayCrash _ := true
+  restarts _ := true
+
+def fuzz5 (config : Config) :=
+  Check.fuzz (cluster (Fin 5) config) { env := env5, driver := Driver.silent, maxCrashes := 3 }
+    [ .always "at most one leader per term" fun w => atMostOneLeaderPerTerm w.state,
+      .sometimes "a leader is elected" fun w => hasLeader w.state ]
+    (runs := 60) (maxSteps := 250)
+
+def fuzzTests : List (String × Bool) :=
+  let safe := fuzz5 {}
+  let buggy := fuzz5 { votesOncePerTerm := false }
+  [ ("election: random runs on five nodes with loss, duplication and crashes keep one leader",
+      safe.ok && safe.runs == 60),
+    ("election: random runs find the split brain, and the trace they report replays",
+      match buggy.failure with
+      | some f =>
+        match (SysState.init (cluster (Fin 5) { votesOncePerTerm := false }) env5).run env5
+            f.trace.labels with
+        | some c => !atMostOneLeaderPerTerm c
+        | none => false
+      | none => false) ]
+
 def tests : List (String × Bool) :=
   let safe := check {} 1
   let buggy := check { votesOncePerTerm := false } 0
