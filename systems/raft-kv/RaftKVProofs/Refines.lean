@@ -145,20 +145,10 @@ theorem inflight_erase {net : List (Envelope (sig N C R))} {src : Option N} {dst
     {req : ReqId} {cmd : C} (h : (⟨src, dst, .propose req cmd⟩ : Envelope (sig N C R)) ∈ net) :
     ((⟨req, dst, cmd⟩ : Request N C) ::ₘ ↑(inflight (net.erase ⟨src, dst, .propose req cmd⟩)) :
       Multiset (Request N C)) = ↑(inflight net) := by
-  induction net with
-  | nil => simp at h
-  | cons e net ih =>
-    by_cases he : e = ⟨src, dst, .propose req cmd⟩
-    · subst he
-      simp [inflight]
-    · rw [List.erase_cons_tail (by simpa using he)]
-      have hmem : (⟨src, dst, .propose req cmd⟩ : Envelope (sig N C R)) ∈ net :=
-        (List.mem_cons.mp h).resolve_left (Ne.symm he)
-      have ih := ih hmem
-      simp only [inflight, List.filterMap_cons] at ih ⊢
-      split
-      · exact ih
-      · rw [← Multiset.cons_coe, Multiset.cons_swap, ih, Multiset.cons_coe]
+  have hperm : (inflight net).Perm
+      (⟨req, dst, cmd⟩ :: inflight (net.erase ⟨src, dst, .propose req cmd⟩)) :=
+    (List.perm_cons_erase h).filterMap _
+  exact (Multiset.coe_eq_coe.mpr hperm).symm
 
 variable {c : SysState (recording N config machine)} {log : List (Entry N C)}
   {pending : Multiset (Request N C)}
