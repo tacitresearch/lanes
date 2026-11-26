@@ -78,6 +78,14 @@ a `sometimes` property), and once the checker rejected a property its author bel
   what a keep-alive wants. A liveness proof that leans on a timer firing is about the model.
   The honest fix is to give a timer an identity that re-arming changes, in the semantics as in
   the kernel. This should be settled before Raft, whose election timer is reset by heartbeats.
+- *The net is one list.* A state records the order of messages on different links, which
+  nothing can observe, and reachability is stated up to equality. The projection proof for
+  joins paid for this twice: the left side needed a hidden relation to get an exact statement,
+  and the right side is true only up to that unobservable order (`SysState.Equiv`), because a
+  join boots one side first. The shard theorem will be up to the same relation. Either
+  reachability should be stated up to `SysState.Equiv` everywhere, with the relation moved
+  from the checker into the core, or the net should be a queue per link. This is a change to
+  the semantics and should be decided before the shard theorem is proved.
 - *Proof volume.* The kernel's timer invariants are 700 lines, the search's soundness 800. They
   were re-proved after each change without trouble, but every kernel change now has that cost.
 - *Throughput.* One shard, and about 90 µs to wake it. Nothing in phase A depended on it;
