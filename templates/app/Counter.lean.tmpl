@@ -25,6 +25,14 @@ structure Response where
   applied : Bool
   deriving DecidableEq, Repr, Hashable
 
+/-- How requests and responses are written to the journal and its snapshots. The round-trip law
+comes with the codecs these are built from. -/
+def Request.codec : Codec Request :=
+  Codec.sum% Request { increment (req := Codec.nat), read (req := Codec.nat) }
+
+def Response.codec : Codec Response :=
+  Codec.struct% Response { req := Codec.nat, value := Codec.nat, applied := Codec.bool }
+
 /-- Explicit configuration (rule 2.5). -/
 structure Config where
   /-- The counter never exceeds this (rule 2.6: bounded everything). -/
