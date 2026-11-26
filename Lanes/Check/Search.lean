@@ -62,6 +62,9 @@ variable {S : Type}
 def name : Property S → String
   | .always n _ | .sometimes n _ => n
 
+def holds : Property S → S → Bool
+  | .always _ p | .sometimes _ p => p
+
 end Property
 
 /-- Bounds and switches for a search. -/

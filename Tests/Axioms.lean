@@ -106,3 +106,15 @@ by `lake build`, not linked into the test executable.
 
 /-- info: 'Lanes.Check.search_states_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Check.search_states_le
+
+/-- info: 'Lanes.Check.search_sound' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.search_sound
+
+/-- info: 'Lanes.Check.search_sound_of_lawful' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.search_sound_of_lawful
+
+/-- info: 'Lanes.Check.search_unreached' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.search_unreached
+
+/-- info: 'Lanes.Check.search_deadlock_free' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.search_deadlock_free
