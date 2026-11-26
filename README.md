@@ -6,10 +6,8 @@ Lanes is a framework for building verified software in Lean 4. Every actor runs 
 nothing shares state, and the runtime merges traffic only at the edges. The same step function
 runs in production, in the simulator, in the model checker and in the proofs.
 
-> Status: early. Working today: the actor core and its semantics, the deterministic scheduler,
-> the model checker, the concurrent runtime, the HTTP adapter, HTML templates, refinement theory
-> on CSLib, and `lanes new` / `lanes lint`. See `docs/DESIGN.md` for the full plan and
-> `docs/DECISIONS.md` for what has been settled.
+> Status: early. `docs/STATUS.md` lists what works today against the plan in `docs/DESIGN.md`;
+> `docs/DECISIONS.md` records what has been settled.
 
 ## A system in three parts
 
@@ -79,7 +77,36 @@ lake test
 lake exe lanes lint
 ```
 
+## A spec in five lines, checked without a refinement mapping
+
+```lean
+def spec : Service (sig K V F) (K → Option V) where
+  init _ := none
+  step store r :=
+    match r.op with
+    | .put key value => (fun k => if k = key then some value else store k, [⟨r.req, .ok⟩])
+    | .get key => (store, [⟨r.req, .value (store key)⟩])
+```
+
+Monitor any system against it with `spec.monitored driver` and `Check.refines`. Give the front
+ends of `Examples/KV.lean` a read cache and the checker reports the stale read:
+
+```
+FAIL: "every response is allowed by the map spec" is violated after 14 steps
+  ...
+  10. deliver front 1 → store: put 2 0 1
+  11. output { req := 2, res := ok }
+  12. input { req := 3, via := 0, op := get 0 }
+  13. deliver outside → front 0: request { req := 3, via := 0, op := get 0 }
+  14. output { req := 3, res := value none }
+```
+
+A service that fits in one actor needs no protocol at all: `Server.system spec` runs the spec
+itself, and `Server.implements` proves it refines the spec for every interleaving.
+
 ## Documents
+
+- `docs/STATUS.md`: what works today and what is next.
 
 - `docs/DESIGN.md`: what Lanes is and the build plan.
 - `LANES_STYLE.md`: design and code rules, each with its reason.

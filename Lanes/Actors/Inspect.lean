@@ -28,6 +28,12 @@ For a system whose identities and messages derive `Repr` and `Hashable`, both in
 
 namespace Lanes
 
+/-- A system with no inputs or no outputs uses `Empty`, which has nothing to hash. -/
+instance (priority := low) : Hashable Empty := ⟨fun x => nomatch x⟩
+
+/-- A system with no inputs or no outputs uses `Empty`, which has nothing to print. -/
+instance (priority := low) : Repr Empty := ⟨fun x _ => nomatch x⟩
+
 /-- A signature whose actors can be listed and whose data can be printed and hashed. -/
 class Signature.Inspect (σ : Signature) where
   /-- Every actor identity. Checking runs on instances with finitely many actors. -/
