@@ -3,6 +3,7 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Tests.Engine
+import Tests.Fair
 import Tests.Bank
 import Tests.Json
 import Tests.Runtime
@@ -34,7 +35,7 @@ def report (results : List (String × Bool)) : IO UInt32 := do
 def main (args : List String) : IO UInt32 := do
   let pure := Tests.Engine.tests ++ Tests.Bank.tests ++ Tests.Json.tests ++ Tests.Html.tests
     ++ Tests.KV.tests ++ Tests.Gate.tests ++ Tests.Join.tests ++ Tests.Kernel.tests
-    ++ Tests.Frame.tests ++ Tests.Clock.tests ++ Tests.HttpClient.tests
+    ++ Tests.Frame.tests ++ Tests.Clock.tests ++ Tests.HttpClient.tests ++ Tests.Fair.tests
   match args with
   | [] =>
     report (pure ++ (← Tests.Runtime.tests) ++ (← Tests.Web.tests) ++ (← Tests.Durable.tests)
