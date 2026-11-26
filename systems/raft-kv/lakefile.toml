@@ -1,6 +1,6 @@
 name = "raftKv"
 version = "0.1.0"
-defaultTargets = ["RaftKV", "raftCheck"]
+defaultTargets = ["RaftKV", "RaftKVProofs", "raftCheck"]
 testDriver = "raftCheck"
 
 [[require]]
@@ -12,6 +12,10 @@ path = "../.."
 [[lean_lib]]
 name = "RaftKV"
 roots = ["RaftKV", "RaftKV.Proofs"]
+
+# What needs `Lanes.Semantics`, and so Mathlib: nothing executable imports it.
+[[lean_lib]]
+name = "RaftKVProofs"
 
 # Model checks, run by `lake test`. Check before you prove (LANES_STYLE rule 5.1).
 [[lean_exe]]
