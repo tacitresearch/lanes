@@ -1,0 +1,143 @@
+# Status
+
+Where the implementation stands against `DESIGN.md`. Update this file in the same change that
+moves an item.
+
+Last updated: 2026-11-27.
+
+## Working
+
+| Area | What exists | Where |
+| --- | --- | --- |
+| Actor API | `Actor`, `Signature`, `Effect`, `System`, `EnvModel`; `actor_invariant` tactic; `System.join` (two systems wired into one), `System.filterMapIO` (other inputs and outputs, some outputs hidden) and `System.mapIO` (the same, none hidden) | `Lanes/Actors/{Actor,System,Join}.lean` |
+| Semantics | One executable step function; per-event lemmas; per-actor invariants lift to systems; ghost histories with an erasure theorem; a five-case proof rule for invariants that hold under every fault, built in layers (`Monotone.and_net`, `and_state`, `of_iff`); projection of a join: a reachable state of `a.join b w` seen from `a` is a reachable state of `a` alone with a network link from outside (`System.Reachable.left`), so invariants of `a` hold of it inside any join (`System.Invariant.join_left`); the same for `b` up to the order of messages on different links, and exactly when the boot of `a` sends `b` nothing. The same of runs, for the left side: a run of the join, seen from `a`, is a run of `a` alone that shows the same deeds, the messages its actors handle and the outputs handed over (`SysState.run_left`), so a count of what `a` does that is proved of `a` alone holds in any join. A kind of message that only the outside sends is handled no more often than it is put in, where the links from outside do not duplicate (`System.handled_le_put`). A system behind hidden inputs and outputs does what it does in the open, event for event (`SysState.run_filterMapIO`, `System.Invariant.filterMapIO`) | `Lanes/Actors/{World,Step,Run,Lift,Ghost,Monotone,JoinSound,Deed,MapIOSound}.lean` |
+| Deterministic scheduler | Seeded runs, replayable event lists, drivers for the outside world; `Check.fuzz` runs many seeded runs with the environment's faults against `always` and `sometimes` properties and reports the seed and trace of a failure. `FairScheduler` takes the event the system has owed longest, counting a timer that is armed again as owed from then; its run is a fair run of the proof layer | `Lanes/Actors/{Scheduler,FairScheduler}.lean`, `Lanes/Check/Fuzz.lean` |
+| Model checker | Breadth-first, exact states, `always`/`sometimes`, constraints, deadlock, coverage, shortest traces; refinement to a `Service` without a mapping. About 50,000 states per second on one core (the election check, 164,847 states, printed by `lanesCheck`). `Options.tasks` computes successors in tasks; the search is the same function with or without them (`Check.Search.explore_eq`), so the report does not depend on timing, but on four shared cores the tasks are slower and they are off by default. Proved: it lists exactly the enabled events of a state, merging states is safe, a complete PASS means every `always` property holds in every world of the instance (`Check.system_sound_of_respects`; `==` must be equality on actor states, and on the driver's state an equivalence that the driver respects, `Driver.Respects`; the hash only decides how many states are stored; `Check.system_sound` is the case where it is equality), the spec monitor accepts exactly what the spec allows, a monitor never holds a candidate twice (in its type), so monitors compare and hash as sets and a monitored driver respects `==` (`Service.monitored_respects`), a complete PASS of a refinement check means the monitor has a candidate in every world (`Check.refines_sound`) and the inputs and outputs of every run of the instance are a trace of the spec (`Check.refines_traces`; the spec's state must have `==` as equality), and a reported violation is a real run of the semantics (`Check.system_violated`) | `Lanes/Check/`, `Lanes/Semantics/Monitor.lean`, `Lanes/Semantics/MonitorSound.lean` |
+| Runtime | A kernel of pure functions (routing, start and stop, timers, batching, idleness) proved to follow the semantics whatever its caller does (`Kernel.exec_reachable`, `Kernel.exec_outputs`), never to lose a pending timer or spin on one (`Kernel.exec_wellFormed`), and to let neither timers nor messages starve the other (`Kernel.WellFormed.step_of_queued`, `step_of_due`), inside a 289-line shell that only performs what a pure function of each batch returns, proved to keep the journal describing the kernel, to hand an output over only after the entries that produce it are written and to save only where every output is handed over (`Batch.run_kernel`, `Batch.run_sound`): one thread per shard, bounded inbox. A message costs the same at 1,000 and 100,000 actors Durable with a journal: the shard replays what its kernel was asked and returns in the same state, proved for whole and torn journals and tested with SIGKILL; a journal that is damaged, another system's, or written with another codec is refused and left as it is (`Journal.open?`), and one process at a time holds a journal. What the inbox decides is proved for every capacity and every sequence of operations: a take returns exactly what was taken in since the last, in order (`Mailbox.batch_since_take`), it never holds more than its capacity (`Mailbox.Reachable.bounded`), and no sleeper or waiting sender is forgotten (`Mailbox.woken_after_rest`, `Mailbox.wake_since_take`). With codecs for its actors the shard saves its kernel and cuts the journal, so a restart replays only what came after the last save: starting from a snapshot gives exactly what replaying the whole history gives (`Journal.resume_eq_recover`), and a process that dies at any point of a save, or at any byte of an append, leaves files that load as the kernel it had (`Journal.Disk.Holds.save_crash`, `append_crash`), tested by killing a process while it saves Several shards: `System.shard` is a system as one shard sees it, on the unchanged kernel, and `Peers` joins shards in different processes. Shards joined behave as the one system, at the level of the semantics: every state of a well-routed run, read as one state, is a state the system reaches alone up to `SysState.Equiv`, for two shards (`System.SplitReachable.merged`) and for any number (`System.shards sys hosts` with `hosts : σ.Id → Fin n`, `System.ShardsReachable.unsharded`), so its invariants hold there (`System.Invariant.split`, `split_state`, `shards`, `shards_state`); model-checked on three shards with the bank and a relay of boot actors with timers and stops | `Lanes/Actors/{Shard,ShardSound,ShardsSound,Lossy,Kernel,KernelSound,KernelTimers,Journal,Snapshot,Disk,Batch,Runtime}.lean`, `Lanes/Env/Journal.lean` |
+| Proof layer | `Spec`, `Refines` (weak simulation with a label map), `of_map`, `trans`, trace inclusion; system semantics as a CSLib `LTS`; `Service.spec`; sum lemmas. Liveness: infinite runs with stuttering (`System.Run`), weak fairness for each `Obligation` of the system on its own (deliveries, timers, starting an actor that has mail, outputs; never the environment's events), where a timer is obliged to fire only if it stays pending and no step arms it again, as in the runtime (`Obligation.Restarted`; a watchdog that is pinged forever never barks in a fair run, `Examples/WatchdogProofs.lean`), `System.LeadsTo` with its proof rule (`LeadsTo.ensures_of_invariant`), transitivity and monotonicity. Fair runs exist: every finite run extends to a fair run, for every system and environment model (`System.exists_fair_run_of_run`), so every reachable state is on one. Fair runs project: a view under which each step of one system is a finite run of another and the obligations match carries fair runs to fair runs and leads-to with them (`System.View.Projects.fair_run`, `leadsTo`). A fair run of `a.join b w`, seen from `a` without the messages from outside in flight, is a fair run of `a` alone under `EnvModel.left`, state for state at corresponding positions and with the same deeds up to them (`System.Run.Fair.left`), so what `a` alone leads to of its actors it leads to in every join (`System.LeadsTo.join_left`); the same behind hidden inputs and outputs, when the output map is injective where it shows (`System.underView_projects`, `System.LeadsTo.filterMapIO`). The right side of a join is not done | `Lanes/Semantics/` |
+| Behaviours | `Server` (request and reply), with `Server.implements` proved | `Lanes/Behaviours/Server.lean`, `Lanes/Semantics/Service.lean` |
+| Web | HTTP/1.1 adapter whose logic is the gate actor. Proved for every system, bridge and configuration: an arrival is answered at most once in any environment whose link from outside to the gate does not duplicate (`Http.answered_le_arrived`, with crashes, loss, reordering and duplication elsewhere allowed), a waiting request keeps its deadline armed (`Http.deadlines_armed`) and no step arms it again (`Http.deadline_not_restarted`), and in every fair run in which the gate does not crash a request the gate has admitted is answered, by the system or with `504` (`Http.pending_leaves`, `Http.pending_answered`). That an arrival reaches the gate, and so that it is answered exactly once, is model-checked on two requests, not proved. The gate is also a system of its own (`Http.gateSystem`), and `Http.fronted sys` is that system joined in front of `sys` by `System.join`: outputs of `sys` that are no response and inputs that are no request pass the gate by, so a shard with peers can sit behind it (`Http.serveFronted`, `Http.serveShard`). Proved of `fronted sys` by projection from the gate alone, for every `sys`: at most once per arrival where the link from outside to the gate does not duplicate (`Http.fronted_answered_le_arrived`, from `Http.Gate.answered_le_handled`) and deadlines stay armed (`Http.fronted_deadlines_armed`); and in every fair run in which the gate does not crash a request the gate has admitted is answered (`Http.fronted_pending_leaves`, `Http.fronted_pending_answered`, from `Http.Gate.pending_leaves` and `Http.Gate.pending_answered` of the gate alone, through the hidden inputs and outputs and the join); model-checked with the properties of `gated`, and the premises of the leads-to rule on the gate alone with the link a join gives it from outside. `gated` stays until the server runs `fronted` (D41); requests and responses as data; `Html` with escaping proved safe, URL attributes checked at render (tested, not proved); scoped template macro with components, fragments and attribute splices; typed routes (`Route.match?_link`, `percentDecode_percentEncode` proved); htmx attributes as typed values taken from routes; cookies (read, and set only when no attribute can be smuggled in), the origin check of a form, a per-route body limit. Sessions and authentication: signed tokens with a purpose (`Auth.verify_sign` proved), form tokens bound to a session, password digests by PBKDF2 compared in constant time, failed attempts that lock, bounded sessions | `Lanes/Http/`, `Lanes/Env/Http.lean`, `Lanes/Html/`, `Lanes/Auth/` |
+| Adapters | `Outside`: what something outside may do, explored by the checker and tested against recorded runs of the real thing (`Outside.allows`). The HTTP server passes against the gate's assumption; a transport that joins shards in different processes by TCP, promising no more than a lossy, duplicating link (`Peers`; its decisions are a pure function, the courier, proved for every limit and every sequence of events to keep one write at a time on a connection, write only where it dialed and only what it was sent, in order and at most once, bound its queue, close everything at `stop`, leave a process alone for `retry_ms` after a break and deliver what its reader makes of the bytes of a connection, in order (`Peers.Courier.written_between`, `write_dialed`, `written_sublist_sent`, `Reachable.queue_le`, `stop_closes`, `rest_after_break`, `delivered_read`), and model-checked with a handler and a network that fails; reading the stream is proved, `Parcel.receive_send`), the two together as one process with an HTTP front and peers (`Http.serveShard`: the bank on two shards joined by TCP, each behind its own front), a clock adapter (wall time that never goes back, also across a restart) and an HTTP client adapter (HTTP/1.1, no TLS), each with model, handler and conformance test. The client's reader is proved to read back a response written as a server writes it (framed by its length, in chunks, by the end of the connection, or after interim responses) as soon as its last byte is there and not before, to keep within its size limit and to end (`Response.read_wire`, `read_wire_extract`, `read_more`, `read_some`, `read_append`); what it makes of other forms, and what it refuses, is tested | `Lanes/Actors/Outside.lean`, `Lanes/Env/{Clock,HttpClient,Peers,Node}.lean`, `Lanes/Http/{Wire,WireSound}.lean` |
+| Data | `Enum`, JSON (parser, printers, `ToJson`/`FromJson`), majority quorums, `Codec` (records with a round-trip law, kept by pairs, sums, lists and maps; `Codec.struct%` and `Codec.sum%` write one for a structure or an inductive type in a line; `Codable` instances for the built-in types), `lanes_data` (a structure or an inductive type declared once, deriving `Codable`, `Enum` and a field-by-field `LawfulBEq` from the declaration's text, without linking `Lean`), `Frame` (length and checksum framing with the torn-write theorem) (`Quorum.majority_inter`), SHA-256, HMAC-SHA-256 and PBKDF2 tested against the NIST and RFC vectors (`Bytes.same_iff`, `Bytes.unhex?_hex` proved), all total and `Std`-only | `Lanes/Data/` |
+| Tooling | `lanes new` (its types declared with `lanes_data`), `lanes lint` (text-level, and the size of trusted files), `lanes check`; `instance_by_cases` for instances defined by cases on an identity (`Inspect` of a system whose actors differ); CI on every push to the pull request (build with warnings as errors, lint, tests, model checks, a generated app); axiom gate | `LanesCli/`, `Lanes/Actors/ByCases.lean`, `.github/workflows/ci.yml`, `Tests/Axioms.lean` |
+
+## Reference apps
+
+| App | Checked | Proved |
+| --- | --- | --- |
+| Bank (`Examples/Bank.lean`) | Conservation on 2 accounts; lost-credit bug found under lossy links; runs on the runtime and over HTTP | Balance never negative (all environments); money conserved for any number of accounts in a faultless environment |
+| Key-value store (`Examples/KV.lean`) | Refines the map spec on one key, two values and two front ends, also with links that lose and reorder messages and a crash; a duplicating link breaks it, whichever of the three it uses; stale-read bug of a read cache found, with one front end already | Without caching it implements the map spec for all keys, values and front ends in every environment whose links do not duplicate; with caching it does not, in any environment, for any instance with a key, a value and a front end: the checker's run replays in every one (`Examples/KVProofs.lean`, about 260 lines) |
+| Leader election (`Examples/Election.lean`) | At most one leader per term on 3 nodes with reordering and a crash (165k states); split-brain bug found | At most one leader per term for any number of nodes and terms under every environment model: loss, duplication, reordering, crashes (`Examples/ElectionProofs.lean`) |
+| Raft key-value store (`systems/raft-kv`, a package of its own) | Refines the map it replicates, with election safety, log matching, agreement on committed entries and leader completeness, on 3 nodes: reliable links and two terms (708k states), unordered links (705k), unordered links with a crash and restart (5.4M), reliable links with a crash across two terms (7.8M), and again with one entry to an `append`, so that a follower is brought on batch by batch; a node that votes for a candidate with a shorter log is caught in 15 steps; what a PASS of these means is a theorem (`RaftKVProofs/Checked.lean`); runs as three processes, each with an HTTP front, a journal it cuts and a snapshot, joined by TCP: every node killed with SIGKILL and started from its snapshot, two at a time, has what was acknowledged (`raftProcs`), and a minute of nodes killed and paused at random loses no acknowledged write (`raftChaos`, not in CI) | Every invariant of Raft's safety argument, for every number of nodes and every environment model (`systems/raft-kv/RaftKV/Proofs/`, about 2,950 lines): election safety, log matching, leader completeness, agreement on committed entries, state machine safety, and that no `append` carries more than `maxAppend` entries. Election safety and state machine safety also over time: no term has two leaders and no index two entries at any two points of a run. On them, the cluster refines its spec in every environment that does not hand a request to a node twice (`systems/raft-kv/RaftKVProofs/`, about 780 lines) |
+| Ledger (`systems/ledger`, a package of its own) | A multi-user double-entry ledger with sign-up, log-in, sessions and an audit, as a web application: refinement to its spec and every safety property on two users with two accounts each, transfers racing, with crashes and with timers; a log-out answered by the user actor, or links that reorder, give a stale view the checker finds; runs on `Http.serve` with a journal and snapshots and is tested over HTTP through SIGKILL and a restart (`ledgerLive`) | Money conserved in each currency, no overdraft, the entries of each transfer sum to zero, every balance the sum of its entries; the ledger serves user `n` only when `user n` asks, and shows `n` only `n`'s records; sessions and failed log-ins within their bounds; for every run and environment model (`systems/ledger/Ledger/Proofs/`). Its friction log is in `systems/ledger/README.md` |
+| Watchdog (`Examples/Watchdog.lean`) | Under the fair scheduler a dog whose keeper keeps pinging never barks, and one whose keeper rests barks | There is a fair run in which the keeper pings forever, the dog's timer is pending at every position and the dog never barks; in every run that fires each timer that stays pending, it barks (`Examples/WatchdogProofs.lean`) |
+
+## Against the DESIGN exit criteria
+
+- **Phase 1** (runtime and actor API): met, except that the gateway app does not exist. The runtime's logic is proved, which Phase 1 did
+  not ask for.
+- **Phase 2** (semantics, specs, refinement): semantics, lifting theorem and refinement theory
+  are in. Trace checking runs in the test suite. Not done: the scheduler simulation proof, the
+  Raft KV store.
+- **Phase 3** (model checking and system proofs): checker finds the seeded split-brain bug;
+  money conservation is proved for all instances. At most one leader per term is proved. Not done:
+  counterexample-to-induction finder, `lanes prove`, symmetry reduction, parallel search.
+- **Phase 4** (liveness): fair runs, leads-to and its proof rule are in, with one theorem, the
+  gate's, and fair runs are proved to exist. Not done: ranking functions, the lasso search,
+  "eventually a leader".
+- **Phases 5 to 8**: only the HTTP server adapter, the HTML layer and JSON exist.
+
+## Next, in order
+
+1. Make the monotone proof rule cheaper to use, from what the election proof showed: a variant
+   that takes per-state, per-message and per-timer predicates and discharges `below` itself, a
+   frame lemma for the actors that did not move, and projections for ghost state.
+2. Counterexample-to-induction finder and `inv_split`, then `lanes prove`.
+3. Releasing idle actors.
+4. What `systems/ledger` asks of the framework (its README's friction log): requests prepared
+   before the journal, specs with time, `Service` without the system's signature.
+
+## Known limits
+
+- The checker runs about 50,000 states per second on one core (the election model: 164,847
+  states in 3.0 to 3.7 s, against 10.8 to 11.2 s before the work of D33), and its tasks do not
+  help: Lean counts references to shared objects atomically and never updates them in place,
+  so four workers cost two to three times the processor time for no gain in wall time. At
+  this rate ten million states take over three minutes and, stored exactly, about 7 GB (0.75 kB
+  a state on the election model). The next factor needs states that are flat data (D33).
+- `lanes lint` is text-level. `no-io-in-step`, `bounded`, `field-leak` and `fn-length` need the
+  elaborator and are not implemented.
+- Templates take text children as string literals (`<p>"text"</p>`), not bare text.
+- The journal of `Http.serve` holds the raw requests the gate received, so a web application's
+  passwords and session cookies are on disk in plain text until a snapshot cuts the journal,
+  and a bridge's costly work (a password digest) runs on the shard's thread and again on every
+  replay. The remedy is a pure `prepare` applied before a request enters the journal
+  (`systems/ledger/README.md`, friction log).
+- No TLS, WebSockets or database adapter. The HTTP client speaks plain HTTP/1.1 to IPv4
+  addresses; call past the local network through a proxy.
+- The gate keeps waiting requests in a list, so each request costs time linear in `maxPending`.
+- A journal survives the death of the process, not loss of power: Lean's `IO` has no `fsync`.
+- A journal is cut only if the application gives codecs for its actors (`Journal.Store.actors`,
+  `Http.Saving`); without them it grows without bound and a restart replays all of it. A
+  codec's law is an equality, so a state that holds a map holds a `Std.ExtTreeMap`
+  (`Codec.extTreeMap`): a `TreeMap` or a `HashMap` has no codec. The codecs are derived
+  by `lanes_data` from the declarations of the state and the messages, or written with
+  `Codec.struct%` and `Codec.sum%` for a type it does not accept (recursive, with indices). The
+  order in which a save replaces the journal's past is proved to lose nothing wherever the
+  process dies (`Journal.Disk.Holds.save_crash`), over a model of the two files. That the
+  operating system's rename is atomic and that flushed bytes survive the process is trusted.
+- A journal is begun at any path that has none, unless the store says otherwise
+  (`Journal.Store.create`). An application whose shard makes promises to others, as a Raft
+  node does with its vote, has to say so itself, as `raftNode` does.
+- A journal's name has to cover everything its replay reads: the version of the step
+  functions and every setting they use, timeouts among them, since a timer is due at the
+  clock's reading plus the configured delay. Nothing checks that a name does. `raft-kv` puts
+  its whole `Config` in the name, so a timeout of a node that has run cannot be changed.
+- A save writes the whole kernel, and the shard does nothing else meanwhile. `raft-kv` never
+  compacts its log, so a node's snapshot grows with every command it has ever taken.
+- Cutting off a write that did not finish, and cutting a journal at a save, replace the
+  journal file by a new one, which gets default permissions; `.tmp` files left by a process
+  killed in between are not cleaned up.
+- A timer does not advance while the process is down, and after a restart it also loses the
+  time that had passed since the last journal entry before the process died.
+- A step that emits very many outputs is quadratic in their number (`Kernel.performAll`
+  appends one at a time): 20,000 outputs from one step take most of a second.
+- `System.join` leaves the inputs it wires open to the outside until `mapIO` or `filterMapIO`
+  hides them, and keeps the outputs it wires in its signature though none is put out;
+  `Http.fronted` hides both. The hand-built `gated` is still what `serve` runs and what the
+  liveness theorem is about: there is no theorem yet that a fair run of a join, seen from one
+  side, is a fair run of that side.
+- Behind `Http.serveShard` a response must be put out by an actor of the process that took the
+  request. Request ids are each process's own, so a response put out on another shard reaches
+  that shard's gate, which may be waiting on the same id for another client. Nothing prevents
+  this; `Tests/Fronted.lean` shows the mild case, a `504` at the front that took the request.
+- The runtime never releases an actor: every identity ever addressed keeps its cell in the
+  kernel. A session-per-user system grows without bound. Releasing an actor means its state must
+  live somewhere else, so this waits for the persistence adapter.
+- Several shards run as several processes joined by TCP (`Lanes.Peers`); there is no router
+  between shards in one process any more (D37), so the cores of a machine are used by running a
+  process on each. That shards behave as the one system is proved for the semantics, for two
+  shards (`Lanes/Actors/ShardSound.lean`) and for any number (`Lanes/Actors/ShardsSound.lean`),
+  with an actor's shard fixed for the whole run: an actor that moves, or a `Peers.Config.home`
+  that is `none`, is outside it. It is not proved for the running program, where it is still
+  trusted that the runtimes and the transport implement `System.shards` with links between
+  shards no better than `Link.network`.
+- A boot actor that stops as it starts does not behave the same on several shards: the shards
+  boot one after another, so a message another boot actor sent it may be kept where the one
+  system loses it (`Tests/Split.lean`, `fragile`). The theorem assumes it away
+  (`System.SteadyBoot`); invariants of actor states proved for every environment are not
+  affected.
+- One shard takes about 1.8 million inputs a second from one sender and about a million from
+  four that contend for its inbox, on a four-core machine; its kernel alone does between two
+  and three million turns a second. With a journal every batch is one write, so the disk is
+  the limit there. A shard with nothing to do sleeps, and waking it costs tens of microseconds.
+- That a pending timer fires in time is proved as far as the kernel goes: its agenda holds
+  exactly the pending timers, it never tells the shell to sleep past one, and it fires one that
+  is due on its next step or, when a message is waiting too, the step after
+  (`Kernel.exec_wellFormed`, `Kernel.WellFormed.wait_of_due`, `step_of_due`, `wait_for_ms`).
+  That the clock advances and the shell's sleep ends is assumed (see `TRUSTED.md`).
+- Liveness theorems are about fair runs of the semantics. That the runtime's runs are fair is
+  not proved, and "eventually" carries no bound.
+- The kernel's message queue has no bound of its own (see `TRUSTED.md`).
+- Templates cannot contain inline `<script>` or `<style>` text, and URL attributes accept only
+  relative, `http`, `https`, `mailto` and `tel` URLs.

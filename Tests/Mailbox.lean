@@ -1,0 +1,40 @@
+/-
+Copyright (c) 2026 The Lanes Authors. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+-/
+import Lanes
+
+/-! The inbox as data: who is refused, who waits, who is woken, and in what order things come
+out. Wakers are numbers here. -/
+
+namespace Tests.Mailbox
+
+open Lanes
+
+abbrev Box := Mailbox Nat Nat
+
+def offers (capacity : Nat) (xs : List Nat) (m : Box) : List Bool × Box :=
+  xs.foldl (init := ([], m)) fun (answers, m) x =>
+    match m.offer capacity x with
+    | (.taken _, m) => (answers ++ [true], m)
+    | (_, m) => (answers ++ [false], m)
+
+def tests : List (String × Bool) :=
+  let (answers, full) := offers 2 [1, 2, 3] {}
+  let (waited, withWaiter) := full.offerOrWait 2 4 70
+  let (taken, emptied) := withWaiter.take
+  let (asleep, resting) := emptied.rest 50
+  let (woken, afterOffer) := resting.offer 2 5
+  let (stillAwake, _) := afterOffer.rest 51
+  let (toWake, closed) := ({ resting with waiting := [60, 61] } : Box).close
+  [ ("mailbox: a full inbox refuses, and what it took comes out in the order it went in",
+      answers == [true, true, false] && taken.batch == [1, 2]),
+    ("mailbox: a sender that waits for room is woken when the shard takes",
+      (waited matches .full) && taken.wake == [70] && emptied.count == 0),
+    ("mailbox: a shard asleep is woken by the first thing that arrives, and by nothing after",
+      asleep && (woken matches .taken (some 50)) && afterOffer.sleeper.isNone),
+    ("mailbox: a shard does not go to sleep on an inbox that has something in it", !stillAwake),
+    ("mailbox: closing wakes the sleeper and every sender that waits, and then nothing is taken in",
+      toWake == [50, 60, 61] && (closed.offer 2 1).1 matches .closed && !(closed.rest 52).1) ]
+
+end Tests.Mailbox

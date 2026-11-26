@@ -1,0 +1,34 @@
+# {{name}}
+
+A [Lanes](https://github.com/tacitresearch/lanes) application.
+
+```bash
+lake exe cache get      # once: prebuilt Mathlib
+lake build
+lake test               # model checks
+lake exe {{name}} 8080  # run
+lake exe {{name}} 8080 app.journal  # run, and keep state across restarts
+```
+
+## Lanes rules for agents
+
+- Read LANES_STYLE.md before writing code. Cite rule numbers in PR descriptions when a rule shaped a choice.
+- Write or update the spec first; model-check it before writing the implementation or a proof.
+- step is pure: no IO. New external work = new Effect constructor + response message.
+- Encode invariants in types first, theorems second, runtime asserts only at adapters.
+- Never add sorry, partial, unsafe or an axiom without listing it in TRUSTED.md.
+- On an unexpected state, emit stop; do not add defensive fallbacks.
+- Run `lanes lint && lake test` before claiming a task is done.
+- Write almost no comments. A comment is for a *why* that a name, a type or a theorem cannot
+  carry. If code needs explaining, rename or restructure it.
+
+## Layout
+
+- `{{Name}}/Counter.lean`: logic. The spec, the actor and its invariant. Pure: no IO.
+- `{{Name}}/Proofs.lean`: proofs that need `Lanes.Semantics`, such as refinement to the spec.
+- `Check.lean`: model checks on small instances, run by `lake test`.
+- `Main.lean`: the edge. HTTP, HTML views, `main`.
+
+Executable code imports `Lanes`. Proof files that need refinement or Mathlib import
+`Lanes.Semantics`; keep that import out of anything `Main.lean` depends on, or the binary grows
+by over 100 MB.

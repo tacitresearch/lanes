@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Installs elan and the pinned toolchain, fetches the Mathlib cache, then builds and tests.
+      # Order follows LANES_STYLE section 6: build, lint, model checks and tests.
+      - uses: leanprover/lean-action@v1
+        with:
+          build-args: "--wfail"
+          test: false
+      - name: Lint
+        run: lake exe lanes lint
+      - name: Test
+        run: lake test
+      - name: Model checks
+        run: lake exe lanesCheck
+      - name: Generated app builds and passes its checks
+        run: |
+          lake exe lanes new demo-app --dir "$RUNNER_TEMP/demo-app" --lanes-path "$GITHUB_WORKSPACE"
+          cd "$RUNNER_TEMP/demo-app"
+          mkdir -p .lake && ln -s "$GITHUB_WORKSPACE/.lake/packages" .lake/packages
+          lake build
+          lake test
+      - name: systems/raft-kv builds and passes its checks
+        run: |
+          cd systems/raft-kv
+          mkdir -p .lake && ln -s "$GITHUB_WORKSPACE/.lake/packages" .lake/packages
+          lake build
+          lake test
+          lake exe raftLive
+          lake exe raftProcs
+      - name: systems/ledger builds and passes its checks
+        run: |
+          cd systems/ledger
+          mkdir -p .lake && ln -s "$GITHUB_WORKSPACE/.lake/packages" .lake/packages
+          lake build
+          lake test
+          lake exe ledgerLive

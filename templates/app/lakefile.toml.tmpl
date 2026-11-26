@@ -1,0 +1,22 @@
+name = "{{name}}"
+version = "0.1.0"
+defaultTargets = ["{{Name}}", "{{name}}"]
+testDriver = "check"
+
+[[require]]
+name = "lanes"
+{{lanes_source}}
+
+[[lean_lib]]
+name = "{{Name}}"
+globs = ["{{Name}}.+"]
+
+# The application.
+[[lean_exe]]
+name = "{{name}}"
+root = "Main"
+
+# Model checks, run by `lake test`. Check before you prove (LANES_STYLE rule 5.1).
+[[lean_exe]]
+name = "check"
+root = "Check"
