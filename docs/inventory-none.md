@@ -68,7 +68,6 @@ Each is to be proved, tested, made private or removed.
 
 ### `Lanes/Actors/Run.lean`
 
-- `Effect.sends`
 - `Effect.armed`
 - `Effect.emits`
 
