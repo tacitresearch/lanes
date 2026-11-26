@@ -13,11 +13,11 @@ in every environment whose links do not hand a message over twice (`implements`)
 be lost and reordered and actors may crash. `Tests/KV.lean` checks that each link the system
 uses must not duplicate: every handling of a message answers a client or sends on.
 
-The simulation (`Sim`) reads the store's data as the spec's value. A request is pending in the
-spec while it is on its way to a front end or from a front end to the store (`pend`), and the
-answer to a read is owed in the spec's outbox while it is on its way back (`owed`). Both are
-bounds, not equalities: a message lost stays pending or owed in the spec for ever, which the spec
-allows. A request takes effect when the store handles it.
+The simulation is the standard one (`Lanes.Account`): the store's data is the spec's value, a
+request is pending in the spec while it is on its way to a front end or from a front end to the
+store (`pend`), and the answer to a read is owed while it is on its way back (`owed`). A front
+end passes on what it was handed (`Moves.forward`); a request takes effect when the store
+handles it (`Moves.take`).
 
 With caching the system does not implement the spec in any environment, for any instance with a
 key, a value and a front end (`caching_not_implements`): the run the checker finds, a read
@@ -77,112 +77,40 @@ theorem tame_invariant (env : EnvModel (sig K V F)) :
 abbrev Abs (K V F : Type) [DecidableEq K] [DecidableEq V] [DecidableEq F] :=
   Service.Abs (Request K V F) (Response V) (K → Option V)
 
-structure Sim (c : SysState (system K V F false)) (t : Abs K V F) : Prop where
-  value : t.value = c.state .store
-  pending : (↑(c.net.filterMap pend) : Multiset (Request K V F)) ≤ t.pending
-  outbox : (↑c.outbox : Multiset (Response V)) + ↑(c.net.filterMap owed) ≤ t.outbox
-
-namespace Sim
-
-variable {c c' : SysState (system K V F false)} {t : Abs K V F}
-
-theorem mono (h : Sim c t) (hvalue : c'.state .store = c.state .store)
-    (hpending : (↑(c'.net.filterMap pend) : Multiset (Request K V F)) ≤ ↑(c.net.filterMap pend))
-    (houtbox : (↑c'.outbox : Multiset (Response V)) + ↑(c'.net.filterMap owed) ≤
-      ↑c.outbox + ↑(c.net.filterMap owed)) : Sim c' t :=
-  ⟨h.value.trans hvalue.symm, hpending.trans h.pending, houtbox.trans h.outbox⟩
-
-theorem loses (h : Sim c t) (hl : c'.Loses c) : Sim c' t :=
-  h.mono (by rw [hl.state]) (Multiset.coe_le.mpr (hl.net.filterMap _).subperm)
-    (by rw [hl.outbox]; exact add_le_add_right (Multiset.coe_le.mpr (hl.net.filterMap _).subperm) _)
-
-/-- A front end handles `e`: what it sends and emits is what `e` was on its way to do. -/
-theorem forward (h : Sim c t) {e : Envelope (sig K V F)} (he : e ∈ c.net)
-    {sent : List (Envelope (sig K V F))} {emitted : List (Response V)}
-    (hvalue : c'.state .store = c.state .store) (hnet : c'.net = c.net.erase e ++ sent)
-    (hout : c'.outbox = c.outbox ++ emitted) (hpend : sent.filterMap pend = (pend e).toList)
-    (howed : emitted ++ sent.filterMap owed = (owed e).toList) : Sim c' t := by
-  refine h.mono hvalue (le_of_eq ?_) (le_of_eq ?_)
-  · rw [hnet, Multiset.coe_eq_coe.mpr (filterMap_perm_erase he), List.filterMap_append, hpend]
-    exact Multiset.coe_eq_coe.mpr List.perm_append_comm
-  · rw [hout, hnet, Multiset.coe_eq_coe.mpr (filterMap_perm_erase he), ← howed]
-    simp only [List.filterMap_append, ← Multiset.coe_add]
-    abel
-
-/-- The store handles `e`, which is `x` taking effect. -/
-theorem take (h : Sim c t) {e : Envelope (sig K V F)} (he : e ∈ c.net) {x : Request K V F}
-    {sent : List (Envelope (sig K V F))} {emitted : List (Response V)} (hx : pend e = some x)
-    (hnone : owed e = none)
-    (hvalue : c'.state .store = ((spec K V F).step (c.state .store) x).1)
-    (hnet : c'.net = c.net.erase e ++ sent) (hout : c'.outbox = c.outbox ++ emitted)
-    (hpend : sent.filterMap pend = [])
-    (howed : emitted ++ sent.filterMap owed = ((spec K V F).step (c.state .store) x).2) :
-    ∃ t', (spec K V F).spec.lts.τSTr t t' ∧ Sim c' t' := by
-  have hle : x ::ₘ (↑(c'.net.filterMap pend) : Multiset (Request K V F)) ≤ t.pending := by
-    have := h.pending
-    rw [Multiset.coe_eq_coe.mpr (filterMap_perm_erase he), hx] at this
-    rw [hnet, List.filterMap_append, hpend, List.append_nil]
-    simpa using this
-  refine ⟨⟨((spec K V F).step t.value x).1, t.pending.erase x,
-    t.outbox + ((spec K V F).step t.value x).2⟩,
-    .single ⟨x, Multiset.mem_of_le hle (Multiset.mem_cons_self _ _), rfl⟩, ?_, ?_, ?_⟩
-  · rw [hvalue, h.value]
-  · simpa using Multiset.erase_le_erase x hle
-  · have := h.outbox
-    rw [Multiset.coe_eq_coe.mpr (filterMap_perm_erase he), hnone] at this
-    rw [hout, hnet, h.value, ← howed]
-    simp only [List.filterMap_append, ← Multiset.coe_add]
-    calc _ = (↑c.outbox + ↑((c.net.erase e).filterMap owed)) +
-          ((↑emitted : Multiset (Response V)) + ↑(sent.filterMap owed)) := by abel
-      _ ≤ _ := add_le_add_left (by simpa using this) _
-
-end Sim
+def account : Account (system K V F false) (K → Option V) Unit where
+  pend := pend
+  owe := owed
+  value state _ _ v := v = state .store
 
 theorem implements (env : EnvModel (sig K V F))
     (henv : ∀ src dst, (env.link src dst).duplicating = false) :
     (system K V F false).Implements env (spec K V F) := by
-  refine System.Refines.of_steps (tame_invariant env) Sim
-    ⟨⟨fun _ => none, 0, 0⟩, rfl, rfl, by simp [SysState.init, SysState.blank],
-      by simp [SysState.init, SysState.blank]⟩ (fun _ _ _ h hl => h.loses hl)
-    ?_ ?_ ?_ ?_ ?_ ?_
-  · intro c t x _ h
-    refine ⟨{ t with pending := x ::ₘ t.pending }, .single rfl, h.value, ?_, ?_⟩
-    · show (↑((c.net ++ [(⟨none, .front x.via, .request x⟩ : Envelope (sig K V F))]).filterMap
-        pend) : Multiset (Request K V F)) ≤ _
-      rw [filterMap_concat, ← Multiset.coe_add]
-      simpa [add_comm, pend] using Multiset.cons_le_cons x h.pending
-    · show _ + (↑((c.net ++ [(⟨none, .front x.via, .request x⟩ : Envelope (sig K V F))]).filterMap
-        owed) : Multiset (Response V)) ≤ _
-      rw [filterMap_concat]
-      simpa [owed] using h.outbox
-  · intro c t out _ h hmem
-    have hin : out ∈ t.outbox :=
-      Multiset.mem_of_le h.outbox (Multiset.mem_add.mpr (.inl (Multiset.mem_coe.mpr hmem)))
-    refine ⟨{ t with outbox := t.outbox.erase out }, .single ⟨hin, rfl⟩, h.value, h.pending, ?_⟩
-    have := Multiset.erase_le_erase out h.outbox
-    rwa [Multiset.erase_add_left_pos _ (Multiset.mem_coe.mpr hmem), Multiset.coe_erase] at this
-  · rintro c t ⟨src, dst, msg⟩ ⟨_, hstore⟩ h hmem
-    cases dst with
-    | front f =>
-      cases msg with
-      | request r =>
-        obtain ⟨req, via, op⟩ := r
-        cases op <;> exact ⟨t, .refl, h.forward hmem (by simp) rfl rfl rfl rfl⟩
-      | got req key value => exact ⟨t, .refl, h.forward hmem (by simp) rfl rfl rfl rfl⟩
-    | store =>
-      cases msg with
-      | put req key value =>
-        obtain ⟨f, rfl⟩ := hstore _ hmem rfl
-        exact h.take hmem (x := ⟨req, f, .put key value⟩) rfl rfl (by simp; rfl) rfl rfl rfl rfl
-      | get req key replyTo =>
-        exact h.take hmem (x := ⟨req, replyTo, .get key⟩) rfl rfl (by simp; rfl) rfl rfl rfl rfl
-  · intro c t e _ _ _ hdup
-    simp [henv] at hdup
-  · intro c t i msg ⟨htimers, _⟩ _ hmem
-    exact (htimers i msg hmem).elim
-  · intro c t i _ h
-    refine ⟨t, .refl, h.mono ?_ ?_ ?_⟩ <;> cases i <;>
-      simp [SysState.grow, system, front, store, Effect.sends, Effect.emits]
+  refine account.implements (tame_invariant env)
+    ⟨(), rfl, by simp [Account.pending, SysState.init, SysState.blank, account],
+      by simp [Account.owed, SysState.init, SysState.blank, account]⟩
+    (fun _ => ⟨rfl, rfl⟩) (fun _ _ _ _ _ h => h) ?_ (fun _ _ _ _ hdup => by simp [henv] at hdup)
+    (fun _ _ _ _ _ => .of_loses ⟨rfl, List.erase_sublist, fun _ _ h => h, rfl⟩ fun _ _ h => h)
+    (fun c i _ => .of_loses (SysState.Loses.down env c i) fun _ _ h => h)
+    (fun _ i msg ⟨htimers, _⟩ hmem => (htimers i msg hmem).elim)
+    (fun _ i _ => by cases i <;> exact .quiet (fun _ _ h => by simpa [account] using h) rfl rfl)
+  rintro c ⟨src, dst, msg⟩ ⟨_, hstore⟩ hd
+  have hmem := SysState.mem_of_deliverable hd
+  cases dst with
+  | front f =>
+    cases msg with
+    | request r =>
+      obtain ⟨req, via, op⟩ := r
+      cases op <;> exact .forward hmem (fun _ _ h => by simpa [account] using h) rfl rfl
+    | got req key value => exact .forward hmem (fun _ _ h => by simpa [account] using h) rfl rfl
+  | store =>
+    cases msg with
+    | put req key value =>
+      obtain ⟨f, rfl⟩ := hstore _ hmem rfl
+      exact .take hmem (x := ⟨req, f, .put key value⟩) rfl rfl
+        (fun _ _ h => by subst h; simp [account]; rfl) rfl fun _ _ _ => rfl
+    | get req key replyTo =>
+      exact .take hmem (x := ⟨req, replyTo, .get key⟩) rfl rfl
+        (fun _ _ h => by subst h; simp [account]; rfl) rfl fun _ _ h => by subst h; rfl
 
 /-! ## Caching -/
 

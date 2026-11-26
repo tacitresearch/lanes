@@ -2,6 +2,7 @@ module
 
 public import Lanes
 public import Lanes.Actors.Step
+public import Lanes.Semantics.Account
 public import Lanes.Semantics.FairJoin
 public import Lanes.Semantics.FairRuns
 public import Lanes.Semantics.FrontLive

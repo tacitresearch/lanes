@@ -6,6 +6,13 @@ import Lanes.Semantics
 
 /-! The axiom gate (rule 5.5, see `Tests/Axioms.lean`) for the theorems of `Lanes/Semantics/`. -/
 
+-- Lanes.Semantics.Account
+/-- info: 'Lanes.Service.takes' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Service.takes
+
+/-- info: 'Lanes.Account.implements' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Account.implements
+
 -- Lanes.Semantics.FairJoin
 /-- info: 'Lanes.Wiring.leftView_projects' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Wiring.leftView_projects
@@ -133,6 +140,9 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.System.Refines.to_ghost' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Refines.to_ghost
+
+/-- info: 'Lanes.System.Refines.of_events' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Refines.of_events
 
 /-- info: 'Lanes.System.Refines.of_steps' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Refines.of_steps
