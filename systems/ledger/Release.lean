@@ -45,7 +45,7 @@ def kept : Bool :=
 /-- The gate passes the declaration on, so the deployed system releases strangers too. -/
 example (config : Config Web.Name) (bridge : Http.Bridge (sig Web.Name Web.Digest))
     (gate : Http.GateConfig) (n : Web.Name) :
-    ((Http.gated (Web.Sys config) bridge gate).actor (some (.user n))).fresh none = true :=
+    ((Http.served (Web.Sys config) bridge gate).actor (.inr (.user n))).fresh none = true :=
   rfl
 
 end Ledger.Release
