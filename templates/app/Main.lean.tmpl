@@ -51,9 +51,11 @@ def bridge : Http.Bridge sig where
     ] request).getD (.error (.text "not found\n" 404))
   encode response := some (response.req, .html (CounterView response).render)
 
+/-- `{{name}} [port] [journal]`. With a journal file the counter survives the process. -/
 def main (args : List String) : IO Unit := do
   let port := (args.head? >>= String.toNat?).getD 8080
-  let server ← (Http.serve (system {}) bridge { port := port.toUInt16 }).block
+  let journal := args[1]?.map System.FilePath.mk
+  let server ← (Http.serve (system {}) bridge { port := port.toUInt16, journal }).block
   IO.println s!"{{name}} listening on http://127.0.0.1:{server.port.getD 0}"
   (← IO.getStdout).flush
   server.wait.block
