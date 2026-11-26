@@ -19,23 +19,45 @@ the node has applied.
 ## What has been checked
 
 Three nodes, one key, two values, a write and a read, with terms, log lengths and messages in
-flight bounded. `lake test` runs the quick checks; `lake exe raftCheck deep` the others.
+flight bounded. `lake test` runs the quick checks; `lake exe raftCheck deep` the others, in 19
+minutes on one core.
+
+An `append` carries at most `maxAppend` entries. Logs here hold two, so with the default of 8 a
+batch is all there is to send, and the rows marked *batches of one* run with `maxAppend := 1`:
+a follower two entries behind is brought on in two messages, with elections in between.
 
 | Instance | States | Result |
 | --- | --- | --- |
-| Reliable links, one term, three messages in flight | 6,616 | passes |
-| Reliable links, two terms | 695,272 | passes |
-| Unordered links, one term | 845,974 | passes |
-| Unordered links, one crash and restart, one term | 6,012,807 | passes |
-| Links between nodes lose messages, one term, three messages in flight | 550,410 | passes |
-| Links between nodes lose, reorder and repeat messages (`Link.network`), one term, three in flight | 2,790,036 | passes |
-| Requests lost and reordered on their way to a node, one term, three in flight | 34,325 | passes |
-| Outside the assumption of the top theorem: a request may be handed to a node twice | 3,021 | found: the request is answered twice, in 18 steps |
-| Seeded bug: a node votes for a candidate whose log is behind | 27,412 | found: a leader lacks a committed entry, in 15 steps |
-| Seeded bug: a leader commits an entry of an earlier term by counting (four terms, two writes) | 4,651,808 | found: a later leader lacks the entry, in 28 steps |
+| Reliable links, one term, three messages in flight | 6,278 | passes |
+| Reliable links, two terms | 708,116 | passes |
+| Unordered links, one term | 704,502 | passes |
+| Unordered links, one crash and restart, one term | 5,431,921 | passes |
+| Links between nodes lose messages, one term, three messages in flight | 612,692 | passes |
+| Links between nodes lose, reorder and repeat messages (`Link.network`), one term, three in flight | 3,042,012 | passes |
+| Requests lost and reordered on their way to a node, one term, three in flight | 32,467 | passes |
+| Reliable links, one crash and restart, two terms | 7,848,541 | passes |
+| Reliable links, two crashes and restarts, one term | 4,309,502 | passes |
+| A write through one node and a read through another, reliable links, two terms | 376,864 | passes |
+| Two writes through two nodes, reliable links, two terms | 429,066 | passes |
+| Batches of one: reliable links, one term, three in flight | 6,692 | passes |
+| Batches of one: reliable links, two terms | 712,576 | passes |
+| Batches of one: unordered links, one term | 648,562 | passes |
+| Batches of one: unordered links, one crash and restart, one term | 4,713,803 | passes |
+| Batches of one: links between nodes lose, reorder and repeat messages, one term, three in flight | 1,982,474 | passes |
+| Outside the assumption of the top theorem: a request may be handed to a node twice | 3,037 | found: the request is answered twice, in 18 steps |
+| Seeded bug: a node votes for a candidate whose log is behind | 26,798 | found: a leader lacks a committed entry, in 15 steps |
+| Seeded bug: a leader commits an entry of an earlier term by counting (four terms, two writes) | 4,055,184 | found: a later leader lacks the entry, in 28 steps |
 
 Each passing check also reaches its witnesses: a leader is elected, a write is answered, a read
-sees the written value, a follower commits.
+sees the written value where there is a read, a follower commits. With batches of one, an
+`append` carries less than its leader has to send, and in two terms one starts past the end of
+the log it is sent to. Unordered links with two crashes in one term is more than the ten
+million states the checker stores, and is not in the list.
+
+What a PASS means is a theorem (`RaftKVProofs/Checked.lean`): after a complete PASS every
+`always` property that was checked holds in every state the instance reaches within its bounds
+(`always_of_pass`), and the inputs and outputs of every run of it are a trace of the map
+(`traces_of_pass`). The kernel does not run the search, so the PASS is their hypothesis.
 
 ## What has been run
 
@@ -64,12 +86,15 @@ left is a majority only because the first came back with what it had.
 ## What is proved
 
 In `RaftKV/Proofs/`, for every finite set of nodes, every machine and every environment model
-(loss, duplication, reordering, crashes and restarts), in every reachable state. The first five
-rows hold for every `Config`, the two bug-seeding switches on or off:
+(loss, duplication, reordering, crashes and restarts), in every reachable state. The rows of
+the first table hold for every `Config`: the two bug-seeding switches on or off, and whatever
+`maxAppend` is:
 
 | Theorem | Says |
 | --- | --- |
 | `election_safety`, `electionSafety_invariant` | No two nodes lead the same term. |
+| `one_leader_per_term` | The same over time: the nodes that lead one term at two points of a run are one node. Stated of the cluster and a run of it, with no history. |
+| `append_bounded`, `appendsBounded_invariant` | No `append` in flight carries more than `maxAppend` entries, or more than one where that is zero. |
 | `applied_le_commit`, `appliedWithinCommit_invariant` | A node has applied no more than it has committed. |
 | `entry_term_le`, `entryTermsWithinTerm_invariant` | No entry is of a later term than the node that holds it. |
 | `leader_append_only`, `leader_log_grows` | A node that leads a term before and after a step has kept every entry it had. |
@@ -98,6 +123,7 @@ On those, also with both switches on, state machine safety and the top theorem:
 | `applied_eq_commit`, `appliedAllCommitted_invariant` | A node has applied all it has committed. |
 | `machine_eq_run`, `machinesRun_invariant` | A node's machine is the replicated machine run from `init` over the entries the node has applied. |
 | `applied_agree` | Of two nodes, the one that has applied less has applied a start of what the other has. |
+| `applied_agree_over_time`, `applied_same_entry` | State machine safety over time: what a node has applied at one point of a run and what a node, the same or another, has applied at a later point are one a start of the other. So no two nodes ever apply different entries at one index. Stated of the cluster and a run of it, with no history. |
 | `implementsMachine` (`RaftKVProofs.lean`), `cluster_implements` | The cluster refines `spec`: for every finite set of nodes, every machine and every environment model whose links from clients do not repeat a request. Links between nodes may lose, repeat and reorder, links from clients may lose and reorder, and any node may crash and restart at any time. |
 
 The top theorem is `System.Implements`, a weak simulation, so every finite run of the cluster
@@ -121,7 +147,9 @@ refinement mapping.
 
 The proofs give each node a ghost history of the states it has left (`Lanes/Actors/Past.lean`)
 and build one invariant in layers with the monotone proof rule, so one argument covers every
-fault: `Votes`, `Terms`, `Logs`, `Standing`, `Safe`, `Commits`. What the layers say of a state
+fault: `Votes`, `Terms`, `Logs`, `Standing`, `Safe`, `Commits`. An `append` carries a batch, so
+what a follower takes from a leader is a start of that leader's log (`Within`), and the layers
+speak of that. What the layers say of a state
 without its history is checked first, as properties of their own (`raftCheck "what the proofs
 use, one term"`, and two deep ones). `Safe`, which is about what a majority may yet come to
 hold, has no such form; it is checked only through the three properties it proves.
@@ -141,12 +169,30 @@ these:
   loss of power.
 - **The journal is never cut.** A node journals every message it is sent, heartbeats too: an
   idle cluster writes most of a gigabyte a day, and a restart replays all of it.
-- **A leader sends everything a follower has not acknowledged, in one message.** A log over
-  16 MB cannot be sent at all, so after a change of leader nothing commits again; a follower
-  that stops reading makes the leader hold many copies of what it has not acknowledged; with a
-  node down, each write costs more than the last.
 - **A client that tries again after a `504` may have its write applied twice.** Requests are
   not told apart.
+
+It also found that a leader sent a follower everything it had not acknowledged in one message.
+A log over 16 MB could not be sent at all, so after a change of leader nothing committed
+again; a follower that stopped reading made the leader hold many copies of what it had not
+acknowledged; with a node down, each write cost more than the last. An `append` now carries at
+most `maxAppend` entries (8). With 20 MB of 1 MB values and the leader killed, another node
+answered a write three seconds later, where none did in six minutes; with a node down a write
+sends that node nothing. What is left of the finding:
+
+- **A follower more than a batch behind a new leader is walked through the whole log.** A new
+  leader sends each follower the last `maxAppend` entries of its log. A follower that was up
+  to date takes them. One that is not ignores them, and from the first heartbeat on is sent
+  the log from its first entry, a batch for each acknowledgement: nothing tells the leader
+  where a follower's log ends. At any time a follower is sent at most `maxAppend` entries per
+  round trip.
+- **A node that stops reading is still sent a batch on every heartbeat.** The heartbeat
+  repeats the batch the node has not acknowledged, and the transport holds up to 1,024 of
+  them: with a follower stopped, thirty writes of 100 kB and ten seconds, the leader grew to
+  384 MB, where it grew to 1.3 GB before.
+- **`maxAppend` counts entries and does not measure them.** That many of the largest must fit
+  in the 16 MiB the transport takes as one message. The defaults do: 8 entries, each a value
+  of at most 1 MiB (the limit on a request's body), its key and about 60 bytes.
 
 ## What is not here yet
 
@@ -160,4 +206,7 @@ these:
   `504`, and the client asks the next node.
 - Election timeouts that differ by themselves. Each node is given its own in its configuration.
 - Change of membership, and compaction of the log.
-- Sending a new follower less than the whole log on first contact.
+- A way for a leader to learn where a follower's log ends (a refusal that says so, or a
+  `nextIndex` that steps back), and to know what it has sent and not heard of. Without the
+  first a follower far behind a new leader starts again from entry 1; without the second a
+  heartbeat repeats a batch that may only be slow.

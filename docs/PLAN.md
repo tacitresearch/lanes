@@ -223,8 +223,10 @@ duties no test checked.
 
 | Finding | Outcome |
 | --- | --- |
-| A Raft log over 16 MB made the cluster unavailable for good after a leader change: a new leader sends its whole log in one parcel, larger than the receiver takes | The transport no longer sends a parcel the receiver would refuse, and says so. The protocol's unbounded append is being replaced by bounded ones, with the proofs |
-| A follower that stops reading made the leader hold a thousand copies of the unacknowledged log; with a node down, each write cost more than the last | Same cause, same fix |
+| A Raft log over 16 MB made the cluster unavailable for good after a leader change: a new leader sends its whole log in one parcel, larger than the receiver takes | The transport no longer sends a parcel the receiver would refuse, and says so. Fixed in the protocol (D35): an `append` carries at most `maxAppend` entries (8), proved (`append_bounded`), checked with batches of one entry, and every theorem keeps its statement. Run again with 20 MB of 1 MB values and the leader killed: another node answers a write in three seconds, where none did in six minutes. Left: a follower more than a batch behind a new leader is walked from its first entry |
+| A follower that stops reading made the leader hold a thousand copies of the unacknowledged log; with a node down, each write cost more than the last | With a node down a write sends it nothing: a proposal goes to the followers that hold all before it. A follower that stops reading is still sent a batch on every heartbeat, so the leader holds up to a thousand copies of one batch, not of the log (384 MB where it was 1.3 GB, for thirty 100 kB writes and ten seconds). Knowing what is in flight to a follower would end that; it is not done |
+| The checker's PASS for Raft was not backed by `Check.system_sound`: `Node`'s `==` is written by hand | Fixed: `LawfulBEq (Node N C M)`, and `RaftKVProofs/Checked.lean` applies the soundness theorems to the checks of `Check.lean` (`always_of_pass`, `traces_of_pass`) |
+| State machine safety was proved of one state, not of two times | Fixed: `applied_agree_over_time`, `applied_same_entry`, stated of the cluster and a run of it |
 | `raftNode` never cut its journal, and an idle cluster wrote most of a gigabyte a day | In progress: a map with a codec that keeps its law, so the node can save |
 | Every wake-up of a shard with a pending timer left a sleep behind until the timer's deadline (a regression of the day) | Fixed: the sleep is stopped |
 | A node started on an empty journal rejoined as a blank voter and acknowledged writes were lost | Outside the model, and said so now; `raftNode` is to refuse a journal that does not exist unless told it is new |
@@ -242,8 +244,9 @@ journal entry as well as the time the process was down; `System.join` leaves wir
 to the outside until `mapIO` hides them; the gate is not yet built with `join` (it is since
 D31: `Http.fronted`, with the inputs hidden by `System.filterMapIO`).
 
-Not done from the third review: `election_safety` speaks of leaders that coexist, not of a term
-having had two leaders at different times; a duplicate attribute from a splice renders twice;
+Done since, from the third review: `election_safety` speaks of leaders that coexist, and
+`one_leader_per_term` now says that no term has two leaders at any two points of a run. Not
+done from it: a duplicate attribute from a splice renders twice;
 `trusted-size` accepts only the exact wording `` `path`, N lines ``.
 
 1. Comment rule in `AGENTS.md`; strip comments; split the test binaries.
