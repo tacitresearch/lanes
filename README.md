@@ -97,7 +97,8 @@ a view cannot link or post to a route that does not exist.
   variables cost nothing at run time (`Invariant.of_ghost`). Invariants about states and
   messages need five cases, not eight, and hold under loss, duplication, reordering and crashes
   (`Inductive.of_monotone`).
-- **Trusted.** About 1,000 lines of IO and macro code, listed with their sizes in `TRUSTED.md`;
+- **Trusted.** About 1,000 lines of IO and macro code and a 400-line HTTP wire format that is
+  tested and only partly proved, listed with their sizes in `TRUSTED.md`;
   `lanes lint` fails if they grow.
 
 ## Kill it and start it again

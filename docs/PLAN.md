@@ -213,7 +213,7 @@ file means when it is opened was such a decision, and is a pure function now.
 | `Outside.both` lost runs when both sides could send the same input | Fixed: the caller says whose each input is; a pair of models cannot guess |
 | Outputs before the journal write, nothing handed over again after a restart, no lock, ids from zero: each mutant passed every test | Each now fails a test; `Journal.recover_handed` proves which outputs are handed over again, where the old theorem allowed none |
 | `Journal.decode_torn` said "a prefix", which the empty list satisfies | Replaced by `open?_cut`, which says which prefix |
-| HTTP client: leaked sockets on timeout, quadratic chunk parsing, header injection in the writer, a lenient response parser | In progress |
+| HTTP client: leaked sockets on timeout, a keep-alive response read as a timeout, quadratic chunk parsing, header injection in the writer, a lenient response parser | Fixed. When a response is whole is a pure function (`Response.read`); the writer's framing is proved (`Request.fields_framing`, `head_plain`: one `Content-Length`, no `Transfer-Encoding`, no CR or LF in a line); the reader refuses what it does not understand, one test per case; live tests against a server that holds the connection fail on the mutants without a timeout and without a size limit |
 
 Not fixed, and written down as limits: `Kernel.performAll` appends outputs one at a time, so a
 step that emits tens of thousands of outputs is quadratic; a pending timer makes the shard

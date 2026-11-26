@@ -22,7 +22,7 @@ departed from the design document, with reasons.
 ```bash
 lake exe cache get   # prebuilt Mathlib; never build Mathlib from source
 lake build           # the library
-lake test            # pure tests and live runtime tests, under a second
+lake test            # pure tests and live runtime tests, a few seconds
 lake exe lanesCheck  # larger model checks, random runs and the scale benchmark, about 20 s: run once, never in a loop
 lake exe lanes lint  # LANES_STYLE checks
 ```
