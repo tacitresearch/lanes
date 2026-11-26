@@ -298,7 +298,8 @@ Agents do what the docs say, so a stale doc is worse than none. Keep each short 
 - `docs/ARCHITECTURE.md` names the theorem behind each claim; a claim without one says it is
   checked, tested or trusted.
 - Cite files by their repository path in backquotes; `lanes lint` fails on one that does not
-  exist (`docs/history/` and `docs/decisions/` are exempt: they record the past).
+  exist (`docs/history/` and `docs/decisions/` are exempt: they record the past). Name a module
+  that is not written yet by its module name (`Lanes.Data.Base64`), not its path.
 - `docs/decisions/` is the record of why: never rewrite a decision, write a new one that
   supersedes it.
 - Write plainly: short sentences, one name per concept, no marketing.
