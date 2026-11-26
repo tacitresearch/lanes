@@ -21,7 +21,6 @@ Usage:
       Run the project's model checks (`lake test`).
 "
 
-/-- The value following a flag. -/
 def flag? (args : List String) (name : String) : Option String :=
   match args.dropWhile (· != name) with
   | _ :: value :: _ => some value

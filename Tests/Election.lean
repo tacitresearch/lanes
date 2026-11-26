@@ -19,7 +19,6 @@ abbrev N := Fin 3
 instance : (sig N).Inspect := {}
 instance (config : Config) : (cluster N config).Inspect := {}
 
-/-- Messages may be reordered, and any node may crash and come back. -/
 def env : EnvModel (sig N) where
   link _ _ := Link.unordered
   mayCrash _ := true

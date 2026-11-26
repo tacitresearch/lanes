@@ -13,14 +13,6 @@ Frame lemmas for `SysState.step`, and the lifting theorem: whatever is proved ab
 isolation holds for that actor in every reachable state of every system it is part of, under
 every environment model. This is what makes per-actor proofs worth writing: no other actor, no
 message order and no fault can break them.
-
-## Main statements
-
-- `SysState.step_state`: an event changes the private state of at most one actor, and only by
-  that actor's own `step` or `recover`.
-- `System.Reachable.actor`: each actor's state in a reachable system state is reachable for that
-  actor alone.
-- `System.invariant_of_actor`: a per-actor invariant is a system invariant.
 -/
 
 public section
@@ -127,7 +119,6 @@ end SysState
 
 namespace System
 
-/-- Reachability of each actor's own state is preserved by starting an actor. -/
 private theorem actor_reachable_startActor {env : EnvModel σ} {c : SysState sys}
     (h : ∀ j, (sys.actor j).Reachable (c.state j)) (i : σ.Id) :
     ∀ j, (sys.actor j).Reachable ((c.startActor env i).state j) := by

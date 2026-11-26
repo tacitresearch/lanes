@@ -57,7 +57,7 @@ variable {sys : System σ} [Hashable σ.Id]
 private def record (rt : Runtime sys) (events : List (Event σ)) : BaseIO Unit := do
   if rt.config.record then rt.log.modify (· ++ events.toArray)
 
-/-- Carry out the kernel's commands. Returns how many timers were armed. -/
+/-- Returns how many timers were armed. -/
 private def carryOut (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
     (commands : List (Kernel.Command σ)) : Async Nat := do
   let mut armed := 0

@@ -47,8 +47,6 @@ abbrev sig : Signature where
   In := Fin 3 × Nat
   Out := Nat
 
-/-- A worker forwards jobs to the collector, stops itself on every seventh job, and ticks once
-shortly after each start. -/
 def worker (k : Fin 3) : sig.Actor (.worker k) Nat where
   init := 0
   step s
@@ -58,7 +56,6 @@ def worker (k : Fin 3) : sig.Actor (.worker k) Nat where
     | .tick => (s, [.send .collector (.ticked k)])
   recover s := (s, [.after 1 .tick])
 
-/-- The collector counts what it hears and reports every tenth job. -/
 def collector : sig.Actor .collector (Nat × Nat) where
   init := (0, 0)
   step s
@@ -87,7 +84,6 @@ def flakyTest : Async (List (String × Bool)) := do
   let config : Runtime.Config := { record := true, inboxCapacity := 8 }
   let outputs ← IO.mkRef (#[] : Array Nat)
   let rt ← Runtime.start flaky config fun out => outputs.modify (·.push out)
-  -- Three clients send 100 jobs each, concurrently.
   let clients := (List.finRange 3).toArray.map fun (k : Fin 3) => (do
     for n in [0:100] do
       rt.input (k, n * 3 + k.val + 1) : Async Unit)
@@ -147,8 +143,6 @@ abbrev floodSig : Signature where
   Msg _ := FloodMsg
   In := Fin 2 × Nat
 
-/-- On `burst n` an actor sends itself `n` notes and its peer `n` pings; a ping is answered with
-a pong. The state counts notes and pongs. -/
 def flooder (self : Fin 2) : floodSig.Actor self (Nat × Nat) where
   init := (0, 0)
   step s

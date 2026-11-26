@@ -33,7 +33,6 @@ def dieHard : Model (Nat × Nat) String where
        ("emptyBig", (small, 0)), ("smallToBig", (small - toBig, big + toBig)),
        ("bigToSmall", (small + toSmall, big - toSmall))]
 
-/-- A counter that stops at 3: a deadlock unless 3 is declared terminal. -/
 def counter : Model Nat Unit where
   init := [0]
   next s := if s < 3 then [((), s + 1)] else []

@@ -21,7 +21,6 @@ Comments and string literals are ignored. The checks that need the elaborator (`
 
 namespace Lanes.Cli.Lint
 
-/-- A rule violation at a line of a file. -/
 structure Finding where
   file : System.FilePath
   line : Nat
@@ -77,11 +76,9 @@ def stripCommentsAndStrings (src : String) : String := Id.run do
       out := out.push c
   return String.ofList out.toList
 
-/-- Whether `c` can be part of an identifier. -/
 def isWordChar (c : Char) : Bool :=
   c.isAlphanum || c == '_' || c == '.' || c == '!' || c == '?' || c == '\''
 
-/-- Whether `word` occurs in `line` as a whole word. -/
 def hasWord (line word : String) : Bool :=
   (line.splitOn word).length > 1 && Id.run do
     let parts := line.splitOn word
@@ -95,22 +92,17 @@ def hasWord (line word : String) : Bool :=
       if startsOk && endsOk then found := true
     return found
 
-/-- Words that mark code Lanes asks you to list in `TRUSTED.md`. -/
 def trustedWords : List String :=
   ["partial", "unsafe", "axiom", "panic!", "implemented_by", "extern"]
 
-/-- Directories whose files may import Mathlib and CSLib. -/
 def proofDirs : List String :=
   ["Semantics", "Temporal", "Proofs", "Examples", "Tests"]
 
-/-- Whether a file belongs to the proof layer, judged by its path. -/
 def isProofFile (file : System.FilePath) : Bool :=
   file.components.any fun part =>
     proofDirs.contains part || part.endsWith "Proofs.lean"
       || proofDirs.any fun dir => part == dir ++ ".lean"
 
-/-- Whether an import line names a module of the proof layer: `Lanes.Semantics`, or a module
-with a `Semantics`, `Temporal` or `Proofs` component, such as an application's `App.Proofs`. -/
 def importsProofModule (line : String) : Bool :=
   match (line.splitOn " ").filter (· != "") |>.getLast? with
   | some module =>
@@ -118,7 +110,7 @@ def importsProofModule (line : String) : Bool :=
       part == "Semantics" || part == "Temporal" || part.endsWith "Proofs"
   | none => false
 
-/-- Check one file. `trusted` is the text of `TRUSTED.md`. -/
+/-- `trusted` is the text of `TRUSTED.md`. -/
 def checkFile (root file : System.FilePath) (trusted : String) : IO (List Finding) := do
   let src ← IO.FS.readFile file
   let relative := (file.toString.dropPrefix (root.toString ++ "/")).toString
@@ -148,14 +140,12 @@ def checkFile (root file : System.FilePath) (trusted : String) : IO (List Findin
               ++ "(rule 1.6)"⟩ :: findings
   return findings.reverse
 
-/-- The Lean files of a project, leaving out build output, templates and hidden directories. -/
 def sourceFiles (root : System.FilePath) : IO (Array System.FilePath) := do
   let files ← root.walkDir fun dir =>
     let name := dir.fileName.getD ""
     return !(name.startsWith "." || name == "templates")
   return (files.filter fun f => f.extension == some "lean").qsort (·.toString < ·.toString)
 
-/-- Run every check on the project at `root`. Returns the number of findings. -/
 def run (root : System.FilePath) : IO Nat := do
   let trustedFile := root / "TRUSTED.md"
   let trusted ← if ← trustedFile.pathExists then IO.FS.readFile trustedFile else pure ""

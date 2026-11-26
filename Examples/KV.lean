@@ -24,49 +24,40 @@ namespace Examples.KV
 
 open Lanes
 
-/-- Identifies a client request. -/
 abbrev ReqId := Nat
 
-/-- An operation on the store. -/
 inductive Op (K V : Type) where
   | put (key : K) (value : V)
   | get (key : K)
   deriving DecidableEq, Repr, Hashable
 
-/-- The result of an operation. -/
 inductive Res (V : Type) where
   | ok
   | value (v : Option V)
   deriving DecidableEq, Repr, Hashable
 
-/-- A client request, sent to the front end `via`. -/
 structure Request (K V F : Type) where
   req : ReqId
   via : F
   op : Op K V
   deriving DecidableEq, Repr, Hashable
 
-/-- The response to request `req`. -/
 structure Response (V : Type) where
   req : ReqId
   res : Res V
   deriving DecidableEq, Repr, Hashable
 
-/-- The actors: the front ends and the store. -/
 inductive Id (F : Type) where
   | front (f : F)
   | store
   deriving DecidableEq, Repr, Hashable
 
-/-- What a front end accepts. -/
 inductive FrontMsg (K V F : Type) where
-  /-- A client request. -/
   | request (r : Request K V F)
   /-- The store's answer to a read this front end forwarded. -/
   | got (req : ReqId) (key : K) (value : Option V)
   deriving DecidableEq, Repr, Hashable
 
-/-- What the store accepts. -/
 inductive StoreMsg (K V F : Type) where
   | put (req : ReqId) (key : K) (value : V)
   | get (req : ReqId) (key : K) (replyTo : F)
@@ -74,7 +65,6 @@ inductive StoreMsg (K V F : Type) where
 
 variable {K V F : Type} [DecidableEq K] [DecidableEq V] [DecidableEq F]
 
-/-- Each actor's message type. -/
 abbrev Msg (K V F : Type) : Id F → Type
   | .front _ => FrontMsg K V F
   | .store => StoreMsg K V F
@@ -83,7 +73,6 @@ instance : ∀ i, DecidableEq (Msg K V F i)
   | .front _ => inferInstanceAs (DecidableEq (FrontMsg K V F))
   | .store => inferInstanceAs (DecidableEq (StoreMsg K V F))
 
-/-- The interface: requests in, responses out. -/
 abbrev sig (K V F : Type) [DecidableEq K] [DecidableEq V] [DecidableEq F] : Signature where
   Id := Id F
   Msg := Msg K V F
@@ -92,8 +81,6 @@ abbrev sig (K V F : Type) [DecidableEq K] [DecidableEq V] [DecidableEq F] : Sign
 
 /-! ## The spec -/
 
-/-- The service spec: a map. A `put` writes and answers `ok`; a `get` answers what the map
-holds. Each request takes effect at one instant. -/
 def spec (K V F : Type) [DecidableEq K] [DecidableEq V] [DecidableEq F] :
     Service (sig K V F) (K → Option V) where
   init _ := none
@@ -104,7 +91,6 @@ def spec (K V F : Type) [DecidableEq K] [DecidableEq V] [DecidableEq F] :
 
 /-! ## The implementation -/
 
-/-- The store owns the data and answers one message at a time. -/
 def store : (sig K V F).Actor .store (K → Option V) where
   init _ := none
   step data
@@ -132,7 +118,6 @@ def front (caching : Bool) (self : F) : (sig K V F).Actor (.front self) (List (K
       (if caching then (key, value) :: cache.filter (·.1 ≠ key) else cache,
         [.emit ⟨req, .value value⟩])
 
-/-- The system: front ends and one store. -/
 abbrev system (K V F : Type) [DecidableEq K] [DecidableEq V] [DecidableEq F] (caching : Bool) :
     System (sig K V F) where
   State

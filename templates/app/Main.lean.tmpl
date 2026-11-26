@@ -9,7 +9,6 @@ is in `{{Name}}.Counter`.
 open Lanes {{Name}}
 open scoped Lanes.Html
 
-/-- The page fragment showing the counter. -/
 def CounterView (response : Response) : Html :=
   <div id="counter">
     <p>{s!"Count: {response.value}"}</p>
@@ -17,7 +16,6 @@ def CounterView (response : Response) : Html :=
     <button hx-post="/increment" hx-target="#counter" hx-swap="outerHTML">"Add one"</button>
   </div>
 
-/-- The page. -/
 def Page : Html :=
   <html lang="en">
     <head>

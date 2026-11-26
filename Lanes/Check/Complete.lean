@@ -19,7 +19,6 @@ namespace Lanes.SysState
 
 variable {σ : Signature} {sys : System σ} [Enum σ.Id] {env : EnvModel σ} {c c' : SysState sys}
 
-/-- Every enabled event other than an input is among the candidates. -/
 theorem mem_candidates {ev : Event σ} (hstep : c.step env ev = some c')
     (hinput : ∀ x, ev ≠ .input x) : ev ∈ c.candidates := by
   simp only [candidates, List.mem_append, List.mem_map, List.mem_flatMap, List.mem_eraseDups]

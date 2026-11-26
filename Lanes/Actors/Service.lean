@@ -21,14 +21,6 @@ way. For a service of operations and responses this is linearizability.
 
 `Lanes.Check.Monitor` checks this on small instances and `Lanes.Semantics.Service` states it as
 a refinement.
-
-## Main definitions
-
-- `Service σ S`: a sequential spec over the inputs and outputs of signature `σ`.
-- `Service.State σ S`: the spec state together with inputs not yet applied and outputs not yet
-  delivered.
-- `Service.State.call`, `Service.apply`, `Service.State.ret`: an input arrives, an input takes
-  effect, an output is delivered.
 -/
 
 @[expose] public section
@@ -37,38 +29,27 @@ namespace Lanes
 
 variable {σ : Signature} {S : Type}
 
-/-- A sequential spec: what each input does and answers, one input at a time. -/
 structure Service (σ : Signature) (S : Type) where
-  /-- The initial state. -/
   init : S
-  /-- Apply one input: the next state and the outputs it produces. -/
   step : S → σ.In → S × List σ.Out
 
 namespace Service
 
-/-- The state of a service used concurrently. -/
 structure State (σ : Signature) (S : Type) where
-  /-- The state of the sequential spec. -/
   value : S
-  /-- Inputs that have arrived and not yet taken effect. -/
   pending : List σ.In
-  /-- Outputs produced and not yet delivered. -/
   outbox : List σ.Out
 
-/-- The state before any input. -/
 def start (svc : Service σ S) : State σ S :=
   ⟨svc.init, [], []⟩
 
-/-- An input arrives. -/
 def State.call (st : State σ S) (x : σ.In) : State σ S :=
   { st with pending := st.pending ++ [x] }
 
-/-- The pending input `x` takes effect. -/
 def apply (svc : Service σ S) (st : State σ S) (x : σ.In) : State σ S :=
   let r := svc.step st.value x
   { value := r.1, pending := st.pending.erase x, outbox := st.outbox ++ r.2 }
 
-/-- The output `out` is delivered, if it is waiting. -/
 def State.ret (st : State σ S) (out : σ.Out) : Option (State σ S) :=
   if st.outbox.contains out then some { st with outbox := st.outbox.erase out } else none
 

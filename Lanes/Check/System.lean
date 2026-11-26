@@ -17,11 +17,6 @@ so what is checked is the code that runs.
 
 A counterexample is a list of events. It replays through `SysState.run` and in the deterministic
 scheduler.
-
-## Main definitions
-
-- `Check.system`: check properties of a system under a scenario.
-- `Check.Report.render`: print a report, with the counterexample trace if there is one.
 -/
 
 @[expose] public section
@@ -44,12 +39,10 @@ private instance [σ.Inspect] [sys.Inspect] [Hashable D] {env : EnvModel σ} :
     Hashable (Node sys env D) where
   hash a := mixHash a.world.state.hash (mixHash (hash a.world.driver) (hash a.world.crashes))
 
-/-- Change the state type of a trace. -/
 def Trace.map {S S' L : Type} (f : S → S') (t : Trace S L) : Trace S' L where
   init := f t.init
   steps := t.steps.map fun (l, s) => (l, f s)
 
-/-- Change the state type of a report. -/
 def Report.map {S S' L : Type} (f : S → S') (r : Report S L) : Report S' L :=
   { r with
     failure := r.failure.map fun
@@ -59,8 +52,6 @@ def Report.map {S S' L : Type} (f : S → S') (r : Report S L) : Report S' L :=
     witnesses := r.witnesses.map fun (n, t) => (n, t.map f) }
 
 /--
-Check `props` in every state of `sys` reachable under the scenario `sc`.
-
 Properties are stated over the `World`: the system state and the driver's state. The result
 covers exactly the instance given: this driver, this crash budget, these bounds.
 -/
@@ -81,14 +72,11 @@ covers exactly the instance given: this driver, this crash budget, these bounds.
       terminal := fun n => opts.terminal n.world }
   (search model props' opts' Event.kind Event.kinds).map (·.world)
 
-/-- Print a trace as numbered events followed by the state it ends in. -/
 def Trace.render {S L : Type} (showState : S → String) (showLabel : L → String)
     (t : Trace S L) : String :=
   let steps := t.steps.zipIdx.map fun ((l, _), k) => s!"  {k + 1}. {showLabel l}"
   "\n".intercalate (steps ++ ["  state reached:", showState t.last])
 
-/-- Print a report: the verdict, any counterexample, then the size of the search and the
-coverage of each kind of step. -/
 def Report.render {S L : Type} (showState : S → String) (showLabel : L → String)
     (r : Report S L) : String :=
   let verdict := match r.failure with
@@ -111,7 +99,6 @@ def Report.render {S L : Type} (showState : S → String) (showLabel : L → Str
     [s!"states: {r.states}, transitions: {r.transitions}, depth: {r.depth}",
      s!"coverage: {", ".intercalate coverage}"])
 
-/-- Print a report about a system. -/
 def Report.renderSystem [σ.Inspect] [sys.Inspect]
     (r : Report (World sys D) (Event σ)) : String :=
   r.render (fun w => w.state.render) Event.render

@@ -13,18 +13,13 @@ open Lanes
 /-- Identifies a client request, so its response can be matched to it. -/
 abbrev ReqId := Nat
 
-/-- What a client may ask. -/
 inductive Request where
-  /-- Add one to the counter. -/
   | increment (req : ReqId)
-  /-- Read the counter. -/
   | read (req : ReqId)
   deriving DecidableEq, Repr, Hashable
 
-/-- The answer to request `req`. -/
 structure Response where
   req : ReqId
-  /-- The value of the counter after the request. -/
   value : Nat
   /-- Whether the request was applied. An increment at the limit is refused. -/
   applied : Bool
@@ -35,7 +30,6 @@ structure Config where
   /-- The counter never exceeds this (rule 2.6: bounded everything). -/
   limit : Nat := 1000
 
-/-- The interface: requests in, responses out, one actor. -/
 abbrev sig : Signature := Server.sig Request Response
 
 /--
@@ -50,7 +44,6 @@ def service (config : Config) : Service sig Nat where
       else (count, [⟨req, count, false⟩])
     | .read req => (count, [⟨req, count, true⟩])
 
-/-- The system: the service behind a mailbox. -/
 abbrev system (config : Config) : System sig :=
   Server.system (service config)
 

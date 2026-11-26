@@ -21,30 +21,25 @@ instance {ε α : Type} [BEq ε] [BEq α] : BEq (Except ε α) where
 
 open Lanes
 
-/-- Whether `text` parses to exactly `expected`. -/
 def parsesTo (text : String) (expected : Json) : Bool :=
   match Json.parse text with
   | .ok j => j == expected
   | .error _ => false
 
-/-- Whether the parser rejects `text`. -/
 def rejects (text : String) : Bool :=
   match Json.parse text with
   | .ok _ => false
   | .error _ => true
 
-/-- Whether parsing `text` fails with exactly the error `message`. -/
 def failsWith (text message : String) : Bool :=
   match Json.parse text with
   | .ok _ => false
   | .error e => e == message
 
-/-- `depth` arrays inside each other, around `null`. -/
 def nested : (depth : Nat) → Json
   | 0 => .null
   | depth + 1 => .arr #[nested depth]
 
-/-- The text of `nested depth`. -/
 def nestedText (depth : Nat) : String :=
   "".pushn '[' depth ++ "null" ++ "".pushn ']' depth
 
@@ -60,7 +55,6 @@ def strings : List Json :=
     "controls \x00 \x01 \x08 \x0c \x1f \x7f", "é ü ß", "日本語", "😀 🎉", "\u2028 \u2029 \uffff",
     "\\u0041 is not an escape here", "null", "[1,2]" ]
 
-/-- Arrays and objects, nested and empty. -/
 def containers : List Json :=
   [ .arr #[], .mkObj [], .arr #[.arr #[], .mkObj []], .arr #[1, "a", .null, true, false, .num 1.5],
     .mkObj [("b", 1), ("a", "x")],
@@ -69,16 +63,13 @@ def containers : List Json :=
             ("object", .mkObj [("x", .num (-1.5)), ("y", .mkObj [("z", "w")])])],
     nested 100 ]
 
-/-- The round-trip corpus. -/
 def corpus : List Json :=
   [.null, .bool true, .bool false] ++ numbers ++ strings ++ containers
 
-/-- A small document used by the printer tests. -/
 def sample : Json :=
   .mkObj [("name", "Ada"), ("tags", .arr #["a", "b"]), ("age", 36), ("empty", .arr #[]),
           ("nested", .mkObj [("ok", true), ("none", .null), ("unit", .mkObj [])])]
 
-/-- Whether `a` survives encoding to JSON text and decoding again. -/
 def roundTrips {α : Type} [ToJson α] [FromJson α] [BEq α] (a : α) : Bool :=
   match Json.parse (toJson a).compress with
   | .ok j =>
@@ -87,13 +78,11 @@ def roundTrips {α : Type} [ToJson α] [FromJson α] [BEq α] (a : α) : Bool :=
     | .error _ => false
   | .error _ => false
 
-/-- Whether `j` does not decode as a value of `α`. -/
 def undecodable (α : Type) [FromJson α] (j : Json) : Bool :=
   match (fromJson? j : Except String α) with
   | .ok _ => false
   | .error _ => true
 
-/-- The parser on well-formed input. -/
 def parserTests : List (String × Bool) :=
   [ ("json: literals and surrounding whitespace",
       parsesTo "null" .null && parsesTo " true\n" (.bool true) &&
@@ -121,7 +110,6 @@ def parserTests : List (String × Bool) :=
       failsWith "\"é\\x\"" "offset 4: invalid escape sequence" &&
       failsWith "[1] x" "offset 4: end of input expected") ]
 
-/-- The parser on malformed input. -/
 def rejectionTests : List (String × Bool) :=
   [ ("json: rejects empty input", rejects "" && rejects " \n"),
     ("json: rejects trailing, leading and missing commas",
@@ -172,7 +160,6 @@ def rejectionTests : List (String × Bool) :=
       !(Json.parse "12.345" (maxDigits := 4)).isOk &&
       Json.parse "[123456]" (maxDigits := 5) == .error "offset 6: number longer than 5 digits") ]
 
-/-- The printers and the round trip through text. -/
 def printerTests : List (String × Bool) :=
   [ ("json: compress writes no whitespace and sorts keys",
       sample.compress ==
@@ -200,7 +187,6 @@ def printerTests : List (String × Bool) :=
     ("json: compress (parse text) is a fixed point",
       corpus.all fun j => (Json.parse j.compress).map Json.compress == .ok j.compress) ]
 
-/-- Values, accessors and instances. -/
 def valueTests : List (String × Bool) :=
   [ ("json: equal numbers are equal values",
       (1.50 : JsonNumber) == 1.5 && (1.0 : JsonNumber) == 1 && (100e-2 : JsonNumber) == 1 &&
@@ -258,7 +244,6 @@ def valueTests : List (String × Bool) :=
       !(sample.getObjValAs? Nat "missing").isOk && !(sample.getObjValAs? Nat "name").isOk &&
       Json.mkObj (Json.opt "a" (some 1) ++ Json.opt "b" (none : Option Nat)) == .obj #[("a", 1)]) ]
 
-/-- Every test of the JSON library. -/
 def tests : List (String × Bool) :=
   parserTests ++ rejectionTests ++ printerTests ++ valueTests
 

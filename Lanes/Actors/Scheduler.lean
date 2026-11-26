@@ -15,13 +15,6 @@ list of events, which replays through `SysState.run`.
 
 It serves as the test and replay harness, as random simulation for instances too large to check
 exhaustively, and as the reference the concurrent runtime's traces are checked against.
-
-## Main definitions
-
-- `Driver σ D`: a model of the outside world that chooses inputs and observes outputs.
-- `World sys D`: a system state together with its driver's state.
-- `World.next`: every step the closed world can take.
-- `simulate`: a seeded random run.
 -/
 
 @[expose] public section
@@ -36,28 +29,22 @@ outputs it sees. Drivers may choose among several inputs; that choice exists onl
 simulator and the model checker, never in an actor.
 -/
 structure Driver (σ : Signature) (D : Type) where
-  /-- The driver's initial state. -/
   init : D
-  /-- The inputs that may arrive now, each with the driver's next state. -/
   inputs : D → List (σ.In × D)
-  /-- The driver's state after seeing an output. -/
   observe : D → σ.Out → D := fun d _ => d
 
 namespace Driver
 
-/-- A driver that never sends anything. -/
 def silent : Driver σ Unit where
   init := ()
   inputs _ := []
 
-/-- Send the given inputs once each, in the given order. -/
 def script (xs : List σ.In) : Driver σ (List σ.In) where
   init := xs
   inputs
     | [] => []
     | x :: xs => [(x, xs)]
 
-/-- Send the given inputs once each, in any order. -/
 def anyOrder (xs : List σ.In) : Driver σ (List σ.In) where
   init := xs
   inputs remaining :=
@@ -66,35 +53,24 @@ def anyOrder (xs : List σ.In) : Driver σ (List σ.In) where
 
 end Driver
 
-/-- A system together with its outside world. -/
 structure World (sys : System σ) (D : Type) where
-  /-- The state of the system. -/
   state : SysState sys
-  /-- The state of the driver. -/
   driver : D
-  /-- How many crashes have happened so far. -/
   crashes : Nat := 0
 
-/-- What bounds a closed world: the environment model, the driver and a crash budget. -/
 structure Scenario (σ : Signature) (D : Type) where
-  /-- The assumptions about links and failures. -/
   env : EnvModel σ := {}
-  /-- The model of the outside world. -/
   driver : Driver σ D
-  /-- At most this many crashes are explored. -/
   maxCrashes : Nat := 0
 
 namespace World
 
 variable {sys : System σ} {D : Type}
 
-/-- The world before any event. -/
 def init (sys : System σ) (sc : Scenario σ D) : World sys D where
   state := SysState.init sys sc.env
   driver := sc.driver.init
 
-/-- Every step the world can take: an enabled event of the system, or an input the driver
-chooses to send. -/
 def next [Enum σ.Id] (sc : Scenario σ D) (w : World sys D) : List (Event σ × World sys D) :=
   let internal := (w.state.successors sc.env).filterMap fun (ev, c) =>
     match ev with
@@ -111,20 +87,13 @@ def next [Enum σ.Id] (sc : Scenario σ D) (w : World sys D) : List (Event σ ×
 
 end World
 
-/-- The record of a run: the events applied, in order, and the world they led to. -/
 structure Run (sys : System σ) (D : Type) where
-  /-- The events applied, in order. -/
   events : Array (Event σ)
-  /-- The world after the last event. -/
   final : World sys D
   /-- Whether the run ended because no event was enabled, as opposed to hitting the step
   bound. -/
   quiescent : Bool
 
-/--
-Run a system under the deterministic scheduler: at each step pick one enabled event uniformly
-with a generator seeded by `seed`. Stops when nothing is enabled or after `maxSteps` events.
--/
 def simulate [Enum σ.Id] (sys : System σ) {D : Type} (sc : Scenario σ D) (seed : Nat)
     (maxSteps : Nat := 10000) : Run sys D := Id.run do
   let mut gen := mkStdGen seed

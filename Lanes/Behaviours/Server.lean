@@ -17,18 +17,12 @@ down.
 
 A server owns its state alone (rule 3.6: one message, one atomic transition). Use it whenever
 the state fits in one actor; move to several actors and a protocol only when it does not.
-
-## Main definitions
-
-- `Server.sig In Out`: the signature of a one-actor system.
-- `Server.actor`, `Server.system`: the actor and the system for a service.
 -/
 
 @[expose] public section
 
 namespace Lanes.Server
 
-/-- The interface of a server: one actor, whose messages are the inputs. -/
 abbrev sig (In Out : Type) [DecidableEq In] [DecidableEq Out] : Signature where
   Id := Unit
   Msg _ := In
@@ -37,14 +31,12 @@ abbrev sig (In Out : Type) [DecidableEq In] [DecidableEq Out] : Signature where
 
 variable {In Out S : Type} [DecidableEq In] [DecidableEq Out]
 
-/-- The actor that runs a service: each input is handled by the service's `step` and its
-outputs are emitted. Its state is durable. -/
+/-- Its state is durable. -/
 def actor (svc : Service (sig In Out) S) : (sig In Out).Actor () S where
   init := svc.init
   step s x := ((svc.step s x).1, (svc.step s x).2.map .emit)
   recover s := (s, [])
 
-/-- The one-actor system that runs a service. -/
 abbrev system (svc : Service (sig In Out) S) : System (sig In Out) where
   State _ := S
   actor _ := actor svc

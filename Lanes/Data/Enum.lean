@@ -12,22 +12,14 @@ identities, and the model checker uses it to run actors that are generic over ke
 node identities on small instances (2 keys, 3 nodes).
 
 It is defined here, not taken from Mathlib's `Fintype`, because runtime modules import only `Std`.
-
-## Main definitions
-
-- `Enum α`: a list containing every value of `α`.
-- `Enum.tabulate`: rebuild a function on a finite type as a table of computed values.
 -/
 
 @[expose] public section
 
 namespace Lanes
 
-/-- A type whose values can all be listed. -/
 class Enum (α : Type) where
-  /-- Every value of the type. -/
   all : List α
-  /-- The list is complete. -/
   complete : ∀ a : α, a ∈ all
 
 namespace Enum
@@ -60,7 +52,6 @@ instance {α β : Type} [Enum α] [Enum β] : Enum (α × β) where
     simp only [List.mem_flatMap, List.mem_map]
     exact ⟨p.1, complete p.1, p.2, complete p.2, rfl⟩
 
-/-- A table of the values of `f` on the list `l`, read back as a function on members of `l`. -/
 def tabulateOn {ι : Type} [DecidableEq ι] {β : ι → Type} (f : (i : ι) → β i) :
     (l : List ι) → (i : ι) → i ∈ l → β i
   | [], _, h => nomatch h
@@ -94,16 +85,13 @@ theorem tabulateOn_eq {ι : Type} [DecidableEq ι] {β : ι → Type} (f : (i : 
     (f : (i : ι) → β i) : tabulate f = f :=
   funext fun i => tabulateOn_eq f _ i _
 
-/-- Functions on a finite type are compared point by point. Low priority, so a more specific
-instance wins. -/
+/-- Low priority, so a more specific instance wins. -/
 instance (priority := low) funBEq {α β : Type} [Enum α] [BEq β] : BEq (α → β) where
   beq f g := (all (α := α)).all fun a => f a == g a
 
-/-- Functions on a finite type are hashed over all their values. -/
 instance (priority := low) funHashable {α β : Type} [Enum α] [Hashable β] : Hashable (α → β) where
   hash f := (all (α := α)).foldl (fun h a => mixHash h (hash (f a))) 17
 
-/-- Functions on a finite type print as the list of their values. -/
 instance (priority := low) funRepr {α β : Type} [Enum α] [Repr α] [Repr β] : Repr (α → β) where
   reprPrec f _ := repr ((all (α := α)).map fun a => (a, f a))
 

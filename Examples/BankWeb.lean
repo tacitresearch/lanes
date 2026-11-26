@@ -11,14 +11,6 @@ import Examples.Bank
 The bank reference app served over HTTP with a server-rendered page. All state stays in the
 account actors. The browser holds no logic: HTMX swaps in the HTML fragments the server sends.
 
-The pieces:
-
-- views are pure functions into `Html`;
-- `bridge.decode` parses each request into a `Bank.Request` or answers directly (the page, `404`,
-  `400`);
-- `bridge.encode` renders the bank's answer as an HTML fragment;
-- the account actors are the ones checked and proved in `Examples.Bank`, unchanged.
-
 Run with `lake exe bankWeb` and open http://127.0.0.1:8080.
 -/
 
@@ -27,10 +19,8 @@ namespace Examples.BankWeb
 open Lanes Examples.Bank
 open scoped Lanes.Html
 
-/-- The demo runs three accounts. -/
 abbrev Acct := Fin 3
 
-/-- Read an account name from text. -/
 def parseAcct (s : String) : Option Acct := do
   let n ← s.toNat?
   if h : n < 3 then some ⟨n, h⟩ else none
@@ -42,7 +32,6 @@ def AccountRow (account : Acct) : Html :=
     <td hx-get={s!"/accounts/{account}"} hx-trigger="load, transferred from:body">"…"</td>
   </tr>
 
-/-- The transfer form. Its result is swapped into `#result`. -/
 def TransferForm : Html :=
   <form hx-post="/transfer" hx-target="#result">
     <label>"From " <input name="src" type="number" min="0" max="2" value="0" required/></label>
@@ -51,7 +40,6 @@ def TransferForm : Html :=
     <button type="submit">"Transfer"</button>
   </form>
 
-/-- The page. -/
 def Page : Html :=
   <html lang="en">
     <head>
@@ -67,20 +55,17 @@ def Page : Html :=
     </body>
   </html>
 
-/-- The fragment shown for each answer of the bank. -/
 def OutcomeView : Outcome → Html
   | .accepted => <span class="ok">"Transfer accepted."</span>
   | .insufficient => <span class="error">"Insufficient funds."</span>
   | .balance amount => <span>{amount}</span>
 
-/-- Parse a transfer form. -/
 def parseTransfer (id : Http.ReqId) (r : Http.Request) : Option (Transfer Acct) := do
   let src ← r.field? "src" >>= parseAcct
   let dst ← r.field? "dst" >>= parseAcct
   let amount ← r.field? "amount" >>= String.toNat?
   return { req := id, src, dst, amount }
 
-/-- How the bank meets HTTP. -/
 def bridge : Http.Bridge (sig Acct) where
   decode id r :=
     match r.method, r.path with

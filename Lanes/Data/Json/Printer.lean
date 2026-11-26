@@ -23,22 +23,15 @@ other character, non-ASCII ones included, is written as it is.
 
 The printers write straight into a `String`: the original goes through `Lean.Format`, which
 runtime modules cannot import. They recurse once per level of nesting.
-
-## Main definitions
-
-- `Json.compress`: the shortest text of a value.
-- `Json.pretty`: the indented text of a value.
 -/
 
 @[expose] public section
 
 namespace Lanes.Json
 
-/-- Whether a character cannot appear unescaped in a JSON string. -/
 def needsEscape (c : Char) : Bool :=
   c == '"' || c == '\\' || c.val < 0x20
 
-/-- Append to `acc` the character `c` as it is written inside a JSON string. -/
 def escapeChar (acc : String) (c : Char) : String :=
   if c == '"' then acc ++ "\\\""
   else if c == '\\' then acc ++ "\\\\"
@@ -51,19 +44,15 @@ def escapeChar (acc : String) (c : Char) : String :=
     (acc ++ "\\u00").push (Nat.digitChar (c.toNat / 16)) |>.push (Nat.digitChar (c.toNat % 16))
   else acc.push c
 
-/-- Append to `acc` the contents of `s` as they are written inside a JSON string. -/
 def escape (s : String) (acc : String := "") : String :=
   if s.any needsEscape then s.foldl escapeChar acc else acc ++ s
 
-/-- Append to `acc` the string `s` as a JSON string, with its quotes. -/
 def renderString (s : String) (acc : String := "") : String :=
   (escape s (acc.push '"')).push '"'
 
-/-- Append to `acc` the comma that separates an element from the one before it, if there is one. -/
 @[inline] def separate (acc : String) (first : Bool) : String :=
   if first then acc else acc.push ','
 
-/-- Append to `acc` the text of `j` with no whitespace. -/
 def compressTo (acc : String) : Json → String
   | .null => acc ++ "null"
   | .bool true => acc ++ "true"
@@ -89,14 +78,9 @@ decreasing_by
 def compress (j : Json) : String :=
   compressTo "" j
 
-/-- A line break followed by the indentation of nesting `level`, at `indent` spaces per level. -/
 def newline (indent level : Nat) : String :=
   "\n".pushn ' ' (indent * level)
 
-/--
-Append to `acc` the text of `j` with one element or field per line. `level` is the nesting of
-`j`, and each level is indented by `indent` spaces.
--/
 def prettyTo (indent level : Nat) (acc : String) : Json → String
   | .arr elems =>
     if elems.isEmpty then acc ++ "[]"
@@ -120,10 +104,7 @@ decreasing_by
     simp only [obj.sizeOf_spec]
     omega
 
-/--
-The text of a value with one array element or object field per line, each level of nesting
-indented by `indent` spaces. Parsing it gives the value back.
--/
+/-- One array element or object field per line. Parsing it gives the value back. -/
 def pretty (j : Json) (indent : Nat := 2) : String :=
   prettyTo indent 0 "" j
 

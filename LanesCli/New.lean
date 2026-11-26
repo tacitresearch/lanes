@@ -14,12 +14,10 @@ namespace Lanes.Cli.New
 
 /-- Where a generated application gets Lanes from. -/
 inductive Source where
-  /-- The public repository, at a revision. -/
   | git (url rev : String)
   /-- A local checkout, for developing Lanes itself. -/
   | path (dir : String)
 
-/-- The `[[require]]` lines for a source. -/
 def Source.toToml : Source → String
   | .git url rev => s!"git = \"{url}\"\nrev = \"{rev}\""
   | .path dir => s!"path = \"{dir}\""
@@ -29,14 +27,11 @@ def moduleName (name : String) : String :=
   String.join ((name.split fun c => c == '-' || c == '_').toList.map fun part =>
     part.toString.capitalize)
 
-/-- Whether a project name is usable: lowercase letters, digits, `-` and `_`, starting with a
-letter. -/
 def validName (name : String) : Bool :=
   match name.toList with
   | c :: _ => c.isLower && name.all fun c => c.isLower || c.isDigit || c == '-' || c == '_'
   | [] => false
 
-/-- The files of the template: destination path and contents, with placeholders. -/
 def files : List (String × String) :=
   [ ("lakefile.toml", include_str "../templates/app/lakefile.toml.tmpl"),
     ("{{Name}}/Counter.lean", include_str "../templates/app/Counter.lean.tmpl"),
@@ -49,12 +44,10 @@ def files : List (String × String) :=
     ("LANES_STYLE.md", include_str "../LANES_STYLE.md"),
     ("lean-toolchain", include_str "../lean-toolchain") ]
 
-/-- Fill in the placeholders. -/
 def fill (name : String) (source : Source) (text : String) : String :=
   text.replace "{{name}}" name |>.replace "{{Name}}" (moduleName name)
     |>.replace "{{lanes_source}}" source.toToml
 
-/-- Create the application `name` in `dir`. -/
 def run (name : String) (dir : System.FilePath) (source : Source) : IO UInt32 := do
   if !validName name then
     IO.eprintln s!"lanes new: '{name}' is not a valid name; use lowercase letters, digits, - and _"

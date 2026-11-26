@@ -32,13 +32,8 @@ Two limits bound what a document can cost (rule 2.6), and input beyond either is
 
 Apart from long numbers, parsing takes time linear in the input, or `n log n` for an object of
 `n` fields.
-
-## Main definitions
-
-- `Json.parse`: parse a string into a `Json` value, or return an error with its byte offset.
 -/
 
-/-- Prove an order between positions of one string from the order hypotheses in scope. -/
 local macro "pos_order" : tactic =>
   `(tactic| ((try simp only [String.Pos.lt_iff_remainingBytes_lt,
       String.Pos.le_iff_remainingBytes_le] at *); omega))
@@ -51,22 +46,18 @@ namespace Parser
 
 variable {s : String}
 
-/-- The error `message`, located at the position `p`. -/
 def fail {α : Type} (p : s.Pos) (message : String) : Except String α :=
   .error s!"offset {p.offset.byteIdx}: {message}"
 
-/-- The character at `p` and the position after it, or `none` at the end of the input. -/
 @[inline] def next? (p : s.Pos) : Option (Char × { q : s.Pos // p < q }) :=
   if h : p = s.endPos then none else some (p.get h, ⟨p.next h, String.Pos.lt_next⟩)
 
-/-- The position after the character at `p`, if there is one and it satisfies `accepted`. -/
 @[inline] def accept (accepted : Char → Bool) (p : s.Pos) : Option { q : s.Pos // p < q } :=
   match next? p with
   | some (c, q) => if accepted c then some q else none
   | none => none
 
-/-- The first position at or after `p` that does not hold whitespace. `start` is where the caller
-began, so that the result is known to be at or after it. -/
+/-- `start` is where the caller began, so that the result is known to be at or after it. -/
 def skipWsFrom (start p : s.Pos) (h : start ≤ p) : { q : s.Pos // start ≤ q } :=
   match next? p with
   | some (c, ⟨q, hq⟩) =>
@@ -76,11 +67,9 @@ def skipWsFrom (start p : s.Pos) (h : start ≤ p) : { q : s.Pos // start ≤ q 
 termination_by p.remainingBytes
 decreasing_by pos_order
 
-/-- The first position at or after `p` that does not hold whitespace. -/
 @[inline] def skipWs (p : s.Pos) : { q : s.Pos // p ≤ q } :=
   skipWsFrom p p (String.Pos.le_refl p)
 
-/-- The position after the characters `expected`, if the input at `p` starts with them. -/
 def acceptAll : (expected : List Char) → (p : s.Pos) → Option { q : s.Pos // p ≤ q }
   | [], p => some ⟨p, String.Pos.le_refl p⟩
   | c :: rest, p =>
@@ -93,14 +82,12 @@ def acceptAll : (expected : List Char) → (p : s.Pos) → Option { q : s.Pos //
 
 /-! ### Strings -/
 
-/-- The value of a hexadecimal digit. -/
 def hexDigit? (c : Char) : Option Nat :=
   if '0' ≤ c ∧ c ≤ '9' then some (c.toNat - '0'.toNat)
   else if 'a' ≤ c ∧ c ≤ 'f' then some (c.toNat - 'a'.toNat + 10)
   else if 'A' ≤ c ∧ c ≤ 'F' then some (c.toNat - 'A'.toNat + 10)
   else none
 
-/-- One hexadecimal digit at `p`. -/
 def hexDigit (p : s.Pos) : Except String (Nat × { q : s.Pos // p < q }) :=
   match next? p with
   | some (c, q) =>
@@ -109,7 +96,6 @@ def hexDigit (p : s.Pos) : Except String (Nat × { q : s.Pos // p < q }) :=
     | none => fail p "hexadecimal digit expected"
   | none => fail p "unexpected end of input"
 
-/-- The four hexadecimal digits of a `\u` escape at `p`, as a number below `0x10000`. -/
 def hex4 (p : s.Pos) : Except String (Nat × { q : s.Pos // p < q }) := do
   let (a, ⟨p1, h1⟩) ← hexDigit p
   let (b, ⟨p2, h2⟩) ← hexDigit p1
@@ -117,10 +103,6 @@ def hex4 (p : s.Pos) : Except String (Nat × { q : s.Pos // p < q }) := do
   let (d, ⟨p4, h4⟩) ← hexDigit p3
   return (4096 * a + 256 * b + 16 * c + d, ⟨p4, by pos_order⟩)
 
-/--
-The second half of a surrogate pair at `p`: a `\u` escape of a low surrogate, combined with the
-high surrogate `high` into the character the pair encodes.
--/
 def lowSurrogate (high : Nat) (p : s.Pos) : Except String (Char × { q : s.Pos // p < q }) :=
   match acceptAll ['\\', 'u'] p with
   | some ⟨p1, h1⟩ =>
@@ -132,7 +114,6 @@ def lowSurrogate (high : Nat) (p : s.Pos) : Except String (Char × { q : s.Pos /
     | .error e => .error e
   | none => fail p "high surrogate not followed by a low surrogate"
 
-/-- The character that the escape sequence at `p`, just after its backslash, stands for. -/
 def escape (p : s.Pos) : Except String (Char × { q : s.Pos // p < q }) :=
   match next? p with
   | some ('"', q) => .ok ('"', q)
@@ -156,10 +137,6 @@ def escape (p : s.Pos) : Except String (Char × { q : s.Pos // p < q }) :=
   | some _ => fail p "invalid escape sequence"
   | none => fail p "unexpected end of input"
 
-/--
-The rest of a string and the position after its closing quote. `p` is inside the string, `acc`
-holds the characters read so far, and `start` is where the caller began.
--/
 def strFrom (start p : s.Pos) (h : start ≤ p) (acc : String) :
     Except String (String × { q : s.Pos // start ≤ q }) :=
   match next? p with
@@ -175,7 +152,6 @@ def strFrom (start p : s.Pos) (h : start ≤ p) (acc : String) :
 termination_by p.remainingBytes
 decreasing_by all_goals pos_order
 
-/-- A string at `p`, with its quotes. -/
 def str (p : s.Pos) : Except String (String × { q : s.Pos // p ≤ q }) :=
   match accept (· == '"') p with
   | some ⟨q, hq⟩ => strFrom p q (by pos_order) ""
@@ -201,8 +177,6 @@ def digitsFrom (maxDigits : Nat) (start p : s.Pos) (h : start ≤ p) (acc count 
 termination_by p.remainingBytes
 decreasing_by pos_order
 
-/-- The integer part of a number at `p`: at least one digit, and no leading zero. Returns its
-value, its number of digits, and the position after it. -/
 def whole (maxDigits : Nat) (p : s.Pos) : Except String (Nat × Nat × { q : s.Pos // p ≤ q }) :=
   match digitsFrom maxDigits p p (String.Pos.le_refl p) 0 0 with
   | .ok (_, 0, _) => fail p "digit expected"
@@ -226,7 +200,6 @@ def fraction (maxDigits whole count : Nat) (p : s.Pos) :
     | .error e => .error e
   | none => .ok (whole, 0, ⟨p, String.Pos.le_refl p⟩)
 
-/-- An optional exponent at `p`, of size at most `maxDigits`. Without one, the result is 0. -/
 def exponent (maxDigits : Nat) (p : s.Pos) : Except String (Int × { q : s.Pos // p ≤ q }) :=
   match accept (fun c => c == 'e' || c == 'E') p with
   | some ⟨p1, h1⟩ =>
@@ -243,7 +216,6 @@ def exponent (maxDigits : Nat) (p : s.Pos) : Except String (Int × { q : s.Pos /
     | .error e => .error e
   | none => .ok (0, ⟨p, String.Pos.le_refl p⟩)
 
-/-- A number at `p`, of at most `maxDigits` digits and with an exponent of at most that size. -/
 def num (maxDigits : Nat) (p : s.Pos) : Except String (JsonNumber × { q : s.Pos // p ≤ q }) :=
   let negative := (accept (· == '-') p).isSome
   let p1 : { q : s.Pos // p ≤ q } :=
@@ -264,14 +236,12 @@ def num (maxDigits : Nat) (p : s.Pos) : Except String (JsonNumber × { q : s.Pos
 
 /-! ### Values -/
 
-/-- A literal at `p`: the characters `text`, which stand for `value`. -/
 def literal (text : String) (value : Json) (p : s.Pos) :
     Except String (Json × { q : s.Pos // p ≤ q }) :=
   match acceptAll text.toList p with
   | some q => .ok (value, q)
   | none => fail p s!"JSON value expected, perhaps {text}"
 
-/-- An object key at `p` with the colon after it, and the position of the value. -/
 def key (p : s.Pos) : Except String (String × { q : s.Pos // p < q }) :=
   match str p with
   | .ok (name, ⟨p1, h1⟩) =>
@@ -285,10 +255,8 @@ def key (p : s.Pos) : Except String (String × { q : s.Pos // p < q }) :=
 
 mutual
 
-/--
-A JSON value at `p`, which must not be whitespace, and the position after it. Arrays and objects
-may nest `depth` levels deep; numbers have at most `maxDigits` digits.
--/
+/-- The value at `p`, which must not be whitespace. Arrays and objects may nest `depth` levels
+deep. -/
 def value (depth maxDigits : Nat) (p : s.Pos) : Except String (Json × { q : s.Pos // p ≤ q }) :=
   match next? p with
   | some ('[', ⟨p1, h1⟩) =>
@@ -324,10 +292,6 @@ def value (depth maxDigits : Nat) (p : s.Pos) : Except String (Json × { q : s.P
 termination_by (p.remainingBytes, 0)
 decreasing_by all_goals (apply Prod.Lex.left; pos_order)
 
-/--
-The rest of the array that opened at `start`: its next element is at `p`, and `acc` holds the
-elements before it. Returns the array and the position after its closing bracket.
--/
 def elements (depth maxDigits : Nat) (start p : s.Pos) (h : start < p) (acc : Array Json) :
     Except String (Json × { q : s.Pos // start ≤ q }) :=
   match value depth maxDigits p with
@@ -347,10 +311,6 @@ decreasing_by
   · apply Prod.Lex.right; decide
   · apply Prod.Lex.left; pos_order
 
-/--
-The rest of the object that opened at `start`: its next key is at `p`, and `acc` holds the fields
-before it. Returns the object and the position after its closing brace.
--/
 def fields (depth maxDigits : Nat) (start p : s.Pos) (h : start < p)
     (acc : Array (String × Json)) : Except String (Json × { q : s.Pos // start ≤ q }) :=
   match key p with
@@ -376,7 +336,6 @@ decreasing_by all_goals (apply Prod.Lex.left; pos_order)
 
 end
 
-/-- A whole document: one value with optional whitespace around it, and nothing else. -/
 def document (s : String) (maxDepth maxDigits : Nat) : Except String Json :=
   let ⟨p, _⟩ := skipWs s.startPos
   match value maxDepth maxDigits p with

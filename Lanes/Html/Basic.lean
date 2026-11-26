@@ -11,51 +11,31 @@ module
 and reasoned about. Text can only enter a page through `Html.text`, which is escaped when the
 page is rendered. `String` and `Html` are different types, so unescaped text cannot be spliced
 into markup by accident.
-
-## Main definitions
-
-- `Html`: text, elements and fragments.
-- `Html.render`: the markup as a string.
-- `Html.escape`: the one escaping function.
-- `Html.safeUrl`: what URL attributes (`href`, `src`, `action`, `formaction`) are rendered through.
-- `ToHtml`, `ToAttr`: what may appear as a child or as an attribute value in a template.
-
-## Main statements
-
-- `Html.escape_safe`: escaped text contains none of `<`, `>`, `"` and `'`, so it cannot open or
-  close a tag or leave an attribute value.
 -/
 
 @[expose] public section
 
 namespace Lanes
 
-/-- An attribute of an element. A value of `none` renders as a bare name, such as `disabled`. -/
+/-- A value of `none` renders as a bare name, such as `disabled`. -/
 structure Html.Attr where
-  /-- The attribute name. -/
   name : String
-  /-- The attribute value, or `none` for a boolean attribute. -/
   value : Option String := none
   deriving DecidableEq, Repr, Hashable
 
-/-- An HTML document fragment. -/
 inductive Html where
-  /-- Text. It is escaped when rendered. -/
+  /-- It is escaped when rendered. -/
   | text (s : String)
-  /-- An element with attributes and children. -/
   | element (tag : String) (attrs : List Html.Attr) (children : List Html)
-  /-- A sequence of nodes with no element around them. -/
   | fragment (children : List Html)
   deriving Repr
 
 namespace Html
 
-/-- The empty fragment. -/
 def empty : Html := .fragment []
 
 instance : Inhabited Html := ⟨empty⟩
 
-/-- How one character is written in HTML text and attribute values. -/
 def escapeChar : Char → List Char
   | '&' => ['&', 'a', 'm', 'p', ';']
   | '<' => ['&', 'l', 't', ';']
@@ -69,7 +49,6 @@ text enters rendered markup. -/
 def escape (s : String) : String :=
   String.ofList (s.toList.flatMap escapeChar)
 
-/-- No character produced by escaping can open or close a tag or end a quoted attribute. -/
 theorem escapeChar_safe {c d : Char} (h : d ∈ escapeChar c) :
     d ≠ '<' ∧ d ≠ '>' ∧ d ≠ '"' ∧ d ≠ '\'' := by
   unfold escapeChar at h
@@ -99,16 +78,13 @@ a name built at run time must not be able to inject markup either. -/
 def safeName (name : String) : String :=
   String.ofList (name.toList.filter fun c => c.isAlphanum || c == '-' || c == '_' || c == ':')
 
-/-- Elements that have no content and no closing tag. -/
 def voidTags : List String :=
   ["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track",
    "wbr"]
 
-/-- Attributes whose value is a URL the browser may follow or load. -/
 def urlAttrs : List String :=
   ["href", "src", "action", "formaction", "xlink:href"]
 
-/-- What an unsafe URL is replaced by. -/
 def blockedUrl : String := "about:invalid#blocked"
 
 /--
@@ -125,8 +101,6 @@ def safeUrl (url : String) : String :=
     else blockedUrl
   else url
 
-/-- Render one attribute, with a leading space. The value of a URL attribute goes through
-`safeUrl`. -/
 def Attr.render (a : Attr) : String :=
   let name := safeName a.name
   match a.value with
@@ -135,7 +109,6 @@ def Attr.render (a : Attr) : String :=
 
 mutual
 
-/-- The markup of a node. -/
 def render : Html → String
   | .text s => escape s
   | .element tag attrs children =>
@@ -145,14 +118,12 @@ def render : Html → String
     else s!"<{tag}{attrs}>{renderAll children}</{tag}>"
   | .fragment children => renderAll children
 
-/-- The markup of a list of nodes. -/
 def renderAll : List Html → String
   | [] => ""
   | node :: nodes => render node ++ renderAll nodes
 
 end
 
-/-- A complete HTML document: the doctype followed by the markup. -/
 def document (page : Html) : String :=
   "<!DOCTYPE html>" ++ page.render
 
@@ -160,7 +131,6 @@ end Html
 
 /-- What may be written as `{value}` in a template's children. -/
 class ToHtml (α : Type) where
-  /-- The node for a value. -/
   toHtml : α → Html
 
 instance : ToHtml Html := ⟨id⟩
@@ -182,7 +152,6 @@ class ToAttr (α : Type) where
 instance : ToAttr String := ⟨fun name v => [⟨name, some v⟩]⟩
 instance : ToAttr Nat := ⟨fun name v => [⟨name, some (toString v)⟩]⟩
 instance : ToAttr Int := ⟨fun name v => [⟨name, some (toString v)⟩]⟩
-/-- A boolean attribute is present when `true` and absent when `false`. -/
 instance : ToAttr Bool := ⟨fun name v => if v then [⟨name, none⟩] else []⟩
 instance {α : Type} [ToAttr α] : ToAttr (Option α) where
   toAttr name

@@ -114,7 +114,6 @@ def handle (k : Kernel sys) (i : σ.Id) (msg : σ.Msg i) : Kernel sys × List (C
 def startActor (k : Kernel sys) (i : σ.Id) : Kernel sys × List (Command σ) :=
   (k.setCell i { (k.cell i) with up := true }).settle i ((sys.actor i).recover (k.cell i).state)
 
-/-- The kernel of a freshly booted system, and the commands its boot actors issued. -/
 def boot (sys : System σ) [Hashable σ.Id] : Kernel sys × List (Command σ) :=
   sys.boot.foldl (fun acc i => ((acc.1.startActor i).1, acc.2 ++ (acc.1.startActor i).2)) ({}, [])
 

@@ -24,14 +24,14 @@ namespace Examples.Election
 
 open Lanes
 
-/-- What a node is doing. A candidate carries the votes it has collected (rule 2.1). -/
+/-- A candidate carries the votes it has collected (rule 2.1). -/
 inductive Role (N : Type) where
   | follower
   | candidate (votes : List N)
   | leader
   deriving DecidableEq, Repr, Hashable
 
-/-- The state of a node. Term and vote are durable; the role is not. -/
+/-- Term and vote are durable; the role is not. -/
 structure Node (N : Type) where
   term : Nat
   /-- The node this node voted for in `term`, if any. -/
@@ -39,35 +39,28 @@ structure Node (N : Type) where
   role : Role N
   deriving DecidableEq, Repr, Hashable
 
-/-- What a node accepts. -/
 inductive Msg (N : Type) where
-  /-- The election timer fired. -/
   | electionTimeout
-  /-- `candidate` asks for a vote in `term`. -/
   | requestVote (term : Nat) (candidate : N)
-  /-- `voter` grants its vote in `term`. -/
   | vote (term : Nat) (voter : N)
   deriving DecidableEq, Repr, Hashable
 
-/-- The interface: one actor per node, nothing in or out. -/
 abbrev sig (N : Type) [DecidableEq N] : Signature where
   Id := N
   Msg _ := Msg N
 
-/-- Explicit configuration. -/
 structure Config where
-  /-- The election timeout. Real deployments randomise it per node. -/
+  /-- Real deployments randomise it per node. -/
   electionTimeout_ms : Nat := 150
   /-- Whether a node refuses a second vote in a term. Turn off only to seed a bug. -/
   votesOncePerTerm : Bool := true
 
 variable {N : Type} [DecidableEq N]
 
-/-- Whether `votes` is a majority of the `size` nodes. -/
 def isMajority (size : Nat) (votes : List N) : Bool :=
   2 * votes.eraseDups.length > size
 
-/-- A node. `peers` are the other nodes and `size` is the number of nodes. -/
+/-- `peers` are the other nodes and `size` is the number of nodes. -/
 def node (config : Config) (peers : List N) (size : Nat) (self : N) :
     (sig N).Actor self (Node N) where
   init := { term := 0, votedFor := none, role := .follower }
@@ -96,10 +89,8 @@ def node (config : Config) (peers : List N) (size : Nat) (self : N) :
           else ({ s with role := .candidate votes }, [])
         else (s, [])
       | _ => (s, [])
-  -- Term and vote survive a restart; the node comes back as a follower with its timer armed.
   recover s := ({ s with role := .follower }, [.after config.electionTimeout_ms .electionTimeout])
 
-/-- The cluster: every node boots at start. -/
 abbrev cluster (N : Type) [DecidableEq N] [Enum N] (config : Config) : System (sig N) where
   State _ := Node N
   actor self := node config ((Enum.all (α := N)).filter (· ≠ self)) (Enum.all (α := N)).length self
@@ -112,7 +103,6 @@ def atMostOneLeaderPerTerm [Enum N] {config : Config} (c : SysState (cluster N c
     a == b || !((c.state a).role == .leader && (c.state b).role == .leader
       && (c.state a).term == (c.state b).term)
 
-/-- Some node is leader. -/
 def hasLeader [Enum N] {config : Config} (c : SysState (cluster N config)) : Bool :=
   (Enum.all (α := N)).any fun a => (c.state a).role == .leader
 

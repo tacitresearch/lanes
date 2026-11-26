@@ -25,14 +25,6 @@ Values are kept canonical, so that `=` is the equality of JSON documents, and it
 Objects are sorted arrays, not the `Std.TreeMap.Raw` of the original: two trees with the same
 entries can differ in shape, so a tree map gives neither `DecidableEq` nor a hash that agrees with
 equality without a proof about its internals.
-
-## Main definitions
-
-- `JsonNumber`: a decimal number `mantissa * 10 ^ -exponent` in lowest terms.
-- `Json`: a JSON value.
-- `Json.mkObj`: build an object from a list of fields.
-- `Json.getObjVal?`, `Json.getArr?`, `Json.getStr?`, `Json.getNat?` and the other accessors, which
-  return `Except String`.
 -/
 
 @[expose] public section
@@ -44,9 +36,7 @@ A decimal number `mantissa * 10 ^ -exponent` in lowest terms. Integers have expo
 are stored in full; a fraction has no trailing zero.
 -/
 structure JsonNumber where
-  /-- The digits of the number as an integer, with its sign. -/
   mantissa : Int
-  /-- The number of those digits that come after the decimal point. -/
   exponent : Nat
   /-- The last digit after the decimal point is not zero, so each number has one representation. -/
   normal : exponent = 0 ∨ mantissa % 10 ≠ 0
@@ -54,15 +44,12 @@ structure JsonNumber where
 
 namespace JsonNumber
 
-/-- The number `mantissa * 10 ^ -exponent`, with trailing zeros after the decimal point removed. -/
 def ofDecimal : (mantissa : Int) → (exponent : Nat) → JsonNumber
   | m, 0 => ⟨m, 0, .inl rfl⟩
   | m, e + 1 => if h : m % 10 = 0 then ofDecimal (m / 10) e else ⟨m, e + 1, .inr h⟩
 
-/-- An integer as a JSON number. -/
 protected def fromInt (n : Int) : JsonNumber := ⟨n, 0, .inl rfl⟩
 
-/-- A natural number as a JSON number. -/
 protected def fromNat (n : Nat) : JsonNumber := .fromInt n
 
 /-- The number `mantissa * 10 ^ exponent`, for an exponent of either sign. -/
@@ -85,11 +72,9 @@ instance : Neg JsonNumber where
 instance : Hashable JsonNumber where
   hash n := mixHash (hash n.mantissa) (hash n.exponent)
 
-/-- The value as an integer, if it has no fractional part. -/
 def toInt? (n : JsonNumber) : Option Int :=
   if n.exponent = 0 then some n.mantissa else none
 
-/-- The value as a natural number, if it is a non-negative integer. -/
 def toNat? (n : JsonNumber) : Option Nat :=
   if n.exponent = 0 ∧ 0 ≤ n.mantissa then some n.mantissa.toNat else none
 
@@ -100,11 +85,6 @@ the number of significant digits.
 -/
 def maxLeadingZeros : Nat := 9
 
-/--
-The JSON text of a number. Integers are written in full. A fraction is written with a decimal
-point, or in scientific notation (`1.5e-20`) when it starts with more than `maxLeadingZeros`
-zeros.
--/
 protected def toString (n : JsonNumber) : String :=
   if n.exponent = 0 then toString n.mantissa
   else
@@ -135,25 +115,17 @@ instance : Repr JsonNumber where
 end JsonNumber
 
 /--
-A JSON value.
-
 The fields of an object are kept sorted by key, with no key twice: `Json.mkObj` and the parser
 build them that way, and equality of objects relies on it. A hand-built `Json.obj` whose fields
 are in another order still prints and is still looked up correctly, but is not equal to the
 sorted object with the same fields.
 -/
 inductive Json where
-  /-- The value `null`. -/
   | null
-  /-- `true` or `false`. -/
   | bool (b : Bool)
-  /-- A number. -/
   | num (n : JsonNumber)
-  /-- A string. -/
   | str (s : String)
-  /-- An array. -/
   | arr (elems : Array Json)
-  /-- An object: its fields, sorted by key. Build one with `Json.mkObj`. -/
   | obj (fields : Array (String × Json))
   deriving Inhabited
 
@@ -169,7 +141,6 @@ written out as total functions.
 
 mutual
 
-/-- Decide whether two JSON values are equal. -/
 protected def decEq : (a b : Json) → Decidable (a = b)
   | .null, .null => isTrue rfl
   | .bool a, .bool b =>
@@ -195,7 +166,6 @@ protected def decEq : (a b : Json) → Decidable (a = b)
     isFalse nofun
 termination_by structural a => a
 
-/-- Decide whether two arrays of JSON values are equal. -/
 protected def decEqArray : (a b : Array Json) → Decidable (a = b)
   | ⟨a⟩, ⟨b⟩ =>
     match Json.decEqList a b with
@@ -203,7 +173,6 @@ protected def decEqArray : (a b : Array Json) → Decidable (a = b)
     | isFalse h => isFalse fun e => h (Array.mk.inj e)
 termination_by structural a => a
 
-/-- Decide whether two lists of JSON values are equal. -/
 protected def decEqList : (a b : List Json) → Decidable (a = b)
   | [], [] => isTrue rfl
   | a :: as, b :: bs =>
@@ -214,7 +183,6 @@ protected def decEqList : (a b : List Json) → Decidable (a = b)
   | [], _ :: _ | _ :: _, [] => isFalse nofun
 termination_by structural a => a
 
-/-- Decide whether two arrays of object fields are equal. -/
 protected def decEqFields : (a b : Array (String × Json)) → Decidable (a = b)
   | ⟨a⟩, ⟨b⟩ =>
     match Json.decEqFieldList a b with
@@ -222,7 +190,6 @@ protected def decEqFields : (a b : Array (String × Json)) → Decidable (a = b)
     | isFalse h => isFalse fun e => h (Array.mk.inj e)
 termination_by structural a => a
 
-/-- Decide whether two lists of object fields are equal. -/
 protected def decEqFieldList : (a b : List (String × Json)) → Decidable (a = b)
   | [], [] => isTrue rfl
   | a :: as, b :: bs =>
@@ -233,7 +200,6 @@ protected def decEqFieldList : (a b : List (String × Json)) → Decidable (a = 
   | [], _ :: _ | _ :: _, [] => isFalse nofun
 termination_by structural a => a
 
-/-- Decide whether two object fields are equal. -/
 protected def decEqField : (a b : String × Json) → Decidable (a = b)
   | (ka, va), (kb, vb) =>
     if hk : ka = kb then
@@ -247,7 +213,6 @@ end
 
 instance : DecidableEq Json := Json.decEq
 
-/-- The value of a field is smaller than the object that holds it. -/
 theorem sizeOf_field_lt {fields : Array (String × Json)} {field : String × Json}
     (h : field ∈ fields) : sizeOf field.2 < sizeOf fields := by
   have := Array.sizeOf_lt_of_mem h
@@ -256,7 +221,6 @@ theorem sizeOf_field_lt {fields : Array (String × Json)} {field : String × Jso
   show sizeOf value < _
   omega
 
-/-- A hash of a JSON value. -/
 protected def hash : Json → UInt64
   | .null => 11
   | .bool b => mixHash 13 (hash b)
@@ -273,7 +237,6 @@ decreasing_by
 
 instance : Hashable Json := ⟨Json.hash⟩
 
-/-- A JSON value as the Lean term that builds it. -/
 protected def reprPrec : Json → Nat → Std.Format
   | .null, _ => "Lanes.Json.null"
   | .bool b, prec => Repr.addAppParen ("Lanes.Json.bool " ++ reprArg b) prec
@@ -309,25 +272,22 @@ instance : Coe String Json := ⟨.str⟩
 instance : Coe Bool Json := ⟨.bool⟩
 instance {n : Nat} : OfNat Json n := ⟨.num (.fromNat n)⟩
 
-/-- Sort fields by key. Fields with the same key keep their relative order. -/
+/-- Fields with the same key keep their relative order. -/
 def sortFields (fields : List (String × Json)) : List (String × Json) :=
   fields.mergeSort fun a b => a.1 ≤ b.1
 
-/-- Of each run of neighbouring fields with the same key, keep the last. -/
 def dedupFields : List (String × Json) → List (String × Json)
   | a :: b :: rest => if a.1 = b.1 then dedupFields (b :: rest) else a :: dedupFields (b :: rest)
   | fields => fields
 
-/-- The first key that two neighbouring fields share. -/
 def duplicateKey? : List (String × Json) → Option String
   | a :: b :: rest => if a.1 = b.1 then some a.1 else duplicateKey? (b :: rest)
   | _ => none
 
-/-- An object with the given fields. If a key is given twice, its last value wins. -/
+/-- If a key is given twice, its last value wins. -/
 def mkObj (fields : List (String × Json)) : Json :=
   .obj (dedupFields (sortFields fields)).toArray
 
-/-- An object with the given fields, or the error naming a key that is given twice. -/
 def mkObj? (fields : List (String × Json)) : Except String Json :=
   let sorted := sortFields fields
   match duplicateKey? sorted with
@@ -336,32 +296,26 @@ def mkObj? (fields : List (String × Json)) : Except String Json :=
 
 /-! ### Reading values -/
 
-/-- Whether the value is `null`. -/
 def isNull : Json → Bool
   | .null => true
   | _ => false
 
-/-- The fields of an object. -/
 def getObj? : Json → Except String (Array (String × Json))
   | .obj fields => .ok fields
   | _ => .error "object expected"
 
-/-- The elements of an array. -/
 def getArr? : Json → Except String (Array Json)
   | .arr elems => .ok elems
   | _ => .error "array expected"
 
-/-- The contents of a string. -/
 def getStr? : Json → Except String String
   | .str s => .ok s
   | _ => .error "string expected"
 
-/-- The value of a number. -/
 def getNum? : Json → Except String JsonNumber
   | .num n => .ok n
   | _ => .error "number expected"
 
-/-- The value of a number that is a natural number. -/
 def getNat? : Json → Except String Nat
   | .num n =>
     match n.toNat? with
@@ -369,7 +323,6 @@ def getNat? : Json → Except String Nat
     | none => .error "natural number expected"
   | _ => .error "natural number expected"
 
-/-- The value of a number that is an integer. -/
 def getInt? : Json → Except String Int
   | .num n =>
     match n.toInt? with
@@ -377,12 +330,10 @@ def getInt? : Json → Except String Int
     | none => .error "integer expected"
   | _ => .error "integer expected"
 
-/-- The value of a Boolean. -/
 def getBool? : Json → Except String Bool
   | .bool b => .ok b
   | _ => .error "Boolean expected"
 
-/-- The value of the field `key` of an object. -/
 def getObjVal? : Json → String → Except String Json
   | .obj fields, key =>
     match fields.find? (·.1 == key) with
@@ -390,7 +341,6 @@ def getObjVal? : Json → String → Except String Json
     | none => .error s!"property not found: {key}"
   | _, _ => .error "object expected"
 
-/-- The element at index `i` of an array. -/
 def getArrVal? : Json → Nat → Except String Json
   | .arr elems, i =>
     match elems[i]? with
@@ -398,7 +348,6 @@ def getArrVal? : Json → Nat → Except String Json
     | none => .error s!"index out of bounds: {i}"
   | _, _ => .error "array expected"
 
-/-- The value of the field `key` of an object, or `null` if there is no such field. -/
 def getObjValD (j : Json) (key : String) : Json :=
   match j.getObjVal? key with
   | .ok value => value

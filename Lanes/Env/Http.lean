@@ -27,12 +27,6 @@ The environment model of this adapter: one input per request, at most one respon
 and a response or a timeout always arrives.
 
 TLS is not handled here. Terminate it in a reverse proxy.
-
-## Main definitions
-
-- `Http.Bridge`: how requests become inputs and outputs become responses.
-- `Http.ServerConfig`: address and limits.
-- `Http.serve`: start a system and its HTTP server.
 -/
 
 public section
@@ -46,7 +40,6 @@ variable {σ : Signature}
 /-- Identifies one HTTP request for as long as it is being served. -/
 abbrev ReqId := Nat
 
-/-- How a system meets HTTP. Both functions are pure. -/
 structure Bridge (σ : Signature) where
   /-- Parse a request into an input, or answer it directly without entering the system (for
   example `404` or `400`). The identifier must travel with the input so the matching output can
@@ -56,25 +49,21 @@ structure Bridge (σ : Signature) where
   not an HTTP response. -/
   encode : σ.Out → Option (ReqId × Response)
 
-/-- Where the server listens and what it accepts. Every limit is explicit (rule 2.6). -/
+/-- Every limit is explicit (rule 2.6). -/
 structure ServerConfig where
   /-- The IPv4 address to bind. -/
   host : String := "127.0.0.1"
-  /-- The port to bind. `0` picks a free port. -/
+  /-- `0` picks a free port. -/
   port : UInt16 := 8080
   /-- A request the system has not answered after this long gets `504`. -/
   requestTimeout_ms : Nat := 30000
   /-- Larger request bodies are refused with `413`. -/
   maxBodyBytes : Nat := 1048576
 
-/-- A system being served over HTTP. -/
 structure Server (sys : System σ) [Hashable σ.Id] where
-  /-- The running system. -/
   runtime : Runtime sys
-  /-- The underlying HTTP server. -/
   http : Std.Http.Server
 
-/-- Convert the method, or `none` for one applications do not handle. -/
 private def toMethod? : Std.Http.Method → Option Method
   | .get => some .get
   | .head => some .head
@@ -85,7 +74,7 @@ private def toMethod? : Std.Http.Method → Option Method
   | .options => some .options
   | _ => none
 
-/-- Write a response. Header names or values that are not valid HTTP are left out. -/
+/-- Header names or values that are not valid HTTP are left out. -/
 private def respond (r : Response) : ContextAsync (Std.Http.Response Std.Http.Body.Any) := do
   let status := (Std.Http.Status.ofCode none r.status.toUInt16).getD .internalServerError
   let builder := r.headers.foldl (init := Std.Http.Response.new.status status) fun b (name, value) =>
@@ -94,7 +83,6 @@ private def respond (r : Response) : ContextAsync (Std.Http.Response Std.Http.Bo
     | _, _ => b
   builder.fromBytes r.body
 
-/-- Read and decode a request. `none` if its method is not one applications handle. -/
 private def readRequest (maxBodyBytes : Nat) (req : Std.Http.Request Std.Http.Body.Stream) :
     ContextAsync (Option Request) := do
   let some method := toMethod? req.line.method | return none
@@ -112,10 +100,8 @@ private def readRequest (maxBodyBytes : Nat) (req : Std.Http.Request Std.Http.Bo
     headers := req.line.headers.toList.map fun (name, value) => (name.value, value.value)
     body }
 
-/--
-Start `sys` and serve it over HTTP. Returns once the server is listening; requests are handled in
-the background until `Server.stop`.
--/
+/-- Returns once the server is listening; requests are handled in the background until
+`Server.stop`. -/
 def serve (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : ServerConfig := {})
     (runtimeConfig : Runtime.Config := {}) : Async (Server sys) := do
   let some addr := Std.Net.IPv4Addr.ofString config.host
@@ -160,7 +146,6 @@ namespace Server
 
 variable {sys : System σ} [Hashable σ.Id]
 
-/-- The port the server is listening on. -/
 def port (server : Server sys) : Option UInt16 :=
   server.http.localAddr.map (·.port)
 
@@ -169,7 +154,6 @@ answered `503` by the underlying server. -/
 def stop (server : Server sys) : Async Unit :=
   server.http.shutdownAndWait
 
-/-- Wait until the server has been stopped. -/
 def wait (server : Server sys) : Async Unit :=
   server.http.waitShutdown
 
