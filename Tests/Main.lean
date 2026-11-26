@@ -23,6 +23,7 @@ import Tests.ReadRequest
 import Tests.Codec
 import Tests.Peers
 import Tests.Courier
+import Tests.HttpConn
 import Tests.Mailbox
 import Tests.Split
 import Tests.Batch
@@ -75,7 +76,7 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.Fair.tests ++ Tests.Codec.tests ++ Tests.Durable.fileTests ++ Tests.Split.tests
     ++ Tests.Peers.tests ++ Tests.Courier.tests ++ Tests.Mailbox.tests ++ Tests.Batch.tests
     ++ Tests.Crypto.tests ++ Tests.Auth.tests ++ Tests.Clients.tests ++ Tests.Lease.tests
-    ++ Tests.ReadRequest.tests
+    ++ Tests.ReadRequest.tests ++ Tests.HttpConn.tests
   match args with
   | [] =>
     let pure := pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.Lint.tests)
