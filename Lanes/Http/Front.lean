@@ -23,6 +23,8 @@ behind a gate: its parcels pass the gate by, both ways.
 
 `Lanes.Http.FrontSound` proves that the gate alone answers no more often than it handles an
 arrival, and, by projection, that `fronted sys` answers no request more often than it arrived.
+`Lanes.Semantics.FrontLive` proves, by projection of fair runs, that `fronted sys` answers every
+request its gate admits.
 -/
 
 @[expose] public section

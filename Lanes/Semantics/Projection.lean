@@ -290,16 +290,19 @@ private noncomputable def Projects.starts (h : v.Projects env env') (r : sys.Run
   | 0 => SysState.init sys' env'
   | n + 1 => (Projects.stage h r n).1
 
+/-- The run for position `n` stands for the step at `n`. -/
 private theorem Projects.blocks_spec (h : v.Projects env env') (r : sys.Run env) (n : ℕ) :
     v.Block env' (r.state n) (r.event n) (r.state (n + 1)) (h.starts r (n + 1))
       (h.blocks r (n + 1)) (h.starts r (n + 2)) :=
   Classical.choose_spec (h.block r n _ (Projects.stage h r n).2)
 
+/-- The first run stands for the start. -/
 private theorem Projects.blocks_zero (h : v.Projects env env') (r : sys.Run env) :
     v.Block env' (SysState.init sys env) none (SysState.init sys env) (h.starts r 0)
       (h.blocks r 0) (h.starts r 1) :=
   Classical.choose_spec h.start
 
+/-- Each run goes from where it starts to where the next one starts. -/
 private theorem Projects.blocks_run (h : v.Projects env env') (r : sys.Run env) (k : ℕ) :
     (h.starts r k).run env' (h.blocks r k) = some (h.starts r (k + 1)) := by
   cases k with
@@ -311,17 +314,20 @@ private noncomputable def Projects.seen (h : v.Projects env env') (r : sys.Run e
     sys'.Run env' :=
   System.Run.ofBlocks (h.starts r) (h.blocks r) rfl (h.blocks_run r)
 
+/-- Within a run, the seen run is in that run's states. -/
 private theorem Projects.seen_state (h : v.Projects env env') (r : sys.Run env) {k j : ℕ}
     (hj : j ≤ (h.blocks r k).length) :
     (h.starts r k).run env' ((h.blocks r k).take j)
       = some ((h.seen r).state (System.Run.blockStart (h.blocks r) k + j)) :=
   System.Run.ofBlocks_state hj
 
+/-- Within a run, the seen run takes that run's events. -/
 private theorem Projects.seen_event (h : v.Projects env env') (r : sys.Run env) {k j : ℕ}
     (hj : j ≤ (h.blocks r k).length) :
     (h.seen r).event (System.Run.blockStart (h.blocks r) k + j) = (h.blocks r k)[j]? :=
   System.Run.ofBlocks_event hj
 
+/-- What the seen run shows up to the end of a run. -/
 private theorem Projects.seen_shows (h : v.Projects env env') (r : sys.Run env) (k : ℕ) :
     ((h.seen r).event.take (System.Run.blockStart (h.blocks r) (k + 1))).filterMap
         (·.bind v.shows')
@@ -333,11 +339,14 @@ private theorem Projects.seen_shows (h : v.Projects env env') (r : sys.Run env) 
   rw [htake]
   simp [List.filterMap_append, List.filterMap_map]
 
+/-- At the end of the run for position `n`, the seen run is in a state that `r.state n` is
+seen as. -/
 private theorem Projects.seen_rel (h : v.Projects env env') (r : sys.Run env) (n : ℕ) :
     v.rel (r.state n) ((h.seen r).state (System.Run.blockStart (h.blocks r) (n + 1))) := by
   have := System.Run.ofBlocks_start (h0 := rfl) (hrun := h.blocks_run r) (n + 1)
   exact this ▸ (Projects.stage h r n).2
 
+/-- A position within a run comes before the next run. -/
 private theorem Projects.lt_next (h : v.Projects env env') (r : sys.Run env) {k j : ℕ}
     (hj : j ≤ (h.blocks r k).length) :
     System.Run.blockStart (h.blocks r) k + j < System.Run.blockStart (h.blocks r) (k + 1) := by
