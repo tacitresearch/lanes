@@ -1872,4 +1872,109 @@ theorem read_bareLF {limits : Limits} (pre rest : ByteArray) {lines : List Strin
 
 end Request
 
+/-! A chunk size line that is not one to sixteen hex digits -/
+
+namespace Request
+
+/-- Whether the chunk reader reads a byte as a hex digit. -/
+def hexByte (b : UInt8) : Bool :=
+  (hexValue? (Char.ofNat b.toNat)).isSome
+
+/-- A chunk whose size line is not one to sixteen hex digits followed by CR is refused: blanks,
+a sign, `0x`, an extension, a bare LF, an empty size or seventeen digits. -/
+theorem chunkSize_bad {bytes : ByteArray} {pos : Nat} {line : List UInt8}
+    (hline : ∀ k (hk : k < line.length), bytes[pos + k]? = some line[k])
+    (hcr : bytes[pos + line.length]? = some 13) (hno : ∀ b ∈ line, b ≠ 13)
+    (hbad : ¬ (line ≠ [] ∧ line.length ≤ 16 ∧ line.all hexByte = true)) :
+    chunkSize bytes pos = .refuse .badRequest := by
+  generalize hk : ((line.take 16).takeWhile hexByte).length = k
+  have hprefix : k ≤ (line.take 16).length := by
+    rw [← hk]
+    exact (List.takeWhile_prefix _).length_le
+  have hk16 : k ≤ 16 := by simp at hprefix; omega
+  have hkline : k ≤ line.length := by simp at hprefix; omega
+  have hdigit : ∀ i (hi : i < k), bytes[pos + i]?.bind (fun b => hexValue? (Char.ofNat b.toNat))
+      = some ((hexValue? (Char.ofNat (line[i]'(by omega)).toNat)).getD 0) := by
+    intro i hi
+    have hhex := takeWhile_getElem (p := hexByte) (l := line.take 16) (i := i) (by omega)
+      (by simp; omega)
+    simp only [List.getElem_take] at hhex
+    rw [hline i (by omega), Option.bind_some]
+    simp only [hexByte, Option.isSome_iff_exists] at hhex
+    obtain ⟨d, hd⟩ := hhex
+    rw [hd]
+    rfl
+  have hstop : k < 16 → bytes[pos + k]?.bind (fun b => hexValue? (Char.ofNat b.toNat)) = none := by
+    intro h16
+    by_cases hlt : k < line.length
+    · have hnot := takeWhile_stop (p := hexByte) (l := line.take 16) (by simp; omega)
+      simp only [hk, List.getElem_take] at hnot
+      rw [hline k hlt, Option.bind_some]
+      simpa [hexByte] using hnot
+    · rw [show k = line.length by omega, hcr]
+      decide
+  have hhex := hex_digits bytes ((List.range k).map fun i =>
+      if h : i < line.length then (hexValue? (Char.ofNat line[i].toNat)).getD 0 else 0)
+    chunkSizeDigits_max pos 0 (by simp [chunkSizeDigits_max]; omega)
+    (fun i hi => by
+      simp only [List.length_map, List.length_range] at hi
+      simp only [List.getElem_map, List.getElem_range, show i < line.length by omega,
+        ↓reduceDIte]
+      exact hdigit i hi)
+    (fun h => by simpa using hstop (by simpa [chunkSizeDigits_max] using h))
+  simp only [List.length_map, List.length_range] at hhex
+  unfold chunkSize
+  rw [hhex]
+  simp only
+  by_cases hk0 : k = 0
+  · subst hk0
+    have : pos < bytes.size := by
+      by_cases hz : line.length = 0
+      · obtain ⟨h, -⟩ := getElem_of_getElem? (show bytes[pos + line.length]? = some 13 from hcr)
+        omega
+      · obtain ⟨h, -⟩ := getElem_of_getElem? (hline 0 (by omega))
+        omega
+    simp only [Nat.add_zero, ↓reduceIte, this]
+  · simp only [show ¬ pos + k = pos by omega, ↓reduceIte]
+    by_cases hlt : k < line.length
+    · have hb := hline k hlt
+      obtain ⟨hsize, e⟩ := getElem_of_getElem? hb
+      have hne : line[k] ≠ 13 := hno _ (List.getElem_mem _)
+      unfold crlf
+      by_cases h₁ : pos + k + 1 < bytes.size
+      · simp [h₁, e, hne]
+      · simp [h₁, hsize, e, hne]
+    · exfalso
+      apply hbad
+      have hall : ((line.take 16).takeWhile hexByte).length = (line.take 16).length := by
+        rw [hk]
+        simp
+        omega
+      refine ⟨fun e => by subst e; simp at hkline; omega, by omega, ?_⟩
+      have := forall_of_takeWhile_length hall
+      rw [List.take_of_length_le (by omega)] at this
+      exact List.all_eq_true.mpr this
+
+theorem chunks_badSize {limits : Limits} {bytes : ByteArray} {pos : Nat} {line : List UInt8}
+    (hline : ∀ k (hk : k < line.length), bytes[pos + k]? = some line[k])
+    (hcr : bytes[pos + line.length]? = some 13) (hno : ∀ b ∈ line, b ≠ 13)
+    (hbad : ¬ (line ≠ [] ∧ line.length ≤ 16 ∧ line.all hexByte = true)) (fuel : Nat)
+    (body : ByteArray) : chunks limits bytes (fuel + 1) pos body = .refuse .badRequest := by
+  simp [chunks, chunkSize_bad hline hcr hno hbad]
+
+/-- A chunked request whose first chunk's size line is not one to sixteen hex digits followed
+by CR is refused, whatever its head and whatever follows. -/
+theorem read_badChunkSize {limits : Limits} {bytes : ByteArray} {pos : Nat} {head : Head}
+    {start : Nat} (hhead : readHead limits bytes pos = .done head start)
+    (hchunked : head.framing = .chunked) {line : List UInt8}
+    (hline : ∀ k (hk : k < line.length), bytes[start + k]? = some line[k])
+    (hcr : bytes[start + line.length]? = some 13) (hno : ∀ b ∈ line, b ≠ 13)
+    (hbad : ¬ (line ≠ [] ∧ line.length ≤ 16 ∧ line.all hexByte = true)) :
+    read limits bytes pos = .refuse .badRequest := by
+  unfold read
+  rw [hhead]
+  simp only [hchunked, chunks_badSize hline hcr hno hbad]
+
+end Request
+
 end Lanes.Http

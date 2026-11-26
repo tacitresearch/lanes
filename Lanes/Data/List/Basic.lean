@@ -115,4 +115,42 @@ theorem dropWhile_head {p : α → Bool} : ∀ {l : List α} {x : α} {rest : Li
       rw [← h.1]
       simpa using hy
 
+theorem takeWhile_getElem {p : α → Bool} : ∀ {l : List α} {i : Nat},
+    i < (l.takeWhile p).length → (hl : i < l.length) → p l[i] = true
+  | [], _, _, hl => by simp at hl
+  | x :: l, i, hi, hl => by
+    rw [List.takeWhile_cons] at hi
+    split at hi
+    · rename_i hx
+      cases i with
+      | zero => simpa using hx
+      | succ i => exact takeWhile_getElem (l := l) (i := i) (by simpa using hi) (by simpa using hl)
+    · simp at hi
+
+theorem takeWhile_stop {p : α → Bool} : ∀ {l : List α}
+    (hi : (l.takeWhile p).length < l.length), p (l[(l.takeWhile p).length]'hi) = false
+  | [], hi => by simp at hi
+  | x :: l, hi => by
+    by_cases hx : p x
+    · have hlen : ((x :: l).takeWhile p).length = (l.takeWhile p).length + 1 := by
+        simp [hx]
+      have := takeWhile_stop (p := p) (l := l) (by simp [hlen] at hi; omega)
+      simp only [hlen, List.getElem_cons_succ]
+      exact this
+    · have hlen : ((x :: l).takeWhile p).length = 0 := by simp [hx]
+      simp only [hlen, List.getElem_cons_zero]
+      simpa using hx
+
+theorem forall_of_takeWhile_length {p : α → Bool} : ∀ {l : List α},
+    (l.takeWhile p).length = l.length → ∀ x ∈ l, p x = true
+  | [], _, x, hx => by simp at hx
+  | y :: l, h, x, hx => by
+    by_cases hy : p y
+    · simp only [List.takeWhile_cons, hy, ↓reduceIte, List.length_cons,
+        Nat.add_right_cancel_iff] at h
+      rcases List.mem_cons.mp hx with rfl | hx
+      · exact hy
+      · exact forall_of_takeWhile_length h x hx
+    · simp [hy] at h
+
 end Lanes
