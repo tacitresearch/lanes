@@ -206,6 +206,61 @@ having had two leaders at different times; a duplicate attribute from a splice r
 5. Web proofs and typed routes (section 4).
 6. `systems/raft-kv`, starting with the quorum library and election safety.
 
+## Phase A: settle the contracts
+
+`ROADMAP.md` has the phases. This is phase A in the order it is being done, with the design of
+each step written down before it is built.
+
+### A.1 Durability: a journal, replayed (D24)
+
+Pure and proved: `Journal.Entry` (input, clock reading, batch), its records, reading back a
+whole or cut journal (`Journal.read_write`, `Journal.read_prefix`); byte framing with the
+torn-write theorem (`Lanes/Data/Frame.lean`); the kernel theorems, which hold for any list of
+requests and so for a replayed one.
+
+Trusted: appending to the file and flushing before outputs leave; reading it at start.
+
+Limits known in advance: Lean's `IO` has `flush` and no `fsync`, so a journal survives the death
+of the process, not loss of power, until there is a sync primitive. No snapshots yet, so the
+journal grows and replay takes time proportional to it. Outputs since the last "handed over"
+mark are handed over again after a restart.
+
+Done when: the bank, killed with `kill -9` in the middle of transfers and started again, has
+the balances the journal says, and the test that does this is in CI.
+
+### A.2 Composition: join two systems, and what survives it
+
+`System.join a b wiring` is one `System`, so every tool applies to it. Its actors are those of
+both. An output of one that the wiring routes to the other becomes a message to the actor the
+other's `accept` names; the rest are the composite's outputs. `System.mapIO` renames inputs and
+outputs at the boundary. The gate in front of a system is the first instance.
+
+The theorem is projection: every run of the composite, seen from `a`, is a run of `a` alone, in
+which what `b` sent arrives as inputs and what `a` sent to `b` leaves as outputs. So whatever
+is proved of `a` for every environment and every input holds of `a` inside any composite. That
+is the form of compositionality the semantics already supports, because a system's theorems
+already quantify over everything its environment may send.
+
+The outside link of `a` alone has to be the most permissive one (unordered, lossy,
+duplicating): messages from several actors of `b` share one link once projected, so their order
+on it is not the composite's.
+
+Refinement as a precongruence (if `a` refines `A` then the join with `a` refines the join with
+`A`) comes after, from the same projection.
+
+### A.3 The outside world: adapters with a model
+
+An adapter is a pair: an actor (or a small system) that models what the outside may do, which
+the checker explores joined to the application, and an IO implementation. A conformance test
+runs the implementation and replays what it did through the model. The gate and its server are
+the first pair; a second, real one (an HTTP client or a database) decides the interface.
+
+### A.4 Time and liveness
+
+Fairness as a property of runs (an event enabled forever is taken), so that "every request is
+eventually answered" can be stated for the gate: it needs timers to fire, which the kernel's
+fairness theorem provides at the level of steps.
+
 ## Decisions that are yours
 
 - **One thread per shard** (section 1). This is the large one. I will start it after steps 1
