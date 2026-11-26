@@ -34,6 +34,10 @@ def Ws (w : List Char) : Prop := ∀ c ∈ w, IsWs c
 
 def IsDigit (c : Char) : Prop := '0' ≤ c ∧ c ≤ '9'
 
+instance (c : Char) : Decidable (IsWs c) := inferInstanceAs (Decidable (_ ∨ _))
+
+instance (c : Char) : Decidable (IsDigit c) := inferInstanceAs (Decidable (_ ∧ _))
+
 def Digits (ds : List Char) : Prop := ds ≠ [] ∧ ∀ c ∈ ds, IsDigit c
 
 /-- `int = zero / ( digit1-9 *DIGIT )` -/

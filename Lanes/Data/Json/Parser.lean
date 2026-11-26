@@ -218,23 +218,25 @@ def exponent (maxDigits : Nat) (p : s.Pos) : Except String (Int × { q : s.Pos /
     | .error e => .error e
   | none => .ok (0, ⟨p, String.Pos.le_refl p⟩)
 
-def num (maxDigits : Nat) (p : s.Pos) : Except String (JsonNumber × { q : s.Pos // p ≤ q }) :=
-  let negative := (accept (· == '-') p).isSome
-  let p1 : { q : s.Pos // p ≤ q } :=
-    match accept (· == '-') p with
-    | some ⟨q, hq⟩ => ⟨q, by pos_order⟩
-    | none => ⟨p, String.Pos.le_refl p⟩
-  match whole maxDigits p1.1 with
+/-- The number at `p1`, after its sign: `negative` if there was a minus. -/
+def unsigned (maxDigits : Nat) (negative : Bool) (p p1 : s.Pos) (h : p ≤ p1) :
+    Except String (JsonNumber × { q : s.Pos // p ≤ q }) :=
+  match whole maxDigits p1 with
   | .ok (n, count, ⟨p2, h2⟩) =>
     match fraction maxDigits n count p2 with
     | .ok (digits, decimals, ⟨p3, h3⟩) =>
       match exponent maxDigits p3 with
       | .ok (e, ⟨p4, h4⟩) =>
         let mantissa : Int := if negative then -(digits : Int) else digits
-        .ok (.ofScientific mantissa (e - decimals), ⟨p4, by have := p1.2; pos_order⟩)
+        .ok (.ofScientific mantissa (e - decimals), ⟨p4, by pos_order⟩)
       | .error e => .error e
     | .error e => .error e
   | .error e => .error e
+
+def num (maxDigits : Nat) (p : s.Pos) : Except String (JsonNumber × { q : s.Pos // p ≤ q }) :=
+  match accept (· == '-') p with
+  | some ⟨p1, h1⟩ => unsigned maxDigits true p p1 (by pos_order)
+  | none => unsigned maxDigits false p p (String.Pos.le_refl p)
 
 /-! ### Values -/
 

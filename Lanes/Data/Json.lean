@@ -10,6 +10,7 @@ public import Lanes.Data.Json.Printer
 public import Lanes.Data.Json.Classes
 public import Lanes.Data.Json.Grammar
 public import Lanes.Data.Json.PrinterSound
+public import Lanes.Data.Json.ParserSound
 
 /-!
 # JSON
