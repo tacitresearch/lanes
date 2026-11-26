@@ -98,6 +98,8 @@ def user (config : Config N) (answering : Answering) (self : N) :
     | .unlock => (User.unlock u, [])
     | .expire session => (User.expire session u, [])
   recover u := (u, rearm config self u)
+  fresh u := u.isNone
+  fresh_recover u h := by cases u <;> simp_all [rearm]
 
 def ledger (config : Config N) : (sig N C).Actor .ledger (Book N) where
   init := .empty
