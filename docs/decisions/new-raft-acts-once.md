@@ -45,9 +45,9 @@ takes it: `RaftKV.implementsMachine_once` has no premise on the environment.
   over twice. Among the deep checks, links from clients losing, reordering and repeating with a
   crash (189,686 states). Every link of `Link.network` with a crash is more than the ten
   million states the checker stores.
-- *The standard simulation is not used.* `Account` (the standard-simulation decision) bounds
-  the spec's pending requests and outbox by multisets and concludes `Implements` of
-  `Service.spec`; `once` is membership against `Service.once`, with no counts to bound.
+- *The standard simulation is not used.* `Account` (D52) bounds the spec's pending requests and
+  outbox by multisets and concludes `Implements` of `Service.spec`; `once` is membership
+  against `Service.once`, with no counts to bound.
   `System.traced` would replace `FromClients`, which this proof does not need, and `linkMsgs`
   reads ordered links, which membership ignores. `OnceSim` and `Once.Server.Sim` have the same
   shape, requests held have arrived and answers held are given; an `Account` for `once` would
