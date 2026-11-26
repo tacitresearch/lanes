@@ -1,0 +1,148 @@
+/-
+Copyright (c) 2026 The Lanes Authors. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+-/
+module
+
+public import Lanes.Actors.Inspect
+
+/-!
+# The deterministic scheduler
+
+A single-threaded scheduler that runs a system by applying `SysState.step` to one enabled event
+at a time, chosen by a seeded generator. The same seed gives the same run. Every run yields its
+list of events, which replays through `SysState.run`.
+
+It serves as the test and replay harness, as random simulation for instances too large to check
+exhaustively, and as the reference the concurrent runtime's traces are checked against.
+
+## Main definitions
+
+- `Driver σ D`: a model of the outside world that chooses inputs and observes outputs.
+- `World sys D`: a system state together with its driver's state.
+- `World.next`: every step the closed world can take.
+- `simulate`: a seeded random run.
+-/
+
+@[expose] public section
+
+namespace Lanes
+
+variable {σ : Signature}
+
+/--
+A model of the outside world: which inputs may arrive next and what it remembers of the
+outputs it sees. Drivers may choose among several inputs; that choice exists only in the
+simulator and the model checker, never in an actor.
+-/
+structure Driver (σ : Signature) (D : Type) where
+  /-- The driver's initial state. -/
+  init : D
+  /-- The inputs that may arrive now, each with the driver's next state. -/
+  inputs : D → List (σ.In × D)
+  /-- The driver's state after seeing an output. -/
+  observe : D → σ.Out → D := fun d _ => d
+
+namespace Driver
+
+/-- A driver that never sends anything. -/
+def silent : Driver σ Unit where
+  init := ()
+  inputs _ := []
+
+/-- Send the given inputs once each, in the given order. -/
+def script (xs : List σ.In) : Driver σ (List σ.In) where
+  init := xs
+  inputs
+    | [] => []
+    | x :: xs => [(x, xs)]
+
+/-- Send the given inputs once each, in any order. -/
+def anyOrder (xs : List σ.In) : Driver σ (List σ.In) where
+  init := xs
+  inputs remaining :=
+    (List.range remaining.length).filterMap fun k =>
+      remaining[k]?.map fun x => (x, remaining.eraseIdx k)
+
+end Driver
+
+/-- A system together with its outside world. -/
+structure World (sys : System σ) (D : Type) where
+  /-- The state of the system. -/
+  state : SysState sys
+  /-- The state of the driver. -/
+  driver : D
+  /-- How many crashes have happened so far. -/
+  crashes : Nat := 0
+
+/-- What bounds a closed world: the environment model, the driver and a crash budget. -/
+structure Scenario (σ : Signature) (D : Type) where
+  /-- The assumptions about links and failures. -/
+  env : EnvModel σ := {}
+  /-- The model of the outside world. -/
+  driver : Driver σ D
+  /-- At most this many crashes are explored. -/
+  maxCrashes : Nat := 0
+
+namespace World
+
+variable {sys : System σ} {D : Type}
+
+/-- The world before any event. -/
+def init (sys : System σ) (sc : Scenario σ D) : World sys D where
+  state := SysState.init sys sc.env
+  driver := sc.driver.init
+
+/-- Every step the world can take: an enabled event of the system, or an input the driver
+chooses to send. -/
+def next [Enum σ.Id] (sc : Scenario σ D) (w : World sys D) : List (Event σ × World sys D) :=
+  let internal := (w.state.successors sc.env).filterMap fun (ev, c) =>
+    match ev with
+    | .output out => some (ev, { w with state := c.compact, driver := sc.driver.observe w.driver out })
+    | .crash _ =>
+      if w.crashes < sc.maxCrashes then
+        some (ev, { w with state := c.compact, crashes := w.crashes + 1 })
+      else none
+    | _ => some (ev, { w with state := c.compact })
+  let inputs := (sc.driver.inputs w.driver).filterMap fun (x, d) =>
+    (w.state.step sc.env (.input x)).map fun c =>
+      (Event.input x, { w with state := c.compact, driver := d })
+  internal ++ inputs
+
+end World
+
+/-- The record of a run: the events applied, in order, and the world they led to. -/
+structure Run (sys : System σ) (D : Type) where
+  /-- The events applied, in order. -/
+  events : Array (Event σ)
+  /-- The world after the last event. -/
+  final : World sys D
+  /-- Whether the run ended because no event was enabled, as opposed to hitting the step
+  bound. -/
+  quiescent : Bool
+
+/--
+Run a system under the deterministic scheduler: at each step pick one enabled event uniformly
+with a generator seeded by `seed`. Stops when nothing is enabled or after `maxSteps` events.
+-/
+def simulate [Enum σ.Id] (sys : System σ) {D : Type} (sc : Scenario σ D) (seed : Nat)
+    (maxSteps : Nat := 10000) : Run sys D := Id.run do
+  let mut gen := mkStdGen seed
+  let mut w := World.init sys sc
+  let mut events : Array (Event σ) := #[]
+  let mut quiescent := false
+  for _ in [0:maxSteps] do
+    let choices := w.next sc
+    if choices.isEmpty then
+      quiescent := true
+      break
+    let (k, gen') := randNat gen 0 (choices.length - 1)
+    gen := gen'
+    match choices[k]? with
+    | some (ev, w') =>
+      events := events.push ev
+      w := w'
+    | none => break
+  return { events, final := w, quiescent }
+
+end Lanes

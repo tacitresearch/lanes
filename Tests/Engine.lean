@@ -1,0 +1,70 @@
+/-
+Copyright (c) 2026 The Lanes Authors. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+-/
+import Lanes
+
+/-!
+Tests of the search engine on transition systems with known state counts.
+
+The bitmask system and the DieHard puzzle are the first rungs of the validation ladder taken
+from Veil's regression tests (`VeilTest/Regression/ParallelActionStats.lean`,
+`Examples/Puzzles/DieHard.lean`).
+-/
+
+namespace Tests.Engine
+
+open Lanes Lanes.Check
+
+/-- Eight bits, one action per bit that sets it: 256 states, and each action is taken from every
+state. -/
+def bitmask : Model Nat (Fin 8) where
+  init := [0]
+  next s := (Enum.all (α := Fin 8)).map fun b => (b, s ||| (1 <<< b.val))
+
+/-- The DieHard water jug puzzle: a 3 and a 5 gallon jug, measure 4 gallons. -/
+def dieHard : Model (Nat × Nat) String where
+  init := [(0, 0)]
+  next
+    | (small, big) =>
+      let toBig := min small (5 - big)
+      let toSmall := min big (3 - small)
+      [("fillSmall", (3, big)), ("fillBig", (small, 5)), ("emptySmall", (0, big)),
+       ("emptyBig", (small, 0)), ("smallToBig", (small - toBig, big + toBig)),
+       ("bigToSmall", (small + toSmall, big - toSmall))]
+
+/-- A counter that stops at 3: a deadlock unless 3 is declared terminal. -/
+def counter : Model Nat Unit where
+  init := [0]
+  next s := if s < 3 then [((), s + 1)] else []
+
+def tests : List (String × Bool) :=
+  let r := search bitmask []
+  let solved := search dieHard [.always "big jug never holds 4" fun s => s.2 != 4] {} id
+  let witness := search dieHard [.sometimes "big jug holds 4" fun s => s.2 == 4] {} id
+  let vacuous := search dieHard [.sometimes "big jug holds 6" fun s => s.2 == 6] {} id
+  let bounded := search bitmask [] { maxDepth := some 1 }
+  let constrained := search bitmask [] { constraint := fun s => s < 16 }
+  let dead := search counter [] { checkDeadlock := true }
+  let live := search counter [] { checkDeadlock := true, terminal := (· == 3) }
+  [ ("bitmask: 256 states", r.states == 256 && r.ok && r.complete),
+    ("bitmask: 2048 transitions, depth 8", r.transitions == 2048 && r.depth == 8),
+    ("diehard: 16 states", witness.states == 16),
+    ("diehard: invariant violated by a shortest trace of 6 steps",
+      match solved.failure with
+      | some (.violated _ t) => t.steps.length == 6 && t.last.2 == 4
+      | _ => false),
+    ("diehard: sometimes has a witness", witness.ok && witness.witnesses.length == 1),
+    ("diehard: unreachable sometimes fails as vacuous",
+      match vacuous.failure with
+      | some (.unreached ["big jug holds 6"]) => true
+      | _ => false),
+    ("depth bound: 9 states, reported incomplete", bounded.states == 9 && !bounded.complete),
+    ("constraint: 16 states", constrained.states == 16 && constrained.complete),
+    ("deadlock found after 3 steps",
+      match dead.failure with
+      | some (.deadlock t) => t.steps.length == 3
+      | _ => false),
+    ("terminal state is not a deadlock", live.ok) ]
+
+end Tests.Engine

@@ -1,0 +1,52 @@
+# Working on Lanes
+
+Lanes is a framework for building verified software in Lean 4: actors with pure step functions, one
+semantics, a model checker, proofs, and adapters. Read `docs/DESIGN.md` for the plan and
+`LANES_STYLE.md` for the rules. `docs/DECISIONS.md` records where the implementation settled or
+departed from the design document, with reasons.
+
+## Lanes rules for agents
+
+- Read LANES_STYLE.md before writing code. Cite rule numbers in PR descriptions when a rule shaped a choice.
+- Write or update the spec first; model-check it before writing the implementation or a proof.
+- step is pure: no IO. New external work = new Effect constructor + response message.
+- Encode invariants in types first, theorems second, runtime asserts only at adapters.
+- Never add sorry, partial, unsafe or an axiom without listing it in TRUSTED.md.
+- On an unexpected state, emit stop; do not add defensive fallbacks.
+- Run `lake build && lake test` before claiming a task is done.
+
+## Build
+
+```bash
+lake exe cache get   # prebuilt Mathlib; never build Mathlib from source
+lake build           # the library
+lake test            # checker, scheduler and example regression tests
+```
+
+The toolchain is pinned in `lean-toolchain` and follows CSLib's. Dependencies are pinned in
+`lake-manifest.json`; upgrade them deliberately, CSLib first.
+
+## Layout
+
+| Path | Contents | May import |
+| --- | --- | --- |
+| `Lanes/Actors/` | `Actor`, `Signature`, `Effect`, `System`, the world step function, scheduler, runtime | `Std` only |
+| `Lanes/Data/` | Small data utilities (`Enum`) | `Std` only |
+| `Lanes/Check/` | Model checker | `Std` only |
+| `Lanes/Semantics/` | The semantics as a CSLib `LTS`, refinement | CSLib, Mathlib |
+| `Examples/` | Reference apps, checked and proved | anything |
+| `Tests/` | Regression tests run by `lake test` | anything |
+
+Runtime modules never import Mathlib or CSLib (design decision 5): app binaries stay small and
+compile fast. Only proof modules pay for Mathlib.
+
+## Conventions
+
+- Library files use the module system: `module`, `public import`, then `@[expose] public section`
+  (as CSLib does). A definition whose body uses private helpers is marked `@[no_expose]`.
+- Every declaration and structure field has a docstring. Each file opens with a `/-! -/` module
+  docstring stating what it defines.
+- One actor step handles one message. Branch on the message once, at the top (rule 4).
+- Define a concrete system with `abbrev`, so instance resolution can see its `State`.
+- Check before you prove: every invariant gets an `always` property and a `sometimes` vacuity
+  check in a test before its proof is attempted (rules 5.1, 5.3).
