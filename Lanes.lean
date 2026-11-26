@@ -23,6 +23,7 @@ public import Lanes.Check.Equiv
 public import Lanes.Check.EquivDecide
 public import Lanes.Check.Fuzz
 public import Lanes.Check.Monitor
+public import Lanes.Check.MonitorEquiv
 public import Lanes.Check.Search
 public import Lanes.Check.SearchSound
 public import Lanes.Check.System

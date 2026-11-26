@@ -21,6 +21,11 @@ An output keeps only the candidates that were waiting to deliver it. If no candi
 the system has done something the spec does not allow, and the checker reports the trace. This
 is the subset construction on the spec, the same idea as the linearizability checkers Porcupine
 and Jepsen's Knossos, run inside the search instead of on recorded histories.
+
+A monitor's candidates are a set kept as a list. The list never holds two states that are the
+same up to `Service.State.equiv`, and the type says so (`Monitor.distinct`): that is what makes
+comparing two monitors by length and one-way inclusion an equivalence, and their hash agree
+with it (`Lanes.Check.MonitorEquiv`).
 -/
 
 @[expose] public section
@@ -42,13 +47,95 @@ def hash [Hashable S] [Hashable σ.In] [Hashable σ.Out] (a : State σ S) : UInt
     (mixHash (a.pending.foldl (fun h x => h + mixHash 3 (Hashable.hash x)) 0)
       (a.outbox.foldl (fun h o => h + mixHash 5 (Hashable.hash o)) 0))
 
+/-- No state is `equiv` to one before it. Stated in this direction it needs nothing of `==` on
+`S`: it is what `insertAll` tests before adding a state. -/
+def Distinct (states : List (State σ S)) : Prop :=
+  states.Pairwise fun earlier later => later.equiv earlier = false
+
 end Service.State
 
 namespace Check
 
-structure Monitor (σ : Signature) (S : Type) where
-  /-- The candidate states, without repetition. -/
-  candidates : List (Service.State σ S)
+open Service (State)
+
+namespace Monitor
+
+variable [BEq S]
+
+def insertAll (known new : List (State σ S)) : List (State σ S) :=
+  new.foldl (fun acc s => if acc.any (s.equiv ·) then acc else acc ++ [s]) known
+
+/-- The states reached from `frontier` by one pending input taking effect. -/
+def expand (svc : Service σ S) (frontier : List (State σ S)) : List (State σ S) :=
+  frontier.flatMap fun s => s.pending.eraseDups.map (svc.apply s)
+
+/-- `acc`, then the states of `next` that are in neither `known` nor what precedes them. -/
+def freshFrom (known acc next : List (State σ S)) : List (State σ S) :=
+  next.foldl (fun fresh s => if (known ++ fresh).any (s.equiv ·) then fresh else fresh ++ [s]) acc
+
+/-- One round of `close` on the known states and the frontier, the states found last. -/
+def closeStep (svc : Service σ S) (acc : List (State σ S) × List (State σ S)) :
+    List (State σ S) × List (State σ S) :=
+  let fresh := freshFrom acc.1 [] (expand svc acc.2)
+  (acc.1 ++ fresh, fresh)
+
+def rounds (states : List (State σ S)) : Nat :=
+  states.foldl (fun n s => max n s.pending.length) 0
+
+/--
+Close a set of candidates under pending inputs taking effect. Each application removes one
+pending input, so as many rounds as the longest pending list reach everything.
+-/
+def close (svc : Service σ S) (states : List (State σ S)) : List (State σ S) :=
+  let seed := insertAll [] states
+  ((List.range (rounds states)).foldl (fun acc _ => closeStep svc acc) (seed, seed)).1
+
+theorem distinct_insertAll {known : List (State σ S)} (new : List (State σ S))
+    (h : State.Distinct known) : State.Distinct (insertAll known new) := by
+  induction new generalizing known with
+  | nil => exact h
+  | cons s new ih =>
+    refine ih (known := if known.any (s.equiv ·) then known else known ++ [s]) ?_
+    split
+    · exact h
+    · next hany =>
+      refine List.pairwise_append.mpr ⟨h, List.pairwise_singleton _ _, fun t ht u hu => ?_⟩
+      obtain rfl := List.mem_singleton.mp hu
+      exact Bool.eq_false_iff.mpr fun hequiv => hany (List.any_eq_true.mpr ⟨t, ht, hequiv⟩)
+
+theorem append_freshFrom (known acc next : List (State σ S)) :
+    known ++ freshFrom known acc next = insertAll (known ++ acc) next := by
+  induction next generalizing acc with
+  | nil => rfl
+  | cons s next ih =>
+    have hfresh : freshFrom known acc (s :: next) = freshFrom known
+        (if (known ++ acc).any (s.equiv ·) then acc else acc ++ [s]) next := rfl
+    have hinsert : insertAll (known ++ acc) (s :: next) = insertAll
+        (if (known ++ acc).any (s.equiv ·) then known ++ acc else known ++ acc ++ [s]) next := rfl
+    rw [hfresh, hinsert, ih]
+    split
+    · rfl
+    · rw [List.append_assoc]
+
+theorem distinct_close (svc : Service σ S) (states : List (State σ S)) :
+    State.Distinct (close svc states) := by
+  suffices h : ∀ (l : List Nat) (acc : List (State σ S) × List (State σ S)),
+      State.Distinct acc.1 → State.Distinct (l.foldl (fun acc _ => closeStep svc acc) acc).1 from
+    h _ _ (distinct_insertAll _ .nil)
+  intro l
+  induction l with
+  | nil => exact fun _ h => h
+  | cons _ l ih =>
+    refine fun acc h => ih (closeStep svc acc) ?_
+    rw [show (closeStep svc acc).1 = insertAll (acc.1 ++ []) (expand svc acc.2) from
+      append_freshFrom ..]
+    exact distinct_insertAll _ (by simpa using h)
+
+end Monitor
+
+structure Monitor (σ : Signature) (S : Type) [BEq S] where
+  candidates : List (State σ S)
+  distinct : State.Distinct candidates
 
 namespace Monitor
 
@@ -64,30 +151,14 @@ instance : BEq (Monitor σ S) where
 instance [Hashable S] [Hashable σ.In] [Hashable σ.Out] : Hashable (Monitor σ S) where
   hash m := m.candidates.foldl (fun h s => h + mixHash 7 s.hash) 0
 
-def insertAll (known new : List (Service.State σ S)) : List (Service.State σ S) :=
-  new.foldl (fun acc s => if acc.any (s.equiv ·) then acc else acc ++ [s]) known
-
-/--
-Close a set of candidates under pending inputs taking effect. Each application removes one
-pending input, so as many rounds as the longest pending list reach everything.
--/
-def close (svc : Service σ S) (states : List (Service.State σ S)) : List (Service.State σ S) :=
-  let rounds := states.foldl (fun n s => max n s.pending.length) 0
-  let step := fun (acc : List (Service.State σ S) × List (Service.State σ S)) _ =>
-    let next := acc.2.flatMap fun s => s.pending.eraseDups.map (svc.apply s)
-    let fresh := next.foldl
-      (fun fresh s => if (acc.1 ++ fresh).any (s.equiv ·) then fresh else fresh ++ [s]) []
-    (acc.1 ++ fresh, fresh)
-  ((List.range rounds).foldl step (insertAll [] states, insertAll [] states)).1
-
 def start (svc : Service σ S) : Monitor σ S :=
-  ⟨[svc.start]⟩
+  ⟨[svc.start], List.pairwise_singleton _ _⟩
 
 def input (svc : Service σ S) (m : Monitor σ S) (x : σ.In) : Monitor σ S :=
-  ⟨close svc (m.candidates.map (·.call x))⟩
+  ⟨close svc (m.candidates.map (·.call x)), distinct_close ..⟩
 
 def output (m : Monitor σ S) (out : σ.Out) : Monitor σ S :=
-  ⟨insertAll [] (m.candidates.filterMap (·.ret out))⟩
+  ⟨insertAll [] (m.candidates.filterMap (·.ret out)), distinct_insertAll _ .nil⟩
 
 end Monitor
 

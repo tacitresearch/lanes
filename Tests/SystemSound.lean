@@ -2,13 +2,17 @@
 Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
+import Lanes.Semantics
 import Tests.Bank
 import Tests.Election
 import Tests.Gate
+import Tests.KV
 
 /-!
-`Check.system_sound` applied to the bank, election and gate checks of the test suite: what their PASS
-means, as theorems. The kernel cannot run the search, so the PASS itself stays a hypothesis.
+`Check.system_sound` applied to the bank, election and gate checks of the test suite, and
+`Check.refines_sound` and `Check.refines_traces` to the refinement check of the key-value store:
+what their PASS means, as theorems. The kernel cannot run the search, so the PASS itself stays a
+hypothesis.
 -/
 
 namespace Tests.SystemSound
@@ -91,5 +95,46 @@ example (hfailure : (check {} twoRequests).failure = none)
   all_goals exact h.eq_of_quiet fun _ => rfl
 
 end Gate
+
+section KV
+
+open Tests.KV Examples.KV
+
+/- Mathlib decides equality of functions on a finite type its own way. The check compared the
+store's state with `Enum.funBEq`, so that is the instance these statements must be about. -/
+attribute [local instance high] Enum.funBEq
+
+instance (caching : Bool) : ∀ i, @LawfulBEq ((system K V F caching).State i)
+    (System.Inspect.beqState (sys := system K V F caching) i)
+  | .front _ => inferInstanceAs (LawfulBEq (List (K × Option V)))
+  | .store => inferInstanceAs (LawfulBEq (K → Option V))
+
+theorem kv_props {p : Check.Property (W false)} (hp : p ∈ props false) {a b : W false}
+    (h : World.Equiv {} a b) : p.holds a = p.holds b := by
+  simp only [props, List.mem_cons, List.not_mem_nil, or_false] at hp
+  rcases hp with rfl | rfl | rfl
+  · exact h.holds_refines _
+  · exact h.congr fun _ _ _ _ _ houtbox _ => houtbox.any_eq
+  · exact h.congr fun _ _ _ _ _ houtbox _ => houtbox.any_eq
+
+example (hfailure : (check false).failure = none) (hcomplete : (check false).complete = true)
+    {w : W false}
+    (hw : Scenario.Reachable (system K V F false)
+      { driver := (spec K V F).monitored (Driver.anyOrder requests) } (fun _ => true) w) :
+    w.driver.2.ok = true :=
+  Check.refines_sound (spec K V F) (.of_lawful _) {} 0 (props false) {}
+    (fun _ hp _ _ => kv_props hp) (fun _ _ _ => rfl) hfailure hcomplete (.head _) hw
+
+open Cslib in
+example (hfailure : (check false).failure = none) (hcomplete : (check false).complete = true)
+    {events : List (Event (sig K V F))} {w : W false}
+    (hrun : Scenario.Run (system K V F false)
+      { driver := (spec K V F).monitored (Driver.anyOrder requests) } (fun _ => true) events w) :
+    ∃ a, (spec K V F).spec.lts.SMTr ⟨fun _ => none, 0, 0⟩
+      ((events.filterMap Event.visible).map some) a :=
+  Check.refines_traces (spec K V F) (.of_lawful _) {} 0 (props false) {}
+    (fun _ hp _ _ => kv_props hp) (fun _ _ _ => rfl) hfailure hcomplete (.head _) hrun
+
+end KV
 
 end Tests.SystemSound

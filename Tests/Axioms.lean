@@ -238,6 +238,18 @@ by `lake build`, not linked into the test executable.
 /-- info: 'Lanes.Check.system_sound_of_respects' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Check.system_sound_of_respects
 
+/-- info: 'Lanes.Check.Monitor.beq_iff_abs_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.Monitor.beq_iff_abs_eq
+
+/-- info: 'Lanes.Service.monitored_respects' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Service.monitored_respects
+
+/-- info: 'Lanes.Check.refines_sound' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.refines_sound
+
+/-- info: 'Lanes.Check.refines_traces' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.refines_traces
+
 /-- info: 'Lanes.Frame.encode_append' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Frame.encode_append
 

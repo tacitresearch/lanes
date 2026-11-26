@@ -157,18 +157,10 @@ namespace Check.Monitor
 
 open Service
 
-/-- The states reached from `frontier` by one pending input taking effect. -/
-def expand (svc : Service σ S) (frontier : List (State σ S)) : List (State σ S) :=
-  frontier.flatMap fun s => s.pending.eraseDups.map (svc.apply s)
-
 /-- The members of `expand`. -/
 theorem mem_expand {svc : Service σ S} {frontier : List (State σ S)} {t : State σ S} :
     t ∈ expand svc frontier ↔ ∃ f ∈ frontier, ∃ x ∈ f.pending, svc.apply f x = t := by
   simp [expand]
-
-/-- The number of rounds `close` runs: the most inputs pending in any state. -/
-def rounds (states : List (State σ S)) : Nat :=
-  states.foldl (fun n s => max n s.pending.length) 0
 
 /-- The running maximum in `rounds` never decreases. -/
 theorem le_foldl_max_pending (states : List (State σ S)) (n : Nat) :
@@ -241,25 +233,6 @@ theorem exists_mem_insertAll_toAbs_eq [LawfulBEq S] {known new : List (State σ 
         simp [hany]
     · exact ih h
 
-/-- The states one round of `close` adds: those of `next` not yet in `known ++ acc`. -/
-def freshFrom (known acc next : List (State σ S)) : List (State σ S) :=
-  next.foldl (fun fresh s => if (known ++ fresh).any (s.equiv ·) then fresh else fresh ++ [s]) acc
-
-/-- Adding the fresh states to the known ones is `insertAll`. -/
-theorem append_freshFrom (known acc next : List (State σ S)) :
-    known ++ freshFrom known acc next = insertAll (known ++ acc) next := by
-  induction next generalizing acc with
-  | nil => rfl
-  | cons s next ih =>
-    have hfresh : freshFrom known acc (s :: next) = freshFrom known
-        (if (known ++ acc).any (s.equiv ·) then acc else acc ++ [s]) next := rfl
-    have hinsert : insertAll (known ++ acc) (s :: next) = insertAll
-        (if (known ++ acc).any (s.equiv ·) then known ++ acc else known ++ acc ++ [s]) next := rfl
-    rw [hfresh, hinsert, ih]
-    split
-    · rfl
-    · rw [List.append_assoc]
-
 /-- A fresh state is one of the states offered. -/
 theorem mem_of_mem_freshFrom {known acc next : List (State σ S)} {t : State σ S}
     (h : t ∈ freshFrom known acc next) : t ∈ acc ∨ t ∈ next := by
@@ -273,11 +246,6 @@ theorem mem_of_mem_freshFrom {known acc next : List (State σ S)} {t : State σ 
         · exact .inl h
         · exact .inr (by simp_all)
     · exact .inr (List.mem_cons_of_mem _ h)
-
-/-- One round of `close` on the known states and the frontier. -/
-def closeStep (svc : Service σ S) (acc : List (State σ S) × List (State σ S)) :
-    List (State σ S) × List (State σ S) :=
-  (acc.1 ++ freshFrom acc.1 [] (expand svc acc.2), freshFrom acc.1 [] (expand svc acc.2))
 
 /-- `close` is `closeStep` repeated. -/
 theorem close_eq (svc : Service σ S) (states : List (State σ S)) :

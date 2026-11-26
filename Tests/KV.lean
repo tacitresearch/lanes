@@ -53,14 +53,19 @@ instance (caching : Bool) : (system K V F caching).Inspect where
 def requests : List (Request K V F) :=
   [⟨1, 0, .get 0⟩, ⟨2, 1, .put 0 1⟩, ⟨3, 0, .get 0⟩]
 
+abbrev W (caching : Bool) :=
+  World (system K V F caching) (List (Request K V F) × Check.Monitor (sig K V F) (K → Option V))
+
+def props (caching : Bool) : List (Check.Property (W caching)) :=
+  [ Check.refines "every response is allowed by the map spec",
+    .sometimes "a read sees the written value" fun w =>
+      w.state.outbox.any fun r => r.res == .value (some 1),
+    .sometimes "a read sees the empty store" fun w =>
+      w.state.outbox.any fun r => r.res == .value none ]
+
 def check (caching : Bool) :=
   Check.system (system K V F caching)
-    { driver := (spec K V F).monitored (Driver.anyOrder requests) }
-    [ Check.refines "every response is allowed by the map spec",
-      .sometimes "a read sees the written value" fun w =>
-        w.state.outbox.any fun r => r.res == .value (some 1),
-      .sometimes "a read sees the empty store" fun w =>
-        w.state.outbox.any fun r => r.res == .value none ]
+    { driver := (spec K V F).monitored (Driver.anyOrder requests) } (props caching)
 
 def tests : List (String × Bool) :=
   let plain := check false

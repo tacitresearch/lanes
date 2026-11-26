@@ -89,6 +89,10 @@ theorem tabulateOn_eq {ι : Type} [DecidableEq ι] {β : ι → Type} (f : (i : 
 instance (priority := low) funBEq {α β : Type} [Enum α] [BEq β] : BEq (α → β) where
   beq f g := (all (α := α)).all fun a => f a == g a
 
+instance funLawfulBEq {α β : Type} [Enum α] [BEq β] [LawfulBEq β] : LawfulBEq (α → β) where
+  rfl := List.all_eq_true.mpr fun _ _ => BEq.rfl
+  eq_of_beq h := funext fun a => eq_of_beq (List.all_eq_true.mp h a (complete a))
+
 instance (priority := low) funHashable {α β : Type} [Enum α] [Hashable β] : Hashable (α → β) where
   hash f := (all (α := α)).foldl (fun h a => mixHash h (hash (f a))) 17
 

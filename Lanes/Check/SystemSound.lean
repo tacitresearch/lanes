@@ -393,4 +393,65 @@ theorem system_violated [σ.Inspect] [sys.Inspect] [BEq D] [Hashable D] (sc : Sc
 
 end Check
 
+/-! The runs of an instance, with their events: what a refinement check is about. -/
+
+/-- `Scenario.Reachable` with the events kept: the runs a check covers, each with the world it
+ends in. -/
+inductive Scenario.Run [Enum σ.Id] (sys : System σ) (sc : Scenario σ D)
+    (constraint : World sys D → Bool) : List (Event σ) → World sys D → Prop
+  | init : constraint (World.init sys sc) = true → Run sys sc constraint [] (World.init sys sc)
+  | step {events : List (Event σ)} {w w' : World sys D} {ev : Event σ} :
+    Run sys sc constraint events w → (ev, w') ∈ w.next sc → constraint w' = true →
+    Run sys sc constraint (events ++ [ev]) w'
+
+theorem SysState.run_append (env : EnvModel σ) (c : SysState sys)
+    (events events' : List (Event σ)) :
+    c.run env (events ++ events') = (c.run env events).bind fun c' => c'.run env events' := by
+  induction events generalizing c with
+  | nil => rfl
+  | cons ev events ih =>
+    simp only [List.cons_append, SysState.run]
+    cases c.step env ev with
+    | none => rfl
+    | some c' => exact ih c'
+
+namespace Scenario
+
+variable [Enum σ.Id] {sc : Scenario σ D} {constraint : World sys D → Bool} {w : World sys D}
+  {events : List (Event σ)}
+
+theorem Run.reachable (h : sc.Run sys constraint events w) : sc.Reachable sys constraint w := by
+  induction h with
+  | init hc => exact .init hc
+  | step _ hnext hc ih =>
+    exact Reachable.of_model (n := ⟨_⟩) (.step ih.model (List.mem_map.mpr ⟨_, hnext, rfl⟩) hc)
+
+/-- The events of a run are a run of the semantics from the initial state. -/
+theorem Run.run (h : sc.Run sys constraint events w) :
+    (SysState.init sys sc.env).run sc.env events = some w.state := by
+  induction h with
+  | init => rfl
+  | step _ hnext _ ih =>
+    rw [SysState.run_append, ih]
+    simp [SysState.run, World.step_of_mem_next hnext]
+
+theorem reachable_iff_exists_run :
+    sc.Reachable sys constraint w ↔ ∃ events, sc.Run sys constraint events w := by
+  refine ⟨fun h => ?_, fun ⟨_, h⟩ => h.reachable⟩
+  suffices hmodel : ∀ n, (Check.model sys sc).Reachable (fun n => constraint n.world) n →
+      ∃ events, sc.Run sys constraint events n.world from hmodel ⟨w⟩ h.model
+  intro n hn
+  induction hn with
+  | init hinit hc =>
+    obtain rfl : _ = Check.Node.mk _ := by simpa [Check.model] using hinit
+    exact ⟨[], .init hc⟩
+  | step _ hnext hc ih =>
+    obtain ⟨events, hrun⟩ := ih
+    obtain ⟨⟨ev, w'⟩, hmem, heq⟩ := List.mem_map.mp hnext
+    simp only [Prod.mk.injEq] at heq
+    obtain ⟨rfl, rfl⟩ := heq
+    exact ⟨_, .step hrun hmem hc⟩
+
+end Scenario
+
 end Lanes

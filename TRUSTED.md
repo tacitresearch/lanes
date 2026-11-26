@@ -101,7 +101,12 @@ proved in `Lanes/Http/GateSound.lean` to answer each arrival at most once and mo
 
 Actor `step` functions, `SysState.step`, the kernel (`Kernel.run1_sound`), the model checker's
 exploration of a state (`SysState.mem_successors_iff`), its search (`Check.search_sound`), what a
-complete PASS of `Check.system` means (`Check.system_sound`, for actor states and a driver state
-whose `==` is equality, and properties that do not depend on message order),
+complete PASS of `Check.system` means (`Check.system_sound_of_respects`: for actor states whose
+`==` is equality, a driver state whose `==` is an equivalence, with a matching hash, that the
+driver respects, and properties that do not tell merged worlds apart; `Check.system_sound` is
+the case where `==` on the driver's state is equality), what a complete PASS of a refinement
+check means (`Check.refines_sound`, `Check.refines_traces`: under a monitored driver the
+inputs and outputs of every run of the instance are a trace of the spec, for a spec state
+whose `==` is equality),
 the refinement theory and every theorem in `Lanes/` and `Examples/`: these are checked by Lean. No `sorry`, `axiom`, `unsafe`, `@[implemented_by]` or
 `@[extern]` appears in them.
