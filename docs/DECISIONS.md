@@ -1127,8 +1127,10 @@ on the loopback interface, which costs a copy and a system call per parcel and n
 more to be trusted. If one process with several shards is wanted again, it should be the
 transport's courier over an in-memory link, not a second router.
 
-The inbox's lane that is never refused (`Mailbox.urge`, `Runtime.peer`) was there for it and has
-no user now; it goes next.
+The inbox's lane that was never refused (`Mailbox.urge`, `Runtime.peer`) was there for it,
+and has gone too: the transport hands a parcel to `tryInput`, which may refuse it, as
+`Link.network` allows. The inbox is one bounded lane, and `Mailbox.batch_since_take` says a
+take returns what it took in since the last, in order.
 
 
 ## D38. Types are declared inside a command that derives what Lean's handlers cannot

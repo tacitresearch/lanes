@@ -28,9 +28,6 @@ structure Mailbox (α W : Type) where
   /-- Bounded: senders are refused or wait when it is full. Newest first. -/
   items : List α := []
   count : Nat := 0
-  /-- From other shards: never refused for want of room, so that two shards cannot block each
-  other. Newest first. -/
-  urgent : List α := []
   closed : Bool := false
   /-- The shard, asleep until something arrives. -/
   sleeper : Option W := none
@@ -60,25 +57,20 @@ def offerOrWait (capacity : Nat) (x : α) (room : W) (m : Mailbox α W) : Offere
   | (.full, m) => (.full, { m with waiting := room :: m.waiting })
   | answered => answered
 
-/-- Put `x` in whatever the room. `none` if the mailbox is closed. -/
-def urge (x : α) (m : Mailbox α W) : Option (Option W) × Mailbox α W :=
-  if m.closed then (none, m)
-  else (some m.sleeper, { m with urgent := x :: m.urgent, sleeper := none })
-
 structure Taken (α W : Type) where
-  /-- What had arrived, oldest first, those from other shards before the rest. -/
+  /-- What had arrived, oldest first. -/
   batch : List α
   /-- Senders that waited for room, to be woken: there is room now. -/
   wake : List W
   closed : Bool
 
 def take (m : Mailbox α W) : Taken α W × Mailbox α W :=
-  ({ batch := m.urgent.reverse ++ m.items.reverse, wake := m.waiting, closed := m.closed },
-    { m with items := [], count := 0, urgent := [], waiting := [] })
+  ({ batch := m.items.reverse, wake := m.waiting, closed := m.closed },
+    { m with items := [], count := 0, waiting := [] })
 
 /-- Go to sleep until something arrives, unless something has: then stay awake. -/
 def rest (wake : W) (m : Mailbox α W) : Bool × Mailbox α W :=
-  if m.closed || !m.items.isEmpty || !m.urgent.isEmpty then (false, m)
+  if m.closed || !m.items.isEmpty then (false, m)
   else (true, { m with sleeper := some wake })
 
 /-- Take no more. Everyone asleep or waiting is to be woken. What is in it stays to be taken. -/
