@@ -32,6 +32,7 @@ import Tests.Clients
 import Tests.Lease
 import Tests.Lint
 import Tests.Release
+import Tests.Oracle.All
 import Tests.Jobs
 
 /-!
@@ -78,13 +79,16 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.Fair.tests ++ Tests.Codec.tests ++ Tests.Durable.fileTests ++ Tests.Split.tests
     ++ Tests.Peers.tests ++ Tests.Courier.tests ++ Tests.Mailbox.tests ++ Tests.Batch.tests
     ++ Tests.Crypto.tests ++ Tests.Auth.tests ++ Tests.Clients.tests ++ Tests.Lease.tests
-    ++ Tests.Release.tests ++ Tests.ReadRequest.tests ++ Tests.Jobs.tests
+    ++ Tests.Release.tests ++ Tests.ReadRequest.tests ++ Tests.Oracle.unitTests
+    ++ Tests.Jobs.tests
   match args with
   | [] =>
     let pure := pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.Lint.tests)
+      ++ (← Tests.Oracle.replayAll)
     failures pure
     report (pure ++ (← live)) pure.length
-  | ["fast"] => report (pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.Lint.tests))
+  | ["fast"] => report (pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.Lint.tests)
+      ++ (← Tests.Oracle.replayAll))
   | ["live"] => report (← live)
   | ["journal-child", path] =>
     Tests.Durable.child path

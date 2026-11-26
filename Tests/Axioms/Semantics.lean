@@ -6,6 +6,22 @@ import Lanes.Semantics
 
 /-! The axiom gate (rule 5.5, see `Tests/Axioms.lean`) for the theorems of `Lanes/Semantics/`. -/
 
+-- Lanes.Semantics.Account
+/-- info: 'Lanes.Service.takes' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Service.takes
+
+/-- info: 'Lanes.Account.implements' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Account.implements
+
+/-- info: 'Lanes.Account.Moves.of_le' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Account.Moves.of_le
+
+/-- info: 'Lanes.Account.Moves.handle' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Account.Moves.handle
+
+/-- info: 'Lanes.Account.Moves.grow' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Account.Moves.grow
+
 -- Lanes.Semantics.FairJoin
 /-- info: 'Lanes.Wiring.leftView_projects' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Wiring.leftView_projects
@@ -76,6 +92,15 @@ import Lanes.Semantics
 /-- info: 'Lanes.Jobs.attach_active_leaves' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Jobs.attach_active_leaves
 
+-- Lanes.Semantics.Link
+/-- info: 'Lanes.linkMsgs_of_deliverable' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Lanes.linkMsgs_of_deliverable
+
+/-- info: 'Lanes.linkMsgs_erase_self' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Lanes.linkMsgs_erase_self
+
+/-- info: 'Lanes.linkMsgs_down' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.linkMsgs_down
 
 -- Lanes.Semantics.Liveness
 /-- info: 'Lanes.System.LeadsTo.ensures_of_invariant' depends on axioms: [propext, Classical.choice, Quot.sound] -/
@@ -140,6 +165,10 @@ import Lanes.Semantics
 /-- info: 'Lanes.Refines.traces' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Refines.traces
 
+-- Lanes.Semantics.Sent
+/-- info: 'Lanes.System.traced' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.traced
+
 -- Lanes.Semantics.Service
 /-- info: 'Lanes.Server.implements' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Server.implements
@@ -156,6 +185,9 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.System.Refines.to_ghost' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Refines.to_ghost
+
+/-- info: 'Lanes.System.Refines.of_events' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Refines.of_events
 
 /-- info: 'Lanes.System.Refines.of_steps' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Refines.of_steps

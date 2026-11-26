@@ -5,7 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import Lanes
 
 /-!
-Releasing actors at rest (`Kernel.rest`, `docs/decisions/new-release-actors-at-rest.md`),
+Releasing actors at rest (`Kernel.rest`, `docs/decisions/D51-release-actors-at-rest.md`),
 checked before it is proved (rule 5.1). A client churns through actors, one per identity, and a
 kernel that releases them is driven side by side with one that keeps every actor it started,
 through every sequence of operations up to a bound: both hand over the same outputs, report the

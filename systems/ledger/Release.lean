@@ -5,7 +5,7 @@ import Ledger
 
 A log-in for a name nobody has signed up leaves `user n` vacant, the state a start gives it
 (`Actor.fresh`), so the kernel releases it once it has answered
-(`docs/decisions/new-release-actors-at-rest.md`). Without that, a stranger guessing names grows
+(`docs/decisions/D51-release-actors-at-rest.md`). Without that, a stranger guessing names grows
 the kernel by an actor a guess. Checked when this file is built, with names and credentials
 that are numbers; the gate in front of the deployed system passes the declaration on.
 -/

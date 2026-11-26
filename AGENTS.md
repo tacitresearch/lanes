@@ -42,6 +42,12 @@ lake exe lanes inventory --list none  # the definitions of Lanes/ without eviden
 - Templates are embedded with `include_str`, which Lake does not track: after editing
   `templates/`, delete `.lake/build/lib/lean/LanesCli/New.*` and `.lake/build/ir/LanesCli/New.*`,
   rebuild `lanes`, and build an app it generates.
+- A parser or format is also tested against Go's standard library
+  (`docs/decisions/D50-differential-tests-against-go.md`): `oracle/<package>/main.go` answers the
+  cases that `Tests/Oracle/<Package>.lean` generates, and every difference is either a `known`
+  predicate there, with its reason, or a failure. `lake exe lanesOracle --cases 100000` asks Go
+  (it needs `go`, at the version `oracle/go.mod` pins); `lake test` replays the answers recorded in
+  `Tests/Oracle/vectors/`, which `lake exe lanesOracle --cases 1000 --record` rewrites.
 - The toolchain is pinned in `lean-toolchain` and follows CSLib's. Dependencies are pinned in
   `lake-manifest.json`; upgrade them deliberately, CSLib first.
 - To work on a proof without rebuilding the file, `scripts/lean-goals` asks a language server it

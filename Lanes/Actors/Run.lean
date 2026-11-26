@@ -118,6 +118,86 @@ theorem emits_map {α : Type} (f : α → Effect σ i) (l : List α) :
 theorem sends_append (a b : List (Effect σ i)) : sends i (a ++ b) = sends i a ++ sends i b :=
   List.filterMap_append
 
+/-! What a step sends, arms and emits, computed by `simp` for a concrete system. A lemma whose
+left side has a type such as `σ.Out` or `σ.Msg i` as an implicit argument (`emits_map_emit`:
+`List.map` at `σ.Out`) is keyed by the discrimination tree on `Signature.Out _`, which a
+concrete signature, reduced to its fields, never matches; these have none. -/
+
+attribute [simp] emits_nil emits_append sends_append
+
+@[simp] theorem sends_nil : sends i ([] : List (Effect σ i)) = [] := rfl
+
+@[simp] theorem sends_cons_send (to : σ.Id) (msg : σ.Msg to) (effs : List (Effect σ i)) :
+    sends i (.send to msg :: effs) = ⟨some i, to, msg⟩ :: sends i effs := rfl
+
+@[simp] theorem sends_cons_emit (out : σ.Out) (effs : List (Effect σ i)) :
+    sends i (.emit out :: effs) = sends i effs := rfl
+
+@[simp] theorem sends_cons_after (delay_ms : Nat) (msg : σ.Msg i) (effs : List (Effect σ i)) :
+    sends i (.after delay_ms msg :: effs) = sends i effs := rfl
+
+@[simp] theorem sends_cons_cancel (msg : σ.Msg i) (effs : List (Effect σ i)) :
+    sends i (.cancel msg :: effs) = sends i effs := rfl
+
+@[simp] theorem sends_cons_stop (effs : List (Effect σ i)) :
+    sends i (.stop :: effs) = sends i effs := rfl
+
+@[simp] theorem emits_cons_send (to : σ.Id) (msg : σ.Msg to) (effs : List (Effect σ i)) :
+    emits (.send to msg :: effs) = emits effs := rfl
+
+@[simp] theorem emits_cons_emit (out : σ.Out) (effs : List (Effect σ i)) :
+    emits (.emit out :: effs) = out :: emits effs := rfl
+
+@[simp] theorem emits_cons_after (delay_ms : Nat) (msg : σ.Msg i) (effs : List (Effect σ i)) :
+    emits (.after delay_ms msg :: effs) = emits effs := rfl
+
+@[simp] theorem emits_cons_cancel (msg : σ.Msg i) (effs : List (Effect σ i)) :
+    emits (.cancel msg :: effs) = emits effs := rfl
+
+@[simp] theorem emits_cons_stop (effs : List (Effect σ i)) :
+    emits (.stop :: effs) = emits effs := rfl
+
+@[simp] theorem armed_nil : armed ([] : List (Effect σ i)) = [] := rfl
+
+@[simp] theorem armed_append (a b : List (Effect σ i)) : armed (a ++ b) = armed a ++ armed b :=
+  List.filterMap_append
+
+@[simp] theorem armed_cons_send (to : σ.Id) (msg : σ.Msg to) (effs : List (Effect σ i)) :
+    armed (.send to msg :: effs) = armed effs := rfl
+
+@[simp] theorem armed_cons_emit (out : σ.Out) (effs : List (Effect σ i)) :
+    armed (.emit out :: effs) = armed effs := rfl
+
+@[simp] theorem armed_cons_after (delay_ms : Nat) (msg : σ.Msg i) (effs : List (Effect σ i)) :
+    armed (.after delay_ms msg :: effs) = msg :: armed effs := rfl
+
+@[simp] theorem armed_cons_cancel (msg : σ.Msg i) (effs : List (Effect σ i)) :
+    armed (.cancel msg :: effs) = armed effs := rfl
+
+@[simp] theorem armed_cons_stop (effs : List (Effect σ i)) :
+    armed (.stop :: effs) = armed effs := rfl
+
+/-- `emits_map` for what a step sends. -/
+@[simp] theorem sends_map {α : Type} (f : α → Effect σ i) (l : List α) :
+    sends i (l.map f) =
+      l.filterMap fun a => match f a with | .send to msg => some ⟨some i, to, msg⟩ | _ => none := by
+  induction l with
+  | nil => rfl
+  | cons a l ih =>
+    rw [List.map_cons, List.filterMap_cons, ← ih]
+    cases f a <;> rfl
+
+/-- `emits_map` for the timers a step arms. -/
+@[simp] theorem armed_map {α : Type} (f : α → Effect σ i) (l : List α) :
+    armed (l.map f) = l.filterMap fun a => match f a with | .after _ msg => some msg | _ => none := by
+  induction l with
+  | nil => rfl
+  | cons a l ih =>
+    rw [List.map_cons, List.filterMap_cons, ← ih]
+    cases f a <;> rfl
+
+attribute [simp] emits_map
+
 /-- Effects rewritten one by one stop the actor exactly when the originals do. -/
 theorem any_isStop_flatMap {τ : Signature} {j : τ.Id} {f : Effect σ i → List (Effect τ j)}
     (h : ∀ eff, (f eff).any isStop = eff.isStop) (effs : List (Effect σ i)) :

@@ -31,7 +31,8 @@ because a launch claim is what a critic tests first.
    URLs and rate limits, which need IP addresses; then TLS and names in the HTTP client.
 4. **Less trusted, fewer premises.** Our own HTTP/1.1 request reader in place of `Std.Http`'s;
    the premise that a client's link does not duplicate taken off the gate and Raft, as D48 took it
-   off the key-value store; idle actors released, which waits for a place to keep their state.
+   off the key-value store; idle actors not at their start saved when they rest and read back when mail comes (those at
+   their start are released already), which waits for a place to keep their state.
 5. **Slow work that is not one request's**, as the ledger's friction log asks
    (`systems/ledger/README.md`). The jobs actor is in (`Lanes/Behaviours/Jobs.lean`). Left: the
    answer carried to its requester through the join, at most once there, as the gate's is; a

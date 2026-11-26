@@ -141,6 +141,8 @@ structure Facts where
   gated : NameMap NameSet := {}
   /-- Model-checking functions. -/
   runners : NameSet := {}
+  /-- Definitions Lean unfolds at reducible transparency, instances aside: the `abbrev`s. -/
+  reducible : NameSet := {}
 
 def ranges (env : Environment) (n : Name) : Option DeclarationRanges :=
   declRangeExt.find? (level := .server) env n <|> declRangeExt.find? (level := .exported) env n
@@ -155,6 +157,11 @@ def inDeriving (lines : Array String) (pos : Position) : Bool :=
     || (previous.startsWith "deriving" && previous.endsWith ","))
 
 def generatedParsers : List Name := [``ParserDescr, ``TrailingParserDescr, ``Parser.Category]
+
+/-- Whether `n` is a theorem, or the private name Lean files a theorem's matchers under. What
+those define is part of a proof: it neither runs nor states. -/
+def ofTheorem (env : Environment) (n : Name) : Bool :=
+  [n, (privateToUserName? n).getD n].any fun n => env.find? n matches some (.thmInfo _)
 
 def readFacts (root : System.FilePath) (env : Environment) : IO Facts := do
   let gated ← gates root
@@ -178,10 +185,14 @@ def readFacts (root : System.FilePath) (env : Environment) : IO Facts := do
         facts := { facts with stated := c.type.getUsedConstants.foldl (·.insert ·) facts.stated }
       | .defnInfo _ | .opaqueInfo _ =>
         let o := owner name
+        if ofTheorem env o then continue
         let used := (ci.value?.map (·.getUsedConstants)).getD #[]
         facts := { facts with
           uses := facts.uses.insert o (used.foldl (·.insert ·) (facts.uses.getD o {})) }
         if o == name then shapes := shapes.push (name, ci.type)
+        if o == name && getReducibilityStatusCore env name == .reducible
+            && !Meta.isInstanceCore env name then
+          facts := { facts with reducible := facts.reducible.insert name }
         if !isLibrary m || name.isInternalDetail || isPrivateName name then continue
         if isAuxRecursor env name || isNoConfusion env name || Meta.isMatcherCore env name
           || env.isProjectionFn name then continue
@@ -283,13 +294,33 @@ def covers (f : Facts) (spec : NameSet) (start : Name) : NameSet := Id.run do
         if !seen.contains c && (through || f.moduleOf.find? c == here) then todo := c :: todo
   return seen
 
+/-- The constants of a statement, with each predicate abbreviation in it read as its body, in
+whatever module it is: Lean reads it so, and it is the statement written shorter, not an entry
+point of its module. -/
+def statement (f : Facts) (consts : NameSet) : NameSet := Id.run do
+  let unfolds := fun n => f.reducible.contains n && isProp f n
+  let mut out := consts
+  let mut todo := consts.toList.filter unfolds
+  let mut fuel := f.reducible.size + consts.size + 1
+  while fuel > 0 do
+    fuel := fuel - 1
+    match todo with
+    | [] => break
+    | n :: rest =>
+      todo := rest
+      for c in f.uses.getD n {} do
+        if !out.contains c then
+          out := out.insert c
+          if unfolds c then todo := c :: todo
+  return out
+
 /-- Of each constant, the gated theorems that state it, each with the constant of its
 statement it is reached through, if it is not there itself. -/
 def provedBy (f : Facts) (spec : NameSet) : NameMap (Array (Name × Option Name)) := Id.run do
   let mut out : NameMap (Array (Name × Option Name)) := {}
   for (thm, consts) in f.gated do
     let mut credit : NameMap (Option Name) := {}
-    for c in consts do
+    for c in statement f consts do
       if isProp f c then
         credit := credit.insert c none
         continue
