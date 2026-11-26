@@ -37,6 +37,15 @@ def shapes : List Shape :=
 
 def trailing : List ByteArray := ["next".toUTF8]
 
+abbrev Index := Std.ExtTreeMap String (List Nat)
+
+def Index.codec : Codec Index := Codec.extTreeMap Codec.string (Codec.list Codec.nat)
+
+def index (keys : List String) : Index :=
+  keys.foldl (fun m key => m.insert key [key.length, m.size]) ∅
+
+def fruit : List String := ["pear", "apple", "fig", "quince", "apple", "é"]
+
 def tests : List (String × Bool) :=
   [ ("codec: a structure and an inductive type read back as written, leaving what follows",
       shapes.all fun shape =>
@@ -47,6 +56,18 @@ def tests : List (String × Bool) :=
       (shapes.drop 1).all (fun shape =>
         (Shape.codec.read ((Shape.codec.write shape).dropLast)).isNone)
         && (Shape.codec.read (Codec.string.write "circle")).isNone),
+    ("codec: a map reads back as the map written, and an empty one as empty",
+      Index.codec.read (Index.codec.write (index fruit) ++ trailing)
+          == some (index fruit, trailing)
+        && Index.codec.read (Index.codec.write ∅) == some (∅, [])
+        && ((Index.codec.read (Index.codec.write (index fruit))).map
+              fun (m, _) => (m["fig"]?, m["plum"]?, m.size))
+            == some (some [3, 2], none, 5)),
+    ("codec: maps that hold the same are written the same, however they were built",
+      let other := (index (fruit.reverse ++ ["plum"])).erase "plum"
+      let same := fruit.foldl (fun m key => m.insert key (index fruit)[key]!) other
+      Index.codec.write same == Index.codec.write (index fruit)
+        && Index.codec.write other != Index.codec.write (index fruit)),
     ("codec: the bank's requests and an HTTP request read back as written",
       let request : Examples.Bank.Request (Fin 3) := .transfer ⟨7, 0, 2, 40⟩
       let codec := Examples.Bank.Request.codec (Codec.fin (n := 3))
