@@ -249,6 +249,7 @@ structure Moves (config : Config) (nodes : List N) (i : N) (s : Node N C M)
       (config.commitsOwnTermOnly = true → termAt s'.log s'.commit = s'.term)) ∨
     (∃ leader prev entries commit,
       msg = some (.append s'.term leader prev (termAt s.log prev) entries commit) ∧
+        prev ≤ s.log.length ∧ s'.log = s.log.take prev ++ merge (s.log.drop prev) entries ∧
         s'.commit = max s.commit (min commit (prev + entries.length)))
   applied_le : s.applied ≤ s.commit → s'.applied ≤ s'.commit
   /-- Only a follower that has taken an `append` acknowledges, and what it acknowledges is where
@@ -273,7 +274,8 @@ local macro "moves" : tactic => `(tactic|
     | exact fun h => applied_le_advanceCommit _ _ _ _ _ _ h))
 
 theorem onElectionTimeout_moves (s : Node N C M) :
-    Moves config nodes self s (some .electionTimeout) (onElectionTimeout config nodes machine self s).1
+    Moves config nodes self s (some .electionTimeout)
+      (onElectionTimeout config nodes machine self s).1
       (onElectionTimeout config nodes machine self s).2 := by
   obtain ⟨t, voted, log, commit, applied, m, role⟩ := s
   cases role <;> simp only [onElectionTimeout] <;> (repeat' split) <;> moves
@@ -286,7 +288,8 @@ theorem onRequestVote_moves (s : Node N C M) (term : Nat) (candidate : N) (lastI
   cases role <;> simp only [onRequestVote, enterTerm] <;> (repeat' split) <;> moves
 
 theorem onVote_moves (s : Node N C M) (term : Nat) (voter : N) :
-    Moves config nodes self s (some (.vote term voter)) (onVote config nodes machine self s term voter).1
+    Moves config nodes self s (some (.vote term voter))
+      (onVote config nodes machine self s term voter).1
       (onVote config nodes machine self s term voter).2 := by
   obtain ⟨t, voted, log, commit, applied, m, role⟩ := s
   cases role <;> simp only [onVote] <;> (repeat' split) <;> moves
@@ -307,7 +310,8 @@ theorem onAppended_moves (s : Node N C M) (term : Nat) (follower : N) (index : N
   cases role <;> simp only [onAppended] <;> (repeat' split) <;> moves
 
 theorem onPropose_moves (s : Node N C M) (req : ReqId) (cmd : C) :
-    Moves config nodes self s (some (.propose req cmd)) (onPropose config nodes machine self s req cmd).1
+    Moves config nodes self s (some (.propose req cmd))
+      (onPropose config nodes machine self s req cmd).1
       (onPropose config nodes machine self s req cmd).2 := by
   obtain ⟨t, voted, log, commit, applied, m, role⟩ := s
   cases role <;> simp only [onPropose] <;> (repeat' split) <;> moves

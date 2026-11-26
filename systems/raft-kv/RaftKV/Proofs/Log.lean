@@ -429,7 +429,8 @@ that holds all of `l`, and `l` if not. -/
 theorem accepted (hv : Votes c) (hc : Logs c) {term prev : Nat} {l log' : List (Entry N C)}
     (hled : Led c term l) (hprev : prev ≤ (c.state i).1.log.length) (hlen : prev ≤ l.length)
     (hterm : termAt (c.state i).1.log prev = termAt l prev)
-    (hlog : log' = (c.state i).1.log.take prev ++ merge ((c.state i).1.log.drop prev) (l.drop prev)) :
+    (hlog : log' =
+      (c.state i).1.log.take prev ++ merge ((c.state i).1.log.drop prev) (l.drop prev)) :
     (l <+: (c.state i).1.log ∧ log' = (c.state i).1.log) ∨
       (¬l <+: (c.state i).1.log ∧ log' = l) :=
   (take_append_merge (hc.matching hv (hc.sourced i _ (c.mem_seen_self i)) (hc.led_sourced hled))
