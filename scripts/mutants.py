@@ -9,17 +9,29 @@ takes a minute or two per mutant, so it is run by hand and nightly, not on every
     python3 scripts/mutants.py            # those checked by lanesTest
     python3 scripts/mutants.py --all      # also those checked by something slower
     python3 scripts/mutants.py journal    # those whose name contains "journal"
-    python3 scripts/mutants.py --list     # print the list and run nothing
+    python3 scripts/mutants.py --list     # print every mutant and run nothing
+
+CI runs the list in pieces on several machines and then puts the verdicts together:
+
+    python3 scripts/mutants.py --all --shard 2/8 --baseline --json v2.json
+    python3 scripts/mutants.py --collect v*.json
+
+`--shard i/n` takes every n-th mutant from the i-th on, so the n shards hold each mutant
+exactly once (`--list --shard i/n` shows a shard). `--baseline` first runs each check the
+shard needs on the code as it is, and stops if one does not pass: a broken baseline would kill
+every mutant. `--json` writes the verdicts to a file; `--collect` reads such files, checks that
+together they hold every mutant once, prints them, and fails as the gate does.
 
 A mutant is killed when a test fails on it, or when it no longer builds, which is how a
 theorem kills one. A run that does not end, or ends without a test that failed, has noticed
 the mutant and asserted nothing: it is reported as HUNG or CRASHED, apart from the kills, and
-is a test to write. The gate fails on a mutant that survives and on one whose text is no
-longer in the file.
+is a test to write. The gate fails on a mutant that survives, on one that only hangs, and on
+one whose text is no longer in the file.
 
 This is a list of known ways to break trusted code, each caught. It is not a measure of what
 the tests cover: see "The mutation gate" in TRUSTED.md.
 """
+import json
 import os
 import pathlib
 import signal
@@ -187,8 +199,9 @@ CHECKS = {
 
 WORDS = {
     "failed": "killed  ", "nobuild": "killed  ", "crashed": "CRASHED ", "hung": "HUNG    ",
-    "passed": "SURVIVED",
+    "passed": "SURVIVED", "stale": "STALE   ", "missing": "MISSING ",
 }
+FAILING = ("passed", "hung", "stale", "missing")
 
 
 def sh(cmd, cwd=".", limit_s=1800):
@@ -233,44 +246,114 @@ def verdict(check):
     return "passed", "every test passed"
 
 
+def line(name, check, how, word):
+    by = "" if check == "lanesTest" else f" [{check}]"
+    return f"{WORDS[how]} {name}{by}: {word}"
+
+
+def summary(counts, not_run):
+    def n(how):
+        return counts.get(how, 0)
+    missing = f", {n('missing')} missing" if n("missing") else ""
+    return (f"{n('failed')} killed by a test that fails, {n('nobuild')} do not build, "
+            f"{n('hung')} only hang, {n('crashed')} only crash, {n('passed')} survived, "
+            f"{n('stale')} stale{missing}; {not_run} not run")
+
+
+def shard(arg):
+    """`i/n` as the pair (i, n), with 1 ≤ i ≤ n."""
+    i, _, n = arg.partition("/")
+    try:
+        i, n = int(i), int(n)
+    except ValueError:
+        sys.exit(f"--shard takes i/n, not {arg}")
+    if not 1 <= i <= n:
+        sys.exit(f"--shard {arg}: i must be from 1 to n")
+    return i, n
+
+
+def collect(files, entries):
+    """Exits as the gate does on the verdicts in `files`, which must hold each mutant once."""
+    verdicts, problems = {}, []
+    for f in files:
+        data = json.loads(pathlib.Path(f).read_text())
+        problems += [f"BASELINE {b}" for b in data["baseline"]]
+        for v in data["verdicts"]:
+            if v["name"] in verdicts:
+                problems.append(f"TWICE    {v['name']}: in more than one shard")
+            verdicts[v["name"]] = v
+    counts = {}
+    for name, _, _, _, check in entries:
+        v = verdicts.pop(name, None)
+        how, word = (v["how"], v["word"]) if v else ("missing", "in the verdicts of no shard")
+        counts[how] = counts.get(how, 0) + 1
+        print(line(name, check, how, word))
+    problems += [f"UNKNOWN  {name}: not a mutant of this list" for name in verdicts]
+    for problem in problems:
+        print(problem)
+    print(summary(counts, 0))
+    sys.exit(1 if problems or any(counts.get(how) for how in FAILING) else 0)
+
+
 def main():
     args = sys.argv[1:]
-    wanted = [a for a in args if not a.startswith("--")]
     entries = [(m[0], m[1], m[2], m[3], m[4] if len(m) > 4 else "lanesTest") for m in MUTANTS]
-    if "--list" in args:
-        for name, path, _, _, check in entries:
-            print(f"{name}\n    {path}, must fail {check}")
-        print(f"{len(entries)} mutants")
-        return
+    if "--collect" in args:
+        collect(args[args.index("--collect") + 1:], entries)
+    value = {}
+    for flag in ("--shard", "--json"):
+        if flag in args:
+            k = args.index(flag)
+            if k + 1 == len(args):
+                sys.exit(f"{flag} needs a value")
+            value[flag] = args.pop(k + 1)
+    wanted = [a for a in args if not a.startswith("--")]
     if wanted:
         chosen = [m for m in entries if any(w in m[0] for w in wanted)]
     else:
-        chosen = [m for m in entries if "--all" in args or m[4] == "lanesTest"]
+        chosen = [m for m in entries if {"--all", "--list"} & set(args) or m[4] == "lanesTest"]
+    if "--shard" in value:
+        i, n = shard(value["--shard"])
+        chosen = chosen[i - 1::n]
+    if "--list" in args:
+        for name, path, _, _, check in chosen:
+            print(f"{name}\n    {path}, must fail {check}")
+        print(f"{len(chosen)} mutants")
+        return
+    report = {"shard": value.get("--shard"), "baseline": [], "verdicts": []}
+
+    def save():
+        if "--json" in value:
+            pathlib.Path(value["--json"]).write_text(json.dumps(report, indent=1) + "\n")
+
+    if "--baseline" in args:
+        for check in dict.fromkeys(m[4] for m in chosen):
+            how, word = verdict(CHECKS[check])
+            print(f"baseline {check}: {word}", flush=True)
+            if how != "passed":
+                report["baseline"].append(f"{check} on the code as it is: {word}")
+                save()
+                sys.exit(1)
     counts = {}
     for name, path, old, new, check in chosen:
         file = pathlib.Path(path)
         source = file.read_text()
         if source.count(old) != 1:
-            counts["stale"] = counts.get("stale", 0) + 1
-            print(f"STALE    {name}: the text to change is not in {path} exactly once")
-            continue
-        try:
-            file.write_text(source.replace(old, new))
-            how, word = verdict(CHECKS[check])
-        finally:
-            file.write_text(source)
+            how, word = "stale", f"the text to change is not in {path} exactly once"
+        else:
+            try:
+                file.write_text(source.replace(old, new))
+                how, word = verdict(CHECKS[check])
+            finally:
+                file.write_text(source)
         counts[how] = counts.get(how, 0) + 1
-        by = "" if check == "lanesTest" else f" [{check}]"
-        print(f"{WORDS[how]} {name}{by}: {word}", flush=True)
+        report["verdicts"].append(dict(name=name, path=path, check=check, how=how, word=word))
+        save()
+        print(line(name, check, how, word), flush=True)
+    save()
     sh("lake build lanesTest")
-
-    def n(how):
-        return counts.get(how, 0)
-
-    print(f"{n('failed')} killed by a test that fails, {n('nobuild')} do not build, "
-          f"{n('hung')} only hang, {n('crashed')} only crash, {n('passed')} survived, "
-          f"{n('stale')} stale; {len(entries) - len(chosen)} not run")
-    sys.exit(1 if n("passed") or n("stale") else 0)
+    print(summary(counts, len(entries) - len(chosen)))
+    sys.exit(1 if any(counts.get(how) for how in FAILING) else 0)
 
 
 if __name__ == "__main__":
