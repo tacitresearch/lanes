@@ -25,6 +25,10 @@ number of states seen, including those not expanded because of a depth bound.
 The search design follows the sequential engine of Veil (verse-lab/veil, Apache-2.0) at commit
 `b1128cc`, simplified to store states instead of fingerprints.
 
+The search is written to be proved, not as a loop: a `Check.Search` value is threaded through
+`Search.start` (store the initial states), `Search.run` (expand one stored state per unit of
+fuel) and `Search.report`. `Lanes.Check.SearchSound` proves what a report claims.
+
 ## Main definitions
 
 - `Check.Model`: initial states and successors.
@@ -282,6 +286,8 @@ Explore the model breadth-first and check the properties.
 The search stops at the first violated `always` property or deadlock. `labelName` groups labels
 for the coverage count; `actions` lists the label names expected to occur, so that names with a
 zero count show up in the coverage.
+
+`maxStates` units of fuel are enough: each expands one stored state, and no more are stored.
 -/
 def search (m : Model S L) (props : List (Property S)) (opts : Options S := {})
     (labelName : L → String := fun _ => "step") (actions : List String := []) : Report S L :=

@@ -13,13 +13,23 @@ What a `Check.Report` claims, proved of `Check.search`.
 
 - `search_violated`, `search_deadlock`, `search_witness`: a reported trace is a path of the
   model through states that satisfy the constraint, and ends in the state the report says it
-  does. These hold for any `BEq` and `Hashable`, lawful or not.
+  does. These hold for any `BEq` and `Hashable`, lawful or not, because a trace is made of the
+  states that were stored.
+- `search_reached`: with no failure, the name of every `sometimes` property has a witness.
 - `search_states_le`: at most `maxStates` states are stored.
 - `search_sound`: a complete search with no failure means every `always` property holds in
-  every reachable state. This needs state equality to be an equivalence that the model cannot
-  tell apart (`Model.Respects`); `search_sound_of_lawful` is the case of a lawful `==`.
+  every reachable state. This needs `==` on states to be an equivalence with a matching hash,
+  and the model to respect it (`Model.Respects`). `search_sound_of_lawful` is the case where
+  `==` is equality, which needs no hypothesis.
 - `search_unreached`, `search_deadlock_free`: the same for a `sometimes` property reported
   unreached and for the absence of deadlocks.
+
+The proofs follow the search's own structure. `Search.Sound` is preserved by every step and
+gives the first two results. `Search.Inv` says that the stored states are closed under the
+steps taken from those already expanded; when nothing is left to expand, they contain every
+reachable state up to `==` (`Search.Closed.stored`).
+
+That `Check.system`'s state equality satisfies `Model.Respects` is not proved here.
 -/
 
 @[expose] public section
@@ -264,6 +274,68 @@ theorem Sound.run (fuel : Nat) (h : st.Sound m props opts) :
       · exact h
       · rename_i v hv
         exact ih (h.expand (Array.mem_of_getElem? hv))
+
+theorem head_add (path : Path S L) (depth : Nat) :
+    (st.add props opts path depth).head = st.head := by
+  unfold Search.add
+  split
+  · rfl
+  · split <;> rfl
+
+theorem head_start (actions : List String) : (start m props opts actions).head = 0 := by
+  unfold Search.start
+  refine List.foldlRecOn (motive := fun st : Search S L => st.head = 0) _ _ rfl fun st h s _ => ?_
+  unfold Search.addInit
+  split
+  · exact h
+  · exact (head_add _ _).trans h
+
+theorem head_visit (parent : Path S L) (depth : Nat) (step : L × S) :
+    (st.visit props opts labelName parent depth step).head = st.head := by
+  unfold Search.visit
+  split
+  · rfl
+  · exact head_add _ _
+
+theorem head_expand (v : Visited S L) :
+    (st.expand m props opts labelName v).failure.isSome = true ∨
+      (st.expand m props opts labelName v).head = st.head + 1 := by
+  unfold Search.expand
+  split
+  · exact .inr rfl
+  · dsimp only
+    split
+    · exact .inl rfl
+    · refine .inr (congrArg (· + 1) ?_)
+      exact List.foldlRecOn (motive := fun st' : Search S L => st'.head = st.head) _ _ rfl
+        fun _ h step _ => (head_visit _ _ step).trans h
+
+theorem run_of_failure (fuel : Nat) (h : st.failure.isSome = true) :
+    st.run m props opts labelName fuel = st := by
+  cases fuel <;> simp [Search.run, h]
+
+/-- Fuel for one expansion per state that may be stored never runs out early. -/
+theorem run_done (fuel : Nat) (h : st.Sound m props opts)
+    (hfuel : opts.maxStates ≤ st.head + fuel) :
+    (st.run m props opts labelName fuel).failure.isSome = true ∨
+      (st.run m props opts labelName fuel).queue.size ≤
+        (st.run m props opts labelName fuel).head := by
+  induction fuel generalizing st with
+  | zero => exact .inr (Nat.le_trans h.size hfuel)
+  | succ fuel ih =>
+    unfold Search.run
+    split
+    · rename_i hsome
+      exact .inl hsome
+    · split
+      · rename_i hnone
+        exact .inr (Array.getElem?_eq_none_iff.mp hnone)
+      · rename_i v hv
+        rcases head_expand (m := m) (props := props) (opts := opts) (labelName := labelName)
+          (st := st) v with hfailure | hhead
+        · rw [run_of_failure fuel hfailure]
+          exact .inl hfailure
+        · exact ih (h.expand (Array.mem_of_getElem? hv)) (by omega)
 
 end Search
 
@@ -561,6 +633,15 @@ theorem Sound.final :
       m props opts :=
   Sound.run _ (Sound.start actions)
 
+/-- `search` gives `run` enough fuel: it stops on a failure or with every stored state
+expanded, so a report is incomplete only when a bound left something out. -/
+theorem done_final :
+    ((Search.start m props opts actions).run m props opts labelName opts.maxStates).failure.isSome
+        = true ∨
+      ((Search.start m props opts actions).run m props opts labelName opts.maxStates).queue.size ≤
+        ((Search.start m props opts actions).run m props opts labelName opts.maxStates).head :=
+  run_done _ (Sound.start actions) (by rw [head_start]; omega)
+
 /-- Once nothing is left to expand, every reachable state is stored, up to equality. -/
 theorem Closed.stored [EquivBEq S] (hm : m.Respects opts.constraint props)
     (h : st.Closed m opts) (hdone : st.queue.size ≤ st.head) {s : S}
@@ -621,6 +702,19 @@ theorem unreached_of_report (hsound : st.Sound m props opts) {names : List Strin
           obtain rfl := Option.some.inj hprop
           exact Bool.eq_false_iff.mpr hany
 
+theorem witnessed_of_report (h : (st.report props).failure = none) {name : String}
+    {p : S → Bool} (hp : .sometimes name p ∈ props) : ∃ path, (name, path) ∈ st.witnesses := by
+  have hnone := failure_none_of_report h
+  simp only [Search.report, hnone] at h
+  split at h
+  · rename_i hempty
+    have hprop := List.filterMap_eq_nil_iff.mp (List.isEmpty_iff.mp hempty) _ hp
+    by_cases hany : st.witnesses.any (·.1 == name) = true
+    · obtain ⟨w, hw, hname⟩ := List.any_eq_true.mp hany
+      exact ⟨w.2, eq_of_beq hname ▸ hw⟩
+    · simp [hany] at hprop
+  · simp at h
+
 /-- A search that ends as a complete pass has stored a state equal to each reachable one. -/
 theorem Inv.stored [EquivBEq S] (h : st.Inv m props opts)
     (hm : m.Respects opts.constraint props) (hfailure : st.failure = none)
@@ -661,6 +755,15 @@ theorem search_witness {name : String} {t : Trace S L}
   obtain ⟨hvalid, p, hmem, hp⟩ := Search.Sound.final.witnesses w hw
   obtain ⟨rfl, rfl⟩ := Prod.mk.inj heq
   exact ⟨hvalid.toTrace, by simpa using hvalid.reachable, p, hmem, by simpa using hp⟩
+
+/-- A search that reports no failure has a witness for the name of each `sometimes` property.
+By `search_witness` it is real. Properties that share a name share a witness: it shows one of
+them reached, so give each its own name. -/
+theorem search_reached (hfailure : (search m props opts labelName actions).failure = none)
+    {name : String} {p : S → Bool} (hp : .sometimes name p ∈ props) :
+    ∃ t, (name, t) ∈ (search m props opts labelName actions).witnesses := by
+  obtain ⟨path, hpath⟩ := Search.witnessed_of_report hfailure hp
+  exact ⟨path.toTrace, List.mem_map.mpr ⟨(name, path), hpath, rfl⟩⟩
 
 theorem search_states_le : (search m props opts labelName actions).states ≤ opts.maxStates :=
   Search.Sound.final.size

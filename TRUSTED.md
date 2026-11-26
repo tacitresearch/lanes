@@ -38,6 +38,7 @@ model-checked in `Tests/Gate.lean`.
 ## Not trusted
 
 Actor `step` functions, `SysState.step`, the kernel (`Kernel.run1_sound`), the model checker's
-exploration of a state (`SysState.mem_successors_iff`), the refinement theory and every theorem in `Lanes/` and
-`Examples/`: these are checked by Lean. No `sorry`, `axiom`, `unsafe`, `@[implemented_by]` or
+exploration of a state (`SysState.mem_successors_iff`), its search (`Check.search_sound`, which
+assumes `Model.Respects`; that the actor instance in `Check.system` meets it is not yet proved),
+the refinement theory and every theorem in `Lanes/` and `Examples/`: these are checked by Lean. No `sorry`, `axiom`, `unsafe`, `@[implemented_by]` or
 `@[extern]` appears in them.

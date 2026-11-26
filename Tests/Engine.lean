@@ -42,6 +42,13 @@ def wide : Model Nat Unit where
   init := [0, 1, 2, 3, 4]
   next _ := []
 
+/-- What a pass is worth: `search_sound_of_lawful` turns a complete search with no failure into
+the invariant in every reachable state. -/
+example (hpass : (search counter [.always "at most 3" (· ≤ 3)]).failure = none)
+    (hcomplete : (search counter [.always "at most 3" (· ≤ 3)]).complete = true) {s : Nat}
+    (hs : counter.Reachable (fun _ => true) s) : s ≤ 3 := by
+  simpa using search_sound_of_lawful hpass hcomplete (List.mem_singleton.mpr rfl) hs
+
 /-- A comparison written without spaces. This file imports Lanes and does not open the template
 syntax, so `<` here must stay a comparison. -/
 def tight (i n : Nat) : Bool := i<n
