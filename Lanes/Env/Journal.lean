@@ -15,8 +15,10 @@ two files, and that a write does what `Journal.Disk.apply` and `Journal.Disk.cra
 is: bytes appended and flushed stay, an append that did not finish leaves some of its first
 bytes and nothing else, and a rename replaces a file at once.
 
-A flush hands the bytes to the operating system, so a journal survives the death of the
-process. Lean's `IO` has no `fsync`, so it does not yet survive loss of power.
+Every write that is flushed is also synced to the disk before the next begins (`fsync`, bound in
+`native/lanes.c`): an append, a file written beside its target before it is renamed, and the
+directory after the rename. So the files left by a loss of power are files the process could
+have left by dying, and the theorems cover both.
 -/
 
 public section
@@ -49,13 +51,22 @@ private def Refusal.explain : Refusal → String
   | .name => "the system's name is too long for a journal"
   | .missing => "it is not there, and this store may not begin one"
 
+/-- Wait until what has been written to the file or directory at `path` is on the disk. -/
+@[extern "lanes_fsync"]
+opaque fsync (path : @& String) : IO Unit
+
+private def syncDir (path : System.FilePath) : IO Unit :=
+  fsync ((path.parent.getD ".").toString)
+
 private def read? (path : System.FilePath) : IO (Option ByteArray) := do
   if ← path.pathExists then some <$> IO.FS.readBinFile path else pure none
 
 private def replace (path : System.FilePath) (bytes : ByteArray) : IO Unit := do
   let scratch := path.addExtension "tmp"
   IO.FS.writeBinFile scratch bytes
+  fsync scratch.toString
   IO.FS.rename scratch path
+  syncDir path
 
 /-- One write, done as `Disk.apply` says. Without `flush` an append may be lost with the
 process, and comes before whatever is appended after it. -/
@@ -63,7 +74,9 @@ private def perform (path : System.FilePath) (handle : IO.Ref IO.FS.Handle) (flu
     Write → IO Unit
   | .append bytes => do
     (← handle.get).write bytes
-    if flush then (← handle.get).flush
+    if flush then
+      (← handle.get).flush
+      fsync path.toString
   | .putSnapshot bytes => replace (path.addExtension "snapshot") bytes
   | .putJournal bytes => do
     replace path bytes
@@ -93,6 +106,7 @@ def Store.open {sys : System σ} (store : Store sys) : IO (Log sys) := do
       IO.FS.writeBinFile (store.path.addExtension "cut")
         (disk.journal.extract found.size disk.journal.size)
     let handle ← IO.mkRef (← IO.FS.Handle.mk store.path .append)
+    syncDir store.path
     (disk.mend store.system found.size).forM (perform store.path handle true)
     let count ← IO.mkRef found.index
     let write := fun (flush : Bool) (entries : List (Entry σ)) => do

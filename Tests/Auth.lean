@@ -58,7 +58,7 @@ def tokenTests : List (String × Bool) :=
         && !checkForm key token (formToken key (sign key "session" "8.alice"))
         && !checkForm key token "") ]
 
-def password : Password := { iterations := 2, pepper := "pepper".toUTF8 }
+def password : Password := { cost := { ops := 1, mem_kib := 64 }, pepper := "pepper".toUTF8 }
 
 def loginTests : List (String × Bool) :=
   let alice := password.digest "alice" "correct horse"

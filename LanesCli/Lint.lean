@@ -10,9 +10,10 @@ Source-level checks of the LANES_STYLE rules that can be decided from the text o
 
 - `no-sorry` (rule 4): no `sorry` or `admit`.
 - `trusted-listed` (rule 5.5): `partial`, `unsafe`, `axiom`, `panic!`, `@[implemented_by]` and
-  `@[extern]` appear only in files named in `TRUSTED.md`.
-- `trusted-size` (rule 5.5): a file that `TRUSTED.md` lists as `` `path`, N lines `` has at most
-  `N` lines, so trusted code cannot grow without the list changing.
+  `@[extern]` appear only in files named in `TRUSTED.md`, and so does every C file, all of
+  which is trusted.
+- `trusted-size` (rule 5.5): a Lean or C file that `TRUSTED.md` lists as `` `path`, N lines ``
+  has at most `N` lines, so trusted code cannot grow without the list changing.
 - `layering` (rule 1.6): files that import Mathlib, CSLib or a proof module (`Lanes.Semantics`,
   `App.Proofs`) live in a proof directory, one named `…Proofs` included, or are named
   `…Proofs.lean`, so executable code never links them.
@@ -146,7 +147,7 @@ def checkFile (root file : System.FilePath) (trusted : String) : IO (List Findin
 def trustedSizes (trusted : String) : List (String × Nat) :=
   let parts := trusted.splitOn "`"
   (parts.zip (parts.drop 1)).filterMap fun (path, after) =>
-    if path.endsWith ".lean" && after.startsWith ", " then
+    if (path.endsWith ".lean" || path.endsWith ".c") && after.startsWith ", " then
       match ((after.drop 2).toString.splitOn " ") with
       | count :: unit :: _ =>
         if unit.startsWith "lines" then count.toNat?.map (path, ·) else none
@@ -167,18 +168,24 @@ def checkSizes (root : System.FilePath) (trusted : String) : IO (List Finding) :
       findings := ⟨"TRUSTED.md", 1, "trusted-size", s!"`{path}` does not exist"⟩ :: findings
   return findings.reverse
 
-def sourceFiles (root : System.FilePath) : IO (Array System.FilePath) := do
+def sourceFiles (root : System.FilePath) (extension : String) : IO (Array System.FilePath) := do
   let files ← root.walkDir fun dir =>
     let name := dir.fileName.getD ""
     return !(name.startsWith "." || name == "templates")
-  return (files.filter fun f => f.extension == some "lean").qsort (·.toString < ·.toString)
+  return (files.filter fun f => f.extension == some extension).qsort (·.toString < ·.toString)
+
+def checkC (root file : System.FilePath) (trusted : String) : List Finding :=
+  let relative := (file.toString.dropPrefix (root.toString ++ "/")).toString
+  if (trusted.splitOn relative).length > 1 then []
+  else [⟨relative, 1, "trusted-listed", "C in a file that TRUSTED.md does not name (rule 5.5)"⟩]
 
 def run (root : System.FilePath) : IO Nat := do
   let trustedFile := root / "TRUSTED.md"
   let trusted ← if ← trustedFile.pathExists then IO.FS.readFile trustedFile else pure ""
-  let files ← sourceFiles root
+  let files ← sourceFiles root "lean"
   let mut count := 0
-  for f in ← checkSizes root trusted do
+  for f in (← checkSizes root trusted) ++ (← sourceFiles root "c").toList.flatMap
+      (checkC root · trusted) do
     IO.println s!"{f.file}:{f.line}: [{f.rule}] {f.message}"
     count := count + 1
   for file in files do

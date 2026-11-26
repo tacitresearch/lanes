@@ -4,18 +4,18 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Data.Hmac
+public import Lanes.Data.Sodium
 public import Lanes.Data.Declare
 
 /-!
 What an actor that lets users log in keeps, as pure data: the digest of a password, the count of
 failed attempts that locks an account, and the bounded list of a user's sessions.
 
-A password never enters a system. The bridge derives its digest where the request arrives
-(`Password.digest`), so the journal, which records what the system was asked, holds digests
-only. The salt is derived from the user's name and a secret of the deployment, because the
-bridge has to compute the digest of a log-in before the system, which could hold a random salt,
-has seen it.
+A password never enters a system. Its digest (`Password.digest`, Argon2id) is derived where the
+request arrives, on the task that reads it and not in the shard, so the journal, which records
+what the system was asked, holds digests only. The salt is derived from the user's name and a
+secret of the deployment, because the digest of a log-in is computed before the system, which
+could hold a random salt, has seen it.
 -/
 
 @[expose] public section
@@ -41,17 +41,19 @@ def Digest.codec : Codec Digest :=
 
 instance : Codable Digest := ⟨Digest.codec⟩
 
-/-- The cost of a digest is `2 * iterations` SHA-256 blocks. -/
 structure Password where
-  iterations : Nat
+  cost : Argon2id
   /-- A secret of the deployment, kept with its key; changing it changes every digest. -/
   pepper : ByteArray
 
 def Password.salt (config : Password) (user : String) : ByteArray :=
-  hmac config.pepper ("salt\x00" ++ user).toUTF8
+  (hmac config.pepper ("salt\x00" ++ user).toUTF8).extract 0 16
+
+theorem Password.size_salt (config : Password) (user : String) : (config.salt user).size = 16 := by
+  simp [Password.salt, Hmac.size_hmac]
 
 def Password.digest (config : Password) (user password : String) : Digest :=
-  ⟨pbkdf2 password.toUTF8 (config.salt user) config.iterations 32⟩
+  ⟨config.cost.hash password.toUTF8 (config.salt user) (config.size_salt user)⟩
 
 /-- Failed log-ins since the account was last unlocked. At `limit` the account locks, and stays
 locked until the application unlocks it, by a timer or by hand. -/
