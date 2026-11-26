@@ -10,8 +10,8 @@ import Examples.BankWeb
 /-!
 Model checks of `Http.fronted`: the gate joined by `System.join` in front of a service that
 also puts out what is no answer (a `memo`) and takes an input that is no request (a `note`).
-The properties are those `Tests/Gate.lean` checks of the hand-built `gated`. Then the gate
-alone, with the link from outside that a join gives it.
+The properties are those `Tests/Gate.lean` checks of `served`, the system `serve` runs, with an
+echo behind its gate. Then the gate alone, with the link from outside that a join gives it.
 
 Then two processes' worth in one: the bank on two shards joined by TCP, each shard behind its
 own HTTP front. And the bank behind a front on a journal.

@@ -123,6 +123,10 @@ file with another name is refused. -/
 def header (system : String) : ByteArray :=
   ("lanes journal 1\n" ++ system).toUTF8
 
+/-- The system a journal file's first frame names, if it is the header of a journal. -/
+def named? (first : ByteArray) : Option String :=
+  (String.fromUTF8? first).bind fun text => (text.dropPrefix? "lanes journal 1\n").map (·.toString)
+
 def file (input : Codec σ.In) (system : String) (entries : List (Entry σ)) : ByteArray :=
   Frame.encode (header system :: write input entries)
 
@@ -131,8 +135,9 @@ theorem file_eq (input : Codec σ.In) (system : String) (entries : List (Entry �
   Frame.encode_cons ..
 
 inductive Refusal where
-  /-- The file is not a journal of `system`. -/
-  | foreign
+  /-- The file is not a journal of `system`: it is the journal of the system `named`, or no
+  journal at all. -/
+  | foreign (named : Option String)
   /-- An entry is intact on disk and cannot be read: it was written with another codec. -/
   | unreadable (entry : Nat)
   /-- A frame is all there and does not check. -/
@@ -160,7 +165,7 @@ def open? (input : Codec σ.In) (system : String) (bytes : ByteArray) :
   | first :: payloads =>
     let entries := read input payloads
     let size := Frame.span (first :: payloads)
-    if first ≠ header system then .error .foreign
+    if first ≠ header system then .error (.foreign (named? first))
     else if entries.length < payloads.length then .error (.unreadable entries.length)
     else if Frame.unfinished bytes size then .ok (entries, size)
     else .error (.damaged size)
@@ -320,7 +325,7 @@ private theorem foldl_replay1 {sys : System σ} (past : List (Entry σ)) (k : Ke
 
 /-- Recovery rebuilds exactly the kernel that the journal's requests lead to from boot. By
 `Kernel.exec_reachable` that is a state the semantics reaches by the events those requests
-reported: the run before the crash, continued. -/
+reported, with actors at rest released: the run before the crash, continued. -/
 theorem recover_kernel (sys : System σ) (past : List (Entry σ)) :
     (recover sys past).1 = ((Kernel.boot sys).1.exec (ops past)).kernel :=
   (foldl_replay1 past (Kernel.boot sys).1 (Kernel.boot sys).2).1

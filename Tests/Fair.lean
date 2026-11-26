@@ -82,9 +82,9 @@ def election (seed : Nat) : Watch (Examples.Election.cluster N {}) :=
   watch _ electionEnv run.events 200
 
 open Lanes.Http Tests.Gate in
-def gate (seed : Nat) : Watch (gated (Server.system echo) bridge {}) :=
+def gate (seed : Nat) : Watch (served (Server.system echo) bridge {}) :=
   let env := hostile fun _ _ => true
-  let run := simulate (gated (Server.system echo) bridge {})
+  let run := simulate (served (Server.system echo) bridge {})
     { env, driver := client [(1, get []), (2, get ["bad"]), (3, get [])], maxCrashes := 1 } seed
     (maxSteps := 3 * seed)
   watch _ env run.events 60

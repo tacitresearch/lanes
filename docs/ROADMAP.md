@@ -37,8 +37,8 @@ the mistakes in A and B while they are cheap to fix.
 - **The Lean runtime is the production target for now.** If it becomes a reference
   implementation instead, the kernel is run from another host and the investment moves to
   proofs. Nothing in phase A depends on the answer.
-- **Library and protocol code is proved; application code is model-checked and proves its key
-  invariants.**
+- **Everything is proved** (`docs/decisions/D45-everything-is-proved.md`). This replaces "library
+  and protocol code is proved; application code is model-checked and proves its key invariants".
 
 ## Standing risks
 
@@ -63,8 +63,9 @@ Asked at each phase end: is this still the right direction, and is there a bette
   system's theorems already quantify over everything its environment may send.
 - The gate was rebuilt with the join after the phase ended (D31): `Http.fronted`. It needed two
   things the join did not have: runs, not only states, seen from one side
-  (`SysState.run_left`), and a way to hide what a join wires (`System.filterMapIO`). The
-  hand-built `gated` stays until fair runs project, since its liveness theorem is about them.
+  (`SysState.run_left`), and a way to hide what a join wires (`System.filterMapIO`). Once fair
+  runs projected (D41), the hand-built `gated` was retired and `serve` runs `fronted`
+  (`docs/decisions/D43-one-gate.md`).
 - Sugar for applications will be macros, not deriving handlers: anything that imports `Lean`
   costs 137 MB in the binary, even through `meta import`.
 
@@ -185,7 +186,10 @@ The next stress test is `systems/ledger`, phase D's exit criterion: users, sessi
 authentication, forms, pages that update, many kinds of records. Alongside it: the trusted
 code is being cut back by moving what it decides into proved functions (the HTTP reader, the
 runtime's batch, the server's table of waiting requests, the mailbox and the courier), and
-declaration sugar for codecs and instances, the boilerplate Raft showed.
+declaration sugar for codecs and instances, the boilerplate Raft showed. The ledger's first
+finding was that `serve` journalled passwords and session cookies as they came; a bridge now
+prepares a request before it is journalled
+(`docs/decisions/D44-request-prepared-before-journal.md`).
 
 The kernel now releases an actor that is back where a start puts it
 (`docs/decisions/new-release-actors-at-rest.md`), which bounds a system whose identities are
@@ -200,3 +204,28 @@ in `systems/`, each its own Lake package that requires Lanes as a user would, wi
 job. They stay in this repository while the API they use is changing, so that a framework
 change that breaks one cannot merge. One moves to its own repository when that API has settled
 or the application needs its own releases.
+
+## Decided after stepping back (2026-11-26)
+
+Lanes is for software an agent writes and nobody reads line by line, so its claim has to rest on
+proofs, not on checks, tests or review (`docs/decisions/D45-everything-is-proved.md`). The order
+of work changes with it:
+
+1. **Proving an application becomes cheap enough to be routine.** A simulation-relation library
+   from what the key-value store's proof repeated, a cheaper invariant rule, then a
+   counterexample-to-induction finder. The ledger's refinement, proved, is the measure; the
+   flagship application is proved, not checked.
+2. **A generated proof inventory** gives every public definition a status, and library code has
+   none without one.
+3. **A standard library on the scale applications need**, triaged from Go's: what Lean already
+   has; what is pure, built here and proved, and tested against Go's implementation on generated
+   inputs; what touches the operating system or cryptography and is bound; what is not needed.
+4. **Trusted and assumed things keep shrinking**: our own HTTP/1.1 request reader in place of
+   `Std.Http`'s, `fsync`, cryptography bound to libsodium, exactly-once requests in place of the
+   premise that links from clients do not duplicate, idle actors released to storage (those back
+   where a start puts them are released already).
+5. **Specs are what a person reviews.** Each system's spec and its premises sit in one place, and
+   a person reads them before any public claim.
+
+Launch work (the flagship application, deployment, the write-up) follows 1 to 4, because a
+launch claim is what a critic tests first.
