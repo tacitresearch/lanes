@@ -27,6 +27,7 @@ flight bounded. `lake test` runs the quick checks; `lake exe raftCheck deep` the
 | Unordered links, one term | 845,974 | passes |
 | Unordered links, one crash and restart, one term | 6,012,807 | passes |
 | Seeded bug: a node votes for a candidate whose log is behind | 27,412 | found: a leader lacks a committed entry, in 15 steps |
+| Seeded bug: a leader commits an entry of an earlier term by counting (four terms, two writes) | 4,651,808 | found: a later leader lacks the entry, in 28 steps |
 
 Each passing check also reaches its witnesses: a leader is elected, a write is answered, a read
 sees the written value, a follower commits.

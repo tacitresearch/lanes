@@ -110,7 +110,7 @@ def deep : List (String × IO Bool) :=
       check {} crashing writeThenRead { maxTerm := 1, maxCrashes := 1 }),
     ("seeded: a leader commits an entry of an earlier term by counting",
       run "seeded: a leader commits an entry of an earlier term by counting"
-        (expect := some "committed entries agree") fun _ =>
+        (expect := some "a leader has every committed entry") fun _ =>
         check { commitsOwnTermOnly := false } reliable twoWrites
           { maxTerm := 4, maxLog := 1, maxNet := 5 }) ]
 

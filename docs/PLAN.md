@@ -452,6 +452,11 @@ The same `System.shard` with a router that speaks over a socket is a system spre
 machines. The link is then lossy and unordered, which is `EnvModel.distributed`: what holds
 there is what was proved for every environment, such as election safety.
 
+Built (D30): `Lanes.Peers` joins shards in different processes by TCP and promises no more
+than `Link.network`. The bank runs on three shards joined that way. Open: running a system
+with an HTTP front on each process, which needs the gate as a system of its own, joined to the
+shard by the general operator, so that parcels pass it by.
+
 ### B.3 Snapshots, then checker v2
 
 Snapshots are built (A.1 above, D29). Checker v2 is open.
