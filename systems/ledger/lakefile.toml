@@ -1,0 +1,17 @@
+name = "ledger"
+version = "0.1.0"
+defaultTargets = ["Ledger", "ledgerCheck"]
+testDriver = "ledgerCheck"
+
+[[require]]
+name = "lanes"
+path = "../.."
+
+[[lean_lib]]
+name = "Ledger"
+
+# Model checks, run by `lake test`. Check before you prove (LANES_STYLE rule 5.1).
+[[lean_exe]]
+name = "ledgerCheck"
+root = "Check"
+
