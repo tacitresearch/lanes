@@ -38,7 +38,7 @@ abbrev sig : Signature := Server.sig Request Response
 The spec: what each request does, as if requests were handled one at a time. This is the part
 to review. It is also the implementation, because the `Server` behaviour runs it as an actor.
 -/
-def service (config : Config) : Service sig Nat where
+def service (config : Config) : Service sig.In sig.Out Nat where
   init := 0
   step count
     | .increment req =>

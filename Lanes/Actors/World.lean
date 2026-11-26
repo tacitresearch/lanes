@@ -98,14 +98,25 @@ inductive Event (σ : Signature) : Type where
   | crash (i : σ.Id)
   | start (i : σ.Id)
 
-inductive Visible (σ : Signature) : Type where
-  | input (x : σ.In)
-  | output (out : σ.Out)
+/-- What the outside world sees: inputs, outputs, and a spec's deadlines passing. -/
+inductive Visible (In Out : Type) (T : Type := Empty) : Type where
+  | input (x : In)
+  | output (out : Out)
+  | fire (t : T)
 
-def Event.visible : Event σ → Option (Visible σ)
+/-- Which timers of a system, by actor and message, are deadlines of a spec, and which. The
+others are internal. -/
+abbrev Deadlines (σ : Signature) (T : Type) : Type := (i : σ.Id) → σ.Msg i → Option T
+
+@[simp] def Event.timed {T : Type} (deadlines : Deadlines σ T) :
+    Event σ → Option (Visible σ.In σ.Out T)
   | .input x => some (.input x)
   | .output out => some (.output out)
+  | .timeout i msg => (deadlines i msg).map .fire
   | _ => none
+
+def Event.visible : Event σ → Option (Visible σ.In σ.Out) :=
+  Event.timed fun _ _ => none
 
 namespace SysState
 
