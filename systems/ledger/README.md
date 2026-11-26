@@ -171,7 +171,7 @@ round of framework work is planned from this.
 - **Clients that wait**: `Driver.after` (`Lanes/Check/Clients.lean`). Neither `anyOrder` nor
   `script` gives real-time order, which is what makes a stale read a violation; it also keeps
   the state space small. Tested on the key-value store (`Tests/Clients.lean`).
-- **A list lemma**: `Lanes.sum_map_set` in `Lanes/Data/List.lean`.
+- **A list lemma**: `Lanes.sum_map_set` in `Lanes/Data/List/Basic.lean`.
 
 ### Broken
 
@@ -204,7 +204,7 @@ round of framework work is planned from this.
    ledger serves at a later one, and a deadline that passes between them is seen at the user.
    The cure is the one that made the untimed system linearizable: let the deadline pass where
    the request is served, the ledger handling the user's notice that the session ended. A
-   `Deadlines` names only timers today (D43), so that needs deadlines on deliveries.
+   `Deadlines` names only timers today (`docs/decisions/new-a-spec-names-its-inputs-and.md`), so that needs deadlines on deliveries.
 5. `omega` did not close `e.account < b.accounts.length, ¬ k < b.accounts.length ⊢ ¬ e.account
    = k` where `k : AccountId` and `abbrev AccountId := Nat` (`Ledger/Proofs/Book.lean`,
    `openAccount_sound`); a term did.
@@ -212,11 +212,11 @@ round of framework work is planned from this.
 ### Clumsy
 
 - ~~**A `Service` needs the system's signature**~~, though it reads only `In` and `Out`.
-  Fixed: `Service In Out S` (D43), and `Ledger.spec` is in `Ledger/Spec.lean`, before the
+  Fixed: `Service In Out S` (`docs/decisions/new-a-spec-names-its-inputs-and.md`), and `Ledger.spec` is in `Ledger/Spec.lean`, before the
   actors.
 - ~~**A `Service` has no time.**~~ Lockouts and session ends could not be specified, so
   refinement was checked with them off and the timed system only against properties. Fixed: a
-  `Service` has deadlines, and the timed system is checked against them (D43). What is still
+  `Service` has deadlines, and the timed system is checked against them (`docs/decisions/new-a-spec-names-its-inputs-and.md`). What is still
   not checked is how long a lock or a session lasts.
 - **The bridge's `encode` sees only the output.** Forms carry a token bound to the session, so
   only `decode`, which has the request, can render them; the system's replies render data
@@ -274,9 +274,9 @@ round of framework work is planned from this.
 
 1. `Bridge.prepare`, as above: the most important change, and a security one.
 2. Let `encode` see what `decode` chose to keep of the request.
-3. ~~`Service In Out S` over inputs and outputs alone, so a spec can come first.~~ Done (D43).
+3. ~~`Service In Out S` over inputs and outputs alone, so a spec can come first.~~ Done (`docs/decisions/new-a-spec-names-its-inputs-and.md`).
 4. ~~Specs with time, or with internal steps, so sessions and lockouts can be specified.~~ Done:
-   deadlines (D43).
+   deadlines (`docs/decisions/new-a-spec-names-its-inputs-and.md`).
 5. A bridge result that says what it means: answered here, or entered as an input.
 6. Sums over the actors a state has started, for invariants across actors with infinitely
    many identities.

@@ -11,7 +11,7 @@ public import Lanes.Data.Frame
 /-!
 The journal of a shard: everything it asks of its kernel, in order. The kernel is a pure
 function of those requests, so replaying a journal gives back the state it describes, and that
-is how a shard survives its process (`DECISIONS.md` D24).
+is how a shard survives its process (`docs/decisions/` D24).
 
 This file is the pure part: what an entry is, how a journal becomes the bytes of a file, which
 files are opened and which refused (`open?`), that a file cut short by a crash opens and gives
