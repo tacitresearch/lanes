@@ -1,0 +1,1 @@
+| Leader election (`Examples/Election.lean`) | At most one leader per term on 3 nodes with reordering and a crash (165k states); split-brain bug found | At most one leader per term for any number of nodes and terms under every environment model: loss, duplication, reordering, crashes (`Examples/ElectionProofs.lean`) |
