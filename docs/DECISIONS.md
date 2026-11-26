@@ -453,8 +453,8 @@ Consequences:
   the other and one to the outside would need two outside links to keep each one's model.
 - `SysState.step_swap` (private for now) is the symmetry of `join`: the join with its sides
   exchanged takes the same steps. The right-hand theorems are the left-hand ones through it.
-- `JoinSound.lean` imports `Lanes/Check/Equiv.lean` for `SysState.Equiv`. The relation is about
-  the semantics and would sit better in `Lanes/Actors/`.
+- `SysState.Equiv` started in the checker; it is in the core now (`Lanes/Actors/Equiv.lean`),
+  since theorems about systems put together are stated up to it.
 
 ## D26. An adapter is a model of the outside and a handler, tested against each other
 
