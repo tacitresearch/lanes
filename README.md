@@ -126,14 +126,17 @@ only what came after the last save; that this gives the same state has a proof t
 It is checked against the map it replicates, and proved to be that one map to its clients,
 for every number of nodes and every fault the model has: links that lose, repeat and reorder
 messages, and nodes that crash and come back with what they had. It runs as three processes
-that survive their leaders being killed. A node that comes back without its journal is outside
-the model, and does lose what was acknowledged: `systems/raft-kv/README.md` says what else to
-know before running it.
+that survive their leaders being killed, each saving its state and cutting its journal as it
+goes. A node that comes back without its journal is outside the model, and does lose what was
+acknowledged, so a node is not started without one unless it is told it is new:
+`systems/raft-kv/README.md` says what else to know before running it.
 
 ```bash
 cd systems/raft-kv && mkdir -p .lake && ln -s ../../../.lake/packages .lake/packages
 lake build
-lake exe raftProcs    # three processes over HTTP, two leaders killed with SIGKILL
+lake exe raftProcs    # three processes over HTTP, killed with SIGKILL and started again
+lake exe raftChaos    # a minute of writes while nodes are killed and paused at random
+lake exe raftNode new 0 8800 node0.journal 7810 7811 7812   # one node; without `new` ever after
 ```
 
 ## Build Lanes itself

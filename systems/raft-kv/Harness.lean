@@ -14,9 +14,8 @@ namespace Harness
 
 open Lanes Std Std.Async
 
-/-- The status and body of one HTTP exchange, or `none` if the node did not answer. -/
-def call (port : UInt16) (method path : String) (body : String := "") :
-    Async (Option (Nat × String)) := do
+/-- What a node sent before it closed the connection, or `none` if it could not be reached. -/
+def converse (port : UInt16) (method path body : String) : Async (Option ByteArray) := do
   try
     let socket ← TCP.Socket.Client.mk
     socket.connect (.v4 ⟨.ofParts 127 0 0 1, port⟩)
@@ -28,12 +27,21 @@ def call (port : UInt16) (method path : String) (body : String := "") :
       | some bytes => received := received ++ bytes
       | none => break
     socket.close
-    let text := (String.fromUTF8? received).getD ""
-    let status := ((text.splitOn " ")[1]?.bind String.toNat?).getD 0
-    return some (status, ((text.splitOn "\r\n\r\n")[1]?).getD "")
+    return some received
   catch _ => return none
 
-abbrev Node := IO.Process.Child { stdin := .null, stdout := .null, stderr := .inherit }
+/-- A response is an answer only when all of it arrived: a node killed while it sends leaves a
+status line that says `200` and less body than it announced. -/
+def answer? (received : ByteArray) : Option (Nat × String) := do
+  let response ← Http.Response.parse received
+  return (response.status, ← String.fromUTF8? response.body)
+
+/-- The status and body of one HTTP exchange, or `none` if the node did not answer. -/
+def call (port : UInt16) (method path : String) (body : String := "") :
+    Async (Option (Nat × String)) :=
+  return (← converse port method path body).bind answer?
+
+abbrev Node := IO.Process.Child { stdin := .null, stdout := .piped, stderr := .inherit }
 
 structure Cluster where
   dir : System.FilePath
@@ -82,17 +90,18 @@ def exitCode (args : Array String) : IO (Option UInt32) := do
   discard child.wait
   return none
 
-/-- Start node `k` and wait until it listens. `false` if it ended, or did not listen in ten
-seconds. -/
+/-- Start node `k` and wait for the line it prints once it listens. `false` if it ended, or
+printed nothing in ten seconds. -/
 def spawn (c : Cluster) (k : Nat) (new : Bool := false) : IO (Cluster × Bool) := do
   let child : Node ← IO.Process.spawn
     { cmd := (← binary).toString, args := (if new then #["new"] else #[]) ++ c.args k
-      stdin := .null, stdout := .null, stderr := .inherit }
+      stdin := .null, stdout := .piped, stderr := .inherit }
+  let line ← IO.asTask (prio := .dedicated) child.stdout.getLine
   for _ in [0:500] do
-    if (← child.tryWait).isSome then return (c, false)
-    if (← (call (c.httpPort k) "GET" "/").block).isSome then
-      return ({ c with nodes := c.nodes.set! k (some child) }, true)
+    if ← IO.hasFinished line then break
     IO.sleep 20
+  if (← IO.hasFinished line) && (line.get.toOption.any (·.startsWith "raft-kv node")) then
+    return ({ c with nodes := c.nodes.set! k (some child) }, true)
   child.kill
   discard child.wait
   return (c, false)
@@ -110,6 +119,22 @@ def kill (c : Cluster) (k : Nat) : IO Cluster := do
 
 def killAll (c : Cluster) : IO Cluster :=
   (List.range 3).foldlM kill c
+
+/-- Three new nodes. Their ports are a guess, which another program on this machine may have
+made too: when a node cannot have its own, the guess is made again. -/
+def launch (name : String) (snapshotEvery : Nat) : IO (Option Cluster) := do
+  for _ in [0:3] do
+    let mut c ← Cluster.new name snapshotEvery
+    let mut started := true
+    for k in [0:3] do
+      if started then
+        let (next, listening) ← c.spawn k (new := true)
+        c := next
+        started := listening
+    if started then return some c
+    discard c.killAll
+    IO.FS.removeDirAll c.dir
+  return none
 
 /-- Ask each running node in turn, for a few seconds, until one gives an answer `accept` takes. -/
 def ask {α : Type} (c : Cluster) (method path body : String)

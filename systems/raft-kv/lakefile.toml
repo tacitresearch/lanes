@@ -1,6 +1,6 @@
 name = "raftKv"
 version = "0.1.0"
-defaultTargets = ["RaftKV", "RaftKVProofs", "raftCheck", "raftLive", "raftNode", "raftProcs"]
+defaultTargets = ["RaftKV", "RaftKVProofs", "raftCheck", "raftLive", "raftNode", "raftProcs", "raftChaos"]
 testDriver = "raftCheck"
 
 [[require]]
@@ -40,3 +40,8 @@ name = "Harness"
 [[lean_exe]]
 name = "raftProcs"
 root = "Procs"
+
+# The same under random faults for a minute: `raftChaos [seconds] [seed]`. Not a test of CI.
+[[lean_exe]]
+name = "raftChaos"
+root = "Chaos"

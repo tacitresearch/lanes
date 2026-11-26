@@ -32,17 +32,18 @@ def reads (c : Cluster) (step : Nat) : Async Bool := do
     if (← c.get (key i)) != some (some (value i)) then return false
   return true
 
-def start (c : Cluster) (nodes : List Nat) (new : Bool := false) : IO (Cluster × Bool) := do
+def start (c : Cluster) (nodes : List Nat) : IO (Cluster × Bool) := do
   let mut c := c
   let mut all := true
   for k in nodes do
-    let (next, started) ← c.spawn k new
+    let (next, started) ← c.spawn k
     c := next
     all := all && started
   return (c, all)
 
 def run : IO (List (String × Bool)) := do
-  let (c, started) ← start (← Cluster.new "raft-procs" snapshotEvery) [0, 1, 2] (new := true)
+  let some c ← Cluster.launch "raft-procs" snapshotEvery
+    | return [("procs: three new nodes start", false)]
   let mut c := c
   let first ← (c.put "a" "1").block
   let readA ← (c.get "a").block
@@ -90,7 +91,7 @@ def run : IO (List (String × Bool)) := do
   IO.FS.removeDirAll c.dir
   return [
     ("procs: three new nodes start, and a leader answers a write and a read over HTTP",
-      started && first.isSome && readA == some (some "1")),
+      first.isSome && readA == some (some "1")),
     (s!"procs: {writes} writes are answered while every node saves its state and cuts its "
       ++ s!"journal, at least eight times, and no journal is left longer than "
       ++ s!"{8 * snapshotEvery} entries",
