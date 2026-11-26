@@ -215,6 +215,26 @@ file means when it is opened was such a decision, and is a pure function now.
 | `Journal.decode_torn` said "a prefix", which the empty list satisfies | Replaced by `open?_cut`, which says which prefix |
 | HTTP client: leaked sockets on timeout, a keep-alive response read as a timeout, quadratic chunk parsing, header injection in the writer, a lenient response parser | Fixed. When a response is whole is a pure function (`Response.read`); the writer's framing is proved (`Request.fields_framing`, `head_plain`: one `Content-Length`, no `Transfer-Encoding`, no CR or LF in a line); the reader refuses what it does not understand, one test per case; live tests against a server that holds the connection fail on the mutants without a timeout and without a size limit |
 
+A fifth review (2026-11-26), of the first night of phase B, again broke nothing that is
+proved, and could not break Raft's safety as three processes: 392 faults (`kill -9`,
+`SIGSTOP`), 19,591 acknowledged writes, every key linearizable. It found a system that is safe
+and not yet operable, one regression in the runtime, and 16 mutants of trusted code whose
+duties no test checked.
+
+| Finding | Outcome |
+| --- | --- |
+| A Raft log over 16 MB made the cluster unavailable for good after a leader change: a new leader sends its whole log in one parcel, larger than the receiver takes | The transport no longer sends a parcel the receiver would refuse, and says so. The protocol's unbounded append is being replaced by bounded ones, with the proofs |
+| A follower that stops reading made the leader hold a thousand copies of the unacknowledged log; with a node down, each write cost more than the last | Same cause, same fix |
+| `raftNode` never cut its journal, and an idle cluster wrote most of a gigabyte a day | In progress: a map with a codec that keeps its law, so the node can save |
+| Every wake-up of a shard with a pending timer left a sleep behind until the timer's deadline (a regression of the day) | Fixed: the sleep is stopped |
+| A node started on an empty journal rejoined as a blank voter and acknowledged writes were lost | Outside the model, and said so now; `raftNode` is to refuse a journal that does not exist unless told it is new |
+| `inboxCapacity := 0` hung every sender | Fixed: at least one; tested |
+| A shard that had died still took inputs while its journal closed | Fixed: the inbox is closed first; tested |
+| The transport: a refused connection was never closed after `stop`; a connection it made was never read, so a peer that left was noticed one lost parcel late; two errors ended its loops silently | Fixed: every connection is read, an accept that fails is tried again, a socket that cannot be made is a broken connection |
+| A duplicated request is applied twice | It is the hypothesis of the theorem; a client that retries after a `504` does this, and nothing removes duplicates |
+| 16 mutants of trusted code survived with a real duty unchecked | Nine are tests and mutants in the gate now: `stop` finishes what was handed over, the clock after a restart, a handler that throws, the order of parcels from other shards and their wake-up, the rest after a failed connection. The others are being written |
+| "Proved for every fault" | Every fault of the model. The README says which, and that a lost disk is not one |
+
 Not fixed, and written down as limits: `Kernel.performAll` appends outputs one at a time, so a
 step that emits tens of thousands of outputs is quadratic; a pending timer makes the shard
 wait with a select and costs about 120 µs per input; a timer loses the time since the last
@@ -507,7 +527,7 @@ What it has shown about the framework so far:
 - The spec and the refinement check needed nothing new: the service monitor that checked the
   key-value store with front ends checks Raft.
 - The checker's speed is the limit. One crash on three nodes in one term is six million
-  states and takes ten minutes; two terms with a crash is out of reach. Checker v2 is what
+  states and took ten minutes then, three now; two terms with a crash is out of reach. Checker v2 is what
   phase C needs first from phase B.
 - A state of the node cannot derive `DecidableEq` when the replicated machine's state is a
   function, so its `BEq` is written by hand, and the lawfulness the checker's theorem asks for

@@ -102,7 +102,8 @@ a view cannot link or post to a route that does not exist.
   decides is a pure function, run by the model checker against a network that fails.
 - **Trusted.** About 1,260 lines of IO and macro code and a 410-line HTTP wire format that is
   tested and partly proved, listed with their sizes in `TRUSTED.md`; `lanes lint` fails if they
-  grow, and `scripts/mutants.py` checks that breaking any duty of that code fails a test.
+  grow, and `scripts/mutants.py` holds the known ways of breaking that code, each of which has
+  to fail a test. It is a list, not a measure: a review found sixteen more.
 
 ## Kill it and start it again
 
@@ -122,10 +123,12 @@ only what came after the last save; that this gives the same state has a proof t
 ## A serious system built on it
 
 `systems/raft-kv` is a replicated key-value store: Raft, as the step function of one actor.
-It is checked against the map it replicates, its safety invariants are proved for every
-cluster and every fault (election safety, log matching, leader completeness), that to its
-clients the cluster is that one map is proved on them, and it runs as three processes that
-survive their leaders being killed:
+It is checked against the map it replicates, and proved to be that one map to its clients,
+for every number of nodes and every fault the model has: links that lose, repeat and reorder
+messages, and nodes that crash and come back with what they had. It runs as three processes
+that survive their leaders being killed. A node that comes back without its journal is outside
+the model, and does lose what was acknowledged: `systems/raft-kv/README.md` says what else to
+know before running it.
 
 ```bash
 cd systems/raft-kv && mkdir -p .lake && ln -s ../../../.lake/packages .lake/packages

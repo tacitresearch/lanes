@@ -352,6 +352,76 @@ def busyStopTest : Async (List (String × Bool)) := do
   return [("stop: a shard that never runs out of work still ends",
     (← throws (rt.input ())) && !(← rt.tryInput ()))]
 
+def soon {α : Type} (ms : Nat) (action : Async α) : Async (Option α) :=
+  Async.race (some <$> action) (do Async.sleep (.ofNat ms); return none)
+
+/-- Commands handed over before `stop` are finished by it, an inbox configured with no room
+still takes one input at a time, and a handler that throws does not end the shard. -/
+def dutiesTest : Async (List (String × Bool)) := do
+  let entered ← IO.Promise.new
+  let release ← IO.Promise.new
+  let outputs ← IO.mkRef #[]
+  let rt ← Runtime.start clockSystem {} fun out => do
+    outputs.modify (·.push out)
+    if out == 0 then
+      entered.resolve ()
+      await release
+  rt.input (.echo 0)
+  await entered
+  for n in [1:6] do discard <| rt.tryInput (.echo n)
+  let stopped ← IO.Promise.new
+  background do
+    rt.stop
+    stopped.resolve ()
+  Async.sleep 20
+  release.resolve ()
+  let ended ← soon 2000 (await stopped.result?)
+  let narrow ← Runtime.start clockSystem { inboxCapacity := 0 }
+  let taken ← soon 2000 (narrow.input (.echo 1))
+  narrow.stop
+  let seen ← IO.mkRef #[]
+  let throwing ← Runtime.start clockSystem {} fun out => do
+    if out == 2 then throw (IO.userError "this handler fails on 2")
+    seen.modify (·.push out)
+  for n in [1:4] do throwing.input (.echo n)
+  let alive ← soon 2000 throwing.idle
+  throwing.stop
+  return [
+    ("stop: commands handed over before it are finished", ended.isSome
+      && (← outputs.get) == #[0, 1, 2, 3, 4, 5]),
+    ("inbox: a capacity of zero still takes an input", taken.isSome),
+    ("outputs: a handler that throws does not end the shard, and is not called again for that "
+      ++ "output", alive.isSome && (← seen.get) == #[1, 3]) ]
+
+/-- A shard started on a journal goes on from the journal's clock, so a timer armed after the
+restart is due after its delay, not after the uptime of the run before. And a shard whose
+journal has failed takes nothing more, also while the journal is still being closed. -/
+def afterRestartTest : Async (List (String × Bool)) := do
+  let ticked ← IO.Promise.new
+  let log : Journal.Log clockSystem := {
+    past := [.advance 3600000, .batch 1]
+    append := fun _ => pure (), note := fun _ => pure (), close := pure () }
+  let rt ← Runtime.start clockSystem {} (journal := some log) fun out => do
+    if out == tickOutput then ticked.resolve ()
+  rt.input (.arm 30)
+  let fired ← soon 2000 (await ticked.result?)
+  rt.stop
+  let failed ← IO.Promise.new
+  let failing : Journal.Log clockSystem := {
+    past := []
+    append := fun _ => do failed.resolve (); throw (IO.userError "no room on the device")
+    note := fun _ => pure ()
+    close := IO.sleep 400 }
+  let dying ← Runtime.start clockSystem {} (journal := some failing)
+  discard <| dying.tryInput (.echo 1)
+  discard <| await failed.result?
+  Async.sleep 100
+  let accepted ← dying.tryInput (.echo 2)
+  discard <| soon 2000 dying.ended
+  return [
+    ("timers: one armed after a restart on a journal is due after its own delay", fired.isSome),
+    ("durable: a shard whose journal has failed takes nothing more while it ends", !accepted) ]
+
 def tests : IO (List (String × Bool)) := do
   let a ← flakyTest.block
   let b ← bankTest.block
@@ -363,6 +433,7 @@ def tests : IO (List (String × Bool)) := do
   let h ← batchTest.block
   let i ← outputsTest.block
   let j ← busyStopTest.block
-  return a ++ b ++ c ++ d ++ e ++ f ++ g ++ h ++ i ++ j
+  return a ++ b ++ c ++ d ++ e ++ f ++ g ++ h ++ i ++ j ++ (← dutiesTest.block)
+    ++ (← afterRestartTest.block)
 
 end Tests.Runtime

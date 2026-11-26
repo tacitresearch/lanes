@@ -54,7 +54,8 @@ structure Wire where
 structure Limits where
   /-- Parcels waiting to be sent to one process. Beyond it they are dropped. -/
   queue : Nat := 1024
-  /-- More bytes than this without a whole parcel end the connection they arrive on. -/
+  /-- A parcel larger than this is not sent, and more bytes than this without a whole parcel end
+  the connection they arrive on. The same for every process of a system. -/
   maxParcelBytes : Nat := 16777216
   /-- How long to leave a process alone after failing to reach it. -/
   retry_ms : Nat := 100

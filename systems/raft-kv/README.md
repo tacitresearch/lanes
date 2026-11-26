@@ -128,6 +128,26 @@ hold, has no such form; it is checked only through the three properties it prove
 `Proofs/Axioms.lean` and `RaftKVProofs.lean` hold every theorem to Lean's three standard
 axioms. `lake build` builds them; `raftCheck` does not link them.
 
+## Before you run it
+
+It is safe, and it is not yet something to leave running. An independent review killed and
+paused its processes 392 times and found every acknowledged write linearizable, and found
+these:
+
+- **A node must come back with its journal.** A node started on an empty journal is a new
+  voter that remembers nothing. With the journals of a majority gone, writes that were
+  acknowledged are lost, and stay lost when the others return. This is outside what is proved:
+  the model's crash keeps what a node had. Nothing is synced to disk, so the same holds after
+  loss of power.
+- **The journal is never cut.** A node journals every message it is sent, heartbeats too: an
+  idle cluster writes most of a gigabyte a day, and a restart replays all of it.
+- **A leader sends everything a follower has not acknowledged, in one message.** A log over
+  16 MB cannot be sent at all, so after a change of leader nothing commits again; a follower
+  that stops reading makes the leader hold many copies of what it has not acknowledged; with a
+  node down, each write costs more than the last.
+- **A client that tries again after a `504` may have its write applied twice.** Requests are
+  not told apart.
+
 ## What is not here yet
 
 - Liveness: that a request is ever answered. The top theorem is safety: a cluster that answers

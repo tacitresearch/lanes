@@ -134,7 +134,7 @@ function; the theorem that two shards are the one system; a transport between pr
   Each now fails a test, and every fix since has been checked against its own mutant. A
   standing mutation run over the trusted files is cheap and is the right gate for them.
 - *The checker is the bottleneck of phase C*, as expected: one crash on three Raft nodes is
-  six million states and ten minutes. A seeded Raft bug that needs four terms took 4.7 million
+  six million states and ten minutes (three, after the checker was made faster). A seeded Raft bug that needs four terms took 4.7 million
   states to find.
 - *A property can be wrong too.* The first leader-completeness property was stronger than
   Raft's and held on every instance that fitted; a seeded bug in a larger one showed it.

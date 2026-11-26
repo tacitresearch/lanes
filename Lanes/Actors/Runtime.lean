@@ -32,7 +32,7 @@ open Std Std.Async
 variable {σ : Signature}
 
 structure Runtime.Config where
-  /-- Inputs wait here for the shard. When it is full, `tryInput` refuses. -/
+  /-- Inputs wait here for the shard. When it is full, `tryInput` refuses. At least one. -/
   inboxCapacity : Nat := 1024
   /-- Units of kernel work between two looks at the inbox, so that a busy shard still admits
   inputs. At least one is done. -/
@@ -109,8 +109,10 @@ private def take (rt : Runtime sys) (wait : Kernel.Wait) : IO (List (Cmd sys) ×
   let wake ← IO.Promise.new
   if ← rt.inbox.modifyGet (Mailbox.rest wake) then
     match wait with
-    | .for_ms ms =>
-      Async.block (Async.race (discard <| await wake.result?) (Async.sleep (.ofNat ms)))
+    | .for_ms ms => Async.block do
+      let sleep ← Sleep.mk (.ofNat ms)
+      Async.race (discard <| await wake.result?) sleep.wait
+      sleep.stop
     | _ => discard <| IO.wait wake.result?
   grab
 
@@ -205,16 +207,17 @@ private def loop (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
 
 /-- However the loop ends, nobody is left waiting on it: not those it had heard from, and not
 those whose commands it never took. Those are taken out of the inbox and dropped, and a caller
-waits on a promise that answers when it is dropped. -/
+waits on a promise that answers when it is dropped. The inbox is closed first, before the
+journal, which may take its time: nothing is accepted by a shard that has ended. -/
 private def run (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
     (journal : Option (Journal.Log sys)) : IO Unit := do
   let waiting ← IO.mkRef #[]
   let error ← (rt.loop onOutput waiting journal).toBaseIO
   if let .error e := error then
     discard (IO.eprintln s!"lanes: the shard stopped on an error: {e}").toBaseIO
-  if let some log := journal then discard log.close.toBaseIO
   for wake in ← rt.inbox.modifyGet Mailbox.close do wake.resolve ()
   discard <| rt.inbox.modifyGet Mailbox.take
+  if let some log := journal then discard log.close.toBaseIO
   for (_, done) in ← waiting.get do done.resolve false
   live.modify (· - 1)
   rt.finished.resolve (match error with | .error e => some e | .ok () => none)
@@ -253,8 +256,11 @@ def start (sys : System σ) [Hashable σ.Id] (config : Runtime.Config := {})
     (journal : Option (Journal.Log sys) := none) : Async (Runtime sys) :=
   startWith sys config (fun _ => onOutput) journal
 
+private def capacity (rt : Runtime sys) : Nat :=
+  max 1 rt.config.inboxCapacity
+
 private def offer (rt : Runtime sys) (c : Cmd sys) : BaseIO Bool := do
-  match ← rt.inbox.modifyGet (Mailbox.offer rt.config.inboxCapacity c) with
+  match ← rt.inbox.modifyGet (Mailbox.offer rt.capacity c) with
   | .taken wake =>
     if let some wake := wake then wake.resolve ()
     return true
@@ -266,7 +272,7 @@ private def send (rt : Runtime sys) (c : Cmd sys) : Async Unit := do
   if ← rt.offer c then return
   repeat
     let room ← IO.Promise.new
-    match ← rt.inbox.modifyGet (Mailbox.offerOrWait rt.config.inboxCapacity c room) with
+    match ← rt.inbox.modifyGet (Mailbox.offerOrWait rt.capacity c room) with
     | .taken wake =>
       if let some wake := wake then wake.resolve ()
       return

@@ -28,7 +28,14 @@ def tests : List (String × Bool) :=
   let (woken, afterOffer) := resting.offer 2 5
   let (stillAwake, _) := afterOffer.rest 51
   let (toWake, closed) := ({ resting with waiting := [60, 61] } : Box).close
-  [ ("mailbox: a full inbox refuses, and what it took comes out in the order it went in",
+  let twoUrgent := ((({} : Box).urge 7).2.urge 8).2
+  let (restsOnUrgent, _) := twoUrgent.rest 53
+  let (urgedAsleep, _) := resting.urge 6
+  [ ("mailbox: what comes from other shards comes out in the order it went in",
+      twoUrgent.take.1.batch == [7, 8]),
+    ("mailbox: a shard does not sleep on what another shard sent, and is woken by it",
+      !restsOnUrgent && urgedAsleep == some (some 50)),
+    ("mailbox: a full inbox refuses, and what it took comes out in the order it went in",
       answers == [true, true, false] && taken.batch == [9, 1, 2]),
     ("mailbox: a sender that waits for room is woken when the shard takes",
       (waited matches .full) && taken.wake == [70] && emptied.count == 0),

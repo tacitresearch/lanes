@@ -52,6 +52,7 @@ structure _root_.Lanes.Peers (σ : Signature) where
   private server : TCP.Socket.Server
   private events : CloseableChannel Happened
   private ended : IO.Promise Unit
+  private complained : IO.Ref Bool
   /-- The port in use, which `listen` may have left to the system to choose. -/
   port : UInt16
 
@@ -61,9 +62,22 @@ private def address (a : Address) : Option Std.Net.SocketAddress :=
 private def quietly (action : Async Unit) : Async Unit :=
   try action catch _ => pure ()
 
+/-- `false` once the transport has stopped: nobody will hear of the event. -/
 private def post (events : CloseableChannel Happened) (event : Event)
-    (fresh : Option TCP.Socket.Client := none) : BaseIO Unit :=
-  discard <| events.trySend (event, fresh)
+    (fresh : Option TCP.Socket.Client := none) : BaseIO Bool :=
+  events.trySend (event, fresh)
+
+/-- Read a connection until it ends, and say so. A connection this side made carries nothing
+back, and is read all the same: that is how a peer that has left is noticed before the next
+parcel is written to it and lost. -/
+private def listen (events : CloseableChannel Happened) (conn : Conn) (socket : TCP.Socket.Client)
+    (hear : ByteArray → BaseIO Unit) : Async Unit := do
+  try
+    repeat
+      let some bytes ← socket.recv? 65536 | break
+      hear bytes
+  catch _ => pure ()
+  discard <| post events (.broken conn (← IO.monoMsNow))
 
 /-- Tell the courier what happened and do what it answers, one event at a time. Every socket is
 in `sockets` from the moment it exists, so the `close` the courier asks for at `stop` reaches
@@ -79,35 +93,32 @@ private def run (config : Config σ) (deliver : Parcel σ → Async Unit)
     for action in actions do
       match action with
       | .dial conn to =>
-        let socket ← TCP.Socket.Client.mk
-        sockets := sockets.insert conn socket
-        background do
-          try
-            let some target := address to | throw (IO.userError "lanes: not an IPv4 address")
-            socket.connect target
-            post events (.connected conn)
-          catch _ => post events (.broken conn (← IO.monoMsNow))
+        match address to, ← (TCP.Socket.Client.mk).toBaseIO with
+        | some target, .ok socket =>
+          sockets := sockets.insert conn socket
+          background do
+            try
+              socket.connect target
+              discard <| post events (.connected conn)
+              listen events conn socket fun _ => pure ()
+            catch _ => discard <| post events (.broken conn (← IO.monoMsNow))
+        | _, _ => discard <| post events (.broken conn (← IO.monoMsNow))
       | .write conn bytes =>
         match sockets[conn]? with
         | some socket => background do
           try
             socket.send bytes
-            post events (.written conn)
-          catch _ => post events (.broken conn (← IO.monoMsNow))
-        | none => post events (.broken conn (← IO.monoMsNow))
+            discard <| post events (.written conn)
+          catch _ => discard <| post events (.broken conn (← IO.monoMsNow))
+        | none => discard <| post events (.broken conn (← IO.monoMsNow))
       | .close conn =>
         if let some socket := sockets[conn]? then quietly socket.close
         sockets := sockets.erase conn
       | .adopt conn =>
         if let some socket := fresh then
           sockets := sockets.insert conn socket
-          background do
-            try
-              repeat
-                let some bytes ← socket.recv? 65536 | break
-                post events (.received conn bytes)
-            catch _ => pure ()
-            post events (.broken conn (← IO.monoMsNow))
+          background (listen events conn socket fun bytes =>
+            discard <| post events (.received conn bytes))
       | .refuse => if let some socket := fresh then quietly socket.close
       | .deliver parcel => deliver parcel
     if courier.stopped then break
@@ -126,24 +137,34 @@ def start (config : Config σ) (deliver : Parcel σ → Async Unit) : Async (Pee
     quietly (run config deliver events)
     ended.resolve ()
   background do
-    try
-      repeat post events .accepted (some (← server.accept))
-    catch _ => pure ()
-  return { config, server, events, ended, port := (← server.getSockName).port }
+    repeat
+      match ← (try some <$> server.accept catch _ => pure none) with
+      | some client => unless ← post events .accepted (some client) do quietly client.close
+      | none =>
+        if ← events.isClosed then break
+        Async.sleep 50
+  return { config, server, events, ended, complained := ← IO.mkRef false
+           port := (← server.getSockName).port }
 
 /-- Send a parcel to the process that hosts its receiver. It does not wait for the network: the
-courier queues the parcel or drops it. -/
+courier queues the parcel or drops it. A parcel larger than the receiver would take is not sent
+at all, and the first such parcel is reported: a system that keeps sending one is stuck. -/
 def send (peers : Peers σ) (parcel : Parcel σ) : Async Unit := do
   let some home ← peers.config.home parcel.1 | return
-  unless Parcel.fits peers.config.id peers.config.msg parcel do return
-  post peers.events
-    (.send home (Parcel.send peers.config.id peers.config.msg [parcel]) (← IO.monoMsNow))
+  let bytes := Parcel.send peers.config.id peers.config.msg [parcel]
+  if Parcel.fits peers.config.id peers.config.msg parcel
+      && bytes.size ≤ peers.config.limits.maxParcelBytes then
+    discard <| post peers.events (.send home bytes (← IO.monoMsNow))
+  else if !(← peers.complained.modifyGet fun said => (said, true)) then
+    IO.eprintln s!"lanes: a parcel of {bytes.size} bytes is over the limit of \
+      {peers.config.limits.maxParcelBytes} and is dropped, as every such parcel will be"
+
 
 /-- Stop listening and sending, and end every connection, so that whoever was sending here
 finds out and connects again to whatever listens next. Returns when that is done. -/
 def stop (peers : Peers σ) : Async Unit := do
   quietly peers.server.close
-  post peers.events .stop
+  discard <| post peers.events .stop
   discard <| await peers.ended.result?
 
 /--

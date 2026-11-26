@@ -58,6 +58,10 @@ structure World where
   stopped : Bool := false
   /-- A connection asked for before `stop` was made after it. -/
   late : Bool := false
+  /-- The peer is left alone until then, after a connection to it failed. -/
+  barred : Nat := 0
+  /-- A connection was asked for while the peer was to be left alone. -/
+  hasty : Bool := false
 
 def key (w : World) :=
   let wire := w.courier.wire peer
@@ -65,13 +69,15 @@ def key (w : World) :=
   ((wire.line, wire.waiting.toList, byConn w.courier.dialed.toList, byConn w.courier.inbound.toList,
       w.courier.nextConn, w.courier.stopped),
     (w.sockets, w.dialing, w.writing, w.asked, w.started, w.wrote, w.now, w.breaks),
-    (w.full, w.stray, w.adopted, w.refused, w.arrived, w.delivered, w.stopped, w.late))
+    (w.full, w.stray, w.adopted, w.refused, w.arrived, w.delivered, w.stopped, w.late, w.barred, w.hasty))
 
 instance : BEq World := ⟨fun a b => key a == key b⟩
 instance : Hashable World := ⟨fun w => hash (key w)⟩
 
 def perform (w : World) : Action wireSig → World
-  | .dial conn _ => { w with sockets := conn :: w.sockets, dialing := conn :: w.dialing }
+  | .dial conn _ =>
+    { w with sockets := conn :: w.sockets, dialing := conn :: w.dialing
+             hasty := w.hasty || w.now < w.barred }
   | .write conn bytes =>
     { w with
       writing := (conn, bytes[0]!.toNat) :: w.writing
@@ -84,6 +90,10 @@ def perform (w : World) : Action wireSig → World
 
 def tell (w : World) (event : Event) : World :=
   let (courier, actions) := w.courier.step limits read event
+  let w := match event with
+    | .broken conn now_ms =>
+      if w.courier.dialed.contains conn then { w with barred := now_ms + limits.retry_ms } else w
+    | _ => w
   actions.foldl perform { w with courier }
 
 def next (w : World) : List (String × World) :=
@@ -135,6 +145,7 @@ def report := search model
     .always "no more wait than the limit" fun w =>
       (w.courier.wire peer).waiting.length ≤ limits.queue,
     .always "after stop no socket is open" fun w => !w.stopped || w.sockets.isEmpty,
+    .always "a peer that could not be reached is left alone for a while" fun w => !w.hasty,
     .always "nothing is lost unless a connection failed, the queue was full or it stopped" fun w =>
       w.breaks > 0 || w.full || w.stopped || !quiet w || w.wrote == w.asked,
     .always "what is delivered is what arrived, in order" fun w =>

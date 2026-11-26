@@ -36,6 +36,34 @@ MUTANTS = [
     ("mailbox: the shard is not woken", "Lanes/Actors/Mailbox.lean",
      "    (.taken m.sleeper, { m with items := x :: m.items, count := m.count + 1, sleeper := none })",
      "    (.taken none, { m with items := x :: m.items, count := m.count + 1, sleeper := none })"),
+    ("runtime: stop drops the commands already handed over", "Lanes/Actors/Runtime.lean",
+     "    if batch.isEmpty && closed then break", "    if closed then break"),
+    ("runtime: the clock starts from zero after a restart", "Lanes/Actors/Runtime.lean",
+     "return since + ((← IO.monoMsNow) - epoch)", "return (← IO.monoMsNow) - epoch"),
+    ("runtime: a handler that throws ends the shard", "Lanes/Actors/Runtime.lean",
+     "    try onOutput out\n    catch e => IO.eprintln s!\"lanes: output handler failed: {e}\"",
+     "    onOutput out"),
+    ("runtime: the journal is closed before the inbox", "Lanes/Actors/Runtime.lean",
+     """  for wake in ← rt.inbox.modifyGet Mailbox.close do wake.resolve ()
+  discard <| rt.inbox.modifyGet Mailbox.take
+  if let some log := journal then discard log.close.toBaseIO
+""",
+     """  if let some log := journal then discard log.close.toBaseIO
+  for wake in ← rt.inbox.modifyGet Mailbox.close do wake.resolve ()
+  discard <| rt.inbox.modifyGet Mailbox.take
+"""),
+    ("runtime: an inbox of no capacity takes nothing", "Lanes/Actors/Runtime.lean",
+     "  max 1 rt.config.inboxCapacity", "  rt.config.inboxCapacity"),
+    ("mailbox: parcels from other shards come out newest first", "Lanes/Actors/Mailbox.lean",
+     "batch := m.urgent.reverse ++ m.items.reverse", "batch := m.urgent ++ m.items.reverse"),
+    ("mailbox: the shard sleeps on what another shard sent", "Lanes/Actors/Mailbox.lean",
+     "  if m.closed || !m.items.isEmpty || !m.urgent.isEmpty then (false, m)",
+     "  if m.closed || !m.items.isEmpty then (false, m)"),
+    ("mailbox: what another shard sends does not wake the shard", "Lanes/Actors/Mailbox.lean",
+     "  else (some m.sleeper, { m with urgent := x :: m.urgent, sleeper := none })",
+     "  else (some none, { m with urgent := x :: m.urgent, sleeper := none })"),
+    ("courier: no rest after a process could not be reached", "Lanes/Actors/Courier.lean",
+     "{ line := .resting (now_ms + limits.retry_ms) }", "{ line := .idle }"),
     ("journal: no lock", "Lanes/Env/Journal.lean",
      "  unless ← lock.tryLock do", "  unless (← lock.tryLock) || true do"),
     ("journal: appended entries not flushed", "Lanes/Env/Journal.lean",
