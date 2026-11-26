@@ -14,11 +14,13 @@ toolchain, the operating system and the hardware.
 | What | Where | Why it is trusted | How it is checked |
 | --- | --- | --- | --- |
 | The runtime shell | `Lanes/Actors/Runtime.lean`, 156 lines | It takes commands from an inbox, calls the kernel and carries out the kernel's commands. That it passes results on unchanged is not proved. | `Tests/Runtime.lean` replays recorded events through `SysState.run` and compares final states. |
-| The HTTP adapter | `Lanes/Env/Http.lean` | It reads and writes sockets and keeps the table of waiting requests in IO. | Manual `curl` runs only. It becomes an actor in `docs/PLAN.md` step 4. |
+| The HTTP adapter's IO | `Lanes/Env/Http.lean` | It reads requests from sockets, hands them to the gated system and writes the gate's one response for each. | `Tests/Web.lean` makes real requests over a socket, including fifty at once. |
 
 The runtime's decisions (routing, start, stop, timers, which mail a stopped actor loses) are
 not in this table. They are in `Lanes/Actors/Kernel.lean` and proved in
-`Lanes/Actors/KernelSound.lean`.
+`Lanes/Actors/KernelSound.lean`. Nor are the HTTP adapter's (which requests are waiting, when
+one times out, when the system is too busy): they are the gate actor in `Lanes/Http/Gate.lean`,
+model-checked in `Tests/Gate.lean`.
 
 ## Assumptions the runtime makes
 

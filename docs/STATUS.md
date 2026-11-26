@@ -16,7 +16,7 @@ Last updated: 2026-11-26.
 | Runtime | A kernel of pure functions proved to follow the semantics (`Kernel.run1_sound`), inside a 156-line shell: one task per shard, bounded inbox, timers | `Lanes/Actors/{Kernel,KernelSound,Runtime}.lean` |
 | Proof layer | `Spec`, `Refines` (weak simulation with a label map), `of_map`, `trans`, trace inclusion; system semantics as a CSLib `LTS`; `Service.spec`; sum lemmas | `Lanes/Semantics/` |
 | Behaviours | `Server` (request and reply), with `Server.implements` proved | `Lanes/Behaviours/Server.lean`, `Lanes/Semantics/Service.lean` |
-| Web | HTTP/1.1 adapter, requests and responses as data, `Html` with proved escaping, template macro | `Lanes/Env/Http.lean`, `Lanes/Http/`, `Lanes/Html/` |
+| Web | HTTP/1.1 adapter whose logic is the gate actor (each request answered exactly once, model-checked); requests and responses as data; `Html` with proved escaping and URL checking; scoped template macro | `Lanes/Http/`, `Lanes/Env/Http.lean`, `Lanes/Html/` |
 | Data | `Enum`, JSON (parser, printers, `ToJson`/`FromJson`), all total and `Std`-only | `Lanes/Data/` |
 | Tooling | `lanes new`, `lanes lint` (text-level), `lanes check`; CI workflow; axiom gate | `LanesCli/`, `.github/workflows/ci.yml`, `Tests/Axioms.lean` |
 
@@ -59,6 +59,7 @@ Last updated: 2026-11-26.
   elaborator and are not implemented.
 - Templates take text children as string literals (`<p>"text"</p>`), not bare text.
 - No TLS, HTTP client, WebSockets or database adapter. `Std.Http` has no client.
+- The gate keeps waiting requests in a list, so each request costs time linear in `maxPending`.
 - The runtime's in-memory "durable" state does not survive a process crash (see `TRUSTED.md`).
 - The runtime never releases an actor: every identity ever addressed keeps its cell in the
   kernel. A session-per-user system grows without bound. Releasing an actor means its state must

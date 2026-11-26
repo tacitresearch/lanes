@@ -218,3 +218,16 @@ Consequences:
 - A stopped actor starts again on its next message. The eager restart policy and its budget
   are gone from the runtime; supervision returns as library actors with specs (rule 3.1).
 - The only assumption about `Std.Async` is the inbox channel and the timer.
+
+## D19. The HTTP adapter's logic is a gate actor
+
+`Lanes/Http/Gate.lean` defines `gate`, an actor that parses each request into an input, keeps
+the list of waiting requests, and answers each exactly once: with the system's response, with
+`504` when its timer fires, or with `503` beyond `maxPending`. `gated sys` is `sys` with the
+gate in front; the inner actors' outputs become messages to the gate. `Lanes/Env/Http.lean`
+serves `gated sys` and only moves bytes.
+
+Why: the first adapter kept the waiting table in a mutex and the deadline in a per-request
+`select`. A review found two defects there. As an actor the logic is checked together with the
+application: `Tests/Gate.lean` explores every race between a response and its deadline and
+shows each request is answered exactly once, and `gate_bounded` proves the table's bound.

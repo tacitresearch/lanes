@@ -8,6 +8,8 @@ import Tests.Json
 import Tests.Runtime
 import Tests.Html
 import Tests.KV
+import Tests.Gate
+import Tests.Web
 
 /-!
 The test driver behind `lake test`: the pure tests and the live runtime tests, well under a
@@ -25,11 +27,11 @@ def report (results : List (String × Bool)) : IO UInt32 := do
 
 def main (args : List String) : IO UInt32 := do
   let pure := Tests.Engine.tests ++ Tests.Bank.tests ++ Tests.Json.tests ++ Tests.Html.tests
-    ++ Tests.KV.tests
+    ++ Tests.KV.tests ++ Tests.Gate.tests
   match args with
-  | [] => report (pure ++ (← Tests.Runtime.tests))
+  | [] => report (pure ++ (← Tests.Runtime.tests) ++ (← Tests.Web.tests))
   | ["fast"] => report pure
-  | ["live"] => report (← Tests.Runtime.tests)
+  | ["live"] => report ((← Tests.Runtime.tests) ++ (← Tests.Web.tests))
   | _ =>
     IO.eprintln "usage: lanesTest [fast|live]"
     return 2
