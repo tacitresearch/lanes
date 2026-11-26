@@ -140,4 +140,16 @@ theorem take_of_prefix {a b : List α} (h : a <+: b) {n : Nat} (hn : n ≤ a.len
 theorem drop_take_of_le (l : List α) {a b : Nat} (h : a ≤ b) : (l.take a).drop b = [] :=
   List.drop_eq_nil_of_le (by rw [List.length_take]; omega)
 
+/-- A start of what follows `n` in `l` is what follows `n` in a start of `l`. -/
+theorem drop_take_of_prefix {l part : List α} {n : Nat} (h : part <+: l.drop n) :
+    (l.take (n + part.length)).drop n = part := by
+  rw [List.drop_take, Nat.add_sub_cancel_left]
+  exact (List.prefix_iff_eq_take.mp h).symm
+
+theorem getElem?_of_prefix {a b : List α} (h : a <+: b) {k : Nat} {x : α}
+    (hx : a[k]? = some x) : b[k]? = some x := by
+  obtain ⟨rest, rfl⟩ := h
+  rw [List.getElem?_append_left (List.getElem?_eq_some_iff.mp hx).1]
+  exact hx
+
 end Lanes

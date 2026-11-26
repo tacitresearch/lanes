@@ -130,6 +130,16 @@ theorem erase_step (env : EnvModel σ) (c : SysState (sys.withGhost g)) (ev : Ev
     exact (map_ite erase (!c.up i && (c.hasMail i || env.restarts i)) _).trans
       (by rw [erase_startActor]; rfl)
 
+theorem erase_run (env : EnvModel σ) (c : SysState (sys.withGhost g)) (evs : List (Event σ)) :
+    (c.run env evs).map erase = c.erase.run env evs := by
+  induction evs generalizing c with
+  | nil => rfl
+  | cons ev evs ih =>
+    rw [run, run, ← erase_step]
+    cases c.step env ev with
+    | none => rfl
+    | some c' => exact ih c'
+
 theorem erase_init (sys : System σ) (g : Ghost sys) (env : EnvModel σ) :
     (SysState.init (sys.withGhost g) env).erase = SysState.init sys env :=
   (List.foldl_hom erase fun c i => (erase_startActor env c i).symm).symm
@@ -159,6 +169,16 @@ theorem Reachable.exists_ghost (g : Ghost sys) {c : SysState sys} (h : sys.Reach
     rw [← SysState.erase_step] at hstep
     obtain ⟨c'', hstep', rfl⟩ := Option.map_eq_some_iff.mp hstep
     exact ⟨c'', .step ev hreach hstep', rfl⟩
+
+/-- A run of the real system from a reachable state is a run with ghosts, erased. -/
+theorem Reachable.exists_ghost_run (g : Ghost sys) {c c' : SysState sys} {evs : List (Event σ)}
+    (h : sys.Reachable env c) (hrun : c.run env evs = some c') :
+    ∃ d d' : SysState (sys.withGhost g), (sys.withGhost g).Reachable env d ∧ d.erase = c ∧
+      d.run env evs = some d' ∧ d'.erase = c' := by
+  obtain ⟨d, hreach, rfl⟩ := h.exists_ghost g
+  rw [← SysState.erase_run] at hrun
+  obtain ⟨d', hrun', rfl⟩ := Option.map_eq_some_iff.mp hrun
+  exact ⟨d, d', hreach, rfl, hrun', rfl⟩
 
 /-- An invariant proved with ghosts, about the part of the state that is not ghost, holds of
 the real system. -/
