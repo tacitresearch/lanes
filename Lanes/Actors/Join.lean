@@ -187,8 +187,9 @@ and given in one line: `instance : (joinSig σ τ).Inspect := .join`. -/
   reprState i := inferInstanceAs (Repr (sys.State i))
   hashState i := inferInstanceAs (Hashable (sys.State i))
 
-@[instance_reducible] def System.Inspect.filterMapIO {In Out : Type} [DecidableEq In] [DecidableEq Out]
-    {sys : System σ} [sys.Inspect] {input : In → σ.In} {output : σ.Out → Option Out} :
+@[instance_reducible] def System.Inspect.filterMapIO {In Out : Type} [DecidableEq In]
+    [DecidableEq Out] {sys : System σ} [sys.Inspect] {input : In → σ.In}
+    {output : σ.Out → Option Out} :
     (sys.filterMapIO input output).Inspect where
   beqState i := inferInstanceAs (BEq (sys.State i))
   reprState i := inferInstanceAs (Repr (sys.State i))

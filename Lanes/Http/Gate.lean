@@ -16,6 +16,10 @@ system's response or with `504` when its deadline passes. `gated sys` is the sys
 gate added, so the model checker and proofs see the adapter's decisions and the application
 together. What is left in IO is reading and writing sockets.
 
+The decisions are `Gate.step`, which does not know where the gate sits. `Lanes.Http.Front` has
+the gate as a system of its own, joined in front of a system that keeps outputs and inputs of
+its own; in `gated sys` every output of `sys` goes to the gate.
+
 `Lanes.Http.GateSound` proves, for every system behind the gate, that an arrival is answered at
 most once and that a waiting request keeps its deadline armed. `Lanes.Semantics.GateLive` proves
 that a request the gate has admitted is answered, in every fair run in which the gate does not

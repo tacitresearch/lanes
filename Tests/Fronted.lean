@@ -319,4 +319,45 @@ def live : Async (List (String × Bool)) := do
     ("fronted: each front does only what the gate's model of its outside allows",
       traces.all (frontedOutside (shardSig (sig Acct))).allows) ]
 
+/-! A fronted system on a journal: stop the server, start another on the same journal. -/
+
+def durable : Async (List (String × Bool)) := do
+  let dir := (← IO.getEnv "TMPDIR").getD "/tmp"
+  let journal : System.FilePath := s!"{dir}/lanes-fronted-{← IO.monoNanosNow}.journal"
+  let start := do
+    let log ← Journal.Store.open
+      (sys := fronted (bank Acct 100) Examples.BankWeb.bridge {})
+      { path := journal
+        input := Codec.sum (Codec.pair Codec.nat Request.codec)
+          (Examples.Bank.Request.codec Codec.fin)
+        actors := some (frontedActors (actors Codec.fin 100) Response.codec
+          Examples.BankWeb.bridge) }
+    serveFronted (bank Acct 100) Examples.BankWeb.bridge { port := 0 }
+      { record := true, snapshotEvery := 4 } (log := some log)
+  let server ← start
+  let moved ← Tests.Web.fetch (server.port.getD 0) "/transfer" (method := "POST")
+    (body := "src=0&dst=1&amount=30")
+  let before ← Tests.Web.fetch (server.port.getD 0) "/accounts/1"
+  server.stop
+  let server ← start
+  let after ← Tests.Web.fetch (server.port.getD 0) "/accounts/1"
+  let again ← Tests.Web.fetch (server.port.getD 0) "/transfer" (method := "POST")
+    (body := "src=1&dst=2&amount=130")
+  let last ← Tests.Web.fetch (server.port.getD 0) "/accounts/2"
+  server.stop
+  let ids := (← server.trace).toList.filterMap fun
+    | .input (.inl (id, _)) => some id
+    | _ => none
+  let cut ← (journal.addExtension "snapshot").pathExists
+  for file in [journal, journal.addExtension "lock", journal.addExtension "snapshot"] do
+    if ← file.pathExists then IO.FS.removeFile file
+  return [
+    ("fronted: behind a journal the bank keeps its balances across a restart and goes on",
+      moved.startsWith "HTTP/1.1 200" && before.endsWith "<span>130</span>"
+        && after.endsWith "<span>130</span>" && again.startsWith "HTTP/1.1 200"
+        && last.endsWith "<span>230</span>"),
+    ("fronted: request ids used before the restart are not used again, though the journal "
+        ++ "was cut",
+      cut && ids.length == 3 && ids.all (2 ≤ ·)) ]
+
 end Tests.Fronted

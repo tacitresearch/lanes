@@ -40,21 +40,21 @@ def report (results : List (String × Bool)) : IO UInt32 := do
 def main (args : List String) : IO UInt32 := do
   let pure := Tests.Engine.tests ++ Tests.Bank.tests ++ Tests.Json.tests ++ Tests.Html.tests
     ++ Tests.KV.tests ++ Tests.Gate.tests ++ Tests.Fronted.tests ++ Tests.Join.tests
-    ++ Tests.Kernel.tests ++ Tests.Frame.tests ++ Tests.Clock.tests ++ Tests.HttpClient.tests ++ Tests.Fair.tests
-    ++ Tests.Codec.tests ++ Tests.Durable.fileTests ++ Tests.Split.tests
+    ++ Tests.Kernel.tests ++ Tests.Frame.tests ++ Tests.Clock.tests ++ Tests.HttpClient.tests
+    ++ Tests.Fair.tests ++ Tests.Codec.tests ++ Tests.Durable.fileTests ++ Tests.Split.tests
     ++ Tests.Peers.tests
   match args with
   | [] =>
     report (pure ++ (← Tests.Runtime.tests) ++ (← Tests.Web.tests) ++ (← Tests.Durable.tests)
       ++ (← Tests.Clock.live.block) ++ (← Tests.HttpClient.live.block)
       ++ (← Tests.Cluster.tests) ++ (← Tests.Peers.live.block)
-      ++ (← Tests.Fronted.live.block))
+      ++ (← Tests.Fronted.live.block) ++ (← Tests.Fronted.durable.block))
   | ["fast"] => report pure
   | ["live"] =>
     report ((← Tests.Runtime.tests) ++ (← Tests.Web.tests) ++ (← Tests.Durable.tests)
       ++ (← Tests.Clock.live.block) ++ (← Tests.HttpClient.live.block)
       ++ (← Tests.Cluster.tests) ++ (← Tests.Peers.live.block)
-      ++ (← Tests.Fronted.live.block))
+      ++ (← Tests.Fronted.live.block) ++ (← Tests.Fronted.durable.block))
   | ["journal-child", path] =>
     Tests.Durable.child path
     return 0
