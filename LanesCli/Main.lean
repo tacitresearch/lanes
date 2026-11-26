@@ -15,8 +15,10 @@ def usage : String :=
 Usage:
   lanes new <name> [--dir <path>] [--lanes-path <path>] [--rev <rev>]
       Create a new application.
-  lanes lint [<path>]
-      Check a project against the LANES_STYLE rules.
+  lanes lint [--fix] [--main] [<path>]
+      Check a project against the LANES_STYLE rules, and the files derived from others.
+      --fix rewrites the derived files: line counts, the decisions' index, docs/STATUS.md.
+      --main numbers new decisions (with --fix) or reports them: use it on the main branch.
   lanes check
       Run the project's model checks (`lake test`).
 "
@@ -34,8 +36,14 @@ def main (args : List String) : IO UInt32 := do
       | some path => .path path
       | none => .git "https://github.com/tacitresearch/lanes" ((flag? rest "--rev").getD "main")
     New.run name dir source
-  | ["lint"] => return if (← Lint.run ".") == 0 then 0 else 1
-  | ["lint", path] => return if (← Lint.run path) == 0 then 0 else 1
+  | "lint" :: rest =>
+    let paths := rest.filter (!·.startsWith "--")
+    let unknown := rest.filter fun a => a.startsWith "--" && a != "--fix" && a != "--main"
+    if paths.length > 1 || !unknown.isEmpty then
+      IO.print usage
+      return 1
+    let options := { fix := rest.contains "--fix", main := rest.contains "--main" }
+    return if (← Lint.run (paths.headD ".") options) == 0 then 0 else 1
   | ["check"] =>
     let child ← IO.Process.spawn { cmd := "lake", args := #["test"] }
     return (← child.wait)
