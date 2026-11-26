@@ -19,6 +19,10 @@ After a step the queue is brought up to date from what the step can have changed
 in flight, the outbox, and the timers of the one actor that took the step. No list of all actors
 is needed, so a signature may have infinitely many identities.
 
+A timer that a step arms again is owed anew and goes to the back of the queue, as the runtime
+gives it a new deadline. So a timer that its actor keeps arming again does not fire while the
+steps that arm it keep coming, and one that is left alone fires in its turn.
+
 `Lanes.Semantics.FairRuns` proves from this scheduler that every finite run extends to a fair
 one.
 -/
@@ -38,9 +42,24 @@ def Event.actor? : Event σ → Option σ.Id
   | .timeout i _ | .crash i | .start i => some i
   | .input _ | .drop _ | .output _ => none
 
+/-- The timers that the effects of actor `i` arm, as the events that fire them. -/
+def Effect.timeouts (i : σ.Id) (effs : List (Effect σ i)) : List (Event σ) :=
+  effs.filterMap fun
+    | .after _ msg => some (.timeout i msg)
+    | _ => none
+
 namespace SysState
 
 variable {sys : System σ}
+
+/-- The timers that taking `ev` from `c` arms, as the events that fire them. The runtime gives
+a pending timer among them a new deadline, where the semantics leaves it as it is. -/
+def arms (c : SysState sys) : Event σ → List (Event σ)
+  | .deliver e | .duplicate e =>
+    Effect.timeouts e.dst ((sys.actor e.dst).step (c.state e.dst) e.msg).2
+  | .timeout i msg => Effect.timeouts i ((sys.actor i).step (c.state i) msg).2
+  | .start i => Effect.timeouts i ((sys.actor i).recover (c.state i)).2
+  | .input _ | .drop _ | .output _ | .crash _ => []
 
 /-- The environment's events (inputs, duplicates, drops, crashes) are never owed, and neither is
 starting an actor that has no mail. -/
@@ -78,12 +97,14 @@ def init (sys : System σ) (env : EnvModel σ) : FairScheduler sys :=
   let c := SysState.init sys env
   ⟨c, requeue env c sys.boot []⟩
 
-/-- Take `ev`, which goes to the back of the queue. An event that is not enabled changes
-nothing. -/
+/-- Take `ev`, which goes to the back of the queue, as do the timers it arms again. An event
+that is not enabled changes nothing. -/
 def take (env : EnvModel σ) (s : FairScheduler sys) (ev : Event σ) : FairScheduler sys :=
   match s.state.step env ev with
   | none => s
-  | some c => ⟨c, requeue env c ev.actor?.toList (s.queue.erase ev ++ [ev])⟩
+  | some c =>
+    let waiting := (s.queue.erase ev).filter fun e => !(s.state.arms ev).contains e
+    ⟨c, requeue env c ev.actor?.toList (waiting ++ [ev])⟩
 
 def next (env : EnvModel σ) (s : FairScheduler sys) : Option (Event σ) :=
   s.queue.find? (s.state.owed env)

@@ -326,16 +326,25 @@ start a stopped actor that has mail, hand over an output), fair runs (weakly fai
 obligation on its own), `System.LeadsTo`, and its proof rule
 (`System.LeadsTo.ensures_of_invariant`, Lamport's WF1) with transitivity and monotonicity.
 
+Fairness agrees with the runtime about timers: a timer that stays pending and is not armed
+again fires (`Obligation.Restarted`). An actor that keeps arming a timer again keeps it from
+firing, in the runtime and in a fair run alike, and the semantics is unchanged. A leads-to proof
+that rests on a timer shows that no step arms it again (the rule's premise `quiet`, filled in
+for other obligations). `Examples/WatchdogProofs.lean` has the run this allows: a watchdog
+whose keeper pings forever never barks, in a fair run.
+
 `Lanes/Semantics/GateLive.lean` is the first use, for every system behind the gate and any
 environment that does not crash the gate: a request waiting in the gate stops waiting
-(`Http.pending_leaves`, by its deadline), it stops waiting only in a step that emits its answer
+(`Http.pending_leaves`, by its deadline, which no step arms again:
+`Http.deadline_not_restarted`), it stops waiting only in a step that emits its answer
 (`Http.answered_of_leaves`), and the answer is handed over (`Http.pending_answered`).
 
 `Lanes/Semantics/FairRuns.lean` proves that fair runs exist: every finite run extends to a fair
 run (`System.exists_fair_run_of_run`), for every system and environment model, with no
 assumption on the signature. So a leads-to theorem is about runs through every reachable state
 (`System.Reachable.exists_fair_run`, `System.LeadsTo.reachable`). The run is that of
-`FairScheduler`, which takes the event owed longest.
+`FairScheduler`, which takes the event owed longest and counts a timer that is armed again as
+owed from then.
 
 Still open, roughly in the order it will be needed:
 
@@ -350,15 +359,14 @@ Still open, roughly in the order it will be needed:
   semantics, or restart as a stated assumption.
 - **Strong fairness**, for an obligation that is due again and again without staying due, such
   as delivery to an actor that keeps crashing. Not needed so far.
-- **Real time.** Fairness says a timer fires, not when. And the semantics does not record a
-  pending timer being armed again, so an actor that restarts a timer forever is live in a fair
-  run and not in the runtime. The gate arms a deadline only for a request that has none, which
-  is checked (`Tests/Gate.lean`), not proved.
+- **Real time.** Fairness says a timer fires, not when, and says of a keep-alive only that it
+  may stay quiet. That a follower does not time out while heartbeats arrive in time is a
+  statement about delays, which neither the semantics nor a fair run has.
 - **The runtime's runs are fair.** The kernel lets neither messages nor due timers starve the
   other (`Kernel.WellFormed.step_of_queued`, `step_of_due`). That its runs are fair runs of
   the semantics, given a clock that advances, is not stated.
 - **Checking.** The checker has no lasso search, so a leads-to property cannot be checked
-  before it is proved. `Tests/Gate.lean` checks the three premises of the rule instead.
+  before it is proved. `Tests/Gate.lean` checks the four premises of the rule instead.
 
 ## Phase B: scale
 

@@ -73,11 +73,15 @@ a `sometimes` property), and once the checker rejected a property its author bel
 
 - *Trusted code is growing with features*: about 590 lines, from 430. The shell itself is flat;
   the growth is file IO and adapters, each with a conformance test. The lint pins the sizes.
-- *Timers and liveness do not quite agree.* In the semantics, arming a pending timer again
-  changes nothing, so a fair run still fires it; in the runtime it restarts the delay, which is
-  what a keep-alive wants. A liveness proof that leans on a timer firing is about the model.
-  The honest fix is to give a timer an identity that re-arming changes, in the semantics as in
-  the kernel. This should be settled before Raft, whose election timer is reset by heartbeats.
+- *Timers and liveness now agree* (settled after this review, D27). In the semantics, arming
+  a pending timer again changes nothing; in the runtime it restarts the delay, which is what a
+  keep-alive wants. Fairness used to oblige every timer that stays pending to fire, so a
+  liveness proof that leaned on a timer was about the model only, and a Raft follower would
+  have timed out under heartbeats in every fair run. Fairness now obliges a timer to fire only
+  if it stays pending and no step arms it again. The semantics did not change; the leads-to
+  rule got one more premise for timers; the gate's theorem was re-proved with it; and a
+  watchdog whose keeper pings forever never barks in a fair run
+  (`Examples/WatchdogProofs.lean`). A timer identity in the semantics was not needed.
 - *The net is one list.* A state records the order of messages on different links, which
   nothing can observe, and reachability is stated up to equality. The projection proof for
   joins paid for this twice: the left side needed a hidden relation to get an exact statement,
@@ -91,8 +95,8 @@ a `sometimes` property), and once the checker rejected a property its author bel
 - *Throughput.* One shard, and about 90 µs to wake it. Nothing in phase A depended on it;
   phase B does.
 
-**Verdict.** The direction holds. Phase B starts with the timer identity question, because it
-changes the semantics, then shards.
+**Verdict.** The direction holds. The timer question came first and is settled in the
+definition of a fair run, with the semantics as it was. Phase B starts with shards.
 
 ## Serious applications
 

@@ -19,8 +19,11 @@ identities.
 
 The fair run is the one `FairScheduler` makes. It takes the given events, and from then on the
 event that has been owed longest. Its queue holds every owed event (`FairScheduler.Complete`),
-and an owed event that is not taken moves at least one place forward at each step. So an
-obligation that stays due is taken after at most as many steps as there were events ahead of it.
+and an owed event that is not taken moves at least one place forward at each step, unless it is
+a timer that the step arms again: that one goes to the back. So an obligation that stays due
+and is not restarted is taken after at most as many steps as there were events ahead of it.
+The run is fair and not impatient: a timer that keeps being armed again while it waits its turn
+does not fire.
 
 What makes this work without listing all actors is that an event changes the timers of one
 actor at most (`SysState.step_of_ne_actor`): the newly owed events are found among the messages
@@ -185,18 +188,23 @@ theorem requeue_append_cons (howed : c.owed env e = true) :
       List.cons_append]
   exact ⟨_, _, h, List.length_filter_le _ _⟩
 
-/-- When an event ahead of `e` in the queue is taken and `e` is still owed, `e` moves
-forward. -/
+/-- When an event ahead of `e` in the queue is taken, and `e` is still owed and not armed
+again, `e` moves forward. -/
 theorem take_queue {c' : SysState sys} (hqueue : s.queue = pre ++ e :: post) (hp : p ∈ pre)
-    (hstep : s.state.step env p = some c') (howed : c'.owed env e = true) :
+    (hstep : s.state.step env p = some c') (howed : c'.owed env e = true)
+    (hquiet : e ∉ s.state.arms p) :
     ∃ pre' post', (s.take env p).queue = pre' ++ e :: post' ∧ pre'.length < pre.length := by
+  let waits (e : Event σ) : Bool := !(s.state.arms p).contains e
   obtain ⟨pre', post', hrequeue, hlen⟩ := requeue_append_cons (env := env)
-    (actors := p.actor?.toList) (pre := pre.erase p) (post := post ++ [p]) howed
+    (actors := p.actor?.toList) (pre := (pre.erase p).filter waits)
+    (post := post.filter waits ++ [p]) howed
   refine ⟨pre', post', ?_, ?_⟩
-  · simp only [take, hstep, hqueue, List.erase_append_left _ hp, List.append_assoc,
-      List.cons_append, hrequeue]
+  · have hwaits : waits e = true := by simpa [waits] using hquiet
+    simp only [take, hstep, hqueue, List.erase_append_left _ hp, List.filter_append,
+      List.filter_cons_of_pos hwaits, List.append_assoc, List.cons_append, waits, hrequeue]
   · have := List.length_pos_of_mem hp
-    rw [List.length_erase_of_mem hp] at hlen
+    have := List.length_filter_le waits (pre.erase p)
+    rw [List.length_erase_of_mem hp] at this
     omega
 
 /-- The queue misses no owed event. -/
@@ -227,9 +235,15 @@ theorem Complete.take (hs : s.Complete env) (ev : Event σ) : (s.take env ev).Co
       obtain ⟨hup, htimers⟩ := SysState.step_of_ne_actor hstep (i := i) (by simpa using hi)
       have hbefore : Event.timeout i msg ∈ s.queue :=
         hs _ (by simpa [SysState.owed, hup, htimers] using howed)
+      have hwaits : Event.timeout i msg ∉ s.state.arms ev := by
+        intro harms
+        obtain ⟨_, _, htimeout, hactor⟩ := SysState.actor?_of_mem_arms harms
+        cases htimeout
+        simp [hactor] at hi
       by_cases heq : Event.timeout i msg = ev
       · exact .inl (by simp [heq])
-      · exact .inl (List.mem_append_left _ ((List.mem_erase_of_ne heq).mpr hbefore))
+      · exact .inl (List.mem_append_left _ (List.mem_filter.mpr
+          ⟨(List.mem_erase_of_ne heq).mpr hbefore, by simpa using hwaits⟩))
 
 end FairScheduler
 
@@ -318,12 +332,14 @@ theorem Run.fairAfter_event (hrun : (SysState.init sys env).run env evs = some c
     | some c₁ => rfl
   simp [Run.fairAfter, fairChoice, hk, hstep]
 
-/-- Once the given events are taken, an event that is in the queue and stays owed is taken
-within as many steps as there are events ahead of it: at each step it is taken or moves
-forward. -/
+/-- Once the given events are taken, an event that is in the queue, stays owed and is not
+armed again is taken within as many steps as there are events ahead of it: at each step it is
+taken or moves forward. -/
 theorem Run.fairAfter_taken {e : Event σ} {m : ℕ} {pre post : List (Event σ)}
     (hm : evs.length ≤ m) (hqueue : (fairSchedule sys env evs m).queue = pre ++ e :: post)
-    (howed : ∀ k, m ≤ k → (fairSchedule sys env evs k).state.owed env e = true) :
+    (howed : ∀ k, m ≤ k → (fairSchedule sys env evs k).state.owed env e = true)
+    (hquiet : ∀ k p, m ≤ k → (Run.fairAfter sys env evs).event k = some p →
+      e ∉ (fairSchedule sys env evs k).state.arms p) :
     ∃ k, m ≤ k ∧ k ≤ m + pre.length ∧ (Run.fairAfter sys env evs).event k = some e := by
   induction hlen : pre.length using Nat.strong_induction_on generalizing m pre post with
   | _ len ih =>
@@ -340,24 +356,31 @@ theorem Run.fairAfter_taken {e : Event σ} {m : ℕ} {pre post : List (Event σ)
         simp [fairSchedule, hchoice, hfind]
       have hstate : (fairSchedule sys env evs (m + 1)).state = c' := by
         simp [hnext, FairScheduler.take, hstep]
+      have htaken : (Run.fairAfter sys env evs).event m = some p := by
+        simp [Run.fairAfter, hchoice, hfind, hstep]
       obtain ⟨pre', post', hqueue', hlt⟩ := FairScheduler.take_queue hqueue
         (List.mem_of_find?_eq_some hfind) hstep (hstate ▸ howed (m + 1) (by omega))
+        (hquiet m p (Nat.le_refl m) htaken)
       obtain ⟨k, hk, hbound, hev⟩ := ih pre'.length (by omega) (by omega : evs.length ≤ m + 1)
-        (hnext ▸ hqueue') (fun k hk => howed k (by omega)) rfl
+        (hnext ▸ hqueue') (fun k hk => howed k (by omega))
+        (fun k p hk => hquiet k p (by omega)) rfl
       exact ⟨k, by omega, by omega, hev⟩
 
 /-- The run that takes `evs` and then serves what is owed, the event owed longest first, is
 fair. -/
 theorem Run.fairAfter_fair (sys : System σ) (env : EnvModel σ) (evs : List (Event σ)) :
     (Run.fairAfter sys env evs).Fair := by
-  intro ob n hdue
-  simp only [Set.mem_singleton_iff, exists_eq_left] at hdue ⊢
+  refine Run.fair_iff.mpr fun ob n hdue => ?_
   have howed (k : ℕ) (hk : max n evs.length ≤ k) :
       (fairSchedule sys env evs k).state.owed env ob.event = true :=
-    Obligation.due_iff_owed.mp (hdue k (by omega))
+    Obligation.due_iff_owed.mp (hdue k (by omega)).1
+  have hquiet (k : ℕ) (p : Event σ) (hk : max n evs.length ≤ k)
+      (hev : (Run.fairAfter sys env evs).event k = some p) :
+      ob.event ∉ (fairSchedule sys env evs k).state.arms p :=
+    fun harms => (hdue k (by omega)).2 ⟨p, hev, Obligation.restarted_iff_mem_arms.mpr harms⟩
   obtain ⟨pre, post, hqueue⟩ := List.append_of_mem
     (fairSchedule_complete sys env evs _ _ (howed _ (Nat.le_refl _)))
-  obtain ⟨k, hk, _, hev⟩ := Run.fairAfter_taken (by omega) hqueue howed
+  obtain ⟨k, hk, _, hev⟩ := Run.fairAfter_taken (by omega) hqueue howed hquiet
   exact ⟨k, by omega, hev⟩
 
 /-- Machine closure: every finite run extends to a fair run. So fairness rules out no finite

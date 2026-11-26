@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
+public import Lanes.Actors.FairScheduler
 public import Lanes.Actors.Step
 public import Lanes.Semantics.System
 public import Cslib.Foundations.Semantics.LTS.OmegaExecution
@@ -19,20 +20,26 @@ and the rule that proves such properties from single steps.
 
 A run is infinite. At each position it takes one enabled event or stutters, so a system with
 nothing left to do still has runs. A run is fair when the system is not held back forever from
-anything it owes: an `Obligation` that is due at every position from some point on is taken.
-The obligations are the events the system itself makes happen: delivering a message to an actor
-that is up, firing an armed timer of an actor that is up, starting a stopped actor that has
-mail, and handing over an output. Inputs, drops, duplicates and crashes are the choice of the
-environment, are not obligations, and so no fairness can be assumed of them. Nor is restarting
-an actor that has no mail, even where the environment model says it may happen. Fairness is
-stated for each obligation on its own (this message, this timer). Fairness of all of them
-together would let one timer wait forever while others fire. Fairness rules out no finite run:
-`Lanes.Semantics.FairRuns` proves that each one extends to a fair run.
+anything it owes: an `Obligation` that is due at every position from some point on, and whose
+wait no step starts again, is taken. The obligations are the events the system itself makes
+happen: delivering a message to an actor that is up, firing an armed timer of an actor that is
+up, starting a stopped actor that has mail, and handing over an output. Inputs, drops,
+duplicates and crashes are the choice of the environment, are not obligations, and so no
+fairness can be assumed of them. Nor is restarting an actor that has no mail, even where the
+environment model says it may happen. Fairness is stated for each obligation on its own (this
+message, this timer). Fairness of all of them together would let one timer wait forever while
+others fire. Fairness rules out no finite run: `Lanes.Semantics.FairRuns` proves that each one
+extends to a fair run.
 
-Fairness says "eventually" and gives no bound. And it reads a timer as the semantics does: an
-actor that arms a pending timer again leaves it armed here, where the runtime starts its delay
-again. A liveness theorem that rests on a timer is therefore about an actor that does not keep
-restarting that timer.
+A timer is the one obligation whose wait can start again. An actor that arms a pending timer
+again leaves it as it is in the semantics, and in the runtime gives it a new deadline: the
+delay starts again. That is what a keep-alive is for, and a timer that every heartbeat arms
+again must not be obliged to fire while heartbeats arrive. So fairness obliges a timer to fire
+only if it stays pending and no step arms it again (`Obligation.Restarted`), which is what the
+runtime provides. This asks less of a run than firing every timer that stays pending
+(`System.Run.Impatient`). There are more fair runs, and a leads-to theorem that rests on a
+timer has one more thing to show: that the timer is left alone. Fairness says "eventually" and
+gives no bound.
 
 CSLib provides the infinite sequences (`ωSequence`), infinite executions of a transition system
 (`LTS.OmegaExecution`) and leads-to along one sequence (`ωSequence.LeadsTo`), and they are used
@@ -44,19 +51,23 @@ development is of processes in that algorithm), so those two are defined here.
 - `Spec.stutter`: a spec with a step that changes nothing.
 - `System.Run`: an infinite run of a system from its initial state.
 - `Obligation`, `Obligation.Due`: what a system owes, and when.
+- `Obligation.Restarted`: the steps that start the wait for an obligation again, which are the
+  steps that arm a timer.
 - `System.Run.WeakFair`, `System.Run.Fair`: weak fairness, and the runs that are fair to every
   obligation.
+- `System.Run.Impatient`: the runs that also fire a timer whose actor keeps arming it.
 - `System.LeadsTo`: in every fair run, a state satisfying `P` is followed by one satisfying `Q`.
 
 ## Main statements
 
 - `System.LeadsTo.ensures_of_invariant`: the proof rule (Lamport's WF1). `P` leads to `Q` when
-  every step from `P` keeps `P` or reaches `Q`, some obligation is due throughout `P`, and
-  taking it reaches `Q`.
+  every step from `P` keeps `P` or reaches `Q`, some obligation is due throughout `P`, no step
+  from `P` restarts it, and taking it reaches `Q`.
 - `System.LeadsTo.trans`, `System.LeadsTo.mono`: leads-to is transitive and monotone.
 - `Obligation.Due.enabled`: an obligation that is due can be taken, so fairness never asks for
   a step the semantics does not have.
 - `System.Run.Fair.output_taken`: an emitted output is eventually handed over.
+- `System.Run.Impatient.fair`: a run that fires every timer that stays pending is fair.
 -/
 
 @[expose] public section
@@ -114,7 +125,62 @@ theorem Due.enabled (h : ob.Due env c) : ∃ c', c.step env ob.event = some c' :
   | start i => exact ⟨_, SysState.step_start.mpr ⟨h.1, .inl h.2, rfl⟩⟩
   | output out => exact ⟨_, SysState.step_output.mpr ⟨h, rfl⟩⟩
 
+/-- Whether taking `ev` from `c` starts the wait for an obligation again. Only a timer waits
+again, when a step of its actor arms it: the runtime then gives it a new deadline. Nothing
+starts the wait for a delivery, a start or an output again. -/
+def Restarted (c : SysState sys) (ev : Event σ) : Obligation σ → Prop
+  | .timeout i msg => .timeout i msg ∈ c.arms ev
+  | .deliver _ | .start _ | .output _ => False
+
 end Obligation
+
+namespace Effect
+
+variable {i : σ.Id} {effs : List (Effect σ i)}
+
+/-- Effects arm a timer when `after` with its message is among them. -/
+theorem mem_timeouts {msg : σ.Msg i} :
+    Event.timeout i msg ∈ timeouts i effs ↔ ∃ delay_ms, after delay_ms msg ∈ effs := by
+  simp only [timeouts, List.mem_filterMap]
+  constructor
+  · rintro ⟨eff, heff, h⟩
+    cases eff <;> simp_all
+    exact ⟨_, heff⟩
+  · rintro ⟨delay_ms, h⟩
+    exact ⟨_, h, rfl⟩
+
+/-- The effects of an actor arm that actor's timers. -/
+theorem eq_of_mem_timeouts {e : Event σ} (h : e ∈ timeouts i effs) : ∃ msg, e = .timeout i msg := by
+  obtain ⟨eff, -, heff⟩ := List.mem_filterMap.mp h
+  cases eff <;> simp_all [eq_comm]
+
+end Effect
+
+/-- An event arms timers of the actor that takes the step, and of no other. -/
+theorem SysState.actor?_of_mem_arms {sys : System σ} {c : SysState sys} {ev e : Event σ}
+    (h : e ∈ c.arms ev) : ∃ i msg, e = .timeout i msg ∧ ev.actor? = some i := by
+  cases ev with
+  | deliver _ | duplicate _ | timeout _ _ | start _ =>
+    obtain ⟨msg, rfl⟩ := Effect.eq_of_mem_timeouts h
+    exact ⟨_, msg, rfl, rfl⟩
+  | input _ | drop _ | output _ | crash _ => exact absurd h List.not_mem_nil
+
+/-- A step restarts an obligation exactly when it arms the timer that the obligation fires. -/
+theorem Obligation.restarted_iff_mem_arms {sys : System σ} {c : SysState sys} {ev : Event σ}
+    {ob : Obligation σ} : ob.Restarted c ev ↔ ob.event ∈ c.arms ev := by
+  cases ob with
+  | timeout i msg => rfl
+  | deliver _ | start _ | output _ =>
+    refine iff_of_false id fun h => ?_
+    obtain ⟨_, _, h, -⟩ := SysState.actor?_of_mem_arms h
+    cases h
+
+/-- Fills in the premise `quiet` of the leads-to rule for an obligation that is not a timer:
+no step restarts it. -/
+macro "never_restarted" : tactic =>
+  `(tactic| first
+    | (intros; exact False.elim (by assumption))
+    | fail "a step that arms this timer restarts it: give the premise `quiet`")
 
 namespace System
 
@@ -163,27 +229,49 @@ theorem reachable (r : sys.Run env) (n : ℕ) : sys.Reachable env (r.state n) :=
     | none => exact step_none h ▸ ih
     | some ev => exact .step ev ih (step_some h)
 
-/-- Weak fairness of a set of obligations: if from some position on one of them is due at every
-position, then one of them is taken at that position or a later one. -/
+/-- The step taken at position `n` starts the wait for `ob` again. -/
+def Restarts (r : sys.Run env) (n : ℕ) (ob : Obligation σ) : Prop :=
+  ∃ ev, r.event n = some ev ∧ ob.Restarted (r.state n) ev
+
+/-- Weak fairness of a set of obligations: if from some position on, at every position one of
+them is due and the step taken there does not restart it, then one of them is taken at that
+position or a later one. -/
 def WeakFair (r : sys.Run env) (obs : Set (Obligation σ)) : Prop :=
-  ∀ n, (∀ m, n ≤ m → ∃ ob ∈ obs, ob.Due env (r.state m)) →
+  ∀ n, (∀ m, n ≤ m → ∃ ob ∈ obs, ob.Due env (r.state m) ∧ ¬r.Restarts m ob) →
     ∃ m, n ≤ m ∧ ∃ ob ∈ obs, r.event m = some ob.event
 
 /-- A fair run is weakly fair to each obligation on its own. -/
 def Fair (r : sys.Run env) : Prop :=
   ∀ ob : Obligation σ, r.WeakFair {ob}
 
-/-- In a fair run, an obligation that stays due is taken. -/
+/-- Fairness, without the sets: an obligation that stays due and is not restarted is taken. -/
+theorem fair_iff : r.Fair ↔ ∀ (ob : Obligation σ) (n : ℕ),
+    (∀ m, n ≤ m → ob.Due env (r.state m) ∧ ¬r.Restarts m ob) →
+      ∃ m, n ≤ m ∧ r.event m = some ob.event := by
+  simp [Fair, WeakFair]
+
+/-- In a fair run, an obligation that stays due and is not restarted is taken. -/
 theorem Fair.taken (hfair : r.Fair) {ob : Obligation σ}
-    (hdue : ∀ m, n ≤ m → ob.Due env (r.state m)) : ∃ m, n ≤ m ∧ r.event m = some ob.event := by
-  obtain ⟨m, hm, _, rfl, hev⟩ := hfair ob n fun m hm => ⟨ob, rfl, hdue m hm⟩
-  exact ⟨m, hm, hev⟩
+    (hdue : ∀ m, n ≤ m → ob.Due env (r.state m)) (hquiet : ∀ m, n ≤ m → ¬r.Restarts m ob) :
+    ∃ m, n ≤ m ∧ r.event m = some ob.event :=
+  fair_iff.mp hfair ob n fun m hm => ⟨hdue m hm, hquiet m hm⟩
+
+/-- A run that takes every obligation that stays due, a timer that is armed again and again
+included. The runtime's runs are not like this: an actor that keeps arming a timer again keeps
+it from firing. -/
+def Impatient (r : sys.Run env) : Prop :=
+  ∀ (ob : Obligation σ) (n : ℕ), (∀ m, n ≤ m → ob.Due env (r.state m)) →
+    ∃ m, n ≤ m ∧ r.event m = some ob.event
+
+/-- Fairness asks less than firing every timer that stays pending. -/
+theorem Impatient.fair (h : r.Impatient) : r.Fair :=
+  fair_iff.mpr fun ob n hdue => h ob n fun m hm => (hdue m hm).1
 
 /-- In a fair run, an emitted output is eventually handed over. -/
 theorem Fair.output_taken (hfair : r.Fair) {out : σ.Out} (hout : out ∈ (r.state n).outbox) :
     ∃ m, n ≤ m ∧ r.event m = some (.output out) := by
   by_contra hnever
-  refine hnever (hfair.taken (ob := .output out) fun m hm => ?_)
+  refine hnever (hfair.taken (ob := .output out) (fun m hm => ?_) fun _ _ ⟨_, _, h⟩ => h)
   induction m, hm using Nat.le_induction with
   | base => exact hout
   | succ m hm ih =>
@@ -216,14 +304,20 @@ state satisfying `P` and not yet `Q`:
 
 - `step`: every step keeps `P` or reaches `Q`;
 - `due`: the obligation `ob` is due;
-- `progress`: taking `ob` reaches `Q`.
+- `progress`: taking `ob` reaches `Q`;
+- `quiet`: no step restarts `ob`, unless it reaches `Q`. Only a timer can be restarted, by a
+  step of its actor that arms it, so for any other obligation there is nothing to show and
+  the premise is filled in.
 
-Then `P` leads to `Q`: `P` holds until `Q` does, so `ob` stays due, so a fair run takes it.
+Then `P` leads to `Q`: `P` holds until `Q` does, so `ob` stays due and is left to wait, so a
+fair run takes it.
 -/
 theorem ensures_of_invariant (hI : sys.Invariant env I) (ob : Obligation σ)
     (step : ∀ c ev c', I c → P c → ¬Q c → c.step env ev = some c' → P c' ∨ Q c')
     (due : ∀ c, I c → P c → ¬Q c → ob.Due env c)
-    (progress : ∀ c c', I c → P c → ¬Q c → c.step env ob.event = some c' → Q c') :
+    (progress : ∀ c c', I c → P c → ¬Q c → c.step env ob.event = some c' → Q c')
+    (quiet : ∀ c ev c', I c → P c → ¬Q c → c.step env ev = some c' → ob.Restarted c ev → Q c' := by
+      never_restarted) :
     sys.LeadsTo env P Q := by
   intro r hfair n hP
   by_contra hnever
@@ -237,8 +331,11 @@ theorem ensures_of_invariant (hI : sys.Invariant env I) (ob : Obligation σ)
       | some ev =>
         exact (step _ ev _ (hI _ (r.reachable m)) ih (hQ m hm) (Run.step_some hev)).resolve_right
           (hQ (m + 1) (by omega))
-  obtain ⟨m, hm, hev⟩ := hfair.taken fun m hm =>
-    due _ (hI _ (r.reachable m)) (hP m hm) (hQ m hm)
+  have hquiet (m : ℕ) (hm : n ≤ m) : ¬r.Restarts m ob := fun ⟨ev, hev, hrestarted⟩ =>
+    hQ (m + 1) (by omega)
+      (quiet _ ev _ (hI _ (r.reachable m)) (hP m hm) (hQ m hm) (Run.step_some hev) hrestarted)
+  obtain ⟨m, hm, hev⟩ := hfair.taken
+    (fun m hm => due _ (hI _ (r.reachable m)) (hP m hm) (hQ m hm)) hquiet
   exact hQ (m + 1) (by omega)
     (progress _ _ (hI _ (r.reachable m)) (hP m hm) (hQ m hm) (Run.step_some hev))
 
@@ -246,10 +343,13 @@ theorem ensures_of_invariant (hI : sys.Invariant env I) (ob : Obligation σ)
 theorem ensures (ob : Obligation σ)
     (step : ∀ c ev c', P c → ¬Q c → c.step env ev = some c' → P c' ∨ Q c')
     (due : ∀ c, P c → ¬Q c → ob.Due env c)
-    (progress : ∀ c c', P c → ¬Q c → c.step env ob.event = some c' → Q c') :
+    (progress : ∀ c c', P c → ¬Q c → c.step env ob.event = some c' → Q c')
+    (quiet : ∀ c ev c', P c → ¬Q c → c.step env ev = some c' → ob.Restarted c ev → Q c' := by
+      never_restarted) :
     sys.LeadsTo env P Q :=
   ensures_of_invariant (I := fun _ => True) (fun _ _ => trivial) ob
     (fun c ev c' _ => step c ev c') (fun c _ => due c) (fun c c' _ => progress c c')
+    (fun c ev c' _ => quiet c ev c')
 
 /-- What already holds is reached at once. -/
 theorem of_imp (h : ∀ c, P c → Q c) : sys.LeadsTo env P Q :=

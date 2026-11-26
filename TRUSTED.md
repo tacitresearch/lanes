@@ -70,7 +70,10 @@ proved in `Lanes/Http/GateSound.lean` to answer each arrival at most once and mo
   due timer may wait for one message, and the oldest message for one timer. No bound is proved
   for a message that is not the oldest, or from the start of a receiver to its delivery.
   Liveness theorems are stated of fair runs of the semantics (`System.Run.Fair`); that the
-  runtime's runs are fair is this assumption, not a theorem.
+  runtime's runs are fair is this assumption, not a theorem. Fairness asks of a timer what the
+  kernel does: one that stays pending and is not armed again fires, and one that is armed
+  again starts its delay again, so a liveness theorem does not assume that a timer fires
+  while its actor keeps arming it.
 - **What the gate guarantees, and under what.** *At most once* is proved. In every run of
   `gated sys`, for every system, bridge and configuration, no request id is output more often
   than it was input (`Http.answered_le_arrived`). The environment may crash and restart every

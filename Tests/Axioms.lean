@@ -5,6 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import Lanes.Semantics
 import Examples.BankProofs
 import Examples.ElectionProofs
+import Examples.WatchdogProofs
 
 /-!
 The axiom gate (rule 5.5). Each headline theorem may depend only on Lean's three standard
@@ -36,6 +37,9 @@ by `lake build`, not linked into the test executable.
 /-- info: 'Lanes.System.Run.Fair.output_taken' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Run.Fair.output_taken
 
+/-- info: 'Lanes.System.Run.Impatient.fair' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Run.Impatient.fair
+
 /-- info: 'Lanes.System.Run.fairAfter_fair' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Run.fairAfter_fair
 
@@ -51,6 +55,9 @@ by `lake build`, not linked into the test executable.
 /-- info: 'Lanes.System.LeadsTo.reachable' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.LeadsTo.reachable
 
+/-- info: 'Lanes.Http.deadline_not_restarted' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.deadline_not_restarted
+
 /-- info: 'Lanes.Http.pending_leaves' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.pending_leaves
 
@@ -59,6 +66,12 @@ by `lake build`, not linked into the test executable.
 
 /-- info: 'Lanes.Http.pending_answered' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.pending_answered
+
+/-- info: 'Examples.Watchdog.exists_fair_run_never_barks' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Examples.Watchdog.exists_fair_run_never_barks
+
+/-- info: 'Examples.Watchdog.impatient_barks' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Examples.Watchdog.impatient_barks
 
 /-- info: 'Lanes.Html.escape_safe' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Html.escape_safe

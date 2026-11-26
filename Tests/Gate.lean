@@ -58,7 +58,7 @@ def get (path : List String) : Request := { method := .get, path }
 
 abbrev GatedWorld (config : GateConfig) := World (gated (Server.system echo) bridge config) Client
 
-/-- The ingredients of `Http.pending_leaves`, which the checker cannot check as a whole: the
+/-- Ingredients of `Http.pending_leaves`, which the checker cannot check as a whole: the
 deadline of a pending request is enabled while the gate is up, and firing it removes the
 request. -/
 def deadlinesFire {config : GateConfig} (env : EnvModel (gatedSig echoSig))
@@ -69,9 +69,16 @@ def deadlinesFire {config : GateConfig} (env : EnvModel (gatedSig echoSig))
       | some c => !(c.state none).contains id
       | none => false
 
-/-- With this the gate never arms a deadline that is already armed. Doing so would start the
-delay again in the runtime and change nothing in the semantics, and the fairness that
-`Http.pending_leaves` assumes of the deadline would not describe the runtime. -/
+/-- The fourth ingredient of `Http.pending_leaves`: while the gate is up, no delivery and no
+timer arms the deadline of a pending request again. The runtime would start its delay again,
+and fairness obliges a timer to fire only if it is left alone. -/
+def deadlinesLeftAlone {config : GateConfig} (w : GatedWorld config) : Bool :=
+  let leaves (ev : Event (gatedSig echoSig)) : Bool :=
+    (w.state.state none).all fun id => !(w.state.arms ev).contains (.timeout none (.expire id))
+  !w.state.up none ||
+    (w.state.net.all fun e => leaves (.deliver e))
+      && (w.state.timers none).all fun msg => leaves (.timeout none msg)
+
 def deadlinesOfPending {config : GateConfig} (w : GatedWorld config) : Bool :=
   (w.state.timers none).all fun
     | .expire id => (w.state.state none).contains id
@@ -105,6 +112,7 @@ def check (config : GateConfig) (requests : List (ReqId × Request)) (mustSee : 
       .always "a pending request's deadline can fire, and firing it removes the request"
         (deadlinesFire env),
       .always "an armed deadline is that of a pending request" deadlinesOfPending,
+      .always "no step arms a pending request's deadline again" deadlinesLeftAlone,
       .sometimes "a request is pending while the gate is up" pendingWhileUp ]
     { checkDeadlock := true
       terminal := fun w => w.driver.toSend.isEmpty
@@ -138,6 +146,7 @@ def checkArrivals (requests : List (ReqId × Request)) (env : EnvModel (gatedSig
       .always "a pending request's deadline can fire, and firing it removes the request"
         (deadlinesFire env),
       .always "an armed deadline is that of a pending request" deadlinesOfPending,
+      .always "no step arms a pending request's deadline again" deadlinesLeftAlone,
       .sometimes "a request is pending while the gate is up" pendingWhileUp,
       .sometimes "an id that arrived twice is answered twice" fun w =>
         w.driver.answered.countP (·.1 == 1) == 2 ]
@@ -177,7 +186,7 @@ def tests : List (String × Bool) :=
       | some (.violated "no request is answered more often than it arrived" _) => true
       | _ => false),
     ("gate: a pending request's deadline can fire and firing it removes the request, with and "
-        ++ "without faults; a gate that cannot crash stays up; deadlines are armed once",
+        ++ "without faults; a gate that cannot crash stays up; no step arms a deadline again",
       two.ok && two.complete && full.ok && full.complete && lossy.ok && lossy.complete),
     ("gate: a request leaves the pending list only in a step that emits its answer",
       leavingIsAnswered) ]

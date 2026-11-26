@@ -15,11 +15,12 @@ the other half for a request the gate has admitted: it is answered, for every sy
 gate, every bridge and every configuration, in every environment that does not crash the gate.
 
 The obligation that makes it true is the request's deadline. While the request waits its
-`expire` timer is armed (`deadlines_armed`), the gate stays up, and firing the timer removes the
-request. So whatever the system behind the gate does or fails to do, the request stops waiting
-(`pending_leaves`). A request stops waiting only in a step that emits its answer
-(`answered_of_leaves`), and an emitted answer is handed over (`System.Run.Fair.output_taken`).
-Together: every admitted request is answered (`pending_answered`).
+`expire` timer is armed (`deadlines_armed`), the gate stays up, no step arms the timer again
+(`deadline_not_restarted`), and firing the timer removes the request. So whatever the system
+behind the gate does or fails to do, the request stops waiting (`pending_leaves`). A request
+stops waiting only in a step that emits its answer (`answered_of_leaves`), and an emitted
+answer is handed over (`System.Run.Fair.output_taken`). Together: every admitted request is
+answered (`pending_answered`).
 
 The gate must not crash. Without that the statement is false: the gate crashes after admitting
 a request, nothing obliges anyone to start an actor that has no mail, and the request waits in
@@ -29,6 +30,8 @@ yet.
 
 ## Main statements
 
+- `deadline_not_restarted`: no step arms the deadline of a waiting request again, so the
+  runtime does not start its delay again and fairness obliges it to fire.
 - `pending_leaves`: a request waiting in the gate leads to that request no longer waiting.
 - `answered_of_leaves`: the step in which a request stops waiting emits an answer to it.
 - `pending_answered`: in a fair run, an answer to a waiting request is eventually handed over.
@@ -53,8 +56,47 @@ theorem gate_stays_up (hcrash : env.mayCrash none = false)
     (hup : c.up none = true) (hstep : c.step env ev = some c') : c'.up none = true :=
   SysState.up_of_step hcrash (fun pending msg => gate_never_stops pending msg) hup hstep
 
+/-- No step starts the deadline of a waiting request again. The gate arms a deadline in two
+places: when it admits a request, which was not waiting, and when it starts, which it cannot do
+while it is up. No other actor arms a timer of the gate. -/
+theorem deadline_not_restarted {c c' : SysState (gated sys bridge config)}
+    {ev : Event (gatedSig σ)} {id : ReqId} (hup : c.up none = true)
+    (hid : id ∈ (c.state none : List ReqId)) (hstep : c.step env ev = some c') :
+    ¬(Obligation.timeout (σ := gatedSig σ) none (.expire id)).Restarted c ev := by
+  have hgate (msg : GateMsg σ) :
+      Event.timeout (σ := gatedSig σ) none (.expire id) ∉
+        Effect.timeouts none ((gate sys bridge config).step (c.state none) msg).2 := by
+    rw [Effect.mem_timeouts]
+    cases msg <;> simp only [gate] <;> repeat' split
+    all_goals simp
+    rintro rfl
+    contradiction
+  have hinner (j : σ.Id) (effs : List (Effect (gatedSig σ) (some j))) :
+      Event.timeout (σ := gatedSig σ) none (.expire id) ∉ Effect.timeouts (some j) effs := by
+    intro h
+    obtain ⟨_, h⟩ := Effect.eq_of_mem_timeouts h
+    cases h
+  cases ev with
+  | deliver e | duplicate e =>
+    obtain ⟨src, dst, msg⟩ := e
+    cases dst with
+    | none => exact hgate msg
+    | some j => exact hinner j _
+  | timeout i msg =>
+    cases i with
+    | none => exact hgate msg
+    | some j => exact hinner j _
+  | start i =>
+    cases i with
+    | none =>
+      obtain ⟨hdown, -⟩ := SysState.step_start.mp hstep
+      simp [hup] at hdown
+    | some j => exact hinner j _
+  | input _ | drop _ | output _ | crash _ => exact List.not_mem_nil
+
 /-- A request waiting in the gate is eventually no longer waiting, whatever is behind the gate,
-in any environment that does not crash the gate: its deadline is armed, and fires. -/
+in any environment that does not crash the gate: its deadline is armed, is not armed again,
+and fires. -/
 theorem pending_leaves (sys : System σ) (bridge : Bridge σ) (config : GateConfig)
     (hcrash : env.mayCrash none = false) (id : ReqId) :
     (gated sys bridge config).LeadsTo env
@@ -62,6 +104,7 @@ theorem pending_leaves (sys : System σ) (bridge : Bridge σ) (config : GateConf
       (fun c => id ∉ (c.state none : List ReqId)) := by
   refine System.LeadsTo.ensures_of_invariant
     (I := fun c => Armed c ∧ List.Nodup (c.state none)) ?_ (.timeout none (.expire id)) ?_ ?_ ?_
+    ?_
   · exact fun c hc => ⟨deadlines_armed sys bridge config env c hc,
       (System.invariant_of_actor _ none (gate_bounded sys bridge config) env c hc).2⟩
   · intro c ev c' _ ⟨hup, _⟩ _ hstep
@@ -72,6 +115,8 @@ theorem pending_leaves (sys : System σ) (bridge : Bridge σ) (config : GateConf
   · intro c c' ⟨_, hnodup⟩ ⟨_, hid⟩ _ hstep
     obtain ⟨_, _, rfl⟩ := SysState.step_timeout.mp hstep
     simp [gate, hid, hnodup.mem_erase_iff]
+  · exact fun c ev c' _ ⟨hup, hid⟩ _ hstep hrestarted =>
+      absurd hrestarted (deadline_not_restarted hup hid hstep)
 
 /-- A step of the gate in which `id` stops waiting emits an answer to `id`. -/
 private theorem answered_of_leaves_gate {c : SysState (gated sys bridge config)} {id : ReqId}
