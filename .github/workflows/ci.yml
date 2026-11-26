@@ -18,14 +18,21 @@ jobs:
         with:
           build-args: "--wfail"
           test: false
+      # Also fails on a stale generated file (line counts, the decisions' index, docs/STATUS.md),
+      # and on main on a decision without a number: run `lake exe lanes lint --fix --main`.
       - name: Lint
-        run: lake exe lanes lint
+        run: lake exe lanes lint ${{ github.event_name == 'push' && '--main' || '' }}
+      - name: lanes lint --fix changes nothing
+        run: |
+          lake exe lanes lint --fix
+          git diff --exit-code
       - name: Test
         run: lake test
       - name: Model checks
         run: lake exe lanesCheck
       - name: Generated app builds and passes its checks
         run: |
+          rm -f .lake/build/lib/lean/LanesCli/New.* .lake/build/ir/LanesCli/New.*
           lake exe lanes new demo-app --dir "$RUNNER_TEMP/demo-app" --lanes-path "$GITHUB_WORKSPACE"
           cd "$RUNNER_TEMP/demo-app"
           mkdir -p .lake && ln -s "$GITHUB_WORKSPACE/.lake/packages" .lake/packages

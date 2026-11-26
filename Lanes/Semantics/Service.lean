@@ -15,7 +15,9 @@ public import Mathlib.Data.Multiset.AddSub
 `Service.spec` turns a sequential `Service` into the transition system a concurrent
 implementation must refine: inputs arrive and wait, each takes effect atomically at some later
 moment, and its outputs wait to be delivered. Arrival and delivery are the visible steps; taking
-effect is internal. `System.Implements` is refinement to that spec. For a service of operations
+effect is internal. A deadline passing is visible too, and takes effect at that moment, so a
+pending input may take effect before or after it. `System.Implements` is refinement to that
+spec, with the system's timers that are the deadlines firing them. For a service of operations
 and responses it is linearizability, stated as a refinement.
 
 Waiting inputs and outputs are multisets here: their order is not observable. `Lanes.Check`
@@ -36,40 +38,42 @@ runs the same definition on lists (`Service.State`).
 
 namespace Lanes
 
-variable {σ : Signature} {S : Type}
+variable {In Out S T : Type} [DecidableEq In] [DecidableEq Out]
 
 namespace Service
 
 /-- The state of a service used concurrently. -/
-structure Abs (σ : Signature) (S : Type) where
+structure Abs (In Out S : Type) where
   /-- The state of the sequential spec. -/
   value : S
   /-- Inputs that have arrived and not yet taken effect. -/
-  pending : Multiset σ.In
+  pending : Multiset In
   /-- Outputs produced and not yet delivered. -/
-  outbox : Multiset σ.Out
+  outbox : Multiset Out
 
 /--
 The transition system of a service: an input arrives (visible), a pending input takes effect
-(internal), an output is delivered (visible).
+(internal), an output is delivered (visible), an armed deadline passes (visible).
 -/
-def spec (svc : Service σ S) : Spec (Abs σ S) (Option (Visible σ)) where
+def spec (svc : Service In Out S T) : Spec (Abs In Out S) (Option (Visible In Out T)) where
   init st := st = ⟨svc.init, 0, 0⟩
   Tr st label st' :=
     match label with
     | some (.input x) => st' = { st with pending := x ::ₘ st.pending }
     | some (.output out) => out ∈ st.outbox ∧ st' = { st with outbox := st.outbox.erase out }
+    | some (.fire t) => svc.armed st.value t = true ∧
+        st' = ⟨(svc.fire st.value t).1, st.pending, st.outbox + (svc.fire st.value t).2⟩
     | none => ∃ x ∈ st.pending,
         st' = ⟨(svc.step st.value x).1, st.pending.erase x, st.outbox + (svc.step st.value x).2⟩
 
 /-- `P` survives any pending input taking effect: the spec's internal steps keep it. -/
-def Stable (svc : Service σ S) (P : Abs σ S → Prop) : Prop :=
+def Stable (svc : Service In Out S T) (P : Abs In Out S → Prop) : Prop :=
   ∀ a x, x ∈ a.pending → P a →
     P ⟨(svc.step a.value x).1, a.pending.erase x, a.outbox + (svc.step a.value x).2⟩
 
 /-- What every pending input taking effect keeps, any number of internal steps keep. -/
-theorem Stable.τSTr {svc : Service σ S} {P : Abs σ S → Prop} (hP : svc.Stable P)
-    {a b : Abs σ S} (h : svc.spec.lts.τSTr a b) (ha : P a) : P b := by
+theorem Stable.τSTr {svc : Service In Out S T} {P : Abs In Out S → Prop} (hP : svc.Stable P)
+    {a b : Abs In Out S} (h : svc.spec.lts.τSTr a b) (ha : P a) : P b := by
   induction h with
   | refl => exact ha
   | tail _ htr ih =>
@@ -78,9 +82,9 @@ theorem Stable.τSTr {svc : Service σ S} {P : Abs σ S → Prop} (hP : svc.Stab
 
 /-- A visible step of the spec, with internal steps around it, from where `P` holds to where `Q`
 holds, when both are stable. This is how a trace is followed one label at a time. -/
-theorem Stable.sTr {svc : Service σ S} {P Q : Abs σ S → Prop} {e : Visible σ}
+theorem Stable.sTr {svc : Service In Out S T} {P Q : Abs In Out S → Prop} {e : Visible In Out T}
     (hP : svc.Stable P) (hQ : svc.Stable Q) (step : ∀ a b, P a → svc.spec.Tr a (some e) b → Q b)
-    {a b : Abs σ S} (h : svc.spec.lts.STr a (some e) b) (ha : P a) : Q b := by
+    {a b : Abs In Out S} (h : svc.spec.lts.STr a (some e) b) (ha : P a) : Q b := by
   generalize hμ : some e = μ at h
   cases h with
   | refl => cases hμ
@@ -92,29 +96,30 @@ end Service
 
 /--
 `sys` implements the service `svc` under `env`: everything a client can observe of the running
-system is a behaviour of the service with each input taking effect at one instant.
+system is a behaviour of the service with each input taking effect at one instant, and each
+timer `deadlines` names passing that deadline as it fires.
 -/
-abbrev System.Implements (sys : System σ) (env : EnvModel σ) (svc : Service σ S) : Prop :=
-  sys.Refines env svc.spec
+abbrev System.Implements {σ : Signature} (sys : System σ) (env : EnvModel σ)
+    (svc : Service σ.In σ.Out S T) (deadlines : Deadlines σ T := fun _ _ => none) : Prop :=
+  sys.Refines env svc.spec deadlines
 
 namespace Server
 
-variable {In Out : Type} [DecidableEq In] [DecidableEq Out]
-
 /-- How a server's state reads as a state of its service: the actor's state, the requests in
 its mailbox, and the outputs not yet handed over. -/
-def abs {svc : Service (sig In Out) S} (c : SysState (system svc)) : Service.Abs (sig In Out) S where
+def abs {svc : Service In Out S} (c : SysState (system svc)) : Service.Abs In Out S where
   value := c.state ()
   pending := (c.net.map fun e => (e.msg : In) : List In)
   outbox := (c.outbox : List Out)
 
 /-- What handling a request does: the service's step on the state, its outputs appended. -/
-theorem handle_eq (svc : Service (sig In Out) S) (env : EnvModel (sig In Out))
+theorem handle_eq (svc : Service In Out S) (env : EnvModel (sig In Out))
     (c : SysState (system svc)) (x : In) :
     c.handle env () x =
       { c with state := update c.state () (svc.step (c.state ()) x).1
                outbox := c.outbox ++ (svc.step (c.state ()) x).2 } := by
-  have h : ∀ s, (actor svc).step s x = ((svc.step s x).1, (svc.step s x).2.map .emit) :=
+  have h : ∀ s, (actor svc).step s x =
+      ((svc.step s x).1, (svc.step s x).2.map (Effect.emit (σ := sig In Out))) :=
     fun _ => rfl
   simp only [SysState.handle, SysState.settle, h]
   rw [SysState.any_isStop_emit]
@@ -125,7 +130,7 @@ A server implements the service it runs. Concurrent clients of `Server.system sv
 exactly the behaviours of `svc` applied one request at a time, in any environment that loses,
 duplicates and crashes nothing.
 -/
-theorem implements (svc : Service (sig In Out) S) (env : EnvModel (sig In Out))
+theorem implements (svc : Service In Out S) (env : EnvModel (sig In Out))
     (henv : env.Faultless) : (system svc).Implements env svc := by
   refine Refines.of_map abs (fun c => c.timers () = []) ?_ ?_ ?_
   · rintro c rfl
@@ -160,7 +165,7 @@ theorem implements (svc : Service (sig In Out) S) (env : EnvModel (sig In Out))
     | input x =>
       obtain rfl := SysState.step_input.mp hstep
       refine .inr ?_
-      simp [Event.visible, Service.spec, abs, ← Multiset.coe_add, add_comm]
+      simp [Service.spec, abs, ← Multiset.coe_add, add_comm]
     | deliver e =>
       obtain ⟨_, hdeliverable, rfl⟩ := SysState.step_deliver.mp hstep
       have hmem := SysState.mem_of_deliverable hdeliverable
@@ -184,7 +189,7 @@ theorem implements (svc : Service (sig In Out) S) (env : EnvModel (sig In Out))
     | output out =>
       obtain ⟨hmem, rfl⟩ := SysState.step_output.mp hstep
       refine .inr ?_
-      simp [Event.visible, Service.spec, abs, hmem]
+      simp [Service.spec, abs, hmem]
     | crash i =>
       obtain ⟨_, hcrash, _⟩ := SysState.step_crash.mp hstep
       simp [henv.noCrashes] at hcrash

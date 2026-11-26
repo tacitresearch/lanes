@@ -4,8 +4,8 @@ Lanes is a framework for building verified software in Lean 4: actors with pure 
 semantics, a model checker, proofs, and adapters. Read `docs/DESIGN.md` for the plan,
 `docs/STATUS.md` for what exists, `docs/ROADMAP.md` for the phases ahead, `docs/PLAN.md` for what
 is being done next and why, and
-`LANES_STYLE.md` for the rules. `docs/DECISIONS.md` records where the implementation settled or
-departed from the design document, with reasons.
+`LANES_STYLE.md` for the rules. `docs/decisions/` records where the implementation settled or
+departed from the design document, with reasons, one file per decision.
 
 ## Lanes rules for agents
 
@@ -24,8 +24,28 @@ lake exe cache get   # prebuilt Mathlib; never build Mathlib from source
 lake build           # the library
 lake test            # pure tests and live runtime tests, a few seconds
 lake exe lanesCheck  # larger model checks, random runs and the scale benchmark, about 20 s: run once, never in a loop
-lake exe lanes lint  # LANES_STYLE checks
+lake exe lanes lint  # LANES_STYLE checks, and that generated files are up to date
+lake exe lanes lint --fix  # rewrite the generated files: line counts, decisions' index, STATUS
 ```
+
+## Parallel branches
+
+Several agents work at once, each on a branch that is merged into the main branch. The layout
+gives independent changes disjoint files; keep it that way.
+
+- Commit after every step that builds.
+- Before reporting, merge the main branch and run the checks again.
+- A new decision is a new file `docs/decisions/new-<slug>.md` whose first line is
+  `# D?. Title`. Do not choose its number: `lake exe lanes lint --fix --main` numbers it on the
+  main branch after the merge.
+- A change of status goes in its area's fragment, `docs/status/areas/<area>.md` or
+  `docs/status/apps/<app>.md` (the row on the first line, the area's known limits after it).
+  `docs/STATUS.md` is generated; do not edit it.
+- An axiom gate goes in `Tests/Axioms/<Area>.lean`, under the line naming its module; a lemma
+  about lists at the end of its topic's file in `Lanes/Data/List/`.
+- Never type a count: the line counts in `TRUSTED.md` and `README.md` are written by
+  `lake exe lanes lint --fix`. A conflict in a generated file is resolved by taking either side
+  and running `lake exe lanes lint --fix`.
 
 The toolchain is pinned in `lean-toolchain` and follows CSLib's. Dependencies are pinned in
 `lake-manifest.json`; upgrade them deliberately, CSLib first.
@@ -35,8 +55,9 @@ The toolchain is pinned in `lean-toolchain` and follows CSLib's. Dependencies ar
 | Path | Contents | May import |
 | --- | --- | --- |
 | `Lanes/Actors/` | `Actor`, `Signature`, `Effect`, `System`, the world step function, scheduler, runtime | `Std` only |
-| `Lanes/Data/` | Small data utilities (`Enum`, list lemmas in `List`), codecs and `lanes_data` (`Codec`, `Declare`), the JSON library (`Json`), SHA-256, HMAC and PBKDF2 (`Sha256`, `Hmac`) | `Std` only |
+| `Lanes/Data/` | Small data utilities (`Enum`; lemmas about lists in `List/`, strings in `Utf8` and byte arrays in `ByteArray`), codecs and `lanes_data` (`Codec`, `Declare`), the JSON library (`Json`), SHA-256 and HMAC in Lean (`Sha256`, `Hmac`), the references of what `Sodium` binds from libsodium | `Std` only |
 | `Lanes/Auth/` | Signed tokens, form tokens, password digests, failed attempts, sessions | `Std` only |
+| `native/` | The C that binds libsodium and `fsync` (`lanes.c`), every line of it trusted and counted in `TRUSTED.md` | libsodium, the C library |
 | `Lanes/Check/` | Model checker | `Std` only |
 | `Lanes/Http/`, `Lanes/Html/` | HTTP requests and responses as data; HTML values and template syntax | `Std` only |
 | `Lanes/Env/` | Adapters to the outside world (HTTP server) | `Std` only |
@@ -124,7 +145,9 @@ A family of instances defined by cases on an identity, such as `∀ i, Decidable
 - Check before you prove: every invariant gets an `always` property and a `sometimes` vacuity
   check in a test before its proof is attempted (rules 5.1, 5.3).
 - A lemma that does not mention the system a proof is about does not stay in that proof's file,
-  private or not. Facts about lists go in `Lanes/Data/List.lean`; about `update`, `SysState`,
+  private or not. Facts about lists go in `Lanes/Data/List/`, at the end of the file of their
+  topic (`Erase`, `Prefix`, `Fold`, else `Basic`); about strings and byte arrays in
+  `Lanes/Data/Utf8.lean` and `Lanes/Data/ByteArray.lean`; about `update`, `SysState`,
   `run` and `Reachable` beside their definitions in `Lanes/Actors/World.lean`; a step or a run
   in closed form in `Lanes/Actors/Run.lean`; `NetEquiv` and `SysState.Equiv` in
   `Lanes/Actors/Equiv.lean`. Look there, and in core `List`, before proving a helper.
