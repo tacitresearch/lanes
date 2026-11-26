@@ -198,15 +198,8 @@ theorem Inductive.of_monotone {P : SysState sys → Prop} (env : EnvModel σ)
       P (c.grow i ((sys.actor i).step (c.state i) msg)))
     (recover : ∀ c i, P c → P (c.grow i ((sys.actor i).recover (c.state i)))) :
     sys.Inductive env P where
-  init := by
-    have hstart : ∀ c i, P c → P (c.startActor env i) := fun c i hc =>
-      below _ _ (recover c i hc) (Below.startActor c env i)
-    have hfold : ∀ (ids : List σ.Id) c, P c → P (ids.foldl (fun c i => c.startActor env i) c) := by
-      intro ids
-      induction ids with
-      | nil => exact fun _ h => h
-      | cons i ids ih => exact fun c hc => ih _ (hstart c i hc)
-    exact hfold _ _ blank
+  init := init_induction blank fun c i hc =>
+    below _ _ (recover c i hc) (Below.startActor c env i)
   step c ev c' hc hstep := by
     cases ev with
     | input x => obtain rfl := step_input.mp hstep; exact input c x hc

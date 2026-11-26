@@ -16,7 +16,8 @@ outputs waiting those that are shown. `SysState.run_filterMapIO` proves that eve
 `sys.filterMapIO input output` is a run of `sys`, event for event (`Event.AllUnder`): an input
 is the input it stands for, an output is an output of `sys` shown as it, and every other event
 is itself. So whatever is proved of every run of `sys` holds of it behind other inputs and outputs,
-and so do its invariants (`System.Invariant.filterMapIO`).
+and so do its invariants (`System.Invariant.filterMapIO`). `sys.mapIO input output` is
+`sys.filterMapIO input (some ∘ output)`, so all of this is about `mapIO` too.
 -/
 
 @[expose] public section
@@ -179,15 +180,8 @@ private theorem over_deliverable (c : SysState sys) (e : Envelope (σ.withIO In 
 
 private theorem over_init :
     (SysState.init sys env.under).over input output
-      = SysState.init (sys.filterMapIO input output) env := by
-  have hfold : ∀ (ids : List σ.Id) (c : SysState sys),
-      (ids.foldl (fun c i => c.startActor env.under i) c).over input output
-        = ids.foldl (fun c i => c.startActor env i) (c.over input output) := by
-    intro ids
-    induction ids with
-    | nil => exact fun _ => rfl
-    | cons i ids ih => exact fun c => by rw [List.foldl_cons, ih, over_startActor, List.foldl_cons]
-  exact hfold _ _
+      = SysState.init (sys.filterMapIO input output) env :=
+  (List.foldl_hom (SysState.over input output) fun c i => (over_startActor c i).symm).symm
 
 /-- One event of `sys.filterMapIO input output` is the event of `sys` it stands for. -/
 private theorem step_under {c : SysState sys} {ev : Event (σ.withIO In Out)}

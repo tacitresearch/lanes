@@ -1491,11 +1491,8 @@ private theorem init_swap (env : EnvModel (joinSig σ τ)) :
           (SysState.blank (b.join a w.swap))) := by
   have hfold : ∀ (l : List (σ.Id ⊕ τ.Id)) (c : SysState (a.join b w)),
       (l.foldl (fun c x => c.startActor env x) c).swap
-        = l.foldl (fun c x => c.startActor env.swap x.swap) c.swap := by
-    intro l
-    induction l with
-    | nil => exact fun _ => rfl
-    | cons x l ih => exact fun c => by rw [List.foldl_cons, ih, startActor_swap, List.foldl_cons]
+        = l.foldl (fun c x => c.startActor env.swap x.swap) c.swap := fun l c =>
+    (List.foldl_hom swap fun c x => (startActor_swap c x).symm).symm
   show (List.foldl (fun c x => c.startActor env x) (SysState.blank (a.join b w))
     (a.boot.map .inl ++ b.boot.map .inr)).swap = _
   rw [hfold, blank_swap, List.foldl_append, List.foldl_map, List.foldl_map]
