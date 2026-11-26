@@ -95,7 +95,8 @@ inductive Failure (S L : Type) where
 
 structure Report (S L : Type) where
   failure : Option (Failure S L)
-  /-- A shortest trace to a witness of each `sometimes` property that was reached. -/
+  /-- A shortest trace to a witness of each `sometimes` property that was reached, in the order
+  of the properties. -/
   witnesses : List (String × Trace S L)
   states : Nat
   /-- Transitions taken, counting those that lead to an already seen state. -/
@@ -144,15 +145,24 @@ def violation {S L : Type} (props : List (Property S)) (path : Path S L) : Optio
     | .always name holds => if holds path.last then none else some (.violated name path.toTrace)
     | .sometimes .. => none
 
-/-- Record `path` as the witness of each `sometimes` property that holds in its last state and
-has no witness yet. -/
+/-- The witness of `prop` once `path` has been seen, given the one `found` before. -/
+def witnessFor {S L : Type} (path : Path S L) (prop : Property S) (found : Option (Path S L)) :
+    Option (Path S L) :=
+  match prop, found with
+  | .sometimes _ holds, none => if holds path.last then some path else none
+  | _, found => found
+
+/-- Witnesses are kept one per property, in the order of `props`, and not by name: two
+`sometimes` properties with the same name each need their own. -/
 def witness {S L : Type} (props : List (Property S)) (path : Path S L)
-    (witnesses : List (String × Path S L)) : List (String × Path S L) :=
-  props.foldl (init := witnesses) fun ws prop =>
-    match prop with
-    | .sometimes name holds =>
-      if !ws.any (·.1 == name) && holds path.last then ws ++ [(name, path)] else ws
-    | .always .. => ws
+    (witnesses : List (Option (Path S L))) : List (Option (Path S L)) :=
+  List.zipWith (witnessFor path) props witnesses
+
+def unwitnessed {S L : Type} (props : List (Property S))
+    (witnesses : List (Option (Path S L))) : List (Property S) :=
+  (props.zip witnesses).filterMap fun
+    | (.sometimes name p, none) => some (.sometimes name p)
+    | _ => none
 
 /-- A stored state: the last state of `path`, first reached at `depth`. -/
 structure Visited (S L : Type) where
@@ -160,13 +170,13 @@ structure Visited (S L : Type) where
   depth : Nat
 
 /-- The state of a search. `queue` holds every stored state in the order found; those before
-`head` have been expanded. -/
+`head` have been expanded. `witnesses` has one entry per property. -/
 structure Search (S L : Type) [BEq S] [Hashable S] where
   queue : Array (Visited S L) := #[]
   seen : Std.HashSet S := {}
   head : Nat := 0
   failure : Option (Failure S L) := none
-  witnesses : List (String × Path S L) := []
+  witnesses : List (Option (Path S L))
   complete : Bool := true
   transitions : Nat := 0
   depth : Nat := 0
@@ -195,7 +205,9 @@ def addInit (props : List (Property S)) (opts : Options S) (st : Search S L) (s 
 
 def start (m : Model S L) (props : List (Property S)) (opts : Options S)
     (actions : List String) : Search S L :=
-  m.init.foldl (addInit props opts) { coverage := actions.foldl (fun c a => c.insert a 0) {} }
+  m.init.foldl (addInit props opts)
+    { witnesses := List.replicate props.length none
+      coverage := actions.foldl (fun c a => c.insert a 0) {} }
 
 /-- Take one transition from the last state of `parent`. -/
 def visit (props : List (Property S)) (opts : Options S) (labelName : L → String)
@@ -236,11 +248,11 @@ def report (props : List (Property S)) (st : Search S L) : Report S L where
     match st.failure with
     | some failure => some failure
     | none =>
-      let missing := props.filterMap fun
-        | .sometimes name _ => if st.witnesses.any (·.1 == name) then none else some name
-        | .always .. => none
-      if missing.isEmpty then none else some (.unreached missing)
-  witnesses := st.witnesses.map fun (name, path) => (name, path.toTrace)
+      let missing := unwitnessed props st.witnesses
+      if missing.isEmpty then none else some (.unreached (missing.map (·.name)))
+  witnesses := (props.zip st.witnesses).filterMap fun
+    | (.sometimes name _, some path) => some (name, path.toTrace)
+    | _ => none
   states := st.queue.size
   transitions := st.transitions
   depth := st.depth

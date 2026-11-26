@@ -15,13 +15,13 @@ What a `Check.Report` claims, proved of `Check.search`.
   model through states that satisfy the constraint, and ends in the state the report says it
   does. These hold for any `BEq` and `Hashable`, lawful or not, because a trace is made of the
   states that were stored.
-- `search_reached`: with no failure, the name of every `sometimes` property has a witness.
+- `search_reached`: with no failure, every `sometimes` property has a witness of its own.
 - `search_states_le`: at most `maxStates` states are stored.
 - `search_sound`: a complete search with no failure means every `always` property holds in
   every reachable state. This needs `==` on states to be an equivalence with a matching hash,
   and the model to respect it (`Model.Respects`). `search_sound_of_lawful` is the case where
   `==` is equality, which needs no hypothesis.
-- `search_unreached`, `search_deadlock_free`: the same for a `sometimes` property reported
+- `search_unreached`, `search_deadlock_free`: the same for the `sometimes` properties reported
   unreached and for the absence of deadlocks.
 
 The proofs follow the search's own structure. `Search.Sound` is preserved by every step and
@@ -111,63 +111,89 @@ theorem violation_eq_none {props : List (Property S)} {path : Path S L}
   have := List.findSome?_eq_none_iff.mp h _ hmem
   simpa using this
 
-theorem witness_cons (prop : Property S) (props : List (Property S)) (path : Path S L)
-    (ws : List (String × Path S L)) :
-    witness (prop :: props) path ws = witness props path (witness [prop] path ws) :=
-  rfl
+theorem witnessFor_eq_some {path q : Path S L} {prop : Property S} {found : Option (Path S L)}
+    (h : witnessFor path prop found = some q) :
+    found = some q ∨ q = path ∧ ∃ name p, prop = .sometimes name p ∧ p path.last = true := by
+  cases prop with
+  | always name p => exact .inl (by simpa [witnessFor] using h)
+  | sometimes name p =>
+    cases found with
+    | some _ => exact .inl (by simpa [witnessFor] using h)
+    | none =>
+      simp only [witnessFor] at h
+      split at h
+      · rename_i hp
+        exact .inr ⟨(Option.some.inj h).symm, name, p, rfl, hp⟩
+      · simp at h
 
-theorem mem_witness {props : List (Property S)} {path : Path S L} {ws : List (String × Path S L)}
-    {w : String × Path S L} (h : w ∈ witness props path ws) :
-    w ∈ ws ∨ w.2 = path ∧ ∃ p, .sometimes w.1 p ∈ props ∧ p path.last = true := by
+theorem witnessFor_eq_none {path : Path S L} {prop : Property S} {found : Option (Path S L)}
+    (h : witnessFor path prop found = none) :
+    found = none ∧ ∀ name p, prop = .sometimes name p → p path.last = false := by
+  cases prop with
+  | always name p => exact ⟨by simpa [witnessFor] using h, fun _ _ hprop => by simp at hprop⟩
+  | sometimes name p =>
+    cases found with
+    | some _ => simp [witnessFor] at h
+    | none =>
+      refine ⟨rfl, fun name' p' hprop => ?_⟩
+      obtain ⟨-, rfl⟩ := Property.sometimes.inj hprop
+      simpa [witnessFor] using h
+
+theorem getElem?_witness_some {props : List (Property S)} {path q : Path S L}
+    {ws : List (Option (Path S L))} {i : Nat} (h : (witness props path ws)[i]? = some (some q)) :
+    ws[i]? = some (some q) ∨
+      q = path ∧ ∃ name p, props[i]? = some (.sometimes name p) ∧ p path.last = true := by
+  obtain ⟨prop, found, hprop, hfound, hfor⟩ := List.getElem?_zipWith_eq_some.mp h
+  rcases witnessFor_eq_some hfor with rfl | ⟨rfl, name, p, rfl, hp⟩
+  · exact .inl hfound
+  · exact .inr ⟨rfl, name, p, hprop, hp⟩
+
+theorem getElem?_witness_none {props : List (Property S)} {path : Path S L}
+    {ws : List (Option (Path S L))} {i : Nat} (h : (witness props path ws)[i]? = some none) :
+    ws[i]? = some none ∧
+      ∀ name p, props[i]? = some (.sometimes name p) → p path.last = false := by
+  obtain ⟨prop, found, hprop, hfound, hfor⟩ := List.getElem?_zipWith_eq_some.mp h
+  obtain ⟨rfl, hfalse⟩ := witnessFor_eq_none hfor
+  exact ⟨hfound, fun name p hp => hfalse name p (Option.some.inj (hprop.symm.trans hp))⟩
+
+theorem mem_zip_iff_getElem? {α β : Type} {as : List α} {bs : List β} {a : α} {b : β} :
+    (a, b) ∈ as.zip bs ↔ ∃ i : Nat, as[i]? = some a ∧ bs[i]? = some b := by
+  simp [List.mem_iff_getElem?, List.getElem?_zip_eq_some]
+
+theorem mem_unwitnessed {props : List (Property S)} {ws : List (Option (Path S L))}
+    {prop : Property S} :
+    prop ∈ unwitnessed props ws ↔
+      ∃ (i : Nat) (name : String) (p : S → Bool),
+        prop = .sometimes name p ∧ props[i]? = some prop ∧ ws[i]? = some none := by
+  simp only [unwitnessed, List.mem_filterMap]
+  constructor
+  · rintro ⟨⟨prop', found⟩, hmem, h⟩
+    obtain ⟨i, hprop, hfound⟩ := mem_zip_iff_getElem?.mp hmem
+    cases prop' with
+    | always _ _ => simp at h
+    | sometimes name p =>
+      cases found with
+      | some _ => simp at h
+      | none =>
+        obtain rfl := Option.some.inj h
+        exact ⟨i, name, p, rfl, hprop, hfound⟩
+  · rintro ⟨i, name, p, rfl, hprop, hfound⟩
+    exact ⟨(_, none), mem_zip_iff_getElem?.mpr ⟨i, hprop, hfound⟩, rfl⟩
+
+theorem unwitnessed_sublist (props : List (Property S)) (ws : List (Option (Path S L))) :
+    (unwitnessed props ws).Sublist props := by
   induction props generalizing ws with
-  | nil => exact .inl h
+  | nil => simp [unwitnessed]
   | cons prop props ih =>
-    rw [witness_cons] at h
-    rcases ih h with h | ⟨hpath, p, hmem, hp⟩
-    · cases prop with
-      | always name p => exact .inl h
+    cases ws with
+    | nil => simp [unwitnessed]
+    | cons found ws =>
+      cases prop with
+      | always name p => exact (ih ws).cons _
       | sometimes name p =>
-        simp only [witness, List.foldl_cons, List.foldl_nil] at h
-        split at h
-        · rename_i hcond
-          rcases List.mem_append.mp h with h | h
-          · exact .inl h
-          · obtain rfl := List.mem_singleton.mp h
-            exact .inr ⟨rfl, p, List.mem_cons_self, by simp_all⟩
-        · exact .inl h
-    · exact .inr ⟨hpath, p, List.mem_cons_of_mem _ hmem, hp⟩
-
-theorem witness_any_of_any {props : List (Property S)} {path : Path S L}
-    {ws : List (String × Path S L)} {name : String} (h : ws.any (·.1 == name) = true) :
-    (witness props path ws).any (·.1 == name) = true := by
-  induction props generalizing ws with
-  | nil => exact h
-  | cons prop props ih =>
-    rw [witness_cons]
-    apply ih
-    cases prop with
-    | always _ _ => exact h
-    | sometimes name' p =>
-      simp only [witness, List.foldl_cons, List.foldl_nil]
-      split
-      · simp [List.any_append, h]
-      · exact h
-
-theorem witness_any {props : List (Property S)} {path : Path S L}
-    {ws : List (String × Path S L)} {name : String} {p : S → Bool}
-    (hmem : .sometimes name p ∈ props) (hp : p path.last = true) :
-    (witness props path ws).any (·.1 == name) = true := by
-  induction props generalizing ws with
-  | nil => simp at hmem
-  | cons prop props ih =>
-    rw [witness_cons]
-    rcases List.mem_cons.mp hmem with rfl | hmem
-    · apply witness_any_of_any
-      simp only [witness, List.foldl_cons, List.foldl_nil]
-      split
-      · simp [List.any_append]
-      · simp_all
-    · exact ih hmem
+        cases found with
+        | some _ => exact (ih ws).cons _
+        | none => exact (ih ws).cons_cons _
 
 /-- What the search itself may report: a trace that is a path of the model, within the
 constraint, to a state that violates the property or is stuck. -/
@@ -191,10 +217,12 @@ variable [BEq S] [Hashable S] {m : Model S L} {props : List (Property S)} {opts 
 structure Sound (m : Model S L) (props : List (Property S)) (opts : Options S)
     (st : Search S L) : Prop where
   queue : ∀ v ∈ st.queue, v.path.Valid m opts.constraint
-  witnesses : ∀ w ∈ st.witnesses,
-    w.2.Valid m opts.constraint ∧ ∃ p, .sometimes w.1 p ∈ props ∧ p w.2.last = true
+  witnesses : ∀ (i : Nat) path, st.witnesses[i]? = some (some path) →
+    path.Valid m opts.constraint ∧
+      ∃ name p, props[i]? = some (.sometimes name p) ∧ p path.last = true
   failure : ∀ f, st.failure = some f → f.Found m props opts
   size : st.queue.size ≤ opts.maxStates
+  slots : st.witnesses.length = props.length
 
 theorem Sound.add (h : st.Sound m props opts) {path : Path S L}
     (hpath : path.Valid m opts.constraint) (depth : Nat) :
@@ -203,18 +231,19 @@ theorem Sound.add (h : st.Sound m props opts) {path : Path S L}
   split
   · exact h
   · split
-    · exact ⟨h.queue, h.witnesses, h.failure, h.size⟩
-    · refine ⟨fun v hv => ?_, fun w hw => ?_, fun f hf => ?_, ?_⟩
+    · exact ⟨h.queue, h.witnesses, h.failure, h.size, h.slots⟩
+    · refine ⟨fun v hv => ?_, fun i q hq => ?_, fun f hf => ?_, ?_, ?_⟩
       · rcases Array.mem_push.mp hv with hv | rfl
         · exact h.queue v hv
         · exact hpath
-      · rcases mem_witness hw with hw | ⟨hw, p, hmem, hp⟩
-        · exact h.witnesses w hw
-        · exact ⟨hw ▸ hpath, p, hmem, hw ▸ hp⟩
+      · rcases getElem?_witness_some hq with hq | ⟨rfl, name, p, hprop, hp⟩
+        · exact h.witnesses i q hq
+        · exact ⟨hpath, name, p, hprop, hp⟩
       · obtain ⟨name, p, rfl, hmem, hp⟩ := violation_eq_some hf
         exact ⟨hpath.toTrace, by simpa using hpath.reachable, p, hmem, by simpa using hp⟩
       · simp only [Array.size_push]
         omega
+      · simp [witness, h.slots]
 
 theorem Sound.addInit (h : st.Sound m props opts) {s : S} (hs : s ∈ m.init) :
     (st.addInit props opts s).Sound m props opts := by
@@ -227,8 +256,8 @@ theorem Sound.addInit (h : st.Sound m props opts) {s : S} (hs : s ∈ m.init) :
 
 theorem Sound.start (actions : List String) : (start m props opts actions).Sound m props opts := by
   unfold Search.start
-  refine List.foldlRecOn _ _ ⟨?_, ?_, ?_, ?_⟩ fun st h s hs => h.addInit hs
-  all_goals simp
+  refine List.foldlRecOn _ _ ⟨?_, ?_, ?_, ?_, ?_⟩ fun st h s hs => h.addInit hs
+  all_goals simp [List.getElem?_replicate]
 
 theorem Sound.visit (h : st.Sound m props opts) {parent : Path S L}
     (hparent : parent.Valid m opts.constraint) (depth : Nat) {step : L × S}
@@ -238,20 +267,20 @@ theorem Sound.visit (h : st.Sound m props opts) {parent : Path S L}
   split
   · exact h
   · refine Sound.add ?_ (path := .step parent step.1 step.2) ⟨hparent, hstep, hconstraint⟩ _
-    exact ⟨h.queue, h.witnesses, h.failure, h.size⟩
+    exact ⟨h.queue, h.witnesses, h.failure, h.size, h.slots⟩
 
 theorem Sound.expand (h : st.Sound m props opts) {v : Visited S L} (hv : v ∈ st.queue) :
     (st.expand m props opts labelName v).Sound m props opts := by
   have hpath := h.queue v hv
   unfold Search.expand
   split
-  · exact ⟨h.queue, h.witnesses, h.failure, h.size⟩
+  · exact ⟨h.queue, h.witnesses, h.failure, h.size, h.slots⟩
   · dsimp only
     split
     · rename_i hdead
       simp only [Bool.and_eq_true, List.isEmpty_iff, List.filter_eq_nil_iff, Bool.not_eq_true,
         Bool.not_eq_eq_eq_not, Bool.not_true] at hdead
-      refine ⟨h.queue, h.witnesses, fun f hf => ?_, h.size⟩
+      refine ⟨h.queue, h.witnesses, fun f hf => ?_, h.size, h.slots⟩
       obtain rfl := Option.some.inj hf
       exact ⟨hpath.toTrace, by simpa using hpath.reachable,
         fun l s hmem => by simpa using hdead.1.2 (l, s) (by simpa using hmem),
@@ -260,7 +289,7 @@ theorem Sound.expand (h : st.Sound m props opts) {v : Visited S L} (hv : v ∈ s
           ((m.next v.path.last).filter fun step => opts.constraint step.2)).Sound m props opts :=
         List.foldlRecOn _ _ h fun st h step hstep =>
           h.visit hpath _ (List.mem_filter.mp hstep).1 (List.mem_filter.mp hstep).2
-      exact ⟨this.queue, this.witnesses, this.failure, this.size⟩
+      exact ⟨this.queue, this.witnesses, this.failure, this.size, this.slots⟩
 
 theorem Sound.run (fuel : Nat) (h : st.Sound m props opts) :
     (st.run m props opts labelName fuel).Sound m props opts := by
@@ -396,14 +425,14 @@ theorem Le.getElem? (h : st.Le st') {i : Nat} (hi : i < st.queue.size) :
   exact h.queue i _ (Array.getElem?_eq_getElem hi)
 
 /-- What has been checked of the stored states: `seen` covers only them, no `always` property
-fails in one unless a failure is recorded, and each `sometimes` property true in one has a
+fails in one unless a failure is recorded, and each `sometimes` property true in one has its
 witness. -/
 structure Checked (props : List (Property S)) (st : Search S L) : Prop where
   seen : ∀ s, st.seen.contains s = true → st.Stored s
   always : st.failure = none → ∀ v ∈ st.queue, ∀ name p, .always name p ∈ props →
     p v.path.last = true
-  sometimes : ∀ v ∈ st.queue, ∀ name p, .sometimes name p ∈ props →
-    p v.path.last = true → st.witnesses.any (·.1 == name) = true
+  sometimes : ∀ v ∈ st.queue, ∀ (i : Nat) name p, props[i]? = some (.sometimes name p) →
+    p v.path.last = true → st.witnesses[i]? ≠ some none
 
 /-- Every initial state and every successor of an expanded state is stored, if within the
 constraint; and with deadlock checking on, no expanded state is stuck. -/
@@ -495,7 +524,8 @@ theorem Checked.add (h : st.Checked props) (hfailure : st.failure = none) (path 
   · exact h
   · split
     · exact ⟨h.seen, h.always, h.sometimes⟩
-    · refine ⟨fun s hs => ?_, fun hnone v hv name p hmem => ?_, fun v hv name p hmem hp => ?_⟩
+    · refine ⟨fun s hs => ?_, fun hnone v hv name p hmem => ?_,
+        fun v hv i name p hprop hp hslot => ?_⟩
       · rw [Std.HashSet.contains_insert, Bool.or_eq_true] at hs
         rcases hs with hs | hs
         · exact ⟨_, Array.mem_push_self, hs⟩
@@ -504,9 +534,10 @@ theorem Checked.add (h : st.Checked props) (hfailure : st.failure = none) (path 
       · rcases Array.mem_push.mp hv with hv | rfl
         · exact h.always hfailure v hv name p hmem
         · exact violation_eq_none hnone hmem
-      · rcases Array.mem_push.mp hv with hv | rfl
-        · exact witness_any_of_any (h.sometimes v hv name p hmem hp)
-        · exact witness_any hmem hp
+      · obtain ⟨hslot, hfalse⟩ := getElem?_witness_none hslot
+        rcases Array.mem_push.mp hv with hv | rfl
+        · exact h.sometimes v hv i name p hprop hp hslot
+        · exact absurd hp (by simp [hfalse name p hprop])
 
 theorem visit_spec (h : st.Checked props) (parent : Path S L) (depth : Nat) (step : L × S) :
     (st.visit props opts labelName parent depth step).Checked props ∧
@@ -560,7 +591,9 @@ structure Inv (m : Model S L) (props : List (Property S)) (opts : Options S)
 
 theorem Inv.start (actions : List String) : (start m props opts actions).Inv m props opts := by
   unfold Search.start
-  generalize hst : ({ coverage := actions.foldl (fun c a => c.insert a 0) {} } : Search S L) = st
+  generalize hst : ({
+    witnesses := List.replicate props.length none
+    coverage := actions.foldl (fun c a => c.insert a 0) {} } : Search S L) = st
   have hchecked : st.Checked props := by
     subst hst
     exact ⟨fun s hs => by simp at hs, fun _ v hv => by simp at hv, fun v hv => by simp at hv⟩
@@ -677,9 +710,9 @@ theorem done_of_report (hcomplete : (st.report props).complete = true)
   simpa [Search.report, hfailure] using hcomplete
 
 theorem unreached_of_report (hsound : st.Sound m props opts) {names : List String}
-    (h : (st.report props).failure = some (.unreached names)) {name : String}
-    (hname : name ∈ names) :
-    st.failure = none ∧ st.witnesses.any (·.1 == name) = false := by
+    (h : (st.report props).failure = some (.unreached names)) :
+    st.failure = none ∧ unwitnessed props st.witnesses ≠ [] ∧
+      names = (unwitnessed props st.witnesses).map (·.name) := by
   cases hfailure : st.failure with
   | some f =>
     have hfound := hsound.failure f hfailure
@@ -687,33 +720,58 @@ theorem unreached_of_report (hsound : st.Sound m props opts) {names : List Strin
     subst h
     exact hfound.elim
   | none =>
-    refine ⟨rfl, ?_⟩
     simp only [Search.report, hfailure] at h
     split at h
     · simp at h
-    · obtain rfl := Failure.unreached.inj (Option.some.inj h)
-      obtain ⟨prop, _, hprop⟩ := List.mem_filterMap.mp hname
-      cases prop with
-      | always _ _ => simp at hprop
-      | sometimes name' _ =>
-        by_cases hany : st.witnesses.any (·.1 == name') = true
-        · simp [hany] at hprop
-        · simp only [hany] at hprop
-          obtain rfl := Option.some.inj hprop
-          exact Bool.eq_false_iff.mpr hany
+    · rename_i hempty
+      exact ⟨rfl, fun hnil => hempty (by simp [hnil]),
+        (Failure.unreached.inj (Option.some.inj h)).symm⟩
 
-theorem witnessed_of_report (h : (st.report props).failure = none) {name : String}
-    {p : S → Bool} (hp : .sometimes name p ∈ props) : ∃ path, (name, path) ∈ st.witnesses := by
+theorem witnessed_of_report (h : (st.report props).failure = none) :
+    unwitnessed props st.witnesses = [] := by
   have hnone := failure_none_of_report h
   simp only [Search.report, hnone] at h
   split at h
   · rename_i hempty
-    have hprop := List.filterMap_eq_nil_iff.mp (List.isEmpty_iff.mp hempty) _ hp
-    by_cases hany : st.witnesses.any (·.1 == name) = true
-    · obtain ⟨w, hw, hname⟩ := List.any_eq_true.mp hany
-      exact ⟨w.2, eq_of_beq hname ▸ hw⟩
-    · simp [hany] at hprop
+    exact List.isEmpty_iff.mp hempty
   · simp at h
+
+theorem mem_report_witnesses {name : String} {t : Trace S L} :
+    (name, t) ∈ (st.report props).witnesses ↔
+      ∃ (i : Nat) (p : S → Bool) (path : Path S L), props[i]? = some (.sometimes name p) ∧
+        st.witnesses[i]? = some (some path) ∧ t = path.toTrace := by
+  simp only [Search.report, List.mem_filterMap]
+  constructor
+  · rintro ⟨⟨prop, found⟩, hmem, h⟩
+    obtain ⟨i, hprop, hfound⟩ := mem_zip_iff_getElem?.mp hmem
+    cases prop with
+    | always _ _ => simp at h
+    | sometimes name' p =>
+      cases found with
+      | none => simp at h
+      | some path =>
+        obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Option.some.inj h)
+        exact ⟨i, p, path, hprop, hfound, rfl⟩
+  · rintro ⟨i, p, path, hprop, hfound, rfl⟩
+    exact ⟨(_, _), mem_zip_iff_getElem?.mpr ⟨i, hprop, hfound⟩, rfl⟩
+
+/-- With no `sometimes` property left without a witness, each has a real one of its own. -/
+theorem Sound.reached (h : st.Sound m props opts) (hnil : unwitnessed props st.witnesses = [])
+    {i : Nat} {name : String} {p : S → Bool} (hprop : props[i]? = some (.sometimes name p)) :
+    ∃ path, st.witnesses[i]? = some (some path) ∧ path.Valid m opts.constraint ∧
+      p path.last = true := by
+  have hlt : i < st.witnesses.length := h.slots ▸ (List.getElem?_eq_some_iff.mp hprop).1
+  cases hfound : st.witnesses[i] with
+  | none =>
+    have : Property.sometimes name p ∈ unwitnessed props st.witnesses :=
+      mem_unwitnessed.mpr ⟨i, name, p, rfl, hprop, by rw [List.getElem?_eq_getElem hlt, hfound]⟩
+    simp [hnil] at this
+  | some path =>
+    have hslot : st.witnesses[i]? = some (some path) := by
+      rw [List.getElem?_eq_getElem hlt, hfound]
+    obtain ⟨hvalid, name', p', hprop', hp⟩ := h.witnesses i path hslot
+    obtain ⟨-, rfl⟩ := Property.sometimes.inj (Option.some.inj (hprop.symm.trans hprop'))
+    exact ⟨path, hslot, hvalid, hp⟩
 
 /-- A search that ends as a complete pass has stored a state equal to each reachable one. -/
 theorem Inv.stored [EquivBEq S] (h : st.Inv m props opts)
@@ -751,19 +809,24 @@ theorem search_witness {name : String} {t : Trace S L}
     (h : (name, t) ∈ (search m props opts labelName actions).witnesses) :
     t.Valid m ∧ m.Reachable opts.constraint t.last ∧
       ∃ p, .sometimes name p ∈ props ∧ p t.last = true := by
-  obtain ⟨w, hw, heq⟩ := List.mem_map.mp h
-  obtain ⟨hvalid, p, hmem, hp⟩ := Search.Sound.final.witnesses w hw
-  obtain ⟨rfl, rfl⟩ := Prod.mk.inj heq
-  exact ⟨hvalid.toTrace, by simpa using hvalid.reachable, p, hmem, by simpa using hp⟩
+  obtain ⟨i, p, path, hprop, hfound, rfl⟩ := Search.mem_report_witnesses.mp h
+  obtain ⟨hvalid, name', p', hprop', hp⟩ := Search.Sound.final.witnesses i path hfound
+  obtain ⟨-, rfl⟩ := Property.sometimes.inj (Option.some.inj (hprop.symm.trans hprop'))
+  exact ⟨hvalid.toTrace, by simpa using hvalid.reachable, p, List.mem_of_getElem? hprop,
+    by simpa using hp⟩
 
-/-- A search that reports no failure has a witness for the name of each `sometimes` property.
-By `search_witness` it is real. Properties that share a name share a witness: it shows one of
-them reached, so give each its own name. -/
+/-- A search that reports no failure has reached every `sometimes` property: each has a witness
+of its own in the report, a path of the model through states that satisfy the constraint to a
+state where that property is true. -/
 theorem search_reached (hfailure : (search m props opts labelName actions).failure = none)
     {name : String} {p : S → Bool} (hp : .sometimes name p ∈ props) :
-    ∃ t, (name, t) ∈ (search m props opts labelName actions).witnesses := by
-  obtain ⟨path, hpath⟩ := Search.witnessed_of_report hfailure hp
-  exact ⟨path.toTrace, List.mem_map.mpr ⟨(name, path), hpath, rfl⟩⟩
+    ∃ t, (name, t) ∈ (search m props opts labelName actions).witnesses ∧ t.Valid m ∧
+      m.Reachable opts.constraint t.last ∧ p t.last = true := by
+  obtain ⟨i, hprop⟩ := List.mem_iff_getElem?.mp hp
+  obtain ⟨path, hslot, hvalid, hp⟩ :=
+    Search.Sound.final.reached (Search.witnessed_of_report hfailure) hprop
+  exact ⟨path.toTrace, Search.mem_report_witnesses.mpr ⟨i, p, path, hprop, hslot, rfl⟩,
+    hvalid.toTrace, by simpa using hvalid.reachable, by simpa using hp⟩
 
 theorem search_states_le : (search m props opts labelName actions).states ≤ opts.maxStates :=
   Search.Sound.final.size
@@ -793,23 +856,40 @@ theorem search_sound_of_lawful [LawfulBEq S]
     (hs : m.Reachable opts.constraint s) : p s = true :=
   search_sound (.of_lawful m opts.constraint props) hfailure hcomplete hp hs
 
-/-- A complete search that reports a `sometimes` property unreached is right: every
-`sometimes` property of that name is false in every state reachable within the constraint. -/
+/-- A complete search that reports `sometimes` properties unreached is right. The names it
+reports are those of `missing`, a selection of the properties in their order and not an empty
+one, and each property in it is false in every state reachable within the constraint. -/
 theorem search_unreached [EquivBEq S] [LawfulHashable S] (hm : m.Respects opts.constraint props)
     {names : List String}
     (hfailure : (search m props opts labelName actions).failure = some (.unreached names))
-    (hcomplete : (search m props opts labelName actions).complete = true)
-    {name : String} (hname : name ∈ names) {p : S → Bool} (hp : .sometimes name p ∈ props)
-    {s : S} (hs : m.Reachable opts.constraint s) : p s = false := by
-  obtain ⟨hnone, hany⟩ := Search.unreached_of_report Search.Sound.final hfailure hname
+    (hcomplete : (search m props opts labelName actions).complete = true) :
+    ∃ missing : List (Property S), missing ≠ [] ∧ missing.Sublist props ∧
+      names = missing.map (·.name) ∧
+      ∀ prop ∈ missing, ∃ name p, prop = .sometimes name p ∧
+        ∀ s, m.Reachable opts.constraint s → p s = false := by
+  obtain ⟨hnone, hne, hnames⟩ := Search.unreached_of_report Search.Sound.final hfailure
+  refine ⟨_, hne, unwitnessed_sublist _ _, hnames, fun prop hprop => ?_⟩
+  obtain ⟨i, name, p, rfl, hprop, hslot⟩ := mem_unwitnessed.mp hprop
+  refine ⟨name, p, rfl, fun s hs => ?_⟩
   obtain ⟨v, hv, hvs⟩ := Search.Inv.final.stored hm hnone hcomplete hs
   cases hps : p s with
   | false => rfl
   | true =>
-    have hwitness := Search.Inv.final.checked.sometimes v hv name p hp
-      ((hm.prop _ hp _ _ hvs).trans hps)
-    rw [hany] at hwitness
-    exact absurd hwitness (by simp)
+    exact absurd hslot (Search.Inv.final.checked.sometimes v hv i name p hprop
+      ((hm.prop _ (List.mem_of_getElem? hprop) _ _ hvs).trans hps))
+
+/-- A complete search that reports `sometimes` properties unreached names one that is false in
+every state reachable within the constraint. -/
+theorem search_unreached_exists [EquivBEq S] [LawfulHashable S]
+    (hm : m.Respects opts.constraint props) {names : List String}
+    (hfailure : (search m props opts labelName actions).failure = some (.unreached names))
+    (hcomplete : (search m props opts labelName actions).complete = true) :
+    ∃ name p, name ∈ names ∧ .sometimes name p ∈ props ∧
+      ∀ s, m.Reachable opts.constraint s → p s = false := by
+  obtain ⟨missing, hne, hsub, rfl, hall⟩ := search_unreached hm hfailure hcomplete
+  obtain ⟨prop, hprop⟩ := List.exists_mem_of_ne_nil _ hne
+  obtain ⟨name, p, rfl, hfalse⟩ := hall prop hprop
+  exact ⟨name, p, List.mem_map.mpr ⟨_, hprop, rfl⟩, hsub.subset hprop, hfalse⟩
 
 /-- A complete pass with deadlock checking on leaves no deadlock: every state reachable within
 the constraint is terminal or has a successor within the constraint. -/

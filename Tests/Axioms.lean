@@ -124,3 +124,6 @@ by `lake build`, not linked into the test executable.
 
 /-- info: 'Lanes.Check.search_reached' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Check.search_reached
+
+/-- info: 'Lanes.Check.search_unreached_exists' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.search_unreached_exists

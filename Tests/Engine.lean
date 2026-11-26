@@ -60,6 +60,8 @@ def tests : List (String × Bool) :=
   let solved := search dieHard [.always "big jug never holds 4" fun s => s.2 != 4] {} id
   let witness := search dieHard [.sometimes "big jug holds 4" fun s => s.2 == 4] {} id
   let vacuous := search dieHard [.sometimes "big jug holds 6" fun s => s.2 == 6] {} id
+  let sameName := search dieHard
+    [.sometimes "big jug" fun s => s.2 == 4, .sometimes "big jug" fun s => s.2 == 6] {} id
   let bounded := search bitmask [] { maxDepth := some 1 }
   let constrained := search bitmask [] { constraint := fun s => s < 16 }
   let dead := search counter [] { checkDeadlock := true }
@@ -75,6 +77,10 @@ def tests : List (String × Bool) :=
     ("diehard: unreachable sometimes fails as vacuous",
       match vacuous.failure with
       | some (.unreached ["big jug holds 6"]) => true
+      | _ => false),
+    ("diehard: a sometimes is not witnessed by another of the same name",
+      match sameName.failure with
+      | some (.unreached ["big jug"]) => sameName.witnesses.length == 1
       | _ => false),
     ("depth bound: 9 states, reported incomplete", bounded.states == 9 && !bounded.complete),
     ("constraint: 16 states", constrained.states == 16 && constrained.complete),
