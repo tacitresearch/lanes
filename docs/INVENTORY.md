@@ -10,17 +10,17 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Area | Definitions | proved | trusted | checked | tested | spec | none |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `Lanes/Actors` | 339 | 170 | 10 | 36 | 19 | 80 | 24 |
+| `Lanes/Actors` | 339 | 166 | 10 | 36 | 20 | 85 | 22 |
 | `Lanes/Auth` | 27 | 7 | 0 | 0 | 16 | 1 | 3 |
-| `Lanes/Behaviours` | 8 | 8 | 0 | 0 | 0 | 0 | 0 |
+| `Lanes/Behaviours` | 44 | 36 | 0 | 1 | 0 | 7 | 0 |
 | `Lanes/Check` | 91 | 54 | 0 | 25 | 0 | 10 | 2 |
-| `Lanes/Data` | 213 | 57 | 5 | 4 | 113 | 3 | 31 |
-| `Lanes/Env` | 24 | 0 | 24 | 0 | 0 | 0 | 0 |
+| `Lanes/Data` | 324 | 152 | 5 | 4 | 120 | 12 | 31 |
+| `Lanes/Env` | 30 | 0 | 30 | 0 | 0 | 0 | 0 |
 | `Lanes/Html` | 42 | 2 | 0 | 0 | 28 | 0 | 12 |
-| `Lanes/Http` | 176 | 100 | 1 | 9 | 35 | 17 | 14 |
-| `Lanes/Semantics` | 42 | 10 | 0 | 0 | 0 | 29 | 3 |
-| `LanesCli` | 102 | 0 | 0 | 0 | 18 | 0 | 84 |
-| All | 1064 | 408 | 40 | 74 | 229 | 140 | 173 |
+| `Lanes/Http` | 176 | 99 | 1 | 9 | 35 | 18 | 14 |
+| `Lanes/Semantics` | 53 | 9 | 0 | 0 | 0 | 43 | 1 |
+| `LanesCli` | 110 | 0 | 0 | 0 | 42 | 0 | 68 |
+| All | 1236 | 525 | 46 | 75 | 261 | 176 | 153 |
 
 ## `Lanes/Actors/Actor.lean`
 
@@ -99,7 +99,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Event.deed` | proved | through `deeds`, `handled`: `Http.Gate.answered_le_handled`, `System.handled_le_put` |
+| `Event.deed` | proved | through `deeds`, `handled`: `Http.Gate.answered_le_handled`, `Jobs.answered_le_handled` and 1 more |
 | `deeds` | spec | used only in statements |
 | `Deed.handles` | spec | used only in statements |
 | `handled` | spec | used only in statements |
@@ -194,17 +194,17 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `instDecidableEqJoinMsg` | proved | its type, `Decidable` |
-| `joinSig` | proved | `SysState.exists_block`, `SysState.run_left`, `System.Invariant.join_left` and 9 more |
-| `Wiring.left` | proved | through `System.filterMapIO`, `System.join`: `SysState.exists_block`, `SysState.run_filterMapIO` and 14 more |
-| `Wiring.right` | proved | through `System.join`: `SysState.exists_block`, `SysState.run_left` and 10 more |
+| `joinSig` | proved | `Jobs.attach_active_leaves`, `Jobs.attach_within`, `SysState.exists_block` and 11 more |
+| `Wiring.left` | proved | through `SysState.over`, `System.filterMapIO` and 3 more: `SysState.exists_block`, `SysState.run_filterMapIO` and 14 more |
+| `Wiring.right` | proved | through `System.join`, `Wiring.leftView`: `SysState.exists_block`, `SysState.run_left` and 10 more |
 | `System.join` | proved | `SysState.exists_block`, `SysState.run_left`, `System.Invariant.join_left` and 9 more |
 | `Signature.withIO` | proved | `SysState.run_filterMapIO`, `System.Invariant.filterMapIO`, `System.LeadsTo.filterMapIO` and 1 more |
-| `Effect.filterMapOut` | proved | through `System.filterMapIO`: `SysState.run_filterMapIO`, `System.Invariant.filterMapIO` and 2 more |
+| `Effect.filterMapOut` | proved | through `SysState.over`, `System.filterMapIO` and 1 more: `SysState.run_filterMapIO`, `System.Invariant.filterMapIO` and 2 more |
 | `System.filterMapIO` | proved | `SysState.run_filterMapIO`, `System.Invariant.filterMapIO`, `System.LeadsTo.filterMapIO` and 1 more |
 | `System.mapIO` | checked | `Tests/Join.lean` |
-| `instHashableSum_lanes` | checked | `Tests/Fronted.lean`, `Tests/Join.lean` |
-| `Signature.Inspect.join` | checked | `Tests/Join.lean` |
-| `System.Inspect.join` | checked | `Tests/Join.lean` |
+| `instHashableSum_lanes` | checked | `Tests/Fronted.lean`, `Tests/Jobs.lean`, `Tests/Join.lean` |
+| `Signature.Inspect.join` | checked | `Tests/Jobs.lean`, `Tests/Join.lean` |
+| `System.Inspect.join` | checked | `Tests/Jobs.lean`, `Tests/Join.lean` |
 | `Signature.Inspect.withIO` | checked | `Tests/Join.lean` |
 | `System.Inspect.filterMapIO` | checked | `Tests/Join.lean` |
 | `System.Inspect.mapIO` | checked | `Tests/Join.lean` |
@@ -213,14 +213,14 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Envelope.left?` | proved | through `SysState.left`, `SysState.thinLeft`: `SysState.run_left`, `System.Invariant.join_left` and 3 more |
+| `Envelope.left?` | proved | through `SysState.left`, `SysState.thinLeft` and 1 more: `SysState.run_left`, `System.Invariant.join_left` and 4 more |
 | `Envelope.right?` | proved | through `SysState.right`: `System.Invariant.join_right`, `System.Reachable.right` and 1 more |
 | `EnvModel.left` | proved | `SysState.run_left`, `System.Invariant.join_left`, `System.LeadsTo.join_left` and 3 more |
 | `EnvModel.right` | proved | `System.Invariant.join_right`, `System.Reachable.right`, `System.Reachable.right_of_quiet_boot` |
 | `SysState.left` | proved | `SysState.run_left`, `System.Invariant.join_left`, `System.LeadsTo.join_left` and 1 more |
 | `SysState.right` | proved | `System.Invariant.join_right`, `System.Reachable.right`, `System.Reachable.right_of_quiet_boot` |
 | `SysState.thinLeft` | proved | `System.LeadsTo.join_left`, `System.Run.Fair.left` |
-| `Event.left?` | proved | through `Event.leftDeed`: `SysState.run_left`, `System.Run.Fair.left` |
+| `Event.left?` | proved | through `Event.leftDeed`, `Wiring.leftView`: `SysState.run_left`, `System.Run.Fair.left` and 1 more |
 | `Event.leftDeed` | proved | `SysState.run_left`, `System.Run.Fair.left` |
 | `Wiring.shown` | proved | `SysState.run_left`, `System.Run.Fair.left` |
 | `Wiring.wired` | spec | used only in statements |
@@ -299,7 +299,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `EnvModel.lossy` | proved | `System.Invariant.shards_of_forall`, `System.Invariant.split_of_forall`, `System.Reachable.lossy` |
+| `EnvModel.lossy` | spec | used only in statements |
 
 ## `Lanes/Actors/Mailbox.lean`
 
@@ -330,10 +330,10 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Envelope.over` | proved | through `SysState.over`: `SysState.run_filterMapIO`, `System.Invariant.filterMapIO` |
+| `Envelope.over` | spec | used only in statements |
 | `Envelope.under` | spec | used only in statements |
-| `EnvModel.under` | proved | `SysState.run_filterMapIO`, `System.Invariant.filterMapIO`, `System.LeadsTo.filterMapIO` and 1 more |
-| `SysState.over` | proved | `SysState.run_filterMapIO`, `System.Invariant.filterMapIO` |
+| `EnvModel.under` | spec | used only in statements |
+| `SysState.over` | spec | used only in statements |
 | `Event.Under` | spec | a predicate |
 | `Event.AllUnder` | spec | a predicate |
 
@@ -341,18 +341,18 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `SysState.grow` | proved | `SysState.Loses.settle`, `SysState.mem_seen_grow_of_mem`, `System.Inductive.of_monotone` and 3 more |
+| `SysState.grow` | proved | `Account.Moves.grow`, `Account.Moves.handle`, `Account.implements` and 7 more |
 | `SysState.Pending` | spec | a predicate |
 
 ## `Lanes/Actors/Outside.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Outside.any` | none |  |
-| `Outside.driver` | checked | `Tests/Clock.lean`, `Tests/HttpClient.lean` |
-| `Outside.after` | tested | `Tests/Clock.lean`, `Tests/Fronted.lean`, `Tests/HttpClient.lean` and 1 more |
-| `Outside.allows` | tested | `Tests/Clock.lean`, `Tests/Fronted.lean`, `Tests/HttpClient.lean` and 1 more |
-| `Outside.both` | checked | `Tests/Clock.lean`, `Tests/HttpClient.lean` |
+| `Outside.any` | tested | `Tests/Jobs.lean` |
+| `Outside.driver` | checked | `Tests/Clock.lean`, `Tests/HttpClient.lean`, `Tests/Jobs.lean` |
+| `Outside.after` | tested | `Tests/Clock.lean`, `Tests/Fronted.lean`, `Tests/HttpClient.lean` and 2 more |
+| `Outside.allows` | tested | `Tests/Clock.lean`, `Tests/Fronted.lean`, `Tests/HttpClient.lean` and 2 more |
+| `Outside.both` | checked | `Tests/Clock.lean`, `Tests/HttpClient.lean`, `Tests/Jobs.lean` |
 
 ## `Lanes/Actors/Past.lean`
 
@@ -366,7 +366,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Event.awake` | proved | `Event.filterMap_eq_of_awake` |
+| `Event.awake` | spec | used only in statements |
 | `SysState.Same` | spec | a predicate |
 | `SysState.release` | spec | used only in statements |
 | `SysState.Leads` | spec | a predicate |
@@ -375,7 +375,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Effect.sends` | none |  |
+| `Effect.sends` | proved | `Account.Moves.grow`, `Account.Moves.handle` |
 | `Effect.armed` | none |  |
 | `Effect.emits` | none |  |
 | `Effect.retime` | spec | used only in statements |
@@ -502,11 +502,11 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Effect.isStop` | none |  |
 | `Effect.instDecidableEq` | proved | its type, `Decidable` |
-| `Envelope.instDecidableEq` | proved | `System.Refines.of_steps` |
+| `Envelope.instDecidableEq` | proved | `Account.Moves.handle`, `Account.implements`, `System.Refines.of_events` and 3 more |
 | `Envelope.sameLink` | none |  |
 | `Link.reliable` | proved | `Examples.Watchdog.exists_fair_run_never_barks`, `Examples.Watchdog.impatient_barks` |
 | `Link.network` | checked | `Tests/Bank.lean`, `Tests/Election.lean`, `Tests/Join.lean` and 1 more |
-| `Link.unordered` | checked | `Tests/Election.lean` |
+| `Link.unordered` | checked | `Tests/Election.lean`, `Tests/Jobs.lean` |
 | `EnvModel.reliable` | spec | used only in statements |
 | `EnvModel.distributed` | none |  |
 
@@ -514,21 +514,21 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `update` | proved | through `SysState.init`, `SysState.run` and 3 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 32 more |
+| `update` | proved | through `SysState.down`, `SysState.init` and 4 more: `Account.implements`, `Check.system_violated` and 36 more |
 | `Event.timed` | spec | used only in statements |
 | `Event.visible` | spec | used only in statements |
 | `SysState.blank` | proved | `System.Inductive.of_monotone`, `System.Monotone.and` |
-| `SysState.hasMail` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 23 more |
-| `SysState.perform` | proved | through `SysState.init`, `SysState.run` and 3 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 32 more |
-| `SysState.performAll` | proved | through `SysState.init`, `SysState.run` and 3 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 32 more |
-| `SysState.down` | proved | through `SysState.init`, `SysState.run` and 3 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 32 more |
+| `SysState.hasMail` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 24 more |
+| `SysState.perform` | proved | through `SysState.init`, `SysState.run` and 3 more: `Account.implements`, `Check.system_violated` and 35 more |
+| `SysState.performAll` | proved | through `SysState.init`, `SysState.run` and 3 more: `Account.implements`, `Check.system_violated` and 35 more |
+| `SysState.down` | proved | `Account.implements`, `System.Refines.of_events`, `linkMsgs_down` |
 | `SysState.settle` | proved | `SysState.Loses.settle` |
-| `SysState.handle` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 23 more |
-| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and 2 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 31 more |
-| `SysState.deliverable` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 23 more |
+| `SysState.handle` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 24 more |
+| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and 2 more: `Account.implements`, `Check.system_violated` and 34 more |
+| `SysState.deliverable` | proved | `Account.implements`, `System.Refines.of_events`, `linkMsgs_of_deliverable` |
 | `SysState.step` | proved | `Http.Gate.answered_of_leaves`, `Http.Gate.deadline_not_restarted`, `Shards.AtHome.step` and 7 more |
-| `SysState.init` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and 16 more |
-| `SysState.run` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and 11 more |
+| `SysState.init` | proved | `Account.implements`, `Check.system_violated`, `Http.Gate.answered_le_handled` and 19 more |
+| `SysState.run` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and 12 more |
 | `System.Invariant` | spec | a predicate |
 
 ## `Lanes/Auth/Login.lean`
@@ -567,6 +567,52 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Auth.verify` | tested | `Tests/Auth.lean` |
 | `Auth.formToken` | tested | `Tests/Auth.lean` |
 | `Auth.checkForm` | tested | `Tests/Auth.lean` |
+
+## `Lanes/Behaviours/Jobs.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Jobs.Phase.codec` | proved | its type, `Codec` |
+| `Jobs.instCodablePhase` | proved | its type, `Codable` |
+| `Jobs.Active.codec` | proved | its type, `Codec` |
+| `Jobs.instCodableActive` | proved | its type, `Codable` |
+| `Jobs.Outcome.codec` | proved | its type, `Codec` |
+| `Jobs.instCodableOutcome` | proved | its type, `Codable` |
+| `Jobs.Input.codec` | proved | its type, `Codec` |
+| `Jobs.instCodableInput` | proved | its type, `Codable` |
+| `Jobs.Output.codec` | proved | its type, `Codec` |
+| `Jobs.instCodableOutput` | proved | its type, `Codable` |
+| `Jobs.Msg.codec` | proved | its type, `Codec` |
+| `Jobs.instCodableMsg` | proved | its type, `Codable` |
+| `Jobs.Config.slots` | proved | through `Jobs.actor`, `Jobs.attach` and 2 more: `Jobs.active_answered`, `Jobs.active_leaves` and 13 more |
+| `Jobs.Config.cap` | proved | through `Jobs.actor`, `Jobs.attach` and 2 more: `Jobs.active_answered`, `Jobs.active_leaves` and 13 more |
+| `Jobs.Config.backoff` | proved | through `Jobs.actor`, `Jobs.attach` and 2 more: `Jobs.active_answered`, `Jobs.active_leaves` and 13 more |
+| `Jobs.keys` | proved | `Jobs.active_answered`, `Jobs.active_leaves`, `Jobs.attach_active_leaves` |
+| `Jobs.entry` | proved | `Jobs.answer_of_leaves`, `Jobs.entry_step`, `Jobs.not_arms` and 1 more |
+| `Jobs.put` | proved | through `Jobs.actor`, `Jobs.attach` and 2 more: `Jobs.active_answered`, `Jobs.active_leaves` and 13 more |
+| `Jobs.remove` | proved | through `Jobs.actor`, `Jobs.attach` and 2 more: `Jobs.active_answered`, `Jobs.active_leaves` and 13 more |
+| `Jobs.Within` | spec | a predicate |
+| `Jobs.Attempts` | spec | a predicate |
+| `Jobs.sig` | proved | `Jobs.active_answered`, `Jobs.active_leaves`, `Jobs.actor_attempts` and 11 more |
+| `Jobs.timer` | proved | `Jobs.not_arms` |
+| `Jobs.fail` | proved | through `Jobs.actor`, `Jobs.attach` and 2 more: `Jobs.active_answered`, `Jobs.active_leaves` and 13 more |
+| `Jobs.step` | proved | `Jobs.answer_of_leaves`, `Jobs.dispatch_active`, `Jobs.entry_step` and 2 more |
+| `Jobs.rearm` | proved | through `Jobs.actor`, `Jobs.attach` and 1 more: `Jobs.active_answered`, `Jobs.active_leaves` and 8 more |
+| `Jobs.actor` | proved | `Jobs.actor_attempts`, `Jobs.actor_within` |
+| `Jobs.system` | proved | `Jobs.active_answered`, `Jobs.active_leaves`, `Jobs.answered_le_handled` and 3 more |
+| `Jobs.Use.wiring` | proved | through `Jobs.attach`: `Jobs.attach_active_leaves`, `Jobs.attach_within` |
+| `Jobs.attach` | proved | `Jobs.attach_active_leaves`, `Jobs.attach_within` |
+| `Jobs.pool` | checked | `Tests/Jobs.lean` |
+
+## `Lanes/Behaviours/JobsSound.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Jobs.left` | spec | used only in statements |
+| `Jobs.Moved` | spec | a predicate |
+| `Jobs.Armed` | spec | a predicate |
+| `Jobs.answered` | spec | used only in statements |
+| `Jobs.handled` | spec | used only in statements |
 
 ## `Lanes/Behaviours/Once.lean`
 
@@ -665,7 +711,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Check.Property.holds` | proved | `Check.refines_sound`, `Check.refines_traces`, `Check.system_sound` and 1 more |
 | `Check.Trace.last` | proved | `Check.search_deadlock`, `Check.search_reached`, `Check.search_violated` and 2 more |
 | `Check.Trace.labels` | proved | `Check.system_violated` |
-| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 12 more |
+| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 13 more |
 | `Check.Path.last` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
 | `Check.Path.toTraceAux` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
 | `Check.Path.toTrace` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
@@ -727,6 +773,59 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Event.isInternal` | none |  |
 | `World.quiet` | spec | used only in statements |
 
+## `Lanes/Data/Base64.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Base64.Alphabet.last` | proved | through `Base64.decode`, `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 4 more |
+| `Base64.Alphabet.code` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 2 more |
+| `Base64.Alphabet.char` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 2 more |
+| `Base64.Alphabet.valueOf` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
+| `Base64.Alphabet.value?` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
+| `Base64.Encoding.std` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
+| `Base64.Encoding.rawStd` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
+| `Base64.Encoding.url` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
+| `Base64.Encoding.rawUrl` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
+| `Base64.sextet` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 2 more |
+| `Base64.byte` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
+| `Base64.pad` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 2 more |
+| `Base64.encodeList` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 2 more |
+| `Base64.full` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
+| `Base64.tail1` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
+| `Base64.tail2` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
+| `Base64.decodeList` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
+| `Base64.encode` | proved | `Base64.allowed_of_mem_encode`, `Base64.decode_encode`, `Base64.decode_eq_some_iff` and 1 more |
+| `Base64.decode` | proved | `Base64.decode_encode`, `Base64.decode_eq_none_of_length`, `Base64.decode_eq_none_of_not_allowed` and 1 more |
+| `Base64.Encoding.Allowed` | spec | a predicate |
+| `Base64.encodedLength` | spec | used only in statements |
+
+## `Lanes/Data/Civil.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Civil.isLeap` | proved | through `Civil.Date.toDays`, `Civil.DateTime` and 1 more: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 3 more |
+| `Civil.daysInMonth` | proved | through `Civil.Date.toDays`, `Civil.DateTime` and 1 more: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 3 more |
+| `Civil.Valid` | spec | a predicate |
+| `Civil.instDecidableValid` | proved | its type, `Decidable` |
+| `Civil.Date.mk?` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Time.lean` |
+| `Civil.marchMonth` | proved | through `Civil.Date.toDays`, `Civil.DateTime.toUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 2 more |
+| `Civil.ofMarchMonth` | proved | through `Civil.Date.ofDays`, `Civil.DateTime.ofUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 2 more |
+| `Civil.daysBefore` | proved | through `Civil.Date.toDays`, `Civil.DateTime.toUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 2 more |
+| `Civil.marchLength` | spec | used only in statements |
+| `Civil.dayOfEra` | proved | through `Civil.Date.toDays`, `Civil.DateTime.toUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 2 more |
+| `Civil.daysFrom` | proved | through `Civil.Date.toDays`, `Civil.DateTime.toUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 2 more |
+| `Civil.Date.toDays` | proved | `Civil.ofDays_toDays`, `Civil.toDays_ofDays` |
+| `Civil.yearOfEra` | proved | through `Civil.Date.ofDays`, `Civil.DateTime.ofUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 2 more |
+| `Civil.civilOf` | proved | through `Civil.Date.ofDays`, `Civil.DateTime.ofUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 2 more |
+| `Civil.civil` | proved | through `Civil.Date.ofDays`, `Civil.DateTime.ofUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 2 more |
+| `Civil.LongYear` | spec | a predicate |
+| `Civil.Date.ofDays` | proved | `Civil.ofDays_toDays`, `Civil.toDays_ofDays` |
+| `Civil.Date.weekday` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Time.lean` |
+| `Civil.TimeOfDay.seconds` | proved | through `Civil.DateTime.toUnix`: `Civil.ofUnix_toUnix`, `Civil.toUnix_ofUnix` |
+| `Civil.TimeOfDay.ofSeconds` | proved | through `Civil.DateTime.ofUnix`: `Civil.ofUnix_toUnix`, `Civil.toUnix_ofUnix` |
+| `Civil.DateTime.toUnix` | proved | `Civil.ofUnix_toUnix`, `Civil.toUnix_ofUnix` |
+| `Civil.DateTime.ofUnix` | proved | `Civil.ofUnix_toUnix`, `Civil.toUnix_ofUnix` |
+
 ## `Lanes/Data/Codec.lean`
 
 | Definition | Status | Evidence |
@@ -785,6 +884,22 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Declare.independent` | none |  |
 | `Declare.enum` | none |  |
 
+## `Lanes/Data/Digits.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Digits.join` | proved | `Digits.join_split` |
+| `Digits.split` | proved | `Digits.join_split` |
+| `Digits.digits` | proved | through `Digits.toChars`: `Digits.head_toChars`, `Digits.ofChars?_toChars` |
+| `Digits.char` | proved | through `Digits.fixed`, `Digits.toChars`: `Digits.head_toChars`, `Digits.ofChars?_fixed` and 1 more |
+| `Digits.valueOf` | proved | through `Digits.ofChars?`: `Digits.ofChars?_fixed`, `Digits.ofChars?_toChars` |
+| `Digits.value?` | proved | through `Digits.ofChars?`: `Digits.ofChars?_fixed`, `Digits.ofChars?_toChars` |
+| `Digits.lower` | spec | used only in statements |
+| `Digits.values?` | proved | through `Digits.ofChars?`: `Digits.ofChars?_fixed`, `Digits.ofChars?_toChars` |
+| `Digits.ofChars?` | proved | `Digits.ofChars?_fixed`, `Digits.ofChars?_toChars` |
+| `Digits.toChars` | proved | `Digits.head_toChars`, `Digits.ofChars?_toChars` |
+| `Digits.fixed` | proved | `Digits.ofChars?_fixed` |
+
 ## `Lanes/Data/Enum.lean`
 
 | Definition | Status | Evidence |
@@ -834,19 +949,52 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Hmac.Pads.of` | tested | `Tests/Crypto.lean` |
 | `Hmac.reference` | tested | `Tests/Crypto.lean` |
 | `Bytes.sameReference` | tested | `Tests/Crypto.lean` |
-| `Bytes.hexDigit` | tested | `Tests/Crypto.lean` |
-| `Bytes.hex` | tested | `Tests/Crypto.lean` |
-| `Bytes.nibble?` | tested | `Tests/Crypto.lean` |
-| `Bytes.unhexList` | tested | `Tests/Crypto.lean` |
-| `Bytes.unhex?` | tested | `Tests/Crypto.lean` |
+| `Bytes.hexDigit` | tested | `Tests/Crypto.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` and 1 more |
+| `Bytes.hex` | tested | `Tests/Crypto.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` and 1 more |
+| `Bytes.nibble?` | tested | `Tests/Crypto.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Bytes.unhexList` | tested | `Tests/Crypto.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Bytes.unhex?` | tested | `Tests/Crypto.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+
+## `Lanes/Data/Ip.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Ip.octet?` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
+| `Ip.parse4` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
+| `Ip.print4` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 2 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 3 more |
+| `Ip.hexGroup?` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
+| `Ip.groups?` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
+| `Ip.expand` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
+| `Ip.fields?` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
+| `Ip.parse6` | proved | through `Ip.Prefix.parse`, `Ip.parse`: `Ip.Prefix.parse_print`, `Ip.parse_print` |
+| `Ip.parse` | proved | `Ip.parse_print` |
+| `Ip.zeroRun` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
+| `Ip.runAt` | proved | `Ip.longestZeroRun_none`, `Ip.longestZeroRun_some` |
+| `Ip.longestZeroRun` | proved | `Ip.longestZeroRun_none`, `Ip.longestZeroRun_some` |
+| `Ip.withEllipsis` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 2 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 3 more |
+| `Ip.hexFields` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 2 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 3 more |
+| `Ip.fields` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 2 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 3 more |
+| `Ip.mappedPrefix` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 2 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 3 more |
+| `Ip.print6` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 2 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 3 more |
+| `Ip.print` | proved | `Ip.parse_print` |
+| `Ip.Found` | spec | a predicate |
+| `Ip.Addr.width` | proved | `Ip.Prefix.contains_iff` |
+| `Ip.Addr.toNat` | spec | used only in statements |
+| `Ip.mask` | proved | through `Ip.Prefix.contains`, `Ip.Prefix.masked`: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 1 more |
+| `Ip.Addr.masked` | proved | through `Ip.Prefix.contains`, `Ip.Prefix.masked`: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 1 more |
+| `Ip.Prefix.masked` | proved | `Ip.Prefix.contains_masked`, `Ip.Prefix.masked_masked` |
+| `Ip.Prefix.contains` | proved | `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` |
+| `Ip.Prefix.print` | proved | `Ip.Prefix.parse_print` |
+| `Ip.decimal?` | proved | through `Ip.Prefix.parse`: `Ip.Prefix.parse_print` |
+| `Ip.Prefix.parse` | proved | `Ip.Prefix.parse_print` |
 
 ## `Lanes/Data/Json/Basic.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `JsonNumber.ofDecimal` | tested | `Tests/Json.lean` |
-| `JsonNumber.fromInt` | tested | `Tests/Json.lean` |
-| `JsonNumber.fromNat` | tested | `Tests/Json.lean` |
+| `JsonNumber.ofDecimal` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` and 1 more |
+| `JsonNumber.fromInt` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` and 1 more |
+| `JsonNumber.fromNat` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` and 1 more |
 | `JsonNumber.ofScientific` | tested | `Tests/Json.lean` |
 | `JsonNumber.instCoeNat` | none |  |
 | `JsonNumber.instCoeInt` | none |  |
@@ -855,8 +1003,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `JsonNumber.instOfScientific` | tested | `Tests/Json.lean` |
 | `JsonNumber.instNeg` | tested | `Tests/Json.lean` |
 | `JsonNumber.instHashable` | tested | `Tests/Json.lean` |
-| `JsonNumber.toInt?` | tested | `Tests/Json.lean` |
-| `JsonNumber.toNat?` | tested | `Tests/Json.lean` |
+| `JsonNumber.toInt?` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Time.lean` |
+| `JsonNumber.toNat?` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Time.lean` |
 | `JsonNumber.maxLeadingZeros` | none |  |
 | `JsonNumber.toString` | none |  |
 | `JsonNumber.instToString` | none |  |
@@ -877,22 +1025,22 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Json.instCoeString` | none |  |
 | `Json.instCoeBool` | none |  |
 | `Json.instOfNat` | tested | `Tests/Json.lean` |
-| `Json.sortFields` | tested | `Tests/Json.lean` |
-| `Json.dedupFields` | tested | `Tests/Json.lean` |
-| `Json.duplicateKey?` | tested | `Tests/Json.lean` |
-| `Json.mkObj` | tested | `Tests/Json.lean` |
-| `Json.mkObj?` | tested | `Tests/Json.lean` |
+| `Json.sortFields` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` and 2 more |
+| `Json.dedupFields` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` and 2 more |
+| `Json.duplicateKey?` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.mkObj` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` and 2 more |
+| `Json.mkObj?` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
 | `Json.isNull` | tested | `Tests/Json.lean` |
-| `Json.getObj?` | tested | `Tests/Json.lean` |
+| `Json.getObj?` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` and 1 more |
 | `Json.getArr?` | tested | `Tests/Json.lean` |
-| `Json.getStr?` | tested | `Tests/Json.lean` |
-| `Json.getNum?` | tested | `Tests/Json.lean` |
-| `Json.getNat?` | tested | `Tests/Json.lean` |
-| `Json.getInt?` | tested | `Tests/Json.lean` |
-| `Json.getBool?` | tested | `Tests/Json.lean` |
-| `Json.getObjVal?` | tested | `Tests/Json.lean` |
+| `Json.getStr?` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.getNum?` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Time.lean` |
+| `Json.getNat?` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Time.lean` |
+| `Json.getInt?` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Time.lean` |
+| `Json.getBool?` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.getObjVal?` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` and 1 more |
 | `Json.getArrVal?` | tested | `Tests/Json.lean` |
-| `Json.getObjValD` | tested | `Tests/Json.lean` |
+| `Json.getObjValD` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` and 1 more |
 
 ## `Lanes/Data/Json/Classes.lean`
 
@@ -929,43 +1077,43 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Json.Parser.fail` | tested | `Tests/Json.lean` |
-| `Json.Parser.next?` | tested | `Tests/Json.lean` |
-| `Json.Parser.accept` | tested | `Tests/Json.lean` |
-| `Json.Parser.skipWsFrom` | tested | `Tests/Json.lean` |
-| `Json.Parser.skipWs` | tested | `Tests/Json.lean` |
-| `Json.Parser.acceptAll` | tested | `Tests/Json.lean` |
-| `Json.Parser.hexDigit?` | tested | `Tests/Json.lean` |
-| `Json.Parser.hexDigit` | tested | `Tests/Json.lean` |
-| `Json.Parser.hex4` | tested | `Tests/Json.lean` |
-| `Json.Parser.lowSurrogate` | tested | `Tests/Json.lean` |
-| `Json.Parser.escape` | tested | `Tests/Json.lean` |
-| `Json.Parser.strFrom` | tested | `Tests/Json.lean` |
-| `Json.Parser.str` | tested | `Tests/Json.lean` |
-| `Json.Parser.digitsFrom` | tested | `Tests/Json.lean` |
-| `Json.Parser.whole` | tested | `Tests/Json.lean` |
-| `Json.Parser.fraction` | tested | `Tests/Json.lean` |
-| `Json.Parser.exponent` | tested | `Tests/Json.lean` |
-| `Json.Parser.num` | tested | `Tests/Json.lean` |
-| `Json.Parser.literal` | tested | `Tests/Json.lean` |
-| `Json.Parser.key` | tested | `Tests/Json.lean` |
-| `Json.Parser.value` | tested | `Tests/Json.lean` |
+| `Json.Parser.fail` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.next?` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.accept` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.skipWsFrom` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.skipWs` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.acceptAll` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.hexDigit?` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.hexDigit` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.hex4` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.lowSurrogate` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.escape` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.strFrom` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.str` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.digitsFrom` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.whole` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.fraction` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.exponent` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.num` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.literal` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.key` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.Parser.value` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
 | `Json.Parser.elements` | spec | used only in statements |
 | `Json.Parser.fields` | spec | used only in statements |
-| `Json.Parser.document` | tested | `Tests/Json.lean` |
-| `Json.parse` | tested | `Tests/Json.lean` |
+| `Json.Parser.document` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.parse` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
 
 ## `Lanes/Data/Json/Printer.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Json.needsEscape` | tested | `Tests/Json.lean` |
-| `Json.escapeChar` | tested | `Tests/Json.lean` |
-| `Json.escape` | tested | `Tests/Json.lean` |
-| `Json.renderString` | tested | `Tests/Json.lean` |
-| `Json.separate` | tested | `Tests/Json.lean` |
-| `Json.compressTo` | tested | `Tests/Json.lean` |
-| `Json.compress` | tested | `Tests/Json.lean` |
+| `Json.needsEscape` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.escapeChar` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.escape` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.renderString` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.separate` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.compressTo` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Json.compress` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
 | `Json.newline` | tested | `Tests/Json.lean` |
 | `Json.prettyTo` | tested | `Tests/Json.lean` |
 | `Json.pretty` | tested | `Tests/Json.lean` |
@@ -1010,6 +1158,40 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `randomBytes` | trusted | TRUSTED.md: The C |
 | `Argon2id.hash` | trusted | TRUSTED.md: The C |
 
+## `Lanes/Data/TimeFormat.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `TimeFormat.isDigit` | proved | through `TimeFormat.parseHttpDate`, `TimeFormat.parseRfc3339`: `TimeFormat.parseHttpDate_print`, `TimeFormat.parseRfc3339_print` |
+| `TimeFormat.num?` | proved | through `TimeFormat.parseHttpDate`, `TimeFormat.parseRfc3339`: `TimeFormat.parseHttpDate_print`, `TimeFormat.parseRfc3339_print` |
+| `TimeFormat.Timestamp.toUnix` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Time.lean` |
+| `TimeFormat.d2` | proved | through `TimeFormat.printHttpDate?`, `TimeFormat.printRfc3339?`: `TimeFormat.parseHttpDate_print`, `TimeFormat.parseRfc3339_print` |
+| `TimeFormat.d4` | proved | through `TimeFormat.printHttpDate?`, `TimeFormat.printRfc3339?`: `TimeFormat.parseHttpDate_print`, `TimeFormat.parseRfc3339_print` |
+| `TimeFormat.clock` | proved | through `TimeFormat.printHttpDate?`, `TimeFormat.printRfc3339?`: `TimeFormat.parseHttpDate_print`, `TimeFormat.parseRfc3339_print` |
+| `TimeFormat.trimZeros` | proved | through `TimeFormat.printRfc3339?`: `TimeFormat.parseRfc3339_print` |
+| `TimeFormat.fractionChars` | proved | through `TimeFormat.printRfc3339?`: `TimeFormat.parseRfc3339_print` |
+| `TimeFormat.offsetChars` | proved | through `TimeFormat.printRfc3339?`: `TimeFormat.parseRfc3339_print` |
+| `TimeFormat.rfc3339Chars` | proved | through `TimeFormat.printRfc3339?`: `TimeFormat.parseRfc3339_print` |
+| `TimeFormat.InRange` | spec | a predicate |
+| `TimeFormat.instDecidableInRange` | proved | its type, `Decidable` |
+| `TimeFormat.printRfc3339?` | proved | `TimeFormat.parseRfc3339_print` |
+| `TimeFormat.clock?` | proved | through `TimeFormat.parseHttpDate`, `TimeFormat.parseRfc3339`: `TimeFormat.parseHttpDate_print`, `TimeFormat.parseRfc3339_print` |
+| `TimeFormat.fraction?` | proved | through `TimeFormat.parseHttpDate`, `TimeFormat.parseRfc3339`: `TimeFormat.parseHttpDate_print`, `TimeFormat.parseRfc3339_print` |
+| `TimeFormat.offset?` | proved | through `TimeFormat.parseHttpDate`, `TimeFormat.parseRfc3339`: `TimeFormat.parseHttpDate_print`, `TimeFormat.parseRfc3339_print` |
+| `TimeFormat.parseRfc3339` | proved | `TimeFormat.parseRfc3339_print` |
+| `TimeFormat.dayNames` | proved | through `TimeFormat.printHttpDate?`: `TimeFormat.parseHttpDate_print` |
+| `TimeFormat.longDayNames` | proved | through `TimeFormat.parseHttpDate`: `TimeFormat.parseHttpDate_print` |
+| `TimeFormat.monthNames` | proved | through `TimeFormat.printHttpDate?`: `TimeFormat.parseHttpDate_print` |
+| `TimeFormat.nameOf?` | proved | through `TimeFormat.parseHttpDate`: `TimeFormat.parseHttpDate_print` |
+| `TimeFormat.imfChars` | proved | through `TimeFormat.printHttpDate?`: `TimeFormat.parseHttpDate_print` |
+| `TimeFormat.printHttpDate?` | proved | `TimeFormat.parseHttpDate_print` |
+| `TimeFormat.checked` | proved | through `TimeFormat.parseHttpDate`: `TimeFormat.parseHttpDate_print` |
+| `TimeFormat.imf?` | proved | through `TimeFormat.parseHttpDate`: `TimeFormat.parseHttpDate_print` |
+| `TimeFormat.fullYear` | proved | through `TimeFormat.parseHttpDate`: `TimeFormat.parseHttpDate_print` |
+| `TimeFormat.rfc850?` | proved | through `TimeFormat.parseHttpDate`: `TimeFormat.parseHttpDate_print` |
+| `TimeFormat.asctime?` | proved | through `TimeFormat.parseHttpDate`: `TimeFormat.parseHttpDate_print` |
+| `TimeFormat.parseHttpDate` | proved | `TimeFormat.parseHttpDate_print` |
+
 ## `Lanes/Env/Clock.lean`
 
 | Definition | Status | Evidence |
@@ -1040,7 +1222,18 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Http.Client.outside` | trusted | TRUSTED.md: The HTTP client adapter's handler |
+| `Http.Client.exchange` | trusted | TRUSTED.md: The HTTP client adapter's handler |
 | `Http.Client.handler` | trusted | TRUSTED.md: The HTTP client adapter's handler |
+
+## `Lanes/Env/Jobs.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Jobs.Port.alone` | trusted | TRUSTED.md: The jobs pool |
+| `Jobs.handler` | trusted | TRUSTED.md: The jobs pool |
+| `Jobs.compute` | trusted | TRUSTED.md: The jobs pool |
+| `Jobs.withHeader` | trusted | TRUSTED.md: The jobs pool |
+| `Jobs.call` | trusted | TRUSTED.md: The jobs pool |
 
 ## `Lanes/Env/Journal.lean`
 
@@ -1253,7 +1446,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Request.fits` | proved | `Http.Request.read_wire`, `Http.Request.read_wire_extract` |
 | `Http.Request.sent` | proved | `Http.Request.read_wire` |
 | `Http.Request.headWire` | spec | used only in statements |
-| `Http.findL` | proved | `Http.findL_lines` |
+| `Http.findL` | spec | used only in statements |
 | `Http.encodedChar` | spec | used only in statements |
 | `Http.Request.fieldName` | spec | used only in statements |
 | `Http.Request.hexByte` | spec | used only in statements |
@@ -1347,15 +1540,26 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Response.wireAfter` | proved | `Http.Response.read_wireAfter`, `Http.Response.read_wireAfter_extract` |
 | `Http.Response.wireToEnd` | proved | `Http.Response.read_wireToEnd`, `Http.Response.read_wireToEnd_open` |
 
+## `Lanes/Semantics/Account.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Service.run` | spec | used only in statements |
+| `Account.pending` | proved | `Account.Moves.of_le` |
+| `Account.owed` | proved | `Account.Moves.of_le` |
+| `Account.Sim` | spec | a predicate |
+| `Account.Moves` | spec | a predicate |
+| `Account.Handles` | spec | a predicate |
+
 ## `Lanes/Semantics/FairJoin.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Obligation.inl` | proved | through `Wiring.leftView`: `Wiring.leftView_projects` |
-| `Wiring.leftView` | proved | `Wiring.leftView_projects` |
+| `Obligation.inl` | spec | used only in statements |
+| `Wiring.leftView` | spec | used only in statements |
 | `SysState.unhidden` | spec | used only in statements |
 | `SysState.hidden` | spec | used only in statements |
-| `System.underView` | proved | `System.underView_projects` |
+| `System.underView` | spec | used only in statements |
 
 ## `Lanes/Semantics/FairRuns.lean`
 
@@ -1367,11 +1571,18 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `System.fairSchedule` | spec | used only in statements |
 | `System.Run.fairAfter` | spec | used only in statements |
 
+## `Lanes/Semantics/Link.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Envelope.on` | spec | used only in statements |
+| `linkMsgs` | spec | used only in statements |
+
 ## `Lanes/Semantics/Liveness.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Spec.stutter` | proved | through `System.Run`, `System.Run.event` and 2 more: `Examples.Watchdog.exists_fair_run_never_barks`, `Examples.Watchdog.impatient_barks` and 11 more |
+| `Spec.stutter` | proved | through `System.Run`, `System.Run.event` and 2 more: `Examples.Watchdog.exists_fair_run_never_barks`, `Examples.Watchdog.impatient_barks` and 13 more |
 | `Obligation.event` | proved | `System.LeadsTo.ensures_of_invariant` |
 | `Obligation.Due` | spec | a predicate |
 | `Obligation.Restarted` | spec | a predicate |
@@ -1400,8 +1611,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Service.Once.take` | none |  |
-| `Service.once` | none |  |
+| `Service.Once.take` | spec | used only in statements |
+| `Service.once` | spec | used only in statements |
 | `System.ImplementsOnce` | spec | a predicate |
 | `Once.Server.Covered` | spec | a predicate |
 
@@ -1418,7 +1629,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Spec.lts` | proved | `Check.Monitor.complete`, `Check.Monitor.ok_iff`, `Check.Monitor.sound` and 6 more |
+| `Spec.lts` | proved | `Check.Monitor.complete`, `Check.Monitor.ok_iff`, `Check.Monitor.sound` and 8 more |
 | `Spec.Reachable` | spec | a predicate |
 | `Spec.Invariant` | spec | a predicate |
 | `Refines` | spec | a predicate |
@@ -1427,16 +1638,24 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Service.spec` | proved | `Check.Monitor.complete`, `Check.Monitor.ok_iff`, `Check.Monitor.sound` and 1 more |
+| `Service.spec` | proved | `Account.implements`, `Check.Monitor.complete`, `Check.Monitor.ok_iff` and 8 more |
 | `Service.Stable` | spec | a predicate |
+| `Service.Only` | spec | a predicate |
+| `Service.Took` | spec | a predicate |
 | `System.Implements` | spec | a predicate |
 | `Server.abs` | spec | used only in statements |
+
+## `Lanes/Semantics/Simulation.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `System.Stops` | spec | a predicate |
 
 ## `Lanes/Semantics/System.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `System.sem` | proved | `System.reachable_iff` |
+| `System.sem` | proved | `Account.implements`, `Examples.KV.caching_not_implements`, `Examples.KV.implements` and 12 more |
 | `System.Refines` | spec | a predicate |
 
 ## `LanesCli/Generated.lean`
@@ -1491,27 +1710,29 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Cli.Inventory.noneFile` | none |  |
 | `Cli.Inventory.sortStrings` | none |  |
 | `Cli.Inventory.moduleOfPath` | none |  |
-| `Cli.Inventory.pathOfModule` | none |  |
+| `Cli.Inventory.pathOfModule` | tested | `Tests/Inventory.lean` |
 | `Cli.Inventory.modulesIn` | none |  |
 | `Cli.Inventory.imports` | none |  |
-| `Cli.Inventory.gates` | none |  |
+| `Cli.Inventory.gates` | tested | `Tests/Inventory.lean` |
 | `Cli.Inventory.trustedRows` | none |  |
-| `Cli.Inventory.owner` | none |  |
-| `Cli.Inventory.shapeOf` | none |  |
+| `Cli.Inventory.owner` | tested | `Tests/Inventory.lean` |
+| `Cli.Inventory.shapeOf` | tested | `Tests/Inventory.lean` |
 | `Cli.Inventory.specTypes` | none |  |
-| `Cli.Inventory.reportTypes` | none |  |
-| `Cli.Inventory.libraryRoots` | none |  |
-| `Cli.Inventory.isLibrary` | none |  |
-| `Cli.Inventory.ranges` | none |  |
-| `Cli.Inventory.inDeriving` | none |  |
-| `Cli.Inventory.generatedParsers` | none |  |
-| `Cli.Inventory.readFacts` | none |  |
-| `Cli.Inventory.isProp` | none |  |
+| `Cli.Inventory.reportTypes` | tested | `Tests/Inventory.lean` |
+| `Cli.Inventory.libraryRoots` | tested | `Tests/Inventory.lean` |
+| `Cli.Inventory.isLibrary` | tested | `Tests/Inventory.lean` |
+| `Cli.Inventory.ranges` | tested | `Tests/Inventory.lean` |
+| `Cli.Inventory.inDeriving` | tested | `Tests/Inventory.lean` |
+| `Cli.Inventory.generatedParsers` | tested | `Tests/Inventory.lean` |
+| `Cli.Inventory.ofTheorem` | tested | `Tests/Inventory.lean` |
+| `Cli.Inventory.readFacts` | tested | `Tests/Inventory.lean` |
+| `Cli.Inventory.isProp` | tested | `Tests/Inventory.lean` |
 | `Cli.Inventory.isType` | none |  |
-| `Cli.Inventory.usersOf` | none |  |
-| `Cli.Inventory.specs` | none |  |
-| `Cli.Inventory.covers` | none |  |
-| `Cli.Inventory.provedBy` | none |  |
+| `Cli.Inventory.usersOf` | tested | `Tests/Inventory.lean` |
+| `Cli.Inventory.specs` | tested | `Tests/Inventory.lean` |
+| `Cli.Inventory.covers` | tested | `Tests/Inventory.lean` |
+| `Cli.Inventory.statement` | tested | `Tests/Inventory.lean` |
+| `Cli.Inventory.provedBy` | tested | `Tests/Inventory.lean` |
 | `Cli.Inventory.isOutside` | none |  |
 | `Cli.Inventory.reach` | none |  |
 | `Cli.Inventory.exercised` | none |  |
@@ -1542,6 +1763,12 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Cli.Lint.checkFile` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.sourceFiles` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.checkC` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.codeSpans` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.firstBraces` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.expandBraces` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.citedPaths` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.citingDocs` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.checkLinks` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.parseFinding` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.inventory` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.lint` | tested | `Tests/Lint.lean` |
