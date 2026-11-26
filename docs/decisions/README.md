@@ -60,3 +60,4 @@ decision without a number.
 - [D44. A request is prepared before it is journalled](D44-request-prepared-before-journal.md)
 - [D45. Everything is proved; the checker finds bugs, a proof is the evidence](D45-everything-is-proved.md)
 - [D46. Bind what touches physics](D46-bind-what-touches-physics.md)
+- [D47. The inventory is computed from the built library](D47-the-inventory-is-computed.md)

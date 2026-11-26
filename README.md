@@ -134,7 +134,11 @@ a view cannot link or post to a route that does not exist.
   sends and only tested for other forms. `lanes lint` fails if they change without the list,
   and `scripts/mutants.py` holds the known ways of breaking that code, each of which has to
   fail a test. It is a list, not a measure: a review found sixteen more, which are in it now,
-  and `TRUSTED.md` says what it still does not check.
+  and `TRUSTED.md` says what it still does not check. What rests on what, for every public
+  definition, is `docs/INVENTORY.md`: proved (with its theorems), trusted (with its row of
+  `TRUSTED.md`), checked, tested, a spec, or none, generated from the built library.
+  `lanes lint` fails when it is stale, and when a definition without evidence is not on
+  `docs/inventory-none.md`, a list that only shrinks.
 
 ## Kill it and start it again
 
