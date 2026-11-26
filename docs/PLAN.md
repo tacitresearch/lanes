@@ -537,8 +537,19 @@ already known to hold what was chosen. What the framework got back from it: the 
 ghost (`Lanes/Actors/Past.lean`), invariants built in layers (`System.Monotone.and`), and a
 lemma for timers, so the next such proof starts further on.
 
-Next: refinement to the spec, which is stated (`RaftKVProofs.lean`) and wants three things
-the framework lacks: refinement carried through ghost erasure, a rule for several abstract
-steps per concrete step, and a ghost for inputs that never reach an actor; the seeded old-term commit bug found by the checker; the node-to-node transport,
-so that three processes run it.
+Proved since: the top theorem. For every number of nodes, every machine and every
+environment whose links from clients do not duplicate, the cluster implements the machine it
+replicates (`RaftKV.implementsMachine`, D34). The statement was model-checked first in the
+environments it covers, and the checker showed the one hypothesis is needed: a request
+repeated by the link from a client is answered twice. Of the three things the framework was
+thought to lack, one was needed (refinement carried through ghosts), one was already there
+(a refinement step may answer with several abstract steps), and one was avoided (no ghost for
+inputs: the requests still owed are bounded from below, so loss cannot break the relation).
 
+That meets the phase's criterion except for "three machines": the nodes are three processes
+on one machine. Not proved: liveness. Not built: membership change, log compaction, an answer
+from a node that is not the leader, authentication between nodes.
+
+Next: the fifth review's findings; then liveness of Raft, which needs fairness carried
+through a join, and the redesigns the lemma consolidation recommended (one theorem for a
+morphism of systems first).

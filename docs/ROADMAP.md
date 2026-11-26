@@ -161,6 +161,12 @@ function; the theorem that two shards are the one system; a transport between pr
 - *Two gates* until the hand-built one is retired in favour of the gate joined by the general
   operator; a process with both an HTTP front and peers needs the joined one.
 
+**Since this review** (the same day): the lemma library was consolidated, the checker made
+3.5 times faster, the inbox rebuilt as a batch (1.8 million inputs a second on a shard, from
+fifteen thousand), the gate rebuilt as a system joined by the general operator, and Raft proved
+linearizable and run as three processes through two leaders killed. Phase C's criterion is met
+but for running on three machines.
+
 **Verdict.** The direction holds and the order changes a little: the lemma library comes
 before more batteries, because Raft's proofs stand on it, and no adapter is added from here
 on without its deciding function and its model.
