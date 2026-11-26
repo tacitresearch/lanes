@@ -46,6 +46,27 @@ def emits (effs : List (Effect σ i)) : List σ.Out :=
     | .emit out => some out
     | _ => none
 
+theorem mem_sends {effs : List (Effect σ i)} {e : Envelope σ} :
+    e ∈ sends i effs ↔ e.src = some i ∧ .send e.dst e.msg ∈ effs := by
+  obtain ⟨src, dst, msg⟩ := e
+  induction effs with
+  | nil => simp [sends]
+  | cons eff effs ih =>
+    simp only [sends, List.filterMap_cons, List.mem_cons] at ih ⊢
+    cases eff <;> simp only [List.mem_cons, ih, reduceCtorEq, false_or]
+    simp only [Envelope.mk.injEq, send.injEq]
+    exact ⟨fun h => h.elim (fun h => ⟨h.1, .inl h.2⟩) fun h => ⟨h.1, .inr h.2⟩,
+      fun h => h.2.elim (fun h' => .inl ⟨h.1, h'⟩) fun h' => .inr ⟨h.1, h'⟩⟩
+
+theorem mem_armed {effs : List (Effect σ i)} {msg : σ.Msg i} :
+    msg ∈ armed effs ↔ ∃ delay, .after delay msg ∈ effs := by
+  induction effs with
+  | nil => simp [armed]
+  | cons eff effs ih =>
+    simp only [armed, List.filterMap_cons, List.mem_cons] at ih ⊢
+    cases eff <;> simp only [List.mem_cons, ih, reduceCtorEq, false_or]
+    simp only [after.injEq, exists_or, exists_eq_left]
+
 end Effect
 
 namespace SysState
@@ -65,6 +86,27 @@ structure Below (c' c : SysState sys) : Prop where
   net : ∀ e ∈ c'.net, e ∈ c.net
   timers : ∀ i msg, msg ∈ c'.timers i → msg ∈ c.timers i
   outbox : ∀ out ∈ c'.outbox, out ∈ c.outbox
+
+@[simp] theorem grow_state_self (c : SysState sys) (i : σ.Id)
+    (r : sys.State i × List (Effect σ i)) : (c.grow i r).state i = r.1 := by
+  simp [grow]
+
+@[simp] theorem grow_state_of_ne (c : SysState sys) {i j : σ.Id}
+    (r : sys.State i × List (Effect σ i)) (h : j ≠ i) : (c.grow i r).state j = c.state j := by
+  simp [grow, h]
+
+theorem mem_grow_net {c : SysState sys} {i : σ.Id} {r : sys.State i × List (Effect σ i)}
+    {e : Envelope σ} :
+    e ∈ (c.grow i r).net ↔ e ∈ c.net ∨ (e.src = some i ∧ .send e.dst e.msg ∈ r.2) := by
+  simp [grow, Effect.mem_sends]
+
+theorem mem_grow_timers {c : SysState sys} {i j : σ.Id} {r : sys.State i × List (Effect σ i)}
+    {msg : σ.Msg j} :
+    msg ∈ (c.grow i r).timers j ↔
+      msg ∈ c.timers j ∨ ∃ h : j = i, ∃ delay, .after delay (h ▸ msg) ∈ r.2 := by
+  by_cases hj : j = i
+  · subst hj; simp [grow, Effect.mem_armed]
+  · simp [grow, hj]
 
 theorem Below.refl (c : SysState sys) : c.Below c :=
   ⟨rfl, fun _ h => h, fun _ _ h => h, fun _ h => h⟩

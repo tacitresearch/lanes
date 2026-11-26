@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes.Semantics
 import Examples.BankProofs
+import Examples.ElectionProofs
 
 /-!
 The axiom gate (rule 5.5). Each headline theorem may depend only on Lean's three standard
@@ -127,3 +128,8 @@ by `lake build`, not linked into the test executable.
 
 /-- info: 'Lanes.Check.search_unreached_exists' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Check.search_unreached_exists
+/-- info: 'Examples.Election.election_safety' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Examples.Election.election_safety
+
+/-- info: 'Examples.Election.atMostOneLeaderPerTerm_invariant' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Examples.Election.atMostOneLeaderPerTerm_invariant
