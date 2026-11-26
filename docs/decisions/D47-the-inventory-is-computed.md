@@ -70,8 +70,8 @@ predicates run, `Effect.isStop` among them, to theorems about systems. Separatel
 Lean writes for a theorem's proof (its matchers, filed under the theorem's name or a private copy of
 it) are part of the proof: they neither run nor state, and no longer stop what a proof matches on
 from being a spec. They are what left `Service.once` and `Service.Once.take` with status none: the
-two are specs, as are eight definitions the inventory gave as proved. `Tests/Inventory.lean` checks
-both rules on facts written by hand.
+two are specs, as are definitions it gave as proved, `EnvModel.lossy` and `Http.findL` among them.
+`Tests/Inventory.lean` checks both rules on facts written by hand.
 
 *Alternatives.* An attribute `@[proves f]` on theorems says what a gate says, with more
 ceremony, with code in the library to define it, and without checking axioms. Counting every
