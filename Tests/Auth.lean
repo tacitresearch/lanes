@@ -58,7 +58,7 @@ def tokenTests : List (String × Bool) :=
         && !checkForm key token (formToken key (sign key "session" "8.alice"))
         && !checkForm key token "") ]
 
-def password : Password := { iterations := 2, pepper := "pepper".toUTF8 }
+def password : Password := { cost := { ops := 1, mem_kib := 64 }, pepper := "pepper".toUTF8 }
 
 def loginTests : List (String × Bool) :=
   let alice := password.digest "alice" "correct horse"
@@ -71,7 +71,9 @@ def loginTests : List (String × Bool) :=
         && alice != password.digest "bob" "correct horse"),
     ("password: and on the deployment's pepper",
       alice != ({ password with pepper := "other".toUTF8 }).digest "alice" "correct horse"),
-    ("password: a digest is 32 bytes", alice.bytes.size == 32),
+    ("password: a digest is 32 bytes, and reads back from its hex",
+      alice.bytes.size == 32 && Digest.ofHex? alice.hex == some alice
+        && Digest.ofHex? "zz" == none),
     ("attempts: the limit-th failure locks, and success does not unlock",
       let a := ((({} : Attempts).fail 3).fail 3)
       !a.locked && (a.fail 3).locked && (a.fail 3).succeed.locked && ((a.fail 3).fail 3).failures == 3),

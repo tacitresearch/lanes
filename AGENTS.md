@@ -25,8 +25,15 @@ lake build           # the library
 lake test            # pure tests and live runtime tests, a few seconds
 lake exe lanesCheck  # larger model checks, random runs and the scale benchmark, about 20 s: run once, never in a loop
 lake exe lanes lint  # LANES_STYLE checks, and that generated files are up to date
-lake exe lanes lint --fix  # rewrite the generated files: line counts, decisions' index, STATUS
+lake exe lanes lint --fix  # rewrite the generated files: line counts, decisions' index, STATUS, INVENTORY
+lake exe lanes inventory --list none  # the definitions of Lanes/ without evidence
 ```
+
+`docs/INVENTORY.md` gives every public definition a status, read from the built modules
+(`docs/decisions/D47-the-inventory-is-computed.md`). A theorem makes what it states proved when
+it has an axiom gate. A new definition of `Lanes/` with no theorem, test or row of `TRUSTED.md`
+fails `lanes lint` unless it is on `docs/inventory-none.md` under a heading that says why; when
+one there gets evidence, take it off.
 
 ## Parallel branches
 
@@ -34,7 +41,10 @@ Several agents work at once, each on a branch that is merged into the main branc
 gives independent changes disjoint files; keep it that way.
 
 - Commit after every step that builds.
-- Before reporting, merge the main branch and run the checks again.
+- Before reporting, merge the main branch and run the checks again. Generated files
+  (`docs/STATUS.md`, `docs/INVENTORY.md`, the decisions index) never need resolving: run
+  `git config merge.generated.driver true` once, and after a merge run
+  `lake exe lanes lint --fix`, which writes them again.
 - A new decision is a new file `docs/decisions/new-<slug>.md` whose first line is
   `# D?. Title`. Do not choose its number: `lake exe lanes lint --fix --main` numbers it on the
   main branch after the merge.
@@ -50,18 +60,40 @@ gives independent changes disjoint files; keep it that way.
 The toolchain is pinned in `lean-toolchain` and follows CSLib's. Dependencies are pinned in
 `lake-manifest.json`; upgrade them deliberately, CSLib first.
 
+## Seeing a goal without a rebuild
+
+`scripts/lean-goals` asks the Lean language server for a file's errors and the goals at some of
+its lines, so a proof can be worked on without rebuilding the file each time:
+
+```bash
+scripts/lean-goals --daemon Lanes/Http/WireSound.lean 1710 1702:4   # start a server, ask it
+scripts/lean-goals Lanes/Http/WireSound.lean 1710                   # later calls use it
+scripts/lean-goals --stop                                            # when done
+```
+
+`LINE` counts from 1 and `COL` from 0, as in Lean's messages; without `COL` it prints the goals
+before and after the line. The daemon keeps the file open: after an edit it elaborates again
+only from the first changed command, so an edit near the end of `WireSound.lean` takes half a
+second instead of the six of `lake env lean` (measured under load 9 here). The first call costs a
+full elaboration. A daemon belongs to the package that holds the file (its socket is that
+package's `.lake/lean-goals.sock`, so each worktree has its own), builds the file's imports when
+they are out of date, and stops by itself after an hour unused. It reopens a file whose imports
+Lean reports out of date; `--reopen` forces that. It does not replace `lake build` before a
+commit.
+
 ## Layout
 
 | Path | Contents | May import |
 | --- | --- | --- |
 | `Lanes/Actors/` | `Actor`, `Signature`, `Effect`, `System`, the world step function, scheduler, runtime | `Std` only |
-| `Lanes/Data/` | Small data utilities (`Enum`; lemmas about lists in `List/`, strings in `Utf8` and byte arrays in `ByteArray`), codecs and `lanes_data` (`Codec`, `Declare`), the JSON library (`Json`), SHA-256, HMAC and PBKDF2 (`Sha256`, `Hmac`) | `Std` only |
+| `Lanes/Data/` | Small data utilities (`Enum`; lemmas about lists in `List/`, strings in `Utf8` and byte arrays in `ByteArray`), codecs and `lanes_data` (`Codec`, `Declare`), the JSON library (`Json`), SHA-256 and HMAC in Lean (`Sha256`, `Hmac`), the references of what `Sodium` binds from libsodium | `Std` only |
 | `Lanes/Auth/` | Signed tokens, form tokens, password digests, failed attempts, sessions | `Std` only |
+| `native/` | The C that binds libsodium and `fsync` (`lanes.c`), every line of it trusted and counted in `TRUSTED.md` | libsodium, the C library |
 | `Lanes/Check/` | Model checker | `Std` only |
 | `Lanes/Http/`, `Lanes/Html/` | HTTP requests and responses as data; HTML values and template syntax | `Std` only |
 | `Lanes/Env/` | Adapters to the outside world (HTTP server) | `Std` only |
 | `Lanes/Semantics/` | The semantics as a CSLib `LTS`, refinement, fairness and leads-to | CSLib, Mathlib |
-| `LanesCli/` | The `lanes` command: `new`, `lint`, `check` | `Std` only |
+| `LanesCli/` | The `lanes` command: `new`, `lint`, `check`, `inventory` | `Std` only; `Lean` in `Inventory`, which only `lanesInventory` links |
 | `templates/app/` | The application `lanes new` creates; embedded in the `lanes` binary | |
 | `Examples/` | Reference apps, checked and proved | anything |
 | `Tests/` | Regression tests run by `lake test` | anything |

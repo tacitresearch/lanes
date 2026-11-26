@@ -319,6 +319,9 @@ import Lanes.Semantics
 #guard_msgs in #print axioms Lanes.SysState.mem_seen_grow_of_mem
 
 -- Lanes.Actors.Release
+/-- info: 'Lanes.Event.filterMap_eq_of_awake' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Event.filterMap_eq_of_awake
+
 /-- info: 'Lanes.SysState.Released.visible' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.SysState.Released.visible
 

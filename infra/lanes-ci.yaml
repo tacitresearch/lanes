@@ -1,0 +1,232 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Lanes CI: one warm EC2 machine of GitHub Actions runners (label `lanes`), which the workflows
+  start and stop through GitHub's OIDC provider, with no AWS keys stored anywhere. See
+  docs/RUNNERS.md.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label: { default: GitHub }
+        Parameters: [GitHubRepository, GitHubToken, ExistingOidcProviderArn, ScriptRef]
+      - Label: { default: The runner machine }
+        Parameters: [InstanceType, VolumeSize, RunnerCount, IdleHours, KeyName, VpcId, SubnetId, ImageId]
+
+Parameters:
+  GitHubRepository:
+    Type: String
+    Default: tacitresearch/lanes
+    AllowedPattern: "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+    Description: The repository whose workflows may start and stop the machine, as owner/name.
+  GitHubToken:
+    Type: String
+    NoEcho: true
+    MinLength: 1
+    Description: >-
+      A fine-grained GitHub token for that repository only, with Administration (read and write)
+      and Contents (read). Kept in Secrets Manager; the machine uses it to register its runners
+      and to clone the repository.
+  ExistingOidcProviderArn:
+    Type: String
+    Default: ""
+    Description: >-
+      The ARN of the account's IAM OIDC provider for token.actions.githubusercontent.com, if it
+      has one already (IAM, Identity providers). Empty to create it.
+  ScriptRef:
+    Type: String
+    Default: main
+    Description: The branch or commit of the repository whose scripts/ec2-runner.sh sets the machine up.
+  InstanceType:
+    Type: String
+    Default: c7a.16xlarge
+    AllowedValues:
+      - c7a.8xlarge
+      - c7a.12xlarge
+      - c7a.16xlarge
+      - c7a.24xlarge
+      - c7i.8xlarge
+      - c7i.12xlarge
+      - c7i.16xlarge
+      - c7i.24xlarge
+    Description: c7a.16xlarge has 64 cores (no SMT) and 128 GiB, for 16 runners. See docs/RUNNERS.md.
+  VolumeSize:
+    Type: Number
+    Default: 200
+    MinValue: 100
+    MaxValue: 2000
+    Description: GiB of gp3 disk. The toolchain, Mathlib and a build per runner take about 40.
+  RunnerCount:
+    Type: Number
+    Default: 0
+    MinValue: 0
+    MaxValue: 64
+    Description: Runner processes on the machine; 0 for one per 4 vCPUs.
+  IdleHours:
+    Type: Number
+    Default: 2
+    MinValue: 0
+    MaxValue: 48
+    Description: The machine stops itself after this many hours without a job; 0 for never.
+  KeyName:
+    Type: String
+    Default: ""
+    Description: >-
+      An EC2 key pair, optional. The machine accepts no inbound connections; use Session Manager
+      (EC2, Connect) to reach a shell.
+  VpcId:
+    Type: String
+    Default: ""
+    Description: Empty for the default VPC. Give it with SubnetId.
+  SubnetId:
+    Type: String
+    Default: ""
+    Description: Empty for a default subnet of the default VPC. It must reach the internet.
+  ImageId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id
+    Description: Ubuntu 24.04, from Canonical's public parameter.
+
+Conditions:
+  CreateOidcProvider: !Equals [!Ref ExistingOidcProviderArn, ""]
+  HasKey: !Not [!Equals [!Ref KeyName, ""]]
+  HasVpc: !Not [!Equals [!Ref VpcId, ""]]
+  HasSubnet: !Not [!Equals [!Ref SubnetId, ""]]
+
+Resources:
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: CreateOidcProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList: [sts.amazonaws.com]
+      ThumbprintList:
+        - 6938fd4d98bab03faadb97b34396831e3780aea1
+        - 1c58a3a8518e8759bf075b76b750d4f2df264fcd
+
+  # What the workflows assume: start, stop and look at this one machine.
+  CiRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Assumed by the repository's GitHub Actions workflows to start and stop the Lanes runner machine.
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !If [CreateOidcProvider, !GetAtt GitHubOidcProvider.Arn, !Ref ExistingOidcProviderArn]
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                token.actions.githubusercontent.com:sub:
+                  - !Sub repo:${GitHubRepository}:ref:refs/heads/*
+                  - !Sub repo:${GitHubRepository}:pull_request
+      Policies:
+        - PolicyName: start-stop-the-runner-machine
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [ec2:StartInstances, ec2:StopInstances]
+                Resource: !Sub arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:instance/${RunnerInstance}
+                Condition:
+                  StringEquals:
+                    aws:ResourceTag/lanes-ci: box
+              - Effect: Allow
+                Action: ec2:DescribeInstances
+                Resource: "*"
+
+  GitHubTokenSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: The GitHub token the Lanes runner machine registers its runners with.
+      SecretString: !Ref GitHubToken
+
+  # What the machine itself may do: read that token. Session Manager gives a shell without SSH.
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ec2.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: read-the-github-token
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Ref GitHubTokenSecret
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: [!Ref InstanceRole]
+
+  RunnerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Lanes CI runners - no inbound, all outbound (GitHub, Mathlib cache, package mirrors)
+      # No ingress rules; a new group allows all outbound by itself.
+      VpcId: !If [HasVpc, !Ref VpcId, !Ref AWS::NoValue]
+
+  RunnerInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref ImageId
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref InstanceProfile
+      KeyName: !If [HasKey, !Ref KeyName, !Ref AWS::NoValue]
+      SubnetId: !If [HasSubnet, !Ref SubnetId, !Ref AWS::NoValue]
+      SecurityGroupIds: [!GetAtt RunnerSecurityGroup.GroupId]
+      InstanceInitiatedShutdownBehavior: stop
+      MetadataOptions:
+        HttpTokens: required
+        HttpPutResponseHopLimit: 1
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeType: gp3
+            VolumeSize: !Ref VolumeSize
+            Encrypted: true
+            DeleteOnTermination: true
+      Tags:
+        - { Key: Name, Value: lanes-ci }
+        - { Key: lanes-ci, Value: box }
+      # First boot only. ec2-runner.sh installs a service that registers the runners again at
+      # each boot when GitHub has removed them.
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -euo pipefail
+          exec >>/var/log/lanes-setup.log 2>&1
+          export PATH="$PATH:/snap/bin"
+          command -v aws >/dev/null || snap install aws-cli --classic
+          pat=$(aws secretsmanager get-secret-value --region ${AWS::Region} \
+            --secret-id ${GitHubTokenSecret} --query SecretString --output text)
+          curl -fsSL -H @<(printf 'Authorization: Bearer %s\n' "$pat") \
+            -H "Accept: application/vnd.github.raw+json" \
+            -o /root/ec2-runner.sh \
+            "https://api.github.com/repos/${GitHubRepository}/contents/scripts/ec2-runner.sh?ref=${ScriptRef}"
+          unset pat
+          REPO=${GitHubRepository} TOKEN_SECRET=${GitHubTokenSecret} AWS_REGION=${AWS::Region} \
+            RUNNERS=${RunnerCount} IDLE_HOURS=${IdleHours} NAME=lanes-ci LABELS=lanes \
+            bash /root/ec2-runner.sh
+
+Outputs:
+  RoleArn:
+    Description: Repository variable LANES_AWS_ROLE_ARN
+    Value: !GetAtt CiRole.Arn
+  InstanceId:
+    Description: Repository variable LANES_AWS_INSTANCE_ID
+    Value: !Ref RunnerInstance
+  Region:
+    Description: Repository variable LANES_AWS_REGION
+    Value: !Ref AWS::Region
