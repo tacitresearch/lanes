@@ -1,0 +1,141 @@
+# The corpus of the request reader's differential test. Each line: a name, the verdict of
+# `Request.read` with the default limits, and the bytes. `lake test` checks the verdicts
+# (Tests/ReadRequest.lean); scripts/requests.py compares them with other parsers.
+#
+# A verdict is what reading from the start and again from where each request ended gives:
+# ok:METHOD:BYTES for a request with a body of that many bytes, then `more` or a status.
+# In the bytes: \r \n \t \\ \xHH, and \*N(text) for text repeated N times.
+simple get	ok:GET:0 more	GET / HTTP/1.1\r\nHost: example.com\r\n\r\n
+get with path and query	ok:GET:0 more	GET /a/b%20c/?x=1&y=a+b&z HTTP/1.1\r\nHost: example.com\r\n\r\n
+head	ok:HEAD:0 more	HEAD /x HTTP/1.1\r\nHost: example.com\r\n\r\n
+post with length	ok:POST:5 more	POST /p HTTP/1.1\r\nHost: a\r\nContent-Length: 5\r\n\r\nhello
+put patch delete	ok:PUT:2 ok:PATCH:0 ok:DELETE:0 more	PUT /p HTTP/1.1\r\nHost: a\r\nContent-Length: 2\r\n\r\nokPATCH /p HTTP/1.1\r\nHost: a\r\n\r\nDELETE /p HTTP/1.1\r\nHost: a\r\nContent-Length: 0\r\n\r\n
+chunked	ok:POST:11 more	POST /p HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n6\r\n world\r\n0\r\n\r\n
+chunked in capitals with leading zeros	ok:POST:26 more	POST /p HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: CHUNKED\r\n\r\n001A\r\nabcdefghijklmnopqrstuvwxyz\r\n000\r\n\r\n
+chunked with spaces around the coding	ok:POST:2 more	POST /p HTTP/1.1\r\nHost: a\r\nTransfer-Encoding:   chunked  \r\n\r\n2\r\nok\r\n0\r\n\r\n
+empty chunked body	ok:POST:0 more	POST /p HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n
+pipelined gets	ok:GET:0 ok:GET:0 ok:GET:0 more	GET /1 HTTP/1.1\r\nHost: a\r\n\r\nGET /2 HTTP/1.1\r\nHost: a\r\n\r\nGET /3 HTTP/1.1\r\nHost: a\r\n\r\n
+pipelined post then get	ok:POST:3 ok:GET:0 more	POST /p HTTP/1.1\r\nHost: a\r\nContent-Length: 3\r\n\r\nabcGET / HTTP/1.1\r\nHost: a\r\n\r\n
+pipelined chunked then get	ok:POST:1 ok:GET:0 more	POST /p HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked\r\n\r\n1\r\nx\r\n0\r\n\r\nGET / HTTP/1.1\r\nHost: a\r\n\r\n
+http 1.0 without host	ok:GET:0 more	GET / HTTP/1.0\r\n\r\n
+http 1.0 with length	ok:POST:2 more	POST / HTTP/1.0\r\nContent-Length: 2\r\n\r\nok
+values with blanks, tabs, empty and utf-8	ok:GET:0 more	GET / HTTP/1.1\r\nHost: a\r\nX-A:   spaced   \r\nX-B:\tt\r\nX-C:\r\nX-D: caf\xc3\xa9\r\nX-E: a b\tc\r\n\r\n
+no blank after the colon	ok:GET:0 more	GET / HTTP/1.1\r\nHost:a\r\nX-A:b\r\n\r\n
+length with leading zeros and blanks	ok:POST:2 more	POST / HTTP/1.1\r\nHost: a\r\nContent-Length:  002 \r\n\r\nok
+expect continue	ok:POST:2 more	POST / HTTP/1.1\r\nHost: a\r\nExpect: 100-continue\r\nContent-Length: 2\r\n\r\nok
+connection close	ok:GET:0 more	GET / HTTP/1.1\r\nHost: a\r\nConnection: close\r\n\r\n
+host with port and ip literal	ok:GET:0 ok:GET:0 more	GET / HTTP/1.1\r\nHost: example.com:8080\r\n\r\nGET / HTTP/1.1\r\nHost: [::1]:80\r\n\r\n
+target with sub-delims and escapes	ok:GET:0 more	GET /!$&'()*+,;=:@-._~%41/?q=/?:@!$'()*+,;= HTTP/1.1\r\nHost: a\r\n\r\n
+a cut head waits	more	GET / HTTP/1.1\r\nHost: a\r\n
+a cut body waits	more	POST / HTTP/1.1\r\nHost: a\r\nContent-Length: 10\r\n\r\nshort
+a cut chunk waits	more	POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhel
+nothing	more
+# The request line
+an empty line before the request	400	\r\nGET / HTTP/1.1\r\nHost: a\r\n\r\n
+a request line alone	400	\r\n\r\n
+http 0.9	400	GET /\r\n\r\n
+lowercase method	501	get / HTTP/1.1\r\nHost: a\r\n\r\n
+unknown method	501	FOO / HTTP/1.1\r\nHost: a\r\n\r\n
+options	501	OPTIONS / HTTP/1.1\r\nHost: a\r\n\r\n
+options asterisk	501	OPTIONS * HTTP/1.1\r\nHost: a\r\n\r\n
+connect	501	CONNECT a:443 HTTP/1.1\r\nHost: a:443\r\n\r\n
+method not a token	400	G@T / HTTP/1.1\r\nHost: a\r\n\r\n
+absolute form	400	GET http://a/ HTTP/1.1\r\nHost: a\r\n\r\n
+asterisk with get	400	GET * HTTP/1.1\r\nHost: a\r\n\r\n
+two spaces	400	GET  / HTTP/1.1\r\nHost: a\r\n\r\n
+tab between parts	400	GET\t/ HTTP/1.1\r\nHost: a\r\n\r\n
+trailing space	400	GET / HTTP/1.1 \r\nHost: a\r\n\r\n
+space in target	400	GET /a b HTTP/1.1\r\nHost: a\r\n\r\n
+version 1.2	505	GET / HTTP/1.2\r\nHost: a\r\n\r\n
+version 2.0	505	GET / HTTP/2.0\r\nHost: a\r\n\r\n
+version in lowercase	400	GET / http/1.1\r\nHost: a\r\n\r\n
+version 1.10	400	GET / HTTP/1.10\r\nHost: a\r\n\r\n
+quote in target	400	GET /"x" HTTP/1.1\r\nHost: a\r\n\r\n
+angle brackets in target	400	GET /<x> HTTP/1.1\r\nHost: a\r\n\r\n
+pipe in query	400	GET /?a=1|2 HTTP/1.1\r\nHost: a\r\n\r\n
+braces in query	400	GET /?a={1} HTTP/1.1\r\nHost: a\r\n\r\n
+backslash in path	400	GET /a\\b HTTP/1.1\r\nHost: a\r\n\r\n
+fragment	400	GET /#x HTTP/1.1\r\nHost: a\r\n\r\n
+non-ascii in target	400	GET /caf\xc3\xa9 HTTP/1.1\r\nHost: a\r\n\r\n
+bad escape	400	GET /%zz HTTP/1.1\r\nHost: a\r\n\r\n
+cut escape	400	GET /a% HTTP/1.1\r\nHost: a\r\n\r\n
+escape that is not utf-8	400	GET /%ff HTTP/1.1\r\nHost: a\r\n\r\n
+request line too long	414	GET /\*9000(a) HTTP/1.1\r\nHost: a\r\n\r\n
+request line too long without its end	414	GET /\*9000(a)
+# Fields
+no host	400	GET / HTTP/1.1\r\n\r\n
+two hosts	400	GET / HTTP/1.1\r\nHost: a\r\nHost: b\r\n\r\n
+two hosts in http 1.0	400	GET / HTTP/1.0\r\nHost: a\r\nHost: a\r\n\r\n
+empty host	400	GET / HTTP/1.1\r\nHost:\r\n\r\n
+host with a space	400	GET / HTTP/1.1\r\nHost: a b\r\n\r\n
+host with a slash	400	GET / HTTP/1.1\r\nHost: a/b\r\n\r\n
+host with userinfo	400	GET / HTTP/1.1\r\nHost: u@a\r\n\r\n
+no colon	400	GET / HTTP/1.1\r\nHost: a\r\nX-A\r\n\r\n
+empty name	400	GET / HTTP/1.1\r\nHost: a\r\n: b\r\n\r\n
+space in name	400	GET / HTTP/1.1\r\nHost: a\r\nX A: b\r\n\r\n
+space before colon	400	GET / HTTP/1.1\r\nHost : a\r\n\r\n
+tab before colon	400	GET / HTTP/1.1\r\nHost\t: a\r\n\r\n
+obs-fold	400	GET / HTTP/1.1\r\nHost: a\r\nX-A: b\r\n c\r\n\r\n
+obs-fold with tab	400	GET / HTTP/1.1\r\nHost: a\r\nX-A: b\r\n\tc\r\n\r\n
+space before the first field	400	GET / HTTP/1.1\r\n Host: a\r\n\r\n
+bare lf ending the request line	400	GET / HTTP/1.1\nHost: a\r\n\r\n
+bare lf ending a field	400	GET / HTTP/1.1\r\nHost: a\nX-A: b\r\n\r\n
+bare lf ending the head	more	GET / HTTP/1.1\r\nHost: a\n\n
+bare lf head then a request	400	GET / HTTP/1.1\nHost: a\n\nGET / HTTP/1.1\r\nHost: a\r\n\r\n
+bare cr in a value	400	GET / HTTP/1.1\r\nHost: a\r\nX-A: b\rc\r\n\r\n
+bare cr at the end of a value	400	GET / HTTP/1.1\r\nHost: a\r\nX-A: b\r\r\n\r\n
+nul in a value	400	GET / HTTP/1.1\r\nHost: a\r\nX-A: b\x00c\r\n\r\n
+vertical tab in a value	400	GET / HTTP/1.1\r\nHost: a\r\nX-A: b\x0bc\r\n\r\n
+del in a value	400	GET / HTTP/1.1\r\nHost: a\r\nX-A: b\x7fc\r\n\r\n
+obs-text that is not utf-8	400	GET / HTTP/1.1\r\nHost: a\r\nX-A: b\xffc\r\n\r\n
+too many fields	431	GET / HTTP/1.1\r\nHost: a\r\n\*101(X-A: b\r\n)\r\n
+head too large	431	GET / HTTP/1.1\r\nHost: a\r\nX-A: \*17000(b)\r\n\r\n
+head too large without its end	431	GET / HTTP/1.1\r\nHost: a\r\nX-A: \*17000(b)
+# Framing
+CL.TE	400	POST / HTTP/1.1\r\nHost: a\r\nContent-Length: 6\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\nX
+TE.CL	400	POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked\r\nContent-Length: 3\r\n\r\n8\r\nSMUGGLED\r\n0\r\n\r\n
+two equal lengths	400	POST / HTTP/1.1\r\nHost: a\r\nContent-Length: 2\r\nContent-Length: 2\r\n\r\nok
+two different lengths	400	POST / HTTP/1.1\r\nHost: a\r\nContent-Length: 2\r\nContent-Length: 3\r\n\r\nokk
+a list of lengths	400	POST / HTTP/1.1\r\nHost: a\r\nContent-Length: 2, 2\r\n\r\nok
+length with a sign	400	POST / HTTP/1.1\r\nHost: a\r\nContent-Length: +2\r\n\r\nok
+negative length	400	POST / HTTP/1.1\r\nHost: a\r\nContent-Length: -1\r\n\r\n
+hex length	400	POST / HTTP/1.1\r\nHost: a\r\nContent-Length: 0x2\r\n\r\nok
+empty length	400	POST / HTTP/1.1\r\nHost: a\r\nContent-Length:\r\n\r\n
+length with a space inside	400	POST / HTTP/1.1\r\nHost: a\r\nContent-Length: 1 0\r\n\r\n0123456789
+length of twenty digits	400	POST / HTTP/1.1\r\nHost: a\r\nContent-Length: 99999999999999999999\r\n\r\n
+length above the limit	413	POST / HTTP/1.1\r\nHost: a\r\nContent-Length: 2000000\r\n\r\n
+space before the colon of transfer-encoding	400	POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding : chunked\r\n\r\n0\r\n\r\n
+xchunked	400	POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: xchunked\r\n\r\n0\r\n\r\n
+chunked then another coding	400	POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked, gzip\r\n\r\n0\r\n\r\n
+another coding then chunked	501	POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: gzip, chunked\r\n\r\n0\r\n\r\n
+chunked twice in one field	400	POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked, chunked\r\n\r\n0\r\n\r\n
+chunked in two fields	400	POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n
+chunked and another field	400	POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked\r\nTransfer-Encoding: identity\r\n\r\n0\r\n\r\n
+identity	400	POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: identity\r\n\r\n
+empty coding	400	POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding:\r\n\r\n
+chunked with a tab after it	400	POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked\t\r\n\r\n0\r\n\r\n
+chunked after a tab	400	POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding:\tchunked\r\n\r\n0\r\n\r\n
+length after a tab	400	POST / HTTP/1.1\r\nHost: a\r\nContent-Length:\t2\r\n\r\nok
+length with a tab after it	400	POST / HTTP/1.1\r\nHost: a\r\nContent-Length: 2\t\r\n\r\nok
+chunked with a vertical tab	400	POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: \x0bchunked\r\n\r\n0\r\n\r\n
+chunked in http 1.0	400	POST / HTTP/1.0\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n
+transfer encoding folded	400	POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding:\r\n chunked\r\n\r\n0\r\n\r\n
+a field that only looks like transfer-encoding	ok:POST:0 400	POST / HTTP/1.1\r\nHost: a\r\nTransfer_Encoding: chunked\r\n\r\n0\r\n\r\n
+# Chunks
+chunk size with a trailing space	400	POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked\r\n\r\n2 \r\nok\r\n0\r\n\r\n
+chunk size with a leading space	400	POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked\r\n\r\n 2\r\nok\r\n0\r\n\r\n
+chunk size with a sign	400	POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked\r\n\r\n+2\r\nok\r\n0\r\n\r\n
+chunk size in 0x	400	POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked\r\n\r\n0x2\r\nok\r\n0\r\n\r\n
+chunk extension	400	POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked\r\n\r\n2;a=b\r\nok\r\n0\r\n\r\n
+chunk extension on the last chunk	400	POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nok\r\n0;a\r\n\r\n
+chunk extension with a bare lf	400	POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked\r\n\r\n2;\nxx\r\nok\r\n0\r\n\r\n
+chunk size of seventeen digits	400	POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked\r\n\r\n00000000000000002\r\nok\r\n0\r\n\r\n
+chunk size that overflows 64 bits	400	POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked\r\n\r\n10000000000000002\r\nok\r\n0\r\n\r\n
+chunk size above the limit	413	POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked\r\n\r\n200000\r\n
+chunk size with a bare lf	400	POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked\r\n\r\n2\nok\r\n0\r\n\r\n
+chunk data without its crlf	400	POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nokX0\r\n\r\n
+chunk data with a bare lf	400	POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nok\n0\r\n\r\n
+chunk shorter than its size	400	POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nok\r\n0\r\n\r\n
+empty chunk size	400	POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked\r\n\r\n\r\nok\r\n0\r\n\r\n
+trailer	400	POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nok\r\n0\r\nX-T: 1\r\n\r\n
+last chunk without the final crlf then a request	400	POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked\r\n\r\n0\r\nGET / HTTP/1.1\r\nHost: a\r\n\r\n

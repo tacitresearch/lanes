@@ -16,11 +16,14 @@ Usage:
   lanes new <name> [--dir <path>] [--lanes-path <path>] [--rev <rev>]
       Create a new application.
   lanes lint [--fix] [--main] [<path>]
-      Check a project against the LANES_STYLE rules, and the files derived from others.
+      Check a project against the rules of Lanes (AGENTS.md), and the files derived from others.
       --fix rewrites the derived files: line counts, the decisions' index, docs/STATUS.md.
       --main numbers new decisions (with --fix) or reports them: use it on the main branch.
   lanes check
       Run the project's model checks (`lake test`).
+  lanes inventory [--list <status>]
+      In Lanes itself: write docs/INVENTORY.md, every public definition with its status and
+      its evidence, or list the library's definitions of one status (`lake exe lanesInventory`).
 "
 
 def flag? (args : List String) (name : String) : Option String :=
@@ -46,6 +49,9 @@ def main (args : List String) : IO UInt32 := do
     return if (← Lint.run (paths.headD ".") options) == 0 then 0 else 1
   | ["check"] =>
     let child ← IO.Process.spawn { cmd := "lake", args := #["test"] }
+    return (← child.wait)
+  | "inventory" :: rest =>
+    let child ← IO.Process.spawn { cmd := "lake", args := #["exe", "lanesInventory"] ++ rest }
     return (← child.wait)
   | _ =>
     IO.print usage

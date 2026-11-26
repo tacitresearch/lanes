@@ -1,103 +1,211 @@
 # Working on Lanes
 
-Lanes is a framework for building verified software in Lean 4: actors with pure step functions, one
-semantics, a model checker, proofs, and adapters. Read `docs/DESIGN.md` for the plan,
-`docs/STATUS.md` for what exists, `docs/ROADMAP.md` for the phases ahead, `docs/PLAN.md` for what
-is being done next and why, and
-`LANES_STYLE.md` for the rules. `docs/decisions/` records where the implementation settled or
-departed from the design document, with reasons, one file per decision.
+Lanes is a framework for verified software in Lean 4: actors with pure step functions, one
+semantics, a proved runtime kernel, a model checker, proofs, and adapters. This file is the rules,
+for agents and for people. `README.md` is the front door, `docs/ARCHITECTURE.md` says how the
+pieces fit and where each is proved, `docs/STATUS.md` what exists, `docs/PLAN.md` what is being
+done now, `docs/ROADMAP.md` the direction, `docs/decisions/` why, `TRUSTED.md` what is trusted.
 
-## Lanes rules for agents
+Rules carry numbers (rule 2.6) because code, decisions and reviews cite them. Never renumber; a
+new rule takes the next free number in its group. Cite a rule in a PR description when it shaped
+a choice. Each rule says why, so a case it does not cover can be judged.
 
-- Read LANES_STYLE.md before writing code. Cite rule numbers in PR descriptions when a rule shaped a choice.
-- Write or update the spec first; model-check it before writing the implementation or a proof.
-- step is pure: no IO. New external work = new Effect constructor + response message.
-- Encode invariants in types first, theorems second, runtime asserts only at adapters.
-- Never add sorry, partial, unsafe or an axiom without listing it in TRUSTED.md.
-- On an unexpected state, emit stop; do not add defensive fallbacks.
-- Run `lake build && lake test && lake exe lanesCheck` before claiming a task is done.
-
-## Build
+## Build and checks
 
 ```bash
-lake exe cache get   # prebuilt Mathlib; never build Mathlib from source
-lake build           # the library
-lake test            # pure tests and live runtime tests, a few seconds
-lake exe lanesCheck  # larger model checks, random runs and the scale benchmark, about 20 s: run once, never in a loop
-lake exe lanes lint  # LANES_STYLE checks, and that generated files are up to date
-lake exe lanes lint --fix  # rewrite the generated files: line counts, decisions' index, STATUS
+lake exe cache get         # once, in a fresh clone: prebuilt Mathlib; never build Mathlib from source
+lake build --wfail         # the library, warnings as errors (as CI builds it)
+lake test                  # pure tests and live runtime tests, a few seconds
+lake exe lanesCheck        # larger model checks, random runs and the scale benchmark, about 20 s: run once, never in a loop
+lake exe lanes lint        # the checks below, and that generated files are up to date
+lake exe lanes lint --fix  # rewrite the generated files: line counts, decisions' index, STATUS, INVENTORY
+lake exe lanes inventory --list none  # the definitions of Lanes/ without evidence
 ```
 
-## Parallel branches
+- Run `lake build --wfail`, `lake test`, `lake exe lanesCheck` and `lake exe lanes lint` before
+  calling a task done. CI runs them in that order, then `lint --fix` must change nothing, then a
+  generated app is built and tested, and `systems/raft-kv` and `systems/ledger` run as jobs of
+  their own.
+- `lanes lint` checks the text of a project: `no-sorry` (no `sorry` or `admit`), `trusted-listed`
+  (`partial`, `unsafe`, `axiom`, `panic!`, `implemented_by`, `extern` and C only in files
+  `TRUSTED.md` names), `trusted-size` (each trusted file has the line count `TRUSTED.md` gives),
+  `layering` (rule 1.6), `decisions` and `status` (the generated files agree with their sources),
+  `inventory` and `inventory-none` (below), and `links` (every repository path in backquotes in
+  `*.md` and `docs/*.md` exists). It does not check `no-io-in-step`, `bounded`, `field-leak` or
+  `fn-length`: those need the elaborator. The inventory's checks read the built modules: run
+  `lake build lanesInventory` before `lake exe lanes lint --fix`.
+- `docs/INVENTORY.md` gives every public definition a status, read from the built modules
+  (`docs/decisions/D47-the-inventory-is-computed.md`). A theorem makes what it states proved when
+  it has an axiom gate. A new definition of `Lanes/` with no theorem, test or row of `TRUSTED.md`
+  fails `lanes lint` unless it is on `docs/inventory-none.md` under a heading that says why; when
+  one there gets evidence, take it off.
+- Templates are embedded with `include_str`, which Lake does not track: after editing
+  `templates/`, delete `.lake/build/lib/lean/LanesCli/New.*` and `.lake/build/ir/LanesCli/New.*`,
+  rebuild `lanes`, and build an app it generates.
+- The toolchain is pinned in `lean-toolchain` and follows CSLib's. Dependencies are pinned in
+  `lake-manifest.json`; upgrade them deliberately, CSLib first.
+- To work on a proof without rebuilding the file, `scripts/lean-goals` asks a language server it
+  keeps open for a file's errors and the goals at some lines (`LINE` from 1, `COL` from 0):
 
-Several agents work at once, each on a branch that is merged into the main branch. The layout
-gives independent changes disjoint files; keep it that way.
+  ```bash
+  scripts/lean-goals --daemon Lanes/Http/WireSound.lean 1710 1702:4   # start a server, ask it
+  scripts/lean-goals Lanes/Http/WireSound.lean 1710                   # later calls use it
+  scripts/lean-goals --stop                                            # when done
+  ```
 
-- Commit after every step that builds.
-- Before reporting, merge the main branch and run the checks again.
-- A new decision is a new file `docs/decisions/new-<slug>.md` whose first line is
-  `# D?. Title`. Do not choose its number: `lake exe lanes lint --fix --main` numbers it on the
-  main branch after the merge.
-- A change of status goes in its area's fragment, `docs/status/areas/<area>.md` or
-  `docs/status/apps/<app>.md` (the row on the first line, the area's known limits after it).
-  `docs/STATUS.md` is generated; do not edit it.
-- An axiom gate goes in `Tests/Axioms/<Area>.lean`, under the line naming its module; a lemma
-  about lists at the end of its topic's file in `Lanes/Data/List/`.
-- Never type a count: the line counts in `TRUSTED.md` and `README.md` are written by
-  `lake exe lanes lint --fix`. A conflict in a generated file is resolved by taking either side
-  and running `lake exe lanes lint --fix`.
+  After an edit it elaborates again from the first changed command only. Each worktree has its
+  own daemon, which stops after an hour unused; `--reopen` reloads a file whose imports changed.
+  It does not replace `lake build` before a commit.
 
-The toolchain is pinned in `lean-toolchain` and follows CSLib's. Dependencies are pinned in
-`lake-manifest.json`; upgrade them deliberately, CSLib first.
+## Design
 
-## Seeing a goal without a rebuild
+1.1 **Separate the essential from the accidental.** Specs and actor state hold only what the
+problem needs; a cache or an index is a separate view with a theorem tying it to its source.
+*Why:* most complexity is accidental state.
 
-`scripts/lean-goals` asks the Lean language server for a file's errors and the goals at some of
-its lines, so a proof can be worked on without rebuilding the file each time:
+1.2 **Write the spec first**, even five lines, and model-check it before the implementation or a
+proof. *Why:* an interface that cannot be specified is not ready, and the spec is what the code is
+proved against.
 
-```bash
-scripts/lean-goals --daemon Lanes/Http/WireSound.lean 1710 1702:4   # start a server, ask it
-scripts/lean-goals Lanes/Http/WireSound.lean 1710                   # later calls use it
-scripts/lean-goals --stop                                            # when done
-```
+1.3 **Deep modules, narrow interfaces.** Hide much behind a small surface: a few functions and an
+opaque state, not record fields; one actor with three kinds of message over five that forward.
 
-`LINE` counts from 1 and `COL` from 0, as in Lean's messages; without `COL` it prints the goals
-before and after the line. The daemon keeps the file open: after an edit it elaborates again
-only from the first changed command, so an edit near the end of `WireSound.lean` takes half a
-second instead of the six of `lake env lean` (measured under load 9 here). The first call costs a
-full elaboration. A daemon belongs to the package that holds the file (its socket is that
-package's `.lake/lean-goals.sock`, so each worktree has its own), builds the file's imports when
-they are out of date, and stops by itself after an hour unused. It reopens a file whose imports
-Lean reports out of date; `--reopen` forces that. It does not replace `lake build` before a
-commit.
+1.4 **Don't complect.** Keep values apart from identity, `step` from scheduling, policy from
+mechanism. A function that decides and performs is two functions. *Why:* concerns that are
+interleaved cannot be proved one at a time.
 
-## Layout
+1.5 **End-to-end checks at the ends.** Duplicate suppression, ordering and recovery belong to the
+endpoints (request ids, the spec's operation); transport retries are an optimisation, never the
+argument.
+
+1.6 **Layers run one way.** Runtime modules import `Std` only; Mathlib, CSLib and proof modules
+(`Lanes.Semantics`, `…Proofs`) are imported only by proof files (lint `layering`). No cycles.
+*Why:* executable code that imports the proof layer links all of Mathlib (over 150 MB).
+
+1.7 **One concept, one name**, in code, specs and docs; names state units and bounds
+(`timeout_ms`, `maxBatch`).
+
+2.1 **Make illegal states unrepresentable.** A role is a sum type that carries its own data, not
+flags in a record; bounds are subtypes and `Fin`. *Why:* a state the type rules out is an
+invariant never proved.
+
+2.2 **Parse, don't validate.** Adapters turn bytes into typed messages once, at the edge; `step`
+never sees a raw string or an unchecked number.
+
+2.3 **Data, calculations, actions.** Messages and effects are data, `step` and what it calls are
+pure and total, and only the runtime and adapters act.
+
+2.4 **`step` never runs IO.** It returns effects (`send`, `emit`, `after`, `cancel`, `stop`; D3).
+Work outside the system is an output to an adapter whose handler performs it and whose answer
+comes back as an input (D26). *Why:* the semantics stays a plain transition system, and the
+checker and the proofs run the real code.
+
+2.5 **Explicit options.** Configuration is one `structure Config` with every field named, passed
+in at the start; no global settings and no environment lookups in logic.
+
+2.6 **Bound everything.** Every queue, map, retry and batch has a maximum in its type or `Config`,
+and the spec says what happens at the limit (refuse, shed, wait). *Why:* unbounded structures hide
+liveness and memory bugs, and bounds keep the checker finite.
+
+2.7 **Bind only what touches physics** (D46). Write in Lean, and prove, what decides; bind what
+Lean cannot express (timing, the operating system), keep a Lean reference beside each binding,
+and count the C in `TRUSTED.md`.
+
+3.1 **Let it crash.** An actor in a state its spec does not cover emits `stop` rather than limping
+on; it starts again, through `recover`, on its next message (D5, D18). No defensive fallbacks.
+*Why:* defensive code hides the bugs the checker should find.
+
+3.2 **The runtime is the error kernel.** Only the runtime shell, adapters' IO and bound C are
+trusted, they stay small, and an actor's crash never corrupts another's state.
+
+3.3 **Crash-only.** There is no clean-shutdown path: every start, the first included, runs
+`recover`, and the semantics can crash any actor at any step. *Why:* the path that is proved is
+the one that runs on every restart.
+
+3.4 **Requests to the outside have an id and a deadline**, and one that may be retried is
+idempotent or its spec says what a repeat does.
+
+3.5 **Prefer a behaviour.** Before a bespoke actor, check `Lanes/Behaviours/`: each behaviour comes
+with its spec and its proof (`Server.implements`).
+
+3.6 **One message, one atomic transition.** What must touch two actors at once goes through a
+protocol or a single owner, never shared state.
+
+3.7 **Batch at the edges.** The shell batches inputs, journal writes and syncs; `step` still sees
+one message at a time, and a theorem says the batch is unobservable (`Batch.run_kernel`).
+
+3.8 **Back-pressure, not unbounded inboxes.** The inbox is bounded (`inboxCapacity`); when it is
+full the sender is refused (`tryInput`, the server's `503`). The kernel's queue between actors
+has no bound yet (`TRUSTED.md`).
+
+3.9 **An adapter decides nothing in IO.** It is a pure function or a system that decides, a model
+of the outside it talks to (`Outside`), and a handler that only performs (D26, D40). *Why:* every
+defect four reviews found was a decision made in IO code.
+
+## Code
+
+4 **Inside `step` and the logic it calls:**
+
+- State a pre- or postcondition as a type (subtype, `Fin`), a theorem beside the function or an
+  invariant of the spec; `assert!` only where input is untrusted, at an adapter.
+- Total by default: structural recursion or `termination_by`; no `partial`, `unsafe`,
+  `implemented_by` or `extern` outside the files `TRUSTED.md` names (lint `trusted-listed`).
+- Branch on the message once, at the top: one `match`, one handler per constructor, each short
+  enough to be one proof goal; helpers are branch-free calculations over collections.
+- Keep a function under about 70 lines.
+- No `IO.Ref`, `ST` or `unsafe` in logic; no `do` with `mut` in `step` unless it is clearer.
+- Errors are `Except` or a sum type in the result, never `panic!` or `default`; an unexpected
+  state is `stop` (rule 3.1), never a silent skip.
+- Names say units and bounds (rule 1.7); use namespaces, not prefixes.
+
+Conventions:
+
+- Library files use the module system: `module`, `public import`, then `@[expose] public section`
+  (as CSLib does). A definition whose body uses private helpers is `@[no_expose]`.
+- Write almost no comments. A comment or docstring is for a *why* that a name, a type or a theorem
+  cannot carry; never restate the code or narrate a change. Each file keeps a short `/-! -/`
+  header. A public declaration gets a docstring only when its name and type do not say what it
+  is. Do not copy the docstring density of older files. `Lanes/Semantics/` documents every
+  declaration, because CSLib's linter requires it.
+- Define a concrete system with `abbrev`, so instance resolution can see its `State`.
+- Template syntax is scoped: a view file starts with `open scoped Lanes.Html`; a tag follows `<`
+  with no space (`<div>`), and `a < b` with a space is a comparison. Keep views and `main` on
+  `import Lanes`: Mathlib's `<i` token breaks `<input>`.
+- In `do` blocks, `(← action)` inside `a || b` or `a && b` runs whether or not the other side
+  decides. Bind it first when it must be conditional.
+- Lean never updates an object in place once another thread may see it, and state held across an
+  `await` is handed to the task system. Hot state (a kernel, a table) lives on one thread, in an
+  `IO.Ref` used through `modifyGet`.
+- Take pairs apart by pattern (`let (a, b) := f x`), not with `.1` and `.2`, when the first part
+  is large state that is then updated: a projection keeps the pair, and the state, alive.
+- An instance over an abstract signature (`[σ.Inspect] : (joinSig σ τ).Inspect`) is not found for
+  a concrete one, which is an `abbrev` that instance search unfolds. Write it as a named
+  definition and give it in one line: `instance : (joinSig a b).Inspect := .join`.
+- A family of instances by cases on an identity (`∀ i, DecidableEq (Msg i)`, the `Inspect` of a
+  system whose actors differ) is `by instance_by_cases`.
+
+Layout, and what each part may import:
 
 | Path | Contents | May import |
 | --- | --- | --- |
-| `Lanes/Actors/` | `Actor`, `Signature`, `Effect`, `System`, the world step function, scheduler, runtime | `Std` only |
-| `Lanes/Data/` | Small data utilities (`Enum`; lemmas about lists in `List/`, strings in `Utf8` and byte arrays in `ByteArray`), codecs and `lanes_data` (`Codec`, `Declare`), the JSON library (`Json`), SHA-256 and HMAC in Lean (`Sha256`, `Hmac`), the references of what `Sodium` binds from libsodium | `Std` only |
+| `Lanes/Actors/` | `Actor`, `System`, the semantics' step, the kernel, the shell, journal, shards | `Std` only |
+| `Lanes/Data/` | `Enum`, codecs and `lanes_data`, JSON, framing, quorums, SHA-256 and HMAC references, `Sodium`; lemmas about lists (`List/`), strings (`Utf8`), byte arrays (`ByteArray`) | `Std` only |
 | `Lanes/Auth/` | Signed tokens, form tokens, password digests, failed attempts, sessions | `Std` only |
-| `native/` | The C that binds libsodium and `fsync` (`lanes.c`), every line of it trusted and counted in `TRUSTED.md` | libsodium, the C library |
+| `Lanes/Behaviours/` | Standard actors with their specs | `Std` only |
 | `Lanes/Check/` | Model checker | `Std` only |
-| `Lanes/Http/`, `Lanes/Html/` | HTTP requests and responses as data; HTML values and template syntax | `Std` only |
-| `Lanes/Env/` | Adapters to the outside world (HTTP server) | `Std` only |
-| `Lanes/Semantics/` | The semantics as a CSLib `LTS`, refinement, fairness and leads-to | CSLib, Mathlib |
-| `LanesCli/` | The `lanes` command: `new`, `lint`, `check` | `Std` only |
-| `templates/app/` | The application `lanes new` creates; embedded in the `lanes` binary | |
+| `Lanes/Http/`, `Lanes/Html/` | HTTP as data, the gate, routes, the wire format; HTML values and templates | `Std` only |
+| `Lanes/Env/` | Adapters' IO: HTTP server and client, clock, journal files, transport | `Std` only |
+| `Lanes/Semantics/` | The semantics as a CSLib `LTS`, refinement, specs, fairness and leads-to | CSLib, Mathlib |
+| `native/` | The C that binds libsodium and `fsync`, all of it trusted | libsodium, libc |
+| `LanesCli/` | The `lanes` command: `new`, `lint`, `check`, `inventory` | `Std` only; `Lean` in `Inventory`, which only `lanesInventory` links |
+| `templates/app/` | The application `lanes new` creates | |
 | `Examples/` | Reference apps, checked and proved | anything |
-| `Tests/` | Regression tests run by `lake test` | anything |
+| `systems/` | Serious applications, each its own Lake package | anything |
+| `Tests/` | Regression tests run by `lake test` and `lanesCheck` | anything |
 
-Runtime modules never import Mathlib or CSLib (design decision 5). `import Lanes` is the runtime
-layer and gives a binary of a few megabytes; `import Lanes.Semantics` is the proof layer.
-Importing the proof layer from executable code links all of Mathlib into the binary (over 150 MB),
-and Mathlib's `<i` token breaks `<input>` in templates, so keep views and `main` on `import Lanes`.
-
-## Declaring a type for a system
-
-Declare the messages, inputs, outputs and states of a system with `lanes_data`. It is the
-ordinary declaration with a prefix, and its `deriving` clause also takes three classes Lean
-cannot derive without linking `Lean` into the binary:
+Declare the messages, inputs, outputs and states of a system with `lanes_data`: the ordinary
+declaration with a prefix, whose `deriving` also takes three classes Lean cannot derive without
+linking `Lean` into the binary.
 
 ```lean
 lanes_data structure Entry (N C : Type) where
@@ -113,65 +221,98 @@ lanes_data inductive Id (F : Type) where
   deriving DecidableEq, Repr, Hashable, Enum
 ```
 
-- `Codable` gives `Entry.codec : Codec N → Codec C → Codec (Entry N C)` and
-  `instance [Codable N] [Codable C] : Codable (Entry N C)`; `Codec.of T` is the instance's codec.
-  Every field's type needs a `Codable` instance: `Nat`, `Int`, `String`, `Bool`, `Unit`,
-  `ByteArray`, `Fin n`, `Option`, `List`, pairs, sums, sigma types, subtypes, `Std.ExtTreeMap`,
-  and types declared this way. The law holds by construction (`Codec.struct%`, `Codec.sum%`).
-- `Enum` lists every value, from `Enum` instances of the constructors' arguments.
-- `LawfulBEq` gives a structure a `BEq` that compares field by field, and its law, for a structure
-  that holds a function on an `Enum` type and so has no `DecidableEq`. A type parameter that is a
-  field's whole type is compared with its own `BEq`; any other needs `DecidableEq`.
+- `Codable` gives `Entry.codec : Codec N → Codec C → Codec (Entry N C)` and an instance;
+  `Codec.of T` is the instance's codec, and its law holds by construction. Every field's type
+  needs `Codable`: `Nat`, `Int`, `String`, `Bool`, `Unit`, `ByteArray`, `Fin n`, `Option`,
+  `List`, pairs, sums, sigma types, subtypes, `Std.ExtTreeMap`, and types declared this way.
+- `Enum` lists every value. `LawfulBEq` compares a structure field by field, for one that holds a
+  function on an `Enum` type and so has no `DecidableEq`.
+- Arguments are `(x y : T)`, fields `x : T` or `x : T := default`, each with an optional
+  docstring; a constructor may be a keyword (`| open`). A value with a property is a subtype,
+  read back only if the property holds. A field whose type names an earlier field is refused.
+  `extends`, indices and recursive types are not accepted: write those with `structure` or
+  `inductive` and the codec with `Codec.struct%` or `Codec.sum%`.
 
-Constructor arguments are written `(x y : T)`, fields `x : T` or `x : T := default`, each with
-an optional docstring; a constructor may be named by a keyword (`| open`). A value with a
-property is a subtype, `name : {s : String // valid s}`: it is written as the value and read back
-only if the property holds. A field whose type names an earlier field, such as a proof about it,
-is refused by the three classes above. `extends`, indices and recursive types are not accepted:
-declare those with `structure` or `inductive` and write the codec with `Codec.struct%` or
-`Codec.sum%`.
+## Proofs
 
-A family of instances defined by cases on an identity, such as `∀ i, DecidableEq (Msg i)` or the
-`Inspect` of a system whose actors have different messages or states, is `by instance_by_cases`.
+5.1 **Check before you prove.** Every invariant and refinement is model-checked on small bounds
+before a proof is attempted. *Why:* a counterexample costs seconds, a failed proof hours.
 
-## Conventions
+5.2 **One invariant, one name, one sentence.** Each invariant is a named `def` with a docstring
+saying it in English; split conjunctions of more than three clauses so a failure names its clause.
 
-- Library files use the module system: `module`, `public import`, then `@[expose] public section`
-  (as CSLib does). A definition whose body uses private helpers is marked `@[no_expose]`.
-- Write almost no comments. A comment or docstring is for a *why* that a name, a type or a
-  theorem cannot carry. Never restate what the code says, and never narrate a change. If code
-  needs explaining, rename or restructure it. Each file keeps a short `/-! -/` header saying what
-  it is for; a public declaration gets a docstring only when its name and type do not already
-  say what it is. Do not copy the docstring density of older files: it is being removed.
-  Exception: `Lanes/Semantics/` documents every declaration, because CSLib's linter requires it.
-- One actor step handles one message. Branch on the message once, at the top (rule 4).
-- Define a concrete system with `abbrev`, so instance resolution can see its `State`.
-- Prove per-actor invariants with `actor_invariant [myActor]`; it leaves the cases it cannot
-  close as goals.
-- Template syntax is scoped: a view file starts with `open scoped Lanes.Html`. Inside it, a tag
-  name follows `<` with no space (`<div>`); `a < b` with a space is a comparison.
-- In `do` blocks, `(← action)` inside `a || b` or `a && b` runs whether or not the other side
-  decides the result. Bind it first when it must be conditional.
-- Lean never updates an object in place once another thread may see it, and state held across
-  an `await` is handed to the task system. Hot state (a kernel, a table) lives on one thread, in
-  an `IO.Ref` used through `modifyGet`; an `Async` loop would copy it on every update.
-- Take pairs apart by pattern (`let (a, b) := f x`), not with `.1` and `.2`, where the first
-  part is large state that is then updated: a projection keeps the pair, and so the state, alive.
-- An instance stated over an abstract signature (`[σ.Inspect] : (joinSig σ τ).Inspect`) is not
-  found for a concrete one: the concrete signature is an `abbrev`, instance search unfolds it,
-  and `σ.Msg i` no longer matches. Write such instances as named definitions and give them in
-  one line: `instance : (joinSig a b).Inspect := .join`.
-- Templates are embedded with `include_str`, which Lake does not track: after editing
-  `templates/`, touch `LanesCli/New.lean` and rebuild `lanes`. CI builds a generated app.
-- Check before you prove: every invariant gets an `always` property and a `sometimes` vacuity
-  check in a test before its proof is attempted (rules 5.1, 5.3).
-- A lemma that does not mention the system a proof is about does not stay in that proof's file,
-  private or not. Facts about lists go in `Lanes/Data/List/`, at the end of the file of their
-  topic (`Erase`, `Prefix`, `Fold`, else `Basic`); about strings and byte arrays in
-  `Lanes/Data/Utf8.lean` and `Lanes/Data/ByteArray.lean`; about `update`, `SysState`,
-  `run` and `Reachable` beside their definitions in `Lanes/Actors/World.lean`; a step or a run
-  in closed form in `Lanes/Actors/Run.lean`; `NetEquiv` and `SysState.Equiv` in
+5.3 **A vacuity check for every invariant**: an `always` property is paired with a `sometimes`
+showing its guarded state is reachable. *Why:* an invariant over unreachable states passes.
+
+5.4 **Keep abstractions boring.** A refinement map is a short total projection, or a relation
+(D34); history goes in ghosts with an erasure theorem (`System.Invariant.of_ghost`, D20).
+
+5.5 **Trusted code is listed, not hidden.** Every `axiom`, `extern`, `implemented_by`, `unsafe`
+and IO file has a row in `TRUSTED.md`: where, why it is trusted, how it is checked. Lint fails on
+an unlisted one, and the axiom gate (`Tests/Axioms/`) stops compiling when a `sorry` or a new
+axiom reaches a headline theorem.
+
+5.6 **Specs say what happens at limits and on faults**: full queues, timeouts, crashes,
+partitions, even if only "answers `unavailable`".
+
+5.7 **Liveness is designed in.** A liveness property names its fairness assumption
+(`System.Run.Fair`) and its measure before code is written.
+
+5.8 **Everything is proved** (D45). Every definition Lanes ships, and every application in
+`systems/`, is proved against a spec, or binds or performs something named in `TRUSTED.md`. A
+complete PASS of the checker finds bugs; a theorem is the evidence.
+
+Conventions:
+
+- Prove a per-actor invariant with `actor_invariant [myActor]`; it leaves the cases it cannot close
+  as goals. It lifts to every system under every fault model (`System.invariant_of_actor`).
+- A lemma that does not mention the system a proof is about does not stay in that proof's file.
+  Lists: `Lanes/Data/List/`, at the end of the file of its topic (`Erase`, `Prefix`, `Fold`, else
+  `Basic`). Strings and byte arrays: `Lanes/Data/Utf8.lean`, `Lanes/Data/ByteArray.lean`.
+  `update`, `SysState`, `run` and `Reachable`: `Lanes/Actors/World.lean`; a step or a run in
+  closed form: `Lanes/Actors/Run.lean`; `NetEquiv` and `SysState.Equiv`:
   `Lanes/Actors/Equiv.lean`. Look there, and in core `List`, before proving a helper.
 - A layer of a `Monotone` proof that reads states and messages in flight is added with
-  `Monotone.and_net` (or `and_state`), not with `below` and `input` lemmas of its own; a stack
-  of more than two layers gets a structure through `Monotone.of_iff`.
+  `Monotone.and_net` (or `and_state`), not with `below` and `input` lemmas of its own; more than
+  two layers get a structure through `Monotone.of_iff`.
+- A proof that passes about 30 lines of tactics gets named lemmas. Proof pain is a signal about
+  the design, not something to grind through.
+
+## Parallel branches
+
+Several agents work at once, each on a branch merged into the main branch. The layout gives
+independent changes disjoint files; keep it that way.
+
+- Commit after every step that builds. Before reporting, merge the main branch and run the checks
+  again. Generated files (`docs/STATUS.md`, `docs/INVENTORY.md`, the decisions index) never need
+  resolving: run `git config merge.generated.driver true` once (`.gitattributes` names them),
+  and after a merge run `lake exe lanes lint --fix`, which writes them again.
+- A new decision is a new file `docs/decisions/new-<slug>.md` whose first line is `# D?. Title`.
+  Do not choose its number: `lake exe lanes lint --fix --main` numbers it on the main branch.
+- A change of status goes in its fragment, `docs/status/areas/<area>.md` or
+  `docs/status/apps/<app>.md` (the row on the first line, the known limits after it).
+- An axiom gate goes in `Tests/Axioms/<Area>.lean`, under the line naming its module; a lemma
+  about lists at the end of its topic's file in `Lanes/Data/List/`.
+- Never type a count: line counts in `TRUSTED.md` and `README.md`, the decisions' index,
+  `docs/STATUS.md` and `docs/INVENTORY.md` are written by `lake exe lanes lint --fix`. A conflict in a generated file is
+  resolved by taking either side and running it.
+
+## Docs
+
+Agents do what the docs say, so a stale doc is worse than none. Keep each short and current.
+
+- Change a doc in the same commit as the code it describes. A doc says what is, not how it came
+  to be: history is in git, in `docs/decisions/` and in `docs/history/`.
+- `docs/PLAN.md` holds only the work in progress and why; when a step is done, take it off.
+  `docs/ROADMAP.md` holds the direction, the phases and the standing risks.
+- `docs/ARCHITECTURE.md` names the theorem behind each claim; a claim without one says it is
+  checked, tested or trusted.
+- Cite files by their repository path in backquotes; `lanes lint` fails on one that does not
+  exist (`docs/history/` and `docs/decisions/` are exempt: they record the past). Name a module
+  that is not written yet by its module name (`Lanes.Data.Base64`), not its path.
+- `docs/decisions/` is the record of why: never rewrite a decision, write a new one that
+  supersedes it.
+- Write plainly: short sentences, one name per concept, no marketing.
+
+The design rules adapt TigerStyle, Ousterhout's deep modules, Erlang/OTP, crash-only software,
+Lampson's hints, *Out of the Tar Pit*, *Parse, don't validate* and *Grokking Simplicity*.
