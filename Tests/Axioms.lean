@@ -5,6 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import Lanes.Semantics
 import Examples.BankProofs
 import Examples.ElectionProofs
+import Examples.KVProofs
 import Examples.WatchdogProofs
 import Tests.BatchProofs
 
@@ -487,3 +488,12 @@ by `lake build`, not linked into the test executable.
 
 /-- info: 'Tests.Batch.implements_withPast' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Tests.Batch.implements_withPast
+
+/-- info: 'Examples.KV.implements' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Examples.KV.implements
+
+/-- info: 'Examples.KV.caching_not_implements' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Examples.KV.caching_not_implements
+
+/-- info: 'Lanes.System.Refines.traces_of_run' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Refines.traces_of_run
