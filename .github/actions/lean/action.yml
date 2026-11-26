@@ -1,0 +1,78 @@
+name: Lean
+description: >
+  Installs elan, which installs the toolchain of `lean-toolchain` on first use, and restores
+  `.lake/packages` (Mathlib, prebuilt, and the other dependencies, built) and `.lake/build`. The
+  packages are keyed on the toolchain and the manifest and fetched with `lake exe cache get` when
+  missing; the build is keyed on the commit and restored from the newest earlier one otherwise,
+  so Lake rebuilds only what changed. With `system`, `systems/<system>` gets the root's packages
+  and its own build back the same way. Saving is left to the jobs that build: see the keys in
+  the outputs.
+inputs:
+  system:
+    description: A directory under `systems/` whose build to restore as well.
+    required: false
+    default: ""
+outputs:
+  packages-hit:
+    description: Whether `.lake/packages` was restored for exactly this toolchain and manifest.
+    value: ${{ steps.packages.outputs.cache-hit }}
+  packages-key:
+    description: The key to save `.lake/packages` under.
+    value: ${{ steps.keys.outputs.packages }}
+  build-key:
+    description: The key to save `.lake/build` under.
+    value: ${{ steps.keys.outputs.build }}
+  system-key:
+    description: The key to save `systems/<system>/.lake/build` under.
+    value: ${{ steps.keys.outputs.system }}
+runs:
+  using: composite
+  steps:
+    - name: Install elan
+      shell: bash
+      run: |
+        elan_home="${ELAN_HOME:-$HOME/.elan}"
+        if [ ! -x "$elan_home/bin/elan" ]; then
+          curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
+            | sh -s -- -y --no-modify-path --default-toolchain none
+        fi
+        echo "$elan_home/bin" >> "$GITHUB_PATH"
+    - id: keys
+      shell: bash
+      env:
+        ROOT: ${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('lean-toolchain', 'lake-manifest.json') }}
+        SYSTEM: ${{ inputs.system }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('lean-toolchain', 'lake-manifest.json', format('systems/{0}/lake-manifest.json', inputs.system)) }}
+        SHA: ${{ github.sha }}
+      run: |
+        {
+          echo "packages=lake-packages-$ROOT"
+          echo "build-prefix=lake-build-$ROOT-"
+          echo "build=lake-build-$ROOT-$SHA"
+          echo "system-prefix=lake-system-$SYSTEM-"
+          echo "system=lake-system-$SYSTEM-$SHA"
+        } >> "$GITHUB_OUTPUT"
+    - id: packages
+      uses: actions/cache/restore@v4
+      with:
+        path: .lake/packages
+        key: ${{ steps.keys.outputs.packages }}
+    - uses: actions/cache/restore@v4
+      with:
+        path: .lake/build
+        key: ${{ steps.keys.outputs.build }}
+        restore-keys: ${{ steps.keys.outputs.build-prefix }}
+    - name: Fetch Mathlib's build
+      if: steps.packages.outputs.cache-hit != 'true'
+      shell: bash
+      run: lake exe cache get
+    - if: inputs.system != ''
+      shell: bash
+      run: |
+        mkdir -p "systems/${{ inputs.system }}/.lake"
+        ln -sfn "$GITHUB_WORKSPACE/.lake/packages" "systems/${{ inputs.system }}/.lake/packages"
+    - if: inputs.system != ''
+      uses: actions/cache/restore@v4
+      with:
+        path: systems/${{ inputs.system }}/.lake/build
+        key: ${{ steps.keys.outputs.system }}
+        restore-keys: ${{ steps.keys.outputs.system-prefix }}

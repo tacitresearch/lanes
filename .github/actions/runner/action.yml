@@ -1,0 +1,36 @@
+name: Runner label
+description: >
+  The `runs-on` of the jobs that build, as JSON: the repository variable LANES_RUNNER, passed
+  in as `runner` (a label such as `lanes`, or a JSON list such as `["self-hosted", "lanes"]`), or
+  `ubuntu-latest` when it is unset. A pull request from a fork always gets `ubuntu-latest`: its
+  code must never run on a self-hosted runner.
+inputs:
+  runner:
+    description: The value of `vars.LANES_RUNNER`, which a composite action cannot read itself.
+    required: false
+    default: ""
+outputs:
+  label:
+    description: The value for `runs-on`, as JSON.
+    value: ${{ steps.label.outputs.label }}
+runs:
+  using: composite
+  steps:
+    - id: label
+      shell: bash
+      env:
+        LANES_RUNNER: ${{ inputs.runner }}
+        FORK: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+      run: |
+        python3 - <<'EOF' >> "$GITHUB_OUTPUT"
+        import json, os, sys
+        value = os.environ["LANES_RUNNER"].strip()
+        if os.environ["FORK"] == "true" or not value:
+            value = "ubuntu-latest"
+        if value.startswith("["):
+            value = json.loads(value)
+            if not value or not all(isinstance(l, str) for l in value):
+                sys.exit(f"LANES_RUNNER must be a label or a JSON list of labels, not {value}")
+        print(f"label={json.dumps(value)}")
+        print(f"runs-on: {json.dumps(value)}", file=sys.stderr)
+        EOF
