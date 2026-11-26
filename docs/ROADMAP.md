@@ -71,7 +71,8 @@ a `sometimes` property), and once the checker rejected a property its author bel
 
 **What to watch.**
 
-- *Trusted code is growing with features*: about 590 lines, from 430. The shell itself is flat;
+- *Trusted code is growing with features*: about 590 lines, from 430 (and far more since: see
+  the next review). The shell itself is flat;
   the growth is file IO and adapters, each with a conformance test. The lint pins the sizes.
 - *Timers and liveness now agree* (settled after this review, D27). In the semantics, arming
   a pending timer again changes nothing; in the runtime it restarts the delay, which is what a
@@ -98,6 +99,60 @@ a `sometimes` property), and once the checker rejected a property its author bel
 
 **Verdict.** The direction holds. The timer question came first and is settled in the
 definition of a fair run, with the semantics as it was. Phase B starts with shards.
+
+## Review after the first night of phase B (2026-11-26)
+
+**What was built.** A fourth review and its fixes; snapshots; the order of a save as a proved
+function; the theorem that two shards are the one system; a transport between processes;
+`systems/raft-kv`, model-checked and running as three nodes over TCP through a leader's death.
+
+**What the night taught.**
+
+- *An adapter's handler may not decide.* The fourth review could not break anything proved.
+  It found a journal deleted by opening it with the wrong codec, a second process starting on
+  a journal in use, callers left hanging when a write failed. Raft, started on real sockets,
+  worked the first time, and the transport under it did not: a stopped shard kept its
+  connections open. Every one of these was a decision made in IO code. Three adapters now
+  have the right shape. The HTTP server's logic is an actor, the gate. The journal's is a pure
+  function over a model of its two files, with a crash-consistency theorem, and the IO runs
+  the writes it is given. The HTTP client's reading is a pure function. The transport does not
+  have it yet: its queues, its reconnecting and what `stop` ends are IO. **Rule from here on:
+  an adapter is an actor or a pure function that decides, a model of the outside it talks to,
+  and a handler that only performs.** The transport is next to be rebuilt that way.
+- *A snapshot is a restart without the crash.* The plan asked for a theorem that kernels alike
+  in everything observable behave alike, because a restored hash map is not the saved one.
+  Making the running shard go on with the restored kernel removed the need: both sides compute
+  equal values. The general lesson is to make the recovery path the normal path, so that
+  equality replaces equivalence.
+- *Mutants pass.* The review ran mutants of trusted code and three passed the whole suite.
+  Each now fails a test, and every fix since has been checked against its own mutant. A
+  standing mutation run over the trusted files is cheap and is the right gate for them.
+- *The checker is the bottleneck of phase C*, as expected: one crash on three Raft nodes is
+  six million states and ten minutes. A seeded Raft bug that needs four terms took 4.7 million
+  states to find.
+- *A property can be wrong too.* The first leader-completeness property was stronger than
+  Raft's and held on every instance that fitted; a seeded bug in a larger one showed it.
+  Vacuity witnesses do not catch a property that is too strong on states never reached.
+  Seeding bugs and widening one bound at a time is what did.
+
+**What to watch.**
+
+- *Trusted and unproved code is about 1,500 lines*, three times what it was at the end of
+  phase A: the transport (173), the HTTP wire format (411, part proved), the journal and
+  snapshot IO. The pure cores behind them are proved, but the count is the wrong way round
+  for a framework whose point is the opposite, and the rule above is how it comes down.
+- *Proof volume.* The join, the split and the disk model are 1,800, 1,300 and 660 lines.
+  Agents report the same missing lemmas each time (updates of functions, permutations of the
+  net, reachability up to `Equiv` closed under steps). They belong in the core before the
+  Raft proofs multiply them.
+- *Boot order is observable* when a boot actor stops as it starts, which is why the shard
+  theorem carries a condition. Nothing depends on it yet.
+- *Two gates* until the hand-built one is retired in favour of the gate joined by the general
+  operator; a process with both an HTTP front and peers needs the joined one.
+
+**Verdict.** The direction holds and the order changes a little: the transport as an actor
+and the lemma library come before more batteries, because Raft's proofs and Raft's deployment
+both stand on them.
 
 ## Serious applications
 
