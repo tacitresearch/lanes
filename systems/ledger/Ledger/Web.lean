@@ -3,13 +3,16 @@ import Ledger.System
 /-!
 # The web front
 
-Server-rendered pages and htmx. The bridge is where a request becomes an input, and the only
-place that sees a password or a cookie:
+Server-rendered pages and htmx. The bridge is where a request becomes an input, and its
+`prepare` the only place that sees a password or a cookie. The server runs it on the request's
+own task before the request enters the system or its journal (`Http.Bridge.prepare`):
 
-- a password becomes its digest (`Auth.Password.digest`) before the request is an input;
-- a session cookie is a signed token of the session's id and the user's name; a request that
-  carries a valid one becomes `Request.act` with that name and session, and nothing in a request
-  body can name a user;
+- a password becomes its digest (`Auth.Password.digest`), so the journal holds no password, and
+  the slow digest is computed once, off the shard's thread, not again at a replay;
+- a session cookie is a signed token of the session's id and the user's name; `prepare` puts the
+  name and session of one that verifies in its place, and the request becomes `Request.act` with
+  them; nothing in a request body can name a user, and a header of the names `prepare` writes
+  that a client sends is dropped;
 - a form that changes something carries a token bound to the session (`Auth.formToken`) and
   comes from this origin (`Request.sameOrigin`).
 
@@ -106,6 +109,35 @@ def session? (s : Settings) (r : Http.Request) : Option (String × Name × Sid) 
   let payload ← Auth.verify s.key "session" token
   match payload.splitOn "." with
   | [sid, name] => return (token, ← Name.ofString? name, ← sid.toNat?)
+  | _ => none
+
+/-- The headers `prepare` writes. One a client sends is dropped. -/
+def verifiedSession : String := "ledger-verified-session"
+def passwordDigest : String := "ledger-password-digest"
+
+/-- A request with its cookie replaced by the session it verifies, and its password by its
+digest, or by `short` when it is too short to digest. -/
+def prepare (s : Settings) (r : Http.Request) : Http.Request :=
+  let kept := r.headers.filter fun (name, _) =>
+    name != "cookie" && name != verifiedSession && name != passwordDigest
+  let session := (session? s r).map fun (_, name, sid) => (verifiedSession, s!"{sid}.{name}")
+  let digest := match r.field? "name" >>= Name.ofString?, r.field? "password" with
+    | some name, some password =>
+      [(passwordDigest, if password.length < s.minPassword then "short"
+        else (s.password.digest name.text password).hex)]
+    | _, _ => []
+  { r with
+    headers := kept ++ session.toList ++ digest
+    body := if (r.field? "password").isSome
+      then (encodeForm (r.form.filter (·.1 != "password"))).toUTF8 else r.body }
+
+/-- The user and session `prepare` verified, and the session's token, signed again. -/
+def verified? (s : Settings) (r : Http.Request) : Option (String × Name × Sid) := do
+  match (← r.header? verifiedSession).splitOn "." with
+  | [sid, name] =>
+    let name ← Name.ofString? name
+    let sid ← sid.toNat?
+    return (sessionToken s name sid, name, sid)
   | _ => none
 
 def cookie (s : Settings) (value : String) : Cookie :=
@@ -245,14 +277,18 @@ so a fragment that says what is wrong with a form is a `200`. -/
 def invalid (text : String) : Except Http.Response In :=
   .error (fragment (Error text))
 
+/-- The name and the digest `prepare` made of the password. -/
 def credentials (s : Settings) (r : Http.Request) : Except Http.Response (Name × Digest) :=
-  match r.field? "name" >>= Name.ofString?, r.field? "password" with
-  | some name, some password =>
-    if password.length < s.minPassword then
-      .error (page (LoginPage (some (Error s!"A password has at least {s.minPassword} characters."))) 400)
-    else .ok (name, s.password.digest name.text password)
-  | _, _ =>
-    .error (page (LoginPage (some (Error "A name is one to twenty-four lowercase letters and digits."))) 400)
+  let badName :=
+    page (LoginPage (some (Error "A name is one to twenty-four lowercase letters and digits."))) 400
+  match r.field? "name" >>= Name.ofString?, r.header? passwordDigest with
+  | some _, some "short" =>
+    .error (page (LoginPage (some (Error s!"A password has at least {s.minPassword} characters."))) 400)
+  | some name, some digest =>
+    match Auth.Digest.ofHex? digest with
+    | some digest => .ok (name, digest)
+    | none => .error badName
+  | _, _ => .error badName
 
 def notLoggedIn : Http.Response :=
   (Http.Response.redirect (Routes.login.link ())).hxRedirect Routes.login ()
@@ -263,7 +299,7 @@ def forbidden : Http.Response :=
 /-- A request whose cookie names a session, as an input; or how the bridge answers it. -/
 def signedIn (s : Settings) (id : ReqId) (r : Http.Request) (changes : Bool)
     (op : Http.Request → Except Http.Response Op) : Except Http.Response In :=
-  match session? s r with
+  match verified? s r with
   | none => .error notLoggedIn
   | some (token, name, session) =>
     if changes && !(r.sameOrigin s.origin && (r.field? "csrf").any (Auth.checkForm s.key token))
@@ -272,7 +308,7 @@ def signedIn (s : Settings) (id : ReqId) (r : Http.Request) (changes : Bool)
 
 def shell (s : Settings) (r : Http.Request) (view : String → Name → Html) :
     Except Http.Response In :=
-  match session? s r with
+  match verified? s r with
   | some (token, name, _) => .error (page (view token name))
   | none => .error notLoggedIn
 
@@ -334,6 +370,7 @@ def encode (s : Settings) : Reply Name → Http.Response
 def bridge (s : Settings) : Bridge (sig Name Digest) where
   decode := decode s
   encode out := some (out.req, encode s out.reply)
+  prepare := prepare s
 
 /-! ## Saving -/
 

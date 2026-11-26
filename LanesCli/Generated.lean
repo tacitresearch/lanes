@@ -9,7 +9,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Text that is derived from other files, so that no one types it and two branches never edit it
 by hand:
 
-- the line counts in `TRUSTED.md` (`` `path.lean`, N lines ``), from the files, and the total
+- the line counts in `TRUSTED.md` (`` `path.lean`, N lines `` or `` `path.c`, N lines ``), from
+  the files, and the total
   in `README.md` (`About N lines of trusted code`, to the nearest 50);
 - the index of `docs/decisions/README.md`, from the decisions' headings, and the numbers of new
   decisions (`new-<slug>.md`, `# D?. Title`), given on the main branch only;
@@ -102,17 +103,20 @@ def parseCount (after : String) : Option (Nat × String) := do
   guard (!digits.isEmpty && tail.startsWith " lines")
   return ((String.ofList digits).toNat!, tail)
 
-/-- The `` `path.lean`, N lines `` entries of `TRUSTED.md`. -/
+def isTrustedSource (path : String) : Bool :=
+  path.endsWith ".lean" || path.endsWith ".c"
+
+/-- The `` `path.lean`, N lines `` and `` `path.c`, N lines `` entries of `TRUSTED.md`. -/
 def trustedSizes (trusted : String) : List (String × Nat) :=
   let parts := trusted.splitOn "`"
   (parts.zip (parts.drop 1)).filterMap fun (path, after) =>
-    if path.endsWith ".lean" then (parseCount after).map fun (n, _) => (path, n) else none
+    if isTrustedSource path then (parseCount after).map fun (n, _) => (path, n) else none
 
 /-- `TRUSTED.md` with each entry's count replaced by `actual path`, where that is known. -/
 def rewriteSizes (trusted : String) (actual : String → Option Nat) : String :=
   let parts := trusted.splitOn "`"
   let fixed := (parts.zip ("" :: parts)).map fun (part, path) =>
-    if path.endsWith ".lean" then
+    if isTrustedSource path then
       match parseCount part, actual path with
       | some (_, tail), some n => s!", {n}{tail}"
       | _, _ => part

@@ -152,9 +152,10 @@ def run (dir : System.FilePath) : IO (List Bool) := do
   discard again.wait
   let holds (text : String) := (List.range journal.length).any fun k =>
     text.toUTF8.data.toList.isPrefixOf (journal.drop k)
-  IO.println s!"known defect: the journal holds passwords in plain text: \
-    {holds "alice%20password"}, and session cookies: {holds alice.cookie} (README, friction log)"
   [
+    check "the journal holds no password and no session cookie"
+      (!holds "alice%20password" && !holds "alice password" && !holds alice.cookie
+        && !holds bob.cookie && !holds admin.cookie),
     check "the administrator opens an account that may go below zero" (contains issued "#0"),
     check "each user opens an account" (contains aliceOpened "#1" && contains bobOpened "#2"),
     check "money is issued to alice" (contains fund "Done"),

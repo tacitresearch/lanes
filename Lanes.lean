@@ -36,6 +36,7 @@ public import Lanes.Actors.Run
 public import Lanes.Actors.Runtime
 public import Lanes.Auth.Login
 public import Lanes.Auth.Token
+public import Lanes.Behaviours.Once
 public import Lanes.Behaviours.Server
 public import Lanes.Check.Clients
 public import Lanes.Check.Complete
@@ -43,6 +44,7 @@ public import Lanes.Actors.Equiv
 public import Lanes.Check.EquivDecide
 public import Lanes.Check.Fuzz
 public import Lanes.Check.Monitor
+public import Lanes.Check.Once
 public import Lanes.Check.MonitorEquiv
 public import Lanes.Check.Search
 public import Lanes.Check.SearchSound
@@ -63,6 +65,7 @@ public import Lanes.Data.Json
 public import Lanes.Data.List
 public import Lanes.Data.Quorum
 public import Lanes.Data.Sha256
+public import Lanes.Data.Sodium
 public import Lanes.Data.TimeFormat
 public import Lanes.Env.Clock
 public import Lanes.Env.Http
@@ -78,7 +81,6 @@ public import Lanes.Http.Cookie
 public import Lanes.Http.Front
 public import Lanes.Http.FrontSound
 public import Lanes.Http.Gate
-public import Lanes.Http.GateSound
 public import Lanes.Http.Route
 public import Lanes.Http.Waiting
 public import Lanes.Http.Wire
