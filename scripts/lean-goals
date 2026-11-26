@@ -1,0 +1,475 @@
+#!/usr/bin/env python3
+"""The diagnostics of a Lean file and the goals at some of its positions, from the language server.
+
+    scripts/lean-goals FILE                    # its errors, warnings and messages
+    scripts/lean-goals FILE 120 340:6          # and the goals there
+    scripts/lean-goals --daemon FILE 120       # the same through a server kept running
+    scripts/lean-goals --stop                  # stop that server
+
+LINE is counted from 1 and COL from 0, in characters, as in Lean's own messages, so a position
+can be copied from an error. Without COL, the goals before and after the line are shown. Where
+there is no tactic goal, the expected type of the term there is shown.
+
+With `--daemon`, or whenever one is running for the package, the file stays open in a server
+kept by a process of its own (a unix socket in the package's `.lake/`). A call after an edit
+sends the new text, and the server elaborates again only from the first changed command on.
+The daemon stops after `--idle` seconds without a call (an hour by default).
+
+The server builds what the file imports when it is out of date, as `lake build` would; with
+`--no-build` it does not, and the file is elaborated against what is built.
+
+The exit code is 1 when the file has an error and 0 otherwise. Only the standard library is used.
+"""
+import argparse
+import json
+import os
+import pathlib
+import socket
+import subprocess
+import sys
+import threading
+import time
+
+SEVERITY = {1: "error", 2: "warning", 3: "info", 4: "hint"}
+SOCKET_NAME = "lean-goals.sock"
+STALE_IMPORTS = "Imports are out of date"
+
+
+class LspError(Exception):
+    pass
+
+
+class Failure(Exception):
+    """What the tool could not do; exit code 2."""
+
+
+def package_root(start):
+    """The nearest directory at or above `start` with a lakefile."""
+    here = pathlib.Path(start).resolve()
+    if here.is_file():
+        here = here.parent
+    for d in [here, *here.parents]:
+        if (d / "lakefile.toml").exists() or (d / "lakefile.lean").exists():
+            return d
+    raise Failure(f"no lakefile at or above {start}")
+
+
+def utf16_col(line, col):
+    return sum(2 if ord(c) > 0xFFFF else 1 for c in line[:col])
+
+
+def char_col(line, units):
+    n = 0
+    for i, c in enumerate(line):
+        if n >= units:
+            return i
+        n += 2 if ord(c) > 0xFFFF else 1
+    return len(line)
+
+
+class Doc:
+    def __init__(self, path):
+        self.path = path
+        self.uri = path.as_uri()
+        self.version = 0
+        self.text = None
+
+
+class Server:
+    """A Lean language server for one package, spoken to over stdio."""
+
+    def __init__(self, root, log):
+        self.root = root
+        self.proc = subprocess.Popen(
+            ["lake", "env", "lean", "--server"], cwd=root, stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE, stderr=log, start_new_session=True)
+        self.write_lock = threading.Lock()
+        self.cond = threading.Condition()
+        self.next_id = 0
+        self.responses = {}
+        self.diagnostics = {}
+        self.progress = {}
+        self.docs = {}
+        self.dead = False
+        threading.Thread(target=self._read, daemon=True).start()
+        self.request("initialize", {
+            "processId": os.getpid(), "rootUri": root.as_uri(), "capabilities": {}}, 300)
+        self.notify("initialized", {})
+
+    def _send(self, msg):
+        body = json.dumps(dict(jsonrpc="2.0", **msg)).encode()
+        with self.write_lock:
+            self.proc.stdin.write(b"Content-Length: %d\r\n\r\n" % len(body) + body)
+            self.proc.stdin.flush()
+
+    def _read(self):
+        out = self.proc.stdout
+        try:
+            while True:
+                length = None
+                while True:
+                    header = out.readline()
+                    if not header:
+                        raise EOFError
+                    header = header.strip()
+                    if not header:
+                        break
+                    name, _, value = header.partition(b":")
+                    if name.lower() == b"content-length":
+                        length = int(value)
+                msg = json.loads(out.read(length))
+                if "method" in msg and "id" in msg:
+                    self._send({"id": msg["id"], "result": None})
+                elif "id" in msg:
+                    with self.cond:
+                        self.responses[msg["id"]] = msg
+                        self.cond.notify_all()
+                else:
+                    self._notification(msg.get("method"), msg.get("params") or {})
+        except (EOFError, ValueError, OSError):
+            with self.cond:
+                self.dead = True
+                self.cond.notify_all()
+
+    def _notification(self, method, params):
+        uri = params.get("textDocument", {}).get("uri") or params.get("uri")
+        with self.cond:
+            if method == "$/lean/fileProgress":
+                version = params["textDocument"].get("version")
+                self.progress[uri] = (version, params.get("processing", []))
+            elif method == "textDocument/publishDiagnostics":
+                version = params.get("version")
+                old_version, old = self.diagnostics.get(uri, (None, []))
+                new = params.get("diagnostics", [])
+                if params.get("isIncremental") and old_version == version:
+                    new = old + new
+                self.diagnostics[uri] = (version, new)
+            self.cond.notify_all()
+
+    def _wait(self, ready, timeout):
+        deadline = time.monotonic() + timeout
+        with self.cond:
+            while not ready():
+                if self.dead:
+                    raise LspError("the Lean server ended")
+                left = deadline - time.monotonic()
+                if left <= 0:
+                    raise LspError(f"no answer from the Lean server within {timeout:.0f} s")
+                self.cond.wait(left)
+
+    def request(self, method, params, timeout):
+        with self.cond:
+            self.next_id += 1
+            rid = self.next_id
+        self._send({"id": rid, "method": method, "params": params})
+        self._wait(lambda: rid in self.responses, timeout)
+        with self.cond:
+            msg = self.responses.pop(rid)
+        if "error" in msg:
+            raise LspError(f"{method}: {msg['error'].get('message')}")
+        return msg.get("result")
+
+    def notify(self, method, params):
+        self._send({"method": method, "params": params})
+
+    def sync(self, path, build, reopen):
+        """Opens `path`, or sends its text as it now is on disk; returns its document."""
+        doc = self.docs.get(path)
+        text = path.read_text()
+        if doc is not None and reopen:
+            self.notify("textDocument/didClose", {"textDocument": {"uri": doc.uri}})
+            del self.docs[path]
+            doc = None
+        if doc is None:
+            doc = self.docs[path] = Doc(path)
+            doc.version += 1
+            doc.text = text
+            self.notify("textDocument/didOpen", {
+                "textDocument": {"uri": doc.uri, "languageId": "lean4",
+                                 "version": doc.version, "text": text},
+                "dependencyBuildMode": "always" if build else "never"})
+        elif text != doc.text:
+            doc.version += 1
+            doc.text = text
+            self.notify("textDocument/didChange", {
+                "textDocument": {"uri": doc.uri, "version": doc.version},
+                "contentChanges": [{"text": text}]})
+        return doc
+
+    def elaborated(self, doc, timeout):
+        """Waits until the server has elaborated this version of `doc`; its diagnostics."""
+        def done():
+            version, processing = self.progress.get(doc.uri, (None, None))
+            return version == doc.version and not processing
+        self._wait(done, timeout)
+        self.request("textDocument/waitForDiagnostics",
+                     {"uri": doc.uri, "version": doc.version}, timeout)
+        with self.cond:
+            version, diags = self.diagnostics.get(doc.uri, (None, []))
+        if version not in (None, doc.version):
+            return []
+        return [d for d in diags if not d.get("isSilent")]
+
+    def goal(self, doc, line, col, timeout):
+        text_line = doc.text.split("\n")[line]
+        params = {"textDocument": {"uri": doc.uri},
+                  "position": {"line": line, "character": utf16_col(text_line, col)}}
+        goal = self.request("$/lean/plainGoal", params, timeout)
+        if goal is not None:
+            return "\n\n".join(goal["goals"]) if goal["goals"] else "no goals"
+        term = self.request("$/lean/plainTermGoal", params, timeout)
+        if term is not None:
+            return f"expected type:\n{term['goal']}"
+        return "no goal here"
+
+    def close(self):
+        try:
+            self.request("shutdown", None, 10)
+            self.notify("exit", None)
+            self.proc.wait(10)
+        except (LspError, OSError, subprocess.TimeoutExpired):
+            pass
+        try:
+            os.killpg(self.proc.pid, 9)
+        except ProcessLookupError:
+            pass
+
+
+def parse_position(arg, lines):
+    line, _, col = arg.partition(":")
+    try:
+        line = int(line) - 1
+        col = int(col) if col else None
+    except ValueError:
+        raise Failure(f"{arg} is not LINE or LINE:COL")
+    if not 0 <= line < len(lines):
+        raise Failure(f"there is no line {line + 1}")
+    return line, col
+
+
+def query(server, req):
+    """What a call prints, and its exit code."""
+    path = pathlib.Path(req["file"])
+    shown = req["shown"]
+    start = time.monotonic()
+    doc = server.sync(path, req["build"], req["reopen"])
+    diags = server.elaborated(doc, req["timeout"])
+    if any(STALE_IMPORTS in d.get("message", "") for d in diags):
+        doc = server.sync(path, req["build"], True)
+        diags = server.elaborated(doc, req["timeout"])
+    took = time.monotonic() - start
+    lines = doc.text.split("\n")
+    out = []
+    for d in sorted(diags, key=lambda d: (d["range"]["start"]["line"],
+                                          d["range"]["start"]["character"])):
+        at = d["range"]["start"]
+        col = char_col(lines[at["line"]], at["character"]) if at["line"] < len(lines) else 0
+        out.append(f"{shown}:{at['line'] + 1}:{col}: "
+                   f"{SEVERITY.get(d.get('severity'), 'info')}: {d['message']}")
+    for arg in req["positions"]:
+        line, col = parse_position(arg, lines)
+        if col is not None:
+            spots = [(f"{line + 1}:{col}", col)]
+        else:
+            text_line = lines[line]
+            first = len(text_line) - len(text_line.lstrip())
+            spots = [(f"{line + 1}:{first} (before the line)", first),
+                     (f"{line + 1}:{len(text_line)} (after the line)", len(text_line))]
+        shown_goals = []
+        for label, c in spots:
+            goal = server.goal(doc, line, c, req["timeout"])
+            if shown_goals and goal == shown_goals[-1]:
+                out[-1] = out[-1].replace(" (before the line)", " (before and after)")
+                continue
+            shown_goals.append(goal)
+            out.append(f"-- goals at {shown}:{label}\n{goal}")
+    errors = sum(1 for d in diags if d.get("severity") == 1)
+    note = (f"lean-goals: {shown} version {doc.version} elaborated in {took:.1f} s, "
+            f"{errors} error{'s' if errors != 1 else ''}")
+    return "\n".join(out), note, 1 if errors else 0
+
+
+def socket_path(root):
+    return root / ".lake" / SOCKET_NAME
+
+
+def unix_socket(path, bind):
+    """A socket bound or connected to `path`, through a relative name when the path is longer
+    than a unix socket address can be."""
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    target = str(path)
+    here = None
+    if len(target.encode()) > 100:
+        here = os.getcwd()
+        os.chdir(path.parent)
+        target = path.name
+    try:
+        if bind:
+            s.bind(target)
+            s.listen(4)
+        else:
+            s.connect(target)
+    except OSError:
+        s.close()
+        raise
+    finally:
+        if here is not None:
+            os.chdir(here)
+    return s
+
+
+def call(root, req, timeout):
+    """The daemon's answer to `req`, or None when no daemon is running for `root`."""
+    try:
+        s = unix_socket(socket_path(root), bind=False)
+    except OSError:
+        return None
+    with s:
+        s.settimeout(timeout + 60)
+        try:
+            s.sendall(json.dumps(req).encode() + b"\n")
+            data = b""
+            while chunk := s.recv(65536):
+                data += chunk
+            return json.loads(data)
+        except (OSError, ValueError) as e:
+            raise Failure(f"the daemon gave no answer ({e}); "
+                          "see .lake/lean-goals.log")
+
+
+def serve(root, idle):
+    path = socket_path(root)
+    path.parent.mkdir(exist_ok=True)
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        pass
+    listener = unix_socket(path, bind=True)
+    listener.settimeout(30)
+    log = open(root / ".lake" / "lean-goals.log", "ab")
+    server = None
+    last = time.monotonic()
+    try:
+        while time.monotonic() - last < idle:
+            try:
+                conn, _ = listener.accept()
+            except socket.timeout:
+                continue
+            last = time.monotonic()
+            with conn:
+                conn.settimeout(None)
+                data = b""
+                while not data.endswith(b"\n"):
+                    chunk = conn.recv(65536)
+                    if not chunk:
+                        break
+                    data += chunk
+                if not data:
+                    continue
+                req = json.loads(data)
+                if req["op"] == "stop":
+                    conn.sendall(json.dumps({"out": "", "note": "lean-goals: stopped",
+                                             "code": 0}).encode())
+                    break
+                try:
+                    if server is None or server.dead:
+                        server = Server(root, log)
+                    out, note, code = query(server, req)
+                    note += " (daemon)"
+                except Exception as e:
+                    out, note, code = "", f"lean-goals: {e}", 2
+                    if isinstance(e, LspError) and server is not None:
+                        server.close()
+                        server = None
+                conn.sendall(json.dumps({"out": out, "note": note, "code": code}).encode())
+            last = time.monotonic()
+    finally:
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+        if server is not None:
+            server.close()
+
+
+def start_daemon(root, idle):
+    log = open(root / ".lake" / "lean-goals.log", "ab")
+    subprocess.Popen([sys.executable, os.path.abspath(__file__), "--serve", str(root),
+                      "--idle", str(idle)], cwd=root, stdin=subprocess.DEVNULL, stdout=log,
+                     stderr=log, start_new_session=True)
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline:
+        try:
+            unix_socket(socket_path(root), bind=False).close()
+            return
+        except OSError:
+            time.sleep(0.2)
+    raise Failure("the daemon did not start; see .lake/lean-goals.log")
+
+
+def main():
+    p = argparse.ArgumentParser(
+        prog="lean-goals", description=__doc__.split("\n")[0],
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="\n".join(__doc__.split("\n")[1:]))
+    p.add_argument("file", nargs="?")
+    p.add_argument("positions", nargs="*", metavar="LINE[:COL]")
+    p.add_argument("--daemon", action="store_true",
+                   help="start a daemon for the package if none runs, and ask it")
+    p.add_argument("--stop", action="store_true", help="stop the package's daemon")
+    p.add_argument("--reopen", action="store_true",
+                   help="close the file and open it again, as after its imports were rebuilt")
+    p.add_argument("--no-build", action="store_true",
+                   help="do not build the file's imports when they are out of date")
+    p.add_argument("--timeout", type=float, default=1800, help="seconds to wait (1800)")
+    p.add_argument("--idle", type=float, default=3600,
+                   help="seconds after which an unused daemon stops (3600)")
+    p.add_argument("--serve", metavar="ROOT", help=argparse.SUPPRESS)
+    args = p.parse_args()
+
+    if args.serve:
+        serve(pathlib.Path(args.serve), args.idle)
+        return
+    root = package_root(args.file or os.getcwd())
+    if args.stop:
+        answer = call(root, {"op": "stop"}, 30)
+        print("lean-goals: stopped" if answer else "lean-goals: no daemon is running",
+              file=sys.stderr)
+        return
+    if not args.file:
+        p.error("FILE is needed")
+    path = pathlib.Path(args.file).resolve()
+    if not path.is_file():
+        raise Failure(f"no file {args.file}")
+    lines = path.read_text().split("\n")
+    for arg in args.positions:
+        parse_position(arg, lines)
+    req = {"op": "query", "file": str(path), "shown": args.file, "positions": args.positions,
+           "build": not args.no_build, "reopen": args.reopen, "timeout": args.timeout}
+    answer = call(root, req, args.timeout)
+    if answer is None and args.daemon:
+        start_daemon(root, args.idle)
+        answer = call(root, req, args.timeout)
+    if answer is None:
+        (root / ".lake").mkdir(exist_ok=True)
+        with open(root / ".lake" / "lean-goals.log", "ab") as log:
+            server = Server(root, log)
+            try:
+                out, note, code = query(server, req)
+            except LspError as e:
+                raise Failure(str(e))
+            finally:
+                server.close()
+        answer = {"out": out, "note": note, "code": code}
+    if answer["out"]:
+        print(answer["out"])
+    print(answer["note"], file=sys.stderr)
+    sys.exit(answer["code"])
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Failure as e:
+        print(f"lean-goals: {e}", file=sys.stderr)
+        sys.exit(2)

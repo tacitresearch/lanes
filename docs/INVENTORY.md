@@ -11,16 +11,16 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Area | Definitions | proved | trusted | checked | tested | spec | none |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | `Lanes/Actors` | 332 | 167 | 10 | 33 | 19 | 78 | 25 |
-| `Lanes/Auth` | 23 | 7 | 0 | 0 | 12 | 1 | 3 |
+| `Lanes/Auth` | 27 | 7 | 0 | 0 | 16 | 1 | 3 |
 | `Lanes/Behaviours` | 3 | 3 | 0 | 0 | 0 | 0 | 0 |
 | `Lanes/Check` | 74 | 54 | 0 | 8 | 0 | 10 | 2 |
-| `Lanes/Data` | 213 | 57 | 0 | 4 | 118 | 3 | 31 |
-| `Lanes/Env` | 23 | 0 | 23 | 0 | 0 | 0 | 0 |
+| `Lanes/Data` | 213 | 57 | 5 | 4 | 113 | 3 | 31 |
+| `Lanes/Env` | 24 | 0 | 24 | 0 | 0 | 0 | 0 |
 | `Lanes/Html` | 42 | 2 | 0 | 0 | 28 | 0 | 12 |
 | `Lanes/Http` | 141 | 72 | 1 | 9 | 33 | 12 | 14 |
 | `Lanes/Semantics` | 38 | 10 | 0 | 0 | 0 | 27 | 1 |
-| `LanesCli` | 100 | 0 | 0 | 0 | 17 | 0 | 83 |
-| All | 989 | 372 | 34 | 54 | 227 | 131 | 171 |
+| `LanesCli` | 102 | 0 | 0 | 0 | 18 | 0 | 84 |
+| All | 996 | 372 | 40 | 54 | 227 | 131 | 172 |
 
 ## `Lanes/Actors/Actor.lean`
 
@@ -528,6 +528,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Auth.instReprDigest` | none |  |
 | `Auth.Digest.codec` | proved | its type, `Codec` |
 | `Auth.instCodableDigest` | proved | its type, `Codable` |
+| `Auth.Digest.hex` | tested | `Tests/Auth.lean` |
+| `Auth.Digest.ofHex?` | tested | `Tests/Auth.lean` |
 | `Auth.Password.salt` | tested | `Tests/Auth.lean` |
 | `Auth.Password.digest` | tested | `Tests/Auth.lean` |
 | `Auth.Attempts.codec` | proved | its type, `Codec` |
@@ -546,6 +548,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
+| `Hmac.Key.of` | tested | `Tests/Auth.lean` |
+| `Hmac.Key.mac` | tested | `Tests/Auth.lean` |
 | `Auth.tag` | tested | `Tests/Auth.lean` |
 | `Auth.sign` | tested | `Tests/Auth.lean` |
 | `Auth.verify` | tested | `Tests/Auth.lean` |
@@ -782,20 +786,15 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Hmac.blockOf` | tested | `Tests/Auth.lean`, `Tests/Crypto.lean` |
-| `Hmac.Key.of` | tested | `Tests/Auth.lean`, `Tests/Crypto.lean` |
-| `Hmac.Key.mac` | tested | `Tests/Crypto.lean` |
-| `hmac` | tested | `Tests/Crypto.lean` |
-| `Bytes.xor` | tested | `Tests/Crypto.lean` |
-| `Bytes.bigEndian32` | tested | `Tests/Crypto.lean` |
-| `Bytes.same` | tested | `Tests/Crypto.lean` |
+| `Hmac.blockOf` | tested | `Tests/Crypto.lean` |
+| `Hmac.Pads.of` | tested | `Tests/Crypto.lean` |
+| `Hmac.reference` | tested | `Tests/Crypto.lean` |
+| `Bytes.sameReference` | tested | `Tests/Crypto.lean` |
 | `Bytes.hexDigit` | tested | `Tests/Crypto.lean` |
 | `Bytes.hex` | tested | `Tests/Crypto.lean` |
 | `Bytes.nibble?` | tested | `Tests/Crypto.lean` |
 | `Bytes.unhexList` | tested | `Tests/Crypto.lean` |
 | `Bytes.unhex?` | tested | `Tests/Crypto.lean` |
-| `Pbkdf2.block` | tested | `Tests/Crypto.lean` |
-| `pbkdf2` | tested | `Tests/Crypto.lean` |
 
 ## `Lanes/Data/Json/Basic.lean`
 
@@ -955,7 +954,17 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Sha256.absorb` | tested | `Tests/Crypto.lean` |
 | `Sha256.digestFrom` | tested | `Tests/Crypto.lean` |
 | `Sha256.State.bytes` | tested | `Tests/Crypto.lean` |
-| `Sha256.hash` | tested | `Tests/Crypto.lean` |
+| `Sha256.reference` | tested | `Tests/Crypto.lean` |
+
+## `Lanes/Data/Sodium.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Sha256.hash` | trusted | TRUSTED.md: The C |
+| `hmac` | trusted | TRUSTED.md: The C |
+| `Bytes.same` | trusted | TRUSTED.md: The C |
+| `randomBytes` | trusted | TRUSTED.md: The C |
+| `Argon2id.hash` | trusted | TRUSTED.md: The C |
 
 ## `Lanes/Env/Clock.lean`
 
@@ -993,6 +1002,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
+| `Journal.fsync` | trusted | TRUSTED.md: The journal's files |
 | `Journal.Store.open` | trusted | TRUSTED.md: The journal's files |
 
 ## `Lanes/Env/Node.lean`
@@ -1346,6 +1356,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Cli.Generated.stale` | none |  |
 | `Cli.Generated.markdownIn` | none |  |
 | `Cli.Generated.parseCount` | none |  |
+| `Cli.Generated.isTrustedSource` | none |  |
 | `Cli.Generated.trustedSizes` | none |  |
 | `Cli.Generated.rewriteSizes` | none |  |
 | `Cli.Generated.withCommas` | tested | `Tests/Lint.lean` |
@@ -1432,6 +1443,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Cli.Lint.importsProofModule` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.checkFile` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.sourceFiles` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.checkC` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.parseFinding` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.inventory` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.lint` | tested | `Tests/Lint.lean` |

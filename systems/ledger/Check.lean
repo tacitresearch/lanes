@@ -185,7 +185,7 @@ open Ledger.Web Lanes.Http
 def admin : Name := ⟨"admin", rfl⟩
 
 def settings : Settings :=
-  { key := .of "test key".toUTF8, password := { iterations := 2, pepper := "pepper".toUTF8 }
+  { key := .of "test key".toUTF8, password := { cost := { ops := 1, mem_kib := 8 }, pepper := "pepper".toUTF8 }
     origin := "http://127.0.0.1:8080", secure := false, admin }
 
 def alice : Name := ⟨"alice", rfl⟩
@@ -243,9 +243,13 @@ def tests : List (String × Bool) :=
       same (decoded claimed) (.error notLoggedIn)),
     ("bridge: nor is a digest a client sends in place of a password",
       let claimed := { post "login" [("name", "alice")] none with
-        headers := [(passwordDigest,
-          Bytes.hex (settings.password.digest "alice" "longenough").bytes)] }
+        headers := [(passwordDigest, (settings.password.digest "alice" "longenough").hex)] }
       match decoded claimed with
+      | .error r => r.status == 400
+      | .ok _ => false),
+    ("bridge: a digest that is not hex does not pass, from prepare or from a client",
+      match credentials settings { post "login" [("name", "alice")] none with
+          headers := [(passwordDigest, "not hex")] } with
       | .error r => r.status == 400
       | .ok _ => false) ]
 
