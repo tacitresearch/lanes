@@ -90,9 +90,9 @@ omit [DecidableEq C] in
   rw [h]
 
 omit [DecidableEq N] [DecidableEq C] [DecidableEq R] in
-theorem drop_take_of_le {α : Type} (l : List α) {a b : Nat} (h : a ≤ b) :
-    (l.take a).drop b = [] :=
-  List.drop_eq_nil_of_le (by rw [List.length_take]; omega)
+theorem getElem?_merge {own sent : List (Entry N C)} {j : Nat} {entry : Entry N C}
+    (h : (merge own sent)[j]? = some entry) : own[j]? = some entry ∨ sent[j]? = some entry := by
+  fun_induction merge own sent generalizing j <;> grind
 
 end Helpers
 

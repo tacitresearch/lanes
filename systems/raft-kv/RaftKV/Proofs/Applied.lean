@@ -28,12 +28,6 @@ open Lanes
 variable {N C R M : Type} [DecidableEq N] [DecidableEq C] [DecidableEq R] [Enum N]
 variable {config : Config} {machine : Machine C R M}
 
-omit [DecidableEq N] [DecidableEq C] [DecidableEq R] [Enum N] in
-theorem take_of_prefix {α : Type} {a b : List α} (h : a <+: b) {n : Nat} (hn : n ≤ a.length) :
-    b.take n = a.take n := by
-  obtain ⟨rest, rfl⟩ := h
-  exact List.take_append_of_le_length hn
-
 omit [Enum N] in
 theorem Moves.commit_le {nodes : List N} {i : N} {s s' : Node N C M} {msg : Option (Msg N C)}
     {effs : List (Effect (sig N C R) i)} (h : Moves config nodes i s msg s' effs) :
@@ -166,11 +160,10 @@ def Applying (c : SysState (recording N config machine)) : Prop :=
 theorem applying_monotone (hup : config.votesForUpToDateOnly = true)
     (hown : config.commitsOwnTermOnly = true) :
     (recording N config machine).Monotone Applying := by
-  refine (committing_monotone hup hown).and ⟨[], .blank⟩
-    (fun _ _ _ ⟨log, h⟩ hbelow => ⟨log, h.of_state hbelow.state⟩)
-    (fun _ _ _ ⟨log, h⟩ => ⟨log, h.of_state rfl⟩) ?_ ?_
+  refine (committing_monotone hup hown).and_state ⟨[], .blank⟩
+    (fun _ _ _ _ _ ⟨log, h⟩ => ⟨log, h.of_state rfl⟩) ?_ ?_
   · intro c i msg hp hp' ⟨log, h⟩ _
-    obtain ⟨log', _, h', _⟩ := h.grow hp.2 hp'.1.1.1 hp'.1.2 hp'.2
+    obtain ⟨log', _, h', _⟩ := h.grow hp.commits hp'.replicating hp'.safe hp'.commits
       (step_moves config Enum.all machine i _ msg) (step_serves config Enum.all machine i _ msg)
     exact ⟨log', h'⟩
   · exact fun c i _ _ ⟨log, h⟩ => ⟨log, h.recover⟩
@@ -179,19 +172,19 @@ theorem applying_monotone (hup : config.votesForUpToDateOnly = true)
 def FromClients (c : SysState (recording N config machine)) : Prop :=
   ∀ src dst req cmd, (⟨src, dst, .propose req cmd⟩ : Envelope (sig N C R)) ∈ c.net → src = none
 
-theorem fromClients_monotone : (recording N config machine).Monotone FromClients where
-  blank := fun _ _ _ _ h => nomatch h
-  below _ _ h hbelow := fun src dst req cmd hmem => h src dst req cmd (hbelow.net _ hmem)
-  input c x h := fun src dst req cmd hmem => by
-    rcases List.mem_append.mp hmem with hold | hnew
+theorem fromClients_monotone :
+    (recording N config machine).Monotone fun c => Timers c ∧ FromClients c := by
+  refine timers_monotone.and_net (fun _ _ _ _ h => nomatch h) ?_ ?_ ?_
+  · intro c up net timers outbox h hnet src dst req cmd hmem
+    rcases hnet _ hmem with hold | ⟨x, hx⟩
     · exact h src dst req cmd hold
-    · simp only [List.mem_singleton, Envelope.mk.injEq] at hnew
-      exact hnew.1
-  step c i msg h _ := fun src dst req cmd hmem => by
+    · simp only [Envelope.mk.injEq] at hx
+      exact hx.1
+  · intro c i msg _ _ h _ src dst req cmd hmem
     rcases SysState.mem_grow_net.mp hmem with hold | ⟨_, hnew⟩
     · exact h src dst req cmd hold
     · exact absurd hnew ((step_serves config Enum.all machine i (c.state i).1 msg).proposes _ _ _)
-  recover c i h := fun src dst req cmd hmem => by
+  · intro c i _ _ h src dst req cmd hmem
     rcases SysState.mem_grow_net.mp hmem with hold | ⟨_, hnew⟩
     · exact h src dst req cmd hold
     · exact absurd hnew ((recover_serves config Enum.all machine i (c.state i).1).proposes _ _ _)
@@ -203,7 +196,7 @@ variable (config) (machine : Machine C R M) (env : EnvModel (sig N C R))
 theorem requests_from_clients :
     (cluster N config machine).Invariant env fun c => ∀ src dst req cmd,
       (⟨src, dst, .propose req cmd⟩ : Envelope (sig N C R)) ∈ c.net → src = none :=
-  .of_ghost (.past _) fun c hc => fromClients_monotone.invariant env c hc
+  .of_ghost (.past _) fun c hc => (fromClients_monotone.invariant env c hc).2
 
 theorem requestsFromClients_invariant :
     (cluster N config machine).Invariant env fun c => requestsFromClients c = true := by
@@ -238,7 +231,7 @@ theorem machine_eq_run :
         machine.run machine.init ((c.state a).log.take (c.state a).applied) :=
   .of_ghost (.past _) fun c hc a => by
     obtain ⟨hcommitting, log, h⟩ := (applying_monotone hup hown).invariant env c hc
-    exact (h.machine a).trans (congrArg _ (h.take_applied hcommitting.2 a))
+    exact (h.machine a).trans (congrArg _ (h.take_applied hcommitting.commits a))
 
 /-- State machine safety: of two nodes, the one that has applied less has applied a start of
 what the other has. -/
@@ -250,7 +243,7 @@ theorem applied_agree :
     obtain ⟨hcommitting, log, h⟩ := (applying_monotone hup hown).invariant env c hc
     show (c.state a).1.log.take (c.state a).1.applied <+:
       (c.state b).1.log.take (c.state b).1.applied
-    rw [← h.take_applied hcommitting.2 a, ← h.take_applied hcommitting.2 b]
+    rw [← h.take_applied hcommitting.commits a, ← h.take_applied hcommitting.commits b]
     exact (List.take_prefix_take_left hle)
 
 theorem appliedAllCommitted_invariant :

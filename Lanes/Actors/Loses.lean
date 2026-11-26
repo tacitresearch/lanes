@@ -16,7 +16,8 @@ output waiting is one the spec owes, so one too many or one too few is a differe
 `Loses` is `Below` with the counting kept: the outputs waiting are the same list, and the
 messages in flight are a sublist, so a message is there no more often than before. Every step
 of the semantics is an input, an output handed over, or an actor moving (`grow`), followed by
-losing messages and timers. `Lanes.Semantics.Steps` turns that into a proof rule for refinement.
+losing messages and timers. `System.Refines.of_steps` (`Lanes/Semantics/Simulation.lean`) turns
+that into a proof rule for refinement.
 -/
 
 @[expose] public section
@@ -24,32 +25,6 @@ losing messages and timers. `Lanes.Semantics.Steps` turns that into a proof rule
 namespace Lanes
 
 variable {σ : Signature} {sys : System σ}
-
-namespace Effect
-
-variable {i : σ.Id}
-
-theorem emits_nil : emits ([] : List (Effect σ i)) = [] := rfl
-
-theorem emits_append (a b : List (Effect σ i)) : emits (a ++ b) = emits a ++ emits b :=
-  List.filterMap_append
-
-theorem emits_cons (eff : Effect σ i) (effs : List (Effect σ i)) :
-    emits (eff :: effs) = (match eff with | .emit out => [out] | _ => []) ++ emits effs := by
-  cases eff <;> rfl
-
-theorem emits_map {α : Type} (f : α → Effect σ i) (l : List α) :
-    emits (l.map f) = l.filterMap fun a => match f a with | .emit out => some out | _ => none := by
-  induction l with
-  | nil => rfl
-  | cons a l ih =>
-    rw [List.map_cons, emits_cons, ih, List.filterMap_cons]
-    cases f a <;> rfl
-
-theorem sends_append (a b : List (Effect σ i)) : sends i (a ++ b) = sends i a ++ sends i b :=
-  List.filterMap_append
-
-end Effect
 
 namespace SysState
 
@@ -71,37 +46,6 @@ theorem Loses.trans {c₁ c₂ c₃ : SysState sys} (h₁ : c₁.Loses c₂) (h�
 theorem Loses.below {c' c : SysState sys} (h : c'.Loses c) : c'.Below c :=
   ⟨h.state, fun _ he => h.net.subset he, h.timers, fun _ ho => h.outbox ▸ ho⟩
 
-theorem performAll_net (c : SysState sys) (i : σ.Id) (effs : List (Effect σ i)) :
-    (c.performAll i effs).net = c.net ++ Effect.sends i effs := by
-  induction effs generalizing c with
-  | nil => simp [Effect.sends]
-  | cons eff effs ih =>
-    rw [performAll_cons, ih]
-    cases eff <;> simp [perform, Effect.sends]
-
-theorem performAll_outbox (c : SysState sys) (i : σ.Id) (effs : List (Effect σ i)) :
-    (c.performAll i effs).outbox = c.outbox ++ Effect.emits effs := by
-  induction effs generalizing c with
-  | nil => simp [Effect.emits]
-  | cons eff effs ih =>
-    rw [performAll_cons, ih]
-    cases eff <;> simp [perform, Effect.emits]
-
-theorem settle_outbox (env : EnvModel σ) (c : SysState sys) (i : σ.Id)
-    (r : sys.State i × List (Effect σ i)) :
-    (c.settle env i r).outbox = c.outbox ++ Effect.emits r.2 := by
-  unfold settle
-  split <;> simp [down, performAll_outbox]
-
-theorem settle_net_sublist (env : EnvModel σ) (c : SysState sys) (i : σ.Id)
-    (r : sys.State i × List (Effect σ i)) :
-    (c.settle env i r).net.Sublist (c.net ++ Effect.sends i r.2) := by
-  have hnet := performAll_net ({ c with state := update c.state i r.1 }) i r.2
-  unfold settle
-  split
-  · exact hnet ▸ List.filter_sublist
-  · exact hnet ▸ List.Sublist.refl _
-
 /-- Whatever was lost before an actor moved, and whether or not it stopped, the result is
 `grow` with messages and timers lost. -/
 theorem Loses.settle {c₀ c : SysState sys} (h : c₀.Loses c) (env : EnvModel σ) (i : σ.Id)
@@ -110,7 +54,7 @@ theorem Loses.settle {c₀ c : SysState sys} (h : c₀.Loses c) (env : EnvModel 
   net := (settle_net_sublist env c₀ i r).trans
     (List.Sublist.append h.net (List.Sublist.refl _))
   timers := (Below.settle h.below env i r).timers
-  outbox := by rw [settle_outbox, h.outbox]; rfl
+  outbox := by rw [settle_outbox_eq, h.outbox]; rfl
 
 theorem Loses.handle {c₀ c : SysState sys} (h : c₀.Loses c) (env : EnvModel σ) (i : σ.Id)
     (msg : σ.Msg i) :

@@ -194,11 +194,6 @@ theorem Accounts.extend (h : Accounts c log pending) {entry : Entry N C}
   · have := Multiset.erase_le_erase entry.request hcount
     rwa [Multiset.erase_cons_head] at this
 
-omit [DecidableEq N] [DecidableEq C] [DecidableEq R] [Enum N] in
-theorem getElem?_merge {own sent : List (Entry N C)} {j : Nat} {entry : Entry N C}
-    (h : (merge own sent)[j]? = some entry) : own[j]? = some entry ∨ sent[j]? = some entry := by
-  fun_induction merge own sent generalizing j <;> grind
-
 variable {i : N} {msg : Option (Msg N C)} {s' : Node N C M} {effs : List (Effect (sig N C R) i)}
 
 omit [Enum N] in
@@ -423,7 +418,7 @@ variable {msg : Option (Msg N C)} {s' : Node N C M} {effs : List (Effect (sig N 
 /-- A node handles a message, taken from `net`, which is what was in flight without it. The
 service takes one internal step for each entry the node is the first to commit. -/
 theorem step {net : List (Envelope (sig N C R))} (h : Sim c t log) (hc : Commits c)
-    (hc' : Committing (({ c with net := net }).grow i ((s', c.seen i), effs)))
+    (hc' : Committing (c.grow i ((s', c.seen i), effs)))
     (hmoves : Moves config Enum.all i (c.state i).1 msg s' effs)
     (hserves : Serves machine i (c.state i).1 msg s' effs) (hpending : Pending c i msg)
     (hsub : net.Sublist c.net)
@@ -432,11 +427,10 @@ theorem step {net : List (Envelope (sig N C R))} (h : Sim c t log) (hc : Commits
         ≤ ↑(inflight c.net)) :
     ∃ t' log', (service N machine).lts.τSTr t t' ∧
       Sim (({ c with net := net }).grow i ((s', c.seen i), effs)) t' log' := by
-  have hlogged : Logged { c with net := net } log := h.logged.of_state rfl
-  have hcommits : Commits { c with net := net } :=
-    hc.below ⟨rfl, fun _ he => hsub.subset he, fun _ _ hm => hm, fun _ ho => ho⟩
-  obtain ⟨log', ⟨ext, rfl⟩, hlogged', hupper, hwhich⟩ :=
-    hlogged.grow hcommits hc'.1.1.1 hc'.1.2 hc'.2 hmoves hserves
+  obtain ⟨log', ⟨ext, rfl⟩, hgrown, hupper, hwhich⟩ :=
+    h.logged.grow hc hc'.replicating hc'.safe hc'.commits hmoves hserves
+  have hlogged' : Logged (({ c with net := net }).grow i ((s', c.seen i), effs)) (log ++ ext) :=
+    hgrown.of_state rfl
   have hbound := h.logged.applied_le hc
   have hpresent : ∀ k entry, ext[k]? = some entry →
       Present (({ c with net := net }).grow i ((s', c.seen i), effs)) (log.length + k) entry := by
@@ -456,7 +450,7 @@ theorem step {net : List (Envelope (sig N C R))} (h : Sim c t log) (hc : Commits
     (h.pending.grow hmoves hserves hpending hsub htaken) hpresent
   refine ⟨t', log ++ ext, ht', hlogged', hvalue', ?_, hpending'⟩
   obtain ⟨_, _, hemits⟩ := hserves.applies (Nat.le_of_eq (h.logged.applied i).symm)
-  have hnode := hc'.2.nodes i
+  have hnode := hc'.commits.nodes i
   simp only [SysState.grow_state_self] at hnode
   have happlied' := hlogged'.applied i
   simp only [SysState.grow_state_self] at happlied'
@@ -473,7 +467,7 @@ theorem step {net : List (Envelope (sig N C R))} (h : Sim c t log) (hc : Commits
       have := h.logged.applied i
       simp only [SysState.grow_state_self]
       omega)
-    (hlogged'.applied_le hc'.2 i)
+    (hgrown.applied_le hc'.commits i)
   simp only [SysState.grow_state_self] at hadvance
   rw [hmine, take_of_prefix (List.prefix_append log ext) (hbound i), ← h.logged.machine i,
     ← hemits] at hadvance
@@ -499,18 +493,11 @@ theorem Sim.handle {c : SysState (recording N config machine)} {t : Service.Abs 
         ≤ ↑(inflight c.net)) :
     ∃ t', (service N machine).lts.τSTr t t' ∧ ∃ log', Sim (({ c with net := net }).grow i
       (((recording N config machine).actor i).step (c.state i) m)) t' log' := by
-  have hmonotone := committing_monotone (N := N) (machine := machine) hup hown
-  have hc' : Committing (({ c with net := net }).grow i
-      (((recording N config machine).actor i).step (c.state i) m)) :=
-    hmonotone.below _ _ (hmonotone.step c i m hc hpending)
-      ⟨rfl, fun e he => by
-        rcases List.mem_append.mp he with he | he
-        · exact List.mem_append_left _ (hsub.subset he)
-        · exact List.mem_append_right _ he, fun _ _ hm => hm, fun _ ho => ho⟩
-  obtain ⟨t', log', ht', h'⟩ := h.step hc.2 hc'
+  obtain ⟨t', log', ht', h'⟩ := h.step hc.commits
+    ((committing_monotone hup hown).step c i m hc hpending)
     (step_moves config Enum.all machine i (c.state i).1 m)
     (step_serves config Enum.all machine i (c.state i).1 m)
-    (hc.1.1.1.timers.pending hpending) hsub
+    (hc.replicating.timers.pending hpending) hsub
     fun req cmd hm => htaken req cmd (Option.some.inj hm)
   exact ⟨t', ht', log', h'⟩
 
@@ -522,7 +509,7 @@ include henv
 theorem recording_refines : (recording N config machine).Refines env (service N machine) := by
   have hinv : (recording N config machine).Invariant env fun c => Committing c ∧ FromClients c :=
     fun c hc => ⟨(committing_monotone hup hown).invariant env c hc,
-      fromClients_monotone.invariant env c hc⟩
+      (fromClients_monotone.invariant env c hc).2⟩
   refine System.Refines.of_steps hinv (fun c t => ∃ log, Sim c t log) ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
   · exact ⟨⟨machine.init, 0, 0⟩, rfl, [], SysState.init_induction (env := env)
       (P := fun c => Sim c ⟨machine.init, 0, 0⟩ []) .blank
@@ -547,7 +534,7 @@ theorem recording_refines : (recording N config machine).Refines env (service N 
     refine h.handle hup hown hc (net := c.net) (List.Sublist.refl _) (.inr hmem)
       fun req cmd hm => ?_
     subst hm
-    rcases hc.1.1.1.timers i _ hmem with h | h <;> cases h
+    rcases hc.replicating.timers i _ hmem with h | h <;> cases h
   · exact fun c t i _ ⟨log, h⟩ => ⟨t, .refl, log, h.recover⟩
 
 /--

@@ -89,6 +89,28 @@ theorem armed_map_emit (outs : List σ.Out) : armed (outs.map (emit (self := i))
   | nil => rfl
   | cons out outs ih => simp [armed]
 
+theorem emits_nil : emits ([] : List (Effect σ i)) = [] := rfl
+
+theorem emits_append (a b : List (Effect σ i)) : emits (a ++ b) = emits a ++ emits b :=
+  List.filterMap_append
+
+theorem emits_cons (eff : Effect σ i) (effs : List (Effect σ i)) :
+    emits (eff :: effs) = (match eff with | .emit out => [out] | _ => []) ++ emits effs := by
+  cases eff <;> rfl
+
+/-- Unlike `emits_map_emit` this has no type that depends on the signature among its arguments,
+so `simp` finds it for the effects of a concrete system. -/
+theorem emits_map {α : Type} (f : α → Effect σ i) (l : List α) :
+    emits (l.map f) = l.filterMap fun a => match f a with | .emit out => some out | _ => none := by
+  induction l with
+  | nil => rfl
+  | cons a l ih =>
+    rw [List.map_cons, emits_cons, ih, List.filterMap_cons]
+    cases f a <;> rfl
+
+theorem sends_append (a b : List (Effect σ i)) : sends i (a ++ b) = sends i a ++ sends i b :=
+  List.filterMap_append
+
 /-- Effects rewritten one by one stop the actor exactly when the originals do. -/
 theorem any_isStop_flatMap {τ : Signature} {j : τ.Id} {f : Effect σ i → List (Effect τ j)}
     (h : ∀ eff, (f eff).any isStop = eff.isStop) (effs : List (Effect σ i)) :
@@ -138,6 +160,21 @@ theorem settle_eq (env : EnvModel σ) (c : SysState sys) (i : σ.Id)
           timers := update c.timers i (Effect.retime r.2 (c.timers i))
           outbox := c.outbox ++ Effect.emits r.2 } := by
   simp only [settle, performAll_eq]
+
+/-- Stopping loses no output. -/
+theorem settle_outbox_eq (env : EnvModel σ) (c : SysState sys) (i : σ.Id)
+    (r : sys.State i × List (Effect σ i)) :
+    (c.settle env i r).outbox = c.outbox ++ Effect.emits r.2 := by
+  rw [settle_eq]
+  split <;> rfl
+
+theorem settle_net_sublist (env : EnvModel σ) (c : SysState sys) (i : σ.Id)
+    (r : sys.State i × List (Effect σ i)) :
+    (c.settle env i r).net.Sublist (c.net ++ Effect.sends i r.2) := by
+  rw [settle_eq]
+  split
+  · exact List.filter_sublist
+  · exact List.Sublist.refl _
 
 /-- An actor's step does not look at the messages in flight: one that stays in flight could as
 well be lost after the step as before it. -/

@@ -123,35 +123,28 @@ theorem step (h : Sim c t) {net : List (Envelope (sig In Out))} (m : Msg In)
 
 end Sim
 
-/-- Requests come from outside, and the one timer is `flush`. -/
+/-- The one timer is `flush`, and requests come from outside. -/
 def Tame {svc : Service (sig In Out) S} (c : SysState (system svc)) : Prop :=
-  (∀ e ∈ c.net, e.src = none) ∧ ∀ i m, m ∈ c.timers i → m = Msg.flush
+  (∀ i m, m ∈ c.timers i → m = Msg.flush) ∧ ∀ e ∈ c.net, e.src = none
 
 theorem tame_invariant (svc : Service (sig In Out) S) (env : EnvModel (sig In Out)) :
     (system svc).Invariant env Tame := by
-  have hsends : ∀ (s : S × List In) (m : Msg In) (dst : Unit) (msg : Msg In),
-      Effect.send (σ := sig In Out) (self := ()) dst msg ∉ ((actor svc).step s m).2 := by
-    intro s m dst msg
-    cases m <;> simp [actor]
-  have hnet : (system svc).Monotone fun c => ∀ e ∈ c.net, e.src = none :=
-    { blank := fun _ h => nomatch h
-      below := fun _ _ h hbelow e he => h e (hbelow.net e he)
-      input := fun c x h e he => by
-        rcases List.mem_append.mp he with he | he
-        · exact h e he
-        · rw [List.mem_singleton.mp he]
-      step := fun c i msg h _ e he => by
-        rcases SysState.mem_grow_net.mp he with he | ⟨_, he⟩
-        · exact h e he
-        · exact absurd he (hsends _ _ _ _)
-      recover := fun c i h e he => by
-        rcases SysState.mem_grow_net.mp he with he | ⟨_, he⟩
-        · exact h e he
-        · simp [actor] at he }
   have htimers := System.Monotone.timers (system svc) (T := fun _ m => m = Msg.flush)
     (fun i s msg delay m h => by cases msg <;> simp_all [actor])
     (fun i s delay m h => by simp_all [actor])
-  exact fun c hc => ⟨hnet.invariant env c hc, htimers.invariant env c hc⟩
+  refine (htimers.and_net (fun _ h => nomatch h) ?_ ?_ ?_).invariant env
+  · intro c up net timers outbox h hnet e he
+    rcases hnet e he with he | ⟨x, rfl⟩
+    · exact h e he
+    · rfl
+  · intro c i msg _ _ h _ e he
+    rcases SysState.mem_grow_net.mp he with he | ⟨_, he⟩
+    · exact h e he
+    · cases msg <;> simp [actor] at he
+  · intro c i _ _ h e he
+    rcases SysState.mem_grow_net.mp he with he | ⟨_, he⟩
+    · exact h e he
+    · simp [actor] at he
 
 theorem implements (svc : Service (sig In Out) S) (env : EnvModel (sig In Out))
     (henv : (env.link none ()).duplicating = false) : (system svc).Implements env svc := by
@@ -181,11 +174,11 @@ theorem implements (svc : Service (sig In Out) S) (env : EnvModel (sig In Out))
     exact h.step m List.erase_sublist fun x hm => by
       subst hm
       exact le_of_eq (waiting_erase hmem)
-  · rintro c t ⟨src, ⟨⟩, m⟩ ⟨hnet, _⟩ h hmem hdup
+  · rintro c t ⟨src, ⟨⟩, m⟩ ⟨_, hnet⟩ h hmem hdup
     refine h.step (net := c.net) m (List.Sublist.refl _) fun x hm => ?_
     obtain rfl : src = none := hnet _ hmem
     simp [henv] at hdup
-  · rintro c t ⟨⟩ m ⟨_, htimers⟩ h hmem
+  · rintro c t ⟨⟩ m ⟨htimers, _⟩ h hmem
     refine h.step (net := c.net) m (List.Sublist.refl _) fun x hm => ?_
     exact nomatch (htimers () m hmem).symm.trans hm
   · rintro c t ⟨⟩ _ h

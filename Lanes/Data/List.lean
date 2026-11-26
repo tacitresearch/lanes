@@ -8,6 +8,7 @@ module
 Facts about lists that proofs about systems share: what `erase` does under `map`, `filter`,
 `filterMap` and `countP`. Messages in flight, timers and outputs waiting are lists, and an event
 takes one element out, so every proof that reads a state through a map or a filter needs these.
+Then `take` and `drop` of a log and of a start of it.
 -/
 
 public section
@@ -130,5 +131,13 @@ theorem find?_congr {p q : α → Bool} {l : List α} (h : ∀ x ∈ l, p x = q 
   | cons x l ih =>
     simp only [List.find?_cons, h x List.mem_cons_self]
     rw [ih fun y hy => h y (List.mem_cons_of_mem _ hy)]
+
+theorem take_of_prefix {a b : List α} (h : a <+: b) {n : Nat} (hn : n ≤ a.length) :
+    b.take n = a.take n := by
+  obtain ⟨rest, rfl⟩ := h
+  exact List.take_append_of_le_length hn
+
+theorem drop_take_of_le (l : List α) {a b : Nat} (h : a ≤ b) : (l.take a).drop b = [] :=
+  List.drop_eq_nil_of_le (by rw [List.length_take]; omega)
 
 end Lanes
