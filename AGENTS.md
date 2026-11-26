@@ -32,7 +32,7 @@ The toolchain is pinned in `lean-toolchain` and follows CSLib's. Dependencies ar
 | Path | Contents | May import |
 | --- | --- | --- |
 | `Lanes/Actors/` | `Actor`, `Signature`, `Effect`, `System`, the world step function, scheduler, runtime | `Std` only |
-| `Lanes/Data/` | Small data utilities (`Enum`) | `Std` only |
+| `Lanes/Data/` | Small data utilities (`Enum`) and the JSON library (`Json`) | `Std` only |
 | `Lanes/Check/` | Model checker | `Std` only |
 | `Lanes/Http/`, `Lanes/Html/` | HTTP requests and responses as data; HTML values and template syntax | `Std` only |
 | `Lanes/Env/` | Adapters to the outside world (HTTP server) | `Std` only |

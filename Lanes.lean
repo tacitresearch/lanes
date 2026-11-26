@@ -13,6 +13,7 @@ public import Lanes.Check.Monitor
 public import Lanes.Check.Search
 public import Lanes.Check.System
 public import Lanes.Data.Enum
+public import Lanes.Data.Json
 public import Lanes.Env.Http
 public import Lanes.Html.Basic
 public import Lanes.Html.Syntax
