@@ -32,6 +32,9 @@ import Tests.BatchProofs
 /-- info: 'Examples.KV.caching_not_implements' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Examples.KV.caching_not_implements
 
+/-- info: 'Examples.KV.implements_once' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Examples.KV.implements_once
+
 -- Examples.WatchdogProofs
 /-- info: 'Examples.Watchdog.exists_fair_run_never_barks' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Examples.Watchdog.exists_fair_run_never_barks

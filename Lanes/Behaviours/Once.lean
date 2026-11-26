@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Actors.Actor
+public import Lanes.Behaviours.Server
 
 /-!
 # Acting once on a request that arrives twice
@@ -38,6 +38,20 @@ def find? (memo : Memo C E) (c : C) : Option (Nat × List E) :=
 def record (memo : Memo C E) (c : C) (n : Nat) (effs : List E) : Memo C E :=
   ⟨(c, n, effs) :: memo.entries.filter fun entry => decide (entry.1 ≠ c)⟩
 
+@[simp] theorem find?_empty (c : C) : ({} : Memo C E).find? c = none := rfl
+
+@[simp] theorem find?_record_self (memo : Memo C E) (c : C) (n : Nat) (effs : List E) :
+    (memo.record c n effs).find? c = some (n, effs) := by
+  simp [find?, record]
+
+theorem find?_record_of_ne (memo : Memo C E) {c c' : C} (n : Nat) (effs : List E)
+    (h : c' ≠ c) : (memo.record c n effs).find? c' = memo.find? c' := by
+  have hc : decide (c = c') = false := decide_eq_false (Ne.symm h)
+  simp only [find?, record, List.find?_cons, hc, List.find?_filter]
+  congr 2
+  funext entry
+  by_cases he : entry.1 = c' <;> simp [he, h]
+
 end Memo
 
 inductive Seen (E : Type) where
@@ -67,5 +81,42 @@ def actor {S Msg : Type} (a : Actor S Msg E) (key : Msg → Option (C × Nat)) :
         | .stale => ((s, memo), [])
   recover
     | (s, memo) => let (s', effs) := a.recover s; ((s', memo), effs)
+
+section Step
+
+variable {S Msg : Type} (a : Actor S Msg E) (key : Msg → Option (C × Nat)) (s : S)
+  (memo : Memo C E) (m : Msg)
+
+theorem step_of_none (hk : key m = none) :
+    (actor a key).step (s, memo) m = (((a.step s m).1, memo), (a.step s m).2) := by
+  simp [actor, hk]
+
+theorem step_of_fresh {c : C} {n : Nat} (hk : key m = some (c, n)) (hs : memo.seen c n = .fresh) :
+    (actor a key).step (s, memo) m =
+      (((a.step s m).1, memo.record c n (a.step s m).2), (a.step s m).2) := by
+  simp [actor, hk, hs]
+
+theorem step_of_again {c : C} {n : Nat} {effs : List E} (hk : key m = some (c, n))
+    (hs : memo.seen c n = .again effs) : (actor a key).step (s, memo) m = ((s, memo), effs) := by
+  simp [actor, hk, hs]
+
+theorem step_of_stale {c : C} {n : Nat} (hk : key m = some (c, n)) (hs : memo.seen c n = .stale) :
+    (actor a key).step (s, memo) m = ((s, memo), []) := by
+  simp [actor, hk, hs]
+
+theorem recover_eq (p : S × Memo C E) :
+    (actor a key).recover p = (((a.recover p.1).1, p.2), (a.recover p.1).2) :=
+  rfl
+
+end Step
+
+variable {In Out S : Type} [DecidableEq In] [DecidableEq Out]
+
+/-- A `Server` that acts once on each request `key` names. -/
+abbrev server (svc : Service (Server.sig In Out) S) (key : In → C × Nat) :
+    System (Server.sig In Out) where
+  State _ := S × Memo C (Effect (Server.sig In Out) ())
+  actor _ := actor (Server.actor svc) fun x => some (key x)
+  accept x := ⟨(), x⟩
 
 end Lanes.Once

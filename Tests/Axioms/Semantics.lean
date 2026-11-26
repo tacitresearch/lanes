@@ -100,6 +100,10 @@ import Lanes.Semantics
 /-- info: 'Lanes.Check.refines_traces' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Check.refines_traces
 
+-- Lanes.Semantics.Once
+/-- info: 'Lanes.Once.server_implements' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Once.server_implements
+
 -- Lanes.Semantics.Projection
 /-- info: 'Lanes.System.View.Projects.fair_run' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.View.Projects.fair_run
@@ -136,6 +140,9 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.System.Refines.of_steps' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Refines.of_steps
+
+/-- info: 'Lanes.System.Refines.of_handles' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Refines.of_handles
 
 -- Lanes.Semantics.System
 /-- info: 'Lanes.System.reachable_iff' depends on axioms: [propext, Classical.choice] -/
