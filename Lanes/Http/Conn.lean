@@ -98,10 +98,12 @@ namespace Conn
 
 /-- `r` as it can be written so that a reader reads it back: headers a reader would not keep
 are left out, and a response that cannot be written so becomes a `500`. -/
+def closing (close : Bool) : List (String × String) :=
+  if close then [("Connection", "close")] else []
+
 def sendable (close : Bool) (r : Response) : Response :=
-  let closing := if close then [("Connection", "close")] else []
-  let kept := { r with headers := r.headers.filter Response.kept ++ closing }
-  if kept.writable then kept else { status := 500, headers := closing }
+  let kept := { r with headers := r.headers.filter Response.kept ++ closing close }
+  if kept.writable then kept else { status := 500 }
 
 /-- The bytes of the response to a request; to `HEAD`, without the body. -/
 def encode (headOnly close : Bool) (r : Response) : ByteArray :=
