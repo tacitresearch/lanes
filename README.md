@@ -98,6 +98,19 @@ a view cannot link or post to a route that does not exist.
 - **Trusted.** About 530 lines of IO and macro code, listed with their sizes in `TRUSTED.md`;
   `lanes lint` fails if they grow.
 
+## Kill it and start it again
+
+```bash
+lake exe bankWeb 8080 bank.journal &
+curl -X POST -d "src=0&dst=2&amount=42" http://127.0.0.1:8080/transfer
+kill -9 %1
+lake exe bankWeb 8080 bank.journal &
+curl http://127.0.0.1:8080/accounts/2     # 142
+```
+
+The journal holds what the system was asked, not its state. Starting again replays it through
+the same pure functions, so the system is back where it was, and that it is has a proof.
+
 ## Build Lanes itself
 
 ```bash

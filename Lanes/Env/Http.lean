@@ -6,7 +6,7 @@ module
 
 public import Std.Http
 public import Std.Data.HashMap
-public import Lanes.Actors.Runtime
+public import Lanes.Env.Journal
 public import Lanes.Http.Gate
 
 /-!
@@ -36,6 +36,9 @@ structure ServerConfig where
   /-- Larger request bodies are refused with `413`. -/
   maxBodyBytes : Nat := 1048576
   gate : GateConfig := {}
+  /-- Where to keep a journal. With one, the system behind the server survives the process:
+  it starts in the state it was in (`DECISIONS.md` D24). -/
+  journal : Option System.FilePath := none
 
 /-- The runtime is private because the gate answers each request once only if request ids are
 never reused, and `serve` is what allocates them. -/
@@ -81,14 +84,24 @@ private def readRequest (maxBodyBytes : Nat) (req : Std.Http.Request Std.Http.Bo
     headers := req.line.headers.toList.map fun (name, value) => (name.value, value.value)
     body }
 
+/-- An id above every one in the journal: ids are never reused, also across restarts. -/
+private def freshId (past : List (Journal.Entry (gatedSig σ))) : ReqId :=
+  past.foldl (init := 0) fun next entry =>
+    match entry with
+    | .input (id, _) => max next (id + 1)
+    | _ => next
+
 /-- Returns once the server is listening. Each request is answered exactly once by the gate. -/
 def serve (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : ServerConfig := {})
     (runtimeConfig : Runtime.Config := {}) : Async (Server sys bridge config) := do
   let some addr := Std.Net.IPv4Addr.ofString config.host
     | throw (IO.userError s!"lanes: {config.host} is not an IPv4 address")
   let waiting : Mutex (Std.HashMap ReqId (IO.Promise Response)) ← Mutex.new {}
-  let nextId ← IO.mkRef (0 : Nat)
-  let runtime ← Runtime.start (gated sys bridge config.gate) runtimeConfig fun (id, response) => do
+  let log ← config.journal.mapM fun path =>
+    Journal.Store.open (σ := gatedSig σ) { path, input := Codec.pair Codec.nat Request.codec }
+  let nextId ← IO.mkRef (freshId ((log.map (·.past)).getD []))
+  let runtime ← Runtime.start (gated sys bridge config.gate) runtimeConfig (journal := log)
+      fun (id, response) => do
     let waiter ← waiting.atomically do
       let waiter := (← get).get? id
       modify (·.erase id)

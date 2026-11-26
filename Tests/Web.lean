@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
 import Tests.Gate
+import Examples.BankWeb
 
 /-! End-to-end tests of the HTTP adapter over a real socket. -/
 
@@ -96,7 +97,33 @@ def linkTest : Async (List (String × Bool)) := do
     ("web: stopping with a request in flight answers it and ends",
       abandoned.startsWith "HTTP/1.1 503") ]
 
+/-! The bank over HTTP with a journal: stop the server, start another on the same journal. -/
+
+def durableTest : Async (List (String × Bool)) := do
+  let dir := (← IO.getEnv "TMPDIR").getD "/tmp"
+  let journal : System.FilePath := s!"{dir}/lanes-web-{← IO.monoNanosNow}.journal"
+  let start := serve (Examples.Bank.bank Examples.BankWeb.Acct 100) Examples.BankWeb.bridge
+    { port := 0, journal := some journal }
+  let server ← start
+  let some port := server.port | return [("web: the server reports its port", false)]
+  let moved ← fetch port "/transfer" (method := "POST") (body := "src=0&dst=1&amount=30")
+  let before ← fetch port "/accounts/1"
+  server.stop
+  let server ← start
+  let some port := server.port | return [("web: the server reports its port", false)]
+  let after ← fetch port "/accounts/1"
+  let again ← fetch port "/transfer" (method := "POST") (body := "src=1&dst=2&amount=130")
+  let last ← fetch port "/accounts/2"
+  server.stop
+  IO.FS.removeFile journal
+  return [
+    ("web: the bank behind a journal keeps its balances across a restart",
+      moved.startsWith "HTTP/1.1 200" && before.endsWith "<span>130</span>"
+        && after.endsWith "<span>130</span>"),
+    ("web: and goes on from them, with request ids that are still fresh",
+      again.startsWith "HTTP/1.1 200" && last.endsWith "<span>230</span>") ]
+
 def tests : IO (List (String × Bool)) := do
-  return (← serveTest.block) ++ (← linkTest.block)
+  return (← serveTest.block) ++ (← linkTest.block) ++ (← durableTest.block)
 
 end Tests.Web
