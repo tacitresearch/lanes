@@ -113,8 +113,8 @@ a view cannot link or post to a route that does not exist.
   variables cost nothing at run time (`Invariant.of_ghost`). Invariants about states and
   messages need five cases, not eight, and hold under loss, duplication, reordering and crashes
   (`Inductive.of_monotone`).
-- **Several shards and processes.** Two shards joined behave as the one system
-  (`System.SplitReachable.merged`). A transport joins shards in different processes; what it
+- **Several shards and processes.** Any number of shards joined behave as the one system
+  (`System.SplitReachable.merged` for two, `System.ShardsReachable.unsharded` for `n`). A transport joins shards in different processes; what it
   decides is a pure function, run by the model checker against a network that fails.
 - **The HTTP client's wire format.** What the reader makes of a response written as a server
   writes it, and of every start of one, is proved, and so are its size limit and its ending

@@ -602,6 +602,27 @@ by `lake build`, not linked into the test executable.
 /-- info: 'Lanes.System.Invariant.split_of_forall' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Invariant.split_of_forall
 
+/-- info: 'Lanes.Shards.AtHome.step' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Shards.AtHome.step
+
+/-- info: 'Lanes.SysState.init_unsharded_equiv' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SysState.init_unsharded_equiv
+
+/-- info: 'Lanes.System.ShardsReachable.unsharded_of_init' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.ShardsReachable.unsharded_of_init
+
+/-- info: 'Lanes.System.ShardsReachable.unsharded' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.ShardsReachable.unsharded
+
+/-- info: 'Lanes.System.Invariant.shards' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Invariant.shards
+
+/-- info: 'Lanes.System.Invariant.shards_of_forall' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Invariant.shards_of_forall
+
+/-- info: 'Lanes.System.Invariant.shards_state' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Invariant.shards_state
+
 /-- info: 'Lanes.Refines.of_invariant' does not depend on any axioms -/
 #guard_msgs in #print axioms Lanes.Refines.of_invariant
 
