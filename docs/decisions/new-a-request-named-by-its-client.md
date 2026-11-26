@@ -63,5 +63,9 @@ and the service acts on a name once and answers it again with what it answered.
   answers owed as multisets (`Accounts`, `owed` as a sum over nodes), and both would become
   membership, with the memo agreeing with the keys of the committed list. That is a rewrite of
   most of its simulation, a few hundred lines, not a small change to a frozen package.
+- *No deadlines yet.* `once` takes a `Service In Out S` with no deadlines
+  (`docs/decisions/D42-a-spec-names-its-inputs-and.md`), as `of_steps` does; a deadline passing
+  would be one more visible step that grows the state, and `of_handles` would need the timed
+  labels `of_steps` does not have.
 - *Checked, not proved: the monitor.* `Service.onceMonitored` is the subset construction for
   `once`, as `Service.monitored` is for `spec`; it has no soundness theorem yet.

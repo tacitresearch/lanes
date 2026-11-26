@@ -18,7 +18,7 @@ scheduler and the model checker run.
 ## Main definitions
 
 - `System.sem`: the semantics of a system under an environment model.
-- `System.Refines`: a system refines a service spec whose labels are the system's visible events.
+- `System.Refines`: a system refines a spec whose labels are the system's visible events.
 
 ## Main statements
 
@@ -84,26 +84,30 @@ theorem mTr_of_run {c c' : SysState sys} {evs : List (Event σ)} (h : c.run env 
 
 /--
 `sys` refines `spec` under `env`: everything the outside world can observe of the running system
-is allowed by the spec. Inputs and outputs are the visible labels; deliveries, timeouts, crashes
-and restarts are internal.
+is allowed by the spec. Inputs and outputs are visible, and so are the timers `deadlines` names,
+each firing as the deadline of the spec it is; deliveries, other timeouts, crashes and restarts
+are internal.
 -/
-abbrev Refines {S : Type} (sys : System σ) (env : EnvModel σ)
-    (spec : Spec S (Option (Visible σ))) : Prop :=
-  Lanes.Refines (sys.sem env) spec Event.visible
+abbrev Refines {S T : Type} (sys : System σ) (env : EnvModel σ)
+    (spec : Spec S (Option (Visible σ.In σ.Out T)))
+    (deadlines : Deadlines σ T := fun _ _ => none) : Prop :=
+  Lanes.Refines (sys.sem env) spec (Event.timed deadlines)
 
-/-- The inputs and outputs of a run from the initial state, in order, are a trace of what the
+/-- The visible events of a run from the initial state, in order, are a trace of what the
 system refines. Shown a run whose trace the spec does not have, a system does not refine it. -/
-theorem Refines.traces_of_run {S : Type} {spec : Spec S (Option (Visible σ))}
-    (h : sys.Refines env spec) {evs : List (Event σ)} {c : SysState sys}
-    (hrun : (SysState.init sys env).run env evs = some c) :
-    ∃ t t', spec.init t ∧ spec.lts.SMTr t ((evs.filterMap Event.visible).map some) t' := by
+theorem Refines.traces_of_run {S T : Type} {spec : Spec S (Option (Visible σ.In σ.Out T))}
+    {deadlines : Deadlines σ T} (h : sys.Refines env spec deadlines) {evs : List (Event σ)}
+    {c : SysState sys} (hrun : (SysState.init sys env).run env evs = some c) :
+    ∃ t t', spec.init t ∧
+      spec.lts.SMTr t ((evs.filterMap (Event.timed deadlines)).map some) t' := by
   have hlabels : ∀ evs : List (Event σ),
-      (evs.map Event.visible).filter (· ≠ HasTau.τ) = (evs.filterMap Event.visible).map some := by
+      (evs.map (Event.timed deadlines)).filter (· ≠ HasTau.τ) =
+        (evs.filterMap (Event.timed deadlines)).map some := by
     intro evs
     induction evs with
     | nil => rfl
     | cons ev evs ih =>
-      cases hv : ev.visible <;> simp_all [HasTau.τ]
+      cases hv : ev.timed deadlines <;> simp_all [HasTau.τ]
   rw [← hlabels]
   exact Lanes.Refines.traces h rfl (mTr_of_run hrun)
 

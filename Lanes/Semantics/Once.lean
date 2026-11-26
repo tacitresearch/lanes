@@ -34,23 +34,24 @@ simulation to it can read messages in flight as a set and a duplicate cannot bre
 
 namespace Lanes
 
-variable {σ : Signature} {S K : Type}
+variable {In Out S K : Type}
 
 namespace Service
 
 /-- The state of a service whose clients name their requests by a key. -/
-structure Once (σ : Signature) (S K : Type) where
+structure Once (In Out S K : Type) where
   /-- The state of the sequential spec. -/
   value : S
   /-- The inputs that have arrived. -/
-  arrived : Set σ.In
+  arrived : Set In
   /-- The keys of the inputs that have taken effect. -/
   taken : Set K
   /-- The outputs given, each of which may be handed over any number of times. -/
-  answered : Set σ.Out
+  answered : Set Out
 
 /-- Input `x` takes effect. -/
-def Once.take (svc : Service σ S) (key : σ.In → K) (t : Once σ S K) (x : σ.In) : Once σ S K :=
+def Once.take (svc : Service In Out S) (key : In → K) (t : Once In Out S K) (x : In) :
+    Once In Out S K :=
   ⟨(svc.step t.value x).1, t.arrived, insert (key x) t.taken,
     t.answered ∪ {out | out ∈ (svc.step t.value x).2}⟩
 
@@ -59,16 +60,18 @@ The transition system of a service whose requests are named by `key`: an input a
 (visible), an arrived input whose key has not taken effect takes effect (internal), an answer
 given is handed over (visible) and stays given.
 -/
-def once (svc : Service σ S) (key : σ.In → K) : Spec (Once σ S K) (Option (Visible σ)) where
+def once (svc : Service In Out S) (key : In → K) : Spec (Once In Out S K) (Option (Visible In Out))
+    where
   init t := t = ⟨svc.init, ∅, ∅, ∅⟩
   Tr t label t' :=
     match label with
     | some (.input x) => t' = { t with arrived := insert x t.arrived }
     | some (.output out) => out ∈ t.answered ∧ t' = t
+    | some (.fire t) => t.elim
     | none => ∃ x ∈ t.arrived, key x ∉ t.taken ∧ t' = t.take svc key x
 
 /-- `t'` has arrived, taken and answered everything `t` has. -/
-structure Once.Grows (t t' : Once σ S K) : Prop where
+structure Once.Grows (t t' : Once In Out S K) : Prop where
   /-- What has arrived stays arrived. -/
   arrived : t.arrived ⊆ t'.arrived
   /-- What has taken effect stays taken. -/
@@ -79,19 +82,19 @@ structure Once.Grows (t t' : Once σ S K) : Prop where
 namespace Once.Grows
 
 /-- A state grows to itself. -/
-theorem refl (t : Once σ S K) : t.Grows t :=
+theorem refl (t : Once In Out S K) : t.Grows t :=
   ⟨subset_rfl, subset_rfl, subset_rfl⟩
 
 /-- Growing twice is growing. -/
-theorem trans {t₁ t₂ t₃ : Once σ S K} (h₁ : t₁.Grows t₂) (h₂ : t₂.Grows t₃) : t₁.Grows t₃ :=
+theorem trans {t₁ t₂ t₃ : Once In Out S K} (h₁ : t₁.Grows t₂) (h₂ : t₂.Grows t₃) : t₁.Grows t₃ :=
   ⟨h₁.arrived.trans h₂.arrived, h₁.taken.trans h₂.taken, h₁.answered.trans h₂.answered⟩
 
 end Once.Grows
 
-variable {svc : Service σ S} {key : σ.In → K}
+variable {svc : Service In Out S} {key : In → K}
 
 /-- Every step of `once` grows its state. -/
-theorem once_grows {t t' : Once σ S K} {μ : Option (Visible σ)} (h : (svc.once key).Tr t μ t') :
+theorem once_grows {t t' : Once In Out S K} {μ : Option (Visible In Out)} (h : (svc.once key).Tr t μ t') :
     t.Grows t' := by
   match μ, h with
   | some (.input x), h =>
@@ -100,26 +103,27 @@ theorem once_grows {t t' : Once σ S K} {μ : Option (Visible σ)} (h : (svc.onc
   | some (.output _), ⟨_, h⟩ =>
     subst h
     exact .refl _
+  | some (.fire t), _ => exact t.elim
   | none, ⟨x, _, _, h⟩ =>
     subst h
     exact ⟨subset_rfl, Set.subset_insert _ _, Set.subset_union_left⟩
 
 /-- Internal steps of `once` grow its state. -/
-theorem once_grows_τSTr {t t' : Once σ S K} (h : (svc.once key).lts.τSTr t t') : t.Grows t' := by
+theorem once_grows_τSTr {t t' : Once In Out S K} (h : (svc.once key).lts.τSTr t t') : t.Grows t' := by
   induction h with
   | refl => exact .refl _
   | tail _ htr ih => exact ih.trans (once_grows (μ := none) htr)
 
 /-- An arrived input whose key has not taken effect may take effect. -/
-theorem once_take {t : Once σ S K} {x : σ.In} (hx : x ∈ t.arrived) (hk : key x ∉ t.taken) :
+theorem once_take {t : Once In Out S K} {x : In} (hx : x ∈ t.arrived) (hk : key x ∉ t.taken) :
     (svc.once key).lts.τSTr t (t.take svc key x) :=
   .single ⟨x, hx, hk, rfl⟩
 
 end Service
 
 /-- `sys` implements `svc` for clients that name their requests by `key`. -/
-abbrev System.ImplementsOnce (sys : System σ) (env : EnvModel σ) (svc : Service σ S)
-    (key : σ.In → K) : Prop :=
+abbrev System.ImplementsOnce {σ : Signature} (sys : System σ) (env : EnvModel σ)
+    (svc : Service σ.In σ.Out S) (key : σ.In → K) : Prop :=
   sys.Refines env (svc.once key)
 
 namespace Once.Memo
@@ -213,11 +217,11 @@ namespace Once.Server
 
 open Service
 
-variable {In Out C : Type} [DecidableEq In] [DecidableEq Out] [DecidableEq C]
-  {svc : Service (Server.sig In Out) S} {key : In → C × Nat}
+variable [DecidableEq In] [DecidableEq Out] {C : Type} [DecidableEq C]
+  {svc : Service In Out S} {key : In → C × Nat}
 
 /-- What an effect of the server leaves is accounted for in `t`, and it arms no timer. -/
-def Covered (t : Service.Once (Server.sig In Out) S (C × Nat)) :
+def Covered (t : Service.Once In Out S (C × Nat)) :
     Effect (Server.sig In Out) () → Prop
   | .send _ msg => (msg : In) ∈ t.arrived
   | .emit out => out ∈ t.answered
@@ -226,7 +230,7 @@ def Covered (t : Service.Once (Server.sig In Out) S (C × Nat)) :
 
 omit [DecidableEq C] in
 /-- What is covered stays covered as the spec grows. -/
-theorem Covered.mono {t t' : Service.Once (Server.sig In Out) S (C × Nat)}
+theorem Covered.mono {t t' : Service.Once In Out S (C × Nat)}
     {eff : Effect (Server.sig In Out) ()} (h : Covered t eff) (hg : t.Grows t') :
     Covered t' eff := by
   cases eff with
@@ -238,7 +242,7 @@ theorem Covered.mono {t t' : Service.Once (Server.sig In Out) S (C × Nat)}
 
 /-- The server's state is the spec's value, every request in flight has arrived, every output
 waiting has been given, no timer is armed, and the memo agrees with the keys taken. -/
-structure Sim (c : SysState (server svc key)) (t : Service.Once (Server.sig In Out) S (C × Nat)) :
+structure Sim (c : SysState (server svc key)) (t : Service.Once In Out S (C × Nat)) :
     Prop where
   /-- The server's state is the spec's value. -/
   value : t.value = (c.state ()).1
@@ -253,7 +257,7 @@ structure Sim (c : SysState (server svc key)) (t : Service.Once (Server.sig In O
 
 /-- The server moves to `r.1` with effects `r.2`, all accounted for in `t'`, with what is left
 of the network. -/
-theorem Sim.grow {c : SysState (server svc key)} {t t' : Service.Once (Server.sig In Out) S (C × Nat)}
+theorem Sim.grow {c : SysState (server svc key)} {t t' : Service.Once In Out S (C × Nat)}
     (h : Sim c t) (hg : t.Grows t') {net : List (Envelope (Server.sig In Out))}
     (hnet : net.Sublist c.net) {r : (server svc key).State () × List (Effect (Server.sig In Out) ())}
     (hvalue : t'.value = r.1.1) (hmemo : r.1.2.Agrees t'.taken (Covered t'))
@@ -273,7 +277,7 @@ theorem Sim.grow {c : SysState (server svc key)} {t t' : Service.Once (Server.si
 
 omit [DecidableEq C] in
 /-- Every effect of the service's step on `x` is an output it gives. -/
-theorem covered_step {t : Service.Once (Server.sig In Out) S (C × Nat)} (s : S) (x : In)
+theorem covered_step {t : Service.Once In Out S (C × Nat)} (s : S) (x : In)
     (h : ∀ out ∈ (svc.step s x).2, out ∈ t.answered) :
     ∀ eff ∈ ((Server.actor svc).step s x).2, Covered t eff := by
   intro eff heff
@@ -289,7 +293,7 @@ every environment: links lose, reorder and hand over twice every message, and th
 crashes. `Server.implements` needs an environment with no fault at all.
 -/
 theorem Once.server_implements {In Out C : Type} [DecidableEq In] [DecidableEq Out]
-    [DecidableEq C] (svc : Service (Server.sig In Out) S) (key : In → C × Nat)
+    [DecidableEq C] (svc : Service In Out S) (key : In → C × Nat)
     (env : EnvModel (Server.sig In Out)) : (server svc key).ImplementsOnce env svc key := by
   refine System.Refines.of_handles (inv := fun _ => True) (fun _ _ => trivial) Sim
     ⟨⟨svc.init, ∅, ∅, ∅⟩, rfl, rfl, by simp [SysState.init, SysState.blank],

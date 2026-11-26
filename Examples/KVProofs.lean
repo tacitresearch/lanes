@@ -56,7 +56,7 @@ theorem tame_invariant (env : EnvModel (sig K V F)) :
     (fun i s delay m h => by cases i <;> simp [system, front, store] at h)).invariant env
 
 abbrev Abs (K V F : Type) [DecidableEq K] [DecidableEq V] [DecidableEq F] :=
-  Service.Abs (sig K V F) (K → Option V)
+  Service.Abs (Request K V F) (Response V) (K → Option V)
 
 structure Sim (c : SysState (system K V F false)) (t : Abs K V F) : Prop where
   value : t.value = c.state .store
@@ -169,7 +169,7 @@ theorem implements (env : EnvModel (sig K V F))
 section Once
 
 abbrev OnceAbs (K V F : Type) [DecidableEq K] [DecidableEq V] [DecidableEq F] :=
-  Service.Once (sig K V F) (K → Option V) (F × ReqId)
+  Service.Once (Request K V F) (Response V) (K → Option V) (F × ReqId)
 
 /-- What `e` is on its way to do is accounted for: its request has arrived, its answer is
 given. -/

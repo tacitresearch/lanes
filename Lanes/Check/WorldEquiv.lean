@@ -24,16 +24,19 @@ namespace Lanes
 variable {σ : Signature} {sys : System σ} {D : Type}
 
 /-- The driver cannot tell `==` states apart: they offer the same inputs, leading to `==`
-states, and stay `==` after seeing an output. -/
+states, and stay `==` after seeing an output or a timer fire. -/
 structure Driver.Respects [BEq D] (driver : Driver σ D) : Prop where
   inputs : ∀ a b, (a == b) = true → ∀ x a', (x, a') ∈ driver.inputs a →
     ∃ b', (x, b') ∈ driver.inputs b ∧ (a' == b') = true
   observe : ∀ a b out, (a == b) = true → (driver.observe a out == driver.observe b out) = true
+  timeout : ∀ a b i msg, (a == b) = true →
+    (driver.timeout a i msg == driver.timeout b i msg) = true
 
 theorem Driver.Respects.of_lawful [BEq D] [LawfulBEq D] (driver : Driver σ D) :
     driver.Respects where
   inputs _ _ hab _ a' ha' := ⟨a', eq_of_beq hab ▸ ha', BEq.rfl⟩
   observe _ _ _ hab := eq_of_beq hab ▸ BEq.rfl
+  timeout _ _ _ _ hab := eq_of_beq hab ▸ BEq.rfl
 
 structure World.Equiv [BEq D] (env : EnvModel σ) (a b : World sys D) : Prop where
   state : SysState.Equiv env a.state b.state
@@ -66,7 +69,12 @@ theorem World.Equiv.next [Enum σ.Id] [BEq D] {sc : Scenario σ D} (hresp : sc.d
         refine ⟨_, .inl ⟨(_, c₂), hsucc₂, by simp [← hcrashes, hbudget]; rfl⟩, ?_⟩
         exact ⟨by simpa using hequiv, hdriver, by simp [hcrashes]⟩
       · exact absurd hsome (by simp)
-    | deliver e | duplicate e | drop e | timeout i msg | start i =>
+    | timeout i msg =>
+      simp only [Option.some.injEq, Prod.mk.injEq] at hsome
+      obtain ⟨rfl, rfl⟩ := hsome
+      exact ⟨_, .inl ⟨(_, c₂), hsucc₂, rfl⟩, by simpa using hequiv,
+        hresp.timeout _ _ i msg hdriver, hcrashes⟩
+    | deliver e | duplicate e | drop e | start i =>
       simp only [Option.some.injEq, Prod.mk.injEq] at hsome
       obtain ⟨rfl, rfl⟩ := hsome
       exact ⟨_, .inl ⟨(_, c₂), hsucc₂, rfl⟩, by simpa using hequiv, hdriver, hcrashes⟩

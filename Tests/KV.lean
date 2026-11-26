@@ -41,7 +41,8 @@ def alone : List (Request K V F) :=
   [⟨1, 0, .get 0⟩, ⟨2, 0, .put 0 1⟩, ⟨3, 0, .get 0⟩]
 
 abbrev W (caching : Bool) :=
-  World (system K V F caching) (List (Request K V F) × Check.Monitor (sig K V F) (K → Option V))
+  World (system K V F caching)
+    (List (Request K V F) × Check.Monitor (Request K V F) (Response V) (K → Option V))
 
 def props (caching : Bool) : List (Check.Property (W caching)) :=
   [ Check.refines "every response is allowed by the map spec",
@@ -70,7 +71,7 @@ def violated (r : Check.Report (W false) (Event (sig K V F))) : Bool :=
   | _ => false
 
 def violated' {sys : System (sig K V F)}
-    (r : Check.Report (World sys (List (Request K V F) × Check.Monitor (sig K V F) (K → Option V)))
+    (r : Check.Report (World sys (List (Request K V F) × Check.Monitor (Request K V F) (Response V) (K → Option V)))
       (Event (sig K V F))) : Bool :=
   match r.failure with
   | some (.violated "every response is allowed by the map spec" _) => true
@@ -102,7 +103,7 @@ def retried : List (Request K V F) :=
   [⟨1, 0, .put 0 1⟩, ⟨2, 0, .put 0 0⟩, ⟨1, 0, .put 0 1⟩, ⟨3, 0, .get 0⟩]
 
 abbrev OW (sys : System (sig K V F)) :=
-  World sys (List (Request K V F) × Check.OnceMonitor (sig K V F) (K → Option V) (F × ReqId))
+  World sys (List (Request K V F) × Check.OnceMonitor (Request K V F) (Response V) (K → Option V) (F × ReqId))
 
 def onceProps (sys : System (sig K V F)) : List (Check.Property (OW sys)) :=
   [ Check.refinesOnce "every response is allowed by the map spec, once per request",

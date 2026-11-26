@@ -113,7 +113,7 @@ end Step
 variable {In Out S : Type} [DecidableEq In] [DecidableEq Out]
 
 /-- A `Server` that acts once on each request `key` names. -/
-abbrev server (svc : Service (Server.sig In Out) S) (key : In → C × Nat) :
+abbrev server (svc : Service In Out S) (key : In → C × Nat) :
     System (Server.sig In Out) where
   State _ := S × Memo C (Effect (Server.sig In Out) ())
   actor _ := actor (Server.actor svc) fun x => some (key x)

@@ -22,12 +22,12 @@ takes at most one step per distinct key, so as many rounds as inputs have arrive
 
 namespace Lanes.Check
 
-variable {σ : Signature} {S K : Type}
+variable {In Out S K : Type}
 
-structure OnceState (σ : Signature) (S K : Type) where
+structure OnceState (In Out S K : Type) where
   value : S
   taken : List K
-  answered : List σ.Out
+  answered : List Out
 
 def insertNew {α : Type} [BEq α] (l : List α) (a : α) : List α :=
   if l.contains a then l else l ++ [a]
@@ -41,74 +41,75 @@ def setHash {α : Type} [Hashable α] (salt : UInt64) (l : List α) : UInt64 :=
 
 namespace OnceState
 
-variable [BEq S] [DecidableEq K]
+variable [BEq S] [DecidableEq K] [DecidableEq In] [DecidableEq Out]
 
-def equiv (a b : OnceState σ S K) : Bool :=
+def equiv (a b : OnceState In Out S K) : Bool :=
   a.value == b.value && sameSet a.taken b.taken && sameSet a.answered b.answered
 
-def take (svc : Service σ S) (key : σ.In → K) (a : OnceState σ S K) (x : σ.In) :
-    OnceState σ S K :=
+def take (svc : Service In Out S) (key : In → K) (a : OnceState In Out S K) (x : In) :
+    OnceState In Out S K :=
   let (value, outs) := svc.step a.value x
   ⟨value, insertNew a.taken (key x), outs.foldl insertNew a.answered⟩
 
-def hash [Hashable S] [Hashable K] [Hashable σ.Out] (a : OnceState σ S K) : UInt64 :=
+def hash [Hashable S] [Hashable K] [Hashable Out] (a : OnceState In Out S K) : UInt64 :=
   mixHash (Hashable.hash a.value) (mixHash (setHash 3 a.taken) (setHash 5 a.answered))
 
 end OnceState
 
-structure OnceMonitor (σ : Signature) (S K : Type) where
-  arrived : List σ.In
-  candidates : List (OnceState σ S K)
+structure OnceMonitor (In Out S K : Type) where
+  arrived : List In
+  candidates : List (OnceState In Out S K)
 
 namespace OnceMonitor
 
-variable [BEq S] [DecidableEq K]
+variable [BEq S] [DecidableEq K] [DecidableEq In] [DecidableEq Out]
 
-def insertAll (known new : List (OnceState σ S K)) : List (OnceState σ S K) :=
+def insertAll (known new : List (OnceState In Out S K)) : List (OnceState In Out S K) :=
   new.foldl (fun acc s => if acc.any (s.equiv ·) then acc else acc ++ [s]) known
 
-def expand (svc : Service σ S) (key : σ.In → K) (arrived : List σ.In)
-    (states : List (OnceState σ S K)) : List (OnceState σ S K) :=
+def expand (svc : Service In Out S) (key : In → K) (arrived : List In)
+    (states : List (OnceState In Out S K)) : List (OnceState In Out S K) :=
   states.flatMap fun a =>
     (arrived.filter fun x => !a.taken.contains (key x)).map (a.take svc key)
 
-def close (svc : Service σ S) (key : σ.In → K) (arrived : List σ.In)
-    (states : List (OnceState σ S K)) : List (OnceState σ S K) :=
+def close (svc : Service In Out S) (key : In → K) (arrived : List In)
+    (states : List (OnceState In Out S K)) : List (OnceState In Out S K) :=
   (List.range arrived.length).foldl (fun acc _ => insertAll acc (expand svc key arrived acc))
     (insertAll [] states)
 
-def ok (m : OnceMonitor σ S K) : Bool :=
+def ok (m : OnceMonitor In Out S K) : Bool :=
   !m.candidates.isEmpty
 
-instance : BEq (OnceMonitor σ S K) where
+instance : BEq (OnceMonitor In Out S K) where
   beq a b := sameSet a.arrived b.arrived && a.candidates.length == b.candidates.length
     && a.candidates.all fun s => b.candidates.any (s.equiv ·)
 
-instance [Hashable S] [Hashable K] [Hashable σ.In] [Hashable σ.Out] :
-    Hashable (OnceMonitor σ S K) where
+instance [Hashable S] [Hashable K] [Hashable In] [Hashable Out] :
+    Hashable (OnceMonitor In Out S K) where
   hash m := mixHash (setHash 11 m.arrived) (m.candidates.foldl (fun h s => h + mixHash 7 s.hash) 0)
 
-def start (svc : Service σ S) : OnceMonitor σ S K :=
+def start (svc : Service In Out S) : OnceMonitor In Out S K :=
   ⟨[], [⟨svc.init, [], []⟩]⟩
 
-def input (svc : Service σ S) (key : σ.In → K) (m : OnceMonitor σ S K) (x : σ.In) :
-    OnceMonitor σ S K :=
+def input (svc : Service In Out S) (key : In → K) (m : OnceMonitor In Out S K) (x : In) :
+    OnceMonitor In Out S K :=
   let arrived := insertNew m.arrived x
   ⟨arrived, close svc key arrived m.candidates⟩
 
-def output (m : OnceMonitor σ S K) (out : σ.Out) : OnceMonitor σ S K :=
+def output (m : OnceMonitor In Out S K) (out : Out) : OnceMonitor In Out S K :=
   { m with candidates := m.candidates.filter (·.answered.contains out) }
 
 end OnceMonitor
 
-def refinesOnce [BEq S] [DecidableEq K] {sys : System σ} {D : Type} (name : String) :
-    Property (World sys (D × OnceMonitor σ S K)) :=
+def refinesOnce {σ : Signature} [BEq S] [DecidableEq K] {sys : System σ} {D : Type}
+    (name : String) : Property (World sys (D × OnceMonitor σ.In σ.Out S K)) :=
   .always name fun w => w.driver.2.ok
 
 end Check
 
-def Service.onceMonitored [BEq S] {K D : Type} [DecidableEq K] (svc : Service σ S)
-    (key : σ.In → K) (driver : Driver σ D) : Driver σ (D × Check.OnceMonitor σ S K) where
+def Service.onceMonitored {σ : Signature} [BEq S] {D : Type} [DecidableEq K]
+    (svc : Service σ.In σ.Out S) (key : σ.In → K) (driver : Driver σ D) :
+    Driver σ (D × Check.OnceMonitor σ.In σ.Out S K) where
   init := (driver.init, Check.OnceMonitor.start svc)
   inputs s := (driver.inputs s.1).map fun (x, d) => (x, (d, s.2.input svc key x))
   observe s out := (driver.observe s.1 out, s.2.output out)
