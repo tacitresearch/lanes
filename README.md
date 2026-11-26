@@ -97,9 +97,12 @@ a view cannot link or post to a route that does not exist.
   variables cost nothing at run time (`Invariant.of_ghost`). Invariants about states and
   messages need five cases, not eight, and hold under loss, duplication, reordering and crashes
   (`Inductive.of_monotone`).
-- **Trusted.** About 1,000 lines of IO and macro code and a 400-line HTTP wire format that is
-  tested and only partly proved, listed with their sizes in `TRUSTED.md`;
-  `lanes lint` fails if they grow.
+- **Several shards and processes.** Two shards joined behave as the one system
+  (`System.SplitReachable.merged`). A transport joins shards in different processes; what it
+  decides is a pure function, run by the model checker against a network that fails.
+- **Trusted.** About 1,260 lines of IO and macro code and a 410-line HTTP wire format that is
+  tested and partly proved, listed with their sizes in `TRUSTED.md`; `lanes lint` fails if they
+  grow, and `scripts/mutants.py` checks that breaking any duty of that code fails a test.
 
 ## Kill it and start it again
 
@@ -115,6 +118,19 @@ The journal holds what the system was asked, not its state. Starting again repla
 the same pure functions, so the system is back in the state the journal describes, and that
 has a proof. From time to time the kernel is saved and the journal cut, so a restart replays
 only what came after the last save; that this gives the same state has a proof too.
+
+## A serious system built on it
+
+`systems/raft-kv` is a replicated key-value store: Raft, as the step function of one actor.
+It is checked against the map it replicates, its safety invariants are proved for every
+cluster and every fault (election safety, log matching, leader completeness), and it runs as
+three processes that survive their leaders being killed:
+
+```bash
+cd systems/raft-kv && mkdir -p .lake && ln -s ../../../.lake/packages .lake/packages
+lake build
+lake exe raftProcs    # three processes over HTTP, two leaders killed with SIGKILL
+```
 
 ## Build Lanes itself
 
