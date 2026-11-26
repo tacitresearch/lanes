@@ -28,3 +28,19 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Html.safeUrl_scheme' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Html.safeUrl_scheme
+
+-- Lanes.Html.HtmxSound
+/-- info: 'Lanes.Hx.methodAttr_inj' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Hx.methodAttr_inj
+
+/-- info: 'Lanes.Hx.request_match?' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Hx.request_match?
+
+/-- info: 'Lanes.Hx.mem_eventName' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Hx.mem_eventName
+
+/-- info: 'Lanes.Hx.eventName_plain' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Hx.eventName_plain
+
+/-- info: 'Lanes.Hx.render_plain' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Hx.render_plain
