@@ -42,7 +42,7 @@ def main (args : List String) : IO UInt32 := do
   let digest_ms := (← IO.monoMsNow) - started
   let config : Config Name := { admin }
   let server ← (Http.serve (Sys config) (bridge settings)
-    { port := port.toUInt16, journal, system := "ledger 2" } { snapshotEvery := 256 }
+    { port := port.toUInt16, journal, system := "ledger 3" } { snapshotEvery := 256 }
     (some (saving config))).block
   IO.println s!"ledger listening on http://127.0.0.1:{server.port.getD 0} (a password digest takes {digest_ms} ms)"
   (← IO.getStdout).flush
