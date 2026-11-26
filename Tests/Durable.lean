@@ -324,6 +324,26 @@ def rehandTest : Async (List (String × Bool)) := do
       (← run past) == #[8]),
     ("durable: and those that were marked are not", (← run (past ++ [.handed])) == #[]) ]
 
+/-- How often a shard saves when it is started on `past`, saves every `every` entries, and is
+given nothing to do. -/
+def savesAtStart (past : List (Journal.Entry (sig (Fin 3)))) (every : Nat) : Async Nat := do
+  let (log, _) ← memory past
+  let saves ← IO.mkRef 0
+  let rt ← Runtime.start Bank3 { snapshotEvery := every }
+    (journal := some { log with save := some fun _ => saves.modify (· + 1) })
+  rt.idle
+  rt.stop
+  saves.get
+
+def overdueTest : Async (List (String × Bool)) := do
+  let past : List (Journal.Entry (sig (Fin 3))) :=
+    [.advance 0, .input (.transfer ⟨7, 0, 1, 3⟩), .batch 64, .handed]
+  return [
+    ("durable: a shard started on a journal as long as the distance between two saves saves "
+      ++ "at once", (← savesAtStart past past.length) == 1),
+    ("durable: and one started on a shorter journal does not",
+      (← savesAtStart past (past.length + 8)) == 0) ]
+
 /-- The journal stops taking writes. The shard must end, say so, and leave nobody waiting:
 neither those it had heard from nor those whose commands it never took. -/
 def failTest : Async (List (String × Bool)) := do
@@ -445,6 +465,62 @@ def windowsTest : Async (List (String × Bool)) := do
       placed),
     ("snapshot: and the finished save gives the same state", done) ]
 
+/-- A journal whose last entry was not wholly written: the entries before it are found, the
+journal is cut back to them, and the bytes cut off are in the `.cut` file. -/
+def cutTest : Async (List (String × Bool)) := do
+  let path ← scratch "cut"
+  let input := Request.codec Codec.fin
+  let file := Journal.file input "" entries
+  let whole := Journal.file input "" entries.dropLast
+  let torn := file.extract 0 (file.size - 3)
+  IO.FS.writeBinFile path torn
+  let log ← (store path).open
+  log.close
+  let journal ← IO.FS.readBinFile path
+  let kept := path.addExtension "cut"
+  let cut ← if ← kept.pathExists then some <$> IO.FS.readBinFile kept else pure none
+  remove path
+  IO.FS.writeBinFile path file
+  let log' ← (store path).open
+  log'.close
+  let nothingCut := !(← kept.pathExists)
+  remove path
+  return [
+    ("journal: a last entry not wholly written is cut off and the entries before it are found",
+      written log.past == written entries.dropLast && journal == whole
+        && whole.size < torn.size),
+    ("journal: the bytes cut off are kept beside the journal, all of them and nothing else",
+      cut == some (torn.extract whole.size torn.size)),
+    ("journal: nothing is kept beside a journal that was whole",
+      nothingCut && written log'.past == written entries) ]
+
+/-- The index of a save's mark is the number of entries written before it, whatever was
+written: turns, marks of outputs handed over, and the marks of earlier saves. -/
+def countTest : Async (List (String × Bool)) := do
+  let path ← scratch "count"
+  let turn : List (Journal.Entry (sig (Fin 3))) :=
+    [.advance 5, .input (.transfer ⟨1, 0, 1, 3⟩), .batch 64]
+  let image := (Journal.recover Bank3 []).1.image
+  let log ← (saving path).open
+  let some save := log.save | return [("journal: a store with codecs can save", false)]
+  log.append turn
+  log.note [.handed]
+  save image
+  log.append turn
+  log.note [.handed]
+  log.append turn
+  save image
+  log.append turn
+  log.close
+  let log ← (saving path).open
+  log.close
+  remove path
+  return [
+    ("journal: the mark of a save has the index of the entries written before it, the marks "
+      ++ "of earlier saves among them",
+      log.saved.map (·.1) == some 12 && log.index == 16
+        && written log.past == written (.snapshot 12 :: turn)) ]
+
 /-! A system whose state is its own history, so that an input lost or applied twice shows in
 it. Each input also arms a timer, so the saved kernel has an agenda. -/
 
@@ -517,7 +593,8 @@ def killSavingTest : Async (List (String × Bool)) := do
 
 def tests : IO (List (String × Bool)) := do
   return (← restartTest.block) ++ (← tornTest.block) ++ (← refusalTest.block)
-    ++ (← orderTest.block) ++ (← rehandTest.block) ++ (← failTest.block)
+    ++ (← orderTest.block) ++ (← rehandTest.block) ++ (← overdueTest.block)
+    ++ (← failTest.block) ++ (← cutTest.block) ++ (← countTest.block)
     ++ (← snapshotTest.block) ++ (← windowsTest.block) ++ (← killTest.block)
     ++ (← killSavingTest.block)
 

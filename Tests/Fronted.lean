@@ -314,6 +314,78 @@ def live : Async (List (String × Bool)) := do
         ++ "front that took the request, which answers 504",
       elsewhere.startsWith "HTTP/1.1 504") ]
 
+/-! The desk behind a front, over a socket. -/
+
+/-- The handler of the desk's memos holds the shard, so a request waits in the inbox, which has
+room for one, and the next finds it full. -/
+def busyTest : Async (List (String × Bool)) := do
+  let entered : IO.Promise Unit ← IO.Promise.new
+  let release : IO.Promise Unit ← IO.Promise.new
+  let server ← serveFronted (Server.system desk) bridge { port := 0 } { inboxCapacity := 1 }
+    fun _ => do
+      entered.resolve ()
+      discard <| await release.result?
+  let some port := server.port | return [("fronted: the server reports its port", false)]
+  let first ← IO.Promise.new
+  background do first.resolve (← Tests.Web.fetch port "/")
+  discard <| await entered.result?
+  let second ← IO.Promise.new
+  background do second.resolve (← Tests.Web.fetch port "/")
+  let mut held := 0
+  for _ in [0:200] do
+    held ← server.inFlight
+    if held == 2 then break
+    Async.sleep 10
+  let third ← Tests.Web.fetch port "/"
+  let during ← server.inFlight
+  release.resolve ()
+  let answers := [← await first, ← await second]
+  let after ← server.inFlight
+  server.stop
+  return [
+    ("fronted: a request that finds the inbox full is answered 503 at once",
+      held == 2 && third.startsWith "HTTP/1.1 503"),
+    ("fronted: it is not in flight, and those that were are answered when the shard goes on",
+      during == 2 && answers.all (·.startsWith "HTTP/1.1 200") && after == 0) ]
+
+def askCodec : Codec Ask :=
+  (Codec.sum Codec.nat Codec.nat).map
+    (fun | .ask id => .inl id | .note n => .inr n)
+    (fun | .inl id => some (.ask id) | .inr n => some (.note n))
+    (by intro ask; cases ask <;> rfl)
+
+def deskPeers (port : UInt16) : Peers.Config deskSig :=
+  { listen := { port }, home := fun _ => pure none, id := Codec.unit, msg := fun _ => askCodec }
+
+/-- One process of the desk. Its memos are neither responses nor parcels. And a second process
+that wants the first one's HTTP port does not start. -/
+def nodeTest : Async (List (String × Bool)) := do
+  let memos ← IO.mkRef #[]
+  let (server, peers) ← serveShard (Server.system desk) (fun _ => true) bridge (deskPeers 0)
+    { port := 0 } {} fun
+      | .memo n => memos.modify (·.push n)
+      | .reply _ => pure ()
+  let some port := server.port | return [("fronted: the server reports its port", false)]
+  let answer ← Tests.Web.fetch port "/"
+  let probe ← Peers.start (deskPeers 0) fun _ => pure ()
+  probe.stop
+  let failed ← try
+      discard <| serveShard (Server.system desk) (fun _ => true) bridge (deskPeers probe.port)
+        { port }
+      pure false
+    catch _ => pure true
+  let free ← try
+      (← Peers.start (deskPeers probe.port) fun _ => pure ()).stop
+      pure true
+    catch _ => pure false
+  peers.stop
+  server.stop
+  return [
+    ("fronted: an output of a shard that is neither a response nor a parcel comes to the caller",
+      answer.startsWith "HTTP/1.1 200" && (← memos.get) == #[0]),
+    ("fronted: a process whose server cannot start stops listening for parcels too",
+      failed && free) ]
+
 /-! A fronted system on a journal: stop the server, start another on the same journal. -/
 
 def durable : Async (List (String × Bool)) := do

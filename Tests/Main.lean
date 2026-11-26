@@ -43,6 +43,13 @@ def report (results : List (String × Bool)) : IO UInt32 := do
   (← IO.getStdout).flush
   IO.Process.exit (if failed == 0 then 0 else 1)
 
+def live : IO (List (String × Bool)) := do
+  return (← Tests.Runtime.tests) ++ (← Tests.Web.tests) ++ (← Tests.Durable.tests)
+    ++ (← Tests.Clock.live.block) ++ (← Tests.HttpClient.live.block)
+    ++ (← Tests.Cluster.tests) ++ (← Tests.Peers.live.block)
+    ++ (← Tests.Fronted.live.block) ++ (← Tests.Fronted.busyTest.block)
+    ++ (← Tests.Fronted.nodeTest.block) ++ (← Tests.Fronted.durable.block)
+
 def main (args : List String) : IO UInt32 := do
   let pure := Tests.Engine.tests ++ Tests.Bank.tests ++ Tests.Json.tests ++ Tests.Html.tests
     ++ Tests.KV.tests ++ Tests.Gate.tests ++ Tests.Fronted.tests ++ Tests.Join.tests
@@ -50,17 +57,9 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.Fair.tests ++ Tests.Codec.tests ++ Tests.Durable.fileTests ++ Tests.Split.tests
     ++ Tests.Peers.tests ++ Tests.Courier.tests ++ Tests.Mailbox.tests ++ Tests.Batch.tests
   match args with
-  | [] =>
-    report (pure ++ (← Tests.Runtime.tests) ++ (← Tests.Web.tests) ++ (← Tests.Durable.tests)
-      ++ (← Tests.Clock.live.block) ++ (← Tests.HttpClient.live.block)
-      ++ (← Tests.Cluster.tests) ++ (← Tests.Peers.live.block)
-      ++ (← Tests.Fronted.live.block) ++ (← Tests.Fronted.durable.block))
+  | [] => report (pure ++ (← live))
   | ["fast"] => report pure
-  | ["live"] =>
-    report ((← Tests.Runtime.tests) ++ (← Tests.Web.tests) ++ (← Tests.Durable.tests)
-      ++ (← Tests.Clock.live.block) ++ (← Tests.HttpClient.live.block)
-      ++ (← Tests.Cluster.tests) ++ (← Tests.Peers.live.block)
-      ++ (← Tests.Fronted.live.block) ++ (← Tests.Fronted.durable.block))
+  | ["live"] => report (← live)
   | ["journal-child", path] =>
     Tests.Durable.child path
     return 0
