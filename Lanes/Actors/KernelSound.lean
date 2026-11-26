@@ -329,6 +329,72 @@ theorem fire_sound (k : Kernel sys) (i : σ.Id) (msg : σ.Msg i) (token : Nat) :
   · simp only [hfire, ite_false, Bool.false_eq_true]
     rfl
 
+theorem apply_sound (k : Kernel sys) (op : Op σ) :
+    (k.abs).run env (k.apply op).events = some ((k.apply op).kernel.abs) := by
+  cases op with
+  | input x => exact accept_sound k x
+  | run =>
+    simp only [apply]
+    cases h : k.run1 with
+    | none => rfl
+    | some r => exact run1_sound h
+  | fire i msg token => exact fire_sound k i msg token
+
+omit [Hashable σ.Id] in
+theorem _root_.Lanes.SysState.run_append (envm : EnvModel σ) (c : SysState sys)
+    (a b : List (Event σ)) : c.run envm (a ++ b) = (c.run envm a).bind (·.run envm b) := by
+  induction a generalizing c with
+  | nil => rfl
+  | cons ev a ih =>
+    simp only [List.cons_append, SysState.run]
+    cases c.step envm ev with
+    | none => rfl
+    | some c' => simpa using ih c'
+
+omit [Hashable σ.Id] in
+theorem _root_.Lanes.System.Reachable.run {envm : EnvModel σ} {c c' : SysState sys}
+    {evs : List (Event σ)} (h : sys.Reachable envm c) (hrun : c.run envm evs = some c') :
+    sys.Reachable envm c' := by
+  induction evs generalizing c with
+  | nil => simp only [SysState.run, Option.some.injEq] at hrun; exact hrun ▸ h
+  | cons ev evs ih =>
+    simp only [SysState.run] at hrun
+    cases hstep : c.step envm ev with
+    | none => simp [hstep] at hrun
+    | some c₁ => exact ih (h.step ev hstep) (by simpa [hstep] using hrun)
+
+theorem exec_sound (k : Kernel sys) (ops : List (Op σ)) :
+    (k.abs).run env (k.exec ops).2 = some ((k.exec ops).1.abs) := by
+  induction ops generalizing k with
+  | nil => rfl
+  | cons op ops ih =>
+    simp only [exec, SysState.run_append, apply_sound, Option.bind_some]
+    exact ih _
+
+theorem boot_sound (sys : System σ) :
+    (SysState.init sys env).run env ((outputs (boot sys).2).map .output)
+      = some ((boot sys).1.abs) := by
+  rw [← abs_boot]
+  exact run_outputs env ((boot sys).1.abs) _
+
+/--
+Whatever a shell does with a kernel, in any order: any inputs, kernel steps at any time, timers
+fired early, late, twice or never armed. The kernel is still in a state the semantics can reach,
+and the events it reported are a run that reaches it. Nothing is assumed about the shell, the
+inbox or the clock.
+-/
+theorem exec_reachable (sys : System σ) (ops : List (Op σ)) :
+    (SysState.init sys env).run env
+        ((outputs (boot sys).2).map .output ++ ((boot sys).1.exec ops).2)
+      = some (((boot sys).1.exec ops).1.abs)
+    ∧ sys.Reachable env (((boot sys).1.exec ops).1.abs) := by
+  have hrun : (SysState.init sys env).run env
+      ((outputs (boot sys).2).map .output ++ ((boot sys).1.exec ops).2)
+        = some (((boot sys).1.exec ops).1.abs) := by
+    rw [SysState.run_append, boot_sound, Option.bind_some]
+    exact exec_sound _ ops
+  exact ⟨hrun, System.Reachable.init.run hrun⟩
+
 end Kernel
 
 end Lanes

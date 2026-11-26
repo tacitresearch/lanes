@@ -29,8 +29,14 @@ model-checked in `Tests/Gate.lean`.
 
 ## Assumptions the runtime makes
 
-- **The inbox.** The shell assumes its channel hands over each command exactly once.
-- **Timers.** A timer wakes no earlier than asked.
+- **The shell passes things on unchanged.** `Kernel.exec_reachable` proves that any sequence
+  of kernel operations, in any order, with any inputs and with timers fired early, late, twice
+  or never armed, leaves the kernel in a state the semantics can reach, and that the events it
+  reported are a run reaching it. So no property of reachable states depends on the inbox, the
+  clock or the scheduler. What is assumed is that the shell hands outputs to the adapter as the
+  kernel gave them, and that an input the shell reports is the one that arrived.
+- **Progress.** That a queued input is eventually handled and an armed timer eventually fires
+  is not proved: it rests on the inbox delivering and the timer waking.
 - **In-memory durability.** `Actor.recover` receives the actor's last state. The kernel keeps
   that state in memory, so it survives an actor stopping itself but not the process dying.
 - **Environment model.** One shard stays within `Kernel.env`: reliable ordered links, no

@@ -142,6 +142,24 @@ def fire (k : Kernel sys) (i : σ.Id) (msg : σ.Msg i) (token : Nat) : Step sys 
     { kernel := r.1, events := .timeout i msg :: (outputs r.2).map .output, commands := r.2 }
   else { kernel := k }
 
+/-- Everything a shell can ask of a kernel. -/
+inductive Op (σ : Signature) where
+  | input (x : σ.In)
+  | run
+  | fire (i : σ.Id) (msg : σ.Msg i) (token : Nat)
+
+def apply (k : Kernel sys) : Op σ → Step sys
+  | .input x => k.accept x
+  | .run => k.run1.getD { kernel := k }
+  | .fire i msg token => k.fire i msg token
+
+def exec (k : Kernel sys) : List (Op σ) → Kernel sys × List (Event σ)
+  | [] => (k, [])
+  | op :: ops =>
+    let r := k.apply op
+    let rest := r.kernel.exec ops
+    (rest.1, r.events ++ rest.2)
+
 end Kernel
 
 end Lanes
