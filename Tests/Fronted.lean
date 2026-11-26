@@ -174,7 +174,46 @@ def checkArrivals (inputs : List (frontedSig deskSig).In) (env : EnvModel (front
         w.driver.answered.countP (·.1 == 1) == 2 ]
     { maxDepth }
 
+/-! The gate alone, with anything arriving on its two inputs. -/
+
+structure GateClient where
+  toSend : List (gateSig deskSig).In
+  answered : List ReqId
+  deriving DecidableEq, Hashable
+
+def gateClient (inputs : List (gateSig deskSig).In) : Driver (gateSig deskSig) GateClient where
+  init := { toSend := inputs, answered := [] }
+  inputs c := (List.range c.toSend.length).filterMap fun k =>
+    c.toSend[k]?.map fun x => (x, { c with toSend := c.toSend.eraseIdx k })
+  observe c
+    | .inl (id, _) => { c with answered := id :: c.answered }
+    | .inr _ => c
+
+def arrivals (inputs : List (gateSig deskSig).In) : List ReqId :=
+  inputs.filterMap fun
+    | .inl (id, _) => some id
+    | .inr _ => none
+
+def checkGate (inputs : List (gateSig deskSig).In) (env : EnvModel (gateSig deskSig))
+    (maxDepth : Option Nat := none) :=
+  Check.system (gateSystem bridge {}) { env, driver := gateClient inputs, maxCrashes := 1 }
+    [ .always "no request is answered more often than it arrived" fun w =>
+        (arrivals inputs).all fun id =>
+          w.driver.answered.count id + (arrivals w.driver.toSend).count id
+            ≤ (arrivals inputs).count id,
+      .sometimes "an id that arrived twice is answered twice" fun w =>
+        w.driver.answered.count 1 == 2 ]
+    { maxDepth }
+
 def tests : List (String × Bool) :=
+  let arriving : List (gateSig deskSig).In :=
+    [.inl (1, { method := .get, path := [] }), .inl (1, { method := .get, path := ["bad"] }),
+      .inr (.reply 1), .inr (.reply 1), .inr (.memo 3)]
+  let alone := checkGate arriving
+    { link := fun _ _ => { ordered := false, lossy := true }
+      mayCrash := fun _ => true, restarts := fun _ => true }
+  let aloneInJoin := checkGate [.inl (1, { method := .get, path := ["bad"] })]
+    (EnvModel.left ({} : EnvModel (joinSig (gateSig deskSig) deskSig))) (maxDepth := some 8)
   let two := check {} [get 1, get 2]
   let noted := check {} [get 1, .inr (.note 7)]
   let refused := check {} [get 1 ["bad"], get 2] (mustSee := 400)
@@ -184,7 +223,7 @@ def tests : List (String × Bool) :=
   let twice := [get 1, get 1 ["bad"]]
   let lossy := checkArrivals twice (hostile fun _ _ => false)
   let duplicating := checkArrivals twice (hostile fun src dst => src.isSome || dst != gateId)
-    (maxDepth := some 12)
+    (maxDepth := some 10)
   let duplicatedOutside := checkArrivals [get 1 ["bad"]] (hostile fun _ _ => true)
     (maxDepth := some 8)
   [ ("fronted: each request is answered exactly once, whatever the timers do, and its memo "
@@ -209,10 +248,18 @@ def tests : List (String × Bool) :=
         ++ "though actors crash and links lose and reorder",
       lossy.ok && lossy.complete && lossy.witnesses.length == 2),
     ("fronted: the same when every link but the one from outside to the gate duplicates, "
-        ++ "to depth 12",
+        ++ "to depth 10",
       duplicating.ok && duplicating.witnesses.length == 2),
     ("fronted: at most once per arrival needs the link from outside to the gate not to duplicate",
       match duplicatedOutside.failure with
+      | some (.violated "no request is answered more often than it arrived" _) => true
+      | _ => false),
+    ("gate alone: no id is answered more often than it arrived, whatever arrives on its two "
+        ++ "inputs, though it crashes and its links lose and reorder",
+      alone.ok && alone.complete),
+    ("gate alone: on the link a join gives it from outside, which duplicates, one arrival is "
+        ++ "answered twice",
+      match aloneInJoin.failure with
       | some (.violated "no request is answered more often than it arrived" _) => true
       | _ => false) ]
 

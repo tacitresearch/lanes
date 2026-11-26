@@ -3,6 +3,7 @@ module
 public import Lanes.Actors.Actor
 public import Lanes.Actors.FairScheduler
 public import Lanes.Actors.Cluster
+public import Lanes.Actors.Deed
 public import Lanes.Actors.Ghost
 public import Lanes.Actors.Monotone
 public import Lanes.Actors.Outside
@@ -17,6 +18,7 @@ public import Lanes.Actors.Snapshot
 public import Lanes.Actors.Kernel
 public import Lanes.Actors.KernelSound
 public import Lanes.Actors.Lossy
+public import Lanes.Actors.MapIOSound
 public import Lanes.Actors.KernelTimers
 public import Lanes.Actors.Scheduler
 public import Lanes.Actors.Shard
@@ -53,6 +55,7 @@ public import Lanes.Html.Htmx
 public import Lanes.Html.Syntax
 public import Lanes.Http.Basic
 public import Lanes.Http.Front
+public import Lanes.Http.FrontSound
 public import Lanes.Http.Gate
 public import Lanes.Http.GateSound
 public import Lanes.Http.Route

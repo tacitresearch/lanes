@@ -109,6 +109,21 @@ by `lake build`, not linked into the test executable.
 /-- info: 'Lanes.Http.deadlines_armed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.deadlines_armed
 
+/-- info: 'Lanes.Http.Gate.step_bounded' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Gate.step_bounded
+
+/-- info: 'Lanes.Http.Gate.answered_le_handled' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Gate.answered_le_handled
+
+/-- info: 'Lanes.Http.fronted_answered_le_arrived' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.fronted_answered_le_arrived
+
+/-- info: 'Lanes.Http.fronted_answered_nodup' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.fronted_answered_nodup
+
+/-- info: 'Lanes.Http.kernel_fronted_answered_le_arrived' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.kernel_fronted_answered_le_arrived
+
 /-- info: 'Lanes.Http.Route.match?_link' depends on axioms: [propext, Classical.choice] -/
 #guard_msgs in #print axioms Lanes.Http.Route.match?_link
 
@@ -315,6 +330,15 @@ by `lake build`, not linked into the test executable.
 #guard_msgs in #print axioms Lanes.Frame.decode_checksum_ne
 /-- info: 'Lanes.System.Reachable.left' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Reachable.left
+
+/-- info: 'Lanes.SysState.run_left' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SysState.run_left
+
+/-- info: 'Lanes.SysState.run_filterMapIO' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SysState.run_filterMapIO
+
+/-- info: 'Lanes.System.handled_le_put' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.handled_le_put
 
 /-- info: 'Lanes.System.Invariant.join_left' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Invariant.join_left

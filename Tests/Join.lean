@@ -12,7 +12,8 @@ outside the join takes questions and gives answers, and no query is ever seen le
 Then projection (`Lanes/Actors/JoinSound.lean`), checked before it was proved: every state the
 join reaches, seen from either side, is among the states that side reaches alone, compared
 exactly. A second pair, `herald` and `keeper`, shows why the side that boots second is seen
-only up to the order of messages on different links.
+only up to the order of messages on different links. And one run of the join beside the run of
+the front alone that `SysState.run_left` promises.
 -/
 
 namespace Tests.Join
@@ -275,6 +276,32 @@ theorem heralded_right_not_alone :
     simp)
   simp at hnote
 
+/-- A question asked and answered through the join. -/
+def joinedRun : List (Event (joinSig frontSig backSig)) :=
+  [.input (.inl (.ask 4)), .start (.inl ()), .deliver ⟨none, .inl (), .ask 4⟩, .start (.inr ()),
+    .deliver ⟨some (.inl ()), .inr (), (4 : Nat)⟩, .deliver ⟨some (.inr ()), .inl (), .reply 8⟩,
+    .output (.inl (.result 8))]
+
+/-- The same seen from the front, alone: the query is handed over and the reply is an input. -/
+def frontRun : List (Event frontSig) :=
+  [.input (.ask 4), .start (), .deliver ⟨none, (), .ask 4⟩, .output (.query 4),
+    .input (.reply 8), .deliver ⟨none, (), .reply 8⟩, .output (.result 8)]
+
+def told : Deed frontSig → FrontIn ⊕ FrontOut
+  | .handle _ msg => .inl msg
+  | .output out => .inr out
+
+def runsAgree : Bool :=
+  let env : EnvModel (joinSig frontSig backSig) := {}
+  match (SysState.init joined env).run env joinedRun,
+      (SysState.init front env.left).run env.left frontRun with
+  | some c, some c' =>
+    (⟨c.left⟩ : Exact front) == ⟨c'⟩
+      && (frontRun.filterMap wiring.shown).map told == (joinedRun.filterMap Event.leftDeed).map told
+      && (joinedRun.filterMap Event.leftDeed).map told
+        == [.inl (.ask 4), .inl (.reply 8), .inr (.result 8)]
+  | _, _ => false
+
 def tests : List (String × Bool) :=
   [ ("join: two systems wired together answer through each other, in every interleaving",
       check.ok && check.complete),
@@ -303,6 +330,9 @@ def tests : List (String × Bool) :=
       && !keeperStates.seen.contains ⟨(SysState.init heralded {}).right⟩),
     ("join: the side that boots second reaches that state alone, up to message order",
       keeperStates.queue.any fun v =>
-        v.path.last.state.equiv keeperEnv (SysState.init heralded {}).right) ]
+        v.path.last.state.equiv keeperEnv (SysState.init heralded {}).right),
+    ("join: a run of the join and a run of the front alone reach the same state and show the "
+        ++ "same deeds, the wired query not among them",
+      runsAgree) ]
 
 end Tests.Join
