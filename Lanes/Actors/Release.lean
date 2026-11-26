@@ -410,12 +410,12 @@ theorem run_back (h : Released a b) (hcrash : ∀ i, env.mayCrash i = false)
       rw [Event.awake_append, hawake₁, hawake, ← Event.awake_append]
       rfl
 
-/-- Releasing actors at rest changes nothing that can be seen: the same inputs and outputs, in
-the same order, are possible from both states. -/
-theorem visible (h : Released a b) (hcrash : ∀ i, env.mayCrash i = false)
-    (trace : List (Visible σ)) :
-    (∃ evs a', a.run env evs = some a' ∧ evs.filterMap Event.visible = trace)
-      ↔ ∃ evs b', b.run env evs = some b' ∧ evs.filterMap Event.visible = trace := by
+/-- Releasing actors at rest changes nothing that can be seen: the same inputs, outputs and
+deadlines passing, in the same order, are possible from both states. -/
+theorem visible {T : Type} (h : Released a b) (hcrash : ∀ i, env.mayCrash i = false)
+    (deadlines : Deadlines σ T) (trace : List (Visible σ.In σ.Out T)) :
+    (∃ evs a', a.run env evs = some a' ∧ evs.filterMap (Event.timed deadlines) = trace)
+      ↔ ∃ evs b', b.run env evs = some b' ∧ evs.filterMap (Event.timed deadlines) = trace := by
   constructor
   · rintro ⟨evs, a', hrun, rfl⟩
     obtain ⟨evs', b', hrun', hawake, -⟩ := h.run_back hcrash hrun

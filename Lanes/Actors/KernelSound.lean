@@ -517,16 +517,16 @@ theorem exec_reachable (sys : System σ) (ops : List (Op σ)) :
   have h := (SysState.Leads.of_run (boot_sound sys)).append (exec_sound (boot sys).1 ops)
   exact ⟨h, SysState.Leads.reachable .init h⟩
 
-/-- Releasing actors changes nothing anyone can see: whatever the shell did, the inputs and
-outputs possible from the kernel's state are those of a state the semantics reaches, which
-keeps every actor it started. -/
-theorem exec_visible (sys : System σ) (ops : List (Op σ)) :
-    ∃ c, sys.Reachable env c ∧ ∀ trace : List (Visible σ),
-      (∃ evs c', c.run env evs = some c' ∧ evs.filterMap Event.visible = trace)
+/-- Releasing actors changes nothing anyone can see: whatever the shell did, the inputs,
+outputs and deadlines passing possible from the kernel's state are those of a state the
+semantics reaches, which keeps every actor it started. -/
+theorem exec_visible {T : Type} (sys : System σ) (ops : List (Op σ)) (deadlines : Deadlines σ T) :
+    ∃ c, sys.Reachable env c ∧ ∀ trace : List (Visible σ.In σ.Out T),
+      (∃ evs c', c.run env evs = some c' ∧ evs.filterMap (Event.timed deadlines) = trace)
         ↔ ∃ evs c', (((boot sys).1.exec ops).kernel.abs).run env evs = some c'
-          ∧ evs.filterMap Event.visible = trace :=
+          ∧ evs.filterMap (Event.timed deadlines) = trace :=
   let ⟨c, hc, hrel⟩ := (exec_reachable sys ops).2
-  ⟨c, hc, hrel.visible fun _ => rfl⟩
+  ⟨c, hc, hrel.visible (fun _ => rfl) deadlines⟩
 
 /-! What the kernel hands the shell is exactly what its events say was output. -/
 

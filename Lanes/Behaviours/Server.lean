@@ -32,12 +32,12 @@ abbrev sig (In Out : Type) [DecidableEq In] [DecidableEq Out] : Signature where
 variable {In Out S : Type} [DecidableEq In] [DecidableEq Out]
 
 /-- Its state is durable. -/
-def actor (svc : Service (sig In Out) S) : (sig In Out).Actor () S where
+def actor (svc : Service In Out S) : (sig In Out).Actor () S where
   init := svc.init
   step s x := ((svc.step s x).1, (svc.step s x).2.map .emit)
   recover s := (s, [])
 
-abbrev system (svc : Service (sig In Out) S) : System (sig In Out) where
+abbrev system (svc : Service In Out S) : System (sig In Out) where
   State _ := S
   actor _ := actor svc
   accept x := ⟨(), x⟩

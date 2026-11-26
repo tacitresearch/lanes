@@ -51,11 +51,6 @@ abbrev sig (N C : Type) [DecidableEq N] [DecidableEq C] : Signature where
   In := Request N C
   Out := Response N
 
-def spec (N C : Type) [DecidableEq N] [DecidableEq C] (config : Config N) :
-    Service (sig N C) (SpecState N C) where
-  init := .init
-  step := SpecState.step config
-
 /-- Who answers a request a user decided. Only `viaLedger` is the spec. -/
 inductive Answering where
   | viaLedger
@@ -79,6 +74,13 @@ def tell (answering : Answering) (self : N) (req : ReqId) :
     | .viaLedger => .send .ledger (.answer req r)
     | .fromUser => .emit ⟨req, r⟩
   | .serve op => .send .ledger (.serve req self op)
+
+/-- A user's timers are the spec's deadlines; the ledger has none. -/
+def deadlines : Deadlines (sig N C) (Deadline N)
+  | .user n, .unlock => some (.unlock n)
+  | .user n, .expire session => some (.expire n session)
+  | .user _, .ask .. => none
+  | .ledger, _ => none
 
 /-- A user's record survives a restart; its timers are armed again. -/
 def rearm (config : Config N) (self : N) : Option (Profile C) → List (Effect (sig N C) (.user self))
