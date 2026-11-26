@@ -25,13 +25,14 @@ variable {σ : Signature}
 
 /--
 A model of the outside world: which inputs may arrive next and what it remembers of the
-outputs it sees. Drivers may choose among several inputs; that choice exists only in the
+outputs it sees and of the timers it sees fire, since the clock is outside too. Drivers may choose among several inputs; that choice exists only in the
 simulator and the model checker, never in an actor.
 -/
 structure Driver (σ : Signature) (D : Type) where
   init : D
   inputs : D → List (σ.In × D)
   observe : D → σ.Out → D := fun d _ => d
+  timeout : D → (i : σ.Id) → σ.Msg i → D := fun d _ _ => d
 
 namespace Driver
 
@@ -75,6 +76,7 @@ def next [Enum σ.Id] (sc : Scenario σ D) (w : World sys D) : List (Event σ ×
   let internal := (w.state.successors sc.env).filterMap fun (ev, c) =>
     match ev with
     | .output out => some (ev, { w with state := c, driver := sc.driver.observe w.driver out })
+    | .timeout i msg => some (ev, { w with state := c, driver := sc.driver.timeout w.driver i msg })
     | .crash _ =>
       if w.crashes < sc.maxCrashes then
         some (ev, { w with state := c, crashes := w.crashes + 1 })

@@ -80,7 +80,7 @@ abbrev sig (K V F : Type) [DecidableEq K] [DecidableEq V] [DecidableEq F] : Sign
 /-! ## The spec -/
 
 def spec (K V F : Type) [DecidableEq K] [DecidableEq V] [DecidableEq F] :
-    Service (sig K V F) (K → Option V) where
+    Service (Request K V F) (Response V) (K → Option V) where
   init _ := none
   step store r :=
     match r.op with

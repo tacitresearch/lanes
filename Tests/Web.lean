@@ -64,7 +64,7 @@ def serveTest : Async (List (String × Bool)) := do
 
 def echoSlug : Route Slug := .get ("echo" /> .slug)
 
-def mute : Service echoSig Unit where
+def mute : Service ReqId ReqId Unit where
   init := ()
   step _ _ := ((), [])
 
