@@ -20,10 +20,8 @@ because a launch claim is what a critic tests first.
    request-and-reply service repeats, a cheaper invariant rule, then a counterexample-to-induction
    finder. The measure is `systems/ledger`'s refinement of its spec, proved, where today it is
    checked on instances.
-   On the branch `claude/once`: a request named by its client takes effect once and its answer
-   may be handed over again (`Service.once`), with `System.Refines.of_handles`, the relation rule
-   that a duplicated message cannot break, and the key-value store proved under it. This also
-   removes the premise that a client's link does not duplicate.
+   Done towards it: a request named by its client takes effect once (`Service.once`, D48), and
+   `System.Refines.of_handles`, a relation rule that a duplicated message cannot break.
 2. **Evidence for every definition of `Lanes/`.** The inventory is generated (`docs/INVENTORY.md`,
    D47); what has none is listed in `docs/inventory-none.md`, which only shrinks. Take entries off
    it by proving, testing or listing them in `TRUSTED.md`.
@@ -32,8 +30,8 @@ because a launch claim is what a critic tests first.
    own branch: base64, IP addresses, media types and time formats, which depend on nothing; then
    URLs and rate limits, which need IP addresses; then TLS and names in the HTTP client.
 4. **Less trusted, fewer premises.** Our own HTTP/1.1 request reader in place of `Std.Http`'s;
-   exactly-once requests (item 1); idle actors released, which waits for a place to keep their
-   state.
+   the premise that a client's link does not duplicate taken off the gate and Raft, as D48 took it
+   off the key-value store; idle actors released, which waits for a place to keep their state.
 5. **Slow work that is not one request's**, as the ledger's friction log asks
    (`systems/ledger/README.md`): background jobs, ending sessions in bulk, statements.
 6. **Short, current docs.** One rules file (`AGENTS.md`), `docs/ARCHITECTURE.md` in place of the

@@ -218,6 +218,11 @@ theorem.
   with deadlines as visible steps, and `System.Implements` is refinement to it: linearizability,
   stated as refinement (`Lanes/Semantics/Service.lean`, D42). `Server.implements` proves the
   `Server` behaviour (`Lanes/Behaviours/Server.lean`) implements its spec.
+- A request named by its client takes effect once (`Lanes/Semantics/Once.lean`, D48):
+  `Service.once` is the spec, `Lanes/Behaviours/Once.lean` the memo that meets it, and
+  `System.Refines.of_handles` the relation rule that a duplicated message cannot break. The
+  key-value store implements it with no premise on its links
+  (`Examples.KV.implements_once`).
 - Liveness (`Lanes/Semantics/Liveness.lean`, D27): infinite runs (`System.Run`), weak fairness
   per obligation (`System.Run.Fair`), `System.LeadsTo` and its rule
   (`System.LeadsTo.ensures_of_invariant`). Every finite run extends to a fair one

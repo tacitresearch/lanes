@@ -10,17 +10,17 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Area | Definitions | proved | trusted | checked | tested | spec | none |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `Lanes/Actors` | 332 | 167 | 10 | 33 | 19 | 78 | 25 |
+| `Lanes/Actors` | 334 | 167 | 10 | 36 | 19 | 78 | 24 |
 | `Lanes/Auth` | 27 | 7 | 0 | 0 | 16 | 1 | 3 |
-| `Lanes/Behaviours` | 3 | 3 | 0 | 0 | 0 | 0 | 0 |
-| `Lanes/Check` | 74 | 54 | 0 | 8 | 0 | 10 | 2 |
+| `Lanes/Behaviours` | 8 | 8 | 0 | 0 | 0 | 0 | 0 |
+| `Lanes/Check` | 91 | 54 | 0 | 25 | 0 | 10 | 2 |
 | `Lanes/Data` | 213 | 57 | 5 | 4 | 113 | 3 | 31 |
 | `Lanes/Env` | 24 | 0 | 24 | 0 | 0 | 0 | 0 |
 | `Lanes/Html` | 42 | 2 | 0 | 0 | 28 | 0 | 12 |
 | `Lanes/Http` | 141 | 72 | 1 | 9 | 33 | 12 | 14 |
-| `Lanes/Semantics` | 38 | 10 | 0 | 0 | 0 | 27 | 1 |
+| `Lanes/Semantics` | 42 | 10 | 0 | 0 | 0 | 29 | 3 |
 | `LanesCli` | 108 | 0 | 0 | 0 | 24 | 0 | 84 |
-| All | 1002 | 372 | 40 | 54 | 233 | 131 | 172 |
+| All | 1030 | 377 | 40 | 74 | 233 | 133 | 173 |
 
 ## `Lanes/Actors/Actor.lean`
 
@@ -159,6 +159,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `instHashableEmpty_lanes` | checked | `Tests/Election.lean`, `Tests/Join.lean` |
 | `instReprEmpty_lanes` | none |  |
 | `instHashableEnvelope` | checked | `Tests/Join.lean` |
+| `instHashableEffect` | checked | `Tests/KV.lean` |
+| `instReprEffect` | checked | `Tests/KV.lean` |
 | `shortNames` | checked | `Tests/KV.lean` |
 | `brief` | checked | `Tests/KV.lean` |
 | `Envelope.render` | checked | `Tests/KV.lean` |
@@ -338,7 +340,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `SysState.grow` | proved | `SysState.Loses.settle`, `SysState.mem_seen_grow_of_mem`, `System.Inductive.of_monotone` and 2 more |
+| `SysState.grow` | proved | `SysState.Loses.settle`, `SysState.mem_seen_grow_of_mem`, `System.Inductive.of_monotone` and 3 more |
 | `SysState.Pending` | spec | a predicate |
 
 ## `Lanes/Actors/Outside.lean`
@@ -391,7 +393,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Driver.silent` | checked | `Tests/Election.lean` |
-| `Driver.script` | none |  |
+| `Driver.script` | checked | `Tests/KV.lean` |
 | `Driver.anyOrder` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 3 more |
 | `World.init` | checked | `Tests/Bank.lean` |
 | `World.next` | proved | `World.Equiv.next` |
@@ -493,7 +495,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Envelope.instDecidableEq` | proved | `System.Refines.of_steps` |
 | `Envelope.sameLink` | none |  |
 | `Link.reliable` | proved | `Examples.Watchdog.exists_fair_run_never_barks`, `Examples.Watchdog.impatient_barks` |
-| `Link.network` | checked | `Tests/Bank.lean`, `Tests/Election.lean`, `Tests/Join.lean` |
+| `Link.network` | checked | `Tests/Bank.lean`, `Tests/Election.lean`, `Tests/Join.lean` and 1 more |
 | `Link.unordered` | checked | `Tests/Election.lean` |
 | `EnvModel.reliable` | spec | used only in statements |
 | `EnvModel.distributed` | none |  |
@@ -502,20 +504,20 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `update` | proved | through `SysState.init`, `SysState.run` and 3 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 32 more |
+| `update` | proved | through `SysState.init`, `SysState.run` and 3 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 33 more |
 | `Event.timed` | spec | used only in statements |
 | `Event.visible` | spec | used only in statements |
 | `SysState.blank` | proved | `System.Inductive.of_monotone`, `System.Monotone.and` |
 | `SysState.hasMail` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 25 more |
-| `SysState.perform` | proved | through `SysState.init`, `SysState.run` and 3 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 32 more |
-| `SysState.performAll` | proved | through `SysState.init`, `SysState.run` and 3 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 32 more |
-| `SysState.down` | proved | through `SysState.init`, `SysState.run` and 3 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 32 more |
+| `SysState.perform` | proved | through `SysState.init`, `SysState.run` and 3 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 33 more |
+| `SysState.performAll` | proved | through `SysState.init`, `SysState.run` and 3 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 33 more |
+| `SysState.down` | proved | through `SysState.init`, `SysState.run` and 3 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 33 more |
 | `SysState.settle` | proved | `SysState.Loses.settle` |
 | `SysState.handle` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 25 more |
-| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and 2 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 31 more |
+| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and 2 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 32 more |
 | `SysState.deliverable` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 25 more |
 | `SysState.step` | proved | `Http.Gate.answered_of_leaves`, `Http.Gate.deadline_not_restarted`, `Shards.AtHome.step` and 7 more |
-| `SysState.init` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and 15 more |
+| `SysState.init` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and 16 more |
 | `SysState.run` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and 13 more |
 | `System.Invariant` | spec | a predicate |
 
@@ -556,11 +558,21 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Auth.formToken` | tested | `Tests/Auth.lean` |
 | `Auth.checkForm` | tested | `Tests/Auth.lean` |
 
+## `Lanes/Behaviours/Once.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Once.Memo.find?` | proved | through `Once.server`: `Once.server_implements` |
+| `Once.Memo.record` | proved | through `Once.server`: `Once.server_implements` |
+| `Once.Memo.seen` | proved | through `Once.server`: `Once.server_implements` |
+| `Once.actor` | proved | through `Once.server`: `Once.server_implements` |
+| `Once.server` | proved | `Once.server_implements` |
+
 ## `Lanes/Behaviours/Server.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Server.sig` | proved | `Server.implements` |
+| `Server.sig` | proved | `Once.server_implements`, `Server.implements` |
 | `Server.actor` | proved | through `Server.system`: `Server.implements` |
 | `Server.system` | proved | `Server.implements` |
 
@@ -612,6 +624,28 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Check.Monitor.Within` | spec | a predicate |
+
+## `Lanes/Check/Once.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Check.insertNew` | checked | `Tests/KV.lean` |
+| `Check.sameSet` | checked | `Tests/KV.lean` |
+| `Check.setHash` | checked | `Tests/KV.lean` |
+| `Check.OnceState.equiv` | checked | `Tests/KV.lean` |
+| `Check.OnceState.take` | checked | `Tests/KV.lean` |
+| `Check.OnceState.hash` | checked | `Tests/KV.lean` |
+| `Check.OnceMonitor.insertAll` | checked | `Tests/KV.lean` |
+| `Check.OnceMonitor.expand` | checked | `Tests/KV.lean` |
+| `Check.OnceMonitor.close` | checked | `Tests/KV.lean` |
+| `Check.OnceMonitor.ok` | checked | `Tests/KV.lean` |
+| `Check.OnceMonitor.instBEq` | checked | `Tests/KV.lean` |
+| `Check.OnceMonitor.instHashable` | checked | `Tests/KV.lean` |
+| `Check.OnceMonitor.start` | checked | `Tests/KV.lean` |
+| `Check.OnceMonitor.input` | checked | `Tests/KV.lean` |
+| `Check.OnceMonitor.output` | checked | `Tests/KV.lean` |
+| `Check.refinesOnce` | checked | `Tests/KV.lean` |
+| `Service.onceMonitored` | checked | `Tests/KV.lean` |
 
 ## `Lanes/Check/Search.lean`
 
@@ -1307,6 +1341,15 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Check.Monitor.abs` | spec | used only in statements |
 
+## `Lanes/Semantics/Once.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Service.Once.take` | none |  |
+| `Service.once` | none |  |
+| `System.ImplementsOnce` | spec | a predicate |
+| `Once.Server.Covered` | spec | a predicate |
+
 ## `Lanes/Semantics/Projection.lean`
 
 | Definition | Status | Evidence |
@@ -1320,7 +1363,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Spec.lts` | proved | `Check.Monitor.complete`, `Check.Monitor.ok_iff`, `Check.Monitor.sound` and 5 more |
+| `Spec.lts` | proved | `Check.Monitor.complete`, `Check.Monitor.ok_iff`, `Check.Monitor.sound` and 6 more |
 | `Spec.Reachable` | spec | a predicate |
 | `Spec.Invariant` | spec | a predicate |
 | `Refines` | spec | a predicate |
