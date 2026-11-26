@@ -42,7 +42,7 @@ structure ServerConfig where
   maxBodyBytes : Nat := 1048576
   gate : GateConfig := {}
   /-- Where to keep a journal. With one, the system behind the server survives the process:
-  it starts in the state it was in (`DECISIONS.md` D24). -/
+  it starts in the state it was in (`docs/decisions/` D24). -/
   journal : Option System.FilePath := none
   /-- The application's name for the system and the version of its step functions. A journal
   written under another name is refused: replayed through other step functions it would give
@@ -167,8 +167,8 @@ structure Saving (sys : System σ) where
   out : Codec σ.Out
 
 /-- The name `serve` writes in its journal: the application's, and the configuration the gate's
-step function reads. A journal of another gate, or of the gate `serve` ran before D42, is
-refused. -/
+step function reads. A journal of another gate, or of the gate `serve` ran when the gate was an
+actor of the system behind it, is refused. -/
 def ServerConfig.journalName (config : ServerConfig) : String :=
   s!"{config.system}, behind a gate of {config.gate.requestTimeout_ms} ms and "
     ++ s!"{config.gate.maxPending} requests"

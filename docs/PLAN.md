@@ -520,7 +520,7 @@ on two shards that way, each behind its own front. At most once per arrival is p
 `fronted sys` for every `sys` by projection from the gate alone. Open: a response must be put
 out by the process that took the request, since request ids are each process's own. Since
 done: the liveness of `fronted`, by projection of fair runs (D41), and `gated` retired, so
-`serve` runs `fronted` too (D42).
+`serve` runs `fronted` too (`docs/decisions/new-one-gate.md`).
 
 ### B.3 Snapshots, then checker v2
 

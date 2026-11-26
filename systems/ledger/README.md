@@ -161,11 +161,12 @@ round of framework work is planned from this.
 - **Clients that wait**: `Driver.after` (`Lanes/Check/Clients.lean`). Neither `anyOrder` nor
   `script` gives real-time order, which is what makes a stale read a violation; it also keeps
   the state space small. Tested on the key-value store (`Tests/Clients.lean`).
-- **A list lemma**: `Lanes.sum_map_set` in `Lanes/Data/List.lean`.
+- **A list lemma**: `Lanes.sum_map_set` in `Lanes/Data/List/Basic.lean`.
 
 ### Broken
 
-1. **The journal held passwords and session cookies in plain text. Fixed (D43).** `Http.serve`
+1. **The journal held passwords and session cookies in plain text. Fixed
+   (`docs/decisions/new-request-prepared-before-journal.md`).** `Http.serve`
    journalled the raw `(ReqId × Request)` the gate receives, so every log-in's form body and
    every request's `Cookie` header was on disk until a snapshot cut the journal, and a lawful
    codec cannot scrub them: its law is that what is read is what was written. The same placement
@@ -251,7 +252,8 @@ round of framework work is planned from this.
 
 ### What I would change in the API
 
-1. `Bridge.prepare`, as above: the most important change, and a security one. Done (D43).
+1. `Bridge.prepare`, as above: the most important change, and a security one. Done
+   (`docs/decisions/new-request-prepared-before-journal.md`).
 2. Let `encode` see what `decode` chose to keep of the request.
 3. `Service In Out S` over inputs and outputs alone, so a spec can come first.
 4. Specs with time, or with internal steps, so sessions and lockouts can be specified.

@@ -159,8 +159,8 @@ def durableTest : Async (List (String × Bool)) := do
     ("web: a server that cannot bind its port fails, and leaves its journal free",
       taken && free.toOption.isSome) ]
 
-/-- A journal written by `serve` before D42, when the gate was an actor of the system behind it
-and the journal was named by the application alone, is refused and left as it was: replayed
+/-- A journal written by `serve` when the gate was an actor of the system behind it and the
+journal was named by the application alone, is refused and left as it was: replayed
 through the gate in front it may give a state that gate never reaches. -/
 def oldJournalTest : Async (List (String × Bool)) := do
   let dir := (← IO.getEnv "TMPDIR").getD "/tmp"
