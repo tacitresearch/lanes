@@ -1,5 +1,6 @@
 // The Go side of scripts/requests.py: net/http's server with the limits of Request.Limits,
-// answering each request it reads with its method and the length of its body.
+// answering each request it reads with its method and the length of its body, 400 for a body
+// it cannot decode and 599 for one cut short by the end of the connection.
 package main
 
 import (
@@ -24,8 +25,10 @@ func main() {
 		switch {
 		case errors.As(err, &tooLarge):
 			w.WriteHeader(413)
-		case err != nil:
+		case errors.Is(err, io.ErrUnexpectedEOF):
 			w.WriteHeader(599)
+		case err != nil:
+			w.WriteHeader(400)
 		default:
 			w.Header().Set("X-Verdict", fmt.Sprintf("ok:%s:%d", r.Method, len(body)))
 			w.WriteHeader(200)

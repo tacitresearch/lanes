@@ -14,6 +14,18 @@ What the request reader of `Lanes.Http.ReadRequest` does, for every input and ev
 - it asks for more only while fewer than `message_max` bytes have arrived from where it starts,
   and a request it gives ends within them, its body within `body_max` (`Request.read_more`,
   `Request.read_done`);
+- what `Request.wire` writes of a request within the limits is read back, wherever it starts
+  and whatever follows it, and every strict start of it needs more (`Request.read_wire`,
+  `Request.read_wire_extract`);
+- a head written as lines is refused, never read and never waited on, when it has both a
+  `Content-Length` and a `Transfer-Encoding`, two `Content-Length`s, a blank before a colon or
+  at the start of a field line, a bare CR or a bare LF (`Request.read_lengthAndCoding`,
+  `read_twoLengths`, `read_blankInName`, `read_fold`, `read_bareCR`, `read_bareLF`); and a
+  chunk size line that is not one to sixteen hex digits is refused (`read_badChunkSize`).
+
+A head written as lines is found through a model of `find` on lists (`findL`): the first blank
+line after lines that are not empty, and of which none has an LF or none has a CR, is the one
+that ends them (`Request.readHead_headWire`).
 -/
 
 @[expose] public section

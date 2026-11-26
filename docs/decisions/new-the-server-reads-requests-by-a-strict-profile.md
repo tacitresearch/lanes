@@ -62,6 +62,10 @@ Refused with 400:
 - **TE.TE**: any `Transfer-Encoding` other than one field `chunked`: `xchunked`, `chunked, x`,
   `chunked` twice or in two fields, an empty value, a coding whose last element is not chunked
   (RFC 9112, 6.1 says 400 for that one), and any `Transfer-Encoding` in HTTP/1.0 (RFC 9112, 6.1).
+- **A tab in a `Content-Length` or `Transfer-Encoding` line**, `chunked\t` and `\tchunked`
+  among them. RFC 9110, 5.5 lets a tab stand for a blank around a value; Node's parser refuses
+  `chunked\t` and Go's reads it as `chunked`, so a proxy and a backend can disagree on it. Spaces
+  around those values are read.
 - **Obsolete line folding**: a field line that starts with a space or a tab, including the first
   one after the request line (RFC 9112, 2.2 and 5.2 allow replacing it with spaces instead).
 - **Whitespace between a name and its colon** (RFC 9112, 5.1, a MUST), and any name that is not a
@@ -105,10 +109,58 @@ chunks takes six bytes on the wire for each byte of data.
 
 ## What is proved and what is tested
 
-The reader is total (no `partial`), and these are proved (`Lanes/Http/ReadRequestSound.lean`):
-what `Request.wire` writes is read back, at its last byte and not before, wherever it is in the
-buffer and whatever follows it; an answer once given does not change as more bytes arrive; an
-answer ends within the bytes given and within the limits; and each case of the smuggling list
-above is refused, for every head of that shape. The differential test (`scripts/requests.py`)
-compares the verdicts with Go's `net/http`, Python's `h11` and Node's `http` on a corpus, and is
-tested, not proved.
+The reader is total (no `partial`), and these are proved (`Lanes/Http/ReadRequestSound.lean`,
+every one on the standard axioms alone, `Tests/Axioms/Http.lean`):
+
+- *Answers stay.* What the reader makes of the first `n` bytes is that it needs more, or what
+  it makes of all of them (`Request.read_extract`); an answer given stays whatever arrives after
+  it (`Request.read_append`).
+- *Limits.* It asks for more only while fewer than `message_max` bytes have arrived from where
+  it starts (`Request.read_more`); a request it gives ends after where it starts, within the
+  bytes given and within `message_max` of where it starts, with a body of at most `body_max`
+  bytes (`Request.read_done`). `message_max` is `max (line_max + 2) head_max + body_max + 20 *
+  (chunks_max + 1)`.
+- *Round trip.* What `Request.wire` writes of a request within the limits (`Request.fits`: the
+  request line, the head, the fields and the body within theirs, a host of host characters, and
+  a path other than `[""]`, which is written `/` like the empty path) is read back as that
+  request, names in lowercase and blanks around values left out (`Request.sent`), wherever it
+  starts in the buffer and whatever follows it (`Request.read_wire`), so pipelined requests are
+  read in turn; every strict start of it needs more (`Request.read_wire_extract`), which is
+  what reading it in any split amounts to.
+- *Smuggling shapes*, for a head written as lines (`Request.headWire`), each line not empty and
+  none with an LF, and whatever follows the head: a `Content-Length` beside a
+  `Transfer-Encoding`, in either order, with any values and blanks around the names
+  (`read_lengthAndCoding`); two `Content-Length` fields (`read_twoLengths`); a blank before the
+  first colon of a field line (`read_blankInName`) and a field line that starts with a blank
+  (`read_fold`); a CR in a line (`read_bareCR`); and, for lines none of which has a CR, an LF in a
+  line (`read_bareLF`): each is refused, never read and never waited on. A chunk whose size line,
+  up to its CR, is not one to sixteen hex digits is refused (`read_badChunkSize`), extensions and
+  blanks among them. These rest on `Request.readHead_headWire`, that such a head is read as its
+  lines, and `Request.parseHead_clean`, that a head the reader takes has neither CR nor LF in a
+  line.
+
+Tested, not proved (`Tests/ReadRequest.lean`, `Tests/ReadRequest.corpus`): which status each
+refusal gets beyond 414 and 431 for a head over its limits; the refusals of the request line, the
+target, `Host`, a tab in a framing field, a length that is not digits, a coding other than
+`chunked`, chunk data without its CRLF and a trailer; what the reader makes of forms
+`Request.wire` does not write (a chunked body, `HEAD`, HTTP/1.0, no blank after a colon, leading
+zeros, `+` in a query); that every start of each case of the corpus reads as needing more or as
+the whole; and each limit at its edge.
+
+## Against other parsers
+
+`scripts/requests.py` puts the corpus to Go 1.24's `net/http`, Node 22's `http` (llhttp, not
+lenient) and h11 0.16. No disagreement is looser: where the reader reads a request, every other
+parser reads the same one, with the same method and body length. It is stricter on 132 verdicts
+out of 390, all decided above: the target's characters and escapes, the absolute and asterisk
+forms, unknown methods (Go and h11 read `FOO` and lowercase `get`), HTTP/1.2 and 2.0, `Host`
+(Node reads two hosts and hosts with blanks), obs-fold and bare LF (Go and h11 read both),
+CL.TE and TE.CL (Go and h11 read the coding), two equal lengths, a tab around a framing value,
+chunk extensions and trailers (all three read them), a chunk size with a trailing blank (Go and
+h11 read it), seventeen digits (Node and h11), a coding in HTTP/1.0 (all three), and the limits.
+The others refuse with another status 22 times: Go and h11 answer 501 to a coding that does
+not end in `chunked`, where RFC 9112, 6.1 says 400; Node answers 400 where the reader answers
+501, 505, 413 or 414. Five times the others refuse a request cut short when the connection ends,
+where the reader waits; the socket loop closes such a connection. One disagreement comes from
+how Node is driven (it drops its answer to a request when its parser fails on the next one in
+the same packet) and is listed in the script.
