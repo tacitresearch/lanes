@@ -669,6 +669,23 @@ in flight to or from a copy that only forwards. Why it is not simpler:
   for an arbitrary environment of the split would treat their starts and crashes as steps that
   change nothing.
 
+Any number of shards (`Lanes/Actors/ShardsSound.lean`). `System.shards sys hosts`, with
+`hosts : σ.Id → Fin n`, is `System.joinAll` of the `n` shards `sys.shard (hosts · == k)`, a
+family join whose wiring sends each parcel to the shard `hosts` names for its receiver; the
+copies are named `(shard, actor)`. This is what `Peers` runs, with `home i` the address of
+process `hosts i`. It is stated directly and not as nested splits, because the two-shard
+theorem does not compose: the split of a split has shards of a join rather than of `sys`, and
+its theorem concludes `Reachable`, which admits parcels from outside and inputs at the wrong
+shard, where the inner split needs a well-routed run; a join with a split on one side is not a
+split, and the theorem is about `split` only, not a congruence for `join`. Composing would need
+the theorem restated to keep routing, and would still not give the system `Peers` runs. The
+proof is the two-shard one over a product instead of a sum, so it has no case on the side and
+is about 740 lines with the family join, against 1,040; it reuses that proof's boot lemmas, and a
+boot shard by shard is `sys`'s boot regrouped, the same up to `SysState.Equiv` under
+`SteadyBoot` (`SysState.boot_grouped`). The checks found nothing new: on three shards the bank
+and a relay of three boot actors reach exactly the states of the system alone, and `fragile` is
+again the only failure, gone where its link is lossy.
+
 ## D29. A snapshot is a restart without the crash
 
 `Lanes/Actors/{Kernel,Journal,Snapshot,Disk}.lean`, `Lanes/Env/Journal.lean`. A journal that only
