@@ -8,6 +8,11 @@ import Lanes
 Two systems written apart and joined: a front that takes questions and a back that doubles
 numbers. The front's queries are wired to the back and the back's results to the front, so from
 outside the join takes questions and gives answers, and no query is ever seen leaving.
+
+Then projection (`Lanes/Actors/JoinSound.lean`), checked before it was proved: every state the
+join reaches, seen from either side, is among the states that side reaches alone, compared
+exactly. A second pair, `herald` and `keeper`, shows why the side that boots second is seen
+only up to the order of messages on different links.
 -/
 
 namespace Tests.Join
@@ -206,6 +211,69 @@ def keeperEnv : EnvModel keeperSig :=
 
 def keeperStates :=
   explore keeper keeperEnv [()] fun c => c.net.length ≤ 4
+
+private theorem mem_tail_of_erase {α : Type} [DecidableEq α] {l : List α} {a x : α}
+    (h : x ∈ (l.erase a).tail) : x ∈ l.tail := by
+  cases l with
+  | nil => simp at h
+  | cons y ys =>
+    by_cases hy : y = a
+    · subst hy
+      rw [List.erase_cons_head] at h
+      exact List.mem_of_mem_tail h
+    · rw [List.erase_cons_tail (by simpa using hy)] at h
+      exact List.mem_of_mem_erase h
+
+/-- Alone, the keeper stays up and never has an input ahead of the note it sent itself. -/
+theorem keeper_note_first {c : SysState keeper} (h : keeper.Reachable keeperEnv c) :
+    c.up () = true ∧ ∀ e ∈ c.net.tail, e.src = none := by
+  induction h with
+  | init => exact ⟨rfl, fun e he => absurd he (by
+      rw [show (SysState.init keeper keeperEnv).net = [⟨some (), (), true⟩] from rfl]
+      simp)⟩
+  | @step c c' ev _ hstep ih =>
+    cases ev with
+    | input x =>
+      obtain rfl := SysState.step_input.mp hstep
+      refine ⟨ih.1, fun e he => ?_⟩
+      cases hnet : c.net with
+      | nil => simp [hnet] at he
+      | cons y ys =>
+        simp only [hnet, List.cons_append, List.tail_cons, List.mem_append,
+          List.mem_singleton] at he
+        rcases he with he | rfl
+        · exact ih.2 e (by simp [hnet, he])
+        · rfl
+    | deliver e =>
+      obtain ⟨_, _, rfl⟩ := SysState.step_deliver.mp hstep
+      exact ⟨ih.1, fun x hx => ih.2 x (mem_tail_of_erase hx)⟩
+    | duplicate e =>
+      obtain ⟨_, _, _, rfl⟩ := SysState.step_duplicate.mp hstep
+      exact ih
+    | drop e =>
+      obtain ⟨_, _, rfl⟩ := SysState.step_drop.mp hstep
+      exact ⟨ih.1, fun x hx => ih.2 x (mem_tail_of_erase hx)⟩
+    | timeout i msg =>
+      obtain ⟨_, _, rfl⟩ := SysState.step_timeout.mp hstep
+      exact ih
+    | output out => exact nomatch out
+    | crash i =>
+      obtain ⟨_, hcrash, _⟩ := SysState.step_crash.mp hstep
+      exact absurd hcrash (by simp [keeperEnv, EnvModel.right])
+    | start i =>
+      obtain ⟨hdown, _, _⟩ := SysState.step_start.mp hstep
+      rw [ih.1] at hdown
+      cases hdown
+
+/-- So the join's first state, seen from the keeper, is no state of the keeper alone: there
+the herald's input is ahead of the note. -/
+theorem heralded_right_not_alone :
+    ¬keeper.Reachable keeperEnv (SysState.init heralded {}).right := fun h => by
+  have hnote := (keeper_note_first h).2 ⟨some (), (), true⟩ (by
+    rw [show (SysState.init heralded {}).right.net
+      = [⟨none, (), false⟩, ⟨some (), (), true⟩] from rfl]
+    simp)
+  simp at hnote
 
 def tests : List (String × Bool) :=
   [ ("join: two systems wired together answer through each other, in every interleaving",

@@ -269,8 +269,39 @@ The outside link of `a` alone has to be the most permissive one (unordered, loss
 duplicating): messages from several actors of `b` share one link once projected, so their order
 on it is not the composite's.
 
+Proved, in `Lanes/Actors/JoinSound.lean`:
+
+- `System.Reachable.left`: a reachable state of `a.join b w`, seen from `a` (`SysState.left`),
+  is a reachable state of `a` alone under `EnvModel.left`. The links between actors of `a`,
+  its crashes and its restarts are those of the join; the link from outside is `Link.network`.
+- `System.Invariant.join_left` carries any invariant of `a` under that environment into the
+  join, and `join_left_state` does the same in one line for a property of actor states proved
+  for every environment. `Tests/Join.lean` has one at work.
+- For `b`: `System.Reachable.right`, up to `SysState.Equiv` (the order of messages on different
+  links, which no actor can observe), and exactly (`right_of_quiet_boot`) when the boot of `a`
+  sends `b` nothing. `join_right` carries invariants that do not depend on that order,
+  `join_right_state` those of actor states.
+
+The two sides differ because `join` boots `a` first. What the boot of `a` sends `b` is in
+flight before the first messages of `b` itself, and `b` alone receives inputs only once it has
+booted, so alone it never has an input ahead of what its own boot sent. `Tests/Join.lean`
+proves the exact statement false for two one-actor systems (`heralded_right_not_alone`). The
+proof for `b` is the proof for `a` through `SysState.step_swap`: a
+join and the join with its sides exchanged take the same steps.
+
+What the permissive outside link costs. A theorem about `a` transfers only if it was proved
+with inputs that may be lost, repeated and reordered. The gate's `answered_le_arrived` assumes
+its link from outside does not duplicate, so it does not transfer to a gate whose arrivals come
+from another system through a join. Projection cannot do better with one outside link: the
+join loses and repeats per sender, and the senders are gone once projected. Giving a system
+several outside links, one per wire, would let each keep the link model it has in the join.
+
+Not covered: properties that relate the two systems ("every ask gets a result") are properties
+of the join and are proved or checked there; projection only brings each side's own theorems
+along.
+
 Refinement as a precongruence (if `a` refines `A` then the join with `a` refines the join with
-`A`) comes after, from the same projection.
+`A`) comes after, from the same projection and the same symmetry.
 
 ### A.3 The outside world: adapters with a model (D26)
 

@@ -283,13 +283,6 @@ private theorem refl : ∀ l : List (Envelope σ), Thin l l
   | [] => .nil
   | e :: l => .keep e (refl l)
 
-private theorem append {l₁ l₁' l₂ l₂' : List (Envelope σ)} (h₁ : Thin l₁ l₁') (h₂ : Thin l₂ l₂') :
-    Thin (l₁ ++ l₂) (l₁' ++ l₂') := by
-  induction h₁ with
-  | nil => exact h₂
-  | keep e _ ih => exact .keep e ih
-  | skip he _ ih => exact .skip he ih
-
 private theorem of_append {l₁' l₂' : List (Envelope σ)} :
     ∀ {l}, Thin l (l₁' ++ l₂') → ∃ l₁ l₂, l = l₁ ++ l₂ ∧ Thin l₁ l₁' ∧ Thin l₂ l₂' := by
   induction l₁' with
