@@ -1162,9 +1162,26 @@ themselves from the text of the fields and constructors.
   field's whole type and appears in no other, and `DecidableEq` of the rest, which is the
   context the node's hand-written instance had.
 
-The command accepts fields `x : T` and arguments `(x y : T)`, with docstrings; a type with
-defaults, `extends`, indices or recursion is declared as usual and given a codec with the
-macros. Errors in what it derives are reported on the command, not on a field.
+The command accepts fields `x : T` and `x : T := default` and arguments `(x y : T)`, with
+docstrings; a type with `extends`, indices or recursion is declared as usual and given a codec
+with the macros. Errors in what it derives are reported on the command, not on a field.
+
+The ledger met four gaps, and each closed without `Lean`. A constructor is read with
+`rawIdent`, as `inductive` reads one, so `| open` is accepted and `Op.open` is named. The
+derived codecs and `Enum` bound each argument to its own name, so an argument named like its
+constructor (`| ask (ask : Ask C)`) was read in the pattern as the constructor, which a macro
+cannot see is a constant; they now bind names with a macro scope, which no constant has.
+Default values pass through to the structure and change nothing derived, since a codec writes
+every field. A value with a property is a subtype (`{s : String // valid s}`): `Codec.subtype`
+writes the value and reads it back only if the property is decided true, and `Enum` filters;
+`DecidableEq`, `Hashable` and `Repr` come from Lean's instances for `Subtype`. A field that is
+a proof about an earlier field, as the ledger's `Name` had, is the one form left out: a macro
+cannot tell whether a name in a type is an earlier field or a constant, and a field-by-field
+codec has nothing to write for a proof. The command finds a field's name in a later field's
+type by text and refuses it, with an error that names the field and says to use a subtype; it
+refuses only when it derives one of its own classes, so `deriving DecidableEq` alone still
+passes the structure to Lean. With these, `lanesTest` grew by 41 KB, the new tests included,
+and links no more of `Lean` than before.
 
 Instances defined by cases on an identity, for systems whose actors have different messages or
 states, were a `match` with `inferInstanceAs` per class and per identity. The tactic
