@@ -6,6 +6,7 @@ module
 
 public import Lanes.Behaviours.Jobs
 public import Lanes.Actors.Deed
+public import Lanes.Actors.JoinSound
 public import Lanes.Actors.Lift
 public import Lanes.Actors.Run
 
@@ -823,5 +824,14 @@ theorem answered_le_handled (env : EnvModel (sig K J R)) {events : List (Event (
   have h := owed_event (env := env) key hstep
   rw [handled_snoc, answered_snoc]
   omega
+
+/-- Beside any system, the jobs actor keeps no more jobs active than its slots. -/
+theorem attach_within {τ : Signature} (sys : System τ) (config : Config R) (use : Use τ K J R)
+    (env : EnvModel (joinSig (sig K J R) τ)) :
+    (attach sys config use).Invariant env
+      fun c => Within config (c.state (.inl ()) : List (Active K J)) :=
+  System.Invariant.join_left_state (a := system config) (b := sys) (w := use.wiring)
+    (Q := fun s : (_ : Unit) → List (Active K J) => Within config (s ()))
+    fun env => within config env
 
 end Lanes.Jobs

@@ -5,6 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Lanes.Behaviours.JobsSound
+public import Lanes.Semantics.FairJoin
 public import Lanes.Semantics.Liveness
 
 /-!
@@ -28,6 +29,7 @@ crashed actor with no mail need never start again.
 - `Jobs.active_answered`: in a fair run, an active job has its answer handed over.
 - `Jobs.submitted_answered`: in a fair run, a submission the actor handles has an answer to its
   key handed over.
+- `Jobs.attach_active_leaves`: beside any system, an active job stops being active.
 -/
 
 @[expose] public section
@@ -229,5 +231,20 @@ theorem submitted_answered (config : Config R) (hcrash : env.mayCrash () = false
       exact List.mem_append_right _ (Effect.mem_emits.mpr houtcome)
     obtain ⟨m, hm, h⟩ := hfair.output_taken hout
     exact ⟨m, by omega, outcome, h⟩
+
+/-- Beside any system, every active job stops being active, in any environment that does not
+crash the jobs actor: what the actor alone does, it does in `attach sys`. The step in which a
+job stops being active emits its answer (`Jobs.answered_of_leaves`), which the wiring hands to
+`sys`. -/
+theorem attach_active_leaves {τ : Signature} (sys : System τ) (config : Config R)
+    (use : Use τ K J R) {env : EnvModel (joinSig (sig K J R) τ)}
+    (hcrash : env.mayCrash (.inl ()) = false) (key : K) :
+    (attach sys config use).LeadsTo env
+      (fun c => c.up (.inl ()) = true ∧ key ∈ keys (c.state (.inl ()) : List (Active K J)))
+      (fun c => key ∉ keys (c.state (.inl ()) : List (Active K J))) :=
+  System.LeadsTo.join_left
+    (P := fun c : SysState (system (K := K) (J := J) config) =>
+      c.up () = true ∧ key ∈ keys (c.state ()))
+    (Q := fun s _ => key ∉ keys (s ())) (active_leaves config (env := env.left) hcrash key)
 
 end Lanes.Jobs

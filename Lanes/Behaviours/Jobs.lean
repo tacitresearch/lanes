@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
+public import Lanes.Actors.Join
 public import Lanes.Actors.Outside
 public import Lanes.Data.Declare
 
@@ -18,7 +19,9 @@ the last result after `maxAttempts`, with `timedOut` when the last attempt's dea
 or at once with `refused` when `maxInFlight` jobs are active (rule 2.6). Every attempt carries
 the key, so the far side can tell a retry from a new request (rule 3.4).
 
-`system` is the actor alone; `Lanes.Behaviours.JobsSound` proves it answers no key more often
+`system` is the actor alone, and `attach sys config use` is it joined beside `sys`, whose outputs
+`use` reads as submissions and to which it hands each answer as an input; attempts leave the
+join as outputs and results come back as inputs. `Lanes.Behaviours.JobsSound` proves it answers no key more often
 than it is submitted and that a retry carries the job it retries, `Lanes.Semantics.JobsLive`
 that every job it admits is answered in a fair run.
 -/
@@ -324,6 +327,24 @@ abbrev system (config : Config R) : System (sig K J R) where
     | .submit key job => ⟨(), .submit key job⟩
     | .result key attempt r => ⟨(), .result key attempt r⟩
   boot := [()]
+
+/-- How a system uses jobs: which of its outputs submit one, and the input an answer is. -/
+structure Use (τ : Signature) (K J R : Type) where
+  submitted : τ.Out → Option (K × J)
+  answer : K → Outcome R → τ.In
+
+/-- A submission goes to the jobs actor, an answer to the system that submitted it; attempts
+leave the join. -/
+def Use.wiring {τ : Signature} (use : Use τ K J R) : Wiring (sig K J R) τ where
+  toRight
+    | .answer key outcome => some (use.answer key outcome)
+    | .dispatch .. => none
+  toLeft out := (use.submitted out).map fun (key, job) => .submit key job
+
+/-- `sys` with the jobs actor beside it. -/
+abbrev attach {τ : Signature} (sys : System τ) (config : Config R) (use : Use τ K J R) :
+    System (joinSig (sig K J R) τ) :=
+  (system config).join sys use.wiring
 
 /-- What a pool of workers may do: give the result of an attempt that was dispatched, once,
 whatever it is, or never. It remembers the attempts open. -/

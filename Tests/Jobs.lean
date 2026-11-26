@@ -124,6 +124,76 @@ def crashing : EnvModel jobsSig where
   mayCrash _ := true
   restarts _ := true
 
+/-! Beside an application: an actor that asks for a job on each input and reports its answer. -/
+
+inductive AppIn where
+  | send (key job : Nat)
+  | answered (key : Nat) (outcome : Outcome Bool)
+  deriving DecidableEq, Repr, Hashable
+
+inductive AppOut where
+  | submit (key job : Nat)
+  | reported (key : Nat) (outcome : Outcome Bool)
+  deriving DecidableEq, Repr, Hashable
+
+abbrev appSig : Signature where
+  Id := Unit
+  Msg _ := AppIn
+  In := AppIn
+  Out := AppOut
+
+abbrev app : System appSig where
+  State _ := Unit
+  actor _ :=
+    { init := ()
+      step := fun _ msg =>
+        ((), match msg with
+          | .send key job => [.emit (.submit key job)]
+          | .answered key outcome => [.emit (.reported key outcome)])
+      recover := fun s => (s, []) }
+  accept x := ⟨(), x⟩
+
+def use : Use appSig Nat Nat Bool where
+  submitted
+    | .submit key job => some (key, job)
+    | .reported .. => none
+  answer := .answered
+
+abbrev attached := attach app (policy 2) use
+
+instance : appSig.Inspect := {}
+instance : app.Inspect := {}
+instance : (joinSig jobsSig appSig).Inspect := .join
+instance : attached.Inspect := .join
+
+/-- What is still to send, the attempts open, and the answers reported. -/
+abbrev Beside := List (Nat × Nat) × List (Nat × Nat) × List (Nat × Outcome Bool)
+
+def beside : Driver (joinSig jobsSig appSig) Beside where
+  init := (submissions, [], [])
+  inputs := fun (toSend, opened, reported) =>
+    toSend.map (fun (key, job) => (.inr (.send key job), (toSend.erase (key, job), opened, reported)))
+      ++ opened.flatMap fun (key, attempt) => [true, false].map fun ok =>
+        (.inl (.result key attempt ok), (toSend, opened.erase (key, attempt), reported))
+  observe := fun (toSend, opened, reported) out =>
+    match out with
+    | .inl (.dispatch key attempt _) => (toSend, (key, attempt) :: opened, reported)
+    | .inr (.reported key outcome) => (toSend, opened, (key, outcome) :: reported)
+    | _ => (toSend, opened, reported)
+
+def checkBeside :=
+  Check.system attached { driver := beside }
+    [ .always "the application is told each answer once" fun w =>
+        submissions.all fun (key, _) => w.driver.2.2.countP (·.1 == key) ≤ 1,
+      .always "no more jobs are active than there are slots"
+        fun w => (w.state.state (.inl ()) : List Active').length ≤ 2,
+      .sometimes "the application is told of a success after a retry" fun w =>
+        w.driver.2.2.any (·.2 == .done true)
+          && (w.state.state (.inl ()) : List Active').isEmpty ]
+    { checkDeadlock := true
+      terminal := fun w => w.driver.1.isEmpty
+        && submissions.all fun (key, _) => w.driver.2.2.any (·.1 == key) }
+
 def withKey : Bool :=
   let request : Http.Request :=
     { method := .post, path := [], headers := [("idempotency-key", "x"), ("A", "1")] }
@@ -135,14 +205,19 @@ def tests : List (String × Bool) :=
   let two := check 2
   let one := check 1
   let faulty := check 2 crashing (maxCrashes := 1)
-  [ (s!"jobs: every job is answered once, retried with its key and job, within the slots ({two.states} states)",
+  let besides := checkBeside
+  [ (s!"jobs: every job is answered once, retried with its key and job, within the slots "
+        ++ s!"({two.states} states)",
       two.ok && two.complete && two.witnesses.length == 4),
     (s!"jobs: beyond maxInFlight a job is refused, and still answered once ({one.states} states)",
       one.ok && one.complete
         && (Check.system (jobs 1) { driver := (world submissions).driver samples }
           [.sometimes "a job is refused" (answeredWith (· == .refused))]).witnesses.length == 1),
-    (s!"jobs: the same when the actor crashes and restarts and results come late or never ({faulty.states} states)",
-      faulty.ok && faulty.complete && faulty.witnesses.length == 4) ]
+    (s!"jobs: the same when the actor crashes and restarts and results come late or never "
+        ++ s!"({faulty.states} states)",
+      faulty.ok && faulty.complete && faulty.witnesses.length == 4),
+    (s!"jobs: beside an application, which is told each answer once ({besides.states} states)",
+      besides.ok && besides.complete && besides.witnesses.length == 1) ]
 
 /-! The pool, live: calls to a local service that fails twice before it succeeds, to a closed
 port and to a service that never answers; and a pure worker. -/
