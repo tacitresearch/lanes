@@ -136,4 +136,77 @@ def list (c : Codec α) : Codec (List α) where
 
 end Codec
 
+/-! Codecs for a structure and for an inductive type, one line each. The law is proved by what
+the macro writes, so it holds or the line does not compile. -/
+
+open Lean in
+/-- `Codec.struct% T { a := codecA, b := codecB }`: the codec of structure `T`, a codec per
+field, in the order written. -/
+syntax (name := codecStruct) "Codec.struct% " ident " {" (ident " := " term),* "}" : term
+
+open Lean in
+/-- `Codec.sum% T { a (x := codecX) (y := codecY), b }`: the codec of inductive type `T`, a
+constructor per entry with a codec per argument. -/
+syntax (name := codecSum)
+  "Codec.sum% " ident " {" (ident ("(" ident " := " term ")")*),* "}" : term
+
+namespace Codec
+
+open Lean
+
+/-- `(a, b, c)` as nested pairs, as a term or a pattern; `()` when empty. -/
+private meta def tuple (xs : Array (TSyntax `term)) : MacroM (TSyntax `term) :=
+  match xs.toList.reverse with
+  | [] => `(())
+  | last :: rest => rest.foldlM (fun acc x => `(($x, $acc))) last
+
+private meta def product (codecs : Array (TSyntax `term)) : MacroM (TSyntax `term) :=
+  match codecs.toList.reverse with
+  | [] => `(Lanes.Codec.unit)
+  | last :: rest => rest.foldlM (fun acc c => `(Lanes.Codec.pair $c $acc)) last
+
+/-- The `k`th of `n` alternatives as nested `Sum.inl`/`Sum.inr` around `x`. -/
+private meta def inject (k n : Nat) (x : TSyntax `term) : MacroM (TSyntax `term) := do
+  let inner ← if k + 1 == n then pure x else `(Sum.inl $x)
+  (List.range k).foldlM (fun acc _ => `(Sum.inr $acc)) inner
+
+end Codec
+
+open Lean Codec in
+macro_rules
+  | `(Codec.struct% $_ { $[$fields := $codecs],* }) => do
+    let r := mkIdent `r
+    let projections ← fields.mapM fun f => `($r.$f:ident)
+    let out ← tuple projections
+    let values : Array (TSyntax `term) := fields.map fun f => ⟨f.raw⟩
+    let pattern ← tuple values
+    `(Lanes.Codec.map $(← product codecs) (fun $r => $out)
+        (fun $pattern => some { $[$fields:ident := $values],* }) (by intro r; rfl))
+
+open Lean Codec in
+macro_rules
+  | `(Codec.sum% $T { $[$ctors $[($args := $codecs)]*],* }) => do
+    let n := ctors.size
+    if n == 0 then Macro.throwError "Codec.sum% needs at least one constructor"
+    let products ← codecs.mapM product
+    let sum ← match products.toList.reverse with
+      | [] => `(Lanes.Codec.unit)
+      | last :: rest => rest.foldlM (fun acc c => `(Lanes.Codec.sum $c $acc)) last
+    let mut cases : Array (TSyntax `term) := #[]
+    let mut backs : Array (TSyntax `term) := #[]
+    for k in [0:n] do
+      let ctor := mkIdent (T.getId ++ ctors[k]!.getId)
+      let vars : Array (TSyntax `term) := args[k]!.map fun a => ⟨a.raw⟩
+      let injected ← inject k n (← tuple vars)
+      cases := cases.push (← if vars.isEmpty then pure injected
+        else `(fun $vars* => $injected))
+      backs := backs.push (← `(fun $(← tuple vars) => some ($ctor $vars*)))
+    let back ← match backs.toList.reverse with
+      | [] => `(fun _ => none)
+      | last :: rest => rest.foldlM (fun acc f => `(Sum.elim $f $acc)) last
+    let casesOn := mkIdent (T.getId ++ `casesOn)
+    `(Lanes.Codec.map $sum
+        (fun x => $casesOn:ident (motive := fun _ => _) x $cases*)
+        $back (by intro x; cases x <;> rfl))
+
 end Lanes

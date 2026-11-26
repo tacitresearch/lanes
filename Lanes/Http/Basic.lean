@@ -44,22 +44,13 @@ structure Request where
   deriving DecidableEq, Repr, Hashable
 
 def Method.codec : Codec Method :=
-  Codec.nat.map
-    (fun
-      | .get => 0 | .post => 1 | .put => 2 | .patch => 3 | .delete => 4)
-    (fun
-      | 0 => some .get | 1 => some .post | 2 => some .put | 3 => some .patch
-      | 4 => some .delete | _ => none)
-    (by intro method; cases method <;> rfl)
+  Codec.sum% Method { get, post, put, patch, delete }
 
 /-- How a request is written to a journal. -/
 def Request.codec : Codec Request :=
   let fields := Codec.list (Codec.pair Codec.string Codec.string)
-  (Codec.pair Method.codec (Codec.pair (Codec.list Codec.string)
-      (Codec.pair fields (Codec.pair fields Codec.bytes)))).map
-    (fun r => (r.method, r.path, r.query, r.headers, r.body))
-    (fun (method, path, query, headers, body) => some { method, path, query, headers, body })
-    (by intro r; rfl)
+  Codec.struct% Request { method := Method.codec, path := Codec.list Codec.string,
+    query := fields, headers := fields, body := Codec.bytes }
 
 structure Response where
   status : Nat := 200

@@ -40,19 +40,14 @@ inductive Request (A : Type) where
   | balance (req : ReqId) (account : A)
   deriving DecidableEq, Repr, Hashable
 
-/-- How a request is written to a journal. Built from codecs that carry their laws, so reading
-back what was written is proved, not tested. -/
+/-- How a request is written to a journal. The round-trip law is proved by what the macros
+write. -/
+def Transfer.codec {A : Type} (account : Codec A) : Codec (Transfer A) :=
+  Codec.struct% Transfer { req := Codec.nat, src := account, dst := account, amount := Codec.nat }
+
 def Request.codec {A : Type} (account : Codec A) : Codec (Request A) :=
-  (Codec.sum
-      (Codec.pair Codec.nat (Codec.pair account (Codec.pair account Codec.nat)))
-      (Codec.pair Codec.nat account)).map
-    (fun
-      | .transfer t => .inl (t.req, t.src, t.dst, t.amount)
-      | .balance req a => .inr (req, a))
-    (fun
-      | .inl (req, src, dst, amount) => some (.transfer ⟨req, src, dst, amount⟩)
-      | .inr (req, a) => some (.balance req a))
-    (by intro request; cases request <;> rfl)
+  Codec.sum% Request { transfer (t := Transfer.codec account),
+    balance (req := Codec.nat) (account := account) }
 
 inductive Outcome where
   /-- The source account was debited and the credit is on its way. -/
