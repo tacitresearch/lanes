@@ -362,34 +362,33 @@ variable {i : σ.Id} {j : τ.Id}
 theorem sends_left (effs : List (Effect σ i)) :
     (Effect.sends (σ := joinSig σ τ) (.inl i) (effs.flatMap fun eff => [w.left b eff])).filterMap
       Envelope.left? = Effect.sends i effs := by
-  induction effs with
-  | nil => rfl
-  | cons eff effs ih =>
-    cases eff with
-    | emit out =>
-      cases h : w.toRight out <;>
-        simp_all [Effect.sends, Wiring.left, Envelope.left?, List.filterMap_cons]
-    | _ => simp_all [Effect.sends, Wiring.left, Envelope.left?]
+  simp only [Effect.sends, ← List.map_eq_flatMap, List.filterMap_map, List.filterMap_filterMap]
+  congr 1
+  funext eff
+  cases eff with
+  | emit out => cases h : w.toRight out <;> simp [Wiring.left, h, Envelope.left?]
+  | _ => simp [Wiring.left, Envelope.left?]
 
 theorem emits_left (effs : List (Effect σ i)) :
     (Effect.emits (effs.flatMap fun eff => [w.left b eff])).filterMap Sum.getLeft?
       = (Effect.emits effs).filter fun out => (w.toRight out).isNone := by
-  induction effs with
-  | nil => rfl
-  | cons eff effs ih =>
-    cases eff with
-    | emit out => cases h : w.toRight out <;> simp_all [Effect.emits, Wiring.left]
-    | _ => simp_all [Effect.emits, Wiring.left]
+  simp only [Effect.emits, ← List.map_eq_flatMap, List.filterMap_map, List.filterMap_filterMap,
+    List.filter_filterMap]
+  congr 1
+  funext eff
+  cases eff with
+  | emit out => cases h : w.toRight out <;> simp [Wiring.left, h, Option.filter]
+  | _ => simp [Wiring.left]
 
 theorem retime_left (effs : List (Effect σ i)) (timers : List (σ.Msg i)) :
     Effect.retime (σ := joinSig σ τ) (i := .inl i) (effs.flatMap fun eff => [w.left b eff]) timers
       = Effect.retime effs timers := by
-  induction effs generalizing timers with
-  | nil => rfl
-  | cons eff effs ih =>
-    cases eff with
-    | emit out => cases h : w.toRight out <;> simp_all [Effect.retime, Wiring.left]
-    | _ => simp_all [Effect.retime, Wiring.left]
+  simp only [Effect.retime, ← List.map_eq_flatMap, List.foldl_map]
+  congr 1
+  funext timers eff
+  cases eff with
+  | emit out => cases h : w.toRight out <;> simp [Wiring.left, h]
+  | _ => simp [Wiring.left]
 
 theorem isStop_left (effs : List (Effect σ i)) :
     (effs.flatMap fun eff => [w.left b eff]).any Effect.isStop = effs.any Effect.isStop :=
@@ -403,30 +402,23 @@ theorem sends_right_left (effs : List (Effect τ j)) :
       Envelope.left?
       = ((Effect.emits effs).filterMap w.toLeft).map fun x =>
           ⟨none, (a.accept x).1, (a.accept x).2⟩ := by
-  induction effs with
-  | nil => rfl
-  | cons eff effs ih =>
-    cases eff with
-    | emit out =>
-      cases h : w.toLeft out <;> simp_all [Effect.sends, Effect.emits, Wiring.right, Envelope.left?]
-    | send to msg =>
-      simp_all [Effect.sends, Effect.emits, Wiring.right, Envelope.left?, List.filterMap_cons]
-    | _ => simp_all [Effect.sends, Effect.emits, Wiring.right]
+  simp only [Effect.sends, Effect.emits, ← List.map_eq_flatMap, List.filterMap_map,
+    List.filterMap_filterMap, List.map_filterMap]
+  congr 1
+  funext eff
+  cases eff with
+  | emit out => cases h : w.toLeft out <;> simp [Wiring.right, h, Envelope.left?]
+  | _ => simp [Wiring.right, Envelope.left?]
 
 theorem emits_right_left (effs : List (Effect τ j)) :
     (Effect.emits (effs.flatMap fun eff => [w.right a eff])).filterMap Sum.getLeft?
       = ([] : List σ.Out) := by
-  induction effs with
-  | nil => rfl
-  | cons eff effs ih =>
-    have head : (Effect.emits [w.right a eff]).filterMap Sum.getLeft? = ([] : List σ.Out) := by
-      cases eff with
-      | emit out => cases h : w.toLeft out <;> simp [Effect.emits, Wiring.right, h]
-      | _ => simp [Effect.emits, Wiring.right]
-    rw [List.flatMap_cons]
-    simp only [Effect.emits, List.filterMap_append] at head ih ⊢
-    rw [head, ih]
-    rfl
+  simp only [Effect.emits, ← List.map_eq_flatMap, List.filterMap_map, List.filterMap_filterMap,
+    List.filterMap_eq_nil_iff]
+  intro eff _
+  cases eff with
+  | emit out => cases h : w.toLeft out <;> simp [Wiring.right, h]
+  | _ => simp [Wiring.right]
 
 end Wiring
 
