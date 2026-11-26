@@ -246,7 +246,7 @@ theorem parse4_print4 (x : Fin (2 ^ 32)) : parse4 (print4 x.val) = some x := by
     · simp [length_split, ← List.length_eq_zero_iff]
   have hoct : ((split 256 4 x.val).map (toChars 10)).mapM octet? = some (split 256 4 x.val) := by
     rw [List.mapM_map]
-    have := mapM_eq_some_map (l := split 256 4 x.val) (f := octet? ∘ toChars 10) (g := id)
+    have := mapM_some (l := split 256 4 x.val) (f := octet? ∘ toChars 10) (g := id)
       fun d hd => octet?_toChars (lt_of_mem_split (by omega) hd)
     simpa using this
   have hj : join 256 (split 256 4 x.val) = x.val := by
@@ -288,7 +288,7 @@ theorem groups?_hexFields {g : List Nat} (h : ∀ d ∈ g, d < 65536) : groups? 
 theorem mapM_hexFields {g : List Nat} (h : ∀ d ∈ g, d < 65536) :
     (hexFields g).mapM hexGroup? = some g := by
   rw [hexFields, List.mapM_map]
-  simpa using mapM_eq_some_map (l := g) (f := hexGroup? ∘ toChars 16) (g := id)
+  simpa using mapM_some (l := g) (f := hexGroup? ∘ toChars 16) (g := id)
     fun d hd => hexGroup?_toChars (h d hd)
 
 theorem hexFields_ne_nil (g : List Nat) : ∀ f ∈ hexFields g, f ≠ [] := by
