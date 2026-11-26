@@ -603,8 +603,13 @@ theorem kernel_fronted_answered_le_arrived (sys : System σ) (bridge : Bridge σ
     (ops : List (Kernel.Op (frontedSig σ))) (id : ReqId) :
     let booted := Kernel.boot (fronted sys bridge config)
     let events := booted.2.map .output ++ (booted.1.exec ops).events
-    (Fronted.answered events).count id ≤ (Fronted.arrived events).count id :=
-  fronted_answered_le_arrived rfl (Kernel.exec_reachable _ ops).1 id
+    (Fronted.answered events).count id ≤ (Fronted.arrived events).count id := by
+  dsimp only
+  obtain ⟨evs, _, hrun, hawake, -⟩ := (Kernel.exec_reachable (fronted sys bridge config) ops).1
+  have hanswered : Fronted.answered evs = Fronted.answered _ := Event.filterMap_eq_of_awake (fun _ => rfl) hawake
+  have harrived : Fronted.arrived evs = Fronted.arrived _ := Event.filterMap_eq_of_awake (fun _ => rfl) hawake
+  rw [← hanswered, ← harrived]
+  exact fronted_answered_le_arrived rfl hrun id
 
 end Fronted
 
@@ -662,8 +667,15 @@ theorem kernel_served_answered_le_arrived (sys : System σ) (bridge : Bridge σ)
     (ops : List (Kernel.Op (servedSig σ))) (id : ReqId) :
     let booted := Kernel.boot (served sys bridge config)
     let events := booted.2.map .output ++ (booted.1.exec ops).events
-    (Served.answered events).count id ≤ (Served.arrived events).count id :=
-  served_answered_le_arrived rfl (Kernel.exec_reachable _ ops).1 id
+    (Served.answered events).count id ≤ (Served.arrived events).count id := by
+  dsimp only
+  obtain ⟨evs, _, hrun, hawake, -⟩ := (Kernel.exec_reachable (served sys bridge config) ops).1
+  have hanswered : Served.answered evs = Served.answered _ :=
+    Event.filterMap_eq_of_awake (fun _ => rfl) hawake
+  have harrived : Served.arrived evs = Served.arrived _ :=
+    Event.filterMap_eq_of_awake (fun _ => rfl) hawake
+  rw [← hanswered, ← harrived]
+  exact served_answered_le_arrived rfl hrun id
 
 end Served
 

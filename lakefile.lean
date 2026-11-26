@@ -45,6 +45,11 @@ lean_exe lanesCheck where
 lean_exe bankWeb where
   root := `Examples.BankWebMain
 
+/-- Differential tests against Go's standard library; needs `go` (`oracle/`). -/
+@[default_target]
+lean_exe lanesOracle where
+  root := `Tests.OracleMain
+
 lean_lib LanesCli where
   globs := #[.submodules `LanesCli]
 
