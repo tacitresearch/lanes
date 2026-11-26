@@ -135,6 +135,38 @@ def seenFromFront (inputs : List FrontIn) : Bool :=
   let alone := frontStates inputs
   explored alone && joinedStates.queue.all fun v => alone.seen.contains ⟨v.path.last.state.left⟩
 
+/-- No result waits to leave before the front has answered. -/
+def resultAnswered (c : SysState front) : Prop :=
+  ∀ n, .result n ∈ c.outbox → 0 < c.state ()
+
+def frontCheck :=
+  Check.system front
+    { env := faulty.left, driver := Driver.anyOrder [.ask 3, .reply 6, .reply 6], maxCrashes := 1 }
+    [ .always "no result waits to leave before the front has answered" fun w =>
+        w.state.outbox.all fun out => !(out matches .result _) || 0 < w.state.state (),
+      .sometimes "a result waits to leave" fun w => w.state.outbox.any (· matches .result _) ]
+    { constraint := fun w => w.state.state () ≤ 3 && w.state.outbox.length ≤ 3 }
+
+theorem front_resultAnswered (env : EnvModel frontSig) : front.Invariant env resultAnswered := by
+  refine (System.Inductive.of_monotone env ?_ ?_ ?_ ?_ ?_).invariant
+  · intro n h
+    simp [SysState.blank] at h
+  · intro c c' hc hbelow n h
+    rw [hbelow.state]
+    exact hc n (hbelow.outbox _ h)
+  · exact fun c x hc => hc
+  · intro c i msg hc _ n h
+    cases msg with
+    | ask m => exact hc n (by simpa [SysState.grow, Effect.emits] using h)
+    | reply m => simp [SysState.grow]
+  · intro c i hc n h
+    simpa [SysState.grow] using hc n (by simpa [SysState.grow, Effect.emits] using h)
+
+/-- The same holds of the front inside the join, whatever the back does. -/
+theorem joined_resultAnswered (env : EnvModel (joinSig frontSig backSig)) :
+    joined.Invariant env fun c => resultAnswered c.left :=
+  (front_resultAnswered env.left).join_left
+
 /-- A boot actor whose start is an output. -/
 abbrev heraldSig : Signature where
   Id := Unit
@@ -187,6 +219,8 @@ def tests : List (String × Bool) :=
       && joinedStates.queue.any fun v => v.path.last.state.left.state () == 2),
     ("join: seen from the front, what the back sends is an input",
       !seenFromFront [.ask 3]),
+    ("join: the front alone gives no result before it has answered",
+      frontCheck.ok && frontCheck.complete),
     ("join: the side that boots second sees an input older than its own first message",
       (SysState.init heralded {}).right.net == [⟨none, (), false⟩, ⟨some (), (), true⟩]
       && explored keeperStates

@@ -285,3 +285,11 @@ by `lake build`, not linked into the test executable.
 
 /-- info: 'Lanes.Frame.decode_checksum_ne' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Frame.decode_checksum_ne
+/-- info: 'Lanes.System.Reachable.left' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Reachable.left
+
+/-- info: 'Lanes.System.Invariant.join_left' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Invariant.join_left
+
+/-- info: 'Lanes.System.Invariant.join_left_state' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Invariant.join_left_state
