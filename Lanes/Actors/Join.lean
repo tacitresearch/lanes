@@ -15,7 +15,8 @@ both. An output of one that the wiring routes to the other becomes a message to 
 other's `accept` names for that input; every other output is an output of the join. Each system
 is written and proved on its own, against its own signature, and knows nothing of the other.
 
-`System.mapIO` changes what a system's inputs and outputs look like from outside.
+`System.mapIO` changes what a system's inputs and outputs look like from outside, and
+`System.filterMapIO` also hides some of its outputs.
 -/
 
 @[expose] public section
@@ -112,6 +113,27 @@ abbrev System.mapIO (sys : System σ) (input : In → σ.In) (output : σ.Out �
   accept x := sys.accept (input x)
   boot := sys.boot
 
+def Effect.filterMapOut (output : σ.Out → Option Out) {i : σ.Id} :
+    Effect σ i → List (Effect (σ.withIO In Out) i)
+  | .send to msg => [.send to msg]
+  | .emit out =>
+    match output out with
+    | some shown => [.emit shown]
+    | none => []
+  | .after delay_ms msg => [.after delay_ms msg]
+  | .cancel msg => [.cancel msg]
+  | .stop => [.stop]
+
+/-- `mapIO` that also hides: an output for which `output` gives `none` is not put out. A join
+keeps in its signature the outputs it has wired, though none is ever put out, and this is how
+they leave it. -/
+abbrev System.filterMapIO (sys : System σ) (input : In → σ.In) (output : σ.Out → Option Out) :
+    System (σ.withIO In Out) where
+  State := sys.State
+  actor i := (sys.actor i).mapEff (Effect.filterMapOut output)
+  accept x := sys.accept (input x)
+  boot := sys.boot
+
 end MapIO
 
 instance (priority := low) {α β : Type} [Hashable α] [Hashable β] : Hashable (α ⊕ β) where
@@ -161,6 +183,14 @@ and given in one line: `instance : (joinSig σ τ).Inspect := .join`. -/
 @[instance_reducible] def System.Inspect.mapIO {In Out : Type} [DecidableEq In] [DecidableEq Out] {sys : System σ}
     [sys.Inspect] {input : In → σ.In} {output : σ.Out → Out} :
     (sys.mapIO input output).Inspect where
+  beqState i := inferInstanceAs (BEq (sys.State i))
+  reprState i := inferInstanceAs (Repr (sys.State i))
+  hashState i := inferInstanceAs (Hashable (sys.State i))
+
+@[instance_reducible] def System.Inspect.filterMapIO {In Out : Type} [DecidableEq In]
+    [DecidableEq Out] {sys : System σ} [sys.Inspect] {input : In → σ.In}
+    {output : σ.Out → Option Out} :
+    (sys.filterMapIO input output).Inspect where
   beqState i := inferInstanceAs (BEq (sys.State i))
   reprState i := inferInstanceAs (Repr (sys.State i))
   hashState i := inferInstanceAs (Hashable (sys.State i))

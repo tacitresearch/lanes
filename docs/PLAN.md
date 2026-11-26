@@ -219,7 +219,8 @@ Not fixed, and written down as limits: `Kernel.performAll` appends outputs one a
 step that emits tens of thousands of outputs is quadratic; a pending timer makes the shard
 wait with a select and costs about 120 µs per input; a timer loses the time since the last
 journal entry as well as the time the process was down; `System.join` leaves wired inputs open
-to the outside until `mapIO` hides them; the gate is not yet built with `join`.
+to the outside until `mapIO` hides them; the gate is not yet built with `join` (it is since
+D31: `Http.fronted`, with the inputs hidden by `System.filterMapIO`).
 
 Not done from the third review: `election_safety` speaks of leaders that coexist, not of a term
 having had two leaders at different times; a duplicate attribute from a splice renders twice;
@@ -461,9 +462,16 @@ machines. The link is then lossy and unordered, which is `EnvModel.distributed`:
 there is what was proved for every environment, such as election safety.
 
 Built (D30): `Lanes.Peers` joins shards in different processes by TCP and promises no more
-than `Link.network`. The bank runs on three shards joined that way. Open: running a system
-with an HTTP front on each process, which needs the gate as a system of its own, joined to the
-shard by the general operator, so that parcels pass it by.
+than `Link.network`. The bank runs on three shards joined that way.
+
+Built (D31): the gate is a system of its own (`Http.gateSystem`), and `Http.fronted sys` is the
+gate joined to `sys` by `System.join`, so parcels pass it by. `Http.serveShard` runs
+`fronted (sys.shard hosts)` with `Peers`: a process with an HTTP front and peers. The bank runs
+on two shards that way, each behind its own front. At most once per arrival is proved of
+`fronted sys` for every `sys` by projection from the gate alone. Open: a response must be put
+out by the process that took the request, since request ids are each process's own; liveness
+of `fronted` (`pending_answered` is proved of `gated`), which waits for the projection of fair
+runs; and `gated` itself, still built by hand.
 
 ### B.3 Snapshots, then checker v2
 

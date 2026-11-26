@@ -47,7 +47,7 @@ variable {σ : Signature} {sys : System σ} {bridge : Bridge σ} {config : GateC
 /-- The gate never stops itself. -/
 theorem gate_never_stops (pending : List ReqId) (msg : GateMsg σ) :
     ((gate sys bridge config).step pending msg).2.any Effect.isStop = false := by
-  cases msg <;> simp only [gate] <;> repeat' split
+  cases msg <;> simp only [gate, Gate.step] <;> repeat' split
   all_goals simp [Effect.isStop]
 
 /-- A gate that the environment does not crash stays up. -/
@@ -67,7 +67,7 @@ theorem deadline_not_restarted {c c' : SysState (gated sys bridge config)}
       Event.timeout (σ := gatedSig σ) none (.expire id) ∉
         Effect.timeouts none ((gate sys bridge config).step (c.state none) msg).2 := by
     rw [Effect.mem_timeouts]
-    cases msg <;> simp only [gate] <;> repeat' split
+    cases msg <;> simp only [gate, Gate.step] <;> repeat' split
     all_goals simp
     rintro rfl
     contradiction
@@ -114,7 +114,7 @@ theorem pending_leaves (sys : System σ) (bridge : Bridge σ) (config : GateConf
   · exact fun c ⟨harmed, _⟩ ⟨hup, hid⟩ _ => ⟨hup, harmed hup id hid⟩
   · intro c c' ⟨_, hnodup⟩ ⟨_, hid⟩ _ hstep
     obtain ⟨_, _, rfl⟩ := SysState.step_timeout.mp hstep
-    simp [gate, hid, hnodup.mem_erase_iff]
+    simp [gate, Gate.step, hid, hnodup.mem_erase_iff]
   · exact fun c ev c' _ ⟨hup, hid⟩ _ hstep hrestarted =>
       absurd hrestarted (deadline_not_restarted hup hid hstep)
 
@@ -125,12 +125,12 @@ private theorem answered_of_leaves_gate {c : SysState (gated sys bridge config)}
     ∃ response, (c.handle env none msg).outbox = c.outbox ++ [(id, response)] := by
   cases msg with
   | arrive id' request =>
-    simp only [SysState.handle_state, update_self, gate] at hout
+    simp only [SysState.handle_state, update_self, gate, Gate.step] at hout
     repeat' split at hout
     all_goals simp [hin] at hout
   | answer out =>
-    simp only [SysState.handle_state, update_self, gate] at hout
-    simp only [SysState.handle, gate]
+    simp only [SysState.handle_state, update_self, gate, Gate.step] at hout
+    simp only [SysState.handle, gate, Gate.step]
     split
     · next id' response hencode =>
       simp only [hencode] at hout
@@ -144,8 +144,8 @@ private theorem answered_of_leaves_gate {c : SysState (gated sys bridge config)}
       · next hpending => simp [hpending, hin] at hout
     · next hencode => simp [hencode, hin] at hout
   | expire id' =>
-    simp only [SysState.handle_state, update_self, gate] at hout
-    simp only [SysState.handle, gate]
+    simp only [SysState.handle_state, update_self, gate, Gate.step] at hout
+    simp only [SysState.handle, gate, Gate.step]
     split
     · next hpending =>
       simp only [hpending, ↓reduceIte] at hout

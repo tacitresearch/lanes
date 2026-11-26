@@ -5,7 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Lanes.Actors.Join
-public import Lanes.Actors.KernelSound
+public import Lanes.Actors.Deed
 public import Lanes.Actors.Monotone
 public import Lanes.Actors.Equiv
 
@@ -17,6 +17,12 @@ on their way to it and the outputs that are its own. `System.Reachable.left` pro
 reachable state of the join, seen from `a`, is a reachable state of `a` alone, under
 `EnvModel.left`. So whatever is proved of `a` for every environment holds of `a` inside any join
 (`System.Invariant.join_left`).
+
+`SysState.run_left` is the same of runs: a run of the join, seen from `a`, is a run of `a` alone
+in which the actors handle the same messages and the same outputs are handed over, in the same
+order (`Deed`). So a statement that counts what `a` does, proved of every run of `a` alone, holds
+of `a` inside any join. What the two runs do not share is the inputs: alone, `a` may be put in a
+message fewer times than the join delivers it, since its link from outside duplicates.
 
 Seen from `a`, a message from `b` is an input. Inputs of `a` alone all travel on one link, so
 that link is modelled as the most permissive one, `Link.network`.
@@ -92,6 +98,20 @@ def right (c : SysState (a.join b w)) : SysState b where
   outbox := c.outbox.filterMap Sum.getRight?
 
 end SysState
+
+/-- What an event of a join shows the left system doing. -/
+def Event.leftDeed : Event (joinSig σ τ) → Option (Deed σ)
+  | .deliver ⟨_, .inl i, msg⟩ | .duplicate ⟨_, .inl i, msg⟩ => some (.handle i msg)
+  | .timeout (.inl i) msg => some (.handle i msg)
+  | .output (.inl out) => some (.output out)
+  | _ => none
+
+/-- What an event of the left system alone shows that the join shows too. Alone, an output the
+wiring routes to the other system is handed over; in the join it is a message. -/
+def Wiring.shown (w : Wiring σ τ) (ev : Event σ) : Option (Deed σ) :=
+  ev.deed.filter fun
+    | .output out => (w.toRight out).isNone
+    | .handle .. => true
 
 end Lanes
 
@@ -752,48 +772,96 @@ end SysState
 
 /-- What the induction carries, of a join seen from `a`: with any of the messages from outside
 left out it is a state `a` reaches alone, and no output waits that the wiring routes to `b`.
-`R` is "reaches alone": reachable for the system that boots first, reachable up to the order of
-messages on different links for the other. -/
-private structure Seen (env : EnvModel (joinSig σ τ)) (w : Wiring σ τ) (R : SysState a → Prop)
-    (c : SysState a) : Prop where
-  closed : ∀ {x x' : SysState a} (ev : Event σ), R x → x.step env.left ev = some x' → R x'
-  reach : ∀ n, Thin n c.net → R { c with net := n }
+`R t` is "reaches alone, showing `t`": by a run with those deeds for the system that boots
+first, and reachable up to the order of messages on different links for the other. -/
+private structure Seen (env : EnvModel (joinSig σ τ)) (w : Wiring σ τ)
+    (R : List (Deed σ) → SysState a → Prop) (t : List (Deed σ)) (c : SysState a) : Prop where
+  closed : ∀ {t : List (Deed σ)} {x x' : SysState a} (ev : Event σ), R t x →
+    x.step env.left ev = some x' → R (t ++ (w.shown ev).toList) x'
+  reach : ∀ n, Thin n c.net → R t { c with net := n }
   tidy : ∀ out ∈ c.outbox, w.toRight out = none
 
-private theorem run_closed {env : EnvModel σ} {R : SysState a → Prop}
-    (closed : ∀ {x x' : SysState a} (ev : Event σ), R x → x.step env ev = some x' → R x') :
-    ∀ {evs : List (Event σ)} {x x' : SysState a}, R x → x.run env evs = some x' → R x' := by
+/-- A run of events that show nothing. -/
+private theorem run_closed {env : EnvModel σ} {R : List (Deed σ) → SysState a → Prop}
+    (closed : ∀ {t : List (Deed σ)} {x x' : SysState a} (ev : Event σ), R t x →
+      x.step env ev = some x' → R (t ++ (w.shown ev).toList) x') :
+    ∀ {evs : List (Event σ)} {t : List (Deed σ)} {x x' : SysState a},
+      (∀ ev ∈ evs, w.shown ev = none) → R t x → x.run env evs = some x' → R t x' := by
   intro evs
   induction evs with
   | nil =>
-    intro x x' hx hrun
+    intro t x x' _ hx hrun
     simp only [SysState.run, Option.some.injEq] at hrun
     exact hrun ▸ hx
   | cons ev evs ih =>
-    intro x x' hx hrun
+    intro t x x' hquiet hx hrun
     simp only [SysState.run] at hrun
     cases hstep : x.step env ev with
     | none => simp [hstep] at hrun
-    | some x₁ => exact ih (closed ev hx hstep) (by simpa [hstep] using hrun)
+    | some x₁ =>
+      have hx₁ := closed ev hx hstep
+      rw [hquiet ev List.mem_cons_self, Option.toList_none, List.append_nil] at hx₁
+      exact ih (fun ev' h => hquiet ev' (List.mem_cons_of_mem _ h)) hx₁
+        (by simpa [hstep] using hrun)
+
+private theorem shown_inputs (xs : List σ.In) :
+    ∀ ev ∈ xs.map (Event.input (σ := σ)), w.shown ev = none := by
+  intro ev hev
+  obtain ⟨x, -, rfl⟩ := List.mem_map.mp hev
+  rfl
+
+private theorem shown_wired (outs : List σ.Out) :
+    ∀ ev ∈ (outs.filter fun out => !(w.toRight out).isNone).map (Event.output (σ := σ)),
+      w.shown ev = none := by
+  intro ev hev
+  obtain ⟨out, hout, rfl⟩ := List.mem_map.mp hev
+  have hwired := (List.mem_filter.mp hout).2
+  simp only [Bool.not_eq_true'] at hwired
+  simp [Wiring.shown, Event.deed, hwired]
+
+/-- Reached alone by a run that shows `t`. -/
+private def Shows (a : System σ) (env : EnvModel σ) (w : Wiring σ τ) (t : List (Deed σ))
+    (c : SysState a) : Prop :=
+  ∃ evs, (SysState.init a env).run env evs = some c ∧ evs.filterMap w.shown = t
+
+private theorem Shows.step {env : EnvModel σ} {t : List (Deed σ)} {x x' : SysState a}
+    (ev : Event σ) (h : Shows a env w t x) (hstep : x.step env ev = some x') :
+    Shows a env w (t ++ (w.shown ev).toList) x' := by
+  obtain ⟨evs, hrun, rfl⟩ := h
+  refine ⟨evs ++ [ev], by simp [SysState.run_append, hrun, SysState.run, hstep], ?_⟩
+  rw [List.filterMap_append]
+  cases h : w.shown ev <;> simp [h]
 
 namespace Seen
 
-variable {R : SysState a → Prop}
+variable {R : List (Deed σ) → SysState a → Prop} {t : List (Deed σ)}
 
-private theorem inputs {c : SysState a} (hc : Seen env w R c) (xs : List σ.In) :
-    Seen env w R { c with
+/-- One event of `a` alone that shows nothing. -/
+private theorem quiet {c : SysState a} (hc : Seen env w R t c) {t' : List (Deed σ)}
+    {x x' : SysState a} (ev : Event σ) (hquiet : w.shown ev = none) (hx : R t' x)
+    (hstep : x.step env.left ev = some x') : R t' x' := by
+  have h := hc.closed ev hx hstep
+  rwa [hquiet, Option.toList_none, List.append_nil] at h
+
+private theorem still {c : SysState a} (hc : Seen env w R t c) : Seen env w R (t ++ []) c :=
+  (List.append_nil t).symm ▸ hc
+
+private theorem inputs {c : SysState a} (hc : Seen env w R t c) (xs : List σ.In) :
+    Seen env w R t { c with
       net := c.net ++ xs.map fun x => ⟨none, (a.accept x).1, (a.accept x).2⟩ } := by
   refine ⟨hc.closed, fun n hn => ?_, hc.tidy⟩
   obtain ⟨n₁, n₂, rfl, h₁, h₂⟩ := hn.of_append
   obtain ⟨ys, rfl⟩ := h₂.of_map
-  exact run_closed hc.closed (hc.reach n₁ h₁) (SysState.run_inputs env.left _ ys)
+  exact run_closed hc.closed (shown_inputs ys) (hc.reach n₁ h₁)
+    (SysState.run_inputs env.left _ ys)
 
 /-- A message from outside is handled whether or not `a` alone still has it in flight: it is
 duplicated if so, and otherwise it is the one message put back and delivered. -/
-private theorem handle_outside {c : SysState a} (hc : Seen env w R c) {u : Envelope σ}
+private theorem handle_outside {c : SysState a} (hc : Seen env w R t c) {u : Envelope σ}
     (hu : u ∈ c.net) (hsrc : u.src = none) (hup : c.up u.dst = true) {n : List (Envelope σ)}
     (hn : Thin n c.net) :
-    R (({ c with net := n } : SysState a).handle env.left u.dst u.msg) := by
+    R (t ++ [.handle u.dst u.msg])
+      (({ c with net := n } : SysState a).handle env.left u.dst u.msg) := by
   have hlink : env.left.link u.src u.dst = Link.network := by
     rw [hsrc]
     rfl
@@ -805,12 +873,13 @@ private theorem handle_outside {c : SysState a} (hc : Seen env w R c) {u : Envel
       ⟨hup, by simp [SysState.deliverable, hlink, Link.network, hmm], rfl⟩)
 
 private theorem settle {c : SysState (a.join b w)}
-    (closed : ∀ {x x' : SysState a} (ev : Event σ), R x → x.step env.left ev = some x' → R x')
+    (closed : ∀ {t : List (Deed σ)} {x x' : SysState a} (ev : Event σ), R t x →
+      x.step env.left ev = some x' → R (t ++ (w.shown ev).toList) x')
     (htidy : ∀ out ∈ c.left.outbox, w.toRight out = none) (i : σ.Id)
     (r : a.State i × List (Effect σ i))
     (hreach : ∀ n, Thin n c.left.net →
-      R (({ c.left with net := n } : SysState a).settle env.left i r)) :
-    Seen env w R (c.settle env (.inl i) (r.1, r.2.flatMap fun eff => [w.left b eff])).left := by
+      R t (({ c.left with net := n } : SysState a).settle env.left i r)) :
+    Seen env w R t (c.settle env (.inl i) (r.1, r.2.flatMap fun eff => [w.left b eff])).left := by
   have houtbox : (c.settle env (.inl i) (r.1, r.2.flatMap fun eff => [w.left b eff])).left.outbox
       = c.left.outbox ++ (Effect.emits r.2).filter fun out => (w.toRight out).isNone := by
     rw [SysState.left_settle]
@@ -823,20 +892,20 @@ private theorem settle {c : SysState (a.join b w)}
       (fun out => (w.toRight out).isNone) c.left.outbox (Effect.emits r.2)
       (fun out hout => by simp [htidy out hout])
     rw [← houtbox] at hrun
-    exact run_closed closed ((heq c.left.outbox) ▸ hreach n hn) hrun
+    exact run_closed closed (shown_wired _) ((heq c.left.outbox) ▸ hreach n hn) hrun
   · rw [houtbox] at hout
     rcases List.mem_append.mp hout with hout | hout
     · exact htidy out hout
     · simpa using (List.mem_filter.mp hout).2
 
-private theorem settle_inr {c : SysState (a.join b w)} (hc : Seen env w R c.left) (j : τ.Id)
+private theorem settle_inr {c : SysState (a.join b w)} (hc : Seen env w R t c.left) (j : τ.Id)
     (r : b.State j × List (Effect τ j)) :
-    Seen env w R (c.settle env (.inr j) (r.1, r.2.flatMap fun eff => [w.right a eff])).left := by
+    Seen env w R t (c.settle env (.inr j) (r.1, r.2.flatMap fun eff => [w.right a eff])).left := by
   rw [SysState.left_settle_inr]
   exact hc.inputs _
 
-private theorem start_inr {c : SysState (a.join b w)} (hc : Seen env w R c.left) (j : τ.Id) :
-    Seen env w R (c.startActor env (.inr j)).left := by
+private theorem start_inr {c : SysState (a.join b w)} (hc : Seen env w R t c.left) (j : τ.Id) :
+    Seen env w R t (c.startActor env (.inr j)).left := by
   have hleft : ({ c with up := update c.up (.inr j) true } : SysState (a.join b w)).left
       = c.left :=
     SysState.ext' rfl (funext fun k => update_inr_inl c.up j true k) rfl rfl rfl
@@ -844,8 +913,8 @@ private theorem start_inr {c : SysState (a.join b w)} (hc : Seen env w R c.left)
     ((b.actor j).recover (c.state (.inr j)))
 
 private theorem step_input {c c' : SysState (a.join b w)} {x : σ.In ⊕ τ.In}
-    (hc : Seen env w R c.left) (hstep : c.step env (.input x) = some c') :
-    Seen env w R c'.left := by
+    (hc : Seen env w R t c.left) (hstep : c.step env (.input x) = some c') :
+    Seen env w R t c'.left := by
   obtain rfl := SysState.step_input.mp hstep
   cases x with
   | inl x =>
@@ -861,15 +930,15 @@ private theorem step_input {c c' : SysState (a.join b w)} {x : σ.In ⊕ τ.In}
     exact hleft ▸ hc
 
 private theorem step_deliver {c c' : SysState (a.join b w)} {e : Envelope (joinSig σ τ)}
-    (hc : Seen env w R c.left) (hstep : c.step env (.deliver e) = some c') :
-    Seen env w R c'.left := by
+    (hc : Seen env w R t c.left) (hstep : c.step env (.deliver e) = some c') :
+    Seen env w R (t ++ (Event.deliver e).leftDeed.toList) c'.left := by
   obtain ⟨hup, hdel, rfl⟩ := SysState.step_deliver.mp hstep
   obtain ⟨src, i | j, msg⟩ := e
   · refine settle (c := { c with net := c.net.erase ⟨src, .inl i, msg⟩ }) hc.closed hc.tidy i
       ((a.actor i).step (c.state (.inl i)) msg) fun n hn => ?_
     have hmem := SysState.mem_of_deliverable hdel
     have outside : src.bind Sum.getLeft? = none →
-        R (({ c.left with net := n } : SysState a).settle env.left i
+        R (t ++ [.handle i msg]) (({ c.left with net := n } : SysState a).settle env.left i
           ((a.actor i).step (c.state (.inl i)) msg)) := fun hsrc =>
       hc.handle_outside (u := ⟨src.bind Sum.getLeft?, i, msg⟩)
         (List.mem_filterMap.mpr ⟨_, hmem, rfl⟩) hsrc hup
@@ -890,18 +959,18 @@ private theorem step_deliver {c c' : SysState (a.join b w)} {e : Envelope (joinS
   · have hleft : ({ c with net := c.net.erase ⟨src, .inr j, msg⟩ } :
         SysState (a.join b w)).left = c.left :=
       SysState.ext' rfl rfl (filterMap_erase_of_none rfl c.net) rfl rfl
-    exact settle_inr (c := { c with net := c.net.erase ⟨src, .inr j, msg⟩ }) (hleft ▸ hc) j
-      ((b.actor j).step (c.state (.inr j)) msg)
+    exact (settle_inr (c := { c with net := c.net.erase ⟨src, .inr j, msg⟩ }) (hleft ▸ hc) j
+      ((b.actor j).step (c.state (.inr j)) msg)).still
 
 private theorem step_duplicate {c c' : SysState (a.join b w)} {e : Envelope (joinSig σ τ)}
-    (hc : Seen env w R c.left) (hstep : c.step env (.duplicate e) = some c') :
-    Seen env w R c'.left := by
+    (hc : Seen env w R t c.left) (hstep : c.step env (.duplicate e) = some c') :
+    Seen env w R (t ++ (Event.duplicate e).leftDeed.toList) c'.left := by
   obtain ⟨hup, hdup, hdel, rfl⟩ := SysState.step_duplicate.mp hstep
   obtain ⟨src, i | j, msg⟩ := e
   · refine settle (c := c) hc.closed hc.tidy i ((a.actor i).step (c.state (.inl i)) msg)
       fun n hn => ?_
     have outside : src.bind Sum.getLeft? = none →
-        R (({ c.left with net := n } : SysState a).settle env.left i
+        R (t ++ [.handle i msg]) (({ c.left with net := n } : SysState a).settle env.left i
           ((a.actor i).step (c.state (.inl i)) msg)) := fun hsrc =>
       hc.handle_outside (u := ⟨src.bind Sum.getLeft?, i, msg⟩)
         (List.mem_filterMap.mpr ⟨_, SysState.mem_of_deliverable hdel, rfl⟩) hsrc hup hn
@@ -910,15 +979,15 @@ private theorem step_duplicate {c c' : SysState (a.join b w)} {e : Envelope (joi
     · exact hc.closed (.duplicate ⟨some s, i, msg⟩) (hc.reach n hn) (SysState.step_duplicate.mpr
         ⟨hup, hdup, SysState.deliverable_left hn hdel, rfl⟩)
     · exact outside rfl
-  · exact settle_inr hc j ((b.actor j).step (c.state (.inr j)) msg)
+  · exact (settle_inr hc j ((b.actor j).step (c.state (.inr j)) msg)).still
 
 private theorem step_drop {c c' : SysState (a.join b w)} {e : Envelope (joinSig σ τ)}
-    (hc : Seen env w R c.left) (hstep : c.step env (.drop e) = some c') :
-    Seen env w R c'.left := by
+    (hc : Seen env w R t c.left) (hstep : c.step env (.drop e) = some c') :
+    Seen env w R t c'.left := by
   obtain ⟨hlossy, hmem, rfl⟩ := SysState.step_drop.mp hstep
   obtain ⟨src, i | j, msg⟩ := e
   · have outside : src.bind Sum.getLeft? = none →
-        Seen env w R ({ c with net := c.net.erase ⟨src, .inl i, msg⟩ } :
+        Seen env w R t ({ c with net := c.net.erase ⟨src, .inl i, msg⟩ } :
           SysState (a.join b w)).left := fun hsrc =>
       ⟨hc.closed, fun n hn => hc.reach n (Thin.of_filterMap_erase (fun u hu => by
         simp only [Envelope.left?, Option.some.injEq] at hu
@@ -932,7 +1001,7 @@ private theorem step_drop {c c' : SysState (a.join b w)} {e : Envelope (joinSig 
         filterMap_erase (fun e' => Envelope.left?_eq_inside e') c.net
       obtain ⟨m, hm, rfl, hmm⟩ := Thin.unerase (u := ⟨some s, i, msg⟩) (l' := c.left.net)
         (by simp) (List.mem_filterMap.mpr ⟨_, hmem, rfl⟩) ((congrArg (Thin n) herase).mp hn)
-      exact hc.closed (.drop ⟨some s, i, msg⟩) (hc.reach m hm)
+      exact hc.quiet (.drop ⟨some s, i, msg⟩) rfl (hc.reach m hm)
         (SysState.step_drop.mpr ⟨hlossy, hmm, rfl⟩)
     · exact outside rfl
   · have hleft : ({ c with net := c.net.erase ⟨src, .inr j, msg⟩ } :
@@ -942,8 +1011,8 @@ private theorem step_drop {c c' : SysState (a.join b w)} {e : Envelope (joinSig 
 
 private theorem step_timeout {c c' : SysState (a.join b w)} {i : σ.Id ⊕ τ.Id}
     {msg : (joinSig σ τ).Msg i}
-    (hc : Seen env w R c.left) (hstep : c.step env (.timeout i msg) = some c') :
-    Seen env w R c'.left := by
+    (hc : Seen env w R t c.left) (hstep : c.step env (.timeout i msg) = some c') :
+    Seen env w R (t ++ (Event.timeout i msg).leftDeed.toList) c'.left := by
   obtain ⟨hup, hmem, rfl⟩ := SysState.step_timeout.mp hstep
   cases i with
   | inl i =>
@@ -961,36 +1030,40 @@ private theorem step_timeout {c c' : SysState (a.join b w)} {i : σ.Id ⊕ τ.Id
         SysState (a.join b w)).left = c.left :=
       SysState.ext' rfl rfl rfl
         (funext fun k => update_inr_inl c.timers j ((c.timers (.inr j)).erase msg) k) rfl
-    exact settle_inr
+    exact (settle_inr
       (c := { c with timers := update c.timers (.inr j) ((c.timers (.inr j)).erase msg) })
-      (hleft ▸ hc) j ((b.actor j).step (c.state (.inr j)) msg)
+      (hleft ▸ hc) j ((b.actor j).step (c.state (.inr j)) msg)).still
 
 private theorem step_output {c c' : SysState (a.join b w)} {out : σ.Out ⊕ τ.Out}
-    (hc : Seen env w R c.left) (hstep : c.step env (.output out) = some c') :
-    Seen env w R c'.left := by
+    (hc : Seen env w R t c.left) (hstep : c.step env (.output out) = some c') :
+    Seen env w R (t ++ (Event.output out).leftDeed.toList) c'.left := by
   obtain ⟨hmem, rfl⟩ := SysState.step_output.mp hstep
   cases out with
   | inl out =>
     have houtbox := filterMap_erase (f := Sum.getLeft?) (a := (.inl out : σ.Out ⊕ τ.Out))
       (b := out) (fun x => by cases x <;> simp) c.outbox
+    have hleft : out ∈ c.left.outbox := List.mem_filterMap.mpr ⟨_, hmem, rfl⟩
+    have hshown : w.shown (.output out) = some (.output out) := by
+      simp [Wiring.shown, Event.deed, hc.tidy out hleft]
     refine ⟨hc.closed, fun n hn => ?_, fun o ho =>
       hc.tidy o (List.mem_of_mem_erase ((congrArg (o ∈ ·) houtbox).mp ho))⟩
+    have hstep := hc.closed (.output out) (hc.reach n hn) (SysState.step_output.mpr ⟨hleft, rfl⟩)
+    rw [hshown] at hstep
     exact (congrArg (fun outbox =>
-      R ({ c.left with net := n, outbox := outbox } : SysState a)) houtbox).mpr
-      (hc.closed (.output out) (hc.reach n hn) (SysState.step_output.mpr
-        ⟨List.mem_filterMap.mpr ⟨_, hmem, rfl⟩, rfl⟩))
+      R (t ++ [.output out]) ({ c.left with net := n, outbox := outbox } : SysState a))
+        houtbox).mpr hstep
   | inr out =>
     have houtbox := filterMap_erase_of_none (f := Sum.getLeft? (α := σ.Out))
       (a := (.inr out : σ.Out ⊕ τ.Out)) rfl c.outbox
-    refine ⟨hc.closed, fun n hn => ?_, fun o ho =>
+    refine still ⟨hc.closed, fun n hn => ?_, fun o ho =>
       hc.tidy o ((congrArg (o ∈ ·) houtbox).mp ho)⟩
     exact (congrArg (fun outbox =>
-      R ({ c.left with net := n, outbox := outbox } : SysState a)) houtbox).mpr
+      R t ({ c.left with net := n, outbox := outbox } : SysState a)) houtbox).mpr
       (hc.reach n hn)
 
 private theorem step_crash {c c' : SysState (a.join b w)} {i : σ.Id ⊕ τ.Id}
-    (hc : Seen env w R c.left) (hstep : c.step env (.crash i) = some c') :
-    Seen env w R c'.left := by
+    (hc : Seen env w R t c.left) (hstep : c.step env (.crash i) = some c') :
+    Seen env w R t c'.left := by
   obtain ⟨hup, hcrash, rfl⟩ := SysState.step_crash.mp hstep
   cases i with
   | inl i =>
@@ -1000,7 +1073,8 @@ private theorem step_crash {c c' : SysState (a.join b w)} {i : σ.Id ⊕ τ.Id}
         net := m.filter fun e => decide (e.dst ≠ i) || (env.left.link e.src e.dst).lossy } :
           SysState a) = ({ c.left with net := m } : SysState a).down env.left i :=
       SysState.ext' rfl (update_inl c.up i false) rfl (update_inl c.timers i []) rfl
-    exact hc.closed (.crash i) (hc.reach m hm) (SysState.step_crash.mpr ⟨hup, hcrash, hdown⟩)
+    exact hc.quiet (.crash i) rfl (hc.reach m hm)
+      (SysState.step_crash.mpr ⟨hup, hcrash, hdown⟩)
   | inr j =>
     have hleft : (c.down env (.inr j)).left = c.left :=
       SysState.ext' rfl (funext fun k => update_inr_inl c.up j false k)
@@ -1009,8 +1083,8 @@ private theorem step_crash {c c' : SysState (a.join b w)} {i : σ.Id ⊕ τ.Id}
     exact hleft ▸ hc
 
 private theorem step_start {c c' : SysState (a.join b w)} {i : σ.Id ⊕ τ.Id}
-    (hc : Seen env w R c.left) (hstep : c.step env (.start i) = some c') :
-    Seen env w R c'.left := by
+    (hc : Seen env w R t c.left) (hstep : c.step env (.start i) = some c') :
+    Seen env w R t c'.left := by
   obtain ⟨hup, hmail, rfl⟩ := SysState.step_start.mp hstep
   cases i with
   | inl i =>
@@ -1022,7 +1096,8 @@ private theorem step_start {c c' : SysState (a.join b w)} {i : σ.Id ⊕ τ.Id}
     rw [hleft]
     by_cases hmail' : ({ c.left with net := n } : SysState a).hasMail i = true
         ∨ env.left.restarts i = true
-    · exact hc.closed (.start i) (hc.reach n hn) (SysState.step_start.mpr ⟨hup, hmail', rfl⟩)
+    · exact hc.quiet (.start i) rfl (hc.reach n hn)
+        (SysState.step_start.mpr ⟨hup, hmail', rfl⟩)
     · have hjoin : c.hasMail (.inl i) = true := hmail.resolve_right fun h => hmail' (.inr h)
       obtain ⟨e, he, hdst⟩ : ∃ e ∈ c.net, e.dst = .inl i := by
         simpa [SysState.hasMail] using hjoin
@@ -1041,23 +1116,24 @@ private theorem step_start {c c' : SysState (a.join b w)} {i : σ.Id ⊕ τ.Id}
         obtain ⟨hkept, heq⟩ := SysState.settle_erase (env := env.left)
           ({ c.left with net := m, up := update c.left.up k true } : SysState a) k
           ((a.actor k).recover (c.state (.inl k))) hmm hlossy
-        have hstart := hc.closed (.start k) (hc.reach m hm) (SysState.step_start.mpr
+        have hstart := hc.quiet (.start k) rfl (hc.reach m hm) (SysState.step_start.mpr
           ⟨hup, .inl (by simpa [SysState.hasMail] using ⟨_, hmm, rfl⟩), rfl⟩)
-        exact heq ▸ hc.closed (.drop _) hstart (SysState.step_drop.mpr ⟨hlossy, hkept, rfl⟩)
+        exact heq ▸ hc.quiet (.drop _) rfl hstart (SysState.step_drop.mpr ⟨hlossy, hkept, rfl⟩)
       · simp at hdst
   | inr j => exact start_inr hc j
 
 private theorem step {c c' : SysState (a.join b w)} {ev : Event (joinSig σ τ)}
-    (hc : Seen env w R c.left) (hstep : c.step env ev = some c') : Seen env w R c'.left := by
+    (hc : Seen env w R t c.left) (hstep : c.step env ev = some c') :
+    Seen env w R (t ++ ev.leftDeed.toList) c'.left := by
   cases ev with
-  | input x => exact hc.step_input hstep
+  | input x => exact (hc.step_input hstep).still
   | deliver e => exact hc.step_deliver hstep
   | duplicate e => exact hc.step_duplicate hstep
-  | drop e => exact hc.step_drop hstep
+  | drop e => exact (hc.step_drop hstep).still
   | timeout i msg => exact hc.step_timeout hstep
   | output out => exact hc.step_output hstep
-  | crash i => exact hc.step_crash hstep
-  | start i => exact hc.step_start hstep
+  | crash i => exact (hc.step_crash hstep).still
+  | start i => exact (hc.step_start hstep).still
 
 /-- Booting the actors of `a` in the join is booting `a` alone, with the outputs wired to `b`
 still waiting. -/
@@ -1104,7 +1180,7 @@ private theorem boot (l : List σ.Id) :
 
 /-- Booting `a` in a join in which nothing has reached `a` yet. -/
 private theorem init_from (c₀ : SysState (a.join b w)) (hc₀ : c₀.left = SysState.blank a) :
-    Seen env w (a.Reachable env.left)
+    Seen env w (Shows a env.left w) []
       (a.boot.foldl (fun c i => c.startActor env (.inl i)) c₀).left := by
   have hboot : ∀ n', Thin n' (a.boot.foldl (fun c i => c.startActor env (.inl i)) c₀).left.net →
       ∃ outbox', outbox'.filter (fun out => (w.toRight out).isNone)
@@ -1125,20 +1201,21 @@ private theorem init_from (c₀ : SysState (a.join b w)) (hc₀ : c₀.left = Sy
         SysState a)
       (fun out => (w.toRight out).isNone) [] outbox' (by simp)
     simp only [List.nil_append, ho'] at hrun
-    exact (heq ▸ System.Reachable.init).run hrun
+    have hinit : Shows a env.left w [] (SysState.init a env.left) := ⟨[], rfl, rfl⟩
+    exact run_closed (fun ev h hstep => h.step ev hstep) (shown_wired outbox') (heq ▸ hinit) hrun
   · obtain ⟨outbox', ho', -⟩ := hboot _ (Thin.refl _)
     rw [← ho'] at hout
     simpa using (List.mem_filter.mp hout).2
 
 private theorem init (env : EnvModel (joinSig σ τ)) :
-    Seen env w (a.Reachable env.left) (SysState.init (a.join b w) env).left := by
+    Seen env w (Shows a env.left w) [] (SysState.init (a.join b w) env).left := by
   have hfold : SysState.init (a.join b w) env
       = b.boot.foldl (fun c j => c.startActor env (.inr j))
         (a.boot.foldl (fun c i => c.startActor env (.inl i)) (SysState.blank (a.join b w))) := by
     simp [SysState.init, List.foldl_append, List.foldl_map]
   have hright : ∀ (l : List τ.Id) (c : SysState (a.join b w)),
-      Seen env w (a.Reachable env.left) c.left →
-      Seen env w (a.Reachable env.left)
+      Seen env w (Shows a env.left w) [] c.left →
+      Seen env w (Shows a env.left w) []
         (l.foldl (fun c j => c.startActor env (.inr j)) c).left := by
     intro l
     induction l with
@@ -1151,14 +1228,37 @@ end Seen
 
 variable {c : SysState (a.join b w)}
 
+/-- Every run of a join, seen from its left system, is a run of that system alone, when its
+inputs may be lost, repeated and reordered, and the two runs show the same: the actors of the
+left system handle the same messages and the same outputs are handed over, in the same order.
+The outputs the wiring routes to the other system are handed over too in the run alone, and
+are not shown. -/
+theorem SysState.run_left {evs : List (Event (joinSig σ τ))}
+    (h : (SysState.init (a.join b w) env).run env evs = some c) :
+    ∃ evs' : List (Event σ), (SysState.init a env.left).run env.left evs' = some c.left
+      ∧ evs'.filterMap w.shown = evs.filterMap Event.leftDeed := by
+  have hseen : Seen env w (Shows a env.left w) (evs.filterMap Event.leftDeed) c.left := by
+    refine System.Reachable.run_induction (P := fun evs c =>
+      Seen env w (Shows a env.left w) (evs.filterMap Event.leftDeed) c.left) .init h
+      (Seen.init env) ?_
+    intro evs c₁ ev c₂ _ hseen hstep
+    have hsnoc : (evs ++ [ev]).filterMap Event.leftDeed
+        = evs.filterMap Event.leftDeed ++ ev.leftDeed.toList := by
+      rw [List.filterMap_append]
+      cases h : ev.leftDeed <;> simp [h]
+    exact hsnoc ▸ hseen.step hstep
+  exact hseen.reach _ (Thin.refl _)
+
 /-- Every reachable state of a join, seen from its left system, is a state that system reaches
 alone, when its inputs may be lost, repeated and reordered. -/
 theorem System.Reachable.left (h : (a.join b w).Reachable env c) : a.Reachable env.left c.left := by
-  have hseen : Seen env w (a.Reachable env.left) c.left := by
+  have hseen : ∃ t, Seen env w (Shows a env.left w) t c.left := by
     induction h with
-    | init => exact Seen.init env
-    | step ev _ hstep ih => exact ih.step hstep
-  exact hseen.reach _ (Thin.refl _)
+    | init => exact ⟨_, Seen.init env⟩
+    | step ev _ hstep ih => exact ih.elim fun t h => ⟨_, h.step hstep⟩
+  obtain ⟨t, hseen⟩ := hseen
+  obtain ⟨evs, hrun, -⟩ := hseen.reach _ (Thin.refl _)
+  exact System.Reachable.init.run hrun
 
 /-- What is proved of a system alone, with a network link from outside, holds of it in every
 join. -/
@@ -1689,7 +1789,7 @@ private theorem boot_inr (l : List τ.Id) :
 /-- The system that boots second: the other's boot has already sent it inputs, which it alone
 can only receive after its own boot. Its messages then sit in another order. -/
 private theorem init_late (env : EnvModel (joinSig σ τ)) :
-    Seen env w (Near a env.left)
+    Seen env w (fun _ => Near a env.left) []
       (a.boot.foldl (fun c i => c.startActor env (.inl i))
         (b.boot.foldl (fun c j => c.startActor env (.inr j))
           (SysState.blank (a.join b w)))).left := by
@@ -1738,7 +1838,7 @@ private theorem init_late (env : EnvModel (joinSig σ τ)) :
     refine ⟨_, System.Reachable.init.run (SysState.run_inputs env.left _ ys), ?_⟩
     exact (congrArg (SysState.Equiv env.left _) hfold).mpr
       (SysState.equiv_rotate (env := env.left) (SysState.init a env.left) hpre fun _ => rfl)
-  refine ⟨Near.step, fun n' hn' => ?_, fun out hout => ?_⟩
+  refine ⟨fun ev h hstep => Near.step ev h hstep, fun n' hn' => ?_, fun out hout => ?_⟩
   · obtain ⟨outbox', ho', hnear'⟩ := hnear n' hn'
     have hrun := SysState.run_outputs_filter env.left
       ({ (a.boot.foldl (fun c i => c.startActor env (.inl i))
@@ -1746,7 +1846,8 @@ private theorem init_late (env : EnvModel (joinSig σ τ)) :
           (SysState.blank (a.join b w)))).left with net := n' } : SysState a)
       (fun out => (w.toRight out).isNone) [] outbox' (by simp)
     simp only [List.nil_append, ho'] at hrun
-    exact run_closed Near.step hnear' hrun
+    exact run_closed (w := w) (R := fun _ => Near a env.left) (t := [])
+      (fun ev h hstep => Near.step ev h hstep) (shown_wired outbox') hnear' hrun
   · obtain ⟨outbox', ho', -⟩ := hnear _ (Thin.refl _)
     rw [← ho'] at hout
     simpa using (List.mem_filter.mp hout).2
@@ -1761,13 +1862,14 @@ system boots first: what its boot sends is in flight before the right system's o
 messages, and alone the right system receives inputs only once it has booted. -/
 theorem System.Reachable.right (h : (a.join b w).Reachable env c) :
     ∃ c', b.Reachable env.right c' ∧ SysState.Equiv env.right c' c.right := by
-  have hseen : Seen env.swap w.swap (Near b env.swap.left) c.swap.left := by
+  have hseen : ∃ t, Seen env.swap w.swap (fun _ => Near b env.swap.left) t c.swap.left := by
     induction h with
     | init =>
       rw [SysState.init_swap]
-      exact Seen.init_late env.swap
-    | step ev _ hstep ih => exact ih.step (SysState.step_swap hstep)
-  have hnear := hseen.reach _ (Thin.refl _)
+      exact ⟨_, Seen.init_late env.swap⟩
+    | step ev _ hstep ih => exact ih.elim fun t h => ⟨_, h.step (SysState.step_swap hstep)⟩
+  obtain ⟨t, hseen⟩ := hseen
+  have hnear : Near b env.swap.left c.swap.left := hseen.reach _ (Thin.refl _)
   rw [EnvModel.swap_left] at hnear
   exact SysState.swap_left c ▸ hnear
 
@@ -1799,13 +1901,15 @@ theorem System.Reachable.right_of_quiet_boot
         exact hquiet i (hl i List.mem_cons_self) _ out (hout ▸ heff)
       rw [List.foldl_cons, ih _ fun k hk => hl k (List.mem_cons_of_mem _ hk), hstart, hnone, hleft]
       simp
-  have hseen : Seen env.swap w.swap (b.Reachable env.swap.left) c.swap.left := by
+  have hseen : ∃ t, Seen env.swap w.swap (Shows b env.swap.left w.swap) t c.swap.left := by
     induction h with
     | init =>
       rw [SysState.init_swap]
-      exact Seen.init_from _ (hblank a.boot _ fun _ h => h)
-    | step ev _ hstep ih => exact ih.step (SysState.step_swap hstep)
-  have hreach := hseen.reach _ (Thin.refl _)
+      exact ⟨_, Seen.init_from _ (hblank a.boot _ fun _ h => h)⟩
+    | step ev _ hstep ih => exact ih.elim fun t h => ⟨_, h.step (SysState.step_swap hstep)⟩
+  obtain ⟨t, hseen⟩ := hseen
+  obtain ⟨evs, hrun, -⟩ := hseen.reach _ (Thin.refl _)
+  have hreach : b.Reachable env.swap.left c.swap.left := System.Reachable.init.run hrun
   rw [EnvModel.swap_left] at hreach
   exact SysState.swap_left c ▸ hreach
 

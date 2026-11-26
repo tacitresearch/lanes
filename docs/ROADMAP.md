@@ -61,6 +61,10 @@ Asked at each phase end: is this still the right direction, and is there a bette
 - Composition is proved by projection (what holds of one side holds in any join), not yet as a
   precongruence for refinement. Projection is what the semantics gives for free, because a
   system's theorems already quantify over everything its environment may send.
+- The gate was rebuilt with the join after the phase ended (D31): `Http.fronted`. It needed two
+  things the join did not have: runs, not only states, seen from one side
+  (`SysState.run_left`), and a way to hide what a join wires (`System.filterMapIO`). The
+  hand-built `gated` stays until fair runs project, since its liveness theorem is about them.
 - Sugar for applications will be macros, not deriving handlers: anything that imports `Lean`
   costs 137 MB in the binary, even through `meta import`.
 
@@ -150,7 +154,7 @@ function; the theorem that two shards are the one system; a transport between pr
 - *Boot order is observable* when a boot actor stops as it starts, which is why the shard
   theorem carries a condition. Nothing depends on it yet.
 - *Throughput* was fifteen thousand inputs a second on one shard, and nobody had measured
-  it. It is ten times that now (D31): the kernel was never the cost, the channel between
+  it. It is ten times that now (D32): the kernel was never the cost, the channel between
   threads was. The benchmark prints the number on every run.
 - *Two gates* until the hand-built one is retired in favour of the gate joined by the general
   operator; a process with both an HTTP front and peers needs the joined one.
