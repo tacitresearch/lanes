@@ -88,22 +88,23 @@ private def readRequest (maxBodyBytes : Nat) (req : Std.Http.Request Std.Http.Bo
     headers := req.line.headers.toList.map fun (name, value) => (name.value, value.value)
     body }
 
-/-- An id above every one in the journal: ids are never reused, also across restarts. -/
-private def freshId (past : List (Journal.Entry (gatedSig σ))) : ReqId :=
-  past.foldl (init := 0) fun next entry =>
-    match entry with
-    | .input (id, _) => max next (id + 1)
-    | _ => next
+/--
+`serve` on a journal that is already open. A shard that ends on an error takes the server down
+with it: requests in flight are answered `503`, and `Server.wait` throws.
 
-/-- `serve` on a journal that is already open. A shard that ends on an error takes the server
-down with it: requests in flight are answered `503`, and `Server.wait` throws. -/
+Request ids are never used twice, also across restarts and after the journal is cut. They
+start at the number of entries in the shard's history and go up by one for each request the
+shard admits, in the order it admits them. Every request that leaves a trace in the system has
+an entry of its own, so the history at the next start is longer than the last such id.
+-/
 def serveWith (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : ServerConfig := {})
-    (runtimeConfig : Runtime.Config := {}) (log : Option (Journal.Log (gatedSig σ))) :
+    (runtimeConfig : Runtime.Config := {})
+    (log : Option (Journal.Log (gated sys bridge config.gate))) :
     Async (Server sys bridge config) := do
   let some addr := Std.Net.IPv4Addr.ofString config.host
     | throw (IO.userError s!"lanes: {config.host} is not an IPv4 address")
   let waiting : Mutex (Std.HashMap ReqId (IO.Promise Response)) ← Mutex.new {}
-  let nextId ← IO.mkRef (freshId ((log.map (·.past)).getD []))
+  let nextId ← IO.mkRef ((log.map (·.index)).getD 0)
   let runtime ← Runtime.start (gated sys bridge config.gate) runtimeConfig (journal := log)
       fun (id, response) => do
     let waiter ← waiting.atomically do
@@ -116,13 +117,16 @@ def serveWith (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : 
       | respond (Response.text "method not allowed\n" 405)
     let headOnly := req.line.method == .head
     let send := fun (r : Response) => respond (if headOnly then { r with body := .empty } else r)
-    let id ← nextId.modifyGet fun n => (n, n + 1)
     let waiter ← IO.Promise.new
-    waiting.atomically (modify (·.insert id waiter))
-    if ← runtime.tryInput (id, request) then send ((← await waiter.result?).getD busy)
-    else
-      waiting.atomically (modify (·.erase id))
-      send busy
+    let admitted ← waiting.atomically do
+      let id ← nextId.get
+      modify (·.insert id waiter)
+      if ← runtime.tryInput (id, request) then
+        nextId.set (id + 1)
+        return true
+      modify (·.erase id)
+      return false
+    if admitted then send ((← await waiter.result?).getD busy) else send busy
   let httpConfig : Std.Http.Config := { maxBodySize := config.maxBodyBytes }
   let http ← try Std.Http.Server.serve (.v4 ⟨addr, config.port⟩) handler httpConfig
     catch e =>
@@ -135,12 +139,22 @@ def serveWith (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : 
       http.shutdown
   return { runtime, http, waiting }
 
-/-- Returns once the server is listening. Each request is answered exactly once by the gate. -/
+/-- What `serve` needs to save the kernel and cut the journal: how the system's actors and its
+outputs are written. -/
+structure Saving (sys : System σ) where
+  actors : Kernel.Image.Codecs sys
+  out : Codec σ.Out
+
+/-- Returns once the server is listening. Each request is answered exactly once by the gate.
+With a journal and `saving`, the kernel is saved from time to time and the journal cut
+(`Runtime.Config.snapshotEvery`); with a journal alone, the journal only grows. -/
 def serve (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : ServerConfig := {})
-    (runtimeConfig : Runtime.Config := {}) : Async (Server sys bridge config) := do
+    (runtimeConfig : Runtime.Config := {}) (saving : Option (Saving sys) := none) :
+    Async (Server sys bridge config) := do
   let log ← config.journal.mapM fun path =>
-    Journal.Store.open (σ := gatedSig σ)
-      { path, input := Codec.pair Codec.nat Request.codec, system := config.system }
+    Journal.Store.open (sys := gated sys bridge config.gate)
+      { path, input := Codec.pair Codec.nat Request.codec, system := config.system
+        actors := saving.map fun s => gatedActors s.actors s.out bridge config.gate }
   try serveWith sys bridge config runtimeConfig log
   catch e =>
     if let some log := log then discard log.close.toBaseIO

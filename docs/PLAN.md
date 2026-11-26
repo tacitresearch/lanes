@@ -258,24 +258,26 @@ the balances the journal says, and the test that does this is in CI.
 **Done.** `Tests/Durable.lean` does exactly that. Next for durability: snapshots, releasing
 idle actors, a sync primitive, and batching several inputs per flush.
 
-#### Snapshots (designed, not built)
+#### Snapshots (built, D29)
 
-A snapshot is the kernel written down: each cell (state, whether it is up, its timers with
-their deadlines), the queue, the clock, the next token and whose turn it is. The agenda is not
-saved; it is what `Kernel.WellFormed` says it is, the pending timers. Recovery restores the
-snapshot and replays the journal written after it; the switch to a new snapshot is one rename.
+A snapshot is the kernel written down: the cells, the queue, the agenda, the clock, the next
+token and whose turn it is. Recovery restores it and replays the journal written after its
+mark. The application gives three codecs: for an identity, for the state of each actor and for
+the messages of each (`Kernel.Image.Codecs`).
 
-It needs two codecs from the application, for an actor's state and for a message, each over
-all actors at once (`Codec ((i : σ.Id) × sys.State i)`). Writing those by hand is the cost, and
-is why a declaration macro that defines a type together with its codec comes first.
+The first design asked for a theorem that two kernels alike in everything observable stay
+alike under every operation, because a hash map restored is not the same value as the one
+saved. That theorem is not needed. Saving is a kernel operation, and a shard that saves goes on
+with the restored kernel, so the shard that keeps running and a shard started from the
+snapshot compute the same values. A snapshot is a restart without the crash, and the recovery
+path is run every time one is taken, not only after a failure.
 
-The theorem is not `restore (snapshot k) = k`: a hash map restored is not the same value. It is
-that the two cannot be told apart: the same `abs`, timers, clock, token and turn, and that
-kernels alike in those stay alike under every operation with the same events and outputs. The
-second half is a lemma about the kernel worth having anyway.
-
-Releasing idle actors is a different thing and waits for shards: a cell that is not in memory
-has to be brought back before a batch that needs it, and the kernel cannot do IO.
+Open: the order of the three steps of a save (mark the journal, put the snapshot in place,
+replace the journal) is trusted IO, with each state the files can be left in tested by hand.
+It should be a pure function over a model of the two files, with the theorem that every prefix
+of the steps recovers the same kernel. Releasing idle actors is a different thing and waits: a
+cell that is not in memory has to be brought back before a batch that needs it, and the kernel
+cannot do IO.
 
 ### A.2 Composition: join two systems, and what survives it
 
@@ -452,7 +454,7 @@ there is what was proved for every environment, such as election safety.
 
 ### B.3 Snapshots, then checker v2
 
-Designed under A.1 above.
+Snapshots are built (A.1 above, D29). Checker v2 is open.
 
 ## Decisions that are yours
 

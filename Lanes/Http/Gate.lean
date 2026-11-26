@@ -7,6 +7,7 @@ module
 public import Lanes.Actors.System
 public import Lanes.Http.Basic
 public import Lanes.Actors.Outside
+public import Lanes.Actors.Snapshot
 
 /-!
 The gate is the HTTP adapter's logic as an actor. It sits in front of a system: it parses each
@@ -156,6 +157,20 @@ abbrev gated (sys : System σ) (bridge : Bridge σ) (config : GateConfig := {}) 
     | some i => (sys.actor i).mapEff fun eff => [liftEffect eff]
   accept x := ⟨none, .arrive x.1 x.2⟩
   boot := none :: sys.boot.map some
+
+/-- How the actors of a gated system are written to a snapshot, given how the system's own
+are, and its outputs, which may be on their way to the gate. -/
+def gatedActors {sys : System σ} (actors : Kernel.Image.Codecs sys) (out : Codec σ.Out)
+    (bridge : Bridge σ) (config : GateConfig := {}) :
+    Kernel.Image.Codecs (gated sys bridge config) where
+  id := Codec.option actors.id
+  state
+    | none => Codec.list Codec.nat
+    | some i => actors.state i
+  msg
+    | none => Codec.sum% GateMsg { arrive (id := Codec.nat) (request := Request.codec),
+        answer (out := out), expire (id := Codec.nat) }
+    | some i => actors.msg i
 
 /-- What the gate assumes of whoever sends it requests: an id is used once. The gate's
 at-most-once guarantee is stated for exactly these runs (`answered_nodup`), and the server

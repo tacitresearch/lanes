@@ -103,7 +103,8 @@ def durableTest : Async (List (String × Bool)) := do
   let dir := (← IO.getEnv "TMPDIR").getD "/tmp"
   let journal : System.FilePath := s!"{dir}/lanes-web-{← IO.monoNanosNow}.journal"
   let start := serve (Examples.Bank.bank Examples.BankWeb.Acct 100) Examples.BankWeb.bridge
-    { port := 0, journal := some journal } { record := true }
+    { port := 0, journal := some journal } { record := true, snapshotEvery := 4 }
+    (some { actors := Examples.Bank.actors Codec.fin 100, out := Examples.Bank.Response.codec })
   let server ← start
   let some port := server.port | return [("web: the server reports its port", false)]
   let moved ← fetch port "/transfer" (method := "POST") (body := "src=0&dst=1&amount=30")
@@ -119,7 +120,8 @@ def durableTest : Async (List (String × Bool)) := do
         { port, journal := some (journal.addExtension "other") }
       pure false
     catch _ => pure true
-  let free ← (Journal.Store.open (σ := gatedSig (Examples.Bank.sig Examples.BankWeb.Acct))
+  let free ← (Journal.Store.open
+    (sys := gated (Examples.Bank.bank Examples.BankWeb.Acct 100) Examples.BankWeb.bridge {})
     { path := journal.addExtension "other", input := Codec.pair Codec.nat Request.codec }).toBaseIO
   if let .ok log := free then log.close
   server.stop
@@ -128,15 +130,17 @@ def durableTest : Async (List (String × Bool)) := do
     | _ => none
   for file in [journal.addExtension "other", (journal.addExtension "other").addExtension "lock"] do
     if ← file.pathExists then IO.FS.removeFile file
-  for file in [journal, journal.addExtension "lock"] do IO.FS.removeFile file
+  let cut ← (journal.addExtension "snapshot").pathExists
+  for file in [journal, journal.addExtension "lock", journal.addExtension "snapshot"] do
+    if ← file.pathExists then IO.FS.removeFile file
   return [
     ("web: the bank behind a journal keeps its balances across a restart",
       moved.startsWith "HTTP/1.1 200" && before.endsWith "<span>130</span>"
         && after.endsWith "<span>130</span>"),
     ("web: and goes on from them",
       again.startsWith "HTTP/1.1 200" && last.endsWith "<span>230</span>"),
-    ("web: request ids used before the restart are not used again",
-      ids.length == 3 && ids.all (2 ≤ ·)),
+    ("web: request ids used before the restart are not used again, though the journal was cut",
+      cut && ids.length == 3 && ids.all (2 ≤ ·)),
     ("web: a server that cannot bind its port fails, and leaves its journal free",
       taken && free.toOption.isSome) ]
 
@@ -144,7 +148,7 @@ def durableTest : Async (List (String × Bool)) := do
 server shuts down, and `wait` fails, so that the process ends and can be started again. -/
 def journalFailTest : Async (List (String × Bool)) := do
   let calls ← IO.mkRef 0
-  let log : Journal.Log (gatedSig echoSig) := {
+  let log : Journal.Log (gated (Server.system echo) bridge {}) := {
     past := []
     append := fun _ => do
       if (← calls.modifyGet fun n => (n, n + 1)) ≥ 2 then

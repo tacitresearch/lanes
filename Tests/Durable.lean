@@ -17,7 +17,7 @@ open Lanes Std Std.Async Examples.Bank
 
 abbrev Bank3 := bank (Fin 3) 100
 
-def store (path : System.FilePath) : Journal.Store (sig (Fin 3)) :=
+def store (path : System.FilePath) : Journal.Store Bank3 :=
   { path, input := Request.codec Codec.fin }
 
 def scratch (name : String) : IO System.FilePath := do
@@ -25,7 +25,8 @@ def scratch (name : String) : IO System.FilePath := do
   return s!"{dir}/lanes-{name}-{← IO.monoNanosNow}.journal"
 
 def remove (path : System.FilePath) : IO Unit := do
-  for file in [path, path.addExtension "lock", path.addExtension "cut"] do
+  for file in [path, path.addExtension "lock", path.addExtension "cut",
+      path.addExtension "snapshot"] do
     if ← file.pathExists then IO.FS.removeFile file
 
 /-! `Journal.open?` on the compiled code: every cut, and every flipped bit, of a small journal. -/
@@ -182,8 +183,8 @@ def refusalTest : Async (List (String × Bool)) := do
   let second ← ((store path).open).toBaseIO
   rt.stop
   let before ← IO.FS.readBinFile path
-  let foreign ← ({ store path with system := "another" } : Journal.Store _).open.toBaseIO
-  let other : Journal.Store (sig Bool) := { path, input := Request.codec Codec.bool }
+  let foreign ← ({ store path with system := "another" } : Journal.Store Bank3).open.toBaseIO
+  let other : Journal.Store (bank Bool 100) := { path, input := Request.codec Codec.bool }
   let codec ← other.open.toBaseIO
   IO.FS.writeBinFile path (flip before (8 * (before.size / 2)))
   let damaged ← ((store path).open).toBaseIO
@@ -212,10 +213,10 @@ def within {α : Type} (ms : Nat) (action : Async α) : Async (Option α) :=
 
 /-- A journal in memory. Its `append` fails from call number `failAt` on. -/
 def memory (past : List (Journal.Entry (sig (Fin 3)))) (failAt : Option Nat := none) :
-    IO (Journal.Log (sig (Fin 3)) × IO.Ref (Array Nat)) := do
+    IO (Journal.Log Bank3 × IO.Ref (Array Nat)) := do
   let durable ← IO.mkRef #[]
   let calls ← IO.mkRef 0
-  let log : Journal.Log (sig (Fin 3)) := {
+  let log : Journal.Log Bank3 := {
     past
     append := fun entries => do
       let call ← calls.modifyGet fun n => (n, n + 1)
@@ -275,8 +276,176 @@ def failTest : Async (List (String × Bool)) := do
     ("durable: nothing is handed over that is not in the journal", (← seen.get).size ≤ 2),
     ("durable: and nobody is left waiting for it", released.all (·.isSome)) ]
 
+/-! Snapshots: a bank that saves its kernel every few entries and cuts its journal. -/
+
+def saving (path : System.FilePath) : Journal.Store Bank3 :=
+  { store path with actors := some (actors Codec.fin 100) }
+
+def startSaving (path : System.FilePath) (seen : IO.Ref (Array Nat)) (every : Nat) :
+    Async (Runtime Bank3) := do
+  Runtime.start Bank3 { snapshotEvery := every } (fun out => seen.modify (·.push out.req))
+    (some (← (saving path).open))
+
+def snapshotTest : Async (List (String × Bool)) := do
+  let path ← scratch "snapshot"
+  let first ← IO.mkRef #[]
+  let rt ← startSaving path first 8
+  for n in [0:20] do rt.input (.transfer ⟨n, 0, 1, 3⟩)
+  rt.idle
+  let before ← balances rt
+  rt.stop
+  let log ← (saving path).open
+  let kept := log.past.length
+  let savedAt := log.saved.map (·.1)
+  log.close
+  let second ← IO.mkRef #[]
+  let rt ← startSaving path second 8
+  rt.idle
+  let after ← balances rt
+  for n in [20:40] do rt.input (.transfer ⟨n, 1, 2, 1⟩)
+  rt.idle
+  let later ← balances rt
+  rt.stop
+  let third ← IO.mkRef #[]
+  let rt ← startSaving path third 8
+  rt.idle
+  let last ← balances rt
+  rt.stop
+  IO.FS.removeFile (path.addExtension "snapshot")
+  let orphan ← IO.mkRef #[]
+  let rt ← startSaving path orphan 8
+  let refused ← within 2000 rt.ended
+  rt.stop
+  remove path
+  return [
+    ("snapshot: the journal is cut when the kernel is saved",
+      kept < 20 && (savedAt.map fun index => decide (index > 20)) == some true),
+    ("snapshot: a shard started from a snapshot is in the state it was in",
+      before == [40, 160, 100] && after == before),
+    ("snapshot: outputs handed over before the save are not handed over again",
+      (← first.get).size == 20 && (← second.get) == (Array.range' 20 20)),
+    ("snapshot: it goes on from there, and comes back again",
+      later == [40, 140, 120] && last == later && (← third.get) == #[]),
+    ("snapshot: a cut journal whose snapshot is gone is refused, not replayed from nothing",
+      (refused.map (·.isSome)) == some true) ]
+
+/-- The process may die between the three steps of a save. Each state the files can be left in
+is built here by hand, and the shard must come back in the same state from each. -/
+def windowsTest : Async (List (String × Bool)) := do
+  let path ← scratch "windows"
+  let seen ← IO.mkRef #[]
+  let rt ← startSaving path seen 1000000
+  for n in [0:10] do rt.input (.transfer ⟨n, 0, 1, 3⟩)
+  rt.idle
+  let expected ← balances rt
+  rt.stop
+  let whole ← IO.FS.readBinFile path
+  let log ← (saving path).open
+  let index := log.past.length
+  let some save := log.save | return [("snapshot: a store with codecs can save", false)]
+  let image := ((Journal.recover Bank3 log.past).1.exec [.snapshot]).kernel.image
+  save image
+  log.close
+  let cutJournal ← IO.FS.readBinFile path
+  let snapshot ← IO.FS.readBinFile (path.addExtension "snapshot")
+  let mark := Journal.encode (Request.codec Codec.fin)
+    ([.snapshot index] : List (Journal.Entry (sig (Fin 3))))
+  let comesBack := fun (journal : ByteArray) (saved : Option ByteArray) => do
+    IO.FS.writeBinFile path journal
+    match saved with
+    | some bytes => IO.FS.writeBinFile (path.addExtension "snapshot") bytes
+    | none => if ← (path.addExtension "snapshot").pathExists then
+        IO.FS.removeFile (path.addExtension "snapshot")
+    let rt ← startSaving path seen 1000000
+    let found ← within 2000 (do rt.idle; balances rt)
+    rt.stop
+    return found == some expected
+  let marked ← comesBack (whole ++ mark) none
+  let placed ← comesBack (whole ++ mark) (some snapshot)
+  let done ← comesBack cutJournal (some snapshot)
+  remove path
+  if ← (path.addExtension "snapshot").pathExists then IO.FS.removeFile (path.addExtension "snapshot")
+  return [
+    ("snapshot: dying after the mark is written and before the snapshot is in place loses nothing",
+      marked),
+    ("snapshot: dying after the snapshot is in place and before the journal is cut loses nothing",
+      placed),
+    ("snapshot: and the finished save gives the same state", done) ]
+
+/-! A system whose state is its own history, so that an input lost or applied twice shows in
+it. Each input also arms a timer, so the saved kernel has an agenda. -/
+
+abbrev tapeSig : Signature where
+  Id := Unit
+  Msg _ := Option Nat
+  In := Nat
+  Out := Nat
+
+abbrev tape : System tapeSig where
+  State _ := List Nat
+  actor _ := {
+    init := []
+    step := fun s msg =>
+      match msg with
+      | some n => (n :: s, [.emit n, .after 1 none])
+      | none => (s, [])
+    recover := fun s => (s, []) }
+  accept n := ⟨(), some n⟩
+
+def tapeStore (path : System.FilePath) : Journal.Store tape :=
+  { path, input := Codec.nat, system := "tape"
+    actors := some { id := Codec.unit, state := fun _ => Codec.list Codec.nat,
+                     msg := fun _ => Codec.option Codec.nat } }
+
+def perRound : Nat := 1000000
+
+/-- Run by `lanesTest tape-child path round`: records numbers until it is killed, saving its
+kernel every forty entries, and says on standard output which it has acknowledged. -/
+def tapeChild (path : System.FilePath) (round : Nat) : IO Unit := do
+  let out ← IO.getStdout
+  let work : Async Unit := do
+    let rt ← Runtime.start tape { snapshotEvery := 40 } (fun n => do
+      out.putStrLn (toString n)
+      out.flush) (some (← (tapeStore path).open))
+    for n in [0:perRound] do rt.input (round * perRound + n)
+  work.block
+
+def killSavingTest : Async (List (String × Bool)) := do
+  let path ← scratch "tape"
+  let mut acknowledged : Array Nat := #[]
+  for round in [0:4] do
+    let process ← IO.Process.spawn {
+      cmd := (← IO.appPath).toString
+      args := #["tape-child", path.toString, toString round], stdout := .piped }
+    for _ in [0:150 + 37 * round] do
+      if let some n := (← process.stdout.getLine).trimAscii.toString.toNat? then
+        acknowledged := acknowledged.push n
+    process.kill
+    discard process.wait
+  let log ← (tapeStore path).open
+  let kept := log.past.length
+  let saved := log.saved.isSome
+  log.close
+  let rt ← Runtime.start tape {} (journal := some (← (tapeStore path).open))
+  rt.idle
+  let history := (← rt.state ()).reverse
+  rt.stop
+  remove path
+  let rounds := (List.range 4).map fun round => history.filter (· / perRound == round)
+  return [
+    ("snapshot: killed four times while saving, the shard has every number it acknowledged",
+      acknowledged.size ≥ 600 && acknowledged.all (history.contains ·)),
+    ("snapshot: and each number once, in the order sent, with none missing before the last",
+      history == rounds.flatten
+        && (List.range 4).all fun round =>
+          rounds[round]! == (List.range rounds[round]!.length).map (round * perRound + ·)),
+    ("snapshot: from a snapshot and a journal much shorter than its history",
+      saved && kept < 200) ]
+
 def tests : IO (List (String × Bool)) := do
   return (← restartTest.block) ++ (← tornTest.block) ++ (← refusalTest.block)
-    ++ (← orderTest.block) ++ (← rehandTest.block) ++ (← failTest.block) ++ (← killTest.block)
+    ++ (← orderTest.block) ++ (← rehandTest.block) ++ (← failTest.block)
+    ++ (← snapshotTest.block) ++ (← windowsTest.block) ++ (← killTest.block)
+    ++ (← killSavingTest.block)
 
 end Tests.Durable

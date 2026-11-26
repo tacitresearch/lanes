@@ -53,6 +53,9 @@ def main (args : List String) : IO UInt32 := do
   | ["journal-child", path] =>
     Tests.Durable.child path
     return 0
+  | ["tape-child", path, round] =>
+    Tests.Durable.tapeChild path round.toNat!
+    return 0
   | _ =>
     IO.eprintln "usage: lanesTest [fast|live]"
     return 2

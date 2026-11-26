@@ -97,7 +97,7 @@ a view cannot link or post to a route that does not exist.
   variables cost nothing at run time (`Invariant.of_ghost`). Invariants about states and
   messages need five cases, not eight, and hold under loss, duplication, reordering and crashes
   (`Inductive.of_monotone`).
-- **Trusted.** About 920 lines of IO and macro code, listed with their sizes in `TRUSTED.md`;
+- **Trusted.** About 1,000 lines of IO and macro code, listed with their sizes in `TRUSTED.md`;
   `lanes lint` fails if they grow.
 
 ## Kill it and start it again
@@ -112,7 +112,8 @@ curl http://127.0.0.1:8080/accounts/2     # 142
 
 The journal holds what the system was asked, not its state. Starting again replays it through
 the same pure functions, so the system is back in the state the journal describes, and that
-has a proof.
+has a proof. From time to time the kernel is saved and the journal cut, so a restart replays
+only what came after the last save; that this gives the same state has a proof too.
 
 ## Build Lanes itself
 

@@ -14,7 +14,9 @@ def main (args : List String) : IO Unit := do
   let port := (args.head? >>= String.toNat?).getD 8080
   let journal := args[1]?.map System.FilePath.mk
   let config : Http.ServerConfig := { port := port.toUInt16, journal, system := "bank 1" }
-  let server ← (Http.serve (bank Acct 100) bridge config).block
+  let saving : Http.Saving (bank Acct 100) :=
+    { actors := actors Codec.fin 100, out := Response.codec }
+  let server ← (Http.serve (bank Acct 100) bridge config { snapshotEvery := 1024 } saving).block
   IO.println s!"Lanes Bank listening on http://127.0.0.1:{server.port.getD 0}"
   (← IO.getStdout).flush
   server.wait.block

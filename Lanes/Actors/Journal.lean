@@ -498,9 +498,4 @@ theorem turns_kernel {sys : System σ} (k : Kernel sys) (fuel : Nat)
     simp only [ops] at hturn ih ⊢
     rw [ih, List.filterMap_append, Kernel.exec_append, ← hturn]
 
-/-- Save the kernel: the image to write down, the kernel to go on with, and the entry that
-says so. Going on with the restored kernel is what makes `resume_eq_recover` enough. -/
-def save {sys : System σ} (k : Kernel sys) (index : Nat) : Kernel.Image sys × Turn sys :=
-  (k.image, { kernel := k.image.kernel, entries := [.snapshot index] })
-
 end Lanes.Journal

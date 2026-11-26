@@ -39,19 +39,30 @@ structure Runtime.Config where
   /-- Keep the events performed, for tests. By `Kernel.exec_reachable` they are a run of the
   semantics. -/
   record : Bool := false
+  /-- With a journal that can save the kernel: how many entries to write between two saves.
+  After a save the journal is cut, so this bounds how much a restart replays. -/
+  snapshotEvery : Nat := 65536
   /-- Whether the shard is one of several (`Lanes.Cluster`). It then also takes inputs from the
   other shards, on a lane that is never full, so that two shards cannot block each other. -/
   clustered : Bool := false
 
 /-- What a durable shard needs of its journal's storage. `Lanes.Journal.Store.open` gives one
 backed by a file. -/
-structure Journal.Log (σ : Signature) where
-  /-- The entries written before this start. -/
+structure Journal.Log (sys : System σ) where
+  /-- The entries in the journal at this start. -/
   past : List (Journal.Entry σ)
+  /-- The kernel last saved, with the index of its mark in the journal. -/
+  saved : Option (Nat × Kernel.Image sys) := none
+  /-- How many entries the shard's history has at this start, counting those a cut journal no
+  longer holds. It never goes down, and goes up with every entry written. -/
+  index : Nat := past.length
   /-- Returns once the entries will survive the process. -/
   append : List (Journal.Entry σ) → IO Unit
   /-- Writes entries that may be lost with the process. -/
   note : List (Journal.Entry σ) → IO Unit
+  /-- Save this image of the kernel as it is after everything appended so far, mark the journal
+  and cut it. `none` if this journal cannot save. -/
+  save : Option (Kernel.Image sys → IO Unit) := none
   close : IO Unit
 
 private inductive Cmd (sys : System σ) where
@@ -121,14 +132,22 @@ What to ask of the kernel in one turn, and what to write in the journal for it, 
 `Journal.turn`, a pure function proved to leave the kernel its journal entries describe
 (`Journal.turns_kernel`). This loop reads the clock, takes a command, calls it, appends the
 entries, and only then hands the outputs over. With a journal the kernel starts as the journal
-describes (`Journal.recover`).
+describes (`Journal.resume`).
+
+Saving the kernel is the kernel operation `snapshot`: the shard goes on with the kernel its
+image restores, which is the kernel a restart from that image would have
+(`Journal.resume_eq_recover`). It is done after a turn's outputs are handed over, because the
+mark it leaves in the journal says they were.
 -/
 private def loop (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
-    (waiting : IO.Ref (Array (Bool × IO.Promise Bool))) (journal : Option (Journal.Log σ)) :
+    (waiting : IO.Ref (Array (Bool × IO.Promise Bool))) (journal : Option (Journal.Log sys)) :
     IO Unit := do
-  let (start, outputs) := match journal with
-    | some log => Journal.recover sys log.past
-    | none => Kernel.boot sys
+  let (start, outputs) ← match journal with
+    | some log =>
+      match Journal.resume sys log.saved log.past with
+      | some found => pure found
+      | none => throw (IO.userError "lanes: the journal does not continue its snapshot")
+    | none => pure (Kernel.boot sys)
   if journal.isNone then rt.record (outputs.map .output)
   let handOver := fun (outputs : List σ.Out) => do
     (handOver onOutput outputs).block
@@ -139,6 +158,7 @@ private def loop (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
   let clock : BaseIO Nat := return since + ((← IO.monoMsNow) - epoch)
   let kernel ← IO.mkRef start
   let fuel := max 1 rt.config.batch
+  let mut written := (journal.map (·.past.length)).getD 0
   repeat
     let now ← clock
     let wait ← kernel.modifyGet fun k => ((k.advance now).wait, k)
@@ -157,6 +177,11 @@ private def loop (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
     if let some log := journal then unless entries.isEmpty do log.append entries
     rt.record events
     handOver outputs
+    written := written + entries.length
+    if let some save := journal.bind (·.save) then
+      if written ≥ max 1 rt.config.snapshotEvery then
+        save (← kernel.modifyGet fun k => match k.image with | image => (image, image.kernel))
+        written := 0
     let reached := fun (timers : Bool) => if timers then still else quiet
     for (timers, done) in ← waiting.get do
       if reached timers then done.resolve true
@@ -165,7 +190,7 @@ private def loop (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
 /-- However the loop ends, nobody is left waiting on it: not those it had heard from, and not
 those whose commands it never took. -/
 private def run (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
-    (journal : Option (Journal.Log σ)) : IO Unit := do
+    (journal : Option (Journal.Log sys)) : IO Unit := do
   let waiting ← IO.mkRef #[]
   let error ← (rt.loop onOutput waiting journal).toBaseIO
   if let .error e := error then
@@ -199,7 +224,7 @@ over shortly before the process died may be handed over again, so a handler that
 repeat itself has to tell. The kernel's clock stands still while the process is down. -/
 def startWith (sys : System σ) [Hashable σ.Id] (config : Runtime.Config := {})
     (onOutput : Runtime sys → σ.Out → Async Unit)
-    (journal : Option (Journal.Log σ) := none) : Async (Runtime sys) := do
+    (journal : Option (Journal.Log sys) := none) : Async (Runtime sys) := do
   let rt : Runtime sys := {
     config
     inbox := ← CloseableChannel.new (some config.inboxCapacity)
@@ -212,7 +237,7 @@ def startWith (sys : System σ) [Hashable σ.Id] (config : Runtime.Config := {})
 /-- `startWith` for a handler that only consumes outputs. -/
 def start (sys : System σ) [Hashable σ.Id] (config : Runtime.Config := {})
     (onOutput : σ.Out → Async Unit := fun _ => pure ())
-    (journal : Option (Journal.Log σ) := none) : Async (Runtime sys) :=
+    (journal : Option (Journal.Log sys) := none) : Async (Runtime sys) :=
   startWith sys config (fun _ => onOutput) journal
 
 private def send (rt : Runtime sys) (c : Cmd sys) : Async Unit := do

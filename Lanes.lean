@@ -13,6 +13,7 @@ public import Lanes.Actors.Inspect
 public import Lanes.Actors.Join
 public import Lanes.Actors.JoinSound
 public import Lanes.Actors.Journal
+public import Lanes.Actors.Snapshot
 public import Lanes.Actors.Kernel
 public import Lanes.Actors.KernelSound
 public import Lanes.Actors.Lossy

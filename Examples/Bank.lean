@@ -61,6 +61,10 @@ structure Response where
   outcome : Outcome
   deriving DecidableEq, Repr, Hashable
 
+def Response.codec : Codec Response :=
+  Codec.struct% Response { req := Codec.nat,
+    outcome := Codec.sum% Outcome { accepted, insufficient, balance (amount := Codec.int) } }
+
 inductive Msg (A : Type) where
   | transfer (req : ReqId) (dst : A) (amount : Nat)
   | credit (amount : Nat)
@@ -98,6 +102,13 @@ abbrev bank (A : Type) [DecidableEq A] (opening : Nat) : System (sig A) where
   accept
     | .transfer t => ⟨t.src, .transfer t.req t.dst t.amount⟩
     | .balance req account => ⟨account, .query req⟩
+
+/-- How the bank's actors are written to a snapshot. -/
+def actors (account : Codec A) (opening : Nat) : Kernel.Image.Codecs (bank A opening) where
+  id := account
+  state _ := Codec.struct% Account { balance := Codec.int }
+  msg _ := Codec.sum% Msg { transfer (req := Codec.nat) (dst := account) (amount := Codec.nat),
+    credit (amount := Codec.nat), query (req := Codec.nat) }
 
 /-- A balance is never negative. -/
 theorem Account.balance_nonneg (opening : Nat) (self : A) :
