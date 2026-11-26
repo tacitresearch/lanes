@@ -98,14 +98,13 @@ def reordering : EnvModel (sig N C) where
 def crashing : EnvModel (sig N C) where
   mayCrash _ := true
 
-/-- What `Ledger.implements` allows: requests lost and reordered on their way in, and any actor
-crashing; the links from the users to the ledger are reliable. -/
+/-- Requests lost and reordered on their way in, and any actor crashing; the links from the users
+to the ledger are reliable. -/
 def lossyIn : EnvModel (sig N C) where
   link src _ := if src.isSome then Link.reliable else { ordered := false, lossy := true }
   mayCrash _ := true
 
-/-- Links from the users to the ledger that lose messages, which `Ledger.implements` does not
-allow: the checker finds nothing, and the proof does not cover it. -/
+/-- Links from the users to the ledger that lose messages, which `Ledger.implements` allows. -/
 def lossyToLedger : EnvModel (sig N C) where
   link src _ := if src.isSome then { lossy := true } else Link.reliable
 

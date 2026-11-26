@@ -126,21 +126,20 @@ axiom gate:
 - `user_bounded`: at most `maxSessions` sessions, at most `maxFailures` failures counted, and
   locked at that many;
 - `implements`: without timers (`Untimed`), the system implements its spec, for every
-  configuration and every environment in which each user's link to the ledger is reliable and
-  no request is handed to a user twice: requests may be lost and reordered on the way in, and
-  any actor may crash (`Ledger/Proofs/Refines.lean`, with `Lanes.Account`). A request takes
-  effect when the ledger serves it; the user has decided it, and moved its record, before. So
-  the witness of the simulation is the list of requests decided and not served, and the spec's
-  record of a user, with that user's requests decided in order, is the user's record and what
-  is on its link to the ledger. When the ledger crashes, the requests the users answered
-  themselves take effect and the others are lost.
+  configuration and every environment in which each user's link to the ledger is ordered and
+  does not duplicate, and no request is handed to a user twice: messages may be lost on every
+  link and reordered on the way in, and any actor may crash (`Ledger/Proofs/Refines.lean`, with
+  `Lanes.Account`). A request takes effect when the ledger serves it; the user has decided it,
+  and moved its record, before. So the witness of the simulation is the list of requests
+  decided and not served, each marked with whether its message is still on the link, and the
+  spec's record of a user, with that user's requests decided in order, is the user's record
+  and the messages on its link to the ledger (`Lanes.linkMsgs`). A request whose message was
+  lost, in a loss or a crash of the ledger, takes effect when the ledger serves the next
+  message on the link if the user answered it, and never if the book was to serve it.
 
 With timers the system does not implement its spec with deadlines (above, found in 43 steps),
 and nothing about it is proved. The links from the users to the ledger must be ordered (a
-reordering link gives a stale view, above). That they do not lose is the proof's assumption,
-not the system's: the checker passes with links to the ledger that lose messages, where a lost
-answer would have to take effect when the message before it on the link is served, which the
-simulation does not say. That `Bytes.same`, HMAC and PBKDF2
+reordering link gives a stale view, above). That `Bytes.same`, HMAC and PBKDF2
 are what they say is tested against published vectors (`TRUSTED.md`).
 
 ## The web front

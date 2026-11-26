@@ -23,7 +23,7 @@ All of it is about the ledger actor, the user actors and pure functions, with no
 the whole system but the lifting lemmas of Lanes: that is what one actor for the book buys.
 
 And without timers the system implements its spec (`implements`), for every configuration and
-every environment in which each user's link to the ledger is reliable and no request reaches a
-user twice. With timers it does not implement the spec with its
+every environment in which each user's link to the ledger is ordered and does not duplicate
+and no request reaches a user twice. With timers it does not implement the spec with its
 deadlines; `Check.lean` finds the run.
 -/
