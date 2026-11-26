@@ -28,7 +28,7 @@ Last updated: 2026-11-27.
 | Bank (`Examples/Bank.lean`) | Conservation on 2 accounts; lost-credit bug found under lossy links; runs on the runtime and over HTTP | Balance never negative (all environments); money conserved for any number of accounts in a faultless environment |
 | Key-value store (`Examples/KV.lean`) | Refines the map spec; stale-read bug of a read cache found | Not yet |
 | Leader election (`Examples/Election.lean`) | At most one leader per term on 3 nodes with reordering and a crash (165k states); split-brain bug found | At most one leader per term for any number of nodes and terms under every environment model: loss, duplication, reordering, crashes (`Examples/ElectionProofs.lean`) |
-| Raft key-value store (`systems/raft-kv`, a package of its own) | Refines the map it replicates, with election safety, log matching, agreement on committed entries and leader completeness, on 3 nodes: reliable links and two terms (708k states), unordered links (705k), unordered links with a crash and restart (5.4M), reliable links with a crash across two terms (7.8M), and again with one entry to an `append`, so that a follower is brought on batch by batch; a node that votes for a candidate with a shorter log is caught in 15 steps; what a PASS of these means is a theorem (`RaftKVProofs/Checked.lean`); runs as three processes, each with an HTTP front and a journal, joined by TCP, through two leaders killed with SIGKILL | Every invariant of Raft's safety argument, for every number of nodes and every environment model (`systems/raft-kv/RaftKV/Proofs/`, about 2,950 lines): election safety, log matching, leader completeness, agreement on committed entries, state machine safety, and that no `append` carries more than `maxAppend` entries. Election safety and state machine safety also over time: no term has two leaders and no index two entries at any two points of a run. On them, the cluster refines its spec in every environment that does not hand a request to a node twice (`systems/raft-kv/RaftKVProofs/`, about 780 lines) |
+| Raft key-value store (`systems/raft-kv`, a package of its own) | Refines the map it replicates, with election safety, log matching, agreement on committed entries and leader completeness, on 3 nodes: reliable links and two terms (708k states), unordered links (705k), unordered links with a crash and restart (5.4M), reliable links with a crash across two terms (7.8M), and again with one entry to an `append`, so that a follower is brought on batch by batch; a node that votes for a candidate with a shorter log is caught in 15 steps; what a PASS of these means is a theorem (`RaftKVProofs/Checked.lean`); runs as three processes, each with an HTTP front, a journal it cuts and a snapshot, joined by TCP: every node killed with SIGKILL and started from its snapshot, two at a time, has what was acknowledged (`raftProcs`), and a minute of nodes killed and paused at random loses no acknowledged write (`raftChaos`, not in CI) | Every invariant of Raft's safety argument, for every number of nodes and every environment model (`systems/raft-kv/RaftKV/Proofs/`, about 2,950 lines): election safety, log matching, leader completeness, agreement on committed entries, state machine safety, and that no `append` carries more than `maxAppend` entries. Election safety and state machine safety also over time: no term has two leaders and no index two entries at any two points of a run. On them, the cluster refines its spec in every environment that does not hand a request to a node twice (`systems/raft-kv/RaftKVProofs/`, about 780 lines) |
 | Watchdog (`Examples/Watchdog.lean`) | Under the fair scheduler a dog whose keeper keeps pinging never barks, and one whose keeper rests barks | There is a fair run in which the keeper pings forever, the dog's timer is pending at every position and the dog never barks; in every run that fires each timer that stays pending, it barks (`Examples/WatchdogProofs.lean`) |
 
 ## Against the DESIGN exit criteria
@@ -74,10 +74,22 @@ Last updated: 2026-11-27.
 - The gate keeps waiting requests in a list, so each request costs time linear in `maxPending`.
 - A journal survives the death of the process, not loss of power: Lean's `IO` has no `fsync`.
 - A journal is cut only if the application gives codecs for its actors (`Journal.Store.actors`,
-  `Http.Saving`); without them it grows without bound and a restart replays all of it. The
+  `Http.Saving`); without them it grows without bound and a restart replays all of it. A
+  codec's law is an equality, so a state that holds a map holds a `Std.ExtTreeMap`
+  (`Codec.extTreeMap`): a `TreeMap` or a `HashMap` has no codec. The codecs are written by
+  hand, one line for each structure and inductive type of the state and the messages. The
   order in which a save replaces the journal's past is proved to lose nothing wherever the
   process dies (`Journal.Disk.Holds.save_crash`), over a model of the two files. That the
   operating system's rename is atomic and that flushed bytes survive the process is trusted.
+- A journal is begun at any path that has none, unless the store says otherwise
+  (`Journal.Store.create`). An application whose shard makes promises to others, as a Raft
+  node does with its vote, has to say so itself, as `raftNode` does.
+- A journal's name has to cover everything its replay reads: the version of the step
+  functions and every setting they use, timeouts among them, since a timer is due at the
+  clock's reading plus the configured delay. Nothing checks that a name does. `raft-kv` puts
+  its whole `Config` in the name, so a timeout of a node that has run cannot be changed.
+- A save writes the whole kernel, and the shard does nothing else meanwhile. `raft-kv` never
+  compacts its log, so a node's snapshot grows with every command it has ever taken.
 - Cutting off a write that did not finish, and cutting a journal at a save, replace the
   journal file by a new one, which gets default permissions; `.tmp` files left by a process
   killed in between are not cleaned up.

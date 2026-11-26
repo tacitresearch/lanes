@@ -161,6 +161,9 @@ by `lake build`, not linked into the test executable.
 /-- info: 'Lanes.Journal.Disk.load_cut' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Journal.Disk.load_cut
 
+/-- info: 'Lanes.Journal.Disk.read_of_start' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Disk.read_of_start
+
 /-- info: 'Lanes.Journal.Disk.torn_nil' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Journal.Disk.torn_nil
 
@@ -377,6 +380,9 @@ by `lake build`, not linked into the test executable.
 
 /-- info: 'Lanes.Check.refines_traces' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Check.refines_traces
+
+/-- info: 'Lanes.Codec.extTreeMap' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Codec.extTreeMap
 
 /-- info: 'Lanes.Frame.encode_append' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Frame.encode_append

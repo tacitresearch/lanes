@@ -64,24 +64,45 @@ What a PASS means is a theorem (`RaftKVProofs/Checked.lean`): after a complete P
 `lake exe raftLive` starts three nodes on the runtime in one process, joined by TCP, each with
 a journal and with real timers. A leader is elected, a write and a read are answered, the
 leader is stopped, the other two elect one of themselves and go on answering, and the stopped
-node comes back from its journal and catches up. `RaftKV/Deploy.lean` has what a node needs as
-a process: the codecs for its messages and `startNode`.
+node comes back from its snapshot and its journal and catches up. `RaftKV/Deploy.lean` has what
+a node needs as a process: the codecs for its messages and its state, the name of its journal,
+and `startNode`.
 
-`raftNode` is one node as a process, with an HTTP front:
+`raftNode` is one node as a process, with an HTTP front. Its first start is `new`; no later
+one is:
 
 ```bash
-lake exe raftNode 0 8800 node0.journal 7810 7811 7812 &
-lake exe raftNode 1 8801 node1.journal 7810 7811 7812 &
-lake exe raftNode 2 8802 node2.journal 7810 7811 7812 &
+lake exe raftNode new 0 8800 node0.journal 7810 7811 7812 &
+lake exe raftNode new 1 8801 node1.journal 7810 7811 7812 &
+lake exe raftNode new 2 8802 node2.journal 7810 7811 7812 &
 curl -X PUT -d 1 http://127.0.0.1:8800/kv/a      # 200 from the leader, 504 from the others
 curl http://127.0.0.1:8800/kv/a                   # 1
 kill -9 %1                                        # the leader
 curl http://127.0.0.1:8801/kv/a                   # 1, from whichever of the two now leads
+lake exe raftNode 0 8800 node0.journal 7810 7811 7812 &   # back with what it had
 ```
 
-`lake exe raftProcs` does this as a test: three processes, the leader killed with SIGKILL, the
-killed node brought back from its journal, then the second leader killed too, so that what is
-left is a majority only because the first came back with what it had.
+A node keeps its journal, and beside it its state as last saved (`.snapshot`) and a lock. It
+saves every 65,536 journal entries (`--snapshot-every <entries>` changes that) and cuts the
+journal there, so a start reads the snapshot and replays what came after it.
+
+`lake exe raftProcs` is the test of this: three processes that save every 64 entries. 300
+writes are answered while each node cuts its journal some tens of times. All three are killed
+with SIGKILL and started from their snapshots and cut journals, two at a time: each pair
+answers with every write, which is so only if two of the three nodes each have all of them.
+Then the leader is killed, the killed node brought back, and the second leader killed too, so
+that what is left is a majority only because the first came back with what it had. Last, a node
+is not started on a path with no journal, nor as `new` on its own.
+
+`lake exe raftChaos [seconds] [seed]` is the longer run, a minute unless told otherwise, and
+not part of the tests. Four clients write and read through whichever node answers while nodes
+are killed, one or two at a time, started again, and paused with SIGSTOP, at random; the nodes
+save every 128 entries, so they are killed during saves as well. Every operation is recorded
+with the times it was sent and answered. At the end every key is read, and every read, during
+the run or after it, must be of a value that was written, and of none older than a write
+acknowledged before the read was sent. One minute with seed 7: 39 kills and 13 pauses, 2,343
+writes acknowledged, 2,422 reads answered over 1,939 keys, no violation, and journals cut to
+between 256 bytes and 14 kB at the end.
 
 ## What is proved
 
@@ -162,13 +183,32 @@ It is safe, and it is not yet something to leave running. An independent review 
 paused its processes 392 times and found every acknowledged write linearizable, and found
 these:
 
-- **A node must come back with its journal.** A node started on an empty journal is a new
-  voter that remembers nothing. With the journals of a majority gone, writes that were
-  acknowledged are lost, and stay lost when the others return. This is outside what is proved:
-  the model's crash keeps what a node had. Nothing is synced to disk, so the same holds after
-  loss of power.
-- **The journal is never cut.** A node journals every message it is sent, heartbeats too: an
-  idle cluster writes most of a gigabyte a day, and a restart replays all of it.
+- **A node must come back with its journal.** The journal and the snapshot are a node's
+  memory of the votes it gave and the entries it acknowledged. `raftNode` now refuses to start
+  when its journal is not there, unless it is started as `new`, and refuses `new` on a journal
+  that is there: a mistyped path or a disk that was not mounted is an error, where it was a
+  node that remembered nothing. What is left is the journal that is really lost. The node
+  cannot be given back what it knew, and started as `new` under its old id it votes again:
+  with one other node behind, the two elect a leader that lacks a write the cluster has
+  answered, and it stays lost when the third returns. This is outside what is proved, since
+  the model's crash keeps what a node had, and replacing such a node safely needs a change of
+  membership, which is not here. Nothing is synced to disk, so loss of power is such a loss.
+- **The journal is cut now, and the log is not.** A node journals every message it is sent,
+  heartbeats too: idle, a follower writes 5 kB a second and the leader 11, which was 470 and
+  930 MB a day. A node now saves its state every 65,536 entries and cuts the journal: idle,
+  that is every 7 to 18 minutes, and the journal stays under 6 MB. After 10,000 writes a
+  node's process is back in a few tenths of a second, from its snapshot and what it journaled
+  since. (The cluster took longer to answer again, 16 to 20 seconds with that log, saved or
+  not, before appends were bounded: see below.) What is left: Raft's log is never compacted, so a node's
+  state grows with every command, in memory and in the snapshot, by 60 to 90 bytes for a
+  small write, and a save writes all of it while the node does nothing else. Saving the state
+  of 10,000 small writes, 0.6 MB, delayed no write by a tenth of a second.
+- **A node's configuration is part of its journal's name.** A start runs the step functions
+  over the journal again, and they read the timeouts: a timer is due at the clock's reading
+  plus the configured delay. Replayed under another timeout a node would have voted otherwise
+  than it did. So the name a journal is kept under holds the node's id, the size of the
+  cluster and every field of `Config` and of the HTTP gate's, and a node started with another
+  is refused. There is no way yet to change a timeout of a node that has run.
 - **A client that tries again after a `504` may have its write applied twice.** Requests are
   not told apart.
 

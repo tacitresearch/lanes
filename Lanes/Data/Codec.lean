@@ -145,6 +145,32 @@ def list (c : Codec α) : Codec (List α) where
     readMany c n rest
   sound as rest := by simp [List.append_assoc, nat.sound, readMany_write]
 
+theorem extTreeMap_ofList_toList {κ : Type} {cmp : κ → κ → Ordering} [Std.TransCmp cmp]
+    [Std.LawfulEqCmp cmp] (t : Std.ExtTreeMap κ α cmp) : .ofList t.toList cmp = t := by
+  apply Std.ExtTreeMap.ext_getElem?
+  intro k
+  cases h : t[k]? with
+  | some v =>
+    exact Std.ExtTreeMap.getElem?_ofList_of_mem Std.ReflCmp.compare_self
+      Std.ExtTreeMap.distinct_keys_toList (Std.ExtTreeMap.mem_toList_iff_getElem?_eq_some.mpr h)
+  | none =>
+    letI : BEq κ := ⟨fun a b => cmp a b == .eq⟩
+    haveI : Std.LawfulBEqCmp cmp := ⟨beq_iff_eq.symm⟩
+    apply Std.ExtTreeMap.getElem?_ofList_of_contains_eq_false
+    rw [Bool.eq_false_iff]
+    intro hk
+    have : k ∈ t := by simpa using hk
+    simp_all
+
+/-- The entries, in the order of their keys. The map is the extensional one because the law is
+an equality: a `Std.TreeMap` or `Std.HashMap` built again from its entries holds the same and
+is another value, so neither has a codec. -/
+def extTreeMap {κ : Type} (key : Codec κ) (value : Codec α)
+    (cmp : κ → κ → Ordering := by exact compare) [Std.TransCmp cmp] [Std.LawfulEqCmp cmp] :
+    Codec (Std.ExtTreeMap κ α cmp) :=
+  (list (pair key value)).map (·.toList) (fun entries => some (.ofList entries cmp))
+    (fun t => congrArg some (extTreeMap_ofList_toList t))
+
 end Codec
 
 /-! Codecs for a structure and for an inductive type, one line each. The law is proved by what

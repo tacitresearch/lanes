@@ -143,6 +143,8 @@ inductive Refusal where
   | apart
   /-- The system's name does not fit in a frame, so no journal can carry it. -/
   | name
+  /-- There is no journal, and the store may not begin one (`Disk.start`). -/
+  | missing
   deriving DecidableEq, Repr
 
 /--

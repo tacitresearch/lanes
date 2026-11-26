@@ -7,27 +7,29 @@ import RaftKV
 /-!
 Three nodes on the runtime, joined by TCP on this machine, with real timers and a journal each.
 A leader is elected, a write and a read are answered, the leader is stopped, the other two go
-on, and the stopped node comes back from its journal and catches up. Run by `lake exe raftLive`.
+on, and the stopped node comes back from its snapshot and its journal and catches up. Run by
+`lake exe raftLive`.
 -/
 
 open Lanes RaftKV Std Std.Async
 
 structure Running where
   input : Request (Fin 3) Command → Async Unit
-  state : Async (RaftKV.Node (Fin 3) Command (Std.TreeMap Text Text))
+  state : Async (RaftKV.Node (Fin 3) Command (Std.ExtTreeMap Text Text))
   stop : Async Unit
 
 def raftConfig (k : Fin 3) : Config :=
   { electionTimeout_ms := 150 + 80 * k.val, heartbeat_ms := 30 }
 
 def start (dir : System.FilePath) (ports : IO.Ref (Array UInt16))
-    (answers : IO.Ref (Array (Response Answer))) (k : Fin 3) : Async Running := do
+    (answers : IO.Ref (Array (Response Answer))) (k : Fin 3) (create : Bool := false) :
+    Async Running := do
   let listen : Peers.Address := { port := (← ports.get)[k.val]?.getD 0 }
   let (rt, peers) ← startNode (n := 3)
     { self := k, raft := raftConfig k, listen
       home := fun i => return (← ports.get)[i.val]?.map fun port => { port }
-      journal := some (dir / s!"node{k}.journal") }
-    fun answer => answers.modify (·.push answer)
+      journal := some (dir / s!"node{k}.journal"), create }
+    { snapshotEvery := 16 } fun answer => answers.modify (·.push answer)
   if (← ports.get).size ≤ k.val then ports.modify (·.push peers.port)
   return {
     input := fun x => rt.input (.inl x)
@@ -59,7 +61,7 @@ def run : Async (List (String × Bool)) := do
   let ports ← IO.mkRef #[]
   let answers ← IO.mkRef #[]
   let mut nodes : List (Fin 3 × Running) := []
-  for k in List.finRange 3 do nodes := nodes ++ [(k, ← start dir ports answers k)]
+  for k in List.finRange 3 do nodes := nodes ++ [(k, ← start dir ports answers k (create := true))]
   let ask := fun (nodes : List (Fin 3 × Running)) (req : ReqId) (cmd : Command) => do
     let some leader ← await? 5000 (leaderAmong nodes) | return none
     if let some (_, node) := nodes.find? (·.1 == leader) then node.input ⟨req, leader, cmd⟩
@@ -73,6 +75,7 @@ def run : Async (List (String × Bool)) := do
   let second ← await? 5000 (leaderAmong rest)
   let wroteAgain ← ask rest 3 (.put "a" "2")
   let readAgain ← ask rest 4 (.get "a")
+  let saved ← (dir / s!"node{old}.journal.snapshot").pathExists
   let back ← start dir ports answers old
   let caughtUp ← await? 5000 do
     let s ← back.state
@@ -88,7 +91,8 @@ def run : Async (List (String × Bool)) := do
     ("raft: with the leader stopped, the other two elect one of themselves",
       second.isSome && second != first),
     ("raft: and go on answering", wroteAgain == some .ok && readAgain == some (.value (some "2"))),
-    ("raft: the stopped node comes back from its journal and catches up", caughtUp.isSome),
+    ("raft: the stopped node comes back from its snapshot and its journal and catches up",
+      saved && caughtUp.isSome),
     ("raft: at the end the three logs agree on what is committed",
       states.all fun a => states.all fun b =>
         a.log.take (min a.commit b.commit) == b.log.take (min a.commit b.commit)) ]
