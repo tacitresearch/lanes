@@ -329,3 +329,6 @@ by `lake build`, not linked into the test executable.
 
 /-- info: 'Lanes.System.SplitReachable.merged_exact' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.SplitReachable.merged_exact
+
+/-- info: 'Lanes.System.Invariant.split_of_forall' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Invariant.split_of_forall

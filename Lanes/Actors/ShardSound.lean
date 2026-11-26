@@ -1047,14 +1047,20 @@ theorem System.SplitReachable.lossy (h : sys.SplitReachable hosts env c) :
     · exact hev
     · exact hdrops drops e he
 
+/-- An invariant of `sys` proved for every environment asks nothing of booting: it is used
+where every link is lossy, and there the order in which boot actors start cannot be told. -/
+theorem System.Invariant.split_of_forall {P : SysState sys → Prop}
+    (h : ∀ env, sys.Invariant env P) (hP : ∀ a b, SysState.Equiv env.lossy a b → P a → P b)
+    (hc : sys.SplitReachable hosts env c) : P c.merged :=
+  let ⟨c', hc', hequiv⟩ := hc.lossy.merged fun _ _ _ _ _ => rfl
+  hP c' _ hequiv (h env.lossy c' hc')
+
 /-- An invariant of the actor states of `sys`, proved for every environment, holds of the
-actor states of the split. Nothing is asked of booting: the invariant is used where every link
-is lossy, and there the order in which boot actors start cannot be told. -/
+actor states of the split. -/
 theorem System.Invariant.split_state {Q : ((i : σ.Id) → sys.State i) → Prop}
     (h : ∀ env, sys.Invariant env fun c => Q c.state) (hc : sys.SplitReachable hosts env c) :
-    Q c.merged.state := by
-  obtain ⟨c', hc', hequiv⟩ := hc.lossy.merged fun _ _ _ _ _ => rfl
-  exact hequiv.state ▸ h env.lossy c' hc'
+    Q c.merged.state :=
+  System.Invariant.split_of_forall h (fun _ _ hequiv ha => hequiv.state ▸ ha) hc
 
 namespace SysState
 

@@ -391,7 +391,8 @@ where each input from outside goes to the shard that hosts its receiver, every s
 one state (`SysState.merged`), is a state of `sys` up to `SysState.Equiv`
 (`System.SplitReachable.merged`). One event of the split is one event of `sys`, and the copies
 that only forward never run. Invariants of `sys` hold of the split (`System.Invariant.split`),
-those of actor states with no side condition (`split_state`).
+those proved for every environment with no condition on booting (`split_of_forall`,
+`split_state`).
 
 What the proof found: the statement needs an assumption on booting (`System.SteadyBoot`),
 because shards boot one after another and a boot actor that stops as it starts loses whatever
