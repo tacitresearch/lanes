@@ -41,7 +41,7 @@ Update them in the same change that moves an item; `lake exe lanes lint --fix` w
 3. Releasing idle actors.
 4. What `systems/ledger` asks of the framework (its README's friction log): requests prepared
    before the journal. Specs with time and `Service` without the system's signature are done
-   (`docs/decisions/new-a-spec-names-its-inputs-and.md`).
+   (`docs/decisions/D42-a-spec-names-its-inputs-and.md`).
 
 ## Known limits
 

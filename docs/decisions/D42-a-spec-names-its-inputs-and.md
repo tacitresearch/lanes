@@ -1,4 +1,4 @@
-# D?. A spec names its inputs and outputs, and time passes in it as deadlines the system's timers are
+# D42. A spec names its inputs and outputs, and time passes in it as deadlines the system's timers are
 
 The ledger (`systems/ledger/README.md`, friction log) found two limits of `Service`.
 
