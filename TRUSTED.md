@@ -185,6 +185,16 @@ and model-checked in `Tests/Gate.lean` and `Tests/Fronted.lean`.
   a shard that falls behind its peers holds what they sent. The transport's queue to another
   process is bounded by the number of parcels, not by their size, and its queue of events is
   not bounded.
+- **Cryptography.** `Lanes/Data/Sha256.lean` and `Lanes/Data/Hmac.lean` are pure code with
+  nothing trusted in them, but that they compute what their names say is tested, not proved:
+  SHA-256 against the NIST examples, HMAC-SHA-256 against RFC 4231 and PBKDF2 against RFC 7914
+  (`Tests/Crypto.lean`). Proved: a digest and a tag are 32 bytes, hex reads back
+  (`Bytes.unhex?_hex`), and `Bytes.same a b` holds exactly when `a = b` (`Bytes.same_iff`).
+  Assumed: that HMAC-SHA-256 is a pseudorandom function, so that nobody without the key can make
+  a tag; that is what makes a session cookie or a form token of `Lanes.Auth` unforgeable. Also
+  assumed: that the compiled `Bytes.same` takes a time that does not depend on where its inputs
+  differ. It reads every byte and does not branch on them, but Lean's compiler promises nothing
+  about time.
 
 ## Not trusted
 
