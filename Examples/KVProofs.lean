@@ -119,53 +119,19 @@ section Stale
 variable (k : K) (v : V) (f : F)
 
 /-- Only the first read has arrived. -/
-def Read (a : Abs K V F) : Prop :=
-  (∀ x ∈ a.pending, x = ⟨1, f, .get k⟩) ∧ ∀ o ∈ a.outbox, o.req = 1
+def Read : Abs K V F → Prop :=
+  Service.Only (· = ⟨1, f, .get k⟩) (fun _ => True) (·.req = 1)
 
-/-- The write has arrived too; once it is acknowledged it has taken effect. -/
+/-- The write has arrived too; once it is answered it has taken effect. -/
 def Written (a : Abs K V F) : Prop :=
-  (∀ x ∈ a.pending, x = ⟨1, f, .get k⟩ ∨ x = ⟨2, f, .put k v⟩) ∧
-    a.pending.count ⟨2, f, .put k v⟩ ≤ 1 ∧
-    ∀ o ∈ a.outbox, o.req = 1 ∨ (o.req = 2 ∧ ⟨2, f, .put k v⟩ ∉ a.pending ∧ a.value k = some v)
+  Service.Only (fun x => x = ⟨1, f, .get k⟩ ∨ x = ⟨2, f, .put k v⟩) (fun _ => True)
+    (fun o => o.req = 1 ∨ o.req = 2) a ∧
+  Service.Took Request.req Response.req ⟨2, f, .put k v⟩ (· k = some v) a
 
 /-- The write has taken effect and only reads are left: the second read can only see it. -/
-def Seen (a : Abs K V F) : Prop :=
-  a.value k = some v ∧ (∀ x ∈ a.pending, x = ⟨1, f, .get k⟩ ∨ x = ⟨3, f, .get k⟩) ∧
-    ∀ o ∈ a.outbox, o.req = 3 → o.res = .value (some v)
-
-theorem read_stable : (spec K V F).Stable (Read k f) := by
-  rintro a x hx ⟨hpending, houtbox⟩
-  obtain rfl := hpending x hx
-  refine ⟨fun y hy => hpending y (Multiset.mem_of_mem_erase hy), fun o ho => ?_⟩
-  rcases Multiset.mem_add.mp ho with ho | ho
-  · exact houtbox o ho
-  · simp_all [spec]
-
-theorem written_stable : (spec K V F).Stable (Written k v f) := by
-  rintro a x hx ⟨hpending, hcount, houtbox⟩
-  refine ⟨fun y hy => hpending y (Multiset.mem_of_mem_erase hy),
-    (Multiset.count_le_of_le _ (Multiset.erase_le _ _)).trans hcount, ?_⟩
-  rcases hpending x hx with rfl | rfl
-  · intro o ho
-    rcases Multiset.mem_add.mp ho with ho | ho
-    · exact (houtbox o ho).imp_right fun ⟨hreq, hnot, hvalue⟩ =>
-        ⟨hreq, fun h => hnot (Multiset.mem_of_mem_erase h), hvalue⟩
-    · simp_all [spec]
-  · have hgone : (⟨2, f, .put k v⟩ : Request K V F) ∉ a.pending.erase ⟨2, f, .put k v⟩ := by
-      rw [← Multiset.count_eq_zero, Multiset.count_erase_self]
-      omega
-    intro o ho
-    rcases Multiset.mem_add.mp ho with ho | ho
-    · exact (houtbox o ho).imp_right fun ⟨hreq, _, _⟩ => ⟨hreq, hgone, by simp [spec]⟩
-    · simp_all [spec]
-
-theorem seen_stable : (spec K V F).Stable (Seen k v f) := by
-  rintro a x hx ⟨hvalue, hpending, houtbox⟩
-  refine ⟨?_, fun y hy => hpending y (Multiset.mem_of_mem_erase hy), fun o ho => ?_⟩
-  · rcases hpending x hx with rfl | rfl <;> exact hvalue
-  · rcases Multiset.mem_add.mp ho with ho | ho
-    · exact houtbox o ho
-    · rcases hpending x hx with rfl | rfl <;> simp_all [spec]
+def Seen : Abs K V F → Prop :=
+  Service.Only (fun x => x = ⟨1, f, .get k⟩ ∨ x = ⟨3, f, .get k⟩) (· k = some v)
+    (fun o => o.req = 3 → o.res = .value (some v))
 
 /-- The map spec does not allow the stale read: after the write is acknowledged, a read that
 arrives later sees it. -/
@@ -177,35 +143,42 @@ theorem stale_not_trace {a : Abs K V F} :
   have hfalse : (spec K V F).Stable fun _ => False := fun _ _ _ h => h
   have hstart : (spec K V F).Stable fun a : Abs K V F => a.pending = 0 ∧ a.outbox = 0 :=
     fun a x hx h => by simp [h.1] at hx
-  refine (seen_stable k v f).sTr hfalse ?_ h₅ ?_
-  · rintro a b ⟨-, -, houtbox⟩ ⟨hmem, -⟩
-    simpa using houtbox _ hmem rfl
-  refine (seen_stable k v f).sTr (seen_stable k v f) ?_ h₄ ?_
-  · rintro a b ⟨hvalue, hpending, houtbox⟩ rfl
-    refine ⟨hvalue, fun x hx => ?_, houtbox⟩
-    rcases Multiset.mem_cons.mp hx with rfl | hx
-    · exact .inr rfl
-    · exact hpending x hx
-  refine (written_stable k v f).sTr (seen_stable k v f) ?_ h₃ ?_
-  · rintro a b ⟨hpending, -, houtbox⟩ ⟨hmem, rfl⟩
-    obtain ⟨-, hgone, hvalue⟩ := (houtbox _ hmem).resolve_left (by simp)
-    refine ⟨hvalue, fun x hx => ?_, fun o ho hreq => ?_⟩
+  have hread : (spec K V F).Stable (Read k f) :=
+    Service.Only.stable fun _ x hx _ => ⟨trivial, by subst hx; simp [spec]⟩
+  have hseen : (spec K V F).Stable (Seen k v f) := Service.Only.stable fun _ x hx hv => by
+    rcases hx with rfl | rfl <;> simp [spec, hv]
+  have hwritten : (spec K V F).Stable (Written k v f) := Service.Took.stable
+    (fun _ x hx _ => ⟨trivial, by rcases hx with rfl | rfl <;> simp [spec]⟩)
+    (fun _ ⟨req, via, op⟩ o ho => by cases op <;> simp_all [spec])
+    (fun x hx hreq => hx.resolve_left fun h => by simp [h] at hreq) (fun _ => by simp [spec])
+    (fun _ x hx hne hv => by rcases hx with rfl | rfl <;> simp_all [spec])
+  refine hseen.sTr hfalse ?_ h₅ ?_
+  · rintro _ _ h ⟨hmem, -⟩
+    simpa using h.2.2 _ hmem rfl
+  refine hseen.sTr hseen ?_ h₄ ?_
+  · rintro a b ⟨hpending, hvalue, houtbox⟩ rfl
+    exact ⟨fun x hx => (Multiset.mem_cons.mp hx).elim .inr (hpending x), hvalue, houtbox⟩
+  refine hwritten.sTr hseen ?_ h₃ ?_
+  · rintro a b ⟨⟨hpending, -, houtbox⟩, -, htook⟩ ⟨hmem, rfl⟩
+    obtain ⟨hgone, hvalue⟩ := htook _ hmem rfl
+    refine ⟨fun x hx => ?_, hvalue, fun o ho hreq => ?_⟩
     · rcases hpending x hx with rfl | rfl
       · exact .inl rfl
       · exact absurd hx hgone
-    · rcases houtbox o (Multiset.mem_of_mem_erase ho) with h | ⟨h, -⟩ <;> simp [hreq] at h
-  refine (read_stable k f).sTr (written_stable k v f) ?_ h₂ ?_
-  · rintro a b ⟨hpending, houtbox⟩ rfl
+    · rcases houtbox o (Multiset.mem_of_mem_erase ho) with h | h <;> simp [hreq] at h
+  refine hread.sTr hwritten ?_ h₂ ?_
+  · rintro a b ⟨hpending, -, houtbox⟩ rfl
     have hnot : (⟨2, f, .put k v⟩ : Request K V F) ∉ a.pending := fun h => by
       simpa using hpending _ h
-    refine ⟨fun x hx => ?_, by simp [Multiset.count_eq_zero_of_notMem hnot], fun o ho => ?_⟩
+    refine ⟨⟨fun x hx => ?_, trivial, fun o ho => .inl (houtbox o ho)⟩,
+      by simp [Multiset.count_eq_zero_of_notMem hnot], fun o ho hreq => ?_⟩
     · rcases Multiset.mem_cons.mp hx with rfl | hx
       · exact .inr rfl
       · exact .inl (hpending x hx)
-    · exact .inl (houtbox o ho)
-  refine hstart.sTr (read_stable k f) ?_ h₁ ⟨rfl, rfl⟩
+    · simp [houtbox o ho] at hreq
+  refine hstart.sTr hread ?_ h₁ ⟨rfl, rfl⟩
   rintro a b ⟨hpending, houtbox⟩ rfl
-  exact ⟨by simp [hpending], by simp [houtbox]⟩
+  exact ⟨by simp [hpending], trivial, by simp [houtbox]⟩
 
 theorem staleRead_runs (env : EnvModel (sig K V F)) :
     ∃ c, (SysState.init (system K V F true) env).run env (staleRead k v f) = some c := by
