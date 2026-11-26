@@ -10,6 +10,7 @@ public import Lanes.Actors.Service
 public import Lanes.Actors.Step
 public import Lanes.Actors.Runtime
 public import Lanes.Behaviours.Server
+public import Lanes.Check.Complete
 public import Lanes.Check.Monitor
 public import Lanes.Check.Search
 public import Lanes.Check.System

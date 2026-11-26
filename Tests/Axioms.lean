@@ -32,6 +32,9 @@ by `lake build`, not linked into the test executable.
 /-- info: 'Lanes.SysState.step_of_mem_successors' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.SysState.step_of_mem_successors
 
+/-- info: 'Lanes.SysState.mem_successors_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SysState.mem_successors_iff
+
 /-- info: 'Lanes.Server.implements' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Server.implements
 
