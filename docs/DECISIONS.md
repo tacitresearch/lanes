@@ -170,6 +170,13 @@ Why: any `import Lean` takes a compiled binary from about 5 MB to about 137 MB, 
 modules must stay small (design decision 5). Canonical values make `Json` usable in actor
 messages and states, which the model checker compares and hashes (D8).
 
+Measured again on 2026-11-27 for the module system's `meta import`: a library that does
+`public meta import Lean`, imported by an application either way, still gives a 137 MB binary,
+because Lake links it. So sugar for applications (a declaration that defines a type together
+with its codec, or a system together with its signature and instances) has to be a macro, which
+needs only `Init` and sees the declaration's syntax, not a deriving handler or an elaborator.
+
+
 ## D16. An actor never waits inside a step
 
 A send whose receiver's mailbox is full goes to the sender's outbox, and a separate task delivers
