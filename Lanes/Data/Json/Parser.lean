@@ -202,20 +202,25 @@ def fraction (maxDigits whole count : Nat) (p : s.Pos) :
     | .error e => .error e
   | none => .ok (whole, 0, ⟨p, String.Pos.le_refl p⟩)
 
+/-- The digits of an exponent at `p2`, after its marker at `p1` and its sign. -/
+def exponentDigits (maxDigits : Nat) (negative : Bool) (p p1 p2 : s.Pos) (h : p ≤ p2) :
+    Except String (Int × { q : s.Pos // p ≤ q }) :=
+  match digitsFrom maxDigits p p2 h 0 0 with
+  | .ok (_, 0, _) => fail p2 "digit expected in the exponent"
+  | .ok (n, _, q) =>
+    if n > maxDigits then fail p1 s!"exponent larger than {maxDigits}"
+    else .ok (if negative then -(n : Int) else n, q)
+  | .error e => .error e
+
 def exponent (maxDigits : Nat) (p : s.Pos) : Except String (Int × { q : s.Pos // p ≤ q }) :=
   match accept (fun c => c == 'e' || c == 'E') p with
   | some ⟨p1, h1⟩ =>
-    let negative := (accept (· == '-') p1).isSome
-    let p2 : { q : s.Pos // p1 ≤ q } :=
-      match accept (fun c => c == '-' || c == '+') p1 with
-      | some ⟨q, hq⟩ => ⟨q, by pos_order⟩
-      | none => ⟨p1, String.Pos.le_refl p1⟩
-    match digitsFrom maxDigits p p2.1 (by have := p2.2; pos_order) 0 0 with
-    | .ok (_, 0, _) => fail p2.1 "digit expected in the exponent"
-    | .ok (n, _, q) =>
-      if n > maxDigits then fail p1 s!"exponent larger than {maxDigits}"
-      else .ok (if negative then -(n : Int) else n, q)
-    | .error e => .error e
+    match accept (· == '-') p1 with
+    | some ⟨p2, h2⟩ => exponentDigits maxDigits true p p1 p2 (by pos_order)
+    | none =>
+      match accept (· == '+') p1 with
+      | some ⟨p2, h2⟩ => exponentDigits maxDigits false p p1 p2 (by pos_order)
+      | none => exponentDigits maxDigits false p p1 p1 (by pos_order)
   | none => .ok (0, ⟨p, String.Pos.le_refl p⟩)
 
 /-- The number at `p1`, after its sign: `negative` if there was a minus. -/

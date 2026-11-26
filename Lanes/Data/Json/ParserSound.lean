@@ -300,47 +300,42 @@ theorem exponent_complete {md : Nat} {p : s.Pos} {exp ed t : List Char} {e : Int
     have hdd := hd.2 d (by simp)
     simp only [IsDigit] at hdd
     have hdt : ∀ c, t.head? = some c → ¬IsDigit c := fun c hc => (ht c hc).1
-    have hnd : ∀ c, IsDigit c → (c == '-') = false ∧ (c == '-' || c == '+') = false := by
+    have hnd : ∀ c, IsDigit c → (c == '-') = false ∧ (c == '+') = false := by
       rintro c ⟨h1, -⟩
       have : c ≠ '-' := by rintro rfl; exact absurd h1 (by decide)
       have : c ≠ '+' := by rintro rfl; exact absurd h1 (by decide)
       simp [*]
+    have hdig : ∀ {negative : Bool} {p2 : s.Pos} {hp : p ≤ p2}, rest p2 = d :: ds' ++ t →
+        ∃ q, exponentDigits md negative p p1 p2 hp =
+          .ok (if negative then -(Nat.ofDigitChars 10 (d :: ds') 0 : Int)
+            else Nat.ofDigitChars 10 (d :: ds') 0, q) ∧ rest q.1 = t := by
+      intro negative p2 hp r2
+      obtain ⟨q, eq, rq⟩ := digitsFrom_complete (md := md) (start := p) (p := p2) (hp := hp) r2
+        hd.2 hdt 0 0 (by simpa using hl)
+      refine ⟨q, ?_, rq⟩
+      rw [exponentDigits, eq]
+      have : ¬Nat.ofDigitChars 10 (d :: ds') 0 > md := by
+        have := hv
+        split at this <;> simp at this <;> omega
+      simp [this]
     rcases hsign with rfl | rfl | rfl
     · have hn : accept (· == '-') p1 = none := accept_none fun c t' hct => by
         rw [r1] at hct; simp at hct; rw [← hct.1]; exact (hnd d (hd.2 d (by simp))).1
-      have hs : accept (fun c => c == '-' || c == '+') p1 = none := accept_none fun c t' hct => by
+      have hs : accept (· == '+') p1 = none := accept_none fun c t' hct => by
         rw [r1] at hct; simp at hct; rw [← hct.1]; exact (hnd d (hd.2 d (by simp))).2
-      obtain ⟨q, eq, rq⟩ := digitsFrom_complete (md := md) (start := p) (p := p1)
-        (hp := String.Pos.le_of_lt h1) (by simpa using r1) hd.2 hdt 0 0 (by simpa using hl)
-      refine ⟨q, ?_, rq⟩
-      simp only [exponent, e1, hn, hs]
-      rw [eq]
-      have : ¬Nat.ofDigitChars 10 (d :: ds') 0 > md := by simp at hv; omega
-      simp [this]
+      obtain ⟨q, eq, rq⟩ := hdig (negative := false) (p2 := p1) (hp := String.Pos.le_of_lt h1)
+        (by simpa using r1)
+      exact ⟨q, by rw [exponent, e1]; simp [hn, hs, eq], rq⟩
     · have hn : accept (· == '-') p1 = none := accept_none fun c t' hct => by
         rw [r1] at hct; simp at hct; rw [← hct.1]; decide
-      obtain ⟨⟨p2, h2⟩, hs, r2⟩ := accept_cons (accepted := fun c => c == '-' || c == '+') r1
-        (by decide)
-      obtain ⟨q, eq, rq⟩ := digitsFrom_complete (md := md) (start := p) (p := p2)
-        (hp := String.Pos.le_of_lt (String.Pos.lt_trans h1 h2)) (by simpa using r2) hd.2 hdt 0 0
-        (by simpa using hl)
-      refine ⟨q, ?_, rq⟩
-      simp only [exponent, e1, hn, hs]
-      rw [eq]
-      have : ¬Nat.ofDigitChars 10 (d :: ds') 0 > md := by simp at hv; omega
-      simp [this]
+      obtain ⟨⟨p2, h2⟩, hs, r2⟩ := accept_cons (accepted := (· == '+')) r1 (by decide)
+      obtain ⟨q, eq, rq⟩ := hdig (negative := false) (p2 := p2)
+        (hp := String.Pos.le_of_lt (String.Pos.lt_trans h1 h2)) (by simpa using r2)
+      exact ⟨q, by rw [exponent, e1]; simp [hn, hs, eq], rq⟩
     · obtain ⟨⟨p2, h2⟩, hn, r2⟩ := accept_cons (accepted := (· == '-')) r1 (by decide)
-      obtain ⟨⟨p2', h2'⟩, hs, r2'⟩ := accept_cons (accepted := fun c => c == '-' || c == '+') r1
-        (by decide)
-      obtain rfl : p2' = p2 := rest_inj (r2'.trans r2.symm)
-      obtain ⟨q, eq, rq⟩ := digitsFrom_complete (md := md) (start := p) (p := p2')
-        (hp := String.Pos.le_of_lt (String.Pos.lt_trans h1 h2)) (by simpa using r2) hd.2 hdt 0 0
-        (by simpa using hl)
-      refine ⟨q, ?_, rq⟩
-      simp only [exponent, e1, hn, hs]
-      rw [eq]
-      have : ¬Nat.ofDigitChars 10 (d :: ds') 0 > md := by simp at hv; omega
-      simp [this]
+      obtain ⟨q, eq, rq⟩ := hdig (negative := true) (p2 := p2)
+        (hp := String.Pos.le_of_lt (String.Pos.lt_trans h1 h2)) (by simpa using r2)
+      exact ⟨q, by rw [exponent, e1]; simp [hn, eq], rq⟩
 
 theorem not_digit_e {c : Char} (h : c = 'e' ∨ c = 'E') : ¬IsDigit c ∧ c ≠ '.' := by
   rcases h with rfl | rfl <;> decide
@@ -700,6 +695,370 @@ theorem numStop_of_ws {w : List Char} (hw : Ws w) : NumStop w := by
     simp only [List.head?_cons, Option.some.injEq] at hc
     subst hc
     rcases hw _ (List.mem_cons_self ..) with h | h | h | h <;> rw [h] <;> decide
+
+/-! ### What the parser accepts is in the grammar -/
+
+theorem rest_of_next? {p : s.Pos} {c : Char} {q : { q : s.Pos // p < q }}
+    (h : next? p = some (c, q)) : rest p = c :: rest q.1 := by
+  unfold next? at h
+  split at h
+  · simp at h
+  · rename_i hne
+    simp only [Option.some.injEq, Prod.mk.injEq] at h
+    obtain ⟨rfl, rfl⟩ := h
+    exact rest_next p hne
+
+theorem rest_of_accept {f : Char → Bool} {p : s.Pos} {q : { q : s.Pos // p < q }}
+    (h : accept f p = some q) : ∃ c, f c = true ∧ rest p = c :: rest q.1 := by
+  unfold accept at h
+  split at h
+  · rename_i c q' hn
+    split at h
+    · simp only [Option.some.injEq] at h
+      subst h
+      exact ⟨c, ‹_›, rest_of_next? hn⟩
+    · simp at h
+  · simp at h
+
+theorem rest_of_acceptAll {cs : List Char} {p : s.Pos} {q : { q : s.Pos // p ≤ q }}
+    (h : acceptAll cs p = some q) : rest p = cs ++ rest q.1 := by
+  induction cs generalizing p with
+  | nil => simp only [acceptAll, Option.some.injEq] at h; subst h; rfl
+  | cons c cs ih =>
+    unfold acceptAll at h
+    split at h
+    · rename_i q1 h1 hacc
+      split at h
+      · rename_i r hr hall
+        simp only [Option.some.injEq] at h
+        subst h
+        obtain ⟨c', hc', e⟩ := rest_of_accept hacc
+        simp only [beq_iff_eq] at hc'
+        subst hc'
+        rw [e, ih hall]
+        rfl
+      · simp at h
+    · simp at h
+
+theorem skipWsFrom_sound (start p : s.Pos) (h : start ≤ p) :
+    ∃ w, Ws w ∧ rest p = w ++ rest (skipWsFrom start p h).1 := by
+  fun_induction skipWsFrom start p h with
+  | case1 p h c q hq hn hws ih =>
+    obtain ⟨w, hw, e⟩ := ih
+    refine ⟨c :: w, ?_, by rw [rest_of_next? hn, e]; rfl⟩
+    intro c' hc'
+    rcases List.mem_cons.mp hc' with rfl | hc'
+    · simp only [Bool.or_eq_true, beq_iff_eq] at hws
+      simp only [IsWs]
+      rcases hws with ((h | h) | h) | h <;> simp [h]
+    · exact hw c' hc'
+  | case2 => exact ⟨[], nofun, rfl⟩
+  | case3 => exact ⟨[], nofun, rfl⟩
+
+theorem skipWs_sound (p : s.Pos) : ∃ w, Ws w ∧ rest p = w ++ rest (skipWs p).1 :=
+  skipWsFrom_sound p p _
+
+theorem hexDigit_sound {p : s.Pos} {x : Nat} {q : { q : s.Pos // p < q }}
+    (h : hexDigit p = .ok (x, q)) : ∃ c, hexDigit? c = some x ∧ rest p = c :: rest q.1 := by
+  unfold hexDigit at h
+  split at h
+  · rename_i c q' hn
+    split at h
+    · simp only [Except.ok.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      exact ⟨c, ‹_›, rest_of_next? hn⟩
+    · simp [fail] at h
+  · simp [fail] at h
+
+theorem hex4_sound {p : s.Pos} {n : Nat} {q : { q : s.Pos // p < q }}
+    (h : hex4 p = .ok (n, q)) : ∃ hs, Hex4 hs n ∧ rest p = hs ++ rest q.1 := by
+  simp only [hex4, bind, Except.bind, pure, Except.pure] at h
+  split at h
+  · simp at h
+  rename_i r1 e1
+  obtain ⟨a, ⟨p1, h1⟩⟩ := r1
+  split at h
+  · simp at h
+  rename_i r2 e2
+  obtain ⟨b, ⟨p2, h2⟩⟩ := r2
+  split at h
+  · simp at h
+  rename_i r3 e3
+  obtain ⟨c, ⟨p3, h3⟩⟩ := r3
+  split at h
+  · simp at h
+  rename_i r4 e4
+  obtain ⟨d, ⟨p4, h4⟩⟩ := r4
+  simp only [Except.ok.injEq, Prod.mk.injEq] at h
+  obtain ⟨rfl, rfl⟩ := h
+  obtain ⟨ca, ha, ra⟩ := hexDigit_sound e1
+  obtain ⟨cb, hb, rb⟩ := hexDigit_sound e2
+  obtain ⟨cc, hc, rc⟩ := hexDigit_sound e3
+  obtain ⟨cd, hd, rd⟩ := hexDigit_sound e4
+  exact ⟨[ca, cb, cc, cd], .mk ha hb hc hd, by rw [ra, rb, rc, rd]; rfl⟩
+
+theorem escape_one {p : s.Pos} {c d e : Char} {q q' : { q : s.Pos // p < q }}
+    (hn : next? p = some (c, q')) (h : (Except.ok (d, q') : Except String _) = .ok (e, q))
+    (he : Escape [c] d) : ∃ es, Escape es e ∧ rest p = es ++ rest q.1 := by
+  simp only [Except.ok.injEq, Prod.mk.injEq] at h
+  obtain ⟨rfl, rfl⟩ := h
+  exact ⟨[c], he, rest_of_next? hn⟩
+
+theorem escape_sound {p : s.Pos} {c : Char} {q : { q : s.Pos // p < q }}
+    (h : escape p = .ok (c, q)) : ∃ es, Escape es c ∧ rest p = es ++ rest q.1 := by
+  unfold escape at h
+  split at h
+  case h_1 _ q' hn => exact escape_one hn h .quote
+  case h_2 _ q' hn => exact escape_one hn h .backslash
+  case h_3 _ q' hn => exact escape_one hn h .slash
+  case h_4 _ q' hn => exact escape_one hn h .backspace
+  case h_5 _ q' hn => exact escape_one hn h .formFeed
+  case h_6 _ q' hn => exact escape_one hn h .lineFeed
+  case h_7 _ q' hn => exact escape_one hn h .carriageReturn
+  case h_8 _ q' hn => exact escape_one hn h .tab
+  case h_10 => simp [fail] at h
+  case h_11 => simp [fail] at h
+  rename_i p1 h1 hn
+  split at h
+  · rename_i code p2 h2 e2
+    obtain ⟨hs, hh, r2⟩ := hex4_sound e2
+    split at h
+    · simp only [Except.ok.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      exact ⟨'u' :: hs, .unicode hh ‹_›, by rw [rest_of_next? hn]; simp [r2]⟩
+    split at h
+    · split at h
+      · rename_i c' p3 h3 e3
+        simp only [Except.ok.injEq, Prod.mk.injEq] at h
+        obtain ⟨rfl, rfl⟩ := h
+        unfold lowSurrogate at e3
+        split at e3
+        · rename_i p4 h4 e4
+          split at e3
+          · rename_i low p5 h5 e5
+            split at e3
+            · rename_i hlow
+              simp only [Except.ok.injEq, Prod.mk.injEq, Subtype.mk.injEq] at e3
+              obtain ⟨rfl, rfl⟩ := e3
+              obtain ⟨ls, hl, r5⟩ := hex4_sound e5
+              have r4 := rest_of_acceptAll e4
+              exact ⟨'u' :: hs ++ '\\' :: 'u' :: ls, .pair hh (by omega) ‹_› hl hlow.1 hlow.2,
+                by rw [rest_of_next? hn]; simp [r2, r4, r5]⟩
+            · simp [fail] at e3
+          · simp at e3
+        · simp [fail] at e3
+      · simp at h
+    · simp [fail] at h
+  · simp at h
+
+theorem strFrom_sound {start p : s.Pos} {hp : start ≤ p} {acc text : String}
+    {q : { q : s.Pos // start ≤ q }} (h : strFrom start p hp acc = .ok (text, q)) :
+    ∃ cs ds, Chars cs ds ∧ rest p = cs ++ '"' :: rest q.1 ∧ text = acc ++ String.ofList ds := by
+  fun_induction strFrom start p hp acc generalizing text q with
+  | case1 p hp acc c q' hq' hn hc =>
+    simp only [Except.ok.injEq, Prod.mk.injEq] at h
+    obtain ⟨rfl, rfl⟩ := h
+    simp only [beq_iff_eq] at hc
+    subst hc
+    exact ⟨[], [], .nil, by rw [rest_of_next? hn]; rfl, by simp⟩
+  | case2 p hp acc c q' hq' hn hc1 hc2 c' r hr he ih =>
+    obtain ⟨cs, ds, hcs, e, rfl⟩ := ih h
+    obtain ⟨es, hes, re⟩ := escape_sound he
+    simp only [beq_iff_eq] at hc2
+    subst hc2
+    refine ⟨'\\' :: es ++ cs, c' :: ds, .escape hes hcs, ?_, ?_⟩
+    · rw [rest_of_next? hn]; simp [re, e]
+    · apply String.toList_inj.mp; simp [String.toList_append, String.toList_push]
+  | case3 => simp at h
+  | case4 => simp [fail] at h
+  | case5 p hp acc c q' hq' hn hc1 hc2 hc3 ih =>
+    obtain ⟨cs, ds, hcs, e, rfl⟩ := ih h
+    simp only [beq_iff_eq] at hc1 hc2
+    refine ⟨c :: cs, c :: ds, .plain ⟨UInt32.not_lt.mp hc3, hc1, hc2⟩ hcs, ?_, ?_⟩
+    · rw [rest_of_next? hn, e]; rfl
+    · apply String.toList_inj.mp; simp [String.toList_append, String.toList_push]
+  | case6 => simp [fail] at h
+
+theorem str_sound {p : s.Pos} {text : String} {q : { q : s.Pos // p ≤ q }}
+    (h : str p = .ok (text, q)) :
+    ∃ cs ds, Chars cs ds ∧ rest p = '"' :: cs ++ '"' :: rest q.1 ∧ text = String.ofList ds := by
+  unfold str at h
+  split at h
+  · rename_i p1 h1 hacc
+    obtain ⟨cs, ds, hcs, e, rfl⟩ := strFrom_sound h
+    obtain ⟨c, hc, r⟩ := rest_of_accept hacc
+    simp only [beq_iff_eq] at hc
+    subst hc
+    exact ⟨cs, ds, hcs, by rw [r, e]; rfl, by simp⟩
+  · simp [fail] at h
+
+theorem digitsFrom_sound {md : Nat} {start p : s.Pos} {hp : start ≤ p} {acc count n c' : Nat}
+    {q : { q : s.Pos // start ≤ q }} (h : digitsFrom md start p hp acc count = .ok (n, c', q)) :
+    ∃ ds, (∀ c ∈ ds, IsDigit c) ∧ rest p = ds ++ rest q.1 ∧ n = Nat.ofDigitChars 10 ds acc ∧
+      c' = count + ds.length ∧ (count ≤ md → c' ≤ md) := by
+  fun_induction digitsFrom md start p hp acc count generalizing n c' q with
+  | case1 p hp acc count c q' hq' hn hc hlt ih =>
+    obtain ⟨ds, hds, e, rfl, rfl, hle⟩ := ih h
+    refine ⟨c :: ds, ?_, by rw [rest_of_next? hn, e]; rfl, by rw [Nat.ofDigitChars_cons],
+      by simp; omega, fun _ => hle (by omega)⟩
+    intro c'' hc''
+    rcases List.mem_cons.mp hc'' with rfl | hc''
+    · exact hc
+    · exact hds c'' hc''
+  | case2 => simp [fail] at h
+  | case3 p hp acc count c q' hq' hn hc =>
+    simp only [Except.ok.injEq, Prod.mk.injEq] at h
+    obtain ⟨rfl, rfl, rfl⟩ := h
+    exact ⟨[], nofun, rfl, Nat.ofDigitChars_nil.symm, rfl, id⟩
+  | case4 p hp acc count hn =>
+    simp only [Except.ok.injEq, Prod.mk.injEq] at h
+    obtain ⟨rfl, rfl, rfl⟩ := h
+    exact ⟨[], nofun, rfl, Nat.ofDigitChars_nil.symm, rfl, id⟩
+
+theorem whole_sound {md n count : Nat} {p : s.Pos} {q : { q : s.Pos // p ≤ q }}
+    (h : whole md p = .ok (n, count, q)) :
+    ∃ ds, IntPart ds ∧ rest p = ds ++ rest q.1 ∧ n = Nat.ofDigitChars 10 ds 0 ∧
+      count = ds.length ∧ count ≤ md := by
+  unfold whole at h
+  split at h
+  · simp [fail] at h
+  · rename_i n' count' q' hz e
+    obtain ⟨ds, hds, r, rfl, rfl, hle⟩ := digitsFrom_sound e
+    split at h
+    · simp [fail] at h
+    · rename_i hlz
+      simp only [Except.ok.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl, rfl⟩ := h
+      have hne : ds ≠ [] := fun e => hz (by simp [e])
+      refine ⟨ds, ⟨⟨hne, hds⟩, fun h0 => ?_⟩, r, rfl, by simp, hle (Nat.zero_le _)⟩
+      obtain ⟨d, rest', rfl⟩ := List.exists_cons_of_ne_nil hne
+      simp only [List.head?_cons, Option.some.injEq] at h0
+      subst h0
+      cases rest' with
+      | nil => rfl
+      | cons d' r' =>
+        exfalso
+        apply hlz
+        obtain ⟨q1, e1, _⟩ := accept_cons (accepted := (· == '0')) (t := d' :: r' ++ rest q'.1)
+          (by rw [r]; rfl) (by decide)
+        simp [e1]
+  · simp at h
+
+theorem fraction_sound {md whole count digits decimals : Nat} {p : s.Pos}
+    {q : { q : s.Pos // p ≤ q }} (h : fraction md whole count p = .ok (digits, decimals, q))
+    (hc : count ≤ md) :
+    ∃ frac fd, Frac frac fd ∧ rest p = frac ++ rest q.1 ∧ digits = Nat.ofDigitChars 10 fd whole ∧
+      decimals = fd.length ∧ count + fd.length ≤ md := by
+  unfold fraction at h
+  split at h
+  · rename_i p1 h1 hacc
+    split at h
+    · rename_i d total q' e
+      obtain ⟨ds, hds, r, rfl, rfl, hle⟩ := digitsFrom_sound e
+      split at h
+      · simp [fail] at h
+      · rename_i hne
+        simp only [Except.ok.injEq, Prod.mk.injEq] at h
+        obtain ⟨rfl, rfl, rfl⟩ := h
+        obtain ⟨c, hc', r1⟩ := rest_of_accept hacc
+        simp only [beq_iff_eq] at hc'
+        subst hc'
+        refine ⟨'.' :: ds, ds, .some ⟨fun e => hne (by simp [e]), hds⟩, by rw [r1, r]; rfl, rfl,
+          by omega, by have := hle hc; omega⟩
+    · simp at h
+  · simp only [Except.ok.injEq, Prod.mk.injEq] at h
+    obtain ⟨rfl, rfl, rfl⟩ := h
+    exact ⟨[], [], .none, rfl, Nat.ofDigitChars_nil.symm, rfl, by simpa using hc⟩
+
+theorem exponentDigits_sound {md : Nat} {negative : Bool} {e : Int} {p p1 p2 : s.Pos}
+    {hp : p ≤ p2} {q : { q : s.Pos // p ≤ q }}
+    (h : exponentDigits md negative p p1 p2 hp = .ok (e, q)) :
+    ∃ ds, Digits ds ∧ rest p2 = ds ++ rest q.1 ∧ ds.length ≤ md ∧
+      e = (if negative then -(Nat.ofDigitChars 10 ds 0 : Int) else Nat.ofDigitChars 10 ds 0) ∧
+      Nat.ofDigitChars 10 ds 0 ≤ md := by
+  unfold exponentDigits at h
+  split at h
+  · simp [fail] at h
+  · rename_i n count q' hz e'
+    obtain ⟨ds, hds, r, rfl, rfl, hle⟩ := digitsFrom_sound e'
+    split at h
+    · simp [fail] at h
+    · rename_i hgt
+      simp only [Except.ok.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      exact ⟨ds, ⟨fun e => hz (by simp [e]), hds⟩, r, by have := hle (Nat.zero_le _); omega, rfl,
+        by omega⟩
+  · simp at h
+
+theorem exponent_sound {md : Nat} {e : Int} {p : s.Pos} {q : { q : s.Pos // p ≤ q }}
+    (h : exponent md p = .ok (e, q)) :
+    ∃ exp ed, Exp exp e ed ∧ rest p = exp ++ rest q.1 ∧ ed.length ≤ md ∧ e.natAbs ≤ md := by
+  unfold exponent at h
+  split at h
+  · rename_i p1 h1 hacc
+    obtain ⟨m, hm, r1⟩ := rest_of_accept hacc
+    have hm' : m = 'e' ∨ m = 'E' := by simpa using hm
+    have tail : ∀ {sign : List Char} {negative : Bool} {p2 : s.Pos} {hp : p ≤ p2},
+        (sign = [] ∨ sign = ['+'] ∨ sign = ['-']) → (negative = true ↔ sign = ['-']) →
+        rest p1 = sign ++ rest p2 → exponentDigits md negative p p1 p2 hp = .ok (e, q) →
+        ∃ exp ed, Exp exp e ed ∧ rest p = exp ++ rest q.1 ∧ ed.length ≤ md ∧ e.natAbs ≤ md := by
+      intro sign negative p2 hp hsign hneg r2 h
+      obtain ⟨ds, hds, r, hl, rfl, hv⟩ := exponentDigits_sound h
+      refine ⟨m :: sign ++ ds, ds, ?_, by rw [r1, r2, r]; simp, hl, by split <;> omega⟩
+      have := Exp.some (e := m) (ds := ds) sign hm' hsign hds
+      cases negative <;> simp_all
+    split at h
+    · rename_i p2 h2 hneg
+      obtain ⟨c, hc, r2⟩ := rest_of_accept hneg
+      simp only [beq_iff_eq] at hc
+      subst hc
+      exact tail (sign := ['-']) (.inr (.inr rfl)) (by simp) r2 h
+    · rename_i hneg
+      split at h
+      · rename_i p2 h2 hpos
+        obtain ⟨c, hc, r2⟩ := rest_of_accept hpos
+        simp only [beq_iff_eq] at hc
+        subst hc
+        exact tail (sign := ['+']) (.inr (.inl rfl)) (by simp) r2 h
+      · exact tail (sign := []) (.inl rfl) (by simp) rfl h
+  · simp only [Except.ok.injEq, Prod.mk.injEq] at h
+    obtain ⟨rfl, rfl⟩ := h
+    exact ⟨[], [], .none, rfl, Nat.zero_le _, Nat.zero_le _⟩
+
+theorem unsigned_sound {md : Nat} {negative : Bool} {n : JsonNumber} {p p1 : s.Pos} {hp : p ≤ p1}
+    {q : { q : s.Pos // p ≤ q }} (h : unsigned md negative p p1 hp = .ok (n, q)) :
+    ∃ cs, Number md ((if negative then ['-'] else []) ++ cs) n ∧ rest p1 = cs ++ rest q.1 := by
+  unfold unsigned at h
+  split at h
+  · rename_i v count p2 h2 ew
+    split at h
+    · rename_i digits decimals p3 h3 ef
+      split at h
+      · rename_i e p4 h4 ee
+        simp only [Except.ok.injEq, Prod.mk.injEq] at h
+        obtain ⟨rfl, rfl⟩ := h
+        obtain ⟨int, hi, rw', rfl, rfl, hc⟩ := whole_sound ew
+        obtain ⟨frac, fd, hf, rf, rfl, rfl, hc'⟩ := fraction_sound ef hc
+        obtain ⟨exp, ed, hx, re, hl, hv⟩ := exponent_sound ee
+        refine ⟨int ++ frac ++ exp, ?_, by rw [rw', rf, re]; simp⟩
+        have := Number.mk negative hi hf hx (by simpa using hc') hl hv
+        simpa [Nat.ofDigitChars_append] using this
+      · simp at h
+    · simp at h
+  · simp at h
+
+theorem num_sound {md : Nat} {n : JsonNumber} {p : s.Pos} {q : { q : s.Pos // p ≤ q }}
+    (h : num md p = .ok (n, q)) : ∃ cs, Number md cs n ∧ rest p = cs ++ rest q.1 := by
+  unfold num at h
+  split at h
+  · rename_i p1 h1 hacc
+    obtain ⟨cs, hn, r⟩ := unsigned_sound h
+    obtain ⟨c, hc, r1⟩ := rest_of_accept hacc
+    simp only [beq_iff_eq] at hc
+    subst hc
+    exact ⟨_, hn, by rw [r1, r]; simp⟩
+  · obtain ⟨cs, hn, r⟩ := unsigned_sound h
+    exact ⟨_, hn, by simpa using r⟩
 
 end Parser
 
