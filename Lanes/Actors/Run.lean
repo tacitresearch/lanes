@@ -131,6 +131,41 @@ theorem any_isStop_map {τ : Signature} {j : τ.Id} {f : Effect σ i → Effect 
   rw [List.any_map]
   exact congrArg effs.any (funext h)
 
+theorem retime_cons (eff : Effect σ i) (effs : List (Effect σ i)) (timers : List (σ.Msg i)) :
+    retime (eff :: effs) timers = retime effs (retime [eff] timers) :=
+  rfl
+
+/-- A timer stays armed through effects that do not cancel it. -/
+theorem mem_retime_of_mem {effs : List (Effect σ i)} {timers : List (σ.Msg i)} {msg : σ.Msg i}
+    (h : msg ∈ timers) (hkeep : .cancel msg ∉ effs) : msg ∈ retime effs timers := by
+  induction effs generalizing timers with
+  | nil => exact h
+  | cons eff effs ih =>
+    simp only [List.mem_cons, not_or] at hkeep
+    rw [retime_cons]
+    refine ih ?_ hkeep.2
+    cases eff with
+    | after _ m => simp only [retime, List.foldl_cons, List.foldl_nil]; split <;> simp [h]
+    | cancel m =>
+      have hne : msg ≠ m := fun he => hkeep.1 (he ▸ rfl)
+      exact (List.mem_erase_of_ne hne).mpr h
+    | send _ _ | emit _ | stop => exact h
+
+/-- Effects that arm a timer and do not cancel it leave it armed. -/
+theorem mem_retime_of_after {effs : List (Effect σ i)} {timers : List (σ.Msg i)} {msg : σ.Msg i}
+    {delay_ms : Nat} (h : .after delay_ms msg ∈ effs) (hkeep : .cancel msg ∉ effs) :
+    msg ∈ retime effs timers := by
+  induction effs generalizing timers with
+  | nil => simp at h
+  | cons eff effs ih =>
+    simp only [List.mem_cons, not_or] at hkeep h
+    rw [retime_cons]
+    rcases h with rfl | h
+    · refine mem_retime_of_mem ?_ hkeep.2
+      simp only [retime, List.foldl_cons, List.foldl_nil]
+      split <;> simp [*]
+    · exact ih h hkeep.2
+
 end Effect
 
 /-- An input, a loss or a hand-over: an event that changes no actor's state, starts or stops no
