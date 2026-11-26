@@ -2,9 +2,9 @@
 
 **Proved logic, contained concurrency.**
 
-Lanes is a framework for building verified software in Lean 4. Every actor runs in its own lane,
-nothing shares state, and the runtime merges traffic only at the edges. The same step function
-runs in production, in the simulator, in the model checker and in the proofs.
+Lanes is a framework for building verified software in Lean 4. Logic is a pure step function
+per actor, nothing shares state, and IO happens only at the edges. The same step function runs
+in production, in the simulator, in the model checker and in the proofs.
 
 > Status: early. `docs/STATUS.md` lists what works today against the plan in `docs/DESIGN.md`;
 > `docs/DECISIONS.md` records what has been settled.
@@ -61,14 +61,38 @@ model check with vacuity witnesses, and a server-rendered page.
 ```lean
 open scoped Lanes.Html
 
+namespace Routes
+def count : Http.Route Unit := .get (.seg "count")
+def increment : Http.Route Unit := .post (.seg "increment")
+end Routes
+
 def CounterView (response : Response) : Html :=
   <div id="counter">
     <p>{s!"Count: {response.value}"}</p>
-    <button hx-post="/increment" hx-target="#counter" hx-swap="outerHTML">"Add one"</button>
+    <button {Hx.request Routes.increment ()} {Hx.target "#counter"} {Hx.swap .outerHTML}>
+      "Add one"
+    </button>
   </div>
 ```
 
 Templates are a Lean macro: no generate step, errors on the template line, text escaped by type.
+A route is one value that prints links and matches requests, with a proof that the two agree, so
+a view cannot link or post to a route that does not exist.
+
+## What is proved, and what is trusted
+
+- **The runtime's logic.** Every decision the runtime makes is a pure function, and whatever
+  the IO loop around it does, the system stays in a state the semantics allows
+  (`Kernel.exec_reachable`).
+- **The model checker.** It lists exactly the enabled events, merging states is safe, a
+  reported trace is real, and a complete PASS of the search means the property holds in every
+  reachable state (`Check.search_sound`).
+- **Proof tools.** Per-actor invariants lift to every system under every fault model. History
+  variables cost nothing at run time (`Invariant.of_ghost`). Invariants about states and
+  messages need five cases, not eight, and hold under loss, duplication, reordering and crashes
+  (`Inductive.of_monotone`).
+- **Trusted.** About 400 lines of IO and macro code, listed with their sizes in `TRUSTED.md`;
+  `lanes lint` fails if they grow.
 
 ## Build Lanes itself
 
@@ -109,7 +133,7 @@ itself, and `Server.implements` proves it refines the spec for every interleavin
 ## Documents
 
 - `docs/STATUS.md`: what works today and what is next.
-
+- `docs/PLAN.md`: what is being done now and why.
 - `docs/DESIGN.md`: what Lanes is and the build plan.
 - `LANES_STYLE.md`: design and code rules, each with its reason.
 - `docs/DECISIONS.md`: decisions taken during implementation.
