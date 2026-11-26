@@ -252,15 +252,6 @@ busy or has stopped. -/
 def tryInput (rt : Runtime sys) (x : σ.In) : Async Bool :=
   rt.offer (.input x)
 
-/-- Hand over an input from another shard. It is never refused for want of room; `false` means
-the shard has stopped. -/
-def peer (rt : Runtime sys) (x : σ.In) : BaseIO Bool := do
-  match ← rt.inbox.modifyGet (Mailbox.urge (.input x)) with
-  | some wake =>
-    if let some wake := wake then wake.resolve ()
-    return true
-  | none => return false
-
 /-- Wait until everything handed over so far is handled and no message is queued. With
 `timers`, also until no timer is pending. Throws if the runtime stops first. -/
 def idle (rt : Runtime sys) (timers : Bool := false) : Async Unit := do

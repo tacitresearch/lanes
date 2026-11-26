@@ -25,8 +25,8 @@ open Lanes
 
 lanes_data structure Profile (C : Type) where
   credential : C
-  attempts : Auth.Attempts
-  sessions : Auth.Sessions
+  attempts : Auth.Attempts := {}
+  sessions : Auth.Sessions := {}
   deriving DecidableEq, Repr, Hashable, Codable
 
 /-- What a request asks of the user it names. -/
@@ -95,7 +95,7 @@ def act (p : Profile C) (session : Sid) : Op → Profile C × Verdict N × Timer
 
 def decide (config : Config N) (self : N) (req : ReqId) :
     Option (Profile C) → Ask C → Option (Profile C) × Verdict N × Timers
-  | none, .signUp c => (some ⟨c, .none, .none⟩, .reply .signedUp, {})
+  | none, .signUp c => (some { credential := c }, .reply .signedUp, {})
   | some p, .signUp _ => (some p, .reply .nameTaken, {})
   | none, .logIn _ => (none, .reply .refused, {})
   | some p, .logIn c =>
@@ -138,7 +138,7 @@ namespace SpecState
 
 variable {N C : Type} [DecidableEq N] [DecidableEq C]
 
-def init : SpecState N C := { users := fun _ => none, book := .empty }
+def init : SpecState N C := { users := fun _ => none, book := {} }
 
 /-- One request, atomically: the user it names decides, and the book serves what the user lets
 through. `Ledger.spec` is this as a `Service`. -/
