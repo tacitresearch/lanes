@@ -284,11 +284,45 @@ connection.
 
 Next: a database adapter; TLS; and proofs for the wire format (what is written is read back).
 
-### A.4 Time and liveness
+### A.4 Time and liveness (D27)
 
-Fairness as a property of runs (an event enabled forever is taken), so that "every request is
-eventually answered" can be stated for the gate: it needs timers to fire, which the kernel's
-fairness theorem provides at the level of steps.
+**Done for the theory and one theorem.** `Lanes/Semantics/Liveness.lean` has infinite runs
+(`System.Run`: at each position an enabled event or a stutter), what a system owes
+(`Obligation`: deliver to an actor that is up, fire an armed timer of an actor that is up,
+start a stopped actor that has mail, hand over an output), fair runs (weakly fair to each
+obligation on its own), `System.LeadsTo`, and its proof rule
+(`System.LeadsTo.ensures_of_invariant`, Lamport's WF1) with transitivity and monotonicity.
+
+`Lanes/Semantics/GateLive.lean` is the first use, for every system behind the gate and any
+environment that does not crash the gate: a request waiting in the gate stops waiting
+(`Http.pending_leaves`, by its deadline), it stops waiting only in a step that emits its answer
+(`Http.answered_of_leaves`), and the answer is handed over (`Http.pending_answered`).
+
+Still open, roughly in the order it will be needed:
+
+- **Fair runs exist.** That every finite run extends to a fair one is not proved. Until it is,
+  a leads-to theorem is not known to be about any run. The step-level part is proved: an
+  obligation that is due can be taken (`Obligation.Due.enabled`).
+- **From arrival to admission.** That an arrival in flight reaches the gate needs fairness of
+  delivery and a measure, the message's place on its link. With it, "every arrival is
+  answered" for distinct ids. This is also the first leads-to chain.
+- **A concrete application.** The gate's theorem says a request is answered, by the system or
+  with `504`. That the bank answers a transfer with its result needs delivery through the
+  application's actors, and a ranking rule (a well-founded measure that fair steps decrease).
+- **Restart.** Nothing obliges starting a crashed actor that has no mail, so no liveness
+  theorem yet survives a crash of the actor it is about. It needs supervision in the
+  semantics, or restart as a stated assumption.
+- **Strong fairness**, for an obligation that is due again and again without staying due, such
+  as delivery to an actor that keeps crashing. Not needed so far.
+- **Real time.** Fairness says a timer fires, not when. And the semantics does not record a
+  pending timer being armed again, so an actor that restarts a timer forever is live in a fair
+  run and not in the runtime. The gate arms a deadline only for a request that has none, which
+  is checked (`Tests/Gate.lean`), not proved.
+- **The runtime's runs are fair.** The kernel lets neither messages nor due timers starve the
+  other (`Kernel.WellFormed.step_of_queued`, `step_of_due`). That its runs are fair runs of
+  the semantics, given a clock that advances, is not stated.
+- **Checking.** The checker has no lasso search, so a leads-to property cannot be checked
+  before it is proved. `Tests/Gate.lean` checks the three premises of the rule instead.
 
 ## Decisions that are yours
 
@@ -301,6 +335,7 @@ fairness theorem provides at the level of steps.
 ## What proofs will not cover
 
 - Parser ambiguity and developer experience: compile-fail tests, not theorems.
-- Liveness: needs fairness, which the semantics does not have yet. Deadlock-freedom of the
-  kernel is a safety property and is checkable.
+- Liveness of the running program: the proof layer has fair runs and leads-to (A.4), and
+  that the runtime's runs are fair is assumed. Deadlock-freedom of the kernel is a safety
+  property and is checkable.
 - The shell, `Std.Async`, `Std.Http`, the Lean runtime and compiler.

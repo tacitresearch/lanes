@@ -69,6 +69,14 @@ def deadlinesFire {config : GateConfig} (env : EnvModel (gatedSig echoSig))
       | some c => !(c.state none).contains id
       | none => false
 
+/-- With this the gate never arms a deadline that is already armed. Doing so would start the
+delay again in the runtime and change nothing in the semantics, and the fairness that
+`Http.pending_leaves` assumes of the deadline would not describe the runtime. -/
+def deadlinesOfPending {config : GateConfig} (w : GatedWorld config) : Bool :=
+  (w.state.timers none).all fun
+    | .expire id => (w.state.state none).contains id
+    | _ => false
+
 def pendingWhileUp {config : GateConfig} (w : GatedWorld config) : Bool :=
   w.state.up none && !(w.state.state none).isEmpty
 
@@ -96,6 +104,7 @@ def check (config : GateConfig) (requests : List (ReqId × Request)) (mustSee : 
       .always "a gate that cannot crash stays up" fun w => env.mayCrash none || w.state.up none,
       .always "a pending request's deadline can fire, and firing it removes the request"
         (deadlinesFire env),
+      .always "an armed deadline is that of a pending request" deadlinesOfPending,
       .sometimes "a request is pending while the gate is up" pendingWhileUp ]
     { checkDeadlock := true
       terminal := fun w => w.driver.toSend.isEmpty
@@ -128,6 +137,7 @@ def checkArrivals (requests : List (ReqId × Request)) (env : EnvModel (gatedSig
       .always "every pending request has its deadline armed" deadlinesArmed,
       .always "a pending request's deadline can fire, and firing it removes the request"
         (deadlinesFire env),
+      .always "an armed deadline is that of a pending request" deadlinesOfPending,
       .sometimes "a request is pending while the gate is up" pendingWhileUp,
       .sometimes "an id that arrived twice is answered twice" fun w =>
         w.driver.answered.countP (·.1 == 1) == 2 ]
@@ -167,7 +177,7 @@ def tests : List (String × Bool) :=
       | some (.violated "no request is answered more often than it arrived" _) => true
       | _ => false),
     ("gate: a pending request's deadline can fire and firing it removes the request, with and "
-        ++ "without faults, and a gate that cannot crash stays up",
+        ++ "without faults; a gate that cannot crash stays up; deadlines are armed once",
       two.ok && two.complete && full.ok && full.complete && lossy.ok && lossy.complete),
     ("gate: a request leaves the pending list only in a step that emits its answer",
       leavingIsAnswered) ]

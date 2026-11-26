@@ -39,7 +39,7 @@ The toolchain is pinned in `lean-toolchain` and follows CSLib's. Dependencies ar
 | `Lanes/Check/` | Model checker | `Std` only |
 | `Lanes/Http/`, `Lanes/Html/` | HTTP requests and responses as data; HTML values and template syntax | `Std` only |
 | `Lanes/Env/` | Adapters to the outside world (HTTP server) | `Std` only |
-| `Lanes/Semantics/` | The semantics as a CSLib `LTS`, refinement | CSLib, Mathlib |
+| `Lanes/Semantics/` | The semantics as a CSLib `LTS`, refinement, fairness and leads-to | CSLib, Mathlib |
 | `LanesCli/` | The `lanes` command: `new`, `lint`, `check` | `Std` only |
 | `templates/app/` | The application `lanes new` creates; embedded in the `lanes` binary | |
 | `Examples/` | Reference apps, checked and proved | anything |

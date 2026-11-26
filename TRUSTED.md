@@ -68,6 +68,8 @@ proved in `Lanes/Http/GateSound.lean` to answer each arrival at most once and mo
   the message which went first cancelled that timer, armed it again or stopped its actor. So a
   due timer may wait for one message, and the oldest message for one timer. No bound is proved
   for a message that is not the oldest, or from the start of a receiver to its delivery.
+  Liveness theorems are stated of fair runs of the semantics (`System.Run.Fair`); that the
+  runtime's runs are fair is this assumption, not a theorem.
 - **What the gate guarantees, and under what.** *At most once* is proved. In every run of
   `gated sys`, for every system, bridge and configuration, no request id is output more often
   than it was input (`Http.answered_le_arrived`). The environment may crash and restart every
@@ -76,13 +78,14 @@ proved in `Lanes/Http/GateSound.lean` to answer each arrival at most once and mo
   that, so the theorem holds of the events the kernel reports
   (`Http.kernel_answered_le_arrived`). "No id is answered twice" follows when the ids that
   arrive are distinct (`Http.answered_nodup`). That they are is trusted: `Lanes/Env/Http.lean`
-  allocates them. *At least once* is not proved. `Http.deadlines_armed` proves that while the
-  gate is up every waiting request has its deadline armed, in every environment. What remains
-  is that the deadline fires, which is the progress assumption above, and that the gate does
-  not crash and lose its mailbox, which holds on one shard. `Tests/Gate.lean` checks exactly
-  once on two requests and shows each precondition is needed: a reused id is answered twice,
-  a duplicating link from outside answers one arrival twice, and a gate that crashes leaves a
-  request unanswered.
+  allocates them. *At least once* is proved of fair runs, for a request the gate has admitted:
+  in any environment that does not crash the gate, an answer to a waiting request is handed
+  over, when its deadline fires if not before (`Http.pending_answered`). What is assumed is
+  that the runtime's runs are fair, which is the progress assumption above, and that the gate
+  does not crash, which holds on one shard. That an arrival reaches the gate is not proved.
+  `Tests/Gate.lean` checks exactly once on two requests and shows each precondition is
+  needed: a reused id is answered twice, a duplicating link from outside answers one arrival
+  twice, and a gate that crashes leaves a request unanswered.
 - **Durability.** Without a journal, the kernel keeps actor state in memory and it is lost with
   the process. With one, the shard returns in the state the journal describes: it survives the
   death of the process, not loss of power, since nothing is synced to disk. Outputs handed over

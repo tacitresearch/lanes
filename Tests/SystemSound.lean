@@ -79,7 +79,7 @@ example (hfailure : (check {} twoRequests).failure = none)
   refine Check.system_sound _ _ _ ?_ (fun _ _ _ => rfl) hfailure hcomplete (.tail _ (.head _)) hw
   intro p hp a b h
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hp
-  rcases hp with rfl | rfl | rfl | rfl | rfl | rfl | rfl
+  rcases hp with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   case inr.inr.inr.inr.inr.inl =>
     refine h.eq_of_quiet fun w => ?_
     simp only [Check.Property.holds, deadlinesFire, World.quiet, SysState.step]
