@@ -30,7 +30,7 @@ structure Bounds where
   maxCrashes : Nat := 0
 
 abbrev W (config : Config) :=
-  World (cluster N config (store K V)) (List (Request N C) × Check.Monitor (sig N C R) M)
+  World (cluster N config (store K V)) (List (Request N C) × Check.Monitor (Request N C) (Response R) M)
 
 def Bounds.holds {config : Config} (bounds : Bounds) (w : W config) : Bool :=
   w.state.net.length ≤ bounds.maxNet
