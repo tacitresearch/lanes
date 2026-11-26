@@ -23,8 +23,8 @@ come before anything is built on top.
 
 | Phase | What | Done when |
 | --- | --- | --- |
-| A. Settle the contracts | Durability; a composition operator with its theorem; adapters as modelled actors; codecs for inputs and states | The bank survives `kill -9` with recovery covered by a theorem; the gate is rebuilt with the general operator; one real adapter passes conformance against its model |
-| B. Scale | Several shards; node-to-node transport; checker v2; fairness | A Raft-sized model check finishes in minutes; one liveness property is proved |
+| A. Settle the contracts | Durability; a composition operator with its theorem; adapters with a model of the outside; fairness, so liveness can be stated; codecs for inputs | The bank survives `kill -9` with recovery covered by a theorem; the gate is rebuilt with the general operator; one real adapter passes conformance against its model |
+| B. Scale | Several shards; node-to-node transport; checker v2; snapshots | A Raft-sized model check finishes in minutes; a shard restarts from a snapshot in time that does not grow with its history |
 | C. Acceptance test | `systems/raft-kv` | Linearizability proved against the map spec; runs on three machines; survives fault injection |
 | D. Batteries | Database, HTTP client, sessions and auth, server push, jobs, observability | `systems/ledger` is a full web application using all of them |
 | E. Developer experience | A macro that hides signature boilerplate; `lanes prove`; counterexample-to-induction; a cheaper proof API; tutorial; trace viewer | A new user ships a checked application in a day |
