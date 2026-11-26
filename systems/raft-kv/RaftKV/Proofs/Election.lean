@@ -9,7 +9,8 @@ import RaftKV.Proofs.Basic
 
 `Check.lean` checks election safety on three nodes and two terms. Here it is proved for any
 finite set of nodes, any machine, any `Config` and any environment model: links may lose,
-duplicate and reorder messages, and nodes may crash and restart at any time.
+duplicate and reorder messages, and nodes may crash and restart at any time. It is proved of
+one state (`election_safety`) and of two points of a run (`one_leader_per_term`).
 
 A node forgets its vote when its term moves on and its role when it restarts, so the proof lets
 each node remember every state it has left (`past`). The invariant (`Votes`) says that the
@@ -241,6 +242,18 @@ theorem election_safety (config : Config) (machine : Machine C R M) (env : EnvMo
   exact (votes_monotone.invariant env c hc).2.leader_unique (p := (c.state a).1)
     (q := (c.state b).1) List.mem_cons_self List.mem_cons_self (isLeader_iff.mpr ⟨_, ha⟩)
     (isLeader_iff.mpr ⟨_, hb⟩) hterm
+
+/-- A term has one leader over all time: the nodes that lead one term at two points of a run
+are one node. `election_safety` is this at one point. -/
+theorem one_leader_per_term (config : Config) (machine : Machine C R M)
+    (env : EnvModel (sig N C R)) {c c' : SysState (cluster N config machine)}
+    {events : List (Event (sig N C R))} (hc : (cluster N config machine).Reachable env c)
+    (hrun : c.run env events = some c') {a b : N} (ha : isLeader (c.state a) = true)
+    (hb : isLeader (c'.state b) = true) (hterm : (c.state a).term = (c'.state b).term) :
+    a = b := by
+  obtain ⟨d', hreach, rfl, hseen⟩ := hc.exists_past hrun
+  exact (votes_monotone.invariant env d' hreach).2.leader_unique (hseen a) (d'.mem_seen_self b)
+    ha hb hterm
 
 theorem electionSafety_invariant (config : Config) (machine : Machine C R M)
     (env : EnvModel (sig N C R)) :

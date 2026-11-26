@@ -12,7 +12,8 @@ With both switches of `Config` on, for every finite set of nodes, every machine 
 environment model: a node has applied exactly what it has committed (`applied_eq_commit`), its
 machine is the replicated machine run over the entries it has applied (`machine_eq_run`), and of
 two nodes one has applied a start of what the other has (`applied_agree`). This is state machine
-safety.
+safety, of one state; `applied_agree_over_time` and `applied_same_entry` are it of two points
+of a run: no two nodes ever apply different entries at one index.
 
 The invariant (`Logged`) names the list the cluster has committed to: a committed list that
 every node's committed entries are a start of. Each machine is that list run up to where the node
@@ -245,6 +246,45 @@ theorem applied_agree :
       (c.state b).1.log.take (c.state b).1.applied
     rw [← h.take_applied hcommitting.commits a, ← h.take_applied hcommitting.commits b]
     exact (List.take_prefix_take_left hle)
+
+/-- State machine safety over time: what a node has applied at one point of a run and what a
+node, the same or another, has applied at a later point are one a start of the other. -/
+theorem applied_agree_over_time {c c' : SysState (cluster N config machine)}
+    {events : List (Event (sig N C R))} (hc : (cluster N config machine).Reachable env c)
+    (hrun : c.run env events = some c') (a b : N) :
+    (c.state a).log.take (c.state a).applied <+: (c'.state b).log.take (c'.state b).applied ∨
+      (c'.state b).log.take (c'.state b).applied <+: (c.state a).log.take (c.state a).applied := by
+  obtain ⟨d, d', hreach, rfl, hrun', rfl⟩ := hc.exists_ghost_run (.past _) hrun
+  obtain ⟨hcommitting, log, h⟩ := (applying_monotone hup hown).invariant env d hreach
+  obtain ⟨hcommitting', log', h'⟩ :=
+    (applying_monotone hup hown).invariant env d' (hreach.run hrun')
+  have hthen := (hcommitting.commits.nodes a).2.of_seen (c' := d')
+    fun _ _ hp => SysState.mem_seen_run hrun' hp
+  show (d.state a).1.log.take (d.state a).1.applied <+:
+      (d'.state b).1.log.take (d'.state b).1.applied ∨
+    (d'.state b).1.log.take (d'.state b).1.applied <+:
+      (d.state a).1.log.take (d.state a).1.applied
+  rw [h.applied a, h'.applied b]
+  exact hthen.comparable hcommitting'.replicating hcommitting'.safe (hcommitting'.commits.nodes b).2
+
+/-- No two nodes ever apply different entries at one index: an entry a node has applied at one
+point of a run is the entry any node has applied there at any later point. -/
+theorem applied_same_entry {c c' : SysState (cluster N config machine)}
+    {events : List (Event (sig N C R))} (hc : (cluster N config machine).Reachable env c)
+    (hrun : c.run env events = some c') {a b : N} {k : Nat} (ha : k < (c.state a).applied)
+    (hb : k < (c'.state b).applied) : (c.state a).log[k]? = (c'.state b).log[k]? := by
+  have hlenA := commit_le_length config machine hup hown env c hc a
+  have hlenB := commit_le_length config machine hup hown env c' (hc.run hrun) b
+  rw [← applied_eq_commit config machine hup hown env c hc a] at hlenA
+  rw [← applied_eq_commit config machine hup hown env c' (hc.run hrun) b] at hlenB
+  have hA : ((c.state a).log.take (c.state a).applied)[k]? = some (c.state a).log[k] := by
+    rw [List.getElem?_take_of_lt ha, List.getElem?_eq_getElem]
+  have hB : ((c'.state b).log.take (c'.state b).applied)[k]? = some (c'.state b).log[k] := by
+    rw [List.getElem?_take_of_lt hb, List.getElem?_eq_getElem]
+  rw [List.getElem?_eq_getElem (by omega), List.getElem?_eq_getElem (by omega)]
+  rcases applied_agree_over_time config machine hup hown env hc hrun a b with h | h
+  · exact (Option.some.inj (hB.symm.trans (getElem?_of_prefix h hA))).symm ▸ rfl
+  · exact Option.some.inj (hA.symm.trans (getElem?_of_prefix h hB)) ▸ rfl
 
 theorem appliedAllCommitted_invariant :
     (cluster N config machine).Invariant env fun c => appliedAllCommitted c = true := by

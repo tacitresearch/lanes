@@ -101,6 +101,16 @@ theorem Committed.mono (h : Committed c term pfx) {pfx' : List (Entry N C)} (hp 
   h.elim (fun hnil => .inl (List.prefix_nil.mp (hnil ▸ hp)))
     fun ⟨chosenTerm, chosen, hle, hchosen, hpc⟩ => .inr ⟨chosenTerm, chosen, hle, hchosen, hp.trans hpc⟩
 
+/-- What is committed stays committed while no node's past is forgotten. -/
+theorem Committed.of_seen {c' : SysState (recording N config machine)}
+    (hseen : ∀ a, ∀ p ∈ c.seen a, p ∈ c'.seen a) (h : Committed c term pfx) :
+    Committed c' term pfx := by
+  rcases h with rfl | ⟨chosenTerm, chosen, hle, ⟨hne, hlast, ⟨l, ⟨a, p, hp, hled⟩, hstart⟩,
+    quorum, hmajority, hheld⟩, hpc⟩
+  · exact .inl rfl
+  · exact .inr ⟨chosenTerm, chosen, hle, ⟨hne, hlast, ⟨l, ⟨a, p, hseen a p hp, hled⟩, hstart⟩,
+      quorum, hmajority, fun v hv => (hheld v hv).elim fun q hq => ⟨q, hseen v q hq.1, hq.2⟩⟩, hpc⟩
+
 theorem Committed.later (h : Committed c term pfx) {later : Nat} (hle : term ≤ later) :
     Committed c later pfx :=
   h.imp id fun ⟨chosenTerm, chosen, hct, hchosen, hp⟩ =>

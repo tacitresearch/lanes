@@ -18,6 +18,9 @@ axioms. If a `sorry` or a new axiom reaches one of them, this file stops compili
 /-- info: 'RaftKV.electionSafety_invariant' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms RaftKV.electionSafety_invariant
 
+/-- info: 'RaftKV.one_leader_per_term' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms RaftKV.one_leader_per_term
+
 /-- info: 'RaftKV.applied_le_commit' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms RaftKV.applied_le_commit
 
@@ -86,6 +89,12 @@ axioms. If a `sorry` or a new axiom reaches one of them, this file stops compili
 
 /-- info: 'RaftKV.applied_agree' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms RaftKV.applied_agree
+
+/-- info: 'RaftKV.applied_agree_over_time' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms RaftKV.applied_agree_over_time
+
+/-- info: 'RaftKV.applied_same_entry' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms RaftKV.applied_same_entry
 
 /-- info: 'RaftKV.requests_from_clients' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms RaftKV.requests_from_clients
