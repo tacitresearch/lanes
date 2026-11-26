@@ -10,13 +10,13 @@ public import Lanes.Actors.Runtime
 public import Lanes.Http.Gate
 
 /-!
-The HTTP server adapter: the IO around `Lanes.Http.gate`. It reads a request, hands it to the
-gated system as an input, and writes the one response the gate gives for it. Which requests are
-waiting, when one times out and when the system is too busy are the gate's decisions, not this
-file's.
+The HTTP server adapter: the IO around `Lanes.Http.gate`. It reads a request, gives it an id no
+other request has, hands it to the gated system as an input, and writes the one response the
+gate gives for it. Which requests are waiting, when one times out and when the system is too
+busy are the gate's decisions, not this file's.
 
-The only refusal made here is `503` when the shard's inbox is full. TLS is not handled:
-terminate it in a reverse proxy.
+Two refusals are made here: `405` for a method an application cannot handle, and `503` when the
+shard's inbox is full. TLS is not handled: terminate it in a reverse proxy.
 -/
 
 public section
@@ -37,10 +37,13 @@ structure ServerConfig where
   maxBodyBytes : Nat := 1048576
   gate : GateConfig := {}
 
+/-- The runtime is private because the gate answers each request once only if request ids are
+never reused, and `serve` is what allocates them. -/
 structure Server (sys : System σ) (bridge : Bridge σ) (config : ServerConfig)
     [Hashable σ.Id] where
-  runtime : Runtime (gated sys bridge config.gate)
-  http : Std.Http.Server
+  private mk ::
+  private runtime : Runtime (gated sys bridge config.gate)
+  private http : Std.Http.Server
 
 private def toMethod? : Std.Http.Method → Option Method
   | .get => some .get
@@ -114,8 +117,9 @@ def port (server : Server sys bridge config) : Option UInt16 :=
 
 /-- Stop accepting connections and wait for the open ones to end. Requests in flight are
 answered `503` by the underlying server. -/
-def stop (server : Server sys bridge config) : Async Unit :=
+def stop (server : Server sys bridge config) : Async Unit := do
   server.http.shutdownAndWait
+  server.runtime.stop
 
 def wait (server : Server sys bridge config) : Async Unit :=
   server.http.waitShutdown

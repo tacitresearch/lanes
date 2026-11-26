@@ -67,7 +67,13 @@ theorem cell_setCell (k : Kernel sys) (i : σ.Id) (c : Cell sys i) :
 
 @[simp] theorem abs_outbox (k : Kernel sys) (ob : List σ.Out) : (k.abs ob).outbox = ob := rfl
 
-theorem map_fst_arm {α : Type} [DecidableEq α] (l : List (α × Nat)) (a : α) (token : Nat) :
+@[simp] theorem abs_unschedule (k : Kernel sys) (dues : List Due) (ob : List σ.Out) :
+    (k.unschedule dues).abs ob = k.abs ob := rfl
+
+@[simp] theorem cell_unschedule (k : Kernel sys) (dues : List Due) :
+    (k.unschedule dues).cell = k.cell := rfl
+
+theorem map_fst_arm {α β : Type} [DecidableEq α] (l : List (α × β)) (a : α) (token : β) :
     (if l.any (·.1 = a) then l.map fun t => if t.1 = a then (a, token) else t
       else l ++ [(a, token)]).map (·.1)
       = if a ∈ l.map (·.1) then l.map (·.1) else l.map (·.1) ++ [a] := by
@@ -101,12 +107,12 @@ theorem abs_setCell (k : Kernel sys) (ob : List σ.Out) (i : σ.Id) (c : Cell sy
   · rfl
 
 theorem abs_perform (k : Kernel sys) (ob : List σ.Out) (i : σ.Id) (eff : Effect σ i) :
-    (k.perform i eff).1.abs (ob ++ outputs (k.perform i eff).2) = (k.abs ob).perform i eff := by
+    (k.perform i eff).1.abs (ob ++ (k.perform i eff).2) = (k.abs ob).perform i eff := by
   cases eff with
-  | send to msg => apply SysState.ext' <;> simp [perform, SysState.perform, outputs, cell]
-  | emit out => apply SysState.ext' <;> simp [perform, SysState.perform, outputs]
+  | send to msg => apply SysState.ext' <;> simp [perform, SysState.perform, cell]
+  | emit out => apply SysState.ext' <;> simp [perform, SysState.perform]
   | after delay_ms msg =>
-    simp only [perform, outputs, List.filterMap_cons, List.filterMap_nil, List.append_nil]
+    simp only [perform, List.append_nil]
     rw [abs_setCell]
     apply SysState.ext'
     · exact update_eq_self _ i
@@ -114,10 +120,10 @@ theorem abs_perform (k : Kernel sys) (ob : List σ.Out) (i : σ.Id) (eff : Effec
     · rfl
     · simp only [SysState.perform, abs_timers]
       congr 1
-      exact map_fst_arm (k.cell i).timers msg k.nextToken
+      exact map_fst_arm (k.cell i).timers msg _
     · rfl
   | cancel msg =>
-    simp only [perform, outputs, List.filterMap_nil, List.append_nil]
+    simp only [perform, List.append_nil]
     rw [abs_setCell]
     apply SysState.ext'
     · exact update_eq_self _ i
@@ -127,33 +133,89 @@ theorem abs_perform (k : Kernel sys) (ob : List σ.Out) (i : σ.Id) (eff : Effec
       congr 1
       exact map_fst_eraseP (k.cell i).timers msg
     · rfl
-  | stop => apply SysState.ext' <;> simp [perform, SysState.perform, outputs]
+  | stop => apply SysState.ext' <;> simp [perform, SysState.perform]
+
+/-! The definitions take pairs apart by pattern, for the compiler's sake. These say the same
+with projections, which is easier to reason about. -/
+
+theorem performAll_eq (k : Kernel sys) (i : σ.Id) (effs : List (Effect σ i)) :
+    k.performAll i effs = effs.foldl
+      (fun acc eff => ((acc.1.perform i eff).1, acc.2 ++ (acc.1.perform i eff).2)) (k, []) := rfl
+
+theorem settle_eq (k : Kernel sys) (i : σ.Id) (r : sys.State i × List (Effect σ i)) :
+    k.settle i r =
+      (if r.2.any Effect.isStop then
+          ((k.setCell i { (k.cell i) with state := r.1 }).performAll i r.2).1.down i
+        else ((k.setCell i { (k.cell i) with state := r.1 }).performAll i r.2).1,
+        ((k.setCell i { (k.cell i) with state := r.1 }).performAll i r.2).2) := rfl
 
 omit [Hashable σ.Id] in
-theorem outputs_append (a b : List (Command σ)) : outputs (a ++ b) = outputs a ++ outputs b := by
-  simp [outputs]
+theorem boot_eq (sys : System σ) [Hashable σ.Id] :
+    boot sys = sys.boot.foldl
+      (fun acc i => ((acc.1.startActor i).1, acc.2 ++ (acc.1.startActor i).2)) ({}, []) := rfl
+
+theorem run1_eq (k : Kernel sys) :
+    k.run1 = match k.queue.pop? with
+      | none => { kernel := k }
+      | some (e, rest) =>
+        if (k.cell e.dst).up then
+          { kernel := (({ k with queue := rest }).handle e.dst e.msg).1
+            events := .deliver e :: (({ k with queue := rest }).handle e.dst e.msg).2.map .output
+            outputs := (({ k with queue := rest }).handle e.dst e.msg).2 }
+        else
+          { kernel := (k.startActor e.dst).1
+            events := .start e.dst :: (k.startActor e.dst).2.map .output
+            outputs := (k.startActor e.dst).2 } := rfl
+
+theorem fire_eq (k : Kernel sys) (i : σ.Id) (msg : σ.Msg i) (due : Due) :
+    k.fire i msg due =
+      if (k.cell i).up && (k.cell i).timers.contains (msg, due) then
+        { kernel := (((k.unschedule [due]).setCell i
+            { (k.cell i) with timers := (k.cell i).timers.eraseP (·.1 = msg) }).handle i msg).1
+          events := .timeout i msg :: (((k.unschedule [due]).setCell i
+            { (k.cell i) with timers := (k.cell i).timers.eraseP (·.1 = msg) }).handle i msg).2.map
+              .output
+          outputs := (((k.unschedule [due]).setCell i
+            { (k.cell i) with timers := (k.cell i).timers.eraseP (·.1 = msg) }).handle i msg).2 }
+      else { kernel := k.unschedule [due] } := rfl
+
+theorem runBatch_succ (k : Kernel sys) (fuel : Nat) :
+    k.runBatch (fuel + 1) =
+      if k.wait = .none then
+        { kernel := (k.step.kernel.runBatch fuel).kernel
+          events := k.step.events ++ (k.step.kernel.runBatch fuel).events
+          outputs := k.step.outputs ++ (k.step.kernel.runBatch fuel).outputs }
+      else { kernel := k } := rfl
+
+theorem exec_cons (k : Kernel sys) (op : Op σ) (ops : List (Op σ)) :
+    k.exec (op :: ops) =
+      { kernel := ((k.apply op).kernel.exec ops).kernel
+        events := (k.apply op).events ++ ((k.apply op).kernel.exec ops).events
+        outputs := (k.apply op).outputs ++ ((k.apply op).kernel.exec ops).outputs } := rfl
 
 private theorem abs_foldl_perform (i : σ.Id) (effs : List (Effect σ i)) :
-    ∀ (k : Kernel sys) (cs : List (Command σ)) (ob : List σ.Out),
+    ∀ (k : Kernel sys) (cs : List σ.Out) (ob : List σ.Out),
       let r := effs.foldl
         (fun acc eff => ((acc.1.perform i eff).1, acc.2 ++ (acc.1.perform i eff).2)) (k, cs)
-      r.1.abs (ob ++ outputs r.2) = (k.abs (ob ++ outputs cs)).performAll i effs := by
+      r.1.abs (ob ++ r.2) = (k.abs (ob ++ cs)).performAll i effs := by
   induction effs with
   | nil => intro k cs ob; rfl
   | cons eff effs ih =>
     intro k cs ob
     simp only [List.foldl_cons, SysState.performAll_cons]
-    rw [ih, outputs_append, ← List.append_assoc, abs_perform]
+    rw [ih, ← List.append_assoc, abs_perform]
 
 theorem abs_performAll (k : Kernel sys) (ob : List σ.Out) (i : σ.Id) (effs : List (Effect σ i)) :
-    (k.performAll i effs).1.abs (ob ++ outputs (k.performAll i effs).2)
+    (k.performAll i effs).1.abs (ob ++ (k.performAll i effs).2)
       = (k.abs ob).performAll i effs := by
   have h := abs_foldl_perform i effs k [] ob
-  simpa [performAll, outputs] using h
+  simpa [performAll_eq] using h
 
 theorem abs_down (k : Kernel sys) (ob : List σ.Out) (i : σ.Id) :
     (k.down i).abs ob = (k.abs ob).down env i := by
-  unfold down
+  show (((({ k with queue := k.queue.filter fun e => decide (e.dst ≠ i) }).unschedule
+    ((k.cell i).timers.map Prod.snd)).setCell i
+      { (k.cell i) with up := false, timers := [] }).abs ob) = _
   rw [abs_setCell]
   apply SysState.ext'
   · exact update_eq_self _ i
@@ -164,7 +226,7 @@ theorem abs_down (k : Kernel sys) (ob : List σ.Out) (i : σ.Id) :
 
 theorem abs_settle (k : Kernel sys) (ob : List σ.Out) (i : σ.Id)
     (r : sys.State i × List (Effect σ i)) :
-    (k.settle i r).1.abs (ob ++ outputs (k.settle i r).2) = (k.abs ob).settle env i r := by
+    (k.settle i r).1.abs (ob ++ (k.settle i r).2) = (k.abs ob).settle env i r := by
   have hset : (k.setCell i { (k.cell i) with state := r.1 }).abs ob
       = { k.abs ob with state := update (k.abs ob).state i r.1 } := by
     rw [abs_setCell]
@@ -176,7 +238,8 @@ theorem abs_settle (k : Kernel sys) (ob : List σ.Out) (i : σ.Id)
     · rfl
   have hall := abs_performAll (k.setCell i { (k.cell i) with state := r.1 }) ob i r.2
   rw [hset] at hall
-  unfold settle SysState.settle
+  rw [settle_eq]
+  unfold SysState.settle
   by_cases hstop : r.2.any Effect.isStop = true
   · simp only [hstop, ite_true]
     rw [abs_down, hall]
@@ -184,11 +247,11 @@ theorem abs_settle (k : Kernel sys) (ob : List σ.Out) (i : σ.Id)
     exact hall
 
 theorem abs_handle (k : Kernel sys) (ob : List σ.Out) (i : σ.Id) (msg : σ.Msg i) :
-    (k.handle i msg).1.abs (ob ++ outputs (k.handle i msg).2) = (k.abs ob).handle env i msg :=
+    (k.handle i msg).1.abs (ob ++ (k.handle i msg).2) = (k.abs ob).handle env i msg :=
   abs_settle k ob i _
 
 theorem abs_startActor (k : Kernel sys) (ob : List σ.Out) (i : σ.Id) :
-    (k.startActor i).1.abs (ob ++ outputs (k.startActor i).2) = (k.abs ob).startActor env i := by
+    (k.startActor i).1.abs (ob ++ (k.startActor i).2) = (k.abs ob).startActor env i := by
   have hup : (k.setCell i { (k.cell i) with up := true }).abs ob
       = { k.abs ob with up := update (k.abs ob).up i true } := by
     rw [abs_setCell]
@@ -198,13 +261,10 @@ theorem abs_startActor (k : Kernel sys) (ob : List σ.Out) (i : σ.Id) :
     · rfl
     · exact update_eq_self _ i
     · rfl
-  have hcell : ((k.setCell i { (k.cell i) with up := true }).cell i).state = (k.cell i).state := by
-    rw [cell_setCell, update_self]
-  unfold startActor SysState.startActor
+  unfold SysState.startActor
   rw [← hup]
-  have h := abs_settle (k.setCell i { (k.cell i) with up := true }) ob i
+  exact abs_settle (k.setCell i { (k.cell i) with up := true }) ob i
     ((sys.actor i).recover (k.cell i).state)
-  exact h
 
 omit [Hashable σ.Id] in
 /-- Handing over every waiting output, oldest first, empties the outbox. -/
@@ -218,23 +278,22 @@ omit [Hashable σ.Id] in
 /-- The kernel of a freshly booted system stands for the semantics' initial state, with the
 boot actors' outputs still to hand over. -/
 theorem abs_boot (sys : System σ) [Hashable σ.Id] :
-    (boot sys).1.abs (outputs (boot sys).2) = SysState.init sys env := by
-  suffices h : ∀ (l : List σ.Id) (k : Kernel sys) (cs : List (Command σ)),
+    (boot sys).1.abs (boot sys).2 = SysState.init sys env := by
+  suffices h : ∀ (l : List σ.Id) (k : Kernel sys) (cs : List σ.Out),
       let r := l.foldl
         (fun acc i => ((acc.1.startActor i).1, acc.2 ++ (acc.1.startActor i).2)) (k, cs)
-      r.1.abs (outputs r.2)
-        = l.foldl (fun c i => c.startActor env i) (k.abs (outputs cs)) by
+      r.1.abs r.2 = l.foldl (fun c i => c.startActor env i) (k.abs cs) by
     have h0 := h sys.boot {} []
-    have hblank : ({} : Kernel sys).abs (outputs ([] : List (Command σ))) = SysState.blank sys := by
-      apply SysState.ext' <;> simp [cell, SysState.blank, outputs]
-    simpa [boot, SysState.init, hblank] using h0
+    have hblank : ({} : Kernel sys).abs ([] : List σ.Out) = SysState.blank sys := by
+      apply SysState.ext' <;> simp [cell, SysState.blank]
+    simpa [boot_eq, SysState.init, hblank] using h0
   intro l
   induction l with
   | nil => intro k cs; rfl
   | cons i l ih =>
     intro k cs
     simp only [List.foldl_cons]
-    rw [ih, outputs_append, abs_startActor]
+    rw [ih, abs_startActor]
 
 /-- Accepting an input is the semantics' `input` event. -/
 theorem accept_sound (k : Kernel sys) (x : σ.In) :
@@ -244,22 +303,21 @@ theorem accept_sound (k : Kernel sys) (x : σ.In) :
   apply SysState.ext' <;> simp [cell]
 
 /--
-One kernel step is a run of the semantics: it starts the receiver of the oldest message or lets
-it handle that message, then hands over the outputs. The events it reports are that run.
+Handling the oldest message is a run of the semantics: start its receiver or let the receiver
+handle it, then hand over the outputs. The events reported are that run.
 -/
-theorem run1_sound {k : Kernel sys} {r : Step sys} (h : k.run1 = some r) :
-    (k.abs).run env r.events = some (r.kernel.abs) := by
-  unfold run1 at h
-  split at h
-  · exact absurd h (by simp)
+theorem run1_sound (k : Kernel sys) :
+    (k.abs).run env k.run1.events = some (k.run1.kernel.abs) := by
+  rw [run1_eq]
+  split
+  · rfl
   · next e rest hpop =>
     have hnet : k.queue.toList = e :: rest.toList := Fifo.toList_of_pop? hpop
     by_cases hup : (k.cell e.dst).up = true
-    · simp only [hup, ite_true, Option.some.injEq] at h
-      subst h
+    · simp only [hup, ite_true]
       have hstep : (k.abs).step env (.deliver e)
           = some ((({ k with queue := rest }).handle e.dst e.msg).1.abs
-              (outputs (({ k with queue := rest }).handle e.dst e.msg).2)) := by
+              (({ k with queue := rest }).handle e.dst e.msg).2) := by
         have hdel : (k.abs).deliverable env e = true := by
           simp [SysState.deliverable, env, Link.reliable, hnet, Envelope.sameLink]
         rw [SysState.step_deliver]
@@ -271,10 +329,9 @@ theorem run1_sound {k : Kernel sys} {r : Step sys} (h : k.run1 = some r) :
         simpa using abs_handle ({ k with queue := rest }) [] e.dst e.msg
       simp only [SysState.run, hstep, Option.bind_some]
       exact run_outputs env ((({ k with queue := rest }).handle e.dst e.msg).1.abs) _
-    · simp only [hup, ite_false, Bool.false_eq_true, Option.some.injEq] at h
-      subst h
+    · simp only [hup, ite_false, Bool.false_eq_true]
       have hstep : (k.abs).step env (.start e.dst)
-          = some ((k.startActor e.dst).1.abs (outputs (k.startActor e.dst).2)) := by
+          = some ((k.startActor e.dst).1.abs (k.startActor e.dst).2) := by
         rw [SysState.step_start]
         refine ⟨by simpa using hup, .inl ?_, ?_⟩
         · simp [SysState.hasMail, hnet]
@@ -282,63 +339,67 @@ theorem run1_sound {k : Kernel sys} {r : Step sys} (h : k.run1 = some r) :
       simp only [SysState.run, hstep, Option.bind_some]
       exact run_outputs env ((k.startActor e.dst).1.abs) _
 
-/-- The kernel is never stuck with mail queued: it can step exactly when its queue is not
-empty. -/
-theorem run1_eq_none_iff (k : Kernel sys) : k.run1 = none ↔ (k.abs).net = [] := by
-  unfold run1
+/-- The kernel is never stuck with mail queued: `run1` reports no event exactly when its queue
+is empty. -/
+theorem run1_events_eq_nil_iff (k : Kernel sys) : k.run1.events = [] ↔ (k.abs).net = [] := by
+  rw [run1_eq]
   split
   · next h => simpa using Fifo.pop?_eq_none.mp h
   · next e rest h =>
     have := Fifo.toList_of_pop? h
     split <;> simp [this]
 
-/-- A timer firing is the semantics' `timeout` event if its token is still pending, and nothing
-at all otherwise. -/
-theorem fire_sound (k : Kernel sys) (i : σ.Id) (msg : σ.Msg i) (token : Nat) :
-    (k.abs).run env (k.fire i msg token).events = some ((k.fire i msg token).kernel.abs) := by
-  unfold fire
-  by_cases hfire : ((k.cell i).up && (k.cell i).timers.contains (msg, token)) = true
+/-- A timer going off is the semantics' `timeout` event if that timer is still pending, and
+nothing at all otherwise. This holds for any `due`, so nothing depends on what the agenda
+holds. -/
+theorem fire_sound (k : Kernel sys) (i : σ.Id) (msg : σ.Msg i) (due : Due) :
+    (k.abs).run env (k.fire i msg due).events = some ((k.fire i msg due).kernel.abs) := by
+  rw [fire_eq]
+  by_cases hfire : ((k.cell i).up && (k.cell i).timers.contains (msg, due)) = true
   · simp only [hfire, ite_true]
     simp only [Bool.and_eq_true, List.contains_iff_mem] at hfire
-    have hstep : (k.abs).step env (.timeout i msg) = some
-        (((k.setCell i { (k.cell i) with timers := (k.cell i).timers.eraseP (·.1 = msg) }).handle
-            i msg).1.abs
-          (outputs ((k.setCell i
-            { (k.cell i) with timers := (k.cell i).timers.eraseP (·.1 = msg) }).handle i msg).2)) := by
+    generalize hk' : (k.unschedule [due]).setCell i
+      { (k.cell i) with timers := (k.cell i).timers.eraseP (·.1 = msg) } = k'
+    have hstep : (k.abs).step env (.timeout i msg)
+        = some ((k'.handle i msg).1.abs (k'.handle i msg).2) := by
       rw [SysState.step_timeout]
       refine ⟨hfire.1, ?_, ?_⟩
       · simp only [abs_timers, List.mem_map]
-        exact ⟨(msg, token), hfire.2, rfl⟩
-      · have habs : (k.setCell i
-              { (k.cell i) with timers := (k.cell i).timers.eraseP (·.1 = msg) }).abs
+        exact ⟨(msg, due), hfire.2, rfl⟩
+      · have habs : k'.abs
             = { k.abs with timers := update (k.abs).timers i (((k.abs).timers i).erase msg) } := by
-          rw [abs_setCell]
+          rw [← hk', abs_setCell]
           apply SysState.ext'
           · exact update_eq_self _ i
           · exact update_eq_self _ i
           · rfl
-          · simp only [abs_timers]
+          · simp only [abs_timers, abs_unschedule]
             congr 1
             exact map_fst_eraseP (k.cell i).timers msg
           · rfl
         rw [← habs]
-        simpa using abs_handle _ [] i msg
+        simpa using abs_handle k' [] i msg
     simp only [SysState.run, hstep, Option.bind_some]
-    exact run_outputs env (((k.setCell i
-      { (k.cell i) with timers := (k.cell i).timers.eraseP (·.1 = msg) }).handle i msg).1.abs) _
-  · simp only [hfire, ite_false, Bool.false_eq_true]
+    exact run_outputs env ((k'.handle i msg).1.abs) _
+  · simp only [hfire, Bool.false_eq_true, ite_false]
     rfl
+
+theorem step_sound (k : Kernel sys) :
+    (k.abs).run env k.step.events = some (k.step.kernel.abs) := by
+  unfold step
+  split
+  · split
+    · exact fire_sound k _ _ _
+    · exact run1_sound k
+  · exact run1_sound k
 
 theorem apply_sound (k : Kernel sys) (op : Op σ) :
     (k.abs).run env (k.apply op).events = some ((k.apply op).kernel.abs) := by
   cases op with
   | input x => exact accept_sound k x
-  | run =>
-    simp only [apply]
-    cases h : k.run1 with
-    | none => rfl
-    | some r => exact run1_sound h
-  | fire i msg token => exact fire_sound k i msg token
+  | advance now_ms => rfl
+  | step => exact step_sound k
+  | fire i msg due => exact fire_sound k i msg due
 
 omit [Hashable σ.Id] in
 theorem _root_.Lanes.SysState.run_append (envm : EnvModel σ) (c : SysState sys)
@@ -364,36 +425,113 @@ theorem _root_.Lanes.System.Reachable.run {envm : EnvModel σ} {c c' : SysState 
     | some c₁ => exact ih (h.step ev hstep) (by simpa [hstep] using hrun)
 
 theorem exec_sound (k : Kernel sys) (ops : List (Op σ)) :
-    (k.abs).run env (k.exec ops).2 = some ((k.exec ops).1.abs) := by
+    (k.abs).run env (k.exec ops).events = some ((k.exec ops).kernel.abs) := by
   induction ops generalizing k with
   | nil => rfl
   | cons op ops ih =>
-    simp only [exec, SysState.run_append, apply_sound, Option.bind_some]
+    simp only [exec_cons, SysState.run_append, apply_sound, Option.bind_some]
     exact ih _
 
+theorem runBatch_sound (k : Kernel sys) (fuel : Nat) :
+    (k.abs).run env (k.runBatch fuel).events = some ((k.runBatch fuel).kernel.abs) := by
+  induction fuel generalizing k with
+  | zero => rfl
+  | succ fuel ih =>
+    rw [runBatch_succ]
+    split
+    · simp only [SysState.run_append, step_sound, Option.bind_some]
+      exact ih _
+    · rfl
+
 theorem boot_sound (sys : System σ) :
-    (SysState.init sys env).run env ((outputs (boot sys).2).map .output)
-      = some ((boot sys).1.abs) := by
+    (SysState.init sys env).run env ((boot sys).2.map .output) = some ((boot sys).1.abs) := by
   rw [← abs_boot]
   exact run_outputs env ((boot sys).1.abs) _
 
 /--
-Whatever a shell does with a kernel, in any order: any inputs, kernel steps at any time, timers
-fired early, late, twice or never armed. The kernel is still in a state the semantics can reach,
-and the events it reported are a run that reaches it. Nothing is assumed about the shell, the
-inbox or the clock.
+Whatever a shell does with a kernel, in any order: any inputs, any clock readings, work at any
+time, timers fired early, late, twice or never armed. The kernel is still in a state the
+semantics can reach, and the events it reported are a run that reaches it. Nothing is assumed
+about the shell, the inbox or the clock.
 -/
 theorem exec_reachable (sys : System σ) (ops : List (Op σ)) :
-    (SysState.init sys env).run env
-        ((outputs (boot sys).2).map .output ++ ((boot sys).1.exec ops).2)
-      = some (((boot sys).1.exec ops).1.abs)
-    ∧ sys.Reachable env (((boot sys).1.exec ops).1.abs) := by
+    (SysState.init sys env).run env ((boot sys).2.map .output ++ ((boot sys).1.exec ops).events)
+      = some (((boot sys).1.exec ops).kernel.abs)
+    ∧ sys.Reachable env (((boot sys).1.exec ops).kernel.abs) := by
   have hrun : (SysState.init sys env).run env
-      ((outputs (boot sys).2).map .output ++ ((boot sys).1.exec ops).2)
-        = some (((boot sys).1.exec ops).1.abs) := by
+      ((boot sys).2.map .output ++ ((boot sys).1.exec ops).events)
+        = some (((boot sys).1.exec ops).kernel.abs) := by
     rw [SysState.run_append, boot_sound, Option.bind_some]
     exact exec_sound _ ops
   exact ⟨hrun, System.Reachable.init.run hrun⟩
+
+/-! What the kernel hands the shell is exactly what its events say was output. -/
+
+/-- The outputs among a list of events, in order. -/
+def _root_.Lanes.Event.outputs (events : List (Event σ)) : List σ.Out :=
+  events.filterMap fun
+    | .output out => some out
+    | _ => none
+
+omit [Hashable σ.Id] in
+theorem outputs_cons_map (ev : Event σ) (outs : List σ.Out) (h : Event.outputs [ev] = []) :
+    Event.outputs (ev :: outs.map .output) = outs := by
+  have hmap : Event.outputs (outs.map (Event.output (σ := σ))) = outs := by
+    induction outs with
+    | nil => rfl
+    | cons out outs ih => simpa [Event.outputs] using ih
+  cases ev <;> simp_all [Event.outputs]
+
+omit [Hashable σ.Id] in
+theorem _root_.Lanes.Event.outputs_append (a b : List (Event σ)) :
+    Event.outputs (a ++ b) = Event.outputs a ++ Event.outputs b := by
+  simp [Event.outputs]
+
+theorem fire_outputs (k : Kernel sys) (i : σ.Id) (msg : σ.Msg i) (due : Due) :
+    Event.outputs (k.fire i msg due).events = (k.fire i msg due).outputs := by
+  rw [fire_eq]
+  split
+  · exact outputs_cons_map _ _ rfl
+  · rfl
+
+theorem run1_outputs (k : Kernel sys) : Event.outputs k.run1.events = k.run1.outputs := by
+  rw [run1_eq]
+  split
+  · rfl
+  · split <;> exact outputs_cons_map _ _ rfl
+
+theorem step_outputs (k : Kernel sys) : Event.outputs k.step.events = k.step.outputs := by
+  unfold step
+  split
+  · split
+    · exact fire_outputs k _ _ _
+    · exact run1_outputs k
+  · exact run1_outputs k
+
+theorem apply_outputs (k : Kernel sys) (op : Op σ) :
+    Event.outputs (k.apply op).events = (k.apply op).outputs := by
+  cases op with
+  | input x => rfl
+  | advance now_ms => rfl
+  | step => exact step_outputs k
+  | fire i msg due => exact fire_outputs k i msg due
+
+/-- The outputs a shell is handed are the outputs of the run, no more, no fewer, in order. -/
+theorem exec_outputs (k : Kernel sys) (ops : List (Op σ)) :
+    Event.outputs (k.exec ops).events = (k.exec ops).outputs := by
+  induction ops generalizing k with
+  | nil => rfl
+  | cons op ops ih => simp only [exec_cons, Event.outputs_append, apply_outputs, ih]
+
+theorem runBatch_outputs (k : Kernel sys) (fuel : Nat) :
+    Event.outputs (k.runBatch fuel).events = (k.runBatch fuel).outputs := by
+  induction fuel generalizing k with
+  | zero => rfl
+  | succ fuel ih =>
+    rw [runBatch_succ]
+    split
+    · simp only [Event.outputs_append, step_outputs, ih]
+    · rfl
 
 end Kernel
 

@@ -9,13 +9,14 @@ public import Std.Sync
 public import Lanes.Actors.KernelSound
 
 /-!
-The runtime is a shell around the kernel: one task that takes commands from an inbox, calls the
-kernel, and carries out what the kernel asks. It decides nothing. Every decision is in
-`Lanes.Kernel`, which is proved to follow `SysState.step`.
+The runtime is a shell around the kernel: one task that takes commands from an inbox, tells the
+kernel the time, lets it work, and hands its outputs on. Which message is next, which timers
+are due, how long to sleep and when the shard is idle are the kernel's answers
+(`Lanes.Kernel`), not decisions made here.
 
-What is trusted here is small and stated: the inbox hands over each command once, the timer
-wakes no earlier than asked, and this loop passes the kernel's results on unchanged. Actors do
-not run in parallel with each other; parallelism comes from running more shards.
+By `Kernel.exec_reachable` nothing this loop does can take the system outside the semantics.
+What is trusted is that it hands outputs on as the kernel gave them. Actors do not run in
+parallel with each other; parallelism comes from running more shards.
 
 The inbox is bounded, which is the system's back-pressure: `input` waits for room and
 `tryInput` refuses (rule 3.8).
@@ -30,111 +31,138 @@ open Std Std.Async
 variable {σ : Signature}
 
 structure Runtime.Config where
-  /-- Inputs and fired timers wait here for the shard. When it is full, `tryInput` refuses. -/
+  /-- Inputs wait here for the shard. When it is full, `tryInput` refuses. -/
   inboxCapacity : Nat := 1024
-  /-- Kernel steps between two looks at the inbox, so that a busy shard still admits inputs. -/
+  /-- Units of kernel work between two looks at the inbox, so that a busy shard still admits
+  inputs. At least one is done. -/
   batch : Nat := 64
-  /-- Keep the events performed, for tests. By `Kernel.run1_sound` they are a run of the
+  /-- Keep the events performed, for tests. By `Kernel.exec_reachable` they are a run of the
   semantics. -/
   record : Bool := false
 
 private inductive Cmd (sys : System σ) where
   | input (x : σ.In)
-  | timer (i : σ.Id) (msg : σ.Msg i) (token : Nat)
-  | idle (timers : Bool) (done : IO.Promise Unit)
+  | idle (timers : Bool) (done : IO.Promise Bool)
   | peek (i : σ.Id) (reply : IO.Promise (sys.State i))
+
+private inductive Taken (sys : System σ) where
+  | command (c : Cmd sys)
+  | nothing
+  | closed
 
 structure Runtime (sys : System σ) [Hashable σ.Id] where
   private mk ::
   private config : Runtime.Config
   private inbox : CloseableChannel (Cmd sys)
   private log : IO.Ref (Array (Event σ))
+  private epoch_ms : Nat
 
 namespace Runtime
 
 variable {sys : System σ} [Hashable σ.Id]
 
+private def stopped : IO.Error := IO.userError "lanes: the runtime has stopped"
+
 private def record (rt : Runtime sys) (events : List (Event σ)) : BaseIO Unit := do
   if rt.config.record then rt.log.modify (· ++ events.toArray)
 
-/-- Returns how many timers were armed. -/
-private def carryOut (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
-    (commands : List (Kernel.Command σ)) : Async Nat := do
-  let mut armed := 0
-  for command in commands do
-    match command with
-    | .emit out =>
-      try onOutput out
-      catch e => IO.eprintln s!"lanes: output handler failed: {e}"
-    | .arm i msg token delay_ms =>
-      armed := armed + 1
-      background do
-        Async.sleep (.ofNat delay_ms)
-        discard <| await (← rt.inbox.send (.timer i msg token))
-  return armed
+private def handOver (onOutput : σ.Out → Async Unit) (outputs : List σ.Out) : Async Unit := do
+  for out in outputs do
+    try onOutput out
+    catch e => IO.eprintln s!"lanes: output handler failed: {e}"
 
-private def loop (rt : Runtime sys) (onOutput : σ.Out → Async Unit) (start : Kernel sys)
-    (armedAtBoot : Nat) : Async Unit := do
-  let mut k := start
-  let mut armed := armedAtBoot
-  let mut waiting : Array (Bool × IO.Promise Unit) := #[]
+private def now (rt : Runtime sys) : BaseIO Nat :=
+  return (← IO.monoMsNow) - rt.epoch_ms
+
+/-- Blocks the calling thread, which is the shard's own. -/
+private def take (rt : Runtime sys) : Kernel.Wait → IO (Taken sys)
+  | .none => return match ← rt.inbox.tryRecv with
+    | some c => .command c
+    | none => .nothing
+  | .forever => return match ← IO.wait (← rt.inbox.recv) with
+    | some c => .command c
+    | none => .closed
+  | .for_ms ms => Async.block do
+    Selectable.one #[
+      .case rt.inbox.recvSelector fun
+        | some c => pure (.command c)
+        | none => pure .closed,
+      .case (← Selector.sleep (.ofNat ms)) fun _ => pure .nothing]
+
+/--
+The shard's loop, on a thread of its own. It is not an `Async` task, for a reason that no test
+of behaviour shows: Lean never updates an object in place once another thread may see it, and
+state held across an `await` is handed to the task system. A kernel kept that way is copied,
+actor table and all, on every step (`Tests/Scale.lean`). Here it is created on this thread and
+never leaves it; only commands, events and outputs cross.
+-/
+private def loop (rt : Runtime sys) (onOutput : σ.Out → Async Unit) : IO Unit := do
+  let (start, outputs) := Kernel.boot sys
+  rt.record (outputs.map .output)
+  (handOver onOutput outputs).block
+  let kernel ← IO.mkRef start
+  let mut waiting : Array (Bool × IO.Promise Bool) := #[]
   repeat
-    let command ← match ← rt.inbox.tryRecv with
-      | some command => pure (some command)
-      | none => if k.queue.isEmpty then await (← rt.inbox.recv) else pure none
-    match command with
-    | some (.input x) =>
-      let r := k.accept x
-      k := r.kernel
-      rt.record r.events
-    | some (.timer i msg token) =>
-      armed := armed - 1
-      let r := k.fire i msg token
-      k := r.kernel
-      rt.record r.events
-      armed := armed + (← rt.carryOut onOutput r.commands)
-    | some (.idle timers done) => waiting := waiting.push (timers, done)
-    | some (.peek i reply) => reply.resolve (k.cell i).state
-    | none => if k.queue.isEmpty then break
-    for _ in [0:rt.config.batch] do
-      let some r := k.run1 | break
-      k := r.kernel
-      rt.record r.events
-      armed := armed + (← rt.carryOut onOutput r.commands)
-    if k.queue.isEmpty then
-      let quiet := armed == 0
-      for (timers, done) in waiting do
-        if !timers || quiet then done.resolve ()
-      waiting := waiting.filter fun (timers, _) => timers && !quiet
+    let now ← rt.now
+    let wait ← kernel.modifyGet fun k => let k := k.advance now; (k.wait, k)
+    match ← rt.take wait with
+    | .closed => break
+    | .nothing => pure ()
+    | .command (.input x) =>
+      rt.record (← kernel.modifyGet fun k => let r := k.accept x; (r.events, r.kernel))
+    | .command (.idle timers done) => waiting := waiting.push (timers, done)
+    | .command (.peek i reply) => reply.resolve (← kernel.modifyGet fun k => ((k.cell i).state, k))
+    let now ← rt.now
+    let batch := max 1 rt.config.batch
+    let (events, outputs, quiet, still) ← kernel.modifyGet fun k =>
+      match (k.advance now).runBatch batch with
+      | { kernel, events, outputs } =>
+        ((events, outputs, kernel.quiet false, kernel.quiet true), kernel)
+    rt.record events
+    (handOver onOutput outputs).block
+    for (timers, done) in waiting do
+      if (if timers then still else quiet) then done.resolve true
+    waiting := waiting.filter fun (timers, _) => !(if timers then still else quiet)
+  for (_, done) in waiting do done.resolve false
 
-/-- Boot a system on one shard. Each output goes to `onOutput`. -/
+/-- Boot a system on one shard, which runs on a thread of its own until `stop`. A program whose
+`main` returns without stopping its runtimes does not exit.
+
+Each output goes to `onOutput`, and the shard waits for it: a slow handler holds every actor up,
+and a handler must not call `input`, `idle` or `state`, which wait for the shard. `tryInput` is
+safe. -/
 def start (sys : System σ) [Hashable σ.Id] (config : Runtime.Config := {})
     (onOutput : σ.Out → Async Unit := fun _ => pure ()) : Async (Runtime sys) := do
   let rt : Runtime sys := {
     config
     inbox := ← CloseableChannel.new (some config.inboxCapacity)
-    log := ← IO.mkRef #[] }
-  let (kernel, commands) := Kernel.boot sys
-  rt.record ((Kernel.outputs commands).map .output)
-  let armed ← rt.carryOut onOutput commands
-  background (rt.loop onOutput kernel armed)
+    log := ← IO.mkRef #[]
+    epoch_ms := ← IO.monoMsNow }
+  discard <| IO.asTask (prio := .dedicated) do
+    try rt.loop onOutput
+    catch e => IO.eprintln s!"lanes: the shard stopped on an error: {e}"
   return rt
 
-/-- Hand over an input, waiting while the inbox is full. -/
-def input (rt : Runtime sys) (x : σ.In) : Async Unit := do
-  discard <| await (← rt.inbox.send (.input x))
+private def send (rt : Runtime sys) (c : Cmd sys) : Async Unit := do
+  match ← await (← rt.inbox.send c) with
+  | .ok () => pure ()
+  | .error _ => throw stopped
 
-/-- Hand over an input if the inbox has room. `false` means the system is busy and nothing was
-accepted. -/
+/-- Hand over an input, waiting while the inbox is full. Throws once the runtime has stopped. -/
+def input (rt : Runtime sys) (x : σ.In) : Async Unit :=
+  rt.send (.input x)
+
+/-- Hand over an input if the inbox has room. `false` means nothing was accepted: the system is
+busy or has stopped. -/
 def tryInput (rt : Runtime sys) (x : σ.In) : Async Bool :=
   rt.inbox.trySend (.input x)
 
 /-- Wait until everything handed over so far is handled and no message is queued. With
-`timers`, also until every armed timer has fired. -/
+`timers`, also until no timer is pending. Throws if the runtime stops first. -/
 def idle (rt : Runtime sys) (timers : Bool := false) : Async Unit := do
   let done ← IO.Promise.new
-  discard <| await (← rt.inbox.send (.idle timers done))
-  await done
+  rt.send (.idle timers done)
+  unless ← await done do throw stopped
 
 /-- The events performed so far. Empty unless `Config.record` is on. -/
 def trace (rt : Runtime sys) : BaseIO (Array (Event σ)) :=
@@ -144,10 +172,11 @@ def trace (rt : Runtime sys) : BaseIO (Array (Event σ)) :=
 def state (rt : Runtime sys) (i : σ.Id) : Async (sys.State i) := do
   have : Nonempty (sys.State i) := ⟨(sys.actor i).init⟩
   let reply ← IO.Promise.new
-  discard <| await (← rt.inbox.send (.peek i reply))
+  rt.send (.peek i reply)
   await reply
 
-/-- Stop taking commands. The shard finishes what is queued and ends. -/
+/-- Stop taking commands. The shard handles what was already handed over and ends; timers still
+pending never fire. -/
 def stop (rt : Runtime sys) : Async Unit := do
   discard <| (rt.inbox.close : EIO _ Unit).toBaseIO
 

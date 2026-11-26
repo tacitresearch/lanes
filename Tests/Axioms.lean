@@ -57,6 +57,15 @@ by `lake build`, not linked into the test executable.
 /-- info: 'Lanes.Http.percentDecode_percentEncode' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.percentDecode_percentEncode
 
+/-- info: 'Lanes.Kernel.exec_outputs' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.exec_outputs
+
+/-- info: 'Lanes.Kernel.runBatch_sound' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.runBatch_sound
+
+/-- info: 'Lanes.Kernel.runBatch_outputs' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.runBatch_outputs
+
 /-- info: 'Lanes.Kernel.exec_reachable' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Kernel.exec_reachable
 

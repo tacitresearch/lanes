@@ -272,3 +272,40 @@ Templ features taken: components, fragments (`<>…</>`), attribute splices (`{a
 conditional classes (`Html.classes`). Not taken: bare text children. Lean's tokenizer would
 split arbitrary text into Lean tokens, so text is a string literal.
 
+## D23. Time is data, and a shard is a thread
+
+*Refines D18, after a second independent review.*
+
+The kernel now owns the clock's meaning. The shell reports what the clock says
+(`Kernel.advance`); the kernel keeps an agenda of pending timers, says which are due
+(`Kernel.step`), how long nothing will be (`Kernel.wait`) and whether the shard is idle
+(`Kernel.quiet`), and does a bounded batch of work in one pure call (`Kernel.runBatch`). There
+are no timer commands, no tokens handed to the shell and no sleeping task per timer. The shell
+sleeps once, until the next deadline or the next input.
+
+The shard's loop runs on a thread of its own, not as an `Async` task, and keeps the kernel in a
+reference that each operation empties and refills.
+
+Why:
+
+- The review found that cancelled timers kept sleeping and then flooded the bounded inbox, and
+  that waiting for "no timers" waited for cancelled ones. With the agenda in the kernel,
+  cancelling is a pure update and there is nothing to leak.
+- It found that no theorem said what the kernel tells the shell to do. With timers inside, the
+  only thing left to tell is the outputs, and `Kernel.exec_outputs` proves they are exactly the
+  outputs of the run.
+- It found that a message cost time linear in the number of actors. The cause is in Lean's
+  runtime, not in any logic: an object another thread may see is never updated in place, and
+  state held across an `await` is handed to the task system. So an `Async` loop copies its
+  state on every update. A plain loop on its own thread does not. `Tests/Scale.lean` measures
+  it: the same cost per message at 1,000 and at 100,000 actors.
+
+Consequences:
+
+- A program whose `main` returns without stopping its runtimes does not exit, as with any
+  thread that is not a daemon. `Http.Server.stop` stops the runtime.
+- Every kernel operation is total and consumes the kernel: there is no "nothing to do" result
+  that would force the caller to keep a second reference.
+- Not yet proved: that the agenda holds exactly the pending timers. Soundness does not depend
+  on it (`fire_sound` holds for any timer the agenda could name); promptness does.
+

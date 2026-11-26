@@ -163,8 +163,20 @@ and parse round trip is open. Step 6 has started: ghost histories, the monotone 
 quorums exist, and election safety is proved for every cluster under every environment model.
 
 A second independent review (2026-11-27) found eight defects, six of them in the 156-line
-shell, and that no theorem constrained what the kernel tells the shell to do. The fixes move
-timers and batching into the kernel as pure functions; see `DECISIONS.md` D23.
+shell, and that no theorem constrained what the kernel tells the shell to do. All are fixed or
+pinned by a test:
+
+| Finding | Outcome |
+| --- | --- |
+| A message cost time linear in the number of actors | Fixed: the shard is a thread, not a task (D23); `Tests/Scale.lean` |
+| `idle`, `state` and `input` hung or lost data after `stop` | Fixed: they fail; tested |
+| An output handler calling back into the runtime deadlocks | Documented on `Runtime.start`; `tryInput` is safe |
+| `batch := 0` never made progress | Fixed in the kernel's caller; tested |
+| Cancelled timers kept sleeping and were waited for | Fixed: timers are kernel data (D23); tested |
+| The gate loses a request if it crashes | Pinned: `Tests/Gate.lean` shows the precondition; one shard has no crashes |
+| Reused request ids break exactly-once | Pinned by a test; the server's runtime is private, so only the adapter allocates ids |
+| No theorem mentioned the kernel's commands | Fixed: there are no commands; `Kernel.exec_outputs` |
+| Back-pressure, timer delay and `stop` were untested | Tested without depending on timing |
 
 1. Comment rule in `AGENTS.md`; strip comments; split the test binaries.
 2. Proofs of the checker and the monitor (section 2).

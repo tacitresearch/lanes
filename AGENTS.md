@@ -67,6 +67,11 @@ and Mathlib's `<i` token breaks `<input>` in templates, so keep views and `main`
   name follows `<` with no space (`<div>`); `a < b` with a space is a comparison.
 - In `do` blocks, `(← action)` inside `a || b` or `a && b` runs whether or not the other side
   decides the result. Bind it first when it must be conditional.
+- Lean never updates an object in place once another thread may see it, and state held across
+  an `await` is handed to the task system. Hot state (a kernel, a table) lives on one thread, in
+  an `IO.Ref` used through `modifyGet`; an `Async` loop would copy it on every update.
+- Take pairs apart by pattern (`let (a, b) := f x`), not with `.1` and `.2`, where the first
+  part is large state that is then updated: a projection keeps the pair, and so the state, alive.
 - Templates are embedded with `include_str`, which Lake does not track: after editing
   `templates/`, touch `LanesCli/New.lean` and rebuild `lanes`. CI builds a generated app.
 - Check before you prove: every invariant gets an `always` property and a `sometimes` vacuity

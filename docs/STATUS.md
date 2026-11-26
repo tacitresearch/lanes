@@ -13,7 +13,7 @@ Last updated: 2026-11-27.
 | Semantics | One executable step function; per-event lemmas; per-actor invariants lift to systems; ghost histories with an erasure theorem; a five-case proof rule for invariants that hold under every fault | `Lanes/Actors/{World,Step,Lift,Ghost,Monotone}.lean` |
 | Deterministic scheduler | Seeded runs, replayable event lists, drivers for the outside world | `Lanes/Actors/Scheduler.lean` |
 | Model checker | Breadth-first, exact states, `always`/`sometimes`, constraints, deadlock, coverage, shortest traces; refinement to a `Service` without a mapping. Proved: it lists exactly the enabled events of a state, merging states is safe, a complete PASS means every `always` property holds in every world of the instance (`Check.system_sound`; `==` must be equality on actor states and the driver's state, so not yet under a monitored driver), the spec monitor accepts exactly what the spec allows, and every trace the search reports is real (`Check/SearchSound.lean`) | `Lanes/Check/`, `Lanes/Semantics/Monitor.lean` |
-| Runtime | A kernel of pure functions proved to follow the semantics (`Kernel.run1_sound`), inside a 156-line shell: one task per shard, bounded inbox, timers | `Lanes/Actors/{Kernel,KernelSound,Runtime}.lean` |
+| Runtime | A kernel of pure functions (routing, start and stop, timers, batching, idleness) proved to follow the semantics whatever its caller does (`Kernel.exec_reachable`, `Kernel.exec_outputs`), inside a 185-line shell: one thread per shard, bounded inbox. A message costs the same at 1,000 and 100,000 actors | `Lanes/Actors/{Kernel,KernelSound,Runtime}.lean` |
 | Proof layer | `Spec`, `Refines` (weak simulation with a label map), `of_map`, `trans`, trace inclusion; system semantics as a CSLib `LTS`; `Service.spec`; sum lemmas | `Lanes/Semantics/` |
 | Behaviours | `Server` (request and reply), with `Server.implements` proved | `Lanes/Behaviours/Server.lean`, `Lanes/Semantics/Service.lean` |
 | Web | HTTP/1.1 adapter whose logic is the gate actor (each request answered exactly once, model-checked); requests and responses as data; `Html` with escaping proved safe, URL attributes checked at render (tested, not proved); scoped template macro with components, fragments and attribute splices; typed routes (`Route.match?_link`, `percentDecode_percentEncode` proved); htmx attributes as typed values taken from routes | `Lanes/Http/`, `Lanes/Env/Http.lean`, `Lanes/Html/` |
@@ -65,6 +65,9 @@ Last updated: 2026-11-27.
   kernel. A session-per-user system grows without bound. Releasing an actor means its state must
   live somewhere else, so this waits for the persistence adapter.
 - One shard only. Several shards, and with them parallelism, are not built yet.
+- Handing one input to a sleeping shard costs a thread wake-up, about 90 µs here. A busy shard
+  does not sleep between inputs.
+- That the kernel's agenda holds exactly the pending timers is tested, not proved.
 - The kernel's message queue has no bound of its own (see `TRUSTED.md`).
 - Templates cannot contain inline `<script>` or `<style>` text, and URL attributes accept only
   relative, `http`, `https`, `mailto` and `tel` URLs.

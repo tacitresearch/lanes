@@ -6,10 +6,10 @@ import Lanes
 import Examples.Bank
 
 /-!
-Tests of the runtime shell: run a system on a real task with recording on, then replay the
-recorded events through `SysState.run`. `Kernel.run1_sound` proves the kernel's events are a run
-of the semantics; these tests check that the shell passes them on and wires timers, inputs and
-outputs correctly.
+Tests of the runtime shell: run a system on a real thread with recording on, then replay the
+recorded events through `SysState.run`. `Kernel.exec_reachable` proves the kernel's events are a
+run of the semantics; these tests check that the shell passes them on and wires inputs, the
+clock, outputs and stopping correctly.
 -/
 
 namespace Tests.Runtime
@@ -96,7 +96,7 @@ def flakyTest : Async (List (String × Bool)) := do
   let stops := events.toList.countP fun
     | .start _ => true
     | _ => false
-  return [
+  let results := [
     ("flaky: the semantics accepts the trace", true),
     ("flaky: replayed collector state equals the runtime's",
       c.state .collector == collectorState),
@@ -105,6 +105,8 @@ def flakyTest : Async (List (String × Bool)) := do
     ("flaky: workers stopped and restarted", stops > 3),
     ("flaky: timers fired", collectorState.2 > 0),
     ("flaky: outputs reached the handler", (← outputs.get).size == collectorState.1 / 10) ]
+  rt.stop
+  return results
 
 /-! The bank under concurrent clients. -/
 
@@ -121,13 +123,15 @@ def bankTest : Async (List (String × Bool)) := do
   let balances ← (List.finRange 3).mapM fun a => rt.state a
   let total := (balances.map (·.balance)).sum
   let replayed ← replay (bank (Fin 3) 100) rt
-  return [
+  let results := [
     ("bank on the runtime: money conserved once idle", total == 300),
     ("bank on the runtime: every request answered", (← responses.get) == 600),
     ("bank on the runtime: the semantics accepts the trace and agrees on balances",
       match replayed with
       | some c => (List.finRange 3).zip balances |>.all fun (a, s) => c.state a == s
       | none => false) ]
+  rt.stop
+  return results
 
 /-! A small inbox: actors that flood themselves and each other, behind an inbox of capacity 2. -/
 
@@ -165,13 +169,15 @@ def floodTest : Async (List (String × Bool)) := do
   rt.idle
   let states ← (List.finRange 2).mapM fun k => rt.state k
   let replayed ← replay flood rt
-  return [
+  let results := [
     ("flood: self-sends and a cycle of sends all arrive",
       states == [(200, 200), (200, 200)]),
     ("flood: the semantics accepts the trace, with sends kept in order",
       match replayed with
       | some c => (List.finRange 2).zip states |>.all fun (k, s) => c.state k == s
       | none => false) ]
+  rt.stop
+  return results
 
 /-! Admission: `tryInput` either accepts an input or refuses it and leaves no trace of it. Whether
 a given call finds the inbox full depends on timing, so the test checks what must hold either
@@ -185,17 +191,129 @@ def busyTest : Async (List (String × Bool)) := do
   let inputs := (← rt.trace).toList.countP fun
     | .input _ => true
     | _ => false
-  return [
+  let results := [
     ("tryInput: every accepted input is handled and no refused one is",
       (← rt.state 0) == (accepted, accepted)),
     ("tryInput: the trace holds exactly the accepted inputs and still replays",
       inputs == accepted && (← replay flood rt).isSome) ]
+  rt.stop
+  return results
+
+/-! Timers, back-pressure and stopping, with nothing left to timing but lower bounds. -/
+
+inductive ClockMsg where
+  | echo (n : Nat)
+  | arm (delay_ms : Nat)
+  | disarm
+  | tick
+  deriving DecidableEq, Repr, Hashable
+
+abbrev clockSig : Signature where
+  Id := Unit
+  Msg _ := ClockMsg
+  In := ClockMsg
+  Out := Nat
+
+def tickOutput : Nat := 1000
+
+/-- The state counts the ticks. -/
+def clock : clockSig.Actor () Nat where
+  init := 0
+  step s
+    | .echo n => (s, [.emit n])
+    | .arm delay_ms => (s, [.after delay_ms .tick])
+    | .disarm => (s, [.cancel .tick])
+    | .tick => (s + 1, [.emit tickOutput])
+  recover s := (s, [])
+
+abbrev clockSystem : System clockSig where
+  State _ := Nat
+  actor _ := clock
+  accept x := ⟨(), x⟩
+
+def throws {α : Type} (action : Async α) : Async Bool := do
+  try discard action; return false
+  catch _ => return true
+
+def timerTest : Async (List (String × Bool)) := do
+  let rt ← Runtime.start clockSystem
+  let t0 ← IO.monoMsNow
+  rt.input (.arm 60)
+  rt.idle (timers := true)
+  let fired ← IO.monoMsNow
+  rt.input (.arm 5000)
+  rt.input .disarm
+  rt.idle (timers := true)
+  let cancelled ← IO.monoMsNow
+  let afterCancel ← rt.state ()
+  let t1 ← IO.monoMsNow
+  rt.input (.arm 5000)
+  rt.input (.arm 90)
+  rt.idle (timers := true)
+  let rearmed ← IO.monoMsNow
+  let results := [
+    ("timer: it fires no earlier than asked", fired - t0 ≥ 60 && afterCancel == 1),
+    ("timer: a cancelled timer is not waited for and never fires",
+      cancelled - fired < 2500 && afterCancel == 1),
+    ("timer: arming again replaces the pending timer",
+      rearmed - t1 ≥ 90 && rearmed - t1 < 2500 && (← rt.state ()) == 2) ]
+  rt.stop
+  return results
+
+/-- The shard is held inside the output handler, so what the inbox does is not a matter of
+timing: it takes `inboxCapacity` inputs and refuses the next. -/
+def backPressureTest : Async (List (String × Bool)) := do
+  let entered ← IO.Promise.new
+  let release ← IO.Promise.new
+  let outputs ← IO.mkRef #[]
+  let rt ← Runtime.start clockSystem { inboxCapacity := 2 } fun out => do
+    outputs.modify (·.push out)
+    if out == 0 then
+      entered.resolve ()
+      await release
+  rt.input (.echo 0)
+  await entered
+  let offered ← [1, 2, 3].mapM fun n => rt.tryInput (.echo n)
+  release.resolve ()
+  rt.idle
+  let results := [
+    ("back-pressure: a full inbox refuses, and what it accepted is handled",
+      offered == [true, true, false] && (← outputs.get) == #[0, 1, 2]) ]
+  rt.stop
+  return results
+
+def stopTest : Async (List (String × Bool)) := do
+  let rt ← Runtime.start clockSystem
+  rt.input (.arm 60000)
+  rt.input (.echo 1)
+  let waiter ← IO.Promise.new
+  background do waiter.resolve (← throws (rt.idle (timers := true)))
+  rt.idle
+  rt.stop
+  let waiterThrew ← await waiter
+  return [
+    ("stop: a caller waiting for timers is told the runtime stopped", waiterThrew),
+    ("stop: input, idle and state fail instead of hanging",
+      (← throws (rt.input (.echo 2))) && (← throws rt.idle) && (← throws (rt.state ()))),
+    ("stop: tryInput refuses", !(← rt.tryInput (.echo 3))) ]
+
+def batchTest : Async (List (String × Bool)) := do
+  let rt ← Runtime.start clockSystem { batch := 0 }
+  rt.input (.arm 1)
+  rt.idle (timers := true)
+  let results := [("batch: a batch of zero still makes progress", (← rt.state ()) == 1)]
+  rt.stop
+  return results
 
 def tests : IO (List (String × Bool)) := do
   let a ← flakyTest.block
   let b ← bankTest.block
   let c ← floodTest.block
   let d ← busyTest.block
-  return a ++ b ++ c ++ d
+  let e ← timerTest.block
+  let f ← backPressureTest.block
+  let g ← stopTest.block
+  let h ← batchTest.block
+  return a ++ b ++ c ++ d ++ e ++ f ++ g ++ h
 
 end Tests.Runtime

@@ -56,8 +56,10 @@ def client (requests : List (ReqId × Request)) : Driver (gatedSig echoSig) Clie
 
 def get (path : List String) : Request := { method := .get, path }
 
-def check (config : GateConfig) (requests : List (ReqId × Request)) (mustSee : Nat := 200) :=
-  Check.system (gated (Server.system echo) bridge config) { driver := client requests }
+def check (config : GateConfig) (requests : List (ReqId × Request)) (mustSee : Nat := 200)
+    (env : EnvModel (gatedSig echoSig) := {}) (maxCrashes : Nat := 0) :=
+  Check.system (gated (Server.system echo) bridge config)
+    { env, driver := client requests, maxCrashes }
     [ .sometimes s!"a request gets {mustSee}" fun w => w.driver.answered.any (·.2 == mustSee),
       .always "no request is answered twice" fun w =>
         (w.driver.answered.map (·.1)).eraseDups.length == w.driver.answered.length,
@@ -72,11 +74,19 @@ def tests : List (String × Bool) :=
   let two := check {} [(1, get []), (2, get [])]
   let refused := check {} [(1, get ["bad"]), (2, get [])] (mustSee := 400)
   let full := check { maxPending := 1 } [(1, get []), (2, get [])] (mustSee := 503)
+  let reused := check {} [(1, get []), (1, get [])]
+  let crashing := check {} [(1, get [])] (env := { mayCrash := (·.isNone) }) (maxCrashes := 1)
   [ ("gate: each request is answered exactly once, whatever the timers do",
       two.ok && two.complete && two.witnesses.length == 3),
     ("gate: a request the bridge refuses is answered without entering the system",
       refused.ok && refused.complete),
     ("gate: beyond maxPending a request gets 503 and is still answered exactly once",
-      full.ok && full.complete) ]
+      full.ok && full.complete),
+    ("gate: exactly once needs distinct request ids, which the adapter allocates",
+      !reused.ok),
+    ("gate: exactly once needs a gate that does not crash, which one shard guarantees",
+      match crashing.failure with
+      | some (.deadlock _) => true
+      | _ => false) ]
 
 end Tests.Gate
