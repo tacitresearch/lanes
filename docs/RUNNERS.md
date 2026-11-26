@@ -1,7 +1,7 @@
 # Runners
 
-The heavy CI jobs — the mutation gate above all (`.github/workflows/mutants.yml`: 43 mutants,
-each a rebuild and a test run) — need more cores than GitHub's runners or a shared container
+The heavy CI jobs — the mutation gate above all (`.github/workflows/mutants.yml`: every mutant
+of `scripts/mutants.py`, each a rebuild and a test run) — need more cores than GitHub's runners or a shared container
 give. The recommended way is one warm EC2 machine of runners that the workflows start and stop
 themselves, through GitHub's OIDC provider, with no AWS keys stored anywhere.
 
