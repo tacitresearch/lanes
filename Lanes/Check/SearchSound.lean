@@ -706,6 +706,13 @@ theorem runBatches_eq (fuel : Nat) :
         have hin : j < min (st.head + count) st.queue.size - st.head := by omega
         simpa only [batch, Array.getElem?_toList, Array.getElem?_extract, hin, ↓reduceIte] using hv
 
+theorem explore_eq (fuel : Nat) :
+    st.explore m props opts labelName fuel = st.run m props opts labelName fuel := by
+  unfold explore
+  split
+  · exact runBatches_eq fuel
+  · rfl
+
 section Equiv
 
 variable [EquivBEq S]
@@ -850,29 +857,29 @@ theorem Inv.run (fuel : Nat) (h : st.Inv m props opts) :
         exact ih (h.expand hv)
 
 theorem Inv.final :
-    ((Search.start m props opts actions).runBatches m props opts labelName opts.maxStates).Inv
+    ((Search.start m props opts actions).explore m props opts labelName opts.maxStates).Inv
       m props opts := by
-  rw [runBatches_eq]
+  rw [explore_eq]
   exact Inv.run _ (Inv.start actions)
 
 end Equiv
 
 theorem Sound.final :
-    ((Search.start m props opts actions).runBatches m props opts labelName opts.maxStates).Sound
+    ((Search.start m props opts actions).explore m props opts labelName opts.maxStates).Sound
       m props opts := by
-  rw [runBatches_eq]
+  rw [explore_eq]
   exact Sound.run _ (Sound.start actions)
 
 /-- `search` gives the run enough fuel: it stops on a failure or with every stored state
 expanded, so a report is incomplete only when a bound left something out. -/
 theorem done_final :
-    ((Search.start m props opts actions).runBatches m props opts labelName
+    ((Search.start m props opts actions).explore m props opts labelName
         opts.maxStates).failure.isSome = true ∨
-      ((Search.start m props opts actions).runBatches m props opts labelName
+      ((Search.start m props opts actions).explore m props opts labelName
           opts.maxStates).queue.size ≤
-        ((Search.start m props opts actions).runBatches m props opts labelName
+        ((Search.start m props opts actions).explore m props opts labelName
           opts.maxStates).head := by
-  rw [runBatches_eq]
+  rw [explore_eq]
   exact run_done _ (Sound.start actions) (by rw [head_start]; omega)
 
 /-- Once nothing is left to expand, every reachable state is stored, up to equality. -/

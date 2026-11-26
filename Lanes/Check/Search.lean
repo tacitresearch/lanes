@@ -328,12 +328,17 @@ def runBatches (m : Model S L) (props : List (Property S)) (opts : Options S)
   if _ : count = 0 ∨ st.failure.isSome then st
   else
     let batch := (st.queue.extract st.head (st.head + count)).toList
-    let tasks := mapInTasks (successors m opts) (if opts.tasks then taskSize else count)
-      batch.length batch
+    let tasks := mapInTasks (successors m opts) taskSize batch.length batch
     runBatches m props opts labelName (fuel - count)
       (tasks.foldl (fun st task => st.expandAll props opts labelName task.get) st)
 termination_by fuel
 decreasing_by omega
+
+/-- `run`, in tasks if the options ask for them. -/
+def explore (m : Model S L) (props : List (Property S)) (opts : Options S)
+    (labelName : L → String) (fuel : Nat) (st : Search S L) : Search S L :=
+  if opts.tasks then st.runBatches m props opts labelName fuel
+  else st.run m props opts labelName fuel
 
 def report (props : List (Property S)) (st : Search S L) : Report S L where
   failure :=
@@ -366,7 +371,7 @@ zero count show up in the coverage.
 -/
 def search (m : Model S L) (props : List (Property S)) (opts : Options S := {})
     (labelName : L → String := fun _ => "step") (actions : List String := []) : Report S L :=
-  ((Search.start m props opts actions).runBatches m props opts labelName opts.maxStates).report
+  ((Search.start m props opts actions).explore m props opts labelName opts.maxStates).report
     props
 
 end Lanes.Check

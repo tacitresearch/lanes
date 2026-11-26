@@ -94,12 +94,33 @@ theorem NetEquiv.matches {env : EnvModel σ} {e : Envelope σ} {a b : List (Enve
     simp [sameLink_eq_onLink hself, ← hhead]
   · simpa using (h.mem_iff e).mp (by simp)
 
+theorem SysState.without_eq (e : Envelope σ) (b passed : List (Envelope σ)) :
+    SysState.without e b passed =
+      if e ∈ b then some (passed.reverseAux (b.erase e)) else none := by
+  induction b generalizing passed with
+  | nil => rfl
+  | cons x b ih =>
+    by_cases hx : x = e
+    · simp [SysState.without, hx]
+    · have hne : (x == e) = false := by simpa using hx
+      simp [SysState.without, hx, ih, hne, List.reverseAux, Ne.symm hx]
+
+theorem SysState.netEquiv_cons (env : EnvModel σ) (e : Envelope σ) (a b : List (Envelope σ)) :
+    SysState.netEquiv env (e :: a) b =
+      ((if (env.link e.src e.dst).ordered then b.find? e.sameLink == some e else b.contains e)
+        && SysState.netEquiv env a (b.erase e)) := by
+  rw [SysState.netEquiv]
+  split
+  · rfl
+  · rw [SysState.without_eq]
+    by_cases hmem : e ∈ b <;> simp [hmem, List.reverseAux]
+
 theorem netEquiv_iff (env : EnvModel σ) (a b : List (Envelope σ)) :
     SysState.netEquiv env a b = true ↔ NetEquiv env a b := by
   induction a generalizing b with
   | nil => simp [SysState.netEquiv, NetEquiv.nil_iff]
   | cons e a ih =>
-    simp only [SysState.netEquiv, Bool.and_eq_true, ih]
+    simp only [SysState.netEquiv_cons, Bool.and_eq_true, ih]
     refine ⟨fun ⟨hmatch, hrest⟩ => (hrest.cons e).trans (Matches.netEquiv hmatch),
       fun h => ⟨h.matches, ?_⟩⟩
     simpa using h.erase e

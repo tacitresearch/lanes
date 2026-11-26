@@ -284,17 +284,27 @@ def compact [Enum σ.Id] (c : SysState sys) : SysState sys :=
 
 variable [σ.Inspect] [sys.Inspect]
 
+/-- `b` without its first `e`, or `none` if `e` is not in `b`. `passed` holds the messages
+before the one looked at, newest first. One pass, where `contains` and `erase` take two. -/
+def without (e : Envelope σ) : List (Envelope σ) → List (Envelope σ) → Option (List (Envelope σ))
+  | [], _ => none
+  | x :: b, passed => if x = e then some (passed.reverseAux b) else without e b (x :: passed)
+
 /--
 Whether two lists of messages in flight are the same traffic. Each message of `a` is matched
 with one of `b` and both are taken out: on an ordered link it must be the oldest message of its
-link in `b`, on an unordered one any occurrence does. One pass over `a`, and lists in the same
-order cost one comparison per message.
+link in `b`, on an unordered one any occurrence does. Lists in the same order cost one
+comparison per message.
 -/
 def netEquiv (env : EnvModel σ) : List (Envelope σ) → List (Envelope σ) → Bool
   | [], b => b.isEmpty
   | e :: a, b =>
-    (if (env.link e.src e.dst).ordered then b.find? e.sameLink == some e else b.contains e)
-      && netEquiv env a (b.erase e)
+    if (env.link e.src e.dst).ordered then
+      b.find? e.sameLink == some e && netEquiv env a (b.erase e)
+    else
+      match without e b [] with
+      | some rest => netEquiv env a rest
+      | none => false
 
 /-- Message order only counts where the link model makes it observable. -/
 def equiv (env : EnvModel σ) (a b : SysState sys) : Bool :=
