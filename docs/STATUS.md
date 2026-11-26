@@ -48,23 +48,9 @@ Update them in the same change that moves an item; `lake exe lanes lint --fix` w
   "eventually a leader".
 - **Phases 5 to 8**: only the HTTP server adapter, the HTML layer and JSON exist.
 
-## Next, in order
+## Next
 
-1. Make proving an application cheap: a library for the usual simulation relations (what the
-   key-value store's refinement proof repeated), the cheaper monotone rule the election proof
-   asked for, then a counterexample-to-induction finder and `lanes prove`. The measure: the
-   ledger's refinement of its spec, proved.
-2. A generated proof inventory: every public definition proved, checked, tested, trusted or
-   none, kept current by CI, with none left in library code.
-3. The standard library: what Go's has that applications need, triaged into what Lean already
-   has, what is pure (built and proved, and tested against Go), what is bound, and what is not
-   needed.
-4. Shrink what is trusted and assumed: the server's request reader, `fsync` and the bound
-   cryptography, exactly-once requests, idle actors released.
-5. A place for slow work that is not a function of one request, as the ledger's friction log
-   asks.
-
-The standard library, triaged from Go's, with its P0 set in build order: `docs/STDLIB.md`.
+What is being worked on now, and why: `docs/PLAN.md`.
 
 ## Known limits
 
