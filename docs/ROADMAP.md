@@ -63,8 +63,9 @@ Asked at each phase end: is this still the right direction, and is there a bette
   system's theorems already quantify over everything its environment may send.
 - The gate was rebuilt with the join after the phase ended (D31): `Http.fronted`. It needed two
   things the join did not have: runs, not only states, seen from one side
-  (`SysState.run_left`), and a way to hide what a join wires (`System.filterMapIO`). The
-  hand-built `gated` stays until fair runs project, since its liveness theorem is about them.
+  (`SysState.run_left`), and a way to hide what a join wires (`System.filterMapIO`). Once fair
+  runs projected (D41), the hand-built `gated` was retired and `serve` runs `fronted`
+  (`docs/decisions/D43-one-gate.md`).
 - Sugar for applications will be macros, not deriving handlers: anything that imports `Lean`
   costs 137 MB in the binary, even through `meta import`.
 
@@ -185,7 +186,10 @@ The next stress test is `systems/ledger`, phase D's exit criterion: users, sessi
 authentication, forms, pages that update, many kinds of records. Alongside it: the trusted
 code is being cut back by moving what it decides into proved functions (the HTTP reader, the
 runtime's batch, the server's table of waiting requests, the mailbox and the courier), and
-declaration sugar for codecs and instances, the boilerplate Raft showed.
+declaration sugar for codecs and instances, the boilerplate Raft showed. The ledger's first
+finding was that `serve` journalled passwords and session cookies as they came; a bridge now
+prepares a request before it is journalled
+(`docs/decisions/D44-request-prepared-before-journal.md`).
 
 ## Serious applications
 

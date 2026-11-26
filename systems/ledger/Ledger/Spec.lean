@@ -12,9 +12,11 @@ The credential is a parameter: the system is checked with two credentials, a rig
 wrong one, and deployed with password digests (`Lanes.Auth.Digest`), which the bridge derives
 so that no password enters the system.
 
-The spec has no time, so the lockout and the end of a session, which are timers in the system,
-are not in it: its checks run with `Config.lockout_ms` and `Config.session_ms` set to `none`.
-The safety properties are stated below and checked of every state in `Check.lean`.
+Time passes in it as deadlines (`Deadline`): a locked account's lock lifting, a live session
+ending. Which are armed is read from the users' records, and the system's timers are those
+deadlines passing (`Ledger.deadlines`). How long a lock or a session lasts is the system's
+configuration, not the spec's. The safety properties are stated below and checked of every
+state in `Check.lean`.
 -/
 
 namespace Ledger
@@ -116,6 +118,12 @@ def expire (session : Sid) : Option (Profile C) → Option (Profile C)
 
 end User
 
+/-- A deadline of the spec: a lock lifting, a session ending. -/
+inductive Deadline (N : Type) where
+  | unlock (name : N)
+  | expire (name : N) (session : Sid)
+  deriving DecidableEq, Repr
+
 structure SpecState (N C : Type) where
   users : N → Option (Profile C)
   book : Book N
@@ -144,7 +152,24 @@ def step (config : Config N) (st : SpecState N C) (r : Request N C) :
     let (book, reply) := st.book.serve config r.name r.req op
     ({ users, book }, [⟨r.req, reply⟩])
 
+/-- A lock is armed while the account is locked, a session's end while the session is live. -/
+def armed (st : SpecState N C) : Deadline N → Bool
+  | .unlock n => (st.users n).any (·.attempts.locked)
+  | .expire n session => (st.users n).any (·.sessions.live session)
+
+def fire (st : SpecState N C) : Deadline N → SpecState N C × List (Response N)
+  | .unlock n => ({ st with users := update st.users n (User.unlock (st.users n)) }, [])
+  | .expire n session =>
+    ({ st with users := update st.users n (User.expire session (st.users n)) }, [])
+
 end SpecState
+
+def spec (N C : Type) [DecidableEq N] [DecidableEq C] (config : Config N) :
+    Service (Request N C) (Response N) (SpecState N C) (Deadline N) where
+  init := .init
+  step := SpecState.step config
+  armed := SpecState.armed
+  fire := SpecState.fire
 
 /-! ## Safety properties
 

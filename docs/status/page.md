@@ -45,6 +45,8 @@ Update them in the same change that moves an item; `lake exe lanes lint --fix` w
    needed.
 4. Shrink what is trusted and assumed: the server's request reader, `fsync` and the bound
    cryptography, exactly-once requests, idle actors released.
+5. A place for slow work that is not a function of one request, as the ledger's friction log
+   asks.
 
 ## Known limits
 

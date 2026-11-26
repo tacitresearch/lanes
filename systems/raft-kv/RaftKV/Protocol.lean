@@ -114,7 +114,7 @@ structure Config where
 
 /-- To its clients, the cluster is the machine. -/
 def spec {N C R M : Type} [DecidableEq N] [DecidableEq C] [DecidableEq R]
-    (machine : Machine C R M) : Service (sig N C R) M where
+    (machine : Machine C R M) : Service (Request N C) (Response R) M where
   init := machine.init
   step m r := ((machine.apply m r.cmd).1, [⟨r.req, (machine.apply m r.cmd).2⟩])
 
