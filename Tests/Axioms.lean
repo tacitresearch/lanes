@@ -94,3 +94,15 @@ by `lake build`, not linked into the test executable.
 
 /-- info: 'Examples.Bank.money_conserved' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Examples.Bank.money_conserved
+
+/-- info: 'Lanes.Check.search_violated' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.search_violated
+
+/-- info: 'Lanes.Check.search_deadlock' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.search_deadlock
+
+/-- info: 'Lanes.Check.search_witness' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.search_witness
+
+/-- info: 'Lanes.Check.search_states_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.search_states_le

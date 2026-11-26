@@ -37,12 +37,18 @@ def counter : Model Nat Unit where
   init := [0]
   next s := if s < 3 then [((), s + 1)] else []
 
+/-- Five initial states and no transitions. -/
+def wide : Model Nat Unit where
+  init := [0, 1, 2, 3, 4]
+  next _ := []
+
 /-- A comparison written without spaces. This file imports Lanes and does not open the template
 syntax, so `<` here must stay a comparison. -/
 def tight (i n : Nat) : Bool := i<n
 
 def tests : List (String × Bool) :=
   let capped := search bitmask [] { maxStates := 10 }
+  let cappedInit := search wide [] { maxStates := 3 }
   let r := search bitmask []
   let solved := search dieHard [.always "big jug never holds 4" fun s => s.2 != 4] {} id
   let witness := search dieHard [.sometimes "big jug holds 4" fun s => s.2 == 4] {} id
@@ -70,8 +76,9 @@ def tests : List (String × Bool) :=
       | some (.deadlock t) => t.steps.length == 3
       | _ => false),
     ("terminal state is not a deadlock", live.ok),
-    ("maxStates bounds the states stored and marks the report incomplete",
-      capped.states == 10 && !capped.complete && capped.ok),
+    ("maxStates bounds the states stored, initial states included, and marks the report incomplete",
+      capped.states == 10 && !capped.complete && capped.ok
+        && cappedInit.states == 3 && !cappedInit.complete && cappedInit.ok),
     ("a comparison without spaces still parses in a file that imports Lanes",
       tight 1 2 && !tight 2 1) ]
 
