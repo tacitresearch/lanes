@@ -9,7 +9,7 @@ Last updated: 2026-11-27.
 
 | Area | What exists | Where |
 | --- | --- | --- |
-| Actor API | `Actor`, `Signature`, `Effect`, `System`, `EnvModel`; `actor_invariant` tactic | `Lanes/Actors/{Actor,System}.lean` |
+| Actor API | `Actor`, `Signature`, `Effect`, `System`, `EnvModel`; `actor_invariant` tactic; `System.join` (two systems wired into one) and `System.mapIO` | `Lanes/Actors/{Actor,System,Join}.lean` |
 | Semantics | One executable step function; per-event lemmas; per-actor invariants lift to systems; ghost histories with an erasure theorem; a five-case proof rule for invariants that hold under every fault | `Lanes/Actors/{World,Step,Lift,Ghost,Monotone}.lean` |
 | Deterministic scheduler | Seeded runs, replayable event lists, drivers for the outside world; `Check.fuzz` runs many seeded runs with the environment's faults against `always` and `sometimes` properties and reports the seed and trace of a failure | `Lanes/Actors/Scheduler.lean`, `Lanes/Check/Fuzz.lean` |
 | Model checker | Breadth-first, exact states, `always`/`sometimes`, constraints, deadlock, coverage, shortest traces; refinement to a `Service` without a mapping. Proved: it lists exactly the enabled events of a state, merging states is safe, a complete PASS means every `always` property holds in every world of the instance (`Check.system_sound`; `==` must be equality on actor states and the driver's state, so not yet under a monitored driver), the spec monitor accepts exactly what the spec allows, and a reported violation is a real run of the semantics (`Check.system_violated`) | `Lanes/Check/`, `Lanes/Semantics/Monitor.lean` |

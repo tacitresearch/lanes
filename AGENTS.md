@@ -73,6 +73,10 @@ and Mathlib's `<i` token breaks `<input>` in templates, so keep views and `main`
   an `IO.Ref` used through `modifyGet`; an `Async` loop would copy it on every update.
 - Take pairs apart by pattern (`let (a, b) := f x`), not with `.1` and `.2`, where the first
   part is large state that is then updated: a projection keeps the pair, and so the state, alive.
+- An instance stated over an abstract signature (`[σ.Inspect] : (joinSig σ τ).Inspect`) is not
+  found for a concrete one: the concrete signature is an `abbrev`, instance search unfolds it,
+  and `σ.Msg i` no longer matches. Write such instances as named definitions and give them in
+  one line: `instance : (joinSig a b).Inspect := .join`.
 - Templates are embedded with `include_str`, which Lake does not track: after editing
   `templates/`, touch `LanesCli/New.lean` and rebuild `lanes`. CI builds a generated app.
 - Check before you prove: every invariant gets an `always` property and a `sometimes` vacuity
