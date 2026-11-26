@@ -5,7 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Lanes.Actors.Join
-public import Lanes.Actors.KernelSound
+public import Lanes.Actors.Run
 
 /-!
 # What hiding inputs and outputs keeps
@@ -77,43 +77,6 @@ namespace Lanes
 variable {σ : Signature} {In Out : Type} [DecidableEq In] [DecidableEq Out] {sys : System σ}
   {input : In → σ.In} {output : σ.Out → Option Out} {env : EnvModel (σ.withIO In Out)}
 
-private theorem map_erase {α β : Type} [DecidableEq α] [DecidableEq β] {f : α → β}
-    (hf : ∀ x y, f x = f y → x = y) (l : List α) (a : α) :
-    (l.erase a).map f = (l.map f).erase (f a) := by
-  induction l with
-  | nil => rfl
-  | cons x l ih =>
-    by_cases hx : x = a
-    · subst hx
-      simp
-    · have hfx : f x ≠ f a := fun h => hx (hf _ _ h)
-      simp [hx, hfx, ih]
-
-/-- An output shown as `out` waits: handing over the first such is handing over `out`. -/
-private theorem filterMap_erase_shown {α β : Type} [DecidableEq α] [DecidableEq β]
-    {f : α → Option β} {b : β} :
-    ∀ l : List α, b ∈ l.filterMap f →
-      ∃ a ∈ l, f a = some b ∧ (l.erase a).filterMap f = (l.filterMap f).erase b := by
-  intro l
-  induction l with
-  | nil => exact fun h => absurd h (by simp)
-  | cons x l ih =>
-    intro h
-    cases hfx : f x with
-    | none =>
-      rw [List.filterMap_cons_none hfx] at h
-      obtain ⟨a, ha, hfa, heq⟩ := ih h
-      have hx : x ≠ a := fun hxa => by simp [hxa, hfa] at hfx
-      exact ⟨a, List.mem_cons_of_mem _ ha, hfa, by simp [hx, hfx, heq]⟩
-    | some y =>
-      by_cases hy : y = b
-      · subst hy
-        exact ⟨x, List.mem_cons_self, hfx, by simp [hfx]⟩
-      · rw [List.filterMap_cons_some hfx] at h
-        obtain ⟨a, ha, hfa, heq⟩ := ih ((List.mem_cons.mp h).resolve_left fun hb => hy hb.symm)
-        have hx : x ≠ a := fun hxa => hy (by simpa [hxa, hfa] using hfx.symm)
-        exact ⟨a, List.mem_cons_of_mem _ ha, hfa, by simp [hx, hfx, heq, hy]⟩
-
 /-- What every event shows as the event it stands for shows, the two runs show. -/
 theorem Event.AllUnder.filterMap_eq {β : Type} {f : Event (σ.withIO In Out) → Option β}
     {g : Event σ → Option β} (hfg : ∀ ev ev', Event.Under input output ev ev' → f ev = g ev') :
@@ -163,15 +126,11 @@ private theorem over_performAll (c : SysState sys) (i : σ.Id) (effs : List (Eff
 
 private theorem isStop_filterMapOut {i : σ.Id} (effs : List (Effect σ i)) :
     (effs.flatMap (Effect.filterMapOut (In := In) output)).any Effect.isStop
-      = effs.any Effect.isStop := by
-  induction effs with
-  | nil => rfl
-  | cons eff effs ih =>
-    have head : (Effect.filterMapOut (In := In) output eff).any Effect.isStop = eff.isStop := by
-      cases eff with
-      | emit out => cases h : output out <;> simp [Effect.filterMapOut, Effect.isStop, h]
-      | _ => simp [Effect.filterMapOut, Effect.isStop]
-    rw [List.flatMap_cons, List.any_append, List.any_cons, ih, head]
+      = effs.any Effect.isStop :=
+  Effect.any_isStop_flatMap (fun eff => by
+    cases eff with
+    | emit out => cases h : output out <;> simp [Effect.filterMapOut, Effect.isStop, h]
+    | _ => simp [Effect.filterMapOut, Effect.isStop]) effs
 
 private theorem over_down (c : SysState sys) (i : σ.Id) :
     (c.down env.under i).over input output = (c.over input output).down env i := by
@@ -239,7 +198,7 @@ private theorem step_under {c : SysState sys} {ev : Event (σ.withIO In Out)}
       ({ c with net := c.net.erase e.under } : SysState sys).over input output
         = { c.over input output with net := (c.over input output).net.erase e } := by
     simp only [over]
-    rw [map_erase Envelope.over_inj]
+    rw [map_erase fun x _ => Envelope.over_inj x _]
     rfl
   cases ev with
   | input x =>
@@ -265,7 +224,7 @@ private theorem step_under {c : SysState sys} {ev : Event (σ.withIO In Out)}
     exact ⟨_, _, rfl, step_timeout.mpr ⟨hup, hmem, rfl⟩, over_handle _ _ _⟩
   | output out =>
     obtain ⟨hmem, rfl⟩ := step_output.mp h
-    obtain ⟨out', hout', hshown, heq⟩ := filterMap_erase_shown c.outbox hmem
+    obtain ⟨out', hout', hshown, heq⟩ := exists_filterMap_erase c.outbox hmem
     exact ⟨_, _, ⟨out', rfl, hshown⟩, step_output.mpr ⟨hout', rfl⟩, by simp only [over, heq]⟩
   | crash i =>
     obtain ⟨hup, hcrash, rfl⟩ := step_crash.mp h

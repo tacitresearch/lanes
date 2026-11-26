@@ -45,6 +45,32 @@ def update {ι : Type} [DecidableEq ι] {β : ι → Type} (f : (i : ι) → β 
   · subst h; simp
   · simp [h]
 
+theorem update_update {ι : Type} [DecidableEq ι] {β : ι → Type} (f : (i : ι) → β i) (i : ι)
+    (v v' : β i) : update (update f i v) i v' = update f i v' := by
+  funext j
+  by_cases h : j = i
+  · subst h; simp
+  · simp [h]
+
+theorem update_comm {ι : Type} [DecidableEq ι] {β : ι → Type} (f : (i : ι) → β i) {i k : ι}
+    (h : i ≠ k) (a : β i) (b : β k) : update (update f i a) k b = update (update f k b) i a := by
+  funext j
+  by_cases hi : j = i
+  · subst hi
+    simp [h]
+  · by_cases hk : j = k
+    · subst hk
+      simp [hi]
+    · simp [hi, hk]
+
+theorem apply_update {ι : Type} [DecidableEq ι] {β γ : ι → Type} (f : (j : ι) → β j → γ j)
+    (g : (j : ι) → β j) (i : ι) (v : β i) :
+    (fun j => f j (update g i v j)) = update (fun j => f j (g j)) i (f i v) := by
+  funext j
+  by_cases h : j = i
+  · subst h; simp
+  · simp [h]
+
 variable {σ : Signature}
 
 structure SysState (sys : System σ) where
@@ -54,6 +80,11 @@ structure SysState (sys : System σ) where
   net : List (Envelope σ)
   timers : (i : σ.Id) → List (σ.Msg i)
   outbox : List σ.Out
+
+theorem SysState.ext' {sys : System σ} {a b : SysState sys} (hstate : a.state = b.state)
+    (hup : a.up = b.up) (hnet : a.net = b.net) (htimers : a.timers = b.timers)
+    (houtbox : a.outbox = b.outbox) : a = b := by
+  cases a; cases b; simp_all
 
 inductive Event (σ : Signature) : Type where
   | input (x : σ.In)
@@ -165,6 +196,16 @@ def run (env : EnvModel σ) (c : SysState sys) : List (Event σ) → Option (Sys
   | [] => some c
   | ev :: evs => (c.step env ev).bind fun c' => c'.run env evs
 
+theorem run_append (env : EnvModel σ) (c : SysState sys) (a b : List (Event σ)) :
+    c.run env (a ++ b) = (c.run env a).bind (·.run env b) := by
+  induction a generalizing c with
+  | nil => rfl
+  | cons ev a ih =>
+    simp only [List.cons_append, run]
+    cases c.step env ev with
+    | none => rfl
+    | some c' => simpa using ih c'
+
 end SysState
 
 namespace System
@@ -191,6 +232,40 @@ theorem Inductive.invariant {env : EnvModel σ} {P : SysState sys → Prop}
   induction hc with
   | init => exact h.init
   | step ev _ hstep ih => exact h.step _ ev _ ih hstep
+
+theorem Reachable.run {env : EnvModel σ} {c c' : SysState sys} {evs : List (Event σ)}
+    (h : sys.Reachable env c) (hrun : c.run env evs = some c') : sys.Reachable env c' := by
+  induction evs generalizing c with
+  | nil => simp only [SysState.run, Option.some.injEq] at hrun; exact hrun ▸ h
+  | cons ev evs ih =>
+    simp only [SysState.run] at hrun
+    cases hstep : c.step env ev with
+    | none => simp [hstep] at hrun
+    | some c₁ => exact ih (h.step ev hstep) (by simpa [hstep] using hrun)
+
+/-- Induction along a run, for properties that relate the events so far to the state reached. -/
+theorem Reachable.run_induction {env : EnvModel σ} {P : List (Event σ) → SysState sys → Prop}
+    {c c' : SysState sys} {events : List (Event σ)} (hc : sys.Reachable env c)
+    (hrun : c.run env events = some c') (start : P [] c)
+    (step : ∀ evs c₁ ev c₂, sys.Reachable env c₁ → P evs c₁ → c₁.step env ev = some c₂ →
+      P (evs ++ [ev]) c₂) : P events c' := by
+  suffices h : ∀ (rest evs : List (Event σ)) (c₁ : SysState sys), sys.Reachable env c₁ →
+      P evs c₁ → c₁.run env rest = some c' → P (evs ++ rest) c' from h events [] c hc start hrun
+  intro rest
+  induction rest with
+  | nil =>
+    intro evs c₁ _ hP hrun
+    simp only [SysState.run, Option.some.injEq] at hrun
+    simpa [← hrun] using hP
+  | cons ev rest ih =>
+    intro evs c₁ hc₁ hP hrun
+    simp only [SysState.run] at hrun
+    cases hstep : c₁.step env ev with
+    | none => simp [hstep] at hrun
+    | some c₂ =>
+      have h := ih (evs ++ [ev]) c₂ (hc₁.step ev hstep) (step evs c₁ ev c₂ hc₁ hP hstep)
+        (by simpa [hstep] using hrun)
+      simpa using h
 
 end System
 

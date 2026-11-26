@@ -6,7 +6,7 @@ module
 
 public import Lanes.Actors.Join
 public import Lanes.Actors.Deed
-public import Lanes.Actors.Monotone
+public import Lanes.Actors.Run
 public import Lanes.Actors.Equiv
 
 /-!
@@ -121,13 +121,6 @@ public section
 
 namespace Lanes
 
-private theorem update_update {ι : Type} [DecidableEq ι] {β : ι → Type} (f : (i : ι) → β i)
-    (i : ι) (v v' : β i) : update (update f i v) i v' = update f i v' := by
-  funext j
-  by_cases h : j = i
-  · subst h; simp
-  · simp [h]
-
 private theorem update_inl {α β : Type} [DecidableEq α] [DecidableEq β] {γ : α ⊕ β → Type}
     (f : (x : α ⊕ β) → γ x) (i : α) (v : γ (.inl i)) :
     (fun k => update f (.inl i) v (.inl k))
@@ -141,153 +134,6 @@ private theorem update_inr_inl {α β : Type} [DecidableEq α] [DecidableEq β] 
     (f : (x : α ⊕ β) → γ x) (j : β) (v : γ (.inr j)) (k : α) :
     update f (.inr j) v (.inl k) = f (.inl k) :=
   update_of_ne _ _ (by simp)
-
-private theorem filterMap_erase {α β : Type} [DecidableEq α] [DecidableEq β] {f : α → Option β}
-    {a : α} {b : β} (h : ∀ x, f x = some b ↔ x = a) (l : List α) :
-    (l.erase a).filterMap f = (l.filterMap f).erase b := by
-  induction l with
-  | nil => rfl
-  | cons x l ih =>
-    by_cases hx : x = a
-    · subst hx
-      simp [(h x).mpr rfl]
-    · cases hfx : f x with
-      | none => simp [hx, hfx, ih]
-      | some y =>
-        have hy : y ≠ b := fun hyb => hx ((h x).mp (hyb ▸ hfx))
-        simp [hx, hfx, ih, hy]
-
-private theorem filterMap_erase_of_none {α β : Type} [DecidableEq α] {f : α → Option β} {a : α}
-    (h : f a = none) (l : List α) : (l.erase a).filterMap f = l.filterMap f := by
-  induction l with
-  | nil => rfl
-  | cons x l ih =>
-    by_cases hx : x = a
-    · subst hx
-      simp [h]
-    · cases hfx : f x <;> simp [hx, hfx, ih]
-
-private theorem filterMap_filter_of_none {α β : Type} {f : α → Option β} {p : α → Bool}
-    (h : ∀ x, p x = false → f x = none) (l : List α) :
-    (l.filter p).filterMap f = l.filterMap f := by
-  induction l with
-  | nil => rfl
-  | cons x l ih =>
-    cases hp : p x with
-    | true => cases hfx : f x <;> simp [hp, hfx, ih]
-    | false => simp [hp, ih, h x hp]
-
-private theorem filter_erase {α : Type} [DecidableEq α] (p : α → Bool) (l : List α) {a : α}
-    (h : p a = true) : (l.filter p).erase a = (l.erase a).filter p := by
-  induction l with
-  | nil => rfl
-  | cons x l ih =>
-    by_cases hx : x = a
-    · subst hx
-      simp [h]
-    · cases hp : p x <;> simp [hx, hp, ih]
-
-namespace Effect
-
-variable {σ : Signature} {i : σ.Id}
-
-/-- An actor's timers after its effects. -/
-def retime (effs : List (Effect σ i)) (timers : List (σ.Msg i)) : List (σ.Msg i) :=
-  effs.foldl (fun timers eff =>
-    match eff with
-    | .after _ msg => if msg ∈ timers then timers else timers ++ [msg]
-    | .cancel msg => timers.erase msg
-    | _ => timers) timers
-
-end Effect
-
-namespace SysState
-
-section General
-
-variable {σ : Signature} {sys : System σ} {env : EnvModel σ}
-
-theorem performAll_eq (c : SysState sys) (i : σ.Id) (effs : List (Effect σ i)) :
-    c.performAll i effs = { c with
-      net := c.net ++ Effect.sends i effs
-      timers := update c.timers i (Effect.retime effs (c.timers i))
-      outbox := c.outbox ++ Effect.emits effs } := by
-  induction effs generalizing c with
-  | nil => simp [Effect.sends, Effect.emits, Effect.retime]
-  | cons eff effs ih =>
-    rw [performAll_cons, ih]
-    cases eff <;>
-      simp [perform, Effect.sends, Effect.emits, Effect.retime, List.append_assoc, update_update]
-
-/-- A step in full: the new state and what the effects add, then the actor taken down if one
-of them is `stop`. -/
-theorem settle_eq (env : EnvModel σ) (c : SysState sys) (i : σ.Id)
-    (r : sys.State i × List (Effect σ i)) :
-    c.settle env i r =
-      if r.2.any Effect.isStop then
-        ({ c with
-          state := update c.state i r.1
-          net := c.net ++ Effect.sends i r.2
-          timers := update c.timers i (Effect.retime r.2 (c.timers i))
-          outbox := c.outbox ++ Effect.emits r.2 } : SysState sys).down env i
-      else
-        { c with
-          state := update c.state i r.1
-          net := c.net ++ Effect.sends i r.2
-          timers := update c.timers i (Effect.retime r.2 (c.timers i))
-          outbox := c.outbox ++ Effect.emits r.2 } := by
-  simp only [settle, performAll_eq]
-
-/-- An actor's step does not look at the messages in flight: one that stays in flight could as
-well be lost after the step as before it. -/
-theorem settle_erase (c : SysState sys) (i : σ.Id) (r : sys.State i × List (Effect σ i))
-    {e : Envelope σ} (hmem : e ∈ c.net) (hlossy : (env.link e.src e.dst).lossy = true) :
-    e ∈ (c.settle env i r).net ∧
-      ({ c with net := c.net.erase e } : SysState sys).settle env i r =
-        { c.settle env i r with net := (c.settle env i r).net.erase e } := by
-  simp only [settle_eq]
-  split
-  · simp only [down]
-    refine ⟨by simp [hmem, hlossy], ?_⟩
-    rw [filter_erase _ _ (by simp [hlossy]), List.erase_append_left _ hmem]
-  · exact ⟨by simp [hmem], by rw [List.erase_append_left _ hmem]⟩
-
-theorem run_inputs (env : EnvModel σ) (c : SysState sys) (xs : List σ.In) :
-    c.run env (xs.map .input) = some { c with
-      net := c.net ++ xs.map fun x => ⟨none, (sys.accept x).1, (sys.accept x).2⟩ } := by
-  induction xs generalizing c with
-  | nil => simp [run]
-  | cons x xs ih => simp [run, step, ih, List.append_assoc]
-
-/-- Handing over the outputs that are not `kept`, when none of them waits behind an equal one
-that is kept. -/
-theorem run_outputs_filter (env : EnvModel σ) (c : SysState sys) (kept : σ.Out → Bool)
-    (pre outs : List σ.Out) (hpre : ∀ out ∈ pre, kept out = true) :
-    ({ c with outbox := pre ++ outs } : SysState sys).run env
-        ((outs.filter (!kept ·)).map .output)
-      = some { c with outbox := pre ++ outs.filter kept } := by
-  induction outs generalizing pre with
-  | nil => simp [run]
-  | cons out outs ih =>
-    cases hout : kept out with
-    | true =>
-      have h := ih (pre ++ [out]) (by
-        intro o ho
-        rcases List.mem_append.mp ho with ho | ho
-        · exact hpre o ho
-        · simp only [List.mem_singleton] at ho
-          exact ho ▸ hout)
-      simpa [hout, List.append_assoc] using h
-    | false =>
-      have hnot : out ∉ pre := fun h => by simp [hpre out h] at hout
-      simp only [List.filter_cons, hout, Bool.not_false, ↓reduceIte, List.map_cons, run]
-      rw [step_output.mpr ⟨by simp, rfl⟩]
-      simp only [Option.bind_some, List.erase_append_right _ hnot, List.erase_cons_head]
-      simpa [hout] using ih pre hpre
-
-end General
-
-end SysState
 
 /-- `l` with some of the messages from outside left out. -/
 private inductive Thin {σ : Signature} : List (Envelope σ) → List (Envelope σ) → Prop
@@ -513,7 +359,7 @@ namespace Wiring
 
 variable {i : σ.Id} {j : τ.Id}
 
-private theorem sends_left (effs : List (Effect σ i)) :
+theorem sends_left (effs : List (Effect σ i)) :
     (Effect.sends (σ := joinSig σ τ) (.inl i) (effs.flatMap fun eff => [w.left b eff])).filterMap
       Envelope.left? = Effect.sends i effs := by
   induction effs with
@@ -528,7 +374,7 @@ private theorem sends_left (effs : List (Effect σ i)) :
     simp only [Effect.sends, List.filterMap_append] at head ih ⊢
     rw [head, ih]
 
-private theorem emits_left (effs : List (Effect σ i)) :
+theorem emits_left (effs : List (Effect σ i)) :
     (Effect.emits (effs.flatMap fun eff => [w.left b eff])).filterMap Sum.getLeft?
       = (Effect.emits effs).filter fun out => (w.toRight out).isNone := by
   induction effs with
@@ -543,7 +389,7 @@ private theorem emits_left (effs : List (Effect σ i)) :
     simp only [Effect.emits, List.filterMap_append, List.filter_append] at head ih ⊢
     rw [head, ih]
 
-private theorem retime_left (effs : List (Effect σ i)) (timers : List (σ.Msg i)) :
+theorem retime_left (effs : List (Effect σ i)) (timers : List (σ.Msg i)) :
     Effect.retime (σ := joinSig σ τ) (i := .inl i) (effs.flatMap fun eff => [w.left b eff]) timers
       = Effect.retime effs timers := by
   induction effs generalizing timers with
@@ -558,19 +404,14 @@ private theorem retime_left (effs : List (Effect σ i)) (timers : List (σ.Msg i
     simp only [Effect.retime, List.foldl_append] at head ih ⊢
     rw [head, ih]
 
-private theorem isStop_left (effs : List (Effect σ i)) :
-    (effs.flatMap fun eff => [w.left b eff]).any Effect.isStop = effs.any Effect.isStop := by
-  induction effs with
-  | nil => rfl
-  | cons eff effs ih =>
-    have head : (w.left b eff).isStop = eff.isStop := by
-      cases eff with
-      | emit out => cases h : w.toRight out <;> simp [Effect.isStop, Wiring.left, h]
-      | _ => simp [Effect.isStop, Wiring.left]
-    rw [List.flatMap_cons, List.any_append, List.any_cons, ih]
-    simp [head]
+theorem isStop_left (effs : List (Effect σ i)) :
+    (effs.flatMap fun eff => [w.left b eff]).any Effect.isStop = effs.any Effect.isStop :=
+  Effect.any_isStop_flatMap (fun eff => by
+    cases eff with
+    | emit out => cases h : w.toRight out <;> simp [Effect.isStop, Wiring.left, h]
+    | _ => simp [Effect.isStop, Wiring.left]) effs
 
-private theorem sends_right_left (effs : List (Effect τ j)) :
+theorem sends_right_left (effs : List (Effect τ j)) :
     (Effect.sends (σ := joinSig σ τ) (.inr j) (effs.flatMap fun eff => [w.right a eff])).filterMap
       Envelope.left?
       = ((Effect.emits effs).filterMap w.toLeft).map fun x =>
@@ -591,7 +432,7 @@ private theorem sends_right_left (effs : List (Effect τ j)) :
     simp only [Effect.sends, Effect.emits, List.filterMap_append, List.map_append] at head ih ⊢
     rw [head, ih]
 
-private theorem emits_right_left (effs : List (Effect τ j)) :
+theorem emits_right_left (effs : List (Effect τ j)) :
     (Effect.emits (effs.flatMap fun eff => [w.right a eff])).filterMap Sum.getLeft?
       = ([] : List σ.Out) := by
   induction effs with
@@ -632,7 +473,7 @@ private theorem left?_of_dropped {j : τ.Id} (e : Envelope (joinSig σ τ))
   · simp at h
   · rfl
 
-private theorem left_settle (c : SysState (a.join b w)) (i : σ.Id)
+theorem left_settle (c : SysState (a.join b w)) (i : σ.Id)
     (r : a.State i × List (Effect σ i)) :
     (c.settle env (.inl i) (r.1, r.2.flatMap fun eff => [w.left b eff])).left =
       if r.2.any Effect.isStop then
@@ -696,7 +537,7 @@ private theorem settle_left (c : SysState (a.join b w)) (i : σ.Id)
     rw [settle_eq]
     simp only [hstop, Bool.false_eq_true, ↓reduceIte]
 
-private theorem left_settle_inr (c : SysState (a.join b w)) (j : τ.Id)
+theorem left_settle_inr (c : SysState (a.join b w)) (j : τ.Id)
     (r : b.State j × List (Effect τ j)) :
     (c.settle env (.inr j) (r.1, r.2.flatMap fun eff => [w.right a eff])).left =
       { c.left with
@@ -1278,18 +1119,6 @@ section Swap
 variable {σ τ : Signature} {a : System σ} {b : System τ} {w : Wiring σ τ}
   {env : EnvModel (joinSig σ τ)}
 
-private theorem map_erase {α β : Type} [DecidableEq α] [DecidableEq β] {f : α → β}
-    (inj : ∀ x y, f x = f y → x = y) (l : List α) (a : α) :
-    (l.erase a).map f = (l.map f).erase (f a) := by
-  induction l with
-  | nil => rfl
-  | cons x l ih =>
-    by_cases hx : x = a
-    · subst hx
-      simp
-    · have hfx : f x ≠ f a := fun h => hx (inj _ _ h)
-      simp [hx, hfx, ih]
-
 private theorem swap_inj {α β : Type} {x y : α ⊕ β} : x.swap = y.swap ↔ x = y :=
   ⟨fun h => by simpa using congrArg Sum.swap h, fun h => h ▸ rfl⟩
 
@@ -1524,11 +1353,8 @@ private theorem settle_swap (c : SysState (a.join b w)) (x : σ.Id ⊕ τ.Id)
     (r : JoinState a b x × List (Effect (joinSig σ τ) x)) :
     (c.settle env x r).swap
       = c.swap.settle env.swap x.swap (swapAt x r.1, r.2.map Effect.swap) := by
-  have hstop : (r.2.map Effect.swap).any Effect.isStop = r.2.any Effect.isStop := by
-    rw [List.any_map]
-    congr 1
-    funext eff
-    exact Effect.swap_isStop eff
+  have hstop : (r.2.map Effect.swap).any Effect.isStop = r.2.any Effect.isStop :=
+    Effect.any_isStop_map Effect.swap_isStop r.2
   have hstate : ({ c with state := update c.state x r.1 } : SysState (a.join b w)).swap
       = { c.swap with state := update c.swap.state x.swap (swapAt x r.1) } :=
     SysState.ext' (swap_update_state c.state x r.1) rfl rfl rfl rfl
@@ -1603,7 +1429,7 @@ private theorem step_swap {c c' : SysState (a.join b w)} {ev : Event (joinSig σ
   have herase : ∀ e : Envelope (joinSig σ τ),
       ({ c with net := c.net.erase e } : SysState (a.join b w)).swap
         = { c.swap with net := c.swap.net.erase e.swap } := fun e =>
-    SysState.ext' rfl rfl (map_erase (fun _ _ => Envelope.swap_inj) c.net e) rfl rfl
+    SysState.ext' rfl rfl (map_erase fun _ _ => Envelope.swap_inj) rfl rfl
   cases ev with
   | input x =>
     obtain rfl := step_input.mp h
@@ -1642,7 +1468,7 @@ private theorem step_swap {c c' : SysState (a.join b w)} {ev : Event (joinSig σ
   | output out =>
     obtain ⟨hmem, rfl⟩ := step_output.mp h
     exact step_output.mpr ⟨List.mem_map_of_mem hmem,
-      SysState.ext' rfl rfl rfl rfl (map_erase (fun _ _ => Lanes.swap_inj.mp) c.outbox out)⟩
+      SysState.ext' rfl rfl rfl rfl (map_erase fun _ _ => Lanes.swap_inj.mp)⟩
   | crash x =>
     obtain ⟨hup, hcrash, rfl⟩ := step_crash.mp h
     exact step_crash.mpr ⟨by simpa [swap] using hup, by simpa [EnvModel.swap] using hcrash,
@@ -1701,17 +1527,6 @@ private theorem EnvModel.swap_left (env : EnvModel (joinSig σ τ)) : env.swap.l
 end Swap
 
 section Right
-
-/-- Reached, up to the order of messages that no actor can tell apart. -/
-private def Near {σ : Signature} (sys : System σ) (env : EnvModel σ) (c : SysState sys) : Prop :=
-  ∃ c', sys.Reachable env c' ∧ SysState.Equiv env c' c
-
-private theorem Near.step {σ : Signature} {sys : System σ} {env : EnvModel σ}
-    {c c' : SysState sys} (ev : Event σ) (h : Near sys env c) (hstep : c.step env ev = some c') :
-    Near sys env c' := by
-  obtain ⟨x, hx, hxc⟩ := h
-  obtain ⟨x', hx', hcx'⟩ := hxc.symm.step hstep
-  exact ⟨x', hx.step ev hx', hcx'.symm⟩
 
 namespace SysState
 
@@ -1789,7 +1604,7 @@ private theorem boot_inr (l : List τ.Id) :
 /-- The system that boots second: the other's boot has already sent it inputs, which it alone
 can only receive after its own boot. Its messages then sit in another order. -/
 private theorem init_late (env : EnvModel (joinSig σ τ)) :
-    Seen env w (fun _ => Near a env.left) []
+    Seen env w (fun _ => System.Near a env.left) []
       (a.boot.foldl (fun c i => c.startActor env (.inl i))
         (b.boot.foldl (fun c j => c.startActor env (.inr j))
           (SysState.blank (a.join b w)))).left := by
@@ -1801,7 +1616,7 @@ private theorem init_late (env : EnvModel (joinSig σ τ)) :
           = (a.boot.foldl (fun c i => c.startActor env (.inl i))
             (b.boot.foldl (fun c j => c.startActor env (.inr j))
               (SysState.blank (a.join b w)))).left.outbox ∧
-        Near a env.left { (a.boot.foldl (fun c i => c.startActor env (.inl i))
+        System.Near a env.left { (a.boot.foldl (fun c i => c.startActor env (.inl i))
           (b.boot.foldl (fun c j => c.startActor env (.inr j))
             (SysState.blank (a.join b w)))).left with net := n', outbox := outbox' } := by
     intro n' hn'
@@ -1838,7 +1653,7 @@ private theorem init_late (env : EnvModel (joinSig σ τ)) :
     refine ⟨_, System.Reachable.init.run (SysState.run_inputs env.left _ ys), ?_⟩
     exact (congrArg (SysState.Equiv env.left _) hfold).mpr
       (SysState.equiv_rotate (env := env.left) (SysState.init a env.left) hpre fun _ => rfl)
-  refine ⟨fun ev h hstep => Near.step ev h hstep, fun n' hn' => ?_, fun out hout => ?_⟩
+  refine ⟨fun ev h hstep => System.Near.step ev h hstep, fun n' hn' => ?_, fun out hout => ?_⟩
   · obtain ⟨outbox', ho', hnear'⟩ := hnear n' hn'
     have hrun := SysState.run_outputs_filter env.left
       ({ (a.boot.foldl (fun c i => c.startActor env (.inl i))
@@ -1846,8 +1661,8 @@ private theorem init_late (env : EnvModel (joinSig σ τ)) :
           (SysState.blank (a.join b w)))).left with net := n' } : SysState a)
       (fun out => (w.toRight out).isNone) [] outbox' (by simp)
     simp only [List.nil_append, ho'] at hrun
-    exact run_closed (w := w) (R := fun _ => Near a env.left) (t := [])
-      (fun ev h hstep => Near.step ev h hstep) (shown_wired outbox') hnear' hrun
+    exact run_closed (w := w) (R := fun _ => System.Near a env.left) (t := [])
+      (fun ev h hstep => System.Near.step ev h hstep) (shown_wired outbox') hnear' hrun
   · obtain ⟨outbox', ho', -⟩ := hnear _ (Thin.refl _)
     rw [← ho'] at hout
     simpa using (List.mem_filter.mp hout).2
@@ -1862,14 +1677,14 @@ system boots first: what its boot sends is in flight before the right system's o
 messages, and alone the right system receives inputs only once it has booted. -/
 theorem System.Reachable.right (h : (a.join b w).Reachable env c) :
     ∃ c', b.Reachable env.right c' ∧ SysState.Equiv env.right c' c.right := by
-  have hseen : ∃ t, Seen env.swap w.swap (fun _ => Near b env.swap.left) t c.swap.left := by
+  have hseen : ∃ t, Seen env.swap w.swap (fun _ => System.Near b env.swap.left) t c.swap.left := by
     induction h with
     | init =>
       rw [SysState.init_swap]
       exact ⟨_, Seen.init_late env.swap⟩
     | step ev _ hstep ih => exact ih.elim fun t h => ⟨_, h.step (SysState.step_swap hstep)⟩
   obtain ⟨t, hseen⟩ := hseen
-  have hnear : Near b env.swap.left c.swap.left := hseen.reach _ (Thin.refl _)
+  have hnear : System.Near b env.swap.left c.swap.left := hseen.reach _ (Thin.refl _)
   rw [EnvModel.swap_left] at hnear
   exact SysState.swap_left c ▸ hnear
 

@@ -5,7 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Lanes.Actors.Lift
-public import Lanes.Actors.Step
+public import Lanes.Actors.Run
 
 /-!
 # Invariants that survive every fault
@@ -26,63 +26,6 @@ messages, timers and outputs are removed. The result holds under every `EnvModel
 namespace Lanes
 
 variable {σ : Signature} {sys : System σ}
-
-namespace Effect
-
-variable {i : σ.Id}
-
-def sends (i : σ.Id) (effs : List (Effect σ i)) : List (Envelope σ) :=
-  effs.filterMap fun
-    | .send to msg => some ⟨some i, to, msg⟩
-    | _ => none
-
-def armed (effs : List (Effect σ i)) : List (σ.Msg i) :=
-  effs.filterMap fun
-    | .after _ msg => some msg
-    | _ => none
-
-def emits (effs : List (Effect σ i)) : List σ.Out :=
-  effs.filterMap fun
-    | .emit out => some out
-    | _ => none
-
-theorem mem_sends {effs : List (Effect σ i)} {e : Envelope σ} :
-    e ∈ sends i effs ↔ e.src = some i ∧ .send e.dst e.msg ∈ effs := by
-  obtain ⟨src, dst, msg⟩ := e
-  induction effs with
-  | nil => simp [sends]
-  | cons eff effs ih =>
-    simp only [sends, List.filterMap_cons, List.mem_cons] at ih ⊢
-    cases eff <;> simp only [List.mem_cons, ih, reduceCtorEq, false_or]
-    simp only [Envelope.mk.injEq, send.injEq]
-    exact ⟨fun h => h.elim (fun h => ⟨h.1, .inl h.2⟩) fun h => ⟨h.1, .inr h.2⟩,
-      fun h => h.2.elim (fun h' => .inl ⟨h.1, h'⟩) fun h' => .inr ⟨h.1, h'⟩⟩
-
-theorem mem_armed {effs : List (Effect σ i)} {msg : σ.Msg i} :
-    msg ∈ armed effs ↔ ∃ delay, .after delay msg ∈ effs := by
-  induction effs with
-  | nil => simp [armed]
-  | cons eff effs ih =>
-    simp only [armed, List.filterMap_cons, List.mem_cons] at ih ⊢
-    cases eff <;> simp only [List.mem_cons, ih, reduceCtorEq, false_or]
-    simp only [after.injEq, exists_or, exists_eq_left]
-
-theorem emits_map_emit (outs : List σ.Out) : emits (outs.map (emit (self := i))) = outs := by
-  induction outs with
-  | nil => rfl
-  | cons out outs ih => simpa [emits] using ih
-
-theorem sends_map_emit (outs : List σ.Out) : sends i (outs.map emit) = [] := by
-  induction outs with
-  | nil => rfl
-  | cons out outs ih => simp [sends]
-
-theorem armed_map_emit (outs : List σ.Out) : armed (outs.map (emit (self := i))) = [] := by
-  induction outs with
-  | nil => rfl
-  | cons out outs ih => simp [armed]
-
-end Effect
 
 namespace SysState
 

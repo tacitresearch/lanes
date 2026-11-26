@@ -4,8 +4,10 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Actors.Shard
+public import Lanes.Actors.Equiv
+public import Lanes.Actors.Join
 public import Lanes.Actors.Lossy
+public import Lanes.Actors.Shard
 
 /-!
 # A system split across two shards behaves as the one system
@@ -196,42 +198,15 @@ namespace Lanes
 
 variable {σ : Signature} {sys : System σ} {hosts : σ.Id → Bool} {env : EnvModel σ}
 
-private theorem map_erase_of_inj {α β : Type} [DecidableEq α] [DecidableEq β] {f : α → β}
-    {l : List α} {a : α} (inj : ∀ x ∈ l, f x = f a → x = a) :
-    (l.erase a).map f = (l.map f).erase (f a) := by
-  induction l with
-  | nil => rfl
-  | cons x l ih =>
-    have ih := ih fun y hy => inj y (List.mem_cons_of_mem _ hy)
-    by_cases hx : x = a
-    · subst hx
-      simp
-    · have hfx : f x ≠ f a := fun h => hx (inj x List.mem_cons_self h)
-      simp [hx, hfx, ih]
+private theorem mem_of_mem_erase {α : Type} [DecidableEq α] {l : List α} {a x : α}
+    (h : x ∈ l.erase a) : x ∈ l :=
+  List.mem_of_mem_erase h
 
 private theorem flatMap_singletons {α β γ : Type} (f : α → β) (g : β → γ) (l : List α) :
     (l.flatMap fun a => [f a]).flatMap (fun b => [g b]) = l.map fun a => g (f a) := by
   induction l with
   | nil => rfl
   | cons a l ih => simp [List.flatMap_cons, ih]
-
-private theorem mem_of_mem_erase {α : Type} [DecidableEq α] {l : List α} {a x : α}
-    (h : x ∈ l.erase a) : x ∈ l :=
-  List.mem_of_mem_erase h
-
-private theorem find?_congr {α : Type} {p q : α → Bool} {l : List α} (h : ∀ x ∈ l, p x = q x) :
-    l.find? p = l.find? q := by
-  induction l with
-  | nil => rfl
-  | cons x l ih =>
-    simp only [List.find?_cons, h x List.mem_cons_self]
-    rw [ih fun y hy => h y (List.mem_cons_of_mem _ hy)]
-
-private theorem filterMap_erase_perm {α β : Type} [DecidableEq α] [DecidableEq β]
-    {f : α → Option β} {l : List α} {a : α} {b : β} (ha : a ∈ l) (hb : f a = some b) :
-    ((l.filterMap f).erase b).Perm ((l.erase a).filterMap f) := by
-  have h := ((List.perm_cons_erase ha).filterMap f).erase b
-  rwa [List.filterMap_cons_some hb, List.erase_cons_head] at h
 
 private theorem pick_update_inl {γ : σ.Id ⊕ σ.Id → Type} {β : σ.Id → Type}
     (l : ∀ i, γ (.inl i) → β i) (r : ∀ i, γ (.inr i) → β i) (f : (x : σ.Id ⊕ σ.Id) → γ x)
@@ -524,12 +499,8 @@ private theorem settle_merged (hc : c.AtHome) (hx : Split.atHome hosts x = true)
     (c.settle (env.split hosts) x (v, effs.map (Split.effect sys hosts x))).AtHome ∧
       (c.settle (env.split hosts) x (v, effs.map (Split.effect sys hosts x))).merged
         = c.merged.settle env (Split.actorOf x) (Split.stateOf x v, effs) := by
-  have hstop : (effs.map (Split.effect sys hosts x)).any Effect.isStop
-      = effs.any Effect.isStop := by
-    rw [List.any_map]
-    congr 1
-    funext eff
-    exact Split.effect_isStop x eff
+  have hstop : (effs.map (Split.effect sys hosts x)).any Effect.isStop = effs.any Effect.isStop :=
+    Effect.any_isStop_map (Split.effect_isStop x) effs
   obtain ⟨h₁, h₂⟩ := performAll_merged
     (c := { c with state := update c.state x v }) ⟨hc.net, hc.down, hc.outbox⟩ hx effs
   rw [merged_setState c hx v] at h₂
@@ -627,7 +598,7 @@ private theorem merged_erase (hc : c.AtHome) {e : Envelope (splitSig σ)} (he : 
         = { c.merged with net := c.merged.net.erase e.merged } :=
   ⟨⟨fun x hx => hc.net x (List.mem_of_mem_erase hx), hc.down, hc.outbox⟩,
     SysState.ext' rfl rfl
-      (map_erase_of_inj fun x hx h => Envelope.merged_inj (hc.net x hx) (hc.net e he) h) rfl rfl⟩
+      (map_erase fun x hx h => Envelope.merged_inj (hc.net x hx) (hc.net e he) h) rfl rfl⟩
 
 private theorem deliverable_merged (hc : c.AtHome) {e : Envelope (splitSig σ)}
     (h : c.deliverable (env.split hosts) e = true) :
@@ -800,42 +771,6 @@ theorem System.SteadyBoot.of_running (env : EnvModel σ)
     sys.SteadyBoot env :=
   fun i hi s hstop => by simp [h i hi s] at hstop
 
-private theorem update_twice {ι : Type} [DecidableEq ι] {β : ι → Type} (f : (i : ι) → β i)
-    (i : ι) (v v' : β i) : update (update f i v) i v' = update f i v' := by
-  funext j
-  by_cases h : j = i
-  · subst h
-    simp
-  · simp [h]
-
-private theorem update_comm {ι : Type} [DecidableEq ι] {β : ι → Type} (f : (i : ι) → β i)
-    {i k : ι} (h : i ≠ k) (a : β i) (b : β k) :
-    update (update f i a) k b = update (update f k b) i a := by
-  funext j
-  by_cases hi : j = i
-  · subst hi
-    simp [h]
-  · by_cases hk : j = k
-    · subst hk
-      simp [hi]
-    · simp [hi, hk]
-
-private theorem netEquiv_append_comm (n a b : List (Envelope σ))
-    (h : ∀ e ∈ a, ∀ e' ∈ b, e.src ≠ e'.src) : NetEquiv env (n ++ a ++ b) (n ++ b ++ a) := by
-  refine ⟨fun src dst => ?_, fun src dst _ => ?_⟩
-  · simp only [List.filter_append, List.append_assoc]
-    exact List.Perm.append_left _ List.perm_append_comm
-  · by_cases ha : a.filter (onLink src dst) = []
-    · simp [List.filter_append, ha]
-    · have hb : b.filter (onLink src dst) = [] := by
-        rw [List.filter_eq_nil_iff]
-        intro e' he' hon'
-        obtain ⟨e, he⟩ := List.exists_mem_of_ne_nil _ ha
-        have hon := (List.mem_filter.mp he).2
-        simp only [onLink, Bool.and_eq_true, decide_eq_true_eq] at hon hon'
-        exact h e (List.mem_filter.mp he).1 e' he' (hon.1.trans hon'.1.symm)
-      simp [List.filter_append, hb]
-
 namespace SysState
 
 /-- `c` after actor `i` moves to `r.1` with effects `r.2` as it starts, when stopping loses no
@@ -864,7 +799,7 @@ private theorem startActor_eq_started (c : SysState sys) (i : σ.Id)
         by_cases he : e.dst = i
         · simp [he, h hstop e.src]
         · simp [he]
-    simp only [down, hkept, update_twice, hstop, Bool.not_true]
+    simp only [down, hkept, update_update, hstop, Bool.not_true]
   · next hstop =>
     simp only [Bool.not_eq_true] at hstop
     simp only [hstop, Bool.not_false]
@@ -875,7 +810,7 @@ private theorem startedWith_comm (c : SysState sys) {i k : σ.Id} (h : i ≠ k)
   refine ⟨update_comm _ h _ _, update_comm _ h _ _, ?_, ?_, ?_⟩
   · simp only [startedWith, update_of_ne _ _ h, update_of_ne _ _ h.symm]
     exact update_comm _ h _ _
-  · exact netEquiv_append_comm _ _ _ fun e he e' he' hsrc => h (by
+  · exact NetEquiv.append_comm _ _ _ fun e he e' he' hsrc => h (by
       have h₁ := (Effect.mem_sends.mp he).1
       have h₂ := (Effect.mem_sends.mp he').1
       rw [hsrc, h₂] at h₁
@@ -982,10 +917,8 @@ theorem System.SplitReachable.merged_of_init
   induction h with
   | init => exact hinit
   | @step c c₂ ev hc hev hstep ih =>
-    obtain ⟨x, hx, hxc⟩ := ih
     obtain ⟨-, ev', m, -, hstep', hperm, hm⟩ := hc.atHome.step (env := env) hev hstep
-    obtain ⟨x', hx', hmx'⟩ := hxc.symm.step hstep'
-    exact ⟨x', hx.step ev' hx', hmx'.symm.trans (hm ▸ ⟨rfl, rfl, rfl, .refl env _, hperm⟩)⟩
+    exact (System.Near.step ev' ih hstep').equiv (hm ▸ ⟨rfl, rfl, rfl, .refl env _, hperm⟩)
 
 /-- **A system split across two shards behaves as the one system.** In a run of the split in
 which every input from outside is given to the shard that hosts its receiver and no parcel

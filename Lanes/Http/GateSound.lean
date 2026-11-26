@@ -6,6 +6,7 @@ module
 
 public import Lanes.Actors.KernelSound
 public import Lanes.Actors.Lift
+public import Lanes.Data.List
 public import Lanes.Http.Gate
 
 /-!
@@ -35,18 +36,6 @@ def answered (events : List (Event (gatedSig σ))) : List ReqId :=
   events.filterMap fun
     | .output out => some out.1
     | _ => none
-
-private theorem countP_erase_add {α : Type} [BEq α] [LawfulBEq α] (p : α → Bool) {l : List α}
-    {a : α} (h : a ∈ l) : (l.erase a).countP p + (p a).toNat = l.countP p := by
-  induction l with
-  | nil => simp at h
-  | cons b l ih =>
-    by_cases hb : b = a
-    · subst hb
-      cases hp : p b <;> simp [hp]
-    · have := ih (by simpa [Ne.symm hb] using h)
-      simp only [List.erase_cons, beq_iff_eq, hb, ↓reduceIte, List.countP_cons]
-      omega
 
 private def arriving (id : ReqId) : Envelope (gatedSig σ) → Bool
   | ⟨_, none, .arrive id' _⟩ => id' == id
