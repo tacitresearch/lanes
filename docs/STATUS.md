@@ -33,21 +33,6 @@ Update them in the same change that moves an item; `lake exe lanes lint --fix` w
 | Raft key-value store (`systems/raft-kv`, a package of its own) | Refines the map it replicates, with election safety, log matching, agreement on committed entries and leader completeness, on 3 nodes: reliable links and two terms (708k states), unordered links (705k), unordered links with a crash and restart (5.4M), reliable links with a crash across two terms (7.8M), and again with one entry to an `append`, so that a follower is brought on batch by batch; a node that votes for a candidate with a shorter log is caught in 15 steps; what a PASS of these means is a theorem (`RaftKVProofs/Checked.lean`); runs as three processes, each with an HTTP front, a journal it cuts and a snapshot, joined by TCP: every node killed with SIGKILL and started from its snapshot, two at a time, has what was acknowledged (`raftProcs`), and a minute of nodes killed and paused at random loses no acknowledged write (`raftChaos`, not in CI) | Every invariant of Raft's safety argument, for every number of nodes and every environment model (`systems/raft-kv/RaftKV/Proofs/`): election safety, log matching, leader completeness, agreement on committed entries, state machine safety, and that no `append` carries more than `maxAppend` entries. Election safety and state machine safety also over time: no term has two leaders and no index two entries at any two points of a run. On them, the cluster refines its spec in every environment that does not hand a request to a node twice (`systems/raft-kv/RaftKVProofs/`, about 780 lines) |
 | Watchdog (`Examples/Watchdog.lean`) | Under the fair scheduler a dog whose keeper keeps pinging never barks, and one whose keeper rests barks | There is a fair run in which the keeper pings forever, the dog's timer is pending at every position and the dog never barks; in every run that fires each timer that stays pending, it barks (`Examples/WatchdogProofs.lean`) |
 
-## Against the DESIGN exit criteria
-
-- **Phase 1** (runtime and actor API): met, except that the gateway app does not exist. The runtime's logic is proved, which Phase 1 did
-  not ask for.
-- **Phase 2** (semantics, specs, refinement): semantics, lifting theorem and refinement theory
-  are in. Trace checking runs in the test suite. Not done: the scheduler simulation proof, the
-  Raft KV store.
-- **Phase 3** (model checking and system proofs): checker finds the seeded split-brain bug;
-  money conservation is proved for all instances. At most one leader per term is proved. Not done:
-  counterexample-to-induction finder, `lanes prove`, symmetry reduction, parallel search.
-- **Phase 4** (liveness): fair runs, leads-to and its proof rule are in, with one theorem, the
-  gate's, and fair runs are proved to exist. Not done: ranking functions, the lasso search,
-  "eventually a leader".
-- **Phases 5 to 8**: only the HTTP server adapter, the HTML layer and JSON exist.
-
 ## Next
 
 What is being worked on now, and why: `docs/PLAN.md`.
