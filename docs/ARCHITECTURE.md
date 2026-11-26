@@ -2,9 +2,12 @@
 
 What Lanes is made of, how a request goes through it, and where each piece is proved. The rules
 are in `AGENTS.md`; what works and its limits in `docs/STATUS.md`; what is trusted, and why, in
-`TRUSTED.md`; why each piece is the way it is in `docs/decisions/`. A theorem named here is a
-theorem in the code, and the headline ones are gated in `Tests/Axioms/`, which stops compiling
-if a `sorry` or a new axiom reaches them.
+`TRUSTED.md`; why each piece is the way it is in `docs/decisions/`. The status of every public
+definition (proved, with its theorems; trusted; checked; tested; a spec; or none) is generated
+from the built library in `docs/INVENTORY.md` (D47), and what has none is on
+`docs/inventory-none.md`: that is where a claim is checked, and this page only names the
+headline theorems. Those are gated in `Tests/Axioms/`, which stops compiling if a `sorry` or a
+new axiom reaches them.
 
 The idea in one line: all logic is pure step functions, the semantics is one executable function
 over them, and the code that runs, the checker that explores and the proofs that cover are all
@@ -265,4 +268,6 @@ also served over HTTP by `Examples/BankWeb.lean`), a key-value store with front 
 applications, each its own Lake package that requires Lanes as a user would (`systems/README.md`):
 `systems/raft-kv`, a replicated key-value store proved to implement the map it replicates
 (`RaftKV.implementsMachine`), and `systems/ledger`, a multi-user web ledger. `lanes new`
-(`LanesCli/New.lean`, `templates/app/`) creates an application.
+(`LanesCli/New.lean`, `templates/app/`) creates an application; `lanes lint`
+(`LanesCli/Lint.lean`) checks the rules of `AGENTS.md` that the text can show, the generated files
+and the inventory (`LanesCli/Inventory.lean`).

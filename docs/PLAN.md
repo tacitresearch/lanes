@@ -24,10 +24,9 @@ because a launch claim is what a critic tests first.
    may be handed over again (`Service.once`), with `System.Refines.of_handles`, the relation rule
    that a duplicated message cannot break, and the key-value store proved under it. This also
    removes the premise that a client's link does not duplicate.
-2. **A generated proof inventory.** Every public definition gets a status (proved, with the
-   theorem; checked; tested; trusted, with its row in `TRUSTED.md`; or none), and library code
-   has none without one. On the branch `claude/inventory` (tacitresearch/lanes#8):
-   `lanes inventory`, which writes the inventory from the built modules, checked by `lanes lint`.
+2. **Evidence for every definition of `Lanes/`.** The inventory is generated (`docs/INVENTORY.md`,
+   D47); what has none is listed in `docs/inventory-none.md`, which only shrinks. Take entries off
+   it by proving, testing or listing them in `TRUSTED.md`.
 3. **The standard library**, triaged from Go's in `docs/STDLIB.md`. Its P0 steps 7 (`fsync`) and
    8 (libsodium) are done (`docs/decisions/D46-bind-what-touches-physics.md`). Next, each on its
    own branch: base64, IP addresses, media types and time formats, which depend on nothing; then

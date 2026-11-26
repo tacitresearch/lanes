@@ -71,7 +71,7 @@ a run whose `start` job passes in the second between another run's check and its
 its jobs waiting for runners; the idle shutdown does not help there, re-running does.
 
 `ci.yml` reads only `LANES_RUNNER` and does not start the machine: it stays on GitHub's runners
-unless you point `LANES_RUNNER` at runners that are up. Its jobs build once (`build`) and then run
+unless you point `LANES_RUNNER` at runners that are up. Its jobs build once (`compile`) and then run
 lint and tests (`test`), the model checks (`check`), `systems/raft-kv` and `systems/ledger` in
 parallel, each restoring the build from the Actions cache. A benchmark workflow can use the box
 the same way as `mutants.yml`: its `start` and `stop` jobs are `.github/actions/box`.

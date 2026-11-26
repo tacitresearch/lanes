@@ -18,7 +18,8 @@ lake build --wfail         # the library, warnings as errors (as CI builds it)
 lake test                  # pure tests and live runtime tests, a few seconds
 lake exe lanesCheck        # larger model checks, random runs and the scale benchmark, about 20 s: run once, never in a loop
 lake exe lanes lint        # the checks below, and that generated files are up to date
-lake exe lanes lint --fix  # rewrite the generated files: line counts, decisions' index, STATUS
+lake exe lanes lint --fix  # rewrite the generated files: line counts, decisions' index, STATUS, INVENTORY
+lake exe lanes inventory --list none  # the definitions of Lanes/ without evidence
 ```
 
 - Run `lake build --wfail`, `lake test`, `lake exe lanesCheck` and `lake exe lanes lint` before
@@ -29,8 +30,15 @@ lake exe lanes lint --fix  # rewrite the generated files: line counts, decisions
   (`partial`, `unsafe`, `axiom`, `panic!`, `implemented_by`, `extern` and C only in files
   `TRUSTED.md` names), `trusted-size` (each trusted file has the line count `TRUSTED.md` gives),
   `layering` (rule 1.6), `decisions` and `status` (the generated files agree with their sources),
-  and `links` (every repository path in backquotes in `*.md` and `docs/*.md` exists). It does not
-  check `no-io-in-step`, `bounded`, `field-leak` or `fn-length`: those need the elaborator.
+  `inventory` and `inventory-none` (below), and `links` (every repository path in backquotes in
+  `*.md` and `docs/*.md` exists). It does not check `no-io-in-step`, `bounded`, `field-leak` or
+  `fn-length`: those need the elaborator. The inventory's checks read the built modules: run
+  `lake build lanesInventory` before `lake exe lanes lint --fix`.
+- `docs/INVENTORY.md` gives every public definition a status, read from the built modules
+  (`docs/decisions/D47-the-inventory-is-computed.md`). A theorem makes what it states proved when
+  it has an axiom gate. A new definition of `Lanes/` with no theorem, test or row of `TRUSTED.md`
+  fails `lanes lint` unless it is on `docs/inventory-none.md` under a heading that says why; when
+  one there gets evidence, take it off.
 - Templates are embedded with `include_str`, which Lake does not track: after editing
   `templates/`, delete `.lake/build/lib/lean/LanesCli/New.*` and `.lake/build/ir/LanesCli/New.*`,
   rebuild `lanes`, and build an app it generates.
@@ -189,7 +197,7 @@ Layout, and what each part may import:
 | `Lanes/Env/` | Adapters' IO: HTTP server and client, clock, journal files, transport | `Std` only |
 | `Lanes/Semantics/` | The semantics as a CSLib `LTS`, refinement, specs, fairness and leads-to | CSLib, Mathlib |
 | `native/` | The C that binds libsodium and `fsync`, all of it trusted | libsodium, libc |
-| `LanesCli/` | The `lanes` command: `new`, `lint`, `check` | `Std` only |
+| `LanesCli/` | The `lanes` command: `new`, `lint`, `check`, `inventory` | `Std` only; `Lean` in `Inventory`, which only `lanesInventory` links |
 | `templates/app/` | The application `lanes new` creates | |
 | `Examples/` | Reference apps, checked and proved | anything |
 | `systems/` | Serious applications, each its own Lake package | anything |
@@ -276,15 +284,17 @@ Several agents work at once, each on a branch merged into the main branch. The l
 independent changes disjoint files; keep it that way.
 
 - Commit after every step that builds. Before reporting, merge the main branch and run the checks
-  again.
+  again. Generated files (`docs/STATUS.md`, `docs/INVENTORY.md`, the decisions index) never need
+  resolving: run `git config merge.generated.driver true` once (`.gitattributes` names them),
+  and after a merge run `lake exe lanes lint --fix`, which writes them again.
 - A new decision is a new file `docs/decisions/new-<slug>.md` whose first line is `# D?. Title`.
   Do not choose its number: `lake exe lanes lint --fix --main` numbers it on the main branch.
 - A change of status goes in its fragment, `docs/status/areas/<area>.md` or
   `docs/status/apps/<app>.md` (the row on the first line, the known limits after it).
 - An axiom gate goes in `Tests/Axioms/<Area>.lean`, under the line naming its module; a lemma
   about lists at the end of its topic's file in `Lanes/Data/List/`.
-- Never type a count: line counts in `TRUSTED.md` and `README.md`, the decisions' index and
-  `docs/STATUS.md` are written by `lake exe lanes lint --fix`. A conflict in a generated file is
+- Never type a count: line counts in `TRUSTED.md` and `README.md`, the decisions' index,
+  `docs/STATUS.md` and `docs/INVENTORY.md` are written by `lake exe lanes lint --fix`. A conflict in a generated file is
   resolved by taking either side and running it.
 
 ## Docs

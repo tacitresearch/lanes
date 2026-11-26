@@ -102,8 +102,11 @@ a view cannot link or post to a route that does not exist.
 
 The rule is that everything Lanes ships is proved against a spec, or binds or performs something
 named in `TRUSTED.md` (`docs/decisions/D45-everything-is-proved.md`); the checker finds bugs
-before a proof is attempted, and a theorem is the evidence. `docs/ARCHITECTURE.md` says where each
-piece is proved. Not there yet: `systems/ledger` is checked on instances, not proved.
+before a proof is attempted, and a theorem is the evidence. `docs/INVENTORY.md`, generated from
+the built library, gives every public definition its status and evidence, and
+`docs/ARCHITECTURE.md` says how the pieces fit and names the headline theorems. Not there yet:
+`systems/ledger` is checked on instances, not proved, and `docs/inventory-none.md` lists the
+definitions of `Lanes/` that still have no evidence.
 
 - **The runtime's logic.** Every decision the runtime makes is a pure function, and whatever
   the IO loop around it does, the system stays in a state the semantics allows
@@ -136,11 +139,15 @@ piece is proved. Not there yet: `systems/ledger` is checked on instances, not pr
   writes it, and of every start of one, is proved, and so are its size limit and its ending
   (`Response.read_wire`, `Response.read_more`).
 - **Trusted.** About 1,750 lines of trusted code, listed with their sizes in `TRUSTED.md`: IO,
-  C that binds libsodium and `fsync`, a template macro, and an HTTP wire format whose reading is proved for what a server's writer
-  sends and only tested for other forms. `lanes lint` fails if they change without the list,
+  C that binds libsodium and `fsync`, a template macro, and an HTTP wire format whose reading
+  is proved for what a server's writer sends and only tested for other forms. `lanes lint` fails if they change without the list,
   and `scripts/mutants.py` holds the known ways of breaking that code, each of which has to
   fail a test. It is a list, not a measure: a review found sixteen more, which are in it now,
-  and `TRUSTED.md` says what it still does not check.
+  and `TRUSTED.md` says what it still does not check. What rests on what, for every public
+  definition, is `docs/INVENTORY.md`: proved (with its theorems), trusted (with its row of
+  `TRUSTED.md`), checked, tested, a spec, or none, generated from the built library.
+  `lanes lint` fails when it is stale, and when a definition without evidence is not on
+  `docs/inventory-none.md`, a list that only shrinks.
 
 ## Kill it and start it again
 
@@ -219,6 +226,7 @@ itself, and `Server.implements` proves it refines the spec for every interleavin
 ## Documents
 
 - `docs/ARCHITECTURE.md`: the pieces, how a request goes through them, and where each is proved.
+- `docs/INVENTORY.md`: every public definition with its status and evidence, generated.
 - `docs/STATUS.md`: what works today, area by area, and its known limits.
 - `docs/PLAN.md`: what is being done now and why.
 - `docs/ROADMAP.md`: the direction, the phases and the standing risks.

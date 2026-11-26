@@ -16,7 +16,8 @@ review. The order of work:
    counterexample-to-induction finder. The ledger's refinement, proved, is the measure; the
    flagship application is proved, not checked.
 2. **A generated proof inventory** gives every public definition a status, and library code has
-   none without one.
+   none without one. Built (`docs/INVENTORY.md`, D47); `docs/inventory-none.md` lists what still
+   has none, and only shrinks.
 3. **A standard library on the scale applications need**, triaged from Go's (`docs/STDLIB.md`):
    what Lean already has; what is pure, built here and proved, and tested against Go's
    implementation on generated inputs; what touches the operating system or cryptography and is
