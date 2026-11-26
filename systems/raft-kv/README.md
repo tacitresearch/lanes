@@ -58,30 +58,49 @@ left is a majority only because the first came back with what it had.
 
 ## What is proved
 
-In `RaftKV/Proofs/`, for every finite set of nodes, every machine, every `Config` (the two
-bug-seeding switches on or off) and every environment model (loss, duplication, reordering,
-crashes and restarts), in every reachable state:
+In `RaftKV/Proofs/`, for every finite set of nodes, every machine and every environment model
+(loss, duplication, reordering, crashes and restarts), in every reachable state. The first five
+rows hold for every `Config`, the two bug-seeding switches on or off:
 
 | Theorem | Says |
 | --- | --- |
-| `election_safety`, `electionSafety_invariant` | No two nodes lead the same term. The second is `electionSafety c = true`, the function the checker evaluates. |
-| `applied_le_commit` | A node has applied no more than it has committed. |
-| `entry_term_le` | No entry is of a later term than the node that holds it. |
+| `election_safety`, `electionSafety_invariant` | No two nodes lead the same term. |
+| `applied_le_commit`, `appliedWithinCommit_invariant` | A node has applied no more than it has committed. |
+| `entry_term_le`, `entryTermsWithinTerm_invariant` | No entry is of a later term than the node that holds it. |
 | `leader_append_only`, `leader_log_grows` | A node that leads a term before and after a step has kept every entry it had. |
-| `log_matching`, `logMatching_invariant` | Two logs that agree on the term of an entry agree on everything up to it. The second is `logMatching c = true`. |
+| `log_matching`, `logMatching_invariant` | Two logs that agree on the term of an entry agree on everything up to it. |
 
-The proofs give each node a ghost history of the states it has left and use the monotone proof
-rule, so one argument covers every fault. `Proofs/Axioms.lean` holds them to Lean's three
-standard axioms. `lake build` builds them; `raftCheck` does not link them.
+The rest need both switches on. With either off the checker finds a leader without a committed
+entry (the seeded checks above):
+
+| Theorem | Says |
+| --- | --- |
+| `commit_le_length`, `commitWithinLog_invariant` | A node has committed no more than it has in its log. |
+| `committed_agree`, `committedAgree_invariant` | What two nodes have both committed is the same. |
+| `leader_complete`, `leaderComplete_invariant` | A leader has what every node no further on in terms has committed. |
+| `leader_completeness` | Leader completeness as Raft states it, over the history: what a majority held in a term (`Chosen`) is in the log of every leader of a later term, at every time. |
+| `committed_chosen` | What a node has committed is a start of something a majority held, in a term up to the node's. |
+
+Each `…_invariant` is the function the checker evaluates, equal to `true`: what is checked and
+what is proved are the same definition.
+
+The proofs give each node a ghost history of the states it has left (`Lanes/Actors/Past.lean`)
+and build one invariant in layers with the monotone proof rule, so one argument covers every
+fault: `Votes`, `Terms`, `Logs`, `Standing`, `Safe`, `Commits`. What the layers say of a state
+without its history is checked first, as properties of their own (`raftCheck "what the proofs
+use, one term"`, and two deep ones). `Safe`, which is about what a majority may yet come to
+hold, has no such form; it is checked only through the three properties it proves.
+`Proofs/Axioms.lean` holds every theorem to Lean's three standard axioms. `lake build` builds
+them; `raftCheck` does not link them.
 
 ## What is not here yet
 
-- The rest of the proofs: agreement on committed entries, leader completeness and refinement to
-  `spec`, which are checked on small instances only and hold only with both switches on. So is
-  `commit ≤ log.length`, the last part of `wellFormed`: a follower's log gets shorter when a
-  leader's entries replace its own, and that this never reaches a committed entry is leader
-  completeness. With `votesForUpToDateOnly` off it is false: a leader elected without two
-  committed entries replaces them, in a follower that has committed both, with its one.
+- The top theorem: that the cluster refines `spec`. It is stated (`RaftKVProofs.lean`,
+  `ImplementsMachine`) and checked on small instances, not proved. What is proved gives the
+  list of commands that have taken effect: what a majority has held is never lost. What is
+  missing is the account of clients: that each request becomes at most one entry, and that the
+  node that took it answers with what the machine said.
+- Liveness: that a request is ever answered.
 - More than one machine. The nodes are processes joined by TCP, on one machine in every test;
   the transport has no authentication or encryption.
 - An answer from a node that is not the leader. It lets the request run into its deadline,

@@ -153,6 +153,26 @@ theorem commit_le_advanceCommit (s : Node N C M) (matched : List (N × Nat)) :
   rw [h]
   exact hle
 
+omit [DecidableEq C] in
+theorem advanceCommit_spec (s : Node N C M) (matched : List (N × Nat)) :
+    (advanceCommit config nodes self s matched).commit = s.commit ∨
+      (s.commit < (advanceCommit config nodes self s matched).commit ∧
+        (advanceCommit config nodes self s matched).commit ≤ s.log.length ∧
+        Quorum.isMajority nodes
+          (holders self matched (advanceCommit config nodes self s matched).commit) = true ∧
+        (config.commitsOwnTermOnly = true →
+          termAt s.log (advanceCommit config nodes self s matched).commit = s.term)) := by
+  simp only [advanceCommit]
+  split
+  · next index h =>
+    have hmem := List.mem_of_find?_eq_some h
+    have hok := List.find?_some h
+    simp only [List.mem_reverse, List.mem_range'_1] at hmem
+    simp only [Bool.and_eq_true, Bool.or_eq_true, beq_iff_eq, Bool.not_eq_true'] at hok
+    refine .inr ⟨?_, ?_, hok.1, fun hown => hok.2.resolve_right (by simp [hown])⟩ <;>
+      dsimp only <;> omega
+  · exact .inl rfl
+
 theorem applied_le_advanceCommit (s : Node N C M) (matched : List (N × Nat))
     (h : s.applied ≤ s.commit) :
     (applyCommitted machine self (advanceCommit config nodes self s matched)).1.applied
@@ -166,35 +186,53 @@ end Helpers
 
 /-- What a node in state `s` may send and arm. -/
 def Sent (i : N) (s : Node N C M) : Effect (sig N C R) i → Prop
+  | .send _ (.requestVote term candidate lastIndex last) =>
+    candidate = i ∧ term = s.term ∧ (∃ votes, s.role = .candidate votes)
+      ∧ lastIndex = s.log.length ∧ last = lastTerm s.log
   | .send dst (.vote term voter) => voter = i ∧ term = s.term ∧ s.votedFor = some dst
-  | .send _ (.append term _ prev prevTerm entries _) =>
+  | .send _ (.append term _ prev prevTerm entries commit) =>
     isLeader s = true ∧ term = s.term ∧ prev ≤ s.log.length ∧ prevTerm = termAt s.log prev
-      ∧ entries = s.log.drop prev
+      ∧ entries = s.log.drop prev ∧ commit = s.commit
   | .after _ msg => msg = .electionTimeout ∨ msg = .heartbeat
   | _ => True
 
 /-- What one transition of a node can do, as far as the invariants can tell. `msg` is the
 message handled, and `none` for a recovery. -/
-structure Moves (nodes : List N) (i : N) (s : Node N C M) (msg : Option (Msg N C))
-    (s' : Node N C M) (effs : List (Effect (sig N C R) i)) : Prop where
+structure Moves (config : Config) (nodes : List N) (i : N) (s : Node N C M)
+    (msg : Option (Msg N C)) (s' : Node N C M) (effs : List (Effect (sig N C R) i)) : Prop where
   term_le : s.term ≤ s'.term
   keeps : s'.term = s.term → ∀ candidate, s.votedFor = some candidate →
     s'.votedFor = some candidate
+  /-- A vote is one the node had cast in this term, or its own on starting a term, or one it
+  grants to a candidate whose log is not behind its own. -/
+  vote : ∀ candidate, s'.votedFor = some candidate →
+    (s'.term = s.term ∧ s.votedFor = some candidate) ∨
+    (s'.term = s.term + 1 ∧ candidate = i ∧ s'.log = s.log) ∨
+    (∃ lastIndex last, msg = some (.requestVote s'.term candidate lastIndex last) ∧
+      s'.log = s.log ∧ (config.votesForUpToDateOnly = true →
+        lastTerm s.log < last ∨ (last = lastTerm s.log ∧ s.log.length ≤ lastIndex)))
   /-- A candidate has just started its term with its own vote, or was a candidate of this term
   and has counted at most the vote it handled. -/
   candidate : ∀ votes, s'.role = .candidate votes →
-    (s'.term = s.term + 1 ∧ votes = [i] ∧ s'.votedFor = some i) ∨
-    (s'.term = s.term ∧ ∃ votes₀, s.role = .candidate votes₀ ∧
+    (s'.term = s.term + 1 ∧ votes = [i] ∧ s'.votedFor = some i ∧ s'.log = s.log) ∨
+    (s'.term = s.term ∧ s'.log = s.log ∧ ∃ votes₀, s.role = .candidate votes₀ ∧
       ∀ v ∈ votes, v ∈ votes₀ ∨ msg = some (.vote s.term v))
   /-- A leader has just started its term as a majority of one, or was a candidate of this term
   with a majority among the votes it had and the one it handled, or led it already and has kept
   its log. -/
   leader : isLeader s' = true →
-    (s'.term = s.term + 1 ∧ Quorum.isMajority nodes [i] = true ∧ s'.votedFor = some i) ∨
-    (s'.term = s.term ∧ ∃ votes₀ votes, s.role = .candidate votes₀ ∧
+    (s'.term = s.term + 1 ∧ Quorum.isMajority nodes [i] = true ∧ s'.votedFor = some i ∧
+      s'.log = s.log) ∨
+    (s'.term = s.term ∧ s'.log = s.log ∧ ∃ votes₀ votes, s.role = .candidate votes₀ ∧
       Quorum.isMajority nodes votes = true ∧
         ∀ v ∈ votes, v ∈ votes₀ ∨ msg = some (.vote s.term v)) ∨
     (s'.term = s.term ∧ isLeader s = true ∧ s.log <+: s'.log)
+  /-- A new leader knows of no follower's log. One that stays has learnt at most what the
+  acknowledgement it handled says. -/
+  matched : ∀ matched', s'.role = .leader matched' → matched' = [] ∨
+    (s'.term = s.term ∧ ∃ matched, s.role = .leader matched ∧ (matched' = matched ∨
+      ∃ follower index, msg = some (.appended s.term follower index) ∧
+        matched' = raise matched follower index))
   /-- The log is as it was, or a leader's with one entry of its term added, or a follower's
   merged with the entries of an `append` of its term that fits at `prev`. -/
   log : s'.log = s.log ∨
@@ -202,7 +240,26 @@ structure Moves (nodes : List N) (i : N) (s : Node N C M) (msg : Option (Msg N C
     (s'.role = .follower ∧ ∃ leader prev entries commit,
       msg = some (.append s'.term leader prev (termAt s.log prev) entries commit) ∧
         prev ≤ s.log.length ∧ s'.log = s.log.take prev ++ merge (s.log.drop prev) entries)
+  /-- The commit index is as it was, or a leader's moved to an entry a majority is known to
+  hold, or a follower's raised to what the `append` it took says. -/
+  commit : s'.commit = s.commit ∨
+    (s.commit < s'.commit ∧ s'.commit ≤ s'.log.length ∧
+      (∃ matched, s'.role = .leader matched ∧
+        Quorum.isMajority nodes (holders i matched s'.commit) = true) ∧
+      (config.commitsOwnTermOnly = true → termAt s'.log s'.commit = s'.term)) ∨
+    (∃ leader prev entries commit,
+      msg = some (.append s'.term leader prev (termAt s.log prev) entries commit) ∧
+        prev ≤ s.log.length ∧ s'.log = s.log.take prev ++ merge (s.log.drop prev) entries ∧
+        s'.commit = max s.commit (min commit (prev + entries.length)))
   applied_le : s.applied ≤ s.commit → s'.applied ≤ s'.commit
+  /-- Only a follower that has taken an `append` acknowledges, and what it acknowledges is where
+  the entries it was sent end. -/
+  acked : ∀ dst term follower index,
+    Effect.send (σ := sig N C R) dst (.appended term follower index) ∈ effs →
+      follower = i ∧ term = s'.term ∧ ∃ leader prev entries commit,
+        msg = some (.append s'.term leader prev (termAt s.log prev) entries commit) ∧
+          index = prev + entries.length ∧ prev ≤ s.log.length ∧
+          s'.log = s.log.take prev ++ merge (s.log.drop prev) entries
   sent : ∀ eff ∈ effs, Sent i s' eff
 
 section Step
@@ -213,51 +270,54 @@ variable (config : Config) (nodes : List N) (machine : Machine C R M) (self : N)
 local macro "moves" : tactic => `(tactic|
   (constructor <;> simp [Sent, armElection, broadcast, appendTo, lead, isLeader] <;>
     first
-    | grind [applyCommitted_applied_le]
+    | grind [applyCommitted_applied_le, advanceCommit_spec]
     | exact fun h => applied_le_advanceCommit _ _ _ _ _ _ h))
 
 theorem onElectionTimeout_moves (s : Node N C M) :
-    Moves nodes self s (some .electionTimeout) (onElectionTimeout config nodes machine self s).1
+    Moves config nodes self s (some .electionTimeout)
+      (onElectionTimeout config nodes machine self s).1
       (onElectionTimeout config nodes machine self s).2 := by
   obtain ⟨t, voted, log, commit, applied, m, role⟩ := s
   cases role <;> simp only [onElectionTimeout] <;> (repeat' split) <;> moves
 
 theorem onRequestVote_moves (s : Node N C M) (term : Nat) (candidate : N) (lastIndex last : Nat) :
-    Moves nodes self s (some (.requestVote term candidate lastIndex last))
+    Moves config nodes self s (some (.requestVote term candidate lastIndex last))
       (onRequestVote (R := R) config self s term candidate lastIndex last).1
       (onRequestVote (R := R) config self s term candidate lastIndex last).2 := by
   obtain ⟨t, voted, log, commit, applied, m, role⟩ := s
   cases role <;> simp only [onRequestVote, enterTerm] <;> (repeat' split) <;> moves
 
 theorem onVote_moves (s : Node N C M) (term : Nat) (voter : N) :
-    Moves nodes self s (some (.vote term voter)) (onVote config nodes machine self s term voter).1
+    Moves config nodes self s (some (.vote term voter))
+      (onVote config nodes machine self s term voter).1
       (onVote config nodes machine self s term voter).2 := by
   obtain ⟨t, voted, log, commit, applied, m, role⟩ := s
   cases role <;> simp only [onVote] <;> (repeat' split) <;> moves
 
 theorem onAppend_moves (s : Node N C M) (term : Nat) (leader : N) (prev prevTerm : Nat)
     (entries : List (Entry N C)) (commit : Nat) :
-    Moves nodes self s (some (.append term leader prev prevTerm entries commit))
+    Moves config nodes self s (some (.append term leader prev prevTerm entries commit))
       (onAppend config machine self s term leader prev prevTerm entries commit).1
       (onAppend config machine self s term leader prev prevTerm entries commit).2 := by
   obtain ⟨t, voted, log, commit, applied, m, role⟩ := s
   cases role <;> simp only [onAppend, enterTerm] <;> (repeat' split) <;> moves
 
 theorem onAppended_moves (s : Node N C M) (term : Nat) (follower : N) (index : Nat) :
-    Moves nodes self s (some (.appended term follower index))
+    Moves config nodes self s (some (.appended term follower index))
       (onAppended config nodes machine self s term follower index).1
       (onAppended config nodes machine self s term follower index).2 := by
   obtain ⟨t, voted, log, commit, applied, m, role⟩ := s
   cases role <;> simp only [onAppended] <;> (repeat' split) <;> moves
 
 theorem onPropose_moves (s : Node N C M) (req : ReqId) (cmd : C) :
-    Moves nodes self s (some (.propose req cmd)) (onPropose config nodes machine self s req cmd).1
+    Moves config nodes self s (some (.propose req cmd))
+      (onPropose config nodes machine self s req cmd).1
       (onPropose config nodes machine self s req cmd).2 := by
   obtain ⟨t, voted, log, commit, applied, m, role⟩ := s
   cases role <;> simp only [onPropose] <;> (repeat' split) <;> moves
 
 theorem step_moves (s : Node N C M) (msg : Msg N C) :
-    Moves nodes self s (some msg) ((node config nodes machine self).step s msg).1
+    Moves config nodes self s (some msg) ((node config nodes machine self).step s msg).1
       ((node config nodes machine self).step s msg).2 := by
   cases msg with
   | electionTimeout => exact onElectionTimeout_moves config nodes machine self s
@@ -274,7 +334,7 @@ theorem step_moves (s : Node N C M) (msg : Msg N C) :
   | propose req cmd => exact onPropose_moves config nodes machine self s req cmd
 
 theorem recover_moves (s : Node N C M) :
-    Moves nodes self s none ((node config nodes machine self).recover s).1
+    Moves config nodes self s none ((node config nodes machine self).recover s).1
       ((node config nodes machine self).recover s).2 := by
   obtain ⟨t, voted, log, commit, applied, m, role⟩ := s
   cases role <;> simp only [node] <;> moves

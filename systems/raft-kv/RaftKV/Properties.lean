@@ -55,9 +55,81 @@ def leaderComplete (c : Cluster N config machine) : Bool :=
     !isLeader (c.state l) || (c.state a).term > (c.state l).term
       || (c.state l).log.take (c.state a).commit == (c.state a).log.take (c.state a).commit
 
-def wellFormed (c : Cluster N config machine) : Bool :=
+def appliedWithinCommit (c : Cluster N config machine) : Bool :=
+  (Enum.all (α := N)).all fun a => (c.state a).applied ≤ (c.state a).commit
+
+/-- Holds only because a leader never replaces a committed entry: it is leader completeness seen
+from a follower. -/
+def commitWithinLog (c : Cluster N config machine) : Bool :=
+  (Enum.all (α := N)).all fun a => (c.state a).commit ≤ (c.state a).log.length
+
+def entryTermsWithinTerm (c : Cluster N config machine) : Bool :=
+  (Enum.all (α := N)).all fun a => (c.state a).log.all (·.term ≤ (c.state a).term)
+
+/-! What the proof of commitment uses on the way, as far as a state without its history shows
+it. The proof's own invariants speak of every state a node has been in; these are what they say
+of the present one. -/
+
+def termsSorted (c : Cluster N config machine) : Bool :=
   (Enum.all (α := N)).all fun a =>
-    (c.state a).applied ≤ (c.state a).commit && (c.state a).commit ≤ (c.state a).log.length
-      && (c.state a).log.all (·.term ≤ (c.state a).term)
+    ((c.state a).log.zip ((c.state a).log.drop 1)).all fun (e, next) => e.term ≤ next.term
+
+/-- A candidate holds no entry of the term it stands in. -/
+def candidatesBehind (c : Cluster N config machine) : Bool :=
+  (Enum.all (α := N)).all fun a =>
+    match (c.state a).role with
+    | .candidate _ => (c.state a).log.all (·.term < (c.state a).term)
+    | _ => true
+
+/-- A request for a vote tells the truth about the log of a node still standing. -/
+def requestsCurrent (c : Cluster N config machine) : Bool :=
+  c.net.all fun e =>
+    match e.msg with
+    | .requestVote term candidate lastIndex last =>
+      let s := c.state candidate
+      !(s.term == term && s.role matches .candidate _)
+        || (lastIndex == s.log.length && last == lastTerm s.log)
+    | _ => true
+
+/-- Nobody has voted for a node in a term that node has not reached. -/
+def votesKnown (c : Cluster N config machine) : Bool :=
+  (Enum.all (α := N)).all fun a =>
+    match (c.state a).votedFor with
+    | some candidate => (c.state a).term ≤ (c.state candidate).term
+    | none => true
+
+/-- What a leader believes of a follower in its term is so. -/
+def matchedHeld (c : Cluster N config machine) : Bool :=
+  pairs fun l f =>
+    match (c.state l).role with
+    | .leader matched =>
+      matched.all fun (p, m) =>
+        p != f || (c.state f).term != (c.state l).term
+          || (m ≤ (c.state f).log.length && m ≤ (c.state l).log.length
+            && (c.state f).log.take m == (c.state l).log.take m)
+    | _ => true
+
+/-- An acknowledgement in flight is true of a follower still in the leader's term. -/
+def acksHeld (c : Cluster N config machine) : Bool :=
+  c.net.all fun e =>
+    match e.msg with
+    | .appended term f m =>
+      (Enum.all (α := N)).all fun l =>
+        !(isLeader (c.state l) && (c.state l).term == term && (c.state f).term == term)
+          || (m ≤ (c.state f).log.length && m ≤ (c.state l).log.length
+            && (c.state f).log.take m == (c.state l).log.take m)
+    | _ => true
+
+/-- An `append` in flight was cut from its leader's log and claims no more committed than the
+leader has. -/
+def appendsCut (c : Cluster N config machine) : Bool :=
+  c.net.all fun e =>
+    match e.msg with
+    | .append term l prev prevTerm entries commit =>
+      let s := c.state l
+      !(isLeader s && s.term == term)
+        || (prev ≤ s.log.length && prevTerm == termAt s.log prev
+          && entries.isPrefixOf (s.log.drop prev) && commit ≤ s.commit)
+    | _ => true
 
 end RaftKV

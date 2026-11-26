@@ -175,6 +175,11 @@ theorem Invariant.of_ghost (g : Ghost sys) {P : SysState sys → Prop}
   obtain ⟨c', hreach, rfl⟩ := hc.exists_ghost g
   exact h c' hreach
 
+/-- An invariant of the real system holds of it with ghosts. -/
+theorem Invariant.to_ghost (g : Ghost sys) {P : SysState sys → Prop} (h : sys.Invariant env P) :
+    (sys.withGhost g).Invariant env fun c => P c.erase :=
+  fun _ hc => h _ hc.erase
+
 end System
 
 end Lanes

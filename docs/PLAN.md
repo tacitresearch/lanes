@@ -530,6 +530,15 @@ Runs as three processes since the gate became a system joined to the shard (D31)
 `raftNode` is a node with an HTTP front, and `raftProcs` kills two leaders in turn. That is the
 phase's "runs on three machines, survives fault injection" on one machine.
 
-Next: leader completeness, agreement on committed entries and refinement to the spec; the seeded old-term commit bug found by the checker; the node-to-node transport,
+Proved since: leader completeness, agreement on committed entries and `commit ≤ log.length`,
+with both switches on, for every cluster and environment. The proof needed no induction on
+terms: an entry of a later term in a candidate's log names, through the history, a leader
+already known to hold what was chosen. What the framework got back from it: the past as a
+ghost (`Lanes/Actors/Past.lean`), invariants built in layers (`System.Monotone.and`), and a
+lemma for timers, so the next such proof starts further on.
+
+Next: refinement to the spec, which is stated (`RaftKVProofs.lean`) and wants three things
+the framework lacks: refinement carried through ghost erasure, a rule for several abstract
+steps per concrete step, and a ghost for inputs that never reach an actor; the seeded old-term commit bug found by the checker; the node-to-node transport,
 so that three processes run it.
 

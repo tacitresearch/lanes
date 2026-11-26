@@ -38,7 +38,9 @@ def props (config : Config) : List (Check.Property (W config)) :=
     .always "logs that agree on a term agree before it" fun w => logMatching w.state,
     .always "committed entries agree" fun w => committedAgree w.state,
     .always "a leader has every committed entry" fun w => leaderComplete w.state,
-    .always "applied ≤ committed ≤ logged" fun w => wellFormed w.state,
+    .always "applied ≤ committed" fun w => appliedWithinCommit w.state,
+    .always "committed ≤ logged" fun w => commitWithinLog w.state,
+    .always "no entry is of a later term than its node" fun w => entryTermsWithinTerm w.state,
     .sometimes "a leader is elected" fun w =>
       (Enum.all (α := N)).any fun a => isLeader (w.state.state a),
     .sometimes "a write is answered" fun w => w.state.outbox.any fun r => r.res == .ok,
@@ -48,11 +50,39 @@ def props (config : Config) : List (Check.Property (W config)) :=
       (Enum.all (α := N)).any fun a =>
         !isLeader (w.state.state a) && (w.state.state a).commit > 0 ]
 
+/-- What the proofs in `RaftKV/Proofs` use on the way, checked before it was proved
+(rule 5.1), with a witness that each speaks of something. -/
+def auxiliary (config : Config) : List (Check.Property (W config)) :=
+  [ .always "terms never decrease along a log" fun w => termsSorted w.state,
+    .always "a candidate holds no entry of its term" fun w => candidatesBehind w.state,
+    .always "a request for a vote tells the truth" fun w => requestsCurrent w.state,
+    .always "nobody votes for a node in a term it has not reached" fun w => votesKnown w.state,
+    .always "what a leader believes of a follower is so" fun w => matchedHeld w.state,
+    .always "an acknowledgement in flight is true" fun w => acksHeld w.state,
+    .always "an append in flight was cut from its leader's log" fun w => appendsCut w.state,
+    .sometimes "a request for a vote is in flight" fun w =>
+      w.state.net.any fun e => e.msg matches .requestVote ..,
+    .sometimes "a leader has heard that a follower holds an entry" fun w =>
+      (Enum.all (α := N)).any fun a =>
+        match (w.state.state a).role with
+        | .leader matched => matched.any (·.2 > 0)
+        | _ => false,
+    .sometimes "an acknowledgement of an entry is in flight" fun w =>
+      w.state.net.any fun e => match e.msg with | .appended _ _ m => m > 0 | _ => false,
+    .sometimes "an append in flight says an entry is committed" fun w =>
+      w.state.net.any fun e => match e.msg with | .append _ _ _ _ _ commit => commit > 0 | _ => false ]
+
+/-- A candidate with a log needs a second term. -/
+def candidateWithLog (config : Config) : Check.Property (W config) :=
+  .sometimes "a candidate holds an entry" fun w =>
+    (Enum.all (α := N)).any fun a =>
+      (w.state.state a).role matches .candidate _ && (w.state.state a).log.length > 0
+
 def check (config : Config) (env : EnvModel (sig N C R)) (requests : List (Request N C))
-    (bounds : Bounds := {}) :=
+    (bounds : Bounds := {}) (properties : List (Check.Property (W config)) := props config) :=
   Check.system (cluster N config (store K V))
     { env, driver := (spec (store K V)).monitored (Driver.anyOrder requests)
-      maxCrashes := bounds.maxCrashes } (props config)
+      maxCrashes := bounds.maxCrashes } properties
     { constraint := fun w =>
         w.state.net.length ≤ bounds.maxNet
           && (Enum.all (α := N)).all fun a =>
@@ -95,6 +125,8 @@ def run {config : Config} (name : String)
 def quick : List (String × IO Bool) :=
   [ ("reliable links, one term", run "reliable links, one term" fun _ =>
       check {} reliable writeThenRead { maxTerm := 1, maxNet := 3 }),
+    ("what the proofs use, one term", run "what the proofs use, one term" fun _ =>
+      check {} reliable writeThenRead { maxTerm := 1, maxNet := 3 } (auxiliary {})),
     ("seeded: a node votes for a candidate whose log is behind",
       run "seeded: a node votes for a candidate whose log is behind"
         (expect := some "a leader has every committed entry") fun _ =>
@@ -106,6 +138,10 @@ def deep : List (String × IO Bool) :=
       check {} reliable writeThenRead { maxTerm := 2 }),
     ("unordered links, one term", run "unordered links, one term" fun _ =>
       check {} unordered writeThenRead { maxTerm := 1 }),
+    ("what the proofs use, two terms", run "what the proofs use, two terms" fun _ =>
+      check {} reliable writeThenRead { maxTerm := 2 } (auxiliary {} ++ [candidateWithLog {}])),
+    ("what the proofs use, unordered links", run "what the proofs use, unordered links" fun _ =>
+      check {} unordered writeThenRead { maxTerm := 1 } (auxiliary {})),
     ("unordered links and a crash, one term", run "unordered links and a crash, one term" fun _ =>
       check {} crashing writeThenRead { maxTerm := 1, maxCrashes := 1 }),
     ("seeded: a leader commits an entry of an earlier term by counting",
