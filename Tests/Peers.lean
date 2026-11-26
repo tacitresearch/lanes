@@ -59,22 +59,25 @@ structure Shard where
   balance : Async Int
   stop : Async Unit
 
+def startShard (ports : IO.Ref (Array UInt16)) (answered : IO.Ref Nat) (k : Nat) :
+    Async Shard := do
+  let config : Peers.Config σ := {
+    listen := { port := (← ports.get)[k]?.getD 0 }
+    home := fun i => return (← ports.get)[i.val]?.map fun port => { port }
+    id := idCodec, msg := msgCodec }
+  let (rt, peers) ← Peers.shard Bank3 (fun i => i.val == k) config {}
+    (fun _ => answered.modify (· + 1))
+  if (← ports.get).size ≤ k then ports.modify (·.push peers.port)
+  return {
+    input := fun x => rt.input (.inl x)
+    balance := return (← rt.state (Fin.ofNat 3 k)).balance
+    stop := do peers.stop; rt.stop }
+
 def live : Async (List (String × Bool)) := do
   let ports ← IO.mkRef (#[] : Array UInt16)
   let answered ← IO.mkRef 0
   let mut shards : Array Shard := #[]
-  for k in [0:3] do
-    let config : Peers.Config σ := {
-      listen := { port := 0 }
-      home := fun i => return (← ports.get)[i.val]?.map fun port => { port }
-      id := idCodec, msg := msgCodec }
-    let (rt, peers) ← Peers.shard Bank3 (fun i => i.val == k) config {}
-      (fun _ => answered.modify (· + 1))
-    ports.modify (·.push peers.port)
-    shards := shards.push {
-      input := fun x => rt.input (.inl x)
-      balance := return (← rt.state (Fin.ofNat 3 k)).balance
-      stop := do peers.stop; rt.stop }
+  for k in [0:3] do shards := shards.push (← startShard ports answered k)
   for round in [0:100] do
     for k in [0:3] do
       if let some shard := shards[k]? then
@@ -84,9 +87,21 @@ def live : Async (List (String × Bool)) := do
     settled ← shards.toList.mapM (·.balance)
     if settled.sum == 3000 then break
     Async.sleep 50
-  for shard in shards do shard.stop
+  let some (first, second) := (shards[0]?).bind fun a => (shards[1]?).map (a, ·)
+    | return [("peers: the shards started", false)]
+  second.stop
+  let again ← startShard ports answered 1
+  let mut reached := 0
+  for round in [0:100] do
+    first.input (.transfer ⟨1000 + round, 0, 1, 1⟩)
+    Async.sleep 50
+    reached ← again.balance
+    if reached > 1000 then break
+  for shard in shards.toList.eraseIdx 1 ++ [again] do shard.stop
   return [
     ("peers: three shards joined by TCP move every credit between them",
-      settled == [1200, 900, 900] && (← answered.get) == 300) ]
+      settled == [1200, 900, 900] && (← answered.get) ≥ 300),
+    ("peers: a shard started again on the same port is found by those that were sending",
+      reached > 1000) ]
 
 end Tests.Peers

@@ -32,11 +32,20 @@ flight bounded. `lake test` runs the quick checks; `lake exe raftCheck deep` the
 Each passing check also reaches its witnesses: a leader is elected, a write is answered, a read
 sees the written value, a follower commits.
 
+## What has been run
+
+`lake exe raftLive` starts three nodes on the runtime in one process, joined by TCP, each with
+a journal and with real timers. A leader is elected, a write and a read are answered, the
+leader is stopped, the other two elect one of themselves and go on answering, and the stopped
+node comes back from its journal and catches up. `RaftKV/Deploy.lean` has what a node needs as
+a process: the codecs for its messages and `startNode`.
+
 ## What is not here yet
 
 - Proofs. The invariants are checked on small instances, not proved for all.
-- More than one process. The nodes are actors of one system; a cluster of machines needs the
-  node-to-node transport (`docs/ROADMAP.md`, phase B).
+- A binary per node with an HTTP front. The nodes run joined by TCP, but a process cannot yet
+  have both peers and the HTTP gate; that needs the gate as a system joined to the shard.
+- Election timeouts that differ by themselves. Each node is given its own in its configuration.
 - Change of membership, and compaction of the log.
 - Sending a new follower less than the whole log on first contact.
 - An answer for a client that reaches a node which is not the leader. The request is dropped

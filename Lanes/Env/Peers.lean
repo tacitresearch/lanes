@@ -60,6 +60,7 @@ structure _root_.Lanes.Peers (σ : Signature) where
   private config : Config σ
   private server : TCP.Socket.Server
   private lanes : Mutex (Std.HashMap Address (CloseableChannel ByteArray))
+  private accepted : IO.Ref (Nat × Std.HashMap Nat TCP.Socket.Client)
   private stopped : IO.Ref Bool
   /-- The port in use, which `listen` may have left to the system to choose. -/
   port : UInt16
@@ -112,13 +113,18 @@ def start (config : Config σ) (deliver : Parcel σ → Async Unit) : Async (Pee
   server.bind listen
   server.listen 128
   let stopped ← IO.mkRef false
+  let accepted ← IO.mkRef (0, {})
   background do
     try
       repeat
         let client ← server.accept
-        background (receiver config deliver client)
+        let key ← accepted.modifyGet fun (next, live) => (next, (next + 1, live.insert next client))
+        background do
+          receiver config deliver client
+          accepted.modify fun (next, live) => (next, live.erase key)
     catch _ => pure ()
-  return { config, server, stopped, lanes := ← Mutex.new {}, port := (← server.getSockName).port }
+  return { config, server, stopped, accepted, lanes := ← Mutex.new {}
+           port := (← server.getSockName).port }
 
 /-- Send a parcel to the process that hosts its receiver. It does not wait for the network: the
 parcel is queued, and dropped if the queue is full or nobody hosts the receiver. -/
@@ -135,9 +141,13 @@ def send (peers : Peers σ) (parcel : Parcel σ) : Async Unit := do
     return lane
   discard <| lane.trySend (Parcel.send peers.config.id peers.config.msg [parcel])
 
+/-- Stop listening and sending, and end every connection, so that whoever was sending here
+finds out and connects again to whatever listens next. -/
 def stop (peers : Peers σ) : Async Unit := do
   peers.stopped.set true
   try peers.server.close catch _ => pure ()
+  for client in ← peers.accepted.modifyGet fun (next, live) => (live.values, (next, {})) do
+    try client.close catch _ => pure ()
   let lanes ← peers.lanes.atomically (modifyGet fun lanes => (lanes.values, {}))
   for lane in lanes do discard <| (lane.close : EIO _ Unit).toBaseIO
 

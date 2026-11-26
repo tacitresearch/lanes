@@ -507,6 +507,11 @@ What it has shown about the framework so far:
 - A heartbeat makes the state space infinite unless the messages in flight are bounded by a
   constraint. A checker option that bounds the net would say so in one place.
 
+- Run on the runtime over TCP, Raft worked the first time it was started: election, a write
+  and a read, a new leader after the first was stopped. What failed was the transport: a
+  stopped shard's accepted connections stayed open, so the others kept sending to nobody. A
+  protocol checked against loss did not care; the adapter was wrong, and is fixed with a test.
+
 Next: the proofs, starting with election safety carried over from the election example, then
 log matching; the seeded old-term commit bug found by the checker; the node-to-node transport,
 so that three processes run it.

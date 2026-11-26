@@ -35,3 +35,4 @@ jobs:
           mkdir -p .lake && ln -s "$GITHUB_WORKSPACE/.lake/packages" .lake/packages
           lake build
           lake test
+          lake exe raftLive

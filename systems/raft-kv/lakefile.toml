@@ -14,3 +14,8 @@ name = "RaftKV"
 [[lean_exe]]
 name = "raftCheck"
 root = "Check"
+
+# Three nodes over TCP on this machine, with real timers and journals.
+[[lean_exe]]
+name = "raftLive"
+root = "Live"
