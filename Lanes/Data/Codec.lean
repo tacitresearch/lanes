@@ -173,6 +173,39 @@ def extTreeMap {κ : Type} (key : Codec κ) (value : Codec α)
 
 end Codec
 
+/-- The codec a type is written with when none is named. -/
+class Codable (α : Type) where
+  codec : Codec α
+
+namespace Codable
+
+instance : Codable ByteArray := ⟨Codec.bytes⟩
+instance : Codable Unit := ⟨Codec.unit⟩
+instance : Codable String := ⟨Codec.string⟩
+instance : Codable Nat := ⟨Codec.nat⟩
+instance : Codable Bool := ⟨Codec.bool⟩
+instance : Codable Int := ⟨Codec.int⟩
+instance {n : Nat} : Codable (Fin n) := ⟨Codec.fin⟩
+
+variable {α β : Type}
+
+instance [Codable α] : Codable (Option α) := ⟨Codec.option codec⟩
+instance [Codable α] : Codable (List α) := ⟨Codec.list codec⟩
+instance [Codable α] [Codable β] : Codable (α × β) := ⟨Codec.pair codec codec⟩
+instance [Codable α] [Codable β] : Codable (α ⊕ β) := ⟨Codec.sum codec codec⟩
+
+instance {ι : Type} {β : ι → Type} [Codable ι] [∀ i, Codable (β i)] :
+    Codable ((i : ι) × β i) :=
+  ⟨Codec.sigma codec fun _ => codec⟩
+
+instance {κ : Type} {cmp : κ → κ → Ordering} [Std.TransCmp cmp] [Std.LawfulEqCmp cmp]
+    [Codable κ] [Codable α] : Codable (Std.ExtTreeMap κ α cmp) :=
+  ⟨Codec.extTreeMap codec codec cmp⟩
+
+end Codable
+
+abbrev Codec.of (α : Type) [Codable α] : Codec α := Codable.codec
+
 /-! Codecs for a structure and for an inductive type, one line each. The law is proved by what
 the macro writes, so it holds or the line does not compile. -/
 
@@ -192,18 +225,18 @@ namespace Codec
 open Lean
 
 /-- `(a, b, c)` as nested pairs, as a term or a pattern; `()` when empty. -/
-private meta def tuple (xs : Array (TSyntax `term)) : MacroM (TSyntax `term) :=
+meta def tuple (xs : Array (TSyntax `term)) : MacroM (TSyntax `term) :=
   match xs.toList.reverse with
   | [] => `(())
   | last :: rest => rest.foldlM (fun acc x => `(($x, $acc))) last
 
-private meta def product (codecs : Array (TSyntax `term)) : MacroM (TSyntax `term) :=
+meta def product (codecs : Array (TSyntax `term)) : MacroM (TSyntax `term) :=
   match codecs.toList.reverse with
   | [] => `(Lanes.Codec.unit)
   | last :: rest => rest.foldlM (fun acc c => `(Lanes.Codec.pair $c $acc)) last
 
 /-- The `k`th of `n` alternatives as nested `Sum.inl`/`Sum.inr` around `x`. -/
-private meta def inject (k n : Nat) (x : TSyntax `term) : MacroM (TSyntax `term) := do
+meta def inject (k n : Nat) (x : TSyntax `term) : MacroM (TSyntax `term) := do
   let inner ← if k + 1 == n then pure x else `(Sum.inl $x)
   (List.range k).foldlM (fun acc _ => `(Sum.inr $acc)) inner
 

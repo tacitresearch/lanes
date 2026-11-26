@@ -41,24 +41,25 @@ structure Machine (C R M : Type) where
   init : M
   apply : M → C → M × R
 
-structure Entry (N C : Type) where
+lanes_data structure Entry (N C : Type) where
   term : Nat
   /-- The node that took the command from its client, and answers it. -/
   origin : N
   req : ReqId
   cmd : C
-  deriving DecidableEq, Repr, Hashable
+  deriving DecidableEq, Repr, Hashable, Codable
 
-inductive Role (N : Type) where
+lanes_data inductive Role (N : Type) where
   | follower
   | candidate (votes : List N)
   /-- For each follower heard from, how much of its log is known to match this leader's. -/
   | leader (matched : List (N × Nat))
-  deriving DecidableEq, Repr, Hashable
+  deriving DecidableEq, Repr, Hashable, Codable
 
 /-- Everything but the role is durable. Entries are numbered from 1: entry `i` is `log[i - 1]`,
-and `commit` and `applied` count entries. -/
-structure Node (N C M : Type) where
+and `commit` and `applied` count entries. The machine may be a function, so a node has no
+`DecidableEq`: it is compared field by field (`LawfulBEq`). -/
+lanes_data structure Node (N C M : Type) where
   term : Nat
   votedFor : Option N
   log : List (Entry N C)
@@ -66,26 +67,9 @@ structure Node (N C M : Type) where
   applied : Nat
   machine : M
   role : Role N
-  deriving Repr, Hashable
+  deriving Repr, Hashable, Codable, LawfulBEq
 
-instance {N C M : Type} [DecidableEq N] [DecidableEq C] [BEq M] : BEq (Node N C M) where
-  beq a b := a.term == b.term && a.votedFor == b.votedFor && a.log == b.log
-    && a.commit == b.commit && a.applied == b.applied && a.machine == b.machine && a.role == b.role
-
-instance {N C M : Type} [DecidableEq N] [DecidableEq C] [BEq M] [LawfulBEq M] :
-    LawfulBEq (Node N C M) where
-  rfl {a} := by
-    change (a.term == a.term && a.votedFor == a.votedFor && a.log == a.log && a.commit == a.commit
-      && a.applied == a.applied && a.machine == a.machine && a.role == a.role) = true
-    simp
-  eq_of_beq {a b} h := by
-    change (a.term == b.term && a.votedFor == b.votedFor && a.log == b.log && a.commit == b.commit
-      && a.applied == b.applied && a.machine == b.machine && a.role == b.role) = true at h
-    cases a
-    cases b
-    simpa [and_assoc] using h
-
-inductive Msg (N C : Type) where
+lanes_data inductive Msg (N C : Type) where
   | electionTimeout
   | heartbeat
   | requestVote (term : Nat) (candidate : N) (lastIndex lastTerm : Nat)
@@ -94,19 +78,19 @@ inductive Msg (N C : Type) where
       (commit : Nat)
   | appended (term : Nat) (follower : N) (matched : Nat)
   | propose (req : ReqId) (cmd : C)
-  deriving DecidableEq, Repr, Hashable
+  deriving DecidableEq, Repr, Hashable, Codable
 
-structure Request (N C : Type) where
+lanes_data structure Request (N C : Type) where
   req : ReqId
   /-- The node the client sends to. A node that is not the leader drops the request. -/
   via : N
   cmd : C
-  deriving DecidableEq, Repr, Hashable
+  deriving DecidableEq, Repr, Hashable, Codable
 
-structure Response (R : Type) where
+lanes_data structure Response (R : Type) where
   req : ReqId
   res : R
-  deriving DecidableEq, Repr, Hashable
+  deriving DecidableEq, Repr, Hashable, Codable
 
 abbrev sig (N C R : Type) [DecidableEq N] [DecidableEq C] [DecidableEq R] : Signature where
   Id := N

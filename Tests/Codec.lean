@@ -5,31 +5,49 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import Lanes
 import Examples.Bank
 
-/-! Codecs built by the combinators and the two macros: what is written is read back, with what
-followed it left over. The law is proved; these run the compiled code. -/
+/-! Codecs built by the combinators, by the two macros and by `lanes_data`: what is written is
+read back, with what followed it left over. The law is proved; these run the compiled code. Then
+what else `lanes_data` derives: `Enum`, and `LawfulBEq` for a structure holding a function. -/
 
 namespace Tests.Codec
 
 open Lanes
 
-structure Point where
+lanes_data structure Point where
   x : Int
   y : Int
   label : Option String
-  deriving DecidableEq
+  deriving DecidableEq, Codable
 
-inductive Shape where
+lanes_data inductive Shape where
   | dot
   | circle (centre : Point) (radius : Nat)
   | path (points : List Point) (closed : Bool)
-  deriving DecidableEq
+  deriving DecidableEq, Codable
 
-def Point.codec : Codec Point :=
+/-- The codecs `lanes_data` writes, by hand: the records must be the same. -/
+def Point.byHand : Codec Point :=
   Codec.struct% Point { x := Codec.int, y := Codec.int, label := Codec.option Codec.string }
 
-def Shape.codec : Codec Shape :=
-  Codec.sum% Shape { dot, circle (centre := Point.codec) (radius := Codec.nat),
-    path (points := Codec.list Point.codec) (closed := Codec.bool) }
+def Shape.byHand : Codec Shape :=
+  Codec.sum% Shape { dot, circle (centre := Point.byHand) (radius := Codec.nat),
+    path (points := Codec.list Point.byHand) (closed := Codec.bool) }
+
+lanes_data inductive Slot (A : Type) where
+  | empty
+  | held (owner : A) (count : Fin 2)
+  deriving DecidableEq, Repr, Enum, Codable
+
+lanes_data structure Pair (A : Type) where
+  first : A
+  second : Bool
+  deriving DecidableEq, Enum
+
+lanes_data structure Table (V : Type) where
+  rows : Fin 2 → Nat
+  version : Nat
+  default : V
+  deriving LawfulBEq
 
 def shapes : List Shape :=
   [ .dot, .circle ⟨-3, 4, some "a/b é"⟩ 7, .path [] true,
@@ -74,6 +92,23 @@ def tests : List (String × Bool) :=
       let http : Http.Request := { method := .post, path := ["a", "b c"], query := [("q", "1")]
                                    headers := [("x", "y")], body := "body".toUTF8 }
       codec.read (codec.write request) == some (request, [])
-        && Http.Request.codec.read (Http.Request.codec.write http) == some (http, [])) ]
+        && Http.Request.codec.read (Http.Request.codec.write http) == some (http, [])),
+    ("codec: lanes_data writes what the macros given each codec by hand write",
+      shapes.all fun shape => (Codec.of Shape).write shape == Shape.byHand.write shape),
+    ("codec: a parameter's codec is the one given, or its instance",
+      let slot : Slot (Fin 3) := .held 2 1
+      (Slot.codec Codec.fin).write slot == (Codec.of (Slot (Fin 3))).write slot
+        && (Codec.of (Slot (Fin 3))).read ((Codec.of (Slot (Fin 3))).write slot ++ trailing)
+          == some (slot, trailing)),
+    ("enum: lanes_data lists every value of an inductive type and of a structure, once each",
+      Enum.all (α := Slot Bool)
+          == [.empty, .held false 0, .held false 1, .held true 0, .held true 1]
+        && (Enum.all (α := Pair (Slot Bool))).length == 10
+        && (Enum.all (α := Pair (Slot Bool))).eraseDups.length == 10),
+    ("beq: a structure holding a function is compared at every argument",
+      let table : Table (Option Nat) := { rows := fun k => k.val, version := 1, default := none }
+      table == { table with rows := fun k => k.val + 0 }
+        && !(table == { table with rows := fun k => if k = 1 then 2 else k.val })
+        && !(table == { table with version := 2 })) ]
 
 end Tests.Codec

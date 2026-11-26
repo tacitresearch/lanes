@@ -23,24 +23,9 @@ def bridge : Bridge echoSig where
   decode id request := if request.path == ["bad"] then .error (.text "bad" 400) else .ok id
   encode id := some (id, .text "ok")
 
-instance : (gatedSig echoSig).Inspect where
-  reprMsg
-    | none => inferInstanceAs (Repr (GateMsg echoSig))
-    | some _ => inferInstanceAs (Repr ReqId)
-  hashMsg
-    | none => inferInstanceAs (Hashable (GateMsg echoSig))
-    | some _ => inferInstanceAs (Hashable ReqId)
-
-instance (config : GateConfig) : (gated (Server.system echo) bridge config).Inspect where
-  beqState
-    | none => inferInstanceAs (BEq (List ReqId))
-    | some _ => inferInstanceAs (BEq Unit)
-  reprState
-    | none => inferInstanceAs (Repr (List ReqId))
-    | some _ => inferInstanceAs (Repr Unit)
-  hashState
-    | none => inferInstanceAs (Hashable (List ReqId))
-    | some _ => inferInstanceAs (Hashable Unit)
+instance : (gatedSig echoSig).Inspect := by instance_by_cases
+instance (config : GateConfig) : (gated (Server.system echo) bridge config).Inspect := by
+  instance_by_cases
 
 /-- The outside world: requests still to send, and the status each answered request got. -/
 structure Client where

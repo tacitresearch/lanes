@@ -37,9 +37,7 @@ abbrev Msg : Id → Type
   | .worker _ => WorkerMsg
   | .collector => CollectorMsg
 
-instance : ∀ i, DecidableEq (Msg i)
-  | .worker _ => inferInstanceAs (DecidableEq WorkerMsg)
-  | .collector => inferInstanceAs (DecidableEq CollectorMsg)
+instance : ∀ i, DecidableEq (Msg i) := by instance_by_cases
 
 abbrev sig : Signature where
   Id := Id

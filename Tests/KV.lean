@@ -19,35 +19,8 @@ abbrev K := Fin 1
 abbrev V := Fin 2
 abbrev F := Fin 2
 
-instance : Enum (Examples.KV.Id F) where
-  all := [.front 0, .front 1, .store]
-  complete i := by
-    cases i with
-    | front f => match f with
-      | 0 => simp
-      | 1 => simp
-    | store => simp
-
-instance : ∀ i, Repr (Msg K V F i)
-  | .front _ => inferInstanceAs (Repr (FrontMsg K V F))
-  | .store => inferInstanceAs (Repr (StoreMsg K V F))
-
-instance : ∀ i, Hashable (Msg K V F i)
-  | .front _ => inferInstanceAs (Hashable (FrontMsg K V F))
-  | .store => inferInstanceAs (Hashable (StoreMsg K V F))
-
-instance : (sig K V F).Inspect := {}
-
-instance (caching : Bool) : (system K V F caching).Inspect where
-  beqState
-    | .front _ => inferInstanceAs (BEq (List (K × Option V)))
-    | .store => inferInstanceAs (BEq (K → Option V))
-  reprState
-    | .front _ => inferInstanceAs (Repr (List (K × Option V)))
-    | .store => inferInstanceAs (Repr (K → Option V))
-  hashState
-    | .front _ => inferInstanceAs (Hashable (List (K × Option V)))
-    | .store => inferInstanceAs (Hashable (K → Option V))
+instance : (sig K V F).Inspect := by instance_by_cases
+instance (caching : Bool) : (system K V F caching).Inspect := by instance_by_cases
 
 /-- Read through front end 0, write through front end 1, read through front end 0 again. -/
 def requests : List (Request K V F) :=
