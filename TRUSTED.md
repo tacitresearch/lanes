@@ -14,7 +14,12 @@ toolchain, the operating system and the hardware.
 | What | Where | Why it is trusted | How it is checked |
 | --- | --- | --- | --- |
 | The runtime shell | `Lanes/Actors/Runtime.lean`, 156 lines | It takes commands from an inbox, calls the kernel and carries out the kernel's commands. That it passes results on unchanged is not proved. | `Tests/Runtime.lean` replays recorded events through `SysState.run` and compares final states. |
-| The HTTP adapter's IO | `Lanes/Env/Http.lean` | It reads requests from sockets, hands them to the gated system and writes the gate's one response for each. | `Tests/Web.lean` makes real requests over a socket, including fifty at once. |
+| The HTTP adapter's IO | `Lanes/Env/Http.lean`, 125 lines | It reads requests from sockets, hands them to the gated system and writes the gate's one response for each. | `Tests/Web.lean` makes real requests over a socket, including fifty at once. |
+
+| The template macro | `Lanes/Html/Syntax.lean`, 113 lines | It turns template syntax into `Html` values. What it produces is type-checked, but that it produces the element the template shows is not proved. | `Tests/Html.lean` compares rendered templates with the expected text. |
+
+`lanes lint` fails when one of these files grows past the line count given here (rule
+`trusted-size`), so trusted code cannot grow without this file changing.
 
 The runtime's decisions (routing, start, stop, timers, which mail a stopped actor loses) are
 not in this table. They are in `Lanes/Actors/Kernel.lean` and proved in
