@@ -2,7 +2,8 @@
 
 Lanes is a framework for building verified software in Lean 4: actors with pure step functions, one
 semantics, a model checker, proofs, and adapters. Read `docs/DESIGN.md` for the plan,
-`docs/STATUS.md` for what exists and what is next, and `LANES_STYLE.md` for the rules. `docs/DECISIONS.md` records where the implementation settled or
+`docs/STATUS.md` for what exists, `docs/PLAN.md` for what is being done next and why, and
+`LANES_STYLE.md` for the rules. `docs/DECISIONS.md` records where the implementation settled or
 departed from the design document, with reasons.
 
 ## Lanes rules for agents
@@ -51,8 +52,12 @@ and Mathlib's `<i` token breaks `<input>` in templates, so keep views and `main`
 
 - Library files use the module system: `module`, `public import`, then `@[expose] public section`
   (as CSLib does). A definition whose body uses private helpers is marked `@[no_expose]`.
-- Every declaration and structure field has a docstring. Each file opens with a `/-! -/` module
-  docstring stating what it defines.
+- Write almost no comments. A comment or docstring is for a *why* that a name, a type or a
+  theorem cannot carry. Never restate what the code says, and never narrate a change. If code
+  needs explaining, rename or restructure it. Each file keeps a short `/-! -/` header saying what
+  it is for; a public declaration gets a docstring only when its name and type do not already
+  say what it is. Do not copy the docstring density of older files: it is being removed.
+  Exception: `Lanes/Semantics/` documents every declaration, because CSLib's linter requires it.
 - One actor step handles one message. Branch on the message once, at the top (rule 4).
 - Define a concrete system with `abbrev`, so instance resolution can see its `State`.
 - Prove per-actor invariants with `actor_invariant [myActor]`; it leaves the cases it cannot

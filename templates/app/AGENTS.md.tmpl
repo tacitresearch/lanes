@@ -18,6 +18,8 @@ lake exe {{name}} 8080  # run
 - Never add sorry, partial, unsafe or an axiom without listing it in TRUSTED.md.
 - On an unexpected state, emit stop; do not add defensive fallbacks.
 - Run `lanes lint && lake test` before claiming a task is done.
+- Write almost no comments. A comment is for a *why* that a name, a type or a theorem cannot
+  carry. If code needs explaining, rename or restructure it.
 
 ## Layout
 
