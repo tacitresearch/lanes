@@ -206,7 +206,7 @@ def tests : List (String × Bool) :=
       relayCompared.split.queue.all fun v =>
         let c := v.path.last.state
         !c.up (.inl 0) && !c.up (.inr 1) && c.net.all fun e =>
-          Split.atHome relayHosts e.dst && e.src.all (Split.atHome relayHosts)),
+          e.atHome relayHosts),
     ("split: a boot actor that stops as it starts loses a message alone and keeps it when split",
       (SysState.init fragile {}).net.isEmpty
       && (SysState.init (fragile.split id) (EnvModel.split {} id)).merged.net
