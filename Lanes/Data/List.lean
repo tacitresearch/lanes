@@ -8,7 +8,9 @@ module
 Facts about lists that proofs about systems share: what `erase` does under `map`, `filter`,
 `filterMap` and `countP`. Messages in flight, timers and outputs waiting are lists, and an event
 takes one element out, so every proof that reads a state through a map or a filter needs these.
-Then `take` and `drop` of a log and of a start of it.
+Then `take` and `drop` of a log and of a start of it. Then strings and byte arrays as lists of
+bytes: what UTF-8 makes of a character below 128, and the bytes of a byte array cut short or put
+after another, through which the proofs about the HTTP reader read what it reads.
 -/
 
 public section
@@ -151,5 +153,119 @@ theorem getElem?_of_prefix {a b : List α} (h : a <+: b) {k : Nat} {x : α}
   obtain ⟨rest, rfl⟩ := h
   rw [List.getElem?_append_left (List.getElem?_eq_some_iff.mp hx).1]
   exact hx
+
+theorem mapM_some {f : α → Option β} {g : α → β} :
+    ∀ {l : List α}, (∀ x ∈ l, f x = some (g x)) → l.mapM f = some (l.map g)
+  | [], _ => rfl
+  | x :: l, h => by
+    rw [List.mapM_cons, h x List.mem_cons_self,
+      mapM_some fun y hy => h y (List.mem_cons_of_mem _ hy)]
+    rfl
+
+theorem dropWhile_of_head_any {p : α → Bool} : ∀ {l : List α}, l.head?.any p = false →
+    l.dropWhile p = l
+  | [], _ => rfl
+  | c :: l, h => List.dropWhile_cons_of_neg (by simpa using h)
+
+theorem utf8EncodeChar_ascii {c : Char} {b : UInt8} (hb : b ∈ String.utf8EncodeChar c)
+    (h : b.toNat < 128) : b.toNat = c.toNat := by
+  simp only [String.utf8EncodeChar] at hb
+  split at hb
+  · simp only [List.mem_singleton] at hb
+    subst hb
+    rename_i hv
+    rw [UInt8.toNat_ofNat']
+    show _ = c.val.toNat
+    omega
+  · split at hb
+    · simp only [List.mem_cons, List.not_mem_nil, or_false] at hb
+      rcases hb with rfl | rfl <;> simp [UInt8.toNat_ofNat'] at h <;> omega
+    · split at hb
+      · simp only [List.mem_cons, List.not_mem_nil, or_false] at hb
+        rcases hb with rfl | rfl | rfl <;> simp [UInt8.toNat_ofNat'] at h <;> omega
+      · simp only [List.mem_cons, List.not_mem_nil, or_false] at hb
+        rcases hb with rfl | rfl | rfl | rfl <;> simp [UInt8.toNat_ofNat'] at h <;> omega
+
+theorem data_toList_toByteArray (s : String) :
+    s.toByteArray.data.toList = s.toList.flatMap String.utf8EncodeChar := by
+  rw [← String.utf8Encode_toList, List.utf8Encode_eq_toByteArray, List.data_toByteArray]
+
+theorem fromUTF8?_toByteArray (s : String) : String.fromUTF8? s.toByteArray = some s := by
+  simp [String.fromUTF8?, s.isValidUTF8, String.fromUTF8]
+
+theorem length_flatMap_utf8EncodeChar (s : String) :
+    (s.toList.flatMap String.utf8EncodeChar).length = s.utf8ByteSize := by
+  rw [← data_toList_toByteArray, Array.length_toList]
+  rfl
+
+theorem extract_append_front (a b rest : ByteArray) :
+    (a ++ (b ++ rest)).extract a.size (a.size + b.size) = b := by
+  have := ByteArray.extract_append_size_add (a := a) (b := b ++ rest) (i := 0) (j := b.size)
+  rw [Nat.add_zero] at this
+  rw [this]
+  exact ByteArray.extract_append_eq_left rfl
+
+theorem size_extract_zero (bytes : ByteArray) (n : Nat) :
+    (bytes.extract 0 n).size = min n bytes.size := by
+  simp [ByteArray.size_extract]
+
+theorem getElem_extract_zero {bytes : ByteArray} {n i : Nat}
+    (h : i < (bytes.extract 0 n).size) :
+    (bytes.extract 0 n)[i] = bytes[i]'(by rw [size_extract_zero] at h; omega) := by
+  simp [ByteArray.getElem_extract]
+
+theorem getElem?_extract_zero (bytes : ByteArray) (n i : Nat) :
+    (bytes.extract 0 n)[i]? = if i < n then bytes[i]? else none := by
+  by_cases h : i < (bytes.extract 0 n).size
+  · have h' := h
+    rw [size_extract_zero] at h'
+    rw [getElem?_pos (bytes.extract 0 n) i h, getElem_extract_zero h,
+      getElem?_pos bytes i (show i < bytes.size by omega)]
+    simp only [show i < n by omega, ↓reduceIte]
+  · rw [size_extract_zero] at h
+    rw [getElem?_neg _ _ (by rw [size_extract_zero]; omega)]
+    by_cases hn : i < n
+    · simp only [hn, ↓reduceIte]
+      rw [getElem?_neg _ _ (by omega)]
+    · simp [hn]
+
+theorem toList_extract_zero (bytes : ByteArray) (n : Nat) :
+    (bytes.extract 0 n).data.toList = bytes.data.toList.take n := by
+  simp [ByteArray.data_extract, Array.toList_extract, List.extract]
+
+theorem extract_extract_zero {bytes : ByteArray} {n i j : Nat} (h : j ≤ n) :
+    (bytes.extract 0 n).extract i j = bytes.extract i j := by
+  rw [ByteArray.extract_extract, Nat.zero_add, Nat.zero_add, Nat.min_eq_left h]
+
+theorem getElem?_data (b : ByteArray) (i : Nat) : b[i]? = b.data.toList[i]? := by
+  by_cases h : i < b.size
+  · rw [getElem?_pos b i h, Array.getElem?_toList, getElem?_pos b.data i h,
+      ByteArray.getElem_eq_getElem_data]
+  · rw [getElem?_neg b i h, Array.getElem?_toList, getElem?_neg b.data i h]
+
+theorem getElem?_append_front (pre bytes : ByteArray) (i : Nat) :
+    (pre ++ bytes)[pre.size + i]? = bytes.data.toList[i]? := by
+  rw [getElem?_data, ByteArray.data_append, Array.toList_append,
+    List.getElem?_append_right (by simp)]
+  congr 1
+  simp only [Array.length_toList]
+  have : pre.data.size = pre.size := rfl
+  omega
+
+theorem getElem_of_getElem? {bytes : ByteArray} {q : Nat} {b : UInt8}
+    (h : bytes[q]? = some b) : ∃ hq : q < bytes.size, bytes[q] = b := by
+  by_cases hq : q < bytes.size
+  · rw [getElem?_pos bytes q hq] at h
+    exact ⟨hq, Option.some.inj h⟩
+  · rw [getElem?_neg bytes q hq] at h
+    cases h
+
+theorem foldl_append_bytes (acc : ByteArray) (cs : List ByteArray) :
+    cs.foldl (· ++ ·) acc = acc ++ cs.foldl (· ++ ·) .empty := by
+  induction cs generalizing acc with
+  | nil => simp
+  | cons c cs ih =>
+    rw [List.foldl_cons, List.foldl_cons, ih, ih (.empty ++ c), ByteArray.empty_append,
+      ByteArray.append_assoc]
 
 end Lanes
