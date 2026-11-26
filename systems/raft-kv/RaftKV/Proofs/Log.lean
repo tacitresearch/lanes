@@ -1,0 +1,502 @@
+/-
+Copyright (c) 2026 The Lanes Authors. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+-/
+import RaftKV.Proofs.Election
+
+/-!
+# The first invariants of the log
+
+For every finite set of nodes, every machine, every `Config` and every environment model:
+
+- a node has applied no more than it has committed (`applied_le_commit`);
+- no entry is of a later term than the node that holds it (`entry_term_le`);
+- a leader's log only grows while it leads its term (`leader_append_only`);
+- two logs that agree on the term of an entry agree on everything up to it (`log_matching`).
+
+Log matching is about the past. An `append` in flight carries part of the log its leader had
+when it was sent, and that leader may since have lost its role and had its log replaced. So the
+proof reads the histories of `Proofs/Election.lean`. The invariant (`Logs`) says that the logs a
+node had as leader of one term extend one another, that every entry of every log a node has had
+came, with all before it, from the log of a leader of the entry's term, and that every `append`
+in flight is cut from such a log. Two logs with an entry of one term at one place then both got
+it from the one leader of that term. A follower that takes an `append` ends with its own log or
+with that leader's, so nothing new has to be shown of the result.
+
+Not here: `commit ≤ log.length`, the third part of `wellFormed`. A follower's log gets shorter
+when a leader's entries replace its own, and that this never reaches a committed entry is leader
+completeness. It is false with `votesForUpToDateOnly` off.
+-/
+
+namespace RaftKV
+
+open Lanes
+
+variable {N C R M : Type} [DecidableEq N] [DecidableEq C] [DecidableEq R] [Enum N]
+variable {config : Config} {machine : Machine C R M}
+
+theorem applied_le_commit (config : Config) (machine : Machine C R M)
+    (env : EnvModel (sig N C R)) :
+    (cluster N config machine).Invariant env fun c =>
+      ∀ a, (c.state a).applied ≤ (c.state a).commit := by
+  intro c hc a
+  refine System.invariant_of_actor (cluster N config machine) a
+    (P := fun s => s.applied ≤ s.commit) (Actor.Inductive.invariant ?_) env c hc
+  exact ⟨Nat.le_refl 0, fun s msg h => (step_moves config Enum.all machine a s msg).applied_le h,
+    fun s h => (recover_moves config Enum.all machine a s).applied_le h⟩
+
+section Terms
+
+omit [DecidableEq N] [DecidableEq C] [DecidableEq R] [Enum N] in
+theorem mem_merge {own sent : List (Entry N C)} {entry : Entry N C}
+    (h : entry ∈ merge own sent) : entry ∈ own ∨ entry ∈ sent := by
+  fun_induction merge own sent <;> grind
+
+/-- No entry, in a log or in flight, is of a later term than the node or the message that holds
+it. -/
+structure Terms (c : SysState (cluster N config machine)) : Prop where
+  logs : ∀ a, ∀ entry ∈ (c.state a).log, entry.term ≤ (c.state a).term
+  appends : ∀ src dst term leader prev prevTerm entries commit,
+    (⟨src, dst, .append term leader prev prevTerm entries commit⟩ : Envelope (sig N C R)) ∈ c.net →
+      ∀ entry ∈ entries, entry.term ≤ term
+  timers : ∀ i msg, msg ∈ c.timers i → msg = .electionTimeout ∨ msg = .heartbeat
+
+namespace Terms
+
+variable {c : SysState (cluster N config machine)}
+
+theorem blank : Terms (SysState.blank (cluster N config machine)) := by
+  constructor <;> simp [SysState.blank, node]
+
+theorem below {c' : SysState (cluster N config machine)} (hc : Terms c) (hbelow : c'.Below c) :
+    Terms c' := by
+  obtain ⟨hstate, hnet, htimers, _⟩ := hbelow
+  refine ⟨?_, ?_, fun i msg h => hc.timers i msg (htimers i msg h)⟩
+  · rw [hstate]
+    exact hc.logs
+  · exact fun src dst term leader prev prevTerm entries commit h =>
+      hc.appends src dst term leader prev prevTerm entries commit (hnet _ h)
+
+theorem input (hc : Terms c) (x : Request N C) :
+    Terms { c with net := c.net ++ [⟨none, x.via, .propose x.req x.cmd⟩] } := by
+  refine ⟨hc.logs, fun src dst term leader prev prevTerm entries commit h => ?_, hc.timers⟩
+  rcases List.mem_append.mp h with h | h
+  · exact hc.appends src dst term leader prev prevTerm entries commit h
+  · simp at h
+
+theorem grow (hc : Terms c) {i : N} {msg : Option (Msg N C)} {s' : Node N C M}
+    {effs : List (Effect (sig N C R) i)} (hmoves : Moves Enum.all i (c.state i) msg s' effs)
+    (happend : ∀ term leader prev prevTerm entries commit,
+      msg = some (.append term leader prev prevTerm entries commit) →
+        ∀ entry ∈ entries, entry.term ≤ term) :
+    Terms (c.grow i (s', effs)) := by
+  have hold : ∀ entry ∈ (c.state i).log, entry.term ≤ s'.term := fun entry h =>
+    Nat.le_trans (hc.logs i entry h) hmoves.term_le
+  have hlogs : ∀ entry ∈ s'.log, entry.term ≤ s'.term := by
+    intro entry hentry
+    rcases hmoves.log with h | ⟨_, added, hadded, h⟩ |
+      ⟨_, leader, prev, entries, commit, hmsg, _, h⟩
+    · exact hold entry (h ▸ hentry)
+    · rcases List.mem_append.mp (h ▸ hentry) with hentry | hentry
+      · exact hold entry hentry
+      · exact Nat.le_of_eq (List.mem_singleton.mp hentry ▸ hadded)
+    · rcases List.mem_append.mp (h ▸ hentry) with hentry | hentry
+      · exact hold entry (List.mem_of_mem_take hentry)
+      · rcases mem_merge hentry with hentry | hentry
+        · exact hold entry (List.mem_of_mem_drop hentry)
+        · exact happend _ leader prev _ entries commit hmsg entry hentry
+  refine ⟨fun a => ?_, fun src dst term leader prev prevTerm entries commit hmem => ?_,
+    fun j m hmem => ?_⟩
+  · by_cases ha : a = i
+    · subst ha
+      simpa using hlogs
+    · simpa [ha] using hc.logs a
+  · rcases SysState.mem_grow_net.mp hmem with hold | ⟨_, hnew⟩
+    · exact hc.appends src dst term leader prev prevTerm entries commit hold
+    · obtain ⟨_, rfl, _, _, rfl⟩ := hmoves.sent _ hnew
+      exact fun entry hentry => hlogs entry (List.mem_of_mem_drop hentry)
+  · rcases SysState.mem_grow_timers.mp hmem with hold | ⟨rfl, delay, hnew⟩
+    · exact hc.timers j m hold
+    · exact hmoves.sent _ hnew
+
+end Terms
+
+theorem terms_inductive (env : EnvModel (sig N C R)) :
+    (cluster N config machine).Inductive env Terms := by
+  refine .of_monotone env .blank (fun _ _ => .below) (fun _ x hc => hc.input x) ?_ ?_
+  · intro c i msg hc hpending
+    refine hc.grow (step_moves config Enum.all machine i _ msg) ?_
+    intro term leader prev prevTerm entries commit hmsg
+    obtain rfl := Option.some.inj hmsg
+    rcases hpending with ⟨src, hnet⟩ | htimer
+    · exact hc.appends src i term leader prev prevTerm entries commit hnet
+    · exact nomatch hc.timers i _ htimer
+  · exact fun c i hc => hc.grow (recover_moves config Enum.all machine i _) nofun
+
+theorem entry_term_le (config : Config) (machine : Machine C R M) (env : EnvModel (sig N C R)) :
+    (cluster N config machine).Invariant env fun c =>
+      ∀ a, ∀ entry ∈ (c.state a).log, entry.term ≤ (c.state a).term :=
+  fun c hc => ((terms_inductive env).invariant c hc).logs
+
+end Terms
+
+section Leader
+
+variable {nodes : List N} {i : N} {s s' : Node N C M} {msg : Option (Msg N C)}
+  {effs : List (Effect (sig N C R) i)}
+
+omit [Enum N] in
+theorem Moves.follower_stays (h : Moves nodes i s msg s' effs) (hterm : s'.term = s.term)
+    (hrole : s.role = .follower) : s'.role = .follower := by
+  cases hrole' : s'.role with
+  | follower => rfl
+  | candidate votes =>
+    rcases h.candidate votes hrole' with ⟨h, _⟩ | ⟨_, votes₀, h, _⟩
+    · omega
+    · simp [hrole] at h
+  | leader matched =>
+    rcases h.leader (isLeader_iff.mpr ⟨matched, hrole'⟩) with
+      ⟨h, _⟩ | ⟨_, votes₀, _, h, _⟩ | ⟨_, h, _⟩
+    · omega
+    · simp [hrole] at h
+    · simp [isLeader, hrole] at h
+
+omit [Enum N] in
+theorem Moves.leader_grows (h : Moves nodes i s msg s' effs) (hterm : s'.term = s.term)
+    (hrole : isLeader s = true) :
+    s'.role = .follower ∨ (isLeader s' = true ∧ s.log <+: s'.log) := by
+  cases hrole' : s'.role with
+  | follower => exact .inl rfl
+  | candidate votes =>
+    rcases h.candidate votes hrole' with ⟨h, _⟩ | ⟨_, votes₀, h, _⟩
+    · omega
+    · simp [isLeader, h] at hrole
+  | leader matched =>
+    have hleader := isLeader_iff.mpr ⟨matched, hrole'⟩
+    rcases h.leader hleader with ⟨h, _⟩ | ⟨_, votes₀, _, h, _⟩ | ⟨_, _, h⟩
+    · omega
+    · simp [isLeader, h] at hrole
+    · exact .inr ⟨hleader, h⟩
+
+omit [Enum N] in
+/-- A leader's log only grows while it leads its term. -/
+theorem leader_append_only (config : Config) (nodes : List N) (machine : Machine C R M)
+    (self : N) (s : Node N C M) (msg : Msg N C) (hleader : isLeader s = true)
+    (hleader' : isLeader ((node config nodes machine self).step s msg).1 = true)
+    (hterm : ((node config nodes machine self).step s msg).1.term = s.term) :
+    s.log <+: ((node config nodes machine self).step s msg).1.log := by
+  rcases (step_moves config nodes machine self s msg).leader_grows hterm hleader with h | h
+  · simp [isLeader, h] at hleader'
+  · exact h.2
+
+/-- The same of the cluster: whatever happens, under any environment model, a node that leads a
+term before and after has kept every entry it had. -/
+theorem leader_log_grows (config : Config) (machine : Machine C R M)
+    {env : EnvModel (sig N C R)} {c c' : SysState (cluster N config machine)}
+    {ev : Event (sig N C R)} (hstep : c.step env ev = some c') (a : N)
+    (hleader : isLeader (c.state a) = true) (hleader' : isLeader (c'.state a) = true)
+    (hterm : (c'.state a).term = (c.state a).term) : (c.state a).log <+: (c'.state a).log := by
+  rcases SysState.step_state hstep with h | ⟨k, msg, h⟩ | ⟨k, h⟩ <;> rw [h] at hleader' hterm ⊢
+  · exact List.prefix_refl _
+  · by_cases ha : a = k
+    · subst ha
+      rw [update_self] at hleader' hterm ⊢
+      exact leader_append_only config Enum.all machine a _ msg hleader hleader' hterm
+    · rw [update_of_ne _ _ ha]
+      exact List.prefix_refl _
+  · by_cases ha : a = k
+    · subst ha
+      simp [isLeader, node] at hleader'
+    · rw [update_of_ne _ _ ha]
+      exact List.prefix_refl _
+
+end Leader
+
+section Matching
+
+omit [DecidableEq N] [DecidableEq C] [DecidableEq R] [Enum N]
+
+theorem termAt_cons_succ (entry : Entry N C) (log : List (Entry N C)) {k : Nat} (hk : 0 < k) :
+    termAt (entry :: log) (k + 1) = termAt log k := by
+  obtain ⟨k, rfl⟩ := Nat.exists_eq_succ_of_ne_zero (Nat.ne_of_gt hk)
+  simp [termAt]
+
+theorem termAt_drop (log : List (Entry N C)) (prev : Nat) {k : Nat} (hk : 0 < k) :
+    termAt (log.drop prev) k = termAt log (prev + k) := by
+  obtain ⟨k, rfl⟩ := Nat.exists_eq_succ_of_ne_zero (Nat.ne_of_gt hk)
+  simp [termAt]
+
+theorem termAt_append_left (a b : List (Entry N C)) {k : Nat} (hk : k ≤ a.length) :
+    termAt (a ++ b) k = termAt a k := by
+  unfold termAt
+  split
+  · rfl
+  · rw [List.getElem?_append_left (by omega)]
+
+theorem termAt_append_length (log : List (Entry N C)) (entry : Entry N C) :
+    termAt (log ++ [entry]) (log.length + 1) = entry.term := by
+  simp [termAt]
+
+/-- Two logs that agree on the term of an entry agree on everything up to it. -/
+def Matching (a b : List (Entry N C)) : Prop :=
+  ∀ k, k ≤ a.length → k ≤ b.length → termAt a k = termAt b k → a.take k = b.take k
+
+theorem Matching.tail {e e' : Entry N C} {a b : List (Entry N C)}
+    (h : Matching (e :: a) (e' :: b)) : Matching a b := by
+  intro k hka hkb hterm
+  rcases Nat.eq_zero_or_pos k with rfl | hk
+  · simp
+  · have := h (k + 1) (by simpa using hka) (by simpa using hkb)
+      (by rwa [termAt_cons_succ _ _ hk, termAt_cons_succ _ _ hk])
+    simp only [List.take_succ_cons, List.cons.injEq] at this
+    exact this.2
+
+theorem Matching.drop {a b : List (Entry N C)} (h : Matching a b) (prev : Nat) :
+    Matching (a.drop prev) (b.drop prev) := by
+  intro k hka hkb hterm
+  rcases Nat.eq_zero_or_pos k with rfl | hk
+  · simp
+  · simp only [List.length_drop] at hka hkb
+    rw [termAt_drop _ _ hk, termAt_drop _ _ hk] at hterm
+    have := congrArg (List.drop prev) (h (prev + k) (by omega) (by omega) hterm)
+    simpa [List.drop_take] using this
+
+theorem merge_eq_of_matching {own sent : List (Entry N C)} (h : Matching own sent) :
+    merge own sent = own ∨ merge own sent = sent := by
+  fun_induction merge own sent with
+  | case1 e own n sent hterm ih =>
+    have := h 1 (by simp) (by simp) (by simpa [termAt] using hterm)
+    simp only [List.take_succ_cons, List.take_zero, List.cons.injEq, and_true] at this
+    subst this
+    exact (ih h.tail).imp (congrArg _) (congrArg _)
+  | case2 e own n sent hterm => exact .inr rfl
+  | case3 sent => exact .inr rfl
+  | case4 own => exact .inl rfl
+
+/-- What a follower has after taking an `append` cut from `theirs`: its own log, or theirs. -/
+theorem take_append_merge {own theirs : List (Entry N C)} (h : Matching own theirs) {prev : Nat}
+    (hown : prev ≤ own.length) (htheirs : prev ≤ theirs.length)
+    (hterm : termAt own prev = termAt theirs prev) :
+    own.take prev ++ merge (own.drop prev) (theirs.drop prev) = own ∨
+      own.take prev ++ merge (own.drop prev) (theirs.drop prev) = theirs := by
+  rcases merge_eq_of_matching (h.drop prev) with hmerge | hmerge <;> rw [hmerge]
+  · exact .inl (List.take_append_drop prev own)
+  · exact .inr (h prev hown htheirs hterm ▸ List.take_append_drop prev theirs)
+
+end Matching
+
+/-- `log` was the log of a leader of `term`, at some time. -/
+def Led (c : SysState (recording N config machine)) (term : Nat) (log : List (Entry N C)) : Prop :=
+  ∃ a, ∃ p ∈ seen c a, isLeader p = true ∧ p.term = term ∧ p.log = log
+
+/-- Every entry of `log` was, with all before it, in the log of a leader of the entry's term. -/
+def Sourced (c : SysState (recording N config machine)) (log : List (Entry N C)) : Prop :=
+  ∀ k, 0 < k → k ≤ log.length → ∃ l, Led c (termAt log k) l ∧ l.take k = log.take k
+
+/--
+The inductive invariant, given `Votes`. Like `Votes` it reads what nodes have been and what is
+in flight, so no loss, duplication or crash can break it.
+-/
+structure Logs (c : SysState (recording N config machine)) : Prop where
+  /-- A node that led its present term still leads it, with a log that has only grown, or has
+  stepped down for good. -/
+  grows : ∀ a, ∀ p ∈ seen c a, isLeader p = true → p.term ≤ (c.state a).1.term ∧
+    (p.term = (c.state a).1.term → (c.state a).1.role = .follower ∨
+      (isLeader (c.state a).1 = true ∧ p.log <+: (c.state a).1.log))
+  chain : ∀ a, ∀ p ∈ seen c a, ∀ q ∈ seen c a, isLeader p = true → isLeader q = true →
+    p.term = q.term → p.log <+: q.log ∨ q.log <+: p.log
+  sourced : ∀ a, ∀ p ∈ seen c a, Sourced c p.log
+  appends : ∀ src dst term leader prev prevTerm entries commit,
+    (⟨src, dst, .append term leader prev prevTerm entries commit⟩ : Envelope (sig N C R)) ∈ c.net →
+      ∃ l, Led c term l ∧ prev ≤ l.length ∧ prevTerm = termAt l prev ∧ entries = l.drop prev
+
+section Grow
+
+variable {c : SysState (recording N config machine)} {i : N} {s' : Node N C M}
+  {effs : List (Effect (sig N C R) i)}
+
+theorem Led.grow {term : Nat} {log : List (Entry N C)} (h : Led c term log) :
+    Led (c.grow i ((s', seen c i), effs)) term log :=
+  h.elim fun a ⟨p, hp, h⟩ => ⟨a, p, mem_seen_grow.mpr (.inl hp), h⟩
+
+theorem Sourced.grow {log : List (Entry N C)} (h : Sourced c log) :
+    Sourced (c.grow i ((s', seen c i), effs)) log :=
+  fun k hk hlen => (h k hk hlen).elim fun l hl => ⟨l, hl.1.grow, hl.2⟩
+
+end Grow
+
+namespace Logs
+
+variable {c : SysState (recording N config machine)}
+
+/-- The logs of the leader of a term extend one another. -/
+theorem led_chain (hv : Votes c) (hc : Logs c) {term : Nat} {l₁ l₂ : List (Entry N C)}
+    (h₁ : Led c term l₁) (h₂ : Led c term l₂) : l₁ <+: l₂ ∨ l₂ <+: l₁ := by
+  obtain ⟨a, p, hp, hpleader, hpterm, rfl⟩ := h₁
+  obtain ⟨b, q, hq, hqleader, hqterm, rfl⟩ := h₂
+  obtain rfl := hv.leader_unique hp hq hpleader hqleader (hpterm.trans hqterm.symm)
+  exact hc.chain a p hp q hq hpleader hqleader (hpterm.trans hqterm.symm)
+
+theorem matching (hv : Votes c) (hc : Logs c) {a b : List (Entry N C)} (ha : Sourced c a)
+    (hb : Sourced c b) : Matching a b := by
+  intro k hka hkb hterm
+  rcases Nat.eq_zero_or_pos k with rfl | hk
+  · simp
+  · obtain ⟨la, hla, htakeA⟩ := ha k hk hka
+    obtain ⟨lb, hlb, htakeB⟩ := hb k hk hkb
+    have hlenA : k ≤ la.length := by
+      have := congrArg List.length htakeA
+      simp only [List.length_take] at this
+      omega
+    have hlenB : k ≤ lb.length := by
+      have := congrArg List.length htakeB
+      simp only [List.length_take] at this
+      omega
+    rw [← htakeA, ← htakeB]
+    rcases hc.led_chain hv (hterm ▸ hla) hlb with ⟨rest, rfl⟩ | ⟨rest, rfl⟩
+    · exact (List.take_append_of_le_length hlenA).symm
+    · exact List.take_append_of_le_length hlenB
+
+theorem blank : Logs (SysState.blank (recording N config machine)) := by
+  constructor <;>
+    simp [SysState.blank, recording, System.withGhost, node, seen, isLeader, Sourced]
+  exact fun _ k hk hzero => absurd hzero (Nat.ne_of_gt hk)
+
+theorem below {c' : SysState (recording N config machine)} (hc : Logs c) (hbelow : c'.Below c) :
+    Logs c' := by
+  obtain ⟨hstate, hnet, _, _⟩ := hbelow
+  refine ⟨?_, ?_, ?_, ?_⟩ <;> simp only [Sourced, Led, seen, hstate]
+  · exact hc.grows
+  · exact hc.chain
+  · exact hc.sourced
+  · exact fun src dst term leader prev prevTerm entries commit h =>
+      hc.appends src dst term leader prev prevTerm entries commit (hnet _ h)
+
+theorem input (hc : Logs c) (x : Request N C) :
+    Logs { c with net := c.net ++ [⟨none, x.via, .propose x.req x.cmd⟩] } := by
+  refine ⟨hc.grows, hc.chain, hc.sourced,
+    fun src dst term leader prev prevTerm entries commit h => ?_⟩
+  rcases List.mem_append.mp h with h | h
+  · exact hc.appends src dst term leader prev prevTerm entries commit h
+  · simp at h
+
+variable {i : N} {msg : Option (Msg N C)} {s' : Node N C M} {effs : List (Effect (sig N C R) i)}
+
+/-- The log of a node that has moved is one already accounted for, or a leader's with one more
+entry of its term. -/
+theorem sourced_moved (hv : Votes c) (hc : Logs c)
+    (hmoves : Moves Enum.all i (c.state i).1 msg s' effs)
+    (happend : ∀ term leader prev prevTerm entries commit,
+      msg = some (.append term leader prev prevTerm entries commit) →
+        ∃ l, Led c term l ∧ prev ≤ l.length ∧ prevTerm = termAt l prev ∧ entries = l.drop prev) :
+    Sourced (c.grow i ((s', seen c i), effs)) s'.log := by
+  have hown : Sourced c (c.state i).1.log := hc.sourced i _ List.mem_cons_self
+  rcases hmoves.log with h | ⟨hleader, entry, hentry, h⟩ |
+    ⟨_, leader, prev, entries, commit, hmsg, hprev, h⟩
+  · exact h ▸ hown.grow
+  · intro k hk hlen
+    rw [h, List.length_append, List.length_singleton] at hlen
+    by_cases hold : k ≤ (c.state i).1.log.length
+    · rw [h, termAt_append_left _ _ hold, List.take_append_of_le_length hold]
+      exact hown.grow k hk hold
+    · obtain rfl : k = (c.state i).1.log.length + 1 := by omega
+      refine ⟨s'.log, ⟨i, s', mem_seen_grow.mpr (.inr ⟨rfl, rfl⟩), hleader, ?_, rfl⟩, rfl⟩
+      rw [h, termAt_append_length, hentry]
+  · obtain ⟨l, hled, hlen, hterm, rfl⟩ := happend _ leader prev _ _ commit hmsg
+    have htheirs : Sourced c l := by
+      obtain ⟨a, p, hp, _, _, rfl⟩ := hled
+      exact hc.sourced a p hp
+    rcases take_append_merge (hc.matching hv hown htheirs) hprev hlen hterm with hlog | hlog
+    · rw [h, hlog]
+      exact hown.grow
+    · rw [h, hlog]
+      exact htheirs.grow
+
+/-- Where a node that has moved stands to each state in which it led. -/
+theorem grows_moved (hc : Logs c) (hmoves : Moves Enum.all i (c.state i).1 msg s' effs)
+    {p : Node N C M} (hp : p ∈ seen c i) (hleader : isLeader p = true) :
+    p.term ≤ s'.term ∧ (p.term = s'.term →
+      s'.role = .follower ∨ (isLeader s' = true ∧ p.log <+: s'.log)) := by
+  obtain ⟨hle, hnow⟩ := hc.grows i p hp hleader
+  have hterm := hmoves.term_le
+  refine ⟨by omega, fun heq => ?_⟩
+  rcases hnow (by omega) with hfollower | ⟨hleader₀, hprefix⟩
+  · exact .inl (hmoves.follower_stays (by omega) hfollower)
+  · exact (hmoves.leader_grows (by omega) hleader₀).imp_right fun h => ⟨h.1, hprefix.trans h.2⟩
+
+theorem chain_moved (hc : Logs c) (hmoves : Moves Enum.all i (c.state i).1 msg s' effs)
+    {p : Node N C M} (hp : p ∈ seen c i) (hleader : isLeader p = true)
+    (hleader' : isLeader s' = true) (hterm : p.term = s'.term) : p.log <+: s'.log := by
+  rcases (hc.grows_moved hmoves hp hleader).2 hterm with h | h
+  · simp [isLeader, h] at hleader'
+  · exact h.2
+
+theorem grow (hv : Votes c) (hc : Logs c) (hmoves : Moves Enum.all i (c.state i).1 msg s' effs)
+    (happend : ∀ term leader prev prevTerm entries commit,
+      msg = some (.append term leader prev prevTerm entries commit) →
+        ∃ l, Led c term l ∧ prev ≤ l.length ∧ prevTerm = termAt l prev ∧ entries = l.drop prev) :
+    Logs (c.grow i ((s', seen c i), effs)) := by
+  refine ⟨fun a p hp hleader => ?_, fun a p hp q hq hpleader hqleader hterm => ?_,
+    fun a p hp => ?_, fun src dst term leader prev prevTerm entries commit hmem => ?_⟩
+  · by_cases ha : a = i
+    · subst ha
+      rw [SysState.grow_state_self]
+      rcases mem_seen_grow.mp hp with hp | ⟨_, rfl⟩
+      · exact hc.grows_moved hmoves hp hleader
+      · exact ⟨Nat.le_refl _, fun _ => .inr ⟨hleader, List.prefix_refl _⟩⟩
+    · rw [SysState.grow_state_of_ne _ _ ha]
+      exact hc.grows a p ((mem_seen_grow.mp hp).resolve_right (ha ·.1)) hleader
+  · rcases mem_seen_grow.mp hp with hp' | ⟨rfl, rfl⟩
+    · rcases mem_seen_grow.mp hq with hq' | ⟨rfl, rfl⟩
+      · exact hc.chain a p hp' q hq' hpleader hqleader hterm
+      · exact .inl (hc.chain_moved hmoves hp' hpleader hqleader hterm)
+    · rcases mem_seen_grow.mp hq with hq' | ⟨_, rfl⟩
+      · exact .inr (hc.chain_moved hmoves hq' hqleader hpleader hterm.symm)
+      · exact .inl (List.prefix_refl _)
+  · rcases mem_seen_grow.mp hp with hp | ⟨rfl, rfl⟩
+    · exact (hc.sourced a p hp).grow
+    · exact hc.sourced_moved hv hmoves happend
+  · rcases SysState.mem_grow_net.mp hmem with hmem | ⟨_, hnew⟩
+    · obtain ⟨l, hled, h⟩ := hc.appends src dst term leader prev prevTerm entries commit hmem
+      exact ⟨l, hled.grow, h⟩
+    · obtain ⟨hleader, rfl, h⟩ := hmoves.sent _ hnew
+      exact ⟨s'.log, ⟨i, s', mem_seen_grow.mpr (.inr ⟨rfl, rfl⟩), hleader, rfl, rfl⟩, h⟩
+
+end Logs
+
+theorem logs_inductive (env : EnvModel (sig N C R)) :
+    (recording N config machine).Inductive env fun c => Votes c ∧ Logs c := by
+  refine .of_monotone env ⟨.blank, .blank⟩
+    (fun _ _ hc hbelow => ⟨hc.1.below hbelow, hc.2.below hbelow⟩)
+    (fun _ x hc => ⟨hc.1.input x, hc.2.input x⟩) ?_ ?_
+  · intro c i msg hc hpending
+    refine ⟨hc.1.step i msg hpending,
+      hc.2.grow hc.1 (step_moves config Enum.all machine i _ msg) ?_⟩
+    intro term leader prev prevTerm entries commit hmsg
+    obtain rfl := Option.some.inj hmsg
+    rcases hpending with ⟨src, hnet⟩ | htimer
+    · exact hc.2.appends src i term leader prev prevTerm entries commit hnet
+    · exact nomatch hc.1.timers i _ htimer
+  · exact fun c i hc =>
+      ⟨hc.1.recover i, hc.2.grow hc.1 (recover_moves config Enum.all machine i _) nofun⟩
+
+theorem log_matching (config : Config) (machine : Machine C R M) (env : EnvModel (sig N C R)) :
+    (cluster N config machine).Invariant env fun c =>
+      ∀ a b, Matching (c.state a).log (c.state b).log := by
+  refine .of_ghost (past config machine) fun c hc a b => ?_
+  obtain ⟨hv, hl⟩ := (logs_inductive env).invariant c hc
+  exact hl.matching hv (hl.sourced a _ List.mem_cons_self) (hl.sourced b _ List.mem_cons_self)
+
+theorem logMatching_invariant (config : Config) (machine : Machine C R M)
+    (env : EnvModel (sig N C R)) :
+    (cluster N config machine).Invariant env fun c => logMatching c = true := by
+  intro c hc
+  have hmatching := log_matching config machine env c hc
+  simp only [logMatching, pairs, List.all_eq_true, List.mem_range, Bool.or_eq_true, bne_iff_ne,
+    beq_iff_eq]
+  intro a _ b _ k hk
+  by_cases hterm : termAt (c.state a).log (k + 1) = termAt (c.state b).log (k + 1)
+  · exact .inr (hmatching a b (k + 1) (by omega) (by omega) hterm)
+  · exact .inl hterm
+
+end RaftKV
