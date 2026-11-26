@@ -153,21 +153,27 @@ The same state, with its per-actor functions rebuilt as tables. A long run other
 chain of function updates as deep as the run is long.
 -/
 def compact [Enum σ.Id] (c : SysState sys) : SysState sys :=
-  { c with state := Enum.tabulate c.state, up := Enum.tabulate c.up,
-           timers := Enum.tabulate c.timers }
+  let state := Enum.Table.of c.state
+  let up := Enum.Table.of c.up
+  let timers := Enum.Table.of c.timers
+  { c with state := state.get, up := up.get, timers := timers.get }
 
 @[simp] theorem compact_eq [Enum σ.Id] (c : SysState sys) : c.compact = c := by
   simp [compact]
 
 variable [σ.Inspect] [sys.Inspect]
 
-/-- Checks the link of every message on either side, so a link that carries messages on only
-one side is not missed. -/
-def netEquiv (env : EnvModel σ) (a b : List (Envelope σ)) : Bool :=
-  let sameOnLinkOf := fun (e : Envelope σ) =>
-    if (env.link e.src e.dst).ordered then a.filter e.sameLink == b.filter e.sameLink
-    else (a.filter e.sameLink).isPerm (b.filter e.sameLink)
-  a.all sameOnLinkOf && b.all sameOnLinkOf
+/--
+Whether two lists of messages in flight are the same traffic. Each message of `a` is matched
+with one of `b` and both are taken out: on an ordered link it must be the oldest message of its
+link in `b`, on an unordered one any occurrence does. One pass over `a`, and lists in the same
+order cost one comparison per message.
+-/
+def netEquiv (env : EnvModel σ) : List (Envelope σ) → List (Envelope σ) → Bool
+  | [], b => b.isEmpty
+  | e :: a, b =>
+    (if (env.link e.src e.dst).ordered then b.find? e.sameLink == some e else b.contains e)
+      && netEquiv env a (b.erase e)
 
 /-- Message order only counts where the link model makes it observable. -/
 def equiv (env : EnvModel σ) (a b : SysState sys) : Bool :=

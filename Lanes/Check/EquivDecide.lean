@@ -25,49 +25,84 @@ theorem sameLink_eq_onLink {e : Envelope σ} {src : Option σ.Id} {dst : σ.Id}
   simp only [Envelope.sameLink, onLink, h.1, h.2]
   congr 1 <;> exact decide_eq_decide.mpr eq_comm
 
+theorem NetEquiv.nil_iff {env : EnvModel σ} {b : List (Envelope σ)} :
+    NetEquiv env [] b ↔ b = [] := by
+  refine ⟨fun h => ?_, fun h => h ▸ .refl env []⟩
+  cases b with
+  | nil => rfl
+  | cons x b => simpa [onLink] using h.perm x.src x.dst
+
+theorem NetEquiv.cons {env : EnvModel σ} {a b : List (Envelope σ)} (h : NetEquiv env a b)
+    (e : Envelope σ) : NetEquiv env (e :: a) (e :: b) := by
+  refine ⟨fun src dst => ?_, fun src dst ho => ?_⟩
+  · by_cases hon : onLink src dst e = true
+    · simpa [hon] using h.perm src dst
+    · simpa [hon] using h.perm src dst
+  · by_cases hon : onLink src dst e = true
+    · simpa [hon] using h.ordered src dst ho
+    · simpa [hon] using h.ordered src dst ho
+
+/-- Whether `e` may be matched with a message of `b`: `SysState.netEquiv` takes it out next. -/
+def Matches (env : EnvModel σ) (e : Envelope σ) (b : List (Envelope σ)) : Prop :=
+  (if (env.link e.src e.dst).ordered then b.find? e.sameLink == some e else b.contains e) = true
+
+theorem Matches.mem {env : EnvModel σ} {e : Envelope σ} {b : List (Envelope σ)}
+    (h : Matches env e b) : e ∈ b := by
+  unfold Matches at h
+  split at h
+  · exact List.mem_of_find?_eq_some (by simpa using h)
+  · simpa using h
+
+/-- Putting a matched message back in front gives the same traffic. -/
+theorem Matches.netEquiv {env : EnvModel σ} {e : Envelope σ} {b : List (Envelope σ)}
+    (h : Matches env e b) : NetEquiv env (e :: b.erase e) b := by
+  have hmem := h.mem
+  have hfilter : ∀ src dst, onLink src dst e = false →
+      (e :: b.erase e).filter (onLink src dst) = b.filter (onLink src dst) := by
+    intro src dst hon
+    simp [hon, filter_erase_of_neg _ _ hon]
+  refine ⟨fun src dst => ?_, fun src dst ho => ?_⟩
+  · by_cases hon : onLink src dst e = true
+    · simp only [List.filter_cons, hon, ↓reduceIte, filter_erase_of_pos _ _ hon]
+      exact (List.perm_cons_erase (List.mem_filter.mpr ⟨hmem, hon⟩)).symm
+    · rw [hfilter src dst (by simpa using hon)]
+  · by_cases hon : onLink src dst e = true
+    · have hlink := sameLink_eq_onLink hon
+      simp only [onLink, Bool.and_eq_true, decide_eq_true_eq] at hon
+      unfold Matches at h
+      rw [hon.1, hon.2, ho, hlink] at h
+      have hhead : (b.filter (onLink src dst)).head? = some e := by
+        rw [List.head?_filter]
+        simpa using h
+      have hon' : onLink src dst e = true := by simp [onLink, hon.1, hon.2]
+      simp only [List.filter_cons, hon', ↓reduceIte, filter_erase_of_pos _ _ hon']
+      cases hl : b.filter (onLink src dst) with
+      | nil => simp [hl] at hhead
+      | cons x l =>
+        obtain rfl : x = e := by simpa [hl] using hhead
+        simp
+    · rw [hfilter src dst (by simpa using hon)]
+
+theorem NetEquiv.matches {env : EnvModel σ} {e : Envelope σ} {a b : List (Envelope σ)}
+    (h : NetEquiv env (e :: a) b) : Matches env e b := by
+  have hself : onLink e.src e.dst e = true := by simp [onLink]
+  unfold Matches
+  split
+  · next ho =>
+    have hhead := congrArg List.head? (h.ordered e.src e.dst ho)
+    rw [List.filter_cons_of_pos hself, List.head?_cons, List.head?_filter] at hhead
+    simp [sameLink_eq_onLink hself, ← hhead]
+  · simpa using (h.mem_iff e).mp (by simp)
+
 theorem netEquiv_iff (env : EnvModel σ) (a b : List (Envelope σ)) :
     SysState.netEquiv env a b = true ↔ NetEquiv env a b := by
-  simp only [SysState.netEquiv, Bool.and_eq_true, List.all_eq_true]
-  constructor
-  · rintro ⟨ha, hb⟩
-    have key : ∀ src dst,
-        (if (env.link src dst).ordered then a.filter (onLink src dst) = b.filter (onLink src dst)
-          else (a.filter (onLink src dst)).Perm (b.filter (onLink src dst))) := by
-      intro src dst
-      by_cases hex : ∃ e, (e ∈ a ∨ e ∈ b) ∧ onLink src dst e = true
-      · obtain ⟨e, hmem, hon⟩ := hex
-        have he := hmem.elim (ha e) (hb e)
-        have hlink := sameLink_eq_onLink hon
-        simp only [onLink, Bool.and_eq_true, decide_eq_true_eq] at hon
-        rw [hlink, hon.1, hon.2] at he
-        split at he
-        · next ho => simpa [ho] using he
-        · next ho => simpa [ho, List.isPerm_iff] using he
-      · have hnil : ∀ l : List (Envelope σ), (∀ e ∈ l, e ∈ a ∨ e ∈ b) →
-            l.filter (onLink src dst) = [] := by
-          intro l hl
-          rw [List.filter_eq_nil_iff]
-          intro e he hon
-          exact hex ⟨e, hl e he, hon⟩
-        rw [hnil a (fun _ h => .inl h), hnil b (fun _ h => .inr h)]
-        split <;> simp
-    refine ⟨fun src dst => ?_, fun src dst ho => ?_⟩
-    · have := key src dst
-      split at this
-      · rw [this]
-      · exact this
-    · simpa [ho] using key src dst
-  · intro h
-    have same : ∀ e : Envelope σ,
-        (if (env.link e.src e.dst).ordered then a.filter e.sameLink == b.filter e.sameLink
-          else (a.filter e.sameLink).isPerm (b.filter e.sameLink)) = true := by
-      intro e
-      have hlink : e.sameLink = onLink e.src e.dst := sameLink_eq_onLink (by simp [onLink])
-      rw [hlink]
-      split
-      · next ho => simp [h.ordered e.src e.dst ho]
-      · exact List.isPerm_iff.mpr (h.perm e.src e.dst)
-    exact ⟨fun e _ => same e, fun e _ => same e⟩
+  induction a generalizing b with
+  | nil => simp [SysState.netEquiv, NetEquiv.nil_iff]
+  | cons e a ih =>
+    simp only [SysState.netEquiv, Bool.and_eq_true, ih]
+    refine ⟨fun ⟨hmatch, hrest⟩ => (hrest.cons e).trans (Matches.netEquiv hmatch),
+      fun h => ⟨h.matches, ?_⟩⟩
+    simpa using h.erase e
 
 /-- The checker's comparison is exactly the relation it is safe to merge on. It needs equality
 of actor states to be real equality. -/
