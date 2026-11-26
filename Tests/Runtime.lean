@@ -6,9 +6,10 @@ import Lanes
 import Examples.Bank
 
 /-!
-Conformance tests of the concurrent runtime: run a system on real tasks with trace recording
-on, then replay the recorded events through `SysState.run`. The semantics must accept the trace
-and end in the state the runtime is in.
+Tests of the runtime shell: run a system on a real task with recording on, then replay the
+recorded events through `SysState.run`. `Kernel.run1_sound` proves the kernel's events are a run
+of the semantics; these tests check that the shell passes them on and wires timers, inputs and
+outputs correctly.
 -/
 
 namespace Tests.Runtime
@@ -77,14 +78,13 @@ abbrev flaky : System sig where
   accept x := ⟨.worker x.1, .job x.2⟩
   boot := [.collector]
 
-/-- Whether the semantics accepts the recorded trace, and the state it leads to. -/
-def replay {σ : Signature} (sys : System σ) [Hashable σ.Id] (rt : Runtime sys)
-    (config : Runtime.Config σ) : BaseIO (Option (SysState sys)) := do
+def replay {σ : Signature} (sys : System σ) [Hashable σ.Id] (rt : Runtime sys) :
+    BaseIO (Option (SysState sys)) := do
   let events ← rt.trace
-  return (SysState.init sys config.env).run config.env events.toList
+  return (SysState.init sys Kernel.env).run Kernel.env events.toList
 
 def flakyTest : Async (List (String × Bool)) := do
-  let config : Runtime.Config sig := { record := true, mailboxCapacity := 8 }
+  let config : Runtime.Config := { record := true, inboxCapacity := 8 }
   let outputs ← IO.mkRef (#[] : Array Nat)
   let rt ← Runtime.start flaky config fun out => outputs.modify (·.push out)
   -- Three clients send 100 jobs each, concurrently.
@@ -94,7 +94,7 @@ def flakyTest : Async (List (String × Bool)) := do
   discard <| Async.concurrentlyAll clients
   rt.idle (timers := true)
   let events ← rt.trace
-  let some c ← replay flaky rt config | return [("flaky: the semantics accepts the trace", false)]
+  let some c ← replay flaky rt | return [("flaky: the semantics accepts the trace", false)]
   let collectorState ← rt.state .collector
   let workerStates ← (List.finRange 3).mapM fun k => rt.state (.worker k)
   let stops := events.toList.countP fun
@@ -114,7 +114,7 @@ def flakyTest : Async (List (String × Bool)) := do
 
 open Examples.Bank in
 def bankTest : Async (List (String × Bool)) := do
-  let config : Runtime.Config (Examples.Bank.sig (Fin 3)) := { record := true }
+  let config : Runtime.Config := { record := true }
   let responses ← IO.mkRef 0
   let rt ← Runtime.start (bank (Fin 3) 100) config fun _ => responses.modify (· + 1)
   let clients := (List.finRange 3).toArray.map fun (k : Fin 3) => (do
@@ -124,7 +124,7 @@ def bankTest : Async (List (String × Bool)) := do
   rt.idle
   let balances ← (List.finRange 3).mapM fun a => rt.state a
   let total := (balances.map (·.balance)).sum
-  let replayed ← replay (bank (Fin 3) 100) rt config
+  let replayed ← replay (bank (Fin 3) 100) rt
   return [
     ("bank on the runtime: money conserved once idle", total == 300),
     ("bank on the runtime: every request answered", (← responses.get) == 600),
@@ -133,7 +133,7 @@ def bankTest : Async (List (String × Bool)) := do
       | some c => (List.finRange 3).zip balances |>.all fun (a, s) => c.state a == s
       | none => false) ]
 
-/-! Full mailboxes: an actor that floods itself and its peer through mailboxes of capacity 2. -/
+/-! A small inbox: actors that flood themselves and each other, behind an inbox of capacity 2. -/
 
 inductive FloodMsg where
   | burst (n : Nat)
@@ -165,17 +165,17 @@ abbrev flood : System floodSig where
   accept x := ⟨x.1, .burst x.2⟩
 
 def floodTest : Async (List (String × Bool)) := do
-  let config : Runtime.Config floodSig := { record := true, mailboxCapacity := 2 }
+  let config : Runtime.Config := { record := true, inboxCapacity := 2 }
   let rt ← Runtime.start flood config
   -- Both actors flood themselves and each other at once: a cycle of full mailboxes.
   discard <| Async.concurrentlyAll #[rt.input (0, 200), rt.input (1, 200)]
   rt.idle
   let states ← (List.finRange 2).mapM fun k => rt.state k
-  let replayed ← replay flood rt config
+  let replayed ← replay flood rt
   return [
-    ("full mailboxes: self-sends and a cycle of sends all arrive",
+    ("flood: self-sends and a cycle of sends all arrive",
       states == [(200, 200), (200, 200)]),
-    ("full mailboxes: the semantics accepts the trace, with sends kept in order",
+    ("flood: the semantics accepts the trace, with sends kept in order",
       match replayed with
       | some c => (List.finRange 2).zip states |>.all fun (k, s) => c.state k == s
       | none => false) ]
@@ -185,7 +185,7 @@ a given call finds the mailbox full depends on timing, so the test checks what m
 way. -/
 
 def busyTest : Async (List (String × Bool)) := do
-  let config : Runtime.Config floodSig := { record := true, mailboxCapacity := 1 }
+  let config : Runtime.Config := { record := true, inboxCapacity := 1 }
   let rt ← Runtime.start flood config
   let accepted := (← (List.range 200).mapM fun _ => rt.tryInput (0, 1)).countP (·)
   rt.idle
@@ -196,43 +196,13 @@ def busyTest : Async (List (String × Bool)) := do
     ("tryInput: every accepted input is handled and no refused one is",
       (← rt.state 0) == (accepted, accepted)),
     ("tryInput: the trace holds exactly the accepted inputs and still replays",
-      inputs == accepted && (← replay flood rt config).isSome) ]
-
-/-! Restart budget: an actor that stops in `recover` is restarted a bounded number of times. -/
-
-abbrev brokenSig : Signature where
-  Id := Unit
-  Msg _ := Unit
-  In := Unit
-
-abbrev broken : System brokenSig where
-  State _ := Unit
-  actor _ := { init := (), step := fun s _ => (s, []), recover := fun s => (s, [.stop]) }
-  accept _ := ⟨(), ()⟩
-
-def budgetTest : Async (List (String × Bool)) := do
-  let config : Runtime.Config brokenSig :=
-    { record := true, restart := fun _ => true, maxRestarts := 3, restartWindow_ms := 60000 }
-  let rt ← Runtime.start broken config
-  rt.input ()
-  rt.idle
-  Async.sleep 20
-  let events ← rt.trace
-  let starts := events.toList.countP fun
-    | .start _ => true
-    | _ => false
-  return [
-    ("restart budget: a start that always stops is retried 3 times, then left down",
-      starts == 4),
-    ("restart budget: the semantics accepts the trace",
-      ((SysState.init broken config.env).run config.env events.toList).isSome) ]
+      inputs == accepted && (← replay flood rt).isSome) ]
 
 def tests : IO (List (String × Bool)) := do
   let a ← flakyTest.block
   let b ← bankTest.block
   let c ← floodTest.block
   let d ← busyTest.block
-  let e ← budgetTest.block
-  return a ++ b ++ c ++ d ++ e
+  return a ++ b ++ c ++ d
 
 end Tests.Runtime

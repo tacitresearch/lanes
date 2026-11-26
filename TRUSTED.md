@@ -13,25 +13,29 @@ toolchain, the operating system and the hardware.
 
 | What | Where | Why it is trusted | How it is checked |
 | --- | --- | --- | --- |
-| The concurrent runtime | `Lanes/Actors/Runtime.lean` | It performs effects on real tasks, timers and channels; its conformance to `SysState.step` is not proved. | With `Config.record` on it records its events; `Tests/Runtime.lean` replays them through `SysState.run` and compares final states, under concurrent clients, self-stopping actors and timers. |
-| `partial def deliver`, `drain`, `perform`, `live` | `Lanes/Actors/Runtime.lean` | Actor tasks run forever and start each other, so they cannot be shown to terminate. | Same tests, which also cover cycles of full mailboxes, refused inputs and the restart budget. |
+| The runtime shell | `Lanes/Actors/Runtime.lean`, 156 lines | It takes commands from an inbox, calls the kernel and carries out the kernel's commands. That it passes results on unchanged is not proved. | `Tests/Runtime.lean` replays recorded events through `SysState.run` and compares final states. |
+| The HTTP adapter | `Lanes/Env/Http.lean` | It reads and writes sockets and keeps the table of waiting requests in IO. | Manual `curl` runs only. It becomes an actor in `docs/PLAN.md` step 4. |
+
+The runtime's decisions (routing, start, stop, timers, which mail a stopped actor loses) are
+not in this table. They are in `Lanes/Actors/Kernel.lean` and proved in
+`Lanes/Actors/KernelSound.lean`.
 
 ## Assumptions the runtime makes
 
-- **In-memory durability.** `Actor.recover` receives the actor's last state. The runtime keeps
-  that state in memory, so it survives an actor stopping itself but not the process dying. Until
-  the persistence adapter exists, an actor that claims durable state is only durable within one
-  process lifetime.
-- **Unbounded outbox.** A send to a full mailbox waits in the sender's outbox, which has no bound
-  of its own. The system as a whole is bounded only if what enters it is: use `Runtime.tryInput`
-  or the HTTP adapter, which refuse inputs to a full mailbox.
-- **Environment model.** The runtime stays within `Runtime.Config.env`: reliable ordered links
-  between actors, unordered inputs from outside, no crashes other than an actor stopping itself.
-  Properties proved under a stronger model than that do not apply to a running system.
+- **The inbox.** The shell assumes its channel hands over each command exactly once.
+- **Timers.** A timer wakes no earlier than asked.
+- **In-memory durability.** `Actor.recover` receives the actor's last state. The kernel keeps
+  that state in memory, so it survives an actor stopping itself but not the process dying.
+- **Environment model.** One shard stays within `Kernel.env`: reliable ordered links, no
+  crashes other than an actor stopping itself. Properties proved under a stronger model than
+  that do not apply to a running system.
+- **Unbounded queue.** The kernel's message queue has no bound of its own. The shell admits one
+  input per batch of kernel steps while the shard is busy, and the inbox is bounded, so the
+  outside is pushed back; messages actors send each other are not limited.
 
 ## Not trusted
 
-Actor `step` functions, `SysState.step`, the model checker's exploration
-(`SysState.step_of_mem_successors`), the refinement theory and every theorem in `Lanes/` and
+Actor `step` functions, `SysState.step`, the kernel (`Kernel.run1_sound`), the model checker's
+exploration of a state (`SysState.mem_successors_iff`), the refinement theory and every theorem in `Lanes/` and
 `Examples/`: these are checked by Lean. No `sorry`, `axiom`, `unsafe`, `@[implemented_by]` or
 `@[extern]` appears in them.

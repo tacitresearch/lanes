@@ -13,7 +13,7 @@ Last updated: 2026-11-26.
 | Semantics | One executable step function; per-event lemmas; per-actor invariants lift to systems | `Lanes/Actors/{World,Step,Lift}.lean` |
 | Deterministic scheduler | Seeded runs, replayable event lists, drivers for the outside world | `Lanes/Actors/Scheduler.lean` |
 | Model checker | Breadth-first, exact states, `always`/`sometimes`, constraints, deadlock, coverage, shortest traces; refinement to a `Service` without a mapping | `Lanes/Check/` |
-| Concurrent runtime | Task and bounded mailbox per actor, timers, self-stop, restart policy; recorded traces replay through the semantics | `Lanes/Actors/Runtime.lean` |
+| Runtime | A kernel of pure functions proved to follow the semantics (`Kernel.run1_sound`), inside a 156-line shell: one task per shard, bounded inbox, timers | `Lanes/Actors/{Kernel,KernelSound,Runtime}.lean` |
 | Proof layer | `Spec`, `Refines` (weak simulation with a label map), `of_map`, `trans`, trace inclusion; system semantics as a CSLib `LTS`; `Service.spec`; sum lemmas | `Lanes/Semantics/` |
 | Behaviours | `Server` (request and reply), with `Server.implements` proved | `Lanes/Behaviours/Server.lean`, `Lanes/Semantics/Service.lean` |
 | Web | HTTP/1.1 adapter, requests and responses as data, `Html` with proved escaping, template macro | `Lanes/Env/Http.lean`, `Lanes/Http/`, `Lanes/Html/` |
@@ -31,7 +31,8 @@ Last updated: 2026-11-26.
 ## Against the DESIGN exit criteria
 
 - **Phase 1** (runtime and actor API): met, except that the gateway app does not exist and the
-  election invariant is checked, not proved.
+  election invariant is checked, not proved. The runtime's logic is proved, which Phase 1 did
+  not ask for.
 - **Phase 2** (semantics, specs, refinement): semantics, lifting theorem and refinement theory
   are in. Trace checking runs in the test suite. Not done: the scheduler simulation proof, the
   Raft KV store.
@@ -59,11 +60,11 @@ Last updated: 2026-11-26.
 - Templates take text children as string literals (`<p>"text"</p>`), not bare text.
 - No TLS, HTTP client, WebSockets or database adapter. `Std.Http` has no client.
 - The runtime's in-memory "durable" state does not survive a process crash (see `TRUSTED.md`).
-- The runtime never releases an actor: every identity ever addressed keeps its cell, task and
-  mailbox. A session-per-user system grows without bound. Releasing an actor means its state must
-  live somewhere else, so this waits for the persistence adapter (item 4 above).
-- An actor's outbox (sends waiting for a full mailbox) has no bound of its own. It is bounded
-  only by the back-pressure full mailboxes put on inputs from outside.
+- The runtime never releases an actor: every identity ever addressed keeps its cell in the
+  kernel. A session-per-user system grows without bound. Releasing an actor means its state must
+  live somewhere else, so this waits for the persistence adapter.
+- One shard only. Several shards, and with them parallelism, are not built yet.
+- The kernel's message queue has no bound of its own (see `TRUSTED.md`).
 - Templates cannot contain inline `<script>` or `<style>` text, and URL attributes accept only
   relative, `http`, `https`, `mailto` and `tel` URLs.
 - The CI workflow has not run yet: it triggers on pull requests and on `main`.

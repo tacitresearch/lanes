@@ -117,7 +117,7 @@ Start `sys` and serve it over HTTP. Returns once the server is listening; reques
 the background until `Server.stop`.
 -/
 def serve (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : ServerConfig := {})
-    (runtimeConfig : Runtime.Config σ := {}) : Async (Server sys) := do
+    (runtimeConfig : Runtime.Config := {}) : Async (Server sys) := do
   let some addr := Std.Net.IPv4Addr.ofString config.host
     | throw (IO.userError s!"lanes: {config.host} is not an IPv4 address")
   let waiting : Mutex (Std.HashMap ReqId (Std.Channel Response)) ← Mutex.new {}

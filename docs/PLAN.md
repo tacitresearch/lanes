@@ -153,6 +153,11 @@ declaration and every field, and most of them restate the name. That rule goes.
 
 Each step is its own commit on the branch.
 
+Progress, 2026-11-27: step 1 is done except the comment pass, which is in review. From step 2,
+checker completeness is proved; search correctness and the monitor are open. Step 3 is done for
+one shard: the kernel is proved and the old runtime is deleted. Several shards and the seeded
+simulation harness are open.
+
 1. Comment rule in `AGENTS.md`; strip comments; split the test binaries.
 2. Proofs of the checker and the monitor (section 2).
 3. Shard kernel, its refinement theorem, simulation harness; port the conformance tests; delete

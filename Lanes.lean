@@ -5,6 +5,8 @@ public import Lanes.Actors.System
 public import Lanes.Actors.World
 public import Lanes.Actors.Lift
 public import Lanes.Actors.Inspect
+public import Lanes.Actors.Kernel
+public import Lanes.Actors.KernelSound
 public import Lanes.Actors.Scheduler
 public import Lanes.Actors.Service
 public import Lanes.Actors.Step
@@ -15,6 +17,7 @@ public import Lanes.Check.Monitor
 public import Lanes.Check.Search
 public import Lanes.Check.System
 public import Lanes.Data.Enum
+public import Lanes.Data.Fifo
 public import Lanes.Data.Json
 public import Lanes.Env.Http
 public import Lanes.Html.Basic
