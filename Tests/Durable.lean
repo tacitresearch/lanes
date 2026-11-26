@@ -44,8 +44,76 @@ def opened (system : String) (bytes : ByteArray) :=
 def flip (bytes : ByteArray) (bit : Nat) : ByteArray :=
   bytes.set! (bit / 8) (bytes[bit / 8]! ^^^ (1 <<< (bit % 8)).toUInt8)
 
+/-! The model of the two files, `Journal.Disk`, on the compiled code: the files are left in
+every state the death of the process can leave them in, and loaded. -/
+
+open Journal (Disk Write) in
+/-- Whether `disk` loads as the kernel and the outputs that replaying `history` gives. -/
+def loads (disk : Disk) (history : List (Journal.Entry (sig (Fin 3)))) : Bool :=
+  let codecs := actors Codec.fin 100
+  let expected := Journal.recover Bank3 history
+  match disk.load Bank3 (Request.codec Codec.fin) (some codecs) "bank" with
+  | .ok (kernel, outputs) =>
+    Journal.saved codecs "" 0 kernel.image == Journal.saved codecs "" 0 expected.1.image
+      && outputs == expected.2
+  | .error _ => false
+
+open Journal (Disk Write) in
+def finish (disk : Disk) (writes : List Write) : Disk :=
+  disk.crash writes writes.length 0
+
+open Journal (Disk Write) in
+/-- Dying anywhere in `writes`, with an append cut at any of its first `bytes` bytes, leaves a
+disk that loads as `history done part`, and still does once it is mended. -/
+def survives (disk : Disk) (writes : List Write) (bytes : Nat)
+    (history : Nat → Nat → List (Journal.Entry (sig (Fin 3)))) : Bool :=
+  (List.range (writes.length + 2)).all fun done => (List.range (bytes + 2)).all fun part =>
+    let left := disk.crash writes done part
+    loads left (history done part)
+      && match left.read (sys := Bank3) (Request.codec Codec.fin) none "bank" with
+        | .ok found =>
+          loads (finish left (left.mend "bank" found.size)) (history done part)
+        | .error _ => false
+
+open Journal (Disk Write) in
+/-- A save of the kernel that `history` gives, on a disk that holds it: `read` finds the index
+of the mark and nothing to cut, and dying anywhere in the save loses nothing. -/
+def saveSurvives (disk : Disk) (history : List (Journal.Entry (sig (Fin 3)))) : Bool :=
+  let input := Request.codec Codec.fin
+  let codecs := actors Codec.fin 100
+  let index := history.length
+  let mark := Journal.encode input ([.snapshot index] : List (Journal.Entry (sig (Fin 3))))
+  (match disk.read (sys := Bank3) input (some codecs) "bank" with
+    | .ok found => found.index == index && found.size == disk.journal.size
+    | .error _ => false)
+  && survives disk (Journal.saveWrites input codecs "bank" index
+      (Journal.recover Bank3 history).1.image) mark.size fun done part =>
+    if done == 0 && part < mark.size then history else history ++ [.snapshot index]
+
+def diskTests : List (String × Bool) :=
+  let input := Request.codec Codec.fin
+  let fresh := finish {} (Journal.Disk.mend "bank" {} 0)
+  let turn := Journal.appendWrites input entries
+  let disk := finish fresh turn
+  let save := Journal.saveWrites input (actors Codec.fin 100) "bank" entries.length
+    (Journal.recover Bank3 entries).1.image
+  let later : List (Journal.Entry (sig (Fin 3))) :=
+    [.advance 12, .input (.transfer ⟨3, 2, 0, 4⟩), .batch 64, .handed]
+  [ ("disk: no journal, and a new one, are the journal of nothing",
+      survives {} (Journal.Disk.mend "bank" {} 0) 0 fun _ _ => []),
+    ("disk: dying at any byte of a turn's append leaves the entries wholly written",
+      survives fresh turn (Journal.encode input entries).size fun done part =>
+        if done == 0 then entries.take (Frame.whole (written entries) part) else entries),
+    ("disk: dying at any byte of the mark or between the steps of a save loses nothing",
+      saveSurvives disk entries),
+    ("disk: nor does dying in the next save, from each state the first can leave",
+      [0, 1, 2, 3].all fun done =>
+        saveSurvives (finish (disk.crash save done 1000) (Journal.appendWrites input later))
+          (entries ++ [.snapshot entries.length] ++ later)) ]
+
 def fileTests : List (String × Bool) :=
   let file := Journal.file (Request.codec Codec.fin) "bank" entries
+  diskTests ++
   [ ("journal: a file cut at any byte opens and gives a prefix of what was written, and all of "
       ++ "it when nothing is cut",
       (List.range (file.size + 1)).all fun n =>

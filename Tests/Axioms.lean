@@ -136,6 +136,42 @@ by `lake build`, not linked into the test executable.
 /-- info: 'Lanes.Journal.resume_eq_recover' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Journal.resume_eq_recover
 
+/-- info: 'Lanes.Journal.Disk.load_cut' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Disk.load_cut
+
+/-- info: 'Lanes.Journal.Disk.torn_nil' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Disk.torn_nil
+
+/-- info: 'Lanes.Journal.Disk.Torn.load' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Disk.Torn.load
+
+/-- info: 'Lanes.Journal.Disk.Torn.read' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Disk.Torn.read
+
+/-- info: 'Lanes.Journal.Disk.Torn.mend' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Disk.Torn.mend
+
+/-- info: 'Lanes.Journal.Disk.Torn.mend_crash' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Disk.Torn.mend_crash
+
+/-- info: 'Lanes.Journal.Disk.Holds.append' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Disk.Holds.append
+
+/-- info: 'Lanes.Journal.Disk.Holds.append_crash' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Disk.Holds.append_crash
+
+/-- info: 'Lanes.Journal.Disk.Holds.save' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Disk.Holds.save
+
+/-- info: 'Lanes.Journal.Disk.Holds.save_crash' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Disk.Holds.save_crash
+
+/-- info: 'Lanes.Journal.Disk.Holds.load_append_crash' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Disk.Holds.load_append_crash
+
+/-- info: 'Lanes.Journal.Disk.Holds.load_save_crash' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Disk.Holds.load_save_crash
+
 /-- info: 'Lanes.Kernel.abs_image_kernel' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Kernel.abs_image_kernel
 

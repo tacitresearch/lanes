@@ -39,6 +39,9 @@ private def Refusal.explain : Refusal → String
   | .unreadable entry =>
     s!"entry {entry} is intact and cannot be read, so it was written with another codec"
   | .damaged byte => s!"it is damaged at byte {byte}"
+  | .snapshot => "its snapshot cannot be read"
+  | .apart => "it does not continue its snapshot"
+  | .name => "the system's name is too long for a journal"
 
 private def cut (path : System.FilePath) (size : Nat) : IO Unit := do
   let handle ← IO.FS.Handle.mk path .readWrite

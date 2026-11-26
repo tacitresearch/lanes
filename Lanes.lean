@@ -3,6 +3,7 @@ module
 public import Lanes.Actors.Actor
 public import Lanes.Actors.FairScheduler
 public import Lanes.Actors.Cluster
+public import Lanes.Actors.Disk
 public import Lanes.Actors.Ghost
 public import Lanes.Actors.Monotone
 public import Lanes.Actors.Outside
