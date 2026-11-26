@@ -171,6 +171,22 @@ but for running on three machines.
 before more batteries, because Raft's proofs stand on it, and no adapter is added from here
 on without its deciding function and its model.
 
+## Decided after the fifth review (2026-11-26)
+
+`systems/raft-kv` is frozen as a regression suite: its model checks, its proofs and its
+process tests stay in CI, and no Raft feature is added unless the framework needs it. It paid
+for itself as a bug-finder and a forcing function: the gate as a system of its own,
+refinement by a relation, the proof library, lawful codecs for maps, journals begun on purpose,
+the checker's speed, and transport bugs no small example could show. It says little about what
+most applications need. Its two open items that are framework questions in disguise are
+liveness (fairness carried through a join) and exactly-once client requests (a battery).
+
+The next stress test is `systems/ledger`, phase D's exit criterion: users, sessions and
+authentication, forms, pages that update, many kinds of records. Alongside it: the trusted
+code is being cut back by moving what it decides into proved functions (the HTTP reader, the
+runtime's batch, the server's table of waiting requests, the mailbox and the courier), and
+declaration sugar for codecs and instances, the boilerplate Raft showed.
+
 ## Serious applications
 
 `Examples/` holds small pieces, one idea each, that run in seconds. Serious applications live
