@@ -13,25 +13,19 @@ open Lanes
 /-- Identifies a client request, so its response can be matched to it. -/
 abbrev ReqId := Nat
 
-inductive Request where
+/-- `lanes_data` derives the codec that writes requests and responses to the journal, with its
+round-trip law, from the declaration. -/
+lanes_data inductive Request where
   | increment (req : ReqId)
   | read (req : ReqId)
-  deriving DecidableEq, Repr, Hashable
+  deriving DecidableEq, Repr, Hashable, Codable
 
-structure Response where
+lanes_data structure Response where
   req : ReqId
   value : Nat
   /-- Whether the request was applied. An increment at the limit is refused. -/
   applied : Bool
-  deriving DecidableEq, Repr, Hashable
-
-/-- How requests and responses are written to the journal and its snapshots. The round-trip law
-comes with the codecs these are built from. -/
-def Request.codec : Codec Request :=
-  Codec.sum% Request { increment (req := Codec.nat), read (req := Codec.nat) }
-
-def Response.codec : Codec Response :=
-  Codec.struct% Response { req := Codec.nat, value := Codec.nat, applied := Codec.bool }
+  deriving DecidableEq, Repr, Hashable, Codable
 
 /-- Explicit configuration (rule 2.5). -/
 structure Config where

@@ -47,10 +47,10 @@ structure Response (V : Type) where
   res : Res V
   deriving DecidableEq, Repr, Hashable
 
-inductive Id (F : Type) where
+lanes_data inductive Id (F : Type) where
   | front (f : F)
   | store
-  deriving DecidableEq, Repr, Hashable
+  deriving DecidableEq, Repr, Hashable, Enum
 
 inductive FrontMsg (K V F : Type) where
   | request (r : Request K V F)
@@ -69,9 +69,7 @@ abbrev Msg (K V F : Type) : Id F → Type
   | .front _ => FrontMsg K V F
   | .store => StoreMsg K V F
 
-instance : ∀ i, DecidableEq (Msg K V F i)
-  | .front _ => inferInstanceAs (DecidableEq (FrontMsg K V F))
-  | .store => inferInstanceAs (DecidableEq (StoreMsg K V F))
+instance : ∀ i, DecidableEq (Msg K V F i) := by instance_by_cases
 
 abbrev sig (K V F : Type) [DecidableEq K] [DecidableEq V] [DecidableEq F] : Signature where
   Id := Id F

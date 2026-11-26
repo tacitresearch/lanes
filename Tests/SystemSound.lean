@@ -80,9 +80,8 @@ open Tests.Gate Lanes.Http
 
 instance (config : GateConfig) : ∀ i, @LawfulBEq
     ((gated (Server.system echo) bridge config).State i)
-    (System.Inspect.beqState (sys := gated (Server.system echo) bridge config) i)
-  | none => inferInstanceAs (LawfulBEq (List ReqId))
-  | some _ => inferInstanceAs (LawfulBEq Unit)
+    (System.Inspect.beqState (sys := gated (Server.system echo) bridge config) i) := by
+  instance_by_cases
 
 def twoRequests : List (ReqId × Request) := [(1, get []), (2, get [])]
 
@@ -122,9 +121,8 @@ store's state with `Enum.funBEq`, so that is the instance these statements must 
 attribute [local instance high] Enum.funBEq
 
 instance (caching : Bool) : ∀ i, @LawfulBEq ((system K V F caching).State i)
-    (System.Inspect.beqState (sys := system K V F caching) i)
-  | .front _ => inferInstanceAs (LawfulBEq (List (K × Option V)))
-  | .store => inferInstanceAs (LawfulBEq (K → Option V))
+    (System.Inspect.beqState (sys := system K V F caching) i) := by
+  instance_by_cases
 
 theorem kv_props {p : Check.Property (W false)} (hp : p ∈ props false) {a b : W false}
     (h : World.Equiv {} a b) : p.holds a = p.holds b := by

@@ -21,12 +21,10 @@ namespace Examples.Watchdog
 
 open Lanes
 
-inductive Id where
+lanes_data inductive Id where
   | keeper
   | dog
-  deriving DecidableEq, Repr, Hashable
-
-instance : Enum Id := ⟨[.keeper, .dog], fun i => by cases i <;> simp⟩
+  deriving DecidableEq, Repr, Hashable, Enum
 
 inductive KeeperMsg where
   | tick
@@ -42,9 +40,7 @@ abbrev Msg : Id → Type
   | .keeper => KeeperMsg
   | .dog => DogMsg
 
-instance : ∀ i, DecidableEq (Msg i)
-  | .keeper => inferInstanceAs (DecidableEq KeeperMsg)
-  | .dog => inferInstanceAs (DecidableEq DogMsg)
+instance : ∀ i, DecidableEq (Msg i) := by instance_by_cases
 
 /-- The one input tells the keeper to rest, and the one output is a bark. -/
 abbrev sig : Signature where

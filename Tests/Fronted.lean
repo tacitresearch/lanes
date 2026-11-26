@@ -21,10 +21,10 @@ namespace Tests.Fronted
 
 open Lanes Lanes.Http
 
-inductive Ask where
+lanes_data inductive Ask where
   | ask (id : ReqId)
   | note (n : Nat)
-  deriving DecidableEq, Repr, Hashable
+  deriving DecidableEq, Repr, Hashable, Codable
 
 inductive Told where
   | reply (id : ReqId)
@@ -349,14 +349,8 @@ def busyTest : Async (List (String × Bool)) := do
     ("fronted: it is not in flight, and those that were are answered when the shard goes on",
       during == 2 && answers.all (·.startsWith "HTTP/1.1 200") && after == 0) ]
 
-def askCodec : Codec Ask :=
-  (Codec.sum Codec.nat Codec.nat).map
-    (fun | .ask id => .inl id | .note n => .inr n)
-    (fun | .inl id => some (.ask id) | .inr n => some (.note n))
-    (by intro ask; cases ask <;> rfl)
-
 def deskPeers (port : UInt16) : Peers.Config deskSig :=
-  { listen := { port }, home := fun _ => pure none, id := Codec.unit, msg := fun _ => askCodec }
+  { listen := { port }, home := fun _ => pure none, id := Codec.unit, msg := fun _ => Ask.codec }
 
 /-- One process of the desk. Its memos are neither responses nor parcels. And a second process
 that wants the first one's HTTP port does not start. -/

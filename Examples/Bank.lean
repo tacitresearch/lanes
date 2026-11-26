@@ -28,48 +28,35 @@ open Lanes
 /-- Identifies a client request, so a response can be matched to it (rule 1.5). -/
 abbrev ReqId := Nat
 
-structure Transfer (A : Type) where
+lanes_data structure Transfer (A : Type) where
   req : ReqId
   src : A
   dst : A
   amount : Nat
-  deriving DecidableEq, Repr, Hashable
+  deriving DecidableEq, Repr, Hashable, Codable
 
-inductive Request (A : Type) where
+lanes_data inductive Request (A : Type) where
   | transfer (t : Transfer A)
   | balance (req : ReqId) (account : A)
-  deriving DecidableEq, Repr, Hashable
+  deriving DecidableEq, Repr, Hashable, Codable
 
-/-- How a request is written to a journal. The round-trip law is proved by what the macros
-write. -/
-def Transfer.codec {A : Type} (account : Codec A) : Codec (Transfer A) :=
-  Codec.struct% Transfer { req := Codec.nat, src := account, dst := account, amount := Codec.nat }
-
-def Request.codec {A : Type} (account : Codec A) : Codec (Request A) :=
-  Codec.sum% Request { transfer (t := Transfer.codec account),
-    balance (req := Codec.nat) (account := account) }
-
-inductive Outcome where
+lanes_data inductive Outcome where
   /-- The source account was debited and the credit is on its way. -/
   | accepted
   | insufficient
   | balance (amount : Int)
-  deriving DecidableEq, Repr, Hashable
+  deriving DecidableEq, Repr, Hashable, Codable
 
-structure Response where
+lanes_data structure Response where
   req : ReqId
   outcome : Outcome
-  deriving DecidableEq, Repr, Hashable
+  deriving DecidableEq, Repr, Hashable, Codable
 
-def Response.codec : Codec Response :=
-  Codec.struct% Response { req := Codec.nat,
-    outcome := Codec.sum% Outcome { accepted, insufficient, balance (amount := Codec.int) } }
-
-inductive Msg (A : Type) where
+lanes_data inductive Msg (A : Type) where
   | transfer (req : ReqId) (dst : A) (amount : Nat)
   | credit (amount : Nat)
   | query (req : ReqId)
-  deriving DecidableEq, Repr, Hashable
+  deriving DecidableEq, Repr, Hashable, Codable
 
 abbrev sig (A : Type) [DecidableEq A] : Signature where
   Id := A
@@ -77,9 +64,9 @@ abbrev sig (A : Type) [DecidableEq A] : Signature where
   In := Request A
   Out := Response
 
-structure Account where
+lanes_data structure Account where
   balance : Int
-  deriving DecidableEq, Repr, Hashable
+  deriving DecidableEq, Repr, Hashable, Codable
 
 variable {A : Type} [DecidableEq A]
 
@@ -106,9 +93,8 @@ abbrev bank (A : Type) [DecidableEq A] (opening : Nat) : System (sig A) where
 /-- How the bank's actors are written to a snapshot. -/
 def actors (account : Codec A) (opening : Nat) : Kernel.Image.Codecs (bank A opening) where
   id := account
-  state _ := Codec.struct% Account { balance := Codec.int }
-  msg _ := Codec.sum% Msg { transfer (req := Codec.nat) (dst := account) (amount := Codec.nat),
-    credit (amount := Codec.nat), query (req := Codec.nat) }
+  state _ := Account.codec
+  msg _ := Msg.codec account
 
 /-- A balance is never negative. -/
 theorem Account.balance_nonneg (opening : Nat) (self : A) :
