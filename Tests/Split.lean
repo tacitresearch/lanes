@@ -378,6 +378,19 @@ theorem split_balance_nonneg {A : Type} [DecidableEq A] (opening : Nat) (hosts :
   System.Invariant.split_state (Q := fun s : A → Account => 0 ≤ (s a).balance)
     (fun env => balance_nonneg opening env a) hc
 
+/-- The same on any number of shards. -/
+theorem shards_balance_nonneg {A : Type} [DecidableEq A] {n : Nat} (opening : Nat)
+    (hosts : A → Fin n) (env : EnvModel (sig A)) {c : SysState ((bank A opening).shards hosts)}
+    (hc : (bank A opening).ShardsReachable hosts env c) (a : A) :
+    0 ≤ (c.unsharded.state a).balance :=
+  System.Invariant.shards_state (Q := fun s : A → Account => 0 ≤ (s a).balance)
+    (fun env => balance_nonneg opening env a) hc
+
+theorem three_shards_balance_nonneg (env : EnvModel (sig (Fin 3)))
+    {c : SysState (Bank3.shards id)} (hc : Bank3.ShardsReachable id env c) (a : Fin 3) :
+    0 ≤ (c.unsharded.state a).balance :=
+  shards_balance_nonneg 1 id env hc a
+
 end Bank
 
 def tests : List (String × Bool) :=
