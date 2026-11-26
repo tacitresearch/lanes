@@ -25,8 +25,15 @@ lake build           # the library
 lake test            # pure tests and live runtime tests, a few seconds
 lake exe lanesCheck  # larger model checks, random runs and the scale benchmark, about 20 s: run once, never in a loop
 lake exe lanes lint  # LANES_STYLE checks, and that generated files are up to date
-lake exe lanes lint --fix  # rewrite the generated files: line counts, decisions' index, STATUS
+lake exe lanes lint --fix  # rewrite the generated files: line counts, decisions' index, STATUS, INVENTORY
+lake exe lanes inventory --list none  # the definitions of Lanes/ without evidence
 ```
+
+`docs/INVENTORY.md` gives every public definition a status, read from the built modules
+(`docs/decisions/new-the-inventory-is-computed.md`). A theorem makes what it states proved when
+it has an axiom gate. A new definition of `Lanes/` with no theorem, test or row of `TRUSTED.md`
+fails `lanes lint` unless it is on `docs/inventory-none.md` under a heading that says why; when
+one there gets evidence, take it off.
 
 ## Parallel branches
 
@@ -61,7 +68,7 @@ The toolchain is pinned in `lean-toolchain` and follows CSLib's. Dependencies ar
 | `Lanes/Http/`, `Lanes/Html/` | HTTP requests and responses as data; HTML values and template syntax | `Std` only |
 | `Lanes/Env/` | Adapters to the outside world (HTTP server) | `Std` only |
 | `Lanes/Semantics/` | The semantics as a CSLib `LTS`, refinement, fairness and leads-to | CSLib, Mathlib |
-| `LanesCli/` | The `lanes` command: `new`, `lint`, `check` | `Std` only |
+| `LanesCli/` | The `lanes` command: `new`, `lint`, `check`, `inventory` | `Std` only; `Lean` in `Inventory`, which only `lanesInventory` links |
 | `templates/app/` | The application `lanes new` creates; embedded in the `lanes` binary | |
 | `Examples/` | Reference apps, checked and proved | anything |
 | `Tests/` | Regression tests run by `lake test` | anything |
