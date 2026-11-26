@@ -135,6 +135,9 @@ def seenFromFront (inputs : List FrontIn) : Bool :=
   let alone := frontStates inputs
   explored alone && joinedStates.queue.all fun v => alone.seen.contains ⟨v.path.last.state.left⟩
 
+def backStates :=
+  explore back faulty.right [3] fun c => c.net.length ≤ 4 && c.outbox.length ≤ 1
+
 /-- No result waits to leave before the front has answered. -/
 def resultAnswered (c : SysState front) : Prop :=
   ∀ n, .result n ∈ c.outbox → 0 < c.state ()
@@ -198,9 +201,11 @@ instance : herald.Inspect := {}
 instance : keeperSig.Inspect := {}
 instance : keeper.Inspect := {}
 
+def keeperEnv : EnvModel keeperSig :=
+  EnvModel.right ({} : EnvModel (joinSig heraldSig keeperSig))
+
 def keeperStates :=
-  explore keeper (EnvModel.right ({} : EnvModel (joinSig heraldSig keeperSig))) [()] fun c =>
-    c.net.length ≤ 4
+  explore keeper keeperEnv [()] fun c => c.net.length ≤ 4
 
 def tests : List (String × Bool) :=
   [ ("join: two systems wired together answer through each other, in every interleaving",
@@ -221,11 +226,15 @@ def tests : List (String × Bool) :=
       !seenFromFront [.ask 3]),
     ("join: the front alone gives no result before it has answered",
       frontCheck.ok && frontCheck.complete),
+    ("join: every state of the join, seen from the back, is a state of the back alone",
+      explored backStates
+      && joinedStates.queue.all fun v => backStates.seen.contains ⟨v.path.last.state.right⟩),
     ("join: the side that boots second sees an input older than its own first message",
       (SysState.init heralded {}).right.net == [⟨none, (), false⟩, ⟨some (), (), true⟩]
       && explored keeperStates
-      && !keeperStates.seen.contains ⟨(SysState.init heralded {}).right⟩
-      && keeperStates.seen.contains
-        ⟨{ (SysState.init heralded {}).right with net := [⟨some (), (), true⟩, ⟨none, (), false⟩] }⟩) ]
+      && !keeperStates.seen.contains ⟨(SysState.init heralded {}).right⟩),
+    ("join: the side that boots second reaches that state alone, up to message order",
+      keeperStates.queue.any fun v =>
+        v.path.last.state.equiv keeperEnv (SysState.init heralded {}).right) ]
 
 end Tests.Join

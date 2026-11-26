@@ -293,3 +293,12 @@ by `lake build`, not linked into the test executable.
 
 /-- info: 'Lanes.System.Invariant.join_left_state' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Invariant.join_left_state
+
+/-- info: 'Lanes.System.Reachable.right' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Reachable.right
+
+/-- info: 'Lanes.System.Invariant.join_right' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Invariant.join_right
+
+/-- info: 'Lanes.System.Invariant.join_right_state' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Invariant.join_right_state
