@@ -48,6 +48,8 @@ Update them in the same change that moves an item; `lake exe lanes lint --fix` w
 5. A place for slow work that is not a function of one request, as the ledger's friction log
    asks.
 
+The standard library, triaged from Go's, with its P0 set in build order: `docs/STDLIB.md`.
+
 ## Known limits
 
 <!-- limits -->
