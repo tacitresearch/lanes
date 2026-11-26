@@ -159,7 +159,7 @@ round of framework work is planned from this.
 - **Clients that wait**: `Driver.after` (`Lanes/Check/Clients.lean`). Neither `anyOrder` nor
   `script` gives real-time order, which is what makes a stale read a violation; it also keeps
   the state space small. Tested on the key-value store (`Tests/Clients.lean`).
-- **A list lemma**: `Lanes.sum_map_set` in `Lanes/Data/List.lean`.
+- **A list lemma**: `Lanes.sum_map_set` in `Lanes/Data/List/Basic.lean`.
 
 ### Broken
 

@@ -35,7 +35,7 @@ The toolchain is pinned in `lean-toolchain` and follows CSLib's. Dependencies ar
 | Path | Contents | May import |
 | --- | --- | --- |
 | `Lanes/Actors/` | `Actor`, `Signature`, `Effect`, `System`, the world step function, scheduler, runtime | `Std` only |
-| `Lanes/Data/` | Small data utilities (`Enum`, list lemmas in `List`), codecs and `lanes_data` (`Codec`, `Declare`), the JSON library (`Json`), SHA-256, HMAC and PBKDF2 (`Sha256`, `Hmac`) | `Std` only |
+| `Lanes/Data/` | Small data utilities (`Enum`; lemmas about lists in `List/`, strings in `Utf8` and byte arrays in `ByteArray`), codecs and `lanes_data` (`Codec`, `Declare`), the JSON library (`Json`), SHA-256, HMAC and PBKDF2 (`Sha256`, `Hmac`) | `Std` only |
 | `Lanes/Auth/` | Signed tokens, form tokens, password digests, failed attempts, sessions | `Std` only |
 | `Lanes/Check/` | Model checker | `Std` only |
 | `Lanes/Http/`, `Lanes/Html/` | HTTP requests and responses as data; HTML values and template syntax | `Std` only |
@@ -120,7 +120,9 @@ A family of instances defined by cases on an identity, such as `∀ i, Decidable
 - Check before you prove: every invariant gets an `always` property and a `sometimes` vacuity
   check in a test before its proof is attempted (rules 5.1, 5.3).
 - A lemma that does not mention the system a proof is about does not stay in that proof's file,
-  private or not. Facts about lists go in `Lanes/Data/List.lean`; about `update`, `SysState`,
+  private or not. Facts about lists go in `Lanes/Data/List/`, at the end of the file of their
+  topic (`Erase`, `Prefix`, `Fold`, else `Basic`); about strings and byte arrays in
+  `Lanes/Data/Utf8.lean` and `Lanes/Data/ByteArray.lean`; about `update`, `SysState`,
   `run` and `Reachable` beside their definitions in `Lanes/Actors/World.lean`; a step or a run
   in closed form in `Lanes/Actors/Run.lean`; `NetEquiv` and `SysState.Equiv` in
   `Lanes/Actors/Equiv.lean`. Look there, and in core `List`, before proving a helper.
