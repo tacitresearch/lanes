@@ -225,4 +225,89 @@ theorem recover_outputs (sys : System σ) (past : List (Entry σ)) :
       = handed ++ (recover sys past).2 :=
   (foldl_replay1 past (Kernel.boot sys).1 (Kernel.boot sys).2).2
 
+/-! One turn of a shard, as a pure function: everything the shell asks of the kernel between two
+looks at its inbox, and what it must write in the journal for it. -/
+
+structure Turn (sys : System σ) where
+  kernel : Kernel sys
+  events : List (Event σ) := []
+  outputs : List σ.Out := []
+  entries : List (Entry σ) := []
+
+/--
+Take an input if there is one and do up to `fuel` units of work at time `now_ms`. If there is
+no input and nothing to do yet, the kernel is left exactly as it was, clock included, and
+nothing is journaled: so the journal always describes the kernel (`turn_eq_exec`).
+-/
+def turn {sys : System σ} (k : Kernel sys) (now_ms : Nat) (input : Option σ.In) (fuel : Nat) :
+    Turn sys :=
+  if input.isNone && (k.advance now_ms).wait != .none then { kernel := k }
+  else
+    let k := k.advance now_ms
+    let clock := k.clock_ms
+    match input with
+    | none =>
+      match k.runBatch fuel with
+      | { kernel, events, outputs } =>
+        { kernel, events, outputs, entries := [.advance clock, .batch fuel] }
+    | some x =>
+      match k.accept x with
+      | { kernel, events := accepted, .. } =>
+        match kernel.runBatch fuel with
+        | { kernel, events, outputs } =>
+          { kernel, events := accepted ++ events, outputs
+            entries := [.advance clock, .input x, .batch fuel] }
+
+private theorem advance_clock {sys : System σ} (k : Kernel sys) (now_ms : Nat) :
+    k.advance (k.advance now_ms).clock_ms = k.advance now_ms := by
+  simp only [Kernel.advance]
+  congr 1
+  omega
+
+/-- What a turn does is what replaying its journal entries does: the same kernel, the same
+events, the same outputs. Nothing is assumed of the clock. -/
+theorem turn_eq_exec {sys : System σ} (k : Kernel sys) (now_ms : Nat) (input : Option σ.In)
+    (fuel : Nat) :
+    (turn k now_ms input fuel).kernel = (k.exec (ops (turn k now_ms input fuel).entries)).kernel
+      ∧ (turn k now_ms input fuel).events
+          = (k.exec (ops (turn k now_ms input fuel).entries)).events
+      ∧ (turn k now_ms input fuel).outputs
+          = (k.exec (ops (turn k now_ms input fuel).entries)).outputs := by
+  unfold turn
+  split
+  · exact ⟨rfl, rfl, rfl⟩
+  · cases input with
+    | none =>
+      simp [ops, Entry.op?, Kernel.exec_cons, Kernel.apply, Kernel.exec, advance_clock]
+    | some x =>
+      simp [ops, Entry.op?, Kernel.exec_cons, Kernel.apply, Kernel.exec, advance_clock,
+        Kernel.accept]
+
+/-- Turn after turn, with the entries each one journals. -/
+def turns {sys : System σ} (k : Kernel sys) (fuel : Nat) :
+    List (Nat × Option σ.In) → Kernel sys × List (Entry σ)
+  | [] => (k, [])
+  | (now_ms, input) :: rest =>
+    match turn k now_ms input fuel with
+    | { kernel, entries, .. } =>
+      match turns kernel fuel rest with
+      | (kernel, later) => (kernel, entries ++ later)
+
+/-- However many turns a shard takes, at whatever times and with whatever inputs, its kernel is
+the one its journal describes. So what `recover` rebuilds after the process dies is the kernel
+the shard had when it last finished writing. -/
+theorem turns_kernel {sys : System σ} (k : Kernel sys) (fuel : Nat)
+    (steps : List (Nat × Option σ.In)) :
+    (turns k fuel steps).1 = (k.exec (ops (turns k fuel steps).2)).kernel := by
+  induction steps generalizing k with
+  | nil => rfl
+  | cons step steps ih =>
+    obtain ⟨now_ms, input⟩ := step
+    have hturn := (turn_eq_exec k now_ms input fuel).1
+    show (turns (turn k now_ms input fuel).kernel fuel steps).1
+      = (k.exec (ops ((turn k now_ms input fuel).entries
+          ++ (turns (turn k now_ms input fuel).kernel fuel steps).2))).kernel
+    simp only [ops] at hturn ih ⊢
+    rw [ih, List.filterMap_append, Kernel.exec_append, ← hturn]
+
 end Lanes.Journal

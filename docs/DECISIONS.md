@@ -391,6 +391,11 @@ What it costs:
   snapshot.
 - Time is the kernel's time. Timers do not advance while the process is down.
 
+What a shard does in one turn (take an input if there is one, do a batch of work, and say what
+to journal) is one pure function, `Journal.turn`. A turn in which nothing happens leaves the
+kernel untouched, clock included, and journals nothing, so the journal describes the kernel
+exactly at every moment (`Journal.turns_kernel`), with no assumption about the clock.
+
 `Actor.recover` keeps its meaning: it runs when an actor starts again after stopping itself or,
 under an environment model with crashes, after a crash.
 

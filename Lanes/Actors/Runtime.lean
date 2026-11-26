@@ -105,8 +105,11 @@ state held across an `await` is handed to the task system. A kernel kept that wa
 actor table and all, on every step (`Tests/Scale.lean`). Here it is created on this thread and
 never leaves it; only commands, events and outputs cross.
 
-With a journal, the kernel starts as the journal describes (`Journal.recover`), and what it is
-asked is appended before any output of it is handed over.
+What to ask of the kernel in one turn, and what to write in the journal for it, is
+`Journal.turn`, a pure function proved to leave the kernel its journal entries describe
+(`Journal.turns_kernel`). This loop reads the clock, takes a command, calls it, appends the
+entries, and only then hands the outputs over. With a journal the kernel starts as the journal
+describes (`Journal.recover`).
 -/
 private def loop (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
     (waiting : IO.Ref (Array (Bool × IO.Promise Bool))) (journal : Option (Journal.Log σ)) :
@@ -123,27 +126,23 @@ private def loop (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
   let epoch ← IO.monoMsNow
   let clock : BaseIO Nat := return since + ((← IO.monoMsNow) - epoch)
   let kernel ← IO.mkRef start
+  let fuel := max 1 rt.config.batch
   repeat
     let now ← clock
-    let wait ← kernel.modifyGet fun k => let k := k.advance now; (k.wait, k)
+    let wait ← kernel.modifyGet fun k => ((k.advance now).wait, k)
     let mut input : Option σ.In := none
     match ← rt.take wait with
     | .closed => break
     | .nothing => pure ()
-    | .command (.input x) =>
-      rt.record (← kernel.modifyGet fun k => let r := k.accept x; (r.events, r.kernel))
-      input := some x
+    | .command (.input x) => input := some x
     | .command (.idle timers done) => waiting.modify (·.push (timers, done))
     | .command (.peek i reply) => reply.resolve (← kernel.modifyGet fun k => ((k.cell i).state, k))
     let now ← clock
-    let batch := max 1 rt.config.batch
-    let (events, outputs, quiet, still) ← kernel.modifyGet fun k =>
-      match (k.advance now).runBatch batch with
-      | { kernel, events, outputs } =>
-        ((events, outputs, kernel.quiet false, kernel.quiet true), kernel)
-    if let some log := journal then
-      unless input.isNone && events.isEmpty do
-        log.append (.advance now :: input.toList.map .input ++ [.batch batch])
+    let (events, outputs, entries, quiet, still) ← kernel.modifyGet fun k =>
+      match Journal.turn k now input fuel with
+      | { kernel, events, outputs, entries } =>
+        ((events, outputs, entries, kernel.quiet false, kernel.quiet true), kernel)
+    if let some log := journal then unless entries.isEmpty do log.append entries
     rt.record events
     handOver outputs
     let reached := fun (timers : Bool) => if timers then still else quiet
