@@ -47,6 +47,45 @@ the mistakes in A and B while they are cheap to fix.
 - Proof cost: election safety took 240 lines with the new tools; full Raft is perhaps ten times
   that. How much automation closes the gap is unmeasured.
 
+## Review at the end of phase A (2026-11-27)
+
+Asked at each phase end: is this still the right direction, and is there a better design?
+
+**What changed from the plan, and why it was better.**
+
+- Durability became a journal of what the kernel was asked, not stored actor states (D24). It
+  fell out of the kernel being pure: replay is the same run continued, so a restart is not a
+  fault any proof has to account for, and only inputs need a codec.
+- An adapter became a model of the outside plus a handler (D26), not an actor. The outside
+  makes choices and actors do not; the semantics already puts choices in events.
+- Composition is proved by projection (what holds of one side holds in any join), not yet as a
+  precongruence for refinement. Projection is what the semantics gives for free, because a
+  system's theorems already quantify over everything its environment may send.
+- Sugar for applications will be macros, not deriving handlers: anything that imports `Lean`
+  costs 137 MB in the binary, even through `meta import`.
+
+**What held.** Every defect found by four reviews and by the proofs themselves was in code no
+theorem covered, or in a statement weaker than its name. Each fix moved logic into a pure
+function. Twice a proof found a bug in code written the same night (`Kernel.fire`, the name of
+a `sometimes` property), and once the checker rejected a property its author believed.
+
+**What to watch.**
+
+- *Trusted code is growing with features*: about 590 lines, from 430. The shell itself is flat;
+  the growth is file IO and adapters, each with a conformance test. The lint pins the sizes.
+- *Timers and liveness do not quite agree.* In the semantics, arming a pending timer again
+  changes nothing, so a fair run still fires it; in the runtime it restarts the delay, which is
+  what a keep-alive wants. A liveness proof that leans on a timer firing is about the model.
+  The honest fix is to give a timer an identity that re-arming changes, in the semantics as in
+  the kernel. This should be settled before Raft, whose election timer is reset by heartbeats.
+- *Proof volume.* The kernel's timer invariants are 700 lines, the search's soundness 800. They
+  were re-proved after each change without trouble, but every kernel change now has that cost.
+- *Throughput.* One shard, and about 90 µs to wake it. Nothing in phase A depended on it;
+  phase B does.
+
+**Verdict.** The direction holds. Phase B starts with the timer identity question, because it
+changes the semantics, then shards.
+
 ## Serious applications
 
 `Examples/` holds small pieces, one idea each, that run in seconds. Serious applications live
