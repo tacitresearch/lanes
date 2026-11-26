@@ -59,4 +59,31 @@ theorem sum_map_set (f : α → Int) {l : List α} {i : Nat} {a : α} (v : α) (
       simp only [List.set_cons_succ, List.map_cons, List.sum_cons]
       omega
 
+theorem mapM_eq_some_map {f : α → Option β} {g : α → β} {l : List α}
+    (h : ∀ x ∈ l, f x = some (g x)) : l.mapM f = some (l.map g) := by
+  induction l with
+  | nil => rfl
+  | cons x l ih =>
+    simp [List.mapM_cons, h x (by simp), ih fun y hy => h y (by simp [hy])]
+
+theorem mem_intercalate {sep : List α} {ls : List (List α)} {x : α}
+    (h : x ∈ sep.intercalate ls) : x ∈ sep ∨ ∃ l ∈ ls, x ∈ l := by
+  match ls with
+  | [] => cases h
+  | [l] => exact .inr ⟨l, by simp, by simpa using h⟩
+  | l :: l' :: rest =>
+    rw [List.intercalate_cons_cons] at h
+    simp only [List.mem_append] at h
+    rcases h with (h | h) | h
+    · exact .inr ⟨l, by simp, h⟩
+    · exact .inl h
+    · rcases mem_intercalate h with h | ⟨m, hm, hx⟩
+      · exact .inl h
+      · exact .inr ⟨m, List.mem_cons_of_mem _ hm, hx⟩
+
+theorem mem_intercalate_of_two_le {sep : List α} {ls : List (List α)} {x : α} (hx : x ∈ sep)
+    (h : 2 ≤ ls.length) : x ∈ sep.intercalate ls := by
+  match ls, h with
+  | l :: l' :: rest, _ => rw [List.intercalate_cons_cons]; simp [hx]
+
 end Lanes

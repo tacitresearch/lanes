@@ -29,6 +29,19 @@ import Lanes.Semantics
 /-- info: 'Lanes.Codec.extTreeMap' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Codec.extTreeMap
 
+-- Lanes.Data.Digits
+/-- info: 'Lanes.Digits.ofChars?_toChars' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Digits.ofChars?_toChars
+
+/-- info: 'Lanes.Digits.ofChars?_fixed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Digits.ofChars?_fixed
+
+/-- info: 'Lanes.Digits.head_toChars' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Digits.head_toChars
+
+/-- info: 'Lanes.Digits.join_split' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Digits.join_split
+
 -- Lanes.Data.Frame
 /-- info: 'Lanes.Frame.encode_append' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Frame.encode_append
@@ -50,6 +63,28 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Frame.decode_checksum_ne' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Frame.decode_checksum_ne
+
+-- Lanes.Data.Ip
+/-- info: 'Lanes.Ip.parse_print' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Ip.parse_print
+
+/-- info: 'Lanes.Ip.longestZeroRun_some' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Ip.longestZeroRun_some
+
+/-- info: 'Lanes.Ip.longestZeroRun_none' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Ip.longestZeroRun_none
+
+/-- info: 'Lanes.Ip.Prefix.parse_print' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Ip.Prefix.parse_print
+
+/-- info: 'Lanes.Ip.Prefix.contains_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Ip.Prefix.contains_iff
+
+/-- info: 'Lanes.Ip.Prefix.masked_masked' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Lanes.Ip.Prefix.masked_masked
+
+/-- info: 'Lanes.Ip.Prefix.contains_masked' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Lanes.Ip.Prefix.contains_masked
 
 -- Lanes.Data.Quorum
 /-- info: 'Lanes.Quorum.majority_inter' depends on axioms: [propext, Classical.choice, Quot.sound] -/
