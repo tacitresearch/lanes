@@ -11,6 +11,7 @@ public import Lanes.Actors.World
 public import Lanes.Actors.Lift
 public import Lanes.Actors.Inspect
 public import Lanes.Actors.Join
+public import Lanes.Actors.JoinSound
 public import Lanes.Actors.Journal
 public import Lanes.Actors.Kernel
 public import Lanes.Actors.KernelSound
