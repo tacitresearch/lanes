@@ -26,7 +26,7 @@ served from the cache after an acknowledged write, is a run of every such instan
 
 namespace Examples.KV
 
-open Lanes Cslib
+open Lanes
 
 variable {K V F : Type} [DecidableEq K] [DecidableEq V] [DecidableEq F]
 
@@ -141,7 +141,7 @@ end Sim
 theorem implements (env : EnvModel (sig K V F))
     (henv : ∀ src dst, (env.link src dst).duplicating = false) :
     (system K V F false).Implements env (spec K V F) := by
-  refine System.Refines.of_steps (spec := (spec K V F).spec) (tame_invariant env) Sim
+  refine System.Refines.of_steps (tame_invariant env) Sim
     ⟨⟨fun _ => none, 0, 0⟩, rfl, rfl, by simp [SysState.init, SysState.blank],
       by simp [SysState.init, SysState.blank]⟩ (fun _ _ _ h hl => h.loses hl)
     ?_ ?_ ?_ ?_ ?_ ?_

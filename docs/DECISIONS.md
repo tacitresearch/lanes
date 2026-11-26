@@ -1009,6 +1009,14 @@ taken.
   free type, does. The proof reads the invariant of `Commit.lean` (`Committed`, its
   `comparable` and `grow`, `Commits.nodes`), not the headline theorems, because a step needs
   the invariant before and after with the history between them.
+- *The second user.* The key-value store with front ends (`Examples/KVProofs.lean`) took
+  `of_steps` with no ghost and a relation of three bounds, each a `filterMap` over the messages
+  in flight, so losing a message was two lines and the eight deliveries closed by `rfl` once
+  two lemmas (a front end passes a request on; the store makes one take effect) took the new
+  network and outbox as equations. What it showed is that those two lemmas, and the input,
+  output and loss cases, are the same in every service behind actors and belong in the library,
+  and that the duplicate and timer cases are noise when the environment and the actors rule
+  them out.
 
 ## D35. An append carries a batch, and only news brings the next
 

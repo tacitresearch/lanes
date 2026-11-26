@@ -26,7 +26,7 @@ Last updated: 2026-11-27.
 | App | Checked | Proved |
 | --- | --- | --- |
 | Bank (`Examples/Bank.lean`) | Conservation on 2 accounts; lost-credit bug found under lossy links; runs on the runtime and over HTTP | Balance never negative (all environments); money conserved for any number of accounts in a faultless environment |
-| Key-value store (`Examples/KV.lean`) | Refines the map spec; stale-read bug of a read cache found | Not yet |
+| Key-value store (`Examples/KV.lean`) | Refines the map spec on one key, two values and two front ends, also with links that lose and reorder messages and a crash; a duplicating link breaks it, whichever of the three it uses; stale-read bug of a read cache found, with one front end already | Without caching it implements the map spec for all keys, values and front ends in every environment whose links do not duplicate; with caching it does not, in any environment, for any instance with a key, a value and a front end: the checker's run replays in every one (`Examples/KVProofs.lean`, about 260 lines) |
 | Leader election (`Examples/Election.lean`) | At most one leader per term on 3 nodes with reordering and a crash (165k states); split-brain bug found | At most one leader per term for any number of nodes and terms under every environment model: loss, duplication, reordering, crashes (`Examples/ElectionProofs.lean`) |
 | Raft key-value store (`systems/raft-kv`, a package of its own) | Refines the map it replicates, with election safety, log matching, agreement on committed entries and leader completeness, on 3 nodes: reliable links and two terms (708k states), unordered links (705k), unordered links with a crash and restart (5.4M), reliable links with a crash across two terms (7.8M), and again with one entry to an `append`, so that a follower is brought on batch by batch; a node that votes for a candidate with a shorter log is caught in 15 steps; what a PASS of these means is a theorem (`RaftKVProofs/Checked.lean`); runs as three processes, each with an HTTP front, a journal it cuts and a snapshot, joined by TCP: every node killed with SIGKILL and started from its snapshot, two at a time, has what was acknowledged (`raftProcs`), and a minute of nodes killed and paused at random loses no acknowledged write (`raftChaos`, not in CI) | Every invariant of Raft's safety argument, for every number of nodes and every environment model (`systems/raft-kv/RaftKV/Proofs/`, about 2,950 lines): election safety, log matching, leader completeness, agreement on committed entries, state machine safety, and that no `append` carries more than `maxAppend` entries. Election safety and state machine safety also over time: no term has two leaders and no index two entries at any two points of a run. On them, the cluster refines its spec in every environment that does not hand a request to a node twice (`systems/raft-kv/RaftKVProofs/`, about 780 lines) |
 | Watchdog (`Examples/Watchdog.lean`) | Under the fair scheduler a dog whose keeper keeps pinging never barks, and one whose keeper rests barks | There is a fair run in which the keeper pings forever, the dog's timer is pending at every position and the dog never barks; in every run that fires each timer that stays pending, it barks (`Examples/WatchdogProofs.lean`) |
@@ -52,10 +52,9 @@ Last updated: 2026-11-27.
    that takes per-state, per-message and per-timer predicates and discharges `below` itself, a
    frame lemma for the actors that did not move, and projections for ghost state.
 2. Counterexample-to-induction finder and `inv_split`, then `lanes prove`.
-3. Refinement proof for the key-value store with front ends (the first multi-actor refinement).
-4. Releasing idle actors; the order of a save as a proved function over a model of the files.
-5. Raft: protocol model, invariants, refinement to `ReplicatedLog`, reference implementation.
-6. Checker v2: states as flat data, which is what both a faster single core and useful
+3. Releasing idle actors; the order of a save as a proved function over a model of the files.
+4. Raft: protocol model, invariants, refinement to `ReplicatedLog`, reference implementation.
+5. Checker v2: states as flat data, which is what both a faster single core and useful
    parallel search need (D33); fingerprints as an opt-in mode that says it is not exact.
 
 ## Known limits
