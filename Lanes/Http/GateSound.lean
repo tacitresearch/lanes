@@ -111,7 +111,7 @@ private theorem handle_gate (h : Owes id n c) (src : Option (Option σ.Id)) (msg
   simp only [owed] at hatMost
   cases msg with
   | arrive id' request =>
-    simp only [SysState.handle, gate]
+    simp only [SysState.handle, gate, Gate.step]
     split
     · settled
     · split
@@ -120,14 +120,14 @@ private theorem handle_gate (h : Owes id n c) (src : Option (Option σ.Id)) (msg
         · settled
         · settled
   | answer out =>
-    simp only [SysState.handle, gate]
+    simp only [SysState.handle, gate, Gate.step]
     split
     · split
       · settled
       · settled
     · settled
   | expire id' =>
-    simp only [SysState.handle, gate]
+    simp only [SysState.handle, gate, Gate.step]
     split
     · settled
     · settled
@@ -333,7 +333,7 @@ private theorem armed_handle_gate {c : SysState (gated sys bridge config)} (msg 
   cases msg with
   | arrive id' request =>
     replace h := fun id hid => h id hid nofun
-    simp only [SysState.handle, gate]
+    simp only [SysState.handle, gate, Gate.step]
     split
     · armed
     · split
@@ -347,7 +347,7 @@ private theorem armed_handle_gate {c : SysState (gated sys bridge config)} (msg 
           · exact ⟨by simp, fun id hid => List.mem_append_left _ (h id hid)⟩
   | answer out =>
     replace h := fun id hid => h id hid nofun
-    simp only [SysState.handle, gate]
+    simp only [SysState.handle, gate, Gate.step]
     split
     · split
       · armed
@@ -357,7 +357,7 @@ private theorem armed_handle_gate {c : SysState (gated sys bridge config)} (msg 
       · armed
     · armed
   | expire id' =>
-    simp only [SysState.handle, gate]
+    simp only [SysState.handle, gate, Gate.step]
     split
     · armed
     · armed

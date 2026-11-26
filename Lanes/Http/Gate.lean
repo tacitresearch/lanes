@@ -89,41 +89,44 @@ def busy : Response := .text "the system is busy\n" 503
 
 def timedOut : Response := .text "the system did not answer in time\n" 504
 
-/-- The gate's state is the requests waiting for the system. -/
-def gate (sys : System σ) (bridge : Bridge σ) (config : GateConfig) :
-    (gatedSig σ).Actor none (List ReqId) where
-  init := []
-  step pending
-    | .arrive id request =>
-      if id ∈ pending then (pending, [])
-      else if pending.length ≥ config.maxPending then (pending, [.emit (id, busy)])
-      else
-        match bridge.decode id request with
-        | .error response => (pending, [.emit (id, response)])
-        | .ok x =>
-          (id :: pending,
-            [.send (some (sys.accept x).1) (sys.accept x).2,
-             .after config.requestTimeout_ms (.expire id)])
-    | .answer out =>
-      match bridge.encode out with
-      | some (id, response) =>
-        if id ∈ pending then (pending.erase id, [.cancel (.expire id), .emit (id, response)])
-        else (pending, [])
-      | none => (pending, [])
-    | .expire id =>
-      if id ∈ pending then (pending.erase id, [.emit (id, timedOut)]) else (pending, [])
-  recover pending := (pending, pending.map fun id => .after config.requestTimeout_ms (.expire id))
+/-- The four things a gate does, as effects of the place where it sits. -/
+structure Gate.Effects (σ : Signature) (E : Type) where
+  respond : ReqId → Response → E
+  forward : σ.In → E
+  arm : ReqId → E
+  disarm : ReqId → E
 
-/-- The gate never holds more than `maxPending` requests, and never the same one twice. -/
-theorem gate_bounded (sys : System σ) (bridge : Bridge σ) (config : GateConfig) :
-    (gate sys bridge config).Invariant fun pending =>
-      pending.length ≤ config.maxPending ∧ pending.Nodup := by
-  apply Actor.Inductive.invariant
-  refine ⟨by simp [gate], ?_, fun _ h => h⟩
-  intro pending msg ⟨hlen, hnodup⟩
+/-- The gate's decisions, the same wherever it sits: `pending` is the requests waiting for the
+system. -/
+def Gate.step {E : Type} (bridge : Bridge σ) (config : GateConfig) (does : Gate.Effects σ E)
+    (pending : List ReqId) : GateMsg σ → List ReqId × List E
+  | .arrive id request =>
+    if id ∈ pending then (pending, [])
+    else if pending.length ≥ config.maxPending then (pending, [does.respond id busy])
+    else
+      match bridge.decode id request with
+      | .error response => (pending, [does.respond id response])
+      | .ok x => (id :: pending, [does.forward x, does.arm id])
+  | .answer out =>
+    match bridge.encode out with
+    | some (id, response) =>
+      if id ∈ pending then (pending.erase id, [does.disarm id, does.respond id response])
+      else (pending, [])
+    | none => (pending, [])
+  | .expire id =>
+    if id ∈ pending then (pending.erase id, [does.respond id timedOut]) else (pending, [])
+
+/-- A step keeps the waiting list within `maxPending` and free of repeats, wherever the gate
+sits. -/
+theorem Gate.step_bounded {E : Type} (bridge : Bridge σ) (config : GateConfig)
+    (does : Gate.Effects σ E) {pending : List ReqId} (msg : GateMsg σ)
+    (h : pending.length ≤ config.maxPending ∧ pending.Nodup) :
+    (Gate.step bridge config does pending msg).1.length ≤ config.maxPending
+      ∧ (Gate.step bridge config does pending msg).1.Nodup := by
+  obtain ⟨hlen, hnodup⟩ := h
   cases msg with
   | arrive id request =>
-    simp only [gate]
+    simp only [Gate.step]
     split
     · exact ⟨hlen, hnodup⟩
     · next hnew =>
@@ -134,17 +137,35 @@ theorem gate_bounded (sys : System σ) (bridge : Bridge σ) (config : GateConfig
         · exact ⟨hlen, hnodup⟩
         · exact ⟨by simp only [List.length_cons]; omega, List.nodup_cons.mpr ⟨hnew, hnodup⟩⟩
   | answer out =>
-    simp only [gate]
+    simp only [Gate.step]
     split
     · split
       · exact ⟨Nat.le_trans (List.length_erase_le ..) hlen, hnodup.erase _⟩
       · exact ⟨hlen, hnodup⟩
     · exact ⟨hlen, hnodup⟩
   | expire id =>
-    simp only [gate]
+    simp only [Gate.step]
     split
     · exact ⟨Nat.le_trans (List.length_erase_le ..) hlen, hnodup.erase _⟩
     · exact ⟨hlen, hnodup⟩
+
+/-- The gate in front of `sys`, as one of the actors of `gated sys`. -/
+def gate (sys : System σ) (bridge : Bridge σ) (config : GateConfig) :
+    (gatedSig σ).Actor none (List ReqId) where
+  init := []
+  step := Gate.step bridge config
+    { respond := fun id response => .emit (id, response)
+      forward := fun x => .send (some (sys.accept x).1) (sys.accept x).2
+      arm := fun id => .after config.requestTimeout_ms (.expire id)
+      disarm := fun id => .cancel (.expire id) }
+  recover pending := (pending, pending.map fun id => .after config.requestTimeout_ms (.expire id))
+
+/-- The gate never holds more than `maxPending` requests, and never the same one twice. -/
+theorem gate_bounded (sys : System σ) (bridge : Bridge σ) (config : GateConfig) :
+    (gate sys bridge config).Invariant fun pending =>
+      pending.length ≤ config.maxPending ∧ pending.Nodup :=
+  Actor.Inductive.invariant
+    ⟨by simp [gate], fun _ msg h => Gate.step_bounded bridge config _ msg h, fun _ h => h⟩
 
 /-- `sys` with the gate in front of it. -/
 abbrev gated (sys : System σ) (bridge : Bridge σ) (config : GateConfig := {}) :
