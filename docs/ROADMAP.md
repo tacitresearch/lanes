@@ -149,6 +149,9 @@ function; the theorem that two shards are the one system; a transport between pr
   Raft proofs multiply them.
 - *Boot order is observable* when a boot actor stops as it starts, which is why the shard
   theorem carries a condition. Nothing depends on it yet.
+- *Throughput* was fifteen thousand inputs a second on one shard, and nobody had measured
+  it. It is ten times that now (D31): the kernel was never the cost, the channel between
+  threads was. The benchmark prints the number on every run.
 - *Two gates* until the hand-built one is retired in favour of the gate joined by the general
   operator; a process with both an HTTP front and peers needs the joined one.
 

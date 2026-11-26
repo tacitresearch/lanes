@@ -327,10 +327,12 @@ def rehandTest : Async (List (String × Bool)) := do
 /-- The journal stops taking writes. The shard must end, say so, and leave nobody waiting:
 neither those it had heard from nor those whose commands it never took. -/
 def failTest : Async (List (String × Bool)) := do
-  let (log, _) ← memory [] (failAt := some 2)
+  let (log, durable) ← memory [] (failAt := some 1)
   let seen ← IO.mkRef #[]
   let rt ← Runtime.start Bank3 {} (journal := some log) fun response =>
     seen.modify (·.push response.req)
+  rt.input (.transfer ⟨100, 0, 1, 3⟩)
+  rt.idle
   let waiters ← (List.range 8).mapM fun n => do
     discard <| rt.tryInput (.transfer ⟨n, 0, 1, 3⟩)
     let done ← IO.Promise.new
@@ -338,10 +340,13 @@ def failTest : Async (List (String × Bool)) := do
     return done
   let released ← waiters.mapM fun done => within 2000 (await done.result?)
   let error ← within 2000 rt.ended
+  rt.stop
+  let durable ← durable.get
   return [
     ("durable: when the journal cannot be written the shard ends and says why",
       (error.map (·.isSome)) == some true),
-    ("durable: nothing is handed over that is not in the journal", (← seen.get).size ≤ 2),
+    ("durable: nothing is handed over that is not in the journal",
+      (← seen.get) == #[100] && durable == #[100]),
     ("durable: and nobody is left waiting for it", released.all (·.isSome)) ]
 
 /-! Snapshots: a bank that saves its kernel every few entries and cuts its journal. -/

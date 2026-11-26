@@ -57,7 +57,7 @@ def start (sys : System σ) [Hashable σ.Id] (shards : Nat) (config : Runtime.Co
   let mut senders := #[]
   for k in [0:shards] do
     let rt ← Runtime.start (sys.shard fun i => home shards i == k)
-      { config with clustered := true } fun
+      config fun
         | .inl out => onOutput out
         | .inr parcel => do
           parcels.modify (· + 1)

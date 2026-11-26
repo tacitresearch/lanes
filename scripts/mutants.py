@@ -14,21 +14,29 @@ import sys
 
 MUTANTS = [
     ("runtime: outputs handed over before the journal is written", "Lanes/Actors/Runtime.lean",
-     """    if let some log := journal then unless entries.isEmpty do log.append entries
-    rt.record events
-    handOver outputs
+     """      if let some log := journal then unless done.1.isEmpty do log.append done.1.toList
+      rt.record done.2.1.toList
+      handOver done.2.2.toList
 """,
-     """    rt.record events
-    handOver outputs
-    if let some log := journal then unless entries.isEmpty do log.append entries
+     """      rt.record done.2.1.toList
+      handOver done.2.2.toList
+      if let some log := journal then unless done.1.isEmpty do log.append done.1.toList
 """),
     ("runtime: nothing handed over again after a restart", "Lanes/Actors/Runtime.lean",
      "  handOver outputs\n  let since := start.clock_ms", "  let since := start.clock_ms"),
     ("runtime: commands left in the inbox when the shard ends", "Lanes/Actors/Runtime.lean",
-     """      | some (.idle _ done) => done.resolve false
-      | some _ => pure ()
-      | none => break""",
-     "      | _ => break"),
+     "    if let .idle _ heard := command then heard.resolve false",
+     "    if let .idle _ heard := command then pure ()"),
+    ("runtime: a snapshot is not taken", "Lanes/Actors/Runtime.lean",
+     "      (journal.bind (·.save)).filter fun _ => written ≥ max 1 rt.config.snapshotEvery",
+     "      (journal.bind (·.save)).filter fun _ => false"),
+    ("mailbox: no limit", "Lanes/Actors/Mailbox.lean",
+     "  else if m.count < capacity then", "  else if m.count < capacity + 1000000 then"),
+    ("mailbox: senders that wait for room are never woken", "Lanes/Actors/Mailbox.lean",
+     "wake := m.waiting, closed := m.closed }", "wake := [], closed := m.closed }"),
+    ("mailbox: the shard is not woken", "Lanes/Actors/Mailbox.lean",
+     "    (.taken m.sleeper, { m with items := x :: m.items, count := m.count + 1, sleeper := none })",
+     "    (.taken none, { m with items := x :: m.items, count := m.count + 1, sleeper := none })"),
     ("journal: no lock", "Lanes/Env/Journal.lean",
      "  unless ← lock.tryLock do", "  unless (← lock.tryLock) || true do"),
     ("journal: appended entries not flushed", "Lanes/Env/Journal.lean",

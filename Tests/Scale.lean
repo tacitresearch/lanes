@@ -39,10 +39,34 @@ def cost (actors : Nat) : Async Nat := do
   rt.stop
   return if handled then elapsed else 1000000
 
+/-- Inputs a second through one shard with `producers` senders that do not wait for each other,
+each input one message to an actor. -/
+def flood (producers each : Nat) : Async Nat := do
+  let rt ← Runtime.start counters { inboxCapacity := 4096 }
+  let t0 ← IO.monoNanosNow
+  discard <| Async.concurrentlyAll ((List.range producers).toArray.map fun p => do
+    for _ in [0:each] do rt.input p)
+  rt.idle
+  let elapsed := (← IO.monoNanosNow) - t0
+  rt.stop
+  return producers * each * 1000000000 / max 1 elapsed
+
+/-- Turns a second of the kernel alone, one input each: what a shard could do if nothing else
+cost anything. -/
+def kernelAlone (turns : Nat) : IO Nat := do
+  let t0 ← IO.monoNanosNow
+  let mut k := (Kernel.boot counters).1
+  for i in [0:turns] do
+    match Journal.turn k i (some 0) 64 with
+    | { kernel, .. } => k := kernel
+  let elapsed := (← IO.monoNanosNow) - t0
+  return if (k.cell 0).state == turns then turns * 1000000000 / max 1 elapsed else 0
+
 def tests : IO (List (String × Bool)) := do
   let small ← (cost 1000).block
   let large ← (cost 100000).block
   IO.println s!"scale: {messages} messages take {small} ms with 1000 actors, {large} ms with 100000"
+  IO.println s!"flood: {← (flood 1 200000).block} inputs a second from one sender, {← (flood 4 100000).block} from four; the kernel alone does {← kernelAlone 200000} turns a second"
   return [("scale: a message costs the same whatever the number of actors",
     large ≤ 4 * small + 50)]
 

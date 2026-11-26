@@ -7,6 +7,7 @@ module
 public import Std.Async
 public import Std.Sync
 public import Lanes.Actors.Journal
+public import Lanes.Actors.Mailbox
 
 /-!
 The runtime is a shell around the kernel: one task that takes commands from an inbox, tells the
@@ -39,12 +40,13 @@ structure Runtime.Config where
   /-- Keep the events performed, for tests. By `Kernel.exec_reachable` they are a run of the
   semantics. -/
   record : Bool := false
+  /-- How many times a shard with nothing to do looks at its inbox before it goes to sleep.
+  Waking a sleeping thread costs far more than looking, so a shard that is fed steadily should
+  not sleep between inputs. At least one look is taken. -/
+  spin : Nat := 2000
   /-- With a journal that can save the kernel: how many entries to write between two saves.
   After a save the journal is cut, so this bounds how much a restart replays. -/
   snapshotEvery : Nat := 65536
-  /-- Whether the shard is one of several (`Lanes.Cluster`). It then also takes inputs from the
-  other shards, on a lane that is never full, so that two shards cannot block each other. -/
-  clustered : Bool := false
 
 /-- What a durable shard needs of its journal's storage. `Lanes.Journal.Store.open` gives one
 backed by a file. -/
@@ -70,16 +72,10 @@ private inductive Cmd (sys : System σ) where
   | idle (timers : Bool) (done : IO.Promise Bool)
   | peek (i : σ.Id) (reply : IO.Promise (sys.State i))
 
-private inductive Taken (sys : System σ) where
-  | command (c : Cmd sys)
-  | nothing
-  | closed
-
 structure Runtime (sys : System σ) [Hashable σ.Id] where
   private mk ::
   private config : Runtime.Config
-  private inbox : CloseableChannel (Cmd sys)
-  private peers : CloseableChannel (Cmd sys)
+  private inbox : IO.Ref (Mailbox (Cmd sys) (IO.Promise Unit))
   private log : IO.Ref (Array (Event σ))
   private finished : IO.Promise (Option IO.Error)
 
@@ -97,29 +93,24 @@ private def handOver (onOutput : σ.Out → Async Unit) (outputs : List σ.Out) 
     try onOutput out
     catch e => IO.eprintln s!"lanes: output handler failed: {e}"
 
-/-- Blocks the calling thread, which is the shard's own. -/
-private def take (rt : Runtime sys) (wait : Kernel.Wait) : IO (Taken sys) := do
-  if rt.config.clustered then
-    if let some c ← rt.peers.tryRecv then return .command c
-  let taken := fun (c : Option (Cmd sys)) => match c with
-    | some c => Taken.command c
-    | none => .closed
-  let command := fun (c : Option (Cmd sys)) => (pure (taken c) : Async (Taken sys))
-  match wait with
-  | .none =>
-    match ← rt.inbox.tryRecv with
-    | some c => return .command c
-    | none => return if ← rt.inbox.isClosed then .closed else .nothing
-  | .forever =>
-    if rt.config.clustered then
-      Async.block (Selectable.one #[
-        .case rt.peers.recvSelector command, .case rt.inbox.recvSelector command])
-    else return taken (← IO.wait (← rt.inbox.recv))
-  | .for_ms ms => Async.block do
-    let sources := #[.case rt.inbox.recvSelector command,
-      .case (← Selector.sleep (.ofNat ms)) fun _ => pure .nothing]
-    Selectable.one (if rt.config.clustered then sources.push (.case rt.peers.recvSelector command)
-      else sources)
+/-- Everything that has arrived, and whether the inbox is closed. If nothing has and the
+kernel has nothing to do, the calling thread, which is the shard's own, sleeps until something
+arrives or `wait` has passed. -/
+private def take (rt : Runtime sys) (wait : Kernel.Wait) : IO (List (Cmd sys) × Bool) := do
+  let grab : BaseIO (List (Cmd sys) × Bool) := do
+    let taken ← rt.inbox.modifyGet Mailbox.take
+    for room in taken.wake do room.resolve ()
+    return (taken.batch, taken.closed)
+  for _ in [0:if wait == .none then 1 else max 1 rt.config.spin] do
+    let (batch, closed) ← grab
+    if wait == .none || closed || !batch.isEmpty then return (batch, closed)
+  let wake ← IO.Promise.new
+  if ← rt.inbox.modifyGet (Mailbox.rest wake) then
+    match wait with
+    | .for_ms ms =>
+      Async.block (Async.race (discard <| await wake.result?) (Async.sleep (.ofNat ms)))
+    | _ => discard <| IO.wait wake.result?
+  grab
 
 /--
 The shard's loop, on a thread of its own. It is not an `Async` task, for a reason that no test
@@ -130,9 +121,11 @@ never leaves it; only commands, events and outputs cross.
 
 What to ask of the kernel in one turn, and what to write in the journal for it, is
 `Journal.turn`, a pure function proved to leave the kernel its journal entries describe
-(`Journal.turns_kernel`). This loop reads the clock, takes a command, calls it, appends the
-entries, and only then hands the outputs over. With a journal the kernel starts as the journal
-describes (`Journal.resume`).
+(`Journal.turns_kernel`). This loop reads the clock, takes every command that has arrived, calls
+a turn for each input, appends the entries of all of them at once, and only then hands their
+outputs over: one exchange with the other threads and one write to the journal for however
+many inputs arrived together. With a journal the kernel starts as the journal describes
+(`Journal.resume`).
 
 Saving the kernel is the kernel operation `snapshot`: the shard goes on with the kernel its
 image restores, which is the kernel a restart from that image would have
@@ -162,29 +155,50 @@ private def loop (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
   repeat
     let now ← clock
     let wait ← kernel.modifyGet fun k => ((k.advance now).wait, k)
-    let mut input : Option σ.In := none
-    match ← rt.take wait with
-    | .closed => break
-    | .nothing => pure ()
-    | .command (.input x) => input := some x
-    | .command (.idle timers done) => waiting.modify (·.push (timers, done))
-    | .command (.peek i reply) => reply.resolve (← kernel.modifyGet fun k => ((k.cell i).state, k))
+    let (batch, closed) ← rt.take wait
+    if batch.isEmpty && closed then break
     let now ← clock
-    let (events, outputs, entries, quiet, still) ← kernel.modifyGet fun k =>
+    let turn := fun (input : Option σ.In) => kernel.modifyGet fun k =>
       match Journal.turn k now input fuel with
-      | { kernel, events, outputs, entries } =>
-        ((events, outputs, entries, kernel.quiet false, kernel.quiet true), kernel)
-    if let some log := journal then unless entries.isEmpty do log.append entries
-    rt.record events
-    handOver outputs
-    written := written + entries.length
-    if let some save := journal.bind (·.save) then
-      if written ≥ max 1 rt.config.snapshotEvery then
+      | { kernel, events, outputs, entries } => ((entries, events, outputs), kernel)
+    let finish := fun (done : Array (Journal.Entry σ) × Array (Event σ) × Array σ.Out) => do
+      if let some log := journal then unless done.1.isEmpty do log.append done.1.toList
+      rt.record done.2.1.toList
+      handOver done.2.2.toList
+    let saveDue := fun (written : Nat) =>
+      (journal.bind (·.save)).filter fun _ => written ≥ max 1 rt.config.snapshotEvery
+    let mut done := (#[], #[], #[])
+    let mut worked := false
+    for command in batch do
+      match command with
+      | .input x =>
+        let (entries, events, outputs) ← turn (some x)
+        done := (done.1 ++ entries, done.2.1 ++ events, done.2.2 ++ outputs)
+        worked := true
+        if (saveDue (written + done.1.size)).isNone then continue
+      | _ => pure ()
+      finish done
+      written := written + done.1.size
+      done := (#[], #[], #[])
+      if let some save := saveDue written then
         save (← kernel.modifyGet fun k => match k.image with | image => (image, image.kernel))
         written := 0
+      match command with
+      | .idle timers heard => waiting.modify (·.push (timers, heard))
+      | .peek i reply => reply.resolve (← kernel.modifyGet fun k => ((k.cell i).state, k))
+      | .input _ => pure ()
+    unless worked do
+      let (entries, events, outputs) ← turn none
+      done := (done.1 ++ entries, done.2.1 ++ events, done.2.2 ++ outputs)
+    finish done
+    written := written + done.1.size
+    if let some save := saveDue written then
+      save (← kernel.modifyGet fun k => match k.image with | image => (image, image.kernel))
+      written := 0
+    let (quiet, still) ← kernel.modifyGet fun k => ((k.quiet false, k.quiet true), k)
     let reached := fun (timers : Bool) => if timers then still else quiet
-    for (timers, done) in ← waiting.get do
-      if reached timers then done.resolve true
+    for (timers, heard) in ← waiting.get do
+      if reached timers then heard.resolve true
     waiting.modify (·.filter fun (timers, _) => !reached timers)
 
 /-- However the loop ends, nobody is left waiting on it: not those it had heard from, and not
@@ -196,13 +210,9 @@ private def run (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
   if let .error e := error then
     discard (IO.eprintln s!"lanes: the shard stopped on an error: {e}").toBaseIO
   if let some log := journal then discard log.close.toBaseIO
-  for channel in [rt.inbox, rt.peers] do
-    discard <| (channel.close : EIO _ Unit).toBaseIO
-    repeat
-      match ← channel.tryRecv with
-      | some (.idle _ done) => done.resolve false
-      | some _ => pure ()
-      | none => break
+  for wake in ← rt.inbox.modifyGet Mailbox.close do wake.resolve ()
+  for command in (← rt.inbox.modifyGet Mailbox.take).batch do
+    if let .idle _ heard := command then heard.resolve false
   for (_, done) in ← waiting.get do done.resolve false
   rt.finished.resolve (match error with | .error e => some e | .ok () => none)
 
@@ -227,8 +237,7 @@ def startWith (sys : System σ) [Hashable σ.Id] (config : Runtime.Config := {})
     (journal : Option (Journal.Log sys) := none) : Async (Runtime sys) := do
   let rt : Runtime sys := {
     config
-    inbox := ← CloseableChannel.new (some config.inboxCapacity)
-    peers := ← CloseableChannel.new
+    inbox := ← IO.mkRef {}
     log := ← IO.mkRef #[]
     finished := ← IO.Promise.new }
   discard <| IO.asTask (prio := .dedicated) (rt.run (onOutput rt) journal)
@@ -240,10 +249,23 @@ def start (sys : System σ) [Hashable σ.Id] (config : Runtime.Config := {})
     (journal : Option (Journal.Log sys) := none) : Async (Runtime sys) :=
   startWith sys config (fun _ => onOutput) journal
 
+private def offer (rt : Runtime sys) (c : Cmd sys) : BaseIO Bool := do
+  match ← rt.inbox.modifyGet (Mailbox.offer rt.config.inboxCapacity c) with
+  | .taken wake =>
+    if let some wake := wake then wake.resolve ()
+    return true
+  | _ => return false
+
+/-- Waits while the inbox is full. -/
 private def send (rt : Runtime sys) (c : Cmd sys) : Async Unit := do
-  match ← await (← rt.inbox.send c) with
-  | .ok () => pure ()
-  | .error _ => throw stopped
+  repeat
+    let room ← IO.Promise.new
+    match ← rt.inbox.modifyGet (Mailbox.offerOrWait rt.config.inboxCapacity c room) with
+    | .taken wake =>
+      if let some wake := wake then wake.resolve ()
+      return
+    | .closed => throw stopped
+    | .full => discard <| await room.result?
 
 /-- Hand over an input, waiting while the inbox is full. Throws once the runtime has stopped. -/
 def input (rt : Runtime sys) (x : σ.In) : Async Unit :=
@@ -252,12 +274,16 @@ def input (rt : Runtime sys) (x : σ.In) : Async Unit :=
 /-- Hand over an input if the inbox has room. `false` means nothing was accepted: the system is
 busy or has stopped. -/
 def tryInput (rt : Runtime sys) (x : σ.In) : Async Bool :=
-  rt.inbox.trySend (.input x)
+  rt.offer (.input x)
 
 /-- Hand over an input from another shard. It is never refused for want of room; `false` means
 the shard has stopped. -/
-def peer (rt : Runtime sys) (x : σ.In) : BaseIO Bool :=
-  rt.peers.trySend (.input x)
+def peer (rt : Runtime sys) (x : σ.In) : BaseIO Bool := do
+  match ← rt.inbox.modifyGet (Mailbox.urge (.input x)) with
+  | some wake =>
+    if let some wake := wake then wake.resolve ()
+    return true
+  | none => return false
 
 /-- Wait until everything handed over so far is handled and no message is queued. With
 `timers`, also until no timer is pending. Throws if the runtime stops first. -/
@@ -282,7 +308,7 @@ def state (rt : Runtime sys) (i : σ.Id) : Async (sys.State i) := do
 handed over and at most one more batch of work, then ends. Messages still queued between actors
 are abandoned and pending timers never fire. -/
 def stop (rt : Runtime sys) : Async Unit := do
-  discard <| (rt.inbox.close : EIO _ Unit).toBaseIO
+  for wake in ← rt.inbox.modifyGet Mailbox.close do wake.resolve ()
   discard <| await rt.finished.result?
 
 /-- Wait until the shard has ended, and say whether an error ended it. A shard ends on an error

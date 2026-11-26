@@ -21,6 +21,7 @@ import Tests.Codec
 import Tests.Cluster
 import Tests.Peers
 import Tests.Courier
+import Tests.Mailbox
 import Tests.Split
 
 /-!
@@ -35,14 +36,15 @@ def report (results : List (String × Bool)) : IO UInt32 := do
     if !ok then IO.println s!"FAIL {name}"
   let failed := results.countP (!·.2)
   IO.println s!"{results.length - failed} passed, {failed} failed"
-  return if failed == 0 then 0 else 1
+  (← IO.getStdout).flush
+  IO.Process.exit (if failed == 0 then 0 else 1)
 
 def main (args : List String) : IO UInt32 := do
   let pure := Tests.Engine.tests ++ Tests.Bank.tests ++ Tests.Json.tests ++ Tests.Html.tests
     ++ Tests.KV.tests ++ Tests.Gate.tests ++ Tests.Join.tests ++ Tests.Kernel.tests
     ++ Tests.Frame.tests ++ Tests.Clock.tests ++ Tests.HttpClient.tests ++ Tests.Fair.tests
     ++ Tests.Codec.tests ++ Tests.Durable.fileTests ++ Tests.Split.tests
-    ++ Tests.Peers.tests ++ Tests.Courier.tests
+    ++ Tests.Peers.tests ++ Tests.Courier.tests ++ Tests.Mailbox.tests
   match args with
   | [] =>
     report (pure ++ (← Tests.Runtime.tests) ++ (← Tests.Web.tests) ++ (← Tests.Durable.tests)

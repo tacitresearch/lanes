@@ -747,3 +747,30 @@ that hosts the receiver; a parcel that arrives is an input.
   split system (`D28` proves the model for two shards; that the runtimes and this adapter are
   that model, over a lossy link, is trusted).
 
+## D31. The inbox is a batch
+
+`Lanes/Actors/Mailbox.lean`, `Lanes/Actors/Runtime.lean`. Measured on one shard: the kernel
+does over two million turns a second, and a shard fed through `Std.CloseableChannel` took
+fifteen thousand inputs. The channel costs tens of microseconds an item, and a shard that
+keeps up with its senders slept and was woken once for every input.
+
+- *The shard takes everything that has arrived at once.* The inbox is a `Mailbox` in a
+  reference: senders add to a list, the shard exchanges the list for an empty one. One
+  exchange between threads for however many inputs arrived together. The lists are extended
+  at the front and reversed when taken, because an object that several threads can see is
+  never updated in place, so an array would be copied on every push.
+- *One write to the journal for a batch.* Each input is still its own turn, the pure
+  `Journal.turn`, so what is proved of a turn is unchanged; the entries of all the turns of a
+  batch are appended together, and only then are their outputs handed over. This is the group
+  commit that D24 named as the lever.
+- *It looks before it sleeps.* A shard with nothing to do looks at its inbox a couple of
+  thousand times, a few tens of microseconds, before it sleeps on a promise. Waking a thread
+  costs about ninety microseconds, so a shard that is fed steadily never pays it.
+- *Who is refused, who waits and who is woken are pure functions* (`Mailbox.offer`, `take`,
+  `rest`, `close`), tested as data; the shell resolves the promises they return.
+
+Result on the same busy machine: 150,000 inputs a second from one sender and 190,000 from four,
+ten times what it was, and the scale benchmark's 20,000 messages in 85 ms, from about 1,000.
+The limit is now the senders. The bound on what a restart replays is unchanged: a save is
+taken inside a batch as soon as it is due.
+
