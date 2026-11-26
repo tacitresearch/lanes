@@ -266,6 +266,9 @@ by `lake build`, not linked into the test executable.
 /-- info: 'Lanes.Peers.Courier.delivered_read' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Peers.Courier.delivered_read
 
+/-- info: 'Lanes.Peers.Courier.written_sublist_sent' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Peers.Courier.written_sublist_sent
+
 /-- info: 'Lanes.Journal.turns_kernel' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Journal.turns_kernel
 

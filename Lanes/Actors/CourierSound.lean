@@ -1532,6 +1532,375 @@ theorem rest_after_break {es : List Event} {q₁ q₂ p₂ p₃ : List (Entry σ
 
 end RestStep
 
+section Order
+
+/-- The bytes the courier was told to send to `to`, in order. -/
+def sentTo (to : Address) : List (Entry σ) → List ByteArray
+  | [] => []
+  | .told (.send to' bytes _) :: log => if to' = to then bytes :: sentTo to log else sentTo to log
+  | _ :: log => sentTo to log
+
+/-- The bytes the courier asked to be written on connections it dialed to `to`, in order;
+`conns` are those dialed before. -/
+def writtenTo (to : Address) (conns : List Conn) : List (Entry σ) → List ByteArray
+  | [] => []
+  | .did (.dial k to') :: log => writtenTo to (if to' = to then k :: conns else conns) log
+  | .did (.write k bytes) :: log =>
+    if k ∈ conns then bytes :: writtenTo to conns log else writtenTo to conns log
+  | _ :: log => writtenTo to conns log
+
+/-- What a run says of the parcels for one process: the connections dialed to it, and what was
+sent to it and is not yet written, oldest first (with what was dropped among it). -/
+structure Order where
+  conns : List Conn := []
+  pending : List ByteArray := []
+
+def Order.told (to : Address) (o : Order) : Event → Order
+  | .send to' bytes _ => if to' = to then { o with pending := o.pending ++ [bytes] } else o
+  | _ => o
+
+/-- `none` when a write to `to` is not of a parcel sent to it and not yet written. -/
+def Order.next (to : Address) (o : Order) : Entry σ → Option Order
+  | .told e => some (o.told to e)
+  | .did (.dial k to') => some (if to' = to then { o with conns := k :: o.conns } else o)
+  | .did (.write k bytes) =>
+    if k ∈ o.conns then (afterFirst bytes o.pending).map fun rest => { o with pending := rest }
+    else some o
+  | _ => some o
+
+theorem Order.foldlM_sublist {to : Address} {log : List (Entry σ)} {o o' : Order}
+    (h : log.foldlM (Order.next to) o = some o') :
+    (writtenTo to o.conns log).Sublist (o.pending ++ sentTo to log) := by
+  induction log generalizing o with
+  | nil => simp [writtenTo]
+  | cons x log ih =>
+    obtain ⟨o₁, hx, hlog⟩ := foldlM_cons_some h
+    have ih := ih hlog
+    rcases x with e | a
+    · cases e with
+      | send to' bytes now =>
+        simp only [Order.next, Order.told, Option.some.injEq] at hx
+        subst hx
+        simp only [writtenTo, sentTo]
+        split
+        · next ht => simpa [ht] using ih
+        · next ht => simpa [ht] using ih
+      | _ =>
+        simp only [Order.next, Order.told, Option.some.injEq] at hx
+        subst hx
+        simpa [writtenTo, sentTo] using ih
+    · cases a with
+      | dial k to' =>
+        simp only [Order.next, Option.some.injEq] at hx
+        subst hx
+        simp only [writtenTo, sentTo]
+        split
+        · next ht => simpa [ht] using ih
+        · next ht => simpa [ht] using ih
+      | write k bytes =>
+        simp only [Order.next] at hx
+        simp only [writtenTo, sentTo]
+        split
+        · next hk =>
+          simp only [hk, ↓reduceIte] at hx
+          cases hr : afterFirst bytes o.pending with
+          | none => simp [hr] at hx
+          | some rest =>
+            simp only [hr, Option.map_some, Option.some.injEq] at hx
+            subst hx
+            obtain ⟨skipped, hp⟩ := eq_of_afterFirst hr
+            rw [hp, List.append_assoc, List.cons_append]
+            exact (List.Sublist.cons_cons _ ih).trans (List.sublist_append_right _ _)
+        · next hk =>
+          simp only [hk, ↓reduceIte, Option.some.injEq] at hx
+          subst hx
+          exact ih
+      | _ =>
+        simp only [Order.next, Option.some.injEq] at hx
+        subst hx
+        simpa [writtenTo, sentTo] using ih
+
+def Order.Holds (to : Address) (c : Courier) (o : Order) : Prop :=
+  (∀ k, c.dialed[k]? = some to → k ∈ o.conns)
+    ∧ (∀ k ∈ o.conns, k < c.nextConn ∧ (c.dialed[k]? = none ∨ c.dialed[k]? = some to))
+    ∧ (c.wire to).waiting.toList.Sublist o.pending
+    ∧ (∀ k, (c.wire to).line = .up k false → (c.wire to).waiting.toList = [])
+
+end Order
+
+section OrderStep
+
+variable {c : Courier}
+
+theorem Order.foldlM_quiet {to : Address} {o : Order} {acts : List (Action σ)}
+    (h : ∀ a ∈ acts, (∀ k to', a ≠ .dial k to') ∧ ∀ k bytes, a ≠ .write k bytes) :
+    (acts.map Entry.did).foldlM (Order.next to) o = some o := by
+  induction acts with
+  | nil => rfl
+  | cons a acts ih =>
+    have ih := ih fun a ha => h a (List.mem_cons_of_mem _ ha)
+    obtain ⟨hd, hw⟩ := h a List.mem_cons_self
+    cases a with
+    | dial k to' => exact absurd rfl (hd k to')
+    | write k bytes => exact absurd rfl (hw k bytes)
+    | _ => simpa [Order.next] using ih
+
+theorem Order.holds_frame {c' : Courier} {to : Address} {o : Order} (ho : Order.Holds to c o)
+    (hd : c'.dialed = c.dialed) (hw : c'.wire to = c.wire to) (hn : c.nextConn ≤ c'.nextConn) :
+    Order.Holds to c' o := by
+  obtain ⟨h₁, h₂, h₃, h₄⟩ := ho
+  refine ⟨fun k hk => h₁ k (hd ▸ hk), fun k hk => ?_, hw ▸ h₃, hw ▸ h₄⟩
+  obtain ⟨hlt, hk⟩ := h₂ k hk
+  exact ⟨Nat.lt_of_lt_of_le hlt hn, hd ▸ hk⟩
+
+theorem Order.holds_told {to : Address} {o : Order} (ho : Order.Holds to c o) (e : Event) :
+    Order.Holds to c (o.told to e) := by
+  cases e with
+  | send to' bytes now =>
+    simp only [Order.told]
+    split
+    · exact ⟨ho.1, ho.2.1, ho.2.2.1.trans (List.sublist_append_left _ _), ho.2.2.2⟩
+    · exact ho
+  | _ => exact ho
+
+theorem Order.not_mem {to to' : Address} {o : Order} (ho : Order.Holds to c o)
+    {k : Conn} (hk : c.dialed[k]? = some to') (ht : to' ≠ to) : k ∉ o.conns := fun hm => by
+  rcases (ho.2.1 k hm).2 with hn | hs
+  · rw [hk] at hn; cases hn
+  · rw [hk] at hs; exact ht (Option.some.inj hs)
+
+theorem order_step (h : Sound limits c) {to : Address} {o : Order} (ho : Order.Holds to c o)
+    (e : Event) :
+    ∃ o', (Entry.told e :: (c.step limits read e).2.map Entry.did).foldlM (Order.next to) o
+        = some o'
+      ∧ Order.Holds to (c.step limits read e).1 o' := by
+  have htold : ∀ l : List (Entry σ), (Entry.told e :: l).foldlM (Order.next to) o
+      = l.foldlM (Order.next to) (o.told to e) := fun _ => rfl
+  simp only [htold]
+  have ho₁ := Order.holds_told ho e
+  have hpend : ∀ to' bytes now, e = .send to' bytes now → to' = to →
+      (o.told to e).pending = o.pending ++ [bytes] := by
+    rintro _ _ _ rfl ht; simp [Order.told, ht]
+  have hconns : (o.told to e).conns = o.conns := by cases e <;> simp only [Order.told] <;> split <;> rfl
+  generalize o.told to e = o₁ at ho₁ hpend hconns
+  have frame {c' : Courier} {acts : List (Action σ)}
+      (hacts : ∀ a ∈ acts, (∀ k to', a ≠ .dial k to') ∧ ∀ k bytes, a ≠ .write k bytes)
+      (hd : c'.dialed = c.dialed) (hw : c'.wire to = c.wire to) (hn : c.nextConn ≤ c'.nextConn) :
+      ∃ o', (acts.map Entry.did).foldlM (Order.next to) o₁ = some o' ∧ Order.Holds to c' o' :=
+    ⟨o₁, Order.foldlM_quiet hacts, Order.holds_frame ho₁ hd hw hn⟩
+  have hnone : ∀ a ∈ ([] : List (Action σ)), (∀ k to', a ≠ .dial k to')
+      ∧ ∀ k bytes, a ≠ .write k bytes := by simp
+  have writeTo {conn : Conn} {bytes : ByteArray} {rest : Fifo ByteArray} {line : Line}
+      (hd : c.dialed[conn]? = some to) (hrest : (bytes :: rest.toList).Sublist o₁.pending)
+      (hline : ∀ k, line ≠ .up k false) :
+      ∃ o', ([Entry.did (Action.write conn bytes)] : List (Entry σ)).foldlM (Order.next to) o₁
+          = some o'
+        ∧ Order.Holds to (c.setWire to { line, waiting := rest }) o' := by
+    obtain ⟨r, hr, hsub⟩ := afterFirst_of_cons_sublist hrest
+    have hm : conn ∈ o₁.conns := ho₁.1 conn hd
+    refine ⟨{ o₁ with pending := r }, by simp [Order.next, hm, hr], ?_⟩
+    refine ⟨ho₁.1, ho₁.2.1, by simpa using hsub, fun k hk => ?_⟩
+    simp only [wire_setWire, ↓reduceIte] at hk
+    exact absurd hk (hline k)
+  cases e with
+  | send to' bytes now =>
+    have hpend := hpend to' bytes now rfl
+    simp only [Courier.step]
+    split
+    · exact frame hnone rfl rfl (Nat.le_refl _)
+    · next hs =>
+      have hs : c.stopped = false := by simpa using hs
+      have enqueueCase (hl : ∀ k, (c.wire to').line ≠ .up k false) :
+          ∃ o', (([] : List (Action σ)).map Entry.did).foldlM (Order.next to) o₁ = some o'
+            ∧ Order.Holds to (enqueue limits c to' (c.wire to') bytes) o' := by
+        refine ⟨o₁, rfl, by simpa using ho₁.1, by simpa using ho₁.2.1, ?_, ?_⟩
+        · rw [wire_enqueue]
+          split
+          · next hc =>
+            obtain ⟨rfl, -⟩ := hc
+            rw [hpend rfl, Fifo.toList_push]
+            exact ho.2.2.1.append (List.Sublist.refl _)
+          · exact ho₁.2.2.1
+        · rw [wire_enqueue]
+          split
+          · next hc => obtain ⟨rfl, -⟩ := hc; exact fun k hk => absurd hk (hl k)
+          · exact ho₁.2.2.2
+      have dialCase (hl : (c.wire to').line.conn? = none) :
+          ∃ o', ((dial (σ := σ) limits c to' bytes).2.map Entry.did).foldlM (Order.next to) o₁
+              = some o'
+            ∧ Order.Holds to (dial (σ := σ) limits c to' bytes).1 o' := by
+        have hfresh : c.nextConn ∉ o₁.conns := fun hm => by
+          have := (ho₁.2.1 _ hm).1; unfold Conn at *; omega
+        by_cases ht : to' = to
+        · subst ht
+          refine ⟨{ o₁ with conns := c.nextConn :: o₁.conns }, by simp [Order.next], ?_⟩
+          refine ⟨fun k hk => ?_, fun k hk => ?_, ?_, fun k hk => by simp at hk⟩
+          · simp only [dialed_dial, Std.HashMap.getElem?_insert, beq_iff_eq] at hk
+            split at hk
+            · next he => exact he ▸ List.mem_cons_self
+            · exact List.mem_cons_of_mem _ (ho₁.1 k hk)
+          · simp only [List.mem_cons] at hk
+            simp only [dialed_dial, nextConn_dial, Std.HashMap.getElem?_insert, beq_iff_eq]
+            rcases hk with rfl | hk
+            · simp
+            · obtain ⟨hlt, hk'⟩ := ho₁.2.1 k hk
+              have : c.nextConn ≠ k := fun e => by unfold Conn at *; omega
+              simp only [this, ↓reduceIte]
+              exact ⟨Nat.lt_succ_of_lt hlt, hk'⟩
+          · simp only [wire_dial, ↓reduceIte, hpend rfl]
+            split
+            · simp
+            · simp
+        · refine ⟨o₁, by simp [Order.next, ht], ?_⟩
+          refine ⟨fun k hk => ?_, fun k hk => ?_, ?_, ?_⟩
+          · simp only [dialed_dial, Std.HashMap.getElem?_insert, beq_iff_eq] at hk
+            split at hk
+            · exact absurd (Option.some.inj hk) ht
+            · exact ho₁.1 k hk
+          · obtain ⟨hlt, hk'⟩ := ho₁.2.1 k hk
+            have : c.nextConn ≠ k := fun e => by unfold Conn at *; omega
+            simp only [dialed_dial, nextConn_dial, Std.HashMap.getElem?_insert, beq_iff_eq, this,
+              ↓reduceIte]
+            exact ⟨Nat.lt_succ_of_lt hlt, hk'⟩
+          · simpa [ht] using ho₁.2.2.1
+          · simpa [ht] using ho₁.2.2.2
+      split
+      · next heq => exact dialCase (by simp [heq])
+      · next heq =>
+        split
+        · exact dialCase (by simp [heq])
+        · exact frame hnone rfl rfl (Nat.le_refl _)
+      · next conn heq => exact enqueueCase (by simp [heq])
+      · next conn heq =>
+        have hd := (h.wired conn to').mpr (by simp [heq])
+        by_cases ht : to' = to
+        · subst ht
+          have hempty := ho₁.2.2.2 conn heq
+          have := writeTo (line := .up conn true) (rest := (c.wire to').waiting) hd
+            (by rw [hempty, hpend rfl]; exact List.sublist_append_right _ _) (by simp)
+          simpa using this
+        · refine ⟨o₁, by simp [Order.next, Order.not_mem ho₁ hd ht], ?_⟩
+          exact Order.holds_frame ho₁ rfl (by simp [ht]) (Nat.le_refl _)
+      · next conn heq => exact enqueueCase (by simp [heq])
+  | connected conn' | written conn' =>
+    have viaNext {to'' : Address} (hd : c.dialed[conn']? = some to'') :
+        ∃ o', ((next (σ := σ) c to'' conn' (c.wire to'')).2.map Entry.did).foldlM (Order.next to) o₁
+            = some o'
+          ∧ Order.Holds to (next (σ := σ) c to'' conn' (c.wire to'')).1 o' := by
+      by_cases ht : to'' = to
+      · subst ht
+        cases hp : (c.wire to'').waiting.pop? with
+        | none =>
+          rw [next_of_none _ _ _ _ hp]
+          refine ⟨o₁, rfl, ho₁.1, ho₁.2.1, by simpa using ho₁.2.2.1, fun k _ => ?_⟩
+          simpa using Fifo.pop?_eq_none.mp hp
+        | some p =>
+          obtain ⟨bytes, rest⟩ := p
+          rw [next_of_pop _ _ _ _ _ hp]
+          have hsub := ho₁.2.2.1
+          rw [Fifo.toList_of_pop? hp] at hsub
+          simpa using writeTo (line := .up conn' true) hd hsub (by simp)
+      · cases hp : (c.wire to'').waiting.pop? with
+        | none =>
+          rw [next_of_none _ _ _ _ hp]
+          exact ⟨o₁, rfl, Order.holds_frame ho₁ rfl (by simp [ht]) (Nat.le_refl _)⟩
+        | some p =>
+          obtain ⟨bytes, rest⟩ := p
+          rw [next_of_pop _ _ _ _ _ hp]
+          refine ⟨o₁, by simp [Order.next, Order.not_mem ho₁ hd ht], ?_⟩
+          exact Order.holds_frame ho₁ rfl (by simp [ht]) (Nat.le_refl _)
+    simp only [Courier.step]
+    split
+    · next to'' hto =>
+      split
+      · exact viaNext hto
+      · exact frame hnone rfl rfl (Nat.le_refl _)
+    · exact frame hnone rfl rfl (Nat.le_refl _)
+  | broken conn' now =>
+    simp only [Courier.step]
+    have erased {c' : Courier} (hd' : c'.dialed = c.dialed.erase conn')
+        (hn : c'.nextConn = c.nextConn)
+        (hw : (c'.wire to).waiting.toList = [] ∧ (∀ k, (c'.wire to).line ≠ .up k false)
+          ∨ c'.wire to = c.wire to) :
+        Order.Holds to c' o₁ := by
+      refine ⟨fun k hk => ?_, fun k hk => ?_, ?_, ?_⟩
+      · rw [hd', Std.HashMap.getElem?_erase] at hk
+        split at hk
+        · cases hk
+        · exact ho₁.1 k hk
+      · obtain ⟨hlt, hk'⟩ := ho₁.2.1 k hk
+        refine ⟨hn ▸ hlt, ?_⟩
+        rw [hd', Std.HashMap.getElem?_erase]
+        split
+        · exact Or.inl rfl
+        · exact hk'
+      · rcases hw with ⟨hw, -⟩ | hw
+        · rw [hw]; exact List.nil_sublist _
+        · rw [hw]; exact ho₁.2.2.1
+      · rcases hw with ⟨-, hw⟩ | hw
+        · exact fun k hk => absurd hk (hw k)
+        · rw [hw]; exact ho₁.2.2.2
+    split
+    · next to'' hto =>
+      split
+      · refine ⟨o₁, Order.foldlM_quiet (by simp), erased (by simp) (by simp) ?_⟩
+        rw [wire_setWire]
+        split
+        · exact Or.inl ⟨by simp [Fifo.toList], by simp⟩
+        · exact Or.inr (by simp)
+      · exact ⟨o₁, Order.foldlM_quiet (by simp), erased rfl rfl (Or.inr (by simp))⟩
+    · split
+      · exact frame (by simp) rfl (by simp) (Nat.le_refl _)
+      · exact frame hnone rfl rfl (Nat.le_refl _)
+  | accepted =>
+    simp only [Courier.step]
+    split
+    · exact frame (by simp) rfl rfl (Nat.le_refl _)
+    · exact frame (by simp) rfl (by simp) (Nat.le_succ _)
+  | received conn' bytes =>
+    have hacts {ps : List (Parcel σ)} {extra : List (Action σ)}
+        (he : ∀ a ∈ extra, a = .close conn') :
+        ∀ a ∈ ps.map Action.deliver ++ extra, (∀ k to', a ≠ .dial k to')
+          ∧ ∀ k bytes, a ≠ .write k bytes := by
+      intro a ha
+      rcases List.mem_append.mp ha with ha | ha
+      · obtain ⟨p, -, rfl⟩ := List.mem_map.mp ha
+        exact ⟨by simp, by simp⟩
+      · cases he a ha
+        exact ⟨by simp, by simp⟩
+    simp only [Courier.step]
+    split
+    · split
+      · split
+        · exact frame (hacts (by simp)) rfl (by simp) (Nat.le_refl _)
+        · exact frame (by simp) rfl (by simp) (Nat.le_refl _)
+      · exact frame (by simp) rfl (by simp) (Nat.le_refl _)
+    · split
+      · exact frame hnone rfl rfl (Nat.le_refl _)
+      · exact frame (by simp) rfl rfl (Nat.le_refl _)
+  | stop =>
+    simp only [Courier.step]
+    refine ⟨o₁, Order.foldlM_quiet ?_, fun k hk => by simp at hk, fun k hk => ?_,
+      by simp [Fifo.toList], fun k hk => by simp at hk⟩
+    · intro a ha
+      obtain ⟨k, -, rfl⟩ := List.mem_map.mp ha
+      exact ⟨by simp, by simp⟩
+    · exact ⟨(ho₁.2.1 k hk).1, Or.inl (by simp)⟩
+
+
+/-- What the courier asks to be written on connections to a process is what it was told to send
+there, in the order it was told, each parcel at most once: some may be dropped, none is
+repeated or reordered. -/
+theorem written_sublist_sent (es : List Event) (to : Address) :
+    (writtenTo to [] (exec limits read {} es).2).Sublist
+      (sentTo to (exec limits read {} es).2) := by
+  obtain ⟨o, ho, -⟩ := exec_foldlM (R := Order.Holds to) (fun _ _ e hc hR => order_step hc hR e)
+    (sound_empty (limits := limits)) (m := {})
+    ⟨by simp, by simp, by simp [Fifo.toList], fun k hk => by simp at hk⟩ es
+  simpa using Order.foldlM_sublist ho
+
+end OrderStep
+
 section Reading
 
 variable {c : Courier}

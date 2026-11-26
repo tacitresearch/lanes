@@ -45,7 +45,8 @@ and nobody sleeps or waits (`Mailbox.after_close`). Of the courier
 its start: between two writes on a connection the handler said the first was written, and it
 never writes on a connection whose write is under way (`Peers.Courier.written_between`,
 `Peers.Courier.Reachable.write_not_busy`); it writes only on a connection it dialed and has not
-closed since (`Peers.Courier.write_dialed`); the queue for a process never holds more than
+closed since (`Peers.Courier.write_dialed`); what it writes to a process is what it was told
+to send there, in order, each parcel at most once (`Peers.Courier.written_sublist_sent`); the queue for a process never holds more than
 `limits.queue` (`Peers.Courier.Reachable.queue_le`); `stop` closes every connection it dialed or
 adopted, and after `stop` it only closes and refuses (`Peers.Courier.stop_closes`,
 `Peers.Courier.after_stop`); the first dial to a process after a connection to it broke answers a
@@ -57,9 +58,7 @@ broke, now kept and tested: with `queue := 0` the parcel that made it dial waite
 and bytes reported on a connection it had dialed were answered with `close` while it went on
 writing there. Left to the model check, because they are about the handler and the network as
 well: that what is reported written was started once, and that nothing is lost unless a
-connection failed, a queue was full or the courier stopped. Also only checked, though it is the
-courier's: that writes to a process start in the order its parcels were sent, each at most
-once.
+connection failed, a queue was full or the courier stopped.
 
 What a journal file means is not in this table either. Proved in `Lanes/Actors/Journal.lean`
 and `Lanes/Data/Frame.lean`: a file reads back as the entries written (`Journal.open?_file`); a

@@ -179,4 +179,37 @@ theorem foldlM_some_inv {M : Type} {f : M → α → Option M} {l : List α} {m 
     exact ih (fun m y m'' hy => hstep m y m'' (List.mem_cons_of_mem _ hy))
       (hstep m x m' List.mem_cons_self hm hx) hl
 
+/-- What follows the first `a` in `l`, if `a` is in it. -/
+@[expose] def afterFirst [DecidableEq α] (a : α) : List α → Option (List α)
+  | [] => none
+  | x :: xs => if x = a then some xs else afterFirst a xs
+
+theorem eq_of_afterFirst [DecidableEq α] {a : α} {l rest : List α}
+    (h : afterFirst a l = some rest) : ∃ skipped, l = skipped ++ a :: rest := by
+  induction l with
+  | nil => simp [afterFirst] at h
+  | cons x xs ih =>
+    simp only [afterFirst] at h
+    split at h
+    · next hx => exact ⟨[], by simp [hx, Option.some.inj h]⟩
+    · obtain ⟨skipped, rfl⟩ := ih h
+      exact ⟨x :: skipped, rfl⟩
+
+/-- Taking the first `a` out of a list that `a :: l` is a sublist of leaves one that `l` is a
+sublist of. -/
+theorem afterFirst_of_cons_sublist [DecidableEq α] {a : α} {l p : List α} (h : (a :: l).Sublist p) :
+    ∃ rest, afterFirst a p = some rest ∧ l.Sublist rest := by
+  induction p with
+  | nil => simp at h
+  | cons x xs ih =>
+    simp only [afterFirst]
+    split
+    · next hx =>
+      subst hx
+      exact ⟨xs, rfl, (List.cons_sublist_cons.mp h)⟩
+    · next hx =>
+      rcases h with _ | ⟨_, h⟩ | ⟨_, h⟩
+      · exact ih ‹_›
+      · exact absurd rfl hx
+
 end Lanes
