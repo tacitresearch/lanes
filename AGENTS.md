@@ -35,6 +35,13 @@ it has an axiom gate. A new definition of `Lanes/` with no theorem, test or row 
 fails `lanes lint` unless it is on `docs/inventory-none.md` under a heading that says why; when
 one there gets evidence, take it off.
 
+A parser or format is also tested against Go's standard library
+(`docs/decisions/new-differential-tests-against-go.md`): `oracle/<package>/main.go` answers the
+cases that `Tests/Oracle/<Package>.lean` generates, and every difference is either a `known`
+predicate there, with its reason, or a failure. `lake exe lanesOracle --cases 100000` asks Go
+(it needs `go`, at the version `oracle/go.mod` pins); `lake test` replays the answers recorded in
+`Tests/Oracle/vectors/`, which `lake exe lanesOracle --cases 1000 --record` rewrites.
+
 ## Parallel branches
 
 Several agents work at once, each on a branch that is merged into the main branch. The layout
