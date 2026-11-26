@@ -620,7 +620,7 @@ Consequences:
 
 ## D28. A shard is a system, and a cluster is runtimes with a router
 
-`Lanes/Actors/Shard.lean`, `Lanes/Actors/Cluster.lean`. `System.shard sys hosts` is `sys` as a
+`Lanes/Actors/Shard.lean`; the in-process router of this section is gone (D37). `System.shard sys hosts` is `sys` as a
 shard that hosts some of its actors sees it: a message to an actor hosted elsewhere leaves as
 an output (a parcel), a parcel arriving is an input, and an actor not hosted only forwards. A
 cluster starts one ordinary runtime per shard and routes parcels between them, on a lane that is
@@ -1090,3 +1090,18 @@ left for the application to get right, and the application had not.
 beside it in `systems/raft-kv/Main.lean`: a save writes the whole state, Raft's log included,
 so it is as rare as a journal of a few megabytes allows. A rule that saves when the journal
 has outgrown the last snapshot would need no number, and is the better default.
+
+## D37. No router between shards in one process
+
+`Lanes/Actors/Cluster.lean` is deleted. It started a runtime per shard in one process and
+carried parcels between them on a lane of the inbox that was never full. It came before the
+transport between processes (D30) and was never given a journal; its 106 lines were trusted,
+and what it did, the transport does with its decisions proved and model-checked and with
+journals. A machine's cores are used by running a process per core, joined by the transport
+on the loopback interface, which costs a copy and a system call per parcel and needs nothing
+more to be trusted. If one process with several shards is wanted again, it should be the
+transport's courier over an in-memory link, not a second router.
+
+The inbox's lane that is never refused (`Mailbox.urge`, `Runtime.peer`) was there for it and has
+no user now; it goes next.
+

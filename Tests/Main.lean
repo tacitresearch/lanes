@@ -19,7 +19,6 @@ import Tests.Durable
 import Tests.Clock
 import Tests.HttpClient
 import Tests.Codec
-import Tests.Cluster
 import Tests.Peers
 import Tests.Courier
 import Tests.Mailbox
@@ -53,7 +52,7 @@ def live : IO (List (String × Bool)) := do
   let group (name : String) (tests : IO (List (String × Bool))) := safely name (liftM tests)
   return (← group "runtime" Tests.Runtime.tests) ++ (← group "web" Tests.Web.tests)
     ++ (← Tests.Durable.tests) ++ (← safely "clock" Tests.Clock.live)
-    ++ (← safely "http client" Tests.HttpClient.live) ++ (← group "cluster" Tests.Cluster.tests)
+    ++ (← safely "http client" Tests.HttpClient.live)
     ++ (← safely "peers" Tests.Peers.live) ++ (← safely "peers on a journal" Tests.Peers.durable)
     ++ (← safely "transport" Tests.Peers.transport) ++ (← safely "fronted" Tests.Fronted.live)
     ++ (← safely "full inbox" Tests.Fronted.busyTest) ++ (← safely "node" Tests.Fronted.nodeTest)

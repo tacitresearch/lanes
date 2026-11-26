@@ -18,7 +18,7 @@ not host only forwards what reaches it, so a misrouted message is passed on, nev
 the wrong place.
 
 It is an ordinary `System`, so a shard runs on the ordinary kernel and runtime, and keeps the
-ordinary journal. Several shards and a router between them are `Lanes.Cluster`.
+ordinary journal. Shards in different processes, joined by TCP, are `Lanes.Peers`.
 -/
 
 @[expose] public section

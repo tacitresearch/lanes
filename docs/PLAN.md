@@ -453,7 +453,7 @@ unrelated messages that the checker's state merging already allows (`SysState.Eq
 Durable clusters come after: each shard numbers what it sends to each other shard, and after a
 restart a shard is sent again what the receiver's journal does not have.
 
-**Done so far:** `System.shard`, the cluster and its router, tested (D28). And the theorem at
+**Done so far:** `System.shard`, the cluster and its router, tested (D28; the in-process router was removed later, D37, in favour of the transport between processes). And the theorem at
 the level of the semantics, for two shards (`Lanes/Actors/ShardSound.lean`): `System.split sys
 hosts` is the two shards joined with every parcel of one an input of the other, and in a run
 where each input from outside goes to the shard that hosts its receiver, every state, read as
@@ -477,7 +477,8 @@ shards. Both have counterexamples in `Tests/Split.lean`.
   the states of the kernels together, with the parcels in the router's lanes, stand for a state
   of `System.split`, and every step of a shard or of the router is a run of it. The theorem
   above then gives the run of `sys`. Each shard's kernel is already proved to follow
-  `System.shard`; what is missing is the router as a pure function and its refinement.
+  `System.shard`; what is missing is the router as a pure function and its refinement. (Now
+  the transport's: its decisions are the courier, D30.)
 - A journal for clusters, and a measurement of what the threads buy on an idle machine.
 
 ### B.2 Node to node
