@@ -58,20 +58,30 @@ structure Config where
   timeout_ms : Nat := 10000
   maxResponseBytes : Nat := 1048576
 
-private def exchange (call : Call) (config : Config) : Async (Option Response) := do
-  let some addr := Std.Net.IPv4Addr.ofString call.host | return none
-  let socket ← TCP.Socket.Client.mk
-  socket.connect (.v4 ⟨addr, call.port⟩)
-  socket.send (call.request.wire call.host)
+private def converse (socket : TCP.Socket.Client) (address : Std.Net.SocketAddress)
+    (request : ByteArray) (config : Config) : Async (Option Response) := do
+  socket.connect address
+  socket.send request
   let mut received := ByteArray.empty
   repeat
-    match ← socket.recv? 65536 with
-    | some bytes =>
-      received := received ++ bytes
-      if received.size > config.maxResponseBytes then break
-    | none => break
-  socket.close
-  return if received.size > config.maxResponseBytes then none else Response.parse received
+    let arrived ← socket.recv? 65536
+    received := received ++ arrived.getD .empty
+    if let .done answer := Response.read config.maxResponseBytes received arrived.isNone then
+      return answer
+  return none
+
+/-- `Async.race` leaves the loser running, so the socket is closed whoever wins: that fails
+what a call given up on still waits for, and ends its task. -/
+private def exchange (call : Call) (config : Config) : Async (Option Response) := do
+  let some addr := Std.Net.IPv4Addr.ofString call.host | return none
+  let some request := call.request.wire call.host | return none
+  let socket ← TCP.Socket.Client.mk
+  let attempt : Async (Option Response) := do
+    try converse socket (.v4 ⟨addr, call.port⟩) request config
+    catch _ => pure none
+  let patience := (fun _ => (none : Option Response)) <$> Async.sleep (.ofNat config.timeout_ms)
+  try Async.race attempt patience
+  finally socket.close
 
 /-- Makes the call on a task of its own, so the shard does not wait for the network, and hands
 the answer back as an input. An answer that finds the inbox full is dropped. -/
@@ -79,12 +89,7 @@ def handler {sys : System σ} [Hashable σ.Id] (port : Port σ) (config : Config
     (rt : Runtime sys) (out : σ.Out) : Async Unit := do
   if let some (id, call) := port.called out then
     background do
-      let attempt : Async (Option Response) := do
-        try exchange call config
-        catch _ => pure none
-      let patience : Async (Option Response) := do
-        Async.sleep (.ofNat config.timeout_ms)
-        return none
-      discard <| rt.tryInput (port.reply id (← Async.race attempt patience))
+      let answer ← try exchange call config catch _ => pure none
+      discard <| rt.tryInput (port.reply id answer)
 
 end Lanes.Http.Client
