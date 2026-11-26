@@ -137,6 +137,29 @@ Two kinds, kept apart:
   2. `systems/ledger`: a full web application with sessions, persistence and a payment saga.
   3. `systems/gateway`: a rate-limited HTTP gateway.
 
+**The key-value store with front ends, the first multi-actor refinement: proved.**
+`Examples/KVProofs.lean` (297 lines): `implements` for every environment whose links do not
+duplicate, and `caching_not_implements` in every environment. The checker settled the
+hypothesis first: every link the store uses must not duplicate, the one to the store too,
+since the store acknowledges each put it handles. What the proof cost:
+
+- *150 lines for the refinement*: 30 for an invariant (no timer, and a put comes from a front
+  end, so that its request can be named), 60 for the relation and its lemmas, 45 for the
+  cases. The deliveries were mechanical (`rfl`); input, output and loss were the batch
+  server's proof with names changed, and about 20 lines were multiset rewriting and `abel`.
+- *110 lines for the bug*: the run replays in one `simp` call; showing the spec has no such
+  trace took three predicates on the spec's state, one per phase of the trace, and that each
+  is `Service.Stable`.
+- *Wished for*: a relation in the library of the form "`pending` is at least what `pend` shows
+  of the network, the outbox at least the outputs and what `owed` shows", with its input,
+  output and loss cases, and the forward and take lemmas, proved once; an `of_steps` that takes
+  `Monotone.timers`'s result and a no-duplication assumption and drops those two cases; and a
+  lemma on `Service.spec` that an output with an input's id was produced when that input took
+  effect, which would shorten the trace argument to a few lines.
+- *Added on the way*: `filterMap_perm_erase`, `Service.Stable` (`τSTr`, `sTr`),
+  `System.mTr_of_run`, `System.Refines.traces_of_run`. `Event` has no `BEq`, so the test that
+  the checker's run is the one replayed compares rendered events.
+
 ## 6. Code style
 
 The code has 12 inline comments and 515 docstrings: I required a docstring on every

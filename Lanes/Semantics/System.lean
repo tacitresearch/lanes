@@ -71,6 +71,17 @@ theorem invariant_iff {P : SysState sys → Prop} :
     sys.Invariant env P ↔ (sys.sem env).Invariant P :=
   ⟨fun h c hc => h c (reachable_iff.mpr hc), fun h c hc => h c (reachable_iff.mp hc)⟩
 
+/-- A run of the step function is a run of the semantics with the same events. -/
+theorem mTr_of_run {c c' : SysState sys} {evs : List (Event σ)} (h : c.run env evs = some c') :
+    (sys.sem env).lts.MTr c evs c' := by
+  induction evs generalizing c with
+  | nil => exact (Option.some.inj h) ▸ .refl
+  | cons ev evs ih =>
+    simp only [SysState.run] at h
+    cases hstep : c.step env ev with
+    | none => simp [hstep] at h
+    | some c₁ => exact .stepL hstep (ih (by simpa [hstep] using h))
+
 /--
 `sys` refines `spec` under `env`: everything the outside world can observe of the running system
 is allowed by the spec. Inputs and outputs are the visible labels; deliveries, timeouts, crashes
@@ -79,6 +90,22 @@ and restarts are internal.
 abbrev Refines {S : Type} (sys : System σ) (env : EnvModel σ)
     (spec : Spec S (Option (Visible σ))) : Prop :=
   Lanes.Refines (sys.sem env) spec Event.visible
+
+/-- The inputs and outputs of a run from the initial state, in order, are a trace of what the
+system refines. Shown a run whose trace the spec does not have, a system does not refine it. -/
+theorem Refines.traces_of_run {S : Type} {spec : Spec S (Option (Visible σ))}
+    (h : sys.Refines env spec) {evs : List (Event σ)} {c : SysState sys}
+    (hrun : (SysState.init sys env).run env evs = some c) :
+    ∃ t t', spec.init t ∧ spec.lts.SMTr t ((evs.filterMap Event.visible).map some) t' := by
+  have hlabels : ∀ evs : List (Event σ),
+      (evs.map Event.visible).filter (· ≠ HasTau.τ) = (evs.filterMap Event.visible).map some := by
+    intro evs
+    induction evs with
+    | nil => rfl
+    | cons ev evs ih =>
+      cases hv : ev.visible <;> simp_all [HasTau.τ]
+  rw [← hlabels]
+  exact Lanes.Refines.traces h rfl (mTr_of_run hrun)
 
 end System
 

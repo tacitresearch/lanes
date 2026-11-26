@@ -72,6 +72,11 @@ theorem filterMap_erase_perm [DecidableEq α] [DecidableEq β] {f : α → Optio
   have h := ((List.perm_cons_erase ha).filterMap f).erase b
   rwa [List.filterMap_cons_some hb, List.erase_cons_head] at h
 
+theorem filterMap_perm_erase [DecidableEq α] {f : α → Option β} {l : List α} {a : α}
+    (ha : a ∈ l) : (l.filterMap f).Perm ((f a).toList ++ (l.erase a).filterMap f) := by
+  have h := (List.perm_cons_erase ha).filterMap f
+  cases hfa : f a <;> simp_all
+
 /-- Erasing `b` from what `f` shows of `l` is erasing from `l` the first element shown as `b`. -/
 theorem exists_filterMap_erase [DecidableEq α] [DecidableEq β] {f : α → Option β} {b : β} :
     ∀ l : List α, b ∈ l.filterMap f →
