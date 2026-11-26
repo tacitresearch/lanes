@@ -74,7 +74,7 @@ theorem bounds_respect (bounds : Bounds) {a b : W config} (h : World.Equiv env a
 
 /-- The instance a check explores. -/
 abbrev scenario (env : EnvModel (sig N C R)) (requests : List (Request N C)) (bounds : Bounds) :
-    Scenario (sig N C R) (List (Request N C) × Check.Monitor (sig N C R) M) :=
+    Scenario (sig N C R) (List (Request N C) × Check.Monitor (Request N C) (Response R) M) :=
   { env, driver := (spec (store K V)).monitored (Driver.anyOrder requests)
     maxCrashes := bounds.maxCrashes }
 
@@ -94,7 +94,7 @@ theorem always_of_pass {name : String} {p : W config → Bool} (hp : .always nam
     (hw : (scenario env requests bounds).Reachable (cluster N config (store K V)) bounds.holds w) :
     p w = true :=
   Check.system_sound_of_respects (scenario env requests bounds)
-    ((spec (store K V)).monitored_respects (.of_lawful _)) properties
+    ((spec (store K V)).monitored_respects (σ := sig N C R) (.of_lawful _)) properties
     { constraint := bounds.holds } hrespect (fun _ _ => bounds_respect bounds) hfailure hcomplete
     hp hw
 
@@ -104,9 +104,9 @@ theorem monitor_of_pass {name : String} (hrefines : Check.refines name ∈ prope
     {w : W config}
     (hw : (scenario env requests bounds).Reachable (cluster N config (store K V)) bounds.holds w) :
     w.driver.2.ok = true :=
-  Check.refines_sound (spec (store K V)) (.of_lawful _) env bounds.maxCrashes properties
-    { constraint := bounds.holds } hrespect (fun _ _ => bounds_respect bounds) hfailure hcomplete
-    hrefines hw
+  Check.refines_sound (σ := sig N C R) (spec (store K V)) (.of_lawful _) env bounds.maxCrashes
+    properties { constraint := bounds.holds } hrespect (fun _ _ => bounds_respect bounds) hfailure
+    hcomplete hrefines hw
 
 /-- After a complete PASS of a check with the monitor, the inputs and outputs of every run of
 the instance within its bounds, in the order they happened, are a trace of the map:
@@ -117,9 +117,9 @@ theorem traces_of_pass {name : String} (hrefines : Check.refines name ∈ proper
       events w) :
     ∃ a, (spec (store K V)).spec.lts.SMTr ⟨fun _ => none, 0, 0⟩
       ((events.filterMap Event.visible).map some) a :=
-  Check.refines_traces (spec (store K V)) (.of_lawful _) env bounds.maxCrashes properties
-    { constraint := bounds.holds } hrespect (fun _ _ => bounds_respect bounds) hfailure hcomplete
-    hrefines hrun
+  Check.refines_traces (σ := sig N C R) (spec (store K V)) (.of_lawful _) env bounds.maxCrashes
+    properties { constraint := bounds.holds } hrespect (fun _ _ => bounds_respect bounds) hfailure
+    hcomplete hrefines hrun
 
 end Pass
 

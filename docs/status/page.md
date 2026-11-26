@@ -40,7 +40,8 @@ Update them in the same change that moves an item; `lake exe lanes lint --fix` w
 2. Counterexample-to-induction finder and `inv_split`, then `lanes prove`.
 3. Releasing idle actors.
 4. What `systems/ledger` asks of the framework (its README's friction log): requests prepared
-   before the journal, specs with time, `Service` without the system's signature.
+   before the journal. Specs with time and `Service` without the system's signature are done
+   (`docs/decisions/D42-a-spec-names-its-inputs-and.md`).
 
 ## Known limits
 

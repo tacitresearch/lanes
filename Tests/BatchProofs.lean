@@ -36,15 +36,15 @@ theorem waiting_erase {net : List (Envelope (sig In Out))} {src : Option Unit} {
 
 /-- The requests still to be served are pending in the service: at least those on their way
 and those queued. -/
-structure Sim {svc : Service (sig In Out) S} (c : SysState (system svc))
-    (t : Service.Abs (sig In Out) S) : Prop where
+structure Sim {svc : Service In Out S} (c : SysState (system svc))
+    (t : Service.Abs In Out S) : Prop where
   value : t.value = (c.state ()).1
   outbox : t.outbox = ↑c.outbox
   pending : (↑(waiting c.net) : Multiset In) + ↑(c.state ()).2 ≤ t.pending
 
 /-- The service serves a queue in as many internal steps as it is long. -/
-theorem serves (svc : Service (sig In Out) S) (queue : List In) :
-    ∀ (t : Service.Abs (sig In Out) S) (rest : Multiset In), rest + ↑queue ≤ t.pending →
+theorem serves (svc : Service In Out S) (queue : List In) :
+    ∀ (t : Service.Abs In Out S) (rest : Multiset In), rest + ↑queue ≤ t.pending →
       ∃ t', svc.spec.lts.τSTr t t' ∧ t'.value = (serve svc t.value queue).1 ∧
         t'.outbox = t.outbox + ↑(serve svc t.value queue).2 ∧ rest ≤ t'.pending := by
   induction queue with
@@ -61,8 +61,8 @@ theorem serves (svc : Service (sig In Out) S) (queue : List In) :
 
 namespace Sim
 
-variable {svc : Service (sig In Out) S} {c : SysState (system svc)}
-  {t : Service.Abs (sig In Out) S}
+variable {svc : Service In Out S} {c : SysState (system svc)}
+  {t : Service.Abs In Out S}
 
 theorem loses {c' : SysState (system svc)} (h : Sim c t) (hl : c'.Loses c) : Sim c' t where
   value := by rw [hl.state]; exact h.value
@@ -124,10 +124,10 @@ theorem step (h : Sim c t) {net : List (Envelope (sig In Out))} (m : Msg In)
 end Sim
 
 /-- The one timer is `flush`, and requests come from outside. -/
-def Tame {svc : Service (sig In Out) S} (c : SysState (system svc)) : Prop :=
+def Tame {svc : Service In Out S} (c : SysState (system svc)) : Prop :=
   (∀ i m, m ∈ c.timers i → m = Msg.flush) ∧ ∀ e ∈ c.net, e.src = none
 
-theorem tame_invariant (svc : Service (sig In Out) S) (env : EnvModel (sig In Out)) :
+theorem tame_invariant (svc : Service In Out S) (env : EnvModel (sig In Out)) :
     (system svc).Invariant env Tame := by
   have htimers := System.Monotone.timers (system svc) (T := fun _ m => m = Msg.flush)
     (fun i s msg delay m h => by cases msg <;> simp_all [actor])
@@ -146,7 +146,7 @@ theorem tame_invariant (svc : Service (sig In Out) S) (env : EnvModel (sig In Ou
     · exact h e he
     · simp [actor] at he
 
-theorem implements (svc : Service (sig In Out) S) (env : EnvModel (sig In Out))
+theorem implements (svc : Service In Out S) (env : EnvModel (sig In Out))
     (henv : (env.link none ()).duplicating = false) : (system svc).Implements env svc := by
   refine System.Refines.of_steps (tame_invariant svc env) Sim ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
   · refine ⟨⟨svc.init, 0, 0⟩, rfl, SysState.init_induction (env := env)
@@ -185,12 +185,12 @@ theorem implements (svc : Service (sig In Out) S) (env : EnvModel (sig In Out))
     exact ⟨t, .refl, h.recover⟩
 
 /-- The same of the server that remembers every state it has been in, and back. -/
-theorem implements_withPast (svc : Service (sig In Out) S) (env : EnvModel (sig In Out))
+theorem implements_withPast (svc : Service In Out S) (env : EnvModel (sig In Out))
     (henv : (env.link none ()).duplicating = false) :
     (system svc).withPast.Implements env svc :=
   System.Refines.to_ghost _ (implements svc env henv)
 
-example (svc : Service (sig In Out) S) (env : EnvModel (sig In Out))
+example (svc : Service In Out S) (env : EnvModel (sig In Out))
     (henv : (env.link none ()).duplicating = false) : (system svc).Implements env svc :=
   System.Refines.of_ghost (.past _) (implements_withPast svc env henv)
 
