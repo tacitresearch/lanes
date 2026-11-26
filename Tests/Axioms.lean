@@ -59,6 +59,15 @@ by `lake build`, not linked into the test executable.
 /-- info: 'Lanes.Server.implements' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Server.implements
 
+/-- info: 'Lanes.Check.Monitor.sound' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.Monitor.sound
+
+/-- info: 'Lanes.Check.Monitor.complete' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.Monitor.complete
+
+/-- info: 'Lanes.Check.Monitor.ok_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.Monitor.ok_iff
+
 /-- info: 'Examples.Bank.balance_nonneg' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Examples.Bank.balance_nonneg
 

@@ -2,6 +2,7 @@ module
 
 public import Lanes
 public import Lanes.Actors.Step
+public import Lanes.Semantics.Monitor
 public import Lanes.Semantics.Refinement
 public import Lanes.Semantics.Service
 public import Lanes.Semantics.Sums

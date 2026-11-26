@@ -71,7 +71,7 @@ theorems, and their repeated tests go away:
 | PASS and complete ⇒ the invariant holds in every reachable state of the instance | To prove |
 | A reported trace is a real run ending in a violation | To prove |
 | `states ≤ maxStates` | To prove |
-| The spec monitor accepts exactly the traces of `Service.spec` | To prove |
+| The spec monitor accepts exactly the traces of `Service.spec` | Proved |
 
 ## 3. Testing: deterministic first, live last
 
