@@ -181,6 +181,57 @@ def abuseWitnesses : List (Check.Property (World' untimed .viaLedger)) :=
     .sometimes "only the administrator sees the audit" fun w => answered w 13 .forbidden,
     .sometimes "a name is taken once" fun w => answered w 14 .nameTaken ]
 
+/-! ## The bridge, without a socket -/
+
+namespace Bridge
+
+open Ledger.Web Lanes.Http
+
+def admin : Name := ⟨"admin", rfl⟩
+
+def settings : Settings :=
+  { key := .of "test key".toUTF8, password := { iterations := 2, pepper := "pepper".toUTF8 }
+    origin := "http://127.0.0.1:8080", secure := false, admin }
+
+def alice : Name := ⟨"alice", rfl⟩
+
+def token : String := sessionToken settings alice 7
+
+def post (path : String) (fields : List (String × String)) (cookie : Option String := some token) :
+    Http.Request :=
+  { method := .post, path := [path]
+    headers := (cookie.map fun c => [("cookie", s!"{sessionCookie}={c}")]).getD []
+    body := ("&".intercalate (fields.map fun (k, v) => s!"{k}={v}")).toUTF8 }
+
+def csrf : String := Auth.formToken settings.key token
+
+def same : Except Http.Response In → Except Http.Response In → Bool
+  | .ok a, .ok b => a == b
+  | .error a, .error b => a == b
+  | _, _ => false
+
+def tests : List (String × Bool) :=
+  let transfer := [("src", "1"), ("dst", "2"), ("amount", "5"), ("csrf", csrf)]
+  [ ("bridge: a session's cookie makes an act of its user, whatever the form says",
+      same (decode settings 9 (post "transfer" (transfer ++ [("name", "bob")])))
+        (.ok (.act 9 alice 7 (.transfer 1 2 5)))),
+    ("bridge: a cookie whose payload names another user does not verify",
+      let forged := (Auth.tag settings.key "session" "7.alice") ++ ".7.bob"
+      same (decode settings 9 (post "transfer" transfer forged)) (.error notLoggedIn)),
+    ("bridge: a form token of another session is refused",
+      same (decode settings 9 (post "transfer" ((transfer.take 3) ++
+        [("csrf", Auth.formToken settings.key (sessionToken settings alice 8))])))
+        (.error forbidden)),
+    ("bridge: a password enters the system only as its digest",
+      same (decode settings 9 (post "login" [("name", "alice"), ("password", "longenough")] none))
+        (.ok (.logIn 9 alice (settings.password.digest "alice" "longenough")))),
+    ("bridge: a short password is refused before it reaches the system",
+      match decode settings 9 (post "signup" [("name", "alice"), ("password", "short")] none) with
+      | .error r => r.status == 400
+      | .ok _ => false) ]
+
+end Bridge
+
 def timedWitnesses : List (Check.Property (World' timed' .viaLedger)) :=
   [ .sometimes "a lock lifts" fun w => answered w 6 (.loggedIn 1 6),
     .sometimes "a session ends on its own" fun w => answered w 12 .noSession ]
@@ -223,6 +274,10 @@ def main (args : List String) : IO UInt32 := do
     results := results.push (← timed "a log-out racing a transfer, with a crash anywhere"
       (fun r => r.ok && r.complete)
       fun _ => check untimed .viaLedger logOutRace [] crashing 1)
+  if all || args.contains "bridge" then
+    for (name, ok) in Bridge.tests do
+      IO.println s!"== {name}: {if ok then "as expected" else "NOT AS EXPECTED"}"
+      results := results.push ok
   if all || args.contains "transfers" then
     results := results.push (← timed "transfers between two users" (fun r => r.ok && r.complete)
       fun _ => check untimed .viaLedger transfers transfersWitnesses)

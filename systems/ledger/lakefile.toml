@@ -1,6 +1,6 @@
 name = "ledger"
 version = "0.1.0"
-defaultTargets = ["Ledger", "ledgerCheck"]
+defaultTargets = ["Ledger", "ledgerCheck", "ledger", "ledgerLive"]
 testDriver = "ledgerCheck"
 
 [[require]]
@@ -18,3 +18,13 @@ roots = ["Ledger", "Ledger.Proofs"]
 name = "ledgerCheck"
 root = "Check"
 
+
+# The web application: `ledger [port] [journal] [secrets] [admin] [iterations]`.
+[[lean_exe]]
+name = "ledger"
+root = "Main"
+
+# Users signing up over HTTP, a transfer between them, the server killed and started again.
+[[lean_exe]]
+name = "ledgerLive"
+root = "Live"
