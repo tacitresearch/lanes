@@ -43,13 +43,17 @@ def report (results : List (String × Bool)) : IO UInt32 := do
   (← IO.getStdout).flush
   IO.Process.exit (if failed == 0 then 0 else 1)
 
+open Tests.Durable (safely) in
 def live : IO (List (String × Bool)) := do
-  return (← Tests.Runtime.tests) ++ (← Tests.Web.tests) ++ (← Tests.Durable.tests)
-    ++ (← Tests.Clock.live.block) ++ (← Tests.HttpClient.live.block)
-    ++ (← Tests.Cluster.tests) ++ (← Tests.Peers.live.block) ++ (← Tests.Peers.durable.block)
-    ++ (← Tests.Peers.transport.block) ++ (← Tests.Fronted.live.block)
-    ++ (← Tests.Fronted.busyTest.block) ++ (← Tests.Fronted.nodeTest.block)
-    ++ (← Tests.Fronted.nodeDurable.block) ++ (← Tests.Fronted.durable.block)
+  let group (name : String) (tests : IO (List (String × Bool))) := safely name (liftM tests)
+  return (← group "runtime" Tests.Runtime.tests) ++ (← group "web" Tests.Web.tests)
+    ++ (← Tests.Durable.tests) ++ (← safely "clock" Tests.Clock.live)
+    ++ (← safely "http client" Tests.HttpClient.live) ++ (← group "cluster" Tests.Cluster.tests)
+    ++ (← safely "peers" Tests.Peers.live) ++ (← safely "peers on a journal" Tests.Peers.durable)
+    ++ (← safely "transport" Tests.Peers.transport) ++ (← safely "fronted" Tests.Fronted.live)
+    ++ (← safely "full inbox" Tests.Fronted.busyTest) ++ (← safely "node" Tests.Fronted.nodeTest)
+    ++ (← safely "node on a journal" Tests.Fronted.nodeDurable)
+    ++ (← safely "fronted on a journal" Tests.Fronted.durable)
 
 def main (args : List String) : IO UInt32 := do
   let pure := Tests.Engine.tests ++ Tests.Bank.tests ++ Tests.Json.tests ++ Tests.Html.tests

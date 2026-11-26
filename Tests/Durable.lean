@@ -592,11 +592,17 @@ def killSavingTest : Async (List (String × Bool)) := do
     ("snapshot: from a snapshot and a journal much shorter than its history",
       saved && kept < 200) ]
 
+/-- A test that throws has failed, and the tests after it still run. -/
+def safely (name : String) (test : Async (List (String × Bool))) : IO (List (String × Bool)) := do
+  try test.block
+  catch e => return [(s!"{name}: threw {e}", false)]
+
 def tests : IO (List (String × Bool)) := do
-  return (← restartTest.block) ++ (← tornTest.block) ++ (← refusalTest.block)
-    ++ (← orderTest.block) ++ (← rehandTest.block) ++ (← overdueTest.block)
-    ++ (← failTest.block) ++ (← cutTest.block) ++ (← countTest.block)
-    ++ (← snapshotTest.block) ++ (← windowsTest.block) ++ (← killTest.block)
-    ++ (← killSavingTest.block)
+  return (← safely "restart" restartTest) ++ (← safely "torn" tornTest)
+    ++ (← safely "refusal" refusalTest) ++ (← safely "order" orderTest)
+    ++ (← safely "rehand" rehandTest) ++ (← safely "overdue" overdueTest)
+    ++ (← safely "fail" failTest) ++ (← safely "cut" cutTest) ++ (← safely "count" countTest)
+    ++ (← safely "snapshot" snapshotTest) ++ (← safely "windows" windowsTest)
+    ++ (← safely "kill" killTest) ++ (← safely "kill while saving" killSavingTest)
 
 end Tests.Durable

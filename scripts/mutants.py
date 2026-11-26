@@ -1,18 +1,31 @@
 #!/usr/bin/env python3
 """Mutation gate for trusted code.
 
-Each mutant below breaks one duty of a file listed in TRUSTED.md. The test suite must fail on
-every one of them: a mutant that passes is a claim nothing checks. Run from the repository
-root; it takes a minute or two per mutant, so it is run by hand and nightly, not on every push.
+Each mutant below breaks one duty of a file listed in TRUSTED.md. A check must fail on every
+one of them: a mutant that passes is a claim nothing checks. The check is `lanesTest` unless
+the entry names another as its fifth part (see `CHECKS`). Run from the repository root; it
+takes a minute or two per mutant, so it is run by hand and nightly, not on every push.
 
-    python3 scripts/mutants.py            # all
+    python3 scripts/mutants.py            # those checked by lanesTest
+    python3 scripts/mutants.py --all      # also those checked by something slower
     python3 scripts/mutants.py journal    # those whose name contains "journal"
+    python3 scripts/mutants.py --list     # print the list and run nothing
+
+A mutant is killed when a test fails on it, or when it no longer builds, which is how a
+theorem kills one. A run that does not end, or ends without a test that failed, has noticed
+the mutant and asserted nothing: it is reported as HUNG or CRASHED, apart from the kills, and
+is a test to write. The gate fails on a mutant that survives and on one whose text is no
+longer in the file.
+
+This is a list of known ways to break trusted code, each caught. It is not a measure of what
+the tests cover: see "The mutation gate" in TRUSTED.md.
 """
 import os
 import pathlib
 import signal
 import subprocess
 import sys
+import tempfile
 
 MUTANTS = [
     ("runtime: outputs handed over before the journal is written", "Lanes/Actors/Runtime.lean",
@@ -151,6 +164,22 @@ MUTANTS = [
     ("node: a parcel that arrives is not handed to the shard", "Lanes/Env/Node.lean",
      "  ready.resolve fun parcel => discard <| server.tryInput (.inr parcel)",
      "  ready.resolve fun _ => pure ()"),
+    ("journal: after a save, entries are appended to the file the save replaced",
+     "Lanes/Env/Journal.lean",
+     "    replace path bytes\n    handle.set (← IO.FS.Handle.mk path .append)",
+     "    replace path bytes"),
+    ("node: a parcel that arrives is not handed to the shard, in three processes",
+     "Lanes/Env/Node.lean",
+     "  ready.resolve fun parcel => discard <| server.tryInput (.inr parcel)",
+     "  ready.resolve fun _ => pure ()", "raftProcs"),
+    ("peers: a connection that cannot be made is not reported, between three raft nodes",
+     "Lanes/Env/Peers.lean",
+     """              listen events conn socket fun _ => pure ()
+            catch _ => discard <| post events (.broken conn (← IO.monoMsNow))
+""",
+     """              listen events conn socket fun _ => pure ()
+            catch _ => pure ()
+""", "raftLive"),
 ]
 
 
@@ -159,6 +188,8 @@ CHECKS = {
                       run="./.lake/build/bin/lanesTest", limit_s=120),
     "raftProcs": dict(cwd="systems/raft-kv", build="lake build raftNode raftProcs",
                       run="./.lake/build/bin/raftProcs", limit_s=300),
+    "raftLive": dict(cwd="systems/raft-kv", build="lake build raftLive",
+                     run="./.lake/build/bin/raftLive", limit_s=300),
 }
 
 WORDS = {
@@ -169,16 +200,22 @@ WORDS = {
 
 def sh(cmd, cwd=".", limit_s=1800):
     """The exit code and output of `cmd`; the code is `None` if it did not end in time. The
-    command has a process group of its own, so that what it started ends with it."""
-    proc = subprocess.Popen(cmd, shell=True, cwd=cwd, text=True, start_new_session=True,
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    try:
-        out, _ = proc.communicate(timeout=limit_s)
-        return proc.returncode, out
-    except subprocess.TimeoutExpired:
-        os.killpg(proc.pid, signal.SIGKILL)
-        out, _ = proc.communicate()
-        return None, out
+    command has a process group of its own, and what it started and left running is killed
+    with it: a test that fails early may leave the processes it spawned."""
+    with tempfile.TemporaryFile(mode="w+") as out:
+        proc = subprocess.Popen(cmd, shell=True, cwd=cwd, start_new_session=True,
+                                stdout=out, stderr=subprocess.STDOUT)
+        try:
+            code = proc.wait(timeout=limit_s)
+        except subprocess.TimeoutExpired:
+            code = None
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        proc.wait()
+        out.seek(0)
+        return code, out.read()
 
 
 def verdict(check):
@@ -191,9 +228,12 @@ def verdict(check):
     failed = [line[5:] for line in out.splitlines() if line.startswith("FAIL ")]
     if code is None:
         return "hung", f"no test failed and the run had not ended after {check['limit_s']} s"
-    if failed:
+    asserted = [name for name in failed if ": threw " not in name]
+    if asserted:
         more = f", and {len(failed) - 1} more" if len(failed) > 1 else ""
-        return "failed", f"FAIL {failed[0]}{more}"
+        return "failed", f"FAIL {asserted[0]}{more}"
+    if failed:
+        return "crashed", f"no test failed and one threw ({failed[0]})"
     if code != 0:
         return "crashed", f"no test failed and the run ended with code {code}"
     return "passed", "every test passed"
