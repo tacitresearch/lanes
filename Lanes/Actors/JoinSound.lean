@@ -20,6 +20,19 @@ reachable state of the join, seen from `a`, is a reachable state of `a` alone, u
 
 Seen from `a`, a message from `b` is an input. Inputs of `a` alone all travel on one link, so
 that link is modelled as the most permissive one, `Link.network`.
+
+One event of the join is zero or more events of `a` alone, but not always the same ones in the
+same order: two equal inputs from different senders are two messages in the join and one kind
+of message alone, and the join may take the newer first. So the proof carries, for every state
+of the join, every way of leaving out messages from outside (`Thin`): alone, `a` never receives
+a message the join is going to remove out of turn.
+
+`SysState.step_swap` exchanges the two sides of a join, which gives the same for `b`
+(`System.Reachable.right`) up to one difference. `a` boots first, so what its boot sends `b` is
+in flight before the first messages of `b` itself, and alone `b` receives inputs only after it
+has booted. Seen from `b` the join is therefore a state of `b` alone up to `SysState.Equiv`, the
+order of messages on different links, and exactly one when the boot of `a` sends `b` nothing
+(`System.Reachable.right_of_quiet_boot`).
 -/
 
 @[expose] public section
@@ -97,7 +110,8 @@ private theorem update_update {ι : Type} [DecidableEq ι] {β : ι → Type} (f
 
 private theorem update_inl {α β : Type} [DecidableEq α] [DecidableEq β] {γ : α ⊕ β → Type}
     (f : (x : α ⊕ β) → γ x) (i : α) (v : γ (.inl i)) :
-    (fun k => update f (.inl i) v (.inl k)) = update (β := fun k => γ (.inl k)) (fun k => f (.inl k)) i v := by
+    (fun k => update f (.inl i) v (.inl k))
+      = update (β := fun k => γ (.inl k)) (fun k => f (.inl k)) i v := by
   funext k
   by_cases h : k = i
   · subst h; simp
@@ -621,7 +635,8 @@ private theorem left_settle (c : SysState (a.join b w)) (i : σ.Id)
           up := c.left.up
           net := c.left.net ++ Effect.sends i r.2
           timers := update c.left.timers i (Effect.retime r.2 (c.left.timers i))
-          outbox := c.left.outbox ++ (Effect.emits r.2).filter fun out => (w.toRight out).isNone } := by
+          outbox := c.left.outbox ++ (Effect.emits r.2).filter fun out =>
+            (w.toRight out).isNone } := by
   rw [settle_eq]
   simp only [Wiring.isStop_left]
   split
@@ -835,186 +850,221 @@ private theorem start_inr {c : SysState (a.join b w)} (hc : Seen env w R c.left)
   exact settle_inr (c := { c with up := update c.up (.inr j) true }) (hleft ▸ hc) j
     ((b.actor j).recover (c.state (.inr j)))
 
+private theorem step_input {c c' : SysState (a.join b w)} {x : σ.In ⊕ τ.In}
+    (hc : Seen env w R c.left) (hstep : c.step env (.input x) = some c') :
+    Seen env w R c'.left := by
+  obtain rfl := SysState.step_input.mp hstep
+  cases x with
+  | inl x =>
+    have hleft : ({ c with net := c.net ++ [⟨none, .inl (a.accept x).1, (a.accept x).2⟩] } :
+        SysState (a.join b w)).left = { c.left with
+          net := c.left.net ++ [x].map fun x => ⟨none, (a.accept x).1, (a.accept x).2⟩ } := by
+      simp [SysState.left, Envelope.left?]
+    exact hleft ▸ hc.inputs [x]
+  | inr y =>
+    have hleft : ({ c with net := c.net ++ [⟨none, .inr (b.accept y).1, (b.accept y).2⟩] } :
+        SysState (a.join b w)).left = c.left := by
+      simp [SysState.left, Envelope.left?]
+    exact hleft ▸ hc
+
+private theorem step_deliver {c c' : SysState (a.join b w)} {e : Envelope (joinSig σ τ)}
+    (hc : Seen env w R c.left) (hstep : c.step env (.deliver e) = some c') :
+    Seen env w R c'.left := by
+  obtain ⟨hup, hdel, rfl⟩ := SysState.step_deliver.mp hstep
+  obtain ⟨src, i | j, msg⟩ := e
+  · refine settle (c := { c with net := c.net.erase ⟨src, .inl i, msg⟩ }) hc.closed hc.tidy i
+      ((a.actor i).step (c.state (.inl i)) msg) fun n hn => ?_
+    have hmem := SysState.mem_of_deliverable hdel
+    have outside : src.bind Sum.getLeft? = none →
+        R (({ c.left with net := n } : SysState a).settle env.left i
+          ((a.actor i).step (c.state (.inl i)) msg)) := fun hsrc =>
+      hc.handle_outside (u := ⟨src.bind Sum.getLeft?, i, msg⟩)
+        (List.mem_filterMap.mpr ⟨_, hmem, rfl⟩) hsrc hup
+        (Thin.of_filterMap_erase (fun u hu => by
+          simp only [Envelope.left?, Option.some.injEq] at hu
+          rw [← hu]
+          exact hsrc) c.net hn)
+    rcases src with _ | s | j'
+    · exact outside rfl
+    · have herase : (c.net.erase ⟨some (.inl s), .inl i, msg⟩).filterMap Envelope.left?
+          = c.left.net.erase ⟨some s, i, msg⟩ :=
+        filterMap_erase (fun e' => Envelope.left?_eq_inside e') c.net
+      obtain ⟨m, hm, rfl, hmm⟩ := Thin.unerase (u := ⟨some s, i, msg⟩) (l' := c.left.net)
+        (by simp) (List.mem_filterMap.mpr ⟨_, hmem, rfl⟩) ((congrArg (Thin n) herase).mp hn)
+      exact hc.closed (.deliver ⟨some s, i, msg⟩) (hc.reach m hm) (SysState.step_deliver.mpr
+        ⟨hup, SysState.deliverable_left hm hdel, rfl⟩)
+    · exact outside rfl
+  · have hleft : ({ c with net := c.net.erase ⟨src, .inr j, msg⟩ } :
+        SysState (a.join b w)).left = c.left :=
+      SysState.ext' rfl rfl (filterMap_erase_of_none rfl c.net) rfl rfl
+    exact settle_inr (c := { c with net := c.net.erase ⟨src, .inr j, msg⟩ }) (hleft ▸ hc) j
+      ((b.actor j).step (c.state (.inr j)) msg)
+
+private theorem step_duplicate {c c' : SysState (a.join b w)} {e : Envelope (joinSig σ τ)}
+    (hc : Seen env w R c.left) (hstep : c.step env (.duplicate e) = some c') :
+    Seen env w R c'.left := by
+  obtain ⟨hup, hdup, hdel, rfl⟩ := SysState.step_duplicate.mp hstep
+  obtain ⟨src, i | j, msg⟩ := e
+  · refine settle (c := c) hc.closed hc.tidy i ((a.actor i).step (c.state (.inl i)) msg)
+      fun n hn => ?_
+    have outside : src.bind Sum.getLeft? = none →
+        R (({ c.left with net := n } : SysState a).settle env.left i
+          ((a.actor i).step (c.state (.inl i)) msg)) := fun hsrc =>
+      hc.handle_outside (u := ⟨src.bind Sum.getLeft?, i, msg⟩)
+        (List.mem_filterMap.mpr ⟨_, SysState.mem_of_deliverable hdel, rfl⟩) hsrc hup hn
+    rcases src with _ | s | j'
+    · exact outside rfl
+    · exact hc.closed (.duplicate ⟨some s, i, msg⟩) (hc.reach n hn) (SysState.step_duplicate.mpr
+        ⟨hup, hdup, SysState.deliverable_left hn hdel, rfl⟩)
+    · exact outside rfl
+  · exact settle_inr hc j ((b.actor j).step (c.state (.inr j)) msg)
+
+private theorem step_drop {c c' : SysState (a.join b w)} {e : Envelope (joinSig σ τ)}
+    (hc : Seen env w R c.left) (hstep : c.step env (.drop e) = some c') :
+    Seen env w R c'.left := by
+  obtain ⟨hlossy, hmem, rfl⟩ := SysState.step_drop.mp hstep
+  obtain ⟨src, i | j, msg⟩ := e
+  · have outside : src.bind Sum.getLeft? = none →
+        Seen env w R ({ c with net := c.net.erase ⟨src, .inl i, msg⟩ } :
+          SysState (a.join b w)).left := fun hsrc =>
+      ⟨hc.closed, fun n hn => hc.reach n (Thin.of_filterMap_erase (fun u hu => by
+        simp only [Envelope.left?, Option.some.injEq] at hu
+        rw [← hu]
+        exact hsrc) c.net hn), hc.tidy⟩
+    rcases src with _ | s | j'
+    · exact outside rfl
+    · refine ⟨hc.closed, fun n hn => ?_, hc.tidy⟩
+      have herase : (c.net.erase ⟨some (.inl s), .inl i, msg⟩).filterMap Envelope.left?
+          = c.left.net.erase ⟨some s, i, msg⟩ :=
+        filterMap_erase (fun e' => Envelope.left?_eq_inside e') c.net
+      obtain ⟨m, hm, rfl, hmm⟩ := Thin.unerase (u := ⟨some s, i, msg⟩) (l' := c.left.net)
+        (by simp) (List.mem_filterMap.mpr ⟨_, hmem, rfl⟩) ((congrArg (Thin n) herase).mp hn)
+      exact hc.closed (.drop ⟨some s, i, msg⟩) (hc.reach m hm)
+        (SysState.step_drop.mpr ⟨hlossy, hmm, rfl⟩)
+    · exact outside rfl
+  · have hleft : ({ c with net := c.net.erase ⟨src, .inr j, msg⟩ } :
+        SysState (a.join b w)).left = c.left :=
+      SysState.ext' rfl rfl (filterMap_erase_of_none rfl c.net) rfl rfl
+    exact hleft ▸ hc
+
+private theorem step_timeout {c c' : SysState (a.join b w)} {i : σ.Id ⊕ τ.Id}
+    {msg : (joinSig σ τ).Msg i}
+    (hc : Seen env w R c.left) (hstep : c.step env (.timeout i msg) = some c') :
+    Seen env w R c'.left := by
+  obtain ⟨hup, hmem, rfl⟩ := SysState.step_timeout.mp hstep
+  cases i with
+  | inl i =>
+    have hleft : ({ c with timers := update c.timers (.inl i) ((c.timers (.inl i)).erase msg) } :
+        SysState (a.join b w)).left
+        = { c.left with timers := update c.left.timers i ((c.left.timers i).erase msg) } :=
+      SysState.ext' rfl rfl rfl (update_inl c.timers i _) rfl
+    refine settle
+      (c := { c with timers := update c.timers (.inl i) ((c.timers (.inl i)).erase msg) })
+      hc.closed hc.tidy i ((a.actor i).step (c.state (.inl i)) msg) fun n hn => ?_
+    rw [hleft]
+    exact hc.closed (.timeout i msg) (hc.reach n hn) (SysState.step_timeout.mpr ⟨hup, hmem, rfl⟩)
+  | inr j =>
+    have hleft : ({ c with timers := update c.timers (.inr j) ((c.timers (.inr j)).erase msg) } :
+        SysState (a.join b w)).left = c.left :=
+      SysState.ext' rfl rfl rfl
+        (funext fun k => update_inr_inl c.timers j ((c.timers (.inr j)).erase msg) k) rfl
+    exact settle_inr
+      (c := { c with timers := update c.timers (.inr j) ((c.timers (.inr j)).erase msg) })
+      (hleft ▸ hc) j ((b.actor j).step (c.state (.inr j)) msg)
+
+private theorem step_output {c c' : SysState (a.join b w)} {out : σ.Out ⊕ τ.Out}
+    (hc : Seen env w R c.left) (hstep : c.step env (.output out) = some c') :
+    Seen env w R c'.left := by
+  obtain ⟨hmem, rfl⟩ := SysState.step_output.mp hstep
+  cases out with
+  | inl out =>
+    have houtbox := filterMap_erase (f := Sum.getLeft?) (a := (.inl out : σ.Out ⊕ τ.Out))
+      (b := out) (fun x => by cases x <;> simp) c.outbox
+    refine ⟨hc.closed, fun n hn => ?_, fun o ho =>
+      hc.tidy o (List.mem_of_mem_erase ((congrArg (o ∈ ·) houtbox).mp ho))⟩
+    exact (congrArg (fun outbox =>
+      R ({ c.left with net := n, outbox := outbox } : SysState a)) houtbox).mpr
+      (hc.closed (.output out) (hc.reach n hn) (SysState.step_output.mpr
+        ⟨List.mem_filterMap.mpr ⟨_, hmem, rfl⟩, rfl⟩))
+  | inr out =>
+    have houtbox := filterMap_erase_of_none (f := Sum.getLeft? (α := σ.Out))
+      (a := (.inr out : σ.Out ⊕ τ.Out)) rfl c.outbox
+    refine ⟨hc.closed, fun n hn => ?_, fun o ho =>
+      hc.tidy o ((congrArg (o ∈ ·) houtbox).mp ho)⟩
+    exact (congrArg (fun outbox =>
+      R ({ c.left with net := n, outbox := outbox } : SysState a)) houtbox).mpr
+      (hc.reach n hn)
+
+private theorem step_crash {c c' : SysState (a.join b w)} {i : σ.Id ⊕ τ.Id}
+    (hc : Seen env w R c.left) (hstep : c.step env (.crash i) = some c') :
+    Seen env w R c'.left := by
+  obtain ⟨hup, hcrash, rfl⟩ := SysState.step_crash.mp hstep
+  cases i with
+  | inl i =>
+    refine ⟨hc.closed, fun n hn => ?_, hc.tidy⟩
+    obtain ⟨m, hm, rfl⟩ := SysState.thin_down c.net hn
+    have hdown : ({ (c.down env (.inl i)).left with
+        net := m.filter fun e => decide (e.dst ≠ i) || (env.left.link e.src e.dst).lossy } :
+          SysState a) = ({ c.left with net := m } : SysState a).down env.left i :=
+      SysState.ext' rfl (update_inl c.up i false) rfl (update_inl c.timers i []) rfl
+    exact hc.closed (.crash i) (hc.reach m hm) (SysState.step_crash.mpr ⟨hup, hcrash, hdown⟩)
+  | inr j =>
+    have hleft : (c.down env (.inr j)).left = c.left :=
+      SysState.ext' rfl (funext fun k => update_inr_inl c.up j false k)
+        (filterMap_filter_of_none SysState.left?_of_dropped c.net)
+        (funext fun k => update_inr_inl c.timers j [] k) rfl
+    exact hleft ▸ hc
+
+private theorem step_start {c c' : SysState (a.join b w)} {i : σ.Id ⊕ τ.Id}
+    (hc : Seen env w R c.left) (hstep : c.step env (.start i) = some c') :
+    Seen env w R c'.left := by
+  obtain ⟨hup, hmail, rfl⟩ := SysState.step_start.mp hstep
+  cases i with
+  | inl i =>
+    have hleft : ({ c with up := update c.up (.inl i) true } : SysState (a.join b w)).left
+        = { c.left with up := update c.left.up i true } :=
+      SysState.ext' rfl (update_inl c.up i true) rfl rfl rfl
+    refine settle (c := { c with up := update c.up (.inl i) true }) hc.closed hc.tidy i
+      ((a.actor i).recover (c.state (.inl i))) fun n hn => ?_
+    rw [hleft]
+    by_cases hmail' : ({ c.left with net := n } : SysState a).hasMail i = true
+        ∨ env.left.restarts i = true
+    · exact hc.closed (.start i) (hc.reach n hn) (SysState.step_start.mpr ⟨hup, hmail', rfl⟩)
+    · have hjoin : c.hasMail (.inl i) = true := hmail.resolve_right fun h => hmail' (.inr h)
+      obtain ⟨e, he, hdst⟩ : ∃ e ∈ c.net, e.dst = .inl i := by
+        simpa [SysState.hasMail] using hjoin
+      obtain ⟨src, k | j, msg⟩ := e
+      · obtain rfl : k = i := by simpa using hdst
+        have hu : (⟨src.bind Sum.getLeft?, k, msg⟩ : Envelope σ) ∈ c.left.net :=
+          List.mem_filterMap.mpr ⟨_, he, rfl⟩
+        have hun : (⟨src.bind Sum.getLeft?, k, msg⟩ : Envelope σ) ∉ n := fun h =>
+          hmail' (.inl (by simpa [SysState.hasMail] using ⟨_, h, rfl⟩))
+        have hsrc : src.bind Sum.getLeft? = none :=
+          Classical.byContradiction fun h => hun (hn.mem hu h)
+        obtain ⟨m, hm, rfl, hmm⟩ := Thin.insert hu hun hn
+        have hlossy : (env.left.link (src.bind Sum.getLeft?) k).lossy = true := by
+          rw [hsrc]
+          rfl
+        obtain ⟨hkept, heq⟩ := SysState.settle_erase (env := env.left)
+          ({ c.left with net := m, up := update c.left.up k true } : SysState a) k
+          ((a.actor k).recover (c.state (.inl k))) hmm hlossy
+        have hstart := hc.closed (.start k) (hc.reach m hm) (SysState.step_start.mpr
+          ⟨hup, .inl (by simpa [SysState.hasMail] using ⟨_, hmm, rfl⟩), rfl⟩)
+        exact heq ▸ hc.closed (.drop _) hstart (SysState.step_drop.mpr ⟨hlossy, hkept, rfl⟩)
+      · simp at hdst
+  | inr j => exact start_inr hc j
+
 private theorem step {c c' : SysState (a.join b w)} {ev : Event (joinSig σ τ)}
     (hc : Seen env w R c.left) (hstep : c.step env ev = some c') : Seen env w R c'.left := by
   cases ev with
-  | input x =>
-    obtain rfl := SysState.step_input.mp hstep
-    cases x with
-    | inl x =>
-      have hleft : ({ c with net := c.net ++ [⟨none, .inl (a.accept x).1, (a.accept x).2⟩] } :
-          SysState (a.join b w)).left = { c.left with
-            net := c.left.net ++ [x].map fun x => ⟨none, (a.accept x).1, (a.accept x).2⟩ } := by
-        simp [SysState.left, Envelope.left?]
-      exact hleft ▸ hc.inputs [x]
-    | inr y =>
-      have hleft : ({ c with net := c.net ++ [⟨none, .inr (b.accept y).1, (b.accept y).2⟩] } :
-          SysState (a.join b w)).left = c.left := by
-        simp [SysState.left, Envelope.left?]
-      exact hleft ▸ hc
-  | deliver e =>
-    obtain ⟨hup, hdel, rfl⟩ := SysState.step_deliver.mp hstep
-    obtain ⟨src, i | j, msg⟩ := e
-    · refine settle (c := { c with net := c.net.erase ⟨src, .inl i, msg⟩ }) hc.closed hc.tidy i
-        ((a.actor i).step (c.state (.inl i)) msg) fun n hn => ?_
-      have hmem := SysState.mem_of_deliverable hdel
-      have outside : src.bind Sum.getLeft? = none →
-          R (({ c.left with net := n } : SysState a).settle env.left i
-            ((a.actor i).step (c.state (.inl i)) msg)) := fun hsrc =>
-        hc.handle_outside (u := ⟨src.bind Sum.getLeft?, i, msg⟩)
-          (List.mem_filterMap.mpr ⟨_, hmem, rfl⟩) hsrc hup
-          (Thin.of_filterMap_erase (fun u hu => by
-            simp only [Envelope.left?, Option.some.injEq] at hu
-            rw [← hu]
-            exact hsrc) c.net hn)
-      rcases src with _ | s | j'
-      · exact outside rfl
-      · have herase : (c.net.erase ⟨some (.inl s), .inl i, msg⟩).filterMap Envelope.left?
-            = c.left.net.erase ⟨some s, i, msg⟩ :=
-          filterMap_erase (fun e' => Envelope.left?_eq_inside e') c.net
-        obtain ⟨m, hm, rfl, hmm⟩ := Thin.unerase (u := ⟨some s, i, msg⟩) (l' := c.left.net)
-          (by simp) (List.mem_filterMap.mpr ⟨_, hmem, rfl⟩) ((congrArg (Thin n) herase).mp hn)
-        exact hc.closed (.deliver ⟨some s, i, msg⟩) (hc.reach m hm) (SysState.step_deliver.mpr
-          ⟨hup, SysState.deliverable_left hm hdel, rfl⟩)
-      · exact outside rfl
-    · have hleft : ({ c with net := c.net.erase ⟨src, .inr j, msg⟩ } :
-          SysState (a.join b w)).left = c.left :=
-        SysState.ext' rfl rfl (filterMap_erase_of_none rfl c.net) rfl rfl
-      exact settle_inr (c := { c with net := c.net.erase ⟨src, .inr j, msg⟩ }) (hleft ▸ hc) j
-        ((b.actor j).step (c.state (.inr j)) msg)
-  | duplicate e =>
-    obtain ⟨hup, hdup, hdel, rfl⟩ := SysState.step_duplicate.mp hstep
-    obtain ⟨src, i | j, msg⟩ := e
-    · refine settle (c := c) hc.closed hc.tidy i ((a.actor i).step (c.state (.inl i)) msg) fun n hn => ?_
-      have outside : src.bind Sum.getLeft? = none →
-          R (({ c.left with net := n } : SysState a).settle env.left i
-            ((a.actor i).step (c.state (.inl i)) msg)) := fun hsrc =>
-        hc.handle_outside (u := ⟨src.bind Sum.getLeft?, i, msg⟩)
-          (List.mem_filterMap.mpr ⟨_, SysState.mem_of_deliverable hdel, rfl⟩) hsrc hup hn
-      rcases src with _ | s | j'
-      · exact outside rfl
-      · exact hc.closed (.duplicate ⟨some s, i, msg⟩) (hc.reach n hn) (SysState.step_duplicate.mpr
-          ⟨hup, hdup, SysState.deliverable_left hn hdel, rfl⟩)
-      · exact outside rfl
-    · exact settle_inr hc j ((b.actor j).step (c.state (.inr j)) msg)
-  | drop e =>
-    obtain ⟨hlossy, hmem, rfl⟩ := SysState.step_drop.mp hstep
-    obtain ⟨src, i | j, msg⟩ := e
-    · have outside : src.bind Sum.getLeft? = none →
-          Seen env w R ({ c with net := c.net.erase ⟨src, .inl i, msg⟩ } :
-            SysState (a.join b w)).left := fun hsrc =>
-        ⟨hc.closed, fun n hn => hc.reach n (Thin.of_filterMap_erase (fun u hu => by
-          simp only [Envelope.left?, Option.some.injEq] at hu
-          rw [← hu]
-          exact hsrc) c.net hn), hc.tidy⟩
-      rcases src with _ | s | j'
-      · exact outside rfl
-      · refine ⟨hc.closed, fun n hn => ?_, hc.tidy⟩
-        have herase : (c.net.erase ⟨some (.inl s), .inl i, msg⟩).filterMap Envelope.left?
-            = c.left.net.erase ⟨some s, i, msg⟩ :=
-          filterMap_erase (fun e' => Envelope.left?_eq_inside e') c.net
-        obtain ⟨m, hm, rfl, hmm⟩ := Thin.unerase (u := ⟨some s, i, msg⟩) (l' := c.left.net)
-          (by simp) (List.mem_filterMap.mpr ⟨_, hmem, rfl⟩) ((congrArg (Thin n) herase).mp hn)
-        exact hc.closed (.drop ⟨some s, i, msg⟩) (hc.reach m hm)
-          (SysState.step_drop.mpr ⟨hlossy, hmm, rfl⟩)
-      · exact outside rfl
-    · have hleft : ({ c with net := c.net.erase ⟨src, .inr j, msg⟩ } :
-          SysState (a.join b w)).left = c.left :=
-        SysState.ext' rfl rfl (filterMap_erase_of_none rfl c.net) rfl rfl
-      exact hleft ▸ hc
-  | timeout i msg =>
-    obtain ⟨hup, hmem, rfl⟩ := SysState.step_timeout.mp hstep
-    cases i with
-    | inl i =>
-      have hleft : ({ c with timers := update c.timers (.inl i) ((c.timers (.inl i)).erase msg) } :
-          SysState (a.join b w)).left
-          = { c.left with timers := update c.left.timers i ((c.left.timers i).erase msg) } :=
-        SysState.ext' rfl rfl rfl (update_inl c.timers i _) rfl
-      refine settle
-        (c := { c with timers := update c.timers (.inl i) ((c.timers (.inl i)).erase msg) })
-        hc.closed hc.tidy i ((a.actor i).step (c.state (.inl i)) msg) fun n hn => ?_
-      rw [hleft]
-      exact hc.closed (.timeout i msg) (hc.reach n hn) (SysState.step_timeout.mpr ⟨hup, hmem, rfl⟩)
-    | inr j =>
-      have hleft : ({ c with timers := update c.timers (.inr j) ((c.timers (.inr j)).erase msg) } :
-          SysState (a.join b w)).left = c.left :=
-        SysState.ext' rfl rfl rfl (funext fun k => update_inr_inl c.timers j ((c.timers (.inr j)).erase msg) k) rfl
-      exact settle_inr
-        (c := { c with timers := update c.timers (.inr j) ((c.timers (.inr j)).erase msg) })
-        (hleft ▸ hc) j ((b.actor j).step (c.state (.inr j)) msg)
-  | output out =>
-    obtain ⟨hmem, rfl⟩ := SysState.step_output.mp hstep
-    cases out with
-    | inl out =>
-      have houtbox := filterMap_erase (f := Sum.getLeft?) (a := (.inl out : σ.Out ⊕ τ.Out))
-        (b := out) (fun x => by cases x <;> simp) c.outbox
-      refine ⟨hc.closed, fun n hn => ?_, fun o ho =>
-        hc.tidy o (List.mem_of_mem_erase ((congrArg (o ∈ ·) houtbox).mp ho))⟩
-      exact (congrArg (fun outbox =>
-        R ({ c.left with net := n, outbox := outbox } : SysState a)) houtbox).mpr
-        (hc.closed (.output out) (hc.reach n hn) (SysState.step_output.mpr
-          ⟨List.mem_filterMap.mpr ⟨_, hmem, rfl⟩, rfl⟩))
-    | inr out =>
-      have houtbox := filterMap_erase_of_none (f := Sum.getLeft? (α := σ.Out))
-        (a := (.inr out : σ.Out ⊕ τ.Out)) rfl c.outbox
-      refine ⟨hc.closed, fun n hn => ?_, fun o ho =>
-        hc.tidy o ((congrArg (o ∈ ·) houtbox).mp ho)⟩
-      exact (congrArg (fun outbox =>
-        R ({ c.left with net := n, outbox := outbox } : SysState a)) houtbox).mpr
-        (hc.reach n hn)
-  | crash i =>
-    obtain ⟨hup, hcrash, rfl⟩ := SysState.step_crash.mp hstep
-    cases i with
-    | inl i =>
-      refine ⟨hc.closed, fun n hn => ?_, hc.tidy⟩
-      obtain ⟨m, hm, rfl⟩ := SysState.thin_down c.net hn
-      have hdown : ({ (c.down env (.inl i)).left with
-          net := m.filter fun e => decide (e.dst ≠ i) || (env.left.link e.src e.dst).lossy } :
-            SysState a) = ({ c.left with net := m } : SysState a).down env.left i :=
-        SysState.ext' rfl (update_inl c.up i false) rfl (update_inl c.timers i []) rfl
-      exact hc.closed (.crash i) (hc.reach m hm) (SysState.step_crash.mpr ⟨hup, hcrash, hdown⟩)
-    | inr j =>
-      have hleft : (c.down env (.inr j)).left = c.left :=
-        SysState.ext' rfl (funext fun k => update_inr_inl c.up j false k)
-          (filterMap_filter_of_none SysState.left?_of_dropped c.net)
-          (funext fun k => update_inr_inl c.timers j [] k) rfl
-      exact hleft ▸ hc
-  | start i =>
-    obtain ⟨hup, hmail, rfl⟩ := SysState.step_start.mp hstep
-    cases i with
-    | inl i =>
-      have hleft : ({ c with up := update c.up (.inl i) true } : SysState (a.join b w)).left
-          = { c.left with up := update c.left.up i true } :=
-        SysState.ext' rfl (update_inl c.up i true) rfl rfl rfl
-      refine settle (c := { c with up := update c.up (.inl i) true }) hc.closed hc.tidy i
-        ((a.actor i).recover (c.state (.inl i))) fun n hn => ?_
-      rw [hleft]
-      by_cases hmail' : ({ c.left with net := n } : SysState a).hasMail i = true
-          ∨ env.left.restarts i = true
-      · exact hc.closed (.start i) (hc.reach n hn) (SysState.step_start.mpr ⟨hup, hmail', rfl⟩)
-      · have hjoin : c.hasMail (.inl i) = true := hmail.resolve_right fun h => hmail' (.inr h)
-        obtain ⟨e, he, hdst⟩ : ∃ e ∈ c.net, e.dst = .inl i := by
-          simpa [SysState.hasMail] using hjoin
-        obtain ⟨src, k | j, msg⟩ := e
-        · obtain rfl : k = i := by simpa using hdst
-          have hu : (⟨src.bind Sum.getLeft?, k, msg⟩ : Envelope σ) ∈ c.left.net :=
-            List.mem_filterMap.mpr ⟨_, he, rfl⟩
-          have hun : (⟨src.bind Sum.getLeft?, k, msg⟩ : Envelope σ) ∉ n := fun h =>
-            hmail' (.inl (by simpa [SysState.hasMail] using ⟨_, h, rfl⟩))
-          have hsrc : src.bind Sum.getLeft? = none :=
-            Classical.byContradiction fun h => hun (hn.mem hu h)
-          obtain ⟨m, hm, rfl, hmm⟩ := Thin.insert hu hun hn
-          have hlossy : (env.left.link (src.bind Sum.getLeft?) k).lossy = true := by
-            rw [hsrc]
-            rfl
-          obtain ⟨hkept, heq⟩ := SysState.settle_erase (env := env.left)
-            ({ c.left with net := m, up := update c.left.up k true } : SysState a) k
-            ((a.actor k).recover (c.state (.inl k))) hmm hlossy
-          have hstart := hc.closed (.start k) (hc.reach m hm) (SysState.step_start.mpr
-            ⟨hup, .inl (by simpa [SysState.hasMail] using ⟨_, hmm, rfl⟩), rfl⟩)
-          exact heq ▸ hc.closed (.drop _) hstart (SysState.step_drop.mpr ⟨hlossy, hkept, rfl⟩)
-        · simp at hdst
-    | inr j => exact start_inr hc j
+  | input x => exact hc.step_input hstep
+  | deliver e => exact hc.step_deliver hstep
+  | duplicate e => exact hc.step_duplicate hstep
+  | drop e => exact hc.step_drop hstep
+  | timeout i msg => exact hc.step_timeout hstep
+  | output out => exact hc.step_output hstep
+  | crash i => exact hc.step_crash hstep
+  | start i => exact hc.step_start hstep
 
 /-- Booting the actors of `a` in the join is booting `a` alone, with the outputs wired to `b`
 still waiting. -/
@@ -1049,14 +1099,43 @@ private theorem boot (l : List σ.Id) :
       rw [SysState.left_settle]
       split <;> rfl
     refine ⟨n, hn, fun outbox ho => ?_⟩
-    obtain ⟨outbox', ho', h'⟩ := h₁ (outbox ++ Effect.emits ((a.actor i).recover (c.state (.inl i))).2)
-      (by rw [List.filter_append, ho, houtbox])
+    obtain ⟨outbox', ho', h'⟩ :=
+      h₁ (outbox ++ Effect.emits ((a.actor i).recover (c.state (.inl i))).2)
+        (by rw [List.filter_append, ho, houtbox])
     refine ⟨outbox', ho', ?_⟩
     rw [List.foldl_cons, List.foldl_cons, ← h']
     congr 1
     have h₂ := h₀ outbox
     rw [hleft] at h₂
     exact h₂
+
+/-- Booting `a` in a join in which nothing has reached `a` yet. -/
+private theorem init_from (c₀ : SysState (a.join b w)) (hc₀ : c₀.left = SysState.blank a) :
+    Seen env w (a.Reachable env.left)
+      (a.boot.foldl (fun c i => c.startActor env (.inl i)) c₀).left := by
+  have hboot : ∀ n', Thin n' (a.boot.foldl (fun c i => c.startActor env (.inl i)) c₀).left.net →
+      ∃ outbox', outbox'.filter (fun out => (w.toRight out).isNone)
+          = (a.boot.foldl (fun c i => c.startActor env (.inl i)) c₀).left.outbox ∧
+        SysState.init a env.left = { (a.boot.foldl (fun c i => c.startActor env (.inl i)) c₀).left
+          with net := n', outbox := outbox' } := by
+    intro n' hn'
+    obtain ⟨n, hn, h⟩ := boot a.boot c₀ hn'
+    rw [hc₀] at hn h
+    obtain rfl : n = [] := by
+      cases hn
+      rfl
+    exact h [] rfl
+  refine ⟨fun ev h hstep => h.step ev hstep, fun n' hn' => ?_, fun out hout => ?_⟩
+  · obtain ⟨outbox', ho', heq⟩ := hboot n' hn'
+    have hrun := SysState.run_outputs_filter env.left
+      ({ (a.boot.foldl (fun c i => c.startActor env (.inl i)) c₀).left with net := n' } :
+        SysState a)
+      (fun out => (w.toRight out).isNone) [] outbox' (by simp)
+    simp only [List.nil_append, ho'] at hrun
+    exact (heq ▸ System.Reachable.init).run hrun
+  · obtain ⟨outbox', ho', -⟩ := hboot _ (Thin.refl _)
+    rw [← ho'] at hout
+    simpa using (List.mem_filter.mp hout).2
 
 private theorem init (env : EnvModel (joinSig σ τ)) :
     Seen env w (a.Reachable env.left) (SysState.init (a.join b w) env).left := by
@@ -1073,31 +1152,7 @@ private theorem init (env : EnvModel (joinSig σ τ)) :
     | nil => exact fun _ h => h
     | cons j l ih => exact fun c hc => ih _ (start_inr hc j)
   rw [hfold]
-  apply hright
-  have hboot : ∀ n', Thin n' (a.boot.foldl (fun c i => c.startActor env (.inl i))
-      (SysState.blank (a.join b w))).left.net →
-      ∃ outbox', outbox'.filter (fun out => (w.toRight out).isNone)
-          = (a.boot.foldl (fun c i => c.startActor env (.inl i))
-            (SysState.blank (a.join b w))).left.outbox ∧
-        SysState.init a env.left = { (a.boot.foldl (fun c i => c.startActor env (.inl i))
-          (SysState.blank (a.join b w))).left with net := n', outbox := outbox' } := by
-    intro n' hn'
-    obtain ⟨n, hn, h⟩ := boot a.boot (SysState.blank (a.join b w)) hn'
-    obtain rfl : n = [] := by
-      cases hn
-      rfl
-    exact h [] rfl
-  refine ⟨fun ev h hstep => h.step ev hstep, fun n' hn' => ?_, fun out hout => ?_⟩
-  · obtain ⟨outbox', ho', heq⟩ := hboot n' hn'
-    have hrun := SysState.run_outputs_filter env.left
-      ({ (a.boot.foldl (fun c i => c.startActor env (.inl i))
-        (SysState.blank (a.join b w))).left with net := n' } : SysState a)
-      (fun out => (w.toRight out).isNone) [] outbox' (by simp)
-    simp only [List.nil_append, ho'] at hrun
-    exact (heq ▸ System.Reachable.init).run hrun
-  · obtain ⟨outbox', ho', -⟩ := hboot _ (Thin.refl _)
-    rw [← ho'] at hout
-    simpa using (List.mem_filter.mp hout).2
+  exact hright _ _ (init_from _ rfl)
 
 end Seen
 
@@ -1682,8 +1737,9 @@ private theorem init_late (env : EnvModel (joinSig σ τ)) :
     have hfold : a.boot.foldl (fun c i => c.startActor env.left i)
         ({ SysState.blank a with net := ys.map fun x =>
           (⟨none, (a.accept x).1, (a.accept x).2⟩ : Envelope σ) } : SysState a)
-        = { SysState.init a env.left with net := (ys.map fun x =>
-          (⟨none, (a.accept x).1, (a.accept x).2⟩ : Envelope σ)) ++ (SysState.init a env.left).net } :=
+        = { SysState.init a env.left with
+            net := (ys.map fun x => (⟨none, (a.accept x).1, (a.accept x).2⟩ : Envelope σ))
+              ++ (SysState.init a env.left).net } :=
       (congrArg (fun c : SysState a => a.boot.foldl (fun c i => c.startActor env.left i) c)
         hnil).trans hboot
     refine ⟨_, System.Reachable.init.run (SysState.run_inputs env.left _ ys), ?_⟩
@@ -1721,6 +1777,44 @@ theorem System.Reachable.right (h : (a.join b w).Reachable env c) :
   have hnear := hseen.reach _ (Thin.refl _)
   rw [EnvModel.swap_left] at hnear
   exact SysState.swap_left c ▸ hnear
+
+/-- The right system is seen exactly as it is alone when the boot of the left system sends it
+nothing. -/
+theorem System.Reachable.right_of_quiet_boot
+    (hquiet : ∀ i ∈ a.boot, ∀ s out, .emit out ∈ ((a.actor i).recover s).2 → w.toRight out = none)
+    (h : (a.join b w).Reachable env c) : b.Reachable env.right c.right := by
+  have hblank : ∀ (l : List σ.Id) (c₀ : SysState (b.join a w.swap)), (∀ i ∈ l, i ∈ a.boot) →
+      (l.foldl (fun c i => c.startActor env.swap (.inr i)) c₀).left = c₀.left := by
+    intro l
+    induction l with
+    | nil => exact fun _ _ => rfl
+    | cons i l ih =>
+      intro c₀ hl
+      have hleft : ({ c₀ with up := update c₀.up (.inr i) true } :
+          SysState (b.join a w.swap)).left = c₀.left :=
+        SysState.ext' rfl (funext fun k => update_inr_inl c₀.up i true k) rfl rfl rfl
+      have hstart : (c₀.startActor env.swap (.inr i)).left = _ :=
+        SysState.left_settle_inr (env := env.swap) ({ c₀ with up := update c₀.up (.inr i) true }) i
+          ((a.actor i).recover (c₀.state (.inr i)))
+      have hnone : (Effect.emits ((a.actor i).recover (c₀.state (.inr i))).2).filterMap
+          w.swap.toLeft = [] := by
+        rw [List.filterMap_eq_nil_iff]
+        intro out hout
+        simp only [Effect.emits, List.mem_filterMap] at hout
+        obtain ⟨eff, heff, hout⟩ := hout
+        cases eff <;> simp only [Option.some.injEq, reduceCtorEq] at hout
+        exact hquiet i (hl i List.mem_cons_self) _ out (hout ▸ heff)
+      rw [List.foldl_cons, ih _ fun k hk => hl k (List.mem_cons_of_mem _ hk), hstart, hnone, hleft]
+      simp
+  have hseen : Seen env.swap w.swap (b.Reachable env.swap.left) c.swap.left := by
+    induction h with
+    | init =>
+      rw [SysState.init_swap]
+      exact Seen.init_from _ (hblank a.boot _ fun _ h => h)
+    | step ev _ hstep ih => exact ih.step (SysState.step_swap hstep)
+  have hreach := hseen.reach _ (Thin.refl _)
+  rw [EnvModel.swap_left] at hreach
+  exact SysState.swap_left c ▸ hreach
 
 /-- What is proved of a system alone, with a network link from outside, holds of it on the
 right of every join, if it does not depend on the order of messages on different links. -/

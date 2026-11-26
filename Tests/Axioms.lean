@@ -302,3 +302,6 @@ by `lake build`, not linked into the test executable.
 
 /-- info: 'Lanes.System.Invariant.join_right_state' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Invariant.join_right_state
+
+/-- info: 'Lanes.System.Reachable.right_of_quiet_boot' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Reachable.right_of_quiet_boot
