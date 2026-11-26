@@ -27,12 +27,16 @@ root = "Check"
 name = "raftLive"
 root = "Live"
 
-# One node as a process: `raftNode <id> <http-port> <journal> <peer-port>...`
+# One node as a process: `raftNode [new] <id> <http-port> <journal> <peer-port>...`
 [[lean_exe]]
 name = "raftNode"
 root = "Main"
 
-# Three `raftNode` processes, their leaders killed in turn.
+# What the tests on processes share: `raftNode` started, killed and asked over HTTP.
+[[lean_lib]]
+name = "Harness"
+
+# Three `raftNode` processes that cut their journals, killed and started again.
 [[lean_exe]]
 name = "raftProcs"
 root = "Procs"
