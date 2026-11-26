@@ -179,7 +179,7 @@ open Ledger.Web Lanes.Http
 def admin : Name := ⟨"admin", rfl⟩
 
 def settings : Settings :=
-  { key := .of "test key".toUTF8, password := { iterations := 2, pepper := "pepper".toUTF8 }
+  { key := .of "test key".toUTF8, password := { cost := { ops := 1, mem_kib := 8 }, pepper := "pepper".toUTF8 }
     origin := "http://127.0.0.1:8080", secure := false, admin }
 
 def alice : Name := ⟨"alice", rfl⟩
