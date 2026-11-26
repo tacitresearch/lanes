@@ -59,6 +59,8 @@ Update them in the same change that moves an item; `lake exe lanes lint --fix` w
    before the journal. Specs with time and `Service` without the system's signature are done
    (`docs/decisions/D42-a-spec-names-its-inputs-and.md`).
 
+The standard library, triaged from Go's, with its P0 set in build order: `docs/STDLIB.md`.
+
 ## Known limits
 
 - `System.join` leaves the inputs it wires open to the outside until `mapIO` or `filterMapIO`
