@@ -146,6 +146,16 @@ theorem drop_take_of_prefix {l part : List α} {n : Nat} (h : part <+: l.drop n)
   rw [List.drop_take, Nat.add_sub_cancel_left]
   exact (List.prefix_iff_eq_take.mp h).symm
 
+theorem append_singleton_eq_append_cons {l before after : List α} {a b : α}
+    (h : l ++ [a] = before ++ b :: after) :
+    (before = l ∧ b = a ∧ after = []) ∨ ∃ rest, l = before ++ b :: rest ∧ after = rest ++ [a] := by
+  rcases List.eq_nil_or_concat after with rfl | ⟨rest, c, rfl⟩
+  · obtain ⟨hl, hab⟩ := List.append_inj' h rfl
+    exact .inl ⟨hl.symm, (List.singleton_inj.mp hab).symm, rfl⟩
+  · rw [List.concat_eq_append, ← List.cons_append, ← List.append_assoc] at h
+    obtain ⟨hl, hac⟩ := List.append_inj' h rfl
+    exact .inr ⟨rest, hl, by rw [List.concat_eq_append, List.singleton_inj.mp hac]⟩
+
 theorem getElem?_of_prefix {a b : List α} (h : a <+: b) {k : Nat} {x : α}
     (hx : a[k]? = some x) : b[k]? = some x := by
   obtain ⟨rest, rfl⟩ := h

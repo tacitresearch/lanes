@@ -1,6 +1,7 @@
 module
 
 public import Lanes.Actors.Actor
+public import Lanes.Actors.Batch
 public import Lanes.Actors.FairScheduler
 public import Lanes.Actors.Cluster
 public import Lanes.Actors.Disk
@@ -64,6 +65,7 @@ public import Lanes.Http.FrontSound
 public import Lanes.Http.Gate
 public import Lanes.Http.GateSound
 public import Lanes.Http.Route
+public import Lanes.Http.Waiting
 public import Lanes.Http.Wire
 
 /-!

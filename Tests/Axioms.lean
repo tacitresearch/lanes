@@ -158,6 +158,45 @@ by `lake build`, not linked into the test executable.
 /-- info: 'Lanes.Journal.resume_eq_recover' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Journal.resume_eq_recover
 
+/-- info: 'Lanes.Batch.run_kernel' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Batch.run_kernel
+
+/-- info: 'Lanes.Batch.run_handed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Batch.run_handed
+
+/-- info: 'Lanes.Batch.run_sound' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Batch.run_sound
+
+/-- info: 'Lanes.Batch.run_peek' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Batch.run_peek
+
+/-- info: 'Lanes.Batch.settle_kernel' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Batch.settle_kernel
+
+/-- info: 'Lanes.Batch.run_resolved' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Batch.run_resolved
+
+/-- info: 'Lanes.Batch.flush_save' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Batch.flush_save
+
+/-- info: 'Lanes.Batch.due_iff' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Batch.due_iff
+
+/-- info: 'Lanes.Http.Waiting.exec_handed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Waiting.exec_handed
+
+/-- info: 'Lanes.Http.Waiting.exec_handed_nodup' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Waiting.exec_handed_nodup
+
+/-- info: 'Lanes.Http.Waiting.exec_waiting' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Waiting.exec_waiting
+
+/-- info: 'Lanes.Http.Waiting.exec_answered' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Waiting.exec_answered
+
+/-- info: 'Lanes.Http.Waiting.exec_drain' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Waiting.exec_drain
+
 /-- info: 'Lanes.Journal.Disk.load_cut' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Journal.Disk.load_cut
 
