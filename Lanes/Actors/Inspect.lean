@@ -148,18 +148,139 @@ theorem step_of_mem_successors [Enum σ.Id] {env : EnvModel σ} {c c' : SysState
   obtain ⟨ev', _, c'', hstep, rfl, rfl⟩ := h
   exact hstep
 
-/--
-The same state, with its per-actor functions rebuilt as tables. A long run otherwise builds a
-chain of function updates as deep as the run is long.
--/
-def compact [Enum σ.Id] (c : SysState sys) : SysState sys :=
-  let state := Enum.Table.of c.state
-  let up := Enum.Table.of c.up
-  let timers := Enum.Table.of c.timers
-  { c with state := state.get, up := up.get, timers := timers.get }
+end SysState
 
-@[simp] theorem compact_eq [Enum σ.Id] (c : SysState sys) : c.compact = c := by
-  simp [compact]
+/-- One actor of a state: its state, whether it is up and its timers. -/
+structure Slot {σ : Signature} (sys : System σ) where
+  id : σ.Id
+  state : sys.State id
+  up : Bool
+  timers : List (σ.Msg id)
+
+namespace Slot
+
+variable {sys : System σ}
+
+def of (c : SysState sys) (i : σ.Id) : Slot sys :=
+  ⟨i, c.state i, c.up i, c.timers i⟩
+
+def find : (slots : List (Slot sys)) → (i : σ.Id) → i ∈ slots.map (·.id) →
+    { s : Slot sys // s.id = i }
+  | [], _, h => nomatch h
+  | s :: slots, i, h =>
+    if hi : s.id = i then ⟨s, hi⟩
+    else find slots i (by
+      cases h with
+      | head => exact absurd rfl hi
+      | tail _ h => exact h)
+
+def stateAt {i : σ.Id} (s : { s : Slot sys // s.id = i }) : sys.State i :=
+  s.property ▸ s.val.state
+
+def timersAt {i : σ.Id} (s : { s : Slot sys // s.id = i }) : List (σ.Msg i) :=
+  s.property ▸ s.val.timers
+
+def same [∀ i, BEq (sys.State i)] (a b : Slot sys) : Bool :=
+  if h : a.id = b.id then
+    (h ▸ a.state : sys.State b.id) == b.state && a.up == b.up
+      && (h ▸ a.timers : List (σ.Msg b.id)) == b.timers
+  else false
+
+def allSame [∀ i, BEq (sys.State i)] : List (Slot sys) → List (Slot sys) → Bool
+  | [], [] => true
+  | a :: as, b :: bs => a.same b && allSame as bs
+  | _, _ => false
+
+def hash [∀ i, Hashable (sys.State i)] [∀ i, Hashable (σ.Msg i)] (h : UInt64) (s : Slot sys) :
+    UInt64 :=
+  mixHash h (mixHash (Hashable.hash s.state)
+    (mixHash (Hashable.hash s.up) (Hashable.hash s.timers)))
+
+theorem find_map (c : SysState sys) (l : List σ.Id) (i : σ.Id)
+    (h : i ∈ (l.map (of c)).map (·.id)) : (find (l.map (of c)) i h).val = of c i := by
+  induction l with
+  | nil => nomatch h
+  | cons j l ih =>
+    simp only [List.map_cons, find]
+    split
+    · next hi => subst hi; rfl
+    · exact ih _
+
+end Slot
+
+/--
+The actors of a state as data, one slot each. A state holds them in functions, and a function
+built by a long run is a chain of updates as deep as the run is long, which every lookup walks.
+
+`Slots.of` returns data, not a function, so that it is evaluated where it is written: a
+definition that returns a function is compiled to one that takes the argument too, and would
+build the table again on every lookup.
+-/
+structure Slots {σ : Signature} (sys : System σ) where
+  list : List (Slot sys)
+  complete : ∀ i, i ∈ list.map (·.id)
+
+namespace Slots
+
+variable {sys : System σ}
+
+def of [Enum σ.Id] (c : SysState sys) : Slots sys where
+  list := (Enum.all (α := σ.Id)).map (Slot.of c)
+  complete i := by simpa [Function.comp_def, Slot.of] using Enum.complete i
+
+def state (t : Slots sys) (i : σ.Id) : sys.State i :=
+  Slot.stateAt (Slot.find t.list i (t.complete i))
+
+def up (t : Slots sys) (i : σ.Id) : Bool :=
+  (Slot.find t.list i (t.complete i)).val.up
+
+def timers (t : Slots sys) (i : σ.Id) : List (σ.Msg i) :=
+  Slot.timersAt (Slot.find t.list i (t.complete i))
+
+theorem find_of [Enum σ.Id] (c : SysState sys) (i : σ.Id) :
+    (Slot.find (of c).list i ((of c).complete i)).val = Slot.of c i :=
+  Slot.find_map c _ i _
+
+@[simp] theorem state_of [Enum σ.Id] (c : SysState sys) : (of c).state = c.state := by
+  funext i
+  have hval := find_of c i
+  change Slot.stateAt (Slot.find (of c).list i ((of c).complete i)) = c.state i
+  generalize Slot.find (of c).list i ((of c).complete i) = s at hval
+  obtain ⟨s, hs⟩ := s
+  subst hval
+  rfl
+
+@[simp] theorem up_of [Enum σ.Id] (c : SysState sys) : (of c).up = c.up :=
+  funext fun i => congrArg Slot.up (find_of c i)
+
+@[simp] theorem timers_of [Enum σ.Id] (c : SysState sys) : (of c).timers = c.timers := by
+  funext i
+  have hval := find_of c i
+  change Slot.timersAt (Slot.find (of c).list i ((of c).complete i)) = c.timers i
+  generalize Slot.find (of c).list i ((of c).complete i) = s at hval
+  obtain ⟨s, hs⟩ := s
+  subst hval
+  rfl
+
+end Slots
+
+namespace SysState
+
+variable {sys : System σ}
+
+/-- `c` with its per-actor functions read from `slots`. -/
+def compactWith (c : SysState sys) (slots : Slots sys) : SysState sys :=
+  { c with state := slots.state, up := slots.up, timers := slots.timers }
+
+@[simp] theorem compactWith_of [Enum σ.Id] (c : SysState sys) : c.compactWith (.of c) = c := by
+  simp [compactWith]
+
+/-- The same state, with its per-actor functions rebuilt from a table of their values. -/
+def compact [Enum σ.Id] (c : SysState sys) : SysState sys :=
+  c.compactWith (.of c)
+
+@[simp] theorem compact_eq [Enum σ.Id] (c : SysState sys) : c.compact = c :=
+  compactWith_of c
 
 variable [σ.Inspect] [sys.Inspect]
 
@@ -181,14 +302,19 @@ def equiv (env : EnvModel σ) (a b : SysState sys) : Bool :=
       a.state i == b.state i && a.up i == b.up i && a.timers i == b.timers i)
     && netEquiv env a.net b.net && a.outbox.isPerm b.outbox
 
+/-- A hash of the messages in flight and the pending outputs that does not depend on their
+order. -/
+def trafficHash (c : SysState sys) : UInt64 :=
+  let net := c.net.foldl (init := 0) fun h e => h + mixHash 11 (Hashable.hash e)
+  let outbox := c.outbox.foldl (init := 0) fun h o => h + mixHash 13 (Hashable.hash o)
+  mixHash net outbox
+
 /-- A hash that agrees with `equiv`: it does not depend on the order of messages in flight. -/
 def hash (c : SysState sys) : UInt64 :=
   let actors := (Enum.all (α := σ.Id)).foldl (init := 7) fun h i =>
     mixHash h (mixHash (Hashable.hash (c.state i))
       (mixHash (Hashable.hash (c.up i)) (Hashable.hash (c.timers i))))
-  let net := c.net.foldl (init := 0) fun h e => h + mixHash 11 (Hashable.hash e)
-  let outbox := c.outbox.foldl (init := 0) fun h o => h + mixHash 13 (Hashable.hash o)
-  mixHash actors (mixHash net outbox)
+  mixHash actors c.trafficHash
 
 def render (c : SysState sys) : String :=
   let actors := (Enum.all (α := σ.Id)).filterMap fun i =>

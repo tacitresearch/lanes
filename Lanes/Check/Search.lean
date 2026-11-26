@@ -76,6 +76,9 @@ structure Options (S : Type) where
   /-- Report a state with no successors as a deadlock, unless `terminal` holds of it. -/
   checkDeadlock : Bool := false
   terminal : S → Bool := fun _ => false
+  /-- Compute successors in tasks, on as many cores as there are. The report is the same
+  either way. -/
+  tasks : Bool := false
 
 structure Trace (S L : Type) where
   init : S
@@ -325,7 +328,8 @@ def runBatches (m : Model S L) (props : List (Property S)) (opts : Options S)
   if _ : count = 0 ∨ st.failure.isSome then st
   else
     let batch := (st.queue.extract st.head (st.head + count)).toList
-    let tasks := mapInTasks (successors m opts) taskSize batch.length batch
+    let tasks := mapInTasks (successors m opts) (if opts.tasks then taskSize else count)
+      batch.length batch
     runBatches m props opts labelName (fuel - count)
       (tasks.foldl (fun st task => st.expandAll props opts labelName task.get) st)
 termination_by fuel

@@ -52,55 +52,6 @@ instance {α β : Type} [Enum α] [Enum β] : Enum (α × β) where
     simp only [List.mem_flatMap, List.mem_map]
     exact ⟨p.1, complete p.1, p.2, complete p.2, rfl⟩
 
-/--
-The values of a function on a finite type, as data. A function built by a long run is a chain of
-updates as deep as the run is long, and every lookup walks it; `Table.of` computes each value
-once, and `Table.get` no longer refers to the function.
-
-`Table.of` returns data, not a function, so that it is evaluated where it is written: a
-definition that returns a function is compiled to one that takes the argument too, and would
-build the table again on every lookup.
--/
-structure Table (ι : Type) (β : ι → Type) where
-  cells : List (Sigma β)
-  complete : ∀ i, i ∈ cells.map Sigma.fst
-
-namespace Table
-
-variable {ι : Type} {β : ι → Type}
-
-def find [DecidableEq ι] : (cells : List (Sigma β)) → (i : ι) → i ∈ cells.map Sigma.fst → β i
-  | [], _, h => nomatch h
-  | ⟨j, v⟩ :: cells, i, h =>
-    if hij : i = j then hij ▸ v
-    else find cells i (by
-      cases h with
-      | head => exact absurd rfl hij
-      | tail _ h => exact h)
-
-theorem find_map [DecidableEq ι] (f : (i : ι) → β i) (l : List ι) (i : ι)
-    (h : i ∈ (l.map fun j => (⟨j, f j⟩ : Sigma β)).map Sigma.fst) :
-    find (l.map fun j => ⟨j, f j⟩) i h = f i := by
-  induction l with
-  | nil => nomatch h
-  | cons j l ih =>
-    simp only [List.map_cons, find]
-    split
-    · next hij => subst hij; rfl
-    · exact ih _
-
-def of [Enum ι] (f : (i : ι) → β i) : Table ι β where
-  cells := (all (α := ι)).map fun i => ⟨i, f i⟩
-  complete i := by simpa [Function.comp_def] using Enum.complete i
-
-def get [DecidableEq ι] (t : Table ι β) (i : ι) : β i :=
-  find t.cells i (t.complete i)
-
-@[simp] theorem get_of [DecidableEq ι] [Enum ι] (f : (i : ι) → β i) : (of f).get = f :=
-  funext fun i => find_map f _ i _
-
-end Table
-
 /-- Low priority, so a more specific instance wins. -/
 instance (priority := low) funBEq {α β : Type} [Enum α] [BEq β] : BEq (α → β) where
   beq f g := (all (α := α)).all fun a => f a == g a

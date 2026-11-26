@@ -68,9 +68,9 @@ private def run [Enum σ.Id] (sc : Scenario σ D) (props : List (Property (World
     if choices.isEmpty then break
     let (k, gen') := randNat gen 0 (choices.length - 1)
     gen := gen'
-    let some (ev, w') := choices[k]? | break
-    w := w'
-    path := path.push (ev, w')
+    let some (ev, next) := choices[k]? | break
+    w := { next with state := next.state.compact }
+    path := path.push (ev, w)
     seen := reach props w seen
     if let some property := violated props w then
       return { steps := walk.steps + path.size, seen,

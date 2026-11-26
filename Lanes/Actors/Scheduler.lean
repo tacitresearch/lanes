@@ -74,15 +74,15 @@ def init (sys : System σ) (sc : Scenario σ D) : World sys D where
 def next [Enum σ.Id] (sc : Scenario σ D) (w : World sys D) : List (Event σ × World sys D) :=
   let internal := (w.state.successors sc.env).filterMap fun (ev, c) =>
     match ev with
-    | .output out => some (ev, { w with state := c.compact, driver := sc.driver.observe w.driver out })
+    | .output out => some (ev, { w with state := c, driver := sc.driver.observe w.driver out })
     | .crash _ =>
       if w.crashes < sc.maxCrashes then
-        some (ev, { w with state := c.compact, crashes := w.crashes + 1 })
+        some (ev, { w with state := c, crashes := w.crashes + 1 })
       else none
-    | _ => some (ev, { w with state := c.compact })
+    | _ => some (ev, { w with state := c })
   let inputs := (sc.driver.inputs w.driver).filterMap fun (x, d) =>
     (w.state.step sc.env (.input x)).map fun c =>
-      (Event.input x, { w with state := c.compact, driver := d })
+      (Event.input x, { w with state := c, driver := d })
   internal ++ inputs
 
 end World
@@ -110,7 +110,7 @@ def simulate [Enum σ.Id] (sys : System σ) {D : Type} (sc : Scenario σ D) (see
     match choices[k]? with
     | some (ev, w') =>
       events := events.push ev
-      w := w'
+      w := { w' with state := w'.state.compact }
     | none => break
   return { events, final := w, quiescent }
 

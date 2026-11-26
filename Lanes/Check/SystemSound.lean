@@ -80,7 +80,7 @@ theorem World.mem_next_iff [Enum σ.Id] {sc : Scenario σ D} {w w' : World sys D
       | .crash _ =>
         w.crashes < sc.maxCrashes ∧ w' = { w with state := c, crashes := w.crashes + 1 }
       | _ => w' = { w with state := c } := by
-  simp only [World.next, List.mem_append, List.mem_filterMap, SysState.compact_eq]
+  simp only [World.next, List.mem_append, List.mem_filterMap]
   constructor
   · rintro (⟨⟨ev₀, c⟩, hsucc, hsome⟩ | ⟨⟨x, d⟩, hinput, hsome⟩)
     · obtain ⟨hstep, hnotInput⟩ := SysState.mem_successors_iff.mp hsucc
@@ -111,24 +111,58 @@ theorem World.mem_next_iff [Enum σ.Id] {sc : Scenario σ D} {w w' : World sys D
       subst hw'
       exact .inl ⟨(_, c), SysState.mem_successors_iff.mpr ⟨hstep, by simp⟩, rfl⟩
 
+namespace Check
+
+@[simp] theorem Node.of_world [Enum σ.Id] {env : EnvModel σ} (w : World sys D) :
+    (Node.of w : Node sys env D).world = w := by
+  simp [Node.of]
+
+/-- A node is its world: the slots are computed from it. -/
+theorem Node.eq_of_world [Enum σ.Id] {env : EnvModel σ} {a b : Node sys env D}
+    (h : a.world = b.world) : a = b := by
+  obtain ⟨_, _, ha⟩ := a
+  obtain ⟨_, _, hb⟩ := b
+  subst h ha hb
+  rfl
+
+theorem mem_model_init [Enum σ.Id] {sc : Scenario σ D} {n : Node sys sc.env D} :
+    n ∈ (model sys sc).init ↔ n.world = World.init sys sc := by
+  simp only [model, List.mem_singleton]
+  exact ⟨fun h => h ▸ Node.of_world _, fun h => Node.eq_of_world (h.trans (Node.of_world _).symm)⟩
+
+/-- The model's steps are the world's. -/
+theorem mem_model_next [Enum σ.Id] {sc : Scenario σ D} {n n' : Node sys sc.env D}
+    {ev : Event σ} : (ev, n') ∈ (model sys sc).next n ↔ (ev, n'.world) ∈ n.world.next sc := by
+  simp only [model, List.mem_map]
+  constructor
+  · rintro ⟨⟨ev', w'⟩, hmem, heq⟩
+    obtain ⟨rfl, rfl⟩ := Prod.mk.inj heq
+    simpa using hmem
+  · exact fun h => ⟨_, h, Prod.ext rfl (Node.eq_of_world (Node.of_world _))⟩
+
+end Check
+
+theorem Scenario.Reachable.model_step [Enum σ.Id] {sc : Scenario σ D}
+    {constraint : World sys D → Bool} {w w' : World sys D} {ev : Event σ}
+    (h : (Check.model sys sc).Reachable (fun n => constraint n.world) (.of w))
+    (hnext : (ev, w') ∈ w.next sc) (hc : constraint w' = true) :
+    (Check.model sys sc).Reachable (fun n => constraint n.world) (.of w') :=
+  .step h (Check.mem_model_next.mpr (by simpa using hnext)) (by simpa using hc)
+
 theorem Scenario.Reachable.model [Enum σ.Id] {sc : Scenario σ D}
     {constraint : World sys D → Bool} {w : World sys D} (h : sc.Reachable sys constraint w) :
-    (Check.model sys sc).Reachable (fun n => constraint n.world) ⟨w⟩ := by
+    (Check.model sys sc).Reachable (fun n => constraint n.world) (.of w) := by
   induction h with
-  | init hc => exact .init (by simp [Check.model]) hc
+  | init hc => exact .init (Check.mem_model_init.mpr (Check.Node.of_world _)) (by simpa using hc)
   | @input _ x d _ _ hinput hstep hc ih =>
-    have hmem := (World.mem_next_iff (ev := .input x)).mpr ⟨_, hstep, d, hinput, rfl⟩
-    exact .step ih (List.mem_map.mpr ⟨_, hmem, rfl⟩) hc
+    exact model_step ih ((World.mem_next_iff (ev := .input x)).mpr ⟨_, hstep, d, hinput, rfl⟩) hc
   | @output _ out _ _ hstep hc ih =>
-    have hmem := (World.mem_next_iff (ev := .output out)).mpr ⟨_, hstep, rfl⟩
-    exact .step ih (List.mem_map.mpr ⟨_, hmem, rfl⟩) hc
+    exact model_step ih ((World.mem_next_iff (ev := .output out)).mpr ⟨_, hstep, rfl⟩) hc
   | @crash _ i _ _ hbudget hstep hc ih =>
-    have hmem := (World.mem_next_iff (ev := .crash i)).mpr ⟨_, hstep, hbudget, rfl⟩
-    exact .step ih (List.mem_map.mpr ⟨_, hmem, rfl⟩) hc
+    exact model_step ih ((World.mem_next_iff (ev := .crash i)).mpr ⟨_, hstep, hbudget, rfl⟩) hc
   | @internal _ ev _ _ hev hstep hc ih =>
-    have hmem := (World.mem_next_iff (ev := ev)).mpr ⟨_, hstep, by
-      cases ev <;> first | rfl | exact absurd hev (by simp [Event.isInternal])⟩
-    exact .step ih (List.mem_map.mpr ⟨_, hmem, rfl⟩) hc
+    exact model_step ih ((World.mem_next_iff (ev := ev)).mpr ⟨_, hstep, by
+      cases ev <;> first | rfl | exact absurd hev (by simp [Event.isInternal])⟩) hc
 
 theorem Scenario.Reachable.of_model [Enum σ.Id] {sc : Scenario σ D}
     {constraint : World sys D → Bool} {n : Check.Node sys sc.env D}
@@ -136,30 +170,31 @@ theorem Scenario.Reachable.of_model [Enum σ.Id] {sc : Scenario σ D}
     sc.Reachable sys constraint n.world := by
   induction h with
   | init hinit hc =>
-    obtain rfl : _ = Check.Node.mk _ := by simpa [Check.model] using hinit
+    rw [Check.mem_model_init.mp hinit] at hc ⊢
     exact .init hc
-  | step _ hnext hc ih =>
-    obtain ⟨⟨ev, w'⟩, hmem, heq⟩ := List.mem_map.mp hnext
-    simp only [Prod.mk.injEq] at heq
-    obtain ⟨rfl, rfl⟩ := heq
-    obtain ⟨c, hstep, hw'⟩ := World.mem_next_iff.mp hmem
+  | @step n n' ev _ hnext hc ih =>
+    obtain ⟨c, hstep, hw'⟩ := World.mem_next_iff.mp (Check.mem_model_next.mp hnext)
     cases ev with
     | input x =>
-      obtain ⟨d, hinput, rfl⟩ := hw'
+      obtain ⟨d, hinput, hw'⟩ := hw'
+      simp only [hw'] at hc ⊢
       exact .input ih hinput hstep hc
-    | output out => subst hw'; exact .output ih hstep hc
+    | output out =>
+      simp only [hw'] at hc ⊢
+      exact .output ih hstep hc
     | crash i =>
-      obtain ⟨hbudget, rfl⟩ := hw'
+      obtain ⟨hbudget, hw'⟩ := hw'
+      simp only [hw'] at hc ⊢
       exact .crash ih hbudget hstep hc
     | deliver e | duplicate e | drop e | timeout i msg | start i =>
-      subst hw'
+      simp only [hw'] at hc ⊢
       exact .internal ih rfl hstep hc
 
 /-- `Scenario.Reachable` is exactly what the checker's model reaches. -/
 theorem Scenario.reachable_iff [Enum σ.Id] {sc : Scenario σ D} {constraint : World sys D → Bool}
     {w : World sys D} : sc.Reachable sys constraint w ↔
-      (Check.model sys sc).Reachable (fun n => constraint n.world) ⟨w⟩ :=
-  ⟨Reachable.model, Reachable.of_model (n := ⟨w⟩)⟩
+      (Check.model sys sc).Reachable (fun n => constraint n.world) (.of w) :=
+  ⟨Reachable.model, fun h => by simpa using Reachable.of_model h⟩
 
 theorem NetEquiv.toPerm {env : EnvModel σ} {a b : List (Envelope σ)} (h : NetEquiv env a b) :
     a.Perm b := by
@@ -169,15 +204,19 @@ theorem NetEquiv.toPerm {env : EnvModel σ} {a b : List (Envelope σ)} (h : NetE
   rw [← List.count_filter (l := a) hself, ← List.count_filter (l := b) hself]
   exact (h.perm e.src e.dst).count_eq e
 
-theorem SysState.Equiv.hash_eq [σ.Inspect] [sys.Inspect] {env : EnvModel σ} {a b : SysState sys}
-    (h : SysState.Equiv env a b) : a.hash = b.hash := by
+theorem SysState.Equiv.trafficHash_eq [σ.Inspect] {env : EnvModel σ} {a b : SysState sys}
+    (h : SysState.Equiv env a b) : a.trafficHash = b.trafficHash := by
   have hnet := h.net.toPerm.foldl_eq'
     (f := fun (h : UInt64) e => h + mixHash 11 (Hashable.hash e))
     (fun _ _ _ _ z => by rw [UInt64.add_assoc, UInt64.add_comm (mixHash _ _), UInt64.add_assoc]) 0
   have hout := h.outbox.foldl_eq'
     (f := fun (h : UInt64) o => h + mixHash 13 (Hashable.hash o))
     (fun _ _ _ _ z => by rw [UInt64.add_assoc, UInt64.add_comm (mixHash _ _), UInt64.add_assoc]) 0
-  simp only [SysState.hash, h.state, h.up, h.timers, hnet, hout]
+  simp only [SysState.trafficHash, hnet, hout]
+
+theorem SysState.Equiv.hash_eq [σ.Inspect] [sys.Inspect] {env : EnvModel σ} {a b : SysState sys}
+    (h : SysState.Equiv env a b) : a.hash = b.hash := by
+  simp only [SysState.hash, h.state, h.up, h.timers, h.trafficHash_eq]
 
 /-- `w` with no messages in flight and no pending outputs. -/
 def World.quiet (w : World sys D) : World sys D :=
@@ -233,11 +272,41 @@ namespace Check
 
 variable [σ.Inspect] [sys.Inspect] {env : EnvModel σ}
 
+omit [σ.Inspect] [sys.Inspect] in
+theorem Slot.same_of [∀ i, BEq (sys.State i)] (a b : SysState sys) (i : σ.Id) :
+    (Slot.of a i).same (Slot.of b i) =
+      (a.state i == b.state i && a.up i == b.up i && a.timers i == b.timers i) := by
+  unfold Slot.same
+  split
+  · rfl
+  · next h => exact absurd rfl h
+
+omit [σ.Inspect] in
+theorem Slot.allSame_iff [∀ i, LawfulBEq (sys.State i)] (a b : SysState sys) (l : List σ.Id) :
+    Slot.allSame (l.map (Slot.of a)) (l.map (Slot.of b)) = true ↔
+      ∀ i ∈ l, a.state i = b.state i ∧ a.up i = b.up i ∧ a.timers i = b.timers i := by
+  induction l with
+  | nil => simp [Slot.allSame]
+  | cons i l ih => simp [Slot.allSame, Slot.same_of, ih, and_assoc]
+
 theorem Node.beq_iff [BEq D] [∀ i, LawfulBEq (sys.State i)] {a b : Node sys env D} :
     (a == b) = true ↔ a.world.crashes = b.world.crashes ∧ (a.world.driver == b.world.driver) = true
       ∧ SysState.Equiv env a.world.state b.world.state := by
-  simp only [BEq.beq, Bool.and_eq_true, SysState.equiv_iff, and_assoc]
-  simp
+  change (a.world.crashes == b.world.crashes && a.world.driver == b.world.driver
+    && Slot.allSame a.slots b.slots
+    && SysState.netEquiv env a.world.state.net b.world.state.net
+    && a.world.state.outbox.isPerm b.world.state.outbox) = true ↔ _
+  rw [a.slots_eq, b.slots_eq]
+  simp only [Bool.and_eq_true, beq_iff_eq, Slot.allSame_iff, netEquiv_iff, List.isPerm_iff,
+    and_assoc]
+  constructor
+  · rintro ⟨hc, hd, hall, hnet, hout⟩
+    exact ⟨hc, hd, funext fun i => (hall i (Enum.complete i)).1,
+      funext fun i => (hall i (Enum.complete i)).2.1,
+      funext fun i => (hall i (Enum.complete i)).2.2, hnet, hout⟩
+  · rintro ⟨hc, hd, h⟩
+    exact ⟨hc, hd, fun i _ => ⟨congrFun h.state i, congrFun h.up i, congrFun h.timers i⟩,
+      h.net, h.outbox⟩
 
 theorem Node.beq_iff_equiv [BEq D] [∀ i, LawfulBEq (sys.State i)] {a b : Node sys env D} :
     (a == b) = true ↔ World.Equiv env a.world b.world := by
@@ -258,7 +327,12 @@ instance [BEq D] [Hashable D] [LawfulHashable D] [∀ i, LawfulBEq (sys.State i)
     LawfulHashable (Node sys env D) where
   hash_eq a b h := by
     obtain ⟨hc, hd, hs⟩ := Node.beq_iff.mp h
-    simp only [hash, hs.hash_eq, hc, LawfulHashable.hash_eq _ _ hd]
+    have hslots : a.slots = b.slots := by
+      rw [a.slots_eq, b.slots_eq]
+      congr 1
+      funext i
+      simp only [Slot.of, hs.state, hs.up, hs.timers]
+    simp only [hash, hslots, hs.trafficHash_eq, hc, LawfulHashable.hash_eq _ _ hd]
 
 variable [BEq D] [Hashable D] [∀ i, LawfulBEq (sys.State i)]
 
@@ -280,15 +354,14 @@ theorem system_sound_of_respects [EquivBEq D] [LawfulHashable D] (sc : Scenario 
     {name : String} {p : World sys D → Bool} (hp : .always name p ∈ props)
     {w : World sys D} (hw : sc.Reachable sys opts.constraint w) : p w = true := by
   simp only [system, Report.map, Option.map_eq_none_iff] at hfailure hcomplete
-  refine search_sound (s := (⟨w⟩ : Node sys sc.env D)) (p := fun n => p n.world) ?_ hfailure
-    hcomplete (List.mem_map.mpr ⟨_, hp, rfl⟩) hw.model
+  have hsound := search_sound (s := (.of w : Node sys sc.env D)) (p := fun n => p n.world) ?_
+    hfailure hcomplete (List.mem_map.mpr ⟨_, hp, rfl⟩) hw.model
+  · simpa using hsound
   refine ⟨fun a b hab l a' ha' => ?_, fun a b hab => hconstraint _ _ (Node.beq_iff_equiv.mp hab),
     fun q hq a b hab => ?_⟩
-  · obtain ⟨⟨ev, w'⟩, hmem, heq⟩ := List.mem_map.mp ha'
-    simp only [Prod.mk.injEq] at heq
-    obtain ⟨rfl, rfl⟩ := heq
-    obtain ⟨b', hb', hequiv⟩ := (Node.beq_iff_equiv.mp hab).next hdriver hmem
-    exact ⟨ev, ⟨b'⟩, List.mem_map.mpr ⟨(ev, b'), hb', rfl⟩, Node.beq_iff_equiv.mpr hequiv⟩
+  · obtain ⟨b', hb', hequiv⟩ := (Node.beq_iff_equiv.mp hab).next hdriver (mem_model_next.mp ha')
+    exact ⟨l, .of b', mem_model_next.mpr (by simpa using hb'),
+      Node.beq_iff_equiv.mpr (by simpa using hequiv)⟩
   · obtain ⟨q', hq', rfl⟩ := List.mem_map.mp hq
     cases q' <;> exact hprops _ hq' _ _ (Node.beq_iff_equiv.mp hab)
 
@@ -351,8 +424,8 @@ theorem run_of_steps [Enum σ.Id] {sc : Scenario σ D} (n : Node sys sc.env D)
   | nil => rfl
   | cons step rest ih =>
     obtain ⟨hmem, hrest⟩ := h
-    obtain ⟨⟨ev, w'⟩, hnext, rfl⟩ := List.mem_map.mp hmem
-    rw [Trace.last_cons, List.map_cons, SysState.run, World.step_of_mem_next hnext]
+    rw [Trace.last_cons, List.map_cons, SysState.run,
+      World.step_of_mem_next (mem_model_next.mp hmem)]
     exact ih _ hrest
 
 /--
@@ -378,8 +451,7 @@ theorem system_violated [σ.Inspect] [sys.Inspect] [BEq D] [Hashable D] (sc : Sc
     obtain ⟨prop, hprop, hprop'⟩ := List.mem_map.mp hp'
     rw [Trace.last_map, Trace.labels_map]
     have hstart : t₀.init.world.state = SysState.init sys sc.env := by
-      simp only [model, List.mem_singleton] at hinit
-      rw [hinit]
+      rw [mem_model_init.mp hinit]
       rfl
     refine ⟨?_, ?_⟩
     · rw [← hstart]
@@ -424,7 +496,7 @@ theorem Run.reachable (h : sc.Run sys constraint events w) : sc.Reachable sys co
   induction h with
   | init hc => exact .init hc
   | step _ hnext hc ih =>
-    exact Reachable.of_model (n := ⟨_⟩) (.step ih.model (List.mem_map.mpr ⟨_, hnext, rfl⟩) hc)
+    simpa using Reachable.of_model (Reachable.model_step ih.model hnext hc)
 
 /-- The events of a run are a run of the semantics from the initial state. -/
 theorem Run.run (h : sc.Run sys constraint events w) :
@@ -439,18 +511,15 @@ theorem reachable_iff_exists_run :
     sc.Reachable sys constraint w ↔ ∃ events, sc.Run sys constraint events w := by
   refine ⟨fun h => ?_, fun ⟨_, h⟩ => h.reachable⟩
   suffices hmodel : ∀ n, (Check.model sys sc).Reachable (fun n => constraint n.world) n →
-      ∃ events, sc.Run sys constraint events n.world from hmodel ⟨w⟩ h.model
+      ∃ events, sc.Run sys constraint events n.world from by simpa using hmodel (.of w) h.model
   intro n hn
   induction hn with
   | init hinit hc =>
-    obtain rfl : _ = Check.Node.mk _ := by simpa [Check.model] using hinit
+    rw [Check.mem_model_init.mp hinit] at hc ⊢
     exact ⟨[], .init hc⟩
   | step _ hnext hc ih =>
     obtain ⟨events, hrun⟩ := ih
-    obtain ⟨⟨ev, w'⟩, hmem, heq⟩ := List.mem_map.mp hnext
-    simp only [Prod.mk.injEq] at heq
-    obtain ⟨rfl, rfl⟩ := heq
-    exact ⟨_, .step hrun hmem hc⟩
+    exact ⟨_, .step hrun (Check.mem_model_next.mp hnext) hc⟩
 
 end Scenario
 
