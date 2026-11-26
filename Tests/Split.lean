@@ -5,13 +5,18 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import Lanes
 import Examples.Bank
 import Tests.Bank
+import Tests.Join
 
 /-!
 A system split across two shards behaves as the one system (`Lanes/Actors/ShardSound.lean`),
 checked before it was proved: every state the split reaches, read as one state, is among the
 states the system reaches alone, compared as the checker compares states. The bank has its two
-accounts on different shards; `relay` adds boot actors, timers and `stop`. `fragile` shows what
-the theorem has to assume about booting.
+accounts on different shards; `relay` adds boot actors, timers and `stop`.
+
+Two systems show where the statement stops. `fragile` has a boot actor that stops as it starts:
+the split boots one shard before the other, so a message is kept that the system alone loses.
+`chorus` has two actors that say the same thing: the split can hand over the newer of two equal
+outputs, so its state is a state of the system only up to the order of the outputs waiting.
 -/
 
 namespace Tests.Split
@@ -122,7 +127,7 @@ inductive RelayMsg where
   deriving DecidableEq, Repr, Hashable
 
 /-- Two boot actors that greet each other when they start, again on a timer, and stop when told
-to from outside. The state counts greetings received, up to two. -/
+to from outside. The state says whether a greeting was received. -/
 abbrev relaySig : Signature where
   Id := Fin 2
   Msg _ := RelayMsg
@@ -130,12 +135,12 @@ abbrev relaySig : Signature where
   Out := Fin 2
 
 abbrev relay : System relaySig where
-  State _ := Nat
+  State _ := Bool
   actor i :=
-    { init := 0
+    { init := false
       step := fun s msg =>
         match msg with
-        | .ping => (min (s + 1) 2, [.emit i])
+        | .ping => (true, [.emit i])
         | .tick => (s, [.send (i + 1) .ping])
         | .halt => (s, [.cancel .tick, .stop])
       recover := fun s => (s, [.send (i + 1) .ping, .after 10 .tick]) }
@@ -184,6 +189,96 @@ instance : (fragile.split id).Inspect := .split
 def fragileCompared :=
   compare fragile id {} [] fun c => c.net.length ≤ 2 && c.state true ≤ 3
 
+def fragileLossy :=
+  compare fragile id { link := fun _ _ => { lossy := true } } [] fun c =>
+    c.net.length ≤ 2 && c.state true ≤ 3
+
+/-- Alone and without faults, `fragile` never moves after it has booted. -/
+theorem fragile_alone {c : SysState fragile} (h : fragile.Reachable {} c) :
+    c = SysState.init fragile {} := by
+  have hnet : (SysState.init fragile {}).net = [] := rfl
+  have htimers : ∀ i, (SysState.init fragile {}).timers i = [] := fun i => by cases i <;> rfl
+  have hmail : ∀ i, (SysState.init fragile {}).hasMail i = false := fun i => by cases i <;> rfl
+  induction h with
+  | init => rfl
+  | step ev _ hstep ih =>
+    subst ih
+    cases ev with
+    | input x => exact nomatch x
+    | deliver e =>
+      have hmem := SysState.mem_of_deliverable (SysState.step_deliver.mp hstep).2.1
+      simp [hnet] at hmem
+    | duplicate e => exact absurd (SysState.step_duplicate.mp hstep).2.1 (by simp [Link.reliable])
+    | drop e => exact absurd (SysState.step_drop.mp hstep).1 (by simp [Link.reliable])
+    | timeout i msg =>
+      have hmem := (SysState.step_timeout.mp hstep).2.1
+      simp [htimers] at hmem
+    | output out => exact nomatch out
+    | crash i => exact absurd (SysState.step_crash.mp hstep).2.1 (by simp)
+    | start i =>
+      have hmay := (SysState.step_start.mp hstep).2.1
+      simp [hmail] at hmay
+
+/-- So the theorem needs its assumption on booting: split, `fragile` starts its second actor
+twice, and alone it starts it once. -/
+theorem fragile_split_not_alone :
+    ∃ c, fragile.SplitReachable id {} c ∧
+      ¬∃ c', fragile.Reachable {} c' ∧ SysState.Equiv {} c' c.merged := by
+  refine ⟨_, System.SplitReachable.init.step (.start (.inl true)) rfl rfl, ?_⟩
+  rintro ⟨c', hc', hequiv⟩
+  have hstate := congrFun hequiv.state true
+  rw [fragile_alone hc'] at hstate
+  exact absurd hstate (by decide)
+
+/-- `true` says 1 and then 0, `false` says 0. The state counts what an actor has said. -/
+abbrev chorusSig : Signature where
+  Id := Bool
+  Msg _ := Unit
+  In := Bool
+  Out := Nat
+
+abbrev chorus : System chorusSig where
+  State _ := Nat
+  actor i :=
+    { init := 0
+      step := fun s _ => (s + 1, [.emit (if i && s == 0 then 1 else 0)])
+      recover := fun s => (s, []) }
+  accept i := ⟨i, ()⟩
+
+instance : chorusSig.Inspect := {}
+instance : chorus.Inspect := {}
+
+instance : (splitSig chorusSig).Inspect := .split
+instance : (chorus.split id).Inspect := .split
+
+/-- The split after all three have spoken and the left shard has handed over its 0: the 0 of
+the right shard, which is older than the 1, still waits. -/
+def chorusSplit : Option (SysState (chorus.split id)) :=
+  (SysState.init (chorus.split id) (EnvModel.split {} id)).run (EnvModel.split {} id)
+    [ .input (.inr (.inl false)), .input (.inl (.inl true)), .input (.inl (.inl true)),
+      .start (.inr false), .start (.inl true),
+      .deliver ⟨none, .inr false, ()⟩, .deliver ⟨none, .inl true, ()⟩,
+      .deliver ⟨none, .inl true, ()⟩, .output (.inl (.inl 0)) ]
+
+/-- Every state of the chorus alone in which no more has been said. -/
+def chorusAlone :=
+  Tests.Join.explore chorus {} [true, false] fun c =>
+    c.state true ≤ 2 && c.state false ≤ 1 && c.net.length ≤ 3 && c.outbox.length ≤ 3
+
+section Bank
+
+open Examples.Bank
+
+/-- No balance of the bank on two shards is ever negative, from the same fact about the bank. -/
+theorem split_balance_nonneg {A : Type} [DecidableEq A] (opening : Nat) (hosts : A → Bool)
+    (env : EnvModel (sig A)) {c : SysState ((bank A opening).split hosts)}
+    (hc : (bank A opening).SplitReachable hosts env c) (a : A) :
+    0 ≤ (c.merged.state a).balance :=
+  System.Invariant.split_state (Q := fun s : A → Account => 0 ≤ (s a).balance)
+    (fun env => balance_nonneg opening env a) hc
+
+end Bank
+
 def tests : List (String × Bool) :=
   [ ("split: the bank on two shards reaches only states of the bank, reliable links",
       bankReliable.complete && bankReliable.sound && bankReliable.full),
@@ -200,8 +295,8 @@ def tests : List (String × Bool) :=
       relayCompared.complete && relayCompared.sound && relayCompared.full),
     ("split: the relay is seen stopped, restarted, and with a timer armed on either shard",
       relayCompared.somewhere (fun c => !c.up (.inl 1) && c.timers (.inl 1) == [])
-      && relayCompared.somewhere (fun c => c.state (.inr 0) == 2 && c.timers (.inr 0) == [.tick])
-      && relayCompared.somewhere fun c => c.state (.inl 1) == 2),
+      && relayCompared.somewhere (fun c => c.state (.inr 0) && c.timers (.inr 0) == [.tick])
+      && relayCompared.somewhere fun c => c.state (.inl 1) && c.timers (.inl 1) == [.tick]),
     ("split: no copy that only forwards ever runs",
       relayCompared.split.queue.all fun v =>
         let c := v.path.last.state
@@ -217,6 +312,15 @@ def tests : List (String × Bool) :=
         | some c => c.merged.state true == 2
         | none => false)
       && fragileCompared.complete && !fragileCompared.sound
-      && fragileCompared.alone.queue.all fun v => v.path.last.state.state true == 1) ]
+      && fragileCompared.alone.queue.all fun v => v.path.last.state.state true == 1),
+    ("split: where the link to it is lossy nothing is lost, and the split is the system again",
+      fragileLossy.complete && fragileLossy.sound && fragileLossy.full),
+    ("split: equal outputs of the two shards leave in an order the system alone cannot have",
+      match chorusSplit with
+      | some c =>
+        c.merged.outbox == [0, 1] && Tests.Join.explored chorusAlone
+          && !chorusAlone.seen.contains ⟨c.merged⟩
+          && chorusAlone.queue.any fun v => v.path.last.state.equiv {} c.merged
+      | none => false) ]
 
 end Tests.Split
