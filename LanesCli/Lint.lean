@@ -2,6 +2,7 @@
 Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
+import LanesCli.Generated
 
 /-!
 # `lanes lint`
@@ -11,8 +12,9 @@ Source-level checks of the LANES_STYLE rules that can be decided from the text o
 - `no-sorry` (rule 4): no `sorry` or `admit`.
 - `trusted-listed` (rule 5.5): `partial`, `unsafe`, `axiom`, `panic!`, `@[implemented_by]` and
   `@[extern]` appear only in files named in `TRUSTED.md`.
-- `trusted-size` (rule 5.5): a file that `TRUSTED.md` lists as `` `path`, N lines `` has at most
-  `N` lines, so trusted code cannot grow without the list changing.
+- `trusted-size` (rule 5.5): a file that `TRUSTED.md` lists as `` `path`, N lines `` has `N`
+  lines, so trusted code cannot grow without the list changing; `--fix` rewrites the counts.
+- `decisions`, `status`: the files `LanesCli/Generated.lean` derives agree with their sources.
 - `layering` (rule 1.6): files that import Mathlib, CSLib or a proof module (`Lanes.Semantics`,
   `App.Proofs`) live in a proof directory, one named `…Proofs` included, or are named
   `…Proofs.lean`, so executable code never links them.
@@ -116,7 +118,7 @@ def importsProofModule (line : String) : Bool :=
 def checkFile (root file : System.FilePath) (trusted : String) : IO (List Finding) := do
   let src ← IO.FS.readFile file
   let relative := (file.toString.dropPrefix (root.toString ++ "/")).toString
-  let listed := (trusted.splitOn relative).length > 1
+  let listed := Generated.occursIn relative.toUTF8 trusted.toUTF8
   let code := stripCommentsAndStrings src
   let mut findings : List Finding := []
   for (text, k) in (code.splitOn "\n").zipIdx do
@@ -142,53 +144,47 @@ def checkFile (root file : System.FilePath) (trusted : String) : IO (List Findin
               ++ "(rule 1.6)"⟩ :: findings
   return findings.reverse
 
-/-- The `` `path.lean`, N lines `` entries of `TRUSTED.md`. -/
-def trustedSizes (trusted : String) : List (String × Nat) :=
-  let parts := trusted.splitOn "`"
-  (parts.zip (parts.drop 1)).filterMap fun (path, after) =>
-    if path.endsWith ".lean" && after.startsWith ", " then
-      match ((after.drop 2).toString.splitOn " ") with
-      | count :: unit :: _ =>
-        if unit.startsWith "lines" then count.toNat?.map (path, ·) else none
-      | _ => none
-    else none
-
-def checkSizes (root : System.FilePath) (trusted : String) : IO (List Finding) := do
-  let mut findings : List Finding := []
-  for (path, allowed) in trustedSizes trusted do
-    let file := root / path
-    if ← file.pathExists then
-      let lines := ((← IO.FS.readFile file).splitOn "\n").length - 1
-      if lines > allowed then
-        findings := ⟨path, lines, "trusted-size",
-          s!"{lines} lines, but TRUSTED.md allows {allowed}: move logic into proved code or "
-            ++ "update the list (rule 5.5)"⟩ :: findings
-    else
-      findings := ⟨"TRUSTED.md", 1, "trusted-size", s!"`{path}` does not exist"⟩ :: findings
-  return findings.reverse
-
 def sourceFiles (root : System.FilePath) : IO (Array System.FilePath) := do
   let files ← root.walkDir fun dir =>
     let name := dir.fileName.getD ""
     return !(name.startsWith "." || name == "templates")
   return (files.filter fun f => f.extension == some "lean").qsort (·.toString < ·.toString)
 
-def run (root : System.FilePath) : IO Nat := do
+structure Options where
+  /-- Rewrite the generated files instead of reporting them. -/
+  fix : Bool := false
+  /-- This is the main branch: decisions without a number are numbered, or reported. -/
+  main : Bool := false
+
+structure Report where
+  findings : List Finding
+  fixed : List Generated.Edit
+  files : Nat
+
+def lint (root : System.FilePath) (options : Options := {}) : IO Report := do
+  let fixed ← if options.fix then Generated.fix root options.main else pure []
+  let plan ← Generated.plan root options.main
+  let mut findings : List Finding :=
+    plan.problems.map (fun (file, line, rule, message) => ⟨file, line, rule, message⟩)
+      ++ plan.edits.map fun e => ⟨e.path, 1, e.rule, e.message⟩
   let trustedFile := root / "TRUSTED.md"
   let trusted ← if ← trustedFile.pathExists then IO.FS.readFile trustedFile else pure ""
   let files ← sourceFiles root
-  let mut count := 0
-  for f in ← checkSizes root trusted do
-    IO.println s!"{f.file}:{f.line}: [{f.rule}] {f.message}"
-    count := count + 1
   for file in files do
-    for f in ← checkFile root file trusted do
-      IO.println s!"{f.file}:{f.line}: [{f.rule}] {f.message}"
-      count := count + 1
+    findings := findings ++ (← checkFile root file trusted)
+  return ⟨findings, fixed, files.size⟩
+
+def run (root : System.FilePath) (options : Options := {}) : IO Nat := do
+  let report ← lint root options
+  for e in report.fixed do
+    IO.println s!"fixed {e.describe}"
+  for f in report.findings do
+    IO.println s!"{f.file}:{f.line}: [{f.rule}] {f.message}"
+  let count := report.findings.length
   if count == 0 then
-    IO.println s!"lanes lint: {files.size} files, no findings"
+    IO.println s!"lanes lint: {report.files} files, no findings"
   else
-    IO.println s!"lanes lint: {count} findings in {files.size} files"
+    IO.println s!"lanes lint: {count} findings in {report.files} files"
   return count
 
 end Lanes.Cli.Lint

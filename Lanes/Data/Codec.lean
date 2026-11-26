@@ -93,6 +93,10 @@ def sigma {ι : Type} {β : ι → Type} (a : Codec ι) (b : ∀ i, Codec (β i)
     return (⟨i, v⟩, rest)
   sound x rest := by simp [List.append_assoc, a.sound, (b x.1).sound]
 
+/-- Written as the value; read back only with the property. -/
+def subtype {p : α → Prop} [DecidablePred p] (c : Codec α) : Codec {a // p a} :=
+  c.map (·.val) (fun a => if h : p a then some ⟨a, h⟩ else none) fun a => by simp [a.property]
+
 def bool : Codec Bool :=
   nat.map (fun b => if b then 1 else 0)
     (fun n => if n = 0 then some false else if n = 1 then some true else none)
@@ -193,6 +197,8 @@ instance [Codable α] : Codable (Option α) := ⟨Codec.option codec⟩
 instance [Codable α] : Codable (List α) := ⟨Codec.list codec⟩
 instance [Codable α] [Codable β] : Codable (α × β) := ⟨Codec.pair codec codec⟩
 instance [Codable α] [Codable β] : Codable (α ⊕ β) := ⟨Codec.sum codec codec⟩
+instance {p : α → Prop} [DecidablePred p] [Codable α] : Codable {a // p a} :=
+  ⟨Codec.subtype codec⟩
 
 instance {ι : Type} {β : ι → Type} [Codable ι] [∀ i, Codable (β i)] :
     Codable ((i : ι) × β i) :=
@@ -218,11 +224,16 @@ open Lean in
 /-- `Codec.sum% T { a (x := codecX) (y := codecY), b }`: the codec of inductive type `T`, a
 constructor per entry with a codec per argument. -/
 syntax (name := codecSum)
-  "Codec.sum% " ident " {" (ident ("(" ident " := " term ")")*),* "}" : term
+  "Codec.sum% " ident " {" (rawIdent ("(" ident " := " term ")")*),* "}" : term
 
 namespace Codec
 
 open Lean
+
+/-- Variables for the values of `xs`, named apart from every constant: a value bound to a name
+that is also a constructor's would be read as the constructor in a pattern. -/
+meta def fresh (xs : Array Ident) : MacroM (Array (TSyntax `term)) :=
+  xs.mapM fun x => return mkIdent (← Macro.addMacroScope x.getId)
 
 /-- `(a, b, c)` as nested pairs, as a term or a pattern; `()` when empty. -/
 meta def tuple (xs : Array (TSyntax `term)) : MacroM (TSyntax `term) :=
@@ -245,10 +256,10 @@ end Codec
 open Lean Codec in
 macro_rules
   | `(Codec.struct% $_ { $[$fields := $codecs],* }) => do
-    let r := mkIdent `r
+    let r := mkIdent (← Macro.addMacroScope `r)
     let projections ← fields.mapM fun f => `($r.$f:ident)
     let out ← tuple projections
-    let values : Array (TSyntax `term) := fields.map fun f => ⟨f.raw⟩
+    let values ← fresh fields
     let pattern ← tuple values
     `(Lanes.Codec.map $(← product codecs) (fun $r => $out)
         (fun $pattern => some { $[$fields:ident := $values],* }) (by intro r; rfl))
@@ -266,7 +277,7 @@ macro_rules
     let mut backs : Array (TSyntax `term) := #[]
     for k in [0:n] do
       let ctor := mkIdent (T.getId ++ ctors[k]!.getId)
-      let vars : Array (TSyntax `term) := args[k]!.map fun a => ⟨a.raw⟩
+      let vars ← fresh args[k]!
       let injected ← inject k n (← tuple vars)
       cases := cases.push (← if vars.isEmpty then pure injected
         else `(fun $vars* => $injected))

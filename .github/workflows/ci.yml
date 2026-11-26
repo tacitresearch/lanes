@@ -56,8 +56,14 @@ jobs:
         with:
           path: .lake/build
           key: ${{ steps.lean.outputs.build-key }}
+      # Also fails on a stale generated file (line counts, the decisions' index, docs/STATUS.md),
+      # and on main on a decision without a number: run `lake exe lanes lint --fix --main`.
       - name: Lint
-        run: lake exe lanes lint
+        run: lake exe lanes lint ${{ github.event_name == 'push' && '--main' || '' }}
+      - name: lanes lint --fix changes nothing
+        run: |
+          lake exe lanes lint --fix
+          git diff --exit-code
 
   check:
     needs: [runner, build]
@@ -82,8 +88,11 @@ jobs:
       - uses: ./.github/actions/lean
       - name: Test
         run: lake test
+      # Lake does not track the templates `LanesCli/New.lean` reads with `include_str`, so a
+      # restored build would keep the old ones: build `lanes new` again from the templates.
       - name: Generated app builds and passes its checks
         run: |
+          rm -f .lake/build/lib/lean/LanesCli/New.* .lake/build/ir/LanesCli/New.*
           lake exe lanes new demo-app --dir "$RUNNER_TEMP/demo-app" --lanes-path "$GITHUB_WORKSPACE"
           cd "$RUNNER_TEMP/demo-app"
           mkdir -p .lake && ln -sfn "$GITHUB_WORKSPACE/.lake/packages" .lake/packages

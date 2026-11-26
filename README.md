@@ -7,7 +7,7 @@ per actor, nothing shares state, and IO happens only at the edges. The same step
 in production, in the simulator, in the model checker and in the proofs.
 
 > Status: early. `docs/STATUS.md` lists what works today against the plan in `docs/DESIGN.md`;
-> `docs/DECISIONS.md` records what has been settled.
+> `docs/decisions/` records what has been settled, one file per decision.
 
 ## A system in three parts
 
@@ -119,10 +119,11 @@ a view cannot link or post to a route that does not exist.
 - **The HTTP client's wire format.** What the reader makes of a response written as a server
   writes it, and of every start of one, is proved, and so are its size limit and its ending
   (`Response.read_wire`, `Response.read_more`).
-- **Trusted.** About 1,150 lines of IO and macro code and a 439-line HTTP wire format whose
-  reading is proved for what a server's writer sends and only tested for other forms, listed with their sizes in `TRUSTED.md`; `lanes lint` fails if they
-  grow, and `scripts/mutants.py` holds the known ways of breaking that code, each of which has
-  to fail a test. It is a list, not a measure: a review found sixteen more, which are in it now,
+- **Trusted.** About 1,600 lines of trusted code, listed with their sizes in `TRUSTED.md`: IO,
+  a template macro, and an HTTP wire format whose reading is proved for what a server's writer
+  sends and only tested for other forms. `lanes lint` fails if they change without the list,
+  and `scripts/mutants.py` holds the known ways of breaking that code, each of which has to
+  fail a test. It is a list, not a measure: a review found sixteen more, which are in it now,
   and `TRUSTED.md` says what it still does not check.
 
 ## Kill it and start it again
@@ -202,7 +203,7 @@ itself, and `Server.implements` proves it refines the spec for every interleavin
 - `docs/PLAN.md`: what is being done now and why.
 - `docs/DESIGN.md`: what Lanes is and the build plan.
 - `LANES_STYLE.md`: design and code rules, each with its reason.
-- `docs/DECISIONS.md`: decisions taken during implementation.
+- `docs/decisions/`: decisions taken during implementation, one file each.
 - `TRUSTED.md`: everything that is trusted rather than proved.
 - `AGENTS.md`: how to work in this repository.
 

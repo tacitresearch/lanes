@@ -41,7 +41,7 @@ structure ServerConfig where
   maxBodyBytes : Nat := 1048576
   gate : GateConfig := {}
   /-- Where to keep a journal. With one, the system behind the server survives the process:
-  it starts in the state it was in (`DECISIONS.md` D24). -/
+  it starts in the state it was in (`docs/decisions/` D24). -/
   journal : Option System.FilePath := none
   /-- The application's name for the system and the version of its step functions. A journal
   written under another name is refused: replayed through other step functions it would give

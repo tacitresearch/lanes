@@ -104,7 +104,7 @@ theorem bounded_decide (config : Config N) (self : N) (req : ReqId) {u : Option 
     | signUp c =>
       intro p hp
       cases hp
-      exact ⟨Nat.zero_le _, by simp [Auth.Attempts.Bounded, Auth.Attempts.none]; omega⟩
+      exact ⟨Nat.zero_le _, by simp [Auth.Attempts.Bounded]; omega⟩
     | logIn | act => intro p hp; cases hp
   | some p =>
     cases ask with
@@ -141,8 +141,7 @@ theorem user_bounded (config : Config N) (answering : Answering) (self : N) :
           | none => cases hq
           | some p =>
             cases hq
-            exact ⟨(h p rfl).1, by simp [Auth.Attempts.Bounded, Auth.Attempts.unlock,
-              Auth.Attempts.none]; omega⟩
+            exact ⟨(h p rfl).1, by simp [Auth.Attempts.Bounded, Auth.Attempts.unlock]; omega⟩
         | expire session =>
           cases u with
           | none => intro q hq; cases hq
