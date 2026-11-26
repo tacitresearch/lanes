@@ -14,7 +14,7 @@ toolchain, the operating system and the hardware.
 | What | Where | Why it is trusted | How it is checked |
 | --- | --- | --- | --- |
 | The concurrent runtime | `Lanes/Actors/Runtime.lean` | It performs effects on real tasks, timers and channels; its conformance to `SysState.step` is not proved. | With `Config.record` on it records its events; `Tests/Runtime.lean` replays them through `SysState.run` and compares final states, under concurrent clients, self-stopping actors and timers. |
-| `partial def post`, `perform`, `live` | `Lanes/Actors/Runtime.lean` | Actor tasks run forever and start each other, so they cannot be shown to terminate. | Same tests. |
+| `partial def deliver`, `drain`, `perform`, `live` | `Lanes/Actors/Runtime.lean` | Actor tasks run forever and start each other, so they cannot be shown to terminate. | Same tests, which also cover cycles of full mailboxes, refused inputs and the restart budget. |
 
 ## Assumptions the runtime makes
 
@@ -22,6 +22,9 @@ toolchain, the operating system and the hardware.
   that state in memory, so it survives an actor stopping itself but not the process dying. Until
   the persistence adapter exists, an actor that claims durable state is only durable within one
   process lifetime.
+- **Unbounded outbox.** A send to a full mailbox waits in the sender's outbox, which has no bound
+  of its own. The system as a whole is bounded only if what enters it is: use `Runtime.tryInput`
+  or the HTTP adapter, which refuse inputs to a full mailbox.
 - **Environment model.** The runtime stays within `Runtime.Config.env`: reliable ordered links
   between actors, unordered inputs from outside, no crashes other than an actor stopping itself.
   Properties proved under a stronger model than that do not apply to a running system.

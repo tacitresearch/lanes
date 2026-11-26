@@ -20,7 +20,8 @@ answered by one output of the system:
    input is parsed once, at the edge);
 3. the input goes to the runtime;
 4. when the system emits an output that `Bridge.encode` maps to this request, the adapter writes
-   the response. A request that is not answered within the deadline gets `504`.
+   the response. A request that is not answered within the deadline gets `504`, and one whose
+   receiver's mailbox is full gets `503` at once.
 
 The environment model of this adapter: one input per request, at most one response per request,
 and a response or a timeout always arrives.
@@ -138,7 +139,11 @@ def serve (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : Serv
     | .ok x =>
       let waiter : Std.Channel Response ← Std.Channel.new (some 1)
       waiting.atomically (modify (·.insert id waiter))
-      runtime.input x
+      -- A full mailbox is answered at once, so a slow system cannot hold requests past their
+      -- deadline (rule 3.8).
+      if !(← runtime.tryInput x) then
+        waiting.atomically (modify (·.erase id))
+        return ← respond (Response.text "the system is busy\n" 503)
       let answer ← Selectable.one #[
         .case waiter.recvSelector (fun response => pure (some response)),
         .case (← Selector.sleep (.ofNat config.requestTimeout_ms)) (fun _ => pure none)]

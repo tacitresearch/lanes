@@ -11,8 +11,9 @@ Source-level checks of the LANES_STYLE rules that can be decided from the text o
 - `no-sorry` (rule 4): no `sorry` or `admit`.
 - `trusted-listed` (rule 5.5): `partial`, `unsafe`, `axiom`, `panic!`, `@[implemented_by]` and
   `@[extern]` appear only in files named in `TRUSTED.md`.
-- `layering` (rule 1.6): files that import Mathlib or CSLib live in a proof directory, so
-  executable code never links them.
+- `layering` (rule 1.6): files that import Mathlib, CSLib or a proof module (`Lanes.Semantics`,
+  `App.Proofs`) live in a proof directory or are named `…Proofs.lean`, so executable code never
+  links them.
 
 Comments and string literals are ignored. The checks that need the elaborator (`no-io-in-step`,
 `bounded`, `field-leak`) are not implemented yet.
@@ -105,7 +106,17 @@ def proofDirs : List String :=
 /-- Whether a file belongs to the proof layer, judged by its path. -/
 def isProofFile (file : System.FilePath) : Bool :=
   file.components.any fun part =>
-    proofDirs.contains part || part.endsWith "Proofs.lean" || part == "Semantics.lean"
+    proofDirs.contains part || part.endsWith "Proofs.lean"
+      || proofDirs.any fun dir => part == dir ++ ".lean"
+
+/-- Whether an import line names a module of the proof layer: `Lanes.Semantics`, or a module
+with a `Semantics`, `Temporal` or `Proofs` component, such as an application's `App.Proofs`. -/
+def importsProofModule (line : String) : Bool :=
+  match (line.splitOn " ").filter (· != "") |>.getLast? with
+  | some module =>
+    (module.splitOn ".").any fun part =>
+      part == "Semantics" || part == "Temporal" || part.endsWith "Proofs"
+  | none => false
 
 /-- Check one file. `trusted` is the text of `TRUSTED.md`. -/
 def checkFile (root file : System.FilePath) (trusted : String) : IO (List Finding) := do
@@ -131,6 +142,10 @@ def checkFile (root file : System.FilePath) (trusted : String) : IO (List Findin
             || (t.splitOn "import Cslib.").length > 1 then
           findings := ⟨relative, line, "layering",
             "Mathlib and CSLib may only be imported from proof files (rule 1.6)"⟩ :: findings
+        else if importsProofModule t then
+          findings := ⟨relative, line, "layering",
+            "a proof module imported from executable code links Mathlib into the binary "
+              ++ "(rule 1.6)"⟩ :: findings
   return findings.reverse
 
 /-- The Lean files of a project, leaving out build output, templates and hidden directories. -/

@@ -57,8 +57,10 @@ and Mathlib's `<i` token breaks `<input>` in templates, so keep views and `main`
 - Define a concrete system with `abbrev`, so instance resolution can see its `State`.
 - Prove per-actor invariants with `actor_invariant [myActor]`; it leaves the cases it cannot
   close as goals.
-- In templates a tag name follows `<` with no space (`<div>`); `a < b` with a space is a
-  comparison.
+- Template syntax is scoped: a view file starts with `open scoped Lanes.Html`. Inside it, a tag
+  name follows `<` with no space (`<div>`); `a < b` with a space is a comparison.
+- In `do` blocks, `(← action)` inside `a || b` or `a && b` runs whether or not the other side
+  decides the result. Bind it first when it must be conditional.
 - Templates are embedded with `include_str`, which Lake does not track: after editing
   `templates/`, touch `LanesCli/New.lean` and rebuild `lanes`. CI builds a generated app.
 - Check before you prove: every invariant gets an `always` property and a `sometimes` vacuity

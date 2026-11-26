@@ -59,4 +59,11 @@ Last updated: 2026-11-26.
 - Templates take text children as string literals (`<p>"text"</p>`), not bare text.
 - No TLS, HTTP client, WebSockets or database adapter. `Std.Http` has no client.
 - The runtime's in-memory "durable" state does not survive a process crash (see `TRUSTED.md`).
+- The runtime never releases an actor: every identity ever addressed keeps its cell, task and
+  mailbox. A session-per-user system grows without bound. Releasing an actor means its state must
+  live somewhere else, so this waits for the persistence adapter (item 4 above).
+- An actor's outbox (sends waiting for a full mailbox) has no bound of its own. It is bounded
+  only by the back-pressure full mailboxes put on inputs from outside.
+- Templates cannot contain inline `<script>` or `<style>` text, and URL attributes accept only
+  relative, `http`, `https`, `mailto` and `tel` URLs.
 - The CI workflow has not run yet: it triggers on pull requests and on `main`.

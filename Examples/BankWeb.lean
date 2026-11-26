@@ -25,6 +25,7 @@ Run with `lake exe bankWeb` and open http://127.0.0.1:8080.
 namespace Examples.BankWeb
 
 open Lanes Examples.Bank
+open scoped Lanes.Html
 
 /-- The demo runs three accounts. -/
 abbrev Acct := Fin 3

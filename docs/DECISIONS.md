@@ -125,6 +125,9 @@ directly.
 Why: found by building the generated app. Without the rule, `if count < limit then (…)` in any
 file importing Lanes parsed `<limit then` as the start of a tag and failed.
 
+*Since extended:* the syntax is scoped (`open scoped Lanes.Html`), so files that are not views
+are unaffected, including `a<b` written without spaces.
+
 ## D13. The runtime orders steps with one logical clock
 
 Every step takes a number from a global counter and each message carries its sender's number.
@@ -166,3 +169,25 @@ by hand. `LawfulJson` states that an encoding loses nothing.
 Why: any `import Lean` takes a compiled binary from about 5 MB to about 137 MB, and runtime
 modules must stay small (design decision 5). Canonical values make `Json` usable in actor
 messages and states, which the model checker compares and hashes (D8).
+
+## D16. An actor never waits inside a step
+
+A send whose receiver's mailbox is full goes to the sender's outbox, and a separate task delivers
+the outbox in order. Inputs from outside are where back-pressure applies: `Runtime.input` waits
+and `Runtime.tryInput` refuses, which the HTTP adapter turns into `503`.
+
+Why: waiting inside a step deadlocks as soon as an actor sends to its own full mailbox, or two
+actors fill each other's. The semantics has no bound on messages in flight, so losing or
+refusing a send between actors would break conformance; refusing at the boundary does not.
+The cost is that the outbox is unbounded, which is stated in `TRUSTED.md`.
+
+## D17. URL attributes are rendered through `Html.safeUrl`
+
+`href`, `src`, `action`, `formaction` and `xlink:href` keep relative URLs and the schemes
+`http`, `https`, `mailto` and `tel`. Anything else renders as `about:invalid#blocked`. The check
+is in `Attr.render`, so it covers values built without the template macro too. `<script>` and
+`<style>` take no children in templates.
+
+Why: escaping stops text becoming markup but does not stop `javascript:` in a link. Checking at
+render time needs no extra types in views. The price is that `data:` and other schemes cannot be
+used in those attributes yet.

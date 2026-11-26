@@ -69,7 +69,8 @@ structure Options (S : Type) where
   constraint : S → Bool := fun _ => true
   /-- States at this depth are not expanded. Initial states have depth 0. -/
   maxDepth : Option Nat := none
-  /-- Stop after this many distinct states. -/
+  /-- Store at most this many distinct states. States found beyond the limit are left out and
+  the report is marked incomplete. -/
   maxStates : Nat := 10000000
   /-- Report a state with no successors as a deadlock, unless `terminal` holds of it. -/
   checkDeadlock : Bool := false
@@ -221,6 +222,9 @@ zero count show up in the coverage.
       if failure.isSome then break
       transitions := transitions + 1
       coverage := coverage.insert (labelName l) (coverage.getD (labelName l) 0 + 1)
+      if f.states.size ≥ opts.maxStates && !f.index.contains s' then
+        complete := false
+        continue
       let (f', added) := f.add s' (some (head, l)) (d + 1)
       f := f'
       if let some k := added then

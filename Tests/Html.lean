@@ -9,6 +9,7 @@ import Lanes
 namespace Tests.Html
 
 open Lanes
+open scoped Lanes.Html
 
 def Row (label : String) (count : Nat) : Html :=
   <li class="row" data-count={count}>{label}</li>
@@ -48,6 +49,18 @@ def tests : List (String × Bool) :=
     ("html: a comparison before a template is still a comparison",
       (badge 1 2).render == "<span class=\"ok\">1</span>"
         && (badge 2 2).render == "<span class=\"full\">full</span>"),
+    ("html: a javascript: URL in a URL attribute is blocked, however it is disguised",
+      (<a href={"javascript:alert(1)"}>"x"</a> : Html).render
+          == "<a href=\"about:invalid#blocked\">x</a>"
+        && Html.safeUrl " JaVa\tScRiPt:alert(1)" == Html.blockedUrl
+        && Html.safeUrl "data:text/html,<script>" == Html.blockedUrl
+        && (Html.element "form" [⟨"ACTION", some "javascript:x"⟩] []).render
+          == "<form ACTION=\"about:invalid#blocked\"></form>"),
+    ("html: ordinary URLs pass through URL attributes unchanged",
+      ["/accounts/1?x=a:b", "https://example.org/a", "mailto:a@example.org", "#top", "a/b:c",
+        "//example.org/x"].all fun url => Html.safeUrl url == url),
+    ("html: a script is loaded by src and has no children",
+      (<script src="/app.js"></script> : Html).render == "<script src=\"/app.js\"></script>"),
     ("html: document adds the doctype",
       (<html></html> : Html).document == "<!DOCTYPE html><html></html>"),
     ("http: form data decodes percent escapes and plus",

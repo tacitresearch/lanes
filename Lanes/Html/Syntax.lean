@@ -9,9 +9,12 @@ public import Lanes.Html.Basic
 /-!
 # Template syntax
 
-HTML written inside Lean, checked by the Lean compiler:
+HTML written inside Lean, checked by the Lean compiler. The syntax is scoped: a view file turns
+it on with `open scoped Lanes.Html`, and code elsewhere is not affected by it.
 
 ```lean
+open scoped Lanes.Html
+
 def Cart (items : List Item) : Html :=
   <div id="cart">
     <ul>{items.map fun item => <CartRow item={item}/>}</ul>
@@ -31,11 +34,13 @@ at the template line, and hover and go-to-definition work inside templates.
 - Attribute names may contain hyphens (`hx-post`, `data-id`) and may be Lean keywords (`class`,
   `for`, `open`).
 - A tag name follows its `<` with no space. With a space, `a < b` is a comparison as usual.
+- `<script>` and `<style>` take no children: browsers do not decode escaped text inside them, so
+  inline code would arrive broken. Load scripts and styles with `src` and `<link>`.
 -/
 
 public section
 
-namespace Lanes.Html.Syntax
+namespace Lanes.Html
 
 open Lean
 
@@ -47,24 +52,24 @@ declare_syntax_cat lanesChild
 declare_syntax_cat lanesElem
 
 /-- `name="text"`. -/
-syntax sepBy1(rawIdent, "-") "=" str : lanesAttr
+scoped syntax sepBy1(rawIdent, "-") "=" str : lanesAttr
 /-- `name={term}`. -/
-syntax sepBy1(rawIdent, "-") "=" "{" term "}" : lanesAttr
+scoped syntax sepBy1(rawIdent, "-") "=" "{" term "}" : lanesAttr
 /-- A bare name: a boolean attribute that is present. -/
-syntax sepBy1(rawIdent, "-") : lanesAttr
+scoped syntax sepBy1(rawIdent, "-") : lanesAttr
 /-- `<tag attrs/>`. No space is allowed between `<` and the tag name: that is what tells a tag
 from a comparison such as `count < limit`. -/
-syntax "<" noWs rawIdent lanesAttr* "/>" : lanesElem
+scoped syntax "<" noWs rawIdent lanesAttr* "/>" : lanesElem
 /-- `<tag attrs>children</tag>`. -/
-syntax "<" noWs rawIdent lanesAttr* ">" lanesChild* "</" rawIdent ">" : lanesElem
+scoped syntax "<" noWs rawIdent lanesAttr* ">" lanesChild* "</" rawIdent ">" : lanesElem
 /-- Text. -/
-syntax str : lanesChild
+scoped syntax str : lanesChild
 /-- A spliced term. -/
-syntax "{" term "}" : lanesChild
+scoped syntax "{" term "}" : lanesChild
 /-- A nested element. -/
-syntax lanesElem : lanesChild
+scoped syntax lanesElem : lanesChild
 /-- A template is a term of type `Html`. -/
-syntax:max lanesElem : term
+scoped syntax:max lanesElem : term
 
 /-- The attribute name written as hyphen-separated parts. -/
 private meta def attrName (parts : Array Syntax) : String :=
@@ -109,6 +114,9 @@ private meta def expandElem : Syntax → MacroM (TSyntax `term)
   | `(lanesElem| <$tag $attrs* > $children* </ $close >) => do
     if tag.getId != close.getId then
       Macro.throwErrorAt close s!"expected </{tag.getId}> to close <{tag.getId}>"
+    if (tag.getId == `script || tag.getId == `style) && !children.isEmpty then
+      Macro.throwErrorAt tag s!"<{tag.getId}> takes no children here: text inside it is not \
+        decoded by browsers, so inline code would arrive broken. Load it from a file instead."
     let children ← children.mapM (expandChild ·.raw)
     if isComponent tag then
       let f ← attrs.foldlM (fun f a => applyArg f a.raw) (⟨tag.raw⟩ : TSyntax `term)
@@ -121,4 +129,4 @@ private meta def expandElem : Syntax → MacroM (TSyntax `term)
 macro_rules
   | `($e:lanesElem) => expandElem e
 
-end Lanes.Html.Syntax
+end Lanes.Html

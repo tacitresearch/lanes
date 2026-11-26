@@ -92,9 +92,7 @@ def flakyTest : Async (List (String × Bool)) := do
     for n in [0:100] do
       rt.input (k, n * 3 + k.val + 1) : Async Unit)
   discard <| Async.concurrentlyAll clients
-  rt.idle
-  Async.sleep 20
-  rt.idle
+  rt.idle (timers := true)
   let events ← rt.trace
   let some c ← replay flaky rt config | return [("flaky: the semantics accepts the trace", false)]
   let collectorState ← rt.state .collector
@@ -135,9 +133,106 @@ def bankTest : Async (List (String × Bool)) := do
       | some c => (List.finRange 3).zip balances |>.all fun (a, s) => c.state a == s
       | none => false) ]
 
+/-! Full mailboxes: an actor that floods itself and its peer through mailboxes of capacity 2. -/
+
+inductive FloodMsg where
+  | burst (n : Nat)
+  | ping
+  | pong
+  | note
+  deriving DecidableEq, Repr, Hashable
+
+abbrev floodSig : Signature where
+  Id := Fin 2
+  Msg _ := FloodMsg
+  In := Fin 2 × Nat
+
+/-- On `burst n` an actor sends itself `n` notes and its peer `n` pings; a ping is answered with
+a pong. The state counts notes and pongs. -/
+def flooder (self : Fin 2) : floodSig.Actor self (Nat × Nat) where
+  init := (0, 0)
+  step s
+    | .burst n =>
+      (s, (List.replicate n (.send self .note)) ++ (List.replicate n (.send (self + 1) .ping)))
+    | .ping => (s, [.send (self + 1) .pong])
+    | .pong => ((s.1, s.2 + 1), [])
+    | .note => ((s.1 + 1, s.2), [])
+  recover s := (s, [])
+
+abbrev flood : System floodSig where
+  State _ := Nat × Nat
+  actor := flooder
+  accept x := ⟨x.1, .burst x.2⟩
+
+def floodTest : Async (List (String × Bool)) := do
+  let config : Runtime.Config floodSig := { record := true, mailboxCapacity := 2 }
+  let rt ← Runtime.start flood config
+  -- Both actors flood themselves and each other at once: a cycle of full mailboxes.
+  discard <| Async.concurrentlyAll #[rt.input (0, 200), rt.input (1, 200)]
+  rt.idle
+  let states ← (List.finRange 2).mapM fun k => rt.state k
+  let replayed ← replay flood rt config
+  return [
+    ("full mailboxes: self-sends and a cycle of sends all arrive",
+      states == [(200, 200), (200, 200)]),
+    ("full mailboxes: the semantics accepts the trace, with sends kept in order",
+      match replayed with
+      | some c => (List.finRange 2).zip states |>.all fun (k, s) => c.state k == s
+      | none => false) ]
+
+/-! Admission: `tryInput` either accepts an input or refuses it and leaves no trace of it. Whether
+a given call finds the mailbox full depends on timing, so the test checks what must hold either
+way. -/
+
+def busyTest : Async (List (String × Bool)) := do
+  let config : Runtime.Config floodSig := { record := true, mailboxCapacity := 1 }
+  let rt ← Runtime.start flood config
+  let accepted := (← (List.range 200).mapM fun _ => rt.tryInput (0, 1)).countP (·)
+  rt.idle
+  let inputs := (← rt.trace).toList.countP fun
+    | .input _ => true
+    | _ => false
+  return [
+    ("tryInput: every accepted input is handled and no refused one is",
+      (← rt.state 0) == (accepted, accepted)),
+    ("tryInput: the trace holds exactly the accepted inputs and still replays",
+      inputs == accepted && (← replay flood rt config).isSome) ]
+
+/-! Restart budget: an actor that stops in `recover` is restarted a bounded number of times. -/
+
+abbrev brokenSig : Signature where
+  Id := Unit
+  Msg _ := Unit
+  In := Unit
+
+abbrev broken : System brokenSig where
+  State _ := Unit
+  actor _ := { init := (), step := fun s _ => (s, []), recover := fun s => (s, [.stop]) }
+  accept _ := ⟨(), ()⟩
+
+def budgetTest : Async (List (String × Bool)) := do
+  let config : Runtime.Config brokenSig :=
+    { record := true, restart := fun _ => true, maxRestarts := 3, restartWindow_ms := 60000 }
+  let rt ← Runtime.start broken config
+  rt.input ()
+  rt.idle
+  Async.sleep 20
+  let events ← rt.trace
+  let starts := events.toList.countP fun
+    | .start _ => true
+    | _ => false
+  return [
+    ("restart budget: a start that always stops is retried 3 times, then left down",
+      starts == 4),
+    ("restart budget: the semantics accepts the trace",
+      ((SysState.init broken config.env).run config.env events.toList).isSome) ]
+
 def tests : IO (List (String × Bool)) := do
   let a ← flakyTest.block
   let b ← bankTest.block
-  return a ++ b
+  let c ← floodTest.block
+  let d ← busyTest.block
+  let e ← budgetTest.block
+  return a ++ b ++ c ++ d ++ e
 
 end Tests.Runtime

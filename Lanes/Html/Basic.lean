@@ -17,6 +17,7 @@ into markup by accident.
 - `Html`: text, elements and fragments.
 - `Html.render`: the markup as a string.
 - `Html.escape`: the one escaping function.
+- `Html.safeUrl`: what URL attributes (`href`, `src`, `action`, `formaction`) are rendered through.
 - `ToHtml`, `ToAttr`: what may appear as a child or as an attribute value in a template.
 
 ## Main statements
@@ -103,11 +104,34 @@ def voidTags : List String :=
   ["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track",
    "wbr"]
 
-/-- Render one attribute, with a leading space. -/
+/-- Attributes whose value is a URL the browser may follow or load. -/
+def urlAttrs : List String :=
+  ["href", "src", "action", "formaction", "xlink:href"]
+
+/-- What an unsafe URL is replaced by. -/
+def blockedUrl : String := "about:invalid#blocked"
+
+/--
+A URL that is safe to put in a URL attribute: `url` itself if it is relative or its scheme is
+`http`, `https`, `mailto` or `tel`, and `blockedUrl` otherwise. This keeps `javascript:` and
+`data:` URLs built from user data out of links and forms. Browsers ignore spaces and control
+characters in a scheme, so they are ignored here too.
+-/
+def safeUrl (url : String) : String :=
+  let visible := url.toList.filter fun c => c.val > 0x20
+  let scheme := visible.takeWhile fun c => c != ':' && c != '/' && c != '?' && c != '#'
+  if (visible.drop scheme.length).head? == some ':' then
+    if ["http", "https", "mailto", "tel"].contains (String.ofList (scheme.map Char.toLower)) then url
+    else blockedUrl
+  else url
+
+/-- Render one attribute, with a leading space. The value of a URL attribute goes through
+`safeUrl`. -/
 def Attr.render (a : Attr) : String :=
+  let name := safeName a.name
   match a.value with
-  | some v => s!" {safeName a.name}=\"{escape v}\""
-  | none => s!" {safeName a.name}"
+  | some v => s!" {name}=\"{escape (if urlAttrs.contains name.toLower then safeUrl v else v)}\""
+  | none => s!" {name}"
 
 mutual
 

@@ -59,6 +59,8 @@ model check with vacuity witnesses, and a server-rendered page.
 ## Views are Lean
 
 ```lean
+open scoped Lanes.Html
+
 def CounterView (response : Response) : Html :=
   <div id="counter">
     <p>{s!"Count: {response.value}"}</p>
