@@ -1,6 +1,6 @@
 name = "lanes"
 version = "0.1.0"
-defaultTargets = ["Lanes", "Examples"]
+defaultTargets = ["Lanes", "Examples", "Tests", "lanes"]
 testDriver = "lanesTest"
 
 [[require]]

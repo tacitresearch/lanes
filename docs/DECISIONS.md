@@ -103,3 +103,42 @@ it of anything upstreamed.
 
 Lean `v4.37.0-rc1`, CSLib pinned by commit in `lakefile.toml`, Mathlib as CSLib pins it.
 License Apache-2.0, matching CSLib, Mathlib and Veil (whose checker design is followed).
+
+## D11. Two import roots: `Lanes` and `Lanes.Semantics`
+
+`import Lanes` is the runtime layer (Std only). `import Lanes.Semantics` adds the proof layer
+(CSLib, Mathlib). Executable code imports the first; proof files import the second.
+
+Why: measured. A test binary that imported the proof layer was 157 MB; the same binary on the
+runtime layer is 8 MB. Mathlib also defines the token `<i`, which breaks `<input>` in templates.
+`lanes lint` enforces the split (`layering`).
+
+*Still open:* an app that never proves anything still downloads Mathlib, because Lanes is one
+package. DESIGN accepts that cost ("a download, not hours of compiling"). If it hurts adoption,
+the fix is a second package for the proof layer, which is a packaging change only.
+
+## D12. Template tags have no space after `<`
+
+`<div>` is a tag; `a < b` is a comparison. The grammar requires the tag name to follow `<`
+directly.
+
+Why: found by building the generated app. Without the rule, `if count < limit then (…)` in any
+file importing Lanes parsed `<limit then` as the start of a tag and failed.
+
+## D13. The runtime orders steps with one logical clock
+
+Every step takes a number from a global counter and each message carries its sender's number.
+When an actor stops, messages numbered at or before the stopping step are dropped with the
+mailbox and later ones are carried into the next mailbox.
+
+Why: `SysState.down` says precisely which messages a stopping actor loses. Without the clock,
+"sent before the stop" depends on thread timing and recorded traces do not always replay.
+With it, the recorded trace ordered by step number is a run of `SysState.step`, which is what
+`Tests/Runtime.lean` checks.
+
+## D14. Proofs of system invariants go through per-event lemmas
+
+`Lanes/Actors/Step.lean` states, for each event, when it is enabled and the exact next state
+(`step_deliver`, `step_drop`, …). A system invariant proof cases on the event and rewrites with
+these; conservation proofs add `sum_update` and `sum_map_erase` from `Lanes/Semantics/Sums.lean`.
+`Examples/BankProofs.lean` is the worked example and the shape `lanes prove` will generate.
