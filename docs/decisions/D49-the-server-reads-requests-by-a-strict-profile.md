@@ -1,4 +1,4 @@
-# D?. The server reads requests by a strict profile, and every refusal closes the connection
+# D49. The server reads requests by a strict profile, and every refusal closes the connection
 
 The server is to read HTTP/1.1 itself, on `Std.Net`, so that what it accepts is decided by a
 proved reader rather than by `Std.Http`. Request smuggling lives in the gap between two parsers

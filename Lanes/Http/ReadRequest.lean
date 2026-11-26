@@ -8,7 +8,7 @@ public import Lanes.Http.Wire
 
 /-!
 The reader of the requests a server receives, as a pure function of the bytes received so far,
-by the strict profile of `docs/decisions/new-the-server-reads-requests-by-a-strict-profile.md`:
+by the strict profile of `docs/decisions/D49-the-server-reads-requests-by-a-strict-profile.md`:
 it needs more, or it has a request and where it ends, or it refuses with a status, and an
 answer once given stays as more bytes arrive. Every limit is a field of `Request.Limits`. What it
 is proved to do is in `Lanes.Http.ReadRequestSound`.
