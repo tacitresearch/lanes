@@ -5,6 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Lanes.Actors.JoinSound
+public import Lanes.Actors.MapIOSound
 public import Lanes.Semantics.Projection
 
 /-!
@@ -153,5 +154,188 @@ theorem System.LeadsTo.join_left {P : SysState a → Prop}
     (a.join b w).LeadsTo env (fun c => P c.thinLeft) fun c => Q c.left.state c.left.up :=
   (w.leftView_projects env).leadsTo (fun _ _ hd hP => hd ▸ hP)
     (fun _ _ ⟨hstate, hup⟩ hQ => hstate ▸ hup ▸ hQ) h
+
+/-! ### Behind other inputs and outputs
+
+A fair run of `sys.filterMapIO input output` is a fair run of `sys` event for event, but for
+the outputs that `output` hides: alone, `sys` would owe their hand-over, so the run of `sys`
+hands each over in the step that emits it. An output that is shown is owed in both. When two
+outputs of `sys` are shown alike, handing one over in `sys.filterMapIO input output` hands over
+either in `sys`, and which one is not fixed; so the projection asks that `output` show different
+outputs differently. -/
+
+section Hidden
+
+variable {In Out : Type} [DecidableEq In] [DecidableEq Out] {sys : System σ}
+  {input : In → σ.In} {output : σ.Out → Option Out} {env : EnvModel (σ.withIO In Out)}
+
+/-- `c` with the outputs that `output` hides handed over. -/
+def SysState.unhidden (output : σ.Out → Option Out) (c : SysState sys) : SysState sys :=
+  { c with outbox := c.outbox.filter fun out => (output out).isSome }
+
+/-- Handing over the outputs that `output` hides. -/
+def SysState.hidden (output : σ.Out → Option Out) (c : SysState sys) : List (Event σ) :=
+  (c.outbox.filter fun out => !(output out).isSome).map .output
+
+omit [DecidableEq Out] in
+/-- The hidden outputs can be handed over, and that changes nothing that is seen. -/
+theorem SysState.run_hidden (env : EnvModel σ) (c : SysState sys) :
+    c.run env (c.hidden output) = some (c.unhidden output) := by
+  exact SysState.run_outputs_filter env c (fun out => (output out).isSome) [] c.outbox (by simp)
+
+omit [DecidableEq Out] in
+/-- Handing over the hidden outputs is quiet. -/
+theorem SysState.hidden_quiet (c : SysState sys) : ∀ ev ∈ c.hidden output, ev.quiet = true := by
+  intro ev hev
+  obtain ⟨_, -, rfl⟩ := List.mem_map.mp hev
+  rfl
+
+/-- What is seen of `c` does not change when its hidden outputs are handed over. -/
+theorem SysState.over_unhidden (c : SysState sys) :
+    (c.unhidden output).over input output = c.over input output := by
+  refine SysState.ext' rfl rfl rfl rfl ?_
+  show (c.outbox.filter _).filterMap output = c.outbox.filterMap output
+  rw [List.filterMap_filter]
+  congr 1
+  funext out
+  cases output out <;> rfl
+
+/-- `sys.filterMapIO input output` seen as `sys`, with no hidden output waiting. -/
+def System.underView (sys : System σ) (input : In → σ.In) (output : σ.Out → Option Out) :
+    (sys.filterMapIO input output).View sys Out where
+  rel d c := c.over input output = d ∧ ∀ out ∈ c.outbox, (output out).isSome = true
+  near d c := c.state = d.state ∧ c.up = d.up
+  lift
+    | .deliver e => some (.deliver e.over)
+    | .timeout i msg => some (.timeout i msg)
+    | .start i => some (.start i)
+    | .output out => (output out).map .output
+  shows
+    | .output o => some o
+    | _ => none
+  shows'
+    | .output out => output out
+    | _ => none
+
+/-- The run of `sys` that stands for a step of `sys.filterMapIO input output`: the step it
+stands for, then the hidden outputs it emitted handed over. -/
+private theorem underView_block
+    (hinj : ∀ o₁ o₂ x, output o₁ = some x → output o₂ = some x → o₁ = o₂)
+    {d d' : SysState (sys.filterMapIO input output)} {c : SysState sys} {ev : Event (σ.withIO In Out)}
+    (hrel : (sys.underView input output).rel d c) (hstep : d.step env ev = some d') :
+    ∃ evs c', (sys.underView input output).Block env.under d (some ev) d' c evs c' := by
+  obtain ⟨rfl, hshown⟩ := hrel
+  obtain ⟨ev', c₁, hunder, hstep', rfl⟩ := SysState.step_under hstep
+  have hrun : c.run env.under (ev' :: c₁.hidden output) = some (c₁.unhidden output) := by
+    simp [SysState.run, hstep', SysState.run_hidden]
+  refine ⟨_, _, hrun, ⟨SysState.over_unhidden c₁, fun out hout => (List.mem_filter.mp hout).2⟩,
+    ?_, fun ob' ob hlift hev => ?_, fun ob' ob ev₁ hlift hev hrestart => ?_, fun j dj hj => ?_⟩
+  · have hhidden : (c₁.hidden output).filterMap (sys.underView input output).shows' = [] := by
+      refine List.filterMap_eq_nil_iff.mpr fun ev hev => ?_
+      obtain ⟨out, hout, rfl⟩ := List.mem_map.mp hev
+      simpa [System.underView] using (List.mem_filter.mp hout).2
+    rw [filterMap_cons_toList, hhidden, List.append_nil]
+    cases ev with
+    | output o =>
+      obtain ⟨out', rfl, hout'⟩ := hunder
+      simp [System.underView, hout']
+    | _ =>
+      cases hunder
+      rfl
+  · obtain rfl := Option.some.inj hev
+    refine List.mem_cons.mpr (.inl ?_)
+    cases ob' with
+    | deliver e =>
+      obtain rfl := Option.some.inj hlift
+      exact hunder.symm
+    | timeout i msg =>
+      obtain rfl := Option.some.inj hlift
+      exact hunder.symm
+    | start i =>
+      obtain rfl := Option.some.inj hlift
+      exact hunder.symm
+    | output out =>
+      cases hout : output out with
+      | none => simp [System.underView, hout] at hlift
+      | some o =>
+        simp only [System.underView, hout, Option.map_some, Option.some.injEq] at hlift
+        subst hlift
+        obtain ⟨out'', rfl, hout''⟩ := hunder
+        rw [hinj _ _ _ hout'' hout]
+        rfl
+  · obtain rfl := Option.some.inj hev
+    cases ob' with
+    | timeout i msg =>
+      obtain rfl := Option.some.inj hlift
+      exact ⟨0, by simp, c, rfl, SysState.arms_under hunder hrestart⟩
+    | deliver e =>
+      obtain rfl := Option.some.inj hlift
+      exact hrestart.elim
+    | start i =>
+      obtain rfl := Option.some.inj hlift
+      exact hrestart.elim
+    | output out =>
+      cases hout : output out with
+      | none => simp [System.underView, hout] at hlift
+      | some o =>
+        simp only [System.underView, hout, Option.map_some, Option.some.injEq] at hlift
+        subst hlift
+        exact hrestart.elim
+  · cases j with
+    | zero =>
+      simp only [List.take_zero, SysState.run, Option.some.injEq] at hj
+      exact .inl (hj ▸ ⟨rfl, rfl⟩)
+    | succ j =>
+      simp only [List.take_succ_cons, SysState.run, hstep', Option.bind_some] at hj
+      have hdj := SysState.run_quiet
+        (fun ev hev => SysState.hidden_quiet c₁ ev (List.mem_of_mem_take hev)) hj
+      exact .inr ⟨hdj.1, hdj.2.1⟩
+
+/-- `sys.filterMapIO input output` seen as `sys` projects fair runs onto fair runs, when `output`
+shows different outputs differently. -/
+theorem System.underView_projects
+    (hinj : ∀ o₁ o₂ x, output o₁ = some x → output o₂ = some x → o₁ = o₂)
+    (env : EnvModel (σ.withIO In Out)) :
+    (sys.underView input output).Projects env env.under where
+  near _ _ h := h.1 ▸ ⟨rfl, rfl⟩
+  init := by
+    have hquiet := SysState.run_quiet (SysState.hidden_quiet _)
+      (SysState.run_hidden (output := output) env.under (SysState.init sys env.under))
+    refine ⟨_, _, SysState.run_hidden env.under _,
+      ⟨(SysState.over_unhidden _).trans SysState.init_over, fun out hout =>
+        (List.mem_filter.mp hout).2⟩, ?_, fun _ _ _ h => (by cases h),
+      fun _ _ _ _ h => (by cases h), fun j dj hj => .inl ?_⟩
+    · refine List.filterMap_eq_nil_iff.mpr fun ev hev => ?_
+      obtain ⟨out, hout, rfl⟩ := List.mem_map.mp hev
+      simpa [System.underView] using (List.mem_filter.mp hout).2
+    · have hdj := SysState.run_quiet (fun ev hev =>
+        SysState.hidden_quiet (output := output) _ ev (List.mem_of_mem_take hev)) hj
+      rw [← SysState.init_over (input := input) (output := output)]
+      exact ⟨hdj.1, hdj.2.1⟩
+  step _ _ _ _ _ hrel hstep := underView_block hinj hrel hstep
+  due d c ob' _ hrel hdue := by
+    obtain ⟨rfl, hshown⟩ := hrel
+    cases ob' with
+    | deliver e =>
+      exact ⟨_, rfl, hdue.1, (SysState.deliverable_over c e).trans hdue.2⟩
+    | timeout i msg => exact ⟨_, rfl, hdue⟩
+    | start i => exact ⟨_, rfl, hdue.1, (SysState.hasMail_over c i).trans hdue.2⟩
+    | output out =>
+      obtain ⟨o, ho⟩ := Option.isSome_iff_exists.mp (hshown out hdue)
+      exact ⟨.output o, by simp [System.underView, ho],
+        List.mem_filterMap.mpr ⟨out, hdue, ho⟩⟩
+
+/-- What `sys` leads to, of its actors' states, it leads to behind other inputs and outputs,
+when `output` shows different outputs differently. -/
+theorem System.LeadsTo.filterMapIO
+    (hinj : ∀ o₁ o₂ x, output o₁ = some x → output o₂ = some x → o₁ = o₂)
+    {P Q : ((i : σ.Id) → sys.State i) → (σ.Id → Bool) → Prop}
+    (h : sys.LeadsTo env.under (fun c => P c.state c.up) fun c => Q c.state c.up) :
+    (sys.filterMapIO input output).LeadsTo env (fun d => P d.state d.up)
+      fun d => Q d.state d.up :=
+  (System.underView_projects hinj env).leadsTo (fun _ _ hrel hP => by obtain ⟨rfl, -⟩ := hrel; exact hP)
+    (fun _ _ ⟨hstate, hup⟩ hQ => hstate ▸ hup ▸ hQ) h
+
+end Hidden
 
 end Lanes

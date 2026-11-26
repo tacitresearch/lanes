@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
+public import Lanes.Actors.FairScheduler
 public import Lanes.Actors.Join
 public import Lanes.Actors.Run
 
@@ -184,7 +185,7 @@ private theorem over_init :
   (List.foldl_hom (SysState.over input output) fun c i => (over_startActor c i).symm).symm
 
 /-- One event of `sys.filterMapIO input output` is the event of `sys` it stands for. -/
-private theorem step_under {c : SysState sys} {ev : Event (σ.withIO In Out)}
+theorem step_under {c : SysState sys} {ev : Event (σ.withIO In Out)}
     {d : SysState (sys.filterMapIO input output)} (h : (c.over input output).step env ev = some d) :
     ∃ ev' c', Event.Under input output ev ev' ∧ c.step env.under ev' = some c'
       ∧ c'.over input output = d := by
@@ -259,6 +260,54 @@ theorem run_filterMapIO {events : List (Event (σ.withIO In Out))}
       obtain ⟨ev', c₁, hunder, hstep', rfl⟩ := step_under hstep
       obtain ⟨events', c', hrun', hover, hall⟩ := ih c₁ (by simpa [hstep] using h)
       exact ⟨ev' :: events', c', by simp [run, hstep', hrun'], hover, hunder, hall⟩
+
+theorem init_over :
+    (SysState.init sys env.under).over input output
+      = SysState.init (sys.filterMapIO input output) env :=
+  over_init
+
+theorem deliverable_over (c : SysState sys) (e : Envelope σ) :
+    (c.over input output).deliverable env e.over = c.deliverable env.under e :=
+  over_deliverable c e.over
+
+theorem hasMail_over (c : SysState sys) (i : σ.Id) :
+    (c.over input output).hasMail i = c.hasMail i := by
+  show (c.net.map Envelope.over).any _ = _
+  rw [List.any_map]
+  rfl
+
+/-- What an event of `sys.filterMapIO input output` arms, the event it stands for arms. -/
+theorem arms_under {c : SysState sys} {ev : Event (σ.withIO In Out)} {ev' : Event σ}
+    (hunder : Event.Under input output ev ev') {i : σ.Id} {msg : σ.Msg i}
+    (h : Event.timeout (σ := σ.withIO In Out) i msg ∈ (c.over input output).arms ev) :
+    Event.timeout i msg ∈ c.arms ev' := by
+  have hflat {j : σ.Id} (effs : List (Effect σ j))
+      (h : Event.timeout (σ := σ.withIO In Out) i msg ∈
+        Effect.timeouts (σ := σ.withIO In Out) j (effs.flatMap (Effect.filterMapOut output))) :
+      Event.timeout i msg ∈ Effect.timeouts j effs := by
+    simp only [Effect.timeouts, List.mem_filterMap, List.mem_flatMap] at h ⊢
+    obtain ⟨_, ⟨eff, heff, hmem⟩, h⟩ := h
+    refine ⟨eff, heff, ?_⟩
+    cases eff with
+    | after d m =>
+      simp only [Effect.filterMapOut, List.mem_singleton] at hmem
+      subst hmem
+      simpa using h
+    | emit out =>
+      simp only [Effect.filterMapOut] at hmem
+      split at hmem <;> simp_all
+    | _ => simp_all [Effect.filterMapOut]
+  cases ev with
+  | deliver e | duplicate e =>
+    cases hunder
+    exact hflat _ h
+  | timeout j m =>
+    cases hunder
+    exact hflat _ h
+  | start j =>
+    cases hunder
+    exact hflat _ h
+  | input _ | drop _ | output _ | crash _ => simp [arms] at h
 
 end SysState
 
