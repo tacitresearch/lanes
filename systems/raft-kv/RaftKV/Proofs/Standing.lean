@@ -48,11 +48,6 @@ theorem mem_raise {matched : List (N × Nat)} {f g : N} {index m : Nat}
 
 end Lists
 
-/-- The message a node is handling is in flight to it, or is one of its two timers. -/
-def Pending (c : SysState (recording N config machine)) (i : N) (msg : Option (Msg N C)) : Prop :=
-  ∀ m, msg = some m →
-    (∃ src, (⟨src, i, m⟩ : Envelope (sig N C R)) ∈ c.net) ∨ m = .electionTimeout ∨ m = .heartbeat
-
 /-- Node `v` had, while in `term`, a log that starts with `pfx`. -/
 def Held (c : SysState (recording N config machine)) (v : N) (term : Nat)
     (pfx : List (Entry N C)) : Prop :=
@@ -65,23 +60,6 @@ section Basics
 
 variable {c : SysState (recording N config machine)} {i : N} {msg : Option (Msg N C)}
   {s' : Node N C M} {effs : List (Effect (sig N C R) i)}
-
-theorem pending_none : Pending c i none :=
-  nofun
-
-theorem Timers.pending (ht : Timers c) {m : Msg N C}
-    (h : (∃ src, (⟨src, i, m⟩ : Envelope (sig N C R)) ∈ c.net) ∨ m ∈ c.timers i) :
-    Pending c i (some m) := by
-  intro m' hm
-  obtain rfl := Option.some.inj hm
-  exact h.imp id (ht i _)
-
-theorem Logs.cut_of_pending (hc : Logs c) (h : Pending c i msg) : Logs.Cut c msg := by
-  intro term leader prev prevTerm entries commit hmsg
-  rcases h _ hmsg with ⟨src, hnet⟩ | h | h
-  · exact hc.appends src i term leader prev prevTerm entries commit hnet
-  · cases h
-  · cases h
 
 theorem Votes.seen_term_le (hv : Votes c) {v : N} {p : Node N C M} (hp : p ∈ c.seen v) :
     p.term ≤ (c.state v).1.term := by
@@ -155,29 +133,6 @@ theorem blank : Standing (SysState.blank (recording N config machine)) := by
   constructor <;>
     simp [SysState.blank, recording, System.withPast, System.withGhost, node, SysState.seen,
       IsCandidate, VotedFor]
-
-theorem below {c' : SysState (recording N config machine)} (hc : Standing c)
-    (hbelow : c'.Below c) : Standing c' := by
-  obtain ⟨hstate, hnet, _, _⟩ := hbelow
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp only [Held, Led, VotedFor, SysState.seen, hstate]
-  · exact hc.behind
-  · exact hc.oneLog
-  · exact fun src dst term candidate lastIndex last h =>
-      hc.requests src dst term candidate lastIndex last (hnet _ h)
-  · exact hc.reached
-  · exact fun src dst term follower index h => hc.acks src dst term follower index (hnet _ h)
-  · exact hc.matched
-
-theorem input (hc : Standing c) (x : Request N C) :
-    Standing { c with net := c.net ++ [⟨none, x.via, .propose x.req x.cmd⟩] } := by
-  refine ⟨hc.behind, hc.oneLog, fun src dst term candidate lastIndex last h => ?_, hc.reached,
-    fun src dst term follower index h => ?_, hc.matched⟩
-  · rcases List.mem_append.mp h with h | h
-    · exact hc.requests src dst term candidate lastIndex last h
-    · simp at h
-  · rcases List.mem_append.mp h with h | h
-    · exact hc.acks src dst term follower index h
-    · simp at h
 
 variable {i : N} {msg : Option (Msg N C)} {s' : Node N C M} {effs : List (Effect (sig N C R) i)}
 
@@ -320,11 +275,14 @@ end Standing
 
 theorem standing_monotone :
     (recording N config machine).Monotone fun c => Replicating c ∧ Standing c := by
-  refine replicating_monotone.and .blank (fun _ _ _ hc => hc.below)
-    (fun _ x _ hc => hc.input x) ?_ ?_
-  · exact fun c i msg hp _ hc hpending => hc.grow hp.1.1.2 hp.1.2 hp.2
-      (step_moves config Enum.all machine i _ msg) (hp.1.1.1.pending hpending)
-  · exact fun c i hp _ hc => hc.grow hp.1.1.2 hp.1.2 hp.2
+  refine replicating_monotone.and_net .blank (fun _ _ _ _ _ hc hnet => ⟨hc.behind, hc.oneLog,
+    fun src dst term candidate lastIndex last h =>
+      hc.requests src dst term candidate lastIndex last (mem_of_not_propose hnet h nofun),
+    hc.reached, fun src dst term follower index h =>
+      hc.acks src dst term follower index (mem_of_not_propose hnet h nofun), hc.matched⟩) ?_ ?_
+  · exact fun c i msg hp _ hc hpending => hc.grow hp.votes hp.terms hp.logs
+      (step_moves config Enum.all machine i _ msg) (hp.timers.pending hpending)
+  · exact fun c i hp _ hc => hc.grow hp.votes hp.terms hp.logs
       (recover_moves config Enum.all machine i _) pending_none
 
 end RaftKV
