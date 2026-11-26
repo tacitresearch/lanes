@@ -235,6 +235,9 @@ by `lake build`, not linked into the test executable.
 /-- info: 'Lanes.Check.system_sound' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Check.system_sound
 
+/-- info: 'Lanes.Check.system_sound_of_respects' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.system_sound_of_respects
+
 /-- info: 'Lanes.Frame.encode_append' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Frame.encode_append
 

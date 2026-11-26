@@ -17,10 +17,14 @@ semantics, with inputs chosen by the driver, crashes within the budget and every
 the constraint. `Check.system_sound` says that a complete PASS means every `always` property
 holds in all of them.
 
-The checker merges worlds that differ only in message order no actor can see (`World.Equiv`),
-so the properties and the constraint must not see it either. `World.Equiv.eq_of_quiet` and
-`World.Equiv.eq_of_perm` discharge that for properties that ignore messages in flight and
-pending outputs, or look at them only up to order.
+The checker merges worlds that differ only in message order no actor can see, and in the driver's
+state up to `==` (`World.Equiv`), so the properties and the constraint must not see either.
+`World.Equiv.eq_of_quiet` and `World.Equiv.eq_of_perm` discharge that for properties that ignore
+messages in flight and pending outputs, or look at them only up to order, when `==` on the
+driver's state is equality; `World.Equiv.congr` is the general form.
+
+`Check.system_sound_of_respects` is the theorem for a driver whose `==` is only an equivalence
+that the driver respects (`Driver.Respects`), such as a monitored driver.
 -/
 
 @[expose] public section
@@ -181,35 +185,46 @@ def World.quiet (w : World sys D) : World sys D :=
 
 namespace World.Equiv
 
-variable {env : EnvModel σ} {a b : World sys D} {α : Type}
+variable [BEq D] {env : EnvModel σ} {a b : World sys D} {α : Type}
 
 theorem net_perm (h : World.Equiv env a b) : a.state.net.Perm b.state.net :=
   h.state.net.toPerm
 
+/-- Merged worlds differ only in the order of messages in flight and of pending outputs, and in
+the driver's state up to `==`. -/
+theorem congr {p : World sys D → α}
+    (hp : ∀ (w : World sys D) (net : List (Envelope σ)) (outbox : List σ.Out) (driver : D),
+      w.state.net.Perm net → w.state.outbox.Perm outbox → (w.driver == driver) = true →
+      p w = p { w with state := { w.state with net, outbox }, driver })
+    (h : World.Equiv env a b) : p a = p b := by
+  have hb : b = { a with state := { a.state with net := b.state.net, outbox := b.state.outbox },
+                         driver := b.driver } := by
+    obtain ⟨⟨hstate, hup, htimers, _, _⟩, _, hcrashes⟩ := h
+    obtain ⟨⟨_, _, _, _, _⟩, _, _⟩ := a
+    obtain ⟨⟨_, _, _, _, _⟩, _, _⟩ := b
+    simp only at hstate hup htimers hcrashes
+    simp [hstate, hup, htimers, hcrashes]
+  rw [hb]
+  exact hp a _ _ _ h.net_perm h.state.outbox h.driver
+
 /-- A property that looks at messages in flight and pending outputs only up to their order
 cannot tell merged worlds apart. -/
-theorem eq_of_perm {p : World sys D → α}
+theorem eq_of_perm [LawfulBEq D] {p : World sys D → α}
     (hp : ∀ (w : World sys D) (net : List (Envelope σ)) (outbox : List σ.Out),
       w.state.net.Perm net → w.state.outbox.Perm outbox →
       p w = p { w with state := { w.state with net, outbox } })
-    (h : World.Equiv env a b) : p a = p b := by
-  have hb : b =
-      { a with state := { a.state with net := b.state.net, outbox := b.state.outbox } } := by
-    obtain ⟨⟨hstate, hup, htimers, _, _⟩, hdriver, hcrashes⟩ := h
-    obtain ⟨⟨_, _, _, _, _⟩, _, _⟩ := a
-    obtain ⟨⟨_, _, _, _, _⟩, _, _⟩ := b
-    simp only at hstate hup htimers hdriver hcrashes
-    simp [hstate, hup, htimers, hdriver, hcrashes]
-  rw [hb]
-  exact hp a _ _ h.net_perm h.state.outbox
+    (h : World.Equiv env a b) : p a = p b :=
+  h.congr fun w net outbox _ hnet houtbox hdriver =>
+    eq_of_beq hdriver ▸ hp w net outbox hnet houtbox
 
 /-- A property that ignores messages in flight and pending outputs cannot tell merged worlds
 apart. For a property of actor states, timers, the driver and the crash count, `hp` is
 `fun _ => rfl`. -/
-theorem eq_of_quiet {p : World sys D → α} (hp : ∀ w, p w = p w.quiet)
+theorem eq_of_quiet [LawfulBEq D] {p : World sys D → α} (hp : ∀ w, p w = p w.quiet)
     (h : World.Equiv env a b) : p a = p b := by
   have hquiet : a.quiet = b.quiet := by
-    simp only [World.quiet, h.state.state, h.state.up, h.state.timers, h.driver, h.crashes]
+    simp only [World.quiet, h.state.state, h.state.up, h.state.timers, eq_of_beq h.driver,
+      h.crashes]
   rw [hp a, hp b, hquiet]
 
 end World.Equiv
@@ -224,9 +239,9 @@ theorem Node.beq_iff [BEq D] [∀ i, LawfulBEq (sys.State i)] {a b : Node sys en
   simp only [BEq.beq, Bool.and_eq_true, SysState.equiv_iff, and_assoc]
   simp
 
-theorem Node.beq_iff_equiv [BEq D] [LawfulBEq D] [∀ i, LawfulBEq (sys.State i)]
-    {a b : Node sys env D} : (a == b) = true ↔ World.Equiv env a.world b.world := by
-  rw [Node.beq_iff, beq_iff_eq]
+theorem Node.beq_iff_equiv [BEq D] [∀ i, LawfulBEq (sys.State i)] {a b : Node sys env D} :
+    (a == b) = true ↔ World.Equiv env a.world b.world := by
+  rw [Node.beq_iff]
   exact ⟨fun ⟨hc, hd, hs⟩ => ⟨hs, hd, hc⟩, fun ⟨hs, hd, hc⟩ => ⟨hc, hd, hs⟩⟩
 
 instance [BEq D] [EquivBEq D] [∀ i, LawfulBEq (sys.State i)] : EquivBEq (Node sys env D) where
@@ -245,16 +260,18 @@ instance [BEq D] [Hashable D] [LawfulHashable D] [∀ i, LawfulBEq (sys.State i)
     obtain ⟨hc, hd, hs⟩ := Node.beq_iff.mp h
     simp only [hash, hs.hash_eq, hc, LawfulHashable.hash_eq _ _ hd]
 
-variable [BEq D] [Hashable D] [LawfulBEq D] [∀ i, LawfulBEq (sys.State i)]
+variable [BEq D] [Hashable D] [∀ i, LawfulBEq (sys.State i)]
 
 /--
 A complete PASS from `Check.system` is sound: every `always` property holds in every world of
 the checked instance.
 
-Actor states and the driver's state must compare with `==` exactly when they are equal. The
-properties and the constraint must not tell merged worlds apart.
+Actor states must compare with `==` exactly when they are equal. On the driver's state `==` need
+only be an equivalence, with a matching hash, that the driver respects. The properties and the
+constraint must not tell merged worlds apart.
 -/
-theorem system_sound (sc : Scenario σ D) (props : List (Property (World sys D)))
+theorem system_sound_of_respects [EquivBEq D] [LawfulHashable D] (sc : Scenario σ D)
+    (hdriver : sc.driver.Respects) (props : List (Property (World sys D)))
     (opts : Options (World sys D))
     (hprops : ∀ p ∈ props, ∀ a b, World.Equiv sc.env a b → p.holds a = p.holds b)
     (hconstraint : ∀ a b, World.Equiv sc.env a b → opts.constraint a = opts.constraint b)
@@ -270,10 +287,22 @@ theorem system_sound (sc : Scenario σ D) (props : List (Property (World sys D))
   · obtain ⟨⟨ev, w'⟩, hmem, heq⟩ := List.mem_map.mp ha'
     simp only [Prod.mk.injEq] at heq
     obtain ⟨rfl, rfl⟩ := heq
-    obtain ⟨b', hb', hequiv⟩ := (Node.beq_iff_equiv.mp hab).next hmem
+    obtain ⟨b', hb', hequiv⟩ := (Node.beq_iff_equiv.mp hab).next hdriver hmem
     exact ⟨ev, ⟨b'⟩, List.mem_map.mpr ⟨(ev, b'), hb', rfl⟩, Node.beq_iff_equiv.mpr hequiv⟩
   · obtain ⟨q', hq', rfl⟩ := List.mem_map.mp hq
     cases q' <;> exact hprops _ hq' _ _ (Node.beq_iff_equiv.mp hab)
+
+/-- `system_sound_of_respects` for a driver whose state compares with `==` exactly when it is
+equal, which every driver respects. -/
+theorem system_sound [LawfulBEq D] (sc : Scenario σ D) (props : List (Property (World sys D)))
+    (opts : Options (World sys D))
+    (hprops : ∀ p ∈ props, ∀ a b, World.Equiv sc.env a b → p.holds a = p.holds b)
+    (hconstraint : ∀ a b, World.Equiv sc.env a b → opts.constraint a = opts.constraint b)
+    (hfailure : (system sys sc props opts).failure = none)
+    (hcomplete : (system sys sc props opts).complete = true)
+    {name : String} {p : World sys D → Bool} (hp : .always name p ∈ props)
+    {w : World sys D} (hw : sc.Reachable sys opts.constraint w) : p w = true :=
+  system_sound_of_respects sc (.of_lawful _) props opts hprops hconstraint hfailure hcomplete hp hw
 
 end Check
 
