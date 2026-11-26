@@ -44,19 +44,13 @@ def owed : Envelope (sig K V F) → Option (Response V)
   | ⟨_, .front _, .got req _ value⟩ => some ⟨req, .value value⟩
   | _ => none
 
-/-- No timer is armed. -/
-def Tame (c : SysState (system K V F false)) : Prop :=
-  ∀ i m, m ∈ c.timers i → False
-
-theorem tame_invariant (env : EnvModel (sig K V F)) :
-    (system K V F false).Invariant env Tame :=
-  (System.Monotone.timers (system K V F false) (T := fun _ _ => False)
-    (fun i s msg delay m h => by
-      cases i <;> cases msg <;> simp [system, front, store] at h; split at h <;> simp at h)
-    (fun i s delay m h => by cases i <;> simp [system, front, store] at h)).invariant env
-
 abbrev Abs (K V F : Type) [DecidableEq K] [DecidableEq V] [DecidableEq F] :=
   Service.Abs (Request K V F) (Response V) (K → Option V)
+
+theorem unarmed {i : Id F} {m : (sig K V F).Msg i} (h : (system K V F false).Armed i m) : False := by
+  cases h with
+  | step s msg h => cases i <;> cases msg <;> simp [system, front, store] at h; split at h <;> simp at h
+  | recover s h => cases i <;> simp [system, front, store] at h
 
 def account : Account (system K V F false) (K → Option V) Unit where
   pend := pend
@@ -66,15 +60,15 @@ def account : Account (system K V F false) (K → Option V) Unit where
 theorem implements (env : EnvModel (sig K V F))
     (henv : ∀ src dst, (env.link src dst).duplicating = false) :
     (system K V F false).Implements env (spec K V F) := by
-  refine account.implements (tame_invariant env)
+  refine account.implements (inv := fun _ => True) (fun _ _ => trivial)
     ⟨(), rfl, by simp [Account.pending, SysState.init, SysState.blank, account],
       by simp [Account.owed, SysState.init, SysState.blank, account]⟩
-    (fun _ => ⟨rfl, rfl⟩) (fun _ _ _ _ _ h => h) ?_ (fun _ _ _ _ hdup => by simp [henv] at hdup)
-    (fun _ _ _ _ _ => .of_loses ⟨rfl, List.erase_sublist, fun _ _ h => h, rfl⟩ fun _ _ h => h)
+    (fun _ => ⟨rfl, rfl⟩) (fun _ _ _ _ _ h => h) ?_ (fun _ _ _ _ _ hdup => by simp [henv] at hdup)
+    (fun _ _ _ _ _ _ => .of_loses ⟨rfl, List.erase_sublist, fun _ _ h => h, rfl⟩ fun _ _ h => h)
     (fun c i _ => .of_loses (SysState.Loses.down env c i) fun _ _ h => h)
-    (fun _ i msg htimers hmem => (htimers i msg hmem).elim)
+    (fun _ _ _ _ h _ => (unarmed h).elim)
     (fun _ i _ => by cases i <;> exact .quiet (fun _ _ h => by simpa [account] using h) rfl rfl)
-  rintro c ⟨src, dst, msg⟩ _ hd
+  rintro c ⟨src, dst, msg⟩ _ _ hd
   have hmem := SysState.mem_of_deliverable hd
   cases dst with
   | front f =>

@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
+public import Lanes.Semantics.Sent
 public import Lanes.Semantics.Service
 public import Lanes.Semantics.Simulation
 
@@ -61,6 +62,14 @@ def run (svc : Service In Out S T) (v : S) : List In → S × List Out
 @[simp] theorem run_singleton (svc : Service In Out S T) (v : S) (x : In) :
     svc.run v [x] = svc.step v x := by
   simp [run]
+
+/-- Inputs taking effect one list after another. -/
+theorem run_append (svc : Service In Out S T) (v : S) (xs ys : List In) :
+    svc.run v (xs ++ ys) =
+      ((svc.run (svc.run v xs).1 ys).1, (svc.run v xs).2 ++ (svc.run (svc.run v xs).1 ys).2) := by
+  induction xs generalizing v with
+  | nil => rfl
+  | cons x xs ih => simp [run, ih]
 
 variable [DecidableEq In] [DecidableEq Out]
 
@@ -229,6 +238,55 @@ theorem Moves.take (he : e ∈ c.net) {x : σ.In} (hx : a.pend e = some x) (hnon
       List.nil_append, ← Multiset.coe_add]
     abel
 
+/--
+Actor `i` moves from the states `state` to `r`, having been handed the input `x` and the output
+`o` (what a message it handles carried), with the network going from `net` to `net'`: from any
+value the account allows, some inputs `xs` take effect, and the inputs its sends carry, those
+the state after holds and `xs` are at most `x` and what the state held; what it outputs, what
+its sends carry and what the state after owes are at most `o`, what the state owed and the
+outputs of `xs`. This is all an application shows of a step (`Moves.handle`, `Moves.grow`).
+-/
+def Handles (a : Account sys S W) (svc : Service σ.In σ.Out S T) (state : (i : σ.Id) → sys.State i) (net net' : List (Envelope σ)) (i : σ.Id)
+    (r : sys.State i × List (Effect σ i)) (x : Option σ.In) (o : Option σ.Out) : Prop :=
+  ∀ w v, a.value state net w v → ∃ w' xs, a.value (update state i r.1) net' w' (svc.run v xs).1 ∧
+    ↑((Effect.sends i r.2).filterMap a.pend) + a.held (update state i r.1) w' + ↑xs ≤
+      ↑x.toList + a.held state w ∧
+    ↑(Effect.emits r.2) + ↑((Effect.sends i r.2).filterMap a.owe) + a.owing (update state i r.1) w' ≤
+      ↑o.toList + a.owing state w + ↑(svc.run v xs).2
+
+/-- An actor handles `e`: what that does is `Handles` with what `e` carried. -/
+theorem Moves.handle (he : e ∈ c.net)
+    (h : a.Handles svc c.state c.net (c.net.erase e ++ Effect.sends e.dst r.2) e.dst r (a.pend e)
+      (a.owe e)) :
+    a.Moves svc c (({ c with net := c.net.erase e }).grow e.dst r) := by
+  intro w v hv
+  obtain ⟨w', xs, hv', hp, ho⟩ := h w v hv
+  refine ⟨w', xs, hv', ?_, ?_⟩
+  · have := add_le_add_left hp ↑((c.net.erase e).filterMap a.pend)
+    simp only [pending, SysState.grow, List.filterMap_append,
+      Multiset.coe_eq_coe.mpr (filterMap_perm_erase he), ← Multiset.coe_add]
+    convert this using 1 <;> abel
+  · have := add_le_add_left ho (↑c.outbox + ↑((c.net.erase e).filterMap a.owe))
+    simp only [owed, SysState.grow, List.filterMap_append,
+      Multiset.coe_eq_coe.mpr (filterMap_perm_erase he), ← Multiset.coe_add]
+    convert this using 1 <;> abel
+
+/-- An actor moves with no message taken off the network (a timer, a recovery, a message handed
+over a second time): `Handles` with nothing handed to it. -/
+theorem Moves.grow {i : σ.Id} {r : sys.State i × List (Effect σ i)}
+    (h : a.Handles svc c.state c.net (c.net ++ Effect.sends i r.2) i r none none) :
+    a.Moves svc c (c.grow i r) := by
+  intro w v hv
+  obtain ⟨w', xs, hv', hp, ho⟩ := h w v hv
+  refine ⟨w', xs, hv', ?_, ?_⟩
+  · have := add_le_add_left (hp.trans_eq (zero_add _)) ↑(c.net.filterMap a.pend)
+    simp only [pending, SysState.grow, List.filterMap_append, ← Multiset.coe_add]
+    convert this using 1 <;> abel
+  · have := add_le_add_left (ho.trans_eq (congrArg (· + _) (zero_add _)))
+      (↑c.outbox + ↑(c.net.filterMap a.owe))
+    simp only [owed, SysState.grow, List.filterMap_append, ← Multiset.coe_add]
+    convert this using 1 <;> abel
+
 variable {env : EnvModel σ} {inv : SysState sys → Prop}
 
 /--
@@ -245,26 +303,29 @@ theorem implements {svc : Service σ.In σ.Out S T} (a : Account sys S W)
       a.owe ⟨none, (sys.accept x).1, (sys.accept x).2⟩ = none)
     (input : ∀ c w v x, inv c → a.value c.state c.net w v →
       a.value c.state (c.net ++ [⟨none, (sys.accept x).1, (sys.accept x).2⟩]) w v)
-    (deliver : ∀ c e, inv c → c.deliverable env e = true → a.Moves svc c
+    (deliver : ∀ c e, inv c → sys.Sent e → c.deliverable env e = true → a.Moves svc c
       (({ c with net := c.net.erase e }).grow e.dst ((sys.actor e.dst).step (c.state e.dst) e.msg)))
-    (duplicate : ∀ c e, inv c → c.deliverable env e = true →
+    (duplicate : ∀ c e, inv c → sys.Sent e → c.deliverable env e = true →
       (env.link e.src e.dst).duplicating = true →
         a.Moves svc c (c.grow e.dst ((sys.actor e.dst).step (c.state e.dst) e.msg)))
-    (drop : ∀ c e, inv c → e ∈ c.net → (env.link e.src e.dst).lossy = true →
+    (drop : ∀ c e, inv c → sys.Sent e → e ∈ c.net → (env.link e.src e.dst).lossy = true →
       a.Moves svc c { c with net := c.net.erase e })
     (down : ∀ c i, env.mayCrash i = true ∨ sys.Stops i → a.Moves svc c (c.down env i))
-    (timeout : ∀ c i msg, inv c → msg ∈ c.timers i →
+    (timeout : ∀ c i msg, inv c → sys.Armed i msg → msg ∈ c.timers i →
       a.Moves svc c (c.grow i ((sys.actor i).step (c.state i) msg)))
     (recover : ∀ c i, inv c → a.Moves svc c (c.grow i ((sys.actor i).recover (c.state i)))) :
     sys.Implements env svc := by
-  refine System.Refines.of_events hinv a.Sim ⟨_, rfl, init⟩
-    (fun c t up timers ⟨w, h⟩ _ => ⟨w, h.value, h.pending, h.owed⟩) ?_ ?_
-    (fun c t e hc ⟨_, h⟩ hd => h.moves (deliver c e hc hd))
-    (fun c t e hc ⟨_, h⟩ hd hdup => h.moves (duplicate c e hc hd hdup))
-    (fun c t e hc ⟨_, h⟩ hmem hlossy => h.moves (drop c e hc hmem hlossy))
+  have hsent := fun c e (hc : inv c ∧ sys.Traced c) he => hc.2.net e he
+  refine System.Refines.of_events (fun c hc => ⟨hinv c hc, System.traced sys env c hc⟩) a.Sim
+    ⟨_, rfl, init⟩ (fun c t up timers ⟨w, h⟩ _ => ⟨w, h.value, h.pending, h.owed⟩) ?_ ?_
+    (fun c t e hc ⟨_, h⟩ hd =>
+      h.moves (deliver c e hc.1 (hsent c e hc (SysState.mem_of_deliverable hd)) hd))
+    (fun c t e hc ⟨_, h⟩ hd hdup =>
+      h.moves (duplicate c e hc.1 (hsent c e hc (SysState.mem_of_deliverable hd)) hd hdup))
+    (fun c t e hc ⟨_, h⟩ hmem hlossy => h.moves (drop c e hc.1 (hsent c e hc hmem) hmem hlossy))
     (fun c t i ⟨_, h⟩ hi => h.moves (down c i hi)) ?_
-    (fun c t i hc ⟨_, h⟩ => h.moves (recover c i hc))
-  · rintro c t x hc ⟨w, h⟩
+    (fun c t i hc ⟨_, h⟩ => h.moves (recover c i hc.1))
+  · rintro c t x ⟨hc, -⟩ ⟨w, h⟩
     obtain ⟨hpend, howe⟩ := accept x
     refine ⟨{ t with pending := x ::ₘ t.pending }, .single rfl, w, input c w _ x hc h.value, ?_, ?_⟩
     · have := Multiset.cons_le_cons x h.pending
@@ -281,7 +342,7 @@ theorem implements {svc : Service σ.In σ.Out S T} (a : Account sys S W)
     rwa [owed, Multiset.erase_add_left_pos _ (Multiset.mem_add.mpr (.inl hin)),
       Multiset.erase_add_left_pos _ hin, Multiset.coe_erase] at this
   · intro c t i msg hc ⟨_, h⟩ hmem
-    obtain ⟨t', ht', h'⟩ := h.moves (timeout c i msg hc hmem)
+    obtain ⟨t', ht', h'⟩ := h.moves (timeout c i msg hc.1 (hc.2.timers i msg hmem) hmem)
     exact ⟨t', (LTS.sTr_τSTr_iff _).mpr ht', h'⟩
 
 end Account

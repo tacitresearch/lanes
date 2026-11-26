@@ -38,79 +38,44 @@ def account (svc : Service In Out S) : Account (system svc) S Unit where
   held state _ := ↑(state ()).2
   value state _ _ v := v = (state ()).1
 
-/-- The queue is served: it takes effect, from the network `net` the server leaves. -/
-theorem flush_moves {svc : Service In Out S} {c : SysState (system svc)}
-    {net : List (Envelope (sig In Out))} (hsub : net.Sublist c.net) :
-    (account svc).Moves svc c
-      (({ c with net := net }).grow () ((actor svc).step (c.state ()) .flush)) := by
-  rintro _ v rfl
-  refine ⟨(), (c.state ()).2, ?_, ?_, le_of_eq ?_⟩
-  · simp [account, SysState.grow, actor, serve_eq_run]
-  · simp only [Account.pending, account, SysState.grow, actor, update_self]
-    rw [Effect.sends_append, Effect.sends_map_emit (σ := sig In Out) (i := ())]
-    simp only [Effect.sends, List.filterMap_cons, List.filterMap_nil, List.append_nil,
-      Multiset.coe_nil, add_zero]
-    exact add_le_add (Multiset.coe_le.mpr (hsub.filterMap _).subperm) le_rfl
-  · simp only [Account.owed, account, SysState.grow, actor]
-    rw [Effect.emits_append, Effect.emits_map_emit (σ := sig In Out) (i := ()),
-      Effect.sends_append, Effect.sends_map_emit (σ := sig In Out) (i := ())]
-    simp [serve_eq_run, Effect.emits, Effect.sends]
-
-/-- The one timer is `flush`, and requests come from outside. -/
-def Tame {svc : Service In Out S} (c : SysState (system svc)) : Prop :=
-  (∀ i m, m ∈ c.timers i → m = Msg.flush) ∧ ∀ e ∈ c.net, e.src = none
-
-theorem tame_invariant (svc : Service In Out S) (env : EnvModel (sig In Out)) :
-    (system svc).Invariant env Tame := by
-  have htimers := System.Monotone.timers (system svc) (T := fun _ m => m = Msg.flush)
-    (fun i s msg delay m h => by cases msg <;> simp_all [actor])
-    (fun i s delay m h => by simp_all [actor])
-  refine (htimers.and_net (fun _ h => nomatch h) ?_ ?_ ?_).invariant env
-  · intro c up net timers outbox h hnet e he
-    rcases hnet e he with he | ⟨x, rfl⟩
-    · exact h e he
-    · rfl
-  · intro c i msg _ _ h _ e he
-    rcases SysState.mem_grow_net.mp he with he | ⟨_, he⟩
-    · exact h e he
-    · cases msg <;> simp [actor] at he
-  · intro c i _ _ h e he
-    rcases SysState.mem_grow_net.mp he with he | ⟨_, he⟩
-    · exact h e he
-    · simp [actor] at he
+/-- A request joins the queue, and a flush is the queue taking effect. -/
+theorem handles {svc : Service In Out S} (state : (i : Unit) → S × List In)
+    (net net' : List (Envelope (sig In Out))) (src : Option Unit) (m : Msg In) :
+    (account svc).Handles svc state net net' () ((actor svc).step (state ()) m)
+      ((account svc).pend ⟨src, (), m⟩) none := by
+  rintro _ _ rfl
+  cases m with
+  | request x =>
+    exact ⟨(), [], rfl, le_of_eq (by simp [account, actor, add_comm, ← Multiset.coe_add]), by simp [account, actor]⟩
+  | flush =>
+    exact ⟨(), (state ()).2, by simp [account, actor, serve_eq_run], by simp [account, actor],
+      by simp [account, actor, serve_eq_run]⟩
 
 theorem implements (svc : Service In Out S) (env : EnvModel (sig In Out))
     (henv : (env.link none ()).duplicating = false) : (system svc).Implements env svc := by
-  refine (account svc).implements (tame_invariant svc env)
+  refine (account svc).implements (inv := fun _ => True) (fun _ _ => trivial)
     ⟨(), by simp [account, SysState.init, SysState.startActor, SysState.settle, SysState.blank,
       SysState.perform, Effect.isStop, actor], by simp [Account.pending, account, SysState.init,
       SysState.startActor, SysState.settle, SysState.blank, SysState.perform, Effect.isStop, actor],
       by simp [Account.owed, account, SysState.init, SysState.startActor, SysState.settle,
         SysState.blank, SysState.perform, Effect.isStop, actor]⟩
-    (fun _ => ⟨rfl, rfl⟩) (fun _ _ _ _ _ h => h) ?_ ?_
-    (fun _ _ _ _ _ => .of_loses ⟨rfl, List.erase_sublist, fun _ _ h => h, rfl⟩ fun _ _ h => h)
+    (fun _ => ⟨rfl, rfl⟩) (fun _ _ _ _ _ h => h)
+    (fun c ⟨src, ⟨⟩, m⟩ _ _ hd => .handle (SysState.mem_of_deliverable hd) (handles _ _ _ src m))
+    ?_
+    (fun _ _ _ _ _ _ => .of_loses ⟨rfl, List.erase_sublist, fun _ _ h => h, rfl⟩ fun _ _ h => h)
     (fun c i _ => .of_loses (SysState.Loses.down env c i) fun _ _ h => h)
-    (fun c ⟨⟩ m ⟨htimers, _⟩ hmem => by
-      obtain rfl := htimers () m hmem
-      exact flush_moves (List.Sublist.refl _))
+    (fun c ⟨⟩ m _ h _ => by
+      obtain rfl : m = .flush := by cases h <;> rename_i h <;> cases ‹Msg In› <;> simp_all [actor]
+      exact .grow (handles _ _ _ none .flush))
     (fun c ⟨⟩ _ => .quiet (fun _ _ h => by simpa [account] using h) rfl rfl (fun _ => by simp)
       (fun _ => rfl))
-  · rintro c ⟨src, ⟨⟩, m⟩ _ hd
-    have hmem := SysState.mem_of_deliverable hd
-    cases m with
-    | request x =>
-      refine .of_le fun _ v h => ⟨(), by simpa [account, SysState.grow, actor] using h,
-        le_of_eq ?_, le_of_eq ?_⟩
-      · simp only [Account.pending, account, SysState.grow, actor, update_self,
-          Multiset.coe_eq_coe.mpr (filterMap_perm_erase hmem)]
-        simp [Effect.sends, ← Multiset.coe_add]
-        rw [← Multiset.cons_coe, ← Multiset.singleton_add]
-        abel
-      · simp [Account.owed, account, SysState.grow, actor, Effect.emits]
-    | flush => exact flush_moves List.erase_sublist
-  · rintro c ⟨src, ⟨⟩, m⟩ ⟨_, hnet⟩ hd hdup
-    obtain rfl : src = none := hnet _ (SysState.mem_of_deliverable hd)
-    simp [henv] at hdup
+  rintro c ⟨src, ⟨⟩, m⟩ _ hsent _ hdup
+  obtain rfl : src = none := by
+    cases hsent with
+    | accept => rfl
+    | step s msg h => cases msg <;> simp [actor] at h
+    | recover s h => simp [actor] at h
+  simp [henv] at hdup
 
 /-- The same of the server that remembers every state it has been in, and back. -/
 theorem implements_withPast (svc : Service In Out S) (env : EnvModel (sig In Out))

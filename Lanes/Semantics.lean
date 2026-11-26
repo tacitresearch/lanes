@@ -12,6 +12,7 @@ public import Lanes.Semantics.MonitorSound
 public import Lanes.Semantics.Once
 public import Lanes.Semantics.Projection
 public import Lanes.Semantics.Refinement
+public import Lanes.Semantics.Sent
 public import Lanes.Semantics.Service
 public import Lanes.Semantics.Simulation
 public import Lanes.Semantics.Sums
