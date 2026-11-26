@@ -209,6 +209,28 @@ def Failure.Found (m : Model S L) (props : List (Property S)) (opts : Options S)
       opts.terminal t.last = false
   | .unreached _ => False
 
+namespace Hashed
+
+variable [BEq S]
+
+theorem beq_iff {a b : Hashed S} :
+    (a == b) = true ↔ a.hash = b.hash ∧ (a.state == b.state) = true := by
+  change (a.hash == b.hash && a.state == b.state) = true ↔ _
+  simp
+
+instance [EquivBEq S] : EquivBEq (Hashed S) where
+  rfl := beq_iff.mpr ⟨rfl, BEq.rfl⟩
+  symm h := beq_iff.mpr ⟨(beq_iff.mp h).1.symm, BEq.symm (beq_iff.mp h).2⟩
+  trans h₁ h₂ := beq_iff.mpr ⟨(beq_iff.mp h₁).1.trans (beq_iff.mp h₂).1,
+    BEq.trans (beq_iff.mp h₁).2 (beq_iff.mp h₂).2⟩
+
+/-- Keys that are equal carry the same hash because equality compares it, so the search does
+not depend on the hash of states agreeing with their equality. -/
+instance : LawfulHashable (Hashed S) where
+  hash_eq _ _ h := (beq_iff.mp h).1
+
+end Hashed
+
 namespace Search
 
 variable [BEq S] [Hashable S] {m : Model S L} {props : List (Property S)} {opts : Options S}
@@ -226,8 +248,8 @@ structure Sound (m : Model S L) (props : List (Property S)) (opts : Options S)
   slots : st.witnesses.length = props.length
 
 theorem Sound.add (h : st.Sound m props opts) {path : Path S L}
-    (hpath : path.Valid m opts.constraint) (depth : Nat) :
-    (st.add props opts path depth).Sound m props opts := by
+    (hpath : path.Valid m opts.constraint) (hash : UInt64) (depth : Nat) :
+    (st.add props opts path hash depth).Sound m props opts := by
   unfold Search.add
   split
   · exact h
@@ -253,7 +275,7 @@ theorem Sound.addInit (h : st.Sound m props opts) {s : S} (hs : s ∈ m.init) :
   · exact h
   · rename_i hcond
     simp only [Bool.or_eq_true, Bool.not_eq_true', not_or, Bool.not_eq_false] at hcond
-    exact h.add (path := .init s) ⟨hs, hcond.2⟩ 0
+    exact h.add (path := .init s) ⟨hs, hcond.2⟩ _ 0
 
 theorem Sound.start (actions : List String) : (start m props opts actions).Sound m props opts := by
   unfold Search.start
@@ -261,35 +283,59 @@ theorem Sound.start (actions : List String) : (start m props opts actions).Sound
   all_goals simp [List.getElem?_replicate]
 
 theorem Sound.visit (h : st.Sound m props opts) {parent : Path S L}
-    (hparent : parent.Valid m opts.constraint) (depth : Nat) {step : L × S}
-    (hstep : step ∈ m.next parent.last) (hconstraint : opts.constraint step.2 = true) :
+    (hparent : parent.Valid m opts.constraint) (depth : Nat) {step : L × Hashed S}
+    (hstep : (step.1, step.2.state) ∈ m.next parent.last)
+    (hconstraint : opts.constraint step.2.state = true) :
     (st.visit props opts labelName parent depth step).Sound m props opts := by
   unfold Search.visit
   split
   · exact h
-  · refine Sound.add ?_ (path := .step parent step.1 step.2) ⟨hparent, hstep, hconstraint⟩ _
+  · refine Sound.add ?_ (path := .step parent step.1 step.2.state)
+      ⟨hparent, hstep, hconstraint⟩ _ _
     exact ⟨h.queue, h.witnesses, h.failure, h.size, h.slots⟩
+
+omit [BEq S] in
+/-- The successors are the transitions of the model within the constraint, unless the depth
+bound stops the state from being expanded. -/
+theorem mem_successors {v : Visited S L} {step : L × Hashed S} :
+    step ∈ successors m opts v ↔ opts.maxDepth.any (v.depth ≥ ·) = false ∧
+      ∃ raw ∈ m.next v.path.last, opts.constraint raw.2 = true ∧ step = (raw.1, .of raw.2) := by
+  unfold successors
+  split
+  · next h => simp [h]
+  · next h =>
+    refine ⟨fun hmem => ?_, fun ⟨_, raw, hraw, hc, hstep⟩ =>
+      List.mem_filterMap.mpr ⟨raw, hraw, by simp [hc, hstep]⟩⟩
+    obtain ⟨raw, hraw, hsome⟩ := List.mem_filterMap.mp hmem
+    split at hsome
+    · next hc => exact ⟨by simpa using h, raw, hraw, hc, (Option.some.inj hsome).symm⟩
+    · simp at hsome
 
 theorem Sound.expand (h : st.Sound m props opts) {v : Visited S L} (hv : v ∈ st.queue) :
     (st.expand m props opts labelName v).Sound m props opts := by
   have hpath := h.queue v hv
-  unfold Search.expand
+  unfold Search.expand Search.expandWith
   split
   · exact ⟨h.queue, h.witnesses, h.failure, h.size, h.slots⟩
-  · dsimp only
+  · rename_i hdepth
     split
     · rename_i hdead
-      simp only [Bool.and_eq_true, List.isEmpty_iff, List.filter_eq_nil_iff, Bool.not_eq_true,
-        Bool.not_eq_eq_eq_not, Bool.not_true] at hdead
+      simp only [Bool.and_eq_true, List.isEmpty_iff, Bool.not_eq_true'] at hdead
       refine ⟨h.queue, h.witnesses, fun f hf => ?_, h.size, h.slots⟩
       obtain rfl := Option.some.inj hf
-      exact ⟨hpath.toTrace, by simpa using hpath.reachable,
-        fun l s hmem => by simpa using hdead.1.2 (l, s) (by simpa using hmem),
+      refine ⟨hpath.toTrace, by simpa using hpath.reachable, fun l s hmem => ?_,
         by simpa using hdead.2⟩
+      cases hc : opts.constraint s with
+      | false => rfl
+      | true =>
+        have hsucc : (l, Hashed.of s) ∈ successors m opts v :=
+          mem_successors.mpr ⟨by simpa using hdepth, (l, s), by simpa using hmem, hc, rfl⟩
+        simp [hdead.1.2] at hsucc
     · have : (List.foldl (Search.visit props opts labelName v.path (v.depth + 1)) st
-          ((m.next v.path.last).filter fun step => opts.constraint step.2)).Sound m props opts :=
-        List.foldlRecOn _ _ h fun st h step hstep =>
-          h.visit hpath _ (List.mem_filter.mp hstep).1 (List.mem_filter.mp hstep).2
+          (successors m opts v)).Sound m props opts :=
+        List.foldlRecOn _ _ h fun st h step hstep => by
+          obtain ⟨_, raw, hraw, hc, rfl⟩ := mem_successors.mp hstep
+          exact h.visit hpath _ hraw hc
       exact ⟨this.queue, this.witnesses, this.failure, this.size, this.slots⟩
 
 theorem Sound.run (fuel : Nat) (h : st.Sound m props opts) :
@@ -305,8 +351,8 @@ theorem Sound.run (fuel : Nat) (h : st.Sound m props opts) :
       · rename_i v hv
         exact ih (h.expand (Array.mem_of_getElem? hv))
 
-theorem head_add (path : Path S L) (depth : Nat) :
-    (st.add props opts path depth).head = st.head := by
+theorem head_add (path : Path S L) (hash : UInt64) (depth : Nat) :
+    (st.add props opts path hash depth).head = st.head := by
   unfold Search.add
   split
   · rfl
@@ -318,31 +364,52 @@ theorem head_start (actions : List String) : (start m props opts actions).head =
   unfold Search.addInit
   split
   · exact h
-  · exact (head_add _ _).trans h
+  · exact (head_add _ _ _).trans h
 
-theorem head_visit (parent : Path S L) (depth : Nat) (step : L × S) :
+theorem head_visit (parent : Path S L) (depth : Nat) (step : L × Hashed S) :
     (st.visit props opts labelName parent depth step).head = st.head := by
   unfold Search.visit
   split
   · rfl
-  · exact head_add _ _
+  · exact head_add _ _ _
 
-theorem head_expand (v : Visited S L) :
-    (st.expand m props opts labelName v).failure.isSome = true ∨
-      (st.expand m props opts labelName v).head = st.head + 1 := by
-  unfold Search.expand
+theorem head_expandWith (v : Visited S L) (succs : List (L × Hashed S)) :
+    (st.expandWith props opts labelName v succs).failure.isSome = true ∨
+      (st.expandWith props opts labelName v succs).head = st.head + 1 := by
+  unfold Search.expandWith
   split
   · exact .inr rfl
-  · dsimp only
-    split
+  · split
     · exact .inl rfl
     · refine .inr (congrArg (· + 1) ?_)
       exact List.foldlRecOn (motive := fun st' : Search S L => st'.head = st.head) _ _ rfl
         fun _ h step _ => (head_visit _ _ step).trans h
 
+theorem head_expand (v : Visited S L) :
+    (st.expand m props opts labelName v).failure.isSome = true ∨
+      (st.expand m props opts labelName v).head = st.head + 1 :=
+  head_expandWith v _
+
 theorem run_of_failure (fuel : Nat) (h : st.failure.isSome = true) :
     st.run m props opts labelName fuel = st := by
   cases fuel <;> simp [Search.run, h]
+
+theorem run_of_none (fuel : Nat) (h : st.queue[st.head]? = none) :
+    st.run m props opts labelName fuel = st := by
+  cases fuel <;> simp [Search.run, h]
+
+theorem run_add (a b : Nat) : st.run m props opts labelName (a + b) =
+    (st.run m props opts labelName a).run m props opts labelName b := by
+  induction a generalizing st with
+  | zero => simp [Search.run]
+  | succ a ih =>
+    rw [Nat.succ_add]
+    simp only [Search.run]
+    split
+    · next h => exact (run_of_failure b h).symm
+    · split
+      · next h => exact (run_of_none b h).symm
+      · exact ih
 
 /-- Fuel for one expansion per state that may be stored never runs out early. -/
 theorem run_done (fuel : Nat) (h : st.Sound m props opts)
@@ -425,11 +492,11 @@ theorem Le.getElem? (h : st.Le st') {i : Nat} (hi : i < st.queue.size) :
   rw [Array.getElem?_eq_getElem hi]
   exact h.queue i _ (Array.getElem?_eq_getElem hi)
 
-/-- What has been checked of the stored states: `seen` covers only them, no `always` property
-fails in one unless a failure is recorded, and each `sometimes` property true in one has its
-witness. -/
+/-- What has been checked of the stored states: `seen` covers only them, whatever hash a key
+carries, no `always` property fails in one unless a failure is recorded, and each `sometimes`
+property true in one has its witness. -/
 structure Checked (props : List (Property S)) (st : Search S L) : Prop where
-  seen : ∀ s, st.seen.contains s = true → st.Stored s
+  seen : ∀ key : Hashed S, st.seen.contains key = true → st.Stored key.state
   always : st.failure = none → ∀ v ∈ st.queue, ∀ name p, .always name p ∈ props →
     p v.path.last = true
   sometimes : ∀ v ∈ st.queue, ∀ (i : Nat) name p, props[i]? = some (.sometimes name p) →
@@ -445,8 +512,8 @@ structure Closed (m : Model S L) (opts : Options S) (st : Search S L) : Prop whe
     opts.terminal v.path.last = true ∨
       ∃ step ∈ m.next v.path.last, opts.constraint step.2 = true
 
-theorem le_add (hfailure : st.failure = none) (path : Path S L) (depth : Nat) :
-    st.Le (st.add props opts path depth) := by
+theorem le_add (hfailure : st.failure = none) (path : Path S L) (hash : UInt64) (depth : Nat) :
+    st.Le (st.add props opts path hash depth) := by
   unfold Search.add
   split
   · exact .refl st
@@ -456,13 +523,26 @@ theorem le_add (hfailure : st.failure = none) (path : Path S L) (depth : Nat) :
       have hi : i < st.queue.size := (Array.getElem?_eq_some_iff.mp hv).1
       simp [Array.getElem?_push, Nat.ne_of_lt hi, hv]
 
-theorem stored_add [ReflBEq S] (h : st.Checked props) {path : Path S L} {depth : Nat}
-    (hcomplete : (st.add props opts path depth).complete = true) :
-    (st.add props opts path depth).Stored path.last := by
+theorem le_visit (parent : Path S L) (depth : Nat) (step : L × Hashed S) :
+    st.Le (st.visit props opts labelName parent depth step) := by
+  unfold Search.visit
+  split
+  · exact .refl st
+  · rename_i hsome
+    dsimp only
+    exact Le.trans (st' := { st with
+        transitions := st.transitions + 1
+        coverage := st.coverage.insert (labelName step.1)
+          (st.coverage.getD (labelName step.1) 0 + 1) })
+      ⟨fun _ _ h => h, id, id, rfl⟩ (le_add (by simpa using hsome) _ _ _)
+
+theorem stored_add [ReflBEq S] (h : st.Checked props) {path : Path S L} {hash : UInt64}
+    {depth : Nat} (hcomplete : (st.add props opts path hash depth).complete = true) :
+    (st.add props opts path hash depth).Stored path.last := by
   unfold Search.add at hcomplete ⊢
   split
   · rename_i hseen
-    exact h.seen _ hseen
+    exact h.seen ⟨path.last, hash⟩ hseen
   · rename_i hseen
     split
     · rename_i hfull
@@ -514,12 +594,124 @@ theorem Closed.advance (h : st.Closed m opts) (hle : st.Le st') {v : Visited S L
     · exact h.moves hcheck i w hlt hw
     · exact hmoves hcheck
 
+/-! `runBatches` is `run`. -/
+
+theorem getElem?_expandWith {i : Nat} {w : Visited S L} (h : st.queue[i]? = some w)
+    (v : Visited S L) (succs : List (L × Hashed S)) :
+    (st.expandWith props opts labelName v succs).queue[i]? = some w := by
+  unfold Search.expandWith
+  split
+  · exact h
+  · split
+    · exact h
+    · exact (List.foldlRecOn (motive := fun st' : Search S L => st.Le st') _ _ (.refl st)
+        fun _ hle step _ => hle.trans (le_visit _ _ step)).queue i w h
+
+theorem expandAll_of_failure (succs : List (List (L × Hashed S)))
+    (h : st.failure.isSome = true) : st.expandAll props opts labelName succs = st := by
+  cases succs <;> simp [Search.expandAll, h]
+
+theorem expandAll_of_none (succs : List (List (L × Hashed S)))
+    (h : st.queue[st.head]? = none) : st.expandAll props opts labelName succs = st := by
+  cases succs <;> simp [Search.expandAll, h]
+
+theorem expandAll_append (a b : List (List (L × Hashed S))) :
+    st.expandAll props opts labelName (a ++ b) =
+      (st.expandAll props opts labelName a).expandAll props opts labelName b := by
+  induction a generalizing st with
+  | nil => rfl
+  | cons succs a ih =>
+    simp only [List.cons_append, Search.expandAll]
+    split
+    · next h => exact (expandAll_of_failure b h).symm
+    · split
+      · next h => exact (expandAll_of_none b h).symm
+      · exact ih
+
+/-- Given the successors of the states waiting at `head`, in order, `expandAll` is `run` with
+one unit of fuel for each. -/
+theorem expandAll_eq_run (succs : List (List (L × Hashed S)))
+    (h : ∀ (j : Nat) s, succs[j]? = some s →
+      ∃ v, st.queue[st.head + j]? = some v ∧ s = successors m opts v) :
+    st.expandAll props opts labelName succs = st.run m props opts labelName succs.length := by
+  induction succs generalizing st with
+  | nil => rfl
+  | cons s rest ih =>
+    obtain ⟨v, hv, rfl⟩ := h 0 s rfl
+    rw [Nat.add_zero] at hv
+    simp only [Search.expandAll, List.length_cons, Search.run, hv]
+    split
+    · rfl
+    · change (st.expand m props opts labelName v).expandAll props opts labelName rest = _
+      rcases head_expand (m := m) (props := props) (opts := opts) (labelName := labelName)
+        (st := st) v with hfailure | hhead
+      · rw [run_of_failure _ hfailure, expandAll_of_failure _ hfailure]
+      · refine ih fun j s hs => ?_
+        obtain ⟨w, hw, rfl⟩ := h (j + 1) s (by simpa using hs)
+        refine ⟨w, ?_, rfl⟩
+        rw [hhead, Nat.add_assoc, Nat.add_comm 1 j]
+        exact getElem?_expandWith hw v _
+
+theorem flatMap_mapInTasks {α β : Type} (f : α → β) (size fuel : Nat) (xs : List α) :
+    (mapInTasks f size fuel xs).flatMap (·.get) = xs.map f := by
+  induction fuel generalizing xs with
+  | zero => simp [mapInTasks]
+  | succ fuel ih =>
+    unfold mapInTasks
+    split
+    · simp
+    · rw [List.flatMap_cons, ih]
+      change (xs.take size).map f ++ (xs.drop size).map f = xs.map f
+      rw [← List.map_append, List.take_append_drop]
+
+theorem foldl_expandAll (tasks : List (Task (List (List (L × Hashed S))))) :
+    tasks.foldl (fun st task => st.expandAll props opts labelName task.get) st =
+      st.expandAll props opts labelName (tasks.flatMap (·.get)) := by
+  induction tasks generalizing st with
+  | nil => rfl
+  | cons task tasks ih => rw [List.foldl_cons, ih, List.flatMap_cons, expandAll_append]
+
+/-- Computing successors ahead, in tasks, changes nothing: the batched run is the plain one. -/
+theorem runBatches_eq (fuel : Nat) :
+    st.runBatches m props opts labelName fuel = st.run m props opts labelName fuel := by
+  induction fuel using Nat.strongRecOn generalizing st with
+  | _ fuel ih =>
+    rw [runBatches]
+    extract_lets count
+    split
+    · next h =>
+      rcases h with h | h
+      · have hdone : fuel = 0 ∨ st.queue.size ≤ st.head := by
+          simp only [count, batchSize] at h
+          omega
+        rcases hdone with rfl | hdone
+        · rfl
+        · exact (run_of_none _ (Array.getElem?_eq_none hdone)).symm
+      · exact (run_of_failure _ h).symm
+    · rename_i batch tasks h
+      have hcount : count ≤ fuel ∧ st.head + count ≤ st.queue.size ∧ count ≠ 0 := by
+        simp only [count] at h ⊢
+        omega
+      have hlength : batch.length = count := by
+        simp only [batch, Array.length_toList, Array.size_extract]
+        omega
+      rw [ih (fuel - count) (by omega), foldl_expandAll, flatMap_mapInTasks,
+        expandAll_eq_run _ fun j s hs => ?_, List.length_map, hlength, ← run_add]
+      · congr 1
+        omega
+      · rw [List.getElem?_map, Option.map_eq_some_iff] at hs
+        obtain ⟨v, hv, rfl⟩ := hs
+        refine ⟨v, ?_, rfl⟩
+        have hj : j < count := hlength ▸ (List.getElem?_eq_some_iff.mp hv).1
+        have hin : j < min (st.head + count) st.queue.size - st.head := by omega
+        simpa only [batch, Array.getElem?_toList, Array.getElem?_extract, hin, ↓reduceIte] using hv
+
 section Equiv
 
-variable [EquivBEq S] [LawfulHashable S]
+variable [EquivBEq S]
 
 theorem Checked.add (h : st.Checked props) (hfailure : st.failure = none) (path : Path S L)
-    (depth : Nat) : (st.add props opts path depth).Checked props := by
+    (hash : UInt64) (depth : Nat) : (st.add props opts path hash depth).Checked props := by
   unfold Search.add
   split
   · exact h
@@ -529,7 +721,7 @@ theorem Checked.add (h : st.Checked props) (hfailure : st.failure = none) (path 
         fun v hv i name p hprop hp hslot => ?_⟩
       · rw [Std.HashSet.contains_insert, Bool.or_eq_true] at hs
         rcases hs with hs | hs
-        · exact ⟨_, Array.mem_push_self, hs⟩
+        · exact ⟨_, Array.mem_push_self, (Hashed.beq_iff.mp hs).2⟩
         · obtain ⟨v, hv, hvs⟩ := h.seen s hs
           exact ⟨v, Array.mem_push_of_mem _ hv, hvs⟩
       · rcases Array.mem_push.mp hv with hv | rfl
@@ -540,33 +732,33 @@ theorem Checked.add (h : st.Checked props) (hfailure : st.failure = none) (path 
         · exact h.sometimes v hv i name p hprop hp hslot
         · exact absurd hp (by simp [hfalse name p hprop])
 
-theorem visit_spec (h : st.Checked props) (parent : Path S L) (depth : Nat) (step : L × S) :
+theorem visit_spec (h : st.Checked props) (parent : Path S L) (depth : Nat)
+    (step : L × Hashed S) :
     (st.visit props opts labelName parent depth step).Checked props ∧
       st.Le (st.visit props opts labelName parent depth step) ∧
       ((st.visit props opts labelName parent depth step).Live →
-        (st.visit props opts labelName parent depth step).Stored step.2) := by
-  unfold Search.visit
-  split
-  · rename_i hsome
-    exact ⟨h, .refl st, fun hlive => by simp [hlive.2] at hsome⟩
-  · rename_i hsome
-    have hfailure : st.failure = none := by simpa using hsome
-    dsimp only
-    generalize hcounted : ({ st with
-      transitions := st.transitions + 1
-      coverage := st.coverage.insert (labelName step.1)
-        (st.coverage.getD (labelName step.1) 0 + 1) } : Search S L) = counted
-    have hchecked : counted.Checked props := by
-      subst hcounted
-      exact ⟨h.seen, h.always, h.sometimes⟩
-    have hfailure' : counted.failure = none := by
-      subst hcounted
-      exact hfailure
-    have hle : st.Le counted := by
-      subst hcounted
-      exact ⟨fun _ _ h => h, id, id, rfl⟩
-    exact ⟨hchecked.add hfailure' _ _, hle.trans (le_add hfailure' _ _),
-      fun hlive => stored_add (path := .step parent step.1 step.2) hchecked hlive.1⟩
+        (st.visit props opts labelName parent depth step).Stored step.2.state) := by
+  refine ⟨?_, le_visit parent depth step, ?_⟩
+  all_goals unfold Search.visit
+  · split
+    · exact h
+    · rename_i hsome
+      dsimp only
+      exact Checked.add (st := { st with
+          transitions := st.transitions + 1
+          coverage := st.coverage.insert (labelName step.1)
+            (st.coverage.getD (labelName step.1) 0 + 1) })
+        ⟨h.seen, h.always, h.sometimes⟩ (by simpa using hsome) _ _ _
+  · split
+    · rename_i hsome
+      exact fun hlive => by simp [hlive.2] at hsome
+    · dsimp only
+      exact fun hlive => stored_add (path := .step parent step.1 step.2.state)
+        (st := { st with
+          transitions := st.transitions + 1
+          coverage := st.coverage.insert (labelName step.1)
+            (st.coverage.getD (labelName step.1) 0 + 1) })
+        ⟨h.seen, h.always, h.sometimes⟩ hlive.1
 
 theorem addInit_spec (h : st.Checked props) (s : S) :
     (st.addInit props opts s).Checked props ∧ st.Le (st.addInit props opts s) ∧
@@ -581,7 +773,7 @@ theorem addInit_spec (h : st.Checked props) (s : S) :
     have hfailure : st.failure = none := by
       simp only [Bool.or_eq_true, not_or] at hskip
       simpa using hskip.1
-    exact ⟨h.add hfailure _ _, le_add hfailure _ _,
+    exact ⟨h.add hfailure _ _ _, le_add hfailure _ _ _,
       fun hlive _ => stored_add (path := .init s) h hlive.1⟩
 
 /-- What holds of a search between expansions. -/
@@ -611,36 +803,38 @@ theorem Inv.start (actions : List String) : (start m props opts actions).Inv m p
 theorem Inv.expand (h : st.Inv m props opts) {v : Visited S L}
     (hv : st.queue[st.head]? = some v) :
     (st.expand m props opts labelName v).Inv m props opts := by
-  unfold Search.expand
+  unfold Search.expand Search.expandWith
   split
   · exact ⟨⟨h.checked.seen, h.checked.always, h.checked.sometimes⟩,
       fun hlive => absurd hlive.1 (by simp)⟩
-  · dsimp only
+  · rename_i hdepth
     split
     · exact ⟨⟨h.checked.seen, fun hnone => by simp at hnone, h.checked.sometimes⟩,
         fun hlive => absurd hlive.2 (by simp)⟩
     · rename_i hdead
       obtain ⟨hchecked, hle, hstored⟩ :=
-        foldl_spec (key := fun step : L × S => step.2) (want := fun _ => True)
+        foldl_spec (key := fun step : L × Hashed S => step.2.state) (want := fun _ => True)
           (fun st step h =>
             have := visit_spec (opts := opts) (labelName := labelName) h v.path (v.depth + 1) step
             ⟨this.1, this.2.1, fun hlive _ => this.2.2 hlive⟩)
-          ((m.next v.path.last).filter fun step => opts.constraint step.2) h.checked
+          (successors m opts v) h.checked
       generalize List.foldl (Search.visit props opts labelName v.path (v.depth + 1)) st
-        ((m.next v.path.last).filter fun step => opts.constraint step.2) = st'
-        at hchecked hle hstored
+        (successors m opts v) = st' at hchecked hle hstored
       refine ⟨⟨hchecked.seen, hchecked.always, hchecked.sometimes⟩, fun hlive => ?_⟩
       have hlive' : st'.Live := hlive
+      have hmem : ∀ step ∈ m.next v.path.last, opts.constraint step.2 = true →
+          (step.1, Hashed.of step.2) ∈ successors m opts v := fun step hstep hconstraint =>
+        mem_successors.mpr ⟨by simpa using hdepth, step, hstep, hconstraint, rfl⟩
       refine (h.closed (hle.live hlive')).advance hle hv
-        (fun step hstep hconstraint =>
-          hstored hlive' step (List.mem_filter.mpr ⟨hstep, hconstraint⟩) trivial)
+        (fun step hstep hconstraint => hstored hlive' _ (hmem step hstep hconstraint) trivial)
         fun hcheck => ?_
       simp only [hcheck, Bool.true_and, Bool.and_eq_true, List.isEmpty_iff, Bool.not_eq_true',
         not_and, Bool.not_eq_false] at hdead
       by_cases hterminal : opts.terminal v.path.last = true
       · exact .inl hterminal
       · obtain ⟨step, hstep⟩ := List.exists_mem_of_ne_nil _ fun hnil => hterminal (hdead hnil)
-        exact .inr ⟨step, (List.mem_filter.mp hstep).1, (List.mem_filter.mp hstep).2⟩
+        obtain ⟨_, raw, hraw, hc, _⟩ := mem_successors.mp hstep
+        exact .inr ⟨raw, hraw, hc⟩
 
 theorem Inv.run (fuel : Nat) (h : st.Inv m props opts) :
     (st.run m props opts labelName fuel).Inv m props opts := by
@@ -656,25 +850,30 @@ theorem Inv.run (fuel : Nat) (h : st.Inv m props opts) :
         exact ih (h.expand hv)
 
 theorem Inv.final :
-    ((Search.start m props opts actions).run m props opts labelName opts.maxStates).Inv
-      m props opts :=
-  Inv.run _ (Inv.start actions)
+    ((Search.start m props opts actions).runBatches m props opts labelName opts.maxStates).Inv
+      m props opts := by
+  rw [runBatches_eq]
+  exact Inv.run _ (Inv.start actions)
 
 end Equiv
 
 theorem Sound.final :
-    ((Search.start m props opts actions).run m props opts labelName opts.maxStates).Sound
-      m props opts :=
-  Sound.run _ (Sound.start actions)
+    ((Search.start m props opts actions).runBatches m props opts labelName opts.maxStates).Sound
+      m props opts := by
+  rw [runBatches_eq]
+  exact Sound.run _ (Sound.start actions)
 
-/-- `search` gives `run` enough fuel: it stops on a failure or with every stored state
+/-- `search` gives the run enough fuel: it stops on a failure or with every stored state
 expanded, so a report is incomplete only when a bound left something out. -/
 theorem done_final :
-    ((Search.start m props opts actions).run m props opts labelName opts.maxStates).failure.isSome
-        = true ∨
-      ((Search.start m props opts actions).run m props opts labelName opts.maxStates).queue.size ≤
-        ((Search.start m props opts actions).run m props opts labelName opts.maxStates).head :=
-  run_done _ (Sound.start actions) (by rw [head_start]; omega)
+    ((Search.start m props opts actions).runBatches m props opts labelName
+        opts.maxStates).failure.isSome = true ∨
+      ((Search.start m props opts actions).runBatches m props opts labelName
+          opts.maxStates).queue.size ≤
+        ((Search.start m props opts actions).runBatches m props opts labelName
+          opts.maxStates).head := by
+  rw [runBatches_eq]
+  exact run_done _ (Sound.start actions) (by rw [head_start]; omega)
 
 /-- Once nothing is left to expand, every reachable state is stored, up to equality. -/
 theorem Closed.stored [EquivBEq S] (hm : m.Respects opts.constraint props)
