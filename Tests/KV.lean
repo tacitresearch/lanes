@@ -1,0 +1,84 @@
+/-
+Copyright (c) 2026 The Lanes Authors. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+-/
+import Lanes
+import Examples.KV
+
+/-!
+Refinement checks of the key-value store against its service spec, on one key, two values and
+two front ends. The driver sends a read, a write and a second read; the monitor checks every
+response against the map spec.
+-/
+
+namespace Tests.KV
+
+open Lanes Examples.KV
+
+abbrev K := Fin 1
+abbrev V := Fin 2
+abbrev F := Fin 2
+
+instance : Enum (Examples.KV.Id F) where
+  all := [.front 0, .front 1, .store]
+  complete i := by
+    cases i with
+    | front f => match f with
+      | 0 => simp
+      | 1 => simp
+    | store => simp
+
+instance : ∀ i, Repr (Msg K V F i)
+  | .front _ => inferInstanceAs (Repr (FrontMsg K V F))
+  | .store => inferInstanceAs (Repr (StoreMsg K V F))
+
+instance : ∀ i, Hashable (Msg K V F i)
+  | .front _ => inferInstanceAs (Hashable (FrontMsg K V F))
+  | .store => inferInstanceAs (Hashable (StoreMsg K V F))
+
+instance : (sig K V F).Inspect := {}
+
+instance (caching : Bool) : (system K V F caching).Inspect where
+  beqState
+    | .front _ => inferInstanceAs (BEq (List (K × Option V)))
+    | .store => inferInstanceAs (BEq (K → Option V))
+  reprState
+    | .front _ => inferInstanceAs (Repr (List (K × Option V)))
+    | .store => inferInstanceAs (Repr (K → Option V))
+  hashState
+    | .front _ => inferInstanceAs (Hashable (List (K × Option V)))
+    | .store => inferInstanceAs (Hashable (K → Option V))
+
+/-- Read through front end 0, write through front end 1, read through front end 0 again. -/
+def requests : List (Request K V F) :=
+  [⟨1, 0, .get 0⟩, ⟨2, 1, .put 0 1⟩, ⟨3, 0, .get 0⟩]
+
+def check (caching : Bool) :=
+  Check.system (system K V F caching)
+    { driver := (spec K V F).monitored (Driver.anyOrder requests) }
+    [ Check.refines "every response is allowed by the map spec",
+      .sometimes "a read sees the written value" fun w =>
+        w.state.outbox.any fun r => r.res == .value (some 1),
+      .sometimes "a read sees the empty store" fun w =>
+        w.state.outbox.any fun r => r.res == .value none ]
+
+def tests : List (String × Bool) :=
+  let plain := check false
+  let cached := check true
+  [ ("kv: without caching the store refines the map spec",
+      plain.ok && plain.complete),
+    ("kv: the check is not vacuous: reads see both the empty store and the written value",
+      plain.witnesses.length == 2),
+    ("kv: read caching breaks refinement: a stale read after an acknowledged write",
+      match cached.failure with
+      | some (.violated "every response is allowed by the map spec" t) =>
+        (match t.labels.getLast? with
+          | some (.output ⟨3, .value none⟩) => true
+          | _ => false)
+      | _ => false) ]
+
+/-- The counterexample for the cached variant, for the test log. -/
+def cachedReport : String :=
+  (check true).renderSystem
+
+end Tests.KV

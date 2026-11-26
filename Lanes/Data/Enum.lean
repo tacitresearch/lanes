@@ -94,6 +94,19 @@ theorem tabulateOn_eq {ι : Type} [DecidableEq ι] {β : ι → Type} (f : (i : 
     (f : (i : ι) → β i) : tabulate f = f :=
   funext fun i => tabulateOn_eq f _ i _
 
+/-- Functions on a finite type are compared point by point. Low priority, so a more specific
+instance wins. -/
+instance (priority := low) funBEq {α β : Type} [Enum α] [BEq β] : BEq (α → β) where
+  beq f g := (all (α := α)).all fun a => f a == g a
+
+/-- Functions on a finite type are hashed over all their values. -/
+instance (priority := low) funHashable {α β : Type} [Enum α] [Hashable β] : Hashable (α → β) where
+  hash f := (all (α := α)).foldl (fun h a => mixHash h (hash (f a))) 17
+
+/-- Functions on a finite type print as the list of their values. -/
+instance (priority := low) funRepr {α β : Type} [Enum α] [Repr α] [Repr β] : Repr (α → β) where
+  reprPrec f _ := repr ((all (α := α)).map fun a => (a, f a))
+
 end Enum
 
 end Lanes

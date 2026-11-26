@@ -6,8 +6,10 @@ public import Lanes.Actors.World
 public import Lanes.Actors.Lift
 public import Lanes.Actors.Inspect
 public import Lanes.Actors.Scheduler
+public import Lanes.Actors.Service
 public import Lanes.Actors.Step
 public import Lanes.Actors.Runtime
+public import Lanes.Check.Monitor
 public import Lanes.Check.Search
 public import Lanes.Check.System
 public import Lanes.Data.Enum

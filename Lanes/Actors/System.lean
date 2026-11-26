@@ -50,10 +50,12 @@ structure Signature where
   [decEqId : DecidableEq Id]
   /-- Messages are data. -/
   [decEqMsg : ∀ i, DecidableEq (Msg i)]
+  /-- Inputs are data. -/
+  [decEqIn : DecidableEq In]
   /-- Outputs are data. -/
   [decEqOut : DecidableEq Out]
 
-attribute [instance] Signature.decEqId Signature.decEqMsg Signature.decEqOut
+attribute [instance] Signature.decEqId Signature.decEqMsg Signature.decEqIn Signature.decEqOut
 
 /--
 An effect returned by the actor `self` of a system with signature `σ`. Effects are values

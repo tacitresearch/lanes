@@ -42,6 +42,8 @@ class Signature.Inspect (σ : Signature) where
   [hashMsg : ∀ i, Hashable (σ.Msg i)]
   /-- Inputs can be printed. -/
   [reprIn : Repr σ.In]
+  /-- Inputs can be hashed. -/
+  [hashIn : Hashable σ.In]
   /-- Outputs can be printed. -/
   [reprOut : Repr σ.Out]
   /-- Outputs can be hashed. -/
@@ -49,6 +51,7 @@ class Signature.Inspect (σ : Signature) where
 
 attribute [instance_reducible, instance] Signature.Inspect.enumId Signature.Inspect.reprId Signature.Inspect.hashId
   Signature.Inspect.reprMsg Signature.Inspect.hashMsg Signature.Inspect.reprIn
+  Signature.Inspect.hashIn
   Signature.Inspect.reprOut Signature.Inspect.hashOut
 
 /-- A system whose actor states can be compared, printed and hashed. -/
@@ -71,23 +74,58 @@ variable [σ.Inspect]
 instance : Hashable (Envelope σ) where
   hash e := mixHash (hash e.src) (mixHash (hash e.dst) (hash e.msg))
 
+/--
+Drop namespace prefixes from printed values: `Examples.Bank.Msg.credit 1` becomes `credit 1`.
+Traces are read by people and agents, and the prefixes are noise. Text inside string literals is
+kept as it is.
+-/
+def shortNames (s : String) : String := Id.run do
+  let mut out : List Char := []
+  let mut word : List Char := []   -- the identifier being read, reversed
+  let mut inString := false
+  let mut escaped := false
+  let flush := fun (out word : List Char) =>
+    let w := word.reverse
+    match w with
+    | c :: _ =>
+      if c.isAlpha then (w.splitOn '.').getLastD w |>.reverse |> (· ++ out) else word ++ out
+    | [] => out
+  for c in s.toList do
+    if inString then
+      out := c :: out
+      if escaped then escaped := false
+      else if c == '\\' then escaped := true
+      else if c == '"' then inString := false
+    else if c.isAlphanum || c == '_' || c == '.' then
+      word := c :: word
+    else
+      out := flush out word
+      word := []
+      out := c :: out
+      if c == '"' then inString := true
+  return String.ofList (flush out word).reverse
+
+/-- Print a value for a trace, without namespace prefixes. -/
+def brief {α : Type} [Repr α] (a : α) : String :=
+  shortNames (toString (repr a))
+
 /-- Print an envelope as `src → dst: msg`. -/
 def Envelope.render (e : Envelope σ) : String :=
   let src := match e.src with
-    | some i => toString (repr i)
+    | some i => brief i
     | none => "outside"
-  s!"{src} → {repr e.dst}: {repr e.msg}"
+  s!"{src} → {brief e.dst}: {brief e.msg}"
 
 /-- Print an event on one line. -/
 def Event.render : Event σ → String
-  | .input x => s!"input {repr x}"
+  | .input x => s!"input {brief x}"
   | .deliver e => s!"deliver {e.render}"
   | .duplicate e => s!"duplicate {e.render}"
   | .drop e => s!"drop {e.render}"
-  | .timeout i msg => s!"timeout {repr i}: {repr msg}"
-  | .output out => s!"output {repr out}"
-  | .crash i => s!"crash {repr i}"
-  | .start i => s!"start {repr i}"
+  | .timeout i msg => s!"timeout {brief i}: {brief msg}"
+  | .output out => s!"output {brief out}"
+  | .crash i => s!"crash {brief i}"
+  | .start i => s!"start {brief i}"
 
 /-- The kind of an event, used to group events in coverage reports. -/
 def Event.kind : Event σ → String
@@ -176,10 +214,10 @@ def hash (c : SysState sys) : UInt64 :=
 flight and the pending outputs. -/
 def render (c : SysState sys) : String :=
   let actors := (Enum.all (α := σ.Id)).filterMap fun i =>
-    let timers := if (c.timers i).isEmpty then "" else s!" timers={repr (c.timers i)}"
-    some s!"  {repr i} [{if c.up i then "up" else "down"}] {repr (c.state i)}{timers}"
+    let timers := if (c.timers i).isEmpty then "" else s!" timers={brief (c.timers i)}"
+    some s!"  {brief i} [{if c.up i then "up" else "down"}] {brief (c.state i)}{timers}"
   let net := c.net.map fun e => s!"  in flight: {e.render}"
-  let outbox := c.outbox.map fun o => s!"  pending output: {repr o}"
+  let outbox := c.outbox.map fun o => s!"  pending output: {brief o}"
   "\n".intercalate (actors ++ net ++ outbox)
 
 end SysState
