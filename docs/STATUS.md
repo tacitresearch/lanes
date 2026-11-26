@@ -18,7 +18,7 @@ Last updated: 2026-11-27.
 | Behaviours | `Server` (request and reply), with `Server.implements` proved | `Lanes/Behaviours/Server.lean`, `Lanes/Semantics/Service.lean` |
 | Web | HTTP/1.1 adapter whose logic is the gate actor (each request answered exactly once, model-checked); requests and responses as data; `Html` with escaping proved safe, URL attributes checked at render (tested, not proved); scoped template macro with components, fragments and attribute splices; typed routes (`Route.match?_link`, `percentDecode_percentEncode` proved); htmx attributes as typed values taken from routes | `Lanes/Http/`, `Lanes/Env/Http.lean`, `Lanes/Html/` |
 | Data | `Enum`, JSON (parser, printers, `ToJson`/`FromJson`), majority quorums (`Quorum.majority_inter`), all total and `Std`-only | `Lanes/Data/` |
-| Tooling | `lanes new`, `lanes lint` (text-level), `lanes check`; CI workflow; axiom gate | `LanesCli/`, `.github/workflows/ci.yml`, `Tests/Axioms.lean` |
+| Tooling | `lanes new`, `lanes lint` (text-level, and the size of trusted files), `lanes check`; CI on every push to the pull request (build with warnings as errors, lint, tests, model checks, a generated app); axiom gate | `LanesCli/`, `.github/workflows/ci.yml`, `Tests/Axioms.lean` |
 
 ## Reference apps
 
@@ -71,4 +71,3 @@ Last updated: 2026-11-27.
 - The kernel's message queue has no bound of its own (see `TRUSTED.md`).
 - Templates cannot contain inline `<script>` or `<style>` text, and URL attributes accept only
   relative, `http`, `https`, `mailto` and `tel` URLs.
-- The CI workflow has not run yet: it triggers on pull requests and on `main`.
