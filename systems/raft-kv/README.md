@@ -40,6 +40,22 @@ leader is stopped, the other two elect one of themselves and go on answering, an
 node comes back from its journal and catches up. `RaftKV/Deploy.lean` has what a node needs as
 a process: the codecs for its messages and `startNode`.
 
+`raftNode` is one node as a process, with an HTTP front:
+
+```bash
+lake exe raftNode 0 8800 node0.journal 7810 7811 7812 &
+lake exe raftNode 1 8801 node1.journal 7810 7811 7812 &
+lake exe raftNode 2 8802 node2.journal 7810 7811 7812 &
+curl -X PUT -d 1 http://127.0.0.1:8800/kv/a      # 200 from the leader, 504 from the others
+curl http://127.0.0.1:8800/kv/a                   # 1
+kill -9 %1                                        # the leader
+curl http://127.0.0.1:8801/kv/a                   # 1, from whichever of the two now leads
+```
+
+`lake exe raftProcs` does this as a test: three processes, the leader killed with SIGKILL, the
+killed node brought back from its journal, then the second leader killed too, so that what is
+left is a majority only because the first came back with what it had.
+
 ## What is proved
 
 In `RaftKV/Proofs/`, for every finite set of nodes, every machine, every `Config` (the two
@@ -66,10 +82,10 @@ standard axioms. `lake build` builds them; `raftCheck` does not link them.
   leader's entries replace its own, and that this never reaches a committed entry is leader
   completeness. With `votesForUpToDateOnly` off it is false: a leader elected without two
   committed entries replaces them, in a follower that has committed both, with its one.
-- A binary per node with an HTTP front. The nodes run joined by TCP, but a process cannot yet
-  have both peers and the HTTP gate; that needs the gate as a system joined to the shard.
+- More than one machine. The nodes are processes joined by TCP, on one machine in every test;
+  the transport has no authentication or encryption.
+- An answer from a node that is not the leader. It lets the request run into its deadline,
+  `504`, and the client asks the next node.
 - Election timeouts that differ by themselves. Each node is given its own in its configuration.
 - Change of membership, and compaction of the log.
 - Sending a new follower less than the whole log on first contact.
-- An answer for a client that reaches a node which is not the leader. The request is dropped
-  and the client's deadline passes.

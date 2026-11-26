@@ -36,3 +36,4 @@ jobs:
           lake build
           lake test
           lake exe raftLive
+          lake exe raftProcs

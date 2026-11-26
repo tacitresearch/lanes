@@ -6,7 +6,7 @@ anything one of them has to work around is a defect of Lanes, and is fixed there
 
 | System | What it is | State |
 | --- | --- | --- |
-| `raft-kv` | A replicated key-value store: Raft, generic over the machine it replicates | Protocol written and model-checked against its spec and its invariants; election safety and log matching proved for every cluster and fault, the rest not yet; runs as three nodes joined by TCP with journals, through a leader's death and return |
+| `raft-kv` | A replicated key-value store: Raft, generic over the machine it replicates | Protocol written and model-checked against its spec and its invariants; election safety and log matching proved for every cluster and fault, the rest not yet; runs as three processes with an HTTP front each, joined by TCP, through two leaders killed with SIGKILL |
 
 To build one:
 

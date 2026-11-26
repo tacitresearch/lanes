@@ -1,6 +1,6 @@
 name = "raftKv"
 version = "0.1.0"
-defaultTargets = ["RaftKV", "raftCheck"]
+defaultTargets = ["RaftKV", "raftCheck", "raftLive", "raftNode", "raftProcs"]
 testDriver = "raftCheck"
 
 [[require]]
@@ -22,3 +22,13 @@ root = "Check"
 [[lean_exe]]
 name = "raftLive"
 root = "Live"
+
+# One node as a process: `raftNode <id> <http-port> <journal> <peer-port>...`
+[[lean_exe]]
+name = "raftNode"
+root = "Main"
+
+# Three `raftNode` processes, their leaders killed in turn.
+[[lean_exe]]
+name = "raftProcs"
+root = "Procs"

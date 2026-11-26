@@ -526,6 +526,10 @@ cluster, configuration and environment. `commit ≤ log.length` turned out to be
 bug switch off and, with it on, to be leader completeness in disguise: the checked property
 `wellFormed` bundled facts of three different strengths.
 
+Runs as three processes since the gate became a system joined to the shard (D31):
+`raftNode` is a node with an HTTP front, and `raftProcs` kills two leaders in turn. That is the
+phase's "runs on three machines, survives fault injection" on one machine.
+
 Next: leader completeness, agreement on committed entries and refinement to the spec; the seeded old-term commit bug found by the checker; the node-to-node transport,
 so that three processes run it.
 
