@@ -715,4 +715,272 @@ theorem SysState.AtHome.step {c c' : SysState (sys.split hosts)} {ev : Event (sp
       simpa [hasMail, merged] using ⟨e, he, rfl⟩
     · simpa [EnvModel.split, hx] using h
 
+namespace SysState
+
+private theorem blank_atHome : (SysState.blank (sys.split hosts)).AtHome :=
+  ⟨fun _ h => (nomatch h), fun _ _ => rfl, fun _ h => (nomatch h)⟩
+
+private theorem blank_merged : (SysState.blank (sys.split hosts)).merged = SysState.blank sys := by
+  refine SysState.ext' (funext fun i => ?_) (funext fun i => ?_) rfl (funext fun i => ?_) rfl
+  · cases h : hosts i <;> simp [merged, blank, h, Actor.mapEff]
+  · simp [merged, blank]
+  · simp [merged, blank]
+
+private theorem boot_merged (l : List (σ.Id ⊕ σ.Id)) (hl : ∀ x ∈ l, Split.atHome hosts x = true) :
+    ∀ c : SysState (sys.split hosts), c.AtHome →
+      (l.foldl (fun c x => c.startActor (env.split hosts) x) c).AtHome ∧
+        (l.foldl (fun c x => c.startActor (env.split hosts) x) c).merged
+          = (l.map Split.actorOf).foldl (fun c i => c.startActor env i) c.merged := by
+  induction l with
+  | nil => exact fun c hc => ⟨hc, rfl⟩
+  | cons x l ih =>
+    intro c hc
+    obtain ⟨h₁, h₂⟩ := startActor_merged (env := env) hc (hl x List.mem_cons_self)
+    obtain ⟨h₃, h₄⟩ := ih (fun y hy => hl y (List.mem_cons_of_mem _ hy)) _ h₁
+    exact ⟨h₃, by rw [List.foldl_cons, h₄, h₂, List.map_cons, List.foldl_cons]⟩
+
+end SysState
+
+/-- The split boots the actors of its left shard first: its first state, merged, is `sys`
+booted in that order. -/
+theorem SysState.init_merged (sys : System σ) (hosts : σ.Id → Bool) (env : EnvModel σ) :
+    (SysState.init (sys.split hosts) (env.split hosts)).AtHome ∧
+      (SysState.init (sys.split hosts) (env.split hosts)).merged
+        = (sys.boot.filter hosts ++ sys.boot.filter fun i => !hosts i).foldl
+          (fun c i => c.startActor env i) (SysState.blank sys) := by
+  have hl : ∀ x ∈ (sys.boot.filter hosts).map Sum.inl
+      ++ (sys.boot.filter fun i => !hosts i).map Sum.inr, Split.atHome hosts x = true := by
+    intro x hx
+    rcases List.mem_append.mp hx with hx | hx
+    · obtain ⟨i, hi, rfl⟩ := List.mem_map.mp hx
+      exact (List.mem_filter.mp hi).2
+    · obtain ⟨i, hi, rfl⟩ := List.mem_map.mp hx
+      exact (List.mem_filter.mp hi).2
+  obtain ⟨h₁, h₂⟩ := SysState.boot_merged (env := env) _ hl _ SysState.blank_atHome
+  refine ⟨h₁, h₂.trans ?_⟩
+  rw [SysState.blank_merged]
+  congr 1
+  simp [List.map_map, Function.comp_def]
+
+/-- No message is lost by booting: a boot actor does not stop as it starts, or every link to
+it is lossy, so that stopping loses nothing. Then the order in which the boot actors start
+cannot be told from the state they leave. -/
+def System.SteadyBoot (sys : System σ) (env : EnvModel σ) : Prop :=
+  ∀ i ∈ sys.boot, ∀ s, ((sys.actor i).recover s).2.any Effect.isStop = true →
+    ∀ src, (env.link src i).lossy = true
+
+theorem System.SteadyBoot.of_running (env : EnvModel σ)
+    (h : ∀ i ∈ sys.boot, ∀ s, ((sys.actor i).recover s).2.any Effect.isStop = false) :
+    sys.SteadyBoot env :=
+  fun i hi s hstop => by simp [h i hi s] at hstop
+
+private theorem update_twice {ι : Type} [DecidableEq ι] {β : ι → Type} (f : (i : ι) → β i)
+    (i : ι) (v v' : β i) : update (update f i v) i v' = update f i v' := by
+  funext j
+  by_cases h : j = i
+  · subst h
+    simp
+  · simp [h]
+
+private theorem update_comm {ι : Type} [DecidableEq ι] {β : ι → Type} (f : (i : ι) → β i)
+    {i k : ι} (h : i ≠ k) (a : β i) (b : β k) :
+    update (update f i a) k b = update (update f k b) i a := by
+  funext j
+  by_cases hi : j = i
+  · subst hi
+    simp [h]
+  · by_cases hk : j = k
+    · subst hk
+      simp [hi]
+    · simp [hi, hk]
+
+private theorem netEquiv_append_comm (n a b : List (Envelope σ))
+    (h : ∀ e ∈ a, ∀ e' ∈ b, e.src ≠ e'.src) : NetEquiv env (n ++ a ++ b) (n ++ b ++ a) := by
+  refine ⟨fun src dst => ?_, fun src dst _ => ?_⟩
+  · simp only [List.filter_append, List.append_assoc]
+    exact List.Perm.append_left _ List.perm_append_comm
+  · by_cases ha : a.filter (onLink src dst) = []
+    · simp [List.filter_append, ha]
+    · have hb : b.filter (onLink src dst) = [] := by
+        rw [List.filter_eq_nil_iff]
+        intro e' he' hon'
+        obtain ⟨e, he⟩ := List.exists_mem_of_ne_nil _ ha
+        have hon := (List.mem_filter.mp he).2
+        simp only [onLink, Bool.and_eq_true, decide_eq_true_eq] at hon hon'
+        exact h e (List.mem_filter.mp he).1 e' he' (hon.1.trans hon'.1.symm)
+      simp [List.filter_append, hb]
+
+namespace SysState
+
+/-- `c` after actor `i` moves to `r.1` with effects `r.2` as it starts, when stopping loses no
+message. -/
+private def startedWith (c : SysState sys) (i : σ.Id) (r : sys.State i × List (Effect σ i)) :
+    SysState sys where
+  state := update c.state i r.1
+  up := update c.up i !(r.2.any Effect.isStop)
+  net := c.net ++ Effect.sends i r.2
+  timers := update c.timers i
+    (if r.2.any Effect.isStop then [] else Effect.retime r.2 (c.timers i))
+  outbox := c.outbox ++ Effect.emits r.2
+
+private def started (c : SysState sys) (i : σ.Id) : SysState sys :=
+  c.startedWith i ((sys.actor i).recover (c.state i))
+
+private theorem startActor_eq_started (c : SysState sys) (i : σ.Id)
+    (h : ((sys.actor i).recover (c.state i)).2.any Effect.isStop = true →
+      ∀ src, (env.link src i).lossy = true) : c.startActor env i = c.started i := by
+  simp only [startActor, settle_eq, started, startedWith]
+  split
+  · next hstop =>
+    have hkept : ∀ l : List (Envelope σ),
+        l.filter (fun e => decide (e.dst ≠ i) || (env.link e.src e.dst).lossy) = l := fun l =>
+      List.filter_eq_self.mpr fun e _ => by
+        by_cases he : e.dst = i
+        · simp [he, h hstop e.src]
+        · simp [he]
+    simp only [down, hkept, update_twice, hstop, Bool.not_true]
+  · next hstop =>
+    simp only [Bool.not_eq_true] at hstop
+    simp only [hstop, Bool.not_false]
+
+private theorem startedWith_comm (c : SysState sys) {i k : σ.Id} (h : i ≠ k)
+    (ri : sys.State i × List (Effect σ i)) (rk : sys.State k × List (Effect σ k)) :
+    Equiv env ((c.startedWith i ri).startedWith k rk) ((c.startedWith k rk).startedWith i ri) := by
+  refine ⟨update_comm _ h _ _, update_comm _ h _ _, ?_, ?_, ?_⟩
+  · simp only [startedWith, update_of_ne _ _ h, update_of_ne _ _ h.symm]
+    exact update_comm _ h _ _
+  · exact netEquiv_append_comm _ _ _ fun e he e' he' hsrc => h (by
+      have h₁ := (Effect.mem_sends.mp he).1
+      have h₂ := (Effect.mem_sends.mp he').1
+      rw [hsrc, h₂] at h₁
+      exact (Option.some.inj h₁).symm)
+  · simp only [startedWith, List.append_assoc]
+    exact List.Perm.append_left _ List.perm_append_comm
+
+private theorem started_comm (c : SysState sys) {i k : σ.Id} (h : i ≠ k) :
+    Equiv env ((c.started i).started k) ((c.started k).started i) := by
+  have hk : (c.startedWith i ((sys.actor i).recover (c.state i))).state k = c.state k :=
+    update_of_ne _ _ h.symm
+  have hi : (c.startedWith k ((sys.actor k).recover (c.state k))).state i = c.state i :=
+    update_of_ne _ _ h
+  simp only [started, hk, hi]
+  exact startedWith_comm c h _ _
+
+private theorem Equiv.started {a b : SysState sys} (h : Equiv env a b) (i : σ.Id) :
+    Equiv env (a.started i) (b.started i) := by
+  simp only [SysState.started, SysState.startedWith, ← h.state, ← h.up, ← h.timers]
+  exact ⟨rfl, rfl, rfl, h.net.append _, h.outbox.append_right _⟩
+
+private theorem Equiv.boot (l : List σ.Id) {a b : SysState sys} (h : Equiv env a b) :
+    Equiv env (l.foldl SysState.started a) (l.foldl SysState.started b) := by
+  induction l generalizing a b with
+  | nil => exact h
+  | cons i l ih => exact ih (h.started i)
+
+private theorem boot_started (l : List σ.Id) (i : σ.Id) (hl : ∀ k ∈ l, k ≠ i) (c : SysState sys) :
+    Equiv env (l.foldl started (c.started i)) ((l.foldl started c).started i) := by
+  induction l generalizing c with
+  | nil => exact .refl env _
+  | cons k l ih =>
+    have hk : k ≠ i := hl k List.mem_cons_self
+    exact (Equiv.boot l (started_comm c (Ne.symm hk))).trans
+      (ih (fun j hj => hl j (List.mem_cons_of_mem _ hj)) (c.started k))
+
+/-- Booting in any order that keeps each side's own order leaves the same state, up to the
+order of messages on different links. -/
+private theorem boot_sorted (p : σ.Id → Bool) (l : List σ.Id) (c : SysState sys) :
+    Equiv env (l.foldl started c)
+      ((l.filter p ++ l.filter fun i => !p i).foldl started c) := by
+  induction l generalizing c with
+  | nil => exact .refl env _
+  | cons i l ih =>
+    cases hp : p i
+    · have hne : ∀ k ∈ l.filter p, k ≠ i := fun k hk hki => by
+        have hpk := (List.mem_filter.mp hk).2
+        rw [hki, hp] at hpk
+        cases hpk
+      simp only [List.filter_cons, hp, Bool.false_eq_true, ↓reduceIte, Bool.not_false,
+        List.foldl_append, List.foldl_cons]
+      have h := ih (c.started i)
+      rw [List.foldl_append] at h
+      exact h.trans (Equiv.boot _ (boot_started _ i hne c))
+    · simp only [List.filter_cons, hp, ↓reduceIte, Bool.not_true, Bool.false_eq_true,
+        List.cons_append, List.foldl_cons]
+      exact ih (c.started i)
+
+private theorem boot_eq_started (hboot : sys.SteadyBoot env) (l : List σ.Id)
+    (hl : ∀ i ∈ l, i ∈ sys.boot) (c : SysState sys) :
+    l.foldl (fun c i => c.startActor env i) c = l.foldl started c := by
+  induction l generalizing c with
+  | nil => rfl
+  | cons i l ih =>
+    rw [List.foldl_cons, List.foldl_cons,
+      startActor_eq_started c i (hboot i (hl i List.mem_cons_self) _)]
+    exact ih (fun k hk => hl k (List.mem_cons_of_mem _ hk)) _
+
+end SysState
+
+/-- The first state of the split, merged, is the first state of `sys` up to the order of
+messages on different links: the split boots one shard before the other. -/
+theorem SysState.init_merged_equiv (hosts : σ.Id → Bool) (hboot : sys.SteadyBoot env) :
+    SysState.Equiv env (SysState.init sys env)
+      (SysState.init (sys.split hosts) (env.split hosts)).merged := by
+  rw [(SysState.init_merged sys hosts env).2, SysState.init,
+    SysState.boot_eq_started hboot _ (fun _ h => h),
+    SysState.boot_eq_started hboot _ fun i hi => by
+      rcases List.mem_append.mp hi with hi | hi <;> exact (List.mem_filter.mp hi).1]
+  exact SysState.boot_sorted hosts sys.boot _
+
+/-- When the boot list already has the actors of the left shard first, the first state of the
+split, merged, is the first state of `sys`. -/
+theorem SysState.init_merged_of_sorted (env : EnvModel σ)
+    (h : sys.boot.filter hosts ++ sys.boot.filter (fun i => !hosts i) = sys.boot) :
+    (SysState.init (sys.split hosts) (env.split hosts)).merged = SysState.init sys env := by
+  rw [(SysState.init_merged sys hosts env).2, h]
+  rfl
+
+variable {c : SysState (sys.split hosts)}
+
+theorem System.SplitReachable.atHome (h : sys.SplitReachable hosts env c) : c.AtHome := by
+  induction h with
+  | init => exact (SysState.init_merged sys hosts env).1
+  | step ev _ hev hstep ih => exact (ih.step hev hstep).1
+
+/-- The theorem in its general form: if the first state of the split, merged, is a state `sys`
+reaches up to the order of unrelated messages, so is every state of a well-routed run. -/
+theorem System.SplitReachable.merged_of_init
+    (hinit : ∃ c₀, sys.Reachable env c₀ ∧
+      SysState.Equiv env c₀ (SysState.init (sys.split hosts) (env.split hosts)).merged)
+    (h : sys.SplitReachable hosts env c) :
+    ∃ c', sys.Reachable env c' ∧ SysState.Equiv env c' c.merged := by
+  induction h with
+  | init => exact hinit
+  | @step c c₂ ev hc hev hstep ih =>
+    obtain ⟨x, hx, hxc⟩ := ih
+    obtain ⟨-, ev', m, -, hstep', hperm, hm⟩ := hc.atHome.step (env := env) hev hstep
+    obtain ⟨x', hx', hmx'⟩ := hxc.symm.step hstep'
+    exact ⟨x', hx.step ev' hx', hmx'.symm.trans (hm ▸ ⟨rfl, rfl, rfl, .refl env _, hperm⟩)⟩
+
+/-- **A system split across two shards behaves as the one system.** In a run of the split in
+which every input from outside is given to the shard that hosts its receiver and no parcel
+comes from outside, every state, read as one state, is a state `sys` reaches alone, up to the
+order of messages no actor can tell apart and of the outputs waiting to leave. -/
+theorem System.SplitReachable.merged (hboot : sys.SteadyBoot env)
+    (h : sys.SplitReachable hosts env c) :
+    ∃ c', sys.Reachable env c' ∧ SysState.Equiv env c' c.merged :=
+  h.merged_of_init ⟨_, .init, SysState.init_merged_equiv hosts hboot⟩
+
+/-- A property of actor states only does not depend on the order of messages. -/
+theorem SysState.Equiv.of_state {Q : ((i : σ.Id) → sys.State i) → Prop} (a b : SysState sys)
+    (h : SysState.Equiv env a b) (ha : Q a.state) : Q b.state :=
+  h.state ▸ ha
+
+/-- An invariant of `sys` that does not depend on the order of unrelated messages holds of the
+split, read as one state. -/
+theorem System.Invariant.split {P : SysState sys → Prop} (h : sys.Invariant env P)
+    (hP : ∀ a b, SysState.Equiv env a b → P a → P b) (hboot : sys.SteadyBoot env)
+    (hc : sys.SplitReachable hosts env c) : P c.merged :=
+  let ⟨c', hc', hequiv⟩ := hc.merged hboot
+  hP c' _ hequiv (h c' hc')
+
 end Lanes
