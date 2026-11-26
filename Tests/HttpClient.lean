@@ -253,13 +253,14 @@ def readingTests : List (String × Bool) :=
         && Response.read wire.size wire false != .done none) ]
 
 def split (body : ByteArray) (size : Nat) : List ByteArray :=
-  (List.range ((body.size + size - 1) / size)).map fun i => body.extract (i * size) (i * size + size)
+  (List.range ((body.size + size - 1) / size)).map fun i =>
+    body.extract (i * size) (i * size + size)
 
 /-- Responses the writer can send: statuses, headers and bodies that try the reader's edges. -/
 def written : List Response :=
   let statuses := [200, 201, 204, 206, 304, 404, 500, 599, 999]
   let headerSets : List (List (String × String)) :=
-    [[], [("x-a", "b")], [("x-a", "b c"), ("set-cookie", "k=v; Path=/"), ("y", "ü\tz")],
+    [[], [("x-a", "b")], [("X-A", "b c"), ("Set-Cookie", "k=v; Path=/"), ("y", "ü\tz")],
       [("x-empty", "")], [("connection", "close"), ("x-a", "1"), ("x-a", "2"), ("host", "h:1")],
       [("x-colon", "a: b"), ("x-quote", "\"q\"")]]
   let bodies := ["", "hello", "\r\n\r\n", "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n",
@@ -276,21 +277,41 @@ def wholeOnlyAtEnd (wire : ByteArray) (expected : Response) : Bool :=
       [ByteArray.empty, bytes "HTTP/1.1 500 Extra\r\n\r\n", bytes "\r\n\r\n"].all fun tail =>
         Response.read wire.size (wire ++ tail) ended == .done (some expected)
 
+def interims : List Response :=
+  [{ status := 100 }, { status := 103, headers := [("Link", "</a>; rel=preload")] }]
+
 def roundTrip (r : Response) : Bool :=
-  wholeOnlyAtEnd r.wire { r with headers := ("content-length", toString r.body.size) :: r.headers }
-    && (r.status == 204 || r.status == 304 || [1, 7, r.body.size].all fun size =>
-      size == 0 || wholeOnlyAtEnd (r.wireChunked (split r.body size))
-        { r with headers := ("transfer-encoding", "chunked") :: r.headers })
+  let framed := { r with
+    headers := ("content-length", toString r.body.size) :: Response.lowered r.headers }
+  let toEnd := r.wireToEnd
+  wholeOnlyAtEnd r.wire framed && wholeOnlyAtEnd (r.wireAfter interims) framed
+    && (r.status == 204 || r.status == 304
+      || ([1, 7, r.body.size].all (fun size =>
+          size == 0 || wholeOnlyAtEnd (r.wireChunked (split r.body size))
+            { r with headers := ("transfer-encoding", "chunked") :: Response.lowered r.headers })
+        && Response.read toEnd.size toEnd true
+          == .done (some { r with headers := Response.lowered r.headers })
+        && (List.range (toEnd.size + 1)).all fun n =>
+          Response.read toEnd.size (toEnd.extract 0 n) false == .more))
 
 def roundTripTests : List (String × Bool) :=
-  [ (s!"http wire: {written.length} responses are read back as written, and every start of them waits",
+  [ (s!"http wire: {written.length} responses, each written five ways, are read back as written",
       written.length ≥ 200 && written.all roundTrip),
     ("http wire: a response the writer cannot send is not writable",
-      [({ status := 199 } : Response), { status := 1000 },
-        { status := 204, body := bytes "x" }, { headers := [("X-Upper", "1")] },
-        { headers := [("content-length", "1")] }, { headers := [("transfer-encoding", "chunked")] },
+      interims.all (·.interim) && [({ status := 199 } : Response), { status := 1000 },
+        { status := 204, body := bytes "x" }, { headers := [("Content-Length", "1")] },
+        { headers := [("content-length", "1")] }, { headers := [("Transfer-Encoding", "chunked")] },
         { headers := [("x", " padded")] }, { headers := [("x", "a\r\nb")] },
         { headers := [("a b", "1")] }].all (!·.writable)),
+    ("http wire: forms a server may send that the writers do not write are read",
+      body? (parse "HTTP/1.1 200 OK\r\nContent-Length:002\r\nX-A:b\r\n\r\nokEXTRA") == some "ok"
+        && (parse "HTTP/1.1 200 OK\r\nX-A:\tb \t\r\nContent-Length: 0\r\n\r\n").map (·.headers)
+          == some [("x-a", "b"), ("content-length", "0")]
+        && body? (parse (chunkedHead ++ "A\r\n0123456789\r\n0\r\n\r\n")) == some "0123456789"
+        && body? (parse ("HTTP/1.1 100 Continue\r\n\r\n" ++ chunkedHead ++ "2\r\nok\r\n0\r\n\r\n"))
+          == some "ok"
+        && body? (parse "HTTP/1.1 100 Continue\r\n\r\nHTTP/1.1 200 OK\r\n\r\nto the end")
+          == some "to the end"),
     ("http wire: a bare CR or another control character in the reason is refused",
       ["HTTP/1.1 200 O\rK", "HTTP/1.1 200 O\nK", "HTTP/1.1 200 O\x00K"].all fun line =>
         refused s!"{line}\r\nContent-Length: 2\r\n\r\nok"),

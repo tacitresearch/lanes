@@ -222,13 +222,18 @@ private theorem lines_toList {lines : List String} :
   rw [String.toList_intercalate]
   rfl
 
-private theorem headEnd_head {lines : List String} (hne : lines ≠ [])
+private theorem drop_append_front (pre bytes : ByteArray) :
+    (pre ++ bytes).data.toList.drop pre.size = bytes.data.toList := by
+  rw [ByteArray.data_append, Array.toList_append]
+  exact List.drop_left' (by simp)
+
+private theorem headEnd_head (pre : ByteArray) {lines : List String} (hne : lines ≠ [])
     (h : ∀ l ∈ lines, l ≠ "" ∧ l.toList.all plain) (t : ByteArray) :
-    headEnd (("\r\n".intercalate lines ++ "\r\n\r\n").toUTF8 ++ t) 0
-      = some (("\r\n".intercalate lines).utf8ByteSize + 4) := by
+    headEnd (pre ++ (("\r\n".intercalate lines ++ "\r\n\r\n").toUTF8 ++ t)) pre.size
+      = some (pre.size + (("\r\n".intercalate lines).utf8ByteSize + 4)) := by
   have hsep : ("\r\n\r\n".toList.flatMap String.utf8EncodeChar) = [13, 10, 13, 10] := by decide
-  rw [headEnd_eq, String.toUTF8_eq_toByteArray, ByteArray.data_append, Array.toList_append,
-    data_toList_toByteArray, String.toList_append, List.flatMap_append, hsep, List.drop_zero,
+  rw [headEnd_eq, drop_append_front, String.toUTF8_eq_toByteArray, ByteArray.data_append,
+    Array.toList_append, data_toList_toByteArray, String.toList_append, List.flatMap_append, hsep,
     List.append_assoc, List.cons_append, List.cons_append, List.cons_append, List.cons_append,
     List.nil_append, ← length_flatMap_utf8EncodeChar, lines_toList, blankAt_lines]
   · simp
@@ -240,10 +245,12 @@ private theorem headEnd_head {lines : List String} (hne : lines ≠ [])
       ne_cr_of_plain ?_⟩
     exact List.all_eq_true.mp this.2 c hc
 
-private theorem extract_head (text : String) (t : ByteArray) :
-    ((text ++ "\r\n\r\n").toUTF8 ++ t).extract 0 text.utf8ByteSize = text.toUTF8 := by
-  rw [String.toUTF8_eq_toByteArray, String.toByteArray_append, ByteArray.append_assoc]
-  exact ByteArray.extract_append_eq_left String.size_toByteArray.symm
+private theorem extract_head (pre : ByteArray) (text : String) (t : ByteArray) :
+    (pre ++ ((text ++ "\r\n\r\n").toUTF8 ++ t)).extract pre.size (pre.size + text.utf8ByteSize)
+      = text.toUTF8 := by
+  rw [String.toUTF8_eq_toByteArray, String.toByteArray_append, ByteArray.append_assoc,
+    ← String.size_toByteArray, extract_append_front]
+  rfl
 
 private theorem splitLines_append {l : List Char} (h : ∀ c ∈ l, c ≠ '\r') (rest line : List Char)
     (done : List (List Char)) :
@@ -336,12 +343,11 @@ private theorem plain_of_isDigit {c : Char} (h : c.isDigit = true) : plain c := 
     exact absurd this (by decide)
 
 private theorem kept_iff {field : String × String} :
-    Response.kept field = true ↔ token field.1 = true ∧ field.1.toLower = field.1
-      ∧ field.1 ≠ "content-length" ∧ field.1 ≠ "transfer-encoding"
+    Response.kept field = true ↔ token field.1 = true
+      ∧ field.1.toLower ≠ "content-length" ∧ field.1.toLower ≠ "transfer-encoding"
       ∧ field.2.toList.all plain = true ∧ field.2.toList.head?.any ows = false
       ∧ field.2.toList.getLast?.any ows = false := by
-  simp only [Response.kept, Bool.and_eq_true, beq_iff_eq, bne_iff_ne, ne_eq, Bool.not_eq_true',
-    and_assoc]
+  simp only [Response.kept, Bool.and_eq_true, bne_iff_ne, ne_eq, Bool.not_eq_true', and_assoc]
 
 private theorem token_plain {name : String} (h : token name = true) :
     name ≠ "" ∧ name.toList.all plain = true := by
@@ -350,7 +356,7 @@ private theorem token_plain {name : String} (h : token name = true) :
 
 private theorem fieldLine_plain {field : String × String} (h : Response.kept field = true) :
     field.1 ++ ": " ++ field.2 ≠ "" ∧ (field.1 ++ ": " ++ field.2).toList.all plain = true := by
-  obtain ⟨htoken, -, -, -, hplain, -, -⟩ := kept_iff.mp h
+  obtain ⟨htoken, -, -, hplain, -, -⟩ := kept_iff.mp h
   obtain ⟨-, hname⟩ := token_plain htoken
   refine ⟨fun e => ?_, ?_⟩
   · have := congrArg String.length e
@@ -369,54 +375,58 @@ private theorem statusLine_plain {status : Nat} :
     simp only [Nat.toString_eq_repr, Nat.toList_repr, List.all_eq_true]
     exact fun c hc => plain_of_isDigit (Nat.isDigit_of_mem_toDigits (by decide) (by decide) hc)
 
-private def headLines (r : Response) (framing : String) : List String :=
-  ("HTTP/1.1 " ++ toString r.status ++ " ") :: framing
-    :: r.headers.map fun field => field.1 ++ ": " ++ field.2
+private def headLines (r : Response) (own : List String) : List String :=
+  ("HTTP/1.1 " ++ toString r.status ++ " ") :: own
+    ++ r.headers.map fun field => field.1 ++ ": " ++ field.2
 
-private theorem headWire_eq (r : Response) (framing : String) :
-    r.headWire framing = ("\r\n".intercalate (headLines r framing) ++ "\r\n\r\n").toUTF8 := rfl
+private theorem headWire_eq (r : Response) (own : List String) :
+    r.headWire own = ("\r\n".intercalate (headLines r own) ++ "\r\n\r\n").toUTF8 := rfl
 
-private theorem size_headWire (r : Response) (framing : String) :
-    (r.headWire framing).size = ("\r\n".intercalate (headLines r framing)).utf8ByteSize + 4 := by
+private theorem size_headWire (r : Response) (own : List String) :
+    (r.headWire own).size = ("\r\n".intercalate (headLines r own)).utf8ByteSize + 4 := by
   rw [headWire_eq, String.toUTF8_eq_toByteArray, String.size_toByteArray,
     String.utf8ByteSize_append]
   rfl
 
 private theorem headLines_plain {r : Response} (hr : r.headers.all Response.kept = true)
-    {framing : String} (hframing : framing ≠ "" ∧ framing.toList.all plain = true) :
-    ∀ l ∈ headLines r framing, l ≠ "" ∧ l.toList.all plain = true := by
+    {own : List String} (hown : ∀ l ∈ own, l ≠ "" ∧ l.toList.all plain = true) :
+    ∀ l ∈ headLines r own, l ≠ "" ∧ l.toList.all plain = true := by
   intro l hl
-  simp only [headLines, List.mem_cons, List.mem_map] at hl
-  rcases hl with rfl | rfl | ⟨field, hfield, rfl⟩
+  simp only [headLines, List.mem_cons, List.mem_append, List.mem_map] at hl
+  rcases hl with (rfl | hl) | ⟨field, hfield, rfl⟩
   · exact statusLine_plain
-  · exact hframing
+  · exact hown l hl
   · exact fieldLine_plain (List.all_eq_true.mp hr field hfield)
 
-private theorem head?_headWire {r : Response} (hr : r.writable = true) {framing : String}
-    {field : String × String} (hframing : framing ≠ "" ∧ framing.toList.all plain = true)
-    (hfield : headerLine? framing.toList = some field) (t : ByteArray) :
-    headEnd (r.headWire framing ++ t) 0 = some (r.headWire framing).size
-      ∧ (String.fromUTF8?
-          ((r.headWire framing ++ t).extract 0 ((r.headWire framing).size - 4))).bind
-          (head? ·.toList) = some (r.status, field :: r.headers) := by
-  simp only [Response.writable, Bool.and_eq_true, decide_eq_true_eq] at hr
-  obtain ⟨⟨⟨⟨h200, h1000⟩, -⟩, -⟩, hkept⟩ := hr
-  have hplain := headLines_plain hkept hframing
+/-- Where the head of a response written after `pre` ends, and what the reader makes of it: the
+writer's own header lines `own` read as `fields`, then the response's headers. -/
+private theorem head?_headWire {r : Response} (h100 : 100 ≤ r.status) (h1000 : r.status < 1000)
+    (hkept : r.headers.all Response.kept = true) {own : List String}
+    {fields : List (String × String)} (hown : ∀ l ∈ own, l ≠ "" ∧ l.toList.all plain = true)
+    (hfields : own.mapM (headerLine? ·.toList) = some fields) (pre t : ByteArray) :
+    headEnd (pre ++ (r.headWire own ++ t)) pre.size = some (pre.size + (r.headWire own).size)
+      ∧ (String.fromUTF8? ((pre ++ (r.headWire own ++ t)).extract pre.size
+          (pre.size + (r.headWire own).size - 4))).bind (head? ·.toList)
+        = some (r.status, fields ++ Response.lowered r.headers) := by
+  have hplain := headLines_plain hkept hown
   refine ⟨?_, ?_⟩
-  · rw [size_headWire, headWire_eq, headEnd_head (by simp [headLines]) hplain]
-  · rw [size_headWire, Nat.add_sub_cancel, headWire_eq, extract_head, String.toUTF8_eq_toByteArray,
-      fromUTF8?_toByteArray, Option.bind_some, lines_toList, head?,
+  · rw [size_headWire, headWire_eq, headEnd_head pre (by simp [headLines]) hplain]
+  · rw [size_headWire, ← Nat.add_assoc, Nat.add_sub_cancel, headWire_eq, extract_head,
+      String.toUTF8_eq_toByteArray, fromUTF8?_toByteArray, Option.bind_some, lines_toList, head?,
       splitLines_intercalate (by simp [headLines])]
-    · simp only [headLines, List.reverse_nil, List.nil_append, List.map_cons, List.map_map]
-      rw [statusLine?_toString (by omega) h1000]
-      simp only [Option.bind_eq_bind, Option.bind_some, List.mapM_cons, hfield]
-      rw [List.mapM_map, mapM_some (g := id)]
-      · simp
+    · simp only [headLines, List.reverse_nil, List.nil_append, List.map_cons, List.map_append,
+        List.map_map, List.cons_append]
+      rw [statusLine?_toString h100 h1000]
+      simp only [Option.bind_eq_bind, Option.bind_some, List.mapM_append]
+      have hf : List.mapM headerLine? (own.map String.toList) = some fields := by
+        rw [List.mapM_map]
+        exact hfields
+      rw [hf, List.mapM_map, mapM_some (g := fun field => (field.1.toLower, field.2))]
+      · rfl
       · intro ⟨name, value⟩ hmem
-        obtain ⟨htoken, hlower, -, -, hvalue, hstart, hend⟩ :=
+        obtain ⟨htoken, -, -, hvalue, hstart, hend⟩ :=
           kept_iff.mp (List.all_eq_true.mp hkept _ hmem)
-        simp only [Function.comp_apply, id]
-        rw [headerLine?_line htoken hvalue hstart hend, hlower]
+        exact headerLine?_line htoken hvalue hstart hend
     · intro l hl c hc
       obtain ⟨line, hline, rfl⟩ := List.mem_map.mp hl
       exact ne_cr_of_plain (List.all_eq_true.mp (hplain line hline).2 c hc)
@@ -446,22 +456,24 @@ private theorem headerLine?_digits (name : String) (hname : token name = true) (
     Bool.true_and]
   decide
 
+private theorem filter_lowered {headers : List (String × String)}
+    (hkept : headers.all Response.kept = true) {name : String}
+    (hname : name = "content-length" ∨ name = "transfer-encoding") :
+    (Response.lowered headers).filter (·.1 == name) = [] := by
+  refine List.filter_eq_nil_iff.mpr fun field hfield => ?_
+  obtain ⟨⟨n, v⟩, hmem, rfl⟩ := List.mem_map.mp hfield
+  obtain ⟨-, h1, h2, -⟩ := kept_iff.mp (List.all_eq_true.mp hkept _ hmem)
+  rcases hname with rfl | rfl <;> simp_all
+
 private theorem framing?_length {r : Response} (hr : r.writable = true) :
-    framing? r.status (("content-length", toString r.body.size) :: r.headers)
+    framing? r.status (("content-length", toString r.body.size) :: Response.lowered r.headers)
       = some (.length r.body.size) := by
   simp only [Response.writable, Bool.and_eq_true, decide_eq_true_eq] at hr
   obtain ⟨⟨⟨⟨-, -⟩, hempty⟩, hsize⟩, hkept⟩ := hr
-  have hnames : ∀ field ∈ r.headers, field.1 ≠ "content-length" ∧ field.1 ≠ "transfer-encoding" :=
-    fun field hfield => by
-      obtain ⟨-, -, h1, h2, -⟩ := kept_iff.mp (List.all_eq_true.mp hkept field hfield)
-      exact ⟨h1, h2⟩
-  have hte : r.headers.filter (·.1 == "transfer-encoding") = [] :=
-    List.filter_eq_nil_iff.mpr fun field hfield => by simp [(hnames field hfield).2]
-  have hcl : r.headers.filter (·.1 == "content-length") = [] :=
-    List.filter_eq_nil_iff.mpr fun field hfield => by simp [(hnames field hfield).1]
   have hne : ("content-length" == "transfer-encoding") = false := by decide
-  simp only [framing?, List.filter_cons, hne, Bool.false_eq_true, ↓reduceIte, hte, hcl,
-    List.map_nil, List.map_cons, beq_self_eq_true, decimal?_toString hsize]
+  simp only [framing?, List.filter_cons, hne, Bool.false_eq_true, ↓reduceIte,
+    filter_lowered hkept (.inl rfl), filter_lowered hkept (.inr rfl), List.map_nil, List.map_cons,
+    beq_self_eq_true, decimal?_toString hsize]
   split
   · rename_i hstatus
     simp only [Bool.or_eq_true, beq_iff_eq] at hempty hstatus
@@ -470,36 +482,59 @@ private theorem framing?_length {r : Response} (hr : r.writable = true) :
     · simp_all
   · simp
 
-theorem readFrom_wire {r : Response} (hr : r.writable = true) (rest : ByteArray) (ended : Bool)
-    (fuel : Nat) :
-    readFrom (r.wire ++ rest) ended (fuel + 1) 0
-      = .done (some ({ r with headers := ("content-length", toString r.body.size) :: r.headers },
-          r.wire.size)) := by
-  obtain ⟨-, hplain, hfield⟩ := headerLine?_digits "Content-Length" (by decide) r.body.size
-  have hframing : "Content-Length: " ++ toString r.body.size
-      = "Content-Length" ++ ": " ++ toString r.body.size := by
-    rw [String.append_assoc]
-    rfl
+private theorem lengthLine :
+    ∀ n : Nat, ∀ l ∈ ["Content-Length: " ++ toString n], l ≠ "" ∧ l.toList.all plain = true := by
+  intro n l hl
+  rw [List.mem_singleton] at hl
+  subst hl
+  obtain ⟨h1, h2, -⟩ := headerLine?_digits "Content-Length" (by decide) n
+  rw [show ("Content-Length" ++ ": " : String) = "Content-Length: " from rfl] at h1 h2
+  exact ⟨h1, h2⟩
+
+private theorem lengthField (n : Nat) :
+    ["Content-Length: " ++ toString n].mapM (headerLine? ·.toList)
+      = some [("content-length", toString n)] := by
+  obtain ⟨-, -, h⟩ := headerLine?_digits "Content-Length" (by decide) n
   have hlower : "Content-Length".toLower = "content-length" := by
     rw [← String.toList_inj, String.toLower, String.toList_map]
     decide
-  rw [hlower] at hfield
-  rw [← hframing] at hfield hplain
-  have hwire : r.wire ++ rest = r.headWire ("Content-Length: " ++ toString r.body.size)
-      ++ (r.body ++ rest) := by
+  rw [hlower, show ("Content-Length" ++ ": " : String) = "Content-Length: " from rfl] at h
+  rw [List.mapM_cons, h]
+  rfl
+
+private theorem status_of_writable {r : Response} (hr : r.writable = true) :
+    200 ≤ r.status ∧ r.status < 1000 ∧ r.headers.all Response.kept = true := by
+  simp only [Response.writable, Bool.and_eq_true, decide_eq_true_eq] at hr
+  obtain ⟨⟨⟨⟨h200, h1000⟩, -⟩, -⟩, hkept⟩ := hr
+  exact ⟨h200, h1000, hkept⟩
+
+theorem readFrom_wire {r : Response} (hr : r.writable = true) (pre tail : ByteArray)
+    (ended : Bool) (fuel : Nat) :
+    readFrom (pre ++ (r.wire ++ tail)) ended (fuel + 1) pre.size
+      = .done (some ({ r with
+          headers := ("content-length", toString r.body.size) :: Response.lowered r.headers },
+          pre.size + r.wire.size)) := by
+  obtain ⟨h200, h1000, hkept⟩ := status_of_writable hr
+  have hwire : pre ++ (r.wire ++ tail)
+      = pre ++ (r.headWire ["Content-Length: " ++ toString r.body.size] ++ (r.body ++ tail)) := by
     rw [Response.wire, ByteArray.append_assoc]
-  obtain ⟨hend, hhead⟩ := head?_headWire hr ⟨by simp [← String.toList_inj] , hplain⟩ hfield
-    (r.body ++ rest)
-  have h200 : ¬ r.status < 200 := by
-    simp only [Response.writable, Bool.and_eq_true, decide_eq_true_eq] at hr
-    omega
+  obtain ⟨hend, hhead⟩ := head?_headWire (by omega) h1000 hkept (lengthLine _) (lengthField _)
+    pre (r.body ++ tail)
   rw [hwire, readFrom, hend]
-  simp only [hhead, h200, ↓reduceIte, framing?_length hr, ByteArray.size_append]
-  have hle : (r.headWire ("Content-Length: " ++ toString r.body.size)).size + r.body.size
-      ≤ (r.headWire ("Content-Length: " ++ toString r.body.size)).size
-        + (r.body.size + rest.size) :=
-    by omega
-  simp only [hle, ↓reduceIte, extract_append_front, Response.wire, ByteArray.size_append]
+  simp only [hhead, show ¬ r.status < 200 by omega, ↓reduceIte, List.singleton_append,
+    framing?_length hr, ByteArray.size_append]
+  have hle : pre.size + (r.headWire ["Content-Length: " ++ toString r.body.size]).size
+      + r.body.size ≤ pre.size + ((r.headWire ["Content-Length: " ++ toString r.body.size]).size
+        + (r.body.size + tail.size)) := by omega
+  have hbody : (pre ++ (r.headWire ["Content-Length: " ++ toString r.body.size]
+      ++ (r.body ++ tail))).extract
+        (pre.size + (r.headWire ["Content-Length: " ++ toString r.body.size]).size)
+        (pre.size + (r.headWire ["Content-Length: " ++ toString r.body.size]).size + r.body.size)
+      = r.body := by
+    rw [← ByteArray.append_assoc, ← ByteArray.size_append]
+    exact extract_append_front _ _ _
+  simp only [Response.wire, ByteArray.size_append, Nat.add_assoc] at hle hbody ⊢
+  simp only [hle, ↓reduceIte, hbody]
 
 /-! Bytes cut at `n` -/
 
@@ -1055,17 +1090,6 @@ theorem read_append {limit : Nat} {bytes : ByteArray} {r : Response}
   rw [readFrom_append_of_ne_more hread]
   simp [hstop]
 
-/-- A response written by `wire` is read back as written, with its `Content-Length`, as soon as
-its last byte is there, whatever follows it and whether or not the connection has ended. -/
-theorem read_wire {r : Response} (hr : r.writable = true) {limit : Nat}
-    (hlimit : r.wire.size ≤ limit) (tail : ByteArray) (ended : Bool) :
-    read limit (r.wire ++ tail) ended
-      = .done (some
-          { r with headers := ("content-length", toString r.body.size) :: r.headers }) := by
-  unfold read
-  rw [readFrom_wire hr]
-  simp [hlimit]
-
 private theorem readFrom_cut {wire : ByteArray} {r : Response}
     (h : ∀ ended, readFrom wire ended (wire.size + 1) 0 = .done (some (r, wire.size)))
     {n : Nat} (hn : n < wire.size) (ended : Bool) :
@@ -1088,13 +1112,6 @@ private theorem read_cut {wire : ByteArray} {r : Response}
   unfold read
   rw [readFrom_cut h hn]
   cases ended <;> simp [hsize, show ¬ limit < n by omega]
-
-/-- Every strict start of a response written by `wire` waits for more while the connection is
-open, and is refused once it has ended. -/
-theorem read_wire_extract {r : Response} (hr : r.writable = true) {limit : Nat}
-    (hlimit : r.wire.size ≤ limit) {n : Nat} (hn : n < r.wire.size) (ended : Bool) :
-    read limit (r.wire.extract 0 n) ended = if ended then .done none else .more :=
-  read_cut (fun ended => by simpa using readFrom_wire hr .empty ended r.wire.size) hlimit hn ended
 
 end Response
 
@@ -1415,24 +1432,54 @@ private theorem dechunk_chunks :
 
 private theorem framing?_chunked {r : Response} (hr : r.writable = true)
     (hstatus : r.status ≠ 204 ∧ r.status ≠ 304) :
-    framing? r.status (("transfer-encoding", "chunked") :: r.headers) = some .chunked := by
-  simp only [Response.writable, Bool.and_eq_true] at hr
-  obtain ⟨-, hkept⟩ := hr
-  have hnames : ∀ field ∈ r.headers, field.1 ≠ "content-length" ∧ field.1 ≠ "transfer-encoding" :=
-    fun field hfield => by
-      obtain ⟨-, -, h1, h2, -⟩ := kept_iff.mp (List.all_eq_true.mp hkept field hfield)
-      exact ⟨h1, h2⟩
-  have hte : r.headers.filter (·.1 == "transfer-encoding") = [] :=
-    List.filter_eq_nil_iff.mpr fun field hfield => by simp [(hnames field hfield).2]
-  have hcl : r.headers.filter (·.1 == "content-length") = [] :=
-    List.filter_eq_nil_iff.mpr fun field hfield => by simp [(hnames field hfield).1]
+    framing? r.status (("transfer-encoding", "chunked") :: Response.lowered r.headers)
+      = some .chunked := by
+  obtain ⟨-, -, hkept⟩ := status_of_writable hr
   have hne : ("transfer-encoding" == "content-length") = false := by decide
   have hlower : "chunked".toLower = "chunked" := by
     rw [← String.toList_inj, String.toLower, String.toList_map]
     decide
-  simp only [framing?, List.filter_cons, hne, Bool.false_eq_true, ↓reduceIte, hte, hcl,
-    List.map_nil, List.map_cons, beq_self_eq_true, hlower]
+  simp only [framing?, List.filter_cons, hne, Bool.false_eq_true, ↓reduceIte,
+    filter_lowered hkept (.inl rfl), filter_lowered hkept (.inr rfl), List.map_nil, List.map_cons,
+    beq_self_eq_true, hlower]
   simp [hstatus]
+
+private theorem framing?_toEnd {r : Response} (hr : r.writable = true)
+    (hstatus : r.status ≠ 204 ∧ r.status ≠ 304) :
+    framing? r.status (Response.lowered r.headers) = some .toEnd := by
+  obtain ⟨-, -, hkept⟩ := status_of_writable hr
+  simp only [framing?, filter_lowered hkept (.inl rfl), filter_lowered hkept (.inr rfl),
+    List.map_nil]
+  simp [hstatus]
+
+private theorem chunkedLine :
+    ∀ l ∈ ["Transfer-Encoding: chunked"], l ≠ "" ∧ l.toList.all plain = true := by
+  intro l hl
+  rw [List.mem_singleton] at hl
+  subst hl
+  exact ⟨by simp [← String.toList_inj], by decide⟩
+
+private theorem chunkedField :
+    ["Transfer-Encoding: chunked"].mapM (headerLine? ·.toList)
+      = some [("transfer-encoding", "chunked")] := by
+  have hlower : "Transfer-Encoding".toLower = "transfer-encoding" := by
+    rw [← String.toList_inj, String.toLower, String.toList_map]
+    decide
+  have := headerLine?_line (name := "Transfer-Encoding") (value := "chunked") (by decide)
+    (by decide) (by decide) (by decide)
+  rw [hlower, show ("Transfer-Encoding" ++ ": " ++ "chunked" : String)
+    = "Transfer-Encoding: chunked" from rfl] at this
+  rw [List.mapM_cons, this]
+  rfl
+
+private theorem headEnd_zero {r : Response} (h100 : 100 ≤ r.status) (h1000 : r.status < 1000)
+    (hkept : r.headers.all Response.kept = true) {own : List String}
+    {fields : List (String × String)} (hown : ∀ l ∈ own, l ≠ "" ∧ l.toList.all plain = true)
+    (hfields : own.mapM (headerLine? ·.toList) = some fields) (t : ByteArray) :
+    headEnd (r.headWire own ++ t) 0 = some (r.headWire own).size
+      ∧ (String.fromUTF8? ((r.headWire own ++ t).extract 0 ((r.headWire own).size - 4))).bind
+          (head? ·.toList) = some (r.status, fields ++ Response.lowered r.headers) := by
+  simpa using head?_headWire h100 h1000 hkept hown hfields .empty t
 
 theorem readFrom_wireChunked {r : Response} (hr : r.writable = true)
     (hstatus : r.status ≠ 204 ∧ r.status ≠ 304) {chunks : List ByteArray}
@@ -1440,25 +1487,15 @@ theorem readFrom_wireChunked {r : Response} (hr : r.writable = true)
     (fuel : Nat) :
     readFrom (r.wireChunked chunks ++ tail) ended (fuel + 1) 0
       = .done (some ({ r with
-          headers := ("transfer-encoding", "chunked") :: r.headers
+          headers := ("transfer-encoding", "chunked") :: Response.lowered r.headers
           body := chunks.foldl (· ++ ·) .empty }, (r.wireChunked chunks).size)) := by
-  have hlower : "Transfer-Encoding".toLower = "transfer-encoding" := by
-    rw [← String.toList_inj, String.toLower, String.toList_map]
-    decide
-  have hfield : headerLine? "Transfer-Encoding: chunked".toList
-      = some ("transfer-encoding", "chunked") := by
-    have := headerLine?_line (name := "Transfer-Encoding") (value := "chunked") (by decide)
-      (by decide) (by decide) (by decide)
-    rwa [hlower] at this
-  have hwire : r.wireChunked chunks ++ tail = r.headWire "Transfer-Encoding: chunked"
+  obtain ⟨h200, h1000, hkept⟩ := status_of_writable hr
+  have hwire : r.wireChunked chunks ++ tail = r.headWire ["Transfer-Encoding: chunked"]
       ++ (chunksWire chunks ++ ("0\r\n\r\n".toUTF8 ++ tail)) := by
     rw [Response.wireChunked, foldl_chunk, ByteArray.empty_append]
     simp only [ByteArray.append_assoc]
-  obtain ⟨hend, hhead⟩ := head?_headWire hr ⟨by simp [← String.toList_inj], by decide⟩ hfield
+  obtain ⟨hend, hhead⟩ := headEnd_zero (by omega) h1000 hkept chunkedLine chunkedField
     (chunksWire chunks ++ ("0\r\n\r\n".toUTF8 ++ tail))
-  have h200 : ¬ r.status < 200 := by
-    simp only [Response.writable, Bool.and_eq_true, decide_eq_true_eq] at hr
-    omega
   have hlen : chunks.length ≤ (chunksWire chunks).size := by
     clear hwire hend hhead
     induction chunks with
@@ -1468,24 +1505,167 @@ theorem readFrom_wireChunked {r : Response} (hr : r.writable = true)
       have := ih fun x hx => hchunks x (List.mem_cons_of_mem _ hx)
       omega
   rw [hwire, readFrom, hend]
-  simp only [hhead, h200, ↓reduceIte, framing?_chunked hr hstatus]
+  simp only [hhead, show ¬ r.status < 200 by omega, ↓reduceIte, List.singleton_append,
+    framing?_chunked hr hstatus]
   rw [dechunk_chunks chunks hchunks _ _ _ _ (by simp only [ByteArray.size_append]; omega)]
   simp only [Reading.map, Option.map_some, ByteArray.empty_append, Response.wireChunked,
     foldl_chunk, ByteArray.size_append]
   rfl
 
+theorem readFrom_wireToEnd {r : Response} (hr : r.writable = true)
+    (hstatus : r.status ≠ 204 ∧ r.status ≠ 304) (ended : Bool) (fuel : Nat) :
+    readFrom r.wireToEnd ended (fuel + 1) 0
+      = if ended then .done (some ({ r with headers := Response.lowered r.headers },
+          r.wireToEnd.size)) else .more := by
+  obtain ⟨h200, h1000, hkept⟩ := status_of_writable hr
+  obtain ⟨hend, hhead⟩ :=
+    headEnd_zero (by omega) h1000 hkept (own := []) (fields := []) (by simp) rfl r.body
+  rw [Response.wireToEnd, readFrom, hend]
+  simp only [hhead, show ¬ r.status < 200 by omega, ↓reduceIte, List.nil_append,
+    framing?_toEnd hr hstatus]
+  cases ended
+  · rfl
+  · have hbody : (r.headWire [] ++ r.body).extract (r.headWire []).size
+        (r.headWire [] ++ r.body).size = r.body := by
+      rw [ByteArray.size_append]
+      simpa using extract_append_front (r.headWire []) r.body .empty
+    simp only [↓reduceIte, hbody]
+
+/-- An interim (`1xx`) response is skipped: what follows its head is read as if it were all. -/
+private theorem readFrom_interim {i : Response} (h100 : 100 ≤ i.status) (h200 : i.status < 200)
+    (hkept : i.headers.all Response.kept = true) (pre tail : ByteArray) (ended : Bool)
+    (fuel : Nat) :
+    readFrom (pre ++ (i.headWire [] ++ tail)) ended (fuel + 1) pre.size
+      = readFrom (pre ++ (i.headWire [] ++ tail)) ended fuel (pre.size + (i.headWire []).size) := by
+  obtain ⟨hend, hhead⟩ :=
+    head?_headWire h100 (by omega) hkept (own := []) (fields := []) (by simp) rfl pre tail
+  rw [readFrom, hend]
+  simp only [hhead, h200, ↓reduceIte]
+
+private def interimsWire : List Response → ByteArray
+  | [] => .empty
+  | i :: is => i.headWire [] ++ interimsWire is
+
+private theorem foldl_interims (acc : ByteArray) (is : List Response) :
+    is.foldl (· ++ ·.headWire []) acc = acc ++ interimsWire is := by
+  induction is generalizing acc with
+  | nil => simp [interimsWire]
+  | cons i is ih => rw [List.foldl_cons, ih, interimsWire, ByteArray.append_assoc]
+
+private theorem interim_iff {i : Response} :
+    i.interim = true ↔ 100 ≤ i.status ∧ i.status < 200 ∧ i.headers.all Response.kept = true := by
+  simp [Response.interim, and_assoc]
+
+private theorem readFrom_interims : ∀ (is : List Response), (∀ i ∈ is, i.interim = true) →
+    ∀ (pre tail : ByteArray) (ended : Bool) (fuel : Nat),
+    readFrom (pre ++ (interimsWire is ++ tail)) ended (fuel + is.length) pre.size
+      = readFrom (pre ++ (interimsWire is ++ tail)) ended fuel (pre.size + (interimsWire is).size)
+  | [], _, pre, tail, ended, fuel => by simp [interimsWire]
+  | i :: is, h, pre, tail, ended, fuel => by
+    obtain ⟨h100, h200, hkept⟩ := interim_iff.mp (h i List.mem_cons_self)
+    have e : pre ++ (interimsWire (i :: is) ++ tail)
+        = pre ++ (i.headWire [] ++ (interimsWire is ++ tail)) := by
+      simp only [interimsWire, ByteArray.append_assoc]
+    have e' : pre ++ (i.headWire [] ++ (interimsWire is ++ tail))
+        = (pre ++ i.headWire []) ++ (interimsWire is ++ tail) := by
+      simp only [ByteArray.append_assoc]
+    rw [e, List.length_cons, ← Nat.add_assoc, readFrom_interim h100 h200 hkept, e',
+      ← ByteArray.size_append,
+      readFrom_interims is (fun x hx => h x (List.mem_cons_of_mem _ hx))]
+    simp only [interimsWire, ByteArray.size_append, Nat.add_assoc]
+
+private theorem length_le_interimsWire : ∀ is : List Response, is.length ≤ (interimsWire is).size
+  | [] => Nat.le_refl _
+  | i :: is => by
+    have := length_le_interimsWire is
+    simp only [interimsWire, ByteArray.size_append, size_headWire, List.length_cons]
+    omega
+
+theorem readFrom_wireAfter {r : Response} (hr : r.writable = true) {interims : List Response}
+    (hi : ∀ i ∈ interims, i.interim = true) (tail : ByteArray) (ended : Bool) (fuel : Nat) :
+    readFrom (r.wireAfter interims ++ tail) ended (fuel + interims.length + 1) 0
+      = .done (some ({ r with
+          headers := ("content-length", toString r.body.size) :: Response.lowered r.headers },
+          (r.wireAfter interims).size)) := by
+  have e : r.wireAfter interims ++ tail
+      = .empty ++ (interimsWire interims ++ (r.wire ++ tail)) := by
+    rw [Response.wireAfter, foldl_interims, ByteArray.empty_append, ByteArray.empty_append,
+      ByteArray.append_assoc]
+  have h1 := readFrom_interims interims hi .empty (r.wire ++ tail) ended (fuel + 1)
+  rw [ByteArray.size_empty, Nat.zero_add] at h1
+  rw [e, Nat.add_right_comm, h1, ByteArray.empty_append, readFrom_wire hr]
+  simp [Response.wireAfter, foldl_interims]
+
 namespace Response
 
+/-- A response written by `wireAfter` its interim responses is read back as written, with its
+`Content-Length` and its names in lowercase, as soon as its last byte is there, whatever follows
+it and whether or not the connection has ended. -/
+theorem read_wireAfter {r : Response} (hr : r.writable = true) {interims : List Response}
+    (hi : ∀ i ∈ interims, i.interim = true) {limit : Nat}
+    (hlimit : (r.wireAfter interims).size ≤ limit) (tail : ByteArray) (ended : Bool) :
+    read limit (r.wireAfter interims ++ tail) ended
+      = .done (some
+          { r with headers := ("content-length", toString r.body.size) :: lowered r.headers }) := by
+  have hlen : interims.length ≤ (r.wireAfter interims ++ tail).size := by
+    have := length_le_interimsWire interims
+    simp only [Response.wireAfter, foldl_interims, ByteArray.empty_append,
+      ByteArray.size_append] at this ⊢
+    omega
+  unfold read
+  rw [show (r.wireAfter interims ++ tail).size + 1
+      = ((r.wireAfter interims ++ tail).size - interims.length) + interims.length + 1 by omega,
+    readFrom_wireAfter hr hi]
+  simp [hlimit]
+
+theorem read_wire {r : Response} (hr : r.writable = true) {limit : Nat}
+    (hlimit : r.wire.size ≤ limit) (tail : ByteArray) (ended : Bool) :
+    read limit (r.wire ++ tail) ended
+      = .done (some
+          { r with headers := ("content-length", toString r.body.size) :: lowered r.headers }) := by
+  have e : r.wireAfter [] = r.wire := by simp [Response.wireAfter]
+  rw [← e] at hlimit ⊢
+  exact read_wireAfter hr (by simp) hlimit tail ended
+
+/-- Every strict start of a response written by `wireAfter` its interim responses waits for more
+while the connection is open, and is refused once it has ended. -/
+theorem read_wireAfter_extract {r : Response} (hr : r.writable = true)
+    {interims : List Response} (hi : ∀ i ∈ interims, i.interim = true) {limit : Nat}
+    (hlimit : (r.wireAfter interims).size ≤ limit) {n : Nat} (hn : n < (r.wireAfter interims).size)
+    (ended : Bool) :
+    read limit ((r.wireAfter interims).extract 0 n) ended
+      = if ended then .done none else .more := by
+  refine read_cut (r := { r with
+    headers := ("content-length", toString r.body.size) :: lowered r.headers })
+    (fun ended => ?_) hlimit hn ended
+  have hlen : interims.length ≤ (r.wireAfter interims).size := by
+    have := length_le_interimsWire interims
+    simp only [Response.wireAfter, foldl_interims, ByteArray.empty_append,
+      ByteArray.size_append] at this ⊢
+    omega
+  rw [show (r.wireAfter interims).size + 1
+      = ((r.wireAfter interims).size - interims.length) + interims.length + 1 by omega]
+  simpa using readFrom_wireAfter hr hi .empty ended _
+
+theorem read_wire_extract {r : Response} (hr : r.writable = true) {limit : Nat}
+    (hlimit : r.wire.size ≤ limit) {n : Nat} (hn : n < r.wire.size) (ended : Bool) :
+    read limit (r.wire.extract 0 n) ended = if ended then .done none else .more := by
+  have e : r.wireAfter [] = r.wire := by simp [Response.wireAfter]
+  rw [← e] at hlimit hn ⊢
+  exact read_wireAfter_extract hr (by simp) hlimit hn ended
+
 /-- A response written by `wireChunked`, in chunks that are not empty and of sizes of at most
-sixteen hex digits, is read back as written, with its `Transfer-Encoding`, as soon as its last
-byte is there, whatever follows it and whether or not the connection has ended. -/
+sixteen hex digits, is read back as written, with its `Transfer-Encoding` and its names in
+lowercase, as soon as its last byte is there, whatever follows it and whether or not the
+connection has ended. -/
 theorem read_wireChunked {r : Response} (hr : r.writable = true)
     (hstatus : r.status ≠ 204 ∧ r.status ≠ 304) {chunks : List ByteArray}
     (hchunks : ∀ c ∈ chunks, 0 < c.size ∧ c.size < 16 ^ 16)
     (hbody : chunks.foldl (· ++ ·) .empty = r.body) {limit : Nat}
     (hlimit : (r.wireChunked chunks).size ≤ limit) (tail : ByteArray) (ended : Bool) :
     read limit (r.wireChunked chunks ++ tail) ended
-      = .done (some { r with headers := ("transfer-encoding", "chunked") :: r.headers }) := by
+      = .done (some
+          { r with headers := ("transfer-encoding", "chunked") :: lowered r.headers }) := by
   unfold read
   rw [readFrom_wireChunked hr hstatus hchunks, hbody]
   simp [hlimit]
@@ -1495,11 +1675,42 @@ connection is open, and is refused once it has ended. -/
 theorem read_wireChunked_extract {r : Response} (hr : r.writable = true)
     (hstatus : r.status ≠ 204 ∧ r.status ≠ 304) {chunks : List ByteArray}
     (hchunks : ∀ c ∈ chunks, 0 < c.size ∧ c.size < 16 ^ 16) {limit : Nat}
-    (hlimit : (r.wireChunked chunks).size ≤ limit) {n : Nat} (hn : n < (r.wireChunked chunks).size)
-    (ended : Bool) :
+    (hlimit : (r.wireChunked chunks).size ≤ limit) {n : Nat}
+    (hn : n < (r.wireChunked chunks).size) (ended : Bool) :
     read limit ((r.wireChunked chunks).extract 0 n) ended = if ended then .done none else .more :=
   read_cut (fun ended => by simpa using readFrom_wireChunked hr hstatus hchunks .empty ended _)
     hlimit hn ended
+
+/-- A response written by `wireToEnd` is read back as written, with its names in lowercase,
+once the connection has ended after its last byte. -/
+theorem read_wireToEnd {r : Response} (hr : r.writable = true)
+    (hstatus : r.status ≠ 204 ∧ r.status ≠ 304) {limit : Nat} (hlimit : r.wireToEnd.size ≤ limit) :
+    read limit r.wireToEnd true = .done (some { r with headers := lowered r.headers }) := by
+  unfold read
+  rw [readFrom_wireToEnd hr hstatus]
+  simp [hlimit]
+
+/-- While the connection is open, every start of a response written by `wireToEnd`, the whole
+of it too, waits for more. -/
+theorem read_wireToEnd_open {r : Response} (hr : r.writable = true)
+    (hstatus : r.status ≠ 204 ∧ r.status ≠ 304) {limit : Nat} (hlimit : r.wireToEnd.size ≤ limit)
+    (n : Nat) : read limit (r.wireToEnd.extract 0 n) false = .more := by
+  have hsize : (r.wireToEnd.extract 0 n).size ≤ r.wireToEnd.size := by
+    rw [size_extract_zero]; omega
+  have hopen : readFrom r.wireToEnd false (r.wireToEnd.size + 1) 0 = .more := by
+    rw [readFrom_wireToEnd hr hstatus]
+    rfl
+  have hcut : readFrom (r.wireToEnd.extract 0 n) false ((r.wireToEnd.extract 0 n).size + 1) 0
+      = .more := by
+    rw [readFrom_fuel _ false (f₂ := r.wireToEnd.size + 1) (by omega) (by omega)]
+    rcases readFrom_extract r.wireToEnd n false (r.wireToEnd.size + 1) 0 with e | e | e
+    · exact e
+    · rw [e, hopen]
+    · cases e.1
+  unfold read
+  rw [hcut]
+  simp only [Bool.false_or, decide_eq_true_eq, show ¬ limit < (r.wireToEnd.extract 0 n).size by
+    omega, ↓reduceIte]
 
 end Response
 
