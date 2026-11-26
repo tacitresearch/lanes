@@ -59,4 +59,98 @@ theorem sum_map_set (f : α → Int) {l : List α} {i : Nat} {a : α} (v : α) (
       simp only [List.set_cons_succ, List.map_cons, List.sum_cons]
       omega
 
+theorem mapM_ok {ε : Type} {f : α → Except ε β} {g : α → β} :
+    ∀ {l : List α}, (∀ x ∈ l, f x = .ok (g x)) → l.mapM f = .ok (l.map g)
+  | [], _ => rfl
+  | x :: l, h => by
+    rw [List.mapM_cons, h x List.mem_cons_self, mapM_ok fun y hy => h y (List.mem_cons_of_mem _ hy)]
+    rfl
+
+theorem forall_mem_intercalate {p : α → Prop} {sep : List α} (hsep : ∀ x ∈ sep, p x) :
+    ∀ {ls : List (List α)}, (∀ l ∈ ls, ∀ x ∈ l, p x) → ∀ x ∈ sep.intercalate ls, p x
+  | [], _, x, hx => by simp at hx
+  | [l], h, x, hx => by simp only [List.intercalate_singleton] at hx; exact h l (by simp) x hx
+  | l :: l' :: ls, h, x, hx => by
+    rw [List.intercalate_cons_cons] at hx
+    rcases List.mem_append.mp hx with hx | hx
+    · rcases List.mem_append.mp hx with hx | hx
+      · exact h l (by simp) x hx
+      · exact hsep x hx
+    · exact forall_mem_intercalate hsep (ls := l' :: ls) (fun y hy => h y (by simp_all)) x hx
+
+theorem mapM_ok_mem {ε : Type} {f : α → Except ε β} :
+    ∀ {l : List α} {r : List β}, l.mapM f = .ok r → ∀ x ∈ l, ∃ y, f x = .ok y
+  | [], _, _, x, hx => by simp at hx
+  | x :: l, r, h, y, hy => by
+    rw [List.mapM_cons] at h
+    cases hx : f x with
+    | error e => simp [hx, bind, Except.bind] at h
+    | ok v =>
+      cases hl : l.mapM f with
+      | error e => simp [hx, hl, bind, Except.bind] at h
+      | ok vs =>
+        rcases List.mem_cons.mp hy with rfl | hy
+        · exact ⟨v, hx⟩
+        · exact mapM_ok_mem hl y hy
+
+theorem forall_mem_takeWhile {p : α → Bool} : ∀ {l : List α}, ∀ x ∈ l.takeWhile p, p x = true
+  | [], x, hx => by simp at hx
+  | y :: l, x, hx => by
+    rw [List.takeWhile_cons] at hx
+    split at hx
+    · rcases List.mem_cons.mp hx with rfl | hx
+      · assumption
+      · exact forall_mem_takeWhile x hx
+    · simp at hx
+
+theorem dropWhile_head {p : α → Bool} : ∀ {l : List α} {x : α} {rest : List α},
+    l.dropWhile p = x :: rest → p x = false
+  | [], _, _, h => by simp at h
+  | y :: l, x, rest, h => by
+    rw [List.dropWhile_cons] at h
+    split at h
+    · exact dropWhile_head h
+    · rename_i hy
+      simp only [List.cons.injEq] at h
+      rw [← h.1]
+      simpa using hy
+
+theorem takeWhile_getElem {p : α → Bool} : ∀ {l : List α} {i : Nat},
+    i < (l.takeWhile p).length → (hl : i < l.length) → p l[i] = true
+  | [], _, _, hl => by simp at hl
+  | x :: l, i, hi, hl => by
+    rw [List.takeWhile_cons] at hi
+    split at hi
+    · rename_i hx
+      cases i with
+      | zero => simpa using hx
+      | succ i => exact takeWhile_getElem (l := l) (i := i) (by simpa using hi) (by simpa using hl)
+    · simp at hi
+
+theorem takeWhile_stop {p : α → Bool} : ∀ {l : List α}
+    (hi : (l.takeWhile p).length < l.length), p (l[(l.takeWhile p).length]'hi) = false
+  | [], hi => by simp at hi
+  | x :: l, hi => by
+    by_cases hx : p x
+    · have hlen : ((x :: l).takeWhile p).length = (l.takeWhile p).length + 1 := by
+        simp [hx]
+      have := takeWhile_stop (p := p) (l := l) (by simp [hlen] at hi; omega)
+      simp only [hlen, List.getElem_cons_succ]
+      exact this
+    · have hlen : ((x :: l).takeWhile p).length = 0 := by simp [hx]
+      simp only [hlen, List.getElem_cons_zero]
+      simpa using hx
+
+theorem forall_of_takeWhile_length {p : α → Bool} : ∀ {l : List α},
+    (l.takeWhile p).length = l.length → ∀ x ∈ l, p x = true
+  | [], _, x, hx => by simp at hx
+  | y :: l, h, x, hx => by
+    by_cases hy : p y
+    · simp only [List.takeWhile_cons, hy, ↓reduceIte, List.length_cons,
+        Nat.add_right_cancel_iff] at h
+      rcases List.mem_cons.mp hx with rfl | hx
+      · exact hy
+      · exact forall_of_takeWhile_length h x hx
+    · simp [hy] at h
+
 end Lanes
