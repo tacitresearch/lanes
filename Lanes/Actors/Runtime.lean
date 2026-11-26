@@ -38,7 +38,7 @@ structure Runtime.Config where
   inputs. At least one is done. -/
   batch : Nat := 64
   /-- Keep the events performed, for tests. By `Kernel.exec_reachable` they are a run of the
-  semantics. -/
+  semantics, but for the starts that bring released actors back. -/
   record : Bool := false
   /-- With a journal that can save the kernel: how many entries to write between two saves.
   After a save the journal is cut, so this bounds how much a restart replays. -/
