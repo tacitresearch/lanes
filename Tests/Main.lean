@@ -34,6 +34,8 @@ program starts.
 -/
 
 def report (results : List (String × Bool)) : IO UInt32 := do
+  let results := results ++ [("no shard is left running when the tests end",
+    (← Lanes.Runtime.running) == 0)]
   for (name, ok) in results do
     if !ok then IO.println s!"FAIL {name}"
   let failed := results.countP (!·.2)

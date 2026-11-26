@@ -23,6 +23,8 @@ namespace RaftKV
 
 open Lanes
 
+export Lanes.SysState (mem_seen_grow)
+
 variable {N C R M : Type} [DecidableEq N] [DecidableEq C] [DecidableEq R] [Enum N]
 variable {config : Config} {machine : Machine C R M}
 
@@ -96,19 +98,33 @@ theorem timers_monotone : (recording N config machine).Monotone Timers :=
   .timers _ (fun i s msg _ _ h => (step_moves config Enum.all machine i s.1 msg).sent _ h)
     fun i s _ _ h => (recover_moves config Enum.all machine i s.1).sent _ h
 
+/-- The message a node is handling is in flight to it, or is one of its two timers. -/
+abbrev Pending (c : SysState (recording N config machine)) (i : N) (msg : Option (Msg N C)) :
+    Prop :=
+  c.Pending (fun _ (m : Msg N C) => m = .electionTimeout ∨ m = .heartbeat) i msg
+
+theorem pending_none {c : SysState (recording N config machine)} {i : N} : Pending c i none :=
+  SysState.pending_none
+
+theorem Timers.pending {c : SysState (recording N config machine)} {i : N} (ht : Timers c)
+    {m : Msg N C}
+    (h : (∃ src, (⟨src, i, m⟩ : Envelope (sig N C R)) ∈ c.net) ∨ m ∈ c.timers i) :
+    Pending c i (some m) :=
+  .of_timers ht h
+
+omit [Enum N] in
+/-- The one message that comes from outside is a `propose`, of which no invariant speaks: any
+other message in flight after inputs was in flight before them. -/
+theorem mem_of_not_propose {net net' : List (Envelope (sig N C R))}
+    (h : ∀ e ∈ net', e ∈ net ∨ ∃ x : Request N C, e = ⟨none, x.via, .propose x.req x.cmd⟩)
+    {src : Option N} {dst : N} {msg : Msg N C} (hmem : ⟨src, dst, msg⟩ ∈ net')
+    (hmsg : ∀ req cmd, msg ≠ .propose req cmd) : ⟨src, dst, msg⟩ ∈ net :=
+  (h _ hmem).resolve_right fun ⟨x, hx⟩ => hmsg x.req x.cmd (by cases hx; rfl)
+
 section Grow
 
 variable {c : SysState (recording N config machine)} {i : N} {s' : Node N C M}
   {effs : List (Effect (sig N C R) i)}
-
-theorem mem_seen_grow {v : N} {p : Node N C M} :
-    p ∈ (c.grow i ((s', c.seen i), effs)).seen v ↔ p ∈ c.seen v ∨ (v = i ∧ p = s') := by
-  by_cases hv : v = i
-  · subst hv
-    rw [SysState.seen_grow_self]
-    simp [or_comm]
-  · rw [SysState.seen_grow_of_ne hv]
-    simp [hv]
 
 theorem VotedFor.grow {voter candidate : N} {term : Nat} (h : VotedFor c voter term candidate) :
     VotedFor (c.grow i ((s', c.seen i), effs)) voter term candidate :=
@@ -124,22 +140,6 @@ theorem blank : Votes (SysState.blank (recording N config machine)) := by
   constructor <;>
     simp [SysState.blank, recording, System.withPast, System.withGhost, node, OneVote.nil,
       SysState.seen, isLeader]
-
-theorem below {c' : SysState (recording N config machine)} (hc : Votes c) (hbelow : c'.Below c) :
-    Votes c' := by
-  obtain ⟨hstate, hnet, _, _⟩ := hbelow
-  refine ⟨?_, ?_, ?_, ?_⟩ <;> simp only [VotedFor, SysState.seen, hstate]
-  · exact hc.oneVote
-  · exact fun src dst term voter h => hc.sent src dst term voter (hnet _ h)
-  · exact hc.counted
-  · exact hc.elected
-
-theorem input (hc : Votes c) (x : Request N C) :
-    Votes { c with net := c.net ++ [⟨none, x.via, .propose x.req x.cmd⟩] } := by
-  refine ⟨hc.oneVote, fun src dst term voter h => ?_, hc.counted, hc.elected⟩
-  rcases List.mem_append.mp h with h | h
-  · exact hc.sent src dst term voter h
-  · simp at h
 
 variable {i : N} {msg : Option (Msg N C)} {s' : Node N C M} {effs : List (Effect (sig N C R) i)}
 
@@ -228,7 +228,9 @@ theorem Votes.recover {c : SysState (recording N config machine)} (hc : Votes c)
   hc.grow (recover_moves config Enum.all machine i _) nofun
 
 theorem votes_monotone : (recording N config machine).Monotone fun c => Timers c ∧ Votes c :=
-  timers_monotone.and .blank (fun _ _ _ hc => hc.below) (fun _ x _ hc => hc.input x)
+  timers_monotone.and_net .blank
+    (fun _ _ _ _ _ hc hnet => ⟨hc.oneVote, fun src dst term voter h =>
+      hc.sent src dst term voter (mem_of_not_propose hnet h nofun), hc.counted, hc.elected⟩)
     (fun _ i msg ht _ hc => hc.step ht i msg) fun _ i _ _ hc => hc.recover i
 
 theorem election_safety (config : Config) (machine : Machine C R M) (env : EnvModel (sig N C R)) :

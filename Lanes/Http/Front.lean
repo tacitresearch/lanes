@@ -87,6 +87,33 @@ abbrev fronted (sys : System σ) (bridge : Bridge σ) (config : GateConfig := {}
     System (frontedSig σ) :=
   ((gateSystem bridge config).join sys (frontWiring bridge)).filterMapIO frontedInput frontedOutput
 
+/-! What the checker needs of a fronted system is what it needs of the system behind the gate.
+As for a join, each is named and given in one line: `instance : (frontedSig σ).Inspect := .fronted`
+and `instance : (fronted sys bridge).Inspect := .fronted`. -/
+
+@[instance_reducible] def _root_.Lanes.Signature.Inspect.gate [σ.Inspect] :
+    (gateSig σ).Inspect where
+  reprMsg _ := inferInstanceAs (Repr (GateMsg σ))
+  hashMsg _ := inferInstanceAs (Hashable (GateMsg σ))
+
+@[instance_reducible] def _root_.Lanes.System.Inspect.gate {bridge : Bridge σ}
+    {config : GateConfig} : (gateSystem bridge config).Inspect where
+  beqState _ := inferInstanceAs (BEq (List ReqId))
+  reprState _ := inferInstanceAs (Repr (List ReqId))
+  hashState _ := inferInstanceAs (Hashable (List ReqId))
+
+@[instance_reducible] def _root_.Lanes.Signature.Inspect.fronted [σ.Inspect] :
+    (frontedSig σ).Inspect :=
+  letI : (gateSig σ).Inspect := .gate
+  letI : (joinSig (gateSig σ) σ).Inspect := .join
+  .withIO
+
+@[instance_reducible] def _root_.Lanes.System.Inspect.fronted {sys : System σ} [sys.Inspect]
+    {bridge : Bridge σ} {config : GateConfig} : (fronted sys bridge config).Inspect :=
+  letI : (gateSystem bridge config).Inspect := .gate
+  letI : ((gateSystem bridge config).join sys (frontWiring bridge)).Inspect := .join
+  .filterMapIO
+
 /-- A bridge for a shard: requests enter as inputs from outside, and a parcel is no response. -/
 def Bridge.shard (bridge : Bridge σ) : Bridge (shardSig σ) where
   decode id request := (bridge.decode id request).map .inl

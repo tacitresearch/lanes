@@ -51,20 +51,10 @@ abbrev Fronted (config : GateConfig) := fronted (Server.system desk) bridge conf
 instance : deskSig.Inspect := {}
 instance : (Server.system desk).Inspect := {}
 
-instance : (gateSig deskSig).Inspect where
-  reprMsg _ := inferInstanceAs (Repr (GateMsg deskSig))
-  hashMsg _ := inferInstanceAs (Hashable (GateMsg deskSig))
-
-instance (config : GateConfig) : (gateSystem bridge config).Inspect where
-  beqState _ := inferInstanceAs (BEq (List ReqId))
-  reprState _ := inferInstanceAs (Repr (List ReqId))
-  hashState _ := inferInstanceAs (Hashable (List ReqId))
-
-instance : (joinSig (gateSig deskSig) deskSig).Inspect := .join
-instance : (frontedSig deskSig).Inspect := .withIO
-instance (config : GateConfig) :
-    ((gateSystem bridge config).join (Server.system desk) (frontWiring bridge)).Inspect := .join
-instance (config : GateConfig) : (Fronted config).Inspect := .filterMapIO
+instance : (gateSig deskSig).Inspect := .gate
+instance (config : GateConfig) : (gateSystem bridge config).Inspect := .gate
+instance : (frontedSig deskSig).Inspect := .fronted
+instance (config : GateConfig) : (Fronted config).Inspect := .fronted
 
 abbrev gateId : (frontedSig deskSig).Id := .inl ()
 

@@ -95,14 +95,8 @@ def answers (s : Node N C M) : List (Response R) :=
 @[simp] theorem applyCommitted_snd (s : Node N C M) :
     (applyCommitted machine self s).2 =
       (answers machine self s).map (Effect.emit (σ := sig N C R) (self := self)) := by
-  have houts : ∀ outs : List (Response R),
-      Effect.emits (outs.map (Effect.emit (σ := sig N C R) (self := self))) = outs := by
-    intro outs
-    induction outs with
-    | nil => rfl
-    | cons out outs ih => simpa [Effect.emits] using ih
   obtain ⟨m, outs, h⟩ := applyCommitted_eq machine self s
-  rw [answers, h, houts]
+  rw [answers, h, Effect.emits_map_emit]
 
 omit [DecidableEq C] in
 theorem advanceCommit_eq (s : Node N C M) (matched : List (N × Nat)) :

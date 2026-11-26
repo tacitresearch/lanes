@@ -17,6 +17,9 @@ A node forgets its vote when its term moves on, so the proof gives each node a h
 one candidate per term, and that every vote in flight, every vote a candidate has counted and a
 majority behind every leader are in the voters' histories. Two leaders of one term then share a
 voter, whose history names them both.
+
+The proof is in layers (`System.Monotone`): first that only the election timeout is ever armed
+(`Timers`), then `Voted` on top of it.
 -/
 
 namespace Examples.Election
@@ -119,9 +122,19 @@ theorem Moves.oneVote {nodes : List N} {i : N} {s s' : Node N} {hist hist' : Lis
 
 variable [Enum N] {config : Config}
 
+/-- Only the election timeout is ever armed, so a `vote` never arrives as a timer, where
+`Voted.sent` says nothing about it. -/
+def Timers (c : SysState (recording N config)) : Prop :=
+  ∀ i msg, msg ∈ c.timers i → msg = .electionTimeout
+
+theorem timers_monotone (honly : config.votesOncePerTerm = true) :
+    (recording N config).Monotone Timers :=
+  .timers _ (fun i s msg => (step_moves config honly Enum.all i s.1 s.2 msg).armed)
+    fun i s => (recover_moves config Enum.all i s.1 s.2).armed
+
 /--
 The inductive invariant. Every clause reads histories, which only grow, and quantifies over
-all messages in flight and all armed timers, so no loss, duplication or crash can break it.
+all messages in flight, so no loss, duplication or crash can break it.
 -/
 structure Voted (c : SysState (recording N config)) : Prop where
   oneVote : ∀ v, OneVote (c.state v).1 (c.state v).2
@@ -132,8 +145,6 @@ structure Voted (c : SysState (recording N config)) : Prop where
   elected : ∀ a, (c.state a).1.role = .leader →
     ∃ counted, Quorum.isMajority Enum.all counted = true ∧
       ∀ v ∈ counted, ((c.state a).1.term, a) ∈ (c.state v).2
-  /-- Without this a `vote` could arrive as a timer, where `sent` says nothing about it. -/
-  timers : ∀ i msg, msg ∈ c.timers i → msg = .electionTimeout
 
 namespace Voted
 
@@ -141,15 +152,6 @@ variable {c : SysState (recording N config)}
 
 theorem blank : Voted (SysState.blank (recording N config)) := by
   constructor <;> simp [SysState.blank, recording, System.withGhost, node, OneVote.nil]
-
-theorem below {c' : SysState (recording N config)} (hc : Voted c) (hbelow : c'.Below c) :
-    Voted c' := by
-  obtain ⟨hstate, hnet, htimers, _⟩ := hbelow
-  refine ⟨?_, ?_, ?_, ?_, fun i msg h => hc.timers i msg (htimers i msg h)⟩ <;> rw [hstate]
-  · exact hc.oneVote
-  · exact fun src dst t voter h => hc.sent src dst t voter (hnet _ h)
-  · exact hc.counted
-  · exact hc.elected
 
 variable {i : N} {granted : N → Prop} {s' : Node N} {hist' : List (Nat × N)}
   {effs : List (Effect (sig N) i)}
@@ -182,7 +184,7 @@ theorem grow (hc : Voted c)
     · exact grow_hist hmoves (hc.counted a counted₀ hrole v hold)
     · exact grow_hist hmoves (hgranted v hnew)
   refine ⟨fun v => ?_, fun src dst t voter hmem => ?_, fun a counted hrole v hv => ?_,
-    fun a hrole => ?_, fun j msg hmem => ?_⟩
+    fun a hrole => ?_⟩
   · obtain ⟨_, hv⟩ := hall v
     exact hv.oneVote (hc.oneVote v)
   · rcases SysState.mem_grow_net.mp hmem with hold | ⟨_, hnew⟩
@@ -199,22 +201,24 @@ theorem grow (hc : Voted c)
     · obtain ⟨counted, hmajority, hvotes⟩ := hc.elected a hwas
       exact ⟨counted, hmajority, fun v hv => grow_hist hmoves (hterm ▸ hvotes v hv)⟩
     · exact ⟨counted, hmajority, fun v hv => hterm ▸ hbacked a counted₀ counted hrole₀ hfrom v hv⟩
-  · rcases SysState.mem_grow_timers.mp hmem with hold | ⟨rfl, delay, hnew⟩
-    · exact hc.timers j msg hold
-    · exact hmoves.armed delay msg hnew
 
 end Voted
 
-theorem voted_inductive (honly : config.votesOncePerTerm = true) (env : EnvModel (sig N)) :
-    (recording N config).Inductive env Voted := by
-  refine .of_monotone env .blank (fun _ _ => .below) (fun _ x => nomatch x) ?_ ?_
-  · intro c i msg hc hpending
+/-- `Voted` reads the nodes' states and asks something of each message in flight, and the
+system takes no input, so `Monotone.and_net` leaves the two kinds of step to prove. -/
+theorem voted_monotone (honly : config.votesOncePerTerm = true) :
+    (recording N config).Monotone fun c => Timers c ∧ Voted c := by
+  refine (timers_monotone honly).and_net .blank (fun _ _ _ _ _ hc hnet => ⟨hc.oneVote,
+    fun src dst t voter h =>
+      hc.sent src dst t voter ((hnet _ h).resolve_right fun ⟨x, _⟩ => nomatch x),
+    hc.counted, hc.elected⟩) ?_ ?_
+  · intro c i msg ht _ hc hpending
     refine hc.grow (step_moves config honly Enum.all i _ _ msg) ?_
     rintro v rfl
     rcases hpending with ⟨src, hnet⟩ | htimer
     · exact hc.sent src i _ v hnet
-    · nomatch hc.timers i _ htimer
-  · exact fun c i hc => hc.grow (recover_moves config Enum.all i _ _) nofun
+    · nomatch ht i _ htimer
+  · exact fun c i _ _ hc => hc.grow (recover_moves config Enum.all i _ _) nofun
 
 theorem election_safety (config : Config) (honly : config.votesOncePerTerm = true)
     (env : EnvModel (sig N)) :
@@ -222,7 +226,7 @@ theorem election_safety (config : Config) (honly : config.votesOncePerTerm = tru
       ∀ a b, (c.state a).role = .leader → (c.state b).role = .leader →
         (c.state a).term = (c.state b).term → a = b := by
   refine .of_ghost (history config) fun c hc a b ha hb hterm => ?_
-  have hvoted := (voted_inductive honly env).invariant c hc
+  have hvoted := ((voted_monotone honly).invariant env c hc).2
   obtain ⟨countedA, hmajorityA, hvotesA⟩ := hvoted.elected a ha
   obtain ⟨countedB, hmajorityB, hvotesB⟩ := hvoted.elected b hb
   obtain ⟨v, hvA, hvB⟩ := Quorum.majority_inter hmajorityA hmajorityB

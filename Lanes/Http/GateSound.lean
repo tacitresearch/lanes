@@ -6,6 +6,7 @@ module
 
 public import Lanes.Actors.KernelSound
 public import Lanes.Actors.Lift
+public import Lanes.Actors.Run
 public import Lanes.Http.Gate
 
 /-!
@@ -35,18 +36,6 @@ def answered (events : List (Event (gatedSig σ))) : List ReqId :=
   events.filterMap fun
     | .output out => some out.1
     | _ => none
-
-private theorem countP_erase_add {α : Type} [BEq α] [LawfulBEq α] (p : α → Bool) {l : List α}
-    {a : α} (h : a ∈ l) : (l.erase a).countP p + (p a).toNat = l.countP p := by
-  induction l with
-  | nil => simp at h
-  | cons b l ih =>
-    by_cases hb : b = a
-    · subst hb
-      cases hp : p b <;> simp [hp]
-    · have := ih (by simpa [Ne.symm hb] using h)
-      simp only [List.erase_cons, beq_iff_eq, hb, ↓reduceIte, List.countP_cons]
-      omega
 
 private def arriving (id : ReqId) : Envelope (gatedSig σ) → Bool
   | ⟨_, none, .arrive id' _⟩ => id' == id
@@ -362,21 +351,6 @@ private theorem armed_handle_gate {c : SysState (gated sys bridge config)} (msg 
     · armed
     · armed
 
-private theorem mem_timers_arm (delay_ms : Nat) (ids : List ReqId)
-    (c : SysState (gated sys bridge config)) (msg : GateMsg σ)
-    (h : msg ∈ c.timers none ∨ ∃ id ∈ ids, msg = .expire id) :
-    msg ∈ (c.performAll none (ids.map fun id => .after delay_ms (.expire id))).timers none := by
-  induction ids generalizing c with
-  | nil => simpa using h
-  | cons id ids ih =>
-    apply ih
-    simp only [SysState.perform, update_self]
-    rcases h with h | ⟨id', hid', rfl⟩
-    · exact .inl (by split <;> simp [h])
-    · rcases List.mem_cons.mp hid' with rfl | hid'
-      · exact .inl (by split <;> simp [*])
-      · exact .inr ⟨id', hid', rfl⟩
-
 private theorem armed_start_gate (c : SysState (gated sys bridge config)) :
     Armed (c.startActor env none) := by
   intro _ id hid
@@ -385,7 +359,7 @@ private theorem armed_start_gate (c : SysState (gated sys bridge config)) :
         Effect.isStop = false := by
     simp [List.any_map, Effect.isStop]
   simp [SysState.startActor, SysState.settle, gate, hrunning] at hid ⊢
-  exact mem_timers_arm _ _ _ _ (.inr ⟨id, hid, rfl⟩)
+  exact SysState.mem_timers_performAll_after _ _ _ _ _ (.inr ⟨id, hid, rfl⟩)
 
 private theorem Armed.settle_inner {c : SysState (gated sys bridge config)} (h : Armed c)
     (j : σ.Id) (r : (gated sys bridge config).State (some j) × List (Effect (gatedSig σ) (some j))) :
