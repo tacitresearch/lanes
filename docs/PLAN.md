@@ -300,11 +300,14 @@ environment that does not crash the gate: a request waiting in the gate stops wa
 (`Http.pending_leaves`, by its deadline), it stops waiting only in a step that emits its answer
 (`Http.answered_of_leaves`), and the answer is handed over (`Http.pending_answered`).
 
+`Lanes/Semantics/FairRuns.lean` proves that fair runs exist: every finite run extends to a fair
+run (`System.exists_fair_run_of_run`), for every system and environment model, with no
+assumption on the signature. So a leads-to theorem is about runs through every reachable state
+(`System.Reachable.exists_fair_run`, `System.LeadsTo.reachable`). The run is that of
+`FairScheduler`, which takes the event owed longest.
+
 Still open, roughly in the order it will be needed:
 
-- **Fair runs exist.** That every finite run extends to a fair one is not proved. Until it is,
-  a leads-to theorem is not known to be about any run. The step-level part is proved: an
-  obligation that is due can be taken (`Obligation.Due.enabled`).
 - **From arrival to admission.** That an arrival in flight reaches the gate needs fairness of
   delivery and a measure, the message's place on its link. With it, "every arrival is
   answered" for distinct ids. This is also the first leads-to chain.

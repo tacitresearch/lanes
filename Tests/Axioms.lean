@@ -36,6 +36,21 @@ by `lake build`, not linked into the test executable.
 /-- info: 'Lanes.System.Run.Fair.output_taken' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Run.Fair.output_taken
 
+/-- info: 'Lanes.System.Run.fairAfter_fair' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Run.fairAfter_fair
+
+/-- info: 'Lanes.System.exists_fair_run_of_run' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.exists_fair_run_of_run
+
+/-- info: 'Lanes.System.Reachable.exists_fair_run' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Reachable.exists_fair_run
+
+/-- info: 'Lanes.System.exists_fair_run' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.exists_fair_run
+
+/-- info: 'Lanes.System.LeadsTo.reachable' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.LeadsTo.reachable
+
 /-- info: 'Lanes.Http.pending_leaves' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.pending_leaves
 

@@ -26,7 +26,8 @@ mail, and handing over an output. Inputs, drops, duplicates and crashes are the 
 environment, are not obligations, and so no fairness can be assumed of them. Nor is restarting
 an actor that has no mail, even where the environment model says it may happen. Fairness is
 stated for each obligation on its own (this message, this timer). Fairness of all of them
-together would let one timer wait forever while others fire.
+together would let one timer wait forever while others fire. Fairness rules out no finite run:
+`Lanes.Semantics.FairRuns` proves that each one extends to a fair run.
 
 Fairness says "eventually" and gives no bound. And it reads a timer as the semantics does: an
 actor that arms a pending timer again leaves it armed here, where the runtime starts its delay

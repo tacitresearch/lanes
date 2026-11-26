@@ -444,9 +444,10 @@ Consequences:
 
 ## D27. Liveness: infinite runs, weak fairness per obligation, leads-to
 
-`Lanes/Semantics/Liveness.lean`, `Lanes/Semantics/GateLive.lean`. Everything proved before
-this was safety. "Every request is eventually answered" is about infinite runs, and only about
-those in which the system is not held back forever.
+`Lanes/Semantics/Liveness.lean`, `Lanes/Semantics/FairRuns.lean`,
+`Lanes/Semantics/GateLive.lean`. Everything proved before this was safety. "Every request is
+eventually answered" is about infinite runs, and only about those in which the system is not
+held back forever.
 
 - A run (`System.Run`) is an infinite sequence of states from the initial one. Each position
   takes an enabled event or stutters.
@@ -494,8 +495,16 @@ Consequences:
 - The gate must not crash, and the theorem is false without that: the gate crashes after
   admitting a request, nothing obliges a start without mail, and the request stays in its
   state forever. Recovering it needs restart as an obligation or an assumption.
-- That fair runs exist is not proved. `Obligation.Due.enabled` proves the part of it that is
-  about one step: fairness never asks for an event the semantics does not have.
+- Fair runs exist (`Lanes/Semantics/FairRuns.lean`). Every finite run extends to a fair run
+  (`System.exists_fair_run_of_run`, machine closure), so every reachable state is on one
+  (`System.Reachable.exists_fair_run`) and a leads-to theorem is never true for lack of runs
+  (`System.LeadsTo.reachable`). It holds for every system and environment model with no
+  assumption, infinitely many identities included. The fair run is the one `FairScheduler`
+  makes (`Lanes/Actors/FairScheduler.lean`, executable, checked on runs in `Tests/Fair.lean`):
+  it keeps the owed events in a queue and takes the one owed longest. The queue needs no list
+  of all actors, because an event changes the timers of one actor at most, and that is what
+  makes the proof work for an infinite signature. Being due is computable (`SysState.owed`,
+  `Obligation.due_iff_owed`), so the schedule is a function and nothing is chosen classically.
 - "Eventually" has no bound, and nothing here ties a fair run to the clock. The kernel's
   theorems about due timers are about steps; that the runtime's runs are fair is assumed.
 - An actor that arms a pending timer again leaves it armed in the semantics, while the
