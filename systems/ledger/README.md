@@ -177,12 +177,14 @@ round of framework work is planned from this.
    field by its digest and the `Cookie` header by the name and session it verifies, and drops
    any header of those names a client sends; `ledgerLive` checks that the journal holds neither
    a password nor a session cookie.
-2. **`lanes_data` refuses a constructor named by a keyword** (`Op.open`, renamed
-   `openAccount`) with a parse error at the constructor, and **an argument named like its
-   constructor** (`ask (ask : Ask C)`) with `Invalid pattern: Not enough arguments to 'ask'`,
-   pointing at the declaration and not saying why. Plain `inductive` takes both.
-3. **`lanes_data` takes no default field values**, so `{}` no longer builds an `Attempts`, a
-   `Sessions` or a `Book`; each got a constant (`Attempts.none`, `Sessions.none`, `Book.empty`).
+2. Fixed (D38). `lanes_data` refused a constructor named by a keyword (`Op.open`, renamed
+   `openAccount`) with a parse error at the constructor, and an argument named like its
+   constructor (`ask (ask : Ask C)`) with `Invalid pattern: Not enough arguments to 'ask'`.
+   Both are accepted now, and `UserMsg.ask` names its argument `ask` again. `Op.openAccount`
+   keeps its name until `Ledger/Web.lean`, which builds it, can be edited.
+3. Fixed (D38). `lanes_data` took no default field values, so `{}` built no `Attempts`,
+   `Sessions` or `Book`, and each had a constant (`Attempts.none`, `Sessions.none`,
+   `Book.empty`). It takes them now, and the constants are gone.
 4. `omega` did not close `e.account < b.accounts.length, ¬ k < b.accounts.length ⊢ ¬ e.account
    = k` where `k : AccountId` and `abbrev AccountId := Nat` (`Ledger/Proofs/Book.lean`,
    `openAccount_sound`); a term did.
@@ -221,8 +223,11 @@ round of framework work is planned from this.
 - **Unbounded state.** Entries grow forever (rule 2.6 has nothing to say to a ledger), accounts
   are a `List` looked up by index, every snapshot writes the whole book, and the transfers page
   lists every entry of the user.
-- **A subtype has no `lanes_data`**: `Name` (a valid user name) has its `DecidableEq`,
-  `Hashable`, `Repr` and codec by hand.
+- Fixed in Lanes (D38): **a subtype had no `lanes_data`**. `lanes_data` takes a field
+  `{s : String // Name.valid s}` and derives its codec, and `Subtype` has `DecidableEq`,
+  `Hashable` and `Repr`. `Name` (in `Ledger/Web.lean`) still has its instances and codec by
+  hand until that file can be edited; declared as a structure with a proof field, as it is,
+  `lanes_data` refuses it and says to use a subtype.
 - **No HTTP client for tests.** `Live.lean` speaks HTTP over a socket with `Request.wire` and
   `Response.parse`, which are good, but each test of a server will write the same twenty lines.
 - **Secrets on disk** are written with default permissions: Lean's `IO` has no `chmod`.

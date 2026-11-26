@@ -52,6 +52,10 @@ instance {α β : Type} [Enum α] [Enum β] : Enum (α × β) where
     simp only [List.mem_flatMap, List.mem_map]
     exact ⟨p.1, complete p.1, p.2, complete p.2, rfl⟩
 
+instance {α : Type} {p : α → Prop} [Enum α] [DecidablePred p] : Enum {a // p a} where
+  all := (all (α := α)).filterMap fun a => if h : p a then some ⟨a, h⟩ else none
+  complete a := List.mem_filterMap.mpr ⟨a.val, complete a.val, by simp [a.property]⟩
+
 /-- Low priority, so a more specific instance wins. -/
 instance (priority := low) funBEq {α β : Type} [Enum α] [BEq β] : BEq (α → β) where
   beq f g := (all (α := α)).all fun a => f a == g a

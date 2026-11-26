@@ -241,8 +241,8 @@ theorem serve_sound {b : Book N} (h : Sound b) (config : Config N) (owner : N) (
   | logOut | accounts | entries | audit => exact h
 
 omit [DecidableEq N] in
-theorem sound_empty : Sound (Book.empty : Book N) := by
-  simp [Sound, conserved, noOverdraft, paired, cached, Book.empty]
+theorem sound_empty : Sound ({} : Book N) := by
+  simp [Sound, conserved, noOverdraft, paired, cached]
 
 end Book
 

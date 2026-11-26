@@ -44,11 +44,9 @@ lanes_data structure Entry where
 
 /-- An account's id is its place in `accounts`. Entries are newest first. -/
 lanes_data structure Book (N : Type) where
-  accounts : List (Account N)
-  entries : List Entry
+  accounts : List (Account N) := []
+  entries : List Entry := []
   deriving DecidableEq, Repr, Hashable, Codable
-
-def Book.empty {N : Type} : Book N := ⟨[], []⟩
 
 /-- Why a transfer was refused. -/
 lanes_data inductive Problem where
