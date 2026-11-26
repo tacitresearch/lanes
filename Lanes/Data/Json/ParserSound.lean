@@ -15,7 +15,12 @@ What `Json.parse` accepts, against the grammar of `Grammar`:
 
 - it accepts every JSON text within its limits, as `Json.normalize` of the text's meaning
   (`parse_complete`), so it reads back what the printers write (`parse_compress`,
-  `parse_pretty`).
+  `parse_pretty`);
+- everything it accepts is such a text, read that way (`parse_sound`); together, `parse_iff`.
+
+The limits are those of `Grammar.Value`: arrays and objects nested at most `maxDepth` deep, and
+numbers within `maxDigits` (`Grammar.Number`). The grammar is RFC 8259's but for `\u` escapes of
+lone surrogates, which denote no character. The parser is total, as every function in Lean is.
 
 The parser works on positions of one string; `Parser.rest p` is the characters from `p` on, and
 each scanning function is shown to read exactly the part of the grammar it is for, whatever
@@ -1060,6 +1065,324 @@ theorem num_sound {md : Nat} {n : JsonNumber} {p : s.Pos} {q : { q : s.Pos // p 
   · obtain ⟨cs, hn, r⟩ := unsigned_sound h
     exact ⟨_, hn, by simpa using r⟩
 
+/-- What `value` reads at `p` is a value of the grammar, read as the normal form of its meaning. -/
+def ValueSound (p : s.Pos) : Prop :=
+  ∀ {d md : Nat} {v : Json} {q : { q : s.Pos // p ≤ q }}, value d md p = .ok (v, q) →
+    ∃ cs raw, Value md d cs raw ∧ rest p = cs ++ rest q.1 ∧ v = raw.normalize
+
+def ElementsSound (p : s.Pos) : Prop :=
+  ∀ {d md : Nat} {start : s.Pos} {hp : start < p} {acc : Array Json} {v : Json}
+    {q : { q : s.Pos // start ≤ q }}, elements d md start p hp acc = .ok (v, q) →
+    ∃ (x : Spaced × Json) (xs : List (Spaced × Json)), x.1.before = [] ∧
+      (∀ e ∈ x :: xs, e.1.Ws) ∧ (∀ e ∈ x :: xs, Value md d e.1.text e.2) ∧
+      rest p = x.1.text ++ (x.1.after ++ ((xs.map fun e => ',' :: e.1.chars).flatten ++
+        ']' :: rest q.1)) ∧
+      v = .arr (acc ++ ((x :: xs).map (·.2.normalize)).toArray)
+
+def FieldsSound (p : s.Pos) : Prop :=
+  ∀ {d md : Nat} {start : s.Pos} {hp : start < p} {acc : Array (String × Json)} {v : Json}
+    {q : { q : s.Pos // start ≤ q }}, fields d md start p hp acc = .ok (v, q) →
+    ∃ (m : Member) (ms : List Member), m.key.before = [] ∧
+      (∀ e ∈ m :: ms, e.key.Ws ∧ e.value.Ws) ∧
+      (∀ e ∈ m :: ms, ∃ cs, e.key.text = '"' :: cs ++ ['"'] ∧ Chars cs e.name) ∧
+      (∀ e ∈ m :: ms, Value md d e.value.text e.json) ∧
+      rest p = m.key.text ++ (m.key.after ++ ':' :: (m.value.chars ++
+        ((ms.map fun e => ',' :: e.chars).flatten ++ '}' :: rest q.1))) ∧
+      v = mkObj (acc.toList ++ (m :: ms).map fun e => (String.ofList e.name, e.json.normalize))
+
+theorem remainingBytes_lt {p q : s.Pos} (h : p < q) : q.remainingBytes < p.remainingBytes :=
+  (String.Pos.lt_iff_remainingBytes_lt p q).mp h
+
+theorem key_sound {p : s.Pos} {name : String} {q : { q : s.Pos // p < q }}
+    (h : key p = .ok (name, q)) :
+    ∃ cs ds w₁ w₂, Chars cs ds ∧ Ws w₁ ∧ Ws w₂ ∧ name = String.ofList ds ∧
+      rest p = '"' :: cs ++ '"' :: (w₁ ++ ':' :: (w₂ ++ rest q.1)) := by
+  unfold key at h
+  split at h
+  · rename_i name' p1 h1 e1
+    obtain ⟨cs, ds, hcs, r1, rfl⟩ := str_sound e1
+    obtain ⟨w₁, hw₁, r2⟩ := skipWs_sound p1
+    split at h
+    rename_i p2 h2 e2
+    rw [e2] at r2
+    split at h
+    · rename_i p3 h3 e3
+      obtain ⟨w₂, hw₂, r4⟩ := skipWs_sound p3
+      split at h
+      rename_i p4 h4 e4
+      rw [e4] at r4
+      simp only [Except.ok.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      obtain ⟨c, hc, r3⟩ := rest_of_accept e3
+      simp only [beq_iff_eq] at hc
+      subst hc
+      exact ⟨cs, ds, w₁, w₂, hcs, hw₁, hw₂, rfl, by rw [r1, r2, r3, r4]⟩
+    · simp [fail] at h
+  · simp at h
+
+theorem value_sound_of {p : s.Pos} (ihE : ∀ q : s.Pos, p < q → ElementsSound q)
+    (ihF : ∀ q : s.Pos, p < q → FieldsSound q) : ValueSound p := by
+  intro d md v q h
+  unfold value at h
+  split at h
+  · rename_i p1 h1 hn
+    split at h
+    · simp [fail] at h
+    · rename_i d'
+      obtain ⟨w, hw, r1⟩ := skipWs_sound p1
+      split at h
+      rename_i p2 h2 e2
+      rw [e2] at r1
+      split at h
+      · rename_i q' hq' hacc
+        simp only [Except.ok.injEq, Prod.mk.injEq] at h
+        obtain ⟨rfl, rfl⟩ := h
+        obtain ⟨c, hc, r2⟩ := rest_of_accept hacc
+        simp only [beq_iff_eq] at hc
+        subst hc
+        exact ⟨'[' :: w ++ [']'], .arr #[], .emptyArr d' hw,
+          by rw [rest_of_next? hn, r1, r2]; simp, by simp [normalize]⟩
+      · obtain ⟨x, xs, -, hws, hvals, r2, rfl⟩ :=
+          ihE _ (String.Pos.lt_of_lt_of_le h1 h2) h
+        refine ⟨_, _, Value.arr d' ((⟨w, x.1.text, x.1.after⟩, x.2) :: xs) (close := [])
+          (by simp) ?_ ?_ nofun, ?_, ?_⟩
+        · intro e he
+          rcases List.mem_cons.mp he with rfl | he
+          · exact ⟨hw, (hws x (by simp)).2⟩
+          · exact hws e (by simp [he])
+        · intro e he
+          rcases List.mem_cons.mp he with rfl | he
+          · exact hvals x (by simp)
+          · exact hvals e (by simp [he])
+        · rw [rest_of_next? hn, r1, r2]
+          simp [intercalate_cons_eq, Spaced.chars, Function.comp_def]
+        · simp [normalize, Function.comp_def]
+  · rename_i p1 h1 hn
+    split at h
+    · simp [fail] at h
+    · rename_i d'
+      obtain ⟨w, hw, r1⟩ := skipWs_sound p1
+      split at h
+      rename_i p2 h2 e2
+      rw [e2] at r1
+      split at h
+      · rename_i q' hq' hacc
+        simp only [Except.ok.injEq, Prod.mk.injEq] at h
+        obtain ⟨rfl, rfl⟩ := h
+        obtain ⟨c, hc, r2⟩ := rest_of_accept hacc
+        simp only [beq_iff_eq] at hc
+        subst hc
+        exact ⟨'{' :: w ++ ['}'], .obj #[], .emptyObj d' hw,
+          by rw [rest_of_next? hn, r1, r2]; simp,
+          by simp [normalize, mkObj, sortFields, dedupFields]⟩
+      · obtain ⟨m, ms, -, hws, hkeys, hvals, r2, rfl⟩ :=
+          ihF _ (String.Pos.lt_of_lt_of_le h1 h2) h
+        refine ⟨_, _, Value.obj d' (⟨⟨w, m.key.text, m.key.after⟩, m.name, m.value, m.json⟩ :: ms)
+          (close := []) (by simp) ?_ ?_ ?_ nofun, ?_, ?_⟩
+        · intro e he
+          rcases List.mem_cons.mp he with rfl | he
+          · exact ⟨⟨hw, (hws m (by simp)).1.2⟩, (hws m (by simp)).2⟩
+          · exact hws e (by simp [he])
+        · intro e he
+          rcases List.mem_cons.mp he with rfl | he
+          · exact hkeys m (by simp)
+          · exact hkeys e (by simp [he])
+        · intro e he
+          rcases List.mem_cons.mp he with rfl | he
+          · exact hvals m (by simp)
+          · exact hvals e (by simp [he])
+        · rw [rest_of_next? hn, r1, r2]
+          simp [intercalate_cons_eq, Member.chars, Spaced.chars, Function.comp_def]
+        · simp [normalize, Function.comp_def]
+  · rename_i q' hn
+    split at h
+    · rename_i text q'' e
+      simp only [Except.ok.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      obtain ⟨cs, ds, hcs, r, rfl⟩ := str_sound e
+      exact ⟨_, _, .str d hcs, by rw [r]; simp, by simp [normalize]⟩
+    · simp at h
+  · rename_i q' hn
+    unfold literal at h
+    split at h
+    · rename_i q'' e
+      simp only [Except.ok.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      exact ⟨_, _, .true d, by rw [rest_of_acceptAll e]; rfl, by simp [normalize]⟩
+    · simp [fail] at h
+  · rename_i q' hn
+    unfold literal at h
+    split at h
+    · rename_i q'' e
+      simp only [Except.ok.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      exact ⟨_, _, .false d, by rw [rest_of_acceptAll e]; rfl, by simp [normalize]⟩
+    · simp [fail] at h
+  · rename_i q' hn
+    unfold literal at h
+    split at h
+    · rename_i q'' e
+      simp only [Except.ok.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      exact ⟨_, _, .null d, by rw [rest_of_acceptAll e]; rfl, by simp [normalize]⟩
+    · simp [fail] at h
+  · split at h
+    · split at h
+      · rename_i n q'' e
+        simp only [Except.ok.injEq, Prod.mk.injEq] at h
+        obtain ⟨rfl, rfl⟩ := h
+        obtain ⟨cs, hn, r⟩ := num_sound e
+        exact ⟨_, _, .num d hn, r, by simp [normalize]⟩
+      · simp at h
+    · simp [fail] at h
+  · simp [fail] at h
+
+theorem elements_sound_of {p : s.Pos} (hv : ValueSound p)
+    (ihE : ∀ q : s.Pos, p < q → ElementsSound q) : ElementsSound p := by
+  intro d md start hp acc v q h
+  unfold elements at h
+  split at h
+  · rename_i elem p1 h1 e1
+    obtain ⟨cs, raw, hraw, r1, rfl⟩ := hv e1
+    obtain ⟨w, hw, r2⟩ := skipWs_sound p1
+    split at h
+    rename_i p2 h2 e2
+    rw [e2] at r2
+    split at h
+    · rename_i p3 h3 hacc
+      obtain ⟨c, hc, r3⟩ := rest_of_accept hacc
+      simp only [beq_iff_eq] at hc
+      subst hc
+      obtain ⟨w', hw', r4⟩ := skipWs_sound p3
+      split at h
+      rename_i p4 h4 e4
+      rw [e4] at r4
+      obtain ⟨y, ys, -, hws, hvals, r5, rfl⟩ := ihE p4
+        (lt_of_le_of_lt' h1 (lt_of_le_of_lt' h2 (String.Pos.lt_of_lt_of_le h3 h4))) h
+      refine ⟨(⟨[], cs, w⟩, raw), (⟨w', y.1.text, y.1.after⟩, y.2) :: ys, rfl, ?_, ?_, ?_, ?_⟩
+      · intro e he
+        simp only [List.mem_cons] at he
+        rcases he with rfl | rfl | he
+        · exact ⟨nofun, hw⟩
+        · exact ⟨hw', (hws y (by simp)).2⟩
+        · exact hws e (by simp [he])
+      · intro e he
+        simp only [List.mem_cons] at he
+        rcases he with rfl | rfl | he
+        · exact hraw
+        · exact hvals y (by simp)
+        · exact hvals e (by simp [he])
+      · rw [r1, r2, r3, r4, r5]
+        simp [Spaced.chars]
+      · simp
+    · split at h
+      · rename_i q' hq' hacc'
+        simp only [Except.ok.injEq, Prod.mk.injEq] at h
+        obtain ⟨rfl, rfl⟩ := h
+        obtain ⟨c, hc, r3⟩ := rest_of_accept hacc'
+        simp only [beq_iff_eq] at hc
+        subst hc
+        refine ⟨(⟨[], cs, w⟩, raw), [], rfl, ?_, ?_, by rw [r1, r2, r3]; simp, by simp⟩
+        · intro e he
+          simp only [List.mem_cons, List.not_mem_nil, or_false] at he
+          subst he
+          exact ⟨nofun, hw⟩
+        · intro e he
+          simp only [List.mem_cons, List.not_mem_nil, or_false] at he
+          subst he
+          exact hraw
+      · simp [fail] at h
+  · simp at h
+
+theorem fields_sound_of {p : s.Pos} (ihV : ∀ q : s.Pos, p < q → ValueSound q)
+    (ihF : ∀ q : s.Pos, p < q → FieldsSound q) : FieldsSound p := by
+  intro d md start hp acc v q h
+  unfold fields at h
+  split at h
+  · rename_i name p1 h1 ek
+    obtain ⟨kcs, ds, w₁, w₂, hkcs, hw₁, hw₂, rfl, rk⟩ := key_sound ek
+    split at h
+    · rename_i fv p2 h2 e2
+      obtain ⟨cs, raw, hraw, r2, rfl⟩ := ihV p1 h1 e2
+      obtain ⟨w, hw, r3⟩ := skipWs_sound p2
+      split at h
+      rename_i p3 h3 e3
+      rw [e3] at r3
+      let m : Member := ⟨⟨[], '"' :: kcs ++ ['"'], w₁⟩, ds, ⟨w₂, cs, w⟩, raw⟩
+      have hm : m.key.Ws ∧ m.value.Ws := ⟨⟨nofun, hw₁⟩, ⟨hw₂, hw⟩⟩
+      split at h
+      · rename_i p4 h4 hacc
+        obtain ⟨c, hc, r4⟩ := rest_of_accept hacc
+        simp only [beq_iff_eq] at hc
+        subst hc
+        obtain ⟨w', hw', r5⟩ := skipWs_sound p4
+        split at h
+        rename_i p5 h5 e5
+        rw [e5] at r5
+        obtain ⟨y, ys, -, hws, hkeys, hvals, r6, rfl⟩ := ihF p5
+          (String.Pos.lt_trans h1 (lt_of_le_of_lt' h2 (lt_of_le_of_lt' h3
+            (String.Pos.lt_of_lt_of_le h4 h5)))) h
+        refine ⟨m, ⟨⟨w', y.key.text, y.key.after⟩, y.name, y.value, y.json⟩ :: ys, rfl, ?_, ?_,
+          ?_, ?_, ?_⟩
+        · intro e he
+          simp only [List.mem_cons] at he
+          rcases he with rfl | rfl | he
+          · exact hm
+          · exact ⟨⟨hw', (hws y (by simp)).1.2⟩, (hws y (by simp)).2⟩
+          · exact hws e (by simp [he])
+        · intro e he
+          simp only [List.mem_cons] at he
+          rcases he with rfl | rfl | he
+          · exact ⟨kcs, rfl, hkcs⟩
+          · exact hkeys y (by simp)
+          · exact hkeys e (by simp [he])
+        · intro e he
+          simp only [List.mem_cons] at he
+          rcases he with rfl | rfl | he
+          · exact hraw
+          · exact hvals y (by simp)
+          · exact hvals e (by simp [he])
+        · rw [rk, r2, r3, r4, r5, r6]
+          simp [m, Member.chars, Spaced.chars]
+        · simp [m]
+      · split at h
+        · rename_i q' hq' hacc'
+          simp only [Except.ok.injEq, Prod.mk.injEq] at h
+          obtain ⟨rfl, rfl⟩ := h
+          obtain ⟨c, hc, r4⟩ := rest_of_accept hacc'
+          simp only [beq_iff_eq] at hc
+          subst hc
+          refine ⟨m, [], rfl, ?_, ?_, ?_, by rw [rk, r2, r3, r4]; simp [m, Spaced.chars],
+            by simp [m]⟩
+          · intro e he
+            simp only [List.mem_cons, List.not_mem_nil, or_false] at he
+            subst he
+            exact hm
+          · intro e he
+            simp only [List.mem_cons, List.not_mem_nil, or_false] at he
+            subst he
+            exact ⟨kcs, rfl, hkcs⟩
+          · intro e he
+            simp only [List.mem_cons, List.not_mem_nil, or_false] at he
+            subst he
+            exact hraw
+        · simp [fail] at h
+    · simp at h
+  · simp at h
+
+theorem sound_at : ∀ (n : Nat) (p : s.Pos), p.remainingBytes = n →
+    ValueSound p ∧ ElementsSound p ∧ FieldsSound p := by
+  intro n
+  induction n using Nat.strongRecOn with
+  | _ n ih =>
+    intro p hn
+    have later : ∀ q : s.Pos, p < q → ValueSound q ∧ ElementsSound q ∧ FieldsSound q :=
+      fun q hq => ih _ (hn ▸ remainingBytes_lt hq) q rfl
+    have hv : ValueSound p := value_sound_of (fun q hq => (later q hq).2.1)
+      (fun q hq => (later q hq).2.2)
+    exact ⟨hv, elements_sound_of hv (fun q hq => (later q hq).2.1),
+      fields_sound_of (fun q hq => (later q hq).1) (fun q hq => (later q hq).2.2)⟩
+
 end Parser
 
 open Parser in
@@ -1091,5 +1414,45 @@ theorem parse_pretty (j : Json) (indent : Nat) {maxDepth maxDigits : Nat}
     ⟨[], _, [], by simp [pretty], nofun, nofun, value_prettyTo indent j 0 hd hm⟩
   rwa [String.ofList_toList] at this
 
+
+
+open Parser in
+/-- Everything the parser accepts is a JSON text of the grammar within its limits, and the value
+is `Json.normalize` of the text's meaning. -/
+theorem parse_sound {text : String} {maxDepth maxDigits : Nat} {v : Json}
+    (h : parse text maxDepth maxDigits = .ok v) :
+    ∃ raw, Text maxDepth maxDigits text.toList raw ∧ v = raw.normalize := by
+  unfold parse document at h
+  obtain ⟨w₁, hw₁, r1⟩ := skipWs_sound text.startPos
+  split at h
+  rename_i p hp e1
+  rw [e1] at r1
+  split at h
+  · rename_i result p1 hp1 ev
+    obtain ⟨cs, raw, hraw, r2, rfl⟩ := (sound_at _ p rfl).1 ev
+    obtain ⟨w₂, hw₂, r3⟩ := skipWs_sound p1
+    split at h
+    rename_i p2 hp2 e3
+    rw [e3] at r3
+    split at h
+    · rename_i hend
+      simp only [Except.ok.injEq] at h
+      subst h hend
+      refine ⟨raw, ⟨w₁, cs, w₂, ?_, hw₁, hw₂, hraw⟩, rfl⟩
+      rw [← rest_startPos, r1, r2, r3, rest_eq_nil.mpr rfl]
+      simp
+    · simp [fail] at h
+  · simp at h
+
+/-- The parser is a function: it accepts a text or refuses it, and what it accepts it reads one
+way. With `parse_sound` and `parse_complete`, it accepts exactly the texts of the grammar within
+its limits. -/
+theorem parse_iff {text : String} {maxDepth maxDigits : Nat} {v : Json} :
+    parse text maxDepth maxDigits = .ok v ↔
+      ∃ raw, Text maxDepth maxDigits text.toList raw ∧ v = raw.normalize := by
+  refine ⟨parse_sound, ?_⟩
+  rintro ⟨raw, ht, rfl⟩
+  have := parse_complete ht
+  rwa [String.ofList_toList] at this
 
 end Lanes.Json
