@@ -63,12 +63,64 @@ def percentDecodeBytes (plusIsSpace : Bool) : List Char → Option (List UInt8)
   | '%' :: _ => none
   | c :: rest => do
     let rest ← percentDecodeBytes plusIsSpace rest
-    return (if c == '+' && plusIsSpace then " " else c.toString).toUTF8.toList ++ rest
+    return (if c == '+' && plusIsSpace then " " else c.toString).toUTF8.data.toList ++ rest
 
 /-- `none` if an escape is malformed or the result is not UTF-8. -/
 def percentDecode (s : String) (plusIsSpace : Bool := false) : Option String := do
   let bytes ← percentDecodeBytes plusIsSpace s.toList
   String.fromUTF8? (ByteArray.mk bytes.toArray)
+
+def hexDigit (n : Nat) : Char :=
+  if n < 10 then Char.ofNat (48 + n) else Char.ofNat (55 + n)
+
+/-- Letters, digits and `-._~`: the bytes RFC 3986 lets a URL carry unescaped everywhere. -/
+def unreserved (b : UInt8) : Bool :=
+  (48 ≤ b && b ≤ 57) || (65 ≤ b && b ≤ 90) || (97 ≤ b && b ≤ 122)
+    || b == 45 || b == 46 || b == 95 || b == 126
+
+def percentEncodeByte (b : UInt8) : List Char :=
+  if unreserved b then [Char.ofNat b.toNat]
+  else ['%', hexDigit (b.toNat / 16), hexDigit (b.toNat % 16)]
+
+def percentEncode (s : String) : String :=
+  String.ofList (s.toUTF8.data.toList.flatMap percentEncodeByte)
+
+private theorem hexValue?_hexDigit : ∀ n, n < 16 → hexValue? (hexDigit n) = some n := by decide
+
+private theorem unreserved_plain : ∀ b : UInt8, unreserved b →
+    Char.ofNat b.toNat ≠ '%' ∧ (Char.ofNat b.toNat).utf8Size = 1
+      ∧ (Char.ofNat b.toNat).val.toUInt8 = b := by decide
+
+private theorem ofNat_nibbles :
+    ∀ b : UInt8, UInt8.ofNat (b.toNat / 16) * 16 + UInt8.ofNat (b.toNat % 16) = b := by decide
+
+private theorem percentDecodeBytes_encodeByte (b : UInt8) (cs : List Char) :
+    percentDecodeBytes false (percentEncodeByte b ++ cs)
+      = (percentDecodeBytes false cs).map (b :: ·) := by
+  unfold percentEncodeByte
+  split
+  · rename_i h
+    obtain ⟨h1, h2, h3⟩ := unreserved_plain b h
+    rw [List.singleton_append, percentDecodeBytes]
+    · simp [Char.toString, String.toByteArray_singleton, List.utf8Encode_singleton,
+        String.utf8EncodeChar_eq_singleton h2, h3]
+      cases percentDecodeBytes false cs <;> simp
+    · intro hi lo rest h _; exact h1 h
+    · intro h; exact h1 h
+  · have h16 : b.toNat / 16 < 16 := by have := b.toNat_lt; omega
+    simp [percentDecodeBytes, hexValue?_hexDigit _ h16,
+      hexValue?_hexDigit _ (Nat.mod_lt _ (by decide : 16 > 0)), ofNat_nibbles]
+    cases percentDecodeBytes false cs <;> simp
+
+private theorem percentDecodeBytes_encode (bs : List UInt8) :
+    percentDecodeBytes false (bs.flatMap percentEncodeByte) = some bs := by
+  induction bs with
+  | nil => simp [percentDecodeBytes]
+  | cons b bs ih => simp [List.flatMap_cons, percentDecodeBytes_encodeByte, ih]
+
+theorem percentDecode_percentEncode (s : String) : percentDecode (percentEncode s) = some s := by
+  simp [percentDecode, percentEncode, percentDecodeBytes_encode, String.fromUTF8?, s.isValidUTF8,
+    String.fromUTF8]
 
 /-- Pairs that do not decode are dropped. -/
 def parseForm (s : String) : List (String × String) :=

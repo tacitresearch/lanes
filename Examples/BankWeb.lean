@@ -21,19 +21,30 @@ open scoped Lanes.Html
 
 abbrev Acct := Fin 3
 
-def parseAcct (s : String) : Option Acct := do
-  let n ← s.toNat?
+def toAcct (n : Nat) : Option Acct :=
   if h : n < 3 then some ⟨n, h⟩ else none
+
+def parseAcct (s : String) : Option Acct :=
+  s.toNat? >>= toAcct
+
+/-- Links and request matching both come from these, so they cannot disagree. -/
+namespace Routes
+
+def home : Http.Route Unit := .get .root
+def account : Http.Route Nat := .get ("accounts" /> .nat)
+def transfer : Http.Route Unit := .post (.seg "transfer")
+
+end Routes
 
 /-- One account row. It loads its balance when the page loads and after every transfer. -/
 def AccountRow (account : Acct) : Html :=
   <tr>
     <td>{s!"Account {account}"}</td>
-    <td hx-get={s!"/accounts/{account}"} hx-trigger="load, transferred from:body">"…"</td>
+    <td hx-get={Routes.account.link account} hx-trigger="load, transferred from:body">"…"</td>
   </tr>
 
 def TransferForm : Html :=
-  <form hx-post="/transfer" hx-target="#result">
+  <form hx-post={Routes.transfer.link ()} hx-target="#result">
     <label>"From " <input name="src" type="number" min="0" max="2" value="0" required/></label>
     <label>" to " <input name="dst" type="number" min="0" max="2" value="1" required/></label>
     <label>" amount " <input name="amount" type="number" min="0" value="10" required/></label>
@@ -68,17 +79,16 @@ def parseTransfer (id : Http.ReqId) (r : Http.Request) : Option (Transfer Acct) 
 
 def bridge : Http.Bridge (sig Acct) where
   decode id r :=
-    match r.method, r.path with
-    | .get, [] => .error (.html Page.document)
-    | .get, ["accounts", a] =>
-      match parseAcct a with
+    if (Routes.home.match? r).isSome then .error (.html Page.document)
+    else if let some n := Routes.account.match? r then
+      match toAcct n with
       | some account => .ok (.balance id account)
       | none => .error (.text "no such account\n" 404)
-    | .post, ["transfer"] =>
+    else if (Routes.transfer.match? r).isSome then
       match parseTransfer id r with
       | some t => .ok (.transfer t)
       | none => .error (.html (<span class="error">"Invalid transfer."</span>).render 400)
-    | _, _ => .error (.text "not found\n" 404)
+    else .error (.text "not found\n" 404)
   encode out :=
     let response := Http.Response.html (OutcomeView out.outcome).render
     -- A completed transfer tells the page to reload the balances.

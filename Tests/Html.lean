@@ -63,6 +63,19 @@ def tests : List (String × Bool) :=
       (<script src="/app.js"></script> : Html).render == "<script src=\"/app.js\"></script>"),
     ("html: document adds the doctype",
       (<html></html> : Html).document == "<!DOCTYPE html><html></html>"),
+    ("route: a link is matched by its own route and by no other",
+      let account : Http.Route Nat := .get ("accounts" /> .nat)
+      let transfer : Http.Route Unit := .post (.seg "transfer")
+      let request : Http.Request := { method := .get, path := ["accounts", "42"] }
+      account.link 42 == "/accounts/42" && account.match? request == some 42
+        && transfer.match? request == none
+        && account.match? { request with path := ["accounts", "42", "x"] } == none
+        && account.match? { request with path := ["accounts", "x"] } == none
+        && account.match? { request with method := .post } == none),
+    ("route: a link escapes what a segment may not carry",
+      let file : Http.Route String := .get ("files" /> .str)
+      file.link "a/b c%é~" == "/files/a%2Fb%20c%25%C3%A9~"
+        && Http.percentDecode (Http.percentEncode "a/b c%é~") == some "a/b c%é~"),
     ("http: form data decodes percent escapes and plus",
       Http.parseForm "name=Ada+Lovelace&q=a%26b%3Dc&flag" ==
         [("name", "Ada Lovelace"), ("q", "a&b=c"), ("flag", "")]),

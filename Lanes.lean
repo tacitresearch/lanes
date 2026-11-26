@@ -27,6 +27,7 @@ public import Lanes.Html.Basic
 public import Lanes.Html.Syntax
 public import Lanes.Http.Basic
 public import Lanes.Http.Gate
+public import Lanes.Http.Route
 
 /-!
 The Lanes runtime layer: everything an application's executable code needs. It imports only
