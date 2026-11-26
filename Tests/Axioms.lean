@@ -133,3 +133,8 @@ by `lake build`, not linked into the test executable.
 
 /-- info: 'Examples.Election.atMostOneLeaderPerTerm_invariant' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Examples.Election.atMostOneLeaderPerTerm_invariant
+/-- info: 'Lanes.Scenario.reachable_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Scenario.reachable_iff
+
+/-- info: 'Lanes.Check.system_sound' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.system_sound

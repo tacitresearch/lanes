@@ -31,8 +31,9 @@ def props : List (Check.Property W) :=
 
 def lossy : EnvModel (sig (Fin 2)) := { link := fun _ _ => Link.network }
 
+def reliable := Check.system Bank2 { driver := Driver.anyOrder transfers } props
+
 def tests : List (String × Bool) :=
-  let reliable := Check.system Bank2 { driver := Driver.anyOrder transfers } props
   let broken := Check.system Bank2 { env := lossy, driver := Driver.anyOrder transfers } props
   let run := simulate Bank2 { driver := Driver.anyOrder transfers } (seed := 42)
   let again := simulate Bank2 { driver := Driver.anyOrder transfers } (seed := 42)

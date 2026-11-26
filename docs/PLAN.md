@@ -68,7 +68,7 @@ theorems, and their repeated tests go away:
 | Every state the checker explores is a real step | Proved |
 | The checker lists every enabled event | Proved (`SysState.mem_successors_iff`) |
 | States the checker merges enable the same events and step to states it merges | Proved (`SysState.Equiv.step`, `SysState.equiv_iff`) |
-| PASS and complete ⇒ the invariant holds in every reachable state of the instance | Proved for the search (`Check.search_sound`), given the row above as the hypothesis `Model.Respects`; not yet joined for `Check.system` |
+| PASS and complete ⇒ the invariant holds in every reachable state of the instance | Proved (`Check.system_sound`): every `always` property holds in every world of `Scenario.Reachable`, which is `SysState.step` with the driver's inputs, the crash budget and the constraint. It assumes that `==` is equality on actor states and on the driver's state (`LawfulBEq`), and that the properties and the constraint do not depend on message order (`World.Equiv`; `eq_of_quiet` and `eq_of_perm` discharge this). Not covered: a driver whose `==` is not equality, which is every monitored driver, so a PASS of `Check.refines` |
 | A reported trace is a real run ending in a violation | Proved for the search (`Check.search_violated`, `search_deadlock`, `search_witness`); not yet carried through `Check.system` to `SysState.run` |
 | `states ≤ maxStates` | Proved (`Check.search_states_le`) |
 | The spec monitor accepts exactly the traces of `Service.spec` | Proved |

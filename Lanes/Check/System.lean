@@ -17,6 +17,8 @@ so what is checked is the code that runs.
 
 A counterexample is a list of events. It replays through `SysState.run` and in the deterministic
 scheduler.
+
+`Lanes.Check.SystemSound` proves what a complete PASS means.
 -/
 
 @[expose] public section
@@ -26,16 +28,16 @@ namespace Lanes.Check
 variable {σ : Signature}
 
 /-- A world tagged with the environment model its equality is taken under. -/
-private structure Node (sys : System σ) (env : EnvModel σ) (D : Type) where
+structure Node (sys : System σ) (env : EnvModel σ) (D : Type) where
   world : World sys D
 
 variable {sys : System σ} {D : Type}
 
-private instance [σ.Inspect] [sys.Inspect] [BEq D] {env : EnvModel σ} : BEq (Node sys env D) where
+instance [σ.Inspect] [sys.Inspect] [BEq D] {env : EnvModel σ} : BEq (Node sys env D) where
   beq a b := a.world.crashes == b.world.crashes && a.world.driver == b.world.driver
     && a.world.state.equiv env b.world.state
 
-private instance [σ.Inspect] [sys.Inspect] [Hashable D] {env : EnvModel σ} :
+instance [σ.Inspect] [sys.Inspect] [Hashable D] {env : EnvModel σ} :
     Hashable (Node sys env D) where
   hash a := mixHash a.world.state.hash (mixHash (hash a.world.driver) (hash a.world.crashes))
 
@@ -51,16 +53,19 @@ def Report.map {S S' L : Type} (f : S → S') (r : Report S L) : Report S' L :=
       | .unreached ps => .unreached ps
     witnesses := r.witnesses.map fun (n, t) => (n, t.map f) }
 
+/-- The transition system that `system` searches. -/
+def model [Enum σ.Id] (sys : System σ) {D : Type} (sc : Scenario σ D) :
+    Model (Node sys sc.env D) (Event σ) where
+  init := [⟨World.init sys sc⟩]
+  next n := (n.world.next sc).map fun (ev, w) => (ev, ⟨w⟩)
+
 /--
 Properties are stated over the `World`: the system state and the driver's state. The result
 covers exactly the instance given: this driver, this crash budget, these bounds.
 -/
-@[no_expose] def system [σ.Inspect] (sys : System σ) [sys.Inspect] {D : Type} [BEq D] [Hashable D]
+def system [σ.Inspect] (sys : System σ) [sys.Inspect] {D : Type} [BEq D] [Hashable D]
     (sc : Scenario σ D) (props : List (Property (World sys D)))
     (opts : Options (World sys D) := {}) : Report (World sys D) (Event σ) :=
-  let model : Model (Node sys sc.env D) (Event σ) :=
-    { init := [⟨World.init sys sc⟩]
-      next := fun n => (n.world.next sc).map fun (ev, w) => (ev, ⟨w⟩) }
   let props' : List (Property (Node sys sc.env D)) := props.map fun
     | .always name p => .always name fun n => p n.world
     | .sometimes name p => .sometimes name fun n => p n.world
@@ -70,7 +75,7 @@ covers exactly the instance given: this driver, this crash budget, these bounds.
       maxStates := opts.maxStates
       checkDeadlock := opts.checkDeadlock
       terminal := fun n => opts.terminal n.world }
-  (search model props' opts' Event.kind Event.kinds).map (·.world)
+  (search (model sys sc) props' opts' Event.kind Event.kinds).map (·.world)
 
 def Trace.render {S L : Type} (showState : S → String) (showLabel : L → String)
     (t : Trace S L) : String :=
