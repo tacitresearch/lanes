@@ -98,6 +98,16 @@ def reordering : EnvModel (sig N C) where
 def crashing : EnvModel (sig N C) where
   mayCrash _ := true
 
+/-- Requests lost and reordered on their way in, and any actor crashing; the links from the users
+to the ledger are reliable. -/
+def lossyIn : EnvModel (sig N C) where
+  link src _ := if src.isSome then Link.reliable else { ordered := false, lossy := true }
+  mayCrash _ := true
+
+/-- Links from the users to the ledger that lose messages, which `Ledger.implements` allows. -/
+def lossyToLedger : EnvModel (sig N C) where
+  link src _ := if src.isSome then { lossy := true } else Link.reliable
+
 def timed' : Config N :=
   { untimed with lockout_ms := some 1000, session_ms := some 1000 }
 
@@ -338,6 +348,14 @@ def main (args : List String) : IO UInt32 := do
     results := results.push (← timed "a log-out racing a transfer, with a crash anywhere"
       (fun r => r.ok && r.complete)
       fun _ => check untimed .viaLedger logOutRace [] crashing 1)
+    results := results.push (← timed
+      "a log-out racing a transfer, with requests lost and reordered and a crash anywhere"
+      (fun r => r.ok && r.complete)
+      fun _ => check untimed .viaLedger logOutRace (raceWitnesses .viaLedger) lossyIn 1)
+    results := results.push (← timed
+      "transfers between two users, with links to the ledger that lose"
+      (fun r => r.ok && r.complete)
+      fun _ => check untimed .viaLedger transfers [] lossyToLedger)
   if all || args.contains "bridge" then
     for (name, ok) in Bridge.tests do
       IO.println s!"== {name}: {if ok then "as expected" else "NOT AS EXPECTED"}"

@@ -26,6 +26,8 @@ internal steps of the spec. The rules here make that usable for a `System`.
 - `Refines.of_lift`: refinement carried back along a function that loses state the steps do not
   read.
 - `System.Refines.of_ghost`: what a system with ghosts refines, the system without them refines.
+- `System.Refines.of_events`: refinement of a system case by event, with only the losses the
+  environment has.
 - `System.Refines.of_steps`: refinement of a system in the cases of `Inductive.of_monotone`,
   for a relation that losing messages and timers cannot break.
 - `System.Refines.of_handles`: the same with handling a message as one case, whether the message
@@ -124,6 +126,135 @@ theorem Refines.to_ghost (g : Ghost sys) (h : sys.Refines env spec) :
       rfl
     exact hstep c.erase t hrel ev c'.erase htr'
 
+/-- Actor `i` can stop itself, in a step or as it recovers. -/
+def Stops (sys : System σ) (i : σ.Id) : Prop :=
+  ∃ s, ((sys.actor i).recover s).2.any Effect.isStop = true ∨
+    ∃ msg, ((sys.actor i).step s msg).2.any Effect.isStop = true
+
+/-- An actor settling from `c₀` is `grow` from `c`, which has the same states, network and
+outbox and at least its timers, with fewer timers, `c₀`'s actors up, and taken down if it
+stopped. -/
+private theorem settle_of_grow {c₀ c : SysState sys} (hstate : c₀.state = c.state)
+    (hnet : c₀.net = c.net) (houtbox : c₀.outbox = c.outbox)
+    (htimers : ∀ j m, m ∈ c₀.timers j → m ∈ c.timers j) (i : σ.Id)
+    (r : sys.State i × List (Effect σ i)) :
+    ∃ timers : (j : σ.Id) → List (σ.Msg j),
+      (∀ j m, m ∈ timers j → m ∈ (c.grow i r).timers j) ∧
+      c₀.settle env i r = if r.2.any Effect.isStop then
+        ({ c.grow i r with up := c₀.up, timers } : SysState sys).down env i
+      else { c.grow i r with up := c₀.up, timers } := by
+  refine ⟨update c₀.timers i (Effect.retime r.2 (c₀.timers i)), fun j m hm => ?_, ?_⟩
+  · by_cases hj : j = i
+    · subst hj
+      simp only [update_self] at hm
+      have hm' : m ∈ (c₀.performAll j r.2).timers j := by
+        rw [SysState.performAll_eq]
+        simpa using hm
+      simp only [SysState.grow, update_self]
+      exact List.mem_append.mpr ((SysState.mem_performAll_timers hm').imp_left (htimers j m))
+    · simp only [update_of_ne _ _ hj] at hm
+      simpa [SysState.grow, hj] using htimers j m hm
+  · rw [SysState.settle_eq]
+    obtain ⟨state₀, up₀, net₀, timers₀, outbox₀⟩ := c₀
+    obtain ⟨state, up, net, timers, outbox⟩ := c
+    simp only at hstate hnet houtbox
+    subst hstate hnet houtbox
+    rfl
+
+/--
+Refinement of a system, case by event, with only the losses the environment has: a message
+dropped on a lossy link, an actor taken down when it may crash or stops itself, and timers. The
+relation must not read timers or which actors are up (`frame`). An actor that handles a message
+or recovers is `grow`, with nothing lost; the delivery case knows the message is deliverable,
+so on an ordered link it is the oldest. Each case is answered by internal steps of the spec,
+except an input and an output, by the same visible step.
+-/
+theorem Refines.of_events {T : Type} {spec : Spec S (Option (Visible σ.In σ.Out T))}
+    {deadlines : Deadlines σ T} {inv : SysState sys → Prop} (hinv : sys.Invariant env inv)
+    (rel : SysState sys → S → Prop)
+    (init : ∃ t, spec.init t ∧ rel (SysState.init sys env) t)
+    (frame : ∀ c t up timers, rel c t → (∀ i msg, msg ∈ timers i → msg ∈ c.timers i) →
+      rel { c with up, timers } t)
+    (input : ∀ c t x, inv c → rel c t → ∃ t', spec.lts.STr t (some (.input x)) t' ∧
+      rel { c with net := c.net ++ [⟨none, (sys.accept x).1, (sys.accept x).2⟩] } t')
+    (output : ∀ c t out, inv c → rel c t → out ∈ c.outbox →
+      ∃ t', spec.lts.STr t (some (.output out)) t' ∧
+        rel { c with outbox := c.outbox.erase out } t')
+    (deliver : ∀ c t e, inv c → rel c t → c.deliverable env e = true →
+      ∃ t', spec.lts.τSTr t t' ∧ rel (({ c with net := c.net.erase e }).grow e.dst
+        ((sys.actor e.dst).step (c.state e.dst) e.msg)) t')
+    (duplicate : ∀ c t e, inv c → rel c t → c.deliverable env e = true →
+      (env.link e.src e.dst).duplicating = true → ∃ t', spec.lts.τSTr t t' ∧
+        rel (c.grow e.dst ((sys.actor e.dst).step (c.state e.dst) e.msg)) t')
+    (drop : ∀ c t e, inv c → rel c t → e ∈ c.net → (env.link e.src e.dst).lossy = true →
+      ∃ t', spec.lts.τSTr t t' ∧ rel { c with net := c.net.erase e } t')
+    (down : ∀ c t i, rel c t → env.mayCrash i = true ∨ sys.Stops i →
+      ∃ t', spec.lts.τSTr t t' ∧ rel (c.down env i) t')
+    (timeout : ∀ c t i msg, inv c → rel c t → msg ∈ c.timers i →
+      ∃ t', spec.lts.STr t ((deadlines i msg).map Visible.fire) t' ∧
+        rel (c.grow i ((sys.actor i).step (c.state i) msg)) t')
+    (recover : ∀ c t i, inv c → rel c t → ∃ t', spec.lts.τSTr t t' ∧
+      rel (c.grow i ((sys.actor i).recover (c.state i))) t') :
+    sys.Refines env spec deadlines := by
+  refine Lanes.Refines.of_invariant (invariant_iff.mp hinv) rel ?_ ?_
+  · rintro _ rfl
+    exact init
+  intro c t ev c' hc _ hrel hstep
+  have internal : ∀ {t'}, spec.lts.τSTr t t' → spec.lts.STr t HasTau.τ t' :=
+    (LTS.sTr_τSTr_iff spec.lts).mpr
+  have settle : ∀ (c₀ c : SysState sys) i r μ t', c₀.state = c.state → c₀.net = c.net →
+      c₀.outbox = c.outbox → (∀ j m, m ∈ c₀.timers j → m ∈ c.timers j) →
+      (r.2.any Effect.isStop = true → sys.Stops i) → spec.lts.STr t μ t' →
+      rel (c.grow i r) t' → ∃ t'', spec.lts.STr t μ t'' ∧ rel (c₀.settle env i r) t'' := by
+    intro c₀ c i r μ t' hstate hnet houtbox htimers hstops ht' hrel'
+    obtain ⟨timers, htimers', heq⟩ := settle_of_grow (env := env) hstate hnet houtbox htimers i r
+    have hframe := frame _ t' c₀.up timers hrel' htimers'
+    rw [heq]
+    split
+    · next hstop =>
+      obtain ⟨t'', ht'', hrel''⟩ := down _ t' i hframe (.inr (hstops hstop))
+      exact ⟨t'', LTS.STr.comp .refl ht' ((LTS.sTr_τSTr_iff spec.lts).mpr ht''), hrel''⟩
+    · exact ⟨t', ht', hframe⟩
+  have stops : ∀ i s msg, ((sys.actor i).step s msg).2.any Effect.isStop = true → sys.Stops i :=
+    fun i s msg h => ⟨s, .inr ⟨msg, h⟩⟩
+  cases ev with
+  | input x =>
+    obtain rfl := SysState.step_input.mp hstep
+    exact input c t x hc hrel
+  | deliver e =>
+    obtain ⟨_, hdeliverable, rfl⟩ := SysState.step_deliver.mp hstep
+    obtain ⟨t', ht', hrel'⟩ := deliver c t e hc hrel hdeliverable
+    exact settle _ _ e.dst _ _ t' rfl rfl rfl (fun _ _ h => h) (stops _ _ _) (internal ht') hrel'
+  | duplicate e =>
+    obtain ⟨_, hdup, hdeliverable, rfl⟩ := SysState.step_duplicate.mp hstep
+    obtain ⟨t', ht', hrel'⟩ := duplicate c t e hc hrel hdeliverable hdup
+    exact settle _ _ e.dst _ _ t' rfl rfl rfl (fun _ _ h => h) (stops _ _ _) (internal ht') hrel'
+  | drop e =>
+    obtain ⟨hlossy, hmem, rfl⟩ := SysState.step_drop.mp hstep
+    obtain ⟨t', ht', hrel'⟩ := drop c t e hc hrel hmem hlossy
+    exact ⟨t', internal ht', hrel'⟩
+  | timeout i msg =>
+    obtain ⟨_, hmem, rfl⟩ := SysState.step_timeout.mp hstep
+    obtain ⟨t', ht', hrel'⟩ := timeout c t i msg hc hrel hmem
+    refine settle _ c i _ _ t' rfl rfl rfl (fun j m hm => ?_) (stops _ _ _) ht' hrel'
+    by_cases hj : j = i
+    · subst hj
+      simp only [update_self] at hm
+      exact List.mem_of_mem_erase hm
+    · simpa [hj] using hm
+  | output out =>
+    obtain ⟨hmem, rfl⟩ := SysState.step_output.mp hstep
+    exact output c t out hc hrel hmem
+  | crash i =>
+    obtain ⟨_, hmay, rfl⟩ := SysState.step_crash.mp hstep
+    obtain ⟨t', ht', hrel'⟩ := down c t i hrel (.inl hmay)
+    exact ⟨t', internal ht', hrel'⟩
+  | start i =>
+    obtain ⟨_, _, rfl⟩ := SysState.step_start.mp hstep
+    obtain ⟨t', ht', hrel'⟩ := recover c t i hc hrel
+    exact settle _ c i _ _ t' rfl rfl rfl (fun _ _ h => h) (fun h => ⟨c.state i, .inl h⟩)
+      (internal ht') hrel'
+
 /--
 Refinement of a system, for a relation that losing messages and timers cannot break (`loses`).
 What is left to show is that the relation holds initially, that an input and an output handed
@@ -153,51 +284,16 @@ theorem Refines.of_steps {inv : SysState sys → Prop} (hinv : sys.Invariant env
       rel (c.grow i ((sys.actor i).step (c.state i) msg)) t')
     (recover : ∀ c t i, inv c → rel c t → ∃ t', spec.lts.τSTr t t' ∧
       rel (c.grow i ((sys.actor i).recover (c.state i))) t') :
-    sys.Refines env spec := by
-  refine Lanes.Refines.of_invariant (invariant_iff.mp hinv) rel ?_ ?_
-  · rintro _ rfl
-    exact init
-  intro c t ev c' hc _ hrel hstep
-  have internal : ∀ {t'}, spec.lts.τSTr t t' → spec.lts.STr t HasTau.τ t' :=
-    (LTS.sTr_τSTr_iff spec.lts).mpr
-  cases ev with
-  | input x =>
-    obtain rfl := SysState.step_input.mp hstep
-    exact input c t x hc hrel
-  | deliver e =>
-    obtain ⟨_, hdeliverable, rfl⟩ := SysState.step_deliver.mp hstep
-    obtain ⟨t', ht', hrel'⟩ := deliver c t e hc hrel (SysState.mem_of_deliverable hdeliverable)
-    exact ⟨t', internal ht', loses _ _ t' hrel' (SysState.Loses.handle (.refl _) ..)⟩
-  | duplicate e =>
-    obtain ⟨_, hdup, hdeliverable, rfl⟩ := SysState.step_duplicate.mp hstep
-    obtain ⟨t', ht', hrel'⟩ :=
-      duplicate c t e hc hrel (SysState.mem_of_deliverable hdeliverable) hdup
-    exact ⟨t', internal ht', loses _ _ t' hrel' (SysState.Loses.handle (.refl _) ..)⟩
-  | drop e =>
-    obtain ⟨_, _, rfl⟩ := SysState.step_drop.mp hstep
-    exact ⟨t, .refl, loses _ _ t hrel ⟨rfl, List.erase_sublist, fun _ _ h => h, rfl⟩⟩
-  | timeout i msg =>
-    obtain ⟨_, hmem, rfl⟩ := SysState.step_timeout.mp hstep
-    obtain ⟨t', ht', hrel'⟩ := timeout c t i msg hc hrel hmem
-    have hlost : SysState.Loses
-        { c with timers := update c.timers i ((c.timers i).erase msg) } c := by
-      refine ⟨rfl, List.Sublist.refl _, fun j m hm => ?_, rfl⟩
-      by_cases hj : j = i
-      · subst hj
-        simp only [update_self] at hm
-        exact List.mem_of_mem_erase hm
-      · simpa [hj] using hm
-    exact ⟨t', internal ht', loses _ _ t' hrel' (SysState.Loses.handle hlost ..)⟩
-  | output out =>
-    obtain ⟨hmem, rfl⟩ := SysState.step_output.mp hstep
-    exact output c t out hc hrel hmem
-  | crash i =>
-    obtain ⟨_, _, rfl⟩ := SysState.step_crash.mp hstep
-    exact ⟨t, .refl, loses _ _ t hrel (SysState.Loses.down env c i)⟩
-  | start i =>
-    obtain ⟨_, _, rfl⟩ := SysState.step_start.mp hstep
-    obtain ⟨t', ht', hrel'⟩ := recover c t i hc hrel
-    exact ⟨t', internal ht', loses _ _ t' hrel' (SysState.Loses.startActor c env i)⟩
+    sys.Refines env spec :=
+  Refines.of_events hinv rel init
+    (fun c t _ _ h htimers => loses c _ t h ⟨rfl, List.Sublist.refl _, htimers, rfl⟩) input output
+    (fun c t e hc h hd => deliver c t e hc h (SysState.mem_of_deliverable hd))
+    (fun c t e hc h hd => duplicate c t e hc h (SysState.mem_of_deliverable hd))
+    (fun c t _ _ h _ _ => ⟨t, .refl, loses c _ t h ⟨rfl, List.erase_sublist, fun _ _ h => h, rfl⟩⟩)
+    (fun c t i h _ => ⟨t, .refl, loses c _ t h (SysState.Loses.down env c i)⟩)
+    (fun c t i msg hc h hmem => by
+      obtain ⟨t', ht', h'⟩ := timeout c t i msg hc h hmem
+      exact ⟨t', (LTS.sTr_τSTr_iff spec.lts).mpr ht', h'⟩) recover
 
 /--
 `of_steps` with a delivery, a duplicate and a timeout as one case: an actor handles a message in
