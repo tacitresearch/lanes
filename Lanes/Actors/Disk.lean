@@ -87,6 +87,31 @@ def read (input : Codec σ.In) (actors : Option (Image.Codecs sys)) (system : St
       | _, _ => .ok { past, saved := none, size }
   else .error .name
 
+/-- What a start goes on with. A journal that is not there, or has not its header, is the
+journal of a shard that has done nothing, and the start begins it (`mend`). A shard that has
+made promises it must keep, a vote, is another matter: its journal gone is those promises
+forgotten, so its store says that it may not begin one, and the start is refused. -/
+def start (input : Codec σ.In) (actors : Option (Image.Codecs sys)) (system : String)
+    (create : Bool) (disk : Disk) : Except Refusal (Found sys) :=
+  match disk.read input actors system with
+  | .error refusal => .error refusal
+  | .ok found => if found.size = 0 ∧ ¬create then .error .missing else .ok found
+
+/-- A start that goes on goes on with what `read` found, so what is proved of `read` and
+`load` is proved of every start. -/
+theorem read_of_start {input : Codec σ.In} {actors : Option (Image.Codecs sys)}
+    {system : String} {create : Bool} {disk : Disk} {found : Found sys}
+    (h : disk.start input actors system create = .ok found) :
+    disk.read input actors system = .ok found := by
+  unfold start at h
+  split at h
+  · cases h
+  · next hread =>
+    split at h
+    · cases h
+    · cases h
+      exact hread
+
 /-- A journal with nothing in it gets its header, and a write that did not finish is cut off,
 since an entry appended after it could never be read. `size` is what `read` found. -/
 def mend (system : String) (disk : Disk) (size : Nat) : List Write :=

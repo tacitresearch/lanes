@@ -101,6 +101,17 @@ def diskTests : List (String × Bool) :=
     [.advance 12, .input (.transfer ⟨3, 2, 0, 4⟩), .batch 64, .handed]
   [ ("disk: no journal, and a new one, are the journal of nothing",
       survives {} (Journal.Disk.mend "bank" {} 0) 0 fun _ _ => []),
+    ("disk: a store that may not begin a journal is refused one that is not there, or has not "
+      ++ "its header, and no other",
+      let start := fun (create : Bool) (disk : Journal.Disk) =>
+        match disk.start (sys := Bank3) input none "bank" create with
+        | .ok found => some found.past.length
+        | .error .missing => none
+        | .error _ => some 0
+      let header := (Journal.header "bank").size
+      start false {} == none && start true {} == some 0
+        && start false { journal := fresh.journal.extract 0 header } == none
+        && start false fresh == some 0 && start false disk == some entries.length),
     ("disk: dying at any byte of a turn's append leaves the entries wholly written",
       survives fresh turn (Journal.encode input entries).size fun done part =>
         if done == 0 then entries.take (Frame.whole (written entries) part) else entries),
@@ -269,6 +280,35 @@ def refusalTest : Async (List (String × Bool)) := do
     ("durable: another system's journal, one written with another codec, and a damaged one "
       ++ "are each refused", refused foreign && codec.toOption.isNone && refused damaged),
     ("durable: a refused journal is left as it was, and opens again", reopened && after == before) ]
+
+/-- A shard that has made promises does not come back without its journal. -/
+def missingTest : Async (List (String × Bool)) := do
+  let path ← scratch "missing"
+  let existing : Journal.Store Bank3 := { store path with create := false }
+  let refused := fun (r : Except IO.Error (Journal.Log Bank3)) =>
+    match r with
+    | .ok _ => false
+    | .error e => (toString e).endsWith "it is not there, and this store may not begin one"
+  let absent ← existing.open.toBaseIO
+  let made ← path.pathExists
+  IO.FS.writeBinFile path .empty
+  let empty ← existing.open.toBaseIO
+  let left ← IO.FS.readBinFile path
+  let seen ← IO.mkRef #[]
+  let rt ← start path seen
+  rt.input (.transfer ⟨1, 0, 2, 3⟩)
+  rt.idle
+  rt.stop
+  let back ← existing.open.toBaseIO
+  let kept ← match back with
+    | .ok log => do log.close; pure (decide (log.past.length > 1))
+    | .error _ => pure false
+  remove path
+  return [
+    ("durable: a store that may not begin a journal is refused a path with none, and makes none",
+      refused absent && !made),
+    ("durable: and an empty file, which it leaves empty", refused empty && left.size == 0),
+    ("durable: and opens the journal another start began", kept) ]
 
 /-! What the shard does with its journal, on a journal held in memory. -/
 
@@ -516,7 +556,7 @@ def killSavingTest : Async (List (String × Bool)) := do
       saved && kept < 200) ]
 
 def tests : IO (List (String × Bool)) := do
-  return (← restartTest.block) ++ (← tornTest.block) ++ (← refusalTest.block)
+  return (← restartTest.block) ++ (← tornTest.block) ++ (← refusalTest.block) ++ (← missingTest.block)
     ++ (← orderTest.block) ++ (← rehandTest.block) ++ (← failTest.block)
     ++ (← snapshotTest.block) ++ (← windowsTest.block) ++ (← killTest.block)
     ++ (← killSavingTest.block)

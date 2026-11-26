@@ -35,6 +35,9 @@ structure Store (sys : System σ) where
   /-- How the actors are written down. With it the shard saves its kernel from time to time,
   beside the journal as `.snapshot`, and cuts the journal; without it the journal only grows. -/
   actors : Option (Kernel.Image.Codecs sys) := none
+  /-- Whether a journal that is not there is begun. Without it a start that finds none is
+  refused, which is what a shard that must not come back having forgotten needs. -/
+  create : Bool := true
 
 private def Refusal.explain : Refusal → String
   | .foreign => "it is not a journal of this system"
@@ -44,6 +47,7 @@ private def Refusal.explain : Refusal → String
   | .snapshot => "its snapshot cannot be read"
   | .apart => "it does not continue its snapshot"
   | .name => "the system's name is too long for a journal"
+  | .missing => "it is not there, and this store may not begin one"
 
 private def read? (path : System.FilePath) : IO (Option ByteArray) := do
   if ← path.pathExists then some <$> IO.FS.readBinFile path else pure none
@@ -70,7 +74,7 @@ Lock the journal, read it, and open it for appending. The lock is a file beside 
 is taken before anything is read, so a second process cannot start on a journal that another is
 still writing. It is held until the log is closed.
 
-What the files give and whether they are refused is `Disk.read`; a refused file is left as it
+What the files give and whether they are refused is `Disk.start`; a refused file is left as it
 is. What is then written is `Disk.mend`, and a write that did not finish is kept beside the
 journal as `.cut`. A turn writes `appendWrites` and a save `saveWrites`.
 -/
@@ -81,7 +85,7 @@ def Store.open {sys : System σ} (store : Store sys) : IO (Log sys) := do
   try
     let disk : Disk := { journal := (← read? store.path).getD .empty
                          snapshot := ← read? (store.path.addExtension "snapshot") }
-    let found ← match disk.read store.input store.actors store.system with
+    let found ← match disk.start store.input store.actors store.system store.create with
       | .ok found => pure found
       | .error refusal =>
         throw (IO.userError s!"lanes: the journal {store.path} is refused: {refusal.explain}")
