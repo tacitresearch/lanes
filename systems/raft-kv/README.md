@@ -8,8 +8,8 @@ one instance (`RaftKV/Store.lean`).
 
 To its clients the cluster is one machine: every answer is one the machine would give if it
 handled the commands one at a time in some order consistent with when they were sent and
-answered. That is `spec`, six lines, and it is checked as refinement by a monitor, with no
-refinement mapping written.
+answered. That is `spec`, six lines. It is checked as refinement by a monitor, with no
+refinement mapping written, and proved for every cluster (`RaftKVProofs.lean`).
 
 The invariants of Raft's safety argument are checked in every state as well
 (`RaftKV/Properties.lean`): at most one leader per term, log matching, agreement on committed
@@ -26,6 +26,10 @@ flight bounded. `lake test` runs the quick checks; `lake exe raftCheck deep` the
 | Reliable links, two terms | 695,272 | passes |
 | Unordered links, one term | 845,974 | passes |
 | Unordered links, one crash and restart, one term | 6,012,807 | passes |
+| Links between nodes lose messages, one term, three messages in flight | 550,410 | passes |
+| Links between nodes lose, reorder and repeat messages (`Link.network`), one term, three in flight | 2,790,036 | passes |
+| Requests lost and reordered on their way to a node, one term, three in flight | 34,325 | passes |
+| Outside the assumption of the top theorem: a request may be handed to a node twice | 3,021 | found: the request is answered twice, in 18 steps |
 | Seeded bug: a node votes for a candidate whose log is behind | 27,412 | found: a leader lacks a committed entry, in 15 steps |
 | Seeded bug: a leader commits an entry of an earlier term by counting (four terms, two writes) | 4,651,808 | found: a later leader lacks the entry, in 28 steps |
 
@@ -84,23 +88,50 @@ entry (the seeded checks above):
 Each `…_invariant` is the function the checker evaluates, equal to `true`: what is checked and
 what is proved are the same definition.
 
+On those, also with both switches on, state machine safety and the top theorem:
+
+| Theorem | Says |
+| --- | --- |
+| `step_serves`, `recover_serves` | What one step of a node does for its clients (`Serves`): an entry is added only by the node that handles a `propose`, and is that request; a node applies exactly the entries between what it had applied and what it has now committed; it answers exactly those it took from a client, each with what the machine says after the entries before it. For every `Config`. |
+| `applied_eq_commit` | A node has applied all it has committed. |
+| `machine_eq_run` | A node's machine is the replicated machine run from `init` over the entries the node has applied. |
+| `applied_agree` | Of two nodes, the one that has applied less has applied a start of what the other has. |
+| `implementsMachine` (`RaftKVProofs.lean`), `cluster_implements` | The cluster refines `spec`: for every finite set of nodes, every machine and every environment model whose links from clients do not repeat a request. Links between nodes may lose, repeat and reorder, links from clients may lose and reorder, and any node may crash and restart at any time. |
+
+The top theorem is `System.Implements`, a weak simulation, so every finite run of the cluster
+has the inputs and outputs of a run of the service in which each command takes effect at one
+instant (`Refines.traces`). The one hypothesis is needed: the check "outside the assumption" in
+the table above is the run without it, where a request the link hands to the leader twice
+becomes two entries and is answered twice. A client that sends a request twice is inside the theorem:
+those are two inputs.
+
+The simulation (`RaftKVProofs/Refines.lean`) is on the cluster with its history and is carried
+to the cluster by `System.Refines.of_ghost`. It names the list the cluster has committed to
+(`Logged`, in `RaftKV/Proofs/Applied.lean`): a committed list that every node's committed
+entries are a start of. The service's value is the machine run over that list; its outbox is
+the cluster's and the answers nodes still owe for entries of the list; its pending requests
+include those in flight and those of every entry, in a log or an `append`, past the end of the
+list. A command takes effect when the list grows over its entry, so one step of a node can be
+several steps of the service. The pending requests are bounded from below and not computed
+from the cluster's state: a request that was lost, or whose entry was replaced, stays pending
+for ever, which the service allows. So no ghost counts requests, and the relation is not a
+refinement mapping.
+
 The proofs give each node a ghost history of the states it has left (`Lanes/Actors/Past.lean`)
 and build one invariant in layers with the monotone proof rule, so one argument covers every
 fault: `Votes`, `Terms`, `Logs`, `Standing`, `Safe`, `Commits`. What the layers say of a state
 without its history is checked first, as properties of their own (`raftCheck "what the proofs
 use, one term"`, and two deep ones). `Safe`, which is about what a majority may yet come to
 hold, has no such form; it is checked only through the three properties it proves.
-`Proofs/Axioms.lean` holds every theorem to Lean's three standard axioms. `lake build` builds
-them; `raftCheck` does not link them.
+`Proofs/Axioms.lean` and `RaftKVProofs.lean` hold every theorem to Lean's three standard
+axioms. `lake build` builds them; `raftCheck` does not link them.
 
 ## What is not here yet
 
-- The top theorem: that the cluster refines `spec`. It is stated (`RaftKVProofs.lean`,
-  `ImplementsMachine`) and checked on small instances, not proved. What is proved gives the
-  list of commands that have taken effect: what a majority has held is never lost. What is
-  missing is the account of clients: that each request becomes at most one entry, and that the
-  node that took it answers with what the machine said.
-- Liveness: that a request is ever answered.
+- Liveness: that a request is ever answered. The top theorem is safety: a cluster that answers
+  nothing refines `spec` too.
+- Requests a link may repeat. The theorem assumes it does not, and the node has no way to tell:
+  suppressing duplicates needs an id the client keeps (rule 1.5), which is not in the protocol.
 - More than one machine. The nodes are processes joined by TCP, on one machine in every test;
   the transport has no authentication or encryption.
 - An answer from a node that is not the leader. It lets the request run into its deadline,

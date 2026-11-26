@@ -516,25 +516,44 @@ theorem fromClients_monotone : (recording N config machine).Monotone FromClients
 section Theorem
 
 variable (hup : config.votesForUpToDateOnly = true) (hown : config.commitsOwnTermOnly = true)
-  (env : EnvModel (sig N C R)) (henv : ∀ node, (env.link none node).duplicating = false)
 
-include hup hown henv
+include hup hown
 
-/-- The cluster with its history refines the service of its machine. -/
-theorem recording_refines : (recording N config machine).Refines env (service N machine) := by
+/-- `Sim.step` of the step function, with what it needs of the state after taken from the
+invariant. -/
+theorem Sim.handle {c : SysState (recording N config machine)} {t : Service.Abs (sig N C R) M}
+    {log : List (Entry N C)} (h : Sim c t log) (hc : Committing c) {i : N} {m : Msg N C}
+    {net : List (Envelope (sig N C R))} (hsub : net.Sublist c.net)
+    (hpending : (∃ src, (⟨src, i, m⟩ : Envelope (sig N C R)) ∈ c.net) ∨ m ∈ c.timers i)
+    (htaken : ∀ req cmd, m = .propose req cmd →
+      ((⟨req, i, cmd⟩ : Request N C) ::ₘ ↑(inflight net) : Multiset (Request N C))
+        ≤ ↑(inflight c.net)) :
+    ∃ t', (service N machine).lts.τSTr t t' ∧ ∃ log', Sim (({ c with net := net }).grow i
+      (((recording N config machine).actor i).step (c.state i) m)) t' log' := by
   have hmonotone := committing_monotone (N := N) (machine := machine) hup hown
-  have hinv : (recording N config machine).Invariant env fun c => Committing c ∧ FromClients c :=
-    fun c hc => ⟨hmonotone.invariant env c hc, fromClients_monotone.invariant env c hc⟩
-  have hgrown : ∀ (c : SysState (recording N config machine)) (i : N) (m : Msg N C)
-      (net : List (Envelope (sig N C R))), Committing c → net.Sublist c.net →
-      ((∃ src, (⟨src, i, m⟩ : Envelope (sig N C R)) ∈ c.net) ∨ m ∈ c.timers i) →
-      Committing (({ c with net := net }).grow i
-        (((recording N config machine).actor i).step (c.state i) m)) :=
-    fun c i m net hc hsub hpending => hmonotone.below _ _ (hmonotone.step c i m hc hpending)
+  have hc' : Committing (({ c with net := net }).grow i
+      (((recording N config machine).actor i).step (c.state i) m)) :=
+    hmonotone.below _ _ (hmonotone.step c i m hc hpending)
       ⟨rfl, fun e he => by
         rcases List.mem_append.mp he with he | he
         · exact List.mem_append_left _ (hsub.subset he)
         · exact List.mem_append_right _ he, fun _ _ hm => hm, fun _ ho => ho⟩
+  obtain ⟨t', log', ht', h'⟩ := h.step hc.2 hc'
+    (step_moves config Enum.all machine i (c.state i).1 m)
+    (step_serves config Enum.all machine i (c.state i).1 m)
+    (hc.1.1.1.timers.pending hpending) hsub
+    fun req cmd hm => htaken req cmd (Option.some.inj hm)
+  exact ⟨t', ht', log', h'⟩
+
+variable (env : EnvModel (sig N C R)) (henv : ∀ node, (env.link none node).duplicating = false)
+
+include henv
+
+/-- The cluster with its history refines the service of its machine. -/
+theorem recording_refines : (recording N config machine).Refines env (service N machine) := by
+  have hinv : (recording N config machine).Invariant env fun c => Committing c ∧ FromClients c :=
+    fun c hc => ⟨(committing_monotone hup hown).invariant env c hc,
+      fromClients_monotone.invariant env c hc⟩
   refine System.Refines.of_steps hinv (fun c t => ∃ log, Sim c t log) ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
   · exact ⟨⟨machine.init, 0, 0⟩, rfl, [], SysState.init_induction (env := env)
       (P := fun c => Sim c ⟨machine.init, 0, 0⟩ []) .blank
@@ -545,42 +564,21 @@ theorem recording_refines : (recording N config machine).Refines env (service N 
     obtain ⟨hout, h'⟩ := h.output hmem
     exact ⟨{ t with outbox := t.outbox.erase out }, .single ⟨hout, rfl⟩, log, h'⟩
   · rintro c t ⟨src, dst, m⟩ ⟨hc, _⟩ ⟨log, h⟩ hmem
-    have hpending : (∃ src, (⟨src, dst, m⟩ : Envelope (sig N C R)) ∈ c.net) ∨ m ∈ c.timers dst :=
-      .inl ⟨src, hmem⟩
-    obtain ⟨t', log', ht', h'⟩ := h.step (net := c.net.erase ⟨src, dst, m⟩) hc.2
-      (hgrown c dst m _ hc List.erase_sublist hpending)
-      (step_moves config Enum.all machine dst (c.state dst).1 m)
-      (step_serves config Enum.all machine dst (c.state dst).1 m)
-      (hc.1.1.1.timers.pending hpending) List.erase_sublist
-      (fun req cmd hm => by
-        obtain rfl := Option.some.inj hm
-        exact le_of_eq (inflight_erase hmem))
-    exact ⟨t', ht', log', h'⟩
+    exact h.handle hup hown hc (net := c.net.erase ⟨src, dst, m⟩) List.erase_sublist
+      (.inl ⟨src, hmem⟩) fun req cmd hm => by
+        subst hm
+        exact le_of_eq (inflight_erase hmem)
   · rintro c t ⟨src, dst, m⟩ ⟨hc, hclients⟩ ⟨log, h⟩ hmem hdup
-    have hpending : (∃ src, (⟨src, dst, m⟩ : Envelope (sig N C R)) ∈ c.net) ∨ m ∈ c.timers dst :=
-      .inl ⟨src, hmem⟩
-    obtain ⟨t', log', ht', h'⟩ := h.step (net := c.net) hc.2
-      (hgrown c dst m _ hc (List.Sublist.refl _) hpending)
-      (step_moves config Enum.all machine dst (c.state dst).1 m)
-      (step_serves config Enum.all machine dst (c.state dst).1 m)
-      (hc.1.1.1.timers.pending hpending) (List.Sublist.refl _)
-      (fun req cmd hm => by
-        obtain rfl := Option.some.inj hm
-        obtain rfl := hclients src dst req cmd hmem
-        simp [henv dst] at hdup)
-    exact ⟨t', ht', log', h'⟩
+    refine h.handle hup hown hc (net := c.net) (List.Sublist.refl _) (.inl ⟨src, hmem⟩)
+      fun req cmd hm => ?_
+    subst hm
+    obtain rfl := hclients src dst req cmd hmem
+    simp [henv dst] at hdup
   · rintro c t i m ⟨hc, _⟩ ⟨log, h⟩ hmem
-    have hpending : (∃ src, (⟨src, i, m⟩ : Envelope (sig N C R)) ∈ c.net) ∨ m ∈ c.timers i :=
-      .inr hmem
-    obtain ⟨t', log', ht', h'⟩ := h.step (net := c.net) hc.2
-      (hgrown c i m _ hc (List.Sublist.refl _) hpending)
-      (step_moves config Enum.all machine i (c.state i).1 m)
-      (step_serves config Enum.all machine i (c.state i).1 m)
-      (hc.1.1.1.timers.pending hpending) (List.Sublist.refl _)
-      (fun req cmd hm => by
-        obtain rfl := Option.some.inj hm
-        rcases hc.1.1.1.timers i _ hmem with h | h <;> cases h)
-    exact ⟨t', ht', log', h'⟩
+    refine h.handle hup hown hc (net := c.net) (List.Sublist.refl _) (.inr hmem)
+      fun req cmd hm => ?_
+    subst hm
+    rcases hc.1.1.1.timers i _ hmem with h | h <;> cases h
   · exact fun c t i _ ⟨log, h⟩ => ⟨t, .refl, log, h.recover⟩
 
 /--

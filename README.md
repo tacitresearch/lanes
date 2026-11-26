@@ -123,8 +123,9 @@ only what came after the last save; that this gives the same state has a proof t
 
 `systems/raft-kv` is a replicated key-value store: Raft, as the step function of one actor.
 It is checked against the map it replicates, its safety invariants are proved for every
-cluster and every fault (election safety, log matching, leader completeness), and it runs as
-three processes that survive their leaders being killed:
+cluster and every fault (election safety, log matching, leader completeness), that to its
+clients the cluster is that one map is proved on them, and it runs as three processes that
+survive their leaders being killed:
 
 ```bash
 cd systems/raft-kv && mkdir -p .lake && ln -s ../../../.lake/packages .lake/packages
