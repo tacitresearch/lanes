@@ -33,6 +33,7 @@ public import Lanes.Actors.Runtime
 public import Lanes.Auth.Login
 public import Lanes.Auth.Token
 public import Lanes.Behaviours.Server
+public import Lanes.Check.Clients
 public import Lanes.Check.Complete
 public import Lanes.Actors.Equiv
 public import Lanes.Check.EquivDecide

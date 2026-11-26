@@ -31,22 +31,11 @@ instance (config : Config N) (answering : Answering) : (system N C config answer
 /-- A request and the requests whose answers it waits for. -/
 abbrev Script := List (Request N C × List ReqId)
 
-/-- The client: what is still to send, and which requests have been answered. -/
-structure Clients where
-  toSend : Script
-  answered : List ReqId
-  deriving DecidableEq, Hashable
-
-def clients (script : Script) : Driver (sig N C) Clients where
-  init := { toSend := script, answered := [] }
-  inputs c := (List.range c.toSend.length).filterMap fun k => do
-    let (x, after) ← c.toSend[k]?
-    if after.all c.answered.contains then some (x, { c with toSend := c.toSend.eraseIdx k })
-    else none
-  observe c out := { c with answered := out.req :: c.answered }
+def clients (script : Script) : Driver (sig N C) (Waiting (Request N C)) :=
+  Driver.after (fun out => some out.req) script
 
 abbrev World' (config : Config N) (answering : Answering) :=
-  World (system N C config answering) (Clients × Check.Monitor (sig N C) (SpecState N C))
+  World (system N C config answering) (Waiting (Request N C) × Check.Monitor (sig N C) (SpecState N C))
 
 def untimed : Config N :=
   { admin := 0, maxAccounts := 2, maxSessions := 2, maxFailures := 2, lockout_ms := none,
@@ -281,6 +270,9 @@ def main (args : List String) : IO UInt32 := do
   if all || args.contains "transfers" then
     results := results.push (← timed "transfers between two users" (fun r => r.ok && r.complete)
       fun _ => check untimed .viaLedger transfers transfersWitnesses)
+    results := results.push (← timed "transfers between two users, with a crash anywhere"
+      (fun r => r.ok && r.complete)
+      fun _ => check untimed .viaLedger transfers [] crashing 1)
   return if results.all id then 0 else 1
 
 end Ledger.Check
