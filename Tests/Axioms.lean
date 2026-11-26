@@ -56,6 +56,18 @@ by `lake build`, not linked into the test executable.
 /-- info: 'Lanes.Http.percentDecode_percentEncode' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.percentDecode_percentEncode
 
+/-- info: 'Lanes.System.Inductive.of_monotone' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Inductive.of_monotone
+
+/-- info: 'Lanes.SysState.erase_step' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SysState.erase_step
+
+/-- info: 'Lanes.System.Invariant.of_ghost' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Invariant.of_ghost
+
+/-- info: 'Lanes.Quorum.majority_inter' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Quorum.majority_inter
+
 /-- info: 'Lanes.SysState.Equiv.step' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.SysState.Equiv.step
 

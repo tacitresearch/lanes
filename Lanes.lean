@@ -1,6 +1,8 @@
 module
 
 public import Lanes.Actors.Actor
+public import Lanes.Actors.Ghost
+public import Lanes.Actors.Monotone
 public import Lanes.Actors.System
 public import Lanes.Actors.World
 public import Lanes.Actors.Lift
@@ -22,6 +24,7 @@ public import Lanes.Check.WorldEquiv
 public import Lanes.Data.Enum
 public import Lanes.Data.Fifo
 public import Lanes.Data.Json
+public import Lanes.Data.Quorum
 public import Lanes.Env.Http
 public import Lanes.Html.Basic
 public import Lanes.Html.Syntax

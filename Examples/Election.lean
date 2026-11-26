@@ -57,11 +57,7 @@ structure Config where
 
 variable {N : Type} [DecidableEq N]
 
-def isMajority (size : Nat) (votes : List N) : Bool :=
-  2 * votes.eraseDups.length > size
-
-/-- `peers` are the other nodes and `size` is the number of nodes. -/
-def node (config : Config) (peers : List N) (size : Nat) (self : N) :
+def node (config : Config) (nodes : List N) (self : N) :
     (sig N).Actor self (Node N) where
   init := { term := 0, votedFor := none, role := .follower }
   step s
@@ -71,7 +67,7 @@ def node (config : Config) (peers : List N) (size : Nat) (self : N) :
       | _ =>
         let term := s.term + 1
         ({ term, votedFor := some self, role := .candidate [self] },
-          peers.map (fun p => .send p (.requestVote term self))
+          (nodes.filter (· ≠ self)).map (fun p => .send p (.requestVote term self))
             ++ [.after config.electionTimeout_ms .electionTimeout])
     | .requestVote term candidate =>
       if term > s.term then
@@ -85,7 +81,7 @@ def node (config : Config) (peers : List N) (size : Nat) (self : N) :
       | .candidate votes =>
         if term == s.term then
           let votes := voter :: votes
-          if isMajority size votes then ({ s with role := .leader }, [.cancel .electionTimeout])
+          if Quorum.isMajority nodes votes then ({ s with role := .leader }, [.cancel .electionTimeout])
           else ({ s with role := .candidate votes }, [])
         else (s, [])
       | _ => (s, [])
@@ -93,7 +89,7 @@ def node (config : Config) (peers : List N) (size : Nat) (self : N) :
 
 abbrev cluster (N : Type) [DecidableEq N] [Enum N] (config : Config) : System (sig N) where
   State _ := Node N
-  actor self := node config ((Enum.all (α := N)).filter (· ≠ self)) (Enum.all (α := N)).length self
+  actor self := node config Enum.all self
   accept x := nomatch x
   boot := Enum.all
 
