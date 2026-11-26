@@ -1,0 +1,22 @@
+name = "lanesBench"
+version = "0.1.0"
+defaultTargets = ["benchStd", "benchTcp", "benchLanes"]
+
+[[require]]
+name = "lanes"
+path = ".."
+
+# `Std.Http.Server` answering every request with a constant, no Lanes.
+[[lean_exe]]
+name = "benchStd"
+root = "StdHello"
+
+# `Std.Net` TCP and a hand-written HTTP/1.1 response loop, no `Std.Http`.
+[[lean_exe]]
+name = "benchTcp"
+root = "TcpHello"
+
+# `Lanes.Http.serve` with one actor that answers each request, optionally journaled.
+[[lean_exe]]
+name = "benchLanes"
+root = "LanesHello"
