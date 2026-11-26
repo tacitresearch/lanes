@@ -137,6 +137,12 @@ inductive Refusal where
   | unreadable (entry : Nat)
   /-- A frame is all there and does not check. -/
   | damaged (byte : Nat)
+  /-- The snapshot file does not read back whole as a snapshot of `system`. -/
+  | snapshot
+  /-- The journal does not continue the snapshot (`resume`). -/
+  | apart
+  /-- The system's name does not fit in a frame, so no journal can carry it. -/
+  | name
   deriving DecidableEq, Repr
 
 /--

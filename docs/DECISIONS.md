@@ -650,7 +650,7 @@ in flight to or from a copy that only forwards. Why it is not simpler:
 
 ## D29. A snapshot is a restart without the crash
 
-`Lanes/Actors/{Kernel,Journal,Snapshot}.lean`, `Lanes/Env/Journal.lean`. A journal that only
+`Lanes/Actors/{Kernel,Journal,Snapshot,Disk}.lean`, `Lanes/Env/Journal.lean`. A journal that only
 grows makes a restart take as long as the shard has lived. A snapshot saves the kernel, and the
 journal is cut at the point of the save.
 
@@ -676,9 +676,26 @@ journal is cut at the point of the save.
   was. A snapshot is written whole and renamed into place, so one that does not read back
   entirely is refused, not repaired (`Journal.saved?`).
 - *The order of a save* is: mark the journal, put the snapshot in place, replace the journal by
-  one that starts at the mark. The process may die between any two. The snapshot in place
-  always has its mark in the journal, which is all `resume` needs. This order is trusted IO,
-  tested by building each state by hand and by killing a process while it saves.
+  one that starts at the mark. It is a pure function, `Journal.saveWrites`, over a model of the
+  two files (`Lanes/Actors/Disk.lean`): a journal that is appended to, where the death of the
+  process leaves any number of the first bytes of the append, and files that are replaced
+  whole. What a start computes from the files is `Disk.load`: `open?`, `saved?`, `resume`.
+  `Disk.Holds.save_crash`: if the process dies at any byte of the mark or between any two of
+  the three writes, the files load as the kernel the shard had or, once the mark is wholly
+  written, as the kernel the saved image restores, which is the one the shard goes on with.
+  Never a refusal, never another kernel. `Disk.Holds.append_crash` says the same of a turn's
+  append: the entries wholly written, and no others. `Disk.Holds` is what the files of a
+  running shard are, and `Disk.Torn` what its death may make of them. A start mends the second
+  into the first (`Disk.Torn.mend`) and a finished turn or save keeps the first, so the
+  theorems hold over any number of starts, saves and deaths. The adapter runs the list of
+  writes and decides nothing about them. A new journal's header and the cut of a write that
+  did not finish are writes of the same kind (`Disk.mend`), so the adapter has two ways to
+  write and no other: append and flush, or write beside and rename. What stays trusted is that
+  the model is the operating system: a rename is atomic, bytes flushed survive the process, an
+  append that did not finish leaves some of its first bytes. There is no `fsync` in Lean's
+  `IO`, so loss of power is not covered. The model is also run on the compiled code at every
+  cut. That test fails when the last two writes are swapped, which the states built by hand on
+  real files cannot notice, since they are built in the right order.
 - *Request ids after a cut.* The HTTP server used to find a fresh id by reading every input in
   the journal, which a cut journal no longer holds. Ids now start at the number of entries in
   the shard's history, which a cut does not lower, and go up by one per request the shard

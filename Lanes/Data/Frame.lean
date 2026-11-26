@@ -210,7 +210,7 @@ private theorem frameAt_extract_eq_none {bytes : ByteArray} {n pos : Nat}
   | inl h => simp [h] at hq
   | inr h => exact absurd hn (Nat.not_le.mpr (h q hq))
 
-private theorem extract_of_size_le {bytes : ByteArray} {n : Nat} (h : bytes.size ≤ n) :
+theorem extract_of_size_le {bytes : ByteArray} {n : Nat} (h : bytes.size ≤ n) :
     bytes.extract 0 n = bytes := by
   rw [← Nat.max_eq_left h, ByteArray.extract_zero_max_size]
 
@@ -375,6 +375,42 @@ theorem size_encode (payloads : List ByteArray) : (encode payloads).size = span 
   | cons p ps ih =>
     rw [encode_cons, ByteArray.size_append, size_one, ih]
     simp [span]
+
+theorem whole_append (a b : List ByteArray) (n : Nat) :
+    whole (a ++ b) (span a + n) = a.length + whole b n := by
+  induction a with
+  | nil => simp [span]
+  | cons p ps ih =>
+    have hspan : span (p :: ps) + n = 8 + p.size + (span ps + n) := by
+      simp [span]
+      omega
+    have hle : 8 + p.size ≤ 8 + p.size + (span ps + n) := Nat.le_add_right ..
+    simp only [List.cons_append, whole, hspan, hle, ↓reduceIte, Nat.add_sub_cancel_left, ih,
+      List.length_cons]
+    omega
+
+theorem span_take_whole_le (payloads : List ByteArray) (n : Nat) :
+    span (payloads.take (whole payloads n)) ≤ n := by
+  induction payloads generalizing n with
+  | nil => simp [span]
+  | cons p ps ih =>
+    rw [whole]
+    split
+    · have := ih (n - (8 + p.size))
+      simp only [List.take_succ_cons, span, List.map_cons, List.sum_cons] at this ⊢
+      omega
+    · simp [span]
+
+/-- The frames that end within `n` bytes are what a file cut there is cut back to. -/
+theorem extract_take_whole (payloads : List ByteArray) (n : Nat) :
+    ((encode payloads).extract 0 n).extract 0 (span (payloads.take (whole payloads n)))
+      = encode (payloads.take (whole payloads n)) := by
+  have hle := span_take_whole_le payloads n
+  generalize whole payloads n = k at hle ⊢
+  have hsplit : encode payloads = encode (payloads.take k) ++ encode (payloads.drop k) := by
+    rw [← encode_append, List.take_append_drop]
+  rw [ByteArray.extract_extract, Nat.zero_add, Nat.zero_add, Nat.min_eq_left hle, hsplit]
+  exact ByteArray.extract_append_eq_left (size_encode _).symm
 
 /-- Whether what stands at `pos` is nothing, or the start of a frame that was not written to its
 end. A file that was only appended to and then cut ends so (`unfinished_take`); a frame that is

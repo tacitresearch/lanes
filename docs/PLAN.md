@@ -272,12 +272,20 @@ with the restored kernel, so the shard that keeps running and a shard started fr
 snapshot compute the same values. A snapshot is a restart without the crash, and the recovery
 path is run every time one is taken, not only after a failure.
 
-Open: the order of the three steps of a save (mark the journal, put the snapshot in place,
-replace the journal) is trusted IO, with each state the files can be left in tested by hand.
-It should be a pure function over a model of the two files, with the theorem that every prefix
-of the steps recovers the same kernel. Releasing idle actors is a different thing and waits: a
-cell that is not in memory has to be brought back before a batch that needs it, and the kernel
-cannot do IO.
+The order of the three steps of a save (mark the journal, put the snapshot in place, replace
+the journal) is a pure function over a model of the two files, `Journal.saveWrites` in
+`Lanes/Actors/Disk.lean`, with the theorem that every prefix of the steps, the first cut at any
+byte, loads as the kernel the shard had or the one the save restores
+(`Disk.Holds.save_crash`), and an invariant that a start, a turn and a save keep, so that it
+holds however often the shard is started and killed. The adapter runs the list of writes.
+
+Open: what is trusted is that the operating system's rename is atomic and that a flush survives
+the process. There is no `fsync` in Lean's `IO`, so a save is not proved, or likely, to survive
+loss of power: the model would need a write that is not yet on the disk. The invariant is
+stated for a store with codecs for its actors. One without never saves, and has the theorem
+for a journal cut at any byte (`Disk.load_cut`) and no invariant of its own. Releasing idle
+actors is a different thing and waits: a cell that is not in memory has to be brought back
+before a batch that needs it, and the kernel cannot do IO.
 
 ### A.2 Composition: join two systems, and what survives it
 
