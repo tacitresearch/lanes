@@ -1,23 +1,61 @@
 name: CI
 
+# Jobs that build run on `vars.LANES_RUNNER` (a label or a JSON list of labels), or on
+# ubuntu-latest when it is unset; a pull request from a fork always runs on ubuntu-latest. CI
+# does not start the warm runner machine (mutants.yml does): point LANES_RUNNER at it only while
+# it is kept running. See docs/RUNNERS.md. `build` builds everything once; the other jobs
+# restore its build and run in parallel.
+
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  build:
+  runner:
     runs-on: ubuntu-latest
+    outputs:
+      label: ${{ steps.runner.outputs.label }}
     steps:
-      - uses: actions/checkout@v4
-      - name: libsodium, which Lanes links
-        run: sudo apt-get update && sudo apt-get install -y libsodium-dev pkg-config
-      # Installs elan and the pinned toolchain, fetches the Mathlib cache, then builds and tests.
-      # Order follows LANES_STYLE section 6: build, lint, model checks and tests.
-      - uses: leanprover/lean-action@v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          build-args: "--wfail"
-          test: false
+          sparse-checkout: .github
+      - id: runner
+        uses: ./.github/actions/runner
+        with:
+          runner: ${{ vars.LANES_RUNNER }}
+
+  # Order follows LANES_STYLE section 6: build, lint, model checks and tests.
+  build:
+    needs: runner
+    runs-on: ${{ fromJSON(needs.runner.outputs.label) }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          clean: false
+      - id: lean
+        uses: ./.github/actions/lean
+      - name: Build
+        run: lake build --wfail
+      - if: steps.lean.outputs.packages-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .lake/packages
+          key: ${{ steps.lean.outputs.packages-key }}
+      - if: steps.lean.outputs.warm != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .lake/build
+          key: ${{ steps.lean.outputs.build-key }}
       # Also fails on a stale generated file (line counts, the decisions' index, docs/STATUS.md),
       # and on main on a decision without a number: run `lake exe lanes lint --fix --main`.
       - name: Lint
@@ -26,30 +64,93 @@ jobs:
         run: |
           lake exe lanes lint --fix
           git diff --exit-code
-      - name: Test
-        run: lake test
+
+  check:
+    needs: [runner, build]
+    runs-on: ${{ fromJSON(needs.runner.outputs.label) }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          clean: false
+      - uses: ./.github/actions/lean
       - name: Model checks
         run: lake exe lanesCheck
+
+  test:
+    needs: [runner, build]
+    runs-on: ${{ fromJSON(needs.runner.outputs.label) }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          clean: false
+      - uses: ./.github/actions/lean
+      - name: Test
+        run: lake test
+      # Lake does not track the templates `LanesCli/New.lean` reads with `include_str`, so a
+      # restored build would keep the old ones: build `lanes new` again from the templates.
       - name: Generated app builds and passes its checks
         run: |
           rm -f .lake/build/lib/lean/LanesCli/New.* .lake/build/ir/LanesCli/New.*
           lake exe lanes new demo-app --dir "$RUNNER_TEMP/demo-app" --lanes-path "$GITHUB_WORKSPACE"
           cd "$RUNNER_TEMP/demo-app"
-          mkdir -p .lake && ln -s "$GITHUB_WORKSPACE/.lake/packages" .lake/packages
+          mkdir -p .lake && ln -sfn "$GITHUB_WORKSPACE/.lake/packages" .lake/packages
           lake build
           lake test
-      - name: systems/raft-kv builds and passes its checks
-        run: |
-          cd systems/raft-kv
-          mkdir -p .lake && ln -s "$GITHUB_WORKSPACE/.lake/packages" .lake/packages
-          lake build
-          lake test
-          lake exe raftLive
-          lake exe raftProcs
-      - name: systems/ledger builds and passes its checks
-        run: |
-          cd systems/ledger
-          mkdir -p .lake && ln -s "$GITHUB_WORKSPACE/.lake/packages" .lake/packages
-          lake build
-          lake test
-          lake exe ledgerLive
+
+  raft-kv:
+    needs: [runner, build]
+    runs-on: ${{ fromJSON(needs.runner.outputs.label) }}
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: systems/raft-kv
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          clean: false
+      - id: lean
+        uses: ./.github/actions/lean
+        with:
+          system: raft-kv
+      - name: Build
+        run: lake build
+      - if: steps.lean.outputs.warm != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: systems/raft-kv/.lake/build
+          key: ${{ steps.lean.outputs.system-key }}
+      - name: Model checks
+        run: lake test
+      - name: Three nodes over TCP
+        run: lake exe raftLive
+      - name: Three node processes, killed and started again
+        run: lake exe raftProcs
+
+  ledger:
+    needs: [runner, build]
+    runs-on: ${{ fromJSON(needs.runner.outputs.label) }}
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: systems/ledger
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          clean: false
+      - id: lean
+        uses: ./.github/actions/lean
+        with:
+          system: ledger
+      - name: Build
+        run: lake build
+      - if: steps.lean.outputs.warm != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: systems/ledger/.lake/build
+          key: ${{ steps.lean.outputs.system-key }}
+      - name: Model checks
+        run: lake test
+      - name: Over HTTP, killed and started again
+        run: lake exe ledgerLive

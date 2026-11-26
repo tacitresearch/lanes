@@ -1,0 +1,101 @@
+name: Runner machine
+description: >
+  Starts or stops the runner machine of a workflow run, as the AWS role of `role-arn`, assumed
+  through GitHub's OIDC provider (the job needs `id-token: write`, and `actions: read` to stop).
+  Route `box` starts the warm machine `instance-id` (infra/lanes-ci.yaml) and waits until its
+  runners are online; stopping it is left to the last run of `workflows` to end. Route `fresh`
+  launches a machine of `instance-type` that sets itself up with scripts/ec2-runner.sh (from the
+  checkout) under the label `run-label`, and terminates it and its runners again. See
+  docs/RUNNERS.md.
+inputs:
+  mode:
+    description: start or stop.
+    required: true
+  route:
+    description: box or fresh, from .github/actions/runner.
+    required: true
+  role-arn:
+    description: vars.LANES_AWS_ROLE_ARN.
+    required: true
+  region:
+    description: vars.LANES_AWS_REGION.
+    required: true
+  instance-id:
+    description: vars.LANES_AWS_INSTANCE_ID, for the box.
+    required: false
+    default: ""
+  labels:
+    description: The runners' labels, as JSON (the runner action's `label`).
+    required: true
+  runner-token:
+    description: >-
+      secrets.LANES_RUNNER_PAT, a fine-grained token with Administration (read and write) on the
+      repository. Optional for the box, where it only lets the start wait for the runners.
+    required: false
+    default: ""
+  github-token:
+    description: The job's GITHUB_TOKEN, to see the repository's other runs.
+    required: true
+  workflows:
+    description: The workflow files whose runs keep the box running.
+    required: false
+    default: ci.yml mutants.yml
+  wait-minutes:
+    description: How long the start waits for runners to come online.
+    required: false
+    default: "15"
+  instance-type:
+    description: vars.LANES_AWS_INSTANCE_TYPE, for a fresh machine.
+    required: false
+    default: ""
+  run-label:
+    description: The label of a fresh machine's runners.
+    required: false
+    default: ""
+  image:
+    description: The AMI of a fresh machine; Ubuntu 24.04 by default.
+    required: false
+    default: ""
+  subnet:
+    description: The subnet of a fresh machine; a default subnet when empty.
+    required: false
+    default: ""
+  security-group:
+    description: The security group of a fresh machine; the VPC's default when empty.
+    required: false
+    default: ""
+  volume-gb:
+    description: The disk of a fresh machine, in GiB.
+    required: false
+    default: "150"
+  max-hours:
+    description: A fresh machine powers off, and so terminates, this many hours after it starts.
+    required: false
+    default: "6"
+runs:
+  using: composite
+  steps:
+    - uses: aws-actions/configure-aws-credentials@45666896f5d8e0f10ae255413f3a4cdd03bdc8f5 # v6.3.1
+      with:
+        role-to-assume: ${{ inputs.role-arn }}
+        aws-region: ${{ inputs.region }}
+        role-session-name: lanes-${{ github.run_id }}-${{ github.run_attempt }}
+        role-duration-seconds: 3600
+    - shell: bash
+      env:
+        MODE: ${{ inputs.mode }}
+        ROUTE: ${{ inputs.route }}
+        INSTANCE_ID: ${{ inputs.instance-id }}
+        LABELS: ${{ inputs.labels }}
+        RUNNER_TOKEN: ${{ inputs.runner-token }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        WORKFLOWS: ${{ inputs.workflows }}
+        WAIT_MINUTES: ${{ inputs.wait-minutes }}
+        INSTANCE_TYPE: ${{ inputs.instance-type }}
+        RUN_LABEL: ${{ inputs.run-label }}
+        IMAGE: ${{ inputs.image || 'resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id' }}
+        SUBNET: ${{ inputs.subnet }}
+        SECURITY_GROUP: ${{ inputs.security-group }}
+        VOLUME_GB: ${{ inputs.volume-gb }}
+        MAX_HOURS: ${{ inputs.max-hours }}
+      run: '"$GITHUB_ACTION_PATH/box.sh"'
