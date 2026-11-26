@@ -34,7 +34,7 @@ inductive Told where
 abbrev deskSig : Signature := Server.sig Ask Told
 
 /-- Answers each request and writes a memo beside the answer; a note gives a memo alone. -/
-def desk : Service deskSig Unit where
+def desk : Service Ask Told Unit where
   init := ()
   step _
     | .ask id => ((), [.reply id, .memo id])

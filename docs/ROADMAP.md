@@ -65,7 +65,7 @@ Asked at each phase end: is this still the right direction, and is there a bette
   things the join did not have: runs, not only states, seen from one side
   (`SysState.run_left`), and a way to hide what a join wires (`System.filterMapIO`). Once fair
   runs projected (D41), the hand-built `gated` was retired and `serve` runs `fronted`
-  (`docs/decisions/new-one-gate.md`).
+  (`docs/decisions/D43-one-gate.md`).
 - Sugar for applications will be macros, not deriving handlers: anything that imports `Lean`
   costs 137 MB in the binary, even through `meta import`.
 
@@ -189,7 +189,7 @@ runtime's batch, the server's table of waiting requests, the mailbox and the cou
 declaration sugar for codecs and instances, the boilerplate Raft showed. The ledger's first
 finding was that `serve` journalled passwords and session cookies as they came; a bridge now
 prepares a request before it is journalled
-(`docs/decisions/new-request-prepared-before-journal.md`).
+(`docs/decisions/D44-request-prepared-before-journal.md`).
 
 ## Serious applications
 

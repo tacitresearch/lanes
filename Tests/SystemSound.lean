@@ -137,7 +137,7 @@ example (hfailure : (check false).failure = none) (hcomplete : (check false).com
     (hw : Scenario.Reachable (system K V F false)
       { driver := (spec K V F).monitored (Driver.anyOrder requests) } (fun _ => true) w) :
     w.driver.2.ok = true :=
-  Check.refines_sound (spec K V F) (.of_lawful _) {} 0 (props false) {}
+  Check.refines_sound (σ := sig K V F) (spec K V F) (.of_lawful _) {} 0 (props false) {}
     (fun _ hp _ _ => kv_props hp) (fun _ _ _ => rfl) hfailure hcomplete (.head _) hw
 
 open Cslib in
@@ -147,7 +147,7 @@ example (hfailure : (check false).failure = none) (hcomplete : (check false).com
       { driver := (spec K V F).monitored (Driver.anyOrder requests) } (fun _ => true) events w) :
     ∃ a, (spec K V F).spec.lts.SMTr ⟨fun _ => none, 0, 0⟩
       ((events.filterMap Event.visible).map some) a :=
-  Check.refines_traces (spec K V F) (.of_lawful _) {} 0 (props false) {}
+  Check.refines_traces (σ := sig K V F) (spec K V F) (.of_lawful _) {} 0 (props false) {}
     (fun _ hp _ _ => kv_props hp) (fun _ _ _ => rfl) hfailure hcomplete (.head _) hrun
 
 end KV

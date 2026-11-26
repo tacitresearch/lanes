@@ -35,8 +35,8 @@ variable {σ : Signature} {sys : System σ} {D : Type}
 
 /-- The events that involve neither the driver nor the crash budget. -/
 def Event.isInternal : Event σ → Bool
-  | .deliver _ | .duplicate _ | .drop _ | .timeout .. | .start _ => true
-  | .input _ | .output _ | .crash _ => false
+  | .deliver _ | .duplicate _ | .drop _ | .start _ => true
+  | .input _ | .output _ | .timeout .. | .crash _ => false
 
 /--
 The instance a check covers: the worlds the semantics reaches when the driver chooses the
@@ -55,6 +55,10 @@ inductive Scenario.Reachable (sys : System σ) (sc : Scenario σ D)
     Reachable sys sc constraint w → w.state.step sc.env (.output out) = some c →
     constraint { w with state := c, driver := sc.driver.observe w.driver out } = true →
     Reachable sys sc constraint { w with state := c, driver := sc.driver.observe w.driver out }
+  | timeout {w : World sys D} {i : σ.Id} {msg : σ.Msg i} {c : SysState sys} :
+    Reachable sys sc constraint w → w.state.step sc.env (.timeout i msg) = some c →
+    constraint { w with state := c, driver := sc.driver.timeout w.driver i msg } = true →
+    Reachable sys sc constraint { w with state := c, driver := sc.driver.timeout w.driver i msg }
   | crash {w : World sys D} {i : σ.Id} {c : SysState sys} :
     Reachable sys sc constraint w → w.crashes < sc.maxCrashes →
     w.state.step sc.env (.crash i) = some c →
@@ -68,7 +72,8 @@ theorem Scenario.Reachable.system {sc : Scenario σ D} {constraint : World sys D
     {w : World sys D} (h : sc.Reachable sys constraint w) : sys.Reachable sc.env w.state := by
   induction h with
   | init => exact .init
-  | input _ _ hstep _ ih | output _ hstep _ ih | crash _ _ hstep _ ih | internal _ _ hstep _ ih =>
+  | input _ _ hstep _ ih | output _ hstep _ ih | timeout _ hstep _ ih | crash _ _ hstep _ ih
+  | internal _ _ hstep _ ih =>
     exact .step _ ih hstep
 
 theorem World.mem_next_iff [Enum σ.Id] {sc : Scenario σ D} {w w' : World sys D} {ev : Event σ} :
@@ -77,6 +82,7 @@ theorem World.mem_next_iff [Enum σ.Id] {sc : Scenario σ D} {w w' : World sys D
       | .input x =>
         ∃ d, (x, d) ∈ sc.driver.inputs w.driver ∧ w' = { w with state := c, driver := d }
       | .output out => w' = { w with state := c, driver := sc.driver.observe w.driver out }
+      | .timeout i msg => w' = { w with state := c, driver := sc.driver.timeout w.driver i msg }
       | .crash _ =>
         w.crashes < sc.maxCrashes ∧ w' = { w with state := c, crashes := w.crashes + 1 }
       | _ => w' = { w with state := c } := by
@@ -158,6 +164,8 @@ theorem Scenario.Reachable.model [Enum σ.Id] {sc : Scenario σ D}
     exact model_step ih ((World.mem_next_iff (ev := .input x)).mpr ⟨_, hstep, d, hinput, rfl⟩) hc
   | @output _ out _ _ hstep hc ih =>
     exact model_step ih ((World.mem_next_iff (ev := .output out)).mpr ⟨_, hstep, rfl⟩) hc
+  | @timeout _ i msg _ _ hstep hc ih =>
+    exact model_step ih ((World.mem_next_iff (ev := .timeout i msg)).mpr ⟨_, hstep, rfl⟩) hc
   | @crash _ i _ _ hbudget hstep hc ih =>
     exact model_step ih ((World.mem_next_iff (ev := .crash i)).mpr ⟨_, hstep, hbudget, rfl⟩) hc
   | @internal _ ev _ _ hev hstep hc ih =>
@@ -182,11 +190,14 @@ theorem Scenario.Reachable.of_model [Enum σ.Id] {sc : Scenario σ D}
     | output out =>
       simp only [hw'] at hc ⊢
       exact .output ih hstep hc
+    | timeout i msg =>
+      simp only [hw'] at hc ⊢
+      exact .timeout ih hstep hc
     | crash i =>
       obtain ⟨hbudget, hw'⟩ := hw'
       simp only [hw'] at hc ⊢
       exact .crash ih hbudget hstep hc
-    | deliver e | duplicate e | drop e | timeout i msg | start i =>
+    | deliver e | duplicate e | drop e | start i =>
       simp only [hw'] at hc ⊢
       exact .internal ih rfl hstep hc
 

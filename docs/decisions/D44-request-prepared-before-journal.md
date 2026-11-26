@@ -1,4 +1,4 @@
-# D?. A request is prepared before it is journalled
+# D44. A request is prepared before it is journalled
 
 `Lanes/Http/Gate.lean` (`Bridge.prepare`), `Lanes/Env/Http.lean`, `systems/ledger/Ledger/Web.lean`.
 The ledger found that `serve` journalled the request as it came: every log-in's password and

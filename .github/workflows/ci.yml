@@ -30,6 +30,7 @@ jobs:
         run: lake exe lanesCheck
       - name: Generated app builds and passes its checks
         run: |
+          rm -f .lake/build/lib/lean/LanesCli/New.* .lake/build/ir/LanesCli/New.*
           lake exe lanes new demo-app --dir "$RUNNER_TEMP/demo-app" --lanes-path "$GITHUB_WORKSPACE"
           cd "$RUNNER_TEMP/demo-app"
           mkdir -p .lake && ln -s "$GITHUB_WORKSPACE/.lake/packages" .lake/packages

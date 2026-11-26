@@ -39,9 +39,9 @@ Update them in the same change that moves an item; `lake exe lanes lint --fix` w
    frame lemma for the actors that did not move, and projections for ghost state.
 2. Counterexample-to-induction finder and `inv_split`, then `lanes prove`.
 3. Releasing idle actors.
-4. What `systems/ledger` asks of the framework (its README's friction log): specs with time,
-   `Service` without the system's signature, and a place for slow work that is not a function
-   of one request.
+4. What `systems/ledger` asks of the framework (its README's friction log): a place for slow
+   work that is not a function of one request. Requests prepared before the journal, specs with
+   time and `Service` without the system's signature are done.
 
 ## Known limits
 

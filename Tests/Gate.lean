@@ -16,7 +16,7 @@ open Lanes Lanes.Http
 
 abbrev echoSig : Signature := Server.sig ReqId ReqId
 
-def echo : Service echoSig Unit where
+def echo : Service ReqId ReqId Unit where
   init := ()
   step _ id := ((), [id])
 
