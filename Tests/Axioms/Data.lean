@@ -104,6 +104,12 @@ import Lanes.Semantics
 #guard_msgs in #print axioms Lanes.fromJson?_toJson_some
 
 -- Lanes.Data.Json.ParserSound
+/-- info: 'Lanes.Json.Parser.rest_next' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Json.Parser.rest_next
+
+/-- info: 'Lanes.Json.Parser.rest_eq_nil' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Json.Parser.rest_eq_nil
+
 /-- info: 'Lanes.Json.parse_complete' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Json.parse_complete
 

@@ -126,8 +126,6 @@ Each is to be proved, tested, made private or removed.
 - `JsonNumber.instCoeNat`
 - `JsonNumber.instCoeInt`
 - `JsonNumber.instInhabited`
-- `JsonNumber.maxLeadingZeros`
-- `JsonNumber.toString`
 - `JsonNumber.instToString`
 - `Json.instCoeNat`
 - `Json.instCoeInt`

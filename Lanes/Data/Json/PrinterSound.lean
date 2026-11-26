@@ -241,7 +241,8 @@ theorem number_toString {md : Nat} (n : JsonNumber) (h : n.digits ≤ md) :
       (intPart_cons hd0 fun c hc => hdig c (by
         simp only [List.mem_cons] at hc ⊢
         exact hc.imp id List.mem_of_mem_take))
-      (.some (digits_of_mem hdrop hdig fun c hc => List.mem_cons_of_mem _ (List.mem_of_mem_drop hc)))
+      (.some (digits_of_mem hdrop hdig fun c hc =>
+        List.mem_cons_of_mem _ (List.mem_of_mem_drop hc)))
       .none ?_ ?_ ?_ (by simp) (by simp)).congr (by simp) rfl
     · rw [List.cons_append, List.take_append_drop, hval]
     · simp at hk ⊢; omega
@@ -310,7 +311,8 @@ theorem foldl_separate {α : Type} (f : String × Bool → α → String × Bool
 
 theorem compressTo_toList (acc : String) : (j : Json) →
     (compressTo acc j).toList = acc.toList ++ (compress j).toList
-  | .null | .bool true | .bool false | .num _ => by simp [compress, compressTo, String.toList_append]
+  | .null | .bool true | .bool false | .num _ => by
+    simp [compress, compressTo, String.toList_append]
   | .str s => by simp [compress, compressTo, renderString_toList]
   | .arr elems => by
     rw [compress, compressTo, compressTo]
@@ -423,7 +425,7 @@ theorem value_compress : (j : Json) → ∀ {maxDigits depth : Nat}, j.depth ≤
           rintro _ ⟨e, he, rfl⟩
           exact value_compress e (by have := depth_le_of_mem he; omega)
             (Nat.le_trans (digits_le_of_mem he) hm)) nofun
-      simpa [Spaced.chars, Function.comp_def] using this
+      simpa [Function.comp_def] using this
   | .obj fields, md, d, hd, hm => by
     rw [compress_obj]
     obtain ⟨d, rfl⟩ : ∃ d', d = d' + 1 := ⟨d - 1, by simp [depth] at hd; omega⟩
@@ -446,7 +448,7 @@ theorem value_compress : (j : Json) → ∀ {maxDigits depth : Nat}, j.depth ≤
           rintro _ ⟨f, hf, rfl⟩
           exact value_compress f.2 (by have := depth_le_of_field hf; omega)
             (Nat.le_trans (digits_le_of_field hf) hm)) nofun
-      simpa [Member.chars, Spaced.chars, Function.comp_def] using this
+      simpa [Function.comp_def] using this
 termination_by j => j
 decreasing_by
   · have := Array.sizeOf_lt_of_mem he
@@ -568,7 +570,7 @@ theorem value_prettyTo (indent : Nat) : (j : Json) → ∀ {maxDigits depth : Na
           rintro _ ⟨e, he, rfl⟩
           exact value_prettyTo indent e (level + 1) (by have := depth_le_of_mem he; omega)
             (Nat.le_trans (digits_le_of_mem he) hm)) (ws_newline _ _)
-      simpa [Spaced.chars, Function.comp_def] using this
+      simpa [Function.comp_def] using this
   | .obj fields, md, d, level, hd, hm => by
     obtain ⟨d, rfl⟩ : ∃ d', d = d' + 1 := ⟨d - 1, by simp [depth] at hd; omega⟩
     rw [prettyTo]
@@ -587,7 +589,8 @@ theorem value_prettyTo (indent : Nat) : (j : Json) → ∀ {maxDigits depth : Na
       have := Value.obj (maxDigits := md) d
         (fields.toList.map fun f => (⟨⟨(newline indent (level + 1)).toList,
           (renderString f.1 "").toList, []⟩, f.1.toList,
-          ⟨[' '], (prettyTo indent (level + 1) "" f.2).toList, []⟩, f.2⟩ : Member)) (close := (newline indent level).toList) (by simpa using he)
+          ⟨[' '], (prettyTo indent (level + 1) "" f.2).toList, []⟩, f.2⟩ : Member))
+        (close := (newline indent level).toList) (by simpa using he)
         (by
           simp only [List.mem_map]
           rintro _ ⟨f, _, rfl⟩
@@ -601,7 +604,7 @@ theorem value_prettyTo (indent : Nat) : (j : Json) → ∀ {maxDigits depth : Na
           rintro _ ⟨f, hf, rfl⟩
           exact value_prettyTo indent f.2 (level + 1) (by have := depth_le_of_field hf; omega)
             (Nat.le_trans (digits_le_of_field hf) hm)) (ws_newline _ _)
-      simpa [Member.chars, Spaced.chars, Function.comp_def] using this
+      simpa [Function.comp_def] using this
   | .null, _, _, level, hd, hm => by
     rw [prettyTo_compressTo (j := .null) _ _ _ (fun _ e => nomatch e) (fun _ e => nomatch e)]
     exact value_compress _ hd hm
@@ -629,7 +632,8 @@ theorem text_compress (j : Json) : Text j.depth j.digits (compress j).toList j :
 
 /-- `pretty` writes a JSON text (RFC 8259) that means the value, fields in their stored order. -/
 theorem text_pretty (j : Json) (indent : Nat) : Text j.depth j.digits (j.pretty indent).toList j :=
-  ⟨[], _, [], by simp [pretty], nofun, nofun, value_prettyTo indent j 0 (Nat.le_refl _) (Nat.le_refl _)⟩
+  ⟨[], _, [], by simp [pretty], nofun, nofun,
+    value_prettyTo indent j 0 (Nat.le_refl _) (Nat.le_refl _)⟩
 
 /-- A `String` is valid UTF-8 by construction, so the printers' output is too, for every value. -/
 theorem fromUTF8?_compress (j : Json) :

@@ -33,6 +33,14 @@ namespace Lanes.Json
 
 open Grammar
 
+local notation "spaced(" x ")" => Spaced.before x ++ Spaced.text x ++
+  Spaced.after x
+
+local notation "member(" m ")" => Spaced.before (Member.key m) ++
+  Spaced.text (Member.key m) ++ Spaced.after (Member.key m) ++
+  ':' :: (Spaced.before (Member.value m) ++
+    Spaced.text (Member.value m) ++ Spaced.after (Member.value m))
+
 namespace Parser
 
 variable {s : String}
@@ -472,7 +480,7 @@ theorem elements_complete {md d : Nat} {close t : List Char} (hclose : Ws close)
     (∀ e ∈ x :: xs, e.1.Ws) → (∀ e ∈ x :: xs, ∀ r, NoWs (e.1.text ++ r)) →
     (∀ e ∈ x :: xs, Reads (s := s) md d e.1.text e.2) →
     ∀ {start p : s.Pos} (hp : start < p) (acc : Array Json),
-    rest p = x.1.text ++ (x.1.after ++ ((xs.map fun e => ',' :: e.1.chars).flatten ++
+    rest p = x.1.text ++ (x.1.after ++ ((xs.map fun e => ',' :: spaced(e.1)).flatten ++
       (close ++ ']' :: t))) →
     ∃ q, elements d md start p hp acc =
       .ok (.arr (acc ++ ((x :: xs).map (·.2.normalize)).toArray), q) ∧ rest q.1 = t
@@ -491,18 +499,18 @@ theorem elements_complete {md d : Nat} {close t : List Char} (hclose : Ws close)
   | y :: ys, x, hw, hh, ih, start, p, hp, acc, h => by
     have hwx := (hw x (by simp)).2
     obtain ⟨⟨p1, h1⟩, e1, r1⟩ := ih x (by simp) (by simpa using h)
-      (numStop_ws (r := y.1.chars ++ (ys.map fun e => ',' :: e.1.chars).flatten ++ close ++
+      (numStop_ws (r := spaced(y.1) ++ (ys.map fun e => ',' :: spaced(e.1)).flatten ++ close ++
         ']' :: t) hwx (by simp))
     have r2 := skipWs_ws (p := p1) (by simpa using r1) hwx (noWs_sep (by simp))
     obtain ⟨⟨p3, h3⟩, e3, r3⟩ := accept_cons (accepted := (· == ',')) r2 (by decide)
-    have r4 := skipWs_ws (p := p3) (by simpa [Spaced.chars] using r3) (hw y (by simp)).1
+    have r4 := skipWs_ws (p := p3) (by simpa using r3) (hw y (by simp)).1
       (hh y (by simp) _)
     obtain ⟨q, eq, rq⟩ := elements_complete hclose ys y (fun e he => hw e (by simp [he]))
       (fun e he => hh e (by simp [he])) (fun e he => ih e (by simp [he]))
       (start := start) (p := (skipWs p3).1)
       (String.Pos.lt_of_lt_of_le hp (String.Pos.le_trans h1 (String.Pos.le_trans (skipWs p1).2
         (String.Pos.le_trans (String.Pos.le_of_lt h3) (skipWs p3).2))))
-      (acc.push x.2.normalize) (by simpa [Spaced.chars] using r4)
+      (acc.push x.2.normalize) (by simpa using r4)
     refine ⟨q, ?_, rq⟩
     rw [elements, e1]
     simp [e3, eq]
@@ -514,8 +522,8 @@ theorem fields_complete {md d : Nat} {close t : List Char} (hclose : Ws close) :
     (∀ e ∈ m :: ms, ∀ r, NoWs (e.value.text ++ r)) →
     (∀ e ∈ m :: ms, Reads (s := s) md d e.value.text e.json) →
     ∀ {start p : s.Pos} (hp : start < p) (acc : Array (String × Json)),
-    rest p = m.key.text ++ (m.key.after ++ ':' :: (m.value.chars ++
-      ((ms.map fun e => ',' :: e.chars).flatten ++ (close ++ '}' :: t)))) →
+    rest p = m.key.text ++ (m.key.after ++ ':' :: (spaced(m.value) ++
+      ((ms.map fun e => ',' :: member(e)).flatten ++ (close ++ '}' :: t)))) →
     ∃ q, fields d md start p hp acc =
       .ok (mkObj (acc.toList ++ (m :: ms).map fun e => (String.ofList e.name, e.json.normalize)),
         q) ∧ rest q.1 = t
@@ -523,7 +531,7 @@ theorem fields_complete {md d : Nat} {close t : List Char} (hclose : Ws close) :
     obtain ⟨⟨hkb, hka⟩, hvb, hva⟩ := hw m (by simp)
     obtain ⟨cs, hcs, hchars⟩ := hk m (by simp)
     obtain ⟨⟨p1, h1⟩, e1, r1⟩ := key_complete (p := p) hchars hka hvb (hh m (by simp) _)
-      (by simpa [hcs, Spaced.chars] using h)
+      (by simpa [hcs] using h)
     have after : Ws m.value.after := hva
     cases ms with
     | nil =>
@@ -541,13 +549,13 @@ theorem fields_complete {md d : Nat} {close t : List Char} (hclose : Ws close) :
       simp [e2, ha, eq]
     | cons y ys =>
       obtain ⟨⟨p2, h2⟩, e2, r2⟩ := ih m (by simp) r1
-        (by simpa using numStop_ws (r := y.chars ++ ((ys.map fun e => ',' :: e.chars).flatten ++
+        (by simpa using numStop_ws (r := member(y) ++ ((ys.map fun e => ',' :: member(e)).flatten ++
           (close ++ '}' :: t))) (c := ',') after (by simp))
       have r3 := skipWs_ws (p := p2) (by simpa using r2) after (noWs_sep (by simp))
       obtain ⟨⟨p4, h4⟩, e4, r4⟩ := accept_cons (accepted := (· == ',')) r3 (by decide)
       obtain ⟨⟨yb, -⟩, -⟩ := hw y (by simp)
       obtain ⟨ycs, hycs, -⟩ := hk y (by simp)
-      have r5 := skipWs_ws (p := p4) (by simpa [Member.chars, Spaced.chars] using r4) yb
+      have r5 := skipWs_ws (p := p4) (by simpa using r4) yb
         (by rw [hycs]; intro c hc; simp at hc; subst hc; decide)
       obtain ⟨q, eq, rq⟩ := fields_complete hclose ys y (fun e he => hw e (by simp [he]))
         (fun e he => hk e (by simp [he])) (fun e he => hh e (by simp [he]))
@@ -556,7 +564,7 @@ theorem fields_complete {md d : Nat} {close t : List Char} (hclose : Ws close) :
           (String.Pos.le_trans h2 (String.Pos.le_trans (skipWs p2).2
             (String.Pos.le_trans (String.Pos.le_of_lt h4) (skipWs p4).2)))))
         (acc.push (String.ofList m.name, m.json.normalize))
-        (by simpa [Member.chars, Spaced.chars] using r5)
+        (by simpa using r5)
       refine ⟨q, ?_, rq⟩
       rw [fields, e1]
       simp [e2, e4, eq]
@@ -654,9 +662,9 @@ theorem value_complete {md d : Nat} {cs : List Char} {v : Json} (hv : Value md d
     obtain ⟨⟨p1, h1⟩, e1, r1⟩ := next?_cons h
     obtain ⟨c, r, hcr, hc⟩ := value_head (hvals x (by simp))
     have r2 := skipWs_ws (p := p1) (w := x.1.before)
-      (t := x.1.text ++ (x.1.after ++ ((xs.map fun e => ',' :: e.1.chars).flatten ++
+      (t := x.1.text ++ (x.1.after ++ ((xs.map fun e => ',' :: spaced(e.1)).flatten ++
         (close ++ ']' :: t))))
-      (by simpa [intercalate_cons_eq, Spaced.chars, Function.comp_def] using r1) (hws x (by simp)).1
+      (by simpa [intercalate_cons_eq, Function.comp_def] using r1) (hws x (by simp)).1
       (noWs_of_value (hvals x (by simp)))
     have ha : accept (· == ']') (skipWs p1).1 = none := accept_none fun c' t' hct => by
       rw [r2, hcr] at hct
@@ -675,9 +683,9 @@ theorem value_complete {md d : Nat} {cs : List Char} {v : Json} (hv : Value md d
     obtain ⟨⟨p1, h1⟩, e1, r1⟩ := next?_cons h
     obtain ⟨cs, hcs, _⟩ := hkeys m (by simp)
     have r2 := skipWs_ws (p := p1) (w := m.key.before)
-      (t := m.key.text ++ (m.key.after ++ ':' :: (m.value.chars ++
-        ((ms.map fun e => ',' :: e.chars).flatten ++ (close ++ '}' :: t)))))
-      (by simpa [intercalate_cons_eq, Member.chars, Spaced.chars, Function.comp_def] using r1)
+      (t := m.key.text ++ (m.key.after ++ ':' :: (spaced(m.value) ++
+        ((ms.map fun e => ',' :: member(e)).flatten ++ (close ++ '}' :: t)))))
+      (by simpa [intercalate_cons_eq, Function.comp_def] using r1)
       (hws m (by simp)).1.1
       (by rw [hcs]; intro c hc; simp at hc; subst hc; decide)
     have ha : accept (· == '}') (skipWs p1).1 = none := accept_none fun c' t' hct => by
@@ -1075,7 +1083,7 @@ def ElementsSound (p : s.Pos) : Prop :=
     {q : { q : s.Pos // start ≤ q }}, elements d md start p hp acc = .ok (v, q) →
     ∃ (x : Spaced × Json) (xs : List (Spaced × Json)), x.1.before = [] ∧
       (∀ e ∈ x :: xs, e.1.Ws) ∧ (∀ e ∈ x :: xs, Value md d e.1.text e.2) ∧
-      rest p = x.1.text ++ (x.1.after ++ ((xs.map fun e => ',' :: e.1.chars).flatten ++
+      rest p = x.1.text ++ (x.1.after ++ ((xs.map fun e => ',' :: spaced(e.1)).flatten ++
         ']' :: rest q.1)) ∧
       v = .arr (acc ++ ((x :: xs).map (·.2.normalize)).toArray)
 
@@ -1086,8 +1094,8 @@ def FieldsSound (p : s.Pos) : Prop :=
       (∀ e ∈ m :: ms, e.key.Ws ∧ e.value.Ws) ∧
       (∀ e ∈ m :: ms, ∃ cs, e.key.text = '"' :: cs ++ ['"'] ∧ Chars cs e.name) ∧
       (∀ e ∈ m :: ms, Value md d e.value.text e.json) ∧
-      rest p = m.key.text ++ (m.key.after ++ ':' :: (m.value.chars ++
-        ((ms.map fun e => ',' :: e.chars).flatten ++ '}' :: rest q.1))) ∧
+      rest p = m.key.text ++ (m.key.after ++ ':' :: (spaced(m.value) ++
+        ((ms.map fun e => ',' :: member(e)).flatten ++ '}' :: rest q.1))) ∧
       v = mkObj (acc.toList ++ (m :: ms).map fun e => (String.ofList e.name, e.json.normalize))
 
 theorem remainingBytes_lt {p q : s.Pos} (h : p < q) : q.remainingBytes < p.remainingBytes :=
@@ -1155,7 +1163,7 @@ theorem value_sound_of {p : s.Pos} (ihE : ∀ q : s.Pos, p < q → ElementsSound
           · exact hvals x (by simp)
           · exact hvals e (by simp [he])
         · rw [rest_of_next? hn, r1, r2]
-          simp [intercalate_cons_eq, Spaced.chars, Function.comp_def]
+          simp [intercalate_cons_eq, Function.comp_def]
         · simp [normalize, Function.comp_def]
   · rename_i p1 h1 hn
     split at h
@@ -1192,7 +1200,7 @@ theorem value_sound_of {p : s.Pos} (ihE : ∀ q : s.Pos, p < q → ElementsSound
           · exact hvals m (by simp)
           · exact hvals e (by simp [he])
         · rw [rest_of_next? hn, r1, r2]
-          simp [intercalate_cons_eq, Member.chars, Spaced.chars, Function.comp_def]
+          simp [intercalate_cons_eq, Function.comp_def]
         · simp [normalize, Function.comp_def]
   · rename_i q' hn
     split at h
@@ -1273,7 +1281,7 @@ theorem elements_sound_of {p : s.Pos} (hv : ValueSound p)
         · exact hvals y (by simp)
         · exact hvals e (by simp [he])
       · rw [r1, r2, r3, r4, r5]
-        simp [Spaced.chars]
+        simp
       · simp
     · split at h
       · rename_i q' hq' hacc'
@@ -1343,7 +1351,7 @@ theorem fields_sound_of {p : s.Pos} (ihV : ∀ q : s.Pos, p < q → ValueSound q
           · exact hvals y (by simp)
           · exact hvals e (by simp [he])
         · rw [rk, r2, r3, r4, r5, r6]
-          simp [m, Member.chars, Spaced.chars]
+          simp [m]
         · simp [m]
       · split at h
         · rename_i q' hq' hacc'
@@ -1352,7 +1360,7 @@ theorem fields_sound_of {p : s.Pos} (ihV : ∀ q : s.Pos, p < q → ValueSound q
           obtain ⟨c, hc, r4⟩ := rest_of_accept hacc'
           simp only [beq_iff_eq] at hc
           subst hc
-          refine ⟨m, [], rfl, ?_, ?_, ?_, by rw [rk, r2, r3, r4]; simp [m, Spaced.chars],
+          refine ⟨m, [], rfl, ?_, ?_, ?_, by rw [rk, r2, r3, r4]; simp [m],
             by simp [m]⟩
           · intro e he
             simp only [List.mem_cons, List.not_mem_nil, or_false] at he

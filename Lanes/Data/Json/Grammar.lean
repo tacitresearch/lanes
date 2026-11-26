@@ -110,8 +110,6 @@ structure Spaced where
   text : List Char
   after : List Char
 
-def Spaced.chars (x : Spaced) : List Char := x.before ++ x.text ++ x.after
-
 def Spaced.Ws (x : Spaced) : Prop := Grammar.Ws x.before ∧ Grammar.Ws x.after
 
 /-- An object member: its key with the whitespace around it, `:`, then its value. -/
@@ -120,8 +118,6 @@ structure Member where
   name : List Char
   value : Spaced
   json : Json
-
-def Member.chars (m : Member) : List Char := m.key.chars ++ ':' :: m.value.chars
 
 /--
 `value`, nested at most `depth` deep. An array is `[`, its elements with whitespace around each,
@@ -140,7 +136,9 @@ inductive Value (maxDigits : Nat) : Nat → List Char → Json → Prop
   | arr (depth : Nat) (elems : List (Spaced × Json)) {close : List Char} :
       elems ≠ [] → (∀ e ∈ elems, e.1.Ws) → (∀ e ∈ elems, Value maxDigits depth e.1.text e.2) →
       Grammar.Ws close →
-      Value maxDigits (depth + 1) ('[' :: [','].intercalate (elems.map (·.1.chars)) ++ close ++ [']'])
+      Value maxDigits (depth + 1)
+        ('[' :: [','].intercalate (elems.map fun e => e.1.before ++ e.1.text ++ e.1.after) ++
+          close ++ [']'])
         (.arr (elems.map (·.2)).toArray)
   | emptyObj (depth : Nat) {w : List Char} :
       Grammar.Ws w → Value maxDigits (depth + 1) ('{' :: w ++ ['}']) (.obj #[])
@@ -149,7 +147,9 @@ inductive Value (maxDigits : Nat) : Nat → List Char → Json → Prop
       (∀ m ∈ members, ∃ cs, m.key.text = '"' :: cs ++ ['"'] ∧ Chars cs m.name) →
       (∀ m ∈ members, Value maxDigits depth m.value.text m.json) → Grammar.Ws close →
       Value maxDigits (depth + 1)
-        ('{' :: [','].intercalate (members.map (·.chars)) ++ close ++ ['}'])
+        ('{' :: [','].intercalate (members.map fun m => m.key.before ++ m.key.text ++
+          m.key.after ++ ':' :: (m.value.before ++ m.value.text ++ m.value.after)) ++
+          close ++ ['}'])
         (.obj (members.map fun m => (String.ofList m.name, m.json)).toArray)
 
 /-- `JSON-text = ws value ws` -/
