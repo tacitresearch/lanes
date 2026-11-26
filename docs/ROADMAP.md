@@ -82,10 +82,10 @@ a `sometimes` property), and once the checker rejected a property its author bel
   nothing can observe, and reachability is stated up to equality. The projection proof for
   joins paid for this twice: the left side needed a hidden relation to get an exact statement,
   and the right side is true only up to that unobservable order (`SysState.Equiv`), because a
-  join boots one side first. The shard theorem will be up to the same relation. Either
-  reachability should be stated up to `SysState.Equiv` everywhere, with the relation moved
-  from the checker into the core, or the net should be a queue per link. This is a change to
-  the semantics and should be decided before the shard theorem is proved.
+  join boots one side first. The shard theorem will be up to the same relation. Decided:
+  the relation is in the core now (`Lanes/Actors/Equiv.lean`) and theorems about systems put
+  together are stated up to it. A queue per link would make states canonical, but it would
+  touch every proof in the core for no new guarantee.
 - *Proof volume.* The kernel's timer invariants are 700 lines, the search's soundness 800. They
   were re-proved after each change without trouble, but every kernel change now has that cost.
 - *Throughput.* One shard, and about 90 µs to wake it. Nothing in phase A depended on it;
