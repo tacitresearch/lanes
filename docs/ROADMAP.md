@@ -185,7 +185,9 @@ The next stress test is `systems/ledger`, phase D's exit criterion: users, sessi
 authentication, forms, pages that update, many kinds of records. Alongside it: the trusted
 code is being cut back by moving what it decides into proved functions (the HTTP reader, the
 runtime's batch, the server's table of waiting requests, the mailbox and the courier), and
-declaration sugar for codecs and instances, the boilerplate Raft showed.
+declaration sugar for codecs and instances, the boilerplate Raft showed. The ledger's first
+finding was that `serve` journalled passwords and session cookies as they came; a bridge now
+prepares a request before it is journalled (D43).
 
 ## Serious applications
 
