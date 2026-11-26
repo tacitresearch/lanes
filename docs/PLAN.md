@@ -69,7 +69,7 @@ theorems, and their repeated tests go away:
 | The checker lists every enabled event | Proved (`SysState.mem_successors_iff`) |
 | States the checker merges enable the same events and step to states it merges | Proved (`SysState.Equiv.step`, `SysState.equiv_iff`) |
 | PASS and complete ⇒ the invariant holds in every reachable state of the instance | Proved (`Check.system_sound`): every `always` property holds in every world of `Scenario.Reachable`, which is `SysState.step` with the driver's inputs, the crash budget and the constraint. It assumes that `==` is equality on actor states and on the driver's state (`LawfulBEq`), and that the properties and the constraint do not depend on message order (`World.Equiv`; `eq_of_quiet` and `eq_of_perm` discharge this). Not covered: a driver whose `==` is not equality, which is every monitored driver, so a PASS of `Check.refines` |
-| A reported trace is a real run ending in a violation | Proved for the search (`Check.search_violated`, `search_deadlock`, `search_witness`); not yet carried through `Check.system` to `SysState.run` |
+| A reported trace is a real run ending in a violation | Proved (`Check.system_violated`: the trace's events are a run of `SysState.step` from the initial state to a state where the property is false) |
 | `states ≤ maxStates` | Proved (`Check.search_states_le`) |
 | The spec monitor accepts exactly the traces of `Service.spec` | Proved |
 
@@ -154,8 +154,8 @@ declaration and every field, and most of them restate the name. That rule goes.
 Each step is its own commit on the branch.
 
 Progress, 2026-11-27: step 1 is done. Step 2 is done for `always` properties: a complete PASS
-of `Check.system` is a theorem (`Check.system_sound`). Open there: refinement checks under a
-monitored driver, and carrying reported traces through to `SysState.run`. Step 3 is done for
+of `Check.system` is a theorem (`Check.system_sound`). A reported violation
+is a real run (`Check.system_violated`). Open there: refinement checks under a monitored driver. Step 3 is done for
 one shard: the kernel is proved and the old runtime is deleted; several shards are open.
 Step 4 is done: the gate actor replaces the adapter's logic. Step 5: typed routes with their
 proofs, the htmx vocabulary, fragments, attribute splices and class lists are done; the render

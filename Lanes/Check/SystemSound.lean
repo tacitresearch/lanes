@@ -277,4 +277,91 @@ theorem system_sound (sc : Scenario σ D) (props : List (Property (World sys D))
 
 end Check
 
+/-! Reported traces are runs of the semantics. -/
+
+theorem World.step_of_mem_next [Enum σ.Id] {sc : Scenario σ D} {w w' : World sys D}
+    {ev : Event σ} (h : (ev, w') ∈ w.next sc) : w.state.step sc.env ev = some w'.state := by
+  obtain ⟨c, hstep, hw⟩ := World.mem_next_iff.mp h
+  rw [hstep]
+  cases ev with
+  | input x => obtain ⟨d, _, rfl⟩ := hw; rfl
+  | crash i => obtain ⟨_, rfl⟩ := hw; rfl
+  | output out | deliver e | duplicate e | drop e | timeout i msg | start i => subst hw; rfl
+
+namespace Check
+
+theorem Trace.last_cons {S L : Type} (s : S) (step : L × S) (rest : List (L × S)) :
+    (Trace.mk s (step :: rest)).last = (Trace.mk step.2 rest).last := by
+  cases rest with
+  | nil => rfl
+  | cons next rest =>
+    simp only [Trace.last, List.getLast?_cons_cons]
+    cases h : (next :: rest).getLast? with
+    | none => simp at h
+    | some last => rfl
+
+theorem Trace.last_map {S S' L : Type} (f : S → S') (t : Trace S L) :
+    (t.map f).last = f t.last := by
+  obtain ⟨init, steps⟩ := t
+  induction steps generalizing init with
+  | nil => rfl
+  | cons step rest ih =>
+    have := ih step.2
+    simp only [Trace.map, List.map_cons] at this ⊢
+    rw [Trace.last_cons, Trace.last_cons]
+    exact this
+
+theorem Trace.labels_map {S S' L : Type} (f : S → S') (t : Trace S L) :
+    (t.map f).labels = t.labels := by
+  simp [Trace.map, Trace.labels, List.map_map, Function.comp_def]
+
+theorem run_of_steps [Enum σ.Id] {sc : Scenario σ D} (n : Node sys sc.env D)
+    (steps : List (Event σ × Node sys sc.env D)) (h : (model sys sc).Steps n steps) :
+    n.world.state.run sc.env (steps.map (·.1)) = some (Trace.mk n steps).last.world.state := by
+  induction steps generalizing n with
+  | nil => rfl
+  | cons step rest ih =>
+    obtain ⟨hmem, hrest⟩ := h
+    obtain ⟨⟨ev, w'⟩, hnext, rfl⟩ := List.mem_map.mp hmem
+    rw [Trace.last_cons, List.map_cons, SysState.run, World.step_of_mem_next hnext]
+    exact ih _ hrest
+
+/--
+A violation `Check.system` reports is real: the events of its trace are a run of the semantics
+from the initial state, and the named property is false in the state they reach. Nothing is
+assumed about the equality or the hashes used to merge states.
+-/
+theorem system_violated [σ.Inspect] [sys.Inspect] [BEq D] [Hashable D] (sc : Scenario σ D)
+    (props : List (Property (World sys D))) (opts : Options (World sys D)) {name : String}
+    {t : Trace (World sys D) (Event σ)}
+    (h : (system sys sc props opts).failure = some (.violated name t)) :
+    (SysState.init sys sc.env).run sc.env t.labels = some t.last.state ∧
+      ∃ p, .always name p ∈ props ∧ p t.last = false := by
+  simp only [system, Report.map, Option.map_eq_some_iff] at h
+  obtain ⟨failure, hsearch, hmap⟩ := h
+  cases failure with
+  | deadlock t₀ => simp at hmap
+  | unreached names => simp at hmap
+  | violated name₀ t₀ =>
+    simp only [Failure.violated.injEq] at hmap
+    obtain ⟨rfl, rfl⟩ := hmap
+    obtain ⟨⟨hinit, hsteps⟩, _, p', hp', hfalse⟩ := search_violated hsearch
+    obtain ⟨prop, hprop, hprop'⟩ := List.mem_map.mp hp'
+    rw [Trace.last_map, Trace.labels_map]
+    have hstart : t₀.init.world.state = SysState.init sys sc.env := by
+      simp only [model, List.mem_singleton] at hinit
+      rw [hinit]
+      rfl
+    refine ⟨?_, ?_⟩
+    · rw [← hstart]
+      exact run_of_steps t₀.init t₀.steps hsteps
+    · cases prop with
+      | sometimes n q => simp at hprop'
+      | always n q =>
+        simp only [Property.always.injEq] at hprop'
+        obtain ⟨rfl, rfl⟩ := hprop'
+        exact ⟨q, hprop, hfalse⟩
+
+end Check
+
 end Lanes
