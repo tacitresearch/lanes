@@ -133,4 +133,27 @@ instance search finds for a sum or a product. -/
 theorem mem_of_mem_erase [DecidableEq α] {l : List α} {a x : α} (h : x ∈ l.erase a) : x ∈ l :=
   List.mem_of_mem_erase h
 
+/-- The first element that `p` finds is the first that `f`, which sees only elements of `p`,
+keeps; erasing it leaves the rest. This is what delivering the oldest message on an ordered
+link does to what a reading of that link sees. -/
+theorem filterMap_eq_cons_of_find? [DecidableEq α] {p : α → Bool} {f : α → Option β}
+    (hf : ∀ x, (f x).isSome = true → p x = true) {l : List α} {a : α} {b : β}
+    (hfind : l.find? p = some a) (hb : f a = some b) :
+    l.filterMap f = b :: (l.erase a).filterMap f := by
+  induction l with
+  | nil => simp at hfind
+  | cons y l ih =>
+    by_cases hy : p y = true
+    · obtain rfl : y = a := by simpa [List.find?_cons, hy] using hfind
+      simp [hb]
+    · have hfy : f y = none := by
+        cases h : f y with
+        | none => rfl
+        | some _ => exact absurd (hf y (by simp [h])) hy
+      have hya : y ≠ a := by
+        rintro rfl
+        exact hy (List.find?_some hfind)
+      rw [List.find?_cons, Bool.eq_false_iff.mpr hy] at hfind
+      simp [beq_iff_eq, hya, hfy, ih hfind]
+
 end Lanes

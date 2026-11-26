@@ -65,3 +65,4 @@ decision without a number.
 - [D49. The server reads requests by a strict profile, and every refusal closes the connection](D49-the-server-reads-requests-by-a-strict-profile.md)
 - [D50. A parser is proved against its RFC and tested against Go, and every difference is decided](D50-differential-tests-against-go.md)
 - [D51. An actor at rest is released, and the kernel's theorems hold up to the starts that bring it back](D51-release-actors-at-rest.md)
+- [D52. A service behind actors is proved with one simulation, and an application gives only its steps](D52-standard-simulation.md)
