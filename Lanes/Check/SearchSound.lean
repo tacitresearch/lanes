@@ -18,9 +18,11 @@ What a `Check.Report` claims, proved of `Check.search`.
 - `search_reached`: with no failure, every `sometimes` property has a witness of its own.
 - `search_states_le`: at most `maxStates` states are stored.
 - `search_sound`: a complete search with no failure means every `always` property holds in
-  every reachable state. This needs `==` on states to be an equivalence with a matching hash,
-  and the model to respect it (`Model.Respects`). `search_sound_of_lawful` is the case where
-  `==` is equality, which needs no hypothesis.
+  every reachable state. This needs `==` on states to be an equivalence that the model
+  respects (`Model.Respects`). Nothing is asked of the hash: the search compares hashes before
+  states, so a hash that tells equal states apart makes it store them twice, and a pass is
+  still a pass. `search_sound_of_lawful` is the case where `==` is equality, which needs no
+  hypothesis.
 - `search_unreached`, `search_deadlock_free`: the same for the `sometimes` properties reported
   unreached and for the absence of deadlocks.
 
@@ -1042,10 +1044,10 @@ theorem search_states_le : (search m props opts labelName actions).states ≤ op
 PASS is sound: if the search reports no failure and is complete, every `always` property holds
 in every state reachable within the constraint.
 
-`==` on states need not be equality, only an equivalence with a matching hash that the model,
-the constraint and the properties respect.
+`==` on states need not be equality, only an equivalence that the model, the constraint and the
+properties respect.
 -/
-theorem search_sound [EquivBEq S] [LawfulHashable S] (hm : m.Respects opts.constraint props)
+theorem search_sound [EquivBEq S] (hm : m.Respects opts.constraint props)
     (hfailure : (search m props opts labelName actions).failure = none)
     (hcomplete : (search m props opts labelName actions).complete = true)
     {name : String} {p : S → Bool} (hp : .always name p ∈ props) {s : S}
@@ -1066,7 +1068,7 @@ theorem search_sound_of_lawful [LawfulBEq S]
 /-- A complete search that reports `sometimes` properties unreached is right. The names it
 reports are those of `missing`, a selection of the properties in their order and not an empty
 one, and each property in it is false in every state reachable within the constraint. -/
-theorem search_unreached [EquivBEq S] [LawfulHashable S] (hm : m.Respects opts.constraint props)
+theorem search_unreached [EquivBEq S] (hm : m.Respects opts.constraint props)
     {names : List String}
     (hfailure : (search m props opts labelName actions).failure = some (.unreached names))
     (hcomplete : (search m props opts labelName actions).complete = true) :
@@ -1087,7 +1089,7 @@ theorem search_unreached [EquivBEq S] [LawfulHashable S] (hm : m.Respects opts.c
 
 /-- A complete search that reports `sometimes` properties unreached names one that is false in
 every state reachable within the constraint. -/
-theorem search_unreached_exists [EquivBEq S] [LawfulHashable S]
+theorem search_unreached_exists [EquivBEq S]
     (hm : m.Respects opts.constraint props) {names : List String}
     (hfailure : (search m props opts labelName actions).failure = some (.unreached names))
     (hcomplete : (search m props opts labelName actions).complete = true) :
@@ -1100,7 +1102,7 @@ theorem search_unreached_exists [EquivBEq S] [LawfulHashable S]
 
 /-- A complete pass with deadlock checking on leaves no deadlock: every state reachable within
 the constraint is terminal or has a successor within the constraint. -/
-theorem search_deadlock_free [EquivBEq S] [LawfulHashable S]
+theorem search_deadlock_free [EquivBEq S]
     (hm : m.Respects opts.constraint props)
     (hterminal : ∀ a b, (a == b) = true → opts.terminal a = opts.terminal b)
     (hcheck : opts.checkDeadlock = true)

@@ -29,9 +29,10 @@ The search is written to be proved, not as a loop: a `Check.Search` value is thr
 `Search.start` (store the initial states), `Search.run` (expand one stored state per unit of
 fuel) and `Search.report`. `Lanes.Check.SearchSound` proves what a report claims.
 
-`Search.run` is the definition; `Search.runBatches` is what runs. It takes the stored states a
-batch at a time, computes their successors in tasks and stores them in the order `run` would,
-so it is the same function (`Search.runBatches_eq`) and the report does not depend on timing.
+`Search.run` is the definition. With `Options.tasks`, `Search.runBatches` runs instead: it takes
+the stored states a batch at a time, computes their successors in tasks and stores them in the
+order `run` would, so it is the same function (`Search.runBatches_eq`) and the report does not
+depend on timing.
 
 A state is hashed once, when it is produced: the search keeps it with its hash (`Hashed`), and
 two states with different hashes are different without being compared.
@@ -77,7 +78,8 @@ structure Options (S : Type) where
   checkDeadlock : Bool := false
   terminal : S → Bool := fun _ => false
   /-- Compute successors in tasks, on as many cores as there are. The report is the same
-  either way. -/
+  either way. Off by default: where it was measured the tasks cost more than they gain
+  (docs/DECISIONS.md, D30). -/
   tasks : Bool := false
 
 structure Trace (S L : Type) where

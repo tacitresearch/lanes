@@ -323,6 +323,8 @@ instance [BEq D] [EquivBEq D] [∀ i, LawfulBEq (sys.State i)] : EquivBEq (Node 
     have ⟨hc₂, hd₂, hs₂⟩ := Node.beq_iff.mp h₂
     Node.beq_iff.mpr ⟨hc₁.trans hc₂, BEq.trans hd₁ hd₂, hs₁.trans hs₂⟩
 
+/-- Nodes the checker merges have the same hash, so each is stored once and the count of
+states is the count of worlds up to `World.Equiv`. Soundness does not need this. -/
 instance [BEq D] [Hashable D] [LawfulHashable D] [∀ i, LawfulBEq (sys.State i)] :
     LawfulHashable (Node sys env D) where
   hash_eq a b h := by
@@ -341,10 +343,10 @@ A complete PASS from `Check.system` is sound: every `always` property holds in e
 the checked instance.
 
 Actor states must compare with `==` exactly when they are equal. On the driver's state `==` need
-only be an equivalence, with a matching hash, that the driver respects. The properties and the
-constraint must not tell merged worlds apart.
+only be an equivalence that the driver respects. The properties and the constraint must not tell
+merged worlds apart.
 -/
-theorem system_sound_of_respects [EquivBEq D] [LawfulHashable D] (sc : Scenario σ D)
+theorem system_sound_of_respects [EquivBEq D] (sc : Scenario σ D)
     (hdriver : sc.driver.Respects) (props : List (Property (World sys D)))
     (opts : Options (World sys D))
     (hprops : ∀ p ∈ props, ∀ a b, World.Equiv sc.env a b → p.holds a = p.holds b)
