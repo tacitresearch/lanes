@@ -97,6 +97,8 @@ does not have armed.
 | The same with any actor crashing once | 16,478 | pass |
 | A log-out racing a transfer, then a view by the other user | 1,727 | pass |
 | The same with a crash anywhere | 10,238 | pass |
+| The same with requests lost and reordered on the way in and a crash anywhere | 12,264 | pass |
+| Transfers between two users, with links to the ledger that lose messages | 3,904 | pass |
 | The same, answered by the user actor | | stale view found in 42 steps |
 | The same with links that reorder | | stale view found in 47 steps |
 | Locks, evictions, a session used for another user, refusals | 199 | pass |
@@ -122,9 +124,22 @@ axiom gate:
 - `serve_from_owner`: every request on its way to the ledger to serve `n` was sent by
   `user n` (`System.Monotone`, five cases);
 - `user_bounded`: at most `maxSessions` sessions, at most `maxFailures` failures counted, and
-  locked at that many.
+  locked at that many;
+- `implements`: without timers (`Untimed`), the system implements its spec, for every
+  configuration and every environment in which each user's link to the ledger is ordered and
+  does not duplicate, and no request is handed to a user twice: messages may be lost on every
+  link and reordered on the way in, and any actor may crash (`Ledger/Proofs/Refines.lean`, with
+  `Lanes.Account`). A request takes effect when the ledger serves it; the user has decided it,
+  and moved its record, before. So the witness of the simulation is the list of requests
+  decided and not served, each marked with whether its message is still on the link, and the
+  spec's record of a user, with that user's requests decided in order, is the user's record
+  and the messages on its link to the ledger (`Lanes.linkMsgs`). A request whose message was
+  lost, in a loss or a crash of the ledger, takes effect when the ledger serves the next
+  message on the link if the user answered it, and never if the book was to serve it.
 
-That the system refines its spec is checked, not proved. That `Bytes.same`, HMAC and PBKDF2
+With timers the system does not implement its spec with deadlines (above, found in 43 steps),
+and nothing about it is proved. The links from the users to the ledger must be ordered (a
+reordering link gives a stale view, above). That `Bytes.same`, HMAC and PBKDF2
 are what they say is tested against published vectors (`TRUSTED.md`).
 
 ## The web front

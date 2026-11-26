@@ -92,6 +92,53 @@ theorem Stable.sTr {svc : Service In Out S T} {P Q : Abs In Out S → Prop} {e :
     subst hμ
     exact hQ.τSTr h₂ (step _ _ (hP.τSTr h₁ ha) htr)
 
+/-- Every pending input is one of `A`, the value one of `V`, and every output waiting one of
+`O`: what a trace argument follows the spec with, between two visible steps. -/
+def Only (A : In → Prop) (V : S → Prop) (O : Out → Prop) (a : Abs In Out S) : Prop :=
+  (∀ x ∈ a.pending, A x) ∧ V a.value ∧ ∀ o ∈ a.outbox, O o
+
+omit [DecidableEq Out] in
+/-- `Only` is stable when every input of `A` keeps `V` and outputs only `O`. -/
+theorem Only.stable {svc : Service In Out S T} {A : In → Prop} {V : S → Prop} {O : Out → Prop}
+    (h : ∀ v x, A x → V v → V (svc.step v x).1 ∧ ∀ o ∈ (svc.step v x).2, O o) :
+    svc.Stable (Only A V O) := by
+  rintro a x hx ⟨hpending, hvalue, houtbox⟩
+  obtain ⟨hvalue', houtbox'⟩ := h a.value x (hpending x hx) hvalue
+  refine ⟨fun y hy => hpending y (Multiset.mem_of_mem_erase hy), hvalue', fun o ho => ?_⟩
+  rcases Multiset.mem_add.mp ho with ho | ho
+  · exact houtbox o ho
+  · exact houtbox' o ho
+
+/-- An output carrying `x₀`'s id (`oid o = id x₀`) waits only once `x₀` has taken effect:
+`x₀` is then no longer pending, if it arrived at most once, and `V`, which it establishes,
+holds. -/
+def Took {K : Type} (id : In → K) (oid : Out → K) (x₀ : In) (V : S → Prop)
+    (a : Abs In Out S) : Prop :=
+  a.pending.count x₀ ≤ 1 ∧ ∀ o ∈ a.outbox, oid o = id x₀ → x₀ ∉ a.pending ∧ V a.value
+
+omit [DecidableEq Out] in
+/-- `Took` is stable, with `Only` beside it, when every output carries the id of the input that
+produced it, `x₀` is the only input of `A` with its id, `x₀` establishes `V`, and every other
+input of `A` keeps it. -/
+theorem Took.stable {svc : Service In Out S T} {K : Type} {id : In → K} {oid : Out → K}
+    {A : In → Prop} {W : S → Prop} {O : Out → Prop} {x₀ : In} {V : S → Prop}
+    (hOnly : ∀ v x, A x → W v → W (svc.step v x).1 ∧ ∀ o ∈ (svc.step v x).2, O o)
+    (hid : ∀ v x, ∀ o ∈ (svc.step v x).2, oid o = id x) (hA : ∀ x, A x → id x = id x₀ → x = x₀)
+    (h₀ : ∀ v, V (svc.step v x₀).1) (hkeep : ∀ v x, A x → x ≠ x₀ → V v → V (svc.step v x).1) :
+    svc.Stable fun a => Only A W O a ∧ Took id oid x₀ V a := by
+  rintro a x hx ⟨honly, hcount, htook⟩
+  refine ⟨Only.stable hOnly a x hx honly,
+    (Multiset.count_le_of_le _ (Multiset.erase_le _ _)).trans hcount, fun o ho hid₀ => ?_⟩
+  have hgone : x₀ ∉ a.pending.erase x₀ := by
+    rw [← Multiset.count_eq_zero, Multiset.count_erase_self]
+    omega
+  rcases Multiset.mem_add.mp ho with ho | ho
+  · obtain ⟨hnot, hvalue⟩ := htook o ho hid₀
+    have hne : x ≠ x₀ := fun h => hnot (h ▸ hx)
+    exact ⟨fun h => hnot (Multiset.mem_of_mem_erase h), hkeep _ x (honly.1 x hx) hne hvalue⟩
+  · obtain rfl := hA x (honly.1 x hx) ((hid _ x o ho).symm.trans hid₀)
+    exact ⟨hgone, h₀ _⟩
+
 end Service
 
 /--
