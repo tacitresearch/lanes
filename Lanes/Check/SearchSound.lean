@@ -29,7 +29,8 @@ gives the first two results. `Search.Inv` says that the stored states are closed
 steps taken from those already expanded; when nothing is left to expand, they contain every
 reachable state up to `==` (`Search.Closed.stored`).
 
-That `Check.system`'s state equality satisfies `Model.Respects` is not proved here.
+That `Check.system`'s state equality satisfies `Model.Respects` is proved in
+`Lanes.Check.SystemSound`.
 -/
 
 @[expose] public section

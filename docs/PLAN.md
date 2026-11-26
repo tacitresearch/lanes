@@ -153,15 +153,18 @@ declaration and every field, and most of them restate the name. That rule goes.
 
 Each step is its own commit on the branch.
 
-Progress, 2026-11-27: step 1 is done. Step 2: checker completeness, safe state merging, the
-monitor and the search engine are proved; joining them into one theorem about `Check.system`
-is in progress. Step 3 is done for one shard: the kernel is proved and the old runtime is
-deleted. Several shards and the seeded simulation harness are open. Step 4 is done: the gate
-actor replaces the adapter's logic, with a model check and an end-to-end test over a socket.
-Step 5: typed routes with their proofs, the htmx vocabulary, fragments, attribute splices and
-class lists are done; the render and parse round trip is open. Step 6 has started with the
-tools Raft proofs need (ghost histories, the monotone proof rule, quorums) and the election
-safety proof, which is in progress.
+Progress, 2026-11-27: step 1 is done. Step 2 is done for `always` properties: a complete PASS
+of `Check.system` is a theorem (`Check.system_sound`). Open there: refinement checks under a
+monitored driver, and carrying reported traces through to `SysState.run`. Step 3 is done for
+one shard: the kernel is proved and the old runtime is deleted; several shards are open.
+Step 4 is done: the gate actor replaces the adapter's logic. Step 5: typed routes with their
+proofs, the htmx vocabulary, fragments, attribute splices and class lists are done; the render
+and parse round trip is open. Step 6 has started: ghost histories, the monotone proof rule and
+quorums exist, and election safety is proved for every cluster under every environment model.
+
+A second independent review (2026-11-27) found eight defects, six of them in the 156-line
+shell, and that no theorem constrained what the kernel tells the shell to do. The fixes move
+timers and batching into the kernel as pure functions; see `DECISIONS.md` D23.
 
 1. Comment rule in `AGENTS.md`; strip comments; split the test binaries.
 2. Proofs of the checker and the monitor (section 2).
