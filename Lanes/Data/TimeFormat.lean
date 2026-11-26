@@ -15,7 +15,7 @@ and the two obsolete ones (RFC 850 and asctime). Each reads back what it writes
 (`parseRfc3339_print`, `parseHttpDate_print`), and what is read is a valid date and time: no
 30 February, no hour 24.
 
-Choices where a reader could differ (`docs/decisions/new-differential-tests-against-go.md`): a
+Choices where a reader could differ (`docs/decisions/D50-differential-tests-against-go.md`): a
 leap second (`:60`) is refused, since POSIX time has no place for it; RFC 3339's lowercase `t`
 and `z` are read; digits of a fraction past the ninth are dropped, as Go does; an HTTP date whose
 day name is not its date's is refused; an RFC 850 two-digit year is the latest year with those

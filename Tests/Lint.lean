@@ -108,11 +108,49 @@ def problemTests (root : System.FilePath) : IO (List (String × Bool)) := do
       report.findings.any fun f => f.rule == "status"
         && f.file.toString == "docs/status/areas/broken.md")]
 
+def citing : String :=
+  "See `Lanes/A.lean`, `Lanes/{A,B}.lean` and `Lanes/`.\n"
+    ++ "Gone: `Lanes/Gone.lean`, and `Lanes/{A,Lost}.lean`.\n"
+    ++ "Not paths: `net/http`, `Lanes.A`, `docs/status/<area>.md`, `Lanes/*.lean`, `a / b`, "
+    ++ "`https://example.com/x`, `/dev/urandom`, `.lake/packages`.\n"
+    ++ "```bash\nlake env lean Lanes/InAFence.lean\n```\n"
+    ++ "A span `across\nlines` keeps the rest paired: `Lanes/Missing/`.\n"
+
+def linkTests (root : System.FilePath) : IO (List (String × Bool)) := do
+  project root
+  discard <| lint root { fix := true }
+  write root "Lanes/A.lean" ""
+  write root "Lanes/B.lean" ""
+  write root "README.md" ("About 50 lines of trusted code.\n" ++ citing)
+  write root "docs/GUIDE.md" "Cites `Lanes/Nowhere.lean`.\n"
+  write root "docs/status/areas/actors.md" "| Actors | `Lanes/Away.lean` |\n"
+  write root "docs/history/old.md" "Was `Lanes/Old.lean`.\n"
+  write root "docs/decisions/D3-past.md" "# D3. Past\n\nWas `Lanes/Past.lean`.\n"
+  let report ← lint root { fix := true }
+  let links := report.findings.filter (·.rule == "links")
+  let found := links.map fun f => (f.file.toString, f.line, f.message)
+  return [
+    ("lint links: a missing path is reported, at its file and line, and one in braces by name",
+      found == [("README.md", 3, "`Lanes/Gone.lean` does not exist"),
+        ("README.md", 3, "`Lanes/Lost.lean` does not exist"),
+        ("README.md", 9, "`Lanes/Missing/` does not exist"),
+        ("docs/GUIDE.md", 1, "`Lanes/Nowhere.lean` does not exist"),
+        ("docs/status/areas/actors.md", 1, "`Lanes/Away.lean` does not exist")]),
+    ("lint links: the history, the decisions and the generated status page are not checked",
+      !links.any fun f => f.file.toString.startsWith "docs/history"
+        || f.file.toString.startsWith "docs/decisions" || f.file.toString == "docs/STATUS.md"),
+    ("codeSpans: double backquotes, and spans outside fences only",
+      codeSpans "a ``x ` y`` b `z`\n```\n`no`\n```\n`w`" == [(1, "x ` y"), (1, "z"), (5, "w")]),
+    ("expandBraces", expandBraces "a/{b,c}/{d,e}.lean"
+      == ["a/b/d.lean", "a/b/e.lean", "a/c/d.lean", "a/c/e.lean"]
+      && expandBraces "a/b.lean" == ["a/b.lean"])]
+
 def tests : IO (List (String × Bool)) := do
   let root ← scratch
   let other ← scratch
+  let third ← scratch
   try
-    let results := (← fixTests root) ++ (← problemTests other)
+    let results := (← fixTests root) ++ (← problemTests other) ++ (← linkTests third)
     return results ++ [
       ("withCommas", Generated.withCommas 1587 == "1,587" && Generated.withCommas 50 == "50"
         && Generated.withCommas 1000000 == "1,000,000"),
@@ -121,7 +159,7 @@ def tests : IO (List (String × Bool)) := do
           == "D4-new-one.md, `D5-one.md` (D5-one.md)"),
       ("roundedTotal", Generated.roundedTotal 1587 == 1600 && Generated.roundedTotal 1574 == 1550)]
   finally
-    for dir in [root, other] do
+    for dir in [root, other, third] do
       if ← dir.pathExists then IO.FS.removeDirAll dir
 
 end Tests.Lint

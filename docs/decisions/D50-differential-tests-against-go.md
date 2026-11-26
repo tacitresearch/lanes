@@ -1,4 +1,4 @@
-# D?. A parser is proved against its RFC and tested against Go, and every difference is decided
+# D50. A parser is proved against its RFC and tested against Go, and every difference is decided
 
 A proof says the code meets its spec; it does not say the spec reads the standard right. Go's
 standard library has had years of use, so each package of the standard library Lanes builds

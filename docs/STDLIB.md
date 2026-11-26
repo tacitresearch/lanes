@@ -1,8 +1,8 @@
 # The standard library, triaged from Go's
 
 Go's standard library covers what an application needs without third-party packages. Lanes
-wants the same coverage, with everything proved (`docs/decisions/D45-everything-is-proved.md`,
-on the branch `claude/roadmap-proved`). This page goes through every public package of Go 1.24
+wants the same coverage, with everything proved (`docs/decisions/D45-everything-is-proved.md`).
+This page goes through every public package of Go 1.24
 (`go list std`, 172 packages without `internal` and `vendor`), plus the `golang.org/x` packages
 most web applications take, and says for each where Lanes gets it.
 
@@ -20,8 +20,8 @@ is how a misread standard shows up.
 | a | Lean core, `Std` or Batteries has it (module named) | 37 |
 | b | Pure and needed by applications: build in Lean and prove | 26 |
 | c | Touches the operating system or cryptography: bind (library named) | 13 |
-| d | Not needed for Lanes applications (reason given) | 82 |
-| e | Already in Lanes (module named) | 14 |
+| d | Not needed for Lanes applications (reason given) | 83 |
+| e | Already in Lanes (module named) | 13 |
 
 Of the 19 `golang.org/x` packages listed at the end, 9 are (b), 3 are (c) and 7 are (d).
 
@@ -131,11 +131,11 @@ API. P1 is common, P2 rare.
 
 | Go package | Class | Where, or why not |
 | --- | --- | --- |
-| `crypto/sha256` | e | `Lanes.Sha256` (pure Lean, NIST vectors); being bound to libsodium is on the roadmap |
-| `crypto/hmac` | e | `Lanes.Hmac` (pure Lean, RFC 4231 vectors) |
-| `crypto/pbkdf2` | e | `Lanes.pbkdf2` (RFC 7914 vectors), used by `Lanes/Auth/Login.lean` |
-| `crypto/rand` | a | `IO.getRandomBytes` (reads `/dev/urandom`). libsodium's `randombytes_buf` uses `getrandom(2)`, which also works where `/dev` is not mounted |
-| `crypto/subtle` | c | libsodium `sodium_memcmp`. `Bytes.same` reads every byte, but compiled Lean promises nothing about timing |
+| `crypto/sha256` | e | libsodium's, bound in `Lanes/Data/Sodium.lean`, with `Lanes.Sha256` (pure Lean, NIST vectors) as its reference (D46) |
+| `crypto/hmac` | e | libsodium's, bound in `Lanes/Data/Sodium.lean`, with `Lanes.Hmac` (pure Lean, RFC 4231 vectors) as its reference (D46) |
+| `crypto/pbkdf2` | d | passwords are digested with Argon2id; the Lean PBKDF2 is gone (D46) |
+| `crypto/rand` | a | `IO.getRandomBytes` (reads `/dev/urandom`); Lanes binds libsodium's `randombytes_buf`, which uses `getrandom(2)` and also works where `/dev` is not mounted (D46) |
+| `crypto/subtle` | c | libsodium `sodium_memcmp`, bound (D46): compiled Lean promises nothing about timing, so the Lean comparison is only the reference |
 | `crypto/tls` | c | OpenSSL 3 `libssl` for the client (P0); inbound TLS stays at the reverse proxy |
 | `crypto/x509`, `crypto/x509/pkix` | c | OpenSSL 3, verifying against the system's roots with the hostname checked (P0, with TLS) |
 | `crypto/aes`, `crypto/cipher` | c | libsodium `crypto_aead_xchacha20poly1305_ietf` (or `crypto_aead_aes256gcm`), for encrypted cookies and data at rest (P1) |
@@ -161,7 +161,7 @@ and the RFCs' own.
 | Go package | Class | Where, or why not |
 | --- | --- | --- |
 | `os` | a | `IO.FS` (files, directories, `rename`, `Handle.lock`, `createTempFile`), `IO.getEnv`, `IO.Process.exit`, `IO.appPath` |
-| `os` (`File.Sync`) | c | `fsync(2)` and `fdatasync(2)`, also on the directory after a rename. Lean's `IO` has none, so a journal survives the death of its process but not loss of power (`Lanes/Env/Journal.lean`, `TRUSTED.md`). P0 |
+| `os` (`File.Sync`) | c | `fsync(2)` and `fdatasync(2)`, also on the directory after a rename. Lean's `IO` has none. Done: bound in `native/lanes.c` and used by `Lanes/Env/Journal.lean` (D46) |
 | `os/exec` | a | `IO.Process.spawn`, `IO.Process.output`, `Std.Async.Process` |
 | `os/signal` | a | `Std.Async.Signal` (`SIGTERM` for a clean stop) |
 | `os/user` | d | an application does not look up OS users |
@@ -192,7 +192,7 @@ and the RFCs' own.
 
 | Package | Class | Where, or why not |
 | --- | --- | --- |
-| `x/crypto/argon2` | c | libsodium `crypto_pwhash` (Argon2id). P0: PBKDF2 is in pure Lean and runs on the shard's thread for every log-in and every replay of one |
+| `x/crypto/argon2` | c | libsodium `crypto_pwhash` (Argon2id). Done (D46): computed off the shard, by a bridge's `prepare` |
 | `x/crypto/bcrypt` | d | Argon2id instead; bcrypt only to import users from elsewhere |
 | `x/crypto/chacha20poly1305`, `x/crypto/nacl/secretbox`, `x/crypto/nacl/box` | c | libsodium (P1) |
 | `x/crypto/acme/autocert`, `x/crypto/ssh` | d | certificates belong to the reverse proxy; no SSH |
@@ -255,27 +255,26 @@ and the RFCs' own.
 
 Each step depends only on steps above it and on what Lanes has.
 
-1. **Base64** (`Lanes/Data/Base64.lean`). No dependencies.
-2. **IP addresses** (`Lanes/Data/Ip.lean`, `net/netip`). No dependencies; replaces
+1. **Base64** (`Lanes.Data.Base64`). No dependencies.
+2. **IP addresses** (`Lanes.Data.Ip`, `net/netip`). No dependencies; replaces
    `Std.Net.IPv4Addr.ofString` where a decision rests on it.
-3. **URLs** (`Lanes/Http/Url.lean`, `net/url`). Needs 2 for host literals, and the percent
+3. **URLs** (`Lanes.Http.Url`, `net/url`). Needs 2 for host literals, and the percent
    encoding of `Lanes/Http/Basic.lean`.
-4. **Media types** (`Lanes/Http/MediaType.lean`, `mime`). Needs the RFC 9110 `token` and
+4. **Media types** (`Lanes.Http.MediaType`, `mime`). Needs the RFC 9110 `token` and
    `quoted-string` grammar, which `Lanes.Http.Cookie` and `Lanes.Http.Wire` should then share.
-5. **Time formats** (`Lanes/Data/TimeFormat.lean`). Needs days from a civil date and back,
+5. **Time formats** (`Lanes.Data.TimeFormat`). Needs days from a civil date and back,
    proved inverse; uses `Std.Time` types only as data.
-6. **Rate limits** (`Lanes/Data/RateLimit.lean`, x/time/rate). Needs time as data (D23) and 2
+6. **Rate limits** (`Lanes.Data.RateLimit`, x/time/rate). Needs time as data (D23) and 2
    for its keys; a table of buckets per key in a `Std.TreeMap`, with buckets that are full
    dropped so the table stays bounded.
-7. **`fsync`**: bind `fsync(2)` and `fdatasync(2)` for `IO.FS.Handle` and for a directory, use
-   them in `Lanes/Env/Journal.lean`, and shrink its row in `TRUSTED.md`.
-8. **libsodium**: `crypto_pwhash` (Argon2id) for `Password.digest`, `sodium_memcmp` for
-   `Bytes.same`, `randombytes_buf`. No dependencies.
+7. **`fsync`**: done (D46), in `native/lanes.c`, used by `Lanes/Env/Journal.lean`.
+8. **libsodium**: done (D46): Argon2id for `Password.digest`, `sodium_memcmp` for `Bytes.same`,
+   `randombytes_buf`, SHA-256 and HMAC-SHA-256.
 9. **TLS and names in the HTTP client**: OpenSSL 3 `libssl` under `Lanes.Env.HttpClient`,
    verifying against the system's roots with the host name checked, and `Std.Async.DNS` for
    names (the client takes IPv4 addresses only today). Needs 3 for scheme, host and port, and 2.
 
-Steps 1, 2, 4, 5, 7 and 8 are independent and can go on parallel branches; 3 waits for 2, 6 for
+Steps 1, 2, 4 and 5 are independent and can go on parallel branches; 3 waits for 2, 6 for
 2, and 9 for 3. The (e) rows that decide and are not yet proved come after: `Lanes.Json`'s
 round trip (oracles JSONTestSuite and Go `encoding/json`) and the cookie parser (Go
 `http.ParseCookie`, `http.ParseSetCookie`).
@@ -285,7 +284,7 @@ round trip (oracles JSONTestSuite and Go `encoding/json`) and the cookie parser 
 - **Where.** A Go module in `oracle/` (`oracle/go.mod`, Go pinned like the Lean toolchain,
   `golang.org/x/time` pinned in `go.sum`), with one small program per package,
   `oracle/<package>/main.go`. The Lean side is `Tests/Oracle/<Package>.lean`, run by a new
-  executable `lanesOracle` (`Tests/OracleMain.lean`).
+  executable `lanesOracle` (`Tests.OracleMain`).
 - **Protocol.** Lean generates cases from a seed and writes them as JSON lines,
   `{"id": 7, "op": "parse", "in": "<hex>"}`; inputs are hex so that invalid UTF-8 survives. The
   Go program reads every line from standard input and answers one line per case:
@@ -299,11 +298,11 @@ round trip (oracles JSONTestSuite and Go `encoding/json`) and the cookie parser 
   cases taken from Go's own `_test.go` tables), mutated. A disagreement prints the seed, the
   input and both answers, and is shrunk by deleting bytes while Go and Lean still disagree.
 - **Known differences.** Where our spec departs from Go on purpose (Go's `url.Parse` accepts
-  some inputs RFC 3986 rejects), the difference is a predicate in `Tests/Oracle/Known.lean` with
+  some inputs RFC 3986 rejects), the difference is a predicate in `Tests.Oracle.Known` with
   a reason, and the comparison skips only the cases it matches. A rate limiter's cases use
   rates and times at which Go's float64 token count is exact, because the spec's is a rational.
 - **Without Go.** Static vectors (RFC test vectors, the Unicode files, urltestdata,
-  JSONTestSuite) are committed under `Tests/Oracle/vectors/` with their source and licence, and
+  JSONTestSuite) are committed in a `vectors` directory beside the oracle tests, with their source and licence, and
   run in `lake test`, which never needs Go.
 - **In CI.** A job `oracle` beside `build`: `actions/setup-go` at the pinned version, `go build`
   of each program into `.lake/oracle/`, then `lake exe lanesOracle --all --cases 20000` at seed 0

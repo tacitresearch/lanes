@@ -10,7 +10,7 @@ padding, as Go names them (`StdEncoding`, `RawStdEncoding`, `URLEncoding`, `RawU
 
 `decode e s = some b ↔ encode e b = s` (`decode_eq_some_iff`): every byte string has exactly one
 spelling, and `decode` accepts nothing else. Go's strict decoders also skip `\r` and `\n`; this
-one does not (`docs/decisions/new-differential-tests-against-go.md`).
+one does not (`docs/decisions/D50-differential-tests-against-go.md`).
 -/
 
 @[expose] public section

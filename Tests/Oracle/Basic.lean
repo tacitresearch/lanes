@@ -5,7 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import Lanes
 
 /-!
-Differential tests against Go (`docs/decisions/new-differential-tests-against-go.md`). A package
+Differential tests against Go (`docs/decisions/D50-differential-tests-against-go.md`). A package
 generates cases, Go's program in `oracle/<name>/` answers them, and ours must give the same
 answer or one its `known` predicate names a reason for. `lake test` replays the answers recorded
 in `Tests/Oracle/vectors/<name>.jsonl`; `lake exe lanesOracle` asks Go itself.
