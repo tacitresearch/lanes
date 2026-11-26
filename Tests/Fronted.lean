@@ -3,12 +3,16 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
-import Tests.Gate
+import Tests.Web
+import Examples.BankWeb
 
 /-!
 Model checks of `Http.fronted`: the gate joined by `System.join` in front of a service that
 also puts out what is no answer (a `memo`) and takes an input that is no request (a `note`).
 The properties are those `Tests/Gate.lean` checks of the hand-built `gated`.
+
+Then two processes' worth in one: the bank on two shards joined by TCP, each shard behind its
+own HTTP front.
 -/
 
 namespace Tests.Fronted
@@ -211,5 +215,61 @@ def tests : List (String × Bool) :=
       match duplicatedOutside.failure with
       | some (.violated "no request is answered more often than it arrived" _) => true
       | _ => false) ]
+
+/-! The bank on two shards, accounts 0 and 2 on the first and account 1 on the second. -/
+
+open Std Std.Async Examples.Bank Examples.BankWeb
+
+structure Node where
+  port : UInt16
+  stop : Async Unit
+  trace : BaseIO (List (Event (frontedSig (shardSig (sig Acct)))))
+
+def live : Async (List (String × Bool)) := do
+  let shardOf (account : Acct) : Nat := account.val % 2
+  let peerPorts ← IO.mkRef (#[] : Array UInt16)
+  let mut nodes : Array Node := #[]
+  for k in [0:2] do
+    let peers : Peers.Config (sig Acct) := {
+      listen := { port := 0 }
+      home := fun account => return (← peerPorts.get)[shardOf account]?.map fun port => { port }
+      id := Codec.fin, msg := (actors Codec.fin 100).msg }
+    let (server, peers) ← serveShard (bank Acct 100) (shardOf · == k) Examples.BankWeb.bridge
+      peers { port := 0 } { record := true }
+    peerPorts.modify (·.push peers.port)
+    nodes := nodes.push {
+      port := server.port.getD 0
+      stop := do peers.stop; server.stop
+      trace := return (← server.trace).toList }
+  let (some first, some second) := (nodes[0]?, nodes[1]?)
+    | return [("fronted: two shards start", false)]
+  let settles (node : Node) (path balance : String) : Async Bool := do
+    for _ in [0:100] do
+      if (← Tests.Web.fetch node.port path).endsWith s!"<span>{balance}</span>" then return true
+      Async.sleep 20
+    return false
+  let moved ← Tests.Web.fetch first.port "/transfer" (method := "POST")
+    (body := "src=0&dst=1&amount=30")
+  let credited ← settles second "/accounts/1" "130"
+  let debited ← Tests.Web.fetch first.port "/accounts/0"
+  let back ← Tests.Web.fetch second.port "/transfer" (method := "POST")
+    (body := "src=1&dst=2&amount=5")
+  let returned ← settles first "/accounts/2" "105"
+  for node in nodes do node.stop
+  let traces ← nodes.toList.mapM (·.trace)
+  let parcelsIn (events : List (Event (frontedSig (shardSig (sig Acct))))) : Nat :=
+    events.countP fun
+      | .input (.inr (.inr _)) => true
+      | _ => false
+  return [
+    ("fronted: a transfer posted to one front between accounts on different shards is answered",
+      moved.startsWith "HTTP/1.1 200"),
+    ("fronted: and the credit shows in the balance read through the other front",
+      credited && debited.endsWith "<span>70</span>"),
+    ("fronted: the same the other way", back.startsWith "HTTP/1.1 200" && returned),
+    ("fronted: each credit entered the other shard as a parcel, past its gate",
+      traces.map parcelsIn == [1, 1]),
+    ("fronted: each front does only what the gate's model of its outside allows",
+      traces.all (frontedOutside (shardSig (sig Acct))).allows) ]
 
 end Tests.Fronted

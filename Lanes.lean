@@ -46,6 +46,7 @@ public import Lanes.Env.Clock
 public import Lanes.Env.Http
 public import Lanes.Env.HttpClient
 public import Lanes.Env.Journal
+public import Lanes.Env.Node
 public import Lanes.Env.Peers
 public import Lanes.Html.Basic
 public import Lanes.Html.Htmx

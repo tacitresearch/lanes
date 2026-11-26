@@ -47,12 +47,14 @@ def main (args : List String) : IO UInt32 := do
   | [] =>
     report (pure ++ (← Tests.Runtime.tests) ++ (← Tests.Web.tests) ++ (← Tests.Durable.tests)
       ++ (← Tests.Clock.live.block) ++ (← Tests.HttpClient.live.block)
-      ++ (← Tests.Cluster.tests) ++ (← Tests.Peers.live.block))
+      ++ (← Tests.Cluster.tests) ++ (← Tests.Peers.live.block)
+      ++ (← Tests.Fronted.live.block))
   | ["fast"] => report pure
   | ["live"] =>
     report ((← Tests.Runtime.tests) ++ (← Tests.Web.tests) ++ (← Tests.Durable.tests)
       ++ (← Tests.Clock.live.block) ++ (← Tests.HttpClient.live.block)
-      ++ (← Tests.Cluster.tests) ++ (← Tests.Peers.live.block))
+      ++ (← Tests.Cluster.tests) ++ (← Tests.Peers.live.block)
+      ++ (← Tests.Fronted.live.block))
   | ["journal-child", path] =>
     Tests.Durable.child path
     return 0
