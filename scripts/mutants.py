@@ -28,22 +28,16 @@ import sys
 import tempfile
 
 MUTANTS = [
-    ("runtime: outputs handed over before the journal is written", "Lanes/Actors/Runtime.lean",
-     """      if let some log := journal then unless done.1.isEmpty do log.append done.1.toList
-      rt.record done.2.1.toList
-      handOver done.2.2.toList
-""",
-     """      rt.record done.2.1.toList
-      handOver done.2.2.toList
-      if let some log := journal then unless done.1.isEmpty do log.append done.1.toList
-"""),
     ("runtime: nothing handed over again after a restart", "Lanes/Actors/Runtime.lean",
      "  handOver outputs\n  let since := start.clock_ms", "  let since := start.clock_ms"),
     ("runtime: commands left in the inbox when the shard ends", "Lanes/Actors/Runtime.lean",
      "  discard <| rt.inbox.modifyGet Mailbox.take\n", ""),
     ("runtime: a snapshot is not taken", "Lanes/Actors/Runtime.lean",
-     "      (journal.bind (·.save)).filter fun _ => written ≥ max 1 rt.config.snapshotEvery",
-     "      (journal.bind (·.save)).filter fun _ => false"),
+     "  let snapshotEvery := save.map fun _ => rt.config.snapshotEvery",
+     "  let snapshotEvery : Option Nat := none"),
+    ("runtime: a save the batch asks for is not performed", "Lanes/Actors/Runtime.lean",
+     "      | .save image => if let some save := save then save image",
+     "      | .save _ => pure ()"),
     ("mailbox: no limit", "Lanes/Actors/Mailbox.lean",
      "  else if m.count < capacity then", "  else if m.count < capacity + 1000000 then"),
     ("mailbox: senders that wait for room are never woken", "Lanes/Actors/Mailbox.lean",
@@ -90,7 +84,7 @@ MUTANTS = [
      """[.putJournal (file input system [.snapshot index]),
     .putSnapshot (saved c system index image)]"""),
     ("http: request ids start at zero after a restart", "Lanes/Env/Http.lean",
-     "IO.mkRef ((log.map (·.index)).getD 0)", "IO.mkRef (0 : ReqId)"),
+     "Mutex.new (Waiting.start ((log.map (·.index)).getD 0))", "Mutex.new (Waiting.start 0)"),
     ("http: a shard that ends on an error is not noticed", "Lanes/Env/Http.lean",
      "    if (← runtime.ended).isSome then", "    if false then"),
     ("http: the runtime is left running when the port is taken", "Lanes/Env/Http.lean",
@@ -118,11 +112,6 @@ MUTANTS = [
     ("journal: the mark of a save is not counted", "Lanes/Env/Journal.lean",
      "        (perform store.path handle true)\n      count.modify (· + 1)",
      "        (perform store.path handle true)"),
-    ("http: an answered request stays among those in flight", "Lanes/Env/Http.lean",
-     "        modify (·.erase id)\n        return waiter", "        return waiter"),
-    ("http: a request refused for a full inbox stays among those in flight",
-     "Lanes/Env/Http.lean",
-     "      modify (·.erase id)\n      return false", "      return false"),
     ("node: peers are left listening when the server cannot start", "Lanes/Env/Node.lean",
      "      peers.stop\n      throw e", "      throw e"),
     ("node: an output that is neither a response nor a parcel is dropped",

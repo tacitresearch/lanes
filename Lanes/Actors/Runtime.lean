@@ -6,7 +6,7 @@ module
 
 public import Std.Async
 public import Std.Sync
-public import Lanes.Actors.Journal
+public import Lanes.Actors.Batch
 public import Lanes.Actors.Mailbox
 
 /-!
@@ -63,10 +63,8 @@ structure Journal.Log (sys : System σ) where
   save : Option (Kernel.Image sys → IO Unit) := none
   close : IO Unit
 
-private inductive Cmd (sys : System σ) where
-  | input (x : σ.In)
-  | idle (timers : Bool) (done : IO.Promise Bool)
-  | peek (i : σ.Id) (reply : IO.Promise (sys.State i))
+private abbrev Cmd (sys : System σ) :=
+  Batch.Command σ (fun i => IO.Promise (sys.State i)) (IO.Promise Bool)
 
 structure Runtime (sys : System σ) [Hashable σ.Id] where
   private mk ::
@@ -123,18 +121,11 @@ state held across an `await` is handed to the task system. A kernel kept that wa
 actor table and all, on every step (`Tests/Scale.lean`). Here it is created on this thread and
 never leaves it; only commands, events and outputs cross.
 
-What to ask of the kernel in one turn, and what to write in the journal for it, is
-`Journal.turn`, a pure function proved to leave the kernel its journal entries describe
-(`Journal.turns_kernel`). This loop reads the clock, takes every command that has arrived, calls
-a turn for each input, appends the entries of all of them at once, and only then hands their
-outputs over: one exchange with the other threads and one write to the journal for however
-many inputs arrived together. With a journal the kernel starts as the journal describes
-(`Journal.resume`).
-
-Saving the kernel is the kernel operation `snapshot`: the shard goes on with the kernel its
-image restores, which is the kernel a restart from that image would have
-(`Journal.resume_eq_recover`). It is done after a turn's outputs are handed over, because the
-mark it leaves in the journal says they were.
+What to do with the commands taken at once is `Batch.run`, a pure function with its theorems:
+the turns it asks of the kernel, and the acts to perform for them, in order. This loop reads
+the clock, takes every command that has arrived, and performs the acts: one exchange with the
+other threads and one write to the journal for however many inputs arrived together. With a
+journal the kernel starts as the journal describes (`Journal.resume`).
 -/
 private def loop (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
     (waiting : IO.Ref (Array (Bool × IO.Promise Bool))) (journal : Option (Journal.Log sys)) :
@@ -154,56 +145,29 @@ private def loop (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
   let epoch ← IO.monoMsNow
   let clock : BaseIO Nat := return since + ((← IO.monoMsNow) - epoch)
   let kernel ← IO.mkRef start
-  let fuel := max 1 rt.config.batch
+  let save := journal.bind (·.save)
+  let snapshotEvery := save.map fun _ => rt.config.snapshotEvery
   let mut written := (journal.map (·.past.length)).getD 0
   repeat
     let now ← clock
     let wait ← kernel.modifyGet fun k => ((k.advance now).wait, k)
     let (batch, closed) ← rt.take wait
     if batch.isEmpty && closed then break
-    let now ← clock
-    let turn := fun (input : Option σ.In) => kernel.modifyGet fun k =>
-      match Journal.turn k now input fuel with
-      | { kernel, events, outputs, entries } => ((entries, events, outputs), kernel)
-    let finish := fun (done : Array (Journal.Entry σ) × Array (Event σ) × Array σ.Out) => do
-      if let some log := journal then unless done.1.isEmpty do log.append done.1.toList
-      rt.record done.2.1.toList
-      handOver done.2.2.toList
-    let saveDue := fun (written : Nat) =>
-      (journal.bind (·.save)).filter fun _ => written ≥ max 1 rt.config.snapshotEvery
-    let mut done := (#[], #[], #[])
-    let mut worked := false
-    for command in batch do
-      match command with
-      | .input x =>
-        let (entries, events, outputs) ← turn (some x)
-        done := (done.1 ++ entries, done.2.1 ++ events, done.2.2 ++ outputs)
-        worked := true
-        if (saveDue (written + done.1.size)).isNone then continue
-      | _ => pure ()
-      finish done
-      written := written + done.1.size
-      done := (#[], #[], #[])
-      if let some save := saveDue written then
-        save (← kernel.modifyGet fun k => match k.image with | image => (image, image.kernel))
-        written := 0
-      match command with
-      | .idle timers heard => waiting.modify (·.push (timers, heard))
-      | .peek i reply => reply.resolve (← kernel.modifyGet fun k => ((k.cell i).state, k))
-      | .input _ => pure ()
-    unless worked do
-      let (entries, events, outputs) ← turn none
-      done := (done.1 ++ entries, done.2.1 ++ events, done.2.2 ++ outputs)
-    finish done
-    written := written + done.1.size
-    if let some save := saveDue written then
-      save (← kernel.modifyGet fun k => match k.image with | image => (image, image.kernel))
-      written := 0
-    let (quiet, still) ← kernel.modifyGet fun k => ((k.quiet false, k.quiet true), k)
-    let reached := fun (timers : Bool) => if timers then still else quiet
-    for (timers, heard) in ← waiting.get do
-      if reached timers then heard.resolve true
-    waiting.modify (·.filter fun (timers, _) => !reached timers)
+    let config : Batch.Config := { now_ms := ← clock, fuel := max 1 rt.config.batch, snapshotEvery }
+    let held ← waiting.get
+    let (acts, resolved, still, count) ← kernel.modifyGet fun k =>
+      match Batch.run config k written held batch with
+      | { kernel, written, acts, resolved, waiting } => ((acts, resolved, waiting, written), kernel)
+    written := count
+    for act in acts do
+      match act with
+      | .append entries => if let some log := journal then log.append entries.toList
+      | .record events => rt.record events.toList
+      | .handOver outputs => handOver outputs.toList
+      | .save image => if let some save := save then save image
+      | .answer _ reply state => reply.resolve state
+    for heard in resolved do heard.resolve true
+    waiting.set still
 
 /-- However the loop ends, nobody is left waiting on it: not those it had heard from, and not
 those whose commands it never took. Those are taken out of the inbox and dropped, and a caller

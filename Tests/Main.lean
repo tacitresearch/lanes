@@ -16,6 +16,7 @@ import Tests.Web
 import Tests.Join
 import Tests.Frame
 import Tests.Durable
+import Tests.Ending
 import Tests.Clock
 import Tests.HttpClient
 import Tests.Codec
@@ -51,7 +52,8 @@ open Tests.Durable (safely) in
 def live : IO (List (String × Bool)) := do
   let group (name : String) (tests : IO (List (String × Bool))) := safely name (liftM tests)
   return (← group "runtime" Tests.Runtime.tests) ++ (← group "web" Tests.Web.tests)
-    ++ (← Tests.Durable.tests) ++ (← safely "clock" Tests.Clock.live)
+    ++ (← Tests.Durable.tests) ++ (← group "ending" Tests.Ending.tests)
+    ++ (← safely "clock" Tests.Clock.live)
     ++ (← safely "http client" Tests.HttpClient.live)
     ++ (← safely "peers" Tests.Peers.live) ++ (← safely "peers on a journal" Tests.Peers.durable)
     ++ (← safely "transport" Tests.Peers.transport) ++ (← safely "fronted" Tests.Fronted.live)
