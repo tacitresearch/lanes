@@ -70,6 +70,7 @@ Each is to be proved, tested, made private or removed.
 - `Service.start`
 - `Service.State.call`
 - `Service.apply`
+- `Service.State.fire`
 - `Service.State.ret`
 
 ### `Lanes/Actors/Snapshot.lean`
@@ -161,9 +162,13 @@ Each is to be proved, tested, made private or removed.
 - `Http.Request.bodyWithin`
 - `Http.Response.noStore`
 
+### `Lanes/Http/Front.lean`
+
+- `Http.servedActors`
+
 ### `Lanes/Http/Gate.lean`
 
-- `Http.gatedActors`
+- `Http.instReprGateMsgOfOut`
 
 ### `Lanes/Http/Route.lean`
 

@@ -6,10 +6,11 @@ import Ledger
 Two users, `0` the administrator and `1`, two accounts each, with a right credential and a wrong
 one. Each scenario is a list of requests, each sent once the requests it lists have been
 answered, as a user who waits for a page does; the rest race. The monitor checks every
-response against the spec (`Ledger.spec`), and every state is checked against the safety
-properties of `Ledger.Spec` and of the actors.
+response, and every lock lifting and session ending, against the spec (`Ledger.spec`), and
+every state is checked against the safety properties of `Ledger.Spec` and of the actors.
 
-`ledgerCheck` prints each report and fails if one is not as expected.
+`ledgerCheck` prints each report and fails if one is not as expected. `ledgerCheck timed-crash`
+runs the scenario with timers and a crash anywhere, which `lake test` leaves out for its size.
 -/
 
 namespace Ledger.Check
@@ -35,7 +36,8 @@ def clients (script : Script) : Driver (sig N C) (Waiting (Request N C)) :=
   Driver.after (fun out => some out.req) script
 
 abbrev World' (config : Config N) (answering : Answering) :=
-  World (system N C config answering) (Waiting (Request N C) × Check.Monitor (sig N C) (SpecState N C))
+  World (system N C config answering)
+    (Waiting (Request N C) × Check.Monitor (Request N C) (Response N) (SpecState N C))
 
 def untimed : Config N :=
   { admin := 0, maxAccounts := 2, maxSessions := 2, maxFailures := 2, lockout_ms := none,
@@ -83,11 +85,10 @@ end Properties
 
 def check (config : Config N) (answering : Answering) (script : Script)
     (witnesses : List (Check.Property (World' config answering)))
-    (env : EnvModel (sig N C) := {}) (maxCrashes : Nat := 0) (refining : Bool := true) :=
+    (env : EnvModel (sig N C) := {}) (maxCrashes : Nat := 0) :=
   Check.system (system N C config answering)
-    { env, maxCrashes, driver := (spec N C config).monitored (clients script) }
-    ((if refining then props config answering script else (props config answering script).drop 1)
-      ++ witnesses)
+    { env, maxCrashes, driver := (spec N C config).monitored (clients script) deadlines }
+    (props config answering script ++ witnesses)
 
 /-- Links between actors that reorder: what several shards joined by TCP give. -/
 def reordering : EnvModel (sig N C) where
@@ -142,6 +143,11 @@ def abuse : Script :=
     (logIn 9 0, [8]), (act 10 0 7 .accounts, [9]), (act 11 0 3 .accounts, [10]),
     (act 12 1 3 (.openAccount .eur true), [11]), (act 13 1 3 .audit, [11]), (signUp 14 0, [11]) ]
 
+/-- The administrator pays `1` while `1` asks for its accounts, and `1`'s session may end at any
+moment. -/
+def expiryRace : Script :=
+  setup ++ [(act 9 0 3 (.transfer 0 2 5), [8]), (act 10 1 4 .accounts, [8])]
+
 def answered (w : World' config answering) (req : ReqId) (reply : Reply N) : Bool :=
   w.state.outbox.any fun r => r.req == req && r.reply == reply
 
@@ -194,6 +200,13 @@ def post (path : String) (fields : List (String × String)) (cookie : Option Str
 
 def csrf : String := Auth.formToken settings.key token
 
+/-- A request as the server hands it to the system. -/
+def decoded (r : Http.Request) : Except Http.Response In :=
+  decode settings 9 (prepare settings r)
+
+def contains (bytes : ByteArray) (text : String) : Bool :=
+  (((String.fromUTF8? bytes).getD "").splitOn text).length > 1
+
 def same : Except Http.Response In → Except Http.Response In → Bool
   | .ok a, .ok b => a == b
   | .error a, .error b => a == b
@@ -202,20 +215,37 @@ def same : Except Http.Response In → Except Http.Response In → Bool
 def tests : List (String × Bool) :=
   let transfer := [("src", "1"), ("dst", "2"), ("amount", "5"), ("csrf", csrf)]
   [ ("bridge: a session's cookie makes an act of its user, whatever the form says",
-      same (decode settings 9 (post "transfer" (transfer ++ [("name", "bob")])))
+      same (decoded (post "transfer" (transfer ++ [("name", "bob")])))
         (.ok (.act 9 alice 7 (.transfer 1 2 5)))),
     ("bridge: a cookie whose payload names another user does not verify",
       let forged := (Auth.tag settings.key "session" "7.alice") ++ ".7.bob"
-      same (decode settings 9 (post "transfer" transfer forged)) (.error notLoggedIn)),
+      same (decoded (post "transfer" transfer forged)) (.error notLoggedIn)),
     ("bridge: a form token of another session is refused",
-      same (decode settings 9 (post "transfer" ((transfer.take 3) ++
+      same (decoded (post "transfer" ((transfer.take 3) ++
         [("csrf", Auth.formToken settings.key (sessionToken settings alice 8))])))
         (.error forbidden)),
     ("bridge: a password enters the system only as its digest",
-      same (decode settings 9 (post "login" [("name", "alice"), ("password", "longenough")] none))
+      same (decoded (post "login" [("name", "alice"), ("password", "longenough")] none))
         (.ok (.logIn 9 alice (settings.password.digest "alice" "longenough")))),
     ("bridge: a short password is refused before it reaches the system",
-      match decode settings 9 (post "signup" [("name", "alice"), ("password", "short")] none) with
+      match decoded (post "signup" [("name", "alice"), ("password", "short")] none) with
+      | .error r => r.status == 400
+      | .ok _ => false),
+    ("bridge: what enters the system and its journal holds no password and no cookie",
+      let prepared := prepare settings
+        (post "login" [("name", "alice"), ("password", "longenough"), ("csrf", csrf)])
+      !contains prepared.body "longenough" && !(prepared.headers.any (·.1 == "cookie"))
+        && (prepared.headers.all fun (_, value) => (value.splitOn token).length == 1)
+        && prepared.field? "csrf" == some csrf),
+    ("bridge: a session a client names itself is not one, without a cookie that verifies",
+      let claimed := { post "transfer" transfer none with
+        headers := [(verifiedSession, "7.alice")] }
+      same (decoded claimed) (.error notLoggedIn)),
+    ("bridge: nor is a digest a client sends in place of a password",
+      let claimed := { post "login" [("name", "alice")] none with
+        headers := [(passwordDigest,
+          Bytes.hex (settings.password.digest "alice" "longenough").bytes)] }
+      match decoded claimed with
       | .error r => r.status == 400
       | .ok _ => false) ]
 
@@ -223,11 +253,37 @@ end Bridge
 
 def timedWitnesses : List (Check.Property (World' timed' .viaLedger)) :=
   [ .sometimes "a lock lifts" fun w => answered w 6 (.loggedIn 1 6),
-    .sometimes "a session ends on its own" fun w => answered w 12 .noSession ]
+    .sometimes "a lock holds" fun w => answered w 6 .locked,
+    .sometimes "a session ends on its own" fun w => answered w 12 .noSession,
+    .sometimes "a session lasts" fun w => answered w 12 .forbidden ]
 
-def timed {config : Config N} {answering : Answering} (name : String)
-    (ok : Check.Report (World' config answering) (Event (sig N C)) → Bool)
-    (report : Unit → Check.Report (World' config answering) (Event (sig N C))) : IO Bool := do
+/-- A user that decides a log-in as if the account were open: a lockout that does not lock,
+though failures are counted and the lock's timer is armed. -/
+def ignoreLock : UserMsg C → Option (Profile C) → Option (Profile C)
+  | .ask _ (.logIn _), some p => some { p with attempts := { p.attempts with locked := false } }
+  | _, u => u
+
+abbrev leaky (config : Config N) : System (sig N C) where
+  State
+    | .user _ => Option (Profile C)
+    | .ledger => Book N
+  actor
+    | .user n =>
+      let honest := user config .viaLedger n
+      { honest with step := fun u msg => honest.step (ignoreLock msg u) msg }
+    | .ledger => ledger config
+  accept r := ⟨.user r.name, .ask r.req r.ask⟩
+
+instance (config : Config N) : (leaky config).Inspect := by instance_by_cases
+
+def checkLeaky :=
+  Check.system (leaky timed')
+    { driver := (spec N C timed').monitored (clients abuse) deadlines }
+    [Check.refines "every response is one the spec allows"]
+
+def timed {sys : System (sig N C)} [sys.Inspect] {D : Type} (name : String)
+    (ok : Check.Report (World sys D) (Event (sig N C)) → Bool)
+    (report : Unit → Check.Report (World sys D) (Event (sig N C))) : IO Bool := do
   let start ← IO.monoMsNow
   let r := report ()
   let passed := ok r
@@ -253,7 +309,22 @@ def main (args : List String) : IO UInt32 := do
       fun _ => check untimed .viaLedger abuse abuseWitnesses)
     results := results.push (← timed "with timers: sessions end and locks lift at any moment"
       (fun r => r.ok && r.complete)
-      fun _ => check timed' .viaLedger abuse (timedWitnesses) (refining := false))
+      fun _ => check timed' .viaLedger abuse timedWitnesses)
+    results := results.push (← timed "the same, with a lockout that does not lock"
+      (fun r => match r.failure with
+        | some (.violated "every response is one the spec allows" _) => true
+        | _ => false)
+      fun _ => checkLeaky)
+    results := results.push (← timed
+      "a session ending while a view is on its way: the view sees a payment asked after the end"
+      (fun r => match r.failure with
+        | some (.violated "every response is one the spec allows" _) => true
+        | _ => false)
+      fun _ => check timed' .viaLedger expiryRace [])
+  if args.contains "timed-crash" then
+    results := results.push (← timed "with timers and a crash anywhere"
+      (fun r => r.ok && r.complete)
+      fun _ => check timed' .viaLedger abuse [] crashing 1)
   if all || args.contains "faults" then
     results := results.push (← timed "a log-out racing a transfer, with links that reorder"
       (fun r => match r.failure with

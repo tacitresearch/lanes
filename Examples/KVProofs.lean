@@ -75,7 +75,7 @@ theorem tame_invariant (env : EnvModel (sig K V F)) :
     · cases i <;> simp [system, front, store] at he
 
 abbrev Abs (K V F : Type) [DecidableEq K] [DecidableEq V] [DecidableEq F] :=
-  Service.Abs (sig K V F) (K → Option V)
+  Service.Abs (Request K V F) (Response V) (K → Option V)
 
 structure Sim (c : SysState (system K V F false)) (t : Abs K V F) : Prop where
   value : t.value = c.state .store

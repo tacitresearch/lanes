@@ -116,6 +116,12 @@ a view cannot link or post to a route that does not exist.
 - **Several shards and processes.** Any number of shards joined behave as the one system
   (`System.SplitReachable.merged` for two, `System.ShardsReachable.unsharded` for `n`). A transport joins shards in different processes; what it
   decides is a pure function, run by the model checker against a network that fails.
+- **The HTTP gate.** `Http.serve` runs the system with the gate joined in front of it, and the
+  theorems are about that system, for every system and bridge: no request is answered more
+  often than it arrived, a waiting request keeps its deadline armed, and in a fair run every
+  request the gate admits is answered (`Http.served_answered_le_arrived`,
+  `Http.served_deadlines_armed`, `Http.served_pending_answered`). A bridge's `prepare` runs
+  before a request is journalled, so a password or a cookie need never reach the disk.
 - **The HTTP client's wire format.** What the reader makes of a response written as a server
   writes it, and of every start of one, is proved, and so are its size limit and its ending
   (`Response.read_wire`, `Response.read_more`).
@@ -176,7 +182,7 @@ lake exe lanes lint
 ## A spec in five lines, checked without a refinement mapping
 
 ```lean
-def spec : Service (sig K V F) (K → Option V) where
+def spec : Service (Request K V F) (Response V) (K → Option V) where
   init _ := none
   step store r :=
     match r.op with

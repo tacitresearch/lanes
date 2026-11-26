@@ -1,7 +1,7 @@
 # D?. The inventory is computed from the built library
 
-`docs/decisions/new-everything-is-proved.md` asks that every public definition Lanes ships have
-one status, stated by the code and generated. `lake exe lanes inventory` writes it to
+D45 asks that every public definition Lanes ships have one status, stated by the code and
+generated. `lake exe lanes inventory` writes it to
 `docs/INVENTORY.md`; `lanes lint` fails when that file is stale and when a definition of
 `Lanes/` has no evidence and is not on `docs/inventory-none.md`.
 

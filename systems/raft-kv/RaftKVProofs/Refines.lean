@@ -306,12 +306,12 @@ end Accounts
 
 /-- The service of the machine, as the transition system the cluster refines. -/
 abbrev service (N : Type) {C R M : Type} [DecidableEq N] [DecidableEq C] [DecidableEq R]
-    (machine : Machine C R M) : Spec (Service.Abs (sig N C R) M) (Option (Visible (sig N C R))) :=
+    (machine : Machine C R M) : Spec (Service.Abs (Request N C) (Response R) M) (Option (Visible (Request N C) (Response R))) :=
   (spec machine).spec
 
 /-- The simulation: the state `t` of the service explains the state `c` of the cluster, with
 `log` the list the cluster has committed to. -/
-structure Sim (c : SysState (recording N config machine)) (t : Service.Abs (sig N C R) M)
+structure Sim (c : SysState (recording N config machine)) (t : Service.Abs (Request N C) (Response R) M)
     (log : List (Entry N C)) : Prop where
   logged : Logged c log
   value : t.value = machine.run machine.init log
@@ -320,7 +320,7 @@ structure Sim (c : SysState (recording N config machine)) (t : Service.Abs (sig 
 
 namespace Sim
 
-variable {c : SysState (recording N config machine)} {t : Service.Abs (sig N C R) M}
+variable {c : SysState (recording N config machine)} {t : Service.Abs (Request N C) (Response R) M}
   {log : List (Entry N C)}
 
 theorem blank : Sim (SysState.blank (recording N config machine)) ⟨machine.init, 0, 0⟩ [] where
@@ -386,7 +386,7 @@ theorem recover (h : Sim c t log) :
 takes effect and its answer is owed. The cluster's outbox `out` and what each node has applied
 are held fixed here; `Sim.step` moves them after. -/
 theorem extend {out : List (Response R)} {applied : N → Nat} (ext : List (Entry N C)) :
-    ∀ {log : List (Entry N C)} {t : Service.Abs (sig N C R) M},
+    ∀ {log : List (Entry N C)} {t : Service.Abs (Request N C) (Response R) M},
       (∀ a, applied a ≤ log.length) → t.value = machine.run machine.init log →
       t.outbox = ↑out + owed machine log applied → Accounts c log t.pending →
       (∀ k entry, ext[k]? = some entry → Present c (log.length + k) entry) →
@@ -485,7 +485,7 @@ include hup hown
 
 /-- `Sim.step` of the step function, with what it needs of the state after taken from the
 invariant. -/
-theorem Sim.handle {c : SysState (recording N config machine)} {t : Service.Abs (sig N C R) M}
+theorem Sim.handle {c : SysState (recording N config machine)} {t : Service.Abs (Request N C) (Response R) M}
     {log : List (Entry N C)} (h : Sim c t log) (hc : Committing c) {i : N} {m : Msg N C}
     {net : List (Envelope (sig N C R))} (hsub : net.Sublist c.net)
     (hpending : (∃ src, (⟨src, i, m⟩ : Envelope (sig N C R)) ∈ c.net) ∨ m ∈ c.timers i)
