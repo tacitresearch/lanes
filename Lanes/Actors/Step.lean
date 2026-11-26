@@ -38,6 +38,48 @@ theorem any_isStop_emit {i : σ.Id} (outs : List σ.Out) :
   | nil => rfl
   | cons out outs ih => simp [Effect.isStop, ih]
 
+theorem performAll_induction {P : SysState sys → Prop} {i : σ.Id} {effs : List (Effect σ i)}
+    (start : P c) (perform : ∀ c, ∀ eff ∈ effs, P c → P (c.perform i eff)) :
+    P (c.performAll i effs) := by
+  induction effs generalizing c with
+  | nil => exact start
+  | cons eff effs ih =>
+    exact ih (perform c eff (by simp) start) fun c eff' h => perform c eff' (by simp [h])
+
+/-- What a step preserves: whatever the new state, each effect and stopping preserve. -/
+theorem settle_induction {P : SysState sys → Prop} {i : σ.Id} {r : sys.State i × List (Effect σ i)}
+    (state : P { c with state := update c.state i r.1 })
+    (perform : ∀ c, ∀ eff ∈ r.2, P c → P (c.perform i eff))
+    (down : ∀ c, P c → P (c.down env i)) : P (c.settle env i r) := by
+  unfold settle
+  split
+  · exact down _ (performAll_induction state perform)
+  · exact performAll_induction state perform
+
+theorem settle_up_of_ne {i k : σ.Id} (r : sys.State i × List (Effect σ i)) (h : k ≠ i) :
+    (c.settle env i r).up k = c.up k := by
+  apply settle_induction (P := fun c' => c'.up k = c.up k) rfl
+  · intro c' eff _ hc'
+    cases eff <;> exact hc'
+  · intro c' hc'
+    simpa [down, h] using hc'
+
+theorem settle_timers_of_ne {i k : σ.Id} (r : sys.State i × List (Effect σ i)) (h : k ≠ i) :
+    (c.settle env i r).timers k = c.timers k := by
+  apply settle_induction (P := fun c' => c'.timers k = c.timers k) rfl
+  · intro c' eff _ hc'
+    cases eff <;> simpa [perform, h] using hc'
+  · intro c' hc'
+    simpa [down, h] using hc'
+
+theorem init_induction {P : SysState sys → Prop} (blank : P (blank sys))
+    (start : ∀ c i, P c → P (c.startActor env i)) : P (init sys env) := by
+  unfold init
+  generalize SysState.blank sys = c at blank
+  induction sys.boot generalizing c with
+  | nil => exact blank
+  | cons i boot ih => exact ih _ (start c i blank)
+
 theorem mem_of_deliverable {e : Envelope σ} (h : c.deliverable env e = true) : e ∈ c.net := by
   unfold deliverable at h
   split at h

@@ -9,10 +9,15 @@ public import Lanes.Http.Basic
 
 /-!
 The gate is the HTTP adapter's logic as an actor. It sits in front of a system: it parses each
-request into an input, remembers which requests are waiting, and answers each one exactly once,
-with the system's response or with `504` when its deadline passes. `gated sys` is the system
-with the gate added, so the model checker and proofs see the adapter's decisions and the
-application together. What is left in IO is reading and writing sockets.
+request into an input, remembers which requests are waiting, and answers each one with the
+system's response or with `504` when its deadline passes. `gated sys` is the system with the
+gate added, so the model checker and proofs see the adapter's decisions and the application
+together. What is left in IO is reading and writing sockets.
+
+`Lanes.Http.GateSound` proves, for every system behind the gate, that an arrival is answered at
+most once and that a waiting request keeps its deadline armed. That every arrival is answered is
+model-checked in `Tests/Gate.lean`, not proved: it needs timers that fire and a gate that does
+not crash.
 -/
 
 @[expose] public section

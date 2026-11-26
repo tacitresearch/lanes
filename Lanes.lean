@@ -34,6 +34,7 @@ public import Lanes.Html.Htmx
 public import Lanes.Html.Syntax
 public import Lanes.Http.Basic
 public import Lanes.Http.Gate
+public import Lanes.Http.GateSound
 public import Lanes.Http.Route
 
 /-!

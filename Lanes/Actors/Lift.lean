@@ -34,6 +34,17 @@ namespace SysState
   | nil => rfl
   | cons eff effs ih => rw [List.foldl_cons, ih, perform_state]
 
+@[simp] theorem perform_up (c : SysState sys) (i : σ.Id) (eff : Effect σ i) :
+    (c.perform i eff).up = c.up := by
+  cases eff <;> rfl
+
+@[simp] theorem performAll_up (c : SysState sys) (i : σ.Id) (effs : List (Effect σ i)) :
+    (c.performAll i effs).up = c.up := by
+  unfold performAll
+  induction effs generalizing c with
+  | nil => rfl
+  | cons eff effs ih => rw [List.foldl_cons, ih, perform_up]
+
 @[simp] theorem down_state (env : EnvModel σ) (c : SysState sys) (i : σ.Id) :
     (c.down env i).state = c.state := rfl
 

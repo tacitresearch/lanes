@@ -25,7 +25,8 @@ actor loses, which timer is due, how long to sleep, how much to do before lookin
 again, and when the shard is idle. They are in `Lanes/Actors/Kernel.lean` and proved in
 `Lanes/Actors/KernelSound.lean`. Nor are the HTTP adapter's (which requests are waiting, when
 one times out, when too many are pending): they are the gate actor in `Lanes/Http/Gate.lean`,
-model-checked in `Tests/Gate.lean`.
+proved in `Lanes/Http/GateSound.lean` to answer each arrival at most once and model-checked in
+`Tests/Gate.lean`.
 
 ## Assumptions the runtime makes
 
@@ -40,9 +41,21 @@ model-checked in `Tests/Gate.lean`.
 - **Progress.** That a queued input is eventually handled and a pending timer eventually fires
   is not proved. It rests on the inbox delivering, the clock advancing, and on the kernel's
   agenda holding every pending timer, which is tested (`Tests/Runtime.lean`) and not yet proved.
-- **The gate's two preconditions.** Each request is answered exactly once provided request ids
-  are never reused, which `Lanes/Env/Http.lean` ensures by allocating them, and provided the
-  gate does not crash, which holds on one shard. `Tests/Gate.lean` shows both are needed.
+- **What the gate guarantees, and under what.** *At most once* is proved. In every run of
+  `gated sys`, for every system, bridge and configuration, no request id is output more often
+  than it was input (`Http.answered_le_arrived`). The environment may crash and restart every
+  actor, the gate included, and may lose, reorder and duplicate messages on every link but
+  one: the link from the outside world to the gate must not duplicate. `Kernel.env` meets
+  that, so the theorem holds of the events the kernel reports
+  (`Http.kernel_answered_le_arrived`). "No id is answered twice" follows when the ids that
+  arrive are distinct (`Http.answered_nodup`). That they are is trusted: `Lanes/Env/Http.lean`
+  allocates them. *At least once* is not proved. `Http.deadlines_armed` proves that while the
+  gate is up every waiting request has its deadline armed, in every environment. What remains
+  is that the deadline fires, which is the progress assumption above, and that the gate does
+  not crash and lose its mailbox, which holds on one shard. `Tests/Gate.lean` checks exactly
+  once on two requests and shows each precondition is needed: a reused id is answered twice,
+  a duplicating link from outside answers one arrival twice, and a gate that crashes leaves a
+  request unanswered.
 - **In-memory durability.** `Actor.recover` receives the actor's last state. The kernel keeps
   that state in memory, so it survives an actor stopping itself but not the process dying.
 - **Environment model.** One shard stays within `Kernel.env`: reliable ordered links, no

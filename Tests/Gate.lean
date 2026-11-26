@@ -70,12 +70,51 @@ def check (config : GateConfig) (requests : List (ReqId × Request)) (mustSee : 
       terminal := fun w => w.driver.toSend.isEmpty
         && requests.all fun r => w.driver.answered.any (·.1 == r.1) }
 
+abbrev GatedWorld (config : GateConfig) := World (gated (Server.system echo) bridge config) Client
+
+def answeredAtMostAsOftenAsArrived {config : GateConfig} (requests : List (ReqId × Request))
+    (w : GatedWorld config) : Bool :=
+  requests.all fun (id, _) =>
+    w.driver.answered.countP (·.1 == id) + w.driver.toSend.countP (·.1 == id)
+      ≤ requests.countP (·.1 == id)
+
+def deadlinesArmed {config : GateConfig} (w : GatedWorld config) : Bool :=
+  !w.state.up none ||
+    (w.state.state none).all fun id => (w.state.timers none).contains (.expire id)
+
+/-- The gate crashes and restarts and every link loses and reorders. `answered_le_arrived`
+allows all of it, and duplication on every link but the one from outside to the gate. -/
+def hostile (duplicating : Option (Option Unit) → Option Unit → Bool) :
+    EnvModel (gatedSig echoSig) where
+  link src dst := { ordered := false, lossy := true, duplicating := duplicating src dst }
+  mayCrash _ := true
+  restarts _ := true
+
+def checkArrivals (requests : List (ReqId × Request)) (env : EnvModel (gatedSig echoSig))
+    (maxDepth : Option Nat := none) :=
+  Check.system (gated (Server.system echo) bridge {})
+    { env, driver := client requests, maxCrashes := 1 }
+    [ .always "no request is answered more often than it arrived"
+        (answeredAtMostAsOftenAsArrived requests),
+      .always "every pending request has its deadline armed" deadlinesArmed,
+      .sometimes "a request is pending while the gate is up" fun w =>
+        w.state.up none && !(w.state.state none).isEmpty,
+      .sometimes "an id that arrived twice is answered twice" fun w =>
+        w.driver.answered.countP (·.1 == 1) == 2 ]
+    { maxDepth }
+
 def tests : List (String × Bool) :=
   let two := check {} [(1, get []), (2, get [])]
   let refused := check {} [(1, get ["bad"]), (2, get [])] (mustSee := 400)
   let full := check { maxPending := 1 } [(1, get []), (2, get [])] (mustSee := 503)
   let reused := check {} [(1, get []), (1, get [])]
   let crashing := check {} [(1, get [])] (env := { mayCrash := (·.isNone) }) (maxCrashes := 1)
+  let twice := [(1, get []), (1, get ["bad"])]
+  let lossy := checkArrivals twice (hostile fun _ _ => false)
+  let duplicating := checkArrivals twice (hostile fun src dst => src.isSome || dst.isSome)
+    (maxDepth := some 12)
+  let duplicatedOutside := checkArrivals [(1, get ["bad"])] (hostile fun _ _ => true)
+    (maxDepth := some 8)
   [ ("gate: each request is answered exactly once, whatever the timers do",
       two.ok && two.complete && two.witnesses.length == 3),
     ("gate: a request the bridge refuses is answered without entering the system",
@@ -87,6 +126,15 @@ def tests : List (String × Bool) :=
     ("gate: exactly once needs a gate that does not crash, which one shard guarantees",
       match crashing.failure with
       | some (.deadlock _) => true
+      | _ => false),
+    ("gate: no id is answered more often than it arrived and pending deadlines stay armed, "
+        ++ "though the gate crashes and links lose and reorder",
+      lossy.ok && lossy.complete && lossy.witnesses.length == 2),
+    ("gate: the same when every link but the one from outside duplicates, to depth 12",
+      duplicating.ok && duplicating.witnesses.length == 2),
+    ("gate: at most once per arrival needs the link from outside not to duplicate",
+      match duplicatedOutside.failure with
+      | some (.violated "no request is answered more often than it arrived" _) => true
       | _ => false) ]
 
 end Tests.Gate

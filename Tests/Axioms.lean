@@ -51,6 +51,18 @@ by `lake build`, not linked into the test executable.
 /-- info: 'Lanes.Http.gate_bounded' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.gate_bounded
 
+/-- info: 'Lanes.Http.answered_le_arrived' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.answered_le_arrived
+
+/-- info: 'Lanes.Http.answered_nodup' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.answered_nodup
+
+/-- info: 'Lanes.Http.kernel_answered_le_arrived' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.kernel_answered_le_arrived
+
+/-- info: 'Lanes.Http.deadlines_armed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.deadlines_armed
+
 /-- info: 'Lanes.Http.Route.match?_link' depends on axioms: [propext, Classical.choice] -/
 #guard_msgs in #print axioms Lanes.Http.Route.match?_link
 

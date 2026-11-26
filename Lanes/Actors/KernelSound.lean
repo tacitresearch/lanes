@@ -424,6 +424,31 @@ theorem _root_.Lanes.System.Reachable.run {envm : EnvModel σ} {c c' : SysState 
     | none => simp [hstep] at hrun
     | some c₁ => exact ih (h.step ev hstep) (by simpa [hstep] using hrun)
 
+omit [Hashable σ.Id] in
+/-- Induction along a run, for properties that relate the events so far to the state reached. -/
+theorem _root_.Lanes.System.Reachable.run_induction {envm : EnvModel σ}
+    {P : List (Event σ) → SysState sys → Prop} {c c' : SysState sys} {events : List (Event σ)}
+    (hc : sys.Reachable envm c) (hrun : c.run envm events = some c') (start : P [] c)
+    (step : ∀ evs c₁ ev c₂, sys.Reachable envm c₁ → P evs c₁ → c₁.step envm ev = some c₂ →
+      P (evs ++ [ev]) c₂) : P events c' := by
+  suffices h : ∀ (rest evs : List (Event σ)) (c₁ : SysState sys), sys.Reachable envm c₁ →
+      P evs c₁ → c₁.run envm rest = some c' → P (evs ++ rest) c' from h events [] c hc start hrun
+  intro rest
+  induction rest with
+  | nil =>
+    intro evs c₁ _ hP hrun
+    simp only [SysState.run, Option.some.injEq] at hrun
+    simpa [← hrun] using hP
+  | cons ev rest ih =>
+    intro evs c₁ hc₁ hP hrun
+    simp only [SysState.run] at hrun
+    cases hstep : c₁.step envm ev with
+    | none => simp [hstep] at hrun
+    | some c₂ =>
+      have h := ih (evs ++ [ev]) c₂ (hc₁.step ev hstep) (step evs c₁ ev c₂ hc₁ hP hstep)
+        (by simpa [hstep] using hrun)
+      simpa using h
+
 theorem exec_sound (k : Kernel sys) (ops : List (Op σ)) :
     (k.abs).run env (k.exec ops).events = some ((k.exec ops).kernel.abs) := by
   induction ops generalizing k with
