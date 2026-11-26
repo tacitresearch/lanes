@@ -122,9 +122,20 @@ def settle (k : Kernel sys) (i : σ.Id) (r : sys.State i × List (Effect σ i)) 
   let (k, outs) := (k.setCell i { c with state := r.1 }).performAll i r.2
   (if r.2.any Effect.isStop then k.down i else k, outs)
 
+/-- Actor `i` leaves memory when it is at rest: up, with no timers, in a state that starting it
+gives (`Actor.fresh`). Its next message starts it again as it was, so nothing can tell
+(`DECISIONS.md` D44). Mail still queued for it is no reason to keep it: finding out would take a
+look through the queue, and its next message starts it as any other would. -/
+def rest (k : Kernel sys) (i : σ.Id) : Kernel sys :=
+  let c := k.cell i
+  if (sys.actor i).fresh c.state && c.up && c.timers.isEmpty then
+    { k with cells := k.cells.erase i }
+  else k
+
 def handle (k : Kernel sys) (i : σ.Id) (msg : σ.Msg i) : Kernel sys × List σ.Out :=
   let r := (sys.actor i).step (k.cell i).state msg
-  k.settle i r
+  let (k, outs) := k.settle i r
+  (k.rest i, outs)
 
 def startActor (k : Kernel sys) (i : σ.Id) : Kernel sys × List σ.Out :=
   let c := k.cell i

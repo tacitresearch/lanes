@@ -299,8 +299,13 @@ theorem kernel_answered_le_arrived (sys : System σ) (bridge : Bridge σ) (confi
     [Hashable (Option σ.Id)] (ops : List (Kernel.Op (gatedSig σ))) (id : ReqId) :
     let booted := Kernel.boot (gated sys bridge config)
     let events := booted.2.map .output ++ (booted.1.exec ops).events
-    (answered events).count id ≤ (arrived events).count id :=
-  answered_le_arrived rfl (Kernel.exec_reachable _ ops).1 id
+    (answered events).count id ≤ (arrived events).count id := by
+  dsimp only
+  obtain ⟨evs, _, hrun, hawake, -⟩ := (Kernel.exec_reachable (gated sys bridge config) ops).1
+  have hanswered : answered evs = answered _ := Event.filterMap_eq_of_awake (fun _ => rfl) hawake
+  have harrived : arrived evs = arrived _ := Event.filterMap_eq_of_awake (fun _ => rfl) hawake
+  rw [← hanswered, ← harrived]
+  exact answered_le_arrived rfl hrun id
 
 /-- While the gate is up, every pending request has its deadline armed. -/
 def Armed (c : SysState (gated sys bridge config)) : Prop :=

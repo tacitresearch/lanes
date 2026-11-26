@@ -163,11 +163,13 @@ theorem modify (h : Released a b) (i : σ.Id) (hi : Same a' b' i)
 
 theorem withNet (h : Released a b) (f : List (Envelope σ) → List (Envelope σ)) :
     Released { a with net := f a.net } { b with net := f b.net } :=
-  ⟨h.actor, congrArg f h.net, h.outbox⟩
+  ⟨fun i => (h.actor i).imp id fun hi => ⟨hi.1, hi.2, hi.3, hi.4, hi.5, hi.6⟩, congrArg f h.net,
+    h.outbox⟩
 
 theorem withOutbox (h : Released a b) (f : List σ.Out → List σ.Out) :
     Released { a with outbox := f a.outbox } { b with outbox := f b.outbox } :=
-  ⟨h.actor, h.net, congrArg f h.outbox⟩
+  ⟨fun i => (h.actor i).imp id fun hi => ⟨hi.1, hi.2, hi.3, hi.4, hi.5, hi.6⟩, h.net,
+    congrArg f h.outbox⟩
 
 theorem deliverable (h : Released a b) (e : Envelope σ) :
     a.deliverable env e = b.deliverable env e := by
@@ -245,7 +247,7 @@ theorem startActor (h : Released a b) (hi : Same a b i) :
   unfold SysState.startActor
   rw [hi.1]
   have h₁ := h.setUp hi true
-  exact h₁.settle (h₁.same (by simp))
+  exact h₁.settle (h₁.same (i := i) (by simp)) _
 
 theorem startActor_asleep (hi : Asleep a b i) :
     b.startActor env i = { b with up := update b.up i true, state := update b.state i (a.state i) } := by
@@ -261,11 +263,8 @@ theorem wake (h : Released a b) (hi : Asleep a b i) :
   rw [startActor_asleep hi]
   have hsame : Same a { b with up := update b.up i true, state := update b.state i (a.state i) } i :=
     ⟨by simp, by simp [hi.up], by simp [hi.idle, hi.timers]⟩
-  refine ⟨(Released.refl a).modify i hsame (fun j _ => Same.refl a j) (fun j hj => ?_) h.net
-    h.outbox, hsame⟩
-  rcases h.actor j with hs | hs
-  · exact ⟨by simp [hj, hs.1], by simp [hj, hs.2.1], hs.2.2⟩
-  · exact ⟨by simp [hj, hs.init], by simp [hj, hs.down], hs.idle⟩
+  exact ⟨h.modify i hsame (fun j _ => Same.refl a j) (fun j hj => ⟨by simp [hj], by simp [hj], rfl⟩)
+    h.net h.outbox, hsame⟩
 
 /-- Every step of `b` is one of `a`, or a start that brings a released actor back. -/
 theorem step (h : Released a b) {ev : Event σ} (hstep : b.step env ev = some b') :
@@ -328,14 +327,14 @@ theorem run (h : Released a b) {events : List (Event σ)} (hrun : b.run env even
       · obtain ⟨evs, a', hrun', hawake, h'⟩ := ih h₁ hrun
         exact ⟨evs, a', hrun', by rw [hawake, Event.awake_start], h'⟩
 
-/-- An actor that is up in `a`, awake in `b` after at most a start. -/
-theorem awaken (h : Released a b) (hup : a.up i = true) (hmail : a.hasMail i = true) :
+/-- An actor with mail is as it is in `a` in `b` after at most a start. -/
+theorem awaken (h : Released a b) (hmail : a.hasMail i = true) :
     ∃ pre b₁, b.run env pre = some b₁ ∧ Event.awake pre = [] ∧ Released a b₁ ∧ Same a b₁ i := by
   rcases h.actor i with hi | hi
   · exact ⟨[], b, rfl, rfl, h, hi⟩
   · have hstart : b.step env (.start i) = some (b.startActor env i) :=
       step_start.mpr ⟨hi.down, .inl ((h.hasMail i) ▸ hmail), rfl⟩
-    exact ⟨[.start i], _, by simp [SysState.run, hstart], by simp, h.wake hi⟩
+    exact ⟨[.start i], _, by simp [SysState.run, hstart], by simp, h.wake (env := env) hi⟩
 
 theorem hasMail_of_mem {e : Envelope σ} (hmem : e ∈ a.net) : a.hasMail e.dst = true :=
   List.any_eq_true.mpr ⟨e, hmem, by simp⟩
@@ -359,13 +358,13 @@ theorem step_back (h : Released a b) (hcrash : ∀ i, env.mayCrash i = false) {e
   | deliver e =>
     obtain ⟨hup, hdel, rfl⟩ := step_deliver.mp hstep
     obtain ⟨pre, b₁, hpre, hawake, h₁, hs₁⟩ :=
-      h.awaken (env := env) hup (hasMail_of_mem (mem_of_deliverable hdel))
+      h.awaken (env := env) (hasMail_of_mem (mem_of_deliverable hdel))
     exact after pre b₁ _ hpre hawake (step_deliver.mpr ⟨hs₁.2.1.trans hup,
       (h₁.deliverable e).symm.trans hdel, rfl⟩) ((h₁.withNet (·.erase e)).handle hs₁ e.msg)
   | duplicate e =>
     obtain ⟨hup, hdup, hdel, rfl⟩ := step_duplicate.mp hstep
     obtain ⟨pre, b₁, hpre, hawake, h₁, hs₁⟩ :=
-      h.awaken (env := env) hup (hasMail_of_mem (mem_of_deliverable hdel))
+      h.awaken (env := env) (hasMail_of_mem (mem_of_deliverable hdel))
     exact after pre b₁ _ hpre hawake (step_duplicate.mpr ⟨hs₁.2.1.trans hup, hdup,
       (h₁.deliverable e).symm.trans hdel, rfl⟩) (h₁.handle hs₁ e.msg)
   | drop e =>
@@ -411,19 +410,19 @@ theorem run_back (h : Released a b) (hcrash : ∀ i, env.mayCrash i = false)
       rw [Event.awake_append, hawake₁, hawake, ← Event.awake_append]
       rfl
 
-/-- Releasing actors at rest changes nothing that can be seen: whatever runs one state allows,
-the other allows too, up to the starts that bring released actors back. -/
-theorem runs (h : Released a b) (hcrash : ∀ i, env.mayCrash i = false)
-    (events : List (Event σ)) :
-    (∃ evs a', a.run env evs = some a' ∧ Event.awake evs = Event.awake events)
-      ↔ ∃ evs b', b.run env evs = some b' ∧ Event.awake evs = Event.awake events := by
+/-- Releasing actors at rest changes nothing that can be seen: the same inputs and outputs, in
+the same order, are possible from both states. -/
+theorem visible (h : Released a b) (hcrash : ∀ i, env.mayCrash i = false)
+    (trace : List (Visible σ)) :
+    (∃ evs a', a.run env evs = some a' ∧ evs.filterMap Event.visible = trace)
+      ↔ ∃ evs b', b.run env evs = some b' ∧ evs.filterMap Event.visible = trace := by
   constructor
-  · rintro ⟨evs, a', hrun, hawake⟩
-    obtain ⟨evs', b', hrun', hawake', -⟩ := h.run_back hcrash hrun
-    exact ⟨evs', b', hrun', hawake'.trans hawake⟩
-  · rintro ⟨evs, b', hrun, hawake⟩
-    obtain ⟨evs', a', hrun', hawake', -⟩ := h.run hrun
-    exact ⟨evs', a', hrun', hawake'.trans hawake⟩
+  · rintro ⟨evs, a', hrun, rfl⟩
+    obtain ⟨evs', b', hrun', hawake, -⟩ := h.run_back hcrash hrun
+    exact ⟨evs', b', hrun', Event.filterMap_eq_of_awake (fun _ => rfl) hawake⟩
+  · rintro ⟨evs, b', hrun, rfl⟩
+    obtain ⟨evs', a', hrun', hawake, -⟩ := h.run hrun
+    exact ⟨evs', a', hrun', Event.filterMap_eq_of_awake (fun _ => rfl) hawake⟩
 
 end Released
 
