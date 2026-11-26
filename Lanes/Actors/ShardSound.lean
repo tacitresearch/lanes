@@ -10,10 +10,31 @@ public import Lanes.Actors.Lossy
 /-!
 # A system split across two shards behaves as the one system
 
-`System.split sys hosts` is two shards of `sys` joined: every parcel one emits is a parcel
-input of the other. Each actor has a copy on either shard; the copy on the shard that hosts it
-is the actor, the other only forwards. `SysState.merged` reads a state of the split as a state
-of `sys`.
+`System.split sys hosts` is two shards of `sys` joined, every parcel one emits being a parcel
+input of the other. Each actor has a copy on either shard: the copy on the shard that hosts it
+is the actor, the other only forwards. `SysState.merged` reads a state of the split as one
+state of `sys`, and `EnvModel.split` is the environment of the split that `env` is for `sys`.
+
+`System.SplitReachable.merged` is the theorem. In a run in which every input from outside is
+given to the shard that hosts its receiver and no parcel comes from outside, every state of the
+split, merged, is a state `sys` reaches alone, up to `SysState.Equiv`. One event of the split is
+one event of `sys` of the same kind (`SysState.AtHome.step`), and the copies that only forward
+never run (`SysState.AtHome`). So the invariants of `sys` hold of the split
+(`System.Invariant.split`, `System.Invariant.split_state`).
+
+It holds up to `SysState.Equiv`, and under a condition on booting, for two reasons.
+
+The split boots one shard before the other, so its first state is `sys` booted in another order
+(`SysState.init_merged`). That order cannot be told as long as booting loses no message
+(`System.SteadyBoot`). A boot actor that stops as it starts loses the messages already sent to
+it on links that are not lossy, and which those are depends on the order: `Tests/Split.lean`
+has a system that, split, reaches a state it never reaches alone. Invariants of actor states
+proved for every environment need no condition, since they hold where every link is lossy
+(`System.Reachable.lossy`).
+
+Equal outputs of the two shards are two outputs in the split and one kind in `sys`, so the
+split may hand over the newer first. With the boot list sorted by shard the correspondence is
+exact but for that (`System.SplitReachable.merged_exact`).
 -/
 
 @[expose] public section
@@ -149,6 +170,13 @@ structure SysState.AtHome (c : SysState (sys.split hosts)) : Prop where
   down : ∀ x, Split.atHome hosts x = false → c.up x = false
   outbox : ∀ out ∈ c.outbox, (Split.output? out).isSome = true
 
+/-- No message is lost by booting: a boot actor does not stop as it starts, or every link to
+it is lossy, so that stopping loses nothing. Then the order in which the boot actors start
+cannot be told from the state they leave. -/
+def System.SteadyBoot (sys : System σ) (env : EnvModel σ) : Prop :=
+  ∀ i ∈ sys.boot, ∀ s, ((sys.actor i).recover s).2.any Effect.isStop = true →
+    ∀ src, (env.link src i).lossy = true
+
 /-- The states the split reaches when every input from outside is given to the shard that hosts
 its receiver and no parcel comes from outside. -/
 inductive System.SplitReachable (sys : System σ) (hosts : σ.Id → Bool) (env : EnvModel σ) :
@@ -258,6 +286,11 @@ theorem home_actorOf {x : ι ⊕ ι} (h : atHome hosts x = true) : home hosts (a
 theorem eq_of_actorOf {x y : ι ⊕ ι} (hx : atHome hosts x = true) (hy : atHome hosts y = true)
     (h : actorOf x = actorOf y) : x = y := by
   rw [← home_actorOf hx, ← home_actorOf hy, h]
+
+theorem routed_route (sys : System σ) (hosts : σ.Id → Bool) (x : σ.In) :
+    (Event.input (route sys hosts x)).routed sys hosts = true := by
+  unfold route
+  split <;> simp [Event.routed, *]
 
 end
 
@@ -762,13 +795,6 @@ theorem SysState.init_merged (sys : System σ) (hosts : σ.Id → Bool) (env : E
   congr 1
   simp [List.map_map, Function.comp_def]
 
-/-- No message is lost by booting: a boot actor does not stop as it starts, or every link to
-it is lossy, so that stopping loses nothing. Then the order in which the boot actors start
-cannot be told from the state they leave. -/
-def System.SteadyBoot (sys : System σ) (env : EnvModel σ) : Prop :=
-  ∀ i ∈ sys.boot, ∀ s, ((sys.actor i).recover s).2.any Effect.isStop = true →
-    ∀ src, (env.link src i).lossy = true
-
 theorem System.SteadyBoot.of_running (env : EnvModel σ)
     (h : ∀ i ∈ sys.boot, ∀ s, ((sys.actor i).recover s).2.any Effect.isStop = false) :
     sys.SteadyBoot env :=
@@ -1029,5 +1055,87 @@ theorem System.Invariant.split_state {Q : ((i : σ.Id) → sys.State i) → Prop
     Q c.merged.state := by
   obtain ⟨c', hc', hequiv⟩ := hc.lossy.merged fun _ _ _ _ _ => rfl
   exact hequiv.state ▸ h env.lossy c' hc'
+
+namespace SysState
+
+private theorem settle_outbox (c : SysState sys) (i : σ.Id) (r : sys.State i × List (Effect σ i))
+    (outbox : List σ.Out) :
+    (c.settle env i r).outbox = c.outbox ++ Effect.emits r.2 ∧
+      ({ c with outbox := outbox } : SysState sys).settle env i r
+        = { c.settle env i r with outbox := outbox ++ Effect.emits r.2 } := by
+  simp only [settle_eq]
+  split <;> exact ⟨rfl, rfl⟩
+
+/-- The order of the outputs waiting to leave changes nothing else. -/
+private theorem step_outbox {a a' : SysState sys} {ev : Event σ} (h : a.step env ev = some a')
+    {outbox : List σ.Out} (hperm : outbox.Perm a.outbox) :
+    ∃ outbox', outbox'.Perm a'.outbox ∧
+      ({ a with outbox := outbox } : SysState sys).step env ev
+        = some { a' with outbox := outbox' } := by
+  have settled : ∀ (x : SysState sys) (i : σ.Id) (r : sys.State i × List (Effect σ i)),
+      x.outbox = a.outbox →
+      (outbox ++ Effect.emits r.2).Perm (x.settle env i r).outbox ∧
+        ({ x with outbox := outbox } : SysState sys).settle env i r
+          = { x.settle env i r with outbox := outbox ++ Effect.emits r.2 } := fun x i r hx => by
+    obtain ⟨h₁, h₂⟩ := settle_outbox (env := env) x i r outbox
+    exact ⟨by rw [h₁, hx]; exact hperm.append_right _, h₂⟩
+  cases ev with
+  | input x =>
+    obtain rfl := step_input.mp h
+    exact ⟨outbox, hperm, step_input.mpr rfl⟩
+  | deliver e =>
+    obtain ⟨hup, hdel, rfl⟩ := step_deliver.mp h
+    obtain ⟨h₁, h₂⟩ := settled { a with net := a.net.erase e } e.dst
+      ((sys.actor e.dst).step (a.state e.dst) e.msg) rfl
+    exact ⟨_, h₁, step_deliver.mpr ⟨hup, hdel, h₂.symm⟩⟩
+  | duplicate e =>
+    obtain ⟨hup, hdup, hdel, rfl⟩ := step_duplicate.mp h
+    obtain ⟨h₁, h₂⟩ := settled a e.dst ((sys.actor e.dst).step (a.state e.dst) e.msg) rfl
+    exact ⟨_, h₁, step_duplicate.mpr ⟨hup, hdup, hdel, h₂.symm⟩⟩
+  | drop e =>
+    obtain ⟨hlossy, hmem, rfl⟩ := step_drop.mp h
+    exact ⟨outbox, hperm, step_drop.mpr ⟨hlossy, hmem, rfl⟩⟩
+  | timeout i msg =>
+    obtain ⟨hup, hmem, rfl⟩ := step_timeout.mp h
+    obtain ⟨h₁, h₂⟩ := settled { a with timers := update a.timers i ((a.timers i).erase msg) } i
+      ((sys.actor i).step (a.state i) msg) rfl
+    exact ⟨_, h₁, step_timeout.mpr ⟨hup, hmem, h₂.symm⟩⟩
+  | output out =>
+    obtain ⟨hmem, rfl⟩ := step_output.mp h
+    exact ⟨outbox.erase out, hperm.erase out, step_output.mpr ⟨hperm.mem_iff.mpr hmem, rfl⟩⟩
+  | crash i =>
+    obtain ⟨hup, hcrash, rfl⟩ := step_crash.mp h
+    exact ⟨outbox, hperm, step_crash.mpr ⟨hup, hcrash, rfl⟩⟩
+  | start i =>
+    obtain ⟨hup, hmail, rfl⟩ := step_start.mp h
+    obtain ⟨h₁, h₂⟩ := settled { a with up := update a.up i true } i
+      ((sys.actor i).recover (a.state i)) rfl
+    exact ⟨_, h₁, step_start.mpr ⟨hup, hmail, h₂.symm⟩⟩
+
+end SysState
+
+/-- When the boot list has the actors of the left shard first, the correspondence is exact but
+for the outputs waiting to leave: the same actors, timers and messages in flight in the same
+order. The outputs are the same ones in some order; `Tests/Split.lean` has two actors on
+different shards whose equal outputs leave in an order `sys` alone cannot have. -/
+theorem System.SplitReachable.merged_exact
+    (hboot : sys.boot.filter hosts ++ sys.boot.filter (fun i => !hosts i) = sys.boot)
+    (h : sys.SplitReachable hosts env c) :
+    ∃ outbox, outbox.Perm c.merged.outbox ∧
+      sys.Reachable env { c.merged with outbox := outbox } := by
+  induction h with
+  | init =>
+    refine ⟨_, .refl _, ?_⟩
+    rw [show ({ (SysState.init (sys.split hosts) (env.split hosts)).merged with
+        outbox := (SysState.init (sys.split hosts) (env.split hosts)).merged.outbox } :
+        SysState sys) = SysState.init sys env from SysState.init_merged_of_sorted env hboot]
+    exact .init
+  | @step c c₂ ev hc hev hstep ih =>
+    obtain ⟨outbox, hperm, hreach⟩ := ih
+    obtain ⟨-, ev', m, -, hstep', hperm', hm⟩ := hc.atHome.step (env := env) hev hstep
+    obtain ⟨outbox', hperm'', hstep''⟩ := SysState.step_outbox hstep' hperm
+    refine ⟨outbox', hperm''.trans hperm', ?_⟩
+    rw [← hm]
+    exact hreach.step ev' hstep''
 
 end Lanes
