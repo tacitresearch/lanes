@@ -482,27 +482,6 @@ theorem step {net : List (Envelope (sig N C R))} (h : Sim c t log) (hc : Commits
 
 end Sim
 
-/-- Every request in flight came from a client: no node sends one. -/
-def FromClients (c : SysState (recording N config machine)) : Prop :=
-  ∀ src dst req cmd, (⟨src, dst, .propose req cmd⟩ : Envelope (sig N C R)) ∈ c.net → src = none
-
-theorem fromClients_monotone : (recording N config machine).Monotone FromClients where
-  blank := fun _ _ _ _ h => nomatch h
-  below _ _ h hbelow := fun src dst req cmd hmem => h src dst req cmd (hbelow.net _ hmem)
-  input c x h := fun src dst req cmd hmem => by
-    rcases List.mem_append.mp hmem with hold | hnew
-    · exact h src dst req cmd hold
-    · simp only [List.mem_singleton, Envelope.mk.injEq] at hnew
-      exact hnew.1
-  step c i msg h _ := fun src dst req cmd hmem => by
-    rcases SysState.mem_grow_net.mp hmem with hold | ⟨_, hnew⟩
-    · exact h src dst req cmd hold
-    · exact absurd hnew ((step_serves config Enum.all machine i (c.state i).1 msg).proposes _ _ _)
-  recover c i h := fun src dst req cmd hmem => by
-    rcases SysState.mem_grow_net.mp hmem with hold | ⟨_, hnew⟩
-    · exact h src dst req cmd hold
-    · exact absurd hnew ((recover_serves config Enum.all machine i (c.state i).1).proposes _ _ _)
-
 section Theorem
 
 variable (hup : config.votesForUpToDateOnly = true) (hown : config.commitsOwnTermOnly = true)

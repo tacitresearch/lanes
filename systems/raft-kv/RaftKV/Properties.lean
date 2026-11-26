@@ -132,4 +132,26 @@ def appendsCut (c : Cluster N config machine) : Bool :=
           && entries.isPrefixOf (s.log.drop prev) && commit ≤ s.commit)
     | _ => true
 
+/-! What the proof that the cluster is the machine uses of a state. -/
+
+omit [DecidableEq N] [DecidableEq C] [DecidableEq R] [Enum N] in
+/-- The machine after `entries`. -/
+def Machine.run (machine : Machine C R M) (m : M) (entries : List (Entry N C)) : M :=
+  entries.foldl (fun m entry => (machine.apply m entry.cmd).1) m
+
+def appliedAllCommitted (c : Cluster N config machine) : Bool :=
+  (Enum.all (α := N)).all fun a => (c.state a).applied == (c.state a).commit
+
+/-- Each node's machine is the replicated one run over the entries the node has applied. -/
+def machinesRun [BEq M] (c : Cluster N config machine) : Bool :=
+  (Enum.all (α := N)).all fun a =>
+    (c.state a).machine == machine.run machine.init ((c.state a).log.take (c.state a).applied)
+
+/-- No node sends a request: those in flight came from clients. -/
+def requestsFromClients (c : Cluster N config machine) : Bool :=
+  c.net.all fun e =>
+    match e.msg with
+    | .propose _ _ => e.src.isNone
+    | _ => true
+
 end RaftKV

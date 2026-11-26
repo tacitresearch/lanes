@@ -25,10 +25,6 @@ namespace Machine
 
 variable (machine : Machine C R M)
 
-/-- The machine after `entries`. -/
-def run (m : M) (entries : List (Entry N C)) : M :=
-  entries.foldl (fun m entry => (machine.apply m entry.cmd).1) m
-
 /-- The answers `self` gives while `entries` are applied from `m`: one for each entry it took
 from a client. -/
 def replies (self : N) (m : M) : List (Entry N C) → List (Response R)

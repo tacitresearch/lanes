@@ -175,6 +175,47 @@ theorem applying_monotone (hup : config.votesForUpToDateOnly = true)
     exact ⟨log', h'⟩
   · exact fun c i _ _ ⟨log, h⟩ => ⟨log, h.recover⟩
 
+/-- Every request in flight came from a client: no node sends one. -/
+def FromClients (c : SysState (recording N config machine)) : Prop :=
+  ∀ src dst req cmd, (⟨src, dst, .propose req cmd⟩ : Envelope (sig N C R)) ∈ c.net → src = none
+
+theorem fromClients_monotone : (recording N config machine).Monotone FromClients where
+  blank := fun _ _ _ _ h => nomatch h
+  below _ _ h hbelow := fun src dst req cmd hmem => h src dst req cmd (hbelow.net _ hmem)
+  input c x h := fun src dst req cmd hmem => by
+    rcases List.mem_append.mp hmem with hold | hnew
+    · exact h src dst req cmd hold
+    · simp only [List.mem_singleton, Envelope.mk.injEq] at hnew
+      exact hnew.1
+  step c i msg h _ := fun src dst req cmd hmem => by
+    rcases SysState.mem_grow_net.mp hmem with hold | ⟨_, hnew⟩
+    · exact h src dst req cmd hold
+    · exact absurd hnew ((step_serves config Enum.all machine i (c.state i).1 msg).proposes _ _ _)
+  recover c i h := fun src dst req cmd hmem => by
+    rcases SysState.mem_grow_net.mp hmem with hold | ⟨_, hnew⟩
+    · exact h src dst req cmd hold
+    · exact absurd hnew ((recover_serves config Enum.all machine i (c.state i).1).proposes _ _ _)
+
+section Requests
+
+variable (config) (machine : Machine C R M) (env : EnvModel (sig N C R))
+
+theorem requests_from_clients :
+    (cluster N config machine).Invariant env fun c => ∀ src dst req cmd,
+      (⟨src, dst, .propose req cmd⟩ : Envelope (sig N C R)) ∈ c.net → src = none :=
+  .of_ghost (.past _) fun c hc => fromClients_monotone.invariant env c hc
+
+theorem requestsFromClients_invariant :
+    (cluster N config machine).Invariant env fun c => requestsFromClients c = true := by
+  intro c hc
+  simp only [requestsFromClients, List.all_eq_true]
+  rintro ⟨src, dst, msg⟩ hmem
+  cases msg <;> first
+    | rfl
+    | simp [requests_from_clients config machine env c hc _ _ _ _ hmem]
+
+end Requests
+
 section Headlines
 
 variable (config) (machine : Machine C R M) (hup : config.votesForUpToDateOnly = true)
@@ -211,6 +252,16 @@ theorem applied_agree :
       (c.state b).1.log.take (c.state b).1.applied
     rw [← h.take_applied hcommitting.2 a, ← h.take_applied hcommitting.2 b]
     exact (List.take_prefix_take_left hle)
+
+theorem appliedAllCommitted_invariant :
+    (cluster N config machine).Invariant env fun c => appliedAllCommitted c = true := by
+  intro c hc
+  simpa [appliedAllCommitted] using fun a _ => applied_eq_commit config machine hup hown env c hc a
+
+theorem machinesRun_invariant [BEq M] [LawfulBEq M] :
+    (cluster N config machine).Invariant env fun c => machinesRun c = true := by
+  intro c hc
+  simpa [machinesRun] using fun a _ => machine_eq_run config machine hup hown env c hc a
 
 end Headlines
 

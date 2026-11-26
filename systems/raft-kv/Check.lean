@@ -41,6 +41,10 @@ def props (config : Config) : List (Check.Property (W config)) :=
     .always "applied ≤ committed" fun w => appliedWithinCommit w.state,
     .always "committed ≤ logged" fun w => commitWithinLog w.state,
     .always "no entry is of a later term than its node" fun w => entryTermsWithinTerm w.state,
+    .always "applied = committed" fun w => appliedAllCommitted w.state,
+    .always "a machine is the map run over what its node has applied" fun w =>
+      machinesRun w.state,
+    .always "requests in flight came from clients" fun w => requestsFromClients w.state,
     .sometimes "a leader is elected" fun w =>
       (Enum.all (α := N)).any fun a => isLeader (w.state.state a),
     .sometimes "a write is answered" fun w => w.state.outbox.any fun r => r.res == .ok,

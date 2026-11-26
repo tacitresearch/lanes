@@ -13,7 +13,8 @@ refinement mapping written, and proved for every cluster (`RaftKVProofs.lean`).
 
 The invariants of Raft's safety argument are checked in every state as well
 (`RaftKV/Properties.lean`): at most one leader per term, log matching, agreement on committed
-entries, leader completeness.
+entries, leader completeness, and that each node's machine is the map run over the entries
+the node has applied.
 
 ## What has been checked
 
@@ -93,8 +94,9 @@ On those, also with both switches on, state machine safety and the top theorem:
 | Theorem | Says |
 | --- | --- |
 | `step_serves`, `recover_serves` | What one step of a node does for its clients (`Serves`): an entry is added only by the node that handles a `propose`, and is that request; a node applies exactly the entries between what it had applied and what it has now committed; it answers exactly those it took from a client, each with what the machine says after the entries before it. For every `Config`. |
-| `applied_eq_commit` | A node has applied all it has committed. |
-| `machine_eq_run` | A node's machine is the replicated machine run from `init` over the entries the node has applied. |
+| `requests_from_clients`, `requestsFromClients_invariant` | No node sends a request: those in flight came from clients. For every `Config`. |
+| `applied_eq_commit`, `appliedAllCommitted_invariant` | A node has applied all it has committed. |
+| `machine_eq_run`, `machinesRun_invariant` | A node's machine is the replicated machine run from `init` over the entries the node has applied. |
 | `applied_agree` | Of two nodes, the one that has applied less has applied a start of what the other has. |
 | `implementsMachine` (`RaftKVProofs.lean`), `cluster_implements` | The cluster refines `spec`: for every finite set of nodes, every machine and every environment model whose links from clients do not repeat a request. Links between nodes may lose, repeat and reorder, links from clients may lose and reorder, and any node may crash and restart at any time. |
 

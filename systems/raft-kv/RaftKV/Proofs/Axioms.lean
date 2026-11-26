@@ -80,3 +80,15 @@ axioms. If a `sorry` or a new axiom reaches one of them, this file stops compili
 
 /-- info: 'RaftKV.applied_agree' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms RaftKV.applied_agree
+
+/-- info: 'RaftKV.requests_from_clients' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms RaftKV.requests_from_clients
+
+/-- info: 'RaftKV.requestsFromClients_invariant' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms RaftKV.requestsFromClients_invariant
+
+/-- info: 'RaftKV.appliedAllCommitted_invariant' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms RaftKV.appliedAllCommitted_invariant
+
+/-- info: 'RaftKV.machinesRun_invariant' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms RaftKV.machinesRun_invariant
