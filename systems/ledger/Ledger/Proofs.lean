@@ -1,5 +1,6 @@
 import Ledger.Proofs.Book
 import Ledger.Proofs.Actors
+import Ledger.Proofs.Refines
 import Ledger.Proofs.Axioms
 
 /-!
@@ -21,5 +22,8 @@ crashes):
 All of it is about the ledger actor, the user actors and pure functions, with no theorem about
 the whole system but the lifting lemmas of Lanes: that is what one actor for the book buys.
 
-That the system refines the spec is checked on small instances (`Check.lean`), not proved.
+And without timers the system implements its spec (`implements`), for every configuration and
+every environment in which each user's link to the ledger is ordered and does not duplicate
+and no request reaches a user twice. With timers it does not implement the spec with its
+deadlines; `Check.lean` finds the run.
 -/

@@ -97,6 +97,8 @@ does not have armed.
 | The same with any actor crashing once | 16,478 | pass |
 | A log-out racing a transfer, then a view by the other user | 1,727 | pass |
 | The same with a crash anywhere | 10,238 | pass |
+| The same with requests lost and reordered on the way in and a crash anywhere | 12,264 | pass |
+| Transfers between two users, with links to the ledger that lose messages | 3,904 | pass |
 | The same, answered by the user actor | | stale view found in 42 steps |
 | The same with links that reorder | | stale view found in 47 steps |
 | Locks, evictions, a session used for another user, refusals | 199 | pass |
@@ -122,9 +124,22 @@ axiom gate:
 - `serve_from_owner`: every request on its way to the ledger to serve `n` was sent by
   `user n` (`System.Monotone`, five cases);
 - `user_bounded`: at most `maxSessions` sessions, at most `maxFailures` failures counted, and
-  locked at that many.
+  locked at that many;
+- `implements`: without timers (`Untimed`), the system implements its spec, for every
+  configuration and every environment in which each user's link to the ledger is ordered and
+  does not duplicate, and no request is handed to a user twice: messages may be lost on every
+  link and reordered on the way in, and any actor may crash (`Ledger/Proofs/Refines.lean`, with
+  `Lanes.Account`). A request takes effect when the ledger serves it; the user has decided it,
+  and moved its record, before. So the witness of the simulation is the list of requests
+  decided and not served, each marked with whether its message is still on the link, and the
+  spec's record of a user, with that user's requests decided in order, is the user's record
+  and the messages on its link to the ledger (`Lanes.linkMsgs`). A request whose message was
+  lost, in a loss or a crash of the ledger, takes effect when the ledger serves the next
+  message on the link if the user answered it, and never if the book was to serve it.
 
-That the system refines its spec is checked, not proved. That `Bytes.same`, HMAC and PBKDF2
+With timers the system does not implement its spec with deadlines (above, found in 43 steps),
+and nothing about it is proved. The links from the users to the ledger must be ordered (a
+reordering link gives a stale view, above). That `Bytes.same`, HMAC and PBKDF2
 are what they say is tested against published vectors (`TRUSTED.md`).
 
 ## The web front
@@ -172,6 +187,12 @@ round of framework work is planned from this.
   `script` gives real-time order, which is what makes a stale read a violation; it also keeps
   the state space small. Tested on the key-value store (`Tests/Clients.lean`).
 - **A list lemma**: `Lanes.sum_map_set` in `Lanes/Data/List/Basic.lean`.
+- **Releasing idle actors**: an actor declares the states a start gives it (`Actor.fresh`), and
+  the kernel drops one that is in such a state with no timers once it has handled a message,
+  proved to change nothing anyone can see (`Kernel.exec_visible`,
+  `docs/decisions/D51-release-actors-at-rest.md`). `user n` declares its vacant state, which a
+  log-in for an unknown name leaves as it is, so twenty thousand guesses leave the kernel
+  holding the ledger alone (`Release.lean`, checked when it is built).
 
 ### Broken
 
@@ -237,9 +258,12 @@ round of framework work is planned from this.
 - **Conservation across actors would not cover real names.** The bank proves conservation
   over a `Fintype` of accounts; `String` names are not one. With the book in one actor the
   question did not arise, but sharding the book needs sums over the actors that have started.
-- **A user actor for every name ever tried.** A log-in for a name nobody has creates the cell
-  `user n`, and the runtime never releases an actor (`docs/STATUS.md`), so a stranger can grow
-  the kernel without bound by guessing names.
+- **A user actor for every name ever tried.** A log-in for a name nobody has created the cell
+  `user n`, and the runtime never released an actor, so a stranger could grow the kernel
+  without bound by guessing names. Fixed (above): a vacant user is released. A user who signed
+  up stays in memory for good, since releasing it needs its record saved elsewhere. The
+  journal's name (`Main.lean`) should change with this, since the kernel now replays an old
+  journal differently.
 - **Unbounded state.** Entries grow forever (rule 2.6 has nothing to say to a ledger), accounts
   are a `List` looked up by index, every snapshot writes the whole book, and the transfers page
   lists every entry of the user.
@@ -265,7 +289,8 @@ round of framework work is planned from this.
   is booked.
 - **A database adapter**: the book outgrows memory and its snapshot; it wants entries by
   account as a derived index with a theorem tying it to the entries (rule 1.1), paged queries,
-  and user actors released to storage when idle.
+  and the actors of users who signed up released to storage when idle and read back on their
+  next request.
 - **A sharded book**: transfers across shards need locks or two-phase commit to stay
   linearizable; the checker already shows what goes wrong without them.
 
