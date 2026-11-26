@@ -154,7 +154,8 @@ declaration and every field, and most of them restate the name. That rule goes.
 Each step is its own commit on the branch.
 
 Progress, 2026-11-27: step 1 is done except the comment pass, which is in review. From step 2,
-checker completeness is proved; search correctness and the monitor are open. Step 3 is done for
+checker completeness, safe state merging and the monitor are proved; search correctness is in
+progress. Step 3 is done for
 one shard: the kernel is proved and the old runtime is deleted. Several shards and the seeded
 simulation harness are open. Step 4 is done: the gate actor replaces the adapter's logic, with
 a model check and an end-to-end test over a socket.
