@@ -61,3 +61,4 @@ decision without a number.
 - [D45. Everything is proved; the checker finds bugs, a proof is the evidence](D45-everything-is-proved.md)
 - [D46. Bind what touches physics](D46-bind-what-touches-physics.md)
 - [D47. The inventory is computed from the built library](D47-the-inventory-is-computed.md)
+- [D48. A request named by its client takes effect once, and its answer may be handed over again](D48-a-request-named-by-its-client.md)
