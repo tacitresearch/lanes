@@ -147,6 +147,10 @@ def parseForm (s : String) : List (String × String) :=
         return (key, value)
       | [] => none
 
+/-- A form as a body, each key and value percent-encoded, which `parseForm` decodes. -/
+def encodeForm (fields : List (String × String)) : String :=
+  "&".intercalate (fields.map fun (key, value) => percentEncode key ++ "=" ++ percentEncode value)
+
 namespace Request
 
 def param? (r : Request) (key : String) : Option String :=

@@ -41,7 +41,9 @@ def Page : Html :=
     </body>
   </html>
 
-/-- Requests are parsed here, once (rule 2.2). -/
+/-- Requests are parsed here, once (rule 2.2). What a request holds that must not be journalled,
+a password or a session cookie, is taken out by a `prepare` field, which the server runs before
+the request enters the system. -/
 def bridge : Http.Bridge sig where
   decode id request :=
     (Http.dispatch [

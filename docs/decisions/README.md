@@ -56,3 +56,5 @@ decision without a number.
 - [D40. The runtime shell and the HTTP server only perform](D40-the-runtime-shell-and-the-http.md)
 - [D41. A fair run of a join is a fair run of its left side, seen without the messages from outside](D41-a-fair-run-of-a-join.md)
 - [D42. A spec names its inputs and outputs, and time passes in it as deadlines the system's timers are](D42-a-spec-names-its-inputs-and.md)
+- [D43. One gate: `serve` runs the gate joined in front](D43-one-gate.md)
+- [D44. A request is prepared before it is journalled](D44-request-prepared-before-journal.md)

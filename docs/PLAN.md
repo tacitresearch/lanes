@@ -518,9 +518,9 @@ gate joined to `sys` by `System.join`, so parcels pass it by. `Http.serveShard` 
 `fronted (sys.shard hosts)` with `Peers`: a process with an HTTP front and peers. The bank runs
 on two shards that way, each behind its own front. At most once per arrival is proved of
 `fronted sys` for every `sys` by projection from the gate alone. Open: a response must be put
-out by the process that took the request, since request ids are each process's own; liveness
-of `fronted` (`pending_answered` is proved of `gated`), which waits for the projection of fair
-runs; and `gated` itself, still built by hand.
+out by the process that took the request, since request ids are each process's own. Since
+done: the liveness of `fronted`, by projection of fair runs (D41), and `gated` retired, so
+`serve` runs `fronted` too (`docs/decisions/D43-one-gate.md`).
 
 ### B.3 Snapshots, then checker v2
 
