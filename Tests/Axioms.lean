@@ -245,6 +245,69 @@ by `lake build`, not linked into the test executable.
 /-- info: 'Lanes.Parcel.receive_send' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Parcel.receive_send
 
+/-- info: 'Lanes.Mailbox.Reachable.sound' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Mailbox.Reachable.sound
+
+/-- info: 'Lanes.Mailbox.Reachable.offer_full_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Mailbox.Reachable.offer_full_iff
+
+/-- info: 'Lanes.Mailbox.Reachable.bounded' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Mailbox.Reachable.bounded
+
+/-- info: 'Lanes.Mailbox.Reachable.asleep_empty' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Mailbox.Reachable.asleep_empty
+
+/-- info: 'Lanes.Mailbox.Reachable.not_asleep_waiting' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Mailbox.Reachable.not_asleep_waiting
+
+/-- info: 'Lanes.Mailbox.rest_eq_false' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Lanes.Mailbox.rest_eq_false
+
+/-- info: 'Lanes.Mailbox.batch_since_take' depends on axioms: [propext, Classical.choice] -/
+#guard_msgs in #print axioms Lanes.Mailbox.batch_since_take
+
+/-- info: 'Lanes.Mailbox.wake_since_take' depends on axioms: [propext, Classical.choice] -/
+#guard_msgs in #print axioms Lanes.Mailbox.wake_since_take
+
+/-- info: 'Lanes.Mailbox.close_since_take' depends on axioms: [propext, Classical.choice] -/
+#guard_msgs in #print axioms Lanes.Mailbox.close_since_take
+
+/-- info: 'Lanes.Mailbox.woken_after_rest' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Mailbox.woken_after_rest
+
+/-- info: 'Lanes.Mailbox.after_close' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Mailbox.after_close
+
+/-- info: 'Lanes.Peers.Courier.Reachable.sound' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Peers.Courier.Reachable.sound
+
+/-- info: 'Lanes.Peers.Courier.Reachable.queue_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Peers.Courier.Reachable.queue_le
+
+/-- info: 'Lanes.Peers.Courier.Reachable.write_not_busy' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Peers.Courier.Reachable.write_not_busy
+
+/-- info: 'Lanes.Peers.Courier.written_between' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Peers.Courier.written_between
+
+/-- info: 'Lanes.Peers.Courier.write_dialed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Peers.Courier.write_dialed
+
+/-- info: 'Lanes.Peers.Courier.stop_closes' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Peers.Courier.stop_closes
+
+/-- info: 'Lanes.Peers.Courier.after_stop' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Peers.Courier.after_stop
+
+/-- info: 'Lanes.Peers.Courier.rest_after_break' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Peers.Courier.rest_after_break
+
+/-- info: 'Lanes.Peers.Courier.delivered_read' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Peers.Courier.delivered_read
+
+/-- info: 'Lanes.Peers.Courier.written_sublist_sent' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Peers.Courier.written_sublist_sent
+
 /-- info: 'Lanes.Journal.turns_kernel' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Journal.turns_kernel
 

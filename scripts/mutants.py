@@ -169,6 +169,14 @@ MUTANTS = [
      """              listen events conn socket fun _ => pure ()
             catch _ => pure ()
 """, "raftLive"),
+    ("courier: the parcel that makes it dial waits in a queue of no room",
+     "Lanes/Actors/Courier.lean",
+     "waiting := if limits.queue = 0 then {} else Fifo.push {} bytes }",
+     "waiting := Fifo.push {} bytes }"),
+    ("courier: bytes on a connection it dialed close it, and it goes on writing there",
+     "Lanes/Actors/Courier.lean",
+     "    | none => if c.dialed.contains conn then (c, []) else (c, [.close conn])",
+     "    | none => (c, [.close conn])"),
 ]
 
 

@@ -189,6 +189,14 @@ def tests : List (String × Bool) :=
       let (_, actions) := courier.step (σ := wireSig) big read (.received 0 ⟨#[7]⟩)
       actions.any fun
         | .close 0 => true
-        | _ => false) ]
+        | _ => false),
+    ("courier: a queue of no room holds nothing, also while the connection is made",
+      let none : Limits := { queue := 0 }
+      let (courier, actions) := ({} : Courier).step (σ := wireSig) none read (.send peer stream 0)
+      (courier.wire peer).waiting.length == 0 && actions matches [.dial 0 _]),
+    ("courier: bytes on a connection it made do not end it, and the next parcel goes on it",
+      let up := tell (tell (tell {} (.send peer ⟨#[0]⟩ 0)) (.connected 0)) (.written 0)
+      let after := tell (tell up (.received 0 ⟨#[7, 1]⟩)) (.send peer ⟨#[1]⟩ 0)
+      after.sockets == [0] && !after.stray && after.started == [0, 1]) ]
 
 end Tests.Courier

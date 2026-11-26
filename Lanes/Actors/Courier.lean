@@ -15,9 +15,9 @@ and decides nothing: when to connect, what waits and what is dropped, one write 
 connection, how long to leave a process alone after failing to reach it, what a stream of bytes
 is as parcels, and what `stop` ends.
 
-Because it is a function, the model checker runs it against a network that may fail at any
-moment (`Tests/Courier.lean`): nothing is written twice or out of order, and nothing stays open
-after `stop`.
+Because it is a function, what it promises is proved of it for every limit and every sequence
+of events (`Lanes/Actors/CourierSound.lean`), and the model checker runs it together with a
+handler and a network that may fail at any moment (`Tests/Courier.lean`).
 -/
 
 @[expose] public section
@@ -96,18 +96,20 @@ def wire (c : Courier) (to : Address) : Wire :=
 def setWire (c : Courier) (to : Address) (wire : Wire) : Courier :=
   { c with wires := c.wires.insert to wire }
 
-private def dial (c : Courier) (to : Address) (bytes : ByteArray) : Courier × List (Action σ) :=
+def dial (limits : Limits) (c : Courier) (to : Address) (bytes : ByteArray) :
+    Courier × List (Action σ) :=
   ({ c with nextConn := c.nextConn + 1, dialed := c.dialed.insert c.nextConn to }.setWire to
-      { line := .dialing c.nextConn, waiting := (Fifo.push {} bytes) },
+      { line := .dialing c.nextConn,
+        waiting := if limits.queue = 0 then {} else Fifo.push {} bytes },
     [.dial c.nextConn to])
 
-private def enqueue (limits : Limits) (c : Courier) (to : Address) (w : Wire)
+def enqueue (limits : Limits) (c : Courier) (to : Address) (w : Wire)
     (bytes : ByteArray) : Courier :=
   if w.waiting.length < limits.queue then c.setWire to { w with waiting := w.waiting.push bytes }
   else c
 
 /-- Write the oldest waiting parcel, if there is one and the connection is free. -/
-private def next (c : Courier) (to : Address) (conn : Conn) (w : Wire) :
+def next (c : Courier) (to : Address) (conn : Conn) (w : Wire) :
     Courier × List (Action σ) :=
   match w.waiting.pop? with
   | some (bytes, rest) => (c.setWire to { line := .up conn true, waiting := rest }, [.write conn bytes])
@@ -120,15 +122,15 @@ parcels (`Parcel.receive`).
 After `stop` it asks for nothing more: `stop` closes every connection it asked for or was told
 of, also those still being made, so one that turns up late is already closed.
 -/
-@[no_expose] def step (limits : Limits) (read : ByteArray → Option (List (Parcel σ) × Nat))
+def step (limits : Limits) (read : ByteArray → Option (List (Parcel σ) × Nat))
     (c : Courier) : Event → Courier × List (Action σ)
   | .send to bytes now_ms =>
     if c.stopped then (c, [])
     else
       let w := c.wire to
       match w.line with
-      | .idle => dial c to bytes
-      | .resting until_ms => if until_ms ≤ now_ms then dial c to bytes else (c, [])
+      | .idle => dial limits c to bytes
+      | .resting until_ms => if until_ms ≤ now_ms then dial limits c to bytes else (c, [])
       | .dialing _ => (enqueue limits c to w bytes, [])
       | .up conn false => (c.setWire to { w with line := .up conn true }, [.write conn bytes])
       | .up _ true => (enqueue limits c to w bytes, [])
@@ -171,7 +173,7 @@ of, also those still being made, so one that turns up late is already closed.
           ({ c with inbound := c.inbound.erase conn }, parcels.map .deliver ++ [.close conn])
         else ({ c with inbound := c.inbound.insert conn rest }, parcels.map .deliver)
       | none => ({ c with inbound := c.inbound.erase conn }, [.close conn])
-    | none => (c, [.close conn])
+    | none => if c.dialed.contains conn then (c, []) else (c, [.close conn])
   | .stop =>
     ({ stopped := true, nextConn := c.nextConn },
       (c.dialed.keys ++ c.inbound.keys).map .close)

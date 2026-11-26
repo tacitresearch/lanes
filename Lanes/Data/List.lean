@@ -10,7 +10,7 @@ Facts about lists that proofs about systems share: what `erase` does under `map`
 takes one element out, so every proof that reads a state through a map or a filter needs these.
 Then `take` and `drop` of a log and of a start of it. Then strings and byte arrays as lists of
 bytes: what UTF-8 makes of a character below 128, and the bytes of a byte array cut short or put
-after another, through which the proofs about the HTTP reader read what it reads.
+after another, through which the proofs about the HTTP reader read what it reads. And a log read by a monitor that may reject it (`foldlM` into `Option`).
 -/
 
 public section
@@ -277,5 +277,64 @@ theorem foldl_append_bytes (acc : ByteArray) (cs : List ByteArray) :
   | cons c cs ih =>
     rw [List.foldl_cons, List.foldl_cons, ih, ih (.empty ++ c), ByteArray.empty_append,
       ByteArray.append_assoc]
+
+theorem foldlM_append_some {M : Type} {f : M → α → Option M} {l₁ l₂ : List α} {m t : M}
+    (h : (l₁ ++ l₂).foldlM f m = some t) :
+    ∃ m', l₁.foldlM f m = some m' ∧ l₂.foldlM f m' = some t := by
+  rw [List.foldlM_append] at h
+  cases h₁ : l₁.foldlM f m with
+  | none => simp [h₁] at h
+  | some m' => exact ⟨m', rfl, by simpa [h₁] using h⟩
+
+theorem foldlM_cons_some {M : Type} {f : M → α → Option M} {x : α} {l : List α} {m t : M}
+    (h : (x :: l).foldlM f m = some t) : ∃ m', f m x = some m' ∧ l.foldlM f m' = some t := by
+  simp only [List.foldlM_cons] at h
+  cases h₁ : f m x with
+  | none => simp [h₁] at h
+  | some m' => exact ⟨m', rfl, by simpa [h₁] using h⟩
+
+/-- What each accepted element keeps, a whole accepted list keeps. -/
+theorem foldlM_some_inv {M : Type} {f : M → α → Option M} {l : List α} {m t : M} (P : M → Prop)
+    (hstep : ∀ m x m', x ∈ l → P m → f m x = some m' → P m') (hm : P m)
+    (h : l.foldlM f m = some t) : P t := by
+  induction l generalizing m with
+  | nil => simp only [List.foldlM_nil] at h; exact Option.some.inj h ▸ hm
+  | cons x l ih =>
+    obtain ⟨m', hx, hl⟩ := foldlM_cons_some h
+    exact ih (fun m y m'' hy => hstep m y m'' (List.mem_cons_of_mem _ hy))
+      (hstep m x m' List.mem_cons_self hm hx) hl
+
+/-- What follows the first `a` in `l`, if `a` is in it. -/
+@[expose] def afterFirst [DecidableEq α] (a : α) : List α → Option (List α)
+  | [] => none
+  | x :: xs => if x = a then some xs else afterFirst a xs
+
+theorem eq_of_afterFirst [DecidableEq α] {a : α} {l rest : List α}
+    (h : afterFirst a l = some rest) : ∃ skipped, l = skipped ++ a :: rest := by
+  induction l with
+  | nil => simp [afterFirst] at h
+  | cons x xs ih =>
+    simp only [afterFirst] at h
+    split at h
+    · next hx => exact ⟨[], by simp [hx, Option.some.inj h]⟩
+    · obtain ⟨skipped, rfl⟩ := ih h
+      exact ⟨x :: skipped, rfl⟩
+
+/-- Taking the first `a` out of a list that `a :: l` is a sublist of leaves one that `l` is a
+sublist of. -/
+theorem afterFirst_of_cons_sublist [DecidableEq α] {a : α} {l p : List α} (h : (a :: l).Sublist p) :
+    ∃ rest, afterFirst a p = some rest ∧ l.Sublist rest := by
+  induction p with
+  | nil => simp at h
+  | cons x xs ih =>
+    simp only [afterFirst]
+    split
+    · next hx =>
+      subst hx
+      exact ⟨xs, rfl, (List.cons_sublist_cons.mp h)⟩
+    · next hx =>
+      rcases h with _ | ⟨_, h⟩ | ⟨_, h⟩
+      · exact ih ‹_›
+      · exact absurd rfl hx
 
 end Lanes
