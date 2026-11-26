@@ -36,6 +36,7 @@ def serveTest : Async (List (String × Bool)) := do
   let many ← Async.concurrentlyAll ((List.range 50).toArray.map fun _ => fetch port "/")
   let head ← fetch port "/" (method := "HEAD")
   let options ← fetch port "/" (method := "OPTIONS")
+  let left ← server.inFlight
   server.stop
   let events := (← server.trace).toList
   let inputs := events.countP fun
@@ -53,6 +54,7 @@ def serveTest : Async (List (String × Bool)) := do
       refused.startsWith "HTTP/1.1 400" && refused.endsWith "bad"),
     ("web: fifty concurrent requests are each answered",
       many.all fun response => response.startsWith "HTTP/1.1 200" && response.endsWith "ok"),
+    ("web: once each request is answered none is in flight", left == 0),
     ("web: HEAD is answered as GET without the body",
       head.startsWith "HTTP/1.1 200" && !head.endsWith "ok"),
     ("web: a method no application handles is refused", options.startsWith "HTTP/1.1 405") ]
@@ -88,6 +90,7 @@ def linkTest : Async (List (String × Bool)) := do
   let pending ← IO.Promise.new
   background do pending.resolve (← fetch port "/never")
   Async.sleep 200
+  let unanswered ← server.inFlight
   server.stop
   let abandoned ← await pending
   return [
@@ -95,7 +98,18 @@ def linkTest : Async (List (String × Bool)) := do
       echoed.all (·)),
     ("web: a body over the limit is refused", tooLarge.startsWith "HTTP/1.1 413"),
     ("web: stopping with a request in flight answers it and ends",
-      abandoned.startsWith "HTTP/1.1 503") ]
+      unanswered == 1 && abandoned.startsWith "HTTP/1.1 503") ]
+
+def deadlineTest : Async (List (String × Bool)) := do
+  let server ← serve (Server.system mute) slugBridge
+    { port := 0, gate := { requestTimeout_ms := 50 } }
+  let some port := server.port | return [("web: the server reports its port", false)]
+  let answers ← Async.concurrentlyAll ((List.range 10).toArray.map fun _ => fetch port "/never")
+  let left ← server.inFlight
+  server.stop
+  return [
+    ("web: requests the system never answers get 504 at their deadline, and none is left in "
+      ++ "flight", answers.all (·.startsWith "HTTP/1.1 504") && left == 0) ]
 
 /-! The bank over HTTP with a journal: stop the server, start another on the same journal. -/
 
@@ -173,7 +187,7 @@ def journalFailTest : Async (List (String × Bool)) := do
     ("web: and the server ends with the error", waited == some true) ]
 
 def tests : IO (List (String × Bool)) := do
-  return (← serveTest.block) ++ (← linkTest.block) ++ (← durableTest.block)
-    ++ (← journalFailTest.block)
+  return (← serveTest.block) ++ (← linkTest.block) ++ (← deadlineTest.block)
+    ++ (← durableTest.block) ++ (← journalFailTest.block)
 
 end Tests.Web

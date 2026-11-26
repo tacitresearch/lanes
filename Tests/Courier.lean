@@ -10,6 +10,11 @@ together: connections that take time to make and may not be made, writes that ma
 that leaves, time that passes, bytes that arrive in pieces, and `stop` at any moment. The
 search explores every order of these and checks what the transport promises.
 
+The handler reads every connection, those it made too, and says when the reading ends. So a
+connection the courier closes for another reason, a write that failed, is reported broken once
+more, some time later, by its reader. The model has that report, which must change nothing.
+After `stop` the handler tells the courier nothing more, so the model leaves it out there.
+
 It does not promise that parcels arrive in the order sent. A write on a connection that then
 fails may still have gone out, and the next parcel goes on a new connection: the search showed
 this when the property claimed order, and it is why the link is modelled as unordered.
@@ -39,6 +44,8 @@ structure World where
   courier : Courier := {}
   /-- The connections the handler holds a socket for. -/
   sockets : List Conn := []
+  /-- Connections closed while they were being read, whose readers have not yet said so. -/
+  echoes : List Conn := []
   dialing : List Conn := []
   writing : List (Conn × Nat) := []
   asked : List Nat := []
@@ -68,7 +75,7 @@ def key (w : World) :=
   let byConn {α : Type} (l : List (Conn × α)) := l.mergeSort fun a b => a.1 ≤ b.1
   ((wire.line, wire.waiting.toList, byConn w.courier.dialed.toList, byConn w.courier.inbound.toList,
       w.courier.nextConn, w.courier.stopped),
-    (w.sockets, w.dialing, w.writing, w.asked, w.started, w.wrote, w.now, w.breaks),
+    (w.sockets, w.echoes, w.dialing, w.writing, w.asked, w.started, w.wrote, w.now, w.breaks),
     (w.full, w.stray, w.adopted, w.refused, w.arrived, w.delivered, w.stopped, w.late, w.barred, w.hasty))
 
 instance : BEq World := ⟨fun a b => key a == key b⟩
@@ -83,7 +90,9 @@ def perform (w : World) : Action wireSig → World
       writing := (conn, bytes[0]!.toNat) :: w.writing
       started := w.started ++ [bytes[0]!.toNat]
       stray := w.stray || !w.sockets.contains conn }
-  | .close conn => { w with sockets := w.sockets.erase conn }
+  | .close conn =>
+    let read := w.sockets.contains conn && !w.dialing.contains conn && !w.stopped
+    { w with sockets := w.sockets.erase conn, echoes := if read then conn :: w.echoes else w.echoes }
   | .adopt conn => { w with sockets := conn :: w.sockets, adopted := some conn }
   | .refuse => { w with refused := true }
   | .deliver parcel => { w with delivered := w.delivered ++ [parcel.2] }
@@ -115,7 +124,11 @@ def next (w : World) : List (String × World) :=
         [("write fails", tell { w with breaks := w.breaks + 1 } (.broken conn w.now))] else [])
   ++ (if w.breaks < 2 then
     w.sockets.map fun conn =>
-      ("peer leaves", tell { w with breaks := w.breaks + 1 } (.broken conn w.now)) else [])
+      let w := tell { w with breaks := w.breaks + 1 } (.broken conn w.now)
+      ("peer leaves", { w with echoes := w.echoes.erase conn }) else [])
+  ++ w.echoes.map (fun conn =>
+    ("the reader of a closed connection ends",
+      tell { w with echoes := w.echoes.erase conn } (.broken conn w.now)))
   ++ (if w.adopted.isNone && !w.refused then [("accepted", tell w .accepted)] else [])
   ++ (match w.adopted with
     | some conn =>
@@ -125,7 +138,7 @@ def next (w : World) : List (String × World) :=
             (.received conn (stream.extract w.arrived (w.arrived + piece))))
       else []
     | none => [])
-  ++ (if w.stopped then [] else [("stop", tell { w with stopped := true } .stop)])
+  ++ (if w.stopped then [] else [("stop", tell { w with stopped := true, echoes := [] } .stop)])
 
 def model : Model World String where
   init := [{}]
@@ -145,6 +158,8 @@ def report := search model
     .always "no more wait than the limit" fun w =>
       (w.courier.wire peer).waiting.length ≤ limits.queue,
     .always "after stop no socket is open" fun w => !w.stopped || w.sockets.isEmpty,
+    .always "the courier remembers no connection that is closed" fun w =>
+      (w.courier.dialed.keys ++ w.courier.inbound.keys).all w.sockets.contains,
     .always "a peer that could not be reached is left alone for a while" fun w => !w.hasty,
     .always "nothing is lost unless a connection failed, the queue was full or it stopped" fun w =>
       w.breaks > 0 || w.full || w.stopped || !quiet w || w.wrote == w.asked,
@@ -156,7 +171,9 @@ def report := search model
     .sometimes "a parcel finds the queue full" fun w => w.full,
     .sometimes "a connection is made after stop, and nothing is open" fun w =>
       w.late && w.sockets.isEmpty,
-    .sometimes "a whole stream is delivered" fun w => w.delivered == [1, 2, 3] ]
+    .sometimes "a whole stream is delivered" fun w => w.delivered == [1, 2, 3],
+    .sometimes "a closed connection's reader has yet to end when the next is being made" fun w =>
+      !w.echoes.isEmpty && !w.dialing.isEmpty ]
   {} id
 
 def tests : List (String × Bool) :=

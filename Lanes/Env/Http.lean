@@ -198,6 +198,10 @@ def stop (server : Server system) : Async Unit := do
   let left ← server.waiting.atomically (modifyGet fun waiting => (waiting.values, {}))
   for waiter in left do waiter.resolve busy
 
+/-- The requests the shard has taken and the server has not yet answered. -/
+def inFlight (server : Server system) : BaseIO Nat :=
+  server.waiting.atomically (return (← get).size)
+
 /-- The events performed, if the runtime was started with `record`. For conformance tests. -/
 def trace (server : Server system) : BaseIO (Array (Event τ)) :=
   server.runtime.trace
