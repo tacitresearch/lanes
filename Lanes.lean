@@ -25,6 +25,7 @@ public import Lanes.Check.SearchSound
 public import Lanes.Check.System
 public import Lanes.Check.SystemSound
 public import Lanes.Check.WorldEquiv
+public import Lanes.Data.Codec
 public import Lanes.Data.Enum
 public import Lanes.Data.Fifo
 public import Lanes.Data.Json

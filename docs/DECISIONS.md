@@ -341,3 +341,44 @@ Consequences:
   it is unless the timer is pending (`Tests/Kernel.lean`). The shell in `Runtime.lean` reaches
   `fire` only through `step`, which names the agenda's own entry, so it could not do this.
 
+## D24. Durability is a journal of what the kernel was asked, replayed
+
+*Departs from `DESIGN.md`, which backs `Actor.recover` with stored state.*
+
+A shard keeps a journal: every input, every clock reading and every batch of work it asks of
+the kernel, appended to a file and synced before any output of that work is handed over. After
+the process dies, the shard replays the journal through the same kernel and is in the state it
+was in.
+
+Why this and not storing actor states:
+
+- The kernel is a pure function of the requests made of it, and `step` cannot do IO, so replay
+  gives the same state by construction. Other systems that replay a log have to trust that
+  handlers are deterministic; here the type of `step` says so.
+- A process restart is then not a crash in the semantics at all. The run simply continues, so
+  everything proved for a faultless environment, such as conservation of money, still holds
+  across restarts. Storing states and losing the messages in flight would have made every
+  restart a crash of every actor with message loss, and most such properties false.
+- Only inputs need a codec, not every actor's state.
+- It is the shape replication needs: a replicated shard is a replicated journal.
+
+What it costs:
+
+- One sync per batch before outputs leave. Batching more inputs per sync is the lever.
+- The journal grows and replay takes longer until there are snapshots. Snapshots need a codec
+  for states and are the next step, together with releasing idle actors.
+- Outputs produced after the last sync mark may be handed over again after a restart: outputs
+  are delivered at least once, and an adapter that must not repeat itself needs to deduplicate.
+- Replaying a journal with changed code gives a different state. Upgrades will go through a
+  snapshot.
+- Time is the kernel's time. Timers do not advance while the process is down.
+
+`Actor.recover` keeps its meaning: it runs when an actor starts again after stopping itself or,
+under an environment model with crashes, after a crash.
+
+What is proved: nothing new is needed for the kernel. `Kernel.exec_reachable` and
+`Kernel.exec_outputs` already hold for any list of requests, so they hold for the replayed one.
+What has to be proved is that the file gives back the list that was written
+(`Lanes/Data/Frame.lean`, and the law every `Codec` carries), including when the last write was
+torn. What stays trusted is that the shell syncs before it hands outputs over.
+
