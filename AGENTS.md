@@ -74,16 +74,20 @@ lanes_data inductive Id (F : Type) where
 - `Codable` gives `Entry.codec : Codec N → Codec C → Codec (Entry N C)` and
   `instance [Codable N] [Codable C] : Codable (Entry N C)`; `Codec.of T` is the instance's codec.
   Every field's type needs a `Codable` instance: `Nat`, `Int`, `String`, `Bool`, `Unit`,
-  `ByteArray`, `Fin n`, `Option`, `List`, pairs, sums, sigma types, `Std.ExtTreeMap`, and types
-  declared this way. The law holds by construction (`Codec.struct%`, `Codec.sum%`).
+  `ByteArray`, `Fin n`, `Option`, `List`, pairs, sums, sigma types, subtypes, `Std.ExtTreeMap`,
+  and types declared this way. The law holds by construction (`Codec.struct%`, `Codec.sum%`).
 - `Enum` lists every value, from `Enum` instances of the constructors' arguments.
 - `LawfulBEq` gives a structure a `BEq` that compares field by field, and its law, for a structure
   that holds a function on an `Enum` type and so has no `DecidableEq`. A type parameter that is a
   field's whole type is compared with its own `BEq`; any other needs `DecidableEq`.
 
-Constructor arguments are written `(x y : T)`, fields `x : T`, each with an optional docstring.
-Default values, `extends`, indices and recursive types are not accepted: declare those with
-`structure` or `inductive` and write the codec with `Codec.struct%` or `Codec.sum%`.
+Constructor arguments are written `(x y : T)`, fields `x : T` or `x : T := default`, each with
+an optional docstring; a constructor may be named by a keyword (`| open`). A value with a
+property is a subtype, `name : {s : String // valid s}`: it is written as the value and read back
+only if the property holds. A field whose type names an earlier field, such as a proof about it,
+is refused by the three classes above. `extends`, indices and recursive types are not accepted:
+declare those with `structure` or `inductive` and write the codec with `Codec.struct%` or
+`Codec.sum%`.
 
 A family of instances defined by cases on an identity, such as `∀ i, DecidableEq (Msg i)` or the
 `Inspect` of a system whose actors have different messages or states, is `by instance_by_cases`.
