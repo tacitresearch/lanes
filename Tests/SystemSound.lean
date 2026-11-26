@@ -79,16 +79,16 @@ section Gate
 open Tests.Gate Lanes.Http
 
 instance (config : GateConfig) : ∀ i, @LawfulBEq
-    ((gated (Server.system echo) bridge config).State i)
-    (System.Inspect.beqState (sys := gated (Server.system echo) bridge config) i) := by
+    ((served (Server.system echo) bridge config).State i)
+    (System.Inspect.beqState (sys := served (Server.system echo) bridge config) i) := by
   instance_by_cases
 
 def twoRequests : List (ReqId × Request) := [(1, get []), (2, get [])]
 
 example (hfailure : (check {} twoRequests).failure = none)
     (hcomplete : (check {} twoRequests).complete = true)
-    {w : World (gated (Server.system echo) bridge {}) Client}
-    (hw : Scenario.Reachable (gated (Server.system echo) bridge {})
+    {w : World (served (Server.system echo) bridge {}) Client}
+    (hw : Scenario.Reachable (served (Server.system echo) bridge {})
       { driver := client twoRequests } (fun _ => true) w) :
     ((w.driver.answered.map (·.1)).eraseDups.length == w.driver.answered.length) = true := by
   refine Check.system_sound _ _ _ ?_ (fun _ _ _ => rfl) hfailure hcomplete (.tail _ (.head _)) hw
@@ -105,7 +105,7 @@ example (hfailure : (check {} twoRequests).failure = none)
     simp only [Check.Property.holds, deadlinesFire, World.quiet, SysState.step]
     congr 2
     funext id
-    by_cases hfires : (w.state.up none && (w.state.timers none).contains (.expire id)) = true
+    by_cases hfires : (w.state.up gateId && (w.state.timers gateId).contains (.expire id)) = true
     · simp only [hfires, ↓reduceIte, SysState.handle_state]
     · simp only [hfires, Bool.false_eq_true, ↓reduceIte]
   all_goals exact h.eq_of_quiet fun _ => rfl

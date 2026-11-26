@@ -45,6 +45,9 @@ FAIL: "money is conserved" is violated after 4 steps
 
 ## Start an application
 
+Lanes links libsodium and needs a C compiler: `apt-get install libsodium-dev pkg-config` (or
+`brew install libsodium pkg-config`).
+
 ```bash
 lake exe lanes new my-app
 cd my-app
@@ -105,7 +108,8 @@ a view cannot link or post to a route that does not exist.
   was written before the cut, that anything else wrong with a file is refused, and that
   recovery rebuilds the kernel (`Journal.open?_cut`, `Journal.recover_kernel`). Because
   recovery is a replay through the same pure kernel, a restart is not a fault the proofs have
-  to account for. Trusted: that the file holds what the shell wrote.
+  to account for. Every write is synced to the disk before the next, so a loss of power leaves
+  what a death would. Trusted: that the file holds what the shell wrote.
 - **The model checker.** It lists exactly the enabled events, merging states is safe, a
   reported trace is real, and a complete PASS of the search means the property holds in every
   reachable state (`Check.search_sound`).
@@ -116,11 +120,17 @@ a view cannot link or post to a route that does not exist.
 - **Several shards and processes.** Any number of shards joined behave as the one system
   (`System.SplitReachable.merged` for two, `System.ShardsReachable.unsharded` for `n`). A transport joins shards in different processes; what it
   decides is a pure function, run by the model checker against a network that fails.
+- **The HTTP gate.** `Http.serve` runs the system with the gate joined in front of it, and the
+  theorems are about that system, for every system and bridge: no request is answered more
+  often than it arrived, a waiting request keeps its deadline armed, and in a fair run every
+  request the gate admits is answered (`Http.served_answered_le_arrived`,
+  `Http.served_deadlines_armed`, `Http.served_pending_answered`). A bridge's `prepare` runs
+  before a request is journalled, so a password or a cookie need never reach the disk.
 - **The HTTP client's wire format.** What the reader makes of a response written as a server
   writes it, and of every start of one, is proved, and so are its size limit and its ending
   (`Response.read_wire`, `Response.read_more`).
-- **Trusted.** About 1,600 lines of trusted code, listed with their sizes in `TRUSTED.md`: IO,
-  a template macro, and an HTTP wire format whose reading is proved for what a server's writer
+- **Trusted.** About 1,750 lines of trusted code, listed with their sizes in `TRUSTED.md`: IO,
+  C that binds libsodium and `fsync`, a template macro, and an HTTP wire format whose reading is proved for what a server's writer
   sends and only tested for other forms. `lanes lint` fails if they change without the list,
   and `scripts/mutants.py` holds the known ways of breaking that code, each of which has to
   fail a test. It is a list, not a measure: a review found sixteen more, which are in it now,

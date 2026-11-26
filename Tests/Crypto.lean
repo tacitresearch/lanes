@@ -5,8 +5,10 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import Lanes
 
 /-!
-SHA-256 against the examples of FIPS 180-4 (as NIST publishes them), HMAC-SHA-256 against
-RFC 4231 and PBKDF2-HMAC-SHA-256 against RFC 7914 section 11 and the vectors in common use.
+SHA-256 against the examples of FIPS 180-4 (as NIST publishes them) and HMAC-SHA-256 against
+RFC 4231, each run on libsodium's and on the Lean reference; then the two compared on thousands
+of random inputs of every length around a block, which is what the trust in libsodium rests on
+(`TRUSTED.md`). Argon2id has no reference, so only its properties are tested.
 -/
 
 namespace Tests.Crypto
@@ -17,74 +19,51 @@ def bytesOf (s : String) : ByteArray := s.toUTF8
 
 def repeated (b : UInt8) (n : Nat) : ByteArray := ⟨Array.replicate n b⟩
 
-def sha (msg : ByteArray) : String := Bytes.hex (Sha256.hash msg)
-
-def mac (key msg : ByteArray) : String := Bytes.hex (hmac key msg)
-
-def kdf (password salt : String) (iterations length : Nat) : String :=
-  Bytes.hex (pbkdf2 (bytesOf password) (bytesOf salt) iterations length)
+def sha256Vectors : List (String × ByteArray × String) :=
+  [ ("the empty message", .empty,
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"),
+    ("abc", bytesOf "abc", "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"),
+    ("the 448-bit message, two blocks",
+      bytesOf "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq",
+      "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"),
+    ("the 896-bit message",
+      bytesOf ("abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmno"
+        ++ "ijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu"),
+      "cf5b16a778af8380036ce59e7b0492370b249b11e8f07a51afac45037afee9d1"),
+    ("a million times a", repeated 0x61 1000000,
+      "cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0") ]
 
 def sha256Tests : List (String × Bool) :=
-  [ ("sha-256: the empty message",
-      sha .empty == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"),
-    ("sha-256: abc",
-      sha (bytesOf "abc") == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"),
-    ("sha-256: the 448-bit message, two blocks",
-      sha (bytesOf "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq")
-        == "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"),
-    ("sha-256: the 896-bit message",
-      sha (bytesOf ("abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmno"
-        ++ "ijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu"))
-        == "cf5b16a778af8380036ce59e7b0492370b249b11e8f07a51afac45037afee9d1"),
-    ("sha-256: a million times a",
-      sha (repeated 0x61 1000000)
-        == "cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0"),
-    ("sha-256: every length from 0 to 130 pads to whole blocks",
+  sha256Vectors.flatMap (fun (name, msg, digest) =>
+    [ (s!"sha-256: {name}", Bytes.hex (Sha256.hash msg) == digest),
+      (s!"sha-256 reference: {name}", Bytes.hex (Sha256.reference msg) == digest) ])
+  ++ [ ("sha-256: every length from 0 to 130 pads to whole blocks",
       (List.range 131).all fun n => (n + (Sha256.padding n).size) % 64 == 0
-        && (Sha256.hash (repeated 0 n)).size == 32) ]
+        && (Sha256.reference (repeated 0 n)).size == 32) ]
+
+def hmacVectors : List (String × ByteArray × ByteArray × String) :=
+  [ ("RFC 4231 case 1", repeated 0x0b 20, bytesOf "Hi There",
+      "b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7"),
+    ("RFC 4231 case 2, a key shorter than the output", bytesOf "Jefe",
+      bytesOf "what do ya want for nothing?",
+      "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843"),
+    ("RFC 4231 case 3", repeated 0xaa 20, repeated 0xdd 50,
+      "773ea91e36800e46854db8ebd09181a72959098b3ef8c122d9635514ced565fe"),
+    ("RFC 4231 case 4", ⟨(List.range 25).toArray.map fun k => (k + 1).toUInt8⟩, repeated 0xcd 50,
+      "82558a389a443c0ea4cc819899f2083a85f0faa3e578f8077a2e3ff46729665b"),
+    ("RFC 4231 case 6, a key longer than a block", repeated 0xaa 131,
+      bytesOf "Test Using Larger Than Block-Size Key - Hash Key First",
+      "60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54"),
+    ("RFC 4231 case 7, key and data longer than a block", repeated 0xaa 131,
+      bytesOf ("This is a test using a larger than block-size key and a "
+        ++ "larger than block-size data. The key needs to be hashed before being used by the HMAC "
+        ++ "algorithm."),
+      "9b09ffa71b942fcb27635fbcd5b0e944bfdc63644f0713938a7f51535c3a35e2") ]
 
 def hmacTests : List (String × Bool) :=
-  [ ("hmac-sha-256: RFC 4231 case 1",
-      mac (repeated 0x0b 20) (bytesOf "Hi There")
-        == "b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7"),
-    ("hmac-sha-256: RFC 4231 case 2, a key shorter than the output",
-      mac (bytesOf "Jefe") (bytesOf "what do ya want for nothing?")
-        == "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843"),
-    ("hmac-sha-256: RFC 4231 case 3",
-      mac (repeated 0xaa 20) (repeated 0xdd 50)
-        == "773ea91e36800e46854db8ebd09181a72959098b3ef8c122d9635514ced565fe"),
-    ("hmac-sha-256: RFC 4231 case 4",
-      mac ⟨(List.range 25).toArray.map fun k => (k + 1).toUInt8⟩ (repeated 0xcd 50)
-        == "82558a389a443c0ea4cc819899f2083a85f0faa3e578f8077a2e3ff46729665b"),
-    ("hmac-sha-256: RFC 4231 case 6, a key longer than a block",
-      mac (repeated 0xaa 131) (bytesOf "Test Using Larger Than Block-Size Key - Hash Key First")
-        == "60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54"),
-    ("hmac-sha-256: RFC 4231 case 7, key and data longer than a block",
-      mac (repeated 0xaa 131) (bytesOf ("This is a test using a larger than block-size key and a "
-        ++ "larger than block-size data. The key needs to be hashed before being used by the HMAC "
-        ++ "algorithm."))
-        == "9b09ffa71b942fcb27635fbcd5b0e944bfdc63644f0713938a7f51535c3a35e2") ]
-
-def pbkdf2Tests : List (String × Bool) :=
-  [ ("pbkdf2-hmac-sha-256: RFC 7914, passwd and salt, one iteration, 64 bytes",
-      kdf "passwd" "salt" 1 64 == "55ac046e56e3089fec1691c22544b605f94185216dde0465e68b9d57c20dacbc"
-        ++ "49ca9cccf179b645991664b39d77ef317c71b845b1e30bd509112041d3a19783"),
-    ("pbkdf2-hmac-sha-256: password and salt, one iteration",
-      kdf "password" "salt" 1 32
-        == "120fb6cffcf8b32c43e7225256c4f837a86548c92ccc35480805987cb70be17b"),
-    ("pbkdf2-hmac-sha-256: password and salt, two iterations",
-      kdf "password" "salt" 2 32
-        == "ae4d0c95af6b46d32d0adff928f06dd02a303f8ef3c251dfd6e2d85a95474c43"),
-    ("pbkdf2-hmac-sha-256: password and salt, 4096 iterations",
-      kdf "password" "salt" 4096 32
-        == "c5e478d59288c841aa530db6845c4c8d962893a001ce4e11a4963873aa98134a"),
-    ("pbkdf2-hmac-sha-256: RFC 7914, Password and NaCl, 80000 iterations, 64 bytes",
-      kdf "Password" "NaCl" 80000 64
-        == "4ddcd8f60b98be21830cee5ef22701f9641a4418d04c0414aeff08876b34ab56"
-          ++ "a1d425a1225833549adb841b51c9b3176a272bdebba1d078478f62b397f33c8d"),
-    ("pbkdf2-hmac-sha-256: an output length that is not a whole block",
-      (kdf "password" "salt" 1 20).length == 40
-        && "120fb6cffcf8b32c43e7225256c4f837a86548c9".isPrefixOf (kdf "password" "salt" 1 20)) ]
+  hmacVectors.flatMap fun (name, key, msg, tag) =>
+    [ (s!"hmac-sha-256: {name}", Bytes.hex (hmac key msg) == tag),
+      (s!"hmac-sha-256 reference: {name}", Bytes.hex (Hmac.reference key msg) == tag) ]
 
 def bytesTests : List (String × Bool) :=
   let a := bytesOf "same bytes"
@@ -97,7 +76,82 @@ def bytesTests : List (String × Bool) :=
     ("bytes: uppercase hex and odd lengths are refused",
       Bytes.unhex? "AB" == none && Bytes.unhex? "abc" == none && Bytes.unhex? "zz" == none) ]
 
+def noise (size : Nat) (gen : StdGen) : ByteArray × StdGen :=
+  (List.range size).foldl (init := (.empty, gen)) fun (bytes, gen) _ =>
+    let (b, gen) := randNat gen 0 255
+    (bytes.push b.toUInt8, gen)
+
+/-- `count` byte strings of random lengths up to `maxSize`, after one of each length up to
+`exhaustive`. -/
+def inputs (seed count maxSize exhaustive : Nat) : List ByteArray :=
+  let (each, gen) := (List.range (exhaustive + 1)).foldl (init := ([], mkStdGen seed))
+    fun (acc, gen) size => let (b, gen) := noise size gen; (b :: acc, gen)
+  ((List.range count).foldl (init := (each, gen)) fun (acc, gen) _ =>
+    let (size, gen) := randNat gen 0 maxSize
+    let (b, gen) := noise size gen
+    (b :: acc, gen)).1
+
+/-- A pair of byte strings that are equal, differ in one byte, differ in length, or are a string
+and a start of it, chosen at random. -/
+def pair (gen : StdGen) : (ByteArray × ByteArray) × StdGen :=
+  let (size, gen) := randNat gen 0 100
+  let (a, gen) := noise size gen
+  let (kind, gen) := randNat gen 0 3
+  let (at_, gen) := randNat gen 0 (size - 1)
+  let (flip, gen) := randNat gen 1 255
+  let (other, gen) := noise (size + 1) gen
+  let b := match kind with
+    | 0 => a
+    | 1 => if size = 0 then a else a.set! at_ (a[at_]! ^^^ flip.toUInt8)
+    | 2 => other
+    | _ => a.extract 0 at_
+  ((a, b), gen)
+
+def pairs (seed count : Nat) : List (ByteArray × ByteArray) :=
+  ((List.range count).foldl (init := ([], mkStdGen seed)) fun (acc, gen) _ =>
+    let (p, gen) := pair gen
+    (p :: acc, gen)).1
+
+def differentialTests : List (String × Bool) :=
+  let messages := inputs 1 2000 1000 300
+  let keys := inputs 2 400 200 130
+  let compared := pairs 3 5000
+  [ ("libsodium: sha-256 equals the reference on 2301 messages of every length to 300 and to 1000",
+      messages.all fun m => Sha256.hash m == Sha256.reference m),
+    ("libsodium: hmac-sha-256 equals the reference on 531 keys of every length to 130, each with a message",
+      (keys.zip messages).all fun (k, m) => hmac k m == Hmac.reference k m),
+    ("libsodium: comparison equals the reference on 5000 pairs, equal, one byte apart, or not",
+      compared.all fun (a, b) => Bytes.same a b == Bytes.sameReference a b),
+    ("libsodium: and those pairs are equal and unequal, and unequal in their last byte",
+      compared.any (fun (a, b) => Bytes.same a b && a.size > 0)
+        && compared.any (fun (a, b) => !Bytes.same a b && a.size == b.size)
+        && Bytes.same (repeated 0 64) (repeated 0 64)
+        && !Bytes.same (repeated 0 64) ((repeated 0 64).set! 63 1)) ]
+
+def cost : Argon2id := { ops := 1, mem_kib := 64 }
+
+def salt (b : UInt8) : {s : ByteArray // s.size = 16} := ⟨repeated b 16, by simp [repeated, ByteArray.size]⟩
+
+def argon2idTests : List (String × Bool) :=
+  let hash (cost : Argon2id) (password : String) (s : UInt8) :=
+    cost.hash (bytesOf password) (salt s).1 (salt s).2
+  let h := hash cost "password" 1
+  [ ("argon2id: 32 bytes, the same each time", h.size == 32 && h == hash cost "password" 1),
+    ("argon2id: another password, salt, number of passes or memory gives another hash",
+      h != hash cost "passwore" 1 && h != hash cost "password" 2
+        && h != hash { ops := 2, mem_kib := 64 } "password" 1
+        && h != hash { ops := 1, mem_kib := 128 } "password" 1),
+    ("argon2id: the least cost libsodium accepts, and an empty password",
+      (hash { ops := 1, mem_kib := 8 } "" 0).size == 32) ]
+
 def tests : List (String × Bool) :=
-  sha256Tests ++ hmacTests ++ pbkdf2Tests ++ bytesTests
+  sha256Tests ++ hmacTests ++ bytesTests ++ differentialTests ++ argon2idTests
+
+def live : IO (List (String × Bool)) := do
+  let a ← Lanes.randomBytes 32
+  let b ← Lanes.randomBytes 32
+  let none ← Lanes.randomBytes 0
+  return [("random bytes: as many as asked, and two draws differ",
+    a.size == 32 && b.size == 32 && a != b && none.size == 0)]
 
 end Tests.Crypto

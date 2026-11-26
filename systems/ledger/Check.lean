@@ -196,7 +196,7 @@ open Ledger.Web Lanes.Http
 def admin : Name := ⟨"admin", rfl⟩
 
 def settings : Settings :=
-  { key := .of "test key".toUTF8, password := { iterations := 2, pepper := "pepper".toUTF8 }
+  { key := .of "test key".toUTF8, password := { cost := { ops := 1, mem_kib := 8 }, pepper := "pepper".toUTF8 }
     origin := "http://127.0.0.1:8080", secure := false, admin }
 
 def alice : Name := ⟨"alice", rfl⟩
@@ -211,6 +211,13 @@ def post (path : String) (fields : List (String × String)) (cookie : Option Str
 
 def csrf : String := Auth.formToken settings.key token
 
+/-- A request as the server hands it to the system. -/
+def decoded (r : Http.Request) : Except Http.Response In :=
+  decode settings 9 (prepare settings r)
+
+def contains (bytes : ByteArray) (text : String) : Bool :=
+  (((String.fromUTF8? bytes).getD "").splitOn text).length > 1
+
 def same : Except Http.Response In → Except Http.Response In → Bool
   | .ok a, .ok b => a == b
   | .error a, .error b => a == b
@@ -219,20 +226,41 @@ def same : Except Http.Response In → Except Http.Response In → Bool
 def tests : List (String × Bool) :=
   let transfer := [("src", "1"), ("dst", "2"), ("amount", "5"), ("csrf", csrf)]
   [ ("bridge: a session's cookie makes an act of its user, whatever the form says",
-      same (decode settings 9 (post "transfer" (transfer ++ [("name", "bob")])))
+      same (decoded (post "transfer" (transfer ++ [("name", "bob")])))
         (.ok (.act 9 alice 7 (.transfer 1 2 5)))),
     ("bridge: a cookie whose payload names another user does not verify",
       let forged := (Auth.tag settings.key "session" "7.alice") ++ ".7.bob"
-      same (decode settings 9 (post "transfer" transfer forged)) (.error notLoggedIn)),
+      same (decoded (post "transfer" transfer forged)) (.error notLoggedIn)),
     ("bridge: a form token of another session is refused",
-      same (decode settings 9 (post "transfer" ((transfer.take 3) ++
+      same (decoded (post "transfer" ((transfer.take 3) ++
         [("csrf", Auth.formToken settings.key (sessionToken settings alice 8))])))
         (.error forbidden)),
     ("bridge: a password enters the system only as its digest",
-      same (decode settings 9 (post "login" [("name", "alice"), ("password", "longenough")] none))
+      same (decoded (post "login" [("name", "alice"), ("password", "longenough")] none))
         (.ok (.logIn 9 alice (settings.password.digest "alice" "longenough")))),
     ("bridge: a short password is refused before it reaches the system",
-      match decode settings 9 (post "signup" [("name", "alice"), ("password", "short")] none) with
+      match decoded (post "signup" [("name", "alice"), ("password", "short")] none) with
+      | .error r => r.status == 400
+      | .ok _ => false),
+    ("bridge: what enters the system and its journal holds no password and no cookie",
+      let prepared := prepare settings
+        (post "login" [("name", "alice"), ("password", "longenough"), ("csrf", csrf)])
+      !contains prepared.body "longenough" && !(prepared.headers.any (·.1 == "cookie"))
+        && (prepared.headers.all fun (_, value) => (value.splitOn token).length == 1)
+        && prepared.field? "csrf" == some csrf),
+    ("bridge: a session a client names itself is not one, without a cookie that verifies",
+      let claimed := { post "transfer" transfer none with
+        headers := [(verifiedSession, "7.alice")] }
+      same (decoded claimed) (.error notLoggedIn)),
+    ("bridge: nor is a digest a client sends in place of a password",
+      let claimed := { post "login" [("name", "alice")] none with
+        headers := [(passwordDigest, (settings.password.digest "alice" "longenough").hex)] }
+      match decoded claimed with
+      | .error r => r.status == 400
+      | .ok _ => false),
+    ("bridge: a digest that is not hex does not pass, from prepare or from a client",
+      match credentials settings { post "login" [("name", "alice")] none with
+          headers := [(passwordDigest, "not hex")] } with
       | .error r => r.status == 400
       | .ok _ => false) ]
 

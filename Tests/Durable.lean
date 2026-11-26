@@ -141,7 +141,7 @@ def fileTests : List (String × Bool) :=
     ("journal: a flipped bit inside an entry is damage, and is refused",
       (opened "bank" (flip file (8 * (file.size - 3)))).toOption.isNone),
     ("journal: another system's journal is refused",
-      (match opened "ledger" file with | .error .foreign => true | _ => false)),
+      (match opened "ledger" file with | .error (.foreign (some "bank")) => true | _ => false)),
     ("journal: a journal written with another codec is refused, not cut",
       (match Journal.open? (σ := sig Bool) (Request.codec Codec.bool) "bank" file with
         | .error (.unreadable 5) => true
@@ -632,6 +632,17 @@ def killSavingTest : Async (List (String × Bool)) := do
     ("snapshot: from a snapshot and a journal much shorter than its history",
       saved && kept < 200) ]
 
+/-- `fsync` itself. That the journal calls it no test can see: only a loss of power could. -/
+def fsyncTest : Async (List (String × Bool)) := do
+  let path ← scratch "fsync"
+  IO.FS.writeFile path "synced"
+  Journal.fsync path.toString
+  Journal.fsync ((path.parent.getD ".").toString)
+  let missing ← (Journal.fsync (path.toString ++ ".missing")).toBaseIO
+  remove path
+  return [("fsync: a file and its directory are synced, and a path that is not there is an error",
+    match missing with | .error (.noFileOrDirectory ..) => true | _ => false)]
+
 /-- A test that throws has failed, and the tests after it still run. -/
 def safely (name : String) (test : Async (List (String × Bool))) : IO (List (String × Bool)) := do
   try test.block
@@ -645,5 +656,6 @@ def tests : IO (List (String × Bool)) := do
     ++ (← safely "fail" failTest) ++ (← safely "cut" cutTest) ++ (← safely "count" countTest)
     ++ (← safely "snapshot" snapshotTest) ++ (← safely "windows" windowsTest)
     ++ (← safely "kill" killTest) ++ (← safely "kill while saving" killSavingTest)
+    ++ (← safely "fsync" fsyncTest)
 
 end Tests.Durable

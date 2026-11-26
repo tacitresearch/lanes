@@ -58,18 +58,17 @@ import Lanes.Semantics
 /-- info: 'Lanes.Http.fronted_pending_answered' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.fronted_pending_answered
 
--- Lanes.Semantics.GateLive
-/-- info: 'Lanes.Http.deadline_not_restarted' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Http.deadline_not_restarted
+/-- info: 'Lanes.Http.Gate.deadline_not_restarted' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Gate.deadline_not_restarted
 
-/-- info: 'Lanes.Http.pending_leaves' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Http.pending_leaves
+/-- info: 'Lanes.Http.Gate.answered_of_leaves' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Gate.answered_of_leaves
 
-/-- info: 'Lanes.Http.answered_of_leaves' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Http.answered_of_leaves
+/-- info: 'Lanes.Http.served_pending_leaves' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.served_pending_leaves
 
-/-- info: 'Lanes.Http.pending_answered' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Http.pending_answered
+/-- info: 'Lanes.Http.served_pending_answered' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.served_pending_answered
 
 -- Lanes.Semantics.Liveness
 /-- info: 'Lanes.System.LeadsTo.ensures_of_invariant' depends on axioms: [propext, Classical.choice, Quot.sound] -/
