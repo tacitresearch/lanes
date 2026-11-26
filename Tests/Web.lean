@@ -13,11 +13,11 @@ namespace Tests.Web
 open Lanes Lanes.Http Std Std.Async Tests.Gate
 
 /-- Std has no HTTP client, so this speaks HTTP/1.1 over a TCP socket. -/
-def fetch (port : UInt16) (path : String) (method : String := "GET") (body : String := "") :
-    Async String := do
+def fetch (port : UInt16) (path : String) (method : String := "GET") (body : String := "")
+    (headers : String := "") : Async String := do
   let socket ← TCP.Socket.Client.mk
   socket.connect (.v4 ⟨.ofParts 127 0 0 1, port⟩)
-  let head := s!"{method} {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n"
+  let head := s!"{method} {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n{headers}"
   let length := if body.isEmpty then "" else s!"Content-Length: {body.utf8ByteSize}\r\n"
   socket.send (head ++ length ++ "\r\n" ++ body).toUTF8
   let mut received := ByteArray.empty
@@ -42,11 +42,11 @@ def serveTest : Async (List (String × Bool)) := do
   let inputs := events.countP fun
     | .input _ => true
     | _ => false
-  let atMost (n : Nat) : Outside (gatedSig echoSig) Nat :=
+  let atMost (n : Nat) : Outside (servedSig echoSig) Nat :=
     { init := 0, allow := fun seen _ => if seen < n then some (seen + 1) else none }
   return [
     ("web: the server does only what the gate's model of its outside allows",
-      (Http.outside echoSig).allows events && inputs == 53),
+      (servedOutside echoSig).allows events && inputs == 53),
     ("web: a model the run does not fit is rejected", !(atMost 10).allows events),
     ("web: a request is answered through the gate",
       ok.startsWith "HTTP/1.1 200" && ok.endsWith "ok"),
@@ -135,8 +135,9 @@ def durableTest : Async (List (String × Bool)) := do
       pure false
     catch _ => pure true
   let free ← (Journal.Store.open
-    (sys := gated (Examples.Bank.bank Examples.BankWeb.Acct 100) Examples.BankWeb.bridge {})
-    { path := journal.addExtension "other", input := Codec.pair Codec.nat Request.codec }).toBaseIO
+    (sys := served (Examples.Bank.bank Examples.BankWeb.Acct 100) Examples.BankWeb.bridge {})
+    { path := journal.addExtension "other", input := Codec.pair Codec.nat Request.codec
+      system := ServerConfig.journalName {} }).toBaseIO
   if let .ok log := free then log.close
   server.stop
   let ids := (← server.trace).toList.filterMap fun
@@ -158,11 +159,61 @@ def durableTest : Async (List (String × Bool)) := do
     ("web: a server that cannot bind its port fails, and leaves its journal free",
       taken && free.toOption.isSome) ]
 
+/-- A journal written by `serve` when the gate was an actor of the system behind it and the
+journal was named by the application alone, is refused and left as it was: replayed
+through the gate in front it may give a state that gate never reaches. -/
+def oldJournalTest : Async (List (String × Bool)) := do
+  let dir := (← IO.getEnv "TMPDIR").getD "/tmp"
+  let journal : System.FilePath := s!"{dir}/lanes-web-old-{← IO.monoNanosNow}.journal"
+  let old := Journal.file (σ := servedSig echoSig) (Codec.pair Codec.nat Request.codec) "echo 1"
+    [.input (0, get [])]
+  IO.FS.writeBinFile journal old
+  let config : ServerConfig := { port := 0, journal := some journal, system := "echo 1" }
+  let refusal ← try
+      (← serve (Server.system echo) bridge config).stop
+      pure ""
+    catch e => pure (toString e)
+  let after ← IO.FS.readBinFile journal
+  for file in [journal, journal.addExtension "lock"] do
+    if ← file.pathExists then IO.FS.removeFile file
+  return [
+    ("web: a journal of the server from before its gate was a front is refused, saying why",
+      refusal == s!"lanes: the journal {journal} is refused: it is the journal of \"echo 1\", "
+        ++ "not of \"echo 1, behind a gate of 30000 ms and 1024 requests\""),
+    ("web: and is left as it was", after == old) ]
+
+/-- A bridge whose `prepare` takes a secret header out and says on the path that it did. -/
+def guarded : Bridge echoSig :=
+  { bridge with
+    prepare := fun r =>
+      if r.headers.any (·.1 == "x-secret") then
+        { r with headers := r.headers.filter (·.1 != "x-secret"), path := ["bad"] }
+      else r }
+
+def prepareTest : Async (List (String × Bool)) := do
+  let dir := (← IO.getEnv "TMPDIR").getD "/tmp"
+  let journal : System.FilePath := s!"{dir}/lanes-web-prepare-{← IO.monoNanosNow}.journal"
+  let server ← serve (Server.system echo) guarded { port := 0, journal := some journal }
+  let some port := server.port | return [("web: the server reports its port", false)]
+  let secret ← fetch port "/" (headers := "X-Secret: hunter2hunter2\r\n")
+  let plain ← fetch port "/"
+  server.stop
+  let bytes := (← IO.FS.readBinFile journal).data.toList
+  let holds (text : String) := (List.range bytes.length).any fun k =>
+    text.toUTF8.data.toList.isPrefixOf (bytes.drop k)
+  for file in [journal, journal.addExtension "lock"] do
+    if ← file.pathExists then IO.FS.removeFile file
+  return [
+    ("web: the system sees a request as the bridge prepared it",
+      secret.startsWith "HTTP/1.1 400" && plain.startsWith "HTTP/1.1 200"),
+    ("web: and the journal holds the prepared request, not what was sent",
+      !holds "hunter2hunter2" && !holds "x-secret" && holds "bad") ]
+
 /-- The journal stops taking writes while the server runs. A request in flight is answered, the
 server shuts down, and `wait` fails, so that the process ends and can be started again. -/
 def journalFailTest : Async (List (String × Bool)) := do
   let calls ← IO.mkRef 0
-  let log : Journal.Log (gated (Server.system echo) bridge {}) := {
+  let log : Journal.Log (served (Server.system echo) bridge {}) := {
     past := []
     append := fun _ => do
       if (← calls.modifyGet fun n => (n, n + 1)) ≥ 2 then
@@ -188,6 +239,7 @@ def journalFailTest : Async (List (String × Bool)) := do
 
 def tests : IO (List (String × Bool)) := do
   return (← serveTest.block) ++ (← linkTest.block) ++ (← deadlineTest.block)
-    ++ (← durableTest.block) ++ (← journalFailTest.block)
+    ++ (← durableTest.block) ++ (← oldJournalTest.block) ++ (← prepareTest.block)
+    ++ (← journalFailTest.block)
 
 end Tests.Web

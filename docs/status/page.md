@@ -34,14 +34,21 @@ Update them in the same change that moves an item; `lake exe lanes lint --fix` w
 
 ## Next, in order
 
-1. Make the monotone proof rule cheaper to use, from what the election proof showed: a variant
-   that takes per-state, per-message and per-timer predicates and discharges `below` itself, a
-   frame lemma for the actors that did not move, and projections for ghost state.
-2. Counterexample-to-induction finder and `inv_split`, then `lanes prove`.
-3. Releasing idle actors.
-4. What `systems/ledger` asks of the framework (its README's friction log): requests prepared
-   before the journal. Specs with time and `Service` without the system's signature are done
-   (`docs/decisions/D42-a-spec-names-its-inputs-and.md`).
+1. Make proving an application cheap: a library for the usual simulation relations (what the
+   key-value store's refinement proof repeated), the cheaper monotone rule the election proof
+   asked for, then a counterexample-to-induction finder and `lanes prove`. The measure: the
+   ledger's refinement of its spec, proved.
+2. A generated proof inventory: every public definition proved, checked, tested, trusted or
+   none, kept current by CI, with none left in library code.
+3. The standard library: what Go's has that applications need, triaged into what Lean already
+   has, what is pure (built and proved, and tested against Go), what is bound, and what is not
+   needed.
+4. Shrink what is trusted and assumed: the server's request reader, `fsync` and the bound
+   cryptography, exactly-once requests, idle actors released.
+5. A place for slow work that is not a function of one request, as the ledger's friction log
+   asks.
+
+The standard library, triaged from Go's, with its P0 set in build order: `docs/STDLIB.md`.
 
 ## Known limits
 

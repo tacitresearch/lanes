@@ -16,7 +16,7 @@ def loadSecrets (path : System.FilePath) : IO ByteArray := do
     let bytes ← IO.FS.readBinFile path
     if bytes.size != 64 then throw (IO.userError s!"ledger: {path} does not hold 64 bytes")
     return bytes
-  let bytes ← IO.getRandomBytes 64
+  let bytes ← Lanes.randomBytes 64
   IO.FS.writeBinFile path bytes
   return bytes
 

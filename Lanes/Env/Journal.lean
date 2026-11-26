@@ -41,8 +41,9 @@ structure Store (sys : System σ) where
   refused, which is what a shard that must not come back having forgotten needs. -/
   create : Bool := true
 
-private def Refusal.explain : Refusal → String
-  | .foreign => "it is not a journal of this system"
+private def Refusal.explain (system : String) : Refusal → String
+  | .foreign (some named) => s!"it is the journal of \"{named}\", not of \"{system}\""
+  | .foreign none => "it is not a journal"
   | .unreadable entry =>
     s!"entry {entry} is intact and cannot be read, so it was written with another codec"
   | .damaged byte => s!"it is damaged at byte {byte}"
@@ -101,7 +102,8 @@ def Store.open {sys : System σ} (store : Store sys) : IO (Log sys) := do
     let found ← match disk.start store.input store.actors store.system store.create with
       | .ok found => pure found
       | .error refusal =>
-        throw (IO.userError s!"lanes: the journal {store.path} is refused: {refusal.explain}")
+        throw (IO.userError
+          s!"lanes: the journal {store.path} is refused: {refusal.explain store.system}")
     if found.size < disk.journal.size then
       IO.FS.writeBinFile (store.path.addExtension "cut")
         (disk.journal.extract found.size disk.journal.size)

@@ -74,7 +74,6 @@ public import Lanes.Http.Cookie
 public import Lanes.Http.Front
 public import Lanes.Http.FrontSound
 public import Lanes.Http.Gate
-public import Lanes.Http.GateSound
 public import Lanes.Http.Route
 public import Lanes.Http.Waiting
 public import Lanes.Http.Wire

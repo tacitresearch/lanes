@@ -141,7 +141,7 @@ def fileTests : List (String × Bool) :=
     ("journal: a flipped bit inside an entry is damage, and is refused",
       (opened "bank" (flip file (8 * (file.size - 3)))).toOption.isNone),
     ("journal: another system's journal is refused",
-      (match opened "ledger" file with | .error .foreign => true | _ => false)),
+      (match opened "ledger" file with | .error (.foreign (some "bank")) => true | _ => false)),
     ("journal: a journal written with another codec is refused, not cut",
       (match Journal.open? (σ := sig Bool) (Request.codec Codec.bool) "bank" file with
         | .error (.unreadable 5) => true
