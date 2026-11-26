@@ -3,6 +3,7 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import RaftKVProofs.Refines
+import RaftKVProofs.Checked
 
 /-!
 # The top theorem
@@ -11,6 +12,8 @@ What `Check.lean` checks with a monitor on three nodes, proved for every cluster
 the cluster is the machine it replicates, each command taking effect at one instant between its
 arrival and its answer. The proof is `RaftKVProofs/Refines.lean`, on the invariants of
 `RaftKV/Proofs`.
+
+What a PASS of `Check.lean` means is `RaftKVProofs/Checked.lean`.
 
 This library needs `Lanes.Semantics`, and so Mathlib. Nothing executable imports it.
 -/
@@ -45,5 +48,14 @@ theorem implementsMachine (N : Type) {C R M : Type} [DecidableEq N] [DecidableEq
 
 /-- info: 'RaftKV.recording_refines' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms RaftKV.recording_refines
+
+/-- info: 'RaftKV.always_of_pass' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms RaftKV.always_of_pass
+
+/-- info: 'RaftKV.monitor_of_pass' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms RaftKV.monitor_of_pass
+
+/-- info: 'RaftKV.traces_of_pass' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms RaftKV.traces_of_pass
 
 end RaftKV
