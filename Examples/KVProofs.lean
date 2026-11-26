@@ -19,6 +19,10 @@ answer to a read is owed in the spec's outbox while it is on its way back (`owed
 bounds, not equalities: a message lost stays pending or owed in the spec for ever, which the spec
 allows. A request takes effect when the store handles it.
 
+Behind `Once.actor` (`onceSystem`) the store implements `once` of the spec in every
+environment, links duplicating included (`implements_once`). Its simulation (`OnceSim`) reads
+the network as a set: every request in flight has arrived, every answer owed has been given.
+
 With caching the system does not implement the spec in any environment, for any instance with a
 key, a value and a front end (`caching_not_implements`): the run the checker finds, a read
 served from the cache after an acknowledged write, is a run of every such instance.

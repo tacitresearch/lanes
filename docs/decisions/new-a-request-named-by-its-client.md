@@ -47,6 +47,21 @@ and the service acts on a name once and answers it again with what it answered.
   reordering and duplicating and a crash, it refines `once` of the map spec; a client that
   retries its first write after its second gets one effect of each; without the memo that retry
   takes effect again, and a read duplicated on its way to the store is answered with two values.
-  Then `Examples.KV.implements_once`, in every environment.
+  Then `Examples.KV.implements_once`, in every environment. Its simulation is five clauses of
+  membership; the duplicate case did not need writing, and the stale read and every other
+  existing theorem stand, since `system` is unchanged but for the front end named in `put`.
+- *The behaviour.* `Once.server svc key` is `Server.system` behind `Once.actor`, and
+  `Once.server_implements` says it implements `once svc key` in every environment, where
+  `Server.implements` needs one with no fault at all. `Once.Memo.Agrees` is the memo's part of
+  any such simulation (a key taken is at most its client's last number; a number remembered is
+  taken, with its effects accounted for) and is what the key-value store's proof reuses.
+- *Raft, not in this branch.* The natural place is the replicated machine, not a node: a command
+  that carries its key, and `Machine` wrapped as `Once.actor` wraps an actor, so the memo is
+  replicated with the state and a request a leader appended twice is answered twice with one
+  effect. The protocol and its invariants (`RaftKV/Proofs/`) are generic over the machine and
+  would not change. The refinement would: `RaftKVProofs/Refines.lean` bounds `pending` and the
+  answers owed as multisets (`Accounts`, `owed` as a sum over nodes), and both would become
+  membership, with the memo agreeing with the keys of the committed list. That is a rewrite of
+  most of its simulation, a few hundred lines, not a small change to a frozen package.
 - *Checked, not proved: the monitor.* `Service.onceMonitored` is the subset construction for
   `once`, as `Service.monitored` is for `spec`; it has no soundness theorem yet.
