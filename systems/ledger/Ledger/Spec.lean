@@ -157,20 +157,28 @@ variable {N : Type} [DecidableEq N]
 
 /-- Money is conserved: in each currency the balances sum to zero. -/
 def conserved (b : Book N) (c : Currency) : Bool :=
-  ((b.accounts.filter (·.currency == c)).map (·.balance)).sum == 0
+  (b.accounts.map fun a => if a.currency = c then a.balance else 0).sum == 0
 
 /-- No account below zero, unless it is allowed to be. -/
 def noOverdraft (b : Book N) : Bool :=
   b.accounts.all fun a => a.allowsNegative || 0 ≤ a.balance
 
+def transferSum (b : Book N) (t : ReqId) : Int :=
+  ((b.entries.filter (·.transfer == t)).map (·.amount)).sum
+
 /-- The entries of every transfer sum to zero. -/
 def paired (b : Book N) : Bool :=
-  b.entries.all fun e => ((b.entries.filter (·.transfer == e.transfer)).map (·.amount)).sum == 0
+  b.entries.all fun e => b.transferSum e.transfer == 0
 
-/-- Every balance is the sum of its account's entries. -/
+def accountSum (b : Book N) (k : AccountId) : Int :=
+  ((b.entries.filter (·.account == k)).map (·.amount)).sum
+
+/-- Every entry is of an account there is, and every balance is the sum of its account's
+entries. -/
 def cached (b : Book N) : Bool :=
-  b.accounts.zipIdx.all fun (a, k) =>
-    a.balance == ((b.entries.filter (·.account == k)).map (·.amount)).sum
+  b.entries.all (·.account < b.accounts.length)
+    && (List.range b.accounts.length).all fun k =>
+      b.accounts[k]?.all fun a => a.balance == b.accountSum k
 
 end Book
 

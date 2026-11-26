@@ -152,4 +152,22 @@ theorem getElem?_of_prefix {a b : List α} (h : a <+: b) {k : Nat} {x : α}
   rw [List.getElem?_append_left (List.getElem?_eq_some_iff.mp hx).1]
   exact hx
 
+/-- Replacing one element changes a sum by the difference. -/
+theorem sum_map_set (f : α → Int) {l : List α} {i : Nat} {a : α} (v : α) (h : l[i]? = some a) :
+    ((l.set i v).map f).sum + f a = (l.map f).sum + f v := by
+  induction l generalizing i with
+  | nil => simp at h
+  | cons x l ih =>
+    cases i with
+    | zero =>
+      simp only [List.getElem?_cons_zero, Option.some.injEq] at h
+      subst h
+      simp only [List.set_cons_zero, List.map_cons, List.sum_cons]
+      omega
+    | succ i =>
+      simp only [List.getElem?_cons_succ] at h
+      have := ih h
+      simp only [List.set_cons_succ, List.map_cons, List.sum_cons]
+      omega
+
 end Lanes
