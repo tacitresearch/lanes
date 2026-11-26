@@ -1,4 +1,4 @@
-# D?. Bind what touches physics
+# D46. Bind what touches physics
 
 Write in Lean what decides: protocols, parsers, state machines, formats, each proved. Bind what
 depends on what Lean cannot express or check, as every other language does: how long code takes
