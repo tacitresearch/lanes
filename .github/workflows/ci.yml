@@ -33,7 +33,7 @@ jobs:
         with:
           runner: ${{ vars.LANES_RUNNER }}
 
-  # Order follows LANES_STYLE section 6: build, lint, model checks and tests.
+  # Order follows AGENTS.md, "Build and checks": build, lint, model checks and tests.
   build:
     needs: runner
     runs-on: ${{ fromJSON(needs.runner.outputs.label) }}

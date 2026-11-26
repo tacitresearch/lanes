@@ -212,10 +212,9 @@ itself, and `Server.implements` proves it refines the spec for every interleavin
 - `docs/ROADMAP.md`: the phases ahead and the open design questions.
 - `docs/PLAN.md`: what is being done now and why.
 - `docs/DESIGN.md`: what Lanes is and the build plan.
-- `LANES_STYLE.md`: design and code rules, each with its reason.
 - `docs/decisions/`: decisions taken during implementation, one file each.
 - `TRUSTED.md`: everything that is trusted rather than proved.
-- `AGENTS.md`: how to work in this repository.
+- `AGENTS.md`: the rules, for agents and people: build and checks, design, code, proofs.
 
 ## License
 

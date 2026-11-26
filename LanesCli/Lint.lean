@@ -7,7 +7,7 @@ import LanesCli.Generated
 /-!
 # `lanes lint`
 
-Source-level checks of the LANES_STYLE rules that can be decided from the text of a project:
+Source-level checks of the rules in `AGENTS.md` that can be decided from the text of a project:
 
 - `no-sorry` (rule 4): no `sorry` or `admit`.
 - `trusted-listed` (rule 5.5): `partial`, `unsafe`, `axiom`, `panic!`, `@[implemented_by]` and
