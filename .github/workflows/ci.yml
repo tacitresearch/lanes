@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: libsodium, which Lanes links
+        run: sudo apt-get update && sudo apt-get install -y libsodium-dev pkg-config
       # Installs elan and the pinned toolchain, fetches the Mathlib cache, then builds and tests.
       # Order follows LANES_STYLE section 6: build, lint, model checks and tests.
       - uses: leanprover/lean-action@v1

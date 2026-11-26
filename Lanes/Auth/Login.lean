@@ -41,6 +41,15 @@ def Digest.codec : Codec Digest :=
 
 instance : Codable Digest := ⟨Digest.codec⟩
 
+/-- A digest as text, so that a request prepared where it arrives can carry it into the bridge
+in place of the password. -/
+def Digest.hex (d : Digest) : String := Bytes.hex d.bytes
+
+def Digest.ofHex? (s : String) : Option Digest := (Bytes.unhex? s).map (⟨·⟩)
+
+theorem Digest.ofHex?_hex (d : Digest) : ofHex? d.hex = some d := by
+  simp [ofHex?, hex, Bytes.unhex?_hex]
+
 structure Password where
   cost : Argon2id
   /-- A secret of the deployment, kept with its key; changing it changes every digest. -/
