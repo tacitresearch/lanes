@@ -41,7 +41,10 @@ Several agents work at once, each on a branch that is merged into the main branc
 gives independent changes disjoint files; keep it that way.
 
 - Commit after every step that builds.
-- Before reporting, merge the main branch and run the checks again.
+- Before reporting, merge the main branch and run the checks again. Generated files
+  (`docs/STATUS.md`, `docs/INVENTORY.md`, the decisions index) never need resolving: run
+  `git config merge.generated.driver true` once, and after a merge run
+  `lake exe lanes lint --fix`, which writes them again.
 - A new decision is a new file `docs/decisions/new-<slug>.md` whose first line is
   `# D?. Title`. Do not choose its number: `lake exe lanes lint --fix --main` numbers it on the
   main branch after the merge.
