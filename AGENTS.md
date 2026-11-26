@@ -50,13 +50,35 @@ gives independent changes disjoint files; keep it that way.
 The toolchain is pinned in `lean-toolchain` and follows CSLib's. Dependencies are pinned in
 `lake-manifest.json`; upgrade them deliberately, CSLib first.
 
+## Seeing a goal without a rebuild
+
+`scripts/lean-goals` asks the Lean language server for a file's errors and the goals at some of
+its lines, so a proof can be worked on without rebuilding the file each time:
+
+```bash
+scripts/lean-goals --daemon Lanes/Http/WireSound.lean 1710 1702:4   # start a server, ask it
+scripts/lean-goals Lanes/Http/WireSound.lean 1710                   # later calls use it
+scripts/lean-goals --stop                                            # when done
+```
+
+`LINE` counts from 1 and `COL` from 0, as in Lean's messages; without `COL` it prints the goals
+before and after the line. The daemon keeps the file open: after an edit it elaborates again
+only from the first changed command, so an edit near the end of `WireSound.lean` takes half a
+second instead of the six of `lake env lean` (measured under load 9 here). The first call costs a
+full elaboration. A daemon belongs to the package that holds the file (its socket is that
+package's `.lake/lean-goals.sock`, so each worktree has its own), builds the file's imports when
+they are out of date, and stops by itself after an hour unused. It reopens a file whose imports
+Lean reports out of date; `--reopen` forces that. It does not replace `lake build` before a
+commit.
+
 ## Layout
 
 | Path | Contents | May import |
 | --- | --- | --- |
 | `Lanes/Actors/` | `Actor`, `Signature`, `Effect`, `System`, the world step function, scheduler, runtime | `Std` only |
-| `Lanes/Data/` | Small data utilities (`Enum`; lemmas about lists in `List/`, strings in `Utf8` and byte arrays in `ByteArray`), codecs and `lanes_data` (`Codec`, `Declare`), the JSON library (`Json`), SHA-256, HMAC and PBKDF2 (`Sha256`, `Hmac`) | `Std` only |
+| `Lanes/Data/` | Small data utilities (`Enum`; lemmas about lists in `List/`, strings in `Utf8` and byte arrays in `ByteArray`), codecs and `lanes_data` (`Codec`, `Declare`), the JSON library (`Json`), SHA-256 and HMAC in Lean (`Sha256`, `Hmac`), the references of what `Sodium` binds from libsodium | `Std` only |
 | `Lanes/Auth/` | Signed tokens, form tokens, password digests, failed attempts, sessions | `Std` only |
+| `native/` | The C that binds libsodium and `fsync` (`lanes.c`), every line of it trusted and counted in `TRUSTED.md` | libsodium, the C library |
 | `Lanes/Check/` | Model checker | `Std` only |
 | `Lanes/Http/`, `Lanes/Html/` | HTTP requests and responses as data; HTML values and template syntax | `Std` only |
 | `Lanes/Env/` | Adapters to the outside world (HTTP server) | `Std` only |

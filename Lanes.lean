@@ -61,6 +61,7 @@ public import Lanes.Data.Json
 public import Lanes.Data.List
 public import Lanes.Data.Quorum
 public import Lanes.Data.Sha256
+public import Lanes.Data.Sodium
 public import Lanes.Env.Clock
 public import Lanes.Env.Http
 public import Lanes.Env.HttpClient

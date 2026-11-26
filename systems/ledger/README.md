@@ -135,11 +135,9 @@ every three seconds and whenever a transfer of the user's is answered. Pages tha
 records (log-in, and the shells of the others, which carry the form tokens) are answered by
 the bridge; the records come into them as fragments through the system.
 
-- Passwords: PBKDF2-HMAC-SHA-256 with 20,000 iterations by default (84 ms on the machine this
-  was written on), salted with an HMAC of the name under a pepper of the deployment. A real
-  deployment wants 600,000 iterations (OWASP's figure for PBKDF2-SHA-256) or a memory-hard
-  function such as Argon2id, computed natively, with a random salt per user; neither is
-  possible here (friction log). The digest is computed by the bridge's `prepare`, on the
+- Passwords: Argon2id from libsodium, two passes over 19 MiB by default (OWASP's figure),
+  salted with an HMAC of the name under a pepper of the deployment; a random salt per user is
+  not possible here (friction log). The digest is computed by the bridge's `prepare`, on the
   request's own task, not on the shard's thread, and never again at a replay.
 - Sessions: a cookie `ledger_session` holding an HMAC-signed token of the session id (the id of
   the log-in request, never reused) and the name; `HttpOnly`, `SameSite=Lax`, `Secure` behind

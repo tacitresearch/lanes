@@ -59,3 +59,4 @@ decision without a number.
 - [D43. One gate: `serve` runs the gate joined in front](D43-one-gate.md)
 - [D44. A request is prepared before it is journalled](D44-request-prepared-before-journal.md)
 - [D45. Everything is proved; the checker finds bugs, a proof is the evidence](D45-everything-is-proved.md)
+- [D46. Bind what touches physics](D46-bind-what-touches-physics.md)

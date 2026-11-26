@@ -11,7 +11,8 @@ Source-level checks of the LANES_STYLE rules that can be decided from the text o
 
 - `no-sorry` (rule 4): no `sorry` or `admit`.
 - `trusted-listed` (rule 5.5): `partial`, `unsafe`, `axiom`, `panic!`, `@[implemented_by]` and
-  `@[extern]` appear only in files named in `TRUSTED.md`.
+  `@[extern]` appear only in files named in `TRUSTED.md`, and so does every C file, all of
+  which is trusted.
 - `trusted-size` (rule 5.5): a file that `TRUSTED.md` lists as `` `path`, N lines `` has `N`
   lines, so trusted code cannot grow without the list changing; `--fix` rewrites the counts.
 - `decisions`, `status`: the files `LanesCli/Generated.lean` derives agree with their sources.
@@ -144,11 +145,17 @@ def checkFile (root file : System.FilePath) (trusted : String) : IO (List Findin
               ++ "(rule 1.6)"⟩ :: findings
   return findings.reverse
 
-def sourceFiles (root : System.FilePath) : IO (Array System.FilePath) := do
+def sourceFiles (root : System.FilePath) (extension : String := "lean") :
+    IO (Array System.FilePath) := do
   let files ← root.walkDir fun dir =>
     let name := dir.fileName.getD ""
     return !(name.startsWith "." || name == "templates")
-  return (files.filter fun f => f.extension == some "lean").qsort (·.toString < ·.toString)
+  return (files.filter fun f => f.extension == some extension).qsort (·.toString < ·.toString)
+
+def checkC (root file : System.FilePath) (trusted : String) : List Finding :=
+  let relative := (file.toString.dropPrefix (root.toString ++ "/")).toString
+  if (trusted.splitOn relative).length > 1 then []
+  else [⟨relative, 1, "trusted-listed", "C in a file that TRUSTED.md does not name (rule 5.5)"⟩]
 
 structure Options where
   /-- Rewrite the generated files instead of reporting them. -/
@@ -170,6 +177,7 @@ def lint (root : System.FilePath) (options : Options := {}) : IO Report := do
   let trustedFile := root / "TRUSTED.md"
   let trusted ← if ← trustedFile.pathExists then IO.FS.readFile trustedFile else pure ""
   let files ← sourceFiles root
+  findings := findings ++ (← sourceFiles root "c").toList.flatMap (checkC root · trusted)
   for file in files do
     findings := findings ++ (← checkFile root file trusted)
   return ⟨findings, fixed, files.size⟩
