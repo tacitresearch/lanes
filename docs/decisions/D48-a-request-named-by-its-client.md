@@ -1,4 +1,4 @@
-# D?. A request named by its client takes effect once, and its answer may be handed over again
+# D48. A request named by its client takes effect once, and its answer may be handed over again
 
 `Lanes/Behaviours/Once.lean`, `Lanes/Semantics/Once.lean`, `Lanes/Check/Once.lean`,
 `Examples/{KV,KVProofs}.lean`. Every refinement theorem so far assumed that some link does not
