@@ -22,53 +22,55 @@ abbrev AccountId := Nat
 /-- A session is named by the id of the log-in request that opened it, which is never reused. -/
 abbrev Sid := Nat
 
-inductive Currency where
+lanes_data inductive Currency where
   | eur | usd
-  deriving DecidableEq, Repr, Hashable
+  deriving DecidableEq, Repr, Hashable, Codable
 
-structure Account (N : Type) where
+lanes_data structure Account (N : Type) where
   owner : N
   currency : Currency
   /-- Only the administrator's accounts may go below zero: they are where money comes from. -/
   allowsNegative : Bool
   balance : Int
-  deriving DecidableEq, Repr, Hashable
+  deriving DecidableEq, Repr, Hashable, Codable
 
 /-- One leg of a transfer: what it did to `account`, and the account on the other side. -/
-structure Entry where
+lanes_data structure Entry where
   transfer : ReqId
   account : AccountId
   counterparty : AccountId
   amount : Int
-  deriving DecidableEq, Repr, Hashable
+  deriving DecidableEq, Repr, Hashable, Codable
 
 /-- An account's id is its place in `accounts`. Entries are newest first. -/
-structure Book (N : Type) where
-  accounts : List (Account N) := []
-  entries : List Entry := []
-  deriving DecidableEq, Repr, Hashable
+lanes_data structure Book (N : Type) where
+  accounts : List (Account N)
+  entries : List Entry
+  deriving DecidableEq, Repr, Hashable, Codable
+
+def Book.empty {N : Type} : Book N := ⟨[], []⟩
 
 /-- Why a transfer was refused. -/
-inductive Problem where
+lanes_data inductive Problem where
   | notYours
   | noSuchAccount
   | sameAccount
   | currencies
   | nothing
   | insufficient
-  deriving DecidableEq, Repr, Hashable
+  deriving DecidableEq, Repr, Hashable, Codable
 
 /-- What a user who is logged in may ask. -/
-inductive Op where
+lanes_data inductive Op where
   | logOut
-  | open (currency : Currency) (allowsNegative : Bool)
+  | openAccount (currency : Currency) (allowsNegative : Bool)
   | transfer (src dst : AccountId) (amount : Nat)
   | accounts
   | entries
   | audit
-  deriving DecidableEq, Repr, Hashable
+  deriving DecidableEq, Repr, Hashable, Codable
 
-inductive Reply (N : Type) where
+lanes_data inductive Reply (N : Type) where
   | signedUp
   | nameTaken
   | loggedIn (name : N) (session : Sid)
@@ -84,12 +86,12 @@ inductive Reply (N : Type) where
   | invalid (problem : Problem)
   | accounts (list : List (AccountId × Account N))
   | entries (list : List Entry)
-  deriving DecidableEq, Repr, Hashable
+  deriving DecidableEq, Repr, Hashable, Codable
 
-structure Response (N : Type) where
+lanes_data structure Response (N : Type) where
   req : ReqId
   reply : Reply N
-  deriving DecidableEq, Repr, Hashable
+  deriving DecidableEq, Repr, Hashable, Codable
 
 /-- The settings both the spec and the system are built with. Every bound is here (rule 2.6). -/
 structure Config (N : Type) where
@@ -155,7 +157,7 @@ def transfer (b : Book N) (owner : N) (id : ReqId) (src dst : AccountId) (amount
 /-- What the ledger does for a user it has been told is logged in. -/
 def serve (config : Config N) (b : Book N) (owner : N) (req : ReqId) : Op → Book N × Reply N
   | .logOut => (b, .loggedOut)
-  | .open currency allowsNegative =>
+  | .openAccount currency allowsNegative =>
     if allowsNegative && owner ≠ config.admin then (b, .forbidden)
     else if (b.accountsOf owner).length ≥ config.maxAccounts then (b, .tooManyAccounts)
     else

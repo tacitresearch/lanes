@@ -22,36 +22,11 @@ abbrev C := Fin 2
 def right : C := 0
 def wrong : C := 1
 
-instance : Enum (Id N) where
-  all := [.user 0, .user 1, .ledger]
-  complete i := by
-    cases i with
-    | user n => match n with
-      | 0 => simp
-      | 1 => simp
-    | ledger => simp
-
-instance : ∀ i, Repr (Msg N C i)
-  | .user _ => inferInstanceAs (Repr (UserMsg C))
-  | .ledger => inferInstanceAs (Repr (LedgerMsg N))
-
-instance : ∀ i, Hashable (Msg N C i)
-  | .user _ => inferInstanceAs (Hashable (UserMsg C))
-  | .ledger => inferInstanceAs (Hashable (LedgerMsg N))
-
+instance : ∀ i, Repr (Msg N C i) := by instance_by_cases
+instance : ∀ i, Hashable (Msg N C i) := by instance_by_cases
 instance : (sig N C).Inspect := {}
-
-instance (config : Config N) (answering : Answering) :
-    (system N C config answering).Inspect where
-  beqState
-    | .user _ => inferInstanceAs (BEq (Option (Profile C)))
-    | .ledger => inferInstanceAs (BEq (Book N))
-  reprState
-    | .user _ => inferInstanceAs (Repr (Option (Profile C)))
-    | .ledger => inferInstanceAs (Repr (Book N))
-  hashState
-    | .user _ => inferInstanceAs (Hashable (Option (Profile C)))
-    | .ledger => inferInstanceAs (Hashable (Book N))
+instance (config : Config N) (answering : Answering) : (system N C config answering).Inspect := by
+  instance_by_cases
 
 /-- A request and the requests whose answers it waits for. -/
 abbrev Script := List (Request N C × List ReqId)
@@ -146,8 +121,8 @@ def act (req : ReqId) (n : N) (session : Sid) (op : Op) : Request N C := .act re
 that may not; `1` opens one in each currency. -/
 def setup : Script :=
   [ (signUp 1 0, []), (signUp 2 1, []), (logIn 3 0, [1]), (logIn 4 1, [2]),
-    (act 5 0 3 (.open .eur true), [3]), (act 6 0 3 (.open .eur false), [5]),
-    (act 7 1 4 (.open .eur false), [6, 4]), (act 8 1 4 (.open .usd false), [7]) ]
+    (act 5 0 3 (.openAccount .eur true), [3]), (act 6 0 3 (.openAccount .eur false), [5]),
+    (act 7 1 4 (.openAccount .eur false), [6, 4]), (act 8 1 4 (.openAccount .usd false), [7]) ]
 
 /-- The administrator pays `1`; then they pay each other at once, which the administrator can
 afford only if `1`'s payment lands first; then `1` tries to pay across currencies, and both look
@@ -176,7 +151,7 @@ def abuse : Script :=
   [ (signUp 1 0, []), (signUp 2 1, [1]), (logIn 3 1, [2]), (logIn 4 1 wrong, [3]),
     (logIn 5 1 wrong, [4]), (logIn 6 1, [5]), (logIn 7 0, [6]), (logIn 8 0, [7]),
     (logIn 9 0, [8]), (act 10 0 7 .accounts, [9]), (act 11 0 3 .accounts, [10]),
-    (act 12 1 3 (.open .eur true), [11]), (act 13 1 3 .audit, [11]), (signUp 14 0, [11]) ]
+    (act 12 1 3 (.openAccount .eur true), [11]), (act 13 1 3 .audit, [11]), (signUp 14 0, [11]) ]
 
 def answered (w : World' config answering) (req : ReqId) (reply : Reply N) : Bool :=
   w.state.outbox.any fun r => r.req == req && r.reply == reply

@@ -62,7 +62,7 @@ def password : Password := { iterations := 2, pepper := "pepper".toUTF8 }
 
 def loginTests : List (String × Bool) :=
   let alice := password.digest "alice" "correct horse"
-  let started := (Sessions.start {} 2 1).1
+  let started := (Sessions.none.start 2 1).1
   let (twice, _) := started.start 2 2
   let (thrice, closed) := twice.start 2 3
   [ ("password: a digest depends on the password and on the user",
@@ -73,7 +73,7 @@ def loginTests : List (String × Bool) :=
       alice != ({ password with pepper := "other".toUTF8 }).digest "alice" "correct horse"),
     ("password: a digest is 32 bytes", alice.bytes.size == 32),
     ("attempts: the limit-th failure locks, and success does not unlock",
-      let a := ((({} : Attempts).fail 3).fail 3)
+      let a := ((Attempts.none.fail 3).fail 3)
       !a.locked && (a.fail 3).locked && (a.fail 3).succeed.locked && ((a.fail 3).fail 3).failures == 3),
     ("sessions: a third session closes the oldest of two",
       thrice.ids == [3, 2] && closed == [1] && thrice.live 2 && !thrice.live 1),

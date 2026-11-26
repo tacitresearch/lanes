@@ -20,30 +20,29 @@ namespace Ledger
 
 open Lanes
 
-inductive Id (N : Type) where
+lanes_data inductive Id (N : Type) where
   | user (name : N)
   | ledger
-  deriving DecidableEq, Repr, Hashable
+  deriving DecidableEq, Repr, Hashable, Codable, Enum
 
-inductive UserMsg (C : Type) where
-  | ask (req : ReqId) (ask : Ask C)
+lanes_data inductive UserMsg (C : Type) where
+  | ask (req : ReqId) (question : Ask C)
   | unlock
   | expire (session : Sid)
-  deriving DecidableEq, Repr, Hashable
+  deriving DecidableEq, Repr, Hashable, Codable
 
-inductive LedgerMsg (N : Type) where
+lanes_data inductive LedgerMsg (N : Type) where
   | answer (req : ReqId) (reply : Reply N)
   /-- Sent only by `user owner` (`Ledger.Proofs`). -/
   | serve (req : ReqId) (owner : N) (op : Op)
-  deriving DecidableEq, Repr, Hashable
+  deriving DecidableEq, Repr, Hashable, Codable
 
 abbrev Msg (N C : Type) : Id N → Type
   | .user _ => UserMsg C
   | .ledger => LedgerMsg N
 
-instance {N C : Type} [DecidableEq N] [DecidableEq C] : ∀ i, DecidableEq (Msg N C i)
-  | .user _ => inferInstanceAs (DecidableEq (UserMsg C))
-  | .ledger => inferInstanceAs (DecidableEq (LedgerMsg N))
+instance {N C : Type} [DecidableEq N] [DecidableEq C] : ∀ i, DecidableEq (Msg N C i) := by
+  instance_by_cases
 
 abbrev sig (N C : Type) [DecidableEq N] [DecidableEq C] : Signature where
   Id := Id N
@@ -101,7 +100,7 @@ def user (config : Config N) (answering : Answering) (self : N) :
   recover u := (u, rearm config self u)
 
 def ledger (config : Config N) : (sig N C).Actor .ledger (Book N) where
-  init := {}
+  init := .empty
   step b
     | .answer req reply => (b, [.emit ⟨req, reply⟩])
     | .serve req owner op =>

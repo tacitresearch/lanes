@@ -5,7 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Lanes.Data.Hmac
-public import Lanes.Data.Codec
+public import Lanes.Data.Declare
 
 /-!
 What an actor that lets users log in keeps, as pure data: the digest of a password, the count of
@@ -39,6 +39,8 @@ instance : Repr Digest := ⟨fun d _ => s!"<digest {(Bytes.hex d.bytes).take 8}>
 def Digest.codec : Codec Digest :=
   Codec.bytes.map (·.bytes) (fun b => some ⟨b⟩) (fun _ => rfl)
 
+instance : Codable Digest := ⟨Digest.codec⟩
+
 /-- The cost of a digest is `2 * iterations` SHA-256 blocks. -/
 structure Password where
   iterations : Nat
@@ -53,12 +55,14 @@ def Password.digest (config : Password) (user password : String) : Digest :=
 
 /-- Failed log-ins since the account was last unlocked. At `limit` the account locks, and stays
 locked until the application unlocks it, by a timer or by hand. -/
-structure Attempts where
-  failures : Nat := 0
-  locked : Bool := false
-  deriving DecidableEq, Repr, Hashable
+lanes_data structure Attempts where
+  failures : Nat
+  locked : Bool
+  deriving DecidableEq, Repr, Hashable, Codable
 
 namespace Attempts
+
+def none : Attempts := ⟨0, false⟩
 
 def fail (a : Attempts) (limit : Nat) : Attempts :=
   let failures := a.failures + 1
@@ -67,7 +71,7 @@ def fail (a : Attempts) (limit : Nat) : Attempts :=
 def succeed (a : Attempts) : Attempts :=
   { a with failures := 0 }
 
-def unlock : Attempts := {}
+def unlock : Attempts := none
 
 /-- What a run of log-ins can do: never more than `limit` failures are counted, and an account
 with that many is locked. -/
@@ -84,18 +88,17 @@ theorem bounded_succeed (limit : Nat) (a : Attempts) : Bounded limit a.succeed :
   simp only [Bounded, succeed]
   omega
 
-def codec : Codec Attempts :=
-  Codec.struct% Attempts { failures := Codec.nat, locked := Codec.bool }
-
 end Attempts
 
 /-- A user's open sessions, newest first, at most `limit` of them: opening one more closes the
 oldest. A session is named by a number the application never uses twice. -/
-structure Sessions where
-  ids : List Nat := []
-  deriving DecidableEq, Repr, Hashable
+lanes_data structure Sessions where
+  ids : List Nat
+  deriving DecidableEq, Repr, Hashable, Codable
 
 namespace Sessions
+
+def none : Sessions := ⟨[]⟩
 
 /-- The sessions after `id` is opened, and those it closed. -/
 def start (s : Sessions) (limit id : Nat) : Sessions × List Nat :=
@@ -116,9 +119,6 @@ theorem live_open (s : Sessions) {limit : Nat} (id : Nat) (h : 0 < limit) :
   cases limit with
   | zero => omega
   | succ n => simp [start, live]
-
-def codec : Codec Sessions :=
-  Codec.struct% Sessions { ids := Codec.list Codec.nat }
 
 end Sessions
 
