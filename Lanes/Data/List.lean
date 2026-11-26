@@ -152,4 +152,15 @@ theorem getElem?_of_prefix {a b : List α} (h : a <+: b) {k : Nat} {x : α}
   rw [List.getElem?_append_left (List.getElem?_eq_some_iff.mp hx).1]
   exact hx
 
+/-- `List.mem_of_mem_erase` for the `BEq` that a `DecidableEq` gives, which is not the one
+instance search finds for a sum or a product. -/
+theorem mem_of_mem_erase [DecidableEq α] {l : List α} {a x : α} (h : x ∈ l.erase a) : x ∈ l :=
+  List.mem_of_mem_erase h
+
+theorem flatMap_singletons {γ : Type} (f : α → β) (g : β → γ) (l : List α) :
+    (l.flatMap fun a => [f a]).flatMap (fun b => [g b]) = l.map fun a => g (f a) := by
+  induction l with
+  | nil => rfl
+  | cons a l ih => simp [List.flatMap_cons, ih]
+
 end Lanes
