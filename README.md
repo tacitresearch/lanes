@@ -100,7 +100,7 @@ a view cannot link or post to a route that does not exist.
 - **Several shards and processes.** Two shards joined behave as the one system
   (`System.SplitReachable.merged`). A transport joins shards in different processes; what it
   decides is a pure function, run by the model checker against a network that fails.
-- **Trusted.** About 1,260 lines of IO and macro code and a 410-line HTTP wire format that is
+- **Trusted.** 1,259 lines of IO and macro code and a 410-line HTTP wire format that is
   tested and partly proved, listed with their sizes in `TRUSTED.md`; `lanes lint` fails if they
   grow, and `scripts/mutants.py` holds the known ways of breaking that code, each of which has
   to fail a test. It is a list, not a measure: a review found sixteen more.
