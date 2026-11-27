@@ -64,6 +64,12 @@ def xmlTests : List (String × Bool) :=
     ("s3 xml: references, decimal and hex, and attributes in either quote",
       ((Xml.parse "<a x='1>' y=\"&\">&lt;&#65;&#x42;&amp;&apos;</a>").map (·.content))
         == some "<AB&'"),
+    ("s3 xml: an element's children by name, its first, and the text of that",
+      match Xml.parse "<r><a>1</a><b>x</b><a>2</a></r>" with
+      | some root => (root.all "a").map (·.content) == ["1", "2"]
+          && (root.child? "b").map (·.content) == some "x" && root.text? "a" == some "1"
+          && root.text? "c" == none
+      | none => false),
     ("s3 xml: escape reads back", ((Xml.parse ("<a>" ++ Xml.escape "<&>\"'é" ++ "</a>")).map
       (·.content)) == some "<&>\"'é"),
     ("s3 xml: a document type, CDATA and an unknown entity are refused",

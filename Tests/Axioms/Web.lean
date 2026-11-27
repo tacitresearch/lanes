@@ -364,6 +364,12 @@ import Lanes.Semantics
 /-- info: 'Lanes.Http.Response.read_ended' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.Response.read_ended
 
+/-- info: 'Lanes.Http.Request.headOnly_plain' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Request.headOnly_plain
+
+/-- info: 'Lanes.Http.Response.readHead_ended' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Response.readHead_ended
+
 -- Lanes.Web.Http.WireSound
 /-- info: 'Lanes.Http.Response.read_more' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.Response.read_more

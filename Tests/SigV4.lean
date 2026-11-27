@@ -262,6 +262,8 @@ def s3Tests : List (String × Bool) :=
 
 def partTests : List (String × Bool) :=
   [ ("sigv4 stamp and day", stamp docTime == "20130524T000000Z" && day docTime == "20130524"),
+    ("sigv4 verb: each method's name", [Method.get, .post, .put, .patch, .delete].map verb
+      == ["GET", "POST", "PUT", "PATCH", "DELETE"]),
     ("sigv4 encode: unreserved bytes kept, the rest as %XX in capitals, a slash included",
       encode unreserved == unreserved && encode "a b/c+d=é*" == "a%20b%2Fc%2Bd%3D%C3%A9%2A"),
     ("sigv4 canonical path: segments escaped, empty ones kept",
