@@ -8,8 +8,9 @@ public import Std
 
 /-!
 The part of XML 1.0 that S3's answers use, read into a tree: elements, whose attributes are
-skipped, text with the five named entities and character references, the declaration, comments
-and processing instructions, which are skipped. A document type, `CDATA`, a reference to any
+skipped, text with the five named entities and character references, its line ends read as line
+feeds and its characters only those XML allows (§2.2, §2.11), the declaration, comments and
+processing instructions, which are skipped. A document type, `CDATA`, a reference to any
 other entity, an element nested deeper than `maxDepth`, an end tag that does not match, and
 anything after the root are refused, so nothing in a document is expanded or fetched. Every
 function is total; the size of what it reads is the HTTP client's limit.
@@ -31,6 +32,16 @@ inductive Token where
   deriving DecidableEq, Repr
 
 def nameChar (c : Char) : Bool := c.isAlphanum || c == '-' || c == '_' || c == '.' || c == ':'
+
+/-- What a name may start with: not a digit, `-` or `.`. -/
+def nameStart (c : Char) : Bool := c.isAlpha || c == '_' || c == ':'
+
+def isName (name : List Char) : Bool := name.head?.any nameStart
+
+/-- XML 1.0's `Char`: what a document may hold, raw or as a reference. -/
+def xmlChar (n : Nat) : Bool :=
+  n == 0x9 || n == 0xA || n == 0xD || (0x20 ≤ n && n ≤ 0xD7FF) || (0xE000 ≤ n && n ≤ 0xFFFD)
+    || (0x10000 ≤ n && n ≤ 0x10FFFF)
 
 def space (c : Char) : Bool := c == ' ' || c == '\t' || c == '\n' || c == '\r'
 
@@ -60,17 +71,20 @@ def hexValue? (c : Char) : Option Nat :=
   else if 'a' ≤ c && c ≤ 'f' then some (c.toNat - 87)
   else if 'A' ≤ c && c ≤ 'F' then some (c.toNat - 55) else none
 
-/-- The code point a character reference names, decimal or after `x` in hex. -/
+/-- The code point a character reference names, decimal or after `x` in hex, with any number of
+leading zeros and at most the digits of the largest. -/
 def codePoint? : List Char → Option Nat
   | 'x' :: hex =>
-    if hex.isEmpty || hex.length > 6 then none
-    else hex.foldlM (fun n c => (16 * n + ·) <$> hexValue? c) 0
+    let significant := hex.dropWhile (· == '0')
+    if hex.isEmpty || significant.length > 6 then none
+    else significant.foldlM (fun n c => (16 * n + ·) <$> hexValue? c) 0
   | digits =>
-    if digits.isEmpty || digits.length > 7 || !digits.all Char.isDigit then none
-    else some (digits.foldl (fun n c => 10 * n + (c.toNat - 48)) 0)
+    let significant := digits.dropWhile (· == '0')
+    if digits.isEmpty || significant.length > 7 || !digits.all Char.isDigit then none
+    else some (significant.foldl (fun n c => 10 * n + (c.toNat - 48)) 0)
 
 def charRef? (digits : List Char) : Option Char :=
-  (codePoint? digits).bind fun n => if n == 0 || !n.isValidChar then none else some (Char.ofNat n)
+  (codePoint? digits).bind fun n => if xmlChar n then some (Char.ofNat n) else none
 
 def entity? (name : List Char) : Option Char :=
   match name with
@@ -82,19 +96,25 @@ def entity? (name : List Char) : Option Char :=
   | '#' :: digits => charRef? digits
   | _ => none
 
-/-- Text with its references replaced, after `acc` reversed; `none` for a reference that is not
-one, or a `<`. Every call is a tail call, so a text of any length takes no stack, and a name is
-looked for in the next eleven characters only, so the time is linear in the text. -/
+/-- Text with its references replaced and a carriage return, alone or before a line feed, read
+as a line feed, after `acc` reversed; `none` for a reference that is not one, a `<`, `]]>`, or a
+character XML does not allow. Every call is a tail call, so a text of any length takes no stack.
+A reference's name runs to the next `;`: those characters are consumed when it is one, and the
+text is refused when it is not, so each character is looked at a bounded number of times and the
+time is linear in the text. -/
 def unescape : (fuel : Nat) → List Char → List Char → Option (List Char)
   | 0, _, _ => none
   | _, [], acc => some acc.reverse
   | fuel + 1, '&' :: rest, acc =>
-    let name := (rest.take 11).takeWhile (· != ';')
-    match rest.drop name.length, (if name.length ≤ 10 then entity? name else none) with
+    let (name, tail) := rest.span (· != ';')
+    match tail, entity? name with
     | ';' :: tail, some c => unescape fuel tail (c :: acc)
     | _, _ => none
   | _, '<' :: _, _ => none
-  | fuel + 1, c :: rest, acc => unescape fuel rest (c :: acc)
+  | _, ']' :: ']' :: '>' :: _, _ => none
+  | fuel + 1, '\r' :: '\n' :: rest, acc => unescape fuel rest ('\n' :: acc)
+  | fuel + 1, '\r' :: rest, acc => unescape fuel rest ('\n' :: acc)
+  | fuel + 1, c :: rest, acc => if xmlChar c.toNat then unescape fuel rest (c :: acc) else none
 
 /-- `s` as XML text: `&`, `<`, `>`, `"` and `'` as entities. -/
 def escape (s : String) : String :=
@@ -106,17 +126,24 @@ def escape (s : String) : String :=
 def tokens : (fuel : Nat) → List Char → List Token → Option (List Token)
   | 0, _, _ => none
   | _, [], acc => some acc.reverse
-  | fuel + 1, '<' :: '?' :: rest, acc => do tokens fuel (← after ['?', '>'] rest) acc
-  | fuel + 1, '<' :: '!' :: '-' :: '-' :: rest, acc => do tokens fuel (← after ['-', '-', '>'] rest) acc
+  | fuel + 1, '<' :: '?' :: rest, acc => do
+    unless rest.head?.any nameStart do none
+    tokens fuel (← after ['?', '>'] rest) acc
+  | fuel + 1, '<' :: '!' :: '-' :: '-' :: rest, acc => do
+    let tail ← after ['-', '-', '>'] rest
+    -- A comment holds no `--`, and does not end in `-` (§2.5).
+    let body := rest.take (rest.length - tail.length - 3)
+    if body.getLast? == some '-' || (body.zip body.tail).any (· == ('-', '-')) then none
+    tokens fuel tail acc
   | _, '<' :: '!' :: _, _ => none
   | fuel + 1, '<' :: '/' :: rest, acc =>
     let (name, tail) := rest.span nameChar
     match tail.dropWhile space with
-    | '>' :: tail => if name.isEmpty then none else tokens fuel tail (.stop (String.ofList name) :: acc)
+    | '>' :: tail => if isName name then tokens fuel tail (.stop (String.ofList name) :: acc) else none
     | _ => none
   | fuel + 1, '<' :: rest, acc => do
     let (name, tail) := rest.span nameChar
-    unless !name.isEmpty && tail.head?.any (fun c => space c || c == '>' || c == '/') do none
+    unless isName name && tail.head?.any (fun c => space c || c == '>' || c == '/') do none
     let (closed, tail) ← skipAttributes none tail
     let name := String.ofList name
     tokens fuel tail ((if closed then [.stop name, .start name] else [.start name]) ++ acc)

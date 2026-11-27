@@ -93,7 +93,7 @@ API. P1 is common, P2 rare.
 | `encoding/csv` | b | P1 |
 | `encoding/pem` | b | P2 |
 | `encoding/asn1` | b | P2 |
-| `encoding/xml` | b | P2; a reader of the part S3's answers use, not yet tested against Go's, in `Lanes/Web/S3/Xml.lean` |
+| `encoding/xml` | b | P2; a reader of the part S3's answers use, in `Lanes/Web/S3/Xml.lean`, tested against Go's (`oracles/go/xml`) |
 | `encoding/gob` | d | Go's own format; Lanes has `Codec` |
 | `encoding/ascii85` | d | PostScript and PDF only |
 | `compress/flate`, `compress/gzip`, `compress/zlib` | b | P2: the reverse proxy compresses responses, and a client can ask for none |
@@ -123,7 +123,7 @@ API. P1 is common, P2 rare.
 | `net/http/httputil` | d | reverse proxying and dumps; the proxy in front is not Lean |
 | `net/http/pprof`, `net/http/httptrace` | d | Go runtime introspection |
 | `net/http/cgi`, `net/http/fcgi` | d | deployment models Lanes does not use |
-| `net/mail` | b | P1 |
+| `net/mail` | b | P1; SES's check of a bare addr-spec, `integrations/aws/Aws/Ses.lean`, tested against Go's (`oracles/go/mail`) |
 | `net/smtp` | b | P2: mail goes through a provider's HTTP API |
 | `net/rpc`, `net/rpc/jsonrpc` | d | shards talk through `Lanes.Peers`; other services through HTTP |
 
@@ -228,7 +228,7 @@ and the RFCs' own.
 | `net/http` (event streams) | live timelines | WHATWG HTML §9.2 (`text/event-stream`); `parse (write events) = events` | the specification's examples; Go has no parser | small | P1 |
 | `path` | cleaning a request's path, static files | RFC 3986 §5.2.4 `remove_dot_segments`; `clean (clean p) = clean p` | Go `path.Clean`, `path.Match` | small | P1 |
 | `log/slog` | structured logs | one JSON object per line, as slog's `JSONHandler` writes (RFC 3339 times, keys in order) | Go `slog.NewJSONHandler` on the same records | small | P1 |
-| `expvar` | a metrics page | Prometheus text exposition format 0.0.4 | `github.com/prometheus/common/expfmt` parsing our output | small | P1, built without the oracle |
+| `expvar` | a metrics page | Prometheus text exposition format 0.0.4 | `github.com/prometheus/common/expfmt` parsing our output | small | P1, built; `oracles/go/expfmt` |
 | `unicode` | validating names and text by category | the Unicode Character Database (`UnicodeData.txt`, `DerivedCoreProperties.txt`), tables generated from it with a theorem per table that lookup agrees with the list | the UCD files directly; Go 1.24 is at Unicode 15.0.0, so it disagrees on newer characters | medium | P1 |
 | `unicode/utf16` | counting text as `maxlength` in a browser does | Unicode §3.9 D91; `decode (encode s) = s` on scalar values | Go `utf16.Encode`, `Decode` | small | P1 |
 | `x/text/unicode/norm` | user names and search keys compared after NFC | UAX #15; NFC idempotent, `nfc ∘ nfd = nfc` | `NormalizationTest.txt`; Go x/text | medium | P1 |
@@ -280,10 +280,11 @@ yet proved come after: `Lanes.Json`'s round trip (oracles JSONTestSuite and Go `
 
 ### Differential tests against Go
 
-- **Where.** A Go module in `oracle/` (`oracle/go.mod`, Go pinned like the Lean toolchain,
-  `golang.org/x/time` pinned in `oracle/go.sum`), with one small program per package,
-  `oracle/<package>/main.go`. The Lean side is `Tests/Oracle/<Package>.lean`, run by
-  `lanesOracle` (`Tests/OracleMain.lean`; D50).
+- **Where.** A Go module in `oracles/go/` (`oracles/go/go.mod`, Go pinned like the Lean
+  toolchain, `golang.org/x/time` and `github.com/prometheus/common` pinned in
+  `oracles/go/go.sum`), with one small program per package, `oracles/go/<package>/main.go`, among
+  the other references of `oracles/README.md`. The Lean side is `Tests/Oracle/<Package>.lean`,
+  run by `lanesOracle` (`Tests/OracleMain.lean`; D50).
 - **Protocol.** Lean generates cases from a seed and writes them as JSON lines,
   `{"id": 7, "op": "parse", "in": "<hex>"}`; inputs are hex so that invalid UTF-8 survives. The
   Go program reads every line from standard input and answers one line per case:
@@ -301,13 +302,14 @@ yet proved come after: `Lanes.Json`'s round trip (oracles JSONTestSuite and Go `
   `Tests/Oracle/<Package>.lean` with a reason, and the comparison skips only the cases it
   matches. The rate limiter's cases use rates and times at which Go's float64 token count is
   exact (`Tests/Oracle/RateLimit.lean`), because ours is exact.
-- **Without Go.** Static vectors (RFC test vectors, the Unicode files, urltestdata,
-  JSONTestSuite) are committed in a `vectors` directory beside the oracle tests, with their source and licence, and
-  run in `lake test`, which never needs Go.
-- **In CI.** A job `oracle` beside `build`: `actions/setup-go` at the pinned version, `go build`
-  of each program into `.lake/oracle/`, then `lake exe lanesOracle --all --cases 20000` at seed 0
-  and at the run's id as seed. It fails on any disagreement not in `Known.lean`, printing the
-  command that reproduces it. A scheduled nightly run takes a million cases per package.
+- **Without Go.** The first answers of each reference are recorded in
+  `oracles/<reference>/answers.jsonl` and replayed by `lake test`, which never needs Go; static
+  vectors (RFC test vectors, JSONTestSuite) are committed beside the tests that read them, with
+  their source and licence.
+- **In CI.** The job `oracle` of `.github/workflows/ci.yml` runs `lake exe lanesOracle --cases
+  20000` at seed 0 and at the run's id as seed, which builds each program into `.lake/oracles/`.
+  It fails on any difference no `known` predicate decides, printing the command that reproduces
+  it.
 - **Bindings.** For (c), the oracle is test vectors (Wycheproof, RFC 9106 for Argon2id) and, for
   TLS, a Go program that serves certificates it makes with `crypto/x509` (expired, wrong host,
   self-signed, unknown root, good) on local ports: the Lean client must refuse all but the good

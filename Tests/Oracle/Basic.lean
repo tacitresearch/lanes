@@ -5,10 +5,11 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import Lanes
 
 /-!
-Differential tests against Go (`docs/decisions/D50-differential-tests-against-go.md`). A package
-generates cases, Go's program in `oracle/<name>/` answers them, and ours must give the same
-answer or one its `known` predicate names a reason for. `lake test` replays the answers recorded
-in `Tests/Oracle/vectors/<name>.jsonl`; `lake exe lanesOracle` asks Go itself.
+Pure-function oracles (`docs/decisions/D50-differential-tests-against-go.md`,
+`oracles/README.md`). A package generates cases, a reference implementation's program under
+`oracles/` answers them, and ours must give the same answer or one its `known` predicate names a
+reason for. `lake test` replays the answers recorded in `oracles/<reference>/answers.jsonl`;
+`lake exe lanesOracle` asks the reference itself.
 -/
 
 namespace Tests.Oracle
@@ -56,14 +57,32 @@ def run {α : Type} (seed : Nat) (g : Gen α) : α := (StateT.run g (mkStdGen se
 
 end Gen
 
+/-- Where a package's reference program is, under `oracles/`. -/
+inductive Reference where
+  /-- `oracles/go/<dir>/main.go`, a program of the Go module `oracles/go`. -/
+  | go (dir : String)
+  /-- `oracles/<dir>/main.py`, run in a virtual environment made from
+  `oracles/<dir>/requirements.txt`. -/
+  | python (dir : String)
+
+def Reference.dir : Reference → String
+  | .go dir => "go/" ++ dir
+  | .python dir => dir
+
 structure Package where
   name : String
+  reference : Reference := .go name
   /-- Cases that are always asked first: the RFC's examples, the edges. -/
   edges : List Case
   case : Gen Case
   answer : Case → Answer
-  /-- Given Go's answer to a case where ours differs, the decided reason, if there is one. -/
+  /-- Given the reference's answer to a case where ours differs, the decided reason, if there is one. -/
   known : Case → Answer → Option String := fun _ _ => none
+  /-- Whether a difference is shrunk by deleting bytes: not for a case that is a document of
+  parts that must agree. -/
+  shrinks : Bool := true
+  /-- How many answers `--record` keeps for `lake test` to replay. -/
+  recorded : Nat := 1000
 
 def Package.cases (p : Package) (count seed : Nat) : Array Case :=
   (p.edges ++ Gen.run seed (Gen.list (count - min count p.edges.length) p.case)).toArray.take count
@@ -101,21 +120,24 @@ def Package.judge (p : Package) (c : Case) (go : Answer) : Verdict :=
     | some reason => .known reason
     | none => .differ
 
-def vectorsPath (name : String) : System.FilePath := s!"Tests/Oracle/vectors/{name}.jsonl"
+/-- The answers recorded from the reference, under the repository's root `root`. -/
+def Package.vectorsPath (p : Package) (root : System.FilePath := ".") : System.FilePath :=
+  root / "oracles" / p.reference.dir / "answers.jsonl"
 
-def Package.vectors (p : Package) : IO (Except String (Array (Case × Answer))) := do
-  let lines ← IO.FS.readFile (vectorsPath p.name)
+def Package.vectors (p : Package) (root : System.FilePath := ".") :
+    IO (Except String (Array (Case × Answer))) := do
+  let lines ← IO.FS.readFile (p.vectorsPath root)
   return do
     (← readLines lines).mapM fun j => return (← readCase j, ← readAnswer j)
 
 /-- The recorded answers, replayed: every one must agree or be a known difference. -/
-def Package.replay (p : Package) : IO (List (String × Bool)) := do
-  match ← p.vectors with
+def Package.replay (p : Package) (root : System.FilePath := ".") : IO (List (String × Bool)) := do
+  match ← p.vectors root with
   | .error e => return [(s!"oracle vectors of {p.name} read: {e}", false)]
   | .ok vectors =>
     let failed := vectors.filter fun (c, go) => p.judge c go = .differ
     for (c, go) in failed.toList.take 5 do
-      IO.println s!"oracle {p.name}: {c.op} {Bytes.hex c.input}: ours {(p.answer c).map Json.compress}, Go {go.map Json.compress}"
-    return [(s!"oracle vectors of {p.name}: {vectors.size} recorded answers of Go agree", failed.isEmpty)]
+      IO.println s!"oracle {p.name}: {c.op} {Bytes.hex c.input}: ours {(p.answer c).map Json.compress}, reference {go.map Json.compress}"
+    return [(s!"oracle vectors of {p.name}: {vectors.size} recorded answers of oracles/{p.reference.dir} agree", failed.isEmpty)]
 
 end Tests.Oracle

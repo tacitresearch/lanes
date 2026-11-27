@@ -1,0 +1,10 @@
+{"call":0,"deadline_ms":3000,"request":{"body":{"html":"<p>Hi</p>","text":"Hi"},"source":"noreply@videos.example","subject":"A comment on your video","to":["ann@b.co"]}}
+{"answer":{"answer":"rejected","code":"MessageRejected","status":400},"reply":0}
+{"call":1,"deadline_ms":3000,"request":{"body":{"html":"<p>Hi</p>","text":"Hi"},"source":"noreply@videos.example","subject":"A comment on your video","to":["ann@b.co"]}}
+{"answer":{"answer":"sent","id":"vjclkofzwdlxkrzt-wvcvdqdp-luhh-kscx-oclq-stqsuraoxfet-uasamg"},"reply":1}
+{"call":2,"deadline_ms":3000,"request":{"body":{"html":"<p>Hi</p>","text":"Hi"},"source":"noreply@videos.example","subject":"A comment on your video","to":["ann@b.co","bo@c.co","cy@d.co"]}}
+{"answer":{"answer":"sent","id":"owyafehnswbrkwkj-wztxpgov-xnyj-mqow-nzjb-ltunfvejlywr-oulyrx"},"reply":2}
+{"call":3,"deadline_ms":1,"request":{"body":{"html":"<p>Hi</p>","text":"Hi"},"source":"noreply@videos.example","subject":"A comment on your video","to":["slow@b.co"]}}
+{"answer":{"answer":"unknown"},"reply":3}
+{"call":4,"deadline_ms":3000,"request":{"body":{"html":"<p>Hi</p>","text":"Hi"},"source":"noreply@videos.example","subject":"A comment on your video","to":["dee@b.co"]}}
+{"answer":{"answer":"sent","id":"bymepnmonylivuqx-pngokoht-bobz-rysv-hhzt-peezgwugqakr-ifrfnp"},"reply":4}

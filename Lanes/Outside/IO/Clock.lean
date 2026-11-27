@@ -6,14 +6,14 @@ module
 
 public import Std.Time
 public import Lanes.Runtime.IO.Shell
-public import Lanes.Outside.Basic
+public import Lanes.Outside.Clock
 
 /-!
 The clock as an adapter, and the shape every adapter has. A system asks the time with an output
 and is told with an input, so `step` stays pure and the answer is in the journal when the shard
-is replayed. The adapter is two things that must agree: `Clock.outside`, what a clock may do,
-which the checker explores; and `Clock.handler`, what this clock does, in IO. A test records a
-real run and checks it against the model (`Outside.allows`).
+is replayed. The adapter is two things that must agree: `Clock.outside`, what a clock may do
+(`Lanes/Outside/Clock.lean`), which the checker explores; and `Clock.handler`, what this clock
+does, in IO. A test records a real run and checks it against the model (`Outside.allows`).
 -/
 
 @[expose] public section
@@ -23,27 +23,6 @@ namespace Lanes.Clock
 open Std.Async
 
 variable {σ : Signature}
-
-/-- Which outputs ask the time and which inputs tell it. `told` reads back what `tell` made. -/
-structure Port (σ : Signature) where
-  asked : σ.Out → Option Nat
-  tell : (question time_ms : Nat) → σ.In
-  told : σ.In → Option (Nat × Nat)
-
-/-- What a clock may do: answer a question that was asked and not yet answered, with a time no
-earlier than any it has given. It may also not answer. It remembers the open questions and the
-last time it gave. -/
-def outside (port : Port σ) : Outside σ (List Nat × Nat) where
-  init := ([], 0)
-  allow d x :=
-    match port.told x with
-    | some (question, time_ms) =>
-      if question ∈ d.1 ∧ d.2 ≤ time_ms then some (d.1.erase question, time_ms) else none
-    | none => none
-  observe d out :=
-    match port.asked out with
-    | some question => (question :: d.1, d.2)
-    | none => d
 
 /-- The latest time a journal says the clock gave. A clock that starts on a journal starts no
 earlier, so that the times in a replayed run and those given after it are still in order. -/
