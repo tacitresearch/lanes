@@ -4,8 +4,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Actors.JoinSound
-public import Lanes.Actors.MapIOSound
+public import Lanes.Proof.JoinSound
+public import Lanes.Proof.MapIOSound
 public import Lanes.Semantics.Projection
 
 /-!

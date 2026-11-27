@@ -66,7 +66,7 @@ import Lanes.Semantics
 /-- info: 'Lanes.System.LeadsTo.reachable' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.LeadsTo.reachable
 
--- Lanes.Semantics.FrontLive
+-- Lanes.Semantics.Front
 /-- info: 'Lanes.Http.Gate.pending_leaves' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.Gate.pending_leaves
 
@@ -91,7 +91,7 @@ import Lanes.Semantics
 /-- info: 'Lanes.Http.served_pending_answered' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.served_pending_answered
 
--- Lanes.Semantics.JobsLive
+-- Lanes.Semantics.Jobs
 /-- info: 'Lanes.Jobs.active_leaves' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Jobs.active_leaves
 

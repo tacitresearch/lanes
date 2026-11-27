@@ -8,12 +8,12 @@ import Tests.Bank
 import Tests.Join
 
 /-!
-A system split across two shards behaves as the one system (`Lanes/Actors/ShardSound.lean`),
+A system split across two shards behaves as the one system (`Lanes/Runtime/ShardSound.lean`),
 checked before it was proved: every state the split reaches, read as one state, is among the
 states the system reaches alone, compared as the checker compares states. The bank has its two
 accounts on different shards; `relay` adds boot actors, timers and `stop`.
 
-The same comparisons run on three shards (`System.shards`, `Lanes/Actors/ShardsSound.lean`).
+The same comparisons run on three shards (`System.shards`, `Lanes/Runtime/ShardsSound.lean`).
 
 Two systems show where the statement stops. `fragile` has a boot actor that stops as it starts:
 the split boots one shard before the other, so a message is kept that the system alone loses.
@@ -280,7 +280,7 @@ def chorusAlone :=
   Tests.Join.explore chorus {} [true, false] fun c =>
     c.state true ≤ 2 && c.state false ≤ 1 && c.net.length ≤ 3 && c.outbox.length ≤ 3
 
-/-! The same on three shards (`Lanes/Actors/ShardsSound.lean`): the bank with an account on
+/-! The same on three shards (`Lanes/Runtime/ShardsSound.lean`): the bank with an account on
 each, the relay with three actors each on the shard after its own, and `fragile` on two of
 three shards. -/
 

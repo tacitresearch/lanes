@@ -195,23 +195,23 @@ round of framework work is planned from this.
 
 ### Missing, and added
 
-- **SHA-256, HMAC-SHA-256, PBKDF2**: `Lanes/Data/Sha256.lean`, `Lanes/Data/Hmac.lean`, pure
+- **SHA-256, HMAC-SHA-256, PBKDF2**: `Lanes/Lib/Crypto/Sha256.lean`, `Lanes/Lib/Crypto/Hmac.lean`, pure
   Lean, Std only, tested against FIPS 180-4, RFC 4231 and RFC 7914 (`Tests/Crypto.lean`).
   Proved: digest and tag lengths, hex round trip, `Bytes.same a b = true ↔ a = b`. About 2 µs a
   block, so a PBKDF2 iteration is about 4 µs.
-- **Cookies**: `Lanes/Http/Cookie.lean`. Reading `Cookie` headers; `Set-Cookie` from a
+- **Cookies**: `Lanes/Web/Http/Cookie.lean`. Reading `Cookie` headers; `Set-Cookie` from a
   `Cookie` with every attribute named and safe defaults; a value that could add an attribute is
   not set. Also the origin check for forms, a per-route body limit and `Cache-Control:
   no-store`.
-- **Signed tokens and form tokens**: `Lanes/Auth/Token.lean`, with a purpose so that a session
+- **Signed tokens and form tokens**: `Lanes/Web/Auth/Token.lean`, with a purpose so that a session
   token is no form token; `Auth.verify_sign` proved.
-- **Login state**: `Lanes/Auth/Login.lean`: a password `Digest` whose `DecidableEq` compares in
+- **Login state**: `Lanes/Web/Auth/Login.lean`: a password `Digest` whose `DecidableEq` compares in
   constant time (so `if c = stored` in a step leaks nothing), `Password.digest`, `Attempts`
   (failures that lock, `bounded_fail`), `Sessions` (bounded, the oldest closed).
 - **Clients that wait**: `Driver.after` (`Lanes/Check/Clients.lean`). Neither `anyOrder` nor
   `script` gives real-time order, which is what makes a stale read a violation; it also keeps
   the state space small. Tested on the key-value store (`Tests/Clients.lean`).
-- **A list lemma**: `Lanes.sum_map_set` in `Lanes/Data/List/Basic.lean`.
+- **A list lemma**: `Lanes.sum_map_set` in `Lanes/Proof/List/Basic.lean`.
 - **Releasing idle actors**: an actor declares the states a start gives it (`Actor.fresh`), and
   the kernel drops one that is in such a state with no timers once it has handled a message,
   proved to change nothing anyone can see (`Kernel.exec_visible`,
@@ -307,7 +307,7 @@ round of framework work is planned from this.
 
 ### What the ledger would want next
 
-- ~~**Background jobs**~~: added in Lanes as the jobs actor (`Lanes/Behaviours/Jobs.lean`): a
+- ~~**Background jobs**~~: added in Lanes as the jobs actor (`Lanes/Behaviours/Jobs/Basic.lean`): a
   job named by its requester's key, attempts that carry the key, retries after a backoff, a
   deadline per attempt and a bound on jobs in flight, with a pool of workers as its adapter and
   every job admitted proved answered in a fair run. The password's Argon2id stays in

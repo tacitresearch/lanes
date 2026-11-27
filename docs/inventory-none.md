@@ -28,20 +28,20 @@ enumeration are fields of its type. That the declaration is the one written is w
 
 Each is to be proved, tested, made private or removed.
 
-### `Lanes/Actors/Actor.lean`
+### `Lanes/Core/Actor.lean`
 
 - `Actor.mapEff`
 - `Actor.comapMsg`
 
-### `Lanes/Actors/CourierSound.lean`
+### `Lanes/Net/CourierSound.lean`
 
 - `Peers.Line.conn?`
 
-### `Lanes/Actors/Equiv.lean`
+### `Lanes/Proof/Equiv.lean`
 
 - `onLink`
 
-### `Lanes/Actors/Inspect.lean`
+### `Lanes/Core/Inspect.lean`
 
 - `instReprEmpty_lanes`
 - `Event.kind`
@@ -51,12 +51,12 @@ Each is to be proved, tested, made private or removed.
 - `Slot.hash`
 - `SysState.render`
 
-### `Lanes/Actors/Run.lean`
+### `Lanes/Core/Run.lean`
 
 - `Effect.armed`
 - `Effect.emits`
 
-### `Lanes/Actors/Service.lean`
+### `Lanes/Core/Service.lean`
 
 - `Service.start`
 - `Service.State.call`
@@ -64,11 +64,11 @@ Each is to be proved, tested, made private or removed.
 - `Service.State.fire`
 - `Service.State.ret`
 
-### `Lanes/Actors/Snapshot.lean`
+### `Lanes/Durable/Snapshot.lean`
 
 - `Journal.saved?`
 
-### `Lanes/Actors/System.lean`
+### `Lanes/Core/System.lean`
 
 - `Effect.isStop`
 - `Envelope.sameLink`
@@ -95,11 +95,11 @@ Each is to be proved, tested, made private or removed.
 - `Fifo.pop?`
 - `Fifo.filter`
 
-### `Lanes/Data/Frame.lean`
+### `Lanes/Durable/Frame.lean`
 
 - `Frame.unfinished`
 
-### `Lanes/Data/Json/Basic.lean`
+### `Lanes/Lib/Encoding/Json/Basic.lean`
 
 - `JsonNumber.instCoeNat`
 - `JsonNumber.instCoeInt`
@@ -110,15 +110,15 @@ Each is to be proved, tested, made private or removed.
 - `Json.instCoeString`
 - `Json.instCoeBool`
 
-### `Lanes/Data/Json/Printer.lean`
+### `Lanes/Lib/Encoding/Json/Printer.lean`
 
 - `Json.instToString`
 
-### `Lanes/Http/Front.lean`
+### `Lanes/Web/Http/Front.lean`
 
 - `Http.servedActors`
 
-### `Lanes/Http/Gate.lean`
+### `Lanes/Web/Http/Gate.lean`
 
 - `Http.instReprGateMsgOfOut`
 

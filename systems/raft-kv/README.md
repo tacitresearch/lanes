@@ -192,7 +192,7 @@ from the cluster's state: a request that was lost, or whose entry was replaced, 
 for ever, which the service allows. So no ghost counts requests, and the relation is not a
 refinement mapping.
 
-The proofs give each node a ghost history of the states it has left (`Lanes/Actors/Past.lean`)
+The proofs give each node a ghost history of the states it has left (`Lanes/Proof/Past.lean`)
 and build one invariant in layers with the monotone proof rule, so one argument covers every
 fault: `Votes`, `Terms`, `Logs`, `Standing`, `Safe`, `Commits`. An `append` carries a batch, so
 what a follower takes from a leader is a start of that leader's log (`Within`), and the layers

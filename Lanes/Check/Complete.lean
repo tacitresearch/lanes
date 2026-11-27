@@ -4,8 +4,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Actors.Inspect
-public import Lanes.Actors.Step
+public import Lanes.Core.Inspect
+public import Lanes.Core.Step
 
 /-!
 The checker explores a state through `SysState.successors`. `step_of_mem_successors` says it

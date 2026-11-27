@@ -205,7 +205,7 @@ package; none touches the library.
 4. **`Once.Memo` has no `DecidableEq` and no `Codable`**, so a state holding one derives
    neither; both are given in `Rookery/Spec.lean`.
 5. **Lemmas about tables of pairs** (`lookup_modify`, `lookup_append_self`, `mem_modify`) belong
-   in `Lanes/Data/List/` and are in `Rookery/Proofs/Table.lean`. A finite map that both runs
+   in `Lanes/Proof/List/` and are in `Rookery/Proofs/Table.lean`. A finite map that both runs
    and proves easily (no `Ord` instance to prove for a subtype of `String`) would replace them.
 6. **No server push.** Timelines poll every five seconds; a stream of events per session (SSE)
    would show a post the moment it is answered, and is the next thing the front needs.

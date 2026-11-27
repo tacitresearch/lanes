@@ -22,7 +22,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `LanesCli` | 110 | 0 | 0 | 0 | 42 | 0 | 68 |
 | All | 1326 | 683 | 54 | 74 | 170 | 221 | 124 |
 
-## `Lanes/Actors/Actor.lean`
+## `Lanes/Core/Actor.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -31,7 +31,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Actor.comapMsg` | none |  |
 | `Actor.Invariant` | spec | a predicate |
 
-## `Lanes/Actors/Batch.lean`
+## `Lanes/Runtime/Batch.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -53,7 +53,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Batch.Command.idle?` | spec | used only in statements |
 | `Batch.settle` | spec | used only in statements |
 
-## `Lanes/Actors/Courier.lean`
+## `Lanes/Net/Courier.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -64,7 +64,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Peers.Courier.next` | proved | through `Peers.Courier.exec`, `Peers.Courier.step`: `Peers.Courier.Reachable.write_not_busy`, `Peers.Courier.after_stop` and 6 more |
 | `Peers.Courier.step` | proved | `Peers.Courier.Reachable.write_not_busy` |
 
-## `Lanes/Actors/CourierSound.lean`
+## `Lanes/Net/CourierSound.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -95,7 +95,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Peers.Action.parcel?` | spec | used only in statements |
 | `Peers.Courier.leftover` | spec | used only in statements |
 
-## `Lanes/Actors/Deed.lean`
+## `Lanes/Proof/Deed.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -106,7 +106,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `put` | spec | used only in statements |
 | `Effect.Avoids` | spec | a predicate |
 
-## `Lanes/Actors/Disk.lean`
+## `Lanes/Durable/Disk.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -123,14 +123,14 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Journal.Disk.Holds` | spec | a predicate |
 | `Journal.Disk.Torn` | spec | a predicate |
 
-## `Lanes/Actors/Equiv.lean`
+## `Lanes/Proof/Equiv.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `onLink` | none |  |
 | `System.Near` | spec | a predicate |
 
-## `Lanes/Actors/FairScheduler.lean`
+## `Lanes/Core/FairScheduler.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -145,14 +145,14 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `FairScheduler.next` | proved | through `System.Run.fairAfter`: `System.Run.fairAfter_fair` |
 | `FairScheduler.advance` | tested | `Tests/Fair.lean` |
 
-## `Lanes/Actors/Ghost.lean`
+## `Lanes/Proof/Ghost.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `System.withGhost` | proved | `SysState.erase_step`, `System.Invariant.of_ghost`, `System.Invariant.to_ghost` and 2 more |
 | `SysState.erase` | spec | used only in statements |
 
-## `Lanes/Actors/Inspect.lean`
+## `Lanes/Core/Inspect.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -189,7 +189,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `SysState.hash` | checked | `Tests/Join.lean` |
 | `SysState.render` | none |  |
 
-## `Lanes/Actors/Join.lean`
+## `Lanes/Core/Join.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -209,7 +209,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `System.Inspect.filterMapIO` | checked | `Tests/Join.lean` |
 | `System.Inspect.mapIO` | checked | `Tests/Join.lean` |
 
-## `Lanes/Actors/JoinSound.lean`
+## `Lanes/Proof/JoinSound.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -225,7 +225,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Wiring.shown` | proved | `SysState.run_left`, `System.Run.Fair.left` |
 | `Wiring.wired` | spec | used only in statements |
 
-## `Lanes/Actors/Journal.lean`
+## `Lanes/Durable/Journal.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -251,7 +251,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Journal.turn` | proved | through `Journal.turns`: `Journal.turns_kernel` |
 | `Journal.turns` | spec | used only in statements |
 
-## `Lanes/Actors/Kernel.lean`
+## `Lanes/Runtime/Kernel.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -282,26 +282,26 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Kernel.apply` | proved | `Kernel.WellFormed.apply` |
 | `Kernel.exec` | proved | `Batch.run_handed`, `Batch.run_kernel`, `Batch.settle_kernel` and 11 more |
 
-## `Lanes/Actors/KernelSound.lean`
+## `Lanes/Runtime/KernelSound.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Event.outputs` | spec | used only in statements |
 
-## `Lanes/Actors/KernelTimers.lean`
+## `Lanes/Runtime/KernelTimers.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Kernel.Serves` | spec | a predicate |
 | `Kernel.Fires` | spec | a predicate |
 
-## `Lanes/Actors/Lossy.lean`
+## `Lanes/Proof/Lossy.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `EnvModel.lossy` | spec | used only in statements |
 
-## `Lanes/Actors/Mailbox.lean`
+## `Lanes/Runtime/Mailbox.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -311,7 +311,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Mailbox.rest` | proved | `Mailbox.rest_eq_false`, `Mailbox.woken_after_rest` |
 | `Mailbox.close` | proved | `Mailbox.after_close`, `Mailbox.close_since_take` |
 
-## `Lanes/Actors/MailboxSound.lean`
+## `Lanes/Runtime/MailboxSound.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -326,7 +326,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Mailbox.boundedIn` | spec | used only in statements |
 | `Mailbox.waitedIn` | spec | used only in statements |
 
-## `Lanes/Actors/MapIOSound.lean`
+## `Lanes/Proof/MapIOSound.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -337,14 +337,14 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Event.Under` | spec | a predicate |
 | `Event.AllUnder` | spec | a predicate |
 
-## `Lanes/Actors/Monotone.lean`
+## `Lanes/Proof/Monotone.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `SysState.grow` | proved | `Account.Fires.grow`, `Account.Fires.handle`, `Account.Moves.grow` and 11 more |
 | `SysState.Pending` | spec | a predicate |
 
-## `Lanes/Actors/Outside.lean`
+## `Lanes/Outside/Basic.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -354,7 +354,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Outside.allows` | tested | `Tests/Clock.lean`, `Tests/Fronted.lean`, `Tests/HttpClient.lean` and 2 more |
 | `Outside.both` | checked | `Tests/Clock.lean`, `Tests/HttpClient.lean`, `Tests/Jobs.lean` |
 
-## `Lanes/Actors/Park.lean`
+## `Lanes/Runtime/IO/Park.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -367,7 +367,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Parker.wait` | trusted | TRUSTED.md: The C |
 | `block` | trusted | TRUSTED.md: The C |
 
-## `Lanes/Actors/Past.lean`
+## `Lanes/Proof/Past.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -375,7 +375,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `System.withPast` | spec | used only in statements |
 | `SysState.seen` | spec | used only in statements |
 
-## `Lanes/Actors/Release.lean`
+## `Lanes/Runtime/Release.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -384,7 +384,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `SysState.release` | spec | used only in statements |
 | `SysState.Leads` | spec | a predicate |
 
-## `Lanes/Actors/Run.lean`
+## `Lanes/Core/Run.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -396,7 +396,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `SysState.startedWith` | spec | used only in statements |
 | `SysState.started` | spec | used only in statements |
 
-## `Lanes/Actors/Runtime.lean`
+## `Lanes/Runtime/IO/Shell.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -411,7 +411,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Runtime.stop` | trusted | TRUSTED.md: The runtime shell |
 | `Runtime.ended` | trusted | TRUSTED.md: The runtime shell |
 
-## `Lanes/Actors/Scheduler.lean`
+## `Lanes/Core/Scheduler.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -422,7 +422,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `World.next` | proved | `World.Equiv.next` |
 | `simulate` | checked | `Tests/Bank.lean` |
 
-## `Lanes/Actors/Service.lean`
+## `Lanes/Core/Service.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -432,7 +432,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Service.State.ret` | none |  |
 | `Service.State.fire` | none |  |
 
-## `Lanes/Actors/Shard.lean`
+## `Lanes/Runtime/Shard.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -445,7 +445,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Parcel.send` | proved | `Parcel.receive_send` |
 | `Parcel.receive` | proved | `Parcel.receive_send` |
 
-## `Lanes/Actors/ShardSound.lean`
+## `Lanes/Runtime/ShardSound.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -471,7 +471,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `SysState.merged` | proved | `SysState.AtHome.step`, `SysState.init_merged_equiv`, `System.Invariant.split` and 5 more |
 | `System.SteadyBoot` | spec | a predicate |
 
-## `Lanes/Actors/ShardsSound.lean`
+## `Lanes/Runtime/ShardsSound.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -496,7 +496,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `SysState.unsharded` | proved | `Shards.AtHome.step`, `SysState.init_unsharded_equiv`, `System.Invariant.shards` and 4 more |
 | `Shards.effect` | spec | used only in statements |
 
-## `Lanes/Actors/Snapshot.lean`
+## `Lanes/Durable/Snapshot.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -509,7 +509,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Journal.saved` | tested | `Tests/Durable.lean` |
 | `Journal.saved?` | none |  |
 
-## `Lanes/Actors/System.lean`
+## `Lanes/Core/System.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -523,7 +523,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `EnvModel.reliable` | spec | used only in statements |
 | `EnvModel.distributed` | none |  |
 
-## `Lanes/Actors/World.lean`
+## `Lanes/Core/World.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -544,7 +544,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `SysState.run` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and 12 more |
 | `System.Invariant` | spec | a predicate |
 
-## `Lanes/Auth/Login.lean`
+## `Lanes/Web/Auth/Login.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -569,7 +569,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Auth.Sessions.close` | proved | `Auth.Sessions.live_close` |
 | `Auth.Sessions.live` | proved | `Auth.Sessions.live_close`, `Auth.Sessions.live_open` |
 
-## `Lanes/Auth/Token.lean`
+## `Lanes/Web/Auth/Token.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -582,7 +582,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Auth.formToken` | proved | `Auth.checkForm_formToken`, `Auth.checkForm_iff`, `Auth.checkForm_other` |
 | `Auth.checkForm` | proved | `Auth.checkForm_formToken`, `Auth.checkForm_iff`, `Auth.checkForm_other` |
 
-## `Lanes/Behaviours/Jobs.lean`
+## `Lanes/Behaviours/Jobs/Basic.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -618,7 +618,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Jobs.attach` | proved | `Jobs.attach_active_leaves`, `Jobs.attach_within` |
 | `Jobs.pool` | checked | `Tests/Jobs.lean` |
 
-## `Lanes/Behaviours/JobsSound.lean`
+## `Lanes/Behaviours/Jobs/Sound.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -628,7 +628,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Jobs.answered` | spec | used only in statements |
 | `Jobs.handled` | spec | used only in statements |
 
-## `Lanes/Behaviours/Once.lean`
+## `Lanes/Behaviours/Once/Basic.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -695,7 +695,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Check.Monitor.Within` | spec | a predicate |
 
-## `Lanes/Check/Once.lean`
+## `Lanes/Behaviours/Once/Check.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -787,7 +787,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Event.isInternal` | none |  |
 | `World.quiet` | spec | used only in statements |
 
-## `Lanes/Data/Base64.lean`
+## `Lanes/Lib/Encoding/Base64.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -813,7 +813,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Base64.Encoding.Allowed` | spec | a predicate |
 | `Base64.encodedLength` | spec | used only in statements |
 
-## `Lanes/Data/Civil.lean`
+## `Lanes/Lib/Time/Civil.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -898,7 +898,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Declare.independent` | none |  |
 | `Declare.enum` | none |  |
 
-## `Lanes/Data/Digits.lean`
+## `Lanes/Lib/Encoding/Digits.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -941,7 +941,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Fifo.length` | proved | `Peers.Courier.Reachable.queue_le` |
 | `Fifo.isEmpty` | checked | `Tests/Courier.lean`, `Tests/Kernel.lean`, `Tests/Release.lean` |
 
-## `Lanes/Data/Frame.lean`
+## `Lanes/Durable/Frame.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -955,7 +955,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Frame.span` | proved | `Journal.open?_cut`, `Parcel.receive_send` |
 | `Frame.unfinished` | none |  |
 
-## `Lanes/Data/Hmac.lean`
+## `Lanes/Lib/Crypto/Hmac.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -969,7 +969,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Bytes.unhexList` | tested | `Tests/Crypto.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
 | `Bytes.unhex?` | tested | `Tests/Crypto.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
 
-## `Lanes/Data/Ip.lean`
+## `Lanes/Lib/Net/Ip.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -1002,7 +1002,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Ip.decimal?` | proved | through `Ip.Prefix.parse`: `Ip.Prefix.parse_print` |
 | `Ip.Prefix.parse` | proved | `Ip.Prefix.parse_print` |
 
-## `Lanes/Data/Json/Basic.lean`
+## `Lanes/Lib/Encoding/Json/Basic.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -1056,7 +1056,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Json.getArrVal?` | proved | `Json.getArrVal?_eq_ok` |
 | `Json.getObjValD` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` and 1 more |
 
-## `Lanes/Data/Json/Classes.lean`
+## `Lanes/Lib/Encoding/Json/Classes.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -1087,7 +1087,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Json.getObjValAs?` | tested | `Tests/Json.lean` |
 | `Json.opt` | tested | `Tests/Json.lean` |
 
-## `Lanes/Data/Json/Grammar.lean`
+## `Lanes/Lib/Encoding/Json/Grammar.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -1106,7 +1106,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `JsonNumber.digits` | spec | used only in statements |
 | `Json.digits` | spec | used only in statements |
 
-## `Lanes/Data/Json/Parser.lean`
+## `Lanes/Lib/Encoding/Json/Parser.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -1138,7 +1138,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Json.Parser.document` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
 | `Json.parse` | proved | `Json.parse_complete`, `Json.parse_compress`, `Json.parse_iff` and 2 more |
 
-## `Lanes/Data/Json/ParserSound.lean`
+## `Lanes/Lib/Encoding/Json/ParserSound.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -1151,7 +1151,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Json.Parser.ElementsSound` | spec | a predicate |
 | `Json.Parser.FieldsSound` | spec | a predicate |
 
-## `Lanes/Data/Json/Printer.lean`
+## `Lanes/Lib/Encoding/Json/Printer.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -1167,7 +1167,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Json.pretty` | proved | `Json.fromUTF8?_pretty`, `Json.parse_pretty`, `Json.text_pretty` |
 | `Json.instToString` | none |  |
 
-## `Lanes/Data/List/Prefix.lean`
+## `Lanes/Proof/List/Prefix.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -1179,7 +1179,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Quorum.isMajority` | proved | `Quorum.majority_inter` |
 
-## `Lanes/Data/Sha256.lean`
+## `Lanes/Lib/Crypto/Sha256.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -1196,7 +1196,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Sha256.State.bytes` | tested | `Tests/Crypto.lean` |
 | `Sha256.reference` | tested | `Tests/Crypto.lean` |
 
-## `Lanes/Data/Sodium.lean`
+## `Lanes/Lib/Crypto/Sodium.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -1206,7 +1206,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `randomBytes` | trusted | TRUSTED.md: The C |
 | `Argon2id.hash` | trusted | TRUSTED.md: The C |
 
-## `Lanes/Data/TimeFormat.lean`
+## `Lanes/Lib/Time/Format.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -1240,7 +1240,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `TimeFormat.asctime?` | proved | through `TimeFormat.parseHttpDate`: `TimeFormat.parseHttpDate_print` |
 | `TimeFormat.parseHttpDate` | proved | `TimeFormat.parseHttpDate_print` |
 
-## `Lanes/Env/Clock.lean`
+## `Lanes/Outside/IO/Clock.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -1250,7 +1250,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Clock.Wall.now` | trusted | TRUSTED.md: The clock adapter's handler |
 | `Clock.handler` | trusted | TRUSTED.md: The clock adapter's handler |
 
-## `Lanes/Env/Http.lean`
+## `Lanes/Web/IO/Server.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -1265,7 +1265,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Server.wait` | trusted | TRUSTED.md: The HTTP adapter's IO |
 | `Http.Server.tryInput` | trusted | TRUSTED.md: The HTTP adapter's IO |
 
-## `Lanes/Env/HttpClient.lean`
+## `Lanes/Web/IO/Client.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -1273,7 +1273,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Client.exchange` | trusted | TRUSTED.md: The HTTP client adapter's handler |
 | `Http.Client.handler` | trusted | TRUSTED.md: The HTTP client adapter's handler |
 
-## `Lanes/Env/Jobs.lean`
+## `Lanes/Behaviours/Jobs/IO/Pool.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -1283,20 +1283,20 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Jobs.withHeader` | trusted | TRUSTED.md: The jobs pool |
 | `Jobs.call` | trusted | TRUSTED.md: The jobs pool |
 
-## `Lanes/Env/Journal.lean`
+## `Lanes/Durable/IO/Journal.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Journal.fsync` | trusted | TRUSTED.md: The journal's files |
 | `Journal.Store.open` | trusted | TRUSTED.md: The journal's files |
 
-## `Lanes/Env/Node.lean`
+## `Lanes/Net/IO/Node.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Http.serveShard` | trusted | TRUSTED.md: A process with a front and peers |
 
-## `Lanes/Env/Peers.lean`
+## `Lanes/Net/IO/Peers.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -1305,7 +1305,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Peers.stop` | trusted | TRUSTED.md: The transport between processes |
 | `Peers.shard` | trusted | TRUSTED.md: The transport between processes |
 
-## `Lanes/Html/Basic.lean`
+## `Lanes/Web/Html/Basic.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -1345,7 +1345,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `instToAttrBool` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
 | `instToAttrOption` | tested | `Tests/Html.lean` |
 
-## `Lanes/Html/BasicSound.lean`
+## `Lanes/Web/Html/BasicSound.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -1358,7 +1358,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Html.schemeChar` | spec | used only in statements |
 | `Html.scheme?` | spec | used only in statements |
 
-## `Lanes/Html/Htmx.lean`
+## `Lanes/Web/Html/Htmx.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -1378,7 +1378,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Response.trigger` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
 | `Http.Response.hxRedirect` | tested | `Tests/Html.lean` |
 
-## `Lanes/Http/Basic.lean`
+## `Lanes/Web/Http/Basic.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -1407,7 +1407,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Response.redirect` | tested | `Tests/Html.lean` |
 | `Http.Response.withHeader` | tested | `Tests/Html.lean` |
 
-## `Lanes/Http/Conn.lean`
+## `Lanes/Web/Http/Conn.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -1436,7 +1436,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Conn.Count.admit` | proved | `Http.Conn.Count.admit_le`, `Http.Conn.Count.admit_stopping` |
 | `Http.Conn.Count.leave` | tested | `Tests/HttpConn.lean` |
 
-## `Lanes/Http/ConnSound.lean`
+## `Lanes/Web/Http/ConnSound.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -1449,7 +1449,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Conn.Bounded` | spec | a predicate |
 | `Http.Conn.Reads` | spec | a predicate |
 
-## `Lanes/Http/Cookie.lean`
+## `Lanes/Web/Http/Cookie.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -1470,14 +1470,14 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Response.clearCookie` | tested | `Tests/Auth.lean` |
 | `Http.Response.noStore` | tested | `Tests/Html.lean` |
 
-## `Lanes/Http/CookieSound.lean`
+## `Lanes/Web/Http/CookieSound.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Http.readSetCookie` | spec | used only in statements |
 | `Http.cookieHeader` | spec | used only in statements |
 
-## `Lanes/Http/Front.lean`
+## `Lanes/Web/Http/Front.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -1503,7 +1503,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.frontedOutside` | tested | `Tests/Fronted.lean`, `Tests/Web.lean` |
 | `Http.servedOutside` | tested | `Tests/Web.lean` |
 
-## `Lanes/Http/FrontSound.lean`
+## `Lanes/Web/Http/FrontSound.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -1517,7 +1517,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Served.answered` | spec | used only in statements |
 | `Http.Served.Armed` | spec | a predicate |
 
-## `Lanes/Http/Gate.lean`
+## `Lanes/Web/Http/Gate.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -1527,7 +1527,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.timedOut` | proved | through `Http.Gate.step`: `Http.Gate.step_bounded` |
 | `Http.Gate.step` | proved | `Http.Gate.step_bounded` |
 
-## `Lanes/Http/ReadRequest.lean`
+## `Lanes/Web/Http/ReadRequest.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -1560,7 +1560,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Request.Head.incoming` | proved | through `Http.Request.read`: `Http.Conn.step_submit_read`, `Http.Request.read_append` and 12 more |
 | `Http.Request.read` | proved | `Http.Conn.step_submit_read`, `Http.Request.read_append`, `Http.Request.read_badChunkSize` and 11 more |
 
-## `Lanes/Http/ReadRequestSound.lean`
+## `Lanes/Web/Http/ReadRequestSound.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -1572,7 +1572,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Request.fieldName` | spec | used only in statements |
 | `Http.Request.hexByte` | spec | used only in statements |
 
-## `Lanes/Http/Route.lean`
+## `Lanes/Web/Http/Route.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -1597,7 +1597,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Route.handle` | proved | `Http.dispatch_link` |
 | `Http.dispatch` | proved | `Http.dispatch_eq_none`, `Http.dispatch_eq_some`, `Http.dispatch_link` |
 
-## `Lanes/Http/Waiting.lean`
+## `Lanes/Web/Http/Waiting.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -1610,7 +1610,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Waiting.Trace.apply` | spec | used only in statements |
 | `Http.Waiting.exec` | spec | used only in statements |
 
-## `Lanes/Http/Wire.lean`
+## `Lanes/Web/Http/Wire.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
@@ -1646,7 +1646,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Response.read` | proved | `Http.Conn.read_encode`, `Http.Response.read_append`, `Http.Response.read_ended` and 10 more |
 | `Http.Response.parse` | trusted | TRUSTED.md: The HTTP wire format |
 
-## `Lanes/Http/WireSpec.lean`
+## `Lanes/Web/Http/WireSpec.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |

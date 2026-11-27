@@ -4,8 +4,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Actors.Ghost
-public import Lanes.Actors.Loses
+public import Lanes.Proof.Ghost
+public import Lanes.Proof.Loses
 public import Lanes.Semantics.System
 
 /-!

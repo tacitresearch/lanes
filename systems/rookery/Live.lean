@@ -19,7 +19,7 @@ def origin : String := s!"http://127.0.0.1:{port}"
 def form (fields : List (String × String)) : String :=
   "&".intercalate (fields.map fun (k, v) => percentEncode k ++ "=" ++ percentEncode v)
 
-/-- One request on a connection of its own, read with the pure reader of `Lanes.Http.Wire`. -/
+/-- One request on a connection of its own, read with the pure reader of `Lanes.Web.Http.Wire`. -/
 def send (request : Http.Request) : IO Http.Response := do
   let some bytes := request.wire s!"127.0.0.1:{port}"
     | throw (IO.userError "live: the request cannot be written")

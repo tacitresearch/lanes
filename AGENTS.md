@@ -54,8 +54,8 @@ lake exe lanes inventory --list none  # the definitions of Lanes/ without eviden
   keeps open for a file's errors and the goals at some lines (`LINE` from 1, `COL` from 0):
 
   ```bash
-  scripts/lean-goals --daemon Lanes/Http/WireSound.lean 1710 1702:4   # start a server, ask it
-  scripts/lean-goals Lanes/Http/WireSound.lean 1710                   # later calls use it
+  scripts/lean-goals --daemon Lanes/Web/Http/WireSound.lean 1710 1702:4   # start a server, ask it
+  scripts/lean-goals Lanes/Web/Http/WireSound.lean 1710                   # later calls use it
   scripts/lean-goals --stop                                            # when done
   ```
 
@@ -274,10 +274,10 @@ Conventions:
   as goals. It lifts to every system under every fault model (`System.invariant_of_actor`).
 - A lemma that does not mention the system a proof is about does not stay in that proof's file.
   Lists: `Lanes/Data/List/`, at the end of the file of its topic (`Erase`, `Prefix`, `Fold`, else
-  `Basic`). Strings and byte arrays: `Lanes/Data/Utf8.lean`, `Lanes/Data/ByteArray.lean`.
-  `update`, `SysState`, `run` and `Reachable`: `Lanes/Actors/World.lean`; a step or a run in
-  closed form: `Lanes/Actors/Run.lean`; `NetEquiv` and `SysState.Equiv`:
-  `Lanes/Actors/Equiv.lean`. Look there, and in core `List`, before proving a helper.
+  `Basic`). Strings and byte arrays: `Lanes/Proof/Utf8.lean`, `Lanes/Proof/ByteArray.lean`.
+  `update`, `SysState`, `run` and `Reachable`: `Lanes/Core/World.lean`; a step or a run in
+  closed form: `Lanes/Core/Run.lean`; `NetEquiv` and `SysState.Equiv`:
+  `Lanes/Proof/Equiv.lean`. Look there, and in core `List`, before proving a helper.
 - A layer of a `Monotone` proof that reads states and messages in flight is added with
   `Monotone.and_net` (or `and_state`), not with `below` and `input` lemmas of its own; more than
   two layers get a structure through `Monotone.of_iff`.
@@ -315,7 +315,7 @@ Agents do what the docs say, so a stale doc is worse than none. Keep each short 
   checked, tested or trusted.
 - Cite files by their repository path in backquotes; `lanes lint` fails on one that does not
   exist (`docs/history/` and `docs/decisions/` are exempt: they record the past). Name a module
-  that is not written yet by its module name (`Lanes.Data.Base64`), not its path.
+  that is not written yet by its module name (`Lanes.Lib.Encoding.Base64`), not its path.
 - `docs/decisions/` is the record of why: never rewrite a decision, write a new one that
   supersedes it.
 - Write plainly: short sentences, one name per concept, no marketing.

@@ -6,7 +6,7 @@ import Lanes.Semantics
 
 /-! The axiom gate (rule 5.5, see `Tests/Axioms.lean`) for the theorems of `Lanes/Behaviours/`. -/
 
--- Lanes.Behaviours.Jobs
+-- Lanes.Behaviours.Jobs.Basic
 /-- info: 'Lanes.Jobs.actor_within' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Jobs.actor_within
 
@@ -19,7 +19,7 @@ import Lanes.Semantics
 /-- info: 'Lanes.Jobs.retry_same' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Jobs.retry_same
 
--- Lanes.Behaviours.JobsSound
+-- Lanes.Behaviours.Jobs.Sound
 /-- info: 'Lanes.Jobs.within' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Jobs.within
 

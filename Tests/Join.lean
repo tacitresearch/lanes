@@ -9,7 +9,7 @@ Two systems written apart and joined: a front that takes questions and a back th
 numbers. The front's queries are wired to the back and the back's results to the front, so from
 outside the join takes questions and gives answers, and no query is ever seen leaving.
 
-Then projection (`Lanes/Actors/JoinSound.lean`), checked before it was proved: every state the
+Then projection (`Lanes/Proof/JoinSound.lean`), checked before it was proved: every state the
 join reaches, seen from either side, is among the states that side reaches alone, compared
 exactly. A second pair, `herald` and `keeper`, shows why the side that boots second is seen
 only up to the order of messages on different links. And one run of the join beside the run of

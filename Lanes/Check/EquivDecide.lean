@@ -4,8 +4,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Actors.Inspect
-public import Lanes.Actors.Equiv
+public import Lanes.Core.Inspect
+public import Lanes.Proof.Equiv
 
 /-!
 The comparison the checker runs, `SysState.equiv`, decides the relation `SysState.Equiv` that

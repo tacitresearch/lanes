@@ -2,7 +2,7 @@ import Rookery.Table
 
 /-!
 What a lookup sees of a table after it is changed. These lemmas do not mention the board; they
-belong in `Lanes/Data/List/`, which this package may not edit (friction log).
+belong in `Lanes/Proof/List/`, which this package may not edit (friction log).
 -/
 
 namespace Rookery
