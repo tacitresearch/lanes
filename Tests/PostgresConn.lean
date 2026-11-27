@@ -9,7 +9,11 @@ A connection to PostgreSQL against a server that does what it may. The server is
 here: it reads what the client sends with `Frontend.decode`, authenticates it by trust, MD5 or
 SCRAM (or answers SCRAM with a signature that is not the password's, or skips it to a client that
 requires it), runs a transaction's statements (one returns rows, one fails, one succeeds) and
-keeps which `COMMIT`s it committed.
+keeps which `COMMIT`s it committed. Over TLS it answers `SSLRequest`, or refuses it, and the
+handshake is done or fails at any moment after the client starts it; it offers
+`SCRAM-SHA-256-PLUS` and checks the client's proof with the hash of its own certificate, so a
+client that reached it through a relay with another certificate, or to which a relay hid the
+offer, is refused.
 What it writes reaches the client in pieces of one, seven or all the bytes, only while the
 connection takes them; the server may leave at any moment, losing what it has not delivered; the
 client submits its requests whenever it is open, pipelining up to the bound, and may stop. The
@@ -29,7 +33,27 @@ inductive Method where
   | forged
   /-- `AuthenticationOk` at once, as trust, to a client that requires SCRAM. -/
   | impostor
+  /-- TLS, and SCRAM bound to the server's certificate. -/
+  | tls
+  /-- `N` to the client's `SSLRequest`. -/
+  | refusing
+  /-- TLS through a relay that holds another certificate, valid for the name. -/
+  | relayed
+  /-- TLS through a relay that hides `SCRAM-SHA-256-PLUS` from the client. -/
+  | stripped
   deriving DecidableEq, Hashable, Repr
+
+def Method.encrypted : Method → Bool
+  | .tls | .refusing | .relayed | .stripped => true
+  | _ => false
+
+/-- The hash of the server's certificate. -/
+def serverHash : ByteArray := ⟨#[1, 2, 3]⟩
+
+/-- What the client's handshake gives as the certificate's hash. -/
+def Method.endPoint : Method → ByteArray
+  | .relayed => ⟨#[9, 9, 9]⟩
+  | _ => serverHash
 
 def password : String := "pw"
 
@@ -47,8 +71,10 @@ def cfg : Config :=
 def cfgOf : Method → Config
   | .trust | .md5 => { cfg with requireScram := false, allowMd5 := true }
   | .scram | .forged | .impostor => cfg
+  | .tls | .refusing | .relayed | .stripped => { cfg with encryption := .negotiated }
 
 inductive ServerPhase where
+  | sslRequest
   | startup
   | password
   | saslInitial
@@ -66,6 +92,8 @@ structure Server where
   answered : Nat := 0
   /-- The numbers, in the order answered, of the requests that committed. -/
   commits : List Nat := []
+  /-- The binding the client's first SCRAM message asked for, as the server checks it. -/
+  binding : Scram.Binding := .none
   deriving DecidableEq, Hashable
 
 def frame (m : Backend) : ByteArray := m.encode
@@ -79,6 +107,16 @@ def welcome : ByteArray :=
   frame .authOk ++ frame (.parameterStatus "server_version" "16") ++ frame (.backendKeyData 7 9)
     ++ ready .idle
 
+/-- What the server makes of the GS2 header of SCRAM's first message: the binding it then checks
+the proof with, its own certificate's hash for `p`; none if it refuses. A server that offers
+binding refuses `y`, which says the client saw no offer. -/
+def bindingOf (offers : Bool) (data : ByteArray) : Option Scram.Binding :=
+  let text := (String.fromUTF8? data).getD ""
+  if text.startsWith "p=tls-server-end-point,," then if offers then some (.endPoint serverHash) else none
+  else if text.startsWith "y,," then if offers then none else some .unoffered
+  else if text.startsWith "n,," then some .none
+  else none
+
 /-- What the server does with one message from the client: its new state and the bytes it
 writes. -/
 def serve (s : Server) (m : Frontend) : Server × ByteArray :=
@@ -88,16 +126,25 @@ def serve (s : Server) (m : Frontend) : Server × ByteArray :=
     | .trust | .impostor => ({ s with phase := .ready }, welcome)
     | .md5 => ({ s with phase := .password }, frame (.authMd5 salt))
     | .scram | .forged => ({ s with phase := .saslInitial }, frame (.authSasl ["SCRAM-SHA-256"]))
+    | .tls | .refusing | .relayed =>
+      ({ s with phase := .saslInitial }, frame (.authSasl ["SCRAM-SHA-256-PLUS", "SCRAM-SHA-256"]))
+    | .stripped => ({ s with phase := .saslInitial }, frame (.authSasl ["SCRAM-SHA-256"]))
   | .password, .password p =>
     if p == md5Answer "u" password salt then ({ s with phase := .ready }, welcome)
     else ({ s with phase := .startup }, errorWith "28P01")
-  | .saslInitial, .saslInitial _ _ => ({ s with phase := .saslResponse }, frame (.authSaslContinue serverFirst.toUTF8))
-  | .saslResponse, .saslResponse _ =>
-    match Scram.respond "" password nonce serverFirst 4 with
-    | .ok (_, signature) =>
-      let signature := if s.method == .forged then Sha256.hash signature else signature
-      ({ s with phase := .ready },
-        frame (.authSaslFinal ("v=" ++ Base64.encode .std signature).toUTF8) ++ welcome)
+  | .saslInitial, .saslInitial _ data =>
+    match bindingOf s.method.encrypted data with
+    | some binding =>
+      ({ s with phase := .saslResponse, binding }, frame (.authSaslContinue serverFirst.toUTF8))
+    | none => ({ s with phase := .startup }, errorWith "28000")
+  | .saslResponse, .saslResponse data =>
+    match Scram.respond s.binding "" password nonce serverFirst 4 with
+    | .ok (final, signature) =>
+      if data != final.toUTF8 then ({ s with phase := .startup }, errorWith "28P01")
+      else
+        let signature := if s.method == .forged then Sha256.hash signature else signature
+        ({ s with phase := .ready },
+          frame (.authSaslFinal ("v=" ++ Base64.encode .std signature).toUTF8) ++ welcome)
     | .error _ => (s, .empty)
   | .ready, .query sql =>
     let s' := { s with answered := s.answered + 1 }
@@ -132,9 +179,14 @@ def serve (s : Server) (m : Frontend) : Server × ByteArray :=
   | _, .terminate => (s, .empty)
   | _, _ => (s, errorWith "08P01")
 
+/-- The server's answer to `SSLRequest`. -/
+def answerSsl (s : Server) : Server × ByteArray :=
+  if s.method == .refusing then ({ s with phase := .startup }, ⟨#[78]⟩)
+  else ({ s with phase := .startup }, ⟨#[83]⟩)
+
 /-- What the server expects in its phase. -/
 def expect : ServerPhase → Frontend.Expect
-  | .startup => .startup
+  | .sslRequest | .startup => .startup
   | .password => .password
   | .saslInitial => .saslInitial
   | .saslResponse => .saslResponse
@@ -142,7 +194,7 @@ def expect : ServerPhase → Frontend.Expect
 
 /-- The client's messages in one write, as the server reads them. -/
 def messages (s : Server) (bytes : ByteArray) : List Frontend :=
-  if s.phase == .startup then (Frontend.decode .startup bytes).toList
+  if s.phase == .startup || s.phase == .sslRequest then (Frontend.decode .startup bytes).toList
   else go bytes.size 0
 where
   go : Nat → Nat → List Frontend
@@ -154,7 +206,9 @@ where
       | _ => []
 
 def serveAll (s : Server) (bytes : ByteArray) : Server × ByteArray :=
-  (messages s bytes).foldl (fun (s, out) m => let (s, more) := serve s m; (s, out ++ more)) (s, .empty)
+  if s.phase == .sslRequest then if bytes == Conn.sslRequest then answerSsl s else (s, .empty)
+  else
+    (messages s bytes).foldl (fun (s, out) m => let (s, more) := serve s m; (s, out ++ more)) (s, .empty)
 
 structure World where
   conn : Conn
@@ -173,13 +227,19 @@ structure World where
   stopped : Bool := false
   /-- An action came after the connection closed. -/
   stray : Bool := false
+  /-- The IO has said the handshake is done. -/
+  secured : Bool := false
+  /-- What was sent before. -/
+  plain : List ByteArray := []
   pieced : Bool := false
   wasFull : Bool := false
 
 def phaseCode : Phase → Nat × ByteArray
+  | .sslRequest => (8, .empty)
+  | .handshake => (9, .empty)
   | .startup => (0, .empty)
   | .password => (1, .empty)
-  | .sasl => (2, .empty)
+  | .sasl b => (2, b.data)
   | .saslFinal sig => (3, sig)
   | .saslDone => (4, .empty)
   | .authed => (5, .empty)
@@ -189,7 +249,7 @@ def phaseCode : Phase → Nat × ByteArray
 def key (w : World) :=
   ((phaseCode w.conn.phase, w.conn.status, w.conn.buffer, w.conn.pos, w.conn.queue),
     (w.server, w.wire.size, w.delivered, w.script.length, w.queried, w.replies),
-    (w.opened, w.closes, w.gone, w.stopped, w.stray, w.pieced, w.wasFull))
+    (w.opened, w.closes, w.gone, w.stopped, w.stray, w.pieced, w.wasFull, w.secured, w.plain))
 
 instance : BEq World := ⟨fun a b => key a == key b⟩
 instance : Hashable World := ⟨fun w => hash (key w)⟩
@@ -197,13 +257,14 @@ instance : Hashable World := ⟨fun w => hash (key w)⟩
 def perform (w : World) : Action → World
   | .send bytes =>
     let (server, out) := serveAll w.server bytes
-    { w with server, wire := w.wire ++ out }
+    { w with server, wire := w.wire ++ out, plain := if w.secured then w.plain else w.plain ++ [bytes] }
   | .query id bytes =>
     let (server, out) := serveAll w.server bytes
     { w with server, wire := w.wire ++ out, queried := w.queried ++ [id] }
   | .opened => { w with opened := true }
   | .reply id r => { w with replies := w.replies ++ [(id, r)] }
   | .close _ => { w with closes := w.closes + 1 }
+  | .startTls => w
 
 def tell (w : World) (e : Event) : World :=
   let closed := w.conn.phase == .closed
@@ -214,7 +275,8 @@ def tell (w : World) (e : Event) : World :=
 
 def initial (method : Method) (script : List Request) : World :=
   let (conn, actions) := Conn.start (cfgOf method)
-  actions.foldl perform { conn, server := { method }, script }
+  let phase := if method.encrypted then .sslRequest else .startup
+  actions.foldl perform { conn, server := { method, phase }, script }
 
 def next (w : World) : List (String × World) :=
   if w.conn.phase == .closed then []
@@ -236,7 +298,13 @@ def next (w : World) : List (String × World) :=
           [("submit", tell { w with script := rest, submitted := w.submitted ++ [(id, r)] } (.submit id r))]
         else []
       | [] => []
-    deliveries ++ submits
+    let handshake :=
+      if w.conn.phase == .handshake && !w.secured && !w.gone then
+        [("the handshake is done",
+            tell { w with secured := true } (.secured (some w.server.method.endPoint) .empty)),
+          ("the handshake fails", tell w (.insecure "refused"))]
+      else []
+    deliveries ++ submits ++ handshake
       ++ (if w.gone then [] else [("the server leaves", tell { w with gone := true } .ended)])
       ++ (if w.stopped then [] else [("the client stops", tell { w with stopped := true } .stop)])
 
@@ -273,11 +341,18 @@ def properties (method : Method) : List (Property World) :=
     .always "no more requests are in flight than the bound" fun w =>
       w.conn.queue.length ≤ cfg.inflight_max,
     .always "a server that does not prove the password is never trusted" fun w =>
-      (method != .forged && method != .impostor) || !w.opened ]
+      (method != .forged && method != .impostor) || !w.opened,
+    .always "with TLS, nothing but SSLRequest is sent before the handshake is done" fun w =>
+      !method.encrypted || w.plain.all (· == Conn.sslRequest),
+    .always "with TLS, the connection opens only once the handshake is done" fun w =>
+      !method.encrypted || !w.opened || w.secured,
+    .always "a server that refuses TLS, or a relay, is never opened" fun w =>
+      (method != .refusing && method != .relayed && method != .stripped) || !w.opened ]
 
 def sometimes (method : Method) (failing : Bool) : List (Property World) :=
-  if method == .forged || method == .impostor then
-    [.sometimes "the server that did not prove the password closes the connection" fun w =>
+  if method == .forged || method == .impostor || method == .refusing || method == .relayed
+      || method == .stripped then
+    [.sometimes "the server that did not prove the password, or refused TLS, closes the connection" fun w =>
       w.conn.phase == .closed && !w.gone]
   else
     [ .sometimes "the connection opens" (·.opened),
@@ -311,7 +386,11 @@ def checks : IO (List (String × Bool)) := do
       ("MD5, a transaction that commits", .md5, committing, false),
       ("SCRAM, a transaction that commits", .scram, committing, false),
       ("SCRAM with a forged signature", .forged, committing, false),
-      ("trust to a client that requires SCRAM", .impostor, committing, false) ]
+      ("trust to a client that requires SCRAM", .impostor, committing, false),
+      ("TLS and SCRAM-SHA-256-PLUS, a transaction that commits", .tls, committing, false),
+      ("TLS refused with N", .refusing, committing, false),
+      ("TLS through a relay with another certificate", .relayed, committing, false),
+      ("TLS through a relay that hides SCRAM-SHA-256-PLUS", .stripped, committing, false) ]
   return cases.map fun (name, method, script, fails) =>
     let r := report method script fails
     (s!"postgres conn: {name}: every promise holds against a server that may do anything", r.ok && r.complete)

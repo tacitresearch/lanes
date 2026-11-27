@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes.Lib.Postgres.Conn
 import Lanes.Lib.Postgres.Table
+import Lanes.Lib.Crypto.Certificate
 
 /-!
 PostgreSQL's client against what a real server sent. `Tests/Postgres/psql-*.txt` are sessions of
@@ -150,7 +151,7 @@ def vectorTests : List (String × Bool) :=
           == "c5e478d59288c841aa530db6845c4c8d962893a001ce4e11a4963873aa98134a"),
     ("postgres: SCRAM-SHA-256 gives RFC 7677's messages",
       let serverFirst := "r=rOprNGfwEbeRWgbNEkqO%hvYDpWUa2RaTCAfuxFIlj)hNlF$k0,s=W22ZaJ0SNY7soEsUEjb6gQ==,i=4096"
-      match Scram.respond "user" "pencil" "rOprNGfwEbeRWgbNEkqO" serverFirst 4096 with
+      match Scram.respond .none "user" "pencil" "rOprNGfwEbeRWgbNEkqO" serverFirst 4096 with
       | .ok (final, signature) =>
         final == "c=biws,r=rOprNGfwEbeRWgbNEkqO%hvYDpWUa2RaTCAfuxFIlj)hNlF$k0,p=dHzbZapWIk4jUhN+Ute9ytag9zjfMHgsqmmiz7AndVQ="
           && Scram.verify signature "v=6rriTRBi23WpRR/wtup+mMhUZUn/dB5nLTJRsjl95G4="
@@ -158,13 +159,29 @@ def vectorTests : List (String × Bool) :=
           && !Scram.verify signature "e=invalid-proof"
       | .error _ => false),
     ("postgres: SCRAM refuses a server nonce that does not extend the client's, and too many iterations",
-      refusal (Scram.respond "" "p" "abc" "r=abd1,s=AAAA,i=1" 10) == some .nonce
-        && refusal (Scram.respond "" "p" "abc" "r=abc,s=AAAA,i=1" 10) == some .nonce
-        && refusal (Scram.respond "" "p" "abc" "r=abcd,s=AAAA,i=11" 10) == some .iterations
-        && refusal (Scram.respond "" "p" "abc" "m=x,r=abcd,s=AAAA,i=1" 10) == some .malformed),
+      refusal (Scram.respond .none "" "p" "abc" "r=abd1,s=AAAA,i=1" 10) == some .nonce
+        && refusal (Scram.respond .none "" "p" "abc" "r=abc,s=AAAA,i=1" 10) == some .nonce
+        && refusal (Scram.respond .none "" "p" "abc" "r=abcd,s=AAAA,i=11" 10) == some .iterations
+        && refusal (Scram.respond .none "" "p" "abc" "m=x,r=abcd,s=AAAA,i=1" 10) == some .malformed),
     ("postgres: SCRAM's first message names no user, or escapes its name",
-      Scram.mechanism == "SCRAM-SHA-256" && Scram.first "" "abc" == "n,,n=,r=abc"
-        && Scram.first "a=b,c" "x" == "n,,n=a=3Db=2Cc,r=x"),
+      Scram.mechanism == "SCRAM-SHA-256" && Scram.first .none "" "abc" == "n,,n=,r=abc"
+        && Scram.first .none "a=b,c" "x" == "n,,n=a=3Db=2Cc,r=x"),
+    ("postgres: SCRAM-SHA-256-PLUS binds the certificate's hash, as Python's hashlib computes it",
+      let serverFirst := "r=rOprNGfwEbeRWgbNEkqO%hvYDpWUa2RaTCAfuxFIlj)hNlF$k0,s=W22ZaJ0SNY7soEsUEjb6gQ==,i=4096"
+      let hash : ByteArray := ⟨(List.range 32).toArray.map (·.toUInt8)⟩
+      let bound := Scram.respond (.endPoint hash) "user" "pencil" "rOprNGfwEbeRWgbNEkqO" serverFirst 4096
+      let unoffered := Scram.respond .unoffered "user" "pencil" "rOprNGfwEbeRWgbNEkqO" serverFirst 4096
+      Scram.first (.endPoint hash) "" "abc" == "p=tls-server-end-point,,n=,r=abc"
+        && Scram.first .unoffered "" "abc" == "y,,n=,r=abc"
+        && (Scram.Binding.endPoint hash).mechanism == "SCRAM-SHA-256-PLUS"
+        && Scram.Binding.unoffered.mechanism == "SCRAM-SHA-256"
+        && (match bound, unoffered with
+          | .ok (final, signature), .ok (final', signature') =>
+            final == "c=cD10bHMtc2VydmVyLWVuZC1wb2ludCwsAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=,r=rOprNGfwEbeRWgbNEkqO%hvYDpWUa2RaTCAfuxFIlj)hNlF$k0,p=nY1Wus9a+gM2DrbQ1msXFgyhW6KM5ktOxWiU+/P/EGY="
+              && Scram.verify signature "v=RwppMGddhz/J0lFYaRReBjXcQeNUFP5Qc76Lo5Exrig="
+              && final' == "c=eSws,r=rOprNGfwEbeRWgbNEkqO%hvYDpWUa2RaTCAfuxFIlj)hNlF$k0,p=FoqiHTtQEDE8lz1CdaEe3tK4mS+iMDTl77SPyDS53DY="
+              && Scram.verify signature' "v=dI4KpiQJwBr1+V+K6U1dA6l6I4I9DUNXWND4pcpRU3U="
+          | _, _ => false)),
     ("postgres: a table's operations are sent as their SQL",
       let t : Table := { name := "t" }
       t.request .serializable .begin == .begin .serializable
@@ -269,6 +286,95 @@ def downgradeTests : List (String × Bool) :=
     ("postgres: without a password, a server that trusts the user opens",
       (afterAuth { cfg with password := none } .authOk).contains .opened) ]
 
+/-- A connection that asks for TLS: what it sends and does as the server answers. -/
+def tlsTests : List (String × Bool) :=
+  let cfg : Conn.Config :=
+    { user := "lanes", database := "lanes", password := some "pw", nonce := "abcdefghijklmnop",
+      encryption := .negotiated }
+  let (c, first) := Conn.start cfg
+  let answer (bytes : List UInt8) := Conn.step cfg c (.received ⟨bytes.toArray⟩)
+  let (afterS, startTls) := answer [83]
+  let secured (cfg : Conn.Config) (c : Conn) (endPoint : Option ByteArray) (alpn : ByteArray) :=
+    Conn.step cfg c (.secured endPoint alpn)
+  let hash : ByteArray := ⟨#[7, 7, 7]⟩
+  let (afterTls, startup) := secured cfg afterS (some hash) .empty
+  let offer (cfg : Conn.Config) (c : Conn) (mechanisms : List String) :=
+    Conn.step cfg c (.received (Backend.authSasl mechanisms).encode)
+  let both := ["SCRAM-SHA-256-PLUS", "SCRAM-SHA-256"]
+  let initial (b : Scram.Binding) :=
+    Conn.Action.send (Frontend.saslInitial b.mechanism (Scram.first b "" cfg.nonce).toUTF8).encode
+  [ ("postgres tls: SSLRequest is the eight bytes of length 8 and code 80877103",
+      Conn.sslRequest.data.toList == [0, 0, 0, 8, 4, 210, 22, 47]
+        && first == [.send Conn.sslRequest] && c.phase == .sslRequest),
+    ("postgres tls: an S starts the handshake, and the start-up is sent only once it is done",
+      startTls == [.startTls] && afterS.phase == .handshake
+        && startup == [.send (Conn.startup cfg).encode] && afterTls.phase == .startup
+        && afterTls.endPoint == some hash),
+    ("postgres tls: an N is refused, nothing sent",
+      let (c', a) := answer [78]
+      c'.phase == .closed && a == [.close .refusedTls]),
+    ("postgres tls: bytes after the S, sent in the clear, are refused (CVE-2021-23222)",
+      let (_, a) := answer [83, 82, 0, 0, 0, 8, 0, 0, 0, 0]
+      a == [.close .protocol] && (answer [69, 0, 0, 0, 4]).2 == [.close .protocol]),
+    ("postgres tls: a stop before TLS sends nothing; a failed handshake closes with its reason",
+      (Conn.step cfg c .stop).2 == [.close .stopped]
+        && (Conn.step cfg afterS (.insecure "bad")).2 == [.close (.tls "bad")]
+        && (Conn.step cfg afterS (.submit 1 .commit)).2 == [.reply 1 (.refused .notReady)]),
+    ("postgres tls: direct TLS starts with the handshake and needs the ALPN protocol postgresql",
+      let d := { cfg with encryption := .direct }
+      let (c, a) := Conn.start d
+      a == [.startTls] && c.phase == .handshake
+        && (secured d c none .empty).2 == [.close .alpn]
+        && (secured d c none "h2".toUTF8).2 == [.close .alpn]
+        && (secured d c none "postgresql".toUTF8).2 == [.send (Conn.startup d).encode]
+        && (secured cfg afterS none "h2".toUTF8).2 == [.close .alpn]),
+    ("postgres tls: SCRAM-SHA-256-PLUS is chosen when offered, bound to the certificate's hash",
+      let (c', a) := offer cfg afterTls both
+      a == [initial (.endPoint hash)] && c'.phase == .sasl (.endPoint hash)),
+    ("postgres tls: a server that does not offer PLUS is told the client could bind (y)",
+      (offer cfg afterTls ["SCRAM-SHA-256"]).2 == [initial .unoffered]),
+    ("postgres tls: with channel binding required, a server without PLUS is refused",
+      let r := { cfg with channelBinding := .require }
+      (offer r afterTls ["SCRAM-SHA-256"]).2 == [.close .method]
+        && (offer r afterTls both).2 == [initial (.endPoint hash)]
+        && (offer r { afterTls with endPoint := none } both).2 == [.close .method]),
+    ("postgres tls: with channel binding disabled, or a certificate with no hash, n is sent",
+      (offer { cfg with channelBinding := .disable } afterTls both).2 == [initial .none]
+        && (offer cfg { afterTls with endPoint := none } both).2 == [initial .none]),
+    ("postgres tls: without TLS, PLUS is never chosen, and requiring it refuses",
+      let plain := { cfg with encryption := .plain }
+      let (c, _) := Conn.start plain
+      (offer plain c both).2 == [initial .none]
+        && (offer { plain with channelBinding := .require } c both).2 == [.close .method]),
+    ("postgres tls: a connection is reusable only open, idle, and with nothing in flight",
+      let ready : Conn := { phase := .ready }
+      ready.reusable && !{ ready with status := .inTx }.reusable
+        && !{ ready with queue := [{ id := 0, kind := .commit }] }.reusable
+        && !({ phase := .closed } : Conn).reusable) ]
+
+/-- The certificate's signature algorithm, and the hash RFC 5929 takes for it. -/
+def endPointTests : List (String × Bool) :=
+  let cert (oid : List UInt8) : ByteArray :=
+    let tlv (tag : UInt8) (body : List UInt8) := tag :: body.length.toUInt8 :: body
+    ⟨(tlv 0x30 (tlv 0x30 [2, 1, 0] ++ tlv 0x30 (tlv 6 oid ++ [5, 0]) ++ tlv 3 [0, 1])).toArray⟩
+  let pkcs1 (n : UInt8) := Certificate.pkcs1 ++ [n]
+  [ ("certificate: the hash of tls-server-end-point is the signature's, SHA-256 for MD5 and SHA-1",
+      Certificate.hashOf (pkcs1 11) == some .sha256 && Certificate.hashOf (pkcs1 5) == some .sha256
+        && Certificate.hashOf (pkcs1 4) == some .sha256 && Certificate.hashOf (pkcs1 12) == some .sha384
+        && Certificate.hashOf (pkcs1 13) == some .sha512
+        && Certificate.hashOf (Certificate.ecdsa ++ [3, 2]) == some .sha256
+        && Certificate.hashOf (Certificate.ecdsa ++ [3, 3]) == some .sha384
+        && Certificate.hashOf (Certificate.ecdsa ++ [3, 4]) == some .sha512
+        && Certificate.hashOf (Certificate.ecdsa ++ [1]) == some .sha256
+        && Certificate.hashOf (pkcs1 10) == none && Certificate.hashOf [0x2b, 0x65, 0x70] == none),
+    ("certificate: the signature algorithm is read from the outer SEQUENCE",
+      Certificate.signatureAlgorithm (cert (pkcs1 12)) == some (pkcs1 12)
+        && Certificate.endPoint (cert (pkcs1 12)) == some (Sha512.hash384 (cert (pkcs1 12)))
+        && Certificate.endPoint (cert (pkcs1 11)) == some (Sha256.hash (cert (pkcs1 11)))
+        && Certificate.endPoint (cert [0x2b, 0x65, 0x70]) == none
+        && Certificate.endPoint .empty == none
+        && Certificate.endPoint ((cert (pkcs1 11)).extract 0 10) == none) ]
+
 def psqlTests : IO (List (String × Bool)) := do
   let names := ["psql-trust", "psql-cleartext", "psql-md5", "psql-scram", "psql-scram-wrong",
     "lanes-trust", "lanes-md5", "lanes-scram", "lanes-scram-wrong"]
@@ -285,7 +391,7 @@ def psqlTests : IO (List (String × Bool)) := do
   let nonceOf (data : ByteArray) := ((String.fromUTF8? data).getD "").drop 8 |>.toString
   let scramRight := match backends scram, frontends scram with
     | _ :: .authSaslContinue first :: .authSaslFinal final :: _, _ :: .saslInitial _ data :: .saslResponse sent :: _ =>
-      match Scram.respond "" "scram-pw" (nonceOf data) ((String.fromUTF8? first).getD "") 4096 with
+      match Scram.respond .none "" "scram-pw" (nonceOf data) ((String.fromUTF8? first).getD "") 4096 with
       | .ok (mine, signature) => mine.toUTF8 == sent && Scram.verify signature ((String.fromUTF8? final).getD "")
       | .error _ => false
     | _, _ => false

@@ -10,8 +10,9 @@ public import Lanes.Lib.Net.Ip
 /-!
 A TLS client session, from OpenSSL (`native/tls.c`). It does no IO: what arrives from the server
 is handed to `feed`, and what `take` gives is sent to it, so it sits under any socket. The
-server's certificate is always verified, and so is the name it is for: there is no way to turn
-either off. TLS 1.2 or 1.3.
+server's certificate is always verified, and so is the name it is for, except by
+`Session.startChain`, which PostgreSQL's `require` asks for. It may offer ALPN protocols, and
+gives the server's certificate for channel binding. TLS 1.2 or 1.3.
 -/
 
 @[expose] public section
@@ -56,13 +57,40 @@ def Session : Type := SessionImpl.type
 instance : Nonempty Session := SessionImpl.property
 
 @[extern "lanes_tls_new"]
-private opaque new (trust host : @& String) (ip : Bool) : IO Session
+private opaque new (trust host : @& String) (ip check : Bool) (alpn : @& ByteArray) : IO Session
+
+/-- ALPN protocols as TLS sends them, each after its length in a byte; none if one is empty or
+longer than 255 bytes. -/
+def alpnWire (protocols : List String) : Option ByteArray :=
+  protocols.foldlM (init := ByteArray.empty) fun acc p =>
+    let bytes := p.toUTF8
+    if bytes.size = 0 ∨ 255 < bytes.size then none else some (acc.push bytes.size.toUInt8 ++ bytes)
+
+@[no_expose]
+private def begin (trust : Trust) (host : String) (check : Bool) (alpn : List String) : IO Session := do
+  let some protocols := alpnWire alpn | throw (.userError "tls: an ALPN protocol is empty or too long")
+  new (← trust.path).toString host (Ip.parse4 host.toList).isSome check protocols
 
 /-- A session with the server `host`, a name or an IPv4 address, whose certificate must chain to
-`trust` and be for `host`. A name is also sent as SNI. -/
+`trust` and be for `host`, offering the ALPN protocols `alpn`. A name is also sent as SNI. -/
 @[no_expose]
-def Session.start (trust : Trust) (host : String) : IO Session := do
-  new (← trust.path).toString host (Ip.parse4 host.toList).isSome
+def Session.start (trust : Trust) (host : String) (alpn : List String := []) : IO Session :=
+  begin trust host true alpn
+
+/-- A session whose certificate must chain to `trust`, for whatever name: what PostgreSQL calls
+`require` (and libpq `verify-ca`). Anyone with a certificate from an authority of `trust` can
+answer, so `trust` should hold only the server's own authority. A name is sent as SNI. -/
+@[no_expose]
+def Session.startChain (trust : Trust) (host : String) (alpn : List String := []) : IO Session :=
+  begin trust host false alpn
+
+/-- The server's certificate, as DER; empty before the handshake. -/
+@[extern "lanes_tls_peer"]
+opaque Session.peer (s : @& Session) : IO ByteArray
+
+/-- The ALPN protocol the server chose; empty if none. -/
+@[extern "lanes_tls_alpn"]
+opaque Session.alpn (s : @& Session) : IO ByteArray
 
 /-- Bytes that arrived from the server. -/
 @[extern "lanes_tls_feed"]

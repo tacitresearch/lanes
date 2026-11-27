@@ -32,8 +32,9 @@ def server : IO (Option (String × UInt16)) := do
 /-- `legacy` lets the server skip SCRAM and ask for MD5, as `lanes_md5` and `lanes_clear` need. -/
 def config (host : String) (port : UInt16) (user : String) (password : Option String)
     (allowCleartext : Bool := false) (legacy : Bool := false) : Client.Config :=
-  { host, port, conn := { user, database := "lanes_test", password, allowCleartext,
-                          allowMd5 := legacy, requireScram := !legacy } }
+  { host, port, sslmode := .disable,
+    conn := { user, database := "lanes_test", password, allowCleartext,
+              allowMd5 := legacy, requireScram := !legacy } }
 
 def opens (cfg : Client.Config) : IO Bool := do
   match ← (connect cfg).block with
