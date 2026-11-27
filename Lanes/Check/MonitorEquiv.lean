@@ -69,23 +69,24 @@ variable {In Out S : Type} [BEq S] [DecidableEq In] [DecidableEq Out]
 
 namespace Service.State
 
-theorem equiv_refl [ReflBEq S] (a : State In Out S) : a.equiv a = true := by
-  simp [equiv, List.isPerm_iff]
+theorem equiv_refl [ReflBEq S] (a : State In Out S) : a.equiv a = true :=
+  equiv_iff.mpr ⟨BEq.rfl, .refl _, .refl _⟩
 
 theorem equiv_symm [PartialEquivBEq S] {a b : State In Out S} (h : a.equiv b = true) :
-    b.equiv a = true := by
-  simp only [equiv, Bool.and_eq_true, List.isPerm_iff] at h ⊢
-  exact ⟨⟨BEq.symm h.1.1, h.1.2.symm⟩, h.2.symm⟩
+    b.equiv a = true :=
+  have ⟨hvalue, hpending, houtbox⟩ := equiv_iff.mp h
+  equiv_iff.mpr ⟨BEq.symm hvalue, hpending.symm, houtbox.symm⟩
 
 theorem equiv_trans [PartialEquivBEq S] {a b c : State In Out S} (h₁ : a.equiv b = true)
-    (h₂ : b.equiv c = true) : a.equiv c = true := by
-  simp only [equiv, Bool.and_eq_true, List.isPerm_iff] at h₁ h₂ ⊢
-  exact ⟨⟨BEq.trans h₁.1.1 h₂.1.1, h₁.1.2.trans h₂.1.2⟩, h₁.2.trans h₂.2⟩
+    (h₂ : b.equiv c = true) : a.equiv c = true :=
+  have ⟨hv₁, hp₁, ho₁⟩ := equiv_iff.mp h₁
+  have ⟨hv₂, hp₂, ho₂⟩ := equiv_iff.mp h₂
+  equiv_iff.mpr ⟨BEq.trans hv₁ hv₂, hp₁.trans hp₂, ho₁.trans ho₂⟩
 
 theorem hash_eq_of_equiv [Hashable S] [LawfulHashable S] [Hashable In] [Hashable Out]
     {a b : State In Out S} (h : a.equiv b = true) : a.hash = b.hash := by
-  simp only [equiv, Bool.and_eq_true, List.isPerm_iff] at h
-  simp only [hash, hash_eq h.1.1, foldl_add_eq_of_perm h.1.2, foldl_add_eq_of_perm h.2]
+  obtain ⟨hvalue, hpending, houtbox⟩ := equiv_iff.mp h
+  simp only [hash, hash_eq hvalue, foldl_add_eq_of_perm hpending, foldl_add_eq_of_perm houtbox]
 
 end Service.State
 
@@ -99,7 +100,7 @@ def Within (a b : List (State In Out S)) : Prop :=
 
 theorem beq_iff_length_within {a b : Monitor In Out S} : (a == b) = true ↔
     a.candidates.length = b.candidates.length ∧ Within a.candidates b.candidates := by
-  simp [BEq.beq, Within]
+  simp [BEq.beq, Within, withinFrom_eq _ _ _ fun _ h => h]
 
 /-- A set of pairwise different states included in `b` is matched one to one into `b`. -/
 theorem exists_perm_of_within [PartialEquivBEq S] {a b : List (State In Out S)}

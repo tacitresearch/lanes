@@ -314,21 +314,21 @@ theorem Slot.allSame_iff [∀ i, LawfulBEq (sys.State i)] (a b : SysState sys) (
 theorem Node.beq_iff [BEq D] [∀ i, LawfulBEq (sys.State i)] {a b : Node sys env D} :
     (a == b) = true ↔ a.world.crashes = b.world.crashes ∧ (a.world.driver == b.world.driver) = true
       ∧ SysState.Equiv env a.world.state b.world.state := by
-  change (a.world.crashes == b.world.crashes && a.world.driver == b.world.driver
-    && Slot.allSame a.slots b.slots
+  change (a.world.crashes == b.world.crashes && Slot.allSame a.slots b.slots
     && SysState.netEquiv env a.world.state.net b.world.state.net
-    && a.world.state.outbox.isPerm b.world.state.outbox) = true ↔ _
+    && a.world.state.outbox.isPerm b.world.state.outbox
+    && a.world.driver == b.world.driver) = true ↔ _
   rw [a.slots_eq, b.slots_eq]
   simp only [Bool.and_eq_true, beq_iff_eq, Slot.allSame_iff, netEquiv_iff, List.isPerm_iff,
     and_assoc]
   constructor
-  · rintro ⟨hc, hd, hall, hnet, hout⟩
+  · rintro ⟨hc, hall, hnet, hout, hd⟩
     exact ⟨hc, hd, funext fun i => (hall i (Enum.complete i)).1,
       funext fun i => (hall i (Enum.complete i)).2.1,
       funext fun i => (hall i (Enum.complete i)).2.2, hnet, hout⟩
   · rintro ⟨hc, hd, h⟩
-    exact ⟨hc, hd, fun i _ => ⟨congrFun h.state i, congrFun h.up i, congrFun h.timers i⟩,
-      h.net, h.outbox⟩
+    exact ⟨hc, fun i _ => ⟨congrFun h.state i, congrFun h.up i, congrFun h.timers i⟩,
+      h.net, h.outbox, hd⟩
 
 theorem Node.beq_iff_equiv [BEq D] [∀ i, LawfulBEq (sys.State i)] {a b : Node sys env D} :
     (a == b) = true ↔ World.Equiv env a.world b.world := by
