@@ -387,4 +387,345 @@ theorem dotFree_resolve {base : Url} (r : Url) (hb : DotFree base.path) :
   · exact dotFree_removeDots _
   · exact dotFree_removeDots _
 
+/-! ### Characters -/
+
+theorem toNat_ofNat_small {n : Nat} (h : n < 0xd800) : (Char.ofNat n).toNat = n := by
+  have hv : n.isValidChar := Or.inl h
+  simp [Char.ofNat, hv, Char.ofNatAux, Char.toNat, UInt32.toNat_ofNatLT]
+
+theorem char_le {a b : Char} : a ≤ b ↔ a.toNat ≤ b.toNat := by
+  simp [Char.le_def, UInt32.le_iff_toNat_le]
+
+theorem lowerChar_lowerChar (c : Char) : lowerChar (lowerChar c) = lowerChar c := by
+  unfold lowerChar
+  by_cases h : 'A' ≤ c && c ≤ 'Z'
+  · have hc : 65 ≤ c.toNat ∧ c.toNat ≤ 90 := by
+      simp only [Bool.and_eq_true, decide_eq_true_eq, char_le] at h; exact h
+    have := toNat_ofNat_small (n := c.toNat + 32) (by omega)
+    have hZ : 'Z'.toNat = 90 := rfl
+    simp only [h, ite_true]
+    rw [ite_eq_right]
+    simp only [Bool.and_eq_true, decide_eq_true_eq, char_le, this, hZ]
+    omega
+  · simp [h]
+
+theorem lowerChar_ne {c : Char} (h : c ≠ '%') : lowerChar c ≠ '%' := by
+  unfold lowerChar
+  split
+  · rename_i hc
+    have hc : 65 ≤ c.toNat ∧ c.toNat ≤ 90 := by
+      simp only [Bool.and_eq_true, decide_eq_true_eq, char_le] at hc; exact hc
+    have := toNat_ofNat_small (n := c.toNat + 32) (by omega)
+    intro e
+    rw [e] at this
+    simp at this
+    omega
+  · exact h
+
+theorem lower_lower (cs : List Char) : lower (lower cs) = lower cs := by
+  simp [lower, Function.comp_def, lowerChar_lowerChar]
+
+def isUpperHex (c : Char) : Bool := isDigit c || ('A' ≤ c && c ≤ 'F')
+
+theorem upperHex_spec {h : Char} (hh : isHex h) :
+    isUpperHex (upperHex h) ∧ hexValue (upperHex h) = hexValue h := by
+  have hA : 'A'.toNat = 65 := rfl
+  have hF : 'F'.toNat = 70 := rfl
+  have ha : 'a'.toNat = 97 := rfl
+  have hf : 'f'.toNat = 102 := rfl
+  have h0 : '0'.toNat = 48 := rfl
+  have h9 : '9'.toNat = 57 := rfl
+  simp only [isHex, isDigit, Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq, char_le, h0, h9,
+    hA, hF, ha, hf] at hh
+  unfold upperHex
+  split
+  · rename_i hl
+    simp only [Bool.and_eq_true, decide_eq_true_eq, char_le, ha, hf] at hl
+    have := toNat_ofNat_small (n := h.toNat - 32) (by omega)
+    simp only [isUpperHex, isDigit, hexValue, Http.hexValue?, Bool.or_eq_true, Bool.and_eq_true,
+      decide_eq_true_eq, char_le, this, h0, h9, hA, hF, ha, hf]
+    refine ⟨by omega, ?_⟩
+    rw [ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_left (by omega), ite_eq_right (by omega), ite_eq_left (by omega)]
+    simp only [Option.getD_some]
+    omega
+  · rename_i hl
+    simp only [Bool.and_eq_true, decide_eq_true_eq, char_le, ha, hf, not_and, Nat.not_le] at hl
+    simp only [isUpperHex, isDigit, Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq, char_le,
+      h0, h9, hA, hF]
+    exact ⟨by omega, trivial⟩
+
+theorem upperHex_of_isUpperHex {h : Char} (hh : isUpperHex h) : upperHex h = h ∧ isHex h := by
+  have hA : 'A'.toNat = 65 := rfl
+  have hF : 'F'.toNat = 70 := rfl
+  have ha : 'a'.toNat = 97 := rfl
+  have h0 : '0'.toNat = 48 := rfl
+  have h9 : '9'.toNat = 57 := rfl
+  simp only [isUpperHex, isDigit, Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq, char_le,
+    h0, h9, hA, hF] at hh
+  refine ⟨?_, ?_⟩
+  · unfold upperHex
+    rw [ite_eq_right]
+    simp only [Bool.and_eq_true, decide_eq_true_eq, char_le, ha]
+    omega
+  · simp only [isHex, isDigit, Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq, char_le, h0, h9,
+      hA, hF]
+    omega
+
+theorem ne_of_isUnreserved {c : Char} (h : isUnreserved c) : c ≠ '%' ∧ c ≠ '/' := by
+  constructor <;> rintro rfl <;> simp [isUnreserved, isAlpha, isDigit] at h
+
+/-! ### Percent-encodings -/
+
+/-- Text that `pct` leaves as it is: every `%` starts an encoding, in uppercase, of a byte that
+is not unreserved. -/
+def pctOk : List Char → Bool
+  | '%' :: h :: l :: rest => isUpperHex h && isUpperHex l
+      && !isUnreserved (Char.ofNat (hexValue h * 16 + hexValue l)) && pctOk rest
+  | '%' :: _ => false
+  | _ :: rest => pctOk rest
+  | [] => true
+
+theorem pctOk_cons {c : Char} (h : c ≠ '%') (rest : List Char) : pctOk (c :: rest) = pctOk rest := by
+  rw [pctOk] <;> intros <;> simp_all
+
+theorem pctOk_pct (x : List Char) : pctOk (pct x) = true := by
+  fun_induction pct x
+  case case1 h l rest hx hu ih =>
+    rw [pctOk_cons (ne_of_isUnreserved hu).1, ih]
+  case case2 h l rest hx hu ih =>
+    simp only [Bool.and_eq_true] at hx
+    obtain ⟨uh, vh⟩ := upperHex_spec hx.1
+    obtain ⟨ul, vl⟩ := upperHex_spec hx.2
+    simp [pctOk, uh, ul, vh, vl, hu, ih]
+  case case3 ih => simp [pctOk, isUpperHex, isDigit, hexValue, Http.hexValue?, isUnreserved, isAlpha, ih]
+  case case4 ih => simp [pctOk, isUpperHex, isDigit, hexValue, Http.hexValue?, isUnreserved, isAlpha, ih]
+  case case5 c rest _ h2 ih => rw [pctOk_cons h2, ih]
+  case case6 => rfl
+
+theorem pct_of_pctOk {x : List Char} (h : pctOk x) : pct x = x := by
+  fun_induction pct x
+  case case1 hd l rest hx hu ih =>
+    simp only [pctOk, Bool.and_eq_true, Bool.not_eq_true'] at h
+    simp [h.1.2] at hu
+  case case2 hd l rest hx hu ih =>
+    simp only [pctOk, Bool.and_eq_true] at h
+    rw [(upperHex_of_isUpperHex h.1.1.1).1, (upperHex_of_isUpperHex h.1.1.2).1, ih h.2]
+  case case3 hd l rest hx ih =>
+    simp only [pctOk, Bool.and_eq_true] at h
+    simp [(upperHex_of_isUpperHex h.1.1.1).2, (upperHex_of_isUpperHex h.1.1.2).2] at hx
+  case case4 rest h1 ih => cases rest with
+    | nil => simp [pctOk] at h
+    | cons a r => cases r with
+      | nil => simp [pctOk] at h
+      | cons b r => exact absurd rfl (h1 a b r)
+  case case5 c rest _ h2 ih => rw [pctOk_cons h2] at h; rw [ih h]
+  case case6 => rfl
+
+theorem pct_pct (x : List Char) : pct (pct x) = pct x := pct_of_pctOk (pctOk_pct x)
+
+theorem pctOk_append {a : List Char} (b : List Char) {c : Char} (hc : !isUpperHex c ∧ c ≠ '%') :
+    pctOk (a ++ c :: b) = (pctOk a && pctOk b) := by
+  fun_induction pctOk a
+  case case1 h l rest ih => simp [pctOk, ih, Bool.and_assoc]
+  case case2 rest h1 =>
+    have hu : isUpperHex c = false := by simpa using hc.1
+    match rest, h1 with
+    | [], _ => cases b <;> simp [pctOk, hu]
+    | [x], _ => simp [pctOk, hu]
+    | x :: y :: r, h1 => exact absurd rfl (h1 x y r)
+  case case3 x rest h1 h2 ih => simp only [List.cons_append, pctOk_cons h2, ih]
+  case case4 => simp [pctOk_cons hc.2]
+
+theorem slash_ok : (!isUpperHex '/') ∧ '/' ≠ '%' := by decide
+
+theorem pctOk_slash (a b : List Char) : pctOk (a ++ '/' :: b) = (pctOk a && pctOk b) :=
+  pctOk_append b slash_ok
+
+/-- What `dots` has still to read of the segment it is in, and the rest. -/
+def pending : Dots → List Char → List Char
+  | .seg _ acc, cs => acc.reverse ++ cs
+  | _, cs => cs
+
+theorem pctOk_dots (m : Dots) (cs : List Char) (out : List (Bool × List Char))
+    (h : pctOk (pending m cs)) (ho : ∀ x ∈ out, pctOk x.2) : ∀ x ∈ dots m cs out, pctOk x.2 := by
+  have tail : ∀ {out : List (Bool × List Char)}, (∀ x ∈ out, pctOk x.2) → ∀ x ∈ out.tail, pctOk x.2 :=
+    fun ho x hx => ho x (List.mem_of_mem_tail hx)
+  have push : ∀ {out : List (Bool × List Char)} {b s}, pctOk s → (∀ x ∈ out, pctOk x.2) →
+      ∀ x ∈ (b, s) :: out, pctOk x.2 := by
+    intro out b s hs ho x hx
+    simp only [List.mem_cons] at hx
+    rcases hx with rfl | hx
+    · exact hs
+    · exact ho x hx
+  fun_induction dots m cs out <;> simp only [pending] at h
+  case case1 ih | case2 ih | case10 ih | case12 ih =>
+    simp only [pctOk_cons (show '.' ≠ '%' by decide), pctOk_cons (show '/' ≠ '%' by decide)] at h
+    first | exact ih h ho | exact ih h (tail ho)
+  case case3 | case4 | case5 => exact ho
+  case case6 ih => exact ih (by simpa [pending, pctOk_cons (show '/' ≠ '%' by decide)] using h) ho
+  case case11 | case14 => exact push rfl ho
+  case case13 => exact push rfl (tail ho)
+  case case15 ih =>
+    exact ih (by simpa [pending, pctOk_cons (show '/' ≠ '%' by decide)] using h) (push rfl ho)
+  case case19 ih =>
+    rw [pctOk_slash, Bool.and_eq_true] at h
+    exact ih h.2 (push h.1 ho)
+  case case20 ih => exact ih (by simpa [pending] using h) ho
+  case case21 => exact push (by simpa using h) ho
+  all_goals rename_i ih; exact ih (by simpa [pending] using h) ho
+
+theorem pctOk_intercalate (ss : List (List Char)) (h : ∀ s ∈ ss, pctOk s) :
+    pctOk (['/'].intercalate ss) := by
+  induction ss with
+  | nil => rfl
+  | cons s ss ih =>
+    cases ss with
+    | nil => simpa using h
+    | cons t ts =>
+      rw [List.intercalate_cons_cons, List.append_assoc, List.singleton_append, pctOk_slash,
+        h s (by simp), ih (fun x hx => h x (List.mem_cons_of_mem _ hx))]
+      rfl
+
+theorem pctOk_removeDots {p : List Char} (h : pctOk p) : pctOk (removeDotsChars p) := by
+  have hs := stack_dots .start p [] rfl
+  have ho := pctOk_dots .start p [] h (by simp)
+  rw [removeDotsChars, join_eq_intercalate hs]
+  apply pctOk_intercalate
+  generalize hL : (dots .start p []).reverse = L
+  have hL' : ∀ x ∈ L, pctOk x.2 := fun x hx => ho x (by rw [← hL] at hx; exact List.mem_reverse.mp hx)
+  intro s hs'
+  match L, hs' with
+  | [], hs' => simp [segs] at hs'; subst hs'; rfl
+  | (false, t) :: rest, hs' =>
+    simp only [segs, List.mem_cons, List.mem_map] at hs'
+    rcases hs' with rfl | ⟨x, hx, rfl⟩
+    · exact hL' (false, s) (by simp)
+    · exact hL' x (by simp [hx])
+  | (true, t) :: rest, hs' =>
+    simp only [segs, List.mem_cons, List.mem_map] at hs'
+    rcases hs' with rfl | rfl | ⟨x, hx, rfl⟩
+    · rfl
+    · exact hL' (true, s) (by simp)
+    · exact hL' x (by simp [hx])
+
+/-- After a `/`, the output has only pieces written after a `/`, and at least one. -/
+theorem dots_slash_true (m : Dots) (cs : List Char) (out : List (Bool × List Char))
+    (hm : m = .slash ∨ ∃ acc, m = .seg true acc) (ho : ∀ x ∈ out, x.1 = true) :
+    (∀ x ∈ dots m cs out, x.1 = true) ∧ dots m cs out ≠ [] := by
+  have push : ∀ {out : List (Bool × List Char)} {s}, (∀ x ∈ out, x.1 = true) →
+      ∀ x ∈ (true, s) :: out, x.1 = true := by
+    intro out s ho x hx
+    simp only [List.mem_cons] at hx
+    rcases hx with rfl | hx
+    · rfl
+    · exact ho x hx
+  have tail : ∀ {out : List (Bool × List Char)}, (∀ x ∈ out, x.1 = true) →
+      ∀ x ∈ out.tail, x.1 = true := fun ho x hx => ho x (List.mem_of_mem_tail hx)
+  fun_induction dots m cs out
+  case case1 | case2 | case3 | case4 | case5 | case6 | case7 | case8 | case9 =>
+    rcases hm with h | ⟨_, h⟩ <;> cases h
+  case case11 | case14 => exact ⟨push ho, by simp⟩
+  case case13 => exact ⟨push (tail ho), by simp⟩
+  case case10 ih => exact ih (.inl rfl) ho
+  case case12 ih => exact ih (.inl rfl) (tail ho)
+  case case15 ih => exact ih (.inl rfl) (push ho)
+  case case16 ih | case17 ih | case18 ih => exact ih (.inr ⟨_, rfl⟩) ho
+  case case19 ih =>
+    rcases hm with h | ⟨_, h⟩ <;> cases h
+    exact ih (.inl rfl) (push ho)
+  case case20 ih =>
+    rcases hm with h | ⟨_, h⟩ <;> cases h
+    exact ih (.inr ⟨_, rfl⟩) ho
+  case case21 =>
+    rcases hm with h | ⟨_, h⟩ <;> cases h
+    exact ⟨push ho, by simp⟩
+
+theorem head_removeDots {rest : List Char} :
+    (removeDotsChars ('/' :: rest)).head? = some '/' := by
+  have ⟨ht, hne⟩ := dots_slash_true .slash rest [] (.inl rfl) (by simp)
+  have e : dots .start ('/' :: rest) [] = dots .slash rest [] := by rw [dots]
+  rw [removeDotsChars, e, join]
+  generalize dots .slash rest [] = out at ht hne
+  obtain ⟨x, L, hx⟩ := List.exists_cons_of_ne_nil (List.reverse_ne_nil_iff.mpr hne)
+  obtain ⟨b, t⟩ := x
+  have hb : b = true := ht (b, t) (by rw [← List.mem_reverse, hx]; simp)
+  subst hb
+  simp [hx, piece]
+
+theorem lowerName_spec {y : List Char} (h : pctOk y) :
+    pctOk (lowerName y) ∧ lowerName (lowerName y) = lowerName y := by
+  fun_induction lowerName y
+  case case1 hd l rest ih =>
+    simp only [pctOk, Bool.and_eq_true] at h
+    have := ih h.2
+    refine ⟨?_, ?_⟩
+    · simp [pctOk, h.1.1.1, h.1.1.2, h.1.2, this.1]
+    · simp [lowerName, this.2]
+  case case2 c rest h1 ih =>
+    have hc : c ≠ '%' := by
+      rintro rfl
+      match rest, h1 with
+      | [], _ => simp [pctOk] at h
+      | [x], _ => simp [pctOk] at h
+      | x :: y :: r, h1 => exact h1 x y r rfl rfl
+    rw [pctOk_cons hc] at h
+    have := ih h
+    have hl := lowerChar_ne hc
+    refine ⟨by rw [pctOk_cons hl]; exact this.1, ?_⟩
+    rw [lowerName, lowerChar_lowerChar, this.2]
+    intros; simp_all
+  case case3 => exact ⟨rfl, rfl⟩
+
+theorem Host.normalize_normalize (h : Host) : h.normalize.normalize = h.normalize := by
+  cases h with
+  | ip a => rfl
+  | name s =>
+    have := lowerName_spec (pctOk_pct s.toList)
+    simp [Host.normalize, pct_of_pctOk this.1, this.2]
+
+theorem Authority.normalize_normalize (a : Authority) : a.normalize.normalize = a.normalize := by
+  obtain ⟨userinfo, host, port⟩ := a
+  cases userinfo <;> simp [Authority.normalize, Host.normalize_normalize, pct_pct]
+
+theorem head_pct (p : List Char) : (pct p).head? = some '/' ↔ p.head? = some '/' := by
+  fun_induction pct p
+  case case1 hu _ => simp [(ne_of_isUnreserved hu).2]
+  case case5 c rest _ _ _ => simp
+  all_goals simp
+
+theorem relativePath_normalize (u : Url) : u.normalize.relativePath = u.relativePath := by
+  unfold relativePath normalize normalizePath
+  by_cases hs : u.scheme.isNone <;> by_cases ha : u.authority.isNone <;> simp [hs, ha]
+  · by_cases hp : u.path.toList.head? = some '/'
+    · obtain ⟨rest, hr⟩ : ∃ rest, pct u.path.toList = '/' :: rest := by
+        have := (head_pct u.path.toList).mpr hp
+        cases e : pct u.path.toList with
+        | nil => simp [e] at this
+        | cons c r => simp [e] at this; exact ⟨r, by rw [this]⟩
+      simp [relativePath, hs, ha, hp, hr, head_removeDots]
+    · have : (pct u.path.toList).head? ≠ some '/' := fun e => hp ((head_pct _).mp e)
+      have hr : u.relativePath = true := by simp [relativePath, hs, ha, hp]
+      simp only [hr, ite_true]
+      rw [bne_iff_ne.mpr this, bne_iff_ne.mpr hp]
+
+theorem normalizePath_normalize (u : Url) :
+    normalizePath u.normalize (normalizePath u u.path.toList) = normalizePath u u.path.toList := by
+  rw [normalizePath, relativePath_normalize]
+  unfold normalizePath
+  split
+  · simp [pct_pct]
+  · have hok := pctOk_removeDots (pctOk_pct u.path.toList)
+    rw [pct_of_pctOk hok]
+    have := removeDots_removeDots (String.ofList (pct u.path.toList))
+    simpa [removeDots] using congrArg String.toList this
+
+/-- §6.2.2: normalizing twice is normalizing once. -/
+theorem normalize_normalize (u : Url) : u.normalize.normalize = u.normalize := by
+  have hp := normalizePath_normalize u
+  obtain ⟨scheme, authority, path, query, fragment⟩ := u
+  simp only [normalize] at hp ⊢
+  rw [String.toList_ofList, hp]
+  cases scheme <;> cases authority <;> cases query <;> cases fragment <;>
+    simp [lower_lower, pct_pct, Authority.normalize_normalize]
+
 end Lanes.Url
