@@ -8,7 +8,8 @@
 #   sudo /opt/lanes/ec2-runner.sh warm                          # warm the shared state again
 #   ec2-runner.sh --fetch-runner DIR                            # only fetch and check the runner
 #
-# Set up installs build-essential, git, curl, python3, zstd, iptables, libsodium-dev and pkg-config, a user `runner`, elan
+# Set up installs build-essential, git, curl, python3, zstd, iptables, libsodium-dev, pkg-config,
+# openssl and libssl-dev, a user `runner`, elan
 # with no default toolchain, and RUNNERS runner processes (vCPUs / 4 by default), each in its own
 # directory with its own work directory, labelled LABELS, registered against REPO as
 # NAME-r1, NAME-r2, ..., and run as systemd services.
@@ -156,7 +157,7 @@ install_packages() {
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -q
   apt-get install -yq build-essential git curl ca-certificates python3 zstd util-linux sudo iptables \
-    libsodium-dev pkg-config
+    libsodium-dev pkg-config openssl libssl-dev
   if [ -n "$TOKEN_SECRET" ] && ! command -v aws >/dev/null && ! [ -x /snap/bin/aws ]; then
     snap install aws-cli --classic
   fi
