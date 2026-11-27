@@ -1,4 +1,4 @@
-# D?. A fair run of a join is a fair run of its right side too, by the join with its sides exchanged
+# D86. A fair run of a join is a fair run of its right side too, by the join with its sides exchanged
 
 *Supersedes the limit of D41 that the right side is not done.*
 
