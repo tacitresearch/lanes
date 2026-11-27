@@ -48,6 +48,7 @@ public import Lanes.Lib.Crypto.Sha256
 public import Lanes.Lib.Crypto.Sha512
 public import Lanes.Lib.Crypto.Sodium
 public import Lanes.Lib.Crypto.Verify
+public import Lanes.Lib.Crypto.Sign
 public import Lanes.Lib.Encoding.Base64
 public import Lanes.Lib.Encoding.Digits
 public import Lanes.Lib.Encoding.Json

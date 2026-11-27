@@ -53,6 +53,11 @@
   again at each start. SES sends simple messages (no attachments, templates or raw MIME), to
   bare addresses, with no webhooks; it takes no idempotency key, so a send whose answer was lost
   may be sent twice if it is sent again.
+- CloudFront's signed URLs and cookies (`Aws.CloudFront`) have not run against CloudFront: they
+  are compared with botocore's `CloudFrontSigner`, and what CloudFront takes is read from AWS's
+  SDKs, not its documentation. The cookies have no `Domain`, so they reach CloudFront only when it
+  serves the site's own host. Keys are RSA of 2048 bits or P-256, in a PEM that is not encrypted;
+  a policy's addresses are IPv4.
 - The cache, wall-clock, shared-cache and throttling models have no adapter and no recorded run
   of a real system. The queue's calls (`Aws.Sqs`) have no handler and have run against moto
   only, which deletes a message with any receipt it was given. The queue takes a delete as done when it is handed over and has no

@@ -11,15 +11,22 @@ should be is at the end.
 cd examples/videos
 mkdir -p .lake && ln -s ../../../.lake/packages .lake/packages   # share the fetched dependencies
 lake build            # the site, the proofs and the tests
-lake test             # model checks, the bridge, and the site over HTTP against a fake S3, ~15 s
+lake test             # model checks, the bridge, and the site over HTTP against a fake S3, ~1 min
 ```
 
 ## How it works
 
 - **The spec is the code.** `Videos/Spec.lean` is one value, `Site`, and two functions:
-  `Site.handle` for an input (a request, or the store's answer to a call) and `Site.recover` for
+  `Site.handle` for an input (a request, or the scheduler's word on a job) and `Site.recover` for
   a start of the actor. `Videos/System.lean` runs them in one actor, so every claim is about one
   atomic owner: a delete vanishes from the feed, the channel and the watch page at once.
+- **Work that is due later** is the scheduler's (`Lanes.Schedule`, D79), beside the site in the
+  same shard and on the same journal. Every call to the store is a job, held under a key that
+  names what it is for and so what it asks the store (`Videos.Key`, `Key.op`): a check, the last
+  check of an upload, the delete of an object. A job survives a restart, is retried with a
+  backoff and a jitter (`Config.checkRetry`, `Config.deleteRetry`), and the scheduler holds at
+  most `maxJobs`; past it a job is refused. Each attempt carries its deadline, and the S3 client
+  cuts the call off there.
 - **Sign-in** is Lanes' (`Lanes.OAuth`, D72), in `serve`'s `arrive`: the system gets only the
   identity the provider vouched for, by its issuer and subject, and a member is made the first
   time one signs in, its channel named by the provider's name for it (the login, without one),
@@ -32,22 +39,25 @@ lake test             # model checks, the bridge, and the site over HTTP against
   `VIDEOS_MAX_UPLOAD_BYTES`), which the store refuses past (`EntityTooLarge`). The browser posts
   the file there itself (`upload.js`, a dozen lines that `fetch` the form's `FormData` and then
   post the next form, and that do not send a file over the limit), and posts "uploaded". The site
-  then asks the store with a `HEAD` and answers that request only when the store has: `found`
-  makes the video `ready`; `missing`, an error or no answer in time leaves it `pending`, to check
-  again from the channel. The site never carries video bytes.
+  then schedules a check, a `HEAD` tried twice, and answers that request when the job ends:
+  `found` makes the video `ready`; `missing`, two errors or no answer in time leave it `pending`,
+  to check again from the channel. A day after the record was made (`Config.pending_s`), an
+  upload still not confirmed is checked a last time: found, it is ready; not there, its record is
+  taken out. The site never carries video bytes.
 - **Watch.** The page's `<video>` has a link presigned for a `GET`, signed when the request
   arrived: `arrive` writes the time into the request, so the time is in the journal and the
   link is the same on replay. Links are signed in the bridge's `encode`, with the deployment's
   credentials; the system holds none.
-- **Delete** takes the record out at once and then deletes the object, sent again on an error or
-  a timeout up to `maxAttempts`, and again at every start; one given up on is logged
-  (`Out.orphan`).
+- **Delete** takes the record out at once and schedules the delete of the object, tried up to ten
+  times over about ten minutes; one given up on, or refused because the scheduler is full, is
+  logged (`Out.orphan`).
 - **Pages** are server-rendered with Lanes' templates. Every form that changes something carries
   a token bound to the session (`Auth.formToken`) and must come from the site's origin; the style
   sheet and the script are served by the bridge, since templates refuse inline code.
 - **Ops**: `/healthz`, `/readyz`, `/metrics` and the access log (`ServerConfig.ops`); SIGTERM
   drains the requests in flight before it stops (`Server.stopOnSignal`).
-- **Storage**: the journal, with a snapshot every 256 inputs. No database.
+- **Storage**: the journal, with a snapshot every 256 inputs, of the site and its scheduler. No
+  database.
 
 ## The claims
 
@@ -59,12 +69,20 @@ model-checked (`Videos/Check.lean`).
 | A private video is its owner's alone: in every run of the system, under every environment model, an output that shows one is addressed to its owner; and of every input, only in an answer to a session of the owner that let the request in when it arrived, open and not past its lifetime | `Videos.private_to_owner`, `Videos.Site.handle_private` |
 | A like counts each member once: in every reachable state of the system, under every environment model, no video's likes name a member twice, so the count shown is the number of distinct likers | `Videos.likes_distinct`, `Videos.count_distinct` |
 | A deleted video is never served again: once a delete is answered, no output of any later input or start shows it, however the store answers the delete (late, refused, `unknown`, never) | `Videos.Site.deleted_never_served`, `Videos.Site.Gone.run` |
-| A video is shown only once the store confirmed its upload: an output that shows a video comes after an output asking the store about it under some call, and after the store's `found` to that call | `Videos.Site.listed_confirmed` (the seeded bugs off: `Config.Honest`) |
+| A video is shown only once the store confirmed its upload: an output that shows a video comes after an input in which the scheduler said a job that asks the store for its object's `HEAD` succeeded with `found`; and the scheduler says so only in the step that takes the store's `found` to that job's attempt | `Videos.Site.listed_confirmed` (the seeded bugs off: `Config.Honest`), `Schedule.succeeded_replied` |
 | What an output shows is a ready video of the site, and a private one only to a session of its owner that let the request in | `Videos.Site.shows_handle` |
+| The scheduler holds at most `maxJobs` jobs and no key twice: one delete of an object at a time | `Videos.jobs_bounded` |
+| Every job ends, whatever the store does: in a fair run in which the scheduler does not crash, a check, a last check or a delete held stops being held | `Videos.job_ends` |
+| A delete answered schedules the delete of the object, and its end is reported as given up exactly when the scheduler gave it up | `Videos.Site.delete_schedules`, `Videos.Site.delete_reported` |
 
-The last three are about runs of the spec's functions, `Site.handle` and `Site.recover`, which is
-what the actor runs; the first two are about the system's runs. The theorem that turns a run of
-the system into the run of the spec its actor performed is not written (as for rookery).
+`listed_confirmed`, `deleted_never_served`, `Gone.run` and `shows_handle` are about runs of the
+spec's functions, `Site.handle` and `Site.recover`, which is what the actor runs; the others
+about the runs of the site beside its scheduler. The theorem that turns a run of the system into
+the run of the spec its actor performed is not written (as for rookery). That a deleted video's
+object is eventually deleted from the store is not proved, and is false: the store may refuse
+every attempt, and an upload begun before the delete may land after it. What is proved is that
+the delete ends and is reported if it gave up, but for the step between: that the scheduler's
+word reaches the site, which the checker checks.
 
 ### What the claims rest on
 
@@ -79,32 +97,47 @@ the system into the run of the spec its actor performed is not written (as for r
 - **The store** is as `Lanes.ObjectStore` models it, with the browser's upload as a write the
   site grants and never hears answered (`granted`), and its `HEAD` as the model's head
   (`Videos/Check.lean`).
+- **The scheduler's time** is not ahead of the clock (D79's premise, `TRUSTED.md`): a job is
+  never run before its time as the scheduler knows it.
 
 ## What is checked
 
 `Videos/Check.lean`, run by `lake test`: two members, at most two videos and one per member, one
-pending upload per member, two comments and one per member on a video, one delete in the store,
-two attempts. The site beside the browsers, which
-follow a script, and the object store's model, which answers each call at most once, late,
-never, refused or `unknown`, and lets an upload not answered land at any moment or never; the
-actor crashes and starts again anywhere. What each browser is shown is judged as it is shown.
+pending upload per member, two comments and one per member on a video, three jobs, one attempt
+for each job or two where the scenario says. The site and its scheduler beside the browsers,
+which follow a script, and the object store's model, which answers each attempt out at most
+once, late, never, refused or `unknown`, and lets an upload not answered land at any moment or
+never; every timer of the scheduler fires at any moment, and the site's actor or the scheduler
+crashes and starts again anywhere. What each browser is shown is judged as it is shown.
 
 | Scenario | States | Result |
 | --- | --- | --- |
-| A public video: made, checked twice, watched, liked three times, deleted, asked for during and after the delete | 736,480 | pass |
-| A private video: asked for by another member, a stranger and its owner; channels, the feed, a like and a comment by another | 561 | pass |
-| A video deleted while its check may be out | 237,289 | pass |
-| A session past its lifetime: a private video watched inside it, asked for and liked after it, then watched in a new session | 376 | pass |
-| Seeded: the browser's word taken for the upload (`trustBrowser`) | | found in 18 steps |
-| Seeded: a check the store did not answer in time taken as found (`readyOnTimeout`) | | found in 21 steps |
-| Seeded: sessions that never end (`lifetime := {}`) | | found in 18 steps |
+| A public video: made, checked, watched, liked three times, deleted, asked for after the delete | 139,273 | pass |
+| A private video: asked for by another member, a stranger and its owner; channels, the feed, a like and a comment by another | 4,426 | pass |
+| A video deleted while its check may be out | 1,405,675 | pass |
+| A second check asked for while the first may be out | 872,632 | pass |
+| A delete tried twice: deleted after its first attempt failed, or given up and reported | 61,578 | pass |
+| An upload never confirmed, checked a last time, twice: made ready and shown, or taken out | 130,833 | pass |
+| A session past its lifetime: a private video watched inside it, asked for and liked after it, then watched in a new session | 2,988 | pass |
+| Seeded: the browser's word taken for the upload (`trustBrowser`) | | found in 15 steps |
+| Seeded: a check the store did not answer in time taken as found (`readyOnTimeout`) | | found in 20 steps |
+| Seeded: sessions that never end (`lifetime := {}`) | | found in 20 steps |
+
+Once a video's delete is answered, in every state its delete is under way, or the store said
+it deleted the object, or the site reported it given up; this is checked of runs with no crash.
+A crash in the semantics loses an actor's mail (`SysState.down`), and the checker found, in 10
+steps, the scheduler crashing with the delete's scheduling in its mail: never held, never
+reported. On one shard an actor crashes only by stopping itself, which neither does, and the
+death of the process returns to the journal, the kernel's queue included (`TRUSTED.md`,
+"Environment model"); if the scheduler ever runs apart from the site, the site must keep what it
+scheduled until the scheduler answers.
 
 Every bound holds in every state of every scenario, those of one member among them: one member's
 videos (`maxOwned`) and comments on one video (`maxCommentsEach`) are bounded far below the site's
 (`maxVideos`, `maxComments`), so one member cannot fill them for everyone. `capTests` checks
 each at its limit, and that a video's owner takes out anyone's comment on it.
 
-Over HTTP (`Videos/EndToEnd.lean`, 21 checks): the site as `Main` serves it, on a journal, against
+Over HTTP (`Videos/EndToEnd.lean`, 22 checks): the site as `Main` serves it, on a journal, against
 the test kit of Lanes (`Lanes.Testing`): its identity provider in GitHub's shape, read by
 `GitHub.read`, its fake S3, which checks every signature, the presigned links' and the upload
 forms' included, and refuses a file over a policy's size, and its browser, which keeps the
@@ -114,8 +147,10 @@ once, a comment, a forged form, another's delete; a private video seen by its ow
 upload not yet in the store not listed; then the server is stopped and started again on its
 journal, and the sessions, likes and comments are there, an upload begun before is checked and
 listed, the feed comes a page at a time, a comment is deleted by its author or the video's owner
-and by no one else, a delete
-removes the video and its object, and a sign-out ends the session.
+and by no one else, a delete removes the video and its object, and a sign-out ends the session.
+Twice the fake S3 is told to refuse the next call (`Testing.S3.Fake.refuse`): a check, which
+the scheduler tries again and the video is confirmed, and a delete, whose next attempt deletes
+the object.
 
 ## Running it
 
@@ -199,10 +234,14 @@ package; none touches the library.
    multipart uploads (`Lanes.S3.Multipart`, and `S3.presignPart` for a browser's parts, each
    length signed), but the site would have to keep each upload's id and parts, which the spec
    does not: not wired.
-5. **Nothing runs in the background.** A delete the store did not answer is sent again at once,
-   up to `maxAttempts`, then given up; an upload never confirmed stays `pending` until its owner
-   deletes it. Retries with a backoff, a sweep of what was given up, thumbnails and transcoding
-   all want a job with a deadline, and the store's own events (S3 notifications) a way in.
+5. **Nothing ran in the background** (since fixed: the scheduler, `Lanes.Schedule`, holds the
+   site's checks, last checks and deletes as jobs, retried with a backoff). A delete was sent
+   again at once a few times, then given up; an upload never confirmed stayed `pending` until its
+   owner deleted it, and held one of their `maxPending` places. Thumbnails and transcoding are
+   jobs too, not written; the store's own events (S3 notifications) still have no way in. The
+   scheduler's word comes back as an input, so the site's proofs about what it shows now rest on
+   one more step: that the scheduler reports the store's answer as it was
+   (`Schedule.succeeded_replied`).
 6. **The object store's model** had no `HEAD` and no write by someone else, such as the
    browser with a presigned link (since fixed: `head` and `granted`, and `ObjectStore.held_sent`;
    its histories are sets now, and a key's settled outcomes replace its earlier ones). That cut
