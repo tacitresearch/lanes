@@ -23,9 +23,11 @@ one call of `Site.recover`. The system runs these functions in one actor (`Video
 what is proved of them (`Videos.Proofs`) is proved of the code that runs.
 
 Every bound is in `Config` (rule 2.6), with what happens at it: a sign-in past `maxMembers` is
-`full`, a video past `maxVideos` or past `maxPending` uploads not yet confirmed is `tooMany`, a
-comment past `maxComments` is `tooManyComments`, a delete past `maxDeleting` gives up the oldest
-delete in the store, which is reported (`Out.orphan`).
+`full`, a video past `maxVideos`, past its member's `maxOwned` or past
+`maxPending` uploads not yet confirmed is `tooMany`, a comment past `maxComments` or past its
+member's `maxCommentsEach` on the video is `tooManyComments`, a delete past `maxDeleting` gives up
+the oldest delete in the store, which is reported (`Out.orphan`). The bounds of one member are
+far below those of the site, so that one member cannot fill the site's.
 -/
 
 namespace Videos
@@ -257,9 +259,13 @@ structure Config where
   (`Auth.Sessions.touch`), so an idle limit would count from the sign-in too. -/
   lifetime : Auth.Lifetime := { absolute_s := some (30 * 86400) }
   maxVideos : Nat := 10000
+  /-- Videos of one member, ready or not. -/
+  maxOwned : Nat := 100
   /-- Videos of one member not yet ready. -/
   maxPending : Nat := 4
   maxComments : Nat := 200
+  /-- Comments of one member on one video. -/
+  maxCommentsEach : Nat := 10
   maxDeleting : Nat := 1000
   /-- Deletes sent for one object before it is given up. -/
   maxAttempts : Nat := 3
@@ -356,6 +362,7 @@ def seen (s : Site) (req : ReqId) (viewer : Viewer) (m : Member) (v : VideoId)
 def create (s : Site) (req : ReqId) (viewer : Viewer) (m : Member) (title : Title) (about : About)
     (visibility : Visibility) (media : Media) (at_s : Nat) : Site × List Out :=
   if config.maxVideos ≤ s.videos.length
+      || config.maxOwned ≤ (s.videos.filter (·.owner == m)).length
       || config.maxPending ≤ (s.videos.filter fun v => v.owner == m && v.waiting).length then
     (s, answer req viewer .tooMany)
   else
@@ -388,7 +395,8 @@ def like (s : Site) (req : ReqId) (viewer : Viewer) (m : Member) (video : Video)
 
 def comment (s : Site) (req : ReqId) (viewer : Viewer) (m : Member) (video : Video) (body : Remark) :
     Site × List Out :=
-  if config.maxComments ≤ video.comments.length then
+  if config.maxComments ≤ video.comments.length
+      || config.maxCommentsEach ≤ (video.comments.filter (·.author == m)).length then
     (s, answer req viewer (.tooManyComments video.id))
   else
     let c : Comment := { id := s.nextComment, author := m, body }
@@ -396,10 +404,10 @@ def comment (s : Site) (req : ReqId) (viewer : Viewer) (m : Member) (video : Vid
         nextComment := s.nextComment + 1 },
       answer req viewer (.commented video.id))
 
-/-- Only the comment's author takes it out. -/
+/-- Only the comment's author, or the video's owner, takes it out. -/
 def uncomment (s : Site) (req : ReqId) (viewer : Viewer) (m : Member) (video : Video)
     (c : CommentId) : Site × List Out :=
-  if video.comments.any fun x => x.id == c && x.author == m then
+  if video.comments.any fun x => x.id == c && (x.author == m || video.owner == m) then
     (s.setVideo { video with comments := video.comments.filter (·.id != c) },
       answer req viewer (.uncommented video.id))
   else (s, answer req viewer .notFound)

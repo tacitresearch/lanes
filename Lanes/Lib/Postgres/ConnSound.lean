@@ -18,6 +18,9 @@ What a connection to PostgreSQL promises, for every configuration and every sequ
   (`Conn.step_committed`, from `Conn.outcome_committed`);
 - after SCRAM, the connection goes on only once the server's signature is the password's, and an
   `AuthenticationOk` before that closes it (`Conn.onMessage_saslFinal`, `Conn.onMessage_sasl_authOk`);
+- with a password and `requireScram` (the default), the connection is authenticated only after
+  SCRAM and the server's signature: `AuthenticationOk` at once, cleartext and MD5 close it
+  (`Conn.onMessage_requireScram`);
 - a connection that ends or breaks answers every request in flight `unknown` (`Conn.step_lost`);
   a closed connection does nothing but refuse (`Conn.step_closed`);
 - no more requests are in flight than `inflight_max` (`Conn.run_queue`).
@@ -558,6 +561,37 @@ theorem onMessage_saslFinal {c : Conn} {signature : ByteArray} {m : Backend}
   · rename_i data _ final hfinal hverify
     exact ⟨data, final, rfl, hfinal, hverify⟩
   · simp [hc] at h
+
+/-- With `requireScram` and a password, a connection that has not finished SCRAM goes on only to
+another phase before the server's proof, or closes, or reaches `saslDone` from SCRAM's last
+message, by `Scram.verify` of the server's signature: so it is `authed`, and opens, only after
+the server proved it knows the password (`onMessage_saslFinal`). An `AuthenticationOk` at once,
+or a request for a cleartext password or an MD5 digest, closes it. -/
+theorem onMessage_requireScram (hs : cfg.scramOnly = true) {c : Conn} {m : Backend}
+    (hc : c.phase = .startup ∨ c.phase = .sasl ∨ ∃ s, c.phase = .saslFinal s) :
+    ((onMessage cfg c m).1.phase = .closed ∨ (onMessage cfg c m).1.phase = .startup
+        ∨ (onMessage cfg c m).1.phase = .sasl ∨ ∃ s, (onMessage cfg c m).1.phase = .saslFinal s)
+      ∨ ((onMessage cfg c m).1.phase = .saslDone ∧ ∃ s data final, c.phase = .saslFinal s
+          ∧ m = .authSaslFinal data ∧ String.fromUTF8? data = some final
+          ∧ Scram.verify s final = true) := by
+  simp only [Config.scramOnly, Bool.and_eq_true, Option.isSome_iff_exists] at hs
+  obtain ⟨hr, pw, hpw⟩ := hs
+  rcases hc with hc | hc | ⟨s, hc⟩
+  · left
+    simp only [onMessage, hc]
+    unfold onAuth
+    cases m <;> (try simp only) <;> (repeat' split) <;> simp_all [fail, Config.scramOnly]
+  · left
+    simp only [onMessage, hc]
+    unfold onSasl
+    cases m <;> (try simp only) <;> (repeat' split) <;> simp_all [fail]
+  · by_cases hd : (onMessage cfg c m).1.phase = .saslDone
+    · obtain ⟨data, final, h1, h2, h3⟩ := onMessage_saslFinal cfg hc hd
+      exact .inr ⟨hd, s, data, final, hc, h1, h2, h3⟩
+    · left
+      simp only [onMessage, hc] at hd ⊢
+      unfold onSaslFinal at hd ⊢
+      cases m <;> (try simp only at hd ⊢) <;> (repeat' split) <;> simp_all [fail]
 
 /-- A server that says `AuthenticationOk` before it has proved it knows the password, once SCRAM
 has begun, is not trusted: the connection closes. -/

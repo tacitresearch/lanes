@@ -29,6 +29,7 @@ def origin : String := "http://videos.test"
 def alice : Testing.OAuth.User := { subject := "1", login := "alice", email := some "alice@example.com" }
 def bob : Testing.OAuth.User :=
   { subject := "2", login := "bob", name := some "Bob \"<b>\" & co", email := some "bob@example.com" }
+def carol : Testing.OAuth.User := { subject := "3", login := "carol", email := some "carol@example.com" }
 
 /-- The form token of the session a browser holds, as a page of the site carries it. -/
 def csrf (b : Browser) : Async String := do
@@ -86,8 +87,10 @@ def flow (d : Deployment) (provider : Testing.OAuth.Fake) (held : String → Asy
   let anon ← Browser.new port origin
   let aliceB ← Browser.new port origin
   let bobB ← Browser.new port origin
+  let carolB ← Browser.new port origin
   let _ ← Testing.OAuth.signIn aliceB provider "hub" alice
   let _ ← Testing.OAuth.signIn bobB provider "hub" bob
+  let _ ← Testing.OAuth.signIn carolB provider "hub" carol
   let aliceSession ← aliceB.cookie sessionCookie
   let bobSession ← bobB.cookie sessionCookie
   let healthz ← anon.get ["healthz"]
@@ -102,6 +105,7 @@ def flow (d : Deployment) (provider : Testing.OAuth.Fake) (held : String → Asy
   let _ ← post bobB ["v", "0", "like"]
   let _ ← post aliceB ["v", "0", "like"]
   let commented ← post bobB ["v", "0", "comment"] [("body", "Nice cats")]
+  let _ ← post carolB ["v", "0", "comment"] [("body", "Buy pills")]
   let afterLikes ← anon.get ["v", "0"]
   let forged ← bobB.post ["v", "0", "like"] [("csrf", "forged")]
   let notTheirs ← post bobB ["v", "0", "delete"]
@@ -122,14 +126,15 @@ def flow (d : Deployment) (provider : Testing.OAuth.Fake) (held : String → Asy
   server.stop
   let server ← start d
   let port := server.port.getD 0
-  let (anon, aliceB, bobB) := (anon.at port, aliceB.at port, bobB.at port)
+  let (anon, aliceB, bobB, carolB) := (anon.at port, aliceB.at port, bobB.at port, carolB.at port)
   let _ ← upload ghostPut
   let late ← post aliceB ["videos", "2", "uploaded"]
   let kept ← anon.get ["v", "0"]
   let feed ← anon.get []
   let older ← anon.get [] [("before", "2")]
-  let uncommentedByAlice ← post aliceB ["v", "0", "comments", "0", "delete"]
+  let uncommentedByCarol ← post carolB ["v", "0", "comments", "0", "delete"]
   let uncommented ← post bobB ["v", "0", "comments", "0", "delete"]
+  let uncommentedByOwner ← post aliceB ["v", "0", "comments", "1", "delete"]
   let afterUncomment ← anon.get ["v", "0"]
   let deleted ← post aliceB ["v", "0", "delete"]
   let gone ← bobB.get ["v", "0"]
@@ -177,9 +182,10 @@ def flow (d : Deployment) (provider : Testing.OAuth.Fake) (held : String → Asy
       status late == 303 && shows feed "Ghost" && !shows feed "Diary"),
     ("videos: the feed comes a page at a time, newest first",
       shows feed "?before=2" && !shows feed "Cats" && shows older "Cats"),
-    ("videos: only its author deletes a comment",
-      status uncommentedByAlice == 404 && status uncommented == 303
-        && !shows afterUncomment "Nice cats"),
+    ("videos: only its author, or the video's owner, deletes a comment",
+      status uncommentedByCarol == 404 && status uncommented == 303
+        && status uncommentedByOwner == 303 && !shows afterUncomment "Nice cats"
+        && !shows afterUncomment "Buy pills"),
     ("videos: a deleted video is not served, and its object is deleted in the store",
       status deleted == 303 && status gone == 404 && !shows feedAfter "Cats" && objectGone),
     ("videos: signed out, the cookie is cleared and the session is over",
@@ -208,7 +214,7 @@ def decoded (r : Http.Request) : Option Input :=
   | .error _ => none
 
 def withCookie (value : String) (r : Http.Request) : Http.Request :=
-  { r with headers := r.headers ++ [("cookie", s!"{sessionCookie}={value}")] }
+  { r with headers := r.headers ++ [("cookie", s!"{settings.cookieName}={value}")] }
 
 def bridgeTests : List (String × Bool) :=
   let watch : Http.Request := { method := .get, path := ["v", "3"] }

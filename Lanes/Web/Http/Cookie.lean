@@ -104,6 +104,13 @@ def bodyWithin (r : Request) (limit : Nat) : Bool :=
 
 end Request
 
+/-- A cookie's name, with the `__Host-` prefix when the cookie is `Secure`: a browser then keeps
+it only if it was set over HTTPS with `Path=/` and no `Domain`, so no subdomain and no page over
+plain HTTP can set it in its place. Over plain HTTP, for a test, a browser would drop a cookie of
+that name, so the prefix is left off. -/
+def hostCookie (name : String) (secure : Bool) : String :=
+  if secure then "__Host-" ++ name else name
+
 namespace Response
 
 /-- Adds the cookie if `Cookie.valid` holds of it, and leaves the response as it was if not. -/
@@ -116,6 +123,11 @@ def clearCookie (r : Response) (c : Cookie) : Response :=
 /-- For pages that show one user's records: no cache keeps them. -/
 def noStore (r : Response) : Response :=
   r.withHeader "cache-control" "no-store"
+
+/-- For pages with forms: no other site shows them in a frame, where a click on them could be
+taken for one on its own page. -/
+def noFraming (r : Response) : Response :=
+  r.withHeader "content-security-policy" "frame-ancestors 'none'"
 
 end Response
 

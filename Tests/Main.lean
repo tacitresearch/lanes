@@ -110,7 +110,8 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.Release.tests ++ Tests.ReadRequest.tests ++ Tests.Oracle.unitTests
     ++ Tests.HttpConn.tests ++ Tests.Loopback.tests
     ++ Tests.Jobs.tests ++ Tests.Schedule.tests ++ Tests.Outside.tests ++ Tests.Postgres.vectorTests
-    ++ Tests.Ops.tests ++ Tests.SigV4.tests ++ Tests.S3.tests ++ Tests.Testing.tests
+    ++ Tests.Postgres.downgradeTests ++ Tests.Ops.tests
+    ++ Tests.SigV4.tests ++ Tests.S3.tests ++ Tests.Testing.tests
     ++ Tests.Queue.tests ++ Tests.Cache.tests ++ Tests.WallClock.tests ++ Tests.Throttle.tests
     ++ Tests.SharedCache.tests
   match args with

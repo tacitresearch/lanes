@@ -111,3 +111,18 @@ behaves like the store model at the isolation level the application chose. That 
 proved and cannot be: it is tested on recorded runs, not on every server or every concurrency.
 Not trusted, because proved or tested: the encoders and decoders, the connection's decisions,
 SCRAM's computation, and the model.
+
+*Amendment: the server proves itself, or the connection closes.* "So a server cannot skip the
+exchange" above was false: the connection checked the server's signature once SCRAM had begun,
+but took an `AuthenticationOk` as the server's first answer, which is `trust`, and answered a
+request for MD5 by default. An impostor at the address, or on the plain TCP path, could open a
+connection that has a password without knowing it, or have a digest of the password sent, to
+guess against offline. `Conn.Config.requireScram`, on by default, now makes a connection that
+has a password close on an `AuthenticationOk` before SCRAM's last message and on a request for a
+cleartext password or an MD5 digest; it reaches `authed` only from `saslDone`, which only a
+`SASLFinal` whose signature `Scram.verify` accepts reaches (`Conn.onMessage_requireScram`, with
+`Conn.onMessage_saslFinal`). `allowMd5` is off by default. A server with no SCRAM, or a user whose
+password is stored as MD5, needs `requireScram := false` and `allowMd5` or `allowCleartext`, as
+`Tests/PostgresLive.lean` gives its MD5 and cleartext users. Without a password, `trust` opens as
+before. Channel binding (`SCRAM-SHA-256-PLUS`) needs TLS and is still not done, so SCRAM proves
+the server knows the password, not that it is the server meant.
