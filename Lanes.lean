@@ -83,6 +83,8 @@ public import Lanes.Html.Htmx
 public import Lanes.Html.HtmxSound
 public import Lanes.Html.Syntax
 public import Lanes.Http.Basic
+public import Lanes.Http.Conn
+public import Lanes.Http.ConnSound
 public import Lanes.Http.Cookie
 public import Lanes.Http.CookieSound
 public import Lanes.Http.Front
