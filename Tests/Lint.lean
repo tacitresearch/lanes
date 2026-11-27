@@ -186,7 +186,10 @@ def tests : IO (List (String × Bool)) := do
       ("replaceName: a reference is rewritten, the end of another name is not",
         Generated.replaceName "D4-new-one.md, `new-one.md` (new-one.md)" "new-one.md" "D5-one.md"
           == "D4-new-one.md, `D5-one.md` (D5-one.md)"),
-      ("roundedTotal", Generated.roundedTotal 1587 == 1600 && Generated.roundedTotal 1574 == 1550)]
+      ("roundedTotal", Generated.roundedTotal 1587 == 1600 && Generated.roundedTotal 1574 == 1550),
+      ("countless: an entry whose count a merge dropped is found, prose after a comma is not",
+        Generated.countless "| a | `A/B.lean`,  lines  It | `C.c`, 12 lines | `T.lean`, against x |"
+          == ["A/B.lean"])]
   finally
     for dir in [root, other, third, fourth] do
       if ← dir.pathExists then IO.FS.removeDirAll dir
