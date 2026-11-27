@@ -12,7 +12,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | `Lanes/Behaviours` | 66 | 36 | 5 | 18 | 0 | 7 | 0 |
 | `Lanes/Check` | 74 | 54 | 0 | 8 | 0 | 10 | 2 |
-| `Lanes/Core` | 104 | 40 | 0 | 34 | 1 | 10 | 19 |
+| `Lanes/Core` | 102 | 40 | 0 | 34 | 1 | 10 | 17 |
 | `Lanes/Data` | 66 | 42 | 0 | 4 | 1 | 0 | 19 |
 | `Lanes/Durable` | 52 | 42 | 2 | 0 | 1 | 5 | 2 |
 | `Lanes/Lib` | 361 | 252 | 5 | 0 | 47 | 48 | 9 |
@@ -23,7 +23,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Semantics` | 57 | 9 | 0 | 0 | 0 | 47 | 1 |
 | `Lanes/Web` | 315 | 188 | 14 | 8 | 64 | 39 | 2 |
 | `LanesCli` | 110 | 0 | 0 | 0 | 46 | 0 | 64 |
-| All | 1418 | 754 | 54 | 74 | 178 | 238 | 120 |
+| All | 1416 | 754 | 54 | 74 | 178 | 238 | 118 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -246,7 +246,6 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Actor.run` | spec | used only in statements |
 | `Actor.mapEff` | none |  |
-| `Actor.comapMsg` | none |  |
 | `Actor.Invariant` | spec | a predicate |
 
 ## `Lanes/Core/FairScheduler.lean`
@@ -269,7 +268,6 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `instHashableEmpty_lanes` | checked | `Tests/Election.lean`, `Tests/Join.lean` |
-| `instReprEmpty_lanes` | none |  |
 | `instHashableEnvelope` | checked | `Tests/Join.lean` |
 | `instHashableEffect` | checked | `Tests/KV.lean` |
 | `instReprEffect` | checked | `Tests/KV.lean` |

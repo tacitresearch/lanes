@@ -24,8 +24,6 @@ namespace Lanes
 /-- A system with no inputs or no outputs uses `Empty`, which has nothing to hash. -/
 instance (priority := low) : Hashable Empty := ⟨fun x => nomatch x⟩
 
-instance (priority := low) : Repr Empty := ⟨fun x _ => nomatch x⟩
-
 class Signature.Inspect (σ : Signature) where
   [enumId : Enum σ.Id]
   [reprId : Repr σ.Id]

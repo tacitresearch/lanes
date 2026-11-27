@@ -31,7 +31,6 @@ Each is to be proved, tested, made private or removed.
 ### `Lanes/Core/Actor.lean`
 
 - `Actor.mapEff`
-- `Actor.comapMsg`
 
 ### `Lanes/Net/CourierSound.lean`
 
@@ -43,7 +42,6 @@ Each is to be proved, tested, made private or removed.
 
 ### `Lanes/Core/Inspect.lean`
 
-- `instReprEmpty_lanes`
 - `Event.kind`
 - `Event.kinds`
 - `Slot.same`
