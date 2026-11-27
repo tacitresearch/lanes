@@ -140,6 +140,10 @@ What is being worked on now, and why: `docs/PLAN.md`.
   so four workers cost two to three times the processor time for no gain in wall time. At
   this rate ten million states take over three minutes and, stored exactly, about 7 GB (0.75 kB
   a state on the election model). The next factor needs states that are flat data (D33).
+- A refinement check (`Check.refines`) takes 15 to 30 times as long as a plain check of the same
+  system: the monitor keeps a candidate for each order in which the inputs in flight may have
+  taken effect (92 for the five requests of the tutorial's shelf), and closing them is quadratic
+  in their number. `lake exe lanesCheck` prints the shelf's times (`Tests/MonitorSpeed.lean`).
 - Liveness theorems are about fair runs of the semantics. That the runtime's runs are fair is
   not proved, and "eventually" carries no bound.
 - A journal is cut only if the application gives codecs for its actors (`Journal.Store.actors`,
