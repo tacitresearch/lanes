@@ -199,6 +199,29 @@ jobs:
       - name: Over HTTP, killed and started again
         run: lake exe rookeryLive
 
+  # A pull request that changes the library, the C, the command or the template changes
+  # CHANGELOG.md too, unless it is labelled `no-changelog` (CONTRIBUTING.md). Pull requests only,
+  # and not among `build`'s needs. The labels are those of the event: after adding the label,
+  # push again (a re-run reads the same labels).
+  changelog:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: CHANGELOG.md changes with the code
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'no-changelog') }}
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          changed=$(git diff --name-only "$BASE...$HEAD")
+          if grep -qE '^(Lanes|native|LanesCli|templates)/' <<<"$changed" && ! grep -qx 'CHANGELOG.md' <<<"$changed"; then
+            echo "::error file=CHANGELOG.md::add a line under Unreleased, or label the pull request no-changelog"
+            exit 1
+          fi
+
   # What a user on a Mac does: Homebrew's libsodium (under /opt/homebrew on Apple silicon), the
   # build, the tests and a generated app, on GitHub's runner.
   macos:
