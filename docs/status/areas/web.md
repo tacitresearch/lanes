@@ -25,3 +25,6 @@
 - The connection's own refusals (`400`, `408`, `413`, `431`, `501`) are neither counted in the
   metrics nor logged. The metrics page and the health checks are on the application's port; the
   page is answered only to a loopback peer by default, and the health checks to every peer.
+- The C loop (`ServerConfig.loop := .c`) runs on Linux only, binds IPv4 only, and is a
+  prototype off by default (`docs/decisions/new-a-loop-of-c.md`); its C is checked by CBMC by hand
+  (`scripts/cbmc.sh`), not in CI.

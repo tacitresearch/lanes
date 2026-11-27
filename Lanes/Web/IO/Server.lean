@@ -28,6 +28,9 @@ There is one loop, `serveOn`, for both systems with a gate: `served sys`, whose 
 responses (`serve`, `serveWith`), and `fronted sys`, which also puts out what is no response and
 takes inputs that are no request (`serveFronted`).
 
+With `ServerConfig.loop := .c` the connections run instead on threads of C, which call
+`Conn.step` through `Lanes/Web/IO/CLoop.lean`; the rest of this file is the same for both.
+
 One refusal is made here: `503` when the shard's inbox is full. TLS is not handled: terminate it
 in a reverse proxy.
 -/
@@ -333,7 +336,8 @@ private def awaitConnections {system : System τ} [Hashable τ.Id] (server : Ser
     Async Unit := do
   for (_, c) in ← server.connections.atomically (return (← get).alive.toList) do
     discard <| await c.line.ended.result?
-  if let some h := server.cloop then discard <| await (← BaseIO.asTask (prio := .dedicated) (CLoop.join h))
+  if let some h := server.cloop then
+    discard <| await (← BaseIO.asTask (prio := .dedicated) (CLoop.join h))
 
 /-- The address a connection comes from, if the socket tells it. -/
 private def peerOf (socket : TCP.Socket.Client) : BaseIO (Option Ip.Addr) := do
@@ -457,13 +461,18 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
     | some ctx => tell ctx line false .resume
   if let some h := cloop then
     let admit := do
-      let admitted ← server.connections.atomically do
-        modifyGet fun c => let (ok, count) := c.count.admit config.connections_max; (ok, { c with count })
+      let admitted ← server.connections.atomically <| modifyGet fun c =>
+        let (ok, count) := c.count.admit config.connections_max
+        (ok, { c with count })
       unless admitted do ops.refused
       return admitted
     let peer (a : Ip.Addr) := if config.ops.active then some a else none
-    CLoop.start h threads config.conn (fun a => ops.front probe (peer a) arrived) admit
-      (server.connections.atomically (modify fun c => { c with count := c.count.leave }))
+    try
+      CLoop.start h threads config.conn (fun a => ops.front probe (peer a) arrived) admit
+        (server.connections.atomically (modify fun c => { c with count := c.count.leave }))
+    catch e =>
+      runtime.stop
+      throw e
   if let some listener := listener then
     discard <| IO.asTask (prio := .dedicated) (ticker server config.tick_ms)
     background do

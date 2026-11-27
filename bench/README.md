@@ -20,6 +20,7 @@ machine through the workflow.
 | `lanes-journal` | `lanes` with a journal: every request is appended and synced (`fsync`, `Lanes/Durable/IO/Journal.lean`) before it is answered; the journal only grows | `LanesHello.lean` |
 | `lanes-snapshot` | `lanes-journal`, also saving the kernel and cutting the journal every 1024 inputs | `LanesHello.lean` |
 | `lanes-io` | `lanes` with its connections on `IO_THREADS` threads of the server's own (`ServerConfig.ioThreads`) | `LanesHello.lean` |
+| `lanes-cloop` | `lanes` with its connections on `IO_THREADS` threads of C, each with its own epoll and listening socket (`ServerConfig.loop := .c`, `native/loop.c`); Linux only | `LanesHello.lean` |
 | `lanes-par` | `lanes` with `WORKERS` threads to work out actors' steps on every wave (`Runtime.Config.workers`, `parallel := .on`): one actor, so this measures what grouping inputs and planning waves cost | `LanesHello.lean` |
 | `lanes-io-par` | both | `LanesHello.lean` |
 | `lanes-many` | `K` (64) counters, request `n` to counter `n % K` | `LanesMany.lean` |
