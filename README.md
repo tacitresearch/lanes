@@ -62,7 +62,7 @@ is in `docs/CLAIMS.md`. In short:
 - **Tested**: processes killed with SIGKILL and started again, JSON, Base64, URLs, IP
   addresses, media types and dates against Go's standard library, the bound C against its Lean
   references.
-- **Trusted**: About 2,250 lines of trusted code, listed with their sizes in `TRUSTED.md`: the
+- **Trusted**: About 2,300 lines of trusted code, listed with their sizes in `TRUSTED.md`: the
   IO shells, the HTTP wire format where its proof does not reach, the C that binds libsodium,
   `fsync` and a timed wait, and the template macro, with the assumptions the runtime makes. `lanes lint` fails if a trusted file changes without the
   list, and `scripts/mutants.py` holds known ways of breaking that code, each of which must
@@ -147,8 +147,9 @@ Early beta: the API will change. What works, area by area, and its known limits 
 
 - TLS, a database, server push and observability;
 - migrations of a journal across changed step functions;
-- models of external systems such as a database or a payment API, which
-  `docs/decisions/D61-models-of-external-systems.md` describes;
+- models of external systems other than an API with idempotency keys and webhooks (payments
+  and email are modelled, `Lanes/Outside/Effects/`), such as a database, which
+  `docs/decisions/D61-models-of-external-systems.md` describes, and adapters to real services;
 - liveness of the applications, and, for rookery, the theorem that joins its claims with its
   refinement into statements about the running system; the HTTP gate is proved for answers,
   not as a refinement.

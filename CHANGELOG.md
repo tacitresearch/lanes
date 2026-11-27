@@ -10,6 +10,9 @@ under Unreleased (`CONTRIBUTING.md`).
 
 ### Added
 
+- Models of external services (`Lanes/Outside/`): `Rpc.outside`, a call answered at most once, `unknown` at its deadline with its effect left open, or never; `Idempotent.server`, idempotency keys, proved to give a request always sent under one key at most one effect in every run the model allows (`Idempotent.at_most_once`); `Events.bounded`, webhooks late, out of order and repeated up to a bound; `Effects`, services that hold things with a lifecycle, and its instances `Payments` (the statuses Stripe documents for a PaymentIntent) and `Email`. `Outside.see`, `Outside.after_induction`, `Outside.after_invariant` and `Outside.after_both` reason about runs a model allows; `System.Emits.outputs` lifts what actors emit to every output of every run.
+- `examples/payments`: a shop that charges each order through the payment model, checked with the classic bug seeded (a retry without the key charges twice) and proved to charge each order at most once (`Shop.charged_at_most_once`).
+- `ServerConfig.ioThreads`: connections owned by dedicated threads, so a connection never changes thread (21–30% more requests a second on the warm machine); and `Runtime.Config.workers`: a batch's actors' steps worked out in parallel, proved equal to the sequential run (`Kernel.runBatchAhead_eq`). Both are off by default.
 - Migrations: a deploy that changes a state or message type reads the old version's journal and snapshot. `Journal.Store` has a `version`, which its files carry with the name (`Journal.label`; version 0 is the name alone, so every existing journal reads as before), and `upgrades`, each an older version's system, codecs and a `Migration` to the new one. A start replays the old files through the old step functions, migrates the kernel, hands over the old outputs not yet handed over (`Journal.Log.pending`), saves under the new label and begins the journal at that mark (`Journal.Log.migrate`). A `Migration` carries the proof that every state an old actor reaches lands in an inductive invariant of the new one, which then holds of every actor afterwards (`Migration.inv_exec`, `Journal.Upgrade.inv_load`); dying during the migration gives the same kernel at the next start (`Journal.Upgrade.begin_crash`). `examples/migration` shows a deploy that adds a field.
 - `lanes_data … from Old := f` declares how a value of a type's previous version becomes one of this (`T.migrate`, an instance of `Migrate`).
 
@@ -17,6 +20,11 @@ under Unreleased (`CONTRIBUTING.md`).
 
 - Module paths are reorganised by concern: `Lanes.Actors` is split into `Lanes/Core`, `Lanes/Proof`, `Lanes/Runtime`, `Lanes/Durable`, `Lanes/Net` and `Lanes/Outside`, HTTP, HTML and authentication are under `Lanes/Web`, the standard library under `Lanes/Lib`, and each area's IO in an `IO/` directory; `import Lanes` leaves out the framework's soundness theorems, which a proof imports with `import Lanes.Proofs` (or `Lanes.Semantics`); `Examples/` and `systems/` are one `examples/` directory of Lake packages, `examples/counter` being what `lanes new` writes.
 - `Journal.Disk.Holds`, `Journal.Disk.Torn`, `Journal.Kept` and `Journal.memo` take the kernel a history starts from (`start`, boot by default), and their theorems hold for any; `Journal.Kept.saved` says a history without a snapshot starts at boot. `Journal.Store.open` needs `Hashable` of the identities, and a refused journal of an older version without an upgrade is reported with its version.
+- `Tests/Fixtures/` keeps the small applications' systems and the two bank theorems the tests carry to shards; the proofs of election, the key-value store and the watchdog are only in their examples.
+
+### Removed
+
+- `Actor.comapMsg`, which nothing used; the `Repr Empty` instance of `Lanes/Core/Inspect.lean`, which Lean has; helper lemmas of the soundness proofs that no proof used.
 
 ## [0.1.0] - unreleased
 
@@ -36,7 +44,7 @@ the Lake file.
 - HTTP: a gate joined in front of a system, typed routes proved to print and match alike, a strict request reader, the server's own connection loop on `Std.Net` as a pure `Http.Conn`, and an HTTP client.
 - HTML values and a template macro, htmx attributes from routes, forms and cookies with proofs against their specs.
 - Authentication: signed tokens, form tokens, sessions, failed-attempt limits and Argon2id password digests.
-- Data: `lanes_data` with derived `Codable`, `Enum` and `LawfulBEq`; law-carrying codecs; JSON; Base64; IP addresses and prefixes; civil dates, RFC 3339 and HTTP dates; SHA-256, HMAC and PBKDF2 references.
+- Data: `lanes_data` with derived `Codable`, `Enum` and `LawfulBEq`; law-carrying codecs; JSON; Base64; IP addresses and prefixes; civil dates, RFC 3339 and HTTP dates; SHA-256 and HMAC references.
 - Bindings to libsodium, `fsync` and a timed thread wait, each beside a Lean reference where one exists.
 - Differential tests of the parsers against Go's standard library, with every difference decided.
 - The `lanes` command: `new` (an app with a proved counter, a journal and a page), `lint`, `check` and `inventory`.

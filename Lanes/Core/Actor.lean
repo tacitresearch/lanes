@@ -68,13 +68,6 @@ def mapEff {Eff' : Type} (f : Eff → List Eff') (A : Actor S Msg Eff) : Actor S
   fresh := A.fresh
   fresh_recover s h := by simp [A.fresh_recover s h]
 
-def comapMsg {Msg' : Type} (f : Msg' → Msg) (A : Actor S Msg Eff) : Actor S Msg' Eff where
-  init := A.init
-  step s m := A.step s (f m)
-  recover := A.recover
-  fresh := A.fresh
-  fresh_recover := A.fresh_recover
-
 inductive Reachable (A : Actor S Msg Eff) : S → Prop
   | init : Reachable A A.init
   | step {s : S} (m : Msg) : Reachable A s → Reachable A (A.step s m).1

@@ -19,7 +19,7 @@ proved function tells it to.
 | --- | --- | --- |
 | Actors and systems | `Lanes/Core/{Actor,System,World,Step,Run}.lean` | the definition everything else is about |
 | Proof tools for systems | `Lanes/Proof/{Lift,Ghost,Monotone,Equiv,Deed}.lean` | `System.invariant_of_actor`, `Inductive.of_monotone`, `System.Invariant.of_ghost` |
-| The kernel | `Lanes/Runtime/{Kernel,KernelSound,KernelTimers}.lean` | `Kernel.exec_reachable`, `Kernel.exec_outputs`, `Kernel.exec_wellFormed` |
+| The kernel | `Lanes/Runtime/{Kernel,KernelSound,KernelTimers,Wave}.lean` | `Kernel.exec_reachable`, `Kernel.exec_outputs`, `Kernel.exec_wellFormed`, `Kernel.runWaves_eq` |
 | The shell | `Lanes/Runtime/IO/Shell.lean`, `Lanes/Runtime/{Batch,Mailbox,MailboxSound}.lean` | `Batch.run_kernel`, `Batch.run_sound`, `Mailbox.batch_since_take`; the shell itself is trusted |
 | Journal, snapshots, disk | `Lanes/Durable/{Journal,Snapshot,Disk,Frame}.lean`, `Lanes/Durable/IO/Journal.lean` | `Journal.open?_cut`, `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Journal.Disk.Holds.save_crash` |
 | Migrations | `Lanes/Durable/{Migration,Upgrade}.lean` | `Migration.inv_exec`, `Journal.Upgrade.begin_crash`, `Journal.Upgrade.holds`, `Journal.Upgrade.inv_load` |
@@ -27,6 +27,7 @@ proved function tells it to.
 | Shards and the transport | `Lanes/Runtime/{Shard,ShardSound,ShardsSound}.lean`, `Lanes/Net/{Courier,CourierSound}.lean`, `Lanes/Net/IO/{Peers,Node}.lean` | `System.ShardsReachable.unsharded`, `Peers.Courier.written_sublist_sent` |
 | The gate and the HTTP server | `Lanes/Web/Http/{Gate,Front,FrontSound,Waiting,Conn,ConnSound}.lean`, `Lanes/Semantics/Front.lean`, `Lanes/Web/IO/Server.lean` | `Http.served_answered_le_arrived`, `Http.served_pending_answered`, `Http.Waiting.exec_answered`, `Http.Conn.run_writes` |
 | Other adapters | `Lanes/Outside/Basic.lean`, `Lanes/Outside/IO/Clock.lean`, `Lanes/Web/IO/Client.lean`, `Lanes/Web/Http/{Grammar,Wire,WireSound}.lean` | `Response.read_wire`, `Request.fields_framing`; conformance tests |
+| Models of external services | `Lanes/Outside/{Rpc,Idempotent,Events}.lean`, `Lanes/Outside/Effects/`, `Lanes/Proof/Outputs.lean` | `Idempotent.at_most_once`, `Rpc.answered_le_called`, `Events.deliveries_le`, `System.Emits.outputs`; that a real service conforms is trusted |
 | Jobs: work outside a step | `Lanes/Behaviours/Jobs/{Basic,Sound}.lean`, `Lanes/Semantics/Jobs.lean`, `Lanes/Behaviours/Jobs/IO/Pool.lean` | `Jobs.answered_le_handled`, `Jobs.retry_same`, `Jobs.submitted_answered`; the pool is trusted |
 | Web | `Lanes/Web/Http/{Basic,Route,RouteSound,Cookie,CookieSound}.lean`, `Lanes/Web/Html/`, `Lanes/Web/Auth/` | `Html.lex_render`, `Html.safeUrl_scheme`, `Http.dispatch_link`, `Http.parseForm_encodeForm`, `Http.readSetCookie_header`, `Auth.verify_eq_some`, `Auth.checkForm_other` |
 | The checker | `Lanes/Check/`, `Lanes/Semantics/{Monitor,MonitorSound}.lean` | `Check.search_sound`, `Check.system_sound_of_respects`, `Check.refines_traces` |
@@ -84,6 +85,16 @@ only where every output is handed over (`Batch.run_sound`); a take returns exact
 since the last, in order, and the inbox never holds more than its capacity
 (`Mailbox.batch_since_take`, `Mailbox.Reachable.bounded`). Trusted: that the shell performs the
 acts as given (`TRUSTED.md`, the first row).
+
+With `Runtime.Config.workers` above one (one by default), the inputs that arrive together are one
+turn (`Journal.turnAll`), and its work is done a wave at a time (`Lanes/Runtime/Wave.lean`): the
+steps of the actors with mail in the wave are worked out on Lean's task pool, each actor's in the
+order of its messages, and the kernel then does the wave as `runBatch` does, taking each step from
+that plan. Handling one actor's message changes no other actor's state (`Kernel.frame_handle`), so
+the result is `runBatch`'s, value for value (`Kernel.runWaves_eq`), and the journal and everything
+proved of the kernel are unchanged. Steps cheaper than a few microseconds cost more to hand to
+another thread than they save
+(`docs/decisions/D64-actors-run-in-parallel.md`).
 
 ## Journal, snapshots and the disk model
 
@@ -181,7 +192,9 @@ request's own task, so a password or a cookie the bridge turns into what the sys
 reaches the journal (D44), takes an id from `Http.Waiting` (pure: each id handed out once, each
 answered at most once and to its own waiter: `Http.Waiting.exec_handed_nodup`,
 `Http.Waiting.exec_answered`), and hands the input to the shard. It answers `503` itself when the
-inbox is full and `405` for a method an application cannot handle. `Http.serveFronted` serves
+inbox is full and `405` for a method an application cannot handle. With `ServerConfig.ioThreads`
+above zero, the connections run on that many threads of the server's own, each on one for its
+whole life; Lean has one libuv loop a process, which every read and write still goes through. `Http.serveFronted` serves
 `fronted sys`, whose other inputs and outputs pass the gate by, and `Http.serveShard`
 (`Lanes/Net/IO/Node.lean`) runs it with the transport: one process with an HTTP front and peers.
 
@@ -214,6 +227,22 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   server writes it as soon as its last byte is there, to stay within its limit and to end
   (`Lanes/Web/Http/WireSound.lean`: `Response.read_wire`, `Response.read_more`; D39).
 - **HTTP server, journal, transport**: above.
+- **Models of external services** (`Lanes/Outside/`, D61 and the decision on models of external
+  services): what a service a system calls may do, built from three combinators on a model of
+  the service (`Rpc.Server`). `Rpc.outside` answers each call at most once, or `unknown`, or never
+  (`Rpc.answered_le_called`); an `unknown` leaves open whether the request took effect, so a
+  request counts as an effect the service may have had from the moment it is sent.
+  `Idempotent.server` gives a request under a key the effect of the first under that key, a
+  repeat the first's answer or a refusal, and proves that a request always sent under one key
+  has at most one effect in every run the model allows (`Idempotent.at_most_once`).
+  `Events.bounded` delivers events late, out of order and up to `maxDeliveries` times
+  (`Events.deliveries_le`). `Effects` is the class of services that hold things with a lifecycle,
+  made under a key and reported by webhooks, with two instances: payments, with the statuses
+  Stripe documents for a PaymentIntent (`Lanes/Outside/Effects/Payments.lean`), and email
+  (`Lanes/Outside/Effects/Email.lean`). A system's part of a proof is a fact about what its steps
+  emit, lifted to every run by `System.Emits.outputs`; `examples/payments` proves a shop charges
+  each order at most once that way (`Shop.charged_at_most_once`). That a real service does only
+  what its model allows is trusted; no adapter talks to one yet.
 - **Jobs** (`Lanes/Behaviours/Jobs/Basic.lean`): work that must not run in a
   step, an outbound call or slow pure work, is submitted to the jobs actor under a key the
   requester chooses, beside the system that submits it (`Jobs.attach`). The actor dispatches
@@ -315,13 +344,14 @@ would, in the order `examples/README.md` reads them: the counter `lanes new` wri
 (`examples/counter`); the bank (`examples/bank`), also served over HTTP (`examples/bank-web`); a
 key-value store with front ends, whose read cache breaks refinement (`examples/kv-cache`,
 `KV.implements`, `KV.caching_not_implements`); leader election (`examples/election`); a watchdog
-(`examples/watchdog`); `examples/raft-kv`, a replicated key-value store proved to implement the
+(`examples/watchdog`); a shop that charges each order at most once through a model of a payment
+service (`examples/payments`, `Shop.charged_at_most_once`); `examples/raft-kv`, a replicated key-value store proved to implement the
 map it replicates (`RaftKV.implementsMachine`), and `once` of it in every environment with the
 memo in the map (`RaftKV.implementsMachine_once`); `examples/ledger`, a multi-user web ledger;
 and `examples/rookery`, a small social network for bots whose claims are proved of its spec,
 which it is proved to implement with deadlines (`Rookery.implements`); the theorem that joins the
 two is not written. Each claim, its evidence and its premises are in `docs/CLAIMS.md`. The tests use copies of
-the small ones in `Tests/Fixtures/`, so an example can change for its reader alone. `lanes new`
+the small ones' systems, and the bank's two theorems, in `Tests/Fixtures/`, so an example can change for its reader alone. `lanes new`
 (`LanesCli/New.lean`, `templates/app/`) creates an application; `lanes lint`
 (`LanesCli/Lint.lean`) checks the rules of `AGENTS.md` that the text can show, the generated files
 and the inventory (`LanesCli/Inventory.lean`).

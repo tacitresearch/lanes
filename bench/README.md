@@ -14,11 +14,20 @@ machine through the workflow.
 | `go` | Go `net/http`, `GOMAXPROCS` the server's CPUs (Go's default) | `go/hello/main.go` |
 | `tcp` | `Std.Net` TCP on libuv, a task per connection, a fixed response per request head; no HTTP parsing. The floor under `Std.Http` | `TcpHello.lean` |
 | `tcp-park` | `tcp` with its main thread asleep rather than waiting on a task (below) | `TcpHello.lean` |
-| `std` | `Std.Http.Server` with its default configuration, which is what Lanes runs; it closes a connection after 100 requests | `StdHello.lean` |
+| `std` | `Std.Http.Server` with its default configuration, which Lanes ran before its own server (D57); it closes a connection after 100 requests | `StdHello.lean` |
 | `std-unlimited` | `std` with no limit of requests per connection | `StdHello.lean` |
 | `lanes` | `Lanes.Http.serve` with one actor (`Server.system`) that answers each request; no journal | `LanesHello.lean` |
 | `lanes-journal` | `lanes` with a journal: every request is appended and synced (`fsync`, `Lanes/Durable/IO/Journal.lean`) before it is answered; the journal only grows | `LanesHello.lean` |
 | `lanes-snapshot` | `lanes-journal`, also saving the kernel and cutting the journal every 1024 inputs | `LanesHello.lean` |
+| `lanes-io` | `lanes` with its connections on `IO_THREADS` threads of the server's own (`ServerConfig.ioThreads`) | `LanesHello.lean` |
+| `lanes-par` | `lanes` with `WORKERS` threads to work out actors' steps (`Runtime.Config.workers`): one actor, so this measures what grouping inputs and planning waves cost | `LanesHello.lean` |
+| `lanes-io-par` | both | `LanesHello.lean` |
+| `lanes-many` | `K` (64) counters, request `n` to counter `n % K` | `LanesMany.lean` |
+| `lanes-many-par` | `lanes-many` with `WORKERS` | `LanesMany.lean` |
+| `lanes-heavy` | `lanes-many` with `SPIN` (20,000) rounds of hashing in each step, about 20 µs | `LanesMany.lean` |
+| `lanes-heavy-par` | `lanes-heavy` with `WORKERS` | `LanesMany.lean` |
+
+`IO_THREADS` and `WORKERS` are a quarter of the server's CPUs each by default (8 and 8 on the warm machine), `K` and `SPIN` as above; all four are read from the environment by `servers.sh`. `benchWaves` (`Waves.lean`) is the kernel alone, without IO: `benchWaves K spin workers inputs rounds`.
 
 `lanes*` run whatever `Lanes.Http.serve` is on the commit measured: a new HTTP server under
 that name is measured by the same rows. `servers.sh` holds the commands.
@@ -138,6 +147,49 @@ request. What it can save here is the scheduling and libuv's share, perhaps half
 allocation, the parsing and the shard stay. It is not written: the evidence is that Lean's own
 work is now as large as the cost of crossing threads.
 
+## Parallel actors and IO threads
+
+`docs/decisions/D64-actors-run-in-parallel.md`: connections on threads of the server's own
+(`lanes-io`) and the actors of a wave stepping in parallel (`lanes-par`, `lanes-many-par`,
+`lanes-heavy-par`). Measured in the shared 4-core container, the server on 2 CPUs and the load on
+the other 2, `IO_THREADS=2 WORKERS=2`, three runs of 5 s, other agents building on the machine
+(10 of 72 runs disturbed), so only the direction counts:
+
+| server | conns | req/s | CPU µs/req |
+| --- | ---: | ---: | ---: |
+| `lanes` | 1 / 16 / 64 | 8,486 / 29,022 / 26,068 | 100 / 46 / 49 |
+| `lanes-io` | 1 / 16 / 64 | 8,375 / 23,397 / 30,712 | 102 / 61 / 50 |
+| `lanes-par` | 1 / 16 / 64 | 6,666 / 27,172 / 26,679 | 145 / 52 / 59 |
+| `lanes-io-par` | 1 / 16 / 64 | 6,093 / 26,354 / 29,027 | 147 / 57 / 55 |
+| `lanes-many` | 1 / 16 / 64 | 7,640 / 22,892 / 28,328 | 114 / 66 / 55 |
+| `lanes-many-par` | 1 / 16 / 64 | 7,212 / 22,227 / 22,605 | 123 / 70 / 67 |
+| `lanes-heavy` | 1 / 16 / 64 | 5,449 / 21,159 / 23,734 | 167 / 75 / 66 |
+| `lanes-heavy-par` | 1 / 16 / 64 | 5,466 / 15,509 / 18,150 | 170 / 102 / 88 |
+
+On two server CPUs both switches cost CPU and gain nothing: libuv's thread, the shard's and the
+connections already fill the two cores (1.3 to 1.6 cores used), so there is no idle core for a
+lane or a worker, and the load generator on two cores is the limit. With the server on three
+CPUs and the load on one, the load generator is the limit (about 1.6 cores of the server used).
+What the warm machine has to show is whether, with cores to spare, `lanes-io` lowers the CPU a
+request and `lanes-heavy-par` raises the rate past `lanes-heavy`, whose shard thread is then the
+limit (about 20 µs of step and 11 of kernel and gate a request, so about 30,000 a second).
+
+The kernel alone (`benchWaves`, no IO, 64 counters, 256 messages a round, `LEAN_NUM_THREADS=4`,
+the same container):
+
+| step | 1 worker | 2 workers | 4 workers |
+| --- | ---: | ---: | ---: |
+| `spin 20000` (about 30 µs) | 31 µs a message | 17 | 9 |
+| `spin 2000` (about 3 µs) | 3.7 µs | | 3.0 |
+| `spin 0` | 0.32–0.45 µs | 1.27 | 1.5–1.7 |
+| `spin 20000`, 4 messages a round | 30 µs | | 35 |
+
+So the waves scale with workers where steps are costly and a wave is large, and cost about a
+microsecond a message where steps are cheap: `perf` puts most of that in `lean_dec_ref_cold`,
+freeing objects a task has made, which Lean counts atomically. A wave of a few messages costs
+the hand-off to another thread and back. `lanes-heavy-par` sees both: the shard takes a few inputs
+at a time from 64 connections, so its waves are small.
+
 ## Results
 
 The latest run on the warm machine.
@@ -162,3 +214,24 @@ one shard, and a shard is one thread, so the application's logic uses one core w
 number of connections; the IO path and running actors in parallel are the next steps.
 `lanes-journal` syncs the journal once a batch before it answers, and a batch is what has
 arrived since the last, so more connections share a sync.
+
+### Parallel actors and IO threads on the warm machine (2026-11-27, commit baec29b81c11)
+
+Same machine and settings as above; `IO_THREADS` and `WORKERS` 8 (a quarter of the server's 32
+CPUs). Requests a second at 1 / 16 / 64 connections, CPU µs a request at 64.
+
+| server | req/s | CPU µs/req |
+| --- | --- | ---: |
+| `go` | 29,926 / 125,774 / 139,730 | 93 |
+| `lanes` | 10,518 / 34,223 / 37,177 | 85 |
+| `lanes-io` | 13,719 / 42,482 / 45,088 | 60 |
+| `lanes-par` | 10,671 / 33,975 / 36,790 | 89 |
+| `lanes-io-par` | 11,529 / 40,600 / 44,335 | 62 |
+| `lanes-many` | 10,992 / 34,715 / 37,474 | 89 |
+| `lanes-many-par` | 10,451 / 29,755 / 33,798 | 114 |
+| `lanes-heavy` | 7,530 / 20,524 / 20,453 | 142 |
+| `lanes-heavy-par` | 7,351 / 28,670 / 31,921 | 147 |
+
+IO threads gain 21–30% and cut CPU a request by a quarter. Parallel actors gain 40–56% when each
+step does real work (`heavy`) and cost about 10% when steps are trivial (`many`), so `workers`
+stays 1 by default until the shell chooses it from its own timing.

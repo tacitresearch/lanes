@@ -313,7 +313,9 @@ independent changes disjoint files; keep it that way.
   resolving: run `git config merge.generated.driver true` once (`.gitattributes` names them),
   and after a merge run `lake exe lanes lint --fix`, which writes them again.
 - A new decision is a new file `docs/decisions/new-<slug>.md` whose first line is `# D?. Title`.
-  Do not choose its number: `lake exe lanes lint --fix --main` numbers it on the main branch.
+  Do not choose its number: whoever opens the pull request runs `lake exe lanes lint --fix --main`
+  against the current main, which numbers it; CI on main refuses an unnumbered decision. If another
+  open pull request took the same number, renumber the later one.
 - A change of status goes in its fragment, `docs/status/areas/<area>.md` or
   `docs/status/apps/<app>.md` (the row on the first line, the known limits after it).
 - An axiom gate goes in `Tests/Axioms/<Area>.lean`, under the line naming its module; a lemma
@@ -334,7 +336,7 @@ Agents do what the docs say, so a stale doc is worse than none. Keep each short 
   checked, tested or trusted.
 - Cite files by their repository path in backquotes; `lanes lint` fails on one that does not
   exist (`docs/history/` and `docs/decisions/` are exempt: they record the past). Name a module
-  that is not written yet by its module name (`Lanes.Lib.Encoding.Base64`), not its path.
+  that is not written yet by its module name (`Lanes.Lib.Encoding.Base32`), not its path.
 - `docs/decisions/` is the record of why: never rewrite a decision, write a new one that
   supersedes it.
 - Write plainly: short sentences, one name per concept, no marketing.

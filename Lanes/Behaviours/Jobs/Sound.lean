@@ -51,11 +51,6 @@ theorem timer_ne_of_key (h : a.key ≠ key) :
     timer (R := R) a ≠ .expire key ∧ timer (R := R) a ≠ .retry key :=
   ⟨fun he => h (timer_eq_expire.mp he).1, fun he => h (timer_eq_retry.mp he).1⟩
 
-theorem timer_eq_of_phase {a' : Active K J} (hkey : a'.key = a.key) (hphase : a'.phase = a.phase) :
-    timer (R := R) a' = timer a := by
-  unfold timer
-  rw [hphase, hkey]
-
 end Timer
 
 variable {K J R : Type} [DecidableEq K] [DecidableEq J] [DecidableEq R] {config : Config R}

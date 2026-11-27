@@ -17,8 +17,9 @@ are due, how long to sleep and when the shard is idle are the kernel's answers
 (`Lanes.Kernel`), not decisions made here.
 
 By `Kernel.exec_reachable` nothing this loop does can take the system outside the semantics.
-What is trusted is that it hands outputs on as the kernel gave them. Actors do not run in
-parallel with each other; parallelism comes from running more shards.
+What is trusted is that it hands outputs on as the kernel gave them. With `workers` above one,
+the inputs that arrive together are accepted together and the steps of the actors they reach
+are worked out in parallel, which changes nothing the kernel does (`Kernel.runWaves_eq`).
 
 The inbox is bounded, which is the system's back-pressure: `input` waits for room and
 `tryInput` refuses (rule 3.8).
@@ -44,6 +45,10 @@ structure Runtime.Config where
   /-- With a journal that can save the kernel: how many entries to write between two saves.
   After a save the journal is cut, so this bounds how much a restart replays. -/
   snapshotEvery : Nat := 65536
+  /-- Threads that work out the steps of different actors at once (`Kernel.runWaves`). With one,
+  each input is a turn of its own, as the kernel was always run; with more, the inputs that
+  arrive together are one turn, and the actors they reach step in parallel. -/
+  workers : Nat := 1
 
 /-- What a durable shard needs of its journal's storage. `Lanes.Journal.Store.open` gives one
 backed by a file. -/
@@ -171,8 +176,11 @@ private def loop (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
     let wait ← kernel.modifyGet fun k => ((k.advance now).wait, k)
     let (batch, closed) ← rt.take wait
     if batch.isEmpty && closed then break
-    let config : Batch.Config := { now_ms := ← clock, fuel := max 1 rt.config.batch, snapshotEvery }
+    let workers := rt.config.workers
+    let config : Batch.Config :=
+      { now_ms := ← clock, fuel := max 1 rt.config.batch, snapshotEvery, workers }
     let held ← waiting.get
+    let batch := if workers ≤ 1 then batch else Batch.group batch
     let (acts, resolved, still, count) ← kernel.modifyGet fun k =>
       match Batch.run config k written held batch with
       | { kernel, written, acts, resolved, waiting } => ((acts, resolved, waiting, written), kernel)

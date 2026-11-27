@@ -3,7 +3,7 @@ name: CI
 # Jobs that build run on `vars.LANES_RUNNER` (a label or a JSON list of labels), or on
 # ubuntu-latest when it is unset; a pull request from a fork always runs on ubuntu-latest. CI
 # does not start the warm runner machine (mutants.yml does): point LANES_RUNNER at it only while
-# it is kept running. See docs/RUNNERS.md. `build` builds everything once; the other jobs
+# it is kept running. See docs/RUNNERS.md. `compile` builds everything once; the other jobs
 # restore its build and run in parallel.
 
 on:
@@ -125,7 +125,7 @@ jobs:
       - uses: ./.github/actions/lean
       - name: Build and check each small example
         run: |
-          for example in counter bank bank-web kv-cache election watchdog migration; do
+          for example in counter bank bank-web kv-cache election watchdog payments migration; do
             echo "::group::examples/$example"
             mkdir -p "examples/$example/.lake"
             ln -sfn "$GITHUB_WORKSPACE/.lake/packages" "examples/$example/.lake/packages"

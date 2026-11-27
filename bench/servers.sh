@@ -2,12 +2,22 @@
 # shellcheck shell=bash
 
 # Every server, in the order run.sh runs them.
-ALL_SERVERS=(go1 go tcp tcp-park std std-unlimited lanes lanes-journal lanes-snapshot)
+ALL_SERVERS=(go1 go tcp tcp-park std std-unlimited lanes lanes-journal lanes-snapshot
+  lanes-io lanes-par lanes-io-par lanes-many lanes-many-par lanes-heavy lanes-heavy-par)
+
+# The threads of the servers that run in parallel: IO_THREADS run connections
+# (ServerConfig.ioThreads) and WORKERS work out actors' steps (Runtime.Config.workers); by default
+# a quarter of LEAN_NUM_THREADS each, which run.sh sets to the server's CPUs. K actors in
+# lanes-many* and lanes-heavy*, and SPIN rounds of hashing in each step of lanes-heavy*.
+K=${K:-64}
+SPIN=${SPIN:-20000}
+quarter_cpus() { local n=$(( ${LEAN_NUM_THREADS:-4} / 4 )); echo $(( n > 0 ? n : 1 )); }
 
 # Sets SERVER to the command that runs server <name> on <port>, keeping any journal in <dir>.
 # shellcheck disable=SC2034
 server_argv() {
   local name=$1 port=$2 dir=$3 bin=.lake/build/bin
+  local io=${IO_THREADS:-$(quarter_cpus)} workers=${WORKERS:-$(quarter_cpus)}
   case $name in
     go1) SERVER=(env GOMAXPROCS=1 .build/hello -port "$port") ;;
     go) SERVER=(.build/hello -port "$port") ;;
@@ -18,6 +28,13 @@ server_argv() {
     lanes) SERVER=("$bin/benchLanes" "$port") ;;
     lanes-journal) SERVER=("$bin/benchLanes" "$port" "$dir/j") ;;
     lanes-snapshot) SERVER=("$bin/benchLanes" "$port" "$dir/j" 1024) ;;
+    lanes-io) SERVER=("$bin/benchLanes" "$port" "io=$io") ;;
+    lanes-par) SERVER=("$bin/benchLanes" "$port" "workers=$workers") ;;
+    lanes-io-par) SERVER=("$bin/benchLanes" "$port" "io=$io" "workers=$workers") ;;
+    lanes-many) SERVER=("$bin/benchMany" "$port" "$K" 0) ;;
+    lanes-many-par) SERVER=("$bin/benchMany" "$port" "$K" 0 "workers=$workers") ;;
+    lanes-heavy) SERVER=("$bin/benchMany" "$port" "$K" "$SPIN") ;;
+    lanes-heavy-par) SERVER=("$bin/benchMany" "$port" "$K" "$SPIN" "workers=$workers") ;;
     *) echo "unknown server $name; the servers are ${ALL_SERVERS[*]}" >&2; return 2 ;;
   esac
 }

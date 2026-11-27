@@ -25,10 +25,14 @@ there.
 5. `election`: leader election with timers, crashes and restarts, at most one leader per term,
    proved with a ghost history and `Monotone`; random runs for five nodes.
 6. `watchdog`: what fairness says about a keep-alive: a fair run in which the dog never barks.
-7. `migration`: a deploy that changes the state type. Version 1 of a quota service runs on a
+7. `payments`: a shop that charges each order through a model of a payment service, whose
+   answers may be late, lost or `unknown` and whose webhooks come late, twice and out of order.
+   A retry without the idempotency key charges an order twice, and the checker finds it; with
+   the key, an order is charged at most once in every run, proved.
+8. `migration`: a deploy that changes the state type. Version 1 of a quota service runs on a
    journal; version 2 adds a quota to each user, reads version 1's files through an upgrade,
    and carries its invariant across with the migration's proof.
-8. `raft-kv`, `ledger`, `rookery`: the serious systems below.
+9. `raft-kv`, `ledger`, `rookery`: the serious systems below.
 
 | Feature | Where to see it |
 | --- | --- |
@@ -40,7 +44,8 @@ there.
 | Refinement to a spec (`System.Implements`, `System.Refines`) | `counter`, `kv-cache`, `ledger`, `raft-kv`, `rookery` |
 | A request takes effect once (`Once.actor`, `Service.once`) | `kv-cache`, `raft-kv` |
 | Fairness and liveness | `watchdog` |
-| Model checks, a bug found, random runs | `bank`, `kv-cache`, `election` |
+| A model of an external service: timeouts with unknown outcome, idempotency keys, webhooks (`Lanes/Outside/`) | `payments` |
+| Model checks, a bug found, random runs | `bank`, `kv-cache`, `election`, `payments` |
 | HTTP, routes, htmx, templates | `counter`, `bank-web`, `ledger`, `rookery` |
 | A journal and snapshots across `kill -9` | `bank-web`, `ledger`, `raft-kv`, `rookery` |
 | A changed state type: an upgrade, a migration and its proof (`Migration`, `Journal.Upgrade`) | `migration` |

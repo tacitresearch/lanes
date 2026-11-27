@@ -28,8 +28,8 @@ def fetch (port : UInt16) (path : String) (method : String := "GET") (body : Str
   socket.close
   return (String.fromUTF8? received).getD ""
 
-def serveTest : Async (List (String × Bool)) := do
-  let server ← serve (Server.system echo) bridge { port := 0 } { record := true }
+def serveTest (ioThreads : Nat := 0) : Async (List (String × Bool)) := do
+  let server ← serve (Server.system echo) bridge { port := 0, ioThreads } { record := true }
   let some port := server.port | return [("web: the server reports its port", false)]
   let ok ← fetch port "/"
   let refused ← fetch port "/bad"
@@ -267,9 +267,9 @@ def get (path : String) (close : Bool := false) : String :=
 def statuses (text : String) : List String :=
   (text.splitOn "HTTP/1.1 ").drop 1 |>.map (·.take 3 |>.toString)
 
-def wireTest : Async (List (String × Bool)) := do
+def wireTest (ioThreads : Nat := 0) : Async (List (String × Bool)) := do
   let server ← serve (Server.system mute) slugBridge
-    { port := 0, head_ms := 300, idle_ms := 300, connections_max := 3 }
+    { port := 0, head_ms := 300, idle_ms := 300, connections_max := 3, ioThreads }
   let some port := server.port | return [("web: the server reports its port", false)]
   let pipelined ← exchange port [get "/echo/a" ++ get "/echo/b" ++ get "/echo/c" true]
   let pieces ← exchange port ["GE", "T /echo/s HTTP/1.1\r\nHo", "st: h\r\nConnection: close\r\n", "\r\n"]
@@ -290,7 +290,7 @@ def wireTest : Async (List (String × Bool)) := do
   let beyond ← exchange port [get "/echo/n" true]
   for socket in held do socket.close
   let ended ← Async.race (do server.stop; return true) (do Async.sleep 3000; return false)
-  let server ← serve (Server.system mute) slugBridge { port := 0 }
+  let server ← serve (Server.system mute) slugBridge { port := 0, ioThreads }
   let some port := server.port | return [("web: the server reports its port", false)]
   let socket ← TCP.Socket.Client.mk
   socket.connect (.v4 ⟨.ofParts 127 0 0 1, port⟩)
@@ -321,8 +321,11 @@ def wireTest : Async (List (String × Bool)) := do
       (first.bind String.fromUTF8?).any (·.endsWith "kept") && stopped && after == none) ]
 
 def tests : IO (List (String × Bool)) := do
-  return (← serveTest.block) ++ (← linkTest.block) ++ (← deadlineTest.block)
+  let onLanes := fun (results : List (String × Bool)) =>
+    results.map fun (name, ok) => (s!"{name} (on 2 IO threads)", ok)
+  return (← (serveTest 0).block) ++ (← linkTest.block) ++ (← deadlineTest.block)
     ++ (← durableTest.block) ++ (← oldJournalTest.block) ++ (← prepareTest.block)
-    ++ (← journalFailTest.block) ++ (← wireTest.block)
+    ++ (← journalFailTest.block) ++ (← (wireTest 0).block)
+    ++ onLanes ((← (serveTest 2).block) ++ (← (wireTest 2).block))
 
 end Tests.Web
