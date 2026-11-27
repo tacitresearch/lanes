@@ -82,4 +82,5 @@ decision without a number.
 - [D66. A migration carries the old kernel across a deploy, once, with a proof](D66-a-migration-carries-the-kernel-across.md)
 - [D67. A TLS client, from the OpenSSL Lean's toolchain ships](D67-a-tls-client-from-the-openssl-lean-ships.md)
 - [D68. PostgreSQL is spoken in Lean, and a transactional store is a model](D68-postgres-protocol-in-lean.md)
+- [D69. The server tells its operators how it is, and nothing it tells enters a system](D69-observability.md)
 - [D71. S3 and Signature Version 4, in Lanes as the protocol of a class of object stores](D71-s3-and-signature-version-4.md)
