@@ -156,7 +156,7 @@ definitions of `Lanes/` that still have no evidence.
 - **The HTTP client's wire format.** What the reader makes of a response written as a server
   writes it, and of every start of one, is proved, and so are its size limit and its ending
   (`Response.read_wire`, `Response.read_more`).
-- **Trusted.** About 2,250 lines of trusted code, listed with their sizes in `TRUSTED.md`: IO,
+- **Trusted.** About 2,300 lines of trusted code, listed with their sizes in `TRUSTED.md`: IO,
   C that binds libsodium, `fsync` and a timed wait, a template macro, and an HTTP wire format whose reading
   is proved for what a server's writer sends and only tested for other forms. `lanes lint` fails if they change without the list,
   and `scripts/mutants.py` holds the known ways of breaking that code, each of which has to

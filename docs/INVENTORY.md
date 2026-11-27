@@ -14,16 +14,16 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Check` | 74 | 54 | 0 | 8 | 0 | 10 | 2 |
 | `Lanes/Core` | 104 | 40 | 0 | 34 | 1 | 10 | 19 |
 | `Lanes/Data` | 66 | 42 | 0 | 4 | 1 | 0 | 19 |
-| `Lanes/Durable` | 52 | 42 | 2 | 0 | 1 | 5 | 2 |
+| `Lanes/Durable` | 53 | 43 | 2 | 0 | 1 | 5 | 2 |
 | `Lanes/Lib` | 361 | 252 | 5 | 0 | 47 | 48 | 9 |
 | `Lanes/Net` | 37 | 6 | 5 | 0 | 0 | 25 | 1 |
 | `Lanes/Outside` | 10 | 0 | 5 | 2 | 3 | 0 | 0 |
 | `Lanes/Proof` | 34 | 13 | 0 | 0 | 0 | 20 | 1 |
-| `Lanes/Runtime` | 132 | 73 | 18 | 0 | 15 | 26 | 0 |
+| `Lanes/Runtime` | 156 | 93 | 18 | 0 | 15 | 30 | 0 |
 | `Lanes/Semantics` | 57 | 9 | 0 | 0 | 0 | 47 | 1 |
 | `Lanes/Web` | 315 | 188 | 14 | 8 | 64 | 39 | 2 |
 | `LanesCli` | 110 | 0 | 0 | 0 | 46 | 0 | 64 |
-| All | 1418 | 755 | 54 | 74 | 178 | 237 | 120 |
+| All | 1443 | 776 | 54 | 74 | 178 | 241 | 120 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -533,15 +533,16 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Journal.named?` | proved | through `Journal.open?`: `Journal.open?_cut`, `Journal.open?_file` |
 | `Journal.file` | proved | `Journal.Disk.load_cut`, `Journal.open?_cut`, `Journal.open?_file` |
 | `Journal.open?` | proved | `Journal.open?_cut`, `Journal.open?_file` |
-| `Journal.Entry.op?` | proved | through `Journal.ops`: `Journal.recover_handed`, `Journal.recover_kernel` and 2 more |
+| `Journal.Entry.op?` | proved | through `Journal.ops`: `Journal.recover_handed`, `Journal.recover_kernel` and 3 more |
 | `Journal.Entry.marks` | spec | used only in statements |
-| `Journal.ops` | proved | `Journal.recover_handed`, `Journal.recover_kernel`, `Journal.recover_outputs` and 1 more |
-| `Journal.replay1` | proved | through `Journal.recover`, `Journal.resume` and 1 more: `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash` and 9 more |
+| `Journal.ops` | proved | `Journal.recover_handed`, `Journal.recover_kernel`, `Journal.recover_outputs` and 2 more |
+| `Journal.replay1` | proved | through `Journal.recover`, `Journal.resume` and 2 more: `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash` and 10 more |
 | `Journal.recover` | proved | `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save` and 7 more |
 | `Journal.Entry.savedAt` | proved | `Journal.Disk.Holds.append`, `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash` and 2 more |
 | `Journal.since` | proved | through `Journal.resume`: `Journal.resume_eq_recover` |
 | `Journal.resume` | proved | `Journal.resume_eq_recover` |
 | `Journal.turn` | proved | through `Journal.turns`: `Journal.turns_kernel` |
+| `Journal.turnAll` | proved | `Journal.turnAll_eq_exec` |
 | `Journal.turns` | spec | used only in statements |
 
 ## `Lanes/Durable/Snapshot.lean`
@@ -1175,10 +1176,14 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Batch.due` | proved | `Batch.due_iff`, `Batch.flush_save` |
 | `Batch.put` | proved | `Batch.flush_save` |
-| `Batch.work` | proved | through `Batch.flush`, `Batch.run` and 1 more: `Batch.flush_save`, `Batch.run_handed` and 5 more |
+| `Batch.workWith` | proved | through `Batch.flush`, `Batch.run` and 1 more: `Batch.flush_save`, `Batch.run_handed` and 5 more |
+| `Batch.work` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_kernel` and 4 more |
+| `Batch.workAll` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_kernel` and 4 more |
 | `Batch.flush` | proved | `Batch.flush_save` |
 | `Batch.scan` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_kernel` and 4 more |
 | `Batch.finish` | proved | through `Batch.run`: `Batch.run_handed`, `Batch.run_kernel` and 3 more |
+| `Batch.group` | proved | `Batch.group_ins` |
+| `Batch.Command.ins` | spec | used only in statements |
 | `Batch.run` | proved | `Batch.run_handed`, `Batch.run_kernel`, `Batch.run_peek` and 2 more |
 | `Batch.Act.ops` | proved | through `Batch.journal`: `Batch.run_handed`, `Batch.run_kernel` and 1 more |
 | `Batch.Act.outputs` | proved | through `Batch.handed`: `Batch.run_handed` |
@@ -1224,31 +1229,31 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Kernel.cell` | proved | `Batch.run_peek`, `Kernel.WellFormed.runBatch_of_due`, `Kernel.WellFormed.step_of_due` and 3 more |
-| `Kernel.setCell` | proved | through `Kernel.apply`, `Kernel.boot` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 24 more |
+| `Kernel.setCell` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 33 more |
 | `Kernel.abs` | proved | `Kernel.WellFormed.quiet_iff`, `Kernel.WellFormed.wait_forever`, `Kernel.abs_boot` and 7 more |
 | `Kernel.env` | proved | `Kernel.abs_boot`, `Kernel.accept_sound`, `Kernel.exec_reachable` and 4 more |
-| `Kernel.unschedule` | proved | through `Kernel.apply`, `Kernel.boot` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 24 more |
-| `Kernel.perform` | proved | through `Kernel.apply`, `Kernel.boot` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 24 more |
-| `Kernel.performAll` | proved | through `Kernel.apply`, `Kernel.boot` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 24 more |
-| `Kernel.down` | proved | through `Kernel.apply`, `Kernel.boot` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 24 more |
-| `Kernel.settle` | proved | through `Kernel.apply`, `Kernel.boot` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 24 more |
-| `Kernel.rest` | proved | through `Kernel.apply`, `Kernel.exec` and 4 more: `Batch.run_handed`, `Batch.run_kernel` and 22 more |
-| `Kernel.handle` | proved | through `Kernel.apply`, `Kernel.exec` and 4 more: `Batch.run_handed`, `Batch.run_kernel` and 22 more |
-| `Kernel.startActor` | proved | through `Kernel.apply`, `Kernel.boot` and 4 more: `Batch.run_handed`, `Batch.run_kernel` and 23 more |
+| `Kernel.unschedule` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 33 more |
+| `Kernel.perform` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 33 more |
+| `Kernel.performAll` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 33 more |
+| `Kernel.down` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 33 more |
+| `Kernel.settle` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 33 more |
+| `Kernel.rest` | proved | through `Kernel.apply`, `Kernel.exec` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 30 more |
+| `Kernel.handle` | proved | `Kernel.frame_handle` |
+| `Kernel.startActor` | proved | `Kernel.frame_startActor` |
 | `Kernel.boot` | proved | `Http.kernel_fronted_answered_le_arrived`, `Http.kernel_served_answered_le_arrived`, `Journal.recover_kernel` and 6 more |
 | `Kernel.accept` | proved | `Kernel.accept_sound` |
 | `Kernel.run1` | proved | `Kernel.run1_sound` |
-| `Kernel.fire` | proved | `Kernel.fire_sound` |
-| `Kernel.advance` | proved | through `Kernel.apply`, `Kernel.exec`: `Batch.run_handed`, `Batch.run_kernel` and 13 more |
-| `Kernel.timerNext` | proved | through `Kernel.apply`, `Kernel.exec` and 2 more: `Batch.run_handed`, `Batch.run_kernel` and 20 more |
+| `Kernel.fire` | proved | `Kernel.fire_sound`, `Kernel.frame_fire` |
+| `Kernel.advance` | proved | through `Kernel.apply`, `Kernel.exec`: `Batch.run_handed`, `Batch.run_kernel` and 15 more |
+| `Kernel.timerNext` | proved | through `Kernel.apply`, `Kernel.exec` and 2 more: `Batch.run_handed`, `Batch.run_kernel` and 26 more |
 | `Kernel.step` | proved | `Kernel.WellFormed.runBatch_of_due`, `Kernel.WellFormed.step_events_ne_nil`, `Kernel.WellFormed.step_of_due` and 1 more |
 | `Kernel.wait` | proved | `Kernel.WellFormed.step_events_ne_nil`, `Kernel.WellFormed.wait_for_ms`, `Kernel.WellFormed.wait_forever` and 1 more |
-| `Kernel.runBatch` | proved | `Kernel.WellFormed.runBatch`, `Kernel.WellFormed.runBatch_of_due`, `Kernel.runBatch_outputs` and 1 more |
+| `Kernel.runBatch` | proved | `Kernel.WellFormed.runBatch`, `Kernel.WellFormed.runBatch_of_due`, `Kernel.runBatchAhead_eq` and 5 more |
 | `Kernel.quiet` | proved | `Batch.run_resolved`, `Kernel.WellFormed.quiet_iff` |
 | `Kernel.image` | proved | `Batch.flush_save`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save` and 4 more |
 | `Kernel.Image.kernel` | proved | `Batch.flush_save`, `Kernel.WellFormed.image`, `Kernel.abs_image_kernel` |
 | `Kernel.apply` | proved | `Kernel.WellFormed.apply` |
-| `Kernel.exec` | proved | `Batch.run_handed`, `Batch.run_kernel`, `Batch.settle_kernel` and 11 more |
+| `Kernel.exec` | proved | `Batch.run_handed`, `Batch.run_kernel`, `Batch.settle_kernel` and 13 more |
 
 ## `Lanes/Runtime/KernelSound.lean`
 
@@ -1360,6 +1365,31 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `EnvModel.shards` | proved | `Shards.AtHome.step`, `SysState.init_unsharded_equiv`, `System.ShardsReachable.unsharded_of_init` |
 | `SysState.unsharded` | proved | `Shards.AtHome.step`, `SysState.init_unsharded_equiv`, `System.Invariant.shards` and 4 more |
 | `Shards.effect` | spec | used only in statements |
+
+## `Lanes/Runtime/Wave.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Kernel.ahead` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 1 more |
+| `Kernel.Fits` | spec | a predicate |
+| `Kernel.Plan.get` | proved | through `Kernel.plan`, `Kernel.runBatchAhead` and 2 more: `Kernel.good_plan`, `Kernel.runBatchAhead_eq` and 2 more |
+| `Kernel.Plan.set` | proved | through `Kernel.plan`, `Kernel.runBatchAhead` and 2 more: `Kernel.good_plan`, `Kernel.runBatchAhead_eq` and 2 more |
+| `Kernel.Plan.drop` | proved | through `Kernel.runBatchAhead`, `Kernel.runWaves` and 1 more: `Kernel.runBatchAhead_eq`, `Kernel.runWaves_eq` and 1 more |
+| `Kernel.Plan.Good` | spec | a predicate |
+| `Kernel.Frame` | spec | a predicate |
+| `Kernel.handleAhead` | proved | through `Kernel.runBatchAhead`, `Kernel.runWaves` and 1 more: `Kernel.runBatchAhead_eq`, `Kernel.runWaves_eq` and 1 more |
+| `Kernel.run1Ahead` | proved | through `Kernel.runBatchAhead`, `Kernel.runWaves` and 1 more: `Kernel.runBatchAhead_eq`, `Kernel.runWaves_eq` and 1 more |
+| `Kernel.stepAhead` | proved | through `Kernel.runBatchAhead`, `Kernel.runWaves` and 1 more: `Kernel.runBatchAhead_eq`, `Kernel.runWaves_eq` and 1 more |
+| `Kernel.runBatchAhead` | proved | `Kernel.runBatchAhead_eq` |
+| `Kernel.Job.run` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 1 more |
+| `Kernel.mail` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 1 more |
+| `Kernel.jobs` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 1 more |
+| `Kernel.chunks` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 1 more |
+| `Kernel.Plan.add` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 1 more |
+| `Kernel.plan` | proved | `Kernel.good_plan` |
+| `Kernel.waves` | proved | `Kernel.waves_eq` |
+| `Kernel.runWaves` | proved | `Kernel.runWaves_eq` |
+| `Kernel.acceptAll` | proved | `Kernel.exec_inputs` |
 
 ## `Lanes/Semantics/Account.lean`
 

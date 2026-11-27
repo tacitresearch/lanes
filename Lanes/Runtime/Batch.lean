@@ -139,6 +139,32 @@ def group : List (Command σ P W) → List (Command σ P W)
     | more => .inputs [x] :: more
   | c :: rest => c :: group rest
 
+/-- The inputs a command carries. -/
+def Command.ins : Command σ P W → List σ.In
+  | .input x => [x]
+  | .inputs xs => xs
+  | _ => []
+
+omit [Hashable σ.Id] in
+/-- Grouping keeps every input, in order. -/
+theorem group_ins (commands : List (Command σ P W)) :
+    (group commands).flatMap Command.ins = commands.flatMap Command.ins := by
+  induction commands with
+  | nil => rfl
+  | cons c rest ih =>
+    cases c with
+    | input x =>
+      simp only [group]
+      split
+      · next xs more h =>
+        rw [h] at ih
+        simp only [List.flatMap_cons, Command.ins] at ih ⊢
+        rw [← ih]; rfl
+      · simp only [List.flatMap_cons, Command.ins, ← ih]
+    | inputs xs => simp only [group, List.flatMap_cons, ih]
+    | idle timers waiter => simp only [group, List.flatMap_cons, ih]
+    | peek i reply => simp only [group, List.flatMap_cons, ih]
+
 /-- One batch: a turn for each input, at one time; when no input came, one turn without. -/
 def run (c : Config) (k : Kernel sys) (written : Nat) (waiting : Array (Bool × W))
     (commands : List (Command σ P W)) : Result sys P W :=

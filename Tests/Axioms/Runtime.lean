@@ -7,6 +7,9 @@ import Lanes.Semantics
 /-! The axiom gate (rule 5.5, see `Tests/Axioms.lean`) for the theorems of `Lanes/Runtime/`. -/
 
 -- Lanes.Runtime.Batch
+/-- info: 'Lanes.Batch.group_ins' depends on axioms: [propext, Classical.choice] -/
+#guard_msgs in #print axioms Lanes.Batch.group_ins
+
 /-- info: 'Lanes.Batch.run_kernel' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Batch.run_kernel
 
