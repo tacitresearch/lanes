@@ -75,12 +75,12 @@ runtime calls only `OpenSSL_version_num`, which suggests a TLS in `Std` later. S
 - the system's OpenSSL cannot be linked statically on Ubuntu 24.04 at all, and would be a second
   copy beside the toolchain's.
 
-The toolchain ships no headers, so `native/tls.c` declares the forty functions and ten constants
-it uses as OpenSSL 3 and 4 declare them. `scripts/tls-declarations.py` compiles those
+The toolchain ships no headers, so `native/tls.c` declares the 34 functions and 10 constants it
+uses as OpenSSL 3 and 4 declare them. `scripts/tls-declarations.py` compiles those
 declarations against the system's OpenSSL headers, and CI runs it on Linux, so a declaration
-that disagrees with OpenSSL's fails there. They are functions LibreSSL, BoringSSL and AWS-LC also
-provide (the `int` forms of read and write, not OpenSSL's `_ex` ones), so linking another of
-those libraries instead changes the Lake file only.
+that disagrees with OpenSSL's fails there. They are chosen from OpenSSL's API as LibreSSL and AWS-LC
+also provide it (the `int` forms of read and write, not OpenSSL's `_ex` ones), so linking one of
+those instead should change the Lake file only; that is not tried here.
 
 The cost is that an OpenSSL fix reaches Lanes only through a Lean release and Lanes' next
 toolchain, and that OpenSSL's record is that of a large C library. AWS-LC is the better library

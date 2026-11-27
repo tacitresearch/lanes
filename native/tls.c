@@ -8,8 +8,8 @@ server's certificate is always verified, against the certificates of a file the 
 and so is the name or address it is for. Arguments are borrowed.
 
 The OpenSSL is the one Lean's toolchain ships and links into every executable, which comes
-without headers; the functions below are declared as OpenSSL 3 and 4 declare them, and are also
-those of LibreSSL, BoringSSL and AWS-LC, so that linking another changes nothing here.
+without headers; the functions below are declared as OpenSSL 3 and 4 declare them
+(`scripts/tls-declarations.py` checks it), from the part of its API LibreSSL and AWS-LC share.
 */
 #include <limits.h>
 #include <pthread.h>
