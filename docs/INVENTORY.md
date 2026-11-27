@@ -14,8 +14,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Check` | 74 | 54 | 0 | 8 | 0 | 10 | 2 |
 | `Lanes/Core` | 104 | 40 | 0 | 34 | 1 | 10 | 19 |
 | `Lanes/Data` | 66 | 42 | 0 | 4 | 1 | 0 | 19 |
-| `Lanes/Durable` | 52 | 42 | 2 | 0 | 1 | 5 | 2 |
-| `Lanes/Lib` | 361 | 252 | 5 | 0 | 47 | 48 | 9 |
+| `Lanes/Durable` | 52 | 44 | 2 | 0 | 0 | 5 | 1 |
+| `Lanes/Lib` | 361 | 257 | 5 | 0 | 42 | 48 | 9 |
 | `Lanes/Net` | 37 | 6 | 5 | 0 | 0 | 25 | 1 |
 | `Lanes/Outside` | 10 | 0 | 5 | 2 | 3 | 0 | 0 |
 | `Lanes/Proof` | 34 | 13 | 0 | 0 | 0 | 20 | 1 |
@@ -23,7 +23,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Semantics` | 57 | 9 | 0 | 0 | 0 | 47 | 1 |
 | `Lanes/Web` | 315 | 188 | 14 | 8 | 64 | 39 | 2 |
 | `LanesCli` | 110 | 0 | 0 | 0 | 46 | 0 | 64 |
-| All | 1418 | 755 | 54 | 74 | 178 | 237 | 120 |
+| All | 1418 | 762 | 54 | 74 | 172 | 237 | 119 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -375,7 +375,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `update` | proved | through `SysState.down`, `SysState.init` and 4 more: `Account.implements`, `Account.implements_timed` and 38 more |
 | `Event.timed` | spec | used only in statements |
 | `Event.visible` | spec | used only in statements |
-| `SysState.blank` | proved | `System.Inductive.of_monotone`, `System.Monotone.and` |
+| `SysState.blank` | proved | `System.Inductive.of_monotone`, `System.Monotone.and`, `System.Monotone.and_net` |
 | `SysState.hasMail` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 24 more |
 | `SysState.perform` | proved | through `SysState.init`, `SysState.run` and 3 more: `Account.implements`, `Account.implements_timed` and 37 more |
 | `SysState.performAll` | proved | through `SysState.init`, `SysState.run` and 3 more: `Account.implements`, `Account.implements_timed` and 37 more |
@@ -501,7 +501,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Frame.fits` | proved | `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save`, `Journal.Disk.Holds.save_crash` and 4 more |
+| `Frame.fits` | proved | `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save`, `Journal.Disk.Holds.save_crash` and 5 more |
 | `Frame.checksum` | proved | `Frame.decode_checksum_ne` |
 | `Frame.stamped` | proved | `Frame.decode_checksum_ne` |
 | `Frame.one` | proved | through `Frame.encode`: `Frame.decode_checksum_ne`, `Frame.decode_encode` and 4 more |
@@ -552,10 +552,10 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Kernel.Image.Codecs.cell` | proved | its type, `Codec` |
 | `Kernel.Image.Codecs.envelope` | proved | its type, `Codec` |
 | `Kernel.Image.Codecs.image` | proved | its type, `Codec` |
-| `Journal.savedHeader` | proved | through `Journal.savedRecords`: `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save` and 1 more |
-| `Journal.savedRecords` | proved | `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save`, `Journal.Disk.Holds.save_crash` |
-| `Journal.saved` | tested | `Tests/Durable.lean` |
-| `Journal.saved?` | none |  |
+| `Journal.savedHeader` | proved | through `Journal.saved?`, `Journal.savedRecords`: `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save` and 2 more |
+| `Journal.savedRecords` | proved | `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save`, `Journal.Disk.Holds.save_crash` and 1 more |
+| `Journal.saved` | proved | `Journal.saved?_saved` |
+| `Journal.saved?` | proved | `Journal.saved?_saved` |
 
 ## `Lanes/Lib/Crypto/Hmac.lean`
 
@@ -565,11 +565,11 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Hmac.Pads.of` | tested | `Tests/Crypto.lean` |
 | `Hmac.reference` | tested | `Tests/Crypto.lean` |
 | `Bytes.sameReference` | tested | `Tests/Crypto.lean` |
-| `Bytes.hexDigit` | tested | `Tests/Crypto.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` and 2 more |
-| `Bytes.hex` | tested | `Tests/Crypto.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` and 2 more |
-| `Bytes.nibble?` | tested | `Tests/Crypto.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
-| `Bytes.unhexList` | tested | `Tests/Crypto.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
-| `Bytes.unhex?` | tested | `Tests/Crypto.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
+| `Bytes.hexDigit` | proved | through `Bytes.hex`: `Bytes.unhex?_hex` |
+| `Bytes.hex` | proved | `Bytes.unhex?_hex` |
+| `Bytes.nibble?` | proved | through `Bytes.unhex?`: `Bytes.unhex?_hex` |
+| `Bytes.unhexList` | proved | through `Bytes.unhex?`: `Bytes.unhex?_hex` |
+| `Bytes.unhex?` | proved | `Bytes.unhex?_hex` |
 
 ## `Lanes/Lib/Crypto/Sha256.lean`
 
@@ -1158,7 +1158,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `SysState.grow` | proved | `Account.Fires.grow`, `Account.Fires.handle`, `Account.Moves.grow` and 11 more |
+| `SysState.grow` | proved | `Account.Fires.grow`, `Account.Fires.handle`, `Account.Moves.grow` and 12 more |
 | `SysState.Pending` | spec | a predicate |
 
 ## `Lanes/Proof/Past.lean`
@@ -1748,9 +1748,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Http.tokenChar` | proved | `Http.visible_of_tokenChar` |
-| `Http.token` | proved | `Http.parseCookies_cookieHeader` |
+| `Http.token` | proved | `Http.Request.fields_token`, `Http.parseCookies_cookieHeader` |
 | `Http.plain` | proved | `Http.Request.head_plain`, `Http.plain_of_visible` |
-| `Http.visible` | proved | `Http.plain_of_visible`, `Http.visible_of_tokenChar` |
+| `Http.visible` | proved | `Http.Request.target_visible`, `Http.plain_of_visible`, `Http.visible_of_tokenChar` |
 | `Http.ows` | proved | `Http.Request.read_blankInName` |
 | `Http.trimOws` | proved | through `Http.Request.fieldName`: `Http.Request.read_lengthAndCoding`, `Http.Request.read_twoLengths` |
 | `Http.isQdtext` | proved | `MediaType.isQdtext_of` |
@@ -1845,9 +1845,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Http.frames` | proved | `Http.Request.fields_framing` |
-| `Http.Request.target` | proved | through `Http.Request.wire`: `Http.Request.head_plain`, `Http.Request.read_wire` and 1 more |
-| `Http.Request.kept` | proved | through `Http.Request.fields`, `Http.Request.wire`: `Http.Request.fields_framing`, `Http.Request.head_plain` and 2 more |
-| `Http.Request.fields` | proved | `Http.Request.fields_framing` |
+| `Http.Request.target` | proved | `Http.Request.target_visible` |
+| `Http.Request.kept` | proved | through `Http.Request.fields`, `Http.Request.wire`: `Http.Request.fields_framing`, `Http.Request.fields_token` and 3 more |
+| `Http.Request.fields` | proved | `Http.Request.fields_framing`, `Http.Request.fields_token` |
 | `Http.Request.head` | proved | `Http.Request.head_plain` |
 | `Http.Request.wire` | proved | `Http.Request.head_plain`, `Http.Request.read_wire`, `Http.Request.read_wire_extract` |
 | `Http.Reading.map` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Conn.read_encode`, `Http.Response.read_append` and 11 more |
