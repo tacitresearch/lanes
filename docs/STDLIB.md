@@ -131,30 +131,29 @@ API. P1 is common, P2 rare.
 
 | Go package | Class | Where, or why not |
 | --- | --- | --- |
-| `crypto/sha256` | e | libsodium's, bound in `Lanes/Lib/Crypto/Sodium.lean`, with `Lanes.Sha256` (pure Lean, NIST vectors) as its reference (D46) |
-| `crypto/hmac` | e | libsodium's, bound in `Lanes/Lib/Crypto/Sodium.lean`, with `Lanes.Hmac` (pure Lean, RFC 4231 vectors) as its reference (D46) |
-| `crypto/pbkdf2` | e | `Lanes/Lib/Crypto/Pbkdf2.lean`, over libsodium's HMAC, for SCRAM-SHA-256 only (RFC 7914 vectors); passwords are digested with Argon2id (D46) |
-| `crypto/rand` | a | `IO.getRandomBytes` (reads `/dev/urandom`); Lanes binds libsodium's `randombytes_buf`, which uses `getrandom(2)` and also works where `/dev` is not mounted (D46) |
-| `crypto/subtle` | c | libsodium `sodium_memcmp`, bound (D46): compiled Lean promises nothing about timing, so the Lean comparison is only the reference |
+| `crypto/sha256` | e | OpenSSL's, bound in `Lanes/Lib/Crypto/Native.lean`, with `Lanes.Sha256` (pure Lean, NIST vectors) as its reference (D46) |
+| `crypto/hmac` | e | OpenSSL's, bound in `Lanes/Lib/Crypto/Native.lean`, with `Lanes.Hmac` (pure Lean, RFC 4231 vectors) as its reference (D46) |
+| `crypto/pbkdf2` | e | `Lanes/Lib/Crypto/Pbkdf2.lean`, over OpenSSL's HMAC, for SCRAM-SHA-256 only (RFC 7914 vectors); passwords are digested with Argon2id (D46) |
+| `crypto/rand` | a | `IO.getRandomBytes` (reads `/dev/urandom`, or `BCryptGenRandom` on Windows), as `Lanes.randomBytes`: it needs `/dev` mounted |
+| `crypto/subtle` | c | OpenSSL's `CRYPTO_memcmp`, bound (D46): compiled Lean promises nothing about timing, so the Lean comparison is only the reference |
 | `crypto/tls` | e | the client, from the OpenSSL Lean's toolchain ships, bound in `native/tls.c` and `Lanes/Web/IO/Tls.lean`; inbound TLS stays at the load balancer or reverse proxy |
 | `crypto/x509`, `crypto/x509/pkix` | e | OpenSSL's, inside the TLS client: the chain verified against the system's roots or a file given, the name or address checked (`Lanes/Web/IO/Tls.lean`); of a certificate, Lean reads only the signature algorithm, for channel binding (`Lanes/Lib/Crypto/Certificate.lean`) |
-| `crypto/aes`, `crypto/cipher` | c | libsodium `crypto_aead_xchacha20poly1305_ietf` (or `crypto_aead_aes256gcm`), for encrypted cookies and data at rest (P1) |
-| `crypto/ed25519` | c | libsodium `crypto_sign` (P1: webhook signatures) |
-| `crypto/ecdh` | c | libsodium `crypto_scalarmult` for X25519; P-256 from OpenSSL's `libcrypto` (P2) |
+| `crypto/aes`, `crypto/cipher` | c | OpenSSL's AES-256-GCM or ChaCha20-Poly1305, for encrypted cookies and data at rest (P1) |
+| `crypto/ed25519` | c | OpenSSL's Ed25519 (P1: webhook signatures) |
+| `crypto/ecdh` | c | X25519 and P-256 from OpenSSL's `libcrypto` (P2) |
 | `crypto/ecdsa` | e | verifying only: P-256 with SHA-256 from the OpenSSL Lean's toolchain ships, bound in `native/verify.c` and `Lanes/Lib/Crypto/Verify.lean`, the key's and the signature's DER written in Lean (`Lanes/Lib/Crypto/PublicKey.lean`); for ES256 tokens; signing with a P-256 key and RFC 6979's nonce, from the same OpenSSL (`native/sign.c`, `Lanes/Lib/Crypto/Sign.lean`), over SHA-1 or SHA-256, for CloudFront's signed URLs |
 | `crypto/rsa` | e | verifying only: PKCS #1 v1.5 with SHA-256, bound from the same OpenSSL (`native/verify.c`), with a Lean reference (`Rsa.verifyReference`); for RS256 tokens. Signing with PKCS #1 v1.5 over SHA-1 or SHA-256 (`native/sign.c`, `Lanes/Lib/Crypto/Sign.lean`); no PSS or encryption |
 | `crypto/sha1` | c | `libcrypto` (P1: TOTP is HMAC-SHA-1; also the WebSocket handshake) |
-| `crypto/sha512` | e | `Lanes/Lib/Crypto/Sha512.lean`, SHA-512 and SHA-384 in pure Lean (NIST vectors, `openssl dgst`), for the hash of a certificate that channel binding sends; libsodium has SHA-512 and not SHA-384 |
-| `crypto/hkdf` | c | libsodium `crypto_kdf_hkdf_sha256` (P1: deriving keys from one secret) |
+| `crypto/sha512` | e | `Lanes/Lib/Crypto/Sha512.lean`, SHA-512 and SHA-384 in pure Lean (NIST vectors, `openssl dgst`), for the hash of a certificate that channel binding sends; OpenSSL has both, and SHA-512 stays in Lean because what it hashes is public |
+| `crypto/hkdf` | c | OpenSSL's HKDF (P1: deriving keys from one secret) |
 | `crypto` | d | a registry of hash functions; Lean calls functions by name |
 | `crypto/md5` | e | `Lanes/Lib/Crypto/Md5.lean`, pure Lean, for PostgreSQL's `md5` authentication only (RFC 1321 vectors); broken as a hash |
 | `crypto/des`, `crypto/rc4`, `crypto/dsa`, `crypto/elliptic` | d | broken, legacy or deprecated |
 | `crypto/sha3`, `crypto/mlkem` | d | no application use yet; ML-KEM matters inside TLS, which is bound |
 | `crypto/fips140` | d | Go's FIPS mode |
 
-libsodium is the default because its interfaces are hard to misuse and it is small. OpenSSL is
-there because TLS needs it, and then provides what libsodium lacks (P-256, RSA, SHA-1), so
-there are two libraries and not three. Bindings are tested against Project Wycheproof's vectors
+OpenSSL is the one library: Lean's toolchain ships it and links it into every executable, so an
+application installs nothing (`docs/decisions/new-one-crypto-library.md`). Bindings are tested against Project Wycheproof's vectors
 and the RFCs' own.
 
 ## Operating system, time and runtime
@@ -193,9 +192,9 @@ and the RFCs' own.
 
 | Package | Class | Where, or why not |
 | --- | --- | --- |
-| `x/crypto/argon2` | c | libsodium `crypto_pwhash` (Argon2id). Done (D46): computed off the shard, by a bridge's `prepare` |
+| `x/crypto/argon2` | c | OpenSSL's Argon2id KDF, as libsodium's `crypto_pwhash` computes it. Done (D46): computed off the shard, by a bridge's `prepare` |
 | `x/crypto/bcrypt` | d | Argon2id instead; bcrypt only to import users from elsewhere |
-| `x/crypto/chacha20poly1305`, `x/crypto/nacl/secretbox`, `x/crypto/nacl/box` | c | libsodium (P1) |
+| `x/crypto/chacha20poly1305`, `x/crypto/nacl/secretbox`, `x/crypto/nacl/box` | c | OpenSSL's ChaCha20-Poly1305 and X25519 (P1) |
 | `x/crypto/acme/autocert`, `x/crypto/ssh` | d | certificates belong to the reverse proxy; no SSH |
 | `x/net/html` | b | P2: an application takes text and Markdown, not HTML |
 | `x/net/idna` | b | P1 |
@@ -268,8 +267,8 @@ Each step depends only on steps above it and on what Lanes has.
    of buckets per key (an address from 2, a user) in a `Std.TreeMap`, with buckets that are full
    dropped so the table stays bounded.
 7. **`fsync`**: done (D46), in `native/lanes.c`, used by `Lanes/Durable/IO/Journal.lean`.
-8. **libsodium**: done (D46): Argon2id for `Password.digest`, `sodium_memcmp` for `Bytes.same`,
-   `randombytes_buf`, SHA-256 and HMAC-SHA-256.
+8. **Bound cryptography**: done (D46), from OpenSSL's libcrypto: Argon2id for `Password.digest`,
+   `CRYPTO_memcmp` for `Bytes.same`, SHA-256 and HMAC-SHA-256.
 9. **TLS and names in the HTTP client**: done (D67), with the OpenSSL that Lean's toolchain
    links, verifying against the system's roots with the host name checked, and `Std.Async.DNS`
    for names (`Lanes/Web/IO/Client.lean`, `Lanes/Web/IO/Tls.lean`).

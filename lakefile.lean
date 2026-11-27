@@ -12,22 +12,12 @@ package lanes where
 
 require cslib from git "https://github.com/leanprover/cslib" @ "910210f7d155e22a2244591e394bd16fbb0ddbb3"
 
-def needSodium : String :=
-  "lanes links libsodium statically and finds it with pkg-config: install them \
-  (apt-get install libsodium-dev pkg-config, or brew install libsodium pkg-config)"
-
-def pkgConfigSodium (option : String) : FetchM String := do
-  let some out ← captureProc? { cmd := "pkg-config", args := #[option, "libsodium"] }
-    | error needSodium
-  return out.trimAscii.toString
-
-/-- `native/lanes.c`, compiled by the system's C compiler against its libsodium headers, which
-Homebrew on Apple silicon puts outside the compiler's search path. -/
+/-- `native/lanes.c`: SHA-256, HMAC, a comparison and Argon2id from the OpenSSL that `native/tls.c`
+uses, declared in the same way, and `fsync` and a timed wait. -/
 target native pkg : FilePath := do
   let src ← inputTextFile (pkg.dir / "native" / "lanes.c")
-  let sodiumFlags := (← pkgConfigSodium "--cflags").splitOn " " |>.filter (· != "") |>.toArray
   buildO (pkg.buildDir / "native" / "lanes.o") src
-    (#["-I", (← getLeanIncludeDir).toString] ++ sodiumFlags) #["-O2", "-fPIC", "-DNDEBUG", "-Wall"]
+    #["-I", (← getLeanIncludeDir).toString] #["-O2", "-fPIC", "-DNDEBUG", "-Wall"]
 
 /-- `native/tls.c`, which declares the OpenSSL functions it calls itself: they come from the
 OpenSSL that Lean's toolchain ships and links into every executable, which has no headers. -/
@@ -48,18 +38,10 @@ target sign pkg : FilePath := do
   buildO (pkg.buildDir / "native" / "sign.o") src
     #["-I", (← getLeanIncludeDir).toString] #["-O2", "-fPIC", "-DNDEBUG", "-Wall"]
 
-/-- The system's libsodium, linked statically: a binary does not need it installed to run. -/
-target sodium : FilePath := do
-  let lib := FilePath.mk (← pkgConfigSodium "--variable=libdir") / "libsodium.a"
-  unless ← lib.pathExists do
-    error s!"lanes links libsodium statically, and {lib} is not there: install the static \
-      library too (libsodium-static on Fedora)"
-  inputBinFile lib
-
 @[default_target]
 lean_lib Lanes where
   roots := #[`Lanes, `Lanes.Proofs, `Lanes.Semantics, `Lanes.Testing]
-  moreLinkObjs := #[native, tls, verify, sign, sodium]
+  moreLinkObjs := #[native, tls, verify, sign]
 
 @[default_target]
 lean_lib Tests where
