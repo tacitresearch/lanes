@@ -289,7 +289,7 @@ def wireTest : Async (List (String × Bool)) := do
   Async.sleep 50
   let beyond ← exchange port [get "/echo/n" true]
   for socket in held do socket.close
-  server.stop
+  let ended ← Async.race (do server.stop; return true) (do Async.sleep 3000; return false)
   let server ← serve (Server.system mute) slugBridge { port := 0 }
   let some port := server.port | return [("web: the server reports its port", false)]
   let socket ← TCP.Socket.Client.mk
@@ -316,6 +316,7 @@ def wireTest : Async (List (String × Bool)) := do
     ("web: an idle connection is closed at its deadline, with nothing written",
       idle == some "" && 250 ≤ idled),
     ("web: a connection beyond the bound is closed without an answer", beyond.getD "" == ""),
+    ("web: and stop then returns, every connection answered and closed", ended),
     ("web: stop closes a connection kept open, after its response",
       (first.bind String.fromUTF8?).any (·.endsWith "kept") && stopped && after == none) ]
 
