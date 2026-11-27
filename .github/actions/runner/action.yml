@@ -6,7 +6,8 @@ description: >
   instance type are given instead (the workflow launches a machine for this run and terminates
   it), `manual` when only LANES_RUNNER is set (a label, or a JSON list of labels, of runners
   someone else keeps up), and `hosted` otherwise: ubuntu-latest. A pull request from a fork is
-  always `hosted`: its code must never run on a self-hosted runner.
+  always `hosted`: its code must never run on a self-hosted runner. So is a merge queue's
+  group, which may hold a pull request from a fork.
 inputs:
   runner:
     description: vars.LANES_RUNNER, which a composite action cannot read itself.
@@ -45,7 +46,7 @@ runs:
         AWS_INSTANCE_ID: ${{ inputs.aws-instance-id }}
         AWS_INSTANCE_TYPE: ${{ inputs.aws-instance-type }}
         RUN_LABEL: lanes-run-${{ github.run_id }}-${{ github.run_attempt }}
-        FORK: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+        FORK: ${{ github.event_name == 'merge_group' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) }}
       run: |
         python3 - <<'EOF' >> "$GITHUB_OUTPUT"
         import json, os, sys
