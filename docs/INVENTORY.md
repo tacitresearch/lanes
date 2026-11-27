@@ -15,16 +15,16 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Core` | 103 | 45 | 0 | 34 | 1 | 10 | 13 |
 | `Lanes/Data` | 68 | 43 | 0 | 4 | 1 | 0 | 20 |
 | `Lanes/Durable` | 70 | 58 | 2 | 0 | 0 | 9 | 1 |
-| `Lanes/Lib` | 603 | 384 | 32 | 1 | 102 | 75 | 9 |
+| `Lanes/Lib` | 626 | 388 | 37 | 1 | 116 | 75 | 9 |
 | `Lanes/Net` | 37 | 6 | 5 | 0 | 0 | 25 | 1 |
 | `Lanes/Outside` | 172 | 133 | 4 | 6 | 1 | 28 | 0 |
 | `Lanes/Proof` | 40 | 16 | 0 | 0 | 0 | 23 | 1 |
 | `Lanes/Runtime` | 180 | 100 | 21 | 0 | 29 | 30 | 0 |
 | `Lanes/Semantics` | 63 | 11 | 0 | 0 | 0 | 51 | 1 |
 | `Lanes/Testing` | 106 | 0 | 0 | 1 | 105 | 0 | 0 |
-| `Lanes/Web` | 691 | 357 | 57 | 46 | 175 | 54 | 2 |
-| `LanesCli` | 126 | 0 | 0 | 0 | 55 | 0 | 71 |
-| All | 2496 | 1314 | 126 | 124 | 469 | 342 | 121 |
+| `Lanes/Web` | 696 | 357 | 57 | 46 | 180 | 54 | 2 |
+| `LanesCli` | 129 | 0 | 0 | 0 | 57 | 0 | 72 |
+| All | 2527 | 1318 | 131 | 124 | 490 | 342 | 122 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -1316,6 +1316,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Postgres.Client.Config.encryption` | trusted | TRUSTED.md: The PostgreSQL client's IO |
+| `Postgres.Client.Config.ofSettings` | trusted | TRUSTED.md: The PostgreSQL client's IO |
+| `Postgres.Env.io` | trusted | TRUSTED.md: The PostgreSQL client's IO |
+| `Postgres.Client.fromEnv` | trusted | TRUSTED.md: The PostgreSQL client's IO |
 | `Postgres.Session.flush` | trusted | TRUSTED.md: The PostgreSQL client's IO |
 | `Postgres.Session.transmit` | trusted | TRUSTED.md: The PostgreSQL client's IO |
 | `Postgres.Session.receive` | trusted | TRUSTED.md: The PostgreSQL client's IO |
@@ -1326,6 +1329,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Postgres.Session.within` | trusted | TRUSTED.md: The PostgreSQL client's IO |
 | `Postgres.Session.exec` | trusted | TRUSTED.md: The PostgreSQL client's IO |
 | `Postgres.Session.close` | trusted | TRUSTED.md: The PostgreSQL client's IO |
+| `Postgres.socketAddress` | trusted | TRUSTED.md: The PostgreSQL client's IO |
+| `Postgres.resolve` | trusted | TRUSTED.md: The PostgreSQL client's IO |
 | `Postgres.connect` | trusted | TRUSTED.md: The PostgreSQL client's IO |
 | `Postgres.Store.perform` | trusted | TRUSTED.md: The PostgreSQL client's IO |
 | `Postgres.Store.handler` | trusted | TRUSTED.md: The PostgreSQL client's IO |
@@ -1412,6 +1417,29 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Postgres.Scram.parseServerFirst` | proved | `Postgres.Scram.respond_iterations`, `Postgres.Scram.respond_nonce` |
 | `Postgres.Scram.respond` | proved | `Postgres.Scram.respond_binds`, `Postgres.Scram.respond_iterations`, `Postgres.Scram.respond_nonce` |
 | `Postgres.Scram.verify` | proved | `Postgres.Conn.onMessage_requireScram`, `Postgres.Conn.onMessage_saslFinal` |
+
+## `Lanes/Lib/Postgres/Settings.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Postgres.Address.localhost` | proved | through `Postgres.SslMode.defaultFor`: `Postgres.Client.Config.sslmode_default`, `Postgres.SslMode.defaultFor_disable` and 2 more |
+| `Postgres.Address.of` | proved | `Postgres.SslMode.defaultFor_disable`, `Postgres.SslMode.defaultFor_loopback`, `Postgres.SslMode.defaultFor_remote` |
+| `Postgres.Address.loopback` | proved | `Postgres.Address.name_remote`, `Postgres.SslMode.defaultFor_disable`, `Postgres.SslMode.defaultFor_loopback` and 1 more |
+| `Postgres.SslMode.defaultFor` | proved | `Postgres.Client.Config.sslmode_default`, `Postgres.SslMode.defaultFor_disable`, `Postgres.SslMode.defaultFor_loopback` and 1 more |
+| `Postgres.SslMode.ofLibpq` | tested | `Tests/PostgresLive.lean`, `Tests/PostgresSettings.lean` |
+| `Postgres.channelBindingOfLibpq` | tested | `Tests/PostgresLive.lean`, `Tests/PostgresSettings.lean` |
+| `Postgres.PassFile.split` | tested | `Tests/PostgresLive.lean`, `Tests/PostgresSettings.lean` |
+| `Postgres.PassFile.split.go` | tested | `Tests/PostgresLive.lean`, `Tests/PostgresSettings.lean` |
+| `Postgres.PassFile.fits` | tested | `Tests/PostgresLive.lean`, `Tests/PostgresSettings.lean` |
+| `Postgres.PassFile.find` | tested | `Tests/PostgresLive.lean`, `Tests/PostgresSettings.lean` |
+| `Postgres.Settings.deployCa` | tested | `Tests/PostgresLive.lean`, `Tests/PostgresSettings.lean` |
+| `Postgres.Settings.first` | tested | `Tests/PostgresLive.lean`, `Tests/PostgresSettings.lean` |
+| `Postgres.Settings.get` | tested | `Tests/PostgresLive.lean`, `Tests/PostgresSettings.lean` |
+| `Postgres.Settings.portOf` | tested | `Tests/PostgresLive.lean`, `Tests/PostgresSettings.lean` |
+| `Postgres.Settings.hostOf` | tested | `Tests/PostgresLive.lean`, `Tests/PostgresSettings.lean` |
+| `Postgres.Settings.passwordOf` | tested | `Tests/PostgresLive.lean`, `Tests/PostgresSettings.lean` |
+| `Postgres.Settings.rootCertOf` | tested | `Tests/PostgresLive.lean`, `Tests/PostgresSettings.lean` |
+| `Postgres.Settings.read` | tested | `Tests/PostgresLive.lean`, `Tests/PostgresSettings.lean` |
 
 ## `Lanes/Lib/Postgres/Table.lean`
 
@@ -2810,6 +2838,16 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.isQuotable` | proved | `MediaType.isQdtext_of`, `MediaType.quoted_esc` |
 | `Http.quoted` | proved | `MediaType.quoted_esc` |
 
+## `Lanes/Web/Http/JournalName.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Http.journalName` | tested | `Tests/Web.lean` |
+| `Http.gateOf` | tested | `Tests/Web.lean` |
+| `Http.formerGate` | tested | `Tests/Web.lean` |
+| `Http.regate` | tested | `Tests/Web.lean` |
+| `Http.regateUpgrade` | tested | `Tests/Web.lean` |
+
 ## `Lanes/Web/Http/Loopback.lean`
 
 | Definition | Status | Evidence |
@@ -3476,6 +3514,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Cli.New.Source.toToml` | tested | `Tests/New.lean` |
+| `Cli.New.repository` | tested | `Tests/New.lean` |
+| `Cli.New.pinned` | tested | `Tests/New.lean` |
+| `Cli.New.ofCheckout` | none |  |
 | `Cli.New.moduleName` | tested | `Tests/New.lean` |
 | `Cli.New.validName` | none |  |
 | `Cli.New.files` | tested | `Tests/New.lean` |
