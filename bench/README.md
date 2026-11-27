@@ -278,7 +278,8 @@ one, for 40–45% less CPU a request (19–22 µs against 35); Go serves about t
 12 µs. Four threads on two CPUs are oversubscribed and cost CPU. A request costs 5 system calls
 (`profile.sh syscalls`, 16 connections): 1.3 reads, 1.3 writes, 1.8 `futex` (handing the request
 to the shard and its answer back), and a share of an `epoll_wait` and of the eventfd's write and
-read; `lanes-io` makes 15, 11 of them `futex`. On one loop thread at 16 connections the loop's
+read; `lanes-io` makes 15, 11 of them `futex`. (The rates above are from before a short read
+ended the reads until the next edge, when a request cost 2.2 reads.) On one loop thread at 16 connections the loop's
 thread used about 10 µs a request and the shard's about 7 (`profile.sh threads`).
 
 On the warm machine, the servers to compare are the Lean loop and the C loop at the same

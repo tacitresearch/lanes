@@ -58,7 +58,8 @@ lines, and `Server.lean` grew by about 40 to choose the loop.
 
 In the shared four-core container only (`bench/README.md`, "A loop of C", has the table and how
 it was run): the server on two CPUs, the load on the other two, four rounds of 5 s, three of
-them with two or three cores of other agents' work on the machine.
+them with two or three cores of other agents' work on the machine. The rates were measured before a short
+read was taken to end the reads until the next edge, which took one `recv` a request off.
 
 | at 64 connections | req/s, median (range) | CPU µs a request |
 | --- | ---: | ---: |
