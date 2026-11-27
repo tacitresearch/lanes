@@ -25,10 +25,9 @@ because a launch claim is what a critic tests first.
 2. **Evidence for every definition of `Lanes/`.** The inventory is generated (`docs/INVENTORY.md`,
    D47); what has none is listed in `docs/inventory-none.md`, which only shrinks. Take entries off
    it by proving, testing or listing them in `TRUSTED.md`.
-3. **The standard library**, triaged from Go's in `docs/STDLIB.md`. Its P0 steps 7 (`fsync`) and
-   8 (libsodium) are done (`docs/decisions/D46-bind-what-touches-physics.md`). Next, each on its
-   own branch: base64, IP addresses, media types and time formats, which depend on nothing; then
-   URLs and rate limits, which need IP addresses; then TLS and names in the HTTP client.
+3. **The standard library**, triaged from Go's in `docs/STDLIB.md`. Of its P0, all is done but
+   a table of rate-limit buckets per key and TLS and names in the HTTP client, each proved
+   against its spec and tested against Go (`docs/decisions/D50-differential-tests-against-go.md`).
 4. **Less trusted, fewer premises.** Our own HTTP/1.1 request reader in place of `Std.Http`'s;
    the premise that a client's link does not duplicate taken off the gate and Raft, as D48 took it
    off the key-value store; idle actors not at their start saved when they rest and read back when mail comes (those at
