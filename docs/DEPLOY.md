@@ -25,7 +25,7 @@ browser ──HTTPS──▶ load balancer ──HTTP──▶ one EC2 instance 
   that outlives the instance and is snapshotted every day.
 - **The load balancer** ends TLS (Lanes has no TLS server), redirects HTTP to HTTPS, sends
   traffic to the instance only once its readiness page answers 200, and answers 404 for the
-  metrics page.
+  metrics page, which the application itself answers only to the machine it runs on.
 - **Calls out over HTTPS** verify the server against Ubuntu's trust store, which the instance
   has (the TLS client: `docs/decisions/D67-a-tls-client-from-the-openssl-lean-ships.md`).
 - **Media does not pass through the application.** The browser uploads to S3 with a presigned
@@ -47,31 +47,38 @@ browser ──HTTPS──▶ load balancer ──HTTP──▶ one EC2 instance 
 
 ## 1. Make the application deployable
 
-The application `lanes new` makes listens on `127.0.0.1`, which the load balancer cannot reach.
-In `Main.lean`, listen on every address and keep idle connections longer than the load balancer
-does (60 s), so that the application never closes a connection the load balancer is about to
-reuse, which the client would see as a `502`:
+The `main` that `lanes new` writes reads where to listen and how to stop from the environment,
+and the unit sets it (`infra/app/app-instance.sh`): `LANES_HOST=0.0.0.0`, since the load balancer
+cannot reach `127.0.0.1`, the default; `LANES_IDLE_MS=75000`, longer than the load balancer keeps
+an idle connection (60 s), so that the application never closes a connection the load balancer
+is about to reuse, which the client would see as a `502`; and `LANES_DRAIN_MS`, `DrainSeconds` in
+milliseconds ("What a stop does"). Nothing in the code changes for the address. A `main` of your
+own reads the same variables as the template's does, or sets them in code, and ends in
+`Server.stopOnSignal` rather than `Server.wait`:
 
 ```lean
   let config : Http.ServerConfig :=
     { host := "0.0.0.0", port := port.toUInt16, journal, system := "my-app 1", idle_ms := 75000 }
+  let server ← (Http.serve (system {}) bridge config {} saving).block
+  Lanes.block (server.stopOnSignal 15000)
 ```
 
 Keep the `system` name your `main` has: a journal written under another name is refused.
 
 The instance's security group admits that port from the load balancer only.
 
-Then the operators' pages of `ServerConfig.ops`, once the server has them
-(`docs/decisions/` on observability, in review): readiness, which the load balancer and every
-deploy ask; liveness; metrics, which the CloudWatch agent reads on the machine; and the access
-log on stderr, one JSON object a line, which reaches CloudWatch Logs:
+Then the operators' pages of `ServerConfig.ops` (`docs/decisions/D69-observability.md`), which
+are what the application answers and so are set in `main`: readiness, which the load balancer
+and every deploy ask; liveness; metrics, which the CloudWatch agent reads on the machine, and
+which the server answers to a peer on the loopback address only ("Logs and metrics"); and the
+access log on stderr, one JSON object a line, which reaches CloudWatch Logs:
 
 ```lean
     ops := { readinessPath := some "/readyz", livenessPath := some "/healthz",
              metricsPath := some "/metrics", accessLog := .stderr, requestIds := true }
 ```
 
-Until then, set the stack's `HealthCheckPath` to a page that answers 200, such as `/`, and
+Without them, set the stack's `HealthCheckPath` to a page that answers 200, such as `/`, and
 `MetricsPath` to nothing. Every check is then a request the journal keeps: about one every five
 seconds from the load balancer's nodes, which a snapshot cuts if the application gives `serve` its
 `saving`.
@@ -91,10 +98,10 @@ and name the stack after the application. The parameters:
 | `AppName` | | Lowercase name: tags, log groups `/lanes/<AppName>`, the release prefix |
 | `BinaryName` | | The executable as the lakefile names it |
 | `AppArguments` | `{port} {journal}` | The executable's arguments: `{port}`, `{journal}` (`/srv/lanes/journal/<AppName>.journal`), `{data}` (its directory) |
-| `AppPort` | 8080 | The port it listens on, on `0.0.0.0` |
+| `AppPort` | 8080 | The port it listens on, on `0.0.0.0` (`LANES_HOST`) |
 | `HealthCheckPath` | `/readyz` | Asked by the load balancer and by each deploy |
 | `MetricsPath` | `/metrics` | Scraped on the machine, 404 from the internet; empty for none |
-| `DrainSeconds` | 15 | The target group's deregistration delay; systemd's stop timeout is ten more |
+| `DrainSeconds` | 15 | How long a stop waits for the requests in flight (`LANES_DRAIN_MS`), and the target group's deregistration delay; systemd's stop timeout is ten more |
 | `DomainName` | | The site, such as `video.example.com`; media uploads are allowed from it |
 | `CertificateArn` | empty | An ACM certificate in this region, or empty to make one |
 | `HostedZoneId` | empty | The domain's Route 53 zone: the certificate and the record are then made for you |
@@ -246,11 +253,15 @@ metric of its own); latency comes from the access log, as above. The load balanc
 (`AWS/ApplicationELB`: requests, `5xx`, target response time, healthy hosts) are there without
 anything set.
 
-The metrics page is kept from the internet by a rule of the load balancer that answers 404 at
-`MetricsPath`. It matches the path as the client wrote it, and the server matches it after
-decoding percent-escapes, so `/%6Detrics` passes the rule and reaches the page. The page holds
-counts only (no paths, no client data), but a page on a port of its own, or a server that takes
-the operators' paths only as written, would close this.
+The server answers the metrics page only to a peer on a loopback address
+(`OpsConfig.metricsAccess`, `.loopback` by default; `Http.Ops.route?_metrics`), which the agent,
+on the instance, is. A request from anywhere else at that path, however it is written, is
+answered `404` as if there were no page. That is what keeps the page from the internet. The load
+balancer's rule that answers 404 at `MetricsPath` stays, as a second guard, but it matches the
+path as the client wrote it while the server matches it after decoding percent-escapes, so on its
+own it would let `/%6Detrics` by. To scrape from another machine, set `metricsAccess := .token
+"<secret>"` and send `Authorization: Bearer <secret>`, or `.anyone` where nothing else reaches
+the port.
 
 Alarms, with `AlarmEmail`: no healthy target for three minutes, the journal's disk over 80%, and
 the host failing AWS's status checks, which also recovers the instance onto other hardware (it
@@ -338,25 +349,26 @@ reads the new one.
 
 ## What a stop does
 
-Lanes installs no signal handler, and Lean's runtime installs none for SIGTERM, so SIGTERM's
-default action ends the process at once (`infra/app/smoke.sh` shows it: status 143). A stop or a
-restart by systemd is then a kill.
+systemd stops or restarts the application with SIGTERM, and kills it ten seconds after
+`DrainSeconds` (`TimeoutStopSec`). The `main` of `lanes new` ends in `Server.stopOnSignal`: at
+SIGTERM or SIGINT readiness answers `503` (`Server.drain`), the requests the shard has taken are
+answered as they finish, for at most `LANES_DRAIN_MS`, and then `Server.stop` answers the ones
+left `503`, closes the connections, and `main` returns 0 (`infra/app/smoke.sh` shows status 0).
 
-- **The data is safe.** The runtime is crash-only (rule 3.3): every answer leaves only after the
-  entries that produce it are synced (`Batch.run_sound`), and a start mends what a death left. A
-  kill is a start like any other.
-- **Requests in flight are dropped.** Their connections close; the load balancer answers them
-  `502`. A request whose input was journalled before the kill may have taken effect though its
-  client saw `502` (rule 3.4: a request that may be retried needs an id, D48).
-- **There is no drain.** `Server.stop` itself answers the requests still waiting `503`.
+- **Requests in flight are answered** if they finish within the drain, and `503` if not. While
+  it drains the server goes on serving: on one instance there is no other target, and the load
+  balancer sends requests until its health checks have seen readiness fail.
+- **The data is safe in any case.** The runtime is crash-only (rule 3.3): every answer leaves
+  only after the entries that produce it are synced (`Batch.run_sound`), and a start mends what a
+  death left. A kill, by systemd at the timeout or by a second SIGTERM during the drain, is a
+  start like any other. Its requests in flight are dropped and the load balancer answers them
+  `502`; one whose input was journalled before the kill may have taken effect though its client
+  saw `502` (rule 3.4: a request that may be retried needs an id, D48).
+- **A `main` that waits with `Server.wait`** installs no handler, and Lean's runtime installs none
+  for SIGTERM, so SIGTERM's default action ends it at once, as a kill (smoke: status 143).
 
-Proposed, not done: `main` waits for SIGTERM with `Std.Async.Signal.Waiter` (in the toolchain),
-then calls `Server.drain` (readiness answers 503), waits until `Server.inFlight` is zero or
-`DrainSeconds` have passed, calls `Server.stop` and returns 0. A helper in
-`Lanes/Web/IO/Server.lean` would give every application that path. The unit's stop timeout
-(`DrainSeconds` + 10) and the target group's deregistration delay (`DrainSeconds`) are sized for
-it. On one instance, a drain lets the requests in flight finish; it does not keep the site up
-while the process restarts, since there is no other target to send new requests to.
+A drain lets the requests in flight finish; on one instance it does not keep the site up while
+the process restarts, since there is no other target to send new requests to.
 
 ## Availability: what one instance means
 
@@ -441,9 +453,11 @@ the template with `cfn-lint` (no error, warning or informational finding, in thr
 scripts and the workflow's scripts with `shellcheck` and `actionlint`; the rendered units with
 `systemd-analyze verify` (systemd 255, as on Ubuntu 24.04); the CloudWatch agent's configuration
 as JSON and the Prometheus configuration as YAML; `infra/app/smoke.sh` against `examples/counter`
-built from this branch (it starts in the journal's directory, answers, writes its journal there,
-ends at SIGTERM with status 143 and starts again on the same journal); the `main` of step 1,
-built into the counter and answering on an address other than loopback; and deploy, rollback,
+built from this branch, with the unit's environment (it starts in the journal's directory,
+answers, writes its journal there, drains at SIGTERM and exits with status 0, and starts again on
+the same journal); the counter with the operators' pages on, on `0.0.0.0`, answering on an
+address other than loopback, where the metrics page is `404` written plainly or percent-encoded
+and readiness answers, while on loopback the page is served; and deploy, rollback,
 the refusal of a wrong SHA-256 and the rollback of a release that never becomes ready, with
 stubs of `aws` and `systemctl`.
 

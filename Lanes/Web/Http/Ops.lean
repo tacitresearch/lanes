@@ -5,7 +5,10 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Lanes.Lib.Metrics
+public import Lanes.Lib.Crypto.Sodium
 public import Lanes.Lib.Encoding.Json
+public import Lanes.Lib.Net.Ip
+public import Lanes.Proof.Utf8
 public import Lanes.Lib.Time.Format
 public import Lanes.Web.Http.Basic
 
@@ -17,7 +20,10 @@ as metrics, a request id taken from the client or made, and a line of the access
 Nothing here reaches a system: an operator's request is answered by the server
 (`docs/decisions/D69-observability.md`). With the default configuration no request is the
 operators' (`route?_default`), and a request is one only at a path configured for it
-(`route?_some`). Readiness answers `200` exactly when the shard has recovered and the server is
+(`route?_some`). The metrics page is answered only to a peer `OpsConfig.metricsAccess` allows, by
+default one on a loopback address, however the client wrote its path (`route?_metrics`), and to
+any other as if there were none (`route?_hidden`); liveness and readiness answer every peer
+alike (`route?_peer`). Readiness answers `200` exactly when the shard has recovered and the server is
 not stopping (`answer_ready`). A request id taken from a client is bounded and has only letters,
 digits and `-._` (`RequestId.accept?_eq_some`), and so does one made (`RequestId.accept?_ofBytes`);
 a response carries exactly one (`header_tag`). A line of the access log is the JSON text of its
@@ -39,11 +45,26 @@ def LogSink.isOn : LogSink → Bool
   | .off => false
   | _ => true
 
+/-- Who may read the metrics page. Its path is matched after percent-decoding, so a rule of a
+load balancer on the path as written (`/metrics`) lets `/%6Detrics` by; this is what keeps the
+page from the internet. -/
+inductive MetricsAccess where
+  /-- A peer on a loopback address: a scraper on the same machine. -/
+  | loopback
+  /-- A peer on a loopback address, or a request with `Authorization: Bearer` and this token,
+  compared in a time that depends on the lengths only. -/
+  | token (secret : String)
+  /-- Every peer: only where something else keeps the page from the internet. -/
+  | anyone
+  deriving DecidableEq, Repr
+
 /-- Everything is off by default. A path is the request's path as the server reads it, with no
 query (`/metrics`). -/
 structure OpsConfig where
   /-- The metrics page, in the Prometheus text format. -/
   metricsPath : Option String := none
+  /-- Who may read it. Any other peer is answered `404` at its path. -/
+  metricsAccess : MetricsAccess := .loopback
   /-- `200` while the server answers at all. -/
   livenessPath : Option String := none
   /-- `200` once the shard has recovered its journal, and `503` from `Server.drain` or `stop`. -/
@@ -79,25 +100,65 @@ def pathText (path : List String) : String :=
 
 inductive Endpoint where
   | metrics
+  /-- The metrics page, asked for by a peer it is not for: `404`, as if there were none. -/
+  | hidden
   | live
   | ready
   deriving DecidableEq, Repr
 
-/-- The operators' endpoint a request asks for, if any: a `GET` at a configured path. -/
-def route? (c : OpsConfig) (r : Request) : Option Endpoint :=
+/-- Whether the peer is on a loopback address. `none` is a peer the server could not read. -/
+def fromLoopback (peer : Option Ip.Addr) : Bool :=
+  peer.any Ip.Addr.isLoopback
+
+/-- The token of an `Authorization: Bearer` header. -/
+def bearer? (r : Request) : Option String :=
+  (r.header? "authorization").bind fun v =>
+    match v.splitOn " " with
+    | [scheme, token] => if scheme.toLower == "bearer" && !token.isEmpty then some token else none
+    | _ => none
+
+/-- Whether `access` lets `peer` read the metrics page with request `r`. -/
+def allows : MetricsAccess → Option Ip.Addr → Request → Bool
+  | .loopback, peer, _ => fromLoopback peer
+  | .token secret, peer, r =>
+    fromLoopback peer || (bearer? r).any fun given => Bytes.same given.toUTF8 secret.toUTF8
+  | .anyone, _, _ => true
+
+theorem allows_eq_true {a : MetricsAccess} {peer : Option Ip.Addr} {r : Request} :
+    allows a peer r = true ↔ fromLoopback peer = true ∨ a = .anyone ∨
+      ∃ secret, a = .token secret ∧ bearer? r = some secret := by
+  cases a with
+  | loopback => simp [allows]
+  | anyone => simp [allows]
+  | token secret =>
+    simp only [allows, Bool.or_eq_true, Option.any_eq_true, Bytes.same_iff, String.toUTF8,
+      toByteArray_inj, reduceCtorEq, MetricsAccess.token.injEq, false_or]
+    constructor
+    · rintro (h | ⟨given, h, rfl⟩)
+      · exact .inl h
+      · exact .inr ⟨given, rfl, h⟩
+    · rintro (h | ⟨_, rfl, h⟩)
+      · exact .inl h
+      · exact .inr ⟨_, h, rfl⟩
+
+/-- The operators' endpoint a request from `peer` asks for, if any: a `GET` at a configured
+path. -/
+def route? (c : OpsConfig) (peer : Option Ip.Addr) (r : Request) : Option Endpoint :=
   if r.method != .get then none
   else
     let path := some (pathText r.path)
-    if c.metricsPath == path then some .metrics
+    if c.metricsPath == path then
+      some (if allows c.metricsAccess peer r then .metrics else .hidden)
     else if c.livenessPath == path then some .live
     else if c.readinessPath == path then some .ready
     else none
 
-theorem route?_default (r : Request) : route? {} r = none := by
+theorem route?_default (peer : Option Ip.Addr) (r : Request) : route? {} peer r = none := by
   simp [route?]
 
 /-- Only a `GET` at a path configured for it is the operators'. -/
-theorem route?_some {c : OpsConfig} {r : Request} {e : Endpoint} (h : route? c r = some e) :
+theorem route?_some {c : OpsConfig} {peer : Option Ip.Addr} {r : Request} {e : Endpoint}
+    (h : route? c peer r = some e) :
     r.method = .get ∧ (c.metricsPath = some (pathText r.path) ∨
       c.livenessPath = some (pathText r.path) ∨ c.readinessPath = some (pathText r.path)) := by
   unfold route? at h
@@ -113,6 +174,53 @@ theorem route?_some {c : OpsConfig} {r : Request} {e : Endpoint} (h : route? c r
     · exact .inr (.inr h3)
     simp [h1, h2, h3] at h
 
+/-- The metrics page is answered only to a peer on a loopback address, or to one the
+configuration lets in. The path is compared once decoded, so this holds however it was
+written. -/
+theorem route?_metrics {c : OpsConfig} {peer : Option Ip.Addr} {r : Request}
+    (h : route? c peer r = some .metrics) :
+    fromLoopback peer = true ∨ c.metricsAccess = .anyone ∨
+      ∃ secret, c.metricsAccess = .token secret ∧ bearer? r = some secret := by
+  refine allows_eq_true.mp ?_
+  dsimp only [route?] at h
+  split at h
+  · simp at h
+  · split at h
+    · split at h
+      · assumption
+      · simp at h
+    · split at h
+      · simp at h
+      · split at h <;> simp at h
+
+/-- By default, only to a peer on a loopback address. -/
+theorem route?_metrics_loopback {c : OpsConfig} {peer : Option Ip.Addr} {r : Request}
+    (hc : c.metricsAccess = .loopback) (h : route? c peer r = some .metrics) :
+    fromLoopback peer = true := by
+  rcases route?_metrics h with h | h | ⟨_, h, _⟩ <;> simp_all
+
+/-- A `GET` at the metrics page's path, from a peer it is not for, is answered as no page. -/
+theorem route?_hidden {c : OpsConfig} {peer : Option Ip.Addr} {r : Request}
+    (hm : r.method = .get) (hp : c.metricsPath = some (pathText r.path))
+    (ha : allows c.metricsAccess peer r = false) : route? c peer r = some .hidden := by
+  simp [route?, hm, hp, ha]
+
+/-- Liveness and readiness are the same to every peer: a load balancer, wherever it is, reaches
+them. -/
+theorem route?_peer {c : OpsConfig} {peer : Option Ip.Addr} {r : Request} {e : Endpoint}
+    (he : e = .live ∨ e = .ready) (h : route? c peer r = some e) (other : Option Ip.Addr) :
+    route? c other r = some e := by
+  dsimp only [route?] at h ⊢
+  split at h
+  · simp at h
+  · rename_i hm
+    simp only [hm]
+    split at h
+    · split at h <;> rcases he with rfl | rfl <;> simp at h
+    · rename_i h1
+      simp only [h1]
+      exact h
+
 structure Health where
   /-- The shard has replayed its journal and handed over what it owed. -/
   recovered : Bool
@@ -125,6 +233,7 @@ def Health.ready (h : Health) : Bool :=
 def answer (e : Endpoint) (health : Health) (metrics : String) : Response :=
   match e with
   | .metrics => { headers := [("content-type", Metrics.contentType)], body := metrics.toUTF8 }
+  | .hidden => .text "not found\n" 404
   | .live => .text "ok\n"
   | .ready => if health.ready then .text "ready\n" else .text "not ready\n" 503
 

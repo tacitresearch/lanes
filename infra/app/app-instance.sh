@@ -184,8 +184,9 @@ WantedBy=multi-user.target
 EOF
 }
 
-# The application's unit. Today a Lanes server dies at SIGTERM without draining (docs/DEPLOY.md);
-# the stop timeout is for the drain that a server will do, DRAIN_SECONDS and ten more.
+# The application's unit. The environment is what the `main` of `lanes new` reads: listen on every
+# address, keep idle connections longer than the load balancer (60 s), and at SIGTERM drain for up
+# to DRAIN_SECONDS (Server.stopOnSignal, docs/DEPLOY.md); the stop timeout is ten seconds more.
 render_app_unit() {
   cat <<EOF
 [Unit]
@@ -202,6 +203,7 @@ Type=exec
 User=$APP_USER
 Group=$APP_USER
 WorkingDirectory=$JOURNAL_DIR
+Environment=LANES_HOST=0.0.0.0 LANES_IDLE_MS=75000 LANES_DRAIN_MS=$((DRAIN_SECONDS * 1000))
 EnvironmentFile=-/etc/lanes/app.env
 EnvironmentFile=-/etc/lanes/secrets.env
 RuntimeDirectory=lanes-app
