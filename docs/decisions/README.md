@@ -86,4 +86,6 @@ decision without a number.
 - [D70. An application is deployed as one instance with its journal on a volume of its own, behind a load balancer](D70-one-instance-one-volume.md)
 - [D71. S3 and Signature Version 4, in Lanes as the protocol of a class of object stores](D71-s3-and-signature-version-4.md)
 - [D72. Sign-in with OAuth 2.0 and OpenID Connect, done where a request arrives](D72-sign-in-with-oauth.md)
+- [D73. The shard chooses from its own timing whether a batch's steps are worked out in parallel](D73-adaptive-waves.md)
 - [D74. AWS as an integration: a role's credentials refreshed by a proved policy, and SES as the email model](D74-aws-integration.md)
+- [D76. Bodies and responses stream through the gate, in pieces and parts, one at a time](D76-streams-through-the-gate.md)

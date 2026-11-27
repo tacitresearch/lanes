@@ -57,12 +57,13 @@ def modulesIn (root : System.FilePath) (dir : String) : IO (Array Name) := do
     else none
   return rel.qsort (·.toString < ·.toString)
 
-/-- What the inventory imports: the two roots of the library, `lanes` and this module, every
-module of `Tests`, the fixtures included. The other executables' `main` modules are left out: they
-would define `main` twice, and they only call what other modules define. -/
+/-- What the inventory imports: the two roots of the library, `lanes`, this module and the
+docstring coverage, every module of `Tests`, the fixtures included. The other executables' `main`
+modules are left out: they would define `main` twice, and they only call what other modules
+define. -/
 def imports (root : System.FilePath) : IO (Array Name) := do
   let tests ← modulesIn root "Tests"
-  let all := #[`Lanes, `Lanes.Semantics, `LanesCli.Main, `LanesCli.Inventory] ++ tests
+  let all := #[`Lanes, `Lanes.Semantics, `LanesCli.Main, `LanesCli.Docstrings] ++ tests
   return all.filter fun m => !(m.getString!.endsWith "Main") || m == `LanesCli.Main
 
 /-- The theorems with an axiom gate: every `#print axioms` in `Tests/Axioms/`. -/

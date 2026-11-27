@@ -34,6 +34,9 @@ namespace Lanes
 
 variable {In Out S T : Type}
 
+/-- A spec: a state, what one input does to it and which outputs it gives, as if inputs came
+one at a time. `armed` says which deadlines (`T`) a state has and `fire` what one passing
+does. -/
 structure Service (In Out S : Type) (T : Type := Empty) where
   init : S
   step : S → In → S × List Out
@@ -42,6 +45,8 @@ structure Service (In Out S : Type) (T : Type := Empty) where
 
 namespace Service
 
+/-- The spec run concurrently: the inputs that have arrived and not yet taken effect, and the
+outputs not yet handed over. -/
 structure State (In Out S : Type) where
   value : S
   pending : List In

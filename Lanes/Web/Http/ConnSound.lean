@@ -37,7 +37,7 @@ def Action.wrote : Action → Option Nat
   | _ => none
 
 def Action.submitted : Action → Option Nat
-  | .submit seq _ => some seq
+  | .submit seq _ | .begin seq _ => some seq
   | _ => none
 
 variable {cfg : Config} {now : Nat}
@@ -67,6 +67,8 @@ theorem flushSlots_spec : ∀ (n : Nat) (slots : List Slot),
       ∧ ∀ a ∈ (flushSlots n slots).1, ∃ s b, a = .write s b
   | n, [] => by simp [flushSlots]
   | n, .asked _ _ :: rest => by simp [flushSlots]
+  | n, .opened .. :: rest => by simp [flushSlots]
+  | n, .stream _ :: rest => by simp [flushSlots]
   | n, .ready bytes :: rest => by
     obtain ⟨h1, h2, h3, h4, h5⟩ := flushSlots_spec (n + 1) rest
     rcases e : flushSlots (n + 1) rest with ⟨actions, m, left⟩
@@ -103,16 +105,20 @@ theorem take_of
       Request.read cfg.limits c.buffer c.pos = .done incoming stop →
       P c { c with pos := stop, need := 0, slots := c.slots ++ [.asked incoming.headOnly incoming.close]
                    reading := !incoming.close, continued := false, stage := .idle, since_ms := now }
-        [.submit (next c) incoming.request]) :
+        [.submit (next c) incoming.request])
+    (hbegin : ∀ c head start, c.closed = false → c.reading = true →
+      c.slots.length < cfg.inflight_max → streamHead? cfg c = some (head, start) →
+      P c (begin now c head start) [.begin (next c) (head.incoming .empty).request]) :
     ∀ fuel c, P c (take cfg now fuel c).1 (take cfg now fuel c).2
   | 0, c => hstay c
   | fuel + 1, c => by
     simp only [take]
-    by_cases hc : (c.closed || !c.reading) = true
+    by_cases hc : (c.closed || !c.reading || c.inflow.isSome) = true
     · simp only [hc, ↓reduceIte]
       exact hstay c
     · simp only [hc, Bool.false_eq_true, ↓reduceIte]
-      simp only [Bool.or_eq_true, Bool.not_eq_true', not_or, Bool.not_eq_true, Bool.not_eq_false] at hc
+      have hc1 : c.closed = false := by cases h : c.closed <;> simp_all
+      have hc2 : c.reading = true := by cases h : c.reading <;> simp_all
       by_cases hf : cfg.inflight_max ≤ c.slots.length
       · simp only [hf, ↓reduceIte]
         exact hfull c
@@ -123,33 +129,60 @@ theorem take_of
         · simp only [hn, ↓reduceIte]
           have hl : c.slots.length < cfg.inflight_max := by omega
           split
-          · rename_i h
-            exact hwait c hc.1 hc.2 hl h
-          · rename_i why h
-            exact hrefuse c why hc.1 hc.2 hl h
-          · rename_i incoming stop h
-            exact trans (hdone c incoming stop hc.1 hc.2 hl h) (take_of hwait hstay hfull hrefuse hdone fuel _)
+          · rename_i head start hs
+            exact trans (hbegin c head start hc1 hc2 hl hs)
+              (take_of hwait hstay hfull hrefuse hdone hbegin fuel _)
+          · split
+            · rename_i h
+              exact hwait c hc1 hc2 hl h
+            · rename_i why h
+              exact hrefuse c why hc1 hc2 hl h
+            · rename_i incoming stop h
+              exact trans (hdone c incoming stop hc1 hc2 hl h)
+                (take_of hwait hstay hfull hrefuse hdone hbegin fuel _)
+
+include trans in
+theorem drain_of
+    (hflush : ∀ c, P c (flush now c).1 (flush now c).2)
+    (hstream : ∀ c, P c (flushStream cfg now c).1 (flushStream cfg now c).2) (c : Conn) :
+    P c (drain cfg now c).1 (drain cfg now c).2 := by
+  have h1 := hflush c
+  rcases e1 : flush now c with ⟨c1, a1⟩
+  rw [e1] at h1
+  have h2 := hstream c1
+  rcases e2 : flushStream cfg now c1 with ⟨c2, a2⟩
+  rw [e2] at h2
+  have h3 := hflush c2
+  rcases e3 : flush now c2 with ⟨c3, a3⟩
+  rw [e3] at h3
+  simp only [drain, e1, e2, e3]
+  exact trans (trans h1 h2) h3
 
 include trans in
 theorem advance_of
     (htake : ∀ fuel c, P c (take cfg now fuel c).1 (take cfg now fuel c).2)
     (hflush : ∀ c, P c (flush now c).1 (flush now c).2)
+    (hstream : ∀ c, P c (flushStream cfg now c).1 (flushStream cfg now c).2)
+    (hpump : ∀ c, P c (pump cfg now c).1 (pump cfg now c).2)
     (hfinish : ∀ c, P c (finish c).1 (finish c).2) (c : Conn) :
     P c (advance cfg now c).1 (advance cfg now c).2 := by
-  have h1 := hflush c
-  rcases e1 : flush now c with ⟨c1, a1⟩
+  have h1 := drain_of P trans hflush hstream c
+  rcases e1 : drain cfg now c with ⟨c1, a1⟩
   rw [e1] at h1
   have h2 := htake (cfg.inflight_max + 1) c1
   rcases e2 : take cfg now (cfg.inflight_max + 1) c1 with ⟨c2, a2⟩
   rw [e2] at h2
-  have h3 := hflush c2
-  rcases e3 : flush now c2 with ⟨c3, a3⟩
+  have h3 := hpump c2
+  rcases e3 : pump cfg now c2 with ⟨c3, a3⟩
   rw [e3] at h3
-  have h4 := hfinish c3
-  rcases e4 : finish c3 with ⟨c4, a4⟩
+  have h4 := drain_of P trans hflush hstream c3
+  rcases e4 : drain cfg now c3 with ⟨c4, a4⟩
   rw [e4] at h4
-  simp only [advance, e1, e2, e3, e4]
-  exact trans (trans (trans h1 h2) h3) h4
+  have h5 := hfinish c4
+  rcases e5 : finish c4 with ⟨c5, a5⟩
+  rw [e5] at h5
+  simp only [advance, e1, e2, e3, e4, e5]
+  exact trans (trans (trans (trans h1 h2) h3) h4) h5
 
 include trans in
 theorem step_of
@@ -159,8 +192,12 @@ theorem step_of
       P c (receive bytes c) [])
     (hanswer : ∀ c seq r, P c (answer seq r c) [])
     (hexpire : ∀ c, P c (expire cfg now c) [])
-    (hquiet : ∀ c, P c { c with reading := false } [])
-    (hclose : ∀ c, P c { c with closed := true } [.close]) (c : Conn) (e : Event) :
+    (hquiet : ∀ c, P c (quiet c) [])
+    (hclose : ∀ c, P c { c with closed := true } [.close])
+    (hrespond : ∀ c seq r, P c (respond seq r c) [])
+    (htook : ∀ c seq index r, P c (took cfg now seq index r c) [])
+    (hpulled : ∀ c seq index r, P c (pulled cfg now seq index r c) [])
+    (hsent : ∀ c, P c { c with unsent := false } []) (c : Conn) (e : Event) :
     P c (step cfg now c e).1 (step cfg now c e).2 := by
   unfold step
   by_cases hc : c.closed = true
@@ -181,6 +218,10 @@ theorem step_of
     | ended => simpa [hc] using trans (hquiet c) (hadvance _)
     | broken => simpa [hc] using hclose c
     | answered seq r => simpa [hc] using trans (hanswer c seq r) (hadvance _)
+    | responded seq r => simpa [hc] using trans (hrespond c seq r) (hadvance _)
+    | took seq index r => simpa [hc] using trans (htook c seq index r) (hadvance _)
+    | pulled seq index r => simpa [hc] using trans (hpulled c seq index r) (hadvance _)
+    | sent => simpa [hc] using trans (hsent c) (hadvance _)
     | tick => simpa [hc] using trans (hexpire c) (hadvance _)
     | stop => simpa [hc] using trans (hquiet c) (hadvance _)
 
@@ -250,6 +291,194 @@ theorem expire_eq (now : Nat) (c : Conn) :
     · exact .inl rfl
   · exact .inl rfl
 
+/-- `c'` holds the bytes and the requests in flight of `c`, numbered alike, and reads only if
+`c` does. -/
+def Calm (c c' : Conn) : Prop :=
+  c'.buffer = c.buffer ∧ c'.pos = c.pos ∧ c'.written = c.written
+    ∧ c'.slots.length = c.slots.length ∧ (c'.reading = true → c.reading = true)
+
+theorem respond_calm (seq : Nat) (r : Response) (c : Conn) : Calm c (respond seq r c) := by
+  unfold respond
+  split
+  · split
+    · simp [Calm]
+    · simp [Calm]
+  · simp [Calm]
+
+theorem pulled_calm (now seq index : Nat) (r : Response) (c : Conn) :
+    Calm c (pulled cfg now seq index r c) := by
+  unfold pulled
+  split
+  · split
+    · split
+      · simp [Calm]
+      · simp [Calm]
+    · simp [Calm]
+  · simp [Calm]
+
+theorem took_calm (now seq index : Nat) (r : Response) (c : Conn) :
+    Calm c (took cfg now seq index r c) := by
+  unfold took
+  repeat' split
+  all_goals simp_all [Calm, settle]
+  all_goals split <;> simp_all
+
+theorem quiet_calm (c : Conn) : Calm c (quiet c) := by
+  simp [Calm, quiet]
+
+theorem sent_calm (c : Conn) : Calm c { c with unsent := false } := by
+  simp [Calm]
+
+/-- Where a piece ends is within the bytes. -/
+theorem next_stop {bytes : ByteArray} {taken room : Nat} :
+    ∀ {fuel pos : Nat} {framing : Inflow.Framing} {data : ByteArray} {stop : Nat}
+      {framing' : Inflow.Framing} {last : Bool},
+      Inflow.next cfg bytes pos taken room framing fuel = .piece data stop framing' last →
+      stop ≤ bytes.size
+  | 0, pos, framing, data, stop, framing', last, h => by
+    cases framing <;> simp [Inflow.next] at h
+  | fuel + 1, pos, framing, data, stop, framing', last, h => by
+    cases framing with
+    | length left =>
+      simp only [Inflow.next] at h
+      split at h
+      · cases h
+      · cases h; omega
+    | data left =>
+      simp only [Inflow.next] at h
+      split at h
+      · cases h
+      · cases h; omega
+    | size =>
+      simp only [Inflow.next] at h
+      split at h
+      · cases h
+      · cases h
+      · split at h
+        · exact next_stop h
+        · split at h
+          · cases h
+          · exact next_stop h
+    | crlf =>
+      simp only [Inflow.next] at h
+      split at h
+      · cases h
+      · cases h
+      · exact next_stop h
+    | last =>
+      simp only [Inflow.next] at h
+      split at h
+      · cases h
+      · cases h
+      · rename_i q hq
+        cases h
+        exact (crlf_bound hq).2
+
+theorem gather_stop {bytes : ByteArray} :
+    ∀ {fuel pos taken : Nat} {framing : Inflow.Framing} {acc data : ByteArray} {stop : Nat}
+      {framing' : Inflow.Framing} {last : Bool}, pos ≤ bytes.size →
+      Inflow.gather cfg bytes fuel pos taken framing acc = .piece data stop framing' last →
+      stop ≤ bytes.size
+  | 0, pos, taken, framing, acc, data, stop, framing', last, hp, h => by
+    simp only [Inflow.gather] at h
+    split at h
+    · cases h
+    · cases h; exact hp
+  | fuel + 1, pos, taken, framing, acc, data, stop, framing', last, hp, h => by
+    simp only [Inflow.gather] at h
+    split at h
+    · split at h
+      · cases h
+      · cases h; exact hp
+    · split at h
+      · cases h
+      · cases h; exact hp
+    · rename_i d s f l hn
+      have hs := next_stop hn
+      split at h
+      · cases h; exact hs
+      · exact gather_stop hs h
+
+/-- What `pump` does: the bytes, the number written and the requests in flight stay, the next
+request may start later in the buffer but within it, reading only stops, and it writes
+`100 Continue` and hands on pieces, nothing else. -/
+theorem pump_frame (now : Nat) (c : Conn) :
+    (pump cfg now c).1.buffer = c.buffer ∧ (pump cfg now c).1.written = c.written
+      ∧ (pump cfg now c).1.slots.length = c.slots.length
+      ∧ ((pump cfg now c).1.reading = true → c.reading = true)
+      ∧ (c.pos ≤ c.buffer.size → (pump cfg now c).1.pos ≤ c.buffer.size)
+      ∧ ∀ a ∈ (pump cfg now c).2, a.wrote = none ∧ a.submitted = none
+        ∧ ∀ s r, a ≠ .submit s r := by
+  unfold pump
+  split
+  · simp
+  · rename_i f hf
+    split
+    · simp
+    · split
+      · simp
+      · split
+        · split <;> simp [Action.wrote, Action.submitted]
+        · dsimp only
+          generalize hg : Inflow.gather cfg c.buffer (max 1 cfg.piece_max) c.pos f.taken f.framing .empty = g
+          cases g with
+          | more =>
+            refine ⟨rfl, rfl, rfl, id, id, ?_⟩
+            intro a ha
+            split at ha <;> simp_all [Action.wrote, Action.submitted]
+          | refuse why =>
+            refine ⟨rfl, rfl, by simp, by simp, id, ?_⟩
+            intro a ha
+            split at ha <;> simp_all [Action.wrote, Action.submitted]
+          | piece data stop framing last =>
+            simp only [settle]
+            refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
+            all_goals (try split) <;> simp_all
+            all_goals first
+              | exact fun hp => gather_stop hp hg
+              | simp [Action.wrote, Action.submitted]
+
+/-- What `flushStream` does: the bytes stay, reading only stops, nothing is handed on, and
+either nothing is written and the requests in flight stay, or the streamed response at the
+front ends and is written. -/
+theorem flushStream_frame (now : Nat) (c : Conn) :
+    (flushStream cfg now c).1.buffer = c.buffer ∧ (flushStream cfg now c).1.pos = c.pos
+      ∧ ((flushStream cfg now c).1.reading = true → c.reading = true)
+      ∧ (∀ a ∈ (flushStream cfg now c).2, a.submitted = none ∧ ∀ s r, a ≠ .submit s r)
+      ∧ (((flushStream cfg now c).1.written = c.written
+            ∧ (flushStream cfg now c).1.slots.length = c.slots.length
+            ∧ ∀ a ∈ (flushStream cfg now c).2, a.wrote = none)
+        ∨ ((flushStream cfg now c).1.written = c.written + 1
+            ∧ (flushStream cfg now c).1.slots.length + 1 = c.slots.length
+            ∧ (flushStream cfg now c).2.filterMap Action.wrote = [c.written])) := by
+  unfold flushStream
+  split
+  · simp
+  · split
+    · rename_i o rest hs
+      dsimp only
+      cases hst : o.state
+      all_goals cases hp : o.pending.isEmpty
+      all_goals simp only [hst, ite_true, ite_false, Bool.false_eq_true]
+      all_goals (repeat' split) <;> simp_all [Action.wrote, Action.submitted]
+      all_goals simp [Action.wrote, List.filterMap]
+    · simp
+
+/-- The request that streams is begun: the head is handed on, the next request starts after it. -/
+theorem streamHead?_some {c : Conn} {head : Request.Head} {start : Nat}
+    (h : streamHead? cfg c = some (head, start)) : c.pos + 4 ≤ start ∧ start ≤ c.buffer.size := by
+  unfold streamHead? at h
+  split at h
+  · cases h
+  · split at h
+    · rename_i head' start' hr
+      split at h
+      · cases h
+        have := Request.readHead_done hr
+        exact ⟨this.1, this.2.2.1⟩
+      · cases h
+    · cases h
+
 /-! Responses in order, each once -/
 
 /-- The writes of `actions` are of the requests numbered from `c.written` to `c'.written`, in
@@ -276,11 +505,32 @@ theorem Writes.none {c c' : Conn} {actions : List Action} (hw : c'.written = c.w
   rw [hw, Nat.sub_self, List.range'_zero, List.filterMap_eq_nil_iff]
   exact ha
 
+theorem Writes.calm {c c' : Conn} (h : Calm c c') : Writes c c' [] :=
+  Writes.none h.2.2.1 (by simp)
+
 theorem step_writes (now : Nat) (c : Conn) (e : Event) :
     Writes c (step cfg now c e).1 (step cfg now c e).2 := by
   refine step_of Writes Writes.trans (fun c => advance_of Writes Writes.trans
-      (take_of Writes Writes.trans ?wait ?stay ?full ?refuse ?done) ?flush ?finish c)
-    ?stay ?receive ?answer ?expire ?quiet ?close c e
+      (take_of Writes Writes.trans ?wait ?stay ?full ?refuse ?done ?begin) ?flush ?stream ?pump
+      ?finish c)
+    ?stay ?receive ?answer ?expire ?quiet ?close ?respond ?took ?pulled ?sent c e
+  case begin => exact fun c _ _ _ _ _ _ => Writes.none rfl (by simp [Action.wrote])
+  case stream =>
+    intro c
+    obtain ⟨-, -, -, -, h⟩ := flushStream_frame (cfg := cfg) now c
+    rcases h with ⟨hw, -, ha⟩ | ⟨hw, -, ha⟩
+    · exact Writes.none hw ha
+    · refine ⟨by omega, ?_⟩
+      rw [ha, hw, show c.written + 1 - c.written = 1 by omega]
+      rfl
+  case pump =>
+    intro c
+    obtain ⟨-, hw, -, -, -, ha⟩ := pump_frame (cfg := cfg) now c
+    exact Writes.none hw fun a h => (ha a h).1
+  case respond => exact fun c seq r => Writes.calm (respond_calm seq r c)
+  case took => exact fun c seq index r => Writes.calm (took_calm now seq index r c)
+  case pulled => exact fun c seq index r => Writes.calm (pulled_calm now seq index r c)
+  case sent => exact fun c => Writes.calm (sent_calm c)
   case wait =>
     intro c _ _ _ _
     refine Writes.none (waitMore_frame c).2.2.2.1 fun a ha => ?_
@@ -307,7 +557,7 @@ theorem step_writes (now : Nat) (c : Conn) (e : Event) :
   case expire =>
     intro c
     rcases expire_eq now c with h | h | ⟨-, h⟩ <;> rw [h] <;> exact Writes.none rfl (by simp)
-  case quiet => exact fun c => Writes.none rfl (by simp)
+  case quiet => exact fun c => Writes.calm (quiet_calm c)
   case close => exact fun c => Writes.none rfl (by simp [Action.wrote])
 
 /-- Responses go out in the order the requests were read, each once: the writes of any run are
@@ -350,11 +600,32 @@ theorem Submits.none {c c' : Conn} {actions : List Action} (hn : c.next ≤ c'.n
   rw [show actions.filterMap Action.submitted = [] from List.filterMap_eq_nil_iff.2 ha]
   exact ⟨hn, by simp, by simp⟩
 
+theorem Submits.calm {c c' : Conn} (h : Calm c c') : Submits c c' [] :=
+  Submits.none (by simp [next, h.2.2.1, h.2.2.2.1]) (by simp)
+
 theorem step_submits (now : Nat) (c : Conn) (e : Event) :
     Submits c (step cfg now c e).1 (step cfg now c e).2 := by
   refine step_of Submits Submits.trans (fun c => advance_of Submits Submits.trans
-      (take_of Submits Submits.trans ?wait ?stay ?full ?refuse ?done) ?flush ?finish c)
-    ?stay ?receive ?answer ?expire ?quiet ?close c e
+      (take_of Submits Submits.trans ?wait ?stay ?full ?refuse ?done ?begin) ?flush ?stream ?pump
+      ?finish c)
+    ?stay ?receive ?answer ?expire ?quiet ?close ?respond ?took ?pulled ?sent c e
+  case begin =>
+    intro c _ _ _ _ _ _
+    refine ⟨by simp only [next, begin, List.length_append]; omega, by simp [Action.submitted], ?_⟩
+    simp [Action.submitted, next, begin]
+  case stream =>
+    intro c
+    obtain ⟨-, -, -, hs, h⟩ := flushStream_frame (cfg := cfg) now c
+    refine Submits.none ?_ fun a ha => (hs a ha).1
+    rcases h with ⟨hw, hl, -⟩ | ⟨hw, hl, -⟩ <;> simp only [next] <;> omega
+  case pump =>
+    intro c
+    obtain ⟨-, hw, hl, -, -, ha⟩ := pump_frame (cfg := cfg) now c
+    exact Submits.none (by simp [next, hw, hl]) fun a h => (ha a h).2.1
+  case respond => exact fun c seq r => Submits.calm (respond_calm seq r c)
+  case took => exact fun c seq index r => Submits.calm (took_calm now seq index r c)
+  case pulled => exact fun c seq index r => Submits.calm (pulled_calm now seq index r c)
+  case sent => exact fun c => Submits.calm (sent_calm c)
   case wait =>
     intro c _ _ _ _
     obtain ⟨-, -, hs, hw, -⟩ := waitMore_frame (cfg := cfg) (now := now) c
@@ -394,7 +665,7 @@ theorem step_submits (now : Nat) (c : Conn) (e : Event) :
     intro c
     rcases expire_eq now c with h | h | ⟨-, h⟩ <;> rw [h] <;>
       exact Submits.none (by simp [next]) (by simp)
-  case quiet => exact fun c => Submits.none (Nat.le_refl _) (by simp)
+  case quiet => exact fun c => Submits.calm (quiet_calm c)
   case close => exact fun c => Submits.none (Nat.le_refl _) (by simp [Action.submitted])
 
 /-- Requests are handed on in increasing order, so each number once, all from `next` on. -/
@@ -417,12 +688,31 @@ theorem Keeps.trans {I : Conn → Prop} {a b c : Conn} {xs ys : List Action}
 def Bounded (cfg : Config) (c : Conn) : Prop :=
   c.pos ≤ c.buffer.size ∧ c.buffer.size ≤ cfg.limits.message_max
 
+theorem Calm.bounded {c c' : Conn} (h : Calm c c') : Keeps (Bounded cfg) c c' [] :=
+  fun hb => ⟨by rw [h.1, h.2.1]; exact hb.1, by rw [h.1]; exact hb.2⟩
+
 theorem step_buffer (now : Nat) (c : Conn) (e : Event) (h : Bounded cfg c) :
     Bounded cfg (step cfg now c e).1 := by
   refine step_of (Keeps (Bounded cfg)) Keeps.trans
     (fun c => advance_of (Keeps (Bounded cfg)) Keeps.trans
-      (take_of (Keeps (Bounded cfg)) Keeps.trans ?wait ?stay ?full ?refuse ?done) ?flush ?finish c)
-    ?stay ?receive ?answer ?expire ?quiet ?close c e h
+      (take_of (Keeps (Bounded cfg)) Keeps.trans ?wait ?stay ?full ?refuse ?done ?begin) ?flush
+      ?stream ?pump ?finish c)
+    ?stay ?receive ?answer ?expire ?quiet ?close ?respond ?took ?pulled ?sent c e h
+  case begin =>
+    intro c head start _ _ _ hs h
+    exact ⟨(streamHead?_some hs).2, h.2⟩
+  case stream =>
+    intro c h
+    obtain ⟨hb, hp, -⟩ := flushStream_frame (cfg := cfg) now c
+    exact ⟨by rw [hb, hp]; exact h.1, by rw [hb]; exact h.2⟩
+  case pump =>
+    intro c h
+    obtain ⟨hb, -, -, -, hp, -⟩ := pump_frame (cfg := cfg) now c
+    exact ⟨by rw [hb]; exact hp h.1, by rw [hb]; exact h.2⟩
+  case respond => exact fun c seq r => Calm.bounded (respond_calm seq r c)
+  case took => exact fun c seq index r => Calm.bounded (took_calm now seq index r c)
+  case pulled => exact fun c seq index r => Calm.bounded (pulled_calm now seq index r c)
+  case sent => exact fun c => Calm.bounded (sent_calm c)
   case wait =>
     intro c _ _ _ _ h
     obtain ⟨hb, hp, -⟩ := waitMore_frame (cfg := cfg) (now := now) c
@@ -462,7 +752,7 @@ theorem step_buffer (now : Nat) (c : Conn) (e : Event) (h : Bounded cfg c) :
   case expire =>
     intro c h
     rcases expire_eq now c with e | e | ⟨-, e⟩ <;> rw [e] <;> exact h
-  case quiet => exact fun _ h => h
+  case quiet => exact fun c => Calm.bounded (quiet_calm c)
   case close => exact fun _ h => h
 
 /-- The buffer never holds more than `message_max` bytes. -/
@@ -471,12 +761,30 @@ theorem run_buffer (c : Conn) (events : List (Nat × Event)) (h : Bounded cfg c)
   run_of (Keeps (Bounded cfg)) Keeps.trans (fun _ h => h) (fun now c e => step_buffer now c e)
     c events h
 
+theorem Calm.slots {c c' : Conn} (h : Calm c c') :
+    Keeps (fun c => c.slots.length ≤ cfg.inflight_max) c c' [] :=
+  fun hs => by show c'.slots.length ≤ cfg.inflight_max; rw [h.2.2.2.1]; exact hs
+
 theorem step_slots (now : Nat) (c : Conn) (e : Event) (h : c.slots.length ≤ cfg.inflight_max) :
     (step cfg now c e).1.slots.length ≤ cfg.inflight_max := by
   refine step_of (Keeps fun c => c.slots.length ≤ cfg.inflight_max) Keeps.trans
     (fun c => advance_of (Keeps fun c => c.slots.length ≤ cfg.inflight_max) Keeps.trans
-      (take_of (Keeps fun c => c.slots.length ≤ cfg.inflight_max) Keeps.trans ?wait ?stay ?full ?refuse ?done) ?flush ?finish c)
-    ?stay ?receive ?answer ?expire ?quiet ?close c e h
+      (take_of (Keeps fun c => c.slots.length ≤ cfg.inflight_max) Keeps.trans ?wait ?stay ?full
+        ?refuse ?done ?begin) ?flush ?stream ?pump ?finish c)
+    ?stay ?receive ?answer ?expire ?quiet ?close ?respond ?took ?pulled ?sent c e h
+  case begin => exact fun _ _ _ _ _ hl _ _ => by simp [begin]; omega
+  case stream =>
+    intro c h
+    obtain ⟨-, -, -, -, hs⟩ := flushStream_frame (cfg := cfg) now c
+    rcases hs with ⟨-, hl, -⟩ | ⟨-, hl, -⟩ <;> omega
+  case pump =>
+    intro c h
+    rw [(pump_frame (cfg := cfg) now c).2.2.1]
+    exact h
+  case respond => exact fun c seq r => Calm.slots (respond_calm seq r c)
+  case took => exact fun c seq index r => Calm.slots (took_calm now seq index r c)
+  case pulled => exact fun c seq index r => Calm.slots (pulled_calm now seq index r c)
+  case sent => exact fun c => Calm.slots (sent_calm c)
   case wait =>
     intro c _ _ _ _ h
     rw [(waitMore_frame (cfg := cfg) (now := now) c).2.2.1]
@@ -509,7 +817,7 @@ theorem step_slots (now : Nat) (c : Conn) (e : Event) (h : c.slots.length ≤ cf
     · exact h
     · simp
       omega
-  case quiet => exact fun _ h => h
+  case quiet => exact fun c => Calm.slots (quiet_calm c)
   case close => exact fun _ h => h
 
 /-- No more than `inflight_max` requests are in flight on a connection. -/
@@ -535,9 +843,24 @@ theorem step_notReading (now : Nat) {c : Conn} (h : c.reading = false) (bytes : 
 theorem advance_quiet (now : Nat) (c : Conn) (h : c.reading = false) :
     (advance cfg now c).1.reading = false := by
   refine advance_of (Keeps fun c => c.reading = false) Keeps.trans
-    (take_of (Keeps fun c => c.reading = false) Keeps.trans ?wait ?stay ?full ?refuse ?done) ?flush
-    ?finish c h
+    (take_of (Keeps fun c => c.reading = false) Keeps.trans ?wait ?stay ?full ?refuse ?done ?begin)
+    ?flush ?stream ?pump ?finish c h
   case wait => exact fun _ _ hr _ _ h => by rw [h] at hr; cases hr
+  case begin => exact fun _ _ _ _ hr _ _ h => by rw [h] at hr; cases hr
+  case stream =>
+    intro c h
+    cases h' : (flushStream cfg now c).1.reading
+    · rfl
+    · have := (flushStream_frame (cfg := cfg) now c).2.2.1 h'
+      rw [h] at this
+      cases this
+  case pump =>
+    intro c h
+    cases h' : (pump cfg now c).1.reading
+    · rfl
+    · have := (pump_frame (cfg := cfg) now c).2.2.2.1 h'
+      rw [h] at this
+      cases this
   case stay => exact fun _ h => h
   case full =>
     intro c h
@@ -555,11 +878,25 @@ theorem advance_quiet (now : Nat) (c : Conn) (h : c.reading = false) :
     intro c h
     rcases finish_eq c with ⟨h₁, -⟩ | ⟨h₁, -⟩ <;> rw [h₁] <;> exact h
 
+theorem Calm.quiet {c c' : Conn} (h : Calm c c') : Keeps (fun c => c.reading = false) c c' [] :=
+  fun hr => by
+    show c'.reading = false
+    cases h' : c'.reading
+    · rfl
+    · have := h.2.2.2.2 h'
+      rw [hr] at this
+      cases this
+
 /-- One that has stopped reading never reads again. -/
 theorem step_reading (now : Nat) {c : Conn} (h : c.reading = false) (e : Event) :
     (step cfg now c e).1.reading = false := by
   refine step_of (Keeps fun c => c.reading = false) Keeps.trans
-    (fun c => advance_quiet now c) ?stay ?receive ?answer ?expire ?quiet ?close c e h
+    (fun c => advance_quiet now c) ?stay ?receive ?answer ?expire ?quiet ?close ?respond ?took
+    ?pulled ?sent c e h
+  case respond => exact fun c seq r => Calm.quiet (respond_calm seq r c)
+  case took => exact fun c seq index r => Calm.quiet (took_calm now seq index r c)
+  case pulled => exact fun c seq index r => Calm.quiet (pulled_calm now seq index r c)
+  case sent => exact fun c => Calm.quiet (sent_calm c)
   case stay => exact fun _ h => h
   case receive => exact fun _ _ _ _ _ h => h
   case answer =>
@@ -636,9 +973,23 @@ theorem Reads.none {c c' : Conn} {actions : List Action} (hb : c'.buffer = c.buf
     (ha : ∀ a ∈ actions, a.submitted = none) : Reads cfg c c' actions :=
   ⟨hb, fun s request h => by cases ha _ h⟩
 
+theorem Reads.quiet {c c' : Conn} {actions : List Action} (hb : c'.buffer = c.buffer)
+    (ha : ∀ s request, .submit s request ∉ actions) : Reads cfg c c' actions :=
+  ⟨hb, fun s request h => absurd h (ha s request)⟩
+
 theorem advance_reads (now : Nat) (c : Conn) : Reads cfg c (advance cfg now c).1 (advance cfg now c).2 := by
   refine advance_of (Reads cfg) Reads.trans
-    (take_of (Reads cfg) Reads.trans ?wait ?stay ?full ?refuse ?done) ?flush ?finish c
+    (take_of (Reads cfg) Reads.trans ?wait ?stay ?full ?refuse ?done ?begin) ?flush ?stream ?pump
+    ?finish c
+  case begin => exact fun c _ _ _ _ _ _ => Reads.quiet rfl (by simp)
+  case stream =>
+    intro c
+    obtain ⟨hb, -, -, hs, -⟩ := flushStream_frame (cfg := cfg) now c
+    exact Reads.quiet hb fun s r h => (hs _ h).2 s r rfl
+  case pump =>
+    intro c
+    obtain ⟨hb, -, -, -, -, ha⟩ := pump_frame (cfg := cfg) now c
+    exact Reads.quiet hb fun s r h => (ha _ h).2.2 s r rfl
   case wait =>
     intro c _ _ _ _
     refine Reads.none (waitMore_frame c).1 fun a ha => ?_
@@ -691,8 +1042,231 @@ theorem step_submit_read (now : Nat) (c : Conn) (e : Event) {s : Nat} {request :
     | ended => exact key _ h
     | broken => simp at h
     | answered seq r => exact key _ h
+    | responded seq r => exact key _ h
+    | took seq index r => exact key _ h
+    | pulled seq index r => exact key _ h
+    | sent => exact key _ h
     | tick => exact key _ h
     | stop => exact key _ h
+
+/-! Streams -/
+
+/-- The bytes of a streamed response, its head, the chunk of each part and the last chunk, are
+`Response.wireChunked`, and the client's reader reads them back as the head with the parts, in
+order, as its body, as soon as the last chunk is there, whatever follows. -/
+theorem read_streamed {close : Bool} {r : Response} (hs : streamable close r = true)
+    {parts : List ByteArray} (hparts : ∀ p ∈ parts, 0 < p.size ∧ p.size < 16 ^ 16)
+    (hbody : (parts.foldl (· ++ ·) ByteArray.empty).size < 10 ^ 18) {limit : Nat}
+    (hlimit : (streamHead close r ++ parts.foldl (· ++ Response.chunk ·) ByteArray.empty
+      ++ lastChunk).size ≤ limit) (tail : ByteArray) (ended : Bool) :
+    Response.read limit (streamHead close r ++ parts.foldl (· ++ Response.chunk ·) ByteArray.empty
+        ++ lastChunk ++ tail) ended
+      = .done (some { streamed close r with
+          headers := ("transfer-encoding", "chunked") :: Response.lowered (streamed close r).headers
+          body := parts.foldl (· ++ ·) ByteArray.empty }) := by
+  have hw : streamHead close r ++ parts.foldl (· ++ Response.chunk ·) ByteArray.empty ++ lastChunk
+      = Response.wireChunked { streamed close r with body := parts.foldl (· ++ ·) ByteArray.empty }
+          parts :=
+    rfl
+  simp only [streamable, Bool.and_eq_true, bne_iff_ne, ne_eq] at hs
+  obtain ⟨⟨hwr, h204⟩, h304⟩ := hs
+  have hr : Response.writable { streamed close r with body := parts.foldl (· ++ ·) ByteArray.empty } := by
+    simp only [Response.writable, streamed, Bool.and_eq_true, decide_eq_true_eq] at hwr ⊢
+    obtain ⟨⟨⟨⟨h1, h2⟩, -⟩, -⟩, h5⟩ := hwr
+    refine ⟨⟨⟨⟨h1, h2⟩, ?_⟩, hbody⟩, h5⟩
+    simp [h204, h304]
+  rw [hw] at hlimit ⊢
+  exact Response.read_wireChunked hr ⟨h204, h304⟩ hparts rfl hlimit tail ended
+
+/-- The answer to a request that streams that opens a stream makes its slot a stream whose head
+is to be written first. -/
+theorem respond_opens {seq : Nat} {c : Conn} {head : Request} {close : Bool}
+    (hw : c.written ≤ seq) (h : c.slots[seq - c.written]? = some (.opened head false close))
+    {r : Response} {mode : Stream.Mode} (hm : Stream.mode? r = some mode)
+    (hs : streamable close r = true) :
+    (respond seq r c).slots = c.slots.set (seq - c.written)
+      (.stream { head, events := mode == .events, close, pending := streamHead close r
+                 after := head.header? "last-event-id" }) := by
+  simp [respond, hw, h, hm, hs]
+
+/-- An answer to a request that is not waiting as one that streams changes nothing. -/
+theorem respond_ignored {seq : Nat} {c : Conn}
+    (h : c.written ≤ seq → ∀ head headOnly close,
+      c.slots[seq - c.written]? ≠ some (.opened head headOnly close)) (r : Response) :
+    respond seq r c = c := by
+  unfold respond
+  split
+  · rename_i hw
+    split
+    · rename_i head headOnly close e
+      exact absurd e (h hw head headOnly close)
+    · rfl
+  · rfl
+
+/-- A part of bytes the system gives for the pull it was asked is to be written as its chunk,
+after what came before it. -/
+theorem pulled_part {seq index : Nat} {c : Conn} {o : Outflow} (hw : c.written ≤ seq)
+    (h : c.slots[seq - c.written]? = some (.stream o)) (hask : o.asking = true)
+    (hi : o.index = index) (hst : o.state = .going) (hev : o.events = false) {r : Response}
+    {d : ByteArray} (hp : Stream.part r = .data d) (hd : d.size ≤ cfg.part_max) :
+    (pulled cfg now seq index r c).slots = c.slots.set (seq - c.written)
+      (.stream { o with asking := false, index := index + 1
+                        pending := o.pending ++ Response.chunk d }) := by
+  have hb : r.body = d := by
+    unfold Stream.part at hp
+    repeat' split at hp
+    all_goals (cases hp <;> rfl)
+  simp [pulled, hw, h, hask, hi, hst, hp, Outflow.accept, hev, hb, show ¬ cfg.part_max < d.size by omega]
+
+/-- An answer to a pull that is not the one a stream waits for changes nothing. -/
+theorem pulled_ignored {seq index : Nat} {c : Conn}
+    (h : ∀ o, c.written ≤ seq → c.slots[seq - c.written]? = some (.stream o) →
+      ¬(o.asking = true ∧ o.index = index ∧ o.state = .going)) (r : Response) :
+    pulled cfg now seq index r c = c := by
+  unfold pulled
+  split
+  · rename_i hw
+    split
+    · rename_i o e
+      have := h o hw e
+      split
+      · rfl
+      · rename_i hne
+        simp only [Bool.and_eq_true, beq_iff_eq, Bool.not_eq_true', Bool.not_eq_false] at hne
+        exact absurd ⟨hne.1.1, hne.1.2, hne.2⟩ this
+    · rfl
+  · rfl
+
+/-- A part larger than `part_max` cuts its stream short. -/
+theorem pulled_large {seq index : Nat} {c : Conn} {o : Outflow} (hw : c.written ≤ seq)
+    (h : c.slots[seq - c.written]? = some (.stream o)) (hask : o.asking = true)
+    (hi : o.index = index) (hst : o.state = .going) {r : Response} {d : ByteArray}
+    (hp : Stream.part r = .data d) (hd : cfg.part_max < d.size) :
+    (pulled cfg now seq index r c).slots = c.slots.set (seq - c.written)
+      (.stream { o with asking := false, index := index + 1, state := .cut }) := by
+  simp [pulled, hw, h, hask, hi, hst, hp, hd]
+
+/-- A streamed response the system ended, at the front, writes what has come of it and then its
+last chunk, and leaves. -/
+theorem flushStream_ended {c : Conn} (hc : c.closed = false) {o : Outflow} {rest : List Slot}
+    (hs : c.slots = .stream o :: rest) (hst : o.state = .ended) :
+    (flushStream cfg now c).2
+        = (if o.pending.isEmpty then [] else [.part c.written o.pending]) ++ [.write c.written lastChunk]
+      ∧ (flushStream cfg now c).1.written = c.written + 1 ∧ (flushStream cfg now c).1.slots = rest := by
+  unfold flushStream
+  cases hp : o.pending.isEmpty <;> simp [hc, hs, hst, hp]
+
+/-- A streamed response going on, at the front, writes what has come of it; it asks for the next
+part only when nothing written is unsent and no pull is with the system. -/
+theorem flushStream_going {c : Conn} (hc : c.closed = false) {o : Outflow} {rest : List Slot}
+    (hs : c.slots = .stream o :: rest) (hst : o.state = .going) :
+    (∀ s b, .part s b ∈ (flushStream cfg now c).2 → s = c.written ∧ (b = o.pending ∨ b = heartbeatChunk))
+      ∧ (∀ s k request, .pull s k request ∈ (flushStream cfg now c).2 →
+          c.unsent = false ∧ o.pending.isEmpty ∧ o.asking = false ∧ s = c.written ∧ k = o.index
+            ∧ request = Stream.pull o.head o.index o.after)
+      ∧ (∀ s b, .write s b ∉ (flushStream cfg now c).2) := by
+  unfold flushStream
+  cases hp : o.pending.isEmpty <;> cases hu : c.unsent <;> cases ha : o.asking <;>
+    simp [hc, hs, hst, hp, ha] <;> (repeat' split) <;> simp_all
+
+/-- A stream not at the front writes nothing and asks for nothing. -/
+theorem flushStream_other {c : Conn} (h : ∀ o rest, c.slots ≠ .stream o :: rest) :
+    flushStream cfg now c = (c, []) := by
+  unfold flushStream
+  split
+  · rfl
+  · split
+    · rename_i o rest hs
+      exact absurd hs (h o rest)
+    · rfl
+
+/-- Of a body framed by its length, a piece is the bytes of the buffer from the connection's
+position to where the piece ends, which is within what is left of the body; what is left after
+it is the framing, and it is the last piece exactly when nothing is left. So the pieces of such a
+body, one after another, are its bytes in order: the body the strict reader reads
+(`Request.read` takes the `n` bytes after the head). -/
+theorem gather_length {bytes : ByteArray} :
+    ∀ {fuel pos taken left : Nat} {acc data : ByteArray} {stop : Nat}
+      {framing : Inflow.Framing} {last : Bool}, 0 < left →
+      Inflow.gather cfg bytes fuel pos taken (.length left) acc = .piece data stop framing last →
+      pos ≤ stop ∧ stop ≤ pos + left ∧ data = acc ++ bytes.extract pos stop
+        ∧ framing = .length (left - (stop - pos)) ∧ (last = true ↔ stop = pos + left)
+  | 0, pos, taken, left, acc, data, stop, framing, last, hl, h => by
+    simp only [Inflow.gather] at h
+    split at h
+    · cases h
+    · cases h
+      refine ⟨Nat.le_refl _, by omega, by simp, by simp, by simp; omega⟩
+  | fuel + 1, pos, taken, left, acc, data, stop, framing, last, hl, h => by
+    simp only [Inflow.gather, Inflow.next] at h
+    by_cases hm0 : min (max 1 cfg.piece_max - acc.size) (min (bytes.size - pos) left) = 0
+    · simp only [hm0, ↓reduceIte] at h
+      split at h
+      · cases h
+      · cases h
+        refine ⟨Nat.le_refl _, by omega, by simp, by simp, by simp; omega⟩
+    · simp only [hm0, ↓reduceIte] at h
+      split at h
+      · cases h
+        refine ⟨by omega, by omega, rfl, by simp, by simp; omega⟩
+      · rename_i hnot
+        have hlast : ¬ left = min (max 1 cfg.piece_max - acc.size) (min (bytes.size - pos) left) := by
+          intro e
+          apply hnot
+          simp only [Bool.or_eq_true, decide_eq_true_eq]
+          exact .inl e
+        obtain ⟨h1, h2, h3, h4, h5⟩ := gather_length (by omega) h
+        refine ⟨by omega, by omega, ?_, ?_, ?_⟩
+        · rw [h3, ByteArray.append_assoc, ByteArray.extract_append_extract]
+          congr 2 <;> omega
+        · rw [h4]
+          congr 1
+          omega
+        · rw [h5]
+          omega
+
+/-- A piece handed on is the next bytes of the body as `Inflow.gather` reads them at the
+connection's position in its buffer, or the piece the system was too busy to take, offered
+again; one at a time. -/
+theorem pump_piece {c : Conn} {s k : Nat} {request : Request}
+    (h : .piece s k request ∈ (pump cfg now c).2) :
+    ∃ f, c.inflow = some f ∧ s = f.seq ∧ k = f.index
+      ∧ ((f.asked = none ∧ ∃ data stop framing last,
+            Inflow.gather cfg c.buffer (max 1 cfg.piece_max) c.pos f.taken f.framing .empty
+              = .piece data stop framing last
+            ∧ request = Stream.piece f.head k data last
+            ∧ (pump cfg now c).1.inflow.bind (·.asked) = some (data, last))
+        ∨ ∃ data last, f.asked = some (data, last) ∧ request = Stream.piece f.head k data last) := by
+  unfold pump at h ⊢
+  split at h
+  · simp at h
+  · rename_i f hf
+    refine ⟨f, hf, ?_⟩
+    split at h
+    · simp at h
+    · split at h
+      · simp at h
+      · split at h
+        · rename_i data last ha
+          split at h
+          · simp only [List.mem_singleton, Action.piece.injEq] at h
+            obtain ⟨rfl, rfl, rfl⟩ := h
+            exact ⟨rfl, rfl, .inr ⟨data, last, ha, rfl⟩⟩
+          · simp at h
+        · rename_i ha
+          dsimp only at h ⊢
+          split at h
+          · split at h <;> simp at h
+          · split at h <;> simp at h
+          · rename_i data stop framing last hg
+            simp only [List.mem_append, List.mem_ite_nil_right, List.mem_singleton,
+              Action.piece.injEq] at h
+            rcases h with ⟨-, h⟩ | ⟨rfl, rfl, rfl⟩
+            · cases h
+            · refine ⟨rfl, rfl, .inl ⟨ha, data, stop, framing, last, hg, rfl, ?_⟩⟩
+              repeat' split
+              all_goals simp_all [settle]
+              all_goals (split <;> rfl)
 
 /-! What is written -/
 

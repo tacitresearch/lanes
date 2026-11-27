@@ -57,6 +57,15 @@ structure ServerConfig where
   idle_ms : Nat := 10000
   head_ms : Nat := 10000
   body_ms : Nat := 30000
+  /-- Which requests stream, by their head (`Conn.Config.streams`): the body is handed to the
+  system in pieces, and the answer may open a response whose parts the system gives one at a
+  time. -/
+  streams : Option (Request → Bool) := none
+  piece_max : Nat := 65536
+  streamBody_max : Nat := 1099511627776
+  part_max : Nat := 1048576
+  poll_ms : Nat := 1000
+  heartbeat_ms : Nat := 15000
   /-- A response that the client has not taken in this long ends the connection. -/
   write_ms : Nat := 30000
   /-- How long what the client still sends is read and dropped before the socket is closed, so
@@ -87,6 +96,12 @@ private def ServerConfig.conn (config : ServerConfig) : Conn.Config where
   idle_ms := config.idle_ms
   head_ms := config.head_ms
   body_ms := config.body_ms
+  streams := config.streams
+  piece_max := config.piece_max
+  streamBody_max := config.streamBody_max
+  part_max := config.part_max
+  poll_ms := config.poll_ms
+  heartbeat_ms := config.heartbeat_ms
 
 /-- What a connection's loop is told. -/
 private inductive Ev where
@@ -97,6 +112,8 @@ private inductive Ev where
   | resume
   /-- A deadline the loop gave may have passed. -/
   | alarm
+  /-- The write the loop waited for to tell the connection it was sent has ended. -/
+  | sent
 
 /-- What the loop of a connection and those who tell it something share. The loop runs on the
 thread that tells it something while it is not running, and never waits. -/
@@ -119,6 +136,10 @@ private structure Loop where
   waits to be written is bounded by what is in flight. -/
   writing : Option (WriteEnd × Nat) := none
   resumeSet : Bool := false
+  /-- The ids the heads of the requests that stream entered the system with, by number. -/
+  heads : List (Nat × ReqId) := []
+  /-- The connection will be told `sent` when the last write ends. -/
+  sentSet : Bool := false
   left : Bool := false
 
 /-- A thread of the server's own that runs the loops of the connections dealt to it, one after
@@ -193,6 +214,10 @@ private structure Ctx where
   config : ServerConfig
   /-- Hand a request to the system, with whom to tell its answer. -/
   submit : Request → (Response → BaseIO Unit) → BaseIO Unit
+  /-- Hand a request that streams, or a piece or a pull of one, to the system, with whom to tell
+  its answer; the id it entered with, unless the system was too busy to take it. These pass by
+  the operations front (`Ops.front`), whose answers are whole. -/
+  submitStream : Request → (Response → BaseIO Unit) → BaseIO (Option ReqId)
   /-- Forget the connection, which has closed. -/
   leave : BaseIO Unit
 
@@ -236,7 +261,23 @@ private partial def react (ctx : Ctx) (line : Line) (loop : Loop) (event : Conn.
       match action with
       | .submit seq request =>
         ctx.submit request fun r => tell ctx line false (.conn (.answered seq r))
-      | .interim _ bytes | .write _ bytes =>
+      | .begin seq request =>
+        let id ← ctx.submitStream request fun r => tell ctx line false (.conn (.responded seq r))
+        let heads := loop.heads.filter (·.1 ≥ loop.conn.written)
+        loop := { loop with heads := match id with
+          | some id => (seq, id) :: heads
+          | none => heads }
+      | .piece seq index request =>
+        let reply := fun r => tell ctx line false (.conn (.took seq index r))
+        match loop.heads.lookup seq with
+        | some id => discard <| ctx.submitStream (Stream.tag request id) reply
+        | none => reply (.text "the request is not with the system\n" 400)
+      | .pull seq index request =>
+        let reply := fun r => tell ctx line false (.conn (.pulled seq index r))
+        match loop.heads.lookup seq with
+        | some id => discard <| ctx.submitStream (Stream.tag request id) reply
+        | none => reply (.text "the request is not with the system\n" 400)
+      | .interim _ bytes | .write _ bytes | .part _ bytes =>
         let failed ← failedWrite loop
         let sent ← (line.socket.native.send #[bytes]).toBaseIO
         match failed, sent with
@@ -256,6 +297,7 @@ private partial def handle (ctx : Ctx) (line : Line) (loop : Loop) : Ev → Base
       | some (.ok none) => .ended
       | _ => .broken
   | .resume => return { loop with resumeSet := false }
+  | .sent => react ctx line { loop with sentSet := false } .sent
   | .alarm => do
     let now ← IO.monoMsNow
     let late := (← writeBy ctx.config.write_ms loop).any (· ≤ now)
@@ -288,9 +330,15 @@ private partial def settle (ctx : Ctx) (line : Line) (loop : Loop) : BaseIO Loop
         loop := { loop with resumeSet := true }
         discard <| BaseIO.mapTask (t := w.result?) (sync := line.lane.isSome) fun _ =>
           tell ctx line true .resume
-  let alarm_ms := match conn.deadline config.conn, writing with
-    | some a, some b => some (min a b)
-    | a, b => a <|> b
+  if conn.unsent && !loop.sentSet then
+    loop := { loop with sentSet := true }
+    match loop.writing, writing with
+    | some (w, _), some _ =>
+      discard <| BaseIO.mapTask (t := w.result?) (sync := line.lane.isSome) fun _ =>
+        tell ctx line true .sent
+    | _, _ => tell ctx line true .sent
+  let alarm_ms := Conn.earlier (Conn.earlier (conn.deadline config.conn) writing)
+    (conn.wakeAt config.conn)
   line.box.atomically (modify fun b => { b with alarm_ms })
   return loop
 
@@ -393,20 +441,21 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
   let server : Server system := {
     runtime, listener, waiting, connections := ← Mutex.new {}, down
     localPort := (← listener.getSockName).port, lanes, ops }
-  let hand (request : Request) (answer : Response → BaseIO Unit) : BaseIO Unit := do
+  let hand (request : Request) (answer : Response → BaseIO Unit) : BaseIO (Option ReqId) := do
     let request := prepare request
     let admitted ← waiting.atomically do
       let id ← modifyGet (·.wait answer)
-      if ← runtime.tryInput (enter (id, request)) then return true
+      if ← runtime.tryInput (enter (id, request)) then return some id
       modify (·.release id)
-      return false
-    unless admitted do answer busy
+      return none
+    if admitted.isNone then answer busy
+    return admitted
   let arrived (request : Request) (answer : Response → BaseIO Unit) : BaseIO Unit :=
     match arrive with
-    | none => hand request answer
+    | none => discard <| hand request answer
     | some work => discard <| IO.asTask (prio := .dedicated) do
       match ← (work request).toBaseIO with
-      | .ok (.ok request) => hand request answer
+      | .ok (.ok request) => discard <| hand request answer
       | .ok (.error response) => answer response
       | .error _ => answer (.text "the request could not be prepared\n" 500)
   let probe : BaseIO Ops.Probe := do
@@ -427,7 +476,7 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
       if !admitted then return none
       let id := c.next
       let ctx : Ctx := {
-        config, submit := front
+        config, submit := front, submitStream := hand
         leave := server.connections.atomically do
           modify fun c => { c with count := c.count.leave, alive := c.alive.erase id } }
       set { c with count, alive := c.alive.insert id { line, tell := tell ctx line false },
@@ -486,7 +535,9 @@ def ServerConfig.journalName (config : ServerConfig) : String :=
   s!"{config.system}, behind a gate of {config.gate.requestTimeout_ms} ms and "
     ++ s!"{config.gate.maxPending} requests"
 
-/-- Returns once the server is listening. Each request is answered exactly once by the gate.
+/-- Serve `sys` over HTTP: the gate (`served`) is joined in front of it, `bridge` turns requests
+into inputs and outputs into responses, and the whole runs on one shard (`Runtime`). Returns
+once the server is listening. Each request is answered exactly once by the gate.
 With a journal and `saving`, the kernel is saved from time to time and the journal cut
 (`Runtime.Config.snapshotEvery`); with a journal alone, the journal only grows. `arrive` is work
 a request needs in IO before it is prepared, done on a task of its own: what it returns enters as
@@ -510,6 +561,7 @@ namespace Server
 
 variable {system : System τ} [Hashable τ.Id]
 
+/-- The port the server listens on: the one picked when `ServerConfig.port` is `0`. -/
 def port (server : Server system) : Option UInt16 :=
   some server.localPort
 

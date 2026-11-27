@@ -131,7 +131,7 @@ jobs:
           for package in integrations/google integrations/github integrations/aws examples/counter \
               examples/bank examples/bank-web examples/kv-cache examples/election examples/watchdog \
               examples/payments examples/migration examples/todo-db examples/sign-in \
-              examples/videos examples/reminders; do
+              examples/videos examples/upload examples/reminders; do
             echo "::group::$package"
             mkdir -p "$package/.lake"
             ln -sfn "$GITHUB_WORKSPACE/.lake/packages" "$package/.lake/packages"

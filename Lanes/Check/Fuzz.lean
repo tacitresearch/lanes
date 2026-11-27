@@ -22,11 +22,14 @@ namespace Lanes.Check
 
 variable {σ : Signature} {sys : System σ} {D : Type}
 
+/-- The `always` property a random run violated, with the run's seed and its trace. -/
 structure FuzzFailure (S L : Type) where
   seed : Nat
   property : String
   trace : Trace S L
 
+/-- What `fuzz` found. It is `ok` when no run violated an `always` property and some run
+reached each `sometimes` property. -/
 structure FuzzReport (S L : Type) where
   runs : Nat
   steps : Nat

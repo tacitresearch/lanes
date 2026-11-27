@@ -87,6 +87,7 @@ public import Lanes.Runtime.Batch
 public import Lanes.Runtime.IO.Park
 public import Lanes.Runtime.IO.Shell
 public import Lanes.Runtime.Kernel
+public import Lanes.Runtime.Pace
 public import Lanes.Runtime.Shard
 public import Lanes.Runtime.Wave
 public import Lanes.Web.Auth.IdToken
@@ -101,10 +102,13 @@ public import Lanes.Web.Http.Basic
 public import Lanes.Web.Http.Conn
 public import Lanes.Web.Http.Cookie
 public import Lanes.Web.Http.Front
+public import Lanes.Web.Http.Loopback
 public import Lanes.Web.Http.Gate
 public import Lanes.Web.Http.Ops
 public import Lanes.Web.Http.ReadRequest
 public import Lanes.Web.Http.Route
+public import Lanes.Web.Http.Sse
+public import Lanes.Web.Http.Stream
 public import Lanes.Web.Http.SigV4
 public import Lanes.Web.Http.Waiting
 public import Lanes.Web.Http.Wire

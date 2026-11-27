@@ -34,6 +34,7 @@ public import Lanes.Web.Http.FrontSound
 public import Lanes.Web.Http.OpsSound
 public import Lanes.Web.Http.ReadRequestSound
 public import Lanes.Web.Http.RouteSound
+public import Lanes.Web.Http.SseSound
 public import Lanes.Web.Http.SigV4Sound
 public import Lanes.Web.Http.WireSound
 
