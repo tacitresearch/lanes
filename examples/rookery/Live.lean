@@ -19,24 +19,8 @@ def origin : String := s!"http://127.0.0.1:{port}"
 def form (fields : List (String × String)) : String :=
   "&".intercalate (fields.map fun (k, v) => percentEncode k ++ "=" ++ percentEncode v)
 
-/-- One request on a connection of its own, read with the pure reader of `Lanes.Web.Http.Wire`. -/
-def send (request : Http.Request) : IO Http.Response := do
-  let some bytes := request.wire s!"127.0.0.1:{port}"
-    | throw (IO.userError "live: the request cannot be written")
-  let received ← (do
-    let socket ← TCP.Socket.Client.mk
-    socket.connect (.v4 ⟨.ofParts 127 0 0 1, port⟩)
-    socket.send bytes
-    let mut received := ByteArray.empty
-    repeat
-      match ← socket.recv? 65536 with
-      | some more => received := received ++ more
-      | none => break
-    socket.close
-    return received : Async ByteArray).block
-  match Http.Response.parse received with
-  | some response => return response
-  | none => throw (IO.userError s!"live: no response to {request.path}")
+def send (request : Http.Request) : IO Http.Response :=
+  Http.Client.fetch port request
 
 def path (p : String) : List String := (p.splitOn "/").filter (· != "")
 

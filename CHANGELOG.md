@@ -11,6 +11,7 @@ under Unreleased (`CONTRIBUTING.md`).
 ### Added
 
 - `ServerConfig.ioThreads`: connections owned by dedicated threads, so a connection never changes thread (21–30% more requests a second on the warm machine); and `Runtime.Config.workers`: a batch's actors' steps worked out in parallel, proved equal to the sequential run (`Kernel.runBatchAhead_eq`). Both are off by default.
+- `Http.Loopback`: an application's front end driven in tests with no socket, through the server's connection, the gate and the system; and `Http.Client.fetch`, one request to a local server for live tests.
 
 ### Changed
 

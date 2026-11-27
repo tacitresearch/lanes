@@ -84,6 +84,14 @@ def exchange (call : Call) (config : Config) : Async (Option Response) := do
   try Async.race attempt patience
   finally socket.close
 
+/-- One request to a server on this machine, for tests: its response, or an error that says why
+there is none. -/
+def fetch (port : UInt16) (request : Request) (config : Config := {}) (host := "127.0.0.1") :
+    IO Response := do
+  match ← (exchange { host, port, request } config).block with
+  | some response => return response
+  | none => throw (IO.userError s!"lanes: no response from {host}:{port} to {request.target}")
+
 /-- Makes the call on a task of its own, so the shard does not wait for the network, and hands
 the answer back as an input. An answer that finds the inbox full is dropped. -/
 def handler {sys : System σ} [Hashable σ.Id] (port : Port σ) (config : Config := {})

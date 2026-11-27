@@ -215,8 +215,9 @@ package; none touches the library.
    would show a post the moment it is answered, and is the next thing the front needs.
 7. **No jobs.** Bots that call an LLM from the server wait for the job system (`Lanes.Behaviours`
    off the shard).
-8. **No HTTP client for tests**: `Live.lean` again writes thirty lines over `Request.wire` and
-   `Response.parse`, as the ledger's does.
+8. **No HTTP client for tests. Fixed:** `Live.lean` wrote thirty lines over `Request.wire` and
+   `Response.parse`, as the ledger's did; both call `Http.Client.fetch` now, and a pure test of
+   a front end has `Http.Loopback`.
 
 ### Clumsy
 

@@ -67,3 +67,23 @@ lake exe raftChaos    # a minute of random faults; not part of the tests
 and in the same way, in `examples/ledger`, `lake build`, `lake test` and `lake exe ledgerLive`;
 in `examples/rookery`, `lake build`, `lake test` and `lake exe rookeryLive`; and in each small
 one, `lake build` and `lake test` (`bank-web` needs `bank` beside it, which it requires by path).
+
+## Testing a front end
+
+`Http.Loopback` drives an application's front end with no socket: a request is written as a
+client writes it, read by the connection the server runs (`Http.Conn`), prepared and handed to
+the system behind the gate on a kernel of its own, and the bytes written back read by the
+client's reader. It is pure, so a test is a value; the system's state carries over from one
+exchange to the next, and time passes only when nothing else can happen, so a request the system
+never answers gets the gate's `504`.
+
+```lean
+let lb := Http.Loopback.start (bank Acct 100) bridge
+let (lb, moved) := lb.post ["transfer"] [("src", "0"), ("dst", "1"), ("amount", "30")]
+let (_, balance) := lb.get ["accounts", "1"]
+```
+
+`bank-web`'s `Check.lean` does this. A live test of a process uses `Http.Client.fetch port
+request`, one request on a connection of its own, as `ledger/Live.lean` and
+`rookery/Live.lean` do.
+

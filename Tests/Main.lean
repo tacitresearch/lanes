@@ -24,6 +24,7 @@ import Tests.Codec
 import Tests.Peers
 import Tests.Courier
 import Tests.HttpConn
+import Tests.Loopback
 import Tests.Mailbox
 import Tests.Split
 import Tests.Batch
@@ -83,7 +84,7 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.Peers.tests ++ Tests.Courier.tests ++ Tests.Mailbox.tests ++ Tests.Batch.tests
     ++ Tests.Crypto.tests ++ Tests.Auth.tests ++ Tests.Clients.tests ++ Tests.Lease.tests
     ++ Tests.Release.tests ++ Tests.ReadRequest.tests ++ Tests.Oracle.unitTests
-    ++ Tests.HttpConn.tests
+    ++ Tests.HttpConn.tests ++ Tests.Loopback.tests
     ++ Tests.Jobs.tests
   match args with
   | [] =>
