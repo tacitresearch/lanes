@@ -82,6 +82,9 @@ def tests : List (String × Bool) :=
       pooled (simulate {} 30000 9000 300 (idle_ns := 30000)).2 ≤ 1),
     ("pace: a shard that would be behind alone takes the pool, and keeps it once it keeps up",
       pooled ((simulate {} 30000 9000 300 (idle_ns := 3000)).2.drop 2) ≥ 285),
+    ("pace: the pool is not tried on the word of a shard's first few steps, however costly",
+      ((({} : Pace).observe config 4 {} 3000000 2 3000000).spread config 4).workers == 1
+        && ((({} : Pace).observe config 4 {} 3000000 100 3000000).spread config 4).workers == 4),
     ("pace: steps that only copy large states leave the pool at its first look, for good",
       let ran := (simulateCopies 500 30000 300).2
       pooled ran ≤ config.probeFirst && (ran.drop (config.probeFirst + 4)).all (!·)),
