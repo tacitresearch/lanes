@@ -15,11 +15,12 @@ and refuses a server that chose none; `verifyFull` refuses a certificate for ano
 
 Against a real PostgreSQL with TLS, when `LANES_POSTGRES_TLS=host:port` names one and
 `LANES_POSTGRES_CERTS` the directory `scripts/postgres-test-server DIR PORT tls` made: SCRAM
-bound to the certificate (`SCRAM-SHA-256-PLUS`) opens, over TLS as `pg_stat_ssl` says; a user
+bound to the certificate (`SCRAM-SHA-256-PLUS`) opens, over TLS as `pg_stat_ssl` says, to an
+address and to `localhost` by name; a user
 the server takes over TLS only is refused without it; through a relay that holds another
 certificate from the same authority, a bound client is refused and an unbound one is not, as
-libpq's `psql` is; and a pool of two serves six clients on at most two connections and replaces
-one handed back broken. CI runs no such server.
+libpq's `psql` is; and a pool of two to `localhost` serves six clients on at most two connections and
+replaces one handed back broken with one that resolves the name again. CI runs no such server.
 -/
 
 namespace Tests.PostgresTls
@@ -182,7 +183,8 @@ def server : IO (Option (UInt16 × String)) := do
   | _ => return none
 
 def pooled (port : UInt16) (trust : Tls.Trust) : Async (List (String × Bool)) := do
-  let pool ← Pool.new (connection port trust (user := "lanes_scram") (password := "scram-pw"))
+  let pool ← Pool.new { connection port trust (user := "lanes_scram") (password := "scram-pw") with
+    host := "localhost" }
     { max := 2, waiting_max := 8 }
   let tasks ← (List.range 6).mapM fun _ => async do
     pool.withSession 5000 fun s => do
@@ -206,7 +208,8 @@ def pooled (port : UInt16) (trust : Tls.Trust) : Async (List (String × Bool)) :
   return [
     ("postgres pool: six clients on a pool of two are each served, on at most two connections",
       served.length == 6 && distinct.length ≤ 2),
-    ("postgres pool: a connection handed back broken is replaced by a new one", replaced) ]
+    ("postgres pool: a connection handed back broken is replaced by a new one, to the name resolved again",
+      replaced) ]
 
 def live : Async (List (String × Bool)) := do
   let openssl ← hasOpenssl
@@ -220,6 +223,8 @@ def live : Async (List (String × Bool)) := do
   let byAddress ← opensWith { scram with conn.channelBinding := .require }
     "SELECT ssl::text FROM pg_stat_ssl WHERE pid = pg_backend_pid()"
   let byName ← opensWith { scram with serverName := some "localhost", conn.channelBinding := .require }
+  let named ← opensWith { scram with host := "localhost", conn.channelBinding := .require }
+    "SELECT ssl::text FROM pg_stat_ssl WHERE pid = pg_backend_pid()"
   let tlsOnly ← opensWith (connection port trust (user := "lanes_tls") (password := "tls-pw"))
   let tlsPlain ← connect { connection port trust (user := "lanes_tls") (password := "tls-pw") with sslmode := .disable }
   let wrongName ← connect { scram with serverName := some "elsewhere.example" }
@@ -241,6 +246,8 @@ def live : Async (List (String × Bool)) := do
   return fromOpenssl ++ [
     ("postgres tls live: SCRAM-SHA-256-PLUS, verifyFull by address and by name, over TLS",
       byAddress == some "true" && byName == some "1"),
+    ("postgres tls live: a host name resolved, and its certificate checked for the name, over TLS",
+      named == some "true"),
     ("postgres tls live: a user taken over TLS only opens with it and is refused without",
       tlsOnly == some "1" && tlsPlainRefused),
     ("postgres tls live: verifyFull refuses the server's certificate for another name",
