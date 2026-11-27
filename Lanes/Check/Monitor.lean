@@ -18,8 +18,9 @@ far must be explainable by the spec. No refinement mapping is needed.
 The monitor keeps every state the spec could be in given what has been observed. An input adds
 itself to `pending` in each candidate, and then any pending inputs may take effect in any order.
 An output keeps only the candidates that were waiting to deliver it. A timer that is a deadline
-of the spec keeps, when it fires, the candidates in which that deadline is armed, passes it in
-each, and closes them again, since inputs pending may take effect after it. If no candidate is
+of the spec, or a message handed to an actor that is one, keeps, when it fires, the candidates
+in which that deadline is armed, passes it in each, and closes them again, since inputs pending
+may take effect after it. If no candidate is
 left, the system has done something the spec does not allow, and the checker reports the trace.
 This is the subset construction on the spec, the same idea as the linearizability checkers
 Porcupine and Jepsen's Knossos, run inside the search instead of on recorded histories.
@@ -171,15 +172,17 @@ end Check
 
 variable {σ : Signature}
 
-/-- `driver`, with the monitor of `svc` beside it. The timers `deadlines` names are the spec's
-deadlines; without them the spec has none. -/
+/-- `driver`, with the monitor of `svc` beside it. The timers `deadlines` names and the
+deliveries `delivered` names are the spec's deadlines passing; without them the spec has none. -/
 def Service.monitored [BEq S] {D : Type} (svc : Service σ.In σ.Out S T) (driver : Driver σ D)
-    (deadlines : Deadlines σ T := fun _ _ => none) :
+    (deadlines : Deadlines σ T := fun _ _ => none)
+    (delivered : Deadlines σ T := fun _ _ => none) :
     Driver σ (D × Check.Monitor σ.In σ.Out S) where
   init := (driver.init, Check.Monitor.start svc)
   inputs s := (driver.inputs s.1).map fun (x, d) => (x, (d, s.2.input svc x))
   observe s out := (driver.observe s.1 out, s.2.output out)
   timeout s i msg := (driver.timeout s.1 i msg, (deadlines i msg).elim s.2 (s.2.fire svc))
+  deliver s e := (driver.deliver s.1 e, (delivered e.dst e.msg).elim s.2 (s.2.fire svc))
 
 def Check.refines [BEq S] {sys : System σ} {D : Type} (name : String) :
     Check.Property (World sys (D × Check.Monitor σ.In σ.Out S)) :=

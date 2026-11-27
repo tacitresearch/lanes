@@ -24,19 +24,21 @@ namespace Lanes
 variable {σ : Signature} {sys : System σ} {D : Type}
 
 /-- The driver cannot tell `==` states apart: they offer the same inputs, leading to `==`
-states, and stay `==` after seeing an output or a timer fire. -/
+states, and stay `==` after seeing an output, a timer fire or a message handed over. -/
 structure Driver.Respects [BEq D] (driver : Driver σ D) : Prop where
   inputs : ∀ a b, (a == b) = true → ∀ x a', (x, a') ∈ driver.inputs a →
     ∃ b', (x, b') ∈ driver.inputs b ∧ (a' == b') = true
   observe : ∀ a b out, (a == b) = true → (driver.observe a out == driver.observe b out) = true
   timeout : ∀ a b i msg, (a == b) = true →
     (driver.timeout a i msg == driver.timeout b i msg) = true
+  deliver : ∀ a b e, (a == b) = true → (driver.deliver a e == driver.deliver b e) = true
 
 theorem Driver.Respects.of_lawful [BEq D] [LawfulBEq D] (driver : Driver σ D) :
     driver.Respects where
   inputs _ _ hab _ a' ha' := ⟨a', eq_of_beq hab ▸ ha', BEq.rfl⟩
   observe _ _ _ hab := eq_of_beq hab ▸ BEq.rfl
   timeout _ _ _ _ hab := eq_of_beq hab ▸ BEq.rfl
+  deliver _ _ _ hab := eq_of_beq hab ▸ BEq.rfl
 
 structure World.Equiv [BEq D] (env : EnvModel σ) (a b : World sys D) : Prop where
   state : SysState.Equiv env a.state b.state
@@ -74,7 +76,12 @@ theorem World.Equiv.next [Enum σ.Id] [BEq D] {sc : Scenario σ D} (hresp : sc.d
       obtain ⟨rfl, rfl⟩ := hsome
       exact ⟨_, .inl ⟨(_, c₂), hsucc₂, rfl⟩, by simpa using hequiv,
         hresp.timeout _ _ i msg hdriver, hcrashes⟩
-    | deliver e | duplicate e | drop e | start i =>
+    | deliver e | duplicate e =>
+      simp only [Option.some.injEq, Prod.mk.injEq] at hsome
+      obtain ⟨rfl, rfl⟩ := hsome
+      exact ⟨_, .inl ⟨(_, c₂), hsucc₂, rfl⟩, by simpa using hequiv,
+        hresp.deliver _ _ e hdriver, hcrashes⟩
+    | drop e | start i =>
       simp only [Option.some.injEq, Prod.mk.injEq] at hsome
       obtain ⟨rfl, rfl⟩ := hsome
       exact ⟨_, .inl ⟨(_, c₂), hsucc₂, rfl⟩, by simpa using hequiv, hdriver, hcrashes⟩
