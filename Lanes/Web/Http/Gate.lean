@@ -23,8 +23,13 @@ namespace Lanes.Http
 
 variable {σ : Signature}
 
+/-- The server's number for a request. It travels in the input and comes back in the output
+that answers the request. -/
 abbrev ReqId := Nat
 
+/-- How an application meets HTTP, in pure functions: a request becomes an input or is
+answered at once, and an output becomes a response. `Http.serve` runs a system behind a gate
+with it. -/
 structure Bridge (σ : Signature) where
   /-- Parse a request into an input, or answer it directly without entering the system. The
   identifier must travel with the input so the matching output can name it. -/
@@ -38,11 +43,15 @@ structure Bridge (σ : Signature) where
   here, once, not again at every replay. -/
   prepare : Request → Request := id
 
+/-- The gate's bounds: how long a request waits for the system before it is answered `504`,
+and how many may wait at once. -/
 structure GateConfig where
   requestTimeout_ms : Nat := 30000
   /-- Requests waiting for the system at once. Beyond it a request gets `503` (rule 2.6). -/
   maxPending : Nat := 1024
 
+/-- What the gate handles: a request arriving, an output of the system, and a request's
+deadline passing. -/
 inductive GateMsg (σ : Signature) where
   | arrive (id : ReqId) (request : Request)
   | answer (out : σ.Out)
@@ -62,8 +71,12 @@ instance [Repr σ.Out] : Repr (GateMsg σ) where
     | .answer out => f!"answer {repr out}"
     | .expire id => f!"expire {id}"
 
+/-- The answer when `GateConfig.maxPending` requests are already waiting, when the server's
+inbox is full, and to requests in flight when it stops. -/
 def busy : Response := .text "the system is busy\n" 503
 
+/-- The answer to a request the system did not answer within
+`GateConfig.requestTimeout_ms`. A later answer to it is dropped. -/
 def timedOut : Response := .text "the system did not answer in time\n" 504
 
 /-- The four things a gate does, as effects of the place where it sits. -/

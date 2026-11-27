@@ -24,6 +24,8 @@ namespace Lanes
 /-- A system with no inputs or no outputs uses `Empty`, which has nothing to hash. -/
 instance (priority := low) : Hashable Empty := ⟨fun x => nomatch x⟩
 
+/-- What the checker, the scheduler and the trace printer need of a signature: its identities
+listed, and its identities, messages, inputs and outputs printed and hashed. -/
 class Signature.Inspect (σ : Signature) where
   [enumId : Enum σ.Id]
   [reprId : Repr σ.Id]
@@ -40,6 +42,7 @@ attribute [instance_reducible, instance] Signature.Inspect.enumId Signature.Insp
   Signature.Inspect.hashIn
   Signature.Inspect.reprOut Signature.Inspect.hashOut
 
+/-- What the checker needs of a system's states: comparing, printing and hashing them. -/
 class System.Inspect {σ : Signature} (sys : System σ) where
   [beqState : ∀ i, BEq (sys.State i)]
   [reprState : ∀ i, Repr (sys.State i)]
