@@ -101,3 +101,4 @@ decision without a number.
 - [D87. The video site's calls to the store are jobs of the scheduler, named by what they are for](D87-videos-on-the-scheduler.md)
 - [D88. Steps worked out on the pool update their states in place](D88-waves-in-place.md)
 - [D89. What one side of a join sends the other is handled there, in every fair run](D89-deliveries-across-a-join.md)
+- [D91. A video is ready only after a transcode worker outside the site says so, signed](D91-the-video-pipeline.md)

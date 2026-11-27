@@ -100,6 +100,8 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Web/S3/Multipart.lean` | `oracles/moto/s3-multipart.jsonl`, `Tests/S3Upload.lean` | The flow and the calls by hand against moto (`Tests/Oracle/Service/S3Multipart.lean`); botocore 1.44's presigned `UploadPart` recorded as a vector; the flow model-checked against `Lanes/Outside/Multipart.lean`. Known: moto 5.2.6 answers `500`, not `404 NoSuchUpload`, to a part sent after an abort |
 | `Lanes/Web/S3/Post.lean` | `oracles/moto/s3-post.jsonl`, `Tests/S3Upload.lean` | Forms posted to moto (`Tests/Oracle/Service/S3Post.lean`): moto reads the form and stores the file at its key, with its type. Known: moto 5.2.6 reads no policy, so it admits a file over the range, another key and an expired policy, which `Post.check` refuses as S3 documents; that check is AWS's documented example and botocore 1.44's `generate_presigned_post`, recorded as vectors, and the policy is proved to read back (`S3.Post.form_policy`) |
 | `Lanes/Web/S3/Xml.lean` | `oracles/go/xml` | |
+| `Lanes/Web/Transcode.lean` | | A format Lanes and its workers write, no vendor's: JSON through `Json`'s parser and printer, which have their oracle, and an HMAC tag through `Auth.tag`; read back as written and checked against the test kit's worker (`Tests/Testing.lean`). There is no reference worker to compare with |
+| `Lanes/Testing/Transcode.lean` | | A fake for tests, not a format: it speaks `Lanes/Web/Transcode.lean`'s, and is tested against a site of `listen` (`Tests/Testing.lean`) |
 | `integrations/aws/Aws/CloudFront.lean` | `oracles/botocore` | The policy and the whole link, signature included, against botocore's `CloudFrontSigner` |
 | `integrations/aws/Aws/Ses.lean` | `oracles/go/mail`, `oracles/moto` | The address check against `net/mail`; the calls against moto |
 | `integrations/aws/Aws/Sqs.lean` | `oracles/moto/sqs.jsonl` | The calls against moto (`integrations/aws/Checks/SqsMoto.lean`) |
@@ -122,3 +124,4 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Outside/Rpc.lean` | `oracles/moto/s3.jsonl`, `oracles/moto/ses.jsonl` | The calls the object store's and the email model are made of |
 | `Lanes/Outside/Store/Basic.lean` | `oracles/postgres/store.jsonl` | |
 | `Lanes/Outside/Throttle.lean` | | Owed: no service in CI answers 429 as a real one does; checked against a seeded bug in `Tests/Throttle.lean` |
+| `Lanes/Outside/Transcode.lean` | | Owed: no reference worker, and a vendor's (MediaConvert, Mux) does not speak the wire format; runs written by hand (`Tests/Outside.lean`), and the test kit's worker in `examples/videos`, not recorded |

@@ -27,6 +27,10 @@ From the environment, read once at start (rule 2.5):
   credentials (`S3.credentialsFromEnv`);
 - `VIDEOS_MAX_UPLOAD_BYTES`: the largest video a member may upload, which the upload form's
   policy makes the store refuse past (2 GiB if unset, at most 5 GiB);
+- `VIDEOS_WORKER_URL`, `VIDEOS_WORKER_SECRET` and `VIDEOS_WORKER_CALLBACK`: the transcode
+  worker's origin, where its jobs are posted (`/jobs`); the key the site and the worker sign
+  with, shared with it alone; and where it posts its reports (`<VIDEOS_URL>/transcoded` unless
+  set);
 - `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`:
   a provider for each pair that is set.
 -/
@@ -83,16 +87,21 @@ def main (args : List String) : IO UInt32 := do
     | IO.eprintln "videos: neither VIDEOS_BUCKET nor LANES_MEDIA_BUCKET is set"; return 2
   let some creds ← S3.credentialsFromEnv
     | IO.eprintln "videos: AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are not set"; return 2
+  let set (name : String) : IO (Option String) := return (← IO.getEnv name).filter (!·.isEmpty)
+  let some worker ← set "VIDEOS_WORKER_URL" | IO.eprintln "videos: VIDEOS_WORKER_URL is not set"; return 2
+  let some secret ← set "VIDEOS_WORKER_SECRET"
+    | IO.eprintln "videos: VIDEOS_WORKER_SECRET is not set"; return 2
+  let callback := (← set "VIDEOS_WORKER_CALLBACK").getD s!"{origin}/transcoded"
   let mut providers := []
   for p in [Google.provider, GitHub.provider] do
     if let some c ← client origin p.name then providers := providers ++ [(p, c)]
   let secure := origin.startsWith "https:"
   let settings : Web.Settings :=
     { key := .of key, origin, secure, bucket := b, creds, providers := providers.map (·.1.name)
-      maxUpload_bytes }
+      maxUpload_bytes, worker, callback }
   let server ← (Web.start {
-    settings, journal
-    server := { host, port := port.toUInt16, system := "videos 2", idle_ms
+    config := { workerKey := .of secret.toUTF8 }, settings, journal
+    server := { host, port := port.toUInt16, system := "videos 3", idle_ms
                 ops := { readinessPath := some "/readyz", livenessPath := some "/healthz"
                          metricsPath := some "/metrics", accessLog := .stderr, requestIds := true } }
     signIn := { providers, secure } }).block

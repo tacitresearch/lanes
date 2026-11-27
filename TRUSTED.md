@@ -266,6 +266,11 @@ in `Lanes/Web/Http/FrontSound.lean` to answer each arrival at most once and in
   in front and a service that throttles (`Queue`, `Cache`, `Clock.wall`, `Http.SharedCache`,
   `Throttle`) assume what the decision on models of more outside systems lists of SQS, Redis and
   memcached, the host's clock, RFC 9111 and a rate limit; none is tested against a real system.
+  The transcode worker's model (`Lanes/Outside/Transcode.lean`) assumes the worker honest: it
+  reports a job done only once it was sent the job, could read the source and wrote the job's
+  targets, and reports each job one way; and that a report signed with the key it shares with
+  the caller is the worker's. It is tested only against runs written by hand and the test kit's
+  worker, not against a real one (`docs/decisions/D91-the-video-pipeline.md`).
 
 ## Trusted by tests, not by applications
 

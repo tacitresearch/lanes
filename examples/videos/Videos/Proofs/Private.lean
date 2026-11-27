@@ -49,7 +49,7 @@ def Shown : SchedOut ⊕ Out → Prop
 /-- An output the site's actor puts out beside the scheduler is one of the site's own. -/
 theorem emit_right {config : Config} {effs : List (Effect sig ())} {out : SchedOut ⊕ Out}
     (h : Effect.emit out ∈ effs.flatMap fun eff =>
-      [use.wiring.right (Schedule.system (K := Key) (P := Unit) (A := StoreAnswer) config.scheduler) eff]) :
+      [use.wiring.right (Schedule.system (K := Key) (P := Unit) (A := Answer) config.scheduler) eff]) :
     ∃ o, Effect.emit o ∈ effs ∧ out = .inr o := by
   obtain ⟨eff, heff, h⟩ := List.mem_flatMap.mp h
   cases eff with

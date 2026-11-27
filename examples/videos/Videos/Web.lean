@@ -20,8 +20,10 @@ upload. The bridge is where a request becomes an input and an output a response:
   comes from this origin;
 - the store's links are signed in `encode` with the deployment's credentials: a form the
   browser posts the upload with, whose policy fixes the key and the content type and bounds the
-  size (`maxUpload_bytes`), and a get for the `<video>`. Video bytes go between the browser and
-  the store; the site sees none.
+  size (`maxUpload_bytes`), and gets for the `<video>`'s rendition and its poster, the
+  thumbnail. Video bytes go between the browser, the store and the worker; the site sees none;
+- the worker's report (`/transcoded`) is read as `Command.report` with the signature it came
+  with, which the system checks: the bridge decides nothing about it, and it needs no session.
 -/
 
 namespace Videos.Web
@@ -50,6 +52,11 @@ structure Settings where
   maxBody_bytes : Nat := 16384
   /-- What the keys of the videos' objects start with. -/
   keyPrefix : String := "videos/"
+  /-- Where the worker takes jobs: its origin, `http://host:port`, and the path. -/
+  worker : String
+  workerPath : List String := ["jobs"]
+  /-- Where the worker posts its reports: this site's `/transcoded`, as the worker reaches it. -/
+  callback : String
 
 namespace Routes
 
@@ -69,6 +76,8 @@ def delete : Route (Nat × Unit) := .post ("v" /> .append .nat (.seg "delete"))
 def channel : Route Nat := .get ("c" /> .nat)
 def signOut : Route Unit := .post (.seg "sign-out")
 def callback : Route (Slug × Unit) := .get ("sign-in" /> .append .slug (.seg "callback"))
+def retry : Route (Nat × Unit) := .post ("videos" /> .append .nat (.seg "retry"))
+def transcoded : Route Unit := .post (.seg "transcoded")
 
 end Routes
 
@@ -81,8 +90,28 @@ def Settings.cookieName (s : Settings) : String := hostCookie sessionCookie s.se
 def sessionHeader : String := "videos-verified-session"
 def arrivedHeader : String := "videos-arrived"
 
-/-- The key of a video's object in the bucket. -/
+/-- The key of a video's upload in the bucket. -/
 def Settings.objectKey (s : Settings) (v : VideoId) : String := s.keyPrefix ++ toString v
+
+/-- The keys the worker writes: the rendition a page plays, and its thumbnail. -/
+def Settings.renditionKey (s : Settings) (v : VideoId) : String := s.objectKey v ++ ".mp4"
+def Settings.thumbnailKey (s : Settings) (v : VideoId) : String := s.objectKey v ++ ".jpg"
+
+/-- The worker's job of round `r`: the upload, and the rendition and the thumbnail to write. -/
+def Settings.job (s : Settings) (r : Round) : Transcode.Job String String :=
+  ⟨r.id, s.objectKey r.video, [s.renditionKey r.video, s.thumbnailKey r.video]⟩
+
+/-- A round by its id on the wire, as `Round.id` writes it, and only so. -/
+def Round.ofId? (id : String) : Option Round := do
+  let [v, n] := id.splitOn "." | none
+  let r : Round := ⟨← v.toNat?, ← n.toNat?⟩
+  if r.id == id then some r else none
+
+/-- The report a worker's report on the wire is, for the site. -/
+def reportOf? (r : Transcode.Report String String) : Option Report :=
+  match r with
+  | .done job _ => (Round.ofId? job).map .done
+  | .failed job => (Round.ofId? job).map .failed
 
 def sessionToken (s : Settings) (m : Member) (session : Sid) : String :=
   Auth.sign s.key "session" s!"{m}.{session}"
@@ -108,9 +137,9 @@ def arrived (r : Http.Request) : Nat := ((r.header? arrivedHeader).bind String.t
 
 /-! ## Links to the store -/
 
-def link (s : Settings) (method : Method) (v : VideoId) (at_s : Nat) (expiry : SigV4.Expiry)
+def link (s : Settings) (method : Method) (key : String) (at_s : Nat) (expiry : SigV4.Expiry)
     (contentType : Option String := none) : String :=
-  match S3.Key.of? (s.objectKey v) with
+  match S3.Key.of? key with
   | some key => S3.presign s.bucket s.creds (Civil.DateTime.ofUnix at_s) method key expiry contentType
   | none => Html.blockedUrl
 
@@ -250,7 +279,8 @@ def WatchPage (s : Settings) (viewer : Viewer) (view : View) (at_s : Nat) : Html
   let c := view.card
   let mine := viewer.map (·.1) == some c.owner
   Layout s c.title viewer [
-    <video controls preload="metadata" src={link s .get c.id at_s s.watch_s}></video>,
+    <video controls preload="metadata" poster={link s .get (s.thumbnailKey c.id) at_s s.watch_s}
+      src={link s .get (s.renditionKey c.id) at_s s.watch_s}></video>,
     <h1>{c.title}</h1>,
     <p class="meta">
       <a href={Routes.channel.link c.owner}>{c.ownerName}</a>
@@ -306,23 +336,43 @@ def FeedPage (s : Settings) (viewer : Viewer) (cards : List Card) (next : Option
     | some id => <p><a href={Routes.home.link () ++ s!"?before={id}"}>"Older"</a></p>
     | none => Html.empty]
 
+/-- What a video not ready waits for, and the button that moves it on, if one does. -/
+def Waiting (s : Settings) (viewer : Member × Sid) (v : VideoId) (title : String) : Stage → Html
+  | .upload =>
+    <form method="post" action={Routes.uploaded.link (v, ())}>
+      {csrf s viewer}
+      {title ++ ": not confirmed yet. "}
+      <button type="submit">"Check the upload"</button>
+    </form>
+  | .transcoding => <p>{title ++ ": being prepared."}</p>
+  | .failed =>
+    <form method="post" action={Routes.retry.link (v, ())}>
+      {csrf s viewer}
+      {title ++ ": could not be prepared. "}
+      <button type="submit">"Try again"</button>
+    </form>
+
 def ChannelPage (s : Settings) (viewer : Viewer) (name : String) (cards : List Card)
-    (waiting : List (VideoId × String)) : Html :=
+    (waiting : List (VideoId × String × Stage)) : Html :=
   Layout s name viewer [
     <h1>{name}</h1>,
     Cards cards,
     match viewer, waiting with
     | some v, _ :: _ =>
       <div>
-        <h2>"Not confirmed yet"</h2>
-        {waiting.map fun (id, title) =>
-          <form method="post" action={Routes.uploaded.link (id, ())}>
-            {csrf s v}
-            {title ++ " "}
-            <button type="submit">"Check the upload"</button>
-          </form>}
+        <h2>"Not ready yet"</h2>
+        {waiting.map fun (id, title, stage) => Waiting s v id title stage}
       </div>
     | _, _ => Html.empty]
+
+/-- A video not ready, to its owner. -/
+def PreparingPage (s : Settings) (viewer : Viewer) (v : VideoId) (title : String) (stage : Stage) :
+    Html :=
+  Layout s title viewer [
+    <h1>{title}</h1>,
+    match viewer with
+    | some who => Waiting s who v title stage
+    | none => Html.empty]
 
 def Message (s : Settings) (viewer : Viewer) (title text : String) : Html :=
   Layout s title viewer [<h1>{title}</h1>, <p>{text}</p>]
@@ -393,6 +443,13 @@ def channelName (who : OAuth.Identity) : String :=
     | none => if user.isEmpty then who.subject else user
   name.take 40 |>.toString
 
+/-- The worker's report, with the signature it came with: the system checks it. -/
+def reportInput (id : ReqId) (r : Http.Request) : Except Http.Response Input :=
+  match (Transcode.readReport? ((String.fromUTF8? r.body).getD "")).bind reportOf? with
+  | some report =>
+    .ok (.request (.report id report ((r.header? Transcode.signatureHeader).getD "")) (arrived r))
+  | none => bad "not a report"
+
 def decode (s : Settings) (id : ReqId) (r : Http.Request) : Except Http.Response Input :=
   let ask (c : Command) : Except Http.Response Input := .ok (.request c (arrived r))
   if !r.bodyWithin s.maxBody_bytes then .error (Http.Response.text "too large\n" 413)
@@ -417,6 +474,8 @@ def decode (s : Settings) (id : ReqId) (r : Http.Request) : Except Http.Response
       Routes.delete.handle fun (v, ()) r => signedIn s r fun m session => ask (.delete id m session v),
       Routes.channel.handle fun whom r => ask (.channel id (session? r) whom),
       Routes.signOut.handle fun () r => signedIn s r fun m session => ask (.signOut id m session),
+      Routes.retry.handle fun (v, ()) r => signedIn s r fun m session => ask (.retry id m session v),
+      Routes.transcoded.handle fun () r => reportInput id r,
       Routes.callback.handle fun _ r => match OAuth.identity? r with
         | some who => ask (.signIn id who.issuer who.subject (channelName who))
         | none => .error (Http.Response.text "not found\n" 404)
@@ -438,6 +497,10 @@ def encodeReply (s : Settings) (viewer : Viewer) : Reply → Http.Response
       "The store did not answer in time. Check again from your channel.") 503
   | .watch view at_s => page (WatchPage s viewer view at_s)
   | .notFound => page (Message s viewer "Not found" "There is no such video.") 404
+  | .preparing v title stage => page (PreparingPage s viewer v title stage)
+  | .retrying v => watchAt v
+  | .reported => Http.Response.text "ok\n"
+  | .forged => forbidden
   | .liked v _ _ | .commented v | .uncommented v => watchAt v
   | .tooManyComments _ => page (Message s viewer "Too many comments"
       "This video has as many comments as it may.") 409
@@ -462,7 +525,7 @@ def actors (config : Config) : Kernel.Image.Codecs (system config) where
     | .inl () => Codec.of (Schedule.State Key Unit)
     | .inr () => Codec.of Site
   msg
-    | .inl () => Codec.of (Schedule.Msg Key Unit StoreAnswer)
+    | .inl () => Codec.of (Schedule.Msg Key Unit Answer)
     | .inr () => Codec.of Input
 
 end Videos.Web

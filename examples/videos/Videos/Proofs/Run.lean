@@ -129,8 +129,38 @@ theorem watch_fst (s : Site) (req : ReqId) (viewer : Viewer) (v : VideoId) (at_s
   unfold watch
   dsimp only
   split
+  · split
+    · rfl
+    · split
+      · split <;> rfl
+      · rfl
+  · rfl
+
+theorem Report.move_id (r : Report) (w : Video) : (r.move w).id = w.id := by
+  unfold Report.move
+  split
   · split <;> rfl
   · rfl
+
+theorem grows_settle (s : Site) (r : Report) : Grows s (s.settle r) := by
+  refine ⟨Nat.le_refl _, fun w hw => ?_⟩
+  simp only [settle, List.mem_map] at hw
+  obtain ⟨w', hw', rfl⟩ := hw
+  exact .inl ⟨w', hw', (Report.move_id r w').symm⟩
+
+theorem grows_retry (s : Site) (req : ReqId) (viewer : Viewer) {video : Video}
+    (hv : video ∈ s.videos) : Grows s (s.retry config req viewer video).1 := by
+  unfold retry
+  split
+  · exact grows_setVideo ⟨video, hv, rfl⟩
+  · exact grows_refl s
+
+theorem grows_report (s : Site) (req : ReqId) (r : Report) (signature : String) :
+    Grows s (s.report config req r signature).1 := by
+  unfold report
+  split
+  · exact grows_settle s r
+  · exact grows_refl s
 
 theorem channel_fst (s : Site) (req : ReqId) (viewer : Viewer) (whose : Member) :
     (s.channel req viewer whose).1 = s := by
@@ -166,8 +196,8 @@ theorem grows_request (s : Site) (c : Command) (at_s : Nat) :
     refine grows_withSession fun _ => grows_owned fun w hw => ?_
     unfold uploaded
     split
-    · exact grows_refl s
     · exact grows_check config s req _ at_s hw
+    · exact grows_refl s
   | watch req viewer v =>
     show Grows s (s.watch req _ v at_s).1
     rw [watch_fst]
@@ -196,6 +226,9 @@ theorem grows_request (s : Site) (c : Command) (at_s : Nat) :
     show Grows s (s.channel req _ whose).1
     rw [channel_fst]
     exact grows_refl s
+  | retry req m session v =>
+    exact grows_withSession fun _ => grows_owned fun w hw => grows_retry config s req _ hw
+  | report req r signature => exact grows_report config s req r signature
 
 theorem grows_found (s : Site) {video : Video} (hv : video ∈ s.videos) (size : Nat) :
     Grows s (s.found config video size).1 :=
@@ -229,20 +262,25 @@ theorem grows_expired (s : Site) {video : Video} (hv : video ∈ s.videos) (o : 
   · exact grows_filter s (·.id != video.id)
   · exact grows_refl s
 
-theorem grows_unready {s : Site} {v : VideoId} {f : Video → Site × List Out}
-    (hf : ∀ w ∈ s.videos, Grows s (f w).1) : Grows s (s.unready v f).1 := by
-  unfold unready
+theorem grows_awaiting {s : Site} {v : VideoId} {f : Video → Site × List Out}
+    (hf : ∀ w ∈ s.videos, Grows s (f w).1) : Grows s (s.awaiting v f).1 := by
+  unfold awaiting
   split
   · next hfind =>
     split
-    · exact grows_refl s
     · exact hf _ (find?_mem hfind)
+    · exact grows_refl s
   · exact grows_refl s
 
 theorem grows_job (s : Site) (key : Key) (o : Outcome) : Grows s (s.job config key o).1 := by
   cases key with
-  | check v req => exact grows_unready fun _ hw => grows_checked config s hw req o
-  | expire v => exact grows_unready fun _ hw => grows_expired config s hw o
+  | check v req => exact grows_awaiting fun _ hw => grows_checked config s hw req o
+  | expire v => exact grows_awaiting fun _ hw => grows_expired config s hw o
+  | transcode r =>
+    show Grows s (if o.givenUp then s.settle (.failed r) else s, []).1
+    split
+    · exact grows_settle s _
+    · exact grows_refl s
   | delete v => exact grows_refl s
 
 theorem grows_handle (s : Site) (i : Input) : Grows s (s.handle config i).1 := by

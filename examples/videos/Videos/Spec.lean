@@ -11,17 +11,24 @@ A video site, as if inputs were handled one at a time. Members sign in with anot
 (Google, GitHub) and each has a channel. A member makes a video record, which starts `pending`,
 and gets a form to post the video to the store (S3) from the browser: the bytes never pass
 through the site. The browser then says it is done, the site has the store asked whether the
-object is there (a `HEAD`), and only a `found` answer makes the video `ready`. Ready videos are
-watched, liked once per member, commented on and listed in a feed; a video is public (in the
-feed and its channel), unlisted (by its link) or private (its owner only). Deleting a video takes
-its record out at once and then deletes the object in the store.
+object is there (a `HEAD`); a `found` answer confirms the upload, and the video is
+`transcoding`: a worker outside the site (`Lanes.Transcode`) is given a job to write a playable
+rendition and a thumbnail beside the upload. Only the worker's report that the job is done,
+signed with the key the site shares with it, makes the video `ready`; a report that it failed,
+or a job the worker could not be given, makes it `failed`, which its owner may try again. Ready
+videos are watched (the rendition, with the thumbnail as its poster), liked once per member,
+commented on and listed in a feed; a video is public (in the feed and its channel), unlisted (by
+its link) or private (its owner only). Deleting a video takes its record out at once and then
+deletes its objects in the store.
 
-The site calls the store through the scheduler beside it (`Lanes.Schedule`, D79), which holds
-each call as a job, retries it with a backoff and keeps it across a restart. There are three
-kinds (`Key`): the check a member asked for, the last check of an upload never confirmed, a day
-after its record was made, which makes it ready if the store has it and takes the record out if
-not, and the delete of a deleted video's object, retried until the store takes it and reported
-(`Out.orphan`) if it never does.
+The site calls the store and the worker through the scheduler beside it (`Lanes.Schedule`,
+D79), which holds each call as a job, retries it with a backoff and keeps it across a restart.
+There are four kinds (`Key`): the check a member asked for; the last check of an upload never
+confirmed, a day after its record was made, which confirms it if the store has it and takes the
+record out if not; the start of a transcode, a round of a video's, which gives the worker its
+job; and the delete of a deleted video's objects, retried until the store takes it and reported
+(`Out.orphan`) if it never does. The worker's reports come as requests (webhooks), each with its
+signature.
 
 The whole state is one value, `Site`, and one input is one call of `Site.handle`: a request, or
 the scheduler's word on a job. A start of the actor is one call of `Site.recover`. The system
@@ -32,8 +39,9 @@ Every bound is in `Config` (rule 2.6), with what happens at it: a sign-in past `
 `full`, a video past `maxVideos`, past its member's `maxOwned` or past
 `maxPending` uploads not yet confirmed is `tooMany`, a comment past `maxComments` or past its
 member's `maxCommentsEach` on the video is `tooManyComments`, a job past `maxJobs` is refused by
-the scheduler: a check is then `unconfirmed`, a delete given up and reported. The bounds of one
-member are far below those of the site, so that one member cannot fill the site's.
+the scheduler: a check is then `unconfirmed`, a transcode `failed`, a delete given up and
+reported. The bounds of one member are far below those of the site, so that one member cannot
+fill the site's.
 -/
 
 namespace Videos
@@ -82,13 +90,36 @@ lanes_data inductive Status where
   /-- The store is asked, by the check job of `waiter`, whether the object is there; `waiter`
   is told. -/
   | checking (waiter : ReqId)
-  /-- The store said the object is there, of `size` bytes. -/
+  /-- The store said the upload is there, of `size` bytes, and round `round` of its transcode
+  is the worker's. -/
+  | transcoding (size round : Nat)
+  /-- The worker said, signed, that the rendition and the thumbnail are written. -/
   | ready (size : Nat)
+  /-- Round `round` of its transcode failed: the worker said so, or could not be given it. -/
+  | failed (size round : Nat)
   deriving DecidableEq, Repr, Hashable, Codable
 
 def Status.isReady : Status → Bool
   | .ready _ => true
   | _ => false
+
+/-- Waiting for the upload: not yet confirmed by the store. -/
+def Status.awaiting : Status → Bool
+  | .pending | .checking _ => true
+  | _ => false
+
+/-- What a video not ready is waiting for, as its owner is shown it. -/
+lanes_data inductive Stage where
+  | upload
+  | transcoding
+  | failed
+  deriving DecidableEq, Repr, Hashable, Codable
+
+def Status.stage? : Status → Option Stage
+  | .pending | .checking _ => some .upload
+  | .transcoding .. => some .transcoding
+  | .failed .. => some .failed
+  | .ready _ => none
 
 lanes_data structure Comment where
   id : CommentId
@@ -130,17 +161,52 @@ lanes_data structure Site where
 
 /-! ## Inputs and outputs -/
 
-/-- What the site asks the store. The object of video `v` is at the key `videos/<v>`. -/
-lanes_data inductive StoreOp where
-  | head (video : VideoId)
-  | delete (video : VideoId)
+/-- Round `n` of the transcode of `video`: the worker's job, by `Round.id`. A new round is a new
+job, so a report of an old one is told apart. -/
+lanes_data structure Round where
+  video : VideoId
+  n : Nat
   deriving DecidableEq, Repr, Hashable, Codable
 
-/-- The store's answer, as the site reads it. -/
-lanes_data inductive StoreAnswer where
+/-- The job's id on the wire. -/
+def Round.id (r : Round) : String := s!"{r.video}.{r.n}"
+
+/-- What the worker reports of a round. The keys it wrote are the site's own, so the site does not
+read them. -/
+lanes_data inductive Report where
+  | done (round : Round)
+  | failed (round : Round)
+  deriving DecidableEq, Repr, Hashable, Codable
+
+def Report.round : Report → Round
+  | .done r | .failed r => r
+
+def Report.status : Report → String
+  | .done _ => "done"
+  | .failed _ => "failed"
+
+/-- Whether `signature` is the worker's for this report, under the key the site shares with it
+(`Transcode.verify`). -/
+def Report.signed (key : Hmac.Key) (r : Report) (signature : String) : Bool :=
+  Transcode.verify key r.round.id r.status signature
+
+/-- What the site asks the store or the worker. Video `v`'s upload is at the key `videos/<v>`,
+its rendition and its thumbnail beside it. -/
+lanes_data inductive Op where
+  | head (video : VideoId)
+  /-- The upload, the rendition and the thumbnail. -/
+  | delete (video : VideoId)
+  /-- Give the worker the job of round `round`. -/
+  | transcode (round : Round)
+  deriving DecidableEq, Repr, Hashable, Codable
+
+/-- The store's or the worker's answer, as the site reads it. -/
+lanes_data inductive Answer where
   | found (size : Nat)
   | missing
   | deleted
+  /-- The worker took the job. -/
+  | accepted
   /-- Anything else: an error, which may have come after the operation took effect. -/
   | failed
   deriving DecidableEq, Repr, Hashable, Codable
@@ -152,16 +218,19 @@ lanes_data inductive Key where
   | check (video : VideoId) (req : ReqId)
   /-- The last check of an upload never confirmed. -/
   | expire (video : VideoId)
-  /-- The delete of a deleted video's object. -/
+  /-- The start of round `round` of a video's transcode. -/
+  | transcode (round : Round)
+  /-- The delete of a deleted video's objects. -/
   | delete (video : VideoId)
   deriving DecidableEq, Repr, Hashable, Codable
 
-def Key.op : Key → StoreOp
+def Key.op : Key → Op
   | .check v _ | .expire v => .head v
+  | .transcode r => .transcode r
   | .delete v => .delete v
 
 /-- What the scheduler says of a job: scheduled, refused, or how it ended. -/
-abbrev Outcome := Schedule.Outcome Unit StoreAnswer
+abbrev Outcome := Schedule.Outcome Unit Answer
 
 /-- A job given up: refused by the scheduler, or out of attempts or time. -/
 def Outcome.givenUp : Outcome → Bool
@@ -193,6 +262,10 @@ lanes_data inductive Command where
   /-- The newest public videos older than `before`, if given. -/
   | feed (req : ReqId) (viewer : Option (Member × Sid)) (before : Option VideoId)
   | channel (req : ReqId) (viewer : Option (Member × Sid)) (whose : Member)
+  /-- The owner asks for a failed transcode to be tried again. -/
+  | retry (req : ReqId) (member : Member) (session : Sid) (video : VideoId)
+  /-- The worker's report, posted to the site, with the signature it came with. -/
+  | report (req : ReqId) (r : Report) (signature : String)
   deriving DecidableEq, Repr, Hashable, Codable
 
 lanes_data inductive Input where
@@ -201,7 +274,7 @@ lanes_data inductive Input where
   judged at that time, links are signed for it, and the scheduler learns it. -/
   | request (c : Command) (at_s : Nat)
   /-- The scheduler's word on the job of `key`. -/
-  | job (key : Key) (outcome : Schedule.Outcome Unit StoreAnswer)
+  | job (key : Key) (outcome : Schedule.Outcome Unit Answer)
   /-- A notice of the scheduler. The site schedules only calls, so none comes. -/
   | noticed (key : Key)
   deriving DecidableEq, Repr, Hashable, Codable
@@ -246,6 +319,7 @@ lanes_data inductive Reply where
   /-- The record is made: the bridge signs the form for the upload at `at_s`. -/
   | created (video : VideoId) (media : Media) (at_s : Nat)
   | tooMany
+  /-- The store has the upload: its transcode is begun. -/
   | confirmed (video : VideoId)
   /-- The store has no such object: the video stays pending. -/
   | notUploaded (video : VideoId)
@@ -255,14 +329,23 @@ lanes_data inductive Reply where
   | watch (view : View) (at_s : Nat)
   /-- No such video, or none this viewer may see: which one is not said. -/
   | notFound
+  /-- To its owner, a video not ready, and what it waits for. -/
+  | preparing (video : VideoId) (title : String) (stage : Stage)
+  | retrying (video : VideoId)
+  /-- A report taken; one of a round no longer under way is taken and changes nothing. -/
+  | reported
+  /-- A report whose signature is not the worker's. -/
+  | forged
   | liked (video : VideoId) (likes : Nat) (on : Bool)
   | commented (video : VideoId)
   | tooManyComments (video : VideoId)
   | uncommented (video : VideoId)
   | deleted (video : VideoId)
   | feed (cards : List Card) (next : Option VideoId)
-  /-- A member's videos; `pending`, the titles of those not ready, only to their owner. -/
-  | channel (whose : Member) (name : String) (cards : List Card) (pending : List (VideoId × String))
+  /-- A member's videos; `pending`, the titles of those not ready and what each waits for, only
+  to their owner. -/
+  | channel (whose : Member) (name : String) (cards : List Card)
+    (pending : List (VideoId × String × Stage))
   deriving DecidableEq, Repr, Hashable, Codable
 
 lanes_data inductive Out where
@@ -290,11 +373,16 @@ structure Config where
   maxComments : Nat := 200
   /-- Comments of one member on one video. -/
   maxCommentsEach : Nat := 10
-  /-- The jobs the scheduler holds: checks, last checks and deletes. -/
+  /-- The key the site shares with the worker, which signs its reports. -/
+  workerKey : Hmac.Key
+  /-- The jobs the scheduler holds: checks, last checks, transcodes and deletes. -/
   maxJobs : Nat := 30000
   /-- How a check is retried. A member waits for it, so it is short. -/
   checkRetry : Schedule.Retry :=
     { maxAttempts := 2, deadline_ms := 5000, base_ms := 500, cap_ms := 500, jitter_ms := 250 }
+  /-- How the start of a transcode is retried: for about five minutes. -/
+  transcodeRetry : Schedule.Retry :=
+    { maxAttempts := 6, deadline_ms := 10000, base_ms := 1000, cap_ms := 120000, jitter_ms := 1000 }
   /-- How a delete is retried: for about ten minutes. -/
   deleteRetry : Schedule.Retry :=
     { maxAttempts := 10, deadline_ms := 10000, base_ms := 1000, cap_ms := 300000, jitter_ms := 1000 }
@@ -307,13 +395,16 @@ structure Config where
   trustBrowser : Bool := false
   /-- A seeded bug: a check the store did not answer in time is taken as found. -/
   readyOnTimeout : Bool := false
+  /-- A seeded bug: a report is taken whatever its signature. -/
+  trustUnsigned : Bool := false
 
 /-- The scheduler beside the site. An error is worth another attempt; any other answer is the
 store's word. Two jobs that failed together wait different times (`Schedule.hashJitter`). -/
-def Config.scheduler (config : Config) : Schedule.Config Key Unit StoreAnswer where
+def Config.scheduler (config : Config) : Schedule.Config Key Unit Answer where
   maxJobs := config.maxJobs
   maxPayload := 0
-  maxAttempts := max config.checkRetry.maxAttempts config.deleteRetry.maxAttempts
+  maxAttempts := max (max config.checkRetry.maxAttempts config.transcodeRetry.maxAttempts)
+    config.deleteRetry.maxAttempts
   ok a := a != .failed
   jitter := Schedule.hashJitter
 
@@ -360,6 +451,23 @@ def Video.listed (v : Video) : Bool :=
   v.status.isReady && v.visibility == .public
 
 def Video.waiting (v : Video) : Bool := !v.status.isReady
+
+/-- What a report makes of a status: the round under way, or a failed one, done is ready; the
+round under way failed is failed. Any other report changes nothing. -/
+def Report.next (r : Report) : Status → Option Status
+  | .transcoding size n => if n = r.round.n then
+      some (match r with | .done _ => .ready size | .failed _ => .failed size n) else none
+  | .failed size n => if n = r.round.n then
+      (match r with | .done _ => some (.ready size) | .failed _ => none) else none
+  | _ => none
+
+/-- What a report of `r` does to a video: the one its round names moves on, if it may. -/
+def Report.move (r : Report) (w : Video) : Video :=
+  if w.id = r.round.video then
+    match r.next w.status with
+    | some status => { w with status }
+    | none => w
+  else w
 
 /-- The one output of a request. -/
 def answer (req : ReqId) (viewer : Viewer) (r : Reply) : List Out := [.reply req viewer r]
@@ -424,6 +532,9 @@ def create (s : Site) (req : ReqId) (viewer : Viewer) (m : Member) (title : Titl
     ({ s with videos := video :: s.videos, next := s.next + 1 },
       answer req viewer (.created s.next media at_s) ++ expiry config s.next at_s)
 
+/-- The start of round `round` of a transcode, due at once. -/
+def start (round : Round) : Out := schedule (.transcode round) config.transcodeRetry 0 0
+
 /-- The request that waits for a check of `video`, if one does, told `r`. -/
 def waiterOf (video : Video) (viewer : Viewer) (r : Reply) : List Out :=
   match video.status with
@@ -436,16 +547,39 @@ def check (s : Site) (req : ReqId) (viewer : Viewer) (video : Video) (at_s : Nat
     Site × List Out :=
   let superseded := waiterOf video viewer (.unconfirmed video.id)
   if config.trustBrowser then
-    (s.setVideo { video with status := .ready 0 }, superseded ++ answer req viewer (.confirmed video.id))
+    (s.setVideo { video with status := .transcoding 0 0 },
+      superseded ++ answer req viewer (.confirmed video.id) ++ [start config ⟨video.id, 0⟩])
   else
     (s.setVideo { video with status := .checking req },
       superseded ++ [schedule (.check video.id req) config.checkRetry at_s (at_s * 1000)])
 
 def uploaded (s : Site) (req : ReqId) (viewer : Viewer) (at_s : Nat) (video : Video) :
     Site × List Out :=
+  if video.status.awaiting then check config s req viewer video at_s
+  else (s, answer req viewer (.confirmed video.id))
+
+/-- A failed transcode is tried again, as a new round. -/
+def retry (s : Site) (req : ReqId) (viewer : Viewer) (video : Video) : Site × List Out :=
   match video.status with
-  | .ready _ => (s, answer req viewer (.confirmed video.id))
-  | _ => check config s req viewer video at_s
+  | .failed size n =>
+    (s.setVideo { video with status := .transcoding size (n + 1) },
+      answer req viewer (.retrying video.id) ++ [start config ⟨video.id, n + 1⟩])
+  | _ => (s, answer req viewer (.retrying video.id))
+
+/-- The start of the round under way, if one is: a delete cancels it. -/
+def unstart (video : Video) : List Out :=
+  match video.status with
+  | .transcoding _ n => [.cancel (.transcode ⟨video.id, n⟩)]
+  | _ => []
+
+/-- What a report of `r` does to the site: the video its round names moves on, if it may. -/
+def settle (s : Site) (r : Report) : Site := { s with videos := s.videos.map r.move }
+
+/-- The worker's report, taken only with the worker's signature. -/
+def report (s : Site) (req : ReqId) (r : Report) (signature : String) : Site × List Out :=
+  if config.trustUnsigned || r.signed config.workerKey signature then
+    (s.settle r, answer req none .reported)
+  else (s, answer req none .forged)
 
 def like (s : Site) (req : ReqId) (viewer : Viewer) (m : Member) (video : Video) (on : Bool) :
     Site × List Out :=
@@ -478,13 +612,17 @@ def delete (s : Site) (req : ReqId) (viewer : Viewer) (at_s : Nat) (video : Vide
   ({ s with videos := s.videos.filter (·.id != video.id) },
     waiterOf video viewer (.unconfirmed video.id) ++ answer req viewer (.deleted video.id)
       ++ [schedule (.delete video.id) config.deleteRetry at_s (at_s * 1000)]
-      ++ unexpire config video.id)
+      ++ unexpire config video.id ++ unstart video)
 
 def watch (s : Site) (req : ReqId) (viewer : Viewer) (v : VideoId) (at_s : Nat) : Site × List Out :=
   let who := viewer.map (·.1)
   match s.find? v with
   | some video =>
     if video.visibleTo who then (s, answer req viewer (.watch (s.view video who) at_s))
+    else if who = some video.owner then
+      match video.status.stage? with
+      | some stage => (s, answer req viewer (.preparing video.id video.title.val stage))
+      | none => (s, answer req viewer .notFound)
     else (s, answer req viewer .notFound)
   | none => (s, answer req viewer .notFound)
 
@@ -500,7 +638,9 @@ def channel (s : Site) (req : ReqId) (viewer : Viewer) (whose : Member) : Site �
   let own := viewer.map (·.1) == some whose
   let theirs := s.videos.filter (·.owner == whose)
   let shown := theirs.filter fun v => if own then v.status.isReady else v.listed
-  let waiting := if own then (theirs.filter (·.waiting)).map fun v => (v.id, v.title.val) else []
+  let waiting := if own then
+      theirs.filterMap fun v => v.status.stage?.map fun stage => (v.id, v.title.val, stage)
+    else []
   match s.channel? whose with
   | some ch => (s, answer req viewer (.channel whose ch.name (shown.map s.card) waiting))
   | none => (s, answer req viewer .notFound)
@@ -529,12 +669,15 @@ def request (s : Site) (c : Command) (at_s : Nat) : Site × List Out :=
     s.owned req viewer m v (s.delete config req viewer at_s)
   | .feed req viewer before => s.feed config req (s.viewer life at_s viewer) before
   | .channel req viewer whose => s.channel req (s.viewer life at_s viewer) whose
+  | .retry req m session v => s.withSession life at_s req m session fun viewer =>
+    s.owned req viewer m v (s.retry config req viewer)
+  | .report req r signature => s.report config req r signature
 
-/-- The store has the object of `video`, of `size` bytes: it is ready, and whoever waits is
-told. -/
+/-- The store has the upload of `video`, of `size` bytes: its first round of transcoding begins,
+and whoever waits is told. -/
 def found (s : Site) (video : Video) (size : Nat) : Site × List Out :=
-  (s.setVideo { video with status := .ready size },
-    waiterOf video none (.confirmed video.id) ++ unexpire config video.id)
+  (s.setVideo { video with status := .transcoding size 0 },
+    waiterOf video none (.confirmed video.id) ++ unexpire config video.id ++ [start config ⟨video.id, 0⟩])
 
 /-- The check of `req` did not confirm `video`: if `req` still waits, the video is pending
 again and `req` is told `r`. -/
@@ -542,7 +685,7 @@ def unconfirmed (s : Site) (video : Video) (req : ReqId) (r : Reply) : Site × L
   if video.status = .checking req then (s.setVideo { video with status := .pending }, answer req none r)
   else (s, [])
 
-/-- How the check of `req` ended, for a video not ready. -/
+/-- How the check of `req` ended, for a video awaiting its upload. -/
 def checked (s : Site) (video : Video) (req : ReqId) : Outcome → Site × List Out
   | .succeeded (.found size) => s.found config video size
   | .succeeded _ => s.unconfirmed video req (.notUploaded video.id)
@@ -552,24 +695,26 @@ def checked (s : Site) (video : Video) (req : ReqId) : Outcome → Site × List 
   | .failed .. | .refused _ | .cancelled => s.unconfirmed video req (.unconfirmed video.id)
   | .scheduled | .already => (s, [])
 
-/-- How the last check of a video not ready ended: found, it is ready; not there, its record is
-taken out; not known, it stays as it is. -/
+/-- How the last check of a video awaiting its upload ended: found, it is confirmed; not there,
+its record is taken out; not known, it stays as it is. -/
 def expired (s : Site) (video : Video) : Outcome → Site × List Out
   | .succeeded (.found size) => s.found config video size
   | .succeeded _ =>
     ({ s with videos := s.videos.filter (·.id != video.id) }, waiterOf video none (.notUploaded video.id))
   | _ => (s, [])
 
-/-- `f`, for a video that is not ready yet. -/
-def unready (s : Site) (v : VideoId) (f : Video → Site × List Out) : Site × List Out :=
+/-- `f`, for a video that awaits its upload. -/
+def awaiting (s : Site) (v : VideoId) (f : Video → Site × List Out) : Site × List Out :=
   match s.find? v with
-  | some video => if video.status.isReady then (s, []) else f video
+  | some video => if video.status.awaiting then f video else (s, [])
   | none => (s, [])
 
-/-- The scheduler's word on a job. A delete given up is reported. -/
+/-- The scheduler's word on a job. A transcode the worker could not be given failed; a delete
+given up is reported. -/
 def job (s : Site) : Key → Outcome → Site × List Out
-  | .check v req, o => s.unready v fun video => s.checked config video req o
-  | .expire v, o => s.unready v fun video => s.expired config video o
+  | .check v req, o => s.awaiting v fun video => s.checked config video req o
+  | .expire v, o => s.awaiting v fun video => s.expired config video o
+  | .transcode r, o => (if o.givenUp then s.settle (.failed r) else s, [])
   | .delete v, o => (s, if o.givenUp then [.orphan v] else [])
 
 def handle (s : Site) : Input → Site × List Out
@@ -578,7 +723,8 @@ def handle (s : Site) : Input → Site × List Out
   | .noticed _ => (s, [])
 
 /-- A start: the requests that waited for a check are gone with the connections, so each is
-told to try again and its video is pending. The jobs are the scheduler's, which keeps them. -/
+told to try again and its video is pending. The jobs are the scheduler's, which keeps them, and a
+round under way is the worker's, whose report may still come. -/
 def recover (s : Site) : Site × List Out :=
   let waiters := s.videos.filterMap fun v => match v.status with
     | .checking waiter => some (Out.reply waiter none (.unconfirmed v.id))

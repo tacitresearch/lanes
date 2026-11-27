@@ -9,8 +9,10 @@ import Videos.Web
 
 The site and its scheduler behind the gate, with the sign-in and the time stamp in `arrive`, on
 a journal with snapshots. Each attempt the scheduler dispatches is made through the S3 client,
-cut off at the attempt's deadline, and its answer, or `unknown` when there is none, is handed
-back as an input. `Main`, the end-to-end test and the live smoke start it the same way.
+or, for a transcode, posted to the worker as its job (`Lanes.Web.Transcode`), cut off at the
+attempt's deadline, and its answer, or `unknown` when there is none, is handed back as an input.
+What each call is and what its answer means are the pure functions below. `Main`, the
+end-to-end test and the live smoke start it the same way.
 
 `S3.handler` needs the `Runtime` of the system, which `Http.serveFronted` keeps to itself, so
 the call is made here with `S3.exchange` and answered with `Server.tryInput`. An answer that
@@ -22,21 +24,42 @@ namespace Videos.Web
 
 open Lanes Lanes.Http Lanes.OAuth Std.Async
 
-/-- The S3 call of what a job asks the store. -/
-def storeCall (s : Settings) : StoreOp → Option S3.Op
-  | .head v => (S3.Key.of? (s.objectKey v)).map .head
-  | .delete v => (S3.Key.of? (s.objectKey v)).map .delete
+/-- What a job's attempt calls: the store, with S3 calls, or the worker, with its job. -/
+inductive Exchange where
+  | store (ops : List S3.Op)
+  | worker (request : Http.Request)
+
+/-- The calls of what a job asks: the head of the upload; the deletes of the upload, the
+rendition and the thumbnail; the job of a round, posted to the worker. -/
+def exchangeOf (s : Settings) (key : Hmac.Key) : Op → Option Exchange
+  | .head v => (S3.Key.of? (s.objectKey v)).map fun k => .store [.head k]
+  | .delete v =>
+    ([s.objectKey v, s.renditionKey v, s.thumbnailKey v].mapM S3.Key.of?).map fun ks =>
+      .store (ks.map .delete)
+  | .transcode r => some (.worker (Transcode.jobRequest key s.workerPath (s.job r) s.callback))
 
 /-- What the site makes of the S3 client's answer, or of none by the deadline. -/
-def storeReply : Option S3.Answer → Rpc.Reply StoreAnswer
+def storeReply : Option S3.Answer → Rpc.Reply Answer
   | some (.found info) => .answer (.found info.size)
   | some .missing => .answer .missing
   | some .deleted => .answer .deleted
   | some _ => .answer .failed
   | none => .unknown
 
+/-- What the site makes of the answers to the calls of one attempt: one call's, or every
+delete's, which is `deleted` only if each is. -/
+def storeReplies : List (Option S3.Answer) → Rpc.Reply Answer
+  | [a] => storeReply a
+  | as => if as.all (· matches some .deleted) then .answer .deleted
+    else if as.any (·.isNone) then .unknown else .answer .failed
+
+/-- What the site makes of the worker's answer to a job: taken with a `2xx`. -/
+def workerReply : Option Http.Response → Rpc.Reply Answer
+  | some r => if 200 ≤ r.status && r.status < 300 then .answer .accepted else .answer .failed
+  | none => .unknown
+
 structure Deployment where
-  config : Config := {}
+  config : Config
   settings : Settings
   server : ServerConfig
   runtime : Runtime.Config := { snapshotEvery := 256 }
@@ -64,13 +87,16 @@ def start (d : Deployment) : Async (Server (Site' d)) := do
     | answer => return answer
   let running : IO.Promise (Option (Server (Site' d))) ← IO.Promise.new
   let perform (a : Schedule.Attempt Key Unit) : Async Unit := do
-    let answer ← match storeCall d.settings a.key.op with
-      | some op =>
-        try S3.exchange d.settings.bucket d.settings.creds op { d.http with timeout_ms := a.deadline_ms }
-        catch _ => pure none
-      | none => pure none
+    let http := { d.http with timeout_ms := a.deadline_ms }
+    let reply ← match exchangeOf d.settings d.config.workerKey a.key.op with
+      | some (.store ops) => storeReplies <$> ops.mapM fun op => do
+          try S3.exchange d.settings.bucket d.settings.creds op http catch _ => pure none
+      | some (.worker request) => match Client.Call.at d.settings.worker request with
+        | some call => workerReply <$> (try Client.exchange call http catch _ => pure none)
+        | none => pure .unknown
+      | none => pure .unknown
     if let some (some server) ← await running.result? then
-      discard <| server.tryInput (.inl (.reply a.key a.attempt (storeReply answer)))
+      discard <| server.tryInput (.inl (.reply a.key a.attempt reply))
   let onOutput : SchedOut ⊕ Out → Async Unit
     | .inl (.call a) => background (perform a)
     | .inr (.orphan v) => IO.eprintln s!"videos: gave up deleting {d.settings.objectKey v} from the store"

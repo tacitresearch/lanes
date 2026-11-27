@@ -84,6 +84,7 @@ public import Lanes.Outside.IO.Clock
 public import Lanes.Outside.Rpc
 public import Lanes.Outside.Store.Basic
 public import Lanes.Outside.Throttle
+public import Lanes.Outside.Transcode
 public import Lanes.Proof.Deed
 public import Lanes.Proof.Equiv
 public import Lanes.Proof.Ghost
@@ -130,6 +131,7 @@ public import Lanes.Web.S3.Basic
 public import Lanes.Web.S3.Multipart
 public import Lanes.Web.S3.Post
 public import Lanes.Web.S3.Xml
+public import Lanes.Web.Transcode
 public import Lanes.Web.IO.Client
 public import Lanes.Web.IO.Ops
 public import Lanes.Web.IO.S3
