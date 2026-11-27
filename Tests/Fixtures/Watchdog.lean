@@ -11,10 +11,8 @@ A dog barks when it has heard nothing from its keeper for a while. Every `ping` 
 `silence` timer again, which starts the delay again, so the dog stays quiet for as long as pings
 keep arriving. The keeper pings on a timer of its own until it is told to `rest`.
 
-This is a keep-alive, the shape of a Raft follower's election timer under heartbeats. It is here
-for what fairness says about it (`Tests/Fixtures/WatchdogProofs.lean`): a run in which the keeper
-pings forever and the dog never barks is fair, because the timer is armed again before it has
-to fire.
+This is a keep-alive, the shape of a Raft follower's election timer under heartbeats.
+`Tests/Fair.lean` runs it under the fair scheduler.
 -/
 
 namespace Tests.Fixtures.Watchdog

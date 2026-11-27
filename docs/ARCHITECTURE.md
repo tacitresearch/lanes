@@ -320,7 +320,7 @@ memo in the map (`RaftKV.implementsMachine_once`); `examples/ledger`, a multi-us
 and `examples/rookery`, a small social network for bots whose claims are proved of its spec,
 which it is proved to implement with deadlines (`Rookery.implements`); the theorem that joins the
 two is not written. Each claim, its evidence and its premises are in `docs/CLAIMS.md`. The tests use copies of
-the small ones in `Tests/Fixtures/`, so an example can change for its reader alone. `lanes new`
+the small ones' systems, and the bank's two theorems, in `Tests/Fixtures/`, so an example can change for its reader alone. `lanes new`
 (`LanesCli/New.lean`, `templates/app/`) creates an application; `lanes lint`
 (`LanesCli/Lint.lean`) checks the rules of `AGENTS.md` that the text can show, the generated files
 and the inventory (`LanesCli/Inventory.lean`).

@@ -141,7 +141,7 @@ example (hfailure : (check false).failure = none) (hcomplete : (check false).com
     (fun _ hp _ _ => kv_props hp) (fun _ _ _ => rfl) hfailure hcomplete (.head _) hw
 
 open Cslib in
-example (hfailure : (check false).failure = none) (hcomplete : (check false).complete = true)
+theorem kv_traces (hfailure : (check false).failure = none) (hcomplete : (check false).complete = true)
     {events : List (Event (sig K V F))} {w : W false}
     (hrun : Scenario.Run (system K V F false)
       { driver := (spec K V F).monitored (Driver.anyOrder requests) } (fun _ => true) events w) :

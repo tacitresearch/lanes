@@ -29,7 +29,7 @@ is a test to write. The gate fails on a mutant that survives, on one that only h
 one whose text is no longer in the file.
 
 This is a list of known ways to break trusted code, each caught. It is not a measure of what
-the tests cover: see "The mutation gate" in TRUSTED.md.
+the tests cover: each row of TRUSTED.md says what its tests check and what they do not.
 """
 import json
 import os

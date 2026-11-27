@@ -8,8 +8,7 @@ here is done, take it off and put its result in `docs/status/`.
 
 Lanes is for software an agent writes and nobody reads line by line, so a claim rests on a proof
 (`docs/decisions/D45-everything-is-proved.md`). The proofs so far are of the framework and of
-two applications that took hundreds of lines each; the checker, not a proof, still carries the
-ledger. So the work is to make a proof cheap enough to be routine, to show for every definition
+applications that took hundreds of lines each. So the work is to make a proof cheap enough to be routine, to show for every definition
 what rests on what, and to give applications the library they need without growing what is
 trusted. Launch work (the flagship application, deployment, the write-up) waits for these,
 because a launch claim is what a critic tests first.
@@ -18,8 +17,7 @@ because a launch claim is what a critic tests first.
 
 1. **Proving an application is cheap.** A library for the simulation relations every
    request-and-reply service repeats, a cheaper invariant rule, then a counterexample-to-induction
-   finder. The measure is `examples/ledger`'s refinement of its spec, proved, where today it is
-   checked on instances.
+   finder. The measure is `examples/ledger`'s refinement of its spec.
    Done towards it: a request named by its client takes effect once (`Service.once`, D48),
    `System.Refines.of_handles`, a relation rule that a duplicated message cannot break, and
    deadlines that pass where a message is served, with which the ledger's timed refinement is
@@ -30,8 +28,7 @@ because a launch claim is what a critic tests first.
 3. **The standard library**, triaged from Go's in `docs/STDLIB.md`. Of its P0, all is done but
    a table of rate-limit buckets per key and TLS and names in the HTTP client, each proved
    against its spec and tested against Go (`docs/decisions/D50-differential-tests-against-go.md`).
-4. **Less trusted, fewer premises.** Our own HTTP/1.1 request reader in place of `Std.Http`'s;
-   the premise that a client's link does not duplicate taken off the gate and Raft, as D48 took it
+4. **Less trusted, fewer premises.** The premise that a client's link does not duplicate taken off the gate and Raft, as D48 took it
    off the key-value store; idle actors not at their start saved when they rest and read back when mail comes (those at
    their start are released already), which waits for a place to keep their state.
 5. **Slow work that is not one request's**, as the ledger's friction log asks
