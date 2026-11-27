@@ -55,6 +55,10 @@ lake exe lanes docstrings  # how many public declarations of `import Lanes` have
   h11's servers by `oracle/requests/requests.py`, run by hand.
 - The toolchain is pinned in `lean-toolchain` and follows CSLib's. Dependencies are pinned in
   `lake-manifest.json`; upgrade them deliberately, CSLib first.
+- A test of an application's front end drives it with `Http.Loopback` (pure, no socket: the
+  connection, the gate and the system, as the server runs them), and a live test of a process
+  with `Http.Client.fetch` (`examples/README.md`, "Testing a front end"). Do not write HTTP by
+  hand.
 - To work on a proof without rebuilding the file, `scripts/lean-goals` asks a language server it
   keeps open for a file's errors and the goals at some lines (`LINE` from 1, `COL` from 0):
 

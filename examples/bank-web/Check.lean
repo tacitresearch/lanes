@@ -3,8 +3,9 @@ import BankWeb
 
 /-!
 What the page asks for and what the bridge makes of it, run by `lake test`: every request the
-page can make is decoded to the message it means, and the page asks for balances and posts
-transfers at its own routes. The bank behind it is checked in `examples/bank`.
+page can make is decoded to the message it means, the page asks for balances and posts
+transfers at its own routes, and the whole front, driven with no socket by `Http.Loopback`,
+moves money and shows it. The bank behind it is checked in `examples/bank`.
 -/
 
 open Lanes Bank BankWeb
@@ -14,8 +15,24 @@ def get (path : List String) : Http.Request := { method := .get, path }
 def form : Http.Request :=
   { method := .post, path := ["transfer"], body := "src=0&dst=1&amount=10".toUTF8 }
 
+def body (r : Except String Http.Response) : String :=
+  match r with
+  | .ok r => (String.fromUTF8? r.body).getD ""
+  | .error _ => ""
+
+/-- A transfer posted and the balances read, through the connection, the gate and the bank. -/
+def throughTheFront : Bool :=
+  let lb := Http.Loopback.start (bank Acct 100) bridge
+  let (lb, moved) := lb.post ["transfer"] [("src", "0"), ("dst", "1"), ("amount", "30")]
+  let (lb, short) := lb.post ["transfer"] [("src", "2"), ("dst", "0"), ("amount", "101")]
+  let (lb, zero) := lb.get ["accounts", "0"]
+  let (_, one) := lb.get ["accounts", "1"]
+  (body moved).endsWith "Transfer accepted.</span>" && (body short).endsWith "Insufficient funds.</span>"
+    && (body zero).endsWith "<span>70</span>" && (body one).endsWith "<span>130</span>"
+
 def tests : List (String × Bool) :=
-  [ ("a balance is asked of the account the link names",
+  [ ("through the front, a transfer moves money and a balance shows it", throughTheFront),
+ ("a balance is asked of the account the link names",
       match bridge.decode 7 (get ["accounts", "2"]) with
       | .ok (.balance 7 account) => account == 2
       | _ => false),
