@@ -47,6 +47,12 @@ runs:
       run: |
         if [ "$RUNNER_OS" = macOS ]; then exit 0; fi
         if command -v openssl >/dev/null && pkg-config --exists openssl 2>/dev/null; then exit 0; fi
+        # A machine of our own may not let the runner use sudo; what is built does not need these,
+        # and the tests that do fail without them.
+        if ! sudo -n true 2>/dev/null; then
+          echo "::warning::the openssl command or OpenSSL's headers are missing and cannot be installed here (no sudo): the TLS tests and scripts/tls-declarations.py need them"
+          exit 0
+        fi
         sudo apt-get update -q && sudo apt-get install -yq openssl libssl-dev
     - name: Install elan and the toolchain
       shell: bash

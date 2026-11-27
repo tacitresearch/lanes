@@ -308,11 +308,11 @@ def verified (creds : SigV4.Credentials) (r : Raw) (scope : SigV4.Scope := ⟨"u
     Option (List String × List (String × String)) :=
   Lanes.Testing.S3.verified creds scope r
 
-/-- The fake S3 on a local port, with its bucket `videos`: the server, its port and its objects. -/
+/-- The fake S3 on a local port, with its bucket `videos`: the server, its port and what it holds. -/
 def fake (creds : SigV4.Credentials) :
-    Async (TCP.Socket.Server × UInt16 × IO.Ref Lanes.Testing.S3.Objects) := do
+    Async (TCP.Socket.Server × UInt16 × IO.Ref Lanes.Testing.S3.State) := do
   let f ← Fake.start creds "videos"
-  return (f.server, f.bucket.endpoint.port, f.objects)
+  return (f.server, f.bucket.endpoint.port, f.state)
 
 def bucketAt (tcpPort : UInt16) : Bucket :=
   { name := "videos", region := "us-east-1",

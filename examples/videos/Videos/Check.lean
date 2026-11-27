@@ -10,10 +10,10 @@ import Videos.System
 The site beside two members' browsers, which follow a script, and beside the model of an object
 store (`Lanes.ObjectStore`, D71), which answers each call at most once, late, never, refused or
 `unknown`, and whose writes that were not answered may take effect at any moment or never. The
-browser's upload is a write the site grants and never hears the answer to (the presigned link,
-the model's `granted`): the model may let it land before the site asks, after, or never. The
-site's `HEAD` is the model's head, and its delete the model's delete. The site's actor may crash
-and start again anywhere.
+browser's upload is a write the site grants and never hears the answer to (the upload form, the
+model's `granted`): the model may let it land before the site asks, after, or never. The site's
+`HEAD` is the model's head, and its delete the model's delete. The site's actor may crash and
+start again anywhere.
 
 What the browsers see is judged as they see it: no private video shown to anyone but its owner;
 nothing shown to a request made after its delete was answered; nothing shown that the store did

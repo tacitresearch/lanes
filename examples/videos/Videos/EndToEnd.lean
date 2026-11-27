@@ -12,10 +12,11 @@ import GitHub
 The site served as `Main` serves it, on a journal, with two members signing in through the
 test kit's identity provider (`Lanes.Testing.OAuth`), in GitHub's shape and read by GitHub's
 integration, and a store: the test kit's fake S3 (`Lanes.Testing.S3`), which checks every
-signature from the bytes it receives, the presigned links' included. A browser is the kit's: it
-signs in, makes a video, puts the file to the link the page carries, asks the site to check,
-watches through the link the page's `<video>` carries, likes, comments, and deletes. Midway the
-server is stopped and started again on its journal, and the flow goes on.
+signature from the bytes it receives, the presigned links' and the upload forms' policies
+included, and enforces a policy's size. A browser is the kit's: it signs in, makes a video,
+posts the file with the form the page carries, asks the site to check, watches through the link
+the page's `<video>` carries, likes, comments, and deletes. Midway the server is stopped and
+started again on its journal, and the flow goes on.
 
 `flow` is also what `videosLive` runs against a real bucket.
 -/
@@ -40,17 +41,35 @@ def post (b : Browser) (path : List String) (form : List (String × String) := [
     Async (Option Http.Response) := do
   b.post path (("csrf", ← csrf b) :: form)
 
-/-- Makes a video and returns the link for its upload. -/
+/-- Where an upload form posts, and its fields, as a page carries them. -/
+structure Upload where
+  url : String := ""
+  fields : List (String × String) := []
+
+/-- The upload form of a page: its action and its hidden fields, in order. -/
+def uploadOf (page : Option Http.Response) : Upload := Id.run do
+  let some form := between page "<form id=\"upload\"" "</form>" | return {}
+  let url := ((form.splitOn "action=\"")[1]?.bind (·.splitOn "\"" |>.head?)).getD ""
+  let fields := (form.splitOn "<input type=\"hidden\" name=\"").drop 1 |>.filterMap fun rest =>
+    match rest.splitOn "\" value=\"" with
+    | name :: value :: _ => some (name, (value.splitOn "\"").headD "")
+    | _ => none
+  return { url, fields }
+
+/-- Makes a video and returns the form for its upload. -/
 def create (b : Browser) (title : String) (visibility : String) :
-    Async (Option Http.Response × String) := do
+    Async (Option Http.Response × Upload) := do
   let page ← post b ["videos"] [("title", title), ("about", s!"About {title}."),
     ("visibility", visibility), ("media", "mp4")]
-  return (page, (between page "data-put=\"" "\"").getD "")
+  return (page, uploadOf page)
 
 def clip : ByteArray := "a few bytes of video".toUTF8
 
-def upload (url : String) : Async (Option Http.Response) :=
-  Testing.S3.follow url .put clip [("content-type", "video/mp4")]
+/-- The most the test's deployment takes in one upload. -/
+def maxUpload_bytes : Nat := 1024
+
+def upload (form : Upload) (file : ByteArray := clip) : Async (Option Http.Response) :=
+  Testing.S3.postForm form.url form.fields file
 
 def fetchVideo (page : Option Http.Response) : Async (Option ByteArray) := do
   let some src := between page "<video controls preload=\"metadata\" src=\"" "\"" | return none
@@ -63,7 +82,8 @@ def deployment (bucket : S3.Bucket) (creds : SigV4.Credentials) (provider : Test
     (journal : System.FilePath) (keyPrefix : String := "videos/") : Deployment :=
   { config := { pageSize := 1 }
     settings := { key := .of "the key of the test deployment".toUTF8, origin, secure := false
-                  bucket, creds, providers := ["hub"], keyPrefix }
+                  bucket, creds, providers := ["hub"], keyPrefix
+                  maxUpload_bytes := ⟨maxUpload_bytes, by decide⟩ }
     server := { port := 0, system := "videos 1"
                 ops := { readinessPath := some "/readyz", livenessPath := some "/healthz"
                          metricsPath := some "/metrics" } }
@@ -119,6 +139,7 @@ def flow (d : Deployment) (provider : Testing.OAuth.Fake) (held : String → Asy
   let channelToAlice ← aliceB.get ["c", "0"]
   let bobsChannel ← anon.get ["c", "1"]
   let (_, ghostPut) ← create aliceB "Ghost" "public"
+  let tooLarge ← upload ghostPut (ByteArray.mk (Array.replicate (maxUpload_bytes + 1) 0))
   let early ← post aliceB ["videos", "2", "uploaded"]
   let ghostEarly ← aliceB.get ["v", "2"]
   let feedEarly ← anon.get []
@@ -151,11 +172,18 @@ def flow (d : Deployment) (provider : Testing.OAuth.Fake) (held : String → Asy
     ("videos: ops pages answer", status healthz == 200 && status readyz == 200 && status metrics == 200),
     ("videos: a member signs in through the provider and gets a session",
       aliceSession.isSome && bobSession.isSome && aliceSession != bobSession),
-    ("videos: making a video gives a page with a signed upload link for its object",
-      status made == 200 && (put.splitOn (d.settings.objectKey 0 ++ "?")).length == 2
-        && (put.splitOn "X-Amz-SignedHeaders=content-type%3Bhost").length == 2),
-    ("videos: the browser puts the file to the store with the link",
-      status uploaded == 200),
+    ("videos: making a video gives a page with a form whose policy is for its object, its type and the size allowed",
+      status made == 200 && put.url == d.settings.bucket.url
+        && put.fields.lookup "key" == some (d.settings.objectKey 0)
+        && (match (put.fields.lookup "policy").bind S3.Post.decode? with
+          | some doc => doc.conditions.contains (.length 1 maxUpload_bytes)
+              && doc.conditions.contains (.eq "key" (d.settings.objectKey 0))
+              && doc.conditions.contains (.eq "Content-Type" "video/mp4")
+          | none => false)),
+    ("videos: the browser posts the file to the store with the form",
+      status uploaded == 204),
+    ("videos: a file larger than the site takes is refused by the store",
+      status tooLarge == 400 && Testing.S3.code tooLarge == "EntityTooLarge"),
     ("videos: asked to check, the site asks the store and the video is ready",
       status confirmed == 303 && location confirmed == "/v/0"),
     ("videos: the watch page's video is a signed link the store serves",
