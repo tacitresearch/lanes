@@ -40,6 +40,11 @@ in flight before the first messages of `b` itself, and alone `b` receives inputs
 has booted. Seen from `b` the join is therefore a state of `b` alone up to `SysState.Equiv`, the
 order of messages on different links, and exactly one when the boot of `a` sends `b` nothing
 (`System.Reachable.right_of_quiet_boot`).
+
+Without the messages from outside in flight (`SysState.thinLeft`, `SysState.thinRight`), each
+step of the join is a run of either side alone (`SysState.exists_block`,
+`SysState.exists_blockRight`), from where that side alone starts (`SysState.init_thinLeft`,
+`SysState.init_thinRight`). For `b` this is exact: what the boot of `a` sends it is from outside.
 -/
 
 @[expose] public section

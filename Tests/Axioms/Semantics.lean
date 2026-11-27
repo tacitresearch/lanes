@@ -44,6 +44,21 @@ import Lanes.Semantics
 /-- info: 'Lanes.System.LeadsTo.join_left' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.LeadsTo.join_left
 
+/-- info: 'Lanes.Obligation.right?_inr' depends on axioms: [propext, Classical.choice] -/
+#guard_msgs in #print axioms Lanes.Obligation.right?_inr
+
+/-- info: 'Lanes.Obligation.Due.of_thinRight' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Obligation.Due.of_thinRight
+
+/-- info: 'Lanes.Wiring.rightView_projects' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Wiring.rightView_projects
+
+/-- info: 'Lanes.System.Run.Fair.right' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Run.Fair.right
+
+/-- info: 'Lanes.System.LeadsTo.join_right' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.LeadsTo.join_right
+
 /-- info: 'Lanes.System.underView_projects' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.underView_projects
 
