@@ -53,9 +53,12 @@ and the unit sets it (`infra/app/app-instance.sh`): `LANES_HOST=0.0.0.0`, since 
 cannot reach `127.0.0.1`, the default; `LANES_IDLE_MS=75000`, longer than the load balancer keeps
 an idle connection (60 s), so that the application never closes a connection the load balancer
 is about to reuse, which the client would see as a `502`; and `LANES_DRAIN_MS`, `DrainSeconds` in
-milliseconds ("What a stop does"). Nothing in the code changes for the address. A `main` of your
-own reads the same variables as the template's does, or sets them in code, and ends in
-`Server.stopOnSignal` rather than `Server.wait`:
+milliseconds ("What a stop does"). Nothing in the code changes for the address. The unit's
+environment file also gives the site's origin, `LANES_URL=https://<DomainName>`, from which an
+application that signs in or checks that a form comes from its own site makes its redirect URIs
+and its `Secure` cookies (`docs/TUTORIAL-WEB.md`, step 6). A `main` of your own reads the same
+variables as the template's does, or sets them in code, and ends in `Server.stopOnSignal` rather
+than `Server.wait`:
 
 ```lean
   let config : Http.ServerConfig :=
@@ -64,22 +67,26 @@ own reads the same variables as the template's does, or sets them in code, and e
   Lanes.block (server.stopOnSignal 15000)
 ```
 
-Keep the `system` name your `main` has: a journal written under another name is refused.
+Keep the `system` name your `main` has: it is the version of the step functions, and a journal
+written under another name is refused. The gate's settings (`ServerConfig.gate`) are not part of
+it: a journal written behind another gate is replayed behind that gate and carried across, if
+`serve` is given its `saving` (`Lanes/Web/Http/JournalName.lean`).
 
 The instance's security group admits that port from the load balancer only.
 
 Then the operators' pages of `ServerConfig.ops` (`docs/decisions/D69-observability.md`), which
-are what the application answers and so are set in `main`: readiness, which the load balancer
-and every deploy ask; liveness; metrics, which the CloudWatch agent reads on the machine, and
-which the server answers to a peer on the loopback address only ("Logs and metrics"); and the
-access log on stderr, one JSON object a line, which reaches CloudWatch Logs:
+are what the application answers and so are set in `main`, as the `main` of `lanes new` sets
+them: readiness, which the load balancer and every deploy ask; liveness; metrics, which the
+CloudWatch agent reads on the machine, and which the server answers to a peer on the loopback
+address only ("Logs and metrics"); and the access log on stderr, one JSON object a line, which
+reaches CloudWatch Logs:
 
 ```lean
     ops := { readinessPath := some "/readyz", livenessPath := some "/healthz",
              metricsPath := some "/metrics", accessLog := .stderr, requestIds := true }
 ```
 
-Without them, set the stack's `HealthCheckPath` to a page that answers 200, such as `/`, and
+A `main` without them sets the stack's `HealthCheckPath` to a page that answers 200, such as `/`, and
 `MetricsPath` to nothing. Every check is then a request the journal keeps: about one every five
 seconds from the load balancer's nodes, which a snapshot cuts if the application gives `serve` its
 `saving`.
@@ -103,7 +110,7 @@ and name the stack after the application. The parameters:
 | `HealthCheckPath` | `/readyz` | Asked by the load balancer and by each deploy |
 | `MetricsPath` | `/metrics` | Scraped on the machine, 404 from the internet; empty for none |
 | `DrainSeconds` | 15 | How long a stop waits for the requests in flight (`LANES_DRAIN_MS`), and the target group's deregistration delay; systemd's stop timeout is ten more |
-| `DomainName` | | The site, such as `video.example.com`; media uploads are allowed from it |
+| `DomainName` | | The site, such as `video.example.com`: the application is told `LANES_URL=https://<it>`, and media uploads are allowed from it |
 | `CertificateArn` | empty | An ACM certificate in this region, or empty to make one |
 | `HostedZoneId` | empty | The domain's Route 53 zone: the certificate and the record are then made for you |
 | `InstanceType` | `t3.small` | x86-64, Nitro; see "Choosing the instance" |
@@ -319,8 +326,11 @@ lakefile (`path` or `git`, as `examples/sign-in` requires Google's and GitHub's)
 A URL presigned with the role's credentials lasts no longer than those credentials, a few hours
 at most, whatever its `Expiry`.
 
-An S3 client that reads `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN`
-instead (`S3.credentialsFromEnv`, once, at start) needs a key of its own: with `MediaUser` true
+An upload form or a presigned link signed in the bridge, which is pure, is signed with
+credentials the bridge is given once, at start; the role's expire within hours, so such an
+application, as the tutorial's shelf and `examples/videos` are, needs a key that lasts. It reads
+`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN` (`S3.credentialsFromEnv`,
+once, at start), and the key is the media user's: with `MediaUser` true
 the stack makes an IAM user whose only rights are the media bucket's (output `MediaUserName`);
 make its access key (**IAM → Users → the user → Security credentials → Create access key**), and
 on the instance, as root:

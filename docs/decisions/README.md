@@ -1,8 +1,9 @@
 # Decisions
 
-Decisions taken while implementing `DESIGN.md`: the ones it left open, and the places where the
-implementation departs from its sketches. Each entry gives the decision and the reason. Newest
-last.
+Why each piece of Lanes is the way it is. Each entry gives the decision and the reason;
+`docs/ARCHITECTURE.md` says how the pieces fit as they are now. The early ones refer to
+DESIGN.md, the first design, which is no longer in the repository: `docs/ARCHITECTURE.md`
+replaced it. Newest last.
 
 One file per decision, `Dn-<slug>.md`, whose first line is `# Dn. Title`. A new decision is a
 new file `new-<slug>.md` whose first line is `# D?. Title`: its author does not choose its

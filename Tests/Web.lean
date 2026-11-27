@@ -180,8 +180,73 @@ def oldJournalTest : Async (List (String × Bool)) := do
   return [
     ("web: a journal of the server from before its gate was a front is refused, saying why",
       refusal == s!"lanes: the journal {journal} is refused: it is the journal of \"echo 1\", "
-        ++ "not of \"echo 1, behind a gate of 30000 ms and 1024 requests\""),
+        ++ "not of \"echo 1, behind a gate of 30000 ms and 1024 requests\". `ServerConfig.system` "
+        ++ "names the step functions a journal is replayed through: start the version that "
+        ++ "wrote it, or move the journal and its snapshot aside to begin anew"),
     ("web: and is left as it was", after == old) ]
+
+/-- A journal's name says the gate it was written behind, and is read back only exactly. -/
+def gateNameTests : List (String × Bool) :=
+  let gate : GateConfig := { requestTimeout_ms := 1500, maxPending := 7 }
+  let name := journalName "bank 1" gate
+  let bank := Tests.Fixtures.Bank.bank Tests.Fixtures.BankWeb.Acct 100
+  [ ("web: a journal's name gives back its gate",
+      (gateOf "bank 1" name).map (fun g => (g.requestTimeout_ms, g.maxPending)) == some (1500, 7)),
+    ("web: and only for its application, written as `journalName` writes it",
+      (gateOf "bank 2" name).isNone
+        && (gateOf "bank 1" "bank 1, behind a gate of 01500 ms and 7 requests").isNone
+        && (gateOf "bank 1" "bank 1").isNone),
+    ("web: a journal behind the same gate has no former gate",
+      (formerGate "bank 1" gate name).isNone
+        && (formerGate "bank 1" {} name).map (·.maxPending) == some 7),
+    ("web: the upgrade across gates reads the journal under the old gate's name",
+      (regateUpgrade bank Tests.Fixtures.BankWeb.bridge (Tests.Fixtures.Bank.actors Codec.fin 100)
+        Tests.Fixtures.Bank.Response.codec "bank 1" gate {}).system == name),
+    ("web: and carries an output across as it is",
+      let answer : ReqId × Response := (7, { status := 503, body := "busy".toUTF8 })
+      (regate bank Tests.Fixtures.BankWeb.bridge gate {}).output answer == answer) ]
+
+/-- The bank's journal, written behind one gate, is read behind another: replayed behind its own
+gate and carried across, and the journal is then under the new name. Without `saving` the
+start is refused, saying what to do. -/
+def regateTest : Async (List (String × Bool)) := do
+  let dir := (← IO.getEnv "TMPDIR").getD "/tmp"
+  let journal : System.FilePath := s!"{dir}/lanes-web-regate-{← IO.monoNanosNow}.journal"
+  let saving : Saving (Tests.Fixtures.Bank.bank Tests.Fixtures.BankWeb.Acct 100) :=
+    { actors := Tests.Fixtures.Bank.actors Codec.fin 100, out := Tests.Fixtures.Bank.Response.codec }
+  let start (gate : GateConfig) (saving : Option _) :=
+    serve (Tests.Fixtures.Bank.bank Tests.Fixtures.BankWeb.Acct 100) Tests.Fixtures.BankWeb.bridge
+      { port := 0, journal := some journal, system := "bank 1", gate } {} saving
+  let server ← start {} (some saving)
+  let some port := server.port | return [("web: the server reports its port", false)]
+  let moved ← fetch port "/transfer" (method := "POST") (body := "src=0&dst=1&amount=30")
+  server.stop
+  let longer : GateConfig := { requestTimeout_ms := 45000 }
+  let refusal ← try
+      (← start longer none).stop
+      pure ""
+    catch e => pure (toString e)
+  let server ← start longer (some saving)
+  let some port := server.port | return [("web: the server reports its port", false)]
+  let after ← fetch port "/accounts/1"
+  server.stop
+  let renamed := (Frame.decode (← IO.FS.readBinFile journal)).head? ==
+    some (Journal.header (journalName "bank 1" longer))
+  let server ← start longer (some saving)
+  let some port := server.port | return [("web: the server reports its port", false)]
+  let again ← fetch port "/accounts/1"
+  server.stop
+  for file in [journal, journal.addExtension "lock", journal.addExtension "snapshot"] do
+    if ← file.pathExists then IO.FS.removeFile file
+  return [
+    ("web: a journal written behind another gate is replayed behind it and carried across",
+      moved.startsWith "HTTP/1.1 200" && after.endsWith "<span>130</span>" && renamed
+        && again.endsWith "<span>130</span>"),
+    ("web: without `saving` it is refused, naming both gates",
+      refusal == s!"lanes: the journal {journal} was written behind a gate of 30000 ms and 1024 \
+        requests, and this server's is of 45000 ms and 1024 requests. It is replayed behind the \
+        gate that wrote it and its state carried across, which needs `serve` to be given its \
+        `saving`; or set `ServerConfig.gate` back") ]
 
 /-- A bridge whose `prepare` takes a secret header out and says on the path that it did. -/
 def guarded : Bridge echoSig :=
@@ -420,7 +485,8 @@ def tests : IO (List (String × Bool)) := do
   let onLanes := fun (results : List (String × Bool)) =>
     results.map fun (name, ok) => (s!"{name} (on 2 IO threads)", ok)
   return (← (serveTest 0).block) ++ (← linkTest.block) ++ (← deadlineTest.block)
-    ++ (← durableTest.block) ++ (← oldJournalTest.block) ++ (← prepareTest.block)
+    ++ (← durableTest.block) ++ (← oldJournalTest.block) ++ gateNameTests ++ (← regateTest.block)
+    ++ (← prepareTest.block)
     ++ (← journalFailTest.block) ++ (← arriveTest.block) ++ (← (wireTest 0).block)
     ++ (← (streamTest 0).block)
     ++ onLanes ((← (serveTest 2).block) ++ (← (wireTest 2).block) ++ (← (streamTest 2).block))

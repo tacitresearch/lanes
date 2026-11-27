@@ -73,7 +73,9 @@ Parameters:
   DomainName:
     Type: String
     AllowedPattern: "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$"
-    Description: The site's name, such as video.example.com. Media uploads are allowed from https://<it>.
+    Description: >-
+      The site's name, such as video.example.com. The application is told its origin,
+      https://<it>, in LANES_URL, and media uploads are allowed from it.
   CertificateArn:
     Type: String
     Default: ""
@@ -585,6 +587,7 @@ Resources:
         - |
           APP=${AppName}
           BINARY=${BinaryName}
+          SITE_URL=https://${DomainName}
           ARGS=${AppArguments}
           PORT=${AppPort}
           READY_PATH=${HealthCheckPath}

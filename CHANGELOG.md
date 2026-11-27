@@ -60,6 +60,11 @@ under Unreleased (`CONTRIBUTING.md`).
 
 ### Changed
 
+- `Http.serve` reads a journal it wrote behind a gate of other settings (`ServerConfig.gate`): it replays the journal behind the gate that wrote it, which the journal's name says, and carries the kernel across with a `Journal.Upgrade` (`Http.regateUpgrade`), so changing a timeout no longer refuses the journal (`docs/decisions/new-journal-version.md`). This needs `saving`; without it the start is refused with a message that names both gates. A journal under another `ServerConfig.system` is refused as before, with a message that says what to do.
+- `lanes new` pins the Lanes it was made from: the release tag of its checkout, or its commit, with a comment in the lakefile that says which; it no longer writes `rev = "main"`.
+- The app `lanes new` makes answers `/readyz`, `/healthz` and `/metrics` and writes an access log (`ServerConfig.ops`), so it passes the deployment stack's health check as it is.
+- The deployment stack tells the application its origin, `LANES_URL=https://<DomainName>`. The tutorial's shelf, `examples/videos` and `examples/sign-in` read it in place of `SHELF_URL` and `VIDEOS_URL`.
+- The deploy workflow and the runner script install elan v4.4.0 from its release archive, checked by its SHA-256, instead of the installer on elan's `master`.
 - `Postgres.Client.Config.sslmode` is `SslMode.defaultFor host` by default: `disable` to `localhost`, `127.0.0.0/8` and `::1`, `verifyFull` to any other host (it was `verifyFull` for every host). The default goes without TLS only to a loopback address (`SslMode.defaultFor_disable`); `localhost` is reached at `127.0.0.1` without asking DNS. `SslMode` moved to `Lanes/Lib/Postgres/Settings.lean`.
 - The deploy no longer writes the database's address to `/run/lanes-app/db-address`: `/etc/lanes/app.env` gives `LANES_DB_USER` and `LANES_DB_PASSWORD_FILE` too, and the application connects with `Postgres.Client.fromEnv` (`docs/DEPLOY.md`).
 - `examples/videos` uploads by a `POST` form whose policy bounds the size (`VIDEOS_MAX_UPLOAD_BYTES`, 2 GiB by default) instead of a presigned `PUT`; the deployment's media bucket allows `POST` from the site.
