@@ -434,7 +434,9 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   time known (`Schedule.dispatch_due`), the next only the backoff after a failure
   (`Schedule.retry_waits`); no id is called more often than its attempts for each scheduling
   (`Schedule.calls_le_scheduled`); an attempt out ends only with its answer or abandoned at the
-  end of its wait (`Schedule.attempt_ends`). In a fair run in which it does not crash, every job
+  end of its wait (`Schedule.attempt_ends`); a job succeeds with an answer only in the step that
+  takes that answer to its attempt out (`Schedule.succeeded_replied`). In a fair run in which it
+  does not crash, every job
   ends and its end is handed over (`Schedule.held_ends`), and a periodic job is noticed again and
   again (`Schedule.every_noticed`). That the times it is told are not ahead of the clock, and
   that the runtime fires a timer no earlier than its delay, are premises (`TRUSTED.md`;

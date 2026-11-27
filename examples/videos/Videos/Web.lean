@@ -447,18 +447,22 @@ def encodeReply (s : Settings) (viewer : Viewer) : Reply → Http.Response
   | .feed cards next => page (FeedPage s viewer cards next)
   | .channel _ name cards waiting => page (ChannelPage s viewer name cards waiting)
 
-def bridge (s : Settings) : Bridge sig where
-  decode := decode s
+def bridge (s : Settings) : Bridge fullSig where
+  decode id r := (decode s id r).map .inr
   encode
-    | .reply req viewer r => some (req, encodeReply s viewer r)
+    | .inr (.reply req viewer r) => some (req, encodeReply s viewer r)
     | _ => none
   prepare := prepare s
 
 /-! ## Saving -/
 
 def actors (config : Config) : Kernel.Image.Codecs (system config) where
-  id := Codec.of Unit
-  state _ := Codec.of Site
-  msg _ := Codec.of Input
+  id := Codec.of (Unit ⊕ Unit)
+  state
+    | .inl () => Codec.of (Schedule.State Key Unit)
+    | .inr () => Codec.of Site
+  msg
+    | .inl () => Codec.of (Schedule.Msg Key Unit StoreAnswer)
+    | .inr () => Codec.of Input
 
 end Videos.Web
