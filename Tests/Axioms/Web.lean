@@ -7,6 +7,9 @@ import Lanes.Semantics
 /-! The axiom gate (rule 5.5, see `Tests/Axioms.lean`) for the theorems of `Lanes/Web/`. -/
 
 -- Lanes.Web.Auth.IdToken
+/-- info: 'Lanes.OAuth.DisplayName.length_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.OAuth.DisplayName.length_le
+
 /-- info: 'Lanes.OAuth.IdToken.check_ok_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.OAuth.IdToken.check_ok_iff
 
@@ -48,33 +51,57 @@ import Lanes.Semantics
 /-- info: 'Lanes.Auth.Sessions.live_open' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Auth.Sessions.live_open
 
-/-- info: 'Lanes.Auth.Sessions.start_kept_closed' depends on axioms: [propext] -/
+/-- info: 'Lanes.Auth.Sessions.start_kept_closed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Auth.Sessions.start_kept_closed
 
 /-- info: 'Lanes.Auth.Sessions.ids_starts' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Auth.Sessions.ids_starts
 
-/-- info: 'Lanes.Auth.Sessions.live_close' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+/-- info: 'Lanes.Auth.Sessions.live_close' depends on axioms: [propext, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Auth.Sessions.live_close
+
+/-- info: 'Lanes.Auth.Session.expired_mono' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Auth.Session.expired_mono
+
+/-- info: 'Lanes.Auth.Sessions.length_close_le' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Lanes.Auth.Sessions.length_close_le
+
+/-- info: 'Lanes.Auth.Sessions.accepts_iff' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Auth.Sessions.accepts_iff
+
+/-- info: 'Lanes.Auth.Sessions.sweep_ended' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Auth.Sessions.sweep_ended
+
+/-- info: 'Lanes.Auth.Sessions.Ended.run' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Auth.Sessions.Ended.run
 
 -- Lanes.Web.Auth.OAuth
 /-- info: 'Lanes.OAuth.same_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.OAuth.same_iff
 
-/-- info: 'Lanes.OAuth.Pending.length_begin' depends on axioms: [propext] -/
-#guard_msgs in #print axioms Lanes.OAuth.Pending.length_begin
+/-- info: 'Lanes.OAuth.check_ok' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.OAuth.check_ok
 
-/-- info: 'Lanes.OAuth.Pending.callback_ok' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.OAuth.Pending.callback_ok
+/-- info: 'Lanes.OAuth.Used.length_claim' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.OAuth.Used.length_claim
 
-/-- info: 'Lanes.OAuth.Pending.callback_removes' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.OAuth.Pending.callback_removes
+/-- info: 'Lanes.OAuth.Used.claim_ok' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.OAuth.Used.claim_ok
 
-/-- info: 'Lanes.OAuth.Pending.callback_sublist' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.OAuth.Pending.callback_sublist
+/-- info: 'Lanes.OAuth.Used.claim_holds' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.OAuth.Used.claim_holds
 
-/-- info: 'Lanes.OAuth.Pending.accepted_le_issued' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.OAuth.Pending.accepted_le_issued
+/-- info: 'Lanes.OAuth.Used.claim_ok_holds' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.OAuth.Used.claim_ok_holds
+
+/-- info: 'Lanes.OAuth.Used.accepted_later' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.OAuth.Used.accepted_later
+
+/-- info: 'Lanes.OAuth.Used.accepted_once' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.OAuth.Used.accepted_once
+
+/-- info: 'Lanes.OAuth.Identity.under_cons' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.OAuth.Identity.under_cons
 
 /-- info: 'Lanes.OAuth.Keys.lookup_fetch' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.OAuth.Keys.lookup_fetch
@@ -535,3 +562,13 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Http.Response.read_wireToEnd_open' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.Response.read_wireToEnd_open
+
+-- Lanes.Web.Http.SharedCache
+/-- info: 'Lanes.Http.SharedCache.serve_storable' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.SharedCache.serve_storable
+
+/-- info: 'Lanes.Http.SharedCache.serve_reuses' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.SharedCache.serve_reuses
+
+/-- info: 'Lanes.Http.SharedCache.serve_of_leaks' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.SharedCache.serve_of_leaks

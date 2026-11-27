@@ -8,7 +8,9 @@ from the built library in `docs/INVENTORY.md` (D47), and what has none is on
 `docs/inventory-none.md`: that is where a claim is checked, and this page only names the
 headline theorems. `import Lanes` gives the API; the soundness theorems named here are in
 `Lanes.Proofs` (`Lanes/Proofs.lean`), which `Lanes.Semantics` imports. Those are gated in `Tests/Axioms/`, which stops compiling if a `sorry` or a
-new axiom reaches them.
+new axiom reaches them. `Lanes.Testing` (`Lanes/Testing.lean`) is the test kit an application's
+tests run against: a fake S3 that checks signatures, a fake identity provider and a scripted
+browser; no binary that serves imports it (`docs/decisions/D77-a-test-kit.md`).
 
 The idea in one line: all logic is pure step functions, the semantics is one executable function
 over them, and the code that runs, the checker that explores and the proofs that cover are all
@@ -21,22 +23,23 @@ proved function tells it to.
 | Proof tools for systems | `Lanes/Proof/{Lift,Ghost,Monotone,Equiv,Deed}.lean` | `System.invariant_of_actor`, `Inductive.of_monotone`, `System.Invariant.of_ghost` |
 | The kernel | `Lanes/Runtime/{Kernel,KernelSound,KernelTimers,Wave}.lean` | `Kernel.exec_reachable`, `Kernel.exec_outputs`, `Kernel.exec_wellFormed`, `Kernel.runWaves_eq` |
 | The shell | `Lanes/Runtime/IO/Shell.lean`, `Lanes/Runtime/{Batch,Mailbox,MailboxSound,Pace}.lean` | `Batch.run_kernel`, `Batch.run_sound`, `Batch.run_spread`, `Mailbox.batch_since_take`; the shell itself is trusted |
-| Journal, snapshots, disk | `Lanes/Durable/{Journal,Snapshot,Disk,Frame}.lean`, `Lanes/Durable/IO/Journal.lean` | `Journal.open?_cut`, `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Journal.Disk.Holds.save_crash` |
+| Journal, snapshots, disk | `Lanes/Durable/{Journal,Snapshot,Disk,Frame,Reading}.lean`, `Lanes/Durable/IO/Journal.lean` | `Journal.open?_cut`, `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Journal.Disk.Holds.save_crash`, `Journal.Disk.Torn.load_readings` |
 | Migrations | `Lanes/Durable/{Migration,Upgrade}.lean` | `Migration.inv_exec`, `Journal.Upgrade.begin_crash`, `Journal.Upgrade.holds`, `Journal.Upgrade.inv_load` |
 | Joins | `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`, `Lanes/Semantics/FairJoin.lean` | `System.Reachable.left`, `SysState.run_left`, `System.Run.Fair.left` |
 | Shards and the transport | `Lanes/Runtime/{Shard,ShardSound,ShardsSound}.lean`, `Lanes/Net/{Courier,CourierSound}.lean`, `Lanes/Net/IO/{Peers,Node}.lean` | `System.ShardsReachable.unsharded`, `Peers.Courier.written_sublist_sent` |
 | The gate and the HTTP server | `Lanes/Web/Http/{Gate,Front,FrontSound,Waiting,Conn,ConnSound,Stream,Sse,SseSound,Loopback}.lean`, `Lanes/Semantics/Front.lean`, `Lanes/Web/IO/Server.lean` | `Http.served_answered_le_arrived`, `Http.served_pending_answered`, `Http.Waiting.exec_answered`, `Http.Conn.run_writes`, `Http.Conn.read_streamed`, `Http.Sse.parse_written` |
 | Metrics, health and the access log | `Lanes/Lib/Metrics.lean`, `Lanes/Web/Http/{Ops,OpsSound}.lean`, `Lanes/Web/IO/Ops.lean` | `Metrics.Histogram.observeAll_eq`, `Metrics.readLabelValue_escapeLabel`, `Http.Ops.route?_default`, `Http.Ops.route?_metrics`, `Http.Ops.answer_ready`, `Http.Ops.Access.parse_line`; that none of it reaches a system is trusted and tested |
-| Other adapters | `Lanes/Outside/Basic.lean`, `Lanes/Outside/IO/Clock.lean`, `Lanes/Web/IO/Client.lean`, `Lanes/Web/Http/{Grammar,Wire,WireSound}.lean` | `Response.read_wire`, `Request.fields_framing`; conformance tests |
-| Models of external services | `Lanes/Outside/{Rpc,Idempotent,Events,ObjectStore}.lean`, `Lanes/Outside/Effects/`, `Lanes/Proof/Outputs.lean` | `Idempotent.at_most_once`, `Rpc.answered_le_called`, `Events.deliveries_le`, `ObjectStore.read_sent`, `System.Emits.outputs`; that a real service conforms is trusted |
+| Other adapters | `Lanes/Outside/Basic.lean`, `Lanes/Outside/{Clock,IO/Clock}.lean`, `Lanes/Web/IO/Client.lean`, `Lanes/Web/Http/{Grammar,Wire,WireSound}.lean` | `Response.read_wire`, `Request.fields_framing`; conformance tests |
+| Models of external services | `Lanes/Outside/{Rpc,Idempotent,Events,ObjectStore,Queue,Cache,Clock,Throttle}.lean`, `Lanes/Outside/Effects/`, `Lanes/Web/Http/SharedCache.lean`, `Lanes/Proof/Outputs.lean` | `Idempotent.at_most_once`, `Rpc.answered_le_called`, `Events.deliveries_le`, `ObjectStore.read_sent`, `ObjectStore.held_sent`, `Queue.received_le`, `Cache.read_sent`, `Clock.wall_back_le`, `Throttle.wait_le`, `SharedCache.serve_storable`, `SharedCache.serve_of_leaks`, `System.Emits.outputs`; that a real service conforms is trusted |
 | Signature Version 4 and the S3 client | `Lanes/Web/Http/{SigV4,SigV4Sound}.lean`, `Lanes/Web/S3/{Basic,Xml}.lean`, `Lanes/Web/IO/S3.lean` | `SigV4.target_sign`, `SigV4.sortQuery_sorted`, `SigV4.canonicalHeaders_sorted`, `SigV4.encode_chunks`; signatures tested against AWS's vectors, the client against a fake S3; its IO trusted |
 | PostgreSQL and the store model | `Lanes/Lib/Postgres/{Bytes,Message,MessageSound,Scram,Conn,ConnSound,Table}.lean`, `Lanes/Lib/Postgres/IO/Client.lean`, `Lanes/Outside/Store/{Basic,Sound}.lean` | `Backend.read_encode`, `Frontend.decode_encode`, `Conn.run_fifo`, `Conn.step_committed`, `Conn.step_query`, `Store.write_skew`, `Store.lost_commit_either`; the IO is trusted, and that the server behaves like the model is a premise |
 | Jobs: work outside a step | `Lanes/Behaviours/Jobs/{Basic,Sound}.lean`, `Lanes/Semantics/Jobs.lean`, `Lanes/Behaviours/Jobs/IO/Pool.lean` | `Jobs.answered_le_handled`, `Jobs.retry_same`, `Jobs.submitted_answered`; the pool is trusted |
+| Schedule: work that is due later | `Lanes/Behaviours/Schedule/{Basic,Sound}.lean`, `Lanes/Semantics/Schedule.lean` | `Schedule.dispatch_due`, `Schedule.calls_le_scheduled`, `Schedule.attempt_ends`, `Schedule.held_ends`; that the time it knows is not ahead of the clock is a premise |
 | Web | `Lanes/Web/Http/{Basic,Route,RouteSound,Cookie,CookieSound}.lean`, `Lanes/Web/Html/`, `Lanes/Web/Auth/` | `Html.lex_render`, `Html.safeUrl_scheme`, `Http.dispatch_link`, `Http.parseForm_encodeForm`, `Http.readSetCookie_header`, `Auth.verify_eq_some`, `Auth.checkForm_other` |
 | The checker | `Lanes/Check/`, `Lanes/Semantics/{Monitor,MonitorSound}.lean` | `Check.search_sound`, `Check.system_sound_of_respects`, `Check.refines_traces` |
 | The proof layer | `Lanes/Semantics/` | refinement, specs, fairness, leads-to |
 | Data and the standard library | `Lanes/Data/`, `Lanes/Lib/` | codec laws, `Quorum.majority_inter`, `Bytes.same_iff`, `Json.parse_iff`, `Url.parse_print` |
-| Sign-in with OAuth 2.0 and OpenID Connect | `Lanes/Web/Auth/{Jose,IdToken,OAuth}.lean`, `Lanes/Web/IO/SignIn.lean` | `OAuth.Pending.callback_ok`, `OAuth.Pending.accepted_le_issued`, `OAuth.IdToken.verify_accepted`, `Jose.verify_ok`, `OAuth.Keys.no_fetch_within`; the edge is trusted, tested end to end against a provider run in the test |
+| Sign-in with OAuth 2.0 and OpenID Connect | `Lanes/Web/Auth/{Jose,IdToken,OAuth}.lean`, `Lanes/Web/IO/SignIn.lean` | `OAuth.check_ok`, `OAuth.Used.accepted_once`, `OAuth.Used.length_claim`, `OAuth.IdToken.verify_accepted`, `Jose.verify_ok`, `OAuth.Keys.no_fetch_within`; the edge is trusted, tested end to end against a provider run in the test |
 | Bound C | `native/lanes.c`, `Lanes/Lib/Crypto/Sodium.lean`; `native/verify.c`, `Lanes/Lib/Crypto/Verify.lean` | trusted; tested against the Lean references and published vectors |
 | TLS client | `native/tls.c`, `Lanes/Web/IO/Tls.lean` | trusted; tested against `openssl s_server` |
 
@@ -132,7 +135,10 @@ the process dies anywhere in an append or a save, the files load as the kernel t
 (`Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.save_crash`), and a start mends what a
 death left (`Journal.Disk.Torn.mend`), so this holds over any number of starts, saves and deaths.
 `Lanes/Durable/IO/Journal.lean` performs the writes, each synced with `fsync` before the next, so a loss
-of power leaves what a death would; that the file system is the model is trusted.
+of power leaves what a death would; that the file system is the model is trusted. A read at a start
+may fail: only "no such file" is a file not there (`Journal.Reading`), a failed read refuses the
+start (`Disk.ofReadings`), and one whose reads do not fail loads what `Disk.Torn.load` says
+(`Journal.Disk.Torn.load_readings`), so a read error never loses committed entries.
 
 The files carry a label, the application's name for the system and the version of its types
 (`Journal.label`; version 0 is the name alone, as every journal was named before versions). A
@@ -267,18 +273,24 @@ against RFC 6265's algorithm); and `Lanes/Web/Auth/`: signed tokens and form tok
 exactly what was signed for their purpose and session (`Auth.verify_eq_some`,
 `Auth.checkForm_iff`) and another's only through an HMAC collision (`Auth.verify_sign_other`,
 `Auth.checkForm_other`), Argon2id password digests, failed attempts that lock at their limit
-(`Auth.Attempts.locked_unlock_repeat`) and sessions that keep the newest (`Auth.Sessions.ids_starts`).
+(`Auth.Attempts.locked_unlock_repeat`) and sessions that keep the newest (`Auth.Sessions.ids_starts`)
+and end after a lifetime, judged at the time a request arrived, so that one over is never let in
+again (`Auth.Sessions.accepts_iff`, `Auth.Sessions.Ended.run`).
 
 Sign-in with another service (`docs/decisions/D72-sign-in-with-oauth.md`) is OAuth 2.0's authorization
 code flow with PKCE and OpenID Connect on it, decided in `Lanes/Web/Auth/OAuth.lean` and done
 where a request arrives, before the system (`serve`'s `arrive`, `Lanes/Web/IO/SignIn.lean`), so no
-code or token is journalled. A callback is accepted only for a state issued to its browser and
-provider and not expired (`OAuth.Pending.callback_ok`), and no state more often than it was issued
-(`OAuth.Pending.accepted_le_issued`), which is also model-checked against an attacker's browser;
+code or token is journalled. A sign-in begun is a ticket the browser keeps in a cookie under the
+server's tag, so beginnings take no room on the server. A callback is accepted only with its
+browser's ticket, for its state and provider, not expired (`OAuth.check_ok`), and no state twice
+(`OAuth.Used.accepted_once`), which is also model-checked against an attacker's browser;
 an ID token only if its header names RS256 or ES256, a key of the provider's set of that
 algorithm and `kid` checks it, and every claim passes (`OAuth.IdToken.verify_accepted`,
 `Lanes/Web/Auth/Jose.lean`). The system gets the identity in headers a client cannot send
-(`OAuth.identity?_strip`). Vendors' presets are packages under `integrations/` (D61).
+(`OAuth.identity?_strip`), read back as written (`OAuth.identity?_withIdentity`). Its name, the
+provider's `name` or GitHub's `login`, is a `DisplayName`: at most 64 characters, none of them a
+control or reordering mark, by its type (`OAuth.DisplayName.length_le`), and text a page shows
+escaped. Vendors' presets are packages under `integrations/` (D61).
 
 ## Adapters
 
@@ -289,7 +301,9 @@ performs; a conformance test records a real run and checks it with `Outside.allo
 adapter has something to decide, it is a pure function with its theorems (rule 3.9).
 
 - **Clock** (`Lanes/Outside/IO/Clock.lean`): the time as an input, never earlier than one given before,
-  also across a restart.
+  also across a restart. Its model is the monotonic clock (`Clock.outside`, `Lanes/Outside/Clock.lean`);
+  the wall clock as the operating system reads it, which NTP may set back by up to twice its skew
+  (`Clock.wall`, `Clock.wall_back_le`), is a model of its own for a system that reads it.
 - **HTTP client** (`Lanes/Web/IO/Client.lean`): HTTP/1.1, or HTTPS through the TLS binding
   below, one request per connection; a `HEAD` is read without a body (`Response.readHead`). The bytes are pure (`Lanes/Web/Http/Wire.lean`): the request writer frames the message
   itself (`Request.fields_framing`), and the reader is proved to read a response written as a
@@ -302,9 +316,11 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   whose target is the canonical path and query that were signed (`SigV4.target_sign`), with the
   query and the signed headers in order (`SigV4.sortQuery_sorted`, `canonicalHeaders_sorted`);
   what an answer means (`S3.interpret`), and a reader of the XML S3 writes, which refuses a
-  document type and every entity it does not know (`Lanes/Web/S3/Xml.lean`). The signatures are
-  tested against AWS's test suite and S3's documented examples, the client against a fake S3
-  that checks every signature from the bytes it receives. Bodies are whole, in memory. The
+  document type and every entity it does not know (`Lanes/Web/S3/Xml.lean`), tested against Go's
+  `encoding/xml`. The signatures are tested against AWS's test suite, S3's documented examples and
+  botocore on generated requests, the client against a fake S3 that checks every signature from
+  the bytes it receives, and against moto's S3, whose run the object store's model allows
+  (`oracles/README.md`). Bodies are whole, in memory. The
   credentials are read at each call from a `SigV4.Source`: fixed, or kept fresh by something
   else.
 - **AWS** (`integrations/aws`, `docs/decisions/D74-aws-integration.md`): a role's credentials
@@ -317,10 +333,10 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   `Refresh.retry_within`); model-checked first against a model of the metadata service with
   timeouts. A task in `Aws/IO/Credentials.lean` only performs. SES's `SendEmail` is a JSON document
   proved to read back with exactly its recipients (`Ses.toAddresses_json`), its answers read as
-  the email model's (`Ses.Answer.modelled`), and a run against a fake SES is one the model
-  allows; SES takes no key, so each send is a request without one.
-- **Sign-in** (`Lanes/Web/IO/SignIn.lean`): the random values of a beginning, the pending
-  sign-ins and each provider's keys held in references, and the calls to the token endpoint,
+  the email model's (`Ses.Answer.modelled`), and runs against a fake SES and against moto's SES
+  are ones the model allows; SES takes no key, so each send is a request without one.
+- **Sign-in** (`Lanes/Web/IO/SignIn.lean`): the random values of a beginning and the key of the
+  tickets, the states used and each provider's keys held in references, and the calls to the token endpoint,
   the JWK Set and a user API; every decision is `Lanes/Web/Auth/OAuth.lean`'s (above).
 - **HTTP server, journal, transport**: above.
 - **Models of external services** (`Lanes/Outside/`, D61 and the decision on models of external
@@ -334,7 +350,9 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   `Events.bounded` delivers events late, out of order and up to `maxDeliveries` times
   (`Events.deliveries_le`). `ObjectStore.server` is an object store whose reads see the last write answered,
   unless a write that timed out, was refused or overlapped it may have come after; a get is
-  answered only with an object a put sent (`ObjectStore.read_sent`). `Effects` is the class of services that hold things with a lifecycle,
+  answered only with an object a put sent (`ObjectStore.read_sent`), and a head says a key holds
+  one only when a put sent one under it (`ObjectStore.held_sent`); a write granted to someone else,
+  a browser's through a presigned link, is never answered and may land or not. `Effects` is the class of services that hold things with a lifecycle,
   made under a key and reported by webhooks, with two instances: payments, with the statuses
   Stripe documents for a PaymentIntent (`Lanes/Outside/Effects/Payments.lean`), and email
   (`Lanes/Outside/Effects/Email.lean`). A system's part of a proof is a fact about what its steps
@@ -342,6 +360,18 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   each order at most once that way (`Shop.charged_at_most_once`). That a real service does only
   what its model allows is trusted; the S3 client's runs against a fake are checked against the
   object store's, and no adapter talks to a real service yet.
+- **More outside systems** (the decision on models of more outside systems), each with a fixture
+  in `Tests/` whose seeded bug the checker finds: a queue as SQS gives one, received at least once,
+  again at any moment until deleted with its latest receipt, in any order or by FIFO group, at most
+  `maxReceives` times a copy (`Lanes/Outside/Queue.lean`, `Queue.received_le`); a cache in front
+  of a store, evicting at any moment, with leases and, optionally, stale reads
+  (`Lanes/Outside/Cache.lean`, `Cache.read_sent`, `Cache.fill_unleased`); a service that throttles
+  with `429` and `Retry-After`, a combinator over `Rpc.Server` (`Lanes/Outside/Throttle.lean`,
+  `Throttle.throttled_inner`, `Throttle.wait_le`); and a shared cache in front of the server, what
+  RFC 9111 lets a CDN keep (`Lanes/Web/Http/SharedCache.lean`), which serves nothing `private` or
+  `no-store` (`SharedCache.serve_storable`), and whose `leaks` is a check an application runs on
+  its exchanges: with no leak, the cache gives each request what the origin gave it
+  (`SharedCache.serve_of_leaks`). `examples/videos` is checked with it.
 - **PostgreSQL** (`Lanes/Lib/Postgres/`): the frontend/backend protocol 3.0 in Lean, not libpq
   (`docs/decisions/D68-postgres-protocol-in-lean.md`): start-up with trust, cleartext (only when
   allowed), MD5 or SCRAM-SHA-256; the extended query protocol with parameters, text both ways;
@@ -362,7 +392,8 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   `Store.lost_update`, `Store.lost_commit_either`, `Store.lost_commit_later`). A table of
   PostgreSQL runs it (`Lanes/Lib/Postgres/Table.lean`, `Postgres.Store.handler`); that the server
   behaves like the model at the level chosen is the premise of a theorem proved against it,
-  tested on recorded runs (`Tests/PostgresLive.lean`). `examples/todo-db` is checked against it.
+  tested on runs recorded from PostgreSQL 16, some interleaved at random
+  (`oracles/postgres/store.jsonl`). `examples/todo-db` is checked against it.
 - **Jobs** (`Lanes/Behaviours/Jobs/Basic.lean`): work that must not run in a
   step, an outbound call or slow pure work, is submitted to the jobs actor under a key the
   requester chooses, beside the system that submits it (`Jobs.attach`). The actor dispatches
@@ -374,6 +405,24 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   (`Jobs.answered_le_handled`); a retry carries its job's key and work (`Jobs.retry_same`);
   in a fair run without crashes every job is answered, whatever the workers do
   (`Jobs.submitted_answered`, by `System.LeadsTo.induction` on attempts left).
+- **Schedule** (`Lanes/Behaviours/Schedule/Basic.lean`): work that is due later. The scheduler
+  holds jobs under ids the requester chooses, beside the system that schedules them
+  (`Schedule.attach`): a call of the outside retried with an exponential backoff, capped and with
+  a deterministic jitter, until it is accepted, its attempts or its time run out (the dead
+  letter) or it is cancelled; a notice at a time; or a notice every period, the sweep that expires
+  what is over. An id held is one job however often it is scheduled (`already`); beyond `maxJobs`
+  or `maxPayload` a scheduling is refused at once. Its state is the journal's, and each job waits
+  on one timer, armed again at every start. The semantics has no clock, so the scheduler keeps
+  the latest time it was told or its timers were armed for, and an attempt carries that time.
+  Proved, in every environment: an attempt starts only by its job's timer, for a job due by the
+  time known (`Schedule.dispatch_due`), the next only the backoff after a failure
+  (`Schedule.retry_waits`); no id is called more often than its attempts for each scheduling
+  (`Schedule.calls_le_scheduled`); an attempt out ends only with its answer or abandoned at the
+  end of its wait (`Schedule.attempt_ends`). In a fair run in which it does not crash, every job
+  ends and its end is handed over (`Schedule.held_ends`), and a periodic job is noticed again and
+  again (`Schedule.every_noticed`). That the times it is told are not ahead of the clock, and
+  that the runtime fires a timer no earlier than its delay, are premises (`TRUSTED.md`;
+  `docs/decisions/D79-work-that-is-due-later-is-a-job-of-the-scheduler.md`).
 
 ## The checker
 

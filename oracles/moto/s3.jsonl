@@ -1,0 +1,30 @@
+{"call":0,"deadline_ms":3000,"request":{"key":"videos/a b/ሴ.mp4","op":"get"}}
+{"answer":{"answer":"missing"},"reply":0}
+{"call":1,"deadline_ms":3000,"request":{"body":"6f6e65","key":"videos/a b/ሴ.mp4","op":"put"}}
+{"answer":{"answer":"stored","etag":"\"f97c5d29941bfb1b2fdab0874906ab82\""},"reply":1}
+{"call":2,"deadline_ms":3000,"request":{"key":"videos/a b/ሴ.mp4","op":"get"}}
+{"answer":{"answer":"object","body":"6f6e65","etag":"\"f97c5d29941bfb1b2fdab0874906ab82\"","modified":"Fri, 27 Nov 2026 11:23:44 GMT","size":3,"type":"binary/octet-stream"},"reply":2}
+{"call":3,"deadline_ms":3000,"request":{"body":"74776f","key":"videos/a b/ሴ.mp4","op":"put"}}
+{"call":4,"deadline_ms":3000,"request":{"body":"7468726565","key":"videos/a b/ሴ.mp4","op":"put"}}
+{"answer":{"answer":"stored","etag":"\"35d6d33467aae9a2e3dccb4b6b027878\""},"reply":4}
+{"answer":{"answer":"stored","etag":"\"b8a9f715dbb64fd5c56e7783c6820a61\""},"reply":3}
+{"call":5,"deadline_ms":3000,"request":{"key":"videos/a b/ሴ.mp4","op":"get"}}
+{"answer":{"answer":"object","body":"74776f","etag":"\"b8a9f715dbb64fd5c56e7783c6820a61\"","modified":"Fri, 27 Nov 2026 11:23:44 GMT","size":3,"type":"binary/octet-stream"},"reply":5}
+{"call":6,"deadline_ms":1,"request":{"body":"666f7572","key":"videos/a b/ሴ.mp4","op":"put"}}
+{"answer":{"answer":"unknown"},"reply":6}
+{"call":7,"deadline_ms":3000,"request":{"key":"videos/a b/ሴ.mp4","op":"get"}}
+{"answer":{"answer":"object","body":"666f7572","etag":"\"8cbad96aced40b3838dd9f07f6ef5772\"","modified":"Fri, 27 Nov 2026 11:23:44 GMT","size":4,"type":"binary/octet-stream"},"reply":7}
+{"call":8,"deadline_ms":3000,"request":{"key":"thumbs/missing.png","op":"get"}}
+{"answer":{"answer":"missing"},"reply":8}
+{"call":9,"deadline_ms":3000,"request":{"key":"videos/a b/ሴ.mp4","op":"delete"}}
+{"answer":{"answer":"deleted"},"reply":9}
+{"call":10,"deadline_ms":3000,"request":{"key":"videos/a b/ሴ.mp4","op":"get"}}
+{"answer":{"answer":"missing"},"reply":10}
+{"call":11,"deadline_ms":3000,"request":{"key":"thumbs/missing.png","op":"delete"}}
+{"answer":{"answer":"deleted"},"reply":11}
+{"call":12,"deadline_ms":3000,"request":{"body":"","key":"thumbs/missing.png","op":"put"}}
+{"answer":{"answer":"stored","etag":"\"d41d8cd98f00b204e9800998ecf8427e\""},"reply":12}
+{"call":13,"deadline_ms":3000,"request":{"key":"thumbs/missing.png","op":"get"}}
+{"answer":{"answer":"object","body":"","etag":"\"d41d8cd98f00b204e9800998ecf8427e\"","modified":"Fri, 27 Nov 2026 11:23:44 GMT","size":0,"type":"binary/octet-stream"},"reply":13}
+{"call":14,"deadline_ms":3000,"request":{"key":"videos/a b/ሴ.mp4","op":"get"}}
+{"answer":{"answer":"missing"},"reply":14}

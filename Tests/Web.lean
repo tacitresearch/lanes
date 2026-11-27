@@ -210,6 +210,28 @@ def prepareTest : Async (List (String × Bool)) := do
     ("web: and the journal holds the prepared request, not what was sent",
       !holds "hunter2hunter2" && !holds "x-secret" && holds "bad") ]
 
+/-- `arrive` runs for at most `arriving_max` requests at once, each on a thread of its own: one
+more is answered `503` before its work begins, and once one is done the next is taken. -/
+def arriveTest : Async (List (String × Bool)) := do
+  let release ← IO.Promise.new
+  let work (_ : Request) : IO (Except Response Request) := do
+    let _ ← IO.wait release.result?
+    return .error (.text "worked")
+  let server ← serve (Server.system mute) slugBridge { port := 0, arriving_max := 1 }
+    (arrive := some work)
+  let some port := server.port | return [("web: the server reports its port", false)]
+  let first ← IO.Promise.new
+  background do first.resolve (← fetch port "/a")
+  Async.sleep 200
+  let second ← fetch port "/b"
+  release.resolve ()
+  let first ← await first
+  let third ← fetch port "/c"
+  server.stop
+  return [
+    ("web: beyond arriving_max, a request whose work is in IO is answered 503 at once",
+      second.startsWith "HTTP/1.1 503" && first.endsWith "worked" && third.endsWith "worked") ]
+
 /-- The journal stops taking writes while the server runs. A request in flight is answered, the
 server shuts down, and `wait` fails, so that the process ends and can be started again. -/
 def journalFailTest : Async (List (String × Bool)) := do
@@ -421,7 +443,8 @@ def tests : IO (List (String × Bool)) := do
     results.map fun (name, ok) => (s!"{name} (on 2 IO threads)", ok)
   return (← (serveTest 0).block) ++ (← linkTest.block) ++ (← deadlineTest.block)
     ++ (← durableTest.block) ++ (← oldJournalTest.block) ++ (← prepareTest.block)
-    ++ (← journalFailTest.block) ++ (← (wireTest 0).block) ++ (← (streamTest 0).block)
+    ++ (← journalFailTest.block) ++ (← arriveTest.block) ++ (← (wireTest 0).block)
+    ++ (← (streamTest 0).block)
     ++ onLanes ((← (serveTest 2).block) ++ (← (wireTest 2).block) ++ (← (streamTest 2).block))
     ++ (← cLoopTests.block)
 

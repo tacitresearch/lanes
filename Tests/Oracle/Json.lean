@@ -10,7 +10,7 @@ namespace Tests.Oracle.Json
 
 open Lanes
 
-/-- The value as `oracle/json` writes it: numbers as `num:<m>e-<e>`, strings after `s:`. -/
+/-- The value as `oracles/go/json` writes it: numbers as `num:<m>e-<e>`, strings after `s:`. -/
 def canonical : Json → Json
   | .num n => .str s!"num:{n.mantissa}e-{n.exponent}"
   | .str s => .str ("s:" ++ s)
@@ -145,7 +145,7 @@ default. -/
 def beyondLimits (c : Case) (go : Answer) : Bool :=
   (answer c).isNone && answerWith 10000 100000 c.input == go
 
-/-- Go reads any exponent. `oracle/json` writes one beyond ±100000 as `num:unbounded`, and ours
+/-- Go reads any exponent. `oracles/go/json` writes one beyond ±100000 as `num:unbounded`, and ours
 refuses an exponent beyond `maxDigits` either way. -/
 def unboundedExponent (c : Case) (go : Answer) : Bool :=
   (answer c).isNone && (go.map Json.compress).any (·.contains "num:unbounded")

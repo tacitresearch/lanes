@@ -8,7 +8,8 @@ import Videos.Spec
 # What an output shows
 
 Of every input and every site: each video an output shows is a ready video of the site, and a
-private one only in an answer to its owner's live session (`Site.shows_handle`). Every claim
+private one only in an answer to a session of its owner that let the request in when it arrived
+(`Site.shows_handle`). Every claim
 about what is shown rests on this: a private video is its owner's alone (`Videos.Proofs.Private`),
 a deleted one is shown no more (`Gone`), a listed one was confirmed by the store
 (`Confirmed`).
@@ -20,18 +21,19 @@ namespace Videos
 
 open Lanes
 
-/-- What an output shows of a video: a ready video of the site, and a private one only to its
-owner's live session. -/
-def Site.Shows (s : Site) (o : Out) : Prop :=
+/-- What an output shows of a video: a ready video of the site, and a private one only to a
+session of its owner that lets in a request of `at_s` under `life`. -/
+def Site.Shows (s : Site) (life : Auth.Lifetime) (at_s : Nat) (o : Out) : Prop :=
   ∀ c ∈ o.cards, ∃ w ∈ s.videos, c = s.card w ∧ w.status.isReady = true ∧
     (w.visibility = .private →
-      ∃ req sid r, o = .reply req (some (w.owner, sid)) r ∧ s.live w.owner sid = true)
+      ∃ req sid r, o = .reply req (some (w.owner, sid)) r ∧ s.accepts life at_s w.owner sid = true)
 
 namespace Site
 
 variable (config : Config)
 
-theorem shows_of_cards {s : Site} {o : Out} (h : o.cards = []) : s.Shows o := by
+theorem shows_of_cards {s : Site} {life : Auth.Lifetime} {at_s : Nat} {o : Out}
+    (h : o.cards = []) : s.Shows life at_s o := by
   intro c hc
   simp [h] at hc
 
@@ -63,8 +65,8 @@ theorem quiet_waiter (video : Video) (viewer : Viewer) :
   · exact quiet_answer rfl
   · exact quiet_nil
 
-theorem viewer_live {s : Site} {x : Viewer} {m : Member} {sid : Sid}
-    (h : s.viewer x = some (m, sid)) : s.live m sid = true := by
+theorem viewer_accepts {s : Site} {life : Auth.Lifetime} {at_s : Nat} {x : Viewer} {m : Member}
+    {sid : Sid} (h : s.viewer life at_s x = some (m, sid)) : s.accepts life at_s m sid = true := by
   unfold Site.viewer at h
   split at h
   · split at h
@@ -72,8 +74,8 @@ theorem viewer_live {s : Site} {x : Viewer} {m : Member} {sid : Sid}
     · cases h
   · cases h
 
-theorem quiet_signIn (s : Site) (req : ReqId) (issuer subject name : String) :
-    Quiet (s.signIn config req issuer subject name).2 := by
+theorem quiet_signIn (s : Site) (req : ReqId) (issuer subject name : String) (at_s : Nat) :
+    Quiet (s.signIn config req issuer subject name at_s).2 := by
   unfold signIn
   split
   · exact quiet_answer rfl
@@ -81,9 +83,9 @@ theorem quiet_signIn (s : Site) (req : ReqId) (issuer subject name : String) :
     · exact quiet_answer rfl
     · exact quiet_answer rfl
 
-theorem quiet_withSession {s : Site} {req : ReqId} {m : Member} {session : Sid}
-    {f : Viewer → Site × List Out} (hf : ∀ v, Quiet (f v).2) :
-    Quiet (s.withSession req m session f).2 := by
+theorem quiet_withSession {s : Site} {life : Auth.Lifetime} {at_s : Nat} {req : ReqId}
+    {m : Member} {session : Sid} {f : Viewer → Site × List Out} (hf : ∀ v, Quiet (f v).2) :
+    Quiet (s.withSession life at_s req m session f).2 := by
   unfold withSession
   split
   · exact hf _
@@ -201,9 +203,9 @@ theorem quiet_recover (s : Site) : Quiet (s.recover config).2 := by
   · cases hv; rfl
   · cases hv
 
-theorem shows_watch (s : Site) (req : ReqId) (viewer : Viewer) (v : VideoId) (at_s : Nat)
-    (hviewer : ∀ m sid, viewer = some (m, sid) → s.live m sid = true) :
-    ∀ o ∈ (s.watch req viewer v at_s).2, s.Shows o := by
+theorem shows_watch (s : Site) (life : Auth.Lifetime) (req : ReqId) (viewer : Viewer)
+    (v : VideoId) (at_s : Nat) (hviewer : ∀ m sid, viewer = some (m, sid) → s.accepts life at_s m sid = true) :
+    ∀ o ∈ (s.watch req viewer v at_s).2, s.Shows life at_s o := by
   unfold watch
   dsimp only
   split
@@ -231,8 +233,8 @@ theorem shows_watch (s : Site) (req : ReqId) (viewer : Viewer) (v : VideoId) (at
     · exact fun o ho => shows_of_cards (by simp [answer] at ho; subst ho; rfl)
   · exact fun o ho => shows_of_cards (by simp [answer] at ho; subst ho; rfl)
 
-theorem shows_feed (s : Site) (req : ReqId) (viewer : Viewer) (before : Option VideoId) :
-    ∀ o ∈ (s.feed config req viewer before).2, s.Shows o := by
+theorem shows_feed (s : Site) (life : Auth.Lifetime) (at_s : Nat) (req : ReqId) (viewer : Viewer)
+    (before : Option VideoId) : ∀ o ∈ (s.feed config req viewer before).2, s.Shows life at_s o := by
   unfold feed
   intro o ho c hc
   simp only [answer, List.mem_singleton] at ho
@@ -243,9 +245,10 @@ theorem shows_feed (s : Site) (req : ReqId) (viewer : Viewer) (before : Option V
   simp only [Video.listed, Bool.and_eq_true, beq_iff_eq] at hw'
   exact ⟨w, hw'.1, rfl, hw'.2.1.1, fun hp => by simp [hp] at hw'⟩
 
-theorem shows_channel (s : Site) (req : ReqId) (viewer : Viewer) (whose : Member)
-    (hviewer : ∀ m sid, viewer = some (m, sid) → s.live m sid = true) :
-    ∀ o ∈ (s.channel req viewer whose).2, s.Shows o := by
+theorem shows_channel (s : Site) (life : Auth.Lifetime) (at_s : Nat) (req : ReqId)
+    (viewer : Viewer) (whose : Member)
+    (hviewer : ∀ m sid, viewer = some (m, sid) → s.accepts life at_s m sid = true) :
+    ∀ o ∈ (s.channel req viewer whose).2, s.Shows life at_s o := by
   unfold channel
   split
   · intro o ho c hc
@@ -274,18 +277,19 @@ theorem shows_channel (s : Site) (req : ReqId) (viewer : Viewer) (whose : Member
       · simp [Video.listed, hp] at hshown
   · exact fun o ho => shows_of_cards (by simp [answer] at ho; subst ho; rfl)
 
-theorem shows_request (s : Site) (c : Command) : ∀ o ∈ (s.request config c).2, s.Shows o := by
-  have quiet {outs : List Out} (h : Quiet outs) : ∀ o ∈ outs, s.Shows o :=
+theorem shows_request (s : Site) (c : Command) (at_s : Nat) :
+    ∀ o ∈ (s.request config c at_s).2, s.Shows config.lifetime at_s o := by
+  have quiet {outs : List Out} (h : Quiet outs) : ∀ o ∈ outs, s.Shows config.lifetime at_s o :=
     fun o ho => shows_of_cards (h o ho)
   cases c with
-  | signIn req issuer subject name => exact quiet (quiet_signIn config s req issuer subject name)
+  | signIn req issuer subject name => exact quiet (quiet_signIn config s req issuer subject name at_s)
   | signOut req m session => exact quiet (quiet_withSession fun _ => quiet_answer rfl)
-  | create req m session title about visibility media at_s =>
+  | create req m session title about visibility media =>
     exact quiet (quiet_withSession fun _ => quiet_create config _ _ _ _ _ _ _ _ _)
   | uploaded req m session v =>
     exact quiet (quiet_withSession fun _ => quiet_owned fun _ => quiet_uploaded config _ _ _ _)
-  | watch req viewer v at_s =>
-    exact shows_watch s req _ v at_s fun _ _ h => viewer_live h
+  | watch req viewer v =>
+    exact shows_watch s _ req _ v at_s fun _ _ h => viewer_accepts h
   | like req m session v on =>
     exact quiet (quiet_withSession fun _ => quiet_seen fun _ => quiet_like _ _ _ _ _ _)
   | comment req m session v body =>
@@ -294,17 +298,19 @@ theorem shows_request (s : Site) (c : Command) : ∀ o ∈ (s.request config c).
     exact quiet (quiet_withSession fun _ => quiet_seen fun _ => quiet_uncomment _ _ _ _ _ _)
   | delete req m session v =>
     exact quiet (quiet_withSession fun _ => quiet_owned fun _ => quiet_delete config _ _ _ _)
-  | feed req viewer before => exact shows_feed config s req _ before
-  | channel req viewer whose => exact shows_channel s req _ whose fun _ _ h => viewer_live h
+  | feed req viewer before => exact shows_feed config s _ _ req _ before
+  | channel req viewer whose => exact shows_channel s _ _ req _ whose fun _ _ h => viewer_accepts h
 
 /-- Every video an output shows is a ready video of the site, and a private one is shown only
-to its owner's live session. -/
-theorem shows_handle (s : Site) (i : Input) : ∀ o ∈ (s.handle config i).2, s.Shows o := by
+to a session of its owner that let the request in when it arrived. -/
+theorem shows_handle (s : Site) (i : Input) :
+    ∀ o ∈ (s.handle config i).2, s.Shows config.lifetime i.at_s o := by
   cases i with
-  | request c => exact shows_request config s c
+  | request c at_s => exact shows_request config s c at_s
   | store call reply => exact fun o ho => shows_of_cards (quiet_stored config s call reply o ho)
 
-theorem shows_recover (s : Site) : ∀ o ∈ (s.recover config).2, s.Shows o :=
+theorem shows_recover (s : Site) (at_s : Nat) :
+    ∀ o ∈ (s.recover config).2, s.Shows config.lifetime at_s o :=
   fun o ho => shows_of_cards (quiet_recover config s o ho)
 
 end Site

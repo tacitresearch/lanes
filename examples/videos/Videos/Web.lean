@@ -70,6 +70,9 @@ end Routes
 
 def sessionCookie : String := "videos_session"
 
+/-- The session cookie's name: `__Host-` before it over HTTPS, so no subdomain can set it. -/
+def Settings.cookieName (s : Settings) : String := hostCookie sessionCookie s.secure
+
 /-- The headers the server writes. One a client sends is dropped. -/
 def sessionHeader : String := "videos-verified-session"
 def arrivedHeader : String := "videos-arrived"
@@ -81,7 +84,7 @@ def sessionToken (s : Settings) (m : Member) (session : Sid) : String :=
   Auth.sign s.key "session" s!"{m}.{session}"
 
 def cookie (s : Settings) (value : String) : Cookie :=
-  { name := sessionCookie, value, secure := s.secure, sameSite := .lax }
+  { name := s.cookieName, value, secure := s.secure, sameSite := .lax }
 
 /-- What `arrive` does after the sign-in: the time the request arrived, in seconds. -/
 def stamp (now_s : Nat) (r : Http.Request) : Http.Request :=
@@ -89,7 +92,7 @@ def stamp (now_s : Nat) (r : Http.Request) : Http.Request :=
 
 def prepare (s : Settings) (r : Http.Request) : Http.Request :=
   let kept := r.headers.filter fun (name, _) => name != "cookie" && name != sessionHeader
-  let session := (r.cookie? sessionCookie >>= Auth.verify s.key "session").map (sessionHeader, ·)
+  let session := (r.cookie? s.cookieName >>= Auth.verify s.key "session").map (sessionHeader, ·)
   { r with headers := kept ++ session.toList }
 
 def session? (r : Http.Request) : Option (Member × Sid) := do
@@ -259,7 +262,7 @@ def WatchPage (s : Settings) (viewer : Viewer) (view : View) (at_s : Nat) : Html
           <p>{r.body}</p>
           {match viewer with
             | some v =>
-              if v.1 == r.author then
+              if v.1 == r.author || mine then
                 <form method="post" action={Routes.uncomment.link (c.id, r.id, ())}>
                   {csrf s v}
                   <button type="submit">"Delete"</button>
@@ -309,7 +312,7 @@ def Message (s : Settings) (viewer : Viewer) (title text : String) : Html :=
 /-! ## The bridge -/
 
 def page (html : Html) (status : Nat := 200) : Http.Response :=
-  (Http.Response.html html.document status).noStore
+  (Http.Response.html html.document status).noStore.noFraming
 
 def forbidden : Http.Response := Http.Response.text "forbidden\n" 403
 
@@ -351,7 +354,7 @@ def createInput (id : ReqId) (r : Http.Request) (m : Member) (session : Sid) :
     if h' : About.valid (text "about") then
       match visibility? (text "visibility"), media? (text "media") with
       | some vis, some media =>
-        .ok (.request (.create id m session ⟨_, h⟩ ⟨_, h'⟩ vis media (arrived r)))
+        .ok (.request (.create id m session ⟨_, h⟩ ⟨_, h'⟩ vis media) (arrived r))
       | _, _ => bad "a visibility and a format are needed"
     else bad "a description is at most 2000 characters"
   else bad "a title is 1 to 100 characters"
@@ -359,17 +362,21 @@ def createInput (id : ReqId) (r : Http.Request) (m : Member) (session : Sid) :
 def commentInput (id : ReqId) (r : Http.Request) (m : Member) (session : Sid) (v : VideoId) :
     Except Http.Response Input :=
   let body := (r.field? "body").getD ""
-  if h : Remark.valid body then .ok (.request (.comment id m session v ⟨body, h⟩))
+  if h : Remark.valid body then .ok (.request (.comment id m session v ⟨body, h⟩) (arrived r))
   else bad "a comment is 1 to 500 characters"
 
-/-- The name a channel shows: what comes before the `@` of the address, since an identity carries
-no name of its own, and the whole address would be shown to everyone. -/
+/-- The name a channel shows: the provider's name for the member, which anyone may choose and the
+pages show as text; without one, what comes before the `@` of the address, since the whole
+address would be shown to everyone. -/
 def channelName (who : OAuth.Identity) : String :=
   let user := (who.email.getD "").takeWhile (· != '@') |>.toString
-  (if user.isEmpty then who.subject else user).take 40 |>.toString
+  let name := match who.name with
+    | some n => n.val
+    | none => if user.isEmpty then who.subject else user
+  name.take 40 |>.toString
 
 def decode (s : Settings) (id : ReqId) (r : Http.Request) : Except Http.Response Input :=
-  let ask (c : Command) : Except Http.Response Input := .ok (.request c)
+  let ask (c : Command) : Except Http.Response Input := .ok (.request c (arrived r))
   if !r.bodyWithin s.maxBody_bytes then .error (Http.Response.text "too large\n" 413)
   else
     (dispatch [
@@ -382,7 +389,7 @@ def decode (s : Settings) (id : ReqId) (r : Http.Request) : Except Http.Response
       Routes.create.handle fun () r => signedIn s r (createInput id r),
       Routes.uploaded.handle fun (v, ()) r => signedIn s r fun m session =>
         ask (.uploaded id m session v),
-      Routes.watch.handle fun v r => ask (.watch id (session? r) v (arrived r)),
+      Routes.watch.handle fun v r => ask (.watch id (session? r) v),
       Routes.like.handle fun (v, ()) r => signedIn s r fun m session => ask (.like id m session v true),
       Routes.unlike.handle fun (v, ()) r => signedIn s r fun m session =>
         ask (.like id m session v false),

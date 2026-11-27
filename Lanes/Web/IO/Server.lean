@@ -57,6 +57,9 @@ structure ServerConfig where
   inflight_max : Nat := 16
   /-- Connections open at once. One more is closed as soon as it is accepted. -/
   connections_max : Nat := 1024
+  /-- Requests whose `arrive` runs at once, each on a thread of its own; one more is answered
+  `503` before its work begins. -/
+  arriving_max : Nat := 64
   /-- How long a connection with nothing in flight is kept open for the next request. -/
   idle_ms : Nat := 10000
   head_ms : Nat := 10000
@@ -472,14 +475,21 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
       return none
     if admitted.isNone then answer busy
     return admitted
+  let arriving ← IO.mkRef (0 : Nat)
   let arrived (request : Request) (answer : Response → BaseIO Unit) : BaseIO Unit :=
     match arrive with
     | none => discard <| hand request answer
-    | some work => discard <| IO.asTask (prio := .dedicated) do
-      match ← (work request).toBaseIO with
-      | .ok (.ok request) => discard <| hand request answer
-      | .ok (.error response) => answer response
-      | .error _ => answer (.text "the request could not be prepared\n" 500)
+    | some work => do
+      let taken ← arriving.modifyGet fun n =>
+        if n < config.arriving_max then (true, n + 1) else (false, n)
+      unless taken do return ← answer busy
+      discard <| IO.asTask (prio := .dedicated) do
+        let done ← (work request).toBaseIO
+        arriving.modify (· - 1)
+        match done with
+        | .ok (.ok request) => discard <| hand request answer
+        | .ok (.error response) => answer response
+        | .error _ => answer (.text "the request could not be prepared\n" 500)
   let probe : BaseIO Ops.Probe := do
     let count ← server.connections.atomically (return (← get).count)
     return { recovered := ← runtime.hasRecovered, stopping := count.stopping

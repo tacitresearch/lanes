@@ -21,13 +21,16 @@ def client : Client :=
 
 def tests : List (String × Bool) :=
   let p := Google.provider
-  let seed : Seed := { state := ⟨#[1]⟩, nonce := ⟨#[2]⟩, verifier := ⟨#[3]⟩, binding := ⟨#[4]⟩ }
-  let (_, url, _) := begin {} p client {} 0 seed
+  let (url, _) := begin {} (.of ⟨#[0]⟩) p client 0 ⟨#[1]⟩
+  let user (issuer : String) : Identity := { issuer, subject := "1", email := some "u@gmail.com" }
   match Discovery.read discovery, p.source with
   | some d, .idToken issuers jwks =>
     [ ("google: the endpoints are those of the discovery document",
         d.authorize == p.authorize && d.token == p.token && d.jwks == jwks),
       ("google: its issuer is one the preset accepts", issuers.contains d.issuer),
+      ("google: a user has one key whichever of Google's two issuers the token names",
+        Identity.under issuers (user "accounts.google.com") == user d.issuer
+          && Identity.under issuers (user "https://accounts.google.com") == user d.issuer),
       ("google: it signs ID tokens with RS256, and takes S256 challenges",
         d.algs.contains "RS256" && d.challenges.contains "S256"),
       ("google: its JWK Set is read: RSA keys for RS256, each with a kid",

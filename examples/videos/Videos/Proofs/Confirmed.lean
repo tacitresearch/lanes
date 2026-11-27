@@ -79,9 +79,9 @@ theorem confirmed_setVideo {es : List Turn} {outs : List Out} {s : Site} {x : Vi
   · exact hx
   · exact h w' hw'
 
-theorem withSession_cases {s : Site} {req : ReqId} {m : Member} {session : Sid}
-    {f : Viewer → Site × List Out} {P : Site × List Out → Prop} (hs : ∀ l, P (s, l))
-    (hf : ∀ v, P (f v)) : P (s.withSession req m session f) := by
+theorem withSession_cases {s : Site} {life : Auth.Lifetime} {at_s : Nat} {req : ReqId}
+    {m : Member} {session : Sid} {f : Viewer → Site × List Out} {P : Site × List Out → Prop}
+    (hs : ∀ l, P (s, l)) (hf : ∀ v, P (f v)) : P (s.withSession life at_s req m session f) := by
   unfold withSession
   split
   · exact hf _
@@ -118,13 +118,14 @@ theorem keeps_same {es : List Turn} {outs : List Out} {s : Site} (h : Confirmed 
   fun w hw => by simpa using (h w hw).mono (es' := []) (outs' := l)
 
 theorem keeps_request (hc : config.Honest) {es : List Turn} {outs : List Out} {s : Site}
-    (h : Confirmed es outs s) (c : Command) : Keeps es outs (s.request config c) := by
+    (h : Confirmed es outs s) (c : Command) (at_s : Nat) :
+    Keeps es outs (s.request config c at_s) := by
   have same := keeps_same h
   have mono {l : List Out} : Confirmed es (outs ++ l) s := fun w hw => by
     simpa using (h w hw).mono (es' := []) (outs' := l)
   cases c with
   | signIn req issuer subject name =>
-    show Keeps es outs (s.signIn config req issuer subject name)
+    show Keeps es outs (s.signIn config req issuer subject name at_s)
     unfold signIn
     dsimp only
     split
@@ -134,7 +135,7 @@ theorem keeps_request (hc : config.Honest) {es : List Turn} {outs : List Out} {s
       · exact fun w hw => mono w hw
   | signOut req m session =>
     exact withSession_cases same fun _ => fun w hw => mono w hw
-  | create req m session title about visibility media at_s =>
+  | create req m session title about visibility media =>
     refine withSession_cases same fun _ => ?_
     unfold create
     split
@@ -155,8 +156,8 @@ theorem keeps_request (hc : config.Honest) {es : List Turn} {outs : List Out} {s
       · cases hst
         exact ⟨config.store_ms, List.mem_append_right _ (List.mem_append_right _ (by simp))⟩
       · cases hr
-  | watch req viewer v at_s =>
-    show Keeps es outs (s.watch req (s.viewer viewer) v at_s)
+  | watch req viewer v =>
+    show Keeps es outs (s.watch req (s.viewer config.lifetime at_s viewer) v at_s)
     intro w hw
     rw [watch_fst] at hw
     exact mono w hw
@@ -180,7 +181,7 @@ theorem keeps_request (hc : config.Honest) {es : List Turn} {outs : List Out} {s
       fun x hx => mono x (List.mem_filter.mp hx).1
   | feed req viewer before => exact same _
   | channel req viewer whose =>
-    show Keeps es outs (s.channel req (s.viewer viewer) whose)
+    show Keeps es outs (s.channel req (s.viewer config.lifetime at_s viewer) whose)
     intro w hw
     rw [channel_fst] at hw
     exact mono w hw
@@ -241,7 +242,7 @@ theorem confirmed_step (hc : config.Honest) {es : List Turn} {outs : List Out} {
   cases e with
   | inl i =>
     cases i with
-    | request c => exact keeps_request hc h' c
+    | request c at_s => exact keeps_request hc h' c at_s
     | store call reply => exact keeps_stored hc h' call reply (by simp)
   | inr _ => exact keeps_recover h'
 
@@ -268,7 +269,8 @@ theorem listed_confirmed (hc : config.Honest) (es : List Turn) (e : Turn) :
     ∀ o ∈ ((Site.run config {} es).1.step config e).2, ∀ c ∈ o.cards,
       ∃ call, Asked (Site.run config {} es).2 call c.id ∧ Found es call := by
   intro o ho c hc'
-  obtain ⟨w, hw, rfl, hready, -⟩ := shows_step config _ e o ho c hc'
+  obtain ⟨_, hshows⟩ := shows_step config _ e o ho
+  obtain ⟨w, hw, rfl, hready, -⟩ := hshows c hc'
   exact (confirmed_run hc es w hw).2 hready
 
 end Site

@@ -58,7 +58,7 @@ target sodium : FilePath := do
 
 @[default_target]
 lean_lib Lanes where
-  roots := #[`Lanes, `Lanes.Proofs, `Lanes.Semantics]
+  roots := #[`Lanes, `Lanes.Proofs, `Lanes.Semantics, `Lanes.Testing]
   moreLinkObjs := #[native, tls, verify, loop, sodium]
 
 @[default_target]
@@ -73,10 +73,16 @@ lean_exe lanesTest where
 lean_exe lanesCheck where
   root := `Tests.CheckMain
 
-/-- Differential tests against Go's standard library; needs `go` (`oracle/`). -/
+/-- The pure oracles (`oracles/README.md`): ours against reference implementations; needs `go` and `python3`. -/
 @[default_target]
 lean_exe lanesOracle where
   root := `Tests.OracleMain
+
+/-- The service oracles (`oracles/README.md`): our clients against real or reference services,
+checked against our models of them; each skipped unless its service is named. -/
+@[default_target]
+lean_exe lanesServiceOracle where
+  root := `Tests.ServiceMain
 
 lean_lib LanesCli where
   globs := #[.submodules `LanesCli]
