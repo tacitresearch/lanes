@@ -44,7 +44,11 @@ there.
     beside the object store's model, with its timeouts and crashes, where taking the browser's
     word for an upload is found; private videos, deletes, confirmed uploads and likes proved;
     tested over HTTP against a fake S3 through a restart. Lanes' V1 acceptance application.
-12. `raft-kv`, `ledger`, `rookery`: the serious systems below.
+12. `reminders`: reminders over HTTP, each a job of the scheduler (`Lanes.Schedule`) that posts
+    its text to a notification service at its time and retries it with a backoff until it is
+    taken, gives up or is cancelled; a periodic sweep held as one job however often it is
+    scheduled; through a restart on the journal.
+13. `raft-kv`, `ledger`, `rookery`: the serious systems below.
 
 | Feature | Where to see it |
 | --- | --- |
@@ -55,7 +59,8 @@ there.
 | Invariants under every fault (`Monotone`), ghosts | `election`, `ledger`, `raft-kv` |
 | Refinement to a spec (`System.Implements`, `System.Refines`) | `counter`, `kv-cache`, `ledger`, `raft-kv`, `rookery` |
 | A request takes effect once (`Once.actor`, `Service.once`) | `kv-cache`, `raft-kv` |
-| Fairness and liveness | `watchdog` |
+| Fairness and liveness | `watchdog`, `reminders` |
+| Work due later, retried with a backoff, periodic sweeps (`Schedule.attach`) | `reminders` |
 | A model of an external service: timeouts with unknown outcome, idempotency keys, webhooks (`Lanes/Outside/`) | `payments`, `videos` |
 | Files in S3: presigned uploads and downloads, `HEAD` and delete, the object store's model | `videos` |
 | A database: the store model, lost commits, PostgreSQL | `todo-db` |

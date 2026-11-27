@@ -215,7 +215,14 @@ def hastyFound (_ : Unit) : Option Nat :=
   | some (.violated "at most one attempt of an id is out at once" t) => some t.steps.length
   | _ => none
 
+/-- The jitter differs between ids and between attempts, and is the same at every replay. -/
+def jitterSpreads : Bool :=
+  hashJitter 0 1 != hashJitter 1 1 && hashJitter 0 1 != hashJitter 0 2
+    && hashJitter (7 : Nat) 3 == hashJitter (7 : Nat) 3
+
 def tests : List (String × Bool) :=
+  ("schedule: the hashed jitter differs between ids and attempts, the same at every replay",
+    jitterSpreads) ::
   let main := check mixed (more := mixedWitnesses)
   let crowd := check crowded (more := crowdedWitnesses)
   let cancel := check cancelling (more := cancelWitness)

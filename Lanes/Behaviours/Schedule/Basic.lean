@@ -470,7 +470,7 @@ def touch (config : Config K P A) (s : State K P) (key : K) (act : Act A) :
     (⟨c.now_ms, set s.jobs key c.job⟩, c.effs)
   | none => (s, [])
 
-def admit (config : Config K P A) (s : State K P) (now_ms : Nat) (spec : Spec K P) :
+def enroll (config : Config K P A) (s : State K P) (now_ms : Nat) (spec : Spec K P) :
     State K P × List (Eff K P A) :=
   let now_ms := max s.now_ms now_ms
   if spec.key ∈ keys s.jobs then (⟨now_ms, s.jobs⟩, [.emit (.answer spec.key .already)])
@@ -483,7 +483,7 @@ def admit (config : Config K P A) (s : State K P) (now_ms : Nat) (spec : Spec K 
       [.emit (.answer spec.key .scheduled), .after (spec.at_ms - now_ms) (.due spec.key)])
 
 def step (config : Config K P A) (s : State K P) : Schedule.Msg K P A → State K P × List (Eff K P A)
-  | .schedule now_ms spec => admit config s now_ms spec
+  | .schedule now_ms spec => enroll config s now_ms spec
   | .cancel key => touch config s key .cancel
   | .reply key attempt reply => touch config s key (.reply attempt reply)
   | .due key => touch config s key .due

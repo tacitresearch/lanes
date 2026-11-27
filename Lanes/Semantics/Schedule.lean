@@ -96,7 +96,7 @@ theorem not_arms {s : State K P} {j : Job K P} (hj : entry s.jobs j.key = some j
   rcases step_cases (config := config) (s := s) msg with
     ⟨now_ms, spec, rfl⟩ | ⟨_, _, _, _, hs⟩ | ⟨key', act, j', rfl, hj', hs⟩
   · rw [step_schedule] at hd
-    obtain ⟨-, ⟨-, o, he⟩ | ⟨hnew, -, -, he⟩⟩ := admit_cases (config := config) (s := s) now_ms spec
+    obtain ⟨-, ⟨-, o, he⟩ | ⟨hnew, -, -, he⟩⟩ := enroll_cases (config := config) (s := s) now_ms spec
     · simp [he] at hd
     · simp only [he, List.mem_cons, Effect.after.injEq, List.not_mem_nil, or_false,
         reduceCtorEq, false_or] at hd
@@ -329,7 +329,7 @@ theorem every_step {s : State K P} {key : K} {j : Job K P} (hj : entry s.jobs ke
       · cases act <;> simp [Act.msg] at h
     · rw [step_schedule] at hd
       obtain ⟨-, ⟨-, o, he⟩ | ⟨hnew, -, -, he⟩⟩ :=
-        admit_cases (config := config) (s := s) now_ms spec
+        enroll_cases (config := config) (s := s) now_ms spec
       · simp [he] at hd
       · simp only [he, List.mem_cons, Effect.after.injEq, List.not_mem_nil, or_false,
           reduceCtorEq, false_or] at hd

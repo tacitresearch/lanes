@@ -391,20 +391,20 @@ section Step
 
 variable {config : Config K P A} {s : State K P}
 
-/-- The job a scheduling makes, if it admits one. -/
+/-- The job a scheduling makes, if it takes one. -/
 def Spec.job (spec : Spec K P) : Job K P := ⟨spec.key, spec.payload, spec.work, spec.at_ms, 0, .waiting⟩
 
 /-- A scheduling leaves the jobs held as they are, and adds a job under an id not held, with an
 answer and its timer. -/
-theorem admit_cases (now_ms : Nat) (spec : Spec K P) :
-    (admit config s now_ms spec).1.now_ms = max s.now_ms now_ms ∧
-    (((admit config s now_ms spec).1.jobs = s.jobs ∧
-        ∃ o, (admit config s now_ms spec).2 = [.emit (.answer spec.key o)]) ∨
+theorem enroll_cases (now_ms : Nat) (spec : Spec K P) :
+    (enroll config s now_ms spec).1.now_ms = max s.now_ms now_ms ∧
+    (((enroll config s now_ms spec).1.jobs = s.jobs ∧
+        ∃ o, (enroll config s now_ms spec).2 = [.emit (.answer spec.key o)]) ∨
       (spec.key ∉ keys s.jobs ∧ s.jobs.length < config.maxJobs ∧
-        (admit config s now_ms spec).1.jobs = spec.job :: s.jobs ∧
-        (admit config s now_ms spec).2 = [.emit (.answer spec.key .scheduled),
+        (enroll config s now_ms spec).1.jobs = spec.job :: s.jobs ∧
+        (enroll config s now_ms spec).2 = [.emit (.answer spec.key .scheduled),
           .after (spec.at_ms - max s.now_ms now_ms) (.due spec.key)])) := by
-  simp only [admit]
+  simp only [enroll]
   split
   · exact ⟨rfl, .inl ⟨rfl, _, rfl⟩⟩
   · split
@@ -414,7 +414,7 @@ theorem admit_cases (now_ms : Nat) (spec : Spec K P) :
       · exact ⟨rfl, .inr ⟨‹_›, by omega, rfl, rfl⟩⟩
 
 theorem step_schedule (now_ms : Nat) (spec : Spec K P) :
-    step config s (.schedule now_ms spec) = admit config s now_ms spec := rfl
+    step config s (.schedule now_ms spec) = enroll config s now_ms spec := rfl
 
 /-- A step about the job held under `key` is its act on that job; any other leaves the job as it
 is. -/
@@ -431,7 +431,7 @@ theorem step_key {key : K} {j : Job K P} (hj : entry s.jobs key = some j)
     rename_i now_ms spec
     refine .inl ⟨?_, fun act => by cases act <;> simp [Act.msg]⟩
     rw [step_schedule]
-    obtain ⟨-, h | h⟩ := admit_cases (config := config) (s := s) now_ms spec
+    obtain ⟨-, h | h⟩ := enroll_cases (config := config) (s := s) now_ms spec
     · rw [h.1]
       exact hj
     · rw [h.2.2.1, entry_cons_of_ne _ _ (fun he => h.1 (by rw [show spec.key = key from he]; exact hheld))]
@@ -475,7 +475,7 @@ theorem step_runs (config : Config K P A) (s : State K P) (msg : Schedule.Msg K 
   rcases step_cases (config := config) (s := s) msg with
     ⟨now_ms, spec, rfl⟩ | ⟨_, _, _, _, h⟩ | ⟨_, _, _, _, _, h⟩
   · rw [step_schedule]
-    obtain ⟨-, ⟨-, o, h⟩ | ⟨-, -, -, h⟩⟩ := admit_cases (config := config) (s := s) now_ms spec <;>
+    obtain ⟨-, ⟨-, o, h⟩ | ⟨-, -, -, h⟩⟩ := enroll_cases (config := config) (s := s) now_ms spec <;>
       simp [h, Effect.isStop]
   · simp [h]
   · simpa [h] using onJob_runs
@@ -489,7 +489,7 @@ theorem now_le_step (config : Config K P A) (s : State K P) (msg : Schedule.Msg 
     s.now_ms ≤ (step config s msg).1.now_ms := by
   rcases step_cases (config := config) (s := s) msg with
     ⟨now_ms, spec, rfl⟩ | ⟨_, _, _, _, h⟩ | ⟨_, _, _, _, _, h⟩
-  · rw [step_schedule, (admit_cases (config := config) (s := s) now_ms spec).1]
+  · rw [step_schedule, (enroll_cases (config := config) (s := s) now_ms spec).1]
     omega
   · simp [h]
   · simpa [h] using onJob_now
@@ -512,7 +512,7 @@ theorem within_step (config : Config K P A) {s : State K P} (msg : Schedule.Msg 
     ⟨now_ms, spec, rfl⟩ | ⟨_, _, _, _, hs⟩ | ⟨key, act, j, _, hj, hs⟩
   · rw [step_schedule]
     obtain ⟨-, ⟨hjobs, -⟩ | ⟨hnew, hroom, hjobs, -⟩⟩ :=
-      admit_cases (config := config) (s := s) now_ms spec
+      enroll_cases (config := config) (s := s) now_ms spec
     · unfold State.Within
       rw [hjobs]
       exact h
@@ -528,7 +528,7 @@ theorem attempts_step (config : Config K P A) {s : State K P} (msg : Schedule.Ms
   rcases step_cases (config := config) (s := s) msg with
     ⟨now_ms, spec, rfl⟩ | ⟨_, _, _, _, hs⟩ | ⟨key, act, j, _, hj, hs⟩
   · rw [step_schedule]
-    obtain ⟨-, ⟨hjobs, -⟩ | ⟨-, -, hjobs, -⟩⟩ := admit_cases (config := config) (s := s) now_ms spec
+    obtain ⟨-, ⟨hjobs, -⟩ | ⟨-, -, hjobs, -⟩⟩ := enroll_cases (config := config) (s := s) now_ms spec
     · unfold State.Attempts
       rw [hjobs]
       exact h
@@ -574,7 +574,7 @@ theorem dispatch_due {msg : Schedule.Msg K P A} {a : Attempt K P}
   rcases step_cases (config := config) (s := s) msg with
     ⟨now_ms, spec, rfl⟩ | ⟨_, _, _, _, hs⟩ | ⟨key, act, j, rfl, hj, hs⟩
   · rw [step_schedule] at h
-    obtain ⟨-, ⟨-, o, he⟩ | ⟨-, -, -, he⟩⟩ := admit_cases (config := config) (s := s) now_ms spec <;>
+    obtain ⟨-, ⟨-, o, he⟩ | ⟨-, -, -, he⟩⟩ := enroll_cases (config := config) (s := s) now_ms spec <;>
       simp [he] at h
   · simp [hs] at h
   · rw [hs] at h ⊢
@@ -637,7 +637,7 @@ theorem armed_step (config : Config K P A) {s : State K P} {timers : List (Sched
       unfold timer
       split <;> simp
     rw [step_schedule]
-    obtain ⟨-, ⟨hjobs, o, he⟩ | ⟨-, -, hjobs, he⟩⟩ := admit_cases (config := config) (s := s) now_ms spec
+    obtain ⟨-, ⟨hjobs, o, he⟩ | ⟨-, -, hjobs, he⟩⟩ := enroll_cases (config := config) (s := s) now_ms spec
     · intro b hb
       rw [hjobs] at hb
       rw [he]
@@ -803,7 +803,7 @@ private theorem owed_step (key : K) {s : State K P} (h : s.Attempts config)
     ⟨now_ms, spec, rfl⟩ | ⟨_, _, rfl, _, hs⟩ | ⟨key', act, j, rfl, hj, hs⟩
   · rw [step_schedule]
     obtain ⟨-, ⟨hjobs, o, he⟩ | ⟨hnew, -, hjobs, he⟩⟩ :=
-      admit_cases (config := config) (s := s) now_ms spec
+      enroll_cases (config := config) (s := s) now_ms spec
     · simp [he, rest, hjobs, Effect.emits, isCall]
     · simp only [he, rest, hjobs, Effect.emits, List.filterMap_cons, List.filterMap_nil,
         List.countP_cons, List.countP_nil, isCall, Bool.false_eq_true, ↓reduceIte]
