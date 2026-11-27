@@ -2,7 +2,7 @@
 # shellcheck shell=bash
 
 # Every server, in the order run.sh runs them.
-ALL_SERVERS=(go1 go tcp std std-unlimited lanes lanes-journal lanes-snapshot)
+ALL_SERVERS=(go1 go tcp tcp-park std std-unlimited lanes lanes-journal lanes-snapshot)
 
 # Sets SERVER to the command that runs server <name> on <port>, keeping any journal in <dir>.
 # shellcheck disable=SC2034
@@ -12,6 +12,7 @@ server_argv() {
     go1) SERVER=(env GOMAXPROCS=1 .build/hello -port "$port") ;;
     go) SERVER=(.build/hello -port "$port") ;;
     tcp) SERVER=("$bin/benchTcp" "$port") ;;
+    tcp-park) SERVER=("$bin/benchTcp" "$port" park) ;;
     std) SERVER=("$bin/benchStd" "$port") ;;
     std-unlimited) SERVER=("$bin/benchStd" "$port" 1000000000) ;;
     lanes) SERVER=("$bin/benchLanes" "$port") ;;

@@ -424,6 +424,28 @@ def afterRestartTest : Async (List (String × Bool)) := do
     ("timers: one armed after a restart on a journal is due after its own delay", fired.isSome),
     ("durable: a shard whose journal has failed takes nothing more while it ends", !accepted) ]
 
+/-- A parker: an `unpark` before the `park` is kept, a timed park ends, a task and an `Async`
+are waited for on one. -/
+def parkerTest : IO (List (String × Bool)) := do
+  let p ← Parker.new
+  p.unpark
+  let t0 ← IO.monoMsNow
+  p.park
+  let kept := (← IO.monoMsNow) - t0 < 1000
+  let t1 ← IO.monoMsNow
+  p.parkAtMost 50
+  let timed := (← IO.monoMsNow) - t1
+  let later ← IO.asTask (do IO.sleep 30; return 7)
+  let waited ← Parker.wait later
+  let blocked ← Lanes.block (do Async.sleep 20; return 8 : Async Nat)
+  let failed ← (Lanes.block (throw (IO.userError "no") : Async Nat)).toBaseIO
+  return [
+    ("parker: an unpark before the park is kept", kept),
+    ("parker: a park of at most 50 ms ends, and not long before", 40 ≤ timed && timed < 2000),
+    ("parker: a task is waited for on a parker", waited matches .ok 7),
+    ("parker: an Async is blocked on with a parker, its error thrown",
+      blocked == 8 && failed matches .error _) ]
+
 def tests : IO (List (String × Bool)) := do
   let a ← flakyTest.block
   let b ← bankTest.block
@@ -436,6 +458,6 @@ def tests : IO (List (String × Bool)) := do
   let i ← outputsTest.block
   let j ← busyStopTest.block
   return a ++ b ++ c ++ d ++ e ++ f ++ g ++ h ++ i ++ j ++ (← dutiesTest.block)
-    ++ (← afterRestartTest.block)
+    ++ (← afterRestartTest.block) ++ (← parkerTest)
 
 end Tests.Runtime

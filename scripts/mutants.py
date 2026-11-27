@@ -73,14 +73,16 @@ MUTANTS = [
      "    try onOutput out\n    catch e => IO.eprintln s!\"lanes: output handler failed: {e}\"",
      "    onOutput out"),
     ("runtime: the journal is closed before the inbox", "Lanes/Actors/Runtime.lean",
-     """  for wake in ← rt.inbox.modifyGet Mailbox.close do wake.resolve ()
+     """  for w in ← rt.inbox.modifyGet Mailbox.close do rt.wake w
   discard <| rt.inbox.modifyGet Mailbox.take
   if let some log := journal then discard log.close.toBaseIO
 """,
      """  if let some log := journal then discard log.close.toBaseIO
-  for wake in ← rt.inbox.modifyGet Mailbox.close do wake.resolve ()
+  for w in ← rt.inbox.modifyGet Mailbox.close do rt.wake w
   discard <| rt.inbox.modifyGet Mailbox.take
 """),
+    ("runtime: the shard sleeps past its next timer", "Lanes/Actors/Runtime.lean",
+     "    | .for_ms ms => rt.parker.parkAtMost ms", "    | .for_ms ms => rt.parker.parkAtMost (ms + 3000)"),
     ("runtime: an inbox of no capacity takes nothing", "Lanes/Actors/Runtime.lean",
      "  max 1 rt.config.inboxCapacity", "  rt.config.inboxCapacity"),
     ("courier: no rest after a process could not be reached", "Lanes/Actors/Courier.lean",
@@ -105,19 +107,18 @@ MUTANTS = [
      "Lanes/Env/Http.lean", "    let request := prepare request\n", ""),
     ("http: serve names its journal by the application alone, so an old gate's is read",
      "Lanes/Env/Http.lean", "system := config.journalName", "system := config.system"),
-    ("http: a connection's deadline is never waited for", "Lanes/Env/Http.lean",
-     "    if let some t := conn.deadline config.conn then",
-     "    if let some t := (none : Option Nat) then"),
+    ("http: a connection's deadline is never acted on", "Lanes/Env/Http.lean",
+     "        if t ≤ now then c.tell .alarm", "        if t ≤ now && false then c.tell .alarm"),
     ("http: every answer goes to the first request of its connection", "Lanes/Env/Http.lean",
-     "discard <| inbox.trySend (.answered seq r)", "discard <| inbox.trySend (.answered 0 r)"),
+     "tell ctx line false (.conn (.answered seq r))", "tell ctx line false (.conn (.answered 0 r))"),
     ("http: no bound on connections", "Lanes/Env/Http.lean",
      "c.count.admit config.connections_max", "c.count.admit (config.connections_max + 1)"),
     ("http: a connection is closed at once, with what the client still sends unread",
      "Lanes/Env/Http.lean",
-     "  try socket.shutdown catch _ => pure ()\n  background do",
-     "  socket.close\n  background do"),
+     "    try socket.shutdown catch _ => pure ()\n    let drain",
+     "    socket.close\n    let drain"),
     ("http: stop does not tell the open connections", "Lanes/Env/Http.lean",
-     "  for (_, c) in alive do discard <| c.inbox.trySend .stop", "  for (_, _) in alive do pure ()"),
+     "  for (_, c) in alive do c.tell (.conn .stop)", "  for (_, _) in alive do pure ()"),
     ("http: what the connection asks for is done last first", "Lanes/Env/Http.lean",
      "  let mut todo := actions\n", "  let mut todo := actions.reverse\n"),
     ("http client: no deadline", "Lanes/Env/HttpClient.lean",
