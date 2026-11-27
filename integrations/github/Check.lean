@@ -23,11 +23,24 @@ def emails : Json := parse "[{\"email\":\"old@example.com\",\"verified\":true,\"
 def unverified : Json := parse "[{\"email\":\"octocat@github.com\",\"verified\":false,\
   \"primary\":true,\"visibility\":\"public\"}]"
 
+/-- The name `read` gives the answers. -/
+def shown (answers : List Json) : Option String :=
+  ((GitHub.read answers).toOption.bind (·.name)).map (·.val)
+
+def long : String := String.ofList (List.replicate 100 'x')
+
 def tests : List (String × Bool) :=
   [ ("github: the user is GitHub's number for them, with the primary address, verified",
       (GitHub.read [user, emails]).toOption == some {
         issuer := "https://github.com", subject := "1", email := some "octocat@github.com",
-        emailVerified := true }),
+        emailVerified := true, name := DisplayName.of? "monalisa octocat" }),
+    ("github: with no name, the login is the name shown",
+      shown [parse "{\"login\":\"octocat\",\"id\":1,\"name\":null}", emails] == some "octocat"),
+    ("github: a name is cleaned and cut to its bound, and a blank one gives the login",
+      shown [parse "{\"login\":\"o\",\"id\":1,\"name\":\"  a\\u0000b\\u202ec  \"}", emails] == some "abc"
+        && (shown [parse s!"\{\"login\":\"o\",\"id\":1,\"name\":\"{long}\"}", emails]).map (·.length)
+          == some DisplayName.maxChars
+        && shown [parse "{\"login\":\"o\",\"id\":1,\"name\":\" \"}", emails] == some "o"),
     ("github: an address GitHub has not verified is said to be unverified",
       (GitHub.read [user, unverified]).toOption.any fun id => !id.emailVerified),
     ("github: no primary address is no address",

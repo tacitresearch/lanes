@@ -41,7 +41,7 @@ import tempfile
 
 MUTANTS = [
     ("runtime: nothing handed over again after a restart", "Lanes/Runtime/IO/Shell.lean",
-     "  handOver outputs\n  let since := start.clock_ms", "  let since := start.clock_ms"),
+     "  handOver outputs\n  rt.recovered.set true", "  rt.recovered.set true"),
     ("runtime: the outputs an older version had not handed over are dropped at a migration",
      "Lanes/Runtime/IO/Shell.lean", "    deliver log.pending\n", ""),
     ("journal: a migration is not written", "Lanes/Durable/IO/Journal.lean",
@@ -318,7 +318,8 @@ MUTANTS = [
      "          let (u, claimed) := u.claim limit later t\n          (claimed, u)",
      "          let (_, claimed) := u.claim limit later t\n          (claimed, u)"),
     ("server: the work a request needs before it enters is not done", "Lanes/Web/IO/Server.lean",
-     "      | .ok (.ok request) => hand request answer", "      | .ok (.ok _) => hand request answer"),
+     "        | .ok (.ok request) => discard <| hand request answer",
+     "        | .ok (.ok _) => discard <| hand request answer"),
     ("libsodium: the comparison reads only the first byte", "native/lanes.c",
      "sodium_memcmp(lean_sarray_cptr(a), lean_sarray_cptr(b), size) == 0",
      "sodium_memcmp(lean_sarray_cptr(a), lean_sarray_cptr(b), size != 0) == 0"),

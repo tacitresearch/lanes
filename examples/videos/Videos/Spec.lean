@@ -157,13 +157,12 @@ lanes_data inductive Command where
   /-- The sign-in verified this identity (`Lanes.OAuth`). -/
   | signIn (req : ReqId) (issuer subject name : String)
   | signOut (req : ReqId) (member : Member) (session : Sid)
-  /-- `at_s` is when the request arrived, in seconds since the epoch: the upload link is
-  signed for it. -/
+  /-- The upload link is signed for the time the request arrived. -/
   | create (req : ReqId) (member : Member) (session : Sid) (title : {s : String // Title.valid s})
-    (about : {s : String // About.valid s}) (visibility : Visibility) (media : Media) (at_s : Nat)
+    (about : {s : String // About.valid s}) (visibility : Visibility) (media : Media)
   /-- The browser says the upload is done. -/
   | uploaded (req : ReqId) (member : Member) (session : Sid) (video : VideoId)
-  | watch (req : ReqId) (viewer : Option (Member × Sid)) (video : VideoId) (at_s : Nat)
+  | watch (req : ReqId) (viewer : Option (Member × Sid)) (video : VideoId)
   /-- `on` to like, off to take the like back. -/
   | like (req : ReqId) (member : Member) (session : Sid) (video : VideoId) (on : Bool)
   | comment (req : ReqId) (member : Member) (session : Sid) (video : VideoId)
@@ -177,10 +176,18 @@ lanes_data inductive Command where
   deriving DecidableEq, Repr, Hashable, Codable
 
 lanes_data inductive Input where
-  | request (c : Command)
+  /-- A request, and when it arrived, in seconds since the epoch: the server's clock, which
+  `arrive` writes (`Web.stamp`), so it is in the journal and the same on replay. A session is
+  judged at that time, and links are signed for it. -/
+  | request (c : Command) (at_s : Nat)
   /-- The store's answer to `call`, or `unknown` at its deadline. -/
   | store (call : Nat) (reply : Rpc.Reply StoreAnswer)
   deriving DecidableEq, Repr, Hashable, Codable
+
+/-- When an input arrived: a request's time; a store's answer carries none. -/
+def Input.at_s : Input → Nat
+  | .request _ at_s => at_s
+  | .store .. => 0
 
 /-- A video as a list shows it. -/
 lanes_data structure Card where
@@ -248,6 +255,9 @@ lanes_data inductive Out where
 structure Config where
   maxMembers : Nat := 10000
   maxSessions : Nat := 4
+  /-- How long a session lets requests in after its sign-in. The site does not record each use
+  (`Auth.Sessions.touch`), so an idle limit would count from the sign-in too. -/
+  lifetime : Auth.Lifetime := { absolute_s := some (30 * 86400) }
   maxVideos : Nat := 10000
   /-- Videos of one member, ready or not. -/
   maxOwned : Nat := 100
@@ -276,9 +286,13 @@ def name (s : Site) (m : Member) : String := ((s.channel? m).map (·.name)).getD
 def live (s : Site) (m : Member) (session : Sid) : Bool :=
   ((s.channel? m).map (·.sessions.live session)).getD false
 
-/-- The member and session a request names, if that session is live. -/
-def viewer (s : Site) : Viewer → Viewer
-  | some (m, session) => if s.live m session then some (m, session) else none
+/-- Whether `m`'s `session` lets in a request that arrived at `at_s`: open, and not over then. -/
+def accepts (s : Site) (life : Auth.Lifetime) (at_s : Nat) (m : Member) (session : Sid) : Bool :=
+  ((s.channel? m).map (·.sessions.accepts life session at_s)).getD false
+
+/-- The member and session a request of `at_s` names, if that session lets it in. -/
+def viewer (s : Site) (life : Auth.Lifetime) (at_s : Nat) : Viewer → Viewer
+  | some (m, session) => if s.accepts life at_s m session then some (m, session) else none
   | none => none
 
 def find? (s : Site) (v : VideoId) : Option Video := s.videos.find? (·.id == v)
@@ -314,9 +328,10 @@ namespace Site
 
 variable (config : Config)
 
-def signIn (s : Site) (req : ReqId) (issuer subject name : String) : Site × List Out :=
+/-- A sign-in at `at_s`: the member's sessions over by then are swept, and one is opened. -/
+def signIn (s : Site) (req : ReqId) (issuer subject name : String) (at_s : Nat) : Site × List Out :=
   let start (m : Member) (ch : Channel) : Site × List Out :=
-    let (sessions, _) := ch.sessions.start config.maxSessions req
+    let (sessions, _) := ch.sessions.start config.maxSessions req at_s config.lifetime
     ({ s with channels := (m, { ch with name, sessions }) :: s.channels.filter (·.1 != m) },
       answer req (some (m, req)) (.signedIn m req))
   match s.channels.find? fun (_, ch) => ch.issuer == issuer && ch.subject == subject with
@@ -325,10 +340,10 @@ def signIn (s : Site) (req : ReqId) (issuer subject name : String) : Site × Lis
     if config.maxMembers ≤ s.channels.length then (s, answer req none .full)
     else start s.channels.length { issuer, subject, name }
 
-/-- `f`, for a live session of `m`. -/
-def withSession (s : Site) (req : ReqId) (m : Member) (session : Sid)
-    (f : Viewer → Site × List Out) : Site × List Out :=
-  if s.live m session then f (some (m, session)) else (s, answer req none .noSession)
+/-- `f`, for a session of `m` that lets in a request of `at_s`. -/
+def withSession (s : Site) (life : Auth.Lifetime) (at_s : Nat) (req : ReqId) (m : Member)
+    (session : Sid) (f : Viewer → Site × List Out) : Site × List Out :=
+  if s.accepts life at_s m session then f (some (m, session)) else (s, answer req none .noSession)
 
 /-- `f`, for a video of `m`'s. -/
 def owned (s : Site) (req : ReqId) (viewer : Viewer) (m : Member) (v : VideoId)
@@ -439,28 +454,30 @@ def channel (s : Site) (req : ReqId) (viewer : Viewer) (whose : Member) : Site �
   | some ch => (s, answer req viewer (.channel whose ch.name (shown.map s.card) waiting))
   | none => (s, answer req viewer .notFound)
 
-def request (s : Site) : Command → Site × List Out
-  | .signIn req issuer subject name => s.signIn config req issuer subject name
-  | .signOut req m session => s.withSession req m session fun _ =>
+def request (s : Site) (c : Command) (at_s : Nat) : Site × List Out :=
+  let life := config.lifetime
+  match c with
+  | .signIn req issuer subject name => s.signIn config req issuer subject name at_s
+  | .signOut req m session => s.withSession life at_s req m session fun _ =>
     ({ s with channels := s.channels.map fun (n, ch) =>
         (n, if n = m then { ch with sessions := ch.sessions.close session } else ch) },
       answer req none .signedOut)
-  | .create req m session title about visibility media at_s =>
-    s.withSession req m session fun viewer =>
+  | .create req m session title about visibility media =>
+    s.withSession life at_s req m session fun viewer =>
       s.create config req viewer m title about visibility media at_s
-  | .uploaded req m session v => s.withSession req m session fun viewer =>
+  | .uploaded req m session v => s.withSession life at_s req m session fun viewer =>
     s.owned req viewer m v (s.uploaded config req viewer)
-  | .watch req viewer v at_s => s.watch req (s.viewer viewer) v at_s
-  | .like req m session v on => s.withSession req m session fun viewer =>
+  | .watch req viewer v => s.watch req (s.viewer life at_s viewer) v at_s
+  | .like req m session v on => s.withSession life at_s req m session fun viewer =>
     s.seen req viewer m v fun video => s.like req viewer m video on
-  | .comment req m session v body => s.withSession req m session fun viewer =>
+  | .comment req m session v body => s.withSession life at_s req m session fun viewer =>
     s.seen req viewer m v fun video => s.comment config req viewer m video body
-  | .uncomment req m session v c => s.withSession req m session fun viewer =>
+  | .uncomment req m session v c => s.withSession life at_s req m session fun viewer =>
     s.seen req viewer m v fun video => s.uncomment req viewer m video c
-  | .delete req m session v => s.withSession req m session fun viewer =>
+  | .delete req m session v => s.withSession life at_s req m session fun viewer =>
     s.owned req viewer m v (s.delete config req viewer)
-  | .feed req viewer before => s.feed config req (s.viewer viewer) before
-  | .channel req viewer whose => s.channel req (s.viewer viewer) whose
+  | .feed req viewer before => s.feed config req (s.viewer life at_s viewer) before
+  | .channel req viewer whose => s.channel req (s.viewer life at_s viewer) whose
 
 /-- The store's answer to a check of `video`, which `waiter` waits for. -/
 def checked (s : Site) (video : Video) (waiter : ReqId) (reply : Rpc.Reply StoreAnswer) :
@@ -504,7 +521,7 @@ def stored (s : Site) (call : Nat) (reply : Rpc.Reply StoreAnswer) : Site × Lis
     | none => (s, [])
 
 def handle (s : Site) : Input → Site × List Out
-  | .request c => s.request config c
+  | .request c at_s => s.request config c at_s
   | .store call reply => s.stored config call reply
 
 /-- A start: the answers to calls made before it may never come. A check is given up, its

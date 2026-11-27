@@ -354,7 +354,7 @@ def createInput (id : ReqId) (r : Http.Request) (m : Member) (session : Sid) :
     if h' : About.valid (text "about") then
       match visibility? (text "visibility"), media? (text "media") with
       | some vis, some media =>
-        .ok (.request (.create id m session ⟨_, h⟩ ⟨_, h'⟩ vis media (arrived r)))
+        .ok (.request (.create id m session ⟨_, h⟩ ⟨_, h'⟩ vis media) (arrived r))
       | _, _ => bad "a visibility and a format are needed"
     else bad "a description is at most 2000 characters"
   else bad "a title is 1 to 100 characters"
@@ -362,17 +362,21 @@ def createInput (id : ReqId) (r : Http.Request) (m : Member) (session : Sid) :
 def commentInput (id : ReqId) (r : Http.Request) (m : Member) (session : Sid) (v : VideoId) :
     Except Http.Response Input :=
   let body := (r.field? "body").getD ""
-  if h : Remark.valid body then .ok (.request (.comment id m session v ⟨body, h⟩))
+  if h : Remark.valid body then .ok (.request (.comment id m session v ⟨body, h⟩) (arrived r))
   else bad "a comment is 1 to 500 characters"
 
-/-- The name a channel shows: what comes before the `@` of the address, since an identity carries
-no name of its own, and the whole address would be shown to everyone. -/
+/-- The name a channel shows: the provider's name for the member, which anyone may choose and the
+pages show as text; without one, what comes before the `@` of the address, since the whole
+address would be shown to everyone. -/
 def channelName (who : OAuth.Identity) : String :=
   let user := (who.email.getD "").takeWhile (· != '@') |>.toString
-  (if user.isEmpty then who.subject else user).take 40 |>.toString
+  let name := match who.name with
+    | some n => n.val
+    | none => if user.isEmpty then who.subject else user
+  name.take 40 |>.toString
 
 def decode (s : Settings) (id : ReqId) (r : Http.Request) : Except Http.Response Input :=
-  let ask (c : Command) : Except Http.Response Input := .ok (.request c)
+  let ask (c : Command) : Except Http.Response Input := .ok (.request c (arrived r))
   if !r.bodyWithin s.maxBody_bytes then .error (Http.Response.text "too large\n" 413)
   else
     (dispatch [
@@ -385,7 +389,7 @@ def decode (s : Settings) (id : ReqId) (r : Http.Request) : Except Http.Response
       Routes.create.handle fun () r => signedIn s r (createInput id r),
       Routes.uploaded.handle fun (v, ()) r => signedIn s r fun m session =>
         ask (.uploaded id m session v),
-      Routes.watch.handle fun v r => ask (.watch id (session? r) v (arrived r)),
+      Routes.watch.handle fun v r => ask (.watch id (session? r) v),
       Routes.like.handle fun (v, ()) r => signedIn s r fun m session => ask (.like id m session v true),
       Routes.unlike.handle fun (v, ()) r => signedIn s r fun m session =>
         ask (.like id m session v false),

@@ -292,7 +292,10 @@ keeps its id, its addresses and its volumes) whether or not an address is given.
 
 The media bucket blocks public access, refuses requests without TLS, allows a presigned `PUT`,
 `GET` and `HEAD` from `https://<DomainName>` (CORS, exposing `ETag`), and aborts multipart
-uploads left incomplete for two days. The instance role may read and write it.
+uploads left incomplete for two days. The instance role may read and write it. The unit gives
+the application the bucket's name and its region in `/etc/lanes/app.env`, as
+`LANES_MEDIA_BUCKET` and `AWS_REGION`; `/etc/lanes/secrets.env`, read after it, may set either
+again.
 
 The S3 client (`Lanes/Web/IO/S3.lean`) reads its credentials from a source at every call
 (`SigV4.Source`). The default path is the instance role's credentials, which the AWS integration
@@ -304,13 +307,14 @@ lakefile (`path` or `git`, as `examples/sign-in` requires Google's and GitHub's)
 ```lean
   let creds ← Aws.Credentials.start (← Aws.Credentials.detect)
   let media : S3.Bucket :=
-    { name := "<MediaBucketName>", region := "<region>", endpoint := S3.Endpoint.aws "<region>" }
+    { name := "<LANES_MEDIA_BUCKET>", region := "<AWS_REGION>",
+      endpoint := S3.Endpoint.aws "<AWS_REGION>" }
   -- In the handler of the system's outputs:
   S3.handler port media creds.source {} rt out
 ```
 
-`/etc/lanes/app.env` gives the application `AWS_REGION`. A URL presigned with the role's
-credentials lasts no longer than those credentials, a few hours at most, whatever its `Expiry`.
+A URL presigned with the role's credentials lasts no longer than those credentials, a few hours
+at most, whatever its `Expiry`.
 
 An S3 client that reads `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN`
 instead (`S3.credentialsFromEnv`, once, at start) needs a key of its own: with `MediaUser` true
@@ -323,7 +327,6 @@ sudo install -m 600 /dev/null /etc/lanes/secrets.env
 sudo tee /etc/lanes/secrets.env >/dev/null <<'EOF'
 AWS_ACCESS_KEY_ID=...
 AWS_SECRET_ACCESS_KEY=...
-AWS_REGION=us-east-1
 EOF
 sudo systemctl restart lanes-app
 ```

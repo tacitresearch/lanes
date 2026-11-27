@@ -245,6 +245,17 @@ in `Lanes/Web/Http/FrontSound.lean` to answer each arrival at most once and in
   since December 2020 and MinIO gives; a store that is only eventually consistent breaks it. In particular a payment service's idempotency keys expire after 24
   hours, and the model's do not.
 
+## Trusted by tests, not by applications
+
+The test kit, `Lanes/Testing/` (`docs/decisions/D77-a-test-kit.md`): a fake S3, a fake identity
+provider, a scripted browser and a server of a handler, all of them IO on local sockets. No
+deployed system imports it (`import Lanes` does not include it), so no property of an
+application rests on it, and its lines are not counted above. The tests that run against it do
+rest on it: a fake that accepts what the real service refuses makes a test pass that should
+fail. The fake S3 checks each signature with the same functions the client signs with
+(`SigV4.authorization`, `SigV4.signature`), so it does not check that those are S3's; the AWS
+test suite does (`Tests/SigV4.lean`). What the fakes refuse is tested (`Tests/Testing.lean`).
+
 ## Not trusted
 
 Actor `step` functions, `SysState.step`, the kernel (`Kernel.run1_sound`), the model checker's

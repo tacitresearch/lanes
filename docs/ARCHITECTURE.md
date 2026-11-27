@@ -8,7 +8,9 @@ from the built library in `docs/INVENTORY.md` (D47), and what has none is on
 `docs/inventory-none.md`: that is where a claim is checked, and this page only names the
 headline theorems. `import Lanes` gives the API; the soundness theorems named here are in
 `Lanes.Proofs` (`Lanes/Proofs.lean`), which `Lanes.Semantics` imports. Those are gated in `Tests/Axioms/`, which stops compiling if a `sorry` or a
-new axiom reaches them.
+new axiom reaches them. `Lanes.Testing` (`Lanes/Testing.lean`) is the test kit an application's
+tests run against: a fake S3 that checks signatures, a fake identity provider and a scripted
+browser; no binary that serves imports it (`docs/decisions/D77-a-test-kit.md`).
 
 The idea in one line: all logic is pure step functions, the semantics is one executable function
 over them, and the code that runs, the checker that explores and the proofs that cover are all
@@ -28,7 +30,7 @@ proved function tells it to.
 | The gate and the HTTP server | `Lanes/Web/Http/{Gate,Front,FrontSound,Waiting,Conn,ConnSound,Stream,Sse,SseSound,Loopback}.lean`, `Lanes/Semantics/Front.lean`, `Lanes/Web/IO/Server.lean` | `Http.served_answered_le_arrived`, `Http.served_pending_answered`, `Http.Waiting.exec_answered`, `Http.Conn.run_writes`, `Http.Conn.read_streamed`, `Http.Sse.parse_written` |
 | Metrics, health and the access log | `Lanes/Lib/Metrics.lean`, `Lanes/Web/Http/{Ops,OpsSound}.lean`, `Lanes/Web/IO/Ops.lean` | `Metrics.Histogram.observeAll_eq`, `Metrics.readLabelValue_escapeLabel`, `Http.Ops.route?_default`, `Http.Ops.route?_metrics`, `Http.Ops.answer_ready`, `Http.Ops.Access.parse_line`; that none of it reaches a system is trusted and tested |
 | Other adapters | `Lanes/Outside/Basic.lean`, `Lanes/Outside/IO/Clock.lean`, `Lanes/Web/IO/Client.lean`, `Lanes/Web/Http/{Grammar,Wire,WireSound}.lean` | `Response.read_wire`, `Request.fields_framing`; conformance tests |
-| Models of external services | `Lanes/Outside/{Rpc,Idempotent,Events,ObjectStore}.lean`, `Lanes/Outside/Effects/`, `Lanes/Proof/Outputs.lean` | `Idempotent.at_most_once`, `Rpc.answered_le_called`, `Events.deliveries_le`, `ObjectStore.read_sent`, `System.Emits.outputs`; that a real service conforms is trusted |
+| Models of external services | `Lanes/Outside/{Rpc,Idempotent,Events,ObjectStore}.lean`, `Lanes/Outside/Effects/`, `Lanes/Proof/Outputs.lean` | `Idempotent.at_most_once`, `Rpc.answered_le_called`, `Events.deliveries_le`, `ObjectStore.read_sent`, `ObjectStore.held_sent`, `System.Emits.outputs`; that a real service conforms is trusted |
 | Signature Version 4 and the S3 client | `Lanes/Web/Http/{SigV4,SigV4Sound}.lean`, `Lanes/Web/S3/{Basic,Xml}.lean`, `Lanes/Web/IO/S3.lean` | `SigV4.target_sign`, `SigV4.sortQuery_sorted`, `SigV4.canonicalHeaders_sorted`, `SigV4.encode_chunks`; signatures tested against AWS's vectors, the client against a fake S3; its IO trusted |
 | PostgreSQL and the store model | `Lanes/Lib/Postgres/{Bytes,Message,MessageSound,Scram,Conn,ConnSound,Table}.lean`, `Lanes/Lib/Postgres/IO/Client.lean`, `Lanes/Outside/Store/{Basic,Sound}.lean` | `Backend.read_encode`, `Frontend.decode_encode`, `Conn.run_fifo`, `Conn.step_committed`, `Conn.step_query`, `Store.write_skew`, `Store.lost_commit_either`; the IO is trusted, and that the server behaves like the model is a premise |
 | Jobs: work outside a step | `Lanes/Behaviours/Jobs/{Basic,Sound}.lean`, `Lanes/Semantics/Jobs.lean`, `Lanes/Behaviours/Jobs/IO/Pool.lean` | `Jobs.answered_le_handled`, `Jobs.retry_same`, `Jobs.submitted_answered`; the pool is trusted |
@@ -264,7 +266,9 @@ against RFC 6265's algorithm); and `Lanes/Web/Auth/`: signed tokens and form tok
 exactly what was signed for their purpose and session (`Auth.verify_eq_some`,
 `Auth.checkForm_iff`) and another's only through an HMAC collision (`Auth.verify_sign_other`,
 `Auth.checkForm_other`), Argon2id password digests, failed attempts that lock at their limit
-(`Auth.Attempts.locked_unlock_repeat`) and sessions that keep the newest (`Auth.Sessions.ids_starts`).
+(`Auth.Attempts.locked_unlock_repeat`) and sessions that keep the newest (`Auth.Sessions.ids_starts`)
+and end after a lifetime, judged at the time a request arrived, so that one over is never let in
+again (`Auth.Sessions.accepts_iff`, `Auth.Sessions.Ended.run`).
 
 Sign-in with another service (`docs/decisions/D72-sign-in-with-oauth.md`) is OAuth 2.0's authorization
 code flow with PKCE and OpenID Connect on it, decided in `Lanes/Web/Auth/OAuth.lean` and done
@@ -276,7 +280,10 @@ browser's ticket, for its state and provider, not expired (`OAuth.check_ok`), an
 an ID token only if its header names RS256 or ES256, a key of the provider's set of that
 algorithm and `kid` checks it, and every claim passes (`OAuth.IdToken.verify_accepted`,
 `Lanes/Web/Auth/Jose.lean`). The system gets the identity in headers a client cannot send
-(`OAuth.identity?_strip`). Vendors' presets are packages under `integrations/` (D61).
+(`OAuth.identity?_strip`), read back as written (`OAuth.identity?_withIdentity`). Its name, the
+provider's `name` or GitHub's `login`, is a `DisplayName`: at most 64 characters, none of them a
+control or reordering mark, by its type (`OAuth.DisplayName.length_le`), and text a page shows
+escaped. Vendors' presets are packages under `integrations/` (D61).
 
 ## Adapters
 
@@ -332,7 +339,9 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   `Events.bounded` delivers events late, out of order and up to `maxDeliveries` times
   (`Events.deliveries_le`). `ObjectStore.server` is an object store whose reads see the last write answered,
   unless a write that timed out, was refused or overlapped it may have come after; a get is
-  answered only with an object a put sent (`ObjectStore.read_sent`). `Effects` is the class of services that hold things with a lifecycle,
+  answered only with an object a put sent (`ObjectStore.read_sent`), and a head says a key holds
+  one only when a put sent one under it (`ObjectStore.held_sent`); a write granted to someone else,
+  a browser's through a presigned link, is never answered and may land or not. `Effects` is the class of services that hold things with a lifecycle,
   made under a key and reported by webhooks, with two instances: payments, with the statuses
   Stripe documents for a PaymentIntent (`Lanes/Outside/Effects/Payments.lean`), and email
   (`Lanes/Outside/Effects/Email.lean`). A system's part of a proof is a fact about what its steps
