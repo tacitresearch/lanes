@@ -1,0 +1,11 @@
+name = "lanes-docs"
+
+# Lanes from this clone, and doc-gen4 at the tag of Lanes' toolchain (`lean-toolchain`).
+[[require]]
+name = "lanes"
+path = "../.."
+
+[[require]]
+name = "doc-gen4"
+git = "https://github.com/leanprover/doc-gen4"
+rev = "v4.37.0-rc1"

@@ -20,6 +20,7 @@ lake exe lanesCheck        # larger model checks, random runs and the scale benc
 lake exe lanes lint        # the checks below, and that generated files are up to date
 lake exe lanes lint --fix  # rewrite the generated files: line counts, decisions' index, STATUS, INVENTORY
 lake exe lanes inventory --list none  # the definitions of Lanes/ without evidence
+lake exe lanes docstrings  # how many public declarations of `import Lanes` have a docstring
 ```
 
 - Run `lake build --wfail`, `lake test`, `lake exe lanesCheck` and `lake exe lanes lint` before
@@ -213,11 +214,12 @@ that performs IO is in an `IO/` directory of its area and named in `TRUSTED.md`.
 | `Lanes/Testing/` | The test kit, for tests and never in `import Lanes`: a fake S3 that checks signatures, a fake identity provider, a scripted browser, a server of a handler and readers of a response (`docs/decisions/D77-a-test-kit.md`) | `Std` only |
 | `Lanes/Semantics/` | The semantics as a CSLib `LTS`, refinement, specs, fairness and leads-to, and the liveness of the gate and of jobs | CSLib, Mathlib |
 | `native/` | The C that binds libsodium, `fsync`, a timed wait, OpenSSL's TLS client and its signature check, all of it trusted | libsodium, OpenSSL, libc |
-| `LanesCli/` | The `lanes` command: `new`, `lint`, `check`, `inventory` | `Std` only; `Lean` in `Inventory`, which only `lanesInventory` links |
+| `LanesCli/` | The `lanes` command: `new`, `lint`, `check`, `inventory`, `docstrings` | `Std` only; `Lean` in `Inventory` and `Docstrings`, which only `lanesInventory` links |
 | `templates/app/` | The application `lanes new` creates, which is `examples/counter` | |
 | `examples/` | Applications to read, each its own Lake package (`examples/README.md`) | anything |
 | `integrations/` | A vendor's preset or client, each its own Lake package (D61): `google` and `github` for sign-in, `aws` for a role's credentials and SES | Lanes |
 | `Tests/` | Regression tests run by `lake test` and `lanesCheck`; the apps they use in `Fixtures/` | anything |
+| `docs/api/` | The API reference, built with doc-gen4: a Lake package of its own (`docs/api/README.md`) | Lanes, doc-gen4 |
 | `oracle/` | Differential tests against Go's standard library and other HTTP servers | |
 | `infra/` | The CI machine: its stack and its set-up script (`docs/RUNNERS.md`); in `app/`, the stack, set-up script and smoke check of an application on AWS (`docs/DEPLOY.md`) | |
 

@@ -29,7 +29,11 @@ variable {σ : Signature}
 
 /-- Where a shard keeps its journal and how its inputs are written. -/
 structure Store (sys : System σ) where
+  /-- The journal's file. Its snapshot, its lock and a write that did not finish are kept beside
+  it, with the extensions `.snapshot`, `.lock` and `.cut`. -/
   path : System.FilePath
+  /-- How the journal writes inputs. A start replays them through the step functions, from
+  the last snapshot if there is one. -/
   input : Codec σ.In
   /-- The application's name for the system. A journal written under another name is refused. -/
   system : String := ""
