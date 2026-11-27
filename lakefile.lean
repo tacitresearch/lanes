@@ -42,6 +42,12 @@ target verify pkg : FilePath := do
   buildO (pkg.buildDir / "native" / "verify.o") src
     #["-I", (← getLeanIncludeDir).toString] #["-O2", "-fPIC", "-DNDEBUG", "-Wall"]
 
+/-- `native/sign.c`, signatures made by the same OpenSSL with a private key, declared in the same way. -/
+target sign pkg : FilePath := do
+  let src ← inputTextFile (pkg.dir / "native" / "sign.c")
+  buildO (pkg.buildDir / "native" / "sign.o") src
+    #["-I", (← getLeanIncludeDir).toString] #["-O2", "-fPIC", "-DNDEBUG", "-Wall"]
+
 /-- The system's libsodium, linked statically: a binary does not need it installed to run. -/
 target sodium : FilePath := do
   let lib := FilePath.mk (← pkgConfigSodium "--variable=libdir") / "libsodium.a"
@@ -53,7 +59,7 @@ target sodium : FilePath := do
 @[default_target]
 lean_lib Lanes where
   roots := #[`Lanes, `Lanes.Proofs, `Lanes.Semantics, `Lanes.Testing]
-  moreLinkObjs := #[native, tls, verify, sodium]
+  moreLinkObjs := #[native, tls, verify, sign, sodium]
 
 @[default_target]
 lean_lib Tests where
