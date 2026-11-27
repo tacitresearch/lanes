@@ -104,3 +104,89 @@ curl -X POST http://127.0.0.1:8080/decrement
 ```
 
 The code of this step is `Tests/Tutorial/Counter.lean` and `Tests/Tutorial/Main.lean`.
+
+## 3. Check a property, and break it
+
+**The checker explores every order and fault.** `Check.lean` runs the counter with a limit of 2
+on four requests. It sends them in every order and follows every state the system can reach:
+each request waiting, taken or answered, and, once you allow it, the actor crashing and
+starting again. Each property is tested in every one of those states. An `always` must hold in
+all of them. A `sometimes` must hold in at least one, so a check that never reaches the
+interesting states fails instead of passing.
+
+In `Check.lean`, send a decrement in place of the read:
+
+```lean
+def requests : List Request :=
+  [.increment 1, .increment 2, .increment 3, .decrement 4]
+```
+
+Then replace the scenario and the properties, from `{ driver` to the closing `]`. This lets
+the actor crash once, says that a request is refused only at a bound, and gives each refusal
+its own witness, since a refused decrement now meets the old `!·.applied` too:
+
+```lean
+    { driver := (service { limit := 2 }).monitored (Driver.anyOrder requests)
+      env := { mayCrash := fun _ => true }
+      maxCrashes := 1 }
+    [ Check.refines "every response is allowed by the spec",
+      .always "the counter never exceeds its limit" fun w => w.state.state () ≤ 2,
+      .sometimes "the counter reaches its limit" fun w => w.state.state () == 2,
+      .sometimes "an increment is refused" fun w =>
+        w.state.outbox.any fun r => !r.applied && r.value == 2,
+      .always "a request is refused only at zero or at the limit" fun w =>
+        w.state.outbox.all fun r => r.applied || r.value == 0 || r.value == 2,
+      .sometimes "a decrement is refused" fun w =>
+        w.state.outbox.any fun r => !r.applied && r.value == 0 ]
+```
+
+`lake test` prints:
+
+```text
+PASS: every reachable state explored
+reached "the counter reaches its limit" in 5 steps
+reached "an increment is refused" in 7 steps
+reached "a decrement is refused" in 3 steps
+states: 5696, transitions: 14066, depth: 15
+coverage: output 7387, input 2339, deliver 1860, crash 1315, start 1165, drop 0 (never fired), duplicate 0 (never fired), timeout 0 (never fired)
+```
+
+Now seed a bug. In `service`, write `1 <` for `0 <`, so that a decrement at one is refused:
+
+```lean
+      if 1 < count then (count - 1, [⟨req, count - 1, true⟩])
+```
+
+`lake test` fails, and prints the shortest run that breaks the property:
+
+```text
+FAIL: "a request is refused only at zero or at the limit" is violated after 5 steps
+  1. input increment 1
+  2. start ()
+  3. deliver outside → (): increment 1
+  4. input decrement 4
+  5. deliver outside → (): decrement 4
+  state reached:
+  () [up] 1
+  pending output: { req := 1, value := 1, applied := true }
+  pending output: { req := 4, value := 1, applied := false }
+reached "the counter reaches its limit" in 5 steps
+reached "a decrement is refused" in 3 steps
+states: 167, transitions: 223, depth: 5
+coverage: input 134, start 40, crash 23, deliver 19, output 7, drop 0 (never fired), duplicate 0 (never fired), timeout 0 (never fired)
+```
+
+Read it as a story. A client sends `increment 1`. The actor, `()` because there is one, starts
+(every actor starts through its recovery, even the first time) and takes it: the count is 1.
+Then `decrement 4` arrives and is refused at 1. The state reached shows the count and the two
+answers not yet sent. Put `0 <` back and the check passes again. `lake test` exits with 1 on a
+`FAIL`, so CI stops on it.
+
+The checks catch the bug of step 2 as well: with no `if` at all, no decrement is ever refused,
+and `lake test` prints `FAIL: never reached: "a decrement is refused"`. Faults find bugs too:
+with `env := { link := fun _ _ => .network }`, a link that loses and repeats messages, the
+checker finds an increment delivered twice and counted twice. That is why `implements` in
+`Tut/Proofs.lean` assumes an environment that does not repeat messages (`env.Faultless`).
+
+The code of this step is `Tests/Tutorial/Check.lean`, where `buggy` is the bug.
+`Tests/Tutorial.lean` checks that the two outputs above are what the checker prints.
