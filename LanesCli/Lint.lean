@@ -225,7 +225,8 @@ def expandBraces (path : String) : List String := Id.run do
 
 /-- A code span that is written as a path in the repository: it has a `/`, no blanks and no
 placeholder (`<area>`, `*`, `…`), and its first part is at the root of the project. Module
-names (`Lanes.Http`), Go packages (`net/http`) and URLs are not. -/
+names (`Lanes.Http`), Go packages (`net/http`) and URLs are not, nor what a build writes under a
+`.lake` at any depth, which a fresh checkout has not. -/
 def citedPaths (root : System.FilePath) (span : String) : IO (List String) := do
   let bad := [' ', '\t', '<', '>', '*', '?', '$', '|', '…', '"', '\'', '(', ')', '#', ':', '=']
   if !span.contains '/' || span.any (bad.contains ·) || span.startsWith "/"
@@ -233,7 +234,8 @@ def citedPaths (root : System.FilePath) (span : String) : IO (List String) := do
     return []
   let paths := expandBraces span
   let first := (span.splitOn "/").headD ""
-  if first.isEmpty || first == "." || first == ".." || first == ".lake" || first == ".git"
+  if first.isEmpty || first == "." || first == ".." || first == ".git"
+      || (span.splitOn "/").contains ".lake"
       || first.contains '{' || !(← (root / first).pathExists) then
     return []
   return paths
