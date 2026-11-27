@@ -121,6 +121,21 @@ def flowTests : List (String × Bool) :=
         | .error e s => e == "access_denied" && s == some "s" | _ => false)
       && (Answer.read [("code", "c")] matches .malformed)
       && (Answer.read [] matches .malformed)),
+    ("oauth: a discovery document gives a provider of OpenID Connect",
+      let doc := "{\"issuer\":\"https://id.example\",\"authorization_endpoint\":\"https://id.example/a\",\
+        \"token_endpoint\":\"https://id.example/t\",\"jwks_uri\":\"https://id.example/k\",\
+        \"id_token_signing_alg_values_supported\":[\"RS256\",\"ES256\"],\
+        \"code_challenge_methods_supported\":[\"S256\"]}"
+      match Discovery.read doc with
+      | some d =>
+        let p := d.provider "id"
+        d.algs == ["RS256", "ES256"] && d.challenges == ["S256"] && p.authorize == "https://id.example/a"
+          && p.token == "https://id.example/t"
+          && (match p.source with
+            | .idToken issuers jwks => issuers == ["https://id.example"] && jwks == "https://id.example/k"
+            | .userApi .. => false)
+          && (Discovery.read "{\"issuer\":\"i\"}").isNone
+      | none => false),
     ("oauth: the code is exchanged with the verifier and the client's secret",
       tokenForm client ⟨"c"⟩ ⟨"v"⟩ == [("grant_type", "authorization_code"), ("code", "c"),
         ("redirect_uri", client.redirect), ("client_id", "app"), ("client_secret", "s3cret"),
