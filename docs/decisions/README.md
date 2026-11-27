@@ -98,4 +98,5 @@ decision without a number.
 - [D83. PostgreSQL over TLS, with channel binding, and a pool of connections](D83-postgres-over-tls.md)
 - [D84. The kernel takes an actor's state out of its cell before the step](D84-the-kernel-takes-the-state-out-before-the-step.md)
 - [D86. A fair run of a join is a fair run of its right side too, by the join with its sides exchanged](D86-a-fair-run-of-a-join-is-one-of-its-right-side.md)
+- [D87. The video site's calls to the store are jobs of the scheduler, named by what they are for](D87-videos-on-the-scheduler.md)
 - [D89. What one side of a join sends the other is handled there, in every fair run](D89-deliveries-across-a-join.md)
