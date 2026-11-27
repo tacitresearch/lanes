@@ -19,7 +19,7 @@ Metadata:
       - Label: { default: "Backups, logs and alarms" }
         Parameters: [SnapshotIntervalHours, SnapshotRetainCount, JournalSnapshotId, LogRetentionDays, AlarmEmail]
       - Label: { default: Media and the database }
-        Parameters: [MediaUser, MailIdentity, DatabaseEngine, DatabaseInstanceClass, DatabaseStorage, DatabaseEngineVersion]
+        Parameters: [MediaUser, MailIdentity, DatabaseEngine, DatabaseInstanceClass, DatabaseStorage, DatabaseEngineVersion, DatabaseCaBundleSha256]
 
 Parameters:
   AppName:
@@ -257,6 +257,15 @@ Parameters:
     Default: "17"
     AllowedValues: ["16", "17"]
     Description: The PostgreSQL major version.
+  DatabaseCaBundleSha256:
+    Type: String
+    Default: 90a6f1a7978a1b1b096dca6c57511ca48d3b8cf052f8e704baf358f34ea2f21b
+    AllowedPattern: "^[0-9a-f]{64}$"
+    ConstraintDescription: the SHA-256 of the bundle, 64 hexadecimal digits
+    Description: >-
+      The SHA-256 of RDS's global certificate bundle, which the instance fetches and the
+      application's client trusts: when AWS changes the bundle, set this to the new one's
+      (docs/DEPLOY.md).
 
 Conditions:
   CreateReleaseBucket: !Equals [!Ref ReleaseBucket, ""]
@@ -591,6 +600,8 @@ Resources:
           DB_PORT=${DbPort}
           DB_NAME=${DbName}
           DB_SECRET=${DbSecret}
+          DB_CA_URL=${DbCaUrl}
+          DB_CA_SHA256=${DbCaSha256}
           MAIL_IDENTITY=${MailIdentity}
           MEDIA_BUCKET=${MediaBucket}
         - Bucket: !If [CreateReleaseBucket, !Ref ReleaseStore, !Ref ReleaseBucket]
@@ -599,6 +610,8 @@ Resources:
           DbPort: !If [HasDatabase, !GetAtt Database.Endpoint.Port, ""]
           DbName: !If [HasDatabase, lanes, ""]
           DbSecret: !If [HasDatabase, !Ref DatabaseSecret, ""]
+          DbCaUrl: !If [HasDatabase, "https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem", ""]
+          DbCaSha256: !If [HasDatabase, !Ref DatabaseCaBundleSha256, ""]
 
   AppLogGroup:
     Type: AWS::Logs::LogGroup
@@ -1061,8 +1074,9 @@ Resources:
           SourceSecurityGroupId: !GetAtt InstanceSecurityGroup.GroupId
           Description: the application's instance
 
-  # The Lanes PostgreSQL client speaks plain TCP (docs/decisions/D68), and RDS refuses that from
-  # PostgreSQL 15 on unless told otherwise; the traffic stays inside the VPC.
+  # The server takes TLS only, as the application's client asks for it (verify-full against RDS's
+  # bundle, with channel binding; docs/DEPLOY.md). The description is older than that: changing it
+  # would replace the group, and RDS applies a new group's parameters only after a reboot.
   DatabaseParameters:
     Type: AWS::RDS::DBParameterGroup
     Condition: HasDatabase
@@ -1070,7 +1084,7 @@ Resources:
       Description: !Sub "The database of the Lanes application ${AppName}: TLS not required"
       Family: !Sub "postgres${DatabaseEngineVersion}"
       Parameters:
-        rds.force_ssl: "0"
+        rds.force_ssl: "1"
         # Stored as SCRAM, so the server proves it knows the password, as the client requires.
         password_encryption: scram-sha-256
 

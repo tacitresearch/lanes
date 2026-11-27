@@ -32,7 +32,7 @@ proved function tells it to.
 | Other adapters | `Lanes/Outside/Basic.lean`, `Lanes/Outside/{Clock,IO/Clock}.lean`, `Lanes/Web/IO/Client.lean`, `Lanes/Web/Http/{Grammar,Wire,WireSound}.lean` | `Response.read_wire`, `Request.fields_framing`; conformance tests |
 | Models of external services | `Lanes/Outside/{Rpc,Idempotent,Events,ObjectStore,Multipart,Queue,Cache,Clock,Throttle}.lean`, `Lanes/Outside/Effects/`, `Lanes/Web/Http/SharedCache.lean`, `Lanes/Proof/Outputs.lean` | `Idempotent.at_most_once`, `Rpc.answered_le_called`, `Events.deliveries_le`, `ObjectStore.read_sent`, `ObjectStore.held_sent`, `Multipart.read_listed`, `Queue.received_le`, `Cache.read_sent`, `Clock.wall_back_le`, `Throttle.wait_le`, `SharedCache.serve_storable`, `SharedCache.serve_of_leaks`, `System.Emits.outputs`; that a real service conforms is trusted |
 | Signature Version 4 and the S3 client | `Lanes/Web/Http/{SigV4,SigV4Sound}.lean`, `Lanes/Web/S3/{Basic,Xml,Post,PostSound,Multipart}.lean`, `Lanes/Web/IO/S3.lean` | `SigV4.target_sign`, `SigV4.sortQuery_sorted`, `SigV4.canonicalHeaders_sorted`, `SigV4.encode_chunks`, `S3.Post.form_policy`, `S3.Post.admitted_bounded`, `S3.Multipart.Plan.count_le`, `S3.Multipart.Plan.range_full`; signatures tested against AWS's vectors and botocore, the client against a fake S3, the multipart flow model-checked; its IO trusted |
-| PostgreSQL and the store model | `Lanes/Lib/Postgres/{Bytes,Message,MessageSound,Scram,Conn,ConnSound,Table}.lean`, `Lanes/Lib/Postgres/IO/Client.lean`, `Lanes/Outside/Store/{Basic,Sound}.lean` | `Backend.read_encode`, `Frontend.decode_encode`, `Conn.run_fifo`, `Conn.step_committed`, `Conn.step_query`, `Store.write_skew`, `Store.lost_commit_either`; the IO is trusted, and that the server behaves like the model is a premise |
+| PostgreSQL and the store model | `Lanes/Lib/Postgres/{Bytes,Message,MessageSound,Scram,Conn,ConnSound,Pool,Table}.lean`, `Lanes/Lib/Postgres/IO/{Client,Pool}.lean`, `Lanes/Lib/Crypto/Certificate.lean`, `Lanes/Outside/Store/{Basic,Sound}.lean` | `Backend.read_encode`, `Frontend.decode_encode`, `Conn.run_fifo`, `Conn.step_committed`, `Conn.step_query`, `Conn.tls_first`, `Conn.run_bound`, `Conn.onMessage_binds`, `Pool.run_size`, `Pool.never_again`, `Store.write_skew`, `Store.lost_commit_either`; the IO is trusted, and that the server behaves like the model is a premise |
 | Jobs: work outside a step | `Lanes/Behaviours/Jobs/{Basic,Sound}.lean`, `Lanes/Semantics/Jobs.lean`, `Lanes/Behaviours/Jobs/IO/Pool.lean` | `Jobs.answered_le_handled`, `Jobs.retry_same`, `Jobs.submitted_answered`; the pool is trusted |
 | Schedule: work that is due later | `Lanes/Behaviours/Schedule/{Basic,Sound}.lean`, `Lanes/Semantics/Schedule.lean` | `Schedule.dispatch_due`, `Schedule.calls_le_scheduled`, `Schedule.attempt_ends`, `Schedule.held_ends`; that the time it knows is not ahead of the clock is a premise |
 | Web | `Lanes/Web/Http/{Basic,Route,RouteSound,Cookie,CookieSound}.lean`, `Lanes/Web/Html/`, `Lanes/Web/Auth/` | `Html.lex_render`, `Html.safeUrl_scheme`, `Http.dispatch_link`, `Http.parseForm_encodeForm`, `Http.readSetCookie_header`, `Auth.verify_eq_some`, `Auth.checkForm_other` |
@@ -393,7 +393,7 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
 - **PostgreSQL** (`Lanes/Lib/Postgres/`): the frontend/backend protocol 3.0 in Lean, not libpq
   (`docs/decisions/D68-postgres-protocol-in-lean.md`): start-up with trust, cleartext (only when
   allowed), MD5 or SCRAM-SHA-256; the extended query protocol with parameters, text both ways;
-  errors; transactions; plain TCP. The messages are proved to read back as written
+  errors; transactions; plain TCP or TLS. The messages are proved to read back as written
   (`Backend.read_encode`, `Frontend.decode_encode`) and tested against recorded sessions of
   `psql` and of this client. A connection is a pure `Postgres.Conn.step` (`Lanes/Lib/Postgres/Conn.lean`), as
   the HTTP server's is: replies answer requests in the order sent (`Conn.run_fifo`), a request is
@@ -402,7 +402,16 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   transaction in progress (`Conn.step_committed`), the server is trusted after SCRAM only once
   it proved it knows the password (`Conn.onMessage_saslFinal`), and a connection that ends
   answers every request in flight `unknown` (`Conn.step_lost`); model-checked first
-  (`Tests/PostgresConn.lean`). The IO (`Lanes/Lib/Postgres/IO/Client.lean`) only performs.
+  (`Tests/PostgresConn.lean`). With TLS (`docs/decisions/D83-postgres-over-tls.md`), after
+  `SSLRequest` or direct, nothing but `SSLRequest` leaves before the handshake is done
+  (`Conn.tls_first`) and `N` closes the connection (`Conn.step_refusedTls`); SCRAM binds the hash
+  of the server's certificate (`SCRAM-SHA-256-PLUS`), the one the handshake gave
+  (`Conn.run_bound`, `Conn.onMessage_binds`), which `Certificate.endPoint` chooses by the
+  certificate's signature algorithm, tested against `openssl dgst` and a real server. The IO
+  (`Lanes/Lib/Postgres/IO/Client.lean`) only performs, the TLS handshake through `Tls.Session`
+  included. A pool (`Postgres.Pool`) is a pure policy proved to keep at most `max` connections
+  open and never to hand out again one handed back broken (`Pool.run_size`, `Pool.never_again`),
+  and an IO file that performs it (`Lanes/Lib/Postgres/IO/Pool.lean`).
 - **A transactional store** (`Lanes/Outside/Store/Basic.lean`): what a store may answer at read
   committed or serializable, as an `Outside` that keeps every database the answers are consistent
   with, so that a `COMMIT` whose answer is lost has both outcomes, and its effect may appear
