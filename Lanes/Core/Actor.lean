@@ -48,6 +48,8 @@ namespace Actor
 
 variable {S Msg Eff : Type}
 
+/-- The state after handling the messages in order from `s`, and the effects of all the steps, in
+the order they were returned. -/
 def run (A : Actor S Msg Eff) (s : S) : List Msg → S × List Eff
   | [] => (s, [])
   | m :: ms =>
@@ -61,6 +63,8 @@ def run (A : Actor S Msg Eff) (s : S) : List Msg → S × List Eff
     A.run s (m :: ms) = ((A.run (A.step s m).1 ms).1, (A.step s m).2 ++ (A.run (A.step s m).1 ms).2) :=
   rfl
 
+/-- The same actor with each effect replaced by those `f` gives: how an actor written over an
+abstract `Eff` is put into a system. -/
 def mapEff {Eff' : Type} (f : Eff → List Eff') (A : Actor S Msg Eff) : Actor S Msg Eff' where
   init := A.init
   step s m := ((A.step s m).1, (A.step s m).2.flatMap f)
@@ -68,14 +72,20 @@ def mapEff {Eff' : Type} (f : Eff → List Eff') (A : Actor S Msg Eff) : Actor S
   fresh := A.fresh
   fresh_recover s h := by simp [A.fresh_recover s h]
 
+/-- The states the actor reaches on its own, by any messages and any restarts. Restarts are
+included because the semantics may crash an actor at any step (rule 3.3). -/
 inductive Reachable (A : Actor S Msg Eff) : S → Prop
   | init : Reachable A A.init
   | step {s : S} (m : Msg) : Reachable A s → Reachable A (A.step s m).1
   | recover {s : S} : Reachable A s → Reachable A (A.recover s).1
 
+/-- `P` holds in every state the actor reaches. `System.invariant_of_actor` lifts it to every
+system the actor is in, under every environment model. -/
 def Invariant (A : Actor S Msg Eff) (P : S → Prop) : Prop :=
   ∀ s, A.Reachable s → P s
 
+/-- `P` holds at `init` and every step and every restart keeps it: the three cases
+`actor_invariant` proves, which give `Invariant` (`Inductive.invariant`). -/
 structure Inductive (A : Actor S Msg Eff) (P : S → Prop) : Prop where
   init : P A.init
   step : ∀ s m, P s → P (A.step s m).1

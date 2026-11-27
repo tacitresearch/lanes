@@ -481,7 +481,7 @@ def route (pathPrefix : String) (r : Request) : Route :=
 request arrives (`strip`), so only the sign-in can have written them. -/
 def identityHeaders : List String :=
   ["x-lanes-identity-issuer", "x-lanes-identity-subject", "x-lanes-identity-email",
-    "x-lanes-identity-email-verified"]
+    "x-lanes-identity-email-verified", "x-lanes-identity-name"]
 
 def strip (r : Request) : Request :=
   { r with headers := r.headers.filter (·.1 ∉ identityHeaders) }
@@ -491,7 +491,8 @@ def withIdentity (r : Request) (id : Identity) : Request :=
   { r with query := [], headers := r.headers ++ [("x-lanes-identity-issuer", id.issuer),
       ("x-lanes-identity-subject", id.subject)]
       ++ (id.email.map fun e => [("x-lanes-identity-email", e)]).getD []
-      ++ [("x-lanes-identity-email-verified", if id.emailVerified then "true" else "false")] }
+      ++ [("x-lanes-identity-email-verified", if id.emailVerified then "true" else "false")]
+      ++ (id.name.map fun n => [("x-lanes-identity-name", n.val)]).getD [] }
 
 /-- The identity the sign-in verified for this request. -/
 def identity? (r : Request) : Option Identity := do
@@ -499,7 +500,8 @@ def identity? (r : Request) : Option Identity := do
   let subject ← r.header? "x-lanes-identity-subject"
   let verified ← r.header? "x-lanes-identity-email-verified"
   return { issuer, subject, email := r.header? "x-lanes-identity-email",
-           emailVerified := verified == "true" }
+           emailVerified := verified == "true"
+           name := (r.header? "x-lanes-identity-name").bind DisplayName.of? }
 
 private theorem find?_strip (r : Request) {name : String} (h : name ∈ identityHeaders) :
     (strip r).headers.find? (·.1 == name) = none := by
@@ -515,13 +517,14 @@ theorem identity?_strip (r : Request) : identity? (strip r) = none := by
 theorem identity?_withIdentity (r : Request) (id : Identity) :
     identity? (withIdentity (strip r) id) = some id := by
   have hs := fun name (h : name ∈ identityHeaders) => find?_strip r h
-  obtain ⟨issuer, subject, email, verified⟩ := id
-  cases email <;> cases verified <;>
-    simp [identity?, withIdentity, Request.header?, List.find?_append,
+  obtain ⟨issuer, subject, email, verified, name⟩ := id
+  cases email <;> cases verified <;> cases name <;>
+    simp [identity?, withIdentity, Request.header?, List.find?_append, DisplayName.of?_val,
       hs "x-lanes-identity-issuer" (by simp [identityHeaders]),
       hs "x-lanes-identity-subject" (by simp [identityHeaders]),
       hs "x-lanes-identity-email" (by simp [identityHeaders]),
-      hs "x-lanes-identity-email-verified" (by simp [identityHeaders])]
+      hs "x-lanes-identity-email-verified" (by simp [identityHeaders]),
+      hs "x-lanes-identity-name" (by simp [identityHeaders])]
 
 /-- The redirect that begins a sign-in, with the cookie that binds it to the browser: sent back
 on the provider's redirect, a top-level navigation, so `SameSite=Lax`, and only to the sign-in's

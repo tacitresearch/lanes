@@ -54,8 +54,6 @@ structure Settings where
   secure : Bool
   minPassword : Nat := 8
   maxBody_bytes : Nat := 4096
-  /-- How often a timeline asks for its posts again. -/
-  refresh_s : Nat := 5
 
 namespace Routes
 
@@ -67,6 +65,8 @@ def signUp : Route Unit := .post (.seg "signup")
 def logOut : Route Unit := .post (.seg "logout")
 def token : Route Unit := .post (.seg "token")
 def timeline : Route Unit := .get (.seg "timeline")
+/-- The timeline as a stream of events: each time it changes, it again. -/
+def timelineEvents : Route Unit := .get ("timeline" /> .seg "events")
 def post : Route Unit := .post (.seg "post")
 def delete : Route Unit := .post (.seg "delete")
 def follow : Route Unit := .post (.seg "follow")
@@ -156,6 +156,7 @@ def Layout (title : String) (children : List Html) : Html :=
       <title>{title ++ " · rookery"}</title>
       <link rel="stylesheet" href={Routes.style.link ()}/>
       <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+      <script src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js"></script>
     </head>
     <body>{children}</body>
   </html>
@@ -211,8 +212,7 @@ def HomePage (s : Settings) (token : String) (name : Name) : Html :=
         <span id="posted" role="status"></span>
       </form>
       <h2>"Timeline"</h2>
-      <div {Hx.request Routes.timeline ()}
-        {Hx.trigger [.load, .every s.refresh_s, .fromBody (.event posted)]}>"…"</div>
+      <div {Hx.events Routes.timelineEvents ()}>"…"</div>
       <h2>"Accounts"</h2>
       <form {Hx.request Routes.follow ()} {Hx.target "#followed"}>
         {csrfField s token}
@@ -386,6 +386,10 @@ def decode (s : Settings) (id : ReqId) (r : Http.Request) : Except Http.Response
         signedIn s r true fun name session => .ok (.newToken id name session),
       Routes.timeline.handle fun () r =>
         signedIn s r false fun name session => .ok (.web id name session .timeline),
+      Routes.timelineEvents.handle fun () r =>
+        signedIn s r false fun name session =>
+          if (Stream.msg? r).isSome then .ok (.web id name session .timeline)
+          else .error Http.Response.events,
       Routes.post.handle fun () r => webOp s id r bodyOp,
       Routes.delete.handle fun () r => webOp s id r deleteOp,
       Routes.follow.handle fun () r => webOp s id r (nameOp .follow),
@@ -422,6 +426,10 @@ def encodeJson : Reply Name → Http.Response
   | .stale => jsonError "a request with a later seq was already acted on" 409
   | _ => jsonError "not an answer the API gives" 500
 
+/-- What a timeline shows, as the id of the event that shows it: the same posts, the same id. -/
+def feedId (posts : List (Name × Post)) : String :=
+  toString (hash (posts.map (·.2.id)))
+
 /-- An answer to a browser. -/
 def encodeHtml (s : Settings) : Reply Name → Http.Response
   | .signedUp => page (LoginPage (some <span>"Signed up. Log in."</span>))
@@ -446,8 +454,12 @@ def encodeHtml (s : Settings) : Reply Name → Http.Response
   | .unfollowed => (fragment <span>"Not following."</span>).trigger posted
   | .noSuchAccount => fragment (Error "No such account.")
   | .tooManyFollows => fragment (Error "You follow as many as you may.")
-  | .feed posts => fragment (Feed posts)
+  | .feed posts => (fragment (Feed posts)).withHeader "event-id" (feedId posts)
   | .badToken | .stale => forbidden
+
+/-- The requests that stream: the timeline as events. -/
+def streams (r : Http.Request) : Bool :=
+  (Routes.timelineEvents.match? r).isSome
 
 def bridge (s : Settings) : Bridge (sig Name Digest) where
   decode := decode s

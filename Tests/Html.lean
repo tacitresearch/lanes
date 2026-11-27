@@ -148,6 +148,10 @@ def tests : List (String × Bool) :=
       (<form {Hx.confirm "Sure?"} {Hx.boost} {Hx.pushUrl} {Hx.indicator "#spin"}/>).render
         == "<form hx-confirm=\"Sure?\" hx-boost=\"true\" hx-push-url=\"true\" "
           ++ "hx-indicator=\"#spin\"></form>"),
+    ("htmx: a stream of events names its route's link and the message it swaps in",
+      let feed : Http.Route Unit := .get ("timeline" /> .seg "events")
+      (<div {Hx.events feed ()}/>).render
+        == "<div hx-ext=\"sse\" sse-connect=\"/timeline/events\" sse-swap=\"message\"></div>"),
     ("htmx: a request htmx made is told apart, and a redirect names the route's link",
       let account : Http.Route Nat := .get ("accounts" /> .nat)
       Http.Request.isHtmx { method := .get, path := [], headers := [("hx-request", "true")] }

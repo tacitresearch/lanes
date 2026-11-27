@@ -20,6 +20,7 @@ lake exe lanesCheck        # larger model checks, random runs and the scale benc
 lake exe lanes lint        # the checks below, and that generated files are up to date
 lake exe lanes lint --fix  # rewrite the generated files: line counts, decisions' index, STATUS, INVENTORY
 lake exe lanes inventory --list none  # the definitions of Lanes/ without evidence
+lake exe lanes docstrings  # how many public declarations of `import Lanes` have a docstring
 ```
 
 - Run `lake build --wfail`, `lake test`, `lake exe lanesCheck` and `lake exe lanes lint` before
@@ -63,6 +64,10 @@ lake exe lanes inventory --list none  # the definitions of Lanes/ without eviden
   `oracles/go/requests/requests.py`, run by hand.
 - The toolchain is pinned in `lean-toolchain` and follows CSLib's. Dependencies are pinned in
   `lake-manifest.json`; upgrade them deliberately, CSLib first.
+- A test of an application's front end drives it with `Http.Loopback` (pure, no socket: the
+  connection, the gate and the system, as the server runs them), and a live test of a process
+  with `Http.Client.fetch` (`examples/README.md`, "Testing a front end"). Do not write HTTP by
+  hand.
 - To work on a proof without rebuilding the file, `scripts/lean-goals` asks a language server it
   keeps open for a file's errors and the goals at some lines (`LINE` from 1, `COL` from 0):
 
@@ -219,19 +224,22 @@ that performs IO is in an `IO/` directory of its area and named in `TRUSTED.md`.
 | `Lanes/Check/` | Model checker | `Std` only |
 | `Lanes/Data/` | `Enum`, codecs and `lanes_data`, the queue, quorums | `Std` only |
 | `Lanes/Lib/` | The standard library: encodings (Base64, JSON), addresses and URLs, time, SHA-256, HMAC, MD5, PBKDF2 and `Sodium`, the PostgreSQL protocol (`Postgres/`), media types, rate limits (`docs/STDLIB.md`) | `Std` only |
+| `Lanes/Testing/` | The test kit, for tests and never in `import Lanes`: a fake S3 that checks signatures, a fake identity provider, a scripted browser, a server of a handler and readers of a response (`docs/decisions/D77-a-test-kit.md`) | `Std` only |
 | `Lanes/Semantics/` | The semantics as a CSLib `LTS`, refinement, specs, fairness and leads-to, and the liveness of the gate and of jobs | CSLib, Mathlib |
 | `native/` | The C that binds libsodium, `fsync`, a timed wait, OpenSSL's TLS client and its signature check, all of it trusted | libsodium, OpenSSL, libc |
-| `LanesCli/` | The `lanes` command: `new`, `lint`, `check`, `inventory` | `Std` only; `Lean` in `Inventory`, which only `lanesInventory` links |
+| `LanesCli/` | The `lanes` command: `new`, `lint`, `check`, `inventory`, `docstrings` | `Std` only; `Lean` in `Inventory` and `Docstrings`, which only `lanesInventory` links |
 | `templates/app/` | The application `lanes new` creates, which is `examples/counter` | |
 | `examples/` | Applications to read, each its own Lake package (`examples/README.md`) | anything |
 | `integrations/` | A vendor's preset or client, each its own Lake package (D61): `google` and `github` for sign-in, `aws` for a role's credentials and SES | Lanes |
 | `Tests/` | Regression tests run by `lake test` and `lanesCheck`; the apps they use in `Fixtures/` | anything |
+| `docs/api/` | The API reference, built with doc-gen4: a Lake package of its own (`docs/api/README.md`) | Lanes, doc-gen4 |
 | `oracles/` | The references the oracles compare with, one folder each, with their pins, programs and records (`oracles/README.md`) | |
 | `infra/` | The CI machine: its stack and its set-up script (`docs/RUNNERS.md`); in `app/`, the stack, set-up script and smoke check of an application on AWS (`docs/DEPLOY.md`) | |
 
 `import Lanes` is the API, executable code and the proof toolkit; `import Lanes.Proofs` adds the
 framework's soundness theorems (the `…Sound` modules), and `import Lanes.Semantics` the proof
-layer, which imports both. Tests and the examples' proofs import what they cite.
+layer, which imports both. Tests and the examples' proofs import what they cite. `import
+Lanes.Testing` is the test kit, for tests only, so that no binary that serves links it.
 
 Declare the messages, inputs, outputs and states of a system with `lanes_data`: the ordinary
 declaration with a prefix, whose `deriving` also takes three classes Lean cannot derive without
