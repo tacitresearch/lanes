@@ -7,10 +7,13 @@ import Tests.Web
 import Tests.Fronted
 
 /-!
-Metrics, health and the access log. The rendering against text checked by hand; then a server
-with all of it on: readiness before the shard has recovered, after, and while draining; a scrape
-of the metrics page; request ids; access-log lines read back as JSON; a connection refused at the
-bound, counted; and the same journal with all of it on as with all of it off.
+Metrics, health and the access log. The rendering against text checked by hand; who may read the
+metrics page; then a server with all of it on: readiness before the shard has recovered, after,
+and while draining; a scrape of the metrics page, with its path written as itself and
+percent-encoded, and the page hidden from a peer elsewhere; request ids; access-log lines read
+back as JSON; a connection refused at the bound, counted; and the same journal with all of it on
+as with all of it off. Last, a process stopped by SIGTERM with a request in flight
+(`Server.stopOnSignal`).
 -/
 
 namespace Tests.Ops
@@ -58,6 +61,24 @@ def awkward : Ops.Access :=
 def field (line key : String) : Option Json :=
   (Json.parse line).toOption.bind fun j => (j.getObjVal? key).toOption
 
+def loopback : Option Ip.Addr := Ip.parse "127.0.0.1"
+
+def elsewhere : Option Ip.Addr := Ip.parse "10.0.3.7"
+
+def isLoopback (text : String) : Option Bool :=
+  (Ip.parse text).map (·.isLoopback)
+
+def bearer (token : String) : String × String :=
+  ("authorization", "Bearer " ++ token)
+
+def metricsFrom (access : OpsConfig) (peer : Option Ip.Addr)
+    (headers : List (String × String) := []) : Option Ops.Endpoint :=
+  Ops.route? { access with metricsPath := some "/metrics" } peer
+    { method := .get, path := ["metrics"], headers }
+
+def health : OpsConfig :=
+  { metricsPath := some "/metrics", livenessPath := some "/healthz", readinessPath := some "/readyz" }
+
 def stats : Ops.Stats [1000] :=
   (({} : Ops.Stats [1000]).answered .get 200 500 |>.answered .get 204 2000
     |>.answered .post 503 10 |>.refuse |>.appended 3 |>.saved)
@@ -100,18 +121,41 @@ def tests : List (String × Bool) :=
       (Ops.RequestId.tag "x" { headers := [("x-request-id", "app"), ("a", "b")] }).headers
         == [("a", "b"), ("x-request-id", "x")]),
     ("ops: with nothing configured no request is the operators'",
-      Ops.route? {} { method := .get, path := ["metrics"] } == none
+      Ops.route? {} loopback { method := .get, path := ["metrics"] } == none
         && !({} : OpsConfig).active && !({} : OpsConfig).counting),
     ("ops: counts are kept only for a metrics page, and a log alone is active",
       ({ metricsPath := some "/m" } : OpsConfig).counting
         && !({ accessLog := .stderr } : OpsConfig).counting
         && ({ accessLog := .stderr } : OpsConfig).active),
     ("ops: a GET at a configured path is, and nothing else",
-      Ops.route? { metricsPath := some "/metrics" } { method := .get, path := ["metrics"] }
+      Ops.route? { metricsPath := some "/metrics" } loopback { method := .get, path := ["metrics"] }
           == some .metrics
-        && Ops.route? { metricsPath := some "/metrics" } { method := .post, path := ["metrics"] }
-          == none
-        && Ops.route? { readinessPath := some "/readyz" } { method := .get, path := [] } == none) ]
+        && Ops.route? { metricsPath := some "/metrics" } loopback
+          { method := .post, path := ["metrics"] } == none
+        && Ops.route? { readinessPath := some "/readyz" } loopback { method := .get, path := [] }
+          == none),
+    ("ops: loopback addresses are 127.0.0.0/8, ::1 and 127.0.0.0/8 mapped into IPv6",
+      ["127.0.0.1", "127.255.3.4", "::1", "::ffff:127.0.0.1"].all (isLoopback · == some true)
+        && ["126.255.255.255", "128.0.0.1", "10.0.0.1", "0.0.0.0", "::", "::2", "::ffff:10.0.0.1",
+          "fe80::1", "::127.0.0.1"].all (isLoopback · == some false)),
+    ("ops: by default the metrics page is answered to a loopback peer only, and hidden from others",
+      metricsFrom {} loopback == some .metrics && metricsFrom {} (Ip.parse "::1") == some .metrics
+        && metricsFrom {} elsewhere == some .hidden && metricsFrom {} none == some .hidden
+        && (Ops.answer .hidden { recovered := true, stopping := false } "").status == 404),
+    ("ops: with a token, a peer elsewhere reads the page only with it",
+      metricsFrom { metricsAccess := .token "s3cret" } elsewhere [bearer "s3cret"] == some .metrics
+        && metricsFrom { metricsAccess := .token "s3cret" } elsewhere
+          [("authorization", "bearer s3cret")] == some .metrics
+        && metricsFrom { metricsAccess := .token "s3cret" } loopback == some .metrics
+        && [[], [bearer "s3cre"], [bearer "s3cret!"], [bearer ""], [("authorization", "s3cret")],
+            [("authorization", "Basic s3cret")], [("authorization", "Bearer s3cret x")]].all
+          (metricsFrom { metricsAccess := .token "s3cret" } elsewhere · == some .hidden)),
+    ("ops: with anyone, every peer reads the page",
+      metricsFrom { metricsAccess := .anyone } elsewhere == some .metrics),
+    ("ops: liveness and readiness answer every peer",
+      [loopback, elsewhere, none].all fun peer =>
+        Ops.route? health peer { method := .get, path := ["healthz"] } == some .live
+          && Ops.route? health peer { method := .get, path := ["readyz"] } == some .ready) ]
 
 /-! A server with all of it on. -/
 
@@ -157,6 +201,7 @@ def readyTest : Async (List (String × Bool)) := do
     Async.sleep 10
   for _ in [0:3] do discard <| Tests.Web.fetch port "/"
   let page ← Tests.Web.fetch port "/metrics"
+  let encoded ← Tests.Web.fetch port "/%6Detrics"
   server.drain
   let draining ← Tests.Web.fetch port "/readyz"
   let stillAlive ← Tests.Web.fetch port "/healthz"
@@ -167,8 +212,10 @@ def readyTest : Async (List (String × Bool)) := do
     ("ops: not ready before the shard has recovered, and alive",
       status early == "503" && status alive == "200"),
     ("ops: ready once it has", status ready == "200"),
-    ("ops: the metrics page is served in the text format",
+    ("ops: the metrics page is served in the text format, to a peer on the loopback address",
       status page == "200" && page.contains ("content-type: " ++ Metrics.contentType)),
+    ("ops: its path is matched once decoded",
+      status encoded == "200" && encoded.contains "lanes_ready 1"),
     ("ops: it counts what was answered, by method and status class",
       valueOf page "lanes_http_requests_total{method=\"GET\",status_class=\"2xx\"}" == some 5
         && valueOf page "lanes_http_requests_total{method=\"GET\",status_class=\"5xx\"}"
@@ -179,7 +226,36 @@ def readyTest : Async (List (String × Bool)) := do
     ("ops: draining is not ready, still alive, and still serves",
       status draining == "503" && status stillAlive == "200" && status served == "200"),
     ("ops: every answer has its line in the access log, and each line is JSON",
-      logged.size == polls + 9 && logged.all fun l => (Json.parse l).toOption.isSome) ]
+      logged.size == polls + 10 && logged.all fun l => (Json.parse l).toOption.isSome) ]
+
+/-- `Ops.front` for a connection from elsewhere: the metrics page, however its path was written,
+is answered `404` and never handed on; liveness is answered. -/
+def hiddenTest : Async (List (String × Bool)) := do
+  let lines ← IO.mkRef #[]
+  let ops ← Ops.new (opsConfig lines)
+  let handed ← IO.mkRef 0
+  let submit : Request → (Response → BaseIO Unit) → BaseIO Unit := fun _ answer => do
+    handed.modify (· + 1)
+    answer (.text "app\n")
+  let probe : BaseIO Ops.Probe :=
+    return { recovered := true, stopping := false, connections := 1, inflight := 0, inbox := 0 }
+  let ask (peer : Option Ip.Addr) (target : String) : BaseIO Response := do
+    let .ok (path, _) := Request.target? target.toList | return .text "unparsed" 400
+    let request : Request := { method := .get, path }
+    let answered ← IO.Promise.new
+    ops.front probe peer submit request answered.resolve
+    return answered.result?.get.getD (.text "unanswered" 500)
+  let plain ← ask elsewhere "/metrics"
+  let encoded ← ask elsewhere "/%6Detrics"
+  let alive ← ask elsewhere "/healthz"
+  let here ← ask loopback "/%6D%65trics"
+  return [
+    ("ops: from elsewhere, the metrics page is not found, written plainly or percent-encoded",
+      plain.status == 404 && encoded.status == 404 && (← handed.get) == 0
+        && !(String.fromUTF8! plain.body).contains "lanes_"),
+    ("ops: from elsewhere, liveness answers; from the loopback address, the page does",
+      alive.status == 200 && here.status == 200
+        && (String.fromUTF8! here.body).contains "lanes_ready 1") ]
 
 /-- Request ids, and what the log leaves out. -/
 def logTest : Async (List (String × Bool)) := do
@@ -261,7 +337,114 @@ def journalTest : Async (List (String × Bool)) := do
     ("ops: and the journal's appends were counted",
       (valueOf page "lanes_journal_entries_total").any (· > 0)) ]
 
+/-! ## A stop -/
+
+inductive Job where
+  | ask (id : ReqId)
+  | done (id : ReqId)
+  deriving DecidableEq, Repr, Hashable
+
+inductive Work where
+  | reply (id : ReqId)
+  | start (id : ReqId)
+  deriving DecidableEq, Repr, Hashable
+
+/-- Answers a request once the work it starts is reported done. -/
+def slow : Service Job Work Unit where
+  init := ()
+  step _
+    | .ask id => ((), [.start id])
+    | .done id => ((), [.reply id])
+
+def slowBridge : Bridge (Server.sig Job Work) where
+  decode id _ := .ok (.ask id)
+  encode
+    | .reply id => some (id, .text "done\n")
+    | .start _ => none
+
+abbrev Slow := fronted (Server.system slow) slowBridge {}
+
+/-- Run by `lanesTest stop-child drain_ms`: a server whose work is done when a line arrives on
+standard input, and never if it ends first, stopped by a signal. It says on standard output when it is listening and when
+work has started. -/
+def stopChild (drain_ms : Nat) : IO Unit := do
+  let out ← IO.getStdout
+  let say (line : String) : IO Unit := do
+    out.putStrLn line
+    out.flush
+  let held : IO.Ref (Option (Http.Server Slow)) ← IO.mkRef none
+  let onOutput : Work → Async Unit
+    | .start id => do
+      say "working"
+      discard <| IO.asTask (prio := .dedicated) do
+        let line ← (← IO.getStdin).getLine
+        if let (some server, false) := (← held.get, line.isEmpty) then
+          discard <| Lanes.block (server.tryInput (.done id))
+    | .reply _ => pure ()
+  Lanes.block do
+    let server ← serveFronted (Server.system slow) slowBridge
+      { port := 0, ops := { readinessPath := some "/readyz" } } {} onOutput
+    held.set (some server)
+    server.stopOnSignal drain_ms (listening := say s!"listening {server.port.getD 0}")
+
+/-- Wait for a child's exit, for at most `ms`; kill it if it has not. -/
+def exitWithin {cfg : IO.Process.StdioConfig} (child : IO.Process.Child cfg) (ms : Nat) :
+    Async (Option UInt32) := do
+  let waited ← IO.asTask (prio := .dedicated) child.wait
+  let code ← Tests.Durable.within ms (await waited)
+  if code.isNone then child.kill
+  return code.bind (·.toOption)
+
+/-- The next line of `out`, waited for at most `ms`. -/
+def lineWithin (out : IO.FS.Handle) (ms : Nat) : Async String := do
+  let line ← IO.asTask (prio := .dedicated) out.getLine
+  return (((← Tests.Durable.within ms (await line)).bind (·.toOption)).getD "").trimAscii.toString
+
+/-- Poll readiness until it answers `want`, at most 500 times. -/
+def readiness (port : UInt16) (want : String) : Async Bool := do
+  for _ in [0:500] do
+    if status (← Tests.Web.fetch port "/readyz") == want then return true
+    Async.sleep 10
+  return false
+
+/-- A child serves, a request starts work, and the child is sent SIGTERM; the work is done during
+the drain if `finish`. What the request was answered, whether each step was seen, and the exit
+status. -/
+def stopRun (drain_ms : Nat) (finish : Bool) : Async (Option (String × Bool × Option UInt32)) := do
+  let child ← IO.Process.spawn {
+    cmd := (← IO.appPath).toString, args := #["stop-child", toString drain_ms]
+    stdin := .piped, stdout := .piped }
+  let some port := ((← lineWithin child.stdout 60000).dropPrefix? "listening ").bind
+      (·.toString.toNat?) |
+    child.kill
+    return none
+  let port := port.toUInt16
+  let ready ← readiness port "200"
+  let request ← async (Tests.Web.fetch port "/work")
+  let started := (← lineWithin child.stdout 10000) == "working"
+  discard <| IO.Process.output { cmd := "kill", args := #["-TERM", toString child.pid] }
+  let draining ← if finish then readiness port "503" else pure true
+  let (stdin, child) ← child.takeStdin
+  if finish then
+    stdin.putStrLn "done"
+    stdin.flush
+  let response ← Tests.Durable.within 10000 (await request)
+  let code ← exitWithin child 10000
+  return some ((response.getD "").take 12 |>.toString, ready && started && draining, code)
+
+def stopTest : Async (List (String × Bool)) := do
+  let finished ← stopRun 30000 true
+  let cut ← stopRun 300 false
+  return [
+    ("stop: on SIGTERM, readiness answers 503 while a request in flight is answered, and the "
+      ++ "process exits 0",
+      finished == some ("HTTP/1.1 200", true, some 0)),
+    ("stop: a request still in flight at the drain's deadline is answered 503, and the process "
+      ++ "exits 0",
+      cut == some ("HTTP/1.1 503", true, some 0)) ]
+
 def live : Async (List (String × Bool)) := do
-  return (← readyTest) ++ (← logTest) ++ (← refusedTest) ++ (← journalTest)
+  return (← readyTest) ++ (← hiddenTest) ++ (← logTest) ++ (← refusedTest) ++ (← journalTest)
+    ++ (← stopTest)
 
 end Tests.Ops

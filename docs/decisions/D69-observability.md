@@ -113,3 +113,21 @@ slows the requests it logs, since a line is written before its response is hande
 
 Not done: the text format is not yet tested against Go's `expfmt` parser, which `docs/STDLIB.md`
 names as its oracle; it is tested against text checked by hand.
+
+*Amendment: the metrics page is for the machine it runs on.* A load balancer's rule does not keep
+the page from the internet: it matches the path as the client wrote it, and `Ops.route?` matches
+it after percent-decoding, so `/%6Detrics` passes a rule written for `/metrics`. Matching the
+path as written would need the raw target in `Request`, and so a change of the journal's codec.
+Instead the server reads each connection's peer, and the page is answered only to one
+`OpsConfig.metricsAccess` allows: by default a peer on a loopback address (`Ip.Addr.isLoopback`),
+which a scraper on the same machine is; `.token` adds a request with that bearer token, compared
+in a time that depends on the lengths only; `.anyone` is every peer. Anyone else is answered
+`404` at the page's path, however it is written, and the request reaches no system, as before
+(`Ops.route?_metrics`, `Ops.route?_hidden`). Liveness and readiness answer every peer alike
+(`Ops.route?_peer`): a load balancer must reach them, and they tell nothing. A rule of the load
+balancer stays useful as a second guard.
+
+*Amendment: a stop.* `Server.stopOnSignal` is the deployment's stop: at SIGTERM or SIGINT it calls
+`drain`, waits until the requests the shard has taken are answered or a deadline passes, and
+calls `stop`. With one instance there is no other target to take the traffic, so it waits for
+the requests in flight rather than for the load balancer's deregistration delay.
