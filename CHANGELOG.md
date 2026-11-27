@@ -50,6 +50,7 @@ under Unreleased (`CONTRIBUTING.md`).
 ### Security
 
 - Sign-in keeps nothing on the server for a sign-in begun, so anonymous beginnings can no longer evict other users' sign-ins: the binding cookie holds the state, the provider and the expiry under an HMAC tag by a key drawn at start, the nonce and the PKCE verifier are tags of the state, and the server keeps only the states of accepted callbacks until they expire (`OAuth.Used`, at most `Settings.maxUsed`, which replaces `maxPending`), a full set refusing only tickets older than those it dropped. A state is accepted at most once (`OAuth.Used.accepted_once`) and only from its browser, for its provider, before it expires (`OAuth.check_ok`); a replay is refused as `used`. An identity from a provider of several issuers names the first, so Google's two give one key (`OAuth.Identity.under`).
+- The deployment's stack runs no script it has not pinned: `ScriptRef` must be a commit and `ScriptSha256` is required, with no default, and `infra/app/app-instance.sh` refuses to install a script fetched without its hash or with another. The deploy role also trusts only the workflow file `DeployWorkflow` (`deploy.yml` by default) as it is on `DeployBranch`, through the token's `job_workflow_ref`.
 
 ## [0.1.0] - unreleased
 

@@ -15,7 +15,7 @@ Metadata:
       - Label: { default: The machine }
         Parameters: [InstanceType, JournalVolumeSize, RootVolumeSize, ImageId, LatestUbuntuImage, KeyName, VpcCidr]
       - Label: { default: Releases and deploys }
-        Parameters: [ReleaseBucket, ReleasePrefix, GitHubRepository, GitHubOwnerId, GitHubRepositoryId, DeployBranch, ExistingOidcProviderArn, ScriptRepository, ScriptRef, ScriptSha256]
+        Parameters: [ReleaseBucket, ReleasePrefix, GitHubRepository, GitHubOwnerId, GitHubRepositoryId, DeployBranch, DeployWorkflow, ExistingOidcProviderArn, ScriptRepository, ScriptRef, ScriptSha256]
       - Label: { default: "Backups, logs and alarms" }
         Parameters: [SnapshotIntervalHours, SnapshotRetainCount, JournalSnapshotId, LogRetentionDays, AlarmEmail]
       - Label: { default: Media and the database }
@@ -161,6 +161,13 @@ Parameters:
     Default: main
     AllowedPattern: "^[A-Za-z0-9_./-]+$"
     Description: The only branch whose workflow runs may deploy.
+  DeployWorkflow:
+    Type: String
+    Default: deploy.yml
+    AllowedPattern: "^[A-Za-z0-9_.-]+\\.ya?ml$"
+    Description: >-
+      The file, in .github/workflows/ of GitHubRepository, of the only workflow that may deploy:
+      the role trusts that file as it is on DeployBranch (the token's job_workflow_ref).
   ExistingOidcProviderArn:
     Type: String
     Default: ""
@@ -175,14 +182,16 @@ Parameters:
     Description: The public repository whose infra/app/app-instance.sh sets the instance up.
   ScriptRef:
     Type: String
-    Default: main
-    AllowedPattern: "^[A-Za-z0-9_./-]+$"
-    Description: The branch, tag or commit of that script; a commit is best, with ScriptSha256.
+    AllowedPattern: "^[0-9a-f]{40}$"
+    ConstraintDescription: a commit, 40 hexadecimal digits, not a branch or a tag
+    Description: >-
+      The commit of that script, which runs as root on the instance: a commit, so that what a
+      branch holds later never runs (docs/DEPLOY.md).
   ScriptSha256:
     Type: String
-    Default: ""
-    AllowedPattern: "^([0-9a-f]{64})?$"
-    Description: The script's SHA-256, optional; the instance refuses another.
+    AllowedPattern: "^[0-9a-f]{64}$"
+    ConstraintDescription: the SHA-256 of the script, 64 hexadecimal digits
+    Description: The script's SHA-256 (sha256sum infra/app/app-instance.sh); the instance runs no other.
   SnapshotIntervalHours:
     Type: Number
     Default: 24
@@ -261,7 +270,6 @@ Conditions:
   SubjectById: !And
     - !Not [!Equals [!Ref GitHubOwnerId, ""]]
     - !Not [!Equals [!Ref GitHubRepositoryId, ""]]
-  HasScriptSha: !Not [!Equals [!Ref ScriptSha256, ""]]
   HasMetrics: !Not [!Equals [!Ref MetricsPath, ""]]
   FromSnapshot: !Not [!Equals [!Ref JournalSnapshotId, ""]]
   HasAlarmEmail: !Not [!Equals [!Ref AlarmEmail, ""]]
@@ -743,9 +751,9 @@ Resources:
             exec >>/var/log/lanes-setup.log 2>&1
             curl -fsSL --retry 5 -o /root/app-instance.sh \
               "https://raw.githubusercontent.com/${ScriptRepository}/${ScriptRef}/infra/app/app-instance.sh"
-            if [ -n "${ScriptSha}" ]; then echo "${ScriptSha}  /root/app-instance.sh" | sha256sum -c -; fi
+            echo "${ScriptSha256}  /root/app-instance.sh" | sha256sum -c -
             CONFIG_PARAMETER=${ConfigParameter} AWS_REGION=${AWS::Region} bash /root/app-instance.sh setup
-          - ScriptSha: !If [HasScriptSha, !Ref ScriptSha256, ""]
+          - {}
 
   LoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
@@ -902,7 +910,7 @@ Resources:
   DeployRole:
     Type: AWS::IAM::Role
     Properties:
-      Description: !Sub "Assumed by ${GitHubRepository}'s deploy workflow on ${DeployBranch} to deploy the Lanes application ${AppName}"
+      Description: !Sub "Assumed by ${GitHubRepository}'s workflow ${DeployWorkflow} on ${DeployBranch} to deploy the Lanes application ${AppName}"
       MaxSessionDuration: 3600
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
@@ -921,6 +929,9 @@ Resources:
                     - Owner: !Select [0, !Split ["/", !Ref GitHubRepository]]
                       Name: !Select [1, !Split ["/", !Ref GitHubRepository]]
                   - !Sub "repo:${GitHubRepository}:ref:refs/heads/${DeployBranch}"
+                # The workflow file itself, as it is on the branch: another workflow of the
+                # repository, or this one run from another branch, is not trusted.
+                token.actions.githubusercontent.com:job_workflow_ref: !Sub "${GitHubRepository}/.github/workflows/${DeployWorkflow}@refs/heads/${DeployBranch}"
       Policies:
         - PolicyName: deploy
           PolicyDocument:

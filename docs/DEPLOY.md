@@ -115,8 +115,10 @@ and name the stack after the application. The parameters:
 | `GitHubRepository` | | `owner/name` of the application's repository |
 | `GitHubOwnerId`, `GitHubRepositoryId` | empty | Only if your repository's OIDC subject names repositories by id |
 | `DeployBranch` | `main` | The only branch whose runs may deploy |
+| `DeployWorkflow` | `deploy.yml` | The only workflow file that may deploy, as it is on `DeployBranch` (the role checks the token's `job_workflow_ref`) |
 | `ExistingOidcProviderArn` | empty | The account's GitHub OIDC provider, if it has one (IAM → Identity providers) |
-| `ScriptRepository`, `ScriptRef`, `ScriptSha256` | `tacitresearch/lanes`, `main`, empty | Where the instance fetches `infra/app/app-instance.sh`; pin a commit and its SHA-256 |
+| `ScriptRepository` | `tacitresearch/lanes` | The repository the instance fetches `infra/app/app-instance.sh` from |
+| `ScriptRef`, `ScriptSha256` | | The commit of that script and its SHA-256, both required (below) |
 | `SnapshotIntervalHours`, `SnapshotRetainCount` | 24, 7 | Snapshots of the journal's volume |
 | `JournalSnapshotId` | empty | A snapshot to restore (see "Restore") |
 | `LogRetentionDays` | 30 | How long log lines are kept |
@@ -124,6 +126,19 @@ and name the stack after the application. The parameters:
 | `MediaUser` | `false` | `true` for an IAM user, for an S3 client that reads a key from the environment (see "Media") |
 | `MailIdentity` | empty | An SES identity the instance may send email from (see "Email") |
 | `DatabaseEngine` | `none` | `postgres` adds RDS PostgreSQL (see "The database") |
+
+The script sets the machine up as root, at the first boot and at each `configure`, so the stack
+names it by a commit, never a branch, and by its hash, and the instance runs no other: a script
+whose SHA-256 differs is refused before it runs. Take both from a commit you have read, such as
+the release of Lanes the application builds with:
+
+```bash
+git rev-parse HEAD                      # ScriptRef
+sha256sum infra/app/app-instance.sh     # ScriptSha256, the first field
+```
+
+To move the instance to a newer script, update the stack with the new pair and run the document's
+`configure`.
 
 **Next**, **Next**, tick **I acknowledge that AWS CloudFormation might create IAM resources**,
 **Submit**. Without `HostedZoneId`, the stack waits on the certificate: **Certificate Manager →
@@ -141,7 +156,13 @@ directory, as `deploy.yml`, and set its `app-dir` default to `.`. Then, in the r
 release location, the document and the readiness URL). Without it the workflow does nothing.
 
 The deploy role trusts tokens for `repo:<owner>/<name>:ref:refs/heads/<DeployBranch>` only: a
-run on another branch, a pull request or a fork cannot assume it. A repository whose OIDC subject
+run on another branch, a pull request or a fork cannot assume it. It also checks the token's
+`job_workflow_ref`, `<owner>/<name>/.github/workflows/<DeployWorkflow>@refs/heads/<DeployBranch>`:
+another workflow of the repository, even one on that branch, cannot assume it either. A
+workflow file of another name than `deploy.yml` is given as `DeployWorkflow`. AWS STS takes
+GitHub's `job_workflow_ref` as a condition key only since 2026, and no real stack has checked it
+("What has not been checked"): a role that refuses a run whose subject is right is the place to
+look. A repository whose OIDC subject
 names repositories by id (as `tacitresearch/lanes` does, `docs/RUNNERS.md`) gives
 `GitHubOwnerId` and `GitHubRepositoryId`.
 
@@ -461,7 +482,7 @@ and readiness answers, while on loopback the page is served; and deploy, rollbac
 the refusal of a wrong SHA-256 and the rollback of a release that never becomes ready, with
 stubs of `aws` and `systemctl`.
 
-Not checked: the AWS integration on an instance (the role's credentials fetched from the
+Not checked: the deploy role's condition on `job_workflow_ref` against a real token; the AWS integration on an instance (the role's credentials fetched from the
 metadata service from inside the unit's sandbox, refreshed, and used by S3), SES with a verified
 identity and the `ses:SendEmail` grant, and the stack with `MediaUser` false and `MailIdentity`
 set; a real stack, instance, role, certificate, load balancer and its rule, Data

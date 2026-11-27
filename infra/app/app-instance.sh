@@ -144,13 +144,17 @@ fetch_config() {
   check_conf
 }
 
-# Installs this script from SCRIPT_URL, checked against SCRIPT_SHA256 when given; without a URL,
-# the running copy.
+# Installs this script from SCRIPT_URL, which must have the SHA-256 SCRIPT_SHA256: it runs as
+# root, so one fetched without its hash, or with another, is refused. Without a URL, the running
+# copy.
 install_script() {
   local tmp
+  if [ -n "$SCRIPT_URL" ] && ! [[ $SCRIPT_SHA256 =~ ^[0-9a-f]{64}$ ]]; then
+    die "SCRIPT_URL is given without SCRIPT_SHA256: a script is not run unchecked"
+  fi
   tmp=$(mktemp "$BASE/.app-instance.XXXXXX")
   if [ -n "$SCRIPT_URL" ]; then curl -fsSL --retry 5 -o "$tmp" "$SCRIPT_URL"; else cp "$0" "$tmp"; fi
-  if [ -n "$SCRIPT_SHA256" ] && ! echo "$SCRIPT_SHA256  $tmp" | sha256sum -c --status -; then
+  if [ -n "$SCRIPT_URL" ] && ! echo "$SCRIPT_SHA256  $tmp" | sha256sum -c --status -; then
     rm -f "$tmp"
     die "$SCRIPT_URL does not have the SHA-256 $SCRIPT_SHA256"
   fi
