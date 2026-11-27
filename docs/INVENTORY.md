@@ -19,12 +19,12 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Net` | 37 | 6 | 5 | 0 | 0 | 25 | 1 |
 | `Lanes/Outside` | 159 | 119 | 4 | 6 | 1 | 29 | 0 |
 | `Lanes/Proof` | 40 | 16 | 0 | 0 | 0 | 23 | 1 |
-| `Lanes/Runtime` | 173 | 94 | 21 | 0 | 28 | 30 | 0 |
+| `Lanes/Runtime` | 180 | 100 | 21 | 0 | 29 | 30 | 0 |
 | `Lanes/Semantics` | 63 | 11 | 0 | 0 | 0 | 51 | 1 |
 | `Lanes/Testing` | 84 | 0 | 0 | 1 | 83 | 0 | 0 |
 | `Lanes/Web` | 676 | 354 | 57 | 46 | 163 | 54 | 2 |
-| `LanesCli` | 125 | 0 | 0 | 0 | 51 | 0 | 74 |
-| All | 2409 | 1263 | 126 | 124 | 430 | 340 | 126 |
+| `LanesCli` | 126 | 0 | 0 | 0 | 55 | 0 | 71 |
+| All | 2417 | 1269 | 126 | 124 | 435 | 340 | 123 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -257,7 +257,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Check.Property.holds` | proved | `Check.refines_sound`, `Check.refines_traces`, `Check.system_sound` and 1 more |
 | `Check.Trace.last` | proved | `Check.search_deadlock`, `Check.search_reached`, `Check.search_violated` and 2 more |
 | `Check.Trace.labels` | proved | `Check.system_violated` |
-| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Cache.lean` and 28 more |
+| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Cache.lean` and 29 more |
 | `Check.Path.last` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
 | `Check.Path.toTraceAux` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
 | `Check.Path.toTrace` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
@@ -308,9 +308,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Check.Report.map` | proved | through `Check.system`: `Check.refines_sound`, `Check.refines_traces` and 3 more |
 | `Check.model` | proved | `Scenario.reachable_iff` |
 | `Check.system` | proved | `Check.refines_sound`, `Check.refines_traces`, `Check.system_sound` and 2 more |
-| `Check.Trace.render` | checked | `Tests/Election.lean`, `Tests/Tutorial.lean` |
-| `Check.Report.render` | checked | `Tests/Election.lean`, `Tests/Tutorial.lean` |
-| `Check.Report.renderSystem` | checked | `Tests/Election.lean`, `Tests/Tutorial.lean` |
+| `Check.Trace.render` | checked | `Tests/Election.lean`, `Tests/Tutorial.lean`, `Tests/TutorialWeb.lean` |
+| `Check.Report.render` | checked | `Tests/Election.lean`, `Tests/Tutorial.lean`, `Tests/TutorialWeb.lean` |
+| `Check.Report.renderSystem` | checked | `Tests/Election.lean`, `Tests/Tutorial.lean`, `Tests/TutorialWeb.lean` |
 
 ## `Lanes/Check/SystemSound.lean`
 
@@ -417,7 +417,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Driver.silent` | checked | `Tests/Election.lean` |
 | `Driver.script` | checked | `Tests/KV.lean` |
-| `Driver.anyOrder` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 6 more |
+| `Driver.anyOrder` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 8 more |
 | `World.init` | checked | `Tests/Bank.lean` |
 | `World.next` | proved | `World.Equiv.next` |
 | `simulate` | checked | `Tests/Bank.lean` |
@@ -484,7 +484,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Codec.int` | proved | its type, `Codec` |
 | `Codec.sum` | proved | its type, `Codec` |
 | `Codec.option` | proved | its type, `Codec` |
-| `Codec.readMany` | tested | `Tests/Codec.lean`, `Tests/Durable.lean` |
+| `Codec.readMany` | tested | `Tests/Codec.lean`, `Tests/Durable.lean`, `Tests/TutorialWeb.lean` and 3 more |
 | `Codec.list` | proved | its type, `Codec` |
 | `Codec.extTreeMap` | proved | its type, `Codec` |
 | `Codable.instByteArray` | proved | its type, `Codable` |
@@ -1900,28 +1900,28 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Kernel.cell` | proved | `Batch.run_peek`, `Journal.Upgrade.inv_load`, `Kernel.WellFormed.runBatch_of_due` and 10 more |
-| `Kernel.setCell` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 43 more |
+| `Kernel.cell` | proved | `Batch.run_peek`, `Journal.Upgrade.inv_load`, `Kernel.Plan.fixAll_local` and 12 more |
+| `Kernel.setCell` | proved | through `Kernel.apply`, `Kernel.boot` and 8 more: `Batch.run_handed`, `Batch.run_kernel` and 49 more |
 | `Kernel.abs` | proved | `Kernel.WellFormed.quiet_iff`, `Kernel.WellFormed.wait_forever`, `Kernel.abs_boot` and 7 more |
 | `Kernel.env` | proved | `Kernel.abs_boot`, `Kernel.accept_sound`, `Kernel.exec_reachable` and 4 more |
-| `Kernel.unschedule` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 43 more |
-| `Kernel.perform` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 43 more |
-| `Kernel.performAll` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 43 more |
-| `Kernel.down` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 43 more |
-| `Kernel.settle` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 43 more |
-| `Kernel.rest` | proved | through `Kernel.apply`, `Kernel.exec` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 35 more |
-| `Kernel.takeState` | proved | through `Kernel.apply`, `Kernel.exec` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 35 more |
-| `Kernel.handle` | proved | `Kernel.frame_handle` |
+| `Kernel.unschedule` | proved | through `Kernel.apply`, `Kernel.boot` and 8 more: `Batch.run_handed`, `Batch.run_kernel` and 49 more |
+| `Kernel.perform` | proved | through `Kernel.apply`, `Kernel.boot` and 8 more: `Batch.run_handed`, `Batch.run_kernel` and 49 more |
+| `Kernel.performAll` | proved | through `Kernel.apply`, `Kernel.boot` and 8 more: `Batch.run_handed`, `Batch.run_kernel` and 49 more |
+| `Kernel.down` | proved | through `Kernel.apply`, `Kernel.boot` and 8 more: `Batch.run_handed`, `Batch.run_kernel` and 49 more |
+| `Kernel.settle` | proved | `Kernel.setState_settle` |
+| `Kernel.rest` | proved | through `Kernel.apply`, `Kernel.exec` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 40 more |
+| `Kernel.takeState` | proved | through `Kernel.apply`, `Kernel.exec` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 40 more |
+| `Kernel.handle` | proved | `Kernel.frame_handle`, `Kernel.handleAhead_eq`, `Kernel.handle_setState` |
 | `Kernel.startActor` | proved | `Kernel.frame_startActor` |
 | `Kernel.boot` | proved | `Http.kernel_fronted_answered_le_arrived`, `Http.kernel_served_answered_le_arrived`, `Journal.Disk.torn_nil` and 13 more |
 | `Kernel.accept` | proved | `Kernel.accept_sound` |
-| `Kernel.run1` | proved | `Kernel.run1_sound` |
+| `Kernel.run1` | proved | `Kernel.run1Ahead_eq`, `Kernel.run1_sound` |
 | `Kernel.fire` | proved | `Kernel.fire_sound`, `Kernel.frame_fire` |
 | `Kernel.advance` | proved | through `Kernel.apply`, `Kernel.exec`: `Batch.run_handed`, `Batch.run_kernel` and 20 more |
-| `Kernel.timerNext` | proved | through `Kernel.apply`, `Kernel.exec` and 2 more: `Batch.run_handed`, `Batch.run_kernel` and 31 more |
-| `Kernel.step` | proved | `Kernel.WellFormed.runBatch_of_due`, `Kernel.WellFormed.step_events_ne_nil`, `Kernel.WellFormed.step_of_due` and 1 more |
+| `Kernel.timerNext` | proved | through `Kernel.apply`, `Kernel.exec` and 2 more: `Batch.run_handed`, `Batch.run_kernel` and 33 more |
+| `Kernel.step` | proved | `Kernel.WellFormed.runBatch_of_due`, `Kernel.WellFormed.step_events_ne_nil`, `Kernel.WellFormed.step_of_due` and 2 more |
 | `Kernel.wait` | proved | `Kernel.WellFormed.step_events_ne_nil`, `Kernel.WellFormed.wait_for_ms`, `Kernel.WellFormed.wait_forever` and 1 more |
-| `Kernel.runBatch` | proved | `Kernel.WellFormed.runBatch`, `Kernel.WellFormed.runBatch_of_due`, `Kernel.runBatchAhead_eq` and 5 more |
+| `Kernel.runBatch` | proved | `Kernel.WellFormed.runBatch`, `Kernel.WellFormed.runBatch_of_due`, `Kernel.runBatchAhead_eq` and 6 more |
 | `Kernel.quiet` | proved | `Batch.run_resolved`, `Kernel.WellFormed.quiet_iff` |
 | `Kernel.image` | proved | `Batch.flush_save`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save` and 8 more |
 | `Kernel.Image.kernel` | proved | `Batch.flush_save`, `Journal.Begun.resume_upgraded`, `Journal.Upgrade.begin_crash` and 3 more |
@@ -1981,6 +1981,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Pace.choose` | tested | `Tests/Pace.lean` |
 | `Pace.spread` | tested | `Tests/Pace.lean` |
 | `Pace.cycleOf` | tested | `Tests/Pace.lean` |
+| `Pace.record` | tested | `Tests/Pace.lean` |
 | `Pace.observe` | tested | `Tests/Pace.lean` |
 | `Pace.work` | tested | `Tests/Pace.lean` |
 
@@ -2061,23 +2062,29 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Kernel.ahead` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 1 more |
+| `Kernel.replay` | proved | through `Kernel.Plan.fixAll`, `Kernel.Plan.real` and 6 more: `Kernel.Plan.fixAll_local`, `Kernel.good_plan` and 7 more |
+| `Kernel.ahead` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 2 more |
 | `Kernel.Fits` | spec | a predicate |
-| `Kernel.Plan.get` | proved | through `Kernel.plan`, `Kernel.runBatchAhead` and 2 more: `Kernel.good_plan`, `Kernel.runBatchAhead_eq` and 2 more |
-| `Kernel.Plan.set` | proved | through `Kernel.plan`, `Kernel.runBatchAhead` and 2 more: `Kernel.good_plan`, `Kernel.runBatchAhead_eq` and 2 more |
-| `Kernel.Plan.drop` | proved | through `Kernel.runBatchAhead`, `Kernel.runWaves` and 1 more: `Kernel.runBatchAhead_eq`, `Kernel.runWaves_eq` and 1 more |
+| `Kernel.setState` | proved | `Kernel.Plan.fixAll_local`, `Kernel.handle_setState`, `Kernel.setState_settle` |
+| `Kernel.restAs` | proved | through `Kernel.handleAhead`, `Kernel.run1Ahead` and 4 more: `Kernel.handleAhead_eq`, `Kernel.run1Ahead_eq` and 5 more |
+| `Kernel.Plan.set` | proved | through `Kernel.handleAhead`, `Kernel.plan` and 5 more: `Kernel.good_plan`, `Kernel.handleAhead_eq` and 6 more |
+| `Kernel.Plan.drop` | proved | through `Kernel.Plan.fixAll`, `Kernel.Plan.real` and 5 more: `Kernel.Plan.fixAll_local`, `Kernel.good_plan` and 7 more |
+| `Kernel.Plan.reset` | proved | through `Kernel.run1Ahead`, `Kernel.runBatchAhead` and 3 more: `Kernel.run1Ahead_eq`, `Kernel.runBatchAhead_eq` and 4 more |
+| `Kernel.Plan.fixAt` | proved | through `Kernel.Plan.fixAll`, `Kernel.Plan.real` and 5 more: `Kernel.Plan.fixAll_local`, `Kernel.good_plan` and 7 more |
+| `Kernel.Plan.fixAll` | proved | `Kernel.Plan.fixAll_local` |
+| `Kernel.Plan.real` | proved | `Kernel.good_plan`, `Kernel.handleAhead_eq`, `Kernel.run1Ahead_eq` and 3 more |
 | `Kernel.Plan.Good` | spec | a predicate |
+| `Kernel.handleAhead` | proved | `Kernel.handleAhead_eq` |
+| `Kernel.run1Ahead` | proved | `Kernel.run1Ahead_eq` |
+| `Kernel.stepAhead` | proved | `Kernel.stepAhead_eq` |
+| `Kernel.runBatchAhead` | proved | `Kernel.runBatchAhead_eq`, `Kernel.wave_eq` |
+| `Kernel.mail` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 2 more |
+| `Kernel.Job.run` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 2 more |
+| `Kernel.jobs` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 2 more |
+| `Kernel.chunks` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 2 more |
+| `Kernel.Plan.add` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 2 more |
+| `Kernel.plan` | proved | `Kernel.good_plan`, `Kernel.wave_eq` |
 | `Kernel.Frame` | spec | a predicate |
-| `Kernel.handleAhead` | proved | through `Kernel.runBatchAhead`, `Kernel.runWaves` and 1 more: `Kernel.runBatchAhead_eq`, `Kernel.runWaves_eq` and 1 more |
-| `Kernel.run1Ahead` | proved | through `Kernel.runBatchAhead`, `Kernel.runWaves` and 1 more: `Kernel.runBatchAhead_eq`, `Kernel.runWaves_eq` and 1 more |
-| `Kernel.stepAhead` | proved | through `Kernel.runBatchAhead`, `Kernel.runWaves` and 1 more: `Kernel.runBatchAhead_eq`, `Kernel.runWaves_eq` and 1 more |
-| `Kernel.runBatchAhead` | proved | `Kernel.runBatchAhead_eq` |
-| `Kernel.Job.run` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 1 more |
-| `Kernel.mail` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 1 more |
-| `Kernel.jobs` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 1 more |
-| `Kernel.chunks` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 1 more |
-| `Kernel.Plan.add` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 1 more |
-| `Kernel.plan` | proved | `Kernel.good_plan` |
 | `Kernel.waves` | proved | `Kernel.waves_eq` |
 | `Kernel.runWaves` | proved | `Kernel.runWaves_eq` |
 | `Kernel.acceptAll` | proved | `Kernel.exec_inputs` |
@@ -2224,18 +2231,18 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Testing.Browser.new` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
-| `Testing.Browser.at` | tested | `Tests/Testing.lean` |
-| `Testing.Kept.parse` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
-| `Testing.Kept.covers` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.Browser.new` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and 1 more |
+| `Testing.Browser.at` | tested | `Tests/Testing.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
+| `Testing.Kept.parse` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and 1 more |
+| `Testing.Kept.covers` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and 1 more |
 | `Testing.Browser.cookie` | tested | `Tests/OAuth.lean` |
-| `Testing.Browser.keep` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.Browser.keep` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and 1 more |
 | `Testing.Browser.forget` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
-| `Testing.Browser.record` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
-| `Testing.Browser.call` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
-| `Testing.Browser.get` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
-| `Testing.Browser.post` | tested | `Tests/Testing.lean` |
-| `Testing.Browser.submit` | tested | `Tests/Testing.lean` |
+| `Testing.Browser.record` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and 1 more |
+| `Testing.Browser.call` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and 1 more |
+| `Testing.Browser.get` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and 1 more |
+| `Testing.Browser.post` | tested | `Tests/Testing.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
+| `Testing.Browser.submit` | tested | `Tests/Testing.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
 
 ## `Lanes/Testing/Http.lean`
 
@@ -2243,13 +2250,13 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Testing.listen` | tested | `Tests/Testing.lean` |
 | `Testing.json` | tested | `Tests/Testing.lean` |
-| `Testing.text` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
-| `Testing.shows` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
-| `Testing.status` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and 2 more |
+| `Testing.text` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and 1 more |
+| `Testing.shows` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and 1 more |
+| `Testing.status` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and 4 more |
 | `Testing.location` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
-| `Testing.unescape` | tested | `Tests/Testing.lean` |
-| `Testing.between` | tested | `Tests/Testing.lean` |
-| `Testing.field` | tested | `Tests/Testing.lean` |
+| `Testing.unescape` | tested | `Tests/Testing.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
+| `Testing.between` | tested | `Tests/Testing.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
+| `Testing.field` | tested | `Tests/Testing.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
 | `Testing.setCookie` | tested | `Tests/Testing.lean` |
 | `Testing.queryOf` | checked | `Tests/OAuth.lean` |
 | `Testing.segments` | tested | `Tests/Testing.lean` |
@@ -2258,71 +2265,71 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Testing.OAuth.hasOpenssl` | tested | `Tests/OAuth.lean` |
-| `Testing.OAuth.openssl` | tested | `Tests/OAuth.lean` |
-| `Testing.OAuth.Fake.at` | tested | `Tests/OAuth.lean` |
-| `Testing.OAuth.Fake.oidc` | tested | `Tests/OAuth.lean` |
-| `Testing.OAuth.yes` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
-| `Testing.OAuth.readUser` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.OAuth.hasOpenssl` | tested | `Tests/OAuth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
+| `Testing.OAuth.openssl` | tested | `Tests/OAuth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
+| `Testing.OAuth.Fake.at` | tested | `Tests/OAuth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
+| `Testing.OAuth.Fake.oidc` | tested | `Tests/OAuth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
+| `Testing.OAuth.yes` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and 1 more |
+| `Testing.OAuth.readUser` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and 1 more |
 | `Testing.OAuth.Fake.userApi` | tested | `Tests/OAuth.lean` |
-| `Testing.OAuth.Fake.client` | tested | `Tests/OAuth.lean` |
-| `Testing.OAuth.b64s` | tested | `Tests/OAuth.lean` |
-| `Testing.OAuth.str` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
-| `Testing.OAuth.nowSeconds` | tested | `Tests/OAuth.lean` |
-| `Testing.OAuth.Fake.mint` | tested | `Tests/OAuth.lean` |
-| `Testing.OAuth.userJson` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
-| `Testing.OAuth.emailsJson` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
-| `Testing.OAuth.Fake.take` | tested | `Tests/OAuth.lean` |
-| `Testing.OAuth.Fake.user?` | tested | `Tests/OAuth.lean` |
-| `Testing.OAuth.Fake.handle` | tested | `Tests/OAuth.lean` |
-| `Testing.OAuth.makeKeys` | tested | `Tests/OAuth.lean` |
-| `Testing.OAuth.Fake.start` | tested | `Tests/OAuth.lean` |
-| `Testing.OAuth.Fake.stop` | tested | `Tests/OAuth.lean` |
-| `Testing.OAuth.Fake.approve` | tested | `Tests/OAuth.lean` |
-| `Testing.OAuth.signIn` | tested | `Tests/OAuth.lean` |
+| `Testing.OAuth.Fake.client` | tested | `Tests/OAuth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
+| `Testing.OAuth.b64s` | tested | `Tests/OAuth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
+| `Testing.OAuth.str` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and 1 more |
+| `Testing.OAuth.nowSeconds` | tested | `Tests/OAuth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
+| `Testing.OAuth.Fake.mint` | tested | `Tests/OAuth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
+| `Testing.OAuth.userJson` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and 1 more |
+| `Testing.OAuth.emailsJson` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and 1 more |
+| `Testing.OAuth.Fake.take` | tested | `Tests/OAuth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
+| `Testing.OAuth.Fake.user?` | tested | `Tests/OAuth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
+| `Testing.OAuth.Fake.handle` | tested | `Tests/OAuth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
+| `Testing.OAuth.makeKeys` | tested | `Tests/OAuth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
+| `Testing.OAuth.Fake.start` | tested | `Tests/OAuth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
+| `Testing.OAuth.Fake.stop` | tested | `Tests/OAuth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
+| `Testing.OAuth.Fake.approve` | tested | `Tests/OAuth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
+| `Testing.OAuth.signIn` | tested | `Tests/OAuth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
 
 ## `Lanes/Testing/S3.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Testing.S3.raw?` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 2 more |
-| `Testing.S3.answer` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 2 more |
-| `Testing.S3.failure` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 2 more |
-| `Testing.S3.time?` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 2 more |
-| `Testing.S3.decodePair` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 2 more |
-| `Testing.S3.splitTarget` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 2 more |
-| `Testing.S3.authField` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
-| `Testing.S3.verified` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
-| `Testing.S3.escapeKey` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
-| `Testing.S3.listXml` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
-| `Testing.S3.range?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
-| `Testing.S3.serve` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
-| `Testing.S3.find?` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 2 more |
-| `Testing.S3.split` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 2 more |
-| `Testing.S3.quoted` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 2 more |
-| `Testing.S3.formParts` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 2 more |
-| `Testing.S3.formBody` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3Upload.lean` and 1 more |
-| `Testing.S3.etag` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 2 more |
-| `Testing.S3.servePost` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 2 more |
-| `Testing.S3.unquote` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
-| `Testing.S3.multipartEtag` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
-| `Testing.S3.xmlAnswer` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
-| `Testing.S3.listPartsXml` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
-| `Testing.S3.completedXml` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
-| `Testing.S3.manifest?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
-| `Testing.S3.complete` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
-| `Testing.S3.serveMultipart` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
-| `Testing.S3.serveAll` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
-| `Testing.S3.Fake.start` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
+| `Testing.S3.raw?` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 4 more |
+| `Testing.S3.answer` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 4 more |
+| `Testing.S3.failure` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 4 more |
+| `Testing.S3.time?` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 4 more |
+| `Testing.S3.decodePair` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 4 more |
+| `Testing.S3.splitTarget` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 4 more |
+| `Testing.S3.authField` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 2 more |
+| `Testing.S3.verified` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 2 more |
+| `Testing.S3.escapeKey` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 2 more |
+| `Testing.S3.listXml` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 2 more |
+| `Testing.S3.range?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 2 more |
+| `Testing.S3.serve` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 2 more |
+| `Testing.S3.find?` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 4 more |
+| `Testing.S3.split` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 4 more |
+| `Testing.S3.quoted` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 4 more |
+| `Testing.S3.formParts` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 4 more |
+| `Testing.S3.formBody` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3Upload.lean` and 3 more |
+| `Testing.S3.etag` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 4 more |
+| `Testing.S3.servePost` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 4 more |
+| `Testing.S3.unquote` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 2 more |
+| `Testing.S3.multipartEtag` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 2 more |
+| `Testing.S3.xmlAnswer` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 2 more |
+| `Testing.S3.listPartsXml` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 2 more |
+| `Testing.S3.completedXml` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 2 more |
+| `Testing.S3.manifest?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 2 more |
+| `Testing.S3.complete` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 2 more |
+| `Testing.S3.serveMultipart` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 2 more |
+| `Testing.S3.serveAll` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 2 more |
+| `Testing.S3.Fake.start` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/TutorialWeb.lean` and 1 more |
 | `Testing.S3.Fake.object?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `Testing.S3.Fake.holds` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `Testing.S3.Fake.keys` | tested | `Tests/S3.lean` |
 | `Testing.S3.Fake.refuse` | tested | `Tests/S3.lean` |
 | `Testing.S3.Fake.refusing` | tested | `Tests/S3.lean` |
-| `Testing.S3.Fake.stop` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
-| `Testing.S3.follow` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 1 more |
-| `Testing.S3.code` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3Upload.lean` |
-| `Testing.S3.postForm` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3Upload.lean` |
+| `Testing.S3.Fake.stop` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/TutorialWeb.lean` and 1 more |
+| `Testing.S3.follow` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 3 more |
+| `Testing.S3.code` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3Upload.lean` and 2 more |
+| `Testing.S3.postForm` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3Upload.lean` and 2 more |
 
 ## `Lanes/Web/Auth/IdToken.lean`
 
@@ -2455,7 +2462,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Html.empty` | tested | `Tests/Html.lean` |
+| `Html.empty` | tested | `Tests/Html.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` and 1 more |
 | `Html.instInhabited` | tested | `Tests/Html.lean` |
 | `Html.escapeChar` | proved | through `Html.escape`, `Html.render`: `Html.escape_safe`, `Html.lex_render` and 1 more |
 | `Html.escape` | proved | `Html.escape_safe` |
@@ -2476,19 +2483,19 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Html.render` | proved | `Html.lex_render`, `Html.render_void` |
 | `Html.renderAll` | proved | through `Html.render`: `Html.lex_render`, `Html.render_void` |
 | `Html.classes` | tested | `Tests/Html.lean` |
-| `Html.document` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
-| `instToHtmlHtml` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
-| `instToHtmlString` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
+| `Html.document` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 5 more |
+| `instToHtmlHtml` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 5 more |
+| `instToHtmlString` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 5 more |
 | `instToHtmlNat` | tested | `Tests/Html.lean` |
 | `instToHtmlInt` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
-| `instToHtmlList` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
+| `instToHtmlList` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 5 more |
 | `instToHtmlArray` | tested | `Tests/Html.lean` |
 | `instToHtmlOption` | tested | `Tests/Html.lean` |
-| `instToAttrString` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
+| `instToAttrString` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 5 more |
 | `instToAttrListString` | tested | `Tests/Html.lean` |
 | `instToAttrNat` | tested | `Tests/Html.lean` |
 | `instToAttrInt` | tested | `Tests/Html.lean` |
-| `instToAttrBool` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
+| `instToAttrBool` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 5 more |
 | `instToAttrOption` | tested | `Tests/Html.lean` |
 
 ## `Lanes/Web/Html/BasicSound.lean`
@@ -2548,7 +2555,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Request.field?` | proved | `Http.Request.field?_eq_lookup` |
 | `Http.Response.ofText` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean`, `Tests/HttpConn.lean` and 3 more |
 | `Http.Response.text` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean`, `Tests/HttpConn.lean` and 3 more |
-| `Http.Response.html` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
+| `Http.Response.html` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 5 more |
 | `Http.Response.json` | tested | `Tests/Html.lean` |
 | `Http.Response.empty` | tested | `Tests/Auth.lean`, `Tests/Html.lean` |
 | `Http.Response.redirect` | checked | `Tests/SharedCache.lean` |
@@ -2633,15 +2640,15 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.trimBlank` | proved | through `Http.parseCookies`, `Http.readSetCookie`: `Http.parseCookies_cookieHeader`, `Http.readSetCookie_header` and 1 more |
 | `Http.parseCookie` | proved | through `Http.parseCookies`: `Http.parseCookies_cookieHeader` |
 | `Http.parseCookies` | proved | `Http.parseCookies_cookieHeader` |
-| `Http.Request.cookies` | tested | `Tests/Auth.lean` |
-| `Http.Request.cookie?` | tested | `Tests/Auth.lean` |
+| `Http.Request.cookies` | tested | `Tests/Auth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` and 1 more |
+| `Http.Request.cookie?` | tested | `Tests/Auth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` and 1 more |
 | `Http.Request.sameOrigin` | proved | `Http.Request.sameOrigin_iff` |
 | `Http.Request.bodyWithin` | spec | used only in statements |
-| `Http.hostCookie` | tested | `Tests/Auth.lean` |
+| `Http.hostCookie` | tested | `Tests/Auth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` and 1 more |
 | `Http.Response.setCookie` | proved | `Http.setCookie_read` |
 | `Http.Response.clearCookie` | tested | `Tests/Auth.lean` |
 | `Http.Response.noStore` | checked | `Tests/SharedCache.lean` |
-| `Http.Response.noFraming` | tested | `Tests/Html.lean` |
+| `Http.Response.noFraming` | tested | `Tests/Html.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` and 1 more |
 
 ## `Lanes/Web/Http/CookieSound.lean`
 
@@ -2813,14 +2820,14 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Slug.ofString?` | proved | `Http.Slug.ofString?_eq_some`, `Http.Slug.ofString?_text` |
 | `Http.Slug.instToString` | tested | `Tests/Html.lean` |
 | `Http.Slug.instDecidableEq` | proved | its type, `Decidable` |
-| `Http.Path.seg` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
-| `Http.Path.slug` | tested | `Tests/Html.lean`, `Tests/Loopback.lean`, `Tests/Web.lean` |
-| `Http.Path.nat` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
-| `Http.Path.root` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
-| `Http.Path.append` | tested | `Tests/Html.lean` |
-| `Http.Path.pre` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
-| `Http.Route.get` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
-| `Http.Route.post` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
+| `Http.Path.seg` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 5 more |
+| `Http.Path.slug` | tested | `Tests/Html.lean`, `Tests/Loopback.lean`, `Tests/TutorialWeb.lean` and 3 more |
+| `Http.Path.nat` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 5 more |
+| `Http.Path.root` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 5 more |
+| `Http.Path.append` | tested | `Tests/Html.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` and 1 more |
+| `Http.Path.pre` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 5 more |
+| `Http.Route.get` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 5 more |
+| `Http.Route.post` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 5 more |
 | `Http.Route.put` | tested | `Tests/Html.lean` |
 | `Http.Route.patch` | tested | `Tests/Html.lean` |
 | `Http.Route.delete` | tested | `Tests/Html.lean` |
@@ -3091,7 +3098,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `S3.Endpoint.aws` | tested | `Tests/S3.lean` |
-| `S3.Key.of?` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/Oracle/Service/S3Multipart.lean` and 4 more |
+| `S3.Key.of?` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/Oracle/Service/S3Multipart.lean` and 7 more |
 | `S3.Range.header` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `S3.PartNumber.of?` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Multipart.lean`, `Tests/S3Upload.lean` |
 | `S3.Manifest.of?` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Multipart.lean`, `Tests/S3Upload.lean` |
@@ -3102,9 +3109,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `S3.Op.query` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `S3.Op.headers` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `S3.Op.body` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
-| `S3.Bucket.host` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
-| `S3.Bucket.path` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
-| `S3.Bucket.scope` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/Oracle/Service/S3Multipart.lean` and 4 more |
+| `S3.Bucket.host` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 3 more |
+| `S3.Bucket.path` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 3 more |
+| `S3.Bucket.scope` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/Oracle/Service/S3Multipart.lean` and 7 more |
 | `S3.call` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `S3.unescapeKey` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `S3.entry?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
@@ -3119,7 +3126,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `S3.interpret` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `S3.Op.modelled` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/Oracle/Service/S3Post.lean` and 1 more |
 | `S3.Answer.modelled` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/Oracle/Service/S3Post.lean` and 1 more |
-| `S3.presign` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `S3.presign` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 3 more |
 | `S3.presignPart` | tested | `Tests/S3Upload.lean` |
 
 ## `Lanes/Web/S3/Multipart.lean`
@@ -3173,7 +3180,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `S3.Post.eqs` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
 | `S3.Post.conditions` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
 | `S3.Post.document` | proved | `S3.Post.form_policy` |
-| `S3.Post.Form.fields` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3Upload.lean` and 1 more |
+| `S3.Post.Form.fields` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3Upload.lean` and 4 more |
 | `S3.Bucket.url` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
 | `S3.Post.form` | proved | `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
 
@@ -3239,13 +3246,14 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Cli.Generated.writeIfChanged` | none |  |
 | `Cli.Generated.stale` | none |  |
 | `Cli.Generated.markdownIn` | none |  |
-| `Cli.Generated.parseCount` | none |  |
-| `Cli.Generated.isTrustedSource` | none |  |
-| `Cli.Generated.trustedSizes` | none |  |
+| `Cli.Generated.parseCount` | tested | `Tests/Lint.lean` |
+| `Cli.Generated.isTrustedSource` | tested | `Tests/Lint.lean` |
+| `Cli.Generated.trustedSizes` | tested | `Tests/Lint.lean` |
 | `Cli.Generated.rewriteSizes` | none |  |
 | `Cli.Generated.withCommas` | tested | `Tests/Lint.lean` |
 | `Cli.Generated.roundedTotal` | tested | `Tests/Lint.lean` |
 | `Cli.Generated.rewriteTotal` | none |  |
+| `Cli.Generated.countless` | tested | `Tests/Lint.lean` |
 | `Cli.Generated.trustedPlan` | none |  |
 | `Cli.Generated.decisionsDir` | none |  |
 | `Cli.Generated.parseDecisionName` | none |  |
