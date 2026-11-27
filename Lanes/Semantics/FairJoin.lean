@@ -9,7 +9,7 @@ public import Lanes.Proof.MapIOSound
 public import Lanes.Semantics.Projection
 
 /-!
-# A fair run of a join is a fair run of its left side
+# A fair run of a join is a fair run of each side
 
 `SysState.run_left` says that a finite run of `a.join b w`, seen from `a`, is a run of `a` alone
 that shows the same deeds. This file gives the same of fair runs: every fair run of the join is
@@ -34,10 +34,17 @@ alone that is not one of the join, where it is a message to `b`; the run alone h
 the same step as the join sends it, so it never waits. A step that arms a timer of `a` in the
 join arms it alone, so a wait the join does not start again `a` alone does not either.
 
+The same holds of `b` under `EnvModel.right` (`System.Run.Fair.right`, `System.LeadsTo.join_right`),
+though `b` boots after `a`. What the boot of `a` sends `b` is from outside, so the view
+`SysState.thinRight` leaves it out and starts where `b` alone starts. A step of the join is a run
+of `b` alone because the join with its sides exchanged takes the same steps, though it is not
+reachable (`SysState.exists_blockRight`).
+
 ## Main definitions
 
 - `Obligation.inl`: an obligation of `a` alone as one of the join.
 - `Wiring.leftView`: the join seen from `a`.
+- `Obligation.inr`, `Wiring.rightView`: the same for `b`.
 - `System.underView`: `sys.filterMapIO input output` seen as `sys`.
 
 ## Main statements
@@ -46,6 +53,8 @@ join arms it alone, so a wait the join does not start again `a` alone does not e
 - `System.Run.Fair.left`: a fair run of the join is seen as a fair run of `a` alone, state for
   state at corresponding positions and with the same deeds up to them.
 - `System.LeadsTo.join_left`: leads-to about the actors of `a` holds of `a` in every join.
+- `Wiring.rightView_projects`, `System.Run.Fair.right`, `System.LeadsTo.join_right`: the same
+  for `b`.
 - `System.underView_projects`, `System.LeadsTo.filterMapIO`: the same behind other inputs and
   outputs, when `output` shows different outputs differently.
 -/
@@ -172,6 +181,110 @@ theorem System.LeadsTo.join_left {P : SysState a → Prop}
     (h : a.LeadsTo env.left P fun d => Q d.state d.up) :
     (a.join b w).LeadsTo env (fun c => P c.thinLeft) fun c => Q c.left.state c.left.up :=
   (w.leftView_projects env).leadsTo (fun _ _ hd hP => hd ▸ hP)
+    (fun _ _ ⟨hstate, hup⟩ hQ => hstate ▸ hup ▸ hQ) h
+
+/-! ### The right side
+
+The same holds of `b`, the system that boots second. What the boot of `a` sends `b` is from
+outside, so the view leaves it out, and the view starts where `b` alone starts once it has handed
+over the outputs the wiring routes to `a` (`SysState.init_thinRight`). -/
+
+/-- An obligation of `b` alone as the obligation of the join that meets it. -/
+def Obligation.inr : Obligation τ → Obligation (joinSig σ τ)
+  | .deliver ⟨src, j, msg⟩ => .deliver ⟨src.map .inr, .inr j, msg⟩
+  | .timeout j msg => .timeout (.inr j) msg
+  | .start j => .start (.inr j)
+  | .output out => .output (.inr out)
+
+theorem Obligation.right?_inr (ob : Obligation τ) :
+    (ob.inr (σ := σ)).event.right? = some ob.event := by
+  cases ob with
+  | deliver e =>
+    obtain ⟨src, j, msg⟩ := e
+    cases src <;> rfl
+  | _ => rfl
+
+/-- The join seen from its right system `b`, without the messages from outside in flight. -/
+def Wiring.rightView (w : Wiring σ τ) : (a.join b w).View b (Deed τ) where
+  rel c d := d = c.thinRight
+  near c d := d.state = c.right.state ∧ d.up = c.right.up
+  lift ob := some ob.inr
+  shows := Event.rightDeed
+  shows' := w.shownRight
+
+/-- What `b` owes without the messages from outside, the join owes. -/
+theorem Obligation.Due.of_thinRight {c : SysState (a.join b w)} {ob : Obligation τ}
+    (h : ob.Due env.right c.thinRight) : (ob.inr (σ := σ)).Due env c := by
+  cases ob with
+  | deliver e =>
+    obtain ⟨src, j, msg⟩ := e
+    obtain ⟨s, hs, hdel⟩ := SysState.deliverable_of_thinRight h.2
+    obtain rfl : src = some s := hs
+    exact ⟨h.1, hdel⟩
+  | timeout j msg => exact h
+  | start j => exact ⟨h.1, SysState.hasMail_of_thinRight h.2⟩
+  | output out =>
+    obtain ⟨x, hx, hxo⟩ := List.mem_filterMap.mp (show out ∈ c.right.outbox from h)
+    cases x with
+    | inl x => simp at hxo
+    | inr x =>
+      obtain rfl : x = out := by simpa using hxo
+      exact hx
+
+/-- The block a step of the join is, as a block of the right view. -/
+private theorem Wiring.BlockRight.view {c c' : SysState (a.join b w)} {ev : Event (joinSig σ τ)}
+    {evs : List (Event τ)} (hb : w.BlockRight env c c' ev evs) :
+    w.rightView.Block env.right c (some ev) c' c.thinRight evs c'.thinRight where
+  run := hb.run
+  rel := rfl
+  shown := hb.shown
+  taken ob' ob hlift hev := by
+    obtain rfl := Option.some.inj hlift
+    exact hb.taken _ (by rw [Option.some.inj hev]; exact ob'.right?_inr)
+  restarts ob' ob ev' hlift hev hrestart := by
+    obtain rfl := Option.some.inj hlift
+    obtain rfl := Option.some.inj hev
+    cases ob' with
+    | timeout j msg => exact hb.arms j msg hrestart
+    | deliver _ | start _ | output _ => exact hrestart.elim
+  near := hb.near
+
+/-- The join seen from `b`, without the messages from outside, projects every fair run of the
+join onto a fair run of `b` alone, under `EnvModel.right`. -/
+theorem Wiring.rightView_projects (w : Wiring σ τ) (env : EnvModel (joinSig σ τ)) :
+    (w.rightView (a := a) (b := b)).Projects env env.right where
+  near _ _ h := h ▸ ⟨rfl, rfl⟩
+  init := by
+    obtain ⟨evs, hrun, hquiet⟩ := SysState.init_thinRight (a := a) (b := b) (w := w) env
+    have hstate := SysState.run_quiet (fun ev hev => (hquiet ev hev).1) hrun
+    refine ⟨evs, _, hrun, rfl, List.filterMap_eq_nil_iff.mpr fun ev hev => (hquiet ev hev).2,
+      fun _ _ _ h => (by cases h), fun _ _ _ _ h => (by cases h), fun j dj hj => .inl ?_⟩
+    have hdj := SysState.run_quiet (fun ev hev => (hquiet ev (List.mem_of_mem_take hev)).1) hj
+    exact ⟨hdj.1.trans hstate.1.symm, hdj.2.1.trans hstate.2.1.symm⟩
+  step c ev c' d hc hd hstep := by
+    subst hd
+    obtain ⟨evs, hb⟩ := SysState.exists_blockRight hc hstep
+    exact ⟨evs, _, hb.view⟩
+  due c d ob' _ hd hdue := ⟨_, rfl, hd ▸ hdue |>.of_thinRight⟩
+
+/-- A fair run of a join, seen from its right system without the messages from outside, is a
+fair run of that system alone, when its inputs may be lost, repeated and reordered: position `n`
+of the join is position `f n` alone, and up to there the two runs show the same deeds. -/
+theorem System.Run.Fair.right {r : (a.join b w).Run env} (hfair : r.Fair) :
+    ∃ (r' : b.Run env.right) (f : ℕ → ℕ), r'.Fair ∧ StrictMono f ∧
+      (∀ n, r'.state (f n) = (r.state n).thinRight) ∧
+      ∀ n, (r'.event.take (f n)).filterMap (·.bind w.shownRight)
+        = (r.event.take n).filterMap (·.bind Event.rightDeed) := by
+  obtain ⟨r', f, hfair', hsees⟩ := (w.rightView_projects env).fair_run hfair
+  exact ⟨r', f, hfair', hsees.mono, hsees.rel, hsees.deeds⟩
+
+/-- What `b` alone leads to, it leads to in every join, of its actors' states: from a state that
+satisfies `P` without the messages from outside, to one in which its actors satisfy `Q`. -/
+theorem System.LeadsTo.join_right {P : SysState b → Prop}
+    {Q : ((j : τ.Id) → b.State j) → (τ.Id → Bool) → Prop}
+    (h : b.LeadsTo env.right P fun d => Q d.state d.up) :
+    (a.join b w).LeadsTo env (fun c => P c.thinRight) fun c => Q c.right.state c.right.up :=
+  (w.rightView_projects env).leadsTo (fun _ _ hd hP => hd ▸ hP)
     (fun _ _ ⟨hstate, hup⟩ hQ => hstate ▸ hup ▸ hQ) h
 
 /-! ### Behind other inputs and outputs
