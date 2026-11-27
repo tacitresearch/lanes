@@ -348,7 +348,7 @@ theorem Bounded.withSession {b : Board N C} (h : b.Bounded config) {n : N} {sess
 
 theorem close_fine {p : Profile N C} (f : Fine config p) (session : Sid) :
     Fine config { p with sessions := p.sessions.close session } :=
-  { f with sessions := Nat.le_trans (List.length_erase_le) f.sessions }
+  { f with sessions := Nat.le_trans (Auth.Sessions.length_close_le ..) f.sessions }
 
 theorem logIn_fine (n : N) (req : ReqId) {p : Profile N C} (c : C) (f : Fine config p) :
     Fine config (logIn config n req p c).1 := by

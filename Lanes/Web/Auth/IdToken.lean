@@ -18,13 +18,55 @@ of `Accepted` holds.
 
 namespace Lanes.OAuth
 
+def DisplayName.maxChars : Nat := 64
+
+/-- Not a control character (C0, DEL, C1), a line or paragraph separator, or a mark that
+reorders the text around it (bidirectional embeddings, overrides and isolates). -/
+def DisplayName.allowed (c : Char) : Bool :=
+  let v := c.val
+  !(v < 0x20 || (0x7f ≤ v && v < 0xa0) || v == 0x2028 || v == 0x2029
+    || (0x202a ≤ v && v ≤ 0x202e) || (0x2066 ≤ v && v ≤ 0x2069))
+
+def DisplayName.Valid (s : String) : Prop :=
+  0 < s.length ∧ s.length ≤ DisplayName.maxChars ∧ s.all DisplayName.allowed = true
+
+/-- A name to show for a user, as the provider gave it: text nobody checked, of at most
+`maxChars` characters, none of them a control character. Show it as text, which `Html` escapes,
+and never as markup, a URL or a header of a response. -/
+structure DisplayName where
+  val : String
+  valid : DisplayName.Valid val
+  deriving DecidableEq, Repr, Hashable
+
+namespace DisplayName
+
+instance (s : String) : Decidable (Valid s) := inferInstanceAs (Decidable (_ ∧ _ ∧ _))
+
+def of? (s : String) : Option DisplayName :=
+  if h : Valid s then some ⟨s, h⟩ else none
+
+/-- What a provider sends, made a name: its control characters dropped, blanks trimmed, cut to
+`maxChars`; none when nothing is left. -/
+def clean (raw : String) : Option DisplayName :=
+  let kept := String.ofList (raw.toList.filter allowed)
+  of? (String.ofList (kept.trimAscii.toString.toList.take maxChars))
+
+theorem of?_val (n : DisplayName) : of? n.val = some n := by
+  simp [of?, n.valid]
+
+theorem length_le (n : DisplayName) : n.val.length ≤ maxChars := n.valid.2.1
+
+end DisplayName
+
 /-- Who signed in. A user is named by `issuer` and `subject` together, which do not change; the
-email is the provider's, and `emailVerified` whether the provider says it checked the address. -/
+email is the provider's, and `emailVerified` whether the provider says it checked the address.
+`name` is what the provider calls the user, for display only: anyone may choose it. -/
 structure Identity where
   issuer : String
   subject : String
   email : Option String := none
   emailVerified : Bool := false
+  name : Option DisplayName := none
   deriving DecidableEq, Repr, Hashable
 
 namespace IdToken
@@ -40,10 +82,13 @@ structure Claims where
   nonce : Option String := none
   email : Option String := none
   emailVerified : Bool := false
+  /-- OpenID Connect's `name`, which the `profile` scope asks for. -/
+  name : Option String := none
   deriving DecidableEq, Repr
 
 def Claims.identity (c : Claims) : Identity :=
-  { issuer := c.iss, subject := c.sub, email := c.email, emailVerified := c.emailVerified }
+  { issuer := c.iss, subject := c.sub, email := c.email, emailVerified := c.emailVerified
+    name := c.name.bind DisplayName.clean }
 
 /-- What a token must say to be accepted now. -/
 structure Expect where
@@ -84,7 +129,8 @@ def audience? : Json → Option (List String)
   | .arr xs => xs.toList.mapM string?
   | _ => none
 
-/-- `exp` and `nbf` must be whole seconds; `email_verified` a Boolean, `false` when absent. -/
+/-- `exp` and `nbf` must be whole seconds; `email_verified` a Boolean, `false` when absent;
+`name` a string when present. -/
 def Claims.read (payload : ByteArray) : Option Claims := do
   let j ← (String.fromUTF8? payload).bind fun text => (Json.parse text).toOption
   let iss ← (j.getObjVal? "iss").toOption.bind string?
@@ -97,7 +143,8 @@ def Claims.read (payload : ByteArray) : Option Claims := do
   let nonce ← optional j "nonce" string?
   let email ← optional j "email" string?
   let verified ← optional j "email_verified" fun | .bool b => some b | _ => none
-  return { iss, sub, aud, azp, exp, nbf, nonce, email, emailVerified := verified.getD false }
+  let name ← optional j "name" string?
+  return { iss, sub, aud, azp, exp, nbf, nonce, email, emailVerified := verified.getD false, name }
 
 /-- Every check of OpenID Connect Core §3.1.3.7 that is about the claims (items 2 to 5, 9 and
 11), and `nbf` as RFC 7519 §4.1.5 has it. A token for several audiences must name this client

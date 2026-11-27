@@ -7,6 +7,9 @@ import Lanes.Semantics
 /-! The axiom gate (rule 5.5, see `Tests/Axioms.lean`) for the theorems of `Lanes/Web/`. -/
 
 -- Lanes.Web.Auth.IdToken
+/-- info: 'Lanes.OAuth.DisplayName.length_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.OAuth.DisplayName.length_le
+
 /-- info: 'Lanes.OAuth.IdToken.check_ok_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.OAuth.IdToken.check_ok_iff
 
@@ -48,14 +51,29 @@ import Lanes.Semantics
 /-- info: 'Lanes.Auth.Sessions.live_open' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Auth.Sessions.live_open
 
-/-- info: 'Lanes.Auth.Sessions.start_kept_closed' depends on axioms: [propext] -/
+/-- info: 'Lanes.Auth.Sessions.start_kept_closed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Auth.Sessions.start_kept_closed
 
 /-- info: 'Lanes.Auth.Sessions.ids_starts' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Auth.Sessions.ids_starts
 
-/-- info: 'Lanes.Auth.Sessions.live_close' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+/-- info: 'Lanes.Auth.Sessions.live_close' depends on axioms: [propext, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Auth.Sessions.live_close
+
+/-- info: 'Lanes.Auth.Session.expired_mono' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Auth.Session.expired_mono
+
+/-- info: 'Lanes.Auth.Sessions.length_close_le' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Lanes.Auth.Sessions.length_close_le
+
+/-- info: 'Lanes.Auth.Sessions.accepts_iff' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Auth.Sessions.accepts_iff
+
+/-- info: 'Lanes.Auth.Sessions.sweep_ended' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Auth.Sessions.sweep_ended
+
+/-- info: 'Lanes.Auth.Sessions.Ended.run' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Auth.Sessions.Ended.run
 
 -- Lanes.Web.Auth.OAuth
 /-- info: 'Lanes.OAuth.same_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/

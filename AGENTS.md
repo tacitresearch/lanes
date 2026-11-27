@@ -215,6 +215,7 @@ that performs IO is in an `IO/` directory of its area and named in `TRUSTED.md`.
 | `Lanes/Check/` | Model checker | `Std` only |
 | `Lanes/Data/` | `Enum`, codecs and `lanes_data`, the queue, quorums | `Std` only |
 | `Lanes/Lib/` | The standard library: encodings (Base64, JSON), addresses and URLs, time, SHA-256, HMAC, MD5, PBKDF2 and `Sodium`, the PostgreSQL protocol (`Postgres/`), media types, rate limits (`docs/STDLIB.md`) | `Std` only |
+| `Lanes/Testing/` | The test kit, for tests and never in `import Lanes`: a fake S3 that checks signatures, a fake identity provider, a scripted browser, a server of a handler and readers of a response (`docs/decisions/D77-a-test-kit.md`) | `Std` only |
 | `Lanes/Semantics/` | The semantics as a CSLib `LTS`, refinement, specs, fairness and leads-to, and the liveness of the gate, of jobs and of the scheduler | CSLib, Mathlib |
 | `native/` | The C that binds libsodium, `fsync`, a timed wait, OpenSSL's TLS client and its signature check, all of it trusted | libsodium, OpenSSL, libc |
 | `LanesCli/` | The `lanes` command: `new`, `lint`, `check`, `inventory`, `docstrings` | `Std` only; `Lean` in `Inventory` and `Docstrings`, which only `lanesInventory` links |
@@ -228,7 +229,8 @@ that performs IO is in an `IO/` directory of its area and named in `TRUSTED.md`.
 
 `import Lanes` is the API, executable code and the proof toolkit; `import Lanes.Proofs` adds the
 framework's soundness theorems (the `…Sound` modules), and `import Lanes.Semantics` the proof
-layer, which imports both. Tests and the examples' proofs import what they cite.
+layer, which imports both. Tests and the examples' proofs import what they cite. `import
+Lanes.Testing` is the test kit, for tests only, so that no binary that serves links it.
 
 Declare the messages, inputs, outputs and states of a system with `lanes_data`: the ordinary
 declaration with a prefix, whose `deriving` also takes three classes Lean cannot derive without
