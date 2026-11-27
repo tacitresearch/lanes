@@ -5,6 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Lanes.Web.Http.Basic
+public import Lanes.Web.Http.Grammar
 
 /-!
 HTTP/1.1 on the wire, as pure functions: a request as the bytes a client sends, and the bytes a
@@ -21,24 +22,6 @@ reads outside the bytes it is given, and answers `none` to anything it does not 
 @[expose] public section
 
 namespace Lanes.Http
-
-/-- A character of an RFC 7230 token, which is what a header's name is. -/
-def tokenChar (c : Char) : Bool :=
-  c.isAlphanum || "!#$%&'*+-.^_`|~".toList.contains c
-
-def token (s : String) : Bool :=
-  s != "" && s.toList.all tokenChar
-
-/-- No control character but tab: what a header's value may hold. -/
-def plain (c : Char) : Bool :=
-  c == '\t' || (32 ≤ c.val && c.val != 127)
-
-def visible (c : Char) : Bool :=
-  33 ≤ c.val && c.val ≤ 126
-
-/-- The blanks a header's value may have around it. -/
-def ows (c : Char) : Bool :=
-  c == ' ' || c == '\t'
 
 /-- Whether a header of this name says where a message ends or whom it is for. The writer
 sets those itself. -/
@@ -81,24 +64,6 @@ end Request
 private theorem toLower_eq_iff (s t : String) :
     s.toLower = t ↔ s.toList.map Char.toLower = t.toList := by
   rw [← String.toList_inj, String.toLower, String.toList_map]
-
-theorem visible_of_tokenChar {c : Char} (h : tokenChar c) : visible c := by
-  rcases Bool.or_eq_true _ _ |>.mp h with alnum | symbol
-  · simp only [Char.isAlphanum, Char.isAlpha, Char.isUpper, Char.isLower, Char.isDigit, visible,
-      Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq, UInt32.le_iff_toNat_le,
-      ge_iff_le] at *
-    simp at *
-    omega
-  · have all : "!#$%&'*+-.^_`|~".toList.all visible = true := by decide
-    exact List.all_eq_true.mp all c (List.contains_iff_mem.mp symbol)
-
-theorem plain_of_visible {c : Char} (h : visible c) : plain c := by
-  simp only [visible, plain, Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq,
-    UInt32.le_iff_toNat_le, bne_iff_ne, ne_eq, beq_iff_eq] at *
-  refine .inr ⟨h.1 |> Nat.le_trans (by decide), ?_⟩
-  intro eq
-  rw [eq] at h
-  exact absurd h.2 (by decide)
 
 private theorem all_plain_of_visible {chars : List Char} (h : chars.all visible) :
     chars.all plain :=
@@ -341,9 +306,6 @@ def statusLine? : List Char → Option Nat
       (decimal? (String.ofList digits)).filter (100 ≤ ·)
     else none
   | _ => none
-
-def trimOws (chars : List Char) : List Char :=
-  ((chars.dropWhile ows).reverse.dropWhile ows).reverse
 
 /-- A header, its name in lowercase and its value trimmed. The name is a token right up to the
 colon, so a line that continues the one before it and a blank before the colon are refused. -/

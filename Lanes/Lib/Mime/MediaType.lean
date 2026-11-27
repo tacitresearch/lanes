@@ -5,6 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Lanes.Lib.Net.Url
+public import Lanes.Web.Http.Grammar
 
 /-!
 Media types as RFC 9110 §8.3.1 writes them: `type/subtype`, then parameters, each a name and a
@@ -29,33 +30,15 @@ structure MediaType where
 
 namespace MediaType
 
-def isTchar (c : Char) : Bool :=
-  Url.isAlpha c || Url.isDigit c || "!#$%&'*+-.^_`|~".toList.contains c
-
-def isWs (c : Char) : Bool := c == ' ' || c == '\t'
-
-/-- What a quoted string holds without a backslash: anything but controls, `"` and `\`. -/
-def isQdtext (c : Char) : Bool :=
-  c == '\t' || c == ' ' || c == '!' || ('#' ≤ c && c ≤ '[') || (']' ≤ c && c ≤ '~') || 0x80 ≤ c.toNat
-
-/-- What a quoted string can hold at all: anything but controls other than tab. -/
-def isQuotable (c : Char) : Bool := c == '\t' || (' ' ≤ c && c ≤ '~') || 0x80 ≤ c.toNat
+open Http (tokenChar ows isQdtext isQuotable quoted)
 
 def token : List Char → List Char × List Char
-  | c :: rest => if isTchar c then (c :: (token rest).1, (token rest).2) else ([], c :: rest)
+  | c :: rest => if tokenChar c then (c :: (token rest).1, (token rest).2) else ([], c :: rest)
   | [] => ([], [])
 
 def skipWs : List Char → List Char
-  | c :: rest => if isWs c then skipWs rest else c :: rest
+  | c :: rest => if ows c then skipWs rest else c :: rest
   | [] => []
-
-/-- A quoted string after its opening quote: its text, and what follows the closing quote. -/
-def quoted : List Char → Option (List Char × List Char)
-  | '"' :: rest => some ([], rest)
-  | '\\' :: c :: rest =>
-    if isQuotable c then (quoted rest).map fun (v, r) => (c :: v, r) else none
-  | c :: rest => if isQdtext c then (quoted rest).map fun (v, r) => (c :: v, r) else none
-  | [] => none
 
 def value : List Char → Option (List Char × List Char)
   | '"' :: rest => quoted rest
@@ -148,7 +131,7 @@ def parseRaw (cs : List Char) : Option MediaType :=
         params := ps.map fun (n, v) => (String.ofList (Url.lower n), String.ofList v) }
   | _ => none
 
-def isToken (s : String) : Bool := !s.isEmpty && s.toList.all isTchar
+def isToken (s : String) : Bool := !s.isEmpty && s.toList.all tokenChar
 
 def names (m : MediaType) : List String := m.params.map fun (n, _) => String.ofList (Url.lower n.toList)
 

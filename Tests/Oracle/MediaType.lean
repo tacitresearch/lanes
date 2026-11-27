@@ -153,7 +153,7 @@ def rfc2231Format (go : Answer) : Bool :=
 
 /-- The same answer, or one whose only difference is Go's RFC 2231 form for a value. -/
 def goFormat (m : MediaType) : String :=
-  let goToken (v : String) := !v.isEmpty && v.toList.all fun c => isTchar c || c == '{' || c == '}'
+  let goToken (v : String) := !v.isEmpty && v.toList.all fun c => Http.tokenChar c || c == '{' || c == '}'
   String.ofList ((sorted m).type.toList ++ '/' :: (sorted m).subtype.toList
     ++ (sorted m).params.flatMap fun (n, v) =>
       ';' :: ' ' :: n.toList ++ '=' :: if goToken v then v.toList else quote v.toList)

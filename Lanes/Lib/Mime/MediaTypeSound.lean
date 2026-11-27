@@ -18,6 +18,7 @@ matter (`parse_format_eq`), and what `parse` reads `format` writes back (`parse_
 namespace Lanes.MediaType
 
 open Url (lowerChar toNat_ofNat_small char_le)
+open Http (tokenChar ows isQdtext isQuotable quoted)
 
 /-! ### Characters -/
 
@@ -44,29 +45,40 @@ theorem isQdtext_of {c : Char} (h : isQuotable c) (h1 : c ≠ '"') (h2 : c ≠ '
     · simp [isQdtext, char_le, t5, t2, e.1, e.2]
   · simp [isQdtext, h]
 
-theorem isTchar_lowerChar {c : Char} (h : isTchar c) : isTchar (lowerChar c) := by
+theorem tokenChar_eq (c : Char) :
+    tokenChar c = (Url.isAlpha c || Url.isDigit c || "!#$%&'*+-.^_`|~".toList.contains c) := by
+  have : c.isAlphanum = (Url.isAlpha c || Url.isDigit c) := by
+    rw [Bool.eq_iff_iff]
+    simp only [Char.isAlphanum, Char.isAlpha, Char.isUpper, Char.isLower, Char.isDigit,
+      Url.isAlpha, Url.isDigit, Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq, char_le,
+      UInt32.le_iff_toNat_le, ge_iff_le, Char.toNat] at *
+    simp
+    omega
+  rw [tokenChar, this]
+
+theorem isTchar_lowerChar {c : Char} (h : tokenChar c) : tokenChar (lowerChar c) := by
   unfold lowerChar
   split
   · rename_i hc
     have hc : 65 ≤ c.toNat ∧ c.toNat ≤ 90 := by
       simp only [Bool.and_eq_true, decide_eq_true_eq, char_le] at hc; exact hc
     have := toNat_ofNat_small (n := c.toNat + 32) (by omega)
-    simp only [isTchar, Url.isAlpha, Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq, char_le, this]
+    simp only [tokenChar_eq, Url.isAlpha, Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq, char_le, this]
     exact .inl (.inl (.inl ⟨by simp; omega, by simp; omega⟩))
   · exact h
 
-theorem not_ws_of_tchar {c : Char} (h : isTchar c) : isWs c = false := by
-  cases e : isWs c
+theorem not_ws_of_tchar {c : Char} (h : tokenChar c) : ows c = false := by
+  cases e : ows c
   · rfl
-  · simp only [isWs, Bool.or_eq_true, beq_iff_eq] at e
-    rcases e with rfl | rfl <;> simp [isTchar, Url.isAlpha, Url.isDigit] at h
+  · simp only [ows, Bool.or_eq_true, beq_iff_eq] at e
+    rcases e with rfl | rfl <;> simp [tokenChar] at h
 
 /-! ### Reading what `format` writes -/
 
 /-- Text that ends a token: nothing, or a character that is not in one. -/
-def EndsToken (r : List Char) : Prop := r = [] ∨ ∃ c r', r = c :: r' ∧ isTchar c = false
+def EndsToken (r : List Char) : Prop := r = [] ∨ ∃ c r', r = c :: r' ∧ tokenChar c = false
 
-theorem token_append {t : List Char} (r : List Char) (h : ∀ c ∈ t, isTchar c) (hr : EndsToken r) :
+theorem token_append {t : List Char} (r : List Char) (h : ∀ c ∈ t, tokenChar c) (hr : EndsToken r) :
     token (t ++ r) = (t, r) := by
   induction t with
   | nil =>
@@ -74,10 +86,10 @@ theorem token_append {t : List Char} (r : List Char) (h : ∀ c ∈ t, isTchar c
     · rfl
     · simp [token, hc]
   | cons c t ih =>
-    have hc : isTchar c := h c (by simp)
+    have hc : tokenChar c := h c (by simp)
     simp [token, hc, ih (fun x hx => h x (by simp [hx]))]
 
-theorem skipWs_of {c : Char} (h : isWs c = false) (r : List Char) : skipWs (c :: r) = c :: r := by
+theorem skipWs_of {c : Char} (h : ows c = false) (r : List Char) : skipWs (c :: r) = c :: r := by
   simp [skipWs, h]
 
 def esc (c : Char) : List Char := if c == '"' || c == '\\' then ['\\', c] else [c]
@@ -103,8 +115,8 @@ theorem quoted_esc {v : List Char} (rest : List Char) (h : ∀ c ∈ v, isQuotab
       · rfl
       · intro e'; exact e.1 e'
       · intro _ _ e' _; exact e.2 e'
-theorem tchar_ne_quote {c : Char} (h : isTchar c) : c ≠ '"' := by
-  rintro rfl; simp [isTchar, Url.isAlpha, Url.isDigit] at h
+theorem tchar_ne_quote {c : Char} (h : tokenChar c) : c ≠ '"' := by
+  rintro rfl; simp [tokenChar] at h
 
 theorem endsToken_of {rest : List Char} (hr : rest = [] ∨ ∃ r, rest = ';' :: r) : EndsToken rest := by
   rcases hr with rfl | ⟨r, rfl⟩
@@ -142,7 +154,7 @@ theorem parseParams_chars (ps : List (String × String))
     simp only [isToken, Bool.and_eq_true, Bool.not_eq_true', List.all_eq_true] at hn
     have hne : n.toList ≠ [] := by simpa using hn.1
     obtain ⟨c, cs, e⟩ := List.exists_cons_of_ne_nil hne
-    have hc : isTchar c := hn.2 c (by simp [e])
+    have hc : tokenChar c := hn.2 c (by simp [e])
     have hrest : ps.flatMap paramChars = [] ∨ ∃ r, ps.flatMap paramChars = ';' :: r := by
       cases ps with
       | nil => exact .inl rfl
@@ -156,7 +168,7 @@ theorem parseParams_chars (ps : List (String × String))
       rw [e, List.cons_append, skipWs_of (not_ws_of_tchar hc)]
     simp only [List.flatMap_cons, paramChars, List.cons_append, List.append_assoc]
     rw [parseParams, ite_eq_right_iff.mpr (by simp)]
-    have hsemi := skipWs_of (show isWs ';' = false by decide)
+    have hsemi := skipWs_of (show ows ';' = false by decide)
       (' ' :: (n.toList ++ '=' :: (valueChars v ++ List.flatMap paramChars ps)))
     split
     · rename_i r heq
@@ -165,7 +177,7 @@ theorem parseParams_chars (ps : List (String × String))
       have hsp : skipWs (' ' :: (n.toList ++ '=' :: (valueChars v ++ List.flatMap paramChars ps)))
           = n.toList ++ '=' :: (valueChars v ++ List.flatMap paramChars ps) := by
         rw [skipWs]
-        simp only [show isWs ' ' = true by decide, ite_true]
+        simp only [show ows ' ' = true by decide, ite_true]
         exact hskip
       split
       · rename_i heq
@@ -196,7 +208,7 @@ theorem chars_eq (m : MediaType) :
   simp only [chars, List.append_assoc, List.cons_append]
   rfl
 
-theorem isToken_spec {s : String} (h : isToken s) : s.toList ≠ [] ∧ ∀ c ∈ s.toList, isTchar c := by
+theorem isToken_spec {s : String} (h : isToken s) : s.toList ≠ [] ∧ ∀ c ∈ s.toList, tokenChar c := by
   simp only [isToken, Bool.and_eq_true, Bool.not_eq_true', List.all_eq_true] at h
   exact ⟨by simpa using h.1, h.2⟩
 
