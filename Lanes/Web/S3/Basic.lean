@@ -72,6 +72,26 @@ def Range.header : Range → String
 /-- How many keys a page of a listing holds at most: S3 gives at most 1000. -/
 abbrev PageSize := {n : Nat // 0 < n ∧ n ≤ 1000}
 
+/-- A part's number in a multipart upload: S3 takes 1 to 10,000. -/
+abbrev PartNumber := {n : Nat // 1 ≤ n ∧ n ≤ 10000}
+
+def PartNumber.of? (n : Nat) : Option PartNumber := if h : 1 ≤ n ∧ n ≤ 10000 then some ⟨n, h⟩ else none
+
+/-- What completes a multipart upload: each part by its number, with the ETag its upload was
+answered, at least one, in ascending order of number, as S3 requires. -/
+abbrev Manifest :=
+  {parts : List (PartNumber × String) // parts ≠ [] ∧ (parts.map (·.1.val)).Pairwise (· < ·)}
+
+def Manifest.of? (parts : List (PartNumber × String)) : Option Manifest :=
+  if h : parts ≠ [] ∧ (parts.map (·.1.val)).Pairwise (· < ·) then some ⟨parts, h⟩ else none
+
+/-- The body of CompleteMultipartUpload. -/
+def Manifest.xml (m : Manifest) : String :=
+  "<CompleteMultipartUpload xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">"
+    ++ String.join (m.val.map fun (n, etag) => "<Part><PartNumber>" ++ toString n.val
+      ++ "</PartNumber><ETag>" ++ Xml.escape etag ++ "</ETag></Part>")
+    ++ "</CompleteMultipartUpload>"
+
 inductive Op where
   | put (key : Key) (body : ByteArray) (contentType : Option String := none)
   | get (key : Key) (range : Option Range := none)
@@ -81,19 +101,30 @@ inductive Op where
   with `delimiter` after the prefix rolled up into one prefix each. -/
   | list (keyPrefix : String := "") (delimiter : Option String := none)
     (continuation : Option String := none) (pageSize : PageSize := ⟨1000, by decide⟩)
+  /-- CreateMultipartUpload: the object `key` will be, with `contentType`. -/
+  | createUpload (key : Key) (contentType : Option String := none)
+  | uploadPart (key : Key) (uploadId : String) (part : PartNumber) (body : ByteArray)
+  /-- CompleteMultipartUpload: the object is the parts listed, in order. -/
+  | completeUpload (key : Key) (uploadId : String) (parts : Manifest)
+  | abortUpload (key : Key) (uploadId : String)
+  /-- ListParts: the parts S3 holds, at most 1000, after `marker`. -/
+  | listParts (key : Key) (uploadId : String) (marker : Option PartNumber := none)
   deriving DecidableEq, Repr, Hashable
 
 namespace Op
 
-def verb : Op → String
-  | .put .. => "PUT" | .get .. => "GET" | .head _ => "HEAD" | .delete _ => "DELETE"
-  | .list .. => "GET"
-
 def method : Op → Method
-  | .put .. => .put | .delete _ => .delete | _ => .get
+  | .put .. | .uploadPart .. => .put
+  | .delete _ | .abortUpload .. => .delete
+  | .createUpload .. | .completeUpload .. => .post
+  | _ => .get
+
+def verb (op : Op) : String := if op matches .head _ then "HEAD" else SigV4.verb op.method
 
 def segments : Op → List String
-  | .put key .. | .get key _ | .head key | .delete key => SigV4.segments key.val
+  | .put key .. | .get key _ | .head key | .delete key | .createUpload key _
+  | .uploadPart key .. | .completeUpload key .. | .abortUpload key _ | .listParts key .. =>
+    SigV4.segments key.val
   | .list .. => []
 
 /-- Keys come back escaped (`encoding-type=url`), so a key XML cannot carry still lists. -/
@@ -103,15 +134,23 @@ def query : Op → List (String × String)
       ++ (if keyPrefix.isEmpty then [] else [("prefix", keyPrefix)])
       ++ (delimiter.map (("delimiter", ·))).toList
       ++ (continuation.map (("continuation-token", ·))).toList
+  | .createUpload .. => [("uploads", "")]
+  | .uploadPart _ uploadId part _ => [("partNumber", toString part.val), ("uploadId", uploadId)]
+  | .completeUpload _ uploadId _ | .abortUpload _ uploadId => [("uploadId", uploadId)]
+  | .listParts _ uploadId marker =>
+    ("uploadId", uploadId) :: (marker.map (("part-number-marker", toString ·.val))).toList
   | _ => []
 
 def headers : Op → List (String × String)
-  | .put _ _ (some contentType) => [("content-type", contentType)]
+  | .put _ _ (some contentType) | .createUpload _ (some contentType) =>
+    [("content-type", contentType)]
   | .get _ (some range) => [("range", range.header)]
+  | .completeUpload .. => [("content-type", "application/xml")]
   | _ => []
 
 def body : Op → ByteArray
-  | .put _ body _ => body
+  | .put _ body _ | .uploadPart _ _ _ body => body
+  | .completeUpload _ _ parts => parts.xml.toUTF8
   | _ => .empty
 
 end Op
@@ -174,12 +213,30 @@ structure Page where
   next : Option String := none
   deriving DecidableEq, Repr, Hashable
 
+structure Part where
+  number : Nat
+  etag : String
+  size : Nat
+  deriving DecidableEq, Repr, Hashable
+
+/-- A page of ListParts. -/
+structure Parts where
+  parts : List Part
+  /-- The marker of the next page, when there is one. -/
+  next : Option Nat := none
+  deriving DecidableEq, Repr, Hashable
+
 inductive Answer where
   | stored (etag : Option String)
   | object (info : Info) (body : ByteArray)
   | found (info : Info)
   | deleted
   | listed (page : Page)
+  /-- A multipart upload begun, with its id. -/
+  | started (uploadId : String)
+  /-- A multipart upload completed: the object is there, with its ETag. -/
+  | completed (etag : Option String)
+  | parts (page : Parts)
   /-- No such key: `404` to a get or a head. -/
   | missing
   /-- An error the store gave, with its code (`NoSuchBucket`, `SignatureDoesNotMatch`), or `""`
@@ -210,6 +267,33 @@ def errorCode (body : ByteArray) : String :=
   ((String.fromUTF8? body).bind Xml.parse |>.filter (·.name == "Error")).bind (·.text? "Code")
     |>.getD ""
 
+def root? (body : ByteArray) : Option Xml.Node := (String.fromUTF8? body).bind Xml.parse
+
+def started? (body : ByteArray) : Option String := do
+  let root ← root? body
+  unless root.name == "InitiateMultipartUploadResult" do none
+  root.text? "UploadId"
+
+def part? (n : Xml.Node) : Option Part := do
+  return { number := ← decimal? (← n.text? "PartNumber"), etag := ← n.text? "ETag"
+           size := ← decimal? (← n.text? "Size") }
+
+def parts? (body : ByteArray) : Option Parts := do
+  let root ← root? body
+  unless root.name == "ListPartsResult" do none
+  let parts ← (root.all "Part").mapM part?
+  let truncated := root.text? "IsTruncated" == some "true"
+  return { parts, next := if truncated then (root.text? "NextPartNumberMarker").bind decimal? else none }
+
+/-- S3 may answer CompleteMultipartUpload `200` and an error in the body. -/
+def completed (body : ByteArray) : Answer :=
+  match root? body with
+  | some root =>
+    if root.name == "CompleteMultipartUploadResult" then .completed (root.text? "ETag")
+    else if root.name == "Error" then .refused 200 ((root.text? "Code").getD "")
+    else .unreadable
+  | none => .unreadable
+
 def info (r : Response) (size : Nat) : Info :=
   { size, etag := r.headers.lookup "etag", contentType := r.headers.lookup "content-type",
     lastModified := r.headers.lookup "last-modified" }
@@ -225,6 +309,15 @@ def interpret (op : Op) (r : Response) : Answer :=
   | .delete _, 204 | .delete _, 200 => .deleted
   | .list .., 200 => match page? r.body with
     | some page => .listed page
+    | none => .unreadable
+  | .createUpload .., 200 => match started? r.body with
+    | some id => .started id
+    | none => .unreadable
+  | .uploadPart .., 200 => .stored (r.headers.lookup "etag")
+  | .completeUpload .., 200 => completed r.body
+  | .abortUpload .., 204 | .abortUpload .., 200 => .deleted
+  | .listParts .., 200 => match parts? r.body with
+    | some page => .parts page
     | none => .unreadable
   | .get .., 404 | .head _, 404 => .missing
   | _, status => .refused status (errorCode r.body)
@@ -262,5 +355,21 @@ def presign (b : Bucket) (creds : Credentials) (t : Civil.DateTime) (method : Me
   let query := SigV4.presign creds t b.scope call.authority (SigV4.verb method) path [] expiry headers
   let scheme := match b.endpoint.scheme with | .http => "http" | .https => "https"
   scheme ++ "://" ++ call.authority ++ ({ method, path, query } : Request).target
+
+/-- A link that uploads part `part` of the upload `uploadId` of `key`, for `expiry` from `t`.
+With `length`, the `Content-Length` is signed, so the store takes a part of exactly that many
+bytes and no other; the browser sends it as the size of what it puts. -/
+def presignPart (b : Bucket) (creds : Credentials) (t : Civil.DateTime) (key : Key)
+    (uploadId : String) (part : PartNumber) (expiry : Expiry) (length : Option Nat := none) :
+    String :=
+  let call : Client.Call :=
+    { host := b.host, port := b.endpoint.port, scheme := b.endpoint.scheme
+      request := { method := .put, path := [] } }
+  let path := b.path (SigV4.segments key.val)
+  let headers := (length.map (("content-length", toString ·))).toList
+  let own := [("partNumber", toString part.val), ("uploadId", uploadId)]
+  let query := SigV4.presign creds t b.scope call.authority "PUT" path own expiry headers
+  let scheme := match b.endpoint.scheme with | .http => "http" | .https => "https"
+  scheme ++ "://" ++ call.authority ++ ({ method := .put, path, query } : Request).target
 
 end Lanes.S3
