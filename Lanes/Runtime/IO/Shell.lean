@@ -18,11 +18,12 @@ are due, how long to sleep and when the shard is idle are the kernel's answers
 (`Lanes.Kernel`), not decisions made here.
 
 By `Kernel.exec_reachable` nothing this loop does can take the system outside the semantics.
-What is trusted is that it hands outputs on as the kernel gave them. With `workers` above one,
-the inputs that arrive together are accepted together and the steps of the actors they reach
-are worked out in parallel, which changes nothing the kernel does (`Kernel.runWaves_eq`). Whether
-a batch is worked out in parallel is `Pace`'s choice, from this loop's timing of the batches
-before it; it is trusted only to be fast, since no spread changes a batch (`Batch.run_spread`).
+What is trusted is that it hands outputs on as the kernel gave them. Unless `parallel` is off or
+there is one worker, the inputs that arrive together are accepted together and the steps of the
+actors they reach may be worked out in parallel, which changes nothing the kernel does
+(`Kernel.runWaves_eq`). With `auto` whether they are is `Pace`'s choice, from this loop's timing
+of the batches before; it is trusted only to be fast, since no spread changes a batch
+(`Batch.run_spread`).
 
 The inbox is bounded, which is the system's back-pressure: `input` waits for room and
 `tryInput` refuses (rule 3.8).
@@ -66,7 +67,8 @@ structure Runtime.Config where
   /-- The most threads that work out the steps of different actors at once (`Kernel.runWaves`);
   `0` is the machine's hardware threads. With one, or with `parallel` off, each input is a turn
   of its own, as the kernel was always run; otherwise the inputs that arrive together are one
-  turn, and the actors they reach may step in parallel. -/
+  turn, at most `min batch snapshotEvery` to a turn, and the actors they reach may step in
+  parallel. -/
   workers : Nat := 0
   parallel : Runtime.Parallel := .auto
   /-- What `auto` counts as worth the pool. -/
@@ -199,6 +201,7 @@ private def loop (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
     | n => n
   let parallel := if workers ≤ 1 then .off else rt.config.parallel
   let mut pace : Pace := {}
+  let mut worked_ns ← IO.monoNanosNow
   repeat
     let now ← clock
     let wait ← kernel.modifyGet fun k => ((k.advance now).wait, k)
@@ -220,7 +223,10 @@ private def loop (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
     let units := Pace.work acts
     if units != 0 then
       if parallel == .auto then
-        pace := pace.observe rt.config.pace workers spread ((← IO.monoNanosNow) - start_ns) units
+        let end_ns ← IO.monoNanosNow
+        pace := pace.observe rt.config.pace workers spread (end_ns - start_ns) units
+          (end_ns - worked_ns)
+        worked_ns := end_ns
       rt.ran.modify fun b =>
         if 1 < spread.workers then { b with pool := b.pool + 1 }
         else { b with inline := b.inline + 1 }

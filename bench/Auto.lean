@@ -7,8 +7,9 @@ import Lanes
 /-! The shell without IO adapters, `parallel` off, on and auto: `benchAuto [workers] [runs]
 [scale] [workload…]`, every workload when none is named. A workload is a list of phases, each a
 number of inputs sent to `K` counters as fast as the inbox takes them, input `n` to counter
-`n % K`, whose step mixes a hash `spin` times; the shard runs to idle after each phase. Every
-run starts a fresh shard. The modes take turns, `runs` times, and the table gives the median
+`n % K`, whose step mixes a hash `spin` times; the shard runs to idle after each phase. The inbox
+holds 64 inputs, so a batch is about as large as a server's at 64 connections. Every run starts a
+fresh shard. The modes take turns, `runs` times, and the table gives the median
 time a message of each and the spread over the runs, (highest − lowest) / median; for auto also
 the share of batches it ran on the pool. -/
 
@@ -47,7 +48,7 @@ structure Phase where
 
 def runOnce (config : Runtime.Config) (phases : List Phase) : IO (Nat × Nat × Runtime.Batches) :=
   Lanes.block do
-    let rt ← Runtime.start counters config
+    let rt ← Runtime.start counters { config with inboxCapacity := 64 }
     let start ← IO.monoNanosNow
     let mut messages := 0
     for p in phases do

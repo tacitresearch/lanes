@@ -20,7 +20,7 @@ proved function tells it to.
 | Actors and systems | `Lanes/Core/{Actor,System,World,Step,Run}.lean` | the definition everything else is about |
 | Proof tools for systems | `Lanes/Proof/{Lift,Ghost,Monotone,Equiv,Deed}.lean` | `System.invariant_of_actor`, `Inductive.of_monotone`, `System.Invariant.of_ghost` |
 | The kernel | `Lanes/Runtime/{Kernel,KernelSound,KernelTimers,Wave}.lean` | `Kernel.exec_reachable`, `Kernel.exec_outputs`, `Kernel.exec_wellFormed`, `Kernel.runWaves_eq` |
-| The shell | `Lanes/Runtime/IO/Shell.lean`, `Lanes/Runtime/{Batch,Mailbox,MailboxSound}.lean` | `Batch.run_kernel`, `Batch.run_sound`, `Mailbox.batch_since_take`; the shell itself is trusted |
+| The shell | `Lanes/Runtime/IO/Shell.lean`, `Lanes/Runtime/{Batch,Mailbox,MailboxSound,Pace}.lean` | `Batch.run_kernel`, `Batch.run_sound`, `Batch.run_spread`, `Mailbox.batch_since_take`; the shell itself is trusted |
 | Journal, snapshots, disk | `Lanes/Durable/{Journal,Snapshot,Disk,Frame}.lean`, `Lanes/Durable/IO/Journal.lean` | `Journal.open?_cut`, `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Journal.Disk.Holds.save_crash` |
 | Migrations | `Lanes/Durable/{Migration,Upgrade}.lean` | `Migration.inv_exec`, `Journal.Upgrade.begin_crash`, `Journal.Upgrade.holds`, `Journal.Upgrade.inv_load` |
 | Joins | `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`, `Lanes/Semantics/FairJoin.lean` | `System.Reachable.left`, `SysState.run_left`, `System.Run.Fair.left` |
@@ -88,15 +88,23 @@ since the last, in order, and the inbox never holds more than its capacity
 (`Mailbox.batch_since_take`, `Mailbox.Reachable.bounded`). Trusted: that the shell performs the
 acts as given (`TRUSTED.md`, the first row).
 
-With `Runtime.Config.workers` above one (one by default), the inputs that arrive together are one
-turn (`Journal.turnAll`), and its work is done a wave at a time (`Lanes/Runtime/Wave.lean`): the
-steps of the actors with mail in the wave are worked out on Lean's task pool, each actor's in the
-order of its messages, and the kernel then does the wave as `runBatch` does, taking each step from
-that plan. Handling one actor's message changes no other actor's state (`Kernel.frame_handle`), so
-the result is `runBatch`'s, value for value (`Kernel.runWaves_eq`), and the journal and everything
-proved of the kernel are unchanged. Steps cheaper than a few microseconds cost more to hand to
-another thread than they save
+Unless `Runtime.Config.parallel` is `off` or there is one worker, the inputs that arrive together
+are one turn (`Journal.turnAll`), a group of at most `min batch snapshotEvery`, and its work is
+done a wave at a time (`Lanes/Runtime/Wave.lean`): the steps of the actors with mail in the wave
+are worked out on Lean's task pool, each actor's in the order of its messages, and the kernel then
+does the wave as `runBatch` does, taking each step from that plan. Handling one actor's message
+changes no other actor's state (`Kernel.frame_handle`), so the result is `runBatch`'s, value for
+value, however the wave is spread over threads (`Kernel.runWaves_eq`), and the journal and
+everything proved of the kernel are unchanged
 (`docs/decisions/D64-actors-run-in-parallel.md`).
+
+Steps cheaper than a few microseconds cost more to hand to another thread than they save, and
+whether costlier ones gain depends on the cores free. With `parallel` `auto`, the default, the
+shell times each batch and `Pace` (`Lanes/Runtime/Pace.lean`, pure) chooses from those times
+whether the next runs on the shard's thread or on the pool: cheap work never goes to the pool,
+costlier work goes the way that has been faster, and the other is measured again now and then.
+A batch is the same whatever the choice (`Batch.run_spread`), so the timing and the choice are
+trusted only for speed (`docs/decisions/new-adaptive-waves.md`).
 
 ## Journal, snapshots and the disk model
 
