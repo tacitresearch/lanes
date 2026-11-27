@@ -3,17 +3,17 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
-import Examples.Bank
+import Tests.Fixtures.Bank
 import Tests.Bank
 import Tests.Join
 
 /-!
-A system split across two shards behaves as the one system (`Lanes/Actors/ShardSound.lean`),
+A system split across two shards behaves as the one system (`Lanes/Runtime/ShardSound.lean`),
 checked before it was proved: every state the split reaches, read as one state, is among the
 states the system reaches alone, compared as the checker compares states. The bank has its two
 accounts on different shards; `relay` adds boot actors, timers and `stop`.
 
-The same comparisons run on three shards (`System.shards`, `Lanes/Actors/ShardsSound.lean`).
+The same comparisons run on three shards (`System.shards`, `Lanes/Runtime/ShardsSound.lean`).
 
 Two systems show where the statement stops. `fragile` has a boot actor that stops as it starts:
 the split boots one shard before the other, so a message is kept that the system alone loses.
@@ -111,7 +111,7 @@ end Compare
 
 section Bank
 
-open Examples.Bank Tests.Bank
+open Tests.Fixtures.Bank Tests.Bank
 
 /-- Credits travel on a network link, requests on a reliable one, and every account may crash:
 a crash loses the requests waiting and keeps the credits. -/
@@ -280,13 +280,13 @@ def chorusAlone :=
   Tests.Join.explore chorus {} [true, false] fun c =>
     c.state true ≤ 2 && c.state false ≤ 1 && c.net.length ≤ 3 && c.outbox.length ≤ 3
 
-/-! The same on three shards (`Lanes/Actors/ShardsSound.lean`): the bank with an account on
+/-! The same on three shards (`Lanes/Runtime/ShardsSound.lean`): the bank with an account on
 each, the relay with three actors each on the shard after its own, and `fragile` on two of
 three shards. -/
 
 section Three
 
-open Examples.Bank
+open Tests.Fixtures.Bank
 
 abbrev Bank3 := bank (Fin 3) 1
 
@@ -368,7 +368,7 @@ end Three
 
 section Bank
 
-open Examples.Bank
+open Tests.Fixtures.Bank
 
 /-- No balance of the bank on two shards is ever negative, from the same fact about the bank. -/
 theorem split_balance_nonneg {A : Type} [DecidableEq A] (opening : Nat) (hosts : A → Bool)

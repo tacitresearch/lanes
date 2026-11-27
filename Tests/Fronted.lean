@@ -3,9 +3,10 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
+import Lanes.Proofs
 import Tests.Durable
 import Tests.Web
-import Examples.BankWeb
+import Tests.Fixtures.BankWeb
 
 /-!
 Model checks of `Http.fronted`: the gate joined by `System.join` in front of a service that
@@ -313,7 +314,7 @@ def tests : List (String × Bool) :=
 
 /-! The bank on two shards, accounts 0 and 2 on the first and account 1 on the second. -/
 
-open Std Std.Async Examples.Bank Examples.BankWeb
+open Std Std.Async Tests.Fixtures.Bank Tests.Fixtures.BankWeb
 
 structure Node where
   port : UInt16
@@ -329,7 +330,7 @@ def live : Async (List (String × Bool)) := do
       listen := { port := 0 }
       home := fun account => return (← peerPorts.get)[shardOf account]?.map fun port => { port }
       id := Codec.fin, msg := (actors Codec.fin 100).msg }
-    let (server, peers) ← serveShard (bank Acct 100) (shardOf · == k) Examples.BankWeb.bridge
+    let (server, peers) ← serveShard (bank Acct 100) (shardOf · == k) Tests.Fixtures.BankWeb.bridge
       peers { port := 0, gate := { requestTimeout_ms := 300 } } { record := true }
     peerPorts.modify (·.push peers.port)
     nodes := nodes.push {
@@ -445,11 +446,11 @@ def nodeDurable : Async (List (String × Bool)) := do
   let fetched (method path' body : String) : Async String := do
     try
       let log ← Journal.Store.open
-        (sys := fronted ((bank Acct 100).shard here) Examples.BankWeb.bridge.shard {})
+        (sys := fronted ((bank Acct 100).shard here) Tests.Fixtures.BankWeb.bridge.shard {})
         { path
           input := Codec.sum (Codec.pair Codec.nat Request.codec)
-            (Codec.sum (Examples.Bank.Request.codec Codec.fin) (Codec.sigma Codec.fin msg)) }
-      let (server, peers) ← serveShard (bank Acct 100) here Examples.BankWeb.bridge
+            (Codec.sum (Tests.Fixtures.Bank.Request.codec Codec.fin) (Codec.sigma Codec.fin msg)) }
+      let (server, peers) ← serveShard (bank Acct 100) here Tests.Fixtures.BankWeb.bridge
         { listen := { port := 0 }, home := fun _ => pure none, id := Codec.fin, msg }
         { port := 0 } (log := some log)
       let answer ← Tests.Web.fetch (server.port.getD 0) path' (method := method) (body := body)
@@ -470,13 +471,13 @@ def durable : Async (List (String × Bool)) := do
   let journal : System.FilePath := s!"{dir}/lanes-fronted-{← IO.monoNanosNow}.journal"
   let start := do
     let log ← Journal.Store.open
-      (sys := fronted (bank Acct 100) Examples.BankWeb.bridge {})
+      (sys := fronted (bank Acct 100) Tests.Fixtures.BankWeb.bridge {})
       { path := journal
         input := Codec.sum (Codec.pair Codec.nat Request.codec)
-          (Examples.Bank.Request.codec Codec.fin)
+          (Tests.Fixtures.Bank.Request.codec Codec.fin)
         actors := some (frontedActors (actors Codec.fin 100) Response.codec
-          Examples.BankWeb.bridge) }
-    serveFronted (bank Acct 100) Examples.BankWeb.bridge { port := 0 }
+          Tests.Fixtures.BankWeb.bridge) }
+    serveFronted (bank Acct 100) Tests.Fixtures.BankWeb.bridge { port := 0 }
       { record := true, snapshotEvery := 4 } (log := some log)
   let server ← start
   let moved ← Tests.Web.fetch (server.port.getD 0) "/transfer" (method := "POST")

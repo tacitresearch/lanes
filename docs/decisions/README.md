@@ -73,3 +73,6 @@ decision without a number.
 - [D57. The server runs its own connections, and a pure function decides for each](D57-the-server-runs-its-own-connections.md)
 - [D58. URLs, media types and rate limits against Go, and where they depart from it](D58-urls-media-types-rate-limits-against-go.md)
 - [D59. Threads park, and a connection's loop runs where it is told something](D59-threads-park.md)
+- [D60. Examples are for reading, fixtures are for the tests](D60-examples-are-for-reading.md)
+- [D61. Models of external systems: classes in Lanes, vendors in integrations](D61-models-of-external-systems.md)
+- [D62. The layout is by concern, and `import Lanes` is the API](D62-the-layout-is-by-concern.md)

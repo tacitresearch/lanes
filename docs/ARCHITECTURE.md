@@ -6,7 +6,8 @@ are in `AGENTS.md`; what works and its limits in `docs/STATUS.md`; what is trust
 definition (proved, with its theorems; trusted; checked; tested; a spec; or none) is generated
 from the built library in `docs/INVENTORY.md` (D47), and what has none is on
 `docs/inventory-none.md`: that is where a claim is checked, and this page only names the
-headline theorems. Those are gated in `Tests/Axioms/`, which stops compiling if a `sorry` or a
+headline theorems. `import Lanes` gives the API; the soundness theorems named here are in
+`Lanes.Proofs` (`Lanes/Proofs.lean`), which `Lanes.Semantics` imports. Those are gated in `Tests/Axioms/`, which stops compiling if a `sorry` or a
 new axiom reaches them.
 
 The idea in one line: all logic is pure step functions, the semantics is one executable function
@@ -16,25 +17,25 @@ proved function tells it to.
 
 | Piece | Where | Proved by |
 | --- | --- | --- |
-| Actors and systems | `Lanes/Actors/{Actor,System,World,Step}.lean` | the definition everything else is about |
-| Proof tools for systems | `Lanes/Actors/{Lift,Ghost,Monotone,Equiv,Run}.lean` | `System.invariant_of_actor`, `Inductive.of_monotone`, `System.Invariant.of_ghost` |
-| The kernel | `Lanes/Actors/{Kernel,KernelSound,KernelTimers}.lean` | `Kernel.exec_reachable`, `Kernel.exec_outputs`, `Kernel.exec_wellFormed` |
-| The shell | `Lanes/Actors/{Runtime,Batch,Mailbox,MailboxSound}.lean` | `Batch.run_kernel`, `Batch.run_sound`, `Mailbox.batch_since_take`; the shell itself is trusted |
-| Journal, snapshots, disk | `Lanes/Actors/{Journal,Snapshot,Disk}.lean`, `Lanes/Env/Journal.lean` | `Journal.open?_cut`, `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Journal.Disk.Holds.save_crash` |
-| Joins | `Lanes/Actors/{Join,JoinSound,MapIOSound}.lean`, `Lanes/Semantics/FairJoin.lean` | `System.Reachable.left`, `SysState.run_left`, `System.Run.Fair.left` |
-| Shards and the transport | `Lanes/Actors/{Shard,ShardSound,ShardsSound,Courier,CourierSound}.lean`, `Lanes/Env/{Peers,Node}.lean` | `System.ShardsReachable.unsharded`, `Peers.Courier.written_sublist_sent` |
-| The gate and the HTTP server | `Lanes/Http/{Gate,Front,FrontSound,Waiting}.lean`, `Lanes/Semantics/FrontLive.lean`, `Lanes/Env/Http.lean` | `Http.served_answered_le_arrived`, `Http.served_pending_answered`, `Http.Waiting.exec_answered` |
-| Other adapters | `Lanes/Actors/Outside.lean`, `Lanes/Env/{Clock,HttpClient}.lean`, `Lanes/Http/{Wire,WireSound}.lean` | `Response.read_wire`, `Request.fields_framing`; conformance tests |
-| Jobs: work outside a step | `Lanes/Behaviours/{Jobs,JobsSound}.lean`, `Lanes/Semantics/JobsLive.lean`, `Lanes/Env/Jobs.lean` | `Jobs.answered_le_handled`, `Jobs.retry_same`, `Jobs.submitted_answered`; the pool is trusted |
-| Web | `Lanes/Http/{Basic,Route,RouteSound,Cookie,CookieSound}.lean`, `Lanes/Html/`, `Lanes/Auth/` | `Html.lex_render`, `Html.safeUrl_scheme`, `Http.dispatch_link`, `Http.parseForm_encodeForm`, `Http.readSetCookie_header`, `Auth.verify_eq_some`, `Auth.checkForm_other` |
+| Actors and systems | `Lanes/Core/{Actor,System,World,Step,Run}.lean` | the definition everything else is about |
+| Proof tools for systems | `Lanes/Proof/{Lift,Ghost,Monotone,Equiv,Deed}.lean` | `System.invariant_of_actor`, `Inductive.of_monotone`, `System.Invariant.of_ghost` |
+| The kernel | `Lanes/Runtime/{Kernel,KernelSound,KernelTimers}.lean` | `Kernel.exec_reachable`, `Kernel.exec_outputs`, `Kernel.exec_wellFormed` |
+| The shell | `Lanes/Runtime/IO/Shell.lean`, `Lanes/Runtime/{Batch,Mailbox,MailboxSound}.lean` | `Batch.run_kernel`, `Batch.run_sound`, `Mailbox.batch_since_take`; the shell itself is trusted |
+| Journal, snapshots, disk | `Lanes/Durable/{Journal,Snapshot,Disk,Frame}.lean`, `Lanes/Durable/IO/Journal.lean` | `Journal.open?_cut`, `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Journal.Disk.Holds.save_crash` |
+| Joins | `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`, `Lanes/Semantics/FairJoin.lean` | `System.Reachable.left`, `SysState.run_left`, `System.Run.Fair.left` |
+| Shards and the transport | `Lanes/Runtime/{Shard,ShardSound,ShardsSound}.lean`, `Lanes/Net/{Courier,CourierSound}.lean`, `Lanes/Net/IO/{Peers,Node}.lean` | `System.ShardsReachable.unsharded`, `Peers.Courier.written_sublist_sent` |
+| The gate and the HTTP server | `Lanes/Web/Http/{Gate,Front,FrontSound,Waiting,Conn,ConnSound}.lean`, `Lanes/Semantics/Front.lean`, `Lanes/Web/IO/Server.lean` | `Http.served_answered_le_arrived`, `Http.served_pending_answered`, `Http.Waiting.exec_answered`, `Http.Conn.run_writes` |
+| Other adapters | `Lanes/Outside/Basic.lean`, `Lanes/Outside/IO/Clock.lean`, `Lanes/Web/IO/Client.lean`, `Lanes/Web/Http/{Grammar,Wire,WireSound}.lean` | `Response.read_wire`, `Request.fields_framing`; conformance tests |
+| Jobs: work outside a step | `Lanes/Behaviours/Jobs/{Basic,Sound}.lean`, `Lanes/Semantics/Jobs.lean`, `Lanes/Behaviours/Jobs/IO/Pool.lean` | `Jobs.answered_le_handled`, `Jobs.retry_same`, `Jobs.submitted_answered`; the pool is trusted |
+| Web | `Lanes/Web/Http/{Basic,Route,RouteSound,Cookie,CookieSound}.lean`, `Lanes/Web/Html/`, `Lanes/Web/Auth/` | `Html.lex_render`, `Html.safeUrl_scheme`, `Http.dispatch_link`, `Http.parseForm_encodeForm`, `Http.readSetCookie_header`, `Auth.verify_eq_some`, `Auth.checkForm_other` |
 | The checker | `Lanes/Check/`, `Lanes/Semantics/{Monitor,MonitorSound}.lean` | `Check.search_sound`, `Check.system_sound_of_respects`, `Check.refines_traces` |
 | The proof layer | `Lanes/Semantics/` | refinement, specs, fairness, leads-to |
-| Data | `Lanes/Data/` | codec laws, `Quorum.majority_inter`, `Bytes.same_iff` |
-| Bound C | `native/lanes.c`, `Lanes/Data/Sodium.lean` | trusted; tested against the Lean references |
+| Data and the standard library | `Lanes/Data/`, `Lanes/Lib/` | codec laws, `Quorum.majority_inter`, `Bytes.same_iff`, `Json.parse_iff`, `Url.parse_print` |
+| Bound C | `native/lanes.c`, `Lanes/Lib/Crypto/Sodium.lean` | trusted; tested against the Lean references |
 
 ## Actors and the semantics
 
-An actor (`Lanes/Actors/Actor.lean`) is `init`, `step` and `recover`: a pure, total function from
+An actor (`Lanes/Core/Actor.lean`) is `init`, `step` and `recover`: a pure, total function from
 a state and one message to a new state and a list of effects. A `Signature` names a system's
 actors, each with its own message type, and its inputs and outputs; an identity is a typed
 reference, and identities may be infinite families, since every identity names an actor that
@@ -42,7 +43,7 @@ always exists and starts on its first message (D2). The effects are `send`, `emi
 `after` and `cancel` (timers named by their message) and `stop` (D3). A `System` adds the actors,
 which actors boot, and `accept`, which actor an input goes to (D4).
 
-The semantics is one function, `SysState.step` in `Lanes/Actors/World.lean`: a state holds every
+The semantics is one function, `SysState.step` in `Lanes/Core/World.lean`: a state holds every
 actor's state, the messages in flight, the armed timers and the outputs not yet handed over; an
 `Event` is an input, a delivery, a duplicate, a drop, a timeout, an output, a crash or a start.
 What may go wrong is an `EnvModel`: each link may lose, reorder and duplicate (`Link.network`
@@ -61,7 +62,7 @@ links, which no actor can see, is factored out by `SysState.Equiv`.
 
 The runtime of one shard is a pure kernel inside a thin shell (D18, D23, D40).
 
-The kernel (`Lanes/Actors/Kernel.lean`) is every runtime decision as pure functions over a hash
+The kernel (`Lanes/Runtime/Kernel.lean`) is every runtime decision as pure functions over a hash
 map of actors, a queue of messages and an agenda of timers: accept an input, deliver the oldest
 message (starting its receiver if it is down), fire a due timer, say how long nothing will
 happen. Time is data: the shell says what the clock reads. Whatever sequence of operations the
@@ -71,9 +72,9 @@ and its outputs are exactly that run's (`Kernel.exec_outputs`). Its agenda holds
 pending timers (`Kernel.exec_wellFormed`), it never sleeps past one, and neither due timers nor
 queued messages starve the other (`Kernel.WellFormed.step_of_queued`, `step_of_due`).
 
-The shell (`Lanes/Actors/Runtime.lean`) is one thread per shard. Senders put commands in a
-bounded inbox (`Lanes/Actors/Mailbox.lean`, pure: who is refused, who waits, who is woken). The
-shell takes everything that has arrived at once and calls `Batch.run` (`Lanes/Actors/Batch.lean`),
+The shell (`Lanes/Runtime/IO/Shell.lean`) is one thread per shard. Senders put commands in a
+bounded inbox (`Lanes/Runtime/Mailbox.lean`, pure: who is refused, who waits, who is woken). The
+shell takes everything that has arrived at once and calls `Batch.run` (`Lanes/Runtime/Batch.lean`),
 a pure function that returns the kernel after the batch and a list of acts: append these journal
 entries, hand over these outputs, save this image, answer this peek. The shell performs the acts
 in order and decides nothing. Proved: the journal describes the kernel (`Batch.run_kernel`); an
@@ -87,30 +88,30 @@ acts as given (`TRUSTED.md`, the first row).
 
 Durability is a journal of what the kernel was asked, not of actor states (D24): replaying it
 through the same pure kernel gives the same state, so a restart is not a fault any proof has to
-account for. Pure, in `Lanes/Actors/Journal.lean` and `Lanes/Data/Frame.lean`: a file reads back
+account for. Pure, in `Lanes/Durable/Journal.lean` and `Lanes/Durable/Frame.lean`: a file reads back
 as the entries written (`Journal.open?_file`); a file cut at any byte opens and gives exactly the
 entries wholly written before the cut, and anything else wrong with it is refused, not repaired
 (`Journal.open?_cut`); recovery rebuilds exactly the kernel those entries lead to
 (`Journal.recover_kernel`), and hands over again exactly what was produced after the last mark
 (`Journal.recover_handed`).
 
-A snapshot is the kernel's image (`Lanes/Actors/Snapshot.lean`), saved with codecs the
+A snapshot is the kernel's image (`Lanes/Durable/Snapshot.lean`), saved with codecs the
 application gives for its actors; a shard that saves goes on with the restored kernel, so a
 snapshot is a restart without the crash (D29). Starting from a snapshot gives what replaying the
 whole history gives (`Journal.resume_eq_recover`).
 
 What is written, in what order, and what a start makes of the files are pure functions over a
-model of the two files (`Lanes/Actors/Disk.lean`: `Journal.Disk.start`, `Disk.mend`,
+model of the two files (`Lanes/Durable/Disk.lean`: `Journal.Disk.start`, `Disk.mend`,
 `appendWrites`, `saveWrites`), in which an append may stop at any byte and a rename is atomic. If
 the process dies anywhere in an append or a save, the files load as the kernel the shard had
 (`Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.save_crash`), and a start mends what a
 death left (`Journal.Disk.Torn.mend`), so this holds over any number of starts, saves and deaths.
-`Lanes/Env/Journal.lean` performs the writes, each synced with `fsync` before the next, so a loss
+`Lanes/Durable/IO/Journal.lean` performs the writes, each synced with `fsync` before the next, so a loss
 of power leaves what a death would; that the file system is the model is trusted.
 
 ## Composition: joins, shards and the transport
 
-`System.join a b wiring` (`Lanes/Actors/Join.lean`) is two systems as one: an output of one that
+`System.join a b wiring` (`Lanes/Core/Join.lean`) is two systems as one: an output of one that
 the wiring routes to the other becomes a message to the actor its `accept` names. Every tool
 applies to a join, because it is an ordinary `System` (D25). What is proved of `a` for every
 environment holds of `a` inside any join: of states (`System.Reachable.left`,
@@ -119,7 +120,7 @@ environment holds of `a` inside any join: of states (`System.Reachable.left`,
 `System.filterMapIO` renames inputs and outputs and hides some; a system behind it does what it
 does in the open (`SysState.run_filterMapIO`).
 
-A shard is a system too (D28): `System.shard sys hosts` (`Lanes/Actors/Shard.lean`) is `sys` as a
+A shard is a system too (D28): `System.shard sys hosts` (`Lanes/Runtime/Shard.lean`) is `sys` as a
 shard sees it, where a message to an actor hosted elsewhere leaves as a parcel and a parcel that
 arrives is an input. It runs on the unchanged kernel and keeps the ordinary journal. Shards
 joined behave as the one system, for two (`System.SplitReachable.merged`) and for any number
@@ -130,21 +131,21 @@ joined behave as the one system, for two (`System.SplitReachable.merged`) and fo
 Shards in different processes are joined by TCP, with a link that promises no more than
 `Link.network` (D30). There is no router inside a process (D37); a machine's cores are used by
 running a process per core. Every decision of the transport is the courier, `Peers.Courier.step`
-(`Lanes/Actors/Courier.lean`), a pure function proved for every limit and every sequence of
-events (`Lanes/Actors/CourierSound.lean`): one write at a time on a connection, writes only where
+(`Lanes/Net/Courier.lean`), a pure function proved for every limit and every sequence of
+events (`Lanes/Net/CourierSound.lean`): one write at a time on a connection, writes only where
 it dialed and only what it was sent, in order and at most once
 (`Peers.Courier.written_sublist_sent`), a bounded queue, everything closed at `stop`
 (`Peers.Courier.stop_closes`), and what it delivers is what its reader makes of the bytes
-(`Peers.Courier.delivered_read`). `Lanes/Env/Peers.lean` only performs. That the running
+(`Peers.Courier.delivered_read`). `Lanes/Net/IO/Peers.lean` only performs. That the running
 processes implement `System.shards` is trusted.
 
 ## The gate and the HTTP server
 
 The HTTP server's logic is a system of its own, the gate (D19, D31, D43). `Gate.step`
-(`Lanes/Http/Gate.lean`) decodes each request into an input through the application's `Bridge`,
+(`Lanes/Web/Http/Gate.lean`) decodes each request into an input through the application's `Bridge`,
 remembers which requests are waiting, arms a deadline for each, and answers with the system's
 response or with `504` when the deadline fires. `Http.gateSystem` is the gate as one actor;
-`Http.fronted sys` is the gate joined in front of `sys` (`Lanes/Http/Front.lean`), and
+`Http.fronted sys` is the gate joined in front of `sys` (`Lanes/Web/Http/Front.lean`), and
 `Http.served sys` is `fronted sys` with requests its only inputs and responses its only outputs,
 which is what `Http.serve` runs.
 
@@ -156,23 +157,23 @@ the gate admits is answered (`Http.served_pending_answered`). These come from th
 (`Http.Gate.answered_le_handled`, `Http.Gate.pending_answered`) by projection through the join.
 That an arrival reaches the gate is checked, not proved.
 
-The server (`Lanes/Env/Http.lean`) reads a request, prepares it with `Bridge.prepare` on the
+The server (`Lanes/Web/IO/Server.lean`) reads a request, prepares it with `Bridge.prepare` on the
 request's own task, so a password or a cookie the bridge turns into what the system needs never
 reaches the journal (D44), takes an id from `Http.Waiting` (pure: each id handed out once, each
 answered at most once and to its own waiter: `Http.Waiting.exec_handed_nodup`,
 `Http.Waiting.exec_answered`), and hands the input to the shard. It answers `503` itself when the
 inbox is full and `405` for a method an application cannot handle. `Http.serveFronted` serves
 `fronted sys`, whose other inputs and outputs pass the gate by, and `Http.serveShard`
-(`Lanes/Env/Node.lean`) runs it with the transport: one process with an HTTP front and peers.
+(`Lanes/Net/IO/Node.lean`) runs it with the transport: one process with an HTTP front and peers.
 
 Around it, pure and in `Std` only: requests and responses as data; typed routes whose links the
 server reads back and `dispatch` hands to their route's handler (`Http.dispatch_link`); forms
 (`Http.parseForm_encodeForm`); HTML values that a browser reads as the tree they were rendered
 from, so text stays text (`Html.lex_render`, against a model of the HTML tokenizer), with URL
 attributes limited to `Html.allowedSchemes` (`Html.safeUrl_scheme`), and a template macro
-(`Lanes/Html/Syntax.lean`, trusted); htmx attributes taken from routes (`Hx.request_match?`);
+(`Lanes/Web/Html/Syntax.lean`, trusted); htmx attributes taken from routes (`Hx.request_match?`);
 cookies a browser stores with exactly the attributes they name (`Http.readSetCookie_header`,
-against RFC 6265's algorithm); and `Lanes/Auth/`: signed tokens and form tokens that accept
+against RFC 6265's algorithm); and `Lanes/Web/Auth/`: signed tokens and form tokens that accept
 exactly what was signed for their purpose and session (`Auth.verify_eq_some`,
 `Auth.checkForm_iff`) and another's only through an HMAC collision (`Auth.verify_sign_other`,
 `Auth.checkForm_other`), Argon2id password digests, failed attempts that lock at their limit
@@ -182,24 +183,24 @@ exactly what was signed for their purpose and session (`Auth.verify_eq_some`,
 
 Whatever a system does not contain reaches it through outputs and inputs, never through an effect
 that does IO (D26). An adapter is a model of the outside, an `Outside`
-(`Lanes/Actors/Outside.lean`) that the checker explores the system against, and a handler that
+(`Lanes/Outside/Basic.lean`) that the checker explores the system against, and a handler that
 performs; a conformance test records a real run and checks it with `Outside.allows`. Where an
 adapter has something to decide, it is a pure function with its theorems (rule 3.9).
 
-- **Clock** (`Lanes/Env/Clock.lean`): the time as an input, never earlier than one given before,
+- **Clock** (`Lanes/Outside/IO/Clock.lean`): the time as an input, never earlier than one given before,
   also across a restart.
-- **HTTP client** (`Lanes/Env/HttpClient.lean`): HTTP/1.1 without TLS, one request per
-  connection. The bytes are pure (`Lanes/Http/Wire.lean`): the request writer frames the message
+- **HTTP client** (`Lanes/Web/IO/Client.lean`): HTTP/1.1 without TLS, one request per
+  connection. The bytes are pure (`Lanes/Web/Http/Wire.lean`): the request writer frames the message
   itself (`Request.fields_framing`), and the reader is proved to read a response written as a
   server writes it as soon as its last byte is there, to stay within its limit and to end
-  (`Lanes/Http/WireSound.lean`: `Response.read_wire`, `Response.read_more`; D39).
+  (`Lanes/Web/Http/WireSound.lean`: `Response.read_wire`, `Response.read_more`; D39).
 - **HTTP server, journal, transport**: above.
-- **Jobs** (`Lanes/Behaviours/Jobs.lean`): work that must not run in a
+- **Jobs** (`Lanes/Behaviours/Jobs/Basic.lean`): work that must not run in a
   step, an outbound call or slow pure work, is submitted to the jobs actor under a key the
   requester chooses, beside the system that submits it (`Jobs.attach`). The actor dispatches
   each attempt as an output carrying the key, gives each a deadline, retries after a backoff,
   keeps at most `maxInFlight` jobs active and refuses beyond, and answers each key once; its
-  pool (`Lanes/Env/Jobs.lean`) performs attempts on tasks of their own, as a pure function or
+  pool (`Lanes/Behaviours/Jobs/IO/Pool.lean`) performs attempts on tasks of their own, as a pure function or
   an HTTP call with the key in `Idempotency-Key`, and hands results back as inputs. Proved: no
   key is answered more often than it is submitted, in every environment
   (`Jobs.answered_le_handled`); a retry carries its job's key and work (`Jobs.retry_same`);
@@ -215,7 +216,7 @@ so what is checked is the code that runs. The engine (`Lanes/Check/Search.lean`)
 over exact states, so traces are shortest (D8, D33). `Service.monitored` and `Check.refines`
 (`Lanes/Check/Monitor.lean`) check a system against a `Service` spec with no refinement mapping
 (D42). `Check.fuzz` runs seeded random runs for instances too large to explore, and the
-deterministic scheduler (`Lanes/Actors/Scheduler.lean`, `Lanes/Actors/FairScheduler.lean`)
+deterministic scheduler (`Lanes/Core/Scheduler.lean`, `Lanes/Core/FairScheduler.lean`)
 replays any run.
 
 What a result means is proved: the checker lists exactly the enabled events
@@ -240,10 +241,10 @@ theorem.
   (`docs/decisions/D56-a-deadline-passes-where-it-is-served.md`). `Server.implements` proves the
   `Server` behaviour (`Lanes/Behaviours/Server.lean`) implements its spec.
 - A request named by its client takes effect once (`Lanes/Semantics/Once.lean`, D48):
-  `Service.once` is the spec, `Lanes/Behaviours/Once.lean` the memo that meets it, and
+  `Service.once` is the spec, `Lanes/Behaviours/Once/Basic.lean` the memo that meets it, and
   `System.Refines.of_handles` the relation rule that a duplicated message cannot break. The
   key-value store implements it with no premise on its links
-  (`Examples.KV.implements_once`), and so does Raft with the memo in its replicated machine
+  (`KV.implements_once`, `examples/kv-cache`), and so does Raft with the memo in its replicated machine
   (`RaftKV.implementsMachine_once`). `System.Refines.filterMapIO` carries a refinement through
   hiding outputs the spec allows at any time (`Spec.showing`).
 - Liveness (`Lanes/Semantics/Liveness.lean`, D27): infinite runs (`System.Run`), weak fairness
@@ -256,7 +257,7 @@ theorem.
 
 What Lean cannot express or check is bound, as other languages bind it (D46): `fsync`, and from
 libsodium SHA-256, HMAC-SHA-256, constant-time comparison, secure random bytes and Argon2id
-(`native/lanes.c`, declared in `Lanes/Data/Sodium.lean` and `Lanes/Env/Journal.lean`). A bound
+(`native/lanes.c`, declared in `Lanes/Lib/Crypto/Sodium.lean` and `Lanes/Durable/IO/Journal.lean`). A bound
 function with a Lean reference (`Sha256.reference`, `Hmac.reference`, `Bytes.sameReference`) has
 that reference as its body, so its theorems (`Bytes.same_iff`) are about the reference, and what
 is trusted is that the C computes the same, which `Tests/Crypto.lean` tests.
@@ -265,7 +266,7 @@ is trusted is that the C computes the same, which `Tests/Crypto.lean` tests.
 
 One process running `Http.serve` on a journal:
 
-1. `Lanes/Env/Http.lean` reads the request from its socket and applies `Bridge.prepare` on the
+1. `Lanes/Web/IO/Server.lean` reads the request from its socket and applies `Bridge.prepare` on the
    request's own task.
 2. `Http.Waiting` hands it an id; the server offers the input to the shard's inbox and answers
    `503` if the inbox refuses it.
@@ -289,16 +290,17 @@ courier and enters the other process's inbox as an input.
 
 ## Applications
 
-`Examples/` holds small reference apps, each checked and proved: the bank (`Examples/Bank.lean`,
-also served over HTTP by `Examples/BankWeb.lean`), a key-value store with front ends
-(`Examples/KV.lean`, refinement in `Examples/KVProofs.lean`), leader election
-(`Examples/Election.lean`) and a watchdog (`Examples/Watchdog.lean`). `systems/` holds serious
-applications, each its own Lake package that requires Lanes as a user would (`systems/README.md`):
-`systems/raft-kv`, a replicated key-value store proved to implement the map it replicates
-(`RaftKV.implementsMachine`), and `once` of it in every environment with the memo in the map
-(`RaftKV.implementsMachine_once`); `systems/ledger`, a multi-user web ledger; and
-`systems/rookery`, a small social network for bots whose claims are proved of its spec, which it
-is proved to implement with deadlines (`Rookery.implements`). `lanes new`
+`examples/` holds the applications, each its own Lake package that requires Lanes as a user
+would, in the order `examples/README.md` reads them: the counter `lanes new` writes
+(`examples/counter`); the bank (`examples/bank`), also served over HTTP (`examples/bank-web`); a
+key-value store with front ends, whose read cache breaks refinement (`examples/kv-cache`,
+`KV.implements`, `KV.caching_not_implements`); leader election (`examples/election`); a watchdog
+(`examples/watchdog`); `examples/raft-kv`, a replicated key-value store proved to implement the
+map it replicates (`RaftKV.implementsMachine`), and `once` of it in every environment with the
+memo in the map (`RaftKV.implementsMachine_once`); `examples/ledger`, a multi-user web ledger;
+and `examples/rookery`, a small social network for bots whose claims are proved of its spec,
+which it is proved to implement with deadlines (`Rookery.implements`). The tests use copies of
+the small ones in `Tests/Fixtures/`, so an example can change for its reader alone. `lanes new`
 (`LanesCli/New.lean`, `templates/app/`) creates an application; `lanes lint`
 (`LanesCli/Lint.lean`) checks the rules of `AGENTS.md` that the text can show, the generated files
 and the inventory (`LanesCli/Inventory.lean`).

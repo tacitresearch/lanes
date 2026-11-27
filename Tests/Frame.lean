@@ -7,7 +7,7 @@ import Lanes
 /-!
 Tests of the journal's framing: the bytes of a frame, the round trip, a file cut at every
 length, a damaged byte at every position, and bytes after good frames. The theorems in
-`Lanes/Data/Frame.lean` say the same of every file; these run the compiled code.
+`Lanes/Durable/Frame.lean` say the same of every file; these run the compiled code.
 -/
 
 namespace Tests.Frame

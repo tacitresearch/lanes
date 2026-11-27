@@ -135,7 +135,7 @@ jobs:
       - name: Build what the checks run
         run: |
           lake build lanesTest
-          (cd systems/raft-kv && lake build raftNode raftProcs raftLive)
+          (cd examples/raft-kv && lake build raftNode raftProcs raftLive)
       - if: steps.lean.outputs.packages-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -149,7 +149,7 @@ jobs:
       - if: steps.lean.outputs.warm != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: systems/raft-kv/.lake/build
+          path: examples/raft-kv/.lake/build
           key: ${{ steps.lean.outputs.system-key }}
 
   shard:

@@ -3,7 +3,7 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
-import Examples.KV
+import Tests.Fixtures.KV
 
 /-!
 Refinement checks of the key-value store against its service spec, on one key, two values and
@@ -12,17 +12,17 @@ response against the map spec.
 
 Without caching the store refines the spec with messages lost and reordered and a crash, and
 breaks it when any link it uses hands a message over twice: every handling of a message answers
-a client or sends on, so a request handed over twice is answered twice. `Examples/KVProofs.lean`
+a client or sends on, so a request handed over twice is answered twice. `Tests/Fixtures/KVProofs.lean`
 proves the first for every instance, and that caching breaks it with one front end already.
 
 Behind `Once.actor`, with requests named by front end and number, the store refines `once` of
 the map spec with every link duplicating, losing and reordering; without the memo a retry and a
-duplicated read take effect twice (`Examples.KV.implements_once` proves the first).
+duplicated read take effect twice (`Tests.Fixtures.KV.implements_once` proves the first).
 -/
 
 namespace Tests.KV
 
-open Lanes Examples.KV
+open Lanes Tests.Fixtures.KV
 
 abbrev K := Fin 1
 abbrev V := Fin 2
@@ -61,7 +61,7 @@ def faulty : EnvModel (sig K V F) where
   mayCrash _ := true
   restarts _ := true
 
-def repeating (dup : Option (Examples.KV.Id F) → Examples.KV.Id F → Bool) :
+def repeating (dup : Option (Tests.Fixtures.KV.Id F) → Tests.Fixtures.KV.Id F → Bool) :
     EnvModel (sig K V F) where
   link src dst := { duplicating := dup src dst }
 

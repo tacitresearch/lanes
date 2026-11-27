@@ -25,7 +25,7 @@ themselves, through GitHub's OIDC provider, with no AWS keys stored anywhere.
    - `ExistingOidcProviderArn`: empty, unless **IAM → Identity providers** already lists
      `token.actions.githubusercontent.com`; then its ARN (an account has at most one).
    - `ScriptRef`: `main`, once this file is on `main`; before that, the branch that has
-     `scripts/ec2-runner.sh`.
+     `infra/ec2-runner.sh`.
    - Everything else as it is (`c7a.16xlarge`, 200 GiB, one runner per 4 vCPUs, stop after 2
      idle hours).
 
@@ -78,11 +78,11 @@ its jobs waiting for runners; the idle shutdown does not help there, re-running 
 
 `ci.yml` reads only `LANES_RUNNER` and does not start the machine: it stays on GitHub's runners
 unless you point `LANES_RUNNER` at runners that are up. Its jobs build once (`compile`) and then run
-lint and tests (`test`), the model checks (`check`), `systems/raft-kv` and `systems/ledger` in
+lint and tests (`test`), the model checks (`check`), `examples/raft-kv` and `examples/ledger` in
 parallel, each restoring the build from the Actions cache. The benchmark workflow (`bench.yml`) uses the box
 the same way as `mutants.yml`: its `start` and `stop` jobs are `.github/actions/box`.
 
-On the machine (`scripts/ec2-runner.sh`):
+On the machine (`infra/ec2-runner.sh`):
 
 - **Runners.** One per 4 vCPUs (16 on a c7a.16xlarge), each with its own directory and work
   directory under `/opt/lanes/runners`, all labelled `lanes`, run as systemd services by the user
@@ -164,7 +164,7 @@ and builds Lanes before its first job). Set `LANES_AWS_INSTANCE_TYPE` (say `c7a.
 instead of `LANES_AWS_INSTANCE_ID`, and optionally `LANES_AWS_SUBNET`,
 `LANES_AWS_SECURITY_GROUP` and `LANES_AWS_AMI` (Ubuntu 24.04 by default). `start` makes a
 registration token with `LANES_RUNNER_PAT` (required here), launches the machine with
-`scripts/ec2-runner.sh` as its user data under the label `lanes-run-<run>-<attempt>`, and `stop`
+`infra/ec2-runner.sh` as its user data under the label `lanes-run-<run>-<attempt>`, and `stop`
 terminates it and removes its runners. It powers itself off, and so terminates, after an idle
 hour or six hours in all. The role then needs, in addition to the stack's policy:
 
@@ -197,7 +197,7 @@ then launch Ubuntu 24.04 with the script as user data:
 ```bash
 TOKEN=$(gh api -X POST repos/tacitresearch/lanes/actions/runners/registration-token --jq .token)
 { echo '#!/bin/bash'
-  echo "cat >/root/ec2-runner.sh <<'LANES_EOF'"; cat scripts/ec2-runner.sh; echo LANES_EOF
+  echo "cat >/root/ec2-runner.sh <<'LANES_EOF'"; cat infra/ec2-runner.sh; echo LANES_EOF
   echo "REPO=tacitresearch/lanes TOKEN=$TOKEN bash /root/ec2-runner.sh"
 } | gzip -9 >user-data.gz
 aws ec2 run-instances --instance-type c7a.16xlarge \
@@ -224,37 +224,6 @@ stack with a new `GitHubToken` works too, but resolves the Ubuntu image again an
 the instance when Canonical has published a newer one; the new instance registers and warms
 itself, under the old runner names, and `LANES_AWS_INSTANCE_ID` must then be set to the new
 `InstanceId`.
-
-## A machine for Claude Code sessions
-
-`scripts/dev-box.sh` sets up a big Ubuntu 24.04 machine to run Claude Code on directly, with
-the repository cloned and warmed and several worktrees that share Mathlib.
-
-1. **EC2 → Launch instance**: Ubuntu Server 24.04, `c7a.16xlarge` (or `c7a.8xlarge`), 200 GiB
-   gp3, an instance profile with `AmazonSSMManagedInstanceCore` (for Session Manager) or a key
-   pair and an inbound SSH rule from your address only. Under **Advanced details → User data**:
-
-   ```bash
-   #!/bin/bash
-   cat >/root/dev-box.sh <<'LANES_EOF'
-   ...the contents of scripts/dev-box.sh...
-   LANES_EOF
-   REPO=tacitresearch/lanes CLONE_TOKEN=<a fine-grained token with Contents: Read-only> SESSIONS=4 bash /root/dev-box.sh
-   ```
-
-   Or run it by hand after logging in: `sudo REPO=tacitresearch/lanes CLONE_TOKEN=... bash
-   dev-box.sh`. Its output is in `/var/log/cloud-init-output.log`; warming takes about half an
-   hour.
-2. Log in (**Connect → Session Manager**, then `sudo -iu ubuntu`; or `ssh ubuntu@<address>`)
-   and run `claude` once to sign in with your Claude account.
-3. `lanes-claude` starts, or attaches to, a tmux session `lanes` in `~/lanes` running
-   `claude remote-control`; `lanes-claude 2` does the same in the worktree `~/lanes-2`, and so
-   on. Detach with `C-b d`: the session goes on when you log out.
-4. The session then appears in the Claude app's Claude Code section (and at claude.ai/code),
-   where you can carry on with it from anywhere.
-
-Stop the instance when you are done (**EC2 → Instances → Instance state → Stop**); its disk, the
-warm build and the worktrees stay for the next start.
 
 ## What has not been checked
 

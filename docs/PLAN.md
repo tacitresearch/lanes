@@ -18,7 +18,7 @@ because a launch claim is what a critic tests first.
 
 1. **Proving an application is cheap.** A library for the simulation relations every
    request-and-reply service repeats, a cheaper invariant rule, then a counterexample-to-induction
-   finder. The measure is `systems/ledger`'s refinement of its spec, proved, where today it is
+   finder. The measure is `examples/ledger`'s refinement of its spec, proved, where today it is
    checked on instances.
    Done towards it: a request named by its client takes effect once (`Service.once`, D48),
    `System.Refines.of_handles`, a relation rule that a duplicated message cannot break, and
@@ -35,9 +35,15 @@ because a launch claim is what a critic tests first.
    off the key-value store; idle actors not at their start saved when they rest and read back when mail comes (those at
    their start are released already), which waits for a place to keep their state.
 5. **Slow work that is not one request's**, as the ledger's friction log asks
-   (`systems/ledger/README.md`). The jobs actor is in (`Lanes/Behaviours/Jobs.lean`). Left: the
+   (`examples/ledger/README.md`). The jobs actor is in (`Lanes/Behaviours/Jobs/Basic.lean`). Left: the
    answer carried to its requester through the join, at most once there, as the gate's is; a
    queue for jobs beyond `maxInFlight`; ending sessions in bulk and statements in the ledger.
 6. **Short, current docs.** One rules file (`AGENTS.md`), `docs/ARCHITECTURE.md` in place of the
    original design, this page and `docs/ROADMAP.md` without their history, and `lanes lint`
    checking that docs cite files that exist.
+7. **Models of external systems.** Classes of external system as models under `Lanes/Outside/`
+   (a transactional store with an isolation level, an object store, a queue, an API with
+   idempotency keys and webhooks), built from combinators on `Outside` (an RPC whose timeout is
+   ambiguous, idempotency, an event stream), and vendors as packages under `integrations/` whose
+   conformance to a class is a trusted premise tested against the real service. Only `Outside`
+   has moved there so far.

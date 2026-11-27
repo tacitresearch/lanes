@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 
 What Lean cannot express or check, bound from C: libsodium for cryptography whose time must not
 depend on secrets, fsync for durability, and a timed wait for a thread. Each function is
-declared in `Lanes/Data/Sodium.lean`, `Lanes/Env/Journal.lean` or `Lanes/Actors/Park.lean`;
+declared in `Lanes/Lib/Crypto/Sodium.lean`, `Lanes/Durable/IO/Journal.lean` or `Lanes/Runtime/IO/Park.lean`;
 arguments are borrowed.
 */
 #include <errno.h>

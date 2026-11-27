@@ -123,7 +123,7 @@ named in `TRUSTED.md` (`docs/decisions/D45-everything-is-proved.md`); the checke
 before a proof is attempted, and a theorem is the evidence. `docs/INVENTORY.md`, generated from
 the built library, gives every public definition its status and evidence, and
 `docs/ARCHITECTURE.md` says how the pieces fit and names the headline theorems. Not there yet:
-`systems/ledger` is checked on instances, not proved, and `docs/inventory-none.md` lists the
+`examples/ledger` is checked on instances, not proved, and `docs/inventory-none.md` lists the
 definitions of `Lanes/` that still have no evidence.
 
 - **The runtime's logic.** Every decision the runtime makes is a pure function, and whatever
@@ -156,7 +156,7 @@ definitions of `Lanes/` that still have no evidence.
 - **The HTTP client's wire format.** What the reader makes of a response written as a server
   writes it, and of every start of one, is proved, and so are its size limit and its ending
   (`Response.read_wire`, `Response.read_more`).
-- **Trusted.** About 2,200 lines of trusted code, listed with their sizes in `TRUSTED.md`: IO,
+- **Trusted.** About 2,250 lines of trusted code, listed with their sizes in `TRUSTED.md`: IO,
   C that binds libsodium, `fsync` and a timed wait, a template macro, and an HTTP wire format whose reading
   is proved for what a server's writer sends and only tested for other forms. `lanes lint` fails if they change without the list,
   and `scripts/mutants.py` holds the known ways of breaking that code, each of which has to
@@ -170,6 +170,8 @@ definitions of `Lanes/` that still have no evidence.
 ## Kill it and start it again
 
 ```bash
+cd examples/bank-web && mkdir -p .lake && ln -s ../../../.lake/packages .lake/packages
+lake build
 lake exe bankWeb 8080 bank.journal &
 curl -X POST -d "src=0&dst=2&amount=42" http://127.0.0.1:8080/transfer
 kill -9 %1
@@ -184,7 +186,7 @@ only what came after the last save; that this gives the same state has a proof t
 
 ## A serious system built on it
 
-`systems/raft-kv` is a replicated key-value store: Raft, as the step function of one actor.
+`examples/raft-kv` is a replicated key-value store: Raft, as the step function of one actor.
 It is checked against the map it replicates, and proved to be that one map to its clients,
 for every number of nodes and every fault the model has: links that lose, repeat and reorder
 messages, and nodes that crash and come back with what they had. With the plain map, one
@@ -196,10 +198,10 @@ gave it (`RaftKV.implementsMachine_once`). It runs as three processes
 that survive their leaders being killed, each saving its state and cutting its journal as it
 goes. A node that comes back without its journal is outside the model, and does lose what was
 acknowledged, so a node is not started without one unless it is told it is new:
-`systems/raft-kv/README.md` says what else to know before running it.
+`examples/raft-kv/README.md` says what else to know before running it.
 
 ```bash
-cd systems/raft-kv && mkdir -p .lake && ln -s ../../../.lake/packages .lake/packages
+cd examples/raft-kv && mkdir -p .lake && ln -s ../../../.lake/packages .lake/packages
 lake build
 lake exe raftProcs    # three processes over HTTP, killed with SIGKILL and started again
 lake exe raftChaos    # a minute of writes while nodes are killed and paused at random
@@ -216,7 +218,10 @@ lake exe lanesCheck  # the larger model checks, about 20 s
 lake exe lanes lint
 ```
 
-`AGENTS.md` has the rules and the layout of the repository.
+`AGENTS.md` has the rules and the layout of the repository, and `examples/README.md` the order
+to read the examples in. Executable code imports `Lanes`; a proof that cites one of the
+framework's soundness theorems imports `Lanes.Proofs`, and one that needs refinement, fairness
+or Mathlib `Lanes.Semantics`.
 
 ## A spec in five lines, checked without a refinement mapping
 
@@ -230,7 +235,7 @@ def spec : Service (Request K V F) (Response V) (K → Option V) where
 ```
 
 Monitor any system against it with `spec.monitored driver` and `Check.refines`. Give the front
-ends of `Examples/KV.lean` a read cache and the checker reports the stale read:
+ends of `examples/kv-cache/KV.lean` a read cache and the checker reports the stale read:
 
 ```
 FAIL: "every response is allowed by the map spec" is violated after 14 steps

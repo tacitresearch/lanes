@@ -1,0 +1,19 @@
+name = "watchdog"
+version = "0.1.0"
+defaultTargets = ["Watchdog", "check"]
+testDriver = "check"
+
+[[require]]
+name = "lanes"
+path = "../.."
+
+# `Watchdog.Proofs` is a root of its own so that `lake build` builds the proofs and `check`,
+# which imports `Watchdog`, does not link them.
+[[lean_lib]]
+name = "Watchdog"
+roots = ["Watchdog", "Watchdog.Proofs", "Watchdog.Proofs.Axioms"]
+
+# Model checks, run by `lake test`. Check before you prove (Lanes rule 5.1).
+[[lean_exe]]
+name = "check"
+root = "Check"

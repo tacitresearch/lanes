@@ -3,18 +3,18 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes.Semantics
-import Examples.BankProofs
+import Tests.Fixtures.BankProofs
 import Tests.SystemSound
 
 /-!
-The bank on two shards conserves money: `Examples.Bank.money_conserved` carried to the split by
+The bank on two shards conserves money: `Tests.Fixtures.Bank.money_conserved` carried to the split by
 `System.Invariant.split`. Conservation reads the credits in flight, so it has to be shown not to
 depend on their order. Built by `lake build`, not linked into the test executable.
 -/
 
 namespace Tests.SplitProofs
 
-open Lanes Examples.Bank
+open Lanes Tests.Fixtures.Bank
 
 variable {A : Type} [DecidableEq A] [Fintype A] {opening : Nat}
 

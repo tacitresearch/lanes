@@ -1,0 +1,19 @@
+name = "kvCache"
+version = "0.1.0"
+defaultTargets = ["KV", "check"]
+testDriver = "check"
+
+[[require]]
+name = "lanes"
+path = "../.."
+
+# `KV.Proofs` is a root of its own so that `lake build` builds the proofs and `check`,
+# which imports `KV`, does not link them.
+[[lean_lib]]
+name = "KV"
+roots = ["KV", "KV.Proofs", "KV.Proofs.Axioms"]
+
+# Model checks, run by `lake test`. Check before you prove (Lanes rule 5.1).
+[[lean_exe]]
+name = "check"
+root = "Check"

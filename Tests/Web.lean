@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
 import Tests.Gate
-import Examples.BankWeb
+import Tests.Fixtures.BankWeb
 
 /-! End-to-end tests of the HTTP adapter over a real socket. -/
 
@@ -116,9 +116,9 @@ def deadlineTest : Async (List (String × Bool)) := do
 def durableTest : Async (List (String × Bool)) := do
   let dir := (← IO.getEnv "TMPDIR").getD "/tmp"
   let journal : System.FilePath := s!"{dir}/lanes-web-{← IO.monoNanosNow}.journal"
-  let start := serve (Examples.Bank.bank Examples.BankWeb.Acct 100) Examples.BankWeb.bridge
+  let start := serve (Tests.Fixtures.Bank.bank Tests.Fixtures.BankWeb.Acct 100) Tests.Fixtures.BankWeb.bridge
     { port := 0, journal := some journal } { record := true, snapshotEvery := 4 }
-    (some { actors := Examples.Bank.actors Codec.fin 100, out := Examples.Bank.Response.codec })
+    (some { actors := Tests.Fixtures.Bank.actors Codec.fin 100, out := Tests.Fixtures.Bank.Response.codec })
   let server ← start
   let some port := server.port | return [("web: the server reports its port", false)]
   let moved ← fetch port "/transfer" (method := "POST") (body := "src=0&dst=1&amount=30")
@@ -130,12 +130,12 @@ def durableTest : Async (List (String × Bool)) := do
   let again ← fetch port "/transfer" (method := "POST") (body := "src=1&dst=2&amount=130")
   let last ← fetch port "/accounts/2"
   let taken ← try
-      discard <| serve (Examples.Bank.bank Examples.BankWeb.Acct 100) Examples.BankWeb.bridge
+      discard <| serve (Tests.Fixtures.Bank.bank Tests.Fixtures.BankWeb.Acct 100) Tests.Fixtures.BankWeb.bridge
         { port, journal := some (journal.addExtension "other") }
       pure false
     catch _ => pure true
   let free ← (Journal.Store.open
-    (sys := served (Examples.Bank.bank Examples.BankWeb.Acct 100) Examples.BankWeb.bridge {})
+    (sys := served (Tests.Fixtures.Bank.bank Tests.Fixtures.BankWeb.Acct 100) Tests.Fixtures.BankWeb.bridge {})
     { path := journal.addExtension "other", input := Codec.pair Codec.nat Request.codec
       system := ServerConfig.journalName {} }).toBaseIO
   if let .ok log := free then log.close

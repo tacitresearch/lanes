@@ -9,7 +9,7 @@ import Tests.KV
 
 namespace Tests.Clients
 
-open Lanes Examples.KV Tests.KV
+open Lanes Tests.Fixtures.KV Tests.KV
 
 /-- Read through front end 0; once that is answered, write through front end 1; once that is
 answered, read through front end 0 again. -/

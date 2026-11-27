@@ -24,8 +24,8 @@ lake exe lanes inventory --list none  # the definitions of Lanes/ without eviden
 
 - Run `lake build --wfail`, `lake test`, `lake exe lanesCheck` and `lake exe lanes lint` before
   calling a task done. CI runs them in that order, then `lint --fix` must change nothing, then a
-  generated app is built and tested, and `systems/raft-kv` and `systems/ledger` run as jobs of
-  their own.
+  generated app is built and tested, the small examples are built and checked, and
+  `examples/raft-kv`, `examples/ledger` and `examples/rookery` run as jobs of their own.
 - `lanes lint` checks the text of a project: `no-sorry` (no `sorry` or `admit`), `trusted-listed`
   (`partial`, `unsafe`, `axiom`, `panic!`, `implemented_by`, `extern` and C only in files
   `TRUSTED.md` names), `trusted-size` (each trusted file has the line count `TRUSTED.md` gives),
@@ -41,21 +41,25 @@ lake exe lanes inventory --list none  # the definitions of Lanes/ without eviden
   one there gets evidence, take it off.
 - Templates are embedded with `include_str`, which Lake does not track: after editing
   `templates/`, delete `.lake/build/lib/lean/LanesCli/New.*` and `.lake/build/ir/LanesCli/New.*`,
-  rebuild `lanes`, and build an app it generates.
+  rebuild `lanes`, and write `examples/counter` again (move it aside, run `lake exe lanes new
+  counter --dir examples/counter --lanes-path ../..`, put its `lake-manifest.json` back): `lake
+  test` fails while the two differ. Then build and test it.
 - A parser or format is also tested against Go's standard library
   (`docs/decisions/D50-differential-tests-against-go.md`): `oracle/<package>/main.go` answers the
   cases that `Tests/Oracle/<Package>.lean` generates, and every difference is either a `known`
   predicate there, with its reason, or a failure. `lake exe lanesOracle --cases 100000` asks Go
   (it needs `go`, at the version `oracle/go.mod` pins); `lake test` replays the answers recorded in
-  `Tests/Oracle/vectors/`, which `lake exe lanesOracle --cases 1000 --record` rewrites.
+  `Tests/Oracle/vectors/`, which `lake exe lanesOracle --cases 1000 --record` rewrites. The
+  request reader's verdicts on `Tests/ReadRequest.corpus` are compared with Go's, Node's and
+  h11's servers by `oracle/requests/requests.py`, run by hand.
 - The toolchain is pinned in `lean-toolchain` and follows CSLib's. Dependencies are pinned in
   `lake-manifest.json`; upgrade them deliberately, CSLib first.
 - To work on a proof without rebuilding the file, `scripts/lean-goals` asks a language server it
   keeps open for a file's errors and the goals at some lines (`LINE` from 1, `COL` from 0):
 
   ```bash
-  scripts/lean-goals --daemon Lanes/Http/WireSound.lean 1710 1702:4   # start a server, ask it
-  scripts/lean-goals Lanes/Http/WireSound.lean 1710                   # later calls use it
+  scripts/lean-goals --daemon Lanes/Web/Http/WireSound.lean 1710 1702:4   # start a server, ask it
+  scripts/lean-goals Lanes/Web/Http/WireSound.lean 1710                   # later calls use it
   scripts/lean-goals --stop                                            # when done
   ```
 
@@ -190,24 +194,34 @@ Conventions:
 - A family of instances by cases on an identity (`∀ i, DecidableEq (Msg i)`, the `Inspect` of a
   system whose actors differ) is `by instance_by_cases`.
 
-Layout, and what each part may import:
+Layout, and what each part may import. A module is in the directory of its concern; a file
+that performs IO is in an `IO/` directory of its area and named in `TRUSTED.md`.
 
 | Path | Contents | May import |
 | --- | --- | --- |
-| `Lanes/Actors/` | `Actor`, `System`, the semantics' step, the kernel, the shell, journal, shards | `Std` only |
-| `Lanes/Data/` | `Enum`, codecs and `lanes_data`, JSON, framing, quorums, SHA-256 and HMAC references, `Sodium`; lemmas about lists (`List/`), strings (`Utf8`), byte arrays (`ByteArray`) | `Std` only |
-| `Lanes/Auth/` | Signed tokens, form tokens, password digests, failed attempts, sessions | `Std` only |
-| `Lanes/Behaviours/` | Standard actors with their specs | `Std` only |
+| `Lanes/Core/` | `Actor`, `Signature`, `Effect`, `System`, the semantics' step (`World`), each event and run in closed form (`Step`, `Run`), joins, `Service`, `Inspect`, the deterministic and fair schedulers | `Std` only |
+| `Lanes/Proof/` | The proof toolkit: lifting per-actor invariants, `Monotone`, ghosts and `Past`, `SysState.Equiv`, deeds, loss; what survives a join (`JoinSound`, `MapIOSound`); lemmas about lists (`List/`), strings (`Utf8`) and byte arrays (`ByteArray`) | `Std` only |
+| `Lanes/Runtime/` | The kernel and its proofs, batches, the inbox, shards; the shell and the parker in `IO/` | `Std` only |
+| `Lanes/Durable/` | The journal, snapshots, the disk model, the framing of a file; the journal's files in `IO/` | `Std` only |
+| `Lanes/Net/` | The courier, every decision of the transport, and its proofs; the transport and a process with an HTTP front in `IO/` | `Std` only |
+| `Lanes/Outside/` | What the outside may do (`Outside`), the home of models of external systems; the clock in `IO/` | `Std` only |
+| `Lanes/Web/` | HTTP as data, its grammar, the gate, routes, cookies, the wire format and the server's connections (`Http/`); HTML values and templates (`Html/`); tokens, password digests, failed attempts, sessions (`Auth/`); the server and the client in `IO/` | `Std` only |
+| `Lanes/Behaviours/` | Standard actors with their specs and proofs, by feature (`Server`, `Jobs/`, `Once/`) | `Std` only |
 | `Lanes/Check/` | Model checker | `Std` only |
-| `Lanes/Http/`, `Lanes/Html/` | HTTP as data, the gate, routes, the wire format; HTML values and templates | `Std` only |
-| `Lanes/Env/` | Adapters' IO: HTTP server and client, clock, journal files, transport | `Std` only |
-| `Lanes/Semantics/` | The semantics as a CSLib `LTS`, refinement, specs, fairness and leads-to | CSLib, Mathlib |
+| `Lanes/Data/` | `Enum`, codecs and `lanes_data`, the queue, quorums | `Std` only |
+| `Lanes/Lib/` | The standard library: encodings (Base64, JSON), addresses and URLs, time, SHA-256, HMAC and `Sodium`, media types, rate limits (`docs/STDLIB.md`) | `Std` only |
+| `Lanes/Semantics/` | The semantics as a CSLib `LTS`, refinement, specs, fairness and leads-to, and the liveness of the gate and of jobs | CSLib, Mathlib |
 | `native/` | The C that binds libsodium, `fsync` and a timed wait, all of it trusted | libsodium, libc |
 | `LanesCli/` | The `lanes` command: `new`, `lint`, `check`, `inventory` | `Std` only; `Lean` in `Inventory`, which only `lanesInventory` links |
-| `templates/app/` | The application `lanes new` creates | |
-| `Examples/` | Reference apps, checked and proved | anything |
-| `systems/` | Serious applications, each its own Lake package | anything |
-| `Tests/` | Regression tests run by `lake test` and `lanesCheck` | anything |
+| `templates/app/` | The application `lanes new` creates, which is `examples/counter` | |
+| `examples/` | Applications to read, each its own Lake package (`examples/README.md`) | anything |
+| `Tests/` | Regression tests run by `lake test` and `lanesCheck`; the apps they use in `Fixtures/` | anything |
+| `oracle/` | Differential tests against Go's standard library and other HTTP servers | |
+| `infra/` | The CI machine: its stack and its set-up script (`docs/RUNNERS.md`) | |
+
+`import Lanes` is the API, executable code and the proof toolkit; `import Lanes.Proofs` adds the
+framework's soundness theorems (the `…Sound` modules), and `import Lanes.Semantics` the proof
+layer, which imports both. Tests and the examples' proofs import what they cite.
 
 Declare the messages, inputs, outputs and states of a system with `lanes_data`: the ordinary
 declaration with a prefix, whose `deriving` also takes three classes Lean cannot derive without
@@ -265,7 +279,7 @@ partitions, even if only "answers `unavailable`".
 (`System.Run.Fair`) and its measure before code is written.
 
 5.8 **Everything is proved** (D45). Every definition Lanes ships, and every application in
-`systems/`, is proved against a spec, or binds or performs something named in `TRUSTED.md`. A
+`examples/`, is proved against a spec, or binds or performs something named in `TRUSTED.md`. A
 complete PASS of the checker finds bugs; a theorem is the evidence.
 
 Conventions:
@@ -273,11 +287,11 @@ Conventions:
 - Prove a per-actor invariant with `actor_invariant [myActor]`; it leaves the cases it cannot close
   as goals. It lifts to every system under every fault model (`System.invariant_of_actor`).
 - A lemma that does not mention the system a proof is about does not stay in that proof's file.
-  Lists: `Lanes/Data/List/`, at the end of the file of its topic (`Erase`, `Prefix`, `Fold`, else
-  `Basic`). Strings and byte arrays: `Lanes/Data/Utf8.lean`, `Lanes/Data/ByteArray.lean`.
-  `update`, `SysState`, `run` and `Reachable`: `Lanes/Actors/World.lean`; a step or a run in
-  closed form: `Lanes/Actors/Run.lean`; `NetEquiv` and `SysState.Equiv`:
-  `Lanes/Actors/Equiv.lean`. Look there, and in core `List`, before proving a helper.
+  Lists: `Lanes/Proof/List/`, at the end of the file of its topic (`Erase`, `Prefix`, `Fold`, else
+  `Basic`). Strings and byte arrays: `Lanes/Proof/Utf8.lean`, `Lanes/Proof/ByteArray.lean`.
+  `update`, `SysState`, `run` and `Reachable`: `Lanes/Core/World.lean`; a step or a run in
+  closed form: `Lanes/Core/Run.lean`; `NetEquiv` and `SysState.Equiv`:
+  `Lanes/Proof/Equiv.lean`. Look there, and in core `List`, before proving a helper.
 - A layer of a `Monotone` proof that reads states and messages in flight is added with
   `Monotone.and_net` (or `and_state`), not with `below` and `input` lemmas of its own; more than
   two layers get a structure through `Monotone.of_iff`.
@@ -298,7 +312,7 @@ independent changes disjoint files; keep it that way.
 - A change of status goes in its fragment, `docs/status/areas/<area>.md` or
   `docs/status/apps/<app>.md` (the row on the first line, the known limits after it).
 - An axiom gate goes in `Tests/Axioms/<Area>.lean`, under the line naming its module; a lemma
-  about lists at the end of its topic's file in `Lanes/Data/List/`.
+  about lists at the end of its topic's file in `Lanes/Proof/List/`.
 - Never type a count: line counts in `TRUSTED.md` and `README.md`, the decisions' index,
   `docs/STATUS.md` and `docs/INVENTORY.md` are written by `lake exe lanes lint --fix`. A conflict in a generated file is
   resolved by taking either side and running it.
@@ -315,7 +329,7 @@ Agents do what the docs say, so a stale doc is worse than none. Keep each short 
   checked, tested or trusted.
 - Cite files by their repository path in backquotes; `lanes lint` fails on one that does not
   exist (`docs/history/` and `docs/decisions/` are exempt: they record the past). Name a module
-  that is not written yet by its module name (`Lanes.Data.Base64`), not its path.
+  that is not written yet by its module name (`Lanes.Lib.Encoding.Base64`), not its path.
 - `docs/decisions/` is the record of why: never rewrite a decision, write a new one that
   supersedes it.
 - Write plainly: short sentences, one name per concept, no marketing.

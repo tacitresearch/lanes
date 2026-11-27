@@ -17,7 +17,7 @@ machine through the workflow.
 | `std` | `Std.Http.Server` with its default configuration, which is what Lanes runs; it closes a connection after 100 requests | `StdHello.lean` |
 | `std-unlimited` | `std` with no limit of requests per connection | `StdHello.lean` |
 | `lanes` | `Lanes.Http.serve` with one actor (`Server.system`) that answers each request; no journal | `LanesHello.lean` |
-| `lanes-journal` | `lanes` with a journal: every request is appended and synced (`fsync`, `Lanes/Env/Journal.lean`) before it is answered; the journal only grows | `LanesHello.lean` |
+| `lanes-journal` | `lanes` with a journal: every request is appended and synced (`fsync`, `Lanes/Durable/IO/Journal.lean`) before it is answered; the journal only grows | `LanesHello.lean` |
 | `lanes-snapshot` | `lanes-journal`, also saving the kernel and cutting the journal every 1024 inputs | `LanesHello.lean` |
 
 `lanes*` run whatever `Lanes.Http.serve` is on the commit measured: a new HTTP server under
@@ -108,7 +108,7 @@ reasons, two of them in Lean's runtime.
    with `notify_all` on one condition (`task_manager::resolve_core`), on which every thread in
    `IO.wait`, `Task.get` or `Async.block` sleeps. A `main` in `server.wait.block`, the shard
    waiting for input, and the shard handing outputs over (`.block`, which also starts a task)
-   were such threads. They now park on a condition of their own (`Lanes/Actors/Park.lean`,
+   were such threads. They now park on a condition of their own (`Lanes/Runtime/IO/Park.lean`,
    `Lanes.block` for a `main`). Alone it is `tcp` against `tcp-park`: 97 → 75 µs a request at
    one connection, 2.9 → 1.7 context switches at 16; for `lanes` at 64 connections it took 321
    → 140 µs.
@@ -132,7 +132,7 @@ causes 2 and 3 cannot be removed from our side.
 
 A loop of our own in C would: epoll on each core, non-blocking sockets, `Conn.step` called
 through `@[export]`, answers from the shard through an eventfd. That is about 500 lines of
-trusted C and 60 of bindings in place of `Lanes/Env/Http.lean`'s 470, and it would take away the
+trusted C and 60 of bindings in place of `Lanes/Web/IO/Server.lean`'s 470, and it would take away the
 handshakes and the hop on each read, leaving a read, a write and a wakeup of the shard a
 request. What it can save here is the scheduling and libuv's share, perhaps half the CPU; the
 allocation, the parsing and the shard stay. It is not written: the evidence is that Lean's own

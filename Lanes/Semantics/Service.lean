@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Actors.Step
+public import Lanes.Core.Step
 public import Lanes.Behaviours.Server
 public import Lanes.Semantics.System
 public import Mathlib.Data.Multiset.AddSub

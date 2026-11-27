@@ -4,8 +4,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Actors.Service
-public import Lanes.Actors.Scheduler
+public import Lanes.Core.Service
+public import Lanes.Core.Scheduler
 public import Lanes.Check.Search
 
 /-!

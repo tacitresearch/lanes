@@ -5,7 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import Lanes
 
 /-!
-Model checks of what `Lanes.Actors.KernelTimers` proves about the kernel's timer agenda (rule
+Model checks of what `Lanes.Runtime.KernelTimers` proves about the kernel's timer agenda (rule
 5.1): every sequence of operations a shell can perform, up to a bound, on two actors that arm,
 arm again, cancel and stop, one of them in a timer's handler. The shell here is hostile: it fires
 any timer the agenda names at either actor, for either message.

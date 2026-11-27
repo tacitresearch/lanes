@@ -105,16 +105,33 @@ jobs:
       - uses: ./.github/actions/lean
       - name: Test
         run: lake test
-      # Lake does not track the templates `LanesCli/New.lean` reads with `include_str`, so a
-      # restored build would keep the old ones: build `lanes new` again from the templates.
       - name: Generated app builds and passes its checks
         run: |
-          rm -f .lake/build/lib/lean/LanesCli/New.* .lake/build/ir/LanesCli/New.*
           lake exe lanes new demo-app --dir "$RUNNER_TEMP/demo-app" --lanes-path "$GITHUB_WORKSPACE"
           cd "$RUNNER_TEMP/demo-app"
           mkdir -p .lake && ln -sfn "$GITHUB_WORKSPACE/.lake/packages" .lake/packages
           lake build
           lake test
+
+  # The small examples, each a package of its own: built with their proofs, and their checks run.
+  examples:
+    needs: [runner, compile]
+    runs-on: ${{ fromJSON(needs.runner.outputs.label) }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          clean: false
+      - uses: ./.github/actions/lean
+      - name: Build and check each small example
+        run: |
+          for example in counter bank bank-web kv-cache election watchdog; do
+            echo "::group::examples/$example"
+            mkdir -p "examples/$example/.lake"
+            ln -sfn "$GITHUB_WORKSPACE/.lake/packages" "examples/$example/.lake/packages"
+            (cd "examples/$example" && lake build --wfail && lake test)
+            echo "::endgroup::"
+          done
 
   raft-kv:
     needs: [runner, compile]
@@ -122,7 +139,7 @@ jobs:
     timeout-minutes: 90
     defaults:
       run:
-        working-directory: systems/raft-kv
+        working-directory: examples/raft-kv
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -136,7 +153,7 @@ jobs:
       - if: steps.lean.outputs.warm != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: systems/raft-kv/.lake/build
+          path: examples/raft-kv/.lake/build
           key: ${{ steps.lean.outputs.system-key }}
       - name: Model checks
         run: lake test
@@ -151,7 +168,7 @@ jobs:
     timeout-minutes: 90
     defaults:
       run:
-        working-directory: systems/ledger
+        working-directory: examples/ledger
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -165,7 +182,7 @@ jobs:
       - if: steps.lean.outputs.warm != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: systems/ledger/.lake/build
+          path: examples/ledger/.lake/build
           key: ${{ steps.lean.outputs.system-key }}
       - name: Model checks
         run: lake test
@@ -178,7 +195,7 @@ jobs:
     timeout-minutes: 90
     defaults:
       run:
-        working-directory: systems/rookery
+        working-directory: examples/rookery
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -192,7 +209,7 @@ jobs:
       - if: steps.lean.outputs.warm != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: systems/rookery/.lake/build
+          path: examples/rookery/.lake/build
           key: ${{ steps.lean.outputs.system-key }}
       - name: Model checks
         run: lake test
@@ -246,7 +263,6 @@ jobs:
         run: lake test
       - name: Generated app builds and passes its checks
         run: |
-          rm -f .lake/build/lib/lean/LanesCli/New.* .lake/build/ir/LanesCli/New.*
           lake exe lanes new demo-app --dir "$RUNNER_TEMP/demo-app" --lanes-path "$GITHUB_WORKSPACE"
           cd "$RUNNER_TEMP/demo-app"
           mkdir -p .lake && ln -sfn "$GITHUB_WORKSPACE/.lake/packages" .lake/packages
@@ -260,7 +276,7 @@ jobs:
   # The one check branch protection requires. A job that is skipped counts as passed there, so
   # this job always runs and fails unless every job before it succeeded.
   build:
-    needs: [runner, compile, check, oracle, test, raft-kv, ledger, rookery, macos]
+    needs: [runner, compile, check, oracle, test, examples, raft-kv, ledger, rookery, macos]
     if: always()
     runs-on: ubuntu-latest
     steps:

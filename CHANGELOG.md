@@ -8,6 +8,10 @@ under Unreleased (`CONTRIBUTING.md`).
 
 ## [Unreleased]
 
+### Changed
+
+- Module paths are reorganised by concern: `Lanes.Actors` is split into `Lanes/Core`, `Lanes/Proof`, `Lanes/Runtime`, `Lanes/Durable`, `Lanes/Net` and `Lanes/Outside`, HTTP, HTML and authentication are under `Lanes/Web`, the standard library under `Lanes/Lib`, and each area's IO in an `IO/` directory; `import Lanes` leaves out the framework's soundness theorems, which a proof imports with `import Lanes.Proofs` (or `Lanes.Semantics`); `Examples/` and `systems/` are one `examples/` directory of Lake packages, `examples/counter` being what `lanes new` writes.
+
 ## [0.1.0] - unreleased
 
 The first public release, a beta. It targets Lean `v4.37.0-rc1` and the CSLib commit pinned in

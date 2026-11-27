@@ -3,7 +3,7 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
-import Examples.Bank
+import Tests.Fixtures.Bank
 
 /-!
 Tests of the runtime shell: run a system on a real thread with recording on, then replay the
@@ -109,7 +109,7 @@ def flakyTest : Async (List (String × Bool)) := do
 
 /-! The bank under concurrent clients. -/
 
-open Examples.Bank in
+open Tests.Fixtures.Bank in
 def bankTest : Async (List (String × Bool)) := do
   let config : Runtime.Config := { record := true }
   let responses ← IO.mkRef 0

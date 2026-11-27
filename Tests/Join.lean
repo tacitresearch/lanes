@@ -3,13 +3,14 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
+import Lanes.Proofs
 
 /-!
 Two systems written apart and joined: a front that takes questions and a back that doubles
 numbers. The front's queries are wired to the back and the back's results to the front, so from
 outside the join takes questions and gives answers, and no query is ever seen leaving.
 
-Then projection (`Lanes/Actors/JoinSound.lean`), checked before it was proved: every state the
+Then projection (`Lanes/Proof/JoinSound.lean`), checked before it was proved: every state the
 join reaches, seen from either side, is among the states that side reaches alone, compared
 exactly. A second pair, `herald` and `keeper`, shows why the side that boots second is seen
 only up to the order of messages on different links. And one run of the join beside the run of

@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Actors.Scheduler
+public import Lanes.Core.Scheduler
 
 /-!
 Clients that wait: a driver that sends each request of a script once the requests it names have

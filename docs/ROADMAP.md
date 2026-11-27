@@ -39,8 +39,8 @@ claim is what a critic tests first.
 | --- | --- | --- | --- |
 | A. Settle the contracts | Durability; a composition operator with its theorem; adapters with a model of the outside; fairness, so liveness can be stated; codecs for inputs | The bank survives `kill -9` with recovery covered by a theorem; the gate is rebuilt with the general operator; one real adapter passes conformance against its model | Done: the journal (D24) and its crash theorems, `System.join` (D25) with the gate joined in front (D31, D43), `Outside` and conformance tests for the server, the clock and the client (D26), fair runs and leads-to (D27), `lanes_data` (D38) |
 | B. Scale | Several shards; node-to-node transport; checker v2; snapshots | A Raft-sized model check finishes in minutes; a shard restarts from a snapshot in time that does not grow with its history | Shards proved for any number (D28), the transport with its courier proved (D30), snapshots (D29), the checker 3.5 times faster (D33): Raft's largest check, 7.8 million states, takes minutes. Open: checker v2 (states as flat data, symmetry, parallel search, a lasso search), and a proof that the running processes implement `System.shards` |
-| C. Acceptance test | `systems/raft-kv` | Linearizability proved against the map spec; runs on three machines; survives fault injection | Met but for three machines: proved to implement the map it replicates (`RaftKV.implementsMachine`), run as three processes on one machine through `kill -9` and pauses. Frozen as a regression suite. Not done: liveness, membership change, log compaction |
-| D. Batteries | Database, HTTP client, sessions and auth, server push, jobs, observability | `systems/ledger` is a full web application using all of them | HTTP client (no TLS), sessions and authentication, `fsync`, libsodium. `systems/ledger` runs with sessions and a journal, checked and not yet proved. Not built: a database, server push, jobs, observability, TLS. Now ordered by the standard library's P0 (`docs/STDLIB.md`) |
+| C. Acceptance test | `examples/raft-kv` | Linearizability proved against the map spec; runs on three machines; survives fault injection | Met but for three machines: proved to implement the map it replicates (`RaftKV.implementsMachine`), run as three processes on one machine through `kill -9` and pauses. Frozen as a regression suite. Not done: liveness, membership change, log compaction |
+| D. Batteries | Database, HTTP client, sessions and auth, server push, jobs, observability | `examples/ledger` is a full web application using all of them | HTTP client (no TLS), sessions and authentication, `fsync`, libsodium. `examples/ledger` runs with sessions and a journal, checked and not yet proved. Not built: a database, server push, jobs, observability, TLS. Now ordered by the standard library's P0 (`docs/STDLIB.md`) |
 | E. Developer experience | A macro that hides signature boilerplate; `lanes prove`; counterexample-to-induction; a cheaper proof API; tutorial; trace viewer | A new user ships a checked application in a day | `lanes_data` and `instance_by_cases`; `lanes new` with a proved counter. In progress: the cheaper proof API (direction 1). Not built: `lanes prove`, counterexample-to-induction, a tutorial, a trace viewer |
 
 A came first because B to D build on its contracts; C came before D because Raft found the
@@ -49,14 +49,15 @@ inside D and E.
 
 ## Serious applications
 
-`Examples/` holds small pieces, one idea each, that run in seconds. Serious applications live in
-`systems/`, each its own Lake package that requires Lanes as a user would, with its own CI job.
+`examples/` holds small pieces, one idea each, that run in seconds, and the serious
+applications, each its own Lake package that requires Lanes as a user would; the serious ones
+have a CI job each.
 They stay in this repository while the API they use is changing, so that a framework change that
 breaks one cannot merge. One moves to its own repository when that API has settled or the
 application needs its own releases.
 
-`systems/raft-kv` is frozen as a regression suite: its checks, proofs and process tests stay in
-CI, and no Raft feature is added unless the framework needs it. `systems/ledger` is the stress
+`examples/raft-kv` is frozen as a regression suite: its checks, proofs and process tests stay in
+CI, and no Raft feature is added unless the framework needs it. `examples/ledger` is the stress
 test of phase D and the measure of direction 1.
 
 ## Assumptions made without an answer

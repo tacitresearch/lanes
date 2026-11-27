@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Actors.Run
+public import Lanes.Core.Run
 
 /-!
 # The messages on one link, in order
