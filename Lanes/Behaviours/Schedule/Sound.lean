@@ -28,6 +28,9 @@ included:
   the end of its wait (`Schedule.attempt_ends`).
 - *The outside's word.* A job succeeds with an answer only in the step that takes that answer,
   accepted by `Config.ok`, to its attempt out (`Schedule.succeeded_replied`).
+- *One end.* A job leaves only in a step that tells its requester once and no more: one answer
+  that ends it, or the notice of a job that runs once (`Schedule.told_of_leaves`). A call job
+  leaves with an answer, `succeeded`, `failed` or `cancelled` (`Schedule.leaves_answered`).
 - While it is up, the timer each job waits on is armed (`Schedule.armed`).
 
 `Lanes.Semantics.Schedule` builds the liveness proof on the facts about one job here.
@@ -94,6 +97,11 @@ theorem touch_some {config : Config K P A} {s : State K P} {key : K} (act : Act 
 def Work.periodic : Work → Bool
   | .every _ => true
   | _ => false
+
+/-- Whether an output tells the requester about `key`: an answer to it, or its notice. -/
+def tells (key : K) : Output K P A → Bool
+  | .answer k _ | .notice k _ _ => k == key
+  | .call _ | .abandon .. => false
 
 /-- Whether an output is an attempt of `key`. -/
 def isCall (key : K) : Output K P A → Bool
@@ -305,6 +313,16 @@ theorem onJob_ends (hgone : (onJob config now_ms j act).job = none) :
       ∃ n, (.emit (.notice j.key j.payload n) : Eff K P A) ∈ (onJob config now_ms j act).effs := by
   job_cases act at hgone
   all_goals (simp_all)
+
+/-- An act that ends a job tells its requester once and no more: an answer that ends it, or, for
+a job that runs once, its notice. -/
+theorem onJob_told (hgone : (onJob config now_ms j act).job = none) :
+    (∃ o, o.isEnd = true ∧
+        (Effect.emits (onJob config now_ms j act).effs).filter (tells j.key) = [.answer j.key o]) ∨
+      (j.work = .once ∧ ∃ t, (Effect.emits (onJob config now_ms j act).effs).filter (tells j.key) =
+        [.notice j.key j.payload t]) := by
+  job_cases act at hgone
+  all_goals (simp_all [Effect.emits, tells, Outcome.isEnd])
 
 /-- An act dispatches an attempt only when its job waits and is due, as the next attempt, with
 the job's key and payload, stamped with the time then known, which is the job's run time or
@@ -698,6 +716,36 @@ theorem succeeded_replied {msg : Schedule.Msg K P A} {key : K} {a : A}
     obtain ⟨-, hkey⟩ := entry_some hj
     subst hkey hact
     exact ⟨j, hj, hwait, rfl, hok⟩
+
+/-- A job leaves only in a step that tells its requester once and no more: of what it says about
+the job's id, there is one answer, which ends the job (`succeeded`, `failed` or `cancelled`), or,
+for a job that runs once, its notice. -/
+theorem told_of_leaves {key : K} {j : Job K P} (hj : entry s.jobs key = some j)
+    {msg : Schedule.Msg K P A} (hgone : entry (step config s msg).1.jobs key = none) :
+    (∃ o, o.isEnd = true ∧
+        (Effect.emits (step config s msg).2).filter (tells key) = [.answer key o]) ∨
+      (j.work = .once ∧ ∃ t,
+        (Effect.emits (step config s msg).2).filter (tells key) = [.notice key j.payload t]) := by
+  have hheld : key ∈ keys s.jobs := mem_keys.mpr ⟨j, (entry_some hj).1, (entry_some hj).2⟩
+  rcases step_key (config := config) hj msg with ⟨hsame, -⟩ | ⟨act, -, hstep⟩
+  · rw [hsame] at hgone
+    exact absurd hgone (Option.some_ne_none j)
+  · rw [hstep] at hgone ⊢
+    rw [entry_set_self hheld (onJob_key_of hj act)] at hgone
+    obtain ⟨-, rfl⟩ := entry_some hj
+    exact onJob_told hgone
+
+/-- A call job leaves only in a step that answers it once, with an answer that ends it, and
+gives no notice of it. -/
+theorem leaves_answered {key : K} {j : Job K P} (hj : entry s.jobs key = some j) {retry : Retry}
+    (hwork : j.work = .call retry) {msg : Schedule.Msg K P A}
+    (hgone : entry (step config s msg).1.jobs key = none) :
+    ∃ o, o.isEnd = true ∧
+      (Effect.emits (step config s msg).2).filter (tells key) = [.answer key o] := by
+  rcases told_of_leaves hj hgone with h | ⟨honce, -⟩
+  · exact h
+  · rw [hwork] at honce
+    cases honce
 
 omit [DecidableEq K] [DecidableEq P] [DecidableEq A] in
 theorem timer_act_key {b : Job K P} {key : K} {act : Act A}
