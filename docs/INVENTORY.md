@@ -18,9 +18,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Env` | 24 | 0 | 24 | 0 | 0 | 0 | 0 |
 | `Lanes/Html` | 58 | 22 | 0 | 0 | 28 | 8 | 0 |
 | `Lanes/Http` | 181 | 120 | 1 | 8 | 28 | 22 | 2 |
-| `Lanes/Semantics` | 53 | 9 | 0 | 0 | 0 | 43 | 1 |
+| `Lanes/Semantics` | 54 | 9 | 0 | 0 | 0 | 44 | 1 |
 | `LanesCli` | 110 | 0 | 0 | 0 | 42 | 0 | 68 |
-| All | 1240 | 631 | 40 | 73 | 168 | 203 | 125 |
+| All | 1241 | 631 | 40 | 73 | 168 | 204 | 125 |
 
 ## `Lanes/Actors/Actor.lean`
 
@@ -195,12 +195,12 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `instDecidableEqJoinMsg` | proved | its type, `Decidable` |
 | `joinSig` | proved | `SysState.exists_block`, `SysState.run_left`, `System.Invariant.join_left` and 9 more |
-| `Wiring.left` | proved | through `SysState.over`, `System.filterMapIO` and 3 more: `SysState.exists_block`, `SysState.run_filterMapIO` and 14 more |
+| `Wiring.left` | proved | through `SysState.over`, `System.filterMapIO` and 3 more: `SysState.exists_block`, `SysState.run_filterMapIO` and 15 more |
 | `Wiring.right` | proved | through `System.join`, `Wiring.leftView`: `SysState.exists_block`, `SysState.run_left` and 10 more |
 | `System.join` | proved | `SysState.exists_block`, `SysState.run_left`, `System.Invariant.join_left` and 9 more |
-| `Signature.withIO` | proved | `SysState.run_filterMapIO`, `System.Invariant.filterMapIO`, `System.LeadsTo.filterMapIO` and 1 more |
-| `Effect.filterMapOut` | proved | through `SysState.over`, `System.filterMapIO` and 1 more: `SysState.run_filterMapIO`, `System.Invariant.filterMapIO` and 2 more |
-| `System.filterMapIO` | proved | `SysState.run_filterMapIO`, `System.Invariant.filterMapIO`, `System.LeadsTo.filterMapIO` and 1 more |
+| `Signature.withIO` | proved | `SysState.run_filterMapIO`, `System.Invariant.filterMapIO`, `System.LeadsTo.filterMapIO` and 2 more |
+| `Effect.filterMapOut` | proved | through `SysState.over`, `System.filterMapIO` and 1 more: `SysState.run_filterMapIO`, `System.Invariant.filterMapIO` and 3 more |
+| `System.filterMapIO` | proved | `SysState.run_filterMapIO`, `System.Invariant.filterMapIO`, `System.LeadsTo.filterMapIO` and 2 more |
 | `System.mapIO` | checked | `Tests/Join.lean` |
 | `instHashableSum_lanes` | checked | `Tests/Fronted.lean`, `Tests/Join.lean` |
 | `Signature.Inspect.join` | checked | `Tests/Join.lean` |
@@ -1624,6 +1624,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Service.once` | spec | used only in statements |
 | `System.ImplementsOnce` | spec | a predicate |
 | `Once.Server.Covered` | spec | a predicate |
+| `Spec.showing` | spec | used only in statements |
 
 ## `Lanes/Semantics/Projection.lean`
 
@@ -1664,7 +1665,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `System.sem` | proved | `Account.implements`, `Examples.KV.caching_not_implements`, `Examples.KV.implements` and 12 more |
+| `System.sem` | proved | `Account.implements`, `Examples.KV.caching_not_implements`, `Examples.KV.implements` and 13 more |
 | `System.Refines` | spec | a predicate |
 
 ## `LanesCli/Generated.lean`

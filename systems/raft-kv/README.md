@@ -45,8 +45,20 @@ a follower two entries behind is brought on in two messages, with elections in b
 | Batches of one: unordered links, one crash and restart, one term | 4,713,803 | passes |
 | Batches of one: links between nodes lose, reorder and repeat messages, one term, three in flight | 1,982,474 | passes |
 | Outside the assumption of the top theorem: a request may be handed to a node twice | 3,037 | found: the request is answered twice, in 18 steps |
+| Behind the memo: commands named by one client, handed to a node twice and reordered on the way in, one term, three in flight | 11,683 | refines `once` of the map |
+| Behind the memo: a write sent again through another node, one term, three in flight | 16,692 | refines `once` of the map |
+| Behind the memo: links from clients lose, reorder and repeat, one crash and restart, one term | 189,686 | refines `once` of the map |
+| Behind the memo, against the map without `once`: commands handed to a node twice | 3,030 | found: an answer handed over twice, in 18 steps |
 | Seeded bug: a node votes for a candidate whose log is behind | 26,798 | found: a leader lacks a committed entry, in 15 steps |
 | Seeded bug: a leader commits an entry of an earlier term by counting (four terms, two writes) | 4,055,184 | found: a later leader lacks the entry, in 28 steps |
+
+The rows *behind the memo* run the cluster with `Machine.once` (`RaftKV/Once.lean`): a command
+names its client and the client's number for it, and the machine remembers, per client, the
+last number it acted on and its answer. They are checked against `once` of the map
+(`Service.onceMonitored`), under which a command takes effect at most once and an answer may be
+handed over again; the first also reaches an answer waiting twice and a command overtaken by a
+later one of its client. The last row is why `once` is the spec: the memo answers a repeat
+again, so the map spec, which allows one answer per request, is broken.
 
 Each passing check also reaches its witnesses: a leader is elected, a write is answered, a read
 sees the written value where there is a read, a follower commits. With batches of one, an
@@ -146,6 +158,7 @@ On those, also with both switches on, state machine safety and the top theorem:
 | `applied_agree` | Of two nodes, the one that has applied less has applied a start of what the other has. |
 | `applied_agree_over_time`, `applied_same_entry` | State machine safety over time: what a node has applied at one point of a run and what a node, the same or another, has applied at a later point are one a start of the other. So no two nodes ever apply different entries at one index. Stated of the cluster and a run of it, with no history. |
 | `implementsMachine` (`RaftKVProofs.lean`), `cluster_implements` | The cluster refines `spec`: for every finite set of nodes, every machine and every environment model whose links from clients do not repeat a request. Links between nodes may lose, repeat and reorder, links from clients may lose and reorder, and any node may crash and restart at any time. |
+| `implementsMachine_once` (`RaftKVProofs.lean`), `onceCluster_implements` | With the machine behind its memo (`Machine.once`) and the answers it no longer keeps hidden (`onceCluster`), the cluster implements `once` of the named machine: for every finite set of nodes, every machine, every set of clients and every environment model, with no hypothesis. Every link, those from clients included, may lose, repeat and reorder, and any node may crash and restart at any time. |
 
 The top theorem is `System.Implements`, a weak simulation, so every finite run of the cluster
 has the inputs and outputs of a run of the service in which each command takes effect at one
@@ -153,6 +166,19 @@ instant (`Refines.traces`). The one hypothesis is needed: the check "outside the
 the table above is the run without it, where a request the link hands to the leader twice
 becomes two entries and is answered twice. A client that sends a request twice is inside the theorem:
 those are two inputs.
+
+`implementsMachine_once` removes the hypothesis. A command names its client and the client's
+number for it, and the memo is in the machine, so it is replicated with the state: two entries
+of one command take effect once and are each answered with what the first was. The spec is
+`once` of the machine (`Lanes/Semantics/Once.lean`): each command takes effect at most once, at
+one instant between its arrival and an answer, and an answer given may be handed over again,
+named as its command. A command overtaken by a later one of its client is answered with
+nothing, since the memo keeps one answer per client, and that empty answer is not handed over
+(`System.Refines.filterMapIO`). The simulation (`RaftKVProofs/Once.lean`) reads the same
+committed list, by membership instead of counting: every request in flight or in an entry has
+arrived, every answer along the list or waiting is empty or given, and the memo after the list
+agrees with the keys taken. So a copy of a message changes nothing it says, and the duplicate
+case is the delivery case.
 
 The simulation (`RaftKVProofs/Refines.lean`) is on the cluster with its history and is carried
 to the cluster by `System.Refines.of_ghost`. It names the list the cluster has committed to
