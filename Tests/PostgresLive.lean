@@ -11,7 +11,8 @@ users `lanes_trust`, `lanes_md5` with password `md5-pw` stored as MD5, `lanes_sc
 `scram-pw` stored as SCRAM, `lanes_clear` with `clear-pw` asked in cleartext). Without it the
 tests say they are skipped and pass; CI does not run a server.
 
-Authentication by each method, and a wrong password refused; rows, `NULL`, UTF-8 and errors; a
+Authentication by each method, and a wrong password refused; `localhost` by name, and the
+settings of libpq's variables and password file, which `psql` reads too; rows, `NULL`, UTF-8 and errors; a
 failed transaction's `COMMIT` rolled back; and runs of the store (`Lanes/Outside/Store/Basic.lean`)
 on a table at read committed and at serializable, with two transactions interleaved and a
 `COMMIT` whose reply is lost, each recorded and checked against the model with
@@ -123,6 +124,43 @@ def lostCommit (cfg : Client.Config) (isolation : Store.Isolation) : IO (Bool ×
   let (lost, r) ← lostCommitRun cfg isolation
   return (lost, ← r.allowed [])
 
+def hasPsql : IO Bool := do
+  try return (← IO.Process.output { cmd := "psql", args := #["--version"] }).exitCode == 0
+  catch _ => return false
+
+/-- `localhost` by name, with the defaults for it; and the settings libpq's variables give, with
+a password file, which `psql` reads too where there is one. -/
+def byName (port : UInt16) : IO (List (String × Bool)) := do
+  let named ← opens
+    { host := "localhost", port,
+      conn := { user := "lanes_scram", database := "lanes_test", password := some "scram-pw" } }
+  let dir : System.FilePath :=
+    s!"{(← IO.getEnv "TMPDIR").getD "/tmp"}/lanes-pgpass-{← IO.monoNanosNow}"
+  IO.FS.createDirAll dir
+  let passfile := dir / "pgpass"
+  IO.FS.writeFile passfile
+    s!"# the test's\nlocalhost:*:lanes_test:lanes_md5:wrong\n*:{port}:lanes\\_test:lanes_scram:scram-pw\n"
+  IO.setAccessRights passfile { user := { read := true, write := true } }
+  let vars := [("PGHOST", "localhost"), ("PGPORT", toString port), ("PGUSER", "lanes_scram"),
+    ("PGDATABASE", "lanes_test"), ("PGPASSFILE", passfile.toString)]
+  let env : Env IO := { Env.io with var := fun name => pure (vars.lookup name) }
+  let settings ← (Settings.read env).run
+  let fromEnv ← match settings with
+    | .ok s => opens (.ofSettings s)
+    | .error _ => pure false
+  let libpq ← if ← hasPsql then do
+      let env := (vars.map fun (n, v) => (n, some v)).toArray
+        ++ #[("PGPASSWORD", none), ("PGSSLMODE", none), ("PGSERVICE", none)]
+      let out ← IO.Process.output
+        { cmd := "psql", args := #["-w", "-Atc", "SELECT current_user"], env }
+      pure (out.exitCode == 0 && out.stdout.trimAscii.toString == "lanes_scram")
+    else pure true
+  IO.FS.removeDirAll dir
+  return [
+    ("postgres live: localhost by name, without TLS by default", named),
+    ("postgres live: libpq's variables and password file, as psql reads them",
+      fromEnv && libpq && settings.toOption.map (·.sslmode) == some .disable) ]
+
 def live : IO (List (String × Bool)) := do
   let some (host, port) ← server | return [("postgres live: skipped, LANES_POSTGRES is not set", true)]
   let trust := config host port "lanes_trust" none
@@ -152,6 +190,7 @@ def live : IO (List (String × Bool)) := do
   let (skewRc, skewRcAllowed) ← writeSkew trust .readCommitted
   let (lostRc, lostRcAllowed) ← lostCommit trust .readCommitted
   let (lostSer, lostSerAllowed) ← lostCommit trust .serializable
+  let named ← byName port
   let zero := match boom with
     | .error fields => fields.any (·.value == "22012")
     | _ => false
@@ -170,6 +209,6 @@ def live : IO (List (String × Bool)) := do
       skewSerAllowed && skewRcAllowed),
     ("postgres live: a COMMIT whose reply is lost is answered unknown", lostRc && lostSer),
     ("postgres live: what is read after a lost COMMIT is what the store model allows",
-      lostRcAllowed && lostSerAllowed) ]
+      lostRcAllowed && lostSerAllowed) ] ++ named
 
 end Tests.PostgresLive

@@ -63,6 +63,7 @@ public import Lanes.Lib.Postgres.IO.Pool
 public import Lanes.Lib.Postgres.Message
 public import Lanes.Lib.Postgres.Pool
 public import Lanes.Lib.Postgres.Scram
+public import Lanes.Lib.Postgres.Settings
 public import Lanes.Lib.Postgres.Table
 public import Lanes.Lib.RateLimit
 public import Lanes.Lib.Time.Civil
