@@ -56,14 +56,14 @@ theorem nodup_like {likes : List Member} (h : likes.Nodup) (m : Member) (on : Bo
     · next hm => exact List.nodup_cons.mpr ⟨by simpa using hm, h⟩
   · exact h.erase m
 
-theorem likedOnce_request {s : Site} (h : s.LikedOnce) (c : Command) :
-    (s.request config c).1.LikedOnce := by
+theorem likedOnce_request {s : Site} (h : s.LikedOnce) (c : Command) (at_s : Nat) :
+    (s.request config c at_s).1.LikedOnce := by
   let P : Site × List Out → Prop := fun r => r.1.LikedOnce
   have same : ∀ l, P (s, l) := fun _ => h
   have videos {s' : Site} (hv : s'.videos = s.videos) : s'.LikedOnce := fun w hw => h w (hv ▸ hw)
   cases c with
   | signIn req issuer subject name =>
-    show (s.signIn config req issuer subject name).1.LikedOnce
+    show (s.signIn config req issuer subject name at_s).1.LikedOnce
     unfold signIn
     dsimp only
     split
@@ -72,7 +72,7 @@ theorem likedOnce_request {s : Site} (h : s.LikedOnce) (c : Command) :
       · exact h
       · exact videos rfl
   | signOut req m session => exact withSession_cases (P := P) same fun _ => videos rfl
-  | create req m session title about visibility media at_s =>
+  | create req m session title about visibility media =>
     refine withSession_cases (P := P) same fun _ => ?_
     show (s.create config _ _ m title about visibility media at_s).1.LikedOnce
     unfold create
@@ -93,7 +93,7 @@ theorem likedOnce_request {s : Site} (h : s.LikedOnce) (c : Command) :
       split
       · exact likedOnce_setVideo h (h w hw)
       · exact likedOnce_setVideo (x := { w with status := .checking s.nextCall req }) h (h w hw)
-  | watch req viewer v at_s =>
+  | watch req viewer v =>
     show (s.watch req _ v at_s).1.LikedOnce
     rw [watch_fst]
     exact h
@@ -153,7 +153,7 @@ theorem likedOnce_stored {s : Site} (h : s.LikedOnce) (call : Nat) (reply : Rpc.
 
 theorem likedOnce_handle {s : Site} (h : s.LikedOnce) (i : Input) : (s.handle config i).1.LikedOnce := by
   cases i with
-  | request c => exact likedOnce_request config h c
+  | request c at_s => exact likedOnce_request config h c at_s
   | store call reply => exact likedOnce_stored config h call reply
 
 theorem likedOnce_recover {s : Site} (h : s.LikedOnce) : (s.recover config).1.LikedOnce := by

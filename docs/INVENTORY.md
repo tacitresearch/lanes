@@ -17,13 +17,14 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Durable` | 67 | 57 | 2 | 0 | 0 | 7 | 1 |
 | `Lanes/Lib` | 531 | 345 | 13 | 2 | 92 | 70 | 9 |
 | `Lanes/Net` | 37 | 6 | 5 | 0 | 0 | 25 | 1 |
-| `Lanes/Outside` | 116 | 86 | 5 | 6 | 1 | 18 | 0 |
+| `Lanes/Outside` | 118 | 87 | 5 | 6 | 1 | 19 | 0 |
 | `Lanes/Proof` | 36 | 12 | 0 | 0 | 0 | 23 | 1 |
 | `Lanes/Runtime` | 172 | 93 | 21 | 0 | 28 | 30 | 0 |
 | `Lanes/Semantics` | 60 | 11 | 0 | 0 | 0 | 48 | 1 |
-| `Lanes/Web` | 575 | 296 | 52 | 31 | 146 | 48 | 2 |
+| `Lanes/Testing` | 63 | 0 | 0 | 1 | 62 | 0 | 0 |
+| `Lanes/Web` | 592 | 309 | 52 | 31 | 146 | 52 | 2 |
 | `LanesCli` | 120 | 0 | 0 | 0 | 46 | 0 | 74 |
-| All | 2025 | 1080 | 103 | 103 | 315 | 297 | 127 |
+| All | 2107 | 1094 | 103 | 104 | 377 | 302 | 127 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -804,7 +805,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `instToJsonOption` | proved | `fromJson?_toJson_none`, `fromJson?_toJson_some` |
 | `instFromJsonProd` | proved | `fromJson?_toJson_prod` |
 | `instToJsonProd` | proved | `fromJson?_toJson_prod` |
-| `Json.getObjValAs?` | tested | `Tests/Json.lean`, `Tests/OAuth.lean` |
+| `Json.getObjValAs?` | tested | `Tests/Json.lean` |
 | `Json.opt` | tested | `Tests/Json.lean` |
 
 ## `Lanes/Lib/Encoding/Json/Grammar.lean`
@@ -1216,7 +1217,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Civil.daysInMonth` | proved | through `Civil.Date.toDays`, `Civil.DateTime` and 1 more: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 4 more |
 | `Civil.Valid` | spec | a predicate |
 | `Civil.instDecidableValid` | proved | its type, `Decidable` |
-| `Civil.Date.mk?` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Time.lean`, `Tests/S3.lean` |
+| `Civil.Date.mk?` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Time.lean` |
 | `Civil.marchMonth` | proved | through `Civil.Date.toDays`, `Civil.DateTime.toUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 2 more |
 | `Civil.ofMarchMonth` | proved | through `Civil.Date.ofDays`, `Civil.DateTime.ofUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 2 more |
 | `Civil.daysBefore` | proved | through `Civil.Date.toDays`, `Civil.DateTime.toUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 2 more |
@@ -1332,8 +1333,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Outside.any` | tested | `Tests/Jobs.lean`, `Tests/S3.lean` |
 | `Outside.driver` | checked | `Tests/Clock.lean`, `Tests/HttpClient.lean`, `Tests/Jobs.lean` and 2 more |
-| `Outside.see` | proved | through `Outside.after`: `Effects.at_most_once`, `Events.deliveries_le` and 7 more |
-| `Outside.after` | proved | `Effects.at_most_once`, `Events.deliveries_le`, `Idempotent.at_most_once` and 6 more |
+| `Outside.see` | proved | through `Outside.after`: `Effects.at_most_once`, `Events.deliveries_le` and 8 more |
+| `Outside.after` | proved | `Effects.at_most_once`, `Events.deliveries_le`, `Idempotent.at_most_once` and 7 more |
 | `Outside.allows` | checked | `Tests/Outside.lean` |
 | `Outside.both` | proved | `Outside.after_both` |
 | `Outside.mine` | spec | used only in statements |
@@ -1429,12 +1430,14 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `ObjectStore.Request.key` | proved | through `ObjectStore.server`: `ObjectStore.read_sent` |
-| `ObjectStore.Request.leaves` | proved | through `ObjectStore.server`: `ObjectStore.read_sent` |
-| `ObjectStore.State.possible` | proved | through `ObjectStore.server`: `ObjectStore.read_sent` |
-| `ObjectStore.State.settle` | proved | through `ObjectStore.server`: `ObjectStore.read_sent` |
-| `ObjectStore.server` | proved | `ObjectStore.read_sent` |
+| `ObjectStore.Request.key` | proved | through `ObjectStore.server`: `ObjectStore.held_sent`, `ObjectStore.read_sent` |
+| `ObjectStore.Request.leaves` | proved | through `ObjectStore.server`: `ObjectStore.held_sent`, `ObjectStore.read_sent` |
+| `ObjectStore.insertNew` | proved | through `ObjectStore.server`: `ObjectStore.held_sent`, `ObjectStore.read_sent` |
+| `ObjectStore.State.possible` | proved | through `ObjectStore.server`: `ObjectStore.held_sent`, `ObjectStore.read_sent` |
+| `ObjectStore.State.settle` | proved | through `ObjectStore.server`: `ObjectStore.held_sent`, `ObjectStore.read_sent` |
+| `ObjectStore.server` | proved | `ObjectStore.held_sent`, `ObjectStore.read_sent` |
 | `ObjectStore.Sound` | spec | a predicate |
+| `ObjectStore.HeldSent` | spec | a predicate |
 
 ## `Lanes/Outside/Rpc.lean`
 
@@ -1444,7 +1447,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Rpc.instCodableCall` | proved | its type, `Codable` |
 | `Rpc.Reply.codec` | proved | its type, `Codec` |
 | `Rpc.instCodableReply` | proved | its type, `Codable` |
-| `Rpc.outside` | proved | `Events.deliveries_le`, `Idempotent.at_most_once`, `Idempotent.keys_nodup` and 3 more |
+| `Rpc.outside` | proved | `Events.deliveries_le`, `Idempotent.at_most_once`, `Idempotent.keys_nodup` and 4 more |
 | `Rpc.Port.reported` | spec | used only in statements |
 | `Rpc.called` | spec | used only in statements |
 | `Rpc.answered` | spec | used only in statements |
@@ -1955,10 +1958,99 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `System.sem` | proved | `Account.implements`, `Account.implements_timed`, `Once.server_implements` and 14 more |
 | `System.Refines` | spec | a predicate |
 
+## `Lanes/Testing/Browser.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Testing.Browser.new` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.Browser.at` | tested | `Tests/Testing.lean` |
+| `Testing.Kept.parse` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.Kept.covers` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.Browser.cookie` | tested | `Tests/OAuth.lean` |
+| `Testing.Browser.keep` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.Browser.forget` | tested | `Tests/Testing.lean` |
+| `Testing.Browser.record` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.Browser.call` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.Browser.get` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.Browser.post` | tested | `Tests/Testing.lean` |
+| `Testing.Browser.submit` | tested | `Tests/Testing.lean` |
+
+## `Lanes/Testing/Http.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Testing.listen` | tested | `Tests/Testing.lean` |
+| `Testing.json` | tested | `Tests/Testing.lean` |
+| `Testing.text` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.shows` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.status` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.location` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.unescape` | tested | `Tests/Testing.lean` |
+| `Testing.between` | tested | `Tests/Testing.lean` |
+| `Testing.field` | tested | `Tests/Testing.lean` |
+| `Testing.setCookie` | tested | `Tests/Testing.lean` |
+| `Testing.queryOf` | checked | `Tests/OAuth.lean` |
+| `Testing.segments` | tested | `Tests/Testing.lean` |
+
+## `Lanes/Testing/OAuth.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Testing.OAuth.hasOpenssl` | tested | `Tests/OAuth.lean` |
+| `Testing.OAuth.openssl` | tested | `Tests/OAuth.lean` |
+| `Testing.OAuth.Fake.at` | tested | `Tests/OAuth.lean` |
+| `Testing.OAuth.Fake.oidc` | tested | `Tests/OAuth.lean` |
+| `Testing.OAuth.yes` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.OAuth.readUser` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.OAuth.Fake.userApi` | tested | `Tests/OAuth.lean` |
+| `Testing.OAuth.Fake.client` | tested | `Tests/OAuth.lean` |
+| `Testing.OAuth.b64s` | tested | `Tests/OAuth.lean` |
+| `Testing.OAuth.str` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.OAuth.nowSeconds` | tested | `Tests/OAuth.lean` |
+| `Testing.OAuth.Fake.mint` | tested | `Tests/OAuth.lean` |
+| `Testing.OAuth.userJson` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.OAuth.emailsJson` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.OAuth.Fake.take` | tested | `Tests/OAuth.lean` |
+| `Testing.OAuth.Fake.user?` | tested | `Tests/OAuth.lean` |
+| `Testing.OAuth.Fake.handle` | tested | `Tests/OAuth.lean` |
+| `Testing.OAuth.makeKeys` | tested | `Tests/OAuth.lean` |
+| `Testing.OAuth.Fake.start` | tested | `Tests/OAuth.lean` |
+| `Testing.OAuth.Fake.stop` | tested | `Tests/OAuth.lean` |
+| `Testing.OAuth.Fake.approve` | tested | `Tests/OAuth.lean` |
+| `Testing.OAuth.signIn` | tested | `Tests/OAuth.lean` |
+
+## `Lanes/Testing/S3.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Testing.S3.raw?` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
+| `Testing.S3.answer` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
+| `Testing.S3.failure` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
+| `Testing.S3.time?` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
+| `Testing.S3.decodePair` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
+| `Testing.S3.splitTarget` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
+| `Testing.S3.authField` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
+| `Testing.S3.verified` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
+| `Testing.S3.escapeKey` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
+| `Testing.S3.listXml` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
+| `Testing.S3.range?` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
+| `Testing.S3.serve` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
+| `Testing.S3.Fake.start` | tested | `Tests/S3.lean` |
+| `Testing.S3.Fake.holds` | tested | `Tests/S3.lean` |
+| `Testing.S3.Fake.keys` | tested | `Tests/S3.lean` |
+| `Testing.S3.Fake.stop` | tested | `Tests/S3.lean` |
+| `Testing.S3.follow` | tested | `Tests/S3.lean` |
+
 ## `Lanes/Web/Auth/IdToken.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
+| `OAuth.DisplayName.maxChars` | proved | `OAuth.DisplayName.length_le` |
+| `OAuth.DisplayName.allowed` | proved | through `OAuth.DisplayName.val`, `OAuth.Identity`: `OAuth.DisplayName.length_le`, `OAuth.IdToken.check_ok_iff` and 3 more |
+| `OAuth.DisplayName.Valid` | spec | a predicate |
+| `OAuth.DisplayName.instDecidableValid` | proved | its type, `Decidable` |
+| `OAuth.DisplayName.of?` | proved | through `OAuth.IdToken.Claims.identity`: `OAuth.IdToken.check_ok_iff`, `OAuth.IdToken.verify_accepted` |
+| `OAuth.DisplayName.clean` | proved | through `OAuth.IdToken.Claims.identity`: `OAuth.IdToken.check_ok_iff`, `OAuth.IdToken.verify_accepted` |
 | `OAuth.IdToken.Claims.identity` | proved | `OAuth.IdToken.check_ok_iff`, `OAuth.IdToken.verify_accepted` |
 | `OAuth.IdToken.optional` | proved | through `OAuth.IdToken.verify`: `OAuth.IdToken.verify_accepted` |
 | `OAuth.IdToken.string?` | proved | through `OAuth.IdToken.verify`: `OAuth.IdToken.verify_accepted` |
@@ -2003,11 +2095,22 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Auth.Attempts.succeed` | proved | `Auth.Attempts.bounded_succeed`, `Auth.Attempts.locked_stays` |
 | `Auth.Attempts.unlock` | spec | used only in statements |
 | `Auth.Attempts.Bounded` | spec | a predicate |
+| `Auth.Session.codec` | proved | its type, `Codec` |
+| `Auth.instCodableSession` | proved | its type, `Codable` |
+| `Auth.Session.expired` | proved | `Auth.Session.expired_mono`, `Auth.Sessions.accepts_iff` |
 | `Auth.Sessions.codec` | proved | its type, `Codec` |
 | `Auth.instCodableSessions` | proved | its type, `Codable` |
+| `Auth.Sessions.ids` | proved | `Auth.Sessions.ids_starts`, `Auth.Sessions.length_close_le`, `Auth.Sessions.length_start_le` and 1 more |
+| `Auth.Sessions.at_s` | proved | through `Auth.Sessions.accepts`, `Auth.Sessions.start` and 1 more: `Auth.Sessions.Ended.run`, `Auth.Sessions.accepts_iff` and 5 more |
+| `Auth.Sessions.sweep` | proved | `Auth.Sessions.sweep_ended` |
 | `Auth.Sessions.start` | proved | `Auth.Sessions.ids_starts`, `Auth.Sessions.length_start_le`, `Auth.Sessions.live_open` and 1 more |
-| `Auth.Sessions.close` | proved | `Auth.Sessions.live_close` |
+| `Auth.Sessions.close` | proved | `Auth.Sessions.length_close_le`, `Auth.Sessions.live_close` |
 | `Auth.Sessions.live` | proved | `Auth.Sessions.live_close`, `Auth.Sessions.live_open` |
+| `Auth.Sessions.accepts` | proved | `Auth.Sessions.Ended.run`, `Auth.Sessions.accepts_iff`, `Auth.Sessions.sweep_ended` |
+| `Auth.Sessions.touch` | proved | through `Auth.Sessions.Op.apply`: `Auth.Sessions.Ended.run` |
+| `Auth.Sessions.Ended` | spec | a predicate |
+| `Auth.Sessions.Op.apply` | spec | used only in statements |
+| `Auth.Sessions.Op.opens` | spec | used only in statements |
 
 ## `Lanes/Web/Auth/OAuth.lean`
 
@@ -2674,7 +2777,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `S3.Endpoint.aws` | tested | `Tests/S3.lean` |
-| `S3.Key.of?` | tested | `Tests/S3.lean` |
+| `S3.Key.of?` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
 | `S3.Range.header` | tested | `Tests/S3.lean` |
 | `S3.Op.verb` | tested | `Tests/S3.lean` |
 | `S3.Op.method` | tested | `Tests/S3.lean` |
@@ -2682,9 +2785,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `S3.Op.query` | tested | `Tests/S3.lean` |
 | `S3.Op.headers` | tested | `Tests/S3.lean` |
 | `S3.Op.body` | tested | `Tests/S3.lean` |
-| `S3.Bucket.host` | tested | `Tests/S3.lean` |
-| `S3.Bucket.path` | tested | `Tests/S3.lean` |
-| `S3.Bucket.scope` | tested | `Tests/S3.lean` |
+| `S3.Bucket.host` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
+| `S3.Bucket.path` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
+| `S3.Bucket.scope` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
 | `S3.call` | tested | `Tests/S3.lean` |
 | `S3.unescapeKey` | tested | `Tests/S3.lean` |
 | `S3.entry?` | tested | `Tests/S3.lean` |
@@ -2694,7 +2797,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `S3.interpret` | tested | `Tests/S3.lean` |
 | `S3.Op.modelled` | tested | `Tests/S3.lean` |
 | `S3.Answer.modelled` | tested | `Tests/S3.lean` |
-| `S3.presign` | tested | `Tests/S3.lean` |
+| `S3.presign` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
 
 ## `Lanes/Web/S3/Xml.lean`
 
