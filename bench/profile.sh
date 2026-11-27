@@ -91,9 +91,9 @@ case $WHAT in
     lpid=$!
     sleep 1
     "$perf" stat -e context-switches -x, -o "$SCRATCH/stat.txt" -p "$pid" -- sleep "$SECONDS_EACH" &
+    statpid=$!
     "$perf" record -F 999 -g -o "$SCRATCH/perf.data" -p "$pid" -- sleep "$SECONDS_EACH" 2> /dev/null
-    wait "$lpid"
-    wait
+    wait "$lpid" "$statpid"
     requests=$(grep -o '"requests":[0-9]*' "$SCRATCH/load.json" | cut -d: -f2)
     awk -F, -v n="$requests" '$3 == "context-switches" {
       printf "%d requests measured; %.1f context switches a request\n", n, $1 / n }' "$SCRATCH/stat.txt"
