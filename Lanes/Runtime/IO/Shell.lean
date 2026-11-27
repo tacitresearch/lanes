@@ -67,6 +67,12 @@ structure Journal.Log (sys : System σ) where
   /-- Save this image of the kernel as it is after everything appended so far, mark the journal
   and cut it. `none` if this journal cannot save. -/
   save : Option (Kernel.Image sys → IO Unit) := none
+  /-- Outputs of an older version of the system that it had not handed over, migrated
+  (`Journal.Upgrade`). They are handed over first, and then `migrate` writes the migration. -/
+  pending : List σ.Out := []
+  /-- Write the migration of an older version's files. Run once `pending` is handed over and
+  before anything is appended, so that dying in between hands them over again. -/
+  migrate : IO Unit := pure ()
   close : IO Unit
 
 private abbrev Cmd (sys : System σ) :=
@@ -150,9 +156,14 @@ private def loop (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
       | none => throw (IO.userError "lanes: the journal does not continue its snapshot")
     | none => pure (Kernel.boot sys)
   if journal.isNone then rt.record (outputs.map .output)
-  let handOver := fun (outputs : List σ.Out) => do
+  let deliver := fun (outputs : List σ.Out) => do
     discard <| Parker.wait (← (handOver onOutput outputs).toBaseIO)
+  let handOver := fun (outputs : List σ.Out) => do
+    deliver outputs
     if let some log := journal then unless outputs.isEmpty do log.note [.handed]
+  if let some log := journal then
+    deliver log.pending
+    log.migrate
   handOver outputs
   rt.recovered.set true
   let since := start.clock_ms

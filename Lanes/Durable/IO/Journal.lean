@@ -5,7 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Lanes.Runtime.IO.Shell
-public import Lanes.Durable.Disk
+public import Lanes.Durable.Upgrade
 
 /-!
 The files of a journal. What they mean, which are refused, what a shard writes to them and in
@@ -31,9 +31,16 @@ variable {σ : Signature}
 structure Store (sys : System σ) where
   path : System.FilePath
   input : Codec σ.In
-  /-- The application's name for the system and the version of its step functions. A journal
-  written under another name is refused. -/
+  /-- The application's name for the system. A journal written under another name is refused. -/
   system : String := ""
+  /-- The version of the system's types and step functions. The files carry it with the name
+  (`Journal.label`); a file of version 0 carries the name alone, as every file did before
+  there were versions. -/
+  version : Nat := 0
+  /-- The older versions this store reads, each with its system, its codecs and the migration
+  from it (`Journal.Upgrade`). A start that finds the files of one migrates them and saves, so
+  the store needs `actors`. -/
+  upgrades : List (Upgrade sys) := []
   /-- How the actors are written down. With it the shard saves its kernel from time to time,
   beside the journal as `.snapshot`, and cuts the journal; without it the journal only grows. -/
   actors : Option (Kernel.Image.Codecs sys) := none
@@ -41,8 +48,14 @@ structure Store (sys : System σ) where
   refused, which is what a shard that must not come back having forgotten needs. -/
   create : Bool := true
 
-private def Refusal.explain (system : String) : Refusal → String
-  | .foreign (some named) => s!"it is the journal of \"{named}\", not of \"{system}\""
+/-- A label as a person reads it: the name, then the version if there is one. -/
+private def shown (label : String) : String :=
+  label.replace "\nversion " ", version "
+
+private def Refusal.explain (system : String) (upgrades : Bool) : Refusal → String
+  | .foreign (some named) =>
+    s!"it is the journal of \"{shown named}\", not of \"{shown system}\""
+      ++ if upgrades then ", and no upgrade reads it" else ""
   | .foreign none => "it is not a journal"
   | .unreadable entry =>
     s!"entry {entry} is intact and cannot be read, so it was written with another codec"
@@ -88,28 +101,45 @@ Lock the journal, read it, and open it for appending. The lock is a file beside 
 is taken before anything is read, so a second process cannot start on a journal that another is
 still writing. It is held until the log is closed.
 
-What the files give and whether they are refused is `Disk.start`; a refused file is left as it
+What the files give and whether they are refused is `Disk.begin`; a refused file is left as it
 is. What is then written is `Disk.mend`, and a write that did not finish is kept beside the
-journal as `.cut`. A turn writes `appendWrites` and a save `saveWrites`.
+journal as `.cut`; or, for the files of an older version, the migration's writes, which the
+shard performs once it has handed over the old outputs (`Log.migrate`). A turn writes
+`appendWrites` and a save `saveWrites`.
 -/
-def Store.open {sys : System σ} (store : Store sys) : IO (Log sys) := do
+def Store.open {sys : System σ} [Hashable σ.Id] (store : Store sys) : IO (Log sys) := do
+  let system := label store.system store.version
+  if !store.upgrades.isEmpty && store.actors.isNone then
+    throw (IO.userError "lanes: a store that reads older versions needs the codecs of its actors")
   let lock ← IO.FS.Handle.mk (store.path.addExtension "lock") .append
   unless ← lock.tryLock do
     throw (IO.userError s!"lanes: the journal {store.path} is in use by another process")
   try
     let disk : Disk := { journal := (← read? store.path).getD .empty
                          snapshot := ← read? (store.path.addExtension "snapshot") }
-    let found ← match disk.start store.input store.actors store.system store.create with
-      | .ok found => pure found
+    let begun ← match disk.begin store.input store.actors system store.create store.upgrades with
+      | .ok begun => pure begun
       | .error refusal =>
-        throw (IO.userError
-          s!"lanes: the journal {store.path} is refused: {refusal.explain store.system}")
-    if found.size < disk.journal.size then
-      IO.FS.writeBinFile (store.path.addExtension "cut")
-        (disk.journal.extract found.size disk.journal.size)
+        throw (IO.userError s!"lanes: the journal {store.path} is refused: \
+          {refusal.explain system !store.upgrades.isEmpty}")
     let handle ← IO.mkRef (← IO.FS.Handle.mk store.path .append)
-    syncDir store.path
-    (disk.mend store.system found.size).forM (perform store.path handle true)
+    let mut migrate : IO Unit := pure ()
+    let mut pending : List σ.Out := []
+    match begun with
+    | .found found =>
+      if found.size < disk.journal.size then
+        IO.FS.writeBinFile (store.path.addExtension "cut")
+          (disk.journal.extract found.size disk.journal.size)
+      syncDir store.path
+      (disk.mend system found.size).forM (perform store.path handle true)
+    | .upgraded upgraded =>
+      if let some actors := store.actors then
+        unless (savedRecords actors system upgraded.index upgraded.image).all Frame.fits
+            && Entry.fits store.input (.snapshot upgraded.index) do
+          throw (IO.userError "lanes: an actor is too large to save")
+      pending := upgraded.pending
+      migrate := upgraded.writes.forM (perform store.path handle true)
+    let found := begun.toFound
     let count ← IO.mkRef found.index
     let write := fun (flush : Bool) (entries : List (Entry σ)) => do
       unless entries.all (Entry.fits store.input) do
@@ -118,14 +148,14 @@ def Store.open {sys : System σ} (store : Store sys) : IO (Log sys) := do
       count.modify (· + entries.length)
     let save := fun (actors : Kernel.Image.Codecs sys) (image : Kernel.Image sys) => do
       let index ← count.get
-      unless (savedRecords actors store.system index image).all Frame.fits
+      unless (savedRecords actors system index image).all Frame.fits
           && Entry.fits store.input (.snapshot index) do
         throw (IO.userError "lanes: an actor is too large to save")
-      (saveWrites store.input actors store.system index image).forM
+      (saveWrites store.input actors system index image).forM
         (perform store.path handle true)
       count.modify (· + 1)
     return {
-      past := found.past, saved := found.saved, index := found.index
+      past := found.past, saved := found.saved, index := found.index, pending, migrate
       append := write true
       note := write false
       save := store.actors.map save
