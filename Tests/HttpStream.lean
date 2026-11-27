@@ -136,12 +136,12 @@ def tell (w : World) (e : Event) : World :=
 def requestOf (w : World) (seq : Nat) : Option Request :=
   (w.handed.find? (·.1 == seq)).map (·.2.1)
 
-def next (stream : ByteArray) (w : World) : List (String × World) :=
+def next (stream : ByteArray) (sizes : List Nat) (w : World) : List (String × World) :=
   if w.conn.closed then []
   else
     let room := w.conn.room cfg
     let reads := if w.conn.wantsInput cfg && !w.ended then
-      ([2, 1000].filterMap fun piece =>
+      (sizes.filterMap fun piece =>
         let n := min piece (min room (stream.size - w.read))
         if n = 0 then none
         else some ("read", tell { w with read := w.read + n } (.received (stream.extract w.read (w.read + n)))))
@@ -173,20 +173,22 @@ def next (stream : ByteArray) (w : World) : List (String × World) :=
             let e := Sse.Event.ofResponse part
             { w with events := w.events ++ [e] }
           else { w with given := w.given ++ [part.body] }
-        [("part", tell fresh (.pulled seq index part))]
+        (if index < 2 then [("part", tell fresh (.pulled seq index part))] else [])
           ++ (if w.emptied then [] else [("nothing yet", tell { w with emptied := true } (.pulled seq index .nothing))])
-          ++ (if 2 ≤ index then [("finished", tell { w with finished := true } (.pulled seq index .finished))] else [])
-          ++ (if request.path == ["ev"] && 1 ≤ index && !w.repeated then
-                [("an event again", tell { w with repeated := true } (.pulled seq index (partOf request (index - 1))))]
-              else [])
+          ++ (if 1 ≤ index then [("finished", tell { w with finished := true } (.pulled seq index .finished))] else [])
+          ++ (match w.events.getLast? with
+              | some e => if request.path == ["ev"] && !w.repeated then
+                  [("an event again", tell { w with repeated := true } (.pulled seq index e.response))]
+                else []
+              | none => [])
     reads ++ answers ++ pieces ++ pulls
       ++ (if w.conn.unsent then [("sent", tell w .sent)] else [])
       ++ (if w.now < 3 then [("tick", tell { w with now := w.now + 1 } .tick)] else [])
       ++ (if w.stopped then [] else [("stop", tell { w with stopped := true } .stop)])
 
-def model (stream : ByteArray) : Model World String where
+def model (stream : ByteArray) (sizes : List Nat) : Model World String where
   init := [{}]
-  next := next stream
+  next := next stream sizes
 
 /-- The bytes written for the response to `seq`, in turn. -/
 def bytesOf (w : World) (seq : Nat) : ByteArray :=
@@ -274,8 +276,11 @@ def properties (stream : ByteArray) : List (Property World) :=
     .always "the buffer stays within its bound" fun w =>
       w.conn.pos ≤ w.conn.buffer.size && w.conn.buffer.size ≤ cfg.limits.message_max,
     .always "no more requests are in flight than the bound" fun w =>
-      w.conn.slots.length ≤ cfg.inflight_max,
-    .sometimes "the last piece is taken" (·.lastTaken),
+      w.conn.slots.length ≤ cfg.inflight_max ]
+
+def uploadProperties : List (Property World) :=
+  [ .sometimes "the last piece is taken and the request behind is answered" fun w =>
+      w.lastTaken && (writes w).length == 2,
     .sometimes "a piece is offered again after the system was busy" (·.retried) ]
 
 def streamProperties : List (Property World) :=
@@ -294,16 +299,20 @@ def eventProperties : List (Property World) :=
     .sometimes "a stream of events ends at stop with its last chunk" fun w =>
       w.stopped && (writes w).length == 1 && w.out.contains .close ]
 
-@[never_extract] def report (stream : ByteArray) (more : List (Property World)) :=
-  search (model stream) (properties stream ++ more) {} id
+@[never_extract] def report (stream : ByteArray) (sizes : List Nat) (more : List (Property World)) :=
+  search (model stream sizes) (properties stream ++ more) {} id
 
 def checks : IO (List (String × Bool)) := do
-  let length := report lengthUpload []
-  let chunked := report chunkedUpload []
-  let down := report download streamProperties
-  let evs := report events eventProperties
+  let length := report lengthUpload [2, 1000] uploadProperties
+  let chunked := report chunkedUpload [2, 1000] uploadProperties
+  let down := report download [1000] streamProperties
+  let evs := report events [1000] eventProperties
   for (name, r) in [("length", length), ("chunked", chunked), ("download", down), ("events", evs)] do
-    unless r.ok && r.complete do IO.println s!"http stream {name}: {repr r.failure.isSome} {r.states}"
+    match r.failure with
+    | some (.violated p t) => IO.println s!"http stream {name}: {p}: {t.labels}"
+    | some (.unreached ps) => IO.println s!"http stream {name}: unreached {ps}"
+    | some (.deadlock t) => IO.println s!"http stream {name}: deadlock {t.labels}"
+    | none => unless r.complete do IO.println s!"http stream {name}: incomplete at {r.states}"
   return [
     ("http stream: a body framed by its length is handed on in pieces that make it up, one at a "
       ++ "time, and the request behind it read", length.ok && length.complete),

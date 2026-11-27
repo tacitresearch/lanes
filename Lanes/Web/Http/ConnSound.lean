@@ -1049,6 +1049,180 @@ theorem step_submit_read (now : Nat) (c : Conn) (e : Event) {s : Nat} {request :
     | tick => exact key _ h
     | stop => exact key _ h
 
+/-! Streams -/
+
+/-- The bytes of a streamed response, its head, the chunk of each part and the last chunk, are
+`Response.wireChunked`, and the client's reader reads them back as the head with the parts, in
+order, as its body, as soon as the last chunk is there, whatever follows. -/
+theorem read_streamed {close : Bool} {r : Response} (hs : streamable close r = true)
+    {parts : List ByteArray} (hparts : ∀ p ∈ parts, 0 < p.size ∧ p.size < 16 ^ 16)
+    (hbody : (parts.foldl (· ++ ·) ByteArray.empty).size < 10 ^ 18) {limit : Nat}
+    (hlimit : (streamHead close r ++ parts.foldl (· ++ Response.chunk ·) ByteArray.empty
+      ++ lastChunk).size ≤ limit) (tail : ByteArray) (ended : Bool) :
+    Response.read limit (streamHead close r ++ parts.foldl (· ++ Response.chunk ·) ByteArray.empty
+        ++ lastChunk ++ tail) ended
+      = .done (some { streamed close r with
+          headers := ("transfer-encoding", "chunked") :: Response.lowered (streamed close r).headers
+          body := parts.foldl (· ++ ·) ByteArray.empty }) := by
+  have hw : streamHead close r ++ parts.foldl (· ++ Response.chunk ·) ByteArray.empty ++ lastChunk
+      = Response.wireChunked { streamed close r with body := parts.foldl (· ++ ·) ByteArray.empty }
+          parts :=
+    rfl
+  simp only [streamable, Bool.and_eq_true, bne_iff_ne, ne_eq] at hs
+  obtain ⟨⟨hwr, h204⟩, h304⟩ := hs
+  have hr : Response.writable { streamed close r with body := parts.foldl (· ++ ·) ByteArray.empty } := by
+    simp only [Response.writable, streamed, Bool.and_eq_true, decide_eq_true_eq] at hwr ⊢
+    obtain ⟨⟨⟨⟨h1, h2⟩, -⟩, -⟩, h5⟩ := hwr
+    refine ⟨⟨⟨⟨h1, h2⟩, ?_⟩, hbody⟩, h5⟩
+    simp [h204, h304]
+  rw [hw] at hlimit ⊢
+  exact Response.read_wireChunked hr ⟨h204, h304⟩ hparts rfl hlimit tail ended
+
+/-- The answer to a request that streams that opens a stream makes its slot a stream whose head
+is to be written first. -/
+theorem respond_opens {seq : Nat} {c : Conn} {head : Request} {close : Bool}
+    (hw : c.written ≤ seq) (h : c.slots[seq - c.written]? = some (.opened head false close))
+    {r : Response} {mode : Stream.Mode} (hm : Stream.mode? r = some mode)
+    (hs : streamable close r = true) :
+    (respond seq r c).slots = c.slots.set (seq - c.written)
+      (.stream { head, events := mode == .events, close, pending := streamHead close r
+                 after := head.header? "last-event-id" }) := by
+  simp [respond, hw, h, hm, hs]
+
+/-- An answer to a request that is not waiting as one that streams changes nothing. -/
+theorem respond_ignored {seq : Nat} {c : Conn}
+    (h : c.written ≤ seq → ∀ head headOnly close,
+      c.slots[seq - c.written]? ≠ some (.opened head headOnly close)) (r : Response) :
+    respond seq r c = c := by
+  unfold respond
+  split
+  · rename_i hw
+    split
+    · rename_i head headOnly close e
+      exact absurd e (h hw head headOnly close)
+    · rfl
+  · rfl
+
+/-- A part of bytes the system gives for the pull it was asked is to be written as its chunk,
+after what came before it. -/
+theorem pulled_part {seq index : Nat} {c : Conn} {o : Outflow} (hw : c.written ≤ seq)
+    (h : c.slots[seq - c.written]? = some (.stream o)) (hask : o.asking = true)
+    (hi : o.index = index) (hst : o.state = .going) (hev : o.events = false) {r : Response}
+    {d : ByteArray} (hp : Stream.part r = .data d) (hd : d.size ≤ cfg.part_max) :
+    (pulled cfg now seq index r c).slots = c.slots.set (seq - c.written)
+      (.stream { o with asking := false, index := index + 1
+                        pending := o.pending ++ Response.chunk d }) := by
+  have hb : r.body = d := by
+    unfold Stream.part at hp
+    repeat' split at hp
+    all_goals (cases hp <;> rfl)
+  simp [pulled, hw, h, hask, hi, hst, hp, Outflow.accept, hev, hb, show ¬ cfg.part_max < d.size by omega]
+
+/-- An answer to a pull that is not the one a stream waits for changes nothing. -/
+theorem pulled_ignored {seq index : Nat} {c : Conn}
+    (h : ∀ o, c.written ≤ seq → c.slots[seq - c.written]? = some (.stream o) →
+      ¬(o.asking = true ∧ o.index = index ∧ o.state = .going)) (r : Response) :
+    pulled cfg now seq index r c = c := by
+  unfold pulled
+  split
+  · rename_i hw
+    split
+    · rename_i o e
+      have := h o hw e
+      split
+      · rfl
+      · rename_i hne
+        simp only [Bool.and_eq_true, beq_iff_eq, Bool.not_eq_true', Bool.not_eq_false] at hne
+        exact absurd ⟨hne.1.1, hne.1.2, hne.2⟩ this
+    · rfl
+  · rfl
+
+/-- A part larger than `part_max` cuts its stream short. -/
+theorem pulled_large {seq index : Nat} {c : Conn} {o : Outflow} (hw : c.written ≤ seq)
+    (h : c.slots[seq - c.written]? = some (.stream o)) (hask : o.asking = true)
+    (hi : o.index = index) (hst : o.state = .going) {r : Response} {d : ByteArray}
+    (hp : Stream.part r = .data d) (hd : cfg.part_max < d.size) :
+    (pulled cfg now seq index r c).slots = c.slots.set (seq - c.written)
+      (.stream { o with asking := false, index := index + 1, state := .cut }) := by
+  simp [pulled, hw, h, hask, hi, hst, hp, hd]
+
+/-- A streamed response the system ended, at the front, writes what has come of it and then its
+last chunk, and leaves. -/
+theorem flushStream_ended {c : Conn} (hc : c.closed = false) {o : Outflow} {rest : List Slot}
+    (hs : c.slots = .stream o :: rest) (hst : o.state = .ended) :
+    (flushStream cfg now c).2
+        = (if o.pending.isEmpty then [] else [.part c.written o.pending]) ++ [.write c.written lastChunk]
+      ∧ (flushStream cfg now c).1.written = c.written + 1 ∧ (flushStream cfg now c).1.slots = rest := by
+  unfold flushStream
+  cases hp : o.pending.isEmpty <;> simp [hc, hs, hst, hp]
+
+/-- A streamed response going on, at the front, writes what has come of it; it asks for the next
+part only when nothing written is unsent and no pull is with the system. -/
+theorem flushStream_going {c : Conn} (hc : c.closed = false) {o : Outflow} {rest : List Slot}
+    (hs : c.slots = .stream o :: rest) (hst : o.state = .going) :
+    (∀ s b, .part s b ∈ (flushStream cfg now c).2 → s = c.written ∧ (b = o.pending ∨ b = heartbeatChunk))
+      ∧ (∀ s k request, .pull s k request ∈ (flushStream cfg now c).2 →
+          c.unsent = false ∧ o.pending.isEmpty ∧ o.asking = false ∧ s = c.written ∧ k = o.index
+            ∧ request = Stream.pull o.head o.index o.after)
+      ∧ (∀ s b, .write s b ∉ (flushStream cfg now c).2) := by
+  unfold flushStream
+  cases hp : o.pending.isEmpty <;> cases hu : c.unsent <;> cases ha : o.asking <;>
+    simp [hc, hs, hst, hp, hu, ha] <;> (repeat' split) <;> simp_all
+
+/-- A stream not at the front writes nothing and asks for nothing. -/
+theorem flushStream_other {c : Conn} (h : ∀ o rest, c.slots ≠ .stream o :: rest) :
+    flushStream cfg now c = (c, []) := by
+  unfold flushStream
+  split
+  · rfl
+  · split
+    · rename_i o rest hs
+      exact absurd hs (h o rest)
+    · rfl
+
+/-- A piece handed on is the next bytes of the body as `Inflow.gather` reads them at the
+connection's position in its buffer, or the piece the system was too busy to take, offered
+again; one at a time. -/
+theorem pump_piece {c : Conn} {s k : Nat} {request : Request}
+    (h : .piece s k request ∈ (pump cfg now c).2) :
+    ∃ f, c.inflow = some f ∧ s = f.seq ∧ k = f.index
+      ∧ ((f.asked = none ∧ ∃ data stop framing last,
+            Inflow.gather cfg c.buffer (max 1 cfg.piece_max) c.pos f.taken f.framing .empty
+              = .piece data stop framing last
+            ∧ request = Stream.piece f.head k data last
+            ∧ (pump cfg now c).1.inflow.bind (·.asked) = some (data, last))
+        ∨ ∃ data last, f.asked = some (data, last) ∧ request = Stream.piece f.head k data last) := by
+  unfold pump at h ⊢
+  split at h
+  · simp at h
+  · rename_i f hf
+    refine ⟨f, hf, ?_⟩
+    split at h
+    · simp at h
+    · split at h
+      · simp at h
+      · split at h
+        · rename_i data last ha
+          split at h
+          · simp only [List.mem_singleton, Action.piece.injEq] at h
+            obtain ⟨rfl, rfl, rfl⟩ := h
+            exact ⟨rfl, rfl, .inr ⟨data, last, ha, rfl⟩⟩
+          · simp at h
+        · rename_i ha
+          dsimp only at h ⊢
+          split at h
+          · split at h <;> simp at h
+          · split at h <;> simp at h
+          · rename_i data stop framing last hg
+            simp only [List.mem_append, List.mem_ite_nil_right, List.mem_singleton,
+              Action.piece.injEq] at h
+            rcases h with ⟨-, h⟩ | ⟨rfl, rfl, rfl⟩
+            · cases h
+            · refine ⟨rfl, rfl, .inl ⟨ha, data, stop, framing, last, hg, rfl, ?_⟩⟩
+              repeat' split
+              all_goals simp_all [settle]
+              all_goals (split <;> rfl)
+
 /-! What is written -/
 
 theorem sendable_writable (close : Bool) (r : Response) : (sendable close r).writable = true := by

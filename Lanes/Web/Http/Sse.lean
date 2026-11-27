@@ -14,7 +14,8 @@ model of the client's reader of a stream of them (`Sse.parse`, after the WHATWG 
 
 The model splits lines at LF only: the writer writes no CR, and an event made from a response
 has none (`Event.ofResponse`). It gives each event the `id` and `retry` of its own block, where a
-browser keeps the last `id` for later events and takes `retry` as its time to reconnect.
+browser keeps the last `id` for later events and takes `retry` as its time to reconnect, and it
+takes a `retry` of at most eighteen digits, where a browser takes any.
 -/
 
 @[expose] public section
@@ -94,8 +95,6 @@ structure Reader where
   id : Option String := none
   retry : Option Nat := none
 
-def digits? (value : List Char) : Option Nat :=
-  if !value.isEmpty && value.all Char.isDigit then some (Nat.ofDigitChars 10 value 0) else none
 
 /-- A line that is not blank: a comment, or a field and its value, the one blank after the
 colon left out. -/
@@ -111,7 +110,7 @@ def Reader.field (r : Reader) (line : List Char) : Reader :=
     | "data" => { r with data := if r.hasData then r.data ++ '\n' :: value else value, hasData := true }
     | "event" => { r with event := some (String.ofList value) }
     | "id" => if value.contains '\x00' then r else { r with id := some (String.ofList value) }
-    | "retry" => match digits? value with
+    | "retry" => match decimal? (String.ofList value) with
       | some n => { r with retry := some n }
       | none => r
     | _ => r
