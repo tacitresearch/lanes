@@ -41,5 +41,5 @@ def main (args : List String) : IO UInt32 := do
     (some (saving config))).block
   IO.println s!"rookery listening on http://127.0.0.1:{server.port.getD 0}"
   (← IO.getStdout).flush
-  Lanes.block server.wait
+  Lanes.block (server.stopOnSignal 10000)
   return 0

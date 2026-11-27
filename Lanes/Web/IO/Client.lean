@@ -40,7 +40,14 @@ structure Call where
   port : UInt16
   request : Request
   scheme : Scheme := .http
+  /-- Sent as `HEAD`, whatever the request's method, and the answer read without a body. -/
+  headOnly : Bool := false
   deriving DecidableEq, Repr, Hashable
+
+/-- What the `Host` header names: the host, and the port when it is not the scheme's. -/
+def Call.authority (call : Call) : String :=
+  if call.port == (if call.scheme == .https then 443 else 80) then call.host
+  else call.host ++ ":" ++ toString call.port
 
 /-- A call to the origin `url` names, `http://host[:port]` or `https://host[:port]` with at most a
 `/` after it, the port the scheme's when it gives none; the request carries the path. -/
@@ -90,14 +97,14 @@ structure Config where
   trust : Tls.Trust := .system
 
 private def converse (socket : TCP.Socket.Client) (address : Std.Net.SocketAddress)
-    (request : ByteArray) (config : Config) : Async (Option Response) := do
+    (request : ByteArray) (read : ByteArray → Bool → Reading Response) : Async (Option Response) := do
   socket.connect address
   socket.send request
   let mut received := ByteArray.empty
   repeat
     let arrived ← socket.recv? 65536
     received := received ++ arrived.getD .empty
-    if let .done answer := Response.read config.maxResponseBytes received arrived.isNone then
+    if let .done answer := read received arrived.isNone then
       return answer
   return none
 
@@ -105,7 +112,8 @@ private def converse (socket : TCP.Socket.Client) (address : Std.Net.SocketAddre
 the server's `close_notify` ends the response: a connection that ends without it may have been
 cut by an attacker, so a response framed by its end is then no answer. -/
 private def converseTls (socket : TCP.Socket.Client) (address : Std.Net.SocketAddress)
-    (request : ByteArray) (session : Tls.Session) (config : Config) : Async (Option Response) := do
+    (request : ByteArray) (session : Tls.Session) (read : ByteArray → Bool → Reading Response) :
+    Async (Option Response) := do
   socket.connect address
   let flush : Async Unit := do
     let out ← session.take
@@ -124,7 +132,7 @@ private def converseTls (socket : TCP.Socket.Client) (address : Std.Net.SocketAd
     if let some bytes := arrived then session.feed bytes
     received := received ++ (← session.readAll)
     flush
-    if let .done answer := Response.read config.maxResponseBytes received (← session.closed) then
+    if let .done answer := read received (← session.closed) then
       try session.shutdown; flush catch _ => pure ()
       return answer
     if arrived.isNone then return none
@@ -142,15 +150,18 @@ connection or handshake refused, with OpenSSL's reason, no whole answer, or the 
 `Async.race` leaves the loser running, so the socket is closed whoever wins: that fails what a
 call given up on still waits for, and ends its task. -/
 def exchangeExplained (call : Call) (config : Config) : Async (Except String Response) := do
-  let some request := call.request.wire call.host | return .error "the request cannot be written"
+  let wire := if call.headOnly then call.request.wireHead else call.request.wire
+  let some request := wire call.authority | return .error "the request cannot be written"
+  let read := if call.headOnly then Response.readHead config.maxResponseBytes
+    else Response.read config.maxResponseBytes
   let socket ← TCP.Socket.Client.mk
   let attempt : Async (Except String Response) := do
     try
       let some address ← resolve call | return .error s!"no IPv4 address for {call.host}"
       let answer ← match call.scheme with
-        | .http => converse socket address request config
+        | .http => converse socket address request read
         | .https =>
-          converseTls socket address request (← Tls.Session.start config.trust call.host) config
+          converseTls socket address request (← Tls.Session.start config.trust call.host) read
       return answer.elim (.error "the connection ended without a whole answer") .ok
     catch e => pure (.error (toString e))
   let patience := (fun _ => (.error "no answer by the deadline" : Except String Response)) <$>

@@ -10,6 +10,13 @@ import Lanes.Semantics
 /-- info: 'Lanes.Bytes.unhex?_hex' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Bytes.unhex?_hex
 
+-- Lanes.Lib.Crypto.PublicKey
+/-- info: 'Lanes.Bytes.size_ofNat' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Bytes.size_ofNat
+
+/-- info: 'Lanes.Rsa.powMod_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Rsa.powMod_eq
+
 -- Lanes.Lib.Encoding.Base64
 /-- info: 'Lanes.Base64.decode_eq_some_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Base64.decode_eq_some_iff
@@ -216,6 +223,12 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Ip.Prefix.contains_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Ip.Prefix.contains_iff
+
+/-- info: 'Lanes.Ip.isLoopback_v4' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Ip.isLoopback_v4
+
+/-- info: 'Lanes.Ip.isLoopback_v6' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Ip.isLoopback_v6
 
 /-- info: 'Lanes.Ip.Prefix.masked_masked' depends on axioms: [propext] -/
 #guard_msgs in #print axioms Lanes.Ip.Prefix.masked_masked

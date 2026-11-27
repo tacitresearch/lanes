@@ -16,7 +16,8 @@ The HTTP server adapter: the IO around the gate and the connections. It accepts 
 `Std.Net`, tells each one's `Conn` what happened and does what it answers: it reads the socket
 when the connection wants bytes, hands each request it reads to a system that has the gate in
 it, writes the responses it is given and closes. A request is prepared as the bridge says
-(`Bridge.prepare`) and given an id no other request has before it enters the system. What the
+(`Bridge.prepare`) and given an id no other request has before it enters the system; before
+that, work it needs in IO is done by `arrive`, if it is given, on a task of its own. What the
 bytes are as requests, in what order responses go out, when to answer `100 Continue`, when a
 client has taken too long and when to close are `Conn.step`'s decisions; which requests are
 waiting, when one times out and when the system is too busy are the gate's. Neither is this
@@ -375,6 +376,13 @@ private def awaitConnections {system : System τ} [Hashable τ.Id] (server : Ser
   for (_, c) in ← server.connections.atomically (return (← get).alive.toList) do
     discard <| await c.line.ended.result?
 
+/-- The address a connection comes from, if the socket tells it. -/
+private def peerOf (socket : TCP.Socket.Client) : BaseIO (Option Ip.Addr) := do
+  match ← socket.getPeerName.toBaseIO with
+  | .ok (.v4 a) => return some (.v4 (.ofNat _ (a.addr.octets.foldl (· * 256 + ·.toNat) 0)))
+  | .ok (.v6 a) => return some (.v6 (.ofNat _ (a.addr.segments.foldl (· * 65536 + ·.toNat) 0)))
+  | .error _ => return none
+
 /-- Every `tick_ms`, tell each connection whose alarm has passed, until the server is down. -/
 private def ticker {system : System τ} [Hashable τ.Id] (server : Server system) (tick_ms : Nat) :
     IO Unit := do
@@ -402,7 +410,8 @@ journal is cut.
 private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig)
     (runtimeConfig : Runtime.Config) (log : Option (Journal.Log system))
     (prepare : Request → Request) (enter : ReqId × Request → τ.In)
-    (onOutput : τ.Out → (ReqId × Response) ⊕ Async Unit) :
+    (onOutput : τ.Out → (ReqId × Response) ⊕ Async Unit)
+    (arrive : Option (Request → IO (Except Response Request))) :
     Async (Server system) := do
   let some addr := Std.Net.IPv4Addr.ofString config.host
     | throw (IO.userError s!"lanes: {config.host} is not an IPv4 address")
@@ -432,8 +441,7 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
   let server : Server system := {
     runtime, listener, waiting, connections := ← Mutex.new {}, down
     localPort := (← listener.getSockName).port, lanes, ops }
-  let submitStream (request : Request) (answer : Response → BaseIO Unit) :
-      BaseIO (Option ReqId) := do
+  let hand (request : Request) (answer : Response → BaseIO Unit) : BaseIO (Option ReqId) := do
     let request := prepare request
     let admitted ← waiting.atomically do
       let id ← modifyGet (·.wait answer)
@@ -442,14 +450,22 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
       return none
     if admitted.isNone then answer busy
     return admitted
+  let arrived (request : Request) (answer : Response → BaseIO Unit) : BaseIO Unit :=
+    match arrive with
+    | none => discard <| hand request answer
+    | some work => discard <| IO.asTask (prio := .dedicated) do
+      match ← (work request).toBaseIO with
+      | .ok (.ok request) => discard <| hand request answer
+      | .ok (.error response) => answer response
+      | .error _ => answer (.text "the request could not be prepared\n" 500)
   let probe : BaseIO Ops.Probe := do
     let count ← server.connections.atomically (return (← get).count)
     return { recovered := ← runtime.hasRecovered, stopping := count.stopping
              connections := count.count, inbox := ← runtime.depth
              inflight := ← waiting.atomically (return (← get).waiters.size) }
-  let submit := ops.front probe fun request answer => discard <| submitStream request answer
   let adopt (socket : TCP.Socket.Client) : Async Unit := do
     try socket.noDelay catch _ => pure ()
+    let front := ops.front probe (← if config.ops.active then peerOf socket else pure none) arrived
     let next ← server.connections.atomically (return (← get).next)
     let line : Line := {
       socket, box := ← Mutex.new {}, loop := ← IO.mkRef { conn := { since_ms := ← IO.monoMsNow } }
@@ -460,7 +476,7 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
       if !admitted then return none
       let id := c.next
       let ctx : Ctx := {
-        config, submit, submitStream
+        config, submit := front, submitStream := hand
         leave := server.connections.atomically do
           modify fun c => { c with count := c.count.leave, alive := c.alive.erase id } }
       set { c with count, alive := c.alive.insert id { line, tell := tell ctx line false },
@@ -490,19 +506,21 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
 /-- `serve` on a journal that is already open. -/
 def serveWith (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : ServerConfig := {})
     (runtimeConfig : Runtime.Config := {})
-    (log : Option (Journal.Log (served sys bridge config.gate))) :
+    (log : Option (Journal.Log (served sys bridge config.gate)))
+    (arrive : Option (Request → IO (Except Response Request)) := none) :
     Async (Server (served sys bridge config.gate)) :=
-  serveOn (served sys bridge config.gate) config runtimeConfig log bridge.prepare id .inl
+  serveOn (served sys bridge config.gate) config runtimeConfig log bridge.prepare id .inl arrive
 
 /-- Serve `sys` behind a gate it shares the process with other things: an output of `sys` that
 the bridge does not read as a response comes to `onOutput`, and `Server.tryInput` hands `sys`
 an input that is no request. `config.journal` is not used: open `log` yourself. -/
 def serveFronted (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : ServerConfig := {})
     (runtimeConfig : Runtime.Config := {}) (onOutput : σ.Out → Async Unit := fun _ => pure ())
-    (log : Option (Journal.Log (fronted sys bridge config.gate)) := none) :
+    (log : Option (Journal.Log (fronted sys bridge config.gate)) := none)
+    (arrive : Option (Request → IO (Except Response Request)) := none) :
     Async (Server (fronted sys bridge config.gate)) :=
   serveOn (fronted sys bridge config.gate) config runtimeConfig log bridge.prepare .inl
-    (Sum.map id onOutput)
+    (Sum.map id onOutput) arrive
 
 /-- What `serve` needs to save the kernel and cut the journal: how the system's actors and its
 outputs are written. -/
@@ -519,15 +537,20 @@ def ServerConfig.journalName (config : ServerConfig) : String :=
 
 /-- Returns once the server is listening. Each request is answered exactly once by the gate.
 With a journal and `saving`, the kernel is saved from time to time and the journal cut
-(`Runtime.Config.snapshotEvery`); with a journal alone, the journal only grows. -/
+(`Runtime.Config.snapshotEvery`); with a journal alone, the journal only grows. `arrive` is work
+a request needs in IO before it is prepared, done on a task of its own: what it returns enters as
+the request, or is the answer and nothing enters. The sign-in (`SignIn.arrive`) is such work.
+Requests of one connection may then enter in another order than they were read; their answers
+are still written in that order. -/
 def serve (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : ServerConfig := {})
-    (runtimeConfig : Runtime.Config := {}) (saving : Option (Saving sys) := none) :
+    (runtimeConfig : Runtime.Config := {}) (saving : Option (Saving sys) := none)
+    (arrive : Option (Request → IO (Except Response Request)) := none) :
     Async (Server (served sys bridge config.gate)) := do
   let log ← config.journal.mapM fun path =>
     Journal.Store.open (sys := served sys bridge config.gate)
       { path, input := Codec.pair Codec.nat Request.codec, system := config.journalName
         actors := saving.map fun s => servedActors s.actors s.out bridge config.gate }
-  try serveWith sys bridge config runtimeConfig log
+  try serveWith sys bridge config runtimeConfig log arrive
   catch e =>
     if let some log := log then discard log.close.toBaseIO
     throw e
@@ -566,6 +589,33 @@ def trace (server : Server system) : BaseIO (Array (Event τ)) :=
 def wait (server : Server system) : Async Unit := do
   discard <| await server.down.result?
   if let some e ← server.runtime.ended then throw e
+
+/-- Wait as `wait` does, and on SIGTERM or SIGINT stop without dropping the requests in flight:
+readiness answers `503` (`drain`) while the shard's answers to the requests it has taken go out,
+for at most `drain_ms`, then `stop`. Returns then, so a `main` that ends here exits with status
+0. A second signal ends the process at once, as the first would without this. `listening` runs
+once the signals are caught. -/
+def stopOnSignal (server : Server system) (drain_ms : Nat) (listening : IO Unit := pure ()) :
+    Async Unit := do
+  let signals ← [Signal.sigterm, .sigint].mapM fun s => Signal.Waiter.mk s false
+  let woken : IO.Promise Bool ← IO.Promise.new
+  for signal in signals do
+    discard <| BaseIO.mapTask (t := ← signal.wait) fun
+      | .ok _ => woken.resolve true
+      | .error _ => pure ()
+  discard <| BaseIO.mapTask (t := server.down.result?) fun _ => woken.resolve false
+  listening
+  let signalled ← await woken.result?
+  for signal in signals do signal.stop
+  unless signalled == some true do return ← server.wait
+  server.drain
+  let deadline := (← IO.monoMsNow) + drain_ms
+  repeat
+    let inFlight ← server.inFlight
+    let now ← IO.monoMsNow
+    if inFlight == 0 || deadline ≤ now then break
+    Async.sleep 10
+  server.stop
 
 /-- Hand the system behind the gate an input that is not a request, such as a parcel from
 another process. `false` if the shard's inbox is full. A request cannot be handed in this way,

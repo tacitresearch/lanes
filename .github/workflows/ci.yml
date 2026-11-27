@@ -115,7 +115,8 @@ jobs:
           lake build
           lake test
 
-  # The small examples, each a package of its own: built with their proofs, and their checks run.
+  # The integrations and the small examples, each a package of its own: built with their proofs,
+  # and their checks run.
   examples:
     needs: [runner, compile]
     runs-on: ${{ fromJSON(needs.runner.outputs.label) }}
@@ -127,11 +128,13 @@ jobs:
       - uses: ./.github/actions/lean
       - name: Build and check each small example
         run: |
-          for example in counter bank bank-web kv-cache election watchdog payments migration todo-db upload; do
-            echo "::group::examples/$example"
-            mkdir -p "examples/$example/.lake"
-            ln -sfn "$GITHUB_WORKSPACE/.lake/packages" "examples/$example/.lake/packages"
-            (cd "examples/$example" && lake build --wfail && lake test)
+          for package in integrations/google integrations/github examples/counter examples/bank \
+              examples/bank-web examples/kv-cache examples/election examples/watchdog \
+              examples/payments examples/migration examples/todo-db examples/sign-in examples/upload; do
+            echo "::group::$package"
+            mkdir -p "$package/.lake"
+            ln -sfn "$GITHUB_WORKSPACE/.lake/packages" "$package/.lake/packages"
+            (cd "$package" && lake build --wfail && lake test)
             echo "::endgroup::"
           done
 

@@ -6,6 +6,26 @@ import Lanes.Semantics
 
 /-! The axiom gate (rule 5.5, see `Tests/Axioms.lean`) for the theorems of `Lanes/Web/`. -/
 
+-- Lanes.Web.Auth.IdToken
+/-- info: 'Lanes.OAuth.IdToken.check_ok_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.OAuth.IdToken.check_ok_iff
+
+/-- info: 'Lanes.OAuth.IdToken.verify_accepted' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.OAuth.IdToken.verify_accepted
+
+-- Lanes.Web.Auth.Jose
+/-- info: 'Lanes.Jose.Alg.parse?_eq_some' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Jose.Alg.parse?_eq_some
+
+/-- info: 'Lanes.Jose.readHeader_alg' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Jose.readHeader_alg
+
+/-- info: 'Lanes.Jose.Compact.read_alg' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Jose.Compact.read_alg
+
+/-- info: 'Lanes.Jose.verify_ok' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Jose.verify_ok
+
 -- Lanes.Web.Auth.Login
 /-- info: 'Lanes.Auth.Attempts.bounded_fail' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Auth.Attempts.bounded_fail
@@ -36,6 +56,37 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Auth.Sessions.live_close' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Auth.Sessions.live_close
+
+-- Lanes.Web.Auth.OAuth
+/-- info: 'Lanes.OAuth.same_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.OAuth.same_iff
+
+/-- info: 'Lanes.OAuth.Pending.length_begin' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Lanes.OAuth.Pending.length_begin
+
+/-- info: 'Lanes.OAuth.Pending.callback_ok' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.OAuth.Pending.callback_ok
+
+/-- info: 'Lanes.OAuth.Pending.callback_removes' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.OAuth.Pending.callback_removes
+
+/-- info: 'Lanes.OAuth.Pending.callback_sublist' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.OAuth.Pending.callback_sublist
+
+/-- info: 'Lanes.OAuth.Pending.accepted_le_issued' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.OAuth.Pending.accepted_le_issued
+
+/-- info: 'Lanes.OAuth.Keys.lookup_fetch' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.OAuth.Keys.lookup_fetch
+
+/-- info: 'Lanes.OAuth.Keys.no_fetch_within' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.OAuth.Keys.no_fetch_within
+
+/-- info: 'Lanes.OAuth.identity?_strip' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.OAuth.identity?_strip
+
+/-- info: 'Lanes.OAuth.identity?_withIdentity' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.OAuth.identity?_withIdentity
 
 -- Lanes.Web.Auth.Token
 /-- info: 'Lanes.Auth.verify_sign' depends on axioms: [propext, Classical.choice, Quot.sound] -/
@@ -269,6 +320,21 @@ import Lanes.Semantics
 /-- info: 'Lanes.Http.Ops.route?_some' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.Ops.route?_some
 
+/-- info: 'Lanes.Http.Ops.allows_eq_true' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Ops.allows_eq_true
+
+/-- info: 'Lanes.Http.Ops.route?_metrics' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Ops.route?_metrics
+
+/-- info: 'Lanes.Http.Ops.route?_metrics_loopback' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Ops.route?_metrics_loopback
+
+/-- info: 'Lanes.Http.Ops.route?_hidden' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Ops.route?_hidden
+
+/-- info: 'Lanes.Http.Ops.route?_peer' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Ops.route?_peer
+
 /-- info: 'Lanes.Http.Ops.answer_ready' depends on axioms: [propext] -/
 #guard_msgs in #print axioms Lanes.Http.Ops.answer_ready
 
@@ -367,6 +433,34 @@ import Lanes.Semantics
 /-- info: 'Lanes.Http.Sse.Event.ofResponse_valid' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.Sse.Event.ofResponse_valid
 
+-- Lanes.Web.Http.SigV4Sound
+/-- info: 'Lanes.SigV4.encode_chunks' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SigV4.encode_chunks
+
+/-- info: 'Lanes.SigV4.decodePath_canonicalPath' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SigV4.decodePath_canonicalPath
+
+/-- info: 'Lanes.SigV4.sortQuery_perm' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SigV4.sortQuery_perm
+
+/-- info: 'Lanes.SigV4.sortQuery_sorted' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SigV4.sortQuery_sorted
+
+/-- info: 'Lanes.SigV4.canonicalQuery_sortQuery' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SigV4.canonicalQuery_sortQuery
+
+/-- info: 'Lanes.SigV4.canonicalHeaders_sorted' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SigV4.canonicalHeaders_sorted
+
+/-- info: 'Lanes.SigV4.mem_canonicalHeaders' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SigV4.mem_canonicalHeaders
+
+/-- info: 'Lanes.SigV4.canonicalHeaders_lower' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SigV4.canonicalHeaders_lower
+
+/-- info: 'Lanes.SigV4.target_sign' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SigV4.target_sign
+
 -- Lanes.Web.Http.Waiting
 /-- info: 'Lanes.Http.Waiting.exec_handed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.Waiting.exec_handed
@@ -398,6 +492,12 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Http.Response.read_ended' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.Response.read_ended
+
+/-- info: 'Lanes.Http.Request.headOnly_plain' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Request.headOnly_plain
+
+/-- info: 'Lanes.Http.Response.readHead_ended' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Response.readHead_ended
 
 -- Lanes.Web.Http.WireSound
 /-- info: 'Lanes.Http.Response.read_more' depends on axioms: [propext, Classical.choice, Quot.sound] -/

@@ -36,9 +36,12 @@ there.
    lost `COMMIT` answers. Appending and retrying a lost commit stores a to-do twice, and the
    checker finds it; the fix inserts under the user's key after reading it, and is proved to send
    nothing else. `lake exe todoLive` runs it on a real server.
-10. `upload`: uploads of any size, handed to the system in pieces and answered with their size
-   and checksum: a request that streams, through the gate a piece at a time.
-11. `raft-kv`, `ledger`, `rookery`: the serious systems below.
+10. `sign-in`: the start of a video site whose members sign in with Google or GitHub. The
+    sign-in is Lanes' and runs before the system, which gets only the identity it verified and
+    gives the member a session.
+11. `upload`: uploads of any size, handed to the system in pieces and answered with their size
+    and checksum: a request that streams, through the gate a piece at a time.
+12. `raft-kv`, `ledger`, `rookery`: the serious systems below.
 
 | Feature | Where to see it |
 | --- | --- |
@@ -57,6 +60,7 @@ there.
 | A journal and snapshots across `kill -9` | `bank-web`, `ledger`, `raft-kv`, `rookery` |
 | A changed state type: an upgrade, a migration and its proof (`Migration`, `Journal.Upgrade`) | `migration` |
 | Sessions, log-in, cookies, tokens | `ledger`, `rookery` |
+| Sign-in with Google or GitHub (OAuth 2.0, OpenID Connect) | `sign-in` |
 | A JSON API and rate limits | `rookery` |
 | Request bodies in pieces, responses in parts, Server-Sent Events | `upload`, `rookery` |
 | Shards in several processes, joined by TCP | `raft-kv` |
@@ -83,7 +87,8 @@ lake exe raftChaos    # a minute of random faults; not part of the tests
 
 and in the same way, in `examples/ledger`, `lake build`, `lake test` and `lake exe ledgerLive`;
 in `examples/rookery`, `lake build`, `lake test` and `lake exe rookeryLive`; and in each small
-one, `lake build` and `lake test` (`bank-web` needs `bank` beside it, which it requires by path;
+one, `lake build` and `lake test` (`bank-web` needs `bank` beside it, which it requires by path,
+and `sign-in` the presets in `integrations/`;
 `upload`'s test drives its front end with no socket, and `lake exe upload 8080` serves it:
 `curl -T file http://127.0.0.1:8080/upload`).
 
