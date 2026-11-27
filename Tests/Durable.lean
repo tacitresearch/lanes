@@ -90,6 +90,40 @@ def saveSurvives (disk : Disk) (history : List (Journal.Entry (sig (Fin 3)))) : 
       (Journal.recover Bank3 history).1.image) mark.size fun done part =>
     if done == 0 && part < mark.size then history else history ++ [.snapshot index]
 
+open Journal (Disk Reading) in
+/-- What a start makes of readings that may fail, of every state dying in a save can leave. -/
+def readingTests (disk : Disk) (save : List Journal.Write) : List (String × Bool) :=
+  let input := Request.codec Codec.fin
+  let failed : Reading := .failed "EIO"
+  let truthful (d : Disk) : List (Reading × Reading) :=
+    [(.bytes d.journal, d.snapshot.elim .absent .bytes)]
+  let faulty (d : Disk) : List (Reading × Reading) :=
+    [(failed, d.snapshot.elim .absent .bytes), (.bytes d.journal, failed), (failed, failed)]
+  /- A start that took a failed read for a file that is not there, as `pathExists` made the
+  start before this one do. -/
+  let lenient : Reading → Reading
+    | .failed _ => .absent
+    | r => r
+  let begun (d : Disk) : Disk :=
+    match d.start (sys := Bank3) input none "bank" true with
+    | .ok found => finish d (d.mend "bank" found.size)
+    | .error _ => d
+  [ ("disk: a start whose read of either file fails refuses, and one whose reads do not loads "
+      ++ "what dying anywhere in a save left",
+      let mark := Journal.encode input ([.snapshot entries.length] : List (Journal.Entry (sig (Fin 3))))
+      (List.range (save.length + 1)).all fun done => (List.range (mark.size + 2)).all fun part =>
+        let left := disk.crash save done part
+        let history := if done == 0 && part < mark.size then entries
+          else entries ++ [.snapshot entries.length]
+        (truthful left).all (fun (j, s) => match Disk.ofReadings j s with
+            | .ok d => loads d history
+            | .error _ => false)
+          && (faulty left).all fun (j, s) => (Disk.ofReadings j s).toOption.isNone),
+    ("disk: a start that took a failed read for no file would begin a journal over every entry",
+      match Disk.ofReadings (lenient failed) (lenient failed) with
+      | .ok d => loads disk entries && loads (begun d) [] && (begun d).journal.size < disk.journal.size
+      | .error _ => false) ]
+
 def diskTests : List (String × Bool) :=
   let input := Request.codec Codec.fin
   let fresh := finish {} (Journal.Disk.mend "bank" {} 0)
@@ -120,7 +154,7 @@ def diskTests : List (String × Bool) :=
     ("disk: nor does dying in the next save, from each state the first can leave",
       [0, 1, 2, 3].all fun done =>
         saveSurvives (finish (disk.crash save done 1000) (Journal.appendWrites input later))
-          (entries ++ [.snapshot entries.length] ++ later)) ]
+          (entries ++ [.snapshot entries.length] ++ later)) ] ++ readingTests disk save
 
 def fileTests : List (String × Bool) :=
   let file := Journal.file (Request.codec Codec.fin) "bank" entries
@@ -309,6 +343,23 @@ def missingTest : Async (List (String × Bool)) := do
       refused absent && !made),
     ("durable: and an empty file, which it leaves empty", refused empty && left.size == 0),
     ("durable: and opens the journal another start began", kept) ]
+
+/-- A journal whose read fails, here because it is a link to itself, is refused and left as it
+was: it is not taken for a journal that is not there, which a start would begin anew. -/
+def unreadableTest : Async (List (String × Bool)) := do
+  let path ← scratch "unreadable"
+  discard <| IO.Process.output { cmd := "ln", args := #["-s", path.toString, path.toString] }
+  let opened ← (store path).open.toBaseIO
+  let refused := match opened with
+    | .ok _ => false
+    | .error e => ((toString e).splitOn "cannot be read").length > 1
+  let left ← path.symlinkMetadata.toBaseIO
+  let still := match left with
+    | .ok m => m.type == .symlink
+    | .error _ => false
+  remove path
+  if (← path.symlinkMetadata.toBaseIO) matches .ok _ then IO.FS.removeFile path
+  return [("durable: a journal that cannot be read is refused, not begun again over", refused && still)]
 
 /-! What the shard does with its journal, on a journal held in memory. -/
 
@@ -699,6 +750,7 @@ def safely (name : String) (test : Async (List (String × Bool))) : IO (List (St
 def tests : IO (List (String × Bool)) := do
   return (← safely "restart" restartTest) ++ (← safely "torn" tornTest)
     ++ (← safely "refusal" refusalTest) ++ (← safely "missing" missingTest)
+    ++ (← safely "unreadable" unreadableTest)
     ++ (← safely "order" orderTest)
     ++ (← safely "rehand" rehandTest) ++ (← safely "overdue" overdueTest)
     ++ (← safely "fail" failTest) ++ (← safely "cut" cutTest) ++ (← safely "count" countTest)
