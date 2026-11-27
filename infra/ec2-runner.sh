@@ -59,6 +59,10 @@ RUNNER_VERSION=${RUNNER_VERSION:-}
 RUNNER_SHA256=${RUNNER_SHA256:-}
 RUNNER_USER=runner
 ELAN_DIR=$BASE/elan
+# elan's release, and the SHA-256 of its archives: an installer from a branch could change.
+ELAN_VERSION=v4.4.0
+ELAN_SHA256_X86_64=0e8250aa2be86c7af929ade68db617af9edc8b9ccf6eaf5ece228250d0d032e2
+ELAN_SHA256_AARCH64=45cde3006f82f98804c94cf2ca4949d117060a5f3cc8afa62f523759947ee21f
 SHARED=$BASE/shared
 API=https://api.github.com
 
@@ -168,8 +172,21 @@ install_elan() {
   mkdir -p "$BASE/runners" "$SHARED" "$ELAN_DIR"
   chown "$RUNNER_USER:" "$SHARED" "$ELAN_DIR"
   if ! [ -x "$ELAN_DIR/bin/elan" ]; then
-    curl -fsSL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -o /tmp/elan-init.sh
-    as_runner sh /tmp/elan-init.sh -y --no-modify-path --default-toolchain none
+    local target sha tmp
+    case "$(uname -m)" in
+      x86_64) target=x86_64-unknown-linux-gnu sha=$ELAN_SHA256_X86_64 ;;
+      aarch64) target=aarch64-unknown-linux-gnu sha=$ELAN_SHA256_AARCH64 ;;
+      *) die "no elan for $(uname -m)" ;;
+    esac
+    tmp=$(mktemp -d)
+    curl -fsSL --retry 5 -o "$tmp/elan.tar.gz" \
+      "https://github.com/leanprover/elan/releases/download/$ELAN_VERSION/elan-$target.tar.gz"
+    echo "$sha  $tmp/elan.tar.gz" | sha256sum -c --status - \
+      || die "elan $ELAN_VERSION for $target does not have the SHA-256 $sha"
+    tar -xzf "$tmp/elan.tar.gz" -C "$tmp"
+    chmod 755 "$tmp" "$tmp/elan-init"
+    as_runner "$tmp/elan-init" -y --no-modify-path --default-toolchain none
+    rm -rf "$tmp"
   fi
 }
 

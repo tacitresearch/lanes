@@ -3,8 +3,8 @@
 Lanes is a framework for verified software in Lean 4: actors with pure step functions, one
 semantics, a proved runtime kernel, a model checker, proofs, and adapters. This file is the rules,
 for agents and for people. `README.md` is the front door, `docs/ARCHITECTURE.md` says how the
-pieces fit and where each is proved, `docs/STATUS.md` what exists, `docs/PLAN.md` what is being
-done now, `docs/ROADMAP.md` the direction, `docs/decisions/` why, `TRUSTED.md` what is trusted.
+pieces fit and where each is proved, `docs/STATUS.md` what exists, `docs/ROADMAP.md` the direction
+and what is being done now, `docs/decisions/` why, `TRUSTED.md` what is trusted.
 
 Rules carry numbers (rule 2.6) because code, decisions and reviews cite them. Never renumber; a
 new rule takes the next free number in its group. Cite a rule in a PR description when it shaped
@@ -355,8 +355,8 @@ Agents do what the docs say, so a stale doc is worse than none. Keep each short 
 
 - Change a doc in the same commit as the code it describes. A doc says what is, not how it came
   to be: history is in git, in `docs/decisions/` and in `docs/history/`.
-- `docs/PLAN.md` holds only the work in progress and why; when a step is done, take it off.
-  `docs/ROADMAP.md` holds the direction, the phases and the standing risks.
+- `docs/ROADMAP.md` holds the direction, the work in progress and why, the phases and the
+  standing risks. When a step in progress is done, take it off.
 - `docs/ARCHITECTURE.md` names the theorem behind each claim; a claim without one says it is
   checked, tested or trusted.
 - Cite files by their repository path in backquotes; `lanes lint` fails on one that does not

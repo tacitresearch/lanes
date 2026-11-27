@@ -110,11 +110,11 @@ API. P1 is common, P2 rare.
 
 | Go package | Class | Where, or why not |
 | --- | --- | --- |
-| `net` | a | `Std.Async.TCP`, `Std.Async.UDP`, `Std.Async.DNS` (libuv's `getaddrinfo`), `Std.Net.Addr`. Lanes uses TCP (`Lanes.Peers`, the HTTP client) and not yet DNS |
+| `net` | a | `Std.Async.TCP`, `Std.Async.UDP`, `Std.Async.DNS` (libuv's `getaddrinfo`), `Std.Net.Addr`. Lanes uses TCP (`Lanes.Peers`, the HTTP client) and DNS (the HTTP client) |
 | `net/netip` | b | P0, built: `Lanes/Lib/Net/Ip.lean` (`Std.Net.Addr` parses and prints with libuv's `inet_pton` and `inet_ntop`, and has no prefixes) |
 | `net/url` | b | P0, built: `Lanes/Lib/Net/Url.lean` (references, resolution, normalization, queries) with `Lanes/Lib/Net/UrlSound.lean`; forms in `Lanes/Web/Http/Basic.lean`. `Std.Http.Data.URI` parses RFC 3986 with no theorems |
 | `net/http` (server) | e | `Lanes.Web.IO.Server` on `Std.Net`, reading requests with `Lanes/Web/Http/ReadRequest.lean` (proved), with the gate (`Lanes/Web/Http/Gate.lean`) deciding; routes `Lanes/Web/Http/Route.lean`; cookies `Lanes/Web/Http/Cookie.lean`; sessions and log-in `Lanes/Web/Auth/` |
-| `net/http` (client) | e | `Lanes.Web.IO.Client` and `Lanes.Web.Http.Wire` (the reader proved). `Std.Http` has no client, only a pure redirect planner (`Std.Http.Protocol.H1.Redirect`). Missing: TLS (c, P0) and names (DNS, P0) |
+| `net/http` (client) | e | `Lanes.Web.IO.Client` and `Lanes.Web.Http.Wire` (the reader proved). `Std.Http` has no client, only a pure redirect planner (`Std.Http.Protocol.H1.Redirect`). TLS from the OpenSSL Lean's toolchain links (c, P0, built: `Lanes/Web/IO/Tls.lean`, D67) and names (DNS, P0, built: a name resolves to its first IPv4 address) |
 | `net/http` (`DetectContentType`) | b | P1, to check an upload is what it claims |
 | `net/http` (streamed responses) | b | P1: server-sent events for live timelines; the server adapter answers once per request today |
 | `net/http/httptest` | e | handlers are pure functions tested directly; adapters are tested against recorded runs (`Lanes.Outside`, `Tests/HttpClient.lean`) |
@@ -269,11 +269,11 @@ Each step depends only on steps above it and on what Lanes has.
 7. **`fsync`**: done (D46), in `native/lanes.c`, used by `Lanes/Durable/IO/Journal.lean`.
 8. **Bound cryptography**: done (D46), from OpenSSL's libcrypto: Argon2id for `Password.digest`,
    `CRYPTO_memcmp` for `Bytes.same`, SHA-256 and HMAC-SHA-256.
-9. **TLS and names in the HTTP client**: OpenSSL 3 `libssl` under `Lanes.Web.IO.Client`,
-   verifying against the system's roots with the host name checked, and `Std.Async.DNS` for
-   names (the client takes IPv4 addresses only today). Needs 3 for scheme, host and port, and 2.
+9. **TLS and names in the HTTP client**: done (D67), with the OpenSSL that Lean's toolchain
+   links, verifying against the system's roots with the host name checked, and `Std.Async.DNS`
+   for names (`Lanes/Web/IO/Client.lean`, `Lanes/Web/IO/Tls.lean`).
 
-What is left of 6 and step 9 can go on parallel branches. The (e) rows that decide and are not
+What is left of 6 can go on a branch of its own. The (e) rows that decide and are not
 yet proved come after: `Lanes.Json`'s round trip (oracles JSONTestSuite and Go `encoding/json`) and the cookie parser (Go
 `http.ParseCookie`, `http.ParseSetCookie`).
 

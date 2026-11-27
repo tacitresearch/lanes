@@ -13,9 +13,9 @@ form tokens, 32 random bytes made at the first start (`videos.secrets` unless gi
 
 From the environment, read once at start (rule 2.5):
 
-- `VIDEOS_URL`: the site's public origin (`http://localhost:<port>` if unset); cookies are
+- `LANES_URL`: the site's public origin (`http://localhost:<port>` if unset); cookies are
   `Secure` when it is `https:`, and each provider's redirect URI is
-  `<VIDEOS_URL>/sign-in/<google|github>/callback`;
+  `<LANES_URL>/sign-in/<google|github>/callback`;
 - `LANES_HOST`, `LANES_IDLE_MS` and `LANES_DRAIN_MS`, as `lanes new` reads them and the
   deployment's unit sets them (`docs/DEPLOY.md`): where to listen (`127.0.0.1` unless set), how
   long an idle connection is kept, and how long SIGTERM waits for the requests in flight;
@@ -29,7 +29,7 @@ From the environment, read once at start (rule 2.5):
   policy makes the store refuse past (2 GiB if unset, at most 5 GiB);
 - `VIDEOS_WORKER_URL`, `VIDEOS_WORKER_SECRET` and `VIDEOS_WORKER_CALLBACK`: the transcode
   worker's origin, where its jobs are posted (`/jobs`); the key the site and the worker sign
-  with, shared with it alone; and where it posts its reports (`<VIDEOS_URL>/transcoded` unless
+  with, shared with it alone; and where it posts its reports (`<LANES_URL>/transcoded` unless
   set);
 - `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`:
   a provider for each pair that is set.
@@ -71,7 +71,7 @@ def main (args : List String) : IO UInt32 := do
   let port := (args[0]? >>= String.toNat?).getD 8080
   let journal := args[1]?.map System.FilePath.mk
   let key ← loadKey ((args[2]?.map System.FilePath.mk).getD "videos.secrets")
-  let origin := ((← IO.getEnv "VIDEOS_URL").filter (!·.isEmpty)).getD s!"http://localhost:{port}"
+  let origin := ((← IO.getEnv "LANES_URL").filter (!·.isEmpty)).getD s!"http://localhost:{port}"
   let ms (name : String) (default : Nat) : IO Nat := do
     let some text ← IO.getEnv name | return default
     let some n := text.toNat? | throw (IO.userError s!"videos: {name} is not a number: {text}")

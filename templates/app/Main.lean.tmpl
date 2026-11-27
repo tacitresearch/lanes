@@ -60,12 +60,15 @@ def saving : Http.Saving (system {}) where
   out := Response.codec
 
 /-- `{{name}} [port] [journal]`. With a journal file the counter survives the process: it is
-replayed through `step` at start, and cut each time the state is saved. Change the number in
-`system` whenever a change to a step function should not be applied to what is already in the
-journal. Where to listen and how to stop come from the environment, so that a deployment sets
-them without a change here: `LANES_HOST`, the address (`127.0.0.1` unless set; `0.0.0.0` behind a
-load balancer), `LANES_IDLE_MS`, how long an idle connection is kept, and `LANES_DRAIN_MS`, how
-long SIGTERM or SIGINT waits for the requests in flight. -/
+replayed through `step` at start, and cut each time the state is saved. `system` is the version
+of the step functions: change its number when a change to a step function should not be applied
+to what is already in the journal, and a journal of the old number is then refused. Where to
+listen and how to stop come from the environment, so that a deployment sets them without a
+change here: `LANES_HOST`, the address (`127.0.0.1` unless set; `0.0.0.0` behind a load
+balancer), `LANES_IDLE_MS`, how long an idle connection is kept, and `LANES_DRAIN_MS`, how long
+SIGTERM or SIGINT waits for the requests in flight. The server answers `/readyz` and `/healthz`,
+which a load balancer asks, `/metrics` to this machine only, and writes an access log to stderr
+(`ServerConfig.ops`). -/
 def main (args : List String) : IO Unit := do
   let port := (args.head? >>= String.toNat?).getD 8080
   let journal := args[1]?.map System.FilePath.mk
@@ -76,7 +79,9 @@ def main (args : List String) : IO Unit := do
   let host := (← IO.getEnv "LANES_HOST").getD "127.0.0.1"
   let config : Http.ServerConfig :=
     { host, port := port.toUInt16, journal, system := "{{name}} 1"
-      idle_ms := ← ms "LANES_IDLE_MS" 10000 }
+      idle_ms := ← ms "LANES_IDLE_MS" 10000
+      ops := { readinessPath := some "/readyz", livenessPath := some "/healthz",
+               metricsPath := some "/metrics", accessLog := .stderr, requestIds := true } }
   let drain_ms ← ms "LANES_DRAIN_MS" 10000
   let server ← (Http.serve (system {}) bridge config {} saving).block
   IO.println s!"{{name}} listening on http://{host}:{server.port.getD 0}"
