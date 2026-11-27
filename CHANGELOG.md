@@ -8,6 +8,12 @@ under Unreleased (`CONTRIBUTING.md`).
 
 ## [Unreleased]
 
+### Added
+
+- A PostgreSQL client in Lean (`Lanes/Lib/Postgres/`): the frontend/backend protocol 3.0 with trust, cleartext, MD5 and SCRAM-SHA-256 authentication, the extended query protocol with parameters in text, errors and transactions, over plain TCP; messages proved to read back as written, a connection as a pure `Pg.Conn.step` proved to answer requests in order and never to report a failed transaction committed, and an IO file that only performs. MD5 and PBKDF2-HMAC-SHA-256 in Lean (`Lanes/Lib/Crypto/`).
+- A transactional store model (`Lanes/Outside/Store/`) at read committed and serializable, with lost `COMMIT` answers, as an `Outside`, and an adapter that runs it on a PostgreSQL table (`Postgres.Store.handler`).
+- `examples/todo-db`: a to-do list in PostgreSQL, where the checker finds the duplicate row that retrying a lost commit makes, and the fix is proved.
+
 ### Changed
 
 - Module paths are reorganised by concern: `Lanes.Actors` is split into `Lanes/Core`, `Lanes/Proof`, `Lanes/Runtime`, `Lanes/Durable`, `Lanes/Net` and `Lanes/Outside`, HTTP, HTML and authentication are under `Lanes/Web`, the standard library under `Lanes/Lib`, and each area's IO in an `IO/` directory; `import Lanes` leaves out the framework's soundness theorems, which a proof imports with `import Lanes.Proofs` (or `Lanes.Semantics`); `Examples/` and `systems/` are one `examples/` directory of Lake packages, `examples/counter` being what `lanes new` writes.

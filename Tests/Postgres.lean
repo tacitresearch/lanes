@@ -3,6 +3,7 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes.Lib.Postgres.Conn
+import Lanes.Lib.Postgres.Table
 
 /-!
 PostgreSQL's client against what a real server sent. `Tests/Postgres/psql-*.txt` are sessions of
@@ -160,7 +161,40 @@ def vectorTests : List (String × Bool) :=
       refusal (Scram.respond "" "p" "abc" "r=abd1,s=AAAA,i=1" 10) == some .nonce
         && refusal (Scram.respond "" "p" "abc" "r=abc,s=AAAA,i=1" 10) == some .nonce
         && refusal (Scram.respond "" "p" "abc" "r=abcd,s=AAAA,i=11" 10) == some .iterations
-        && refusal (Scram.respond "" "p" "abc" "m=x,r=abcd,s=AAAA,i=1" 10) == some .malformed) ]
+        && refusal (Scram.respond "" "p" "abc" "m=x,r=abcd,s=AAAA,i=1" 10) == some .malformed),
+    ("postgres: SCRAM's first message names no user, or escapes its name",
+      Scram.mechanism == "SCRAM-SHA-256" && Scram.first "" "abc" == "n,,n=,r=abc"
+        && Scram.first "a=b,c" "x" == "n,,n=a=3Db=2Cc,r=x"),
+    ("postgres: a table's operations are sent as their SQL",
+      let t : Table := { name := "t" }
+      t.request .serializable .begin == .begin .serializable
+        && t.request .readCommitted .begin == .begin .readCommitted
+        && t.request .serializable (.read 3) == .statement { sql := "SELECT value FROM t WHERE key = $1", params := [some "3"] }
+        && t.request .serializable .scan == .statement { sql := "SELECT key, value FROM t ORDER BY key" }
+        && t.request .serializable (.insert 3 "x") == .statement { sql := "INSERT INTO t (key, value) VALUES ($1, $2)", params := [some "3", some "x"] }
+        && t.request .serializable (.append "x") == .statement { sql := "INSERT INTO t (value) VALUES ($1) RETURNING key", params := [some "x"] }
+        && t.request .serializable (.delete 3) == .statement { sql := "DELETE FROM t WHERE key = $1", params := [some "3"] }
+        && (match t.request .serializable (.write 3 "x") with
+            | .statement st => st.params == [some "3", some "x"] && (st.sql.splitOn "ON CONFLICT").length == 2
+            | _ => false)
+        && t.request .serializable .commit == .commit && t.request .serializable .rollback == .rollback
+        && t.create.sql.startsWith "CREATE TABLE IF NOT EXISTS t "),
+    ("postgres: what a reply to a table's operation means",
+      let rows (r : List (List (Option String))) : Reply := .rows { rows := r }
+      Table.answer (.read 1) (rows []) == .value none
+        && Table.answer (.read 1) (rows [[some "x"]]) == .value (some "x")
+        && Table.answer (.read 1) (rows [[some "x"], [some "y"]]) == .failed
+        && Table.answer .scan (rows [[some "1", some "a"], [some "2", some "b"]]) == .rows [(1, "a"), (2, "b")]
+        && Table.answer .scan (rows [[some "one", some "a"]]) == .failed
+        && Table.answer (.append "a") (rows [[some "9"]]) == .key 9
+        && Table.answer (.insert 1 "a") (.error []) == .failed
+        && Table.answer .commit .committed == .committed && Table.answer .commit .rolledBack == .failed
+        && Table.answer .commit .unknown == .unknown && Table.answer .rollback .rolledBack == .ok
+        && Table.answer .begin (rows []) == .ok && Table.answer (.write 1 "a") (.refused .busy) == .failed
+        && scanRows [[some "1", none]] == none),
+    ("postgres: a transaction is over after commit, rollback, a failure or no answer",
+      Table.over .commit .committed && Table.over .rollback .ok && Table.over (.read 1) .failed
+        && Table.over (.read 1) .unknown && !Table.over (.read 1) (.value none) && !Table.over .begin .ok) ]
 
 /-- This client's session replayed: the server's writes received as they came, and each request
 submitted where the recording has the client send it. What the connection sends, all of it,

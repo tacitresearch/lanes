@@ -26,6 +26,7 @@ proved function tells it to.
 | Shards and the transport | `Lanes/Runtime/{Shard,ShardSound,ShardsSound}.lean`, `Lanes/Net/{Courier,CourierSound}.lean`, `Lanes/Net/IO/{Peers,Node}.lean` | `System.ShardsReachable.unsharded`, `Peers.Courier.written_sublist_sent` |
 | The gate and the HTTP server | `Lanes/Web/Http/{Gate,Front,FrontSound,Waiting,Conn,ConnSound}.lean`, `Lanes/Semantics/Front.lean`, `Lanes/Web/IO/Server.lean` | `Http.served_answered_le_arrived`, `Http.served_pending_answered`, `Http.Waiting.exec_answered`, `Http.Conn.run_writes` |
 | Other adapters | `Lanes/Outside/Basic.lean`, `Lanes/Outside/IO/Clock.lean`, `Lanes/Web/IO/Client.lean`, `Lanes/Web/Http/{Grammar,Wire,WireSound}.lean` | `Response.read_wire`, `Request.fields_framing`; conformance tests |
+| PostgreSQL and the store model | `Lanes/Lib/Postgres/{Bytes,Message,MessageSound,Scram,Conn,ConnSound,Table}.lean`, `Lanes/Lib/Postgres/IO/Client.lean`, `Lanes/Outside/Store/{Basic,Sound}.lean` | `Backend.read_encode`, `Frontend.decode_encode`, `Conn.run_fifo`, `Conn.step_committed`, `Conn.step_query`, `Store.write_skew`, `Store.lost_commit_either`; the IO is trusted, and that the server behaves like the model is a premise |
 | Jobs: work outside a step | `Lanes/Behaviours/Jobs/{Basic,Sound}.lean`, `Lanes/Semantics/Jobs.lean`, `Lanes/Behaviours/Jobs/IO/Pool.lean` | `Jobs.answered_le_handled`, `Jobs.retry_same`, `Jobs.submitted_answered`; the pool is trusted |
 | Web | `Lanes/Web/Http/{Basic,Route,RouteSound,Cookie,CookieSound}.lean`, `Lanes/Web/Html/`, `Lanes/Web/Auth/` | `Html.lex_render`, `Html.safeUrl_scheme`, `Http.dispatch_link`, `Http.parseForm_encodeForm`, `Http.readSetCookie_header`, `Auth.verify_eq_some`, `Auth.checkForm_other` |
 | The checker | `Lanes/Check/`, `Lanes/Semantics/{Monitor,MonitorSound}.lean` | `Check.search_sound`, `Check.system_sound_of_respects`, `Check.refines_traces` |
@@ -195,6 +196,27 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   server writes it as soon as its last byte is there, to stay within its limit and to end
   (`Lanes/Web/Http/WireSound.lean`: `Response.read_wire`, `Response.read_more`; D39).
 - **HTTP server, journal, transport**: above.
+- **PostgreSQL** (`Lanes/Lib/Postgres/`): the frontend/backend protocol 3.0 in Lean, not libpq
+  (`docs/decisions/new-postgres-protocol-in-lean.md`): start-up with trust, cleartext (only when
+  allowed), MD5 or SCRAM-SHA-256; the extended query protocol with parameters, text both ways;
+  errors; transactions; plain TCP. The messages are proved to read back as written
+  (`Backend.read_encode`, `Frontend.decode_encode`) and tested against recorded sessions of
+  `psql` and of this client. A connection is a pure `Pg.Conn.step` (`Lanes/Lib/Postgres/Conn.lean`), as
+  the HTTP server's is: replies answer requests in the order sent (`Conn.run_fifo`), a request is
+  sent only to an open connection and is read by the server as sent (`Conn.step_query`,
+  `Conn.valid_decode`), `committed` is answered only for a `COMMIT` the server committed from a
+  transaction in progress (`Conn.step_committed`), the server is trusted after SCRAM only once
+  it proved it knows the password (`Conn.onMessage_saslFinal`), and a connection that ends
+  answers every request in flight `unknown` (`Conn.step_lost`); model-checked first
+  (`Tests/PostgresConn.lean`). The IO (`Lanes/Lib/Postgres/IO/Client.lean`) only performs.
+- **A transactional store** (`Lanes/Outside/Store/Basic.lean`): what a store may answer at read
+  committed or serializable, as an `Outside` that keeps every database the answers are consistent
+  with, so that a `COMMIT` whose answer is lost has both outcomes, and its effect may appear
+  later. Its litmus runs are theorems (`Lanes/Outside/Store/Sound.lean`: `Store.write_skew`,
+  `Store.lost_update`, `Store.lost_commit_either`, `Store.lost_commit_later`). A table of
+  PostgreSQL runs it (`Lanes/Lib/Postgres/Table.lean`, `Postgres.Store.handler`); that the server
+  behaves like the model at the level chosen is the premise of a theorem proved against it,
+  tested on recorded runs (`Tests/PostgresLive.lean`). `examples/todo-db` is checked against it.
 - **Jobs** (`Lanes/Behaviours/Jobs/Basic.lean`): work that must not run in a
   step, an outbound call or slow pure work, is submitted to the jobs actor under a key the
   requester chooses, beside the system that submits it (`Jobs.attach`). The actor dispatches
