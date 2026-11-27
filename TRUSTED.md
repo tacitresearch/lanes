@@ -228,7 +228,7 @@ in `Lanes/Web/Http/FrontSound.lean` to answer each arrival at most once and in
   that Argon2id makes a password digest slow to guess from, at the cost the application gives
   it. A request signed with Signature Version 4 rests on the same assumption of
   HMAC-SHA-256; that the signature is the one AWS computes is tested against AWS's vectors
-  (`Tests/SigV4.lean`), not proved, and what the canonical request is, is proved
+  (`Tests/SigV4.lean`) and botocore (`oracles/botocore`), not proved, and what the canonical request is, is proved
   (`Lanes/Web/Http/SigV4Sound.lean`).
 - **Identity providers.** What the sign-in accepts is as good as the provider it is configured
   with: that its JWK Set, fetched over TLS from the URL its preset names, holds only its keys,
@@ -247,10 +247,12 @@ in `Lanes/Web/Http/FrontSound.lean` to answer each arrival at most once and in
   system beside the real service only as far as the service does no more than its model
   allows. That is assumed, not proved: what each model assumes of the service is listed in the
   decision on models of external services (`docs/decisions/D65-models-of-external-services.md`),
-  and is to be checked by recording runs of the real service, in its test mode, and testing them
-  with `Outside.allows`. Today the models are tested only against runs written by hand
-  (`Tests/Outside.lean`), and the object store's against a fake S3 (`Tests/S3.lean`), and the email model's against a fake SES
-  (`integrations/aws/Check.lean`). SES takes no idempotency key, so every send is a request
+  and is checked by recording runs of a real or reference implementation of the service and
+  testing them with `Outside.allows` (`oracles/README.md`). The object store's model is checked
+  against runs recorded from moto's S3, the email model against moto's SES, and the store model
+  against PostgreSQL 16 (`oracles/moto/s3.jsonl`, `oracles/moto/ses.jsonl`,
+  `oracles/postgres/store.jsonl`); moto is a reference, not AWS. The payment model, keys and
+  webhooks are tested only against runs written by hand (`Tests/Outside.lean`). SES takes no idempotency key, so every send is a request
   without one, which the model gives an effect of its own. The object store's model (`Lanes/Outside/ObjectStore.lean`) assumes read-after-write, as S3 has promised
   since December 2020 and MinIO gives; a store that is only eventually consistent breaks it. In particular a payment service's idempotency keys expire after 24
   hours, and the model's do not.

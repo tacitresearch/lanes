@@ -129,15 +129,16 @@ def Db.set (db : Db K V) (k : K) : Option V → Db K V
 def Db.apply (db : Db K V) (writes : List (K × Option V)) : Db K V :=
   writes.foldr (fun (k, v) db => db.set k v) db
 
-/-- What a transaction read from the store: one key, or every row. -/
+/-- What a transaction read from the store: one key, or every row but those of the keys it had
+written itself, `own`, which it saw as it wrote them. -/
 inductive Read (K V : Type) where
   | key (key : K) (value : Option V)
-  | all (rows : Db K V)
+  | all (rows : Db K V) (own : List K)
   deriving DecidableEq, Repr, Hashable
 
 def Read.holds (db : Db K V) : Read K V → Bool
   | .key k v => db.get k == v
-  | .all rows => db == rows
+  | .all rows own => db.filter (fun (k, _) => !own.contains k) == rows
 
 structure Txn (K V : Type) where
   id : Nat
@@ -208,7 +209,7 @@ def dropTxn (w : World K V) (id : Nat) : World K V :=
 def stateAt (w : World K V) (p : Nat) : Db K V :=
   (w.history.take p).foldl (fun db t => db.apply t.writes) w.base
 
-def readsAll (t : Txn K V) : Bool := t.reads.any fun | .all _ => true | _ => false
+def readsAll (t : Txn K V) : Bool := t.reads.any fun | .all .. => true | _ => false
 
 /-- Whether `t`, read at `stateAt p`, writes what a transaction after `p` read. -/
 def clashes (t : Txn K V) (later : Txn K V) : Bool :=
@@ -342,7 +343,8 @@ def answer (w : World K V) (r : Request K V) (a : Answer K V) : List (World K V)
         else [w'.setTxn { t with reads := t.reads ++ [.key k v] }]
       | .scan, .rows rows =>
         if !possible then []
-        else [w'.setTxn { t with reads := t.reads ++ [.all (rows.filter fun (k, _) => (t.own k).isNone)] }]
+        else [w'.setTxn { t with reads := t.reads ++
+          [.all (rows.filter fun (k, _) => (t.own k).isNone) (t.writes.map (·.1))] }]
       | .write k v, .ok => [w'.setTxn { t with writes := (k, some v) :: t.writes }]
       | .delete k, .ok => [w'.setTxn { t with writes := (k, none) :: t.writes }]
       | .insert k v, .ok =>

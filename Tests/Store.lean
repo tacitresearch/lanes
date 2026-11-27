@@ -97,11 +97,26 @@ starts. -/
       .sometimes "after a lost commit nothing is read" fun w =>
         (reads w).any (· == (false, none)) ]
 
+/-- A transaction that writes a key, scans, then reads another, as PostgreSQL answered it in a
+run of `oracles/postgres/store.jsonl`: the scan sees its own write over the rows, and the model
+once compared the rows without it to all of the store's, and refused every read after. -/
+def scanAfterWrite (isolation : Store.Isolation) : Bool :=
+  let db : List (Nat × Nat) := [(1, 10), (2, 20)]
+  let start : Store.State Nat Nat := { worlds := [{ db, base := db }] }
+  let ask (id : Nat) (op : Store.Op Nat Nat) (a : Store.Answer Nat Nat) :
+      List (Store.Request Nat Nat ⊕ Store.Reply Nat Nat) := [.inl { id, txn := 1, op }, .inr { id, answer := a }]
+  let run := ask 0 .begin .ok ++ ask 1 (.write 1 11) .ok ++ ask 2 .scan (.rows [(1, 11), (2, 20)])
+    ++ ask 3 (.read 2) (.value (some 20)) ++ ask 4 .commit .committed
+  (start.run (model isolation) run).isSome
+    && (start.run (model isolation) (run.take 6 ++ ask 3 (.read 2) (.value (some 21)))).isNone
+
 def checks : IO (List (String × Bool)) := do
   let rc := check .readCommitted
   let ser := check .serializable
   return [ ("store model: a committed write is read, and a lost commit's may or may not be, at read committed",
       rc.ok && rc.complete),
-    ("store model: and at serializable", ser.ok && ser.complete) ]
+    ("store model: and at serializable", ser.ok && ser.complete),
+    ("store model: a read after a scan that saw the transaction's own write, at both levels",
+      scanAfterWrite .readCommitted && scanAfterWrite .serializable) ]
 
 end Tests.StoreModel

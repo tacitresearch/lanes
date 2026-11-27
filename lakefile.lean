@@ -67,10 +67,16 @@ lean_exe lanesTest where
 lean_exe lanesCheck where
   root := `Tests.CheckMain
 
-/-- Differential tests against Go's standard library; needs `go` (`oracle/`). -/
+/-- The pure oracles (`oracles/README.md`): ours against reference implementations; needs `go` and `python3`. -/
 @[default_target]
 lean_exe lanesOracle where
   root := `Tests.OracleMain
+
+/-- The service oracles (`oracles/README.md`): our clients against real or reference services,
+checked against our models of them; each skipped unless its service is named. -/
+@[default_target]
+lean_exe lanesServiceOracle where
+  root := `Tests.ServiceMain
 
 lean_lib LanesCli where
   globs := #[.submodules `LanesCli]
