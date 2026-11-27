@@ -83,6 +83,9 @@ structure Package where
   shrinks : Bool := true
   /-- How many answers `--record` keeps for `lake test` to replay. -/
   recorded : Nat := 1000
+  /-- The file of the reference's folder they are kept in: another than `answers.jsonl` when two
+  packages share a reference. -/
+  answers : String := "answers.jsonl"
 
 def Package.cases (p : Package) (count seed : Nat) : Array Case :=
   (p.edges ++ Gen.run seed (Gen.list (count - min count p.edges.length) p.case)).toArray.take count
@@ -122,7 +125,7 @@ def Package.judge (p : Package) (c : Case) (go : Answer) : Verdict :=
 
 /-- The answers recorded from the reference, under the repository's root `root`. -/
 def Package.vectorsPath (p : Package) (root : System.FilePath := ".") : System.FilePath :=
-  root / "oracles" / p.reference.dir / "answers.jsonl"
+  root / "oracles" / p.reference.dir / p.answers
 
 def Package.vectors (p : Package) (root : System.FilePath := ".") :
     IO (Except String (Array (Case × Answer))) := do

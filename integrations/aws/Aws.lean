@@ -8,3 +8,5 @@ import Aws.IO.Credentials
 import Aws.Ses
 import Aws.SesSound
 import Aws.IO.Ses
+import Aws.CloudFront
+import Aws.CloudFrontSound
