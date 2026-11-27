@@ -77,4 +77,5 @@ decision without a number.
 - [D61. Models of external systems: classes in Lanes, vendors in integrations](D61-models-of-external-systems.md)
 - [D62. The layout is by concern, and `import Lanes` is the API](D62-the-layout-is-by-concern.md)
 - [D63. The fixtures hold what the tests use, the examples the proofs](D63-fixtures-hold-what-tests-use.md)
+- [D64. Actors step in parallel within a wave, and connections run on threads of the server's own](D64-actors-run-in-parallel.md)
 - [D65. Models of external services: calls that may not answer, keys, webhooks, and things with a lifecycle](D65-models-of-external-services.md)
