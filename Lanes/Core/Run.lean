@@ -547,6 +547,77 @@ theorem nextOnLink_spec {c : SysState sys} {e : Envelope σ} (he : e ∈ c.net) 
 
 end Ahead
 
+/-! A message stays in flight until it is handed over, on a link that does not lose it, to an
+actor that the environment does not crash and that never stops: only a loss, a crash or a stop
+of its receiver takes it out. -/
+
+section Kept
+
+variable {e : Envelope σ}
+
+/-- A step of one actor keeps a message in flight, unless it is to that actor and the step
+stops. -/
+theorem mem_net_settle {c : SysState sys} {i : σ.Id} {r : sys.State i × List (Effect σ i)}
+    (he : e ∈ c.net) (hstop : e.dst = i → r.2.any Effect.isStop = false) :
+    e ∈ (c.settle env i r).net := by
+  rw [settle_eq]
+  split
+  · next h =>
+    have hi : e.dst ≠ i := fun hi => by simp [hstop hi] at h
+    simp [down, he, hi]
+  · exact List.mem_append_left _ he
+
+/-- A step puts in flight what it sends to other actors, even if it stops. -/
+theorem mem_net_settle_of_sends {c : SysState sys} {i : σ.Id}
+    {r : sys.State i × List (Effect σ i)} (he : e ∈ Effect.sends i r.2) (hne : e.dst ≠ i) :
+    e ∈ (c.settle env i r).net := by
+  rw [settle_eq]
+  split
+  · simp [down, he, hne]
+  · exact List.mem_append_right _ he
+
+/-- Every step but one that hands `e` over keeps it in flight, on a link that does not lose it,
+when the environment does not crash its receiver and the receiver never stops. -/
+theorem mem_net_of_step {c c' : SysState sys} {ev : Event σ} (he : e ∈ c.net)
+    (hstep : c.step env ev = some c') (hlossless : (env.link e.src e.dst).lossy = false)
+    (hcrash : env.mayCrash e.dst = false)
+    (hruns : ∀ s msg, ((sys.actor e.dst).step s msg).2.any Effect.isStop = false)
+    (hrecovers : ∀ s, ((sys.actor e.dst).recover s).2.any Effect.isStop = false)
+    (hdeliver : ev ≠ .deliver e) (hdup : ev ≠ .duplicate e) : e ∈ c'.net := by
+  have hhandle (c₀ : SysState sys) (h₀ : e ∈ c₀.net) (j : σ.Id) (msg : σ.Msg j) :
+      e ∈ (c₀.handle env j msg).net :=
+    mem_net_settle h₀ fun h => by subst h; exact hruns _ _
+  cases ev with
+  | input x =>
+    obtain rfl := step_input.mp hstep
+    exact List.mem_append_left _ he
+  | deliver x =>
+    obtain ⟨-, -, rfl⟩ := step_deliver.mp hstep
+    exact hhandle _ ((List.mem_erase_of_ne fun h => hdeliver (by rw [h])).mpr he) _ _
+  | duplicate x =>
+    obtain ⟨-, -, -, rfl⟩ := step_duplicate.mp hstep
+    exact hhandle _ he _ _
+  | drop x =>
+    obtain ⟨hlossy, -, rfl⟩ := step_drop.mp hstep
+    refine (List.mem_erase_of_ne fun h => ?_).mpr he
+    subst h
+    simp [hlossless] at hlossy
+  | timeout i msg =>
+    obtain ⟨-, -, rfl⟩ := step_timeout.mp hstep
+    exact hhandle { c with timers := update c.timers i ((c.timers i).erase msg) } he i msg
+  | output out =>
+    obtain ⟨-, rfl⟩ := step_output.mp hstep
+    exact he
+  | crash i =>
+    obtain ⟨-, hmay, rfl⟩ := step_crash.mp hstep
+    have hi : e.dst ≠ i := fun h => by simp [h ▸ hcrash] at hmay
+    simp [down, he, hi]
+  | start i =>
+    obtain ⟨-, -, rfl⟩ := step_start.mp hstep
+    exact mem_net_settle he fun h => by subst h; exact hrecovers _
+
+end Kept
+
 end SysState
 
 /-- A message from outside in flight is an input the system accepted. -/

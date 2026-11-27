@@ -16,3 +16,6 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.SysState.nextOnLink_spec' depends on axioms: [propext, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.SysState.nextOnLink_spec
+
+/-- info: 'Lanes.SysState.mem_net_of_step' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SysState.mem_net_of_step

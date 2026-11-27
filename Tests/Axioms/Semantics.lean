@@ -65,6 +65,21 @@ import Lanes.Semantics
 /-- info: 'Lanes.System.LeadsTo.filterMapIO' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.LeadsTo.filterMapIO
 
+/-- info: 'Lanes.System.Run.Fair.handled_right' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Run.Fair.handled_right
+
+/-- info: 'Lanes.System.Run.Fair.handled_left' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Run.Fair.handled_left
+
+/-- info: 'Lanes.System.Run.Fair.routed_right' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Run.Fair.routed_right
+
+/-- info: 'Lanes.System.Run.Fair.routed_left' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Run.Fair.routed_left
+
+/-- info: 'Lanes.SysState.step_left_state' depends on axioms: [propext, Classical.choice] -/
+#guard_msgs in #print axioms Lanes.SysState.step_left_state
+
 -- Lanes.Semantics.FairRuns
 /-- info: 'Lanes.System.Run.fairAfter_fair' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Run.fairAfter_fair
@@ -169,6 +184,9 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.System.Run.Fair.delivered' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Run.Fair.delivered
+
+/-- info: 'Lanes.System.Run.Fair.handled' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Run.Fair.handled
 
 /-- info: 'Lanes.System.Run.Impatient.fair' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Run.Impatient.fair
@@ -278,3 +296,6 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Schedule.attach_held_leaves' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Schedule.attach_held_leaves
+
+/-- info: 'Lanes.Schedule.attach_end_handled' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Schedule.attach_end_handled
