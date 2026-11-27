@@ -5,6 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import Tests.Oracle.Base64
 import Tests.Oracle.Ip
 import Tests.Oracle.MediaType
+import Tests.Oracle.RateLimit
 import Tests.Oracle.Time
 import Tests.Oracle.Url
 
@@ -12,9 +13,9 @@ import Tests.Oracle.Url
 
 namespace Tests.Oracle
 
-def packages : List Package := [Base64.package, Ip.package, MediaType.package, Time.package, Url.package]
+def packages : List Package := [Base64.package, Ip.package, MediaType.package, RateLimit.package, Time.package, Url.package]
 
-def unitTests : List (String × Bool) := Base64.tests ++ Ip.tests ++ MediaType.tests ++ Time.tests ++ Url.tests
+def unitTests : List (String × Bool) := Base64.tests ++ Ip.tests ++ MediaType.tests ++ RateLimit.tests ++ Time.tests ++ Url.tests
 
 def replayAll : IO (List (String × Bool)) :=
   return (← packages.mapM Package.replay).flatten

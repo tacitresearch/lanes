@@ -64,6 +64,7 @@ public import Lanes.Data.Ip
 public import Lanes.Data.Json
 public import Lanes.Data.List
 public import Lanes.Data.Quorum
+public import Lanes.Data.RateLimit
 public import Lanes.Data.Sha256
 public import Lanes.Data.Sodium
 public import Lanes.Data.TimeFormat
