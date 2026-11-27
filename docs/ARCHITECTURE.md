@@ -26,6 +26,7 @@ proved function tells it to.
 | Shards and the transport | `Lanes/Runtime/{Shard,ShardSound,ShardsSound}.lean`, `Lanes/Net/{Courier,CourierSound}.lean`, `Lanes/Net/IO/{Peers,Node}.lean` | `System.ShardsReachable.unsharded`, `Peers.Courier.written_sublist_sent` |
 | The gate and the HTTP server | `Lanes/Web/Http/{Gate,Front,FrontSound,Waiting,Conn,ConnSound}.lean`, `Lanes/Semantics/Front.lean`, `Lanes/Web/IO/Server.lean` | `Http.served_answered_le_arrived`, `Http.served_pending_answered`, `Http.Waiting.exec_answered`, `Http.Conn.run_writes` |
 | Other adapters | `Lanes/Outside/Basic.lean`, `Lanes/Outside/IO/Clock.lean`, `Lanes/Web/IO/Client.lean`, `Lanes/Web/Http/{Grammar,Wire,WireSound}.lean` | `Response.read_wire`, `Request.fields_framing`; conformance tests |
+| Models of external services | `Lanes/Outside/{Rpc,Idempotent,Events}.lean`, `Lanes/Outside/Effects/`, `Lanes/Proof/Outputs.lean` | `Idempotent.at_most_once`, `Rpc.answered_le_called`, `Events.deliveries_le`, `System.Emits.outputs`; that a real service conforms is trusted |
 | Jobs: work outside a step | `Lanes/Behaviours/Jobs/{Basic,Sound}.lean`, `Lanes/Semantics/Jobs.lean`, `Lanes/Behaviours/Jobs/IO/Pool.lean` | `Jobs.answered_le_handled`, `Jobs.retry_same`, `Jobs.submitted_answered`; the pool is trusted |
 | Web | `Lanes/Web/Http/{Basic,Route,RouteSound,Cookie,CookieSound}.lean`, `Lanes/Web/Html/`, `Lanes/Web/Auth/` | `Html.lex_render`, `Html.safeUrl_scheme`, `Http.dispatch_link`, `Http.parseForm_encodeForm`, `Http.readSetCookie_header`, `Auth.verify_eq_some`, `Auth.checkForm_other` |
 | The checker | `Lanes/Check/`, `Lanes/Semantics/{Monitor,MonitorSound}.lean` | `Check.search_sound`, `Check.system_sound_of_respects`, `Check.refines_traces` |
@@ -207,6 +208,22 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   server writes it as soon as its last byte is there, to stay within its limit and to end
   (`Lanes/Web/Http/WireSound.lean`: `Response.read_wire`, `Response.read_more`; D39).
 - **HTTP server, journal, transport**: above.
+- **Models of external services** (`Lanes/Outside/`, D61 and the decision on models of external
+  services): what a service a system calls may do, built from three combinators on a model of
+  the service (`Rpc.Server`). `Rpc.outside` answers each call at most once, or `unknown`, or never
+  (`Rpc.answered_le_called`); an `unknown` leaves open whether the request took effect, so a
+  request counts as an effect the service may have had from the moment it is sent.
+  `Idempotent.server` gives a request under a key the effect of the first under that key, a
+  repeat the first's answer or a refusal, and proves that a request always sent under one key
+  has at most one effect in every run the model allows (`Idempotent.at_most_once`).
+  `Events.bounded` delivers events late, out of order and up to `maxDeliveries` times
+  (`Events.deliveries_le`). `Effects` is the class of services that hold things with a lifecycle,
+  made under a key and reported by webhooks, with two instances: payments, with the statuses
+  Stripe documents for a PaymentIntent (`Lanes/Outside/Effects/Payments.lean`), and email
+  (`Lanes/Outside/Effects/Email.lean`). A system's part of a proof is a fact about what its steps
+  emit, lifted to every run by `System.Emits.outputs`; `examples/payments` proves a shop charges
+  each order at most once that way (`Shop.charged_at_most_once`). That a real service does only
+  what its model allows is trusted; no adapter talks to one yet.
 - **Jobs** (`Lanes/Behaviours/Jobs/Basic.lean`): work that must not run in a
   step, an outbound call or slow pure work, is submitted to the jobs actor under a key the
   requester chooses, beside the system that submits it (`Jobs.attach`). The actor dispatches
@@ -308,7 +325,8 @@ would, in the order `examples/README.md` reads them: the counter `lanes new` wri
 (`examples/counter`); the bank (`examples/bank`), also served over HTTP (`examples/bank-web`); a
 key-value store with front ends, whose read cache breaks refinement (`examples/kv-cache`,
 `KV.implements`, `KV.caching_not_implements`); leader election (`examples/election`); a watchdog
-(`examples/watchdog`); `examples/raft-kv`, a replicated key-value store proved to implement the
+(`examples/watchdog`); a shop that charges each order at most once through a model of a payment
+service (`examples/payments`, `Shop.charged_at_most_once`); `examples/raft-kv`, a replicated key-value store proved to implement the
 map it replicates (`RaftKV.implementsMachine`), and `once` of it in every environment with the
 memo in the map (`RaftKV.implementsMachine_once`); `examples/ledger`, a multi-user web ledger;
 and `examples/rookery`, a small social network for bots whose claims are proved of its spec,

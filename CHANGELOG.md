@@ -10,6 +10,8 @@ under Unreleased (`CONTRIBUTING.md`).
 
 ### Added
 
+- Models of external services (`Lanes/Outside/`): `Rpc.outside`, a call answered at most once, `unknown` at its deadline with its effect left open, or never; `Idempotent.server`, idempotency keys, proved to give a request always sent under one key at most one effect in every run the model allows (`Idempotent.at_most_once`); `Events.bounded`, webhooks late, out of order and repeated up to a bound; `Effects`, services that hold things with a lifecycle, and its instances `Payments` (the statuses Stripe documents for a PaymentIntent) and `Email`. `Outside.see`, `Outside.after_induction`, `Outside.after_invariant` and `Outside.after_both` reason about runs a model allows; `System.Emits.outputs` lifts what actors emit to every output of every run.
+- `examples/payments`: a shop that charges each order through the payment model, checked with the classic bug seeded (a retry without the key charges twice) and proved to charge each order at most once (`Shop.charged_at_most_once`).
 - `ServerConfig.ioThreads`: connections owned by dedicated threads, so a connection never changes thread (21–30% more requests a second on the warm machine); and `Runtime.Config.workers`: a batch's actors' steps worked out in parallel, proved equal to the sequential run (`Kernel.runBatchAhead_eq`). Both are off by default.
 
 ### Changed

@@ -206,6 +206,15 @@ in `Lanes/Web/Http/FrontSound.lean` to answer each arrival at most once and in
   messages have one tag (`Auth.verify_sign_other`, `Auth.checkForm_other`); and
   that Argon2id makes a password digest slow to guess from, at the cost the application gives
   it.
+- **Models of external services.** A theorem about a system beside a model of a service
+  (`Lanes/Outside/`: `Rpc`, `Idempotent`, `Events`, `Effects`, `Payments`, `Email`) holds of the
+  system beside the real service only as far as the service does no more than its model
+  allows. That is assumed, not proved: what each model assumes of the service is listed in the
+  decision on models of external services (`docs/decisions/D65-models-of-external-services.md`),
+  and is to be checked by recording runs of the real service, in its test mode, and testing them
+  with `Outside.allows`. Today the models are tested only against runs written by hand
+  (`Tests/Outside.lean`). In particular a payment service's idempotency keys expire after 24
+  hours, and the model's do not.
 
 ## Not trusted
 

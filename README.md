@@ -147,8 +147,9 @@ Early beta: the API will change. What works, area by area, and its known limits 
 
 - TLS, a database, server push and observability;
 - migrations of a journal across changed step functions;
-- models of external systems such as a database or a payment API, which
-  `docs/decisions/D61-models-of-external-systems.md` describes;
+- models of external systems other than an API with idempotency keys and webhooks (payments
+  and email are modelled, `Lanes/Outside/Effects/`), such as a database, which
+  `docs/decisions/D61-models-of-external-systems.md` describes, and adapters to real services;
 - liveness of the applications, and, for rookery, the theorem that joins its claims with its
   refinement into statements about the running system; the HTTP gate is proved for answers,
   not as a refinement.

@@ -17,13 +17,13 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Durable` | 53 | 45 | 2 | 0 | 0 | 5 | 1 |
 | `Lanes/Lib` | 361 | 257 | 5 | 0 | 42 | 48 | 9 |
 | `Lanes/Net` | 37 | 6 | 5 | 0 | 0 | 25 | 1 |
-| `Lanes/Outside` | 10 | 0 | 5 | 2 | 3 | 0 | 0 |
-| `Lanes/Proof` | 34 | 12 | 0 | 0 | 0 | 21 | 1 |
+| `Lanes/Outside` | 72 | 53 | 5 | 4 | 1 | 9 | 0 |
+| `Lanes/Proof` | 35 | 12 | 0 | 0 | 0 | 22 | 1 |
 | `Lanes/Runtime` | 156 | 93 | 18 | 0 | 15 | 30 | 0 |
 | `Lanes/Semantics` | 57 | 9 | 0 | 0 | 0 | 47 | 1 |
 | `Lanes/Web` | 315 | 188 | 14 | 8 | 64 | 39 | 2 |
 | `LanesCli` | 110 | 0 | 0 | 0 | 46 | 0 | 64 |
-| All | 1441 | 782 | 54 | 74 | 172 | 242 | 117 |
+| All | 1504 | 835 | 54 | 76 | 170 | 252 | 117 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -178,7 +178,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Check.Property.holds` | proved | `Check.refines_sound`, `Check.refines_traces`, `Check.system_sound` and 1 more |
 | `Check.Trace.last` | proved | `Check.search_deadlock`, `Check.search_reached`, `Check.search_violated` and 2 more |
 | `Check.Trace.labels` | proved | `Check.system_violated` |
-| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 15 more |
+| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 16 more |
 | `Check.Path.last` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
 | `Check.Path.toTraceAux` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
 | `Check.Path.toTrace` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
@@ -362,7 +362,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Envelope.sameLink` | none |  |
 | `Link.reliable` | proved | through `EnvModel.link`, `EnvModel.lossy` and 1 more: `Account.implements`, `Account.implements_timed` and 20 more |
 | `Link.network` | checked | `Tests/Bank.lean`, `Tests/Election.lean`, `Tests/Join.lean` and 1 more |
-| `Link.unordered` | checked | `Tests/Election.lean`, `Tests/Jobs.lean` |
+| `Link.unordered` | checked | `Tests/Election.lean`, `Tests/Jobs.lean`, `Tests/Outside.lean` |
 | `EnvModel.reliable` | spec | used only in statements |
 | `EnvModel.distributed` | none |  |
 
@@ -370,21 +370,21 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `update` | proved | through `SysState.down`, `SysState.init` and 4 more: `Account.implements`, `Account.implements_timed` and 38 more |
+| `update` | proved | through `SysState.down`, `SysState.init` and 4 more: `Account.implements`, `Account.implements_timed` and 39 more |
 | `Event.timed` | spec | used only in statements |
 | `Event.visible` | spec | used only in statements |
 | `SysState.blank` | proved | `System.Inductive.of_monotone`, `System.Monotone.and`, `System.Monotone.and_net` |
-| `SysState.hasMail` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 24 more |
-| `SysState.perform` | proved | through `SysState.init`, `SysState.run` and 3 more: `Account.implements`, `Account.implements_timed` and 37 more |
-| `SysState.performAll` | proved | through `SysState.init`, `SysState.run` and 3 more: `Account.implements`, `Account.implements_timed` and 37 more |
+| `SysState.hasMail` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 25 more |
+| `SysState.perform` | proved | through `SysState.init`, `SysState.run` and 3 more: `Account.implements`, `Account.implements_timed` and 38 more |
+| `SysState.performAll` | proved | through `SysState.init`, `SysState.run` and 3 more: `Account.implements`, `Account.implements_timed` and 38 more |
 | `SysState.down` | proved | `Account.implements`, `Account.implements_timed`, `System.Refines.of_events` and 2 more |
 | `SysState.settle` | proved | `SysState.Loses.settle` |
-| `SysState.handle` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 24 more |
-| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and 2 more: `Account.implements`, `Account.implements_timed` and 36 more |
+| `SysState.handle` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 25 more |
+| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and 2 more: `Account.implements`, `Account.implements_timed` and 37 more |
 | `SysState.deliverable` | proved | `Account.implements`, `Account.implements_timed`, `System.Refines.of_events` and 2 more |
 | `SysState.step` | proved | `Http.Gate.answered_of_leaves`, `Http.Gate.deadline_not_restarted`, `Shards.AtHome.step` and 7 more |
-| `SysState.init` | proved | `Account.implements`, `Account.implements_timed`, `Check.system_violated` and 21 more |
-| `SysState.run` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and 12 more |
+| `SysState.init` | proved | `Account.implements`, `Account.implements_timed`, `Check.system_violated` and 22 more |
+| `SysState.run` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and 13 more |
 | `System.Invariant` | spec | a predicate |
 
 ## `Lanes/Data/Codec.lean`
@@ -1074,10 +1074,74 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Outside.any` | tested | `Tests/Jobs.lean` |
-| `Outside.driver` | checked | `Tests/Clock.lean`, `Tests/HttpClient.lean`, `Tests/Jobs.lean` |
-| `Outside.after` | tested | `Tests/Clock.lean`, `Tests/Fronted.lean`, `Tests/HttpClient.lean` and 2 more |
-| `Outside.allows` | tested | `Tests/Clock.lean`, `Tests/Fronted.lean`, `Tests/HttpClient.lean` and 2 more |
-| `Outside.both` | checked | `Tests/Clock.lean`, `Tests/HttpClient.lean`, `Tests/Jobs.lean` |
+| `Outside.driver` | checked | `Tests/Clock.lean`, `Tests/HttpClient.lean`, `Tests/Jobs.lean` and 1 more |
+| `Outside.see` | proved | through `Outside.after`: `Effects.at_most_once`, `Events.deliveries_le` and 6 more |
+| `Outside.after` | proved | `Effects.at_most_once`, `Events.deliveries_le`, `Idempotent.at_most_once` and 5 more |
+| `Outside.allows` | checked | `Tests/Outside.lean` |
+| `Outside.both` | proved | `Outside.after_both` |
+| `Outside.mine` | spec | used only in statements |
+
+## `Lanes/Outside/Effects/Basic.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Effects.Phase.codec` | proved | its type, `Codec` |
+| `Effects.instCodablePhase` | proved | its type, `Codable` |
+| `Effects.instEnumPhase` | proved | its type, `Enum` |
+| `Effects.Phase.final` | spec | used only in statements |
+| `Effects.Lifecycle.Final` | spec | a predicate |
+| `Effects.Lifecycle.reachable` | proved | through `Effects.outside`: `Effects.at_most_once` |
+| `Effects.Lifecycle.reachable.go` | proved | through `Effects.outside`: `Effects.at_most_once` |
+| `Effects.Lifecycle.reaches` | proved | through `Effects.outside`: `Effects.at_most_once` |
+| `Effects.Lifecycle.seen` | proved | through `Effects.outside`: `Effects.at_most_once` |
+| `Effects.Answer.codec` | proved | its type, `Codec` |
+| `Effects.instCodableAnswer` | proved | its type, `Codable` |
+| `Effects.Answer.isRefused` | proved | through `Effects.outside`: `Effects.at_most_once` |
+| `Effects.Report.codec` | proved | its type, `Codec` |
+| `Effects.instCodableReport` | proved | its type, `Codable` |
+| `Effects.Thing.codec` | proved | its type, `Codec` |
+| `Effects.instCodableThing` | proved | its type, `Codable` |
+| `Effects.ids` | proved | through `Effects.outside`: `Effects.at_most_once` |
+| `Effects.answered` | proved | through `Effects.outside`: `Effects.at_most_once` |
+| `Effects.moved` | proved | through `Effects.outside`: `Effects.at_most_once` |
+| `Effects.reported` | proved | through `Effects.outside`: `Effects.at_most_once` |
+| `Effects.server` | proved | through `Effects.outside`: `Effects.at_most_once` |
+| `Effects.service` | proved | through `Effects.outside`: `Effects.at_most_once` |
+| `Effects.outside` | proved | `Effects.at_most_once` |
+
+## `Lanes/Outside/Effects/Email.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Email.Status.codec` | proved | its type, `Codec` |
+| `Email.instCodableStatus` | proved | its type, `Codable` |
+| `Email.instEnumStatus` | proved | its type, `Enum` |
+| `Email.Status.next` | proved | through `Email.lifecycle`: `Email.final` |
+| `Email.Status.phase` | proved | through `Email.lifecycle`: `Email.final` |
+| `Email.lifecycle` | proved | `Email.final` |
+| `Email.outside` | checked | `Tests/Outside.lean` |
+
+## `Lanes/Outside/Effects/Payments.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Payments.Status.codec` | proved | its type, `Codec` |
+| `Payments.instCodableStatus` | proved | its type, `Codable` |
+| `Payments.instEnumStatus` | proved | its type, `Enum` |
+| `Payments.Status.next` | proved | through `Payments.lifecycle`: `Payments.final` |
+| `Payments.Status.phase` | proved | through `Payments.lifecycle`: `Payments.final` |
+| `Payments.Status.event` | proved | through `Payments.lifecycle`: `Payments.final` |
+| `Payments.lifecycle` | proved | `Payments.final` |
+| `Payments.outside` | checked | `Tests/Outside.lean` |
+
+## `Lanes/Outside/Events.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Events.count` | proved | through `Events.bounded`: `Events.deliveries_le` |
+| `Events.bump` | proved | through `Events.bounded`: `Events.deliveries_le` |
+| `Events.bounded` | proved | `Events.deliveries_le` |
+| `Events.deliveries` | spec | used only in statements |
 
 ## `Lanes/Outside/IO/Clock.lean`
 
@@ -1088,6 +1152,34 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Clock.Wall.start` | trusted | TRUSTED.md: The clock adapter's handler |
 | `Clock.Wall.now` | trusted | TRUSTED.md: The clock adapter's handler |
 | `Clock.handler` | trusted | TRUSTED.md: The clock adapter's handler |
+
+## `Lanes/Outside/Idempotent.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Idempotent.Keyed.codec` | proved | its type, `Codec` |
+| `Idempotent.instCodableKeyed` | proved | its type, `Codable` |
+| `Idempotent.Slot.codec` | proved | its type, `Codec` |
+| `Idempotent.instCodableSlot` | proved | its type, `Codable` |
+| `Idempotent.Route.codec` | proved | its type, `Codec` |
+| `Idempotent.instCodableRoute` | proved | its type, `Codable` |
+| `Idempotent.requests` | spec | used only in statements |
+| `Idempotent.holder` | proved | through `Idempotent.server`: `Idempotent.answer_repeat`, `Idempotent.at_most_once` and 1 more |
+| `Idempotent.server` | proved | `Idempotent.answer_repeat`, `Idempotent.at_most_once`, `Idempotent.keys_nodup` |
+| `Idempotent.Holds` | spec | a predicate |
+
+## `Lanes/Outside/Rpc.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Rpc.Call.codec` | proved | its type, `Codec` |
+| `Rpc.instCodableCall` | proved | its type, `Codable` |
+| `Rpc.Reply.codec` | proved | its type, `Codec` |
+| `Rpc.instCodableReply` | proved | its type, `Codable` |
+| `Rpc.outside` | proved | `Events.deliveries_le`, `Idempotent.at_most_once`, `Idempotent.keys_nodup` and 2 more |
+| `Rpc.Port.reported` | spec | used only in statements |
+| `Rpc.called` | spec | used only in statements |
+| `Rpc.answered` | spec | used only in statements |
 
 ## `Lanes/Proof/Deed.lean`
 
@@ -1159,6 +1251,12 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `SysState.grow` | proved | `Account.Fires.grow`, `Account.Fires.handle`, `Account.Moves.grow` and 12 more |
 | `SysState.Pending` | spec | a predicate |
+
+## `Lanes/Proof/Outputs.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `System.Emits` | spec | a predicate |
 
 ## `Lanes/Proof/Past.lean`
 
