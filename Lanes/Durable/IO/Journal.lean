@@ -6,14 +6,16 @@ module
 
 public import Lanes.Runtime.IO.Shell
 public import Lanes.Durable.Upgrade
+public import Lanes.Durable.Reading
 
 /-!
 The files of a journal. What they mean, which are refused, what a shard writes to them and in
 what order are pure functions with their theorems (`Lanes/Durable/Disk.lean`): whenever the
 process dies, the files it leaves load as the kernel it had. Trusted here: locking, reading the
-two files, and that a write does what `Journal.Disk.apply` and `Journal.Disk.crash` say. That
-is: bytes appended and flushed stay, an append that did not finish leaves some of its first
-bytes and nothing else, and a rename replaces a file at once.
+two files as `Journal.Reading` says (a read that fails is not a file that is not there), and
+that a write does what `Journal.Disk.apply` and `Journal.Disk.crash` say. That is: bytes
+appended and flushed stay, an append that did not finish leaves some of its first bytes and
+nothing else, and a rename replaces a file at once.
 
 Every write that is flushed is also synced to the disk before the next begins (`fsync`, bound in
 `native/lanes.c`): an append, a file written beside its target before it is renamed, and the
@@ -76,8 +78,13 @@ opaque fsync (path : @& String) : IO Unit
 private def syncDir (path : System.FilePath) : IO Unit :=
   fsync ((path.parent.getD ".").toString)
 
-private def read? (path : System.FilePath) : IO (Option ByteArray) := do
-  if ← path.pathExists then some <$> IO.FS.readBinFile path else pure none
+/-- Only "no such file" is a file not there: any other error is a failure, which the start
+refuses (`Disk.ofReadings`). -/
+private def reading (path : System.FilePath) : IO Reading := do
+  match ← (IO.FS.readBinFile path).toBaseIO with
+  | .ok bytes => return .bytes bytes
+  | .error (.noFileOrDirectory ..) => return .absent
+  | .error e => return .failed s!"{path} cannot be read: {e}"
 
 private def replace (path : System.FilePath) (bytes : ByteArray) : IO Unit := do
   let scratch := path.addExtension "tmp"
@@ -119,8 +126,10 @@ def Store.open {sys : System σ} [Hashable σ.Id] (store : Store sys) : IO (Log 
   unless ← lock.tryLock do
     throw (IO.userError s!"lanes: the journal {store.path} is in use by another process")
   try
-    let disk : Disk := { journal := (← read? store.path).getD .empty
-                         snapshot := ← read? (store.path.addExtension "snapshot") }
+    let disk ← match Disk.ofReadings (← reading store.path)
+        (← reading (store.path.addExtension "snapshot")) with
+      | .ok disk => pure disk
+      | .error why => throw (IO.userError s!"lanes: the journal {store.path} is refused: {why}")
     let begun ← match disk.begin store.input store.actors system store.create store.upgrades with
       | .ok begun => pure begun
       | .error refusal =>
