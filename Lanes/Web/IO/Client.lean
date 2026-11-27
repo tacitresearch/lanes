@@ -7,7 +7,7 @@ module
 public import Std.Async
 public import Lanes.Runtime.IO.Shell
 public import Lanes.Outside.Basic
-public import Lanes.Web.Http.Wire
+public import Lanes.Web.Http.Sse
 public import Lanes.Web.IO.Tls
 public import Lanes.Lib.Net.Url
 
@@ -172,6 +172,33 @@ def exchangeExplained (call : Call) (config : Config) : Async (Except String Res
 /-- Make one call: its response, or `none` if there is none by the deadline. -/
 def exchange (call : Call) (config : Config) : Async (Option Response) :=
   (·.toOption) <$> exchangeExplained call config
+
+/-- One request to a server on this machine, for tests: its response, or an error that says why
+there is none. -/
+def fetch (port : UInt16) (request : Request) (config : Config := {}) (host := "127.0.0.1") :
+    IO Response := do
+  match ← (exchangeExplained { host, port, request } config).block with
+  | .ok response => return response
+  | .error why => throw (IO.userError s!"lanes: no response from {host}:{port} to {request.target}: {why}")
+
+/-- A stream of events from a server on this machine, for tests: the events read once `enough`
+holds of them, or when the server ends the stream, or at the deadline. -/
+def events (port : UInt16) (request : Request) (enough : List Sse.Event → Bool)
+    (timeout_ms : Nat := 5000) (host := "127.0.0.1") : IO (List Sse.Event) := do
+  let some addr := Std.Net.IPv4Addr.ofString host | return []
+  let some bytes := request.wire host | return []
+  let socket ← TCP.Socket.Client.mk
+  let received ← IO.mkRef ByteArray.empty
+  let read : Async Unit := do
+    socket.connect (.v4 ⟨addr, port⟩)
+    socket.send bytes
+    repeat
+      let some more ← socket.recv? 65536 | break
+      received.modify (· ++ more)
+      if enough (Sse.received (← received.get)) then break
+  try (Async.race (try read catch _ => pure ()) (Async.sleep (.ofNat timeout_ms))).block
+  finally discard socket.close.toBaseIO
+  return Sse.received (← received.get)
 
 /-- Makes the call on a task of its own, so the shard does not wait for the network, and hands
 the answer back as an input. An answer that finds the inbox full is dropped. -/
