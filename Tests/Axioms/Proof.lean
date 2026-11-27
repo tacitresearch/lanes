@@ -56,6 +56,9 @@ import Lanes.Semantics
 /-- info: 'Lanes.System.Reachable.actor' depends on axioms: [propext, Classical.choice] -/
 #guard_msgs in #print axioms Lanes.System.Reachable.actor
 
+/-- info: 'Lanes.System.invariant_of_actor' depends on axioms: [propext, Classical.choice] -/
+#guard_msgs in #print axioms Lanes.System.invariant_of_actor
+
 -- Lanes.Proof.Loses
 /-- info: 'Lanes.SysState.Loses.settle' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.SysState.Loses.settle
@@ -80,6 +83,9 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.System.Monotone.and' depends on axioms: [propext, Classical.choice] -/
 #guard_msgs in #print axioms Lanes.System.Monotone.and
+
+/-- info: 'Lanes.System.Monotone.and_net' depends on axioms: [propext, Classical.choice] -/
+#guard_msgs in #print axioms Lanes.System.Monotone.and_net
 
 /-- info: 'Lanes.System.Monotone.timers' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Monotone.timers
