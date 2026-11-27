@@ -48,8 +48,10 @@ public import Lanes.Lib.Net.Ip
 public import Lanes.Lib.Net.Url
 public import Lanes.Lib.Postgres.Bytes
 public import Lanes.Lib.Postgres.Conn
+public import Lanes.Lib.Postgres.IO.Client
 public import Lanes.Lib.Postgres.Message
 public import Lanes.Lib.Postgres.Scram
+public import Lanes.Lib.Postgres.Table
 public import Lanes.Lib.RateLimit
 public import Lanes.Lib.Time.Civil
 public import Lanes.Lib.Time.Format
@@ -57,6 +59,7 @@ public import Lanes.Net.IO.Node
 public import Lanes.Net.IO.Peers
 public import Lanes.Outside.Basic
 public import Lanes.Outside.IO.Clock
+public import Lanes.Outside.Store.Basic
 public import Lanes.Proof.Deed
 public import Lanes.Proof.Equiv
 public import Lanes.Proof.Ghost

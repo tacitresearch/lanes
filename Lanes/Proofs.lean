@@ -16,6 +16,7 @@ public import Lanes.Lib.Net.UrlSound
 public import Lanes.Lib.Postgres.ConnSound
 public import Lanes.Lib.Postgres.MessageSound
 public import Lanes.Net.CourierSound
+public import Lanes.Outside.Store.Sound
 public import Lanes.Proof.JoinSound
 public import Lanes.Proof.MapIOSound
 public import Lanes.Runtime.KernelSound

@@ -162,10 +162,39 @@ def vectorTests : List (String × Bool) :=
         && refusal (Scram.respond "" "p" "abc" "r=abcd,s=AAAA,i=11" 10) == some .iterations
         && refusal (Scram.respond "" "p" "abc" "m=x,r=abcd,s=AAAA,i=1" 10) == some .malformed) ]
 
+/-- This client's session replayed: the server's writes received as they came, and each request
+submitted where the recording has the client send it. What the connection sends, all of it,
+must be the bytes the recording has the client send. -/
+def replayExact (cfg : Conn.Config) (writes : List (Bool × ByteArray)) (requests : List Request) :
+    Bool :=
+  let sent (actions : List Conn.Action) : ByteArray := actions.foldl (init := .empty) fun acc a =>
+    match a with
+    | .send b | .query _ b => acc ++ b
+    | _ => acc
+  let (c, first) := Conn.start cfg
+  let (_, _, out) := (writes.drop 1).foldl (init := (c, requests, sent first)) fun (c, rs, out) (client, bytes) =>
+    if client then
+      if bytes[0]? == some 112 then (c, rs, out)
+      else if bytes[0]? == some 88 then
+        let (c, actions) := c.step cfg .stop
+        (c, rs, out ++ sent (actions.take 1))
+      else
+        match rs with
+        | r :: rest =>
+          let (c, actions) := c.step cfg (.submit 0 r)
+          (c, rest, out ++ sent actions)
+        | [] => (c, rs, out)
+    else
+      let (c, actions) := c.step cfg (.received bytes)
+      (c, rs, out ++ sent actions)
+  out == writes.foldl (fun acc (client, bytes) => if client then acc ++ bytes else acc) .empty
+
 def recorded (name : String) : IO (List (Bool × ByteArray)) := recording s!"Tests/Postgres/{name}.txt"
 
 def scramConfig (nonce : String) : Conn.Config :=
   { user := "lanes_scram", database := "lanes_test", password := some "scram-pw", nonce }
+
+def scramConfig' (nonce : String) : Conn.Config := { scramConfig nonce with user := "lanes_scram" }
 
 def md5Config : Conn.Config := { user := "lanes_md5", database := "lanes_test", password := some "md5-pw" }
 
@@ -173,7 +202,8 @@ def clearConfig (allow : Bool) : Conn.Config :=
   { user := "lanes_clear", database := "lanes_test", password := some "clear-pw", allowCleartext := allow }
 
 def psqlTests : IO (List (String × Bool)) := do
-  let names := ["psql-trust", "psql-cleartext", "psql-md5", "psql-scram", "psql-scram-wrong"]
+  let names := ["psql-trust", "psql-cleartext", "psql-md5", "psql-scram", "psql-scram-wrong",
+    "lanes-trust", "lanes-md5", "lanes-scram", "lanes-scram-wrong"]
   let mut results := []
   for name in names do
     let writes ← recorded name
@@ -206,7 +236,23 @@ def psqlTests : IO (List (String × Bool)) := do
   let md5Replay := replay md5Config (← recorded "psql-md5")
   let cleartext ← recorded "psql-cleartext"
   let clearReplay (allow : Bool) := replay (clearConfig allow) cleartext
+  let lanesNonce (name : String) : IO String := do
+    let ms := (decodeAll (← recorded name)).getD []
+    return match frontends ms with
+      | _ :: .saslInitial _ data :: _ => nonceOf data
+      | _ => ""
+  let who := Request.statement { sql := "SELECT current_user" }
+  let lanesTrust := replayExact { user := "lanes_trust", database := "lanes_test" } (← recorded "lanes-trust")
+    [.statement { sql := "SELECT $1::text AS a, NULL::int AS b, 'é' AS c", params := [some "x"] },
+     .statement { sql := "SELECT 1 / 0" }, .begin .readCommitted, .statement { sql := "SELECT 1 / 0" },
+     .commit]
+  let lanesScram := replayExact (scramConfig' (← lanesNonce "lanes-scram")) (← recorded "lanes-scram") [who]
+  let lanesMd5 := replayExact md5Config (← recorded "lanes-md5") [who]
+  let lanesWrong := replayExact { scramConfig' (← lanesNonce "lanes-scram-wrong") with password := some "wrong" }
+    (← recorded "lanes-scram-wrong") []
   return results ++ [
+    ("postgres: this client's recorded sessions replayed send exactly the bytes recorded",
+      lanesTrust && lanesScram && lanesMd5 && lanesWrong),
     ("postgres: the MD5 answer is libpq's", md5Right),
     ("postgres: the SCRAM answer is libpq's, and the server's signature is verified", scramRight),
     ("postgres: psql's session replayed gives each reply, a failed transaction's COMMIT rolled back",
