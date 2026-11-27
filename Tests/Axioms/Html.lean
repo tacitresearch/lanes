@@ -9,3 +9,38 @@ import Lanes.Semantics
 -- Lanes.Html.Basic
 /-- info: 'Lanes.Html.escape_safe' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Html.escape_safe
+
+-- Lanes.Html.BasicSound
+/-- info: 'Lanes.Html.lex_render' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Html.lex_render
+
+/-- info: 'Lanes.Html.nameChar_safe' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Html.nameChar_safe
+
+/-- info: 'Lanes.Html.mem_safeName' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Html.mem_safeName
+
+/-- info: 'Lanes.Html.render_void' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Html.render_void
+
+/-- info: 'Lanes.Html.safeUrl_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Html.safeUrl_eq
+
+/-- info: 'Lanes.Html.safeUrl_scheme' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Html.safeUrl_scheme
+
+-- Lanes.Html.HtmxSound
+/-- info: 'Lanes.Hx.methodAttr_inj' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Hx.methodAttr_inj
+
+/-- info: 'Lanes.Hx.request_match?' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Hx.request_match?
+
+/-- info: 'Lanes.Hx.mem_eventName' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Hx.mem_eventName
+
+/-- info: 'Lanes.Hx.eventName_plain' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Hx.eventName_plain
+
+/-- info: 'Lanes.Hx.render_plain' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Hx.render_plain

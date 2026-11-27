@@ -11,16 +11,16 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Area | Definitions | proved | trusted | checked | tested | spec | none |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | `Lanes/Actors` | 339 | 166 | 10 | 36 | 19 | 85 | 23 |
-| `Lanes/Auth` | 27 | 7 | 0 | 0 | 16 | 1 | 3 |
+| `Lanes/Auth` | 28 | 19 | 0 | 0 | 7 | 2 | 0 |
 | `Lanes/Behaviours` | 8 | 8 | 0 | 0 | 0 | 0 | 0 |
 | `Lanes/Check` | 91 | 54 | 0 | 25 | 0 | 10 | 2 |
 | `Lanes/Data` | 348 | 233 | 5 | 4 | 44 | 33 | 29 |
 | `Lanes/Env` | 24 | 0 | 24 | 0 | 0 | 0 | 0 |
-| `Lanes/Html` | 42 | 2 | 0 | 0 | 28 | 0 | 12 |
-| `Lanes/Http` | 176 | 99 | 1 | 9 | 35 | 18 | 14 |
+| `Lanes/Html` | 58 | 22 | 0 | 0 | 28 | 8 | 0 |
+| `Lanes/Http` | 181 | 120 | 1 | 8 | 28 | 22 | 2 |
 | `Lanes/Semantics` | 53 | 9 | 0 | 0 | 0 | 43 | 1 |
 | `LanesCli` | 110 | 0 | 0 | 0 | 42 | 0 | 68 |
-| All | 1218 | 578 | 40 | 74 | 184 | 190 | 152 |
+| All | 1240 | 631 | 40 | 73 | 168 | 203 | 125 |
 
 ## `Lanes/Actors/Actor.lean`
 
@@ -536,8 +536,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Auth.instDecidableEqDigest` | proved | its type, `Decidable` |
-| `Auth.instHashableDigest` | none |  |
-| `Auth.instReprDigest` | none |  |
+| `Auth.instHashableDigest` | tested | `Tests/Auth.lean` |
+| `Auth.instReprDigest` | tested | `Tests/Auth.lean` |
 | `Auth.Digest.codec` | proved | its type, `Codec` |
 | `Auth.instCodableDigest` | proved | its type, `Codable` |
 | `Auth.Digest.hex` | tested | `Tests/Auth.lean` |
@@ -546,27 +546,28 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Auth.Password.digest` | tested | `Tests/Auth.lean` |
 | `Auth.Attempts.codec` | proved | its type, `Codec` |
 | `Auth.instCodableAttempts` | proved | its type, `Codable` |
-| `Auth.Attempts.fail` | tested | `Tests/Auth.lean` |
-| `Auth.Attempts.succeed` | tested | `Tests/Auth.lean` |
-| `Auth.Attempts.unlock` | none |  |
+| `Auth.Attempts.fail` | proved | `Auth.Attempts.bounded_fail`, `Auth.Attempts.fail_repeat`, `Auth.Attempts.locked_stays` and 1 more |
+| `Auth.Attempts.succeed` | proved | `Auth.Attempts.bounded_succeed`, `Auth.Attempts.locked_stays` |
+| `Auth.Attempts.unlock` | spec | used only in statements |
 | `Auth.Attempts.Bounded` | spec | a predicate |
 | `Auth.Sessions.codec` | proved | its type, `Codec` |
 | `Auth.instCodableSessions` | proved | its type, `Codable` |
-| `Auth.Sessions.start` | tested | `Tests/Auth.lean` |
-| `Auth.Sessions.close` | tested | `Tests/Auth.lean` |
-| `Auth.Sessions.live` | tested | `Tests/Auth.lean` |
+| `Auth.Sessions.start` | proved | `Auth.Sessions.ids_starts`, `Auth.Sessions.length_start_le`, `Auth.Sessions.live_open` and 1 more |
+| `Auth.Sessions.close` | proved | `Auth.Sessions.live_close` |
+| `Auth.Sessions.live` | proved | `Auth.Sessions.live_close`, `Auth.Sessions.live_open` |
 
 ## `Lanes/Auth/Token.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Hmac.Key.of` | tested | `Tests/Auth.lean` |
-| `Hmac.Key.mac` | tested | `Tests/Auth.lean` |
-| `Auth.tag` | tested | `Tests/Auth.lean` |
-| `Auth.sign` | tested | `Tests/Auth.lean` |
-| `Auth.verify` | tested | `Tests/Auth.lean` |
-| `Auth.formToken` | tested | `Tests/Auth.lean` |
-| `Auth.checkForm` | tested | `Tests/Auth.lean` |
+| `Hmac.Key.mac` | proved | `Auth.checkForm_other`, `Auth.verify_sign_other` |
+| `Auth.message` | proved | `Auth.checkForm_other`, `Auth.message_inj`, `Auth.verify_sign_other` |
+| `Auth.tag` | proved | through `Auth.checkForm`, `Auth.sign`: `Auth.checkForm_formToken`, `Auth.checkForm_iff` and 4 more |
+| `Auth.sign` | proved | `Auth.verify_eq_some`, `Auth.verify_sign`, `Auth.verify_sign_other` |
+| `Auth.verify` | proved | `Auth.verify_eq_some`, `Auth.verify_sign`, `Auth.verify_sign_other` |
+| `Auth.formToken` | proved | `Auth.checkForm_formToken`, `Auth.checkForm_iff`, `Auth.checkForm_other` |
+| `Auth.checkForm` | proved | `Auth.checkForm_formToken`, `Auth.checkForm_iff`, `Auth.checkForm_other` |
 
 ## `Lanes/Behaviours/Once.lean`
 
@@ -1238,18 +1239,26 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Html.empty` | none |  |
-| `Html.instInhabited` | none |  |
-| `Html.escapeChar` | proved | through `Html.escape`: `Html.escape_safe` |
+| `Html.empty` | tested | `Tests/Html.lean` |
+| `Html.instInhabited` | tested | `Tests/Html.lean` |
+| `Html.escapeChar` | proved | through `Html.escape`, `Html.render`: `Html.escape_safe`, `Html.lex_render` and 1 more |
 | `Html.escape` | proved | `Html.escape_safe` |
-| `Html.safeName` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
-| `Html.voidTags` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
-| `Html.urlAttrs` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
-| `Html.blockedUrl` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
-| `Html.safeUrl` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
-| `Html.Attr.render` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
-| `Html.render` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
-| `Html.renderAll` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
+| `Html.nameChar` | proved | `Html.mem_safeName`, `Html.nameChar_safe` |
+| `Html.safeName` | proved | `Html.mem_safeName`, `Html.render_void` |
+| `Html.voidTags` | proved | `Html.render_void` |
+| `Html.rawTextTags` | proved | through `Html.render`, `Html.tokens`: `Html.lex_render`, `Html.render_void` |
+| `Html.urlAttrs` | proved | through `Html.render`, `Html.tokens`: `Html.lex_render`, `Html.render_void` |
+| `Html.allowedSchemes` | proved | `Html.safeUrl_scheme` |
+| `Html.blockedUrl` | proved | `Html.safeUrl_eq`, `Html.safeUrl_scheme` |
+| `Html.urlBlank` | proved | `Html.safeUrl_scheme` |
+| `Html.safeUrl` | proved | `Html.safeUrl_eq`, `Html.safeUrl_scheme` |
+| `Html.Attr.shown` | proved | through `Html.render`, `Html.tokens`: `Html.lex_render`, `Html.render_void` |
+| `Html.Attr.render` | proved | `Html.render_void` |
+| `Html.isTagName` | proved | through `Html.render`, `Html.tokens`: `Html.lex_render`, `Html.render_void` |
+| `Html.startTag` | proved | `Html.render_void` |
+| `Html.endTag` | proved | through `Html.render`: `Html.lex_render`, `Html.render_void` |
+| `Html.render` | proved | `Html.lex_render`, `Html.render_void` |
+| `Html.renderAll` | proved | through `Html.render`: `Html.lex_render`, `Html.render_void` |
 | `Html.classes` | tested | `Tests/Html.lean` |
 | `Html.document` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
 | `instToHtmlHtml` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
@@ -1257,81 +1266,104 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `instToHtmlNat` | tested | `Tests/Html.lean` |
 | `instToHtmlInt` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
 | `instToHtmlList` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
-| `instToHtmlArray` | none |  |
-| `instToHtmlOption` | none |  |
+| `instToHtmlArray` | tested | `Tests/Html.lean` |
+| `instToHtmlOption` | tested | `Tests/Html.lean` |
 | `instToAttrString` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
 | `instToAttrListString` | tested | `Tests/Html.lean` |
 | `instToAttrNat` | tested | `Tests/Html.lean` |
-| `instToAttrInt` | none |  |
+| `instToAttrInt` | tested | `Tests/Html.lean` |
 | `instToAttrBool` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
-| `instToAttrOption` | none |  |
+| `instToAttrOption` | tested | `Tests/Html.lean` |
+
+## `Lanes/Html/BasicSound.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Html.Attr.token` | spec | used only in statements |
+| `Html.tokens` | spec | used only in statements |
+| `Html.tokensAll` | spec | used only in statements |
+| `Html.charRef` | spec | used only in statements |
+| `Html.Lexer.step` | spec | used only in statements |
+| `Html.lex` | spec | used only in statements |
+| `Html.schemeChar` | spec | used only in statements |
+| `Html.scheme?` | spec | used only in statements |
 
 ## `Lanes/Html/Htmx.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Hx.methodAttr` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
-| `Hx.request` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
+| `Hx.methodAttr` | proved | `Hx.methodAttr_inj`, `Hx.request_match?` |
+| `Hx.request` | proved | `Hx.request_match?` |
 | `Hx.target` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
 | `Hx.Swap.name` | tested | `Tests/Html.lean` |
 | `Hx.swap` | tested | `Tests/Html.lean` |
-| `Hx.eventName` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
-| `Hx.Trigger.render` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
+| `Hx.eventName` | proved | `Hx.eventName_plain`, `Hx.mem_eventName` |
+| `Hx.Trigger.render` | proved | `Hx.render_plain` |
 | `Hx.trigger` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
-| `Hx.confirm` | none |  |
-| `Hx.boost` | none |  |
-| `Hx.pushUrl` | none |  |
-| `Hx.indicator` | none |  |
-| `Http.Request.isHtmx` | none |  |
+| `Hx.confirm` | tested | `Tests/Html.lean` |
+| `Hx.boost` | tested | `Tests/Html.lean` |
+| `Hx.pushUrl` | tested | `Tests/Html.lean` |
+| `Hx.indicator` | tested | `Tests/Html.lean` |
+| `Http.Request.isHtmx` | tested | `Tests/Html.lean` |
 | `Http.Response.trigger` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
-| `Http.Response.hxRedirect` | none |  |
+| `Http.Response.hxRedirect` | tested | `Tests/Html.lean` |
 
 ## `Lanes/Http/Basic.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Http.reprBody` | checked | `Tests/HttpClient.lean` |
+| `Http.reprBody` | proved | through `Http.Request.field?`, `Http.Request.form`: `Http.Request.field?_eq_lookup`, `Http.Request.form_encodeForm` |
 | `Http.Method.codec` | proved | its type, `Codec` |
 | `Http.Request.codec` | proved | its type, `Codec` |
-| `Http.hexValue?` | proved | through `Http.Request.hexByte`, `Http.percentDecode`: `Http.Request.read_badChunkSize`, `Http.percentDecode_percentEncode` |
-| `Http.percentDecodeBytes` | proved | through `Http.percentDecode`: `Http.percentDecode_percentEncode` |
+| `Http.hexValue?` | proved | through `Http.Request.field?`, `Http.Request.form` and 3 more: `Http.Request.field?_eq_lookup`, `Http.Request.form_encodeForm` and 3 more |
+| `Http.percentDecodeBytes` | proved | through `Http.Request.field?`, `Http.Request.form` and 2 more: `Http.Request.field?_eq_lookup`, `Http.Request.form_encodeForm` and 2 more |
 | `Http.percentDecode` | proved | `Http.percentDecode_percentEncode` |
-| `Http.hexDigit` | proved | through `Http.percentEncode`: `Http.percentDecode_percentEncode` |
-| `Http.unreserved` | proved | through `Http.percentEncode`: `Http.percentDecode_percentEncode` |
-| `Http.percentEncodeByte` | proved | through `Http.percentEncode`: `Http.percentDecode_percentEncode` |
-| `Http.percentEncode` | proved | `Http.percentDecode_percentEncode` |
-| `Http.parseForm` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
-| `Http.encodeForm` | tested | `Tests/Html.lean` |
-| `Http.Request.param?` | none |  |
-| `Http.Request.header?` | none |  |
-| `Http.Request.text?` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
-| `Http.Request.form` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
-| `Http.Request.field?` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
+| `Http.hexDigit` | proved | through `Http.encodeForm`, `Http.percentEncode`: `Http.Request.form_encodeForm`, `Http.parseForm_encodeForm` and 2 more |
+| `Http.unreserved` | proved | through `Http.encodeForm`, `Http.percentEncode`: `Http.Request.form_encodeForm`, `Http.parseForm_encodeForm` and 2 more |
+| `Http.percentEncodeByte` | proved | through `Http.encodeForm`, `Http.percentEncode`: `Http.Request.form_encodeForm`, `Http.parseForm_encodeForm` and 2 more |
+| `Http.percentEncode` | proved | `Http.percentDecode_percentEncode`, `Http.percentEncode_plain` |
+| `Http.parseForm` | proved | `Http.parseForm_encodeForm` |
+| `Http.encodeForm` | proved | `Http.Request.form_encodeForm`, `Http.parseForm_encodeForm` |
+| `Http.Request.param?` | spec | used only in statements |
+| `Http.Request.header?` | proved | `Http.Request.header?_eq_lookup`, `Http.Request.sameOrigin_iff` |
+| `Http.Request.text?` | proved | through `Http.Request.field?`, `Http.Request.form`: `Http.Request.field?_eq_lookup`, `Http.Request.form_encodeForm` |
+| `Http.Request.form` | proved | `Http.Request.field?_eq_lookup`, `Http.Request.form_encodeForm` |
+| `Http.Request.field?` | proved | `Http.Request.field?_eq_lookup` |
 | `Http.Response.ofText` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean` |
 | `Http.Response.text` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean` |
 | `Http.Response.html` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
-| `Http.Response.json` | none |  |
-| `Http.Response.empty` | tested | `Tests/Auth.lean` |
-| `Http.Response.redirect` | none |  |
-| `Http.Response.withHeader` | none |  |
+| `Http.Response.json` | tested | `Tests/Html.lean` |
+| `Http.Response.empty` | tested | `Tests/Auth.lean`, `Tests/Html.lean` |
+| `Http.Response.redirect` | tested | `Tests/Html.lean` |
+| `Http.Response.withHeader` | tested | `Tests/Html.lean` |
 
 ## `Lanes/Http/Cookie.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Http.SameSite.name` | tested | `Tests/Auth.lean` |
-| `Http.cookieOctet` | tested | `Tests/Auth.lean` |
-| `Http.Cookie.valid` | tested | `Tests/Auth.lean` |
-| `Http.Cookie.header` | tested | `Tests/Auth.lean` |
+| `Http.SameSite.name` | proved | through `Http.Cookie.header`, `Http.Response.setCookie`: `Http.readSetCookie_header`, `Http.setCookie_read` |
+| `Http.cookieOctet` | proved | `Http.parseCookies_cookieHeader` |
+| `Http.Cookie.valid` | proved | `Http.readSetCookie_header` |
+| `Http.Cookie.attributes` | proved | `Http.readSetCookie_header`, `Http.setCookie_read` |
+| `Http.Cookie.header` | proved | `Http.readSetCookie_header` |
 | `Http.Cookie.expired` | tested | `Tests/Auth.lean` |
-| `Http.parseCookies` | tested | `Tests/Auth.lean` |
+| `Http.trimBlank` | proved | through `Http.parseCookies`, `Http.readSetCookie`: `Http.parseCookies_cookieHeader`, `Http.readSetCookie_header` and 1 more |
+| `Http.parseCookie` | proved | through `Http.parseCookies`: `Http.parseCookies_cookieHeader` |
+| `Http.parseCookies` | proved | `Http.parseCookies_cookieHeader` |
 | `Http.Request.cookies` | tested | `Tests/Auth.lean` |
 | `Http.Request.cookie?` | tested | `Tests/Auth.lean` |
-| `Http.Request.sameOrigin` | tested | `Tests/Auth.lean` |
-| `Http.Request.bodyWithin` | none |  |
-| `Http.Response.setCookie` | tested | `Tests/Auth.lean` |
+| `Http.Request.sameOrigin` | proved | `Http.Request.sameOrigin_iff` |
+| `Http.Request.bodyWithin` | spec | used only in statements |
+| `Http.Response.setCookie` | proved | `Http.setCookie_read` |
 | `Http.Response.clearCookie` | tested | `Tests/Auth.lean` |
-| `Http.Response.noStore` | none |  |
+| `Http.Response.noStore` | tested | `Tests/Html.lean` |
+
+## `Lanes/Http/CookieSound.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Http.readSetCookie` | spec | used only in statements |
+| `Http.cookieHeader` | spec | used only in statements |
 
 ## `Lanes/Http/Front.lean`
 
@@ -1390,19 +1422,19 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Refusal.status` | tested | `Tests/ReadRequest.lean` |
 | `Http.matchAt` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 12 more |
 | `Http.find` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 12 more |
-| `Http.pieces` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 12 more |
+| `Http.pieces` | proved | through `Http.Request.read`, `Http.Request.readHead` and 1 more: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 16 more |
 | `Http.Request.Limits.message_max` | spec | used only in statements |
 | `Http.Request.elements` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 12 more |
-| `Http.Request.version?` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 12 more |
+| `Http.Request.version?` | proved | through `Http.Request.read`, `Http.Request.readHead` and 1 more: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 16 more |
 | `Http.Request.method?` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 12 more |
-| `Http.Request.pchar` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 12 more |
-| `Http.Request.targetChar` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 12 more |
+| `Http.Request.pchar` | proved | through `Http.Request.read`, `Http.Request.readHead` and 1 more: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 16 more |
+| `Http.Request.targetChar` | proved | through `Http.Request.read`, `Http.Request.readHead` and 1 more: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 16 more |
 | `Http.Request.hostChar` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 12 more |
-| `Http.Request.segments?` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 12 more |
-| `Http.Request.queryPart?` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 12 more |
-| `Http.Request.pair?` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 12 more |
-| `Http.Request.query?` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 12 more |
-| `Http.Request.target?` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 12 more |
+| `Http.Request.segments?` | proved | through `Http.Request.read`, `Http.Request.readHead` and 1 more: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 16 more |
+| `Http.Request.queryPart?` | proved | through `Http.Request.read`, `Http.Request.readHead` and 1 more: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 16 more |
+| `Http.Request.pair?` | proved | through `Http.Request.read`, `Http.Request.readHead` and 1 more: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 16 more |
+| `Http.Request.query?` | proved | through `Http.Request.read`, `Http.Request.readHead` and 1 more: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 16 more |
+| `Http.Request.target?` | proved | `Http.Route.link_target`, `Http.Route.match?_target`, `Http.dispatch_link` and 1 more |
 | `Http.Request.fieldLine?` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 12 more |
 | `Http.Request.host?` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 12 more |
 | `Http.Request.tabbedFraming` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 12 more |
@@ -1434,24 +1466,24 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Http.Segment.Clean` | spec | a predicate |
 | `Http.instDecidableClean` | proved | its type, `Decidable` |
-| `Http.Slug.ofString?` | tested | `Tests/Html.lean`, `Tests/Web.lean` |
-| `Http.Slug.instToString` | none |  |
+| `Http.Slug.ofString?` | proved | `Http.Slug.ofString?_eq_some`, `Http.Slug.ofString?_text` |
+| `Http.Slug.instToString` | tested | `Tests/Html.lean` |
 | `Http.Slug.instDecidableEq` | proved | its type, `Decidable` |
 | `Http.Path.seg` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
 | `Http.Path.slug` | tested | `Tests/Html.lean`, `Tests/Web.lean` |
 | `Http.Path.nat` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
 | `Http.Path.root` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
-| `Http.Path.append` | none |  |
+| `Http.Path.append` | tested | `Tests/Html.lean` |
 | `Http.Path.pre` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
 | `Http.Route.get` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
 | `Http.Route.post` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
-| `Http.Route.put` | none |  |
-| `Http.Route.patch` | none |  |
-| `Http.Route.delete` | none |  |
-| `Http.Route.match?` | proved | `Http.Route.match?_link` |
-| `Http.Route.link` | tested | `Tests/Html.lean`, `Tests/Web.lean` |
-| `Http.Route.handle` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
-| `Http.dispatch` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
+| `Http.Route.put` | tested | `Tests/Html.lean` |
+| `Http.Route.patch` | tested | `Tests/Html.lean` |
+| `Http.Route.delete` | tested | `Tests/Html.lean` |
+| `Http.Route.match?` | proved | `Http.Route.match?_link`, `Http.Route.match?_target`, `Hx.request_match?` |
+| `Http.Route.link` | proved | `Http.Route.link_target`, `Http.Route.match?_target`, `Http.dispatch_link` |
+| `Http.Route.handle` | proved | `Http.dispatch_link` |
+| `Http.dispatch` | proved | `Http.dispatch_eq_none`, `Http.dispatch_eq_some`, `Http.dispatch_link` |
 
 ## `Lanes/Http/Waiting.lean`
 
@@ -1470,8 +1502,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Http.tokenChar` | proved | through `Http.Request.fields`, `Http.Request.wire` and 2 more: `Http.Request.fields_framing`, `Http.Request.head_plain` and 14 more |
-| `Http.token` | proved | through `Http.Request.fields`, `Http.Request.wire` and 2 more: `Http.Request.fields_framing`, `Http.Request.head_plain` and 14 more |
+| `Http.tokenChar` | proved | through `Http.Request.fields`, `Http.Request.wire` and 3 more: `Http.Request.fields_framing`, `Http.Request.head_plain` and 15 more |
+| `Http.token` | proved | `Http.parseCookies_cookieHeader` |
 | `Http.plain` | proved | `Http.Request.head_plain` |
 | `Http.visible` | proved | through `Http.Request.wire`: `Http.Request.head_plain`, `Http.Request.read_wire` and 1 more |
 | `Http.ows` | proved | `Http.Request.read_blankInName` |
