@@ -36,6 +36,8 @@ namespace Lanes.Http
 
 variable {σ : Signature}
 
+/-- The gate alone: requests and the system's outputs come in, responses and the system's
+inputs go out. -/
 abbrev gateSig (σ : Signature) : Signature where
   Id := Unit
   Msg _ := GateMsg σ
@@ -57,6 +59,8 @@ theorem gateActor_bounded (bridge : Bridge σ) (config : GateConfig) :
   Actor.Inductive.invariant
     ⟨by simp [gateActor], fun _ msg h => Gate.step_bounded bridge config _ msg h, fun _ h => h⟩
 
+/-- The gate as a system of one actor, whose state is the requests waiting for the system.
+On a restart it arms their deadlines again. -/
 abbrev gateSystem (bridge : Bridge σ) (config : GateConfig := {}) : System (gateSig σ) where
   State _ := List ReqId
   actor _ := gateActor bridge config

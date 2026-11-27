@@ -30,6 +30,7 @@ import Tests.HttpConn
 import Tests.Mailbox
 import Tests.Split
 import Tests.Batch
+import Tests.Pace
 import Tests.Crypto
 import Tests.Auth
 import Tests.Clients
@@ -98,6 +99,7 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.Signature.tests ++ Tests.OAuth.tests
     ++ Tests.Fair.tests ++ Tests.Codec.tests ++ Tests.Durable.fileTests ++ Tests.Split.tests
     ++ Tests.Peers.tests ++ Tests.Courier.tests ++ Tests.Mailbox.tests ++ Tests.Batch.tests
+    ++ Tests.Pace.tests
     ++ Tests.Crypto.tests ++ Tests.Auth.tests ++ Tests.Clients.tests ++ Tests.Lease.tests
     ++ Tests.Release.tests ++ Tests.ReadRequest.tests ++ Tests.Oracle.unitTests
     ++ Tests.HttpConn.tests

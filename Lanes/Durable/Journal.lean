@@ -25,6 +25,8 @@ namespace Lanes.Journal
 
 variable {σ : Signature}
 
+/-- One thing a shard asked of its kernel: an input, a clock reading, a batch of work, or a
+mark. Replaying the entries rebuilds the kernel (`Journal.recover_kernel`). -/
 inductive Entry (σ : Signature) where
   | input (x : σ.In)
   | advance (now_ms : Nat)
@@ -150,6 +152,7 @@ theorem file_eq (input : Codec σ.In) (system : String) (entries : List (Entry �
     file input system entries = Frame.one (header system) ++ encode input entries :=
   Frame.encode_cons ..
 
+/-- Why a journal's files are not opened. A refused file is left as it is. -/
 inductive Refusal where
   /-- The file is not a journal of `system`: it is the journal of the system `named`, or no
   journal at all. -/
@@ -522,27 +525,27 @@ theorem turn_eq_exec {sys : System σ} (k : Kernel sys) (now_ms : Nat) (input : 
         Kernel.accept]
 
 /-- `turn` for inputs that arrived together: each is accepted, in order, and then up to `fuel`
-units of work are done, the steps of different actors worked out on `workers` threads
+units of work are done, the steps of different actors worked out as `spread` says
 (`Kernel.runWaves`, which is `runBatch`). The journal has `advance`, the inputs and one `batch`. -/
 def turnAll {sys : System σ} (k : Kernel sys) (now_ms : Nat) (inputs : List σ.In)
-    (fuel workers : Nat) : Turn sys :=
+    (fuel : Nat) (spread : Kernel.Spread) : Turn sys :=
   if inputs.isEmpty && (k.advance now_ms).wait != .none then { kernel := k }
   else
     let k := k.advance now_ms
     let clock := k.clock_ms
-    match (k.acceptAll inputs).runWaves workers fuel with
+    match (k.acceptAll inputs).runWaves spread fuel with
     | { kernel, events, outputs } =>
       { kernel, events := inputs.map .input ++ events, outputs
         entries := .advance clock :: inputs.map .input ++ [.batch fuel] }
 
 theorem turnAll_eq_exec {sys : System σ} (k : Kernel sys) (now_ms : Nat) (inputs : List σ.In)
-    (fuel workers : Nat) :
-    (turnAll k now_ms inputs fuel workers).kernel
-        = (k.exec (ops (turnAll k now_ms inputs fuel workers).entries)).kernel
-      ∧ (turnAll k now_ms inputs fuel workers).events
-          = (k.exec (ops (turnAll k now_ms inputs fuel workers).entries)).events
-      ∧ (turnAll k now_ms inputs fuel workers).outputs
-          = (k.exec (ops (turnAll k now_ms inputs fuel workers).entries)).outputs := by
+    (fuel : Nat) (spread : Kernel.Spread) :
+    (turnAll k now_ms inputs fuel spread).kernel
+        = (k.exec (ops (turnAll k now_ms inputs fuel spread).entries)).kernel
+      ∧ (turnAll k now_ms inputs fuel spread).events
+          = (k.exec (ops (turnAll k now_ms inputs fuel spread).entries)).events
+      ∧ (turnAll k now_ms inputs fuel spread).outputs
+          = (k.exec (ops (turnAll k now_ms inputs fuel spread).entries)).outputs := by
   unfold turnAll
   split
   · exact ⟨rfl, rfl, rfl⟩
@@ -553,6 +556,13 @@ theorem turnAll_eq_exec {sys : System σ} (k : Kernel sys) (now_ms : Nat) (input
     simp only [hops, Kernel.exec_cons, Kernel.exec_append, Kernel.exec_inputs, Kernel.runWaves_eq,
       Kernel.apply, advance_clock]
     simp [Kernel.exec]
+
+/-- How a turn's waves are spread does not change the turn (`Kernel.runWaves_eq`). -/
+theorem turnAll_spread {sys : System σ} (k : Kernel sys) (now_ms : Nat) (inputs : List σ.In)
+    (fuel : Nat) (spread : Kernel.Spread) :
+    turnAll k now_ms inputs fuel spread = turnAll k now_ms inputs fuel {} := by
+  unfold turnAll
+  simp only [Kernel.runWaves_eq]
 
 /-- Turn after turn, with the entries each one journals. -/
 def turns {sys : System σ} (k : Kernel sys) (fuel : Nat) :

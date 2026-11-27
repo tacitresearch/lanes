@@ -230,7 +230,7 @@ def live (release : Bool) (touched : Nat) : Async (Array Nat × Nat × List (Nat
   let zeros ← IO.mkRef 0
   let after ← IO.mkRef false
   let shown ← IO.mkRef #[]
-  let rt ← Runtime.start (churn Nat release) { snapshotEvery := touched / 2 }
+  let rt ← Runtime.start (churn Nat release) { snapshotEvery := touched / 10 }
     (fun out => do
       if ← after.get then shown.modify (·.push out)
       else if out.2 == 0 then zeros.modify (· + 1))

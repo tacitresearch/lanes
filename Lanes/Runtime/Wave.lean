@@ -349,14 +349,25 @@ decreasing_by simp only [List.length_drop, List.length_cons]; omega
 def Plan.add {k : Kernel sys} (p : Plan sys) (done : List (Done k)) : Plan sys :=
   done.foldl (fun p d => p.set d.1.1 d.1.2) p
 
+/-- How a wave's steps are spread over threads. It decides only where they are worked out, not
+what they are (`runWaves_eq`). -/
+structure Spread where
+  /-- Threads to work out a wave's steps on. With one, a batch is `runBatch` itself. -/
+  workers : Nat := 1
+  /-- The fewest actors in a piece, so that a piece is worth a task: a wave whose actors fit in
+  one piece is left to the kernel. -/
+  minPiece : Nat := 1
+
 /-- The steps of a wave worked out on up to `workers` threads: the actors are cut into as many
-pieces, each piece a task of Lean's task pool, the first done on this thread. A wave with mail
-for one actor only is left to the kernel, which gains nothing from it. -/
-def plan (k : Kernel sys) (workers : Nat) (wave : List (Envelope σ)) : Plan sys :=
+pieces, of at least `minPiece` actors each, each piece a task of Lean's task pool, the first done
+on this thread. A wave whose actors fit in one piece, one actor's mail among them, is left to the
+kernel, which gains nothing from it. -/
+def plan (k : Kernel sys) (spread : Spread) (wave : List (Envelope σ)) : Plan sys :=
   let js := jobs k wave
-  if js.length < 2 then {}
+  let size := max (max 1 spread.minPiece) ((js.length + spread.workers - 1) / max 1 spread.workers)
+  if js.length ≤ size then {}
   else
-    match chunks ((js.length + workers - 1) / max 1 workers) js with
+    match chunks size js with
     | [] => {}
     | first :: others =>
       let tasks := others.map fun piece => Task.spawn fun _ => piece.map Job.run
@@ -377,8 +388,8 @@ theorem Plan.Good.add {k : Kernel sys} {p : Plan sys} (hp : p.Good k) (done : Li
     · rw [update_of_ne _ _ h]
       exact hp i
 
-theorem good_plan (k : Kernel sys) (workers : Nat) (wave : List (Envelope σ)) :
-    (k.plan workers wave).Good k := by
+theorem good_plan (k : Kernel sys) (spread : Spread) (wave : List (Envelope σ)) :
+    (k.plan spread wave).Good k := by
   unfold plan
   dsimp only
   split
@@ -415,15 +426,15 @@ theorem runBatch_add (k : Kernel sys) (a b : Nat) :
     · simp only [ih, List.append_assoc]
     · next h => simp [runBatch_of_wait h]
 
-/-- Up to `fuel` units of work, a wave at a time, each wave's steps worked out on `workers`
-threads before the kernel takes them in order. -/
-def waves (k : Kernel sys) (workers : Nat) (fuel : Nat) : Step sys :=
+/-- Up to `fuel` units of work, a wave at a time, each wave's steps worked out as `spread` says
+before the kernel takes them in order. -/
+def waves (k : Kernel sys) (spread : Spread) (fuel : Nat) : Step sys :=
   if _h : fuel = 0 then { kernel := k }
   else if k.wait = .none then
     let n := min fuel (max 1 k.queue.length)
-    match k.runBatchAhead (k.plan workers (k.queue.toList.take n)) n with
+    match k.runBatchAhead (k.plan spread (k.queue.toList.take n)) n with
     | { kernel, events, outputs } =>
-      match waves kernel workers (fuel - n) with
+      match waves kernel spread (fuel - n) with
       | { kernel, events := later, outputs := more } =>
         { kernel, events := events ++ later, outputs := outputs ++ more }
   else { kernel := k }
@@ -432,10 +443,11 @@ decreasing_by omega
 
 /-- `runBatch`, its actors' steps worked out in parallel when there are `workers` threads to do
 it; on one, `runBatch` itself. -/
-def runWaves (k : Kernel sys) (workers : Nat) (fuel : Nat) : Step sys :=
-  if workers ≤ 1 then k.runBatch fuel else k.waves workers fuel
+def runWaves (k : Kernel sys) (spread : Spread) (fuel : Nat) : Step sys :=
+  if spread.workers ≤ 1 then k.runBatch fuel else k.waves spread fuel
 
-theorem waves_eq (k : Kernel sys) (workers fuel : Nat) : k.waves workers fuel = k.runBatch fuel := by
+theorem waves_eq (k : Kernel sys) (spread : Spread) (fuel : Nat) :
+    k.waves spread fuel = k.runBatch fuel := by
   induction fuel using Nat.strongRecOn generalizing k with
   | _ fuel ih =>
     rw [waves]
@@ -451,14 +463,15 @@ theorem waves_eq (k : Kernel sys) (workers fuel : Nat) : k.waves workers fuel = 
         rw [runBatch_add]
       · next hw => exact (runBatch_of_wait hw fuel).symm
 
-/-- Whatever the number of workers, a batch of waves is `runBatch`: the same kernel, the same
-events and the same outputs, in the same order. -/
-theorem runWaves_eq (k : Kernel sys) (workers fuel : Nat) :
-    k.runWaves workers fuel = k.runBatch fuel := by
+/-- However a batch's waves are spread, over however many workers in pieces of whatever size, a
+batch of waves is `runBatch`: the same kernel, the same events and the same outputs, in the same
+order. -/
+theorem runWaves_eq (k : Kernel sys) (spread : Spread) (fuel : Nat) :
+    k.runWaves spread fuel = k.runBatch fuel := by
   unfold runWaves
   split
   · rfl
-  · exact waves_eq k workers fuel
+  · exact waves_eq k spread fuel
 
 /-- Every input, in order. -/
 def acceptAll (k : Kernel sys) : List σ.In → Kernel sys
