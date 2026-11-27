@@ -40,3 +40,37 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Jobs.answer_of_leaves' depends on axioms: [propext, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Jobs.answer_of_leaves
+
+-- Lanes.Behaviours.Schedule.Sound
+/-- info: 'Lanes.Schedule.actor_within' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Schedule.actor_within
+
+/-- info: 'Lanes.Schedule.actor_attempts' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Schedule.actor_attempts
+
+/-- info: 'Lanes.Schedule.within' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Schedule.within
+
+/-- info: 'Lanes.Schedule.attempts' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Schedule.attempts
+
+/-- info: 'Lanes.Schedule.armed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Schedule.armed
+
+/-- info: 'Lanes.Schedule.now_le_step' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Schedule.now_le_step
+
+/-- info: 'Lanes.Schedule.dispatch_due' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Schedule.dispatch_due
+
+/-- info: 'Lanes.Schedule.retry_waits' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Schedule.retry_waits
+
+/-- info: 'Lanes.Schedule.attempt_ends' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Schedule.attempt_ends
+
+/-- info: 'Lanes.Schedule.calls_le_scheduled' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Schedule.calls_le_scheduled
+
+/-- info: 'Lanes.Schedule.attach_within' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Schedule.attach_within

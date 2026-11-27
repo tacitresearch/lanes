@@ -232,16 +232,18 @@ def interpret (op : Op) (r : Response) : Answer :=
 /-! ## As the model of an object store -/
 
 /-- The request `op` is in `Lanes.Outside.ObjectStore`'s model, for the operations it has: a
-ranged get, a head and a listing are not in it. -/
+ranged get and a listing are not in it. -/
 def Op.modelled : Op → Option (ObjectStore.Request String ByteArray)
   | .put key body _ => some (.put key.val body)
   | .get key none => some (.get key.val)
+  | .head key => some (.head key.val)
   | .delete key => some (.delete key.val)
   | _ => none
 
 def Answer.modelled : Answer → Option (ObjectStore.Answer ByteArray)
   | .stored _ => some .stored
   | .object _ body => some (.found body)
+  | .found _ => some .present
   | .missing => some .missing
   | .deleted => some .deleted
   | .refused .. | .unreadable => some .refused

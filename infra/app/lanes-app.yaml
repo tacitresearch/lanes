@@ -603,6 +603,7 @@ Resources:
           DB_CA_URL=${DbCaUrl}
           DB_CA_SHA256=${DbCaSha256}
           MAIL_IDENTITY=${MailIdentity}
+          MEDIA_BUCKET=${MediaBucket}
         - Bucket: !If [CreateReleaseBucket, !Ref ReleaseStore, !Ref ReleaseBucket]
           Prefix: !If [DefaultPrefix, !Ref AppName, !Ref ReleasePrefix]
           DbHost: !If [HasDatabase, !GetAtt Database.Endpoint.Address, ""]

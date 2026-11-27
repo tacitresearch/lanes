@@ -87,9 +87,10 @@ theorem grows_filter (s : Site) (p : Video → Bool) :
 theorem find?_mem {s : Site} {v : VideoId} {w : Video} (h : s.find? v = some w) : w ∈ s.videos :=
   List.mem_of_find?_eq_some h
 
-theorem grows_withSession {s : Site} {req : ReqId} {m : Member} {session : Sid}
+theorem grows_withSession {s : Site} {life : Auth.Lifetime} {at_s : Nat} {req : ReqId}
+    {m : Member} {session : Sid}
     {f : Viewer → Site × List Out} (hf : ∀ v, Grows s (f v).1) :
-    Grows s (s.withSession req m session f).1 := by
+    Grows s (s.withSession life at_s req m session f).1 := by
   unfold withSession
   split
   · exact hf _
@@ -139,10 +140,11 @@ theorem channel_fst (s : Site) (req : ReqId) (viewer : Viewer) (whose : Member) 
   dsimp only
   split <;> rfl
 
-theorem grows_request (s : Site) (c : Command) : Grows s (s.request config c).1 := by
+theorem grows_request (s : Site) (c : Command) (at_s : Nat) :
+    Grows s (s.request config c at_s).1 := by
   cases c with
   | signIn req issuer subject name =>
-    show Grows s (s.signIn config req issuer subject name).1
+    show Grows s (s.signIn config req issuer subject name at_s).1
     unfold signIn
     dsimp only
     split
@@ -151,9 +153,9 @@ theorem grows_request (s : Site) (c : Command) : Grows s (s.request config c).1 
       · exact grows_refl s
       · exact grows_videos rfl rfl
   | signOut req m session =>
-    show Grows s (s.withSession req m session _).1
+    show Grows s (s.withSession config.lifetime at_s req m session _).1
     exact grows_withSession fun _ => grows_videos rfl rfl
-  | create req m session title about visibility media at_s =>
+  | create req m session title about visibility media =>
     refine grows_withSession fun _ => ?_
     unfold create
     split
@@ -168,7 +170,7 @@ theorem grows_request (s : Site) (c : Command) : Grows s (s.request config c).1 
     split
     · exact grows_refl s
     · exact grows_check config s req _ hw
-  | watch req viewer v at_s =>
+  | watch req viewer v =>
     show Grows s (s.watch req _ v at_s).1
     rw [watch_fst]
     exact grows_refl s
@@ -227,7 +229,7 @@ theorem grows_stored (s : Site) (call : Nat) (reply : Rpc.Reply StoreAnswer) :
 
 theorem grows_handle (s : Site) (i : Input) : Grows s (s.handle config i).1 := by
   cases i with
-  | request c => exact grows_request config s c
+  | request c at_s => exact grows_request config s c at_s
   | store call reply => exact grows_stored config s call reply
 
 theorem grows_recover (s : Site) : Grows s (s.recover config).1 := by

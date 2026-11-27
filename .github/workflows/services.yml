@@ -1,0 +1,69 @@
+name: Services
+
+# The service oracles (oracles/README.md): the S3 client and the SES adapter against moto, and
+# the store's adapter against PostgreSQL 16, each run checked against our model of the service.
+# They start services and take longer than a pull request should wait, so they run nightly on
+# the default branch and by hand; the pure oracles run in ci.yml. Each run's records are kept as
+# the workflow's artifact: copy them over oracles/moto/*.jsonl and oracles/postgres/*.jsonl to
+# update what `lake test` checks.
+
+on:
+  schedule:
+    - cron: "41 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: services-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  runner:
+    runs-on: ubuntu-latest
+    outputs:
+      label: ${{ steps.runner.outputs.label }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: .github
+      - id: runner
+        uses: ./.github/actions/runner
+        with:
+          runner: ${{ vars.LANES_RUNNER }}
+
+  services:
+    needs: runner
+    runs-on: ${{ fromJSON(needs.runner.outputs.label) }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          clean: false
+      - uses: ./.github/actions/lean
+      - name: PostgreSQL 16, and Python's venv for moto
+        run: |
+          if ! ls /usr/lib/postgresql/16/bin/initdb >/dev/null 2>&1; then
+            sudo apt-get update -q && sudo apt-get install -yq postgresql-16
+          fi
+          if ! python3 -m venv --help >/dev/null 2>&1; then
+            sudo apt-get update -q && sudo apt-get install -yq python3-venv
+          fi
+      - name: Build
+        run: |
+          lake build lanesServiceOracle
+          mkdir -p integrations/aws/.lake
+          ln -sfn "$GITHUB_WORKSPACE/.lake/packages" integrations/aws/.lake/packages
+          (cd integrations/aws && lake build serviceOracle)
+      - name: The store model against PostgreSQL 16
+        run: oracles/postgres/run.sh --record
+      - name: The object store and email models against moto
+        run: oracles/moto/run.sh --record
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: service-records
+          path: |
+            oracles/moto/*.jsonl
+            oracles/postgres/*.jsonl
