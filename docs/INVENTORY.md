@@ -21,9 +21,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Proof` | 36 | 12 | 0 | 0 | 0 | 23 | 1 |
 | `Lanes/Runtime` | 158 | 93 | 20 | 0 | 15 | 30 | 0 |
 | `Lanes/Semantics` | 60 | 11 | 0 | 0 | 0 | 48 | 1 |
-| `Lanes/Web` | 504 | 259 | 48 | 24 | 126 | 45 | 2 |
+| `Lanes/Web` | 506 | 259 | 50 | 24 | 126 | 45 | 2 |
 | `LanesCli` | 120 | 0 | 0 | 0 | 46 | 0 | 74 |
-| All | 1940 | 1043 | 98 | 96 | 282 | 294 | 127 |
+| All | 1942 | 1043 | 100 | 96 | 282 | 294 | 127 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -2512,6 +2512,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
+| `SigV4.Source.fixed` | trusted | TRUSTED.md: The S3 client's IO |
+| `SigV4.instCoeCredentialsSource` | trusted | TRUSTED.md: The S3 client's IO |
 | `S3.credentialsFromEnv` | trusted | TRUSTED.md: The S3 client's IO |
 | `S3.now` | trusted | TRUSTED.md: The S3 client's IO |
 | `S3.exchange` | trusted | TRUSTED.md: The S3 client's IO |
