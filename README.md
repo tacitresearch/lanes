@@ -55,16 +55,18 @@ is in `docs/CLAIMS.md`. In short:
   state it describes; a complete PASS of the model checker means the property holds in every
   reachable state of the instance; any number of shards behave as one system; the HTTP gate
   answers no request more often than it arrived and, in a fair run in which it does not crash,
-  answers every request it admits; and the parsers, routes, HTML rendering and tokens of
+  answers every request it admits; a sign-in accepts no state more often than it was issued, and
+  an ID token only when signed for an allowed algorithm with every claim passing; and the
+  parsers, routes, HTML rendering and tokens of
   `docs/ARCHITECTURE.md`. Each has premises, which `docs/CLAIMS.md` gives.
 - **Checked**: model checks of the examples on small instances, and of what the proofs do not
   yet cover, such as that a request reaches the gate.
 - **Tested**: processes killed with SIGKILL and started again, JSON, Base64, URLs, IP
   addresses, media types and dates against Go's standard library, the bound C against its Lean
   references.
-- **Trusted**: About 3,200 lines of trusted code, listed with their sizes in `TRUSTED.md`: the
+- **Trusted**: About 3,400 lines of trusted code, listed with their sizes in `TRUSTED.md`: the
   IO shells, the HTTP wire format where its proof does not reach, the C that binds libsodium,
-  `fsync`, a timed wait and OpenSSL's TLS client, and the template macro, with the assumptions the runtime makes. `lanes lint` fails if a trusted file changes without the
+  `fsync`, a timed wait, OpenSSL's TLS client and its signature check, the sign-in's IO, and the template macro, with the assumptions the runtime makes. `lanes lint` fails if a trusted file changes without the
   list, and `scripts/mutants.py` holds known ways of breaking that code, each of which must
   fail a test.
 
