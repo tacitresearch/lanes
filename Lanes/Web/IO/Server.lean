@@ -55,6 +55,15 @@ structure ServerConfig where
   idle_ms : Nat := 10000
   head_ms : Nat := 10000
   body_ms : Nat := 30000
+  /-- Which requests stream, by their head (`Conn.Config.streams`): the body is handed to the
+  system in pieces, and the answer may open a response whose parts the system gives one at a
+  time. -/
+  streams : Option (Request → Bool) := none
+  piece_max : Nat := 65536
+  streamBody_max : Nat := 1099511627776
+  part_max : Nat := 1048576
+  poll_ms : Nat := 1000
+  heartbeat_ms : Nat := 15000
   /-- A response that the client has not taken in this long ends the connection. -/
   write_ms : Nat := 30000
   /-- How long what the client still sends is read and dropped before the socket is closed, so
@@ -81,6 +90,12 @@ private def ServerConfig.conn (config : ServerConfig) : Conn.Config where
   idle_ms := config.idle_ms
   head_ms := config.head_ms
   body_ms := config.body_ms
+  streams := config.streams
+  piece_max := config.piece_max
+  streamBody_max := config.streamBody_max
+  part_max := config.part_max
+  poll_ms := config.poll_ms
+  heartbeat_ms := config.heartbeat_ms
 
 /-- What a connection's loop is told. -/
 private inductive Ev where
@@ -91,6 +106,8 @@ private inductive Ev where
   | resume
   /-- A deadline the loop gave may have passed. -/
   | alarm
+  /-- The write the loop waited for to tell the connection it was sent has ended. -/
+  | sent
 
 /-- What the loop of a connection and those who tell it something share. The loop runs on the
 thread that tells it something while it is not running, and never waits. -/
@@ -113,6 +130,8 @@ private structure Loop where
   waits to be written is bounded by what is in flight. -/
   writing : Option (WriteEnd × Nat) := none
   resumeSet : Bool := false
+  /-- The connection will be told `sent` when the last write ends. -/
+  sentSet : Bool := false
   left : Bool := false
 
 /-- A thread of the server's own that runs the loops of the connections dealt to it, one after
@@ -229,7 +248,13 @@ private partial def react (ctx : Ctx) (line : Line) (loop : Loop) (event : Conn.
       match action with
       | .submit seq request =>
         ctx.submit request fun r => tell ctx line false (.conn (.answered seq r))
-      | .interim _ bytes | .write _ bytes =>
+      | .begin seq request =>
+        ctx.submit request fun r => tell ctx line false (.conn (.responded seq r))
+      | .piece seq index request =>
+        ctx.submit request fun r => tell ctx line false (.conn (.took seq index r))
+      | .pull seq index request =>
+        ctx.submit request fun r => tell ctx line false (.conn (.pulled seq index r))
+      | .interim _ bytes | .write _ bytes | .part _ bytes =>
         let failed ← failedWrite loop
         let sent ← (line.socket.native.send #[bytes]).toBaseIO
         match failed, sent with
@@ -249,6 +274,7 @@ private partial def handle (ctx : Ctx) (line : Line) (loop : Loop) : Ev → Base
       | some (.ok none) => .ended
       | _ => .broken
   | .resume => return { loop with resumeSet := false }
+  | .sent => react ctx line { loop with sentSet := false } .sent
   | .alarm => do
     let now ← IO.monoMsNow
     let late := (← writeBy ctx.config.write_ms loop).any (· ≤ now)
@@ -281,9 +307,15 @@ private partial def settle (ctx : Ctx) (line : Line) (loop : Loop) : BaseIO Loop
         loop := { loop with resumeSet := true }
         discard <| BaseIO.mapTask (t := w.result?) (sync := line.lane.isSome) fun _ =>
           tell ctx line true .resume
-  let alarm_ms := match conn.deadline config.conn, writing with
-    | some a, some b => some (min a b)
-    | a, b => a <|> b
+  if conn.unsent && !loop.sentSet then
+    loop := { loop with sentSet := true }
+    match loop.writing, writing with
+    | some (w, _), some _ =>
+      discard <| BaseIO.mapTask (t := w.result?) (sync := line.lane.isSome) fun _ =>
+        tell ctx line true .sent
+    | _, _ => tell ctx line true .sent
+  let alarm_ms := Conn.earlier (Conn.earlier (conn.deadline config.conn) writing)
+    (conn.wakeAt config.conn)
   line.box.atomically (modify fun b => { b with alarm_ms })
   return loop
 
