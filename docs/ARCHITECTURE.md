@@ -24,7 +24,7 @@ proved function tells it to.
 | Journal, snapshots, disk | `Lanes/Durable/{Journal,Snapshot,Disk,Frame}.lean`, `Lanes/Durable/IO/Journal.lean` | `Journal.open?_cut`, `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Journal.Disk.Holds.save_crash` |
 | Joins | `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`, `Lanes/Semantics/FairJoin.lean` | `System.Reachable.left`, `SysState.run_left`, `System.Run.Fair.left` |
 | Shards and the transport | `Lanes/Runtime/{Shard,ShardSound,ShardsSound}.lean`, `Lanes/Net/{Courier,CourierSound}.lean`, `Lanes/Net/IO/{Peers,Node}.lean` | `System.ShardsReachable.unsharded`, `Peers.Courier.written_sublist_sent` |
-| The gate and the HTTP server | `Lanes/Web/Http/{Gate,Front,FrontSound,Waiting,Conn,ConnSound}.lean`, `Lanes/Semantics/Front.lean`, `Lanes/Web/IO/Server.lean` | `Http.served_answered_le_arrived`, `Http.served_pending_answered`, `Http.Waiting.exec_answered`, `Http.Conn.run_writes` |
+| The gate and the HTTP server | `Lanes/Web/Http/{Gate,Front,FrontSound,Waiting,Conn,ConnSound,Stream,Sse,SseSound,Loopback}.lean`, `Lanes/Semantics/Front.lean`, `Lanes/Web/IO/Server.lean` | `Http.served_answered_le_arrived`, `Http.served_pending_answered`, `Http.Waiting.exec_answered`, `Http.Conn.run_writes`, `Http.Conn.read_streamed`, `Http.Sse.parse_written` |
 | Other adapters | `Lanes/Outside/Basic.lean`, `Lanes/Outside/IO/Clock.lean`, `Lanes/Web/IO/Client.lean`, `Lanes/Web/Http/{Grammar,Wire,WireSound}.lean` | `Response.read_wire`, `Request.fields_framing`; conformance tests |
 | Jobs: work outside a step | `Lanes/Behaviours/Jobs/{Basic,Sound}.lean`, `Lanes/Semantics/Jobs.lean`, `Lanes/Behaviours/Jobs/IO/Pool.lean` | `Jobs.answered_le_handled`, `Jobs.retry_same`, `Jobs.submitted_answered`; the pool is trusted |
 | Web | `Lanes/Web/Http/{Basic,Route,RouteSound,Cookie,CookieSound}.lean`, `Lanes/Web/Html/`, `Lanes/Web/Auth/` | `Html.lex_render`, `Html.safeUrl_scheme`, `Http.dispatch_link`, `Http.parseForm_encodeForm`, `Http.readSetCookie_header`, `Auth.verify_eq_some`, `Auth.checkForm_other` |
@@ -177,6 +177,24 @@ above zero, the connections run on that many threads of the server's own, each o
 whole life; Lean has one libuv loop a process, which every read and write still goes through. `Http.serveFronted` serves
 `fronted sys`, whose other inputs and outputs pass the gate by, and `Http.serveShard`
 (`Lanes/Net/IO/Node.lean`) runs it with the transport: one process with an HTTP front and peers.
+
+A request may stream (`ServerConfig.streams`, the decision "Bodies and responses stream through
+the gate"): its head is handed on alone, its body follows in pieces of at most `piece_max` bytes,
+and the answer may open a response whose parts the connection pulls; each piece and each pull is
+a request of its own through the gate (`Lanes/Web/Http/Stream.lean`), one at a time, so the gate
+and its theorems are unchanged and back-pressure reaches the client's TCP window. Proved of
+`Conn.step` for every configuration, beside its theorems before: the bytes of a streamed response
+are `Response.wireChunked`, read back as the head with the parts as its body
+(`Http.Conn.read_streamed`); each part is written as its chunk after what came before
+(`Http.Conn.pulled_part`, `Http.Conn.flushStream_ended`); a pull is made only when nothing written
+is unsent (`Http.Conn.flushStream_going`); a piece is what `Inflow.gather` reads at the
+connection's position (`Http.Conn.pump_piece`). That the pieces of a whole run make up the strict
+reader's body and the bytes of a whole stream are the parts given is model-checked
+(`Tests/HttpStream.lean`), not proved. Server-Sent Events are parts of a stream of events: the
+client's reader, a model of the WHATWG one, reads back the events written, in order, each once,
+comments between them ignored (`Http.Sse.parse_written`), and an event made from an answer is one
+it reads back as it is (`Http.Sse.Event.ofResponse_valid`). `Http.Loopback` runs a front end with
+no socket, for tests: the connection, the gate and the system on a kernel of its own.
 
 Around it, pure and in `Std` only: requests and responses as data; typed routes whose links the
 server reads back and `dispatch` hands to their route's handler (`Http.dispatch_link`); forms

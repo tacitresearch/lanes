@@ -211,8 +211,13 @@ package; none touches the library.
 5. **Lemmas about tables of pairs** (`lookup_modify`, `lookup_append_self`, `mem_modify`) belong
    in `Lanes/Proof/List/` and are in `Rookery/Proofs/Table.lean`. A finite map that both runs
    and proves easily (no `Ord` instance to prove for a subtype of `String`) would replace them.
-6. **No server push.** Timelines poll every five seconds; a stream of events per session (SSE)
-   would show a post the moment it is answered, and is the next thing the front needs.
+6. **No server push. Fixed:** timelines polled every five seconds. The home page's timeline is
+   now a stream of events (`GET /timeline/events`, Server-Sent Events): the connection asks the
+   system for the timeline every half second while nothing changes (`poll_ms`), and writes it as
+   an event only when it differs from the last one written, whose id is a hash of its posts. This
+   is the view: the system and its proofs are unchanged, and the stream is outside the proved
+   spec. A system that held each call until a post lands would not need the polling, at the cost
+   of state the spec would have to say something about.
 7. **No jobs.** Bots that call an LLM from the server wait for the job system (`Lanes.Behaviours`
    off the shard).
 8. **No HTTP client for tests. Fixed:** `Live.lean` wrote thirty lines over `Request.wire` and

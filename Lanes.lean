@@ -79,6 +79,8 @@ public import Lanes.Web.Http.Loopback
 public import Lanes.Web.Http.Gate
 public import Lanes.Web.Http.ReadRequest
 public import Lanes.Web.Http.Route
+public import Lanes.Web.Http.Sse
+public import Lanes.Web.Http.Stream
 public import Lanes.Web.Http.Waiting
 public import Lanes.Web.Http.Wire
 public import Lanes.Web.Http.WireSpec

@@ -25,7 +25,9 @@ there.
 5. `election`: leader election with timers, crashes and restarts, at most one leader per term,
    proved with a ghost history and `Monotone`; random runs for five nodes.
 6. `watchdog`: what fairness says about a keep-alive: a fair run in which the dog never barks.
-7. `raft-kv`, `ledger`, `rookery`: the serious systems below.
+7. `upload`: uploads of any size, handed to the system in pieces and answered with their size
+   and checksum: a request that streams, through the gate a piece at a time.
+8. `raft-kv`, `ledger`, `rookery`: the serious systems below.
 
 | Feature | Where to see it |
 | --- | --- |
@@ -42,6 +44,7 @@ there.
 | A journal and snapshots across `kill -9` | `bank-web`, `ledger`, `raft-kv`, `rookery` |
 | Sessions, log-in, cookies, tokens | `ledger`, `rookery` |
 | A JSON API and rate limits | `rookery` |
+| Request bodies in pieces, responses in parts, Server-Sent Events | `upload`, `rookery` |
 | Shards in several processes, joined by TCP | `raft-kv` |
 
 ## The serious systems
@@ -66,7 +69,9 @@ lake exe raftChaos    # a minute of random faults; not part of the tests
 
 and in the same way, in `examples/ledger`, `lake build`, `lake test` and `lake exe ledgerLive`;
 in `examples/rookery`, `lake build`, `lake test` and `lake exe rookeryLive`; and in each small
-one, `lake build` and `lake test` (`bank-web` needs `bank` beside it, which it requires by path).
+one, `lake build` and `lake test` (`bank-web` needs `bank` beside it, which it requires by path;
+`upload`'s test drives its front end with no socket, and `lake exe upload 8080` serves it:
+`curl -T file http://127.0.0.1:8080/upload`).
 
 ## Testing a front end
 

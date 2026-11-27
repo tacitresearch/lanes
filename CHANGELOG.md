@@ -12,6 +12,7 @@ under Unreleased (`CONTRIBUTING.md`).
 
 - `ServerConfig.ioThreads`: connections owned by dedicated threads, so a connection never changes thread (21–30% more requests a second on the warm machine); and `Runtime.Config.workers`: a batch's actors' steps worked out in parallel, proved equal to the sequential run (`Kernel.runBatchAhead_eq`). Both are off by default.
 - `Http.Loopback`: an application's front end driven in tests with no socket, through the server's connection, the gate and the system; and `Http.Client.fetch`, one request to a local server for live tests.
+- Requests that stream (`ServerConfig.streams`): a body handed to the system in pieces of at most `piece_max` bytes, framed by its length or in chunks, up to `streamBody_max`, and a response in parts the connection pulls one at a time, each piece and pull a request of its own through the gate (`Lanes.Web.Http.Stream`); Server-Sent Events, with heartbeats and `Last-Event-ID` (`Lanes.Web.Http.Sse`, `Response.events`, `Hx.events`, `Client.events`); the client's reader of events proved to read back what a stream writes (`Sse.parse_written`), and a streamed response's bytes proved to be `Response.wireChunked` (`Conn.read_streamed`). `examples/upload` takes uploads of any size; rookery's timeline is a stream of events.
 
 ### Changed
 
