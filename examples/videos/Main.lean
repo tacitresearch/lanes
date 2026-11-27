@@ -19,7 +19,8 @@ From the environment, read once at start (rule 2.5):
 - `LANES_HOST`, `LANES_IDLE_MS` and `LANES_DRAIN_MS`, as `lanes new` reads them and the
   deployment's unit sets them (`docs/DEPLOY.md`): where to listen (`127.0.0.1` unless set), how
   long an idle connection is kept, and how long SIGTERM waits for the requests in flight;
-- `VIDEOS_BUCKET` and `AWS_REGION` (`us-east-1` if unset): the bucket of the videos;
+- `VIDEOS_BUCKET`, or else `LANES_MEDIA_BUCKET`, and `AWS_REGION` (`us-east-1` if unset): the
+  bucket of the videos, which the deployment's unit names in the last two (`docs/DEPLOY.md`);
   `VIDEOS_S3_ENDPOINT`, as `http://host:port`, for a store other than AWS's (MinIO,
   LocalStack), named by path;
 - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN`: the S3 client's
@@ -36,6 +37,9 @@ def loadKey (path : System.FilePath) : IO ByteArray := do
     if bytes.size != 32 then throw (IO.userError s!"videos: {path} does not hold 32 bytes")
     return bytes
   let bytes ← randomBytes 32
+  -- Readable by this user alone, before the key is in it.
+  IO.FS.writeBinFile path .empty
+  IO.setAccessRights path { user := { read := true, write := true } }
   IO.FS.writeBinFile path bytes
   return bytes
 
@@ -46,7 +50,9 @@ def client (origin name : String) : IO (Option Client) := do
 
 /-- The bucket the environment names, at AWS or at `VIDEOS_S3_ENDPOINT`. -/
 def bucket : IO (Option S3.Bucket) := do
-  let some name := (← IO.getEnv "VIDEOS_BUCKET").filter (!·.isEmpty) | return none
+  let named (key : String) : IO (Option String) :=
+    return (← IO.getEnv key).filter (!·.isEmpty)
+  let some name := (← named "VIDEOS_BUCKET") <|> (← named "LANES_MEDIA_BUCKET") | return none
   let region := ((← IO.getEnv "AWS_REGION").filter (!·.isEmpty)).getD "us-east-1"
   match (← IO.getEnv "VIDEOS_S3_ENDPOINT").filter (!·.isEmpty) with
   | none => return some { name, region, endpoint := S3.Endpoint.aws region }
@@ -67,7 +73,8 @@ def main (args : List String) : IO UInt32 := do
   let host := (← IO.getEnv "LANES_HOST").getD "127.0.0.1"
   let idle_ms ← ms "LANES_IDLE_MS" 10000
   let drain_ms ← ms "LANES_DRAIN_MS" 10000
-  let some b ← bucket | IO.eprintln "videos: VIDEOS_BUCKET is not set"; return 2
+  let some b ← bucket
+    | IO.eprintln "videos: neither VIDEOS_BUCKET nor LANES_MEDIA_BUCKET is set"; return 2
   let some creds ← S3.credentialsFromEnv
     | IO.eprintln "videos: AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are not set"; return 2
   let mut providers := []

@@ -22,7 +22,10 @@ lake test             # model checks, the bridge, and the site over HTTP against
   atomic owner: a delete vanishes from the feed, the channel and the watch page at once.
 - **Sign-in** is Lanes' (`Lanes.OAuth`, D72), in `serve`'s `arrive`: the system gets only the
   identity the provider vouched for, by its issuer and subject, and a member is made the first
-  time one signs in. A session is a signed cookie and an entry of the member's `Auth.Sessions`.
+  time one signs in, its channel named by the provider's name for it (the login, without one),
+  which the pages show as text. A session is a signed cookie and an entry of the member's
+  `Auth.Sessions`, and lets requests in for 30 days after its sign-in (`Config.lifetime`), judged
+  at the time each request arrived; a sign-in sweeps the member's sessions that are over.
 - **Upload.** "Upload" makes a record, `pending`, and answers a page whose form carries a link
   presigned for a `PUT` of `videos/<id>`, with the content type signed. The browser puts the file
   there itself (`upload.js`, a dozen lines that `fetch` the link and then post the next form),
@@ -50,11 +53,11 @@ model-checked (`Videos/Check.lean`).
 
 | Claim | Theorem |
 | --- | --- |
-| A private video is its owner's alone: in every run of the system, under every environment model, an output that shows one is addressed to its owner; and of every input, only in an answer to a live session of the owner | `Videos.private_to_owner`, `Videos.Site.handle_private` |
+| A private video is its owner's alone: in every run of the system, under every environment model, an output that shows one is addressed to its owner; and of every input, only in an answer to a session of the owner that let the request in when it arrived, open and not past its lifetime | `Videos.private_to_owner`, `Videos.Site.handle_private` |
 | A like counts each member once: in every reachable state of the system, under every environment model, no video's likes name a member twice, so the count shown is the number of distinct likers | `Videos.likes_distinct`, `Videos.count_distinct` |
 | A deleted video is never served again: once a delete is answered, no output of any later input or start shows it, however the store answers the delete (late, refused, `unknown`, never) | `Videos.Site.deleted_never_served`, `Videos.Site.Gone.run` |
 | A video is shown only once the store confirmed its upload: an output that shows a video comes after an output asking the store about it under some call, and after the store's `found` to that call | `Videos.Site.listed_confirmed` (the seeded bugs off: `Config.Honest`) |
-| What an output shows is a ready video of the site, and a private one only to its owner's live session | `Videos.Site.shows_handle` |
+| What an output shows is a ready video of the site, and a private one only to a session of its owner that let the request in | `Videos.Site.shows_handle` |
 
 The last three are about runs of the spec's functions, `Site.handle` and `Site.recover`, which is
 what the actor runs; the first two are about the system's runs. The theorem that turns a run of
@@ -70,33 +73,44 @@ the system into the run of the spec its actor performed is not written (as for r
   store's delete lands, and an upload link used after the delete leaves an object no record
   names. A lifecycle rule on the bucket, or a second delete after the upload link expires, would
   close it.
-- **The store** is as `Lanes.ObjectStore` models it, with the browser's upload as a put the site
-  hands out and never hears answered, and a `HEAD` as its get (`Videos/Check.lean`).
+- **The store** is as `Lanes.ObjectStore` models it, with the browser's upload as a write the
+  site grants and never hears answered (`granted`), and its `HEAD` as the model's head
+  (`Videos/Check.lean`).
 
 ## What is checked
 
-`Videos/Check.lean`, run by `lake test`: two members, at most two videos, one pending upload per
-member, one comment, one delete in the store, two attempts. The site beside the browsers, which
+`Videos/Check.lean`, run by `lake test`: two members, at most two videos and one per member, one
+pending upload per member, two comments and one per member on a video, one delete in the store,
+two attempts. The site beside the browsers, which
 follow a script, and the object store's model, which answers each call at most once, late,
 never, refused or `unknown`, and lets an upload not answered land at any moment or never; the
 actor crashes and starts again anywhere. What each browser is shown is judged as it is shown.
 
 | Scenario | States | Result |
 | --- | --- | --- |
-| A public video: made, checked twice, watched, liked three times, deleted, asked for during and after the delete | 741,759 | pass |
+| A public video: made, checked twice, watched, liked three times, deleted, asked for during and after the delete | 736,480 | pass |
 | A private video: asked for by another member, a stranger and its owner; channels, the feed, a like and a comment by another | 561 | pass |
-| A video deleted while its check may be out | 240,716 | pass |
+| A video deleted while its check may be out | 237,289 | pass |
+| A session past its lifetime: a private video watched inside it, asked for and liked after it, then watched in a new session | 376 | pass |
 | Seeded: the browser's word taken for the upload (`trustBrowser`) | | found in 18 steps |
 | Seeded: a check the store did not answer in time taken as found (`readyOnTimeout`) | | found in 21 steps |
+| Seeded: sessions that never end (`lifetime := {}`) | | found in 18 steps |
 
-Over HTTP (`Videos/EndToEnd.lean`, 19 checks): the site as `Main` serves it, on a journal, with a
-provider of the test's (a token endpoint and a user API, as GitHub's) and Lanes' fake S3, which
-checks every signature, the presigned links' included. Two members sign in; a video is made, put
+Every bound holds in every state of every scenario, those of one member among them: one member's
+videos (`maxOwned`) and comments on one video (`maxCommentsEach`) are bounded far below the site's
+(`maxVideos`, `maxComments`), so one member cannot fill them for everyone. `capTests` checks
+each at its limit, and that a video's owner takes out anyone's comment on it.
+
+Over HTTP (`Videos/EndToEnd.lean`, 20 checks): the site as `Main` serves it, on a journal, against
+the test kit of Lanes (`Lanes.Testing`): its identity provider in GitHub's shape, read by
+`GitHub.read`, its fake S3, which checks every signature, the presigned links' included, and its
+browser, which keeps the cookies. Three members sign in; a video is made, put
 to the store through its link, checked and watched through the `<video>`'s link; likes counted
 once, a comment, a forged form, another's delete; a private video seen by its owner alone; an
 upload not yet in the store not listed; then the server is stopped and started again on its
 journal, and the sessions, likes and comments are there, an upload begun before is checked and
-listed, the feed comes a page at a time, comments are deleted by their author only, a delete
+listed, the feed comes a page at a time, a comment is deleted by its author or the video's owner
+and by no one else, a delete
 removes the video and its object, and a sign-out ends the session.
 
 ## Running it
@@ -110,7 +124,8 @@ lake exe videos 8080 videos.journal videos.secrets
 `Main.lean` lists what it reads: `VIDEOS_URL` (the public origin, from which each provider's
 redirect URI `<VIDEOS_URL>/sign-in/<google|github>/callback` is made, and `Secure` cookies when
 it is `https:`), `LANES_HOST`, `LANES_IDLE_MS` and `LANES_DRAIN_MS` (as `lanes new` reads
-them; SIGTERM drains for that long, `Server.stopOnSignal`), `VIDEOS_BUCKET`, `AWS_REGION`,
+them; SIGTERM drains for that long, `Server.stopOnSignal`), `VIDEOS_BUCKET` (or
+`LANES_MEDIA_BUCKET`, as a deployment's unit sets it), `AWS_REGION`,
 `VIDEOS_S3_ENDPOINT` (MinIO or LocalStack, as `http://host:port`), the `AWS_*` credentials and
 each provider's client. The
 bucket's CORS rules must allow `PUT` and `GET` from the site's origin with a `Content-Type`
@@ -138,11 +153,11 @@ is `examples/videos` (or `.` in a repository of its own). The stack's parameters
 | `MediaUser` | `true` (the S3 client reads keys from the environment) |
 | `DatabaseEngine` | `none` |
 
-Then on the instance, `/etc/lanes/secrets.env` (DEPLOY.md, "Media") holds, besides the media
-user's `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_REGION`:
+The unit names the stack's media bucket and its region (`LANES_MEDIA_BUCKET`, `AWS_REGION`),
+which `Main` reads. On the instance, `/etc/lanes/secrets.env` (DEPLOY.md, "Media") holds, besides
+the media user's `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`:
 
 ```bash
-VIDEOS_BUCKET=<the stack's MediaBucketName output>
 VIDEOS_URL=https://<DomainName>
 GOOGLE_CLIENT_ID=...       # and/or GITHUB_CLIENT_ID
 GOOGLE_CLIENT_SECRET=...
@@ -183,22 +198,24 @@ package; none touches the library.
    up to `maxAttempts`, then given up; an upload never confirmed stays `pending` until its owner
    deletes it. Retries with a backoff, a sweep of what was given up, thumbnails and transcoding
    all want a job with a deadline, and the store's own events (S3 notifications) a way in.
-6. **The object store's model** has no `HEAD` and no write by someone else, such as the browser
-   with a presigned link; the check maps the `HEAD` to a get and the link to a put no one answers
-   (`Videos/Check.lean`). Its state keeps every write settled, sent and read in lists that only
-   grow, so states that differ only in history are distinct: the scenario of a video's life has
-   741,759 states for thirteen requests.
-7. **No kit for tests.** The fake S3 and the fake provider are test files of Lanes
-   (`Tests/S3.lean`, `Tests/OAuth.lean`), imported here from the `Tests` library, which an
-   application outside this repository cannot do; the browser (cookies, form tokens, following
-   links) is written again here, as rookery and the ledger did.
+6. **The object store's model** had no `HEAD` and no write by someone else, such as the
+   browser with a presigned link (since fixed: `head` and `granted`, and `ObjectStore.held_sent`;
+   its histories are sets now, and a key's settled outcomes replace its earlier ones). That cut
+   the scenario of a video's life only from 741,759 states to 736,480 for thirteen requests: what
+   remains is the interleavings of the store's answers with the site's crashes, not history.
+7. **No kit for tests** (since fixed: `Lanes.Testing`, which this package's tests use). The fake
+   S3 and the fake provider were test files of Lanes, which an application outside this
+   repository cannot import; the browser (cookies, form tokens, following links) was written
+   again here, as rookery and the ledger did.
 8. **The S3 client takes keys only from the environment**: no instance role (IMDSv2), so the
-   deployment needs a long-lived IAM user's keys; and the stack does not tell the application its
-   media bucket, so `VIDEOS_BUCKET` is set by hand in `secrets.env`.
-9. **An identity has no name.** `OAuth.Identity` carries an issuer, a subject and an address, so
-   a channel is named by what comes before the `@`; a GitHub login or a Google name is not given.
-10. **Sessions do not end on their own.** `Auth.Sessions` has no time; ending them after a while
-    needs a timer per session, as rookery's are, which this site does not have.
+   deployment needs a long-lived IAM user's keys. (The stack did not tell the application its
+   media bucket; it does now, as `LANES_MEDIA_BUCKET` and `AWS_REGION`.)
+9. **An identity had no name** (since fixed: `OAuth.Identity.name`, the provider's name or
+   GitHub's login, which a channel now shows). A channel was named by what came before the `@`.
+10. **Sessions did not end on their own** (since fixed: `Auth.Sessions` takes a `Lifetime`,
+    judged at the time a request arrived, and this site's sessions last 30 days). Ending them
+    needed a timer per session, as rookery's are. Each request now carries its time
+    (`Input.request`), and the site does not record each use, which an idle limit would need.
 
 ### Clumsy
 
@@ -209,8 +226,8 @@ package; none touches the library.
 - **The checker and the outside world.** With requests from outside reordered, the first
   scenario did not finish in two minutes; the scripts are chains, and requests arrive in order.
 - **Inline code is refused in templates**, so the bridge serves `/upload.js` and `/style.css`.
-- **`docs/DEPLOY.md`** still calls the S3 client "in progress", and D71 presents `S3.handler` as
-  how a system calls the store, which a web application cannot do (2).
+- **D71** presents `S3.handler` as how a system calls the store, which a web application cannot
+  do (2). (`docs/DEPLOY.md` called the S3 client "in progress"; no longer.)
 
 ### Not there for a site like YouTube
 

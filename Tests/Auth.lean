@@ -32,6 +32,10 @@ def cookieTests : List (String × Bool) :=
       (Response.empty.setCookie { name := "session", value := "v; Domain=evil" }).headers == []),
     ("cookie: a name that is not a token is not set",
       (Response.empty.setCookie { name := "a b", value := "v" }).headers == []),
+    ("cookie: a Secure cookie is named __Host-, one over plain HTTP is not",
+      hostCookie "session" true == "__Host-session" && hostCookie "session" false == "session"
+        && (Response.empty.setCookie { name := hostCookie "session" true, value := "v" }).headers
+          == [("set-cookie", "__Host-session=v; Path=/; HttpOnly; Secure; SameSite=Lax")]),
     ("cookie: clearing sends an empty value that expires at once",
       (Response.empty.clearCookie { name := "session", value := "v", secure := false }).headers
         == [("set-cookie", "session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax")]),
@@ -80,6 +84,25 @@ def loginTests : List (String × Bool) :=
     ("sessions: a third session closes the oldest of two",
       thrice.ids == [3, 2] && closed == [1] && thrice.live 2 && !thrice.live 1),
     ("sessions: a closed session is not live", !(thrice.close 3).live 3),
+    ("sessions: with an idle lifetime, a session lets in until it has been idle that long",
+      let life : Lifetime := { idle_s := some 60 }
+      let s := (({} : Sessions).start 4 1 1000 life).1
+      s.accepts life 1 1059 && !s.accepts life 1 1060 && !s.accepts life 2 1000
+        && (s.touch life 1 1050).accepts life 1 1100 && !(s.touch life 1 1060).accepts life 1 1060),
+    ("sessions: an absolute lifetime ends a session however recently it was used",
+      let life : Lifetime := { idle_s := some 60, absolute_s := some 100 }
+      let s := (((({} : Sessions).start 4 1 1000 life).1.touch life 1 1050).touch life 1 1090)
+      s.accepts life 1 1099 && !s.accepts life 1 1100),
+    ("sessions: a session over is swept by the next write, and a clock stepped back does not revive it",
+      let life : Lifetime := { idle_s := some 60 }
+      let s := (({} : Sessions).start 4 1 1000 life).1
+      let (later, closed) := s.start 4 2 1100 life
+      later.ids == [2] && closed == [1] && !later.accepts life 1 1000
+        && !((s.sweep life 1100).1.accepts life 1 1000)
+        && ((s.sweep life 1100).1.accepts life 2 1000 == false)),
+    ("sessions: without a lifetime, none is ever over",
+      let s := (({} : Sessions).start 4 1 1000).1
+      s.accepts {} 1 (1000 + 10 ^ 9) && (s.sweep {} (10 ^ 9)).2.isEmpty),
     ("password: a digest prints as its first eight hex digits only, and hashes as its bytes",
       reprStr alice == "<digest " ++ String.ofList (alice.hex.toList.take 8) ++ ">"
         && hash alice == hash (password.digest "alice" "correct horse")) ]

@@ -10,7 +10,7 @@ import Videos.EndToEnd
 -/
 
 def main : IO UInt32 := do
-  let tests := (← Videos.Check.run) ++ Videos.EndToEnd.bridgeTests ++ (← Videos.EndToEnd.run)
+  let tests := (← Videos.Check.run) ++ Videos.Check.capTests ++ Videos.EndToEnd.bridgeTests ++ (← Videos.EndToEnd.run)
   let failed := tests.filter (!·.2)
   for (name, ok) in tests do
     IO.println s!"{if ok then "ok  " else "FAIL"} {name}"
