@@ -106,12 +106,22 @@ only for speed, in the shell's row of `TRUSTED.md`.
 
 ## Measured
 
-`bench/README.md`, "Choosing from the shard's timing", in this shared container: on every
-workload auto is within the noise of the better of `off` and `on`, which are each worse by up to
-a half on the workload the other suits. Over HTTP on two server CPUs, as D64 found, neither way
-gains. The warm machine's run is to come; the decision to make `auto` the default stands on the
-local numbers and on the argument that it is `off` for trivial steps, which most applications
-have.
+`bench/README.md`, "Choosing from the shard's timing", in the shared four-core container:
+`benchAuto`, the shard without IO on seven workloads (trivial and heavy steps, one or two actors
+and 64, mixed steps, phases of each), three sessions of seven runs. Differences under about a
+third were noise. Within it auto was as fast as the faster of `off` and `on` on every workload
+in every session, at worst 24% slower in a row whose spread was 38%; `on` was up to 2.8 times
+slower than auto on trivial steps and `off` up to 1.5 times on heavy ones. Whether the pool paid
+for heavy steps changed between sessions with the other agents' load (35, 22 and 36 µs a message
+on the pool against 35–37 on one thread), and auto followed it. Over HTTP on two server CPUs,
+where no mode gains (D64), auto was within the noise of `off` and used its CPU a request.
+
+**The default.** `auto` is the default because on these numbers it is never meaningfully worse
+than the better fixed setting, it is `off` but for the grouping of inputs where steps are cheap,
+and the grouping costs nothing measurable once groups are bounded. The warm machine's run is to
+come (`lanes-many-auto`, `lanes-heavy-auto` and `benchAuto`); it should show `lanes-heavy-auto`
+near `lanes-heavy-par` and `lanes-many-auto` near `lanes-many`, and if it does not, the
+thresholds move, not the default.
 
 ## Risks
 
