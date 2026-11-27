@@ -1,0 +1,22 @@
+name = "counter"
+version = "0.1.0"
+defaultTargets = ["Counter", "counter"]
+testDriver = "check"
+
+[[require]]
+name = "lanes"
+path = "../.."
+
+[[lean_lib]]
+name = "Counter"
+globs = ["Counter.+"]
+
+# The application.
+[[lean_exe]]
+name = "counter"
+root = "Main"
+
+# Model checks, run by `lake test`. Check before you prove (Lanes rule 5.1).
+[[lean_exe]]
+name = "check"
+root = "Check"

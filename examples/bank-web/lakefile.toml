@@ -1,0 +1,25 @@
+name = "bankWeb"
+version = "0.1.0"
+defaultTargets = ["BankWeb", "bankWeb", "check"]
+testDriver = "check"
+
+[[require]]
+name = "lanes"
+path = "../.."
+
+[[require]]
+name = "bank"
+path = "../bank"
+
+[[lean_lib]]
+name = "BankWeb"
+
+# The web application: `bankWeb [port] [journal]`.
+[[lean_exe]]
+name = "bankWeb"
+root = "Main"
+
+# What the page asks for and what the bridge makes of it, run by `lake test`.
+[[lean_exe]]
+name = "check"
+root = "Check"

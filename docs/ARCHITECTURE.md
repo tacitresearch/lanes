@@ -289,15 +289,15 @@ courier and enters the other process's inbox as an input.
 
 ## Applications
 
-`Examples/` holds small reference apps, each checked and proved: the bank (`Examples/Bank.lean`,
-also served over HTTP by `Examples/BankWeb.lean`), a key-value store with front ends
-(`Examples/KV.lean`, refinement in `Examples/KVProofs.lean`), leader election
-(`Examples/Election.lean`) and a watchdog (`Examples/Watchdog.lean`). `systems/` holds serious
-applications, each its own Lake package that requires Lanes as a user would (`systems/README.md`):
-`systems/raft-kv`, a replicated key-value store proved to implement the map it replicates
+`Examples/` holds small reference apps, each checked and proved: the bank (`Tests/Fixtures/Bank.lean`,
+also served over HTTP by `Tests/Fixtures/BankWeb.lean`), a key-value store with front ends
+(`Tests/Fixtures/KV.lean`, refinement in `Tests/Fixtures/KVProofs.lean`), leader election
+(`Tests/Fixtures/Election.lean`) and a watchdog (`Tests/Fixtures/Watchdog.lean`). `systems/` holds serious
+applications, each its own Lake package that requires Lanes as a user would (`examples/README.md`):
+`examples/raft-kv`, a replicated key-value store proved to implement the map it replicates
 (`RaftKV.implementsMachine`), and `once` of it in every environment with the memo in the map
-(`RaftKV.implementsMachine_once`); `systems/ledger`, a multi-user web ledger; and
-`systems/rookery`, a small social network for bots whose claims are proved of its spec, which it
+(`RaftKV.implementsMachine_once`); `examples/ledger`, a multi-user web ledger; and
+`examples/rookery`, a small social network for bots whose claims are proved of its spec, which it
 is proved to implement with deadlines (`Rookery.implements`). `lanes new`
 (`LanesCli/New.lean`, `templates/app/`) creates an application; `lanes lint`
 (`LanesCli/Lint.lean`) checks the rules of `AGENTS.md` that the text can show, the generated files

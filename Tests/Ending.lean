@@ -12,7 +12,7 @@ last batch; here the journal's second write holds the shard until they have, and
 
 namespace Tests.Ending
 
-open Lanes Std Std.Async Examples.Bank Tests.Durable
+open Lanes Std Std.Async Tests.Fixtures.Bank Tests.Durable
 
 def untakenTest : Async (List (String × Bool)) := do
   let calls ← IO.mkRef 0

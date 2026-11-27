@@ -29,7 +29,7 @@
 # Warming (WARM=1, the default, and `warm`) clones REPO into /opt/lanes/shared/src, installs the
 # toolchain of its lean-toolchain, fetches Mathlib's build into /opt/lanes/shared/<key>/packages,
 # where <key> is a hash of lean-toolchain and lake-manifest.json, and builds Lanes and what the
-# mutation gate runs of systems/raft-kv. Jobs link that `.lake/packages` and start from that
+# mutation gate runs of examples/raft-kv. Jobs link that `.lake/packages` and start from that
 # build (.github/actions/lean); a job whose key is not there yet makes it, under the same lock.
 # A private REPO is cloned with CLONE_TOKEN, or with the token of TOKEN_SECRET; neither is
 # stored.
@@ -331,14 +331,14 @@ warm_as_runner() {
   ln -sfn "$dir/packages" .lake/packages
   flock -u 9
   lake build
-  mkdir -p systems/raft-kv/.lake
-  ln -sfn "$src/.lake/packages" systems/raft-kv/.lake/packages
-  (cd systems/raft-kv && lake build raftNode raftProcs raftLive)
+  mkdir -p examples/raft-kv/.lake
+  ln -sfn "$src/.lake/packages" examples/raft-kv/.lake/packages
+  (cd examples/raft-kv && lake build raftNode raftProcs raftLive)
   flock 9
   rm -rf "$dir/build.new" "$dir/systems.new"
   cp -a .lake/build "$dir/build.new"
   mkdir -p "$dir/systems.new/raft-kv"
-  cp -a systems/raft-kv/.lake/build "$dir/systems.new/raft-kv/build"
+  cp -a examples/raft-kv/.lake/build "$dir/systems.new/raft-kv/build"
   rm -rf "$dir/build" "$dir/systems"
   mv "$dir/build.new" "$dir/build"
   mv "$dir/systems.new" "$dir/systems"

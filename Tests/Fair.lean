@@ -3,8 +3,8 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
-import Examples.Election
-import Examples.Watchdog
+import Tests.Fixtures.Election
+import Tests.Fixtures.Watchdog
 import Tests.Gate
 
 /-!
@@ -68,16 +68,16 @@ def watch (sys : System σ) (env : EnvModel σ) (events : Array (Event σ)) (ste
 
 abbrev N := Fin 3
 
-instance : (Examples.Election.sig N).Inspect := {}
+instance : (Tests.Fixtures.Election.sig N).Inspect := {}
 
-def electionEnv : EnvModel (Examples.Election.sig N) where
+def electionEnv : EnvModel (Tests.Fixtures.Election.sig N) where
   link _ _ := Link.network
   mayCrash _ := true
   restarts _ := true
 
 /-- Election timers are armed again and again, so the fair scheduler never runs out of work. -/
-def election (seed : Nat) : Watch (Examples.Election.cluster N {}) :=
-  let run := simulate (Examples.Election.cluster N {})
+def election (seed : Nat) : Watch (Tests.Fixtures.Election.cluster N {}) :=
+  let run := simulate (Tests.Fixtures.Election.cluster N {})
     { env := electionEnv, driver := Driver.silent, maxCrashes := 2 } seed (maxSteps := 5 * seed)
   watch _ electionEnv run.events 200
 
@@ -89,7 +89,7 @@ def gate (seed : Nat) : Watch (served (Server.system echo) bridge {}) :=
     (maxSteps := 3 * seed)
   watch _ env run.events 60
 
-open Examples.Watchdog in
+open Tests.Fixtures.Watchdog in
 /-- The keeper is a ping ahead: one is in flight whenever the dog's timer comes up. Then the
 keeper is left to ping, or told to rest. -/
 def watchdog (rest : Bool) : Watch (system {}) :=
@@ -112,10 +112,10 @@ def tests : List (String × Bool) :=
       gates.all fun w => w.taken.length < 60 && w.patience.isEmpty),
     ("fair scheduler: a timer that is armed again waits anew, so a watchdog whose keeper keeps "
         ++ "pinging never barks",
-      pinged.ok && !pinged.taken.contains Examples.Watchdog.bark
-        && pinged.taken.count (.deliver Examples.Watchdog.ping) == 100),
+      pinged.ok && !pinged.taken.contains Tests.Fixtures.Watchdog.bark
+        && pinged.taken.count (.deliver Tests.Fixtures.Watchdog.ping) == 100),
     ("fair scheduler: once the keeper rests, the watchdog barks and nothing is owed",
-      rested.ok && rested.taken.count Examples.Watchdog.bark == 1 && rested.taken.length < 200
+      rested.ok && rested.taken.count Tests.Fixtures.Watchdog.bark == 1 && rested.taken.length < 200
         && rested.patience.isEmpty) ]
 
 end Tests.Fair

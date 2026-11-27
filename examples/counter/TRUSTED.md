@@ -1,0 +1,11 @@
+# Trusted code
+
+Everything in this application that is trusted rather than proved (Lanes rule 5.5): each
+`axiom`, `@[extern]`, `@[implemented_by]`, `unsafe` and `partial`, with an owner, a reason and a
+test that exercises it. `lanes lint` fails on any that is not listed here.
+
+| What | Where | Owner | Why it is trusted | Test |
+| --- | --- | --- | --- | --- |
+
+Nothing yet. The Lanes runtime and adapters this application runs on are listed in Lanes' own
+`TRUSTED.md`.

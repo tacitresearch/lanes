@@ -3,7 +3,7 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
-import Examples.Bank
+import Tests.Fixtures.Bank
 
 /-! Codecs built by the combinators, by the two macros and by `lanes_data`: what is written is
 read back, with what followed it left over. The law is proved; these run the compiled code. Then
@@ -127,8 +127,8 @@ def tests : List (String × Bool) :=
       Index.codec.write same == Index.codec.write (index fruit)
         && Index.codec.write other != Index.codec.write (index fruit)),
     ("codec: the bank's requests and an HTTP request read back as written",
-      let request : Examples.Bank.Request (Fin 3) := .transfer ⟨7, 0, 2, 40⟩
-      let codec := Examples.Bank.Request.codec (Codec.fin (n := 3))
+      let request : Tests.Fixtures.Bank.Request (Fin 3) := .transfer ⟨7, 0, 2, 40⟩
+      let codec := Tests.Fixtures.Bank.Request.codec (Codec.fin (n := 3))
       let http : Http.Request := { method := .post, path := ["a", "b c"], query := [("q", "1")]
                                    headers := [("x", "y")], body := "body".toUTF8 }
       codec.read (codec.write request) == some (request, [])

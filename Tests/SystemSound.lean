@@ -28,7 +28,7 @@ theorem sum_perm {l₁ l₂ : List Int} (h : l₁.Perm l₂) : l₁.sum = l₂.s
 
 section Bank
 
-open Tests.Bank Examples.Bank
+open Tests.Bank Tests.Fixtures.Bank
 
 example (hfailure : reliable.failure = none) (hcomplete : reliable.complete = true) {w : W}
     (hw : Scenario.Reachable Bank2 { driver := Driver.anyOrder transfers } (fun _ => true) w) :
@@ -47,7 +47,7 @@ end Bank
 
 section Election
 
-open Tests.Election Examples.Election
+open Tests.Election Tests.Fixtures.Election
 
 example (hfailure : (check {} 1).failure = none) (hcomplete : (check {} 1).complete = true)
     {w : World (cluster N {}) Unit}
@@ -114,7 +114,7 @@ end Gate
 
 section KV
 
-open Tests.KV Examples.KV
+open Tests.KV Tests.Fixtures.KV
 
 /- Mathlib decides equality of functions on a finite type its own way. The check compared the
 store's state with `Enum.funBEq`, so that is the instance these statements must be about. -/

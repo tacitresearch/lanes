@@ -3,13 +3,13 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
-import Examples.Bank
+import Tests.Fixtures.Bank
 
 /-! Tests of the bank reference app: model checking, the scheduler and trace replay. -/
 
 namespace Tests.Bank
 
-open Lanes Examples.Bank
+open Lanes Tests.Fixtures.Bank
 
 instance : (sig (Fin 2)).Inspect := {}
 instance : (bank (Fin 2) 2).Inspect := {}

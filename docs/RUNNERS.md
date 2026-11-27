@@ -78,7 +78,7 @@ its jobs waiting for runners; the idle shutdown does not help there, re-running 
 
 `ci.yml` reads only `LANES_RUNNER` and does not start the machine: it stays on GitHub's runners
 unless you point `LANES_RUNNER` at runners that are up. Its jobs build once (`compile`) and then run
-lint and tests (`test`), the model checks (`check`), `systems/raft-kv` and `systems/ledger` in
+lint and tests (`test`), the model checks (`check`), `examples/raft-kv` and `examples/ledger` in
 parallel, each restoring the build from the Actions cache. The benchmark workflow (`bench.yml`) uses the box
 the same way as `mutants.yml`: its `start` and `stop` jobs are `.github/actions/box`.
 

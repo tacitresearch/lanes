@@ -3,7 +3,7 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
-import Examples.Bank
+import Tests.Fixtures.Bank
 
 /-!
 A durable shard: the bank with a journal. It is stopped and started, its journal is cut short,
@@ -13,7 +13,7 @@ shard comes back in the state its journal describes, with nothing it had acknowl
 
 namespace Tests.Durable
 
-open Lanes Std Std.Async Examples.Bank
+open Lanes Std Std.Async Tests.Fixtures.Bank
 
 abbrev Bank3 := bank (Fin 3) 100
 

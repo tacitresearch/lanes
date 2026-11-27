@@ -58,11 +58,11 @@ def modulesIn (root : System.FilePath) (dir : String) : IO (Array Name) := do
   return rel.qsort (·.toString < ·.toString)
 
 /-- What the inventory imports: the two roots of the library, `lanes` and this module, every
-module of `Tests`, and `Examples`. The other executables' `main` modules are left out: they
+module of `Tests`, the fixtures included. The other executables' `main` modules are left out: they
 would define `main` twice, and they only call what other modules define. -/
 def imports (root : System.FilePath) : IO (Array Name) := do
   let tests ← modulesIn root "Tests"
-  let all := #[`Lanes, `Lanes.Semantics, `Examples, `LanesCli.Main, `LanesCli.Inventory] ++ tests
+  let all := #[`Lanes, `Lanes.Semantics, `LanesCli.Main, `LanesCli.Inventory] ++ tests
   return all.filter fun m => !(m.getString!.endsWith "Main") || m == `LanesCli.Main
 
 /-- The theorems with an axiom gate: every `#print axioms` in `Tests/Axioms/`. -/
@@ -171,7 +171,7 @@ def readFacts (root : System.FilePath) (env : Environment) : IO Facts := do
   for i in [0:env.header.moduleNames.size] do
     let m := env.header.moduleNames[i]!
     let r := m.getRoot
-    if !(r == `Lanes || r == `LanesCli || r == `Tests || r == `Examples) then continue
+    if !(r == `Lanes || r == `LanesCli || r == `Tests) then continue
     for name in env.header.moduleData[i]!.constNames do
       let some ci := env.find? name | continue
       facts := { facts with moduleOf := facts.moduleOf.insert name m }
@@ -332,10 +332,10 @@ def provedBy (f : Facts) (spec : NameSet) : NameMap (Array (Name × Option Name)
   return out
 
 def isOutside (f : Facts) (n : Name) : Bool :=
-  (f.moduleOf.find? n).any fun m => m.getRoot == `Tests || m.getRoot == `Examples
+  (f.moduleOf.find? n).any fun m => m.getRoot == `Tests
 
-/-- The library constants the declarations reach through declarations of `Tests` and
-`Examples`, with no library declaration between. -/
+/-- The library constants the declarations reach through declarations of `Tests`, with no
+library declaration between. -/
 def reach (f : Facts) (start : List Name) : NameSet := Id.run do
   let mut seen : NameSet := {}
   let mut out : NameSet := {}

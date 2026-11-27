@@ -3,7 +3,7 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
-import Examples.BankWeb
+import Tests.Fixtures.BankWeb
 
 /-! Tests of HTML templates, rendering and HTTP request decoding. -/
 
@@ -90,7 +90,7 @@ def tests : List (String × Bool) :=
       let get (path : List String) : Http.Request := { method := .get, path }
       let form : Http.Request :=
         { method := .post, path := ["transfer"], body := "src=0&dst=1&amount=10".toUTF8 }
-      open Examples.BankWeb Examples.Bank in
+      open Tests.Fixtures.BankWeb Tests.Fixtures.Bank in
       (match bridge.decode 7 (get ["accounts", "2"]) with
         | .ok (.balance 7 account) => account == 2
         | _ => false)
@@ -104,7 +104,7 @@ def tests : List (String × Bool) :=
         | .error response => response.status == 200
         | _ => false)),
     ("bank web: the page asks for balances and posts transfers at its own routes",
-      let page := Examples.BankWeb.Page.render
+      let page := Tests.Fixtures.BankWeb.Page.render
       page.contains "hx-get=\"/accounts/2\" hx-trigger=\"load, transferred from:body\""
         && page.contains "<form hx-post=\"/transfer\" hx-target=\"#result\">"),
     ("route: a link is matched by its own route and by no other",

@@ -43,9 +43,6 @@ lean_lib Lanes where
   moreLinkObjs := #[native, sodium]
 
 @[default_target]
-lean_lib Examples
-
-@[default_target]
 lean_lib Tests where
   globs := #[.submodules `Tests]
 
@@ -56,10 +53,6 @@ lean_exe lanesTest where
 @[default_target]
 lean_exe lanesCheck where
   root := `Tests.CheckMain
-
-@[default_target]
-lean_exe bankWeb where
-  root := `Examples.BankWebMain
 
 /-- Differential tests against Go's standard library; needs `go` (`oracle/`). -/
 @[default_target]
@@ -78,4 +71,4 @@ lean_exe lanes where
 @[default_target]
 lean_exe lanesInventory where
   root := `LanesCli.InventoryMain
-  needs := #[`@/Lanes, `@/Tests, `@/Examples, `+LanesCli.Main]
+  needs := #[`@/Lanes, `@/Tests, `+LanesCli.Main]

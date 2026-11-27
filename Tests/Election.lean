@@ -3,7 +3,7 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
-import Examples.Election
+import Tests.Fixtures.Election
 
 /-!
 Model checks of leader election on three nodes with terms bounded at 2, over unordered links
@@ -12,7 +12,7 @@ with a crash budget. Timers, crashes and restarts are all explored here.
 
 namespace Tests.Election
 
-open Lanes Examples.Election
+open Lanes Tests.Fixtures.Election
 
 abbrev N := Fin 3
 

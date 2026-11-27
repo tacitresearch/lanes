@@ -235,9 +235,9 @@ MUTANTS = [
 CHECKS = {
     "lanesTest": dict(cwd=".", build="lake build lanesTest",
                       run="./.lake/build/bin/lanesTest", limit_s=120),
-    "raftProcs": dict(cwd="systems/raft-kv", build="lake build raftNode raftProcs",
+    "raftProcs": dict(cwd="examples/raft-kv", build="lake build raftNode raftProcs",
                       run="./.lake/build/bin/raftProcs", limit_s=300),
-    "raftLive": dict(cwd="systems/raft-kv", build="lake build raftLive",
+    "raftLive": dict(cwd="examples/raft-kv", build="lake build raftLive",
                      run="./.lake/build/bin/raftLive", limit_s=300),
 }
 

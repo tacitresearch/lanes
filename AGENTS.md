@@ -24,7 +24,7 @@ lake exe lanes inventory --list none  # the definitions of Lanes/ without eviden
 
 - Run `lake build --wfail`, `lake test`, `lake exe lanesCheck` and `lake exe lanes lint` before
   calling a task done. CI runs them in that order, then `lint --fix` must change nothing, then a
-  generated app is built and tested, and `systems/raft-kv` and `systems/ledger` run as jobs of
+  generated app is built and tested, and `examples/raft-kv` and `examples/ledger` run as jobs of
   their own.
 - `lanes lint` checks the text of a project: `no-sorry` (no `sorry` or `admit`), `trusted-listed`
   (`partial`, `unsafe`, `axiom`, `panic!`, `implemented_by`, `extern` and C only in files

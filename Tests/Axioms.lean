@@ -7,12 +7,12 @@ import Tests.Axioms.Check
 import Tests.Axioms.Core
 import Tests.Axioms.Data
 import Tests.Axioms.Durable
-import Tests.Axioms.Examples
 import Tests.Axioms.Lib
 import Tests.Axioms.Net
 import Tests.Axioms.Proof
 import Tests.Axioms.Runtime
 import Tests.Axioms.Semantics
+import Tests.Axioms.Tests
 import Tests.Axioms.Web
 
 /-!
@@ -21,6 +21,6 @@ axioms. If a `sorry` or a new axiom reaches one of them, its gate stops compilin
 built by `lake build`, not linked into the test executable.
 
 A theorem's gate is in `Tests/Axioms/<Area>.lean`, for the directory under `Lanes/` of the
-module that states it (`Lanes/Web/Http/Wire.lean` is `Web.lean`; `Examples/` and `Tests/` are
-`Examples.lean`), after the other gates of that module, under the line `-- <module>`.
+module that states it (`Lanes/Web/Http/Wire.lean` is `Web.lean`; `Tests/`, the fixtures included,
+is `Tests.lean`), after the other gates of that module, under the line `-- <module>`.
 -/

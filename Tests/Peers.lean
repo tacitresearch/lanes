@@ -3,7 +3,7 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
-import Examples.Bank
+import Tests.Fixtures.Bank
 import Tests.Durable
 import Tests.HttpClient
 
@@ -16,7 +16,7 @@ what it is sent: order, the size limit, and ends that leave, come back or are no
 
 namespace Tests.Peers
 
-open Lanes Std Std.Async Examples.Bank
+open Lanes Std Std.Async Tests.Fixtures.Bank
 
 abbrev Bank3 := bank (Fin 3) 1000
 

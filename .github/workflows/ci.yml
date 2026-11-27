@@ -122,7 +122,7 @@ jobs:
     timeout-minutes: 90
     defaults:
       run:
-        working-directory: systems/raft-kv
+        working-directory: examples/raft-kv
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -136,7 +136,7 @@ jobs:
       - if: steps.lean.outputs.warm != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: systems/raft-kv/.lake/build
+          path: examples/raft-kv/.lake/build
           key: ${{ steps.lean.outputs.system-key }}
       - name: Model checks
         run: lake test
@@ -151,7 +151,7 @@ jobs:
     timeout-minutes: 90
     defaults:
       run:
-        working-directory: systems/ledger
+        working-directory: examples/ledger
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -165,7 +165,7 @@ jobs:
       - if: steps.lean.outputs.warm != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: systems/ledger/.lake/build
+          path: examples/ledger/.lake/build
           key: ${{ steps.lean.outputs.system-key }}
       - name: Model checks
         run: lake test
@@ -178,7 +178,7 @@ jobs:
     timeout-minutes: 90
     defaults:
       run:
-        working-directory: systems/rookery
+        working-directory: examples/rookery
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -192,7 +192,7 @@ jobs:
       - if: steps.lean.outputs.warm != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: systems/rookery/.lake/build
+          path: examples/rookery/.lake/build
           key: ${{ steps.lean.outputs.system-key }}
       - name: Model checks
         run: lake test

@@ -3,7 +3,7 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
-import Examples.Bank
+import Tests.Fixtures.Bank
 import Tests.Bank
 import Tests.Join
 
@@ -111,7 +111,7 @@ end Compare
 
 section Bank
 
-open Examples.Bank Tests.Bank
+open Tests.Fixtures.Bank Tests.Bank
 
 /-- Credits travel on a network link, requests on a reliable one, and every account may crash:
 a crash loses the requests waiting and keeps the credits. -/
@@ -286,7 +286,7 @@ three shards. -/
 
 section Three
 
-open Examples.Bank
+open Tests.Fixtures.Bank
 
 abbrev Bank3 := bank (Fin 3) 1
 
@@ -368,7 +368,7 @@ end Three
 
 section Bank
 
-open Examples.Bank
+open Tests.Fixtures.Bank
 
 /-- No balance of the bank on two shards is ever negative, from the same fact about the bank. -/
 theorem split_balance_nonneg {A : Type} [DecidableEq A] (opening : Nat) (hosts : A → Bool)
