@@ -535,7 +535,9 @@ def ServerConfig.journalName (config : ServerConfig) : String :=
   s!"{config.system}, behind a gate of {config.gate.requestTimeout_ms} ms and "
     ++ s!"{config.gate.maxPending} requests"
 
-/-- Returns once the server is listening. Each request is answered exactly once by the gate.
+/-- Serve `sys` over HTTP: the gate (`served`) is joined in front of it, `bridge` turns requests
+into inputs and outputs into responses, and the whole runs on one shard (`Runtime`). Returns
+once the server is listening. Each request is answered exactly once by the gate.
 With a journal and `saving`, the kernel is saved from time to time and the journal cut
 (`Runtime.Config.snapshotEvery`); with a journal alone, the journal only grows. `arrive` is work
 a request needs in IO before it is prepared, done on a task of its own: what it returns enters as
@@ -559,6 +561,7 @@ namespace Server
 
 variable {system : System τ} [Hashable τ.Id]
 
+/-- The port the server listens on: the one picked when `ServerConfig.port` is `0`. -/
 def port (server : Server system) : Option UInt16 :=
   some server.localPort
 

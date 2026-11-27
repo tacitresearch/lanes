@@ -52,6 +52,8 @@ structure Runtime.Batches where
   pool : Nat := 0
   deriving Repr
 
+/-- How a shard runs: its bounds, its threads and how often it saves. Every field has a
+default. -/
 structure Runtime.Config where
   /-- Inputs wait here for the shard. When it is full, `tryInput` refuses. At least one. -/
   inboxCapacity : Nat := 1024
@@ -107,6 +109,10 @@ private inductive Wake where
   | shard
   | sender (room : IO.Promise Unit)
 
+/-- A running shard: `sys` executed by the kernel on a thread of its own. Start one with
+`Runtime.start` or `Runtime.startWith`, hand it inputs with `input` or `tryInput`, and end it
+with `stop`. By `Kernel.exec_reachable`, nothing it does takes the system outside the
+semantics. -/
 structure Runtime (sys : System σ) [Hashable σ.Id] where
   private mk ::
   private config : Runtime.Config

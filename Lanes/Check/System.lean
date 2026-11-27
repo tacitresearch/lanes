@@ -105,6 +105,8 @@ def Trace.render {S L : Type} (showState : S → String) (showLabel : L → Stri
   let steps := t.steps.zipIdx.map fun ((l, _), k) => s!"  {k + 1}. {showLabel l}"
   "\n".intercalate (steps ++ ["  state reached:", showState t.last])
 
+/-- The report as the checker prints it: the verdict, the trace to a failure and the state it
+reaches, the witnesses, the counts, and how often each kind of transition was taken. -/
 def Report.render {S L : Type} (showState : S → String) (showLabel : L → String)
     (r : Report S L) : String :=
   let verdict := match r.failure with
@@ -127,6 +129,8 @@ def Report.render {S L : Type} (showState : S → String) (showLabel : L → Str
     [s!"states: {r.states}, transitions: {r.transitions}, depth: {r.depth}",
      s!"coverage: {", ".intercalate coverage}"])
 
+/-- `render` for a report of `Check.system`, which prints states and events through
+`Inspect`. -/
 def Report.renderSystem [σ.Inspect] [sys.Inspect]
     (r : Report (World sys D) (Event σ)) : String :=
   r.render (fun w => w.state.render) Event.render
