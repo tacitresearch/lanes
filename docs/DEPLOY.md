@@ -4,7 +4,7 @@ How to take an application from `lanes new` to a site on HTTPS on AWS, deploy it
 its types, back it up and restore it, and watch it. One stack makes everything
 (`infra/app/lanes-app.yaml`), one script sets the machine up (`infra/app/app-instance.sh`), and
 one workflow deploys (`.github/workflows/deploy-example.yml`). Why the shape is one machine and a
-disk is `docs/decisions/new-one-instance-one-volume.md`.
+disk is `docs/decisions/D70-one-instance-one-volume.md`.
 
 None of this has run on AWS yet: what has been checked, and what has not, is at the end.
 
