@@ -7,6 +7,7 @@ module
 public import Lanes.Runtime.Kernel
 public import Lanes.Runtime.Release
 public import Lanes.Proof.Lift
+public import Lanes.Proof.HashMap
 
 /-!
 The kernel cannot leave the semantics: every kernel operation is a run of `SysState.step` under
@@ -314,9 +315,35 @@ theorem abs_settle (k : Kernel sys) (ob : List σ.Out) (i : σ.Id)
   · simp only [hstop, ite_false, Bool.false_eq_true]
     exact hall
 
+/-- Writing a cell twice is writing it once: the table is the same value, not only the same
+map. -/
+theorem setCell_setCell {k : Kernel sys} {i : σ.Id} (h : k.cells.contains i = true)
+    (c c' : Cell sys i) : (k.setCell i c).setCell i c' = k.setCell i c' := by
+  simp only [setCell, DHashMap.insert_insert_of_contains h]
+
+/-- `settle` reads only the cell's `up` and `timers`, and writes the whole cell: so whatever
+state a cell held for `i` before, the kernel `settle` leaves is the same. -/
+theorem settle_setCell {k : Kernel sys} {i : σ.Id} {c : Cell sys i} (h : k.cells.get? i = some c)
+    (s : sys.State i) (r : sys.State i × List (Effect σ i)) :
+    (k.setCell i { c with state := s }).settle i r = k.settle i r := by
+  have hc : k.cell i = c := by simp [cell, h]
+  have hcontains : k.cells.contains i = true := by
+    rw [Std.DHashMap.contains_eq_isSome_get?, h]; rfl
+  simp only [settle_eq, cell_setCell, update_self, hc, setCell_setCell hcontains]
+
+/-- `handle` takes the state out of its cell before the step (`takeState`), and that changes no
+value: it is `settle` on the step from the state the cell holds. -/
 theorem handle_eq (k : Kernel sys) (i : σ.Id) (msg : σ.Msg i) :
     k.handle i msg = (((k.settle i ((sys.actor i).step (k.cell i).state msg)).1).rest i,
-      (k.settle i ((sys.actor i).step (k.cell i).state msg)).2) := rfl
+      (k.settle i ((sys.actor i).step (k.cell i).state msg)).2) := by
+  unfold handle takeState
+  cases h : k.cells.get? i with
+  | none =>
+    have hc : k.cell i = { state := (sys.actor i).init } := by simp [cell, h]
+    rw [hc]
+  | some c =>
+    have hc : k.cell i = c := by simp [cell, h]
+    simp only [settle_setCell h, hc]
 
 /-- Handling a message is the semantics' `handle`, with the actor released if that leaves it at
 rest. -/
