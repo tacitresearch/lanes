@@ -19,11 +19,11 @@ is how a misread standard shows up.
 | --- | --- | --- |
 | a | Lean core, `Std` or Batteries has it (module named) | 37 |
 | b | Pure and needed by applications: build in Lean and prove | 26 |
-| c | Touches the operating system or cryptography: bind (library named) | 13 |
+| c | Touches the operating system or cryptography: bind (library named) | 11 |
 | d | Not needed for Lanes applications (reason given) | 79 |
-| e | Already in Lanes (module named) | 17 |
+| e | Already in Lanes (module named) | 19 |
 
-Of the 19 `golang.org/x` packages listed at the end, 9 are (b), 3 are (c) and 7 are (d).
+Of the 19 `golang.org/x` packages listed at the end, 8 are (b), 3 are (c), 7 are (d) and 1 is (e).
 
 A package gets the class of what applications use it for. Three have a part in another class,
 listed on their own line: the formats of `time` (b, P0), `File.Sync` in `os` (c, P0) and content
@@ -93,7 +93,7 @@ API. P1 is common, P2 rare.
 | `encoding/csv` | b | P1 |
 | `encoding/pem` | b | P2 |
 | `encoding/asn1` | b | P2 |
-| `encoding/xml` | b | P2 |
+| `encoding/xml` | b | P2; a reader of the part S3's answers use, not yet tested against Go's, in `Lanes/Web/S3/Xml.lean` |
 | `encoding/gob` | d | Go's own format; Lanes has `Codec` |
 | `encoding/ascii85` | d | PostScript and PDF only |
 | `compress/flate`, `compress/gzip`, `compress/zlib` | b | P2: the reverse proxy compresses responses, and a client can ask for none |
@@ -141,8 +141,8 @@ API. P1 is common, P2 rare.
 | `crypto/aes`, `crypto/cipher` | c | libsodium `crypto_aead_xchacha20poly1305_ietf` (or `crypto_aead_aes256gcm`), for encrypted cookies and data at rest (P1) |
 | `crypto/ed25519` | c | libsodium `crypto_sign` (P1: webhook signatures) |
 | `crypto/ecdh` | c | libsodium `crypto_scalarmult` for X25519; P-256 from OpenSSL's `libcrypto` (P2) |
-| `crypto/ecdsa` | c | `libcrypto`; libsodium has no P-256 (P1: ES256 tokens, WebAuthn, Web Push) |
-| `crypto/rsa` | c | `libcrypto` (P1: verifying RS256 tokens from an identity provider) |
+| `crypto/ecdsa` | e | verifying only: P-256 with SHA-256 from the OpenSSL Lean's toolchain ships, bound in `native/verify.c` and `Lanes/Lib/Crypto/Verify.lean`, the key's and the signature's DER written in Lean (`Lanes/Lib/Crypto/PublicKey.lean`); for ES256 tokens. Signing (WebAuthn, Web Push) is not bound |
+| `crypto/rsa` | e | verifying only: PKCS #1 v1.5 with SHA-256, bound from the same OpenSSL (`native/verify.c`), with a Lean reference (`Rsa.verifyReference`); for RS256 tokens. No signing, PSS or encryption |
 | `crypto/sha1` | c | `libcrypto` (P1: TOTP is HMAC-SHA-1; also the WebSocket handshake) |
 | `crypto/sha512` | c | libsodium `crypto_hash_sha512` (P2) |
 | `crypto/hkdf` | c | libsodium `crypto_kdf_hkdf_sha256` (P1: deriving keys from one secret) |
@@ -175,9 +175,9 @@ and the RFCs' own.
 | `context` | e | deadlines are `Effect.after` and `Effect.cancel` (`Lanes/Core/System.lean`, D3); a request's deadline is the gate's |
 | `sync`, `sync/atomic` | a | `Std.Sync` (`Mutex`, `Channel`, `Semaphore`, `Barrier`, `Notify`, `Broadcast`), `IO.Ref`. Lanes actors share nothing, so applications do not use them |
 | `log` | a | `IO.println`, `IO.eprintln` |
-| `log/slog` | b | P1 |
+| `log/slog` | b | P1. The HTTP server's access log is JSON lines (`Lanes/Web/Http/Ops.lean`); there is no general logger |
 | `log/syslog` | d | logs go to standard error and the service manager collects them |
-| `expvar` | b | P1, as a metrics page in the Prometheus text format rather than expvar's JSON |
+| `expvar` | b | P1, built as a metrics page in the Prometheus text format rather than expvar's JSON: `Lanes/Lib/Metrics.lean`, served by the HTTP server (`ServerConfig.ops`) |
 | `flag` | d | an application takes a few arguments and the environment; the `Cli` package is in the manifest (through Mathlib) if a tool needs more |
 | `testing` | e | `lake test`, the model checker (`Lanes.Check`), seeded random runs (`Lanes/Check/Fuzz.lean`), mutants (`scripts/mutants.py`) |
 | `testing/quick` | a | Plausible, pinned in `lake-manifest.json` through Mathlib |
@@ -208,7 +208,7 @@ and the RFCs' own.
 | `x/text/language`, `x/text/encoding` | d | one language and UTF-8 only, for now |
 | `x/time/rate` | b | P0, built: `Lanes/Lib/RateLimit.lean` (the bucket; not yet the table of buckets per key) |
 | `x/sync` (`errgroup`, `semaphore`, `singleflight`) | d | concurrency is actors |
-| `x/oauth2` | b | P1 |
+| `x/oauth2` | e | sign-in only: the authorization code flow with PKCE and OpenID Connect (`Lanes/Web/Auth/OAuth.lean`, `Lanes/Web/IO/SignIn.lean`); no refresh tokens or token sources for calling APIs |
 
 ## What to build (b)
 
@@ -228,19 +228,19 @@ and the RFCs' own.
 | `net/http` (event streams) | live timelines | WHATWG HTML §9.2 (`text/event-stream`); `parse (write events) = events` | the specification's examples; Go has no parser | small | P1 |
 | `path` | cleaning a request's path, static files | RFC 3986 §5.2.4 `remove_dot_segments`; `clean (clean p) = clean p` | Go `path.Clean`, `path.Match` | small | P1 |
 | `log/slog` | structured logs | one JSON object per line, as slog's `JSONHandler` writes (RFC 3339 times, keys in order) | Go `slog.NewJSONHandler` on the same records | small | P1 |
-| `expvar` | a metrics page | Prometheus text exposition format 0.0.4 | `github.com/prometheus/common/expfmt` parsing our output | small | P1 |
+| `expvar` | a metrics page | Prometheus text exposition format 0.0.4 | `github.com/prometheus/common/expfmt` parsing our output | small | P1, built without the oracle |
 | `unicode` | validating names and text by category | the Unicode Character Database (`UnicodeData.txt`, `DerivedCoreProperties.txt`), tables generated from it with a theorem per table that lookup agrees with the list | the UCD files directly; Go 1.24 is at Unicode 15.0.0, so it disagrees on newer characters | medium | P1 |
 | `unicode/utf16` | counting text as `maxlength` in a browser does | Unicode §3.9 D91; `decode (encode s) = s` on scalar values | Go `utf16.Encode`, `Decode` | small | P1 |
 | `x/text/unicode/norm` | user names and search keys compared after NFC | UAX #15; NFC idempotent, `nfc ∘ nfd = nfc` | `NormalizationTest.txt`; Go x/text | medium | P1 |
 | `x/text/cases` | case-insensitive names | Unicode §3.13 default case folding | `CaseFolding.txt`, `SpecialCasing.txt`; Go x/text | medium | P1 |
 | `x/text/secure/precis` | user names and passwords prepared before comparison | RFC 8264, RFC 8265 (`UsernameCaseMapped`, `OpaqueString`); needs norm and cases | Go x/text/secure/precis | small | P1 |
 | `x/net/idna` | host names in links in posts | UTS #46, RFC 5891, RFC 3492 (Punycode, `decode (encode s) = s`) | `IdnaTestV2.txt`; Go x/net/idna | medium | P1 |
-| `x/oauth2` | "log in with" another service; calling APIs on a user's behalf | RFC 6749 §4.1 with PKCE (RFC 7636), written as an actor whose step is the flow | Go x/oauth2 against a scripted provider, comparing the requests each sends | medium | P1 |
+| `x/oauth2` | "log in with" another service; calling APIs on a user's behalf | RFC 6749 §4.1 with PKCE (RFC 7636): built for signing in, as pure decisions done where a request arrives, not as an actor (`docs/decisions/D72-sign-in-with-oauth.md`); calling APIs later (refresh tokens) is not | Go x/oauth2 against a scripted provider, comparing the requests each sends: not done; tested against a provider run in the test | medium | P1, sign-in built |
 | `regexp`, `regexp/syntax` | validation, search, rewriting links | RE2 syntax; the language of an expression and leftmost-first matching as the spec; the matcher (Pike VM or derivatives) proved to agree and to run in linear time | Go `regexp`; RE2's suites in Go's tree (`regexp/testdata/re2-search.txt`, `re2-exhaustive.txt.bz2`) and the AT&T POSIX tests there (`basic.dat`, `nullsubexpr.dat`, `repetition.dat`) | large | P1 |
 | `compress/flate`, `gzip`, `zlib`, `hash/crc32`, `hash/adler32` | reading compressed API responses and uploads | RFC 1950, 1951, 1952; `inflate (deflate x) = some x`; CRC-32 as polynomial division | Go `compress/*` both ways (Go inflates ours, we inflate Go's at every level), Go `crc32.ChecksumIEEE` | large | P2 |
 | `encoding/binary` | varints and fixed-width fields of other services' formats | protobuf varint and zigzag; round trips | Go `binary.AppendUvarint`, `Uvarint`, `BigEndian` | small | P2 |
 | `encoding/pem` | reading keys for the bound libraries | RFC 7468; round trip | Go `encoding/pem` | small | P2 |
-| `encoding/asn1` | DER-encoded ECDSA signatures (JWT ES256 wants `r ‖ s`) | ITU-T X.690 DER; round trip and canonicity | Go `encoding/asn1`, x/crypto/cryptobyte | large | P2 |
+| `encoding/asn1` | DER-encoded ECDSA signatures (JWT ES256 wants `r ‖ s`); written, not read, for the two shapes the signature check needs in `Lanes/Lib/Crypto/PublicKey.lean` | ITU-T X.690 DER; round trip and canonicity | Go `encoding/asn1`, x/crypto/cryptobyte | large | P2 |
 | `encoding/xml` | Atom and RSS feeds (written, like `Html`); reading XML is rarer | XML 1.0 (fifth edition) | W3C XML Conformance Test Suite; Go `encoding/xml` is lenient, so second | large | P2 |
 | `mime/quotedprintable` | mail bodies | RFC 2045 §6.7; round trip | Go `mime/quotedprintable` | small | P2 |
 | `net/smtp` | sending mail without a provider's API | RFC 5321 client as an actor; needs TLS (c) | Go `net/smtp` against a scripted server, comparing the bytes each client sends | medium | P2 |

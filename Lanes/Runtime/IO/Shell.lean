@@ -115,6 +115,7 @@ structure Runtime (sys : System σ) [Hashable σ.Id] where
   private log : IO.Ref (Array (Event σ))
   private ran : IO.Ref Runtime.Batches
   private finished : IO.Promise (Option IO.Error)
+  private recovered : IO.Ref Bool
 
 private initialize live : IO.Ref Nat ← IO.mkRef 0
 
@@ -189,6 +190,7 @@ private def loop (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
     deliver log.pending
     log.migrate
   handOver outputs
+  rt.recovered.set true
   let since := start.clock_ms
   let epoch ← IO.monoMsNow
   let clock : BaseIO Nat := return since + ((← IO.monoMsNow) - epoch)
@@ -283,7 +285,8 @@ def startWith (sys : System σ) [Hashable σ.Id] (config : Runtime.Config := {})
     parker := ← Parker.new
     log := ← IO.mkRef #[]
     ran := ← IO.mkRef {}
-    finished := ← IO.Promise.new }
+    finished := ← IO.Promise.new
+    recovered := ← IO.mkRef false }
   live.modify (· + 1)
   discard <| IO.asTask (prio := .dedicated) (rt.run (onOutput rt) journal)
   return rt
@@ -355,6 +358,14 @@ are abandoned and pending timers never fire. -/
 def stop (rt : Runtime sys) : Async Unit := do
   for w in ← rt.inbox.modifyGet Mailbox.close do rt.wake w
   discard <| await rt.finished.result?
+
+/-- Whether the shard has started: replayed its journal and handed over what it owed. -/
+def hasRecovered (rt : Runtime sys) : BaseIO Bool :=
+  rt.recovered.get
+
+/-- The commands waiting in the inbox. -/
+def depth (rt : Runtime sys) : BaseIO Nat :=
+  rt.inbox.modifyGet fun m => (m.count, m)
 
 /-- Wait until the shard has ended, and say whether an error ended it. A shard ends on an error
 when its journal cannot be written: it must not hand over outputs it could not make durable.

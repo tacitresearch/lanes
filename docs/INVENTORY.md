@@ -15,15 +15,15 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Core` | 102 | 40 | 0 | 34 | 1 | 10 | 17 |
 | `Lanes/Data` | 68 | 43 | 0 | 4 | 1 | 0 | 20 |
 | `Lanes/Durable` | 67 | 57 | 2 | 0 | 0 | 7 | 1 |
-| `Lanes/Lib` | 486 | 331 | 13 | 2 | 66 | 65 | 9 |
+| `Lanes/Lib` | 530 | 344 | 13 | 2 | 92 | 70 | 9 |
 | `Lanes/Net` | 37 | 6 | 5 | 0 | 0 | 25 | 1 |
-| `Lanes/Outside` | 110 | 81 | 5 | 6 | 1 | 17 | 0 |
+| `Lanes/Outside` | 116 | 86 | 5 | 6 | 1 | 18 | 0 |
 | `Lanes/Proof` | 35 | 12 | 0 | 0 | 0 | 22 | 1 |
-| `Lanes/Runtime` | 170 | 93 | 19 | 0 | 28 | 30 | 0 |
+| `Lanes/Runtime` | 172 | 93 | 21 | 0 | 28 | 30 | 0 |
 | `Lanes/Semantics` | 57 | 9 | 0 | 0 | 0 | 47 | 1 |
-| `Lanes/Web` | 329 | 188 | 28 | 8 | 64 | 39 | 2 |
+| `Lanes/Web` | 500 | 256 | 47 | 24 | 126 | 45 | 2 |
 | `LanesCli` | 110 | 0 | 0 | 0 | 46 | 0 | 64 |
-| All | 1711 | 950 | 77 | 80 | 207 | 279 | 118 |
+| All | 1934 | 1036 | 98 | 96 | 295 | 291 | 118 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -178,7 +178,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Check.Property.holds` | proved | `Check.refines_sound`, `Check.refines_traces`, `Check.system_sound` and 1 more |
 | `Check.Trace.last` | proved | `Check.search_deadlock`, `Check.search_reached`, `Check.search_violated` and 2 more |
 | `Check.Trace.labels` | proved | `Check.system_violated` |
-| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 18 more |
+| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 19 more |
 | `Check.Path.last` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
 | `Check.Path.toTraceAux` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
 | `Check.Path.toTrace` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
@@ -337,7 +337,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Driver.silent` | checked | `Tests/Election.lean` |
 | `Driver.script` | checked | `Tests/KV.lean` |
-| `Driver.anyOrder` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 5 more |
+| `Driver.anyOrder` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 6 more |
 | `World.init` | checked | `Tests/Bank.lean` |
 | `World.next` | proved | `World.Equiv.next` |
 | `simulate` | checked | `Tests/Bank.lean` |
@@ -586,9 +586,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Hmac.blockOf` | tested | `Tests/Crypto.lean` |
-| `Hmac.Pads.of` | tested | `Tests/Crypto.lean` |
-| `Hmac.reference` | tested | `Tests/Crypto.lean` |
+| `Hmac.blockOf` | tested | `Tests/Crypto.lean`, `Tests/SigV4.lean` |
+| `Hmac.Pads.of` | tested | `Tests/Crypto.lean`, `Tests/SigV4.lean` |
+| `Hmac.reference` | tested | `Tests/Crypto.lean`, `Tests/SigV4.lean` |
 | `Bytes.sameReference` | tested | `Tests/Crypto.lean` |
 | `Bytes.hexDigit` | proved | through `Bytes.hex`: `Bytes.unhex?_hex` |
 | `Bytes.hex` | proved | `Bytes.unhex?_hex` |
@@ -623,6 +623,29 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Pbkdf2.block.go` | tested | `Tests/Postgres.lean` |
 | `Pbkdf2.derive` | tested | `Tests/Postgres.lean` |
 
+## `Lanes/Lib/Crypto/PublicKey.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Bytes.toNat` | tested | `Tests/Signature.lean` |
+| `Bytes.ofNat` | proved | `Bytes.size_ofNat` |
+| `Der.digits` | tested | `Tests/Signature.lean` |
+| `Der.length` | tested | `Tests/Signature.lean` |
+| `Der.tlv` | tested | `Tests/Signature.lean` |
+| `Der.integer` | tested | `Tests/Signature.lean` |
+| `Der.sequence` | tested | `Tests/Signature.lean` |
+| `Der.bitString` | tested | `Tests/Signature.lean` |
+| `Der.rsaAlgorithm` | tested | `Tests/Signature.lean` |
+| `Der.p256Algorithm` | tested | `Tests/Signature.lean` |
+| `PublicKey.rsaSize` | tested | `Tests/Signature.lean` |
+| `PublicKey.valid` | tested | `Tests/Signature.lean` |
+| `PublicKey.spki` | tested | `Tests/Signature.lean` |
+| `PublicKey.derSignature` | tested | `Tests/Signature.lean` |
+| `Rsa.powMod` | proved | `Rsa.powMod_eq` |
+| `Rsa.digestInfo` | tested | `Tests/Signature.lean` |
+| `Rsa.encode` | tested | `Tests/Signature.lean` |
+| `Rsa.verifyReference` | tested | `Tests/Signature.lean` |
+
 ## `Lanes/Lib/Crypto/Sha256.lean`
 
 | Definition | Status | Evidence |
@@ -650,6 +673,12 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `randomBytes` | trusted | TRUSTED.md: The C |
 | `Argon2id.hash` | trusted | TRUSTED.md: The C |
 
+## `Lanes/Lib/Crypto/Verify.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `PublicKey.verifies` | proved | `Jose.verify_ok`, `OAuth.IdToken.verify_accepted` |
+
 ## `Lanes/Lib/Encoding/Base64.lean`
 
 | Definition | Status | Evidence |
@@ -662,7 +691,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Base64.Encoding.std` | checked | `Tests/PostgresConn.lean` |
 | `Base64.Encoding.rawStd` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
 | `Base64.Encoding.url` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
-| `Base64.Encoding.rawUrl` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
+| `Base64.Encoding.rawUrl` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean`, `Tests/Signature.lean` |
 | `Base64.sextet` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 2 more |
 | `Base64.byte` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
 | `Base64.pad` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 2 more |
@@ -702,7 +731,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `JsonNumber.ofScientific` | proved | `Json.ofScientific_mantissa` |
 | `JsonNumber.instCoeNat` | none |  |
 | `JsonNumber.instCoeInt` | none |  |
-| `JsonNumber.instOfNat` | tested | `Tests/Json.lean` |
+| `JsonNumber.instOfNat` | tested | `Tests/Json.lean`, `Tests/Ops.lean` |
 | `JsonNumber.instInhabited` | none |  |
 | `JsonNumber.instOfScientific` | tested | `Tests/Json.lean` |
 | `JsonNumber.instNeg` | tested | `Tests/Json.lean` |
@@ -729,8 +758,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Json.instCoeString` | none |  |
 | `Json.instCoeBool` | none |  |
 | `Json.instOfNat` | tested | `Tests/Json.lean` |
-| `Json.sortFields` | proved | through `Json.depth`, `Json.mkObj` and 1 more: `Json.getObjVal?_mkObj`, `Json.parse_complete` and 6 more |
-| `Json.dedupFields` | proved | through `Json.depth`, `Json.mkObj` and 1 more: `Json.getObjVal?_mkObj`, `Json.parse_complete` and 6 more |
+| `Json.sortFields` | proved | through `Json.depth`, `Json.mkObj` and 1 more: `Http.Ops.Access.parse_line`, `Json.getObjVal?_mkObj` and 7 more |
+| `Json.dedupFields` | proved | through `Json.depth`, `Json.mkObj` and 1 more: `Http.Ops.Access.parse_line`, `Json.getObjVal?_mkObj` and 7 more |
 | `Json.duplicateKey?` | tested | `Tests/Json.lean` |
 | `Json.mkObj` | proved | `Json.getObjVal?_mkObj` |
 | `Json.mkObj?` | tested | `Tests/Json.lean` |
@@ -742,7 +771,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Json.getNat?` | proved | `Json.getNat?_eq_ok` |
 | `Json.getInt?` | proved | `Json.getInt?_eq_ok` |
 | `Json.getBool?` | proved | `Json.getBool?_eq_ok` |
-| `Json.getObjVal?` | proved | `Json.getObjVal?_eq_ok`, `Json.getObjVal?_mkObj` |
+| `Json.getObjVal?` | proved | `Jose.Compact.read_alg`, `Jose.readHeader_alg`, `Jose.verify_ok` and 3 more |
 | `Json.getArrVal?` | proved | `Json.getArrVal?_eq_ok` |
 | `Json.getObjValD` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` and 3 more |
 
@@ -774,7 +803,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `instToJsonOption` | proved | `fromJson?_toJson_none`, `fromJson?_toJson_some` |
 | `instFromJsonProd` | proved | `fromJson?_toJson_prod` |
 | `instToJsonProd` | proved | `fromJson?_toJson_prod` |
-| `Json.getObjValAs?` | tested | `Tests/Json.lean` |
+| `Json.getObjValAs?` | tested | `Tests/Json.lean`, `Tests/OAuth.lean` |
 | `Json.opt` | tested | `Tests/Json.lean` |
 
 ## `Lanes/Lib/Encoding/Json/Grammar.lean`
@@ -800,33 +829,33 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Json.Parser.fail` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.next?` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.accept` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.skipWsFrom` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.skipWs` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.acceptAll` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.hexDigit?` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.hexDigit` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.hex4` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.lowSurrogate` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.escape` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.strFrom` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.str` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.digitsFrom` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.whole` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.fraction` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.exponentDigits` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.exponent` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.unsigned` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.num` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.literal` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.key` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.value` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
+| `Json.Parser.fail` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.next?` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.accept` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.skipWsFrom` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.skipWs` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.acceptAll` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.hexDigit?` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.hexDigit` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.hex4` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.lowSurrogate` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.escape` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.strFrom` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.str` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.digitsFrom` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.whole` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.fraction` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.exponentDigits` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.exponent` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.unsigned` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.num` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.literal` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.key` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.value` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
 | `Json.Parser.elements` | spec | used only in statements |
 | `Json.Parser.fields` | spec | used only in statements |
-| `Json.Parser.document` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.parse` | proved | `Json.parse_complete`, `Json.parse_compress`, `Json.parse_iff` and 2 more |
+| `Json.Parser.document` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.parse` | proved | `Http.Ops.Access.parse_line`, `Json.parse_complete`, `Json.parse_compress` and 3 more |
 
 ## `Lanes/Lib/Encoding/Json/ParserSound.lean`
 
@@ -856,6 +885,36 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Json.prettyTo` | proved | through `Json.pretty`: `Json.fromUTF8?_pretty`, `Json.parse_pretty` and 1 more |
 | `Json.pretty` | proved | `Json.fromUTF8?_pretty`, `Json.parse_pretty`, `Json.text_pretty` |
 | `Json.instToString` | none |  |
+
+## `Lanes/Lib/Metrics.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Metrics.Histogram.bump` | proved | through `Metrics.Histogram.observeAll`: `Metrics.Histogram.buckets_pairwise`, `Metrics.Histogram.observeAll_eq` |
+| `Metrics.Histogram.observe` | proved | through `Metrics.Histogram.observeAll`: `Metrics.Histogram.buckets_pairwise`, `Metrics.Histogram.observeAll_eq` |
+| `Metrics.Histogram.observeAll` | proved | `Metrics.Histogram.buckets_pairwise`, `Metrics.Histogram.observeAll_eq` |
+| `Metrics.Histogram.buckets` | spec | used only in statements |
+| `Metrics.escapeLabelChar` | proved | through `Metrics.escapeLabel`: `Metrics.newline_not_mem_escapeLabel`, `Metrics.readLabelValue_escapeLabel` |
+| `Metrics.escapeLabel` | proved | `Metrics.newline_not_mem_escapeLabel`, `Metrics.readLabelValue_escapeLabel` |
+| `Metrics.escapeHelpChar` | proved | through `Metrics.escapeHelp`: `Metrics.newline_not_mem_escapeHelp`, `Metrics.readHelp_escapeHelp` |
+| `Metrics.escapeHelp` | proved | `Metrics.newline_not_mem_escapeHelp`, `Metrics.readHelp_escapeHelp` |
+| `Metrics.readLabelValue` | spec | used only in statements |
+| `Metrics.readHelp` | spec | used only in statements |
+| `Metrics.nameChar` | proved | through `Metrics.sanitize`: `Metrics.sanitize_of_valid`, `Metrics.valid_sanitize` |
+| `Metrics.validChars` | spec | used only in statements |
+| `Metrics.valid` | spec | used only in statements |
+| `Metrics.sanitizeChars` | proved | through `Metrics.sanitize`: `Metrics.sanitize_of_valid`, `Metrics.valid_sanitize` |
+| `Metrics.sanitize` | proved | `Metrics.sanitize_of_valid`, `Metrics.valid_sanitize` |
+| `Metrics.trimZeros` | tested | `Tests/Ops.lean` |
+| `Metrics.decimal` | tested | `Tests/Ops.lean` |
+| `Metrics.decimalInt` | tested | `Tests/Ops.lean` |
+| `Metrics.Series.kind` | tested | `Tests/Ops.lean` |
+| `Metrics.renderLabels` | tested | `Tests/Ops.lean` |
+| `Metrics.sample` | tested | `Tests/Ops.lean` |
+| `Metrics.renderHistogram` | tested | `Tests/Ops.lean` |
+| `Metrics.Family.render` | tested | `Tests/Ops.lean` |
+| `Metrics.render` | tested | `Tests/Ops.lean` |
+| `Metrics.contentType` | tested | `Tests/Ops.lean` |
 
 ## `Lanes/Lib/Mime/MediaType.lean`
 
@@ -1151,11 +1210,11 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Civil.isLeap` | proved | through `Civil.Date.toDays`, `Civil.DateTime` and 1 more: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 3 more |
-| `Civil.daysInMonth` | proved | through `Civil.Date.toDays`, `Civil.DateTime` and 1 more: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 3 more |
+| `Civil.isLeap` | proved | through `Civil.Date.toDays`, `Civil.DateTime` and 1 more: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 4 more |
+| `Civil.daysInMonth` | proved | through `Civil.Date.toDays`, `Civil.DateTime` and 1 more: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 4 more |
 | `Civil.Valid` | spec | a predicate |
 | `Civil.instDecidableValid` | proved | its type, `Decidable` |
-| `Civil.Date.mk?` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Time.lean` |
+| `Civil.Date.mk?` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Time.lean`, `Tests/S3.lean` |
 | `Civil.marchMonth` | proved | through `Civil.Date.toDays`, `Civil.DateTime.toUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 2 more |
 | `Civil.ofMarchMonth` | proved | through `Civil.Date.ofDays`, `Civil.DateTime.ofUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 2 more |
 | `Civil.daysBefore` | proved | through `Civil.Date.toDays`, `Civil.DateTime.toUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 2 more |
@@ -1269,10 +1328,10 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Outside.any` | tested | `Tests/Jobs.lean` |
+| `Outside.any` | tested | `Tests/Jobs.lean`, `Tests/S3.lean` |
 | `Outside.driver` | checked | `Tests/Clock.lean`, `Tests/HttpClient.lean`, `Tests/Jobs.lean` and 2 more |
-| `Outside.see` | proved | through `Outside.after`: `Effects.at_most_once`, `Events.deliveries_le` and 6 more |
-| `Outside.after` | proved | `Effects.at_most_once`, `Events.deliveries_le`, `Idempotent.at_most_once` and 5 more |
+| `Outside.see` | proved | through `Outside.after`: `Effects.at_most_once`, `Events.deliveries_le` and 7 more |
+| `Outside.after` | proved | `Effects.at_most_once`, `Events.deliveries_le`, `Idempotent.at_most_once` and 6 more |
 | `Outside.allows` | checked | `Tests/Outside.lean` |
 | `Outside.both` | proved | `Outside.after_both` |
 | `Outside.mine` | spec | used only in statements |
@@ -1364,6 +1423,17 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Idempotent.server` | proved | `Idempotent.answer_repeat`, `Idempotent.at_most_once`, `Idempotent.keys_nodup` |
 | `Idempotent.Holds` | spec | a predicate |
 
+## `Lanes/Outside/ObjectStore.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `ObjectStore.Request.key` | proved | through `ObjectStore.server`: `ObjectStore.read_sent` |
+| `ObjectStore.Request.leaves` | proved | through `ObjectStore.server`: `ObjectStore.read_sent` |
+| `ObjectStore.State.possible` | proved | through `ObjectStore.server`: `ObjectStore.read_sent` |
+| `ObjectStore.State.settle` | proved | through `ObjectStore.server`: `ObjectStore.read_sent` |
+| `ObjectStore.server` | proved | `ObjectStore.read_sent` |
+| `ObjectStore.Sound` | spec | a predicate |
+
 ## `Lanes/Outside/Rpc.lean`
 
 | Definition | Status | Evidence |
@@ -1372,7 +1442,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Rpc.instCodableCall` | proved | its type, `Codable` |
 | `Rpc.Reply.codec` | proved | its type, `Codec` |
 | `Rpc.instCodableReply` | proved | its type, `Codable` |
-| `Rpc.outside` | proved | `Events.deliveries_le`, `Idempotent.at_most_once`, `Idempotent.keys_nodup` and 2 more |
+| `Rpc.outside` | proved | `Events.deliveries_le`, `Idempotent.at_most_once`, `Idempotent.keys_nodup` and 3 more |
 | `Rpc.Port.reported` | spec | used only in statements |
 | `Rpc.called` | spec | used only in statements |
 | `Rpc.answered` | spec | used only in statements |
@@ -1563,6 +1633,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Runtime.trace` | trusted | TRUSTED.md: The runtime shell |
 | `Runtime.state` | trusted | TRUSTED.md: The runtime shell |
 | `Runtime.stop` | trusted | TRUSTED.md: The runtime shell |
+| `Runtime.hasRecovered` | trusted | TRUSTED.md: The runtime shell |
+| `Runtime.depth` | trusted | TRUSTED.md: The runtime shell |
 | `Runtime.ended` | trusted | TRUSTED.md: The runtime shell |
 
 ## `Lanes/Runtime/Kernel.lean`
@@ -1872,6 +1944,35 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `System.sem` | proved | `Account.implements`, `Account.implements_timed`, `Once.server_implements` and 12 more |
 | `System.Refines` | spec | a predicate |
 
+## `Lanes/Web/Auth/IdToken.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `OAuth.IdToken.Claims.identity` | proved | `OAuth.IdToken.check_ok_iff`, `OAuth.IdToken.verify_accepted` |
+| `OAuth.IdToken.optional` | proved | through `OAuth.IdToken.verify`: `OAuth.IdToken.verify_accepted` |
+| `OAuth.IdToken.string?` | proved | through `OAuth.IdToken.verify`: `OAuth.IdToken.verify_accepted` |
+| `OAuth.IdToken.nat?` | proved | through `OAuth.IdToken.verify`: `OAuth.IdToken.verify_accepted` |
+| `OAuth.IdToken.audience?` | proved | through `OAuth.IdToken.verify`: `OAuth.IdToken.verify_accepted` |
+| `OAuth.IdToken.Claims.read` | proved | `OAuth.IdToken.verify_accepted` |
+| `OAuth.IdToken.check` | proved | `OAuth.IdToken.check_ok_iff` |
+| `OAuth.IdToken.verify` | proved | `OAuth.IdToken.verify_accepted` |
+
+## `Lanes/Web/Auth/Jose.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Jose.Alg.name` | spec | used only in statements |
+| `Jose.Alg.parse?` | proved | `Jose.Alg.parse?_eq_some` |
+| `Jose.Jwk.fits` | proved | `Jose.verify_ok`, `OAuth.IdToken.verify_accepted` |
+| `Jose.str?` | proved | through `Jose.Compact.read`, `Jose.readHeader`: `Jose.Compact.read_alg`, `Jose.readHeader_alg` and 2 more |
+| `Jose.bytes?` | proved | through `Jose.Compact.read`: `Jose.Compact.read_alg`, `Jose.verify_ok` and 1 more |
+| `Jose.Jwk.read?` | proved | through `Jose.Compact.read`: `Jose.Compact.read_alg`, `Jose.verify_ok` and 1 more |
+| `Jose.readKeys` | tested | `Tests/Signature.lean` |
+| `Jose.readHeader` | proved | `Jose.readHeader_alg` |
+| `Jose.Compact.read` | proved | `Jose.Compact.read_alg`, `Jose.verify_ok`, `OAuth.IdToken.verify_accepted` |
+| `Jose.candidates` | proved | through `Jose.verify`: `Jose.verify_ok` |
+| `Jose.verify` | proved | `Jose.verify_ok` |
+
 ## `Lanes/Web/Auth/Login.lean`
 
 | Definition | Status | Evidence |
@@ -1896,6 +1997,43 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Auth.Sessions.start` | proved | `Auth.Sessions.ids_starts`, `Auth.Sessions.length_start_le`, `Auth.Sessions.live_open` and 1 more |
 | `Auth.Sessions.close` | proved | `Auth.Sessions.live_close` |
 | `Auth.Sessions.live` | proved | `Auth.Sessions.live_close`, `Auth.Sessions.live_open` |
+
+## `Lanes/Web/Auth/OAuth.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `OAuth.instReprSecret` | checked | `Tests/OAuth.lean` |
+| `OAuth.instToStringSecret` | tested | `Tests/OAuth.lean` |
+| `OAuth.b64` | checked | `Tests/OAuth.lean` |
+| `OAuth.challenge` | checked | `Tests/OAuth.lean` |
+| `OAuth.same` | proved | `OAuth.same_iff` |
+| `OAuth.Pending.begin` | proved | `OAuth.Pending.length_begin` |
+| `OAuth.Pending.callback` | proved | `OAuth.Pending.callback_ok`, `OAuth.Pending.callback_removes`, `OAuth.Pending.callback_sublist` |
+| `OAuth.Pending.Op.issues` | spec | used only in statements |
+| `OAuth.Pending.run` | proved | `OAuth.Pending.accepted_le_issued` |
+| `OAuth.Seed.entry` | checked | `Tests/OAuth.lean` |
+| `OAuth.authorizeUrl` | checked | `Tests/OAuth.lean` |
+| `OAuth.Discovery.read` | checked | `Tests/OAuth.lean` |
+| `OAuth.Discovery.provider` | checked | `Tests/OAuth.lean` |
+| `OAuth.begin` | checked | `Tests/OAuth.lean` |
+| `OAuth.Answer.state` | checked | `Tests/OAuth.lean` |
+| `OAuth.Answer.read` | checked | `Tests/OAuth.lean` |
+| `OAuth.tokenForm` | checked | `Tests/OAuth.lean` |
+| `OAuth.Tokens.read` | checked | `Tests/OAuth.lean` |
+| `OAuth.tokenAnswer` | checked | `Tests/OAuth.lean` |
+| `OAuth.userAnswer` | checked | `Tests/OAuth.lean` |
+| `OAuth.keysAnswer` | tested | `Tests/OAuth.lean` |
+| `OAuth.Keys.lookup` | proved | `OAuth.Keys.lookup_fetch`, `OAuth.Keys.no_fetch_within` |
+| `OAuth.Keys.fetched` | proved | `OAuth.Keys.no_fetch_within` |
+| `OAuth.route` | tested | `Tests/OAuth.lean` |
+| `OAuth.identityHeaders` | proved | through `OAuth.strip`: `OAuth.identity?_strip`, `OAuth.identity?_withIdentity` |
+| `OAuth.strip` | proved | `OAuth.identity?_strip`, `OAuth.identity?_withIdentity` |
+| `OAuth.withIdentity` | proved | `OAuth.identity?_withIdentity` |
+| `OAuth.identity?` | proved | `OAuth.identity?_strip`, `OAuth.identity?_withIdentity` |
+| `OAuth.beginResponse` | tested | `Tests/OAuth.lean` |
+| `OAuth.Refusal.describe` | checked | `Tests/OAuth.lean` |
+| `OAuth.refusedResponse` | checked | `Tests/OAuth.lean` |
+| `OAuth.Endpoint.parse` | tested | `Tests/OAuth.lean` |
 
 ## `Lanes/Web/Auth/Token.lean`
 
@@ -1990,8 +2128,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.reprBody` | proved | through `Http.Request.field?`, `Http.Request.form`: `Http.Request.field?_eq_lookup`, `Http.Request.form_encodeForm` |
 | `Http.Method.codec` | proved | its type, `Codec` |
 | `Http.Request.codec` | proved | its type, `Codec` |
-| `Http.hexValue?` | proved | through `Http.Request.field?`, `Http.Request.form` and 3 more: `Http.Request.field?_eq_lookup`, `Http.Request.form_encodeForm` and 3 more |
-| `Http.percentDecodeBytes` | proved | through `Http.Request.field?`, `Http.Request.form` and 2 more: `Http.Request.field?_eq_lookup`, `Http.Request.form_encodeForm` and 2 more |
+| `Http.hexValue?` | proved | through `Http.Request.field?`, `Http.Request.form` and 4 more: `Http.Request.field?_eq_lookup`, `Http.Request.form_encodeForm` and 4 more |
+| `Http.percentDecodeBytes` | proved | through `Http.Request.field?`, `Http.Request.form` and 3 more: `Http.Request.field?_eq_lookup`, `Http.Request.form_encodeForm` and 3 more |
 | `Http.percentDecode` | proved | `Http.percentDecode_percentEncode` |
 | `Http.hexDigit` | proved | through `Http.encodeForm`, `Http.percentEncode`: `Http.Request.form_encodeForm`, `Http.parseForm_encodeForm` and 2 more |
 | `Http.unreserved` | proved | through `Http.encodeForm`, `Http.percentEncode`: `Http.Request.form_encodeForm`, `Http.parseForm_encodeForm` and 2 more |
@@ -2004,8 +2142,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Request.text?` | proved | through `Http.Request.field?`, `Http.Request.form`: `Http.Request.field?_eq_lookup`, `Http.Request.form_encodeForm` |
 | `Http.Request.form` | proved | `Http.Request.field?_eq_lookup`, `Http.Request.form_encodeForm` |
 | `Http.Request.field?` | proved | `Http.Request.field?_eq_lookup` |
-| `Http.Response.ofText` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean`, `Tests/HttpConn.lean` |
-| `Http.Response.text` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean`, `Tests/HttpConn.lean` |
+| `Http.Response.ofText` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean`, `Tests/HttpConn.lean` and 1 more |
+| `Http.Response.text` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean`, `Tests/HttpConn.lean` and 1 more |
 | `Http.Response.html` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 1 more |
 | `Http.Response.json` | tested | `Tests/Html.lean` |
 | `Http.Response.empty` | tested | `Tests/Auth.lean`, `Tests/Html.lean` |
@@ -2138,13 +2276,40 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Http.tokenChar` | proved | `Http.visible_of_tokenChar` |
 | `Http.token` | proved | `Http.Request.fields_token`, `Http.parseCookies_cookieHeader` |
-| `Http.plain` | proved | `Http.Request.head_plain`, `Http.plain_of_visible` |
+| `Http.plain` | proved | `Http.Request.headOnly_plain`, `Http.Request.head_plain`, `Http.plain_of_visible` |
 | `Http.visible` | proved | `Http.Request.target_visible`, `Http.plain_of_visible`, `Http.visible_of_tokenChar` |
 | `Http.ows` | proved | `Http.Request.read_blankInName` |
 | `Http.trimOws` | proved | through `Http.Request.fieldName`: `Http.Request.read_lengthAndCoding`, `Http.Request.read_twoLengths` |
 | `Http.isQdtext` | proved | `MediaType.isQdtext_of` |
 | `Http.isQuotable` | proved | `MediaType.isQdtext_of`, `MediaType.quoted_esc` |
 | `Http.quoted` | proved | `MediaType.quoted_esc` |
+
+## `Lanes/Web/Http/Ops.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Http.LogSink.isOn` | tested | `Tests/Ops.lean` |
+| `Http.OpsConfig.counting` | tested | `Tests/Ops.lean` |
+| `Http.OpsConfig.active` | tested | `Tests/Ops.lean` |
+| `Http.Ops.pathText` | proved | `Http.Ops.route?_some` |
+| `Http.Ops.route?` | proved | `Http.Ops.route?_default`, `Http.Ops.route?_some` |
+| `Http.Ops.Health.ready` | proved | `Http.Ops.answer_ready` |
+| `Http.Ops.answer` | proved | `Http.Ops.answer_ready` |
+| `Http.Ops.methodName` | proved | through `Http.Ops.Access.json`: `Http.Ops.Access.parse_line` |
+| `Http.Ops.statusClass` | tested | `Tests/Ops.lean` |
+| `Http.Ops.bumpKey` | proved | `Http.Ops.lookup_bumpKey` |
+| `Http.Ops.Stats.answered` | tested | `Tests/Ops.lean` |
+| `Http.Ops.Stats.refuse` | tested | `Tests/Ops.lean` |
+| `Http.Ops.Stats.appended` | tested | `Tests/Ops.lean` |
+| `Http.Ops.Stats.saved` | tested | `Tests/Ops.lean` |
+| `Http.Ops.families` | tested | `Tests/Ops.lean` |
+| `Http.Ops.RequestId.allowed` | proved | `Http.Ops.RequestId.accept?_eq_some` |
+| `Http.Ops.RequestId.accept?` | proved | `Http.Ops.RequestId.accept?_eq_some`, `Http.Ops.RequestId.accept?_ofBytes` |
+| `Http.Ops.RequestId.ofBytes` | proved | `Http.Ops.RequestId.accept?_ofBytes` |
+| `Http.Ops.RequestId.tag` | proved | `Http.Ops.RequestId.header_tag` |
+| `Http.Ops.Access.time` | proved | through `Http.Ops.Access.json`: `Http.Ops.Access.parse_line` |
+| `Http.Ops.Access.json` | proved | `Http.Ops.Access.parse_line` |
+| `Http.Ops.Access.line` | proved | `Http.Ops.Access.parse_line` |
 
 ## `Lanes/Web/Http/ReadRequest.lean`
 
@@ -2216,6 +2381,50 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Route.handle` | proved | `Http.dispatch_link` |
 | `Http.dispatch` | proved | `Http.dispatch_eq_none`, `Http.dispatch_eq_some`, `Http.dispatch_link` |
 
+## `Lanes/Web/Http/SigV4.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `SigV4.instReprSecret` | tested | `Tests/SigV4.lean` |
+| `SigV4.instToStringSecret` | tested | `Tests/SigV4.lean` |
+| `SigV4.stamp` | proved | through `SigV4.sign`: `SigV4.target_sign` |
+| `SigV4.day` | proved | through `SigV4.sign`: `SigV4.target_sign` |
+| `SigV4.credentialScope` | proved | through `SigV4.sign`: `SigV4.target_sign` |
+| `SigV4.encode` | proved | `SigV4.encode_chunks` |
+| `SigV4.segments` | proved | `SigV4.decodePath_canonicalPath` |
+| `SigV4.canonicalPath` | proved | `SigV4.decodePath_canonicalPath`, `SigV4.target_sign` |
+| `SigV4.encodePair` | proved | `SigV4.sortQuery_sorted` |
+| `SigV4.pairLe` | proved | `SigV4.sortQuery_sorted` |
+| `SigV4.sortQuery` | proved | `SigV4.canonicalQuery_sortQuery`, `SigV4.sortQuery_perm`, `SigV4.sortQuery_sorted` |
+| `SigV4.canonicalQuery` | proved | `SigV4.canonicalQuery_sortQuery`, `SigV4.target_sign` |
+| `SigV4.blank` | proved | through `SigV4.canonicalHeaders`, `SigV4.sign`: `SigV4.canonicalHeaders_lower`, `SigV4.canonicalHeaders_sorted` and 2 more |
+| `SigV4.squeeze` | proved | through `SigV4.canonicalHeaders`, `SigV4.sign`: `SigV4.canonicalHeaders_lower`, `SigV4.canonicalHeaders_sorted` and 2 more |
+| `SigV4.trimValue` | proved | through `SigV4.canonicalHeaders`, `SigV4.sign`: `SigV4.canonicalHeaders_lower`, `SigV4.canonicalHeaders_sorted` and 2 more |
+| `SigV4.insertHeader` | proved | through `SigV4.canonicalHeaders`, `SigV4.sign`: `SigV4.canonicalHeaders_lower`, `SigV4.canonicalHeaders_sorted` and 2 more |
+| `SigV4.canonicalHeaders` | proved | `SigV4.canonicalHeaders_lower`, `SigV4.canonicalHeaders_sorted`, `SigV4.mem_canonicalHeaders` |
+| `SigV4.signedHeaders` | proved | through `SigV4.sign`: `SigV4.target_sign` |
+| `SigV4.canonicalRequest` | proved | through `SigV4.sign`: `SigV4.target_sign` |
+| `SigV4.algorithm` | proved | through `SigV4.sign`: `SigV4.target_sign` |
+| `SigV4.unsignedPayload` | tested | `Tests/S3.lean`, `Tests/SigV4.lean` |
+| `SigV4.payloadHash` | tested | `Tests/S3.lean`, `Tests/SigV4.lean` |
+| `SigV4.stringToSign` | proved | through `SigV4.sign`: `SigV4.target_sign` |
+| `SigV4.signingKey` | proved | through `SigV4.sign`: `SigV4.target_sign` |
+| `SigV4.signature` | proved | through `SigV4.sign`: `SigV4.target_sign` |
+| `SigV4.authorization` | proved | through `SigV4.sign`: `SigV4.target_sign` |
+| `SigV4.verb` | tested | `Tests/SigV4.lean` |
+| `SigV4.signedFields` | proved | through `SigV4.sign`: `SigV4.target_sign` |
+| `SigV4.sign` | proved | `SigV4.target_sign` |
+| `SigV4.presign` | tested | `Tests/S3.lean`, `Tests/SigV4.lean` |
+
+## `Lanes/Web/Http/SigV4Sound.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `SigV4.upperHex` | spec | used only in statements |
+| `SigV4.unreservedChar` | spec | used only in statements |
+| `SigV4.chunk` | spec | used only in statements |
+| `SigV4.decodePath` | spec | used only in statements |
+
 ## `Lanes/Web/Http/Waiting.lean`
 
 | Definition | Status | Evidence |
@@ -2234,29 +2443,33 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Http.frames` | proved | `Http.Request.fields_framing` |
-| `Http.Request.target` | proved | `Http.Request.target_visible` |
-| `Http.Request.kept` | proved | through `Http.Request.fields`, `Http.Request.wire`: `Http.Request.fields_framing`, `Http.Request.fields_token` and 3 more |
+| `Http.Request.target` | proved | `Http.Request.target_visible`, `SigV4.target_sign` |
+| `Http.Request.kept` | proved | through `Http.Request.fields`, `Http.Request.wire` and 1 more: `Http.Request.fields_framing`, `Http.Request.fields_token` and 4 more |
 | `Http.Request.fields` | proved | `Http.Request.fields_framing`, `Http.Request.fields_token` |
 | `Http.Request.head` | proved | `Http.Request.head_plain` |
 | `Http.Request.wire` | proved | `Http.Request.head_plain`, `Http.Request.read_wire`, `Http.Request.read_wire_extract` |
-| `Http.Reading.map` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Conn.read_encode`, `Http.Response.read_append` and 11 more |
-| `Http.headEnd` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Conn.read_encode`, `Http.Response.read_append` and 11 more |
-| `Http.crlf` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Conn.read_encode`, `Http.Response.read_append` and 11 more |
-| `Http.skip` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Conn.read_encode`, `Http.Response.read_append` and 11 more |
-| `Http.hex` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Conn.read_encode`, `Http.Response.read_append` and 11 more |
-| `Http.chunkSizeDigits_max` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Conn.read_encode`, `Http.Response.read_append` and 11 more |
-| `Http.chunkExtensionBytes_max` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Conn.read_encode`, `Http.Response.read_append` and 11 more |
-| `Http.sizeLineEnd` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Conn.read_encode`, `Http.Response.read_append` and 11 more |
-| `Http.chunkHead` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Conn.read_encode`, `Http.Response.read_append` and 11 more |
-| `Http.dechunk` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Conn.read_encode`, `Http.Response.read_append` and 11 more |
-| `Http.decimal?` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Conn.read_encode`, `Http.Response.read_append` and 11 more |
-| `Http.splitLines` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Conn.read_encode`, `Http.Response.read_append` and 11 more |
-| `Http.statusLine?` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Conn.read_encode`, `Http.Response.read_append` and 11 more |
-| `Http.headerLine?` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Conn.read_encode`, `Http.Response.read_append` and 11 more |
-| `Http.head?` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Conn.read_encode`, `Http.Response.read_append` and 11 more |
-| `Http.framing?` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Conn.read_encode`, `Http.Response.read_append` and 11 more |
+| `Http.Request.headOnly` | proved | `Http.Request.headOnly_plain` |
+| `Http.Request.wireHead` | proved | `Http.Request.headOnly_plain` |
+| `Http.Reading.map` | proved | through `Http.Response.read`, `Http.Response.readHead` and 1 more: `Http.Conn.read_encode`, `Http.Response.readHead_ended` and 12 more |
+| `Http.headEnd` | proved | through `Http.Response.read`, `Http.Response.readHead` and 1 more: `Http.Conn.read_encode`, `Http.Response.readHead_ended` and 12 more |
+| `Http.crlf` | proved | through `Http.Response.read`, `Http.Response.readHead` and 1 more: `Http.Conn.read_encode`, `Http.Response.readHead_ended` and 12 more |
+| `Http.skip` | proved | through `Http.Response.read`, `Http.Response.readHead` and 1 more: `Http.Conn.read_encode`, `Http.Response.readHead_ended` and 12 more |
+| `Http.hex` | proved | through `Http.Response.read`, `Http.Response.readHead` and 1 more: `Http.Conn.read_encode`, `Http.Response.readHead_ended` and 12 more |
+| `Http.chunkSizeDigits_max` | proved | through `Http.Response.read`, `Http.Response.readHead` and 1 more: `Http.Conn.read_encode`, `Http.Response.readHead_ended` and 12 more |
+| `Http.chunkExtensionBytes_max` | proved | through `Http.Response.read`, `Http.Response.readHead` and 1 more: `Http.Conn.read_encode`, `Http.Response.readHead_ended` and 12 more |
+| `Http.sizeLineEnd` | proved | through `Http.Response.read`, `Http.Response.readHead` and 1 more: `Http.Conn.read_encode`, `Http.Response.readHead_ended` and 12 more |
+| `Http.chunkHead` | proved | through `Http.Response.read`, `Http.Response.readHead` and 1 more: `Http.Conn.read_encode`, `Http.Response.readHead_ended` and 12 more |
+| `Http.dechunk` | proved | through `Http.Response.read`, `Http.Response.readHead` and 1 more: `Http.Conn.read_encode`, `Http.Response.readHead_ended` and 12 more |
+| `Http.decimal?` | proved | through `Http.Response.read`, `Http.Response.readHead` and 1 more: `Http.Conn.read_encode`, `Http.Response.readHead_ended` and 12 more |
+| `Http.splitLines` | proved | through `Http.Response.read`, `Http.Response.readHead` and 1 more: `Http.Conn.read_encode`, `Http.Response.readHead_ended` and 12 more |
+| `Http.statusLine?` | proved | through `Http.Response.read`, `Http.Response.readHead` and 1 more: `Http.Conn.read_encode`, `Http.Response.readHead_ended` and 12 more |
+| `Http.headerLine?` | proved | through `Http.Response.read`, `Http.Response.readHead` and 1 more: `Http.Conn.read_encode`, `Http.Response.readHead_ended` and 12 more |
+| `Http.head?` | proved | through `Http.Response.read`, `Http.Response.readHead` and 1 more: `Http.Conn.read_encode`, `Http.Response.readHead_ended` and 12 more |
+| `Http.framing?` | proved | through `Http.Response.read`, `Http.Response.readHead` and 1 more: `Http.Conn.read_encode`, `Http.Response.readHead_ended` and 12 more |
 | `Http.readFrom` | proved | `Http.Response.read_some` |
 | `Http.Response.read` | proved | `Http.Conn.read_encode`, `Http.Response.read_append`, `Http.Response.read_ended` and 10 more |
+| `Http.readHeadFrom` | proved | through `Http.Response.readHead`: `Http.Response.readHead_ended` |
+| `Http.Response.readHead` | proved | `Http.Response.readHead_ended` |
 | `Http.Response.parse` | trusted | TRUSTED.md: The HTTP wire format |
 
 ## `Lanes/Web/Http/WireSpec.lean`
@@ -2278,11 +2491,36 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
+| `Http.Client.Call.authority` | trusted | TRUSTED.md: The HTTP client adapter's handler |
 | `Http.Client.Call.at` | trusted | TRUSTED.md: The HTTP client adapter's handler |
 | `Http.Client.outside` | trusted | TRUSTED.md: The HTTP client adapter's handler |
 | `Http.Client.exchangeExplained` | trusted | TRUSTED.md: The HTTP client adapter's handler |
 | `Http.Client.exchange` | trusted | TRUSTED.md: The HTTP client adapter's handler |
 | `Http.Client.handler` | trusted | TRUSTED.md: The HTTP client adapter's handler |
+
+## `Lanes/Web/IO/Ops.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Http.Ops.new` | trusted | TRUSTED.md: What the server tells its operators |
+| `Http.Ops.drain` | trusted | TRUSTED.md: What the server tells its operators |
+| `Http.Ops.journal` | trusted | TRUSTED.md: What the server tells its operators |
+| `Http.Ops.refused` | trusted | TRUSTED.md: What the server tells its operators |
+| `Http.Ops.write` | trusted | TRUSTED.md: What the server tells its operators |
+| `Http.Ops.health` | trusted | TRUSTED.md: What the server tells its operators |
+| `Http.Ops.page` | trusted | TRUSTED.md: What the server tells its operators |
+| `Http.Ops.freshId` | trusted | TRUSTED.md: What the server tells its operators |
+| `Http.Ops.wallMs` | trusted | TRUSTED.md: What the server tells its operators |
+| `Http.Ops.front` | trusted | TRUSTED.md: What the server tells its operators |
+
+## `Lanes/Web/IO/S3.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `S3.credentialsFromEnv` | trusted | TRUSTED.md: The S3 client's IO |
+| `S3.now` | trusted | TRUSTED.md: The S3 client's IO |
+| `S3.exchange` | trusted | TRUSTED.md: The S3 client's IO |
+| `S3.handler` | trusted | TRUSTED.md: The S3 client's IO |
 
 ## `Lanes/Web/IO/Server.lean`
 
@@ -2294,10 +2532,19 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.serve` | trusted | TRUSTED.md: The HTTP adapter's IO |
 | `Http.Server.port` | trusted | TRUSTED.md: The HTTP adapter's IO |
 | `Http.Server.stop` | trusted | TRUSTED.md: The HTTP adapter's IO |
+| `Http.Server.drain` | trusted | TRUSTED.md: The HTTP adapter's IO |
 | `Http.Server.inFlight` | trusted | TRUSTED.md: The HTTP adapter's IO |
 | `Http.Server.trace` | trusted | TRUSTED.md: The HTTP adapter's IO |
 | `Http.Server.wait` | trusted | TRUSTED.md: The HTTP adapter's IO |
 | `Http.Server.tryInput` | trusted | TRUSTED.md: The HTTP adapter's IO |
+
+## `Lanes/Web/IO/SignIn.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `OAuth.SignIn.start` | trusted | TRUSTED.md: The sign-in's IO |
+| `OAuth.SignIn.finish` | trusted | TRUSTED.md: The sign-in's IO |
+| `OAuth.SignIn.arrive` | trusted | TRUSTED.md: The sign-in's IO |
 
 ## `Lanes/Web/IO/Tls.lean`
 
@@ -2315,6 +2562,57 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Tls.Session.closed` | trusted | TRUSTED.md: The TLS client |
 | `Tls.Session.shutdown` | trusted | TRUSTED.md: The TLS client |
 | `Tls.Session.readAll` | trusted | TRUSTED.md: The TLS client |
+
+## `Lanes/Web/S3/Basic.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `S3.Endpoint.aws` | tested | `Tests/S3.lean` |
+| `S3.Key.of?` | tested | `Tests/S3.lean` |
+| `S3.Range.header` | tested | `Tests/S3.lean` |
+| `S3.Op.verb` | tested | `Tests/S3.lean` |
+| `S3.Op.method` | tested | `Tests/S3.lean` |
+| `S3.Op.segments` | tested | `Tests/S3.lean` |
+| `S3.Op.query` | tested | `Tests/S3.lean` |
+| `S3.Op.headers` | tested | `Tests/S3.lean` |
+| `S3.Op.body` | tested | `Tests/S3.lean` |
+| `S3.Bucket.host` | tested | `Tests/S3.lean` |
+| `S3.Bucket.path` | tested | `Tests/S3.lean` |
+| `S3.Bucket.scope` | tested | `Tests/S3.lean` |
+| `S3.call` | tested | `Tests/S3.lean` |
+| `S3.unescapeKey` | tested | `Tests/S3.lean` |
+| `S3.entry?` | tested | `Tests/S3.lean` |
+| `S3.page?` | tested | `Tests/S3.lean` |
+| `S3.errorCode` | tested | `Tests/S3.lean` |
+| `S3.info` | tested | `Tests/S3.lean` |
+| `S3.interpret` | tested | `Tests/S3.lean` |
+| `S3.Op.modelled` | tested | `Tests/S3.lean` |
+| `S3.Answer.modelled` | tested | `Tests/S3.lean` |
+| `S3.presign` | tested | `Tests/S3.lean` |
+
+## `Lanes/Web/S3/Xml.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `S3.Xml.nameChar` | tested | `Tests/S3.lean` |
+| `S3.Xml.space` | tested | `Tests/S3.lean` |
+| `S3.Xml.after` | tested | `Tests/S3.lean` |
+| `S3.Xml.skipAttributes` | tested | `Tests/S3.lean` |
+| `S3.Xml.hexValue?` | tested | `Tests/S3.lean` |
+| `S3.Xml.codePoint?` | tested | `Tests/S3.lean` |
+| `S3.Xml.charRef?` | tested | `Tests/S3.lean` |
+| `S3.Xml.entity?` | tested | `Tests/S3.lean` |
+| `S3.Xml.unescape` | tested | `Tests/S3.lean` |
+| `S3.Xml.escape` | tested | `Tests/S3.lean` |
+| `S3.Xml.tokens` | tested | `Tests/S3.lean` |
+| `S3.Xml.push` | tested | `Tests/S3.lean` |
+| `S3.Xml.parse` | tested | `Tests/S3.lean` |
+| `S3.Xml.Node.name` | tested | `Tests/S3.lean` |
+| `S3.Xml.Node.children` | tested | `Tests/S3.lean` |
+| `S3.Xml.Node.content` | tested | `Tests/S3.lean` |
+| `S3.Xml.Node.all` | tested | `Tests/S3.lean` |
+| `S3.Xml.Node.child?` | tested | `Tests/S3.lean` |
+| `S3.Xml.Node.text?` | tested | `Tests/S3.lean` |
 
 ## `LanesCli/Generated.lean`
 
