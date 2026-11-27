@@ -49,8 +49,8 @@ the fingerprinted mode, where a collision hides a state.
 
 **A fingerprinted mode, off by default** (`Check.fingerprint`, `Check.systemFingerprinted`).
 It keeps of each state seen only its hash, and of each state stored its parent's record and
-which of the parent's transitions led to it (16 bytes); states are held only while their level
-waits to be expanded. A duplicate is found by comparing hashes, and nothing else. A trace is
+which of the parent's transitions led to it (two numbers); states are held only while their
+level waits to be expanded. A duplicate is found by comparing hashes, and nothing else. A trace is
 rebuilt by replaying the recorded choices through `Model.next`, and what it shows is checked
 again on the state it reaches. So what it reports is real whatever the hash
 (`Check.fingerprint_violated`, `Check.fingerprint_deadlock`, `Check.fingerprint_witness`,
@@ -58,7 +58,7 @@ again on the state it reaches. So what it reports is real whatever the hash
 collides with one seen is never explored, so a pass is not exhaustive. The report says so
 (`Report.fingerprinted`, "PASS (fingerprinted)").
 
-| Scenario | Exact | Fingerprinted |
+| Scenario | Exact, with the new hash | Fingerprinted |
 | --- | --- | --- |
 | A video's life, 1,838,171 states | 79 s, 1,518 MB | 48 s, 530 MB |
 | An upload never confirmed, 359,757 states | 13.5 s, 316 MB | 9.2 s, 100 MB |
@@ -75,8 +75,8 @@ traces. It does not help here: 9.1 s of wall time and 29 s of processor time for
 never confirmed, against 9.2 s on one core. The exact search's tasks (D33, `Search.runBatches`)
 lose too: 16.7 s and 39 s against 13.5 s. D33's reasons hold. Lean counts references to an
 object another thread has seen atomically and never updates it in place, so the table of seen
-states must stay on one thread, and every state a worker made is shared: the workers do two
-and a half times the work. On this machine the main thread and four workers share four cores.
+states must stay on one thread, and every state a worker made is shared: the search in tasks
+takes about three times the processor time. On this machine the main thread and four workers share four cores.
 Whether more idle cores win was not measured.
 
 **Reductions with proofs** (`Model.reduce`, `Check.systemReduced`). A reduction replaces every
@@ -119,5 +119,16 @@ a canonical form, under a relation the driver cannot see (`Driver.Simulation`,
 
 ## The old sizes
 
-The cut-down scenarios at the sizes they had before, in the fingerprinted mode, are in
-`examples/videos/README.md`'s table of checks.
+The cut-down videos scenarios, at the sizes they had before they were cut, in the fingerprinted
+mode, with no bound reached. Each passed, with every witness reached. `examples/videos` still
+checks the cut-down ones, exactly; whether to check these too, and how, is the owner's call.
+
+| Scenario | States | Transitions | Time | Memory |
+| --- | --- | --- | --- | --- |
+| A video deleted while its check may be out, either actor crashing | 2,059,057 | 9,767,745 | 39 s | 472 MB |
+| A second check while the first may be out, either actor crashing | 1,699,880 | 7,261,846 | 31 s | 378 MB |
+| A video's life with the worker's faults | 7,371,678 | 38,775,151 | 409 s | 2,362 MB |
+| The pipeline with either actor crashing and a job's start not answered, refused or `unknown` | 17,256,751 | 86,424,547 | 1,589 s | 6,228 MB |
+
+The first two are within the exact search's bound of 3,000,000 states, and pass it with the
+same counts: 59 s and 1,663 MB, and 42 s and 1,381 MB.
