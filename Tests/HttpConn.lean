@@ -79,7 +79,7 @@ structure World where
 
 def key (w : World) :=
   ((w.conn.buffer, w.conn.pos, w.conn.need, w.conn.slots, w.conn.written, w.conn.reading,
-      w.conn.closed, w.conn.stage, w.conn.since_ms, w.conn.continued),
+      w.conn.closed, w.conn.stage, w.conn.since_ms, w.conn.continued, w.conn.inflow, w.conn.unsent),
     (w.now, w.read, w.ended, w.stopped, w.submitted.map (·.1), w.answered, w.twice, w.stranger),
     (w.out, w.stray, w.pieced, w.overdue, w.wasFull))
 
@@ -91,6 +91,7 @@ def perform (w : World) : Action → World
   | .interim seq _ => { w with out := w.out ++ [.interim seq] }
   | .write seq bytes => { w with out := w.out ++ [.write seq bytes] }
   | .close => { w with out := w.out ++ [.close] }
+  | .begin .. | .piece .. | .pull .. | .part .. => { w with stray := true }
 
 def tell (w : World) (e : Event) : World :=
   let (conn, actions) := w.conn.step cfg w.now e

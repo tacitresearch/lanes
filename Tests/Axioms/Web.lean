@@ -230,6 +230,36 @@ import Lanes.Semantics
 /-- info: 'Lanes.Http.Conn.Count.admit_stopping' depends on axioms: [propext] -/
 #guard_msgs in #print axioms Lanes.Http.Conn.Count.admit_stopping
 
+/-- info: 'Lanes.Http.Conn.read_streamed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Conn.read_streamed
+
+/-- info: 'Lanes.Http.Conn.respond_opens' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Conn.respond_opens
+
+/-- info: 'Lanes.Http.Conn.respond_ignored' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Conn.respond_ignored
+
+/-- info: 'Lanes.Http.Conn.pulled_part' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Conn.pulled_part
+
+/-- info: 'Lanes.Http.Conn.pulled_ignored' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Conn.pulled_ignored
+
+/-- info: 'Lanes.Http.Conn.pulled_large' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Conn.pulled_large
+
+/-- info: 'Lanes.Http.Conn.flushStream_ended' depends on axioms: [propext, Classical.choice] -/
+#guard_msgs in #print axioms Lanes.Http.Conn.flushStream_ended
+
+/-- info: 'Lanes.Http.Conn.flushStream_going' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Conn.flushStream_going
+
+/-- info: 'Lanes.Http.Conn.pump_piece' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Conn.pump_piece
+
+/-- info: 'Lanes.Http.Conn.gather_length' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Conn.gather_length
+
 -- Lanes.Web.Http.CookieSound
 /-- info: 'Lanes.Http.readSetCookie_header' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.readSetCookie_header
@@ -407,6 +437,13 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Http.dispatch_link' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.dispatch_link
+
+-- Lanes.Web.Http.SseSound
+/-- info: 'Lanes.Http.Sse.parse_written' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Sse.parse_written
+
+/-- info: 'Lanes.Http.Sse.Event.ofResponse_valid' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Sse.Event.ofResponse_valid
 
 -- Lanes.Web.Http.SigV4Sound
 /-- info: 'Lanes.SigV4.encode_chunks' depends on axioms: [propext, Classical.choice, Quot.sound] -/

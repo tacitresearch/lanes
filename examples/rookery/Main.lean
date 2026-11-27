@@ -36,7 +36,8 @@ def main (args : List String) : IO UInt32 := do
       secure := false }
   let config : Config := { maxPerWindow }
   let server ← (Http.serve (Sys config) (bridge settings)
-    { port := port.toUInt16, journal, system := "rookery 1" } { snapshotEvery := 256 }
+    { port := port.toUInt16, journal, system := "rookery 1", streams := some streams, poll_ms := 500 }
+    { snapshotEvery := 256 }
     (some (saving config))).block
   IO.println s!"rookery listening on http://127.0.0.1:{server.port.getD 0}"
   (← IO.getStdout).flush

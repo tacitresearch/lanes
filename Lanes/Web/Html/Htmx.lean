@@ -103,6 +103,11 @@ def pushUrl : List Html.Attr :=
 def indicator (selector : String) : List Html.Attr :=
   [⟨"hx-indicator", some selector⟩]
 
+/-- The element's content is each event of the stream at `route`, as it comes (htmx's `sse`
+extension, whose script the page loads). -/
+def events {α : Type} (route : Route α) (a : α) : List Html.Attr :=
+  [⟨"hx-ext", some "sse"⟩, ⟨"sse-connect", some (route.link a)⟩, ⟨"sse-swap", some "message"⟩]
+
 end Lanes.Hx
 
 namespace Lanes.Http
