@@ -3,11 +3,15 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 
 What Lean cannot express or check, bound from C: libsodium for cryptography whose time must not
-depend on secrets, and fsync for durability. Each function is declared in
-`Lanes/Data/Sodium.lean` or `Lanes/Env/Journal.lean`; arguments are borrowed.
+depend on secrets, fsync for durability, and a timed wait for a thread. Each function is
+declared in `Lanes/Data/Sodium.lean`, `Lanes/Env/Journal.lean` or `Lanes/Actors/Park.lean`;
+arguments are borrowed.
 */
 #include <errno.h>
 #include <fcntl.h>
+#include <pthread.h>
+#include <stdlib.h>
+#include <time.h>
 #include <unistd.h>
 #include <sodium.h>
 #include <lean/lean.h>
@@ -66,4 +70,78 @@ LEAN_EXPORT lean_obj_res lanes_fsync(b_lean_obj_arg path) {
     close(fd);
     if (failed) return lean_io_result_mk_error(lean_decode_io_error(failed, path));
     return lean_io_result_mk_ok(lean_box(0));
+}
+
+/* A thread waiting here sleeps in the operating system. One waiting on a task sleeps in Lean's
+   task manager, which wakes every such thread whenever any task finishes. */
+typedef struct {
+    pthread_mutex_t mutex;
+    pthread_cond_t cond;
+    int permit;
+} lanes_parker;
+
+static lean_external_class *lanes_parker_class;
+static pthread_once_t lanes_parker_once = PTHREAD_ONCE_INIT;
+
+static void lanes_parker_free(void *data) {
+    lanes_parker *p = data;
+    pthread_cond_destroy(&p->cond);
+    pthread_mutex_destroy(&p->mutex);
+    free(p);
+}
+
+static void lanes_parker_each(void *data, b_lean_obj_arg f) { (void)data; (void)f; }
+
+static void lanes_parker_register(void) {
+    lanes_parker_class = lean_register_external_class(lanes_parker_free, lanes_parker_each);
+}
+
+LEAN_EXPORT lean_obj_res lanes_parker_new(void) {
+    pthread_once(&lanes_parker_once, lanes_parker_register);
+    lanes_parker *p = malloc(sizeof *p);
+    if (!p) lean_internal_panic_out_of_memory();
+    pthread_mutex_init(&p->mutex, NULL);
+    pthread_condattr_t attr;
+    pthread_condattr_init(&attr);
+#ifndef __APPLE__
+    pthread_condattr_setclock(&attr, CLOCK_MONOTONIC);
+#endif
+    pthread_cond_init(&p->cond, &attr);
+    pthread_condattr_destroy(&attr);
+    p->permit = 0;
+    return lean_alloc_external(lanes_parker_class, p);
+}
+
+LEAN_EXPORT lean_obj_res lanes_park(b_lean_obj_arg parker, uint8_t timed, uint32_t ms) {
+    lanes_parker *p = lean_get_external_data(parker);
+    pthread_mutex_lock(&p->mutex);
+    if (!p->permit) {
+        if (!timed) {
+            pthread_cond_wait(&p->cond, &p->mutex);
+        } else {
+#ifdef __APPLE__
+            struct timespec t = { ms / 1000, (long)(ms % 1000) * 1000000 };
+            pthread_cond_timedwait_relative_np(&p->cond, &p->mutex, &t);
+#else
+            struct timespec t;
+            clock_gettime(CLOCK_MONOTONIC, &t);
+            t.tv_sec += ms / 1000;
+            t.tv_nsec += (long)(ms % 1000) * 1000000;
+            if (t.tv_nsec >= 1000000000) { t.tv_sec += 1; t.tv_nsec -= 1000000000; }
+            pthread_cond_timedwait(&p->cond, &p->mutex, &t);
+#endif
+        }
+    }
+    p->permit = 0;
+    pthread_mutex_unlock(&p->mutex);
+    return lean_box(0);
+}
+
+LEAN_EXPORT lean_obj_res lanes_unpark(b_lean_obj_arg parker) {
+    lanes_parker *p = lean_get_external_data(parker);
+    pthread_mutex_lock(&p->mutex);
+    p->permit = 1;
+    pthread_cond_signal(&p->cond);
+    pthread_mutex_unlock(&p->mutex);
+    return lean_box(0);
 }

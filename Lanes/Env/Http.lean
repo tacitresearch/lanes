@@ -60,6 +60,8 @@ structure ServerConfig where
   /-- How long what the client still sends is read and dropped before the socket is closed, so
   that the client reads the last response rather than a reset. -/
   linger_ms : Nat := 2000
+  /-- How often deadlines are looked at: a connection is told one has passed up to this late. -/
+  tick_ms : Nat := 25
   gate : GateConfig := {}
   /-- Where to keep a journal. With one, the system behind the server survives the process:
   it starts in the state it was in (`docs/decisions/` D24). -/
@@ -76,11 +78,49 @@ private def ServerConfig.conn (config : ServerConfig) : Conn.Config where
   head_ms := config.head_ms
   body_ms := config.body_ms
 
-/-- What the server keeps of a connection: where to tell it of an answer or of `stop`, and how
-to know it has ended. -/
-private structure Open where
-  inbox : CloseableChannel Conn.Event
+/-- What a connection's loop is told. -/
+private inductive Ev where
+  | conn (e : Conn.Event)
+  /-- The read the loop started has ended: bytes, the end of them, or an error. -/
+  | read (r : Option (Except IO.Error (Option ByteArray)))
+  /-- Look again: the connection has begun, or the write the loop waited for has ended. -/
+  | resume
+  /-- A deadline the loop gave may have passed. -/
+  | alarm
+
+/-- What the loop of a connection and those who tell it something share. The loop runs on the
+thread that tells it something while it is not running, and never waits. -/
+private structure Box where
+  /-- Newest first. -/
+  events : List Ev := []
+  running : Bool := false
+  /-- When to tell the loop `alarm`. -/
+  alarm_ms : Option Nat := none
+
+private abbrev ReadEnd := IO.Promise (Except IO.Error (Option ByteArray))
+private abbrev WriteEnd := IO.Promise (Except IO.Error Unit)
+
+/-- What only the running loop touches. -/
+private structure Loop where
+  conn : Conn
+  /-- The read started that has not ended. One at a time. -/
+  reading : Option ReadEnd := none
+  /-- The last write and when it began. While it has not ended nothing is read, so that what
+  waits to be written is bounded by what is in flight. -/
+  writing : Option (WriteEnd × Nat) := none
+  resumeSet : Bool := false
+  left : Bool := false
+
+private structure Line where
+  socket : TCP.Socket.Client
+  box : Mutex Box
+  loop : IO.Ref Loop
   ended : IO.Promise Unit
+
+/-- What the server keeps of a connection. -/
+private structure Open where
+  line : Line
+  tell : Ev → BaseIO Unit
 
 private structure Connections where
   count : Conn.Count := {}
@@ -98,35 +138,58 @@ structure Server (system : System τ) [Hashable τ.Id] where
   private down : IO.Promise Unit
   private localPort : UInt16
 
-/-- Whether the bytes were written within `write_ms`. A write that is done at once is not
-raced, so that the usual one costs no timer. -/
-private def write (socket : TCP.Socket.Client) (write_ms : Nat) (bytes : ByteArray) :
-    Async Bool := do
-  try
-    let promise ← socket.native.send #[bytes]
-    if ← IO.hasFinished promise.result? then
-      return promise.result?.get matches some (.ok ())
-    Async.race ((fun _ => true) <$> Async.ofPromise (pure promise))
-      ((fun _ => false) <$> Async.sleep (.ofNat write_ms))
-  catch _ => return false
-
 /-- Everything written is sent before the end of the connection, and what the client still
-sends is read and dropped for a while, so that its last response is not lost to a reset. -/
-private def hangUp (socket : TCP.Socket.Client) (linger_ms : Nat) : Async Unit := do
-  try socket.shutdown catch _ => pure ()
-  background do
+sends is read and dropped for a while, so that its last response is not lost to a reset. The
+read in progress, if any, is the first of those. -/
+private def hangUp (socket : TCP.Socket.Client) (reading : Option ReadEnd) (linger_ms : Nat) :
+    BaseIO Unit :=
+  discard <| EAsync.toBaseIO (ε := IO.Error) do
+    try socket.shutdown catch _ => pure ()
     let drain : Async Unit := do
+      if let some r := reading then
+        let some (.ok (some _)) ← await r.result? | return
       repeat
         let some _ ← socket.recv? 65536 | break
     try Async.race drain (Async.sleep (.ofNat linger_ms)) catch _ => pure ()
     socket.close
 
+/-- How a connection's loop reaches the rest of the server. -/
+private structure Ctx where
+  config : ServerConfig
+  /-- Hand a request to the system, with whom to tell its answer. -/
+  submit : Request → (Response → BaseIO Unit) → BaseIO Unit
+  /-- Forget the connection, which has closed. -/
+  leave : BaseIO Unit
+
+/-- Whether the last write has failed. One still going on has not. -/
+private def failedWrite (loop : Loop) : BaseIO Bool := do
+  let some (w, _) := loop.writing | return false
+  if !(← IO.hasFinished w.result?) then return false
+  return !(w.result?.get matches some (.ok ()))
+
+/-- When the last write is to have ended, while it has not. -/
+private def writeBy (write_ms : Nat) (loop : Loop) : BaseIO (Option Nat) := do
+  let some (w, start) := loop.writing | return none
+  return if ← IO.hasFinished w.result? then none else some (start + write_ms)
+
+mutual
+
+/-- Tell the connection's loop `ev`. If the loop is not running it runs now, on this thread
+when `here`, else on a task of its own. -/
+private partial def tell (ctx : Ctx) (line : Line) (here : Bool) (ev : Ev) : BaseIO Unit := do
+  let start ← line.box.atomically do
+    modifyGet fun b => (!b.running, { b with events := ev :: b.events, running := true })
+  if start then
+    if here then run ctx line else discard <| BaseIO.asTask (run ctx line)
+
 /-- Do what the connection asks after `event`. When a write fails, what the connection asks
 after `broken` is done in place of the rest. -/
-private def react (config : ServerConfig) (socket : TCP.Socket.Client)
-    (submit : Nat → Request → Async Unit) (conn : Conn) (event : Conn.Event) : Async Conn := do
-  let (conn, actions) := conn.step config.conn (← IO.monoMsNow) event
-  let mut conn := conn
+private partial def react (ctx : Ctx) (line : Line) (loop : Loop) (event : Conn.Event) :
+    BaseIO Loop := do
+  let config := ctx.config
+  let event := if ← failedWrite loop then .broken else event
+  let (conn, actions) := loop.conn.step config.conn (← IO.monoMsNow) event
+  let mut loop := { loop with conn }
   let mut todo := actions
   repeat
     match todo with
@@ -134,33 +197,78 @@ private def react (config : ServerConfig) (socket : TCP.Socket.Client)
     | action :: rest =>
       todo := rest
       match action with
-      | .submit seq request => submit seq request
+      | .submit seq request =>
+        ctx.submit request fun r => tell ctx line false (.conn (.answered seq r))
       | .interim _ bytes | .write _ bytes =>
-        unless ← write socket config.write_ms bytes do
-          let (broken, actions) := conn.step config.conn (← IO.monoMsNow) .broken
-          conn := broken
+        let failed ← failedWrite loop
+        let sent ← (line.socket.native.send #[bytes]).toBaseIO
+        match failed, sent with
+        | false, .ok w => loop := { loop with writing := some (w, ← IO.monoMsNow) }
+        | _, _ =>
+          let (broken, actions) := loop.conn.step config.conn (← IO.monoMsNow) .broken
+          loop := { loop with conn := broken }
           todo := actions
-      | .close => hangUp socket config.linger_ms
-  return conn
+      | .close => hangUp line.socket loop.reading config.linger_ms
+  return loop
 
-/-- One connection: wait for what the connection waits for, and tell it what happened. -/
-private def converse (config : ServerConfig) (socket : TCP.Socket.Client)
-    (inbox : CloseableChannel Conn.Event) (submit : Nat → Request → Async Unit) : Async Unit := do
-  let mut conn : Conn := { since_ms := ← IO.monoMsNow }
-  repeat
-    if conn.closed then break
-    let mut cases : Array (Selectable Conn.Event) :=
-      #[.case inbox.recvSelector fun event => pure (event.getD .stop)]
-    if conn.wantsInput config.conn then
+private partial def handle (ctx : Ctx) (line : Line) (loop : Loop) : Ev → BaseIO Loop
+  | .conn e => react ctx line loop e
+  | .read r =>
+    react ctx line { loop with reading := none } <| match r with
+      | some (.ok (some bytes)) => .received bytes
+      | some (.ok none) => .ended
+      | _ => .broken
+  | .resume => return { loop with resumeSet := false }
+  | .alarm => do
+    let now ← IO.monoMsNow
+    let late := (← writeBy ctx.config.write_ms loop).any (· ≤ now)
+    react ctx line loop (if late then .broken else .tick)
+
+/-- After the events: read if the connection wants bytes and the last write has ended, say when
+to be told `alarm`, and once it has closed, leave. -/
+private partial def settle (ctx : Ctx) (line : Line) (loop : Loop) : BaseIO Loop := do
+  let config := ctx.config
+  let conn := loop.conn
+  if conn.closed then
+    unless loop.left do
+      ctx.leave
+      line.ended.resolve ()
+    line.box.atomically (modify fun b => { b with alarm_ms := none })
+    return { loop with left := true }
+  let mut loop := loop
+  let writing ← writeBy config.write_ms loop
+  if conn.wantsInput config.conn && loop.reading.isNone then
+    if writing.isNone then
       let size := (min (conn.room config.conn) 65536).toUInt64
-      cases := cases.push (.case (socket.recvSelector size) fun
-        | some bytes => pure (.received bytes)
-        | none => pure .ended)
-    if let some t := conn.deadline config.conn then
-      let left := t - (← IO.monoMsNow)
-      cases := cases.push (.case (← Selector.sleep (.ofNat (max 1 left))) fun _ => pure .tick)
-    let event ← try Selectable.one cases catch _ => pure .broken
-    conn ← react config socket submit conn event
+      match ← (line.socket.native.recv? size).toBaseIO with
+      | .ok r =>
+        loop := { loop with reading := some r }
+        discard <| BaseIO.mapTask (t := r.result?) fun res => tell ctx line true (.read res)
+      | .error e => tell ctx line true (.read (some (.error e)))
+    else if !loop.resumeSet then
+      if let some (w, _) := loop.writing then
+        loop := { loop with resumeSet := true }
+        discard <| BaseIO.mapTask (t := w.result?) fun _ => tell ctx line true .resume
+  let alarm_ms := match conn.deadline config.conn, writing with
+    | some a, some b => some (min a b)
+    | a, b => a <|> b
+  line.box.atomically (modify fun b => { b with alarm_ms })
+  return loop
+
+/-- Handle what the connection has been told, oldest first, until nothing more is. -/
+private partial def run (ctx : Ctx) (line : Line) : BaseIO Unit := do
+  repeat
+    let taken ← line.box.atomically do
+      modifyGet fun b =>
+        if b.events.isEmpty then ([], { b with running := false })
+        else (b.events, { b with events := [] })
+    if taken.isEmpty then break
+    let mut loop ← line.loop.get
+    for ev in taken.reverse do loop ← handle ctx line loop ev
+    loop ← settle ctx line loop
+    line.loop.set loop
+
+end
 
 private def shutDown {system : System τ} [Hashable τ.Id] (server : Server system) :
     Async Unit := do
@@ -168,12 +276,23 @@ private def shutDown {system : System τ} [Hashable τ.Id] (server : Server syst
   let alive ← server.connections.atomically do
     modify fun c => { c with count.stopping := true }
     return (← get).alive.toList
-  for (_, c) in alive do discard <| c.inbox.trySend .stop
+  for (_, c) in alive do c.tell (.conn .stop)
 
 private def awaitConnections {system : System τ} [Hashable τ.Id] (server : Server system) :
     Async Unit := do
   for (_, c) in ← server.connections.atomically (return (← get).alive.toList) do
-    discard <| await c.ended.result?
+    discard <| await c.line.ended.result?
+
+/-- Every `tick_ms`, tell each connection whose alarm has passed, until the server is down. -/
+private def ticker {system : System τ} [Hashable τ.Id] (server : Server system) (tick_ms : Nat) :
+    IO Unit := do
+  repeat
+    IO.sleep (max 1 tick_ms).toUInt32
+    if ← IO.hasFinished server.down.result? then break
+    let now ← IO.monoMsNow
+    for (_, c) in ← server.connections.atomically (return (← get).alive.toList) do
+      if let some t ← c.line.box.atomically (return (← get).alarm_ms) then
+        if t ≤ now then c.tell .alarm
 
 /--
 The server's loop, for any system with a gate in it: `enter` is how a request enters
@@ -214,10 +333,8 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
   let server : Server system := {
     runtime, listener, waiting, connections := ← Mutex.new {}, down := ← IO.Promise.new
     localPort := (← listener.getSockName).port }
-  let submit (inbox : CloseableChannel Conn.Event) (seq : Nat) (request : Request) :
-      Async Unit := do
+  let submit (request : Request) (answer : Response → BaseIO Unit) : BaseIO Unit := do
     let request := prepare request
-    let answer : Response → BaseIO Unit := fun r => discard <| inbox.trySend (.answered seq r)
     let admitted ← waiting.atomically do
       let id ← modifyGet (·.wait answer)
       if ← runtime.tryInput (enter (id, request)) then return true
@@ -225,23 +342,26 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
       return false
     unless admitted do answer busy
   let adopt (socket : TCP.Socket.Client) : Async Unit := do
-    let inbox ← CloseableChannel.new
-    let ended ← IO.Promise.new
+    try socket.noDelay catch _ => pure ()
+    let line : Line := {
+      socket, box := ← Mutex.new {}, loop := ← IO.mkRef { conn := { since_ms := ← IO.monoMsNow } }
+      ended := ← IO.Promise.new }
     let admitted ← server.connections.atomically do
       let c ← get
       let (admitted, count) := c.count.admit config.connections_max
-      if admitted then set { c with count, alive := c.alive.insert c.next { inbox, ended }, next := c.next + 1 }
-      return if admitted then some c.next else none
+      if !admitted then return none
+      let id := c.next
+      let ctx : Ctx := {
+        config, submit
+        leave := server.connections.atomically do
+          modify fun c => { c with count := c.count.leave, alive := c.alive.erase id } }
+      set { c with count, alive := c.alive.insert id { line, tell := tell ctx line false },
+                   next := c.next + 1 }
+      return some ctx
     match admitted with
     | none => socket.close
-    | some id =>
-      try socket.noDelay catch _ => pure ()
-      background do
-        try converse config socket inbox (submit inbox) catch _ => socket.close
-        server.connections.atomically do
-          modify fun c => { c with count := c.count.leave, alive := c.alive.erase id }
-        discard <| (inbox.close : EIO _ Unit).toBaseIO
-        ended.resolve ()
+    | some ctx => tell ctx line false .resume
+  discard <| IO.asTask (prio := .dedicated) (ticker server config.tick_ms)
   background do
     repeat
       match ← (try some <$> listener.accept catch _ => pure none) with
