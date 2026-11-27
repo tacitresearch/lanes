@@ -37,6 +37,7 @@ outputs.
 
 - `Service.takes`: pending inputs taking effect in order are internal steps of the spec.
 - `Account.implements`: a system implements its service when every step of an actor `Moves`.
+- `Account.implements_timed`: the same with deadlines, a step that passes one `Fires` it.
 -/
 
 @[expose] public section
@@ -164,6 +165,48 @@ theorem Holds.moves {w : W} {t : Service.Abs σ.In σ.Out S} (h : a.Holds c w t)
   rw [houtbox']
   exact add_le_add h.owed le_rfl
 
+variable (a svc) in
+/--
+`c'` is `c` after a step that passes the deadline `t`: from any value the account allows of
+`c`, the inputs `xs` take effect, `t` is then armed, and its passing leads to a value the
+account allows of `c'`; `c'` holds, with `xs`, no more inputs than `c` did, and owes no more
+than `c` did with the outputs of `xs` and of the deadline passing.
+-/
+def Fires (t : T) (c c' : SysState sys) : Prop :=
+  ∀ w v, a.value c.state c.net w v → ∃ w' xs, svc.armed (svc.run v xs).1 t = true ∧
+    a.value c'.state c'.net w' (svc.fire (svc.run v xs).1 t).1 ∧
+    a.pending c' w' + ↑xs ≤ a.pending c w ∧
+    a.owed c' w' ≤ a.owed c w + ↑(svc.run v xs).2 + ↑(svc.fire (svc.run v xs).1 t).2
+
+variable (a svc) in
+/-- A step that passes the deadline `d` names: `Fires` when it names one, `Moves` when not. -/
+def Passes : Option T → SysState sys → SysState sys → Prop
+  | none, c, c' => a.Moves svc c c'
+  | some t, c, c' => a.Fires svc t c c'
+
+/-- A step that `Fires` is answered by its inputs taking effect, then the deadline passing. -/
+theorem Holds.fires {w : W} {t₀ : Service.Abs σ.In σ.Out S} {t : T} (h : a.Holds c w t₀)
+    (hf : a.Fires svc t c c') : ∃ t', svc.spec.lts.STr t₀ (some (.fire t)) t' ∧ a.Sim c' t' := by
+  obtain ⟨w', xs, harmed, hvalue, hpending, howed⟩ := hf w t₀.value h.value
+  obtain ⟨t₁, ht₁, hvalue₁, houtbox₁, hrest⟩ :=
+    Service.takes svc xs t₀ (a.pending c' w') (hpending.trans h.pending)
+  refine ⟨⟨(svc.fire t₁.value t).1, t₁.pending, t₁.outbox + (svc.fire t₁.value t).2⟩,
+    .tr ht₁ ⟨by rwa [hvalue₁], rfl⟩ .refl, w', by rw [hvalue₁]; exact hvalue, hrest, ?_⟩
+  refine howed.trans ?_
+  rw [houtbox₁, hvalue₁]
+  exact add_le_add (add_le_add h.owed le_rfl) le_rfl
+
+/-- A step that `Passes` the deadline `d` names is answered by a step of the spec with that
+label. -/
+theorem Holds.passes {w : W} {t₀ : Service.Abs σ.In σ.Out S} {d : Option T} (h : a.Holds c w t₀)
+    (hp : a.Passes svc d c c') :
+    ∃ t', svc.spec.lts.STr t₀ (d.map Visible.fire) t' ∧ a.Sim c' t' := by
+  cases d with
+  | none =>
+    obtain ⟨t', ht', h'⟩ := h.moves hp
+    exact ⟨t', (LTS.sTr_τSTr_iff _).mpr ht', h'⟩
+  | some t => exact h.fires hp
+
 /-- A step at which nothing takes effect: the account allows the same values, and the state
 after holds and owes no more. -/
 theorem Moves.of_le
@@ -287,7 +330,108 @@ theorem Moves.grow {i : σ.Id} {r : sys.State i × List (Effect σ i)}
     simp only [owed, SysState.grow, List.filterMap_append, ← Multiset.coe_add]
     convert this using 1 <;> abel
 
+/-- `Handles`, for a step that passes the deadline `t` after the inputs `xs` take effect: `t`
+is then armed, and the outputs of its passing may be owed too. -/
+def HandlesFire (a : Account sys S W) (svc : Service σ.In σ.Out S T)
+    (state : (i : σ.Id) → sys.State i) (net net' : List (Envelope σ)) (i : σ.Id)
+    (r : sys.State i × List (Effect σ i)) (x : Option σ.In) (o : Option σ.Out) (t : T) : Prop :=
+  ∀ w v, a.value state net w v → ∃ w' xs, svc.armed (svc.run v xs).1 t = true ∧
+    a.value (update state i r.1) net' w' (svc.fire (svc.run v xs).1 t).1 ∧
+    ↑((Effect.sends i r.2).filterMap a.pend) + a.held (update state i r.1) w' + ↑xs ≤
+      ↑x.toList + a.held state w ∧
+    ↑(Effect.emits r.2) + ↑((Effect.sends i r.2).filterMap a.owe) + a.owing (update state i r.1) w' ≤
+      ↑o.toList + a.owing state w + ↑(svc.run v xs).2 + ↑(svc.fire (svc.run v xs).1 t).2
+
+/-- An actor handles `e` and passes the deadline `t`: what that does is `HandlesFire` with what
+`e` carried. -/
+theorem Fires.handle {t : T} (he : e ∈ c.net)
+    (h : a.HandlesFire svc c.state c.net (c.net.erase e ++ Effect.sends e.dst r.2) e.dst r
+      (a.pend e) (a.owe e) t) :
+    a.Fires svc t c (({ c with net := c.net.erase e }).grow e.dst r) := by
+  intro w v hv
+  obtain ⟨w', xs, harmed, hv', hp, ho⟩ := h w v hv
+  refine ⟨w', xs, harmed, hv', ?_, ?_⟩
+  · have := add_le_add_left hp ↑((c.net.erase e).filterMap a.pend)
+    simp only [pending, SysState.grow, List.filterMap_append,
+      Multiset.coe_eq_coe.mpr (filterMap_perm_erase he), ← Multiset.coe_add]
+    convert this using 1 <;> abel
+  · have := add_le_add_left ho (↑c.outbox + ↑((c.net.erase e).filterMap a.owe))
+    simp only [owed, SysState.grow, List.filterMap_append,
+      Multiset.coe_eq_coe.mpr (filterMap_perm_erase he), ← Multiset.coe_add]
+    convert this using 1 <;> abel
+
+/-- An actor passes the deadline `t` with no message taken off the network (a timer, a message
+handed over a second time): `HandlesFire` with nothing handed to it. -/
+theorem Fires.grow {i : σ.Id} {r : sys.State i × List (Effect σ i)} {t : T}
+    (h : a.HandlesFire svc c.state c.net (c.net ++ Effect.sends i r.2) i r none none t) :
+    a.Fires svc t c (c.grow i r) := by
+  intro w v hv
+  obtain ⟨w', xs, harmed, hv', hp, ho⟩ := h w v hv
+  refine ⟨w', xs, harmed, hv', ?_, ?_⟩
+  · have := add_le_add_left (hp.trans_eq (zero_add _)) ↑(c.net.filterMap a.pend)
+    simp only [pending, SysState.grow, List.filterMap_append, ← Multiset.coe_add]
+    convert this using 1 <;> abel
+  · have := add_le_add_left (ho.trans_eq (by rw [Option.toList_none, Multiset.coe_nil, zero_add]))
+      (↑c.outbox + ↑(c.net.filterMap a.owe))
+    simp only [owed, SysState.grow, List.filterMap_append, ← Multiset.coe_add]
+    convert this using 1 <;> abel
+
 variable {env : EnvModel σ} {inv : SysState sys → Prop}
+
+/--
+A system implements its service with deadlines when every step of an actor `Moves`, or, where
+it is a timer that `deadlines` names or a message handed over that `delivered` names, `Fires`
+that deadline (`Passes`). The rest is as in `implements`.
+-/
+theorem implements_timed {svc : Service σ.In σ.Out S T} (a : Account sys S W)
+    {deadlines delivered : Deadlines σ T}
+    (hinv : sys.Invariant env inv)
+    (init : ∃ w, a.Holds (SysState.init sys env) w ⟨svc.init, 0, 0⟩)
+    (accept : ∀ x, a.pend ⟨none, (sys.accept x).1, (sys.accept x).2⟩ = some x ∧
+      a.owe ⟨none, (sys.accept x).1, (sys.accept x).2⟩ = none)
+    (input : ∀ c w v x, inv c → a.value c.state c.net w v →
+      a.value c.state (c.net ++ [⟨none, (sys.accept x).1, (sys.accept x).2⟩]) w v)
+    (deliver : ∀ c e, inv c → sys.Sent e → c.deliverable env e = true →
+      a.Passes svc (delivered e.dst e.msg) c (({ c with net := c.net.erase e }).grow e.dst
+        ((sys.actor e.dst).step (c.state e.dst) e.msg)))
+    (duplicate : ∀ c e, inv c → sys.Sent e → c.deliverable env e = true →
+      (env.link e.src e.dst).duplicating = true → a.Passes svc (delivered e.dst e.msg) c
+        (c.grow e.dst ((sys.actor e.dst).step (c.state e.dst) e.msg)))
+    (drop : ∀ c e, inv c → sys.Sent e → e ∈ c.net → (env.link e.src e.dst).lossy = true →
+      a.Moves svc c { c with net := c.net.erase e })
+    (down : ∀ c i, env.mayCrash i = true ∨ sys.Stops i → a.Moves svc c (c.down env i))
+    (timeout : ∀ c i msg, inv c → sys.Armed i msg → msg ∈ c.timers i →
+      a.Passes svc (deadlines i msg) c (c.grow i ((sys.actor i).step (c.state i) msg)))
+    (recover : ∀ c i, inv c → a.Moves svc c (c.grow i ((sys.actor i).recover (c.state i)))) :
+    sys.Implements env svc deadlines delivered := by
+  have hsent := fun c e (hc : inv c ∧ sys.Traced c) he => hc.2.net e he
+  refine System.Refines.of_timed_events (fun c hc => ⟨hinv c hc, System.traced sys env c hc⟩)
+    a.Sim ⟨_, rfl, init⟩ (fun c t up timers ⟨w, h⟩ _ => ⟨w, h.value, h.pending, h.owed⟩) ?_ ?_
+    (fun c t e hc ⟨_, h⟩ hd =>
+      h.passes (deliver c e hc.1 (hsent c e hc (SysState.mem_of_deliverable hd)) hd))
+    (fun c t e hc ⟨_, h⟩ hd hdup =>
+      h.passes (duplicate c e hc.1 (hsent c e hc (SysState.mem_of_deliverable hd)) hd hdup))
+    (fun c t e hc ⟨_, h⟩ hmem hlossy => h.moves (drop c e hc.1 (hsent c e hc hmem) hmem hlossy))
+    (fun c t i ⟨_, h⟩ hi => h.moves (down c i hi))
+    (fun c t i msg hc ⟨_, h⟩ hmem =>
+      h.passes (timeout c i msg hc.1 (hc.2.timers i msg hmem) hmem))
+    (fun c t i hc ⟨_, h⟩ => h.moves (recover c i hc.1))
+  · rintro c t x ⟨hc, -⟩ ⟨w, h⟩
+    obtain ⟨hpend, howe⟩ := accept x
+    refine ⟨{ t with pending := x ::ₘ t.pending }, .single rfl, w, input c w _ x hc h.value, ?_, ?_⟩
+    · have := Multiset.cons_le_cons x h.pending
+      simp only [pending, filterMap_concat, hpend, Option.toList_some, ← Multiset.coe_add] at this ⊢
+      rw [add_comm (↑(c.net.filterMap a.pend) : Multiset σ.In), add_assoc]
+      simpa [Multiset.singleton_add] using this
+    · simpa [owed, filterMap_concat, howe] using h.owed
+  · rintro c t out hc ⟨w, h⟩ hmem
+    have hin : out ∈ (↑c.outbox : Multiset σ.Out) := Multiset.mem_coe.mpr hmem
+    refine ⟨{ t with outbox := t.outbox.erase out },
+      .single ⟨Multiset.mem_of_le h.owed (Multiset.mem_add.mpr (.inl (Multiset.mem_add.mpr
+        (.inl hin)))), rfl⟩, w, h.value, h.pending, ?_⟩
+    have := Multiset.erase_le_erase out h.owed
+    rwa [owed, Multiset.erase_add_left_pos _ (Multiset.mem_add.mpr (.inl hin)),
+      Multiset.erase_add_left_pos _ hin, Multiset.coe_erase] at this
 
 /--
 A system implements its service when every step of an actor `Moves`: an application gives the
@@ -314,36 +458,9 @@ theorem implements {svc : Service σ.In σ.Out S T} (a : Account sys S W)
     (timeout : ∀ c i msg, inv c → sys.Armed i msg → msg ∈ c.timers i →
       a.Moves svc c (c.grow i ((sys.actor i).step (c.state i) msg)))
     (recover : ∀ c i, inv c → a.Moves svc c (c.grow i ((sys.actor i).recover (c.state i)))) :
-    sys.Implements env svc := by
-  have hsent := fun c e (hc : inv c ∧ sys.Traced c) he => hc.2.net e he
-  refine System.Refines.of_events (fun c hc => ⟨hinv c hc, System.traced sys env c hc⟩) a.Sim
-    ⟨_, rfl, init⟩ (fun c t up timers ⟨w, h⟩ _ => ⟨w, h.value, h.pending, h.owed⟩) ?_ ?_
-    (fun c t e hc ⟨_, h⟩ hd =>
-      h.moves (deliver c e hc.1 (hsent c e hc (SysState.mem_of_deliverable hd)) hd))
-    (fun c t e hc ⟨_, h⟩ hd hdup =>
-      h.moves (duplicate c e hc.1 (hsent c e hc (SysState.mem_of_deliverable hd)) hd hdup))
-    (fun c t e hc ⟨_, h⟩ hmem hlossy => h.moves (drop c e hc.1 (hsent c e hc hmem) hmem hlossy))
-    (fun c t i ⟨_, h⟩ hi => h.moves (down c i hi)) ?_
-    (fun c t i hc ⟨_, h⟩ => h.moves (recover c i hc.1))
-  · rintro c t x ⟨hc, -⟩ ⟨w, h⟩
-    obtain ⟨hpend, howe⟩ := accept x
-    refine ⟨{ t with pending := x ::ₘ t.pending }, .single rfl, w, input c w _ x hc h.value, ?_, ?_⟩
-    · have := Multiset.cons_le_cons x h.pending
-      simp only [pending, filterMap_concat, hpend, Option.toList_some, ← Multiset.coe_add] at this ⊢
-      rw [add_comm (↑(c.net.filterMap a.pend) : Multiset σ.In), add_assoc]
-      simpa [Multiset.singleton_add] using this
-    · simpa [owed, filterMap_concat, howe] using h.owed
-  · rintro c t out hc ⟨w, h⟩ hmem
-    have hin : out ∈ (↑c.outbox : Multiset σ.Out) := Multiset.mem_coe.mpr hmem
-    refine ⟨{ t with outbox := t.outbox.erase out },
-      .single ⟨Multiset.mem_of_le h.owed (Multiset.mem_add.mpr (.inl (Multiset.mem_add.mpr
-        (.inl hin)))), rfl⟩, w, h.value, h.pending, ?_⟩
-    have := Multiset.erase_le_erase out h.owed
-    rwa [owed, Multiset.erase_add_left_pos _ (Multiset.mem_add.mpr (.inl hin)),
-      Multiset.erase_add_left_pos _ hin, Multiset.coe_erase] at this
-  · intro c t i msg hc ⟨_, h⟩ hmem
-    obtain ⟨t', ht', h'⟩ := h.moves (timeout c i msg hc.1 (hc.2.timers i msg hmem) hmem)
-    exact ⟨t', (LTS.sTr_τSTr_iff _).mpr ht', h'⟩
+    sys.Implements env svc :=
+  a.implements_timed (deadlines := fun _ _ => none) (delivered := fun _ _ => none) hinv init
+    accept input deliver duplicate drop down timeout recover
 
 end Account
 
