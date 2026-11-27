@@ -128,8 +128,8 @@ jobs:
       - uses: ./.github/actions/lean
       - name: Build and check each small example
         run: |
-          for package in integrations/google integrations/github examples/counter examples/bank \
-              examples/bank-web examples/kv-cache examples/election examples/watchdog \
+          for package in integrations/google integrations/github integrations/aws examples/counter \
+              examples/bank examples/bank-web examples/kv-cache examples/election examples/watchdog \
               examples/payments examples/migration examples/todo-db examples/sign-in; do
             echo "::group::$package"
             mkdir -p "$package/.lake"

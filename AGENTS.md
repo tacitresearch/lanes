@@ -215,7 +215,7 @@ that performs IO is in an `IO/` directory of its area and named in `TRUSTED.md`.
 | `LanesCli/` | The `lanes` command: `new`, `lint`, `check`, `inventory` | `Std` only; `Lean` in `Inventory`, which only `lanesInventory` links |
 | `templates/app/` | The application `lanes new` creates, which is `examples/counter` | |
 | `examples/` | Applications to read, each its own Lake package (`examples/README.md`) | anything |
-| `integrations/` | A vendor's preset or client, each its own Lake package (D61): `google` and `github` for sign-in | Lanes |
+| `integrations/` | A vendor's preset or client, each its own Lake package (D61): `google` and `github` for sign-in, `aws` for a role's credentials and SES | Lanes |
 | `Tests/` | Regression tests run by `lake test` and `lanesCheck`; the apps they use in `Fixtures/` | anything |
 | `oracle/` | Differential tests against Go's standard library and other HTTP servers | |
 | `infra/` | The CI machine: its stack and its set-up script (`docs/RUNNERS.md`); in `app/`, the stack, set-up script and smoke check of an application on AWS (`docs/DEPLOY.md`) | |

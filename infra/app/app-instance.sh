@@ -49,7 +49,8 @@ die() { say "$*"; exit 1; }
 
 # The keys the configuration may set, and nothing else.
 CONF_KEYS=(APP BINARY ARGS PORT READY_PATH METRICS_PATH DRAIN_SECONDS RELEASES LOG_GROUP
-  METRICS_LOG_GROUP METRICS_NAMESPACE SCRIPT_URL SCRIPT_SHA256 DB_HOST DB_PORT DB_NAME DB_SECRET)
+  METRICS_LOG_GROUP METRICS_NAMESPACE SCRIPT_URL SCRIPT_SHA256 DB_HOST DB_PORT DB_NAME DB_SECRET
+  MAIL_IDENTITY)
 
 load_conf() {
   # shellcheck source=/dev/null
@@ -73,6 +74,7 @@ load_conf() {
   DB_PORT=${DB_PORT:-}
   DB_NAME=${DB_NAME:-}
   DB_SECRET=${DB_SECRET:-}
+  MAIL_IDENTITY=${MAIL_IDENTITY:-}
   CONFIG_PARAMETER=${CONFIG_PARAMETER:-}
   AWS_REGION=${AWS_REGION:-}
 }
@@ -86,6 +88,8 @@ check_conf() {
   [[ $READY_PATH =~ ^/[A-Za-z0-9_./-]*$ ]] || die "READY_PATH '$READY_PATH' is not a path"
   [[ $METRICS_PATH =~ ^(/[A-Za-z0-9_./-]*)?$ ]] || die "METRICS_PATH '$METRICS_PATH' is not a path"
   [[ $DRAIN_SECONDS =~ ^[0-9]{1,3}$ ]] || die "DRAIN_SECONDS '$DRAIN_SECONDS' is not a number"
+  [[ $MAIL_IDENTITY =~ ^([A-Za-z0-9._+-]+@)?([A-Za-z0-9-]+\.)*[A-Za-z0-9-]*$ ]] \
+    || die "MAIL_IDENTITY '$MAIL_IDENTITY' is not an address or a domain"
 }
 
 # The arguments the application is started with.
@@ -275,12 +279,15 @@ write_units() {
   copytruncate
 }
 EOF
-  if [ -n "$DB_HOST" ]; then
-    printf '%s=%s\n' LANES_DB_HOST "$DB_HOST" LANES_DB_PORT "$DB_PORT" LANES_DB_NAME "$DB_NAME" \
-      >/etc/lanes/app.env
-  else
-    rm -f /etc/lanes/app.env
-  fi
+  # The region, for the role's credentials (which the application fetches from the metadata
+  # service itself), S3 and SES; the database and the mail identity when there are.
+  {
+    printf '%s=%s\n' AWS_REGION "$(region)"
+    if [ -n "$DB_HOST" ]; then
+      printf '%s=%s\n' LANES_DB_HOST "$DB_HOST" LANES_DB_PORT "$DB_PORT" LANES_DB_NAME "$DB_NAME"
+    fi
+    if [ -n "$MAIL_IDENTITY" ]; then printf '%s=%s\n' LANES_MAIL_IDENTITY "$MAIL_IDENTITY"; fi
+  } >/etc/lanes/app.env
   systemctl daemon-reload
   systemctl enable lanes-volume.service lanes-app.service lanes-log.service
 }

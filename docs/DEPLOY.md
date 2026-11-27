@@ -114,7 +114,8 @@ and name the stack after the application. The parameters:
 | `JournalSnapshotId` | empty | A snapshot to restore (see "Restore") |
 | `LogRetentionDays` | 30 | How long log lines are kept |
 | `AlarmEmail` | empty | Who is told when the site has no healthy target, the disk fills or the host fails |
-| `MediaUser` | `true` | An IAM user for an S3 client that reads keys from the environment (see "Media") |
+| `MediaUser` | `false` | `true` for an IAM user, for an S3 client that reads a key from the environment (see "Media") |
+| `MailIdentity` | empty | An SES identity the instance may send email from (see "Email") |
 | `DatabaseEngine` | `none` | `postgres` adds RDS PostgreSQL (see "The database") |
 
 **Next**, **Next**, tick **I acknowledge that AWS CloudFormation might create IAM resources**,
@@ -261,12 +262,29 @@ The media bucket blocks public access, refuses requests without TLS, allows a pr
 `GET` and `HEAD` from `https://<DomainName>` (CORS, exposing `ETag`), and aborts multipart
 uploads left incomplete for two days. The instance role may read and write it.
 
-Lanes's S3 client (SigV4 and presigned URLs, in progress) reads its credentials from
-`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN`, once, at start. Until it
-reads the instance role's credentials from the metadata service (IMDSv2, which the instance
-requires), give it a key of its own: with `MediaUser` true the stack makes an IAM user whose only
-rights are the media bucket's (output `MediaUserName`); make its access key (**IAM → Users → the
-user → Security credentials → Create access key**), and on the instance, as root:
+The S3 client (`Lanes/Web/IO/S3.lean`) reads its credentials from a source at every call
+(`SigV4.Source`). The default path is the instance role's credentials, which the AWS integration
+(`integrations/aws`, `docs/decisions/new-aws-integration.md`) fetches from the metadata service
+with IMDSv2, as the instance requires, and fetches again five minutes before they expire. Nothing
+is stored on the instance and nothing needs rotating. Require the package in the application's
+lakefile (`path` or `git`, as `examples/sign-in` requires Google's and GitHub's), and in `main`:
+
+```lean
+  let creds ← Aws.Credentials.start (← Aws.Credentials.detect)
+  let media : S3.Bucket :=
+    { name := "<MediaBucketName>", region := "<region>", endpoint := S3.Endpoint.aws "<region>" }
+  -- In the handler of the system's outputs:
+  S3.handler port media creds.source {} rt out
+```
+
+`/etc/lanes/app.env` gives the application `AWS_REGION`. A URL presigned with the role's
+credentials lasts no longer than those credentials, a few hours at most, whatever its `Expiry`.
+
+An S3 client that reads `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN`
+instead (`S3.credentialsFromEnv`, once, at start) needs a key of its own: with `MediaUser` true
+the stack makes an IAM user whose only rights are the media bucket's (output `MediaUserName`);
+make its access key (**IAM → Users → the user → Security credentials → Create access key**), and
+on the instance, as root:
 
 ```bash
 sudo install -m 600 /dev/null /etc/lanes/secrets.env
@@ -279,9 +297,28 @@ sudo systemctl restart lanes-app
 ```
 
 systemd reads the file as root and hands the values to the application; the `lanes` user cannot
-read it. The key does not expire: rotate it by hand. Once the client takes the instance role,
-delete the file and the key and set `MediaUser` to false. A URL presigned with the role's
-credentials lasts no longer than those credentials, a few hours.
+read it. The key does not expire: rotate it by hand, or move to the instance role and then
+delete the file and the key and set `MediaUser` to false.
+
+## Email
+
+With `MailIdentity` set to an identity verified in SES in the stack's region (a domain, such as
+`videos.example`, or an address), the instance role may call `ses:SendEmail` from that identity
+and no other, and `/etc/lanes/app.env` gives `LANES_MAIL_IDENTITY`. The AWS integration's SES
+adapter (`Aws.Ses`, SES API v2's `SendEmail`) sends a message with the same credentials:
+
+```lean
+  let mail := Aws.Ses.Endpoint.aws "<region>"
+  -- In the handler of the system's outputs:
+  Aws.Ses.handler port mail creds.source {} rt out
+```
+
+Verify the identity first (**Amazon SES → Identities → Create identity**; a domain takes DNS
+records, which Route 53 can add). A new account is in SES's sandbox: it sends only to verified
+addresses, at most 200 messages a day, until you ask AWS for production access (**Amazon SES →
+Account dashboard → Request production access**). SES takes no idempotency key, so a send whose
+answer never came may have been sent: resending it may send it twice (the decision on the AWS
+integration).
 
 ## The database
 
@@ -291,7 +328,7 @@ protection on) in two private subnets, reachable on 5432 from the instance only.
 made by Secrets Manager. Before each start of the application, as root, the unit writes the
 database's IPv4 address and password to `/run/lanes-app/db-address` and `/run/lanes-app/db-password`,
 readable by the application only, and `/etc/lanes/app.env` gives `LANES_DB_HOST`, `LANES_DB_PORT`
-and `LANES_DB_NAME` (`lanes`); the user is `lanes`. The application's `main` reads them into
+and `LANES_DB_NAME` (`lanes`), beside `AWS_REGION`; the user is `lanes`. The application's `main` reads them into
 the client's configuration (`Lanes/Lib/Postgres/IO/Client.lean`,
 `docs/decisions/D68-postgres-protocol-in-lean.md`). That client takes an IPv4 address, not a
 name, and speaks plain TCP, so the stack's parameter group turns off `rds.force_ssl`, which RDS
@@ -410,7 +447,10 @@ built into the counter and answering on an address other than loopback; and depl
 the refusal of a wrong SHA-256 and the rollback of a release that never becomes ready, with
 stubs of `aws` and `systemctl`.
 
-Not checked: a real stack, instance, role, certificate, load balancer and its rule, Data
+Not checked: the AWS integration on an instance (the role's credentials fetched from the
+metadata service from inside the unit's sandbox, refreshed, and used by S3), SES with a verified
+identity and the `ses:SendEmail` grant, and the stack with `MediaUser` false and `MailIdentity`
+set; a real stack, instance, role, certificate, load balancer and its rule, Data
 Lifecycle Manager policy and restore, the instance attaching its own volume (the
 `ec2:SourceInstanceARN` condition) and a replaced instance taking it over; the CloudWatch agent's
 Prometheus support on EC2 and the metrics it sends; the Systems Manager document, the
