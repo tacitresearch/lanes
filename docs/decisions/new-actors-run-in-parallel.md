@@ -133,9 +133,14 @@ new C.
 
 ## Measured
 
-Locally (a shared four-core container, the server on two CPUs and the load on two, three runs of
-5 s, `IO_THREADS=2 WORKERS=2`), see `bench/README.md` ("Parallel actors and IO threads"). The
-numbers that count are the warm machine's.
+Locally, in a shared four-core container: `bench/README.md`, "Parallel actors and IO threads".
+In short: the kernel alone scales with workers where steps are costly (64 actors, steps of about
+30 µs: 31, 17 and 9 µs a message on one, two and four workers) and costs about a microsecond more
+a message where they are cheap (0.3 to 0.45 against 1.3 to 1.7), most of it Lean freeing objects
+that tasks made, which it counts atomically. Over HTTP on two server CPUs neither switch gains,
+because the two cores are already full; `lanes-heavy-par` costs 88 to 102 µs a request against
+66 to 75, its waves being a few messages each. The numbers that decide are the warm machine's,
+with cores to spare.
 
 ## Risks
 
