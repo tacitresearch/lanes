@@ -26,7 +26,7 @@ review. The order of work:
 4. **Trusted and assumed things keep shrinking**: exactly-once requests in place of the premise
    that links from clients do not duplicate, idle actors saved to storage when they rest. The
    server reads requests with its own reader (`Lanes/Web/Http/ReadRequest.lean`, D49); `fsync`
-   and cryptography bound to libsodium are done (D46); exactly-once requests are in for the
+   and cryptography bound to OpenSSL are done (D46); exactly-once requests are in for the
    key-value store (D48); actors back where a start puts them are released
    (`docs/decisions/D51-release-actors-at-rest.md`).
 5. **Specs are what a person reviews.** Each system's spec and its premises sit in one place, and

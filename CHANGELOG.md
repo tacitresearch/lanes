@@ -62,6 +62,7 @@ under Unreleased (`CONTRIBUTING.md`).
 
 ### Changed
 
+- One crypto library (`docs/decisions/new-one-crypto-library.md`): SHA-256, HMAC-SHA-256, the comparison of byte strings and Argon2id come from the OpenSSL Lean's toolchain ships, as TLS does, and random bytes from Lean's `IO.getRandomBytes`. Building or running an application installs no library; `pkg-config` is not needed. Password digests are the same bytes as before, tested against hashes libsodium made and RFC 9106's example. `Lanes/Lib/Crypto/Sodium.lean` is `Lanes/Lib/Crypto/Native.lean`, every name kept; `Argon2id.derive` takes RFC 9106's lanes, secret and associated data.
 - `Http.serve` reads a journal it wrote behind a gate of other settings (`ServerConfig.gate`): it replays the journal behind the gate that wrote it, which the journal's name says, and carries the kernel across with a `Journal.Upgrade` (`Http.regateUpgrade`), so changing a timeout no longer refuses the journal (`docs/decisions/new-journal-version.md`). This needs `saving`; without it the start is refused with a message that names both gates. A journal under another `ServerConfig.system` is refused as before, with a message that says what to do.
 - `lanes new` pins the Lanes it was made from: the release tag of its checkout, or its commit, with a comment in the lakefile that says which; it no longer writes `rev = "main"`.
 - The app `lanes new` makes answers `/readyz`, `/healthz` and `/metrics` and writes an access log (`ServerConfig.ops`), so it passes the deployment stack's health check as it is.
@@ -101,6 +102,7 @@ under Unreleased (`CONTRIBUTING.md`).
 
 ### Removed
 
+- libsodium: the lakefile no longer finds it with `pkg-config` or links `libsodium.a`, and CI, the runner and the template no longer install it. `Lanes.Lib.Crypto.Sodium` only imports `Lanes.Lib.Crypto.Native`, and is deprecated.
 - `Actor.comapMsg`, which nothing used; the `Repr Empty` instance of `Lanes/Core/Inspect.lean`, which Lean has; helper lemmas of the soundness proofs that no proof used.
 
 ### Security

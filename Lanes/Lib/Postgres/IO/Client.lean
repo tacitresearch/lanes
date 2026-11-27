@@ -17,7 +17,7 @@ what happened, and does what it answers: send bytes, run the TLS handshake, repo
 decides nothing (rule 3.9): whether to ask for TLS, what the server's answer means, which bytes
 to send, with which channel binding, what the server's bytes mean, which reply answers which
 request and what a reply to `COMMIT` means are `Conn.step`'s, proved in
-`Lanes/Lib/Postgres/ConnSound.lean`. It draws the SCRAM nonce from libsodium, reads no more than
+`Lanes/Lib/Postgres/ConnSound.lean`. It draws the SCRAM nonce from `randomBytes`, reads no more than
 `Conn.room` bytes at a time, and tells the connection the socket broke when a send or a read
 fails or a request's deadline passes.
 

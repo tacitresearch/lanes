@@ -10,7 +10,7 @@ public import Std
 MD5 (RFC 1321) in pure Lean, for PostgreSQL's `md5` authentication and nothing else: MD5 is
 broken as a hash, and the password digest PostgreSQL asks for is what the server stores.
 
-It is not bound: libsodium has no MD5, and the digest a client sends is of a password the server
+It is not bound: the digest a client sends is of a password the server
 already holds a digest of, so a timing side channel here gives nothing a recording of the
 exchange does not. Tested against RFC 1321's examples and against libpq's answer recorded from a
 real server (`Tests/Postgres.lean`). That it is MD5 is not proved; that a digest is 16 bytes is.

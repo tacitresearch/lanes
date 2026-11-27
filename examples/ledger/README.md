@@ -168,7 +168,7 @@ axiom gate:
   its journal, as the kernel the journal's requests lead to (`Journal.recover_kernel`).
 
 The links from the users to the ledger must be ordered (a
-reordering link gives a stale view, above). That libsodium's SHA-256, HMAC and comparison
+reordering link gives a stale view, above). That OpenSSL's SHA-256, HMAC and comparison
 compute what their Lean references do is tested, and that the references are SHA-256 and HMAC
 is tested against published vectors (`TRUSTED.md`). Not proved: that the gate in front
 (`Http.served`) keeps the refinement, and that a request is ever answered beyond what the
@@ -182,7 +182,7 @@ every three seconds and whenever a transfer of the user's is answered. Pages tha
 records (log-in, and the shells of the others, which carry the form tokens) are answered by
 the bridge; the records come into them as fragments through the system.
 
-- Passwords: Argon2id from libsodium, two passes over 19 MiB by default (OWASP's figure),
+- Passwords: Argon2id from OpenSSL, two passes over 19 MiB by default (OWASP's figure),
   salted with an HMAC of the name under a pepper of the deployment; a random salt per user is
   not possible here (friction log). The digest is computed by the bridge's `prepare`, on the
   request's own task, not on the shard's thread, and never again at a replay.
@@ -203,7 +203,7 @@ round of framework work is planned from this.
 ### Missing, and added
 
 - **SHA-256, HMAC-SHA-256**: `Lanes/Lib/Crypto/Sha256.lean`, `Lanes/Lib/Crypto/Hmac.lean`, bound
-  to libsodium with a Lean reference beside each, tested against FIPS 180-4 and RFC 4231
+  to OpenSSL with a Lean reference beside each, tested against FIPS 180-4 and RFC 4231
   (`Tests/Crypto.lean`). Proved of the Lean references, which the bound C is trusted to match: the
   digest's and the tag's lengths (`Sha256.size_hash`, `Hmac.size_hmac`) and
   `Bytes.same a b = true ↔ a = b`. Proved outright: the hex round trip (`Bytes.unhex?_hex`).

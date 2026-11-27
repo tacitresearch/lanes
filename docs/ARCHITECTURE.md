@@ -40,7 +40,7 @@ proved function tells it to.
 | The proof layer | `Lanes/Semantics/` | refinement, specs, fairness, leads-to |
 | Data and the standard library | `Lanes/Data/`, `Lanes/Lib/` | codec laws, `Quorum.majority_inter`, `Bytes.same_iff`, `Json.parse_iff`, `Url.parse_print` |
 | Sign-in with OAuth 2.0 and OpenID Connect | `Lanes/Web/Auth/{Jose,IdToken,OAuth}.lean`, `Lanes/Web/IO/SignIn.lean` | `OAuth.check_ok`, `OAuth.Used.accepted_once`, `OAuth.Used.length_claim`, `OAuth.IdToken.verify_accepted`, `Jose.verify_ok`, `OAuth.Keys.no_fetch_within`; the edge is trusted, tested end to end against a provider run in the test |
-| Bound C | `native/lanes.c`, `Lanes/Lib/Crypto/Sodium.lean`; `native/verify.c`, `Lanes/Lib/Crypto/Verify.lean`; `native/sign.c`, `Lanes/Lib/Crypto/Sign.lean` | trusted; tested against the Lean references and published vectors |
+| Bound C | `native/lanes.c`, `Lanes/Lib/Crypto/Native.lean`; `native/verify.c`, `Lanes/Lib/Crypto/Verify.lean`; `native/sign.c`, `Lanes/Lib/Crypto/Sign.lean` | trusted; tested against the Lean references and published vectors |
 | TLS client | `native/tls.c`, `Lanes/Web/IO/Tls.lean` | trusted; tested against `openssl s_server` |
 
 ## Actors and the semantics
@@ -539,8 +539,8 @@ is a pass of `Check.system` when the representative is a `World.Reduction`
 ## Bound C
 
 What Lean cannot express or check is bound, as other languages bind it (D46): `fsync`, and from
-libsodium SHA-256, HMAC-SHA-256, constant-time comparison, secure random bytes and Argon2id
-(`native/lanes.c`, declared in `Lanes/Lib/Crypto/Sodium.lean` and `Lanes/Durable/IO/Journal.lean`). A bound
+OpenSSL's libcrypto SHA-256, HMAC-SHA-256, constant-time comparison and Argon2id
+(`native/lanes.c`, declared in `Lanes/Lib/Crypto/Native.lean` and `Lanes/Durable/IO/Journal.lean`). A bound
 function with a Lean reference (`Sha256.reference`, `Hmac.reference`, `Bytes.sameReference`) has
 that reference as its body, so its theorems (`Bytes.same_iff`) are about the reference, and what
 is trusted is that the C computes the same, which `Tests/Crypto.lean` tests.

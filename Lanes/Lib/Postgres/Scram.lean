@@ -17,7 +17,7 @@ the hash of the server's certificate and what the server sent.
 The nonce is drawn by the IO that runs the connection and passed in, so that these stay
 functions. The client does not trust the server before the server has proved it knows the
 password: `Scram.respond` gives, with the client's last message, the signature the server must
-answer with, and `Scram.verify` compares the two with libsodium's comparison. Tested against RFC
+answer with, and `Scram.verify` compares the two with OpenSSL's comparison. Tested against RFC
 7677's example and against libpq's messages recorded from a real server (`Tests/Postgres.lean`).
 -/
 

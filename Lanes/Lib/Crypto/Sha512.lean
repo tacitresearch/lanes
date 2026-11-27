@@ -9,8 +9,8 @@ public import Std
 /-!
 SHA-512 and SHA-384 (FIPS 180-4) in pure Lean, for the hash of a server's certificate that
 channel binding sends (`Lanes/Lib/Crypto/Certificate.lean`) when the certificate is signed with
-one of them. What is hashed is public, so a timing side channel here gives nothing away; libsodium
-has SHA-512 but not SHA-384, which is SHA-512 from other initial words, cut to 48 bytes.
+one of them. What is hashed is public, so a timing side channel here gives nothing away. SHA-384
+is SHA-512 from other initial words, cut to 48 bytes.
 
 Tested against the NIST examples and against `openssl dgst` (`Tests/Crypto.lean`,
 `Tests/PostgresTls.lean`). That it is SHA-512 is not proved; that a digest is 64 or 48 bytes is.

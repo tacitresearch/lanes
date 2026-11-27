@@ -4,15 +4,15 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Lib.Crypto.Sodium
+public import Lanes.Lib.Crypto.Native
 
 /-!
 PBKDF2 with HMAC-SHA-256 (RFC 8018), which SCRAM-SHA-256 calls `Hi`. It is for authenticating
 to a server that asks for it, not for digesting passwords: those are Argon2id
 (`docs/decisions/D46-bind-what-touches-physics.md`).
 
-It composes libsodium's HMAC (`hmac`), so what takes time that may depend on the password is
-libsodium's; the loop around it does the same work whatever the bytes are. Tested against RFC
+It composes OpenSSL's HMAC (`hmac`), so what takes time that may depend on the password is
+OpenSSL's; the loop around it does the same work whatever the bytes are. Tested against RFC
 7914's vectors and Python's `hashlib` (`Tests/Crypto.lean`).
 -/
 

@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Lib.Crypto.Sodium
+public import Lanes.Lib.Crypto.Native
 
 /-!
 Signed tokens: a payload and its HMAC-SHA-256 tag under a server key, for a named purpose, so a
