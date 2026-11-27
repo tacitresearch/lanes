@@ -95,6 +95,8 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Web/Http/Wire.lean` | `oracles/go/requests` | The writer proved against the reader (`Lanes/Web/Http/WireSound.lean`); the responses it reads against `openssl s_server` (`Tests/Tls.lean`) and moto (`oracles/moto`) |
 | `Lanes/Web/Http/WireSpec.lean` | | The spec the wire format is proved against |
 | `Lanes/Web/S3/Basic.lean` | `oracles/moto`, `oracles/botocore` | Its calls signed as botocore signs, and run against moto |
+| `Lanes/Web/S3/Multipart.lean` | `Tests/S3Upload.lean` | botocore 1.44's presigned `UploadPart` recorded as a vector; the flow model-checked against `Lanes/Outside/Multipart.lean` and run against the test kit's fake S3. A run against moto's multipart upload is owed |
+| `Lanes/Web/S3/Post.lean` | `Tests/S3Upload.lean` | botocore 1.44's `generate_presigned_post` recorded as vectors, and AWS's documented example; the policy proved to read back (`S3.Post.form_policy`). A form posted to moto is owed |
 | `Lanes/Web/S3/Xml.lean` | `oracles/go/xml` | |
 | `integrations/aws/Aws/Ses.lean` | `oracles/go/mail`, `oracles/moto` | The address check against `net/mail`; the calls against moto |
 
@@ -110,6 +112,7 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Outside/Effects/Payments.lean` | | Owed: Stripe's test mode needs a key, and stripe-mock keeps no state; runs written by hand (`Tests/Outside.lean`) |
 | `Lanes/Outside/Events.lean` | | Owed, with Payments: webhooks need a service that sends them; runs written by hand (`Tests/Outside.lean`) |
 | `Lanes/Outside/Idempotent.lean` | | Owed, with Payments: SES and S3 take no idempotency key; runs written by hand (`Tests/Outside.lean`) |
+| `Lanes/Outside/Multipart.lean` | | Owed: moto has multipart uploads, and a run of `S3.upload` against it is not yet recorded; runs against the test kit's fake S3, checked with the model (`Tests/S3Upload.lean`) |
 | `Lanes/Outside/ObjectStore.lean` | `oracles/moto/s3.jsonl` | |
 | `Lanes/Outside/Queue.lean` | | Owed: moto's SQS could record a run, as `oracles/moto` does for S3 and SES; checked against a seeded bug in `Tests/Queue.lean` |
 | `Lanes/Outside/Rpc.lean` | `oracles/moto/s3.jsonl`, `oracles/moto/ses.jsonl` | The calls the object store's and the email model are made of |

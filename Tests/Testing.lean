@@ -5,10 +5,11 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import Lanes.Testing
 
 /-!
-The test kit itself (`Lanes/Testing/`): what its fakes refuse, since a fake that lets through
-what the real service refuses makes a test pass that should fail; how the browser keeps and
-sends cookies; and the helpers that read a response. `Tests/S3.lean` and `Tests/OAuth.lean` run
-the S3 client and the sign-in against the fakes.
+The test kit itself (`Lanes/Testing/`): what its fakes refuse, a form beyond its policy
+included, since a fake that lets through what the real service refuses makes a test pass that
+should fail; how the browser keeps and sends cookies; and the helpers that read a response.
+`Tests/S3.lean`, `Tests/S3Upload.lean` and `Tests/OAuth.lean` run the S3 client, uploads and
+the sign-in against the fakes.
 -/
 
 namespace Tests.Testing
@@ -49,6 +50,45 @@ def s3Tests : List (String × Bool) :=
     ("kit s3: ranges as S3 reads them",
       S3.range? "bytes=2-5" 10 == some (2, 6) && S3.range? "bytes=-3" 10 == some (7, 10)
         && S3.range? "bytes=4-" 10 == some (4, 10) && S3.range? "items=1-2" 10 == none) ]
+
+/-- A form posted to the fake's bucket, as the fake reads it off the wire. -/
+def formRaw (fields : List (String × String)) (file : ByteArray) : S3.Raw :=
+  let boundary := "kit-boundary"
+  let body := S3.formBody boundary fields "clip.mp4" file
+  { verb := "POST", target := "/test", body
+    headers := [("host", "127.0.0.1:9000"), ("content-length", toString body.size),
+      ("content-type", s!"multipart/form-data; boundary={boundary}")] }
+
+/-- The status line and the error code the fake answers a form at `now_s`, and what it then holds. -/
+def posted (r : S3.Raw) (now_s : Int := at_.toUnix + 1) : String × String × S3.Objects :=
+  let (reply, st) := S3.serveAll creds "test" "us-east-1" now_s {} r
+  let text := (String.fromUTF8? reply).getD ""
+  let code := (((text.splitOn "<Code>")[1]?).map (·.splitOn "</Code>" |>.headD "")).getD ""
+  ((text.splitOn "\r\n").headD "", code, st.objects)
+
+def formTests : List (String × Bool) :=
+  let policy : S3.Post.Policy := { key := .exact (key "up/a"), length := ⟨2, 10, by decide, by decide⟩
+                                   contentType := some "video/mp4", expiry := ⟨600, by decide⟩ }
+  let form := S3.Post.form bucket creds at_ policy
+  let set (name value : String) := form.fields.map fun (n, v) => if n == name then (n, value) else (n, v)
+  let clip := "a clip".toUTF8
+  let (stored, _, held) := posted (formRaw form.fields clip)
+  [ ("kit s3: a form under its policy, its file in range, is stored with its type",
+      stored == "HTTP/1.1 204 S3" && held.lookup "up/a" == some (clip, "video/mp4")),
+    ("kit s3: a file larger or smaller than the policy's range is refused as S3 refuses it",
+      (posted (formRaw form.fields (ByteArray.mk (Array.replicate 11 0)))).1 == "HTTP/1.1 400 S3"
+        && (posted (formRaw form.fields (ByteArray.mk (Array.replicate 11 0)))).2.1 == "EntityTooLarge"
+        && (posted (formRaw form.fields "a".toUTF8)).2.1 == "EntityTooSmall"),
+    ("kit s3: a form signed with another secret, or its policy changed, is refused",
+      let other := S3.Post.form bucket { creds with secretAccessKey := ⟨"other"⟩ } at_ policy
+      let wider := S3.Post.document bucket creds at_ { policy with length := ⟨2, 100, by decide, by decide⟩ }
+      (posted (formRaw other.fields clip)).2.1 == "SignatureDoesNotMatch"
+        && (posted (formRaw (set "policy" wider.encode) clip)).2.1 == "SignatureDoesNotMatch"),
+    ("kit s3: another key, another type, a field the policy does not name, and expired, refused",
+      (posted (formRaw (set "key" "up/b") clip)).2.1 == "AccessDenied"
+        && (posted (formRaw (set "Content-Type" "text/html") clip)).2.1 == "AccessDenied"
+        && (posted (formRaw (("acl", "public-read") :: form.fields) clip)).2.1 == "AccessDenied"
+        && (posted (formRaw form.fields clip) (at_.toUnix + 600)).2.1 == "AccessDenied") ]
 
 def browserTests : List (String × Bool) :=
   [ ("kit browser: a set-cookie keeps its name, value and path, and Max-Age=0 clears",
@@ -91,7 +131,7 @@ def providerTests : List (String × Bool) :=
         parse (OAuth.emailsJson { subject := "x\"y", email := none })]).toOption.any
         fun id => id.subject == "x\"y" && id.email.isNone && id.name.map (·.val) == some "x\"y") ]
 
-def tests : List (String × Bool) := s3Tests ++ browserTests ++ httpTests ++ providerTests
+def tests : List (String × Bool) := s3Tests ++ formTests ++ browserTests ++ httpTests ++ providerTests
 
 /-- The browser against a site of `listen` that sets a cookie, clears it, and has a form. -/
 def live : Async (List (String × Bool)) := do

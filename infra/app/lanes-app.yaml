@@ -514,7 +514,7 @@ Resources:
         CorsRules:
           - Id: presigned-from-the-site
             AllowedOrigins: [!Sub "https://${DomainName}"]
-            AllowedMethods: [PUT, GET, HEAD]
+            AllowedMethods: [POST, PUT, GET, HEAD]
             AllowedHeaders: ["*"]
             ExposedHeaders: [ETag]
             MaxAge: 3600
