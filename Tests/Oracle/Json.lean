@@ -143,12 +143,49 @@ def readsLoneSurrogates (c : Case) (go : Answer) : Bool :=
 /-- Go has no limit on the digits of a number. Ours refuses more than `maxDigits`, 1000 by
 default. -/
 def beyondLimits (c : Case) (go : Answer) : Bool :=
-  (answer c).isNone && answerWith 10000 1000000000 c.input == go
+  (answer c).isNone && answerWith 10000 100000 c.input == go
 
 /-- Go reads any exponent. `oracle/json` writes one beyond ±100000 as `num:unbounded`, and ours
 refuses an exponent beyond `maxDigits` either way. -/
 def unboundedExponent (c : Case) (go : Answer) : Bool :=
   (answer c).isNone && (go.map Json.compress).any (·.contains "num:unbounded")
+
+/-- The text with the digits of each exponent beyond ±100000 written `0`; `fuel` is its length. -/
+def capExponents : Nat → List Char → List Char
+  | fuel + 1, e :: rest =>
+    if e == 'e' || e == 'E' then
+      let (sign, afterSign) := match rest with
+        | c :: r => if c == '+' || c == '-' then ([c], r) else ([], rest)
+        | [] => ([], [])
+      let digits := afterSign.takeWhile Char.isDigit
+      if digits.foldl (fun n d => 10 * n + (d.toNat - '0'.toNat)) 0 > 100000 then
+        e :: sign ++ '0' :: capExponents fuel (afterSign.drop digits.length)
+      else e :: capExponents fuel rest
+    else e :: capExponents fuel rest
+  | _, cs => cs
+
+/-- Go's answer, where each `num:unbounded` stands for any number. -/
+def sameUpToUnbounded : Nat → Json → Json → Bool
+  | _, .str "num:unbounded", .str s => s.startsWith "num:"
+  | n + 1, .arr xs, .arr ys =>
+    xs.size == ys.size && (xs.toList.zip ys.toList).all fun (x, y) => sameUpToUnbounded n x y
+  | n + 1, .obj fs, .obj gs =>
+    fs.size == gs.size && (fs.toList.zip gs.toList).all fun ((k, x), (l, y)) =>
+      k == l && sameUpToUnbounded n x y
+  | _, x, y => x == y
+
+/-- Ours refuses an exponent beyond `maxDigits`. Go reads it, and keeps or discards the value:
+a repeated key keeps only its last. With those exponents capped, ours agrees with Go up to the
+values Go writes as `num:unbounded`. -/
+def cappedExponent (c : Case) (go : Answer) : Bool :=
+  (answer c).isNone &&
+    match String.fromUTF8? c.input, go with
+    | some s, some g =>
+      let capped := String.ofList (capExponents s.length s.toList)
+      capped != s && match answerWith 10000 100000 capped.toUTF8 with
+        | some ours => sameUpToUnbounded c.input.size g ours
+        | none => false
+    | _, _ => false
 
 def package : Package where
   name := "json"
@@ -160,7 +197,8 @@ def package : Package where
     else if readsLoneSurrogates c go then
       some "Go reads an unpaired surrogate escape as U+FFFD; ours refuses it"
     else if beyondLimits c go then some "beyond the limits of ours on digits or nesting"
-    else if unboundedExponent c go then some "an exponent beyond ±100000, which ours refuses"
+    else if unboundedExponent c go || cappedExponent c go then
+      some "an exponent beyond ±100000, which ours refuses"
     else none
 
 end Tests.Oracle.Json
