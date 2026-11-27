@@ -328,6 +328,13 @@ private def awaitConnections {system : System τ} [Hashable τ.Id] (server : Ser
   for (_, c) in ← server.connections.atomically (return (← get).alive.toList) do
     discard <| await c.line.ended.result?
 
+/-- The address a connection comes from, if the socket tells it. -/
+private def peerOf (socket : TCP.Socket.Client) : BaseIO (Option Ip.Addr) := do
+  match ← socket.getPeerName.toBaseIO with
+  | .ok (.v4 a) => return some (.v4 (.ofNat _ (a.addr.octets.foldl (· * 256 + ·.toNat) 0)))
+  | .ok (.v6 a) => return some (.v6 (.ofNat _ (a.addr.segments.foldl (· * 65536 + ·.toNat) 0)))
+  | .error _ => return none
+
 /-- Every `tick_ms`, tell each connection whose alarm has passed, until the server is down. -/
 private def ticker {system : System τ} [Hashable τ.Id] (server : Server system) (tick_ms : Nat) :
     IO Unit := do
@@ -407,9 +414,9 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
     return { recovered := ← runtime.hasRecovered, stopping := count.stopping
              connections := count.count, inbox := ← runtime.depth
              inflight := ← waiting.atomically (return (← get).waiters.size) }
-  let submit := ops.front probe arrived
   let adopt (socket : TCP.Socket.Client) : Async Unit := do
     try socket.noDelay catch _ => pure ()
+    let front := ops.front probe (← if config.ops.active then peerOf socket else pure none) arrived
     let next ← server.connections.atomically (return (← get).next)
     let line : Line := {
       socket, box := ← Mutex.new {}, loop := ← IO.mkRef { conn := { since_ms := ← IO.monoMsNow } }
@@ -420,7 +427,7 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
       if !admitted then return none
       let id := c.next
       let ctx : Ctx := {
-        config, submit
+        config, submit := front
         leave := server.connections.atomically do
           modify fun c => { c with count := c.count.leave, alive := c.alive.erase id } }
       set { c with count, alive := c.alive.insert id { line, tell := tell ctx line false },
@@ -533,6 +540,33 @@ def trace (server : Server system) : BaseIO (Array (Event τ)) :=
 def wait (server : Server system) : Async Unit := do
   discard <| await server.down.result?
   if let some e ← server.runtime.ended then throw e
+
+/-- Wait as `wait` does, and on SIGTERM or SIGINT stop without dropping the requests in flight:
+readiness answers `503` (`drain`) while the shard's answers to the requests it has taken go out,
+for at most `drain_ms`, then `stop`. Returns then, so a `main` that ends here exits with status
+0. A second signal ends the process at once, as the first would without this. `listening` runs
+once the signals are caught. -/
+def stopOnSignal (server : Server system) (drain_ms : Nat) (listening : IO Unit := pure ()) :
+    Async Unit := do
+  let signals ← [Signal.sigterm, .sigint].mapM fun s => Signal.Waiter.mk s false
+  let woken : IO.Promise Bool ← IO.Promise.new
+  for signal in signals do
+    discard <| BaseIO.mapTask (t := ← signal.wait) fun
+      | .ok _ => woken.resolve true
+      | .error _ => pure ()
+  discard <| BaseIO.mapTask (t := server.down.result?) fun _ => woken.resolve false
+  listening
+  let signalled ← await woken.result?
+  for signal in signals do signal.stop
+  unless signalled == some true do return ← server.wait
+  server.drain
+  let deadline := (← IO.monoMsNow) + drain_ms
+  repeat
+    let inFlight ← server.inFlight
+    let now ← IO.monoMsNow
+    if inFlight == 0 || deadline ≤ now then break
+    Async.sleep 10
+  server.stop
 
 /-- Hand the system behind the gate an input that is not a request, such as a parcel from
 another process. `false` if the shard's inbox is full. A request cannot be handed in this way,

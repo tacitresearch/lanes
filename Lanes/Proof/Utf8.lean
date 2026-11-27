@@ -39,6 +39,10 @@ theorem data_toList_toByteArray (s : String) :
 theorem fromUTF8?_toByteArray (s : String) : String.fromUTF8? s.toByteArray = some s := by
   simp [String.fromUTF8?, s.isValidUTF8, String.fromUTF8]
 
+theorem toByteArray_inj {s t : String} : s.toByteArray = t.toByteArray ↔ s = t :=
+  ⟨fun h => Option.some.inj ((fromUTF8?_toByteArray s).symm.trans
+    ((congrArg String.fromUTF8? h).trans (fromUTF8?_toByteArray t))), fun h => h ▸ rfl⟩
+
 theorem length_flatMap_utf8EncodeChar (s : String) :
     (s.toList.flatMap String.utf8EncodeChar).length = s.utf8ByteSize := by
   rw [← data_toList_toByteArray, Array.length_toList]

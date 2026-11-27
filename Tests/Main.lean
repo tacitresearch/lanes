@@ -117,6 +117,9 @@ def main (args : List String) : IO UInt32 := do
   | ["journal-child", path] =>
     Tests.Durable.child path
     return 0
+  | ["stop-child", drain_ms] =>
+    Tests.Ops.stopChild drain_ms.toNat!
+    return 0
   | ["tape-child", path, round] =>
     Tests.Durable.tapeChild path round.toNat!
     return 0

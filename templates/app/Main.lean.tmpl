@@ -62,12 +62,23 @@ def saving : Http.Saving (system {}) where
 /-- `{{name}} [port] [journal]`. With a journal file the counter survives the process: it is
 replayed through `step` at start, and cut each time the state is saved. Change the number in
 `system` whenever a change to a step function should not be applied to what is already in the
-journal. -/
+journal. Where to listen and how to stop come from the environment, so that a deployment sets
+them without a change here: `LANES_HOST`, the address (`127.0.0.1` unless set; `0.0.0.0` behind a
+load balancer), `LANES_IDLE_MS`, how long an idle connection is kept, and `LANES_DRAIN_MS`, how
+long SIGTERM or SIGINT waits for the requests in flight. -/
 def main (args : List String) : IO Unit := do
   let port := (args.head? >>= String.toNat?).getD 8080
   let journal := args[1]?.map System.FilePath.mk
-  let config : Http.ServerConfig := { port := port.toUInt16, journal, system := "{{name}} 1" }
+  let ms (name : String) (default : Nat) : IO Nat := do
+    let some text ← IO.getEnv name | return default
+    let some n := text.toNat? | throw (IO.userError s!"{{name}}: {name} is not a number: {text}")
+    return n
+  let host := (← IO.getEnv "LANES_HOST").getD "127.0.0.1"
+  let config : Http.ServerConfig :=
+    { host, port := port.toUInt16, journal, system := "{{name}} 1"
+      idle_ms := ← ms "LANES_IDLE_MS" 10000 }
+  let drain_ms ← ms "LANES_DRAIN_MS" 10000
   let server ← (Http.serve (system {}) bridge config {} saving).block
-  IO.println s!"{{name}} listening on http://127.0.0.1:{server.port.getD 0}"
+  IO.println s!"{{name}} listening on http://{host}:{server.port.getD 0}"
   (← IO.getStdout).flush
-  Lanes.block server.wait
+  Lanes.block (server.stopOnSignal drain_ms)
