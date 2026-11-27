@@ -39,16 +39,19 @@ structure Driver (σ : Signature) (D : Type) where
 
 namespace Driver
 
+/-- A world that sends nothing: the system runs from its boot actors alone. -/
 def silent : Driver σ Unit where
   init := ()
   inputs _ := []
 
+/-- Sends `xs` in order. -/
 def script (xs : List σ.In) : Driver σ (List σ.In) where
   init := xs
   inputs
     | [] => []
     | x :: xs => [(x, xs)]
 
+/-- May send the inputs of `xs` that are left in any order; the checker tries every order. -/
 def anyOrder (xs : List σ.In) : Driver σ (List σ.In) where
   init := xs
   inputs remaining :=
@@ -57,11 +60,15 @@ def anyOrder (xs : List σ.In) : Driver σ (List σ.In) where
 
 end Driver
 
+/-- What the scheduler and the checker step: the system, the driver's state, and the crashes
+so far, which `Scenario.maxCrashes` bounds. Properties are stated over it. -/
 structure World (sys : System σ) (D : Type) where
   state : SysState sys
   driver : D
   crashes : Nat := 0
 
+/-- One instance to run or check: the environment model, the driver of the inputs, and how
+many crashes a run may take. -/
 structure Scenario (σ : Signature) (D : Type) where
   env : EnvModel σ := {}
   driver : Driver σ D
@@ -71,10 +78,14 @@ namespace World
 
 variable {sys : System σ} {D : Type}
 
+/-- `SysState.init` with the driver's initial state. -/
 def init (sys : System σ) (sc : Scenario σ D) : World sys D where
   state := SysState.init sys sc.env
   driver := sc.driver.init
 
+/-- Every event enabled in `w`, with the world it leads to: each event the environment model
+allows, a crash only within the budget, and each input the driver may send. The checker
+explores all of them; `simulate` and `fuzz` pick one. -/
 def next [Enum σ.Id] (sc : Scenario σ D) (w : World sys D) : List (Event σ × World sys D) :=
   let internal := (w.state.successors sc.env).filterMap fun (ev, c) =>
     match ev with
@@ -94,6 +105,7 @@ def next [Enum σ.Id] (sc : Scenario σ D) (w : World sys D) : List (Event σ ×
 
 end World
 
+/-- A run of `simulate`: its events, which replay through `SysState.run`, and where it ended. -/
 structure Run (sys : System σ) (D : Type) where
   events : Array (Event σ)
   final : World sys D
@@ -101,6 +113,8 @@ structure Run (sys : System σ) (D : Type) where
   bound. -/
   quiescent : Bool
 
+/-- A run of at most `maxSteps` events, each picked from `World.next` by a generator seeded
+with `seed`: the same seed gives the same run. -/
 def simulate [Enum σ.Id] (sys : System σ) {D : Type} (sc : Scenario σ D) (seed : Nat)
     (maxSteps : Nat := 10000) : Run sys D := Id.run do
   let mut gen := mkStdGen seed

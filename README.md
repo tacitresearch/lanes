@@ -64,7 +64,7 @@ is in `docs/CLAIMS.md`. In short:
 - **Tested**: processes killed with SIGKILL and started again, JSON, Base64, URLs, IP
   addresses, media types and dates against Go's standard library, the bound C against its Lean
   references.
-- **Trusted**: About 3,650 lines of trusted code, listed with their sizes in `TRUSTED.md`: the
+- **Trusted**: About 3,100 lines of trusted code, listed with their sizes in `TRUSTED.md`: the
   IO shells, the HTTP wire format where its proof does not reach, the C that binds libsodium,
   `fsync`, a timed wait, OpenSSL's TLS client and its signature check, the sign-in's IO, the AWS integration's IO, and the template macro, with the assumptions the runtime makes. `lanes lint` fails if a trusted file changes without the
   list, and `scripts/mutants.py` holds known ways of breaking that code, each of which must
@@ -164,7 +164,9 @@ Early beta: the API will change. What works, area by area, and its known limits 
 `SECURITY.md` how to report a vulnerability (a theorem that states less than the docs claim is
 one), and `CHANGELOG.md` what each release changed. `docs/ARCHITECTURE.md` says how the pieces fit
 and where each is proved, `docs/ROADMAP.md` the direction, and `docs/decisions/` why each piece is
-the way it is.
+the way it is. The API reference, every module and declaration of `import Lanes` and
+`import Lanes.Proofs` with its docstring, is built with doc-gen4 by `docs/api/`
+(`docs/api/README.md`).
 
 To build Lanes itself:
 

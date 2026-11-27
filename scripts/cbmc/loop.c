@@ -7,6 +7,7 @@
    without a line, nor on a closed connection; no Lean object dropped more often than it is
    held, nor used once freed; no panic; and once the thread ends, every object it held dropped
    and every socket closed. */
+#define READ_MAX 16 /* the buffer, 64 KiB in the loop, small enough to check */
 #include "../../native/loop.c"
 
 size_t model_live;
@@ -39,6 +40,7 @@ static lean_object *turn_for(lean_object *line, int fixed_want) {
     t->scalars[1] = nondet_u64();
     __CPROVER_assume(t->scalars[1] < 100000);
     t->scalars[2] = nondet_u8() & 1;
+    t->scalars[3] = nondet_u8() & 1;
     return t;
 }
 
@@ -55,7 +57,7 @@ lean_object *lanes_cloop_open(lean_object *h, uint32_t peer, uint64_t now) {
 lean_object *lanes_cloop_turn(lean_object *h, uint64_t token, lean_object *line, uint8_t kind,
                               lean_object *bytes, uint64_t now) {
     (void)now;
-    assert(h == the_handler && line != NULL && kind <= 4);
+    assert(h == the_handler && line != NULL && kind <= 5);
     assert((token & 0xffffffffu) < 2);
     size_t read = lean_sarray_size(bytes);
     assert(kind != 0 || (read > 0 && read <= the_worker.conns[token & 1].want));

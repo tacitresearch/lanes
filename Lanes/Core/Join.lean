@@ -37,6 +37,7 @@ abbrev JoinState (a : System σ) (b : System τ) : σ.Id ⊕ τ.Id → Type
   | .inl i => a.State i
   | .inr j => b.State j
 
+/-- The actors, inputs and outputs of both signatures, each tagged with its side. -/
 abbrev joinSig (σ τ : Signature) : Signature where
   Id := σ.Id ⊕ τ.Id
   Msg := JoinMsg σ τ
@@ -74,6 +75,9 @@ def right (w : Wiring σ τ) (a : System σ) {j : τ.Id} :
 
 end Wiring
 
+/-- `a` and `b` as one system. An output that `w` routes to the other side is delivered as a
+message to the actor that side's `accept` names; what a join preserves is proved in
+`Lanes/Proof/JoinSound.lean`. -/
 abbrev System.join (a : System σ) (b : System τ) (w : Wiring σ τ := {}) :
     System (joinSig σ τ) where
   State := JoinState a b

@@ -42,8 +42,10 @@ extern lean_object *lanes_cloop_answer(lean_object *h, lean_object *line, lean_o
                                        uint64_t now);
 extern lean_object *lanes_cloop_take(lean_object *h);
 
-enum { RECEIVED, ENDED, BROKEN, TICK, STOP };
+enum { RECEIVED, ENDED, BROKEN, TICK, STOP, SENT };
+#ifndef READ_MAX /* smaller under CBMC (scripts/cbmc/loop.c) */
 #define READ_MAX 65536
+#endif
 #define EVENTS_MAX 128
 #define ACCEPTS_MAX 64
 #define THREADS_MAX 1024
@@ -61,6 +63,7 @@ typedef struct {
     uint64_t want;       /* bytes to read at most; 0: do not read */
     uint64_t deadline_ms; /* 0: none; once closed, when to close the socket */
     int readable, shut;
+    int notify;          /* tell Lean `sent` once nothing is unwritten */
 } conn_t;
 
 typedef struct loop loop_t;
@@ -119,6 +122,7 @@ static void apply(worker_t *w, conn_t *c, lean_object *t, uint64_t now) {
     c->want = lean_ctor_get_uint64(t, sizeof(void *) * 2);
     c->deadline_ms = lean_ctor_get_uint64(t, sizeof(void *) * 2 + 8);
     uint64_t closed = lean_ctor_get_uint64(t, sizeof(void *) * 2 + 16);
+    c->notify = lean_ctor_get_uint64(t, sizeof(void *) * 2 + 24) != 0;
     lean_inc(line);
     lean_inc(out);
     lean_dec_ref(t);
@@ -200,12 +204,19 @@ static void drive(worker_t *w, conn_t *c, uint64_t now) {
             }
             return;
         }
+        if (!f && c->notify) {
+            c->notify = 0;
+            event(w, c, SENT, lean_alloc_sarray(1, 0, 0), now);
+            continue;
+        }
         if (f || !c->readable || c->want == 0) return;
         size_t size = c->want < READ_MAX ? (size_t)c->want : READ_MAX;
         ssize_t n = recv(c->fd, w->buf, size, 0);
         if (n > 0) {
             lean_object *bytes = lean_alloc_sarray(1, (size_t)n, (size_t)n);
             memcpy(lean_sarray_cptr(bytes), w->buf, (size_t)n);
+            /* A short read took all there was; more makes a new edge. */
+            if ((size_t)n < size) c->readable = 0;
             event(w, c, RECEIVED, bytes, now);
         } else if (n == 0) {
             event(w, c, ENDED, lean_alloc_sarray(1, 0, 0), now);

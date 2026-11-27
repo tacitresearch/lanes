@@ -14,7 +14,7 @@ typedef struct lean_object {
     int kind; /* 0 a constructor, 1 a byte array, 2 an array, 3 anything else */
     size_t size; /* the bytes of a byte array, the fields of a constructor or an array */
     struct lean_object **fields;
-    uint64_t scalars[3];
+    uint64_t scalars[4];
     uint8_t *data;
 } lean_object;
 
@@ -62,14 +62,19 @@ static inline void model_free(lean_object *o) {
 
 /* Two levels deep, which is as deep as the objects of the model go: a turn and its line and
    bytes, an answer box and its letters. */
+static inline void model_drop_field(lean_object *o, size_t i) {
+    if (!o->fields || i >= o->size) return;
+    lean_object *f = o->fields[i];
+    if (!f || lean_is_scalar(f) || !model_drop(f)) return;
+    assert(!f->fields || f->size == 0 || lean_is_scalar(f->fields[0]));
+    model_free(f);
+}
+
 static inline void lean_dec_ref(lean_object *o) {
     if (!model_drop(o)) return;
-    for (size_t i = 0; o->fields && i < o->size && i < 2; i++) {
-        lean_object *f = o->fields[i];
-        if (!f || lean_is_scalar(f) || !model_drop(f)) continue;
-        assert(!f->fields || f->size == 0 || lean_is_scalar(f->fields[0]));
-        model_free(f);
-    }
+    assert(!o->fields || o->size <= 2);
+    model_drop_field(o, 0);
+    model_drop_field(o, 1);
     model_free(o);
 }
 
@@ -80,7 +85,7 @@ static inline lean_object *lean_ctor_get(lean_object *o, unsigned i) {
 
 static inline uint64_t lean_ctor_get_uint64(lean_object *o, unsigned offset) {
     size_t base = sizeof(void *) * o->size;
-    assert(o->kind == 0 && offset >= base && (offset - base) % 8 == 0 && (offset - base) / 8 < 3);
+    assert(o->kind == 0 && offset >= base && (offset - base) % 8 == 0 && (offset - base) / 8 < 4);
     return o->scalars[(offset - base) / 8];
 }
 

@@ -7,6 +7,8 @@ module
 public import Std.Sync.Mutex
 public import Lanes.Lib.Net.Ip
 public import Lanes.Web.Http.Conn
+public import Lanes.Web.Http.Gate
+public import Lanes.Web.Http.Stream
 
 /-!
 The server's connections on a loop of C threads (`native/loop.c`), each with its own epoll and its
@@ -70,9 +72,11 @@ structure Mail where
 structure Line where
   conn : Conn
   submit : Request → (Response → BaseIO Unit) → BaseIO Unit
+  /-- The ids the heads of the requests that stream entered the system with, by number. -/
+  heads : List (Nat × ReqId) := []
 
 /-- What the C does after a turn. `native/loop.c` reads it by its layout: two objects, then
-three 64-bit scalars in this order. -/
+four 64-bit scalars in this order. -/
 structure Turn where
   line : Line
   /-- Write these bytes, after what is still unwritten. -/
@@ -83,6 +87,8 @@ structure Turn where
   deadline_ms : UInt64
   /-- `1`: write what is left, shut down, drain for `linger_ms`, close. -/
   closed : UInt64
+  /-- `1`: tell the connection `sent` once nothing is unwritten. -/
+  sent : UInt64
 
 /-- What one thread of the C calls with: its own, so that no two threads count references to
 it. -/
@@ -93,6 +99,9 @@ structure Handler where
   mail : Std.Mutex (Array Mail)
   /-- How the requests of a connection from this peer reach the system. -/
   front : Ip.Addr → Request → (Response → BaseIO Unit) → BaseIO Unit
+  /-- How a request that streams, or a piece or a pull of one, reaches the system, and the id it
+  entered with; these pass by the operations front, as in the server's own loop. -/
+  submitStream : Request → (Response → BaseIO Unit) → BaseIO (Option ReqId)
   /-- Take one more connection, or refuse it (`Conn.Count.admit`). -/
   admit : BaseIO Bool
   leave : BaseIO Unit
@@ -108,22 +117,48 @@ private def post (h : Handler) (m : Mail) : BaseIO Unit := do
 private def finish (h : Handler) (line : Line) (out : ByteArray) : Turn :=
   let conn := line.conn
   let want := if conn.wantsInput h.config then min (conn.room h.config) 65536 else 0
-  { line, out, want := want.toUInt64, deadline_ms := ((conn.deadline h.config).getD 0).toUInt64
-    closed := if conn.closed then 1 else 0 }
+  let deadline := Conn.earlier (conn.deadline h.config) (conn.wakeAt h.config)
+  { line, out, want := want.toUInt64, deadline_ms := (deadline.getD 0).toUInt64
+    closed := if conn.closed then 1 else 0, sent := if conn.unsent then 1 else 0 }
+
+/-- A piece or a pull of the request that streams numbered `seq`, under the id its head
+entered with. -/
+private def toStream (h : Handler) (line : Line) (seq : Nat) (request : Request)
+    (reply : Response → BaseIO Unit) : BaseIO Unit :=
+  match line.heads.lookup seq with
+  | some id => discard <| h.submitStream (Stream.tag request id) reply
+  | none => reply (.text "the request is not with the system\n" 400)
+
+/-- Do an action of a turn, as the server's own loop does; what it writes goes after `out`. -/
+private def act (h : Handler) (token : UInt64) (line : Line) (out : ByteArray) :
+    Conn.Action → BaseIO (Line × ByteArray)
+  | .submit seq request => do
+    line.submit request fun r => post h { token, event := .answered seq r }
+    return (line, out)
+  | .begin seq request => do
+    let id ← h.submitStream request fun r => post h { token, event := .responded seq r }
+    let heads := line.heads.filter (·.1 ≥ line.conn.written)
+    return ({ line with heads := match id with | some id => (seq, id) :: heads | none => heads }, out)
+  | .piece seq index request => do
+    toStream h line seq request fun r => post h { token, event := .took seq index r }
+    return (line, out)
+  | .pull seq index request => do
+    toStream h line seq request fun r => post h { token, event := .pulled seq index r }
+    return (line, out)
+  | .interim _ bytes | .write _ bytes | .part _ bytes =>
+    return (line, if out.isEmpty then bytes else out ++ bytes)
+  | .close => return (line, out)
 
 private def step (h : Handler) (token : UInt64) (line : Line) (event : Conn.Event)
     (now_ms : UInt64) : BaseIO Turn := do
-  let ⟨conn, submit⟩ := line
-  let wasClosed := conn.closed
-  let (conn, actions) := conn.step h.config now_ms.toNat event
+  let wasClosed := line.conn.closed
+  let (conn, actions) := line.conn.step h.config now_ms.toNat event
+  let mut line := { line with conn }
   let mut out := ByteArray.empty
   for action in actions do
-    match action with
-    | .submit seq request => submit request fun r => post h { token, event := .answered seq r }
-    | .interim _ bytes | .write _ bytes => out := if out.isEmpty then bytes else out ++ bytes
-    | .close => pure ()
+    (line, out) ← act h token line out action
   if conn.closed && !wasClosed then h.leave
-  return finish h { conn, submit } out
+  return finish h line out
 
 /-- A connection the C has accepted: its first turn, or `none` to close it. -/
 @[export lanes_cloop_open]
@@ -133,7 +168,7 @@ private def «open» (h : Handler) (peer : UInt32) (now_ms : UInt64) : BaseIO (O
   return some (finish h { conn := { since_ms := now_ms.toNat }, submit } .empty)
 
 /-- What the C saw: `0` bytes received, `1` their end, `2` a failed socket, `3` a deadline that
-may have passed, `4` the server stopping. -/
+may have passed, `4` the server stopping, `5` everything written sent. -/
 @[export lanes_cloop_turn]
 private def turn (h : Handler) (token : UInt64) (line : Line) (kind : UInt8) (bytes : ByteArray)
     (now_ms : UInt64) : BaseIO Turn :=
@@ -144,6 +179,7 @@ where
     | 1 => .ended
     | 3 => .tick
     | 4 => .stop
+    | 5 => .sent
     | _ => .broken
 
 @[export lanes_cloop_answer]
@@ -157,10 +193,10 @@ private def take (h : Handler) : BaseIO (Array Mail) :=
 /-- Start the loop on `handle`'s threads. -/
 def start (handle : Handle) (threads : Nat) (config : Conn.Config)
     (front : Ip.Addr → Request → (Response → BaseIO Unit) → BaseIO Unit)
-    (admit : BaseIO Bool) (leave : BaseIO Unit) : IO Unit := do
+    (submitStream : Request → (Response → BaseIO Unit) → BaseIO (Option ReqId)) (admit : BaseIO Bool) (leave : BaseIO Unit) : IO Unit := do
   let handlers ← (List.range threads).toArray.mapM fun i => do
     return { loop := handle, thread := i.toUInt32, config, mail := ← Std.Mutex.new #[], front
-             admit, leave : Handler }
+             submitStream, admit, leave : Handler }
   run handle handlers
 
 end CLoop

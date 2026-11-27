@@ -121,6 +121,8 @@ def pre {α : Type} (name : String) (p : Path α) (h : Segment.Clean name := by 
 
 end Path
 
+/-- A method and a path pattern, which reads a request's path as a value of `α` and writes
+the path of a value (`link`). A link dispatches to its value (`Http.dispatch_link`). -/
 structure Route (α : Type) where
   method : Method
   path : Path α
@@ -143,6 +145,7 @@ def match? (r : Route α) (request : Request) : Option α :=
     | _ => none
   else none
 
+/-- The path whose request this route reads as `a`, percent-encoded. -/
 def link (r : Route α) (a : α) : String :=
   "/" ++ "/".intercalate ((r.path.print a).map percentEncode)
 

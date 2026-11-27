@@ -125,6 +125,27 @@ MUTANTS = [
      "  for (_, c) in alive do c.tell (.conn .stop)", "  for (_, _) in alive do pure ()"),
     ("http: what the connection asks for is done last first", "Lanes/Web/IO/Server.lean",
      "  let mut todo := actions\n", "  let mut todo := actions.reverse\n"),
+    ("http stream: the head of a request that streams is not kept, so its pieces are refused",
+     "Lanes/Web/IO/Server.lean", "          | some id => (seq, id) :: heads", "          | some _ => heads"),
+    ("http stream: a piece is not tagged with its head", "Lanes/Web/IO/Server.lean",
+     """(.conn (.took seq index r))
+        match loop.heads.lookup seq with
+        | some id => discard <| ctx.submitStream (Stream.tag request id) reply""",
+     """(.conn (.took seq index r))
+        match loop.heads.lookup seq with
+        | some _ => discard <| ctx.submitStream request reply"""),
+    ("http stream: a piece's answer goes to the piece before", "Lanes/Web/IO/Server.lean",
+     "(.conn (.took seq index r))", "(.conn (.took seq (index - 1) r))"),
+    ("http stream: a pull's answer goes to the next pull", "Lanes/Web/IO/Server.lean",
+     "(.conn (.pulled seq index r))", "(.conn (.pulled seq (index + 1) r))"),
+    ("http stream: the connection is never told that what it wrote was sent",
+     "Lanes/Web/IO/Server.lean", "  | .sent => react ctx line { loop with sentSet := false } .sent",
+     "  | .sent => return { loop with sentSet := false }"),
+    ("http stream: a time to look again that is no deadline is not acted on",
+     "Lanes/Web/IO/Server.lean", "    (conn.wakeAt config.conn)", "    none"),
+    ("http client: a stream of events is read past its deadline", "Lanes/Web/IO/Client.lean",
+     "(Async.race (try read catch _ => pure ()) (Async.sleep (.ofNat timeout_ms)))",
+     "(try read catch _ => pure ())"),
     ("http client: no deadline", "Lanes/Web/IO/Client.lean",
      "try Async.race attempt patience", "try attempt"),
     ("http client: the socket of a call given up on is left open", "Lanes/Web/IO/Client.lean",
