@@ -357,8 +357,14 @@ def streamTest (ioThreads : Nat := 0) : Async (List (String × Bool)) := do
   background do
     discard <| (Client.events quietPort { method := .get, path := ["events"] } (fun _ => false) 1500 : IO _)
   let asked ← IO.monoMsNow
-  let cut ← (Client.events quietPort { method := .get, path := ["events"] } (fun _ => false) 200 : IO _)
-  let waited := (← IO.monoMsNow) - asked
+  let reading ← IO.asTask
+    (Client.events quietPort { method := .get, path := ["events"] } (fun _ => false) 200)
+  let mut waited := 0
+  while !(← IO.hasFinished reading) && waited < 2000 do
+    Async.sleep 20
+    waited := (← IO.monoMsNow) - asked
+  let cut := if ← IO.hasFinished reading then reading.get.toOption.getD [{ data := "" }]
+    else [{ data := "" }]
   let stopped ← Async.race (do quiet.stop; return true) (do Async.sleep 3000; return false)
   let text := fun (r : Response) => (String.fromUTF8? r.body).getD ""
   return [
