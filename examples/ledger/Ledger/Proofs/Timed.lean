@@ -661,7 +661,8 @@ theorem kernel_history [Hashable (sig N C).Id] (config : Config N)
     ∃ evs c, (SysState.init (system N C config) Kernel.env).run Kernel.env evs = some c ∧
       Event.awake evs = Event.awake ((Kernel.boot (system N C config)).2.map .output ++
         ((Kernel.boot (system N C config)).1.exec ops).events) ∧
-      ∃ acts cut, System.Implements.Explains (spec N C config) evs acts cut := by
+      ∃ acts cut, System.Implements.Explains (spec N C config) (deadlines .atLedger)
+        (delivered .atLedger) evs acts cut := by
   obtain ⟨evs, c, hrun, hawake, -⟩ := (Kernel.exec_reachable (system N C config) ops).1
   exact ⟨evs, c, hrun, hawake, (implements_timed_kernel config).history hrun⟩
 

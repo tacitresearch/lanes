@@ -404,9 +404,9 @@ theorem.
   stated as refinement (`Lanes/Semantics/Service.lean`, D42); that this is the textbook definition is argued, not proved.
   What it gives is proved: every run of a system that implements a service has a sequential
   history of the service's acts that produces each output it hands over, takes each input
-  after it arrives, and respects real-time order (`System.Implements.history`,
-  `Lanes/Semantics/History.lean`), so what is proved of the service's functions holds of the
-  system's outputs. A deadline passes in the system
+  after it arrives, and respects real-time order, with each deadline passing where the run
+  shows it (`System.Implements.history`, `Lanes/Semantics/History.lean`), so what is proved of
+  the service's functions holds of the system's outputs. A deadline passes in the system
   as a timer it names fires, or as a message it names is delivered
   (`docs/decisions/D56-a-deadline-passes-where-it-is-served.md`). `Server.implements` proves the
   `Server` behaviour (`Lanes/Behaviours/Server.lean`) implements its spec in an environment

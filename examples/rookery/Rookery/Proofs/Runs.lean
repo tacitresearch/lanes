@@ -2,9 +2,9 @@ import Lanes.Semantics
 import Rookery.Proofs.Traces
 
 /-!
-# Posts kept and API changes acted on once, of the system's runs
+# Posts kept, the rate limit and API changes acted on once, of the system's runs
 
-Two more claims of the spec carried to every run of the system through
+Three more claims of the spec carried to every run of the system through
 `System.Implements.history`, when requests have distinct ids, as the server's do:
 
 - `posted_kept`, `shown_kept`: a post the system answered `posted` to a web post, or showed in
@@ -12,12 +12,18 @@ Two more claims of the spec carried to every run of the system through
   its author to delete it arrives. A read shows at most `timelineMax` posts, so the post need
   not be in the list handed over: the read is of a board that holds it, and the timeline claims
   (`Board.timeline_complete`) say which posts that read shows;
+- `rate_limit_run`: after a position at which an account's window passes, and before the next,
+  the web posts it makes that arrive after it are answered `posted` with at most
+  `maxPerWindow` distinct ids. The history passes each deadline in the block of the position
+  where its timer fires (`System.Implements.Explains.fired`, `fires`), so `Board.rate_limit`
+  applies to the acts between;
 - `api_once`: of the API changes an account sends with one sequence number, every reply other
   than `stale` and `badToken` is the same: the board acts on one of them, and answers each
   other as it answered that one or refuses it.
 
-An API post answered `posted` is not a trigger of `posted_kept`: a repeat of its `seq` is
-answered `posted` from the memo even after the post was deleted.
+An API post answered `posted` is not a trigger of `posted_kept`, nor counted by
+`rate_limit_run`: a repeat of its `seq` is answered `posted` from the memo, after the post was
+deleted or in a later window.
 -/
 
 set_option linter.unusedSectionVars false
@@ -216,7 +222,8 @@ end Board
 section History
 
 variable {evs : List (Lanes.Event (sig N C))} {acts : List (Service.Act (Request N C) (Deadline N))}
-  {cut : ℕ → ℕ} (hex : System.Implements.Explains (spec N C config) evs acts cut)
+  {cut : ℕ → ℕ}
+  (hex : System.Implements.Explains (spec N C config) deadlines (fun _ _ => none) evs acts cut)
   (hdistinct : ∀ (p p' : ℕ) (r r' : Request N C), evs[p]? = some (Lanes.Event.input r) →
     evs[p']? = some (Lanes.Event.input r') → r.req = r'.req → p = p')
 
@@ -296,6 +303,129 @@ theorem kept_until {k₀ k : ℕ} (hk : k₀ ≤ k) {a : N} {q : Post}
 
 end History
 
+/-! ## The rate limit, of every run -/
+
+namespace Board
+
+/-- The ids of the posts of `n` that `es` accept, in order. -/
+def acceptedIds (n : N) : Board N C → List (Event N C) → List PostId
+  | _, [] => []
+  | b, .inl r :: es =>
+    (if r.name = n ∧ (b.handle config r).1.next ≠ b.next then [b.next] else [])
+      ++ acceptedIds n (b.handle config r).1 es
+  | b, .inr d :: es => acceptedIds n (b.fire d) es
+
+theorem fire_next (b : Board N C) (d : Deadline N) : (b.fire d).next = b.next := by
+  cases d <;> rfl
+
+theorem length_acceptedIds (n : N) (b : Board N C) (es : List (Event N C)) :
+    (acceptedIds config n b es).length = accepted config n b es := by
+  induction es generalizing b with
+  | nil => rfl
+  | cons e es ih =>
+    cases e with
+    | inl r =>
+      simp only [acceptedIds, accepted, List.length_append, ih]
+      split <;> simp
+    | inr d => exact ih _
+
+theorem le_of_mem_acceptedIds {n : N} {b : Board N C} {es : List (Event N C)} {id : PostId}
+    (h : id ∈ acceptedIds config n b es) : b.next ≤ id := by
+  induction es generalizing b with
+  | nil => cases h
+  | cons e es ih =>
+    cases e with
+    | inl r =>
+      simp only [acceptedIds, List.mem_append] at h
+      rcases h with h | h
+      · split at h
+        · simp only [List.mem_singleton] at h; exact Nat.le_of_eq h.symm
+        · cases h
+      · exact Nat.le_trans (next_le_handle config b r) (ih h)
+    | inr d => exact fire_next b d ▸ ih h
+
+/-- Each accepted post has its own id. -/
+theorem nodup_acceptedIds (n : N) (b : Board N C) (es : List (Event N C)) :
+    (acceptedIds config n b es).Nodup := by
+  induction es generalizing b with
+  | nil => exact List.nodup_nil
+  | cons e es ih =>
+    cases e with
+    | inl r =>
+      simp only [acceptedIds]
+      split
+      · next hacc =>
+        refine List.nodup_cons.mpr ⟨fun hmem => ?_, ih _⟩
+        have hle := le_of_mem_acceptedIds config hmem
+        rw [(handle_accepts config b r hacc.2).1] at hle
+        exact Nat.not_succ_le_self _ hle
+      · exact ih _
+    | inr d => exact ih _
+
+/-- A request in `es` made as `n` that accepts a post has its id among the accepted. -/
+theorem mem_acceptedIds {n : N} (b : Board N C) (es₁ es₂ : List (Event N C)) {r : Request N C}
+    (hn : r.name = n) (hacc : ((Board.run config b es₁).handle config r).1.next ≠
+      (Board.run config b es₁).next) :
+    (Board.run config b es₁).next ∈ acceptedIds config n b (es₁ ++ .inl r :: es₂) := by
+  induction es₁ generalizing b with
+  | nil =>
+    simp only [Board.run, List.foldl_nil] at hacc ⊢
+    simp [acceptedIds, hn, hacc]
+  | cons e es₁ ih =>
+    cases e with
+    | inl r' =>
+      simp only [List.cons_append, acceptedIds, List.mem_append]
+      exact .inr (ih _ hacc)
+    | inr d => exact ih _ hacc
+
+/-- A web post answered `posted id` accepted the post, with the next id. -/
+theorem handle_web_posted_next {b : Board N C} {req : ReqId} {a : N} {s : Sid}
+    {body : {s : String // Body.valid s}} {id : PostId}
+    (h : (b.handle config (.web req a s (.post body))).2.1 = .posted id) :
+    id = b.next ∧ (b.handle config (.web req a s (.post body))).1.next ≠ b.next := by
+  cases hp : b.get? a with
+  | none => simp [handle, withSession, hp] at h
+  | some p =>
+    by_cases hlive : p.sessions.live s = true
+    · have hw : ¬ config.maxPerWindow ≤ p.window := by
+        intro hw; simp [handle, withSession, hp, hlive, act, post, hw] at h
+      have hm : ¬ config.maxPosts ≤ p.posts.length := by
+        intro hm; simp [handle, withSession, hp, hlive, act, post, hw, hm] at h
+      simp only [handle, withSession, hp, hlive, ↓reduceIte, act, post, hw, hm] at h ⊢
+      exact ⟨by simpa using h.symm, by simp⟩
+    · simp [handle, withSession, hp, hlive] at h
+
+end Board
+
+section History
+
+variable {evs : List (Lanes.Event (sig N C))} {acts : List (Service.Act (Request N C) (Deadline N))}
+
+theorem window_passes {p : ℕ} {n : N}
+    (h : (evs[p]?).bind (Lanes.Event.timed deadlines (fun _ _ => none)) =
+      some (.fire (.window n))) :
+    evs[p]? = some (.timeout () (.deadline (.window n))) := by
+  cases hp : evs[p]? with
+  | none => simp [hp] at h
+  | some ev =>
+    rw [hp] at h
+    cases ev with
+    | timeout i msg =>
+      cases msg with
+      | deadline d =>
+        simp only [Option.bind_some, Lanes.Event.timed, deadlines, Option.map_some,
+          Option.some.injEq, Visible.fire.injEq] at h
+        rw [h]
+      | request r => simp [Lanes.Event.timed, deadlines] at h
+    | _ => simp [Lanes.Event.timed] at h
+
+theorem boardAt_succ_fire {k : ℕ} {d : Deadline N} (ha : acts[k]? = some (.fire d)) :
+    boardAt config acts (k + 1) = (boardAt config acts k).fire d := by
+  rw [boardAt, List.take_add_one, ha, Option.toList_some, Service.play_concat]
+  rfl
+
+end History
+
 /-! ## Of every run -/
 
 variable {env : EnvModel (sig N C)} (henv : (env.link none ()).duplicating = false)
@@ -309,9 +439,9 @@ include henv hrun hdistinct
 /-- The board of a read, given the post on its author's account before it: from the act of
 the read on, it is a read of a board the spec reaches that holds the post. -/
 theorem read_holds {acts : List (Service.Act (Request N C) (Deadline N))} {cut : ℕ → ℕ}
-    (hex : System.Implements.Explains (spec N C config) evs acts cut) {k₀ : ℕ} {a : N}
-    {q : Post} (hq : q ∈ (boardAt config acts k₀).postsOf a) {p₂ l : ℕ} {r₂ : Request N C}
-    {list : List (N × Post)} {json : Bool} (hread : evs[p₂]? = some (.input r₂))
+    (hex : System.Implements.Explains (spec N C config) deadlines (fun _ _ => none) evs acts cut)
+    {k₀ : ℕ} {a : N} {q : Post} (hq : q ∈ (boardAt config acts k₀).postsOf a) {p₂ l : ℕ}
+    {r₂ : Request N C} {list : List (N × Post)} {json : Bool} (hread : evs[p₂]? = some (.input r₂))
     (hshown : evs[l]? = some (.output ⟨r₂.req, .feed list, json⟩)) (hk₀ : k₀ ≤ cut p₂)
     (hkept : ∀ p r, evs[p]? = some (.input r) → p < l → r.name = a → r.deletes ≠ some q.id) :
     ∃ es, (Board.run config {} es).ReadOf config r₂ list ∧ q ∈ (Board.run config {} es).postsOf a := by
@@ -404,5 +534,76 @@ theorem api_once {i j p₁ p₂ : ℕ} {o₁ o₂ : Response N} {req₁ req₂ t
     obtain ⟨rfl, -, rfl, -, rfl⟩ := ha₂
     rfl
   · exact (hlt hk ha₂ hop₂ hop₁ hr₂.1 hr₂.2 hr₁.1 hr₁.2).symm
+
+open Classical in
+/-- The rate limit, of every run: after a position at which `n`'s window passes, and before any
+later one, the web posts made as `n` whose requests arrive after it are answered `posted` with
+at most `maxPerWindow` distinct ids. -/
+theorem rate_limit_run {w₁ w₂ : ℕ} {n : N}
+    (hw₁ : evs[w₁]? = some (.timeout () (.deadline (.window n))))
+    (hnone : ∀ w, w₁ < w → w < w₂ → evs[w]? ≠ some (.timeout () (.deadline (.window n))))
+    {ids : List PostId} (hids : ids.Nodup)
+    (hposted : ∀ id ∈ ids, ∃ p l req s body json, w₁ < p ∧ l < w₂ ∧
+      evs[p]? = some (.input (.web req n s (.post body))) ∧
+      evs[l]? = some (.output ⟨req, .posted id, json⟩)) :
+    ids.length ≤ config.maxPerWindow := by
+  obtain ⟨acts, cut, hex⟩ := (implements config env henv).history hrun
+  obtain ⟨kf, hkf, hckf, hkf₁⟩ := hex.fires w₁ (.window n) (by simp [hw₁, deadlines])
+  let P : ℕ → Prop := fun k => acts[k]? = some (.fire (.window n))
+  let K₀ := Nat.findGreatest P (cut (w₁ + 1) - 1)
+  have hK₀ : P K₀ := Nat.findGreatest_spec (P := P) (by omega) hkf
+  have hkfK₀ : kf ≤ K₀ := Nat.le_findGreatest (P := P) (by omega) hkf
+  have hK₀le : K₀ ≤ cut (w₁ + 1) - 1 := Nat.findGreatest_le _
+  let K := K₀ + 1
+  let M := max (cut w₂) K
+  let seg := ((acts.drop K).take (M - K)).map toEvent
+  have hwin : (boardAt config acts K).windowOf n = 0 := by
+    rw [boardAt_succ_fire config hK₀, Board.windowOf_fire]
+    simp
+  have hseg : ∀ d, .inr d ∈ seg → d ≠ .window n := by
+    intro d hd hdw
+    subst hdw
+    obtain ⟨j, hKj, hjM, a, hj, ha⟩ := mem_segment config hex hd
+    cases a with
+    | take x => cases ha
+    | fire d' =>
+      obtain rfl : d' = .window n := by simpa [toEvent] using ha
+      obtain ⟨p, hp, hcp, hjp⟩ := hex.fired j _ hj
+      have hpw := window_passes hp
+      have hjw : j < cut w₂ := by omega
+      rcases Nat.lt_trichotomy p w₁ with hpl | rfl | hpg
+      · have := hex.mono (p + 1) w₁ hpl
+        omega
+      · exact Nat.findGreatest_is_greatest (P := P) (show K₀ < j by omega)
+          (show j ≤ cut (p + 1) - 1 by omega) hj
+      · by_cases hpw₂ : p < w₂
+        · exact hnone p hpg hpw₂ hpw
+        · have := hex.mono w₂ p (by omega)
+          omega
+  have hacc := Board.rate_limit config n seg hseg (boardAt config acts K) (by rw [hwin]; omega)
+  rw [hwin] at hacc
+  have hsub : ids ⊆ Board.acceptedIds config n (boardAt config acts K) seg := by
+    intro id hid
+    obtain ⟨p, l, req, s, body, json, hwp, hlw, hp, hl⟩ := hposted id hid
+    obtain ⟨j, hjl, hcpj, hj, ho⟩ := take_of_output config hex hdistinct hl hp rfl
+    simp only [Response.mk.injEq] at ho
+    obtain ⟨hid', hacc'⟩ := Board.handle_web_posted_next config ho.2.1.symm
+    have hKj : K ≤ j := by
+      have := hex.mono (w₁ + 1) p hwp
+      omega
+    have hjM : j < M := by
+      have := hex.mono (l + 1) w₂ hlw
+      omega
+    have hsplit : seg = ((acts.drop K).take (j - K)).map toEvent ++
+        .inl (.web req n s (.post body)) :: ((acts.drop (j + 1)).take (M - (j + 1))).map toEvent := by
+      simp only [seg]
+      rw [take_drop_split hKj hjM hj]
+      simp [toEvent]
+    have hb := boardAt_le config (acts := acts) hKj
+    rw [hsplit, hid', hb]
+    refine Board.mem_acceptedIds config _ _ _ rfl ?_
+    rw [← hb]
+    exact hacc'
+  exact (hids.length_le_of_subset hsub).trans (by rw [Board.length_acceptedIds]; omega)
 
 end Rookery

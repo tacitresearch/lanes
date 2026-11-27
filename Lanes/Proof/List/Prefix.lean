@@ -167,4 +167,15 @@ theorem mem_take_drop {α : Type} {l : List α} {a m : Nat} {x : α} (h : x ∈ 
     exact ⟨a + j, by omega, by omega, hj⟩
   · cases hj
 
+/-- A window of a list split at one of its elements. -/
+theorem take_drop_split {α : Type} {l : List α} {a j m : Nat} {x : α} (haj : a ≤ j) (hjm : j < m)
+    (hx : l[j]? = some x) :
+    (l.drop a).take (m - a) = (l.drop a).take (j - a) ++ x :: (l.drop (j + 1)).take (m - (j + 1)) := by
+  have hj : j < l.length := (List.getElem?_eq_some_iff.mp hx).1
+  rw [show m - a = (j - a) + (m - j) by omega, List.take_add, List.drop_drop,
+    show a + (j - a) = j by omega, List.drop_eq_getElem_cons hj,
+    show m - j = (m - (j + 1)) + 1 by omega, List.take_succ_cons]
+  have : l[j] = x := (List.getElem?_eq_some_iff.mp hx).2
+  rw [this]
+
 end Lanes
