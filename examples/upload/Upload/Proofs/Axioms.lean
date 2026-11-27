@@ -14,8 +14,8 @@ If a `sorry` or a new axiom reaches one, this file stops compiling.
 /-- info: 'Upload.step_piece' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Upload.step_piece
 
-/-- info: 'Upload.take_take' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+/-- info: 'Upload.take_take' depends on axioms: [propext, Quot.sound] -/
 #guard_msgs in #print axioms Upload.take_take
 
-/-- info: 'Upload.start_take' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+/-- info: 'Upload.start_take' depends on axioms: [propext] -/
 #guard_msgs in #print axioms Upload.start_take
