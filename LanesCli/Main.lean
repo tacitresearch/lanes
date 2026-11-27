@@ -24,6 +24,9 @@ Usage:
   lanes inventory [--list <status>]
       In Lanes itself: write docs/INVENTORY.md, every public definition with its status and
       its evidence, or list the library's definitions of one status (`lake exe lanesInventory`).
+  lanes docstrings [--list]
+      In Lanes itself: how many public declarations of `import Lanes` have a docstring, by
+      module, or list those that have none. It reports and fails nothing.
 "
 
 def flag? (args : List String) (name : String) : Option String :=
@@ -49,6 +52,10 @@ def main (args : List String) : IO UInt32 := do
     return if (← Lint.run (paths.headD ".") options) == 0 then 0 else 1
   | ["check"] =>
     let child ← IO.Process.spawn { cmd := "lake", args := #["test"] }
+    return (← child.wait)
+  | "docstrings" :: rest =>
+    let child ← IO.Process.spawn
+      { cmd := "lake", args := #["exe", "lanesInventory", "--docstrings"] ++ rest }
     return (← child.wait)
   | "inventory" :: rest =>
     let child ← IO.Process.spawn { cmd := "lake", args := #["exe", "lanesInventory"] ++ rest }

@@ -240,12 +240,15 @@ def citedPaths (root : System.FilePath) (span : String) : IO (List String) := do
 
 /-- The Markdown files whose citations are checked: those at the root and under `docs/`, but
 not the records of the past, `docs/history/` and `docs/decisions/`, nor `docs/STATUS.md`, which
-is written from `docs/status/`, whose fragments are checked instead. -/
+is written from `docs/status/`, whose fragments are checked instead, nor what a package under
+`docs/` keeps in its `.lake/`. -/
 def citingDocs (root : System.FilePath) : IO (List String) := do
   let top := (← Generated.markdownIn root)
   let docs := root / "docs"
   let nested ← if ← docs.isDir then
-      docs.walkDir fun dir => return !["history", "decisions"].contains (dir.fileName.getD "")
+      docs.walkDir fun dir =>
+        let name := dir.fileName.getD ""
+        return !(["history", "decisions"].contains name || name.startsWith ".")
     else pure #[]
   let below := nested.toList.filterMap fun file =>
     let relative := (file.toString.dropPrefix (root.toString ++ "/")).toString

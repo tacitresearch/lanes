@@ -164,7 +164,8 @@ Early beta: the API will change. What works, area by area, and its known limits 
 `SECURITY.md` how to report a vulnerability (a theorem that states less than the docs claim is
 one), and `CHANGELOG.md` what each release changed. `docs/ARCHITECTURE.md` says how the pieces fit
 and where each is proved, `docs/ROADMAP.md` the direction, and `docs/decisions/` why each piece is
-the way it is.
+the way it is. The API reference, every module and declaration of `import Lanes` with its
+docstring, is built with doc-gen4 by `docs/api/` (`docs/api/README.md`).
 
 To build Lanes itself:
 

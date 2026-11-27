@@ -1,0 +1,104 @@
+name: API docs
+
+# The API reference of `import Lanes`, built with doc-gen4 by the package in docs/api
+# (docs/api/README.md) and uploaded as the artifact `api-docs`: on pushes to main and on pull
+# requests that change the library or the docs package. Jobs run where CI's do (`runner`,
+# docs/RUNNERS.md).
+#
+# Publishing to GitHub Pages is the job `pages`, which does nothing until the owner turns it on:
+# enable Pages with "GitHub Actions" as its source (Settings, Pages), then set the repository
+# variable LANES_DOCS_PAGES to `true`. It then deploys each push to main.
+
+on:
+  push:
+    branches: [main]
+    paths: ["Lanes/**", Lanes.lean, lakefile.lean, lake-manifest.json, lean-toolchain,
+      "docs/api/**", .github/workflows/docs.yml, ".github/actions/**"]
+  pull_request:
+    paths: ["Lanes/**", Lanes.lean, lakefile.lean, lake-manifest.json, lean-toolchain,
+      "docs/api/**", .github/workflows/docs.yml, ".github/actions/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  runner:
+    runs-on: ubuntu-latest
+    outputs:
+      label: ${{ steps.runner.outputs.label }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: .github
+      - id: runner
+        uses: ./.github/actions/runner
+        with:
+          runner: ${{ vars.LANES_RUNNER }}
+
+  build:
+    needs: runner
+    runs-on: ${{ fromJSON(needs.runner.outputs.label) }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          clean: false
+      - id: lean
+        uses: ./.github/actions/lean
+      # The docs package's own `.lake`: doc-gen4 and its dependencies, built, and the database of
+      # what each module documents, so that a run redoes only the modules that changed. The
+      # packages Lanes has are links to the root's, which the cache keeps as links. On a warm
+      # runner the work directory keeps it instead.
+      - id: keys
+        if: steps.lean.outputs.warm != 'true'
+        env:
+          KEY: ${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('lean-toolchain', 'lake-manifest.json', 'docs/api/lake-manifest.json') }}
+        run: |
+          echo "prefix=lake-docs-$KEY-" >> "$GITHUB_OUTPUT"
+          echo "key=lake-docs-$KEY-$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+      - id: cache
+        if: steps.lean.outputs.warm != 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: docs/api/.lake
+          key: ${{ steps.keys.outputs.key }}
+          restore-keys: ${{ steps.keys.outputs.prefix }}
+      - name: Link the packages Lanes has
+        run: docs/api/link-packages.sh
+      - name: Build the API docs
+        working-directory: docs/api
+        run: lake build +Lanes:docs
+      - if: steps.lean.outputs.warm != 'true' && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: docs/api/.lake
+          key: ${{ steps.keys.outputs.key }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: api-docs
+          path: docs/api/.lake/build/doc
+          retention-days: 14
+      - if: github.event_name == 'push' && vars.LANES_DOCS_PAGES == 'true'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: docs/api/.lake/build/doc
+
+  # Off until the repository variable LANES_DOCS_PAGES is `true` (above).
+  pages:
+    needs: build
+    if: github.event_name == 'push' && vars.LANES_DOCS_PAGES == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
