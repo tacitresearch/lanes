@@ -8,6 +8,10 @@ under Unreleased (`CONTRIBUTING.md`).
 
 ## [Unreleased]
 
+### Added
+
+- HTTPS in the HTTP client: a TLS 1.2 and 1.3 client from the OpenSSL Lean's toolchain ships (`native/tls.c`, `Lanes.Tls`), with the certificate verified against the system's trust store or a file given and the name or address checked, always; `Client.Call` takes a `scheme`, `Call.at` builds a call from an `https://` or `http://` origin, and names are resolved. Nothing new to install.
+
 ### Changed
 
 - Module paths are reorganised by concern: `Lanes.Actors` is split into `Lanes/Core`, `Lanes/Proof`, `Lanes/Runtime`, `Lanes/Durable`, `Lanes/Net` and `Lanes/Outside`, HTTP, HTML and authentication are under `Lanes/Web`, the standard library under `Lanes/Lib`, and each area's IO in an `IO/` directory; `import Lanes` leaves out the framework's soundness theorems, which a proof imports with `import Lanes.Proofs` (or `Lanes.Semantics`); `Examples/` and `systems/` are one `examples/` directory of Lake packages, `examples/counter` being what `lanes new` writes.

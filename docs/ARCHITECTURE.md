@@ -32,6 +32,7 @@ proved function tells it to.
 | The proof layer | `Lanes/Semantics/` | refinement, specs, fairness, leads-to |
 | Data and the standard library | `Lanes/Data/`, `Lanes/Lib/` | codec laws, `Quorum.majority_inter`, `Bytes.same_iff`, `Json.parse_iff`, `Url.parse_print` |
 | Bound C | `native/lanes.c`, `Lanes/Lib/Crypto/Sodium.lean` | trusted; tested against the Lean references |
+| TLS client | `native/tls.c`, `Lanes/Web/IO/Tls.lean` | trusted; tested against `openssl s_server` |
 
 ## Actors and the semantics
 
@@ -189,8 +190,8 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
 
 - **Clock** (`Lanes/Outside/IO/Clock.lean`): the time as an input, never earlier than one given before,
   also across a restart.
-- **HTTP client** (`Lanes/Web/IO/Client.lean`): HTTP/1.1 without TLS, one request per
-  connection. The bytes are pure (`Lanes/Web/Http/Wire.lean`): the request writer frames the message
+- **HTTP client** (`Lanes/Web/IO/Client.lean`): HTTP/1.1, or HTTPS through the TLS binding
+  below, one request per connection. The bytes are pure (`Lanes/Web/Http/Wire.lean`): the request writer frames the message
   itself (`Request.fields_framing`), and the reader is proved to read a response written as a
   server writes it as soon as its last byte is there, to stay within its limit and to end
   (`Lanes/Web/Http/WireSound.lean`: `Response.read_wire`, `Response.read_more`; D39).
@@ -262,6 +263,14 @@ libsodium SHA-256, HMAC-SHA-256, constant-time comparison, secure random bytes a
 function with a Lean reference (`Sha256.reference`, `Hmac.reference`, `Bytes.sameReference`) has
 that reference as its body, so its theorems (`Bytes.same_iff`) are about the reference, and what
 is trusted is that the C computes the same, which `Tests/Crypto.lean` tests.
+
+TLS is a client from OpenSSL, the copy Lean's toolchain ships and links into every executable
+(`native/tls.c`, declared in `Lanes/Web/IO/Tls.lean`; `docs/decisions/new-a-tls-client-from-the-openssl-lean-ships.md`).
+It does no IO: the client hands it the bytes that arrive and sends those it gives back, so what
+is sent and what the bytes mean stay the pure writer and reader. The certificate is always
+verified, against the system's trust store or a file given, and so is the name or address it is
+for. A response is ended only by the server's `close_notify`. That TLS is done right is trusted,
+not proved: `Tests/Tls.lean` checks the refusals against `openssl s_server`.
 
 ## A request, end to end
 
