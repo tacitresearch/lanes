@@ -5,7 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import Lanes
 
 /-! A counter behind `Lanes.Http.serve`, for reads answered from the state
-(`docs/decisions/new-reads.md`): `benchReads [port] [journal|-] [reads]`. `POST /inc` adds one,
+(`docs/decisions/D75-reads.md`): `benchReads [port] [journal|-] [reads]`. `POST /inc` adds one,
 `GET /` is a request that enters the system and is answered by the counter with its value, and
 with `reads`, `GET /read` is answered from the counter's state without entering it. With a
 journal every request that enters is appended and synced before it is answered. -/

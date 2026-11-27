@@ -227,7 +227,7 @@ is a stop that drops nothing in flight: at SIGTERM or SIGINT readiness answers `
 requests the shard has taken are answered until none is left or a deadline passes, and then the
 server stops; trusted and tested with a child process.
 
-*A proposal, not decided* (`docs/decisions/new-reads.md`): reads answered from the state. An
+*A proposal, not decided* (`docs/decisions/D75-reads.md`): reads answered from the state. An
 application may name some requests as reads (`serve`'s `reads`, `Lanes/Web/Http/Read.lean`): the
 actor a request reads and a pure function from its state to the response. Such a request takes no
 id and never enters the system: once prepared, it is a peek at that actor (`Runtime.tryPeek`),

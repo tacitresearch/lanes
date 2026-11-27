@@ -209,7 +209,7 @@ What is being worked on now, and why: `docs/PLAN.md`.
   metrics nor logged. The metrics page and the health checks are on the application's port; the
   page is answered only to a loopback peer by default, and the health checks to every peer.
 - Reads answered from the state (`serve`'s `reads`) are a proposal, off by default
-  (`docs/decisions/new-reads.md`): a read sees one actor, has no deadline, is not counted by the
+  (`docs/decisions/D75-reads.md`): a read sees one actor, has no deadline, is not counted by the
   gate's `maxPending` or waited for by a drain, and the gate's theorems and `System.Implements`
   say nothing of it.
 - No adapter: the shop runs only in the checker and the proof.

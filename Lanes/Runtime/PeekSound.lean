@@ -9,7 +9,7 @@ public import Lanes.Runtime.KernelSound
 
 /-!
 What a peek sees and what it leaves, which is what answering a request from the state of an
-actor rests on (the proposal `docs/decisions/new-reads.md`).
+actor rests on (the proposal `docs/decisions/D75-reads.md`).
 
 A peek leaves nothing: a batch with its peeks taken out appends the same journal, hands over the
 same outputs and leaves the same kernel (`run_erase_peeks`), so replay, recovery and every

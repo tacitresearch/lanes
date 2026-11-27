@@ -8,7 +8,7 @@ import Tests.Ops
 import Tests.Fixtures.BankWeb
 
 /-!
-Reads answered from the state (`docs/decisions/new-reads.md`), on the bank behind its web page:
+Reads answered from the state (`docs/decisions/D75-reads.md`), on the bank behind its web page:
 a balance page is answered from the account's state and never enters the system. The same
 requests with reads on and off get the same answers, and with reads on the journal holds the
 transfers alone; each read after a transfer's response sees it; and a shard on a journal file

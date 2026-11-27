@@ -1,4 +1,4 @@
-# D?. Reads answered from the state of an actor, without entering the system (a proposal)
+# D75. Reads answered from the state of an actor, without entering the system (a proposal)
 
 The first application of the first release, `examples/videos`, found this its first problem:
 every page view is a request, so it enters the journal with its headers, is synced before it is

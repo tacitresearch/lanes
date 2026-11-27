@@ -28,7 +28,7 @@ machine through the workflow.
 | `lanes-heavy-par` | `lanes-heavy` with `WORKERS` | `LanesMany.lean` |
 
 `IO_THREADS` and `WORKERS` are a quarter of the server's CPUs each by default (8 and 8 on the warm machine), `K` and `SPIN` as above; all four are read from the environment by `servers.sh`. `benchWaves` (`Waves.lean`) is the kernel alone, without IO: `benchWaves K spin workers inputs rounds`.
-`benchReads` (`ReadsHello.lean`), which `run.sh` does not run, is a counter for reads answered from the state (`docs/decisions/new-reads.md`): `benchReads port journal|- [reads]`, with `GET /` through the system, `GET /read` from its state and `GET /inc` a write; the load generator's `-path` picks the route.
+`benchReads` (`ReadsHello.lean`), which `run.sh` does not run, is a counter for reads answered from the state (`docs/decisions/D75-reads.md`): `benchReads port journal|- [reads]`, with `GET /` through the system, `GET /read` from its state and `GET /inc` a write; the load generator's `-path` picks the route.
 
 `lanes*` run whatever `Lanes.Http.serve` is on the commit measured: a new HTTP server under
 that name is measured by the same rows. `servers.sh` holds the commands.

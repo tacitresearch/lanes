@@ -306,7 +306,7 @@ once the shard has written out and handed over everything taken before (`Batch.c
 on a task of its own, or `none` if the shard stops first. Nothing is journalled
 (`Batch.run_erase_peeks`). `false` means nothing was asked. The state is then shared with
 another thread, which costs the shard in proportion to the state once a write follows
-(`docs/decisions/new-reads.md`). -/
+(`docs/decisions/D75-reads.md`). -/
 def tryPeek (rt : Runtime sys) (i : σ.Id) (reply : Option (sys.State i) → BaseIO Unit) :
     BaseIO Bool := do
   have : Nonempty (sys.State i) := ⟨(sys.actor i).init⟩

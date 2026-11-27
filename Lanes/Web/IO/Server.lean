@@ -31,7 +31,7 @@ takes inputs that are no request (`serveFronted`).
 One refusal is made here: `503` when the shard's inbox is full. TLS is not handled: terminate it
 in a reverse proxy.
 
-A request the application names as a read (`Read`, a proposal: `docs/decisions/new-reads.md`)
+A request the application names as a read (`Read`, a proposal: `docs/decisions/D75-reads.md`)
 does not enter the system: once prepared, it is answered from the state of the actor it reads, as
 the shard has it after everything taken before it (`Runtime.tryPeek`). It takes no id and leaves
 no entry in the journal.
