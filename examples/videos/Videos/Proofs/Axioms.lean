@@ -6,6 +6,7 @@ import Videos.Proofs.Gone
 import Videos.Proofs.Confirmed
 import Videos.Proofs.Likes
 import Videos.Proofs.Private
+import Videos.Proofs.Jobs
 
 /-!
 The axiom gate (Lanes rule 5.5): each headline theorem depends only on Lean's three standard
@@ -35,3 +36,15 @@ axioms. If a `sorry` or a new axiom reaches one, this file stops compiling.
 
 /-- info: 'Videos.Site.shows_handle' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Videos.Site.shows_handle
+
+/-- info: 'Videos.jobs_bounded' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Videos.jobs_bounded
+
+/-- info: 'Videos.job_ends' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Videos.job_ends
+
+/-- info: 'Videos.Site.delete_schedules' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Videos.Site.delete_schedules
+
+/-- info: 'Videos.Site.delete_reported' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Videos.Site.delete_reported

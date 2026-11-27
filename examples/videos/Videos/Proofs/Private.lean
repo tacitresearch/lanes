@@ -10,8 +10,8 @@ import Videos.Proofs.Shows
 
 Of every input and every site, an output that shows a private video answers a request made with
 a session of its owner that let it in when it arrived, open and not past its lifetime
-(`Site.handle_private`); a start shows nothing. The system emits only
-such outputs, so in every run of it, under every environment model, every output that shows a
+(`Site.handle_private`); a start shows nothing. The site beside its scheduler emits only such
+outputs, so in every run of the two, under every environment model, every output that shows a
 private video is addressed to its owner (`private_to_owner`). The bridge sends an answer only to
 the connection that made the request (`Http.served`), and a request names a member only through
 a session cookie the bridge verified (tested, `Videos.EndToEnd`).
@@ -40,20 +40,54 @@ theorem Out.private_ok_of_shows {s : Site} {life : Auth.Lifetime} {at_s : Nat} {
   obtain ⟨req, sid, r, rfl, -⟩ := hpriv hp
   rfl
 
-theorem emits_private (config : Config) : (system config).Emits Out.private_ok := by
-  refine ⟨fun _ s i out hout => ?_, fun _ s out hout => ?_⟩
-  · have : out ∈ (s.handle config i).2 := by simpa [site] using hout
-    exact Out.private_ok_of_shows (s.shows_handle config i out this)
-  · have : out ∈ (s.recover config).2 := by simpa [site] using hout
-    exact Out.private_ok_of_shows (s.shows_recover config 0 out this)
+/-- What the system may put out: an answer that shows a private video only to its owner. The
+scheduler's attempts and abandons show no video. -/
+def Shown : SchedOut ⊕ Out → Prop
+  | .inl _ => True
+  | .inr o => o.private_ok
 
-/-- A private video is its owner's alone: in every run of the system, under every environment
-model, every output that shows a private video is addressed to its owner. -/
-theorem private_to_owner (config : Config) (env : EnvModel sig) {events : List (Event sig)}
+/-- An output the site's actor puts out beside the scheduler is one of the site's own. -/
+theorem emit_right {config : Config} {effs : List (Effect sig ())} {out : SchedOut ⊕ Out}
+    (h : Effect.emit out ∈ effs.flatMap fun eff =>
+      [use.wiring.right (Schedule.system (K := Key) (P := Unit) (A := StoreAnswer) config.scheduler) eff]) :
+    ∃ o, Effect.emit o ∈ effs ∧ out = .inr o := by
+  obtain ⟨eff, heff, h⟩ := List.mem_flatMap.mp h
+  cases eff with
+  | emit o =>
+    simp only [Wiring.right, List.mem_singleton] at h
+    split at h
+    · cases h
+    · exact ⟨o, heff, Effect.emit.inj h⟩
+  | _ => simp [Wiring.right] at h
+
+theorem emits_private (config : Config) : (system config).Emits Shown := by
+  refine ⟨fun i s msg out hout => ?_, fun i s out hout => ?_⟩
+  · rcases i with ⟨⟩ | ⟨⟩
+    · obtain ⟨eff, -, h⟩ := List.mem_flatMap.mp hout
+      cases eff <;> simp only [Wiring.left, List.mem_singleton] at h <;> try cases h
+      split at h
+      · cases h
+      · cases h; trivial
+    · obtain ⟨o, ho, rfl⟩ := emit_right hout
+      have : o ∈ (s.handle config msg).2 := by simpa [site] using ho
+      exact Out.private_ok_of_shows (s.shows_handle config msg o this)
+  · rcases i with ⟨⟩ | ⟨⟩
+    · obtain ⟨eff, heff, h⟩ := List.mem_flatMap.mp hout
+      cases eff <;> simp only [Wiring.left, List.mem_singleton] at h <;> try cases h
+      split at h
+      · cases h
+      · cases h; trivial
+    · obtain ⟨o, ho, rfl⟩ := emit_right hout
+      have : o ∈ s.recover.2 := by simpa [site] using ho
+      exact Out.private_ok_of_shows (s.shows_recover config 0 o this)
+
+/-- A private video is its owner's alone: in every run of the site and its scheduler, under
+every environment model, every output that shows a private video is addressed to its owner. -/
+theorem private_to_owner (config : Config) (env : EnvModel fullSig) {events : List (Event fullSig)}
     {c : SysState (system config)}
     (hrun : (SysState.init (system config) env).run env events = some c) :
-    ∀ out, Event.output out ∈ events → ∀ card ∈ out.cards, card.visibility = .private →
+    ∀ out : Out, Event.output (Sum.inr out) ∈ events → ∀ card ∈ out.cards, card.visibility = .private →
       out.viewer = some card.owner :=
-  fun out hout => (emits_private config).outputs hrun out hout
+  fun out hout => (emits_private config).outputs hrun (Sum.inr out) hout
 
 end Videos
