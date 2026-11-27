@@ -35,7 +35,7 @@ the Lake file.
 - HTTP: a gate joined in front of a system, typed routes proved to print and match alike, a strict request reader, the server's own connection loop on `Std.Net` as a pure `Http.Conn`, and an HTTP client.
 - HTML values and a template macro, htmx attributes from routes, forms and cookies with proofs against their specs.
 - Authentication: signed tokens, form tokens, sessions, failed-attempt limits and Argon2id password digests.
-- Data: `lanes_data` with derived `Codable`, `Enum` and `LawfulBEq`; law-carrying codecs; JSON; Base64; IP addresses and prefixes; civil dates, RFC 3339 and HTTP dates; SHA-256, HMAC and PBKDF2 references.
+- Data: `lanes_data` with derived `Codable`, `Enum` and `LawfulBEq`; law-carrying codecs; JSON; Base64; IP addresses and prefixes; civil dates, RFC 3339 and HTTP dates; SHA-256 and HMAC references.
 - Bindings to libsodium, `fsync` and a timed thread wait, each beside a Lean reference where one exists.
 - Differential tests of the parsers against Go's standard library, with every difference decided.
 - The `lanes` command: `new` (an app with a proved counter, a journal and a page), `lint`, `check` and `inventory`.
