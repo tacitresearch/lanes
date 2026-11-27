@@ -1,4 +1,4 @@
-# D?. Bodies and responses stream through the gate, in pieces and parts, one at a time
+# D76. Bodies and responses stream through the gate, in pieces and parts, one at a time
 
 A body had to fit `message_max`, and a response was one value: an upload larger than
 `body_max` was refused, and rookery's timelines polled every five seconds
