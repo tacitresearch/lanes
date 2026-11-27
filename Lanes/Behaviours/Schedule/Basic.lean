@@ -533,19 +533,44 @@ abbrev attach {τ : Signature} (sys : System τ) (config : Config K P A) (use : 
     System (joinSig (sig K P A) τ) :=
   (system config).join sys use.wiring
 
+/-- The attempts out at the service, and those abandoned before the service was handed them:
+outputs are handed over in any order. -/
+structure Callee (K : Type) where
+  out : List (K × Nat) := []
+  early : List (K × Nat) := []
+
+/-- Two lists that hold the same elements as often: the order the attempts went out in is not
+the service's state, and the checker keeps one state for every order. -/
+def sameBag {α : Type} [BEq α] (a b : List α) : Bool :=
+  a.length == b.length && a.all fun x => a.count x == b.count x
+
+/-- A hash that does not depend on the order of the list. -/
+def bagHash {α : Type} [Hashable α] (l : List α) : UInt64 :=
+  l.foldl (fun h x => h + mixHash 17 (hash x)) 0
+
+instance {K : Type} [BEq K] : BEq (Callee K) where
+  beq a b := sameBag a.out b.out && sameBag a.early b.early
+
+instance {K : Type} [Hashable K] : Hashable (Callee K) where
+  hash d := mixHash (bagHash d.out) (bagHash d.early)
+
 /-- What the service called may do: answer an attempt that is out, once, with any answer or
-`unknown`, or never. An attempt abandoned is over: the adapter cut it off. It remembers the
-attempts out. -/
-def callee : Outside (sig K P A) (List (K × Nat)) where
-  init := []
-  allow out x :=
+`unknown`, or never. An attempt abandoned is over: the adapter cut it off. -/
+def callee : Outside (sig K P A) (Callee K) where
+  init := {}
+  allow d x :=
     match x with
-    | .reply key attempt _ => if (key, attempt) ∈ out then some (out.erase (key, attempt)) else none
+    | .reply key attempt _ =>
+      if (key, attempt) ∈ d.out then some { d with out := d.out.erase (key, attempt) } else none
     | _ => none
-  observe out o :=
+  observe d o :=
     match o with
-    | .call a => (a.key, a.attempt) :: out
-    | .abandon key attempt => out.erase (key, attempt)
-    | _ => out
+    | .call a =>
+      if (a.key, a.attempt) ∈ d.early then { d with early := d.early.erase (a.key, a.attempt) }
+      else { d with out := (a.key, a.attempt) :: d.out }
+    | .abandon key attempt =>
+      if (key, attempt) ∈ d.out then { d with out := d.out.erase (key, attempt) }
+      else { d with early := (key, attempt) :: d.early }
+    | _ => d
 
 end Lanes.Schedule
