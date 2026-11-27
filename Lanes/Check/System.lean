@@ -52,11 +52,13 @@ def Node.of [Enum σ.Id] {env : EnvModel σ} (world : World sys D) : Node sys en
       rw [SysState.compactWith_of]
       rfl }
 
+/-- The driver is compared last: a monitor's comparison costs the most, and worlds whose hashes
+agree often differ only in the order of the messages in flight. -/
 instance [σ.Inspect] [sys.Inspect] [BEq D] {env : EnvModel σ} : BEq (Node sys env D) where
-  beq a b := a.world.crashes == b.world.crashes && a.world.driver == b.world.driver
-    && Slot.allSame a.slots b.slots
+  beq a b := a.world.crashes == b.world.crashes && Slot.allSame a.slots b.slots
     && SysState.netEquiv env a.world.state.net b.world.state.net
     && a.world.state.outbox.isPerm b.world.state.outbox
+    && a.world.driver == b.world.driver
 
 instance [σ.Inspect] [sys.Inspect] [Hashable D] {env : EnvModel σ} :
     Hashable (Node sys env D) where

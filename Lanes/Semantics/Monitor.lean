@@ -101,8 +101,8 @@ theorem State.exists_fire {svc : Service In Out S T} {st : State In Out S} {t : 
 /-- States the checker treats as the same stand for the same mathematical state. -/
 theorem State.toAbs_eq_of_equiv [BEq S] [LawfulBEq S] {a b : State In Out S}
     (h : a.equiv b = true) : a.toAbs = b.toAbs := by
-  simp only [State.equiv, Bool.and_eq_true, beq_iff_eq, List.isPerm_iff] at h
-  obtain ⟨⟨hvalue, hpending⟩, houtbox⟩ := h
+  obtain ⟨hvalue, hpending, houtbox⟩ := State.equiv_iff.mp h
+  rw [beq_iff_eq] at hvalue
   simp [State.toAbs, hvalue, Multiset.coe_eq_coe.mpr hpending, Multiset.coe_eq_coe.mpr houtbox]
 
 /-- A pending input taking effect is an internal step of the spec. -/
@@ -269,7 +269,8 @@ theorem mem_of_mem_freshFrom {known acc next : List (State In Out S)} {t : State
   induction next generalizing acc with
   | nil => exact .inl h
   | cons s next ih =>
-    rcases ih (acc := if (known ++ acc).any (s.equiv ·) then acc else acc ++ [s]) h with h | h
+    rcases ih (acc := if known.any (s.equiv ·) || acc.any (s.equiv ·) then acc else acc ++ [s]) h
+      with h | h
     · split at h
       · exact .inl h
       · rcases List.mem_append.mp h with h | h
@@ -435,10 +436,8 @@ theorem sound (svc : Service In Out S T) {obs : List (Visible In Out T)} {st : S
       obtain ⟨s, hs, rfl⟩ := List.mem_map.mp hseed
       exact ⟨s.toAbs, (s.call x).toAbs, ih hs, State.toAbs_call s x, hτ⟩
     | output out =>
-      rcases mem_or_mem_of_mem_insertAll h with h | h
-      · cases h
-      · obtain ⟨s, hs, hret⟩ := List.mem_filterMap.mp h
-        exact ⟨s.toAbs, st.toAbs, ih hs, State.ret_eq_some hret, .refl⟩
+      obtain ⟨s, hs, hret⟩ := List.mem_filterMap.mp h
+      exact ⟨s.toAbs, st.toAbs, ih hs, State.ret_eq_some hret, .refl⟩
     | fire t =>
       obtain ⟨seed, hseed, hτ⟩ := close_sound svc h
       obtain ⟨s, hs, hfire⟩ := List.mem_filterMap.mp hseed
@@ -466,10 +465,7 @@ theorem complete [LawfulBEq S] (svc : Service In Out S T) {obs : List (Visible I
       obtain ⟨a', ha', hmem', rfl⟩ := τSTr_erase_outbox hmem hτ
       obtain ⟨s, hs, rfl⟩ := ih (by simpa using hrun.comp (LTS.sMTr_τSTr_iff.mp ha'))
       obtain ⟨s', hret⟩ := State.ret_of_mem hmem'
-      have hmem : s' ∈ (after svc obs).candidates.filterMap (·.ret out) :=
-        List.mem_filterMap.mpr ⟨s, hs, hret⟩
-      obtain ⟨t, ht, hts⟩ := exists_mem_insertAll_toAbs_eq (known := []) hmem
-      exact ⟨t, ht, hts.trans (State.ret_eq_some hret).2⟩
+      exact ⟨s', List.mem_filterMap.mpr ⟨s, hs, hret⟩, (State.ret_eq_some hret).2⟩
     | fire t =>
       obtain ⟨s, hs, rfl⟩ := ih hrun
       obtain ⟨s', hfire, rfl⟩ := State.exists_fire htr

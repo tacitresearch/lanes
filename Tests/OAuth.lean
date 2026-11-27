@@ -11,9 +11,10 @@ Sign-in with another service (`Lanes/Web/Auth/OAuth.lean`, `Lanes/Web/IO/SignIn.
 decisions one by one; the edge as an actor, its tickets in the browsers' cookies and the states it
 used, model-checked against two browsers, one of them an attacker's, that replay and swap
 callbacks across a restart; and the whole flow end to end over HTTP, against the test kit's
-provider (`Lanes/Testing/OAuth.lean`): an authorization endpoint the test plays, a token endpoint
-that checks PKCE and signs ID tokens with an RSA key made by `openssl`, a JWK Set, and a user API
-for a provider without ID tokens. No real provider is called.
+provider (`Lanes/Testing/OAuth.lean`): a discovery document, which configures a provider through
+`Discovery.read`, an authorization endpoint the test plays, a token endpoint that checks PKCE and
+signs ID tokens with an RSA key made by `openssl`, a JWK Set, and a user API for a provider
+without ID tokens. No real provider is called.
 -/
 
 namespace Tests.OAuth
@@ -446,8 +447,11 @@ def live : Async (List (String × Bool)) := do
     return []
   let p ← Fake.start
   try
+    let found ← Testing.S3.follow (p.at ".well-known/openid-configuration") .get
+    let discovered := Discovery.read (text found)
     let signIn ← SignIn.start {
       providers := [(p.oidc "id", p.client origin "id"), (p.userApi "hub", p.client origin "hub")]
+        ++ (discovered.map fun d => (d.provider "found", p.client origin "found")).toList
       secure := false, http := { timeout_ms := 5000 } }
     let app ← serve (Server.system Tests.Web.mute) appBridge { port := 0 }
       (arrive := some signIn.arrive)
@@ -470,6 +474,7 @@ def live : Async (List (String × Bool)) := do
       let (unknownKid, _, _) ← flow appPort p "id" .unknownKid
       let (tampered, _, _) ← flow appPort p "id" .tampered
       let fetches ← p.jwksFetches.get
+      let (viaDiscovery, _, _) ← flow appPort p "found" .good
       let viaApi ← Testing.OAuth.signIn (← Browser.new appPort origin) p "hub"
         { subject := "42", login := "octo", email := some "o@example.com" }
       let anon ← Browser.new appPort origin
@@ -510,6 +515,13 @@ def live : Async (List (String × Bool)) := do
         ("oauth live: an ID token whose payload was changed is refused", refused tampered "signature"),
         ("oauth live: the JWK Set is fetched once, an unknown kid within the wait included",
           fetches == 1),
+        ("oauth live: the provider's discovery document, read by Discovery.read, names its endpoints",
+          discovered.any fun d => d.issuer == p.issuer && d.authorize == p.authorization
+            && d.token == p.at "oidc/token" && d.jwks == p.at "oidc/jwks" && d.algs == ["RS256"]
+            && d.challenges == ["S256"]),
+        ("oauth live: the provider its discovery document configures signs in",
+          status viaDiscovery == 200
+            && text viaDiscovery == "https://id.example user-1 (some u@example.com) true name=Ada <L> query=0"),
         ("oauth live: a provider without ID tokens is asked its user API, the login its name without one",
           text viaApi == "https://hub.example 42 (some o@example.com) true name=octo query=0"),
         ("oauth live: identity headers a client sends do not reach the system", status forged == 401),
