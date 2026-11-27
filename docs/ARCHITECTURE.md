@@ -236,10 +236,11 @@ theorem.
   `Lanes/Semantics/Simulation.lean`).
 - `Service.spec` turns a sequential `Service` into what a concurrent implementation must refine,
   with deadlines as visible steps, and `System.Implements` is refinement to it: linearizability,
-  stated as refinement (`Lanes/Semantics/Service.lean`, D42). A deadline passes in the system
+  stated as refinement (`Lanes/Semantics/Service.lean`, D42); that this is the textbook definition is argued, not proved. A deadline passes in the system
   as a timer it names fires, or as a message it names is delivered
   (`docs/decisions/D56-a-deadline-passes-where-it-is-served.md`). `Server.implements` proves the
-  `Server` behaviour (`Lanes/Behaviours/Server.lean`) implements its spec.
+  `Server` behaviour (`Lanes/Behaviours/Server.lean`) implements its spec in an environment
+  without faults.
 - A request named by its client takes effect once (`Lanes/Semantics/Once.lean`, D48):
   `Service.once` is the spec, `Lanes/Behaviours/Once/Basic.lean` the memo that meets it, and
   `System.Refines.of_handles` the relation rule that a duplicated message cannot break. The
@@ -299,7 +300,8 @@ key-value store with front ends, whose read cache breaks refinement (`examples/k
 map it replicates (`RaftKV.implementsMachine`), and `once` of it in every environment with the
 memo in the map (`RaftKV.implementsMachine_once`); `examples/ledger`, a multi-user web ledger;
 and `examples/rookery`, a small social network for bots whose claims are proved of its spec,
-which it is proved to implement with deadlines (`Rookery.implements`). The tests use copies of
+which it is proved to implement with deadlines (`Rookery.implements`); the theorem that joins the
+two is not written. Each claim, its evidence and its premises are in `docs/CLAIMS.md`. The tests use copies of
 the small ones' systems in `Tests/Fixtures/`, so an example can change for its reader alone. `lanes new`
 (`LanesCli/New.lean`, `templates/app/`) creates an application; `lanes lint`
 (`LanesCli/Lint.lean`) checks the rules of `AGENTS.md` that the text can show, the generated files
