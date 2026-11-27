@@ -67,6 +67,9 @@ jobs:
         run: |
           lake exe lanes lint --fix
           git diff --exit-code
+      # The totals no committed file holds, since each would change with every item.
+      - name: Totals
+        run: lake exe lanes stats >> "$GITHUB_STEP_SUMMARY"
 
   check:
     needs: [runner, compile]
@@ -236,10 +239,10 @@ jobs:
       - name: Over HTTP, killed and started again
         run: lake exe rookeryLive
 
-  # A pull request that changes the library, the C, the command or the template changes
-  # CHANGELOG.md too, unless it is labelled `no-changelog` (CONTRIBUTING.md). Pull requests only,
-  # and not among `build`'s needs. The labels are those of the event: after adding the label,
-  # push again (a re-run reads the same labels).
+  # A pull request that changes the library, the C, the command or the template adds or edits
+  # a fragment in docs/changes/, unless it is labelled `no-changelog` (CONTRIBUTING.md). Pull
+  # requests only, and not among `build`'s needs. The labels are those of the event: after
+  # adding the label, push again (a re-run reads the same labels).
   changelog:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -247,15 +250,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - name: CHANGELOG.md changes with the code
+      - name: A changelog fragment changes with the code
         if: ${{ !contains(github.event.pull_request.labels.*.name, 'no-changelog') }}
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
           changed=$(git diff --name-only "$BASE...$HEAD")
-          if grep -qE '^(Lanes|native|LanesCli|templates)/' <<<"$changed" && ! grep -qx 'CHANGELOG.md' <<<"$changed"; then
-            echo "::error file=CHANGELOG.md::add a line under Unreleased, or label the pull request no-changelog"
+          fragments=$(grep -E '^docs/changes/.+\.md$' <<<"$changed" | grep -vx 'docs/changes/README.md' || true)
+          if grep -qE '^(Lanes|native|LanesCli|templates)/' <<<"$changed" && [ -z "$fragments" ]; then
+            echo "::error file=docs/changes/README.md::add a fragment, docs/changes/<slug>.md, or label the pull request no-changelog"
             exit 1
           fi
 

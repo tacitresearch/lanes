@@ -4,27 +4,8 @@ Every public definition of `Lanes` and `LanesCli`, with its status and the evide
 Generated from the built modules by `lake exe lanes lint --fix` (`LanesCli/Inventory.lean`);
 do not edit. What each status means, and what is not listed, is in
 `docs/decisions/D47-the-inventory-is-computed.md`. The definitions of `Lanes/` with status
-none are on `docs/inventory-none.md`, which only shrinks.
-
-## Summary
-
-| Area | Definitions | proved | trusted | checked | tested | spec | none |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `Lanes/Behaviours` | 136 | 81 | 5 | 24 | 0 | 26 | 0 |
-| `Lanes/Check` | 75 | 55 | 0 | 8 | 0 | 10 | 2 |
-| `Lanes/Core` | 103 | 45 | 0 | 34 | 1 | 10 | 13 |
-| `Lanes/Data` | 68 | 43 | 0 | 4 | 1 | 0 | 20 |
-| `Lanes/Durable` | 70 | 58 | 2 | 0 | 0 | 9 | 1 |
-| `Lanes/Lib` | 627 | 388 | 38 | 1 | 116 | 75 | 9 |
-| `Lanes/Net` | 37 | 6 | 5 | 0 | 0 | 25 | 1 |
-| `Lanes/Outside` | 172 | 133 | 4 | 6 | 1 | 28 | 0 |
-| `Lanes/Proof` | 40 | 16 | 0 | 0 | 0 | 23 | 1 |
-| `Lanes/Runtime` | 180 | 100 | 21 | 0 | 29 | 30 | 0 |
-| `Lanes/Semantics` | 63 | 11 | 0 | 0 | 0 | 51 | 1 |
-| `Lanes/Testing` | 106 | 0 | 0 | 1 | 105 | 0 | 0 |
-| `Lanes/Web` | 696 | 357 | 57 | 46 | 180 | 54 | 2 |
-| `LanesCli` | 129 | 0 | 0 | 0 | 57 | 0 | 72 |
-| All | 2502 | 1293 | 132 | 124 | 490 | 341 | 122 |
+none are on `docs/inventory-none.md`, which only shrinks. `lake exe lanes stats` counts
+them by area.
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -42,22 +23,22 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Jobs.instCodableOutput` | proved | its type, `Codable` |
 | `Jobs.Msg.codec` | proved | its type, `Codec` |
 | `Jobs.instCodableMsg` | proved | its type, `Codable` |
-| `Jobs.Config.slots` | proved | through `Jobs.actor`, `Jobs.attach` and 2 more: `Jobs.active_answered`, `Jobs.active_leaves` and 13 more |
-| `Jobs.Config.cap` | proved | through `Jobs.actor`, `Jobs.attach` and 2 more: `Jobs.active_answered`, `Jobs.active_leaves` and 13 more |
-| `Jobs.Config.backoff` | proved | through `Jobs.actor`, `Jobs.attach` and 2 more: `Jobs.active_answered`, `Jobs.active_leaves` and 13 more |
+| `Jobs.Config.slots` | proved | through `Jobs.actor`, `Jobs.attach` and others: `Jobs.active_answered`, `Jobs.active_leaves` and others |
+| `Jobs.Config.cap` | proved | through `Jobs.actor`, `Jobs.attach` and others: `Jobs.active_answered`, `Jobs.active_leaves` and others |
+| `Jobs.Config.backoff` | proved | through `Jobs.actor`, `Jobs.attach` and others: `Jobs.active_answered`, `Jobs.active_leaves` and others |
 | `Jobs.keys` | proved | `Jobs.active_answered`, `Jobs.active_leaves`, `Jobs.attach_active_leaves` |
-| `Jobs.entry` | proved | `Jobs.answer_of_leaves`, `Jobs.entry_step`, `Jobs.not_arms` and 1 more |
-| `Jobs.put` | proved | through `Jobs.actor`, `Jobs.attach` and 2 more: `Jobs.active_answered`, `Jobs.active_leaves` and 13 more |
-| `Jobs.remove` | proved | through `Jobs.actor`, `Jobs.attach` and 2 more: `Jobs.active_answered`, `Jobs.active_leaves` and 13 more |
+| `Jobs.entry` | proved | `Jobs.answer_of_leaves`, `Jobs.entry_step`, `Jobs.not_arms` and others |
+| `Jobs.put` | proved | through `Jobs.actor`, `Jobs.attach` and others: `Jobs.active_answered`, `Jobs.active_leaves` and others |
+| `Jobs.remove` | proved | through `Jobs.actor`, `Jobs.attach` and others: `Jobs.active_answered`, `Jobs.active_leaves` and others |
 | `Jobs.Within` | spec | a predicate |
 | `Jobs.Attempts` | spec | a predicate |
-| `Jobs.sig` | proved | `Jobs.active_answered`, `Jobs.active_leaves`, `Jobs.actor_attempts` and 11 more |
+| `Jobs.sig` | proved | `Jobs.active_answered`, `Jobs.active_leaves`, `Jobs.actor_attempts` and others |
 | `Jobs.timer` | proved | `Jobs.not_arms` |
-| `Jobs.fail` | proved | through `Jobs.actor`, `Jobs.attach` and 2 more: `Jobs.active_answered`, `Jobs.active_leaves` and 13 more |
-| `Jobs.step` | proved | `Jobs.answer_of_leaves`, `Jobs.dispatch_active`, `Jobs.entry_step` and 2 more |
-| `Jobs.rearm` | proved | through `Jobs.actor`, `Jobs.attach` and 1 more: `Jobs.active_answered`, `Jobs.active_leaves` and 8 more |
+| `Jobs.fail` | proved | through `Jobs.actor`, `Jobs.attach` and others: `Jobs.active_answered`, `Jobs.active_leaves` and others |
+| `Jobs.step` | proved | `Jobs.answer_of_leaves`, `Jobs.dispatch_active`, `Jobs.entry_step` and others |
+| `Jobs.rearm` | proved | through `Jobs.actor`, `Jobs.attach` and others: `Jobs.active_answered`, `Jobs.active_leaves` and others |
 | `Jobs.actor` | proved | `Jobs.actor_attempts`, `Jobs.actor_within` |
-| `Jobs.system` | proved | `Jobs.active_answered`, `Jobs.active_leaves`, `Jobs.answered_le_handled` and 3 more |
+| `Jobs.system` | proved | `Jobs.active_answered`, `Jobs.active_leaves`, `Jobs.answered_le_handled` and others |
 | `Jobs.Use.wiring` | proved | through `Jobs.attach`: `Jobs.attach_active_leaves`, `Jobs.attach_within` |
 | `Jobs.attach` | proved | `Jobs.attach_active_leaves`, `Jobs.attach_within` |
 | `Jobs.pool` | checked | `Tests/Jobs.lean` |
@@ -144,27 +125,27 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Schedule.Msg.codec` | proved | its type, `Codec` |
 | `Schedule.instCodableMsg` | proved | its type, `Codable` |
 | `Schedule.hashJitter` | checked | `Tests/Schedule.lean` |
-| `Schedule.Config.cap` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 18 more |
+| `Schedule.Config.cap` | proved | through `Schedule.actor`, `Schedule.attach` and others: `Schedule.actor_attempts`, `Schedule.actor_within` and others |
 | `Schedule.Config.backoff` | proved | `Schedule.retry_waits` |
-| `Schedule.Config.wait` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 18 more |
+| `Schedule.Config.wait` | proved | through `Schedule.actor`, `Schedule.attach` and others: `Schedule.actor_attempts`, `Schedule.actor_within` and others |
 | `Schedule.keys` | proved | `Schedule.attach_held_leaves`, `Schedule.every_noticed`, `Schedule.held_leaves` |
-| `Schedule.entry` | proved | `Schedule.attach_answer_handled`, `Schedule.attach_end_handled`, `Schedule.attach_held_leaves` and 9 more |
-| `Schedule.put` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 18 more |
-| `Schedule.remove` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 18 more |
-| `Schedule.set` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 18 more |
-| `Schedule.sig` | proved | `Schedule.actor_attempts`, `Schedule.actor_within`, `Schedule.armed` and 15 more |
-| `Schedule.timer` | proved | through `Schedule.actor`, `Schedule.attach` and 1 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 11 more |
-| `Schedule.fail` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 18 more |
-| `Schedule.over` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 18 more |
-| `Schedule.run` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 18 more |
-| `Schedule.answerOf` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 18 more |
-| `Schedule.onJob` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 18 more |
-| `Schedule.touch` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 18 more |
-| `Schedule.enroll` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 18 more |
-| `Schedule.step` | proved | `Schedule.attempt_ends`, `Schedule.dispatch_due`, `Schedule.leaves_answered` and 4 more |
-| `Schedule.rearm` | proved | through `Schedule.actor`, `Schedule.attach` and 1 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 11 more |
+| `Schedule.entry` | proved | `Schedule.attach_answer_handled`, `Schedule.attach_end_handled`, `Schedule.attach_held_leaves` and others |
+| `Schedule.put` | proved | through `Schedule.actor`, `Schedule.attach` and others: `Schedule.actor_attempts`, `Schedule.actor_within` and others |
+| `Schedule.remove` | proved | through `Schedule.actor`, `Schedule.attach` and others: `Schedule.actor_attempts`, `Schedule.actor_within` and others |
+| `Schedule.set` | proved | through `Schedule.actor`, `Schedule.attach` and others: `Schedule.actor_attempts`, `Schedule.actor_within` and others |
+| `Schedule.sig` | proved | `Schedule.actor_attempts`, `Schedule.actor_within`, `Schedule.armed` and others |
+| `Schedule.timer` | proved | through `Schedule.actor`, `Schedule.attach` and others: `Schedule.actor_attempts`, `Schedule.actor_within` and others |
+| `Schedule.fail` | proved | through `Schedule.actor`, `Schedule.attach` and others: `Schedule.actor_attempts`, `Schedule.actor_within` and others |
+| `Schedule.over` | proved | through `Schedule.actor`, `Schedule.attach` and others: `Schedule.actor_attempts`, `Schedule.actor_within` and others |
+| `Schedule.run` | proved | through `Schedule.actor`, `Schedule.attach` and others: `Schedule.actor_attempts`, `Schedule.actor_within` and others |
+| `Schedule.answerOf` | proved | through `Schedule.actor`, `Schedule.attach` and others: `Schedule.actor_attempts`, `Schedule.actor_within` and others |
+| `Schedule.onJob` | proved | through `Schedule.actor`, `Schedule.attach` and others: `Schedule.actor_attempts`, `Schedule.actor_within` and others |
+| `Schedule.touch` | proved | through `Schedule.actor`, `Schedule.attach` and others: `Schedule.actor_attempts`, `Schedule.actor_within` and others |
+| `Schedule.enroll` | proved | through `Schedule.actor`, `Schedule.attach` and others: `Schedule.actor_attempts`, `Schedule.actor_within` and others |
+| `Schedule.step` | proved | `Schedule.attempt_ends`, `Schedule.dispatch_due`, `Schedule.leaves_answered` and others |
+| `Schedule.rearm` | proved | through `Schedule.actor`, `Schedule.attach` and others: `Schedule.actor_attempts`, `Schedule.actor_within` and others |
 | `Schedule.actor` | proved | `Schedule.actor_attempts`, `Schedule.actor_within` |
-| `Schedule.system` | proved | `Schedule.armed`, `Schedule.attempts`, `Schedule.calls_le_scheduled` and 4 more |
+| `Schedule.system` | proved | `Schedule.armed`, `Schedule.attempts`, `Schedule.calls_le_scheduled` and others |
 | `Schedule.Use.wiring` | spec | used only in statements |
 | `Schedule.attach` | spec | used only in statements |
 | `Schedule.sameBag` | checked | `Tests/Schedule.lean` |
@@ -229,20 +210,20 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Service.State.equiv` | proved | `Check.Monitor.withinFrom_eq`, `Service.State.equiv_iff`, `Service.State.equiv_of_ret` |
 | `Service.State.hash` | proved | through `Check.Monitor.instHashable`: `Check.refines_sound`, `Check.refines_traces` |
 | `Service.State.Distinct` | spec | a predicate |
-| `Check.Monitor.insertAll` | proved | through `Check.Monitor.after`, `Service.monitored`: `Check.Monitor.complete`, `Check.Monitor.ok_iff` and 4 more |
-| `Check.Monitor.expand` | proved | through `Check.Monitor.after`, `Service.monitored`: `Check.Monitor.complete`, `Check.Monitor.ok_iff` and 4 more |
-| `Check.Monitor.freshFrom` | proved | through `Check.Monitor.after`, `Service.monitored`: `Check.Monitor.complete`, `Check.Monitor.ok_iff` and 4 more |
-| `Check.Monitor.closeStep` | proved | through `Check.Monitor.after`, `Service.monitored`: `Check.Monitor.complete`, `Check.Monitor.ok_iff` and 4 more |
-| `Check.Monitor.rounds` | proved | through `Check.Monitor.after`, `Service.monitored`: `Check.Monitor.complete`, `Check.Monitor.ok_iff` and 4 more |
-| `Check.Monitor.close` | proved | through `Check.Monitor.after`, `Service.monitored`: `Check.Monitor.complete`, `Check.Monitor.ok_iff` and 4 more |
+| `Check.Monitor.insertAll` | proved | through `Check.Monitor.after`, `Service.monitored`: `Check.Monitor.complete`, `Check.Monitor.ok_iff` and others |
+| `Check.Monitor.expand` | proved | through `Check.Monitor.after`, `Service.monitored`: `Check.Monitor.complete`, `Check.Monitor.ok_iff` and others |
+| `Check.Monitor.freshFrom` | proved | through `Check.Monitor.after`, `Service.monitored`: `Check.Monitor.complete`, `Check.Monitor.ok_iff` and others |
+| `Check.Monitor.closeStep` | proved | through `Check.Monitor.after`, `Service.monitored`: `Check.Monitor.complete`, `Check.Monitor.ok_iff` and others |
+| `Check.Monitor.rounds` | proved | through `Check.Monitor.after`, `Service.monitored`: `Check.Monitor.complete`, `Check.Monitor.ok_iff` and others |
+| `Check.Monitor.close` | proved | through `Check.Monitor.after`, `Service.monitored`: `Check.Monitor.complete`, `Check.Monitor.ok_iff` and others |
 | `Check.Monitor.ok` | proved | `Check.Monitor.ok_iff`, `Check.refines_sound` |
 | `Check.Monitor.withinFrom` | proved | `Check.Monitor.withinFrom_eq` |
-| `Check.Monitor.instBEq` | proved | `Check.Monitor.beq_iff_abs_eq`, `Check.refines_sound`, `Check.refines_traces` and 1 more |
+| `Check.Monitor.instBEq` | proved | `Check.Monitor.beq_iff_abs_eq`, `Check.refines_sound`, `Check.refines_traces` and others |
 | `Check.Monitor.instHashable` | proved | `Check.refines_sound`, `Check.refines_traces` |
-| `Check.Monitor.start` | proved | through `Check.Monitor.after`, `Service.monitored`: `Check.Monitor.complete`, `Check.Monitor.ok_iff` and 4 more |
-| `Check.Monitor.input` | proved | through `Check.Monitor.after`, `Service.monitored`: `Check.Monitor.complete`, `Check.Monitor.ok_iff` and 4 more |
-| `Check.Monitor.output` | proved | through `Check.Monitor.after`, `Service.monitored`: `Check.Monitor.complete`, `Check.Monitor.ok_iff` and 4 more |
-| `Check.Monitor.fire` | proved | through `Check.Monitor.after`, `Service.monitored`: `Check.Monitor.complete`, `Check.Monitor.ok_iff` and 4 more |
+| `Check.Monitor.start` | proved | through `Check.Monitor.after`, `Service.monitored`: `Check.Monitor.complete`, `Check.Monitor.ok_iff` and others |
+| `Check.Monitor.input` | proved | through `Check.Monitor.after`, `Service.monitored`: `Check.Monitor.complete`, `Check.Monitor.ok_iff` and others |
+| `Check.Monitor.output` | proved | through `Check.Monitor.after`, `Service.monitored`: `Check.Monitor.complete`, `Check.Monitor.ok_iff` and others |
+| `Check.Monitor.fire` | proved | through `Check.Monitor.after`, `Service.monitored`: `Check.Monitor.complete`, `Check.Monitor.ok_iff` and others |
 | `Service.monitored` | proved | `Check.refines_sound`, `Check.refines_traces`, `Service.monitored_respects` |
 | `Check.refines` | proved | `Check.refines_sound`, `Check.refines_traces` |
 
@@ -257,37 +238,37 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Check.Property.name` | proved | `Check.search_unreached` |
-| `Check.Property.holds` | proved | `Check.refines_sound`, `Check.refines_traces`, `Check.system_sound` and 1 more |
-| `Check.Trace.last` | proved | `Check.search_deadlock`, `Check.search_reached`, `Check.search_violated` and 2 more |
+| `Check.Property.holds` | proved | `Check.refines_sound`, `Check.refines_traces`, `Check.system_sound` and others |
+| `Check.Trace.last` | proved | `Check.search_deadlock`, `Check.search_reached`, `Check.search_violated` and others |
 | `Check.Trace.labels` | proved | `Check.system_violated` |
-| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Cache.lean` and 30 more |
-| `Check.Path.last` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
-| `Check.Path.toTraceAux` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
-| `Check.Path.toTrace` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
-| `Check.violation` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
-| `Check.witnessFor` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
-| `Check.witness` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
-| `Check.unwitnessed` | proved | through `Check.search`: `Check.search_deadlock`, `Check.search_deadlock_free` and 8 more |
-| `Check.Hashed.of` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
-| `Check.Hashed.instBEq` | proved | through `Check.Search`, `Check.search`: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
-| `Check.Hashed.instHashable` | proved | through `Check.Search`, `Check.search`: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
-| `Check.Search.add` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
+| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Cache.lean` and others |
+| `Check.Path.last` | proved | through `Check.Search.run`, `Check.Search.runBatches` and others: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and others |
+| `Check.Path.toTraceAux` | proved | through `Check.Search.run`, `Check.Search.runBatches` and others: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and others |
+| `Check.Path.toTrace` | proved | through `Check.Search.run`, `Check.Search.runBatches` and others: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and others |
+| `Check.violation` | proved | through `Check.Search.run`, `Check.Search.runBatches` and others: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and others |
+| `Check.witnessFor` | proved | through `Check.Search.run`, `Check.Search.runBatches` and others: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and others |
+| `Check.witness` | proved | through `Check.Search.run`, `Check.Search.runBatches` and others: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and others |
+| `Check.unwitnessed` | proved | through `Check.search`: `Check.search_deadlock`, `Check.search_deadlock_free` and others |
+| `Check.Hashed.of` | proved | through `Check.Search.run`, `Check.Search.runBatches` and others: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and others |
+| `Check.Hashed.instBEq` | proved | through `Check.Search`, `Check.search`: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and others |
+| `Check.Hashed.instHashable` | proved | through `Check.Search`, `Check.search`: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and others |
+| `Check.Search.add` | proved | through `Check.Search.run`, `Check.Search.runBatches` and others: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and others |
 | `Check.Search.contains` | checked | `Tests/Join.lean` |
-| `Check.Search.addInit` | proved | through `Check.search`: `Check.search_deadlock`, `Check.search_deadlock_free` and 8 more |
-| `Check.Search.start` | proved | through `Check.search`: `Check.search_deadlock`, `Check.search_deadlock_free` and 8 more |
-| `Check.Search.visit` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
-| `Check.Search.successors` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
-| `Check.Search.expandWith` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
-| `Check.Search.expand` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
+| `Check.Search.addInit` | proved | through `Check.search`: `Check.search_deadlock`, `Check.search_deadlock_free` and others |
+| `Check.Search.start` | proved | through `Check.search`: `Check.search_deadlock`, `Check.search_deadlock_free` and others |
+| `Check.Search.visit` | proved | through `Check.Search.run`, `Check.Search.runBatches` and others: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and others |
+| `Check.Search.successors` | proved | through `Check.Search.run`, `Check.Search.runBatches` and others: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and others |
+| `Check.Search.expandWith` | proved | through `Check.Search.run`, `Check.Search.runBatches` and others: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and others |
+| `Check.Search.expand` | proved | through `Check.Search.run`, `Check.Search.runBatches` and others: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and others |
 | `Check.Search.run` | proved | `Check.Search.explore_eq`, `Check.Search.runBatches_eq` |
-| `Check.Search.expandAll` | proved | through `Check.Search.explore`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
-| `Check.Search.mapInTasks` | proved | through `Check.Search.explore`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
-| `Check.Search.taskSize` | proved | through `Check.Search.explore`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
-| `Check.Search.batchSize` | proved | through `Check.Search.explore`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
+| `Check.Search.expandAll` | proved | through `Check.Search.explore`, `Check.Search.runBatches` and others: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and others |
+| `Check.Search.mapInTasks` | proved | through `Check.Search.explore`, `Check.Search.runBatches` and others: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and others |
+| `Check.Search.taskSize` | proved | through `Check.Search.explore`, `Check.Search.runBatches` and others: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and others |
+| `Check.Search.batchSize` | proved | through `Check.Search.explore`, `Check.Search.runBatches` and others: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and others |
 | `Check.Search.runBatches` | proved | `Check.Search.runBatches_eq` |
 | `Check.Search.explore` | proved | `Check.Search.explore_eq` |
-| `Check.Search.report` | proved | through `Check.search`: `Check.search_deadlock`, `Check.search_deadlock_free` and 8 more |
-| `Check.search` | proved | `Check.search_deadlock`, `Check.search_deadlock_free`, `Check.search_reached` and 7 more |
+| `Check.Search.report` | proved | through `Check.search`: `Check.search_deadlock`, `Check.search_deadlock_free` and others |
+| `Check.search` | proved | `Check.search_deadlock`, `Check.search_deadlock_free`, `Check.search_reached` and others |
 
 ## `Lanes/Check/SearchSound.lean`
 
@@ -306,11 +287,11 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Check.Node.of` | proved | `Scenario.reachable_iff` |
 | `Check.instBEqNodeOfInspect` | proved | `Check.Node.beq_iff` |
-| `Check.instHashableNodeOfInspect` | proved | through `Check.system`: `Check.refines_sound`, `Check.refines_traces` and 3 more |
-| `Check.Trace.map` | proved | through `Check.system`: `Check.refines_sound`, `Check.refines_traces` and 3 more |
-| `Check.Report.map` | proved | through `Check.system`: `Check.refines_sound`, `Check.refines_traces` and 3 more |
+| `Check.instHashableNodeOfInspect` | proved | through `Check.system`: `Check.refines_sound`, `Check.refines_traces` and others |
+| `Check.Trace.map` | proved | through `Check.system`: `Check.refines_sound`, `Check.refines_traces` and others |
+| `Check.Report.map` | proved | through `Check.system`: `Check.refines_sound`, `Check.refines_traces` and others |
 | `Check.model` | proved | `Scenario.reachable_iff` |
-| `Check.system` | proved | `Check.refines_sound`, `Check.refines_traces`, `Check.system_sound` and 2 more |
+| `Check.system` | proved | `Check.refines_sound`, `Check.refines_traces`, `Check.system_sound` and others |
 | `Check.Trace.render` | checked | `Tests/Election.lean`, `Tests/Tutorial.lean`, `Tests/TutorialWeb.lean` |
 | `Check.Report.render` | checked | `Tests/Election.lean`, `Tests/Tutorial.lean`, `Tests/TutorialWeb.lean` |
 | `Check.Report.renderSystem` | checked | `Tests/Election.lean`, `Tests/Tutorial.lean`, `Tests/TutorialWeb.lean` |
@@ -386,13 +367,13 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `instDecidableEqJoinMsg` | proved | its type, `Decidable` |
-| `joinSig` | proved | `Jobs.attach_active_leaves`, `Jobs.attach_within`, `Obligation.Due.of_thinRight` and 30 more |
-| `Wiring.left` | proved | through `Schedule.attach`, `SysState.over` and 5 more: `Obligation.Due.of_thinRight`, `Schedule.attach_answer_handled` and 33 more |
-| `Wiring.right` | proved | through `Schedule.attach`, `System.join` and 2 more: `Obligation.Due.of_thinRight`, `Schedule.attach_answer_handled` and 28 more |
-| `System.join` | proved | `Obligation.Due.of_thinRight`, `SysState.deliverable_of_thinRight`, `SysState.exists_block` and 23 more |
-| `Signature.withIO` | proved | `SysState.run_filterMapIO`, `System.Invariant.filterMapIO`, `System.LeadsTo.filterMapIO` and 2 more |
-| `Effect.filterMapOut` | proved | through `SysState.over`, `System.filterMapIO` and 1 more: `SysState.run_filterMapIO`, `System.Invariant.filterMapIO` and 3 more |
-| `System.filterMapIO` | proved | `SysState.run_filterMapIO`, `System.Invariant.filterMapIO`, `System.LeadsTo.filterMapIO` and 2 more |
+| `joinSig` | proved | `Jobs.attach_active_leaves`, `Jobs.attach_within`, `Obligation.Due.of_thinRight` and others |
+| `Wiring.left` | proved | through `Schedule.attach`, `SysState.over` and others: `Obligation.Due.of_thinRight`, `Schedule.attach_answer_handled` and others |
+| `Wiring.right` | proved | through `Schedule.attach`, `System.join` and others: `Obligation.Due.of_thinRight`, `Schedule.attach_answer_handled` and others |
+| `System.join` | proved | `Obligation.Due.of_thinRight`, `SysState.deliverable_of_thinRight`, `SysState.exists_block` and others |
+| `Signature.withIO` | proved | `SysState.run_filterMapIO`, `System.Invariant.filterMapIO`, `System.LeadsTo.filterMapIO` and others |
+| `Effect.filterMapOut` | proved | through `SysState.over`, `System.filterMapIO` and others: `SysState.run_filterMapIO`, `System.Invariant.filterMapIO` and others |
+| `System.filterMapIO` | proved | `SysState.run_filterMapIO`, `System.Invariant.filterMapIO`, `System.LeadsTo.filterMapIO` and others |
 | `System.mapIO` | checked | `Tests/Join.lean` |
 | `instHashableSum_lanes` | checked | `Tests/Fronted.lean`, `Tests/Jobs.lean`, `Tests/Join.lean` |
 | `Signature.Inspect.join` | checked | `Tests/Jobs.lean`, `Tests/Join.lean` |
@@ -405,7 +386,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Effect.sends` | proved | `Account.Fires.grow`, `Account.Fires.handle`, `Account.Moves.grow` and 1 more |
+| `Effect.sends` | proved | `Account.Fires.grow`, `Account.Fires.handle`, `Account.Moves.grow` and others |
 | `Effect.armed` | none |  |
 | `Effect.emits` | proved | `Schedule.leaves_answered`, `Schedule.told_of_leaves` |
 | `Effect.retime` | spec | used only in statements |
@@ -420,7 +401,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Driver.silent` | checked | `Tests/Election.lean` |
 | `Driver.script` | checked | `Tests/KV.lean` |
-| `Driver.anyOrder` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 9 more |
+| `Driver.anyOrder` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and others |
 | `World.init` | checked | `Tests/Bank.lean` |
 | `World.next` | proved | `World.Equiv.next` |
 | `simulate` | checked | `Tests/Bank.lean` |
@@ -439,13 +420,13 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Effect.isStop` | proved | `Schedule.attach_answer_handled`, `Schedule.attach_end_handled`, `SysState.mem_net_of_step` and 5 more |
+| `Effect.isStop` | proved | `Schedule.attach_answer_handled`, `Schedule.attach_end_handled`, `SysState.mem_net_of_step` and others |
 | `Effect.instDecidableEq` | proved | its type, `Decidable` |
-| `Envelope.instDecidableEq` | proved | `Account.Fires.handle`, `Account.Moves.handle`, `Account.implements` and 8 more |
+| `Envelope.instDecidableEq` | proved | `Account.Fires.handle`, `Account.Moves.handle`, `Account.implements` and others |
 | `Envelope.sameLink` | proved | through `SysState.nextOnLink`: `SysState.nextOnLink_spec` |
-| `Link.reliable` | proved | through `EnvModel.link`, `EnvModel.lossy` and 2 more: `Account.implements`, `Account.implements_timed` and 33 more |
-| `Link.network` | checked | `Tests/Bank.lean`, `Tests/Election.lean`, `Tests/Join.lean` and 1 more |
-| `Link.unordered` | checked | `Tests/Election.lean`, `Tests/Jobs.lean`, `Tests/Outside.lean` and 1 more |
+| `Link.reliable` | proved | through `EnvModel.link`, `EnvModel.lossy` and others: `Account.implements`, `Account.implements_timed` and others |
+| `Link.network` | checked | `Tests/Bank.lean`, `Tests/Election.lean`, `Tests/Join.lean` and others |
+| `Link.unordered` | checked | `Tests/Election.lean`, `Tests/Jobs.lean`, `Tests/Outside.lean` and others |
 | `EnvModel.reliable` | spec | used only in statements |
 | `EnvModel.distributed` | none |  |
 
@@ -453,21 +434,21 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `update` | proved | through `SysState.down`, `SysState.handle` and 5 more: `Account.implements`, `Account.implements_timed` and 53 more |
-| `Event.timed` | proved | `Account.implements`, `Account.implements_timed`, `Check.refines_traces` and 16 more |
+| `update` | proved | through `SysState.down`, `SysState.handle` and others: `Account.implements`, `Account.implements_timed` and others |
+| `Event.timed` | proved | `Account.implements`, `Account.implements_timed`, `Check.refines_traces` and others |
 | `Event.visible` | spec | used only in statements |
 | `SysState.blank` | proved | `System.Inductive.of_monotone`, `System.Monotone.and`, `System.Monotone.and_net` |
 | `SysState.hasMail` | proved | `SysState.hasMail_of_thinRight` |
-| `SysState.perform` | proved | through `SysState.handle`, `SysState.init` and 4 more: `Account.implements`, `Account.implements_timed` and 52 more |
-| `SysState.performAll` | proved | through `SysState.handle`, `SysState.init` and 4 more: `Account.implements`, `Account.implements_timed` and 52 more |
-| `SysState.down` | proved | `Account.implements`, `Account.implements_timed`, `System.Refines.of_events` and 2 more |
+| `SysState.perform` | proved | through `SysState.handle`, `SysState.init` and others: `Account.implements`, `Account.implements_timed` and others |
+| `SysState.performAll` | proved | through `SysState.handle`, `SysState.init` and others: `Account.implements`, `Account.implements_timed` and others |
+| `SysState.down` | proved | `Account.implements`, `Account.implements_timed`, `System.Refines.of_events` and others |
 | `SysState.settle` | proved | `SysState.Loses.settle` |
 | `SysState.handle` | proved | `Http.fronted_handle_arrive`, `Http.served_handle_arrive` |
-| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and 2 more: `Account.implements`, `Account.implements_timed` and 49 more |
-| `SysState.deliverable` | proved | `Account.implements`, `Account.implements_timed`, `SysState.deliverable_of_thinRight` and 4 more |
-| `SysState.step` | proved | `Http.Gate.answered_of_leaves`, `Http.Gate.deadline_not_restarted`, `Outside.Beside.keeps` and 13 more |
-| `SysState.init` | proved | `Account.implements`, `Account.implements_timed`, `Check.system_violated` and 28 more |
-| `SysState.run` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and 20 more |
+| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and others: `Account.implements`, `Account.implements_timed` and others |
+| `SysState.deliverable` | proved | `Account.implements`, `Account.implements_timed`, `SysState.deliverable_of_thinRight` and others |
+| `SysState.step` | proved | `Http.Gate.answered_of_leaves`, `Http.Gate.deadline_not_restarted`, `Outside.Beside.keeps` and others |
+| `SysState.init` | proved | `Account.implements`, `Account.implements_timed`, `Check.system_violated` and others |
+| `SysState.run` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and others |
 | `System.Invariant` | spec | a predicate |
 
 ## `Lanes/Data/Codec.lean`
@@ -487,7 +468,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Codec.int` | proved | its type, `Codec` |
 | `Codec.sum` | proved | its type, `Codec` |
 | `Codec.option` | proved | its type, `Codec` |
-| `Codec.readMany` | tested | `Tests/Codec.lean`, `Tests/Durable.lean`, `Tests/MonitorSpeed.lean` and 4 more |
+| `Codec.readMany` | tested | `Tests/Codec.lean`, `Tests/Durable.lean`, `Tests/MonitorSpeed.lean` and others |
 | `Codec.list` | proved | its type, `Codec` |
 | `Codec.extTreeMap` | proved | its type, `Codec` |
 | `Codable.instByteArray` | proved | its type, `Codable` |
@@ -567,13 +548,13 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Journal.Disk.apply` | proved | `Journal.Disk.Holds.append`, `Journal.Disk.Holds.save`, `Journal.Disk.Torn.mend` and 1 more |
-| `Journal.Disk.crash` | proved | `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash` and 3 more |
+| `Journal.Disk.apply` | proved | `Journal.Disk.Holds.append`, `Journal.Disk.Holds.save`, `Journal.Disk.Torn.mend` and others |
+| `Journal.Disk.crash` | proved | `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash` and others |
 | `Journal.Disk.Found.index` | proved | `Journal.Disk.Torn.read` |
-| `Journal.Disk.read` | proved | `Journal.Disk.Torn.mend`, `Journal.Disk.Torn.mend_crash`, `Journal.Disk.Torn.read` and 2 more |
+| `Journal.Disk.read` | proved | `Journal.Disk.Torn.mend`, `Journal.Disk.Torn.mend_crash`, `Journal.Disk.Torn.read` and others |
 | `Journal.Disk.start` | proved | `Journal.Disk.read_of_start`, `Journal.Disk.start_foreign` |
 | `Journal.Disk.mend` | proved | `Journal.Disk.Torn.mend`, `Journal.Disk.Torn.mend_crash` |
-| `Journal.Disk.load` | proved | `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Torn.load` and 3 more |
+| `Journal.Disk.load` | proved | `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Torn.load` and others |
 | `Journal.appendWrites` | proved | `Journal.Disk.Holds.append`, `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash` |
 | `Journal.saveWrites` | proved | `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save`, `Journal.Disk.Holds.save_crash` |
 | `Journal.memo` | spec | used only in statements |
@@ -584,13 +565,13 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Frame.fits` | proved | `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save`, `Journal.Disk.Holds.save_crash` and 10 more |
+| `Frame.fits` | proved | `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save`, `Journal.Disk.Holds.save_crash` and others |
 | `Frame.checksum` | proved | `Frame.decode_checksum_ne` |
 | `Frame.stamped` | proved | `Frame.decode_checksum_ne` |
-| `Frame.one` | proved | through `Frame.encode`: `Frame.decode_checksum_ne`, `Frame.decode_encode` and 4 more |
-| `Frame.encode` | proved | `Frame.decode_checksum_ne`, `Frame.decode_encode`, `Frame.decode_take` and 3 more |
-| `Frame.decode` | proved | `Frame.decode_checksum_ne`, `Frame.decode_encode`, `Frame.decode_extract_prefix` and 7 more |
-| `Frame.whole` | proved | `Frame.decode_take_eq`, `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash` and 3 more |
+| `Frame.one` | proved | through `Frame.encode`: `Frame.decode_checksum_ne`, `Frame.decode_encode` and others |
+| `Frame.encode` | proved | `Frame.decode_checksum_ne`, `Frame.decode_encode`, `Frame.decode_take` and others |
+| `Frame.decode` | proved | `Frame.decode_checksum_ne`, `Frame.decode_encode`, `Frame.decode_extract_prefix` and others |
+| `Frame.whole` | proved | `Frame.decode_take_eq`, `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash` and others |
 | `Frame.span` | proved | `Journal.open?_cut`, `Parcel.receive_send` |
 | `Frame.unfinished` | none |  |
 
@@ -606,25 +587,25 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Journal.Entry.codec` | proved | its type, `Codec` |
-| `Journal.Entry.bytes` | proved | through `Journal.Entry.fits`, `Journal.encode`: `Journal.Disk.Holds.append`, `Journal.Disk.Holds.append_crash` and 10 more |
-| `Journal.Entry.ofBytes` | proved | through `Journal.open?`: `Journal.Disk.open?_of_read`, `Journal.open?_cut` and 1 more |
-| `Journal.Entry.fits` | proved | `Journal.Disk.Holds.append`, `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash` and 9 more |
-| `Journal.write` | proved | `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.load_cut` and 1 more |
-| `Journal.read` | proved | through `Journal.open?`: `Journal.Disk.open?_of_read`, `Journal.open?_cut` and 1 more |
+| `Journal.Entry.bytes` | proved | through `Journal.Entry.fits`, `Journal.encode`: `Journal.Disk.Holds.append`, `Journal.Disk.Holds.append_crash` and others |
+| `Journal.Entry.ofBytes` | proved | through `Journal.open?`: `Journal.Disk.open?_of_read`, `Journal.open?_cut` and others |
+| `Journal.Entry.fits` | proved | `Journal.Disk.Holds.append`, `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash` and others |
+| `Journal.write` | proved | `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.load_cut` and others |
+| `Journal.read` | proved | through `Journal.open?`: `Journal.Disk.open?_of_read`, `Journal.open?_cut` and others |
 | `Journal.encode` | proved | `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save_crash` |
-| `Journal.header` | proved | `Journal.Disk.load_cut`, `Journal.Disk.start_foreign`, `Journal.Disk.torn_nil` and 7 more |
+| `Journal.header` | proved | `Journal.Disk.load_cut`, `Journal.Disk.start_foreign`, `Journal.Disk.torn_nil` and others |
 | `Journal.label` | proved | `Journal.label_zero` |
 | `Journal.named?` | proved | `Journal.Disk.start_foreign` |
 | `Journal.file` | proved | `Journal.Disk.load_cut`, `Journal.open?_cut`, `Journal.open?_file` |
 | `Journal.open?` | proved | `Journal.Disk.open?_of_read`, `Journal.open?_cut`, `Journal.open?_file` |
-| `Journal.Entry.op?` | proved | through `Journal.ops`: `Journal.recover_handed`, `Journal.recover_kernel` and 4 more |
+| `Journal.Entry.op?` | proved | through `Journal.ops`: `Journal.recover_handed`, `Journal.recover_kernel` and others |
 | `Journal.Entry.marks` | spec | used only in statements |
-| `Journal.ops` | proved | `Journal.recover_handed`, `Journal.recover_kernel`, `Journal.recover_outputs` and 3 more |
-| `Journal.replay1` | proved | through `Journal.Begun.toFound`, `Journal.recover` and 4 more: `Journal.Begun.resume_upgraded`, `Journal.Disk.Holds.load_append_crash` and 20 more |
-| `Journal.recover` | proved | `Journal.Disk.load_cut`, `Journal.Upgrade.begin_crash`, `Journal.Upgrade.begin_torn` and 7 more |
-| `Journal.replay` | proved | `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save` and 5 more |
-| `Journal.Entry.savedAt` | proved | `Journal.Disk.Holds.append`, `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash` and 3 more |
-| `Journal.since` | proved | through `Journal.Begun.load`, `Journal.Begun.toFound` and 1 more: `Journal.Begun.resume_upgraded`, `Journal.Upgrade.begin_crash` and 2 more |
+| `Journal.ops` | proved | `Journal.recover_handed`, `Journal.recover_kernel`, `Journal.recover_outputs` and others |
+| `Journal.replay1` | proved | through `Journal.Begun.toFound`, `Journal.recover` and others: `Journal.Begun.resume_upgraded`, `Journal.Disk.Holds.load_append_crash` and others |
+| `Journal.recover` | proved | `Journal.Disk.load_cut`, `Journal.Upgrade.begin_crash`, `Journal.Upgrade.begin_torn` and others |
+| `Journal.replay` | proved | `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save` and others |
+| `Journal.Entry.savedAt` | proved | `Journal.Disk.Holds.append`, `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash` and others |
+| `Journal.since` | proved | through `Journal.Begun.load`, `Journal.Begun.toFound` and others: `Journal.Begun.resume_upgraded`, `Journal.Upgrade.begin_crash` and others |
 | `Journal.resume` | proved | `Journal.Begun.resume_upgraded`, `Journal.resume_eq_recover`, `Journal.resume_eq_replay` |
 | `Journal.turn` | proved | through `Journal.turns`: `Journal.turns_kernel` |
 | `Journal.turnAll` | proved | `Journal.turnAll_eq_exec`, `Journal.turnAll_spread` |
@@ -635,9 +616,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Migration.cell` | proved | `Migration.cell_kernel` |
-| `Migration.envelope` | proved | through `Migration.kernel`: `Journal.Upgrade.begin_crash`, `Journal.Upgrade.inv_load` and 4 more |
-| `Migration.image` | proved | through `Migration.kernel`: `Journal.Upgrade.begin_crash`, `Journal.Upgrade.inv_load` and 4 more |
-| `Migration.kernel` | proved | `Journal.Upgrade.begin_crash`, `Journal.Upgrade.inv_load`, `Migration.cell_kernel` and 3 more |
+| `Migration.envelope` | proved | through `Migration.kernel`: `Journal.Upgrade.begin_crash`, `Journal.Upgrade.inv_load` and others |
+| `Migration.image` | proved | through `Migration.kernel`: `Journal.Upgrade.begin_crash`, `Journal.Upgrade.inv_load` and others |
+| `Migration.kernel` | proved | `Journal.Upgrade.begin_crash`, `Journal.Upgrade.inv_load`, `Migration.cell_kernel` and others |
 
 ## `Lanes/Durable/Reading.lean`
 
@@ -656,7 +637,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Kernel.Image.Codecs.envelope` | proved | its type, `Codec` |
 | `Kernel.Image.Codecs.image` | proved | its type, `Codec` |
 | `Journal.savedHeader` | proved | `Journal.savedHeader_inj` |
-| `Journal.savedRecords` | proved | `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save`, `Journal.Disk.Holds.save_crash` and 4 more |
+| `Journal.savedRecords` | proved | `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save`, `Journal.Disk.Holds.save_crash` and others |
 | `Journal.saved` | proved | `Journal.saved?_other`, `Journal.saved?_saved` |
 | `Journal.saved?` | proved | `Journal.saved?_other`, `Journal.saved?_saved` |
 
@@ -752,7 +733,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Der.rsaAlgorithm` | proved | through `PublicKey.ofSpki?`: `PublicKey.ofSpki?_spki` |
 | `Der.p256Algorithm` | proved | through `PublicKey.ofSpki?`: `PublicKey.ofSpki?_spki` |
 | `Der.read?` | proved | through `PublicKey.ofSpki?`: `PublicKey.ofSpki?_spki` |
-| `PublicKey.rsaSize` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Jose.lean`, `Tests/Sign.lean` and 1 more |
+| `PublicKey.rsaSize` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Jose.lean`, `Tests/Sign.lean` and others |
 | `PublicKey.valid` | proved | through `PublicKey.ofSpki?`: `PublicKey.ofSpki?_spki` |
 | `PublicKey.spki` | proved | `PublicKey.ofSpki?_spki` |
 | `PublicKey.derSignature` | tested | `Tests/Sign.lean`, `Tests/Signature.lean` |
@@ -760,9 +741,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `PublicKey.lines` | tested | `Tests/Sign.lean` |
 | `PublicKey.pem` | tested | `Tests/Sign.lean` |
 | `Rsa.powMod` | proved | `Rsa.powMod_eq` |
-| `Rsa.digestInfo` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Jose.lean`, `Tests/Sign.lean` and 1 more |
-| `Rsa.encode` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Jose.lean`, `Tests/Sign.lean` and 1 more |
-| `Rsa.verifyReference` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Jose.lean`, `Tests/Sign.lean` and 1 more |
+| `Rsa.digestInfo` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Jose.lean`, `Tests/Sign.lean` and others |
+| `Rsa.encode` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Jose.lean`, `Tests/Sign.lean` and others |
+| `Rsa.verifyReference` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Jose.lean`, `Tests/Sign.lean` and others |
 
 ## `Lanes/Lib/Crypto/Sha256.lean`
 
@@ -820,25 +801,25 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Base64.Alphabet.last` | proved | through `Base64.decode`, `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 6 more |
-| `Base64.Alphabet.code` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 4 more |
-| `Base64.Alphabet.char` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 4 more |
-| `Base64.Alphabet.valueOf` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
-| `Base64.Alphabet.value?` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
+| `Base64.Alphabet.last` | proved | through `Base64.decode`, `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and others |
+| `Base64.Alphabet.code` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and others |
+| `Base64.Alphabet.char` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and others |
+| `Base64.Alphabet.valueOf` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and others |
+| `Base64.Alphabet.value?` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and others |
 | `Base64.Encoding.std` | proved | `Postgres.Conn.onMessage_binds`, `Postgres.Scram.respond_binds` |
 | `Base64.Encoding.rawStd` | tested | `Tests/Crypto.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
 | `Base64.Encoding.url` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
-| `Base64.Encoding.rawUrl` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean`, `Tests/Oracle/Jose.lean` and 1 more |
-| `Base64.sextet` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 4 more |
-| `Base64.byte` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
-| `Base64.pad` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 4 more |
-| `Base64.encodeList` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 4 more |
-| `Base64.full` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
-| `Base64.tail1` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
-| `Base64.tail2` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
-| `Base64.decodeList` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
-| `Base64.encode` | proved | `Base64.allowed_of_mem_encode`, `Base64.decode_encode`, `Base64.decode_eq_some_iff` and 3 more |
-| `Base64.decode` | proved | `Base64.decode_encode`, `Base64.decode_eq_none_of_length`, `Base64.decode_eq_none_of_not_allowed` and 1 more |
+| `Base64.Encoding.rawUrl` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean`, `Tests/Oracle/Jose.lean` and others |
+| `Base64.sextet` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and others |
+| `Base64.byte` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and others |
+| `Base64.pad` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and others |
+| `Base64.encodeList` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and others |
+| `Base64.full` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and others |
+| `Base64.tail1` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and others |
+| `Base64.tail2` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and others |
+| `Base64.decodeList` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and others |
+| `Base64.encode` | proved | `Base64.allowed_of_mem_encode`, `Base64.decode_encode`, `Base64.decode_eq_some_iff` and others |
+| `Base64.decode` | proved | `Base64.decode_encode`, `Base64.decode_eq_none_of_length`, `Base64.decode_eq_none_of_not_allowed` and others |
 | `Base64.Encoding.Allowed` | spec | a predicate |
 | `Base64.encodedLength` | spec | used only in statements |
 
@@ -849,7 +830,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Digits.join` | proved | `Digits.join_split` |
 | `Digits.split` | proved | `Digits.join_split` |
 | `Digits.digits` | proved | through `Digits.toChars`: `Digits.head_toChars`, `Digits.ofChars?_toChars` |
-| `Digits.char` | proved | through `Digits.fixed`, `Digits.toChars`: `Digits.head_toChars`, `Digits.ofChars?_fixed` and 1 more |
+| `Digits.char` | proved | through `Digits.fixed`, `Digits.toChars`: `Digits.head_toChars`, `Digits.ofChars?_fixed` and others |
 | `Digits.valueOf` | proved | through `Digits.ofChars?`: `Digits.ofChars?_fixed`, `Digits.ofChars?_toChars` |
 | `Digits.value?` | proved | through `Digits.ofChars?`: `Digits.ofChars?_fixed`, `Digits.ofChars?_toChars` |
 | `Digits.lower` | spec | used only in statements |
@@ -862,13 +843,13 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `JsonNumber.ofDecimal` | proved | through `JsonNumber.fromInt`, `JsonNumber.fromNat` and 1 more: `Json.getInt?_eq_ok`, `Json.getNat?_eq_ok` and 1 more |
+| `JsonNumber.ofDecimal` | proved | through `JsonNumber.fromInt`, `JsonNumber.fromNat` and others: `Json.getInt?_eq_ok`, `Json.getNat?_eq_ok` and others |
 | `JsonNumber.fromInt` | proved | `Json.getInt?_eq_ok` |
 | `JsonNumber.fromNat` | proved | `Json.getNat?_eq_ok` |
 | `JsonNumber.ofScientific` | proved | `Json.ofScientific_mantissa` |
 | `JsonNumber.instCoeNat` | none |  |
 | `JsonNumber.instCoeInt` | none |  |
-| `JsonNumber.instOfNat` | tested | `Tests/Json.lean`, `Tests/Ops.lean`, `Tests/Oracle/All.lean` and 1 more |
+| `JsonNumber.instOfNat` | tested | `Tests/Json.lean`, `Tests/Ops.lean`, `Tests/Oracle/All.lean` and others |
 | `JsonNumber.instInhabited` | none |  |
 | `JsonNumber.instOfScientific` | tested | `Tests/Json.lean` |
 | `JsonNumber.instNeg` | tested | `Tests/Json.lean` |
@@ -895,8 +876,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Json.instCoeString` | none |  |
 | `Json.instCoeBool` | none |  |
 | `Json.instOfNat` | tested | `Tests/Json.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` |
-| `Json.sortFields` | proved | through `Json.depth`, `Json.mkObj` and 1 more: `Http.Ops.Access.parse_line`, `Json.getObjVal?_mkObj` and 7 more |
-| `Json.dedupFields` | proved | through `Json.depth`, `Json.mkObj` and 1 more: `Http.Ops.Access.parse_line`, `Json.getObjVal?_mkObj` and 7 more |
+| `Json.sortFields` | proved | through `Json.depth`, `Json.mkObj` and others: `Http.Ops.Access.parse_line`, `Json.getObjVal?_mkObj` and others |
+| `Json.dedupFields` | proved | through `Json.depth`, `Json.mkObj` and others: `Http.Ops.Access.parse_line`, `Json.getObjVal?_mkObj` and others |
 | `Json.duplicateKey?` | tested | `Tests/Json.lean` |
 | `Json.mkObj` | proved | `Json.getObjVal?_mkObj` |
 | `Json.mkObj?` | tested | `Tests/Json.lean` |
@@ -908,9 +889,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Json.getNat?` | proved | `Json.getNat?_eq_ok` |
 | `Json.getInt?` | proved | `Json.getInt?_eq_ok` |
 | `Json.getBool?` | proved | `Json.getBool?_eq_ok` |
-| `Json.getObjVal?` | proved | `Jose.Compact.read_alg`, `Jose.readHeader_alg`, `Jose.verify_ok` and 3 more |
+| `Json.getObjVal?` | proved | `Jose.Compact.read_alg`, `Jose.readHeader_alg`, `Jose.verify_ok` and others |
 | `Json.getArrVal?` | proved | `Json.getArrVal?_eq_ok` |
-| `Json.getObjValD` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` and 4 more |
+| `Json.getObjValD` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` and others |
 
 ## `Lanes/Lib/Encoding/Json/Classes.lean`
 
@@ -966,33 +947,33 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Json.Parser.fail` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
-| `Json.Parser.next?` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
-| `Json.Parser.accept` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
-| `Json.Parser.skipWsFrom` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
-| `Json.Parser.skipWs` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
-| `Json.Parser.acceptAll` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
-| `Json.Parser.hexDigit?` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
-| `Json.Parser.hexDigit` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
-| `Json.Parser.hex4` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
-| `Json.Parser.lowSurrogate` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
-| `Json.Parser.escape` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
-| `Json.Parser.strFrom` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
-| `Json.Parser.str` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
-| `Json.Parser.digitsFrom` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
-| `Json.Parser.whole` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
-| `Json.Parser.fraction` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
-| `Json.Parser.exponentDigits` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
-| `Json.Parser.exponent` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
-| `Json.Parser.unsigned` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
-| `Json.Parser.num` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
-| `Json.Parser.literal` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
-| `Json.Parser.key` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
-| `Json.Parser.value` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.fail` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and others |
+| `Json.Parser.next?` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and others |
+| `Json.Parser.accept` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and others |
+| `Json.Parser.skipWsFrom` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and others |
+| `Json.Parser.skipWs` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and others |
+| `Json.Parser.acceptAll` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and others |
+| `Json.Parser.hexDigit?` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and others |
+| `Json.Parser.hexDigit` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and others |
+| `Json.Parser.hex4` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and others |
+| `Json.Parser.lowSurrogate` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and others |
+| `Json.Parser.escape` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and others |
+| `Json.Parser.strFrom` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and others |
+| `Json.Parser.str` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and others |
+| `Json.Parser.digitsFrom` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and others |
+| `Json.Parser.whole` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and others |
+| `Json.Parser.fraction` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and others |
+| `Json.Parser.exponentDigits` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and others |
+| `Json.Parser.exponent` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and others |
+| `Json.Parser.unsigned` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and others |
+| `Json.Parser.num` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and others |
+| `Json.Parser.literal` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and others |
+| `Json.Parser.key` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and others |
+| `Json.Parser.value` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and others |
 | `Json.Parser.elements` | spec | used only in statements |
 | `Json.Parser.fields` | spec | used only in statements |
-| `Json.Parser.document` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
-| `Json.parse` | proved | `Http.Ops.Access.parse_line`, `Json.parse_complete`, `Json.parse_compress` and 3 more |
+| `Json.Parser.document` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and others |
+| `Json.parse` | proved | `Http.Ops.Access.parse_line`, `Json.parse_complete`, `Json.parse_compress` and others |
 
 ## `Lanes/Lib/Encoding/Json/ParserSound.lean`
 
@@ -1011,15 +992,15 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Json.needsEscape` | proved | through `Json.compress`, `Json.pretty`: `Json.fromUTF8?_compress`, `Json.fromUTF8?_pretty` and 4 more |
-| `Json.escapeChar` | proved | through `Json.compress`, `Json.pretty`: `Json.fromUTF8?_compress`, `Json.fromUTF8?_pretty` and 4 more |
-| `Json.escape` | proved | through `Json.compress`, `Json.pretty`: `Json.fromUTF8?_compress`, `Json.fromUTF8?_pretty` and 4 more |
-| `Json.renderString` | proved | through `Json.compress`, `Json.pretty`: `Json.fromUTF8?_compress`, `Json.fromUTF8?_pretty` and 4 more |
-| `Json.separate` | proved | through `Json.compress`, `Json.pretty`: `Json.fromUTF8?_compress`, `Json.fromUTF8?_pretty` and 4 more |
-| `Json.compressTo` | proved | through `Json.compress`, `Json.pretty`: `Json.fromUTF8?_compress`, `Json.fromUTF8?_pretty` and 4 more |
+| `Json.needsEscape` | proved | through `Json.compress`, `Json.pretty`: `Json.fromUTF8?_compress`, `Json.fromUTF8?_pretty` and others |
+| `Json.escapeChar` | proved | through `Json.compress`, `Json.pretty`: `Json.fromUTF8?_compress`, `Json.fromUTF8?_pretty` and others |
+| `Json.escape` | proved | through `Json.compress`, `Json.pretty`: `Json.fromUTF8?_compress`, `Json.fromUTF8?_pretty` and others |
+| `Json.renderString` | proved | through `Json.compress`, `Json.pretty`: `Json.fromUTF8?_compress`, `Json.fromUTF8?_pretty` and others |
+| `Json.separate` | proved | through `Json.compress`, `Json.pretty`: `Json.fromUTF8?_compress`, `Json.fromUTF8?_pretty` and others |
+| `Json.compressTo` | proved | through `Json.compress`, `Json.pretty`: `Json.fromUTF8?_compress`, `Json.fromUTF8?_pretty` and others |
 | `Json.compress` | proved | `Json.fromUTF8?_compress`, `Json.parse_compress`, `Json.text_compress` |
-| `Json.newline` | proved | through `Json.pretty`: `Json.fromUTF8?_pretty`, `Json.parse_pretty` and 1 more |
-| `Json.prettyTo` | proved | through `Json.pretty`: `Json.fromUTF8?_pretty`, `Json.parse_pretty` and 1 more |
+| `Json.newline` | proved | through `Json.pretty`: `Json.fromUTF8?_pretty`, `Json.parse_pretty` and others |
+| `Json.prettyTo` | proved | through `Json.pretty`: `Json.fromUTF8?_pretty`, `Json.parse_pretty` and others |
 | `Json.pretty` | proved | `Json.fromUTF8?_pretty`, `Json.parse_pretty`, `Json.text_pretty` |
 | `Json.instToString` | none |  |
 
@@ -1057,19 +1038,19 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `MediaType.token` | proved | through `MediaType.parse`: `MediaType.parse_format`, `MediaType.parse_format_eq` and 1 more |
-| `MediaType.skipWs` | proved | through `MediaType.parse`: `MediaType.parse_format`, `MediaType.parse_format_eq` and 1 more |
-| `MediaType.value` | proved | through `MediaType.parse`: `MediaType.parse_format`, `MediaType.parse_format_eq` and 1 more |
-| `MediaType.parseParams` | proved | through `MediaType.parse`: `MediaType.parse_format`, `MediaType.parse_format_eq` and 1 more |
-| `MediaType.parseRaw` | proved | through `MediaType.parse`: `MediaType.parse_format`, `MediaType.parse_format_eq` and 1 more |
-| `MediaType.isToken` | proved | through `MediaType.format`, `MediaType.valid`: `MediaType.parse_format`, `MediaType.parse_format_eq` and 1 more |
-| `MediaType.names` | proved | through `MediaType.format`, `MediaType.lower`: `MediaType.parse_format`, `MediaType.parse_format_eq` and 1 more |
+| `MediaType.token` | proved | through `MediaType.parse`: `MediaType.parse_format`, `MediaType.parse_format_eq` and others |
+| `MediaType.skipWs` | proved | through `MediaType.parse`: `MediaType.parse_format`, `MediaType.parse_format_eq` and others |
+| `MediaType.value` | proved | through `MediaType.parse`: `MediaType.parse_format`, `MediaType.parse_format_eq` and others |
+| `MediaType.parseParams` | proved | through `MediaType.parse`: `MediaType.parse_format`, `MediaType.parse_format_eq` and others |
+| `MediaType.parseRaw` | proved | through `MediaType.parse`: `MediaType.parse_format`, `MediaType.parse_format_eq` and others |
+| `MediaType.isToken` | proved | through `MediaType.format`, `MediaType.valid`: `MediaType.parse_format`, `MediaType.parse_format_eq` and others |
+| `MediaType.names` | proved | through `MediaType.format`, `MediaType.lower`: `MediaType.parse_format`, `MediaType.parse_format_eq` and others |
 | `MediaType.valid` | proved | `MediaType.parse_format`, `MediaType.parse_format_eq` |
 | `MediaType.lower` | proved | `MediaType.parse_format`, `MediaType.parse_format_eq` |
 | `MediaType.parse` | proved | `MediaType.parse_format`, `MediaType.parse_format_eq`, `MediaType.parse_print` |
-| `MediaType.quote` | proved | through `MediaType.format`: `MediaType.parse_format`, `MediaType.parse_format_eq` and 1 more |
-| `MediaType.valueChars` | proved | through `MediaType.format`: `MediaType.parse_format`, `MediaType.parse_format_eq` and 1 more |
-| `MediaType.chars` | proved | through `MediaType.format`: `MediaType.parse_format`, `MediaType.parse_format_eq` and 1 more |
+| `MediaType.quote` | proved | through `MediaType.format`: `MediaType.parse_format`, `MediaType.parse_format_eq` and others |
+| `MediaType.valueChars` | proved | through `MediaType.format`: `MediaType.parse_format`, `MediaType.parse_format_eq` and others |
+| `MediaType.chars` | proved | through `MediaType.format`: `MediaType.parse_format`, `MediaType.parse_format_eq` and others |
 | `MediaType.format` | proved | `MediaType.parse_format`, `MediaType.parse_format_eq`, `MediaType.parse_print` |
 
 ## `Lanes/Lib/Mime/MediaTypeSound.lean`
@@ -1084,29 +1065,29 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Ip.octet?` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 4 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 7 more |
-| `Ip.parse4` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 4 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 7 more |
-| `Ip.print4` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
-| `Ip.hexGroup?` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 4 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 7 more |
-| `Ip.groups?` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 4 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 7 more |
-| `Ip.expand` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 4 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 7 more |
-| `Ip.fields?` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 4 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 7 more |
+| `Ip.octet?` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and others: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and others |
+| `Ip.parse4` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and others: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and others |
+| `Ip.print4` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and others: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and others |
+| `Ip.hexGroup?` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and others: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and others |
+| `Ip.groups?` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and others: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and others |
+| `Ip.expand` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and others: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and others |
+| `Ip.fields?` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and others: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and others |
 | `Ip.parse6` | proved | through `Ip.Prefix.parse`, `Ip.parse`: `Ip.Prefix.parse_print`, `Ip.parse_print` |
 | `Ip.parse` | proved | `Ip.parse_print` |
-| `Ip.zeroRun` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 4 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 7 more |
+| `Ip.zeroRun` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and others: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and others |
 | `Ip.runAt` | proved | `Ip.longestZeroRun_none`, `Ip.longestZeroRun_some` |
 | `Ip.longestZeroRun` | proved | `Ip.longestZeroRun_none`, `Ip.longestZeroRun_some` |
-| `Ip.withEllipsis` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
-| `Ip.hexFields` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
-| `Ip.fields` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
-| `Ip.mappedPrefix` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
-| `Ip.print6` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
+| `Ip.withEllipsis` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and others: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and others |
+| `Ip.hexFields` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and others: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and others |
+| `Ip.fields` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and others: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and others |
+| `Ip.mappedPrefix` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and others: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and others |
+| `Ip.print6` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and others: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and others |
 | `Ip.print` | proved | `Ip.parse_print` |
 | `Ip.Found` | spec | a predicate |
 | `Ip.Addr.width` | proved | `Ip.Prefix.contains_iff` |
 | `Ip.Addr.toNat` | spec | used only in statements |
-| `Ip.mask` | proved | through `Ip.Prefix.contains`, `Ip.Prefix.masked`: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 1 more |
-| `Ip.Addr.masked` | proved | through `Ip.Prefix.contains`, `Ip.Prefix.masked`: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 1 more |
+| `Ip.mask` | proved | through `Ip.Prefix.contains`, `Ip.Prefix.masked`: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and others |
+| `Ip.Addr.masked` | proved | through `Ip.Prefix.contains`, `Ip.Prefix.masked`: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and others |
 | `Ip.Prefix.masked` | proved | `Ip.Prefix.contains_masked`, `Ip.Prefix.masked_masked` |
 | `Ip.Prefix.contains` | proved | `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` |
 | `Ip.Prefix.print` | proved | `Ip.Prefix.parse_print` |
@@ -1118,44 +1099,44 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Url.isAlpha` | proved | through `Url.normalize`, `Url.parse` and 1 more: `Tests.Oracle.Url.resolve_examples`, `Url.normalize_normalize` and 2 more |
-| `Url.isDigit` | proved | through `Url.normalize`, `Url.parse` and 1 more: `Tests.Oracle.Url.resolve_examples`, `Url.normalize_normalize` and 2 more |
-| `Url.isHex` | proved | through `Url.normalize`, `Url.parse` and 1 more: `Tests.Oracle.Url.resolve_examples`, `Url.normalize_normalize` and 2 more |
-| `Url.isUnreserved` | proved | through `Url.normalize`, `Url.parse` and 1 more: `Tests.Oracle.Url.resolve_examples`, `Url.normalize_normalize` and 2 more |
-| `Url.isSubDelim` | proved | through `Url.normalize`, `Url.parse` and 1 more: `Tests.Oracle.Url.resolve_examples`, `Url.normalize_normalize` and 2 more |
-| `Url.isPchar` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
-| `Url.isPathChar` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
-| `Url.isQueryChar` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
-| `Url.isUserChar` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
-| `Url.isNameChar` | proved | through `Url.normalize`, `Url.parse` and 1 more: `Tests.Oracle.Url.resolve_examples`, `Url.normalize_normalize` and 2 more |
-| `Url.isSchemeChar` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
-| `Url.encoded` | proved | through `Url.normalize`, `Url.parse` and 1 more: `Tests.Oracle.Url.resolve_examples`, `Url.normalize_normalize` and 2 more |
-| `Url.lowerChar` | proved | through `Url.normalize`, `Url.parse` and 1 more: `Tests.Oracle.Url.resolve_examples`, `Url.normalize_normalize` and 2 more |
-| `Url.lower` | proved | through `Url.normalize`, `Url.parse` and 1 more: `Tests.Oracle.Url.resolve_examples`, `Url.normalize_normalize` and 2 more |
-| `Url.schemeOk` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
-| `Url.Host.chars` | proved | through `Url.print`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
-| `Url.Authority.chars` | proved | through `Url.print`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
-| `Url.pathChars` | proved | through `Url.print`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
-| `Url.chars` | proved | through `Url.print`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
+| `Url.isAlpha` | proved | through `Url.normalize`, `Url.parse` and others: `Tests.Oracle.Url.resolve_examples`, `Url.normalize_normalize` and others |
+| `Url.isDigit` | proved | through `Url.normalize`, `Url.parse` and others: `Tests.Oracle.Url.resolve_examples`, `Url.normalize_normalize` and others |
+| `Url.isHex` | proved | through `Url.normalize`, `Url.parse` and others: `Tests.Oracle.Url.resolve_examples`, `Url.normalize_normalize` and others |
+| `Url.isUnreserved` | proved | through `Url.normalize`, `Url.parse` and others: `Tests.Oracle.Url.resolve_examples`, `Url.normalize_normalize` and others |
+| `Url.isSubDelim` | proved | through `Url.normalize`, `Url.parse` and others: `Tests.Oracle.Url.resolve_examples`, `Url.normalize_normalize` and others |
+| `Url.isPchar` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and others |
+| `Url.isPathChar` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and others |
+| `Url.isQueryChar` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and others |
+| `Url.isUserChar` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and others |
+| `Url.isNameChar` | proved | through `Url.normalize`, `Url.parse` and others: `Tests.Oracle.Url.resolve_examples`, `Url.normalize_normalize` and others |
+| `Url.isSchemeChar` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and others |
+| `Url.encoded` | proved | through `Url.normalize`, `Url.parse` and others: `Tests.Oracle.Url.resolve_examples`, `Url.normalize_normalize` and others |
+| `Url.lowerChar` | proved | through `Url.normalize`, `Url.parse` and others: `Tests.Oracle.Url.resolve_examples`, `Url.normalize_normalize` and others |
+| `Url.lower` | proved | through `Url.normalize`, `Url.parse` and others: `Tests.Oracle.Url.resolve_examples`, `Url.normalize_normalize` and others |
+| `Url.schemeOk` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and others |
+| `Url.Host.chars` | proved | through `Url.print`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and others |
+| `Url.Authority.chars` | proved | through `Url.print`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and others |
+| `Url.pathChars` | proved | through `Url.print`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and others |
+| `Url.chars` | proved | through `Url.print`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and others |
 | `Url.print` | proved | `Url.parse_print`, `Url.parse_print_of_valid` |
-| `Url.cut` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
-| `Url.breakSlash` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
-| `Url.schemeEnd` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
-| `Url.parseHost` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
-| `Url.parseAuthority` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
-| `Url.parseRaw` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
-| `Url.Host.valid` | proved | through `Url.normalize`, `Url.parse` and 1 more: `Tests.Oracle.Url.resolve_examples`, `Url.normalize_normalize` and 2 more |
-| `Url.Authority.valid` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
-| `Url.pathFits` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
+| `Url.cut` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and others |
+| `Url.breakSlash` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and others |
+| `Url.schemeEnd` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and others |
+| `Url.parseHost` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and others |
+| `Url.parseAuthority` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and others |
+| `Url.parseRaw` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and others |
+| `Url.Host.valid` | proved | through `Url.normalize`, `Url.parse` and others: `Tests.Oracle.Url.resolve_examples`, `Url.normalize_normalize` and others |
+| `Url.Authority.valid` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and others |
+| `Url.pathFits` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and others |
 | `Url.valid` | proved | `Url.parse_print_of_valid` |
 | `Url.parse` | proved | `Url.parse_print`, `Url.parse_print_of_valid` |
-| `Url.dots` | proved | through `Url.normalize`, `Url.removeDots` and 2 more: `Tests.Oracle.Url.resolve_examples`, `Url.dotFree_removeDots` and 6 more |
-| `Url.piece` | proved | through `Url.normalize`, `Url.removeDots` and 2 more: `Tests.Oracle.Url.resolve_examples`, `Url.dotFree_removeDots` and 6 more |
-| `Url.join` | proved | through `Url.normalize`, `Url.removeDots` and 2 more: `Tests.Oracle.Url.resolve_examples`, `Url.dotFree_removeDots` and 6 more |
-| `Url.removeDotsChars` | proved | through `Url.normalize`, `Url.removeDots` and 2 more: `Tests.Oracle.Url.resolve_examples`, `Url.dotFree_removeDots` and 6 more |
-| `Url.removeDots` | proved | `Url.dotFree_removeDots`, `Url.removeDots_of_dotFree`, `Url.removeDots_removeDots` and 1 more |
-| `Url.directory` | proved | through `Url.resolve`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.dotFree_resolve` and 2 more |
-| `Url.merge` | proved | through `Url.resolve`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.dotFree_resolve` and 2 more |
+| `Url.dots` | proved | through `Url.normalize`, `Url.removeDots` and others: `Tests.Oracle.Url.resolve_examples`, `Url.dotFree_removeDots` and others |
+| `Url.piece` | proved | through `Url.normalize`, `Url.removeDots` and others: `Tests.Oracle.Url.resolve_examples`, `Url.dotFree_removeDots` and others |
+| `Url.join` | proved | through `Url.normalize`, `Url.removeDots` and others: `Tests.Oracle.Url.resolve_examples`, `Url.dotFree_removeDots` and others |
+| `Url.removeDotsChars` | proved | through `Url.normalize`, `Url.removeDots` and others: `Tests.Oracle.Url.resolve_examples`, `Url.dotFree_removeDots` and others |
+| `Url.removeDots` | proved | `Url.dotFree_removeDots`, `Url.removeDots_of_dotFree`, `Url.removeDots_removeDots` and others |
+| `Url.directory` | proved | through `Url.resolve`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.dotFree_resolve` and others |
+| `Url.merge` | proved | through `Url.resolve`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.dotFree_resolve` and others |
 | `Url.resolve` | proved | `Url.dotFree_resolve`, `Url.resolve_of_absolute`, `Url.resolve_of_scheme` |
 | `Url.resolveExamples` | proved | `Tests.Oracle.Url.resolve_examples` |
 | `Url.resolveText` | proved | `Tests.Oracle.Url.resolve_examples` |
@@ -1220,41 +1201,41 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Postgres.Isolation.sql` | proved | through `Postgres.Conn.Request.encode`, `Postgres.Conn.Request.messages` and 2 more: `Postgres.Conn.run_beforeTls`, `Postgres.Conn.run_bound` and 14 more |
-| `Postgres.Conn.Request.kind` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_beforeTls`, `Postgres.Conn.run_bound` and 13 more |
+| `Postgres.Isolation.sql` | proved | through `Postgres.Conn.Request.encode`, `Postgres.Conn.Request.messages` and others: `Postgres.Conn.run_beforeTls`, `Postgres.Conn.run_bound` and others |
+| `Postgres.Conn.Request.kind` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_beforeTls`, `Postgres.Conn.run_bound` and others |
 | `Postgres.Conn.instDecidableNamed` | proved | its type, `Decidable` |
 | `Postgres.Conn.instDecidablePredOptionByteArrayValueOk` | proved | its type, `Decidable` |
 | `Postgres.Conn.instDecidablePredFrontendOk` | proved | its type, `Decidable` |
-| `Postgres.Conn.fits` | proved | through `Postgres.Conn.run`, `Postgres.Conn.start` and 2 more: `Postgres.Conn.run_beforeTls`, `Postgres.Conn.run_bound` and 15 more |
+| `Postgres.Conn.fits` | proved | through `Postgres.Conn.run`, `Postgres.Conn.start` and others: `Postgres.Conn.run_beforeTls`, `Postgres.Conn.run_bound` and others |
 | `Postgres.Conn.Request.messages` | proved | `Postgres.Conn.valid_decode` |
 | `Postgres.Conn.Request.encode` | proved | `Postgres.Conn.step_query` |
 | `Postgres.Conn.valid` | proved | `Postgres.Conn.step_query`, `Postgres.Conn.valid_decode` |
-| `Postgres.Conn.room` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_beforeTls`, `Postgres.Conn.run_bound` and 13 more |
+| `Postgres.Conn.room` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_beforeTls`, `Postgres.Conn.run_bound` and others |
 | `Postgres.Conn.fail` | proved | `Postgres.Conn.onMessage_sasl_authOk`, `Postgres.Conn.step_refusedTls` |
 | `Postgres.Conn.outcome` | proved | `Postgres.Conn.outcome_committed` |
-| `Postgres.Conn.texts` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_binds`, `Postgres.Conn.onMessage_opened` and 18 more |
-| `Postgres.Conn.onReply` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_binds`, `Postgres.Conn.onMessage_opened` and 18 more |
-| `Postgres.Conn.nonceOk` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_binds`, `Postgres.Conn.onMessage_opened` and 18 more |
+| `Postgres.Conn.texts` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and others: `Postgres.Conn.onMessage_binds`, `Postgres.Conn.onMessage_opened` and others |
+| `Postgres.Conn.onReply` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and others: `Postgres.Conn.onMessage_binds`, `Postgres.Conn.onMessage_opened` and others |
+| `Postgres.Conn.nonceOk` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and others: `Postgres.Conn.onMessage_binds`, `Postgres.Conn.onMessage_opened` and others |
 | `Postgres.Conn.Config.scramOnly` | proved | `Postgres.Conn.onMessage_requireScram` |
-| `Postgres.Conn.unbound` | proved | through `Postgres.Conn.choose`, `Postgres.Conn.onMessage` and 2 more: `Postgres.Conn.choose_endPoint`, `Postgres.Conn.choose_require` and 20 more |
+| `Postgres.Conn.unbound` | proved | through `Postgres.Conn.choose`, `Postgres.Conn.onMessage` and others: `Postgres.Conn.choose_endPoint`, `Postgres.Conn.choose_require` and others |
 | `Postgres.Conn.choose` | proved | `Postgres.Conn.choose_endPoint`, `Postgres.Conn.choose_require` |
-| `Postgres.Conn.onAuth` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_binds`, `Postgres.Conn.onMessage_opened` and 18 more |
-| `Postgres.Conn.onSasl` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_binds`, `Postgres.Conn.onMessage_opened` and 18 more |
-| `Postgres.Conn.onSaslFinal` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_binds`, `Postgres.Conn.onMessage_opened` and 18 more |
-| `Postgres.Conn.onMessage` | proved | `Postgres.Conn.onMessage_binds`, `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_requireScram` and 2 more |
-| `Postgres.Conn.drain` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_beforeTls`, `Postgres.Conn.run_bound` and 13 more |
-| `Postgres.Conn.receive` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_beforeTls`, `Postgres.Conn.run_bound` and 13 more |
-| `Postgres.Conn.submit` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_beforeTls`, `Postgres.Conn.run_bound` and 13 more |
+| `Postgres.Conn.onAuth` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and others: `Postgres.Conn.onMessage_binds`, `Postgres.Conn.onMessage_opened` and others |
+| `Postgres.Conn.onSasl` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and others: `Postgres.Conn.onMessage_binds`, `Postgres.Conn.onMessage_opened` and others |
+| `Postgres.Conn.onSaslFinal` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and others: `Postgres.Conn.onMessage_binds`, `Postgres.Conn.onMessage_opened` and others |
+| `Postgres.Conn.onMessage` | proved | `Postgres.Conn.onMessage_binds`, `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_requireScram` and others |
+| `Postgres.Conn.drain` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_beforeTls`, `Postgres.Conn.run_bound` and others |
+| `Postgres.Conn.receive` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_beforeTls`, `Postgres.Conn.run_bound` and others |
+| `Postgres.Conn.submit` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_beforeTls`, `Postgres.Conn.run_bound` and others |
 | `Postgres.Conn.startup` | proved | `Postgres.Conn.step_secured` |
 | `Postgres.Conn.sslRequest` | proved | `Postgres.Conn.tls_first` |
-| `Postgres.Conn.alpn` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_beforeTls`, `Postgres.Conn.run_bound` and 13 more |
+| `Postgres.Conn.alpn` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_beforeTls`, `Postgres.Conn.run_bound` and others |
 | `Postgres.Conn.start` | proved | `Postgres.Conn.run_bound`, `Postgres.Conn.start_queue`, `Postgres.Conn.tls_first` |
-| `Postgres.Conn.beforeTls` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_beforeTls`, `Postgres.Conn.run_bound` and 13 more |
+| `Postgres.Conn.beforeTls` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_beforeTls`, `Postgres.Conn.run_bound` and others |
 | `Postgres.Conn.alpnOk` | proved | `Postgres.Conn.step_secured` |
-| `Postgres.Conn.secure` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_beforeTls`, `Postgres.Conn.run_bound` and 13 more |
+| `Postgres.Conn.secure` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_beforeTls`, `Postgres.Conn.run_bound` and others |
 | `Postgres.Conn.Phase.beforeTls` | proved | `Postgres.Conn.run_beforeTls`, `Postgres.Conn.step_beforeTls` |
 | `Postgres.Conn.reusable` | tested | `Tests/Postgres.lean` |
-| `Postgres.Conn.step` | proved | `Postgres.Conn.step_beforeTls`, `Postgres.Conn.step_buffer`, `Postgres.Conn.step_closed` and 7 more |
+| `Postgres.Conn.step` | proved | `Postgres.Conn.step_beforeTls`, `Postgres.Conn.step_buffer`, `Postgres.Conn.step_closed` and others |
 | `Postgres.Conn.run` | spec | used only in statements |
 
 ## `Lanes/Lib/Postgres/ConnSound.lean`
@@ -1313,30 +1294,30 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Postgres.TxStatus.byte` | proved | through `Postgres.Backend.body`: `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` |
 | `Postgres.TxStatus.ofByte` | proved | through `Postgres.Backend.decode`, `Postgres.Backend.decodeBody`: `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` |
-| `Postgres.protocol30` | proved | through `Postgres.Frontend.decode`, `Postgres.Frontend.encode`: `Postgres.Conn.onMessage_binds`, `Postgres.Conn.step_secured` and 2 more |
+| `Postgres.protocol30` | proved | through `Postgres.Frontend.decode`, `Postgres.Frontend.encode`: `Postgres.Conn.onMessage_binds`, `Postgres.Conn.step_secured` and others |
 | `Postgres.Column.put` | proved | through `Postgres.Backend.body`: `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` |
-| `Postgres.Column.get` | proved | through `Postgres.Backend.decode`, `Postgres.Backend.decodeBody` and 1 more: `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` and 2 more |
+| `Postgres.Column.get` | proved | through `Postgres.Backend.decode`, `Postgres.Backend.decodeBody` and others: `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` and others |
 | `Postgres.Column.Ok` | spec | a predicate |
 | `Postgres.Field.put` | proved | through `Postgres.Backend.body`: `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` |
 | `Postgres.Field.get` | proved | through `Postgres.Backend.decode`, `Postgres.Backend.decodeBody`: `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` |
 | `Postgres.Field.Ok` | spec | a predicate |
 | `Postgres.getFields` | proved | through `Postgres.Backend.decode`, `Postgres.Backend.decodeBody`: `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` |
-| `Postgres.getNames` | proved | through `Postgres.Backend.decodeBody`, `Postgres.Frame.read`: `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` and 2 more |
+| `Postgres.getNames` | proved | through `Postgres.Backend.decodeBody`, `Postgres.Frame.read`: `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` and others |
 | `Postgres.Named` | spec | a predicate |
-| `Postgres.putParam` | proved | through `Postgres.Frontend.body`, `Postgres.Frontend.encode`: `Postgres.Conn.onMessage_binds`, `Postgres.Conn.step_secured` and 2 more |
-| `Postgres.getParam` | proved | through `Postgres.Backend.decode`, `Postgres.Backend.decodeBody` and 1 more: `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` and 2 more |
+| `Postgres.putParam` | proved | through `Postgres.Frontend.body`, `Postgres.Frontend.encode`: `Postgres.Conn.onMessage_binds`, `Postgres.Conn.step_secured` and others |
+| `Postgres.getParam` | proved | through `Postgres.Backend.decode`, `Postgres.Backend.decodeBody` and others: `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` and others |
 | `Postgres.Backend.tag` | proved | `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` |
 | `Postgres.Backend.body` | proved | `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` |
 | `Postgres.Backend.Ok` | spec | a predicate |
-| `Postgres.Backend.decodeAuth` | proved | through `Postgres.Backend.decodeBody`, `Postgres.Frame.read`: `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` and 2 more |
+| `Postgres.Backend.decodeAuth` | proved | through `Postgres.Backend.decodeBody`, `Postgres.Frame.read`: `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` and others |
 | `Postgres.Backend.decodeBody` | proved | `Postgres.Backend.decodeBody_body` |
 | `Postgres.Backend.decode` | proved | `Postgres.Backend.read_encode` |
 | `Postgres.Frontend.expect` | spec | used only in statements |
-| `Postgres.Frontend.tag` | proved | through `Postgres.Frontend.body`, `Postgres.Frontend.encode`: `Postgres.Conn.onMessage_binds`, `Postgres.Conn.step_secured` and 2 more |
+| `Postgres.Frontend.tag` | proved | through `Postgres.Frontend.body`, `Postgres.Frontend.encode`: `Postgres.Conn.onMessage_binds`, `Postgres.Conn.step_secured` and others |
 | `Postgres.Frontend.body` | proved | `Postgres.Frontend.decode_encode` |
 | `Postgres.Frontend.Ok` | spec | a predicate |
-| `Postgres.Frontend.wire` | proved | through `Postgres.Frontend.encode`: `Postgres.Conn.onMessage_binds`, `Postgres.Conn.step_secured` and 2 more |
-| `Postgres.Frontend.encode` | proved | `Postgres.Conn.onMessage_binds`, `Postgres.Conn.step_secured`, `Postgres.Conn.valid_decode` and 1 more |
+| `Postgres.Frontend.wire` | proved | through `Postgres.Frontend.encode`: `Postgres.Conn.onMessage_binds`, `Postgres.Conn.step_secured` and others |
+| `Postgres.Frontend.encode` | proved | `Postgres.Conn.onMessage_binds`, `Postgres.Conn.step_secured`, `Postgres.Conn.valid_decode` and others |
 | `Postgres.Frontend.decodeBody` | proved | through `Postgres.Frontend.decode`: `Postgres.Conn.valid_decode`, `Postgres.Frontend.decode_encode` |
 | `Postgres.Frontend.decodeStartup` | proved | through `Postgres.Frontend.decode`: `Postgres.Conn.valid_decode`, `Postgres.Frontend.decode_encode` |
 | `Postgres.Frontend.decode` | proved | `Postgres.Conn.valid_decode`, `Postgres.Frontend.decode_encode` |
@@ -1349,14 +1330,14 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Postgres.Pool.State.size` | proved | `Postgres.Pool.run_size` |
-| `Postgres.Pool.refill` | proved | through `Postgres.Pool.run`: `Postgres.Pool.never_again`, `Postgres.Pool.run_size` and 1 more |
-| `Postgres.Pool.hand` | proved | through `Postgres.Pool.run`: `Postgres.Pool.never_again`, `Postgres.Pool.run_size` and 1 more |
-| `Postgres.Pool.onCheckout` | proved | through `Postgres.Pool.run`: `Postgres.Pool.never_again`, `Postgres.Pool.run_size` and 1 more |
-| `Postgres.Pool.onOpened` | proved | through `Postgres.Pool.run`: `Postgres.Pool.never_again`, `Postgres.Pool.run_size` and 1 more |
-| `Postgres.Pool.onFailed` | proved | through `Postgres.Pool.run`: `Postgres.Pool.never_again`, `Postgres.Pool.run_size` and 1 more |
-| `Postgres.Pool.onCheckin` | proved | through `Postgres.Pool.run`: `Postgres.Pool.never_again`, `Postgres.Pool.run_size` and 1 more |
-| `Postgres.Pool.onExpire` | proved | through `Postgres.Pool.run`: `Postgres.Pool.never_again`, `Postgres.Pool.run_size` and 1 more |
-| `Postgres.Pool.step` | proved | through `Postgres.Pool.run`: `Postgres.Pool.never_again`, `Postgres.Pool.run_size` and 1 more |
+| `Postgres.Pool.refill` | proved | through `Postgres.Pool.run`: `Postgres.Pool.never_again`, `Postgres.Pool.run_size` and others |
+| `Postgres.Pool.hand` | proved | through `Postgres.Pool.run`: `Postgres.Pool.never_again`, `Postgres.Pool.run_size` and others |
+| `Postgres.Pool.onCheckout` | proved | through `Postgres.Pool.run`: `Postgres.Pool.never_again`, `Postgres.Pool.run_size` and others |
+| `Postgres.Pool.onOpened` | proved | through `Postgres.Pool.run`: `Postgres.Pool.never_again`, `Postgres.Pool.run_size` and others |
+| `Postgres.Pool.onFailed` | proved | through `Postgres.Pool.run`: `Postgres.Pool.never_again`, `Postgres.Pool.run_size` and others |
+| `Postgres.Pool.onCheckin` | proved | through `Postgres.Pool.run`: `Postgres.Pool.never_again`, `Postgres.Pool.run_size` and others |
+| `Postgres.Pool.onExpire` | proved | through `Postgres.Pool.run`: `Postgres.Pool.never_again`, `Postgres.Pool.run_size` and others |
+| `Postgres.Pool.step` | proved | through `Postgres.Pool.run`: `Postgres.Pool.never_again`, `Postgres.Pool.run_size` and others |
 | `Postgres.Pool.run` | spec | used only in statements |
 | `Postgres.Pool.Out` | spec | a predicate |
 
@@ -1365,15 +1346,15 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Postgres.md5Answer` | checked | `Tests/PostgresConn.lean` |
-| `Postgres.Scram.mechanism` | proved | through `Postgres.Scram.Binding.data`, `Postgres.Scram.respond`: `Postgres.Conn.onMessage_binds`, `Postgres.Scram.Binding.data_endPoint` and 3 more |
+| `Postgres.Scram.mechanism` | proved | through `Postgres.Scram.Binding.data`, `Postgres.Scram.respond`: `Postgres.Conn.onMessage_binds`, `Postgres.Scram.Binding.data_endPoint` and others |
 | `Postgres.Scram.mechanismPlus` | proved | `Postgres.Conn.choose_endPoint` |
-| `Postgres.Scram.Binding.header` | proved | through `Postgres.Scram.Binding.data`, `Postgres.Scram.respond`: `Postgres.Conn.onMessage_binds`, `Postgres.Scram.Binding.data_endPoint` and 3 more |
-| `Postgres.Scram.Binding.mechanism` | proved | through `Postgres.Scram.Binding.data`, `Postgres.Scram.respond`: `Postgres.Conn.onMessage_binds`, `Postgres.Scram.Binding.data_endPoint` and 3 more |
+| `Postgres.Scram.Binding.header` | proved | through `Postgres.Scram.Binding.data`, `Postgres.Scram.respond`: `Postgres.Conn.onMessage_binds`, `Postgres.Scram.Binding.data_endPoint` and others |
+| `Postgres.Scram.Binding.mechanism` | proved | through `Postgres.Scram.Binding.data`, `Postgres.Scram.respond`: `Postgres.Conn.onMessage_binds`, `Postgres.Scram.Binding.data_endPoint` and others |
 | `Postgres.Scram.Binding.data` | proved | `Postgres.Conn.onMessage_binds`, `Postgres.Scram.Binding.data_endPoint`, `Postgres.Scram.respond_binds` |
-| `Postgres.Scram.saslName` | proved | through `Postgres.Scram.respond`: `Postgres.Scram.respond_binds`, `Postgres.Scram.respond_iterations` and 1 more |
-| `Postgres.Scram.firstBare` | proved | through `Postgres.Scram.respond`: `Postgres.Scram.respond_binds`, `Postgres.Scram.respond_iterations` and 1 more |
+| `Postgres.Scram.saslName` | proved | through `Postgres.Scram.respond`: `Postgres.Scram.respond_binds`, `Postgres.Scram.respond_iterations` and others |
+| `Postgres.Scram.firstBare` | proved | through `Postgres.Scram.respond`: `Postgres.Scram.respond_binds`, `Postgres.Scram.respond_iterations` and others |
 | `Postgres.Scram.first` | tested | `Tests/Postgres.lean` |
-| `Postgres.Scram.field` | proved | through `Postgres.Scram.respond`, `Postgres.Scram.verify`: `Postgres.Conn.onMessage_requireScram`, `Postgres.Conn.onMessage_saslFinal` and 3 more |
+| `Postgres.Scram.field` | proved | through `Postgres.Scram.respond`, `Postgres.Scram.verify`: `Postgres.Conn.onMessage_requireScram`, `Postgres.Conn.onMessage_saslFinal` and others |
 | `Postgres.Scram.parseServerFirst` | proved | `Postgres.Scram.respond_iterations`, `Postgres.Scram.respond_nonce` |
 | `Postgres.Scram.respond` | proved | `Postgres.Scram.respond_binds`, `Postgres.Scram.respond_iterations`, `Postgres.Scram.respond_nonce` |
 | `Postgres.Scram.verify` | proved | `Postgres.Conn.onMessage_requireScram`, `Postgres.Conn.onMessage_saslFinal` |
@@ -1382,10 +1363,10 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Postgres.Address.localhost` | proved | through `Postgres.SslMode.defaultFor`: `Postgres.Client.Config.sslmode_default`, `Postgres.SslMode.defaultFor_disable` and 2 more |
+| `Postgres.Address.localhost` | proved | through `Postgres.SslMode.defaultFor`: `Postgres.Client.Config.sslmode_default`, `Postgres.SslMode.defaultFor_disable` and others |
 | `Postgres.Address.of` | proved | `Postgres.SslMode.defaultFor_disable`, `Postgres.SslMode.defaultFor_loopback`, `Postgres.SslMode.defaultFor_remote` |
-| `Postgres.Address.loopback` | proved | `Postgres.Address.name_remote`, `Postgres.SslMode.defaultFor_disable`, `Postgres.SslMode.defaultFor_loopback` and 1 more |
-| `Postgres.SslMode.defaultFor` | proved | `Postgres.Client.Config.sslmode_default`, `Postgres.SslMode.defaultFor_disable`, `Postgres.SslMode.defaultFor_loopback` and 1 more |
+| `Postgres.Address.loopback` | proved | `Postgres.Address.name_remote`, `Postgres.SslMode.defaultFor_disable`, `Postgres.SslMode.defaultFor_loopback` and others |
+| `Postgres.SslMode.defaultFor` | proved | `Postgres.Client.Config.sslmode_default`, `Postgres.SslMode.defaultFor_disable`, `Postgres.SslMode.defaultFor_loopback` and others |
 | `Postgres.SslMode.ofLibpq` | tested | `Tests/PostgresLive.lean`, `Tests/PostgresSettings.lean` |
 | `Postgres.channelBindingOfLibpq` | tested | `Tests/PostgresLive.lean`, `Tests/PostgresSettings.lean` |
 | `Postgres.PassFile.split` | tested | `Tests/PostgresLive.lean`, `Tests/PostgresSettings.lean` |
@@ -1405,7 +1386,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Postgres.Table.create` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/Postgres.lean`, `Tests/Postgres.lean` and 1 more |
+| `Postgres.Table.create` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/Postgres.lean`, `Tests/Postgres.lean` and others |
 | `Postgres.Table.Isolation.ofStore` | tested | `Tests/Postgres.lean` |
 | `Postgres.Table.request` | tested | `Tests/Postgres.lean` |
 | `Postgres.scanRows` | tested | `Tests/Postgres.lean` |
@@ -1416,9 +1397,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `RateLimit.Config.cap` | proved | `RateLimit.allowed_le`, `RateLimit.credit_allowAll_le`, `RateLimit.credit_allow_le` and 1 more |
+| `RateLimit.Config.cap` | proved | `RateLimit.allowed_le`, `RateLimit.credit_allowAll_le`, `RateLimit.credit_allow_le` and others |
 | `RateLimit.full` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/RateLimit.lean` |
-| `RateLimit.refill` | proved | through `RateLimit.allow`, `RateLimit.allowAll` and 1 more: `RateLimit.allow_after_reserve`, `RateLimit.allowed_le` and 3 more |
+| `RateLimit.refill` | proved | through `RateLimit.allow`, `RateLimit.allowAll` and others: `RateLimit.allow_after_reserve`, `RateLimit.allowed_le` and others |
 | `RateLimit.allow` | proved | `RateLimit.allow_after_reserve`, `RateLimit.credit_allow_le` |
 | `RateLimit.wait` | proved | through `RateLimit.reserve`: `RateLimit.allow_after_reserve`, `RateLimit.credit_reserve_le` |
 | `RateLimit.reserve` | proved | `RateLimit.allow_after_reserve`, `RateLimit.credit_reserve_le` |
@@ -1428,35 +1409,35 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Civil.isLeap` | proved | through `Civil.Date.toDays`, `Civil.DateTime` and 1 more: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 7 more |
-| `Civil.daysInMonth` | proved | through `Civil.Date.toDays`, `Civil.DateTime` and 1 more: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 7 more |
+| `Civil.isLeap` | proved | through `Civil.Date.toDays`, `Civil.DateTime` and others: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and others |
+| `Civil.daysInMonth` | proved | through `Civil.Date.toDays`, `Civil.DateTime` and others: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and others |
 | `Civil.Valid` | spec | a predicate |
 | `Civil.instDecidableValid` | proved | its type, `Decidable` |
 | `Civil.Date.mk?` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Time.lean`, `Tests/S3Upload.lean` |
-| `Civil.marchMonth` | proved | through `Civil.Date.toDays`, `Civil.DateTime.toUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 4 more |
-| `Civil.ofMarchMonth` | proved | through `Civil.Date.ofDays`, `Civil.DateTime.ofUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 4 more |
-| `Civil.daysBefore` | proved | through `Civil.Date.toDays`, `Civil.DateTime.toUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 4 more |
+| `Civil.marchMonth` | proved | through `Civil.Date.toDays`, `Civil.DateTime.toUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and others |
+| `Civil.ofMarchMonth` | proved | through `Civil.Date.ofDays`, `Civil.DateTime.ofUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and others |
+| `Civil.daysBefore` | proved | through `Civil.Date.toDays`, `Civil.DateTime.toUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and others |
 | `Civil.marchLength` | spec | used only in statements |
-| `Civil.dayOfEra` | proved | through `Civil.Date.toDays`, `Civil.DateTime.toUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 4 more |
-| `Civil.daysFrom` | proved | through `Civil.Date.toDays`, `Civil.DateTime.toUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 4 more |
+| `Civil.dayOfEra` | proved | through `Civil.Date.toDays`, `Civil.DateTime.toUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and others |
+| `Civil.daysFrom` | proved | through `Civil.Date.toDays`, `Civil.DateTime.toUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and others |
 | `Civil.Date.toDays` | proved | `Civil.ofDays_toDays`, `Civil.toDays_ofDays` |
-| `Civil.yearOfEra` | proved | through `Civil.Date.ofDays`, `Civil.DateTime.ofUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 4 more |
-| `Civil.civilOf` | proved | through `Civil.Date.ofDays`, `Civil.DateTime.ofUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 4 more |
-| `Civil.civil` | proved | through `Civil.Date.ofDays`, `Civil.DateTime.ofUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 4 more |
+| `Civil.yearOfEra` | proved | through `Civil.Date.ofDays`, `Civil.DateTime.ofUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and others |
+| `Civil.civilOf` | proved | through `Civil.Date.ofDays`, `Civil.DateTime.ofUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and others |
+| `Civil.civil` | proved | through `Civil.Date.ofDays`, `Civil.DateTime.ofUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and others |
 | `Civil.LongYear` | spec | a predicate |
 | `Civil.Date.ofDays` | proved | `Civil.ofDays_toDays`, `Civil.toDays_ofDays` |
 | `Civil.Date.weekday` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Time.lean` |
-| `Civil.TimeOfDay.seconds` | proved | through `Civil.DateTime.toUnix`: `Civil.ofUnix_toUnix`, `Civil.toUnix_ofUnix` and 2 more |
-| `Civil.TimeOfDay.ofSeconds` | proved | through `Civil.DateTime.ofUnix`: `Civil.ofUnix_toUnix`, `Civil.toUnix_ofUnix` and 2 more |
-| `Civil.DateTime.toUnix` | proved | `Civil.ofUnix_toUnix`, `Civil.toUnix_ofUnix`, `S3.Post.admitted_bounded` and 1 more |
-| `Civil.DateTime.ofUnix` | proved | `Civil.ofUnix_toUnix`, `Civil.toUnix_ofUnix`, `S3.Post.admitted_bounded` and 1 more |
+| `Civil.TimeOfDay.seconds` | proved | through `Civil.DateTime.toUnix`: `Civil.ofUnix_toUnix`, `Civil.toUnix_ofUnix` and others |
+| `Civil.TimeOfDay.ofSeconds` | proved | through `Civil.DateTime.ofUnix`: `Civil.ofUnix_toUnix`, `Civil.toUnix_ofUnix` and others |
+| `Civil.DateTime.toUnix` | proved | `Civil.ofUnix_toUnix`, `Civil.toUnix_ofUnix`, `S3.Post.admitted_bounded` and others |
+| `Civil.DateTime.ofUnix` | proved | `Civil.ofUnix_toUnix`, `Civil.toUnix_ofUnix`, `S3.Post.admitted_bounded` and others |
 
 ## `Lanes/Lib/Time/Format.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `TimeFormat.isDigit` | proved | through `TimeFormat.parseHttpDate`, `TimeFormat.parseRfc3339`: `S3.Post.expiration_parse`, `TimeFormat.parseHttpDate_print` and 1 more |
-| `TimeFormat.num?` | proved | through `TimeFormat.parseHttpDate`, `TimeFormat.parseRfc3339`: `S3.Post.expiration_parse`, `TimeFormat.parseHttpDate_print` and 1 more |
+| `TimeFormat.isDigit` | proved | through `TimeFormat.parseHttpDate`, `TimeFormat.parseRfc3339`: `S3.Post.expiration_parse`, `TimeFormat.parseHttpDate_print` and others |
+| `TimeFormat.num?` | proved | through `TimeFormat.parseHttpDate`, `TimeFormat.parseRfc3339`: `S3.Post.expiration_parse`, `TimeFormat.parseHttpDate_print` and others |
 | `TimeFormat.Timestamp.toUnix` | proved | `S3.Post.expiration_parse` |
 | `TimeFormat.d2` | proved | through `TimeFormat.printHttpDate?`, `TimeFormat.printRfc3339?`: `TimeFormat.parseHttpDate_print`, `TimeFormat.parseRfc3339_print` |
 | `TimeFormat.d4` | proved | through `TimeFormat.printHttpDate?`, `TimeFormat.printRfc3339?`: `TimeFormat.parseHttpDate_print`, `TimeFormat.parseRfc3339_print` |
@@ -1468,9 +1449,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `TimeFormat.InRange` | spec | a predicate |
 | `TimeFormat.instDecidableInRange` | proved | its type, `Decidable` |
 | `TimeFormat.printRfc3339?` | proved | `TimeFormat.parseRfc3339_print` |
-| `TimeFormat.clock?` | proved | through `TimeFormat.parseHttpDate`, `TimeFormat.parseRfc3339`: `S3.Post.expiration_parse`, `TimeFormat.parseHttpDate_print` and 1 more |
-| `TimeFormat.fraction?` | proved | through `TimeFormat.parseHttpDate`, `TimeFormat.parseRfc3339`: `S3.Post.expiration_parse`, `TimeFormat.parseHttpDate_print` and 1 more |
-| `TimeFormat.offset?` | proved | through `TimeFormat.parseHttpDate`, `TimeFormat.parseRfc3339`: `S3.Post.expiration_parse`, `TimeFormat.parseHttpDate_print` and 1 more |
+| `TimeFormat.clock?` | proved | through `TimeFormat.parseHttpDate`, `TimeFormat.parseRfc3339`: `S3.Post.expiration_parse`, `TimeFormat.parseHttpDate_print` and others |
+| `TimeFormat.fraction?` | proved | through `TimeFormat.parseHttpDate`, `TimeFormat.parseRfc3339`: `S3.Post.expiration_parse`, `TimeFormat.parseHttpDate_print` and others |
+| `TimeFormat.offset?` | proved | through `TimeFormat.parseHttpDate`, `TimeFormat.parseRfc3339`: `S3.Post.expiration_parse`, `TimeFormat.parseHttpDate_print` and others |
 | `TimeFormat.parseRfc3339` | proved | `S3.Post.expiration_parse`, `TimeFormat.parseRfc3339_print` |
 | `TimeFormat.dayNames` | proved | through `TimeFormat.printHttpDate?`: `TimeFormat.parseHttpDate_print` |
 | `TimeFormat.longDayNames` | proved | through `TimeFormat.parseHttpDate`: `TimeFormat.parseHttpDate_print` |
@@ -1490,10 +1471,10 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Peers.Courier.wire` | proved | `Peers.Courier.Reachable.queue_le`, `Peers.Courier.Reachable.write_not_busy` |
-| `Peers.Courier.setWire` | proved | through `Peers.Courier.exec`, `Peers.Courier.step`: `Peers.Courier.Reachable.write_not_busy`, `Peers.Courier.after_stop` and 6 more |
-| `Peers.Courier.dial` | proved | through `Peers.Courier.exec`, `Peers.Courier.step`: `Peers.Courier.Reachable.write_not_busy`, `Peers.Courier.after_stop` and 6 more |
-| `Peers.Courier.enqueue` | proved | through `Peers.Courier.exec`, `Peers.Courier.step`: `Peers.Courier.Reachable.write_not_busy`, `Peers.Courier.after_stop` and 6 more |
-| `Peers.Courier.next` | proved | through `Peers.Courier.exec`, `Peers.Courier.step`: `Peers.Courier.Reachable.write_not_busy`, `Peers.Courier.after_stop` and 6 more |
+| `Peers.Courier.setWire` | proved | through `Peers.Courier.exec`, `Peers.Courier.step`: `Peers.Courier.Reachable.write_not_busy`, `Peers.Courier.after_stop` and others |
+| `Peers.Courier.dial` | proved | through `Peers.Courier.exec`, `Peers.Courier.step`: `Peers.Courier.Reachable.write_not_busy`, `Peers.Courier.after_stop` and others |
+| `Peers.Courier.enqueue` | proved | through `Peers.Courier.exec`, `Peers.Courier.step`: `Peers.Courier.Reachable.write_not_busy`, `Peers.Courier.after_stop` and others |
+| `Peers.Courier.next` | proved | through `Peers.Courier.exec`, `Peers.Courier.step`: `Peers.Courier.Reachable.write_not_busy`, `Peers.Courier.after_stop` and others |
 | `Peers.Courier.step` | proved | `Peers.Courier.Reachable.write_not_busy` |
 
 ## `Lanes/Net/CourierSound.lean`
@@ -1547,10 +1528,10 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Outside.any` | tested | `Tests/Jobs.lean`, `Tests/S3.lean` |
-| `Outside.driver` | checked | `Tests/Cache.lean`, `Tests/Clock.lean`, `Tests/HttpClient.lean` and 9 more |
+| `Outside.driver` | checked | `Tests/Cache.lean`, `Tests/Clock.lean`, `Tests/HttpClient.lean` and others |
 | `Outside.see` | proved | `Outside.Beside.keeps`, `Outside.run_induction` |
-| `Outside.after` | proved | `Cache.read_sent`, `Clock.wall_back_le`, `Clock.wall_latest_le` and 21 more |
-| `Outside.allows` | checked | `Tests/Outside.lean`, `Tests/Queue.lean`, `Tests/Throttle.lean` and 1 more |
+| `Outside.after` | proved | `Cache.read_sent`, `Clock.wall_back_le`, `Clock.wall_latest_le` and others |
+| `Outside.allows` | checked | `Tests/Outside.lean`, `Tests/Queue.lean`, `Tests/Throttle.lean` and others |
 | `Outside.both` | proved | `Outside.after_both` |
 | `Outside.mine` | spec | used only in statements |
 
@@ -1585,24 +1566,24 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Effects.instEnumPhase` | proved | its type, `Enum` |
 | `Effects.Phase.final` | spec | used only in statements |
 | `Effects.Lifecycle.Final` | spec | a predicate |
-| `Effects.Lifecycle.reachable` | proved | through `Effects.Lifecycle.reaches`, `Effects.outside`: `Effects.Lifecycle.reaches_terminal`, `Effects.Sound.allow` and 7 more |
-| `Effects.Lifecycle.reachable.go` | proved | through `Effects.Lifecycle.reaches`, `Effects.outside`: `Effects.Lifecycle.reaches_terminal`, `Effects.Sound.allow` and 7 more |
+| `Effects.Lifecycle.reachable` | proved | through `Effects.Lifecycle.reaches`, `Effects.outside`: `Effects.Lifecycle.reaches_terminal`, `Effects.Sound.allow` and others |
+| `Effects.Lifecycle.reachable.go` | proved | through `Effects.Lifecycle.reaches`, `Effects.outside`: `Effects.Lifecycle.reaches_terminal`, `Effects.Sound.allow` and others |
 | `Effects.Lifecycle.reaches` | proved | `Effects.Lifecycle.reaches_terminal` |
-| `Effects.Lifecycle.seen` | proved | through `Effects.outside`: `Effects.Sound.allow`, `Effects.Sound.observe` and 6 more |
+| `Effects.Lifecycle.seen` | proved | through `Effects.outside`: `Effects.Sound.allow`, `Effects.Sound.observe` and others |
 | `Effects.Answer.codec` | proved | its type, `Codec` |
 | `Effects.instCodableAnswer` | proved | its type, `Codable` |
-| `Effects.Answer.isRefused` | proved | through `Effects.outside`: `Effects.Sound.allow`, `Effects.Sound.observe` and 6 more |
+| `Effects.Answer.isRefused` | proved | through `Effects.outside`: `Effects.Sound.allow`, `Effects.Sound.observe` and others |
 | `Effects.Report.codec` | proved | its type, `Codec` |
 | `Effects.instCodableReport` | proved | its type, `Codable` |
 | `Effects.Thing.codec` | proved | its type, `Codec` |
 | `Effects.instCodableThing` | proved | its type, `Codable` |
-| `Effects.ids` | proved | through `Effects.outside`: `Effects.Sound.allow`, `Effects.Sound.observe` and 6 more |
-| `Effects.answered` | proved | through `Effects.outside`: `Effects.Sound.allow`, `Effects.Sound.observe` and 6 more |
-| `Effects.moved` | proved | through `Effects.outside`: `Effects.Sound.allow`, `Effects.Sound.observe` and 6 more |
-| `Effects.reported` | proved | through `Effects.outside`: `Effects.Sound.allow`, `Effects.Sound.observe` and 6 more |
-| `Effects.server` | proved | through `Effects.outside`: `Effects.Sound.allow`, `Effects.Sound.observe` and 6 more |
-| `Effects.service` | proved | through `Effects.outside`: `Effects.Sound.allow`, `Effects.Sound.observe` and 6 more |
-| `Effects.outside` | proved | `Effects.Sound.allow`, `Effects.Sound.observe`, `Effects.Sound.shows_reply` and 5 more |
+| `Effects.ids` | proved | through `Effects.outside`: `Effects.Sound.allow`, `Effects.Sound.observe` and others |
+| `Effects.answered` | proved | through `Effects.outside`: `Effects.Sound.allow`, `Effects.Sound.observe` and others |
+| `Effects.moved` | proved | through `Effects.outside`: `Effects.Sound.allow`, `Effects.Sound.observe` and others |
+| `Effects.reported` | proved | through `Effects.outside`: `Effects.Sound.allow`, `Effects.Sound.observe` and others |
+| `Effects.server` | proved | through `Effects.outside`: `Effects.Sound.allow`, `Effects.Sound.observe` and others |
+| `Effects.service` | proved | through `Effects.outside`: `Effects.Sound.allow`, `Effects.Sound.observe` and others |
+| `Effects.outside` | proved | `Effects.Sound.allow`, `Effects.Sound.observe`, `Effects.Sound.shows_reply` and others |
 | `Effects.Lifecycle.Terminal` | spec | a predicate |
 | `Effects.Shows` | spec | a predicate |
 | `Effects.Keeps` | spec | a predicate |
@@ -1661,7 +1642,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Idempotent.Route.codec` | proved | its type, `Codec` |
 | `Idempotent.instCodableRoute` | proved | its type, `Codable` |
 | `Idempotent.requests` | spec | used only in statements |
-| `Idempotent.holder` | proved | through `Idempotent.server`: `Idempotent.answer_repeat`, `Idempotent.at_most_once` and 1 more |
+| `Idempotent.holder` | proved | through `Idempotent.server`: `Idempotent.answer_repeat`, `Idempotent.at_most_once` and others |
 | `Idempotent.server` | proved | `Idempotent.answer_repeat`, `Idempotent.at_most_once`, `Idempotent.keys_nodup` |
 | `Idempotent.Holds` | spec | a predicate |
 
@@ -1701,11 +1682,11 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Queue.Message.codec` | proved | its type, `Codec` |
 | `Queue.instCodableMessage` | proved | its type, `Codable` |
-| `Queue.inOrder` | proved | through `Queue.outside`: `Queue.deleted_not_received`, `Queue.fifo_received_le` and 1 more |
-| `Queue.ready` | proved | through `Queue.outside`: `Queue.deleted_not_received`, `Queue.fifo_received_le` and 1 more |
-| `Queue.receive` | proved | through `Queue.outside`: `Queue.deleted_not_received`, `Queue.fifo_received_le` and 1 more |
-| `Queue.delete` | proved | through `Queue.outside`: `Queue.deleted_not_received`, `Queue.fifo_received_le` and 1 more |
-| `Queue.send` | proved | through `Queue.outside`: `Queue.deleted_not_received`, `Queue.fifo_received_le` and 1 more |
+| `Queue.inOrder` | proved | through `Queue.outside`: `Queue.deleted_not_received`, `Queue.fifo_received_le` and others |
+| `Queue.ready` | proved | through `Queue.outside`: `Queue.deleted_not_received`, `Queue.fifo_received_le` and others |
+| `Queue.receive` | proved | through `Queue.outside`: `Queue.deleted_not_received`, `Queue.fifo_received_le` and others |
+| `Queue.delete` | proved | through `Queue.outside`: `Queue.deleted_not_received`, `Queue.fifo_received_le` and others |
+| `Queue.send` | proved | through `Queue.outside`: `Queue.deleted_not_received`, `Queue.fifo_received_le` and others |
 | `Queue.outside` | proved | `Queue.deleted_not_received`, `Queue.fifo_received_le`, `Queue.received_le` |
 | `Queue.receives` | spec | used only in statements |
 | `Queue.OneCopy` | spec | a predicate |
@@ -1718,7 +1699,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Rpc.instCodableCall` | proved | its type, `Codable` |
 | `Rpc.Reply.codec` | proved | its type, `Codec` |
 | `Rpc.instCodableReply` | proved | its type, `Codable` |
-| `Rpc.outside` | proved | `Cache.read_sent`, `Events.deliveries_le`, `Idempotent.at_most_once` and 11 more |
+| `Rpc.outside` | proved | `Cache.read_sent`, `Events.deliveries_le`, `Idempotent.at_most_once` and others |
 | `Rpc.Port.reported` | proved | `Effects.Sound.shows_report`, `Transcode.done_given`, `Transcode.reports_agree` |
 | `Rpc.called` | spec | used only in statements |
 | `Rpc.answered` | spec | used only in statements |
@@ -1727,34 +1708,34 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Store.Db.get` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
-| `Store.Db.insertSorted` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
-| `Store.Db.set` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
-| `Store.Db.apply` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
-| `Store.Read.holds` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
-| `Store.Txn.own` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
-| `Store.Txn.view` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
-| `Store.World.txn?` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
-| `Store.World.setTxn` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
-| `Store.World.dropTxn` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
-| `Store.World.stateAt` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
-| `Store.World.readsAll` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
-| `Store.World.clashes` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
-| `Store.World.places` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
-| `Store.World.commitPlaces` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
-| `Store.World.placeAt` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
-| `Store.World.settle` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
-| `Store.World.answersNow` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
-| `Store.World.applyCommit` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
-| `Store.World.expand` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
-| `Store.dedup` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
-| `Store.World.send` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
-| `Store.World.answer` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
-| `Store.World.answerCommit` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
-| `Store.outstanding` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
-| `Store.State.allow` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
-| `Store.State.observe` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
-| `Store.State.run` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
+| `Store.Db.get` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and others |
+| `Store.Db.insertSorted` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and others |
+| `Store.Db.set` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and others |
+| `Store.Db.apply` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and others |
+| `Store.Read.holds` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and others |
+| `Store.Txn.own` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and others |
+| `Store.Txn.view` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and others |
+| `Store.World.txn?` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and others |
+| `Store.World.setTxn` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and others |
+| `Store.World.dropTxn` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and others |
+| `Store.World.stateAt` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and others |
+| `Store.World.readsAll` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and others |
+| `Store.World.clashes` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and others |
+| `Store.World.places` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and others |
+| `Store.World.commitPlaces` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and others |
+| `Store.World.placeAt` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and others |
+| `Store.World.settle` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and others |
+| `Store.World.answersNow` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and others |
+| `Store.World.applyCommit` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and others |
+| `Store.World.expand` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and others |
+| `Store.dedup` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and others |
+| `Store.World.send` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and others |
+| `Store.World.answer` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and others |
+| `Store.World.answerCommit` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and others |
+| `Store.outstanding` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and others |
+| `Store.State.allow` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and others |
+| `Store.State.observe` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and others |
+| `Store.State.run` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and others |
 | `Store.outside` | checked | `Tests/Store.lean` |
 | `Store.samples` | checked | `Tests/Store.lean` |
 
@@ -1803,7 +1784,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Event.deed` | proved | through `deeds`, `handled`: `Http.Gate.answered_le_handled`, `Jobs.answered_le_handled` and 2 more |
+| `Event.deed` | proved | through `deeds`, `handled`: `Http.Gate.answered_le_handled`, `Jobs.answered_le_handled` and others |
 | `deeds` | spec | used only in statements |
 | `Deed.handles` | spec | used only in statements |
 | `handled` | spec | used only in statements |
@@ -1828,17 +1809,17 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Envelope.left?` | proved | through `Event.leftDeed`, `Event.right?` and 5 more: `Obligation.right?_inr`, `SysState.run_left` and 10 more |
-| `Envelope.right?` | proved | through `Event.right?`, `Event.rightDeed` and 3 more: `Obligation.Due.of_thinRight`, `Obligation.right?_inr` and 11 more |
-| `EnvModel.left` | proved | `SysState.run_left`, `System.Invariant.join_left`, `System.LeadsTo.join_left` and 3 more |
-| `EnvModel.right` | proved | `Obligation.Due.of_thinRight`, `SysState.deliverable_of_thinRight`, `SysState.init_thinRight` and 6 more |
-| `SysState.left` | proved | `SysState.run_left`, `System.Invariant.join_left`, `System.LeadsTo.join_left` and 1 more |
-| `SysState.right` | proved | `System.Invariant.join_right`, `System.LeadsTo.join_right`, `System.Reachable.right` and 2 more |
+| `Envelope.left?` | proved | through `Event.leftDeed`, `Event.right?` and others: `Obligation.right?_inr`, `SysState.run_left` and others |
+| `Envelope.right?` | proved | through `Event.right?`, `Event.rightDeed` and others: `Obligation.Due.of_thinRight`, `Obligation.right?_inr` and others |
+| `EnvModel.left` | proved | `SysState.run_left`, `System.Invariant.join_left`, `System.LeadsTo.join_left` and others |
+| `EnvModel.right` | proved | `Obligation.Due.of_thinRight`, `SysState.deliverable_of_thinRight`, `SysState.init_thinRight` and others |
+| `SysState.left` | proved | `SysState.run_left`, `System.Invariant.join_left`, `System.LeadsTo.join_left` and others |
+| `SysState.right` | proved | `System.Invariant.join_right`, `System.LeadsTo.join_right`, `System.Reachable.right` and others |
 | `SysState.thinLeft` | proved | `System.LeadsTo.join_left`, `System.Run.Fair.left` |
-| `Event.left?` | proved | through `Event.leftDeed`, `Event.right?` and 3 more: `Obligation.right?_inr`, `SysState.run_left` and 7 more |
-| `Event.leftDeed` | proved | `SysState.run_left`, `SysState.step_left_state`, `System.Run.Fair.left` and 1 more |
+| `Event.left?` | proved | through `Event.leftDeed`, `Event.right?` and others: `Obligation.right?_inr`, `SysState.run_left` and others |
+| `Event.leftDeed` | proved | `SysState.run_left`, `SysState.step_left_state`, `System.Run.Fair.left` and others |
 | `Wiring.shown` | proved | `SysState.run_left`, `System.Run.Fair.left` |
-| `SysState.thinRight` | proved | `Obligation.Due.of_thinRight`, `SysState.deliverable_of_thinRight`, `SysState.hasMail_of_thinRight` and 3 more |
+| `SysState.thinRight` | proved | `Obligation.Due.of_thinRight`, `SysState.deliverable_of_thinRight`, `SysState.hasMail_of_thinRight` and others |
 | `Event.right?` | proved | `Obligation.right?_inr` |
 | `Event.rightDeed` | proved | `System.Run.Fair.right`, `System.Run.Fair.routed_left` |
 | `Wiring.shownRight` | proved | `SysState.init_thinRight`, `System.Run.Fair.right` |
@@ -1872,7 +1853,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `SysState.grow` | proved | `Account.Fires.grow`, `Account.Fires.handle`, `Account.Moves.grow` and 12 more |
+| `SysState.grow` | proved | `Account.Fires.grow`, `Account.Fires.handle`, `Account.Moves.grow` and others |
 | `SysState.Pending` | spec | a predicate |
 
 ## `Lanes/Proof/Outputs.lean`
@@ -1895,16 +1876,16 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Batch.due` | proved | `Batch.due_iff`, `Batch.flush_save` |
 | `Batch.put` | proved | `Batch.flush_save` |
-| `Batch.workWith` | proved | through `Batch.flush`, `Batch.run` and 1 more: `Batch.flush_save`, `Batch.run_handed` and 6 more |
-| `Batch.work` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_kernel` and 5 more |
-| `Batch.workAll` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_kernel` and 5 more |
+| `Batch.workWith` | proved | through `Batch.flush`, `Batch.run` and others: `Batch.flush_save`, `Batch.run_handed` and others |
+| `Batch.work` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_kernel` and others |
+| `Batch.workAll` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_kernel` and others |
 | `Batch.flush` | proved | `Batch.flush_save` |
-| `Batch.scan` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_kernel` and 5 more |
-| `Batch.finish` | proved | through `Batch.run`: `Batch.run_handed`, `Batch.run_kernel` and 4 more |
+| `Batch.scan` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_kernel` and others |
+| `Batch.finish` | proved | through `Batch.run`: `Batch.run_handed`, `Batch.run_kernel` and others |
 | `Batch.group` | proved | `Batch.group_ins` |
 | `Batch.Command.ins` | spec | used only in statements |
-| `Batch.run` | proved | `Batch.run_handed`, `Batch.run_kernel`, `Batch.run_peek` and 3 more |
-| `Batch.Act.ops` | proved | through `Batch.journal`: `Batch.run_handed`, `Batch.run_kernel` and 1 more |
+| `Batch.run` | proved | `Batch.run_handed`, `Batch.run_kernel`, `Batch.run_peek` and others |
+| `Batch.Act.ops` | proved | through `Batch.journal`: `Batch.run_handed`, `Batch.run_kernel` and others |
 | `Batch.Act.outputs` | proved | through `Batch.handed`: `Batch.run_handed` |
 | `Batch.Act.events` | proved | through `Batch.recorded`: `Batch.run_handed` |
 | `Batch.journal` | proved | `Batch.run_handed`, `Batch.run_kernel`, `Batch.settle_kernel` |
@@ -1950,33 +1931,33 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Kernel.cell` | proved | `Batch.run_peek`, `Journal.Upgrade.inv_load`, `Kernel.Plan.fixAll_local` and 12 more |
-| `Kernel.setCell` | proved | through `Kernel.apply`, `Kernel.boot` and 8 more: `Batch.run_handed`, `Batch.run_kernel` and 49 more |
-| `Kernel.abs` | proved | `Kernel.WellFormed.quiet_iff`, `Kernel.WellFormed.wait_forever`, `Kernel.abs_boot` and 7 more |
-| `Kernel.env` | proved | `Kernel.abs_boot`, `Kernel.accept_sound`, `Kernel.exec_reachable` and 4 more |
-| `Kernel.unschedule` | proved | through `Kernel.apply`, `Kernel.boot` and 8 more: `Batch.run_handed`, `Batch.run_kernel` and 49 more |
-| `Kernel.perform` | proved | through `Kernel.apply`, `Kernel.boot` and 8 more: `Batch.run_handed`, `Batch.run_kernel` and 49 more |
-| `Kernel.performAll` | proved | through `Kernel.apply`, `Kernel.boot` and 8 more: `Batch.run_handed`, `Batch.run_kernel` and 49 more |
-| `Kernel.down` | proved | through `Kernel.apply`, `Kernel.boot` and 8 more: `Batch.run_handed`, `Batch.run_kernel` and 49 more |
+| `Kernel.cell` | proved | `Batch.run_peek`, `Journal.Upgrade.inv_load`, `Kernel.Plan.fixAll_local` and others |
+| `Kernel.setCell` | proved | through `Kernel.apply`, `Kernel.boot` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
+| `Kernel.abs` | proved | `Kernel.WellFormed.quiet_iff`, `Kernel.WellFormed.wait_forever`, `Kernel.abs_boot` and others |
+| `Kernel.env` | proved | `Kernel.abs_boot`, `Kernel.accept_sound`, `Kernel.exec_reachable` and others |
+| `Kernel.unschedule` | proved | through `Kernel.apply`, `Kernel.boot` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
+| `Kernel.perform` | proved | through `Kernel.apply`, `Kernel.boot` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
+| `Kernel.performAll` | proved | through `Kernel.apply`, `Kernel.boot` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
+| `Kernel.down` | proved | through `Kernel.apply`, `Kernel.boot` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
 | `Kernel.settle` | proved | `Kernel.setState_settle` |
-| `Kernel.rest` | proved | through `Kernel.apply`, `Kernel.exec` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 40 more |
-| `Kernel.takeState` | proved | through `Kernel.apply`, `Kernel.exec` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 40 more |
+| `Kernel.rest` | proved | through `Kernel.apply`, `Kernel.exec` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
+| `Kernel.takeState` | proved | through `Kernel.apply`, `Kernel.exec` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
 | `Kernel.handle` | proved | `Kernel.frame_handle`, `Kernel.handleAhead_eq`, `Kernel.handle_setState` |
 | `Kernel.startActor` | proved | `Kernel.frame_startActor` |
-| `Kernel.boot` | proved | `Http.kernel_fronted_answered_le_arrived`, `Http.kernel_served_answered_le_arrived`, `Journal.Disk.torn_nil` and 13 more |
+| `Kernel.boot` | proved | `Http.kernel_fronted_answered_le_arrived`, `Http.kernel_served_answered_le_arrived`, `Journal.Disk.torn_nil` and others |
 | `Kernel.accept` | proved | `Kernel.accept_sound` |
 | `Kernel.run1` | proved | `Kernel.run1Ahead_eq`, `Kernel.run1_sound` |
 | `Kernel.fire` | proved | `Kernel.fire_sound`, `Kernel.frame_fire` |
-| `Kernel.advance` | proved | through `Kernel.apply`, `Kernel.exec`: `Batch.run_handed`, `Batch.run_kernel` and 20 more |
-| `Kernel.timerNext` | proved | through `Kernel.apply`, `Kernel.exec` and 2 more: `Batch.run_handed`, `Batch.run_kernel` and 33 more |
-| `Kernel.step` | proved | `Kernel.WellFormed.runBatch_of_due`, `Kernel.WellFormed.step_events_ne_nil`, `Kernel.WellFormed.step_of_due` and 2 more |
-| `Kernel.wait` | proved | `Kernel.WellFormed.step_events_ne_nil`, `Kernel.WellFormed.wait_for_ms`, `Kernel.WellFormed.wait_forever` and 1 more |
-| `Kernel.runBatch` | proved | `Kernel.WellFormed.runBatch`, `Kernel.WellFormed.runBatch_of_due`, `Kernel.runBatchAhead_eq` and 6 more |
+| `Kernel.advance` | proved | through `Kernel.apply`, `Kernel.exec`: `Batch.run_handed`, `Batch.run_kernel` and others |
+| `Kernel.timerNext` | proved | through `Kernel.apply`, `Kernel.exec` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
+| `Kernel.step` | proved | `Kernel.WellFormed.runBatch_of_due`, `Kernel.WellFormed.step_events_ne_nil`, `Kernel.WellFormed.step_of_due` and others |
+| `Kernel.wait` | proved | `Kernel.WellFormed.step_events_ne_nil`, `Kernel.WellFormed.wait_for_ms`, `Kernel.WellFormed.wait_forever` and others |
+| `Kernel.runBatch` | proved | `Kernel.WellFormed.runBatch`, `Kernel.WellFormed.runBatch_of_due`, `Kernel.runBatchAhead_eq` and others |
 | `Kernel.quiet` | proved | `Batch.run_resolved`, `Kernel.WellFormed.quiet_iff` |
-| `Kernel.image` | proved | `Batch.flush_save`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save` and 8 more |
-| `Kernel.Image.kernel` | proved | `Batch.flush_save`, `Journal.Begun.resume_upgraded`, `Journal.Upgrade.begin_crash` and 3 more |
+| `Kernel.image` | proved | `Batch.flush_save`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save` and others |
+| `Kernel.Image.kernel` | proved | `Batch.flush_save`, `Journal.Begun.resume_upgraded`, `Journal.Upgrade.begin_crash` and others |
 | `Kernel.apply` | proved | `Kernel.WellFormed.apply` |
-| `Kernel.exec` | proved | `Batch.run_handed`, `Batch.run_kernel`, `Batch.settle_kernel` and 18 more |
+| `Kernel.exec` | proved | `Batch.run_handed`, `Batch.run_kernel`, `Batch.settle_kernel` and others |
 
 ## `Lanes/Runtime/KernelSound.lean`
 
@@ -1996,8 +1977,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Mailbox.offer` | proved | `Mailbox.Reachable.offer_full_iff` |
-| `Mailbox.offerOrWait` | proved | through `Mailbox.Op.apply`, `Mailbox.boundedIn` and 2 more: `Mailbox.after_close`, `Mailbox.batch_since_take` and 3 more |
-| `Mailbox.take` | proved | `Mailbox.Reachable.asleep_empty`, `Mailbox.batch_since_take`, `Mailbox.close_since_take` and 2 more |
+| `Mailbox.offerOrWait` | proved | through `Mailbox.Op.apply`, `Mailbox.boundedIn` and others: `Mailbox.after_close`, `Mailbox.batch_since_take` and others |
+| `Mailbox.take` | proved | `Mailbox.Reachable.asleep_empty`, `Mailbox.batch_since_take`, `Mailbox.close_since_take` and others |
 | `Mailbox.rest` | proved | `Mailbox.rest_eq_false`, `Mailbox.woken_after_rest` |
 | `Mailbox.close` | proved | `Mailbox.after_close`, `Mailbox.close_since_take` |
 
@@ -2064,75 +2045,75 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `instHashableSigma_lanes` | tested | `Tests/Split.lean` |
 | `Signature.Inspect.shard` | tested | `Tests/Split.lean` |
 | `System.Inspect.shard` | tested | `Tests/Split.lean` |
-| `splitSig` | proved | `SysState.AtHome.step`, `SysState.init_merged_equiv`, `System.Invariant.split` and 5 more |
-| `shardWiring` | proved | through `System.split`: `SysState.AtHome.step`, `SysState.init_merged_equiv` and 6 more |
-| `System.split` | proved | `SysState.AtHome.step`, `SysState.init_merged_equiv`, `System.Invariant.split` and 5 more |
+| `splitSig` | proved | `SysState.AtHome.step`, `SysState.init_merged_equiv`, `System.Invariant.split` and others |
+| `shardWiring` | proved | through `System.split`: `SysState.AtHome.step`, `SysState.init_merged_equiv` and others |
+| `System.split` | proved | `SysState.AtHome.step`, `SysState.init_merged_equiv`, `System.Invariant.split` and others |
 | `Signature.Inspect.split` | tested | `Tests/Split.lean` |
 | `System.Inspect.split` | tested | `Tests/Split.lean` |
-| `Split.actorOf` | proved | through `EnvModel.split`, `Event.merged?` and 1 more: `SysState.AtHome.step`, `SysState.init_merged_equiv` and 6 more |
+| `Split.actorOf` | proved | through `EnvModel.split`, `Event.merged?` and others: `SysState.AtHome.step`, `SysState.init_merged_equiv` and others |
 | `Split.home` | spec | used only in statements |
-| `Split.atHome` | proved | through `EnvModel.split`: `SysState.AtHome.step`, `SysState.init_merged_equiv` and 1 more |
+| `Split.atHome` | proved | through `EnvModel.split`: `SysState.AtHome.step`, `SysState.init_merged_equiv` and others |
 | `Split.route` | tested | `Tests/Split.lean` |
-| `Split.output?` | proved | through `Event.merged?`, `SysState.merged`: `SysState.AtHome.step`, `SysState.init_merged_equiv` and 6 more |
-| `Split.msgOf` | proved | through `Event.merged?`, `SysState.merged`: `SysState.AtHome.step`, `SysState.init_merged_equiv` and 6 more |
-| `Envelope.merged` | proved | through `Event.merged?`, `SysState.merged`: `SysState.AtHome.step`, `SysState.init_merged_equiv` and 6 more |
+| `Split.output?` | proved | through `Event.merged?`, `SysState.merged`: `SysState.AtHome.step`, `SysState.init_merged_equiv` and others |
+| `Split.msgOf` | proved | through `Event.merged?`, `SysState.merged`: `SysState.AtHome.step`, `SysState.init_merged_equiv` and others |
+| `Envelope.merged` | proved | through `Event.merged?`, `SysState.merged`: `SysState.AtHome.step`, `SysState.init_merged_equiv` and others |
 | `Envelope.atHome` | tested | `Tests/Split.lean` |
 | `Event.merged?` | spec | used only in statements |
 | `Event.routed` | proved | `SysState.AtHome.step` |
 | `EnvModel.split` | proved | `SysState.AtHome.step`, `SysState.init_merged_equiv`, `System.SplitReachable.merged_of_init` |
-| `SysState.merged` | proved | `SysState.AtHome.step`, `SysState.init_merged_equiv`, `System.Invariant.split` and 5 more |
+| `SysState.merged` | proved | `SysState.AtHome.step`, `SysState.init_merged_equiv`, `System.Invariant.split` and others |
 | `System.SteadyBoot` | spec | a predicate |
 
 ## `Lanes/Runtime/ShardsSound.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `joinAllSig` | proved | through `shardsSig`: `Shards.AtHome.step`, `SysState.init_unsharded_equiv` and 5 more |
-| `joinAllEffect` | proved | through `SysState.unsharded`: `Shards.AtHome.step`, `SysState.init_unsharded_equiv` and 5 more |
-| `System.joinAll` | proved | through `SysState.unsharded`: `Shards.AtHome.step`, `SysState.init_unsharded_equiv` and 5 more |
-| `shardsSig` | proved | `Shards.AtHome.step`, `SysState.init_unsharded_equiv`, `System.Invariant.shards` and 4 more |
-| `shardsRoute` | proved | through `SysState.unsharded`: `Shards.AtHome.step`, `SysState.init_unsharded_equiv` and 5 more |
-| `System.shards` | proved | `Shards.AtHome.step`, `SysState.init_unsharded_equiv`, `System.Invariant.shards` and 4 more |
+| `joinAllSig` | proved | through `shardsSig`: `Shards.AtHome.step`, `SysState.init_unsharded_equiv` and others |
+| `joinAllEffect` | proved | through `SysState.unsharded`: `Shards.AtHome.step`, `SysState.init_unsharded_equiv` and others |
+| `System.joinAll` | proved | through `SysState.unsharded`: `Shards.AtHome.step`, `SysState.init_unsharded_equiv` and others |
+| `shardsSig` | proved | `Shards.AtHome.step`, `SysState.init_unsharded_equiv`, `System.Invariant.shards` and others |
+| `shardsRoute` | proved | through `SysState.unsharded`: `Shards.AtHome.step`, `SysState.init_unsharded_equiv` and others |
+| `System.shards` | proved | `Shards.AtHome.step`, `SysState.init_unsharded_equiv`, `System.Invariant.shards` and others |
 | `Signature.Inspect.joinAll` | tested | `Tests/Split.lean` |
 | `System.Inspect.joinAll` | tested | `Tests/Split.lean` |
 | `Signature.Inspect.shards` | tested | `Tests/Split.lean` |
 | `System.Inspect.shards` | tested | `Tests/Split.lean` |
-| `Shards.atHome` | proved | through `EnvModel.shards`: `Shards.AtHome.step`, `SysState.init_unsharded_equiv` and 1 more |
+| `Shards.atHome` | proved | through `EnvModel.shards`: `Shards.AtHome.step`, `SysState.init_unsharded_equiv` and others |
 | `Shards.route` | tested | `Tests/Split.lean` |
-| `Shards.output?` | proved | through `SysState.unsharded`: `Shards.AtHome.step`, `SysState.init_unsharded_equiv` and 5 more |
+| `Shards.output?` | proved | through `SysState.unsharded`: `Shards.AtHome.step`, `SysState.init_unsharded_equiv` and others |
 | `Shards.routed` | proved | `Shards.AtHome.step` |
-| `Envelope.unsharded` | proved | through `SysState.unsharded`: `Shards.AtHome.step`, `SysState.init_unsharded_equiv` and 5 more |
+| `Envelope.unsharded` | proved | through `SysState.unsharded`: `Shards.AtHome.step`, `SysState.init_unsharded_equiv` and others |
 | `Envelope.atHomeAll` | tested | `Tests/Split.lean` |
 | `Event.unsharded?` | spec | used only in statements |
 | `EnvModel.shards` | proved | `Shards.AtHome.step`, `SysState.init_unsharded_equiv`, `System.ShardsReachable.unsharded_of_init` |
-| `SysState.unsharded` | proved | `Shards.AtHome.step`, `SysState.init_unsharded_equiv`, `System.Invariant.shards` and 4 more |
+| `SysState.unsharded` | proved | `Shards.AtHome.step`, `SysState.init_unsharded_equiv`, `System.Invariant.shards` and others |
 | `Shards.effect` | spec | used only in statements |
 
 ## `Lanes/Runtime/Wave.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Kernel.replay` | proved | through `Kernel.Plan.fixAll`, `Kernel.Plan.real` and 6 more: `Kernel.Plan.fixAll_local`, `Kernel.good_plan` and 7 more |
-| `Kernel.ahead` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 2 more |
+| `Kernel.replay` | proved | through `Kernel.Plan.fixAll`, `Kernel.Plan.real` and others: `Kernel.Plan.fixAll_local`, `Kernel.good_plan` and others |
+| `Kernel.ahead` | proved | through `Kernel.plan`, `Kernel.runWaves` and others: `Kernel.good_plan`, `Kernel.runWaves_eq` and others |
 | `Kernel.Fits` | spec | a predicate |
 | `Kernel.setState` | proved | `Kernel.Plan.fixAll_local`, `Kernel.handle_setState`, `Kernel.setState_settle` |
-| `Kernel.restAs` | proved | through `Kernel.handleAhead`, `Kernel.run1Ahead` and 4 more: `Kernel.handleAhead_eq`, `Kernel.run1Ahead_eq` and 5 more |
-| `Kernel.Plan.set` | proved | through `Kernel.handleAhead`, `Kernel.plan` and 5 more: `Kernel.good_plan`, `Kernel.handleAhead_eq` and 6 more |
-| `Kernel.Plan.drop` | proved | through `Kernel.Plan.fixAll`, `Kernel.Plan.real` and 5 more: `Kernel.Plan.fixAll_local`, `Kernel.good_plan` and 7 more |
-| `Kernel.Plan.reset` | proved | through `Kernel.run1Ahead`, `Kernel.runBatchAhead` and 3 more: `Kernel.run1Ahead_eq`, `Kernel.runBatchAhead_eq` and 4 more |
-| `Kernel.Plan.fixAt` | proved | through `Kernel.Plan.fixAll`, `Kernel.Plan.real` and 5 more: `Kernel.Plan.fixAll_local`, `Kernel.good_plan` and 7 more |
+| `Kernel.restAs` | proved | through `Kernel.handleAhead`, `Kernel.run1Ahead` and others: `Kernel.handleAhead_eq`, `Kernel.run1Ahead_eq` and others |
+| `Kernel.Plan.set` | proved | through `Kernel.handleAhead`, `Kernel.plan` and others: `Kernel.good_plan`, `Kernel.handleAhead_eq` and others |
+| `Kernel.Plan.drop` | proved | through `Kernel.Plan.fixAll`, `Kernel.Plan.real` and others: `Kernel.Plan.fixAll_local`, `Kernel.good_plan` and others |
+| `Kernel.Plan.reset` | proved | through `Kernel.run1Ahead`, `Kernel.runBatchAhead` and others: `Kernel.run1Ahead_eq`, `Kernel.runBatchAhead_eq` and others |
+| `Kernel.Plan.fixAt` | proved | through `Kernel.Plan.fixAll`, `Kernel.Plan.real` and others: `Kernel.Plan.fixAll_local`, `Kernel.good_plan` and others |
 | `Kernel.Plan.fixAll` | proved | `Kernel.Plan.fixAll_local` |
-| `Kernel.Plan.real` | proved | `Kernel.good_plan`, `Kernel.handleAhead_eq`, `Kernel.run1Ahead_eq` and 3 more |
+| `Kernel.Plan.real` | proved | `Kernel.good_plan`, `Kernel.handleAhead_eq`, `Kernel.run1Ahead_eq` and others |
 | `Kernel.Plan.Good` | spec | a predicate |
 | `Kernel.handleAhead` | proved | `Kernel.handleAhead_eq` |
 | `Kernel.run1Ahead` | proved | `Kernel.run1Ahead_eq` |
 | `Kernel.stepAhead` | proved | `Kernel.stepAhead_eq` |
 | `Kernel.runBatchAhead` | proved | `Kernel.runBatchAhead_eq`, `Kernel.wave_eq` |
-| `Kernel.mail` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 2 more |
-| `Kernel.Job.run` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 2 more |
-| `Kernel.jobs` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 2 more |
-| `Kernel.chunks` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 2 more |
-| `Kernel.Plan.add` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 2 more |
+| `Kernel.mail` | proved | through `Kernel.plan`, `Kernel.runWaves` and others: `Kernel.good_plan`, `Kernel.runWaves_eq` and others |
+| `Kernel.Job.run` | proved | through `Kernel.plan`, `Kernel.runWaves` and others: `Kernel.good_plan`, `Kernel.runWaves_eq` and others |
+| `Kernel.jobs` | proved | through `Kernel.plan`, `Kernel.runWaves` and others: `Kernel.good_plan`, `Kernel.runWaves_eq` and others |
+| `Kernel.chunks` | proved | through `Kernel.plan`, `Kernel.runWaves` and others: `Kernel.good_plan`, `Kernel.runWaves_eq` and others |
+| `Kernel.Plan.add` | proved | through `Kernel.plan`, `Kernel.runWaves` and others: `Kernel.good_plan`, `Kernel.runWaves_eq` and others |
 | `Kernel.plan` | proved | `Kernel.good_plan`, `Kernel.wave_eq` |
 | `Kernel.Frame` | spec | a predicate |
 | `Kernel.waves` | proved | `Kernel.waves_eq` |
@@ -2194,7 +2175,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Spec.stutter` | proved | through `System.Run`, `System.Run.event` and 2 more: `Http.Gate.pending_answered`, `Http.fronted_arrival_answered` and 23 more |
+| `Spec.stutter` | proved | through `System.Run`, `System.Run.event` and others: `Http.Gate.pending_answered`, `Http.fronted_arrival_answered` and others |
 | `Obligation.event` | proved | `Obligation.right?_inr`, `System.LeadsTo.ensures_of_invariant` |
 | `Obligation.Due` | spec | a predicate |
 | `Obligation.Restarted` | spec | a predicate |
@@ -2242,7 +2223,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Spec.lts` | proved | `Account.Holds.passes`, `Check.Monitor.complete`, `Check.Monitor.ok_iff` and 10 more |
+| `Spec.lts` | proved | `Account.Holds.passes`, `Check.Monitor.complete`, `Check.Monitor.ok_iff` and others |
 | `Spec.Reachable` | spec | a predicate |
 | `Spec.Invariant` | spec | a predicate |
 | `Refines` | spec | a predicate |
@@ -2257,7 +2238,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Service.spec` | proved | `Account.Holds.passes`, `Account.implements`, `Account.implements_timed` and 10 more |
+| `Service.spec` | proved | `Account.Holds.passes`, `Account.implements`, `Account.implements_timed` and others |
 | `Service.Stable` | spec | a predicate |
 | `Service.Only` | spec | a predicate |
 | `Service.Took` | spec | a predicate |
@@ -2274,23 +2255,23 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `System.sem` | proved | `Account.implements`, `Account.implements_timed`, `Once.server_implements` and 14 more |
+| `System.sem` | proved | `Account.implements`, `Account.implements_timed`, `Once.server_implements` and others |
 | `System.Refines` | spec | a predicate |
 
 ## `Lanes/Testing/Browser.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Testing.Browser.new` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and 1 more |
+| `Testing.Browser.new` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and others |
 | `Testing.Browser.at` | tested | `Tests/Testing.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
-| `Testing.Kept.parse` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and 1 more |
-| `Testing.Kept.covers` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and 1 more |
+| `Testing.Kept.parse` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and others |
+| `Testing.Kept.covers` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and others |
 | `Testing.Browser.cookie` | tested | `Tests/OAuth.lean` |
-| `Testing.Browser.keep` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and 1 more |
+| `Testing.Browser.keep` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and others |
 | `Testing.Browser.forget` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
-| `Testing.Browser.record` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and 1 more |
-| `Testing.Browser.call` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and 1 more |
-| `Testing.Browser.get` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and 1 more |
+| `Testing.Browser.record` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and others |
+| `Testing.Browser.call` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and others |
+| `Testing.Browser.get` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and others |
 | `Testing.Browser.post` | tested | `Tests/Testing.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
 | `Testing.Browser.submit` | tested | `Tests/Testing.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
 
@@ -2300,9 +2281,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Testing.listen` | tested | `Tests/Testing.lean` |
 | `Testing.json` | tested | `Tests/Testing.lean` |
-| `Testing.text` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and 1 more |
-| `Testing.shows` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and 1 more |
-| `Testing.status` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and 4 more |
+| `Testing.text` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and others |
+| `Testing.shows` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and others |
+| `Testing.status` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
 | `Testing.location` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
 | `Testing.entity?` | tested | `Tests/Testing.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
 | `Testing.unescape` | tested | `Tests/Testing.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
@@ -2328,17 +2309,17 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Testing.OAuth.Fake.at` | tested | `Tests/OAuth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
 | `Testing.OAuth.Fake.authorization` | tested | `Tests/OAuth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
 | `Testing.OAuth.Fake.oidc` | tested | `Tests/OAuth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
-| `Testing.OAuth.str` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and 1 more |
+| `Testing.OAuth.str` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and others |
 | `Testing.OAuth.Fake.discovery` | tested | `Tests/OAuth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
-| `Testing.OAuth.yes` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and 1 more |
-| `Testing.OAuth.readUser` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and 1 more |
+| `Testing.OAuth.yes` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and others |
+| `Testing.OAuth.readUser` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and others |
 | `Testing.OAuth.Fake.userApi` | tested | `Tests/OAuth.lean` |
 | `Testing.OAuth.Fake.client` | tested | `Tests/OAuth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
 | `Testing.OAuth.b64s` | tested | `Tests/OAuth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
 | `Testing.OAuth.nowSeconds` | tested | `Tests/OAuth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
 | `Testing.OAuth.Fake.mint` | tested | `Tests/OAuth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
-| `Testing.OAuth.userJson` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and 1 more |
-| `Testing.OAuth.emailsJson` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and 1 more |
+| `Testing.OAuth.userJson` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and others |
+| `Testing.OAuth.emailsJson` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean`, `Tests/TutorialWeb.lean` and others |
 | `Testing.OAuth.Fake.take` | tested | `Tests/OAuth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
 | `Testing.OAuth.Fake.user?` | tested | `Tests/OAuth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
 | `Testing.OAuth.Fake.handle` | tested | `Tests/OAuth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
@@ -2352,44 +2333,44 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Testing.S3.raw?` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and 5 more |
-| `Testing.S3.answer` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and 5 more |
-| `Testing.S3.failure` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and 5 more |
-| `Testing.S3.time?` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and 5 more |
-| `Testing.S3.decodePair` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and 5 more |
-| `Testing.S3.splitTarget` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and 5 more |
-| `Testing.S3.authField` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 2 more |
-| `Testing.S3.verified` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 2 more |
-| `Testing.S3.escapeKey` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 2 more |
-| `Testing.S3.listXml` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 2 more |
-| `Testing.S3.range?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 2 more |
-| `Testing.S3.serve` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 2 more |
-| `Testing.S3.find?` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and 5 more |
-| `Testing.S3.split` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and 5 more |
-| `Testing.S3.quoted` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and 5 more |
-| `Testing.S3.formParts` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and 5 more |
-| `Testing.S3.formBody` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3Upload.lean` and 3 more |
-| `Testing.S3.etag` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and 5 more |
-| `Testing.S3.servePost` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and 5 more |
-| `Testing.S3.unquote` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 2 more |
-| `Testing.S3.multipartEtag` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 2 more |
-| `Testing.S3.xmlAnswer` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 2 more |
-| `Testing.S3.listPartsXml` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 2 more |
-| `Testing.S3.completedXml` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 2 more |
-| `Testing.S3.manifest?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 2 more |
-| `Testing.S3.complete` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 2 more |
-| `Testing.S3.serveMultipart` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 2 more |
-| `Testing.S3.serveAll` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 2 more |
-| `Testing.S3.Fake.start` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 2 more |
+| `Testing.S3.raw?` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
+| `Testing.S3.answer` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
+| `Testing.S3.failure` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
+| `Testing.S3.time?` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
+| `Testing.S3.decodePair` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
+| `Testing.S3.splitTarget` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
+| `Testing.S3.authField` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
+| `Testing.S3.verified` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
+| `Testing.S3.escapeKey` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
+| `Testing.S3.listXml` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
+| `Testing.S3.range?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
+| `Testing.S3.serve` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
+| `Testing.S3.find?` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
+| `Testing.S3.split` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
+| `Testing.S3.quoted` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
+| `Testing.S3.formParts` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
+| `Testing.S3.formBody` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3Upload.lean` and others |
+| `Testing.S3.etag` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
+| `Testing.S3.servePost` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
+| `Testing.S3.unquote` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
+| `Testing.S3.multipartEtag` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
+| `Testing.S3.xmlAnswer` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
+| `Testing.S3.listPartsXml` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
+| `Testing.S3.completedXml` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
+| `Testing.S3.manifest?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
+| `Testing.S3.complete` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
+| `Testing.S3.serveMultipart` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
+| `Testing.S3.serveAll` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
+| `Testing.S3.Fake.start` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
 | `Testing.S3.Fake.object?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
 | `Testing.S3.Fake.holds` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
 | `Testing.S3.Fake.keys` | tested | `Tests/S3.lean` |
 | `Testing.S3.Fake.refuse` | tested | `Tests/S3.lean` |
 | `Testing.S3.Fake.refusing` | tested | `Tests/S3.lean` |
-| `Testing.S3.Fake.stop` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 2 more |
-| `Testing.S3.follow` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and 4 more |
-| `Testing.S3.code` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3Upload.lean` and 2 more |
-| `Testing.S3.postForm` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3Upload.lean` and 2 more |
+| `Testing.S3.Fake.stop` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
+| `Testing.S3.follow` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
+| `Testing.S3.code` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3Upload.lean` and others |
+| `Testing.S3.postForm` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3Upload.lean` and others |
 
 ## `Lanes/Testing/Transcode.lean`
 
@@ -2413,7 +2394,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `OAuth.DisplayName.maxChars` | proved | `OAuth.DisplayName.length_le` |
-| `OAuth.DisplayName.allowed` | proved | through `OAuth.DisplayName.val`, `OAuth.Identity` and 1 more: `OAuth.DisplayName.length_le`, `OAuth.IdToken.check_ok_iff` and 4 more |
+| `OAuth.DisplayName.allowed` | proved | through `OAuth.DisplayName.val`, `OAuth.Identity` and others: `OAuth.DisplayName.length_le`, `OAuth.IdToken.check_ok_iff` and others |
 | `OAuth.DisplayName.Valid` | spec | a predicate |
 | `OAuth.DisplayName.instDecidableValid` | proved | its type, `Decidable` |
 | `OAuth.DisplayName.of?` | proved | through `OAuth.IdToken.Claims.identity`: `OAuth.IdToken.check_ok_iff`, `OAuth.IdToken.verify_accepted` |
@@ -2434,9 +2415,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Jose.Alg.name` | spec | used only in statements |
 | `Jose.Alg.parse?` | proved | `Jose.Alg.parse?_eq_some` |
 | `Jose.Jwk.fits` | proved | `Jose.verify_ok`, `OAuth.IdToken.verify_accepted` |
-| `Jose.str?` | proved | through `Jose.Compact.read`, `Jose.readHeader`: `Jose.Compact.read_alg`, `Jose.readHeader_alg` and 2 more |
-| `Jose.bytes?` | proved | through `Jose.Compact.read`: `Jose.Compact.read_alg`, `Jose.verify_ok` and 1 more |
-| `Jose.Jwk.read?` | proved | through `Jose.Compact.read`: `Jose.Compact.read_alg`, `Jose.verify_ok` and 1 more |
+| `Jose.str?` | proved | through `Jose.Compact.read`, `Jose.readHeader`: `Jose.Compact.read_alg`, `Jose.readHeader_alg` and others |
+| `Jose.bytes?` | proved | through `Jose.Compact.read`: `Jose.Compact.read_alg`, `Jose.verify_ok` and others |
+| `Jose.Jwk.read?` | proved | through `Jose.Compact.read`: `Jose.Compact.read_alg`, `Jose.verify_ok` and others |
 | `Jose.readKeys` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Jose.lean`, `Tests/Signature.lean` |
 | `Jose.readHeader` | proved | `Jose.readHeader_alg` |
 | `Jose.Compact.read` | proved | `Jose.Compact.read_alg`, `Jose.verify_ok`, `OAuth.IdToken.verify_accepted` |
@@ -2458,7 +2439,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Auth.Password.digest` | tested | `Tests/Auth.lean`, `Tests/Crypto.lean` |
 | `Auth.Attempts.codec` | proved | its type, `Codec` |
 | `Auth.instCodableAttempts` | proved | its type, `Codable` |
-| `Auth.Attempts.fail` | proved | `Auth.Attempts.bounded_fail`, `Auth.Attempts.fail_repeat`, `Auth.Attempts.locked_stays` and 1 more |
+| `Auth.Attempts.fail` | proved | `Auth.Attempts.bounded_fail`, `Auth.Attempts.fail_repeat`, `Auth.Attempts.locked_stays` and others |
 | `Auth.Attempts.succeed` | proved | `Auth.Attempts.bounded_succeed`, `Auth.Attempts.locked_stays` |
 | `Auth.Attempts.unlock` | spec | used only in statements |
 | `Auth.Attempts.Bounded` | spec | a predicate |
@@ -2467,10 +2448,10 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Auth.Session.expired` | proved | `Auth.Session.expired_mono`, `Auth.Sessions.accepts_iff` |
 | `Auth.Sessions.codec` | proved | its type, `Codec` |
 | `Auth.instCodableSessions` | proved | its type, `Codable` |
-| `Auth.Sessions.ids` | proved | `Auth.Sessions.ids_starts`, `Auth.Sessions.length_close_le`, `Auth.Sessions.length_start_le` and 1 more |
-| `Auth.Sessions.at_s` | proved | through `Auth.Sessions.accepts`, `Auth.Sessions.start` and 1 more: `Auth.Sessions.Ended.run`, `Auth.Sessions.accepts_iff` and 5 more |
+| `Auth.Sessions.ids` | proved | `Auth.Sessions.ids_starts`, `Auth.Sessions.length_close_le`, `Auth.Sessions.length_start_le` and others |
+| `Auth.Sessions.at_s` | proved | through `Auth.Sessions.accepts`, `Auth.Sessions.start` and others: `Auth.Sessions.Ended.run`, `Auth.Sessions.accepts_iff` and others |
 | `Auth.Sessions.sweep` | proved | `Auth.Sessions.sweep_ended` |
-| `Auth.Sessions.start` | proved | `Auth.Sessions.ids_starts`, `Auth.Sessions.length_start_le`, `Auth.Sessions.live_open` and 1 more |
+| `Auth.Sessions.start` | proved | `Auth.Sessions.ids_starts`, `Auth.Sessions.length_start_le`, `Auth.Sessions.live_open` and others |
 | `Auth.Sessions.close` | proved | `Auth.Sessions.length_close_le`, `Auth.Sessions.live_close` |
 | `Auth.Sessions.live` | proved | `Auth.Sessions.live_close`, `Auth.Sessions.live_open` |
 | `Auth.Sessions.accepts` | proved | `Auth.Sessions.Ended.run`, `Auth.Sessions.accepts_iff`, `Auth.Sessions.sweep_ended` |
@@ -2495,7 +2476,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `OAuth.Ticket.derive` | checked | `Tests/OAuth.lean` |
 | `OAuth.Ticket.grant` | checked | `Tests/OAuth.lean` |
 | `OAuth.check` | proved | `OAuth.check_ok` |
-| `OAuth.Used.claim` | proved | `OAuth.Used.claim_holds`, `OAuth.Used.claim_ok`, `OAuth.Used.claim_ok_holds` and 1 more |
+| `OAuth.Used.claim` | proved | `OAuth.Used.claim_holds`, `OAuth.Used.claim_ok`, `OAuth.Used.claim_ok_holds` and others |
 | `OAuth.Used.Holds` | spec | a predicate |
 | `OAuth.Used.run` | proved | `OAuth.Used.accepted_later`, `OAuth.Used.accepted_once` |
 | `OAuth.authorizeUrl` | checked | `Tests/OAuth.lean` |
@@ -2529,7 +2510,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Hmac.Key.of` | checked | `Tests/OAuth.lean` |
 | `Hmac.Key.mac` | proved | `Auth.checkForm_other`, `Auth.verify_sign_other` |
 | `Auth.message` | proved | `Auth.checkForm_other`, `Auth.message_inj`, `Auth.verify_sign_other` |
-| `Auth.tag` | proved | through `Auth.checkForm`, `Auth.sign`: `Auth.checkForm_formToken`, `Auth.checkForm_iff` and 4 more |
+| `Auth.tag` | proved | through `Auth.checkForm`, `Auth.sign`: `Auth.checkForm_formToken`, `Auth.checkForm_iff` and others |
 | `Auth.sign` | proved | `Auth.verify_eq_some`, `Auth.verify_sign`, `Auth.verify_sign_other` |
 | `Auth.verify` | proved | `Auth.verify_eq_some`, `Auth.verify_sign`, `Auth.verify_sign_other` |
 | `Auth.formToken` | proved | `Auth.checkForm_formToken`, `Auth.checkForm_iff`, `Auth.checkForm_other` |
@@ -2539,9 +2520,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Html.empty` | tested | `Tests/Html.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` and 1 more |
+| `Html.empty` | tested | `Tests/Html.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` and others |
 | `Html.instInhabited` | tested | `Tests/Html.lean` |
-| `Html.escapeChar` | proved | through `Html.escape`, `Html.render`: `Html.escape_safe`, `Html.lex_render` and 1 more |
+| `Html.escapeChar` | proved | through `Html.escape`, `Html.render`: `Html.escape_safe`, `Html.lex_render` and others |
 | `Html.escape` | proved | `Html.escape_safe` |
 | `Html.nameChar` | proved | `Html.mem_safeName`, `Html.nameChar_safe` |
 | `Html.safeName` | proved | `Html.mem_safeName`, `Html.render_void` |
@@ -2560,19 +2541,19 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Html.render` | proved | `Html.lex_render`, `Html.render_void` |
 | `Html.renderAll` | proved | through `Html.render`: `Html.lex_render`, `Html.render_void` |
 | `Html.classes` | tested | `Tests/Html.lean` |
-| `Html.document` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 5 more |
-| `instToHtmlHtml` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 5 more |
-| `instToHtmlString` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 5 more |
+| `Html.document` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and others |
+| `instToHtmlHtml` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and others |
+| `instToHtmlString` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and others |
 | `instToHtmlNat` | tested | `Tests/Html.lean` |
-| `instToHtmlInt` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
-| `instToHtmlList` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 5 more |
+| `instToHtmlInt` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and others |
+| `instToHtmlList` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and others |
 | `instToHtmlArray` | tested | `Tests/Html.lean` |
 | `instToHtmlOption` | tested | `Tests/Html.lean` |
-| `instToAttrString` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 5 more |
+| `instToAttrString` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and others |
 | `instToAttrListString` | tested | `Tests/Html.lean` |
 | `instToAttrNat` | tested | `Tests/Html.lean` |
 | `instToAttrInt` | tested | `Tests/Html.lean` |
-| `instToAttrBool` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 5 more |
+| `instToAttrBool` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and others |
 | `instToAttrOption` | tested | `Tests/Html.lean` |
 
 ## `Lanes/Web/Html/BasicSound.lean`
@@ -2594,19 +2575,19 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Hx.methodAttr` | proved | `Hx.methodAttr_inj`, `Hx.request_match?` |
 | `Hx.request` | proved | `Hx.request_match?` |
-| `Hx.target` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
+| `Hx.target` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and others |
 | `Hx.Swap.name` | tested | `Tests/Html.lean` |
 | `Hx.swap` | tested | `Tests/Html.lean` |
 | `Hx.eventName` | proved | `Hx.eventName_plain`, `Hx.mem_eventName` |
 | `Hx.Trigger.render` | proved | `Hx.render_plain` |
-| `Hx.trigger` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
+| `Hx.trigger` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and others |
 | `Hx.confirm` | tested | `Tests/Html.lean` |
 | `Hx.boost` | tested | `Tests/Html.lean` |
 | `Hx.pushUrl` | tested | `Tests/Html.lean` |
 | `Hx.indicator` | tested | `Tests/Html.lean` |
 | `Hx.events` | tested | `Tests/Html.lean` |
 | `Http.Request.isHtmx` | tested | `Tests/Html.lean` |
-| `Http.Response.trigger` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
+| `Http.Response.trigger` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and others |
 | `Http.Response.hxRedirect` | tested | `Tests/Html.lean` |
 
 ## `Lanes/Web/Http/Basic.lean`
@@ -2616,23 +2597,23 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.reprBody` | proved | through `Http.Request.field?`, `Http.Request.form`: `Http.Request.field?_eq_lookup`, `Http.Request.form_encodeForm` |
 | `Http.Method.codec` | proved | its type, `Codec` |
 | `Http.Request.codec` | proved | its type, `Codec` |
-| `Http.hexValue?` | proved | through `Http.Request.field?`, `Http.Request.form` and 4 more: `Http.Request.field?_eq_lookup`, `Http.Request.form_encodeForm` and 4 more |
-| `Http.percentDecodeBytes` | proved | through `Http.Request.field?`, `Http.Request.form` and 3 more: `Http.Request.field?_eq_lookup`, `Http.Request.form_encodeForm` and 3 more |
+| `Http.hexValue?` | proved | through `Http.Request.field?`, `Http.Request.form` and others: `Http.Request.field?_eq_lookup`, `Http.Request.form_encodeForm` and others |
+| `Http.percentDecodeBytes` | proved | through `Http.Request.field?`, `Http.Request.form` and others: `Http.Request.field?_eq_lookup`, `Http.Request.form_encodeForm` and others |
 | `Http.percentDecode` | proved | `Http.percentDecode_percentEncode` |
-| `Http.hexDigit` | proved | through `Http.encodeForm`, `Http.percentEncode`: `Http.Request.form_encodeForm`, `Http.parseForm_encodeForm` and 2 more |
-| `Http.unreserved` | proved | through `Http.encodeForm`, `Http.percentEncode`: `Http.Request.form_encodeForm`, `Http.parseForm_encodeForm` and 2 more |
-| `Http.percentEncodeByte` | proved | through `Http.encodeForm`, `Http.percentEncode`: `Http.Request.form_encodeForm`, `Http.parseForm_encodeForm` and 2 more |
+| `Http.hexDigit` | proved | through `Http.encodeForm`, `Http.percentEncode`: `Http.Request.form_encodeForm`, `Http.parseForm_encodeForm` and others |
+| `Http.unreserved` | proved | through `Http.encodeForm`, `Http.percentEncode`: `Http.Request.form_encodeForm`, `Http.parseForm_encodeForm` and others |
+| `Http.percentEncodeByte` | proved | through `Http.encodeForm`, `Http.percentEncode`: `Http.Request.form_encodeForm`, `Http.parseForm_encodeForm` and others |
 | `Http.percentEncode` | proved | `Http.percentDecode_percentEncode`, `Http.percentEncode_plain` |
 | `Http.parseForm` | proved | `Http.parseForm_encodeForm` |
 | `Http.encodeForm` | proved | `Http.Request.form_encodeForm`, `Http.parseForm_encodeForm` |
 | `Http.Request.param?` | spec | used only in statements |
-| `Http.Request.header?` | proved | `Http.Conn.respond_opens`, `Http.Request.header?_eq_lookup`, `Http.Request.sameOrigin_iff` and 1 more |
+| `Http.Request.header?` | proved | `Http.Conn.respond_opens`, `Http.Request.header?_eq_lookup`, `Http.Request.sameOrigin_iff` and others |
 | `Http.Request.text?` | proved | through `Http.Request.field?`, `Http.Request.form`: `Http.Request.field?_eq_lookup`, `Http.Request.form_encodeForm` |
 | `Http.Request.form` | proved | `Http.Request.field?_eq_lookup`, `Http.Request.form_encodeForm` |
 | `Http.Request.field?` | proved | `Http.Request.field?_eq_lookup` |
-| `Http.Response.ofText` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean`, `Tests/HttpConn.lean` and 3 more |
-| `Http.Response.text` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean`, `Tests/HttpConn.lean` and 3 more |
-| `Http.Response.html` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 5 more |
+| `Http.Response.ofText` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean`, `Tests/HttpConn.lean` and others |
+| `Http.Response.text` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean`, `Tests/HttpConn.lean` and others |
+| `Http.Response.html` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and others |
 | `Http.Response.json` | tested | `Tests/Html.lean` |
 | `Http.Response.empty` | tested | `Tests/Auth.lean`, `Tests/Html.lean` |
 | `Http.Response.redirect` | checked | `Tests/SharedCache.lean` |
@@ -2642,13 +2623,13 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Http.Conn.closing` | proved | through `Http.Conn.answer`, `Http.Conn.encode` and 8 more: `Http.Conn.answer_ignored`, `Http.Conn.answer_waiting` and 20 more |
-| `Http.Conn.nosniff` | proved | through `Http.Conn.answer`, `Http.Conn.encode` and 7 more: `Http.Conn.answer_ignored`, `Http.Conn.answer_waiting` and 19 more |
+| `Http.Conn.closing` | proved | through `Http.Conn.answer`, `Http.Conn.encode` and others: `Http.Conn.answer_ignored`, `Http.Conn.answer_waiting` and others |
+| `Http.Conn.nosniff` | proved | through `Http.Conn.answer`, `Http.Conn.encode` and others: `Http.Conn.answer_ignored`, `Http.Conn.answer_waiting` and others |
 | `Http.Conn.sendable` | proved | `Http.Conn.read_encode`, `Http.Conn.sendable_writable` |
 | `Http.Conn.encode` | proved | `Http.Conn.answer_waiting`, `Http.Conn.read_encode` |
-| `Http.Conn.refusal` | proved | through `Http.Conn.pump`, `Http.Conn.run` and 1 more: `Http.Conn.pump_piece`, `Http.Conn.run_buffer` and 8 more |
-| `Http.Conn.timeout` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and 7 more |
-| `Http.Conn.continueWire` | proved | through `Http.Conn.pump`, `Http.Conn.run` and 1 more: `Http.Conn.pump_piece`, `Http.Conn.run_buffer` and 8 more |
+| `Http.Conn.refusal` | proved | through `Http.Conn.pump`, `Http.Conn.run` and others: `Http.Conn.pump_piece`, `Http.Conn.run_buffer` and others |
+| `Http.Conn.timeout` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and others |
+| `Http.Conn.continueWire` | proved | through `Http.Conn.pump`, `Http.Conn.run` and others: `Http.Conn.pump_piece`, `Http.Conn.run_buffer` and others |
 | `Http.Conn.streamed` | proved | `Http.Conn.read_streamed` |
 | `Http.Conn.streamable` | proved | `Http.Conn.read_streamed`, `Http.Conn.respond_opens` |
 | `Http.Conn.streamHead` | proved | `Http.Conn.read_streamed`, `Http.Conn.respond_opens` |
@@ -2658,35 +2639,35 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Conn.room` | proved | `Http.Conn.wantsInput_room` |
 | `Http.Conn.wantsInput` | proved | `Http.Conn.wantsInput_room` |
 | `Http.Conn.deadline` | proved | `Http.Conn.step_tick` |
-| `Http.Conn.settle` | proved | through `Http.Conn.pump`, `Http.Conn.run` and 1 more: `Http.Conn.pump_piece`, `Http.Conn.run_buffer` and 8 more |
-| `Http.Conn.waitMore` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and 7 more |
-| `Http.Conn.streamHead?` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and 7 more |
-| `Http.Conn.Inflow.start` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and 7 more |
-| `Http.Conn.begin` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and 7 more |
-| `Http.Conn.take` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and 7 more |
-| `Http.Conn.flushSlots` | proved | through `Http.Conn.flushStream`, `Http.Conn.run` and 1 more: `Http.Conn.flushStream_ended`, `Http.Conn.flushStream_going` and 9 more |
-| `Http.Conn.flush` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and 7 more |
-| `Http.Conn.finish` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and 7 more |
-| `Http.Conn.Inflow.next` | proved | through `Http.Conn.Inflow.gather`, `Http.Conn.run` and 1 more: `Http.Conn.gather_length`, `Http.Conn.pump_piece` and 9 more |
+| `Http.Conn.settle` | proved | through `Http.Conn.pump`, `Http.Conn.run` and others: `Http.Conn.pump_piece`, `Http.Conn.run_buffer` and others |
+| `Http.Conn.waitMore` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and others |
+| `Http.Conn.streamHead?` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and others |
+| `Http.Conn.Inflow.start` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and others |
+| `Http.Conn.begin` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and others |
+| `Http.Conn.take` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and others |
+| `Http.Conn.flushSlots` | proved | through `Http.Conn.flushStream`, `Http.Conn.run` and others: `Http.Conn.flushStream_ended`, `Http.Conn.flushStream_going` and others |
+| `Http.Conn.flush` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and others |
+| `Http.Conn.finish` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and others |
+| `Http.Conn.Inflow.next` | proved | through `Http.Conn.Inflow.gather`, `Http.Conn.run` and others: `Http.Conn.gather_length`, `Http.Conn.pump_piece` and others |
 | `Http.Conn.Inflow.gather` | proved | `Http.Conn.gather_length`, `Http.Conn.pump_piece` |
-| `Http.Conn.Slot.isOpened` | proved | through `Http.Conn.answer`, `Http.Conn.flushStream` and 5 more: `Http.Conn.answer_ignored`, `Http.Conn.answer_waiting` and 17 more |
+| `Http.Conn.Slot.isOpened` | proved | through `Http.Conn.answer`, `Http.Conn.flushStream` and others: `Http.Conn.answer_ignored`, `Http.Conn.answer_waiting` and others |
 | `Http.Conn.pump` | proved | `Http.Conn.pump_piece` |
-| `Http.Conn.took` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and 7 more |
+| `Http.Conn.took` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and others |
 | `Http.Conn.respond` | proved | `Http.Conn.respond_ignored`, `Http.Conn.respond_opens` |
-| `Http.Conn.Outflow.accept` | proved | through `Http.Conn.flushStream`, `Http.Conn.pulled` and 2 more: `Http.Conn.flushStream_ended`, `Http.Conn.flushStream_going` and 12 more |
+| `Http.Conn.Outflow.accept` | proved | through `Http.Conn.flushStream`, `Http.Conn.pulled` and others: `Http.Conn.flushStream_ended`, `Http.Conn.flushStream_going` and others |
 | `Http.Conn.pulled` | proved | `Http.Conn.pulled_ignored`, `Http.Conn.pulled_large`, `Http.Conn.pulled_part` |
 | `Http.Conn.flushStream` | proved | `Http.Conn.flushStream_ended`, `Http.Conn.flushStream_going` |
 | `Http.Conn.earlier` | tested | `Tests/Loopback.lean` |
 | `Http.Conn.wakeAt` | tested | `Tests/Loopback.lean` |
-| `Http.Conn.drain` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and 7 more |
-| `Http.Conn.advance` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and 7 more |
-| `Http.Conn.Slot.stop` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and 7 more |
-| `Http.Conn.quiet` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and 7 more |
+| `Http.Conn.drain` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and others |
+| `Http.Conn.advance` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and others |
+| `Http.Conn.Slot.stop` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and others |
+| `Http.Conn.quiet` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and others |
 | `Http.Conn.answer` | proved | `Http.Conn.answer_ignored`, `Http.Conn.answer_waiting` |
-| `Http.Conn.receive` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and 7 more |
-| `Http.Conn.expire` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and 7 more |
-| `Http.Conn.step` | proved | `Http.Conn.step_closed`, `Http.Conn.step_notReading`, `Http.Conn.step_reading` and 2 more |
-| `Http.Conn.run` | proved | `Http.Conn.run_buffer`, `Http.Conn.run_slots`, `Http.Conn.run_submits` and 1 more |
+| `Http.Conn.receive` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and others |
+| `Http.Conn.expire` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and others |
+| `Http.Conn.step` | proved | `Http.Conn.step_closed`, `Http.Conn.step_notReading`, `Http.Conn.step_reading` and others |
+| `Http.Conn.run` | proved | `Http.Conn.run_buffer`, `Http.Conn.run_slots`, `Http.Conn.run_submits` and others |
 | `Http.Conn.Count.admit` | proved | `Http.Conn.Count.admit_le`, `Http.Conn.Count.admit_stopping` |
 | `Http.Conn.Count.leave` | tested | `Tests/HttpConn.lean` |
 
@@ -2714,18 +2695,18 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Cookie.attributes` | proved | `Http.readSetCookie_header`, `Http.setCookie_read` |
 | `Http.Cookie.header` | proved | `Http.readSetCookie_header` |
 | `Http.Cookie.expired` | tested | `Tests/Auth.lean` |
-| `Http.trimBlank` | proved | through `Http.parseCookies`, `Http.readSetCookie`: `Http.parseCookies_cookieHeader`, `Http.readSetCookie_header` and 1 more |
+| `Http.trimBlank` | proved | through `Http.parseCookies`, `Http.readSetCookie`: `Http.parseCookies_cookieHeader`, `Http.readSetCookie_header` and others |
 | `Http.parseCookie` | proved | through `Http.parseCookies`: `Http.parseCookies_cookieHeader` |
 | `Http.parseCookies` | proved | `Http.parseCookies_cookieHeader` |
-| `Http.Request.cookies` | tested | `Tests/Auth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` and 1 more |
-| `Http.Request.cookie?` | tested | `Tests/Auth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` and 1 more |
+| `Http.Request.cookies` | tested | `Tests/Auth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` and others |
+| `Http.Request.cookie?` | tested | `Tests/Auth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` and others |
 | `Http.Request.sameOrigin` | proved | `Http.Request.sameOrigin_iff` |
 | `Http.Request.bodyWithin` | spec | used only in statements |
-| `Http.hostCookie` | tested | `Tests/Auth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` and 1 more |
+| `Http.hostCookie` | tested | `Tests/Auth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` and others |
 | `Http.Response.setCookie` | proved | `Http.setCookie_read` |
 | `Http.Response.clearCookie` | tested | `Tests/Auth.lean` |
 | `Http.Response.noStore` | checked | `Tests/SharedCache.lean` |
-| `Http.Response.noFraming` | tested | `Tests/Html.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` and 1 more |
+| `Http.Response.noFraming` | tested | `Tests/Html.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` and others |
 
 ## `Lanes/Web/Http/CookieSound.lean`
 
@@ -2738,16 +2719,16 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Http.gateSig` | proved | `Http.Gate.always_up`, `Http.Gate.answered_le_handled`, `Http.Gate.answered_of_leaves` and 19 more |
+| `Http.gateSig` | proved | `Http.Gate.always_up`, `Http.Gate.answered_le_handled`, `Http.Gate.answered_of_leaves` and others |
 | `Http.gateActor` | proved | `Http.gateActor_bounded` |
-| `Http.gateSystem` | proved | `Http.Gate.always_up`, `Http.Gate.answered_le_handled`, `Http.Gate.answered_of_leaves` and 4 more |
-| `Http.frontWiring` | proved | through `Http.fronted`, `Http.served`: `Http.fronted_answered_le_arrived`, `Http.fronted_answered_nodup` and 16 more |
-| `Http.frontedSig` | proved | `Http.fronted_answered_le_arrived`, `Http.fronted_answered_nodup`, `Http.fronted_arrival_answered` and 6 more |
-| `Http.frontedInput` | proved | through `Http.fronted`, `Http.served`: `Http.fronted_answered_le_arrived`, `Http.fronted_answered_nodup` and 16 more |
-| `Http.frontedOutput` | proved | through `Http.fronted`, `Http.served`: `Http.fronted_answered_le_arrived`, `Http.fronted_answered_nodup` and 16 more |
-| `Http.fronted` | proved | `Http.fronted_answered_le_arrived`, `Http.fronted_answered_nodup`, `Http.fronted_arrival_answered` and 6 more |
-| `Http.servedSig` | proved | `Http.kernel_served_answered_le_arrived`, `Http.served_answered_le_arrived`, `Http.served_answered_nodup` and 6 more |
-| `Http.served` | proved | `Http.kernel_served_answered_le_arrived`, `Http.served_answered_le_arrived`, `Http.served_answered_nodup` and 6 more |
+| `Http.gateSystem` | proved | `Http.Gate.always_up`, `Http.Gate.answered_le_handled`, `Http.Gate.answered_of_leaves` and others |
+| `Http.frontWiring` | proved | through `Http.fronted`, `Http.served`: `Http.fronted_answered_le_arrived`, `Http.fronted_answered_nodup` and others |
+| `Http.frontedSig` | proved | `Http.fronted_answered_le_arrived`, `Http.fronted_answered_nodup`, `Http.fronted_arrival_answered` and others |
+| `Http.frontedInput` | proved | through `Http.fronted`, `Http.served`: `Http.fronted_answered_le_arrived`, `Http.fronted_answered_nodup` and others |
+| `Http.frontedOutput` | proved | through `Http.fronted`, `Http.served`: `Http.fronted_answered_le_arrived`, `Http.fronted_answered_nodup` and others |
+| `Http.fronted` | proved | `Http.fronted_answered_le_arrived`, `Http.fronted_answered_nodup`, `Http.fronted_arrival_answered` and others |
+| `Http.servedSig` | proved | `Http.kernel_served_answered_le_arrived`, `Http.served_answered_le_arrived`, `Http.served_answered_nodup` and others |
+| `Http.served` | proved | `Http.kernel_served_answered_le_arrived`, `Http.served_answered_le_arrived`, `Http.served_answered_nodup` and others |
 | `Signature.Inspect.gate` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean` |
 | `System.Inspect.gate` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean` |
 | `Signature.Inspect.fronted` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean` |
@@ -2834,7 +2815,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Ops.fromLoopback` | proved | `Http.Ops.allows_eq_true`, `Http.Ops.route?_metrics`, `Http.Ops.route?_metrics_loopback` |
 | `Http.Ops.bearer?` | proved | `Http.Ops.allows_eq_true`, `Http.Ops.route?_metrics` |
 | `Http.Ops.allows` | proved | `Http.Ops.allows_eq_true`, `Http.Ops.route?_hidden` |
-| `Http.Ops.route?` | proved | `Http.Ops.route?_default`, `Http.Ops.route?_hidden`, `Http.Ops.route?_metrics` and 3 more |
+| `Http.Ops.route?` | proved | `Http.Ops.route?_default`, `Http.Ops.route?_hidden`, `Http.Ops.route?_metrics` and others |
 | `Http.Ops.Health.ready` | proved | `Http.Ops.answer_ready` |
 | `Http.Ops.answer` | proved | `Http.Ops.answer_ready` |
 | `Http.Ops.methodName` | proved | through `Http.Ops.Access.json`: `Http.Ops.Access.parse_line` |
@@ -2858,33 +2839,33 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Http.Refusal.status` | tested | `Tests/ReadRequest.lean` |
-| `Http.matchAt` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and 13 more |
-| `Http.find` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and 13 more |
-| `Http.pieces` | proved | through `Http.Request.read`, `Http.Request.readHead` and 1 more: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and 17 more |
+| `Http.matchAt` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and others |
+| `Http.find` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and others |
+| `Http.pieces` | proved | through `Http.Request.read`, `Http.Request.readHead` and others: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and others |
 | `Http.Request.Limits.message_max` | proved | `Http.Request.read_done`, `Http.Request.read_more` |
-| `Http.Request.elements` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and 13 more |
-| `Http.Request.version?` | proved | through `Http.Request.read`, `Http.Request.readHead` and 1 more: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and 17 more |
-| `Http.Request.method?` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and 13 more |
-| `Http.Request.pchar` | proved | through `Http.Request.read`, `Http.Request.readHead` and 1 more: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and 17 more |
-| `Http.Request.targetChar` | proved | through `Http.Request.read`, `Http.Request.readHead` and 1 more: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and 17 more |
-| `Http.Request.hostChar` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and 13 more |
-| `Http.Request.segments?` | proved | through `Http.Request.read`, `Http.Request.readHead` and 1 more: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and 17 more |
-| `Http.Request.queryPart?` | proved | through `Http.Request.read`, `Http.Request.readHead` and 1 more: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and 17 more |
-| `Http.Request.pair?` | proved | through `Http.Request.read`, `Http.Request.readHead` and 1 more: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and 17 more |
-| `Http.Request.query?` | proved | through `Http.Request.read`, `Http.Request.readHead` and 1 more: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and 17 more |
-| `Http.Request.target?` | proved | `Http.Route.link_target`, `Http.Route.match?_target`, `Http.dispatch_link` and 1 more |
-| `Http.Request.fieldLine?` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and 13 more |
-| `Http.Request.host?` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and 13 more |
-| `Http.Request.tabbedFraming` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and 13 more |
-| `Http.Request.framing?` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and 13 more |
+| `Http.Request.elements` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and others |
+| `Http.Request.version?` | proved | through `Http.Request.read`, `Http.Request.readHead` and others: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and others |
+| `Http.Request.method?` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and others |
+| `Http.Request.pchar` | proved | through `Http.Request.read`, `Http.Request.readHead` and others: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and others |
+| `Http.Request.targetChar` | proved | through `Http.Request.read`, `Http.Request.readHead` and others: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and others |
+| `Http.Request.hostChar` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and others |
+| `Http.Request.segments?` | proved | through `Http.Request.read`, `Http.Request.readHead` and others: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and others |
+| `Http.Request.queryPart?` | proved | through `Http.Request.read`, `Http.Request.readHead` and others: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and others |
+| `Http.Request.pair?` | proved | through `Http.Request.read`, `Http.Request.readHead` and others: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and others |
+| `Http.Request.query?` | proved | through `Http.Request.read`, `Http.Request.readHead` and others: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and others |
+| `Http.Request.target?` | proved | `Http.Route.link_target`, `Http.Route.match?_target`, `Http.dispatch_link` and others |
+| `Http.Request.fieldLine?` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and others |
+| `Http.Request.host?` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and others |
+| `Http.Request.tabbedFraming` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and others |
+| `Http.Request.framing?` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and others |
 | `Http.Request.parseHead` | proved | `Http.Request.readHead_headWire` |
 | `Http.Request.readHead` | proved | `Http.Request.readHead_headWire`, `Http.Request.read_badChunkSize` |
-| `Http.Request.chunkSize` | proved | through `Http.Request.read`: `Http.Conn.step_submit_read`, `Http.Request.read_append` and 12 more |
-| `Http.Request.chunks` | proved | through `Http.Request.read`: `Http.Conn.step_submit_read`, `Http.Request.read_append` and 12 more |
-| `Http.Request.Head.close` | proved | through `Http.Request.read`: `Http.Conn.step_submit_read`, `Http.Request.read_append` and 12 more |
+| `Http.Request.chunkSize` | proved | through `Http.Request.read`: `Http.Conn.step_submit_read`, `Http.Request.read_append` and others |
+| `Http.Request.chunks` | proved | through `Http.Request.read`: `Http.Conn.step_submit_read`, `Http.Request.read_append` and others |
+| `Http.Request.Head.close` | proved | through `Http.Request.read`: `Http.Conn.step_submit_read`, `Http.Request.read_append` and others |
 | `Http.Request.Head.expectsContinue` | tested | `Tests/ReadRequest.lean` |
-| `Http.Request.Head.incoming` | proved | through `Http.Request.read`: `Http.Conn.step_submit_read`, `Http.Request.read_append` and 12 more |
-| `Http.Request.read` | proved | `Http.Conn.step_submit_read`, `Http.Request.read_append`, `Http.Request.read_badChunkSize` and 11 more |
+| `Http.Request.Head.incoming` | proved | through `Http.Request.read`: `Http.Conn.step_submit_read`, `Http.Request.read_append` and others |
+| `Http.Request.read` | proved | `Http.Conn.step_submit_read`, `Http.Request.read_append`, `Http.Request.read_badChunkSize` and others |
 
 ## `Lanes/Web/Http/ReadRequestSound.lean`
 
@@ -2907,14 +2888,14 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Slug.ofString?` | proved | `Http.Slug.ofString?_eq_some`, `Http.Slug.ofString?_text` |
 | `Http.Slug.instToString` | tested | `Tests/Html.lean` |
 | `Http.Slug.instDecidableEq` | proved | its type, `Decidable` |
-| `Http.Path.seg` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 5 more |
-| `Http.Path.slug` | tested | `Tests/Html.lean`, `Tests/Loopback.lean`, `Tests/TutorialWeb.lean` and 3 more |
-| `Http.Path.nat` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 5 more |
-| `Http.Path.root` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 5 more |
-| `Http.Path.append` | tested | `Tests/Html.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` and 1 more |
-| `Http.Path.pre` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 5 more |
-| `Http.Route.get` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 5 more |
-| `Http.Route.post` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 5 more |
+| `Http.Path.seg` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and others |
+| `Http.Path.slug` | tested | `Tests/Html.lean`, `Tests/Loopback.lean`, `Tests/TutorialWeb.lean` and others |
+| `Http.Path.nat` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and others |
+| `Http.Path.root` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and others |
+| `Http.Path.append` | tested | `Tests/Html.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` and others |
+| `Http.Path.pre` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and others |
+| `Http.Route.get` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and others |
+| `Http.Route.post` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and others |
 | `Http.Route.put` | tested | `Tests/Html.lean` |
 | `Http.Route.patch` | tested | `Tests/Html.lean` |
 | `Http.Route.delete` | tested | `Tests/Html.lean` |
@@ -2927,13 +2908,13 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Http.SharedCache.directives` | proved | through `Http.SharedCache.leaks`, `Http.SharedCache.outside` and 1 more: `Http.SharedCache.serve_of_leaks`, `Http.SharedCache.serve_reuses` and 1 more |
+| `Http.SharedCache.directives` | proved | through `Http.SharedCache.leaks`, `Http.SharedCache.outside` and others: `Http.SharedCache.serve_of_leaks`, `Http.SharedCache.serve_reuses` and others |
 | `Http.SharedCache.says` | proved | `Http.SharedCache.serve_storable` |
 | `Http.SharedCache.vary` | proved | `Http.SharedCache.serve_reuses` |
 | `Http.SharedCache.explicitlyFresh` | proved | through `Http.SharedCache.leaks`, `Http.SharedCache.outside`: `Http.SharedCache.serve_of_leaks`, `Http.SharedCache.serve_storable` |
 | `Http.SharedCache.heuristic` | proved | through `Http.SharedCache.leaks`, `Http.SharedCache.outside`: `Http.SharedCache.serve_of_leaks`, `Http.SharedCache.serve_storable` |
 | `Http.SharedCache.storable` | proved | `Http.SharedCache.serve_storable` |
-| `Http.SharedCache.reuses` | proved | through `Http.SharedCache.Store.serve?`, `Http.SharedCache.leaks`: `Http.SharedCache.serve_of_leaks`, `Http.SharedCache.serve_reuses` and 1 more |
+| `Http.SharedCache.reuses` | proved | through `Http.SharedCache.Store.serve?`, `Http.SharedCache.leaks`: `Http.SharedCache.serve_of_leaks`, `Http.SharedCache.serve_reuses` and others |
 | `Http.SharedCache.Store.observe` | proved | through `Http.SharedCache.outside`: `Http.SharedCache.serve_storable` |
 | `Http.SharedCache.Store.serve?` | proved | `Http.SharedCache.serve_of_leaks`, `Http.SharedCache.serve_reuses`, `Http.SharedCache.serve_storable` |
 | `Http.SharedCache.outside` | proved | `Http.SharedCache.serve_storable` |
@@ -2956,16 +2937,16 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `SigV4.pairLe` | proved | `SigV4.sortQuery_sorted` |
 | `SigV4.sortQuery` | proved | `SigV4.canonicalQuery_sortQuery`, `SigV4.sortQuery_perm`, `SigV4.sortQuery_sorted` |
 | `SigV4.canonicalQuery` | proved | `SigV4.canonicalQuery_sortQuery`, `SigV4.target_sign` |
-| `SigV4.blank` | proved | through `SigV4.canonicalHeaders`, `SigV4.sign`: `SigV4.canonicalHeaders_lower`, `SigV4.canonicalHeaders_sorted` and 2 more |
-| `SigV4.squeeze` | proved | through `SigV4.canonicalHeaders`, `SigV4.sign`: `SigV4.canonicalHeaders_lower`, `SigV4.canonicalHeaders_sorted` and 2 more |
-| `SigV4.trimValue` | proved | through `SigV4.canonicalHeaders`, `SigV4.sign`: `SigV4.canonicalHeaders_lower`, `SigV4.canonicalHeaders_sorted` and 2 more |
-| `SigV4.insertHeader` | proved | through `SigV4.canonicalHeaders`, `SigV4.sign`: `SigV4.canonicalHeaders_lower`, `SigV4.canonicalHeaders_sorted` and 2 more |
+| `SigV4.blank` | proved | through `SigV4.canonicalHeaders`, `SigV4.sign`: `SigV4.canonicalHeaders_lower`, `SigV4.canonicalHeaders_sorted` and others |
+| `SigV4.squeeze` | proved | through `SigV4.canonicalHeaders`, `SigV4.sign`: `SigV4.canonicalHeaders_lower`, `SigV4.canonicalHeaders_sorted` and others |
+| `SigV4.trimValue` | proved | through `SigV4.canonicalHeaders`, `SigV4.sign`: `SigV4.canonicalHeaders_lower`, `SigV4.canonicalHeaders_sorted` and others |
+| `SigV4.insertHeader` | proved | through `SigV4.canonicalHeaders`, `SigV4.sign`: `SigV4.canonicalHeaders_lower`, `SigV4.canonicalHeaders_sorted` and others |
 | `SigV4.canonicalHeaders` | proved | `SigV4.canonicalHeaders_lower`, `SigV4.canonicalHeaders_sorted`, `SigV4.mem_canonicalHeaders` |
 | `SigV4.signedHeaders` | proved | through `SigV4.sign`: `SigV4.target_sign` |
 | `SigV4.canonicalRequest` | proved | through `SigV4.sign`: `SigV4.target_sign` |
 | `SigV4.algorithm` | proved | through `SigV4.sign`: `SigV4.target_sign` |
-| `SigV4.unsignedPayload` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/SigV4.lean`, `Tests/S3.lean` and 1 more |
-| `SigV4.payloadHash` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean` and 6 more |
+| `SigV4.unsignedPayload` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/SigV4.lean`, `Tests/S3.lean` and others |
+| `SigV4.payloadHash` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean` and others |
 | `SigV4.stringToSign` | proved | through `SigV4.sign`: `SigV4.target_sign` |
 | `SigV4.signingKey` | proved | through `SigV4.sign`: `SigV4.target_sign` |
 | `SigV4.signature` | proved | through `SigV4.sign`: `SigV4.target_sign` |
@@ -3036,12 +3017,12 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Http.Waiting.start` | proved | through `Http.Waiting.exec`: `Http.Waiting.exec_answered`, `Http.Waiting.exec_drain` and 3 more |
-| `Http.Waiting.wait` | proved | through `Http.Waiting.exec`: `Http.Waiting.exec_answered`, `Http.Waiting.exec_drain` and 3 more |
-| `Http.Waiting.releases` | proved | through `Http.Waiting.exec`: `Http.Waiting.exec_answered`, `Http.Waiting.exec_drain` and 3 more |
-| `Http.Waiting.release` | proved | through `Http.Waiting.exec`: `Http.Waiting.exec_answered`, `Http.Waiting.exec_drain` and 3 more |
-| `Http.Waiting.answer` | proved | through `Http.Waiting.exec`: `Http.Waiting.exec_answered`, `Http.Waiting.exec_drain` and 3 more |
-| `Http.Waiting.drain` | proved | through `Http.Waiting.exec`: `Http.Waiting.exec_answered`, `Http.Waiting.exec_drain` and 3 more |
+| `Http.Waiting.start` | proved | through `Http.Waiting.exec`: `Http.Waiting.exec_answered`, `Http.Waiting.exec_drain` and others |
+| `Http.Waiting.wait` | proved | through `Http.Waiting.exec`: `Http.Waiting.exec_answered`, `Http.Waiting.exec_drain` and others |
+| `Http.Waiting.releases` | proved | through `Http.Waiting.exec`: `Http.Waiting.exec_answered`, `Http.Waiting.exec_drain` and others |
+| `Http.Waiting.release` | proved | through `Http.Waiting.exec`: `Http.Waiting.exec_answered`, `Http.Waiting.exec_drain` and others |
+| `Http.Waiting.answer` | proved | through `Http.Waiting.exec`: `Http.Waiting.exec_answered`, `Http.Waiting.exec_drain` and others |
+| `Http.Waiting.drain` | proved | through `Http.Waiting.exec`: `Http.Waiting.exec_answered`, `Http.Waiting.exec_drain` and others |
 | `Http.Waiting.Trace.apply` | spec | used only in statements |
 | `Http.Waiting.exec` | spec | used only in statements |
 
@@ -3051,30 +3032,30 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Http.frames` | proved | `Http.Request.fields_framing` |
 | `Http.Request.target` | proved | `Http.Request.target_visible`, `SigV4.target_sign` |
-| `Http.Request.kept` | proved | through `Http.Request.fields`, `Http.Request.wire` and 1 more: `Http.Request.fields_framing`, `Http.Request.fields_token` and 4 more |
+| `Http.Request.kept` | proved | through `Http.Request.fields`, `Http.Request.wire` and others: `Http.Request.fields_framing`, `Http.Request.fields_token` and others |
 | `Http.Request.fields` | proved | `Http.Request.fields_framing`, `Http.Request.fields_token` |
 | `Http.Request.head` | proved | `Http.Request.head_plain` |
 | `Http.Request.wire` | proved | `Http.Request.head_plain`, `Http.Request.read_wire`, `Http.Request.read_wire_extract` |
 | `Http.Request.headOnly` | proved | `Http.Request.headOnly_plain` |
 | `Http.Request.wireHead` | proved | `Http.Request.headOnly_plain` |
-| `Http.Reading.map` | proved | through `Http.Response.read`, `Http.Response.readHead` and 1 more: `Http.Conn.read_encode`, `Http.Conn.read_streamed` and 13 more |
-| `Http.headEnd` | proved | through `Http.Response.read`, `Http.Response.readHead` and 1 more: `Http.Conn.read_encode`, `Http.Conn.read_streamed` and 13 more |
-| `Http.crlf` | proved | through `Http.Response.read`, `Http.Response.readHead` and 1 more: `Http.Conn.read_encode`, `Http.Conn.read_streamed` and 13 more |
-| `Http.skip` | proved | through `Http.Response.read`, `Http.Response.readHead` and 1 more: `Http.Conn.read_encode`, `Http.Conn.read_streamed` and 13 more |
-| `Http.hex` | proved | through `Http.Response.read`, `Http.Response.readHead` and 1 more: `Http.Conn.read_encode`, `Http.Conn.read_streamed` and 13 more |
-| `Http.chunkSizeDigits_max` | proved | through `Http.Response.read`, `Http.Response.readHead` and 1 more: `Http.Conn.read_encode`, `Http.Conn.read_streamed` and 13 more |
-| `Http.chunkExtensionBytes_max` | proved | through `Http.Response.read`, `Http.Response.readHead` and 1 more: `Http.Conn.read_encode`, `Http.Conn.read_streamed` and 13 more |
-| `Http.sizeLineEnd` | proved | through `Http.Response.read`, `Http.Response.readHead` and 1 more: `Http.Conn.read_encode`, `Http.Conn.read_streamed` and 13 more |
-| `Http.chunkHead` | proved | through `Http.Response.read`, `Http.Response.readHead` and 1 more: `Http.Conn.read_encode`, `Http.Conn.read_streamed` and 13 more |
-| `Http.dechunk` | proved | through `Http.Response.read`, `Http.Response.readHead` and 1 more: `Http.Conn.read_encode`, `Http.Conn.read_streamed` and 13 more |
-| `Http.decimal?` | proved | through `Http.Response.read`, `Http.Response.readHead` and 1 more: `Http.Conn.read_encode`, `Http.Conn.read_streamed` and 13 more |
-| `Http.splitLines` | proved | through `Http.Response.read`, `Http.Response.readHead` and 1 more: `Http.Conn.read_encode`, `Http.Conn.read_streamed` and 13 more |
-| `Http.statusLine?` | proved | through `Http.Response.read`, `Http.Response.readHead` and 1 more: `Http.Conn.read_encode`, `Http.Conn.read_streamed` and 13 more |
-| `Http.headerLine?` | proved | through `Http.Response.read`, `Http.Response.readHead` and 1 more: `Http.Conn.read_encode`, `Http.Conn.read_streamed` and 13 more |
-| `Http.head?` | proved | through `Http.Response.read`, `Http.Response.readHead` and 1 more: `Http.Conn.read_encode`, `Http.Conn.read_streamed` and 13 more |
-| `Http.framing?` | proved | through `Http.Response.read`, `Http.Response.readHead` and 1 more: `Http.Conn.read_encode`, `Http.Conn.read_streamed` and 13 more |
+| `Http.Reading.map` | proved | through `Http.Response.read`, `Http.Response.readHead` and others: `Http.Conn.read_encode`, `Http.Conn.read_streamed` and others |
+| `Http.headEnd` | proved | through `Http.Response.read`, `Http.Response.readHead` and others: `Http.Conn.read_encode`, `Http.Conn.read_streamed` and others |
+| `Http.crlf` | proved | through `Http.Response.read`, `Http.Response.readHead` and others: `Http.Conn.read_encode`, `Http.Conn.read_streamed` and others |
+| `Http.skip` | proved | through `Http.Response.read`, `Http.Response.readHead` and others: `Http.Conn.read_encode`, `Http.Conn.read_streamed` and others |
+| `Http.hex` | proved | through `Http.Response.read`, `Http.Response.readHead` and others: `Http.Conn.read_encode`, `Http.Conn.read_streamed` and others |
+| `Http.chunkSizeDigits_max` | proved | through `Http.Response.read`, `Http.Response.readHead` and others: `Http.Conn.read_encode`, `Http.Conn.read_streamed` and others |
+| `Http.chunkExtensionBytes_max` | proved | through `Http.Response.read`, `Http.Response.readHead` and others: `Http.Conn.read_encode`, `Http.Conn.read_streamed` and others |
+| `Http.sizeLineEnd` | proved | through `Http.Response.read`, `Http.Response.readHead` and others: `Http.Conn.read_encode`, `Http.Conn.read_streamed` and others |
+| `Http.chunkHead` | proved | through `Http.Response.read`, `Http.Response.readHead` and others: `Http.Conn.read_encode`, `Http.Conn.read_streamed` and others |
+| `Http.dechunk` | proved | through `Http.Response.read`, `Http.Response.readHead` and others: `Http.Conn.read_encode`, `Http.Conn.read_streamed` and others |
+| `Http.decimal?` | proved | through `Http.Response.read`, `Http.Response.readHead` and others: `Http.Conn.read_encode`, `Http.Conn.read_streamed` and others |
+| `Http.splitLines` | proved | through `Http.Response.read`, `Http.Response.readHead` and others: `Http.Conn.read_encode`, `Http.Conn.read_streamed` and others |
+| `Http.statusLine?` | proved | through `Http.Response.read`, `Http.Response.readHead` and others: `Http.Conn.read_encode`, `Http.Conn.read_streamed` and others |
+| `Http.headerLine?` | proved | through `Http.Response.read`, `Http.Response.readHead` and others: `Http.Conn.read_encode`, `Http.Conn.read_streamed` and others |
+| `Http.head?` | proved | through `Http.Response.read`, `Http.Response.readHead` and others: `Http.Conn.read_encode`, `Http.Conn.read_streamed` and others |
+| `Http.framing?` | proved | through `Http.Response.read`, `Http.Response.readHead` and others: `Http.Conn.read_encode`, `Http.Conn.read_streamed` and others |
 | `Http.readFrom` | proved | `Http.Response.read_some` |
-| `Http.Response.read` | proved | `Http.Conn.read_encode`, `Http.Conn.read_streamed`, `Http.Response.read_append` and 11 more |
+| `Http.Response.read` | proved | `Http.Conn.read_encode`, `Http.Conn.read_streamed`, `Http.Response.read_append` and others |
 | `Http.readHeadFrom` | proved | through `Http.Response.readHead`: `Http.Response.readHead_ended` |
 | `Http.Response.readHead` | proved | `Http.Response.readHead_ended` |
 | `Http.Response.parse` | trusted | TRUSTED.md: The HTTP wire format |
@@ -3083,10 +3064,10 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Http.Response.kept` | proved | through `Http.Response.writable`: `Http.Conn.sendable_writable`, `Http.Response.read_wire` and 7 more |
-| `Http.Response.lowered` | proved | `Http.Conn.read_encode`, `Http.Conn.read_streamed`, `Http.Response.read_wire` and 3 more |
-| `Http.Response.writable` | proved | `Http.Conn.sendable_writable`, `Http.Response.read_wire`, `Http.Response.read_wireAfter` and 6 more |
-| `Http.Response.headWire` | proved | through `Http.Response.wire`, `Http.Response.wireAfter` and 2 more: `Http.Response.read_wire`, `Http.Response.read_wireAfter` and 6 more |
+| `Http.Response.kept` | proved | through `Http.Response.writable`: `Http.Conn.sendable_writable`, `Http.Response.read_wire` and others |
+| `Http.Response.lowered` | proved | `Http.Conn.read_encode`, `Http.Conn.read_streamed`, `Http.Response.read_wire` and others |
+| `Http.Response.writable` | proved | `Http.Conn.sendable_writable`, `Http.Response.read_wire`, `Http.Response.read_wireAfter` and others |
+| `Http.Response.headWire` | proved | through `Http.Response.wire`, `Http.Response.wireAfter` and others: `Http.Response.read_wire`, `Http.Response.read_wireAfter` and others |
 | `Http.Response.wire` | proved | `Http.Response.read_wire`, `Http.Response.read_wire_extract` |
 | `Http.Response.chunk` | proved | `Http.Conn.pulled_part`, `Http.Conn.read_streamed` |
 | `Http.Response.wireChunked` | proved | `Http.Response.read_wireChunked`, `Http.Response.read_wireChunked_extract` |
@@ -3185,7 +3166,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `S3.Endpoint.aws` | tested | `Tests/S3.lean` |
-| `S3.Key.of?` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/Oracle/Service/S3Multipart.lean` and 7 more |
+| `S3.Key.of?` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/Oracle/Service/S3Multipart.lean` and others |
 | `S3.Range.header` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `S3.PartNumber.of?` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Multipart.lean`, `Tests/S3Upload.lean` |
 | `S3.Manifest.of?` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Multipart.lean`, `Tests/S3Upload.lean` |
@@ -3196,9 +3177,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `S3.Op.query` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `S3.Op.headers` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `S3.Op.body` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
-| `S3.Bucket.host` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 3 more |
-| `S3.Bucket.path` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 3 more |
-| `S3.Bucket.scope` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/Oracle/Service/S3Multipart.lean` and 7 more |
+| `S3.Bucket.host` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
+| `S3.Bucket.path` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
+| `S3.Bucket.scope` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/Oracle/Service/S3Multipart.lean` and others |
 | `S3.call` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `S3.unescapeKey` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `S3.entry?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
@@ -3211,9 +3192,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `S3.completed` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `S3.info` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `S3.interpret` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
-| `S3.Op.modelled` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/Oracle/Service/S3Post.lean` and 1 more |
-| `S3.Answer.modelled` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/Oracle/Service/S3Post.lean` and 1 more |
-| `S3.presign` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and 3 more |
+| `S3.Op.modelled` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
+| `S3.Answer.modelled` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
+| `S3.presign` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
 | `S3.presignPart` | tested | `Tests/S3Upload.lean` |
 
 ## `Lanes/Web/S3/Multipart.lean`
@@ -3224,7 +3205,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `S3.Multipart.maxPart_bytes` | proved | `S3.Multipart.Plan.range_full` |
 | `S3.Multipart.maxParts` | proved | `S3.Multipart.Plan.count_le` |
 | `S3.Multipart.maxObject_bytes` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Multipart.lean`, `Tests/S3Upload.lean` |
-| `S3.Multipart.Plan.count` | proved | `S3.Multipart.Plan.count_le`, `S3.Multipart.Plan.range_full`, `S3.Multipart.Plan.range_last` and 1 more |
+| `S3.Multipart.Plan.count` | proved | `S3.Multipart.Plan.count_le`, `S3.Multipart.Plan.range_full`, `S3.Multipart.Plan.range_last` and others |
 | `S3.Multipart.Plan.range` | proved | `S3.Multipart.Plan.range_full`, `S3.Multipart.Plan.range_last`, `S3.Multipart.Plan.range_next` |
 | `S3.Multipart.Plan.of?` | tested | `Tests/S3Upload.lean` |
 | `S3.Multipart.Plan.auto` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Multipart.lean`, `Tests/S3Upload.lean` |
@@ -3244,18 +3225,18 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `S3.Post.Condition.json` | proved | through `S3.Post.Condition.holds`, `S3.Post.Document.encode` and 1 more: `S3.Post.admitted_bounded`, `S3.Post.check_holds` and 2 more |
-| `S3.Post.field?` | proved | through `S3.Post.decode?`: `S3.Post.admitted_bounded`, `S3.Post.decode?_encode` and 1 more |
-| `S3.Post.Condition.read?` | proved | through `S3.Post.decode?`: `S3.Post.admitted_bounded`, `S3.Post.decode?_encode` and 1 more |
-| `S3.Post.Document.json` | proved | through `S3.Post.Document.encode`, `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.decode?_encode` and 1 more |
-| `S3.Post.Document.read?` | proved | through `S3.Post.decode?`: `S3.Post.admitted_bounded`, `S3.Post.decode?_encode` and 1 more |
+| `S3.Post.Condition.json` | proved | through `S3.Post.Condition.holds`, `S3.Post.Document.encode` and others: `S3.Post.admitted_bounded`, `S3.Post.check_holds` and others |
+| `S3.Post.field?` | proved | through `S3.Post.decode?`: `S3.Post.admitted_bounded`, `S3.Post.decode?_encode` and others |
+| `S3.Post.Condition.read?` | proved | through `S3.Post.decode?`: `S3.Post.admitted_bounded`, `S3.Post.decode?_encode` and others |
+| `S3.Post.Document.json` | proved | through `S3.Post.Document.encode`, `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.decode?_encode` and others |
+| `S3.Post.Document.read?` | proved | through `S3.Post.decode?`: `S3.Post.admitted_bounded`, `S3.Post.decode?_encode` and others |
 | `S3.Post.Document.encode` | proved | `S3.Post.decode?_encode` |
 | `S3.Post.decode?` | proved | `S3.Post.admitted_bounded`, `S3.Post.decode?_encode`, `S3.Post.form_policy` |
 | `S3.Post.signature` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
-| `S3.Post.lookup` | proved | through `S3.Post.Condition.holds`, `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.check_holds` and 1 more |
+| `S3.Post.lookup` | proved | through `S3.Post.Condition.holds`, `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.check_holds` and others |
 | `S3.Post.Condition.holds` | proved | `S3.Post.check_holds` |
-| `S3.Post.Condition.field?` | proved | through `S3.Post.check`, `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.check_holds` and 1 more |
-| `S3.Post.exempt` | proved | through `S3.Post.check`, `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.check_holds` and 1 more |
+| `S3.Post.Condition.field?` | proved | through `S3.Post.check`, `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.check_holds` and others |
+| `S3.Post.exempt` | proved | through `S3.Post.check`, `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.check_holds` and others |
 | `S3.Post.check` | proved | `S3.Post.admitted_bounded`, `S3.Post.check_holds` |
 | `S3.Post.KeyRule.condition` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
 | `S3.Post.KeyRule.field` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
@@ -3267,7 +3248,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `S3.Post.eqs` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
 | `S3.Post.conditions` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
 | `S3.Post.document` | proved | `S3.Post.form_policy` |
-| `S3.Post.Form.fields` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3Upload.lean` and 4 more |
+| `S3.Post.Form.fields` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3Upload.lean` and others |
 | `S3.Bucket.url` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
 | `S3.Post.form` | proved | `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
 
@@ -3324,6 +3305,22 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Transcode.readReport?` | tested | `Tests/Testing.lean` |
 | `Transcode.reportRequest` | tested | `Tests/Testing.lean` |
 
+## `LanesCli/Changelog.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Cli.Changelog.changesDir` | none |  |
+| `Cli.Changelog.sections` | tested | `Tests/Lint.lean` |
+| `Cli.Changelog.parse` | tested | `Tests/Lint.lean` |
+| `Cli.Changelog.files` | none |  |
+| `Cli.Changelog.read` | none |  |
+| `Cli.Changelog.assemble` | tested | `Tests/Lint.lean` |
+| `Cli.Changelog.unreleasedHeading` | tested | `Tests/Lint.lean` |
+| `Cli.Changelog.strayEntries` | none |  |
+| `Cli.Changelog.check` | none |  |
+| `Cli.Changelog.insertRelease` | tested | `Tests/Lint.lean` |
+| `Cli.Changelog.run` | none |  |
+
 ## `LanesCli/Docstrings.lean`
 
 | Definition | Status | Evidence |
@@ -3346,7 +3343,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Cli.Generated.instAppendPlan` | none |  |
 | `Cli.Generated.lineCount` | none |  |
 | `Cli.Generated.readIfExists` | none |  |
-| `Cli.Generated.sortStrings` | none |  |
+| `Cli.Generated.sortStrings` | tested | `Tests/Lint.lean` |
 | `Cli.Generated.charsFrom` | none |  |
 | `Cli.Generated.occursIn` | tested | `Tests/Lint.lean` |
 | `Cli.Generated.replaceName` | tested | `Tests/Lint.lean` |
@@ -3358,24 +3355,24 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Cli.Generated.trustedSizes` | tested | `Tests/Lint.lean` |
 | `Cli.Generated.rewriteSizes` | none |  |
 | `Cli.Generated.withCommas` | tested | `Tests/Lint.lean` |
-| `Cli.Generated.roundedTotal` | tested | `Tests/Lint.lean` |
-| `Cli.Generated.rewriteTotal` | none |  |
 | `Cli.Generated.countless` | tested | `Tests/Lint.lean` |
 | `Cli.Generated.trustedPlan` | none |  |
+| `Cli.Generated.trustedTotal` | none |  |
 | `Cli.Generated.decisionsDir` | none |  |
 | `Cli.Generated.parseDecisionName` | none |  |
 | `Cli.Generated.parseHeading` | none |  |
 | `Cli.Generated.readDecisions` | none |  |
-| `Cli.Generated.indexLine` | none |  |
-| `Cli.Generated.indexText` | none |  |
+| `Cli.Generated.indexLine` | tested | `Tests/Lint.lean` |
+| `Cli.Generated.indexText` | tested | `Tests/Lint.lean` |
 | `Cli.Generated.textFiles` | none |  |
 | `Cli.Generated.numberPlan` | none |  |
 | `Cli.Generated.decisionsPlan` | none |  |
 | `Cli.Generated.statusDir` | none |  |
-| `Cli.Generated.rowsMarker?` | none |  |
-| `Cli.Generated.limitsMarker` | none |  |
+| `Cli.Generated.sectionsMarker?` | none |  |
 | `Cli.Generated.generatedNote` | tested | `Tests/Lint.lean` |
-| `Cli.Generated.splitFragment` | none |  |
+| `Cli.Generated.sortItems` | tested | `Tests/Lint.lean` |
+| `Cli.Generated.trimFragment` | none |  |
+| `Cli.Generated.fragmentProblems` | none |  |
 | `Cli.Generated.statusPlan` | none |  |
 | `Cli.Generated.plan` | none |  |
 | `Cli.Generated.Edit.describe` | none |  |
@@ -3467,6 +3464,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `usage` | none |  |
 | `flag?` | none |  |
+| `stats` | none |  |
 | `main` | none |  |
 
 ## `LanesCli/New.lean`

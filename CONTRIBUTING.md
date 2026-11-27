@@ -34,10 +34,15 @@ tests, which CI runs; a reviewer reads those for what they claim, not line by li
 ## The changelog
 
 A pull request that changes the library, the C, the `lanes` command or the app template adds a
-line under `Unreleased` in `CHANGELOG.md`, in one of Added, Changed, Fixed or Security. A CI job
-(`changelog`) checks this. A change with nothing to tell a user (a proof refactored, a comment
-fixed) gets the label `no-changelog` instead; push again after adding the label, since the job
-reads the labels the pull request had when it ran.
+file to `docs/changes/`, named after the change (`docs/changes/<slug>.md`): a section, such as
+`### Added`, and its entry, one line that starts with `- `. The sections are Added, Changed,
+Deprecated, Removed, Fixed and Security (`docs/changes/README.md`). Two pull requests then never
+edit the same file. `CHANGELOG.md` holds the released history; `lake exe lanes changelog` prints
+the Unreleased section from the fragments, and the release writes it there (`docs/RELEASING.md`).
+`lanes lint` checks each fragment, and a CI job (`changelog`) checks that there is one. A change
+with nothing to tell a user (a proof refactored, a comment fixed) gets the label `no-changelog`
+instead; push again after adding the label, since the job reads the labels the pull request had
+when it ran.
 
 ## Agents
 

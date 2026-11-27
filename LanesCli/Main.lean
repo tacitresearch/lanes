@@ -17,10 +17,17 @@ Usage:
       Create a new application.
   lanes lint [--fix] [--main] [<path>]
       Check a project against the rules of Lanes (AGENTS.md), and the files derived from others.
-      --fix rewrites the derived files: line counts, the decisions' index, docs/STATUS.md.
+      --fix rewrites the derived files: line counts, the decisions' index, docs/STATUS.md and
+      the order of its fragments' items, and in Lanes itself docs/INVENTORY.md.
       --main numbers new decisions (with --fix) or reports them: use it on the main branch.
   lanes check
       Run the project's model checks (`lake test`).
+  lanes changelog [--release <version> <date>]
+      Print the Unreleased section of the changelog, gathered from docs/changes/; or write it
+      into CHANGELOG.md as the release <version> of <date> and remove the fragments.
+  lanes stats
+      Print the totals no committed file holds: trusted lines, decisions, unreleased changes,
+      and in Lanes itself the inventory's statuses by area (`lake exe lanesInventory --summary`).
   lanes inventory [--list <status>]
       In Lanes itself: write docs/INVENTORY.md, every public definition with its status and
       its evidence, or list the library's definitions of one status (`lake exe lanesInventory`).
@@ -33,6 +40,19 @@ def flag? (args : List String) (name : String) : Option String :=
   match args.dropWhile (· != name) with
   | _ :: value :: _ => some value
   | _ => none
+
+/-- The totals no committed file holds, since each would change with every item. -/
+def stats (root : System.FilePath) : IO UInt32 := do
+  let (files, lines) ← Generated.trustedTotal root
+  IO.println s!"- Trusted code (TRUSTED.md): {Generated.withCommas lines} lines in {files} files"
+  let (decisions, _) ← Generated.readDecisions root
+  IO.println s!"- Decisions: {decisions.length}"
+  IO.println s!"- Changelog fragments in docs/changes/: {(← Changelog.files root).length}"
+  if !(← (root / "LanesCli" / "Inventory.lean").pathExists) then return 0
+  IO.println "\nThe inventory (docs/INVENTORY.md), definitions by status:\n"
+  let child ← IO.Process.spawn
+    { cmd := "lake", args := #["exe", "lanesInventory", "--summary"], cwd := some root }
+  child.wait
 
 def main (args : List String) : IO UInt32 := do
   match args with
@@ -56,6 +76,8 @@ def main (args : List String) : IO UInt32 := do
       return 1
     let options := { fix := rest.contains "--fix", main := rest.contains "--main" }
     return if (← Lint.run (paths.headD ".") options) == 0 then 0 else 1
+  | "changelog" :: rest => Changelog.run "." rest
+  | ["stats"] => stats "."
   | ["check"] =>
     let child ← IO.Process.spawn { cmd := "lake", args := #["test"] }
     return (← child.wait)
