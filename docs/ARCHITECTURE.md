@@ -19,7 +19,7 @@ proved function tells it to.
 | --- | --- | --- |
 | Actors and systems | `Lanes/Core/{Actor,System,World,Step,Run}.lean` | the definition everything else is about |
 | Proof tools for systems | `Lanes/Proof/{Lift,Ghost,Monotone,Equiv,Deed}.lean` | `System.invariant_of_actor`, `Inductive.of_monotone`, `System.Invariant.of_ghost` |
-| The kernel | `Lanes/Runtime/{Kernel,KernelSound,KernelTimers}.lean` | `Kernel.exec_reachable`, `Kernel.exec_outputs`, `Kernel.exec_wellFormed` |
+| The kernel | `Lanes/Runtime/{Kernel,KernelSound,KernelTimers,Wave}.lean` | `Kernel.exec_reachable`, `Kernel.exec_outputs`, `Kernel.exec_wellFormed`, `Kernel.runWaves_eq` |
 | The shell | `Lanes/Runtime/IO/Shell.lean`, `Lanes/Runtime/{Batch,Mailbox,MailboxSound}.lean` | `Batch.run_kernel`, `Batch.run_sound`, `Mailbox.batch_since_take`; the shell itself is trusted |
 | Journal, snapshots, disk | `Lanes/Durable/{Journal,Snapshot,Disk,Frame}.lean`, `Lanes/Durable/IO/Journal.lean` | `Journal.open?_cut`, `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Journal.Disk.Holds.save_crash` |
 | Joins | `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`, `Lanes/Semantics/FairJoin.lean` | `System.Reachable.left`, `SysState.run_left`, `System.Run.Fair.left` |
@@ -83,6 +83,16 @@ only where every output is handed over (`Batch.run_sound`); a take returns exact
 since the last, in order, and the inbox never holds more than its capacity
 (`Mailbox.batch_since_take`, `Mailbox.Reachable.bounded`). Trusted: that the shell performs the
 acts as given (`TRUSTED.md`, the first row).
+
+With `Runtime.Config.workers` above one (one by default), the inputs that arrive together are one
+turn (`Journal.turnAll`), and its work is done a wave at a time (`Lanes/Runtime/Wave.lean`): the
+steps of the actors with mail in the wave are worked out on Lean's task pool, each actor's in the
+order of its messages, and the kernel then does the wave as `runBatch` does, taking each step from
+that plan. Handling one actor's message changes no other actor's state (`Kernel.frame_handle`), so
+the result is `runBatch`'s, value for value (`Kernel.runWaves_eq`), and the journal and everything
+proved of the kernel are unchanged. Steps cheaper than a few microseconds cost more to hand to
+another thread than they save
+(`docs/decisions/D64-actors-run-in-parallel.md`).
 
 ## Journal, snapshots and the disk model
 
@@ -162,7 +172,9 @@ request's own task, so a password or a cookie the bridge turns into what the sys
 reaches the journal (D44), takes an id from `Http.Waiting` (pure: each id handed out once, each
 answered at most once and to its own waiter: `Http.Waiting.exec_handed_nodup`,
 `Http.Waiting.exec_answered`), and hands the input to the shard. It answers `503` itself when the
-inbox is full and `405` for a method an application cannot handle. `Http.serveFronted` serves
+inbox is full and `405` for a method an application cannot handle. With `ServerConfig.ioThreads`
+above zero, the connections run on that many threads of the server's own, each on one for its
+whole life; Lean has one libuv loop a process, which every read and write still goes through. `Http.serveFronted` serves
 `fronted sys`, whose other inputs and outputs pass the gate by, and `Http.serveShard`
 (`Lanes/Net/IO/Node.lean`) runs it with the transport: one process with an HTTP front and peers.
 
