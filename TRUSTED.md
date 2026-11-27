@@ -172,7 +172,8 @@ in `Lanes/Web/Http/FrontSound.lean` to answer each arrival at most once and in
   crash the gate, an answer to a waiting request is handed over, when its deadline fires if not
   before (`Http.served_pending_leaves`, `Http.served_pending_answered`). What is assumed is that
   the runtime's runs are fair, which is the progress assumption above, and that the gate does
-  not crash, which holds on one shard. That an arrival reaches the gate is not proved.
+  not crash, which holds on one shard. An arrival is answered, when the link from outside to the
+  gate loses nothing as well (`Http.served_arrival_answered`).
   `Tests/Gate.lean` checks exactly once on two requests of `served sys` and shows each
   precondition is needed: a reused id is answered twice, a duplicating link from outside answers
   one arrival twice, and a gate that crashes leaves a request unanswered. Each theorem is that

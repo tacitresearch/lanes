@@ -225,6 +225,9 @@ import Lanes.Semantics
 /-- info: 'Lanes.Http.Gate.step_bounded' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.Gate.step_bounded
 
+/-- info: 'Lanes.Http.Gate.step_arrive' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Gate.step_arrive
+
 -- Lanes.Web.Http.Grammar
 /-- info: 'Lanes.Http.visible_of_tokenChar' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.visible_of_tokenChar

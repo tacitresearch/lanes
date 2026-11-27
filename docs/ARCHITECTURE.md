@@ -188,7 +188,11 @@ often than it arrived where the link from outside to the gate does not duplicate
 (`Http.served_deadlines_armed`), and in a fair run in which the gate does not crash every request
 the gate admits is answered (`Http.served_pending_answered`). These come from the gate alone
 (`Http.Gate.answered_le_handled`, `Http.Gate.pending_answered`) by projection through the join.
-That an arrival reaches the gate is checked, not proved.
+Every request that arrives is answered, in a fair run in which the gate does not crash and the
+link from outside to the gate loses nothing (`Http.served_arrival_answered`): a message in
+flight on such a link to an actor that stays up is handed to it (`System.Run.Fair.delivered`),
+and the gate answers an arrival at once or admits it. With distinct ids and a link from outside
+that does not duplicate, each request is answered exactly once.
 
 The server (`Lanes/Web/IO/Server.lean`) reads a request, prepares it with `Bridge.prepare` on the
 request's own task, so a password or a cookie the bridge turns into what the system needs never

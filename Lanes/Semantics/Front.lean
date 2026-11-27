@@ -42,6 +42,8 @@ yet.
 - `fronted_pending_leaves`, `served_pending_leaves`: a request waiting in the gate stops waiting.
 - `fronted_pending_answered`, `served_pending_answered`: in a fair run, an answer to a waiting
   request is handed over.
+- `fronted_arrival_answered`, `served_arrival_answered`: in a fair run whose link from outside to
+  the gate loses nothing, every request that arrives is answered.
 -/
 
 @[expose] public section
@@ -312,5 +314,134 @@ theorem served_pending_answered {env : EnvModel (servedSig σ)}
     obtain rfl : o = (id, response) := by simpa [System.underView] using hshows
     rfl
   | _ => simp [System.underView] at hshows
+
+/-! ## Every arrival is answered
+
+An arrival is a message from outside to the gate. On a link that loses nothing, to a gate that
+is always up, a fair run hands it to the gate (`System.Run.Fair.delivered`). The gate answers it
+in that step or admits it (`Gate.step_arrive`); an answer is handed over, and an admitted request
+is answered (`served_pending_answered`). No premise on ids is needed: an arrival whose id is
+waiting already is answered with it. -/
+
+/-- A gate that the environment does not crash is up in every state. -/
+theorem Gate.always_up {env : EnvModel (gateSig σ)} (hcrash : env.mayCrash () = false) :
+    (gateSystem bridge config).Invariant env fun c => c.up () = true := by
+  refine System.Inductive.invariant ⟨?_, fun c ev c' hup hstep => Gate.stays_up hcrash hup hstep⟩
+  show (SysState.blank (gateSystem bridge config) |>.startActor env ()).up () = true
+  rw [SysState.startActor, SysState.settle_up_of_running (by simp [gateActor, Effect.isStop])]
+  simp
+
+/-- The gate of `fronted sys` is up in every state, in an environment that does not crash it. -/
+theorem fronted_gate_up {env : EnvModel (frontedSig σ)} (hcrash : env.mayCrash (.inl ()) = false) :
+    (fronted sys bridge config).Invariant env fun c => c.up (.inl ()) = true :=
+  System.Invariant.filterMapIO (Gate.always_up (env := env.under.left) hcrash).join_left
+
+/-- The gate of `served sys` is up in every state, in an environment that does not crash it. -/
+theorem served_gate_up {env : EnvModel (servedSig σ)} (hcrash : env.mayCrash (.inl ()) = false) :
+    (served sys bridge config).Invariant env fun c => c.up (.inl ()) = true :=
+  System.Invariant.filterMapIO (fronted_gate_up (env := env.under) hcrash)
+
+private theorem gateActor_arrive (pending : List ReqId) (id : ReqId) (request : Request) :
+    id ∈ ((gateActor bridge config).step pending (.arrive id request)).1 ∨
+      ∃ response, Effect.emit (σ := gateSig σ) (.inl (id, response)) ∈
+        ((gateActor bridge config).step pending (.arrive id request)).2 :=
+  Gate.step_arrive bridge config _ pending id request
+
+/-- An answer of the gate alone is an answer of `fronted sys`. -/
+private theorem fronted_respond {pending : List ReqId} {msg : GateMsg σ} {id : ReqId}
+    {response : Response}
+    (h : Effect.emit (σ := gateSig σ) (.inl (id, response)) ∈
+      ((gateActor bridge config).step pending msg).2) :
+    Effect.emit (σ := frontedSig σ) (self := .inl ()) (.inl (id, response)) ∈
+      (((fronted sys bridge config).actor (.inl ())).step pending msg).2 :=
+  List.mem_flatMap.mpr ⟨_, List.mem_flatMap.mpr ⟨_, h, List.mem_singleton_self _⟩,
+    List.mem_singleton_self _⟩
+
+/-- The gate of `fronted sys` answers an arrival in the step that handles it, or it is waiting
+after that step. -/
+theorem fronted_handle_arrive {env : EnvModel (frontedSig σ)}
+    (c : SysState (fronted sys bridge config)) (id : ReqId) (request : Request) :
+    id ∈ ((c.handle env (.inl ()) (.arrive id request)).state (.inl ()) : List ReqId) ∨
+      ∃ response, .inl (id, response) ∈ (c.handle env (.inl ()) (.arrive id request)).outbox := by
+  rcases gateActor_arrive (c.state (.inl ())) id request with h | ⟨response, h⟩
+  · rw [SysState.handle_state, update_self]
+    exact .inl h
+  · refine .inr ⟨response, ?_⟩
+    rw [SysState.handle, SysState.settle_outbox_eq]
+    exact List.mem_append_right _ (Effect.mem_emits.mpr (fronted_respond h))
+
+/-- The gate of `served sys` answers an arrival in the step that handles it, or it is waiting
+after that step. -/
+theorem served_handle_arrive {env : EnvModel (servedSig σ)}
+    (c : SysState (served sys bridge config)) (id : ReqId) (request : Request) :
+    id ∈ ((c.handle env (.inl ()) (.arrive id request)).state (.inl ()) : List ReqId) ∨
+      ∃ response, (id, response) ∈ (c.handle env (.inl ()) (.arrive id request)).outbox := by
+  rcases gateActor_arrive (c.state (.inl ())) id request with h | ⟨response, h⟩
+  · rw [SysState.handle_state, update_self]
+    exact .inl h
+  · refine .inr ⟨response, ?_⟩
+    rw [SysState.handle, SysState.settle_outbox_eq]
+    exact List.mem_append_right _ (Effect.mem_emits.mpr
+      (List.mem_flatMap.mpr ⟨_, fronted_respond (sys := sys) h, List.mem_singleton_self _⟩))
+
+/-- Every request that arrives at `fronted sys` is answered, whatever `sys` is: in a fair run, in
+any environment that does not crash the gate and whose link from outside to the gate loses
+nothing, an arrival is followed by a response to its id handed to the outside world. -/
+theorem fronted_arrival_answered {env : EnvModel (frontedSig σ)}
+    (hcrash : env.mayCrash (.inl ()) = false)
+    (hlossless : (env.link none (.inl ())).lossy = false)
+    {r : (fronted sys bridge config).Run env} (hfair : r.Fair) {n : ℕ} {id : ReqId}
+    {request : Request} (hin : r.event n = some (.input (.inl (id, request)))) :
+    ∃ m, n ≤ m ∧ ∃ response, r.event m = some (.output (.inl (id, response))) := by
+  have hup (m : ℕ) : (r.state m).up (.inl ()) = true := fronted_gate_up hcrash _ (r.reachable m)
+  let e : Envelope (frontedSig σ) := ⟨none, .inl (), .arrive id request⟩
+  have he : e ∈ (r.state (n + 1)).net := by
+    rw [SysState.step_input.mp (System.Run.step_some hin)]
+    exact List.mem_append_right _ (List.mem_singleton_self _)
+  obtain ⟨m, hm, hev⟩ := hfair.delivered hlossless (fun m _ => hup m) he
+  have hQ : id ∈ ((r.state (m + 1)).state (.inl ()) : List ReqId) ∨
+      ∃ response, .inl (id, response) ∈ (r.state (m + 1)).outbox := by
+    rcases hev with hev | hev
+    · obtain ⟨-, -, hc⟩ := SysState.step_deliver.mp (System.Run.step_some hev)
+      rw [hc]
+      exact fronted_handle_arrive _ id request
+    · obtain ⟨-, -, -, hc⟩ := SysState.step_duplicate.mp (System.Run.step_some hev)
+      rw [hc]
+      exact fronted_handle_arrive _ id request
+  rcases hQ with hid | ⟨response, hout⟩
+  · obtain ⟨m', hm', response, hev'⟩ := fronted_pending_answered hcrash id hfair (hup (m + 1)) hid
+    exact ⟨m', by omega, response, hev'⟩
+  · obtain ⟨m', hm', hev'⟩ := hfair.output_taken hout
+    exact ⟨m', by omega, response, hev'⟩
+
+/-- Every request that arrives at `served sys` is answered, under the assumptions of
+`fronted_arrival_answered`. With `served_answered_le_arrived`, a request whose id is used once
+is answered exactly once. -/
+theorem served_arrival_answered {env : EnvModel (servedSig σ)}
+    (hcrash : env.mayCrash (.inl ()) = false)
+    (hlossless : (env.link none (.inl ())).lossy = false)
+    {r : (served sys bridge config).Run env} (hfair : r.Fair) {n : ℕ} {id : ReqId}
+    {request : Request} (hin : r.event n = some (.input (id, request))) :
+    ∃ m, n ≤ m ∧ ∃ response, r.event m = some (.output (id, response)) := by
+  have hup (m : ℕ) : (r.state m).up (.inl ()) = true := served_gate_up hcrash _ (r.reachable m)
+  let e : Envelope (servedSig σ) := ⟨none, .inl (), .arrive id request⟩
+  have he : e ∈ (r.state (n + 1)).net := by
+    rw [SysState.step_input.mp (System.Run.step_some hin)]
+    exact List.mem_append_right _ (List.mem_singleton_self _)
+  obtain ⟨m, hm, hev⟩ := hfair.delivered hlossless (fun m _ => hup m) he
+  have hQ : id ∈ ((r.state (m + 1)).state (.inl ()) : List ReqId) ∨
+      ∃ response, (id, response) ∈ (r.state (m + 1)).outbox := by
+    rcases hev with hev | hev
+    · obtain ⟨-, -, hc⟩ := SysState.step_deliver.mp (System.Run.step_some hev)
+      rw [hc]
+      exact served_handle_arrive _ id request
+    · obtain ⟨-, -, -, hc⟩ := SysState.step_duplicate.mp (System.Run.step_some hev)
+      rw [hc]
+      exact served_handle_arrive _ id request
+  rcases hQ with hid | ⟨response, hout⟩
+  · obtain ⟨m', hm', response, hev'⟩ := served_pending_answered hcrash id hfair (hup (m + 1)) hid
+    exact ⟨m', by omega, response, hev'⟩
+  · obtain ⟨m', hm', hev'⟩ := hfair.output_taken hout
+    exact ⟨m', by omega, response, hev'⟩
 
 end Lanes.Http
