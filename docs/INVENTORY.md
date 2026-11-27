@@ -10,17 +10,17 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Area | Definitions | proved | trusted | checked | tested | spec | none |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `Lanes/Actors` | 339 | 166 | 10 | 36 | 19 | 85 | 23 |
+| `Lanes/Actors` | 339 | 166 | 10 | 36 | 20 | 85 | 22 |
 | `Lanes/Auth` | 28 | 19 | 0 | 0 | 7 | 2 | 0 |
-| `Lanes/Behaviours` | 8 | 8 | 0 | 0 | 0 | 0 | 0 |
+| `Lanes/Behaviours` | 44 | 36 | 0 | 1 | 0 | 7 | 0 |
 | `Lanes/Check` | 91 | 54 | 0 | 25 | 0 | 10 | 2 |
 | `Lanes/Data` | 348 | 233 | 5 | 4 | 44 | 33 | 29 |
-| `Lanes/Env` | 24 | 0 | 24 | 0 | 0 | 0 | 0 |
+| `Lanes/Env` | 30 | 0 | 30 | 0 | 0 | 0 | 0 |
 | `Lanes/Html` | 58 | 22 | 0 | 0 | 28 | 8 | 0 |
 | `Lanes/Http` | 213 | 144 | 1 | 8 | 29 | 29 | 2 |
-| `Lanes/Semantics` | 53 | 9 | 0 | 0 | 0 | 43 | 1 |
+| `Lanes/Semantics` | 54 | 9 | 0 | 0 | 0 | 44 | 1 |
 | `LanesCli` | 110 | 0 | 0 | 0 | 42 | 0 | 68 |
-| All | 1272 | 655 | 40 | 73 | 169 | 210 | 125 |
+| All | 1315 | 683 | 46 | 74 | 170 | 218 | 124 |
 
 ## `Lanes/Actors/Actor.lean`
 
@@ -99,7 +99,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Event.deed` | proved | through `deeds`, `handled`: `Http.Gate.answered_le_handled`, `System.handled_le_put` |
+| `Event.deed` | proved | through `deeds`, `handled`: `Http.Gate.answered_le_handled`, `Jobs.answered_le_handled` and 1 more |
 | `deeds` | spec | used only in statements |
 | `Deed.handles` | spec | used only in statements |
 | `handled` | spec | used only in statements |
@@ -194,17 +194,17 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `instDecidableEqJoinMsg` | proved | its type, `Decidable` |
-| `joinSig` | proved | `SysState.exists_block`, `SysState.run_left`, `System.Invariant.join_left` and 9 more |
-| `Wiring.left` | proved | through `SysState.over`, `System.filterMapIO` and 3 more: `SysState.exists_block`, `SysState.run_filterMapIO` and 14 more |
+| `joinSig` | proved | `Jobs.attach_active_leaves`, `Jobs.attach_within`, `SysState.exists_block` and 11 more |
+| `Wiring.left` | proved | through `SysState.over`, `System.filterMapIO` and 3 more: `SysState.exists_block`, `SysState.run_filterMapIO` and 15 more |
 | `Wiring.right` | proved | through `System.join`, `Wiring.leftView`: `SysState.exists_block`, `SysState.run_left` and 10 more |
 | `System.join` | proved | `SysState.exists_block`, `SysState.run_left`, `System.Invariant.join_left` and 9 more |
-| `Signature.withIO` | proved | `SysState.run_filterMapIO`, `System.Invariant.filterMapIO`, `System.LeadsTo.filterMapIO` and 1 more |
-| `Effect.filterMapOut` | proved | through `SysState.over`, `System.filterMapIO` and 1 more: `SysState.run_filterMapIO`, `System.Invariant.filterMapIO` and 2 more |
-| `System.filterMapIO` | proved | `SysState.run_filterMapIO`, `System.Invariant.filterMapIO`, `System.LeadsTo.filterMapIO` and 1 more |
+| `Signature.withIO` | proved | `SysState.run_filterMapIO`, `System.Invariant.filterMapIO`, `System.LeadsTo.filterMapIO` and 2 more |
+| `Effect.filterMapOut` | proved | through `SysState.over`, `System.filterMapIO` and 1 more: `SysState.run_filterMapIO`, `System.Invariant.filterMapIO` and 3 more |
+| `System.filterMapIO` | proved | `SysState.run_filterMapIO`, `System.Invariant.filterMapIO`, `System.LeadsTo.filterMapIO` and 2 more |
 | `System.mapIO` | checked | `Tests/Join.lean` |
-| `instHashableSum_lanes` | checked | `Tests/Fronted.lean`, `Tests/Join.lean` |
-| `Signature.Inspect.join` | checked | `Tests/Join.lean` |
-| `System.Inspect.join` | checked | `Tests/Join.lean` |
+| `instHashableSum_lanes` | checked | `Tests/Fronted.lean`, `Tests/Jobs.lean`, `Tests/Join.lean` |
+| `Signature.Inspect.join` | checked | `Tests/Jobs.lean`, `Tests/Join.lean` |
+| `System.Inspect.join` | checked | `Tests/Jobs.lean`, `Tests/Join.lean` |
 | `Signature.Inspect.withIO` | checked | `Tests/Join.lean` |
 | `System.Inspect.filterMapIO` | checked | `Tests/Join.lean` |
 | `System.Inspect.mapIO` | checked | `Tests/Join.lean` |
@@ -348,11 +348,11 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Outside.any` | none |  |
-| `Outside.driver` | checked | `Tests/Clock.lean`, `Tests/HttpClient.lean` |
-| `Outside.after` | tested | `Tests/Clock.lean`, `Tests/Fronted.lean`, `Tests/HttpClient.lean` and 1 more |
-| `Outside.allows` | tested | `Tests/Clock.lean`, `Tests/Fronted.lean`, `Tests/HttpClient.lean` and 1 more |
-| `Outside.both` | checked | `Tests/Clock.lean`, `Tests/HttpClient.lean` |
+| `Outside.any` | tested | `Tests/Jobs.lean` |
+| `Outside.driver` | checked | `Tests/Clock.lean`, `Tests/HttpClient.lean`, `Tests/Jobs.lean` |
+| `Outside.after` | tested | `Tests/Clock.lean`, `Tests/Fronted.lean`, `Tests/HttpClient.lean` and 2 more |
+| `Outside.allows` | tested | `Tests/Clock.lean`, `Tests/Fronted.lean`, `Tests/HttpClient.lean` and 2 more |
+| `Outside.both` | checked | `Tests/Clock.lean`, `Tests/HttpClient.lean`, `Tests/Jobs.lean` |
 
 ## `Lanes/Actors/Past.lean`
 
@@ -506,7 +506,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Envelope.sameLink` | none |  |
 | `Link.reliable` | proved | `Examples.Watchdog.exists_fair_run_never_barks`, `Examples.Watchdog.impatient_barks` |
 | `Link.network` | checked | `Tests/Bank.lean`, `Tests/Election.lean`, `Tests/Join.lean` and 1 more |
-| `Link.unordered` | checked | `Tests/Election.lean` |
+| `Link.unordered` | checked | `Tests/Election.lean`, `Tests/Jobs.lean` |
 | `EnvModel.reliable` | spec | used only in statements |
 | `EnvModel.distributed` | none |  |
 
@@ -514,21 +514,21 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `update` | proved | through `SysState.down`, `SysState.init` and 4 more: `Account.implements`, `Check.system_violated` and 35 more |
+| `update` | proved | through `SysState.down`, `SysState.init` and 4 more: `Account.implements`, `Check.system_violated` and 36 more |
 | `Event.timed` | spec | used only in statements |
 | `Event.visible` | spec | used only in statements |
 | `SysState.blank` | proved | `System.Inductive.of_monotone`, `System.Monotone.and` |
-| `SysState.hasMail` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 23 more |
-| `SysState.perform` | proved | through `SysState.init`, `SysState.run` and 3 more: `Account.implements`, `Check.system_violated` and 34 more |
-| `SysState.performAll` | proved | through `SysState.init`, `SysState.run` and 3 more: `Account.implements`, `Check.system_violated` and 34 more |
+| `SysState.hasMail` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 24 more |
+| `SysState.perform` | proved | through `SysState.init`, `SysState.run` and 3 more: `Account.implements`, `Check.system_violated` and 35 more |
+| `SysState.performAll` | proved | through `SysState.init`, `SysState.run` and 3 more: `Account.implements`, `Check.system_violated` and 35 more |
 | `SysState.down` | proved | `Account.implements`, `System.Refines.of_events`, `linkMsgs_down` |
 | `SysState.settle` | proved | `SysState.Loses.settle` |
-| `SysState.handle` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 23 more |
-| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and 2 more: `Account.implements`, `Check.system_violated` and 33 more |
+| `SysState.handle` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 24 more |
+| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and 2 more: `Account.implements`, `Check.system_violated` and 34 more |
 | `SysState.deliverable` | proved | `Account.implements`, `System.Refines.of_events`, `linkMsgs_of_deliverable` |
 | `SysState.step` | proved | `Http.Gate.answered_of_leaves`, `Http.Gate.deadline_not_restarted`, `Shards.AtHome.step` and 7 more |
-| `SysState.init` | proved | `Account.implements`, `Check.system_violated`, `Http.Gate.answered_le_handled` and 18 more |
-| `SysState.run` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and 11 more |
+| `SysState.init` | proved | `Account.implements`, `Check.system_violated`, `Http.Gate.answered_le_handled` and 19 more |
+| `SysState.run` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and 12 more |
 | `System.Invariant` | spec | a predicate |
 
 ## `Lanes/Auth/Login.lean`
@@ -568,6 +568,52 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Auth.verify` | proved | `Auth.verify_eq_some`, `Auth.verify_sign`, `Auth.verify_sign_other` |
 | `Auth.formToken` | proved | `Auth.checkForm_formToken`, `Auth.checkForm_iff`, `Auth.checkForm_other` |
 | `Auth.checkForm` | proved | `Auth.checkForm_formToken`, `Auth.checkForm_iff`, `Auth.checkForm_other` |
+
+## `Lanes/Behaviours/Jobs.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Jobs.Phase.codec` | proved | its type, `Codec` |
+| `Jobs.instCodablePhase` | proved | its type, `Codable` |
+| `Jobs.Active.codec` | proved | its type, `Codec` |
+| `Jobs.instCodableActive` | proved | its type, `Codable` |
+| `Jobs.Outcome.codec` | proved | its type, `Codec` |
+| `Jobs.instCodableOutcome` | proved | its type, `Codable` |
+| `Jobs.Input.codec` | proved | its type, `Codec` |
+| `Jobs.instCodableInput` | proved | its type, `Codable` |
+| `Jobs.Output.codec` | proved | its type, `Codec` |
+| `Jobs.instCodableOutput` | proved | its type, `Codable` |
+| `Jobs.Msg.codec` | proved | its type, `Codec` |
+| `Jobs.instCodableMsg` | proved | its type, `Codable` |
+| `Jobs.Config.slots` | proved | through `Jobs.actor`, `Jobs.attach` and 2 more: `Jobs.active_answered`, `Jobs.active_leaves` and 13 more |
+| `Jobs.Config.cap` | proved | through `Jobs.actor`, `Jobs.attach` and 2 more: `Jobs.active_answered`, `Jobs.active_leaves` and 13 more |
+| `Jobs.Config.backoff` | proved | through `Jobs.actor`, `Jobs.attach` and 2 more: `Jobs.active_answered`, `Jobs.active_leaves` and 13 more |
+| `Jobs.keys` | proved | `Jobs.active_answered`, `Jobs.active_leaves`, `Jobs.attach_active_leaves` |
+| `Jobs.entry` | proved | `Jobs.answer_of_leaves`, `Jobs.entry_step`, `Jobs.not_arms` and 1 more |
+| `Jobs.put` | proved | through `Jobs.actor`, `Jobs.attach` and 2 more: `Jobs.active_answered`, `Jobs.active_leaves` and 13 more |
+| `Jobs.remove` | proved | through `Jobs.actor`, `Jobs.attach` and 2 more: `Jobs.active_answered`, `Jobs.active_leaves` and 13 more |
+| `Jobs.Within` | spec | a predicate |
+| `Jobs.Attempts` | spec | a predicate |
+| `Jobs.sig` | proved | `Jobs.active_answered`, `Jobs.active_leaves`, `Jobs.actor_attempts` and 11 more |
+| `Jobs.timer` | proved | `Jobs.not_arms` |
+| `Jobs.fail` | proved | through `Jobs.actor`, `Jobs.attach` and 2 more: `Jobs.active_answered`, `Jobs.active_leaves` and 13 more |
+| `Jobs.step` | proved | `Jobs.answer_of_leaves`, `Jobs.dispatch_active`, `Jobs.entry_step` and 2 more |
+| `Jobs.rearm` | proved | through `Jobs.actor`, `Jobs.attach` and 1 more: `Jobs.active_answered`, `Jobs.active_leaves` and 8 more |
+| `Jobs.actor` | proved | `Jobs.actor_attempts`, `Jobs.actor_within` |
+| `Jobs.system` | proved | `Jobs.active_answered`, `Jobs.active_leaves`, `Jobs.answered_le_handled` and 3 more |
+| `Jobs.Use.wiring` | proved | through `Jobs.attach`: `Jobs.attach_active_leaves`, `Jobs.attach_within` |
+| `Jobs.attach` | proved | `Jobs.attach_active_leaves`, `Jobs.attach_within` |
+| `Jobs.pool` | checked | `Tests/Jobs.lean` |
+
+## `Lanes/Behaviours/JobsSound.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Jobs.left` | spec | used only in statements |
+| `Jobs.Moved` | spec | a predicate |
+| `Jobs.Armed` | spec | a predicate |
+| `Jobs.answered` | spec | used only in statements |
+| `Jobs.handled` | spec | used only in statements |
 
 ## `Lanes/Behaviours/Once.lean`
 
@@ -666,7 +712,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Check.Property.holds` | proved | `Check.refines_sound`, `Check.refines_traces`, `Check.system_sound` and 1 more |
 | `Check.Trace.last` | proved | `Check.search_deadlock`, `Check.search_reached`, `Check.search_violated` and 2 more |
 | `Check.Trace.labels` | proved | `Check.system_violated` |
-| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 13 more |
+| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 14 more |
 | `Check.Path.last` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
 | `Check.Path.toTraceAux` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
 | `Check.Path.toTrace` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
@@ -1211,7 +1257,18 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Http.Client.outside` | trusted | TRUSTED.md: The HTTP client adapter's handler |
+| `Http.Client.exchange` | trusted | TRUSTED.md: The HTTP client adapter's handler |
 | `Http.Client.handler` | trusted | TRUSTED.md: The HTTP client adapter's handler |
+
+## `Lanes/Env/Jobs.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Jobs.Port.alone` | trusted | TRUSTED.md: The jobs pool |
+| `Jobs.handler` | trusted | TRUSTED.md: The jobs pool |
+| `Jobs.compute` | trusted | TRUSTED.md: The jobs pool |
+| `Jobs.withHeader` | trusted | TRUSTED.md: The jobs pool |
+| `Jobs.call` | trusted | TRUSTED.md: The jobs pool |
 
 ## `Lanes/Env/Journal.lean`
 
@@ -1633,7 +1690,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Spec.stutter` | proved | through `System.Run`, `System.Run.event` and 2 more: `Examples.Watchdog.exists_fair_run_never_barks`, `Examples.Watchdog.impatient_barks` and 11 more |
+| `Spec.stutter` | proved | through `System.Run`, `System.Run.event` and 2 more: `Examples.Watchdog.exists_fair_run_never_barks`, `Examples.Watchdog.impatient_barks` and 13 more |
 | `Obligation.event` | proved | `System.LeadsTo.ensures_of_invariant` |
 | `Obligation.Due` | spec | a predicate |
 | `Obligation.Restarted` | spec | a predicate |
@@ -1666,6 +1723,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Service.once` | spec | used only in statements |
 | `System.ImplementsOnce` | spec | a predicate |
 | `Once.Server.Covered` | spec | a predicate |
+| `Spec.showing` | spec | used only in statements |
 
 ## `Lanes/Semantics/Projection.lean`
 
@@ -1706,7 +1764,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `System.sem` | proved | `Account.implements`, `Examples.KV.caching_not_implements`, `Examples.KV.implements` and 12 more |
+| `System.sem` | proved | `Account.implements`, `Examples.KV.caching_not_implements`, `Examples.KV.implements` and 13 more |
 | `System.Refines` | spec | a predicate |
 
 ## `LanesCli/Generated.lean`

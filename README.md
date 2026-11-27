@@ -138,7 +138,7 @@ definitions of `Lanes/` that still have no evidence.
 - **The HTTP client's wire format.** What the reader makes of a response written as a server
   writes it, and of every start of one, is proved, and so are its size limit and its ending
   (`Response.read_wire`, `Response.read_more`).
-- **Trusted.** About 1,850 lines of trusted code, listed with their sizes in `TRUSTED.md`: IO,
+- **Trusted.** About 1,950 lines of trusted code, listed with their sizes in `TRUSTED.md`: IO,
   C that binds libsodium and `fsync`, a template macro, and an HTTP wire format whose reading
   is proved for what a server's writer sends and only tested for other forms. `lanes lint` fails if they change without the list,
   and `scripts/mutants.py` holds the known ways of breaking that code, each of which has to
@@ -169,8 +169,12 @@ only what came after the last save; that this gives the same state has a proof t
 `systems/raft-kv` is a replicated key-value store: Raft, as the step function of one actor.
 It is checked against the map it replicates, and proved to be that one map to its clients,
 for every number of nodes and every fault the model has: links that lose, repeat and reorder
-messages, and nodes that crash and come back with what they had. One premise remains: a
-client's request is not repeated on its way to a node (`RaftKV.implementsMachine`). It runs as three processes
+messages, and nodes that crash and come back with what they had. With the plain map, one
+premise remains: a client's request is not repeated on its way to a node
+(`RaftKV.implementsMachine`). With the map behind a memo of the commands its clients name,
+there is none: in every environment, links from clients losing, repeating and reordering
+included, each command takes effect at most once and every answer handed over is one the map
+gave it (`RaftKV.implementsMachine_once`). It runs as three processes
 that survive their leaders being killed, each saving its state and cutting its journal as it
 goes. A node that comes back without its journal is outside the model, and does lose what was
 acknowledged, so a node is not started without one unless it is told it is new:

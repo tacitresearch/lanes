@@ -37,6 +37,8 @@ public import Lanes.Actors.Runtime
 public import Lanes.Auth.Login
 public import Lanes.Auth.Token
 public import Lanes.Auth.TokenSound
+public import Lanes.Behaviours.Jobs
+public import Lanes.Behaviours.JobsSound
 public import Lanes.Behaviours.Once
 public import Lanes.Behaviours.Server
 public import Lanes.Check.Clients
@@ -71,6 +73,7 @@ public import Lanes.Data.TimeFormat
 public import Lanes.Env.Clock
 public import Lanes.Env.Http
 public import Lanes.Env.HttpClient
+public import Lanes.Env.Jobs
 public import Lanes.Env.Journal
 public import Lanes.Env.Node
 public import Lanes.Env.Peers

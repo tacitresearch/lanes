@@ -79,6 +79,19 @@ import Lanes.Semantics
 /-- info: 'Lanes.Http.served_pending_answered' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.served_pending_answered
 
+-- Lanes.Semantics.JobsLive
+/-- info: 'Lanes.Jobs.active_leaves' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Jobs.active_leaves
+
+/-- info: 'Lanes.Jobs.active_answered' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Jobs.active_answered
+
+/-- info: 'Lanes.Jobs.submitted_answered' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Jobs.submitted_answered
+
+/-- info: 'Lanes.Jobs.attach_active_leaves' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Jobs.attach_active_leaves
+
 -- Lanes.Semantics.Link
 /-- info: 'Lanes.linkMsgs_of_deliverable' depends on axioms: [propext] -/
 #guard_msgs in #print axioms Lanes.linkMsgs_of_deliverable
@@ -101,6 +114,12 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.System.Run.Impatient.fair' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Run.Impatient.fair
+
+/-- info: 'Lanes.System.LeadsTo.induction' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.LeadsTo.induction
+
+/-- info: 'Lanes.System.LeadsTo.exists_left' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.LeadsTo.exists_left
 
 -- Lanes.Semantics.Monitor
 /-- info: 'Lanes.Check.Monitor.sound' depends on axioms: [propext, Classical.choice, Quot.sound] -/
@@ -128,6 +147,9 @@ import Lanes.Semantics
 -- Lanes.Semantics.Once
 /-- info: 'Lanes.Once.server_implements' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Once.server_implements
+
+/-- info: 'Lanes.System.Refines.filterMapIO' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Refines.filterMapIO
 
 -- Lanes.Semantics.Projection
 /-- info: 'Lanes.System.View.Projects.fair_run' depends on axioms: [propext, Classical.choice, Quot.sound] -/
