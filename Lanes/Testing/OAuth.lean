@@ -261,8 +261,9 @@ def Fake.approve (f : Fake) (location : String) (user : User) (token : Token := 
   return [("code", code), ("state", get "state")]
 
 /-- Signs `b` in with `provider` as `user`, as a browser: begins at `/sign-in/<provider>`,
-agrees at the provider, and comes back to the callback with the cookie of the beginning. The
-callback's answer is given, with the session cookie it sets kept by the browser. -/
+agrees at the provider, and comes back to the callback with the ticket the beginning set in its
+cookie (`__Host-lanes-sign-in` over HTTPS), which the browser keeps. The callback's answer is
+given, with the session cookie it sets kept by the browser. -/
 def signIn (b : Browser) (f : Fake) (provider : String) (user : User) (token : Token := .good) :
     Async (Option Response) := do
   let begun ← b.get ["sign-in", provider]

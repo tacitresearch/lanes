@@ -147,13 +147,17 @@ fetch_config() {
   check_conf
 }
 
-# Installs this script from SCRIPT_URL, checked against SCRIPT_SHA256 when given; without a URL,
-# the running copy.
+# Installs this script from SCRIPT_URL, which must have the SHA-256 SCRIPT_SHA256: it runs as
+# root, so one fetched without its hash, or with another, is refused. Without a URL, the running
+# copy.
 install_script() {
   local tmp
+  if [ -n "$SCRIPT_URL" ] && ! [[ $SCRIPT_SHA256 =~ ^[0-9a-f]{64}$ ]]; then
+    die "SCRIPT_URL is given without SCRIPT_SHA256: a script is not run unchecked"
+  fi
   tmp=$(mktemp "$BASE/.app-instance.XXXXXX")
   if [ -n "$SCRIPT_URL" ]; then curl -fsSL --retry 5 -o "$tmp" "$SCRIPT_URL"; else cp "$0" "$tmp"; fi
-  if [ -n "$SCRIPT_SHA256" ] && ! echo "$SCRIPT_SHA256  $tmp" | sha256sum -c --status -; then
+  if [ -n "$SCRIPT_URL" ] && ! echo "$SCRIPT_SHA256  $tmp" | sha256sum -c --status -; then
     rm -f "$tmp"
     die "$SCRIPT_URL does not have the SHA-256 $SCRIPT_SHA256"
   fi
@@ -395,8 +399,10 @@ EOF
 }
 
 configure_cloudwatch_agent() {
+  # Readable by root and the agent alone: an access line names paths and peers.
   touch /var/log/lanes/app.log /var/log/lanes-setup.log
-  chmod 644 /var/log/lanes/app.log /var/log/lanes-setup.log
+  chgrp cwagent /var/log/lanes/app.log /var/log/lanes-setup.log
+  chmod 640 /var/log/lanes/app.log /var/log/lanes-setup.log
   render_cloudwatch_config >"$CW_AGENT/etc/lanes.json"
   if [ -n "$METRICS_PATH" ]; then render_prometheus_config >"$CW_AGENT/etc/prometheus.yaml"; fi
   "$CW_AGENT/bin/amazon-cloudwatch-agent-ctl" -a fetch-config -m ec2 -s -c "file:$CW_AGENT/etc/lanes.json"

@@ -79,8 +79,9 @@ the system into the run of the spec its actor performed is not written (as for r
 
 ## What is checked
 
-`Videos/Check.lean`, run by `lake test`: two members, at most two videos, one pending upload per
-member, one comment, one delete in the store, two attempts. The site beside the browsers, which
+`Videos/Check.lean`, run by `lake test`: two members, at most two videos and one per member, one
+pending upload per member, two comments and one per member on a video, one delete in the store,
+two attempts. The site beside the browsers, which
 follow a script, and the object store's model, which answers each call at most once, late,
 never, refused or `unknown`, and lets an upload not answered land at any moment or never; the
 actor crashes and starts again anywhere. What each browser is shown is judged as it is shown.
@@ -95,15 +96,21 @@ actor crashes and starts again anywhere. What each browser is shown is judged as
 | Seeded: a check the store did not answer in time taken as found (`readyOnTimeout`) | | found in 21 steps |
 | Seeded: sessions that never end (`lifetime := {}`) | | found in 18 steps |
 
+Every bound holds in every state of every scenario, those of one member among them: one member's
+videos (`maxOwned`) and comments on one video (`maxCommentsEach`) are bounded far below the site's
+(`maxVideos`, `maxComments`), so one member cannot fill them for everyone. `capTests` checks
+each at its limit, and that a video's owner takes out anyone's comment on it.
+
 Over HTTP (`Videos/EndToEnd.lean`, 20 checks): the site as `Main` serves it, on a journal, against
 the test kit of Lanes (`Lanes.Testing`): its identity provider in GitHub's shape, read by
 `GitHub.read`, its fake S3, which checks every signature, the presigned links' included, and its
-browser, which keeps the cookies. Two members sign in; a video is made, put
+browser, which keeps the cookies. Three members sign in; a video is made, put
 to the store through its link, checked and watched through the `<video>`'s link; likes counted
 once, a comment, a forged form, another's delete; a private video seen by its owner alone; an
 upload not yet in the store not listed; then the server is stopped and started again on its
 journal, and the sessions, likes and comments are there, an upload begun before is checked and
-listed, the feed comes a page at a time, comments are deleted by their author only, a delete
+listed, the feed comes a page at a time, a comment is deleted by its author or the video's owner
+and by no one else, a delete
 removes the video and its object, and a sign-out ends the session.
 
 ## Running it

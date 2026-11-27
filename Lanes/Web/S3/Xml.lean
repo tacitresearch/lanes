@@ -82,17 +82,19 @@ def entity? (name : List Char) : Option Char :=
   | '#' :: digits => charRef? digits
   | _ => none
 
-/-- Text with its references replaced; `none` for a reference that is not one, or a `<`. -/
-def unescape : (fuel : Nat) → List Char → Option (List Char)
-  | 0, _ => none
-  | _, [] => some []
-  | fuel + 1, '&' :: rest => do
-    let (name, tail) := rest.span (· != ';')
-    let tail ← tail.tail?
-    let c ← if name.length ≤ 10 then entity? name else none
-    return c :: (← unescape fuel tail)
-  | _, '<' :: _ => none
-  | fuel + 1, c :: rest => (c :: ·) <$> unescape fuel rest
+/-- Text with its references replaced, after `acc` reversed; `none` for a reference that is not
+one, or a `<`. Every call is a tail call, so a text of any length takes no stack, and a name is
+looked for in the next eleven characters only, so the time is linear in the text. -/
+def unescape : (fuel : Nat) → List Char → List Char → Option (List Char)
+  | 0, _, _ => none
+  | _, [], acc => some acc.reverse
+  | fuel + 1, '&' :: rest, acc =>
+    let name := (rest.take 11).takeWhile (· != ';')
+    match rest.drop name.length, (if name.length ≤ 10 then entity? name else none) with
+    | ';' :: tail, some c => unescape fuel tail (c :: acc)
+    | _, _ => none
+  | _, '<' :: _, _ => none
+  | fuel + 1, c :: rest, acc => unescape fuel rest (c :: acc)
 
 /-- `s` as XML text: `&`, `<`, `>`, `"` and `'` as entities. -/
 def escape (s : String) : String :=
@@ -120,7 +122,7 @@ def tokens : (fuel : Nat) → List Char → List Token → Option (List Token)
     tokens fuel tail ((if closed then [.stop name, .start name] else [.start name]) ++ acc)
   | fuel + 1, chars, acc => do
     let (text, tail) := chars.span (· != '<')
-    let text ← unescape (text.length + 1) text
+    let text ← unescape (text.length + 1) text []
     tokens fuel tail (.text (String.ofList text) :: acc)
 
 /-- The elements open, innermost first, each with its children so far in reverse. -/

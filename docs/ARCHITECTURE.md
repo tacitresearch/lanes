@@ -39,7 +39,7 @@ proved function tells it to.
 | The checker | `Lanes/Check/`, `Lanes/Semantics/{Monitor,MonitorSound}.lean` | `Check.search_sound`, `Check.system_sound_of_respects`, `Check.refines_traces` |
 | The proof layer | `Lanes/Semantics/` | refinement, specs, fairness, leads-to |
 | Data and the standard library | `Lanes/Data/`, `Lanes/Lib/` | codec laws, `Quorum.majority_inter`, `Bytes.same_iff`, `Json.parse_iff`, `Url.parse_print` |
-| Sign-in with OAuth 2.0 and OpenID Connect | `Lanes/Web/Auth/{Jose,IdToken,OAuth}.lean`, `Lanes/Web/IO/SignIn.lean` | `OAuth.Pending.callback_ok`, `OAuth.Pending.accepted_le_issued`, `OAuth.IdToken.verify_accepted`, `Jose.verify_ok`, `OAuth.Keys.no_fetch_within`; the edge is trusted, tested end to end against a provider run in the test |
+| Sign-in with OAuth 2.0 and OpenID Connect | `Lanes/Web/Auth/{Jose,IdToken,OAuth}.lean`, `Lanes/Web/IO/SignIn.lean` | `OAuth.check_ok`, `OAuth.Used.accepted_once`, `OAuth.Used.length_claim`, `OAuth.IdToken.verify_accepted`, `Jose.verify_ok`, `OAuth.Keys.no_fetch_within`; the edge is trusted, tested end to end against a provider run in the test |
 | Bound C | `native/lanes.c`, `Lanes/Lib/Crypto/Sodium.lean`; `native/verify.c`, `Lanes/Lib/Crypto/Verify.lean` | trusted; tested against the Lean references and published vectors |
 | TLS client | `native/tls.c`, `Lanes/Web/IO/Tls.lean` | trusted; tested against `openssl s_server` |
 
@@ -274,9 +274,10 @@ again (`Auth.Sessions.accepts_iff`, `Auth.Sessions.Ended.run`).
 Sign-in with another service (`docs/decisions/D72-sign-in-with-oauth.md`) is OAuth 2.0's authorization
 code flow with PKCE and OpenID Connect on it, decided in `Lanes/Web/Auth/OAuth.lean` and done
 where a request arrives, before the system (`serve`'s `arrive`, `Lanes/Web/IO/SignIn.lean`), so no
-code or token is journalled. A callback is accepted only for a state issued to its browser and
-provider and not expired (`OAuth.Pending.callback_ok`), and no state more often than it was issued
-(`OAuth.Pending.accepted_le_issued`), which is also model-checked against an attacker's browser;
+code or token is journalled. A sign-in begun is a ticket the browser keeps in a cookie under the
+server's tag, so beginnings take no room on the server. A callback is accepted only with its
+browser's ticket, for its state and provider, not expired (`OAuth.check_ok`), and no state twice
+(`OAuth.Used.accepted_once`), which is also model-checked against an attacker's browser;
 an ID token only if its header names RS256 or ES256, a key of the provider's set of that
 algorithm and `kid` checks it, and every claim passes (`OAuth.IdToken.verify_accepted`,
 `Lanes/Web/Auth/Jose.lean`). The system gets the identity in headers a client cannot send
@@ -324,8 +325,8 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   proved to read back with exactly its recipients (`Ses.toAddresses_json`), its answers read as
   the email model's (`Ses.Answer.modelled`), and a run against a fake SES is one the model
   allows; SES takes no key, so each send is a request without one.
-- **Sign-in** (`Lanes/Web/IO/SignIn.lean`): the random values of a beginning, the pending
-  sign-ins and each provider's keys held in references, and the calls to the token endpoint,
+- **Sign-in** (`Lanes/Web/IO/SignIn.lean`): the random values of a beginning and the key of the
+  tickets, the states used and each provider's keys held in references, and the calls to the token endpoint,
   the JWK Set and a user API; every decision is `Lanes/Web/Auth/OAuth.lean`'s (above).
 - **HTTP server, journal, transport**: above.
 - **Models of external services** (`Lanes/Outside/`, D61 and the decision on models of external

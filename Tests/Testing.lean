@@ -54,7 +54,9 @@ def browserTests : List (String × Bool) :=
   [ ("kit browser: a set-cookie keeps its name, value and path, and Max-Age=0 clears",
       Kept.parse "s=abc; Path=/sign-in; Max-Age=600; HttpOnly" == some ({ name := "s", value := "abc", path := "/sign-in" }, false)
         && Kept.parse "s=; Path=/; Max-Age=0" == some ({ name := "s", value := "", path := "/" }, true)
-        && Kept.parse "no value" == none),
+        && Kept.parse "no value" == none
+        && Kept.parse "__Host-lanes-sign-in=t.v; Path=/; Max-Age=600; HttpOnly; Secure; SameSite=Lax"
+          == some ({ name := "__Host-lanes-sign-in", value := "t.v", path := "/" }, false)),
     ("kit browser: a cookie goes where its path covers the request",
       let c : Kept := { name := "s", value := "v", path := "/sign-in" }
       c.covers ["sign-in", "id", "callback"] && c.covers ["sign-in"] && !c.covers ["sign-inx"]
