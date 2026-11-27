@@ -139,6 +139,42 @@ instance {α : Type u} {β : Type v} [ToJson α] [FromJson α] [LawfulJson α]
     [ToJson β] [FromJson β] [LawfulJson β] : LawfulJson (α × β) :=
   ⟨fun pair => by simp [toJson, fromJson?, Json.getArr?, fromJson?_toJson]⟩
 
+/-! The law for each instance, by name, and what holds of `Option`. -/
+
+theorem fromJson?_toJson_json (j : Json) : fromJson? (toJson j) = .ok j := fromJson?_toJson j
+theorem fromJson?_toJson_jsonNumber (n : JsonNumber) : fromJson? (toJson n) = .ok n :=
+  fromJson?_toJson n
+theorem fromJson?_toJson_unit (u : Unit) : fromJson? (toJson u) = .ok u := fromJson?_toJson u
+theorem fromJson?_toJson_bool (b : Bool) : fromJson? (toJson b) = .ok b := fromJson?_toJson b
+theorem fromJson?_toJson_nat (n : Nat) : fromJson? (toJson n) = .ok n := fromJson?_toJson n
+theorem fromJson?_toJson_int (i : Int) : fromJson? (toJson i) = .ok i := fromJson?_toJson i
+theorem fromJson?_toJson_string (s : String) : fromJson? (toJson s) = .ok s := fromJson?_toJson s
+theorem fromJson?_toJson_fin {n : Nat} (i : Fin n) : fromJson? (toJson i) = .ok i :=
+  fromJson?_toJson i
+
+theorem fromJson?_toJson_array {α : Type u} [ToJson α] [FromJson α] [LawfulJson α]
+    (a : Array α) : fromJson? (toJson a) = .ok a := fromJson?_toJson a
+
+theorem fromJson?_toJson_list {α : Type u} [ToJson α] [FromJson α] [LawfulJson α] (l : List α) :
+    fromJson? (toJson l) = .ok l := fromJson?_toJson l
+
+theorem fromJson?_toJson_prod {α : Type u} {β : Type v} [ToJson α] [FromJson α] [LawfulJson α]
+    [ToJson β] [FromJson β] [LawfulJson β] (pair : α × β) :
+    fromJson? (toJson pair) = .ok pair := fromJson?_toJson pair
+
+theorem fromJson?_toJson_none {α : Type u} [ToJson α] [FromJson α] :
+    (fromJson? (toJson (none : Option α)) : Except String (Option α)) = .ok none := rfl
+
+/-- `some a` reads back when `a` is not encoded as `null`, the encoding of `none`. -/
+theorem fromJson?_toJson_some {α : Type u} [ToJson α] [FromJson α] [LawfulJson α] {a : α}
+    (h : toJson a ≠ .null) : fromJson? (toJson (some a)) = .ok (some a) := by
+  show (match toJson a with
+    | .null => (.ok none : Except String (Option α))
+    | j => (fromJson? j : Except String α).map some) = _
+  split
+  · exact absurd ‹_› h
+  · rw [fromJson?_toJson]; rfl
+
 namespace Json
 
 /-- A missing field decodes as `null` does, so a field of type `Option α` may be left out. -/

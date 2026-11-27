@@ -34,10 +34,14 @@ end Lanes.Hmac
 
 namespace Lanes.Auth
 
-/-- The tag of `payload` for `purpose`: 64 hex digits. `purpose` is a name the application
-fixes, and the zero byte after it keeps two purposes apart whatever the payloads. -/
+/-- What a tag authenticates. `purpose` is a name the application fixes, without a zero byte, so
+the zero byte after it keeps two purposes apart whatever the payloads (`message_inj`). -/
+def message (purpose payload : String) : ByteArray :=
+  purpose.toUTF8 ++ ⟨#[0]⟩ ++ payload.toUTF8
+
+/-- The tag of `payload` for `purpose`: 64 hex digits. -/
 def tag (key : Hmac.Key) (purpose payload : String) : String :=
-  Bytes.hex (key.mac (purpose.toUTF8 ++ ⟨#[0]⟩ ++ payload.toUTF8))
+  Bytes.hex (key.mac (message purpose payload))
 
 def sign (key : Hmac.Key) (purpose payload : String) : String :=
   tag key purpose payload ++ "." ++ payload
@@ -77,7 +81,8 @@ theorem verify_sign (key : Hmac.Key) (purpose payload : String) :
     List.take_of_length_le (Nat.le_of_eq hlen), (Bytes.same_iff _ _).mpr rfl, ite_true]
 
 /-- The token a form carries for a session, so that a page on another site, which cannot read
-the session's cookie, cannot make a request that passes as the user's. -/
+the session's cookie, cannot make a request that passes as the user's. It is the tag of `sign`
+for the purpose `form`, which is therefore no purpose for an application to sign with. -/
 def formToken (key : Hmac.Key) (session : String) : String :=
   tag key "form" session
 
