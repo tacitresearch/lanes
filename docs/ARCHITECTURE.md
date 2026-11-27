@@ -227,6 +227,20 @@ is a stop that drops nothing in flight: at SIGTERM or SIGINT readiness answers `
 requests the shard has taken are answered until none is left or a deadline passes, and then the
 server stops; trusted and tested with a child process.
 
+*A proposal, not decided* (`docs/decisions/new-reads.md`): reads answered from the state. An
+application may name some requests as reads (`serve`'s `reads`, `Lanes/Web/Http/Read.lean`): the
+actor a request reads and a pure function from its state to the response. Such a request takes no
+id and never enters the system: once prepared, it is a peek at that actor (`Runtime.tryPeek`),
+answered after everything the shard took before it is appended and handed over, and rendered on a
+task of its own. Nothing is journalled: a batch without its peeks appends the same journal and
+leaves the same kernel (`Batch.run_erase_peeks`), so replay and recovery are those of the requests
+that entered. Over the shard's history a peek sees the state of the kernel the journal so far
+describes, once every output it produced is handed over (`Batch.chain_peek`), and one asked after a
+response was handed over sees the actor in a world the semantics reaches by a run that put that
+response out first (`Batch.chain_peek_after`, `Lanes/Runtime/PeekSound.lean`). The gate's theorems
+and `System.Implements` say nothing of reads; that each read is answered once is trusted and
+tested (`Tests/Reads.lean`). Off unless an application names its reads.
+
 Around it, pure and in `Std` only: requests and responses as data; typed routes whose links the
 server reads back and `dispatch` hands to their route's handler (`Http.dispatch_link`); forms
 (`Http.parseForm_encodeForm`); HTML values that a browser reads as the tree they were rendered

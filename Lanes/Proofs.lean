@@ -22,6 +22,7 @@ public import Lanes.Proof.MapIOSound
 public import Lanes.Runtime.KernelSound
 public import Lanes.Runtime.KernelTimers
 public import Lanes.Runtime.MailboxSound
+public import Lanes.Runtime.PeekSound
 public import Lanes.Runtime.ShardSound
 public import Lanes.Runtime.ShardsSound
 public import Lanes.Web.Auth.TokenSound

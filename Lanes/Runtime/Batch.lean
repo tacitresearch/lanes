@@ -193,7 +193,8 @@ def recorded (acts : List (Act sys P)) : List (Event σ) := acts.flatMap Act.eve
 
 /-- What an act may do after `before`, from kernel `k`: hand over or record exactly what the
 journal so far produced and was not yet handed over or recorded, save the kernel the journal
-describes once every output it produced is handed over, and answer with that kernel's state. -/
+describes once every output it produced is handed over, and answer with that kernel's state
+once every output it produced is handed over. -/
 def Act.Sound (k : Kernel sys) (before : List (Act sys P)) : Act sys P → Prop
   | .append _ => True
   | .record events => recorded before ++ events.toList = (k.exec (journal before)).events
@@ -201,7 +202,9 @@ def Act.Sound (k : Kernel sys) (before : List (Act sys P)) : Act sys P → Prop
   | .save image =>
     image = (k.exec (journal before)).kernel.image
       ∧ handed before = (k.exec (journal before)).outputs
-  | .answer i _ state => state = ((k.exec (journal before)).kernel.cell i).state
+  | .answer i _ state =>
+    state = ((k.exec (journal before)).kernel.cell i).state
+      ∧ handed before = (k.exec (journal before)).outputs
 
 def Sound (k : Kernel sys) (acts : List (Act sys P)) : Prop :=
   ∀ before act after, acts = before ++ act :: after → act.Sound k before
@@ -370,11 +373,11 @@ private theorem inv_scan (c : Config) {k0 : Kernel sys} {ks : Kernel sys × Scan
     obtain ⟨⟨hk, ho, he, hs⟩, -⟩ := inv_flush c h
     exact ⟨hk, ho, he, hs⟩
   | peek i reply =>
-    obtain ⟨⟨hk, ho, he, hs⟩, hentries, -⟩ := inv_flush c h
+    obtain ⟨⟨hk, ho, he, hs⟩, hentries, -, houtputs⟩ := inv_flush c h
     simp only [scan]
-    generalize flush c ks = f at hk ho he hs hentries
+    generalize flush c ks = f at hk ho he hs hentries houtputs
     obtain ⟨k, s⟩ := f
-    simp only at hk ho he hs hentries
+    simp only at hk ho he hs hentries houtputs
     rw [hentries, ops_empty, List.append_nil] at hk ho he
     have hj : journal (s.acts.toList ++ [Act.answer i reply (k.cell i).state])
         = journal s.acts.toList := by simp [journal, Act.ops]
@@ -387,7 +390,8 @@ private theorem inv_scan (c : Config) {k0 : Kernel sys} {ks : Kernel sys × Scan
     · exact hk
     · exact ho
     · exact he
-    · exact sound_push hs (by simp only [Act.Sound, ← hk])
+    · refine sound_push hs ⟨by rw [← hk], ?_⟩
+      rw [← ho, houtputs, Array.toList_empty, List.append_nil]
 
 private theorem inv_foldl (c : Config) {k0 : Kernel sys} (commands : List (Command σ P W)) :
     ∀ {ks : Kernel sys × Scan sys P W}, Inv k0 ks → Inv k0 (commands.foldl (scan c) ks) := by
@@ -439,7 +443,8 @@ theorem run_handed (c : Config) (k : Kernel sys) (written : Nat) (waiting : Arra
 /-- Every act of a batch is sound where it falls. So an output is handed over only after the
 entries that produce it are appended, which is what makes it durable; a save falls only where
 everything produced has been handed over, as the mark it leaves says; and a peek is answered
-with the state of the kernel the journal so far describes. -/
+with the state of the kernel the journal so far describes, once every output it produced is
+handed over. -/
 theorem run_sound (c : Config) (k : Kernel sys) (written : Nat) (waiting : Array (Bool × W))
     (commands : List (Command σ P W)) : Sound k (run c k written waiting commands).acts.toList :=
   (inv_finish c (inv_foldl c commands (inv_start k written waiting))).2.2.2

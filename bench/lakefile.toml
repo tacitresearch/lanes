@@ -30,3 +30,8 @@ root = "LanesMany"
 [[lean_exe]]
 name = "benchWaves"
 root = "Waves"
+
+# A counter answering `GET /` through the system and, with `reads`, `GET /read` from its state.
+[[lean_exe]]
+name = "benchReads"
+root = "ReadsHello"

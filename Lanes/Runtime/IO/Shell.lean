@@ -301,6 +301,20 @@ def state (rt : Runtime sys) (i : σ.Id) : Async (sys.State i) := do
   let some state ← await reply.result? | throw stopped
   return state
 
+/-- Ask for the state of actor `i` if the inbox has room, without waiting: `reply` is given it
+once the shard has written out and handed over everything taken before (`Batch.chain_peek`),
+on a task of its own, or `none` if the shard stops first. Nothing is journalled
+(`Batch.run_erase_peeks`). `false` means nothing was asked. The state is then shared with
+another thread, which costs the shard in proportion to the state once a write follows
+(`docs/decisions/new-reads.md`). -/
+def tryPeek (rt : Runtime sys) (i : σ.Id) (reply : Option (sys.State i) → BaseIO Unit) :
+    BaseIO Bool := do
+  have : Nonempty (sys.State i) := ⟨(sys.actor i).init⟩
+  let promise ← IO.Promise.new
+  unless ← rt.offer (.peek i promise) do return false
+  discard <| BaseIO.mapTask (t := promise.result?) reply
+  return true
+
 /-- Stop, and return when the shard has ended. It takes no more commands, finishes those already
 handed over and at most one more batch of work, then ends. Messages still queued between actors
 are abandoned and pending timers never fire. -/

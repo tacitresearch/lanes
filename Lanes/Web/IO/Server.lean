@@ -8,6 +8,7 @@ public import Std.Async
 public import Lanes.Durable.IO.Journal
 public import Lanes.Web.Http.Conn
 public import Lanes.Web.Http.Front
+public import Lanes.Web.Http.Read
 public import Lanes.Web.Http.Waiting
 public import Lanes.Web.IO.Ops
 
@@ -29,6 +30,11 @@ takes inputs that are no request (`serveFronted`).
 
 One refusal is made here: `503` when the shard's inbox is full. TLS is not handled: terminate it
 in a reverse proxy.
+
+A request the application names as a read (`Read`, a proposal: `docs/decisions/new-reads.md`)
+does not enter the system: once prepared, it is answered from the state of the actor it reads, as
+the shard has it after everything taken before it (`Runtime.tryPeek`). It takes no id and leaves
+no entry in the journal.
 -/
 
 public section
@@ -363,7 +369,8 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
     (runtimeConfig : Runtime.Config) (log : Option (Journal.Log system))
     (prepare : Request → Request) (enter : ReqId × Request → τ.In)
     (onOutput : τ.Out → (ReqId × Response) ⊕ Async Unit)
-    (arrive : Option (Request → IO (Except Response Request))) :
+    (arrive : Option (Request → IO (Except Response Request)))
+    (read : Request → Option (Read system)) :
     Async (Server system) := do
   let some addr := Std.Net.IPv4Addr.ofString config.host
     | throw (IO.userError s!"lanes: {config.host} is not an IPv4 address")
@@ -395,6 +402,12 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
     localPort := (← listener.getSockName).port, lanes, ops }
   let hand (request : Request) (answer : Response → BaseIO Unit) : BaseIO Unit := do
     let request := prepare request
+    if let some r := read request then
+      let asked ← runtime.tryPeek r.actor fun
+        | some state => answer (r.answer state)
+        | none => answer busy
+      unless asked do answer busy
+      return
     let admitted ← waiting.atomically do
       let id ← modifyGet (·.wait answer)
       if ← runtime.tryInput (enter (id, request)) then return true
@@ -458,9 +471,11 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
 def serveWith (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : ServerConfig := {})
     (runtimeConfig : Runtime.Config := {})
     (log : Option (Journal.Log (served sys bridge config.gate)))
-    (arrive : Option (Request → IO (Except Response Request)) := none) :
+    (arrive : Option (Request → IO (Except Response Request)) := none)
+    (reads : Request → Option (Read sys) := fun _ => none) :
     Async (Server (served sys bridge config.gate)) :=
   serveOn (served sys bridge config.gate) config runtimeConfig log bridge.prepare id .inl arrive
+    fun request => (reads request).map fun r => ⟨.inr r.actor, r.answer⟩
 
 /-- Serve `sys` behind a gate it shares the process with other things: an output of `sys` that
 the bridge does not read as a response comes to `onOutput`, and `Server.tryInput` hands `sys`
@@ -468,10 +483,11 @@ an input that is no request. `config.journal` is not used: open `log` yourself. 
 def serveFronted (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : ServerConfig := {})
     (runtimeConfig : Runtime.Config := {}) (onOutput : σ.Out → Async Unit := fun _ => pure ())
     (log : Option (Journal.Log (fronted sys bridge config.gate)) := none)
-    (arrive : Option (Request → IO (Except Response Request)) := none) :
+    (arrive : Option (Request → IO (Except Response Request)) := none)
+    (reads : Request → Option (Read sys) := fun _ => none) :
     Async (Server (fronted sys bridge config.gate)) :=
   serveOn (fronted sys bridge config.gate) config runtimeConfig log bridge.prepare .inl
-    (Sum.map id onOutput) arrive
+    (Sum.map id onOutput) arrive fun request => (reads request).map fun r => ⟨.inr r.actor, r.answer⟩
 
 /-- What `serve` needs to save the kernel and cut the journal: how the system's actors and its
 outputs are written. -/
@@ -492,16 +508,18 @@ With a journal and `saving`, the kernel is saved from time to time and the journ
 a request needs in IO before it is prepared, done on a task of its own: what it returns enters as
 the request, or is the answer and nothing enters. The sign-in (`SignIn.arrive`) is such work.
 Requests of one connection may then enter in another order than they were read; their answers
-are still written in that order. -/
+are still written in that order. A request `reads` names is answered from the state of the actor
+it reads and never enters the system (`Read`); with none, every request enters. -/
 def serve (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : ServerConfig := {})
     (runtimeConfig : Runtime.Config := {}) (saving : Option (Saving sys) := none)
-    (arrive : Option (Request → IO (Except Response Request)) := none) :
+    (arrive : Option (Request → IO (Except Response Request)) := none)
+    (reads : Request → Option (Read sys) := fun _ => none) :
     Async (Server (served sys bridge config.gate)) := do
   let log ← config.journal.mapM fun path =>
     Journal.Store.open (sys := served sys bridge config.gate)
       { path, input := Codec.pair Codec.nat Request.codec, system := config.journalName
         actors := saving.map fun s => servedActors s.actors s.out bridge config.gate }
-  try serveWith sys bridge config runtimeConfig log arrive
+  try serveWith sys bridge config runtimeConfig log arrive reads
   catch e =>
     if let some log := log then discard log.close.toBaseIO
     throw e
