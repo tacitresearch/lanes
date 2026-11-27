@@ -46,7 +46,9 @@ import Tests.Outside
 import Tests.Ops
 import Tests.Postgres
 import Tests.PostgresConn
+import Tests.PostgresPool
 import Tests.PostgresLive
+import Tests.PostgresTls
 import Tests.Store
 import Tests.SigV4
 import Tests.S3
@@ -89,6 +91,7 @@ def live : IO (List (String × Bool)) := do
     ++ (← safely "release" Tests.Release.liveTests) ++ (← safely "jobs" Tests.Jobs.live)
     ++ (← safely "ops" Tests.Ops.live) ++ (← Tests.Crypto.live)
     ++ (← safely "postgres" Tests.PostgresLive.live)
+    ++ (← safely "postgres tls" Tests.PostgresTls.live)
     ++ (← safely "s3" Tests.S3.live)
 
 def main (args : List String) : IO UInt32 := do
@@ -103,18 +106,19 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.Release.tests ++ Tests.ReadRequest.tests ++ Tests.Oracle.unitTests
     ++ Tests.HttpConn.tests ++ Tests.Loopback.tests
     ++ Tests.Jobs.tests ++ Tests.Outside.tests ++ Tests.Postgres.vectorTests
-    ++ Tests.Postgres.downgradeTests ++ Tests.Ops.tests
+    ++ Tests.Postgres.downgradeTests ++ Tests.Postgres.tlsTests ++ Tests.Postgres.endPointTests
+    ++ Tests.Ops.tests
     ++ Tests.SigV4.tests ++ Tests.S3.tests
   match args with
   | [] =>
     let pure := pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.Lint.tests)
       ++ (← Tests.New.tests) ++ (← Tests.Tutorial.tests) ++ (← Tests.Oracle.replayAll)
-      ++ (← Tests.Json.suite) ++ (← Tests.HttpConn.checks) ++ (← Tests.Postgres.psqlTests) ++ (← Tests.PostgresConn.checks) ++ (← Tests.StoreModel.checks)
+      ++ (← Tests.Json.suite) ++ (← Tests.HttpConn.checks) ++ (← Tests.Postgres.psqlTests) ++ (← Tests.PostgresConn.checks) ++ (← Tests.PostgresPool.checks) ++ (← Tests.StoreModel.checks)
     failures pure
     report (pure ++ (← live)) pure.length
   | ["fast"] => report (pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.Lint.tests)
       ++ (← Tests.New.tests) ++ (← Tests.Tutorial.tests) ++ (← Tests.Oracle.replayAll)
-      ++ (← Tests.Json.suite) ++ (← Tests.HttpConn.checks) ++ (← Tests.Postgres.psqlTests) ++ (← Tests.PostgresConn.checks) ++ (← Tests.StoreModel.checks))
+      ++ (← Tests.Json.suite) ++ (← Tests.HttpConn.checks) ++ (← Tests.Postgres.psqlTests) ++ (← Tests.PostgresConn.checks) ++ (← Tests.PostgresPool.checks) ++ (← Tests.StoreModel.checks))
   | ["live"] => report (← live)
   | ["journal-child", path] =>
     Tests.Durable.child path

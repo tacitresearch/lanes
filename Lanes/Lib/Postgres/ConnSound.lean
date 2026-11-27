@@ -143,22 +143,80 @@ theorem submit_fifo (id : Nat) (r : Request) (c : Conn) : Fifo c (submit cfg id 
     | exact same_fifo c c rfl _ rfl rfl
     | simp [Fifo, ids, queries, answers]
 
+/-- Before TLS, bytes leave the connection as it is, close it, or start the handshake. -/
+theorem beforeTls_cases (c : Conn) (bytes : ByteArray) :
+    beforeTls c bytes = (c, []) ∨ (∃ why, beforeTls c bytes = fail c why)
+      ∨ beforeTls c bytes = ({ c with phase := .handshake }, [.startTls]) := by
+  unfold beforeTls
+  split
+  · split
+    · exact .inl rfl
+    · exact .inr (.inl ⟨_, rfl⟩)
+  · split
+    · exact .inl rfl
+    · exact .inr (.inr rfl)
+    · exact .inr (.inl ⟨_, rfl⟩)
+    · exact .inr (.inl ⟨_, rfl⟩)
+
+/-- The end of the handshake closes the connection, or sends the start-up. -/
+theorem secure_cases (c : Conn) (endPoint : Option ByteArray) (selected : ByteArray) :
+    (∃ why, secure cfg c endPoint selected = fail c why)
+      ∨ (c.phase = .handshake ∧ alpnOk cfg selected = true
+        ∧ secure cfg c endPoint selected
+          = ({ c with phase := .startup, endPoint }, [.send (startup cfg).encode])) := by
+  unfold secure
+  split
+  · exact .inl ⟨_, rfl⟩
+  · split
+    · exact .inl ⟨_, rfl⟩
+    · rename_i h1 h2
+      exact .inr ⟨Classical.not_not.mp h1, by simpa using h2, rfl⟩
+
+theorem mem_beforeTls {c : Conn} {bytes : ByteArray} {a : Action} (h : a ∈ (beforeTls c bytes).2) :
+    (∃ why, a ∈ (fail c why).2) ∨ a = .startTls := by
+  rcases beforeTls_cases c bytes with e | ⟨w, e⟩ | e <;> rw [e] at h
+  · simp at h
+  · exact .inl ⟨w, h⟩
+  · exact .inr (by simpa using h)
+
+theorem mem_secure {c : Conn} {endPoint : Option ByteArray} {selected : ByteArray} {a : Action}
+    (h : a ∈ (secure cfg c endPoint selected).2) :
+    (∃ why, a ∈ (fail c why).2) ∨ a = .send (startup cfg).encode := by
+  rcases secure_cases cfg c endPoint selected with ⟨w, e⟩ | ⟨_, _, e⟩ <;> rw [e] at h
+  · exact .inl ⟨w, h⟩
+  · exact .inr (by simpa using h)
+
 theorem step_fifo (c : Conn) (e : Event) : Fifo c (step cfg c e) := by
   cases e with
   | submit id r => exact submit_fifo cfg id r c
   | received bytes =>
     simp only [step]
-    repeat' split
+    split
     · exact same_fifo c c rfl _ rfl rfl
-    · exact fail_fifo c _
-    · exact drain_fifo cfg _ (receive bytes c)
+    · split
+      · rcases beforeTls_cases c bytes with e | ⟨w, e⟩ | e <;> rw [e]
+        · exact same_fifo c c rfl _ rfl rfl
+        · exact fail_fifo c _
+        · exact same_fifo c _ rfl _ rfl rfl
+      · split
+        · exact fail_fifo c _
+        · exact drain_fifo cfg _ (receive bytes c)
+  | secured p a =>
+    simp only [step]
+    split
+    · exact same_fifo c c rfl _ rfl rfl
+    · rcases secure_cases cfg c p a with ⟨w, e⟩ | ⟨_, _, e⟩ <;> rw [e]
+      · exact fail_fifo c _
+      · exact same_fifo c _ rfl _ rfl rfl
   | stop =>
     simp only [step]
     split
     · exact same_fifo c c rfl _ rfl rfl
-    · have := fail_fifo c .stopped
-      simp only [Fifo] at this ⊢
-      simpa [queries, answers] using this
+    · split
+      · exact fail_fifo c _
+      · have := fail_fifo c .stopped
+        simp only [Fifo] at this ⊢
+        simpa [queries, answers] using this
   | _ =>
     simp only [step]
     split
@@ -292,15 +350,28 @@ theorem step_committed (c : Conn) (e : Event) {id : Nat}
     split at h
     · simp at h
     · split at h
+      · rcases mem_beforeTls h with ⟨_, h⟩ | h
+        · exact absurd h not_mem_fail_committed
+        · cases h
+      · split at h
+        · exact absurd h not_mem_fail_committed
+        · obtain ⟨c', next, m, hr, hc⟩ := drain_committed cfg _ _ h
+          exact ⟨c', next, m, Reads.trans cfg (.receive bytes (.refl c)) hr, hc⟩
+  | secured p a =>
+    simp only [step] at h
+    split at h
+    · simp at h
+    · rcases mem_secure cfg h with ⟨_, h⟩ | h
       · exact absurd h not_mem_fail_committed
-      · obtain ⟨c', next, m, hr, hc⟩ := drain_committed cfg _ _ h
-        exact ⟨c', next, m, Reads.trans cfg (.receive bytes (.refl c)) hr, hc⟩
+      · cases h
   | stop =>
     simp only [step] at h
     split at h
     · simp at h
-    · simp only [List.mem_cons, reduceCtorEq, false_or] at h
-      exact absurd h not_mem_fail_committed
+    · split at h
+      · exact absurd h not_mem_fail_committed
+      · simp only [List.mem_cons, reduceCtorEq, false_or] at h
+        exact absurd h not_mem_fail_committed
   | _ =>
     simp only [step] at h
     split at h
@@ -368,14 +439,27 @@ theorem step_query (c : Conn) (e : Event) {id : Nat} {b : ByteArray}
     split at h
     · simp at h
     · split at h
+      · rcases mem_beforeTls h with ⟨_, h⟩ | h
+        · exact absurd h not_mem_fail_query
+        · cases h
+      · split at h
+        · exact absurd h not_mem_fail_query
+        · exact absurd h (drain_query cfg _ _)
+  | secured p a =>
+    simp only [step] at h
+    split at h
+    · simp at h
+    · rcases mem_secure cfg h with ⟨_, h⟩ | h
       · exact absurd h not_mem_fail_query
-      · exact absurd h (drain_query cfg _ _)
+      · cases h
   | stop =>
     simp only [step] at h
     split at h
     · simp at h
-    · simp only [List.mem_cons, reduceCtorEq, false_or] at h
-      exact absurd h not_mem_fail_query
+    · split at h
+      · exact absurd h not_mem_fail_query
+      · simp only [List.mem_cons, reduceCtorEq, false_or] at h
+        exact absurd h not_mem_fail_query
   | _ =>
     simp only [step] at h
     split at h
@@ -450,15 +534,23 @@ theorem step_queue (c : Conn) (e : Event) (h : c.queue.length ≤ cfg.inflight_m
     omega
   | received bytes =>
     simp only [step]
-    repeat' split
+    split
     · exact h
-    · simp [fail]
-    · exact Nat.le_trans (drain_queue cfg _ _) h
+    · split
+      · rcases beforeTls_cases c bytes with e | ⟨w, e⟩ | e <;> rw [e] <;> simp [fail, h]
+      · split
+        · simp [fail]
+        · exact Nat.le_trans (drain_queue cfg _ _) h
+  | secured p a =>
+    simp only [step]
+    split
+    · exact h
+    · rcases secure_cases cfg c p a with ⟨w, e⟩ | ⟨_, _, e⟩ <;> rw [e] <;> simp [fail, h]
   | stop =>
     simp only [step]
     split
     · exact h
-    · simp [fail]
+    · split <;> simp [fail]
   | _ =>
     simp only [step]
     split
@@ -474,7 +566,9 @@ theorem run_queue (c : Conn) (events : List Event) (h : c.queue.length ≤ cfg.i
 
 theorem start_queue : (start cfg).1.queue = [] := by
   dsimp only [start]
-  split <;> rfl
+  split
+  · rfl
+  · split <;> rfl
 
 theorem onMessage_buffer (c : Conn) (m : Backend) :
     (onMessage cfg c m).1.buffer = c.buffer ∧ (onMessage cfg c m).1.pos = c.pos := by
@@ -524,21 +618,28 @@ theorem step_buffer (c : Conn) (e : Event) (h : c.buffer.size - c.pos ≤ cfg.me
     split
     · exact h
     · split
-      · exact h
-      · rename_i _ hroom
-        apply drain_buffer
-        simp only [receive, room] at hroom ⊢
-        split
-        · rename_i hz
-          rw [ByteArray.size_append]
-          omega
-        · rw [ByteArray.size_append, ByteArray.size_extract]
-          omega
+      · rcases beforeTls_cases c bytes with e | ⟨w, e⟩ | e <;> rw [e] <;> exact h
+      · split
+        · exact h
+        · rename_i _ _ hroom
+          apply drain_buffer
+          simp only [receive, room] at hroom ⊢
+          split
+          · rename_i hz
+            rw [ByteArray.size_append]
+            omega
+          · rw [ByteArray.size_append, ByteArray.size_extract]
+            omega
+  | secured p a =>
+    simp only [step]
+    split
+    · exact h
+    · rcases secure_cases cfg c p a with ⟨w, e⟩ | ⟨_, _, e⟩ <;> rw [e] <;> exact h
   | stop =>
     simp only [step]
     split
     · exact h
-    · exact h
+    · split <;> exact h
   | _ =>
     simp only [step]
     split
@@ -568,15 +669,16 @@ message, by `Scram.verify` of the server's signature: so it is `authed`, and ope
 the server proved it knows the password (`onMessage_saslFinal`). An `AuthenticationOk` at once,
 or a request for a cleartext password or an MD5 digest, closes it. -/
 theorem onMessage_requireScram (hs : cfg.scramOnly = true) {c : Conn} {m : Backend}
-    (hc : c.phase = .startup ∨ c.phase = .sasl ∨ ∃ s, c.phase = .saslFinal s) :
+    (hc : c.phase = .startup ∨ (∃ b, c.phase = .sasl b) ∨ ∃ s, c.phase = .saslFinal s) :
     ((onMessage cfg c m).1.phase = .closed ∨ (onMessage cfg c m).1.phase = .startup
-        ∨ (onMessage cfg c m).1.phase = .sasl ∨ ∃ s, (onMessage cfg c m).1.phase = .saslFinal s)
+        ∨ (∃ b, (onMessage cfg c m).1.phase = .sasl b)
+        ∨ ∃ s, (onMessage cfg c m).1.phase = .saslFinal s)
       ∨ ((onMessage cfg c m).1.phase = .saslDone ∧ ∃ s data final, c.phase = .saslFinal s
           ∧ m = .authSaslFinal data ∧ String.fromUTF8? data = some final
           ∧ Scram.verify s final = true) := by
   simp only [Config.scramOnly, Bool.and_eq_true, Option.isSome_iff_exists] at hs
   obtain ⟨hr, pw, hpw⟩ := hs
-  rcases hc with hc | hc | ⟨s, hc⟩
+  rcases hc with hc | ⟨b, hc⟩ | ⟨s, hc⟩
   · left
     simp only [onMessage, hc]
     unfold onAuth
@@ -595,9 +697,10 @@ theorem onMessage_requireScram (hs : cfg.scramOnly = true) {c : Conn} {m : Backe
 
 /-- A server that says `AuthenticationOk` before it has proved it knows the password, once SCRAM
 has begun, is not trusted: the connection closes. -/
-theorem onMessage_sasl_authOk {c : Conn} (hc : c.phase = .sasl ∨ ∃ s, c.phase = .saslFinal s) :
+theorem onMessage_sasl_authOk {c : Conn}
+    (hc : (∃ b, c.phase = .sasl b) ∨ ∃ s, c.phase = .saslFinal s) :
     onMessage cfg c .authOk = fail c .signature := by
-  rcases hc with hc | ⟨s, hc⟩ <;> simp [onMessage, hc, onSasl, onSaslFinal]
+  rcases hc with ⟨b, hc⟩ | ⟨s, hc⟩ <;> simp [onMessage, hc, onSasl, onSaslFinal]
 
 /-- The connection reports itself open only on the server's first `ReadyForQuery` after it
 authenticated. -/
@@ -616,5 +719,357 @@ theorem onMessage_opened {c : Conn} {m : Backend} (h : .opened ∈ (onMessage cf
   all_goals
     (try unfold onAuth at h) <;> (try unfold onSasl at h) <;> (try unfold onSaslFinal at h) <;>
       cases m <;> (try simp only at h) <;> (repeat' split at h) <;> simp [fail] at h
+
+
+theorem not_mem_fail_startTls {c : Conn} {why : Closing} : .startTls ∉ (fail c why).2 := by
+  simp [fail]
+
+theorem onMessage_startTls {c : Conn} {m : Backend} : .startTls ∉ (onMessage cfg c m).2 := by
+  intro h
+  unfold onMessage at h
+  split at h
+  case h_7 =>
+    split at h
+    · unfold onReply at h
+      cases m <;> (try simp only at h) <;> (repeat' split at h) <;>
+        first | exact not_mem_fail_startTls h | simp at h
+    · cases m <;> (try simp only at h) <;> first | exact not_mem_fail_startTls h | simp at h
+  all_goals
+    (try unfold onAuth at h) <;> (try unfold onSasl at h) <;> (try unfold onSaslFinal at h) <;>
+      cases m <;> (try simp only at h) <;> (repeat' split at h) <;>
+      first | exact not_mem_fail_startTls h | simp at h
+
+theorem drain_startTls (fuel : Nat) (c : Conn) : .startTls ∉ (drain cfg fuel c).2 := by
+  induction fuel generalizing c with
+  | zero => simp [drain]
+  | succ fuel ih =>
+    unfold drain
+    split
+    · simp
+    · split
+      · simp
+      · exact not_mem_fail_startTls
+      · split
+        · exact not_mem_fail_startTls
+        · simp only [List.mem_append, not_or]
+          exact ⟨onMessage_startTls cfg, ih _⟩
+
+/-! ## TLS first -/
+
+/-- The bytes the connection sends: of the start-up, authentication, `Terminate`, `SSLRequest`
+and requests. -/
+def Action.bytes : Action → Option ByteArray
+  | .send b => some b
+  | .query _ b => some b
+  | _ => none
+
+def sent (actions : List Action) : List ByteArray := actions.filterMap Action.bytes
+
+@[simp] theorem sent_append (a b : List Action) : sent (a ++ b) = sent a ++ sent b := by
+  simp [sent]
+
+theorem sent_fail (c : Conn) (why : Closing) : sent (fail c why).2 = [] := by
+  simp [fail, sent, List.filterMap_eq_nil_iff, Action.bytes]
+
+/-- Before TLS, until the IO says the handshake is done, a step sends nothing, and the connection
+stays before TLS or closes. -/
+theorem step_beforeTls (c : Conn) (e : Event) (hc : c.phase.beforeTls = true)
+    (he : ∀ p a, e ≠ .secured p a) :
+    sent (step cfg c e).2 = []
+      ∧ ((step cfg c e).1.phase.beforeTls = true ∨ (step cfg c e).1.phase = .closed) := by
+  have hr : c.phase ≠ .ready := by intro h; simp [h, Phase.beforeTls] at hc
+  have hcl : c.phase ≠ .closed := by intro h; simp [h, Phase.beforeTls] at hc
+  cases e with
+  | submit i r => simp [step, submit, hr, sent, hc, Action.bytes]
+  | received bytes =>
+    simp only [step, hcl, hc, ↓reduceIte]
+    rcases beforeTls_cases c bytes with e | ⟨w, e⟩ | e <;> rw [e]
+    · simp [sent, hc]
+    · exact ⟨sent_fail c w, .inr rfl⟩
+    · simp [sent, Phase.beforeTls, Action.bytes]
+  | secured p a => exact absurd rfl (he p a)
+  | stop =>
+    simp only [step, hcl, hc, ↓reduceIte]
+    exact ⟨sent_fail c _, .inr rfl⟩
+  | _ =>
+    simp only [step, hcl, ↓reduceIte]
+    exact ⟨sent_fail c _, .inr rfl⟩
+
+theorem step_closed_sent (c : Conn) (e : Event) (h : c.phase = .closed) :
+    sent (step cfg c e).2 = [] ∧ (step cfg c e).1.phase = .closed := by
+  obtain ⟨hs, ha⟩ := step_closed cfg c e h
+  refine ⟨?_, by rw [hs]; exact h⟩
+  simp only [sent, List.filterMap_eq_nil_iff]
+  intro a ha'
+  obtain ⟨id, rfl⟩ := ha a ha'
+  rfl
+
+/-- From before TLS, a run of events none of which says the handshake is done sends nothing. -/
+theorem run_beforeTls (c : Conn) (events : List Event)
+    (hc : c.phase.beforeTls = true ∨ c.phase = .closed)
+    (he : ∀ e ∈ events, ∀ p a, e ≠ .secured p a) : sent (run cfg c events).2 = [] := by
+  induction events generalizing c with
+  | nil => rfl
+  | cons e rest ih =>
+    have he' : ∀ p a, e ≠ .secured p a := he e (List.mem_cons_self ..)
+    have hnext : sent (step cfg c e).2 = []
+        ∧ ((step cfg c e).1.phase.beforeTls = true ∨ (step cfg c e).1.phase = .closed) := by
+      rcases hc with hc | hc
+      · exact step_beforeTls cfg c e hc he'
+      · obtain ⟨h1, h2⟩ := step_closed_sent cfg c e hc
+        exact ⟨h1, .inr h2⟩
+    simp only [run, sent_append, hnext.1, List.nil_append]
+    exact ih _ hnext.2 fun e h => he e (List.mem_cons_of_mem _ h)
+
+/-- With TLS, the only bytes sent before the IO says the handshake is done are `SSLRequest`'s:
+not the start-up, not a password, not a request. -/
+theorem tls_first (h : cfg.encryption ≠ .plain) (events : List Event)
+    (he : ∀ e ∈ events, ∀ p a, e ≠ .secured p a) :
+    ∀ b ∈ sent ((start cfg).2 ++ (run cfg (start cfg).1 events).2), b = sslRequest := by
+  have hs : sent (start cfg).2 ⊆ [sslRequest] ∧
+      ((start cfg).1.phase.beforeTls = true ∨ (start cfg).1.phase = .closed) := by
+    unfold start
+    split
+    · simp [sent, Action.bytes]
+    · split
+      · exact absurd ‹_› h
+      · simp [sent, Phase.beforeTls, Action.bytes]
+      · simp [sent, Phase.beforeTls, Action.bytes]
+  intro b hb
+  rw [sent_append, run_beforeTls cfg _ events hs.2 he, List.append_nil] at hb
+  simpa using hs.1 hb
+
+/-- The handshake starts only on an `S` alone, in answer to `SSLRequest`, or at once with direct
+TLS (`start`). -/
+theorem step_startTls (c : Conn) (e : Event) (h : .startTls ∈ (step cfg c e).2) :
+    c.phase = .sslRequest ∧ ∃ bytes, e = .received bytes ∧ bytes.data.toList = [83] := by
+  cases e with
+  | submit i r =>
+    simp only [step, submit] at h
+    repeat' split at h
+    all_goals simp at h
+  | received bytes =>
+    simp only [step] at h
+    split at h
+    · simp at h
+    · split at h
+      · rename_i hb
+        unfold beforeTls at h
+        split at h
+        · split at h <;> simp [fail] at h
+        · split at h
+          · simp at h
+          · rename_i hp _ hd
+            refine ⟨?_, bytes, rfl, hd⟩
+            cases hq : c.phase <;> simp_all [Phase.beforeTls]
+          · simp [fail] at h
+          · simp [fail] at h
+      · split at h
+        · simp [fail] at h
+        · exact absurd h (drain_startTls cfg _ _)
+  | secured p a =>
+    simp only [step] at h
+    split at h
+    · simp at h
+    · rcases mem_secure cfg h with ⟨_, h⟩ | h
+      · simp [fail] at h
+      · cases h
+  | stop =>
+    simp only [step] at h
+    split at h
+    · simp at h
+    · split at h <;> simp [fail] at h
+  | _ =>
+    simp only [step] at h
+    split at h
+    · simp at h
+    · simp [fail] at h
+
+/-- A server that answers `SSLRequest` with `N` is refused: TLS is never given up. -/
+theorem step_refusedTls (c : Conn) (bytes : ByteArray) (hc : c.phase = .sslRequest)
+    (hn : bytes.data.toList.head? = some 78) :
+    step cfg c (.received bytes) = fail c .refusedTls := by
+  obtain ⟨rest, hr⟩ : ∃ rest, bytes.data.toList = 78 :: rest := by
+    cases h : bytes.data.toList with
+    | nil => simp [h] at hn
+    | cons x rest => simp only [h, List.head?_cons, Option.some.injEq] at hn; exact ⟨rest, by rw [hn]⟩
+  simp only [step, hc, beforeTls, Phase.beforeTls, reduceCtorEq, ↓reduceIte, hr]
+
+/-- The start-up is sent after the handshake only when the server chose the ALPN protocol the
+encryption allows. -/
+theorem step_secured (c : Conn) (p : Option ByteArray) (a : ByteArray) {b : ByteArray}
+    (h : .send b ∈ (step cfg c (.secured p a)).2) :
+    c.phase = .handshake ∧ alpnOk cfg a = true ∧ b = (startup cfg).encode
+      ∧ (step cfg c (.secured p a)).1.endPoint = p := by
+  simp only [step] at h ⊢
+  split at h
+  · simp at h
+  · rename_i hcl
+    simp only [hcl, ↓reduceIte]
+    rcases secure_cases cfg c p a with ⟨w, e⟩ | ⟨h1, h2, e⟩ <;> rw [e] at h ⊢
+    · simp [fail] at h
+    · simp only [List.mem_singleton, Action.send.injEq] at h
+      exact ⟨h1, h2, h, rfl⟩
+
+/-! ## Channel binding -/
+
+theorem unbound_ne {mechanisms : List String} {hash : ByteArray} :
+    unbound cfg mechanisms ≠ some (.endPoint hash) := by
+  unfold unbound
+  split
+  · simp
+  · split <;> simp
+
+theorem unbound_require (hr : cfg.channelBinding = .require) (mechanisms : List String) :
+    unbound cfg mechanisms = none := by
+  simp [unbound, hr]
+
+/-- SCRAM is bound to a certificate's hash only with TLS, when the server offers
+`SCRAM-SHA-256-PLUS`, and to the hash the handshake gave. -/
+theorem choose_endPoint {c : Conn} {mechanisms : List String} {hash : ByteArray}
+    (h : choose cfg c mechanisms = some (.endPoint hash)) :
+    c.endPoint = some hash ∧ Scram.mechanismPlus ∈ mechanisms ∧ cfg.encryption ≠ .plain := by
+  unfold choose at h
+  split at h
+  · rename_i e he
+    split at h
+    · rename_i hc
+      simp only [Option.some.injEq, Scram.Binding.endPoint.injEq] at h
+      exact ⟨h ▸ he, hc.2.2, hc.1⟩
+    · exact absurd h (unbound_ne cfg)
+  · exact absurd h (unbound_ne cfg)
+
+/-- With `channelBinding := require`, SCRAM is always bound to the certificate's hash. -/
+theorem choose_require (hr : cfg.channelBinding = .require) {c : Conn} {mechanisms : List String}
+    {b : Scram.Binding} (h : choose cfg c mechanisms = some b) :
+    ∃ hash, b = .endPoint hash ∧ c.endPoint = some hash := by
+  unfold choose at h
+  split at h
+  · rename_i e he
+    split at h
+    · exact ⟨e, (Option.some.inj h).symm, he⟩
+    · simp [unbound_require cfg hr] at h
+  · simp [unbound_require cfg hr] at h
+
+/-- In SCRAM's exchange the binding is to the hash the handshake gave, and with `require` there
+is one. -/
+def Bound (c : Conn) : Prop :=
+  ∀ b, c.phase = .sasl b → (∀ h, b = .endPoint h → c.endPoint = some h)
+    ∧ (cfg.channelBinding = .require → ∃ h, b = .endPoint h)
+
+theorem bound_of {c : Conn} (h : ∀ b, c.phase ≠ .sasl b) : Bound cfg c :=
+  fun b hb => absurd hb (h b)
+
+theorem bound_fail (c : Conn) (why : Closing) : Bound cfg (fail c why).1 :=
+  bound_of cfg (by simp [fail])
+
+theorem onMessage_bound (c : Conn) (m : Backend) (h : Bound cfg c) :
+    Bound cfg (onMessage cfg c m).1 := by
+  unfold onMessage
+  split
+  case h_1 =>
+    unfold onAuth
+    cases m <;> (try simp only) <;> (repeat' split) <;>
+      first
+      | exact h
+      | exact bound_fail cfg c _
+      | (apply bound_of; simp [*]; done)
+      | skip
+    rename_i b hb
+    intro b' hb'
+    cases hb'
+    refine ⟨fun hash hh => ?_, fun hr => ?_⟩
+    · cases hh
+      exact (choose_endPoint cfg hb).1
+    · exact (choose_require cfg hr hb).imp fun _ h => h.1
+  case h_7 =>
+    split
+    · unfold onReply
+      cases m <;> (try simp only) <;> (repeat' split) <;>
+        first | exact h | exact bound_fail cfg c _ | (apply bound_of; simp [*]; done)
+    · cases m <;> (try simp only) <;> first | exact h | exact bound_fail cfg c _
+  all_goals
+    (try unfold onSasl) <;> (try unfold onSaslFinal) <;>
+      cases m <;> (try simp only) <;> (repeat' split) <;>
+      first | exact h | exact bound_fail cfg c _ | (apply bound_of; simp [*]; done)
+
+theorem drain_bound (fuel : Nat) (c : Conn) (h : Bound cfg c) : Bound cfg (drain cfg fuel c).1 := by
+  induction fuel generalizing c with
+  | zero => exact h
+  | succ fuel ih =>
+    unfold drain
+    split
+    · exact h
+    · split
+      · exact h
+      · exact bound_fail cfg c _
+      · split
+        · exact bound_fail cfg c _
+        · exact ih _ (onMessage_bound cfg _ _ h)
+
+theorem step_bound (c : Conn) (e : Event) (h : Bound cfg c) : Bound cfg (step cfg c e).1 := by
+  cases e with
+  | submit i r =>
+    simp only [step, submit]
+    repeat' split
+    all_goals first | exact h | exact fun b hb => h b hb
+  | received bytes =>
+    simp only [step]
+    split
+    · exact h
+    · split
+      · rcases beforeTls_cases c bytes with e | ⟨w, e⟩ | e <;> rw [e]
+        · exact h
+        · exact bound_fail cfg c _
+        · (apply bound_of; simp)
+      · split
+        · exact bound_fail cfg c _
+        · exact drain_bound cfg _ _ h
+  | secured p a =>
+    simp only [step]
+    split
+    · exact h
+    · rcases secure_cases cfg c p a with ⟨w, e⟩ | ⟨_, _, e⟩ <;> rw [e]
+      · exact bound_fail cfg c _
+      · (apply bound_of; simp)
+  | stop =>
+    simp only [step]
+    split
+    · exact h
+    · split <;> exact bound_fail cfg c .stopped
+  | _ =>
+    simp only [step]
+    split
+    · exact h
+    · exact bound_fail cfg c _
+
+/-- Over every run from the start, SCRAM's binding is to the certificate's hash that the handshake
+gave (`Event.secured`), and with `channelBinding := require` it is bound. -/
+theorem run_bound (events : List Event) : Bound cfg (run cfg (start cfg).1 events).1 := by
+  have hs : Bound cfg (start cfg).1 := by
+    apply bound_of
+    unfold start
+    split
+    · simp
+    · split <;> simp
+  suffices ∀ c, Bound cfg c → Bound cfg (run cfg c events).1 from this _ hs
+  induction events with
+  | nil => exact fun c h => h
+  | cons e rest ih => exact fun c h => ih _ (step_bound cfg c e h)
+
+/-- In SCRAM's exchange with binding `b`, the client's last message binds `b`: its `c=` is
+`b`'s GS2 header and binding data in base 64 (`Scram.Binding.data`), the certificate's hash for
+`tls-server-end-point` (`Scram.Binding.data_endPoint`), which is the one the handshake gave
+(`Conn.run_bound`). -/
+theorem onMessage_binds {c : Conn} {b : Scram.Binding} {m : Backend} {bytes : ByteArray}
+    (hc : c.phase = .sasl b) (h : .send bytes ∈ (onMessage cfg c m).2) :
+    ∃ final nonce proof, bytes = (Frontend.saslResponse final.toUTF8).encode
+      ∧ final = "c=" ++ Base64.encode .std b.data ++ ",r=" ++ nonce ++ ",p=" ++ proof := by
+  simp only [onMessage, hc] at h
+  unfold onSasl at h
+  cases m <;> (try simp only at h) <;> (repeat' split at h) <;> (try simp [fail] at h)
+  rename_i final signature hr
+  obtain ⟨nonce, proof, hf⟩ := Scram.respond_binds hr
+  exact ⟨final, nonce, proof, h, hf⟩
 
 end Lanes.Postgres.Conn
