@@ -157,6 +157,34 @@ import Lanes.Semantics
 /-- info: 'Lanes.Json.ofScientific_mantissa' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Json.ofScientific_mantissa
 
+-- Lanes.Lib.Metrics
+/-- info: 'Lanes.Metrics.Histogram.observeAll_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Metrics.Histogram.observeAll_eq
+
+/-- info: 'Lanes.Metrics.Histogram.buckets_pairwise' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Metrics.Histogram.buckets_pairwise
+
+/-- info: 'Lanes.Metrics.Histogram.buckets_getLast' depends on axioms: [propext, Classical.choice] -/
+#guard_msgs in #print axioms Lanes.Metrics.Histogram.buckets_getLast
+
+/-- info: 'Lanes.Metrics.readLabelValue_escapeLabel' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Metrics.readLabelValue_escapeLabel
+
+/-- info: 'Lanes.Metrics.readHelp_escapeHelp' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Metrics.readHelp_escapeHelp
+
+/-- info: 'Lanes.Metrics.newline_not_mem_escapeLabel' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Metrics.newline_not_mem_escapeLabel
+
+/-- info: 'Lanes.Metrics.newline_not_mem_escapeHelp' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Metrics.newline_not_mem_escapeHelp
+
+/-- info: 'Lanes.Metrics.valid_sanitize' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Metrics.valid_sanitize
+
+/-- info: 'Lanes.Metrics.sanitize_of_valid' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Metrics.sanitize_of_valid
+
 -- Lanes.Lib.Mime.MediaTypeSound
 /-- info: 'Lanes.MediaType.parse_format' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.MediaType.parse_format

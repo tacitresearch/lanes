@@ -39,6 +39,7 @@ import Tests.Release
 import Tests.Oracle.All
 import Tests.Jobs
 import Tests.Outside
+import Tests.Ops
 import Tests.Postgres
 import Tests.PostgresConn
 import Tests.PostgresLive
@@ -81,7 +82,8 @@ def live : IO (List (String × Bool)) := do
     ++ (← safely "node on a journal" Tests.Fronted.nodeDurable)
     ++ (← safely "fronted on a journal" Tests.Fronted.durable)
     ++ (← safely "release" Tests.Release.liveTests) ++ (← safely "jobs" Tests.Jobs.live)
-    ++ (← Tests.Crypto.live) ++ (← safely "postgres" Tests.PostgresLive.live)
+    ++ (← safely "ops" Tests.Ops.live) ++ (← Tests.Crypto.live)
+    ++ (← safely "postgres" Tests.PostgresLive.live)
     ++ (← safely "s3" Tests.S3.live)
 
 def main (args : List String) : IO UInt32 := do
@@ -93,7 +95,7 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.Crypto.tests ++ Tests.Auth.tests ++ Tests.Clients.tests ++ Tests.Lease.tests
     ++ Tests.Release.tests ++ Tests.ReadRequest.tests ++ Tests.Oracle.unitTests
     ++ Tests.HttpConn.tests
-    ++ Tests.Jobs.tests ++ Tests.Outside.tests ++ Tests.Postgres.vectorTests
+    ++ Tests.Jobs.tests ++ Tests.Outside.tests ++ Tests.Postgres.vectorTests ++ Tests.Ops.tests
     ++ Tests.SigV4.tests ++ Tests.S3.tests
   match args with
   | [] =>

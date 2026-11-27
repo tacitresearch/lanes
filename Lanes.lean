@@ -45,6 +45,7 @@ public import Lanes.Lib.Crypto.Sodium
 public import Lanes.Lib.Encoding.Base64
 public import Lanes.Lib.Encoding.Digits
 public import Lanes.Lib.Encoding.Json
+public import Lanes.Lib.Metrics
 public import Lanes.Lib.Mime.MediaType
 public import Lanes.Lib.Net.Ip
 public import Lanes.Lib.Net.Url
@@ -95,6 +96,7 @@ public import Lanes.Web.Http.Conn
 public import Lanes.Web.Http.Cookie
 public import Lanes.Web.Http.Front
 public import Lanes.Web.Http.Gate
+public import Lanes.Web.Http.Ops
 public import Lanes.Web.Http.ReadRequest
 public import Lanes.Web.Http.Route
 public import Lanes.Web.Http.SigV4
@@ -104,6 +106,7 @@ public import Lanes.Web.Http.WireSpec
 public import Lanes.Web.S3.Basic
 public import Lanes.Web.S3.Xml
 public import Lanes.Web.IO.Client
+public import Lanes.Web.IO.Ops
 public import Lanes.Web.IO.S3
 public import Lanes.Web.IO.Server
 public import Lanes.Web.IO.Tls
