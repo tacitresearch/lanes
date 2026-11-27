@@ -3,7 +3,8 @@
 
 # Every server, in the order run.sh runs them.
 ALL_SERVERS=(go1 go tcp tcp-park std std-unlimited lanes lanes-journal lanes-snapshot
-  lanes-io lanes-par lanes-io-par lanes-many lanes-many-par lanes-heavy lanes-heavy-par)
+  lanes-io lanes-par lanes-io-par lanes-many lanes-many-par lanes-many-auto lanes-heavy
+  lanes-heavy-par lanes-heavy-auto)
 
 # The threads of the servers that run in parallel: IO_THREADS run connections
 # (ServerConfig.ioThreads) and WORKERS work out actors' steps (Runtime.Config.workers); by default
@@ -33,8 +34,11 @@ server_argv() {
     lanes-io-par) SERVER=("$bin/benchLanes" "$port" "io=$io" "workers=$workers") ;;
     lanes-many) SERVER=("$bin/benchMany" "$port" "$K" 0) ;;
     lanes-many-par) SERVER=("$bin/benchMany" "$port" "$K" 0 "workers=$workers") ;;
+    lanes-many-auto) SERVER=("$bin/benchMany" "$port" "$K" 0 "workers=$workers" parallel=auto) ;;
     lanes-heavy) SERVER=("$bin/benchMany" "$port" "$K" "$SPIN") ;;
     lanes-heavy-par) SERVER=("$bin/benchMany" "$port" "$K" "$SPIN" "workers=$workers") ;;
+    lanes-heavy-auto)
+      SERVER=("$bin/benchMany" "$port" "$K" "$SPIN" "workers=$workers" parallel=auto) ;;
     *) echo "unknown server $name; the servers are ${ALL_SERVERS[*]}" >&2; return 2 ;;
   esac
 }
