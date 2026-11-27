@@ -65,25 +65,6 @@ end Request
 
 /-! Finding a pattern -/
 
-theorem matchAt_iff {bytes : ByteArray} : ∀ {pattern : List UInt8} {i : Nat},
-    matchAt bytes pattern i = true ↔ ∀ k (hk : k < pattern.length), bytes[i + k]? = some pattern[k]
-  | [], i => by simp [matchAt]
-  | b :: rest, i => by
-    simp only [matchAt, Bool.and_eq_true, beq_iff_eq, matchAt_iff, List.length_cons]
-    constructor
-    · rintro ⟨h0, hrest⟩ k hk
-      cases k with
-      | zero => simpa using h0
-      | succ k =>
-        have := hrest k (by omega)
-        rw [show i + (k + 1) = i + 1 + k by omega]
-        simpa using this
-    · intro h
-      refine ⟨by simpa using h 0 (by omega), fun k hk => ?_⟩
-      have := h (k + 1) (by omega)
-      rw [show i + (k + 1) = i + 1 + k by omega] at this
-      simpa using this
-
 theorem matchAt_extract {bytes : ByteArray} {n : Nat} :
     ∀ {pattern : List UInt8} {j : Nat}, j + pattern.length ≤ n →
       matchAt (bytes.extract 0 n) pattern j = matchAt bytes pattern j

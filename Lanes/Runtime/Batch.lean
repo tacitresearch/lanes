@@ -30,6 +30,9 @@ variable {σ : Signature}
 
 inductive Command (σ : Signature) (P : σ.Id → Type) (W : Type) where
   | input (x : σ.In)
+  /-- Inputs that arrived together, accepted in order before any work is done for them, so that
+  the actors they reach can step in parallel (`Journal.turnAll`). -/
+  | inputs (xs : List σ.In)
   | idle (timers : Bool) (waiter : W)
   | peek (i : σ.Id) (reply : P i)
 
@@ -46,6 +49,8 @@ structure Config where
   fuel : Nat
   /-- How many entries to write between two saves, if the journal can save. -/
   snapshotEvery : Option Nat
+  /-- Threads to work out the steps of a wave of `inputs` on (`Kernel.runWaves`). -/
+  workers : Nat := 1
 
 /-- The shard's part of a batch so far, besides its kernel. -/
 structure Scan (sys : System σ) (P : σ.Id → Type) (W : Type) where
@@ -76,14 +81,21 @@ def put (acts : Array (Act sys P)) (skip : Bool) (act : Act sys P) : Array (Act 
 variable [Hashable σ.Id]
 
 /-- A turn, kept back to be written with the turns after it. -/
-def work (c : Config) (input : Option σ.In) :
+def workWith (turn : Kernel sys → Journal.Turn sys) :
     Kernel sys × Scan sys P W → Kernel sys × Scan sys P W
   | (k, ⟨written, waiting, acts, entries, events, outputs, _⟩) =>
-    match Journal.turn k c.now_ms input c.fuel with
+    match turn k with
     | { kernel, events := more, outputs := out, entries := new } =>
       (kernel, { written, waiting, acts, entries := entries ++ new
                  events := events ++ more, outputs := outputs ++ out
                  worked := true })
+
+def work (c : Config) (input : Option σ.In) : Kernel sys × Scan sys P W → Kernel sys × Scan sys P W :=
+  workWith fun k => Journal.turn k c.now_ms input c.fuel
+
+/-- The turn of inputs that arrived together, with `fuel` for each. -/
+def workAll (c : Config) (xs : List σ.In) : Kernel sys × Scan sys P W → Kernel sys × Scan sys P W :=
+  workWith fun k => Journal.turnAll k c.now_ms xs (c.fuel * max 1 xs.length) c.workers
 
 /-- Write what was kept back, and save if that many entries are due. -/
 def flush (c : Config) : Kernel sys × Scan sys P W → Kernel sys × Scan sys P W
@@ -101,6 +113,9 @@ def scan (c : Config) (ks : Kernel sys × Scan sys P W) :
   | .input x =>
     match work c (some x) ks with
     | (k, s) => if due c (s.written + s.entries.size) then flush c (k, s) else (k, s)
+  | .inputs xs =>
+    match workAll c xs ks with
+    | (k, s) => if due c (s.written + s.entries.size) then flush c (k, s) else (k, s)
   | .idle timers waiter =>
     match flush c ks with
     | (k, s) => (k, { s with waiting := s.waiting.push (timers, waiter) })
@@ -114,6 +129,41 @@ def finish (c : Config) (ks : Kernel sys × Scan sys P W) : Result sys P W :=
     { kernel := k, written := s.written, acts := s.acts
       resolved := (s.waiting.filter fun w => k.quiet w.1).map (·.2)
       waiting := s.waiting.filter fun w => !k.quiet w.1 }
+
+/-- Inputs next to each other as one command, so that they are accepted together. -/
+def group : List (Command σ P W) → List (Command σ P W)
+  | [] => []
+  | .input x :: rest =>
+    match group rest with
+    | .inputs xs :: more => .inputs (x :: xs) :: more
+    | more => .inputs [x] :: more
+  | c :: rest => c :: group rest
+
+/-- The inputs a command carries. -/
+def Command.ins : Command σ P W → List σ.In
+  | .input x => [x]
+  | .inputs xs => xs
+  | _ => []
+
+omit [Hashable σ.Id] in
+/-- Grouping keeps every input, in order. -/
+theorem group_ins (commands : List (Command σ P W)) :
+    (group commands).flatMap Command.ins = commands.flatMap Command.ins := by
+  induction commands with
+  | nil => rfl
+  | cons c rest ih =>
+    cases c with
+    | input x =>
+      simp only [group]
+      split
+      · next xs more h =>
+        rw [h] at ih
+        simp only [List.flatMap_cons, Command.ins] at ih ⊢
+        rw [← ih]; rfl
+      · simp only [List.flatMap_cons, Command.ins, ← ih]
+    | inputs xs => simp only [group, List.flatMap_cons, ih]
+    | idle timers waiter => simp only [group, List.flatMap_cons, ih]
+    | peek i reply => simp only [group, List.flatMap_cons, ih]
 
 /-- One batch: a turn for each input, at one time; when no input came, one turn without. -/
 def run (c : Config) (k : Kernel sys) (written : Nat) (waiting : Array (Bool × W))
@@ -198,11 +248,14 @@ private theorem inv_start (k : Kernel sys) (written : Nat) (waiting : Array (Boo
   events := rfl
   sound := fun before act after h => by simp at h
 
-private theorem inv_work (c : Config) (input : Option σ.In) {k0 : Kernel sys}
-    {ks : Kernel sys × Scan sys P W} (h : Inv k0 ks) : Inv k0 (work c input ks) := by
+private theorem inv_workWith (turn : Kernel sys → Journal.Turn sys)
+    (hturn : ∀ k, (turn k).kernel = (k.exec (Journal.ops (turn k).entries)).kernel
+      ∧ (turn k).events = (k.exec (Journal.ops (turn k).entries)).events
+      ∧ (turn k).outputs = (k.exec (Journal.ops (turn k).entries)).outputs) {k0 : Kernel sys}
+    {ks : Kernel sys × Scan sys P W} (h : Inv k0 ks) : Inv k0 (workWith turn ks) := by
   obtain ⟨k, ⟨written, waiting, acts, entries, events, outputs, worked⟩⟩ := ks
   obtain ⟨hk, ho, he, hs⟩ := h
-  obtain ⟨tk, te, to⟩ := Journal.turn_eq_exec k c.now_ms input c.fuel
+  obtain ⟨tk, te, to⟩ := hturn k
   simp only at hk ho he hs
   have hexec : ∀ more : List (Journal.Entry σ),
       k0.exec (journal acts.toList ++ Journal.ops (entries.toList ++ more))
@@ -215,8 +268,16 @@ private theorem inv_work (c : Config) (input : Option σ.In) {k0 : Kernel sys}
     rw [Journal.ops, List.filterMap_append, ← List.append_assoc, Kernel.exec_append, ← Journal.ops,
       ← Journal.ops, ← hk]
   refine ⟨?_, ?_, ?_, hs⟩ <;>
-    simp only [work, Array.toList_appendList, hexec, ← tk, ← te, ← to, ← ho, ← he,
+    simp only [workWith, Array.toList_appendList, hexec, ← tk, ← te, ← to, ← ho, ← he,
       List.append_assoc]
+
+private theorem inv_work (c : Config) (input : Option σ.In) {k0 : Kernel sys}
+    {ks : Kernel sys × Scan sys P W} (h : Inv k0 ks) : Inv k0 (work c input ks) :=
+  inv_workWith _ (fun k => Journal.turn_eq_exec k c.now_ms input c.fuel) h
+
+private theorem inv_workAll (c : Config) (xs : List σ.In) {k0 : Kernel sys}
+    {ks : Kernel sys × Scan sys P W} (h : Inv k0 ks) : Inv k0 (workAll c xs ks) :=
+  inv_workWith _ (fun k => Journal.turnAll_eq_exec k c.now_ms xs _ c.workers) h
 
 private theorem inv_flush (c : Config) {k0 : Kernel sys} {ks : Kernel sys × Scan sys P W}
     (h : Inv k0 ks) :
@@ -293,6 +354,14 @@ private theorem inv_scan (c : Config) {k0 : Kernel sys} {ks : Kernel sys × Scan
     have hw := inv_work c (some x) h
     simp only [scan]
     generalize work c (some x) ks = w at hw
+    obtain ⟨k, s⟩ := w
+    split
+    · exact (inv_flush c hw).1
+    · exact hw
+  | inputs xs =>
+    have hw := inv_workAll c xs h
+    simp only [scan]
+    generalize workAll c xs ks = w at hw
     obtain ⟨k, s⟩ := w
     split
     · exact (inv_flush c hw).1
@@ -404,6 +473,16 @@ private theorem acts_scan (c : Config) (ks : Kernel sys × Scan sys P W)
     split
     · exact acts_flush c (k, s)
     · exact List.prefix_refl _
+  | inputs xs =>
+    have hw : (workAll c xs ks).2.acts = ks.2.acts := by
+      obtain ⟨k, ⟨_, _, _, _, _, _, _⟩⟩ := ks; rfl
+    simp only [scan]
+    rw [← hw]
+    generalize workAll c xs ks = w
+    obtain ⟨k, s⟩ := w
+    split
+    · exact acts_flush c (k, s)
+    · exact List.prefix_refl _
   | idle timers waiter => exact acts_flush c ks
   | peek i reply =>
     exact (acts_flush c ks).trans (by simp only [scan, Array.toList_push]; exact List.prefix_append _ _)
@@ -469,6 +548,13 @@ private theorem waiting_foldl (c : Config) (commands : List (Command σ P W)) :
       simp only [scan, Command.idle?]
       have hw := waiting_work c (some x) ks
       generalize work c (some x) ks = w at hw
+      obtain ⟨k, s⟩ := w
+      split <;> simp [waiting_flush, ← hw]
+    | inputs xs =>
+      simp only [scan, Command.idle?]
+      have hw : (workAll c xs ks).2.waiting = ks.2.waiting := by
+        obtain ⟨k, ⟨_, _, _, _, _, _, _⟩⟩ := ks; rfl
+      generalize workAll c xs ks = w at hw
       obtain ⟨k, s⟩ := w
       split <;> simp [waiting_flush, ← hw]
     | idle timers waiter => simp [scan, Command.idle?, waiting_flush]

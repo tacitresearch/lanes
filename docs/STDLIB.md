@@ -113,12 +113,12 @@ API. P1 is common, P2 rare.
 | `net` | a | `Std.Async.TCP`, `Std.Async.UDP`, `Std.Async.DNS` (libuv's `getaddrinfo`), `Std.Net.Addr`. Lanes uses TCP (`Lanes.Peers`, the HTTP client) and not yet DNS |
 | `net/netip` | b | P0, built: `Lanes/Lib/Net/Ip.lean` (`Std.Net.Addr` parses and prints with libuv's `inet_pton` and `inet_ntop`, and has no prefixes) |
 | `net/url` | b | P0, built: `Lanes/Lib/Net/Url.lean` (references, resolution, normalization, queries) with `Lanes/Lib/Net/UrlSound.lean`; forms in `Lanes/Web/Http/Basic.lean`. `Std.Http.Data.URI` parses RFC 3986 with no theorems |
-| `net/http` (server) | e | `Lanes.Web.IO.Server` on `Std.Http.Server`, with the gate (`Lanes/Web/Http/Gate.lean`) deciding; routes `Lanes/Web/Http/Route.lean`; cookies `Lanes/Web/Http/Cookie.lean`; sessions and log-in `Lanes/Web/Auth/` |
+| `net/http` (server) | e | `Lanes.Web.IO.Server` on `Std.Net`, reading requests with `Lanes/Web/Http/ReadRequest.lean` (proved), with the gate (`Lanes/Web/Http/Gate.lean`) deciding; routes `Lanes/Web/Http/Route.lean`; cookies `Lanes/Web/Http/Cookie.lean`; sessions and log-in `Lanes/Web/Auth/` |
 | `net/http` (client) | e | `Lanes.Web.IO.Client` and `Lanes.Web.Http.Wire` (the reader proved). `Std.Http` has no client, only a pure redirect planner (`Std.Http.Protocol.H1.Redirect`). Missing: TLS (c, P0) and names (DNS, P0) |
 | `net/http` (`DetectContentType`) | b | P1, to check an upload is what it claims |
 | `net/http` (streamed responses) | b | P1: server-sent events for live timelines; the server adapter answers once per request today |
 | `net/http/httptest` | e | handlers are pure functions tested directly; adapters are tested against recorded runs (`Lanes.Outside`, `Tests/HttpClient.lean`) |
-| `net/textproto` | e | header lines are read and written in `Lanes.Web.Http.Wire` and by `Std.Http` |
+| `net/textproto` | e | header lines are read in `Lanes/Web/Http/ReadRequest.lean` and written and read in `Lanes.Web.Http.Wire` |
 | `net/http/cookiejar` | d | the application is the server; a client that logs in elsewhere is rare |
 | `net/http/httputil` | d | reverse proxying and dumps; the proxy in front is not Lean |
 | `net/http/pprof`, `net/http/httptrace` | d | Go runtime introspection |

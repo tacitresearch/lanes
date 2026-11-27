@@ -12,18 +12,18 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | `Lanes/Behaviours` | 66 | 36 | 5 | 18 | 0 | 7 | 0 |
 | `Lanes/Check` | 74 | 54 | 0 | 8 | 0 | 10 | 2 |
-| `Lanes/Core` | 104 | 40 | 0 | 34 | 1 | 10 | 19 |
+| `Lanes/Core` | 102 | 40 | 0 | 34 | 1 | 10 | 17 |
 | `Lanes/Data` | 66 | 42 | 0 | 4 | 1 | 0 | 19 |
-| `Lanes/Durable` | 52 | 44 | 2 | 0 | 0 | 5 | 1 |
+| `Lanes/Durable` | 53 | 45 | 2 | 0 | 0 | 5 | 1 |
 | `Lanes/Lib` | 486 | 331 | 13 | 2 | 66 | 65 | 9 |
 | `Lanes/Net` | 37 | 6 | 5 | 0 | 0 | 25 | 1 |
-| `Lanes/Outside` | 48 | 28 | 5 | 4 | 3 | 8 | 0 |
-| `Lanes/Proof` | 34 | 13 | 0 | 0 | 0 | 20 | 1 |
-| `Lanes/Runtime` | 132 | 73 | 18 | 0 | 15 | 26 | 0 |
+| `Lanes/Outside` | 110 | 81 | 5 | 6 | 1 | 17 | 0 |
+| `Lanes/Proof` | 35 | 12 | 0 | 0 | 0 | 22 | 1 |
+| `Lanes/Runtime` | 156 | 93 | 18 | 0 | 15 | 30 | 0 |
 | `Lanes/Semantics` | 57 | 9 | 0 | 0 | 0 | 47 | 1 |
 | `Lanes/Web` | 315 | 188 | 14 | 8 | 64 | 39 | 2 |
 | `LanesCli` | 110 | 0 | 0 | 0 | 46 | 0 | 64 |
-| All | 1581 | 864 | 62 | 78 | 196 | 262 | 119 |
+| All | 1667 | 937 | 62 | 80 | 194 | 277 | 117 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -178,7 +178,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Check.Property.holds` | proved | `Check.refines_sound`, `Check.refines_traces`, `Check.system_sound` and 1 more |
 | `Check.Trace.last` | proved | `Check.search_deadlock`, `Check.search_reached`, `Check.search_violated` and 2 more |
 | `Check.Trace.labels` | proved | `Check.system_violated` |
-| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 17 more |
+| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 18 more |
 | `Check.Path.last` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
 | `Check.Path.toTraceAux` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
 | `Check.Path.toTrace` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
@@ -246,7 +246,6 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Actor.run` | spec | used only in statements |
 | `Actor.mapEff` | none |  |
-| `Actor.comapMsg` | none |  |
 | `Actor.Invariant` | spec | a predicate |
 
 ## `Lanes/Core/FairScheduler.lean`
@@ -269,7 +268,6 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `instHashableEmpty_lanes` | checked | `Tests/Election.lean`, `Tests/Join.lean` |
-| `instReprEmpty_lanes` | none |  |
 | `instHashableEnvelope` | checked | `Tests/Join.lean` |
 | `instHashableEffect` | checked | `Tests/KV.lean` |
 | `instReprEffect` | checked | `Tests/KV.lean` |
@@ -362,9 +360,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Effect.instDecidableEq` | proved | its type, `Decidable` |
 | `Envelope.instDecidableEq` | proved | `Account.Fires.handle`, `Account.Moves.handle`, `Account.implements` and 6 more |
 | `Envelope.sameLink` | none |  |
-| `Link.reliable` | proved | `Tests.Fixtures.Watchdog.exists_fair_run_never_barks`, `Tests.Fixtures.Watchdog.impatient_barks` |
+| `Link.reliable` | proved | through `EnvModel.link`, `EnvModel.lossy` and 1 more: `Account.implements`, `Account.implements_timed` and 20 more |
 | `Link.network` | checked | `Tests/Bank.lean`, `Tests/Election.lean`, `Tests/Join.lean` and 1 more |
-| `Link.unordered` | checked | `Tests/Election.lean`, `Tests/Jobs.lean` |
+| `Link.unordered` | checked | `Tests/Election.lean`, `Tests/Jobs.lean`, `Tests/Outside.lean` |
 | `EnvModel.reliable` | spec | used only in statements |
 | `EnvModel.distributed` | none |  |
 
@@ -372,21 +370,21 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `update` | proved | through `SysState.down`, `SysState.init` and 4 more: `Account.implements`, `Account.implements_timed` and 38 more |
+| `update` | proved | through `SysState.down`, `SysState.init` and 4 more: `Account.implements`, `Account.implements_timed` and 39 more |
 | `Event.timed` | spec | used only in statements |
 | `Event.visible` | spec | used only in statements |
 | `SysState.blank` | proved | `System.Inductive.of_monotone`, `System.Monotone.and`, `System.Monotone.and_net` |
-| `SysState.hasMail` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 24 more |
-| `SysState.perform` | proved | through `SysState.init`, `SysState.run` and 3 more: `Account.implements`, `Account.implements_timed` and 37 more |
-| `SysState.performAll` | proved | through `SysState.init`, `SysState.run` and 3 more: `Account.implements`, `Account.implements_timed` and 37 more |
+| `SysState.hasMail` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 25 more |
+| `SysState.perform` | proved | through `SysState.init`, `SysState.run` and 3 more: `Account.implements`, `Account.implements_timed` and 38 more |
+| `SysState.performAll` | proved | through `SysState.init`, `SysState.run` and 3 more: `Account.implements`, `Account.implements_timed` and 38 more |
 | `SysState.down` | proved | `Account.implements`, `Account.implements_timed`, `System.Refines.of_events` and 2 more |
 | `SysState.settle` | proved | `SysState.Loses.settle` |
-| `SysState.handle` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 24 more |
-| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and 2 more: `Account.implements`, `Account.implements_timed` and 36 more |
+| `SysState.handle` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 25 more |
+| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and 2 more: `Account.implements`, `Account.implements_timed` and 37 more |
 | `SysState.deliverable` | proved | `Account.implements`, `Account.implements_timed`, `System.Refines.of_events` and 2 more |
 | `SysState.step` | proved | `Http.Gate.answered_of_leaves`, `Http.Gate.deadline_not_restarted`, `Shards.AtHome.step` and 7 more |
-| `SysState.init` | proved | `Account.implements`, `Account.implements_timed`, `Check.system_violated` and 21 more |
-| `SysState.run` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and 12 more |
+| `SysState.init` | proved | `Account.implements`, `Account.implements_timed`, `Check.system_violated` and 22 more |
+| `SysState.run` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and 13 more |
 | `System.Invariant` | spec | a predicate |
 
 ## `Lanes/Data/Codec.lean`
@@ -533,15 +531,16 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Journal.named?` | proved | through `Journal.open?`: `Journal.open?_cut`, `Journal.open?_file` |
 | `Journal.file` | proved | `Journal.Disk.load_cut`, `Journal.open?_cut`, `Journal.open?_file` |
 | `Journal.open?` | proved | `Journal.open?_cut`, `Journal.open?_file` |
-| `Journal.Entry.op?` | proved | through `Journal.ops`: `Journal.recover_handed`, `Journal.recover_kernel` and 2 more |
+| `Journal.Entry.op?` | proved | through `Journal.ops`: `Journal.recover_handed`, `Journal.recover_kernel` and 3 more |
 | `Journal.Entry.marks` | spec | used only in statements |
-| `Journal.ops` | proved | `Journal.recover_handed`, `Journal.recover_kernel`, `Journal.recover_outputs` and 1 more |
-| `Journal.replay1` | proved | through `Journal.recover`, `Journal.resume` and 1 more: `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash` and 9 more |
+| `Journal.ops` | proved | `Journal.recover_handed`, `Journal.recover_kernel`, `Journal.recover_outputs` and 2 more |
+| `Journal.replay1` | proved | through `Journal.recover`, `Journal.resume` and 2 more: `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash` and 10 more |
 | `Journal.recover` | proved | `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save` and 7 more |
 | `Journal.Entry.savedAt` | proved | `Journal.Disk.Holds.append`, `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash` and 2 more |
 | `Journal.since` | proved | through `Journal.resume`: `Journal.resume_eq_recover` |
 | `Journal.resume` | proved | `Journal.resume_eq_recover` |
 | `Journal.turn` | proved | through `Journal.turns`: `Journal.turns_kernel` |
+| `Journal.turnAll` | proved | `Journal.turnAll_eq_exec` |
 | `Journal.turns` | spec | used only in statements |
 
 ## `Lanes/Durable/Snapshot.lean`
@@ -1245,10 +1244,74 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Outside.any` | tested | `Tests/Jobs.lean` |
-| `Outside.driver` | checked | `Tests/Clock.lean`, `Tests/HttpClient.lean`, `Tests/Jobs.lean` and 1 more |
-| `Outside.after` | tested | `Tests/Clock.lean`, `Tests/Fronted.lean`, `Tests/HttpClient.lean` and 2 more |
-| `Outside.allows` | tested | `Tests/Clock.lean`, `Tests/Fronted.lean`, `Tests/HttpClient.lean` and 2 more |
-| `Outside.both` | checked | `Tests/Clock.lean`, `Tests/HttpClient.lean`, `Tests/Jobs.lean` |
+| `Outside.driver` | checked | `Tests/Clock.lean`, `Tests/HttpClient.lean`, `Tests/Jobs.lean` and 2 more |
+| `Outside.see` | proved | through `Outside.after`: `Effects.at_most_once`, `Events.deliveries_le` and 6 more |
+| `Outside.after` | proved | `Effects.at_most_once`, `Events.deliveries_le`, `Idempotent.at_most_once` and 5 more |
+| `Outside.allows` | checked | `Tests/Outside.lean` |
+| `Outside.both` | proved | `Outside.after_both` |
+| `Outside.mine` | spec | used only in statements |
+
+## `Lanes/Outside/Effects/Basic.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Effects.Phase.codec` | proved | its type, `Codec` |
+| `Effects.instCodablePhase` | proved | its type, `Codable` |
+| `Effects.instEnumPhase` | proved | its type, `Enum` |
+| `Effects.Phase.final` | spec | used only in statements |
+| `Effects.Lifecycle.Final` | spec | a predicate |
+| `Effects.Lifecycle.reachable` | proved | through `Effects.outside`: `Effects.at_most_once` |
+| `Effects.Lifecycle.reachable.go` | proved | through `Effects.outside`: `Effects.at_most_once` |
+| `Effects.Lifecycle.reaches` | proved | through `Effects.outside`: `Effects.at_most_once` |
+| `Effects.Lifecycle.seen` | proved | through `Effects.outside`: `Effects.at_most_once` |
+| `Effects.Answer.codec` | proved | its type, `Codec` |
+| `Effects.instCodableAnswer` | proved | its type, `Codable` |
+| `Effects.Answer.isRefused` | proved | through `Effects.outside`: `Effects.at_most_once` |
+| `Effects.Report.codec` | proved | its type, `Codec` |
+| `Effects.instCodableReport` | proved | its type, `Codable` |
+| `Effects.Thing.codec` | proved | its type, `Codec` |
+| `Effects.instCodableThing` | proved | its type, `Codable` |
+| `Effects.ids` | proved | through `Effects.outside`: `Effects.at_most_once` |
+| `Effects.answered` | proved | through `Effects.outside`: `Effects.at_most_once` |
+| `Effects.moved` | proved | through `Effects.outside`: `Effects.at_most_once` |
+| `Effects.reported` | proved | through `Effects.outside`: `Effects.at_most_once` |
+| `Effects.server` | proved | through `Effects.outside`: `Effects.at_most_once` |
+| `Effects.service` | proved | through `Effects.outside`: `Effects.at_most_once` |
+| `Effects.outside` | proved | `Effects.at_most_once` |
+
+## `Lanes/Outside/Effects/Email.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Email.Status.codec` | proved | its type, `Codec` |
+| `Email.instCodableStatus` | proved | its type, `Codable` |
+| `Email.instEnumStatus` | proved | its type, `Enum` |
+| `Email.Status.next` | proved | through `Email.lifecycle`: `Email.final` |
+| `Email.Status.phase` | proved | through `Email.lifecycle`: `Email.final` |
+| `Email.lifecycle` | proved | `Email.final` |
+| `Email.outside` | checked | `Tests/Outside.lean` |
+
+## `Lanes/Outside/Effects/Payments.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Payments.Status.codec` | proved | its type, `Codec` |
+| `Payments.instCodableStatus` | proved | its type, `Codable` |
+| `Payments.instEnumStatus` | proved | its type, `Enum` |
+| `Payments.Status.next` | proved | through `Payments.lifecycle`: `Payments.final` |
+| `Payments.Status.phase` | proved | through `Payments.lifecycle`: `Payments.final` |
+| `Payments.Status.event` | proved | through `Payments.lifecycle`: `Payments.final` |
+| `Payments.lifecycle` | proved | `Payments.final` |
+| `Payments.outside` | checked | `Tests/Outside.lean` |
+
+## `Lanes/Outside/Events.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Events.count` | proved | through `Events.bounded`: `Events.deliveries_le` |
+| `Events.bump` | proved | through `Events.bounded`: `Events.deliveries_le` |
+| `Events.bounded` | proved | `Events.deliveries_le` |
+| `Events.deliveries` | spec | used only in statements |
 
 ## `Lanes/Outside/IO/Clock.lean`
 
@@ -1259,6 +1322,34 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Clock.Wall.start` | trusted | TRUSTED.md: The clock adapter's handler |
 | `Clock.Wall.now` | trusted | TRUSTED.md: The clock adapter's handler |
 | `Clock.handler` | trusted | TRUSTED.md: The clock adapter's handler |
+
+## `Lanes/Outside/Idempotent.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Idempotent.Keyed.codec` | proved | its type, `Codec` |
+| `Idempotent.instCodableKeyed` | proved | its type, `Codable` |
+| `Idempotent.Slot.codec` | proved | its type, `Codec` |
+| `Idempotent.instCodableSlot` | proved | its type, `Codable` |
+| `Idempotent.Route.codec` | proved | its type, `Codec` |
+| `Idempotent.instCodableRoute` | proved | its type, `Codable` |
+| `Idempotent.requests` | spec | used only in statements |
+| `Idempotent.holder` | proved | through `Idempotent.server`: `Idempotent.answer_repeat`, `Idempotent.at_most_once` and 1 more |
+| `Idempotent.server` | proved | `Idempotent.answer_repeat`, `Idempotent.at_most_once`, `Idempotent.keys_nodup` |
+| `Idempotent.Holds` | spec | a predicate |
+
+## `Lanes/Outside/Rpc.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Rpc.Call.codec` | proved | its type, `Codec` |
+| `Rpc.instCodableCall` | proved | its type, `Codable` |
+| `Rpc.Reply.codec` | proved | its type, `Codec` |
+| `Rpc.instCodableReply` | proved | its type, `Codable` |
+| `Rpc.outside` | proved | `Events.deliveries_le`, `Idempotent.at_most_once`, `Idempotent.keys_nodup` and 2 more |
+| `Rpc.Port.reported` | spec | used only in statements |
+| `Rpc.called` | spec | used only in statements |
+| `Rpc.answered` | spec | used only in statements |
 
 ## `Lanes/Outside/Store/Basic.lean`
 
@@ -1330,7 +1421,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `System.withGhost` | proved | `SysState.erase_step`, `System.Invariant.of_ghost`, `System.Invariant.to_ghost` and 2 more |
+| `System.withGhost` | spec | used only in statements |
 | `SysState.erase` | spec | used only in statements |
 
 ## `Lanes/Proof/JoinSound.lean`
@@ -1379,6 +1470,12 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `SysState.grow` | proved | `Account.Fires.grow`, `Account.Fires.handle`, `Account.Moves.grow` and 12 more |
 | `SysState.Pending` | spec | a predicate |
 
+## `Lanes/Proof/Outputs.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `System.Emits` | spec | a predicate |
+
 ## `Lanes/Proof/Past.lean`
 
 | Definition | Status | Evidence |
@@ -1393,10 +1490,14 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Batch.due` | proved | `Batch.due_iff`, `Batch.flush_save` |
 | `Batch.put` | proved | `Batch.flush_save` |
-| `Batch.work` | proved | through `Batch.flush`, `Batch.run` and 1 more: `Batch.flush_save`, `Batch.run_handed` and 5 more |
+| `Batch.workWith` | proved | through `Batch.flush`, `Batch.run` and 1 more: `Batch.flush_save`, `Batch.run_handed` and 5 more |
+| `Batch.work` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_kernel` and 4 more |
+| `Batch.workAll` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_kernel` and 4 more |
 | `Batch.flush` | proved | `Batch.flush_save` |
 | `Batch.scan` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_kernel` and 4 more |
 | `Batch.finish` | proved | through `Batch.run`: `Batch.run_handed`, `Batch.run_kernel` and 3 more |
+| `Batch.group` | proved | `Batch.group_ins` |
+| `Batch.Command.ins` | spec | used only in statements |
 | `Batch.run` | proved | `Batch.run_handed`, `Batch.run_kernel`, `Batch.run_peek` and 2 more |
 | `Batch.Act.ops` | proved | through `Batch.journal`: `Batch.run_handed`, `Batch.run_kernel` and 1 more |
 | `Batch.Act.outputs` | proved | through `Batch.handed`: `Batch.run_handed` |
@@ -1442,31 +1543,31 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Kernel.cell` | proved | `Batch.run_peek`, `Kernel.WellFormed.runBatch_of_due`, `Kernel.WellFormed.step_of_due` and 3 more |
-| `Kernel.setCell` | proved | through `Kernel.apply`, `Kernel.boot` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 24 more |
+| `Kernel.setCell` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 33 more |
 | `Kernel.abs` | proved | `Kernel.WellFormed.quiet_iff`, `Kernel.WellFormed.wait_forever`, `Kernel.abs_boot` and 7 more |
 | `Kernel.env` | proved | `Kernel.abs_boot`, `Kernel.accept_sound`, `Kernel.exec_reachable` and 4 more |
-| `Kernel.unschedule` | proved | through `Kernel.apply`, `Kernel.boot` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 24 more |
-| `Kernel.perform` | proved | through `Kernel.apply`, `Kernel.boot` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 24 more |
-| `Kernel.performAll` | proved | through `Kernel.apply`, `Kernel.boot` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 24 more |
-| `Kernel.down` | proved | through `Kernel.apply`, `Kernel.boot` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 24 more |
-| `Kernel.settle` | proved | through `Kernel.apply`, `Kernel.boot` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 24 more |
-| `Kernel.rest` | proved | through `Kernel.apply`, `Kernel.exec` and 4 more: `Batch.run_handed`, `Batch.run_kernel` and 22 more |
-| `Kernel.handle` | proved | through `Kernel.apply`, `Kernel.exec` and 4 more: `Batch.run_handed`, `Batch.run_kernel` and 22 more |
-| `Kernel.startActor` | proved | through `Kernel.apply`, `Kernel.boot` and 4 more: `Batch.run_handed`, `Batch.run_kernel` and 23 more |
+| `Kernel.unschedule` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 33 more |
+| `Kernel.perform` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 33 more |
+| `Kernel.performAll` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 33 more |
+| `Kernel.down` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 33 more |
+| `Kernel.settle` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 33 more |
+| `Kernel.rest` | proved | through `Kernel.apply`, `Kernel.exec` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 30 more |
+| `Kernel.handle` | proved | `Kernel.frame_handle` |
+| `Kernel.startActor` | proved | `Kernel.frame_startActor` |
 | `Kernel.boot` | proved | `Http.kernel_fronted_answered_le_arrived`, `Http.kernel_served_answered_le_arrived`, `Journal.recover_kernel` and 6 more |
 | `Kernel.accept` | proved | `Kernel.accept_sound` |
 | `Kernel.run1` | proved | `Kernel.run1_sound` |
-| `Kernel.fire` | proved | `Kernel.fire_sound` |
-| `Kernel.advance` | proved | through `Kernel.apply`, `Kernel.exec`: `Batch.run_handed`, `Batch.run_kernel` and 13 more |
-| `Kernel.timerNext` | proved | through `Kernel.apply`, `Kernel.exec` and 2 more: `Batch.run_handed`, `Batch.run_kernel` and 20 more |
+| `Kernel.fire` | proved | `Kernel.fire_sound`, `Kernel.frame_fire` |
+| `Kernel.advance` | proved | through `Kernel.apply`, `Kernel.exec`: `Batch.run_handed`, `Batch.run_kernel` and 15 more |
+| `Kernel.timerNext` | proved | through `Kernel.apply`, `Kernel.exec` and 2 more: `Batch.run_handed`, `Batch.run_kernel` and 26 more |
 | `Kernel.step` | proved | `Kernel.WellFormed.runBatch_of_due`, `Kernel.WellFormed.step_events_ne_nil`, `Kernel.WellFormed.step_of_due` and 1 more |
 | `Kernel.wait` | proved | `Kernel.WellFormed.step_events_ne_nil`, `Kernel.WellFormed.wait_for_ms`, `Kernel.WellFormed.wait_forever` and 1 more |
-| `Kernel.runBatch` | proved | `Kernel.WellFormed.runBatch`, `Kernel.WellFormed.runBatch_of_due`, `Kernel.runBatch_outputs` and 1 more |
+| `Kernel.runBatch` | proved | `Kernel.WellFormed.runBatch`, `Kernel.WellFormed.runBatch_of_due`, `Kernel.runBatchAhead_eq` and 5 more |
 | `Kernel.quiet` | proved | `Batch.run_resolved`, `Kernel.WellFormed.quiet_iff` |
 | `Kernel.image` | proved | `Batch.flush_save`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save` and 4 more |
 | `Kernel.Image.kernel` | proved | `Batch.flush_save`, `Kernel.WellFormed.image`, `Kernel.abs_image_kernel` |
 | `Kernel.apply` | proved | `Kernel.WellFormed.apply` |
-| `Kernel.exec` | proved | `Batch.run_handed`, `Batch.run_kernel`, `Batch.settle_kernel` and 11 more |
+| `Kernel.exec` | proved | `Batch.run_handed`, `Batch.run_kernel`, `Batch.settle_kernel` and 13 more |
 
 ## `Lanes/Runtime/KernelSound.lean`
 
@@ -1579,6 +1680,31 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `SysState.unsharded` | proved | `Shards.AtHome.step`, `SysState.init_unsharded_equiv`, `System.Invariant.shards` and 4 more |
 | `Shards.effect` | spec | used only in statements |
 
+## `Lanes/Runtime/Wave.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Kernel.ahead` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 1 more |
+| `Kernel.Fits` | spec | a predicate |
+| `Kernel.Plan.get` | proved | through `Kernel.plan`, `Kernel.runBatchAhead` and 2 more: `Kernel.good_plan`, `Kernel.runBatchAhead_eq` and 2 more |
+| `Kernel.Plan.set` | proved | through `Kernel.plan`, `Kernel.runBatchAhead` and 2 more: `Kernel.good_plan`, `Kernel.runBatchAhead_eq` and 2 more |
+| `Kernel.Plan.drop` | proved | through `Kernel.runBatchAhead`, `Kernel.runWaves` and 1 more: `Kernel.runBatchAhead_eq`, `Kernel.runWaves_eq` and 1 more |
+| `Kernel.Plan.Good` | spec | a predicate |
+| `Kernel.Frame` | spec | a predicate |
+| `Kernel.handleAhead` | proved | through `Kernel.runBatchAhead`, `Kernel.runWaves` and 1 more: `Kernel.runBatchAhead_eq`, `Kernel.runWaves_eq` and 1 more |
+| `Kernel.run1Ahead` | proved | through `Kernel.runBatchAhead`, `Kernel.runWaves` and 1 more: `Kernel.runBatchAhead_eq`, `Kernel.runWaves_eq` and 1 more |
+| `Kernel.stepAhead` | proved | through `Kernel.runBatchAhead`, `Kernel.runWaves` and 1 more: `Kernel.runBatchAhead_eq`, `Kernel.runWaves_eq` and 1 more |
+| `Kernel.runBatchAhead` | proved | `Kernel.runBatchAhead_eq` |
+| `Kernel.Job.run` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 1 more |
+| `Kernel.mail` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 1 more |
+| `Kernel.jobs` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 1 more |
+| `Kernel.chunks` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 1 more |
+| `Kernel.Plan.add` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 1 more |
+| `Kernel.plan` | proved | `Kernel.good_plan` |
+| `Kernel.waves` | proved | `Kernel.waves_eq` |
+| `Kernel.runWaves` | proved | `Kernel.runWaves_eq` |
+| `Kernel.acceptAll` | proved | `Kernel.exec_inputs` |
+
 ## `Lanes/Semantics/Account.lean`
 
 | Definition | Status | Evidence |
@@ -1624,7 +1750,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Spec.stutter` | proved | through `System.Run`, `System.Run.event` and 2 more: `Http.Gate.pending_answered`, `Http.fronted_pending_answered` and 13 more |
+| `Spec.stutter` | proved | through `System.Run`, `System.Run.event` and 2 more: `Http.Gate.pending_answered`, `Http.fronted_pending_answered` and 11 more |
 | `Obligation.event` | proved | `System.LeadsTo.ensures_of_invariant` |
 | `Obligation.Due` | spec | a predicate |
 | `Obligation.Restarted` | spec | a predicate |
@@ -1681,7 +1807,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Service.spec` | proved | `Account.Holds.passes`, `Account.implements`, `Account.implements_timed` and 10 more |
+| `Service.spec` | proved | `Account.Holds.passes`, `Account.implements`, `Account.implements_timed` and 8 more |
 | `Service.Stable` | spec | a predicate |
 | `Service.Only` | spec | a predicate |
 | `Service.Took` | spec | a predicate |
@@ -1698,7 +1824,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `System.sem` | proved | `Account.implements`, `Account.implements_timed`, `Once.server_implements` and 15 more |
+| `System.sem` | proved | `Account.implements`, `Account.implements_timed`, `Once.server_implements` and 12 more |
 | `System.Refines` | spec | a predicate |
 
 ## `Lanes/Web/Auth/Login.lean`

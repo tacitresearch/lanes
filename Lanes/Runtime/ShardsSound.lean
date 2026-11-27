@@ -461,9 +461,6 @@ private theorem up_atHome (hc : Shards.AtHome c) {x : Fin n × σ.Id} (hup : c.u
   | true => rfl
   | false => simp [hc.down x h] at hup
 
-private theorem unsharded_up (c : SysState (sys.shards hosts)) (i : σ.Id) :
-    c.unsharded.up i = c.up (hosts i, i) := rfl
-
 end SysState
 
 /-- One event of the shards is one event of `sys`: it leads `c.unsharded` to `c'.unsharded`,

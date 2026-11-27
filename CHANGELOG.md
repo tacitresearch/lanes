@@ -10,6 +10,9 @@ under Unreleased (`CONTRIBUTING.md`).
 
 ### Added
 
+- Models of external services (`Lanes/Outside/`): `Rpc.outside`, a call answered at most once, `unknown` at its deadline with its effect left open, or never; `Idempotent.server`, idempotency keys, proved to give a request always sent under one key at most one effect in every run the model allows (`Idempotent.at_most_once`); `Events.bounded`, webhooks late, out of order and repeated up to a bound; `Effects`, services that hold things with a lifecycle, and its instances `Payments` (the statuses Stripe documents for a PaymentIntent) and `Email`. `Outside.see`, `Outside.after_induction`, `Outside.after_invariant` and `Outside.after_both` reason about runs a model allows; `System.Emits.outputs` lifts what actors emit to every output of every run.
+- `examples/payments`: a shop that charges each order through the payment model, checked with the classic bug seeded (a retry without the key charges twice) and proved to charge each order at most once (`Shop.charged_at_most_once`).
+- `ServerConfig.ioThreads`: connections owned by dedicated threads, so a connection never changes thread (21–30% more requests a second on the warm machine); and `Runtime.Config.workers`: a batch's actors' steps worked out in parallel, proved equal to the sequential run (`Kernel.runBatchAhead_eq`). Both are off by default.
 - A PostgreSQL client in Lean (`Lanes/Lib/Postgres/`): the frontend/backend protocol 3.0 with trust, cleartext, MD5 and SCRAM-SHA-256 authentication, the extended query protocol with parameters in text, errors and transactions, over plain TCP; messages proved to read back as written, a connection as a pure `Pg.Conn.step` proved to answer requests in order and never to report a failed transaction committed, and an IO file that only performs. MD5 and PBKDF2-HMAC-SHA-256 in Lean (`Lanes/Lib/Crypto/`).
 - A transactional store model (`Lanes/Outside/Store/`) at read committed and serializable, with lost `COMMIT` answers, as an `Outside`, and an adapter that runs it on a PostgreSQL table (`Postgres.Store.handler`).
 - `examples/todo-db`: a to-do list in PostgreSQL, where the checker finds the duplicate row that retrying a lost commit makes, and the fix is proved.
@@ -17,6 +20,11 @@ under Unreleased (`CONTRIBUTING.md`).
 ### Changed
 
 - Module paths are reorganised by concern: `Lanes.Actors` is split into `Lanes/Core`, `Lanes/Proof`, `Lanes/Runtime`, `Lanes/Durable`, `Lanes/Net` and `Lanes/Outside`, HTTP, HTML and authentication are under `Lanes/Web`, the standard library under `Lanes/Lib`, and each area's IO in an `IO/` directory; `import Lanes` leaves out the framework's soundness theorems, which a proof imports with `import Lanes.Proofs` (or `Lanes.Semantics`); `Examples/` and `systems/` are one `examples/` directory of Lake packages, `examples/counter` being what `lanes new` writes.
+- `Tests/Fixtures/` keeps the small applications' systems and the two bank theorems the tests carry to shards; the proofs of election, the key-value store and the watchdog are only in their examples.
+
+### Removed
+
+- `Actor.comapMsg`, which nothing used; the `Repr Empty` instance of `Lanes/Core/Inspect.lean`, which Lean has; helper lemmas of the soundness proofs that no proof used.
 
 ## [0.1.0] - unreleased
 
@@ -36,7 +44,7 @@ the Lake file.
 - HTTP: a gate joined in front of a system, typed routes proved to print and match alike, a strict request reader, the server's own connection loop on `Std.Net` as a pure `Http.Conn`, and an HTTP client.
 - HTML values and a template macro, htmx attributes from routes, forms and cookies with proofs against their specs.
 - Authentication: signed tokens, form tokens, sessions, failed-attempt limits and Argon2id password digests.
-- Data: `lanes_data` with derived `Codable`, `Enum` and `LawfulBEq`; law-carrying codecs; JSON; Base64; IP addresses and prefixes; civil dates, RFC 3339 and HTTP dates; SHA-256, HMAC and PBKDF2 references.
+- Data: `lanes_data` with derived `Codable`, `Enum` and `LawfulBEq`; law-carrying codecs; JSON; Base64; IP addresses and prefixes; civil dates, RFC 3339 and HTTP dates; SHA-256 and HMAC references.
 - Bindings to libsodium, `fsync` and a timed thread wait, each beside a Lean reference where one exists.
 - Differential tests of the parsers against Go's standard library, with every difference decided.
 - The `lanes` command: `new` (an app with a proved counter, a journal and a page), `lint`, `check` and `inventory`.

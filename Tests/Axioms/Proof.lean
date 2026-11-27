@@ -93,3 +93,7 @@ import Lanes.Semantics
 -- Lanes.Proof.Past
 /-- info: 'Lanes.SysState.mem_seen_grow_of_mem' depends on axioms: [propext, Classical.choice] -/
 #guard_msgs in #print axioms Lanes.SysState.mem_seen_grow_of_mem
+
+-- Lanes.Proof.Outputs
+/-- info: 'Lanes.System.Emits.outputs' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Emits.outputs

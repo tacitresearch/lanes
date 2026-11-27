@@ -6,10 +6,6 @@ module
 
 public import Lanes.Lib.Encoding.Json.PrinterSound
 
-local macro "pos_order" : tactic =>
-  `(tactic| ((try simp only [String.Pos.lt_iff_remainingBytes_lt,
-      String.Pos.le_iff_remainingBytes_le] at *); omega))
-
 /-!
 What `Json.parse` accepts, against the grammar of `Grammar`:
 
@@ -54,10 +50,6 @@ theorem rest_next (p : s.Pos) (h : p ≠ s.endPos) : rest p = p.get h :: rest (p
 
 theorem rest_eq_nil {p : s.Pos} : rest p = [] ↔ p = s.endPos := by
   rw [(String.Pos.splits p).eq_endPos_iff, rest, String.toList_eq_nil_iff]
-
-theorem rest_inj {p q : s.Pos} (h : rest p = rest q) : p = q :=
-  (String.Pos.splits p).pos_eq_of_eq_right
-    ((String.Pos.splits q).of_eq rfl (String.toList_inj.mp h.symm))
 
 theorem rest_startPos : rest s.startPos = s.toList := by
   simp [rest, String.sliceFrom_startPos]

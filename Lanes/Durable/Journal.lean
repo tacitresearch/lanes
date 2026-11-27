@@ -5,6 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Lanes.Runtime.KernelSound
+public import Lanes.Runtime.Wave
 public import Lanes.Data.Codec
 public import Lanes.Durable.Frame
 
@@ -483,6 +484,39 @@ theorem turn_eq_exec {sys : System σ} (k : Kernel sys) (now_ms : Nat) (input : 
     | some x =>
       simp [ops, Entry.op?, Kernel.exec_cons, Kernel.apply, Kernel.exec, advance_clock,
         Kernel.accept]
+
+/-- `turn` for inputs that arrived together: each is accepted, in order, and then up to `fuel`
+units of work are done, the steps of different actors worked out on `workers` threads
+(`Kernel.runWaves`, which is `runBatch`). The journal has `advance`, the inputs and one `batch`. -/
+def turnAll {sys : System σ} (k : Kernel sys) (now_ms : Nat) (inputs : List σ.In)
+    (fuel workers : Nat) : Turn sys :=
+  if inputs.isEmpty && (k.advance now_ms).wait != .none then { kernel := k }
+  else
+    let k := k.advance now_ms
+    let clock := k.clock_ms
+    match (k.acceptAll inputs).runWaves workers fuel with
+    | { kernel, events, outputs } =>
+      { kernel, events := inputs.map .input ++ events, outputs
+        entries := .advance clock :: inputs.map .input ++ [.batch fuel] }
+
+theorem turnAll_eq_exec {sys : System σ} (k : Kernel sys) (now_ms : Nat) (inputs : List σ.In)
+    (fuel workers : Nat) :
+    (turnAll k now_ms inputs fuel workers).kernel
+        = (k.exec (ops (turnAll k now_ms inputs fuel workers).entries)).kernel
+      ∧ (turnAll k now_ms inputs fuel workers).events
+          = (k.exec (ops (turnAll k now_ms inputs fuel workers).entries)).events
+      ∧ (turnAll k now_ms inputs fuel workers).outputs
+          = (k.exec (ops (turnAll k now_ms inputs fuel workers).entries)).outputs := by
+  unfold turnAll
+  split
+  · exact ⟨rfl, rfl, rfl⟩
+  · have hops : ∀ c : Nat, ops (.advance c :: inputs.map Entry.input ++ [.batch fuel])
+        = .advance c :: (inputs.map Kernel.Op.input ++ [.batch fuel]) := by
+      intro c
+      simp [ops, Entry.op?, List.filterMap_append, List.filterMap_map, Function.comp_def]
+    simp only [hops, Kernel.exec_cons, Kernel.exec_append, Kernel.exec_inputs, Kernel.runWaves_eq,
+      Kernel.apply, advance_clock]
+    simp [Kernel.exec]
 
 /-- Turn after turn, with the entries each one journals. -/
 def turns {sys : System σ} (k : Kernel sys) (fuel : Nat) :
