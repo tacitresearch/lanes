@@ -11,7 +11,7 @@ path = "../.."
 # which imports `Shop`, does not link them.
 [[lean_lib]]
 name = "Shop"
-roots = ["Shop", "Shop.Proofs", "Shop.Proofs.Axioms"]
+roots = ["Shop", "Shop.Proofs", "Shop.Proofs.Paid", "Shop.Proofs.Axioms"]
 
 # Model checks, run by `lake test`. Check before you prove (Lanes rule 5.1).
 [[lean_exe]]
