@@ -38,6 +38,8 @@ public import Lanes.Durable.Migration
 public import Lanes.Durable.Snapshot
 public import Lanes.Durable.Upgrade
 public import Lanes.Lib.Crypto.Hmac
+public import Lanes.Lib.Crypto.Md5
+public import Lanes.Lib.Crypto.Pbkdf2
 public import Lanes.Lib.Crypto.Sha256
 public import Lanes.Lib.Crypto.Sodium
 public import Lanes.Lib.Encoding.Base64
@@ -47,6 +49,12 @@ public import Lanes.Lib.Metrics
 public import Lanes.Lib.Mime.MediaType
 public import Lanes.Lib.Net.Ip
 public import Lanes.Lib.Net.Url
+public import Lanes.Lib.Postgres.Bytes
+public import Lanes.Lib.Postgres.Conn
+public import Lanes.Lib.Postgres.IO.Client
+public import Lanes.Lib.Postgres.Message
+public import Lanes.Lib.Postgres.Scram
+public import Lanes.Lib.Postgres.Table
 public import Lanes.Lib.RateLimit
 public import Lanes.Lib.Time.Civil
 public import Lanes.Lib.Time.Format
@@ -60,6 +68,7 @@ public import Lanes.Outside.Events
 public import Lanes.Outside.Idempotent
 public import Lanes.Outside.IO.Clock
 public import Lanes.Outside.Rpc
+public import Lanes.Outside.Store.Basic
 public import Lanes.Proof.Deed
 public import Lanes.Proof.Equiv
 public import Lanes.Proof.Ghost
@@ -95,6 +104,7 @@ public import Lanes.Web.Http.WireSpec
 public import Lanes.Web.IO.Client
 public import Lanes.Web.IO.Ops
 public import Lanes.Web.IO.Server
+public import Lanes.Web.IO.Tls
 
 /-!
 The Lanes API: everything an application's executable code needs, and the tools its proofs use.

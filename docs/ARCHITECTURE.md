@@ -29,12 +29,14 @@ proved function tells it to.
 | Metrics, health and the access log | `Lanes/Lib/Metrics.lean`, `Lanes/Web/Http/{Ops,OpsSound}.lean`, `Lanes/Web/IO/Ops.lean` | `Metrics.Histogram.observeAll_eq`, `Metrics.readLabelValue_escapeLabel`, `Http.Ops.route?_default`, `Http.Ops.answer_ready`, `Http.Ops.Access.parse_line`; that none of it reaches a system is trusted and tested |
 | Other adapters | `Lanes/Outside/Basic.lean`, `Lanes/Outside/IO/Clock.lean`, `Lanes/Web/IO/Client.lean`, `Lanes/Web/Http/{Grammar,Wire,WireSound}.lean` | `Response.read_wire`, `Request.fields_framing`; conformance tests |
 | Models of external services | `Lanes/Outside/{Rpc,Idempotent,Events}.lean`, `Lanes/Outside/Effects/`, `Lanes/Proof/Outputs.lean` | `Idempotent.at_most_once`, `Rpc.answered_le_called`, `Events.deliveries_le`, `System.Emits.outputs`; that a real service conforms is trusted |
+| PostgreSQL and the store model | `Lanes/Lib/Postgres/{Bytes,Message,MessageSound,Scram,Conn,ConnSound,Table}.lean`, `Lanes/Lib/Postgres/IO/Client.lean`, `Lanes/Outside/Store/{Basic,Sound}.lean` | `Backend.read_encode`, `Frontend.decode_encode`, `Conn.run_fifo`, `Conn.step_committed`, `Conn.step_query`, `Store.write_skew`, `Store.lost_commit_either`; the IO is trusted, and that the server behaves like the model is a premise |
 | Jobs: work outside a step | `Lanes/Behaviours/Jobs/{Basic,Sound}.lean`, `Lanes/Semantics/Jobs.lean`, `Lanes/Behaviours/Jobs/IO/Pool.lean` | `Jobs.answered_le_handled`, `Jobs.retry_same`, `Jobs.submitted_answered`; the pool is trusted |
 | Web | `Lanes/Web/Http/{Basic,Route,RouteSound,Cookie,CookieSound}.lean`, `Lanes/Web/Html/`, `Lanes/Web/Auth/` | `Html.lex_render`, `Html.safeUrl_scheme`, `Http.dispatch_link`, `Http.parseForm_encodeForm`, `Http.readSetCookie_header`, `Auth.verify_eq_some`, `Auth.checkForm_other` |
 | The checker | `Lanes/Check/`, `Lanes/Semantics/{Monitor,MonitorSound}.lean` | `Check.search_sound`, `Check.system_sound_of_respects`, `Check.refines_traces` |
 | The proof layer | `Lanes/Semantics/` | refinement, specs, fairness, leads-to |
 | Data and the standard library | `Lanes/Data/`, `Lanes/Lib/` | codec laws, `Quorum.majority_inter`, `Bytes.same_iff`, `Json.parse_iff`, `Url.parse_print` |
 | Bound C | `native/lanes.c`, `Lanes/Lib/Crypto/Sodium.lean` | trusted; tested against the Lean references |
+| TLS client | `native/tls.c`, `Lanes/Web/IO/Tls.lean` | trusted; tested against `openssl s_server` |
 
 ## Actors and the semantics
 
@@ -236,8 +238,8 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
 
 - **Clock** (`Lanes/Outside/IO/Clock.lean`): the time as an input, never earlier than one given before,
   also across a restart.
-- **HTTP client** (`Lanes/Web/IO/Client.lean`): HTTP/1.1 without TLS, one request per
-  connection. The bytes are pure (`Lanes/Web/Http/Wire.lean`): the request writer frames the message
+- **HTTP client** (`Lanes/Web/IO/Client.lean`): HTTP/1.1, or HTTPS through the TLS binding
+  below, one request per connection. The bytes are pure (`Lanes/Web/Http/Wire.lean`): the request writer frames the message
   itself (`Request.fields_framing`), and the reader is proved to read a response written as a
   server writes it as soon as its last byte is there, to stay within its limit and to end
   (`Lanes/Web/Http/WireSound.lean`: `Response.read_wire`, `Response.read_more`; D39).
@@ -258,6 +260,27 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   emit, lifted to every run by `System.Emits.outputs`; `examples/payments` proves a shop charges
   each order at most once that way (`Shop.charged_at_most_once`). That a real service does only
   what its model allows is trusted; no adapter talks to one yet.
+- **PostgreSQL** (`Lanes/Lib/Postgres/`): the frontend/backend protocol 3.0 in Lean, not libpq
+  (`docs/decisions/D68-postgres-protocol-in-lean.md`): start-up with trust, cleartext (only when
+  allowed), MD5 or SCRAM-SHA-256; the extended query protocol with parameters, text both ways;
+  errors; transactions; plain TCP. The messages are proved to read back as written
+  (`Backend.read_encode`, `Frontend.decode_encode`) and tested against recorded sessions of
+  `psql` and of this client. A connection is a pure `Postgres.Conn.step` (`Lanes/Lib/Postgres/Conn.lean`), as
+  the HTTP server's is: replies answer requests in the order sent (`Conn.run_fifo`), a request is
+  sent only to an open connection and is read by the server as sent (`Conn.step_query`,
+  `Conn.valid_decode`), `committed` is answered only for a `COMMIT` the server committed from a
+  transaction in progress (`Conn.step_committed`), the server is trusted after SCRAM only once
+  it proved it knows the password (`Conn.onMessage_saslFinal`), and a connection that ends
+  answers every request in flight `unknown` (`Conn.step_lost`); model-checked first
+  (`Tests/PostgresConn.lean`). The IO (`Lanes/Lib/Postgres/IO/Client.lean`) only performs.
+- **A transactional store** (`Lanes/Outside/Store/Basic.lean`): what a store may answer at read
+  committed or serializable, as an `Outside` that keeps every database the answers are consistent
+  with, so that a `COMMIT` whose answer is lost has both outcomes, and its effect may appear
+  later. Its litmus runs are theorems (`Lanes/Outside/Store/Sound.lean`: `Store.write_skew`,
+  `Store.lost_update`, `Store.lost_commit_either`, `Store.lost_commit_later`). A table of
+  PostgreSQL runs it (`Lanes/Lib/Postgres/Table.lean`, `Postgres.Store.handler`); that the server
+  behaves like the model at the level chosen is the premise of a theorem proved against it,
+  tested on recorded runs (`Tests/PostgresLive.lean`). `examples/todo-db` is checked against it.
 - **Jobs** (`Lanes/Behaviours/Jobs/Basic.lean`): work that must not run in a
   step, an outbound call or slow pure work, is submitted to the jobs actor under a key the
   requester chooses, beside the system that submits it (`Jobs.attach`). The actor dispatches
@@ -325,6 +348,14 @@ libsodium SHA-256, HMAC-SHA-256, constant-time comparison, secure random bytes a
 function with a Lean reference (`Sha256.reference`, `Hmac.reference`, `Bytes.sameReference`) has
 that reference as its body, so its theorems (`Bytes.same_iff`) are about the reference, and what
 is trusted is that the C computes the same, which `Tests/Crypto.lean` tests.
+
+TLS is a client from OpenSSL, the copy Lean's toolchain ships and links into every executable
+(`native/tls.c`, declared in `Lanes/Web/IO/Tls.lean`; `docs/decisions/D67-a-tls-client-from-the-openssl-lean-ships.md`).
+It does no IO: the client hands it the bytes that arrive and sends those it gives back, so what
+is sent and what the bytes mean stay the pure writer and reader. The certificate is always
+verified, against the system's trust store or a file given, and so is the name or address it is
+for. A response is ended only by the server's `close_notify`. That TLS is done right is trusted,
+not proved: `Tests/Tls.lean` checks the refusals against `openssl s_server`.
 
 ## A request, end to end
 
