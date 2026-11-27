@@ -160,6 +160,16 @@ in `Lanes/Web/Http/FrontSound.lean` to answer each arrival at most once and in
   kernel does: one that stays pending and is not armed again fires, and one that is armed
   again starts its delay again, so a liveness theorem does not assume that a timer fires
   while its actor keeps arming it.
+- **What the scheduler's time means.** The semantics has no clock, so the scheduler
+  (`Lanes/Behaviours/Schedule/Basic.lean`) keeps the latest time it knows: the times its
+  schedulings carry and the times its own timers were armed for, when they fire. What is proved
+  is said of that time (`Schedule.dispatch_due`, `Schedule.retry_waits`). That it is never ahead
+  of the real time is assumed: that the time a system puts in a scheduling is not ahead of the
+  clock (the examples take it from the wall clock where a request arrives), and that the runtime
+  fires a timer no earlier than its delay after it was armed, which the kernel does by firing
+  only timers whose deadline its clock has reached (`Kernel.timerNext`) and the shell by
+  reporting the clock as it reads it. A clock set back makes it lag, which makes jobs late, not
+  early.
 - **What the gate guarantees, and under what.** These are theorems about `served sys`, the
   system `serve` and `serveWith` run: `fronted sys`, the gate joined in front of `sys`, with
   requests its only inputs and responses its only outputs. *At most once* is proved. In every
@@ -247,6 +257,17 @@ in `Lanes/Web/Http/FrontSound.lean` to answer each arrival at most once and in
   in front and a service that throttles (`Queue`, `Cache`, `Clock.wall`, `Http.SharedCache`,
   `Throttle`) assume what the decision on models of more outside systems lists of SQS, Redis and
   memcached, the host's clock, RFC 9111 and a rate limit; none is tested against a real system.
+
+## Trusted by tests, not by applications
+
+The test kit, `Lanes/Testing/` (`docs/decisions/D77-a-test-kit.md`): a fake S3, a fake identity
+provider, a scripted browser and a server of a handler, all of them IO on local sockets. No
+deployed system imports it (`import Lanes` does not include it), so no property of an
+application rests on it, and its lines are not counted above. The tests that run against it do
+rest on it: a fake that accepts what the real service refuses makes a test pass that should
+fail. The fake S3 checks each signature with the same functions the client signs with
+(`SigV4.authorization`, `SigV4.signature`), so it does not check that those are S3's; the AWS
+test suite does (`Tests/SigV4.lean`). What the fakes refuse is tested (`Tests/Testing.lean`).
 
 ## Not trusted
 

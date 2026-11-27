@@ -584,6 +584,7 @@ Resources:
           DB_NAME=${DbName}
           DB_SECRET=${DbSecret}
           MAIL_IDENTITY=${MailIdentity}
+          MEDIA_BUCKET=${MediaBucket}
         - Bucket: !If [CreateReleaseBucket, !Ref ReleaseStore, !Ref ReleaseBucket]
           Prefix: !If [DefaultPrefix, !Ref AppName, !Ref ReleasePrefix]
           DbHost: !If [HasDatabase, !GetAtt Database.Endpoint.Address, ""]

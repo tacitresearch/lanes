@@ -9,7 +9,8 @@ Sign-in with GitHub: an OAuth app, which gives no ID token. The user is known by
 GitHub's API with the access token: `GET /user` for the user's number, `id`, which never changes
 (the `login` may), and `GET /user/emails`, which the scope `user:email` allows, for the primary
 address and whether GitHub verified it. `read` makes an identity of the two answers, and refuses
-answers of other shapes rather than guess.
+answers of other shapes rather than guess. The name shown is the user's `name`, which may be
+`null`, or else the `login`.
 -/
 
 namespace GitHub
@@ -28,8 +29,10 @@ def read : List Json → Except String Identity
     let all ← emails.getArr?
     let primary := all.toList.find? (yes · "primary")
     let email := primary.bind fun e => (e.getObjValAs? String "email").toOption
+    let name := ((user.getObjValAs? String "name").toOption.bind DisplayName.clean).orElse
+      fun _ => (user.getObjValAs? String "login").toOption.bind DisplayName.clean
     return { issuer, subject := toString id, email,
-             emailVerified := email.isSome && primary.any (yes · "verified") }
+             emailVerified := email.isSome && primary.any (yes · "verified"), name }
   | _ => .error "the answers of /user and /user/emails expected"
 
 def provider : Provider where
