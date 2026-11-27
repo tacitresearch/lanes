@@ -149,7 +149,8 @@ at two hours.
   trust policy admits `repo:tacitresearch/lanes:ref:refs/heads/*` and
   `repo:tacitresearch/lanes:pull_request`, and a fork's run gets no OIDC token or secrets).
   Keep **Settings → Actions → General → Fork pull request workflows → Require approval for all
-  external contributors** on as well.
+  external contributors** on as well. A merge queue's group may hold a fork's pull request, so CI
+  runs it on `ubuntu-latest` too.
 - What runs on the machine is code from the repository's own branches: whoever can push a branch
   can run code there, and that code can see what other jobs left in their work directories and
   in the shared packages. That is the same trust as push access.
