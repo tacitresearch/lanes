@@ -155,4 +155,16 @@ theorem find?_eq_or_beforeFirst {p : α → Bool} (hp : p a = true) {l : List α
 
 end BeforeFirst
 
+/-- An element of a window `(l.drop a).take m` of a list is at a position from `a` to below
+`a + m`. -/
+theorem mem_take_drop {α : Type} {l : List α} {a m : Nat} {x : α} (h : x ∈ (l.drop a).take m) :
+    ∃ k, a ≤ k ∧ k < a + m ∧ l[k]? = some x := by
+  obtain ⟨j, hj⟩ := List.mem_iff_getElem?.mp h
+  rw [List.getElem?_take] at hj
+  split at hj
+  · next hjm =>
+    rw [List.getElem?_drop] at hj
+    exact ⟨a + j, by omega, by omega, hj⟩
+  · cases hj
+
 end Lanes
