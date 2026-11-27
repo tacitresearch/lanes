@@ -10,8 +10,9 @@ public import Lanes.Proof.List.Basic
 /-!
 IP addresses and prefixes as Go's `net/netip` reads and writes them: IPv4 in dotted decimal with
 no leading zeros, IPv6 in the text forms of RFC 4291 §2.2 (hex groups of one to four digits in
-either case, one `::`, an IPv4 address in place of the last two groups), and CIDR prefixes
-(RFC 4632). Zones (`fe80::1%eth0`) are refused.
+either case, one `::`, an IPv4 address in place of the last two groups), CIDR prefixes
+(RFC 4632), and which addresses are the host's own (`Addr.isLoopback`). Zones (`fe80::1%eth0`)
+are refused.
 
 `print` writes RFC 5952: lowercase, no leading zeros (`Digits.head_toChars`), `::` for the
 leftmost longest run of two or more zero groups (`longestZeroRun_some`, `longestZeroRun_none`),
@@ -590,5 +591,24 @@ theorem Prefix.parse_print (p : Prefix) : Prefix.parse p.print = some p := by
   simp only [Prefix.parse, hsplit, String.ofList_toList, Ip.parse_print, decimal?_toChars,
     Option.bind_eq_bind, Option.bind_some]
   rw [dite_eq_left le]
+
+/-! ### Loopback -/
+
+/-- Whether the address is the host's own: in `127.0.0.0/8`, `::1`, or in `127.0.0.0/8` mapped
+into IPv6 (`::ffff:127.0.0.1`), as Go's `netip.Addr.IsLoopback` reads it. -/
+def Addr.isLoopback : Addr → Bool
+  | .v4 n => n.val / 2 ^ 24 == 127
+  | .v6 n => n.val == 1 || n.val / 2 ^ 24 == 0xffff7f
+
+theorem isLoopback_v4 (n : Fin (2 ^ 32)) :
+    (Addr.v4 n).isLoopback ↔ 127 * 2 ^ 24 ≤ n.val ∧ n.val < 128 * 2 ^ 24 := by
+  simp only [Addr.isLoopback, beq_iff_eq]
+  omega
+
+theorem isLoopback_v6 (n : Fin (2 ^ 128)) :
+    (Addr.v6 n).isLoopback ↔
+      n.val = 1 ∨ 0xffff7f * 2 ^ 24 ≤ n.val ∧ n.val < 0xffff80 * 2 ^ 24 := by
+  simp only [Addr.isLoopback, Bool.or_eq_true, beq_iff_eq]
+  omega
 
 end Lanes.Ip

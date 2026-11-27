@@ -99,11 +99,11 @@ def wallMs : BaseIO Nat := do
   | .error _ => return 0
 
 /--
-`submit` with the operators' part around it: an operator's request is answered here, from
-`probe`; any other goes to `submit`. Either way its answer is counted, logged and tagged with
-its request id before it is handed on.
+`submit` with the operators' part around it, for a connection from `peer`: an operator's request
+is answered here, from `probe`; any other goes to `submit`. Either way its answer is counted,
+logged and tagged with its request id before it is handed on.
 -/
-def front (ops : Ops) (probe : BaseIO Probe)
+def front (ops : Ops) (probe : BaseIO Probe) (peer : Option Ip.Addr)
     (submit : Request → (Response → BaseIO Unit) → BaseIO Unit) :
     Request → (Response → BaseIO Unit) → BaseIO Unit :=
   if !ops.config.active then submit
@@ -124,7 +124,7 @@ def front (ops : Ops) (probe : BaseIO Probe)
           time_ms := ← wallMs, method := request.method, path := request.path
           status := response.status, duration_us, bytes := response.body.size, requestId := id }
       answer (if config.requestIds then RequestId.tag id response else response)
-    match route? config request with
+    match route? config peer request with
     | some endpoint =>
       let probe ← probe
       let page ← if endpoint == .metrics then ops.page probe else pure ""
