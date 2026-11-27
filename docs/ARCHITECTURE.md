@@ -124,7 +124,7 @@ of power leaves what a death would; that the file system is the model is trusted
 The files carry a label, the application's name for the system and the version of its types
 (`Journal.label`; version 0 is the name alone, as every journal was named before versions). A
 deploy that changes a type keeps the old version's system and reads its files through an
-upgrade (`docs/decisions/new-a-migration-carries-the-kernel-across.md`,
+upgrade (`docs/decisions/D66-a-migration-carries-the-kernel-across.md`,
 `Lanes/Durable/Upgrade.lean`): the start replays them with the old codecs and step
 functions, migrates the kernel (`Migration`, `Lanes/Durable/Migration.lean`), hands over the old
 outputs not yet handed over, saves the result under the new label and begins the journal at

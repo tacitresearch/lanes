@@ -1,4 +1,4 @@
-# D?. A migration carries the old kernel across a deploy, once, with a proof
+# D66. A migration carries the old kernel across a deploy, once, with a proof
 
 *Supersedes the part of D24 and D36 that has a changed system refuse its old files.*
 
