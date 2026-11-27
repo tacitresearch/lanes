@@ -372,6 +372,28 @@ theorem mono (hP : ∀ c, P' c → P c) (hQ : ∀ c, Q c → Q' c) (h : sys.Lead
     sys.LeadsTo env P' Q' :=
   mono_of_invariant (I := fun _ => True) (fun _ _ => trivial) (fun c _ => hP c) (fun c _ => hQ c) h
 
+/-- What each of a family of starts leads to, their union leads to. -/
+theorem exists_left {α : Type*} {P : α → SysState sys → Prop}
+    (h : ∀ x, sys.LeadsTo env (P x) Q) : sys.LeadsTo env (fun c => ∃ x, P x c) Q :=
+  iff.mpr fun r hfair n ⟨x, hx⟩ => iff.mp (h x) r hfair n hx
+
+/-- Leads-to by a measure that goes down: if `P` with measure `n` leads to `Q`, or to `P` with
+a smaller measure, then `P` leads to `Q`. -/
+theorem induction (f : SysState sys → ℕ)
+    (h : ∀ n, sys.LeadsTo env (fun c => P c ∧ f c = n) fun c => Q c ∨ (P c ∧ f c < n)) :
+    sys.LeadsTo env P Q := by
+  refine iff.mpr fun r hfair n hP => ?_
+  suffices hk : ∀ k n, P (r.state n) → f (r.state n) = k → ∃ m, n ≤ m ∧ Q (r.state m) from
+    hk _ n hP rfl
+  intro k
+  induction k using Nat.strong_induction_on with
+  | _ k ih =>
+    intro n hP hf
+    obtain ⟨m, hm, hQ | ⟨hP', hlt⟩⟩ := iff.mp (h k) r hfair n ⟨hP, hf⟩
+    · exact ⟨m, hm, hQ⟩
+    · obtain ⟨m', hm', hQ'⟩ := ih _ hlt m hP' rfl
+      exact ⟨m', Nat.le_trans hm hm', hQ'⟩
+
 end LeadsTo
 
 end System

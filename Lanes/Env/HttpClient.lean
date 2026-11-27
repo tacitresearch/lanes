@@ -70,9 +70,10 @@ private def converse (socket : TCP.Socket.Client) (address : Std.Net.SocketAddre
       return answer
   return none
 
-/-- `Async.race` leaves the loser running, so the socket is closed whoever wins: that fails
-what a call given up on still waits for, and ends its task. -/
-private def exchange (call : Call) (config : Config) : Async (Option Response) := do
+/-- Make one call: its response, or `none` if there is none by the deadline. `Async.race` leaves
+the loser running, so the socket is closed whoever wins: that fails what a call given up on
+still waits for, and ends its task. -/
+def exchange (call : Call) (config : Config) : Async (Option Response) := do
   let some addr := Std.Net.IPv4Addr.ofString call.host | return none
   let some request := call.request.wire call.host | return none
   let socket ← TCP.Socket.Client.mk

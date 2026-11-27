@@ -45,7 +45,7 @@ def escapeChar (acc : String) (c : Char) : String :=
   else acc.push c
 
 def escape (s : String) (acc : String := "") : String :=
-  if s.any needsEscape then s.foldl escapeChar acc else acc ++ s
+  if s.contains needsEscape then s.foldl escapeChar acc else acc ++ s
 
 def renderString (s : String) (acc : String := "") : String :=
   (escape s (acc.push '"')).push '"'
