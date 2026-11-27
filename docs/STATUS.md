@@ -59,7 +59,9 @@ What is being worked on now, and why: `docs/PLAN.md`.
   trust store is `SSL_CERT_FILE` when it is set. The C declares the functions of the OpenSSL the
   toolchain links, 4.1.0, and `scripts/tls-declarations.py` checks them against the system's
   headers, 3.0 on Ubuntu 24.04: 4.1's headers are generated from templates by its own build.
-- The PostgreSQL client connects to IPv4 addresses, not names; it has no client certificates,
+- The PostgreSQL client resolves a name to its first IPv4 address at each connect, and takes
+  IPv6 addresses but no IPv6 address of a name; it has no Unix sockets, no `PGSERVICE` or
+  `~/.postgresql/root.crt`, and does not check a password file's permissions. It has no client certificates,
   no CRL or OCSP check, and its direct TLS is tested against `openssl s_server` only. It has no
   `COPY`, `LISTEN`/`NOTIFY`, binary formats, named statements or cancellation; the pool does not
   watch idle connections, and `Store.handler` does not use it. A message is decoded through a

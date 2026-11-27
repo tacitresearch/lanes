@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
+public import Lanes.Lib.Net.Ip
 public import Lanes.Lib.Postgres.Conn
 
 /-!
@@ -34,41 +35,28 @@ inductive SslMode where
   | verifyFull
   deriving DecidableEq, Repr, Hashable
 
-/-- A host as the client reaches it: an IPv4 address, an IPv6 address, or a name, resolved at
-each connect. -/
+/-- A host as the client reaches it: an IP address, or a name, resolved at each connect. -/
 inductive Address where
-  | v4 (a b c d : UInt8)
-  | v6 (literal : String)
+  | ip (a : Ip.Addr)
   | name (name : String)
   deriving DecidableEq, Repr
 
 namespace Address
 
-/-- A decimal number from 0 to 255, written without a leading zero. -/
-def octet (s : String) : Option UInt8 :=
-  match s.toList with
-  | [] => none
-  | '0' :: _ :: _ => none
-  | cs => if cs.all Char.isDigit then (s.toNat?.filter (· < 256)).map Nat.toUInt8 else none
+def localhost : Ip.Addr := .v4 ⟨127 * 2 ^ 24 + 1, by decide⟩
 
-def ofName (host : String) : Address :=
-  if host.contains ':' then .v6 host
-  else if host.toLower == "localhost" || host.toLower == "localhost." then .v4 127 0 0 1
-  else .name host
-
-/-- `localhost` is `127.0.0.1`, as RFC 6761 lets a client decide without asking DNS. -/
+/-- An address as `Ip.parse` reads it, and `localhost` as `127.0.0.1`, which RFC 6761 lets a
+client decide without asking DNS. -/
 def of (host : String) : Address :=
-  match host.splitOn "." with
-  | [a, b, c, d] =>
-    match octet a, octet b, octet c, octet d with
-    | some a, some b, some c, some d => .v4 a b c d
-    | _, _, _, _ => ofName host
-  | _ => ofName host
+  match Ip.parse host with
+  | some a => .ip a
+  | none =>
+    if host.toLower == "localhost" || host.toLower == "localhost." then .ip localhost
+    else .name host
 
-/-- An address on this machine: `127.0.0.0/8` or `::1`. A name never is. -/
+/-- An address on this machine (`Ip.Addr.isLoopback`). A name never is. -/
 def loopback : Address → Bool
-  | .v4 a _ _ _ => a == 127
-  | .v6 literal => literal == "::1"
+  | .ip a => a.isLoopback
   | .name _ => false
 
 end Address

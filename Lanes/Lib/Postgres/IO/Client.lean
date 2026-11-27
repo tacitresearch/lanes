@@ -203,12 +203,22 @@ def close (s : Session) : Async Unit := do
 
 end Session
 
+def socketAddress (a : Ip.Addr) (port : UInt16) : Option Std.Net.SocketAddress :=
+  match a with
+  | .v4 n =>
+    match Digits.split 256 4 n.val with
+    | [a, b, c, d] => some (.v4 ⟨.ofParts a.toUInt8 b.toUInt8 c.toUInt8 d.toUInt8, port⟩)
+    | _ => none
+  | .v6 n =>
+    match (Digits.split 65536 8 n.val).map Nat.toUInt16 with
+    | [a, b, c, d, e, f, g, h] => some (.v6 ⟨.ofParts a b c d e f g h, port⟩)
+    | _ => none
+
 /-- Where `host` is now: a name is resolved at each call, to its first IPv4 address, so that a
 new connection follows it to a new address. -/
 def resolve (host : String) (port : UInt16) : Async (Option Std.Net.SocketAddress) := do
   match Address.of host with
-  | .v4 a b c d => return some (.v4 ⟨.ofParts a b c d, port⟩)
-  | .v6 literal => return (Std.Net.IPv6Addr.ofString literal).map fun addr => .v6 ⟨addr, port⟩
+  | .ip a => return socketAddress a port
   | .name name =>
     let found ← DNS.getAddrInfo name "" (some .ipv4)
     return found.toList.findSome? fun

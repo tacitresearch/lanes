@@ -29,18 +29,21 @@ def failed : Option Settings → Bool
   | some _ => false
 
 def defaultTests : List (String × Bool) :=
-  let local_ := ["127.0.0.1", "127.3.2.1", "::1", "localhost", "LocalHost", "localhost."]
+  let local_ := ["127.0.0.1", "127.3.2.1", "::1", "0:0:0:0:0:0:0:1", "::ffff:127.0.0.1",
+    "localhost", "LocalHost", "localhost."]
   let remote := ["10.0.0.5", "db.example.com", "lanes.abc.eu-west-1.rds.amazonaws.com",
     "localhost.example.com", "127.0.0.1.nip.io", "0127.0.0.1", "127.0.0.256", "127.1", "::2",
-    "128.0.0.1", ""]
+    "128.0.0.1", "::ffff:10.0.0.1", ""]
   let conn : Conn.Config := { user := "lanes", database := "lanes" }
   [ ("postgres settings: no TLS by default to this machine: 127.0.0.0/8, ::1, localhost",
       local_.all fun h => SslMode.defaultFor h == .disable),
     ("postgres settings: TLS with full verification by default to any other host",
       remote.all fun h => SslMode.defaultFor h == .verifyFull),
     ("postgres settings: localhost is reached at 127.0.0.1 without DNS; a name is resolved",
-      Address.of "localhost" == .v4 127 0 0 1 && Address.of "10.0.0.5" == .v4 10 0 0 5
-        && Address.of "db.example.com" == .name "db.example.com" && Address.of "::1" == .v6 "::1"),
+      Address.of "localhost" == Address.of "127.0.0.1" && Address.of "LOCALHOST." == Address.of "127.0.0.1"
+        && Address.of "10.0.0.5" == .ip (.v4 ⟨10 * 2 ^ 24 + 5, by decide⟩)
+        && Address.of "db.example.com" == .name "db.example.com"
+        && Address.of "::1" == .ip (.v6 ⟨1, by decide⟩)),
     ("postgres settings: a client's configuration takes the default for its host, and channel binding where offered",
       ({ host := "127.0.0.1", conn } : Client.Config).sslmode == .disable
         && ({ host := "db.example.com", conn } : Client.Config).sslmode == .verifyFull

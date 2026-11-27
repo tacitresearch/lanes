@@ -18,7 +18,7 @@ roots = ["TodoDb", "TodoDb.Proofs", "TodoDb.Proofs.Axioms"]
 name = "check"
 root = "Check"
 
-# The system on a real PostgreSQL, when LANES_POSTGRES names one.
+# The system on a real PostgreSQL, when PGHOST names one.
 [[lean_exe]]
 name = "todoLive"
 root = "Live"
