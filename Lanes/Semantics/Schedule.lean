@@ -32,12 +32,17 @@ with no mail is not obliged to start again. A shard restarts its actors from the
 the start arms every job's timer again (`Schedule.armed`); what is not proved is that a start
 comes.
 
+Beside a system (`Schedule.attach`) the end is a message to it, and fairness delivers it
+(`System.Run.Fair.routed_right`) when the links to it lose nothing and its actors are not
+crashed and never stop.
+
 ## Main statements
 
 - `Schedule.held_leaves`: a job held that is not periodic stops being held.
 - `Schedule.held_ends`: in a fair run, its end is handed over.
 - `Schedule.every_noticed`: a periodic job held is noticed, or stops being held.
 - `Schedule.attach_held_leaves`: the same beside any system.
+- `Schedule.attach_end_handled`: beside any system, the end is handled by that system.
 -/
 
 @[expose] public section
@@ -446,5 +451,57 @@ theorem attach_held_leaves {τ : Signature} (sys : System τ) (config : Config K
     (P := fun c : SysState (system (K := K) (P := P) config) =>
       c.up () = true ∧ ∃ j, entry (c.state ()).jobs key = some j ∧ j.work.periodic = false)
     (Q := fun s _ => key ∉ keys (s ()).jobs) (held_leaves config (env := env.left) hcrash key)
+
+/-- Beside any system, the end of every job held that is not periodic is handled by that system:
+in a fair run in which the scheduler is not crashed, a job held while it is up has its answer or
+its notice delivered, at a later position, to the actor of `sys` that takes it. The links from
+the scheduler to `sys` must lose nothing, and the actors of `sys` must not be crashed and never
+stop: a loss, a crash or a stop can take the end out of flight. -/
+theorem attach_end_handled {τ : Signature} (sys : System τ) (config : Config K P A)
+    (use : Use τ K P A) {env : EnvModel (joinSig (sig K P A) τ)}
+    (hcrash : env.mayCrash (.inl ()) = false)
+    (hlossless : ∀ j, (env.link (some (.inl ())) (.inr j)).lossy = false)
+    (hcrashes : ∀ j, env.mayCrash (.inr j) = false)
+    (hruns : ∀ j s msg, ((sys.actor j).step s msg).2.any Effect.isStop = false)
+    (hrecovers : ∀ j s, ((sys.actor j).recover s).2.any Effect.isStop = false) (key : K)
+    {r : (attach sys config use).Run env} (hfair : r.Fair) {n : ℕ}
+    (hup : (r.state n).up (.inl ()) = true) {j : Job K P}
+    (hj : entry ((r.state n).state (.inl ()) : State K P).jobs key = some j)
+    (hp : j.work.periodic = false) :
+    ∃ m x, n ≤ m ∧ ((∃ o, x = use.answer key o) ∨ ∃ p t, x = use.notice key p t) ∧
+      (r.event m = some (.deliver ⟨some (.inl ()), .inr (sys.accept x).1, (sys.accept x).2⟩) ∨
+        r.event m =
+          some (.duplicate ⟨some (.inl ()), .inr (sys.accept x).1, (sys.accept x).2⟩)) := by
+  obtain ⟨m, hm, hgone⟩ := System.LeadsTo.iff.mp (attach_held_leaves sys config use hcrash key)
+    r hfair n ⟨hup, j, hj, hp⟩
+  have hin : key ∈ keys ((r.state n).state (.inl ()) : State K P).jobs :=
+    mem_keys.mpr ⟨j, (entry_some hj).1, (entry_some hj).2⟩
+  have hleaves : ∃ k, n ≤ k ∧ key ∈ keys ((r.state k).state (.inl ()) : State K P).jobs ∧
+      key ∉ keys ((r.state (k + 1)).state (.inl ()) : State K P).jobs := by
+    induction m, hm using Nat.le_induction with
+    | base => exact absurd hin hgone
+    | succ m hm ih =>
+      by_cases hin' : key ∈ keys ((r.state m).state (.inl ()) : State K P).jobs
+      · exact ⟨m, hm, hin', hgone⟩
+      · exact ih hin'
+  obtain ⟨k, hk, hin', hout⟩ := hleaves
+  obtain ⟨j', hj'⟩ := Option.ne_none_iff_exists'.mp (entry_eq_none.not.mpr (not_not.mpr hin'))
+  cases hev : r.event k with
+  | none => exact absurd (System.Run.step_none hev ▸ hin') hout
+  | some ev =>
+    rcases SysState.step_left_state (System.Run.step_some hev) () with
+      hs | ⟨msg, hdeed, hs⟩ | ⟨-, hs⟩
+    · exact absurd (hs ▸ hin') hout
+    · obtain ⟨out, x, hemit, hx, hend⟩ : ∃ out x, (.emit out : Eff K P A) ∈
+          (step config ((r.state k).state (.inl ())) msg).2 ∧ use.wiring.toRight out = some x ∧
+          ((∃ o, x = use.answer key o) ∨ ∃ p t, x = use.notice key p t) := by
+        rcases ends_of_leaves (config := config) hj' (entry_eq_none.mpr (hs ▸ hout)) with
+          ⟨o, ho⟩ | ⟨t, ho⟩
+        · exact ⟨_, _, ho, rfl, .inl ⟨o, rfl⟩⟩
+        · exact ⟨_, _, ho, rfl, .inr ⟨_, t, rfl⟩⟩
+      obtain ⟨m, hm, h⟩ := hfair.routed_right hev hdeed hemit hx (hlossless _) (hcrashes _)
+        (hruns _) (hrecovers _)
+      exact ⟨m, x, by omega, hend, h⟩
+    · exact absurd (hs ▸ hin') hout
 
 end Lanes.Schedule
