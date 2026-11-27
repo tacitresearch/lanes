@@ -35,6 +35,12 @@ import Lanes.Semantics
 #guard_msgs in #print axioms Lanes.Batch.due_iff
 
 -- Lanes.Runtime.KernelSound
+/-- info: 'Lanes.Kernel.exec_inductive' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.exec_inductive
+
+/-- info: 'Lanes.Kernel.exec_cell_reachable' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.exec_cell_reachable
+
 /-- info: 'Lanes.Kernel.abs_boot' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Kernel.abs_boot
 

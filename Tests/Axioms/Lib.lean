@@ -223,6 +223,106 @@ import Lanes.Semantics
 /-- info: 'Lanes.Url.normalize_normalize' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Url.normalize_normalize
 
+-- Lanes.Lib.Postgres.Bytes
+/-- info: 'Lanes.Postgres.inverse_byte' does not depend on any axioms -/
+#guard_msgs in #print axioms Lanes.Postgres.inverse_byte
+
+/-- info: 'Lanes.Postgres.inverse_u16' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.inverse_u16
+
+/-- info: 'Lanes.Postgres.inverse_u32' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.inverse_u32
+
+/-- info: 'Lanes.Postgres.inverse_str' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.inverse_str
+
+/-- info: 'Lanes.Postgres.inverse_value' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.inverse_value
+
+/-- info: 'Lanes.Postgres.take_append' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Lanes.Postgres.take_append
+
+/-- info: 'Lanes.Postgres.untilNul_append' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Lanes.Postgres.untilNul_append
+
+/-- info: 'Lanes.Postgres.many_append' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Lanes.Postgres.many_append
+
+/-- info: 'Lanes.Postgres.inverse_list16' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.inverse_list16
+
+/-- info: 'Lanes.Postgres.getTerminated_append' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.getTerminated_append
+
+/-- info: 'Lanes.Postgres.whole_append' depends on axioms: [propext, Classical.choice] -/
+#guard_msgs in #print axioms Lanes.Postgres.whole_append
+
+-- Lanes.Lib.Postgres.ConnSound
+/-- info: 'Lanes.Postgres.Conn.run_fifo' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.Conn.run_fifo
+
+/-- info: 'Lanes.Postgres.Conn.step_fifo' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.Conn.step_fifo
+
+/-- info: 'Lanes.Postgres.Conn.outcome_committed' depends on axioms: [propext, Classical.choice] -/
+#guard_msgs in #print axioms Lanes.Postgres.Conn.outcome_committed
+
+/-- info: 'Lanes.Postgres.Conn.step_committed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.Conn.step_committed
+
+/-- info: 'Lanes.Postgres.Conn.step_query' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.Conn.step_query
+
+/-- info: 'Lanes.Postgres.Conn.valid_decode' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.Conn.valid_decode
+
+/-- info: 'Lanes.Postgres.Conn.step_closed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.Conn.step_closed
+
+/-- info: 'Lanes.Postgres.Conn.step_lost' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.Conn.step_lost
+
+/-- info: 'Lanes.Postgres.Conn.run_queue' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.Conn.run_queue
+
+/-- info: 'Lanes.Postgres.Conn.start_queue' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.Conn.start_queue
+
+/-- info: 'Lanes.Postgres.Conn.step_buffer' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.Conn.step_buffer
+
+/-- info: 'Lanes.Postgres.Conn.onMessage_saslFinal' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.Conn.onMessage_saslFinal
+
+/-- info: 'Lanes.Postgres.Conn.onMessage_sasl_authOk' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.Conn.onMessage_sasl_authOk
+
+/-- info: 'Lanes.Postgres.Conn.onMessage_opened' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.Conn.onMessage_opened
+
+-- Lanes.Lib.Postgres.MessageSound
+/-- info: 'Lanes.Postgres.Backend.read_encode' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.Backend.read_encode
+
+/-- info: 'Lanes.Postgres.Backend.decodeBody_body' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.Backend.decodeBody_body
+
+/-- info: 'Lanes.Postgres.Frontend.decode_encode' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.Frontend.decode_encode
+
+/-- info: 'Lanes.Postgres.Frame.read_more' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.Frame.read_more
+
+/-- info: 'Lanes.Postgres.Frame.read_done' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.Frame.read_done
+
+-- Lanes.Lib.Postgres.Scram
+/-- info: 'Lanes.Postgres.Scram.respond_nonce' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.Scram.respond_nonce
+
+/-- info: 'Lanes.Postgres.Scram.respond_iterations' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.Scram.respond_iterations
+
 -- Lanes.Lib.RateLimit
 /-- info: 'Lanes.RateLimit.credit_allow_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.RateLimit.credit_allow_le

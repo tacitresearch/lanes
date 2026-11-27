@@ -22,12 +22,14 @@ proved function tells it to.
 | The kernel | `Lanes/Runtime/{Kernel,KernelSound,KernelTimers,Wave}.lean` | `Kernel.exec_reachable`, `Kernel.exec_outputs`, `Kernel.exec_wellFormed`, `Kernel.runWaves_eq` |
 | The shell | `Lanes/Runtime/IO/Shell.lean`, `Lanes/Runtime/{Batch,Mailbox,MailboxSound}.lean` | `Batch.run_kernel`, `Batch.run_sound`, `Mailbox.batch_since_take`; the shell itself is trusted |
 | Journal, snapshots, disk | `Lanes/Durable/{Journal,Snapshot,Disk,Frame}.lean`, `Lanes/Durable/IO/Journal.lean` | `Journal.open?_cut`, `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Journal.Disk.Holds.save_crash` |
+| Migrations | `Lanes/Durable/{Migration,Upgrade}.lean` | `Migration.inv_exec`, `Journal.Upgrade.begin_crash`, `Journal.Upgrade.holds`, `Journal.Upgrade.inv_load` |
 | Joins | `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`, `Lanes/Semantics/FairJoin.lean` | `System.Reachable.left`, `SysState.run_left`, `System.Run.Fair.left` |
 | Shards and the transport | `Lanes/Runtime/{Shard,ShardSound,ShardsSound}.lean`, `Lanes/Net/{Courier,CourierSound}.lean`, `Lanes/Net/IO/{Peers,Node}.lean` | `System.ShardsReachable.unsharded`, `Peers.Courier.written_sublist_sent` |
 | The gate and the HTTP server | `Lanes/Web/Http/{Gate,Front,FrontSound,Waiting,Conn,ConnSound}.lean`, `Lanes/Semantics/Front.lean`, `Lanes/Web/IO/Server.lean` | `Http.served_answered_le_arrived`, `Http.served_pending_answered`, `Http.Waiting.exec_answered`, `Http.Conn.run_writes` |
 | Other adapters | `Lanes/Outside/Basic.lean`, `Lanes/Outside/IO/Clock.lean`, `Lanes/Web/IO/Client.lean`, `Lanes/Web/Http/{Grammar,Wire,WireSound}.lean` | `Response.read_wire`, `Request.fields_framing`; conformance tests |
 | Models of external services | `Lanes/Outside/{Rpc,Idempotent,Events,ObjectStore}.lean`, `Lanes/Outside/Effects/`, `Lanes/Proof/Outputs.lean` | `Idempotent.at_most_once`, `Rpc.answered_le_called`, `Events.deliveries_le`, `ObjectStore.read_sent`, `System.Emits.outputs`; that a real service conforms is trusted |
 | Signature Version 4 and the S3 client | `Lanes/Web/Http/{SigV4,SigV4Sound}.lean`, `Lanes/Web/S3/{Basic,Xml}.lean`, `Lanes/Web/IO/S3.lean` | `SigV4.target_sign`, `SigV4.sortQuery_sorted`, `SigV4.canonicalHeaders_sorted`, `SigV4.encode_chunks`; signatures tested against AWS's vectors, the client against a fake S3; its IO trusted |
+| PostgreSQL and the store model | `Lanes/Lib/Postgres/{Bytes,Message,MessageSound,Scram,Conn,ConnSound,Table}.lean`, `Lanes/Lib/Postgres/IO/Client.lean`, `Lanes/Outside/Store/{Basic,Sound}.lean` | `Backend.read_encode`, `Frontend.decode_encode`, `Conn.run_fifo`, `Conn.step_committed`, `Conn.step_query`, `Store.write_skew`, `Store.lost_commit_either`; the IO is trusted, and that the server behaves like the model is a premise |
 | Jobs: work outside a step | `Lanes/Behaviours/Jobs/{Basic,Sound}.lean`, `Lanes/Semantics/Jobs.lean`, `Lanes/Behaviours/Jobs/IO/Pool.lean` | `Jobs.answered_le_handled`, `Jobs.retry_same`, `Jobs.submitted_answered`; the pool is trusted |
 | Web | `Lanes/Web/Http/{Basic,Route,RouteSound,Cookie,CookieSound}.lean`, `Lanes/Web/Html/`, `Lanes/Web/Auth/` | `Html.lex_render`, `Html.safeUrl_scheme`, `Http.dispatch_link`, `Http.parseForm_encodeForm`, `Http.readSetCookie_header`, `Auth.verify_eq_some`, `Auth.checkForm_other` |
 | The checker | `Lanes/Check/`, `Lanes/Semantics/{Monitor,MonitorSound}.lean` | `Check.search_sound`, `Check.system_sound_of_respects`, `Check.refines_traces` |
@@ -121,6 +123,24 @@ the process dies anywhere in an append or a save, the files load as the kernel t
 death left (`Journal.Disk.Torn.mend`), so this holds over any number of starts, saves and deaths.
 `Lanes/Durable/IO/Journal.lean` performs the writes, each synced with `fsync` before the next, so a loss
 of power leaves what a death would; that the file system is the model is trusted.
+
+The files carry a label, the application's name for the system and the version of its types
+(`Journal.label`; version 0 is the name alone, as every journal was named before versions). A
+deploy that changes a type keeps the old version's system and reads its files through an
+upgrade (`docs/decisions/D66-a-migration-carries-the-kernel-across.md`,
+`Lanes/Durable/Upgrade.lean`): the start replays them with the old codecs and step
+functions, migrates the kernel (`Migration`, `Lanes/Durable/Migration.lean`), hands over the old
+outputs not yet handed over, saves the result under the new label and begins the journal at
+that mark, whose index is the old history's length. Dying anywhere in those writes, the next
+start gives the same migrated kernel (`Journal.Upgrade.begin_crash`). `Disk.Holds` and
+`Disk.Torn` take the kernel a history starts from, boot or a migrated kernel, and the files after
+a migration are those of a running shard that started there (`Journal.Upgrade.holds`), so the
+crash theorems go on. What the proofs of the new version still say is what is inductive: a
+`Migration` carries an invariant of each new actor that its steps and restarts keep, and the
+proof that every state an old actor reaches migrates into it; it then holds of every actor in
+every state the new shard reaches (`Migration.inv_exec`, `Kernel.exec_inductive`) and at every
+later start (`Journal.Upgrade.inv_load`). An invariant proved only from boot, and refinement,
+do not carry over.
 
 ## Composition: joins, shards and the transport
 
@@ -239,6 +259,27 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   each order at most once that way (`Shop.charged_at_most_once`). That a real service does only
   what its model allows is trusted; the S3 client's runs against a fake are checked against the
   object store's, and no adapter talks to a real service yet.
+- **PostgreSQL** (`Lanes/Lib/Postgres/`): the frontend/backend protocol 3.0 in Lean, not libpq
+  (`docs/decisions/D68-postgres-protocol-in-lean.md`): start-up with trust, cleartext (only when
+  allowed), MD5 or SCRAM-SHA-256; the extended query protocol with parameters, text both ways;
+  errors; transactions; plain TCP. The messages are proved to read back as written
+  (`Backend.read_encode`, `Frontend.decode_encode`) and tested against recorded sessions of
+  `psql` and of this client. A connection is a pure `Postgres.Conn.step` (`Lanes/Lib/Postgres/Conn.lean`), as
+  the HTTP server's is: replies answer requests in the order sent (`Conn.run_fifo`), a request is
+  sent only to an open connection and is read by the server as sent (`Conn.step_query`,
+  `Conn.valid_decode`), `committed` is answered only for a `COMMIT` the server committed from a
+  transaction in progress (`Conn.step_committed`), the server is trusted after SCRAM only once
+  it proved it knows the password (`Conn.onMessage_saslFinal`), and a connection that ends
+  answers every request in flight `unknown` (`Conn.step_lost`); model-checked first
+  (`Tests/PostgresConn.lean`). The IO (`Lanes/Lib/Postgres/IO/Client.lean`) only performs.
+- **A transactional store** (`Lanes/Outside/Store/Basic.lean`): what a store may answer at read
+  committed or serializable, as an `Outside` that keeps every database the answers are consistent
+  with, so that a `COMMIT` whose answer is lost has both outcomes, and its effect may appear
+  later. Its litmus runs are theorems (`Lanes/Outside/Store/Sound.lean`: `Store.write_skew`,
+  `Store.lost_update`, `Store.lost_commit_either`, `Store.lost_commit_later`). A table of
+  PostgreSQL runs it (`Lanes/Lib/Postgres/Table.lean`, `Postgres.Store.handler`); that the server
+  behaves like the model at the level chosen is the premise of a theorem proved against it,
+  tested on recorded runs (`Tests/PostgresLive.lean`). `examples/todo-db` is checked against it.
 - **Jobs** (`Lanes/Behaviours/Jobs/Basic.lean`): work that must not run in a
   step, an outbound call or slow pure work, is submitted to the jobs actor under a key the
   requester chooses, beside the system that submits it (`Jobs.attach`). The actor dispatches
