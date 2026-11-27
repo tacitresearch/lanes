@@ -434,6 +434,119 @@ theorem mem_settle_net {c : SysState sys} {i : σ.Id} {r : sys.State i × List (
   · exact .inl h
   · exact .inr (Effect.mem_sends.mp h).1
 
+/-! What is in flight ahead of a message (`beforeFirst e c.net`): a step keeps the message in
+flight unless it hands it over or its receiver goes down, and lets nothing in ahead of it. -/
+
+section Ahead
+
+variable {e : Envelope σ}
+
+theorem down_ahead {c : SysState sys} {i : σ.Id} (he : e ∈ c.net)
+    (hup : (c.down env i).up e.dst = true) :
+    e ∈ (c.down env i).net ∧ (beforeFirst e (c.down env i).net).Sublist (beforeFirst e c.net) := by
+  have hi : e.dst ≠ i := by
+    rintro h
+    simp [down, h] at hup
+  let keep : Envelope σ → Bool := fun x => decide (x.dst ≠ i) || (env.link x.src x.dst).lossy
+  have hkeep : keep e = true := by simp [keep, hi]
+  refine ⟨List.mem_filter.mpr ⟨he, hkeep⟩, ?_⟩
+  show (beforeFirst e (c.net.filter keep)).Sublist _
+  rw [beforeFirst_filter hkeep]
+  exact List.filter_sublist
+
+theorem settle_ahead {c : SysState sys} {i : σ.Id} {r : sys.State i × List (Effect σ i)}
+    (he : e ∈ c.net) (hup : (c.settle env i r).up e.dst = true) :
+    e ∈ (c.settle env i r).net ∧
+      (beforeFirst e (c.settle env i r).net).Sublist (beforeFirst e c.net) := by
+  have he' : e ∈ c.net ++ Effect.sends i r.2 := List.mem_append_left _ he
+  rw [settle_eq] at hup ⊢
+  cases hstop : r.2.any Effect.isStop
+  · simp only [hstop, Bool.false_eq_true, ↓reduceIte] at hup ⊢
+    exact ⟨he', by rw [beforeFirst_append he]; exact List.Sublist.refl _⟩
+  · simp only [hstop, ↓reduceIte] at hup ⊢
+    obtain ⟨hmem, hsub⟩ := down_ahead he' hup
+    exact ⟨hmem, by rwa [beforeFirst_append he] at hsub⟩
+
+/-- Delivering another message takes it out of what is ahead of `e`, if it was there. -/
+theorem deliver_ahead {c c' : SysState sys} {x : Envelope σ}
+    (hstep : c.step env (.deliver x) = some c') (hx : x ≠ e) (he : e ∈ c.net)
+    (hup : c'.up e.dst = true) :
+    e ∈ c'.net ∧ (beforeFirst e c'.net).Sublist ((beforeFirst e c.net).erase x) := by
+  obtain ⟨-, -, rfl⟩ := step_deliver.mp hstep
+  have he' : e ∈ c.net.erase x := (List.mem_erase_of_ne (Ne.symm hx)).mpr he
+  obtain ⟨hmem, hsub⟩ := settle_ahead (c := { c with net := c.net.erase x }) (i := x.dst)
+    (r := (sys.actor x.dst).step (c.state x.dst) x.msg) he' hup
+  rw [beforeFirst_erase hx] at hsub
+  exact ⟨hmem, hsub⟩
+
+/-- Every step but one that hands `e` over keeps it in flight, on a link that does not lose it,
+while its receiver stays up, and lets nothing in ahead of it. -/
+theorem step_ahead {c c' : SysState sys} {ev : Event σ} (hstep : c.step env ev = some c')
+    (he : e ∈ c.net) (hlossless : (env.link e.src e.dst).lossy = false)
+    (hup : c'.up e.dst = true) (hdeliver : ev ≠ .deliver e) (hdup : ev ≠ .duplicate e) :
+    e ∈ c'.net ∧ (beforeFirst e c'.net).Sublist (beforeFirst e c.net) := by
+  cases ev with
+  | input x =>
+    obtain rfl := step_input.mp hstep
+    exact ⟨List.mem_append_left _ he, by rw [beforeFirst_append he]; exact List.Sublist.refl _⟩
+  | deliver x =>
+    obtain ⟨hmem, hsub⟩ := deliver_ahead hstep (fun h => hdeliver (h ▸ rfl)) he hup
+    exact ⟨hmem, hsub.trans (List.erase_sublist ..)⟩
+  | duplicate x =>
+    obtain ⟨-, -, -, rfl⟩ := step_duplicate.mp hstep
+    exact settle_ahead he hup
+  | drop x =>
+    obtain ⟨hlossy, -, rfl⟩ := step_drop.mp hstep
+    have hx : x ≠ e := by
+      rintro rfl
+      simp [hlossless] at hlossy
+    refine ⟨(List.mem_erase_of_ne (Ne.symm hx)).mpr he, ?_⟩
+    rw [beforeFirst_erase hx]
+    exact List.erase_sublist ..
+  | timeout i msg =>
+    obtain ⟨-, -, rfl⟩ := step_timeout.mp hstep
+    exact settle_ahead (c := { c with timers := _ }) he hup
+  | output out =>
+    obtain ⟨-, rfl⟩ := step_output.mp hstep
+    exact ⟨he, List.Sublist.refl _⟩
+  | crash i =>
+    obtain ⟨-, -, rfl⟩ := step_crash.mp hstep
+    exact down_ahead he hup
+  | start i =>
+    obtain ⟨-, -, rfl⟩ := step_start.mp hstep
+    exact settle_ahead (c := { c with up := _ }) he hup
+
+/-- The message a delivery of which brings `e` nearer: the oldest on its link if the link is
+ordered, else `e` itself. While nothing ahead of `e` changes, it stays the same. -/
+def nextOnLink (env : EnvModel σ) (c : SysState sys) (e : Envelope σ) : Envelope σ :=
+  if (env.link e.src e.dst).ordered then ((beforeFirst e c.net).find? e.sameLink).getD e else e
+
+/-- `nextOnLink` is `e` or ahead of it, on its link, and deliverable. -/
+theorem nextOnLink_spec {c : SysState sys} {e : Envelope σ} (he : e ∈ c.net) :
+    (c.nextOnLink env e = e ∨ c.nextOnLink env e ∈ beforeFirst e c.net) ∧
+      (c.nextOnLink env e).dst = e.dst ∧ c.deliverable env (c.nextOnLink env e) = true := by
+  have hself : e.sameLink e = true := by simp [Envelope.sameLink]
+  unfold nextOnLink
+  by_cases hord : (env.link e.src e.dst).ordered = true
+  · simp only [hord, ↓reduceIte]
+    cases hfind : (beforeFirst e c.net).find? e.sameLink with
+    | none =>
+      refine ⟨.inl rfl, rfl, ?_⟩
+      simp [SysState.deliverable, hord, find?_eq_or_beforeFirst hself he, hfind]
+    | some h =>
+      have hlink := List.find?_some hfind
+      simp only [Envelope.sameLink, Bool.and_eq_true, decide_eq_true_eq] at hlink
+      obtain ⟨hsrc, hdst⟩ := hlink
+      have hsame : h.sameLink = e.sameLink := by
+        funext x
+        simp [Envelope.sameLink, hsrc, hdst]
+      refine ⟨.inr (List.mem_of_find?_eq_some hfind), hdst.symm, ?_⟩
+      simp [SysState.deliverable, ← hsrc, ← hdst, hord, hsame, find?_eq_or_beforeFirst hself he,
+        hfind]
+  · simp [hord, SysState.deliverable, he]
+
+end Ahead
+
 end SysState
 
 /-- A message from outside in flight is an input the system accepted. -/

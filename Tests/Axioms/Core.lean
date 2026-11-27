@@ -9,3 +9,10 @@ import Lanes.Semantics
 -- Lanes.Core.Inspect
 /-- info: 'Lanes.SysState.step_of_mem_successors' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.SysState.step_of_mem_successors
+
+-- Lanes.Core.Run
+/-- info: 'Lanes.SysState.step_ahead' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SysState.step_ahead
+
+/-- info: 'Lanes.SysState.nextOnLink_spec' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SysState.nextOnLink_spec
