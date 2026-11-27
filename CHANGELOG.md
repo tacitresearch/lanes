@@ -37,6 +37,7 @@ under Unreleased (`CONTRIBUTING.md`).
 - Every request that arrives at a served or fronted system is answered, in a fair run in which the gate does not crash and the link from outside to the gate loses nothing (`Http.served_arrival_answered`, `Http.fronted_arrival_answered`), so a request whose id is used once is answered exactly once; this was model-checked only. It rests on `System.Run.Fair.delivered`: in a fair run a message on a link that loses nothing, to an actor that stays up, is handed to it.
 - `System.Implements.history`: every run of a system that implements a service has a sequential history of the service's acts (`Service.Act`, `Service.play`) that produces each output, takes each input after it arrives and respects real-time order, so statements about the service's functions carry to the system's runs. `examples/rookery` uses it for three of its claims (`Rookery.output_secret`, `Rookery.output_read`, `Rookery.deleted_unread`).
 - A test kit, `import Lanes.Testing`, which `import Lanes` does not include: a fake S3 that checks every signature as S3 would, a fake identity provider of OpenID Connect and of OAuth 2.0 with a user API (`Testing.OAuth.Fake`, `Testing.OAuth.signIn`), a scripted browser that keeps cookies (`Testing.Browser`), a server of a handler (`Testing.listen`) and readers of a response. The fakes that `Tests/S3.lean` and `Tests/OAuth.lean` held moved there.
+- Oracles in one place, `oracles/`, one folder per reference implementation with its pin (`oracles/README.md`). Pure oracles compare ours with a reference on generated inputs (`lake exe lanesOracle`, now for Python references too): new are the S3 XML reader against Go's `encoding/xml`, the metrics page against Prometheus's `expfmt`, Signature Version 4 against botocore, JWS against jwcrypto, and SES's address check against `net/mail` (`lake exe oracle` in `integrations/aws`). Service oracles run our clients against moto's S3 and SES and a PostgreSQL 16 of their own, check each run against its model with `Outside.allows`, and record it for `lake test` to check again (`oracles/moto/run.sh`, `oracles/postgres/run.sh`, `lake exe lanesServiceOracle`); CI runs them nightly (`.github/workflows/services.yml`). `lanes lint` checks that every protocol module and model has an oracle or a reason in the manifest (rule `oracles`).
 
 ### Changed
 
@@ -56,6 +57,11 @@ under Unreleased (`CONTRIBUTING.md`).
 - `Journal.Disk.Holds`, `Journal.Disk.Torn`, `Journal.Kept` and `Journal.memo` take the kernel a history starts from (`start`, boot by default), and their theorems hold for any; `Journal.Kept.saved` says a history without a snapshot starts at boot. `Journal.Store.open` needs `Hashable` of the identities, and a refused journal of an older version without an upgrade is reported with its version.
 - `Clock.Port` and `Clock.outside` are in `Lanes/Outside/Clock.lean`, beside the wall clock's model; `Lanes.Outside.IO.Clock` imports it.
 - `Tests/Fixtures/` keeps the small applications' systems and the two bank theorems the tests carry to shards; the proofs of election, the key-value store and the watchdog are only in their examples.
+
+### Fixed
+
+- The store model (`Lanes/Outside/Store/Basic.lean`) refused every read after a scan that saw its transaction's own write, at serializable, so it refused runs PostgreSQL gives; `Store.Read.all` carries the keys the transaction had written. Found by the PostgreSQL oracle.
+- The S3 XML reader (`Lanes/Web/S3/Xml.lean`) reads line ends as XML 1.0 does and refuses characters and references outside its `Char` production, names that start with a digit, `-` or `.`, `]]>` in text, `--` in a comment and a processing instruction without a target; it reads a character reference with leading zeros. Found by the `encoding/xml` oracle.
 
 ### Removed
 

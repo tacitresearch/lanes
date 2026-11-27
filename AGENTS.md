@@ -31,8 +31,9 @@ lake exe lanes docstrings  # how many public declarations of `import Lanes` have
   (`partial`, `unsafe`, `axiom`, `panic!`, `implemented_by`, `extern` and C only in files
   `TRUSTED.md` names), `trusted-size` (each trusted file has the line count `TRUSTED.md` gives),
   `layering` (rule 1.6), `decisions` and `status` (the generated files agree with their sources),
-  `inventory` and `inventory-none` (below), and `links` (every repository path in backquotes in
-  `*.md` and `docs/*.md` exists). It does not check `no-io-in-step`, `bounded`, `field-leak` or
+  `inventory` and `inventory-none` (below), `links` (every repository path in backquotes in
+  `*.md` and `docs/*.md` exists) and `oracles` (`oracles/README.md` names an oracle, or why there
+  is none, for every protocol module and model, and every path it names exists). It does not check `no-io-in-step`, `bounded`, `field-leak` or
   `fn-length`: those need the elaborator. The inventory's checks read the built modules: run
   `lake build lanesInventory` before `lake exe lanes lint --fix`.
 - `docs/INVENTORY.md` gives every public definition a status, read from the built modules
@@ -45,14 +46,22 @@ lake exe lanes docstrings  # how many public declarations of `import Lanes` have
   rebuild `lanes`, and write `examples/counter` again (move it aside, run `lake exe lanes new
   counter --dir examples/counter --lanes-path ../..`, put its `lake-manifest.json` back): `lake
   test` fails while the two differ. Then build and test it.
-- A parser or format is also tested against Go's standard library
-  (`docs/decisions/D50-differential-tests-against-go.md`): `oracle/<package>/main.go` answers the
-  cases that `Tests/Oracle/<Package>.lean` generates, and every difference is either a `known`
-  predicate there, with its reason, or a failure. `lake exe lanesOracle --cases 100000` asks Go
-  (it needs `go`, at the version `oracle/go.mod` pins); `lake test` replays the answers recorded in
-  `Tests/Oracle/vectors/`, which `lake exe lanesOracle --cases 1000 --record` rewrites. The
-  request reader's verdicts on `Tests/ReadRequest.corpus` are compared with Go's, Node's and
-  h11's servers by `oracle/requests/requests.py`, run by hand.
+- Oracles (rule 5.9, `docs/decisions/D80-oracles.md`) are in `oracles/`, one folder per
+  reference implementation with its pin, and `oracles/README.md` lists every protocol module and
+  every model against its oracle or the reason it has none (lint `oracles`). *Pure oracles*: a
+  reference's program (`oracles/go/<package>/main.go`, `oracles/<reference>/main.py`) answers the
+  cases `Tests/Oracle/<Package>.lean` generates, and every difference is a `known` predicate
+  there, with its reason, or a failure. `lake exe lanesOracle --cases 100000 [package…]` asks the
+  references (it needs `go` and `python3`; Python's are set up in virtual environments under
+  `LANES_ORACLE_CACHE`, or `.lake/oracles`); `lake test` replays the answers recorded in
+  `oracles/<reference>/answers.jsonl`, which `--record` rewrites. CI runs them on every pull
+  request. *Service oracles*: `oracles/moto/run.sh` and `oracles/postgres/run.sh` start moto or
+  a PostgreSQL of their own, run our clients against it through their handlers, check the runs
+  against the models with `Outside.allows`, and stop the service; `--record` rewrites the
+  records under `oracles/`, which `lake test` checks against the models again. CI runs them
+  nightly (`.github/workflows/services.yml`). The request reader's verdicts on
+  `Tests/ReadRequest.corpus` are compared with Go's, Node's and h11's servers by
+  `oracles/go/requests/requests.py`, run by hand.
 - The toolchain is pinned in `lean-toolchain` and follows CSLib's. Dependencies are pinned in
   `lake-manifest.json`; upgrade them deliberately, CSLib first.
 - A test of an application's front end drives it with `Http.Loopback` (pure, no socket: the
@@ -224,7 +233,7 @@ that performs IO is in an `IO/` directory of its area and named in `TRUSTED.md`.
 | `integrations/` | A vendor's preset or client, each its own Lake package (D61): `google` and `github` for sign-in, `aws` for a role's credentials and SES | Lanes |
 | `Tests/` | Regression tests run by `lake test` and `lanesCheck`; the apps they use in `Fixtures/` | anything |
 | `docs/api/` | The API reference, built with doc-gen4: a Lake package of its own (`docs/api/README.md`) | Lanes, doc-gen4 |
-| `oracle/` | Differential tests against Go's standard library and other HTTP servers | |
+| `oracles/` | The references the oracles compare with, one folder each, with their pins, programs and records (`oracles/README.md`) | |
 | `infra/` | The CI machine: its stack and its set-up script (`docs/RUNNERS.md`); in `app/`, the stack, set-up script and smoke check of an application on AWS (`docs/DEPLOY.md`) | |
 
 `import Lanes` is the API, executable code and the proof toolkit; `import Lanes.Proofs` adds the
@@ -295,6 +304,13 @@ partitions, even if only "answers `unavailable`".
 5.8 **Everything is proved** (D45). Every definition Lanes ships, and every application in
 `examples/`, is proved against a spec, or binds or performs something named in `TRUSTED.md`. A
 complete PASS of the checker finds bugs; a theorem is the evidence.
+
+5.9 **A parser has an oracle, and a model a recorded run.** Every parser or encoder (in
+`Lanes/Lib/`, and the protocol code of `Lanes/Web/`: the wire format, Signature Version 4, XML,
+JOSE) is compared with a reference implementation on generated inputs, and every model of an
+outside service is checked against a run recorded from a real or reference implementation; or
+`oracles/README.md` says why not. *Why:* a proof says the code meets its spec, not that the
+spec reads the standard, or the service, as others do.
 
 Conventions:
 

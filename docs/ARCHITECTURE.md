@@ -313,9 +313,11 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   whose target is the canonical path and query that were signed (`SigV4.target_sign`), with the
   query and the signed headers in order (`SigV4.sortQuery_sorted`, `canonicalHeaders_sorted`);
   what an answer means (`S3.interpret`), and a reader of the XML S3 writes, which refuses a
-  document type and every entity it does not know (`Lanes/Web/S3/Xml.lean`). The signatures are
-  tested against AWS's test suite and S3's documented examples, the client against a fake S3
-  that checks every signature from the bytes it receives. Bodies are whole, in memory. The
+  document type and every entity it does not know (`Lanes/Web/S3/Xml.lean`), tested against Go's
+  `encoding/xml`. The signatures are tested against AWS's test suite, S3's documented examples and
+  botocore on generated requests, the client against a fake S3 that checks every signature from
+  the bytes it receives, and against moto's S3, whose run the object store's model allows
+  (`oracles/README.md`). Bodies are whole, in memory. The
   credentials are read at each call from a `SigV4.Source`: fixed, or kept fresh by something
   else.
 - **AWS** (`integrations/aws`, `docs/decisions/D74-aws-integration.md`): a role's credentials
@@ -328,8 +330,8 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   `Refresh.retry_within`); model-checked first against a model of the metadata service with
   timeouts. A task in `Aws/IO/Credentials.lean` only performs. SES's `SendEmail` is a JSON document
   proved to read back with exactly its recipients (`Ses.toAddresses_json`), its answers read as
-  the email model's (`Ses.Answer.modelled`), and a run against a fake SES is one the model
-  allows; SES takes no key, so each send is a request without one.
+  the email model's (`Ses.Answer.modelled`), and runs against a fake SES and against moto's SES
+  are ones the model allows; SES takes no key, so each send is a request without one.
 - **Sign-in** (`Lanes/Web/IO/SignIn.lean`): the random values of a beginning and the key of the
   tickets, the states used and each provider's keys held in references, and the calls to the token endpoint,
   the JWK Set and a user API; every decision is `Lanes/Web/Auth/OAuth.lean`'s (above).
@@ -387,7 +389,8 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   `Store.lost_update`, `Store.lost_commit_either`, `Store.lost_commit_later`). A table of
   PostgreSQL runs it (`Lanes/Lib/Postgres/Table.lean`, `Postgres.Store.handler`); that the server
   behaves like the model at the level chosen is the premise of a theorem proved against it,
-  tested on recorded runs (`Tests/PostgresLive.lean`). `examples/todo-db` is checked against it.
+  tested on runs recorded from PostgreSQL 16, some interleaved at random
+  (`oracles/postgres/store.jsonl`). `examples/todo-db` is checked against it.
 - **Jobs** (`Lanes/Behaviours/Jobs/Basic.lean`): work that must not run in a
   step, an outbound call or slow pure work, is submitted to the jobs actor under a key the
   requester chooses, beside the system that submits it (`Jobs.attach`). The actor dispatches
