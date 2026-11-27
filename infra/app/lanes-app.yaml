@@ -1070,6 +1070,8 @@ Resources:
       Family: !Sub "postgres${DatabaseEngineVersion}"
       Parameters:
         rds.force_ssl: "0"
+        # Stored as SCRAM, so the server proves it knows the password, as the client requires.
+        password_encryption: scram-sha-256
 
   # Kept with the database's final snapshot, which it opens.
   DatabaseSecret:
