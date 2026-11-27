@@ -272,7 +272,10 @@ The code of this step is `Tests/Tutorial/Counter.lean` (the theorems) and
 
 ## 5. Where next
 
-Read the examples in the order `examples/README.md` gives:
+`docs/TUTORIAL-WEB.md` is the sequel: a web app with sign-in, uploads to S3, a test of the
+whole site, and a deploy.
+
+Then read the examples in the order `examples/README.md` gives:
 
 1. `examples/counter`: what `lanes new` wrote, which you now know.
 2. `examples/bank`: actors that send each other messages, an invariant of the whole system,
