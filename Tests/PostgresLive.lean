@@ -78,7 +78,9 @@ def reset (cfg : Client.Config) : IO Unit := do
   discard <| (s.exec (.statement { sql := s!"DELETE FROM {table.name}" })).block
   (s.close).block
 
-def writeSkew (cfg : Client.Config) (isolation : Store.Isolation) : IO (Bool × Bool) := do
+/-- Two transactions that each read the key the other writes: whether both committed, and the
+run recorded. -/
+def writeSkewRun (cfg : Client.Config) (isolation : Store.Isolation) : IO (Bool × Recorder) := do
   reset cfg
   let r ← Recorder.new cfg isolation
   discard <| r.ask 1 .begin
@@ -89,16 +91,20 @@ def writeSkew (cfg : Client.Config) (isolation : Store.Isolation) : IO (Bool × 
   discard <| r.ask 2 (.write 1 "two")
   let a ← r.ask 1 .commit
   let b ← r.ask 2 .commit
-  return (a == .committed && b == .committed, ← r.allowed [])
+  return (a == .committed && b == .committed, r)
+
+def writeSkew (cfg : Client.Config) (isolation : Store.Isolation) : IO (Bool × Bool) := do
+  let (both, r) ← writeSkewRun cfg isolation
+  return (both, ← r.allowed [])
 
 /-- A `COMMIT` sent and its connection broken before the reply is read: the outcome is unknown
 to the client, and what a later transaction reads must be one the model allows. -/
-def lostCommit (cfg : Client.Config) (isolation : Store.Isolation) : IO (Bool × Bool) := do
+def lostCommitRun (cfg : Client.Config) (isolation : Store.Isolation) : IO (Bool × Recorder) := do
   reset cfg
   let r ← Recorder.new cfg isolation
   discard <| r.ask 1 .begin
   discard <| r.ask 1 (.insert 7 "seven")
-  let some s := (← r.sessions.get).lookup 1 | return (false, false)
+  let some s := (← r.sessions.get).lookup 1 | return (false, r)
   r.events.modify (· ++ [.inl { id := 100, txn := 1, op := .commit }])
   discard <| (s.tell (.submit 9 .commit)).block
   let late ← (s.tell .broken).block
@@ -108,6 +114,10 @@ def lostCommit (cfg : Client.Config) (isolation : Store.Isolation) : IO (Bool ×
   discard <| r.ask 2 .begin
   discard <| r.ask 2 (.read 7)
   discard <| r.ask 2 .commit
+  return (lost, r)
+
+def lostCommit (cfg : Client.Config) (isolation : Store.Isolation) : IO (Bool × Bool) := do
+  let (lost, r) ← lostCommitRun cfg isolation
   return (lost, ← r.allowed [])
 
 def live : IO (List (String × Bool)) := do

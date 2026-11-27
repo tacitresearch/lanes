@@ -72,6 +72,12 @@ lean_exe lanesCheck where
 lean_exe lanesOracle where
   root := `Tests.OracleMain
 
+/-- The service oracles (`oracles/README.md`): our clients against real or reference services,
+checked against our models of them; each skipped unless its service is named. -/
+@[default_target]
+lean_exe lanesServiceOracle where
+  root := `Tests.ServiceMain
+
 lean_lib LanesCli where
   globs := #[.submodules `LanesCli]
 
