@@ -136,7 +136,7 @@ def rest (k : Kernel sys) (i : σ.Id) : Kernel sys :=
 /-- The state of `i`, taken out of its cell, which keeps its place in the table with `init` in
 its stead until `settle` writes the next state. The step is then given the only reference to the
 state, and updates it in place: read where it is, it would be shared with the table, and copied
-on every step (`docs/decisions/new-kernel-in-place.md`). -/
+on every step (`docs/decisions/D84-the-kernel-takes-the-state-out-before-the-step.md`). -/
 def takeState (k : Kernel sys) (i : σ.Id) : Kernel sys × sys.State i :=
   match k.cells.get? i with
   | some c => (k.setCell i { c with state := (sys.actor i).init }, c.state)

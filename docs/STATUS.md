@@ -188,7 +188,7 @@ What is being worked on now, and why: `docs/PLAN.md`.
   million numbers that is a few milliseconds a step where the shard's thread takes a
   microsecond, and `auto` can choose the pool for it, since a copy makes the step look costly.
   A system with large states and several actors busy at once runs with `parallel := .off`
-  (`docs/decisions/new-kernel-in-place.md`).
+  (`docs/decisions/D84-the-kernel-takes-the-state-out-before-the-step.md`).
 - The fake S3 checks signatures with the functions the client signs with, so it agrees with the
   client by construction; that they are S3's is tested against AWS's vectors (`Tests/SigV4.lean`).
 - The browser runs no script and follows no redirect, and ignores a cookie's domain, expiry and

@@ -161,3 +161,10 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Journal.Upgrade.inv_load' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Journal.Upgrade.inv_load
+
+-- Lanes.Durable.Reading
+/-- info: 'Lanes.Journal.Disk.ofReadings_eq' depends on axioms: [propext, Classical.choice] -/
+#guard_msgs in #print axioms Lanes.Journal.Disk.ofReadings_eq
+
+/-- info: 'Lanes.Journal.Disk.Torn.load_readings' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Disk.Torn.load_readings
