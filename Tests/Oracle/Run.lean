@@ -137,7 +137,7 @@ def compare (root : System.FilePath) (o : Options) (p : Package) : IO Bool := do
       Json.compress (Json.mkObj (("id", (i : Json)) :: ("op", (c.op : Json))
         :: ("in", (Bytes.hex c.input : Json)) :: answerFields go)) ++ "\n"
     IO.FS.writeFile (p.vectorsPath root) (String.join lines)
-    IO.println s!"  recorded {lines.length} answers in oracles/{p.reference.dir}/answers.jsonl"
+    IO.println s!"  recorded {lines.length} answers in oracles/{p.reference.dir}/{p.answers}"
   return differ.isEmpty
 
 /-- The command line of `command`, comparing `packages`, for the repository at `root`. -/
