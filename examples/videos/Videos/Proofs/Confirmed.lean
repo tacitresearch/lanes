@@ -161,18 +161,20 @@ with the evidence `hdone` gives. -/
 theorem confirmed_settle {es : List Turn} {s : Site} (h : Confirmed config es s) (r : Report)
     (hdone : ∀ round, r = .done round → Transcoded config es round.video) :
     Confirmed config es (s.settle r) := by
-  unfold settle
+  intro w hw
+  simp only [settle, List.mem_map] at hw
+  obtain ⟨video, hv, rfl⟩ := hw
+  have hw := h video hv
+  unfold Report.move
   split
-  · next video hfind =>
+  · next hid =>
     split
     · next status hnext =>
-      have hid : video.id = r.round.video := by simpa using List.find?_some hfind
-      have hw := h video (find?_mem hfind)
-      refine confirmed_setVideo h ⟨fun _ => hw.1 (next_awaiting hnext), fun hr => ?_⟩
+      refine ⟨fun _ => hw.1 (next_awaiting hnext), fun hr => ?_⟩
       obtain ⟨round, rfl⟩ := next_ready hnext hr
       simpa [hid, Report.round] using hdone round rfl
-    · exact h
-  · exact h
+    · exact hw
+  · exact hw
 
 /-- What one input or start must keep, for the turns `es` before it with the turn added. -/
 abbrev Keeps (config : Config) (es : List Turn) (r : Site × List Out) : Prop := Confirmed config es r.1
@@ -366,17 +368,16 @@ theorem listed_transcoded (hc : config.Honest) (es : List Turn) (e : Turn) :
   obtain ⟨w, hid, hready, hw⟩ := shown_evident hc es e o ho c hc'
   exact hid ▸ hw.2 hready
 
-theorem setVideo_filter (s : Site) (w : Video) (v : VideoId) (hw : w.id = v) :
-    (s.setVideo w).videos.filter (·.id != v) = s.videos.filter (·.id != v) := by
-  subst hw
-  simp only [setVideo]
+theorem settle_filter (s : Site) (r : Report) :
+    (s.settle r).videos.filter (·.id != r.round.video) = s.videos.filter (·.id != r.round.video) := by
+  simp only [settle]
   induction s.videos with
   | nil => rfl
   | cons x xs ih =>
-    simp only [beq_iff_eq] at ih
-    by_cases hx : x.id = w.id
-    · simp [hx, ih]
-    · simp [hx, ih]
+    by_cases hx : x.id = r.round.video
+    · simp [Report.move_id, hx, ih]
+    · have hm : r.move x = x := by simp [Report.move, hx]
+      simp [hm, hx, ih]
 
 /-- A report changes only the video its round names: every other video, every channel and every
 count is as it was, whatever the report and its signature. -/
@@ -386,14 +387,7 @@ theorem report_names (s : Site) (req : ReqId) (r : Report) (signature : String) 
       s'.videos.filter (·.id != r.round.video) = s.videos.filter (·.id != r.round.video) := by
   simp only [handle, request, report]
   split
-  · unfold settle
-    split
-    · next video hfind =>
-      have hid : video.id = r.round.video := by simpa using List.find?_some hfind
-      split
-      · exact ⟨rfl, rfl, rfl, setVideo_filter s _ _ hid⟩
-      · exact ⟨rfl, rfl, rfl, rfl⟩
-    · exact ⟨rfl, rfl, rfl, rfl⟩
+  · exact ⟨rfl, rfl, rfl, settle_filter s r⟩
   · exact ⟨rfl, rfl, rfl, rfl⟩
 
 end Site

@@ -98,19 +98,28 @@ asks `trustUnsigned` off):
   (`Videos.Site.listed_transcoded`), and still only after the store confirmed its upload
   (`Videos.Site.listed_confirmed`);
 - a report changes only the video its round names: every other video, every channel and every
-  count is as it was, whatever the report and its signature (`Videos.Site.report_names`).
+  count is as it was, whatever the report and its signature (`Videos.Site.report_names`);
+- a report of a round signed by the worker leaves no video of that round transcoding
+  (`Videos.Site.report_leaves`), and in a fair run the site handles it (`Videos.report_settles`).
 
 Every theorem of the site that held before holds, restated where its functions changed.
 
-*Liveness is checked, not proved.* With a fair run and an honest worker that eventually
-reports, a confirmed upload leads to ready or failed. D89's join lemmas, which would carry the
-scheduler's ends and the worker's reports through the join (`Fair.routed_*`,
-`Schedule.attach_end_handled`), are in an open pull request (tacitresearch/lanes#80), not on the
-main branch. So the checker checks it instead: of runs with no crash, every state with no
-successor, the script done, every message delivered, every timer fired and the worker's reports
-spent, has no video transcoding (`Videos.Check`, `pipeline`, as deadlocks). A run with a crash
-can lose the report on its way in the mail of the site, which the semantics allows and one shard
-does not (D87); a real worker posts again until it is acknowledged.
+*Liveness: proved from the report, checked as a whole.* With a fair run and an honest worker
+that eventually reports, a confirmed upload leads to ready or failed. The step the site owns is
+proved with D89's lemma, which landed on the main branch while this was written
+(`System.Run.Fair.handled_right`): in a fair run in which the site is not crashed and the link
+from outside to it loses nothing, a report of a round signed by the worker and sent to the site
+is followed by a position where no video of that round is transcoding (`Videos.report_settles`,
+from `Videos.Site.report_leaves`). That the worker reports is the premise, as the run's input:
+it is the worker's, as its model says, not the site's. The whole, the worker's model among it,
+is checked: of runs with no crash, every state with no successor, the script done, every message
+delivered, every timer fired and the worker's reports spent, has no video transcoding
+(`Videos.Check`, the pipeline, as deadlocks), a start the worker never answers, refuses or
+answers `unknown` included. A run with a crash can lose the report on its way in the mail of the
+site, which the semantics allows and one shard does not (D87); a real worker posts again until
+it is acknowledged. Not proved: that a start the scheduler gives up on makes the video failed in
+every fair run (`Schedule.attach_answer_handled` would carry it), since the claim asked for
+rests on the worker's report.
 
 The checker explores the site, its scheduler, the worker's model with its store, two browsers and
 a forger, with a crash anywhere: reports delivered twice, failed, or forged; every claim of the

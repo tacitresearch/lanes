@@ -83,6 +83,7 @@ model-checked (`Videos/Check.lean`).
 | A video is shown only once the store confirmed its upload: an output that shows a video comes after an input in which the scheduler said a job that asks the store for its upload's `HEAD` succeeded with `found`; and the scheduler says so only in the step that takes the store's `found` to that job's attempt | `Videos.Site.listed_confirmed` (the seeded bugs off: `Config.Honest`), `Schedule.succeeded_replied` |
 | A video is listed as ready only after a done report for it whose signature checks: an output that shows a video comes after a request in which the worker reported a round of the video's transcode done, signed under the worker's key | `Videos.Site.listed_transcoded` (the seeded bugs off) |
 | A report changes only the video its round names: every other video, every channel and every count is as it was, whatever the report and its signature | `Videos.Site.report_names` |
+| A round the worker reports ends: in a fair run in which the site is not crashed and the link from outside to it loses nothing, a report of a round signed by the worker is followed by a position where no video of that round is transcoding, each ready or failed | `Videos.report_settles`, `Videos.Site.report_leaves` |
 | What an output shows is a ready video of the site, and a private one only to a session of its owner that let the request in | `Videos.Site.shows_handle` |
 | The scheduler holds at most `maxJobs` jobs and no key twice: one delete of an object at a time | `Videos.jobs_bounded` |
 | Every job ends, whatever the store and the worker do: in a fair run in which the scheduler does not crash, a check, a last check, the start of a transcode or a delete held stops being held | `Videos.job_ends` |
@@ -95,9 +96,9 @@ the run of the spec its actor performed is not written (as for rookery). That a 
 object is eventually deleted from the store is not proved, and is false: the store may refuse
 every attempt, and an upload begun before the delete may land after it. What is proved is that
 the delete ends and is reported if it gave up, but for the step between: that the scheduler's
-word reaches the site, which the checker checks. That a confirmed upload ends ready or failed,
-with an honest worker that reports, is checked and not proved: the lemmas that carry fairness
-through the join (D89's) are in an open pull request.
+word reaches the site, which the checker checks. That a confirmed upload ends ready or failed
+is proved from the worker's report, which is the premise (`Videos.report_settles`); with the
+worker's model, that it reports, the whole is checked.
 
 ### What the claims rest on
 
@@ -142,7 +143,7 @@ explores a job not answered, refused or `unknown` (with no crash), a report late
 never, and a retry; the forgery a report delivered twice and one posted by someone else. And of
 runs with no crash, every state with no successor (the script done, every message delivered,
 every timer fired, the worker's reports spent) has no video transcoding: a confirmed upload ends
-ready or failed. That is the liveness claim, checked and not proved.
+ready or failed. The site's part of it is proved (`Videos.report_settles`).
 
 | Scenario | States | Result |
 | --- | --- | --- |

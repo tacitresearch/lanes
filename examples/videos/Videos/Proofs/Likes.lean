@@ -58,13 +58,15 @@ theorem nodup_like {likes : List Member} (h : likes.Nodup) (m : Member) (on : Bo
   · exact h.erase m
 
 theorem likedOnce_settle {s : Site} (h : s.LikedOnce) (r : Report) : (s.settle r).LikedOnce := by
-  unfold settle
+  intro w hw
+  simp only [settle, List.mem_map] at hw
+  obtain ⟨w', hw', rfl⟩ := hw
+  unfold Report.move
   split
-  · next video hfind =>
-    split
-    · exact likedOnce_setVideo h (h video (find?_mem hfind))
-    · exact h
-  · exact h
+  · split
+    · exact h w' hw'
+    · exact h w' hw'
+  · exact h w' hw'
 
 theorem likedOnce_request {s : Site} (h : s.LikedOnce) (c : Command) (at_s : Nat) :
     (s.request config c at_s).1.LikedOnce := by

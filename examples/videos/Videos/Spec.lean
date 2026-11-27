@@ -461,6 +461,14 @@ def Report.next (r : Report) : Status → Option Status
       (match r with | .done _ => some (.ready size) | .failed _ => none) else none
   | _ => none
 
+/-- What a report of `r` does to a video: the one its round names moves on, if it may. -/
+def Report.move (r : Report) (w : Video) : Video :=
+  if w.id = r.round.video then
+    match r.next w.status with
+    | some status => { w with status }
+    | none => w
+  else w
+
 /-- The one output of a request. -/
 def answer (req : ReqId) (viewer : Viewer) (r : Reply) : List Out := [.reply req viewer r]
 
@@ -565,13 +573,7 @@ def unstart (video : Video) : List Out :=
   | _ => []
 
 /-- What a report of `r` does to the site: the video its round names moves on, if it may. -/
-def settle (s : Site) (r : Report) : Site :=
-  match s.find? r.round.video with
-  | some video =>
-    match r.next video.status with
-    | some status => s.setVideo { video with status }
-    | none => s
-  | none => s
+def settle (s : Site) (r : Report) : Site := { s with videos := s.videos.map r.move }
 
 /-- The worker's report, taken only with the worker's signature. -/
 def report (s : Site) (req : ReqId) (r : Report) (signature : String) : Site × List Out :=

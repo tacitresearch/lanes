@@ -136,14 +136,17 @@ theorem watch_fst (s : Site) (req : ReqId) (viewer : Viewer) (v : VideoId) (at_s
       · rfl
   · rfl
 
-theorem grows_settle (s : Site) (r : Report) : Grows s (s.settle r) := by
-  unfold settle
+theorem Report.move_id (r : Report) (w : Video) : (r.move w).id = w.id := by
+  unfold Report.move
   split
-  · next video hfind =>
-    split
-    · exact grows_setVideo ⟨video, find?_mem hfind, rfl⟩
-    · exact grows_refl s
-  · exact grows_refl s
+  · split <;> rfl
+  · rfl
+
+theorem grows_settle (s : Site) (r : Report) : Grows s (s.settle r) := by
+  refine ⟨Nat.le_refl _, fun w hw => ?_⟩
+  simp only [settle, List.mem_map] at hw
+  obtain ⟨w', hw', rfl⟩ := hw
+  exact .inl ⟨w', hw', (Report.move_id r w').symm⟩
 
 theorem grows_retry (s : Site) (req : ReqId) (viewer : Viewer) {video : Video}
     (hv : video ∈ s.videos) : Grows s (s.retry config req viewer video).1 := by

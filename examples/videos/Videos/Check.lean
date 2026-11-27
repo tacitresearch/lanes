@@ -39,8 +39,8 @@ once (`quiet`), or never answers (`silent`); the pipeline and the forgery explor
 
 Of runs with no crash, every run that cannot go on, every message delivered, every timer fired
 and the worker done reporting, leaves no video transcoding: a confirmed upload ends ready or
-failed (`pipeline`, the checker's deadlocks). That is the liveness claim, checked and not
-proved: the lemmas that would carry fairness through the join are not on the main branch yet.
+failed (`pipeline`, the checker's deadlocks). The site's part of it is proved from the worker's
+report (`Videos.report_settles`); that the worker reports is its model's, checked here.
 
 Four seeded bugs, each found: a video made ready because the browser says so, a check the
 store did not answer in time taken as found, sessions that never end, and a report taken
