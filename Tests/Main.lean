@@ -44,6 +44,7 @@ import Tests.Oracle.All
 import Tests.Jobs
 import Tests.Outside
 import Tests.Queue
+import Tests.Cache
 import Tests.Throttle
 import Tests.WallClock
 import Tests.Ops
@@ -105,7 +106,8 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.Crypto.tests ++ Tests.Auth.tests ++ Tests.Clients.tests ++ Tests.Lease.tests
     ++ Tests.Release.tests ++ Tests.ReadRequest.tests ++ Tests.Oracle.unitTests
     ++ Tests.HttpConn.tests ++ Tests.Loopback.tests
-    ++ Tests.Jobs.tests ++ Tests.Outside.tests ++ Tests.Queue.tests ++ Tests.WallClock.tests ++ Tests.Throttle.tests ++ Tests.Postgres.vectorTests ++ Tests.Ops.tests
+    ++ Tests.Jobs.tests ++ Tests.Outside.tests ++ Tests.Postgres.vectorTests ++ Tests.Ops.tests
+    ++ Tests.Queue.tests ++ Tests.Cache.tests ++ Tests.WallClock.tests ++ Tests.Throttle.tests
     ++ Tests.SigV4.tests ++ Tests.S3.tests
   match args with
   | [] =>
