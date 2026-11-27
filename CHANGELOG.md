@@ -8,6 +8,10 @@ under Unreleased (`CONTRIBUTING.md`).
 
 ## [Unreleased]
 
+### Added
+
+- `ServerConfig.ioThreads`: connections owned by dedicated threads, so a connection never changes thread (21–30% more requests a second on the warm machine); and `Runtime.Config.workers`: a batch's actors' steps worked out in parallel, proved equal to the sequential run (`Kernel.runBatchAhead_eq`). Both are off by default.
+
 ### Changed
 
 - Module paths are reorganised by concern: `Lanes.Actors` is split into `Lanes/Core`, `Lanes/Proof`, `Lanes/Runtime`, `Lanes/Durable`, `Lanes/Net` and `Lanes/Outside`, HTTP, HTML and authentication are under `Lanes/Web`, the standard library under `Lanes/Lib`, and each area's IO in an `IO/` directory; `import Lanes` leaves out the framework's soundness theorems, which a proof imports with `import Lanes.Proofs` (or `Lanes.Semantics`); `Examples/` and `systems/` are one `examples/` directory of Lake packages, `examples/counter` being what `lanes new` writes.
