@@ -122,8 +122,13 @@ def run (dir : System.FilePath) : IO (List Bool) := do
   let bobTimeline ← get bob "/timeline"
   let issued ← post bob "/token" []
   let some token := tokenOf issued | server.kill; return [false]
+  let live ← IO.asTask (Http.Client.events port
+    { method := .get, path := ["timeline", "events"]
+      headers := [("Cookie", s!"rookery_session={bob.cookie}")] } (·.length ≥ 2) 10000)
+  IO.sleep 500
   let beep ← api .post "/api/post" token "{\"text\": \"beep\", \"seq\": 1}"
   let retried ← api .post "/api/post" token "{\"text\": \"beep\", \"seq\": 1}"
+  let events ← IO.ofExcept live.get
   discard <| post ann "/follow" [("name", "bob")]
   let annTimeline ← get ann "/timeline"
   let deleted ← post ann "/delete" [("id", "0")]
@@ -160,6 +165,8 @@ def run (dir : System.FilePath) : IO (List Bool) := do
       (contains follows "Following" && ids bobTimeline == [1, 0]),
     check "a post's text is escaped" (contains bobTimeline "&lt;b&gt;escaped&lt;/b&gt;"),
     check "bob, a bot, posts through the API with a token" (beep.status == 201),
+    check "bob's timeline as a stream of events shows it, then his post as soon as it is made"
+      ((events.map fun e => ids e.data) == [[1, 0], [2, 1, 0]]),
     check "a post retried with the same seq is posted once, with the same id"
       (retried.status == 201 && body retried == body beep && contains (body beep) "\"id\":2"),
     check "ann follows bob and sees his post with hers" (ids annTimeline == [2, 1, 0]),
