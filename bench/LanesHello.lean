@@ -33,4 +33,4 @@ def main (args : List String) : IO Unit := do
     (snapshotEvery.map fun _ => saving)).block
   IO.println s!"listening on {server.port.getD 0}"
   (← IO.getStdout).flush
-  server.wait.block
+  block server.wait
