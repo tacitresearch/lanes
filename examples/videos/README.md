@@ -205,19 +205,19 @@ VIDEOS_WORKER_URL=http://127.0.0.1:9100 VIDEOS_WORKER_SECRET=... \
 lake exe videos 8080 videos.journal videos.secrets
 ```
 
-`Main.lean` lists what it reads: `VIDEOS_URL` (the public origin, from which each provider's
-redirect URI `<VIDEOS_URL>/sign-in/<google|github>/callback` is made, and `Secure` cookies when
+`Main.lean` lists what it reads: `LANES_URL` (the public origin, from which each provider's
+redirect URI `<LANES_URL>/sign-in/<google|github>/callback` is made, and `Secure` cookies when
 it is `https:`), `LANES_HOST`, `LANES_IDLE_MS` and `LANES_DRAIN_MS` (as `lanes new` reads
 them; SIGTERM drains for that long, `Server.stopOnSignal`), `VIDEOS_BUCKET` (or
 `LANES_MEDIA_BUCKET`, as a deployment's unit sets it), `AWS_REGION`,
 `VIDEOS_S3_ENDPOINT` (MinIO or LocalStack, as `http://host:port`), the `AWS_*` credentials,
 `VIDEOS_MAX_UPLOAD_BYTES`, each provider's client, and the worker: `VIDEOS_WORKER_URL` (its
 origin; jobs go to `/jobs`), `VIDEOS_WORKER_SECRET` (the key the two sign with) and
-`VIDEOS_WORKER_CALLBACK` (where it posts reports, `<VIDEOS_URL>/transcoded` unless set). The
+`VIDEOS_WORKER_CALLBACK` (where it posts reports, `<LANES_URL>/transcoded` unless set). The
 worker speaks `Lanes/Web/Transcode.lean`'s format and writes to the same bucket; none ships with
 Lanes but the test kit's (`Lanes.Testing.Transcode`). The bucket's CORS rules must allow `POST`
 and `GET` from the site's origin. For a local store, MinIO with a bucket and a CORS rule for `http://localhost:8080` will
-do; over plain HTTP set nothing else, since `VIDEOS_URL` defaults to `http://localhost:<port>`.
+do; over plain HTTP set nothing else, since `LANES_URL` defaults to `http://localhost:<port>`.
 
 `lake exe videosLive` runs the end-to-end flow against the bucket the same variables name, with
 the provider and the worker still the test's, under keys `videos-live-<n>/` that it deletes at the end. It is
@@ -237,15 +237,15 @@ is `examples/videos` (or `.` in a repository of its own). The stack's parameters
 | `HealthCheckPath` | `/readyz` |
 | `MetricsPath` | `/metrics` |
 | `DomainName` | the site, such as `video.example.com` |
-| `MediaUser` | `true` (the S3 client reads keys from the environment) |
+| `MediaUser` | `true`: the bridge signs forms and links with credentials given once at start (DEPLOY.md, "Media") |
 | `DatabaseEngine` | `none` |
 
-The unit names the stack's media bucket and its region (`LANES_MEDIA_BUCKET`, `AWS_REGION`),
-which `Main` reads. On the instance, `/etc/lanes/secrets.env` (DEPLOY.md, "Media") holds, besides
-the media user's `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`:
+The unit gives the site's origin, the stack's media bucket and its region (`LANES_URL`,
+`LANES_MEDIA_BUCKET`, `AWS_REGION`), which `Main` reads. On the instance,
+`/etc/lanes/secrets.env` (DEPLOY.md, "Media") holds, besides the media user's
+`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`:
 
 ```bash
-VIDEOS_URL=https://<DomainName>
 GOOGLE_CLIENT_ID=...       # and/or GITHUB_CLIENT_ID
 GOOGLE_CLIENT_SECRET=...
 VIDEOS_WORKER_URL=...      # a worker that reads and writes the media bucket
@@ -303,9 +303,12 @@ package; none touches the library.
    S3 and the fake provider were test files of Lanes, which an application outside this
    repository cannot import; the browser (cookies, form tokens, following links) was written
    again here, as rookery and the ledger did.
-8. **The S3 client takes keys only from the environment**: no instance role (IMDSv2), so the
-   deployment needs a long-lived IAM user's keys. (The stack did not tell the application its
-   media bucket; it does now, as `LANES_MEDIA_BUCKET` and `AWS_REGION`.)
+8. **The site signs with a long-lived key.** The S3 client's calls take the instance role's
+   credentials (`SigV4.Source`, `integrations/aws`), but the upload forms and the presigned links
+   are signed in the bridge, a pure function given credentials once at start, and the role's
+   expire within hours. So the deployment still needs the media user's keys. (The stack did
+   not tell the application its media bucket or its origin; it does now, as
+   `LANES_MEDIA_BUCKET`, `AWS_REGION` and `LANES_URL`.)
 9. **An identity had no name** (since fixed: `OAuth.Identity.name`, the provider's name or
    GitHub's login, which a channel now shows). A channel was named by what came before the `@`.
 10. **Sessions did not end on their own** (since fixed: `Auth.Sessions` takes a `Lifetime`,
@@ -328,7 +331,8 @@ package; none touches the library.
 ### Not there for a site like YouTube
 
 Search (no index; a scan of the list), a worker that transcodes for real (the format is
-written, the worker is not), renditions at several sizes, a CDN in front of the bucket (CloudFront's signed URLs need RSA signing, which Lanes does not
-do), mail (SES speaks Signature Version 4, but there is no client), view counts (each view would
-be a write), live updates (no server push), subscriptions, notifications, moderation and reports,
-and a rate limit per member (`Lanes.RateLimit` exists; not used here).
+written, the worker is not), renditions at several sizes, a CDN in front of the bucket
+(CloudFront's signed URLs exist, `integrations/aws/Aws/CloudFront.lean`; not used here), mail
+(`Aws.Ses` exists; not used here), view counts (each view would be a write), live updates
+(server push exists, `Lanes/Web/Http/Sse.lean`; not used here), subscriptions, notifications,
+moderation and reports, and a rate limit per member (`Lanes.RateLimit` exists; not used here).

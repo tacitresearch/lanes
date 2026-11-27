@@ -67,6 +67,7 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Lib/Postgres/Message.lean` | `Tests/Postgres.lean`, `oracles/postgres` | The messages, in the recorded sessions; written and read again against a live server |
 | `Lanes/Lib/Postgres/Pool.lean` | | Decisions, not a format: proved (`Pool.run_size`, `Pool.never_again`) and model-checked (`Tests/PostgresPool.lean`) |
 | `Lanes/Lib/Postgres/Scram.lean` | `Tests/Postgres.lean`, `Tests/PostgresTls.lean` | RFC 7677's example and libpq's recorded session; with channel binding, Python's `hashlib` and PostgreSQL 16 with TLS |
+| `Lanes/Lib/Postgres/Settings.lean` | `Tests/PostgresLive.lean` | libpq's variables and password file: `psql` connects with the same, against PostgreSQL 16 |
 | `Lanes/Lib/Postgres/Table.lean` | `oracles/postgres` | The SQL of the store's operations, against PostgreSQL itself |
 | `Lanes/Lib/RateLimit.lean` | `oracles/go/rate` | |
 | `Lanes/Lib/Time/Civil.lean` | `oracles/go/time` | Through the formats, whose dates it computes |
@@ -85,6 +86,7 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Web/Http/Front.lean` | | Decisions, not a format |
 | `Lanes/Web/Http/Gate.lean` | | Decisions, not a format |
 | `Lanes/Web/Http/Grammar.lean` | | RFC 9110's tokens and field values, used by the reader and the writer |
+| `Lanes/Web/Http/JournalName.lean` | | A journal's name, read back only as it is written, and a migration across gates; tested (`Tests/Web.lean`) |
 | `Lanes/Web/Http/Loopback.lean` | | A front end with no socket for tests, not a format: its bytes are `Conn`'s and `Wire`'s |
 | `Lanes/Web/Http/Ops.lean` | | Routes and access for the operators' endpoints; their page is `Metrics`' |
 | `Lanes/Web/Http/ReadRequest.lean` | `oracles/go/requests` | Go's, Node's and h11's servers on `Tests/ReadRequest.corpus`, by hand |

@@ -14,13 +14,47 @@ namespace Lanes.Cli.New
 
 /-- Where a generated application gets Lanes from. -/
 inductive Source where
-  | git (url rev : String)
+  /-- `why` is written above it, as comments of the lakefile. -/
+  | git (url rev : String) (why : List String := [])
   /-- A local checkout, for developing Lanes itself. -/
   | path (dir : String)
 
 def Source.toToml : Source → String
-  | .git url rev => s!"git = \"{url}\"\nrev = \"{rev}\""
+  | .git url rev why =>
+    String.join (why.map (s!"# {·}\n")) ++ s!"git = \"{url}\"\nrev = \"{rev}\""
   | .path dir => s!"path = \"{dir}\""
+
+def repository : String := "https://github.com/tacitresearch/lanes"
+
+/-- What the lakefile requires when `lanes new` is given no `--rev`: the release tag of the
+checkout it runs from, else that checkout's commit. Either way the app builds against the Lanes
+it was made with, and a later `lake update` does not move it, as it would move `main`. -/
+def pinned (tag? : Option String) (commit : String) (released : Bool) : Source :=
+  let move := "To move to another version, change `rev` and run `lake update lanes`."
+  match tag? with
+  | some tag => .git repository tag [s!"Lanes {tag}, the release this app was made from.", move]
+  | none =>
+    let why := if released then "No release tag of Lanes is at the commit this app was made from"
+      else "Lanes has no release yet"
+    .git repository commit [s!"{why}, so this is the commit of Lanes it was made from.", move]
+
+private def runGit (dir : System.FilePath) (args : List String) : IO (Option String) := do
+  let out ← try
+      IO.Process.output { cmd := "git", args := #["-C", dir.toString] ++ args.toArray }
+    catch _ => return none
+  if out.exitCode != 0 then return none
+  let text := out.stdout.trimAscii.toString
+  return if text.isEmpty then none else some text
+
+/-- What `pinned` gives for the checkout this executable was built in
+(`<checkout>/.lake/build/bin/lanes`), or `none` if git cannot say. -/
+def ofCheckout : IO (Option Source) := do
+  let some dir := (← IO.appPath).parent >>= (·.parent) >>= (·.parent) >>= (·.parent)
+    | return none
+  let some commit ← runGit dir ["rev-parse", "HEAD"] | return none
+  let tag? ← runGit dir ["describe", "--tags", "--exact-match", "--match", "v*", "HEAD"]
+  let released := (← runGit dir ["tag", "--list", "v*"]).isSome
+  return some (pinned tag? commit released)
 
 /-- `my-app` becomes `MyApp`: the Lean module name of an application. -/
 def moduleName (name : String) : String :=

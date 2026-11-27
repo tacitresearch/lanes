@@ -46,7 +46,7 @@ def main (args : List String) : IO Unit := do
   let port := (args[0]? >>= String.toNat?).getD 8080
   let journal := args[1]?.map System.FilePath.mk
   let key ← loadKey ((args[2]?.map System.FilePath.mk).getD "shelf.secrets")
-  let origin := ((← IO.getEnv "SHELF_URL").filter (!·.isEmpty)).getD s!"http://localhost:{port}"
+  let origin := ((← IO.getEnv "LANES_URL").filter (!·.isEmpty)).getD s!"http://localhost:{port}"
   let region := ((← IO.getEnv "AWS_REGION").filter (!·.isEmpty)).getD "us-east-1"
   let bucket : S3.Bucket :=
     { name := ← need "LANES_MEDIA_BUCKET", region, endpoint := S3.Endpoint.aws region }

@@ -19,7 +19,7 @@ Update them in the same change that moves an item; `lake exe lanes lint --fix` w
 
 ## Next
 
-What is being worked on now, and why: `docs/PLAN.md`.
+What is being worked on now, and why: `docs/ROADMAP.md`, "In progress".
 
 ## Known limits
 

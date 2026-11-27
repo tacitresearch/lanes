@@ -65,6 +65,7 @@ public import Lanes.Lib.Postgres.IO.Pool
 public import Lanes.Lib.Postgres.Message
 public import Lanes.Lib.Postgres.Pool
 public import Lanes.Lib.Postgres.Scram
+public import Lanes.Lib.Postgres.Settings
 public import Lanes.Lib.Postgres.Table
 public import Lanes.Lib.RateLimit
 public import Lanes.Lib.Time.Civil
@@ -119,6 +120,7 @@ public import Lanes.Web.Http.Cookie
 public import Lanes.Web.Http.Front
 public import Lanes.Web.Http.Loopback
 public import Lanes.Web.Http.Gate
+public import Lanes.Web.Http.JournalName
 public import Lanes.Web.Http.Ops
 public import Lanes.Web.Http.ReadRequest
 public import Lanes.Web.Http.Route
