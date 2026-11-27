@@ -39,7 +39,8 @@ lake test             # model checks, the bridge, and the site over HTTP against
 - **Pages** are server-rendered with Lanes' templates. Every form that changes something carries
   a token bound to the session (`Auth.formToken`) and must come from the site's origin; the style
   sheet and the script are served by the bridge, since templates refuse inline code.
-- **Ops**: `/healthz`, `/readyz`, `/metrics` and the access log (`ServerConfig.ops`).
+- **Ops**: `/healthz`, `/readyz`, `/metrics` and the access log (`ServerConfig.ops`); SIGTERM
+  drains the requests in flight before it stops (`Server.stopOnSignal`).
 - **Storage**: the journal, with a snapshot every 256 inputs. No database.
 
 ## The claims
@@ -88,7 +89,7 @@ actor crashes and starts again anywhere. What each browser is shown is judged as
 | Seeded: the browser's word taken for the upload (`trustBrowser`) | | found in 18 steps |
 | Seeded: a check the store did not answer in time taken as found (`readyOnTimeout`) | | found in 21 steps |
 
-Over HTTP (`Videos/EndToEnd.lean`, 18 checks): the site as `Main` serves it, on a journal, with a
+Over HTTP (`Videos/EndToEnd.lean`, 19 checks): the site as `Main` serves it, on a journal, with a
 provider of the test's (a token endpoint and a user API, as GitHub's) and Lanes' fake S3, which
 checks every signature, the presigned links' included. Two members sign in; a video is made, put
 to the store through its link, checked and watched through the `<video>`'s link; likes counted
@@ -108,8 +109,10 @@ lake exe videos 8080 videos.journal videos.secrets
 
 `Main.lean` lists what it reads: `VIDEOS_URL` (the public origin, from which each provider's
 redirect URI `<VIDEOS_URL>/sign-in/<google|github>/callback` is made, and `Secure` cookies when
-it is `https:`), `VIDEOS_HOST`, `VIDEOS_BUCKET`, `AWS_REGION`, `VIDEOS_S3_ENDPOINT` (MinIO or
-LocalStack, as `http://host:port`), the `AWS_*` credentials and each provider's client. The
+it is `https:`), `LANES_HOST`, `LANES_IDLE_MS` and `LANES_DRAIN_MS` (as `lanes new` reads
+them; SIGTERM drains for that long, `Server.stopOnSignal`), `VIDEOS_BUCKET`, `AWS_REGION`,
+`VIDEOS_S3_ENDPOINT` (MinIO or LocalStack, as `http://host:port`), the `AWS_*` credentials and
+each provider's client. The
 bucket's CORS rules must allow `PUT` and `GET` from the site's origin with a `Content-Type`
 header. For a local store, MinIO with a bucket and a CORS rule for `http://localhost:8080` will
 do; over plain HTTP set nothing else, since `VIDEOS_URL` defaults to `http://localhost:<port>`.
@@ -141,7 +144,6 @@ user's `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_REGION`:
 ```bash
 VIDEOS_BUCKET=<the stack's MediaBucketName output>
 VIDEOS_URL=https://<DomainName>
-VIDEOS_HOST=0.0.0.0
 GOOGLE_CLIENT_ID=...       # and/or GITHUB_CLIENT_ID
 GOOGLE_CLIENT_SECRET=...
 ```
@@ -151,19 +153,69 @@ stack's media bucket already allows the presigned `PUT`, `GET` and `HEAD` from
 `https://<DomainName>`. The key in `videos.secrets` is made at the first start; losing it ends
 every session, nothing else.
 
-## Findings
 
-What Lanes made harder than it should be is the report of this example's branch; the ones that
-shape the code are:
+## Friction log
 
-- `S3.handler` needs the system's `Runtime`, which `serveFronted` keeps private, so
-  `Videos/Serve.lean` makes the call itself with `S3.exchange` and `Server.tryInput`, and holds a
-  promise of the server for the outputs that come before `serveFronted` returns.
-- The bridge's `encode` sees only the output, so the time a link is signed for travels through
-  the system (`at_s`), written by `arrive`, and the viewer's session rides in every answer
-  (`Out.reply`'s `viewer`) for the form tokens.
-- The object store's model has no `HEAD` and no notion of a put the system hands to someone else;
-  the check maps `HEAD` to a get and the upload link to a put of a call no one answers.
-- Every page view is a request, so it enters the journal and is synced before it is answered.
-- The fake S3 and the fake provider are test files of Lanes (`Tests/S3.lean`, `Tests/OAuth.lean`),
-  imported from `Tests`: an application outside this repository has no such kit.
+Where Lanes made this harder than it should be, most costly first. Workarounds are in this
+package; none touches the library.
+
+### Missing, or in the way
+
+1. **Every page view is journalled.** A watch, a feed page or a channel page is a request, so it
+   enters the journal, with its headers, and is synced before it is answered; ten page views
+   added 3.4 KB to the journal of a smoke run, and each is replayed at every start until a
+   snapshot cuts it. A site that is read a thousand times for each write wants reads answered
+   from the state without a journal entry.
+2. **`S3.handler` cannot be used behind the HTTP server.** It needs the system's `Runtime`, which
+   `Http.serveFronted` keeps private; and `serveFronted` takes `onOutput` before the server it
+   would hand inputs to exists, and wants its journal opened by hand with the sum of codecs.
+   `Videos/Serve.lean` makes the call with `S3.exchange`, answers with `Server.tryInput`, and
+   holds a promise of the server for the calls a start makes before `serveFronted` returns
+   (about 40 lines that every application with an adapter will write).
+3. **The bridge's `encode` sees only the output** (rookery's and the ledger's friction too). The
+   links are signed there, with a time, so `arrive` writes the time into the request and it
+   rides through the spec as `at_s`; the form tokens need the session, so every answer carries
+   the viewer (`Out.reply`).
+4. **An upload's size cannot be bounded.** A presigned `PUT` signs the content type, not a
+   length, and S3 takes up to 5 GB in one; a presigned `POST` with a policy
+   (`content-length-range`) or multipart uploads would bound it and let large videos resume.
+5. **Nothing runs in the background.** A delete the store did not answer is sent again at once,
+   up to `maxAttempts`, then given up; an upload never confirmed stays `pending` until its owner
+   deletes it. Retries with a backoff, a sweep of what was given up, thumbnails and transcoding
+   all want a job with a deadline, and the store's own events (S3 notifications) a way in.
+6. **The object store's model** has no `HEAD` and no write by someone else, such as the browser
+   with a presigned link; the check maps the `HEAD` to a get and the link to a put no one answers
+   (`Videos/Check.lean`). Its state keeps every write settled, sent and read in lists that only
+   grow, so states that differ only in history are distinct: the scenario of a video's life has
+   741,759 states for thirteen requests.
+7. **No kit for tests.** The fake S3 and the fake provider are test files of Lanes
+   (`Tests/S3.lean`, `Tests/OAuth.lean`), imported here from the `Tests` library, which an
+   application outside this repository cannot do; the browser (cookies, form tokens, following
+   links) is written again here, as rookery and the ledger did.
+8. **The S3 client takes keys only from the environment**: no instance role (IMDSv2), so the
+   deployment needs a long-lived IAM user's keys; and the stack does not tell the application its
+   media bucket, so `VIDEOS_BUCKET` is set by hand in `secrets.env`.
+9. **An identity has no name.** `OAuth.Identity` carries an issuer, a subject and an address, so
+   a channel is named by what comes before the `@`; a GitHub login or a Google name is not given.
+10. **Sessions do not end on their own.** `Auth.Sessions` has no time; ending them after a while
+    needs a timer per session, as rookery's are, which this site does not have.
+
+### Clumsy
+
+- **Tables are lists.** Every request scans the videos (the feed filters all of them), and every
+  snapshot writes the whole site. Bounded, but a map that runs and proves easily would serve.
+- **`arrive` starts a thread of its own for every request**, the style sheet's included, once an
+  application has one (the sign-in needs it).
+- **The checker and the outside world.** With requests from outside reordered, the first
+  scenario did not finish in two minutes; the scripts are chains, and requests arrive in order.
+- **Inline code is refused in templates**, so the bridge serves `/upload.js` and `/style.css`.
+- **`docs/DEPLOY.md`** still calls the S3 client "in progress", and D71 presents `S3.handler` as
+  how a system calls the store, which a web application cannot do (2).
+
+### Not there for a site like YouTube
+
+Search (no index; a scan of the list), thumbnails and transcoding (jobs and the store's events),
+a CDN in front of the bucket (CloudFront's signed URLs need RSA signing, which Lanes does not
+do), mail (SES speaks Signature Version 4, but there is no client), view counts (each view would
+be a write), live updates (no server push), subscriptions, notifications, moderation and reports,
+and a rate limit per member (`Lanes.RateLimit` exists; not used here).

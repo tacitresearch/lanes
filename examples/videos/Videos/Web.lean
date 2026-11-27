@@ -362,6 +362,12 @@ def commentInput (id : ReqId) (r : Http.Request) (m : Member) (session : Sid) (v
   if h : Remark.valid body then .ok (.request (.comment id m session v ⟨body, h⟩))
   else bad "a comment is 1 to 500 characters"
 
+/-- The name a channel shows: what comes before the `@` of the address, since an identity carries
+no name of its own, and the whole address would be shown to everyone. -/
+def channelName (who : OAuth.Identity) : String :=
+  let user := (who.email.getD "").takeWhile (· != '@') |>.toString
+  (if user.isEmpty then who.subject else user).take 40 |>.toString
+
 def decode (s : Settings) (id : ReqId) (r : Http.Request) : Except Http.Response Input :=
   let ask (c : Command) : Except Http.Response Input := .ok (.request c)
   if !r.bodyWithin s.maxBody_bytes then .error (Http.Response.text "too large\n" 413)
@@ -387,7 +393,7 @@ def decode (s : Settings) (id : ReqId) (r : Http.Request) : Except Http.Response
       Routes.channel.handle fun whom r => ask (.channel id (session? r) whom),
       Routes.signOut.handle fun () r => signedIn s r fun m session => ask (.signOut id m session),
       Routes.callback.handle fun _ r => match OAuth.identity? r with
-        | some who => ask (.signIn id who.issuer who.subject ((who.email.getD who.subject).take 40).toString)
+        | some who => ask (.signIn id who.issuer who.subject (channelName who))
         | none => .error (Http.Response.text "not found\n" 404)
     ] r).getD (.error (page (Message s none "Not found" "There is no such page.") 404))
 

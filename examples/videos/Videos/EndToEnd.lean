@@ -217,6 +217,8 @@ def flow (d : Deployment) (held : String â†’ Async Bool) : Async (List (String Ã
     ("videos: a private video is its owner's alone",
       status secretToBob == 404 && status secretToAnon == 404 && status secretToAlice == 200
         && !has channelToBob "Diary" && has channelToAlice "Diary"),
+    ("videos: a channel is named without its member's address",
+      has channelToBob "<h1>alice</h1>" && !has channelToBob "@example.com"),
     ("videos: a video the store does not hold is not ready, watched or listed",
       status early == 409 && status ghostEarly == 404 && has feedEarly "Cats"
         && !has feedEarly "Ghost" && has waiting "Not confirmed yet"),
