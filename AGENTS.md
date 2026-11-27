@@ -217,7 +217,7 @@ that performs IO is in an `IO/` directory of its area and named in `TRUSTED.md`.
 | `examples/` | Applications to read, each its own Lake package (`examples/README.md`) | anything |
 | `Tests/` | Regression tests run by `lake test` and `lanesCheck`; the apps they use in `Fixtures/` | anything |
 | `oracle/` | Differential tests against Go's standard library and other HTTP servers | |
-| `infra/` | The CI machine: its stack and its set-up script (`docs/RUNNERS.md`) | |
+| `infra/` | The CI machine: its stack and its set-up script (`docs/RUNNERS.md`); in `app/`, the stack, set-up script and smoke check of an application on AWS (`docs/DEPLOY.md`) | |
 
 `import Lanes` is the API, executable code and the proof toolkit; `import Lanes.Proofs` adds the
 framework's soundness theorems (the `…Sound` modules), and `import Lanes.Semantics` the proof

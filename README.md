@@ -127,6 +127,8 @@ lake exe my-app      # serves http://127.0.0.1:8080
 
 `docs/TUTORIAL.md` then takes the app through a change, a model check and a proof, in fifteen
 minutes.
+`docs/DEPLOY.md` then puts it on AWS behind HTTPS: one instance with its journal on a disk of its
+own, backed up, deployed from GitHub.
 
 The app gets Lanes from GitHub (`rev = "main"` in its `lakefile.toml`), not from the clone,
 which it does not need once the app is made. Any Lake project can depend on Lanes the same way:
