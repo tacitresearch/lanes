@@ -42,6 +42,10 @@ import tempfile
 MUTANTS = [
     ("runtime: nothing handed over again after a restart", "Lanes/Runtime/IO/Shell.lean",
      "  handOver outputs\n  let since := start.clock_ms", "  let since := start.clock_ms"),
+    ("runtime: the outputs an older version had not handed over are dropped at a migration",
+     "Lanes/Runtime/IO/Shell.lean", "    deliver log.pending\n", ""),
+    ("journal: a migration is not written", "Lanes/Durable/IO/Journal.lean",
+     "      migrate := upgraded.writes.forM (perform store.path handle true)\n", ""),
     ("runtime: commands left in the inbox when the shard ends", "Lanes/Runtime/IO/Shell.lean",
      "  discard <| rt.inbox.modifyGet Mailbox.take\n", ""),
     ("runtime: a snapshot is not taken", "Lanes/Runtime/IO/Shell.lean",
@@ -147,10 +151,10 @@ MUTANTS = [
      "Lanes/Runtime/IO/Shell.lean",
      "  let mut written := (journal.map (·.past.length)).getD 0", "  let mut written := 0"),
     ("journal: what is cut off is not kept", "Lanes/Durable/IO/Journal.lean",
-     """      IO.FS.writeBinFile (store.path.addExtension "cut")
-        (disk.journal.extract found.size disk.journal.size)
+     """        IO.FS.writeBinFile (store.path.addExtension "cut")
+          (disk.journal.extract found.size disk.journal.size)
 """,
-     "      pure ()\n"),
+     "        pure ()\n"),
     ("journal: the mark of a save is not counted", "Lanes/Durable/IO/Journal.lean",
      "        (perform store.path handle true)\n      count.modify (· + 1)",
      "        (perform store.path handle true)"),

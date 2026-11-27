@@ -29,7 +29,10 @@ there.
    answers may be late, lost or `unknown` and whose webhooks come late, twice and out of order.
    A retry without the idempotency key charges an order twice, and the checker finds it; with
    the key, an order is charged at most once in every run, proved.
-8. `raft-kv`, `ledger`, `rookery`: the serious systems below.
+8. `migration`: a deploy that changes the state type. Version 1 of a quota service runs on a
+   journal; version 2 adds a quota to each user, reads version 1's files through an upgrade,
+   and carries its invariant across with the migration's proof.
+9. `raft-kv`, `ledger`, `rookery`: the serious systems below.
 
 | Feature | Where to see it |
 | --- | --- |
@@ -45,6 +48,7 @@ there.
 | Model checks, a bug found, random runs | `bank`, `kv-cache`, `election`, `payments` |
 | HTTP, routes, htmx, templates | `counter`, `bank-web`, `ledger`, `rookery` |
 | A journal and snapshots across `kill -9` | `bank-web`, `ledger`, `raft-kv`, `rookery` |
+| A changed state type: an upgrade, a migration and its proof (`Migration`, `Journal.Upgrade`) | `migration` |
 | Sessions, log-in, cookies, tokens | `ledger`, `rookery` |
 | A JSON API and rate limits | `rookery` |
 | Shards in several processes, joined by TCP | `raft-kv` |

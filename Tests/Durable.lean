@@ -643,6 +643,54 @@ def fsyncTest : Async (List (String × Bool)) := do
   return [("fsync: a file and its directory are synced, and a path that is not there is an error",
     match missing with | .error (.noFileOrDirectory ..) => true | _ => false)]
 
+/-! An upgrade: the bank's files of version 1, read by version 2. The two versions have the same
+types here, so the migration changes nothing; what is tested is what the store and the shell do
+with an older version's files. `examples/migration` changes a type. -/
+
+def sameBank : Migration Bank3 Bank3 where
+  id := id
+  injective _ _ h := h
+  state _ s := s
+  msg _ m := m
+  output o := o
+  inv _ _ := True
+  keeps _ := ⟨trivial, fun _ _ _ => trivial, fun _ _ => trivial⟩
+  lands _ _ _ := trivial
+
+def upgradeTest : Async (List (String × Bool)) := do
+  let path ← scratch "upgrade"
+  let input := Request.codec Codec.fin
+  let past : List (Journal.Entry (sig (Fin 3))) :=
+    [.advance 0, .input (.transfer ⟨7, 0, 1, 3⟩), .batch 64, .handed,
+      .advance 1, .input (.transfer ⟨8, 0, 1, 3⟩), .batch 64]
+  IO.FS.writeBinFile path (Journal.file input (Journal.label "bank" 1) past)
+  let upgrade : Journal.Upgrade Bank3 :=
+    { old := Bank3, system := Journal.label "bank" 1, input, actors := some (actors Codec.fin 100)
+      migration := sameBank }
+  let v2 : Journal.Store Bank3 :=
+    { saving path with system := "bank", version := 2, upgrades := [upgrade] }
+  let run : Async (Array Nat × List Int) := do
+    let seen ← IO.mkRef #[]
+    let rt ← Runtime.start Bank3 {} (fun out => seen.modify (·.push out.req)) (some (← v2.open))
+    rt.idle
+    let balances ← (List.finRange 3).mapM fun a => do return (← rt.state a).balance
+    rt.stop
+    return (← seen.get, balances)
+  let (first, before) ← run
+  let header := (Frame.decode (← IO.FS.readBinFile path)).head?
+  let (second, after) ← run
+  let unsaved ← ({ v2 with actors := none } : Journal.Store Bank3).open.toBaseIO
+  remove path
+  return [
+    ("upgrade: a start on version 1's files hands over the output version 1 had not",
+      first == #[8] && before == [94, 106, 100]),
+    ("upgrade: and writes the migration, so the next start reads version 2's files and hands "
+      ++ "nothing over again",
+      second == #[] && after == before
+        && header == some (Journal.header (Journal.label "bank" 2))),
+    ("upgrade: a store that reads older versions and cannot save is refused",
+      unsaved.toOption.isNone) ]
+
 /-- A test that throws has failed, and the tests after it still run. -/
 def safely (name : String) (test : Async (List (String × Bool))) : IO (List (String × Bool)) := do
   try test.block
@@ -656,6 +704,6 @@ def tests : IO (List (String × Bool)) := do
     ++ (← safely "fail" failTest) ++ (← safely "cut" cutTest) ++ (← safely "count" countTest)
     ++ (← safely "snapshot" snapshotTest) ++ (← safely "windows" windowsTest)
     ++ (← safely "kill" killTest) ++ (← safely "kill while saving" killSavingTest)
-    ++ (← safely "fsync" fsyncTest)
+    ++ (← safely "fsync" fsyncTest) ++ (← safely "upgrade" upgradeTest)
 
 end Tests.Durable

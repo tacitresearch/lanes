@@ -69,6 +69,18 @@ import Lanes.Semantics
 #guard_msgs in #print axioms Lanes.Frame.decode_checksum_ne
 
 -- Lanes.Durable.Journal
+/-- info: 'Lanes.Journal.replay_kernel' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.replay_kernel
+
+/-- info: 'Lanes.Journal.resume_eq_replay' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.resume_eq_replay
+
+/-- info: 'Lanes.Journal.header_inj' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.header_inj
+
+/-- info: 'Lanes.Journal.label_zero' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Lanes.Journal.label_zero
+
 /-- info: 'Lanes.Journal.open?_file' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Journal.open?_file
 
@@ -93,6 +105,56 @@ import Lanes.Semantics
 /-- info: 'Lanes.Journal.recover_outputs' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Journal.recover_outputs
 
+-- Lanes.Durable.Migration
+/-- info: 'Lanes.Migration.cell_kernel' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Migration.cell_kernel
+
+/-- info: 'Lanes.Migration.inv_kernel' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Migration.inv_kernel
+
+/-- info: 'Lanes.Migration.inv_migrated' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Migration.inv_migrated
+
+/-- info: 'Lanes.Migration.inv_exec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Migration.inv_exec
+
 -- Lanes.Durable.Snapshot
+/-- info: 'Lanes.Journal.savedHeader_inj' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.savedHeader_inj
+
+/-- info: 'Lanes.Journal.saved?_other' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.saved?_other
+
 /-- info: 'Lanes.Journal.saved?_saved' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Journal.saved?_saved
+
+-- Lanes.Durable.Upgrade
+/-- info: 'Lanes.Journal.Entry.fits_handed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Entry.fits_handed
+
+/-- info: 'Lanes.Journal.Disk.open?_of_read' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Disk.open?_of_read
+
+/-- info: 'Lanes.Journal.Disk.start_foreign' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Disk.start_foreign
+
+/-- info: 'Lanes.Journal.Begun.resume_upgraded' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Begun.resume_upgraded
+
+/-- info: 'Lanes.Journal.Upgrade.start_torn' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Upgrade.start_torn
+
+/-- info: 'Lanes.Journal.Upgrade.decode_torn' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Upgrade.decode_torn
+
+/-- info: 'Lanes.Journal.Upgrade.begin_torn' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Upgrade.begin_torn
+
+/-- info: 'Lanes.Journal.Upgrade.begin_crash' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Upgrade.begin_crash
+
+/-- info: 'Lanes.Journal.Upgrade.holds' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Upgrade.holds
+
+/-- info: 'Lanes.Journal.Upgrade.inv_load' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Upgrade.inv_load
