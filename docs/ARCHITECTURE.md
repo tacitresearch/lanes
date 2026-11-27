@@ -34,6 +34,7 @@ proved function tells it to.
 | Signature Version 4 and the S3 client | `Lanes/Web/Http/{SigV4,SigV4Sound}.lean`, `Lanes/Web/S3/{Basic,Xml}.lean`, `Lanes/Web/IO/S3.lean` | `SigV4.target_sign`, `SigV4.sortQuery_sorted`, `SigV4.canonicalHeaders_sorted`, `SigV4.encode_chunks`; signatures tested against AWS's vectors, the client against a fake S3; its IO trusted |
 | PostgreSQL and the store model | `Lanes/Lib/Postgres/{Bytes,Message,MessageSound,Scram,Conn,ConnSound,Table}.lean`, `Lanes/Lib/Postgres/IO/Client.lean`, `Lanes/Outside/Store/{Basic,Sound}.lean` | `Backend.read_encode`, `Frontend.decode_encode`, `Conn.run_fifo`, `Conn.step_committed`, `Conn.step_query`, `Store.write_skew`, `Store.lost_commit_either`; the IO is trusted, and that the server behaves like the model is a premise |
 | Jobs: work outside a step | `Lanes/Behaviours/Jobs/{Basic,Sound}.lean`, `Lanes/Semantics/Jobs.lean`, `Lanes/Behaviours/Jobs/IO/Pool.lean` | `Jobs.answered_le_handled`, `Jobs.retry_same`, `Jobs.submitted_answered`; the pool is trusted |
+| Schedule: work that is due later | `Lanes/Behaviours/Schedule/{Basic,Sound}.lean`, `Lanes/Semantics/Schedule.lean` | `Schedule.dispatch_due`, `Schedule.calls_le_scheduled`, `Schedule.attempt_ends`, `Schedule.held_ends`; that the time it knows is not ahead of the clock is a premise |
 | Web | `Lanes/Web/Http/{Basic,Route,RouteSound,Cookie,CookieSound}.lean`, `Lanes/Web/Html/`, `Lanes/Web/Auth/` | `Html.lex_render`, `Html.safeUrl_scheme`, `Http.dispatch_link`, `Http.parseForm_encodeForm`, `Http.readSetCookie_header`, `Auth.verify_eq_some`, `Auth.checkForm_other` |
 | The checker | `Lanes/Check/`, `Lanes/Semantics/{Monitor,MonitorSound}.lean` | `Check.search_sound`, `Check.system_sound_of_respects`, `Check.refines_traces` |
 | The proof layer | `Lanes/Semantics/` | refinement, specs, fairness, leads-to |
@@ -380,6 +381,24 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   (`Jobs.answered_le_handled`); a retry carries its job's key and work (`Jobs.retry_same`);
   in a fair run without crashes every job is answered, whatever the workers do
   (`Jobs.submitted_answered`, by `System.LeadsTo.induction` on attempts left).
+- **Schedule** (`Lanes/Behaviours/Schedule/Basic.lean`): work that is due later. The scheduler
+  holds jobs under ids the requester chooses, beside the system that schedules them
+  (`Schedule.attach`): a call of the outside retried with an exponential backoff, capped and with
+  a deterministic jitter, until it is accepted, its attempts or its time run out (the dead
+  letter) or it is cancelled; a notice at a time; or a notice every period, the sweep that expires
+  what is over. An id held is one job however often it is scheduled (`already`); beyond `maxJobs`
+  or `maxPayload` a scheduling is refused at once. Its state is the journal's, and each job waits
+  on one timer, armed again at every start. The semantics has no clock, so the scheduler keeps
+  the latest time it was told or its timers were armed for, and an attempt carries that time.
+  Proved, in every environment: an attempt starts only by its job's timer, for a job due by the
+  time known (`Schedule.dispatch_due`), the next only the backoff after a failure
+  (`Schedule.retry_waits`); no id is called more often than its attempts for each scheduling
+  (`Schedule.calls_le_scheduled`); an attempt out ends only with its answer or abandoned at the
+  end of its wait (`Schedule.attempt_ends`). In a fair run in which it does not crash, every job
+  ends and its end is handed over (`Schedule.held_ends`), and a periodic job is noticed again and
+  again (`Schedule.every_noticed`). That the times it is told are not ahead of the clock, and
+  that the runtime fires a timer no earlier than its delay, are premises (`TRUSTED.md`;
+  `docs/decisions/D79-work-that-is-due-later-is-a-job-of-the-scheduler.md`).
 
 ## The checker
 
