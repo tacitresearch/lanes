@@ -68,3 +68,4 @@ decision without a number.
 - [D52. A service behind actors is proved with one simulation, and an application gives only its steps](D52-standard-simulation.md)
 - [D53. A JSON key given twice keeps its last value](D53-json-repeated-keys.md)
 - [D54. Raft acts once on a command its client names, and an answer it no longer keeps is not handed over](D54-raft-acts-once.md)
+- [D55. Work outside a step is a job: an actor with an outbox, a deadline per attempt and a bound](D55-jobs.md)
