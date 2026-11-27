@@ -15,7 +15,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Core` | 103 | 45 | 0 | 34 | 1 | 10 | 13 |
 | `Lanes/Data` | 68 | 43 | 0 | 4 | 1 | 0 | 20 |
 | `Lanes/Durable` | 70 | 58 | 2 | 0 | 0 | 9 | 1 |
-| `Lanes/Lib` | 626 | 389 | 36 | 1 | 116 | 75 | 9 |
+| `Lanes/Lib` | 626 | 388 | 37 | 1 | 116 | 75 | 9 |
 | `Lanes/Net` | 37 | 6 | 5 | 0 | 0 | 25 | 1 |
 | `Lanes/Outside` | 172 | 133 | 4 | 6 | 1 | 28 | 0 |
 | `Lanes/Proof` | 40 | 16 | 0 | 0 | 0 | 23 | 1 |
@@ -24,7 +24,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Testing` | 106 | 0 | 0 | 1 | 105 | 0 | 0 |
 | `Lanes/Web` | 691 | 357 | 57 | 46 | 175 | 54 | 2 |
 | `LanesCli` | 126 | 0 | 0 | 0 | 55 | 0 | 71 |
-| All | 2493 | 1294 | 130 | 124 | 483 | 341 | 121 |
+| All | 2493 | 1293 | 131 | 124 | 483 | 341 | 121 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -1288,6 +1288,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Postgres.Session.within` | trusted | TRUSTED.md: The PostgreSQL client's IO |
 | `Postgres.Session.exec` | trusted | TRUSTED.md: The PostgreSQL client's IO |
 | `Postgres.Session.close` | trusted | TRUSTED.md: The PostgreSQL client's IO |
+| `Postgres.socketAddress` | trusted | TRUSTED.md: The PostgreSQL client's IO |
 | `Postgres.resolve` | trusted | TRUSTED.md: The PostgreSQL client's IO |
 | `Postgres.connect` | trusted | TRUSTED.md: The PostgreSQL client's IO |
 | `Postgres.Store.perform` | trusted | TRUSTED.md: The PostgreSQL client's IO |
@@ -1380,8 +1381,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Postgres.Address.octet` | proved | through `Postgres.SslMode.defaultFor`: `Postgres.Client.Config.sslmode_default`, `Postgres.SslMode.defaultFor_disable` and 2 more |
-| `Postgres.Address.ofName` | proved | through `Postgres.SslMode.defaultFor`: `Postgres.Client.Config.sslmode_default`, `Postgres.SslMode.defaultFor_disable` and 2 more |
+| `Postgres.Address.localhost` | proved | through `Postgres.SslMode.defaultFor`: `Postgres.Client.Config.sslmode_default`, `Postgres.SslMode.defaultFor_disable` and 2 more |
 | `Postgres.Address.of` | proved | `Postgres.SslMode.defaultFor_disable`, `Postgres.SslMode.defaultFor_loopback`, `Postgres.SslMode.defaultFor_remote` |
 | `Postgres.Address.loopback` | proved | `Postgres.Address.name_remote`, `Postgres.SslMode.defaultFor_disable`, `Postgres.SslMode.defaultFor_loopback` and 1 more |
 | `Postgres.SslMode.defaultFor` | proved | `Postgres.Client.Config.sslmode_default`, `Postgres.SslMode.defaultFor_disable`, `Postgres.SslMode.defaultFor_loopback` and 1 more |
