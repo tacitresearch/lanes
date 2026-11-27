@@ -5,6 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Lanes.Core.FairScheduler
+public import Lanes.Core.Run
 public import Lanes.Core.Step
 public import Lanes.Semantics.System
 public import Cslib.Foundations.Semantics.LTS.OmegaExecution
@@ -67,6 +68,8 @@ development is of processes in that algorithm), so those two are defined here.
 - `Obligation.Due.enabled`: an obligation that is due can be taken, so fairness never asks for
   a step the semantics does not have.
 - `System.Run.Fair.output_taken`: an emitted output is eventually handed over.
+- `System.Run.Fair.delivered`: a message in flight on a link that loses nothing, to an actor
+  that stays up, is eventually handed to it; the measure is what is ahead of it on its link.
 - `System.Run.Impatient.fair`: a run that fires every timer that stays pending is fair.
 -/
 
@@ -281,6 +284,59 @@ theorem Fair.output_taken (hfair : r.Fair) {out : σ.Out} (hout : out ∈ (r.sta
       refine SysState.mem_outbox_of_step ih (step_some hev) ?_
       rintro rfl
       exact hnever ⟨m, hm, hev⟩
+
+/-- In a fair run, a message in flight on a link that does not lose it, to an actor that stays
+up, is handed to it: the message to deliver next on its link stays due while nothing ahead of it
+changes, and each delivery ahead of it brings it nearer. -/
+theorem Fair.delivered (hfair : r.Fair) {e : Envelope σ}
+    (hlossless : (env.link e.src e.dst).lossy = false)
+    (hup : ∀ m, n ≤ m → (r.state m).up e.dst = true) (he : e ∈ (r.state n).net) :
+    ∃ m, n ≤ m ∧ (r.event m = some (.deliver e) ∨ r.event m = some (.duplicate e)) := by
+  induction hk : (beforeFirst e (r.state n).net).length using Nat.strong_induction_on
+    generalizing n with
+  | _ k ih =>
+  by_contra hnever
+  have hnot (m : ℕ) (hm : n ≤ m) :
+      r.event m ≠ some (.deliver e) ∧ r.event m ≠ some (.duplicate e) :=
+    ⟨fun h => hnever ⟨m, hm, .inl h⟩, fun h => hnever ⟨m, hm, .inr h⟩⟩
+  have hkeep (m : ℕ) (hm : n ≤ m) : e ∈ (r.state m).net ∧
+      (beforeFirst e (r.state m).net).Sublist (beforeFirst e (r.state n).net) := by
+    induction m, hm using Nat.le_induction with
+    | base => exact ⟨he, List.Sublist.refl _⟩
+    | succ m hm ih =>
+      cases hev : r.event m with
+      | none => exact step_none hev ▸ ih
+      | some ev =>
+        obtain ⟨hmem, hsub⟩ := SysState.step_ahead (step_some hev) ih.1 hlossless
+          (hup (m + 1) (by omega)) (fun h => (hnot m hm).1 (h ▸ hev))
+          (fun h => (hnot m hm).2 (h ▸ hev))
+        exact ⟨hmem, hsub.trans ih.2⟩
+  have hsame (m : ℕ) (hm : n ≤ m) : beforeFirst e (r.state m).net = beforeFirst e (r.state n).net := by
+    refine (hkeep m hm).2.eq_of_length ?_
+    by_contra hlen
+    have hlt := Nat.lt_of_le_of_ne (hkeep m hm).2.length_le hlen
+    obtain ⟨m', hm', h⟩ := ih _ (hk ▸ hlt) (fun m'' hm'' => hup m'' (by omega)) (hkeep m hm).1 rfl
+    exact hnever ⟨m', by omega, h⟩
+  have hnext (m : ℕ) (hm : n ≤ m) : (r.state m).nextOnLink env e = (r.state n).nextOnLink env e := by
+    simp only [SysState.nextOnLink, hsame m hm]
+  obtain ⟨hwhere, hdst, -⟩ := SysState.nextOnLink_spec (env := env) he
+  obtain ⟨m, hm, hev⟩ := hfair.taken (ob := .deliver ((r.state n).nextOnLink env e))
+    (fun m hm => by
+      obtain ⟨-, hdst', hdel⟩ := SysState.nextOnLink_spec (env := env) (hkeep m hm).1
+      rw [hnext m hm] at hdst' hdel
+      exact ⟨hdst' ▸ hup m hm, hdel⟩)
+    (fun _ _ ⟨_, _, h⟩ => h)
+  rcases hwhere with heq | hahead
+  · exact (hnot m hm).1 (heq ▸ hev)
+  · have hx : (r.state n).nextOnLink env e ≠ e := fun h =>
+      not_mem_beforeFirst _ (h ▸ hahead)
+    obtain ⟨-, hsub⟩ := SysState.deliver_ahead (step_some hev) hx (hkeep m hm).1
+      (hup (m + 1) (by omega))
+    rw [hsame m hm, hsame (m + 1) (by omega)] at hsub
+    have := hsub.length_le
+    rw [List.length_erase_of_mem hahead] at this
+    have hpos := List.length_pos_of_mem hahead
+    omega
 
 end Run
 

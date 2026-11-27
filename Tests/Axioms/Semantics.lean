@@ -91,6 +91,34 @@ import Lanes.Semantics
 /-- info: 'Lanes.Http.served_pending_answered' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.served_pending_answered
 
+/-- info: 'Lanes.Http.Gate.always_up' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Gate.always_up
+
+/-- info: 'Lanes.Http.fronted_gate_up' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.fronted_gate_up
+
+/-- info: 'Lanes.Http.served_gate_up' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.served_gate_up
+
+/-- info: 'Lanes.Http.fronted_handle_arrive' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.fronted_handle_arrive
+
+/-- info: 'Lanes.Http.served_handle_arrive' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.served_handle_arrive
+
+/-- info: 'Lanes.Http.fronted_arrival_answered' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.fronted_arrival_answered
+
+/-- info: 'Lanes.Http.served_arrival_answered' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.served_arrival_answered
+
+-- Lanes.Semantics.History
+/-- info: 'Lanes.System.Implements.history' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Implements.history
+
+/-- info: 'Lanes.System.Implements.produced' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Implements.produced
+
 -- Lanes.Semantics.Jobs
 /-- info: 'Lanes.Jobs.active_leaves' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Jobs.active_leaves
@@ -123,6 +151,9 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.System.Run.Fair.output_taken' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Run.Fair.output_taken
+
+/-- info: 'Lanes.System.Run.Fair.delivered' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Run.Fair.delivered
 
 /-- info: 'Lanes.System.Run.Impatient.fair' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Run.Impatient.fair

@@ -126,4 +126,20 @@ theorem Gate.step_bounded {E : Type} (bridge : Bridge σ) (config : GateConfig)
     · exact ⟨Nat.le_trans (List.length_erase_le ..) hlen, hnodup.erase _⟩
     · exact ⟨hlen, hnodup⟩
 
+/-- An arrival is answered in the step that handles it, or is waiting after it, wherever the
+gate sits. -/
+theorem Gate.step_arrive {E : Type} (bridge : Bridge σ) (config : GateConfig)
+    (does : Gate.Effects σ E) (pending : List ReqId) (id : ReqId) (request : Request) :
+    id ∈ (Gate.step bridge config does pending (.arrive id request)).1 ∨
+      ∃ response, does.respond id response ∈
+        (Gate.step bridge config does pending (.arrive id request)).2 := by
+  simp only [Gate.step]
+  split
+  · exact .inl ‹_›
+  · split
+    · exact .inr ⟨_, List.mem_singleton_self _⟩
+    · split
+      · exact .inr ⟨_, List.mem_singleton_self _⟩
+      · exact .inl List.mem_cons_self
+
 end Lanes.Http

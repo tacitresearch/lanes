@@ -78,4 +78,81 @@ theorem afterFirst_of_cons_sublist [DecidableEq α] {a : α} {l p : List α} (h 
       · exact ih ‹_›
       · exact absurd rfl hx
 
+/-- What comes before the first `a` in `l`: all of `l` if `a` is not in it. -/
+@[expose] def beforeFirst [DecidableEq α] (a : α) : List α → List α
+  | [] => []
+  | x :: xs => if x = a then [] else x :: beforeFirst a xs
+
+section BeforeFirst
+
+variable [DecidableEq α] {a b : α}
+
+theorem not_mem_beforeFirst (l : List α) : a ∉ beforeFirst a l := by
+  induction l with
+  | nil => simp [beforeFirst]
+  | cons x xs ih =>
+    simp only [beforeFirst]
+    split
+    · simp
+    · next hx => simp [Ne.symm hx, ih]
+
+theorem eq_beforeFirst_append {l : List α} (h : a ∈ l) :
+    ∃ rest, l = beforeFirst a l ++ a :: rest := by
+  induction l with
+  | nil => simp at h
+  | cons x xs ih =>
+    simp only [beforeFirst]
+    split
+    · next hx => exact ⟨xs, by simp [hx]⟩
+    · next hx =>
+      obtain ⟨rest, hrest⟩ := ih ((List.mem_cons.mp h).resolve_left (Ne.symm hx))
+      exact ⟨rest, by rw [List.cons_append, ← hrest]⟩
+
+theorem beforeFirst_append {l : List α} (h : a ∈ l) (l' : List α) :
+    beforeFirst a (l ++ l') = beforeFirst a l := by
+  induction l with
+  | nil => simp at h
+  | cons x xs ih =>
+    simp only [List.cons_append, beforeFirst]
+    split
+    · rfl
+    · next hx => rw [ih ((List.mem_cons.mp h).resolve_left (Ne.symm hx))]
+
+theorem beforeFirst_filter {p : α → Bool} (hp : p a = true) (l : List α) :
+    beforeFirst a (l.filter p) = (beforeFirst a l).filter p := by
+  induction l with
+  | nil => rfl
+  | cons x xs ih =>
+    by_cases hx : p x = true
+    · simp only [List.filter_cons, hx, ↓reduceIte, beforeFirst]
+      split
+      · rfl
+      · simp [hx, ih]
+    · have hne : x ≠ a := fun h => hx (h ▸ hp)
+      simp [hx, beforeFirst, hne, ih]
+
+theorem beforeFirst_erase (hb : b ≠ a) (l : List α) :
+    beforeFirst a (l.erase b) = (beforeFirst a l).erase b := by
+  induction l with
+  | nil => rfl
+  | cons x xs ih =>
+    by_cases hxb : x = b
+    · subst hxb
+      simp [beforeFirst, hb]
+    · rw [List.erase_cons_tail (by simpa using hxb)]
+      by_cases hxa : x = a
+      · simp [beforeFirst, hxa]
+      · simp only [beforeFirst, hxa, ↓reduceIte, ih]
+        rw [List.erase_cons_tail (by simpa using hxb)]
+
+/-- Where `a` is in `l` and `p` holds of it, the first element of `l` that satisfies `p` is
+`a` or comes before it. -/
+theorem find?_eq_or_beforeFirst {p : α → Bool} (hp : p a = true) {l : List α} (h : a ∈ l) :
+    l.find? p = ((beforeFirst a l).find? p).or (some a) := by
+  obtain ⟨rest, hrest⟩ := eq_beforeFirst_append h
+  have hl : l.find? p = (beforeFirst a l ++ a :: rest).find? p := by rw [← hrest]
+  rw [hl, List.find?_append, List.find?_cons_of_pos hp]
+
+end BeforeFirst
+
 end Lanes
