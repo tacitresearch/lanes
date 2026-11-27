@@ -163,6 +163,12 @@ import Lanes.Semantics
 /-- info: 'Lanes.MediaType.parse_print' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.MediaType.parse_print
 
+/-- info: 'Lanes.MediaType.isQdtext_of' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.MediaType.isQdtext_of
+
+/-- info: 'Lanes.MediaType.quoted_esc' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.MediaType.quoted_esc
+
 -- Lanes.Lib.Net.Ip
 /-- info: 'Lanes.Ip.parse_print' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Ip.parse_print

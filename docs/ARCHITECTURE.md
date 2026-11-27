@@ -6,7 +6,8 @@ are in `AGENTS.md`; what works and its limits in `docs/STATUS.md`; what is trust
 definition (proved, with its theorems; trusted; checked; tested; a spec; or none) is generated
 from the built library in `docs/INVENTORY.md` (D47), and what has none is on
 `docs/inventory-none.md`: that is where a claim is checked, and this page only names the
-headline theorems. Those are gated in `Tests/Axioms/`, which stops compiling if a `sorry` or a
+headline theorems. `import Lanes` gives the API; the soundness theorems named here are in
+`Lanes.Proofs` (`Lanes/Proofs.lean`), which `Lanes.Semantics` imports. Those are gated in `Tests/Axioms/`, which stops compiling if a `sorry` or a
 new axiom reaches them.
 
 The idea in one line: all logic is pure step functions, the semantics is one executable function
@@ -16,20 +17,20 @@ proved function tells it to.
 
 | Piece | Where | Proved by |
 | --- | --- | --- |
-| Actors and systems | `Lanes/Actors/{Actor,System,World,Step}.lean` | the definition everything else is about |
-| Proof tools for systems | `Lanes/Actors/{Lift,Ghost,Monotone,Equiv,Run}.lean` | `System.invariant_of_actor`, `Inductive.of_monotone`, `System.Invariant.of_ghost` |
-| The kernel | `Lanes/Actors/{Kernel,KernelSound,KernelTimers}.lean` | `Kernel.exec_reachable`, `Kernel.exec_outputs`, `Kernel.exec_wellFormed` |
-| The shell | `Lanes/Actors/{Runtime,Batch,Mailbox,MailboxSound}.lean` | `Batch.run_kernel`, `Batch.run_sound`, `Mailbox.batch_since_take`; the shell itself is trusted |
-| Journal, snapshots, disk | `Lanes/Actors/{Journal,Snapshot,Disk}.lean`, `Lanes/Durable/IO/Journal.lean` | `Journal.open?_cut`, `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Journal.Disk.Holds.save_crash` |
-| Joins | `Lanes/Actors/{Join,JoinSound,MapIOSound}.lean`, `Lanes/Semantics/FairJoin.lean` | `System.Reachable.left`, `SysState.run_left`, `System.Run.Fair.left` |
-| Shards and the transport | `Lanes/Actors/{Shard,ShardSound,ShardsSound,Courier,CourierSound}.lean`, `Lanes/Env/{Peers,Node}.lean` | `System.ShardsReachable.unsharded`, `Peers.Courier.written_sublist_sent` |
-| The gate and the HTTP server | `Lanes/Http/{Gate,Front,FrontSound,Waiting}.lean`, `Lanes/Semantics/Front.lean`, `Lanes/Web/IO/Server.lean` | `Http.served_answered_le_arrived`, `Http.served_pending_answered`, `Http.Waiting.exec_answered` |
-| Other adapters | `Lanes/Outside/Basic.lean`, `Lanes/Env/{Clock,HttpClient}.lean`, `Lanes/Http/{Wire,WireSound}.lean` | `Response.read_wire`, `Request.fields_framing`; conformance tests |
-| Jobs: work outside a step | `Lanes/Behaviours/{Jobs,JobsSound}.lean`, `Lanes/Semantics/Jobs.lean`, `Lanes/Behaviours/Jobs/IO/Pool.lean` | `Jobs.answered_le_handled`, `Jobs.retry_same`, `Jobs.submitted_answered`; the pool is trusted |
-| Web | `Lanes/Http/{Basic,Route,RouteSound,Cookie,CookieSound}.lean`, `Lanes/Html/`, `Lanes/Auth/` | `Html.lex_render`, `Html.safeUrl_scheme`, `Http.dispatch_link`, `Http.parseForm_encodeForm`, `Http.readSetCookie_header`, `Auth.verify_eq_some`, `Auth.checkForm_other` |
+| Actors and systems | `Lanes/Core/{Actor,System,World,Step,Run}.lean` | the definition everything else is about |
+| Proof tools for systems | `Lanes/Proof/{Lift,Ghost,Monotone,Equiv,Deed}.lean` | `System.invariant_of_actor`, `Inductive.of_monotone`, `System.Invariant.of_ghost` |
+| The kernel | `Lanes/Runtime/{Kernel,KernelSound,KernelTimers}.lean` | `Kernel.exec_reachable`, `Kernel.exec_outputs`, `Kernel.exec_wellFormed` |
+| The shell | `Lanes/Runtime/IO/Shell.lean`, `Lanes/Runtime/{Batch,Mailbox,MailboxSound}.lean` | `Batch.run_kernel`, `Batch.run_sound`, `Mailbox.batch_since_take`; the shell itself is trusted |
+| Journal, snapshots, disk | `Lanes/Durable/{Journal,Snapshot,Disk,Frame}.lean`, `Lanes/Durable/IO/Journal.lean` | `Journal.open?_cut`, `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Journal.Disk.Holds.save_crash` |
+| Joins | `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`, `Lanes/Semantics/FairJoin.lean` | `System.Reachable.left`, `SysState.run_left`, `System.Run.Fair.left` |
+| Shards and the transport | `Lanes/Runtime/{Shard,ShardSound,ShardsSound}.lean`, `Lanes/Net/{Courier,CourierSound}.lean`, `Lanes/Net/IO/{Peers,Node}.lean` | `System.ShardsReachable.unsharded`, `Peers.Courier.written_sublist_sent` |
+| The gate and the HTTP server | `Lanes/Web/Http/{Gate,Front,FrontSound,Waiting,Conn,ConnSound}.lean`, `Lanes/Semantics/Front.lean`, `Lanes/Web/IO/Server.lean` | `Http.served_answered_le_arrived`, `Http.served_pending_answered`, `Http.Waiting.exec_answered`, `Http.Conn.run_writes` |
+| Other adapters | `Lanes/Outside/Basic.lean`, `Lanes/Outside/IO/Clock.lean`, `Lanes/Web/IO/Client.lean`, `Lanes/Web/Http/{Grammar,Wire,WireSound}.lean` | `Response.read_wire`, `Request.fields_framing`; conformance tests |
+| Jobs: work outside a step | `Lanes/Behaviours/Jobs/{Basic,Sound}.lean`, `Lanes/Semantics/Jobs.lean`, `Lanes/Behaviours/Jobs/IO/Pool.lean` | `Jobs.answered_le_handled`, `Jobs.retry_same`, `Jobs.submitted_answered`; the pool is trusted |
+| Web | `Lanes/Web/Http/{Basic,Route,RouteSound,Cookie,CookieSound}.lean`, `Lanes/Web/Html/`, `Lanes/Web/Auth/` | `Html.lex_render`, `Html.safeUrl_scheme`, `Http.dispatch_link`, `Http.parseForm_encodeForm`, `Http.readSetCookie_header`, `Auth.verify_eq_some`, `Auth.checkForm_other` |
 | The checker | `Lanes/Check/`, `Lanes/Semantics/{Monitor,MonitorSound}.lean` | `Check.search_sound`, `Check.system_sound_of_respects`, `Check.refines_traces` |
 | The proof layer | `Lanes/Semantics/` | refinement, specs, fairness, leads-to |
-| Data | `Lanes/Data/` | codec laws, `Quorum.majority_inter`, `Bytes.same_iff` |
+| Data and the standard library | `Lanes/Data/`, `Lanes/Lib/` | codec laws, `Quorum.majority_inter`, `Bytes.same_iff`, `Json.parse_iff`, `Url.parse_print` |
 | Bound C | `native/lanes.c`, `Lanes/Lib/Crypto/Sodium.lean` | trusted; tested against the Lean references |
 
 ## Actors and the semantics
@@ -172,7 +173,7 @@ from, so text stays text (`Html.lex_render`, against a model of the HTML tokeniz
 attributes limited to `Html.allowedSchemes` (`Html.safeUrl_scheme`), and a template macro
 (`Lanes/Web/Html/Syntax.lean`, trusted); htmx attributes taken from routes (`Hx.request_match?`);
 cookies a browser stores with exactly the attributes they name (`Http.readSetCookie_header`,
-against RFC 6265's algorithm); and `Lanes/Auth/`: signed tokens and form tokens that accept
+against RFC 6265's algorithm); and `Lanes/Web/Auth/`: signed tokens and form tokens that accept
 exactly what was signed for their purpose and session (`Auth.verify_eq_some`,
 `Auth.checkForm_iff`) and another's only through an HMAC collision (`Auth.verify_sign_other`,
 `Auth.checkForm_other`), Argon2id password digests, failed attempts that lock at their limit
@@ -243,7 +244,7 @@ theorem.
   `Service.once` is the spec, `Lanes/Behaviours/Once/Basic.lean` the memo that meets it, and
   `System.Refines.of_handles` the relation rule that a duplicated message cannot break. The
   key-value store implements it with no premise on its links
-  (`Examples.KV.implements_once`), and so does Raft with the memo in its replicated machine
+  (`KV.implements_once`, `examples/kv-cache`), and so does Raft with the memo in its replicated machine
   (`RaftKV.implementsMachine_once`). `System.Refines.filterMapIO` carries a refinement through
   hiding outputs the spec allows at any time (`Spec.showing`).
 - Liveness (`Lanes/Semantics/Liveness.lean`, D27): infinite runs (`System.Run`), weak fairness
@@ -289,16 +290,17 @@ courier and enters the other process's inbox as an input.
 
 ## Applications
 
-`Examples/` holds small reference apps, each checked and proved: the bank (`Tests/Fixtures/Bank.lean`,
-also served over HTTP by `Tests/Fixtures/BankWeb.lean`), a key-value store with front ends
-(`Tests/Fixtures/KV.lean`, refinement in `Tests/Fixtures/KVProofs.lean`), leader election
-(`Tests/Fixtures/Election.lean`) and a watchdog (`Tests/Fixtures/Watchdog.lean`). `systems/` holds serious
-applications, each its own Lake package that requires Lanes as a user would (`examples/README.md`):
-`examples/raft-kv`, a replicated key-value store proved to implement the map it replicates
-(`RaftKV.implementsMachine`), and `once` of it in every environment with the memo in the map
-(`RaftKV.implementsMachine_once`); `examples/ledger`, a multi-user web ledger; and
-`examples/rookery`, a small social network for bots whose claims are proved of its spec, which it
-is proved to implement with deadlines (`Rookery.implements`). `lanes new`
+`examples/` holds the applications, each its own Lake package that requires Lanes as a user
+would, in the order `examples/README.md` reads them: the counter `lanes new` writes
+(`examples/counter`); the bank (`examples/bank`), also served over HTTP (`examples/bank-web`); a
+key-value store with front ends, whose read cache breaks refinement (`examples/kv-cache`,
+`KV.implements`, `KV.caching_not_implements`); leader election (`examples/election`); a watchdog
+(`examples/watchdog`); `examples/raft-kv`, a replicated key-value store proved to implement the
+map it replicates (`RaftKV.implementsMachine`), and `once` of it in every environment with the
+memo in the map (`RaftKV.implementsMachine_once`); `examples/ledger`, a multi-user web ledger;
+and `examples/rookery`, a small social network for bots whose claims are proved of its spec,
+which it is proved to implement with deadlines (`Rookery.implements`). The tests use copies of
+the small ones in `Tests/Fixtures/`, so an example can change for its reader alone. `lanes new`
 (`LanesCli/New.lean`, `templates/app/`) creates an application; `lanes lint`
 (`LanesCli/Lint.lean`) checks the rules of `AGENTS.md` that the text can show, the generated files
 and the inventory (`LanesCli/Inventory.lean`).

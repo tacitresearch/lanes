@@ -49,8 +49,9 @@ inside D and E.
 
 ## Serious applications
 
-`Examples/` holds small pieces, one idea each, that run in seconds. Serious applications live in
-`systems/`, each its own Lake package that requires Lanes as a user would, with its own CI job.
+`examples/` holds small pieces, one idea each, that run in seconds, and the serious
+applications, each its own Lake package that requires Lanes as a user would; the serious ones
+have a CI job each.
 They stay in this repository while the API they use is changing, so that a framework change that
 breaks one cannot merge. One moves to its own repository when that API has settled or the
 application needs its own releases.

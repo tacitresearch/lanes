@@ -156,7 +156,7 @@ definitions of `Lanes/` that still have no evidence.
 - **The HTTP client's wire format.** What the reader makes of a response written as a server
   writes it, and of every start of one, is proved, and so are its size limit and its ending
   (`Response.read_wire`, `Response.read_more`).
-- **Trusted.** About 2,200 lines of trusted code, listed with their sizes in `TRUSTED.md`: IO,
+- **Trusted.** About 2,250 lines of trusted code, listed with their sizes in `TRUSTED.md`: IO,
   C that binds libsodium, `fsync` and a timed wait, a template macro, and an HTTP wire format whose reading
   is proved for what a server's writer sends and only tested for other forms. `lanes lint` fails if they change without the list,
   and `scripts/mutants.py` holds the known ways of breaking that code, each of which has to
@@ -170,6 +170,8 @@ definitions of `Lanes/` that still have no evidence.
 ## Kill it and start it again
 
 ```bash
+cd examples/bank-web && mkdir -p .lake && ln -s ../../../.lake/packages .lake/packages
+lake build
 lake exe bankWeb 8080 bank.journal &
 curl -X POST -d "src=0&dst=2&amount=42" http://127.0.0.1:8080/transfer
 kill -9 %1
@@ -216,7 +218,10 @@ lake exe lanesCheck  # the larger model checks, about 20 s
 lake exe lanes lint
 ```
 
-`AGENTS.md` has the rules and the layout of the repository.
+`AGENTS.md` has the rules and the layout of the repository, and `examples/README.md` the order
+to read the examples in. Executable code imports `Lanes`; a proof that cites one of the
+framework's soundness theorems imports `Lanes.Proofs`, and one that needs refinement, fairness
+or Mathlib `Lanes.Semantics`.
 
 ## A spec in five lines, checked without a refinement mapping
 
@@ -230,7 +235,7 @@ def spec : Service (Request K V F) (Response V) (K → Option V) where
 ```
 
 Monitor any system against it with `spec.monitored driver` and `Check.refines`. Give the front
-ends of `Tests/Fixtures/KV.lean` a read cache and the checker reports the stale read:
+ends of `examples/kv-cache/KV.lean` a read cache and the checker reports the stale read:
 
 ```
 FAIL: "every response is allowed by the map spec" is violated after 14 steps

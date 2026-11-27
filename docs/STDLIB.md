@@ -85,7 +85,7 @@ API. P1 is common, P2 rare.
 | Go package | Class | Where, or why not |
 | --- | --- | --- |
 | `encoding` | e | the interfaces; Lanes' equivalent is `Codec` with its round-trip law (`Lanes/Data/Codec.lean`, `lanes_data`) |
-| `encoding/json` | e | `Lanes.Json` (`Lanes/Data/Json/`, D15): total, bounded, strict. Its print-then-parse round trip is not proved yet; JSONTestSuite and Go are its oracles |
+| `encoding/json` | e | `Lanes.Json` (`Lanes/Lib/Encoding/Json/`, D15): total, bounded, strict. Its print-then-parse round trip is not proved yet; JSONTestSuite and Go are its oracles |
 | `encoding/hex` | e | `Bytes.hex`, `Bytes.unhex?` (`Lanes/Lib/Crypto/Hmac.lean`, `Bytes.unhex?_hex` proved) |
 | `encoding/base64` | b | P0, built: `Lanes/Lib/Encoding/Base64.lean` |
 | `encoding/base32` | b | P1 |
@@ -103,7 +103,7 @@ API. P1 is common, P2 rare.
 | `mime/multipart` | b | P1 |
 | `mime/quotedprintable` | b | P2 |
 | `html` | e | escaping in `Lanes.Html` (`Lanes/Web/Html/Basic.lean`, proved safe). Unescaping (`html.UnescapeString`) is P2, and the table of character references exists in `Lean.Data.Html.CharRef` (not linkable) |
-| `html/template` | e | `Lanes.Html`, the template macro and `Lanes.Hx` (`Lanes/Html/`): text escaped by type, URL attributes checked at render |
+| `html/template` | e | `Lanes.Html`, the template macro and `Lanes.Hx` (`Lanes/Web/Html/`): text escaped by type, URL attributes checked at render |
 | `image`, `image/color`, `image/color/palette`, `image/draw`, `image/gif`, `image/jpeg`, `image/png` | d | an upload is stored as bytes. Decoding hostile images to resize them would be (b, large); for now that is a separate service |
 
 ## Network and HTTP
@@ -113,7 +113,7 @@ API. P1 is common, P2 rare.
 | `net` | a | `Std.Async.TCP`, `Std.Async.UDP`, `Std.Async.DNS` (libuv's `getaddrinfo`), `Std.Net.Addr`. Lanes uses TCP (`Lanes.Peers`, the HTTP client) and not yet DNS |
 | `net/netip` | b | P0, built: `Lanes/Lib/Net/Ip.lean` (`Std.Net.Addr` parses and prints with libuv's `inet_pton` and `inet_ntop`, and has no prefixes) |
 | `net/url` | b | P0, built: `Lanes/Lib/Net/Url.lean` (references, resolution, normalization, queries) with `Lanes/Lib/Net/UrlSound.lean`; forms in `Lanes/Web/Http/Basic.lean`. `Std.Http.Data.URI` parses RFC 3986 with no theorems |
-| `net/http` (server) | e | `Lanes.Web.IO.Server` on `Std.Http.Server`, with the gate (`Lanes/Web/Http/Gate.lean`) deciding; routes `Lanes/Web/Http/Route.lean`; cookies `Lanes/Web/Http/Cookie.lean`; sessions and log-in `Lanes/Auth/` |
+| `net/http` (server) | e | `Lanes.Web.IO.Server` on `Std.Http.Server`, with the gate (`Lanes/Web/Http/Gate.lean`) deciding; routes `Lanes/Web/Http/Route.lean`; cookies `Lanes/Web/Http/Cookie.lean`; sessions and log-in `Lanes/Web/Auth/` |
 | `net/http` (client) | e | `Lanes.Web.IO.Client` and `Lanes.Web.Http.Wire` (the reader proved). `Std.Http` has no client, only a pure redirect planner (`Std.Http.Protocol.H1.Redirect`). Missing: TLS (c, P0) and names (DNS, P0) |
 | `net/http` (`DetectContentType`) | b | P1, to check an upload is what it claims |
 | `net/http` (streamed responses) | b | P1: server-sent events for live timelines; the server adapter answers once per request today |

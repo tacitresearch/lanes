@@ -41,3 +41,9 @@ because a launch claim is what a critic tests first.
 6. **Short, current docs.** One rules file (`AGENTS.md`), `docs/ARCHITECTURE.md` in place of the
    original design, this page and `docs/ROADMAP.md` without their history, and `lanes lint`
    checking that docs cite files that exist.
+7. **Models of external systems.** Classes of external system as models under `Lanes/Outside/`
+   (a transactional store with an isolation level, an object store, a queue, an API with
+   idempotency keys and webhooks), built from combinators on `Outside` (an RPC whose timeout is
+   ambiguous, idempotency, an event stream), and vendors as packages under `integrations/` whose
+   conformance to a class is a trusted premise tested against the real service. Only `Outside`
+   has moved there so far.
