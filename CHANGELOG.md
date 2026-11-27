@@ -11,6 +11,11 @@ under Unreleased (`CONTRIBUTING.md`).
 ### Changed
 
 - Module paths are reorganised by concern: `Lanes.Actors` is split into `Lanes/Core`, `Lanes/Proof`, `Lanes/Runtime`, `Lanes/Durable`, `Lanes/Net` and `Lanes/Outside`, HTTP, HTML and authentication are under `Lanes/Web`, the standard library under `Lanes/Lib`, and each area's IO in an `IO/` directory; `import Lanes` leaves out the framework's soundness theorems, which a proof imports with `import Lanes.Proofs` (or `Lanes.Semantics`); `Examples/` and `systems/` are one `examples/` directory of Lake packages, `examples/counter` being what `lanes new` writes.
+- `Tests/Fixtures/` keeps the small applications' systems and the two bank theorems the tests carry to shards; the proofs of election, the key-value store and the watchdog are only in their examples.
+
+### Removed
+
+- `Actor.comapMsg`, which nothing used; the `Repr Empty` instance of `Lanes/Core/Inspect.lean`, which Lean has; helper lemmas of the soundness proofs that no proof used.
 
 ## [0.1.0] - unreleased
 
@@ -30,7 +35,7 @@ the Lake file.
 - HTTP: a gate joined in front of a system, typed routes proved to print and match alike, a strict request reader, the server's own connection loop on `Std.Net` as a pure `Http.Conn`, and an HTTP client.
 - HTML values and a template macro, htmx attributes from routes, forms and cookies with proofs against their specs.
 - Authentication: signed tokens, form tokens, sessions, failed-attempt limits and Argon2id password digests.
-- Data: `lanes_data` with derived `Codable`, `Enum` and `LawfulBEq`; law-carrying codecs; JSON; Base64; IP addresses and prefixes; civil dates, RFC 3339 and HTTP dates; SHA-256, HMAC and PBKDF2 references.
+- Data: `lanes_data` with derived `Codable`, `Enum` and `LawfulBEq`; law-carrying codecs; JSON; Base64; IP addresses and prefixes; civil dates, RFC 3339 and HTTP dates; SHA-256 and HMAC references.
 - Bindings to libsodium, `fsync` and a timed thread wait, each beside a Lean reference where one exists.
 - Differential tests of the parsers against Go's standard library, with every difference decided.
 - The `lanes` command: `new` (an app with a proved counter, a journal and a page), `lint`, `check` and `inventory`.

@@ -76,3 +76,4 @@ decision without a number.
 - [D60. Examples are for reading, fixtures are for the tests](D60-examples-are-for-reading.md)
 - [D61. Models of external systems: classes in Lanes, vendors in integrations](D61-models-of-external-systems.md)
 - [D62. The layout is by concern, and `import Lanes` is the API](D62-the-layout-is-by-concern.md)
+- [D63. The fixtures hold what the tests use, the examples the proofs](D63-fixtures-hold-what-tests-use.md)
