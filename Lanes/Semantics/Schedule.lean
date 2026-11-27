@@ -114,7 +114,7 @@ theorem not_arms {s : State K P} {j : Job K P} (hj : entry s.jobs j.key = some j
 theorem ends_of_leaves {s : State K P} {key : K} {j : Job K P} (hj : entry s.jobs key = some j)
     {msg : Schedule.Msg K P A} (hgone : entry (step config s msg).1.jobs key = none) :
     (∃ o, (.emit (.answer key o) : Eff K P A) ∈ (step config s msg).2) ∨
-      (.emit (.notice key j.payload) : Eff K P A) ∈ (step config s msg).2 := by
+      ∃ n, (.emit (.notice key j.payload n) : Eff K P A) ∈ (step config s msg).2 := by
   have hheld : key ∈ keys s.jobs := mem_keys.mpr ⟨j, (entry_some hj).1, (entry_some hj).2⟩
   rcases step_key (config := config) hj msg with ⟨hsame, -⟩ | ⟨act, -, hstep⟩
   · rw [hsame] at hgone
@@ -233,21 +233,22 @@ theorem held_leaves (config : Config K P A) (hcrash : env.mayCrash () = false) (
 theorem ends_of_step {c c' : SysState (system (K := K) (P := P) config)}
     {ev : Event (sig K P A)} (hstep : c.step env ev = some c') {key : K} {j : Job K P}
     (hj : entry (c.state ()).jobs key = some j) (hout : key ∉ keys (c'.state ()).jobs) :
-    (∃ o, Output.answer key o ∈ c'.outbox) ∨ Output.notice key j.payload ∈ c'.outbox := by
+    (∃ o, Output.answer key o ∈ c'.outbox) ∨ ∃ n, Output.notice key j.payload n ∈ c'.outbox := by
   have hin : key ∈ keys (c.state ()).jobs :=
     mem_keys.mpr ⟨j, (entry_some hj).1, (entry_some hj).2⟩
   have hhandle (c₀ : SysState (system (K := K) (P := P) config)) (hs : c₀.state = c.state)
       (i : Unit) (msg : Schedule.Msg K P A)
       (hgone : key ∉ keys ((c₀.handle env i msg).state ()).jobs) :
       (∃ o, Output.answer key o ∈ (c₀.handle env i msg).outbox) ∨
-        Output.notice key j.payload ∈ (c₀.handle env i msg).outbox := by
+        ∃ n, Output.notice key j.payload n ∈ (c₀.handle env i msg).outbox := by
     obtain rfl : i = () := rfl
     rw [handle_eq] at hgone ⊢
     simp only [update_self] at hgone
     rw [hs] at hgone ⊢
     rcases ends_of_leaves (config := config) hj (entry_eq_none.mpr hgone) with ⟨o, ho⟩ | ho
     · exact .inl ⟨o, List.mem_append_right _ (Effect.mem_emits.mpr ho)⟩
-    · exact .inr (List.mem_append_right _ (Effect.mem_emits.mpr ho))
+    · obtain ⟨n, ho⟩ := ho
+      exact .inr ⟨n, List.mem_append_right _ (Effect.mem_emits.mpr ho)⟩
   cases ev with
   | input x =>
     obtain rfl := SysState.step_input.mp hstep
@@ -283,7 +284,7 @@ theorem held_ends (config : Config K P A) (hcrash : env.mayCrash () = false) (ke
     (hup : (r.state n).up () = true) {j : Job K P}
     (hj : entry ((r.state n).state ()).jobs key = some j) (hp : j.work.periodic = false) :
     ∃ m, n ≤ m ∧ ((∃ o, r.event m = some (.output (.answer key o))) ∨
-      ∃ p, r.event m = some (.output (.notice key p))) := by
+      ∃ p n, r.event m = some (.output (.notice key p n))) := by
   obtain ⟨m, hm, hgone⟩ := System.LeadsTo.iff.mp (held_leaves config hcrash key)
     r hfair n ⟨hup, j, hj, hp⟩
   have hin : key ∈ keys ((r.state n).state ()).jobs :=
@@ -304,8 +305,9 @@ theorem held_ends (config : Config K P A) (hcrash : env.mayCrash () = false) (ke
     rcases ends_of_step (System.Run.step_some hev) hj' hout with ⟨o, ho⟩ | ho
     · obtain ⟨m', hm', htaken⟩ := hfair.output_taken (n := k + 1) ho
       exact ⟨m', by omega, .inl ⟨o, htaken⟩⟩
-    · obtain ⟨m', hm', htaken⟩ := hfair.output_taken (n := k + 1) ho
-      exact ⟨m', by omega, .inr ⟨_, htaken⟩⟩
+    · obtain ⟨t, ho⟩ := ho
+      obtain ⟨m', hm', htaken⟩ := hfair.output_taken (n := k + 1) ho
+      exact ⟨m', by omega, .inr ⟨_, _, htaken⟩⟩
 
 /-- A step leaves a periodic job waiting as it was, without arming its timer again, or ends it,
 or emits its notice. -/
@@ -315,7 +317,7 @@ theorem every_step {s : State K P} {key : K} {j : Job K P} (hj : entry s.jobs ke
     (entry (step config s msg).1.jobs key = some j ∧
         ∀ d, (.after d (timer j) : Eff K P A) ∉ (step config s msg).2) ∨
       entry (step config s msg).1.jobs key = none ∨
-      (.emit (.notice key j.payload) : Eff K P A) ∈ (step config s msg).2 := by
+      ∃ n, (.emit (.notice key j.payload n) : Eff K P A) ∈ (step config s msg).2 := by
   have hheld : key ∈ keys s.jobs := mem_keys.mpr ⟨j, (entry_some hj).1, (entry_some hj).2⟩
   obtain ⟨-, hkey⟩ := entry_some hj
   have hother {key' : K} (hk : key' ≠ key) {effs : List (Eff K P A)} (hown : OwnTimers key' effs) :
@@ -357,12 +359,12 @@ private theorem every_event {c c' : SysState (system (K := K) (P := P) config)}
     {ev : Event (sig K P A)} (hstep : c.step env ev = some c') (hup : c.up () = true)
     {key : K} {j : Job K P} (hj : entry (c.state ()).jobs key = some j) {period_ms : Nat}
     (hwork : j.work = .every period_ms) (hwait : j.phase = .waiting) :
-    (key ∉ keys (c'.state ()).jobs ∨ ∃ p, Output.notice key p ∈ c'.outbox) ∨
+    (key ∉ keys (c'.state ()).jobs ∨ ∃ p n, Output.notice key p n ∈ c'.outbox) ∨
       (entry (c'.state ()).jobs key = some j ∧ .timeout () (timer j) ∉ c.arms ev) := by
   have hhandle (c₀ : SysState (system (K := K) (P := P) config)) (hs : c₀.state = c.state)
       (msg : Schedule.Msg K P A) :
       (key ∉ keys ((c₀.handle env () msg).state ()).jobs ∨
-          ∃ p, Output.notice key p ∈ (c₀.handle env () msg).outbox) ∨
+          ∃ p n, Output.notice key p n ∈ (c₀.handle env () msg).outbox) ∨
         (entry ((c₀.handle env () msg).state ()).jobs key = some j ∧
           Event.timeout (σ := sig K P A) () (timer j) ∉
             Effect.timeouts () (step config (c.state ()) msg).2) := by
@@ -374,7 +376,8 @@ private theorem every_event {c c' : SysState (system (K := K) (P := P) config)}
       obtain ⟨d, hd⟩ := Effect.mem_timeouts.mp h
       exact hnot d hd
     · exact .inl (.inl (entry_eq_none.mp hgone))
-    · exact .inl (.inr ⟨_, List.mem_append_right _ (Effect.mem_emits.mpr hnotice)⟩)
+    · obtain ⟨n, hnotice⟩ := hnotice
+      exact .inl (.inr ⟨_, n, List.mem_append_right _ (Effect.mem_emits.mpr hnotice)⟩)
   cases ev with
   | input x =>
     obtain rfl := SysState.step_input.mp hstep
@@ -409,7 +412,7 @@ theorem every_noticed (config : Config K P A) (hcrash : env.mayCrash () = false)
     (hwait : j.phase = .waiting) :
     (system (K := K) (P := P) config).LeadsTo env
       (fun c => c.up () = true ∧ entry (c.state ()).jobs key = some j)
-      (fun c => key ∉ keys (c.state ()).jobs ∨ ∃ p, Output.notice key p ∈ c.outbox) := by
+      (fun c => key ∉ keys (c.state ()).jobs ∨ ∃ p n, Output.notice key p n ∈ c.outbox) := by
   refine System.LeadsTo.ensures_of_invariant (I := fun c => Armed c) ?_
     (.timeout () (timer j)) ?_ ?_ ?_ ?_
   · exact fun c hc => armed config env c hc
@@ -420,7 +423,7 @@ theorem every_noticed (config : Config K P A) (hcrash : env.mayCrash () = false)
   · exact fun c harmed ⟨hup, hj⟩ _ => ⟨hup, harmed hup j (entry_some hj).1⟩
   · intro c c' _ ⟨hup, hj⟩ _ hstep
     obtain ⟨_, _, rfl⟩ := SysState.step_timeout.mp hstep
-    refine .inr ⟨j.payload, ?_⟩
+    refine .inr ⟨j.payload, max (c.state ()).now_ms j.at_ms, ?_⟩
     rw [handle_eq]
     refine List.mem_append_right _ (Effect.mem_emits.mpr ?_)
     obtain ⟨-, rfl⟩ := entry_some hj

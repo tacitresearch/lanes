@@ -58,7 +58,7 @@ lanes_data inductive In where
   | remind (req : Nat) (now_ms : Nat) (text : String) (in_s : Nat)
   | cancel (req : Nat) (id : Nat)
   | list (req : Nat)
-  | noticed (key : Key) (task : Task)
+  | noticed (key : Key) (task : Task) (now_ms : Nat)
   | answered (key : Key) (outcome : Schedule.Outcome Task Answer)
   deriving DecidableEq, Repr, Hashable, Codable
 
@@ -141,8 +141,8 @@ def step (config : Config) (s : State) : In → State × List Eff
   | .remind req now_ms text in_s => remind config s req now_ms text in_s
   | .cancel req id => cancel s req id
   | .list req => (s, [reply s req ""])
-  | .noticed .sweep _ => (sweep s, [])
-  | .noticed (.reminder _) _ => (s, [])
+  | .noticed .sweep _ _ => (sweep s, [])
+  | .noticed (.reminder _) _ _ => (s, [])
   | .answered (.reminder id) outcome => answered s id outcome
   | .answered .sweep _ => (s, [])
 

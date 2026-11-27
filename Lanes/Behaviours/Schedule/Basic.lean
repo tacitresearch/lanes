@@ -130,7 +130,8 @@ lanes_data inductive Output (K P A : Type) where
   | call (attempt : Attempt K P)
   /-- The attempt's wait is over with no answer: the scheduler no longer waits for it. -/
   | abandon (key : K) (attempt : Nat)
-  | notice (key : K) (payload : P)
+  /-- A job's time has come; `now_ms` is the scheduler's time then, which a sweep compares with. -/
+  | notice (key : K) (payload : P) (now_ms : Nat)
   | answer (key : K) (outcome : Outcome P A)
   deriving DecidableEq, Repr, Hashable, Codable
 
@@ -426,10 +427,10 @@ def run (config : Config K P A) (now_ms : Nat) (j : Job K P) :
     (some { j with attempt := j.attempt + 1, phase := .running, at_ms := now_ms + config.wait retry },
       [.emit (.call ⟨j.key, j.attempt + 1, now_ms, retry.deadline_ms, j.payload⟩),
         .after (config.wait retry) (.expire j.key)])
-  | .once => (none, [.emit (.notice j.key j.payload)])
+  | .once => (none, [.emit (.notice j.key j.payload now_ms)])
   | .every period_ms =>
     (some { j with at_ms := now_ms + max 1 period_ms },
-      [.emit (.notice j.key j.payload), .after (max 1 period_ms) (.due j.key)])
+      [.emit (.notice j.key j.payload now_ms), .after (max 1 period_ms) (.due j.key)])
 
 /-- The answer a reply carries; `unknown` carries none. -/
 def answerOf : Rpc.Reply A → Option A
@@ -513,14 +514,14 @@ inputs a notice and an answer are. -/
 structure Use (τ : Signature) (K P A : Type) where
   scheduled : τ.Out → Option (Nat × Spec K P)
   cancelled : τ.Out → Option K := fun _ => none
-  notice : K → P → τ.In
+  notice : K → P → Nat → τ.In
   answer : K → Outcome P A → τ.In
 
 /-- A scheduling goes to the scheduler, a notice and an answer to the system that scheduled;
 attempts and abandons leave the join. -/
 def Use.wiring {τ : Signature} (use : Use τ K P A) : Wiring (sig K P A) τ where
   toRight
-    | .notice key payload => some (use.notice key payload)
+    | .notice key payload now_ms => some (use.notice key payload now_ms)
     | .answer key outcome => some (use.answer key outcome)
     | .call _ | .abandon .. => none
   toLeft out :=

@@ -28,6 +28,8 @@ which go to the system. A job (`Schedule.Job`) has an id, chosen by the requeste
 - `once`: at its time the system is told `notice`, and the job is over;
 - `every period_ms`: the system is told `notice` at its time and every period after, until
   the job is cancelled. This is the sweep: "every minute, expire the sessions that are over".
+  A notice carries the scheduler's time when the job was due, so that a sweep can tell what is
+  over without a clock of its own.
 
 The policy is data, per job (`Schedule.Retry`) under a cap for all (`Schedule.Config`, rule
 2.5): `maxAttempts`, at most `Config.maxAttempts`; `deadline_ms`, how long the adapter waits for

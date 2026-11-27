@@ -48,7 +48,7 @@ theorem step_bounded (config : Config) {s : State} (h : Bounded config s) (x : I
     simp only [step, cancel]
     split <;> exact h
   | list req => exact h
-  | noticed key task =>
+  | noticed key task now_ms =>
     cases key with
     | sweep => exact Nat.le_trans (List.length_filter_le ..) h
     | reminder _ => exact h

@@ -68,7 +68,7 @@ def requester (toSend : List (Input Nat Nat Bool)) : Outside schedSig Requester 
   observe d out :=
     match out with
     | .answer key o => { d with answers := (key, o) :: d.answers }
-    | .notice key _ => { d with notices := key :: d.notices }
+    | .notice key _ _ => { d with notices := key :: d.notices }
     | .call a => { d with starts := (a.key, a.attempt, a.start_ms) :: d.starts }
     | .abandon .. => d
 

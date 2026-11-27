@@ -300,7 +300,7 @@ theorem onJob_not_arms (hp : j.work.periodic = false) (d : Nat) :
 /-- A job is over only by an act that tells its requester. -/
 theorem onJob_ends (hgone : (onJob config now_ms j act).job = none) :
     (∃ o, (.emit (.answer j.key o) : Eff K P A) ∈ (onJob config now_ms j act).effs) ∨
-      (.emit (.notice j.key j.payload) : Eff K P A) ∈ (onJob config now_ms j act).effs := by
+      ∃ n, (.emit (.notice j.key j.payload n) : Eff K P A) ∈ (onJob config now_ms j act).effs := by
   job_cases act at hgone
   all_goals (simp_all)
 
