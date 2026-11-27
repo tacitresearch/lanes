@@ -22,16 +22,21 @@ proved function tells it to.
 | The kernel | `Lanes/Runtime/{Kernel,KernelSound,KernelTimers,Wave}.lean` | `Kernel.exec_reachable`, `Kernel.exec_outputs`, `Kernel.exec_wellFormed`, `Kernel.runWaves_eq` |
 | The shell | `Lanes/Runtime/IO/Shell.lean`, `Lanes/Runtime/{Batch,Mailbox,MailboxSound}.lean` | `Batch.run_kernel`, `Batch.run_sound`, `Mailbox.batch_since_take`; the shell itself is trusted |
 | Journal, snapshots, disk | `Lanes/Durable/{Journal,Snapshot,Disk,Frame}.lean`, `Lanes/Durable/IO/Journal.lean` | `Journal.open?_cut`, `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Journal.Disk.Holds.save_crash` |
+| Migrations | `Lanes/Durable/{Migration,Upgrade}.lean` | `Migration.inv_exec`, `Journal.Upgrade.begin_crash`, `Journal.Upgrade.holds`, `Journal.Upgrade.inv_load` |
 | Joins | `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`, `Lanes/Semantics/FairJoin.lean` | `System.Reachable.left`, `SysState.run_left`, `System.Run.Fair.left` |
 | Shards and the transport | `Lanes/Runtime/{Shard,ShardSound,ShardsSound}.lean`, `Lanes/Net/{Courier,CourierSound}.lean`, `Lanes/Net/IO/{Peers,Node}.lean` | `System.ShardsReachable.unsharded`, `Peers.Courier.written_sublist_sent` |
 | The gate and the HTTP server | `Lanes/Web/Http/{Gate,Front,FrontSound,Waiting,Conn,ConnSound,Stream,Sse,SseSound,Loopback}.lean`, `Lanes/Semantics/Front.lean`, `Lanes/Web/IO/Server.lean` | `Http.served_answered_le_arrived`, `Http.served_pending_answered`, `Http.Waiting.exec_answered`, `Http.Conn.run_writes`, `Http.Conn.read_streamed`, `Http.Sse.parse_written` |
+| Metrics, health and the access log | `Lanes/Lib/Metrics.lean`, `Lanes/Web/Http/{Ops,OpsSound}.lean`, `Lanes/Web/IO/Ops.lean` | `Metrics.Histogram.observeAll_eq`, `Metrics.readLabelValue_escapeLabel`, `Http.Ops.route?_default`, `Http.Ops.answer_ready`, `Http.Ops.Access.parse_line`; that none of it reaches a system is trusted and tested |
 | Other adapters | `Lanes/Outside/Basic.lean`, `Lanes/Outside/IO/Clock.lean`, `Lanes/Web/IO/Client.lean`, `Lanes/Web/Http/{Grammar,Wire,WireSound}.lean` | `Response.read_wire`, `Request.fields_framing`; conformance tests |
+| Models of external services | `Lanes/Outside/{Rpc,Idempotent,Events}.lean`, `Lanes/Outside/Effects/`, `Lanes/Proof/Outputs.lean` | `Idempotent.at_most_once`, `Rpc.answered_le_called`, `Events.deliveries_le`, `System.Emits.outputs`; that a real service conforms is trusted |
+| PostgreSQL and the store model | `Lanes/Lib/Postgres/{Bytes,Message,MessageSound,Scram,Conn,ConnSound,Table}.lean`, `Lanes/Lib/Postgres/IO/Client.lean`, `Lanes/Outside/Store/{Basic,Sound}.lean` | `Backend.read_encode`, `Frontend.decode_encode`, `Conn.run_fifo`, `Conn.step_committed`, `Conn.step_query`, `Store.write_skew`, `Store.lost_commit_either`; the IO is trusted, and that the server behaves like the model is a premise |
 | Jobs: work outside a step | `Lanes/Behaviours/Jobs/{Basic,Sound}.lean`, `Lanes/Semantics/Jobs.lean`, `Lanes/Behaviours/Jobs/IO/Pool.lean` | `Jobs.answered_le_handled`, `Jobs.retry_same`, `Jobs.submitted_answered`; the pool is trusted |
 | Web | `Lanes/Web/Http/{Basic,Route,RouteSound,Cookie,CookieSound}.lean`, `Lanes/Web/Html/`, `Lanes/Web/Auth/` | `Html.lex_render`, `Html.safeUrl_scheme`, `Http.dispatch_link`, `Http.parseForm_encodeForm`, `Http.readSetCookie_header`, `Auth.verify_eq_some`, `Auth.checkForm_other` |
 | The checker | `Lanes/Check/`, `Lanes/Semantics/{Monitor,MonitorSound}.lean` | `Check.search_sound`, `Check.system_sound_of_respects`, `Check.refines_traces` |
 | The proof layer | `Lanes/Semantics/` | refinement, specs, fairness, leads-to |
 | Data and the standard library | `Lanes/Data/`, `Lanes/Lib/` | codec laws, `Quorum.majority_inter`, `Bytes.same_iff`, `Json.parse_iff`, `Url.parse_print` |
 | Bound C | `native/lanes.c`, `Lanes/Lib/Crypto/Sodium.lean` | trusted; tested against the Lean references |
+| TLS client | `native/tls.c`, `Lanes/Web/IO/Tls.lean` | trusted; tested against `openssl s_server` |
 
 ## Actors and the semantics
 
@@ -119,6 +124,24 @@ death left (`Journal.Disk.Torn.mend`), so this holds over any number of starts, 
 `Lanes/Durable/IO/Journal.lean` performs the writes, each synced with `fsync` before the next, so a loss
 of power leaves what a death would; that the file system is the model is trusted.
 
+The files carry a label, the application's name for the system and the version of its types
+(`Journal.label`; version 0 is the name alone, as every journal was named before versions). A
+deploy that changes a type keeps the old version's system and reads its files through an
+upgrade (`docs/decisions/D66-a-migration-carries-the-kernel-across.md`,
+`Lanes/Durable/Upgrade.lean`): the start replays them with the old codecs and step
+functions, migrates the kernel (`Migration`, `Lanes/Durable/Migration.lean`), hands over the old
+outputs not yet handed over, saves the result under the new label and begins the journal at
+that mark, whose index is the old history's length. Dying anywhere in those writes, the next
+start gives the same migrated kernel (`Journal.Upgrade.begin_crash`). `Disk.Holds` and
+`Disk.Torn` take the kernel a history starts from, boot or a migrated kernel, and the files after
+a migration are those of a running shard that started there (`Journal.Upgrade.holds`), so the
+crash theorems go on. What the proofs of the new version still say is what is inductive: a
+`Migration` carries an invariant of each new actor that its steps and restarts keep, and the
+proof that every state an old actor reaches migrates into it; it then holds of every actor in
+every state the new shard reaches (`Migration.inv_exec`, `Kernel.exec_inductive`) and at every
+later start (`Journal.Upgrade.inv_load`). An invariant proved only from boot, and refinement,
+do not carry over.
+
 ## Composition: joins, shards and the transport
 
 `System.join a b wiring` (`Lanes/Core/Join.lean`) is two systems as one: an output of one that
@@ -173,7 +196,7 @@ reaches the journal (D44), takes an id from `Http.Waiting` (pure: each id handed
 answered at most once and to its own waiter: `Http.Waiting.exec_handed_nodup`,
 `Http.Waiting.exec_answered`), and hands the input to the shard. It answers `503` itself when the
 inbox is full and `405` for a method an application cannot handle. With `ServerConfig.ioThreads`
-above zero, the connections run on that many threads of the server's own, each on one for its
+above zero (four by default), the connections run on that many threads of the server's own, each on one for its
 whole life; Lean has one libuv loop a process, which every read and write still goes through. `Http.serveFronted` serves
 `fronted sys`, whose other inputs and outputs pass the gate by, and `Http.serveShard`
 (`Lanes/Net/IO/Node.lean`) runs it with the transport: one process with an HTTP front and peers.
@@ -195,6 +218,20 @@ client's reader, a model of the WHATWG one, reads back the events written, in or
 comments between them ignored (`Http.Sse.parse_written`), and an event made from an answer is one
 it reads back as it is (`Http.Sse.Event.ofResponse_valid`). `Http.Loopback` runs a front end with
 no socket, for tests: the connection, the gate and the system on a kernel of its own.
+
+The server tells its operators how it is, each part off by default (`ServerConfig.ops`,
+`docs/decisions/D69-observability.md`): a metrics page in the Prometheus text format, liveness,
+readiness, request ids and a JSON access log. What is decided is pure. `Lanes/Lib/Metrics.lean`
+renders counters, gauges and histograms, whose buckets count the observations at or below their
+bounds (`Metrics.Histogram.observeAll_eq`) and whose label values a reader reads back as written
+(`Metrics.readLabelValue_escapeLabel`). `Lanes/Web/Http/Ops.lean` says which request is the
+operators', none with nothing configured (`Http.Ops.route?_default`), that readiness answers
+`200` exactly when the shard has recovered and the server is not stopping or draining
+(`Http.Ops.answer_ready`), and what a log line holds, the JSON text of its record
+(`Http.Ops.Access.parse_line`). `Lanes/Web/IO/Ops.lean` answers an operator's request before it
+is prepared or has an id, so it never reaches the shard, and passes every other request on as it
+came; it counts the journal's appends by wrapping its storage. So a run writes the same journal
+with all of it on as off, which is trusted and tested (`Tests/Ops.lean`).
 
 Around it, pure and in `Std` only: requests and responses as data; typed routes whose links the
 server reads back and `dispatch` hands to their route's handler (`Http.dispatch_link`); forms
@@ -219,12 +256,49 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
 
 - **Clock** (`Lanes/Outside/IO/Clock.lean`): the time as an input, never earlier than one given before,
   also across a restart.
-- **HTTP client** (`Lanes/Web/IO/Client.lean`): HTTP/1.1 without TLS, one request per
-  connection. The bytes are pure (`Lanes/Web/Http/Wire.lean`): the request writer frames the message
+- **HTTP client** (`Lanes/Web/IO/Client.lean`): HTTP/1.1, or HTTPS through the TLS binding
+  below, one request per connection. The bytes are pure (`Lanes/Web/Http/Wire.lean`): the request writer frames the message
   itself (`Request.fields_framing`), and the reader is proved to read a response written as a
   server writes it as soon as its last byte is there, to stay within its limit and to end
   (`Lanes/Web/Http/WireSound.lean`: `Response.read_wire`, `Response.read_more`; D39).
 - **HTTP server, journal, transport**: above.
+- **Models of external services** (`Lanes/Outside/`, D61 and the decision on models of external
+  services): what a service a system calls may do, built from three combinators on a model of
+  the service (`Rpc.Server`). `Rpc.outside` answers each call at most once, or `unknown`, or never
+  (`Rpc.answered_le_called`); an `unknown` leaves open whether the request took effect, so a
+  request counts as an effect the service may have had from the moment it is sent.
+  `Idempotent.server` gives a request under a key the effect of the first under that key, a
+  repeat the first's answer or a refusal, and proves that a request always sent under one key
+  has at most one effect in every run the model allows (`Idempotent.at_most_once`).
+  `Events.bounded` delivers events late, out of order and up to `maxDeliveries` times
+  (`Events.deliveries_le`). `Effects` is the class of services that hold things with a lifecycle,
+  made under a key and reported by webhooks, with two instances: payments, with the statuses
+  Stripe documents for a PaymentIntent (`Lanes/Outside/Effects/Payments.lean`), and email
+  (`Lanes/Outside/Effects/Email.lean`). A system's part of a proof is a fact about what its steps
+  emit, lifted to every run by `System.Emits.outputs`; `examples/payments` proves a shop charges
+  each order at most once that way (`Shop.charged_at_most_once`). That a real service does only
+  what its model allows is trusted; no adapter talks to one yet.
+- **PostgreSQL** (`Lanes/Lib/Postgres/`): the frontend/backend protocol 3.0 in Lean, not libpq
+  (`docs/decisions/D68-postgres-protocol-in-lean.md`): start-up with trust, cleartext (only when
+  allowed), MD5 or SCRAM-SHA-256; the extended query protocol with parameters, text both ways;
+  errors; transactions; plain TCP. The messages are proved to read back as written
+  (`Backend.read_encode`, `Frontend.decode_encode`) and tested against recorded sessions of
+  `psql` and of this client. A connection is a pure `Postgres.Conn.step` (`Lanes/Lib/Postgres/Conn.lean`), as
+  the HTTP server's is: replies answer requests in the order sent (`Conn.run_fifo`), a request is
+  sent only to an open connection and is read by the server as sent (`Conn.step_query`,
+  `Conn.valid_decode`), `committed` is answered only for a `COMMIT` the server committed from a
+  transaction in progress (`Conn.step_committed`), the server is trusted after SCRAM only once
+  it proved it knows the password (`Conn.onMessage_saslFinal`), and a connection that ends
+  answers every request in flight `unknown` (`Conn.step_lost`); model-checked first
+  (`Tests/PostgresConn.lean`). The IO (`Lanes/Lib/Postgres/IO/Client.lean`) only performs.
+- **A transactional store** (`Lanes/Outside/Store/Basic.lean`): what a store may answer at read
+  committed or serializable, as an `Outside` that keeps every database the answers are consistent
+  with, so that a `COMMIT` whose answer is lost has both outcomes, and its effect may appear
+  later. Its litmus runs are theorems (`Lanes/Outside/Store/Sound.lean`: `Store.write_skew`,
+  `Store.lost_update`, `Store.lost_commit_either`, `Store.lost_commit_later`). A table of
+  PostgreSQL runs it (`Lanes/Lib/Postgres/Table.lean`, `Postgres.Store.handler`); that the server
+  behaves like the model at the level chosen is the premise of a theorem proved against it,
+  tested on recorded runs (`Tests/PostgresLive.lean`). `examples/todo-db` is checked against it.
 - **Jobs** (`Lanes/Behaviours/Jobs/Basic.lean`): work that must not run in a
   step, an outbound call or slow pure work, is submitted to the jobs actor under a key the
   requester chooses, beside the system that submits it (`Jobs.attach`). The actor dispatches
@@ -293,6 +367,14 @@ function with a Lean reference (`Sha256.reference`, `Hmac.reference`, `Bytes.sam
 that reference as its body, so its theorems (`Bytes.same_iff`) are about the reference, and what
 is trusted is that the C computes the same, which `Tests/Crypto.lean` tests.
 
+TLS is a client from OpenSSL, the copy Lean's toolchain ships and links into every executable
+(`native/tls.c`, declared in `Lanes/Web/IO/Tls.lean`; `docs/decisions/D67-a-tls-client-from-the-openssl-lean-ships.md`).
+It does no IO: the client hands it the bytes that arrive and sends those it gives back, so what
+is sent and what the bytes mean stay the pure writer and reader. The certificate is always
+verified, against the system's trust store or a file given, and so is the name or address it is
+for. A response is ended only by the server's `close_notify`. That TLS is done right is trusted,
+not proved: `Tests/Tls.lean` checks the refusals against `openssl s_server`.
+
 ## A request, end to end
 
 One process running `Http.serve` on a journal:
@@ -326,7 +408,8 @@ would, in the order `examples/README.md` reads them: the counter `lanes new` wri
 (`examples/counter`); the bank (`examples/bank`), also served over HTTP (`examples/bank-web`); a
 key-value store with front ends, whose read cache breaks refinement (`examples/kv-cache`,
 `KV.implements`, `KV.caching_not_implements`); leader election (`examples/election`); a watchdog
-(`examples/watchdog`); `examples/raft-kv`, a replicated key-value store proved to implement the
+(`examples/watchdog`); a shop that charges each order at most once through a model of a payment
+service (`examples/payments`, `Shop.charged_at_most_once`); `examples/raft-kv`, a replicated key-value store proved to implement the
 map it replicates (`RaftKV.implementsMachine`), and `once` of it in every environment with the
 memo in the map (`RaftKV.implementsMachine_once`); `examples/ledger`, a multi-user web ledger;
 and `examples/rookery`, a small social network for bots whose claims are proved of its spec,

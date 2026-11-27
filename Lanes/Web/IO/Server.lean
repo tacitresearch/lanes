@@ -9,6 +9,7 @@ public import Lanes.Durable.IO.Journal
 public import Lanes.Web.Http.Conn
 public import Lanes.Web.Http.Front
 public import Lanes.Web.Http.Waiting
+public import Lanes.Web.IO.Ops
 
 /-!
 The HTTP server adapter: the IO around the gate and the connections. It accepts connections on
@@ -73,8 +74,9 @@ structure ServerConfig where
   tick_ms : Nat := 25
   /-- Threads of the server's own that run the connections, each connection on one of them for
   its whole life, dealt in turn as they are accepted. With `0`, a connection's loop runs on
-  whichever of Lean's task threads tells it something. -/
-  ioThreads : Nat := 0
+  whichever of Lean's task threads tells it something. Four by default: on the warm machine they
+  serve 21–30% more requests a second than `0` for a quarter less CPU (`bench/README.md`). -/
+  ioThreads : Nat := 4
   gate : GateConfig := {}
   /-- Where to keep a journal. With one, the system behind the server survives the process:
   it starts in the state it was in (`docs/decisions/` D24). -/
@@ -83,6 +85,9 @@ structure ServerConfig where
   written under another name is refused: replayed through other step functions it would give
   another state. -/
   system : String := ""
+  /-- Metrics, health and the access log, answered and written by the server: all off by
+  default (`Lanes/Web/IO/Ops.lean`). -/
+  ops : OpsConfig := {}
 
 private def ServerConfig.conn (config : ServerConfig) : Conn.Config where
   limits := { config.limits with body_max := config.maxBodyBytes }
@@ -186,6 +191,7 @@ structure Server (system : System τ) [Hashable τ.Id] where
   private down : IO.Promise Unit
   private localPort : UInt16
   private lanes : Array Lane
+  private ops : Ops
 
 /-- Everything written is sent before the end of the connection, and what the client still
 sends is read and dropped for a while, so that its last response is not lost to a reset. The
@@ -205,9 +211,12 @@ private def hangUp (socket : TCP.Socket.Client) (reading : Option ReadEnd) (ling
 /-- How a connection's loop reaches the rest of the server. -/
 private structure Ctx where
   config : ServerConfig
-  /-- Hand a request to the system, with whom to tell its answer; the id it entered with, unless
-  the system was too busy to take it. -/
-  submit : Request → (Response → BaseIO Unit) → BaseIO (Option ReqId)
+  /-- Hand a request to the system, with whom to tell its answer. -/
+  submit : Request → (Response → BaseIO Unit) → BaseIO Unit
+  /-- Hand a request that streams, or a piece or a pull of one, to the system, with whom to tell
+  its answer; the id it entered with, unless the system was too busy to take it. These pass by
+  the operations front (`Ops.front`), whose answers are whole. -/
+  submitStream : Request → (Response → BaseIO Unit) → BaseIO (Option ReqId)
   /-- Forget the connection, which has closed. -/
   leave : BaseIO Unit
 
@@ -250,9 +259,9 @@ private partial def react (ctx : Ctx) (line : Line) (loop : Loop) (event : Conn.
       todo := rest
       match action with
       | .submit seq request =>
-        discard <| ctx.submit request fun r => tell ctx line false (.conn (.answered seq r))
+        ctx.submit request fun r => tell ctx line false (.conn (.answered seq r))
       | .begin seq request =>
-        let id ← ctx.submit request fun r => tell ctx line false (.conn (.responded seq r))
+        let id ← ctx.submitStream request fun r => tell ctx line false (.conn (.responded seq r))
         let heads := loop.heads.filter (·.1 ≥ loop.conn.written)
         loop := { loop with heads := match id with
           | some id => (seq, id) :: heads
@@ -260,12 +269,12 @@ private partial def react (ctx : Ctx) (line : Line) (loop : Loop) (event : Conn.
       | .piece seq index request =>
         let reply := fun r => tell ctx line false (.conn (.took seq index r))
         match loop.heads.lookup seq with
-        | some id => discard <| ctx.submit (Stream.tag request id) reply
+        | some id => discard <| ctx.submitStream (Stream.tag request id) reply
         | none => reply (.text "the request is not with the system\n" 400)
       | .pull seq index request =>
         let reply := fun r => tell ctx line false (.conn (.pulled seq index r))
         match loop.heads.lookup seq with
-        | some id => discard <| ctx.submit (Stream.tag request id) reply
+        | some id => discard <| ctx.submitStream (Stream.tag request id) reply
         | none => reply (.text "the request is not with the system\n" 400)
       | .interim _ bytes | .write _ bytes | .part _ bytes =>
         let failed ← failedWrite loop
@@ -397,6 +406,8 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
     Async (Server system) := do
   let some addr := Std.Net.IPv4Addr.ofString config.host
     | throw (IO.userError s!"lanes: {config.host} is not an IPv4 address")
+  let ops ← Ops.new config.ops
+  let log := log.map ops.journal
   let waiting ← Mutex.new (Waiting.start ((log.map (·.index)).getD 0))
   let runtime ← Runtime.start system runtimeConfig (journal := log) fun out => do
     match onOutput out with
@@ -420,8 +431,9 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
     return lane
   let server : Server system := {
     runtime, listener, waiting, connections := ← Mutex.new {}, down
-    localPort := (← listener.getSockName).port, lanes }
-  let submit (request : Request) (answer : Response → BaseIO Unit) : BaseIO (Option ReqId) := do
+    localPort := (← listener.getSockName).port, lanes, ops }
+  let submitStream (request : Request) (answer : Response → BaseIO Unit) :
+      BaseIO (Option ReqId) := do
     let request := prepare request
     let admitted ← waiting.atomically do
       let id ← modifyGet (·.wait answer)
@@ -430,6 +442,12 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
       return none
     if admitted.isNone then answer busy
     return admitted
+  let probe : BaseIO Ops.Probe := do
+    let count ← server.connections.atomically (return (← get).count)
+    return { recovered := ← runtime.hasRecovered, stopping := count.stopping
+             connections := count.count, inbox := ← runtime.depth
+             inflight := ← waiting.atomically (return (← get).waiters.size) }
+  let submit := ops.front probe fun request answer => discard <| submitStream request answer
   let adopt (socket : TCP.Socket.Client) : Async Unit := do
     try socket.noDelay catch _ => pure ()
     let next ← server.connections.atomically (return (← get).next)
@@ -442,14 +460,16 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
       if !admitted then return none
       let id := c.next
       let ctx : Ctx := {
-        config, submit
+        config, submit, submitStream
         leave := server.connections.atomically do
           modify fun c => { c with count := c.count.leave, alive := c.alive.erase id } }
       set { c with count, alive := c.alive.insert id { line, tell := tell ctx line false },
                    next := c.next + 1 }
       return some ctx
     match admitted with
-    | none => socket.close
+    | none =>
+      ops.refused
+      socket.close
     | some ctx => tell ctx line false .resume
   discard <| IO.asTask (prio := .dedicated) (ticker server config.tick_ms)
   background do
@@ -527,6 +547,11 @@ def stop (server : Server system) : Async Unit := do
   for (_, waiter) in ← server.waiting.atomically (modifyGet Waiting.drain) do waiter busy
   awaitConnections server
   server.finish
+
+/-- Readiness answers `503` from now on, while the server goes on serving, so that a load
+balancer stops sending it requests before `stop`. -/
+def drain (server : Server system) : BaseIO Unit :=
+  server.ops.drain
 
 /-- The requests the shard has taken and the server has not yet answered. -/
 def inFlight (server : Server system) : BaseIO Nat :=

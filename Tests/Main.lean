@@ -19,6 +19,7 @@ import Tests.Durable
 import Tests.Ending
 import Tests.Clock
 import Tests.HttpClient
+import Tests.Tls
 import Tests.ReadRequest
 import Tests.Codec
 import Tests.Peers
@@ -38,6 +39,12 @@ import Tests.Tutorial
 import Tests.Release
 import Tests.Oracle.All
 import Tests.Jobs
+import Tests.Outside
+import Tests.Ops
+import Tests.Postgres
+import Tests.PostgresConn
+import Tests.PostgresLive
+import Tests.Store
 
 /-!
 The test driver behind `lake test`: the pure tests and the live runtime tests, well under a
@@ -67,35 +74,36 @@ def live : IO (List (String × Bool)) := do
   return (← group "runtime" Tests.Runtime.tests) ++ (← group "web" Tests.Web.tests)
     ++ (← Tests.Durable.tests) ++ (← group "ending" Tests.Ending.tests)
     ++ (← safely "clock" Tests.Clock.live)
-    ++ (← safely "http client" Tests.HttpClient.live)
+    ++ (← safely "http client" Tests.HttpClient.live) ++ (← safely "tls" Tests.Tls.live)
     ++ (← safely "peers" Tests.Peers.live) ++ (← safely "peers on a journal" Tests.Peers.durable)
     ++ (← safely "transport" Tests.Peers.transport) ++ (← safely "fronted" Tests.Fronted.live)
     ++ (← safely "full inbox" Tests.Fronted.busyTest) ++ (← safely "node" Tests.Fronted.nodeTest)
     ++ (← safely "node on a journal" Tests.Fronted.nodeDurable)
     ++ (← safely "fronted on a journal" Tests.Fronted.durable)
     ++ (← safely "release" Tests.Release.liveTests) ++ (← safely "jobs" Tests.Jobs.live)
-    ++ (← Tests.Crypto.live)
+    ++ (← safely "ops" Tests.Ops.live) ++ (← Tests.Crypto.live)
+    ++ (← safely "postgres" Tests.PostgresLive.live)
 
 def main (args : List String) : IO UInt32 := do
   let pure := Tests.Engine.tests ++ Tests.Bank.tests ++ Tests.Json.tests ++ Tests.Html.tests
     ++ Tests.KV.tests ++ Tests.Gate.tests ++ Tests.Fronted.tests ++ Tests.Join.tests
-    ++ Tests.Kernel.tests ++ Tests.Frame.tests ++ Tests.Clock.tests ++ Tests.HttpClient.tests
+    ++ Tests.Kernel.tests ++ Tests.Frame.tests ++ Tests.Clock.tests ++ Tests.HttpClient.tests ++ Tests.Tls.tests
     ++ Tests.Fair.tests ++ Tests.Codec.tests ++ Tests.Durable.fileTests ++ Tests.Split.tests
     ++ Tests.Peers.tests ++ Tests.Courier.tests ++ Tests.Mailbox.tests ++ Tests.Batch.tests
     ++ Tests.Crypto.tests ++ Tests.Auth.tests ++ Tests.Clients.tests ++ Tests.Lease.tests
     ++ Tests.Release.tests ++ Tests.ReadRequest.tests ++ Tests.Oracle.unitTests
     ++ Tests.HttpConn.tests ++ Tests.Loopback.tests
-    ++ Tests.Jobs.tests
+    ++ Tests.Jobs.tests ++ Tests.Outside.tests ++ Tests.Postgres.vectorTests ++ Tests.Ops.tests
   match args with
   | [] =>
     let pure := pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.Lint.tests)
       ++ (← Tests.New.tests) ++ (← Tests.Tutorial.tests) ++ (← Tests.Oracle.replayAll)
-      ++ (← Tests.Json.suite) ++ (← Tests.HttpConn.checks)
+      ++ (← Tests.Json.suite) ++ (← Tests.HttpConn.checks) ++ (← Tests.Postgres.psqlTests) ++ (← Tests.PostgresConn.checks) ++ (← Tests.StoreModel.checks)
     failures pure
     report (pure ++ (← live)) pure.length
   | ["fast"] => report (pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.Lint.tests)
       ++ (← Tests.New.tests) ++ (← Tests.Tutorial.tests) ++ (← Tests.Oracle.replayAll)
-      ++ (← Tests.Json.suite) ++ (← Tests.HttpConn.checks))
+      ++ (← Tests.Json.suite) ++ (← Tests.HttpConn.checks) ++ (← Tests.Postgres.psqlTests) ++ (← Tests.PostgresConn.checks) ++ (← Tests.StoreModel.checks))
   | ["live"] => report (← live)
   | ["journal-child", path] =>
     Tests.Durable.child path

@@ -23,7 +23,7 @@ namespace Lanes.Http.Sse
 
 theorem splitLf_cons {c : Char} (hc : c ≠ '\n') (rest line : List Char) :
     splitLf (c :: rest) line = splitLf rest (c :: line) := by
-  simp [splitLf, hc]
+  simp [splitLf]
 
 theorem splitLf_line : ∀ {l : List Char}, '\n' ∉ l → ∀ (acc rest : List Char),
     splitLf (l ++ '\n' :: rest) acc = (acc.reverse ++ l) :: splitLf rest []
@@ -39,8 +39,7 @@ theorem splitLf_lines : ∀ {ls : List (List Char)}, (∀ l ∈ ls, '\n' ∉ l) 
   | [], _, rest => by simp
   | l :: ls, h, rest => by
     have := splitLf_line (h l List.mem_cons_self) [] (ls.flatMap (· ++ ['\n']) ++ rest)
-    simp only [List.flatMap_cons, List.append_assoc, List.cons_append, List.nil_append,
-      List.singleton_append] at this ⊢
+    simp only [List.flatMap_cons, List.append_assoc, List.cons_append, List.nil_append] at this ⊢
     rw [this, splitLf_lines (fun l' m => h l' (List.mem_cons_of_mem _ m)) rest]
     simp
 
@@ -179,7 +178,7 @@ theorem lines_ok (e : Event) (h : e.valid = true) : ∀ l ∈ e.lines, '\n' ∉ 
   obtain ⟨hev, hid, -, -⟩ := valid_iff.mp h
   intro l hl
   unfold Event.lines at hl
-  simp only [List.mem_append, List.mem_map, Option.mem_toList, Option.mem_def,
+  simp only [List.mem_append, List.mem_map, Option.mem_toList,
     Option.map_eq_some_iff] at hl
   rcases hl with ((⟨n, hn, rfl⟩ | ⟨i, hi, rfl⟩) | ⟨n, -, rfl⟩) | ⟨p, hp, rfl⟩
   · exact ⟨by simpa using (hev n hn).1, by simp⟩

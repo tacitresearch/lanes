@@ -1167,7 +1167,7 @@ theorem flushStream_going {c : Conn} (hc : c.closed = false) {o : Outflow} {rest
       ∧ (∀ s b, .write s b ∉ (flushStream cfg now c).2) := by
   unfold flushStream
   cases hp : o.pending.isEmpty <;> cases hu : c.unsent <;> cases ha : o.asking <;>
-    simp [hc, hs, hst, hp, hu, ha] <;> (repeat' split) <;> simp_all
+    simp [hc, hs, hst, hp, ha] <;> (repeat' split) <;> simp_all
 
 /-- A stream not at the front writes nothing and asks for nothing. -/
 theorem flushStream_other {c : Conn} (h : ∀ o rest, c.slots ≠ .stream o :: rest) :
@@ -1179,6 +1179,51 @@ theorem flushStream_other {c : Conn} (h : ∀ o rest, c.slots ≠ .stream o :: r
     · rename_i o rest hs
       exact absurd hs (h o rest)
     · rfl
+
+/-- Of a body framed by its length, a piece is the bytes of the buffer from the connection's
+position to where the piece ends, which is within what is left of the body; what is left after
+it is the framing, and it is the last piece exactly when nothing is left. So the pieces of such a
+body, one after another, are its bytes in order: the body the strict reader reads
+(`Request.read` takes the `n` bytes after the head). -/
+theorem gather_length {bytes : ByteArray} :
+    ∀ {fuel pos taken left : Nat} {acc data : ByteArray} {stop : Nat}
+      {framing : Inflow.Framing} {last : Bool}, 0 < left →
+      Inflow.gather cfg bytes fuel pos taken (.length left) acc = .piece data stop framing last →
+      pos ≤ stop ∧ stop ≤ pos + left ∧ data = acc ++ bytes.extract pos stop
+        ∧ framing = .length (left - (stop - pos)) ∧ (last = true ↔ stop = pos + left)
+  | 0, pos, taken, left, acc, data, stop, framing, last, hl, h => by
+    simp only [Inflow.gather] at h
+    split at h
+    · cases h
+    · cases h
+      refine ⟨Nat.le_refl _, by omega, by simp, by simp, by simp; omega⟩
+  | fuel + 1, pos, taken, left, acc, data, stop, framing, last, hl, h => by
+    simp only [Inflow.gather, Inflow.next] at h
+    by_cases hm0 : min (max 1 cfg.piece_max - acc.size) (min (bytes.size - pos) left) = 0
+    · simp only [hm0, ↓reduceIte] at h
+      split at h
+      · cases h
+      · cases h
+        refine ⟨Nat.le_refl _, by omega, by simp, by simp, by simp; omega⟩
+    · simp only [hm0, ↓reduceIte] at h
+      split at h
+      · cases h
+        refine ⟨by omega, by omega, rfl, by simp, by simp; omega⟩
+      · rename_i hnot
+        have hlast : ¬ left = min (max 1 cfg.piece_max - acc.size) (min (bytes.size - pos) left) := by
+          intro e
+          apply hnot
+          simp only [Bool.or_eq_true, decide_eq_true_eq]
+          exact .inl e
+        obtain ⟨h1, h2, h3, h4, h5⟩ := gather_length (by omega) h
+        refine ⟨by omega, by omega, ?_, ?_, ?_⟩
+        · rw [h3, ByteArray.append_assoc, ByteArray.extract_append_extract]
+          congr 2 <;> omega
+        · rw [h4]
+          congr 1
+          omega
+        · rw [h5]
+          omega
 
 /-- A piece handed on is the next bytes of the body as `Inflow.gather` reads them at the
 connection's position in its buffer, or the piece the system was too busy to take, offered

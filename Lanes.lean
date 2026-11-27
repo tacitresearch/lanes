@@ -34,23 +34,41 @@ public import Lanes.Durable.Disk
 public import Lanes.Durable.Frame
 public import Lanes.Durable.IO.Journal
 public import Lanes.Durable.Journal
+public import Lanes.Durable.Migration
 public import Lanes.Durable.Snapshot
+public import Lanes.Durable.Upgrade
 public import Lanes.Lib.Crypto.Hmac
+public import Lanes.Lib.Crypto.Md5
+public import Lanes.Lib.Crypto.Pbkdf2
 public import Lanes.Lib.Crypto.Sha256
 public import Lanes.Lib.Crypto.Sodium
 public import Lanes.Lib.Encoding.Base64
 public import Lanes.Lib.Encoding.Digits
 public import Lanes.Lib.Encoding.Json
+public import Lanes.Lib.Metrics
 public import Lanes.Lib.Mime.MediaType
 public import Lanes.Lib.Net.Ip
 public import Lanes.Lib.Net.Url
+public import Lanes.Lib.Postgres.Bytes
+public import Lanes.Lib.Postgres.Conn
+public import Lanes.Lib.Postgres.IO.Client
+public import Lanes.Lib.Postgres.Message
+public import Lanes.Lib.Postgres.Scram
+public import Lanes.Lib.Postgres.Table
 public import Lanes.Lib.RateLimit
 public import Lanes.Lib.Time.Civil
 public import Lanes.Lib.Time.Format
 public import Lanes.Net.IO.Node
 public import Lanes.Net.IO.Peers
 public import Lanes.Outside.Basic
+public import Lanes.Outside.Effects.Basic
+public import Lanes.Outside.Effects.Email
+public import Lanes.Outside.Effects.Payments
+public import Lanes.Outside.Events
+public import Lanes.Outside.Idempotent
 public import Lanes.Outside.IO.Clock
+public import Lanes.Outside.Rpc
+public import Lanes.Outside.Store.Basic
 public import Lanes.Proof.Deed
 public import Lanes.Proof.Equiv
 public import Lanes.Proof.Ghost
@@ -59,6 +77,7 @@ public import Lanes.Proof.List
 public import Lanes.Proof.Loses
 public import Lanes.Proof.Lossy
 public import Lanes.Proof.Monotone
+public import Lanes.Proof.Outputs
 public import Lanes.Proof.Past
 public import Lanes.Runtime.Batch
 public import Lanes.Runtime.IO.Park
@@ -77,6 +96,7 @@ public import Lanes.Web.Http.Cookie
 public import Lanes.Web.Http.Front
 public import Lanes.Web.Http.Loopback
 public import Lanes.Web.Http.Gate
+public import Lanes.Web.Http.Ops
 public import Lanes.Web.Http.ReadRequest
 public import Lanes.Web.Http.Route
 public import Lanes.Web.Http.Sse
@@ -85,7 +105,9 @@ public import Lanes.Web.Http.Waiting
 public import Lanes.Web.Http.Wire
 public import Lanes.Web.Http.WireSpec
 public import Lanes.Web.IO.Client
+public import Lanes.Web.IO.Ops
 public import Lanes.Web.IO.Server
+public import Lanes.Web.IO.Tls
 
 /-!
 The Lanes API: everything an application's executable code needs, and the tools its proofs use.

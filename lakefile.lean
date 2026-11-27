@@ -29,6 +29,13 @@ target native pkg : FilePath := do
   buildO (pkg.buildDir / "native" / "lanes.o") src
     (#["-I", (← getLeanIncludeDir).toString] ++ sodiumFlags) #["-O2", "-fPIC", "-DNDEBUG", "-Wall"]
 
+/-- `native/tls.c`, which declares the OpenSSL functions it calls itself: they come from the
+OpenSSL that Lean's toolchain ships and links into every executable, which has no headers. -/
+target tls pkg : FilePath := do
+  let src ← inputTextFile (pkg.dir / "native" / "tls.c")
+  buildO (pkg.buildDir / "native" / "tls.o") src
+    #["-I", (← getLeanIncludeDir).toString] #["-O2", "-fPIC", "-DNDEBUG", "-Wall"]
+
 /-- The system's libsodium, linked statically: a binary does not need it installed to run. -/
 target sodium : FilePath := do
   let lib := FilePath.mk (← pkgConfigSodium "--variable=libdir") / "libsodium.a"
@@ -40,7 +47,7 @@ target sodium : FilePath := do
 @[default_target]
 lean_lib Lanes where
   roots := #[`Lanes, `Lanes.Proofs, `Lanes.Semantics]
-  moreLinkObjs := #[native, sodium]
+  moreLinkObjs := #[native, tls, sodium]
 
 @[default_target]
 lean_lib Tests where

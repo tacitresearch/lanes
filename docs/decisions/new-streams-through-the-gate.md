@@ -95,7 +95,9 @@ than `part_max` cuts the stream (`Conn.pulled_large`); a stream writes only at t
 has come and then its last chunk (`Conn.flushStream_ended`), and pulls only when nothing written
 is unsent and no pull is out (`Conn.flushStream_going`); a piece handed on is what
 `Inflow.gather` reads at the connection's position in its buffer, or the one the system was too
-busy for, offered again (`Conn.pump_piece`); the client's reader of events reads back the events a
+busy for, offered again (`Conn.pump_piece`), and of a body framed by its length a piece is the bytes
+from the connection's position, within what is left, the last exactly when nothing is left
+(`Conn.gather_length`), so such pieces in turn are the bytes the strict reader takes; the client's reader of events reads back the events a
 stream writes, in order, each once, whatever comments are between them (`Sse.parse_written`), and
 an event made from an answer is one it reads back as it is (`Sse.Event.ofResponse_valid`).
 
@@ -111,7 +113,8 @@ reader reads back with the parts as its body once it ends; events are read back 
 once; one piece and one pull at a time, none while something written is unsent; and the bounds,
 the order of responses and closing once, as before.
 
-Not proved: that the pieces of a whole run make up the body the strict reader would read, and
+Not proved: that the pieces of a whole run make up the body the strict reader would read (for a
+body in chunks, `Inflow.gather` is not related to `Request.chunks` by a theorem), and
 that the bytes written for a stream over a whole run are exactly the parts the system gave: the
 theorems above are of each step, and the whole run is model-checked, not proved.
 
