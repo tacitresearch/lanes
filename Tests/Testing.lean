@@ -225,6 +225,12 @@ def workerLive : Async (List (String × Bool)) := do
   let rendition ← store.object? "videos/3.mp4"
   let thumbnail ← store.object? "videos/3.jpg"
   let forged ← worker.forge "http://site.test/transcoded" (.done "3.0" job.targets)
+  let again := { job with id := "3.1" }
+  let some call'' := Client.Call.at worker.origin (jobPosted workerKey again) | return [("kit worker: listens", false)]
+  let _ ← Client.exchange call'' { timeout_ms := 5000 }
+  worker.fail 1
+  let failing ← worker.work
+  let taken' ← worker.taken
   let got ← reports.get
   worker.stop
   site.close
@@ -235,8 +241,10 @@ def workerLive : Async (List (String × Bool)) := do
     ("kit worker: working writes a rendition and a thumbnail from the source, and reports done, signed",
       rendition.map (·.2) == some "video/mp4" && thumbnail.map (·.2) == some "image/jpeg"
         && sent == [(.done "3.0" job.targets, 200), (.failed "4.0", 200)]
-        && got == [.done "3.0" job.targets, .failed "4.0"]),
+        && got.take 2 == [.done "3.0" job.targets, .failed "4.0"]),
     ("kit worker: a report forged with another key is refused by a site that checks it",
-      forged == 403) ]
+      forged == 403),
+    ("kit worker: told to fail, it reports the next job failed, its source there or not",
+      failing == [(.failed "3.1", 200)] && taken'.map (·.job.id) == ["3.0", "4.0", "3.1"]) ]
 
 end Tests.Testing

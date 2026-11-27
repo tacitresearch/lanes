@@ -17,14 +17,14 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Durable` | 70 | 58 | 2 | 0 | 0 | 9 | 1 |
 | `Lanes/Lib` | 603 | 384 | 32 | 1 | 102 | 75 | 9 |
 | `Lanes/Net` | 37 | 6 | 5 | 0 | 0 | 25 | 1 |
-| `Lanes/Outside` | 159 | 119 | 4 | 6 | 1 | 29 | 0 |
+| `Lanes/Outside` | 172 | 133 | 4 | 6 | 1 | 28 | 0 |
 | `Lanes/Proof` | 40 | 16 | 0 | 0 | 0 | 23 | 1 |
 | `Lanes/Runtime` | 173 | 94 | 21 | 0 | 28 | 30 | 0 |
 | `Lanes/Semantics` | 63 | 11 | 0 | 0 | 0 | 51 | 1 |
-| `Lanes/Testing` | 84 | 0 | 0 | 1 | 83 | 0 | 0 |
-| `Lanes/Web` | 676 | 354 | 57 | 46 | 163 | 54 | 2 |
+| `Lanes/Testing` | 96 | 0 | 0 | 1 | 95 | 0 | 0 |
+| `Lanes/Web` | 691 | 357 | 57 | 46 | 175 | 54 | 2 |
 | `LanesCli` | 125 | 0 | 0 | 0 | 51 | 0 | 74 |
-| All | 2409 | 1262 | 126 | 124 | 430 | 340 | 127 |
+| All | 2449 | 1279 | 126 | 124 | 454 | 339 | 127 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -1517,7 +1517,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Outside.any` | tested | `Tests/Jobs.lean`, `Tests/S3.lean` |
 | `Outside.driver` | checked | `Tests/Cache.lean`, `Tests/Clock.lean`, `Tests/HttpClient.lean` and 9 more |
 | `Outside.see` | proved | `Outside.Beside.keeps`, `Outside.run_induction` |
-| `Outside.after` | proved | `Cache.read_sent`, `Clock.wall_back_le`, `Clock.wall_latest_le` and 19 more |
+| `Outside.after` | proved | `Cache.read_sent`, `Clock.wall_back_le`, `Clock.wall_latest_le` and 21 more |
 | `Outside.allows` | checked | `Tests/Outside.lean`, `Tests/Queue.lean`, `Tests/Throttle.lean` and 1 more |
 | `Outside.both` | proved | `Outside.after_both` |
 | `Outside.mine` | spec | used only in statements |
@@ -1686,8 +1686,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Rpc.instCodableCall` | proved | its type, `Codable` |
 | `Rpc.Reply.codec` | proved | its type, `Codec` |
 | `Rpc.instCodableReply` | proved | its type, `Codable` |
-| `Rpc.outside` | proved | `Cache.read_sent`, `Events.deliveries_le`, `Idempotent.at_most_once` and 9 more |
-| `Rpc.Port.reported` | spec | used only in statements |
+| `Rpc.outside` | proved | `Cache.read_sent`, `Events.deliveries_le`, `Idempotent.at_most_once` and 11 more |
+| `Rpc.Port.reported` | proved | `Effects.Sound.shows_report`, `Transcode.done_given`, `Transcode.reports_agree` |
 | `Rpc.called` | spec | used only in statements |
 | `Rpc.answered` | spec | used only in statements |
 
@@ -1748,6 +1748,24 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Throttle.Event.codec` | proved | its type, `Codec` |
 | `Throttle.instCodableEvent` | proved | its type, `Codable` |
 | `Throttle.server` | proved | `Throttle.throttled_inner`, `Throttle.wait_le`, `Throttle.within_not_throttled` |
+
+## `Lanes/Outside/Transcode.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Transcode.Job.codec` | proved | its type, `Codec` |
+| `Transcode.instCodableJob` | proved | its type, `Codable` |
+| `Transcode.Report.codec` | proved | its type, `Codec` |
+| `Transcode.instCodableReport` | proved | its type, `Codable` |
+| `Transcode.Report.job` | proved | `Transcode.reports_agree` |
+| `Transcode.landOne` | proved | through `Transcode.service`: `Transcode.done_given`, `Transcode.reports_agree` |
+| `Transcode.land` | proved | through `Transcode.service`: `Transcode.done_given`, `Transcode.reports_agree` |
+| `Transcode.receive` | proved | through `Transcode.service`: `Transcode.done_given`, `Transcode.reports_agree` |
+| `Transcode.answer` | proved | through `Transcode.service`: `Transcode.done_given`, `Transcode.reports_agree` |
+| `Transcode.finish` | proved | through `Transcode.service`: `Transcode.done_given`, `Transcode.reports_agree` |
+| `Transcode.event` | proved | through `Transcode.service`: `Transcode.done_given`, `Transcode.reports_agree` |
+| `Transcode.server` | proved | through `Transcode.service`: `Transcode.done_given`, `Transcode.reports_agree` |
+| `Transcode.service` | proved | `Transcode.done_given`, `Transcode.reports_agree` |
 
 ## `Lanes/Proof/Deed.lean`
 
@@ -2313,16 +2331,33 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Testing.S3.complete` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
 | `Testing.S3.serveMultipart` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
 | `Testing.S3.serveAll` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
-| `Testing.S3.Fake.start` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
-| `Testing.S3.Fake.object?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
-| `Testing.S3.Fake.holds` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
+| `Testing.S3.Fake.start` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `Testing.S3.Fake.object?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `Testing.S3.Fake.holds` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
 | `Testing.S3.Fake.keys` | tested | `Tests/S3.lean` |
 | `Testing.S3.Fake.refuse` | tested | `Tests/S3.lean` |
 | `Testing.S3.Fake.refusing` | tested | `Tests/S3.lean` |
-| `Testing.S3.Fake.stop` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
+| `Testing.S3.Fake.stop` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
 | `Testing.S3.follow` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 1 more |
 | `Testing.S3.code` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3Upload.lean` |
 | `Testing.S3.postForm` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3Upload.lean` |
+
+## `Lanes/Testing/Transcode.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Testing.Transcode.take` | tested | `Tests/Testing.lean` |
+| `Testing.Transcode.rendition` | tested | `Tests/Testing.lean` |
+| `Testing.Transcode.thumbnail` | tested | `Tests/Testing.lean` |
+| `Testing.Transcode.Fake.start` | tested | `Tests/Testing.lean` |
+| `Testing.Transcode.Fake.reportTo` | tested | `Tests/Testing.lean` |
+| `Testing.Transcode.Fake.fail` | tested | `Tests/Testing.lean` |
+| `Testing.Transcode.Fake.taken` | tested | `Tests/Testing.lean` |
+| `Testing.Transcode.Fake.post` | tested | `Tests/Testing.lean` |
+| `Testing.Transcode.Fake.render` | tested | `Tests/Testing.lean` |
+| `Testing.Transcode.Fake.work` | tested | `Tests/Testing.lean` |
+| `Testing.Transcode.Fake.forge` | tested | `Tests/Testing.lean` |
+| `Testing.Transcode.Fake.stop` | tested | `Tests/Testing.lean` |
 
 ## `Lanes/Web/Auth/IdToken.lean`
 
@@ -3209,6 +3244,26 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `S3.Xml.Node.all` | tested | `Tests/S3.lean` |
 | `S3.Xml.Node.child?` | tested | `Tests/S3.lean` |
 | `S3.Xml.Node.text?` | tested | `Tests/S3.lean` |
+
+## `Lanes/Web/Transcode.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Transcode.signatureHeader` | tested | `Tests/Testing.lean` |
+| `Transcode.Report.status` | tested | `Tests/Testing.lean` |
+| `Transcode.signed` | proved | through `Transcode.verify`: `Transcode.verify_iff` |
+| `Transcode.signature` | proved | `Transcode.verify_iff` |
+| `Transcode.verify` | proved | `Transcode.verify_iff` |
+| `Transcode.jobJson` | tested | `Tests/Testing.lean` |
+| `Transcode.jobBody` | tested | `Tests/Testing.lean` |
+| `Transcode.jobSignature` | tested | `Tests/Testing.lean` |
+| `Transcode.jobRequest` | tested | `Tests/Testing.lean` |
+| `Transcode.field?` | tested | `Tests/Testing.lean` |
+| `Transcode.readJob?` | tested | `Tests/Testing.lean` |
+| `Transcode.reportJson` | tested | `Tests/Testing.lean` |
+| `Transcode.reportBody` | tested | `Tests/Testing.lean` |
+| `Transcode.readReport?` | tested | `Tests/Testing.lean` |
+| `Transcode.reportRequest` | tested | `Tests/Testing.lean` |
 
 ## `LanesCli/Docstrings.lean`
 
