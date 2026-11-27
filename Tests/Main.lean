@@ -82,11 +82,11 @@ def main (args : List String) : IO UInt32 := do
   match args with
   | [] =>
     let pure := pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.Lint.tests)
-      ++ (← Tests.Oracle.replayAll)
+      ++ (← Tests.Oracle.replayAll) ++ (← Tests.Json.suite)
     failures pure
     report (pure ++ (← live)) pure.length
   | ["fast"] => report (pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.Lint.tests)
-      ++ (← Tests.Oracle.replayAll))
+      ++ (← Tests.Oracle.replayAll) ++ (← Tests.Json.suite))
   | ["live"] => report (← live)
   | ["journal-child", path] =>
     Tests.Durable.child path
