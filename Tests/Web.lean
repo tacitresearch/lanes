@@ -189,15 +189,22 @@ def oldJournalTest : Async (List (String × Bool)) := do
 def gateNameTests : List (String × Bool) :=
   let gate : GateConfig := { requestTimeout_ms := 1500, maxPending := 7 }
   let name := journalName "bank 1" gate
+  let bank := Tests.Fixtures.Bank.bank Tests.Fixtures.BankWeb.Acct 100
   [ ("web: a journal's name gives back its gate",
       (gateOf "bank 1" name).map (fun g => (g.requestTimeout_ms, g.maxPending)) == some (1500, 7)),
     ("web: and only for its application, written as `journalName` writes it",
       (gateOf "bank 2" name).isNone
-        &&(gateOf "bank 1" "bank 1, behind a gate of 01500 ms and 7 requests").isNone
+        && (gateOf "bank 1" "bank 1, behind a gate of 01500 ms and 7 requests").isNone
         && (gateOf "bank 1" "bank 1").isNone),
     ("web: a journal behind the same gate has no former gate",
       (formerGate "bank 1" gate name).isNone
-        && (formerGate "bank 1" {} name).map (·.maxPending) == some 7) ]
+        && (formerGate "bank 1" {} name).map (·.maxPending) == some 7),
+    ("web: the upgrade across gates reads the journal under the old gate's name",
+      (regateUpgrade bank Tests.Fixtures.BankWeb.bridge (Tests.Fixtures.Bank.actors Codec.fin 100)
+        Tests.Fixtures.Bank.Response.codec "bank 1" gate {}).system == name),
+    ("web: and carries an output across as it is",
+      let answer : ReqId × Response := (7, { status := 503, body := "busy".toUTF8 })
+      (regate bank Tests.Fixtures.BankWeb.bridge gate {}).output answer == answer) ]
 
 /-- The bank's journal, written behind one gate, is read behind another: replayed behind its own
 gate and carried across, and the journal is then under the new name. Without `saving` the
