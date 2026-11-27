@@ -1,0 +1,20 @@
+# What a person reviews because proofs cannot: specs, trusted code, the C, CI and infrastructure,
+# and decisions (CONTRIBUTING.md). Everything else is evidenced by proofs, checks and tests, and
+# has no owner here on purpose. Globs rather than paths where the tree may move.
+
+# Trusted code and what it is built and run with.
+/TRUSTED.md       @nathanrs
+/native/          @nathanrs
+/lakefile.lean    @nathanrs
+/.github/         @nathanrs
+/infra/           @nathanrs
+
+# Decisions.
+/docs/decisions/  @nathanrs
+
+# Specs: the applications' (`Spec.lean`), the wire format's (`WireSpec.lean`), and the
+# behaviours, whose specs sit with them.
+**/*Spec.lean     @nathanrs
+**/Behaviours/    @nathanrs
+# The behaviours' proofs are evidence, not specs: no owner.
+**/Behaviours/*Sound.lean

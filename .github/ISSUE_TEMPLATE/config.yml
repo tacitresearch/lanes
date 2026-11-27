@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a vulnerability
+    url: https://github.com/tacitresearch/lanes/security/advisories/new
+    about: Vulnerabilities, and theorems whose statement does not mean what their docs say, are reported privately (SECURITY.md).
