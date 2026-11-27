@@ -8,7 +8,7 @@ import Tests.HttpClient
 
 /-!
 The request reader: the verdicts on the corpus `Tests/ReadRequest.corpus`, which
-`scripts/requests.py` compares with other parsers; requests written by `Request.wire` read back
+`oracle/requests/requests.py` compares with other parsers; requests written by `Request.wire` read back
 at every split; the smuggling shapes refused; each limit at its edge.
 -/
 

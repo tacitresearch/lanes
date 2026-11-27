@@ -4,7 +4,7 @@ description: >
   through GitHub's OIDC provider (the job needs `id-token: write`, and `actions: read` to stop).
   Route `box` starts the warm machine `instance-id` (infra/lanes-ci.yaml) and waits until its
   runners are online; stopping it is left to the last run of `workflows` to end. Route `fresh`
-  launches a machine of `instance-type` that sets itself up with scripts/ec2-runner.sh (from the
+  launches a machine of `instance-type` that sets itself up with infra/ec2-runner.sh (from the
   checkout) under the label `run-label`, and terminates it and its runners again. See
   docs/RUNNERS.md.
 inputs:

@@ -1,4 +1,4 @@
-// The Go side of scripts/requests.py: net/http's server with the limits of Request.Limits,
+// The Go side of oracle/requests/requests.py: net/http's server with the limits of Request.Limits,
 // answering each request it reads with its method and the length of its body, 400 for a body
 // it cannot decode and 599 for one cut short by the end of the connection.
 package main

@@ -110,7 +110,7 @@ start_fresh() {
   {
     echo '#!/bin/bash'
     echo "cat >/root/ec2-runner.sh <<'LANES_EOF'"
-    cat "$GITHUB_WORKSPACE/scripts/ec2-runner.sh"
+    cat "$GITHUB_WORKSPACE/infra/ec2-runner.sh"
     echo 'LANES_EOF'
     printf 'REPO=%q TOKEN=%q LABELS=%q NAME=%q WARM=0 IDLE_HOURS=1 MAX_HOURS=%q bash /root/ec2-runner.sh\n' \
       "$GITHUB_REPOSITORY" "$token" "$RUN_LABEL" "$RUN_LABEL" "$MAX_HOURS"

@@ -116,6 +116,26 @@ jobs:
           lake build
           lake test
 
+  # The small examples, each a package of its own: built with their proofs, and their checks run.
+  examples:
+    needs: [runner, compile]
+    runs-on: ${{ fromJSON(needs.runner.outputs.label) }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          clean: false
+      - uses: ./.github/actions/lean
+      - name: Build and check each small example
+        run: |
+          for example in counter bank bank-web kv-cache election watchdog; do
+            echo "::group::examples/$example"
+            mkdir -p "examples/$example/.lake"
+            ln -sfn "$GITHUB_WORKSPACE/.lake/packages" "examples/$example/.lake/packages"
+            (cd "examples/$example" && lake build --wfail && lake test)
+            echo "::endgroup::"
+          done
+
   raft-kv:
     needs: [runner, compile]
     runs-on: ${{ fromJSON(needs.runner.outputs.label) }}
@@ -237,7 +257,7 @@ jobs:
   # The one check branch protection requires. A job that is skipped counts as passed there, so
   # this job always runs and fails unless every job before it succeeded.
   build:
-    needs: [runner, compile, check, oracle, test, raft-kv, ledger, rookery, macos]
+    needs: [runner, compile, check, oracle, test, examples, raft-kv, ledger, rookery, macos]
     if: always()
     runs-on: ubuntu-latest
     steps:

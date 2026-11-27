@@ -1,4 +1,4 @@
-// The Node side of scripts/requests.py: node's http server (llhttp, not lenient) with the limits
+// The Node side of oracle/requests/requests.py: node's http server (llhttp, not lenient) with the limits
 // of Request.Limits, answering each request it reads with its method and the length of its body.
 const http = require("http");
 

@@ -48,7 +48,7 @@ Parameters:
   ScriptRef:
     Type: String
     Default: main
-    Description: The branch or commit of the repository whose scripts/ec2-runner.sh sets the machine up.
+    Description: The branch or commit of the repository whose infra/ec2-runner.sh sets the machine up.
   InstanceType:
     Type: String
     Default: c7a.16xlarge
@@ -233,7 +233,7 @@ Resources:
           curl -fsSL -H @<(printf 'Authorization: Bearer %s\n' "$pat") \
             -H "Accept: application/vnd.github.raw+json" \
             -o /root/ec2-runner.sh \
-            "https://api.github.com/repos/${GitHubRepository}/contents/scripts/ec2-runner.sh?ref=${ScriptRef}"
+            "https://api.github.com/repos/${GitHubRepository}/contents/infra/ec2-runner.sh?ref=${ScriptRef}"
           unset pat
           REPO=${GitHubRepository} TOKEN_SECRET=${GitHubTokenSecret} AWS_REGION=${AWS::Region} \
             RUNNERS=${RunnerCount} IDLE_HOURS=${IdleHours} NAME=lanes-ci LABELS=lanes \

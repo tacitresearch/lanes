@@ -12,7 +12,7 @@ printed with its kind:
   LOOSER     Lanes reads a request the other refuses or waits on: a bug unless decided
   FRAMING    both read a request, but not the same one: a bug unless decided
 
-Usage: scripts/requests.py [--go PATH] [--node PATH] [--only NAME]
+Usage: oracle/requests/requests.py [--go PATH] [--node PATH] [--only NAME]
 Exits 1 if a disagreement is LOOSER or FRAMING.
 """
 
@@ -24,7 +24,7 @@ import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-CORPUS = os.path.join(HERE, "..", "Tests", "ReadRequest.corpus")
+CORPUS = os.path.join(HERE, "..", "..", "Tests", "ReadRequest.corpus")
 
 
 def unescape(text):
@@ -193,11 +193,11 @@ def main():
     servers = {}
     others = []
     try:
-        go = subprocess.Popen([args.go, "build", "-o", "/tmp/lanes-requests-go",
-                               os.path.join(HERE, "requests", "server.go")], env=env)
+        go = subprocess.Popen([args.go, "build", "-o", "/tmp/lanes-requests-go", "./requests"],
+                              cwd=os.path.join(HERE, ".."), env=env)
         if go.wait() == 0:
             servers["go"] = start(["/tmp/lanes-requests-go"])
-        servers["node"] = start([args.node, os.path.join(HERE, "requests", "server.js")])
+        servers["node"] = start([args.node, os.path.join(HERE, "server.js")])
         bad = 0
         counts = {}
         for name, lanes, wire in corpus():

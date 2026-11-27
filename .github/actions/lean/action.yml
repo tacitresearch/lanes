@@ -2,16 +2,16 @@ name: Lean
 description: >
   Installs elan and the toolchain of `lean-toolchain`, and gives the job `.lake/packages`
   (Mathlib, prebuilt, and the other dependencies, built) and a `.lake/build` to start from, so
-  Lake rebuilds only what changed. On a runner set up by scripts/ec2-runner.sh (LANES_SHARED is
+  Lake rebuilds only what changed. On a runner set up by infra/ec2-runner.sh (LANES_SHARED is
   set) the packages are the machine's shared ones, made once per toolchain and manifest, and
   the build is the one the job's work directory kept, or the machine's warm one. Elsewhere both
   come from the Actions cache: the packages keyed on the toolchain and the manifest (fetched with
   `lake exe cache get` when missing), the build on the commit, falling back to the newest
-  earlier one. With `system`, `systems/<system>` gets the same packages and its own build back.
+  earlier one. With `system`, `examples/<system>` gets the same packages and its own build back.
   Saving is left to the jobs that build, when `warm` is not true: see the keys in the outputs.
 inputs:
   system:
-    description: A directory under `systems/` whose build to restore as well.
+    description: A directory under `examples/` whose build to restore as well.
     required: false
     default: ""
 outputs:
@@ -28,7 +28,7 @@ outputs:
     description: The key to save `.lake/build` under.
     value: ${{ steps.keys.outputs.build }}
   system-key:
-    description: The key to save `systems/<system>/.lake/build` under.
+    description: The key to save `examples/<system>/.lake/build` under.
     value: ${{ steps.keys.outputs.system }}
 runs:
   using: composite
@@ -60,7 +60,7 @@ runs:
       shell: bash
       env:
         ROOT: ${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('lean-toolchain', 'lake-manifest.json') }}
-        SYSTEM: ${{ inputs.system }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('lean-toolchain', 'lake-manifest.json', format('systems/{0}/lake-manifest.json', inputs.system)) }}
+        SYSTEM: ${{ inputs.system }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('lean-toolchain', 'lake-manifest.json', format('examples/{0}/lake-manifest.json', inputs.system)) }}
         SHA: ${{ github.sha }}
       run: |
         {
@@ -100,10 +100,10 @@ runs:
         fi
         if [ ! -d .lake/build ] && [ -d "$dir/build" ]; then cp -a "$dir/build" .lake/build; fi
         if [ -n "$SYSTEM" ]; then
-          mkdir -p "systems/$SYSTEM/.lake"
-          ln -sfn "$GITHUB_WORKSPACE/.lake/packages" "systems/$SYSTEM/.lake/packages"
-          if [ ! -d "systems/$SYSTEM/.lake/build" ] && [ -d "$dir/systems/$SYSTEM/build" ]; then
-            cp -a "$dir/systems/$SYSTEM/build" "systems/$SYSTEM/.lake/build"
+          mkdir -p "examples/$SYSTEM/.lake"
+          ln -sfn "$GITHUB_WORKSPACE/.lake/packages" "examples/$SYSTEM/.lake/packages"
+          if [ ! -d "examples/$SYSTEM/.lake/build" ] && [ -d "$dir/systems/$SYSTEM/build" ]; then
+            cp -a "$dir/systems/$SYSTEM/build" "examples/$SYSTEM/.lake/build"
           fi
         fi
         echo "warm=true" >> "$GITHUB_OUTPUT"
@@ -128,11 +128,11 @@ runs:
       env:
         SYSTEM: ${{ inputs.system }}
       run: |
-        mkdir -p "systems/$SYSTEM/.lake"
-        ln -sfn "$GITHUB_WORKSPACE/.lake/packages" "systems/$SYSTEM/.lake/packages"
+        mkdir -p "examples/$SYSTEM/.lake"
+        ln -sfn "$GITHUB_WORKSPACE/.lake/packages" "examples/$SYSTEM/.lake/packages"
     - if: steps.shared.outputs.warm != 'true' && inputs.system != ''
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
-        path: systems/${{ inputs.system }}/.lake/build
+        path: examples/${{ inputs.system }}/.lake/build
         key: ${{ steps.keys.outputs.system }}
         restore-keys: ${{ steps.keys.outputs.system-prefix }}

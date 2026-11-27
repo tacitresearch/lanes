@@ -1,6 +1,6 @@
 # The corpus of the request reader's differential test. Each line: a name, the verdict of
 # `Request.read` with the default limits, and the bytes. `lake test` checks the verdicts
-# (Tests/ReadRequest.lean); scripts/requests.py compares them with other parsers.
+# (Tests/ReadRequest.lean); oracle/requests/requests.py compares them with other parsers.
 #
 # A verdict is what reading from the start and again from where each request ended gives:
 # ok:METHOD:BYTES for a request with a body of that many bytes, then `more` or a status.
