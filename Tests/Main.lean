@@ -46,6 +46,8 @@ import Tests.Postgres
 import Tests.PostgresConn
 import Tests.PostgresLive
 import Tests.Store
+import Tests.SigV4
+import Tests.S3
 
 /-!
 The test driver behind `lake test`: the pure tests and the live runtime tests, well under a
@@ -85,6 +87,7 @@ def live : IO (List (String × Bool)) := do
     ++ (← safely "release" Tests.Release.liveTests) ++ (← safely "jobs" Tests.Jobs.live)
     ++ (← safely "ops" Tests.Ops.live) ++ (← Tests.Crypto.live)
     ++ (← safely "postgres" Tests.PostgresLive.live)
+    ++ (← safely "s3" Tests.S3.live)
 
 def main (args : List String) : IO UInt32 := do
   let pure := Tests.Engine.tests ++ Tests.Bank.tests ++ Tests.Json.tests ++ Tests.Html.tests
@@ -97,6 +100,7 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.Release.tests ++ Tests.ReadRequest.tests ++ Tests.Oracle.unitTests
     ++ Tests.HttpConn.tests
     ++ Tests.Jobs.tests ++ Tests.Outside.tests ++ Tests.Postgres.vectorTests ++ Tests.Ops.tests
+    ++ Tests.SigV4.tests ++ Tests.S3.tests
   match args with
   | [] =>
     let pure := pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.Lint.tests)

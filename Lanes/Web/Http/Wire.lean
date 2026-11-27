@@ -195,6 +195,30 @@ theorem head_plain (r : Request) (host : String) (sent : (r.wire host).isSome) :
     exact List.all_eq_true.mpr fun c mem =>
       plain_of_visible (visible_of_tokenChar (List.all_eq_true.mp name_token.2 c mem))
 
+/-- The head of `r` sent as `HEAD`: the request line names `HEAD`, the headers are `head`'s. -/
+def headOnly (r : Request) (host : String) : List String :=
+  ("HEAD " ++ r.target ++ " HTTP/1.1") :: (r.head host).tail
+
+/-- The bytes of `r` sent as a `HEAD` request, whatever its method; `none` where `wire` gives
+none. -/
+def wireHead (r : Request) (host : String) : Option ByteArray :=
+  if host != "" && host.toList.all visible then
+    some (("\r\n".intercalate (r.headOnly host) ++ "\r\n\r\n").toUTF8 ++ r.body)
+  else none
+
+/-- As `head_plain`, for a request sent as `HEAD`. -/
+theorem headOnly_plain (r : Request) (host : String) (sent : (r.wireHead host).isSome) :
+    ∀ line ∈ r.headOnly host, line.toList.all plain := by
+  have sent' : (r.wire host).isSome := by
+    simp only [wireHead] at sent
+    simp only [wire]
+    split at sent <;> simp_all
+  intro line mem
+  rcases List.mem_cons.mp mem with rfl | mem
+  · simp only [String.toList_append, List.all_append, Bool.and_eq_true]
+    exact ⟨⟨by decide, all_plain_of_visible r.target_visible⟩, by decide⟩
+  · exact r.head_plain host sent' line (List.mem_of_mem_tail mem)
+
 end Request
 
 /-- What a reader makes of the bytes it has so far: it needs more, or it is done, with a value
@@ -391,6 +415,46 @@ theorem Response.read_ended (limit : Nat) (bytes : ByteArray) :
   · split <;> simp
   · simp
   · simp
+
+/-- The response to a `HEAD` request whose head starts at `pos`, or the one after it when that
+one is interim. It has no body, whatever its headers say (RFC 9110, 9.3.2). -/
+def readHeadFrom (bytes : ByteArray) (ended : Bool) (limit : Nat) : (fuel pos : Nat) → Reading Response
+  | 0, _ => .done none
+  | fuel + 1, pos =>
+    match headEnd bytes pos with
+    | none => if ended || limit < bytes.size then .done none else .more
+    | some bodyStart =>
+      if limit < bodyStart then .done none
+      else
+        match (String.fromUTF8? (bytes.extract pos (bodyStart - 4))).bind (head? ·.toList) with
+        | none => .done none
+        | some (status, headers) =>
+          if status < 200 then readHeadFrom bytes ended limit fuel bodyStart
+          else .done (some { status, headers })
+
+/-- As `Response.read`, for the answer to a `HEAD` request: its head, as soon as it is whole
+within `limit` bytes. -/
+def Response.readHead (limit : Nat) (bytes : ByteArray) (ended : Bool) : Reading Response :=
+  readHeadFrom bytes ended limit (bytes.size + 1) 0
+
+theorem Response.readHead_ended (limit : Nat) (bytes : ByteArray) :
+    Response.readHead limit bytes true ≠ .more := by
+  unfold Response.readHead
+  generalize bytes.size + 1 = fuel
+  generalize 0 = pos
+  induction fuel generalizing pos with
+  | zero => simp [readHeadFrom]
+  | succ n ih =>
+    simp only [readHeadFrom]
+    split
+    · simp
+    · split
+      · simp
+      · split
+        · simp
+        · split
+          · exact ih _
+          · simp
 
 /-- The one response in all the bytes of a connection. -/
 def Response.parse (bytes : ByteArray) : Option Response :=

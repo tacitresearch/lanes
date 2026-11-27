@@ -93,7 +93,7 @@ API. P1 is common, P2 rare.
 | `encoding/csv` | b | P1 |
 | `encoding/pem` | b | P2 |
 | `encoding/asn1` | b | P2 |
-| `encoding/xml` | b | P2 |
+| `encoding/xml` | b | P2; a reader of the part S3's answers use, not yet tested against Go's, in `Lanes/Web/S3/Xml.lean` |
 | `encoding/gob` | d | Go's own format; Lanes has `Codec` |
 | `encoding/ascii85` | d | PostScript and PDF only |
 | `compress/flate`, `compress/gzip`, `compress/zlib` | b | P2: the reverse proxy compresses responses, and a client can ask for none |
