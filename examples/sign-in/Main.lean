@@ -10,7 +10,7 @@ import GitHub
 `signIn [port]`: the site, with a provider for each of Google and GitHub whose client is in the
 environment: `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, `GITHUB_CLIENT_ID` and
 `GITHUB_CLIENT_SECRET`. Each is registered with its provider with the redirect URI
-`<VIDEOS_URL>/sign-in/<google|github>/callback`, where `VIDEOS_URL` is the site's public origin,
+`<LANES_URL>/sign-in/<google|github>/callback`, where `LANES_URL` is the site's public origin,
 `http://localhost:<port>` if unset. Sessions are signed with a key made at start, so they end
 with the process.
 -/
@@ -24,7 +24,7 @@ def client (origin name : String) : IO (Option Client) := do
 
 def main (args : List String) : IO Unit := do
   let port := (args.head? >>= String.toNat?).getD 8080
-  let origin := (← IO.getEnv "VIDEOS_URL").getD s!"http://localhost:{port}"
+  let origin := (← IO.getEnv "LANES_URL").getD s!"http://localhost:{port}"
   let mut providers := []
   for p in [Google.provider, GitHub.provider] do
     if let some c ← client origin p.name then providers := providers ++ [(p, c)]
