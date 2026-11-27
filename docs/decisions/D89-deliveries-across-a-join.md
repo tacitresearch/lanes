@@ -1,4 +1,4 @@
-# D?. What one side of a join sends the other is handled there, in every fair run
+# D89. What one side of a join sends the other is handled there, in every fair run
 
 `Lanes/Semantics/FairJoin.lean` (section `Across the wiring`), `Lanes/Semantics/Liveness.lean`
 (`System.Run.Fair.handled`), `Lanes/Core/Run.lean` (section `Kept`), `Lanes/Semantics/Schedule.lean`
