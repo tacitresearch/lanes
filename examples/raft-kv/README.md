@@ -9,7 +9,8 @@ one instance (`RaftKV/Store.lean`).
 To its clients the cluster is one machine: every answer is one the machine would give if it
 handled the commands one at a time in some order consistent with when they were sent and
 answered. That is `spec`, six lines. It is checked as refinement by a monitor, with no
-refinement mapping written, and proved for every cluster (`RaftKVProofs.lean`).
+refinement mapping written, and proved for every cluster, given that the link from a client does
+not hand a node one request twice (`RaftKVProofs.lean`; below).
 
 The invariants of Raft's safety argument are checked in every state as well
 (`RaftKV/Properties.lean`): at most one leader per term, log matching, agreement on committed
@@ -218,7 +219,8 @@ these:
   with one other node behind, the two elect a leader that lacks a write the cluster has
   answered, and it stays lost when the third returns. This is outside what is proved, since
   the model's crash keeps what a node had, and replacing such a node safely needs a change of
-  membership, which is not here. Nothing is synced to disk, so loss of power is such a loss.
+  membership, which is not here. Every journal write is synced (`fsync`) before the next, so a
+  loss of power is a death, not a lost journal; a lost disk is a lost journal.
 - **The journal is cut now, and the log is not.** A node journals every message it is sent,
   heartbeats too: idle, a follower writes 5 kB a second and the leader 11, which was 470 and
   930 MB a day. A node now saves its state every 65,536 entries and cuts the journal: idle,
@@ -235,8 +237,9 @@ these:
   than it did. So the name a journal is kept under holds the node's id, the size of the
   cluster and every field of `Config` and of the HTTP gate's, and a node started with another
   is refused. There is no way yet to change a timeout of a node that has run.
-- **A client that tries again after a `504` may have its write applied twice.** Requests are
-  not told apart.
+- **A client that tries again after a `504` may have its write applied twice.** `raftNode`
+  runs the plain map, whose requests are not told apart. The memo that makes a repeat take
+  effect once (`Machine.once`, `implementsMachine_once`) is proved and checked, not deployed.
 
 It also found that a leader sent a follower everything it had not acknowledged in one message.
 A log over 16 MB could not be sent at all, so after a change of leader nothing committed
@@ -264,8 +267,9 @@ sends that node nothing. What is left of the finding:
 
 - Liveness: that a request is ever answered. The top theorem is safety: a cluster that answers
   nothing refines `spec` too.
-- Requests a link may repeat. The theorem assumes it does not, and the node has no way to tell:
-  suppressing duplicates needs an id the client keeps (rule 1.5), which is not in the protocol.
+- Requests a link may repeat, in the node that runs. `implementsMachine` assumes it does not;
+  `implementsMachine_once` needs no such premise, with the machine behind `Machine.once`, which
+  `raftNode` does not use yet.
 - More than one machine. The nodes are processes joined by TCP, on one machine in every test;
   the transport has no authentication or encryption.
 - An answer from a node that is not the leader. It lets the request run into its deadline,

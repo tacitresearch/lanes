@@ -6,6 +6,10 @@ import Lanes.Semantics
 
 /-! The axiom gate (rule 5.5, see `Tests/Axioms.lean`) for the theorems of `Lanes/Lib/`. -/
 
+-- Lanes.Lib.Crypto.Hmac
+/-- info: 'Lanes.Bytes.unhex?_hex' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Bytes.unhex?_hex
+
 -- Lanes.Lib.Encoding.Base64
 /-- info: 'Lanes.Base64.decode_eq_some_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Base64.decode_eq_some_iff

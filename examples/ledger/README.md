@@ -164,8 +164,11 @@ axiom gate:
   every notice the ledger serves is of a deadline armed in the spec.
 
 The links from the users to the ledger must be ordered (a
-reordering link gives a stale view, above). That `Bytes.same`, HMAC and PBKDF2
-are what they say is tested against published vectors (`TRUSTED.md`).
+reordering link gives a stale view, above). That libsodium's SHA-256, HMAC and comparison
+compute what their Lean references do is tested, and that the references are SHA-256 and HMAC
+is tested against published vectors (`TRUSTED.md`). Not proved: that the gate in front
+(`Http.served`) keeps the refinement, and that a request is ever answered beyond what the
+gate's own theorems say.
 
 ## The web front
 

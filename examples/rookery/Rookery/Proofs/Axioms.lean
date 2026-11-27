@@ -11,6 +11,9 @@ If a `sorry` or a new axiom reaches one, this file stops compiling.
 /-- info: 'Rookery.Board.handle_accepts' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Rookery.Board.handle_accepts
 
+/-- info: 'Rookery.Board.handle_keeps' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Rookery.Board.handle_keeps
+
 /-- info: 'Rookery.Board.handle_get?_ne' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Rookery.Board.handle_get?_ne
 
@@ -26,8 +29,14 @@ If a `sorry` or a new axiom reaches one, this file stops compiling.
 /-- info: 'Rookery.Board.mem_feed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Rookery.Board.mem_feed
 
+/-- info: 'Rookery.Board.mem_timeline' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Rookery.Board.mem_timeline
+
 /-- info: 'Rookery.Board.sorted_timeline' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Rookery.Board.sorted_timeline
+
+/-- info: 'Rookery.Board.length_timeline' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Rookery.Board.length_timeline
 
 /-- info: 'Rookery.Board.timeline_complete' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Rookery.Board.timeline_complete
@@ -40,6 +49,9 @@ If a `sorry` or a new axiom reaches one, this file stops compiling.
 
 /-- info: 'Rookery.Board.handle_secret' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Rookery.Board.handle_secret
+
+/-- info: 'Rookery.Board.Bounded.handle' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Rookery.Board.Bounded.handle
 
 /-- info: 'Rookery.board_invariant' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Rookery.board_invariant
