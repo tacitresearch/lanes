@@ -36,8 +36,10 @@ public import Lanes.Durable.IO.Journal
 public import Lanes.Durable.Journal
 public import Lanes.Durable.Snapshot
 public import Lanes.Lib.Crypto.Hmac
+public import Lanes.Lib.Crypto.PublicKey
 public import Lanes.Lib.Crypto.Sha256
 public import Lanes.Lib.Crypto.Sodium
+public import Lanes.Lib.Crypto.Verify
 public import Lanes.Lib.Encoding.Base64
 public import Lanes.Lib.Encoding.Digits
 public import Lanes.Lib.Encoding.Json
@@ -73,6 +75,7 @@ public import Lanes.Runtime.IO.Shell
 public import Lanes.Runtime.Kernel
 public import Lanes.Runtime.Shard
 public import Lanes.Runtime.Wave
+public import Lanes.Web.Auth.Jose
 public import Lanes.Web.Auth.Login
 public import Lanes.Web.Auth.Token
 public import Lanes.Web.Html.Basic
