@@ -15,15 +15,15 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Core` | 102 | 40 | 0 | 34 | 1 | 10 | 17 |
 | `Lanes/Data` | 68 | 43 | 0 | 4 | 1 | 0 | 20 |
 | `Lanes/Durable` | 67 | 57 | 2 | 0 | 0 | 7 | 1 |
-| `Lanes/Lib` | 530 | 344 | 13 | 2 | 92 | 70 | 9 |
+| `Lanes/Lib` | 531 | 345 | 13 | 2 | 92 | 70 | 9 |
 | `Lanes/Net` | 37 | 6 | 5 | 0 | 0 | 25 | 1 |
 | `Lanes/Outside` | 116 | 86 | 5 | 6 | 1 | 18 | 0 |
 | `Lanes/Proof` | 35 | 12 | 0 | 0 | 0 | 22 | 1 |
 | `Lanes/Runtime` | 172 | 93 | 21 | 0 | 28 | 30 | 0 |
 | `Lanes/Semantics` | 57 | 9 | 0 | 0 | 0 | 47 | 1 |
-| `Lanes/Web` | 500 | 256 | 47 | 24 | 126 | 45 | 2 |
+| `Lanes/Web` | 504 | 259 | 48 | 24 | 126 | 45 | 2 |
 | `LanesCli` | 110 | 0 | 0 | 0 | 46 | 0 | 64 |
-| All | 1934 | 1036 | 98 | 96 | 295 | 291 | 118 |
+| All | 1939 | 1040 | 99 | 96 | 295 | 291 | 118 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -947,23 +947,23 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Ip.octet?` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
-| `Ip.parse4` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
-| `Ip.print4` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 2 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 3 more |
-| `Ip.hexGroup?` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
-| `Ip.groups?` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
-| `Ip.expand` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
-| `Ip.fields?` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
+| `Ip.octet?` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 4 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 7 more |
+| `Ip.parse4` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 4 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 7 more |
+| `Ip.print4` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
+| `Ip.hexGroup?` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 4 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 7 more |
+| `Ip.groups?` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 4 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 7 more |
+| `Ip.expand` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 4 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 7 more |
+| `Ip.fields?` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 4 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 7 more |
 | `Ip.parse6` | proved | through `Ip.Prefix.parse`, `Ip.parse`: `Ip.Prefix.parse_print`, `Ip.parse_print` |
 | `Ip.parse` | proved | `Ip.parse_print` |
-| `Ip.zeroRun` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
+| `Ip.zeroRun` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 4 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 7 more |
 | `Ip.runAt` | proved | `Ip.longestZeroRun_none`, `Ip.longestZeroRun_some` |
 | `Ip.longestZeroRun` | proved | `Ip.longestZeroRun_none`, `Ip.longestZeroRun_some` |
-| `Ip.withEllipsis` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 2 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 3 more |
-| `Ip.hexFields` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 2 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 3 more |
-| `Ip.fields` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 2 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 3 more |
-| `Ip.mappedPrefix` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 2 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 3 more |
-| `Ip.print6` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 2 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 3 more |
+| `Ip.withEllipsis` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
+| `Ip.hexFields` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
+| `Ip.fields` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
+| `Ip.mappedPrefix` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
+| `Ip.print6` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
 | `Ip.print` | proved | `Ip.parse_print` |
 | `Ip.Found` | spec | a predicate |
 | `Ip.Addr.width` | proved | `Ip.Prefix.contains_iff` |
@@ -975,6 +975,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Ip.Prefix.print` | proved | `Ip.Prefix.parse_print` |
 | `Ip.decimal?` | proved | through `Ip.Prefix.parse`: `Ip.Prefix.parse_print` |
 | `Ip.Prefix.parse` | proved | `Ip.Prefix.parse_print` |
+| `Ip.Addr.isLoopback` | proved | `Ip.isLoopback_v4`, `Ip.isLoopback_v6` |
 
 ## `Lanes/Lib/Net/Url.lean`
 
@@ -2291,8 +2292,11 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.LogSink.isOn` | tested | `Tests/Ops.lean` |
 | `Http.OpsConfig.counting` | tested | `Tests/Ops.lean` |
 | `Http.OpsConfig.active` | tested | `Tests/Ops.lean` |
-| `Http.Ops.pathText` | proved | `Http.Ops.route?_some` |
-| `Http.Ops.route?` | proved | `Http.Ops.route?_default`, `Http.Ops.route?_some` |
+| `Http.Ops.pathText` | proved | `Http.Ops.route?_hidden`, `Http.Ops.route?_some` |
+| `Http.Ops.fromLoopback` | proved | `Http.Ops.allows_eq_true`, `Http.Ops.route?_metrics`, `Http.Ops.route?_metrics_loopback` |
+| `Http.Ops.bearer?` | proved | `Http.Ops.allows_eq_true`, `Http.Ops.route?_metrics` |
+| `Http.Ops.allows` | proved | `Http.Ops.allows_eq_true`, `Http.Ops.route?_hidden` |
+| `Http.Ops.route?` | proved | `Http.Ops.route?_default`, `Http.Ops.route?_hidden`, `Http.Ops.route?_metrics` and 3 more |
 | `Http.Ops.Health.ready` | proved | `Http.Ops.answer_ready` |
 | `Http.Ops.answer` | proved | `Http.Ops.answer_ready` |
 | `Http.Ops.methodName` | proved | through `Http.Ops.Access.json`: `Http.Ops.Access.parse_line` |
@@ -2536,6 +2540,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Server.inFlight` | trusted | TRUSTED.md: The HTTP adapter's IO |
 | `Http.Server.trace` | trusted | TRUSTED.md: The HTTP adapter's IO |
 | `Http.Server.wait` | trusted | TRUSTED.md: The HTTP adapter's IO |
+| `Http.Server.stopOnSignal` | trusted | TRUSTED.md: The HTTP adapter's IO |
 | `Http.Server.tryInput` | trusted | TRUSTED.md: The HTTP adapter's IO |
 
 ## `Lanes/Web/IO/SignIn.lean`

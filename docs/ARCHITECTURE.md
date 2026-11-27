@@ -107,7 +107,7 @@ shell times each batch and `Pace` (`Lanes/Runtime/Pace.lean`, pure) chooses from
 whether the next runs on the shard's thread or on the pool: cheap work never goes to the pool,
 costlier work goes the way that has been faster, and the other is measured again now and then.
 A batch is the same whatever the choice (`Batch.run_spread`), so the timing and the choice are
-trusted only for speed (`docs/decisions/new-adaptive-waves.md`).
+trusted only for speed (`docs/decisions/D73-adaptive-waves.md`).
 
 ## Journal, snapshots and the disk model
 

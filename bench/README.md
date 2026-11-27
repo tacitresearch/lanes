@@ -194,7 +194,7 @@ at a time from 64 connections, so its waves are small.
 
 ### Choosing from the shard's timing
 
-`docs/decisions/new-adaptive-waves.md`: with `parallel := .auto` the shard times its batches and
+`docs/decisions/D73-adaptive-waves.md`: with `parallel := .auto` the shard times its batches and
 runs each on its own thread or on the pool (`Lanes/Runtime/Pace.lean`). `benchAuto` runs the shard
 without IO adapters, its inbox holding 64 inputs, on seven workloads; each is run in each mode in
 turn, `runs` times, a fresh shard each time, and the table gives the median µs a message and the
