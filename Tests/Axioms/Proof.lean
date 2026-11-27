@@ -100,3 +100,9 @@ import Lanes.Semantics
 -- Lanes.Proof.Outputs
 /-- info: 'Lanes.System.Emits.outputs' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Emits.outputs
+
+/-- info: 'Lanes.Outside.Beside.holds' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Outside.Beside.holds
+
+/-- info: 'Lanes.Outside.Beside.keeps' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Outside.Beside.keeps

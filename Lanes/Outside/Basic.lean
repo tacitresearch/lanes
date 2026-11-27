@@ -155,6 +155,28 @@ theorem after_both (a : Outside σ D) (b : Outside σ E) (first : σ.In → Bool
     subst hsee
     simp [List.filter_append, List.filter_cons, List.filter_nil, mine, after_concat, ha, hb, see]
 
+/-- Induction along a run of a system beside an outside that allows it: what holds of the
+events so far, the system's state and the outside's memory at the start, and every event that
+both allow keeps, holds after every run both allow. -/
+theorem run_induction (outside : Outside σ D) {sys : System σ} {env : EnvModel σ}
+    {P : List (Event σ) → SysState sys → D → Prop}
+    (init : P [] (SysState.init sys env) outside.init)
+    (step : ∀ evs c d ev c' d', sys.Reachable env c → P evs c d → c.step env ev = some c' →
+      outside.see d ev = some d' → P (evs ++ [ev]) c' d')
+    {events : List (Event σ)} {c : SysState sys} {d : D}
+    (hrun : (SysState.init sys env).run env events = some c)
+    (hd : outside.after events = some d) : P events c d := by
+  refine System.Reachable.init.run_induction
+    (P := fun evs c => ∀ d, outside.after evs = some d → P evs c d) hrun
+    (fun d hd => by simp only [after_nil, Option.some.injEq] at hd; exact hd ▸ init) ?_ d hd
+  intro evs c₁ ev c₂ hc₁ ih hstep d hd
+  rw [after_concat] at hd
+  cases h₁ : outside.after evs with
+  | none => simp [h₁] at hd
+  | some d₁ =>
+    simp only [h₁, Option.bind_some] at hd
+    exact step evs c₁ d₁ ev c₂ d hc₁ (ih d₁ h₁) hstep hd
+
 /-- Every input the checker explores is one the model allows, with the same memory after. -/
 theorem allow_of_mem_driver (outside : Outside σ D) (samples : D → List σ.In) {d d' : D}
     {x : σ.In} (h : (x, d') ∈ (outside.driver samples).inputs d) : outside.allow d x = some d' := by

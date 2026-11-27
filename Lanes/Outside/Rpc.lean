@@ -122,6 +122,16 @@ theorem allow_not_reported {port : Port σ Q A E} {server : Server S Q A E} {d d
     simp only [Port.reported, hreplied] at h
     simp [h] at hallow
 
+theorem allow_answer {port : Port σ Q A E} {server : Server S Q A E} {d d' : State S}
+    {x : σ.In} {call : Nat} {a : A} (h : port.replied x = some (call, .answer a))
+    (hallow : (outside port server).allow d x = some d') :
+    server.answer d.server call a = some d'.server := by
+  simp only [outside, h] at hallow
+  split at hallow
+  · obtain ⟨s, hs, rfl⟩ := Option.map_eq_some_iff.mp hallow
+    exact hs
+  · simp at hallow
+
 /-- What the server's start has, and every request `good` admits, every answer and every event
 keep, holds after every run whose calls `good` admits. -/
 theorem server_invariant (port : Port σ Q A E) (server : Server S Q A E)
