@@ -1,9 +1,9 @@
 name: API docs
 
-# The API reference of `import Lanes`, built with doc-gen4 by the package in docs/api
-# (docs/api/README.md) and uploaded as the artifact `api-docs`: on pushes to main and on pull
-# requests that change the library or the docs package. Jobs run where CI's do (`runner`,
-# docs/RUNNERS.md).
+# The API reference of `import Lanes` and of the soundness theorems, `import Lanes.Proofs`, built
+# with doc-gen4 by the package in docs/api (docs/api/README.md) and uploaded as the artifact
+# `api-docs`: on pushes to main and on pull requests that change the library or the docs
+# package. Jobs run where CI's do (`runner`, docs/RUNNERS.md).
 #
 # Publishing to GitHub Pages is the job `pages`, which does nothing until the owner turns it on:
 # enable Pages with "GitHub Actions" as its source (Settings, Pages), then set the repository
@@ -72,7 +72,7 @@ jobs:
         run: docs/api/link-packages.sh
       - name: Build the API docs
         working-directory: docs/api
-        run: lake build +Lanes:docs
+        run: lake build +Lanes.Proofs:docs
       - if: steps.lean.outputs.warm != 'true' && steps.cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
