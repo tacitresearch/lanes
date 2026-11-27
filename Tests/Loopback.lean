@@ -50,6 +50,24 @@ def streamed : List (String × Bool) :=
     ("loopback: a stream of events resumes after the event the client last read",
       (Sse.received written).map (·.data) == ["e1", "e2"]) ]
 
+/-- The pieces of the stream protocol, one at a time. -/
+def parts : List (String × Bool) :=
+  let head : Request := { method := .put, path := ["upload"] }
+  let e : Sse.Event := { data := "a\nb", event := some "post", id := some "7", retry := some 500 }
+  let busy : Conn :=
+    { inflow := some { seq := 0, head, framing := .length 3, close := false, asked := some (.empty, false)
+                       again := some 40 } }
+  [ ("stream: a piece tagged with its head reads back as the piece of that head",
+      Stream.msg? (Stream.tag (Stream.piece head 3 "xyz".toUTF8 true) 9)
+        == some (.piece 9 3 "xyz".toUTF8 true)
+      && Stream.msg? (Stream.tag (Stream.pull head 4 (some "e1")) 2) == some (.pull 2 4 (some "e1"))
+      && Stream.msg? head == none),
+    ("sse: an event is read back from its bytes, a comment between events is none",
+      Sse.parse ((String.fromUTF8? (e.encode ++ Sse.heartbeat ++ e.encode)).getD "").toList == [e, e]),
+    ("conn: a piece the system was too busy for is looked at again at its time, the earlier of two",
+      busy.wakeAt {} == some 40 && Conn.earlier (some 3) (some 2) == some 2
+        && Conn.earlier none (some 5) == some 5) ]
+
 def tests : List (String × Bool) :=
   let lb := Loopback.start (Server.system echo) bridge
   let (lb, ok) := lb.get []
@@ -78,6 +96,6 @@ def tests : List (String × Bool) :=
     ("loopback: a body over the connection's limit is refused 413", status tooLarge == 413),
     ("loopback: the bank moves money and shows it, its state carried from one request to the "
       ++ "next", status moved == 200 && (text balance).endsWith "<span>130</span>"
-        && status refused == 200 && (text after).endsWith "<span>70</span>") ] ++ streamed
+        && status refused == 200 && (text after).endsWith "<span>70</span>") ] ++ streamed ++ parts
 
 end Tests.Loopback
