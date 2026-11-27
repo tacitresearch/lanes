@@ -35,6 +35,11 @@ the cycle on the shard's thread is read as at most that many times the pool's.
 
 A wave on the pool is cut into pieces of at least `piece_ns` of work at the shard's rate, so a
 narrow wave of cheap steps is left to the kernel (`Kernel.Spread.minPiece`).
+
+The first batch on the shard's thread after a batch on the pool counts as the pool's. Lean never
+updates in place an object another thread has seen, so that batch copies the state of every actor
+the pool stepped, once. It is a cost of the pool: counted as the shard's, a state of a million
+numbers makes its steps look costly, and the pool look no slower than the shard's thread.
 -/
 
 @[expose] public section
@@ -83,6 +88,8 @@ structure Pace where
   base : Nat := 0
   /-- How many times in a row the other way was run and found the slower. -/
   confirmed : Nat := 0
+  /-- The batch before ran on the pool. -/
+  afterPool : Bool := false
   deriving Repr
 
 namespace Pace
@@ -143,15 +150,9 @@ def spread (c : Config) (workers : Nat) (p : Pace) : Kernel.Spread :=
 def cycleOf (p : Pace) (pooled : Bool) : Nat :=
   ((if pooled then p.pool else p.inline).perUnit).getD 0
 
-/-- A batch ran with `spread` and did `units` units of work in `ns`, `elapsed_ns` after the end
-of the batch before. Its cycle counts the time between at most three times the batch, so that a
-shard that was idle long is soon seen busy again once it is, and not at all before the first
-batch, when the shard was starting. A batch run the way not in use replaces that way's rates,
-which were old. -/
-def observe (c : Config) (workers : Nat) (p : Pace) (spread : Kernel.Spread)
-    (ns units elapsed_ns : Nat) : Pace :=
-  let pooled := decide (1 < spread.workers)
-  let cycle := if p.arrived.units = 0 then ns else max ns (min elapsed_ns (4 * ns))
+/-- A batch that did `units` units of work in a cycle of `cycle`, on the pool when `pooled`, `ns`
+of it in `Batch.run`. A batch run the way not in use replaces that way's rates, which were old. -/
+def record (c : Config) (workers : Nat) (p : Pace) (pooled : Bool) (ns units cycle : Nat) : Pace :=
   let probe := pooled != p.pooled
   let p : Pace := { p with arrived := p.arrived.add cycle units }
   let p : Pace := if pooled then p
@@ -168,6 +169,20 @@ def observe (c : Config) (workers : Nat) (p : Pace) (spread : Kernel.Spread)
   let next := p.prefer c workers
   if next = p.pooled then p
   else { p with pooled := next, since := 0, base := p.cycleOf next, confirmed := 0 }
+
+/-- A batch ran with `spread` and did `units` units of work in `ns`, `elapsed_ns` after the end
+of the batch before. Its cycle counts the time between at most three times the batch, so that a
+shard that was idle long is soon seen busy again once it is, and not at all before the first
+batch, when the shard was starting. The first batch on the shard's thread after the pool is the
+pool's: it adds to the pool's cycle, and neither to the shard's cost nor to its cycle. -/
+def observe (c : Config) (workers : Nat) (p : Pace) (spread : Kernel.Spread)
+    (ns units elapsed_ns : Nat) : Pace :=
+  let pooled := decide (1 < spread.workers)
+  let cycle := if p.arrived.units = 0 then ns else max ns (min elapsed_ns (4 * ns))
+  if !pooled && p.afterPool then
+    { p with arrived := p.arrived.add cycle units, pool := p.pool.add cycle units,
+             afterPool := false }
+  else { p.record c workers pooled ns units cycle with afterPool := pooled }
 
 /-- The units of work in a batch: the messages delivered, the timers fired, the actors
 started. -/
