@@ -23,9 +23,10 @@ lifting. Each is always armed, and one that passes with nothing to end changes n
 system's timers need no invariant tying them to the state (`Rookery.System`). How long a window
 or a session lasts is the timers' delay in `Config`, which the semantics does not model.
 
-An API request carries a sequence number its bot chooses. The board acts once on each: the
-same number again gets the answer it got, without acting, and an older one gets `stale`
-(`Lanes.Once.Memo`, D48), so a bot that retries a post it got no answer to posts it once.
+An API request carries a sequence number its bot chooses. The board acts once on each change:
+the same number again gets the answer it got, without acting, and an older one gets `stale`
+(`Lanes.Once.Memo`, D48), so a bot that retries a post it got no answer to posts it once. A read
+is answered afresh, so that no answer remembered shows a post deleted since.
 -/
 
 namespace Rookery
@@ -262,10 +263,12 @@ def withSession (b : Board N C) (n : N) (session : Sid)
   | some p => if p.sessions.live session then f p else (b, .noSession, {})
   | none => (b, .noSession, {})
 
-/-- An API request: acted on once for each sequence number (`Lanes.Once.Memo`). -/
+/-- An API request: a read is answered afresh; a change is acted on once for each sequence
+number (`Lanes.Once.Memo`). A read answered from the memo could show a post deleted since. -/
 def api (config : Config) (b : Board N C) (n : N) (p : Profile N C) (token seq : Nat)
     (op : Op N) : Board N C × Reply N × Timers :=
   if p.token = 0 ∨ token ≠ p.token then (b, .badToken, {})
+  else if op = .timeline then b.act config n p op
   else
     match b.memo.seen n seq with
     | .again replies => (b, replies.headD .stale, {})
