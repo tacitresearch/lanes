@@ -75,8 +75,10 @@ public import Lanes.Runtime.IO.Shell
 public import Lanes.Runtime.Kernel
 public import Lanes.Runtime.Shard
 public import Lanes.Runtime.Wave
+public import Lanes.Web.Auth.IdToken
 public import Lanes.Web.Auth.Jose
 public import Lanes.Web.Auth.Login
+public import Lanes.Web.Auth.OAuth
 public import Lanes.Web.Auth.Token
 public import Lanes.Web.Html.Basic
 public import Lanes.Web.Html.Htmx
@@ -92,6 +94,7 @@ public import Lanes.Web.Http.Waiting
 public import Lanes.Web.Http.Wire
 public import Lanes.Web.Http.WireSpec
 public import Lanes.Web.IO.Client
+public import Lanes.Web.IO.SignIn
 public import Lanes.Web.IO.Server
 public import Lanes.Web.IO.Tls
 
