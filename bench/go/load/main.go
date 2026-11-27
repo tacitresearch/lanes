@@ -49,6 +49,9 @@ type result struct {
 // The kernel's USER_HZ, which /proc/<pid>/stat and /proc/stat count in; 100 on Linux.
 const userHz = 100
 
+// The largest response body the load generator reads; a benchmark server answers a few bytes.
+const maxBodyBytes = 16 << 20
+
 // cpuList parses a list such as "0-3,8,10-11" into a set; empty means every CPU.
 func cpuList(s string) (map[int]bool, error) {
 	if s == "" {
@@ -198,7 +201,11 @@ func readResponse(r *bufio.Reader) (status int, keep bool, err error) {
 		value := strings.TrimSpace(string(h[colon+1:]))
 		switch name {
 		case "content-length":
-			length, _ = strconv.Atoi(value)
+			n, err := strconv.ParseUint(value, 10, 32)
+			if err != nil || n > maxBodyBytes {
+				return 0, false, fmt.Errorf("bad or oversized Content-Length %q", value)
+			}
+			length = int(n)
 		case "connection":
 			if strings.EqualFold(value, "close") {
 				keep = false
@@ -214,9 +221,12 @@ func readResponse(r *bufio.Reader) (status int, keep bool, err error) {
 			if err != nil {
 				return 0, false, err
 			}
-			size, err := strconv.ParseInt(strings.TrimSpace(strings.SplitN(sizeLine, ";", 2)[0]), 16, 64)
+			size, err := strconv.ParseUint(strings.TrimSpace(strings.SplitN(sizeLine, ";", 2)[0]), 16, 32)
 			if err != nil {
 				return 0, false, err
+			}
+			if size > maxBodyBytes {
+				return 0, false, fmt.Errorf("chunk of %d bytes is over the limit of %d", size, maxBodyBytes)
 			}
 			if _, err := r.Discard(int(size) + 2); err != nil {
 				return 0, false, err
