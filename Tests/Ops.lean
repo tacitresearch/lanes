@@ -168,7 +168,7 @@ def readyTest : Async (List (String × Bool)) := do
       status early == "503" && status alive == "200"),
     ("ops: ready once it has", status ready == "200"),
     ("ops: the metrics page is served in the text format",
-      status page == "200" && page.contains "content-type: text/plain; version=0.0.4"),
+      status page == "200" && page.contains ("content-type: " ++ Metrics.contentType)),
     ("ops: it counts what was answered, by method and status class",
       valueOf page "lanes_http_requests_total{method=\"GET\",status_class=\"2xx\"}" == some 5
         && valueOf page "lanes_http_requests_total{method=\"GET\",status_class=\"5xx\"}"

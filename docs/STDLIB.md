@@ -174,9 +174,9 @@ and the RFCs' own.
 | `context` | e | deadlines are `Effect.after` and `Effect.cancel` (`Lanes/Core/System.lean`, D3); a request's deadline is the gate's |
 | `sync`, `sync/atomic` | a | `Std.Sync` (`Mutex`, `Channel`, `Semaphore`, `Barrier`, `Notify`, `Broadcast`), `IO.Ref`. Lanes actors share nothing, so applications do not use them |
 | `log` | a | `IO.println`, `IO.eprintln` |
-| `log/slog` | b | P1 |
+| `log/slog` | b | P1. The HTTP server's access log is JSON lines (`Lanes/Web/Http/Ops.lean`); there is no general logger |
 | `log/syslog` | d | logs go to standard error and the service manager collects them |
-| `expvar` | b | P1, as a metrics page in the Prometheus text format rather than expvar's JSON |
+| `expvar` | b | P1, built as a metrics page in the Prometheus text format rather than expvar's JSON: `Lanes/Lib/Metrics.lean`, served by the HTTP server (`ServerConfig.ops`) |
 | `flag` | d | an application takes a few arguments and the environment; the `Cli` package is in the manifest (through Mathlib) if a tool needs more |
 | `testing` | e | `lake test`, the model checker (`Lanes.Check`), seeded random runs (`Lanes/Check/Fuzz.lean`), mutants (`scripts/mutants.py`) |
 | `testing/quick` | a | Plausible, pinned in `lake-manifest.json` through Mathlib |
@@ -227,7 +227,7 @@ and the RFCs' own.
 | `net/http` (event streams) | live timelines | WHATWG HTML §9.2 (`text/event-stream`); `parse (write events) = events` | the specification's examples; Go has no parser | small | P1 |
 | `path` | cleaning a request's path, static files | RFC 3986 §5.2.4 `remove_dot_segments`; `clean (clean p) = clean p` | Go `path.Clean`, `path.Match` | small | P1 |
 | `log/slog` | structured logs | one JSON object per line, as slog's `JSONHandler` writes (RFC 3339 times, keys in order) | Go `slog.NewJSONHandler` on the same records | small | P1 |
-| `expvar` | a metrics page | Prometheus text exposition format 0.0.4 | `github.com/prometheus/common/expfmt` parsing our output | small | P1 |
+| `expvar` | a metrics page | Prometheus text exposition format 0.0.4 | `github.com/prometheus/common/expfmt` parsing our output | small | P1, built without the oracle |
 | `unicode` | validating names and text by category | the Unicode Character Database (`UnicodeData.txt`, `DerivedCoreProperties.txt`), tables generated from it with a theorem per table that lookup agrees with the list | the UCD files directly; Go 1.24 is at Unicode 15.0.0, so it disagrees on newer characters | medium | P1 |
 | `unicode/utf16` | counting text as `maxlength` in a browser does | Unicode §3.9 D91; `decode (encode s) = s` on scalar values | Go `utf16.Encode`, `Decode` | small | P1 |
 | `x/text/unicode/norm` | user names and search keys compared after NFC | UAX #15; NFC idempotent, `nfc ∘ nfd = nfc` | `NormalizationTest.txt`; Go x/text | medium | P1 |
