@@ -430,7 +430,7 @@ import Lanes.Semantics
 /-- info: 'Lanes.Postgres.SslMode.defaultFor_disable' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Postgres.SslMode.defaultFor_disable
 
-/-- info: 'Lanes.Postgres.Address.name_remote' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+/-- info: 'Lanes.Postgres.Address.name_remote' does not depend on any axioms -/
 #guard_msgs in #print axioms Lanes.Postgres.Address.name_remote
 
 -- Lanes.Lib.RateLimit

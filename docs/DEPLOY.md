@@ -395,21 +395,23 @@ The authorities are `PGSSLROOTCERT`, else `LANES_DB_CA`, else `/etc/lanes/db-ca.
 there, else the system's. `PGSSLMODE` `allow` and `prefer`, which give TLS up when the server
 refuses it, are refused.
 
+AWS adds authorities to RDS's bundle from time to time (for new regions). Setup and `configure`
+then stop with `does not have the SHA-256`, and the bundle installed before is kept: update the
+stack's parameter `DatabaseCaBundleSha256` to the new bundle's SHA-256, after checking it as
+below.
+
 **For auditors.** The stack's parameter group sets `rds.force_ssl` to 1 and
 `password_encryption` to SCRAM. At setup and at each `configure`, the instance fetches RDS's
 global bundle of authorities,
 `https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem`, checks that it has the
-SHA-256 of the stack's parameter `DatabaseCaBundleSha256`, and installs it as
-`/etc/lanes/db-ca.pem` (`LANES_DB_CA`); a bundle with another hash is refused, and the one
-installed before is kept. The application trusts every authority in that file and no other.
-When AWS changes the bundle (it adds the authorities of new regions), setup and `configure` stop
-with `does not have the SHA-256`: check the new bundle (`curl -fsSL <url> | sha256sum`, and
+SHA-256 of `DatabaseCaBundleSha256`, and installs it as `/etc/lanes/db-ca.pem` (`LANES_DB_CA`);
+a bundle with another hash is refused. The application trusts every authority in that file and
+no other. To check a new bundle, `curl -fsSL <url> | sha256sum` gives its hash, and
 `openssl crl2pkcs7 -nocrl -certfile global-bundle.pem | openssl pkcs7 -print_certs -noout`
-lists its authorities), then update the stack with its hash. Channel binding
-(`SCRAM-SHA-256-PLUS`) means that a party in the middle with a certificate from one of the
-bundle's authorities is refused by the server; a client that could have bound and was not
-offered it says so, and a server that did offer it then refuses it, so the binding cannot be
-stripped. `docs/decisions/D83-postgres-over-tls.md` says why.
+lists its authorities. Channel binding (`SCRAM-SHA-256-PLUS`) means that a party in the middle
+with a certificate from one of the bundle's authorities is refused by the server; a client that
+could have bound and was not offered it says so, and a server that did offer it then refuses it,
+so the binding cannot be stripped. `docs/decisions/D83-postgres-over-tls.md` says why.
 
 ## What a stop does
 
