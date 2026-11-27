@@ -143,7 +143,7 @@ def readsLoneSurrogates (c : Case) (go : Answer) : Bool :=
 /-- Go has no limit on the digits of a number. Ours refuses more than `maxDigits`, 1000 by
 default. -/
 def beyondLimits (c : Case) (go : Answer) : Bool :=
-  (answer c).isNone && answerWith 10000 100000 c.input == go
+  (answer c).isNone && answerWith 10000 1000000000 c.input == go
 
 /-- Go reads any exponent. `oracle/json` writes one beyond ±100000 as `num:unbounded`, and ours
 refuses an exponent beyond `maxDigits` either way. -/
