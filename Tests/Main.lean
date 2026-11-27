@@ -38,6 +38,7 @@ import Tests.Release
 import Tests.Oracle.All
 import Tests.Jobs
 import Tests.Postgres
+import Tests.PostgresConn
 
 /-!
 The test driver behind `lake test`: the pure tests and the live runtime tests, well under a
@@ -90,12 +91,12 @@ def main (args : List String) : IO UInt32 := do
   | [] =>
     let pure := pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.Lint.tests)
       ++ (← Tests.New.tests) ++ (← Tests.Tutorial.tests) ++ (← Tests.Oracle.replayAll)
-      ++ (← Tests.Json.suite) ++ (← Tests.HttpConn.checks) ++ (← Tests.Postgres.psqlTests)
+      ++ (← Tests.Json.suite) ++ (← Tests.HttpConn.checks) ++ (← Tests.Postgres.psqlTests) ++ (← Tests.PostgresConn.checks)
     failures pure
     report (pure ++ (← live)) pure.length
   | ["fast"] => report (pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.Lint.tests)
       ++ (← Tests.New.tests) ++ (← Tests.Tutorial.tests) ++ (← Tests.Oracle.replayAll)
-      ++ (← Tests.Json.suite) ++ (← Tests.HttpConn.checks) ++ (← Tests.Postgres.psqlTests))
+      ++ (← Tests.Json.suite) ++ (← Tests.HttpConn.checks) ++ (← Tests.Postgres.psqlTests) ++ (← Tests.PostgresConn.checks))
   | ["live"] => report (← live)
   | ["journal-child", path] =>
     Tests.Durable.child path
