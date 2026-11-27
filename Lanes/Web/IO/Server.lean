@@ -9,6 +9,7 @@ public import Lanes.Durable.IO.Journal
 public import Lanes.Web.Http.Conn
 public import Lanes.Web.Http.Front
 public import Lanes.Web.Http.Waiting
+public import Lanes.Web.IO.Ops
 
 /-!
 The HTTP server adapter: the IO around the gate and the connections. It accepts connections on
@@ -76,6 +77,9 @@ structure ServerConfig where
   written under another name is refused: replayed through other step functions it would give
   another state. -/
   system : String := ""
+  /-- Metrics, health and the access log, answered and written by the server: all off by
+  default (`Lanes/Web/IO/Ops.lean`). -/
+  ops : OpsConfig := {}
 
 private def ServerConfig.conn (config : ServerConfig) : Conn.Config where
   limits := { config.limits with body_max := config.maxBodyBytes }
@@ -167,6 +171,7 @@ structure Server (system : System τ) [Hashable τ.Id] where
   private down : IO.Promise Unit
   private localPort : UInt16
   private lanes : Array Lane
+  private ops : Ops
 
 /-- Everything written is sent before the end of the connection, and what the client still
 sends is read and dropped for a while, so that its last response is not lost to a reset. The
@@ -355,6 +360,8 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
     Async (Server system) := do
   let some addr := Std.Net.IPv4Addr.ofString config.host
     | throw (IO.userError s!"lanes: {config.host} is not an IPv4 address")
+  let ops ← Ops.new config.ops
+  let log := log.map ops.journal
   let waiting ← Mutex.new (Waiting.start ((log.map (·.index)).getD 0))
   let runtime ← Runtime.start system runtimeConfig (journal := log) fun out => do
     match onOutput out with
@@ -378,7 +385,7 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
     return lane
   let server : Server system := {
     runtime, listener, waiting, connections := ← Mutex.new {}, down
-    localPort := (← listener.getSockName).port, lanes }
+    localPort := (← listener.getSockName).port, lanes, ops }
   let hand (request : Request) (answer : Response → BaseIO Unit) : BaseIO Unit := do
     let request := prepare request
     let admitted ← waiting.atomically do
@@ -387,7 +394,7 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
       modify (·.release id)
       return false
     unless admitted do answer busy
-  let submit (request : Request) (answer : Response → BaseIO Unit) : BaseIO Unit :=
+  let arrived (request : Request) (answer : Response → BaseIO Unit) : BaseIO Unit :=
     match arrive with
     | none => hand request answer
     | some work => discard <| IO.asTask (prio := .dedicated) do
@@ -395,6 +402,12 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
       | .ok (.ok request) => hand request answer
       | .ok (.error response) => answer response
       | .error _ => answer (.text "the request could not be prepared\n" 500)
+  let probe : BaseIO Ops.Probe := do
+    let count ← server.connections.atomically (return (← get).count)
+    return { recovered := ← runtime.hasRecovered, stopping := count.stopping
+             connections := count.count, inbox := ← runtime.depth
+             inflight := ← waiting.atomically (return (← get).waiters.size) }
+  let submit := ops.front probe arrived
   let adopt (socket : TCP.Socket.Client) : Async Unit := do
     try socket.noDelay catch _ => pure ()
     let next ← server.connections.atomically (return (← get).next)
@@ -414,7 +427,9 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
                    next := c.next + 1 }
       return some ctx
     match admitted with
-    | none => socket.close
+    | none =>
+      ops.refused
+      socket.close
     | some ctx => tell ctx line false .resume
   discard <| IO.asTask (prio := .dedicated) (ticker server config.tick_ms)
   background do
@@ -499,6 +514,11 @@ def stop (server : Server system) : Async Unit := do
   for (_, waiter) in ← server.waiting.atomically (modifyGet Waiting.drain) do waiter busy
   awaitConnections server
   server.finish
+
+/-- Readiness answers `503` from now on, while the server goes on serving, so that a load
+balancer stops sending it requests before `stop`. -/
+def drain (server : Server system) : BaseIO Unit :=
+  server.ops.drain
 
 /-- The requests the shard has taken and the server has not yet answered. -/
 def inFlight (server : Server system) : BaseIO Nat :=

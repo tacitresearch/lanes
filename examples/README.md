@@ -29,10 +29,17 @@ there.
    answers may be late, lost or `unknown` and whose webhooks come late, twice and out of order.
    A retry without the idempotency key charges an order twice, and the checker finds it; with
    the key, an order is charged at most once in every run, proved.
-8. `sign-in`: the start of a video site whose members sign in with Google or GitHub. The
-   sign-in is Lanes' and runs before the system, which gets only the identity it verified and
-   gives the member a session.
-9. `raft-kv`, `ledger`, `rookery`: the serious systems below.
+8. `migration`: a deploy that changes the state type. Version 1 of a quota service runs on a
+   journal; version 2 adds a quota to each user, reads version 1's files through an upgrade,
+   and carries its invariant across with the migration's proof.
+9. `todo-db`: a to-do list kept in PostgreSQL, checked against the transactional store model with
+   lost `COMMIT` answers. Appending and retrying a lost commit stores a to-do twice, and the
+   checker finds it; the fix inserts under the user's key after reading it, and is proved to send
+   nothing else. `lake exe todoLive` runs it on a real server.
+10. `sign-in`: the start of a video site whose members sign in with Google or GitHub. The
+    sign-in is Lanes' and runs before the system, which gets only the identity it verified and
+    gives the member a session.
+11. `raft-kv`, `ledger`, `rookery`: the serious systems below.
 
 | Feature | Where to see it |
 | --- | --- |
@@ -45,9 +52,11 @@ there.
 | A request takes effect once (`Once.actor`, `Service.once`) | `kv-cache`, `raft-kv` |
 | Fairness and liveness | `watchdog` |
 | A model of an external service: timeouts with unknown outcome, idempotency keys, webhooks (`Lanes/Outside/`) | `payments` |
-| Model checks, a bug found, random runs | `bank`, `kv-cache`, `election`, `payments` |
+| A database: the store model, lost commits, PostgreSQL | `todo-db` |
+| Model checks, a bug found, random runs | `bank`, `kv-cache`, `election`, `payments`, `todo-db` |
 | HTTP, routes, htmx, templates | `counter`, `bank-web`, `ledger`, `rookery` |
 | A journal and snapshots across `kill -9` | `bank-web`, `ledger`, `raft-kv`, `rookery` |
+| A changed state type: an upgrade, a migration and its proof (`Migration`, `Journal.Upgrade`) | `migration` |
 | Sessions, log-in, cookies, tokens | `ledger`, `rookery` |
 | Sign-in with Google or GitHub (OAuth 2.0, OpenID Connect) | `sign-in` |
 | A JSON API and rate limits | `rookery` |

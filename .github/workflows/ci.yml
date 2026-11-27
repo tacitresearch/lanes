@@ -130,7 +130,7 @@ jobs:
         run: |
           for package in integrations/google integrations/github examples/counter examples/bank \
               examples/bank-web examples/kv-cache examples/election examples/watchdog \
-              examples/payments examples/sign-in; do
+              examples/payments examples/migration examples/todo-db examples/sign-in; do
             echo "::group::$package"
             mkdir -p "$package/.lake"
             ln -sfn "$GITHUB_WORKSPACE/.lake/packages" "$package/.lake/packages"

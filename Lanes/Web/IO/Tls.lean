@@ -20,24 +20,31 @@ namespace Lanes.Tls
 
 /-- The certificates a server's must chain to. -/
 inductive Trust where
-  /-- The operating system's: the first of `systemFiles` there is. -/
+  /-- The operating system's: the file `SSL_CERT_FILE` names, if it is set, or else the first of
+  `systemFiles` there is. -/
   | system
   /-- Those in a PEM file, and no others. -/
   | file (path : System.FilePath)
   deriving DecidableEq, Repr, Hashable
 
 /-- Where systems keep their trusted certificates, as Go's `crypto/x509` looks for them: Debian,
-Ubuntu and Alpine; Fedora and RHEL; OpenSUSE; OpenELEC; CentOS and RHEL 7 and Amazon Linux;
-macOS and the BSDs. The OpenSSL that Lean ships was built to look in none of them. -/
+Ubuntu and Alpine; Fedora and RHEL; OpenSUSE; OpenELEC; CentOS and RHEL 7 and Amazon Linux. Then
+Homebrew's bundle on macOS, before `/etc/ssl/cert.pem`, which macOS and the BSDs have but which
+macOS does not keep up to date with its keychain: on GitHub's macOS runners it lacks the root
+example.com chains to. The OpenSSL that Lean ships was built to look in none of them. -/
 def systemFiles : List System.FilePath :=
   ["/etc/ssl/certs/ca-certificates.crt", "/etc/pki/tls/certs/ca-bundle.crt",
     "/etc/ssl/ca-bundle.pem", "/etc/pki/tls/cacert.pem",
-    "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem", "/etc/ssl/cert.pem"]
+    "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",
+    "/opt/homebrew/etc/ca-certificates/cert.pem", "/usr/local/etc/ca-certificates/cert.pem",
+    "/etc/ssl/cert.pem"]
 
 /-- The file of trusted certificates `trust` names. -/
 def Trust.path : Trust → IO System.FilePath
   | .file path => pure path
   | .system => do
+    if let some named ← IO.getEnv "SSL_CERT_FILE" then
+      unless named.isEmpty do return named
     for path in systemFiles do
       if ← path.pathExists then return path
     throw (.userError "tls: no file of trusted certificates in any of the usual places")

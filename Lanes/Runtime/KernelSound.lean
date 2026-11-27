@@ -6,6 +6,7 @@ module
 
 public import Lanes.Runtime.Kernel
 public import Lanes.Runtime.Release
+public import Lanes.Proof.Lift
 
 /-!
 The kernel cannot leave the semantics: every kernel operation is a run of `SysState.step` under
@@ -591,6 +592,37 @@ theorem exec_outputs (k : Kernel sys) (ops : List (Op σ)) :
   induction ops generalizing k with
   | nil => rfl
   | cons op ops ih => simp only [exec_cons, Event.outputs_append, apply_outputs, ih]
+
+/-! What holds of each actor from any kernel, not only from boot: a shard whose kernel was
+migrated from another system's starts from a kernel that boot never gives. -/
+
+/-- A property of each actor that its own steps and restarts keep, and that holds of every actor
+of a kernel, holds of every actor after any operations on it. -/
+theorem exec_inductive (k : Kernel sys) (ops : List (Op σ)) {P : ∀ i, sys.State i → Prop}
+    (hP : ∀ i, (sys.actor i).Inductive (P i)) (hk : ∀ i, P i (k.cell i).state) :
+    ∀ i, P i ((k.exec ops).kernel.cell i).state := by
+  obtain ⟨evs, c, hrun, -, hrel⟩ := exec_sound k ops
+  have hc := SysState.run_inductive hP hrun hk
+  intro i
+  rcases hrel.actor i with hsame | hasleep
+  · show P i (((k.exec ops).kernel.abs).state i)
+    rw [hsame.1]
+    exact hc i
+  · show P i (((k.exec ops).kernel.abs).state i)
+    rw [hasleep.init]
+    exact (hP i).init
+
+omit [Hashable σ.Id] in
+/-- Every actor of a kernel that a shard can have is in a state the actor reaches on its own. -/
+theorem exec_cell_reachable (sys : System σ) [Hashable σ.Id] (ops : List (Op σ)) (i : σ.Id) :
+    (sys.actor i).Reachable (((boot sys).1.exec ops).kernel.cell i).state := by
+  obtain ⟨c, hc, hrel⟩ := (exec_reachable sys ops).2
+  show (sys.actor i).Reachable ((((boot sys).1.exec ops).kernel.abs).state i)
+  rcases hrel.actor i with hsame | hasleep
+  · rw [hsame.1]
+    exact System.Reachable.actor hc i
+  · rw [hasleep.init]
+    exact .init
 
 end Kernel
 

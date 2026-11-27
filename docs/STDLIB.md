@@ -20,8 +20,8 @@ is how a misread standard shows up.
 | a | Lean core, `Std` or Batteries has it (module named) | 37 |
 | b | Pure and needed by applications: build in Lean and prove | 26 |
 | c | Touches the operating system or cryptography: bind (library named) | 11 |
-| d | Not needed for Lanes applications (reason given) | 83 |
-| e | Already in Lanes (module named) | 15 |
+| d | Not needed for Lanes applications (reason given) | 79 |
+| e | Already in Lanes (module named) | 19 |
 
 Of the 19 `golang.org/x` packages listed at the end, 8 are (b), 3 are (c), 7 are (d) and 1 is (e).
 
@@ -133,7 +133,7 @@ API. P1 is common, P2 rare.
 | --- | --- | --- |
 | `crypto/sha256` | e | libsodium's, bound in `Lanes/Lib/Crypto/Sodium.lean`, with `Lanes.Sha256` (pure Lean, NIST vectors) as its reference (D46) |
 | `crypto/hmac` | e | libsodium's, bound in `Lanes/Lib/Crypto/Sodium.lean`, with `Lanes.Hmac` (pure Lean, RFC 4231 vectors) as its reference (D46) |
-| `crypto/pbkdf2` | d | passwords are digested with Argon2id; the Lean PBKDF2 is gone (D46) |
+| `crypto/pbkdf2` | e | `Lanes/Lib/Crypto/Pbkdf2.lean`, over libsodium's HMAC, for SCRAM-SHA-256 only (RFC 7914 vectors); passwords are digested with Argon2id (D46) |
 | `crypto/rand` | a | `IO.getRandomBytes` (reads `/dev/urandom`); Lanes binds libsodium's `randombytes_buf`, which uses `getrandom(2)` and also works where `/dev` is not mounted (D46) |
 | `crypto/subtle` | c | libsodium `sodium_memcmp`, bound (D46): compiled Lean promises nothing about timing, so the Lean comparison is only the reference |
 | `crypto/tls` | e | the client, from the OpenSSL Lean's toolchain ships, bound in `native/tls.c` and `Lanes/Web/IO/Tls.lean`; inbound TLS stays at the load balancer or reverse proxy |
@@ -147,7 +147,8 @@ API. P1 is common, P2 rare.
 | `crypto/sha512` | c | libsodium `crypto_hash_sha512` (P2) |
 | `crypto/hkdf` | c | libsodium `crypto_kdf_hkdf_sha256` (P1: deriving keys from one secret) |
 | `crypto` | d | a registry of hash functions; Lean calls functions by name |
-| `crypto/md5`, `crypto/des`, `crypto/rc4`, `crypto/dsa`, `crypto/elliptic` | d | broken, legacy or deprecated |
+| `crypto/md5` | e | `Lanes/Lib/Crypto/Md5.lean`, pure Lean, for PostgreSQL's `md5` authentication only (RFC 1321 vectors); broken as a hash |
+| `crypto/des`, `crypto/rc4`, `crypto/dsa`, `crypto/elliptic` | d | broken, legacy or deprecated |
 | `crypto/sha3`, `crypto/mlkem` | d | no application use yet; ML-KEM matters inside TLS, which is bound |
 | `crypto/fips140` | d | Go's FIPS mode |
 
@@ -174,14 +175,14 @@ and the RFCs' own.
 | `context` | e | deadlines are `Effect.after` and `Effect.cancel` (`Lanes/Core/System.lean`, D3); a request's deadline is the gate's |
 | `sync`, `sync/atomic` | a | `Std.Sync` (`Mutex`, `Channel`, `Semaphore`, `Barrier`, `Notify`, `Broadcast`), `IO.Ref`. Lanes actors share nothing, so applications do not use them |
 | `log` | a | `IO.println`, `IO.eprintln` |
-| `log/slog` | b | P1 |
+| `log/slog` | b | P1. The HTTP server's access log is JSON lines (`Lanes/Web/Http/Ops.lean`); there is no general logger |
 | `log/syslog` | d | logs go to standard error and the service manager collects them |
-| `expvar` | b | P1, as a metrics page in the Prometheus text format rather than expvar's JSON |
+| `expvar` | b | P1, built as a metrics page in the Prometheus text format rather than expvar's JSON: `Lanes/Lib/Metrics.lean`, served by the HTTP server (`ServerConfig.ops`) |
 | `flag` | d | an application takes a few arguments and the environment; the `Cli` package is in the manifest (through Mathlib) if a tool needs more |
 | `testing` | e | `lake test`, the model checker (`Lanes.Check`), seeded random runs (`Lanes/Check/Fuzz.lean`), mutants (`scripts/mutants.py`) |
 | `testing/quick` | a | Plausible, pinned in `lake-manifest.json` through Mathlib |
 | `testing/fstest`, `testing/iotest`, `testing/slogtest` | d | fakes for Go interfaces |
-| `database/sql`, `database/sql/driver` | d | state is actor state with a journal; there is no SQL database |
+| `database/sql`, `database/sql/driver` | e | state is actor state with a journal by default; PostgreSQL's protocol is `Lanes/Lib/Postgres/` (a client, not a generic driver interface), and a transactional store is the model `Lanes/Outside/Store/Basic.lean` |
 | `syscall` | d | specific calls are bound one by one (`fsync`), not as a package |
 | `plugin`, `reflect` | d | Lean has no run-time reflection; codecs are derived by `lanes_data` |
 | `runtime`, `runtime/cgo`, `runtime/coverage`, `runtime/debug`, `runtime/metrics`, `runtime/pprof`, `runtime/race`, `runtime/trace` | d | Go runtime internals |
@@ -227,7 +228,7 @@ and the RFCs' own.
 | `net/http` (event streams) | live timelines | WHATWG HTML §9.2 (`text/event-stream`); `parse (write events) = events` | the specification's examples; Go has no parser | small | P1 |
 | `path` | cleaning a request's path, static files | RFC 3986 §5.2.4 `remove_dot_segments`; `clean (clean p) = clean p` | Go `path.Clean`, `path.Match` | small | P1 |
 | `log/slog` | structured logs | one JSON object per line, as slog's `JSONHandler` writes (RFC 3339 times, keys in order) | Go `slog.NewJSONHandler` on the same records | small | P1 |
-| `expvar` | a metrics page | Prometheus text exposition format 0.0.4 | `github.com/prometheus/common/expfmt` parsing our output | small | P1 |
+| `expvar` | a metrics page | Prometheus text exposition format 0.0.4 | `github.com/prometheus/common/expfmt` parsing our output | small | P1, built without the oracle |
 | `unicode` | validating names and text by category | the Unicode Character Database (`UnicodeData.txt`, `DerivedCoreProperties.txt`), tables generated from it with a theorem per table that lookup agrees with the list | the UCD files directly; Go 1.24 is at Unicode 15.0.0, so it disagrees on newer characters | medium | P1 |
 | `unicode/utf16` | counting text as `maxlength` in a browser does | Unicode §3.9 D91; `decode (encode s) = s` on scalar values | Go `utf16.Encode`, `Decode` | small | P1 |
 | `x/text/unicode/norm` | user names and search keys compared after NFC | UAX #15; NFC idempotent, `nfc ∘ nfd = nfc` | `NormalizationTest.txt`; Go x/text | medium | P1 |

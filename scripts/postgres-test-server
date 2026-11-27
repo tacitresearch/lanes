@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# A PostgreSQL cluster for the live tests of the PostgreSQL client (`Tests/PostgresLive.lean`):
+#
+#   scripts/postgres-test-server DIR PORT    # make it in DIR and start it on 127.0.0.1:PORT
+#   LANES_POSTGRES=127.0.0.1:PORT lake test
+#   pg_ctl -D DIR/data stop                  # stop it
+#
+# Run it as a user other than root (PostgreSQL refuses root), with PostgreSQL's binaries on PATH
+# (on Debian and Ubuntu, /usr/lib/postgresql/<version>/bin). It makes a database `lanes_test` and
+# one user per way of authenticating: `lanes_trust` (none), `lanes_clear` (`clear-pw`, asked in
+# cleartext), `lanes_md5` (`md5-pw`, stored as MD5) and `lanes_scram` (`scram-pw`, SCRAM-SHA-256).
+set -euo pipefail
+dir=$1
+port=$2
+initdb -D "$dir/data" -U postgres --auth=trust -E UTF8 --locale=C.UTF-8 > "$dir/initdb.log"
+cat > "$dir/data/pg_hba.conf" <<'EOF'
+local all postgres trust
+host all lanes_clear 127.0.0.1/32 password
+host all lanes_md5 127.0.0.1/32 md5
+host all lanes_scram 127.0.0.1/32 scram-sha-256
+host all lanes_trust 127.0.0.1/32 trust
+EOF
+cat >> "$dir/data/postgresql.conf" <<EOF
+port = $port
+listen_addresses = '127.0.0.1'
+unix_socket_directories = '$dir'
+EOF
+pg_ctl -D "$dir/data" -l "$dir/log" -w start
+psql -h "$dir" -p "$port" -U postgres -v ON_ERROR_STOP=1 -q <<'EOF'
+CREATE USER lanes_trust;
+CREATE USER lanes_clear PASSWORD 'clear-pw';
+SET password_encryption = 'md5';
+CREATE USER lanes_md5 PASSWORD 'md5-pw';
+SET password_encryption = 'scram-sha-256';
+CREATE USER lanes_scram PASSWORD 'scram-pw';
+CREATE DATABASE lanes_test;
+GRANT ALL ON DATABASE lanes_test TO lanes_trust, lanes_clear, lanes_md5, lanes_scram;
+\c lanes_test
+GRANT ALL ON SCHEMA public TO lanes_trust, lanes_clear, lanes_md5, lanes_scram;
+EOF
+echo "PostgreSQL is on 127.0.0.1:$port; LANES_POSTGRES=127.0.0.1:$port lake test runs the live tests"

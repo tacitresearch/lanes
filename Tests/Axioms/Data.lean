@@ -10,6 +10,10 @@ import Lanes.Semantics
 /-- info: 'Lanes.Codec.extTreeMap' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Codec.extTreeMap
 
+-- Lanes.Data.Declare
+/-- info: 'Lanes.Migrate.migrate_same' does not depend on any axioms -/
+#guard_msgs in #print axioms Lanes.Migrate.migrate_same
+
 -- Lanes.Data.Quorum
 /-- info: 'Lanes.Quorum.majority_inter' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Quorum.majority_inter

@@ -68,6 +68,21 @@ lanes_data structure Tally where
   owner : String
   deriving DecidableEq, Codable
 
+/-- The next version of `Tally`, which counts misses too, and of `Slot`, which may be locked. -/
+lanes_data structure Tally2 where
+  hits : Nat
+  misses : Nat
+  owner : String
+  deriving DecidableEq, Codable
+  from Tally := fun t => { hits := t.hits, misses := 0, owner := t.owner }
+
+lanes_data inductive Slot2 (A : Type) where
+  | empty
+  | held (owner : A) (count : Fin 2)
+  | locked
+  deriving DecidableEq
+  from Slot A := fun | .empty => .empty | .held owner count => .held owner count
+
 def Handle.valid (s : String) : Bool :=
   0 < s.length && s.toList.all Char.isLower
 
@@ -161,6 +176,12 @@ def tests : List (String × Bool) :=
       let tally : Tally := { owner := "o" }
       tally.hits == 0 && tally.doors == [.close]
         && (Codec.of Tally).read ((Codec.of Tally).write tally) == some (tally, [])),
+    ("lanes_data: `from` says how a value of the previous version becomes one of this",
+      let tally : Tally := { hits := 3, owner := "o" }
+      Migrate.migrate tally == ({ hits := 3, misses := 0, owner := "o" } : Tally2)
+        && Tally2.migrate tally == Migrate.migrate tally
+        && (Migrate.migrate (Slot.held 'a' 1) : Slot2 Char) == .held 'a' 1
+        && Migrate.migrate (β := Door) Door.close == .close),
     ("subtype: a value is written as its value, and read back only with its property",
       let member : Member := ⟨⟨"ada", rfl⟩, ⟨2, by decide⟩⟩
       let codec := Codec.of Member
