@@ -199,7 +199,7 @@ What is being worked on now, and why: `docs/PLAN.md`.
   has its state copied once a wave, in its task, and once more by its next step on the shard's
   thread. With `parallel := .on`, a write to one of two busy actors whose states hold a million
   numbers costs about a tenth of a millisecond, where it costs a microsecond on the shard's thread.
-  `.auto` keeps such steps on the shard's thread (`docs/decisions/new-waves-in-place.md`).
+  `.auto` keeps such steps on the shard's thread (`docs/decisions/D88-waves-in-place.md`).
 - The fake S3 checks signatures with the functions the client signs with, so it agrees with the
   client by construction; that they are S3's is tested against AWS's vectors (`Tests/SigV4.lean`).
 - The browser runs no script and follows no redirect, and ignores a cookie's domain, expiry and

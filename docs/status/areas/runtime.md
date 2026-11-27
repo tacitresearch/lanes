@@ -62,4 +62,4 @@
   has its state copied once a wave, in its task, and once more by its next step on the shard's
   thread. With `parallel := .on`, a write to one of two busy actors whose states hold a million
   numbers costs about a tenth of a millisecond, where it costs a microsecond on the shard's thread.
-  `.auto` keeps such steps on the shard's thread (`docs/decisions/new-waves-in-place.md`).
+  `.auto` keeps such steps on the shard's thread (`docs/decisions/D88-waves-in-place.md`).

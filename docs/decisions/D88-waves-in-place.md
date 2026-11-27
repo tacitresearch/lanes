@@ -1,4 +1,4 @@
-# D?. Steps worked out on the pool update their states in place
+# D88. Steps worked out on the pool update their states in place
 
 `Lanes/Runtime/Wave.lean`, `Lanes/Runtime/Pace.lean`, `Lanes/Proof/HashMap.lean`,
 `Tests/Scale.lean`, `Tests/Pace.lean`. D84 made a step on the shard's thread update its actor's

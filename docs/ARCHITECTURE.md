@@ -110,7 +110,7 @@ Handling one actor's message neither reads nor writes another actor's cell
 (`DHashMap.insert_comm_of_contains`), so the result is `runBatch`'s, value for value, however the
 wave is spread over threads (`Kernel.runWaves_eq`), and the journal and everything proved of the
 kernel are unchanged (`docs/decisions/D64-actors-run-in-parallel.md`,
-`docs/decisions/new-waves-in-place.md`).
+`docs/decisions/D88-waves-in-place.md`).
 
 Steps cheaper than a few microseconds cost more to hand to another thread than they save, and
 whether costlier ones gain depends on the cores free. With `parallel` `auto`, the default, the
