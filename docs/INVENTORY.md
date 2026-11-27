@@ -15,15 +15,15 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Core` | 103 | 41 | 0 | 34 | 1 | 11 | 16 |
 | `Lanes/Data` | 68 | 43 | 0 | 4 | 1 | 0 | 20 |
 | `Lanes/Durable` | 67 | 57 | 2 | 0 | 0 | 7 | 1 |
-| `Lanes/Lib` | 511 | 341 | 13 | 2 | 76 | 70 | 9 |
+| `Lanes/Lib` | 531 | 345 | 13 | 2 | 92 | 70 | 9 |
 | `Lanes/Net` | 37 | 6 | 5 | 0 | 0 | 25 | 1 |
 | `Lanes/Outside` | 116 | 86 | 5 | 6 | 1 | 18 | 0 |
 | `Lanes/Proof` | 36 | 12 | 0 | 0 | 0 | 23 | 1 |
 | `Lanes/Runtime` | 158 | 93 | 20 | 0 | 15 | 30 | 0 |
 | `Lanes/Semantics` | 60 | 11 | 0 | 0 | 0 | 48 | 1 |
-| `Lanes/Web` | 446 | 229 | 44 | 8 | 120 | 43 | 2 |
+| `Lanes/Web` | 504 | 259 | 48 | 24 | 126 | 45 | 2 |
 | `LanesCli` | 110 | 0 | 0 | 0 | 46 | 0 | 64 |
-| All | 1852 | 1009 | 94 | 80 | 260 | 292 | 117 |
+| All | 1930 | 1043 | 98 | 96 | 282 | 294 | 117 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -178,7 +178,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Check.Property.holds` | proved | `Check.refines_sound`, `Check.refines_traces`, `Check.system_sound` and 1 more |
 | `Check.Trace.last` | proved | `Check.search_deadlock`, `Check.search_reached`, `Check.search_violated` and 2 more |
 | `Check.Trace.labels` | proved | `Check.system_violated` |
-| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 18 more |
+| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 19 more |
 | `Check.Path.last` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
 | `Check.Path.toTraceAux` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
 | `Check.Path.toTrace` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
@@ -338,7 +338,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Driver.silent` | checked | `Tests/Election.lean` |
 | `Driver.script` | checked | `Tests/KV.lean` |
-| `Driver.anyOrder` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 5 more |
+| `Driver.anyOrder` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 6 more |
 | `World.init` | checked | `Tests/Bank.lean` |
 | `World.next` | proved | `World.Equiv.next` |
 | `simulate` | checked | `Tests/Bank.lean` |
@@ -624,6 +624,29 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Pbkdf2.block.go` | tested | `Tests/Postgres.lean` |
 | `Pbkdf2.derive` | tested | `Tests/Postgres.lean` |
 
+## `Lanes/Lib/Crypto/PublicKey.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Bytes.toNat` | tested | `Tests/Signature.lean` |
+| `Bytes.ofNat` | proved | `Bytes.size_ofNat` |
+| `Der.digits` | tested | `Tests/Signature.lean` |
+| `Der.length` | tested | `Tests/Signature.lean` |
+| `Der.tlv` | tested | `Tests/Signature.lean` |
+| `Der.integer` | tested | `Tests/Signature.lean` |
+| `Der.sequence` | tested | `Tests/Signature.lean` |
+| `Der.bitString` | tested | `Tests/Signature.lean` |
+| `Der.rsaAlgorithm` | tested | `Tests/Signature.lean` |
+| `Der.p256Algorithm` | tested | `Tests/Signature.lean` |
+| `PublicKey.rsaSize` | tested | `Tests/Signature.lean` |
+| `PublicKey.valid` | tested | `Tests/Signature.lean` |
+| `PublicKey.spki` | tested | `Tests/Signature.lean` |
+| `PublicKey.derSignature` | tested | `Tests/Signature.lean` |
+| `Rsa.powMod` | proved | `Rsa.powMod_eq` |
+| `Rsa.digestInfo` | tested | `Tests/Signature.lean` |
+| `Rsa.encode` | tested | `Tests/Signature.lean` |
+| `Rsa.verifyReference` | tested | `Tests/Signature.lean` |
+
 ## `Lanes/Lib/Crypto/Sha256.lean`
 
 | Definition | Status | Evidence |
@@ -651,6 +674,12 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `randomBytes` | trusted | TRUSTED.md: The C |
 | `Argon2id.hash` | trusted | TRUSTED.md: The C |
 
+## `Lanes/Lib/Crypto/Verify.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `PublicKey.verifies` | proved | `Jose.verify_ok`, `OAuth.IdToken.verify_accepted` |
+
 ## `Lanes/Lib/Encoding/Base64.lean`
 
 | Definition | Status | Evidence |
@@ -663,7 +692,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Base64.Encoding.std` | checked | `Tests/PostgresConn.lean` |
 | `Base64.Encoding.rawStd` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
 | `Base64.Encoding.url` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
-| `Base64.Encoding.rawUrl` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
+| `Base64.Encoding.rawUrl` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean`, `Tests/Signature.lean` |
 | `Base64.sextet` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 2 more |
 | `Base64.byte` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
 | `Base64.pad` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 2 more |
@@ -743,7 +772,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Json.getNat?` | proved | `Json.getNat?_eq_ok` |
 | `Json.getInt?` | proved | `Json.getInt?_eq_ok` |
 | `Json.getBool?` | proved | `Json.getBool?_eq_ok` |
-| `Json.getObjVal?` | proved | `Json.getObjVal?_eq_ok`, `Json.getObjVal?_mkObj` |
+| `Json.getObjVal?` | proved | `Jose.Compact.read_alg`, `Jose.readHeader_alg`, `Jose.verify_ok` and 3 more |
 | `Json.getArrVal?` | proved | `Json.getArrVal?_eq_ok` |
 | `Json.getObjValD` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` and 3 more |
 
@@ -775,7 +804,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `instToJsonOption` | proved | `fromJson?_toJson_none`, `fromJson?_toJson_some` |
 | `instFromJsonProd` | proved | `fromJson?_toJson_prod` |
 | `instToJsonProd` | proved | `fromJson?_toJson_prod` |
-| `Json.getObjValAs?` | tested | `Tests/Json.lean` |
+| `Json.getObjValAs?` | tested | `Tests/Json.lean`, `Tests/OAuth.lean` |
 | `Json.opt` | tested | `Tests/Json.lean` |
 
 ## `Lanes/Lib/Encoding/Json/Grammar.lean`
@@ -919,23 +948,23 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Ip.octet?` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
-| `Ip.parse4` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
-| `Ip.print4` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 2 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 3 more |
-| `Ip.hexGroup?` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
-| `Ip.groups?` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
-| `Ip.expand` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
-| `Ip.fields?` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
+| `Ip.octet?` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 4 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 7 more |
+| `Ip.parse4` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 4 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 7 more |
+| `Ip.print4` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
+| `Ip.hexGroup?` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 4 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 7 more |
+| `Ip.groups?` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 4 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 7 more |
+| `Ip.expand` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 4 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 7 more |
+| `Ip.fields?` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 4 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 7 more |
 | `Ip.parse6` | proved | through `Ip.Prefix.parse`, `Ip.parse`: `Ip.Prefix.parse_print`, `Ip.parse_print` |
 | `Ip.parse` | proved | `Ip.parse_print` |
-| `Ip.zeroRun` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
+| `Ip.zeroRun` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 4 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 7 more |
 | `Ip.runAt` | proved | `Ip.longestZeroRun_none`, `Ip.longestZeroRun_some` |
 | `Ip.longestZeroRun` | proved | `Ip.longestZeroRun_none`, `Ip.longestZeroRun_some` |
-| `Ip.withEllipsis` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 2 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 3 more |
-| `Ip.hexFields` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 2 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 3 more |
-| `Ip.fields` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 2 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 3 more |
-| `Ip.mappedPrefix` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 2 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 3 more |
-| `Ip.print6` | proved | through `Ip.Prefix.bits`, `Ip.Prefix.masked` and 2 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 3 more |
+| `Ip.withEllipsis` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
+| `Ip.hexFields` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
+| `Ip.fields` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
+| `Ip.mappedPrefix` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
+| `Ip.print6` | proved | through `Ip.Addr.isLoopback`, `Ip.Prefix.bits` and 3 more: `Ip.Prefix.contains_iff`, `Ip.Prefix.contains_masked` and 5 more |
 | `Ip.print` | proved | `Ip.parse_print` |
 | `Ip.Found` | spec | a predicate |
 | `Ip.Addr.width` | proved | `Ip.Prefix.contains_iff` |
@@ -947,6 +976,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Ip.Prefix.print` | proved | `Ip.Prefix.parse_print` |
 | `Ip.decimal?` | proved | through `Ip.Prefix.parse`: `Ip.Prefix.parse_print` |
 | `Ip.Prefix.parse` | proved | `Ip.Prefix.parse_print` |
+| `Ip.Addr.isLoopback` | proved | `Ip.isLoopback_v4`, `Ip.isLoopback_v6` |
 
 ## `Lanes/Lib/Net/Url.lean`
 
@@ -1906,6 +1936,35 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `System.sem` | proved | `Account.implements`, `Account.implements_timed`, `Once.server_implements` and 14 more |
 | `System.Refines` | spec | a predicate |
 
+## `Lanes/Web/Auth/IdToken.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `OAuth.IdToken.Claims.identity` | proved | `OAuth.IdToken.check_ok_iff`, `OAuth.IdToken.verify_accepted` |
+| `OAuth.IdToken.optional` | proved | through `OAuth.IdToken.verify`: `OAuth.IdToken.verify_accepted` |
+| `OAuth.IdToken.string?` | proved | through `OAuth.IdToken.verify`: `OAuth.IdToken.verify_accepted` |
+| `OAuth.IdToken.nat?` | proved | through `OAuth.IdToken.verify`: `OAuth.IdToken.verify_accepted` |
+| `OAuth.IdToken.audience?` | proved | through `OAuth.IdToken.verify`: `OAuth.IdToken.verify_accepted` |
+| `OAuth.IdToken.Claims.read` | proved | `OAuth.IdToken.verify_accepted` |
+| `OAuth.IdToken.check` | proved | `OAuth.IdToken.check_ok_iff` |
+| `OAuth.IdToken.verify` | proved | `OAuth.IdToken.verify_accepted` |
+
+## `Lanes/Web/Auth/Jose.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Jose.Alg.name` | spec | used only in statements |
+| `Jose.Alg.parse?` | proved | `Jose.Alg.parse?_eq_some` |
+| `Jose.Jwk.fits` | proved | `Jose.verify_ok`, `OAuth.IdToken.verify_accepted` |
+| `Jose.str?` | proved | through `Jose.Compact.read`, `Jose.readHeader`: `Jose.Compact.read_alg`, `Jose.readHeader_alg` and 2 more |
+| `Jose.bytes?` | proved | through `Jose.Compact.read`: `Jose.Compact.read_alg`, `Jose.verify_ok` and 1 more |
+| `Jose.Jwk.read?` | proved | through `Jose.Compact.read`: `Jose.Compact.read_alg`, `Jose.verify_ok` and 1 more |
+| `Jose.readKeys` | tested | `Tests/Signature.lean` |
+| `Jose.readHeader` | proved | `Jose.readHeader_alg` |
+| `Jose.Compact.read` | proved | `Jose.Compact.read_alg`, `Jose.verify_ok`, `OAuth.IdToken.verify_accepted` |
+| `Jose.candidates` | proved | through `Jose.verify`: `Jose.verify_ok` |
+| `Jose.verify` | proved | `Jose.verify_ok` |
+
 ## `Lanes/Web/Auth/Login.lean`
 
 | Definition | Status | Evidence |
@@ -1930,6 +1989,43 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Auth.Sessions.start` | proved | `Auth.Sessions.ids_starts`, `Auth.Sessions.length_start_le`, `Auth.Sessions.live_open` and 1 more |
 | `Auth.Sessions.close` | proved | `Auth.Sessions.live_close` |
 | `Auth.Sessions.live` | proved | `Auth.Sessions.live_close`, `Auth.Sessions.live_open` |
+
+## `Lanes/Web/Auth/OAuth.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `OAuth.instReprSecret` | checked | `Tests/OAuth.lean` |
+| `OAuth.instToStringSecret` | tested | `Tests/OAuth.lean` |
+| `OAuth.b64` | checked | `Tests/OAuth.lean` |
+| `OAuth.challenge` | checked | `Tests/OAuth.lean` |
+| `OAuth.same` | proved | `OAuth.same_iff` |
+| `OAuth.Pending.begin` | proved | `OAuth.Pending.length_begin` |
+| `OAuth.Pending.callback` | proved | `OAuth.Pending.callback_ok`, `OAuth.Pending.callback_removes`, `OAuth.Pending.callback_sublist` |
+| `OAuth.Pending.Op.issues` | spec | used only in statements |
+| `OAuth.Pending.run` | proved | `OAuth.Pending.accepted_le_issued` |
+| `OAuth.Seed.entry` | checked | `Tests/OAuth.lean` |
+| `OAuth.authorizeUrl` | checked | `Tests/OAuth.lean` |
+| `OAuth.Discovery.read` | checked | `Tests/OAuth.lean` |
+| `OAuth.Discovery.provider` | checked | `Tests/OAuth.lean` |
+| `OAuth.begin` | checked | `Tests/OAuth.lean` |
+| `OAuth.Answer.state` | checked | `Tests/OAuth.lean` |
+| `OAuth.Answer.read` | checked | `Tests/OAuth.lean` |
+| `OAuth.tokenForm` | checked | `Tests/OAuth.lean` |
+| `OAuth.Tokens.read` | checked | `Tests/OAuth.lean` |
+| `OAuth.tokenAnswer` | checked | `Tests/OAuth.lean` |
+| `OAuth.userAnswer` | checked | `Tests/OAuth.lean` |
+| `OAuth.keysAnswer` | tested | `Tests/OAuth.lean` |
+| `OAuth.Keys.lookup` | proved | `OAuth.Keys.lookup_fetch`, `OAuth.Keys.no_fetch_within` |
+| `OAuth.Keys.fetched` | proved | `OAuth.Keys.no_fetch_within` |
+| `OAuth.route` | tested | `Tests/OAuth.lean` |
+| `OAuth.identityHeaders` | proved | through `OAuth.strip`: `OAuth.identity?_strip`, `OAuth.identity?_withIdentity` |
+| `OAuth.strip` | proved | `OAuth.identity?_strip`, `OAuth.identity?_withIdentity` |
+| `OAuth.withIdentity` | proved | `OAuth.identity?_withIdentity` |
+| `OAuth.identity?` | proved | `OAuth.identity?_strip`, `OAuth.identity?_withIdentity` |
+| `OAuth.beginResponse` | tested | `Tests/OAuth.lean` |
+| `OAuth.Refusal.describe` | checked | `Tests/OAuth.lean` |
+| `OAuth.refusedResponse` | checked | `Tests/OAuth.lean` |
+| `OAuth.Endpoint.parse` | tested | `Tests/OAuth.lean` |
 
 ## `Lanes/Web/Auth/Token.lean`
 
@@ -2038,8 +2134,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Request.text?` | proved | through `Http.Request.field?`, `Http.Request.form`: `Http.Request.field?_eq_lookup`, `Http.Request.form_encodeForm` |
 | `Http.Request.form` | proved | `Http.Request.field?_eq_lookup`, `Http.Request.form_encodeForm` |
 | `Http.Request.field?` | proved | `Http.Request.field?_eq_lookup` |
-| `Http.Response.ofText` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean`, `Tests/HttpConn.lean` |
-| `Http.Response.text` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean`, `Tests/HttpConn.lean` |
+| `Http.Response.ofText` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean`, `Tests/HttpConn.lean` and 1 more |
+| `Http.Response.text` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean`, `Tests/HttpConn.lean` and 1 more |
 | `Http.Response.html` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 1 more |
 | `Http.Response.json` | tested | `Tests/Html.lean` |
 | `Http.Response.empty` | tested | `Tests/Auth.lean`, `Tests/Html.lean` |
@@ -2187,8 +2283,11 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.LogSink.isOn` | tested | `Tests/Ops.lean` |
 | `Http.OpsConfig.counting` | tested | `Tests/Ops.lean` |
 | `Http.OpsConfig.active` | tested | `Tests/Ops.lean` |
-| `Http.Ops.pathText` | proved | `Http.Ops.route?_some` |
-| `Http.Ops.route?` | proved | `Http.Ops.route?_default`, `Http.Ops.route?_some` |
+| `Http.Ops.pathText` | proved | `Http.Ops.route?_hidden`, `Http.Ops.route?_some` |
+| `Http.Ops.fromLoopback` | proved | `Http.Ops.allows_eq_true`, `Http.Ops.route?_metrics`, `Http.Ops.route?_metrics_loopback` |
+| `Http.Ops.bearer?` | proved | `Http.Ops.allows_eq_true`, `Http.Ops.route?_metrics` |
+| `Http.Ops.allows` | proved | `Http.Ops.allows_eq_true`, `Http.Ops.route?_hidden` |
+| `Http.Ops.route?` | proved | `Http.Ops.route?_default`, `Http.Ops.route?_hidden`, `Http.Ops.route?_metrics` and 3 more |
 | `Http.Ops.Health.ready` | proved | `Http.Ops.answer_ready` |
 | `Http.Ops.answer` | proved | `Http.Ops.answer_ready` |
 | `Http.Ops.methodName` | proved | through `Http.Ops.Access.json`: `Http.Ops.Access.parse_line` |
@@ -2432,7 +2531,16 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Server.inFlight` | trusted | TRUSTED.md: The HTTP adapter's IO |
 | `Http.Server.trace` | trusted | TRUSTED.md: The HTTP adapter's IO |
 | `Http.Server.wait` | trusted | TRUSTED.md: The HTTP adapter's IO |
+| `Http.Server.stopOnSignal` | trusted | TRUSTED.md: The HTTP adapter's IO |
 | `Http.Server.tryInput` | trusted | TRUSTED.md: The HTTP adapter's IO |
+
+## `Lanes/Web/IO/SignIn.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `OAuth.SignIn.start` | trusted | TRUSTED.md: The sign-in's IO |
+| `OAuth.SignIn.finish` | trusted | TRUSTED.md: The sign-in's IO |
+| `OAuth.SignIn.arrive` | trusted | TRUSTED.md: The sign-in's IO |
 
 ## `Lanes/Web/IO/Tls.lean`
 
