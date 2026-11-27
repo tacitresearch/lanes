@@ -121,12 +121,13 @@ theorem after_invariant (outside : Outside σ D) (good : σ.Out → Prop) (P : D
       | _ => simp only [see, Option.some.injEq] at hsee; exact hsee ▸ hd) h
   exact this hgood
 
-/-- Of two outsides at once, each remembers what it would alone after the events it sees: the
-inputs `first` gives it, or does not, and everything else. -/
+/-- The events the left (`left`) or the right one of `both` sees: its own inputs, as `first`
+says, and every other event. -/
 def mine (first : σ.In → Bool) (left : Bool) : Event σ → Bool
   | .input x => first x == left
   | _ => true
 
+/-- Of two outsides at once, each remembers what it would alone after the events it sees. -/
 theorem after_both (a : Outside σ D) (b : Outside σ E) (first : σ.In → Bool)
     {events : List (Event σ)} {d : D × E} (h : (a.both b first).after events = some d) :
     a.after (events.filter (mine first true)) = some d.1 ∧

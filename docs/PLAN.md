@@ -45,5 +45,7 @@ because a launch claim is what a critic tests first.
    (a transactional store with an isolation level, an object store, a queue, an API with
    idempotency keys and webhooks), built from combinators on `Outside` (an RPC whose timeout is
    ambiguous, idempotency, an event stream), and vendors as packages under `integrations/` whose
-   conformance to a class is a trusted premise tested against the real service. Only `Outside`
-   has moved there so far.
+   conformance to a class is a trusted premise tested against the real service. The combinators
+   and the API with idempotency keys and webhooks are written, with payments and email as
+   instances (`Lanes/Outside/Effects/`, `examples/payments`); next are the store, the object
+   store and the queue, and a first integration that records runs of a real service.

@@ -8,6 +8,11 @@ under Unreleased (`CONTRIBUTING.md`).
 
 ## [Unreleased]
 
+### Added
+
+- Models of external services (`Lanes/Outside/`): `Rpc.outside`, a call answered at most once, `unknown` at its deadline with its effect left open, or never; `Idempotent.server`, idempotency keys, proved to give a request always sent under one key at most one effect in every run the model allows (`Idempotent.at_most_once`); `Events.bounded`, webhooks late, out of order and repeated up to a bound; `Effects`, services that hold things with a lifecycle, and its instances `Payments` (the statuses Stripe documents for a PaymentIntent) and `Email`. `Outside.see`, `Outside.after_induction`, `Outside.after_invariant` and `Outside.after_both` reason about runs a model allows; `System.Emits.outputs` lifts what actors emit to every output of every run.
+- `examples/payments`: a shop that charges each order through the payment model, checked with the classic bug seeded (a retry without the key charges twice) and proved to charge each order at most once (`Shop.charged_at_most_once`).
+
 ### Changed
 
 - Module paths are reorganised by concern: `Lanes.Actors` is split into `Lanes/Core`, `Lanes/Proof`, `Lanes/Runtime`, `Lanes/Durable`, `Lanes/Net` and `Lanes/Outside`, HTTP, HTML and authentication are under `Lanes/Web`, the standard library under `Lanes/Lib`, and each area's IO in an `IO/` directory; `import Lanes` leaves out the framework's soundness theorems, which a proof imports with `import Lanes.Proofs` (or `Lanes.Semantics`); `Examples/` and `systems/` are one `examples/` directory of Lake packages, `examples/counter` being what `lanes new` writes.
