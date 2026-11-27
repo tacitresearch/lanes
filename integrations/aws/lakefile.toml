@@ -23,8 +23,8 @@ root = "Check"
 name = "oracle"
 root = "Oracle"
 
-# The SES adapter against moto, checked against the email model; skipped unless LANES_MOTO is
-# set (`oracles/moto/run.sh`).
+# The SES adapter and SQS's calls against moto, checked against the email and queue models;
+# skipped unless LANES_MOTO is set (`oracles/moto/run.sh`).
 [[lean_exe]]
 name = "serviceOracle"
 root = "ServiceOracle"

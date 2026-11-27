@@ -230,7 +230,7 @@ that performs IO is in an `IO/` directory of its area and named in `TRUSTED.md`.
 | `LanesCli/` | The `lanes` command: `new`, `lint`, `check`, `inventory`, `docstrings` | `Std` only; `Lean` in `Inventory` and `Docstrings`, which only `lanesInventory` links |
 | `templates/app/` | The application `lanes new` creates, which is `examples/counter` | |
 | `examples/` | Applications to read, each its own Lake package (`examples/README.md`) | anything |
-| `integrations/` | A vendor's preset or client, each its own Lake package (D61): `google` and `github` for sign-in, `aws` for a role's credentials and SES | Lanes |
+| `integrations/` | A vendor's preset or client, each its own Lake package (D61): `google` and `github` for sign-in, `aws` for a role's credentials, SES and SQS's calls | Lanes |
 | `Tests/` | Regression tests run by `lake test` and `lanesCheck`; the apps they use in `Fixtures/` | anything |
 | `docs/api/` | The API reference, built with doc-gen4: a Lake package of its own (`docs/api/README.md`) | Lanes, doc-gen4 |
 | `oracles/` | The references the oracles compare with, one folder each, with their pins, programs and records (`oracles/README.md`) | |
