@@ -10,7 +10,8 @@ import Videos.Proofs.Confirmed
 
 A video's likes are the members who like it, and its count is how many they are
 (`Site.card`). No input or start makes a member appear twice (`Site.likedOnce_handle`), so in
-every reachable state of the system, under every environment model, each video's count is the
+every reachable state of the site and its scheduler, under every environment model, each video's
+count is the
 number of distinct members who like it (`likes_distinct`, `count_distinct`). Liking again
 changes nothing, and taking a like back takes out the one there is.
 -/
@@ -84,7 +85,7 @@ theorem likedOnce_request {s : Site} (h : s.LikedOnce) (c : Command) (at_s : Nat
       · exact h w hw
   | uploaded req m session v =>
     refine withSession_cases (P := P) same fun viewer => owned_cases (P := P) same fun w hw => ?_
-    show (s.uploaded config req viewer w).1.LikedOnce
+    show (s.uploaded config req viewer at_s w).1.LikedOnce
     unfold uploaded
     split
     · exact h
@@ -92,7 +93,7 @@ theorem likedOnce_request {s : Site} (h : s.LikedOnce) (c : Command) (at_s : Nat
       dsimp only
       split
       · exact likedOnce_setVideo h (h w hw)
-      · exact likedOnce_setVideo (x := { w with status := .checking s.nextCall req }) h (h w hw)
+      · exact likedOnce_setVideo (x := { w with status := .checking req }) h (h w hw)
   | watch req viewer v =>
     show (s.watch req _ v at_s).1.LikedOnce
     rw [watch_fst]
@@ -125,38 +126,50 @@ theorem likedOnce_request {s : Site} (h : s.LikedOnce) (c : Command) (at_s : Nat
     rw [channel_fst]
     exact h
 
-theorem likedOnce_stored {s : Site} (h : s.LikedOnce) (call : Nat) (reply : Rpc.Reply StoreAnswer) :
-    (s.stored config call reply).1.LikedOnce := by
-  unfold stored
+theorem likedOnce_unconfirmed {s : Site} (h : s.LikedOnce) {video : Video} (hv : video ∈ s.videos)
+    (req : ReqId) (r : Reply) : (s.unconfirmed video req r).1.LikedOnce := by
+  unfold unconfirmed
   split
-  · next video hfind =>
-    have hv := h video (List.mem_of_find?_eq_some hfind)
+  · exact likedOnce_setVideo h (h video hv)
+  · exact h
+
+theorem likedOnce_job {s : Site} (h : s.LikedOnce) (key : Key) (o : Outcome) :
+    (s.job config key o).1.LikedOnce := by
+  let P : Site × List Out → Prop := fun r => r.1.LikedOnce
+  have same : ∀ l, P (s, l) := fun _ => h
+  have found {w : Video} (hw : w ∈ s.videos) (size : Nat) : P (s.found config w size) :=
+    likedOnce_setVideo h (h w hw)
+  cases key with
+  | check v req =>
+    refine unready_cases (P := P) same fun w hw _ => ?_
+    show (s.checked config w req o).1.LikedOnce
+    unfold checked
     split
-    · unfold checked
-      split
-      · exact likedOnce_setVideo h hv
-      · exact likedOnce_setVideo h hv
-      · split
-        · exact likedOnce_setVideo h hv
-        · exact likedOnce_setVideo h hv
-      · exact likedOnce_setVideo h hv
+    · exact found hw _
+    · exact likedOnce_unconfirmed h hw req _
+    · split
+      · exact found hw _
+      · exact likedOnce_unconfirmed h hw req _
+    all_goals first
+      | exact likedOnce_unconfirmed h hw req _
+      | exact h
+  | expire v =>
+    refine unready_cases (P := P) same fun w hw _ => ?_
+    show (s.expired config w o).1.LikedOnce
+    unfold expired
+    split
+    · exact found hw _
+    · exact fun x hx => h x (List.mem_filter.mp hx).1
     · exact h
-  · split
-    · unfold deleteAnswered
-      split
-      · exact h
-      · exact h
-      · split
-        · exact h
-        · exact h
-    · exact h
+  | delete v => exact h
 
 theorem likedOnce_handle {s : Site} (h : s.LikedOnce) (i : Input) : (s.handle config i).1.LikedOnce := by
   cases i with
   | request c at_s => exact likedOnce_request config h c at_s
-  | store call reply => exact likedOnce_stored config h call reply
+  | job key o => exact likedOnce_job config h key o
+  | noticed _ => exact h
 
-theorem likedOnce_recover {s : Site} (h : s.LikedOnce) : (s.recover config).1.LikedOnce := by
+theorem likedOnce_recover {s : Site} (h : s.LikedOnce) : s.recover.1.LikedOnce := by
   intro w hw
   simp only [Site.recover, List.mem_map] at hw
   obtain ⟨w', hw', rfl⟩ := hw
@@ -173,14 +186,14 @@ theorem likedOnce (config : Config) : (site config).Invariant Site.LikedOnce :=
       step := fun s i h => by
         simpa [site] using Site.likedOnce_handle config h i
       recover := fun s h => by
-        simpa [site] using Site.likedOnce_recover config h }
+        simpa [site] using Site.likedOnce_recover h }
 
-/-- A like counts each member once: in every reachable state of the system, under every
-environment model, no video's likes name a member twice. -/
-theorem likes_distinct (config : Config) (env : EnvModel sig) :
-    (system config).Invariant env fun c => (c.state ()).LikedOnce :=
-  System.invariant_of_actor (system config) () (likedOnce config) env
-
+/-- A like counts each member once: in every reachable state of the site and its scheduler,
+under every environment model, no video's likes name a member twice. -/
+theorem likes_distinct (config : Config) (env : EnvModel fullSig) :
+    (system config).Invariant env fun c => (c.state (.inr ()) : Site).LikedOnce :=
+  System.invariant_of_actor (system config) (.inr ()) (Actor.Invariant.mapEff _ (likedOnce config))
+    env
 /-- So the count a video shows is the number of distinct members who like it. -/
 theorem count_distinct {s : Site} (h : s.LikedOnce) {w : Video} (hw : w ∈ s.videos) :
     (s.card w).likes = w.likes.eraseDups.length := by

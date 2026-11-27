@@ -10,24 +10,30 @@ import Lanes
 A video site, as if inputs were handled one at a time. Members sign in with another service
 (Google, GitHub) and each has a channel. A member makes a video record, which starts `pending`,
 and gets a form to post the video to the store (S3) from the browser: the bytes never pass
-through the site. The browser then says it is done, the site asks the store whether the object
-is there (a `HEAD`), and only a `found` answer makes the video `ready`. Ready videos are watched,
-liked once per member, commented on and listed in a feed; a video is public (in the feed and its
-channel), unlisted (by its link) or private (its owner only). Deleting a video takes its record
-out at once and then deletes the object in the store, again until the store says so or the
-attempts run out.
+through the site. The browser then says it is done, the site has the store asked whether the
+object is there (a `HEAD`), and only a `found` answer makes the video `ready`. Ready videos are
+watched, liked once per member, commented on and listed in a feed; a video is public (in the
+feed and its channel), unlisted (by its link) or private (its owner only). Deleting a video takes
+its record out at once and then deletes the object in the store.
 
-The whole state is one value, `Site`, and one input is one call of `Site.handle`: a request,
-or the store's answer to a call (`Rpc.Reply`, which may be `unknown`). A start of the actor is
-one call of `Site.recover`. The system runs these functions in one actor (`Videos.System`), so
-what is proved of them (`Videos.Proofs`) is proved of the code that runs.
+The site calls the store through the scheduler beside it (`Lanes.Schedule`, D79), which holds
+each call as a job, retries it with a backoff and keeps it across a restart. There are three
+kinds (`Key`): the check a member asked for, the last check of an upload never confirmed, a day
+after its record was made, which makes it ready if the store has it and takes the record out if
+not, and the delete of a deleted video's object, retried until the store takes it and reported
+(`Out.orphan`) if it never does.
+
+The whole state is one value, `Site`, and one input is one call of `Site.handle`: a request, or
+the scheduler's word on a job. A start of the actor is one call of `Site.recover`. The system
+runs these functions in one actor (`Videos.System`), so what is proved of them (`Videos.Proofs`)
+is proved of the code that runs.
 
 Every bound is in `Config` (rule 2.6), with what happens at it: a sign-in past `maxMembers` is
 `full`, a video past `maxVideos`, past its member's `maxOwned` or past
 `maxPending` uploads not yet confirmed is `tooMany`, a comment past `maxComments` or past its
-member's `maxCommentsEach` on the video is `tooManyComments`, a delete past `maxDeleting` gives up
-the oldest delete in the store, which is reported (`Out.orphan`). The bounds of one member are
-far below those of the site, so that one member cannot fill the site's.
+member's `maxCommentsEach` on the video is `tooManyComments`, a job past `maxJobs` is refused by
+the scheduler: a check is then `unconfirmed`, a delete given up and reported. The bounds of one
+member are far below those of the site, so that one member cannot fill the site's.
 -/
 
 namespace Videos
@@ -73,8 +79,9 @@ def Media.mime : Media → String
 lanes_data inductive Status where
   /-- Waiting for the browser's upload, or for the member to say it is done. -/
   | pending
-  /-- The store is asked, under `call`, whether the object is there; `waiter` is told. -/
-  | checking (call : Nat) (waiter : ReqId)
+  /-- The store is asked, by the check job of `waiter`, whether the object is there; `waiter`
+  is told. -/
+  | checking (waiter : ReqId)
   /-- The store said the object is there, of `size` bytes. -/
   | ready (size : Nat)
   deriving DecidableEq, Repr, Hashable, Codable
@@ -112,13 +119,6 @@ lanes_data structure Channel where
   sessions : Auth.Sessions := {}
   deriving DecidableEq, Repr, Hashable, Codable
 
-/-- An object in the store whose video was deleted, and the delete sent for it. -/
-lanes_data structure Deleting where
-  video : VideoId
-  call : Nat
-  attempts : Nat
-  deriving DecidableEq, Repr, Hashable, Codable
-
 lanes_data structure Site where
   channels : List (Member × Channel) := []
   /-- Newest first. -/
@@ -126,9 +126,6 @@ lanes_data structure Site where
   /-- The id the next video gets: none is used twice. -/
   next : VideoId := 0
   nextComment : CommentId := 0
-  nextCall : Nat := 0
-  /-- Newest first. -/
-  deleting : List Deleting := []
   deriving DecidableEq, Repr, Hashable, Codable
 
 /-! ## Inputs and outputs -/
@@ -147,6 +144,29 @@ lanes_data inductive StoreAnswer where
   /-- Anything else: an error, which may have come after the operation took effect. -/
   | failed
   deriving DecidableEq, Repr, Hashable, Codable
+
+/-- A job of the scheduler, by what it is for. The key says what the job asks the store
+(`Key.op`), so no job can ask about another video than its key names. -/
+lanes_data inductive Key where
+  /-- The check that request `req` asked for. -/
+  | check (video : VideoId) (req : ReqId)
+  /-- The last check of an upload never confirmed. -/
+  | expire (video : VideoId)
+  /-- The delete of a deleted video's object. -/
+  | delete (video : VideoId)
+  deriving DecidableEq, Repr, Hashable, Codable
+
+def Key.op : Key → StoreOp
+  | .check v _ | .expire v => .head v
+  | .delete v => .delete v
+
+/-- What the scheduler says of a job: scheduled, refused, or how it ended. -/
+abbrev Outcome := Schedule.Outcome Unit StoreAnswer
+
+/-- A job given up: refused by the scheduler, or out of attempts or time. -/
+def Outcome.givenUp : Outcome → Bool
+  | .failed .. | .refused _ => true
+  | _ => false
 
 /-- A viewer: the member and the session a request's cookie names, when it names one. -/
 abbrev Viewer := Option (Member × Sid)
@@ -178,16 +198,18 @@ lanes_data inductive Command where
 lanes_data inductive Input where
   /-- A request, and when it arrived, in seconds since the epoch: the server's clock, which
   `arrive` writes (`Web.stamp`), so it is in the journal and the same on replay. A session is
-  judged at that time, and links are signed for it. -/
+  judged at that time, links are signed for it, and the scheduler learns it. -/
   | request (c : Command) (at_s : Nat)
-  /-- The store's answer to `call`, or `unknown` at its deadline. -/
-  | store (call : Nat) (reply : Rpc.Reply StoreAnswer)
+  /-- The scheduler's word on the job of `key`. -/
+  | job (key : Key) (outcome : Schedule.Outcome Unit StoreAnswer)
+  /-- A notice of the scheduler. The site schedules only calls, so none comes. -/
+  | noticed (key : Key)
   deriving DecidableEq, Repr, Hashable, Codable
 
-/-- When an input arrived: a request's time; a store's answer carries none. -/
+/-- When an input arrived: a request's time; the scheduler's word carries none. -/
 def Input.at_s : Input → Nat
   | .request _ at_s => at_s
-  | .store .. => 0
+  | _ => 0
 
 /-- A video as a list shows it. -/
 lanes_data structure Card where
@@ -246,7 +268,9 @@ lanes_data inductive Reply where
 lanes_data inductive Out where
   /-- The answer to request `req`, for the session that made it, if it is live. -/
   | reply (req : ReqId) (viewer : Option (Member × Sid)) (r : Reply)
-  | store (call : Rpc.Call StoreOp)
+  /-- A job for the scheduler, at `now_ms`, the time of the request that asks for it. -/
+  | schedule (now_ms : Nat) (spec : Schedule.Spec Key Unit)
+  | cancel (key : Key)
   /-- The object of a deleted video that the store did not say it deleted, given up on. -/
   | orphan (video : VideoId)
   deriving DecidableEq, Repr, Hashable, Codable
@@ -266,16 +290,32 @@ structure Config where
   maxComments : Nat := 200
   /-- Comments of one member on one video. -/
   maxCommentsEach : Nat := 10
-  maxDeleting : Nat := 1000
-  /-- Deletes sent for one object before it is given up. -/
-  maxAttempts : Nat := 3
+  /-- The jobs the scheduler holds: checks, last checks and deletes. -/
+  maxJobs : Nat := 30000
+  /-- How a check is retried. A member waits for it, so it is short. -/
+  checkRetry : Schedule.Retry :=
+    { maxAttempts := 2, deadline_ms := 5000, base_ms := 500, cap_ms := 500, jitter_ms := 250 }
+  /-- How a delete is retried: for about ten minutes. -/
+  deleteRetry : Schedule.Retry :=
+    { maxAttempts := 10, deadline_ms := 10000, base_ms := 1000, cap_ms := 300000, jitter_ms := 1000 }
+  /-- How long after its record is made an upload not confirmed is checked a last time, and taken
+  out if the store does not have it. Far past the upload form's fifteen minutes, so no upload
+  begun with it is still under way. `none`: never. -/
+  pending_s : Option Nat := some 86400
   pageSize : Nat := 12
-  /-- How long the store is waited for. -/
-  store_ms : Nat := 10000
   /-- A seeded bug: a video is ready when the browser says it is uploaded, without asking. -/
   trustBrowser : Bool := false
   /-- A seeded bug: a check the store did not answer in time is taken as found. -/
   readyOnTimeout : Bool := false
+
+/-- The scheduler beside the site. An error is worth another attempt; any other answer is the
+store's word. Two jobs that failed together wait different times (`Schedule.hashJitter`). -/
+def Config.scheduler (config : Config) : Schedule.Config Key Unit StoreAnswer where
+  maxJobs := config.maxJobs
+  maxPayload := 0
+  maxAttempts := max config.checkRetry.maxAttempts config.deleteRetry.maxAttempts
+  ok a := a != .failed
+  jitter := Schedule.hashJitter
 
 namespace Site
 
@@ -359,6 +399,20 @@ def seen (s : Site) (req : ReqId) (viewer : Viewer) (m : Member) (v : VideoId)
   | some video => if video.visibleTo (some m) then f video else (s, answer req viewer .notFound)
   | none => (s, answer req viewer .notFound)
 
+/-- A job of `key`, due at `at_ms`, asked for at `at_s`. -/
+def schedule (key : Key) (retry : Schedule.Retry) (at_s at_ms : Nat) : Out :=
+  .schedule (at_s * 1000) ⟨key, (), .call retry, at_ms⟩
+
+/-- The last check of a video made at `at_s`, if there is one. -/
+def expiry (v : VideoId) (at_s : Nat) : List Out :=
+  match config.pending_s with
+  | some p => [schedule (.expire v) config.checkRetry at_s ((at_s + p) * 1000)]
+  | none => []
+
+/-- The last check of `v` is not needed: it is ready, or deleted. -/
+def unexpire (v : VideoId) : List Out :=
+  if config.pending_s.isSome then [.cancel (.expire v)] else []
+
 def create (s : Site) (req : ReqId) (viewer : Viewer) (m : Member) (title : Title) (about : About)
     (visibility : Visibility) (media : Media) (at_s : Nat) : Site × List Out :=
   if config.maxVideos ≤ s.videos.length
@@ -368,24 +422,30 @@ def create (s : Site) (req : ReqId) (viewer : Viewer) (m : Member) (title : Titl
   else
     let video : Video := { id := s.next, owner := m, title, about, visibility, media, status := .pending }
     ({ s with videos := video :: s.videos, next := s.next + 1 },
-      answer req viewer (.created s.next media at_s))
+      answer req viewer (.created s.next media at_s) ++ expiry config s.next at_s)
 
-/-- Ask the store whether the object of `video` is there, and tell `req`. A check already out
-is answered `unconfirmed`: the newer takes its place. -/
-def check (s : Site) (req : ReqId) (viewer : Viewer) (video : Video) : Site × List Out :=
-  let superseded := match video.status with
-    | .checking _ waiter => answer waiter viewer (.unconfirmed video.id)
-    | _ => []
+/-- The request that waits for a check of `video`, if one does, told `r`. -/
+def waiterOf (video : Video) (viewer : Viewer) (r : Reply) : List Out :=
+  match video.status with
+  | .checking waiter => answer waiter viewer r
+  | _ => []
+
+/-- Have the store asked whether the object of `video` is there, and tell `req`. A check
+already waited for is answered `unconfirmed`: the newer takes its place. -/
+def check (s : Site) (req : ReqId) (viewer : Viewer) (video : Video) (at_s : Nat) :
+    Site × List Out :=
+  let superseded := waiterOf video viewer (.unconfirmed video.id)
   if config.trustBrowser then
     (s.setVideo { video with status := .ready 0 }, superseded ++ answer req viewer (.confirmed video.id))
   else
-    ({ s.setVideo { video with status := .checking s.nextCall req } with nextCall := s.nextCall + 1 },
-      superseded ++ [.store ⟨s.nextCall, config.store_ms, .head video.id⟩])
+    (s.setVideo { video with status := .checking req },
+      superseded ++ [schedule (.check video.id req) config.checkRetry at_s (at_s * 1000)])
 
-def uploaded (s : Site) (req : ReqId) (viewer : Viewer) (video : Video) : Site × List Out :=
+def uploaded (s : Site) (req : ReqId) (viewer : Viewer) (at_s : Nat) (video : Video) :
+    Site × List Out :=
   match video.status with
   | .ready _ => (s, answer req viewer (.confirmed video.id))
-  | _ => check config s req viewer video
+  | _ => check config s req viewer video at_s
 
 def like (s : Site) (req : ReqId) (viewer : Viewer) (m : Member) (video : Video) (on : Bool) :
     Site × List Out :=
@@ -412,22 +472,13 @@ def uncomment (s : Site) (req : ReqId) (viewer : Viewer) (m : Member) (video : V
       answer req viewer (.uncommented video.id))
   else (s, answer req viewer .notFound)
 
-/-- The deletes in the store with `d` added, newest first, and the oldest given up on when there
-are more than `maxDeleting`. -/
-def pushDeleting (s : Site) (d : Deleting) : List Deleting × List Out :=
-  let all := d :: s.deleting
-  (all.take config.maxDeleting, (all.drop config.maxDeleting).map (.orphan ·.video))
-
-/-- The record goes at once; the object is deleted in the store after. -/
-def delete (s : Site) (req : ReqId) (viewer : Viewer) (video : Video) : Site × List Out :=
-  let waiter := match video.status with
-    | .checking _ waiter => answer waiter viewer (.unconfirmed video.id)
-    | _ => []
-  let d : Deleting := { video := video.id, call := s.nextCall, attempts := 1 }
-  let (deleting, given) := s.pushDeleting config d
-  ({ s with videos := s.videos.filter (·.id != video.id), nextCall := s.nextCall + 1, deleting },
-    waiter ++ answer req viewer (.deleted video.id)
-      ++ [.store ⟨s.nextCall, config.store_ms, .delete video.id⟩] ++ given)
+/-- The record goes at once; the object is deleted in the store after, by a job. -/
+def delete (s : Site) (req : ReqId) (viewer : Viewer) (at_s : Nat) (video : Video) :
+    Site × List Out :=
+  ({ s with videos := s.videos.filter (·.id != video.id) },
+    waiterOf video viewer (.unconfirmed video.id) ++ answer req viewer (.deleted video.id)
+      ++ [schedule (.delete video.id) config.deleteRetry at_s (at_s * 1000)]
+      ++ unexpire config video.id)
 
 def watch (s : Site) (req : ReqId) (viewer : Viewer) (v : VideoId) (at_s : Nat) : Site × List Out :=
   let who := viewer.map (·.1)
@@ -466,7 +517,7 @@ def request (s : Site) (c : Command) (at_s : Nat) : Site × List Out :=
     s.withSession life at_s req m session fun viewer =>
       s.create config req viewer m title about visibility media at_s
   | .uploaded req m session v => s.withSession life at_s req m session fun viewer =>
-    s.owned req viewer m v (s.uploaded config req viewer)
+    s.owned req viewer m v (s.uploaded config req viewer at_s)
   | .watch req viewer v => s.watch req (s.viewer life at_s viewer) v at_s
   | .like req m session v on => s.withSession life at_s req m session fun viewer =>
     s.seen req viewer m v fun video => s.like req viewer m video on
@@ -475,67 +526,67 @@ def request (s : Site) (c : Command) (at_s : Nat) : Site × List Out :=
   | .uncomment req m session v c => s.withSession life at_s req m session fun viewer =>
     s.seen req viewer m v fun video => s.uncomment req viewer m video c
   | .delete req m session v => s.withSession life at_s req m session fun viewer =>
-    s.owned req viewer m v (s.delete config req viewer)
+    s.owned req viewer m v (s.delete config req viewer at_s)
   | .feed req viewer before => s.feed config req (s.viewer life at_s viewer) before
   | .channel req viewer whose => s.channel req (s.viewer life at_s viewer) whose
 
-/-- The store's answer to a check of `video`, which `waiter` waits for. -/
-def checked (s : Site) (video : Video) (waiter : ReqId) (reply : Rpc.Reply StoreAnswer) :
-    Site × List Out :=
-  let tell (r : Reply) := answer waiter none r
-  match reply with
-  | .answer (.found size) => (s.setVideo { video with status := .ready size }, tell (.confirmed video.id))
-  | .answer .missing => (s.setVideo { video with status := .pending }, tell (.notUploaded video.id))
-  | .unknown =>
-    if config.readyOnTimeout then
-      (s.setVideo { video with status := .ready 0 }, tell (.confirmed video.id))
-    else (s.setVideo { video with status := .pending }, tell (.unconfirmed video.id))
-  | .answer _ => (s.setVideo { video with status := .pending }, tell (.unconfirmed video.id))
+/-- The store has the object of `video`, of `size` bytes: it is ready, and whoever waits is
+told. -/
+def found (s : Site) (video : Video) (size : Nat) : Site × List Out :=
+  (s.setVideo { video with status := .ready size },
+    waiterOf video none (.confirmed video.id) ++ unexpire config video.id)
 
-/-- The store's answer to a delete: done, or sent again under a new call, or given up on. -/
-def deleteAnswered (s : Site) (d : Deleting) (reply : Rpc.Reply StoreAnswer) : Site × List Out :=
-  let rest := s.deleting.filter (·.call != d.call)
-  match reply with
-  | .answer .deleted | .answer .missing => ({ s with deleting := rest }, [])
-  | _ =>
-    if d.attempts < config.maxAttempts then
-      ({ s with deleting := { d with call := s.nextCall, attempts := d.attempts + 1 } :: rest
-                nextCall := s.nextCall + 1 },
-        [.store ⟨s.nextCall, config.store_ms, .delete d.video⟩])
-    else ({ s with deleting := rest }, [.orphan d.video])
+/-- The check of `req` did not confirm `video`: if `req` still waits, the video is pending
+again and `req` is told `r`. -/
+def unconfirmed (s : Site) (video : Video) (req : ReqId) (r : Reply) : Site × List Out :=
+  if video.status = .checking req then (s.setVideo { video with status := .pending }, answer req none r)
+  else (s, [])
 
-def isChecking (call : Nat) (v : Video) : Bool :=
-  match v.status with
-  | .checking c _ => c == call
-  | _ => false
+/-- How the check of `req` ended, for a video not ready. -/
+def checked (s : Site) (video : Video) (req : ReqId) : Outcome → Site × List Out
+  | .succeeded (.found size) => s.found config video size
+  | .succeeded _ => s.unconfirmed video req (.notUploaded video.id)
+  | .failed _ _ none =>
+    if config.readyOnTimeout then s.found config video 0
+    else s.unconfirmed video req (.unconfirmed video.id)
+  | .failed .. | .refused _ | .cancelled => s.unconfirmed video req (.unconfirmed video.id)
+  | .scheduled | .already => (s, [])
 
-def stored (s : Site) (call : Nat) (reply : Rpc.Reply StoreAnswer) : Site × List Out :=
-  match s.videos.find? (isChecking call) with
-  | some video =>
-    match video.status with
-    | .checking _ waiter => s.checked config video waiter reply
-    | _ => (s, [])
-  | none =>
-    match s.deleting.find? (·.call == call) with
-    | some d => s.deleteAnswered config d reply
-    | none => (s, [])
+/-- How the last check of a video not ready ended: found, it is ready; not there, its record is
+taken out; not known, it stays as it is. -/
+def expired (s : Site) (video : Video) : Outcome → Site × List Out
+  | .succeeded (.found size) => s.found config video size
+  | .succeeded _ =>
+    ({ s with videos := s.videos.filter (·.id != video.id) }, waiterOf video none (.notUploaded video.id))
+  | _ => (s, [])
+
+/-- `f`, for a video that is not ready yet. -/
+def unready (s : Site) (v : VideoId) (f : Video → Site × List Out) : Site × List Out :=
+  match s.find? v with
+  | some video => if video.status.isReady then (s, []) else f video
+  | none => (s, [])
+
+/-- The scheduler's word on a job. A delete given up is reported. -/
+def job (s : Site) : Key → Outcome → Site × List Out
+  | .check v req, o => s.unready v fun video => s.checked config video req o
+  | .expire v, o => s.unready v fun video => s.expired config video o
+  | .delete v, o => (s, if o.givenUp then [.orphan v] else [])
 
 def handle (s : Site) : Input → Site × List Out
   | .request c at_s => s.request config c at_s
-  | .store call reply => s.stored config call reply
+  | .job key o => s.job config key o
+  | .noticed _ => (s, [])
 
-/-- A start: the answers to calls made before it may never come. A check is given up, its
-waiter told to try again; each delete is sent again under a new call. -/
+/-- A start: the requests that waited for a check are gone with the connections, so each is
+told to try again and its video is pending. The jobs are the scheduler's, which keeps them. -/
 def recover (s : Site) : Site × List Out :=
   let waiters := s.videos.filterMap fun v => match v.status with
-    | .checking _ waiter => some (Out.reply waiter none (.unconfirmed v.id))
+    | .checking waiter => some (Out.reply waiter none (.unconfirmed v.id))
     | _ => none
   let videos := s.videos.map fun v => match v.status with
     | .checking .. => { v with status := .pending }
     | _ => v
-  let deleting := s.deleting.zipIdx.map fun (d, k) => { d with call := s.nextCall + k }
-  ({ s with videos, deleting, nextCall := s.nextCall + s.deleting.length },
-    waiters ++ deleting.map fun d => .store ⟨d.call, config.store_ms, .delete d.video⟩)
+  ({ s with videos }, waiters)
 
 end Site
 

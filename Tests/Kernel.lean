@@ -215,8 +215,9 @@ def waveTests : List (String × Bool) :=
   let planned := k.plan { workers := 4 } (k.queue.toList.take 8)
   let waves := k.runWaves { workers := 4 } 64
   let batch := k.runBatch 64
-  [ ("kernel waves: the steps of every actor with mail are worked out ahead",
-      planned.steps.size == 3 && (planned.get 2).length == 3),
+  [ ("kernel waves: the steps of every actor with mail are worked out ahead, up to a stop",
+      planned.steps.size == 3 && (planned.steps.get? 2).map (·.steps.length) == some 2
+        && (planned.steps.get? 0).map (·.steps.length) == some 3),
     ("kernel waves: the batch's outputs and states are runBatch's, a stop included",
       waves.outputs == batch.outputs && batch.outputs.length == 7
         && (List.finRange 3).all fun i =>

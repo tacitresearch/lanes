@@ -73,16 +73,17 @@ theorem gone_delete {s : Site} (hfresh : Fresh s) {req : ReqId} {m : Member} {se
     | none => simp [hl, hfind, answer] at h
     | some video =>
       by_cases ho : video.owner = m
-      · simp only [hl, hfind, ho, ite_true, delete, pushDeleting] at h ⊢
+      · simp only [hl, hfind, ho, ite_true, delete] at h ⊢
         have hv : v = video.id := by
           simp only [List.mem_append, answer, List.mem_singleton, Out.reply.injEq,
-            Reply.deleted.injEq, List.mem_map, reduceCtorEq, and_false, exists_false,
-            or_false] at h
-          rcases h with h | h
-          · split at h
-            · simp at h
-            · simp at h
+            Reply.deleted.injEq] at h
+          rcases h with ((h | h) | h) | h
+          · unfold waiterOf at h
+            split at h <;> simp [answer] at h
           · exact h.2.2
+          · simp [schedule] at h
+          · unfold unexpire at h
+            split at h <;> simp at h
         subst hv
         exact ⟨hfresh video (find?_mem hfind), fun w hw heq => by
           simpa [heq] using (List.mem_filter.mp hw).2⟩

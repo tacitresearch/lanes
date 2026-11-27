@@ -8,6 +8,7 @@ import Videos.Proofs.Gone
 import Videos.Proofs.Confirmed
 import Videos.Proofs.Likes
 import Videos.Proofs.Private
+import Videos.Proofs.Jobs
 import Videos.Proofs.Axioms
 
 /-!
@@ -15,6 +16,7 @@ import Videos.Proofs.Axioms
 
 For every configuration (the seeded bugs off where it matters) and every site, input and start
 of the actor (`Shows`, `Run`), and so for every run of the spec's functions (`Gone`,
-`Confirmed`) and every run of the system under every environment model (`Likes`, `Private`).
-The README lists each claim with its theorem.
+`Confirmed`) and every run of the site beside its scheduler under every environment model
+(`Likes`, `Private`, `Jobs`), and every fair run of it (`Jobs`). The README lists each claim
+with its theorem.
 -/
