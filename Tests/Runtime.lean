@@ -89,6 +89,11 @@ def flakyTest (shape : Runtime.Config := serial) : Async (List (String × Bool))
     for n in [0:100] do
       rt.input (k, n * 3 + k.val + 1) : Async Unit)
   discard <| Async.concurrentlyAll clients
+  -- A stop drops a worker's queued jobs and its timer, so a worker may end the load stopped,
+  -- with every tick it armed cancelled by the next stop before the clock reached it. One more
+  -- job each that does not stop (1 is not a multiple of 7) leaves every worker up, with the
+  -- tick its start armed still pending, so waiting for the timers sees one fire.
+  for k in List.finRange 3 do rt.input (k, 1)
   rt.idle (timers := true)
   let events ← rt.trace
   let some c ← replay flaky rt
