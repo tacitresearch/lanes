@@ -43,9 +43,7 @@ extern lean_object *lanes_cloop_answer(lean_object *h, lean_object *line, lean_o
 extern lean_object *lanes_cloop_take(lean_object *h);
 
 enum { RECEIVED, ENDED, BROKEN, TICK, STOP, SENT };
-#ifndef READ_MAX /* smaller under CBMC (scripts/cbmc/loop.c) */
 #define READ_MAX 65536
-#endif
 #define EVENTS_MAX 128
 #define ACCEPTS_MAX 64
 #define THREADS_MAX 1024

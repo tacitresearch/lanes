@@ -94,7 +94,7 @@ Worth keeping as the opt-in it is, not yet worth making the default.
 
 Before adopting it as Linux's default: run `lanes-cloop` on the warm machine at 1, 2, 4 and 8
 threads (`bench/README.md`); if it gains at least half over `lanes-io` there, make it the default
-on Linux with the Lean loop kept for other systems, run `scripts/cbmc.sh` in CI, and move the
+on Linux with the Lean loop kept for other systems, model-check its C (below), and move the
 choice of thread for a connection into Lean.
 
 ## Not done
@@ -104,4 +104,9 @@ choice of thread for a connection into Lean.
 - IPv6, TLS, and a bound on the copies made when answers arrive for a socket that is full.
 - Reading into the connection's buffer: the C copies what it reads into a fresh `ByteArray`,
   and `Conn.receive` copies it again onto the buffer.
-- CBMC (`scripts/cbmc.sh`) is run by hand: it needs `cbmc`, which CI does not install.
+- CBMC. A harness that checks each operation of a thread (drive a connection, accept, take the
+  mailbox, sweep, stop) keeps an invariant of the table of connections, on stubs of Lean and the
+  sockets that may do anything their contracts allow, ran out of 15 GB in CBMC 5.95 for every
+  operation but the sweep; one drive from one fixed state checked in 12 s. It is in the history
+  of this decision's branch, to be made to finish: fewer objects in the model of Lean's heap, or
+  a harness for each operation from a smaller state.
