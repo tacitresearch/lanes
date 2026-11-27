@@ -249,17 +249,18 @@ in `Lanes/Web/Http/FrontSound.lean` to answer each arrival at most once and in
   allows. That is assumed, not proved: what each model assumes of the service is listed in the
   decision on models of external services (`docs/decisions/D65-models-of-external-services.md`),
   and is checked by recording runs of a real or reference implementation of the service and
-  testing them with `Outside.allows` (`oracles/README.md`). The object store's model is checked
-  against runs recorded from moto's S3, the email model against moto's SES, and the store model
-  against PostgreSQL 16 (`oracles/moto/s3.jsonl`, `oracles/moto/ses.jsonl`,
-  `oracles/postgres/store.jsonl`); moto is a reference, not AWS. The payment model, keys and
+  testing them with `Outside.allows` (`oracles/README.md`). The object store's and the multipart
+  models are checked against runs recorded from moto's S3, the email model against moto's SES,
+  the queue model against moto's SQS, and the store model against PostgreSQL 16
+  (`oracles/moto/s3.jsonl`, `oracles/moto/s3-multipart.jsonl`, `oracles/moto/ses.jsonl`,
+  `oracles/moto/sqs.jsonl`, `oracles/postgres/store.jsonl`); moto is a reference, not AWS. The payment model, keys and
   webhooks are tested only against runs written by hand (`Tests/Outside.lean`). SES takes no idempotency key, so every send is a request
   without one, which the model gives an effect of its own. The object store's model (`Lanes/Outside/ObjectStore.lean`) assumes read-after-write, as S3 has promised
   since December 2020 and MinIO gives; a store that is only eventually consistent breaks it. The
   multipart model's (`Lanes/Outside/Multipart.lean`) assumes that S3 makes the object of exactly
   the parts a Complete lists, that an ETag names a part's content (an MD5, unless the bucket
   encrypts with KMS), and that a Complete sent again with the same listing is answered as the
-  first; it is tested against the fake (`Tests/S3Upload.lean`), not against S3. In particular a payment service's idempotency keys expire after 24
+  first; it is tested against the fake (`Tests/S3Upload.lean`) and moto, not against S3. In particular a payment service's idempotency keys expire after 24
   hours, and the model's do not. The models of a queue, a cache, the wall clock, a shared cache
   in front and a service that throttles (`Queue`, `Cache`, `Clock.wall`, `Http.SharedCache`,
   `Throttle`) assume what the decision on models of more outside systems lists of SQS, Redis and

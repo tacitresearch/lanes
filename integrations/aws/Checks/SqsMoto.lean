@@ -90,7 +90,8 @@ def eventJson : Event sig → Option Json
   | .output (.receive q n v got) =>
     some (Json.mkObj [("queue", q), ("receive", n), ("visibility_s", v), ("got", got)])
   | .output (.delete q r a) => some (Json.mkObj [("queue", q), ("delete", r), ("answer", a)])
-  | .input (.received q r m) => some (Json.mkObj (([("queue", q), ("received", r)] : List (String × Json)) ++ msgFields m))
+  | .input (.received q r m) =>
+    some (Json.mkObj ([("queue", (q : Json)), ("received", (r : Json))] ++ msgFields m))
   | _ => none
 
 def readMsg (j : Json) (idField : String) : Option Msg := do
