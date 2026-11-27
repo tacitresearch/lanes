@@ -9,7 +9,8 @@ What the fix rests on, proved of the actor for every state and every message (`k
 every request it sends is a `begin`, a read, a `commit` or a `rollback`, or an insert of the to-do
 being stored, under the key its user gave it, in the transaction that has just read that key and
 found it free (`keyed_requests`). It never asks the store to choose a key, to replace a row or to
-delete one (`keyed_no_unkeyed`).
+delete one (`keyed_no_unkeyed`), and so no output of any run of the system, under any environment,
+does (`outputs_noUnkeyed`, through `System.Emits.outputs`).
 
 So a retry after a lost `COMMIT` cannot add a second row: it reads the key first, and if the lost
 commit takes effect later, one of the two inserts of the key fails, as the table's primary key
@@ -137,5 +138,25 @@ theorem keyed_no_unkeyed (hk : cfg.keyed = true) (s : State) (m : In) (r : Reque
     (∀ v, r.op ≠ .append v) ∧ (∀ k v, r.op ≠ .write k v) ∧ (∀ k, r.op ≠ .delete k) := by
   have := keyed_requests hk s m r h
   refine ⟨fun v hv => ?_, fun k v hv => ?_, fun k hv => ?_⟩ <;> simp [Keyed, hv] at this
+
+/-- An output that adds a row under a key the store chooses, replaces one or deletes one. -/
+def NoUnkeyed (out : Out) : Prop :=
+  ∀ r, out = .store r → (∀ v, r.op ≠ .append v) ∧ (∀ k v, r.op ≠ .write k v) ∧ (∀ k, r.op ≠ .delete k)
+
+theorem emits_noUnkeyed (hk : cfg.keyed = true) : (system cfg).Emits NoUnkeyed := by
+  refine ⟨fun i s msg out h => ?_, fun i s out h => ?_⟩
+  · cases i
+    intro r hr
+    subst hr
+    exact keyed_no_unkeyed hk s msg r (List.mem_filterMap.mpr ⟨_, h, rfl⟩)
+  · cases i
+    simp [system, app] at h
+
+/-- In every run of the fixed system, under every environment, no request it sends appends,
+replaces or deletes a row. -/
+theorem outputs_noUnkeyed (hk : cfg.keyed = true) {env : EnvModel sig} {events : List (Event sig)}
+    {c : SysState (system cfg)} (hrun : (SysState.init (system cfg) env).run env events = some c) :
+    ∀ out, Event.output out ∈ events → NoUnkeyed out :=
+  (emits_noUnkeyed hk).outputs hrun
 
 end TodoDb
