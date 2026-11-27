@@ -23,8 +23,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Semantics` | 60 | 11 | 0 | 0 | 0 | 48 | 1 |
 | `Lanes/Testing` | 63 | 0 | 0 | 1 | 62 | 0 | 0 |
 | `Lanes/Web` | 523 | 272 | 50 | 24 | 126 | 49 | 2 |
-| `LanesCli` | 110 | 0 | 0 | 0 | 46 | 0 | 64 |
-| All | 2028 | 1057 | 101 | 97 | 357 | 299 | 117 |
+| `LanesCli` | 120 | 0 | 0 | 0 | 46 | 0 | 74 |
+| All | 2038 | 1057 | 101 | 97 | 357 | 299 | 127 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -2733,6 +2733,21 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `S3.Xml.Node.all` | tested | `Tests/S3.lean` |
 | `S3.Xml.Node.child?` | tested | `Tests/S3.lean` |
 | `S3.Xml.Node.text?` | tested | `Tests/S3.lean` |
+
+## `LanesCli/Docstrings.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Cli.Docstrings.Kind.label` | none |  |
+| `Cli.Docstrings.Kind.all` | none |  |
+| `Cli.Docstrings.instances` | none |  |
+| `Cli.Docstrings.kindOf` | none |  |
+| `Cli.Docstrings.shown` | none |  |
+| `Cli.Docstrings.read` | none |  |
+| `Cli.Docstrings.ratio` | none |  |
+| `Cli.Docstrings.row` | none |  |
+| `Cli.Docstrings.table` | none |  |
+| `Cli.Docstrings.run` | none |  |
 
 ## `LanesCli/Generated.lean`
 
