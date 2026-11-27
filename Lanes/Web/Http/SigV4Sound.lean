@@ -56,9 +56,6 @@ private theorem slash_not_mem_encode (s : String) : '/' ∉ (encode s).toList :=
   simp only [encode, percentEncode, String.toList_ofList, List.mem_flatMap, not_exists, not_and]
   exact fun b _ => this b
 
-/-- A path's segments, between its slashes. -/
-def segments (path : String) : List String := (path.toList.splitOn '/').map String.ofList
-
 /-- The path a canonical path escapes, without its first slash. -/
 def decodePath (canonical : String) : Option String :=
   match canonical.toList with

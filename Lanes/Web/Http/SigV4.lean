@@ -69,6 +69,9 @@ def credentialScope (t : Civil.DateTime) (scope : Scope) : String :=
 /-- Escaped as AWS escapes: every byte but letters, digits and `-._~` as `%XX`, in capitals. -/
 def encode (s : String) : String := percentEncode s
 
+/-- A path's segments, between its slashes: an S3 key keeps its slashes as they are. -/
+def segments (path : String) : List String := (path.toList.splitOn '/').map String.ofList
+
 def canonicalPath (segments : List String) : String := "/" ++ "/".intercalate (segments.map encode)
 
 def encodePair (p : String × String) : String × String := (encode p.1, encode p.2)
