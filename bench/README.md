@@ -140,5 +140,25 @@ work is now as large as the cost of crossing threads.
 
 ## Results
 
-None yet. The first run on the warm machine (c7a.16xlarge, 64 cores) goes here: its
-`results/<date>-<commit>.md`, the commit, and what it shows.
+The latest run on the warm machine.
+
+- Date: 2026-11-27. Commit: 70d61f52d0aa.
+- Machine: c7a.16xlarge (64 vCPUs), the server and the load generator pinned to disjoint
+  halves of its CPUs.
+- Settings: `GET /` answered with `hello\n`, keep-alive, 1, 16 and 64 connections; the
+  workflow's defaults (three runs of 10 s after a 1 s warm-up, medians; `LEAN_NUM_THREADS` the
+  server's CPUs).
+
+Requests a second:
+
+| Server | 1 | 16 | 64 | Server CPU |
+| --- | ---: | ---: | ---: | --- |
+| `go` (Go `net/http`) | 29,870 | 125,809 | 137,938 | up to 12.8 cores |
+| `lanes` | 11,395 | 34,516 | 37,098 | 3.2 cores, 85–101 µs a request |
+| `lanes-journal` (every request synced before it is answered) | 344 | 2,393 | 8,632 | |
+
+At 64 connections Lanes answers about a quarter of what Go does (3.7×). `lanes` is one actor on
+one shard, and a shard is one thread, so the application's logic uses one core whatever the
+number of connections; the IO path and running actors in parallel are the next steps.
+`lanes-journal` syncs the journal once a batch before it answers, and a batch is what has
+arrived since the last, so more connections share a sync.
