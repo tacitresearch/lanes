@@ -137,23 +137,30 @@ private def resolve (call : Call) : Async (Option Std.Net.SocketAddress) := do
     | .v4 addr => some (.v4 ⟨addr, call.port⟩)
     | .v6 _ => none
 
-/-- Make one call: its response, or `none` if there is none by the deadline. `Async.race` leaves
-the loser running, so the socket is closed whoever wins: that fails what a call given up on
-still waits for, and ends its task. -/
-def exchange (call : Call) (config : Config) : Async (Option Response) := do
-  let some request := call.request.wire call.host | return none
+/-- Make one call: its response, or why there is none by the deadline (the address not found, the
+connection or handshake refused, with OpenSSL's reason, no whole answer, or the time run out).
+`Async.race` leaves the loser running, so the socket is closed whoever wins: that fails what a
+call given up on still waits for, and ends its task. -/
+def exchangeExplained (call : Call) (config : Config) : Async (Except String Response) := do
+  let some request := call.request.wire call.host | return .error "the request cannot be written"
   let socket ← TCP.Socket.Client.mk
-  let attempt : Async (Option Response) := do
+  let attempt : Async (Except String Response) := do
     try
-      let some address ← resolve call | return none
-      match call.scheme with
-      | .http => converse socket address request config
-      | .https =>
-        converseTls socket address request (← Tls.Session.start config.trust call.host) config
-    catch _ => pure none
-  let patience := (fun _ => (none : Option Response)) <$> Async.sleep (.ofNat config.timeout_ms)
+      let some address ← resolve call | return .error s!"no IPv4 address for {call.host}"
+      let answer ← match call.scheme with
+        | .http => converse socket address request config
+        | .https =>
+          converseTls socket address request (← Tls.Session.start config.trust call.host) config
+      return answer.elim (.error "the connection ended without a whole answer") .ok
+    catch e => pure (.error (toString e))
+  let patience := (fun _ => (.error "no answer by the deadline" : Except String Response)) <$>
+    Async.sleep (.ofNat config.timeout_ms)
   try Async.race attempt patience
   finally socket.close
+
+/-- Make one call: its response, or `none` if there is none by the deadline. -/
+def exchange (call : Call) (config : Config) : Async (Option Response) :=
+  (·.toOption) <$> exchangeExplained call config
 
 /-- Makes the call on a task of its own, so the shard does not wait for the network, and hands
 the answer back as an input. An answer that finds the inbox full is dropped. -/

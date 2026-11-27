@@ -210,9 +210,10 @@ def online (host : String := "example.com") : Async (List (String × Bool)) := d
     return []
   let some call := Client.Call.at s!"https://{host}" { method := .get, path := [] }
     | return [("tls: an https origin is a call", false)]
-  let answer ← Client.exchange call { timeout_ms := 10000 }
+  let answer ← Client.exchangeExplained call { timeout_ms := 10000 }
+  if let .error why := answer then IO.println s!"tls: {host}: {why}"
   return [(s!"tls: {host} is answered over TLS, checked against the system's trust store",
-    answer.any (·.status == 200))]
+    match answer with | .ok response => response.status == 200 | .error _ => false)]
 
 def hasOpenssl : IO Bool := do
   try return (← IO.Process.output { cmd := "openssl", args := #["version"] }).exitCode == 0
