@@ -1,4 +1,4 @@
-# D?. The layout is by concern, and `import Lanes` is the API
+# D62. The layout is by concern, and `import Lanes` is the API
 
 Before 0.1.0, when module paths become what users copy, the repository was laid out as it grew:
 `Lanes/Actors/` held 39 files and 16,000 lines of five concerns (the actor model, its proof

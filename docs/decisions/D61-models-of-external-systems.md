@@ -1,4 +1,4 @@
-# D?. Models of external systems: classes in Lanes, vendors in integrations
+# D61. Models of external systems: classes in Lanes, vendors in integrations
 
 A system talks to things it does not contain through outputs and inputs (D26), and what such a
 thing may do is an `Outside` (`Lanes/Outside/Basic.lean`): the checker explores the system
