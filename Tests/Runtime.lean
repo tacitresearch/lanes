@@ -78,8 +78,8 @@ def replay {σ : Signature} (sys : System σ) [Hashable σ.Id] (rt : Runtime sys
   let events ← rt.trace
   return (SysState.init sys Kernel.env).run Kernel.env events.toList
 
-def flakyTest : Async (List (String × Bool)) := do
-  let config : Runtime.Config := { record := true, inboxCapacity := 8 }
+def flakyTest (workers : Nat := 1) : Async (List (String × Bool)) := do
+  let config : Runtime.Config := { record := true, inboxCapacity := 8, workers }
   let outputs ← IO.mkRef (#[] : Array Nat)
   let rt ← Runtime.start flaky config fun out => outputs.modify (·.push out)
   let clients := (List.finRange 3).toArray.map fun (k : Fin 3) => (do
@@ -110,8 +110,8 @@ def flakyTest : Async (List (String × Bool)) := do
 /-! The bank under concurrent clients. -/
 
 open Tests.Fixtures.Bank in
-def bankTest : Async (List (String × Bool)) := do
-  let config : Runtime.Config := { record := true }
+def bankTest (workers : Nat := 1) : Async (List (String × Bool)) := do
+  let config : Runtime.Config := { record := true, workers }
   let responses ← IO.mkRef 0
   let rt ← Runtime.start (bank (Fin 3) 100) config fun _ => responses.modify (· + 1)
   let clients := (List.finRange 3).toArray.map fun (k : Fin 3) => (do
@@ -161,8 +161,8 @@ abbrev flood : System floodSig where
   actor := flooder
   accept x := ⟨x.1, .burst x.2⟩
 
-def floodTest : Async (List (String × Bool)) := do
-  let config : Runtime.Config := { record := true, inboxCapacity := 2 }
+def floodTest (workers : Nat := 1) : Async (List (String × Bool)) := do
+  let config : Runtime.Config := { record := true, inboxCapacity := 2, workers }
   let rt ← Runtime.start flood config
   discard <| Async.concurrentlyAll #[rt.input (0, 200), rt.input (1, 200)]
   rt.idle
@@ -447,9 +447,9 @@ def parkerTest : IO (List (String × Bool)) := do
       blocked == 8 && failed matches .error _) ]
 
 def tests : IO (List (String × Bool)) := do
-  let a ← flakyTest.block
-  let b ← bankTest.block
-  let c ← floodTest.block
+  let a ← (flakyTest 1).block
+  let b ← (bankTest 1).block
+  let c ← (floodTest 1).block
   let d ← busyTest.block
   let e ← timerTest.block
   let f ← backPressureTest.block
@@ -457,7 +457,10 @@ def tests : IO (List (String × Bool)) := do
   let h ← batchTest.block
   let i ← outputsTest.block
   let j ← busyStopTest.block
-  return a ++ b ++ c ++ d ++ e ++ f ++ g ++ h ++ i ++ j ++ (← dutiesTest.block)
+  let onWorkers := fun (results : List (String × Bool)) =>
+    results.map fun (name, ok) => (s!"{name} (on 4 workers)", ok)
+  let w := onWorkers ((← (flakyTest 4).block) ++ (← (bankTest 4).block) ++ (← (floodTest 4).block))
+  return a ++ b ++ c ++ d ++ e ++ f ++ g ++ h ++ i ++ j ++ w ++ (← dutiesTest.block)
     ++ (← afterRestartTest.block) ++ (← parkerTest)
 
 end Tests.Runtime

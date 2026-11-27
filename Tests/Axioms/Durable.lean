@@ -84,6 +84,9 @@ import Lanes.Semantics
 /-- info: 'Lanes.Journal.turns_kernel' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Journal.turns_kernel
 
+/-- info: 'Lanes.Journal.turnAll_eq_exec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.turnAll_eq_exec
+
 /-- info: 'Lanes.Journal.recover_kernel' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Journal.recover_kernel
 

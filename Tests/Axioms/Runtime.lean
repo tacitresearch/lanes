@@ -199,3 +199,31 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.System.Invariant.shards_state' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Invariant.shards_state
+
+-- Lanes.Runtime.Wave
+/-- info: 'Lanes.Kernel.frame_handle' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.frame_handle
+
+/-- info: 'Lanes.Kernel.frame_startActor' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.frame_startActor
+
+/-- info: 'Lanes.Kernel.frame_fire' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.frame_fire
+
+/-- info: 'Lanes.Kernel.runBatchAhead_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.runBatchAhead_eq
+
+/-- info: 'Lanes.Kernel.good_plan' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.good_plan
+
+/-- info: 'Lanes.Kernel.runBatch_add' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.runBatch_add
+
+/-- info: 'Lanes.Kernel.waves_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.waves_eq
+
+/-- info: 'Lanes.Kernel.runWaves_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.runWaves_eq
+
+/-- info: 'Lanes.Kernel.exec_inputs' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.exec_inputs
