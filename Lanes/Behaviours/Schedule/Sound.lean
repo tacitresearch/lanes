@@ -60,6 +60,7 @@ theorem step_target {config : Config K P A} {s : State K P} {msg : Schedule.Msg 
   cases msg <;> simp only [Msg.target, Option.some.injEq, Prod.mk.injEq, reduceCtorEq] at h <;>
     obtain ⟨rfl, rfl⟩ := h <;> exact ⟨rfl, rfl⟩
 
+omit [DecidableEq K] [DecidableEq P] [DecidableEq A] in
 theorem target_timer (j : Job K P) :
     ∃ act, (timer j : Schedule.Msg K P A).target = some (j.key, act) ∧
       (act = .due ∧ j.phase = .waiting ∨ act = .expire ∧ j.phase ≠ .waiting) := by
@@ -68,6 +69,7 @@ theorem target_timer (j : Job K P) :
   · exact ⟨.due, rfl, .inl ⟨rfl, ‹_›⟩⟩
   · next h => exact ⟨.expire, rfl, .inr ⟨rfl, by simpa using h⟩⟩
 
+omit [DecidableEq K] [DecidableEq P] [DecidableEq A] in
 theorem timer_key {j : Job K P} {key : K} :
     (timer j : Schedule.Msg K P A) = .due key ∨ (timer j : Schedule.Msg K P A) = .expire key →
       j.key = key := by
@@ -618,6 +620,347 @@ theorem attempt_ends {msg : Schedule.Msg K P A} {key : K} {j : Job K P}
     · exact .inl ⟨r, rfl⟩
     · exact .inr ⟨rfl, habandon⟩
 
+omit [DecidableEq K] [DecidableEq P] [DecidableEq A] in
+theorem timer_act_key {b : Job K P} {key : K} {act : Act A}
+    (h : (timer b : Schedule.Msg K P A) = act.msg key) : b.key = key := by
+  cases act <;> unfold timer at h <;> split at h <;> simp_all [Act.msg]
+
+/-- After a step, the timer of every job held is armed, if before it the timer of every job held
+was, but perhaps the one the step handles. -/
+theorem armed_step (config : Config K P A) {s : State K P} {timers : List (Schedule.Msg K P A)}
+    (msg : Schedule.Msg K P A)
+    (h : ∀ j ∈ s.jobs, timer j ≠ msg → timer j ∈ timers) :
+    ∀ j ∈ (step config s msg).1.jobs, timer j ∈ Effect.retime (step config s msg).2 timers := by
+  rcases step_cases (config := config) (s := s) msg with
+    ⟨now_ms, spec, rfl⟩ | ⟨key, act, rfl, hnone, hs⟩ | ⟨key, act, j, rfl, hj, hs⟩
+  · have hne (b : Job K P) : timer b ≠ (.schedule now_ms spec : Schedule.Msg K P A) := by
+      unfold timer
+      split <;> simp
+    rw [step_schedule]
+    obtain ⟨-, ⟨hjobs, o, he⟩ | ⟨-, -, hjobs, he⟩⟩ := admit_cases (config := config) (s := s) now_ms spec
+    · intro b hb
+      rw [hjobs] at hb
+      rw [he]
+      exact h b hb (hne b)
+    · intro b hb
+      rw [hjobs] at hb
+      rw [he]
+      rcases List.mem_cons.mp hb with rfl | hb
+      · exact Effect.mem_retime_of_after (delay_ms := spec.at_ms - max s.now_ms now_ms)
+          (by simp [timer, Spec.job]) (by simp)
+      · exact Effect.mem_retime_of_mem (h b hb (hne b)) (by simp)
+  · rw [hs]
+    intro b hb
+    refine h b hb fun he => ?_
+    have hkey : b.key = key := timer_act_key he
+    exact entry_eq_none.mp hnone (mem_keys.mpr ⟨b, hb, hkey⟩)
+  · rw [hs]
+    obtain ⟨hmem, rfl⟩ := entry_some hj
+    intro b hb
+    rcases mem_set (onJob_key_of hj act) hb with hb' | ⟨hb', hne⟩
+    · rcases onJob_timer b hb' with ⟨⟨d, hd⟩, hc⟩ | ⟨heffs, htimer, hfired⟩
+      · exact Effect.mem_retime_of_after hd hc
+      · rw [heffs, htimer]
+        exact h j hmem hfired
+    · have hnot : timer b ≠ (act.msg j.key : Schedule.Msg K P A) := fun he =>
+        hne (timer_act_key he)
+      refine Effect.mem_retime_of_mem (h b hb' hnot) fun hc => hne ?_
+      exact timer_key (onJob_ownTimers _ (.inl hc))
+
 end Step
+
+/-! ### The scheduler as a system -/
+
+variable {config : Config K P A} {env : EnvModel (sig K P A)}
+
+/-- While the scheduler is up, the timer each job held waits on is armed. -/
+def Armed (c : SysState (system (K := K) (P := P) config)) : Prop :=
+  c.up () = true → ∀ j ∈ (c.state () : State K P).jobs, timer j ∈ c.timers ()
+
+/-- No more jobs are held than `maxJobs`, and no id twice, in every environment. -/
+theorem within (config : Config K P A) (env : EnvModel (sig K P A)) :
+    (system (K := K) (P := P) config).Invariant env fun c => (c.state ()).Within config :=
+  System.invariant_of_actor _ () (actor_within config) env
+
+/-- Every job held is within its attempts, in every environment. -/
+theorem attempts (config : Config K P A) (env : EnvModel (sig K P A)) :
+    (system (K := K) (P := P) config).Invariant env fun c => (c.state ()).Attempts config :=
+  System.invariant_of_actor _ () (actor_attempts config) env
+
+theorem handle_eq (c : SysState (system (K := K) (P := P) config)) (msg : Schedule.Msg K P A) :
+    c.handle env () msg = { c with
+      state := update c.state () (step config (c.state ()) msg).1
+      net := c.net ++ Effect.sends () (step config (c.state ()) msg).2
+      timers := update c.timers () (Effect.retime (step config (c.state ()) msg).2 (c.timers ()))
+      outbox := c.outbox ++ Effect.emits (step config (c.state ()) msg).2 } := by
+  have hr : ((actor config).step (c.state ()) msg).2.any Effect.isStop = false :=
+    step_runs config (c.state ()) msg
+  simp only [SysState.handle, SysState.settle_eq, hr, Bool.false_eq_true, ↓reduceIte]
+  rfl
+
+theorem startActor_eq (c : SysState (system (K := K) (P := P) config)) :
+    c.startActor env () = { c with
+      up := update c.up () true
+      net := c.net ++ Effect.sends () ((c.state ()).jobs.map (rearm (c.state ())))
+      timers := update c.timers ()
+        (Effect.retime ((c.state ()).jobs.map (rearm (c.state ()))) (c.timers ()))
+      outbox := c.outbox ++ Effect.emits ((c.state ()).jobs.map (rearm (c.state ()))) } := by
+  have hr := recover_runs (K := K) (P := P) config (c.state ())
+  simp only [SysState.startActor, SysState.settle_eq, hr, Bool.false_eq_true, ↓reduceIte]
+  simp only [actor, SysState.mk.injEq, and_true]
+  funext i
+  simp
+
+private theorem armed_handle {c : SysState (system (K := K) (P := P) config)}
+    (msg : Schedule.Msg K P A)
+    (h : ∀ j ∈ (c.state () : State K P).jobs, timer j ≠ msg → timer j ∈ c.timers ()) :
+    Armed (c.handle env () msg) := by
+  intro _ j hj
+  rw [handle_eq] at hj ⊢
+  simp only [update_self] at hj ⊢
+  exact armed_step config msg h j hj
+
+private theorem armed_start (c : SysState (system (K := K) (P := P) config)) :
+    Armed (c.startActor env ()) := by
+  intro _ j hj
+  rw [startActor_eq] at hj ⊢
+  simp only [update_self] at hj ⊢
+  refine Effect.mem_retime_of_after (List.mem_map.mpr ⟨j, hj, rfl⟩) ?_
+  intro hc
+  obtain ⟨b, -, hb⟩ := List.mem_map.mp hc
+  simp [rearm] at hb
+
+/-- The scheduler cannot forget a job, in any environment: while it is up, the timer the job
+waits on is armed. -/
+theorem armed (config : Config K P A) (env : EnvModel (sig K P A)) :
+    (system (K := K) (P := P) config).Invariant env Armed := by
+  intro c hc
+  induction hc with
+  | init => exact armed_start (env := env) (SysState.blank _)
+  | @step c c' ev hc hstep ih =>
+    cases ev with
+    | input x =>
+      obtain rfl := SysState.step_input.mp hstep
+      exact ih
+    | deliver e =>
+      obtain ⟨hup, _, rfl⟩ := SysState.step_deliver.mp hstep
+      exact armed_handle (c := { c with net := c.net.erase e }) e.msg
+        fun j hj _ => ih hup j hj
+    | duplicate e =>
+      obtain ⟨hup, _, _, rfl⟩ := SysState.step_duplicate.mp hstep
+      exact armed_handle e.msg fun j hj _ => ih hup j hj
+    | drop e =>
+      obtain ⟨_, _, rfl⟩ := SysState.step_drop.mp hstep
+      exact ih
+    | timeout i msg =>
+      obtain ⟨hup, _, rfl⟩ := SysState.step_timeout.mp hstep
+      refine armed_handle msg fun j hj hne => ?_
+      simpa using (List.mem_erase_of_ne hne).mpr (ih hup j hj)
+    | output out =>
+      obtain ⟨_, rfl⟩ := SysState.step_output.mp hstep
+      exact ih
+    | crash i =>
+      obtain ⟨_, _, rfl⟩ := SysState.step_crash.mp hstep
+      simp [Armed, SysState.down]
+    | start i =>
+      obtain ⟨_, _, rfl⟩ := SysState.step_start.mp hstep
+      exact armed_start c
+
+/-! ### No more calls than attempts allowed -/
+
+/-- The attempts of `key` handed over, as often as they were. -/
+def calls (key : K) (shown : List (Deed (sig K P A))) : Nat :=
+  shown.countP fun
+    | .output (.call a) => a.key == key
+    | _ => false
+
+/-- The schedulings of `key` the scheduler handled, as often as it handled them. -/
+def schedulings (key : K) (shown : List (Deed (sig K P A))) : Nat :=
+  shown.countP fun
+    | .handle _ (.schedule _ spec) => spec.key == key
+    | _ => false
+
+private def schedules (key : K) : Schedule.Msg K P A → Bool
+  | .schedule _ spec => spec.key == key
+  | _ => false
+
+/-- The attempts the job under `key` may still start. -/
+private def rest (config : Config K P A) (s : State K P) (key : K) : Nat :=
+  (entry s.jobs key).elim 0 fun j => config.cap j.work - j.attempt
+
+/-- What the scheduler may still call `key`: the attempts waiting to leave and those its job
+may start. -/
+private def owed (key : K) (c : SysState (system (K := K) (P := P) config)) : Nat :=
+  c.outbox.countP (isCall key) + rest config (c.state ()) key
+
+/-- One step calls `key` no more than its job had left, and adds to what is left only by a
+scheduling of it, by at most `max 1 maxAttempts`. -/
+private theorem owed_step (key : K) {s : State K P} (h : s.Attempts config)
+    (msg : Schedule.Msg K P A) :
+    (Effect.emits (step config s msg).2).countP (isCall key) + rest config (step config s msg).1 key
+      ≤ rest config s key + max 1 config.maxAttempts * (schedules key msg).toNat := by
+  rcases step_cases (config := config) (s := s) msg with
+    ⟨now_ms, spec, rfl⟩ | ⟨_, _, rfl, _, hs⟩ | ⟨key', act, j, rfl, hj, hs⟩
+  · rw [step_schedule]
+    obtain ⟨-, ⟨hjobs, o, he⟩ | ⟨hnew, -, hjobs, he⟩⟩ :=
+      admit_cases (config := config) (s := s) now_ms spec
+    · simp [he, rest, hjobs, Effect.emits, isCall]
+    · simp only [he, rest, hjobs, Effect.emits, List.filterMap_cons, List.filterMap_nil,
+        List.countP_cons, List.countP_nil, isCall, Bool.false_eq_true, ↓reduceIte]
+      by_cases hk : spec.key = key
+      · subst hk
+        have hnone : entry s.jobs spec.key = none := entry_eq_none.mpr hnew
+        have := config.cap_le spec.work
+        rw [show entry (spec.job :: s.jobs) spec.key = some spec.job from entry_cons_self _ _]
+        simp [hnone, Spec.job, schedules]
+        omega
+      · rw [entry_cons_of_ne _ _ (by simpa [Spec.job] using hk)]
+        omega
+  · simp [hs, Effect.emits]
+  · rw [hs]
+    have hheld : key' ∈ keys s.jobs := mem_keys.mpr ⟨j, (entry_some hj).1, (entry_some hj).2⟩
+    have hsched : schedules key (act.msg key' : Schedule.Msg K P A) = false := by
+      cases act <;> rfl
+    rw [hsched, Bool.toNat_false, Nat.mul_zero, Nat.add_zero]
+    by_cases hk : key' = key
+    · subst hk
+      obtain ⟨hmem, hkey⟩ := entry_some hj
+      have := onJob_calls (now_ms := s.now_ms) (act := act) (h j hmem)
+      simp only [rest, entry_set_self hheld (onJob_key_of hj act), hj, Option.elim]
+      rw [hkey] at this
+      cases hjob : (onJob config s.now_ms j act).job <;> simp_all
+    · have hnone : (Effect.emits (onJob config s.now_ms j act).effs).countP (isCall key) = 0 := by
+        refine List.countP_eq_zero.mpr fun out hout => ?_
+        cases out with
+        | call a =>
+          obtain ⟨-, -, -, _, -, rfl, -⟩ := onJob_dispatch (Effect.mem_emits.mp hout)
+          simpa [isCall, (entry_some hj).2] using hk
+        | _ => simp [isCall]
+      simp only [rest, hnone, Nat.zero_add]
+      rw [entry_set_of_ne (Ne.symm hk) (onJob_key_of hj act)]
+      exact Nat.le_refl _
+
+private theorem owed_handle (key : K) (c : SysState (system (K := K) (P := P) config))
+    (h : (c.state ()).Attempts config) (i : Unit) (msg : Schedule.Msg K P A) :
+    owed key (c.handle env i msg)
+      ≤ owed key c + max 1 config.maxAttempts * (schedules key msg).toNat := by
+  obtain rfl : i = () := rfl
+  have hs := owed_step (config := config) key h msg
+  rw [handle_eq]
+  simp only [owed, update_self, List.countP_append]
+  omega
+
+private theorem owed_start (key : K) (c : SysState (system (K := K) (P := P) config)) :
+    owed key (c.startActor env ()) = owed key c := by
+  have hquiet : Effect.emits ((c.state ()).jobs.map (rearm (A := A) (c.state ()))) = [] := by
+    rw [Effect.emits_map]
+    exact List.filterMap_eq_nil_iff.mpr fun j _ => rfl
+  rw [startActor_eq]
+  simp [owed, hquiet, rest]
+
+private theorem calls_snoc (events : List (Event (sig K P A))) (ev : Event (sig K P A)) (key : K) :
+    calls key (deeds (events ++ [ev])) = calls key (deeds events) + calls key ev.deed.toList := by
+  simp only [calls, deeds, List.filterMap_append, List.countP_append]
+  cases h : ev.deed <;> simp [h]
+
+private theorem schedulings_snoc (events : List (Event (sig K P A))) (ev : Event (sig K P A))
+    (key : K) :
+    schedulings key (deeds (events ++ [ev]))
+      = schedulings key (deeds events) + schedulings key ev.deed.toList := by
+  simp only [schedulings, deeds, List.filterMap_append, List.countP_append]
+  cases h : ev.deed <;> simp [h]
+
+private theorem schedulings_handle (i : Unit) (msg : Schedule.Msg K P A) (key : K) :
+    schedulings key [Deed.handle (σ := sig K P A) i msg] = (schedules key msg).toNat := by
+  cases msg <;> simp [schedulings, schedules, Bool.toNat]
+
+private theorem calls_output (out : Output K P A) (key : K) :
+    calls key [Deed.output (σ := sig K P A) out] = (isCall key out).toNat := by
+  cases out <;> simp [calls, isCall, Bool.toNat]
+
+/-- One event: the attempts it hands over and what is owed after it are covered by what was owed
+before and the scheduling it handles. -/
+private theorem owed_event (key : K) {c c' : SysState (system (K := K) (P := P) config)}
+    (hc : (system (K := K) (P := P) config).Reachable env c) {ev : Event (sig K P A)}
+    (hstep : c.step env ev = some c') :
+    calls key ev.deed.toList + owed key c'
+      ≤ owed key c + max 1 config.maxAttempts * schedulings key ev.deed.toList := by
+  have hatt := attempts config env c hc
+  cases ev with
+  | input x =>
+    obtain rfl := SysState.step_input.mp hstep
+    simp only [Event.deed, Option.toList_none, calls, schedulings, List.countP_nil,
+      Nat.zero_add, Nat.mul_zero, Nat.add_zero]
+    exact Nat.le_refl _
+  | deliver e =>
+    obtain ⟨_, _, rfl⟩ := SysState.step_deliver.mp hstep
+    have h := owed_handle (env := env) key { c with net := c.net.erase e } hatt e.dst e.msg
+    have hsched := schedulings_handle e.dst e.msg key
+    have hsame : owed key { c with net := c.net.erase e } = owed key c := rfl
+    have hcalls : calls key [Deed.handle (σ := sig K P A) e.dst e.msg] = 0 := rfl
+    simp only [Event.deed, Option.toList_some]
+    rw [hsched, hcalls]
+    omega
+  | duplicate e =>
+    obtain ⟨_, _, _, rfl⟩ := SysState.step_duplicate.mp hstep
+    have h := owed_handle (env := env) key c hatt e.dst e.msg
+    have hsched := schedulings_handle e.dst e.msg key
+    have hcalls : calls key [Deed.handle (σ := sig K P A) e.dst e.msg] = 0 := rfl
+    simp only [Event.deed, Option.toList_some]
+    rw [hsched, hcalls]
+    omega
+  | drop e =>
+    obtain ⟨_, _, rfl⟩ := SysState.step_drop.mp hstep
+    simp only [Event.deed, Option.toList_none, calls, schedulings, List.countP_nil,
+      Nat.zero_add, Nat.mul_zero, Nat.add_zero]
+    exact Nat.le_refl _
+  | timeout i msg =>
+    obtain ⟨_, _, rfl⟩ := SysState.step_timeout.mp hstep
+    have h := owed_handle (env := env) key
+      { c with timers := update c.timers i ((c.timers i).erase msg) } hatt i msg
+    have hsched := schedulings_handle i msg key
+    have hsame : owed key { c with timers := update c.timers i ((c.timers i).erase msg) }
+        = owed key c := rfl
+    have hcalls : calls key [Deed.handle (σ := sig K P A) i msg] = 0 := rfl
+    simp only [Event.deed, Option.toList_some]
+    rw [hsched, hcalls]
+    omega
+  | output out =>
+    have h := SysState.countP_outbox_of_output (isCall key) hstep
+    obtain ⟨-, rfl⟩ := SysState.step_output.mp hstep
+    have hcalls := calls_output out key
+    have hsched : schedulings key [Deed.output (σ := sig K P A) out] = 0 := rfl
+    simp only [Event.deed, Option.toList_some, owed] at h ⊢
+    rw [hsched, hcalls]
+    omega
+  | crash i =>
+    obtain ⟨_, _, rfl⟩ := SysState.step_crash.mp hstep
+    simp [owed, rest, SysState.down, Event.deed, calls, schedulings]
+  | start i =>
+    obtain ⟨_, _, rfl⟩ := SysState.step_start.mp hstep
+    have h := owed_start (env := env) key c
+    simp [h, Event.deed, calls, schedulings]
+
+/-- The scheduler calls no key more often than `max 1 maxAttempts` times for each scheduling of
+it that it handled, in every environment: whatever arrives and however often, and whatever the
+service answers. It may crash and restart, and its links may lose, reorder and duplicate. -/
+theorem calls_le_scheduled (env : EnvModel (sig K P A)) {events : List (Event (sig K P A))}
+    {c : SysState (system (K := K) (P := P) config)}
+    (hrun : (SysState.init (system config) env).run env events = some c) (key : K) :
+    calls key (deeds events) ≤ max 1 config.maxAttempts * schedulings key (deeds events) := by
+  suffices h : calls key (deeds events) + owed key c
+      ≤ max 1 config.maxAttempts * schedulings key (deeds events) from
+    Nat.le_trans (Nat.le_add_right _ _) h
+  refine System.Reachable.run_induction
+    (P := fun events c => calls key (deeds events) + owed key c
+      ≤ max 1 config.maxAttempts * schedulings key (deeds events)) .init hrun ?_ ?_
+  · have hinit : owed key (SysState.init (system (K := K) (P := P) config) env) = 0 :=
+      (owed_start (env := env) key (SysState.blank _)).trans
+        (by simp [owed, rest, SysState.blank, actor, entry])
+    simp [hinit, calls, schedulings, deeds]
+  rintro evs c₁ ev c₂ hc hle hstep
+  have h := owed_event (env := env) key hc hstep
+  rw [calls_snoc, schedulings_snoc, Nat.mul_add]
+  omega
 
 end Lanes.Schedule
