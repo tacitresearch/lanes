@@ -34,7 +34,11 @@ observations and does not change.
 `.deliver e` and `.duplicate e` (default: no change), beside `observe` and `timeout`;
 `Driver.Respects` asks it to keep `==`, and `World.next` calls it. A delivery is therefore no
 longer an internal event of `Scenario.Reachable`: it has its constructor, like a timer firing.
-A monitored driver's `deliver` passes the deadline exactly as its `timeout` does.
+A monitored driver's `deliver` passes the deadline exactly as its `timeout` does. The hook
+takes the receiver and the message, as `timeout` takes the actor and its timer, not the
+envelope: a statement about a monitored driver whose maps are left to unification then
+unifies them, as it did `deadlines`, because each is applied to bound variables in the
+driver's fields.
 
 *Proof rules.* `System.Refines.of_timed_events` is `of_events` with each delivery, duplicate and
 timer answered by a step of the spec with that event's label: internal steps, or a deadline

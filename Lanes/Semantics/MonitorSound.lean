@@ -165,10 +165,10 @@ theorem Service.monitored_respects {D : Type} [BEq D] (svc : Service σ.In σ.Ou
     cases deadlines i msg with
     | none => exact (prod_beq_iff.mp hab).2
     | some t => exact Check.Monitor.fire_congr svc (prod_beq_iff.mp hab).2 t
-  deliver a b e hab := by
-    refine prod_beq_iff.mpr ⟨h.deliver _ _ e (prod_beq_iff.mp hab).1, ?_⟩
+  deliver a b i msg hab := by
+    refine prod_beq_iff.mpr ⟨h.deliver _ _ i msg (prod_beq_iff.mp hab).1, ?_⟩
     simp only [Service.monitored]
-    cases delivered e.dst e.msg with
+    cases delivered i msg with
     | none => exact (prod_beq_iff.mp hab).2
     | some t => exact Check.Monitor.fire_congr svc (prod_beq_iff.mp hab).2 t
 
@@ -242,9 +242,11 @@ theorem refines_sound (svc : Service σ.In σ.Out S T) {driver : Driver σ D}
     (hprops : ∀ p ∈ props, ∀ a b, World.Equiv env a b → p.holds a = p.holds b)
     (hconstraint : ∀ a b, World.Equiv env a b → opts.constraint a = opts.constraint b)
     (hfailure : (system sys
-      { env, driver := svc.monitored driver deadlines delivered, maxCrashes } props opts).failure = none)
+      { env, driver := svc.monitored driver deadlines delivered, maxCrashes } props
+      opts).failure = none)
     (hcomplete : (system sys
-      { env, driver := svc.monitored driver deadlines delivered, maxCrashes } props opts).complete = true)
+      { env, driver := svc.monitored driver deadlines delivered, maxCrashes } props
+      opts).complete = true)
     {name : String} (hrefines : refines name ∈ props) {w : World sys (D × Monitor σ.In σ.Out S)}
     (hw : Scenario.Reachable sys
       { env, driver := svc.monitored driver deadlines delivered, maxCrashes } opts.constraint w) :
@@ -265,13 +267,16 @@ theorem refines_traces (svc : Service σ.In σ.Out S T) {driver : Driver σ D}
     (hprops : ∀ p ∈ props, ∀ a b, World.Equiv env a b → p.holds a = p.holds b)
     (hconstraint : ∀ a b, World.Equiv env a b → opts.constraint a = opts.constraint b)
     (hfailure : (system sys
-      { env, driver := svc.monitored driver deadlines delivered, maxCrashes } props opts).failure = none)
+      { env, driver := svc.monitored driver deadlines delivered, maxCrashes } props
+      opts).failure = none)
     (hcomplete : (system sys
-      { env, driver := svc.monitored driver deadlines delivered, maxCrashes } props opts).complete = true)
+      { env, driver := svc.monitored driver deadlines delivered, maxCrashes } props
+      opts).complete = true)
     {name : String} (hrefines : refines name ∈ props) {events : List (Event σ)}
     {w : World sys (D × Monitor σ.In σ.Out S)}
     (hrun : Scenario.Run sys
-      { env, driver := svc.monitored driver deadlines delivered, maxCrashes } opts.constraint events w) :
+      { env, driver := svc.monitored driver deadlines delivered, maxCrashes }
+      opts.constraint events w) :
     ∃ a, svc.spec.lts.SMTr ⟨svc.init, 0, 0⟩
       ((events.filterMap (Event.timed deadlines delivered)).map some) a := by
   rw [← Monitor.ok_iff, ← Monitor.eq_after_of_run hrun]

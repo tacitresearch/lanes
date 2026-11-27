@@ -35,7 +35,7 @@ structure Driver (σ : Signature) (D : Type) where
   inputs : D → List (σ.In × D)
   observe : D → σ.Out → D := fun d _ => d
   timeout : D → (i : σ.Id) → σ.Msg i → D := fun d _ _ => d
-  deliver : D → Envelope σ → D := fun d _ => d
+  deliver : D → (i : σ.Id) → σ.Msg i → D := fun d _ _ => d
 
 namespace Driver
 
@@ -81,7 +81,7 @@ def next [Enum σ.Id] (sc : Scenario σ D) (w : World sys D) : List (Event σ ×
     | .output out => some (ev, { w with state := c, driver := sc.driver.observe w.driver out })
     | .timeout i msg => some (ev, { w with state := c, driver := sc.driver.timeout w.driver i msg })
     | .deliver e | .duplicate e =>
-      some (ev, { w with state := c, driver := sc.driver.deliver w.driver e })
+      some (ev, { w with state := c, driver := sc.driver.deliver w.driver e.dst e.msg })
     | .crash _ =>
       if w.crashes < sc.maxCrashes then
         some (ev, { w with state := c, crashes := w.crashes + 1 })

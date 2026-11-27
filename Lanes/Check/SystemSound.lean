@@ -63,8 +63,9 @@ inductive Scenario.Reachable (sys : System σ) (sc : Scenario σ D)
   | deliver {w : World sys D} {e : Envelope σ} {ev : Event σ} {c : SysState sys} :
     Reachable sys sc constraint w → (ev = .deliver e ∨ ev = .duplicate e) →
     w.state.step sc.env ev = some c →
-    constraint { w with state := c, driver := sc.driver.deliver w.driver e } = true →
-    Reachable sys sc constraint { w with state := c, driver := sc.driver.deliver w.driver e }
+    constraint { w with state := c, driver := sc.driver.deliver w.driver e.dst e.msg } = true →
+    Reachable sys sc constraint
+      { w with state := c, driver := sc.driver.deliver w.driver e.dst e.msg }
   | crash {w : World sys D} {i : σ.Id} {c : SysState sys} :
     Reachable sys sc constraint w → w.crashes < sc.maxCrashes →
     w.state.step sc.env (.crash i) = some c →
@@ -89,7 +90,8 @@ theorem World.mem_next_iff [Enum σ.Id] {sc : Scenario σ D} {w w' : World sys D
         ∃ d, (x, d) ∈ sc.driver.inputs w.driver ∧ w' = { w with state := c, driver := d }
       | .output out => w' = { w with state := c, driver := sc.driver.observe w.driver out }
       | .timeout i msg => w' = { w with state := c, driver := sc.driver.timeout w.driver i msg }
-      | .deliver e | .duplicate e => w' = { w with state := c, driver := sc.driver.deliver w.driver e }
+      | .deliver e | .duplicate e =>
+        w' = { w with state := c, driver := sc.driver.deliver w.driver e.dst e.msg }
       | .crash _ =>
         w.crashes < sc.maxCrashes ∧ w' = { w with state := c, crashes := w.crashes + 1 }
       | _ => w' = { w with state := c } := by

@@ -182,7 +182,7 @@ def Service.monitored [BEq S] {D : Type} (svc : Service σ.In σ.Out S T) (drive
   inputs s := (driver.inputs s.1).map fun (x, d) => (x, (d, s.2.input svc x))
   observe s out := (driver.observe s.1 out, s.2.output out)
   timeout s i msg := (driver.timeout s.1 i msg, (deadlines i msg).elim s.2 (s.2.fire svc))
-  deliver s e := (driver.deliver s.1 e, (delivered e.dst e.msg).elim s.2 (s.2.fire svc))
+  deliver s i msg := (driver.deliver s.1 i msg, (delivered i msg).elim s.2 (s.2.fire svc))
 
 def Check.refines [BEq S] {sys : System σ} {D : Type} (name : String) :
     Check.Property (World sys (D × Check.Monitor σ.In σ.Out S)) :=
