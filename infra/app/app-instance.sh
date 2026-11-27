@@ -49,7 +49,8 @@ die() { say "$*"; exit 1; }
 
 # The keys the configuration may set, and nothing else.
 CONF_KEYS=(APP BINARY ARGS PORT READY_PATH METRICS_PATH DRAIN_SECONDS RELEASES LOG_GROUP
-  METRICS_LOG_GROUP METRICS_NAMESPACE SCRIPT_URL SCRIPT_SHA256 DB_HOST DB_PORT DB_NAME DB_SECRET)
+  METRICS_LOG_GROUP METRICS_NAMESPACE SCRIPT_URL SCRIPT_SHA256 DB_HOST DB_PORT DB_NAME DB_SECRET
+  MEDIA_BUCKET)
 
 load_conf() {
   # shellcheck source=/dev/null
@@ -73,6 +74,7 @@ load_conf() {
   DB_PORT=${DB_PORT:-}
   DB_NAME=${DB_NAME:-}
   DB_SECRET=${DB_SECRET:-}
+  MEDIA_BUCKET=${MEDIA_BUCKET:-}
   CONFIG_PARAMETER=${CONFIG_PARAMETER:-}
   AWS_REGION=${AWS_REGION:-}
 }
@@ -86,6 +88,7 @@ check_conf() {
   [[ $READY_PATH =~ ^/[A-Za-z0-9_./-]*$ ]] || die "READY_PATH '$READY_PATH' is not a path"
   [[ $METRICS_PATH =~ ^(/[A-Za-z0-9_./-]*)?$ ]] || die "METRICS_PATH '$METRICS_PATH' is not a path"
   [[ $DRAIN_SECONDS =~ ^[0-9]{1,3}$ ]] || die "DRAIN_SECONDS '$DRAIN_SECONDS' is not a number"
+  [[ $MEDIA_BUCKET =~ ^([a-z0-9][a-z0-9.-]{1,61}[a-z0-9])?$ ]] || die "MEDIA_BUCKET '$MEDIA_BUCKET' is not a bucket name"
 }
 
 # The arguments the application is started with.
@@ -277,12 +280,14 @@ write_units() {
   copytruncate
 }
 EOF
-  if [ -n "$DB_HOST" ]; then
-    printf '%s=%s\n' LANES_DB_HOST "$DB_HOST" LANES_DB_PORT "$DB_PORT" LANES_DB_NAME "$DB_NAME" \
-      >/etc/lanes/app.env
-  else
-    rm -f /etc/lanes/app.env
-  fi
+  # What the stack tells the application; secrets.env, read after, may set any of it again.
+  {
+    printf '%s=%s\n' AWS_REGION "$(region)"
+    if [ -n "$MEDIA_BUCKET" ]; then printf '%s=%s\n' LANES_MEDIA_BUCKET "$MEDIA_BUCKET"; fi
+    if [ -n "$DB_HOST" ]; then
+      printf '%s=%s\n' LANES_DB_HOST "$DB_HOST" LANES_DB_PORT "$DB_PORT" LANES_DB_NAME "$DB_NAME"
+    fi
+  } >/etc/lanes/app.env
   systemctl daemon-reload
   systemctl enable lanes-volume.service lanes-app.service lanes-log.service
 }

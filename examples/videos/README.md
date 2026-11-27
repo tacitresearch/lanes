@@ -116,7 +116,8 @@ lake exe videos 8080 videos.journal videos.secrets
 `Main.lean` lists what it reads: `VIDEOS_URL` (the public origin, from which each provider's
 redirect URI `<VIDEOS_URL>/sign-in/<google|github>/callback` is made, and `Secure` cookies when
 it is `https:`), `LANES_HOST`, `LANES_IDLE_MS` and `LANES_DRAIN_MS` (as `lanes new` reads
-them; SIGTERM drains for that long, `Server.stopOnSignal`), `VIDEOS_BUCKET`, `AWS_REGION`,
+them; SIGTERM drains for that long, `Server.stopOnSignal`), `VIDEOS_BUCKET` (or
+`LANES_MEDIA_BUCKET`, as a deployment's unit sets it), `AWS_REGION`,
 `VIDEOS_S3_ENDPOINT` (MinIO or LocalStack, as `http://host:port`), the `AWS_*` credentials and
 each provider's client. The
 bucket's CORS rules must allow `PUT` and `GET` from the site's origin with a `Content-Type`
@@ -144,11 +145,11 @@ is `examples/videos` (or `.` in a repository of its own). The stack's parameters
 | `MediaUser` | `true` (the S3 client reads keys from the environment) |
 | `DatabaseEngine` | `none` |
 
-Then on the instance, `/etc/lanes/secrets.env` (DEPLOY.md, "Media") holds, besides the media
-user's `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_REGION`:
+The unit names the stack's media bucket and its region (`LANES_MEDIA_BUCKET`, `AWS_REGION`),
+which `Main` reads. On the instance, `/etc/lanes/secrets.env` (DEPLOY.md, "Media") holds, besides
+the media user's `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`:
 
 ```bash
-VIDEOS_BUCKET=<the stack's MediaBucketName output>
 VIDEOS_URL=https://<DomainName>
 GOOGLE_CLIENT_ID=...       # and/or GITHUB_CLIENT_ID
 GOOGLE_CLIENT_SECRET=...
@@ -199,8 +200,8 @@ package; none touches the library.
    repository cannot import; the browser (cookies, form tokens, following links) was written
    again here, as rookery and the ledger did.
 8. **The S3 client takes keys only from the environment**: no instance role (IMDSv2), so the
-   deployment needs a long-lived IAM user's keys; and the stack does not tell the application its
-   media bucket, so `VIDEOS_BUCKET` is set by hand in `secrets.env`.
+   deployment needs a long-lived IAM user's keys. (The stack did not tell the application its
+   media bucket; it does now, as `LANES_MEDIA_BUCKET` and `AWS_REGION`.)
 9. **An identity had no name** (since fixed: `OAuth.Identity.name`, the provider's name or
    GitHub's login, which a channel now shows). A channel was named by what came before the `@`.
 10. **Sessions did not end on their own** (since fixed: `Auth.Sessions` takes a `Lifetime`,
@@ -217,8 +218,8 @@ package; none touches the library.
 - **The checker and the outside world.** With requests from outside reordered, the first
   scenario did not finish in two minutes; the scripts are chains, and requests arrive in order.
 - **Inline code is refused in templates**, so the bridge serves `/upload.js` and `/style.css`.
-- **`docs/DEPLOY.md`** still calls the S3 client "in progress", and D71 presents `S3.handler` as
-  how a system calls the store, which a web application cannot do (2).
+- **D71** presents `S3.handler` as how a system calls the store, which a web application cannot
+  do (2). (`docs/DEPLOY.md` called the S3 client "in progress"; no longer.)
 
 ### Not there for a site like YouTube
 

@@ -270,9 +270,13 @@ keeps its id, its addresses and its volumes) whether or not an address is given.
 
 The media bucket blocks public access, refuses requests without TLS, allows a presigned `PUT`,
 `GET` and `HEAD` from `https://<DomainName>` (CORS, exposing `ETag`), and aborts multipart
-uploads left incomplete for two days. The instance role may read and write it.
+uploads left incomplete for two days. The instance role may read and write it. The unit gives
+the application the bucket's name and its region in `/etc/lanes/app.env`, as
+`LANES_MEDIA_BUCKET` and `AWS_REGION`; `/etc/lanes/secrets.env`, read after it, may set either
+again.
 
-Lanes's S3 client (SigV4 and presigned URLs, in progress) reads its credentials from
+Lanes's S3 client (`Lanes.S3`, `docs/decisions/D71-s3-and-signature-version-4.md`: calls signed
+with Signature Version 4, and links presigned for the browser) reads its credentials from
 `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN`, once, at start. Until it
 reads the instance role's credentials from the metadata service (IMDSv2, which the instance
 requires), give it a key of its own: with `MediaUser` true the stack makes an IAM user whose only
@@ -284,7 +288,6 @@ sudo install -m 600 /dev/null /etc/lanes/secrets.env
 sudo tee /etc/lanes/secrets.env >/dev/null <<'EOF'
 AWS_ACCESS_KEY_ID=...
 AWS_SECRET_ACCESS_KEY=...
-AWS_REGION=us-east-1
 EOF
 sudo systemctl restart lanes-app
 ```
@@ -301,8 +304,8 @@ one zone, seven days of automated backups, a final snapshot when it is deleted, 
 protection on) in two private subnets, reachable on 5432 from the instance only. Its password is
 made by Secrets Manager. Before each start of the application, as root, the unit writes the
 database's IPv4 address and password to `/run/lanes-app/db-address` and `/run/lanes-app/db-password`,
-readable by the application only, and `/etc/lanes/app.env` gives `LANES_DB_HOST`, `LANES_DB_PORT`
-and `LANES_DB_NAME` (`lanes`); the user is `lanes`. The application's `main` reads them into
+readable by the application only, and `/etc/lanes/app.env` also gives `LANES_DB_HOST`,
+`LANES_DB_PORT` and `LANES_DB_NAME` (`lanes`); the user is `lanes`. The application's `main` reads them into
 the client's configuration (`Lanes/Lib/Postgres/IO/Client.lean`,
 `docs/decisions/D68-postgres-protocol-in-lean.md`). That client takes an IPv4 address, not a
 name, and speaks plain TCP, so the stack's parameter group turns off `rds.force_ssl`, which RDS

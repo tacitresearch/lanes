@@ -573,6 +573,7 @@ Resources:
           DB_PORT=${DbPort}
           DB_NAME=${DbName}
           DB_SECRET=${DbSecret}
+          MEDIA_BUCKET=${MediaBucket}
         - Bucket: !If [CreateReleaseBucket, !Ref ReleaseStore, !Ref ReleaseBucket]
           Prefix: !If [DefaultPrefix, !Ref AppName, !Ref ReleasePrefix]
           DbHost: !If [HasDatabase, !GetAtt Database.Endpoint.Address, ""]
