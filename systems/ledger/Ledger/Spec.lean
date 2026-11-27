@@ -13,8 +13,8 @@ wrong one, and deployed with password digests (`Lanes.Auth.Digest`), which the b
 so that no password enters the system.
 
 Time passes in it as deadlines (`Deadline`): a locked account's lock lifting, a live session
-ending. Which are armed is read from the users' records, and the system's timers are those
-deadlines passing (`Ledger.deadlines`). How long a lock or a session lasts is the system's
+ending. Which are armed is read from the users' records, and each passes in the system as the
+ledger serves a user's notice of it (`Ledger.delivered`). How long a lock or a session lasts is the system's
 configuration, not the spec's. The safety properties are stated below and checked of every
 state in `Check.lean`.
 -/

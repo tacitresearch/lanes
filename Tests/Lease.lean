@@ -9,6 +9,10 @@ A spec with a deadline: a lease is granted to one client at a time and is free a
 lapses. The server's timer is the lapse, and the checker holds the server to it: a lease freed
 before its timer fires is a second grant the spec refuses, and with the timer not named a
 deadline the spec's lease never lapses.
+
+A server may instead free the lease when it handles a notice its timer sends it (`served`):
+the deadline then passes as that message is delivered, which the system names
+(`Event.timed`'s `delivered`), and naming the timer instead is a lapse the server has not seen.
 -/
 
 namespace Tests.Lease
@@ -18,6 +22,7 @@ open Lanes
 inductive Msg where
   | acquire (client : Fin 2)
   | lapse
+  | free
   deriving DecidableEq, Repr, Hashable
 
 inductive Answer where
@@ -38,8 +43,9 @@ def spec : Service (Fin 2) Answer Bool Unit where
   armed held _ := held
   fire _ _ := (false, [])
 
-/-- `holds` false seeds a bug: the lease is free again as soon as it is granted. -/
-abbrev server (holds : Bool := true) : System sig where
+/-- `holds` false seeds a bug: the lease is free again as soon as it is granted. With
+`served`, the timer sends the server a notice, and the lease is free when it handles it. -/
+abbrev server (holds : Bool := true) (served : Bool := false) : System sig where
   State _ := Bool
   actor _ :=
     { init := false
@@ -48,38 +54,51 @@ abbrev server (holds : Bool := true) : System sig where
         | .acquire c =>
           if held then (true, [.emit (.busy c)])
           else (holds, [.emit (.granted c), .after 10 .lapse])
-        | .lapse => (false, [])
+        | .lapse => if served then (held, [.send () .free]) else (false, [])
+        | .free => (false, [])
       recover := fun held => (held, if held then [.after 10 .lapse] else []) }
   accept c := ⟨(), .acquire c⟩
 
 def lapses : Deadlines sig Unit
   | _, .lapse => some ()
-  | _, .acquire _ => none
+  | _, _ => none
+
+def freed : Deadlines sig Unit
+  | _, .free => some ()
+  | _, _ => none
 
 instance : sig.Inspect := {}
-instance (holds : Bool) : (server holds).Inspect := {}
+instance (holds served : Bool) : (server holds served).Inspect := {}
 
 def crashing : EnvModel sig where
   mayCrash _ := true
 
-def check (holds : Bool) (deadlines : Deadlines sig Unit) (maxCrashes : Nat := 0) :=
-  Check.system (server holds)
+def check (holds : Bool) (deadlines : Deadlines sig Unit) (maxCrashes : Nat := 0)
+    (served : Bool := false) (delivered : Deadlines sig Unit := fun _ _ => none) :=
+  Check.system (server holds served)
     { env := crashing, maxCrashes
-      driver := spec.monitored (Driver.anyOrder [0, 1, 0]) deadlines }
+      driver := spec.monitored (Driver.anyOrder [0, 1, 0]) deadlines delivered }
     [ Check.refines "every answer is allowed by the lease",
       .sometimes "a lease lapses and is granted again" fun w =>
         (w.state.outbox.filter (· matches .granted _)).length == 2,
       .sometimes "a lease is held" fun w => w.state.outbox.any (· matches .busy _) ]
 
-def violated {holds : Bool} {D : Type} (r : Check.Report (World (server holds) D) (Event sig)) :
-    Bool :=
+def violated {holds served : Bool} {D : Type}
+    (r : Check.Report (World (server holds served) D) (Event sig)) : Bool :=
   match r.failure with
   | some (.violated "every answer is allowed by the lease" _) => true
   | _ => false
 
 def tests : List (String × Bool) :=
   let honest := check true lapses 1
-  [ ("lease: the server refines the lease, with the timer as its deadline and a crash",
+  let served := check true (fun _ _ => none) 1 true freed
+  [ ("lease: freed as the server handles its notice, that delivery the deadline, with a crash",
+      served.ok && served.complete && served.witnesses.length == 2),
+    ("lease: with the notice not named a deadline, the spec's lease never lapses",
+      violated (check true (fun _ _ => none) 0 true)),
+    ("lease: with the timer named instead, the lease lapses before the server frees it",
+      violated (check true lapses 0 true)),
+    ("lease: the server refines the lease, with the timer as its deadline and a crash",
       honest.ok && honest.complete),
     ("lease: the check is not vacuous: a lease lapses, and one is held",
       honest.witnesses.length == 2),

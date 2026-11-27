@@ -20,8 +20,7 @@ unmarks. The ledger serves the oldest message on the link; the requests before i
 message was lost take effect then if the user answered them (`answered`), and never if the
 book was to serve them, which leaves the user's record as it was.
 
-With timers the system does not implement the spec with deadlines: a view decided before a
-session ends and served after it can see a payment asked after the end (`Check.lean`).
+With timers, `Ledger.Proofs.Timed` proves the system implements the spec with its deadlines.
 -/
 
 namespace Ledger
@@ -168,7 +167,12 @@ theorem unarmed (hc : Untimed config) {i : Id N} {m : (sig N C).Msg i}
   | step s msg h =>
     cases i with
     | ledger => cases msg <;> simp [system, ledger] at h
-    | user n => cases msg <;> simp [system, user, timerEffects_untimed hc, tell_viaLedger] at h
+    | user n =>
+      cases msg with
+      | ask => simp [system, user, timerEffects_untimed hc, tell_viaLedger] at h
+      | unlock | expire =>
+        simp only [system, user] at h
+        split at h <;> simp [notice] at h
   | recover s h => cases i <;> simp [system, user, ledger, rearm_untimed hc] at h
 
 /-- The standard simulation, with the requests decided and not served as the witness. -/
@@ -434,8 +438,14 @@ theorem sent_cases (hc : Untimed config) {e : Envelope (sig N C)}
   | @step i s msg _ he =>
     cases i with
     | user n =>
-      cases msg <;> simp [system, user, tell_viaLedger, timerEffects_untimed hc] at he
-      exact .inr ⟨n, _, he⟩
+      cases msg with
+      | ask =>
+        simp [system, user, tell_viaLedger, timerEffects_untimed hc] at he
+        exact .inr ⟨n, _, he⟩
+      | unlock | expire =>
+        simp only [system, user] at he
+        split at he <;> simp [notice] at he
+        exact .inr ⟨n, _, he⟩
     | ledger => cases msg <;> simp [system, ledger] at he
   | @recover i s _ he => cases i <;> simp [system, user, ledger, rearm_untimed hc] at he
 
