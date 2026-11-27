@@ -394,8 +394,10 @@ EOF
 }
 
 configure_cloudwatch_agent() {
+  # Readable by root and the agent alone: an access line names paths and peers.
   touch /var/log/lanes/app.log /var/log/lanes-setup.log
-  chmod 644 /var/log/lanes/app.log /var/log/lanes-setup.log
+  chgrp cwagent /var/log/lanes/app.log /var/log/lanes-setup.log
+  chmod 640 /var/log/lanes/app.log /var/log/lanes-setup.log
   render_cloudwatch_config >"$CW_AGENT/etc/lanes.json"
   if [ -n "$METRICS_PATH" ]; then render_prometheus_config >"$CW_AGENT/etc/prometheus.yaml"; fi
   "$CW_AGENT/bin/amazon-cloudwatch-agent-ctl" -a fetch-config -m ec2 -s -c "file:$CW_AGENT/etc/lanes.json"

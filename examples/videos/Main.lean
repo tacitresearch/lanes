@@ -36,6 +36,9 @@ def loadKey (path : System.FilePath) : IO ByteArray := do
     if bytes.size != 32 then throw (IO.userError s!"videos: {path} does not hold 32 bytes")
     return bytes
   let bytes ← randomBytes 32
+  -- Readable by this user alone, before the key is in it.
+  IO.FS.writeBinFile path .empty
+  IO.setAccessRights path { user := { read := true, write := true } }
   IO.FS.writeBinFile path bytes
   return bytes
 

@@ -53,6 +53,11 @@ under Unreleased (`CONTRIBUTING.md`).
 - The deployment's stack runs no script it has not pinned: `ScriptRef` must be a commit and `ScriptSha256` is required, with no default, and `infra/app/app-instance.sh` refuses to install a script fetched without its hash or with another. The deploy role also trusts only the workflow file `DeployWorkflow` (`deploy.yml` by default) as it is on `DeployBranch`, through the token's `job_workflow_ref`.
 - The PostgreSQL client no longer opens a connection that has a password unless the server proves it knows it by SCRAM: `Conn.Config.requireScram`, on by default, refuses an `AuthenticationOk` before SCRAM finishes and a request for MD5 or a cleartext password (`Postgres.Conn.onMessage_requireScram`), and `allowMd5` is off by default.
 - `examples/videos`: one member can no longer make the site refuse every new video or comment: a member's videos (`maxOwned`, 100) and comments on one video (`maxCommentsEach`, 10) are bounded far below the site's, and a video's owner may delete anyone's comment on it.
+- Every response the HTTP server writes says `X-Content-Type-Options: nosniff`, the connection's own refusals included (`Http.Conn.nosniff`); `Response.noFraming` sends `Content-Security-Policy: frame-ancestors 'none'`, and the pages of `examples/videos` and `examples/rookery` use it.
+- `serve` runs `arrive` for at most `ServerConfig.arriving_max` requests at once (64), each on a thread of its own, and answers one more `503`, rather than starting a thread for every request.
+- `Http.hostCookie` names a `Secure` cookie `__Host-`; the sign-in's binding cookie and the session cookie of `examples/videos` use it. `examples/videos` writes its key file readable by its user alone, and the deployment's log files are `0640`, readable by the CloudWatch agent's group.
+- The S3 client's XML reader replaces references by a loop, in time linear in the text, so a long text from a hostile endpoint no longer exhausts the stack.
+- An RSA key is valid for a modulus of 2048 to 8192 bits counted in bits (`PublicKey.valid`): a modulus of 256 bytes with fewer than 2048 bits, which was accepted, is refused.
 
 ## [0.1.0] - unreleased
 

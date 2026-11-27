@@ -145,6 +145,11 @@ def tests : List (String × Bool) :=
           aKtMN3Yj0iPS4hcgUuTwjAzZr1Z9CAow\"}").isNone
         && (jwk "{\"kty\":\"RSA\",\"e\":\"AQAB\",\"n\":\"AQAB\"}").isNone
         && (jwk (keyA3.replace "\"x\":\"f83O" "\"x\":\"AAf83O")).isNone),
+    ("signature: an RSA modulus is valid from 2048 bits to 8192 bits, counted in bits, not bytes",
+      let rsa (n : Nat) : PublicKey := .rsa (Bytes.ofNat ((Der.digits n).length) n) ⟨#[1, 0, 1]⟩
+      !(rsa (2 ^ 2040 + 1)).valid && !(rsa (2 ^ 2047 - 1)).valid && (rsa (2 ^ 2047 + 1)).valid
+        && (rsa (2 ^ 8192 - 1)).valid && !(rsa (2 ^ 8192 + 1)).valid
+        && !(PublicKey.rsa (Bytes.ofNat 257 (2 ^ 2040 + 1)) ⟨#[1, 0, 1]⟩).valid),
     ("signature: a token that is not three parts of base64url is malformed",
       [ "", "a.b", "a.b.c.d", tokenA2 ++ "=", "!" ++ tokenA2,
         "e30." ++ payloadA1 ++ ".", "W10." ++ payloadA1 ++ "." ].all

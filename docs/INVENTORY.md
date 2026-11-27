@@ -21,9 +21,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Proof` | 36 | 12 | 0 | 0 | 0 | 23 | 1 |
 | `Lanes/Runtime` | 158 | 93 | 20 | 0 | 15 | 30 | 0 |
 | `Lanes/Semantics` | 60 | 11 | 0 | 0 | 0 | 48 | 1 |
-| `Lanes/Web` | 513 | 262 | 50 | 27 | 127 | 45 | 2 |
+| `Lanes/Web` | 515 | 263 | 50 | 27 | 128 | 45 | 2 |
 | `LanesCli` | 110 | 0 | 0 | 0 | 46 | 0 | 64 |
-| All | 1940 | 1047 | 100 | 99 | 283 | 294 | 117 |
+| All | 1942 | 1048 | 100 | 99 | 284 | 294 | 117 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -2154,6 +2154,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Http.Conn.closing` | proved | through `Http.Conn.answer`, `Http.Conn.encode` and 3 more: `Http.Conn.answer_ignored`, `Http.Conn.answer_waiting` and 11 more |
+| `Http.Conn.nosniff` | proved | through `Http.Conn.answer`, `Http.Conn.encode` and 3 more: `Http.Conn.answer_ignored`, `Http.Conn.answer_waiting` and 11 more |
 | `Http.Conn.sendable` | proved | `Http.Conn.read_encode`, `Http.Conn.sendable_writable` |
 | `Http.Conn.encode` | proved | `Http.Conn.answer_waiting`, `Http.Conn.read_encode` |
 | `Http.Conn.refusal` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and 7 more |
@@ -2212,6 +2213,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Response.setCookie` | proved | `Http.setCookie_read` |
 | `Http.Response.clearCookie` | tested | `Tests/Auth.lean` |
 | `Http.Response.noStore` | tested | `Tests/Html.lean` |
+| `Http.Response.noFraming` | tested | `Tests/Html.lean` |
 
 ## `Lanes/Web/Http/CookieSound.lean`
 

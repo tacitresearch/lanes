@@ -261,7 +261,7 @@ def decoded (r : Http.Request) : Option Input :=
   | .error _ => none
 
 def withCookie (value : String) (r : Http.Request) : Http.Request :=
-  { r with headers := r.headers ++ [("cookie", s!"{sessionCookie}={value}")] }
+  { r with headers := r.headers ++ [("cookie", s!"{settings.cookieName}={value}")] }
 
 def bridgeTests : List (String × Bool) :=
   let watch : Http.Request := { method := .get, path := ["v", "3"] }

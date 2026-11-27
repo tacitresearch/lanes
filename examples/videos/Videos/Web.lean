@@ -70,6 +70,9 @@ end Routes
 
 def sessionCookie : String := "videos_session"
 
+/-- The session cookie's name: `__Host-` before it over HTTPS, so no subdomain can set it. -/
+def Settings.cookieName (s : Settings) : String := hostCookie sessionCookie s.secure
+
 /-- The headers the server writes. One a client sends is dropped. -/
 def sessionHeader : String := "videos-verified-session"
 def arrivedHeader : String := "videos-arrived"
@@ -81,7 +84,7 @@ def sessionToken (s : Settings) (m : Member) (session : Sid) : String :=
   Auth.sign s.key "session" s!"{m}.{session}"
 
 def cookie (s : Settings) (value : String) : Cookie :=
-  { name := sessionCookie, value, secure := s.secure, sameSite := .lax }
+  { name := s.cookieName, value, secure := s.secure, sameSite := .lax }
 
 /-- What `arrive` does after the sign-in: the time the request arrived, in seconds. -/
 def stamp (now_s : Nat) (r : Http.Request) : Http.Request :=
@@ -89,7 +92,7 @@ def stamp (now_s : Nat) (r : Http.Request) : Http.Request :=
 
 def prepare (s : Settings) (r : Http.Request) : Http.Request :=
   let kept := r.headers.filter fun (name, _) => name != "cookie" && name != sessionHeader
-  let session := (r.cookie? sessionCookie >>= Auth.verify s.key "session").map (sessionHeader, ·)
+  let session := (r.cookie? s.cookieName >>= Auth.verify s.key "session").map (sessionHeader, ·)
   { r with headers := kept ++ session.toList }
 
 def session? (r : Http.Request) : Option (Member × Sid) := do
@@ -309,7 +312,7 @@ def Message (s : Settings) (viewer : Viewer) (title text : String) : Html :=
 /-! ## The bridge -/
 
 def page (html : Html) (status : Nat := 200) : Http.Response :=
-  (Http.Response.html html.document status).noStore
+  (Http.Response.html html.document status).noStore.noFraming
 
 def forbidden : Http.Response := Http.Response.text "forbidden\n" 403
 

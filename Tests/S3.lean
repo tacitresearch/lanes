@@ -70,7 +70,14 @@ def xmlTests : List (String × Bool) :=
           && (root.child? "b").map (·.content) == some "x" && root.text? "a" == some "1"
           && root.text? "c" == none
       | none => false),
-    ("s3 xml: escape reads back", ((Xml.parse ("<a>" ++ Xml.escape "<&>\"'é" ++ "</a>")).map
+    ("s3 xml: a text of a million characters, or of references, is read without running out of stack",
+      let long := String.ofList (List.replicate 1000000 'x')
+      ((Xml.parse ("<a>" ++ long ++ "</a>")).map (·.content.length)) == some 1000000
+        && ((Xml.parse ("<a>" ++ String.join (List.replicate 200000 "&amp;") ++ "</a>")).map
+          (·.content.length)) == some 200000
+        && (Xml.parse ("<a>" ++ String.ofList (List.replicate 100000 '&') ++ "</a>")).isNone
+        && (Xml.parse "<a>&ampxxxxxxxxx;</a>").isNone),
+    ("s3 xml: escape reads back",((Xml.parse ("<a>" ++ Xml.escape "<&>\"'é" ++ "</a>")).map
       (·.content)) == some "<&>\"'é"),
     ("s3 xml: a document type, CDATA and an unknown entity are refused",
       (Xml.parse "<!DOCTYPE a [<!ENTITY e \"x\">]><a>&e;</a>").isNone

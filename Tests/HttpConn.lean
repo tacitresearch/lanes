@@ -238,12 +238,18 @@ def tests : List (String × Bool) :=
       let (c, actions) := ({} : Conn).run cfg [(1, .tick), (2, .tick)]
       c.closed && actions == [.close]),
     ("http conn: a HEAD is answered with the length of the body and no body",
-      encode true false (.text "four") == "HTTP/1.1 200 \r\nContent-Length: 4\r\ncontent-type: text/plain; charset=utf-8\r\n\r\n".toUTF8),
+      encode true false (.text "four") == "HTTP/1.1 200 \r\nContent-Length: 4\r\ncontent-type: text/plain; charset=utf-8\r\nX-Content-Type-Options: nosniff\r\n\r\n".toUTF8),
     ("http conn: headers that cannot be written are left out, and a bad status becomes 500",
       sendable false { status := 99, headers := [("Content-Length", "9"), ("a b", "c"), ("x", "ok")] }
           == { status := 500 }
         && sendable true { headers := [("Content-Length", "9"), ("x", " y")] }
-          == { headers := [("Connection", "close")] }),
+          == { headers := [("X-Content-Type-Options", "nosniff"), ("Connection", "close")] }),
+    ("http conn: every response says nosniff, once, the refusals' included",
+      (sendable false (.text "a")).headers.contains ("X-Content-Type-Options", "nosniff")
+        && (sendable false { headers := [("x-content-type-options", "nosniff")] }).headers
+          == [("x-content-type-options", "nosniff")]
+        && (((String.fromUTF8? (refusal .contentTooLarge)).getD "").splitOn
+          "X-Content-Type-Options: nosniff").length == 2),
     ("http conn: no more connections are taken than the bound, and none while stopping",
       let (a, n) := ({} : Count).admit 1
       let (b, n) := n.admit 1

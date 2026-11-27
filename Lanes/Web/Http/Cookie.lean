@@ -124,6 +124,11 @@ def clearCookie (r : Response) (c : Cookie) : Response :=
 def noStore (r : Response) : Response :=
   r.withHeader "cache-control" "no-store"
 
+/-- For pages with forms: no other site shows them in a frame, where a click on them could be
+taken for one on its own page. -/
+def noFraming (r : Response) : Response :=
+  r.withHeader "content-security-policy" "frame-ancestors 'none'"
+
 end Response
 
 end Lanes.Http
