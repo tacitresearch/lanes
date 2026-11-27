@@ -38,9 +38,12 @@ and the name is sent as SNI. TLS 1.0 and 1.1 are refused. Revocation is not chec
 most clients do not. Tests use a trust store of their own, `Tls.Trust.file`, which is a choice
 of roots, not a switch; production may use it for a private CA.
 
-The trust store `.system` is the first of a list of files that systems keep, the list Go's
-`crypto/x509` uses on Linux, ending with `/etc/ssl/cert.pem`, which macOS and the BSDs have. It
-is not the macOS keychain: roots an administrator added there are not seen. A binary built on
+The trust store `.system` is the file `SSL_CERT_FILE` names, as for OpenSSL and Go, or else the
+first of a list of files that systems keep: the list Go's `crypto/x509` uses on Linux, then
+Homebrew's bundle, then `/etc/ssl/cert.pem`, which macOS and the BSDs have. On macOS that last
+file is not kept up to date with the keychain (on GitHub's runners it lacks the root example.com
+chains to), so a Mac without Homebrew should set `SSL_CERT_FILE`. It is not the macOS keychain:
+roots an administrator added there are not seen. A binary built on
 one distribution therefore finds the store on another, which the paths compiled into an OpenSSL
 do not give.
 
