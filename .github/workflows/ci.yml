@@ -200,8 +200,7 @@ jobs:
         run: lake exe rookeryLive
 
   # What a user on a Mac does: Homebrew's libsodium (under /opt/homebrew on Apple silicon), the
-  # build, the tests and a generated app, on GitHub's runner. Not in `build`'s needs until it has
-  # passed.
+  # build, the tests and a generated app, on GitHub's runner.
   macos:
     runs-on: macos-latest
     timeout-minutes: 120
@@ -238,7 +237,7 @@ jobs:
   # The one check branch protection requires. A job that is skipped counts as passed there, so
   # this job always runs and fails unless every job before it succeeded.
   build:
-    needs: [runner, compile, check, oracle, test, raft-kv, ledger, rookery]
+    needs: [runner, compile, check, oracle, test, raft-kv, ledger, rookery, macos]
     if: always()
     runs-on: ubuntu-latest
     steps:
