@@ -42,6 +42,7 @@ import Tests.Tutorial
 import Tests.Release
 import Tests.Oracle.All
 import Tests.Jobs
+import Tests.Schedule
 import Tests.Outside
 import Tests.Ops
 import Tests.Postgres
@@ -103,7 +104,7 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.Crypto.tests ++ Tests.Auth.tests ++ Tests.Clients.tests ++ Tests.Lease.tests
     ++ Tests.Release.tests ++ Tests.ReadRequest.tests ++ Tests.Oracle.unitTests
     ++ Tests.HttpConn.tests ++ Tests.Loopback.tests
-    ++ Tests.Jobs.tests ++ Tests.Outside.tests ++ Tests.Postgres.vectorTests
+    ++ Tests.Jobs.tests ++ Tests.Schedule.tests ++ Tests.Outside.tests ++ Tests.Postgres.vectorTests
     ++ Tests.Postgres.downgradeTests ++ Tests.Ops.tests
     ++ Tests.SigV4.tests ++ Tests.S3.tests ++ Tests.Testing.tests
   match args with
