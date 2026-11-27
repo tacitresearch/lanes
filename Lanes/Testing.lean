@@ -8,6 +8,7 @@ public import Lanes.Testing.Http
 public import Lanes.Testing.Browser
 public import Lanes.Testing.S3
 public import Lanes.Testing.OAuth
+public import Lanes.Testing.Transcode
 
 /-!
 The test kit: what an application's tests run against, imported as `Lanes.Testing` beside

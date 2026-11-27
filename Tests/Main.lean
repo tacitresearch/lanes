@@ -106,6 +106,7 @@ def live : IO (List (String × Bool)) := do
     ++ (← safely "postgres tls" Tests.PostgresTls.live)
     ++ (← safely "s3" Tests.S3.live) ++ (← safely "s3 uploads" Tests.S3Upload.live)
     ++ (← safely "test kit" Tests.Testing.live)
+    ++ (← safely "test kit worker" Tests.Testing.workerLive)
 
 def main (args : List String) : IO UInt32 := do
   let pure := Tests.Engine.tests ++ Tests.Bank.tests ++ Tests.Json.tests ++ Tests.Html.tests

@@ -201,6 +201,71 @@ def mailRecorded : List (Event mailSig) :=
 def slotsAfter (events : List (Event mailSig)) : Option Nat :=
   (mail.after events).map (·.server.slots.length)
 
+/-! ## A transcode worker -/
+
+abbrev TJob := Transcode.Job Nat String
+
+abbrev TReport := Transcode.Report Nat String
+
+inductive WorkerIn where
+  | reply (call : Nat) (reply : Rpc.Reply (Transcode.Answer Unit))
+  | report (r : TReport)
+  deriving DecidableEq
+
+abbrev workerSig : Signature where
+  Id := Unit
+  Msg _ := WorkerIn
+  In := WorkerIn
+  Out := Rpc.Call (Transcode.Request Nat String Unit)
+
+def workerPort : Rpc.Port workerSig (Transcode.Request Nat String Unit) (Transcode.Answer Unit) TReport where
+  called c := some c
+  replied
+    | .reply id r => some (id, r)
+    | .report _ => none
+  notified
+    | .report r => some r
+    | .reply .. => none
+
+def worker (honest : Bool := true) := Rpc.outside workerPort (Transcode.service 2 () honest)
+
+def putUpload (id : Nat) : Event workerSig := .output ⟨id, 1000, .store (.granted "up" ())⟩
+
+def startJob (id : Nat) (job : Nat := 0) : Event workerSig :=
+  .output ⟨id, 1000, .start ⟨job, "up", ["play", "thumb"]⟩⟩
+
+def headOf (id : Nat) (key : String) : Event workerSig := .output ⟨id, 1000, .store (.head key)⟩
+
+def done (job : Nat := 0) (written : List String := ["play", "thumb"]) : Event workerSig :=
+  .input (.report (.done job written))
+
+/-- An upload, a job whose start timed out, sent again and taken, its done report delivered
+twice, and a head of its rendition answered present. -/
+def workerRecorded : List (Event workerSig) :=
+  [putUpload 0, startJob 1, .input (.reply 1 .unknown), startJob 2,
+    .input (.reply 2 (.answer .accepted)), done, done, headOf 3 "play",
+    .input (.reply 3 (.answer (.store .present)))]
+
+def transcodeTests : List (String × Bool) :=
+  [ ("transcode model: a job retried after a timeout, done, reported twice, its rendition held",
+      (worker).allows workerRecorded),
+    ("transcode model: an honest worker reports done for no job it was not sent, nor other targets",
+      !(worker).allows [putUpload 0, done] && !(worker).allows [putUpload 0, startJob 1, done 0 ["play"]]),
+    ("transcode model: a job is reported one way only, and at most twice",
+      !(worker).allows (workerRecorded ++ [.input (.report (.failed 0))])
+        && !(worker).allows (workerRecorded ++ [done])),
+    ("transcode model: done only once the source may be held; failed whatever it holds",
+      !(worker).allows [startJob 1, done] && (worker).allows [startJob 1, .input (.report (.failed 0))]),
+    ("transcode model: before its done report a job's rendition may or may not be held",
+      (worker).allows [putUpload 0, startJob 1, headOf 2 "play", .input (.reply 2 (.answer (.store .missing)))]
+        && (worker).allows [putUpload 0, startJob 1, headOf 2 "play",
+          .input (.reply 2 (.answer (.store .present)))]),
+    ("transcode model: after its done report, a job's rendition is held",
+      !(worker).allows [putUpload 0, startJob 1, done, headOf 2 "play",
+        .input (.reply 2 (.answer (.store .missing)))]),
+    ("transcode model: a dishonest worker may report done for a job it was never sent",
+      (worker false).allows [done]) ]
+
 def tests : List (String × Bool) :=
   let keyed := check true [0]
   let crashing := check true [0] (maxCrashes := 1)
@@ -234,6 +299,6 @@ def tests : List (String × Bool) :=
     ("email model: a message rejected at once may be reported rejected, not delivered",
       mail.allows [send 0, .input (.reply 0 (.answer (.made 5 .rejected))), mailHook .rejected]
         && !mail.allows [send 0, .input (.reply 0 (.answer (.made 5 .rejected))),
-          mailHook .delivered]) ]
+          mailHook .delivered]) ] ++ transcodeTests
 
 end Tests.Outside

@@ -131,7 +131,41 @@ def providerTests : List (String × Bool) :=
         parse (OAuth.emailsJson { subject := "x\"y", email := none })]).toOption.any
         fun id => id.subject == "x\"y" && id.email.isNone && id.name.map (·.val) == some "x\"y") ]
 
+/-! ## A transcode worker -/
+
+def workerKey : Hmac.Key := .of "the worker's key".toUTF8
+
+def job : Transcode.Job String String := ⟨"3.0", "videos/3", ["videos/3.mp4", "videos/3.jpg"]⟩
+
+def jobPosted (key : Hmac.Key := workerKey) (j : Transcode.Job String String := job) : Request :=
+  Transcode.jobRequest key ["jobs"] j "http://site.test/transcoded"
+
+def workerTests : List (String × Bool) :=
+  let done : Transcode.Report String String := .done "3.0" job.targets
+  let sig := Transcode.signature workerKey "3.0" "done"
+  let (first, st) := Transcode.take workerKey {} (jobPosted)
+  let (again, st') := Transcode.take workerKey st (jobPosted)
+  [ ("wire: a job and a report read back as written",
+      Transcode.readJob? (Transcode.jobBody job "http://site.test/transcoded")
+          == some (job, "http://site.test/transcoded")
+        && Transcode.readReport? (Transcode.reportBody done) == some done
+        && Transcode.readReport? (Transcode.reportBody (.failed "3.0")) == some (.failed "3.0")
+        && Transcode.readReport? "{\"job\":\"3.0\",\"status\":\"lost\"}" == none),
+    ("wire: a report's signature checks for its job and status, under its key only",
+      Transcode.verify workerKey "3.0" "done" sig && !Transcode.verify workerKey "3.0" "failed" sig
+        && !Transcode.verify workerKey "3.1" "done" sig
+        && !Transcode.verify (.of "another".toUTF8) "3.0" "done" sig
+        && (Transcode.reportRequest workerKey ["transcoded"] done).header? Transcode.signatureHeader
+          == some sig),
+    ("kit worker: a job signed with its key is taken once by its id; one signed otherwise is refused",
+      first.status == 202 && again.status == 202 && st'.taken.length == 1 && st'.queue.length == 1
+        && (Transcode.take workerKey {} (jobPosted (.of "another".toUTF8))).1.status == 403
+        && (Transcode.take workerKey {} { jobPosted with
+          body := (Transcode.jobBody { job with source := "videos/9" } "http://site.test/transcoded").toUTF8 }).1.status
+            == 403) ]
+
 def tests : List (String × Bool) := s3Tests ++ formTests ++ browserTests ++ httpTests ++ providerTests
+  ++ workerTests
 
 /-- The browser against a site of `listen` that sets a cookie, clears it, and has a form. -/
 def live : Async (List (String × Bool)) := do
@@ -164,5 +198,45 @@ def live : Async (List (String × Bool)) := do
     ("kit browser: a cookie forgotten is not sent, and a form goes with the token its page carries",
       text forgotten == "false none none "
         && text submitted == "true none http://site.test csrf=t%261&x=y") ]
+
+/-- The fake worker beside the fake S3, and a site of `listen` that takes reports signed with the
+worker's key. -/
+def workerLive : Async (List (String × Bool)) := do
+  let store ← Testing.S3.Fake.start creds "test"
+  let _ ← S3.exchange store.bucket creds (.put (key "videos/3") "a clip".toUTF8 (some "video/mp4"))
+  let reports ← IO.mkRef ([] : List (Transcode.Report String String))
+  let (site, port) ← listen fun r => do
+    let some rep := Transcode.readReport? ((String.fromUTF8? r.body).getD "")
+      | return Response.text "bad\n" 400
+    if (r.header? Transcode.signatureHeader).any (Transcode.verify workerKey rep.job rep.status) then
+      reports.modify (· ++ [rep])
+      return Response.text "ok\n"
+    else return Response.text "forbidden\n" 403
+  let worker ← Transcode.Fake.start workerKey store.bucket creds
+  worker.reportTo port
+  let missing := { job with id := "4.0", source := "videos/4", targets := ["videos/4.mp4", "videos/4.jpg"] }
+  let (some call, some call') := (Client.Call.at worker.origin jobPosted,
+      Client.Call.at worker.origin (jobPosted workerKey missing))
+    | return [("kit worker: listens", false)]
+  let taken ← Client.exchange call { timeout_ms := 5000 }
+  let _ ← Client.exchange call' { timeout_ms := 5000 }
+  let held ← store.holds "videos/3.mp4"
+  let sent ← worker.work
+  let rendition ← store.object? "videos/3.mp4"
+  let thumbnail ← store.object? "videos/3.jpg"
+  let forged ← worker.forge "http://site.test/transcoded" (.done "3.0" job.targets)
+  let got ← reports.get
+  worker.stop
+  site.close
+  store.stop
+  return [
+    ("kit worker: a job is taken, and nothing is written before it is worked on",
+      status taken == 202 && !held),
+    ("kit worker: working writes a rendition and a thumbnail from the source, and reports done, signed",
+      rendition.map (·.2) == some "video/mp4" && thumbnail.map (·.2) == some "image/jpeg"
+        && sent == [(.done "3.0" job.targets, 200), (.failed "4.0", 200)]
+        && got == [.done "3.0" job.targets, .failed "4.0"]),
+    ("kit worker: a report forged with another key is refused by a site that checks it",
+      forged == 403) ]
 
 end Tests.Testing
