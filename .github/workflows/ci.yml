@@ -125,7 +125,7 @@ jobs:
       - uses: ./.github/actions/lean
       - name: Build and check each small example
         run: |
-          for example in counter bank bank-web kv-cache election watchdog; do
+          for example in counter bank bank-web kv-cache election watchdog migration; do
             echo "::group::examples/$example"
             mkdir -p "examples/$example/.lake"
             ln -sfn "$GITHUB_WORKSPACE/.lake/packages" "examples/$example/.lake/packages"
