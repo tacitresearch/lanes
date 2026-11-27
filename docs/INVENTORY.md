@@ -13,17 +13,17 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Behaviours` | 66 | 36 | 5 | 18 | 0 | 7 | 0 |
 | `Lanes/Check` | 74 | 54 | 0 | 8 | 0 | 10 | 2 |
 | `Lanes/Core` | 102 | 40 | 0 | 34 | 1 | 10 | 17 |
-| `Lanes/Data` | 66 | 42 | 0 | 4 | 1 | 0 | 19 |
-| `Lanes/Durable` | 53 | 45 | 2 | 0 | 0 | 5 | 1 |
-| `Lanes/Lib` | 361 | 257 | 5 | 0 | 42 | 48 | 9 |
+| `Lanes/Data` | 68 | 43 | 0 | 4 | 1 | 0 | 20 |
+| `Lanes/Durable` | 67 | 57 | 2 | 0 | 0 | 7 | 1 |
+| `Lanes/Lib` | 486 | 331 | 13 | 2 | 66 | 65 | 9 |
 | `Lanes/Net` | 37 | 6 | 5 | 0 | 0 | 25 | 1 |
-| `Lanes/Outside` | 78 | 58 | 5 | 4 | 1 | 10 | 0 |
+| `Lanes/Outside` | 116 | 86 | 5 | 6 | 1 | 18 | 0 |
 | `Lanes/Proof` | 35 | 12 | 0 | 0 | 0 | 22 | 1 |
 | `Lanes/Runtime` | 156 | 93 | 18 | 0 | 15 | 30 | 0 |
 | `Lanes/Semantics` | 57 | 9 | 0 | 0 | 0 | 47 | 1 |
 | `Lanes/Web` | 412 | 216 | 32 | 8 | 111 | 43 | 2 |
 | `LanesCli` | 110 | 0 | 0 | 0 | 46 | 0 | 64 |
-| All | 1607 | 868 | 72 | 76 | 217 | 257 | 117 |
+| All | 1786 | 983 | 80 | 80 | 241 | 284 | 118 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -178,7 +178,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Check.Property.holds` | proved | `Check.refines_sound`, `Check.refines_traces`, `Check.system_sound` and 1 more |
 | `Check.Trace.last` | proved | `Check.search_deadlock`, `Check.search_reached`, `Check.search_violated` and 2 more |
 | `Check.Trace.labels` | proved | `Check.system_violated` |
-| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 16 more |
+| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 18 more |
 | `Check.Path.last` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
 | `Check.Path.toTraceAux` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
 | `Check.Path.toTrace` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
@@ -370,21 +370,21 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `update` | proved | through `SysState.down`, `SysState.init` and 4 more: `Account.implements`, `Account.implements_timed` and 39 more |
+| `update` | proved | through `SysState.down`, `SysState.init` and 4 more: `Account.implements`, `Account.implements_timed` and 40 more |
 | `Event.timed` | spec | used only in statements |
 | `Event.visible` | spec | used only in statements |
 | `SysState.blank` | proved | `System.Inductive.of_monotone`, `System.Monotone.and`, `System.Monotone.and_net` |
-| `SysState.hasMail` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 25 more |
-| `SysState.perform` | proved | through `SysState.init`, `SysState.run` and 3 more: `Account.implements`, `Account.implements_timed` and 38 more |
-| `SysState.performAll` | proved | through `SysState.init`, `SysState.run` and 3 more: `Account.implements`, `Account.implements_timed` and 38 more |
+| `SysState.hasMail` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 26 more |
+| `SysState.perform` | proved | through `SysState.init`, `SysState.run` and 3 more: `Account.implements`, `Account.implements_timed` and 39 more |
+| `SysState.performAll` | proved | through `SysState.init`, `SysState.run` and 3 more: `Account.implements`, `Account.implements_timed` and 39 more |
 | `SysState.down` | proved | `Account.implements`, `Account.implements_timed`, `System.Refines.of_events` and 2 more |
 | `SysState.settle` | proved | `SysState.Loses.settle` |
-| `SysState.handle` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 25 more |
-| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and 2 more: `Account.implements`, `Account.implements_timed` and 37 more |
+| `SysState.handle` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 26 more |
+| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and 2 more: `Account.implements`, `Account.implements_timed` and 38 more |
 | `SysState.deliverable` | proved | `Account.implements`, `Account.implements_timed`, `System.Refines.of_events` and 2 more |
 | `SysState.step` | proved | `Http.Gate.answered_of_leaves`, `Http.Gate.deadline_not_restarted`, `Shards.AtHome.step` and 7 more |
 | `SysState.init` | proved | `Account.implements`, `Account.implements_timed`, `Check.system_violated` and 22 more |
-| `SysState.run` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and 13 more |
+| `SysState.run` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and 14 more |
 | `System.Invariant` | spec | a predicate |
 
 ## `Lanes/Data/Codec.lean`
@@ -431,6 +431,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
+| `Migrate.same` | proved | `Migrate.migrate_same` |
 | `Enum.ofEquiv` | proved | its type, `Enum` |
 | `Declare.params` | none |  |
 | `Declare.classBinders` | none |  |
@@ -443,6 +444,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Declare.fieldwise` | none |  |
 | `Declare.comparedByBEq` | none |  |
 | `Declare.independent` | none |  |
+| `Declare.migrate` | none |  |
 | `Declare.enum` | none |  |
 
 ## `Lanes/Data/Enum.lean`
@@ -482,13 +484,13 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Journal.Disk.apply` | proved | `Journal.Disk.Holds.append`, `Journal.Disk.Holds.save`, `Journal.Disk.Torn.mend` |
-| `Journal.Disk.crash` | proved | `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash` and 2 more |
+| `Journal.Disk.apply` | proved | `Journal.Disk.Holds.append`, `Journal.Disk.Holds.save`, `Journal.Disk.Torn.mend` and 1 more |
+| `Journal.Disk.crash` | proved | `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash` and 3 more |
 | `Journal.Disk.Found.index` | proved | `Journal.Disk.Torn.read` |
-| `Journal.Disk.read` | proved | `Journal.Disk.Torn.mend`, `Journal.Disk.Torn.mend_crash`, `Journal.Disk.Torn.read` and 1 more |
-| `Journal.Disk.start` | proved | `Journal.Disk.read_of_start` |
+| `Journal.Disk.read` | proved | `Journal.Disk.Torn.mend`, `Journal.Disk.Torn.mend_crash`, `Journal.Disk.Torn.read` and 2 more |
+| `Journal.Disk.start` | proved | `Journal.Disk.read_of_start`, `Journal.Disk.start_foreign` |
 | `Journal.Disk.mend` | proved | `Journal.Disk.Torn.mend`, `Journal.Disk.Torn.mend_crash` |
-| `Journal.Disk.load` | proved | `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Torn.load` and 1 more |
+| `Journal.Disk.load` | proved | `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Torn.load` and 2 more |
 | `Journal.appendWrites` | proved | `Journal.Disk.Holds.append`, `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash` |
 | `Journal.saveWrites` | proved | `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save`, `Journal.Disk.Holds.save_crash` |
 | `Journal.memo` | spec | used only in statements |
@@ -499,12 +501,12 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Frame.fits` | proved | `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save`, `Journal.Disk.Holds.save_crash` and 5 more |
+| `Frame.fits` | proved | `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save`, `Journal.Disk.Holds.save_crash` and 10 more |
 | `Frame.checksum` | proved | `Frame.decode_checksum_ne` |
 | `Frame.stamped` | proved | `Frame.decode_checksum_ne` |
 | `Frame.one` | proved | through `Frame.encode`: `Frame.decode_checksum_ne`, `Frame.decode_encode` and 4 more |
 | `Frame.encode` | proved | `Frame.decode_checksum_ne`, `Frame.decode_encode`, `Frame.decode_take` and 3 more |
-| `Frame.decode` | proved | `Frame.decode_checksum_ne`, `Frame.decode_encode`, `Frame.decode_extract_prefix` and 3 more |
+| `Frame.decode` | proved | `Frame.decode_checksum_ne`, `Frame.decode_encode`, `Frame.decode_extract_prefix` and 7 more |
 | `Frame.whole` | proved | `Frame.decode_take_eq`, `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash` and 3 more |
 | `Frame.span` | proved | `Journal.open?_cut`, `Parcel.receive_send` |
 | `Frame.unfinished` | none |  |
@@ -521,27 +523,38 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Journal.Entry.codec` | proved | its type, `Codec` |
-| `Journal.Entry.bytes` | proved | through `Journal.Entry.fits`, `Journal.encode`: `Journal.Disk.Holds.append`, `Journal.Disk.Holds.append_crash` and 7 more |
-| `Journal.Entry.ofBytes` | proved | through `Journal.open?`: `Journal.open?_cut`, `Journal.open?_file` |
-| `Journal.Entry.fits` | proved | `Journal.Disk.Holds.append`, `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash` and 6 more |
+| `Journal.Entry.bytes` | proved | through `Journal.Entry.fits`, `Journal.encode`: `Journal.Disk.Holds.append`, `Journal.Disk.Holds.append_crash` and 10 more |
+| `Journal.Entry.ofBytes` | proved | through `Journal.open?`: `Journal.Disk.open?_of_read`, `Journal.open?_cut` and 1 more |
+| `Journal.Entry.fits` | proved | `Journal.Disk.Holds.append`, `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash` and 9 more |
 | `Journal.write` | proved | `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.load_cut` and 1 more |
-| `Journal.read` | proved | through `Journal.open?`: `Journal.open?_cut`, `Journal.open?_file` |
+| `Journal.read` | proved | through `Journal.open?`: `Journal.Disk.open?_of_read`, `Journal.open?_cut` and 1 more |
 | `Journal.encode` | proved | `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save_crash` |
-| `Journal.header` | proved | `Journal.Disk.load_cut`, `Journal.Disk.torn_nil`, `Journal.open?_cut` and 1 more |
-| `Journal.named?` | proved | through `Journal.open?`: `Journal.open?_cut`, `Journal.open?_file` |
+| `Journal.header` | proved | `Journal.Disk.load_cut`, `Journal.Disk.start_foreign`, `Journal.Disk.torn_nil` and 7 more |
+| `Journal.label` | proved | `Journal.label_zero` |
+| `Journal.named?` | proved | `Journal.Disk.start_foreign` |
 | `Journal.file` | proved | `Journal.Disk.load_cut`, `Journal.open?_cut`, `Journal.open?_file` |
-| `Journal.open?` | proved | `Journal.open?_cut`, `Journal.open?_file` |
-| `Journal.Entry.op?` | proved | through `Journal.ops`: `Journal.recover_handed`, `Journal.recover_kernel` and 3 more |
+| `Journal.open?` | proved | `Journal.Disk.open?_of_read`, `Journal.open?_cut`, `Journal.open?_file` |
+| `Journal.Entry.op?` | proved | through `Journal.ops`: `Journal.recover_handed`, `Journal.recover_kernel` and 4 more |
 | `Journal.Entry.marks` | spec | used only in statements |
-| `Journal.ops` | proved | `Journal.recover_handed`, `Journal.recover_kernel`, `Journal.recover_outputs` and 2 more |
-| `Journal.replay1` | proved | through `Journal.recover`, `Journal.resume` and 2 more: `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash` and 10 more |
-| `Journal.recover` | proved | `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save` and 7 more |
-| `Journal.Entry.savedAt` | proved | `Journal.Disk.Holds.append`, `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash` and 2 more |
-| `Journal.since` | proved | through `Journal.resume`: `Journal.resume_eq_recover` |
-| `Journal.resume` | proved | `Journal.resume_eq_recover` |
+| `Journal.ops` | proved | `Journal.recover_handed`, `Journal.recover_kernel`, `Journal.recover_outputs` and 3 more |
+| `Journal.replay1` | proved | through `Journal.Begun.toFound`, `Journal.recover` and 4 more: `Journal.Begun.resume_upgraded`, `Journal.Disk.Holds.load_append_crash` and 18 more |
+| `Journal.recover` | proved | `Journal.Disk.load_cut`, `Journal.Upgrade.begin_crash`, `Journal.Upgrade.begin_torn` and 7 more |
+| `Journal.replay` | proved | `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save` and 4 more |
+| `Journal.Entry.savedAt` | proved | `Journal.Disk.Holds.append`, `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash` and 3 more |
+| `Journal.since` | proved | through `Journal.Begun.load`, `Journal.Begun.toFound` and 1 more: `Journal.Begun.resume_upgraded`, `Journal.Upgrade.begin_crash` and 2 more |
+| `Journal.resume` | proved | `Journal.Begun.resume_upgraded`, `Journal.resume_eq_recover`, `Journal.resume_eq_replay` |
 | `Journal.turn` | proved | through `Journal.turns`: `Journal.turns_kernel` |
 | `Journal.turnAll` | proved | `Journal.turnAll_eq_exec` |
 | `Journal.turns` | spec | used only in statements |
+
+## `Lanes/Durable/Migration.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Migration.cell` | proved | `Migration.cell_kernel` |
+| `Migration.envelope` | proved | through `Migration.kernel`: `Journal.Upgrade.begin_crash`, `Journal.Upgrade.inv_load` and 4 more |
+| `Migration.image` | proved | through `Migration.kernel`: `Journal.Upgrade.begin_crash`, `Journal.Upgrade.inv_load` and 4 more |
+| `Migration.kernel` | proved | `Journal.Upgrade.begin_crash`, `Journal.Upgrade.inv_load`, `Migration.cell_kernel` and 3 more |
 
 ## `Lanes/Durable/Snapshot.lean`
 
@@ -551,10 +564,23 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Kernel.Image.Codecs.cell` | proved | its type, `Codec` |
 | `Kernel.Image.Codecs.envelope` | proved | its type, `Codec` |
 | `Kernel.Image.Codecs.image` | proved | its type, `Codec` |
-| `Journal.savedHeader` | proved | through `Journal.saved?`, `Journal.savedRecords`: `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save` and 2 more |
-| `Journal.savedRecords` | proved | `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save`, `Journal.Disk.Holds.save_crash` and 1 more |
-| `Journal.saved` | proved | `Journal.saved?_saved` |
-| `Journal.saved?` | proved | `Journal.saved?_saved` |
+| `Journal.savedHeader` | proved | `Journal.savedHeader_inj` |
+| `Journal.savedRecords` | proved | `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save`, `Journal.Disk.Holds.save_crash` and 4 more |
+| `Journal.saved` | proved | `Journal.saved?_other`, `Journal.saved?_saved` |
+| `Journal.saved?` | proved | `Journal.saved?_other`, `Journal.saved?_saved` |
+
+## `Lanes/Durable/Upgrade.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Journal.Upgrade.reads` | proved | `Journal.Upgrade.begin_crash`, `Journal.Upgrade.begin_torn` |
+| `Journal.Upgrade.writes` | proved | `Journal.Upgrade.holds` |
+| `Journal.Upgrade.upgraded` | proved | `Journal.Upgrade.begin_crash`, `Journal.Upgrade.begin_torn`, `Journal.Upgrade.start_torn` |
+| `Journal.Upgrade.start` | proved | `Journal.Upgrade.start_torn` |
+| `Journal.Disk.begin` | proved | `Journal.Upgrade.begin_crash`, `Journal.Upgrade.begin_torn` |
+| `Journal.Begun.load` | spec | used only in statements |
+| `Journal.Begun.toFound` | proved | `Journal.Begun.resume_upgraded` |
+| `Journal.Upgrade.past` | spec | used only in statements |
 
 ## `Lanes/Lib/Crypto/Hmac.lean`
 
@@ -569,6 +595,33 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Bytes.nibble?` | proved | through `Bytes.unhex?`: `Bytes.unhex?_hex` |
 | `Bytes.unhexList` | proved | through `Bytes.unhex?`: `Bytes.unhex?_hex` |
 | `Bytes.unhex?` | proved | `Bytes.unhex?_hex` |
+
+## `Lanes/Lib/Crypto/Md5.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Md5.shifts` | tested | `Tests/Postgres.lean` |
+| `Md5.sines` | tested | `Tests/Postgres.lean` |
+| `Md5.initial` | tested | `Tests/Postgres.lean` |
+| `Md5.rotl` | tested | `Tests/Postgres.lean` |
+| `Md5.mix` | tested | `Tests/Postgres.lean` |
+| `Md5.compress` | tested | `Tests/Postgres.lean` |
+| `Md5.wordAt` | tested | `Tests/Postgres.lean` |
+| `Md5.blockAt` | tested | `Tests/Postgres.lean` |
+| `Md5.padding` | tested | `Tests/Postgres.lean` |
+| `Md5.absorb` | tested | `Tests/Postgres.lean` |
+| `Md5.State.bytes` | tested | `Tests/Postgres.lean` |
+| `Md5.hash` | tested | `Tests/Postgres.lean` |
+
+## `Lanes/Lib/Crypto/Pbkdf2.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Pbkdf2.xor` | tested | `Tests/Postgres.lean` |
+| `Pbkdf2.be32` | tested | `Tests/Postgres.lean` |
+| `Pbkdf2.block` | tested | `Tests/Postgres.lean` |
+| `Pbkdf2.block.go` | tested | `Tests/Postgres.lean` |
+| `Pbkdf2.derive` | tested | `Tests/Postgres.lean` |
 
 ## `Lanes/Lib/Crypto/Sha256.lean`
 
@@ -606,7 +659,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Base64.Alphabet.char` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 2 more |
 | `Base64.Alphabet.valueOf` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
 | `Base64.Alphabet.value?` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
-| `Base64.Encoding.std` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
+| `Base64.Encoding.std` | checked | `Tests/PostgresConn.lean` |
 | `Base64.Encoding.rawStd` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
 | `Base64.Encoding.url` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
 | `Base64.Encoding.rawUrl` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
@@ -939,6 +992,149 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Url.pending` | spec | used only in statements |
 | `Url.Delim` | spec | a predicate |
 
+## `Lanes/Lib/Postgres/Bytes.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Postgres.Inverse` | spec | a predicate |
+| `Postgres.byte` | proved | `Postgres.inverse_byte` |
+| `Postgres.putU16` | proved | `Postgres.inverse_u16` |
+| `Postgres.getU16` | proved | `Postgres.inverse_u16` |
+| `Postgres.putU32` | proved | `Postgres.inverse_u32` |
+| `Postgres.getU32` | proved | `Postgres.inverse_u32` |
+| `Postgres.untilNul` | proved | `Postgres.untilNul_append` |
+| `Postgres.Plain` | spec | a predicate |
+| `Postgres.instDecidablePlain` | proved | its type, `Decidable` |
+| `Postgres.putStr` | proved | `Postgres.inverse_str` |
+| `Postgres.getStr` | proved | `Postgres.inverse_str` |
+| `Postgres.take` | proved | `Postgres.take_append` |
+| `Postgres.putValue` | proved | `Postgres.inverse_value` |
+| `Postgres.getValue` | proved | `Postgres.inverse_value` |
+| `Postgres.ValueOk` | spec | a predicate |
+| `Postgres.many` | proved | `Postgres.many_append` |
+| `Postgres.putList16` | proved | `Postgres.inverse_list16` |
+| `Postgres.getList16` | proved | `Postgres.inverse_list16` |
+| `Postgres.getTerminated` | proved | `Postgres.getTerminated_append` |
+| `Postgres.putTerminated` | proved | `Postgres.getTerminated_append` |
+| `Postgres.whole` | proved | `Postgres.whole_append` |
+| `Postgres.StartsNonzero` | spec | a predicate |
+
+## `Lanes/Lib/Postgres/Conn.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Postgres.Isolation.sql` | proved | through `Postgres.Conn.Request.encode`, `Postgres.Conn.Request.messages` and 2 more: `Postgres.Conn.run_fifo`, `Postgres.Conn.run_queue` and 7 more |
+| `Postgres.Conn.Request.kind` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_fifo`, `Postgres.Conn.run_queue` and 6 more |
+| `Postgres.Conn.instDecidableNamed` | proved | its type, `Decidable` |
+| `Postgres.Conn.instDecidablePredOptionByteArrayValueOk` | proved | its type, `Decidable` |
+| `Postgres.Conn.instDecidablePredFrontendOk` | proved | its type, `Decidable` |
+| `Postgres.Conn.fits` | proved | through `Postgres.Conn.run`, `Postgres.Conn.start` and 2 more: `Postgres.Conn.run_fifo`, `Postgres.Conn.run_queue` and 8 more |
+| `Postgres.Conn.Request.messages` | proved | `Postgres.Conn.valid_decode` |
+| `Postgres.Conn.Request.encode` | proved | `Postgres.Conn.step_query` |
+| `Postgres.Conn.valid` | proved | `Postgres.Conn.step_query`, `Postgres.Conn.valid_decode` |
+| `Postgres.Conn.room` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_fifo`, `Postgres.Conn.run_queue` and 6 more |
+| `Postgres.Conn.fail` | proved | `Postgres.Conn.onMessage_sasl_authOk` |
+| `Postgres.Conn.outcome` | proved | `Postgres.Conn.outcome_committed` |
+| `Postgres.Conn.texts` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_saslFinal` and 9 more |
+| `Postgres.Conn.onReply` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_saslFinal` and 9 more |
+| `Postgres.Conn.nonceOk` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_saslFinal` and 9 more |
+| `Postgres.Conn.onAuth` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_saslFinal` and 9 more |
+| `Postgres.Conn.onSasl` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_saslFinal` and 9 more |
+| `Postgres.Conn.onSaslFinal` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_saslFinal` and 9 more |
+| `Postgres.Conn.onMessage` | proved | `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_saslFinal`, `Postgres.Conn.onMessage_sasl_authOk` |
+| `Postgres.Conn.drain` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_fifo`, `Postgres.Conn.run_queue` and 6 more |
+| `Postgres.Conn.receive` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_fifo`, `Postgres.Conn.run_queue` and 6 more |
+| `Postgres.Conn.submit` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_fifo`, `Postgres.Conn.run_queue` and 6 more |
+| `Postgres.Conn.start` | proved | `Postgres.Conn.start_queue` |
+| `Postgres.Conn.step` | proved | `Postgres.Conn.step_buffer`, `Postgres.Conn.step_closed`, `Postgres.Conn.step_committed` and 3 more |
+| `Postgres.Conn.run` | spec | used only in statements |
+
+## `Lanes/Lib/Postgres/ConnSound.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Postgres.Conn.queries` | spec | used only in statements |
+| `Postgres.Conn.answers` | spec | used only in statements |
+| `Postgres.Conn.ids` | spec | used only in statements |
+| `Postgres.Conn.Fifo` | spec | a predicate |
+| `Postgres.Conn.Commits` | spec | a predicate |
+| `Postgres.Conn.Answered` | spec | a predicate |
+
+## `Lanes/Lib/Postgres/IO/Client.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Postgres.Session.tell` | trusted | TRUSTED.md: The PostgreSQL client's IO |
+| `Postgres.Session.await` | trusted | TRUSTED.md: The PostgreSQL client's IO |
+| `Postgres.Session.within` | trusted | TRUSTED.md: The PostgreSQL client's IO |
+| `Postgres.Session.exec` | trusted | TRUSTED.md: The PostgreSQL client's IO |
+| `Postgres.Session.close` | trusted | TRUSTED.md: The PostgreSQL client's IO |
+| `Postgres.connect` | trusted | TRUSTED.md: The PostgreSQL client's IO |
+| `Postgres.Store.perform` | trusted | TRUSTED.md: The PostgreSQL client's IO |
+| `Postgres.Store.handler` | trusted | TRUSTED.md: The PostgreSQL client's IO |
+
+## `Lanes/Lib/Postgres/Message.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Postgres.TxStatus.byte` | proved | through `Postgres.Backend.body`: `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` |
+| `Postgres.TxStatus.ofByte` | proved | through `Postgres.Backend.decode`, `Postgres.Backend.decodeBody`: `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` |
+| `Postgres.protocol30` | proved | through `Postgres.Frontend.decode`: `Postgres.Conn.valid_decode`, `Postgres.Frontend.decode_encode` |
+| `Postgres.Column.put` | proved | through `Postgres.Backend.body`: `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` |
+| `Postgres.Column.get` | proved | through `Postgres.Backend.decode`, `Postgres.Backend.decodeBody` and 1 more: `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` and 2 more |
+| `Postgres.Column.Ok` | spec | a predicate |
+| `Postgres.Field.put` | proved | through `Postgres.Backend.body`: `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` |
+| `Postgres.Field.get` | proved | through `Postgres.Backend.decode`, `Postgres.Backend.decodeBody`: `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` |
+| `Postgres.Field.Ok` | spec | a predicate |
+| `Postgres.getFields` | proved | through `Postgres.Backend.decode`, `Postgres.Backend.decodeBody`: `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` |
+| `Postgres.getNames` | proved | through `Postgres.Backend.decodeBody`, `Postgres.Frame.read`: `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` and 2 more |
+| `Postgres.Named` | spec | a predicate |
+| `Postgres.putParam` | proved | through `Postgres.Frontend.body`, `Postgres.Frontend.encode`: `Postgres.Conn.valid_decode`, `Postgres.Frontend.decode_encode` |
+| `Postgres.getParam` | proved | through `Postgres.Backend.decode`, `Postgres.Backend.decodeBody` and 1 more: `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` and 2 more |
+| `Postgres.Backend.tag` | proved | `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` |
+| `Postgres.Backend.body` | proved | `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` |
+| `Postgres.Backend.Ok` | spec | a predicate |
+| `Postgres.Backend.decodeAuth` | proved | through `Postgres.Backend.decodeBody`, `Postgres.Frame.read`: `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` and 2 more |
+| `Postgres.Backend.decodeBody` | proved | `Postgres.Backend.decodeBody_body` |
+| `Postgres.Backend.decode` | proved | `Postgres.Backend.read_encode` |
+| `Postgres.Frontend.expect` | spec | used only in statements |
+| `Postgres.Frontend.tag` | proved | through `Postgres.Frontend.body`, `Postgres.Frontend.encode`: `Postgres.Conn.valid_decode`, `Postgres.Frontend.decode_encode` |
+| `Postgres.Frontend.body` | proved | `Postgres.Frontend.decode_encode` |
+| `Postgres.Frontend.Ok` | spec | a predicate |
+| `Postgres.Frontend.wire` | proved | through `Postgres.Frontend.encode`: `Postgres.Conn.valid_decode`, `Postgres.Frontend.decode_encode` |
+| `Postgres.Frontend.encode` | proved | `Postgres.Conn.valid_decode`, `Postgres.Frontend.decode_encode` |
+| `Postgres.Frontend.decodeBody` | proved | through `Postgres.Frontend.decode`: `Postgres.Conn.valid_decode`, `Postgres.Frontend.decode_encode` |
+| `Postgres.Frontend.decodeStartup` | proved | through `Postgres.Frontend.decode`: `Postgres.Conn.valid_decode`, `Postgres.Frontend.decode_encode` |
+| `Postgres.Frontend.decode` | proved | `Postgres.Conn.valid_decode`, `Postgres.Frontend.decode_encode` |
+| `Postgres.Backend.wire` | proved | through `Postgres.Backend.encode`: `Postgres.Backend.read_encode` |
+| `Postgres.Backend.encode` | proved | `Postgres.Backend.read_encode` |
+| `Postgres.Frame.read` | proved | `Postgres.Backend.read_encode`, `Postgres.Frame.read_done`, `Postgres.Frame.read_more` |
+
+## `Lanes/Lib/Postgres/Scram.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Postgres.md5Answer` | checked | `Tests/PostgresConn.lean` |
+| `Postgres.Scram.mechanism` | tested | `Tests/Postgres.lean` |
+| `Postgres.Scram.saslName` | proved | through `Postgres.Scram.respond`: `Postgres.Scram.respond_iterations`, `Postgres.Scram.respond_nonce` |
+| `Postgres.Scram.firstBare` | proved | through `Postgres.Scram.respond`: `Postgres.Scram.respond_iterations`, `Postgres.Scram.respond_nonce` |
+| `Postgres.Scram.first` | tested | `Tests/Postgres.lean` |
+| `Postgres.Scram.field` | proved | through `Postgres.Scram.respond`, `Postgres.Scram.verify`: `Postgres.Conn.onMessage_saslFinal`, `Postgres.Scram.respond_iterations` and 1 more |
+| `Postgres.Scram.parseServerFirst` | proved | `Postgres.Scram.respond_iterations`, `Postgres.Scram.respond_nonce` |
+| `Postgres.Scram.respond` | proved | `Postgres.Scram.respond_iterations`, `Postgres.Scram.respond_nonce` |
+| `Postgres.Scram.verify` | proved | `Postgres.Conn.onMessage_saslFinal` |
+
+## `Lanes/Lib/Postgres/Table.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Postgres.Table.create` | tested | `Tests/Postgres.lean`, `Tests/PostgresLive.lean` |
+| `Postgres.Table.Isolation.ofStore` | tested | `Tests/Postgres.lean` |
+| `Postgres.Table.request` | tested | `Tests/Postgres.lean` |
+| `Postgres.scanRows` | tested | `Tests/Postgres.lean` |
+| `Postgres.Table.answer` | tested | `Tests/Postgres.lean` |
+| `Postgres.Table.over` | tested | `Tests/Postgres.lean` |
+
 ## `Lanes/Lib/RateLimit.lean`
 
 | Definition | Status | Evidence |
@@ -1074,7 +1270,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Outside.any` | tested | `Tests/Jobs.lean`, `Tests/S3.lean` |
-| `Outside.driver` | checked | `Tests/Clock.lean`, `Tests/HttpClient.lean`, `Tests/Jobs.lean` and 1 more |
+| `Outside.driver` | checked | `Tests/Clock.lean`, `Tests/HttpClient.lean`, `Tests/Jobs.lean` and 2 more |
 | `Outside.see` | proved | through `Outside.after`: `Effects.at_most_once`, `Events.deliveries_le` and 7 more |
 | `Outside.after` | proved | `Effects.at_most_once`, `Events.deliveries_le`, `Idempotent.at_most_once` and 6 more |
 | `Outside.allows` | checked | `Tests/Outside.lean` |
@@ -1191,6 +1387,54 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Rpc.Port.reported` | spec | used only in statements |
 | `Rpc.called` | spec | used only in statements |
 | `Rpc.answered` | spec | used only in statements |
+
+## `Lanes/Outside/Store/Basic.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Store.Db.get` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
+| `Store.Db.insertSorted` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
+| `Store.Db.set` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
+| `Store.Db.apply` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
+| `Store.Read.holds` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
+| `Store.Txn.own` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
+| `Store.Txn.view` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
+| `Store.World.txn?` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
+| `Store.World.setTxn` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
+| `Store.World.dropTxn` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
+| `Store.World.stateAt` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
+| `Store.World.readsAll` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
+| `Store.World.clashes` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
+| `Store.World.places` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
+| `Store.World.commitPlaces` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
+| `Store.World.placeAt` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
+| `Store.World.settle` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
+| `Store.World.answersNow` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
+| `Store.World.applyCommit` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
+| `Store.World.expand` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
+| `Store.dedup` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
+| `Store.World.send` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
+| `Store.World.answer` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
+| `Store.World.answerCommit` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
+| `Store.outstanding` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
+| `Store.State.allow` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
+| `Store.State.observe` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
+| `Store.State.run` | proved | through `Store.allows`: `Store.failed_never_committed`, `Store.insert_unique` and 6 more |
+| `Store.outside` | checked | `Tests/Store.lean` |
+| `Store.samples` | checked | `Tests/Store.lean` |
+
+## `Lanes/Outside/Store/Sound.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Store.nat` | spec | used only in statements |
+| `Store.ask` | spec | used only in statements |
+| `Store.say` | spec | used only in statements |
+| `Store.allows` | spec | used only in statements |
+| `Store.lostCommit` | spec | used only in statements |
+| `Store.writeSkew` | spec | used only in statements |
+| `Store.lostUpdate` | spec | used only in statements |
+| `Store.earlier` | spec | used only in statements |
 
 ## `Lanes/Proof/Deed.lean`
 
@@ -1335,32 +1579,32 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Kernel.cell` | proved | `Batch.run_peek`, `Kernel.WellFormed.runBatch_of_due`, `Kernel.WellFormed.step_of_due` and 3 more |
-| `Kernel.setCell` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 33 more |
+| `Kernel.cell` | proved | `Batch.run_peek`, `Journal.Upgrade.inv_load`, `Kernel.WellFormed.runBatch_of_due` and 10 more |
+| `Kernel.setCell` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 43 more |
 | `Kernel.abs` | proved | `Kernel.WellFormed.quiet_iff`, `Kernel.WellFormed.wait_forever`, `Kernel.abs_boot` and 7 more |
 | `Kernel.env` | proved | `Kernel.abs_boot`, `Kernel.accept_sound`, `Kernel.exec_reachable` and 4 more |
-| `Kernel.unschedule` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 33 more |
-| `Kernel.perform` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 33 more |
-| `Kernel.performAll` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 33 more |
-| `Kernel.down` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 33 more |
-| `Kernel.settle` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 33 more |
-| `Kernel.rest` | proved | through `Kernel.apply`, `Kernel.exec` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 30 more |
+| `Kernel.unschedule` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 43 more |
+| `Kernel.perform` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 43 more |
+| `Kernel.performAll` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 43 more |
+| `Kernel.down` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 43 more |
+| `Kernel.settle` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 43 more |
+| `Kernel.rest` | proved | through `Kernel.apply`, `Kernel.exec` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 35 more |
 | `Kernel.handle` | proved | `Kernel.frame_handle` |
 | `Kernel.startActor` | proved | `Kernel.frame_startActor` |
-| `Kernel.boot` | proved | `Http.kernel_fronted_answered_le_arrived`, `Http.kernel_served_answered_le_arrived`, `Journal.recover_kernel` and 6 more |
+| `Kernel.boot` | proved | `Http.kernel_fronted_answered_le_arrived`, `Http.kernel_served_answered_le_arrived`, `Journal.Disk.torn_nil` and 13 more |
 | `Kernel.accept` | proved | `Kernel.accept_sound` |
 | `Kernel.run1` | proved | `Kernel.run1_sound` |
 | `Kernel.fire` | proved | `Kernel.fire_sound`, `Kernel.frame_fire` |
-| `Kernel.advance` | proved | through `Kernel.apply`, `Kernel.exec`: `Batch.run_handed`, `Batch.run_kernel` and 15 more |
-| `Kernel.timerNext` | proved | through `Kernel.apply`, `Kernel.exec` and 2 more: `Batch.run_handed`, `Batch.run_kernel` and 26 more |
+| `Kernel.advance` | proved | through `Kernel.apply`, `Kernel.exec`: `Batch.run_handed`, `Batch.run_kernel` and 20 more |
+| `Kernel.timerNext` | proved | through `Kernel.apply`, `Kernel.exec` and 2 more: `Batch.run_handed`, `Batch.run_kernel` and 31 more |
 | `Kernel.step` | proved | `Kernel.WellFormed.runBatch_of_due`, `Kernel.WellFormed.step_events_ne_nil`, `Kernel.WellFormed.step_of_due` and 1 more |
 | `Kernel.wait` | proved | `Kernel.WellFormed.step_events_ne_nil`, `Kernel.WellFormed.wait_for_ms`, `Kernel.WellFormed.wait_forever` and 1 more |
 | `Kernel.runBatch` | proved | `Kernel.WellFormed.runBatch`, `Kernel.WellFormed.runBatch_of_due`, `Kernel.runBatchAhead_eq` and 5 more |
 | `Kernel.quiet` | proved | `Batch.run_resolved`, `Kernel.WellFormed.quiet_iff` |
-| `Kernel.image` | proved | `Batch.flush_save`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save` and 4 more |
-| `Kernel.Image.kernel` | proved | `Batch.flush_save`, `Kernel.WellFormed.image`, `Kernel.abs_image_kernel` |
+| `Kernel.image` | proved | `Batch.flush_save`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save` and 8 more |
+| `Kernel.Image.kernel` | proved | `Batch.flush_save`, `Journal.Begun.resume_upgraded`, `Journal.Upgrade.begin_crash` and 3 more |
 | `Kernel.apply` | proved | `Kernel.WellFormed.apply` |
-| `Kernel.exec` | proved | `Batch.run_handed`, `Batch.run_kernel`, `Batch.settle_kernel` and 13 more |
+| `Kernel.exec` | proved | `Batch.run_handed`, `Batch.run_kernel`, `Batch.settle_kernel` and 18 more |
 
 ## `Lanes/Runtime/KernelSound.lean`
 
