@@ -108,7 +108,7 @@ def events (port : UInt16) (request : Request) (enough : List Sse.Event → Bool
       received.modify (· ++ more)
       if enough (Sse.received (← received.get)) then break
   try (Async.race (try read catch _ => pure ()) (Async.sleep (.ofNat timeout_ms))).block
-  finally socket.close
+  finally discard socket.close.toBaseIO
   return Sse.received (← received.get)
 
 /-- Makes the call on a task of its own, so the shard does not wait for the network, and hands

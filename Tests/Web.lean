@@ -346,6 +346,7 @@ def streamTest (ioThreads : Nat := 0) : Async (List (String × Bool)) := do
   let head := "POST /upload HTTP/1.1\r\nHost: h\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n"
   let inChunks ← exchange port [head ++ String.fromUTF8! (chunked (letters 30000) 777)]
   let counted ← (Client.fetch port { method := .get, path := ["count"] } : IO Response)
+  let later ← (Client.fetch port { method := .get, path := ["later"] } : IO Response)
   let events ← (Client.events port { method := .get, path := ["events"] } (·.length ≥ 3) : IO _)
   let resumed ← (Client.events port
     { method := .get, path := ["events"], headers := [("last-event-id", "1")] } (·.length ≥ 1) : IO _)
@@ -355,7 +356,9 @@ def streamTest (ioThreads : Nat := 0) : Async (List (String × Bool)) := do
   let some quietPort := quiet.port | return [("web: the server reports its port", false)]
   background do
     discard <| (Client.events quietPort { method := .get, path := ["events"] } (fun _ => false) 1500 : IO _)
-  Async.sleep 300
+  let asked ← IO.monoMsNow
+  let cut ← (Client.events quietPort { method := .get, path := ["events"] } (fun _ => false) 200 : IO _)
+  let waited := (← IO.monoMsNow) - asked
   let stopped ← Async.race (do quiet.stop; return true) (do Async.sleep 3000; return false)
   let text := fun (r : Response) => (String.fromUTF8? r.body).getD ""
   return [
@@ -365,6 +368,10 @@ def streamTest (ioThreads : Nat := 0) : Async (List (String × Bool)) := do
       inChunks.any (·.endsWith s!"30000 bytes, Adler-32 {checksum (letters 30000)}\n")),
     ("web: a streamed response is read back whole, in chunks",
       text counted == "0\n1\n2\n" && counted.headers.contains ("transfer-encoding", "chunked")),
+    ("web: a stream asked again after the system had nothing yet carries what it has later",
+      text later == "late\n"),
+    ("web: a client reading a stream that never ends gives up at its deadline",
+      cut.isEmpty && waited < 2000),
     ("web: a stream of events carries each event once, in order",
       events.map (·.data) == ["e0", "e1", "e2"] && events.map (·.id) == [some "0", some "1", some "2"]),
     ("web: a stream of events resumes after the event the client last read",

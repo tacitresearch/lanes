@@ -9,7 +9,8 @@ import Lanes
 
 `examples/upload`'s service, which keeps the size and the Adler-32 checksum of each upload as its
 pieces come, behind a bridge that also answers two streamed responses itself: `GET /count`, the
-lines `0`, `1`, `2`, and `GET /events`, the events `e0`, `e1`, `e2` with ids `0`, `1`, `2`, from
+lines `0`, `1`, `2`, `GET /later`, which has nothing at first and then the line `late`, and
+`GET /events`, the events `e0`, `e1`, `e2` with ids `0`, `1`, `2`, from
 after the one the client last read.
 -/
 
@@ -63,7 +64,7 @@ def service : Service sig.In sig.Out (List (ReqId × Progress)) where
           else ((head, p) :: rest, [(req, Response.taken)])
 
 def streams (r : Request) : Bool :=
-  r.path == ["upload"] || r.path == ["count"] || r.path == ["events"]
+  r.path == ["upload"] || r.path == ["count"] || r.path == ["later"] || r.path == ["events"]
 
 def decode (id : ReqId) (r : Request) : Except Response In :=
   match Stream.msg? r with
@@ -71,13 +72,18 @@ def decode (id : ReqId) (r : Request) : Except Response In :=
   | some (.pull _ index after) =>
     if r.path == ["count"] then
       .error (if index < 3 then Response.part s!"{index}\n".toUTF8 else Response.finished)
+    else if r.path == ["later"] then
+      .error (match index with
+        | 0 => Response.nothing
+        | 1 => Response.part "late\n".toUTF8
+        | _ => Response.finished)
     else
       let next := ((after.bind String.toNat?).map (· + 1)).getD 0
       .error (if next < 3 then Sse.Event.response { data := s!"e{next}", id := some s!"{next}" }
         else Response.finished)
   | none =>
     if r.path == ["upload"] then .ok (.start id)
-    else if r.path == ["count"] then .error Response.stream
+    else if r.path == ["count"] || r.path == ["later"] then .error Response.stream
     else if r.path == ["events"] then .error Response.events
     else .error (.text "not found\n" 404)
 
