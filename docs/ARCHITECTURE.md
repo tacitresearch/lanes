@@ -25,6 +25,7 @@ proved function tells it to.
 | Shards and the transport | `Lanes/Actors/{Shard,ShardSound,ShardsSound,Courier,CourierSound}.lean`, `Lanes/Env/{Peers,Node}.lean` | `System.ShardsReachable.unsharded`, `Peers.Courier.written_sublist_sent` |
 | The gate and the HTTP server | `Lanes/Http/{Gate,Front,FrontSound,Waiting}.lean`, `Lanes/Semantics/FrontLive.lean`, `Lanes/Env/Http.lean` | `Http.served_answered_le_arrived`, `Http.served_pending_answered`, `Http.Waiting.exec_answered` |
 | Other adapters | `Lanes/Actors/Outside.lean`, `Lanes/Env/{Clock,HttpClient}.lean`, `Lanes/Http/{Wire,WireSound}.lean` | `Response.read_wire`, `Request.fields_framing`; conformance tests |
+| Jobs: work outside a step | `Lanes/Behaviours/{Jobs,JobsSound}.lean`, `Lanes/Semantics/JobsLive.lean`, `Lanes/Env/Jobs.lean` | `Jobs.answered_le_handled`, `Jobs.retry_same`, `Jobs.submitted_answered`; the pool is trusted |
 | Web | `Lanes/Http/{Basic,Route,RouteSound,Cookie,CookieSound}.lean`, `Lanes/Html/`, `Lanes/Auth/` | `Html.lex_render`, `Html.safeUrl_scheme`, `Http.dispatch_link`, `Http.parseForm_encodeForm`, `Http.readSetCookie_header`, `Auth.verify_eq_some`, `Auth.checkForm_other` |
 | The checker | `Lanes/Check/`, `Lanes/Semantics/{Monitor,MonitorSound}.lean` | `Check.search_sound`, `Check.system_sound_of_respects`, `Check.refines_traces` |
 | The proof layer | `Lanes/Semantics/` | refinement, specs, fairness, leads-to |
@@ -193,6 +194,17 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   server writes it as soon as its last byte is there, to stay within its limit and to end
   (`Lanes/Http/WireSound.lean`: `Response.read_wire`, `Response.read_more`; D39).
 - **HTTP server, journal, transport**: above.
+- **Jobs** (`Lanes/Behaviours/Jobs.lean`): work that must not run in a
+  step, an outbound call or slow pure work, is submitted to the jobs actor under a key the
+  requester chooses, beside the system that submits it (`Jobs.attach`). The actor dispatches
+  each attempt as an output carrying the key, gives each a deadline, retries after a backoff,
+  keeps at most `maxInFlight` jobs active and refuses beyond, and answers each key once; its
+  pool (`Lanes/Env/Jobs.lean`) performs attempts on tasks of their own, as a pure function or
+  an HTTP call with the key in `Idempotency-Key`, and hands results back as inputs. Proved: no
+  key is answered more often than it is submitted, in every environment
+  (`Jobs.answered_le_handled`); a retry carries its job's key and work (`Jobs.retry_same`);
+  in a fair run without crashes every job is answered, whatever the workers do
+  (`Jobs.submitted_answered`, by `System.LeadsTo.induction` on attempts left).
 
 ## The checker
 

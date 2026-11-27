@@ -34,7 +34,9 @@ because a launch claim is what a critic tests first.
    off the key-value store; idle actors not at their start saved when they rest and read back when mail comes (those at
    their start are released already), which waits for a place to keep their state.
 5. **Slow work that is not one request's**, as the ledger's friction log asks
-   (`systems/ledger/README.md`): background jobs, ending sessions in bulk, statements.
+   (`systems/ledger/README.md`). The jobs actor is in (`Lanes/Behaviours/Jobs.lean`). Left: the
+   answer carried to its requester through the join, at most once there, as the gate's is; a
+   queue for jobs beyond `maxInFlight`; ending sessions in bulk and statements in the ledger.
 6. **Short, current docs.** One rules file (`AGENTS.md`), `docs/ARCHITECTURE.md` in place of the
    original design, this page and `docs/ROADMAP.md` without their history, and `lanes lint`
    checking that docs cite files that exist.

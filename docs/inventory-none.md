@@ -51,10 +51,6 @@ Each is to be proved, tested, made private or removed.
 - `Slot.hash`
 - `SysState.render`
 
-### `Lanes/Actors/Outside.lean`
-
-- `Outside.any`
-
 ### `Lanes/Actors/Run.lean`
 
 - `Effect.armed`
