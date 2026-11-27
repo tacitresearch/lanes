@@ -1,4 +1,4 @@
-# D?. Models of more outside systems: queues, caches, clocks, shared caches, rate limits and disk faults
+# D81. Models of more outside systems: queues, caches, clocks, shared caches, rate limits and disk faults
 
 D65 gave the combinators for models of external services and the first instances. This adds six
 more, each with a theorem about what it allows and a fixture in `Tests/` with a seeded bug the
