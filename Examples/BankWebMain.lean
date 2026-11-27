@@ -19,4 +19,4 @@ def main (args : List String) : IO Unit := do
   let server ← (Http.serve (bank Acct 100) bridge config { snapshotEvery := 1024 } saving).block
   IO.println s!"Lanes Bank listening on http://127.0.0.1:{server.port.getD 0}"
   (← IO.getStdout).flush
-  server.wait.block
+  Lanes.block server.wait

@@ -14,6 +14,7 @@
 #   IDLE_WAIT_MINUTES (0)    how long to wait at the start for the machine to be idle
 #   REQUIRE_IDLE (0)         1: exit 3 if the machine is not idle at the start, 4 if a run was disturbed
 #   BUILD (1)                0: use the binaries already built
+#   LEAN_NUM_THREADS         Lean's worker threads; by default as many as SERVER_CPUS
 set -euo pipefail
 cd "$(dirname "$0")"
 export PATH="$HOME/.elan/bin:/usr/local/go/bin:$PATH"
@@ -54,8 +55,8 @@ if [ -z "${SERVER_CPUS:-}" ] || [ -z "${LOAD_CPUS:-}" ]; then
 fi
 read -ra server_cpus <<<"$(expand_cpus "$SERVER_CPUS")"
 # Lean's runtime sizes its thread pool from the machine's CPUs, not from its affinity mask, as
-# Go does; this gives it as many workers as it has CPUs.
-export LEAN_NUM_THREADS=${#server_cpus[@]}
+# Go does; this gives it as many workers as it has CPUs, unless LEAN_NUM_THREADS is set.
+export LEAN_NUM_THREADS=${LEAN_NUM_THREADS:-${#server_cpus[@]}}
 
 # Runner.Worker is the process of a GitHub Actions job: one is this job (if any), others are
 # jobs that other runners on the machine took.

@@ -106,7 +106,7 @@ def serve {n : Nat} (args : Args) (self : Fin n) : IO UInt32 := do
     (log := some log)).block
   IO.println s!"raft-kv node {self} of {n} on http://127.0.0.1:{server.port.getD 0}"
   (← IO.getStdout).flush
-  server.wait.block
+  Lanes.block server.wait
   return 0
 
 def main (args : List String) : IO UInt32 := do
