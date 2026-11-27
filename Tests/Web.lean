@@ -282,14 +282,23 @@ def wireTest (ioThreads : Nat := 0) : Async (List (String × Bool)) := do
   let started ← IO.monoMsNow
   let idle ← exchange port []
   let idled := (← IO.monoMsNow) - started
+  let ended ← Async.race (do server.stop; return true) (do Async.sleep 3000; return false)
+  -- The bound, on a server whose deadlines are long: a held connection the server closed at its
+  -- deadline would free a place for the one beyond it. Each held connection is answered once
+  -- before the next, so all three are counted when the fourth arrives.
+  let bound ← serve (Server.system mute) slugBridge
+    { port := 0, head_ms := 10000, idle_ms := 10000, connections_max := 3, ioThreads }
+  let some boundPort := bound.port | return [("web: the server reports its port", false)]
   let held ← (List.range 3).mapM fun _ => do
     let socket ← TCP.Socket.Client.mk
-    socket.connect (.v4 ⟨.ofParts 127 0 0 1, port⟩)
-    return socket
-  Async.sleep 50
-  let beyond ← exchange port [get "/echo/n" true]
-  for socket in held do socket.close
-  let ended ← Async.race (do server.stop; return true) (do Async.sleep 3000; return false)
+    socket.connect (.v4 ⟨.ofParts 127 0 0 1, boundPort⟩)
+    socket.send (get "/echo/held").toUTF8
+    let answer ← try Async.race (socket.recv? 65536) (do Async.sleep 3000; return none)
+      catch _ => pure none
+    return (socket, answer.isSome)
+  let beyond ← exchange boundPort [get "/echo/n" true]
+  for (socket, _) in held do socket.close
+  discard <| Async.race (do bound.stop; return true) (do Async.sleep 3000; return false)
   let server ← serve (Server.system mute) slugBridge { port := 0, ioThreads }
   let some port := server.port | return [("web: the server reports its port", false)]
   let socket ← TCP.Socket.Client.mk
@@ -315,7 +324,8 @@ def wireTest (ioThreads : Nat := 0) : Async (List (String × Bool)) := do
       slow.any (statuses · == ["408"])),
     ("web: an idle connection is closed at its deadline, with nothing written",
       idle == some "" && 250 ≤ idled),
-    ("web: a connection beyond the bound is closed without an answer", beyond.getD "" == ""),
+    ("web: a connection beyond the bound is closed without an answer",
+      held.all (·.2) && beyond.getD "" == ""),
     ("web: and stop then returns, every connection answered and closed", ended),
     ("web: stop closes a connection kept open, after its response",
       (first.bind String.fromUTF8?).any (·.endsWith "kept") && stopped && after == none) ]
