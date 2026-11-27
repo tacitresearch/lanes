@@ -52,6 +52,37 @@ import Lanes.Semantics
 /-- info: 'Lanes.Check.systemFingerprinted_violated' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Check.systemFingerprinted_violated
 
+-- Lanes.Check.ReduceSound
+/-- info: 'Lanes.Check.Model.Reduction.reachable' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.Model.Reduction.reachable
+
+/-- info: 'Lanes.Check.Model.Reduction.of_reduced' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.Model.Reduction.of_reduced
+
+/-- info: 'Lanes.Check.search_reduce_sound' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.search_reduce_sound
+
+/-- info: 'Lanes.Check.search_reduce_violated' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.search_reduce_violated
+
+/-- info: 'Lanes.Check.search_reduce_witness' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.search_reduce_witness
+
+/-- info: 'Lanes.Check.search_reduce_unreached' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.search_reduce_unreached
+
+/-- info: 'Lanes.Check.search_reduce_deadlock' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.search_reduce_deadlock
+
+/-- info: 'Lanes.Check.search_reduce_deadlock_free' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.search_reduce_deadlock_free
+
+/-- info: 'Lanes.Check.World.Reduction.ofDriver' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.World.Reduction.ofDriver
+
+/-- info: 'Lanes.Check.systemReduced_sound' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.systemReduced_sound
+
 -- Lanes.Check.SearchSound
 /-- info: 'Lanes.Check.search_violated' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Check.search_violated

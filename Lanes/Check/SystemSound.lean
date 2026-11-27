@@ -430,6 +430,22 @@ instance [BEq D] [Hashable D] [LawfulHashable D] [∀ i, LawfulBEq (sys.State i)
 
 variable [BEq D] [Hashable D] [∀ i, LawfulBEq (sys.State i)]
 
+omit [Hashable D] in
+/-- The checker's model respects the nodes' equality when the driver, the properties and the
+constraint do. -/
+theorem model_respects [EquivBEq D] (sc : Scenario σ D) (hdriver : sc.driver.Respects)
+    (props : List (Property (World sys D))) (opts : Options (World sys D))
+    (hprops : ∀ p ∈ props, ∀ a b, World.Equiv sc.env a b → p.holds a = p.holds b)
+    (hconstraint : ∀ a b, World.Equiv sc.env a b → opts.constraint a = opts.constraint b) :
+    (model sys sc).Respects (fun n => opts.constraint n.world) (Node.props props) := by
+  refine ⟨fun a b hab l a' ha' => ?_, fun a b hab => hconstraint _ _ (Node.beq_iff_equiv.mp hab),
+    fun q hq a b hab => ?_⟩
+  · obtain ⟨b', hb', hequiv⟩ := (Node.beq_iff_equiv.mp hab).next hdriver (mem_model_next.mp ha')
+    exact ⟨l, .of b', mem_model_next.mpr (by simpa using hb'),
+      Node.beq_iff_equiv.mpr (by simpa using hequiv)⟩
+  · obtain ⟨q', hq', rfl⟩ := List.mem_map.mp hq
+    cases q' <;> exact hprops _ hq' _ _ (Node.beq_iff_equiv.mp hab)
+
 /--
 A complete PASS from `Check.system` is sound: every `always` property holds in every world of
 the checked instance.
@@ -448,16 +464,10 @@ theorem system_sound_of_respects [EquivBEq D] (sc : Scenario σ D)
     {name : String} {p : World sys D → Bool} (hp : .always name p ∈ props)
     {w : World sys D} (hw : sc.Reachable sys opts.constraint w) : p w = true := by
   simp only [system, Report.map, Option.map_eq_none_iff] at hfailure hcomplete
-  have hsound := search_sound (s := (.of w : Node sys sc.env D)) (p := fun n => p n.world) ?_
-    hfailure hcomplete (List.mem_map.mpr ⟨_, hp, rfl⟩) hw.model
-  · simpa using hsound
-  refine ⟨fun a b hab l a' ha' => ?_, fun a b hab => hconstraint _ _ (Node.beq_iff_equiv.mp hab),
-    fun q hq a b hab => ?_⟩
-  · obtain ⟨b', hb', hequiv⟩ := (Node.beq_iff_equiv.mp hab).next hdriver (mem_model_next.mp ha')
-    exact ⟨l, .of b', mem_model_next.mpr (by simpa using hb'),
-      Node.beq_iff_equiv.mpr (by simpa using hequiv)⟩
-  · obtain ⟨q', hq', rfl⟩ := List.mem_map.mp hq
-    cases q' <;> exact hprops _ hq' _ _ (Node.beq_iff_equiv.mp hab)
+  have hsound := search_sound (s := (.of w : Node sys sc.env D)) (p := fun n => p n.world)
+    (model_respects sc hdriver props opts hprops hconstraint) hfailure hcomplete
+    (List.mem_map.mpr ⟨_, hp, rfl⟩) hw.model
+  simpa using hsound
 
 /-- `system_sound_of_respects` for a driver whose state compares with `==` exactly when it is
 equal, which every driver respects. -/
