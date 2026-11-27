@@ -76,7 +76,7 @@ instance {i : σ.Id} : Repr (Effect σ i) where
     | .stop, _ => "stop"
 
 /--
-Drop namespace prefixes from printed values: `Examples.Bank.Msg.credit 1` becomes `credit 1`.
+Drop namespace prefixes from printed values: `Bank.Msg.credit 1` becomes `credit 1`.
 Traces are read by people and agents, and the prefixes are noise. Text inside string literals is
 kept as it is.
 -/

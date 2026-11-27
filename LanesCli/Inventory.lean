@@ -424,7 +424,7 @@ def entries (root : System.FilePath) (f : Facts) : IO (Array Entry) := do
 
 /-! ## The document -/
 
-/-- `Lanes.Runtime.Kernel` is in `Lanes/Actors`; `LanesCli.Lint` in `LanesCli`. -/
+/-- `Lanes.Runtime.Kernel` is in `Lanes/Runtime`; `LanesCli.Lint` in `LanesCli`. -/
 def area (m : Name) : String :=
   match m.components with
   | `Lanes :: a :: _ :: _ => s!"Lanes/{a}"
