@@ -102,11 +102,15 @@ Unless `Runtime.Config.parallel` is `off` or there is one worker, the inputs tha
 are one turn (`Journal.turnAll`), a group of at most `min batch snapshotEvery`, and its work is
 done a wave at a time (`Lanes/Runtime/Wave.lean`): the steps of the actors with mail in the wave
 are worked out on Lean's task pool, each actor's in the order of its messages, and the kernel then
-does the wave as `runBatch` does, taking each step from that plan. Handling one actor's message
-changes no other actor's state (`Kernel.frame_handle`), so the result is `runBatch`'s, value for
-value, however the wave is spread over threads (`Kernel.runWaves_eq`), and the journal and
-everything proved of the kernel are unchanged
-(`docs/decisions/D64-actors-run-in-parallel.md`).
+does the wave as `runBatch` does, taking each step from that plan. A plan keeps each actor's last
+state only, so its steps update the state in place; the kernel writes it at the actor's last
+step, or works out the state the steps taken leave where they stop early (`Kernel.Plan.real`).
+Handling one actor's message neither reads nor writes another actor's cell
+(`Kernel.handle_setState`), and writes to cells already in the table commute
+(`DHashMap.insert_comm_of_contains`), so the result is `runBatch`'s, value for value, however the
+wave is spread over threads (`Kernel.runWaves_eq`), and the journal and everything proved of the
+kernel are unchanged (`docs/decisions/D64-actors-run-in-parallel.md`,
+`docs/decisions/new-waves-in-place.md`).
 
 Steps cheaper than a few microseconds cost more to hand to another thread than they save, and
 whether costlier ones gain depends on the cores free. With `parallel` `auto`, the default, the

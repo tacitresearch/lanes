@@ -23,7 +23,8 @@ actor's steps, and writes the last state then. If the actor's steps stop being t
 that, because a timer of its goes off, another message comes first, the wave ends, or an actor is
 started that has no cell yet, the kernel works out the state the steps taken leave, from the
 state in the cell, and writes it (`Plan.fixAt`, `Plan.real`). That costs the steps again, and is
-rare.
+rare. A state a task has seen is shared, so its first write still copies it: once a wave for
+each actor worked out on the pool.
 
 So the work done is `runBatch`'s, value for value (`Kernel.runWaves_eq`): the journal, replay,
 snapshots and every theorem about the kernel are unchanged, and which thread worked out a step

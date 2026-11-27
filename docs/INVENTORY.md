@@ -19,12 +19,12 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Net` | 37 | 6 | 5 | 0 | 0 | 25 | 1 |
 | `Lanes/Outside` | 144 | 112 | 4 | 6 | 1 | 21 | 0 |
 | `Lanes/Proof` | 36 | 12 | 0 | 0 | 0 | 23 | 1 |
-| `Lanes/Runtime` | 173 | 94 | 21 | 0 | 28 | 30 | 0 |
+| `Lanes/Runtime` | 180 | 100 | 21 | 0 | 29 | 30 | 0 |
 | `Lanes/Semantics` | 61 | 11 | 0 | 0 | 0 | 49 | 1 |
 | `Lanes/Testing` | 63 | 0 | 0 | 1 | 62 | 0 | 0 |
 | `Lanes/Web` | 616 | 324 | 52 | 37 | 148 | 53 | 2 |
 | `LanesCli` | 125 | 0 | 0 | 0 | 51 | 0 | 74 |
-| All | 2236 | 1182 | 102 | 116 | 384 | 325 | 127 |
+| All | 2243 | 1188 | 102 | 116 | 385 | 325 | 127 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -1780,28 +1780,28 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Kernel.cell` | proved | `Batch.run_peek`, `Journal.Upgrade.inv_load`, `Kernel.WellFormed.runBatch_of_due` and 10 more |
-| `Kernel.setCell` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 43 more |
+| `Kernel.cell` | proved | `Batch.run_peek`, `Journal.Upgrade.inv_load`, `Kernel.Plan.fixAll_local` and 12 more |
+| `Kernel.setCell` | proved | through `Kernel.apply`, `Kernel.boot` and 8 more: `Batch.run_handed`, `Batch.run_kernel` and 49 more |
 | `Kernel.abs` | proved | `Kernel.WellFormed.quiet_iff`, `Kernel.WellFormed.wait_forever`, `Kernel.abs_boot` and 7 more |
 | `Kernel.env` | proved | `Kernel.abs_boot`, `Kernel.accept_sound`, `Kernel.exec_reachable` and 4 more |
-| `Kernel.unschedule` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 43 more |
-| `Kernel.perform` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 43 more |
-| `Kernel.performAll` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 43 more |
-| `Kernel.down` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 43 more |
-| `Kernel.settle` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 43 more |
-| `Kernel.rest` | proved | through `Kernel.apply`, `Kernel.exec` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 35 more |
-| `Kernel.takeState` | proved | through `Kernel.apply`, `Kernel.exec` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 35 more |
-| `Kernel.handle` | proved | `Kernel.frame_handle` |
+| `Kernel.unschedule` | proved | through `Kernel.apply`, `Kernel.boot` and 8 more: `Batch.run_handed`, `Batch.run_kernel` and 49 more |
+| `Kernel.perform` | proved | through `Kernel.apply`, `Kernel.boot` and 8 more: `Batch.run_handed`, `Batch.run_kernel` and 49 more |
+| `Kernel.performAll` | proved | through `Kernel.apply`, `Kernel.boot` and 8 more: `Batch.run_handed`, `Batch.run_kernel` and 49 more |
+| `Kernel.down` | proved | through `Kernel.apply`, `Kernel.boot` and 8 more: `Batch.run_handed`, `Batch.run_kernel` and 49 more |
+| `Kernel.settle` | proved | `Kernel.setState_settle` |
+| `Kernel.rest` | proved | through `Kernel.apply`, `Kernel.exec` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 40 more |
+| `Kernel.takeState` | proved | through `Kernel.apply`, `Kernel.exec` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 40 more |
+| `Kernel.handle` | proved | `Kernel.frame_handle`, `Kernel.handleAhead_eq`, `Kernel.handle_setState` |
 | `Kernel.startActor` | proved | `Kernel.frame_startActor` |
 | `Kernel.boot` | proved | `Http.kernel_fronted_answered_le_arrived`, `Http.kernel_served_answered_le_arrived`, `Journal.Disk.torn_nil` and 13 more |
 | `Kernel.accept` | proved | `Kernel.accept_sound` |
-| `Kernel.run1` | proved | `Kernel.run1_sound` |
+| `Kernel.run1` | proved | `Kernel.run1Ahead_eq`, `Kernel.run1_sound` |
 | `Kernel.fire` | proved | `Kernel.fire_sound`, `Kernel.frame_fire` |
 | `Kernel.advance` | proved | through `Kernel.apply`, `Kernel.exec`: `Batch.run_handed`, `Batch.run_kernel` and 20 more |
-| `Kernel.timerNext` | proved | through `Kernel.apply`, `Kernel.exec` and 2 more: `Batch.run_handed`, `Batch.run_kernel` and 31 more |
-| `Kernel.step` | proved | `Kernel.WellFormed.runBatch_of_due`, `Kernel.WellFormed.step_events_ne_nil`, `Kernel.WellFormed.step_of_due` and 1 more |
+| `Kernel.timerNext` | proved | through `Kernel.apply`, `Kernel.exec` and 2 more: `Batch.run_handed`, `Batch.run_kernel` and 33 more |
+| `Kernel.step` | proved | `Kernel.WellFormed.runBatch_of_due`, `Kernel.WellFormed.step_events_ne_nil`, `Kernel.WellFormed.step_of_due` and 2 more |
 | `Kernel.wait` | proved | `Kernel.WellFormed.step_events_ne_nil`, `Kernel.WellFormed.wait_for_ms`, `Kernel.WellFormed.wait_forever` and 1 more |
-| `Kernel.runBatch` | proved | `Kernel.WellFormed.runBatch`, `Kernel.WellFormed.runBatch_of_due`, `Kernel.runBatchAhead_eq` and 5 more |
+| `Kernel.runBatch` | proved | `Kernel.WellFormed.runBatch`, `Kernel.WellFormed.runBatch_of_due`, `Kernel.runBatchAhead_eq` and 6 more |
 | `Kernel.quiet` | proved | `Batch.run_resolved`, `Kernel.WellFormed.quiet_iff` |
 | `Kernel.image` | proved | `Batch.flush_save`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save` and 8 more |
 | `Kernel.Image.kernel` | proved | `Batch.flush_save`, `Journal.Begun.resume_upgraded`, `Journal.Upgrade.begin_crash` and 3 more |
@@ -1861,6 +1861,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Pace.choose` | tested | `Tests/Pace.lean` |
 | `Pace.spread` | tested | `Tests/Pace.lean` |
 | `Pace.cycleOf` | tested | `Tests/Pace.lean` |
+| `Pace.record` | tested | `Tests/Pace.lean` |
 | `Pace.observe` | tested | `Tests/Pace.lean` |
 | `Pace.work` | tested | `Tests/Pace.lean` |
 
@@ -1941,23 +1942,29 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Kernel.ahead` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 1 more |
+| `Kernel.replay` | proved | through `Kernel.Plan.fixAll`, `Kernel.Plan.real` and 6 more: `Kernel.Plan.fixAll_local`, `Kernel.good_plan` and 7 more |
+| `Kernel.ahead` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 2 more |
 | `Kernel.Fits` | spec | a predicate |
-| `Kernel.Plan.get` | proved | through `Kernel.plan`, `Kernel.runBatchAhead` and 2 more: `Kernel.good_plan`, `Kernel.runBatchAhead_eq` and 2 more |
-| `Kernel.Plan.set` | proved | through `Kernel.plan`, `Kernel.runBatchAhead` and 2 more: `Kernel.good_plan`, `Kernel.runBatchAhead_eq` and 2 more |
-| `Kernel.Plan.drop` | proved | through `Kernel.runBatchAhead`, `Kernel.runWaves` and 1 more: `Kernel.runBatchAhead_eq`, `Kernel.runWaves_eq` and 1 more |
+| `Kernel.setState` | proved | `Kernel.Plan.fixAll_local`, `Kernel.handle_setState`, `Kernel.setState_settle` |
+| `Kernel.restAs` | proved | through `Kernel.handleAhead`, `Kernel.run1Ahead` and 4 more: `Kernel.handleAhead_eq`, `Kernel.run1Ahead_eq` and 5 more |
+| `Kernel.Plan.set` | proved | through `Kernel.handleAhead`, `Kernel.plan` and 5 more: `Kernel.good_plan`, `Kernel.handleAhead_eq` and 6 more |
+| `Kernel.Plan.drop` | proved | through `Kernel.Plan.fixAll`, `Kernel.Plan.real` and 5 more: `Kernel.Plan.fixAll_local`, `Kernel.good_plan` and 7 more |
+| `Kernel.Plan.reset` | proved | through `Kernel.run1Ahead`, `Kernel.runBatchAhead` and 3 more: `Kernel.run1Ahead_eq`, `Kernel.runBatchAhead_eq` and 4 more |
+| `Kernel.Plan.fixAt` | proved | through `Kernel.Plan.fixAll`, `Kernel.Plan.real` and 5 more: `Kernel.Plan.fixAll_local`, `Kernel.good_plan` and 7 more |
+| `Kernel.Plan.fixAll` | proved | `Kernel.Plan.fixAll_local` |
+| `Kernel.Plan.real` | proved | `Kernel.good_plan`, `Kernel.handleAhead_eq`, `Kernel.run1Ahead_eq` and 3 more |
 | `Kernel.Plan.Good` | spec | a predicate |
+| `Kernel.handleAhead` | proved | `Kernel.handleAhead_eq` |
+| `Kernel.run1Ahead` | proved | `Kernel.run1Ahead_eq` |
+| `Kernel.stepAhead` | proved | `Kernel.stepAhead_eq` |
+| `Kernel.runBatchAhead` | proved | `Kernel.runBatchAhead_eq`, `Kernel.wave_eq` |
+| `Kernel.mail` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 2 more |
+| `Kernel.Job.run` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 2 more |
+| `Kernel.jobs` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 2 more |
+| `Kernel.chunks` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 2 more |
+| `Kernel.Plan.add` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 2 more |
+| `Kernel.plan` | proved | `Kernel.good_plan`, `Kernel.wave_eq` |
 | `Kernel.Frame` | spec | a predicate |
-| `Kernel.handleAhead` | proved | through `Kernel.runBatchAhead`, `Kernel.runWaves` and 1 more: `Kernel.runBatchAhead_eq`, `Kernel.runWaves_eq` and 1 more |
-| `Kernel.run1Ahead` | proved | through `Kernel.runBatchAhead`, `Kernel.runWaves` and 1 more: `Kernel.runBatchAhead_eq`, `Kernel.runWaves_eq` and 1 more |
-| `Kernel.stepAhead` | proved | through `Kernel.runBatchAhead`, `Kernel.runWaves` and 1 more: `Kernel.runBatchAhead_eq`, `Kernel.runWaves_eq` and 1 more |
-| `Kernel.runBatchAhead` | proved | `Kernel.runBatchAhead_eq` |
-| `Kernel.Job.run` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 1 more |
-| `Kernel.mail` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 1 more |
-| `Kernel.jobs` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 1 more |
-| `Kernel.chunks` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 1 more |
-| `Kernel.Plan.add` | proved | through `Kernel.plan`, `Kernel.runWaves` and 1 more: `Kernel.good_plan`, `Kernel.runWaves_eq` and 1 more |
-| `Kernel.plan` | proved | `Kernel.good_plan` |
 | `Kernel.waves` | proved | `Kernel.waves_eq` |
 | `Kernel.runWaves` | proved | `Kernel.runWaves_eq` |
 | `Kernel.acceptAll` | proved | `Kernel.exec_inputs` |
