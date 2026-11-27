@@ -10,6 +10,10 @@ of the state of the actor that takes it. A shell that keeps a second reference t
 makes every step copy the actor table, and a kernel that steps a state its table still holds
 makes every step copy the state. No functional test notices either: it only shows as time. So
 these measure time, with a wide margin.
+
+Steps worked out on the pool copy each state once a wave, since Lean never updates in place an
+object another thread has seen: with `parallel := .on` a write costs a share of a copy, and
+those tests bound it by half a copy.
 -/
 
 namespace Tests.Scale
@@ -106,6 +110,42 @@ def shardWrites (size : Nat) : IO Nat := (do
   rt.stop
   return if written then elapsed else 1000000000000 : Async Nat).block
 
+abbrev pairSig : Signature where
+  Id := Fin 2
+  Msg _ := Nat
+  In := Nat
+
+/-- Two actors whose states are `initial`; input `n` writes `n` at `n` modulo the size in the
+state of actor `n` modulo 2. -/
+abbrev pair (initial : Array Nat) : System pairSig where
+  State _ := Array Nat
+  actor _ :=
+    { init := initial, step := fun s n => (s.set! (n % s.size) n, []), recover := fun s => (s, []) }
+  accept n := ⟨Fin.ofNat 2 n, n⟩
+
+/-- `shardWrites` with the writes shared by two busy actors, on four workers as `parallel` says. -/
+def pairWrites (parallel : Runtime.Parallel) (size : Nat) : IO Nat := (do
+  let rt ← Runtime.start (pair (Array.replicate size 0)) { parallel, workers := 4 }
+  rt.input 0
+  rt.input 1
+  rt.idle
+  let t0 ← IO.monoNanosNow
+  for n in [2:writes + 2] do rt.input n
+  rt.idle
+  let elapsed := (← IO.monoNanosNow) - t0
+  let last := writes + 1
+  let written := (← rt.state (Fin.ofNat 2 last))[last % size]! == last
+  rt.stop
+  return if written then elapsed else 1000000000000 : Async Nat).block
+
+/-- Nanoseconds to copy an array of `size` numbers. -/
+def copyNs (size : Nat) : IO Nat := do
+  let a ← IO.lazyPure fun _ => Array.replicate size 0
+  let t0 ← IO.monoNanosNow
+  let b ← IO.lazyPure fun _ => a.set! 0 1
+  let elapsed := (← IO.monoNanosNow) - t0
+  return if a[0]! + b[0]! == 1 then elapsed else 0
+
 def fastest (run : IO Nat) : IO Nat :=
   return min (← run) (min (← run) (← run))
 
@@ -120,10 +160,20 @@ def tests : IO (List (String × Bool)) := do
   let shardLarge ← fastest (shardWrites 1000000)
   let us (ns : Nat) := s!"{ns / writes / 1000}.{ns / writes / 100 % 10} µs"
   IO.println s!"in place: a write to a state of 10^4 numbers takes {us aloneSmall} in the kernel and {us shardSmall} on a shard, to one of 10^6 {us aloneLarge} and {us shardLarge}"
+  let autoSmall ← fastest (pairWrites .auto 10000)
+  let autoLarge ← fastest (pairWrites .auto 1000000)
+  let onSmall ← fastest (pairWrites .on 10000)
+  let onLarge ← fastest (pairWrites .on 1000000)
+  let copy ← fastest (copyNs 1000000)
+  IO.println s!"in place on two busy actors: a write to a state of 10^4 numbers takes {us autoSmall} with parallel auto and {us onSmall} on, to one of 10^6 {us autoLarge} and {us onLarge}; a copy of 10^6 numbers takes {copy / 1000} µs"
   return [("scale: a message costs the same whatever the number of actors",
       large ≤ 4 * small + 50),
     ("scale: a step updates its actor's state in place, whatever its size, in the kernel",
       aloneLarge ≤ 10 * aloneSmall + 50000000),
-    ("scale: and on a shard", shardLarge ≤ 10 * shardSmall + 50000000)]
+    ("scale: and on a shard", shardLarge ≤ 10 * shardSmall + 50000000),
+    ("scale: and on a shard of two busy actors, with parallel auto",
+      autoLarge ≤ 10 * autoSmall + 50000000),
+    ("scale: with parallel on, a write costs less than half a copy of the state",
+      2 * onLarge ≤ writes * copy && onSmall < 1000000000000)]
 
 end Tests.Scale
