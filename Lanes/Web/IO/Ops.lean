@@ -18,7 +18,7 @@ pure and proved.
 It never enters a system and never changes what enters one: an operator's request is answered
 here, before the request is prepared or has an id; any other request goes on as it came; the
 journal's storage is given the entries and images it was given, and counts them after they are
-written (`docs/decisions/new-observability.md`). With nothing configured, `front` and `journal`
+written (`docs/decisions/D69-observability.md`). With nothing configured, `front` and `journal`
 return what they are given.
 -/
 

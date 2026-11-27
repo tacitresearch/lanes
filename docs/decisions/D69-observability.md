@@ -1,4 +1,4 @@
-# D?. The server tells its operators how it is, and nothing it tells enters a system
+# D69. The server tells its operators how it is, and nothing it tells enters a system
 
 An application deployed behind a load balancer needs three things the framework did not have:
 metrics a Prometheus server or the CloudWatch agent can scrape, a liveness and a readiness check

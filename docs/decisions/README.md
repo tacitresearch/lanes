@@ -80,3 +80,4 @@ decision without a number.
 - [D64. Actors step in parallel within a wave, and connections run on threads of the server's own](D64-actors-run-in-parallel.md)
 - [D65. Models of external services: calls that may not answer, keys, webhooks, and things with a lifecycle](D65-models-of-external-services.md)
 - [D66. A migration carries the old kernel across a deploy, once, with a proof](D66-a-migration-carries-the-kernel-across.md)
+- [D69. The server tells its operators how it is, and nothing it tells enters a system](D69-observability.md)

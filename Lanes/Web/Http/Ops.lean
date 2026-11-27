@@ -15,7 +15,7 @@ metrics page, liveness, readiness), what each answers, the server's counts and h
 as metrics, a request id taken from the client or made, and a line of the access log.
 
 Nothing here reaches a system: an operator's request is answered by the server
-(`docs/decisions/new-observability.md`). With the default configuration no request is the
+(`docs/decisions/D69-observability.md`). With the default configuration no request is the
 operators' (`route?_default`), and a request is one only at a path configured for it
 (`route?_some`). Readiness answers `200` exactly when the shard has recovered and the server is
 not stopping (`answer_ready`). A request id taken from a client is bounded and has only letters,

@@ -200,7 +200,7 @@ whole life; Lean has one libuv loop a process, which every read and write still 
 (`Lanes/Net/IO/Node.lean`) runs it with the transport: one process with an HTTP front and peers.
 
 The server tells its operators how it is, each part off by default (`ServerConfig.ops`,
-`docs/decisions/new-observability.md`): a metrics page in the Prometheus text format, liveness,
+`docs/decisions/D69-observability.md`): a metrics page in the Prometheus text format, liveness,
 readiness, request ids and a JSON access log. What is decided is pure. `Lanes/Lib/Metrics.lean`
 renders counters, gauges and histograms, whose buckets count the observations at or below their
 bounds (`Metrics.Histogram.observeAll_eq`) and whose label values a reader reads back as written
