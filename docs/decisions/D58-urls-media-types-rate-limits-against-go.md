@@ -1,4 +1,4 @@
-# D57. URLs, media types and rate limits against Go, and where they depart from it
+# D58. URLs, media types and rate limits against Go, and where they depart from it
 
 D50's pattern, applied to three more packages of `docs/STDLIB.md`'s P0: `Lanes.Url`
 (`Lanes/Http/Url.lean`, RFC 3986) against `net/url`, `Lanes.MediaType`
