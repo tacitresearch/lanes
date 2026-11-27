@@ -1,7 +1,7 @@
 # Oracles
 
 What Lanes is compared with, and what it is not compared with and why
-(`docs/decisions/new-oracles.md`). There are two kinds, kept apart:
+(`docs/decisions/D80-oracles.md`). There are two kinds, kept apart:
 
 - **Pure oracles** give one input to ours and to a reference implementation and compare the
   outputs, on generated inputs: `lake exe lanesOracle [--cases N] [--seed S] [package…]`, and

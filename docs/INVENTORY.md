@@ -10,7 +10,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Area | Definitions | proved | trusted | checked | tested | spec | none |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `Lanes/Behaviours` | 66 | 36 | 5 | 18 | 0 | 7 | 0 |
+| `Lanes/Behaviours` | 134 | 81 | 5 | 24 | 0 | 24 | 0 |
 | `Lanes/Check` | 74 | 54 | 0 | 8 | 0 | 10 | 2 |
 | `Lanes/Core` | 103 | 41 | 0 | 34 | 1 | 11 | 16 |
 | `Lanes/Data` | 68 | 43 | 0 | 4 | 1 | 0 | 20 |
@@ -20,11 +20,11 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Outside` | 118 | 87 | 5 | 6 | 1 | 19 | 0 |
 | `Lanes/Proof` | 36 | 12 | 0 | 0 | 0 | 23 | 1 |
 | `Lanes/Runtime` | 172 | 93 | 21 | 0 | 28 | 30 | 0 |
-| `Lanes/Semantics` | 60 | 11 | 0 | 0 | 0 | 48 | 1 |
+| `Lanes/Semantics` | 61 | 11 | 0 | 0 | 0 | 49 | 1 |
 | `Lanes/Testing` | 63 | 0 | 0 | 1 | 62 | 0 | 0 |
 | `Lanes/Web` | 595 | 309 | 52 | 31 | 149 | 52 | 2 |
 | `LanesCli` | 125 | 0 | 0 | 0 | 51 | 0 | 74 |
-| All | 2115 | 1094 | 103 | 104 | 385 | 302 | 127 |
+| All | 2184 | 1139 | 103 | 110 | 385 | 320 | 127 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -114,6 +114,84 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Check.refinesOnce` | checked | `Tests/KV.lean` |
 | `Service.onceMonitored` | checked | `Tests/KV.lean` |
 
+## `Lanes/Behaviours/Schedule/Basic.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Schedule.Retry.codec` | proved | its type, `Codec` |
+| `Schedule.instCodableRetry` | proved | its type, `Codable` |
+| `Schedule.Work.codec` | proved | its type, `Codec` |
+| `Schedule.instCodableWork` | proved | its type, `Codable` |
+| `Schedule.Spec.codec` | proved | its type, `Codec` |
+| `Schedule.instCodableSpec` | proved | its type, `Codable` |
+| `Schedule.Phase.codec` | proved | its type, `Codec` |
+| `Schedule.instCodablePhase` | proved | its type, `Codable` |
+| `Schedule.Job.codec` | proved | its type, `Codec` |
+| `Schedule.instCodableJob` | proved | its type, `Codable` |
+| `Schedule.State.codec` | proved | its type, `Codec` |
+| `Schedule.instCodableState` | proved | its type, `Codable` |
+| `Schedule.Attempt.codec` | proved | its type, `Codec` |
+| `Schedule.instCodableAttempt` | proved | its type, `Codable` |
+| `Schedule.Refusal.codec` | proved | its type, `Codec` |
+| `Schedule.instCodableRefusal` | proved | its type, `Codable` |
+| `Schedule.Outcome.codec` | proved | its type, `Codec` |
+| `Schedule.instCodableOutcome` | proved | its type, `Codable` |
+| `Schedule.Input.codec` | proved | its type, `Codec` |
+| `Schedule.instCodableInput` | proved | its type, `Codable` |
+| `Schedule.Output.codec` | proved | its type, `Codec` |
+| `Schedule.instCodableOutput` | proved | its type, `Codable` |
+| `Schedule.Msg.codec` | proved | its type, `Codec` |
+| `Schedule.instCodableMsg` | proved | its type, `Codable` |
+| `Schedule.hashJitter` | checked | `Tests/Schedule.lean` |
+| `Schedule.Config.cap` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
+| `Schedule.Config.backoff` | proved | `Schedule.retry_waits` |
+| `Schedule.Config.wait` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
+| `Schedule.keys` | proved | `Schedule.attach_held_leaves`, `Schedule.every_noticed`, `Schedule.held_leaves` |
+| `Schedule.entry` | proved | `Schedule.attach_held_leaves`, `Schedule.attempt_ends`, `Schedule.dispatch_due` and 4 more |
+| `Schedule.put` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
+| `Schedule.remove` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
+| `Schedule.set` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
+| `Schedule.sig` | proved | `Schedule.actor_attempts`, `Schedule.actor_within`, `Schedule.armed` and 10 more |
+| `Schedule.timer` | proved | through `Schedule.actor`, `Schedule.attach` and 1 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 9 more |
+| `Schedule.fail` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
+| `Schedule.over` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
+| `Schedule.run` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
+| `Schedule.answerOf` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
+| `Schedule.onJob` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
+| `Schedule.touch` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
+| `Schedule.enroll` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
+| `Schedule.step` | proved | `Schedule.attempt_ends`, `Schedule.dispatch_due`, `Schedule.now_le_step` and 1 more |
+| `Schedule.rearm` | proved | through `Schedule.actor`, `Schedule.attach` and 1 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 9 more |
+| `Schedule.actor` | proved | `Schedule.actor_attempts`, `Schedule.actor_within` |
+| `Schedule.system` | proved | `Schedule.armed`, `Schedule.attempts`, `Schedule.calls_le_scheduled` and 4 more |
+| `Schedule.Use.wiring` | spec | used only in statements |
+| `Schedule.attach` | spec | used only in statements |
+| `Schedule.sameBag` | checked | `Tests/Schedule.lean` |
+| `Schedule.bagHash` | checked | `Tests/Schedule.lean` |
+| `Schedule.instBEqCallee` | checked | `Tests/Schedule.lean` |
+| `Schedule.instHashableCallee` | checked | `Tests/Schedule.lean` |
+| `Schedule.callee` | checked | `Tests/Schedule.lean` |
+
+## `Lanes/Behaviours/Schedule/Sound.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Schedule.Msg.target` | spec | used only in statements |
+| `Schedule.Act.msg` | spec | used only in statements |
+| `Schedule.Work.periodic` | spec | used only in statements |
+| `Schedule.isCall` | spec | used only in statements |
+| `Schedule.left` | spec | used only in statements |
+| `Schedule.Moved` | spec | a predicate |
+| `Schedule.Same` | spec | a predicate |
+| `Schedule.OwnTimers` | spec | a predicate |
+| `Schedule.Job.Within` | spec | a predicate |
+| `Schedule.Spec.job` | spec | used only in statements |
+| `Schedule.State.Within` | spec | a predicate |
+| `Schedule.State.Attempts` | spec | a predicate |
+| `Schedule.Armed` | spec | a predicate |
+| `Schedule.calls` | spec | used only in statements |
+| `Schedule.schedulings` | spec | used only in statements |
+
 ## `Lanes/Behaviours/Server.lean`
 
 | Definition | Status | Evidence |
@@ -179,7 +257,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Check.Property.holds` | proved | `Check.refines_sound`, `Check.refines_traces`, `Check.system_sound` and 1 more |
 | `Check.Trace.last` | proved | `Check.search_deadlock`, `Check.search_reached`, `Check.search_violated` and 2 more |
 | `Check.Trace.labels` | proved | `Check.system_violated` |
-| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 20 more |
+| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 21 more |
 | `Check.Path.last` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
 | `Check.Path.toTraceAux` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
 | `Check.Path.toTrace` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
@@ -305,9 +383,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `instDecidableEqJoinMsg` | proved | its type, `Decidable` |
-| `joinSig` | proved | `Jobs.attach_active_leaves`, `Jobs.attach_within`, `SysState.exists_block` and 11 more |
-| `Wiring.left` | proved | through `SysState.over`, `System.filterMapIO` and 3 more: `SysState.exists_block`, `SysState.run_filterMapIO` and 15 more |
-| `Wiring.right` | proved | through `System.join`, `Wiring.leftView`: `SysState.exists_block`, `SysState.run_left` and 10 more |
+| `joinSig` | proved | `Jobs.attach_active_leaves`, `Jobs.attach_within`, `Schedule.attach_held_leaves` and 13 more |
+| `Wiring.left` | proved | through `Schedule.attach`, `SysState.over` and 4 more: `Schedule.attach_held_leaves`, `Schedule.attach_within` and 17 more |
+| `Wiring.right` | proved | through `Schedule.attach`, `System.join` and 1 more: `Schedule.attach_held_leaves`, `Schedule.attach_within` and 12 more |
 | `System.join` | proved | `SysState.exists_block`, `SysState.run_left`, `System.Invariant.join_left` and 9 more |
 | `Signature.withIO` | proved | `SysState.run_filterMapIO`, `System.Invariant.filterMapIO`, `System.LeadsTo.filterMapIO` and 2 more |
 | `Effect.filterMapOut` | proved | through `SysState.over`, `System.filterMapIO` and 1 more: `SysState.run_filterMapIO`, `System.Invariant.filterMapIO` and 3 more |
@@ -364,7 +442,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Envelope.sameLink` | proved | through `SysState.nextOnLink`: `SysState.nextOnLink_spec` |
 | `Link.reliable` | proved | through `EnvModel.link`, `EnvModel.lossy` and 2 more: `Account.implements`, `Account.implements_timed` and 25 more |
 | `Link.network` | checked | `Tests/Bank.lean`, `Tests/Election.lean`, `Tests/Join.lean` and 1 more |
-| `Link.unordered` | checked | `Tests/Election.lean`, `Tests/Jobs.lean`, `Tests/Outside.lean` |
+| `Link.unordered` | checked | `Tests/Election.lean`, `Tests/Jobs.lean`, `Tests/Outside.lean` and 1 more |
 | `EnvModel.reliable` | spec | used only in statements |
 | `EnvModel.distributed` | none |  |
 
@@ -372,21 +450,21 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `update` | proved | through `SysState.down`, `SysState.handle` and 5 more: `Account.implements`, `Account.implements_timed` and 45 more |
+| `update` | proved | through `SysState.down`, `SysState.handle` and 5 more: `Account.implements`, `Account.implements_timed` and 46 more |
 | `Event.timed` | spec | used only in statements |
 | `Event.visible` | spec | used only in statements |
 | `SysState.blank` | proved | `System.Inductive.of_monotone`, `System.Monotone.and`, `System.Monotone.and_net` |
-| `SysState.hasMail` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 29 more |
-| `SysState.perform` | proved | through `SysState.handle`, `SysState.init` and 4 more: `Account.implements`, `Account.implements_timed` and 44 more |
-| `SysState.performAll` | proved | through `SysState.handle`, `SysState.init` and 4 more: `Account.implements`, `Account.implements_timed` and 44 more |
+| `SysState.hasMail` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 30 more |
+| `SysState.perform` | proved | through `SysState.handle`, `SysState.init` and 4 more: `Account.implements`, `Account.implements_timed` and 45 more |
+| `SysState.performAll` | proved | through `SysState.handle`, `SysState.init` and 4 more: `Account.implements`, `Account.implements_timed` and 45 more |
 | `SysState.down` | proved | `Account.implements`, `Account.implements_timed`, `System.Refines.of_events` and 2 more |
 | `SysState.settle` | proved | `SysState.Loses.settle` |
 | `SysState.handle` | proved | `Http.fronted_handle_arrive`, `Http.served_handle_arrive` |
-| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and 2 more: `Account.implements`, `Account.implements_timed` and 41 more |
+| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and 2 more: `Account.implements`, `Account.implements_timed` and 42 more |
 | `SysState.deliverable` | proved | `Account.implements`, `Account.implements_timed`, `SysState.nextOnLink_spec` and 3 more |
 | `SysState.step` | proved | `Http.Gate.answered_of_leaves`, `Http.Gate.deadline_not_restarted`, `Shards.AtHome.step` and 8 more |
-| `SysState.init` | proved | `Account.implements`, `Account.implements_timed`, `Check.system_violated` and 24 more |
-| `SysState.run` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and 16 more |
+| `SysState.init` | proved | `Account.implements`, `Account.implements_timed`, `Check.system_violated` and 25 more |
+| `SysState.run` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and 17 more |
 | `System.Invariant` | spec | a predicate |
 
 ## `Lanes/Data/Codec.lean`
@@ -1332,7 +1410,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Outside.any` | tested | `Tests/Jobs.lean`, `Tests/S3.lean` |
-| `Outside.driver` | checked | `Tests/Clock.lean`, `Tests/HttpClient.lean`, `Tests/Jobs.lean` and 2 more |
+| `Outside.driver` | checked | `Tests/Clock.lean`, `Tests/HttpClient.lean`, `Tests/Jobs.lean` and 3 more |
 | `Outside.see` | proved | through `Outside.after`: `Effects.at_most_once`, `Events.deliveries_le` and 8 more |
 | `Outside.after` | proved | `Effects.at_most_once`, `Events.deliveries_le`, `Idempotent.at_most_once` and 7 more |
 | `Outside.allows` | checked | `Tests/Outside.lean` |
@@ -1504,7 +1582,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Event.deed` | proved | through `deeds`, `handled`: `Http.Gate.answered_le_handled`, `Jobs.answered_le_handled` and 1 more |
+| `Event.deed` | proved | through `deeds`, `handled`: `Http.Gate.answered_le_handled`, `Jobs.answered_le_handled` and 2 more |
 | `deeds` | spec | used only in statements |
 | `Deed.handles` | spec | used only in statements |
 | `handled` | spec | used only in statements |
@@ -1881,7 +1959,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Spec.stutter` | proved | through `System.Run`, `System.Run.event` and 2 more: `Http.Gate.pending_answered`, `Http.fronted_arrival_answered` and 14 more |
+| `Spec.stutter` | proved | through `System.Run`, `System.Run.event` and 2 more: `Http.Gate.pending_answered`, `Http.fronted_arrival_answered` and 15 more |
 | `Obligation.event` | proved | `System.LeadsTo.ensures_of_invariant` |
 | `Obligation.Due` | spec | a predicate |
 | `Obligation.Restarted` | spec | a predicate |
@@ -1933,6 +2011,12 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Spec.Reachable` | spec | a predicate |
 | `Spec.Invariant` | spec | a predicate |
 | `Refines` | spec | a predicate |
+
+## `Lanes/Semantics/Schedule.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Schedule.Nearer` | spec | a predicate |
 
 ## `Lanes/Semantics/Service.lean`
 

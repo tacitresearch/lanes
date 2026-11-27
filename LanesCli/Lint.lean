@@ -25,7 +25,7 @@ Source-level checks of the rules in `AGENTS.md` that can be decided from the tex
 - `oracles`, where there is an `oracles/README.md`: its tables name a reference for each folder
   of `oracles/`, and an oracle, or why there is none, for each module of `Lanes/Lib/` and
   `Lanes/Web/` and each model of `Lanes/Outside/` that is not a proof or IO; every module and
-  path they name exists (`docs/decisions/new-oracles.md`).
+  path they name exists (`docs/decisions/D80-oracles.md`).
 - `inventory`, `inventory-none`, in Lanes itself: `docs/INVENTORY.md` is up to date, and every
   definition of `Lanes/` without evidence is on `docs/inventory-none.md`. These read the built
   modules, so `lanesInventory`, which links `Lean`, does them; `--fix` has it rewrite the file.

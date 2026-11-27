@@ -46,7 +46,7 @@ lake exe lanes docstrings  # how many public declarations of `import Lanes` have
   rebuild `lanes`, and write `examples/counter` again (move it aside, run `lake exe lanes new
   counter --dir examples/counter --lanes-path ../..`, put its `lake-manifest.json` back): `lake
   test` fails while the two differ. Then build and test it.
-- Oracles (rule 5.9, `docs/decisions/new-oracles.md`) are in `oracles/`, one folder per
+- Oracles (rule 5.9, `docs/decisions/D80-oracles.md`) are in `oracles/`, one folder per
   reference implementation with its pin, and `oracles/README.md` lists every protocol module and
   every model against its oracle or the reason it has none (lint `oracles`). *Pure oracles*: a
   reference's program (`oracles/go/<package>/main.go`, `oracles/<reference>/main.py`) answers the
