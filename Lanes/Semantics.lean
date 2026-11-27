@@ -1,6 +1,7 @@
 module
 
 public import Lanes
+public import Lanes.Proofs
 public import Lanes.Core.Step
 public import Lanes.Semantics.Account
 public import Lanes.Semantics.FairJoin

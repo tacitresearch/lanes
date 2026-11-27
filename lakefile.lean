@@ -39,7 +39,7 @@ target sodium : FilePath := do
 
 @[default_target]
 lean_lib Lanes where
-  roots := #[`Lanes, `Lanes.Semantics]
+  roots := #[`Lanes, `Lanes.Proofs, `Lanes.Semantics]
   moreLinkObjs := #[native, sodium]
 
 @[default_target]

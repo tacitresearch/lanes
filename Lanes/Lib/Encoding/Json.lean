@@ -9,9 +9,6 @@ public import Lanes.Lib.Encoding.Json.Parser
 public import Lanes.Lib.Encoding.Json.Printer
 public import Lanes.Lib.Encoding.Json.Classes
 public import Lanes.Lib.Encoding.Json.Grammar
-public import Lanes.Lib.Encoding.Json.BasicSound
-public import Lanes.Lib.Encoding.Json.PrinterSound
-public import Lanes.Lib.Encoding.Json.ParserSound
 
 /-!
 # JSON

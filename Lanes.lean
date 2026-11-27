@@ -2,7 +2,6 @@ module
 
 public import Lanes.Behaviours.Jobs.Basic
 public import Lanes.Behaviours.Jobs.IO.Pool
-public import Lanes.Behaviours.Jobs.Sound
 public import Lanes.Behaviours.Once.Basic
 public import Lanes.Behaviours.Once.Check
 public import Lanes.Behaviours.Server
@@ -13,9 +12,7 @@ public import Lanes.Check.Fuzz
 public import Lanes.Check.Monitor
 public import Lanes.Check.MonitorEquiv
 public import Lanes.Check.Search
-public import Lanes.Check.SearchSound
 public import Lanes.Check.System
-public import Lanes.Check.SystemSound
 public import Lanes.Check.WorldEquiv
 public import Lanes.Core.Actor
 public import Lanes.Core.ByCases
@@ -45,14 +42,11 @@ public import Lanes.Lib.Encoding.Base64
 public import Lanes.Lib.Encoding.Digits
 public import Lanes.Lib.Encoding.Json
 public import Lanes.Lib.Mime.MediaType
-public import Lanes.Lib.Mime.MediaTypeSound
 public import Lanes.Lib.Net.Ip
 public import Lanes.Lib.Net.Url
-public import Lanes.Lib.Net.UrlSound
 public import Lanes.Lib.RateLimit
 public import Lanes.Lib.Time.Civil
 public import Lanes.Lib.Time.Format
-public import Lanes.Net.CourierSound
 public import Lanes.Net.IO.Node
 public import Lanes.Net.IO.Peers
 public import Lanes.Outside.Basic
@@ -60,52 +54,37 @@ public import Lanes.Outside.IO.Clock
 public import Lanes.Proof.Deed
 public import Lanes.Proof.Equiv
 public import Lanes.Proof.Ghost
-public import Lanes.Proof.JoinSound
 public import Lanes.Proof.Lift
 public import Lanes.Proof.List
 public import Lanes.Proof.Loses
 public import Lanes.Proof.Lossy
-public import Lanes.Proof.MapIOSound
 public import Lanes.Proof.Monotone
 public import Lanes.Proof.Past
 public import Lanes.Runtime.Batch
 public import Lanes.Runtime.IO.Park
 public import Lanes.Runtime.IO.Shell
 public import Lanes.Runtime.Kernel
-public import Lanes.Runtime.KernelSound
-public import Lanes.Runtime.KernelTimers
-public import Lanes.Runtime.MailboxSound
 public import Lanes.Runtime.Shard
-public import Lanes.Runtime.ShardSound
-public import Lanes.Runtime.ShardsSound
 public import Lanes.Web.Auth.Login
 public import Lanes.Web.Auth.Token
-public import Lanes.Web.Auth.TokenSound
 public import Lanes.Web.Html.Basic
-public import Lanes.Web.Html.BasicSound
 public import Lanes.Web.Html.Htmx
-public import Lanes.Web.Html.HtmxSound
 public import Lanes.Web.Html.Syntax
 public import Lanes.Web.Http.Basic
 public import Lanes.Web.Http.Conn
-public import Lanes.Web.Http.ConnSound
 public import Lanes.Web.Http.Cookie
-public import Lanes.Web.Http.CookieSound
 public import Lanes.Web.Http.Front
-public import Lanes.Web.Http.FrontSound
 public import Lanes.Web.Http.Gate
 public import Lanes.Web.Http.ReadRequest
-public import Lanes.Web.Http.ReadRequestSound
 public import Lanes.Web.Http.Route
-public import Lanes.Web.Http.RouteSound
 public import Lanes.Web.Http.Waiting
 public import Lanes.Web.Http.Wire
-public import Lanes.Web.Http.WireSound
 public import Lanes.Web.Http.WireSpec
 public import Lanes.Web.IO.Client
 public import Lanes.Web.IO.Server
 
 /-!
-The Lanes runtime layer: everything an application's executable code needs. It imports only
-`Std`, so binaries stay small. The proof layer, built on CSLib and Mathlib, is `Lanes.Semantics`.
+The Lanes API: everything an application's executable code needs, and the tools its proofs use.
+It imports only `Std`, so binaries stay small. The framework's own soundness theorems are
+`Lanes.Proofs`, and the proof layer, built on CSLib and Mathlib, is `Lanes.Semantics`.
 -/
