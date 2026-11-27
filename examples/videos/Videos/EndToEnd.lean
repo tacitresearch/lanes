@@ -241,6 +241,52 @@ def remove (path : System.FilePath) : IO Unit := do
   for file in [path, path.addExtension "lock", path.addExtension "snapshot"] do
     if ← file.pathExists then IO.FS.removeFile file
 
+/-! ## The bridge, without a socket -/
+
+def settings : Web.Settings :=
+  { key := .of "a key".toUTF8, origin, secure := true
+    bucket := { name := "b", region := "us-east-1", endpoint := S3.Endpoint.aws "us-east-1" }
+    creds := Tests.S3.creds }
+
+def decoded (r : Http.Request) : Option Input :=
+  match (bridge settings).decode 0 ((bridge settings).prepare r) with
+  | .ok i => some i
+  | .error _ => none
+
+def withCookie (value : String) (r : Http.Request) : Http.Request :=
+  { r with headers := r.headers ++ [("cookie", s!"{sessionCookie}={value}")] }
+
+def bridgeTests : List (String × Bool) :=
+  let watch : Http.Request := { method := .get, path := ["v", "3"] }
+  let token := sessionToken settings 0 7
+  let like (csrf : String) (headers : List (String × String) := []) : Http.Request :=
+    withCookie token { method := .post, path := ["v", "3", "like"], headers
+                       body := s!"csrf={csrf}".toUTF8 }
+  let good := Auth.formToken settings.key token
+  [ ("bridge: a verified cookie names its member and session, and is dropped",
+      decoded (withCookie token watch) == some (.request (.watch 0 (some (0, 7)) 3 0))
+        && ((bridge settings).prepare (withCookie token watch)).headers.all (·.1 != "cookie")),
+    ("bridge: a cookie whose payload is changed, and a session header a client sends, name no one",
+      decoded (withCookie "0.7" watch) == some (.request (.watch 0 none 3 0))
+        && decoded { watch with headers := [(sessionHeader, "0.7")] } == some (.request (.watch 0 none 3 0))),
+    ("bridge: the time a request arrived is the server's, not the client's",
+      decoded (stamp 99 { watch with headers := [(arrivedHeader, "5")] })
+        == some (.request (.watch 0 none 3 99))),
+    ("bridge: a change needs the session's form token, from this origin",
+      decoded (like good) == some (.request (.like 0 0 7 3 true)) && decoded (like "forged") == none
+        && decoded (like good [("origin", "https://evil.example")]) == none),
+    ("bridge: a title too long, or no format, is refused before the system",
+      let make (title media : String) : Http.Request := withCookie token {
+        method := .post, path := ["videos"]
+        body := (encodeForm [("csrf", good), ("title", title), ("visibility", "public"),
+          ("media", media)]).toUTF8 }
+      (decoded (make "ok" "mp4")).isSome && decoded (make (String.ofList (List.replicate 101 'x')) "mp4") == none
+        && decoded (make "ok" "avi") == none),
+    ("bridge: a store call is the head or the delete of the video's key, and only those",
+      (storeCall settings ⟨0, 1000, .head 4⟩).any (· matches .head _)
+        && (storeCall settings ⟨0, 1000, .delete 4⟩).any (· matches .delete _)
+        && storeReply none == .unknown && storeReply (some (.refused 500 "")) == .answer .failed) ]
+
 /-- The flow against the fake S3 and the provider, both run here. -/
 def run : IO (List (String × Bool)) := do
   let journal ← scratch
