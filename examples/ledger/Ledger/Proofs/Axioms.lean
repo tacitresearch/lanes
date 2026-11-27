@@ -26,6 +26,12 @@ If a `sorry` or a new axiom reaches one, this file stops compiling.
 /-- info: 'Ledger.implements_timed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Ledger.implements_timed
 
+/-- info: 'Ledger.implements_timed_kernel' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Ledger.implements_timed_kernel
+
+/-- info: 'Ledger.kernel_history' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Ledger.kernel_history
+
 /-- info: 'Lanes.Auth.verify_sign' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Auth.verify_sign
 

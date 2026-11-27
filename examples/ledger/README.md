@@ -162,6 +162,10 @@ axiom gate:
   alike, and the spec's record of a user, with those applied in order, is the user's record and
   the messages on its link. A timer that finds its deadline no longer armed tells nothing, so
   every notice the ledger serves is of a deadline armed in the spec.
+  One shard's kernel meets every premise (`implements_timed_kernel`), so the events it reports,
+  whatever the shell does, are a run the spec explains as a sequential history
+  (`kernel_history`). A process that dies is no crash of the semantics: it restarts whole from
+  its journal, as the kernel the journal's requests lead to (`Journal.recover_kernel`).
 
 The links from the users to the ledger must be ordered (a
 reordering link gives a stale view, above). That libsodium's SHA-256, HMAC and comparison
