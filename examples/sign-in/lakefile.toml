@@ -1,0 +1,29 @@
+name = "signIn"
+version = "0.1.0"
+defaultTargets = ["Videos", "signIn", "check"]
+testDriver = "check"
+
+[[require]]
+name = "lanes"
+path = "../.."
+
+[[require]]
+name = "google"
+path = "../../integrations/google"
+
+[[require]]
+name = "github"
+path = "../../integrations/github"
+
+[[lean_lib]]
+name = "Videos"
+
+# The site: `signIn [port]`, with its providers' clients in the environment.
+[[lean_exe]]
+name = "signIn"
+root = "Main"
+
+# What the bridge makes of requests and what the site answers, run by `lake test`.
+[[lean_exe]]
+name = "check"
+root = "Check"

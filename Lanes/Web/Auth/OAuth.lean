@@ -317,6 +317,34 @@ def authorizeUrl (provider : Provider) (client : Client) (e : Entry) : String :=
     ("code_challenge_method", "S256")] ++ nonce ++ provider.extra
   provider.authorize ++ (if provider.authorize.contains '?' then "&" else "?") ++ encodeForm params
 
+/-- What a provider's discovery document (OpenID Connect Discovery 1.0 §3) says that sign-in
+uses. Read from a copy kept with the deployment: none is fetched. -/
+structure Discovery where
+  issuer : String
+  authorize : String
+  token : String
+  jwks : String
+  /-- `id_token_signing_alg_values_supported`. -/
+  algs : List String
+  /-- `code_challenge_methods_supported`. -/
+  challenges : List String
+  deriving DecidableEq, Repr
+
+def Discovery.read (text : String) : Option Discovery := do
+  let j ← (Json.parse text).toOption
+  let strings (name : String) : List String := match j.getObjVal? name with
+    | .ok (.arr xs) => xs.toList.filterMap IdToken.string?
+    | _ => []
+  return { issuer := ← Jose.str? j "issuer", authorize := ← Jose.str? j "authorization_endpoint",
+           token := ← Jose.str? j "token_endpoint", jwks := ← Jose.str? j "jwks_uri",
+           algs := strings "id_token_signing_alg_values_supported",
+           challenges := strings "code_challenge_methods_supported" }
+
+/-- The OpenID Connect provider a discovery document describes. -/
+def Discovery.provider (d : Discovery) (name : String) (scopes : List String := ["openid", "email"]) :
+    Provider :=
+  { name, authorize := d.authorize, token := d.token, scopes, source := .idToken [d.issuer] d.jwks }
+
 /-- A sign-in begun now: the pending sign-ins with its entry, the URL to send the browser to,
 and the value of the cookie that binds it to the browser. -/
 def begin (settings : Settings) (provider : Provider) (client : Client) (p : Pending)
