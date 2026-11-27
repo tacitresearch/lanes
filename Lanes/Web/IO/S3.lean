@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Web.S3.Basic
+public import Lanes.Web.S3.Multipart
 public import Std.Time
 
 /-!
@@ -56,6 +56,17 @@ def exchange (b : Bucket) (creds : SigV4.Source) (op : Op) (config : Client.Conf
   let some creds ← creds.read | return none
   let call := S3.call b creds (← now) op payload
   return (← Client.exchange call config).map (interpret op)
+
+/-- Uploads `body` to `key` in parts, as `flow` decides, and returns where the flow ended:
+`done` with the object's ETag, or `failed` with why. -/
+def upload (b : Bucket) (creds : SigV4.Source) (flow : Multipart.Flow) (body : ByteArray)
+    (config : Client.Config := {}) : Async Multipart.Phase := do
+  let mut f := flow
+  for _ in [0:flow.bound] do
+    let some step := f.next | break
+    let answer ← try exchange b creds (f.op body step) config catch _ => pure none
+    f := f.answer answer
+  return f.phase
 
 /-- Which outputs are calls to the store, and the input that answers one. -/
 structure Port (σ : Signature) where

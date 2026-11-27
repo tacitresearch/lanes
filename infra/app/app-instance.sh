@@ -34,6 +34,7 @@
 set -euo pipefail
 
 BASE=${BASE:-/opt/lanes}
+DB_CA=${DB_CA:-/etc/lanes/db-ca.pem}
 DATA=${DATA:-/srv/lanes}
 JOURNAL_DIR=$DATA/journal
 CONF=${CONF:-/etc/lanes/app.conf}
@@ -50,7 +51,7 @@ die() { say "$*"; exit 1; }
 # The keys the configuration may set, and nothing else.
 CONF_KEYS=(APP BINARY ARGS PORT READY_PATH METRICS_PATH DRAIN_SECONDS RELEASES LOG_GROUP
   METRICS_LOG_GROUP METRICS_NAMESPACE SCRIPT_URL SCRIPT_SHA256 DB_HOST DB_PORT DB_NAME DB_SECRET
-  MAIL_IDENTITY MEDIA_BUCKET)
+  DB_CA_URL DB_CA_SHA256 MAIL_IDENTITY MEDIA_BUCKET)
 
 load_conf() {
   # shellcheck source=/dev/null
@@ -74,6 +75,8 @@ load_conf() {
   DB_PORT=${DB_PORT:-}
   DB_NAME=${DB_NAME:-}
   DB_SECRET=${DB_SECRET:-}
+  DB_CA_URL=${DB_CA_URL:-}
+  DB_CA_SHA256=${DB_CA_SHA256:-}
   MAIL_IDENTITY=${MAIL_IDENTITY:-}
   MEDIA_BUCKET=${MEDIA_BUCKET:-}
   CONFIG_PARAMETER=${CONFIG_PARAMETER:-}
@@ -163,6 +166,22 @@ install_script() {
   fi
   chmod 755 "$tmp"
   mv "$tmp" "$BASE/app-instance.sh"
+}
+
+# The certificates the database's must chain to, from DB_CA_URL, which must have the SHA-256
+# DB_CA_SHA256: the application trusts every authority in it, so a bundle fetched without its
+# hash, or with another, is refused, and the one installed before is kept.
+install_db_ca() {
+  local tmp
+  [ -n "$DB_CA_URL" ] || return 0
+  [[ $DB_CA_SHA256 =~ ^[0-9a-f]{64}$ ]] || die "DB_CA_URL is given without DB_CA_SHA256"
+  tmp=$(mktemp "$DB_CA.XXXXXX")
+  if ! curl -fsSL --retry 5 -o "$tmp" "$DB_CA_URL" || ! echo "$DB_CA_SHA256  $tmp" | sha256sum -c --status -; then
+    rm -f "$tmp"
+    die "$DB_CA_URL could not be fetched, or does not have the SHA-256 $DB_CA_SHA256"
+  fi
+  chmod 644 "$tmp"
+  mv "$tmp" "$DB_CA"
 }
 
 make_user() {
@@ -296,6 +315,7 @@ EOF
     if [ -n "$MEDIA_BUCKET" ]; then printf '%s=%s\n' LANES_MEDIA_BUCKET "$MEDIA_BUCKET"; fi
     if [ -n "$DB_HOST" ]; then
       printf '%s=%s\n' LANES_DB_HOST "$DB_HOST" LANES_DB_PORT "$DB_PORT" LANES_DB_NAME "$DB_NAME"
+      if [ -n "$DB_CA_URL" ]; then printf '%s=%s\n' LANES_DB_CA "$DB_CA"; fi
     fi
     if [ -n "$MAIL_IDENTITY" ]; then printf '%s=%s\n' LANES_MAIL_IDENTITY "$MAIL_IDENTITY"; fi
   } >/etc/lanes/app.env
@@ -594,6 +614,7 @@ configure() {
 }
 
 reconfigure() {
+  install_db_ca
   write_units
   configure_cloudwatch_agent
   systemctl start lanes-volume.service lanes-log.service
@@ -607,6 +628,7 @@ setup() {
   fetch_config
   install_cloudwatch_agent
   install_script
+  install_db_ca
   write_units
   configure_cloudwatch_agent
   systemctl start lanes-volume.service lanes-log.service

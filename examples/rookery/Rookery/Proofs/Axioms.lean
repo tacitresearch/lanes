@@ -1,4 +1,5 @@
 import Rookery.Proofs.Traces
+import Rookery.Proofs.Runs
 
 /-!
 The axiom gate (rule 5.5): each headline theorem depends only on Lean's three standard axioms.
@@ -67,3 +68,15 @@ If a `sorry` or a new axiom reaches one, this file stops compiling.
 
 /-- info: 'Rookery.deleted_unread' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Rookery.deleted_unread
+
+/-- info: 'Rookery.posted_kept' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Rookery.posted_kept
+
+/-- info: 'Rookery.shown_kept' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Rookery.shown_kept
+
+/-- info: 'Rookery.api_once' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Rookery.api_once
+
+/-- info: 'Rookery.rate_limit_run' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Rookery.rate_limit_run
