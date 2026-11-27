@@ -461,7 +461,8 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
     discard <| IO.asTask (prio := .dedicated) lane.run
     return lane
   let server : Server system := {
-    runtime, listener, cloop, waiting, connections := ← Mutex.new {}, down, localPort, lanes, ops }
+    runtime, listener, cloop, waiting, connections := ← Mutex.new {}, down, localPort, lanes
+    ops }
   let hand (request : Request) (answer : Response → BaseIO Unit) : BaseIO (Option ReqId) := do
     let request := prepare request
     let admitted ← waiting.atomically do
@@ -509,7 +510,7 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
       socket.close
     | some ctx => tell ctx line false .resume
   if let some h := cloop then
-    let admit := do
+    let accept := do
       let admitted ← server.connections.atomically <| modifyGet fun c =>
         let (ok, count) := c.count.admit config.connections_max
         (ok, { c with count })
@@ -517,7 +518,7 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
       return admitted
     let peer (a : Ip.Addr) := if config.ops.active then some a else none
     try
-      CLoop.start h threads config.conn (fun a => ops.front probe (peer a) arrived) hand admit
+      CLoop.start h threads config.conn (fun a => ops.front probe (peer a) arrived) hand accept
         (server.connections.atomically (modify fun c => { c with count := c.count.leave }))
     catch e =>
       runtime.stop

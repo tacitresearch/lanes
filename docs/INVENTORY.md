@@ -21,9 +21,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Proof` | 36 | 12 | 0 | 0 | 0 | 23 | 1 |
 | `Lanes/Runtime` | 172 | 93 | 21 | 0 | 28 | 30 | 0 |
 | `Lanes/Semantics` | 60 | 11 | 0 | 0 | 0 | 48 | 1 |
-| `Lanes/Web` | 575 | 296 | 52 | 31 | 146 | 48 | 2 |
+| `Lanes/Web` | 583 | 296 | 60 | 31 | 146 | 48 | 2 |
 | `LanesCli` | 120 | 0 | 0 | 0 | 46 | 0 | 74 |
-| All | 2025 | 1080 | 103 | 103 | 315 | 297 | 127 |
+| All | 2033 | 1080 | 111 | 103 | 315 | 297 | 127 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -2587,6 +2587,19 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Response.interim` | proved | `Http.Response.read_wireAfter`, `Http.Response.read_wireAfter_extract` |
 | `Http.Response.wireAfter` | proved | `Http.Response.read_wireAfter`, `Http.Response.read_wireAfter_extract` |
 | `Http.Response.wireToEnd` | proved | `Http.Response.read_wireToEnd`, `Http.Response.read_wireToEnd_open` |
+
+## `Lanes/Web/IO/CLoop.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Http.CLoop.HandleImpl` | trusted | TRUSTED.md: The C loop |
+| `Http.CLoop.new` | trusted | TRUSTED.md: The C loop |
+| `Http.CLoop.port` | trusted | TRUSTED.md: The C loop |
+| `Http.CLoop.wake` | trusted | TRUSTED.md: The C loop |
+| `Http.CLoop.stop` | trusted | TRUSTED.md: The C loop |
+| `Http.CLoop.join` | trusted | TRUSTED.md: The C loop |
+| `Http.CLoop.run` | trusted | TRUSTED.md: The C loop |
+| `Http.CLoop.start` | trusted | TRUSTED.md: The C loop |
 
 ## `Lanes/Web/IO/Client.lean`
 

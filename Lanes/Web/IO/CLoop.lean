@@ -103,7 +103,7 @@ structure Handler where
   entered with; these pass by the operations front, as in the server's own loop. -/
   submitStream : Request → (Response → BaseIO Unit) → BaseIO (Option ReqId)
   /-- Take one more connection, or refuse it (`Conn.Count.admit`). -/
-  admit : BaseIO Bool
+  accept : BaseIO Bool
   leave : BaseIO Unit
 
 /-- Hand the C a handler for each thread and start them. -/
@@ -138,7 +138,7 @@ private def act (h : Handler) (token : UInt64) (line : Line) (out : ByteArray) :
   | .begin seq request => do
     let id ← h.submitStream request fun r => post h { token, event := .responded seq r }
     let heads := line.heads.filter (·.1 ≥ line.conn.written)
-    return ({ line with heads := match id with | some id => (seq, id) :: heads | none => heads }, out)
+    return ({ line with heads := (id.map fun id => (seq, id) :: heads).getD heads }, out)
   | .piece seq index request => do
     toStream h line seq request fun r => post h { token, event := .took seq index r }
     return (line, out)
@@ -163,7 +163,7 @@ private def step (h : Handler) (token : UInt64) (line : Line) (event : Conn.Even
 /-- A connection the C has accepted: its first turn, or `none` to close it. -/
 @[export lanes_cloop_open]
 private def «open» (h : Handler) (peer : UInt32) (now_ms : UInt64) : BaseIO (Option Turn) := do
-  unless ← h.admit do return none
+  unless ← h.accept do return none
   let submit := h.front (.v4 (.ofNat _ peer.toNat))
   return some (finish h { conn := { since_ms := now_ms.toNat }, submit } .empty)
 
@@ -193,10 +193,11 @@ private def take (h : Handler) : BaseIO (Array Mail) :=
 /-- Start the loop on `handle`'s threads. -/
 def start (handle : Handle) (threads : Nat) (config : Conn.Config)
     (front : Ip.Addr → Request → (Response → BaseIO Unit) → BaseIO Unit)
-    (submitStream : Request → (Response → BaseIO Unit) → BaseIO (Option ReqId)) (admit : BaseIO Bool) (leave : BaseIO Unit) : IO Unit := do
+    (submitStream : Request → (Response → BaseIO Unit) → BaseIO (Option ReqId))
+    (accept : BaseIO Bool) (leave : BaseIO Unit) : IO Unit := do
   let handlers ← (List.range threads).toArray.mapM fun i => do
     return { loop := handle, thread := i.toUInt32, config, mail := ← Std.Mutex.new #[], front
-             submitStream, admit, leave : Handler }
+             submitStream, accept, leave : Handler }
   run handle handlers
 
 end CLoop
