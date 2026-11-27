@@ -19,11 +19,11 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Net` | 37 | 6 | 5 | 0 | 0 | 25 | 1 |
 | `Lanes/Outside` | 116 | 86 | 5 | 6 | 1 | 18 | 0 |
 | `Lanes/Proof` | 36 | 12 | 0 | 0 | 0 | 23 | 1 |
-| `Lanes/Runtime` | 158 | 93 | 20 | 0 | 15 | 30 | 0 |
+| `Lanes/Runtime` | 161 | 93 | 21 | 0 | 15 | 32 | 0 |
 | `Lanes/Semantics` | 60 | 11 | 0 | 0 | 0 | 48 | 1 |
 | `Lanes/Web` | 506 | 259 | 50 | 24 | 126 | 45 | 2 |
 | `LanesCli` | 110 | 0 | 0 | 0 | 46 | 0 | 64 |
-| All | 1932 | 1043 | 100 | 96 | 282 | 294 | 117 |
+| All | 1935 | 1043 | 101 | 96 | 282 | 296 | 117 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -371,20 +371,20 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `update` | proved | through `SysState.down`, `SysState.handle` and 5 more: `Account.implements`, `Account.implements_timed` and 45 more |
+| `update` | proved | through `SysState.down`, `SysState.handle` and 5 more: `Account.implements`, `Account.implements_timed` and 46 more |
 | `Event.timed` | spec | used only in statements |
 | `Event.visible` | spec | used only in statements |
 | `SysState.blank` | proved | `System.Inductive.of_monotone`, `System.Monotone.and`, `System.Monotone.and_net` |
 | `SysState.hasMail` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 29 more |
-| `SysState.perform` | proved | through `SysState.handle`, `SysState.init` and 4 more: `Account.implements`, `Account.implements_timed` and 44 more |
-| `SysState.performAll` | proved | through `SysState.handle`, `SysState.init` and 4 more: `Account.implements`, `Account.implements_timed` and 44 more |
+| `SysState.perform` | proved | through `SysState.handle`, `SysState.init` and 4 more: `Account.implements`, `Account.implements_timed` and 45 more |
+| `SysState.performAll` | proved | through `SysState.handle`, `SysState.init` and 4 more: `Account.implements`, `Account.implements_timed` and 45 more |
 | `SysState.down` | proved | `Account.implements`, `Account.implements_timed`, `System.Refines.of_events` and 2 more |
 | `SysState.settle` | proved | `SysState.Loses.settle` |
 | `SysState.handle` | proved | `Http.fronted_handle_arrive`, `Http.served_handle_arrive` |
-| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and 2 more: `Account.implements`, `Account.implements_timed` and 41 more |
+| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and 2 more: `Account.implements`, `Account.implements_timed` and 42 more |
 | `SysState.deliverable` | proved | `Account.implements`, `Account.implements_timed`, `SysState.nextOnLink_spec` and 3 more |
 | `SysState.step` | proved | `Http.Gate.answered_of_leaves`, `Http.Gate.deadline_not_restarted`, `Shards.AtHome.step` and 8 more |
-| `SysState.init` | proved | `Account.implements`, `Account.implements_timed`, `Check.system_violated` and 24 more |
+| `SysState.init` | proved | `Account.implements`, `Account.implements_timed`, `Batch.chain_peek_after` and 25 more |
 | `SysState.run` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and 16 more |
 | `System.Invariant` | spec | a predicate |
 
@@ -1587,23 +1587,23 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Batch.due` | proved | `Batch.due_iff`, `Batch.flush_save` |
+| `Batch.due` | proved | `Batch.due_iff`, `Batch.flush_save`, `Batch.run_erase_peeks` |
 | `Batch.put` | proved | `Batch.flush_save` |
-| `Batch.workWith` | proved | through `Batch.flush`, `Batch.run` and 1 more: `Batch.flush_save`, `Batch.run_handed` and 5 more |
-| `Batch.work` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_kernel` and 4 more |
-| `Batch.workAll` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_kernel` and 4 more |
+| `Batch.workWith` | proved | through `Batch.chain`, `Batch.flush` and 2 more: `Batch.chain_peek`, `Batch.chain_peek_after` and 9 more |
+| `Batch.work` | proved | through `Batch.chain`, `Batch.run` and 1 more: `Batch.chain_peek`, `Batch.chain_peek_after` and 8 more |
+| `Batch.workAll` | proved | through `Batch.chain`, `Batch.run` and 1 more: `Batch.chain_peek`, `Batch.chain_peek_after` and 8 more |
 | `Batch.flush` | proved | `Batch.flush_save` |
-| `Batch.scan` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_kernel` and 4 more |
-| `Batch.finish` | proved | through `Batch.run`: `Batch.run_handed`, `Batch.run_kernel` and 3 more |
+| `Batch.scan` | proved | through `Batch.chain`, `Batch.run` and 1 more: `Batch.chain_peek`, `Batch.chain_peek_after` and 8 more |
+| `Batch.finish` | proved | through `Batch.chain`, `Batch.run`: `Batch.chain_peek`, `Batch.chain_peek_after` and 7 more |
 | `Batch.group` | proved | `Batch.group_ins` |
 | `Batch.Command.ins` | spec | used only in statements |
-| `Batch.run` | proved | `Batch.run_handed`, `Batch.run_kernel`, `Batch.run_peek` and 2 more |
-| `Batch.Act.ops` | proved | through `Batch.journal`: `Batch.run_handed`, `Batch.run_kernel` and 1 more |
-| `Batch.Act.outputs` | proved | through `Batch.handed`: `Batch.run_handed` |
-| `Batch.Act.events` | proved | through `Batch.recorded`: `Batch.run_handed` |
-| `Batch.journal` | proved | `Batch.run_handed`, `Batch.run_kernel`, `Batch.settle_kernel` |
-| `Batch.handed` | proved | `Batch.run_handed` |
-| `Batch.recorded` | proved | `Batch.run_handed` |
+| `Batch.run` | proved | `Batch.run_erase_peeks`, `Batch.run_handed`, `Batch.run_kernel` and 3 more |
+| `Batch.Act.ops` | proved | through `Batch.journal`: `Batch.chain_peek`, `Batch.chain_sound` and 4 more |
+| `Batch.Act.outputs` | proved | through `Batch.handed`: `Batch.chain_peek`, `Batch.chain_peek_after` and 3 more |
+| `Batch.Act.events` | proved | through `Batch.recorded`: `Batch.chain_sound`, `Batch.run_erase_peeks` and 1 more |
+| `Batch.journal` | proved | `Batch.chain_peek`, `Batch.chain_sound`, `Batch.run_erase_peeks` and 3 more |
+| `Batch.handed` | proved | `Batch.chain_peek`, `Batch.chain_peek_after`, `Batch.chain_sound` and 2 more |
+| `Batch.recorded` | proved | `Batch.chain_sound`, `Batch.run_erase_peeks`, `Batch.run_handed` |
 | `Batch.Act.Sound` | spec | a predicate |
 | `Batch.Sound` | spec | a predicate |
 | `Batch.Command.idle?` | spec | used only in statements |
@@ -1634,6 +1634,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Runtime.idle` | trusted | TRUSTED.md: The runtime shell |
 | `Runtime.trace` | trusted | TRUSTED.md: The runtime shell |
 | `Runtime.state` | trusted | TRUSTED.md: The runtime shell |
+| `Runtime.tryPeek` | trusted | TRUSTED.md: The runtime shell |
 | `Runtime.stop` | trusted | TRUSTED.md: The runtime shell |
 | `Runtime.hasRecovered` | trusted | TRUSTED.md: The runtime shell |
 | `Runtime.depth` | trusted | TRUSTED.md: The runtime shell |
@@ -1643,24 +1644,24 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Kernel.cell` | proved | `Batch.run_peek`, `Journal.Upgrade.inv_load`, `Kernel.WellFormed.runBatch_of_due` and 10 more |
-| `Kernel.setCell` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 43 more |
+| `Kernel.cell` | proved | `Batch.chain_peek`, `Batch.run_peek`, `Journal.Upgrade.inv_load` and 11 more |
+| `Kernel.setCell` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.chain_peek`, `Batch.chain_peek_after` and 46 more |
 | `Kernel.abs` | proved | `Kernel.WellFormed.quiet_iff`, `Kernel.WellFormed.wait_forever`, `Kernel.abs_boot` and 7 more |
-| `Kernel.env` | proved | `Kernel.abs_boot`, `Kernel.accept_sound`, `Kernel.exec_reachable` and 4 more |
-| `Kernel.unschedule` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 43 more |
-| `Kernel.perform` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 43 more |
-| `Kernel.performAll` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 43 more |
-| `Kernel.down` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 43 more |
-| `Kernel.settle` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 43 more |
-| `Kernel.rest` | proved | through `Kernel.apply`, `Kernel.exec` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 35 more |
+| `Kernel.env` | proved | `Batch.chain_peek_after`, `Kernel.abs_boot`, `Kernel.accept_sound` and 5 more |
+| `Kernel.unschedule` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.chain_peek`, `Batch.chain_peek_after` and 46 more |
+| `Kernel.perform` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.chain_peek`, `Batch.chain_peek_after` and 46 more |
+| `Kernel.performAll` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.chain_peek`, `Batch.chain_peek_after` and 46 more |
+| `Kernel.down` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.chain_peek`, `Batch.chain_peek_after` and 46 more |
+| `Kernel.settle` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.chain_peek`, `Batch.chain_peek_after` and 46 more |
+| `Kernel.rest` | proved | through `Kernel.apply`, `Kernel.exec` and 5 more: `Batch.chain_peek`, `Batch.chain_peek_after` and 38 more |
 | `Kernel.handle` | proved | `Kernel.frame_handle` |
 | `Kernel.startActor` | proved | `Kernel.frame_startActor` |
-| `Kernel.boot` | proved | `Http.kernel_fronted_answered_le_arrived`, `Http.kernel_served_answered_le_arrived`, `Journal.Disk.torn_nil` and 13 more |
+| `Kernel.boot` | proved | `Batch.chain_peek_after`, `Http.kernel_fronted_answered_le_arrived`, `Http.kernel_served_answered_le_arrived` and 14 more |
 | `Kernel.accept` | proved | `Kernel.accept_sound` |
 | `Kernel.run1` | proved | `Kernel.run1_sound` |
 | `Kernel.fire` | proved | `Kernel.fire_sound`, `Kernel.frame_fire` |
-| `Kernel.advance` | proved | through `Kernel.apply`, `Kernel.exec`: `Batch.run_handed`, `Batch.run_kernel` and 20 more |
-| `Kernel.timerNext` | proved | through `Kernel.apply`, `Kernel.exec` and 2 more: `Batch.run_handed`, `Batch.run_kernel` and 31 more |
+| `Kernel.advance` | proved | through `Kernel.apply`, `Kernel.exec`: `Batch.chain_peek`, `Batch.chain_peek_after` and 23 more |
+| `Kernel.timerNext` | proved | through `Kernel.apply`, `Kernel.exec` and 2 more: `Batch.chain_peek`, `Batch.chain_peek_after` and 34 more |
 | `Kernel.step` | proved | `Kernel.WellFormed.runBatch_of_due`, `Kernel.WellFormed.step_events_ne_nil`, `Kernel.WellFormed.step_of_due` and 1 more |
 | `Kernel.wait` | proved | `Kernel.WellFormed.step_events_ne_nil`, `Kernel.WellFormed.wait_for_ms`, `Kernel.WellFormed.wait_forever` and 1 more |
 | `Kernel.runBatch` | proved | `Kernel.WellFormed.runBatch`, `Kernel.WellFormed.runBatch_of_due`, `Kernel.runBatchAhead_eq` and 5 more |
@@ -1668,7 +1669,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Kernel.image` | proved | `Batch.flush_save`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save` and 8 more |
 | `Kernel.Image.kernel` | proved | `Batch.flush_save`, `Journal.Begun.resume_upgraded`, `Journal.Upgrade.begin_crash` and 3 more |
 | `Kernel.apply` | proved | `Kernel.WellFormed.apply` |
-| `Kernel.exec` | proved | `Batch.run_handed`, `Batch.run_kernel`, `Batch.settle_kernel` and 18 more |
+| `Kernel.exec` | proved | `Batch.chain_peek`, `Batch.chain_peek_after`, `Batch.chain_sound` and 21 more |
 
 ## `Lanes/Runtime/KernelSound.lean`
 
@@ -1707,6 +1708,13 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Mailbox.Op.resetsSleeper` | spec | used only in statements |
 | `Mailbox.boundedIn` | spec | used only in statements |
 | `Mailbox.waitedIn` | spec | used only in statements |
+
+## `Lanes/Runtime/PeekSound.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Batch.Command.isPeek` | spec | used only in statements |
+| `Batch.chain` | spec | used only in statements |
 
 ## `Lanes/Runtime/Release.lean`
 
@@ -2065,19 +2073,19 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Html.render` | proved | `Html.lex_render`, `Html.render_void` |
 | `Html.renderAll` | proved | through `Html.render`: `Html.lex_render`, `Html.render_void` |
 | `Html.classes` | tested | `Tests/Html.lean` |
-| `Html.document` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 1 more |
-| `instToHtmlHtml` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 1 more |
-| `instToHtmlString` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 1 more |
+| `Html.document` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
+| `instToHtmlHtml` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
+| `instToHtmlString` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
 | `instToHtmlNat` | tested | `Tests/Html.lean` |
-| `instToHtmlInt` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 1 more |
-| `instToHtmlList` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 1 more |
+| `instToHtmlInt` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
+| `instToHtmlList` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
 | `instToHtmlArray` | tested | `Tests/Html.lean` |
 | `instToHtmlOption` | tested | `Tests/Html.lean` |
-| `instToAttrString` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 1 more |
+| `instToAttrString` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
 | `instToAttrListString` | tested | `Tests/Html.lean` |
 | `instToAttrNat` | tested | `Tests/Html.lean` |
 | `instToAttrInt` | tested | `Tests/Html.lean` |
-| `instToAttrBool` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 1 more |
+| `instToAttrBool` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
 | `instToAttrOption` | tested | `Tests/Html.lean` |
 
 ## `Lanes/Web/Html/BasicSound.lean`
@@ -2099,18 +2107,18 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Hx.methodAttr` | proved | `Hx.methodAttr_inj`, `Hx.request_match?` |
 | `Hx.request` | proved | `Hx.request_match?` |
-| `Hx.target` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 1 more |
+| `Hx.target` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
 | `Hx.Swap.name` | tested | `Tests/Html.lean` |
 | `Hx.swap` | tested | `Tests/Html.lean` |
 | `Hx.eventName` | proved | `Hx.eventName_plain`, `Hx.mem_eventName` |
 | `Hx.Trigger.render` | proved | `Hx.render_plain` |
-| `Hx.trigger` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 1 more |
+| `Hx.trigger` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
 | `Hx.confirm` | tested | `Tests/Html.lean` |
 | `Hx.boost` | tested | `Tests/Html.lean` |
 | `Hx.pushUrl` | tested | `Tests/Html.lean` |
 | `Hx.indicator` | tested | `Tests/Html.lean` |
 | `Http.Request.isHtmx` | tested | `Tests/Html.lean` |
-| `Http.Response.trigger` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 1 more |
+| `Http.Response.trigger` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
 | `Http.Response.hxRedirect` | tested | `Tests/Html.lean` |
 
 ## `Lanes/Web/Http/Basic.lean`
@@ -2136,7 +2144,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Request.field?` | proved | `Http.Request.field?_eq_lookup` |
 | `Http.Response.ofText` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean`, `Tests/HttpConn.lean` and 1 more |
 | `Http.Response.text` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean`, `Tests/HttpConn.lean` and 1 more |
-| `Http.Response.html` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 1 more |
+| `Http.Response.html` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
 | `Http.Response.json` | tested | `Tests/Html.lean` |
 | `Http.Response.empty` | tested | `Tests/Auth.lean`, `Tests/Html.lean` |
 | `Http.Response.redirect` | tested | `Tests/Html.lean` |
@@ -2360,14 +2368,14 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Slug.ofString?` | proved | `Http.Slug.ofString?_eq_some`, `Http.Slug.ofString?_text` |
 | `Http.Slug.instToString` | tested | `Tests/Html.lean` |
 | `Http.Slug.instDecidableEq` | proved | its type, `Decidable` |
-| `Http.Path.seg` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 1 more |
+| `Http.Path.seg` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
 | `Http.Path.slug` | tested | `Tests/Html.lean`, `Tests/Web.lean` |
-| `Http.Path.nat` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 1 more |
-| `Http.Path.root` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 1 more |
+| `Http.Path.nat` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
+| `Http.Path.root` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
 | `Http.Path.append` | tested | `Tests/Html.lean` |
-| `Http.Path.pre` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 1 more |
-| `Http.Route.get` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 1 more |
-| `Http.Route.post` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 1 more |
+| `Http.Path.pre` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
+| `Http.Route.get` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
+| `Http.Route.post` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
 | `Http.Route.put` | tested | `Tests/Html.lean` |
 | `Http.Route.patch` | tested | `Tests/Html.lean` |
 | `Http.Route.delete` | tested | `Tests/Html.lean` |

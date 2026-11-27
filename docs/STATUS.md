@@ -208,6 +208,10 @@ What is being worked on now, and why: `docs/PLAN.md`.
 - The connection's own refusals (`400`, `408`, `413`, `431`, `501`) are neither counted in the
   metrics nor logged. The metrics page and the health checks are on the application's port; the
   page is answered only to a loopback peer by default, and the health checks to every peer.
+- Reads answered from the state (`serve`'s `reads`) are a proposal, off by default
+  (`docs/decisions/new-reads.md`): a read sees one actor, has no deadline, is not counted by the
+  gate's `maxPending` or waited for by a drain, and the gate's theorems and `System.Implements`
+  say nothing of it.
 - No adapter: the shop runs only in the checker and the proof.
 - Sessions are signed with a key made at start, so they end with the process, and the members
   are not journalled; neither the example nor its presets has been run against Google or GitHub.
