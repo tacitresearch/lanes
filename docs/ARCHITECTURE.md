@@ -294,7 +294,7 @@ that reference as its body, so its theorems (`Bytes.same_iff`) are about the ref
 is trusted is that the C computes the same, which `Tests/Crypto.lean` tests.
 
 TLS is a client from OpenSSL, the copy Lean's toolchain ships and links into every executable
-(`native/tls.c`, declared in `Lanes/Web/IO/Tls.lean`; `docs/decisions/new-a-tls-client-from-the-openssl-lean-ships.md`).
+(`native/tls.c`, declared in `Lanes/Web/IO/Tls.lean`; `docs/decisions/D67-a-tls-client-from-the-openssl-lean-ships.md`).
 It does no IO: the client hands it the bytes that arrive and sends those it gives back, so what
 is sent and what the bytes mean stay the pure writer and reader. The certificate is always
 verified, against the system's trust store or a file given, and so is the name or address it is

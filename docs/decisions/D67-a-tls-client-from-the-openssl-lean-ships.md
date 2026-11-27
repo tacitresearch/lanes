@@ -1,4 +1,4 @@
-# D?. A TLS client, from the OpenSSL Lean's toolchain ships
+# D67. A TLS client, from the OpenSSL Lean's toolchain ships
 
 Applications have to call HTTPS APIs: S3, SES, Stripe, OAuth providers. The HTTP client spoke
 plain HTTP/1.1 only. This adds a TLS 1.2 and 1.3 client under it, bound from C as D46 says
