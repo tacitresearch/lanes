@@ -25,7 +25,11 @@ there.
 5. `election`: leader election with timers, crashes and restarts, at most one leader per term,
    proved with a ghost history and `Monotone`; random runs for five nodes.
 6. `watchdog`: what fairness says about a keep-alive: a fair run in which the dog never barks.
-7. `raft-kv`, `ledger`, `rookery`: the serious systems below.
+7. `todo-db`: a to-do list kept in PostgreSQL, checked against the transactional store model with
+   lost `COMMIT` answers. Appending and retrying a lost commit stores a to-do twice, and the
+   checker finds it; the fix inserts under the user's key after reading it, and is proved to send
+   nothing else. `lake exe todoLive` runs it on a real server.
+8. `raft-kv`, `ledger`, `rookery`: the serious systems below.
 
 | Feature | Where to see it |
 | --- | --- |
@@ -37,7 +41,8 @@ there.
 | Refinement to a spec (`System.Implements`, `System.Refines`) | `counter`, `kv-cache`, `ledger`, `raft-kv`, `rookery` |
 | A request takes effect once (`Once.actor`, `Service.once`) | `kv-cache`, `raft-kv` |
 | Fairness and liveness | `watchdog` |
-| Model checks, a bug found, random runs | `bank`, `kv-cache`, `election` |
+| A database: the store model, lost commits, PostgreSQL | `todo-db` |
+| Model checks, a bug found, random runs | `bank`, `kv-cache`, `election`, `todo-db` |
 | HTTP, routes, htmx, templates | `counter`, `bank-web`, `ledger`, `rookery` |
 | A journal and snapshots across `kill -9` | `bank-web`, `ledger`, `raft-kv`, `rookery` |
 | Sessions, log-in, cookies, tokens | `ledger`, `rookery` |
