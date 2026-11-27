@@ -389,7 +389,7 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   ends and its end is handed over (`Schedule.held_ends`), and a periodic job is noticed again and
   again (`Schedule.every_noticed`). That the times it is told are not ahead of the clock, and
   that the runtime fires a timer no earlier than its delay, are premises (`TRUSTED.md`;
-  `docs/decisions/new-work-that-is-due-later-is-a-job-of-the-scheduler.md`).
+  `docs/decisions/D79-work-that-is-due-later-is-a-job-of-the-scheduler.md`).
 
 ## The checker
 
