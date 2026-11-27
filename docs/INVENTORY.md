@@ -14,17 +14,17 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Check` | 74 | 54 | 0 | 8 | 0 | 10 | 2 |
 | `Lanes/Core` | 103 | 41 | 0 | 34 | 1 | 11 | 16 |
 | `Lanes/Data` | 68 | 43 | 0 | 4 | 1 | 0 | 20 |
-| `Lanes/Durable` | 67 | 57 | 2 | 0 | 0 | 7 | 1 |
+| `Lanes/Durable` | 70 | 58 | 2 | 0 | 0 | 9 | 1 |
 | `Lanes/Lib` | 532 | 346 | 13 | 2 | 92 | 70 | 9 |
 | `Lanes/Net` | 37 | 6 | 5 | 0 | 0 | 25 | 1 |
-| `Lanes/Outside` | 118 | 87 | 5 | 6 | 1 | 19 | 0 |
+| `Lanes/Outside` | 144 | 112 | 4 | 6 | 1 | 21 | 0 |
 | `Lanes/Proof` | 40 | 16 | 0 | 0 | 0 | 23 | 1 |
 | `Lanes/Runtime` | 172 | 93 | 21 | 0 | 28 | 30 | 0 |
 | `Lanes/Semantics` | 63 | 11 | 0 | 0 | 0 | 51 | 1 |
 | `Lanes/Testing` | 63 | 0 | 0 | 1 | 62 | 0 | 0 |
-| `Lanes/Web` | 601 | 313 | 52 | 34 | 148 | 52 | 2 |
-| `LanesCli` | 120 | 0 | 0 | 0 | 46 | 0 | 74 |
-| All | 2192 | 1148 | 103 | 113 | 379 | 322 | 127 |
+| `Lanes/Web` | 616 | 324 | 52 | 37 | 148 | 53 | 2 |
+| `LanesCli` | 125 | 0 | 0 | 0 | 51 | 0 | 74 |
+| All | 2241 | 1185 | 102 | 116 | 384 | 327 | 127 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -257,7 +257,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Check.Property.holds` | proved | `Check.refines_sound`, `Check.refines_traces`, `Check.system_sound` and 1 more |
 | `Check.Trace.last` | proved | `Check.search_deadlock`, `Check.search_reached`, `Check.search_violated` and 2 more |
 | `Check.Trace.labels` | proved | `Check.system_violated` |
-| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 21 more |
+| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Cache.lean` and 26 more |
 | `Check.Path.last` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
 | `Check.Path.toTraceAux` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
 | `Check.Path.toTrace` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
@@ -570,7 +570,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Journal.Disk.read` | proved | `Journal.Disk.Torn.mend`, `Journal.Disk.Torn.mend_crash`, `Journal.Disk.Torn.read` and 2 more |
 | `Journal.Disk.start` | proved | `Journal.Disk.read_of_start`, `Journal.Disk.start_foreign` |
 | `Journal.Disk.mend` | proved | `Journal.Disk.Torn.mend`, `Journal.Disk.Torn.mend_crash` |
-| `Journal.Disk.load` | proved | `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Torn.load` and 2 more |
+| `Journal.Disk.load` | proved | `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Torn.load` and 3 more |
 | `Journal.appendWrites` | proved | `Journal.Disk.Holds.append`, `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash` |
 | `Journal.saveWrites` | proved | `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save`, `Journal.Disk.Holds.save_crash` |
 | `Journal.memo` | spec | used only in statements |
@@ -617,9 +617,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Journal.Entry.op?` | proved | through `Journal.ops`: `Journal.recover_handed`, `Journal.recover_kernel` and 4 more |
 | `Journal.Entry.marks` | spec | used only in statements |
 | `Journal.ops` | proved | `Journal.recover_handed`, `Journal.recover_kernel`, `Journal.recover_outputs` and 3 more |
-| `Journal.replay1` | proved | through `Journal.Begun.toFound`, `Journal.recover` and 4 more: `Journal.Begun.resume_upgraded`, `Journal.Disk.Holds.load_append_crash` and 19 more |
+| `Journal.replay1` | proved | through `Journal.Begun.toFound`, `Journal.recover` and 4 more: `Journal.Begun.resume_upgraded`, `Journal.Disk.Holds.load_append_crash` and 20 more |
 | `Journal.recover` | proved | `Journal.Disk.load_cut`, `Journal.Upgrade.begin_crash`, `Journal.Upgrade.begin_torn` and 7 more |
-| `Journal.replay` | proved | `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save` and 4 more |
+| `Journal.replay` | proved | `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save` and 5 more |
 | `Journal.Entry.savedAt` | proved | `Journal.Disk.Holds.append`, `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash` and 3 more |
 | `Journal.since` | proved | through `Journal.Begun.load`, `Journal.Begun.toFound` and 1 more: `Journal.Begun.resume_upgraded`, `Journal.Upgrade.begin_crash` and 2 more |
 | `Journal.resume` | proved | `Journal.Begun.resume_upgraded`, `Journal.resume_eq_recover`, `Journal.resume_eq_replay` |
@@ -635,6 +635,14 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Migration.envelope` | proved | through `Migration.kernel`: `Journal.Upgrade.begin_crash`, `Journal.Upgrade.inv_load` and 4 more |
 | `Migration.image` | proved | through `Migration.kernel`: `Journal.Upgrade.begin_crash`, `Journal.Upgrade.inv_load` and 4 more |
 | `Migration.kernel` | proved | `Journal.Upgrade.begin_crash`, `Journal.Upgrade.inv_load`, `Migration.cell_kernel` and 3 more |
+
+## `Lanes/Durable/Reading.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Journal.Reading.OfJournal` | spec | a predicate |
+| `Journal.Reading.OfSnapshot` | spec | a predicate |
+| `Journal.Disk.ofReadings` | proved | `Journal.Disk.Torn.load_readings`, `Journal.Disk.ofReadings_eq` |
 
 ## `Lanes/Durable/Snapshot.lean`
 
@@ -707,9 +715,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Bytes.toNat` | tested | `Tests/Signature.lean` |
+| `Bytes.toNat` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Jose.lean`, `Tests/Signature.lean` |
 | `Bytes.ofNat` | proved | `Bytes.size_ofNat` |
-| `Der.digits` | tested | `Tests/Signature.lean` |
+| `Der.digits` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Jose.lean`, `Tests/Signature.lean` |
 | `Der.length` | tested | `Tests/Signature.lean` |
 | `Der.tlv` | tested | `Tests/Signature.lean` |
 | `Der.integer` | tested | `Tests/Signature.lean` |
@@ -717,14 +725,14 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Der.bitString` | tested | `Tests/Signature.lean` |
 | `Der.rsaAlgorithm` | tested | `Tests/Signature.lean` |
 | `Der.p256Algorithm` | tested | `Tests/Signature.lean` |
-| `PublicKey.rsaSize` | tested | `Tests/Signature.lean` |
+| `PublicKey.rsaSize` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Jose.lean`, `Tests/Signature.lean` |
 | `PublicKey.valid` | tested | `Tests/Signature.lean` |
 | `PublicKey.spki` | tested | `Tests/Signature.lean` |
 | `PublicKey.derSignature` | tested | `Tests/Signature.lean` |
 | `Rsa.powMod` | proved | `Rsa.powMod_eq` |
-| `Rsa.digestInfo` | tested | `Tests/Signature.lean` |
-| `Rsa.encode` | tested | `Tests/Signature.lean` |
-| `Rsa.verifyReference` | tested | `Tests/Signature.lean` |
+| `Rsa.digestInfo` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Jose.lean`, `Tests/Signature.lean` |
+| `Rsa.encode` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Jose.lean`, `Tests/Signature.lean` |
+| `Rsa.verifyReference` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Jose.lean`, `Tests/Signature.lean` |
 
 ## `Lanes/Lib/Crypto/Sha256.lean`
 
@@ -771,7 +779,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Base64.Encoding.std` | checked | `Tests/PostgresConn.lean` |
 | `Base64.Encoding.rawStd` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
 | `Base64.Encoding.url` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
-| `Base64.Encoding.rawUrl` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean`, `Tests/Signature.lean` |
+| `Base64.Encoding.rawUrl` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean`, `Tests/Oracle/Jose.lean` and 1 more |
 | `Base64.sextet` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 2 more |
 | `Base64.byte` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
 | `Base64.pad` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 2 more |
@@ -811,7 +819,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `JsonNumber.ofScientific` | proved | `Json.ofScientific_mantissa` |
 | `JsonNumber.instCoeNat` | none |  |
 | `JsonNumber.instCoeInt` | none |  |
-| `JsonNumber.instOfNat` | tested | `Tests/Json.lean`, `Tests/Ops.lean` |
+| `JsonNumber.instOfNat` | tested | `Tests/Json.lean`, `Tests/Ops.lean`, `Tests/Oracle/All.lean` and 1 more |
 | `JsonNumber.instInhabited` | none |  |
 | `JsonNumber.instOfScientific` | tested | `Tests/Json.lean` |
 | `JsonNumber.instNeg` | tested | `Tests/Json.lean` |
@@ -853,7 +861,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Json.getBool?` | proved | `Json.getBool?_eq_ok` |
 | `Json.getObjVal?` | proved | `Jose.Compact.read_alg`, `Jose.readHeader_alg`, `Jose.verify_ok` and 3 more |
 | `Json.getArrVal?` | proved | `Json.getArrVal?_eq_ok` |
-| `Json.getObjValD` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` and 3 more |
+| `Json.getObjValD` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` and 4 more |
 
 ## `Lanes/Lib/Encoding/Json/Classes.lean`
 
@@ -985,15 +993,15 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Metrics.valid` | spec | used only in statements |
 | `Metrics.sanitizeChars` | proved | through `Metrics.sanitize`: `Metrics.sanitize_of_valid`, `Metrics.valid_sanitize` |
 | `Metrics.sanitize` | proved | `Metrics.sanitize_of_valid`, `Metrics.valid_sanitize` |
-| `Metrics.trimZeros` | tested | `Tests/Ops.lean` |
-| `Metrics.decimal` | tested | `Tests/Ops.lean` |
-| `Metrics.decimalInt` | tested | `Tests/Ops.lean` |
-| `Metrics.Series.kind` | tested | `Tests/Ops.lean` |
-| `Metrics.renderLabels` | tested | `Tests/Ops.lean` |
-| `Metrics.sample` | tested | `Tests/Ops.lean` |
-| `Metrics.renderHistogram` | tested | `Tests/Ops.lean` |
-| `Metrics.Family.render` | tested | `Tests/Ops.lean` |
-| `Metrics.render` | tested | `Tests/Ops.lean` |
+| `Metrics.trimZeros` | tested | `Tests/Ops.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Metrics.lean` |
+| `Metrics.decimal` | tested | `Tests/Ops.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Metrics.lean` |
+| `Metrics.decimalInt` | tested | `Tests/Ops.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Metrics.lean` |
+| `Metrics.Series.kind` | tested | `Tests/Ops.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Metrics.lean` |
+| `Metrics.renderLabels` | tested | `Tests/Ops.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Metrics.lean` |
+| `Metrics.sample` | tested | `Tests/Ops.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Metrics.lean` |
+| `Metrics.renderHistogram` | tested | `Tests/Ops.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Metrics.lean` |
+| `Metrics.Family.render` | tested | `Tests/Ops.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Metrics.lean` |
+| `Metrics.render` | tested | `Tests/Ops.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Metrics.lean` |
 | `Metrics.contentType` | tested | `Tests/Ops.lean` |
 
 ## `Lanes/Lib/Mime/MediaType.lean`
@@ -1269,7 +1277,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Postgres.Table.create` | tested | `Tests/Postgres.lean`, `Tests/PostgresLive.lean` |
+| `Postgres.Table.create` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/Postgres.lean`, `Tests/Postgres.lean` and 1 more |
 | `Postgres.Table.Isolation.ofStore` | tested | `Tests/Postgres.lean` |
 | `Postgres.Table.request` | tested | `Tests/Postgres.lean` |
 | `Postgres.scanRows` | tested | `Tests/Postgres.lean` |
@@ -1411,12 +1419,34 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Outside.any` | tested | `Tests/Jobs.lean`, `Tests/S3.lean` |
-| `Outside.driver` | checked | `Tests/Clock.lean`, `Tests/HttpClient.lean`, `Tests/Jobs.lean` and 3 more |
-| `Outside.see` | proved | through `Outside.after`: `Effects.at_most_once`, `Events.deliveries_le` and 8 more |
-| `Outside.after` | proved | `Effects.at_most_once`, `Events.deliveries_le`, `Idempotent.at_most_once` and 7 more |
-| `Outside.allows` | checked | `Tests/Outside.lean` |
+| `Outside.driver` | checked | `Tests/Cache.lean`, `Tests/Clock.lean`, `Tests/HttpClient.lean` and 8 more |
+| `Outside.see` | proved | through `Outside.after`: `Cache.read_sent`, `Clock.wall_back_le` and 15 more |
+| `Outside.after` | proved | `Cache.read_sent`, `Clock.wall_back_le`, `Clock.wall_latest_le` and 14 more |
+| `Outside.allows` | checked | `Tests/Outside.lean`, `Tests/Queue.lean`, `Tests/Throttle.lean` and 1 more |
 | `Outside.both` | proved | `Outside.after_both` |
 | `Outside.mine` | spec | used only in statements |
+
+## `Lanes/Outside/Cache.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Cache.Request.key` | proved | through `Cache.server`: `Cache.fill_unleased`, `Cache.read_sent` |
+| `Cache.Request.leaves` | proved | through `Cache.server`: `Cache.fill_unleased`, `Cache.read_sent` |
+| `Cache.Core.possible` | proved | through `Cache.server`: `Cache.fill_unleased`, `Cache.read_sent` |
+| `Cache.Core.receive` | proved | through `Cache.server`: `Cache.fill_unleased`, `Cache.read_sent` |
+| `Cache.Core.settle` | proved | through `Cache.server`: `Cache.fill_unleased`, `Cache.read_sent` |
+| `Cache.Core.answer` | proved | through `Cache.server`: `Cache.fill_unleased`, `Cache.read_sent` |
+| `Cache.readOf` | proved | through `Cache.server`: `Cache.fill_unleased`, `Cache.read_sent` |
+| `Cache.sentOf` | proved | through `Cache.server`: `Cache.fill_unleased`, `Cache.read_sent` |
+| `Cache.mayRead` | proved | through `Cache.server`: `Cache.fill_unleased`, `Cache.read_sent` |
+| `Cache.server` | proved | `Cache.fill_unleased`, `Cache.read_sent` |
+
+## `Lanes/Outside/Clock.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Clock.outside` | proved | `Clock.outside_ge` |
+| `Clock.wall` | proved | `Clock.wall_back_le`, `Clock.wall_latest_le` |
 
 ## `Lanes/Outside/Effects/Basic.lean`
 
@@ -1475,7 +1505,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Events.count` | proved | through `Events.bounded`: `Events.deliveries_le` |
+| `Events.count` | proved | `Queue.received_le` |
 | `Events.bump` | proved | through `Events.bounded`: `Events.deliveries_le` |
 | `Events.bounded` | proved | `Events.deliveries_le` |
 | `Events.deliveries` | spec | used only in statements |
@@ -1484,7 +1514,6 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Clock.outside` | trusted | TRUSTED.md: The clock adapter's handler |
 | `Clock.latest` | trusted | TRUSTED.md: The clock adapter's handler |
 | `Clock.Wall.start` | trusted | TRUSTED.md: The clock adapter's handler |
 | `Clock.Wall.now` | trusted | TRUSTED.md: The clock adapter's handler |
@@ -1518,6 +1547,21 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `ObjectStore.Sound` | spec | a predicate |
 | `ObjectStore.HeldSent` | spec | a predicate |
 
+## `Lanes/Outside/Queue.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Queue.Message.codec` | proved | its type, `Codec` |
+| `Queue.instCodableMessage` | proved | its type, `Codable` |
+| `Queue.inOrder` | proved | through `Queue.outside`: `Queue.deleted_not_received`, `Queue.fifo_received_le` and 1 more |
+| `Queue.ready` | proved | through `Queue.outside`: `Queue.deleted_not_received`, `Queue.fifo_received_le` and 1 more |
+| `Queue.receive` | proved | through `Queue.outside`: `Queue.deleted_not_received`, `Queue.fifo_received_le` and 1 more |
+| `Queue.delete` | proved | through `Queue.outside`: `Queue.deleted_not_received`, `Queue.fifo_received_le` and 1 more |
+| `Queue.send` | proved | through `Queue.outside`: `Queue.deleted_not_received`, `Queue.fifo_received_le` and 1 more |
+| `Queue.outside` | proved | `Queue.deleted_not_received`, `Queue.fifo_received_le`, `Queue.received_le` |
+| `Queue.receives` | spec | used only in statements |
+| `Queue.OneCopy` | spec | a predicate |
+
 ## `Lanes/Outside/Rpc.lean`
 
 | Definition | Status | Evidence |
@@ -1526,7 +1570,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Rpc.instCodableCall` | proved | its type, `Codable` |
 | `Rpc.Reply.codec` | proved | its type, `Codec` |
 | `Rpc.instCodableReply` | proved | its type, `Codable` |
-| `Rpc.outside` | proved | `Events.deliveries_le`, `Idempotent.at_most_once`, `Idempotent.keys_nodup` and 4 more |
+| `Rpc.outside` | proved | `Cache.read_sent`, `Events.deliveries_le`, `Idempotent.at_most_once` and 6 more |
 | `Rpc.Port.reported` | spec | used only in statements |
 | `Rpc.called` | spec | used only in statements |
 | `Rpc.answered` | spec | used only in statements |
@@ -1578,6 +1622,16 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Store.writeSkew` | spec | used only in statements |
 | `Store.lostUpdate` | spec | used only in statements |
 | `Store.earlier` | spec | used only in statements |
+
+## `Lanes/Outside/Throttle.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Throttle.Answer.codec` | proved | its type, `Codec` |
+| `Throttle.instCodableAnswer` | proved | its type, `Codable` |
+| `Throttle.Event.codec` | proved | its type, `Codec` |
+| `Throttle.instCodableEvent` | proved | its type, `Codable` |
+| `Throttle.server` | proved | `Throttle.throttled_inner`, `Throttle.wait_le`, `Throttle.within_not_throttled` |
 
 ## `Lanes/Proof/Deed.lean`
 
@@ -2161,7 +2215,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Jose.str?` | proved | through `Jose.Compact.read`, `Jose.readHeader`: `Jose.Compact.read_alg`, `Jose.readHeader_alg` and 2 more |
 | `Jose.bytes?` | proved | through `Jose.Compact.read`: `Jose.Compact.read_alg`, `Jose.verify_ok` and 1 more |
 | `Jose.Jwk.read?` | proved | through `Jose.Compact.read`: `Jose.Compact.read_alg`, `Jose.verify_ok` and 1 more |
-| `Jose.readKeys` | tested | `Tests/Signature.lean` |
+| `Jose.readKeys` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Jose.lean`, `Tests/Signature.lean` |
 | `Jose.readHeader` | proved | `Jose.readHeader_alg` |
 | `Jose.Compact.read` | proved | `Jose.Compact.read_alg`, `Jose.verify_ok`, `OAuth.IdToken.verify_accepted` |
 | `Jose.candidates` | proved | through `Jose.verify`: `Jose.verify_ok` |
@@ -2350,17 +2404,17 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.parseForm` | proved | `Http.parseForm_encodeForm` |
 | `Http.encodeForm` | proved | `Http.Request.form_encodeForm`, `Http.parseForm_encodeForm` |
 | `Http.Request.param?` | spec | used only in statements |
-| `Http.Request.header?` | proved | `Http.Conn.respond_opens`, `Http.Request.header?_eq_lookup`, `Http.Request.sameOrigin_iff` |
+| `Http.Request.header?` | proved | `Http.Conn.respond_opens`, `Http.Request.header?_eq_lookup`, `Http.Request.sameOrigin_iff` and 1 more |
 | `Http.Request.text?` | proved | through `Http.Request.field?`, `Http.Request.form`: `Http.Request.field?_eq_lookup`, `Http.Request.form_encodeForm` |
 | `Http.Request.form` | proved | `Http.Request.field?_eq_lookup`, `Http.Request.form_encodeForm` |
 | `Http.Request.field?` | proved | `Http.Request.field?_eq_lookup` |
-| `Http.Response.ofText` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean`, `Tests/HttpConn.lean` and 2 more |
-| `Http.Response.text` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean`, `Tests/HttpConn.lean` and 2 more |
+| `Http.Response.ofText` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean`, `Tests/HttpConn.lean` and 3 more |
+| `Http.Response.text` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean`, `Tests/HttpConn.lean` and 3 more |
 | `Http.Response.html` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
 | `Http.Response.json` | tested | `Tests/Html.lean` |
 | `Http.Response.empty` | tested | `Tests/Auth.lean`, `Tests/Html.lean` |
-| `Http.Response.redirect` | tested | `Tests/Html.lean` |
-| `Http.Response.withHeader` | tested | `Tests/Html.lean` |
+| `Http.Response.redirect` | checked | `Tests/SharedCache.lean` |
+| `Http.Response.withHeader` | checked | `Tests/SharedCache.lean` |
 
 ## `Lanes/Web/Http/Conn.lean`
 
@@ -2448,7 +2502,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.hostCookie` | tested | `Tests/Auth.lean` |
 | `Http.Response.setCookie` | proved | `Http.setCookie_read` |
 | `Http.Response.clearCookie` | tested | `Tests/Auth.lean` |
-| `Http.Response.noStore` | tested | `Tests/Html.lean` |
+| `Http.Response.noStore` | checked | `Tests/SharedCache.lean` |
 | `Http.Response.noFraming` | tested | `Tests/Html.lean` |
 
 ## `Lanes/Web/Http/CookieSound.lean`
@@ -2637,6 +2691,23 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Route.handle` | proved | `Http.dispatch_link` |
 | `Http.dispatch` | proved | `Http.dispatch_eq_none`, `Http.dispatch_eq_some`, `Http.dispatch_link` |
 
+## `Lanes/Web/Http/SharedCache.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Http.SharedCache.directives` | proved | through `Http.SharedCache.leaks`, `Http.SharedCache.outside` and 1 more: `Http.SharedCache.serve_of_leaks`, `Http.SharedCache.serve_reuses` and 1 more |
+| `Http.SharedCache.says` | proved | `Http.SharedCache.serve_storable` |
+| `Http.SharedCache.vary` | proved | `Http.SharedCache.serve_reuses` |
+| `Http.SharedCache.explicitlyFresh` | proved | through `Http.SharedCache.leaks`, `Http.SharedCache.outside`: `Http.SharedCache.serve_of_leaks`, `Http.SharedCache.serve_storable` |
+| `Http.SharedCache.heuristic` | proved | through `Http.SharedCache.leaks`, `Http.SharedCache.outside`: `Http.SharedCache.serve_of_leaks`, `Http.SharedCache.serve_storable` |
+| `Http.SharedCache.storable` | proved | `Http.SharedCache.serve_storable` |
+| `Http.SharedCache.reuses` | proved | through `Http.SharedCache.Store.serve?`, `Http.SharedCache.leaks`: `Http.SharedCache.serve_of_leaks`, `Http.SharedCache.serve_reuses` and 1 more |
+| `Http.SharedCache.Store.observe` | proved | through `Http.SharedCache.outside`: `Http.SharedCache.serve_storable` |
+| `Http.SharedCache.Store.serve?` | proved | `Http.SharedCache.serve_of_leaks`, `Http.SharedCache.serve_reuses`, `Http.SharedCache.serve_storable` |
+| `Http.SharedCache.outside` | proved | `Http.SharedCache.serve_storable` |
+| `Http.SharedCache.Store.Sound` | spec | a predicate |
+| `Http.SharedCache.leaks` | proved | `Http.SharedCache.serve_of_leaks` |
+
 ## `Lanes/Web/Http/SigV4.lean`
 
 | Definition | Status | Evidence |
@@ -2661,8 +2732,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `SigV4.signedHeaders` | proved | through `SigV4.sign`: `SigV4.target_sign` |
 | `SigV4.canonicalRequest` | proved | through `SigV4.sign`: `SigV4.target_sign` |
 | `SigV4.algorithm` | proved | through `SigV4.sign`: `SigV4.target_sign` |
-| `SigV4.unsignedPayload` | tested | `Tests/S3.lean`, `Tests/SigV4.lean` |
-| `SigV4.payloadHash` | tested | `Tests/S3.lean`, `Tests/SigV4.lean` |
+| `SigV4.unsignedPayload` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/SigV4.lean`, `Tests/S3.lean` and 1 more |
+| `SigV4.payloadHash` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean` and 3 more |
 | `SigV4.stringToSign` | proved | through `SigV4.sign`: `SigV4.target_sign` |
 | `SigV4.signingKey` | proved | through `SigV4.sign`: `SigV4.target_sign` |
 | `SigV4.signature` | proved | through `SigV4.sign`: `SigV4.target_sign` |
@@ -2877,7 +2948,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `S3.Endpoint.aws` | tested | `Tests/S3.lean` |
-| `S3.Key.of?` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
+| `S3.Key.of?` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/S3.lean` and 1 more |
 | `S3.Range.header` | tested | `Tests/S3.lean` |
 | `S3.Op.verb` | tested | `Tests/S3.lean` |
 | `S3.Op.method` | tested | `Tests/S3.lean` |
@@ -2887,7 +2958,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `S3.Op.body` | tested | `Tests/S3.lean` |
 | `S3.Bucket.host` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
 | `S3.Bucket.path` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
-| `S3.Bucket.scope` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
+| `S3.Bucket.scope` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/S3.lean` and 1 more |
 | `S3.call` | tested | `Tests/S3.lean` |
 | `S3.unescapeKey` | tested | `Tests/S3.lean` |
 | `S3.entry?` | tested | `Tests/S3.lean` |
@@ -2895,27 +2966,30 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `S3.errorCode` | tested | `Tests/S3.lean` |
 | `S3.info` | tested | `Tests/S3.lean` |
 | `S3.interpret` | tested | `Tests/S3.lean` |
-| `S3.Op.modelled` | tested | `Tests/S3.lean` |
-| `S3.Answer.modelled` | tested | `Tests/S3.lean` |
+| `S3.Op.modelled` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/S3.lean` |
+| `S3.Answer.modelled` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/S3.lean` |
 | `S3.presign` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
 
 ## `Lanes/Web/S3/Xml.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `S3.Xml.nameChar` | tested | `Tests/S3.lean` |
-| `S3.Xml.space` | tested | `Tests/S3.lean` |
-| `S3.Xml.after` | tested | `Tests/S3.lean` |
-| `S3.Xml.skipAttributes` | tested | `Tests/S3.lean` |
-| `S3.Xml.hexValue?` | tested | `Tests/S3.lean` |
-| `S3.Xml.codePoint?` | tested | `Tests/S3.lean` |
-| `S3.Xml.charRef?` | tested | `Tests/S3.lean` |
-| `S3.Xml.entity?` | tested | `Tests/S3.lean` |
-| `S3.Xml.unescape` | tested | `Tests/S3.lean` |
-| `S3.Xml.escape` | tested | `Tests/S3.lean` |
-| `S3.Xml.tokens` | tested | `Tests/S3.lean` |
-| `S3.Xml.push` | tested | `Tests/S3.lean` |
-| `S3.Xml.parse` | tested | `Tests/S3.lean` |
+| `S3.Xml.nameChar` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Xml.lean`, `Tests/S3.lean` |
+| `S3.Xml.nameStart` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Xml.lean`, `Tests/S3.lean` |
+| `S3.Xml.isName` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Xml.lean`, `Tests/S3.lean` |
+| `S3.Xml.xmlChar` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Xml.lean`, `Tests/S3.lean` |
+| `S3.Xml.space` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Xml.lean`, `Tests/S3.lean` |
+| `S3.Xml.after` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Xml.lean`, `Tests/S3.lean` |
+| `S3.Xml.skipAttributes` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Xml.lean`, `Tests/S3.lean` |
+| `S3.Xml.hexValue?` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Xml.lean`, `Tests/S3.lean` |
+| `S3.Xml.codePoint?` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Xml.lean`, `Tests/S3.lean` |
+| `S3.Xml.charRef?` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Xml.lean`, `Tests/S3.lean` |
+| `S3.Xml.entity?` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Xml.lean`, `Tests/S3.lean` |
+| `S3.Xml.unescape` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Xml.lean`, `Tests/S3.lean` |
+| `S3.Xml.escape` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Xml.lean`, `Tests/S3.lean` |
+| `S3.Xml.tokens` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Xml.lean`, `Tests/S3.lean` |
+| `S3.Xml.push` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Xml.lean`, `Tests/S3.lean` |
+| `S3.Xml.parse` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Xml.lean`, `Tests/S3.lean` |
 | `S3.Xml.Node.name` | tested | `Tests/S3.lean` |
 | `S3.Xml.Node.children` | tested | `Tests/S3.lean` |
 | `S3.Xml.Node.content` | tested | `Tests/S3.lean` |
@@ -3049,6 +3123,11 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Cli.Lint.citedPaths` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.citingDocs` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.checkLinks` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.cells` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.tableRows` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.spans` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.inScope` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.checkOracles` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.parseFinding` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.inventory` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.lint` | tested | `Tests/Lint.lean` |
