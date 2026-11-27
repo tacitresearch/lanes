@@ -95,7 +95,7 @@ theorem bounded_close {config : Config N} {p : Profile C} (h : Bounded config (s
   intro q hq
   cases hq
   obtain ⟨hs, ha⟩ := h p rfl
-  exact ⟨Nat.le_trans (List.length_erase_le ..) hs, ha⟩
+  exact ⟨Nat.le_trans (Auth.Sessions.length_close_le ..) hs, ha⟩
 
 omit [DecidableEq N] in
 theorem bounded_decide (config : Config N) (self : N) (req : ReqId) {u : Option (Profile C)}

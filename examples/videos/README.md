@@ -24,7 +24,8 @@ lake test             # model checks, the bridge, and the site over HTTP against
   identity the provider vouched for, by its issuer and subject, and a member is made the first
   time one signs in, its channel named by the provider's name for it (the login, without one),
   which the pages show as text. A session is a signed cookie and an entry of the member's
-  `Auth.Sessions`.
+  `Auth.Sessions`, and lets requests in for 30 days after its sign-in (`Config.lifetime`), judged
+  at the time each request arrived; a sign-in sweeps the member's sessions that are over.
 - **Upload.** "Upload" makes a record, `pending`, and answers a page whose form carries a link
   presigned for a `PUT` of `videos/<id>`, with the content type signed. The browser puts the file
   there itself (`upload.js`, a dozen lines that `fetch` the link and then post the next form),
@@ -52,11 +53,11 @@ model-checked (`Videos/Check.lean`).
 
 | Claim | Theorem |
 | --- | --- |
-| A private video is its owner's alone: in every run of the system, under every environment model, an output that shows one is addressed to its owner; and of every input, only in an answer to a live session of the owner | `Videos.private_to_owner`, `Videos.Site.handle_private` |
+| A private video is its owner's alone: in every run of the system, under every environment model, an output that shows one is addressed to its owner; and of every input, only in an answer to a session of the owner that let the request in when it arrived, open and not past its lifetime | `Videos.private_to_owner`, `Videos.Site.handle_private` |
 | A like counts each member once: in every reachable state of the system, under every environment model, no video's likes name a member twice, so the count shown is the number of distinct likers | `Videos.likes_distinct`, `Videos.count_distinct` |
 | A deleted video is never served again: once a delete is answered, no output of any later input or start shows it, however the store answers the delete (late, refused, `unknown`, never) | `Videos.Site.deleted_never_served`, `Videos.Site.Gone.run` |
 | A video is shown only once the store confirmed its upload: an output that shows a video comes after an output asking the store about it under some call, and after the store's `found` to that call | `Videos.Site.listed_confirmed` (the seeded bugs off: `Config.Honest`) |
-| What an output shows is a ready video of the site, and a private one only to its owner's live session | `Videos.Site.shows_handle` |
+| What an output shows is a ready video of the site, and a private one only to a session of its owner that let the request in | `Videos.Site.shows_handle` |
 
 The last three are about runs of the spec's functions, `Site.handle` and `Site.recover`, which is
 what the actor runs; the first two are about the system's runs. The theorem that turns a run of
@@ -88,8 +89,10 @@ actor crashes and starts again anywhere. What each browser is shown is judged as
 | A public video: made, checked twice, watched, liked three times, deleted, asked for during and after the delete | 741,759 | pass |
 | A private video: asked for by another member, a stranger and its owner; channels, the feed, a like and a comment by another | 561 | pass |
 | A video deleted while its check may be out | 240,716 | pass |
+| A session past its lifetime: a private video watched inside it, asked for and liked after it, then watched in a new session | 376 | pass |
 | Seeded: the browser's word taken for the upload (`trustBrowser`) | | found in 18 steps |
 | Seeded: a check the store did not answer in time taken as found (`readyOnTimeout`) | | found in 21 steps |
+| Seeded: sessions that never end (`lifetime := {}`) | | found in 18 steps |
 
 Over HTTP (`Videos/EndToEnd.lean`, 20 checks): the site as `Main` serves it, on a journal, against
 the test kit of Lanes (`Lanes.Testing`): its identity provider in GitHub's shape, read by
@@ -200,8 +203,10 @@ package; none touches the library.
    media bucket, so `VIDEOS_BUCKET` is set by hand in `secrets.env`.
 9. **An identity had no name** (since fixed: `OAuth.Identity.name`, the provider's name or
    GitHub's login, which a channel now shows). A channel was named by what came before the `@`.
-10. **Sessions do not end on their own.** `Auth.Sessions` has no time; ending them after a while
-    needs a timer per session, as rookery's are, which this site does not have.
+10. **Sessions did not end on their own** (since fixed: `Auth.Sessions` takes a `Lifetime`,
+    judged at the time a request arrived, and this site's sessions last 30 days). Ending them
+    needed a timer per session, as rookery's are. Each request now carries its time
+    (`Input.request`), and the site does not record each use, which an idle limit would need.
 
 ### Clumsy
 

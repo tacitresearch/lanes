@@ -218,16 +218,16 @@ def bridgeTests : List (String × Bool) :=
                        body := s!"csrf={csrf}".toUTF8 }
   let good := Auth.formToken settings.key token
   [ ("bridge: a verified cookie names its member and session, and is dropped",
-      decoded (withCookie token watch) == some (.request (.watch 0 (some (0, 7)) 3 0))
+      decoded (withCookie token watch) == some (.request (.watch 0 (some (0, 7)) 3) 0)
         && ((bridge settings).prepare (withCookie token watch)).headers.all (·.1 != "cookie")),
     ("bridge: a cookie whose payload is changed, and a session header a client sends, name no one",
-      decoded (withCookie "0.7" watch) == some (.request (.watch 0 none 3 0))
-        && decoded { watch with headers := [(sessionHeader, "0.7")] } == some (.request (.watch 0 none 3 0))),
+      decoded (withCookie "0.7" watch) == some (.request (.watch 0 none 3) 0)
+        && decoded { watch with headers := [(sessionHeader, "0.7")] } == some (.request (.watch 0 none 3) 0)),
     ("bridge: the time a request arrived is the server's, not the client's",
       decoded (stamp 99 { watch with headers := [(arrivedHeader, "5")] })
-        == some (.request (.watch 0 none 3 99))),
+        == some (.request (.watch 0 none 3) 99)),
     ("bridge: a change needs the session's form token, from this origin",
-      decoded (like good) == some (.request (.like 0 0 7 3 true)) && decoded (like "forged") == none
+      decoded (like good) == some (.request (.like 0 0 7 3 true) 0) && decoded (like "forged") == none
         && decoded (like good [("origin", "https://evil.example")]) == none),
     ("bridge: a title too long, or no format, is refused before the system",
       let make (title media : String) : Http.Request := withCookie token {

@@ -22,9 +22,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Runtime` | 158 | 93 | 20 | 0 | 15 | 30 | 0 |
 | `Lanes/Semantics` | 57 | 9 | 0 | 0 | 0 | 47 | 1 |
 | `Lanes/Testing` | 63 | 0 | 0 | 1 | 62 | 0 | 0 |
-| `Lanes/Web` | 510 | 264 | 48 | 24 | 126 | 46 | 2 |
+| `Lanes/Web` | 521 | 272 | 48 | 24 | 126 | 49 | 2 |
 | `LanesCli` | 110 | 0 | 0 | 0 | 46 | 0 | 64 |
-| All | 1994 | 1045 | 98 | 97 | 344 | 292 | 118 |
+| All | 2005 | 1053 | 98 | 97 | 344 | 295 | 118 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -2064,11 +2064,22 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Auth.Attempts.succeed` | proved | `Auth.Attempts.bounded_succeed`, `Auth.Attempts.locked_stays` |
 | `Auth.Attempts.unlock` | spec | used only in statements |
 | `Auth.Attempts.Bounded` | spec | a predicate |
+| `Auth.Session.codec` | proved | its type, `Codec` |
+| `Auth.instCodableSession` | proved | its type, `Codable` |
+| `Auth.Session.expired` | proved | `Auth.Session.expired_mono`, `Auth.Sessions.accepts_iff` |
 | `Auth.Sessions.codec` | proved | its type, `Codec` |
 | `Auth.instCodableSessions` | proved | its type, `Codable` |
+| `Auth.Sessions.ids` | proved | `Auth.Sessions.ids_starts`, `Auth.Sessions.length_close_le`, `Auth.Sessions.length_start_le` and 1 more |
+| `Auth.Sessions.at_s` | proved | through `Auth.Sessions.accepts`, `Auth.Sessions.start` and 1 more: `Auth.Sessions.Ended.run`, `Auth.Sessions.accepts_iff` and 5 more |
+| `Auth.Sessions.sweep` | proved | `Auth.Sessions.sweep_ended` |
 | `Auth.Sessions.start` | proved | `Auth.Sessions.ids_starts`, `Auth.Sessions.length_start_le`, `Auth.Sessions.live_open` and 1 more |
-| `Auth.Sessions.close` | proved | `Auth.Sessions.live_close` |
+| `Auth.Sessions.close` | proved | `Auth.Sessions.length_close_le`, `Auth.Sessions.live_close` |
 | `Auth.Sessions.live` | proved | `Auth.Sessions.live_close`, `Auth.Sessions.live_open` |
+| `Auth.Sessions.accepts` | proved | `Auth.Sessions.Ended.run`, `Auth.Sessions.accepts_iff`, `Auth.Sessions.sweep_ended` |
+| `Auth.Sessions.touch` | proved | through `Auth.Sessions.Op.apply`: `Auth.Sessions.Ended.run` |
+| `Auth.Sessions.Ended` | spec | a predicate |
+| `Auth.Sessions.Op.apply` | spec | used only in statements |
+| `Auth.Sessions.Op.opens` | spec | used only in statements |
 
 ## `Lanes/Web/Auth/OAuth.lean`
 

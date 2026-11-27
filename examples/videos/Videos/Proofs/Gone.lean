@@ -35,16 +35,17 @@ theorem Gone.grows {s s' : Site} {v : VideoId} (h : Gone s v) (hg : Grows s s') 
   · rw [← heq, hid] at h
     exact Nat.lt_irrefl _ h.1
 
-theorem Gone.not_shown {s : Site} {v : VideoId} {o : Out} (h : Gone s v) (ho : s.Shows o) :
+theorem Gone.not_shown {s : Site} {v : VideoId} {life : Auth.Lifetime} {at_s : Nat} {o : Out}
+    (h : Gone s v) (ho : s.Shows life at_s o) :
     ∀ c ∈ o.cards, c.id ≠ v := by
   intro c hc
   obtain ⟨w, hw, rfl, -⟩ := ho c hc
   exact h.2 w hw
 
-theorem shows_step (s : Site) (e : Turn) : ∀ o ∈ (s.step config e).2, s.Shows o := by
+theorem shows_step (s : Site) (e : Turn) : ∀ o ∈ (s.step config e).2, ∃ t, s.Shows config.lifetime t o := by
   cases e with
-  | inl i => exact shows_handle config s i
-  | inr _ => exact shows_recover config s
+  | inl i => exact fun o ho => ⟨_, shows_handle config s i o ho⟩
+  | inr _ => exact fun o ho => ⟨0, shows_recover config s 0 o ho⟩
 
 /-- A video gone stays gone through any turns, and none of their outputs shows it. -/
 theorem Gone.run {s : Site} {v : VideoId} (h : Gone s v) (es : List Turn) :
@@ -56,16 +57,18 @@ theorem Gone.run {s : Site} {v : VideoId} (h : Gone s v) (es : List Turn) :
     rw [run_cons]
     refine ⟨hgone, fun o ho => ?_⟩
     rcases List.mem_append.mp ho with ho | ho
-    · exact h.not_shown (shows_step config s e o ho)
+    · obtain ⟨_, hs⟩ := shows_step config s e o ho
+      exact h.not_shown hs
     · exact hshown o ho
 
 /-- A delete answered `deleted` leaves the video gone. -/
 theorem gone_delete {s : Site} (hfresh : Fresh s) {req : ReqId} {m : Member} {session : Sid}
-    {v v' : VideoId} {r : ReqId} {viewer : Viewer}
-    (h : Out.reply r viewer (.deleted v) ∈ (s.handle config (.request (.delete req m session v'))).2) :
-    Gone (s.handle config (.request (.delete req m session v'))).1 v := by
+    {at_s : Nat} {v v' : VideoId} {r : ReqId} {viewer : Viewer}
+    (h : Out.reply r viewer (.deleted v) ∈
+      (s.handle config (.request (.delete req m session v') at_s)).2) :
+    Gone (s.handle config (.request (.delete req m session v') at_s)).1 v := by
   simp only [handle, request, withSession, owned] at h ⊢
-  by_cases hl : s.live m session = true
+  by_cases hl : s.accepts config.lifetime at_s m session = true
   · cases hfind : s.find? v' with
     | none => simp [hl, hfind, answer] at h
     | some video =>
@@ -90,11 +93,11 @@ theorem gone_delete {s : Site} (hfresh : Fresh s) {req : ReqId} {m : Member} {se
 input or start of the actor shows the video, whatever the store answers to its delete, and
 whenever. -/
 theorem deleted_never_served (es₁ es₂ : List Turn) {req : ReqId} {m : Member} {session : Sid}
-    {v v' : VideoId} {r : ReqId} {viewer : Viewer}
+    {at_s : Nat} {v v' : VideoId} {r : ReqId} {viewer : Viewer}
     (h : Out.reply r viewer (.deleted v) ∈
-      (((Site.run config {} es₁).1).handle config (.request (.delete req m session v'))).2) :
+      (((Site.run config {} es₁).1).handle config (.request (.delete req m session v') at_s)).2) :
     ∀ o ∈ ((((Site.run config {} es₁).1).handle config
-        (.request (.delete req m session v'))).1.run config es₂).2, ∀ c ∈ o.cards, c.id ≠ v :=
+        (.request (.delete req m session v') at_s)).1.run config es₂).2, ∀ c ∈ o.cards, c.id ≠ v :=
   ((gone_delete config (fresh_init.run config es₁) h).run config es₂).2
 
 end Site

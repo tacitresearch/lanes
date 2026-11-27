@@ -52,12 +52,15 @@ def port : Rpc.Port sig (ObjectStore.Request VideoId Unit) (ObjectStore.Answer U
   replied
     | .store call .unknown => some (call, .unknown)
     | .store call (.answer a) => some (call, .answer (storeAnswer a))
-    | .request _ => none
+    | .request .. => none
 
 def store : Outside sig Store := Rpc.outside port ObjectStore.server
 
-/-- A request and the requests whose answers it waits for. -/
-abbrev Script := List (Command × List ReqId)
+/-- A request, the time it arrives, and the requests whose answers it waits for. -/
+abbrev Script := List (Command × Nat × List ReqId)
+
+/-- Requests that all arrive at time 0. -/
+def Script.of (l : List (Command × List ReqId)) : Script := l.map fun (c, deps) => (c, 0, deps)
 
 /-- The browsers: what they have still to send, what they were answered, and what they saw go
 wrong. -/
@@ -68,6 +71,8 @@ structure Browsers where
   deleted : List VideoId := []
   /-- For each request sent, the videos whose delete was answered before it was sent. -/
   sent : List (ReqId × List VideoId) := []
+  /-- When each request sent arrived. -/
+  times : List (ReqId × Nat) := []
   broken : List String := []
   watched : List (VideoId × Option Member) := []
   deriving DecidableEq, Hashable, Repr
@@ -81,22 +86,31 @@ def Command.req : Command → ReqId
 
 def Browsers.ready (b : Browsers) (deps : List ReqId) : Bool := deps.all b.answered.contains
 
-def Browsers.send (b : Browsers) (c : Command) : Option Browsers :=
-  match b.todo.find? fun (c', deps) => c' == c && b.ready deps with
+def Browsers.send (b : Browsers) (c : Command) (at_s : Nat) : Option Browsers :=
+  match b.todo.find? fun (c', t, deps) => c' == c && t == at_s && b.ready deps with
   | some entry =>
-    some { b with todo := b.todo.erase entry, sent := (Command.req c, b.deleted) :: b.sent }
+    some { b with todo := b.todo.erase entry, sent := (Command.req c, b.deleted) :: b.sent
+                  times := (Command.req c, at_s) :: b.times }
   | none => none
 
-/-- What each claim says of a reply as a browser sees it, with the store as it is then. -/
-def judge (b : Browsers) (held : Store) (req : ReqId) (viewer : Viewer) (r : Reply) : Browsers :=
+/-- What each claim says of a reply as a browser sees it, with the store as it is then. A
+session is named by the request that signed in, so it began when that request arrived. -/
+def judge (life : Auth.Lifetime) (b : Browsers) (held : Store) (req : ReqId) (viewer : Viewer)
+    (r : Reply) : Browsers :=
   let cards := r.cards
+  let liveOk := match viewer, b.times.lookup req with
+    | some (_, sid), some t => match b.times.lookup sid with
+      | some began => !life.absolute_s.any (began + · ≤ t)
+      | none => true
+    | _, _ => true
   let before := ((b.sent.lookup req).getD [])
   let privateOk := cards.all fun c => c.visibility != .private || viewer.map (·.1) == some c.owner
   let goneOk := cards.all fun c => !before.contains c.id
   let confirmedOk := cards.all fun c => held.server.read.contains (c.id, ())
   let fail := [("a private video is shown to someone else", privateOk),
     ("a deleted video is shown", goneOk),
-    ("a video is shown that the store did not say it holds", confirmedOk)].filterMap
+    ("a video is shown that the store did not say it holds", confirmedOk),
+    ("a session past its lifetime is let in", liveOk)].filterMap
       fun (name, ok) => if ok then none else some name
   let b := { b with answered := req :: b.answered, broken := b.broken ++ fail }
   match r with
@@ -104,14 +118,14 @@ def judge (b : Browsers) (held : Store) (req : ReqId) (viewer : Viewer) (r : Rep
   | .watch view _ => { b with watched := (view.card.id, viewer.map (·.1)) :: b.watched }
   | _ => b
 
-def world (script : Script) : Outside sig (Browsers × Store) where
+def world (life : Auth.Lifetime) (script : Script) : Outside sig (Browsers × Store) where
   init := ({ todo := script }, store.init)
   allow d
-    | .request c => (d.1.send c).map (·, d.2)
+    | .request c at_s => (d.1.send c at_s).map (·, d.2)
     | x => (store.allow d.2 x).map (d.1, ·)
   observe d out :=
     let b := match out with
-      | .reply req viewer r => judge d.1 d.2 req viewer r
+      | .reply req viewer r => judge life d.1 d.2 req viewer r
       | _ => d.1
     (b, store.observe d.2 out)
 
@@ -119,7 +133,7 @@ def answers : List (Rpc.Reply StoreAnswer) :=
   [.unknown, .answer (.found 1), .answer .missing, .answer .deleted, .answer .failed]
 
 def samples (d : Browsers × Store) : List Input :=
-  (d.1.todo.filterMap fun (c, deps) => if d.1.ready deps then some (.request c) else none)
+  (d.1.todo.filterMap fun (c, at_s, deps) => if d.1.ready deps then some (.request c at_s) else none)
     ++ (d.2.pending.filter (· < 1000)).flatMap fun id => answers.map (.store id)
 
 abbrev W (config : Config) := World (system config) (Browsers × Store)
@@ -146,31 +160,43 @@ def none_ : About := ⟨"", by decide⟩
 def hi : Remark := ⟨"hi", by decide⟩
 
 /-- Member 0 signs in with request 1 and session 1, member 1 with request 2 and session 2. -/
-def signIns : Script := [(.signIn 1 "id" "a" "a", []), (.signIn 2 "id" "b" "b", [1])]
+def signIns : List (Command × List ReqId) :=
+  [(.signIn 1 "id" "a" "a", []), (.signIn 2 "id" "b" "b", [1])]
 
 /-- `0` makes a public video and says it is uploaded, twice if need be; `1` watches it, likes it
 twice, and `0` likes it; `0` deletes it, and `1` asks for it again, and for the feed. -/
-def life : Script :=
+def life : Script := .of <|
   signIns ++
-  [ (.create 3 0 1 t none_ .public .mp4 0, [2]), (.uploaded 4 0 1 0, [3]), (.uploaded 5 0 1 0, [4]),
-    (.watch 6 (some (1, 2)) 0 0, [5]), (.like 7 1 2 0 true, [6]), (.like 8 1 2 0 true, [7]),
-    (.like 9 0 1 0 true, [8]), (.delete 10 0 1 0, [9]), (.watch 11 (some (1, 2)) 0 0, [9]),
-    (.watch 12 (some (1, 2)) 0 0, [10]), (.feed 13 (some (1, 2)) none, [12]) ]
+  [ (.create 3 0 1 t none_ .public .mp4, [2]), (.uploaded 4 0 1 0, [3]), (.uploaded 5 0 1 0, [4]),
+    (.watch 6 (some (1, 2)) 0, [5]), (.like 7 1 2 0 true, [6]), (.like 8 1 2 0 true, [7]),
+    (.like 9 0 1 0 true, [8]), (.delete 10 0 1 0, [9]), (.watch 11 (some (1, 2)) 0, [9]),
+    (.watch 12 (some (1, 2)) 0, [10]), (.feed 13 (some (1, 2)) none, [12]) ]
 
 /-- `0` makes a private video; `1`, a stranger and `0` ask for it, for `0`'s channel and for
 the feed; `1` tries to like it and comment on it. -/
-def secret : Script :=
+def secret : Script := .of <|
   signIns ++
-  [ (.create 3 0 1 t none_ .private .webm 0, [2]), (.uploaded 4 0 1 0, [3]),
-    (.watch 5 (some (1, 2)) 0 0, [4]), (.watch 6 none 0 0, [5]), (.watch 7 (some (0, 1)) 0 0, [6]),
+  [ (.create 3 0 1 t none_ .private .webm, [2]), (.uploaded 4 0 1 0, [3]),
+    (.watch 5 (some (1, 2)) 0, [4]), (.watch 6 none 0, [5]), (.watch 7 (some (0, 1)) 0, [6]),
     (.channel 8 (some (1, 2)) 0, [7]), (.channel 9 (some (0, 1)) 0, [8]),
     (.feed 10 (some (1, 2)) none, [9]), (.like 11 1 2 0 true, [10]), (.comment 12 1 2 0 hi, [11]) ]
 
 /-- `0` makes a video and deletes it at once, while a check may be out; then asks for it. -/
-def gone : Script :=
+def gone : Script := .of <|
   signIns.take 1 ++
-  [ (.create 3 0 1 t none_ .unlisted .mp4 0, [1]), (.uploaded 4 0 1 0, [3]),
+  [ (.create 3 0 1 t none_ .unlisted .mp4, [1]), (.uploaded 4 0 1 0, [3]),
     (.delete 5 0 1 0, [3]), (.channel 6 (some (0, 1)) 0, [5]) ]
+
+/-- `0` signs in at 0 and makes a private video; it watches it at 50, inside its session's
+lifetime of 100, and at 150, past it, when it also tries to like it and is then let in by the
+session of a new sign-in. -/
+def expiry : Script :=
+  [ (.signIn 1 "id" "a" "a", 0, []), (.create 2 0 1 t none_ .private .mp4, 10, [1]),
+    (.uploaded 3 0 1 0, 20, [2]), (.watch 4 (some (0, 1)) 0, 50, [3]),
+    (.watch 5 (some (0, 1)) 0, 150, [4]), (.like 6 0 1 0 true, 150, [5]),
+    (.signIn 7 "id" "a" "a", 150, [6]), (.watch 8 (some (0, 7)) 0, 160, [7]) ]
+
+def short : Config := { config with lifetime := { absolute_s := some 100 } }
 
 def claims {config : Config} : List (Check.Property (W config)) :=
   [ .always "a private video is shown to its owner only" fun w =>
@@ -179,6 +205,8 @@ def claims {config : Config} : List (Check.Property (W config)) :=
       !w.driver.1.broken.contains "a deleted video is shown",
     .always "a video is shown only once the store said it holds its object" fun w =>
       !w.driver.1.broken.contains "a video is shown that the store did not say it holds",
+    .always "a session past its lifetime lets no request in" fun w =>
+      !w.driver.1.broken.contains "a session past its lifetime is let in",
     .always "each like is a member's, counted once" fun w =>
       (site w).videos.all fun v => v.likes.eraseDups.length == v.likes.length,
     .always "every bound holds" fun w => bounded config (site w) ]
@@ -193,6 +221,10 @@ def goneWhileHeld {config : Config} : Check.Property (W config) :=
 def twoLikes {config : Config} : Check.Property (W config) :=
   .sometimes "a video has two likes" fun w => (site w).videos.any (·.likes.length == 2)
 
+def watchedTwice {config : Config} : Check.Property (W config) :=
+  .sometimes "a private video is watched by its owner in two sessions" fun w =>
+    (w.driver.1.watched.filter (· == (0, some 0))).length == 2
+
 def ownerWatches {config : Config} : Check.Property (W config) :=
   .sometimes "a private video is watched by its owner" fun w =>
     w.driver.1.watched.contains (0, some 0)
@@ -201,9 +233,11 @@ def othersAsk {config : Config} : Check.Property (W config) :=
   .sometimes "a private video is asked for by another member and by a stranger" fun w =>
     w.driver.1.answered.contains 5 && w.driver.1.answered.contains 6
 
+/-- The site of `config` checked against `script`; its sessions are judged by `life`, the
+site's own unless a seeded bug says otherwise. -/
 def check (config : Config) (script : Script) (witnesses : List (Check.Property (W config)))
-    (maxCrashes : Nat := 1) :=
-  Check.system (system config) { env, driver := (world script).driver samples, maxCrashes }
+    (maxCrashes : Nat := 1) (life : Auth.Lifetime := config.lifetime) :=
+  Check.system (system config) { env, driver := (world life script).driver samples, maxCrashes }
     (claims ++ witnesses) { maxStates := 3000000 }
 
 def trusting : Config := { config with trustBrowser := true }
@@ -222,12 +256,17 @@ def run : IO (List (String × Bool)) := do
   IO.println s!"secret: {secret'.renderSystem}"
   let gone' := check config gone [goneWhileHeld]
   IO.println s!"gone: {gone'.renderSystem}"
+  let expiry' := check short expiry [watchedTwice]
+  IO.println s!"expiry: {expiry'.renderSystem}"
   let trusted := found (check trusting life [] 0)
   if let some (p, n) := trusted then
     IO.println s!"seeded, the browser trusted: \"{p}\" after {n} steps"
   let rushed := found (check hasty life [] 0)
   if let some (p, n) := rushed then
     IO.println s!"seeded, a check that timed out taken as found: \"{p}\" after {n} steps"
+  let endless := found (check { short with lifetime := {} } expiry [] 0 short.lifetime)
+  if let some (p, n) := endless then
+    IO.println s!"seeded, sessions that never end: \"{p}\" after {n} steps"
   let unconfirmed := "a video is shown only once the store said it holds its object"
   return [
     ("check: a video's life, with the store's faults and a crash anywhere",
@@ -236,9 +275,13 @@ def run : IO (List (String × Bool)) := do
       secret'.ok && secret'.complete && secret'.witnesses.length == 2),
     ("check: a video deleted while its check may be out, and a crash anywhere",
       gone'.ok && gone'.complete && gone'.witnesses.length == 1),
+    ("check: a session past its lifetime lets nothing in, and a new sign-in does",
+      expiry'.ok && expiry'.complete && expiry'.witnesses.length == 1),
     ("check, seeded: trusting the browser shows a video the store never confirmed",
       trusted.any (·.1 == unconfirmed)),
     ("check, seeded: a check that timed out taken as found shows such a video",
-      rushed.any (·.1 == unconfirmed)) ]
+      rushed.any (·.1 == unconfirmed)),
+    ("check, seeded: sessions that never end let a request in past the lifetime",
+      endless.any (·.1 == "a session past its lifetime lets no request in")) ]
 
 end Videos.Check
