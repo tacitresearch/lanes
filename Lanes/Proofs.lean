@@ -13,6 +13,7 @@ public import Lanes.Lib.Encoding.Json.ParserSound
 public import Lanes.Lib.Encoding.Json.PrinterSound
 public import Lanes.Lib.Mime.MediaTypeSound
 public import Lanes.Lib.Net.UrlSound
+public import Lanes.Lib.Postgres.MessageSound
 public import Lanes.Net.CourierSound
 public import Lanes.Proof.JoinSound
 public import Lanes.Proof.MapIOSound
@@ -33,7 +34,7 @@ public import Lanes.Web.Http.WireSound
 
 /-!
 The framework's soundness theorems: what the kernel, the shell, joins, shards, the transport,
-the checker, the HTTP reader and server, HTML, tokens, JSON, URLs and media types are proved to
+the checker, the HTTP reader and server, PostgreSQL's messages and connection, HTML, tokens, JSON, URLs and media types are proved to
 do. `import Lanes` leaves them out so that an application builds and imports less; a proof that
 cites one imports this, and `Lanes.Semantics` imports it. It imports only `Std`.
 -/

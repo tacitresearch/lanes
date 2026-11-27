@@ -36,6 +36,8 @@ public import Lanes.Durable.IO.Journal
 public import Lanes.Durable.Journal
 public import Lanes.Durable.Snapshot
 public import Lanes.Lib.Crypto.Hmac
+public import Lanes.Lib.Crypto.Md5
+public import Lanes.Lib.Crypto.Pbkdf2
 public import Lanes.Lib.Crypto.Sha256
 public import Lanes.Lib.Crypto.Sodium
 public import Lanes.Lib.Encoding.Base64
@@ -44,6 +46,10 @@ public import Lanes.Lib.Encoding.Json
 public import Lanes.Lib.Mime.MediaType
 public import Lanes.Lib.Net.Ip
 public import Lanes.Lib.Net.Url
+public import Lanes.Lib.Postgres.Bytes
+public import Lanes.Lib.Postgres.Conn
+public import Lanes.Lib.Postgres.Message
+public import Lanes.Lib.Postgres.Scram
 public import Lanes.Lib.RateLimit
 public import Lanes.Lib.Time.Civil
 public import Lanes.Lib.Time.Format
