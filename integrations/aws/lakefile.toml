@@ -18,6 +18,11 @@ roots = ["Aws", "Aws.Axioms"]
 name = "check"
 root = "Check"
 
+# SES's address check against Go's net/mail, with the repository's `oracles/go`; needs `go`.
+[[lean_exe]]
+name = "oracle"
+root = "Oracle"
+
 # What `check` runs: the model checks, and the tests against fakes run in the test.
 [[lean_lib]]
 name = "Checks"

@@ -67,7 +67,7 @@ lean_exe lanesTest where
 lean_exe lanesCheck where
   root := `Tests.CheckMain
 
-/-- Differential tests against Go's standard library; needs `go` (`oracle/`). -/
+/-- The pure oracles (`oracles/README.md`): ours against reference implementations; needs `go` and `python3`. -/
 @[default_target]
 lean_exe lanesOracle where
   root := `Tests.OracleMain
