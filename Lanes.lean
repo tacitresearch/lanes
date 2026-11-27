@@ -78,6 +78,7 @@ public import Lanes.Html.Htmx
 public import Lanes.Html.Syntax
 public import Lanes.Http.Basic
 public import Lanes.Http.Cookie
+public import Lanes.Http.Url
 public import Lanes.Http.Front
 public import Lanes.Http.FrontSound
 public import Lanes.Http.Gate
