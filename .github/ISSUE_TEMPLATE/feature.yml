@@ -1,0 +1,38 @@
+name: Feature
+description: Propose something Lanes should have, or do differently.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you are trying to build or prove, and what stops you today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: The proposal
+      description: What you would add or change. A spec, even five lines, helps (AGENTS.md, rule 1.2).
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: How it would be proved, checked or tested, or why it would have to be trusted (TRUSTED.md).
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: The release or commit you looked at.
+  - type: input
+    id: toolchain
+    attributes:
+      label: Lean toolchain
+      placeholder: leanprover/lean4:v4.37.0-rc1
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: Ubuntu 24.04, x86_64

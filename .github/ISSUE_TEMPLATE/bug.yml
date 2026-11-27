@@ -1,0 +1,45 @@
+name: Bug
+description: Something in Lanes does not do what its docs, spec or theorems say.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A vulnerability, or a theorem whose statement does not mean what its docs say, is reported privately instead (SECURITY.md).
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: A release tag (v0.1.0) or the commit of Lanes you used.
+    validations:
+      required: true
+  - type: input
+    id: toolchain
+    attributes:
+      label: Lean toolchain
+      description: The contents of lean-toolchain where it happened.
+      placeholder: leanprover/lean4:v4.37.0-rc1
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: Ubuntu 24.04, x86_64
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead, with the exact error or output.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Smallest reproduction
+      description: The smallest program, input or command that shows it.
+      render: lean
+    validations:
+      required: true

@@ -259,6 +259,13 @@ itself, and `Server.implements` proves it refines the spec for every interleavin
 - `docs/RUNNERS.md`: the CI machine for the heavy jobs.
 - `docs/history/`: the plan and the reviews as they were written, out of the reading path.
 
+## Contributing
+
+`CONTRIBUTING.md` says how a change is made and reviewed, and `AGENTS.md` has the rules it
+follows. Vulnerabilities are reported privately (`SECURITY.md`). `CHANGELOG.md` lists what each
+release changed, and `docs/RELEASING.md` how releases are versioned and made. Conduct:
+`CODE_OF_CONDUCT.md`.
+
 ## License
 
 Apache 2.0. See `LICENSE`.
