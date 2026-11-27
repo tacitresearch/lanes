@@ -53,7 +53,6 @@ Each is to be proved, tested, made private or removed.
 ### `Lanes/Core/Run.lean`
 
 - `Effect.armed`
-- `Effect.emits`
 
 ### `Lanes/Core/Service.lean`
 

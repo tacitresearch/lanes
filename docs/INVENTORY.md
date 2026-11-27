@@ -10,9 +10,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Area | Definitions | proved | trusted | checked | tested | spec | none |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `Lanes/Behaviours` | 134 | 81 | 5 | 24 | 0 | 24 | 0 |
+| `Lanes/Behaviours` | 136 | 81 | 5 | 24 | 0 | 26 | 0 |
 | `Lanes/Check` | 74 | 54 | 0 | 8 | 0 | 10 | 2 |
-| `Lanes/Core` | 103 | 43 | 0 | 34 | 1 | 10 | 15 |
+| `Lanes/Core` | 103 | 44 | 0 | 34 | 1 | 10 | 14 |
 | `Lanes/Data` | 68 | 43 | 0 | 4 | 1 | 0 | 20 |
 | `Lanes/Durable` | 70 | 58 | 2 | 0 | 0 | 9 | 1 |
 | `Lanes/Lib` | 603 | 384 | 32 | 1 | 102 | 75 | 9 |
@@ -24,7 +24,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Testing` | 84 | 0 | 0 | 1 | 83 | 0 | 0 |
 | `Lanes/Web` | 676 | 354 | 57 | 46 | 163 | 54 | 2 |
 | `LanesCli` | 126 | 0 | 0 | 0 | 55 | 0 | 71 |
-| All | 2417 | 1269 | 126 | 124 | 435 | 340 | 123 |
+| All | 2419 | 1270 | 126 | 124 | 435 | 342 | 122 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -136,6 +136,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Schedule.instCodableRefusal` | proved | its type, `Codable` |
 | `Schedule.Outcome.codec` | proved | its type, `Codec` |
 | `Schedule.instCodableOutcome` | proved | its type, `Codable` |
+| `Schedule.Outcome.isEnd` | spec | used only in statements |
 | `Schedule.Input.codec` | proved | its type, `Codec` |
 | `Schedule.instCodableInput` | proved | its type, `Codable` |
 | `Schedule.Output.codec` | proved | its type, `Codec` |
@@ -143,25 +144,25 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Schedule.Msg.codec` | proved | its type, `Codec` |
 | `Schedule.instCodableMsg` | proved | its type, `Codable` |
 | `Schedule.hashJitter` | checked | `Tests/Schedule.lean` |
-| `Schedule.Config.cap` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 15 more |
+| `Schedule.Config.cap` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 18 more |
 | `Schedule.Config.backoff` | proved | `Schedule.retry_waits` |
-| `Schedule.Config.wait` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 15 more |
+| `Schedule.Config.wait` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 18 more |
 | `Schedule.keys` | proved | `Schedule.attach_held_leaves`, `Schedule.every_noticed`, `Schedule.held_leaves` |
-| `Schedule.entry` | proved | `Schedule.attach_end_handled`, `Schedule.attach_held_leaves`, `Schedule.attempt_ends` and 6 more |
-| `Schedule.put` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 15 more |
-| `Schedule.remove` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 15 more |
-| `Schedule.set` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 15 more |
-| `Schedule.sig` | proved | `Schedule.actor_attempts`, `Schedule.actor_within`, `Schedule.armed` and 12 more |
-| `Schedule.timer` | proved | through `Schedule.actor`, `Schedule.attach` and 1 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 10 more |
-| `Schedule.fail` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 15 more |
-| `Schedule.over` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 15 more |
-| `Schedule.run` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 15 more |
-| `Schedule.answerOf` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 15 more |
-| `Schedule.onJob` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 15 more |
-| `Schedule.touch` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 15 more |
-| `Schedule.enroll` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 15 more |
-| `Schedule.step` | proved | `Schedule.attempt_ends`, `Schedule.dispatch_due`, `Schedule.now_le_step` and 2 more |
-| `Schedule.rearm` | proved | through `Schedule.actor`, `Schedule.attach` and 1 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 10 more |
+| `Schedule.entry` | proved | `Schedule.attach_answer_handled`, `Schedule.attach_end_handled`, `Schedule.attach_held_leaves` and 9 more |
+| `Schedule.put` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 18 more |
+| `Schedule.remove` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 18 more |
+| `Schedule.set` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 18 more |
+| `Schedule.sig` | proved | `Schedule.actor_attempts`, `Schedule.actor_within`, `Schedule.armed` and 15 more |
+| `Schedule.timer` | proved | through `Schedule.actor`, `Schedule.attach` and 1 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 11 more |
+| `Schedule.fail` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 18 more |
+| `Schedule.over` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 18 more |
+| `Schedule.run` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 18 more |
+| `Schedule.answerOf` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 18 more |
+| `Schedule.onJob` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 18 more |
+| `Schedule.touch` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 18 more |
+| `Schedule.enroll` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 18 more |
+| `Schedule.step` | proved | `Schedule.attempt_ends`, `Schedule.dispatch_due`, `Schedule.leaves_answered` and 4 more |
+| `Schedule.rearm` | proved | through `Schedule.actor`, `Schedule.attach` and 1 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 11 more |
 | `Schedule.actor` | proved | `Schedule.actor_attempts`, `Schedule.actor_within` |
 | `Schedule.system` | proved | `Schedule.armed`, `Schedule.attempts`, `Schedule.calls_le_scheduled` and 4 more |
 | `Schedule.Use.wiring` | spec | used only in statements |
@@ -179,6 +180,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Schedule.Msg.target` | spec | used only in statements |
 | `Schedule.Act.msg` | spec | used only in statements |
 | `Schedule.Work.periodic` | spec | used only in statements |
+| `Schedule.tells` | spec | used only in statements |
 | `Schedule.isCall` | spec | used only in statements |
 | `Schedule.left` | spec | used only in statements |
 | `Schedule.Moved` | spec | a predicate |
@@ -383,9 +385,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `instDecidableEqJoinMsg` | proved | its type, `Decidable` |
-| `joinSig` | proved | `Jobs.attach_active_leaves`, `Jobs.attach_within`, `Obligation.Due.of_thinRight` and 29 more |
-| `Wiring.left` | proved | through `Schedule.attach`, `SysState.over` and 5 more: `Obligation.Due.of_thinRight`, `Schedule.attach_end_handled` and 32 more |
-| `Wiring.right` | proved | through `Schedule.attach`, `System.join` and 2 more: `Obligation.Due.of_thinRight`, `Schedule.attach_end_handled` and 27 more |
+| `joinSig` | proved | `Jobs.attach_active_leaves`, `Jobs.attach_within`, `Obligation.Due.of_thinRight` and 30 more |
+| `Wiring.left` | proved | through `Schedule.attach`, `SysState.over` and 5 more: `Obligation.Due.of_thinRight`, `Schedule.attach_answer_handled` and 33 more |
+| `Wiring.right` | proved | through `Schedule.attach`, `System.join` and 2 more: `Obligation.Due.of_thinRight`, `Schedule.attach_answer_handled` and 28 more |
 | `System.join` | proved | `Obligation.Due.of_thinRight`, `SysState.deliverable_of_thinRight`, `SysState.exists_block` and 23 more |
 | `Signature.withIO` | proved | `SysState.run_filterMapIO`, `System.Invariant.filterMapIO`, `System.LeadsTo.filterMapIO` and 2 more |
 | `Effect.filterMapOut` | proved | through `SysState.over`, `System.filterMapIO` and 1 more: `SysState.run_filterMapIO`, `System.Invariant.filterMapIO` and 3 more |
@@ -404,7 +406,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Effect.sends` | proved | `Account.Fires.grow`, `Account.Fires.handle`, `Account.Moves.grow` and 1 more |
 | `Effect.armed` | none |  |
-| `Effect.emits` | none |  |
+| `Effect.emits` | proved | `Schedule.leaves_answered`, `Schedule.told_of_leaves` |
 | `Effect.retime` | spec | used only in statements |
 | `Event.quiet` | spec | used only in statements |
 | `SysState.startedWith` | spec | used only in statements |
@@ -436,11 +438,11 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Effect.isStop` | proved | `Schedule.attach_end_handled`, `SysState.mem_net_of_step`, `System.Run.Fair.handled` and 4 more |
+| `Effect.isStop` | proved | `Schedule.attach_answer_handled`, `Schedule.attach_end_handled`, `SysState.mem_net_of_step` and 5 more |
 | `Effect.instDecidableEq` | proved | its type, `Decidable` |
 | `Envelope.instDecidableEq` | proved | `Account.Fires.handle`, `Account.Moves.handle`, `Account.implements` and 8 more |
 | `Envelope.sameLink` | proved | through `SysState.nextOnLink`: `SysState.nextOnLink_spec` |
-| `Link.reliable` | proved | through `EnvModel.link`, `EnvModel.lossy` and 2 more: `Account.implements`, `Account.implements_timed` and 32 more |
+| `Link.reliable` | proved | through `EnvModel.link`, `EnvModel.lossy` and 2 more: `Account.implements`, `Account.implements_timed` and 33 more |
 | `Link.network` | checked | `Tests/Bank.lean`, `Tests/Election.lean`, `Tests/Join.lean` and 1 more |
 | `Link.unordered` | checked | `Tests/Election.lean`, `Tests/Jobs.lean`, `Tests/Outside.lean` and 1 more |
 | `EnvModel.reliable` | spec | used only in statements |
@@ -2144,7 +2146,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Spec.stutter` | proved | through `System.Run`, `System.Run.event` and 2 more: `Http.Gate.pending_answered`, `Http.fronted_arrival_answered` and 22 more |
+| `Spec.stutter` | proved | through `System.Run`, `System.Run.event` and 2 more: `Http.Gate.pending_answered`, `Http.fronted_arrival_answered` and 23 more |
 | `Obligation.event` | proved | `Obligation.right?_inr`, `System.LeadsTo.ensures_of_invariant` |
 | `Obligation.Due` | spec | a predicate |
 | `Obligation.Restarted` | spec | a predicate |
