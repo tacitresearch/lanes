@@ -6,6 +6,7 @@ module
 
 public import Lanes.Core.Scheduler
 public import Lanes.Check.Search
+public import Lanes.Check.Fingerprint
 
 /-!
 # Model checking actor systems
@@ -60,9 +61,28 @@ instance [σ.Inspect] [sys.Inspect] [BEq D] {env : EnvModel σ} : BEq (Node sys 
     && a.world.state.outbox.isPerm b.world.state.outbox
     && a.world.driver == b.world.driver
 
+/-- The messages in flight, each with the number of messages before it on its link if `env`
+orders the link, and `0` if it does not: what `World.Equiv` keeps of the traffic. `before` holds
+the messages already passed. -/
+def Node.tagged (env : EnvModel σ) :
+    List (Envelope σ) → List (Envelope σ) → List (Envelope σ × Nat)
+  | _, [] => []
+  | before, e :: rest =>
+    (e, if (env.link e.src e.dst).ordered then before.countP e.sameLink else 0)
+      :: tagged env (e :: before) rest
+
+/-- A hash of the messages in flight and the pending outputs that does not depend on the order
+`env` cannot observe, and does on the order it can: states that differ only in the order of
+the messages on an ordered link do not collide, as they do under `SysState.trafficHash`. -/
+def Node.trafficHash [σ.Inspect] (env : EnvModel σ) (c : SysState sys) : UInt64 :=
+  let net := (Node.tagged env [] c.net).foldl (init := 0) fun h p =>
+    h + mixHash 11 (mixHash (Hashable.hash p.1) (Hashable.hash p.2))
+  let outbox := c.outbox.foldl (init := 0) fun h o => h + mixHash 13 (Hashable.hash o)
+  mixHash net outbox
+
 instance [σ.Inspect] [sys.Inspect] [Hashable D] {env : EnvModel σ} :
     Hashable (Node sys env D) where
-  hash a := mixHash (mixHash (a.slots.foldl Slot.hash 7) a.world.state.trafficHash)
+  hash a := mixHash (mixHash (a.slots.foldl Slot.hash 7) (Node.trafficHash env a.world.state))
     (mixHash (hash a.world.driver) (hash a.world.crashes))
 
 def Trace.map {S S' L : Type} (f : S → S') (t : Trace S L) : Trace S' L where
@@ -102,6 +122,32 @@ def system [σ.Inspect] (sys : System σ) [sys.Inspect] {D : Type} [BEq D] [Hash
       tasks := opts.tasks }
   (search (model sys sc) props' opts' Event.kind Event.kinds).map (·.world)
 
+/-- The properties of `system`, stated over its nodes. -/
+def Node.props {env : EnvModel σ} [Enum σ.Id] (props : List (Property (World sys D))) :
+    List (Property (Node sys env D)) :=
+  props.map fun
+    | .always name p => .always name fun n => p n.world
+    | .sometimes name p => .sometimes name fun n => p n.world
+
+/-- The options of `system`, stated over its nodes. -/
+def Node.options {env : EnvModel σ} [Enum σ.Id] (opts : Options (World sys D)) :
+    Options (Node sys env D) :=
+  { constraint := fun n => opts.constraint n.world
+    maxDepth := opts.maxDepth
+    maxStates := opts.maxStates
+    checkDeadlock := opts.checkDeadlock
+    terminal := fun n => opts.terminal n.world
+    tasks := opts.tasks }
+
+/-- `system` with `Check.fingerprint`: each world seen is kept as its hash only, so far more fit
+in memory, but a pass is not exhaustive, and the report says it was fingerprinted. A trace it
+reports replays (`Check.systemFingerprinted_violated`). -/
+def systemFingerprinted [σ.Inspect] (sys : System σ) [sys.Inspect] {D : Type} [Hashable D]
+    (sc : Scenario σ D) (props : List (Property (World sys D)))
+    (opts : Options (World sys D) := {}) : Report (World sys D) (Event σ) :=
+  (fingerprint (model sys sc) (Node.props props) (Node.options opts) Event.kind
+    Event.kinds).map (·.world)
+
 def Trace.render {S L : Type} (showState : S → String) (showLabel : L → String)
     (t : Trace S L) : String :=
   let steps := t.steps.zipIdx.map fun ((l, _), k) => s!"  {k + 1}. {showLabel l}"
@@ -113,7 +159,12 @@ def Report.render {S L : Type} (showState : S → String) (showLabel : L → Str
     (r : Report S L) : String :=
   let verdict := match r.failure with
     | none =>
-      if r.complete then ["PASS: every reachable state explored"]
+      if r.fingerprinted then
+        [if r.complete then "PASS (fingerprinted): every state explored up to a hash collision, \
+            so states whose hash collides with one seen were not"
+         else "PASS (fingerprinted, bounded): the search hit a bound, and states whose hash \
+            collides with one seen were not explored"]
+      else if r.complete then ["PASS: every reachable state explored"]
       else ["PASS (bounded): the search hit a bound, so only part of the state space is covered"]
     | some (.violated p t) =>
       [s!"FAIL: \"{p}\" is violated after {t.steps.length} steps",

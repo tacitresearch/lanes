@@ -30,6 +30,28 @@ import Lanes.Semantics
 /-- info: 'Lanes.Check.Monitor.withinFrom_eq' depends on axioms: [propext, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Check.Monitor.withinFrom_eq
 
+-- Lanes.Check.FingerprintSound
+/-- info: 'Lanes.Check.fingerprint_violated' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.fingerprint_violated
+
+/-- info: 'Lanes.Check.fingerprint_deadlock' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.fingerprint_deadlock
+
+/-- info: 'Lanes.Check.fingerprint_witness' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.fingerprint_witness
+
+/-- info: 'Lanes.Check.fingerprint_fingerprinted' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.fingerprint_fingerprinted
+
+/-- info: 'Lanes.Check.fingerprint_tasks' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.fingerprint_tasks
+
+/-- info: 'Lanes.Check.Fingerprint.Search.runParallel_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.Fingerprint.Search.runParallel_eq
+
+/-- info: 'Lanes.Check.systemFingerprinted_violated' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.systemFingerprinted_violated
+
 -- Lanes.Check.SearchSound
 /-- info: 'Lanes.Check.search_violated' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Check.search_violated
@@ -68,6 +90,9 @@ import Lanes.Semantics
 #guard_msgs in #print axioms Lanes.Check.Search.runBatches_eq
 
 -- Lanes.Check.SystemSound
+/-- info: 'Lanes.Check.Node.trafficHash_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.Node.trafficHash_eq
+
 /-- info: 'Lanes.Check.Node.beq_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Check.Node.beq_iff
 

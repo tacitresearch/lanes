@@ -236,6 +236,76 @@ theorem SysState.Equiv.trafficHash_eq [σ.Inspect] {env : EnvModel σ} {a b : Sy
     (fun _ _ _ _ z => by rw [UInt64.add_assoc, UInt64.add_comm (mixHash _ _), UInt64.add_assoc]) 0
   simp only [SysState.trafficHash, hnet, hout]
 
+namespace Check
+
+theorem Node.tagged_filter (env : EnvModel σ) (s : Option σ.Id) (d : σ.Id) :
+    ∀ (before a : List (Envelope σ)),
+      Node.tagged env (before.filter (onLink s d)) (a.filter (onLink s d)) =
+        (Node.tagged env before a).filter (fun p => onLink s d p.1)
+  | _, [] => by simp [Node.tagged]
+  | before, e :: rest => by
+    by_cases he : onLink s d e = true
+    · have hcount : (before.filter (onLink s d)).countP e.sameLink = before.countP e.sameLink := by
+        rw [List.countP_filter]
+        congr 1
+        funext x
+        simp only [onLink, Bool.and_eq_true, decide_eq_true_eq] at he
+        cases hx : e.sameLink x
+        · rfl
+        · simp only [Envelope.sameLink, Bool.and_eq_true, decide_eq_true_eq] at hx
+          simp [onLink, ← hx.1, ← hx.2, he.1, he.2]
+      rw [List.filter_cons_of_pos he, Node.tagged, Node.tagged,
+        List.filter_cons_of_pos (by simpa using he), hcount, ← List.filter_cons_of_pos he,
+        tagged_filter env s d (e :: before) rest]
+    · have he' : onLink s d e = false := by simpa using he
+      rw [List.filter_cons_of_neg (by simpa using he), Node.tagged,
+        List.filter_cons_of_neg (by simpa using he), ← tagged_filter env s d (e :: before) rest,
+        List.filter_cons_of_neg (by simpa using he)]
+
+theorem Node.tagged_unordered (env : EnvModel σ) :
+    ∀ (before l : List (Envelope σ)), (∀ x ∈ l, (env.link x.src x.dst).ordered = false) →
+      Node.tagged env before l = l.map (·, 0)
+  | _, [], _ => rfl
+  | before, e :: rest, h => by
+    simp only [Node.tagged, h e (.head _), Bool.false_eq_true, ↓reduceIte, List.map_cons,
+      tagged_unordered env _ rest fun x hx => h x (.tail _ hx)]
+
+theorem Node.tagged_perm {env : EnvModel σ} {a b : List (Envelope σ)} (h : NetEquiv env a b) :
+    (Node.tagged env [] a).Perm (Node.tagged env [] b) := by
+  rw [List.perm_iff_count]
+  rintro ⟨e, k⟩
+  have hself : onLink e.src e.dst (e, k).1 = true := by simp [onLink]
+  rw [← List.count_filter (p := fun p : Envelope σ × Nat => onLink e.src e.dst p.1)
+      (l := Node.tagged env [] a) hself,
+    ← List.count_filter (p := fun p : Envelope σ × Nat => onLink e.src e.dst p.1)
+      (l := Node.tagged env [] b) hself,
+    ← Node.tagged_filter env e.src e.dst [] a, ← Node.tagged_filter env e.src e.dst [] b]
+  cases hord : (env.link e.src e.dst).ordered
+  · have hon : ∀ (l : List (Envelope σ)), ∀ x ∈ l.filter (onLink e.src e.dst),
+        (env.link x.src x.dst).ordered = false := by
+      intro l x hx
+      have := (List.mem_filter.mp hx).2
+      simp only [onLink, Bool.and_eq_true, decide_eq_true_eq] at this
+      rw [this.1, this.2, hord]
+    rw [List.filter_nil, Node.tagged_unordered env [] _ (hon a),
+      Node.tagged_unordered env [] _ (hon b)]
+    exact ((h.perm e.src e.dst).map _).count_eq _
+  · rw [h.ordered e.src e.dst hord]
+
+/-- Equivalent states have the same traffic hash, so `Node`'s hash agrees with its equality. -/
+theorem Node.trafficHash_eq [σ.Inspect] {env : EnvModel σ} {a b : SysState sys}
+    (h : SysState.Equiv env a b) : Node.trafficHash env a = Node.trafficHash env b := by
+  have hnet := (Node.tagged_perm h.net).foldl_eq'
+    (f := fun (h : UInt64) (p : Envelope σ × Nat) =>
+      h + mixHash 11 (mixHash (Hashable.hash p.1) (Hashable.hash p.2)))
+    (fun _ _ _ _ z => by rw [UInt64.add_assoc, UInt64.add_comm (mixHash _ _), UInt64.add_assoc]) 0
+  have hout := h.outbox.foldl_eq'
+    (f := fun (h : UInt64) o => h + mixHash 13 (Hashable.hash o))
+    (fun _ _ _ _ z => by rw [UInt64.add_assoc, UInt64.add_comm (mixHash _ _), UInt64.add_assoc]) 0
+  simp only [Node.trafficHash, hnet, hout]
+
+end Check
+
 theorem SysState.Equiv.hash_eq [σ.Inspect] [sys.Inspect] {env : EnvModel σ} {a b : SysState sys}
     (h : SysState.Equiv env a b) : a.hash = b.hash := by
   simp only [SysState.hash, h.state, h.up, h.timers, h.trafficHash_eq]
@@ -356,7 +426,7 @@ instance [BEq D] [Hashable D] [LawfulHashable D] [∀ i, LawfulBEq (sys.State i)
       congr 1
       funext i
       simp only [Slot.of, hs.state, hs.up, hs.timers]
-    simp only [hash, hslots, hs.trafficHash_eq, hc, LawfulHashable.hash_eq _ _ hd]
+    simp only [hash, hslots, Node.trafficHash_eq hs, hc, LawfulHashable.hash_eq _ _ hd]
 
 variable [BEq D] [Hashable D] [∀ i, LawfulBEq (sys.State i)]
 
