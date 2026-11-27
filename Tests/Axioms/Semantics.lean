@@ -141,6 +141,9 @@ import Lanes.Semantics
 /-- info: 'Lanes.Once.server_implements' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Once.server_implements
 
+/-- info: 'Lanes.System.Refines.filterMapIO' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Refines.filterMapIO
+
 -- Lanes.Semantics.Projection
 /-- info: 'Lanes.System.View.Projects.fair_run' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.View.Projects.fair_run

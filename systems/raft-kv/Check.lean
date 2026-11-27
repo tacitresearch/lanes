@@ -163,8 +163,77 @@ earlier one that another leader has replaced. -/
 def twoWrites : List (Request N C) :=
   [⟨1, 0, .put 0 0⟩, ⟨2, 1, .put 0 1⟩]
 
-def run {config : Config} (name : String)
-    (check : Unit → Check.Report (W config) (Event (sig N C R))) (expect : Option String := none) :
+/-! The machine behind the memo, with one client that names its commands. -/
+
+abbrev Cl := Fin 1
+abbrev NC := Named Cl C
+abbrev OSig := (sig N NC (Option (Named Cl R))).withIO (Request N NC) (Named Cl R)
+
+instance : (sig N NC (Option (Named Cl R))).Inspect := {}
+instance : (cluster N {} ((store K V).once Cl)).Inspect := {}
+instance : OSig.Inspect := .withIO
+instance : (onceCluster N Cl {} (store K V)).Inspect := .filterMapIO
+
+abbrev OW := World (onceCluster N Cl {} (store K V))
+  (List (Request N NC) × Check.OnceMonitor (Request N NC) (Named Cl R) M (Cl × Nat))
+
+abbrev PW := World (onceCluster N Cl {} (store K V))
+  (List (Request N NC) × Check.Monitor (Request N NC) (Named Cl R) M)
+
+def Bounds.holdsOnce {D : Type} (bounds : Bounds) (w : World (onceCluster N Cl {} (store K V)) D) :
+    Bool :=
+  w.state.net.length ≤ bounds.maxNet
+    && (Enum.all (α := N)).all fun a =>
+      (w.state.state a).term ≤ bounds.maxTerm && (w.state.state a).log.length ≤ bounds.maxLog
+
+/-- Some node has applied the client's command `later` before its command `earlier`. -/
+def overtaken (w : OW) (earlier later : Nat) : Bool :=
+  (Enum.all (α := N)).any fun a =>
+    let seqs := ((w.state.state a).log.take (w.state.state a).applied).map (·.cmd.seq)
+    match seqs.idxOf? later, seqs.idxOf? earlier with
+    | some l, some e => l < e
+    | _, _ => false
+
+def onceProps (witnesses : List (Check.Property OW)) : List (Check.Property OW) :=
+  ([ Check.refinesOnce "the cluster is the map it replicates, once per command",
+    .always "committed entries agree" fun w => pairs fun a b =>
+      let n := min (w.state.state a).commit (w.state.state b).commit
+      (w.state.state a).log.take n == (w.state.state b).log.take n,
+    .sometimes "a write is answered" fun w => w.state.outbox.any fun a => a.cmd == .ok ] :
+    List (Check.Property OW)) ++ witnesses
+
+def checkOnce (env : EnvModel OSig) (requests : List (Request N NC)) (bounds : Bounds := {})
+    (witnesses : List (Check.Property OW) := []) :=
+  Check.system (onceCluster N Cl {} (store K V))
+    { env, driver := (named N Cl (store K V)).onceMonitored Request.key (Driver.anyOrder requests)
+      maxCrashes := bounds.maxCrashes } (onceProps witnesses) { constraint := bounds.holdsOnce }
+
+/-- A client's command may be handed to a node twice, and commands overtake one another. -/
+def retryingClients : EnvModel OSig where
+  link src _ := if src.isSome then Link.reliable else { ordered := false, duplicating := true }
+
+def checkPlain (env : EnvModel OSig) (requests : List (Request N NC)) (bounds : Bounds := {}) :=
+  Check.system (onceCluster N Cl {} (store K V))
+    { env, driver := (named N Cl (store K V)).monitored (Driver.anyOrder requests) }
+    ([Check.refines "the cluster is the map it replicates"] : List (Check.Property PW))
+    { constraint := bounds.holdsOnce }
+
+/-- Links from clients lose, reorder and repeat messages, and nodes crash and restart. -/
+def chaos : EnvModel OSig where
+  link src _ := if src.isSome then Link.reliable else Link.network
+  mayCrash _ := true
+  restarts _ := true
+
+/-- A write and a read, each named by the one client. -/
+def namedWriteThenRead : List (Request N NC) :=
+  [⟨1, 0, ⟨0, 1, .put 0 1⟩⟩, ⟨2, 0, ⟨0, 2, .get 0⟩⟩]
+
+/-- A write sent through one node and, again, through another. -/
+def retriedElsewhere : List (Request N NC) :=
+  [⟨1, 0, ⟨0, 1, .put 0 1⟩⟩, ⟨1, 1, ⟨0, 1, .put 0 1⟩⟩, ⟨2, 0, ⟨0, 2, .get 0⟩⟩]
+
+def run {σ : Signature} [σ.Inspect] {sys : System σ} [sys.Inspect] {D : Type} (name : String)
+    (check : Unit → Check.Report (World sys D) (Event σ)) (expect : Option String := none) :
     IO Bool := do
   let t0 ← IO.monoMsNow
   let report := check ()
@@ -194,7 +263,23 @@ def quick : List (String × IO Bool) :=
           (props single ++ [partBatch single])),
     ("what the proofs use, batches of one, one term",
       run "what the proofs use, batches of one, one term" fun _ =>
-        check single reliable writeThenRead { maxTerm := 1, maxNet := 3 } (auxiliary single)) ]
+        check single reliable writeThenRead { maxTerm := 1, maxNet := 3 } (auxiliary single)),
+    ("once: a command handed to a node twice takes effect once",
+      run "once: a command handed to a node twice takes effect once" fun _ =>
+        checkOnce retryingClients namedWriteThenRead { maxTerm := 1, maxNet := 3 }
+          [ .sometimes "an answer is waiting twice" fun w =>
+              w.state.outbox.any fun a => w.state.outbox.count a ≥ 2,
+            .sometimes "a command overtaken by a later one is applied" fun w =>
+              overtaken w 1 2 ]),
+    ("once: a write sent again through another node takes effect once",
+      run "once: a write sent again through another node takes effect once" fun _ =>
+        checkOnce {} retriedElsewhere { maxTerm := 1, maxNet := 3 }
+          [ .sometimes "a read sees the written value" fun w =>
+              w.state.outbox.any fun a => a.cmd == .value (some 1) ]),
+    ("once: the map spec without once is broken: an answer is handed over twice",
+      run "once: the map spec without once is broken: an answer is handed over twice"
+        (expect := some "the cluster is the map it replicates") fun _ =>
+        checkPlain retryingClients namedWriteThenRead { maxTerm := 1, maxNet := 3 }) ]
 
 /-- Checks that take minutes: `lake exe raftCheck deep`. -/
 def deep : List (String × IO Bool) :=
@@ -248,6 +333,9 @@ def deep : List (String × IO Bool) :=
     ("reliable links and two crashes, one term",
       run "reliable links and two crashes, one term" fun _ =>
         check {} restarting writeThenRead { maxTerm := 1, maxCrashes := 2 }),
+    ("once: links from clients losing, reordering and repeating, and a crash",
+      run "once: links from clients losing, reordering and repeating, and a crash" fun _ =>
+        checkOnce chaos namedWriteThenRead { maxTerm := 1, maxNet := 3, maxCrashes := 1 }),
     ("outside the assumption: a request handed to a node twice",
       run "outside the assumption: a request handed to a node twice"
         (expect := some "the cluster is the map it replicates") fun _ =>

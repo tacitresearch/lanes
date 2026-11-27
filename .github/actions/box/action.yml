@@ -39,7 +39,7 @@ inputs:
   workflows:
     description: The workflow files whose runs keep the box running.
     required: false
-    default: ci.yml mutants.yml
+    default: ci.yml mutants.yml bench.yml
   wait-minutes:
     description: How long the start waits for runners to come online.
     required: false

@@ -1,0 +1,207 @@
+name: Bench
+
+# The HTTP benchmark of bench/run.sh (bench/README.md): Go's net/http, Std.Http and Lanes'
+# servers under one load generator. By hand only, and required by nothing.
+#
+# Where it runs is mutants.yml's route (docs/RUNNERS.md): the warm runner machine, started by
+# `start` and stopped by `stop`, when LANES_AWS_ROLE_ARN, LANES_AWS_REGION and
+# LANES_AWS_INSTANCE_ID are set; a machine launched for the run with LANES_AWS_INSTANCE_TYPE
+# instead; LANES_RUNNER's runners; else ubuntu-latest, whose 4 vCPUs give numbers that are no
+# results.
+#
+# The benchmark is one job, because it needs the whole machine. The warm machine has 16
+# runners, and while this job runs the other 15 may take jobs of ci.yml (when LANES_RUNNER points
+# at the machine), of mutants.yml or of another branch. Runners cannot be told to refuse work,
+# so the job checks instead: run.sh waits up to `idle-wait-minutes` until no other Actions job
+# (a Runner.Worker process) is on the machine and other processes use at most one core; with
+# `require-idle` it fails if that never happens, and fails at the end if any run was disturbed.
+# Each run records the other jobs and the CPU time spent on its CPUs by anything but the server
+# and the load generator, and the report marks disturbed runs. A machine launched for the run
+# has no other jobs.
+
+on:
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: Seconds each run measures
+        required: false
+        default: "10"
+      runs:
+        description: Runs of each server at each connection count
+        required: false
+        default: "3"
+      servers:
+        description: Servers to run, separated by spaces (all when empty; see bench/servers.sh)
+        required: false
+        default: ""
+      require-idle:
+        description: Fail unless the machine is idle at the start and throughout
+        type: boolean
+        required: false
+        default: true
+      idle-wait-minutes:
+        description: How long to wait for the machine to become idle
+        required: false
+        default: "30"
+      hosted:
+        description: Run on GitHub's runners, whatever the variables say
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bench
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      label: ${{ steps.runner.outputs.label }}
+      route: ${{ steps.runner.outputs.route }}
+      run-label: ${{ steps.runner.outputs.run-label }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: .github
+      - id: runner
+        uses: ./.github/actions/runner
+        with:
+          runner: ${{ !inputs.hosted && vars.LANES_RUNNER || '' }}
+          aws-role: ${{ !inputs.hosted && vars.LANES_AWS_ROLE_ARN || '' }}
+          aws-instance-id: ${{ vars.LANES_AWS_INSTANCE_ID }}
+          aws-instance-type: ${{ vars.LANES_AWS_INSTANCE_TYPE }}
+
+  start:
+    needs: plan
+    if: needs.plan.outputs.route == 'box' || needs.plan.outputs.route == 'fresh'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: |
+            .github
+            scripts
+      - uses: ./.github/actions/box
+        with:
+          mode: start
+          route: ${{ needs.plan.outputs.route }}
+          role-arn: ${{ vars.LANES_AWS_ROLE_ARN }}
+          region: ${{ vars.LANES_AWS_REGION }}
+          instance-id: ${{ vars.LANES_AWS_INSTANCE_ID }}
+          instance-type: ${{ vars.LANES_AWS_INSTANCE_TYPE }}
+          image: ${{ vars.LANES_AWS_AMI }}
+          subnet: ${{ vars.LANES_AWS_SUBNET }}
+          security-group: ${{ vars.LANES_AWS_SECURITY_GROUP }}
+          labels: ${{ needs.plan.outputs.label }}
+          run-label: ${{ needs.plan.outputs.run-label }}
+          runner-token: ${{ secrets.LANES_RUNNER_PAT }}
+          github-token: ${{ github.token }}
+
+  bench:
+    needs: [plan, start]
+    if: >-
+      !cancelled() && needs.plan.result == 'success' &&
+      (needs.start.result == 'success' || needs.start.result == 'skipped')
+    runs-on: ${{ fromJSON(needs.plan.outputs.label) }}
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          clean: false
+      - uses: ./.github/actions/lean
+      - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version-file: bench/go/go.mod
+          cache: false
+      - name: The repository's packages for bench/
+        run: |
+          mkdir -p bench/.lake
+          ln -sfn "$GITHUB_WORKSPACE/.lake/packages" bench/.lake/packages
+          rm -rf bench/results
+      - name: The machine
+        run: |
+          echo "nproc $(nproc); $(grep -m1 'model name' /proc/cpuinfo)"
+          uptime
+          echo "Actions jobs on this machine (Runner.Worker processes, this one included):"
+          ps -eo pid,etime,args | awk 'NR == 1 || /[R]unner.Worker/'
+      - name: Run
+        env:
+          SECONDS_EACH: ${{ inputs.seconds }}
+          RUNS: ${{ inputs.runs }}
+          SERVERS: ${{ inputs.servers }}
+          REQUIRE_IDLE: ${{ inputs.require-idle && '1' || '0' }}
+          IDLE_WAIT_MINUTES: ${{ inputs.idle-wait-minutes }}
+        run: |
+          for n in "$SECONDS_EACH" "$RUNS" "$IDLE_WAIT_MINUTES"; do
+            [[ $n =~ ^[0-9]+$ ]] || { echo "::error::$n is not a number"; exit 2; }
+          done
+          read -ra servers <<<"$SERVERS"
+          status=0
+          bench/run.sh "${servers[@]}" || status=$?
+          case $status in
+            0) ;;
+            3) echo "::error::the machine did not become idle in $IDLE_WAIT_MINUTES minutes" ;;
+            4) echo "::error::some runs were disturbed by other work on the machine: see the report" ;;
+            *) echo "::error::run.sh failed ($status)" ;;
+          esac
+          exit "$status"
+      - name: Report
+        if: ${{ !cancelled() }}
+        run: |
+          shopt -s nullglob
+          reports=(bench/results/*.md)
+          if [ ${#reports[@]} -eq 0 ]; then
+            echo "No report: the benchmark did not finish." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          {
+            echo "Runner \`$RUNNER_NAME\`, route \`${ROUTE}\`."
+            echo
+            cat "${reports[@]}"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if grep -q 'runs were disturbed' "${reports[@]}"; then
+            echo "::warning::some runs were disturbed by other work on the machine"
+          fi
+        env:
+          ROUTE: ${{ needs.plan.outputs.route }}
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: bench-${{ github.run_id }}-${{ github.run_attempt }}
+          path: bench/results/
+          if-no-files-found: ignore
+
+  stop:
+    needs: [plan, start, bench]
+    if: always() && (needs.plan.outputs.route == 'box' || needs.plan.outputs.route == 'fresh')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: .github
+      - uses: ./.github/actions/box
+        with:
+          mode: stop
+          route: ${{ needs.plan.outputs.route }}
+          role-arn: ${{ vars.LANES_AWS_ROLE_ARN }}
+          region: ${{ vars.LANES_AWS_REGION }}
+          instance-id: ${{ vars.LANES_AWS_INSTANCE_ID }}
+          labels: ${{ needs.plan.outputs.label }}
+          run-label: ${{ needs.plan.outputs.run-label }}
+          runner-token: ${{ secrets.LANES_RUNNER_PAT }}
+          github-token: ${{ github.token }}
+          workflows: ci.yml mutants.yml bench.yml

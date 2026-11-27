@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
+public import Lanes.Actors.MapIOSound
 public import Lanes.Behaviours.Once
 public import Lanes.Semantics.Service
 public import Lanes.Semantics.Simulation
@@ -23,11 +24,16 @@ simulation to it can read messages in flight as a set and a duplicate cannot bre
 - `Service.once`: the transition system of a service whose requests are named by a key.
 - `System.ImplementsOnce`: a system refines it.
 - `Once.Memo.Agrees`: what the memo of `Once.actor` says of the spec.
+- `Spec.showing`: a spec for a system whose outputs are shown through a function, where an
+  output shown as nothing may be handed over at any time.
 
 ## Main statements
 
 - `Server.implementsOnce`: a `Server` behind `Once.actor` implements `once` of its service in
   every environment: links lose, reorder and duplicate, and the server crashes.
+- `System.Refines.filterMapIO`: what a system refines with the outputs it shows as nothing
+  allowed at any time, it refines with them hidden. A memo that no longer keeps an answer still
+  has to give one where its actor always answers; hidden, that answer is not handed over.
 -/
 
 @[expose] public section
@@ -348,5 +354,87 @@ theorem Once.server_implements {In Out C : Type} [DecidableEq In] [DecidableEq O
     refine ⟨t, .refl, ?_⟩
     exact h.grow (net := c.net) (.refl _) (.refl _) (by simpa [Once.recover_eq, Server.actor] using h.value)
       (by simpa [Once.recover_eq, Server.actor] using h.memo) (by simp [Once.recover_eq, Server.actor])
+
+namespace Spec
+
+variable {In Out Out' T : Type}
+
+/--
+`spec` for a system whose outputs are shown through `output`: an output shown is a step of
+`spec` with what it is shown as, and one shown as nothing may be handed over at any time and
+changes nothing.
+-/
+def showing (spec : Spec S (Option (Visible In Out T))) (output : Out' → Option Out) :
+    Spec S (Option (Visible In Out' T)) where
+  init := spec.init
+  Tr t label t' :=
+    match label with
+    | some (.input x) => spec.Tr t (some (.input x)) t'
+    | some (.output out) =>
+      match output out with
+      | some shown => spec.Tr t (some (.output shown)) t'
+      | none => t' = t
+    | some (.fire d) => spec.Tr t (some (.fire d)) t'
+    | none => spec.Tr t none t'
+
+variable {spec : Spec S (Option (Visible In Out T))} {output : Out' → Option Out}
+
+/-- Internal steps of `spec.showing output` are internal steps of `spec`. -/
+theorem showing_τSTr {t t' : S} (h : (spec.showing output).lts.τSTr t t') : spec.lts.τSTr t t' := by
+  induction h with
+  | refl => exact .refl
+  | tail _ htr ih => exact ih.tail htr
+
+/-- Internal steps of `spec` are internal steps of `spec.showing output`. -/
+theorem τSTr_showing {t t' : S} (h : spec.lts.τSTr t t') : (spec.showing output).lts.τSTr t t' := by
+  induction h with
+  | refl => exact .refl
+  | tail _ htr ih => exact ih.tail htr
+
+/-- A visible step of `spec.showing output` that is answered by one of `spec`, saturated. -/
+theorem showing_sTr {t t' : S} {v' : Visible In Out' T} {v : Visible In Out T}
+    (hv : ∀ s s', (spec.showing output).Tr s (some v') s' → spec.Tr s (some v) s')
+    (h : (spec.showing output).lts.STr t (some v') t') : spec.lts.STr t (some v) t' := by
+  cases h with
+  | tr h₁ h₂ h₃ => exact .tr (showing_τSTr h₁) (hv _ _ h₂) (showing_τSTr h₃)
+
+end Spec
+
+open Cslib in
+/--
+What `sys` refines with the outputs `output` shows as nothing allowed at any time,
+`sys.filterMapIO id output` refines with them hidden: every step of the system behind the
+filter is a step of `sys` (`SysState.step_under`), and an output it hands over is one shown.
+-/
+theorem System.Refines.filterMapIO {σ : Signature} {sys : System σ} {Out T : Type}
+    [DecidableEq Out] {output : σ.Out → Option Out} {env : EnvModel (σ.withIO σ.In Out)}
+    {spec : Spec S (Option (Visible σ.In Out T))}
+    (h : sys.Refines env.under (spec.showing output)) :
+    (sys.filterMapIO id output).Refines env spec := by
+  obtain ⟨rel, hinit, hstep⟩ := h
+  refine ⟨fun d t => ∃ c, c.over id output = d ∧ rel c t, ?_, ?_⟩
+  · rintro d rfl
+    obtain ⟨t, ht, hrel⟩ := hinit _ rfl
+    exact ⟨t, ht, _, SysState.init_over, hrel⟩
+  · rintro d t ⟨c, rfl, hrel⟩ ev d' hd
+    obtain ⟨ev', c', hunder, hc, rfl⟩ := SysState.step_under hd
+    obtain ⟨t', ht', hrel'⟩ := hstep c t hrel ev' c' hc
+    refine ⟨t', ?_, c', rfl, hrel'⟩
+    have hτ (h : (spec.showing output).lts.STr t none t') : spec.lts.STr t none t' :=
+      (LTS.sTr_τSTr_iff _).mpr (Spec.showing_τSTr ((LTS.sTr_τSTr_iff _).mp h))
+    cases ev with
+    | input x =>
+      subst hunder
+      exact Spec.showing_sTr (v' := .input x) (v := .input x) (fun _ _ h => h) ht'
+    | output out =>
+      obtain ⟨out', rfl, hout⟩ := hunder
+      exact Spec.showing_sTr (v' := .output out') (v := .output out)
+        (fun _ _ h => by simpa [Spec.showing, hout] using h) ht'
+    | deliver e => subst hunder; exact hτ ht'
+    | duplicate e => subst hunder; exact hτ ht'
+    | drop e => subst hunder; exact hτ ht'
+    | timeout i msg => subst hunder; exact hτ ht'
+    | crash i => subst hunder; exact hτ ht'
+    | start i => subst hunder; exact hτ ht'
 
 end Lanes
