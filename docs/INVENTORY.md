@@ -19,12 +19,12 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Net` | 37 | 6 | 5 | 0 | 0 | 25 | 1 |
 | `Lanes/Outside` | 118 | 87 | 5 | 6 | 1 | 19 | 0 |
 | `Lanes/Proof` | 36 | 12 | 0 | 0 | 0 | 23 | 1 |
-| `Lanes/Runtime` | 172 | 93 | 21 | 0 | 28 | 30 | 0 |
+| `Lanes/Runtime` | 173 | 94 | 21 | 0 | 28 | 30 | 0 |
 | `Lanes/Semantics` | 61 | 11 | 0 | 0 | 0 | 49 | 1 |
 | `Lanes/Testing` | 63 | 0 | 0 | 1 | 62 | 0 | 0 |
 | `Lanes/Web` | 592 | 309 | 52 | 31 | 146 | 52 | 2 |
 | `LanesCli` | 120 | 0 | 0 | 0 | 46 | 0 | 74 |
-| All | 2176 | 1139 | 103 | 110 | 377 | 320 | 127 |
+| All | 2177 | 1140 | 103 | 110 | 377 | 320 | 127 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -1735,6 +1735,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Kernel.down` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 43 more |
 | `Kernel.settle` | proved | through `Kernel.apply`, `Kernel.boot` and 7 more: `Batch.run_handed`, `Batch.run_kernel` and 43 more |
 | `Kernel.rest` | proved | through `Kernel.apply`, `Kernel.exec` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 35 more |
+| `Kernel.takeState` | proved | through `Kernel.apply`, `Kernel.exec` and 5 more: `Batch.run_handed`, `Batch.run_kernel` and 35 more |
 | `Kernel.handle` | proved | `Kernel.frame_handle` |
 | `Kernel.startActor` | proved | `Kernel.frame_startActor` |
 | `Kernel.boot` | proved | `Http.kernel_fronted_answered_le_arrived`, `Http.kernel_served_answered_le_arrived`, `Journal.Disk.torn_nil` and 13 more |

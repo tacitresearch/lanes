@@ -81,6 +81,10 @@ semantics reaches and the events it reports are a run reaching it (`Kernel.exec_
 and its outputs are exactly that run's (`Kernel.exec_outputs`). Its agenda holds exactly the
 pending timers (`Kernel.exec_wellFormed`), it never sleeps past one, and neither due timers nor
 queued messages starve the other (`Kernel.WellFormed.step_of_queued`, `step_of_due`).
+Before a step the kernel takes the actor's state out of its cell (`Kernel.takeState`), so the step
+holds the only reference and updates the state in place; that changes no value
+(`Kernel.handle_eq`), and `Tests/Scale.lean` measures that a step costs the same whatever the
+state's size (`docs/decisions/new-kernel-in-place.md`).
 
 The shell (`Lanes/Runtime/IO/Shell.lean`) is one thread per shard. Senders put commands in a
 bounded inbox (`Lanes/Runtime/Mailbox.lean`, pure: who is refused, who waits, who is woken). The
