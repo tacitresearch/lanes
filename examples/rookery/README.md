@@ -33,9 +33,9 @@ do); the same `seq` again is answered as the first time and changes nothing.
 ## The claims
 
 Each is a theorem in `Rookery/Proofs/`, for every configuration, gated in
-`Rookery/Proofs/Axioms.lean`, and each is also model-checked (`Check.lean`). All but the last
-are about the spec's functions, `Board.handle` and `Board.fire`, and every sequence of them;
-the last says the system implements that spec.
+`Rookery/Proofs/Axioms.lean`, and each but the last is also model-checked (`Check.lean`). All
+but the last two are about the spec's functions, `Board.handle` and `Board.fire`, and every sequence of them;
+the last two say the system implements that spec, and carry three of the claims to its runs.
 
 | Claim | Theorem |
 | --- | --- |
@@ -48,6 +48,7 @@ the last says the system implements that spec.
 | One account sees no other account's secrets: a reply carries a session or a token only of the account it answers, and none carries a credential (`Reply` does not mention its type) | `Board.handle_secret` |
 | Every bound of `Config` holds in every state of every run | `Board.Bounded.handle`, `board_invariant` |
 | The system implements its spec: every behaviour it shows, deadlines included, is one the spec allows, with requests lost and reordered and the board crashing, where the link from outside does not duplicate a request. The gate in front is not part of it | `implements` |
+| Of every run of the system: no response carries another account's secrets, every list of posts is a read of a board the spec reaches, and a post deleted through the web is in no read asked for after the delete was answered | `output_secret`, `output_read`, `deleted_unread` |
 
 What the claims rest on, and what is not proved, is at the end of this section.
 
@@ -61,11 +62,16 @@ are in the theorem.
 
 ### What remains
 
-- **The claims are proved of the spec's functions and of every sequence of them, and the system
-  is proved to implement the spec; the theorem that puts the two together** (each claim as a
-  statement about the observable traces of the running system) is not written. It needs a
-  lemma that a run of `Service.spec` is a sequence of `Board.handle` and `Board.fire`, which is
-  what `Service.spec` says, and is the next step.
+- **The claims as statements about the system's runs.** Every run of the system has a history
+  that is a sequence of `Board.handle` and `Board.fire`, which produces each response and
+  respects real-time order (`System.Implements.history`). Three claims are carried through it
+  (`Rookery/Proofs/Traces.lean`): a response carries no other account's secrets
+  (`output_secret`), every list of posts handed over is a read of a board the spec reaches
+  (`output_read`), and a read whose request arrives after a web delete is answered `deleted`
+  does not show the post, when request ids are distinct (`deleted_unread`). For the rate limit,
+  posts never lost and the API's `seq` the statements about runs are not written. An API delete
+  answered `deleted` is not covered: a repeated `seq` is answered with the first reply,
+  whatever the second request asks.
 - **The gate in front.** `implements` is about `system`; that `Http.served system` implements the
   same spec through the gate is checked by the gate's own theorems for answers
   (`Http.served_answered_le_arrived`), not proved as a refinement (as for the ledger).

@@ -21,6 +21,7 @@ under Unreleased (`CONTRIBUTING.md`).
 - A transactional store model (`Lanes/Outside/Store/`) at read committed and serializable, with lost `COMMIT` answers, as an `Outside`, and an adapter that runs it on a PostgreSQL table (`Postgres.Store.handler`).
 - `examples/todo-db`: a to-do list in PostgreSQL, where the checker finds the duplicate row that retrying a lost commit makes, and the fix is proved.
 - Every request that arrives at a served or fronted system is answered, in a fair run in which the gate does not crash and the link from outside to the gate loses nothing (`Http.served_arrival_answered`, `Http.fronted_arrival_answered`), so a request whose id is used once is answered exactly once; this was model-checked only. It rests on `System.Run.Fair.delivered`: in a fair run a message on a link that loses nothing, to an actor that stays up, is handed to it.
+- `System.Implements.history`: every run of a system that implements a service has a sequential history of the service's acts (`Service.Act`, `Service.play`) that produces each output, takes each input after it arrives and respects real-time order, so statements about the service's functions carry to the system's runs. `examples/rookery` uses it for three of its claims (`Rookery.output_secret`, `Rookery.output_read`, `Rookery.deleted_unread`).
 
 ### Changed
 

@@ -7,6 +7,7 @@ public import Lanes.Semantics.Account
 public import Lanes.Semantics.FairJoin
 public import Lanes.Semantics.FairRuns
 public import Lanes.Semantics.Front
+public import Lanes.Semantics.History
 public import Lanes.Semantics.Jobs
 public import Lanes.Semantics.Link
 public import Lanes.Semantics.Liveness
