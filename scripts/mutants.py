@@ -130,16 +130,17 @@ MUTANTS = [
     ("http stream: a piece is not tagged with its head", "Lanes/Web/IO/Server.lean",
      """(.conn (.took seq index r))
         match loop.heads.lookup seq with
-        | some id => discard <| ctx.submit (Stream.tag request id) reply""",
+        | some id => discard <| ctx.submitStream (Stream.tag request id) reply""",
      """(.conn (.took seq index r))
         match loop.heads.lookup seq with
-        | some _ => discard <| ctx.submit request reply"""),
+        | some _ => discard <| ctx.submitStream request reply"""),
     ("http stream: a piece's answer goes to the piece before", "Lanes/Web/IO/Server.lean",
      "(.conn (.took seq index r))", "(.conn (.took seq (index - 1) r))"),
     ("http stream: a pull's answer goes to the next pull", "Lanes/Web/IO/Server.lean",
      "(.conn (.pulled seq index r))", "(.conn (.pulled seq (index + 1) r))"),
     ("http stream: the connection is never told that what it wrote was sent",
-     "Lanes/Web/IO/Server.lean", "    | _, _ => tell ctx line true .sent", "    | _, _ => pure ()"),
+     "Lanes/Web/IO/Server.lean", "  | .sent => react ctx line { loop with sentSet := false } .sent",
+     "  | .sent => return { loop with sentSet := false }"),
     ("http stream: a time to look again that is no deadline is not acted on",
      "Lanes/Web/IO/Server.lean", "    (conn.wakeAt config.conn)", "    none"),
     ("http client: a stream of events is read past its deadline", "Lanes/Web/IO/Client.lean",
