@@ -20,8 +20,8 @@ is how a misread standard shows up.
 | a | Lean core, `Std` or Batteries has it (module named) | 37 |
 | b | Pure and needed by applications: build in Lean and prove | 26 |
 | c | Touches the operating system or cryptography: bind (library named) | 13 |
-| d | Not needed for Lanes applications (reason given) | 83 |
-| e | Already in Lanes (module named) | 13 |
+| d | Not needed for Lanes applications (reason given) | 79 |
+| e | Already in Lanes (module named) | 17 |
 
 Of the 19 `golang.org/x` packages listed at the end, 9 are (b), 3 are (c) and 7 are (d).
 
@@ -133,11 +133,11 @@ API. P1 is common, P2 rare.
 | --- | --- | --- |
 | `crypto/sha256` | e | libsodium's, bound in `Lanes/Lib/Crypto/Sodium.lean`, with `Lanes.Sha256` (pure Lean, NIST vectors) as its reference (D46) |
 | `crypto/hmac` | e | libsodium's, bound in `Lanes/Lib/Crypto/Sodium.lean`, with `Lanes.Hmac` (pure Lean, RFC 4231 vectors) as its reference (D46) |
-| `crypto/pbkdf2` | d | passwords are digested with Argon2id; the Lean PBKDF2 is gone (D46) |
+| `crypto/pbkdf2` | e | `Lanes/Lib/Crypto/Pbkdf2.lean`, over libsodium's HMAC, for SCRAM-SHA-256 only (RFC 7914 vectors); passwords are digested with Argon2id (D46) |
 | `crypto/rand` | a | `IO.getRandomBytes` (reads `/dev/urandom`); Lanes binds libsodium's `randombytes_buf`, which uses `getrandom(2)` and also works where `/dev` is not mounted (D46) |
 | `crypto/subtle` | c | libsodium `sodium_memcmp`, bound (D46): compiled Lean promises nothing about timing, so the Lean comparison is only the reference |
-| `crypto/tls` | c | OpenSSL 3 `libssl` for the client (P0); inbound TLS stays at the reverse proxy |
-| `crypto/x509`, `crypto/x509/pkix` | c | OpenSSL 3, verifying against the system's roots with the hostname checked (P0, with TLS) |
+| `crypto/tls` | e | the client, from the OpenSSL Lean's toolchain ships, bound in `native/tls.c` and `Lanes/Web/IO/Tls.lean`; inbound TLS stays at the load balancer or reverse proxy |
+| `crypto/x509`, `crypto/x509/pkix` | e | OpenSSL's, inside the TLS client: the chain verified against the system's roots or a file given, the name or address checked (`Lanes/Web/IO/Tls.lean`); certificates are not parsed in Lean |
 | `crypto/aes`, `crypto/cipher` | c | libsodium `crypto_aead_xchacha20poly1305_ietf` (or `crypto_aead_aes256gcm`), for encrypted cookies and data at rest (P1) |
 | `crypto/ed25519` | c | libsodium `crypto_sign` (P1: webhook signatures) |
 | `crypto/ecdh` | c | libsodium `crypto_scalarmult` for X25519; P-256 from OpenSSL's `libcrypto` (P2) |
@@ -147,7 +147,8 @@ API. P1 is common, P2 rare.
 | `crypto/sha512` | c | libsodium `crypto_hash_sha512` (P2) |
 | `crypto/hkdf` | c | libsodium `crypto_kdf_hkdf_sha256` (P1: deriving keys from one secret) |
 | `crypto` | d | a registry of hash functions; Lean calls functions by name |
-| `crypto/md5`, `crypto/des`, `crypto/rc4`, `crypto/dsa`, `crypto/elliptic` | d | broken, legacy or deprecated |
+| `crypto/md5` | e | `Lanes/Lib/Crypto/Md5.lean`, pure Lean, for PostgreSQL's `md5` authentication only (RFC 1321 vectors); broken as a hash |
+| `crypto/des`, `crypto/rc4`, `crypto/dsa`, `crypto/elliptic` | d | broken, legacy or deprecated |
 | `crypto/sha3`, `crypto/mlkem` | d | no application use yet; ML-KEM matters inside TLS, which is bound |
 | `crypto/fips140` | d | Go's FIPS mode |
 
@@ -181,7 +182,7 @@ and the RFCs' own.
 | `testing` | e | `lake test`, the model checker (`Lanes.Check`), seeded random runs (`Lanes/Check/Fuzz.lean`), mutants (`scripts/mutants.py`) |
 | `testing/quick` | a | Plausible, pinned in `lake-manifest.json` through Mathlib |
 | `testing/fstest`, `testing/iotest`, `testing/slogtest` | d | fakes for Go interfaces |
-| `database/sql`, `database/sql/driver` | d | state is actor state with a journal; there is no SQL database |
+| `database/sql`, `database/sql/driver` | e | state is actor state with a journal by default; PostgreSQL's protocol is `Lanes/Lib/Postgres/` (a client, not a generic driver interface), and a transactional store is the model `Lanes/Outside/Store/Basic.lean` |
 | `syscall` | d | specific calls are bound one by one (`fsync`), not as a package |
 | `plugin`, `reflect` | d | Lean has no run-time reflection; codecs are derived by `lanes_data` |
 | `runtime`, `runtime/cgo`, `runtime/coverage`, `runtime/debug`, `runtime/metrics`, `runtime/pprof`, `runtime/race`, `runtime/trace` | d | Go runtime internals |

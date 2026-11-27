@@ -47,6 +47,8 @@ jobs:
         uses: ./.github/actions/lean
       - name: Build
         run: lake build --wfail
+      - name: native/tls.c declares OpenSSL as its headers do
+        run: python3 scripts/tls-declarations.py
       - if: steps.lean.outputs.packages-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -125,7 +127,7 @@ jobs:
       - uses: ./.github/actions/lean
       - name: Build and check each small example
         run: |
-          for example in counter bank bank-web kv-cache election watchdog payments migration; do
+          for example in counter bank bank-web kv-cache election watchdog payments migration todo-db; do
             echo "::group::examples/$example"
             mkdir -p "examples/$example/.lake"
             ln -sfn "$GITHUB_WORKSPACE/.lake/packages" "examples/$example/.lake/packages"
