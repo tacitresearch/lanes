@@ -18,13 +18,13 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Lib` | 593 | 371 | 26 | 1 | 111 | 75 | 9 |
 | `Lanes/Net` | 37 | 6 | 5 | 0 | 0 | 25 | 1 |
 | `Lanes/Outside` | 156 | 119 | 4 | 6 | 1 | 26 | 0 |
-| `Lanes/Proof` | 36 | 12 | 0 | 0 | 0 | 23 | 1 |
+| `Lanes/Proof` | 40 | 16 | 0 | 0 | 0 | 23 | 1 |
 | `Lanes/Runtime` | 173 | 94 | 21 | 0 | 28 | 30 | 0 |
-| `Lanes/Semantics` | 61 | 11 | 0 | 0 | 0 | 49 | 1 |
+| `Lanes/Semantics` | 63 | 11 | 0 | 0 | 0 | 51 | 1 |
 | `Lanes/Testing` | 82 | 0 | 0 | 1 | 81 | 0 | 0 |
 | `Lanes/Web` | 676 | 354 | 57 | 46 | 163 | 54 | 2 |
 | `LanesCli` | 125 | 0 | 0 | 0 | 51 | 0 | 74 |
-| All | 2388 | 1244 | 120 | 124 | 437 | 336 | 127 |
+| All | 2394 | 1248 | 120 | 124 | 437 | 338 | 127 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -383,10 +383,10 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `instDecidableEqJoinMsg` | proved | its type, `Decidable` |
-| `joinSig` | proved | `Jobs.attach_active_leaves`, `Jobs.attach_within`, `Schedule.attach_held_leaves` and 13 more |
-| `Wiring.left` | proved | through `Schedule.attach`, `SysState.over` and 4 more: `Schedule.attach_held_leaves`, `Schedule.attach_within` and 17 more |
-| `Wiring.right` | proved | through `Schedule.attach`, `System.join` and 1 more: `Schedule.attach_held_leaves`, `Schedule.attach_within` and 12 more |
-| `System.join` | proved | `SysState.exists_block`, `SysState.run_left`, `System.Invariant.join_left` and 9 more |
+| `joinSig` | proved | `Jobs.attach_active_leaves`, `Jobs.attach_within`, `Obligation.Due.of_thinRight` and 23 more |
+| `Wiring.left` | proved | through `Schedule.attach`, `SysState.over` and 5 more: `Obligation.Due.of_thinRight`, `Schedule.attach_held_leaves` and 26 more |
+| `Wiring.right` | proved | through `Schedule.attach`, `System.join` and 2 more: `Obligation.Due.of_thinRight`, `Schedule.attach_held_leaves` and 21 more |
+| `System.join` | proved | `Obligation.Due.of_thinRight`, `SysState.deliverable_of_thinRight`, `SysState.exists_block` and 18 more |
 | `Signature.withIO` | proved | `SysState.run_filterMapIO`, `System.Invariant.filterMapIO`, `System.LeadsTo.filterMapIO` and 2 more |
 | `Effect.filterMapOut` | proved | through `SysState.over`, `System.filterMapIO` and 1 more: `SysState.run_filterMapIO`, `System.Invariant.filterMapIO` and 3 more |
 | `System.filterMapIO` | proved | `SysState.run_filterMapIO`, `System.Invariant.filterMapIO`, `System.LeadsTo.filterMapIO` and 2 more |
@@ -450,21 +450,21 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `update` | proved | through `SysState.down`, `SysState.handle` and 5 more: `Account.implements`, `Account.implements_timed` and 46 more |
+| `update` | proved | through `SysState.down`, `SysState.handle` and 5 more: `Account.implements`, `Account.implements_timed` and 48 more |
 | `Event.timed` | spec | used only in statements |
 | `Event.visible` | spec | used only in statements |
 | `SysState.blank` | proved | `System.Inductive.of_monotone`, `System.Monotone.and`, `System.Monotone.and_net` |
-| `SysState.hasMail` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 30 more |
-| `SysState.perform` | proved | through `SysState.handle`, `SysState.init` and 4 more: `Account.implements`, `Account.implements_timed` and 45 more |
-| `SysState.performAll` | proved | through `SysState.handle`, `SysState.init` and 4 more: `Account.implements`, `Account.implements_timed` and 45 more |
+| `SysState.hasMail` | proved | `SysState.hasMail_of_thinRight` |
+| `SysState.perform` | proved | through `SysState.handle`, `SysState.init` and 4 more: `Account.implements`, `Account.implements_timed` and 47 more |
+| `SysState.performAll` | proved | through `SysState.handle`, `SysState.init` and 4 more: `Account.implements`, `Account.implements_timed` and 47 more |
 | `SysState.down` | proved | `Account.implements`, `Account.implements_timed`, `System.Refines.of_events` and 2 more |
 | `SysState.settle` | proved | `SysState.Loses.settle` |
 | `SysState.handle` | proved | `Http.fronted_handle_arrive`, `Http.served_handle_arrive` |
-| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and 2 more: `Account.implements`, `Account.implements_timed` and 42 more |
-| `SysState.deliverable` | proved | `Account.implements`, `Account.implements_timed`, `SysState.nextOnLink_spec` and 3 more |
-| `SysState.step` | proved | `Http.Gate.answered_of_leaves`, `Http.Gate.deadline_not_restarted`, `Shards.AtHome.step` and 8 more |
-| `SysState.init` | proved | `Account.implements`, `Account.implements_timed`, `Check.system_violated` and 25 more |
-| `SysState.run` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and 17 more |
+| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and 2 more: `Account.implements`, `Account.implements_timed` and 44 more |
+| `SysState.deliverable` | proved | `Account.implements`, `Account.implements_timed`, `SysState.deliverable_of_thinRight` and 4 more |
+| `SysState.step` | proved | `Http.Gate.answered_of_leaves`, `Http.Gate.deadline_not_restarted`, `Shards.AtHome.step` and 9 more |
+| `SysState.init` | proved | `Account.implements`, `Account.implements_timed`, `Check.system_violated` and 26 more |
+| `SysState.run` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and 18 more |
 | `System.Invariant` | spec | a predicate |
 
 ## `Lanes/Data/Codec.lean`
@@ -1760,16 +1760,20 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Envelope.left?` | proved | through `SysState.left`, `SysState.thinLeft` and 1 more: `SysState.run_left`, `System.Invariant.join_left` and 4 more |
-| `Envelope.right?` | proved | through `SysState.right`: `System.Invariant.join_right`, `System.Reachable.right` and 1 more |
+| `Envelope.left?` | proved | through `Event.right?`, `Event.rightDeed` and 4 more: `Obligation.right?_inr`, `SysState.run_left` and 7 more |
+| `Envelope.right?` | proved | through `Event.right?`, `SysState.right` and 2 more: `Obligation.Due.of_thinRight`, `Obligation.right?_inr` and 10 more |
 | `EnvModel.left` | proved | `SysState.run_left`, `System.Invariant.join_left`, `System.LeadsTo.join_left` and 3 more |
-| `EnvModel.right` | proved | `System.Invariant.join_right`, `System.Reachable.right`, `System.Reachable.right_of_quiet_boot` |
+| `EnvModel.right` | proved | `Obligation.Due.of_thinRight`, `SysState.deliverable_of_thinRight`, `SysState.init_thinRight` and 6 more |
 | `SysState.left` | proved | `SysState.run_left`, `System.Invariant.join_left`, `System.LeadsTo.join_left` and 1 more |
-| `SysState.right` | proved | `System.Invariant.join_right`, `System.Reachable.right`, `System.Reachable.right_of_quiet_boot` |
+| `SysState.right` | proved | `System.Invariant.join_right`, `System.LeadsTo.join_right`, `System.Reachable.right` and 2 more |
 | `SysState.thinLeft` | proved | `System.LeadsTo.join_left`, `System.Run.Fair.left` |
-| `Event.left?` | proved | through `Event.leftDeed`, `Wiring.leftView`: `SysState.run_left`, `System.Run.Fair.left` and 1 more |
+| `Event.left?` | proved | through `Event.leftDeed`, `Event.right?` and 3 more: `Obligation.right?_inr`, `SysState.run_left` and 4 more |
 | `Event.leftDeed` | proved | `SysState.run_left`, `System.Run.Fair.left` |
 | `Wiring.shown` | proved | `SysState.run_left`, `System.Run.Fair.left` |
+| `SysState.thinRight` | proved | `Obligation.Due.of_thinRight`, `SysState.deliverable_of_thinRight`, `SysState.hasMail_of_thinRight` and 3 more |
+| `Event.right?` | proved | `Obligation.right?_inr` |
+| `Event.rightDeed` | proved | `System.Run.Fair.right` |
+| `Wiring.shownRight` | proved | `SysState.init_thinRight`, `System.Run.Fair.right` |
 | `Wiring.wired` | spec | used only in statements |
 
 ## `Lanes/Proof/List/Prefix.lean`
@@ -2080,6 +2084,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Obligation.inl` | spec | used only in statements |
 | `Wiring.leftView` | spec | used only in statements |
+| `Obligation.inr` | spec | used only in statements |
+| `Wiring.rightView` | spec | used only in statements |
 | `SysState.unhidden` | spec | used only in statements |
 | `SysState.hidden` | spec | used only in statements |
 | `System.underView` | spec | used only in statements |
@@ -2113,8 +2119,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Spec.stutter` | proved | through `System.Run`, `System.Run.event` and 2 more: `Http.Gate.pending_answered`, `Http.fronted_arrival_answered` and 15 more |
-| `Obligation.event` | proved | `System.LeadsTo.ensures_of_invariant` |
+| `Spec.stutter` | proved | through `System.Run`, `System.Run.event` and 2 more: `Http.Gate.pending_answered`, `Http.fronted_arrival_answered` and 16 more |
+| `Obligation.event` | proved | `Obligation.right?_inr`, `System.LeadsTo.ensures_of_invariant` |
 | `Obligation.Due` | spec | a predicate |
 | `Obligation.Restarted` | spec | a predicate |
 | `System.Run.idle` | none |  |
