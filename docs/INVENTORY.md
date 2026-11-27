@@ -19,11 +19,11 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Net` | 37 | 6 | 5 | 0 | 0 | 25 | 1 |
 | `Lanes/Outside` | 116 | 86 | 5 | 6 | 1 | 18 | 0 |
 | `Lanes/Proof` | 36 | 12 | 0 | 0 | 0 | 23 | 1 |
-| `Lanes/Runtime` | 158 | 93 | 20 | 0 | 15 | 30 | 0 |
+| `Lanes/Runtime` | 172 | 93 | 21 | 0 | 28 | 30 | 0 |
 | `Lanes/Semantics` | 60 | 11 | 0 | 0 | 0 | 48 | 1 |
 | `Lanes/Web` | 506 | 259 | 50 | 24 | 126 | 45 | 2 |
 | `LanesCli` | 120 | 0 | 0 | 0 | 46 | 0 | 74 |
-| All | 1942 | 1043 | 100 | 96 | 282 | 294 | 127 |
+| All | 1956 | 1043 | 101 | 96 | 295 | 294 | 127 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -538,14 +538,14 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Journal.Entry.op?` | proved | through `Journal.ops`: `Journal.recover_handed`, `Journal.recover_kernel` and 4 more |
 | `Journal.Entry.marks` | spec | used only in statements |
 | `Journal.ops` | proved | `Journal.recover_handed`, `Journal.recover_kernel`, `Journal.recover_outputs` and 3 more |
-| `Journal.replay1` | proved | through `Journal.Begun.toFound`, `Journal.recover` and 4 more: `Journal.Begun.resume_upgraded`, `Journal.Disk.Holds.load_append_crash` and 18 more |
+| `Journal.replay1` | proved | through `Journal.Begun.toFound`, `Journal.recover` and 4 more: `Journal.Begun.resume_upgraded`, `Journal.Disk.Holds.load_append_crash` and 19 more |
 | `Journal.recover` | proved | `Journal.Disk.load_cut`, `Journal.Upgrade.begin_crash`, `Journal.Upgrade.begin_torn` and 7 more |
 | `Journal.replay` | proved | `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save` and 4 more |
 | `Journal.Entry.savedAt` | proved | `Journal.Disk.Holds.append`, `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash` and 3 more |
 | `Journal.since` | proved | through `Journal.Begun.load`, `Journal.Begun.toFound` and 1 more: `Journal.Begun.resume_upgraded`, `Journal.Upgrade.begin_crash` and 2 more |
 | `Journal.resume` | proved | `Journal.Begun.resume_upgraded`, `Journal.resume_eq_recover`, `Journal.resume_eq_replay` |
 | `Journal.turn` | proved | through `Journal.turns`: `Journal.turns_kernel` |
-| `Journal.turnAll` | proved | `Journal.turnAll_eq_exec` |
+| `Journal.turnAll` | proved | `Journal.turnAll_eq_exec`, `Journal.turnAll_spread` |
 | `Journal.turns` | spec | used only in statements |
 
 ## `Lanes/Durable/Migration.lean`
@@ -1589,15 +1589,15 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Batch.due` | proved | `Batch.due_iff`, `Batch.flush_save` |
 | `Batch.put` | proved | `Batch.flush_save` |
-| `Batch.workWith` | proved | through `Batch.flush`, `Batch.run` and 1 more: `Batch.flush_save`, `Batch.run_handed` and 5 more |
-| `Batch.work` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_kernel` and 4 more |
-| `Batch.workAll` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_kernel` and 4 more |
+| `Batch.workWith` | proved | through `Batch.flush`, `Batch.run` and 1 more: `Batch.flush_save`, `Batch.run_handed` and 6 more |
+| `Batch.work` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_kernel` and 5 more |
+| `Batch.workAll` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_kernel` and 5 more |
 | `Batch.flush` | proved | `Batch.flush_save` |
-| `Batch.scan` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_kernel` and 4 more |
-| `Batch.finish` | proved | through `Batch.run`: `Batch.run_handed`, `Batch.run_kernel` and 3 more |
+| `Batch.scan` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_kernel` and 5 more |
+| `Batch.finish` | proved | through `Batch.run`: `Batch.run_handed`, `Batch.run_kernel` and 4 more |
 | `Batch.group` | proved | `Batch.group_ins` |
 | `Batch.Command.ins` | spec | used only in statements |
-| `Batch.run` | proved | `Batch.run_handed`, `Batch.run_kernel`, `Batch.run_peek` and 2 more |
+| `Batch.run` | proved | `Batch.run_handed`, `Batch.run_kernel`, `Batch.run_peek` and 3 more |
 | `Batch.Act.ops` | proved | through `Batch.journal`: `Batch.run_handed`, `Batch.run_kernel` and 1 more |
 | `Batch.Act.outputs` | proved | through `Batch.handed`: `Batch.run_handed` |
 | `Batch.Act.events` | proved | through `Batch.recorded`: `Batch.run_handed` |
@@ -1632,6 +1632,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Runtime.input` | trusted | TRUSTED.md: The runtime shell |
 | `Runtime.tryInput` | trusted | TRUSTED.md: The runtime shell |
 | `Runtime.idle` | trusted | TRUSTED.md: The runtime shell |
+| `Runtime.batches` | trusted | TRUSTED.md: The runtime shell |
 | `Runtime.trace` | trusted | TRUSTED.md: The runtime shell |
 | `Runtime.state` | trusted | TRUSTED.md: The runtime shell |
 | `Runtime.stop` | trusted | TRUSTED.md: The runtime shell |
@@ -1707,6 +1708,24 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Mailbox.Op.resetsSleeper` | spec | used only in statements |
 | `Mailbox.boundedIn` | spec | used only in statements |
 | `Mailbox.waitedIn` | spec | used only in statements |
+
+## `Lanes/Runtime/Pace.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Pace.Rate.add` | tested | `Tests/Pace.lean` |
+| `Pace.Rate.perUnit` | tested | `Tests/Pace.lean` |
+| `Pace.unit_ns` | tested | `Tests/Pace.lean` |
+| `Pace.busy` | tested | `Tests/Pace.lean` |
+| `Pace.worth` | tested | `Tests/Pace.lean` |
+| `Pace.cycles` | tested | `Tests/Pace.lean` |
+| `Pace.prefer` | tested | `Tests/Pace.lean` |
+| `Pace.probeAfter` | tested | `Tests/Pace.lean` |
+| `Pace.choose` | tested | `Tests/Pace.lean` |
+| `Pace.spread` | tested | `Tests/Pace.lean` |
+| `Pace.cycleOf` | tested | `Tests/Pace.lean` |
+| `Pace.observe` | tested | `Tests/Pace.lean` |
+| `Pace.work` | tested | `Tests/Pace.lean` |
 
 ## `Lanes/Runtime/Release.lean`
 
