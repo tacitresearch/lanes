@@ -84,30 +84,32 @@ theorem mTr_of_run {c c' : SysState sys} {evs : List (Event σ)} (h : c.run env 
 
 /--
 `sys` refines `spec` under `env`: everything the outside world can observe of the running system
-is allowed by the spec. Inputs and outputs are visible, and so are the timers `deadlines` names,
-each firing as the deadline of the spec it is; deliveries, other timeouts, crashes and restarts
-are internal.
+is allowed by the spec. Inputs and outputs are visible, and so are the timers `deadlines` names
+and the deliveries `delivered` names, each passing the deadline of the spec it is; other
+deliveries and timeouts, crashes and restarts are internal.
 -/
 abbrev Refines {S T : Type} (sys : System σ) (env : EnvModel σ)
     (spec : Spec S (Option (Visible σ.In σ.Out T)))
-    (deadlines : Deadlines σ T := fun _ _ => none) : Prop :=
-  Lanes.Refines (sys.sem env) spec (Event.timed deadlines)
+    (deadlines : Deadlines σ T := fun _ _ => none)
+    (delivered : Deadlines σ T := fun _ _ => none) : Prop :=
+  Lanes.Refines (sys.sem env) spec (Event.timed deadlines delivered)
 
 /-- The visible events of a run from the initial state, in order, are a trace of what the
 system refines. Shown a run whose trace the spec does not have, a system does not refine it. -/
 theorem Refines.traces_of_run {S T : Type} {spec : Spec S (Option (Visible σ.In σ.Out T))}
-    {deadlines : Deadlines σ T} (h : sys.Refines env spec deadlines) {evs : List (Event σ)}
-    {c : SysState sys} (hrun : (SysState.init sys env).run env evs = some c) :
+    {deadlines delivered : Deadlines σ T} (h : sys.Refines env spec deadlines delivered)
+    {evs : List (Event σ)} {c : SysState sys}
+    (hrun : (SysState.init sys env).run env evs = some c) :
     ∃ t t', spec.init t ∧
-      spec.lts.SMTr t ((evs.filterMap (Event.timed deadlines)).map some) t' := by
+      spec.lts.SMTr t ((evs.filterMap (Event.timed deadlines delivered)).map some) t' := by
   have hlabels : ∀ evs : List (Event σ),
-      (evs.map (Event.timed deadlines)).filter (· ≠ HasTau.τ) =
-        (evs.filterMap (Event.timed deadlines)).map some := by
+      (evs.map (Event.timed deadlines delivered)).filter (· ≠ HasTau.τ) =
+        (evs.filterMap (Event.timed deadlines delivered)).map some := by
     intro evs
     induction evs with
     | nil => rfl
     | cons ev evs ih =>
-      cases hv : ev.timed deadlines <;> simp_all [HasTau.τ]
+      cases hv : ev.timed deadlines delivered <;> simp_all [HasTau.τ]
   rw [← hlabels]
   exact Lanes.Refines.traces h rfl (mTr_of_run hrun)
 

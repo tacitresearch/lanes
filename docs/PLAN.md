@@ -20,8 +20,10 @@ because a launch claim is what a critic tests first.
    request-and-reply service repeats, a cheaper invariant rule, then a counterexample-to-induction
    finder. The measure is `systems/ledger`'s refinement of its spec, proved, where today it is
    checked on instances.
-   Done towards it: a request named by its client takes effect once (`Service.once`, D48), and
-   `System.Refines.of_handles`, a relation rule that a duplicated message cannot break.
+   Done towards it: a request named by its client takes effect once (`Service.once`, D48),
+   `System.Refines.of_handles`, a relation rule that a duplicated message cannot break, and
+   deadlines that pass where a message is served, with which the ledger's timed refinement is
+   proved (`Account.implements_timed`, `Ledger.implements_timed`).
 2. **Evidence for every definition of `Lanes/`.** The inventory is generated (`docs/INVENTORY.md`,
    D47); what has none is listed in `docs/inventory-none.md`, which only shrinks. Take entries off
    it by proving, testing or listing them in `TRUSTED.md`.
@@ -33,7 +35,9 @@ because a launch claim is what a critic tests first.
    off the key-value store; idle actors not at their start saved when they rest and read back when mail comes (those at
    their start are released already), which waits for a place to keep their state.
 5. **Slow work that is not one request's**, as the ledger's friction log asks
-   (`systems/ledger/README.md`): background jobs, ending sessions in bulk, statements.
+   (`systems/ledger/README.md`). The jobs actor is in (`Lanes/Behaviours/Jobs.lean`). Left: the
+   answer carried to its requester through the join, at most once there, as the gate's is; a
+   queue for jobs beyond `maxInFlight`; ending sessions in bulk and statements in the ledger.
 6. **Short, current docs.** One rules file (`AGENTS.md`), `docs/ARCHITECTURE.md` in place of the
    original design, this page and `docs/ROADMAP.md` without their history, and `lanes lint`
    checking that docs cite files that exist.

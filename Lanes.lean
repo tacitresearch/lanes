@@ -36,6 +36,9 @@ public import Lanes.Actors.Run
 public import Lanes.Actors.Runtime
 public import Lanes.Auth.Login
 public import Lanes.Auth.Token
+public import Lanes.Auth.TokenSound
+public import Lanes.Behaviours.Jobs
+public import Lanes.Behaviours.JobsSound
 public import Lanes.Behaviours.Once
 public import Lanes.Behaviours.Server
 public import Lanes.Check.Clients
@@ -71,14 +74,18 @@ public import Lanes.Data.TimeFormat
 public import Lanes.Env.Clock
 public import Lanes.Env.Http
 public import Lanes.Env.HttpClient
+public import Lanes.Env.Jobs
 public import Lanes.Env.Journal
 public import Lanes.Env.Node
 public import Lanes.Env.Peers
 public import Lanes.Html.Basic
+public import Lanes.Html.BasicSound
 public import Lanes.Html.Htmx
+public import Lanes.Html.HtmxSound
 public import Lanes.Html.Syntax
 public import Lanes.Http.Basic
 public import Lanes.Http.Cookie
+public import Lanes.Http.CookieSound
 public import Lanes.Http.Url
 public import Lanes.Http.UrlSound
 public import Lanes.Http.Front
@@ -89,6 +96,7 @@ public import Lanes.Http.MediaTypeSound
 public import Lanes.Http.ReadRequest
 public import Lanes.Http.ReadRequestSound
 public import Lanes.Http.Route
+public import Lanes.Http.RouteSound
 public import Lanes.Http.Waiting
 public import Lanes.Http.Wire
 public import Lanes.Http.WireSpec

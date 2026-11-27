@@ -49,12 +49,14 @@ namespace Cookie
 def valid (c : Cookie) : Bool :=
   token c.name && c.value.toList.all cookieOctet && c.path.toList.all cookieOctet
 
-def header (c : Cookie) : String :=
-  let parts := [s!"{c.name}={c.value}", s!"Path={c.path}"]
-    ++ (c.maxAge_s.map fun s => s!"Max-Age={s}").toList
+/-- What `header` gives after the name and value, in order. -/
+def attributes (c : Cookie) : List String :=
+  ["Path=" ++ c.path] ++ (c.maxAge_s.map fun s => "Max-Age=" ++ toString s).toList
     ++ (if c.httpOnly then ["HttpOnly"] else []) ++ (if c.secure then ["Secure"] else [])
-    ++ [s!"SameSite={c.sameSite.name}"]
-  "; ".intercalate parts
+    ++ ["SameSite=" ++ c.sameSite.name]
+
+def header (c : Cookie) : String :=
+  "; ".intercalate ((c.name ++ "=" ++ c.value) :: c.attributes)
 
 /-- The same cookie, expired: a browser that has it drops it. -/
 def expired (c : Cookie) : Cookie :=
@@ -62,13 +64,22 @@ def expired (c : Cookie) : Cookie :=
 
 end Cookie
 
-/-- The pairs of one `Cookie` header, `a=1; b=2`. A pair without `=` is left out. -/
+/-- `chars` without the whitespace around them. -/
+def trimBlank (chars : List Char) : List Char :=
+  ((chars.dropWhile Char.isWhitespace).reverse.dropWhile Char.isWhitespace).reverse
+
+/-- A piece of a `Cookie` header, trimmed and split at its first `=`; `none` without `=` or with
+an empty name. -/
+def parseCookie (part : List Char) : Option (String × String) :=
+  match (trimBlank part).splitOn '=' with
+  | name :: value :: rest =>
+    if name.isEmpty then none
+    else some (String.ofList name, String.ofList (['='].intercalate (value :: rest)))
+  | _ => none
+
+/-- The pairs of one `Cookie` header, `a=1; b=2`. -/
 def parseCookies (header : String) : List (String × String) :=
-  (header.splitOn ";").filterMap fun part =>
-    match (part.trimAscii.toString.splitOn "=") with
-    | name :: value :: rest =>
-      if name.isEmpty then none else some (name, "=".intercalate (value :: rest))
-    | _ => none
+  (header.toList.splitOn ';').filterMap parseCookie
 
 namespace Request
 

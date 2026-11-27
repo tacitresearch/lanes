@@ -41,10 +41,12 @@ proofs state:
 
 Time passes in the spec as deadlines (`Deadline`): a locked account's lock lifting and a live
 session ending, armed while the account is locked and the session live, read from the user's
-record. The system's timers `unlock` and `expire` are those deadlines passing
-(`Ledger.deadlines`), so the checker sees a lock lift or a session end at the moment the timer
-fires and holds the spec to it: before the lock's deadline the account refuses even the right
-credential, and after a session's it serves the session nothing. How long a lock or a session
+record. The user's timers `unlock` and `expire` lift the lock or end the session in its record
+and tell the ledger (`unlocked`, `ended`), and the ledger serving that notice is the deadline
+passing (`Ledger.delivered`, `docs/decisions/D56-a-deadline-passes-where-it-is-served.md`), so
+the checker sees a lock lift or a session end at that moment and holds the spec to it: before
+the lock's deadline the account refuses even the right credential, and after a session's it
+serves the session nothing. How long a lock or a session
 lasts is the timer's delay (`Config.lockout_ms`, `session_ms`), which the semantics does not
 model, so that is not checked.
 
@@ -74,6 +76,16 @@ request.
   answers itself, and the checker finds its stale view in 42 steps: a log-out returns while a
   transfer of the same session is on its way, and a view asked afterwards misses it. The same
   run appears when the links reorder, so the design needs one shard or an ordered transport.
+- **A deadline passes where requests are served.** The notice of a session's end goes to the
+  ledger on the same ordered link as the user's decisions, so the ledger serves the requests the
+  user decided while the session was live before the end, and those it decided after, which it
+  refused, after it. A deadline that passed at the user's timer (`Ending.atUser`) let a view
+  decided before a session's end be served after a payment asked after the end, and show it;
+  the checker finds that run in 43 steps. A notice lost is a deadline that never passes though
+  the user acted on it, so the links from the users to the ledger must lose nothing and the
+  ledger must not crash on its own: the checker finds a lost end in 16 steps on a lossy link
+  and in 17 with the ledger crashing. Deployed, the ledger and its users are one shard, which
+  restarts whole from its journal.
 - **The user id comes from the cookie.** The bridge verifies the session cookie, a signed
   token of the session id and the name, and makes `Request.act req name session op`; nothing in
   a request body names a user. The system then trusts no name either: `user n` serves its
@@ -102,10 +114,15 @@ does not have armed.
 | The same, answered by the user actor | | stale view found in 42 steps |
 | The same with links that reorder | | stale view found in 47 steps |
 | Locks, evictions, a session used for another user, refusals | 199 | pass |
-| The same with timers that fire at any moment, checked against the deadlines | 12,577 | pass |
-| The same with a crash anywhere (`ledgerCheck timed-crash`, 11 s) | 88,546 | pass |
-| The same with a lockout that does not lock | | found in 26 steps |
-| A payment to `1` and a view by `1` racing the end of `1`'s session | | not the spec: found in 43 steps |
+| The same with timers that fire at any moment (`ledgerCheck timed`, 19 s) | 108,105 | pass |
+| The same with a user crashing anywhere (`ledgerCheck timed`, 75 s) | 527,757 | pass |
+| The same with a lockout that does not lock | | found in 27 steps |
+| A lock, then a session, with timers that fire at any moment | 71 | pass |
+| A payment to `1` and a view by `1` racing the end of `1`'s session | 22,109 | pass |
+| The same with a user crashing anywhere | 95,966 | pass |
+| The same with the end at the user's timer (`Ending.atUser`) | | not the spec: found in 43 steps |
+| The same with the ledger crashing | | a session's end lost: found in 17 steps |
+| The same with links to the ledger that lose messages | | a session's end lost: found in 16 steps |
 
 Also tested, without a socket: a session cookie makes an act of its user whatever the form
 says; a cookie whose payload is changed does not verify; a form token of another session is
@@ -136,9 +153,17 @@ axiom gate:
   and the messages on its link to the ledger (`Lanes.linkMsgs`). A request whose message was
   lost, in a loss or a crash of the ledger, takes effect when the ledger serves the next
   message on the link if the user answered it, and never if the book was to serve it.
+- `implements_timed`: with timers, the system implements its spec with its deadlines, each
+  passing as the ledger serves the user's notice of it, for every configuration and every
+  environment in which each user's link to the ledger is ordered and neither loses nor
+  duplicates, no request is handed to a user twice and the ledger does not crash: requests may
+  be lost and reordered on the way in, and users may crash (`Ledger/Proofs/Timed.lean`). The
+  witness is what each user has decided and the ledger has not served, requests and deadlines
+  alike, and the spec's record of a user, with those applied in order, is the user's record and
+  the messages on its link. A timer that finds its deadline no longer armed tells nothing, so
+  every notice the ledger serves is of a deadline armed in the spec.
 
-With timers the system does not implement its spec with deadlines (above, found in 43 steps),
-and nothing about it is proved. The links from the users to the ledger must be ordered (a
+The links from the users to the ledger must be ordered (a
 reordering link gives a stale view, above). That `Bytes.same`, HMAC and PBKDF2
 are what they say is tested against published vectors (`TRUSTED.md`).
 
@@ -217,14 +242,15 @@ round of framework work is planned from this.
 3. Fixed (D38). `lanes_data` took no default field values, so `{}` built no `Attempts`,
    `Sessions` or `Book`, and each had a constant (`Attempts.none`, `Sessions.none`,
    `Book.empty`). It takes them now, and the constants are gone.
-4. **With deadlines the system is not its spec.** A view that `user 1` decided while its
-   session was live reaches the ledger after a payment the administrator asked once the
-   session had ended, and shows it: the spec puts the view before the session's end and the
-   payment after (`Check.lean`, found in 43 steps). The user decides at one moment and the
-   ledger serves at a later one, and a deadline that passes between them is seen at the user.
-   The cure is the one that made the untimed system linearizable: let the deadline pass where
-   the request is served, the ledger handling the user's notice that the session ended. A
-   `Deadlines` names only timers today (`docs/decisions/D42-a-spec-names-its-inputs-and.md`), so that needs deadlines on deliveries.
+4. **With deadlines the system was not its spec. Fixed
+   (`docs/decisions/D56-a-deadline-passes-where-it-is-served.md`).** A view that `user 1`
+   decided while its session was live reached the ledger after a payment the administrator
+   asked once the session had ended, and showed it: the spec puts the view before the
+   session's end and the payment after (found in 43 steps). The user decided at one moment and
+   the ledger served at a later one, and the deadline passed between them, at the user. Now a
+   deadline may be the delivery of a message (`Event.timed`'s `delivered`), the user's timer
+   tells the ledger, and the session ends as the ledger serves that notice, in order with the
+   user's requests; the timed refinement is checked and proved (`implements_timed`).
 5. `omega` did not close `e.account < b.accounts.length, ¬ k < b.accounts.length ⊢ ¬ e.account
    = k` where `k : AccountId` and `abbrev AccountId := Nat` (`Ledger/Proofs/Book.lean`,
    `openAccount_sound`); a term did.
@@ -281,9 +307,13 @@ round of framework work is planned from this.
 
 ### What the ledger would want next
 
-- **Background jobs**: interest and statements, sending mail, ending sessions in bulk, and
-  above all CPU-heavy pure work such as PBKDF2 run off the shard: a job effect with a response
-  message, retries and an idempotency key, whose runner is an adapter with a model.
+- ~~**Background jobs**~~: added in Lanes as the jobs actor (`Lanes/Behaviours/Jobs.lean`): a
+  job named by its requester's key, attempts that carry the key, retries after a backoff, a
+  deadline per attempt and a bound on jobs in flight, with a pool of workers as its adapter and
+  every job admitted proved answered in a fair run. The password's Argon2id stays in
+  `Bridge.prepare`: what a job is asked is journalled, and a password must never be (D44);
+  `prepare` already runs on the request's own task, off the shard's thread, once. Interest,
+  statements, mail and ending sessions in bulk are jobs or timers when the ledger has them.
 - **Server push**: the transfers page polls every three seconds; a stream of events per
   session (SSE first) as outputs the gate keeps open would let a transfer show the moment it
   is booked.

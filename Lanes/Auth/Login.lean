@@ -97,6 +97,36 @@ theorem bounded_succeed (limit : Nat) (a : Attempts) : Bounded limit a.succeed :
   simp only [Bounded, succeed]
   omega
 
+/-- `n + 1` failures in a row: the count stops at `limit`, and the account is locked from the
+failure that brings it there. -/
+theorem fail_repeat (limit : Nat) (a : Attempts) (n : Nat) :
+    Nat.repeat (·.fail limit) (n + 1) a
+      = { failures := min (a.failures + n + 1) limit,
+          locked := a.locked || decide (limit ≤ a.failures + n + 1) } := by
+  induction n with
+  | zero => rfl
+  | succ n ih =>
+    rw [Nat.repeat, ih]
+    simp only [fail, mk.injEq]
+    refine ⟨by omega, ?_⟩
+    apply Bool.eq_iff_iff.mpr
+    cases a.locked <;> simp <;> omega
+
+/-- From `unlock`, an account is locked exactly once it has failed `limit` times in a row, and at
+least once. -/
+theorem locked_unlock_repeat (limit n : Nat) :
+    (Nat.repeat (·.fail limit) n unlock).locked = (decide (0 < n) && decide (limit ≤ n)) := by
+  cases n with
+  | zero => rfl
+  | succ n =>
+    rw [fail_repeat limit unlock n]
+    simp [unlock, Nat.add_comm]
+
+/-- Only `unlock` unlocks an account. -/
+theorem locked_stays {a : Attempts} (h : a.locked) (limit : Nat) :
+    (a.fail limit).locked ∧ a.succeed.locked := by
+  simp [fail, succeed, h]
+
 end Attempts
 
 /-- A user's open sessions, newest first, at most `limit` of them: opening one more closes the
@@ -126,6 +156,34 @@ theorem live_open (s : Sessions) {limit : Nat} (id : Nat) (h : 0 < limit) :
   cases limit with
   | zero => omega
   | succ n => simp [start, live]
+
+/-- Opening a session keeps the newest `limit`, the new one first, and closes the others, the
+oldest; it closes none while there is room. -/
+theorem start_kept_closed (s : Sessions) (limit id : Nat) :
+    (s.start limit id).1.ids ++ (s.start limit id).2 = id :: s.ids
+      ∧ (s.start limit id).1.ids.length = min (s.ids.length + 1) limit := by
+  simp [start, List.take_append_drop, Nat.min_comm]
+
+/-- After any run of log-ins from at most `limit` sessions, the sessions are the `limit` newest. -/
+theorem ids_starts (limit : Nat) (ids : List Nat) {s : Sessions} (h : s.ids.length ≤ limit) :
+    (ids.foldl (fun s id => (s.start limit id).1) s).ids = (ids.reverse ++ s.ids).take limit := by
+  induction ids generalizing s with
+  | nil => simp [List.take_of_length_le h]
+  | cons id ids ih =>
+    rw [List.foldl_cons, ih (length_start_le s limit id)]
+    simp only [start, List.reverse_cons, List.append_assoc, List.singleton_append,
+      List.take_append, List.take_take]
+    congr 2
+    omega
+
+/-- A closed session is not live, and closing one leaves the others as they were, when no
+session is named twice. -/
+theorem live_close {s : Sessions} (h : s.ids.Nodup) (id id' : Nat) :
+    (s.close id).live id' = (s.live id' && id' != id) := by
+  apply Bool.eq_iff_iff.mpr
+  simp only [close, live, List.contains_iff_mem, Bool.and_eq_true, bne_iff_ne, ne_eq,
+    h.mem_erase_iff]
+  exact and_comm
 
 end Sessions
 

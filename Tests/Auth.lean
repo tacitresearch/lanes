@@ -79,7 +79,10 @@ def loginTests : List (String × Bool) :=
       !a.locked && (a.fail 3).locked && (a.fail 3).succeed.locked && ((a.fail 3).fail 3).failures == 3),
     ("sessions: a third session closes the oldest of two",
       thrice.ids == [3, 2] && closed == [1] && thrice.live 2 && !thrice.live 1),
-    ("sessions: a closed session is not live", !(thrice.close 3).live 3) ]
+    ("sessions: a closed session is not live", !(thrice.close 3).live 3),
+    ("password: a digest prints as its first eight hex digits only, and hashes as its bytes",
+      reprStr alice == "<digest " ++ String.ofList (alice.hex.toList.take 8) ++ ">"
+        && hash alice == hash (password.digest "alice" "correct horse")) ]
 
 def tests : List (String × Bool) :=
   cookieTests ++ tokenTests ++ loginTests

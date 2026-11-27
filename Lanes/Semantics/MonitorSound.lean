@@ -147,8 +147,8 @@ variable {σ : Signature}
 
 /-- A monitored driver respects `==` whenever the driver it wraps does. -/
 theorem Service.monitored_respects {D : Type} [BEq D] (svc : Service σ.In σ.Out S T)
-    {driver : Driver σ D} (h : driver.Respects) {deadlines : Deadlines σ T} :
-    (svc.monitored driver deadlines).Respects where
+    {driver : Driver σ D} (h : driver.Respects) {deadlines delivered : Deadlines σ T} :
+    (svc.monitored driver deadlines delivered).Respects where
   inputs a b hab x a' ha' := by
     obtain ⟨hd, hm⟩ := prod_beq_iff.mp hab
     obtain ⟨⟨x', d⟩, hmem, heq⟩ := List.mem_map.mp ha'
@@ -165,6 +165,12 @@ theorem Service.monitored_respects {D : Type} [BEq D] (svc : Service σ.In σ.Ou
     cases deadlines i msg with
     | none => exact (prod_beq_iff.mp hab).2
     | some t => exact Check.Monitor.fire_congr svc (prod_beq_iff.mp hab).2 t
+  deliver a b i msg hab := by
+    refine prod_beq_iff.mpr ⟨h.deliver _ _ i msg (prod_beq_iff.mp hab).1, ?_⟩
+    simp only [Service.monitored]
+    cases delivered i msg with
+    | none => exact (prod_beq_iff.mp hab).2
+    | some t => exact Check.Monitor.fire_congr svc (prod_beq_iff.mp hab).2 t
 
 namespace Check
 
@@ -174,12 +180,12 @@ omit [σ.Inspect] [sys.Inspect] [BEq D] [LawfulBEq S] in
 /-- The monitor of a world is the monitor after the visible events of any run of the instance
 that ends in that world. -/
 theorem Monitor.eq_after_of_run [Enum σ.Id] {svc : Service σ.In σ.Out S T}
-    {driver : Driver σ D} {deadlines : Deadlines σ T} {env : EnvModel σ} {maxCrashes : Nat}
-    {constraint : World sys (D × Monitor σ.In σ.Out S) → Bool} {events : List (Event σ)}
-    {w : World sys (D × Monitor σ.In σ.Out S)}
-    (h : Scenario.Run sys { env, driver := svc.monitored driver deadlines, maxCrashes } constraint
-      events w) :
-    w.driver.2 = Monitor.after svc (events.filterMap (Event.timed deadlines)) := by
+    {driver : Driver σ D} {deadlines delivered : Deadlines σ T} {env : EnvModel σ}
+    {maxCrashes : Nat} {constraint : World sys (D × Monitor σ.In σ.Out S) → Bool}
+    {events : List (Event σ)} {w : World sys (D × Monitor σ.In σ.Out S)}
+    (h : Scenario.Run sys
+      { env, driver := svc.monitored driver deadlines delivered, maxCrashes } constraint events w) :
+    w.driver.2 = Monitor.after svc (events.filterMap (Event.timed deadlines delivered)) := by
   induction h with
   | init => rfl
   | @step events w w' ev _ hnext _ ih =>
@@ -200,14 +206,20 @@ theorem Monitor.eq_after_of_run [Enum σ.Id] {svc : Service σ.In σ.Out S T}
       cases ht : deadlines i msg with
       | none => simp [Service.monitored, ht, ih]
       | some t => simp [Service.monitored, ht, ih, after_concat, observe]
+    | deliver e | duplicate e =>
+      subst hw'
+      cases ht : delivered e.dst e.msg with
+      | none => simp [Service.monitored, ht, ih]
+      | some t => simp [Service.monitored, ht, ih, after_concat, observe]
     | crash i =>
       obtain ⟨-, rfl⟩ := hw'
-      rw [show List.filterMap (Event.timed deadlines) [Event.crash i] = [] from rfl,
+      rw [show List.filterMap (Event.timed deadlines delivered) [Event.crash i] = [] from rfl,
         List.append_nil]
       exact ih
-    | deliver e | duplicate e | drop e | start i =>
+    | drop e | start i =>
       subst hw'
-      rw [show List.filterMap (Event.timed deadlines) [_] = [] from rfl, List.append_nil]
+      rw [show List.filterMap (Event.timed deadlines delivered) [_] = [] from rfl,
+        List.append_nil]
       exact ih
 
 variable [Hashable D] [EquivBEq D] [Hashable S]
@@ -223,18 +235,21 @@ and the constraint must not tell merged worlds apart; for the refinement propert
 is `World.Equiv.holds_refines`.
 -/
 theorem refines_sound (svc : Service σ.In σ.Out S T) {driver : Driver σ D}
-    (hdriver : driver.Respects) {deadlines : Deadlines σ T} (env : EnvModel σ) (maxCrashes : Nat)
+    (hdriver : driver.Respects) {deadlines delivered : Deadlines σ T} (env : EnvModel σ)
+    (maxCrashes : Nat)
     (props : List (Property (World sys (D × Monitor σ.In σ.Out S))))
     (opts : Options (World sys (D × Monitor σ.In σ.Out S)))
     (hprops : ∀ p ∈ props, ∀ a b, World.Equiv env a b → p.holds a = p.holds b)
     (hconstraint : ∀ a b, World.Equiv env a b → opts.constraint a = opts.constraint b)
-    (hfailure : (system sys { env, driver := svc.monitored driver deadlines, maxCrashes } props
+    (hfailure : (system sys
+      { env, driver := svc.monitored driver deadlines delivered, maxCrashes } props
       opts).failure = none)
-    (hcomplete : (system sys { env, driver := svc.monitored driver deadlines, maxCrashes } props
+    (hcomplete : (system sys
+      { env, driver := svc.monitored driver deadlines delivered, maxCrashes } props
       opts).complete = true)
     {name : String} (hrefines : refines name ∈ props) {w : World sys (D × Monitor σ.In σ.Out S)}
-    (hw : Scenario.Reachable sys { env, driver := svc.monitored driver deadlines, maxCrashes }
-      opts.constraint w) :
+    (hw : Scenario.Reachable sys
+      { env, driver := svc.monitored driver deadlines delivered, maxCrashes } opts.constraint w) :
     w.driver.2.ok = true :=
   system_sound_of_respects _ (svc.monitored_respects hdriver) props opts hprops hconstraint
     hfailure hcomplete hrefines hw
@@ -245,21 +260,25 @@ deadlines passing of every run of the checked instance, in the order they happen
 of the spec. The hypotheses are those of `refines_sound`.
 -/
 theorem refines_traces (svc : Service σ.In σ.Out S T) {driver : Driver σ D}
-    (hdriver : driver.Respects) {deadlines : Deadlines σ T} (env : EnvModel σ) (maxCrashes : Nat)
+    (hdriver : driver.Respects) {deadlines delivered : Deadlines σ T} (env : EnvModel σ)
+    (maxCrashes : Nat)
     (props : List (Property (World sys (D × Monitor σ.In σ.Out S))))
     (opts : Options (World sys (D × Monitor σ.In σ.Out S)))
     (hprops : ∀ p ∈ props, ∀ a b, World.Equiv env a b → p.holds a = p.holds b)
     (hconstraint : ∀ a b, World.Equiv env a b → opts.constraint a = opts.constraint b)
-    (hfailure : (system sys { env, driver := svc.monitored driver deadlines, maxCrashes } props
+    (hfailure : (system sys
+      { env, driver := svc.monitored driver deadlines delivered, maxCrashes } props
       opts).failure = none)
-    (hcomplete : (system sys { env, driver := svc.monitored driver deadlines, maxCrashes } props
+    (hcomplete : (system sys
+      { env, driver := svc.monitored driver deadlines delivered, maxCrashes } props
       opts).complete = true)
     {name : String} (hrefines : refines name ∈ props) {events : List (Event σ)}
     {w : World sys (D × Monitor σ.In σ.Out S)}
-    (hrun : Scenario.Run sys { env, driver := svc.monitored driver deadlines, maxCrashes }
+    (hrun : Scenario.Run sys
+      { env, driver := svc.monitored driver deadlines delivered, maxCrashes }
       opts.constraint events w) :
     ∃ a, svc.spec.lts.SMTr ⟨svc.init, 0, 0⟩
-      ((events.filterMap (Event.timed deadlines)).map some) a := by
+      ((events.filterMap (Event.timed deadlines delivered)).map some) a := by
   rw [← Monitor.ok_iff, ← Monitor.eq_after_of_run hrun]
   exact refines_sound svc hdriver env maxCrashes props opts hprops hconstraint hfailure hcomplete
     hrefines hrun.reachable

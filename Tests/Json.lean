@@ -136,9 +136,11 @@ def rejectionTests : List (String × Bool) :=
     ("json: rejects what is not JSON",
       rejects "nul" && rejects "True" && rejects "NaN" && rejects "Infinity" && rejects "'a'" &&
       rejects "{a:1}" && rejects "{1:2}" && rejects "{\"a\" 1}" && rejects "undefined"),
-    ("json: rejects duplicate object keys",
-      rejects "{\"a\":1,\"a\":2}" && rejects "{\"a\":1,\"b\":2,\"a\":1}" &&
-      rejects "{\"\\u0061\":1,\"a\":2}" && !rejects "{\"a\":1,\"A\":2}"),
+    ("json: a key given twice keeps its last value",
+      parsesTo "{\"a\":1,\"a\":2}" (.obj #[("a", 2)]) &&
+      parsesTo "{\"a\":1,\"b\":2,\"a\":3}" (.obj #[("a", 3), ("b", 2)]) &&
+      parsesTo "{\"\\u0061\":1,\"a\":2}" (.obj #[("a", 2)]) &&
+      parsesTo "{\"a\":1,\"A\":2}" (.obj #[("A", 2), ("a", 1)])),
     ("json: nesting up to the depth limit is accepted, one level more is rejected",
       parsesTo (nestedText 128) (nested 128) && rejects (nestedText 129) &&
       failsWith (nestedText 129) "offset 128: maximum nesting depth exceeded"),
@@ -246,5 +248,47 @@ def valueTests : List (String × Bool) :=
 
 def tests : List (String × Bool) :=
   parserTests ++ rejectionTests ++ printerTests ++ valueTests
+
+/-!
+The parsing tests of JSONTestSuite (github.com/nst/JSONTestSuite, MIT licence, in
+`Tests/data/JSONTestSuite`): a `y_` file must be accepted and print to text that parses to the
+same value, an `n_` file must be refused, and an `i_` file, which RFC 8259 leaves to the
+implementation, must do what `acceptedByChoice` records. A file that is not UTF-8 is refused
+before it reaches the parser, as an adapter refuses it.
+-/
+
+def suiteDir : System.FilePath := "Tests" / "data" / "JSONTestSuite"
+
+/-- Two files of the suite are built here rather than stored: they are 350 kB of one pattern. -/
+def builtFiles : List (String × ByteArray) :=
+  [ ("n_structure_100000_opening_arrays.json", ("".pushn '[' 100000).toUTF8),
+    ("n_structure_open_array_object.json",
+      (String.join (List.replicate 50000 "[{\"\":") ++ "\n").toUTF8) ]
+
+def acceptedByChoice : List String :=
+  [ "i_number_double_huge_neg_exp.json", "i_number_too_big_neg_int.json",
+    "i_number_too_big_pos_int.json", "i_number_very_big_negative_int.json" ]
+
+def suiteOutcome (name : String) (bytes : ByteArray) : Option Bool :=
+  let parsed := (String.fromUTF8? bytes).map Json.parse
+  let accepted := match parsed with
+    | some (.ok j) => Json.parse j.compress == .ok j
+    | _ => false
+  let refused := match parsed with
+    | some (.ok _) => false
+    | _ => true
+  if name.startsWith "y_" then some accepted
+  else if name.startsWith "n_" then some refused
+  else if name.startsWith "i_" then
+    some (if acceptedByChoice.contains name then accepted else refused)
+  else none
+
+def suite : IO (List (String × Bool)) := do
+  let entries ← suiteDir.readDir
+  let stored ← entries.toList.mapM fun entry => do
+    return (entry.fileName, ← IO.FS.readBinFile entry.path)
+  let files := (stored ++ builtFiles).filterMap fun (name, bytes) =>
+    (suiteOutcome name bytes).map fun ok => (s!"json suite: {name}", ok)
+  return ("json suite: every file is there", files.length == 318) :: files
 
 end Tests.Json

@@ -10,6 +10,40 @@ import Lanes.Semantics
 /-- info: 'Lanes.Http.percentDecode_percentEncode' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.percentDecode_percentEncode
 
+/-- info: 'Lanes.Http.percentEncode_plain' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.percentEncode_plain
+
+/-- info: 'Lanes.Http.parseForm_encodeForm' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.parseForm_encodeForm
+
+/-- info: 'Lanes.Http.Request.param?_eq_lookup' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Request.param?_eq_lookup
+
+/-- info: 'Lanes.Http.Request.header?_eq_lookup' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Request.header?_eq_lookup
+
+/-- info: 'Lanes.Http.Request.field?_eq_lookup' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Request.field?_eq_lookup
+
+/-- info: 'Lanes.Http.Request.form_encodeForm' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Request.form_encodeForm
+
+-- Lanes.Http.CookieSound
+/-- info: 'Lanes.Http.readSetCookie_header' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.readSetCookie_header
+
+/-- info: 'Lanes.Http.setCookie_read' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.setCookie_read
+
+/-- info: 'Lanes.Http.parseCookies_cookieHeader' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.parseCookies_cookieHeader
+
+/-- info: 'Lanes.Http.Request.sameOrigin_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Request.sameOrigin_iff
+
+/-- info: 'Lanes.Http.Request.bodyWithin_iff' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Lanes.Http.Request.bodyWithin_iff
+
 -- Lanes.Http.Front
 /-- info: 'Lanes.Http.gateActor_bounded' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.gateActor_bounded
@@ -108,6 +142,28 @@ import Lanes.Semantics
 -- Lanes.Http.Route
 /-- info: 'Lanes.Http.Route.match?_link' depends on axioms: [propext, Classical.choice] -/
 #guard_msgs in #print axioms Lanes.Http.Route.match?_link
+
+-- Lanes.Http.RouteSound
+/-- info: 'Lanes.Http.Slug.ofString?_text' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Lanes.Http.Slug.ofString?_text
+
+/-- info: 'Lanes.Http.Slug.ofString?_eq_some' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Lanes.Http.Slug.ofString?_eq_some
+
+/-- info: 'Lanes.Http.Route.link_target' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Route.link_target
+
+/-- info: 'Lanes.Http.Route.match?_target' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Route.match?_target
+
+/-- info: 'Lanes.Http.dispatch_eq_some' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.dispatch_eq_some
+
+/-- info: 'Lanes.Http.dispatch_eq_none' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.dispatch_eq_none
+
+/-- info: 'Lanes.Http.dispatch_link' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.dispatch_link
 
 -- Lanes.Http.UrlSound
 /-- info: 'Lanes.Url.parse_print' depends on axioms: [propext, Classical.choice, Quot.sound] -/

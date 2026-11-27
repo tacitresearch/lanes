@@ -3,6 +3,7 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import RaftKVProofs.Refines
+import RaftKVProofs.Once
 import RaftKVProofs.Checked
 
 /-!
@@ -13,7 +14,9 @@ the cluster is the machine it replicates, each command taking effect at one inst
 arrival and its answer. The proof is `RaftKVProofs/Refines.lean`, on the invariants of
 `RaftKV/Proofs`.
 
-What a PASS of `Check.lean` means is `RaftKVProofs/Checked.lean`.
+The same with the machine behind its memo, once per command and with no assumption on the
+environment, is `RaftKVProofs/Once.lean`. What a PASS of `Check.lean` means is
+`RaftKVProofs/Checked.lean`.
 
 This library needs `Lanes.Semantics`, and so Mathlib. Nothing executable imports it.
 -/
@@ -40,6 +43,26 @@ theorem implementsMachine (N : Type) {C R M : Type} [DecidableEq N] [DecidableEq
     ImplementsMachine N config machine :=
   fun env henv => cluster_implements hup hown env henv
 
+/--
+The cluster implements the machine once per command, whatever every link loses, repeats or
+reorders, those from clients included, and whichever nodes crash and restart. The machine is
+behind its memo (`Machine.once`): a command names its client and the client's number for it,
+and is answered with its name. A command sent again, or handed to a node twice, takes effect
+at most once and may be answered again; an answer the memo no longer keeps is not handed over
+(`onceCluster`).
+-/
+def ImplementsMachineOnce (N Cl : Type) {C R M : Type} [DecidableEq N] [DecidableEq Cl]
+    [DecidableEq C] [DecidableEq R] [Enum N] (config : Config) (machine : Machine C R M) : Prop :=
+  ∀ env, (onceCluster N Cl config machine).ImplementsOnce env (named N Cl machine) Request.key
+
+/-- With both switches on, every cluster implements its machine once per command, in every
+environment. -/
+theorem implementsMachine_once (N Cl : Type) {C R M : Type} [DecidableEq N] [DecidableEq Cl]
+    [DecidableEq C] [DecidableEq R] [Enum N] (config : Config) (machine : Machine C R M)
+    (hup : config.votesForUpToDateOnly = true) (hown : config.commitsOwnTermOnly = true) :
+    ImplementsMachineOnce N Cl config machine :=
+  fun env => onceCluster_implements hup hown env
+
 /-- info: 'RaftKV.implementsMachine' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms RaftKV.implementsMachine
 
@@ -48,6 +71,15 @@ theorem implementsMachine (N : Type) {C R M : Type} [DecidableEq N] [DecidableEq
 
 /-- info: 'RaftKV.recording_refines' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms RaftKV.recording_refines
+
+/-- info: 'RaftKV.implementsMachine_once' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms RaftKV.implementsMachine_once
+
+/-- info: 'RaftKV.onceCluster_implements' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms RaftKV.onceCluster_implements
+
+/-- info: 'RaftKV.recording_refines_once' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms RaftKV.recording_refines_once
 
 /-- info: 'RaftKV.always_of_pass' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms RaftKV.always_of_pass

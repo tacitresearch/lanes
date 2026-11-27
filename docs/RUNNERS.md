@@ -51,6 +51,12 @@ drops runners that have been offline for 14 days).
 
 ## How it works
 
+The role trusts a token whose subject names the repository by its ids as well as its name:
+GitHub writes it `repo:tacitresearch@316370654/lanes@1472755265:ref:refs/heads/main`, so a
+repository made later under the same name cannot assume the role. The stack's `GitHubOwnerId`
+and `GitHubRepositoryId` are those ids; another repository's are the `repository_owner_id` and
+`repository_id` claims of its tokens.
+
 `mutants.yml` decides where to run in its first job (`.github/actions/runner`):
 
 | Variables set | Route | Jobs run on |
@@ -73,7 +79,7 @@ its jobs waiting for runners; the idle shutdown does not help there, re-running 
 `ci.yml` reads only `LANES_RUNNER` and does not start the machine: it stays on GitHub's runners
 unless you point `LANES_RUNNER` at runners that are up. Its jobs build once (`compile`) and then run
 lint and tests (`test`), the model checks (`check`), `systems/raft-kv` and `systems/ledger` in
-parallel, each restoring the build from the Actions cache. A benchmark workflow can use the box
+parallel, each restoring the build from the Actions cache. The benchmark workflow (`bench.yml`) uses the box
 the same way as `mutants.yml`: its `start` and `stop` jobs are `.github/actions/box`.
 
 On the machine (`scripts/ec2-runner.sh`):
