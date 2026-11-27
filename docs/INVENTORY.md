@@ -22,9 +22,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Runtime` | 172 | 93 | 21 | 0 | 28 | 30 | 0 |
 | `Lanes/Semantics` | 61 | 11 | 0 | 0 | 0 | 49 | 1 |
 | `Lanes/Testing` | 63 | 0 | 0 | 1 | 62 | 0 | 0 |
-| `Lanes/Web` | 601 | 313 | 52 | 34 | 148 | 52 | 2 |
-| `LanesCli` | 120 | 0 | 0 | 0 | 46 | 0 | 74 |
-| All | 2186 | 1144 | 103 | 113 | 379 | 320 | 127 |
+| `Lanes/Web` | 604 | 313 | 52 | 34 | 151 | 52 | 2 |
+| `LanesCli` | 125 | 0 | 0 | 0 | 51 | 0 | 74 |
+| All | 2194 | 1144 | 103 | 113 | 387 | 320 | 127 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -707,9 +707,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Bytes.toNat` | tested | `Tests/Signature.lean` |
+| `Bytes.toNat` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Jose.lean`, `Tests/Signature.lean` |
 | `Bytes.ofNat` | proved | `Bytes.size_ofNat` |
-| `Der.digits` | tested | `Tests/Signature.lean` |
+| `Der.digits` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Jose.lean`, `Tests/Signature.lean` |
 | `Der.length` | tested | `Tests/Signature.lean` |
 | `Der.tlv` | tested | `Tests/Signature.lean` |
 | `Der.integer` | tested | `Tests/Signature.lean` |
@@ -717,14 +717,14 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Der.bitString` | tested | `Tests/Signature.lean` |
 | `Der.rsaAlgorithm` | tested | `Tests/Signature.lean` |
 | `Der.p256Algorithm` | tested | `Tests/Signature.lean` |
-| `PublicKey.rsaSize` | tested | `Tests/Signature.lean` |
+| `PublicKey.rsaSize` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Jose.lean`, `Tests/Signature.lean` |
 | `PublicKey.valid` | tested | `Tests/Signature.lean` |
 | `PublicKey.spki` | tested | `Tests/Signature.lean` |
 | `PublicKey.derSignature` | tested | `Tests/Signature.lean` |
 | `Rsa.powMod` | proved | `Rsa.powMod_eq` |
-| `Rsa.digestInfo` | tested | `Tests/Signature.lean` |
-| `Rsa.encode` | tested | `Tests/Signature.lean` |
-| `Rsa.verifyReference` | tested | `Tests/Signature.lean` |
+| `Rsa.digestInfo` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Jose.lean`, `Tests/Signature.lean` |
+| `Rsa.encode` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Jose.lean`, `Tests/Signature.lean` |
+| `Rsa.verifyReference` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Jose.lean`, `Tests/Signature.lean` |
 
 ## `Lanes/Lib/Crypto/Sha256.lean`
 
@@ -771,7 +771,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Base64.Encoding.std` | checked | `Tests/PostgresConn.lean` |
 | `Base64.Encoding.rawStd` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
 | `Base64.Encoding.url` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
-| `Base64.Encoding.rawUrl` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean`, `Tests/Signature.lean` |
+| `Base64.Encoding.rawUrl` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean`, `Tests/Oracle/Jose.lean` and 1 more |
 | `Base64.sextet` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 2 more |
 | `Base64.byte` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
 | `Base64.pad` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 2 more |
@@ -811,7 +811,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `JsonNumber.ofScientific` | proved | `Json.ofScientific_mantissa` |
 | `JsonNumber.instCoeNat` | none |  |
 | `JsonNumber.instCoeInt` | none |  |
-| `JsonNumber.instOfNat` | tested | `Tests/Json.lean`, `Tests/Ops.lean` |
+| `JsonNumber.instOfNat` | tested | `Tests/Json.lean`, `Tests/Ops.lean`, `Tests/Oracle/All.lean` and 1 more |
 | `JsonNumber.instInhabited` | none |  |
 | `JsonNumber.instOfScientific` | tested | `Tests/Json.lean` |
 | `JsonNumber.instNeg` | tested | `Tests/Json.lean` |
@@ -853,7 +853,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Json.getBool?` | proved | `Json.getBool?_eq_ok` |
 | `Json.getObjVal?` | proved | `Jose.Compact.read_alg`, `Jose.readHeader_alg`, `Jose.verify_ok` and 3 more |
 | `Json.getArrVal?` | proved | `Json.getArrVal?_eq_ok` |
-| `Json.getObjValD` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` and 3 more |
+| `Json.getObjValD` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` and 4 more |
 
 ## `Lanes/Lib/Encoding/Json/Classes.lean`
 
@@ -985,15 +985,15 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Metrics.valid` | spec | used only in statements |
 | `Metrics.sanitizeChars` | proved | through `Metrics.sanitize`: `Metrics.sanitize_of_valid`, `Metrics.valid_sanitize` |
 | `Metrics.sanitize` | proved | `Metrics.sanitize_of_valid`, `Metrics.valid_sanitize` |
-| `Metrics.trimZeros` | tested | `Tests/Ops.lean` |
-| `Metrics.decimal` | tested | `Tests/Ops.lean` |
-| `Metrics.decimalInt` | tested | `Tests/Ops.lean` |
-| `Metrics.Series.kind` | tested | `Tests/Ops.lean` |
-| `Metrics.renderLabels` | tested | `Tests/Ops.lean` |
-| `Metrics.sample` | tested | `Tests/Ops.lean` |
-| `Metrics.renderHistogram` | tested | `Tests/Ops.lean` |
-| `Metrics.Family.render` | tested | `Tests/Ops.lean` |
-| `Metrics.render` | tested | `Tests/Ops.lean` |
+| `Metrics.trimZeros` | tested | `Tests/Ops.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Metrics.lean` |
+| `Metrics.decimal` | tested | `Tests/Ops.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Metrics.lean` |
+| `Metrics.decimalInt` | tested | `Tests/Ops.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Metrics.lean` |
+| `Metrics.Series.kind` | tested | `Tests/Ops.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Metrics.lean` |
+| `Metrics.renderLabels` | tested | `Tests/Ops.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Metrics.lean` |
+| `Metrics.sample` | tested | `Tests/Ops.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Metrics.lean` |
+| `Metrics.renderHistogram` | tested | `Tests/Ops.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Metrics.lean` |
+| `Metrics.Family.render` | tested | `Tests/Ops.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Metrics.lean` |
+| `Metrics.render` | tested | `Tests/Ops.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Metrics.lean` |
 | `Metrics.contentType` | tested | `Tests/Ops.lean` |
 
 ## `Lanes/Lib/Mime/MediaType.lean`
@@ -1269,7 +1269,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Postgres.Table.create` | tested | `Tests/Postgres.lean`, `Tests/PostgresLive.lean` |
+| `Postgres.Table.create` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/Postgres.lean`, `Tests/Postgres.lean` and 1 more |
 | `Postgres.Table.Isolation.ofStore` | tested | `Tests/Postgres.lean` |
 | `Postgres.Table.request` | tested | `Tests/Postgres.lean` |
 | `Postgres.scanRows` | tested | `Tests/Postgres.lean` |
@@ -2155,7 +2155,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Jose.str?` | proved | through `Jose.Compact.read`, `Jose.readHeader`: `Jose.Compact.read_alg`, `Jose.readHeader_alg` and 2 more |
 | `Jose.bytes?` | proved | through `Jose.Compact.read`: `Jose.Compact.read_alg`, `Jose.verify_ok` and 1 more |
 | `Jose.Jwk.read?` | proved | through `Jose.Compact.read`: `Jose.Compact.read_alg`, `Jose.verify_ok` and 1 more |
-| `Jose.readKeys` | tested | `Tests/Signature.lean` |
+| `Jose.readKeys` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Jose.lean`, `Tests/Signature.lean` |
 | `Jose.readHeader` | proved | `Jose.readHeader_alg` |
 | `Jose.Compact.read` | proved | `Jose.Compact.read_alg`, `Jose.verify_ok`, `OAuth.IdToken.verify_accepted` |
 | `Jose.candidates` | proved | through `Jose.verify`: `Jose.verify_ok` |
@@ -2655,8 +2655,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `SigV4.signedHeaders` | proved | through `SigV4.sign`: `SigV4.target_sign` |
 | `SigV4.canonicalRequest` | proved | through `SigV4.sign`: `SigV4.target_sign` |
 | `SigV4.algorithm` | proved | through `SigV4.sign`: `SigV4.target_sign` |
-| `SigV4.unsignedPayload` | tested | `Tests/S3.lean`, `Tests/SigV4.lean` |
-| `SigV4.payloadHash` | tested | `Tests/S3.lean`, `Tests/SigV4.lean` |
+| `SigV4.unsignedPayload` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/SigV4.lean`, `Tests/S3.lean` and 1 more |
+| `SigV4.payloadHash` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean` and 3 more |
 | `SigV4.stringToSign` | proved | through `SigV4.sign`: `SigV4.target_sign` |
 | `SigV4.signingKey` | proved | through `SigV4.sign`: `SigV4.target_sign` |
 | `SigV4.signature` | proved | through `SigV4.sign`: `SigV4.target_sign` |
@@ -2871,7 +2871,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `S3.Endpoint.aws` | tested | `Tests/S3.lean` |
-| `S3.Key.of?` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
+| `S3.Key.of?` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/S3.lean` and 1 more |
 | `S3.Range.header` | tested | `Tests/S3.lean` |
 | `S3.Op.verb` | tested | `Tests/S3.lean` |
 | `S3.Op.method` | tested | `Tests/S3.lean` |
@@ -2881,7 +2881,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `S3.Op.body` | tested | `Tests/S3.lean` |
 | `S3.Bucket.host` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
 | `S3.Bucket.path` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
-| `S3.Bucket.scope` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
+| `S3.Bucket.scope` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/S3.lean` and 1 more |
 | `S3.call` | tested | `Tests/S3.lean` |
 | `S3.unescapeKey` | tested | `Tests/S3.lean` |
 | `S3.entry?` | tested | `Tests/S3.lean` |
@@ -2889,27 +2889,30 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `S3.errorCode` | tested | `Tests/S3.lean` |
 | `S3.info` | tested | `Tests/S3.lean` |
 | `S3.interpret` | tested | `Tests/S3.lean` |
-| `S3.Op.modelled` | tested | `Tests/S3.lean` |
-| `S3.Answer.modelled` | tested | `Tests/S3.lean` |
+| `S3.Op.modelled` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/S3.lean` |
+| `S3.Answer.modelled` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/S3.lean` |
 | `S3.presign` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
 
 ## `Lanes/Web/S3/Xml.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `S3.Xml.nameChar` | tested | `Tests/S3.lean` |
-| `S3.Xml.space` | tested | `Tests/S3.lean` |
-| `S3.Xml.after` | tested | `Tests/S3.lean` |
-| `S3.Xml.skipAttributes` | tested | `Tests/S3.lean` |
-| `S3.Xml.hexValue?` | tested | `Tests/S3.lean` |
-| `S3.Xml.codePoint?` | tested | `Tests/S3.lean` |
-| `S3.Xml.charRef?` | tested | `Tests/S3.lean` |
-| `S3.Xml.entity?` | tested | `Tests/S3.lean` |
-| `S3.Xml.unescape` | tested | `Tests/S3.lean` |
-| `S3.Xml.escape` | tested | `Tests/S3.lean` |
-| `S3.Xml.tokens` | tested | `Tests/S3.lean` |
-| `S3.Xml.push` | tested | `Tests/S3.lean` |
-| `S3.Xml.parse` | tested | `Tests/S3.lean` |
+| `S3.Xml.nameChar` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Xml.lean`, `Tests/S3.lean` |
+| `S3.Xml.nameStart` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Xml.lean`, `Tests/S3.lean` |
+| `S3.Xml.isName` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Xml.lean`, `Tests/S3.lean` |
+| `S3.Xml.xmlChar` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Xml.lean`, `Tests/S3.lean` |
+| `S3.Xml.space` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Xml.lean`, `Tests/S3.lean` |
+| `S3.Xml.after` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Xml.lean`, `Tests/S3.lean` |
+| `S3.Xml.skipAttributes` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Xml.lean`, `Tests/S3.lean` |
+| `S3.Xml.hexValue?` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Xml.lean`, `Tests/S3.lean` |
+| `S3.Xml.codePoint?` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Xml.lean`, `Tests/S3.lean` |
+| `S3.Xml.charRef?` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Xml.lean`, `Tests/S3.lean` |
+| `S3.Xml.entity?` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Xml.lean`, `Tests/S3.lean` |
+| `S3.Xml.unescape` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Xml.lean`, `Tests/S3.lean` |
+| `S3.Xml.escape` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Xml.lean`, `Tests/S3.lean` |
+| `S3.Xml.tokens` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Xml.lean`, `Tests/S3.lean` |
+| `S3.Xml.push` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Xml.lean`, `Tests/S3.lean` |
+| `S3.Xml.parse` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Xml.lean`, `Tests/S3.lean` |
 | `S3.Xml.Node.name` | tested | `Tests/S3.lean` |
 | `S3.Xml.Node.children` | tested | `Tests/S3.lean` |
 | `S3.Xml.Node.content` | tested | `Tests/S3.lean` |
@@ -3043,6 +3046,11 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Cli.Lint.citedPaths` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.citingDocs` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.checkLinks` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.cells` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.tableRows` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.spans` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.inScope` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.checkOracles` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.parseFinding` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.inventory` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.lint` | tested | `Tests/Lint.lean` |
