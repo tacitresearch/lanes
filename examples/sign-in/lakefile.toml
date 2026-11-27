@@ -17,6 +17,7 @@ path = "../../integrations/github"
 
 [[lean_lib]]
 name = "Videos"
+roots = ["Videos", "Videos.Axioms"]
 
 # The site: `signIn [port]`, with its providers' clients in the environment.
 [[lean_exe]]

@@ -149,6 +149,19 @@ def tests : List (String × Bool) :=
       [ "", "a.b", "a.b.c.d", tokenA2 ++ "=", "!" ++ tokenA2,
         "e30." ++ payloadA1 ++ ".", "W10." ++ payloadA1 ++ "." ].all
         (fun t => refusal (verify a2 t) == some .malformed)),
+    ("signature: a JWK Set is read for its keys of signatures, and what is no set is refused",
+      (readKeys ("{\"keys\":[" ++ keyA2 ++ "," ++ keyA3 ++ ",{\"kty\":\"oct\",\"k\":\"AA\"}]}")).toOption.map
+          (·.length) == some 2
+        && (readKeys "{\"keys\":{}}" matches .error .malformed)
+        && (readKeys "[]" matches .error .malformed) && (readKeys "" matches .error .malformed)),
+    ("signature: a signature is handed over only at its key's size, and ECDSA's as DER",
+      let rsa := PublicKey.rsa (Bytes.ofNat 256 (2 ^ 2047)) ⟨#[1, 0, 1]⟩
+      let ec := PublicKey.p256 (ByteArray.mk (Array.replicate 32 1)) (ByteArray.mk (Array.replicate 32 2))
+      let sig := ByteArray.mk (Array.replicate 64 0x80)
+      (rsa.derSignature (Bytes.ofNat 256 5)).isSome && (rsa.derSignature (Bytes.ofNat 255 5)).isNone
+        && (ec.derSignature sig).any (fun d => d.size == 72 && d.get! 0 == 0x30 && d.get! 2 == 0x02
+          && d.get! 3 == 33 && d.get! 4 == 0)
+        && (ec.derSignature (sig.push 0)).isNone),
     ("signature: a header with crit is refused",
       refusal (verify a2 ("eyJhbGciOiJSUzI1NiIsImNyaXQiOlsiZXhwIl19." ++ payloadA1 ++ ".AA"))
         == some .critical),

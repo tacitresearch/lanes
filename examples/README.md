@@ -29,7 +29,10 @@ there.
    answers may be late, lost or `unknown` and whose webhooks come late, twice and out of order.
    A retry without the idempotency key charges an order twice, and the checker finds it; with
    the key, an order is charged at most once in every run, proved.
-8. `raft-kv`, `ledger`, `rookery`: the serious systems below.
+8. `sign-in`: the start of a video site whose members sign in with Google or GitHub. The
+   sign-in is Lanes' and runs before the system, which gets only the identity it verified and
+   gives the member a session.
+9. `raft-kv`, `ledger`, `rookery`: the serious systems below.
 
 | Feature | Where to see it |
 | --- | --- |
@@ -46,6 +49,7 @@ there.
 | HTTP, routes, htmx, templates | `counter`, `bank-web`, `ledger`, `rookery` |
 | A journal and snapshots across `kill -9` | `bank-web`, `ledger`, `raft-kv`, `rookery` |
 | Sessions, log-in, cookies, tokens | `ledger`, `rookery` |
+| Sign-in with Google or GitHub (OAuth 2.0, OpenID Connect) | `sign-in` |
 | A JSON API and rate limits | `rookery` |
 | Shards in several processes, joined by TCP | `raft-kv` |
 
@@ -71,4 +75,5 @@ lake exe raftChaos    # a minute of random faults; not part of the tests
 
 and in the same way, in `examples/ledger`, `lake build`, `lake test` and `lake exe ledgerLive`;
 in `examples/rookery`, `lake build`, `lake test` and `lake exe rookeryLive`; and in each small
-one, `lake build` and `lake test` (`bank-web` needs `bank` beside it, which it requires by path).
+one, `lake build` and `lake test` (`bank-web` needs `bank` beside it, which it requires by path,
+and `sign-in` the presets in `integrations/`).

@@ -211,10 +211,11 @@ that performs IO is in an `IO/` directory of its area and named in `TRUSTED.md`.
 | `Lanes/Data/` | `Enum`, codecs and `lanes_data`, the queue, quorums | `Std` only |
 | `Lanes/Lib/` | The standard library: encodings (Base64, JSON), addresses and URLs, time, SHA-256, HMAC and `Sodium`, media types, rate limits (`docs/STDLIB.md`) | `Std` only |
 | `Lanes/Semantics/` | The semantics as a CSLib `LTS`, refinement, specs, fairness and leads-to, and the liveness of the gate and of jobs | CSLib, Mathlib |
-| `native/` | The C that binds libsodium, `fsync`, a timed wait and OpenSSL's TLS client, all of it trusted | libsodium, OpenSSL, libc |
+| `native/` | The C that binds libsodium, `fsync`, a timed wait, OpenSSL's TLS client and its signature check, all of it trusted | libsodium, OpenSSL, libc |
 | `LanesCli/` | The `lanes` command: `new`, `lint`, `check`, `inventory` | `Std` only; `Lean` in `Inventory`, which only `lanesInventory` links |
 | `templates/app/` | The application `lanes new` creates, which is `examples/counter` | |
 | `examples/` | Applications to read, each its own Lake package (`examples/README.md`) | anything |
+| `integrations/` | A vendor's preset or client, each its own Lake package (D61): `google` and `github` for sign-in | Lanes |
 | `Tests/` | Regression tests run by `lake test` and `lanesCheck`; the apps they use in `Fixtures/` | anything |
 | `oracle/` | Differential tests against Go's standard library and other HTTP servers | |
 | `infra/` | The CI machine: its stack and its set-up script (`docs/RUNNERS.md`) | |

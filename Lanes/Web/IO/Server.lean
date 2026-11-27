@@ -379,7 +379,7 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
   let server : Server system := {
     runtime, listener, waiting, connections := ← Mutex.new {}, down
     localPort := (← listener.getSockName).port, lanes }
-  let admit (request : Request) (answer : Response → BaseIO Unit) : BaseIO Unit := do
+  let hand (request : Request) (answer : Response → BaseIO Unit) : BaseIO Unit := do
     let request := prepare request
     let admitted ← waiting.atomically do
       let id ← modifyGet (·.wait answer)
@@ -389,10 +389,10 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
     unless admitted do answer busy
   let submit (request : Request) (answer : Response → BaseIO Unit) : BaseIO Unit :=
     match arrive with
-    | none => admit request answer
+    | none => hand request answer
     | some work => discard <| IO.asTask (prio := .dedicated) do
       match ← (work request).toBaseIO with
-      | .ok (.ok request) => admit request answer
+      | .ok (.ok request) => hand request answer
       | .ok (.error response) => answer response
       | .error _ => answer (.text "the request could not be prepared\n" 500)
   let adopt (socket : TCP.Socket.Client) : Async Unit := do

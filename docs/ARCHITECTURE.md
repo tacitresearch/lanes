@@ -32,7 +32,8 @@ proved function tells it to.
 | The checker | `Lanes/Check/`, `Lanes/Semantics/{Monitor,MonitorSound}.lean` | `Check.search_sound`, `Check.system_sound_of_respects`, `Check.refines_traces` |
 | The proof layer | `Lanes/Semantics/` | refinement, specs, fairness, leads-to |
 | Data and the standard library | `Lanes/Data/`, `Lanes/Lib/` | codec laws, `Quorum.majority_inter`, `Bytes.same_iff`, `Json.parse_iff`, `Url.parse_print` |
-| Bound C | `native/lanes.c`, `Lanes/Lib/Crypto/Sodium.lean` | trusted; tested against the Lean references |
+| Sign-in with OAuth 2.0 and OpenID Connect | `Lanes/Web/Auth/{Jose,IdToken,OAuth}.lean`, `Lanes/Web/IO/SignIn.lean` | `OAuth.Pending.callback_ok`, `OAuth.Pending.accepted_le_issued`, `OAuth.IdToken.verify_accepted`, `Jose.verify_ok`, `OAuth.Keys.no_fetch_within`; the edge is trusted, tested end to end against a provider run in the test |
+| Bound C | `native/lanes.c`, `Lanes/Lib/Crypto/Sodium.lean`; `native/verify.c`, `Lanes/Lib/Crypto/Verify.lean` | trusted; tested against the Lean references and published vectors |
 | TLS client | `native/tls.c`, `Lanes/Web/IO/Tls.lean` | trusted; tested against `openssl s_server` |
 
 ## Actors and the semantics
@@ -193,6 +194,17 @@ exactly what was signed for their purpose and session (`Auth.verify_eq_some`,
 `Auth.checkForm_other`), Argon2id password digests, failed attempts that lock at their limit
 (`Auth.Attempts.locked_unlock_repeat`) and sessions that keep the newest (`Auth.Sessions.ids_starts`).
 
+Sign-in with another service (`docs/decisions/new-sign-in-with-oauth.md`) is OAuth 2.0's authorization
+code flow with PKCE and OpenID Connect on it, decided in `Lanes/Web/Auth/OAuth.lean` and done
+where a request arrives, before the system (`serve`'s `arrive`, `Lanes/Web/IO/SignIn.lean`), so no
+code or token is journalled. A callback is accepted only for a state issued to its browser and
+provider and not expired (`OAuth.Pending.callback_ok`), and no state more often than it was issued
+(`OAuth.Pending.accepted_le_issued`), which is also model-checked against an attacker's browser;
+an ID token only if its header names RS256 or ES256, a key of the provider's set of that
+algorithm and `kid` checks it, and every claim passes (`OAuth.IdToken.verify_accepted`,
+`Lanes/Web/Auth/Jose.lean`). The system gets the identity in headers a client cannot send
+(`OAuth.identity?_strip`). Vendors' presets are packages under `integrations/` (D61).
+
 ## Adapters
 
 Whatever a system does not contain reaches it through outputs and inputs, never through an effect
@@ -208,6 +220,9 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   itself (`Request.fields_framing`), and the reader is proved to read a response written as a
   server writes it as soon as its last byte is there, to stay within its limit and to end
   (`Lanes/Web/Http/WireSound.lean`: `Response.read_wire`, `Response.read_more`; D39).
+- **Sign-in** (`Lanes/Web/IO/SignIn.lean`): the random values of a beginning, the pending
+  sign-ins and each provider's keys held in references, and the calls to the token endpoint,
+  the JWK Set and a user API; every decision is `Lanes/Web/Auth/OAuth.lean`'s (above).
 - **HTTP server, journal, transport**: above.
 - **Models of external services** (`Lanes/Outside/`, D61 and the decision on models of external
   services): what a service a system calls may do, built from three combinators on a model of
@@ -301,12 +316,19 @@ verified, against the system's trust store or a file given, and so is the name o
 for. A response is ended only by the server's `close_notify`. That TLS is done right is trusted,
 not proved: `Tests/Tls.lean` checks the refusals against `openssl s_server`.
 
+Signatures under RSA and P-256 public keys are checked by the same OpenSSL's libcrypto
+(`native/verify.c`, declared in `Lanes/Lib/Crypto/Verify.lean`), with SHA-256: the key's DER and an
+ECDSA signature's are written in Lean, which also decides which keys are valid and what size a
+signature has (`Lanes/Lib/Crypto/PublicKey.lean`), and RSA's check has a Lean reference,
+`Rsa.verifyReference`, that `Tests/Signature.lean` compares with it beside RFC 7515's and RFC 7520's
+vectors.
+
 ## A request, end to end
 
 One process running `Http.serve` on a journal:
 
-1. `Lanes/Web/IO/Server.lean` reads the request from its socket and applies `Bridge.prepare` on the
-   request's own task.
+1. `Lanes/Web/IO/Server.lean` reads the request from its socket and, on the request's own task,
+   applies `arrive` if it was given one (which may answer it instead) and `Bridge.prepare`.
 2. `Http.Waiting` hands it an id; the server offers the input to the shard's inbox and answers
    `503` if the inbox refuses it.
 3. The shell takes the batch; `Batch.run` journals the input, and the shell appends the entry and
@@ -338,6 +360,7 @@ key-value store with front ends, whose read cache breaks refinement (`examples/k
 service (`examples/payments`, `Shop.charged_at_most_once`); `examples/raft-kv`, a replicated key-value store proved to implement the
 map it replicates (`RaftKV.implementsMachine`), and `once` of it in every environment with the
 memo in the map (`RaftKV.implementsMachine_once`); `examples/ledger`, a multi-user web ledger;
+`examples/sign-in`, members of a video site signed in with Google or GitHub, with sessions;
 and `examples/rookery`, a small social network for bots whose claims are proved of its spec,
 which it is proved to implement with deadlines (`Rookery.implements`); the theorem that joins the
 two is not written. Each claim, its evidence and its premises are in `docs/CLAIMS.md`. The tests use copies of

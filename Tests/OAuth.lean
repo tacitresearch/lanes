@@ -136,6 +136,21 @@ def flowTests : List (String × Bool) :=
             | .userApi .. => false)
           && (Discovery.read "{\"issuer\":\"i\"}").isNone
       | none => false),
+    ("oauth: the state of the provider's answer, an error's included",
+      (Answer.read [("state", "s"), ("code", "c")]).state == some "s"
+        && (Answer.read [("error", "e"), ("state", "s")]).state == some "s"
+        && (Answer.read [("error", "e")]).state == none && (Answer.read []).state == none),
+    ("oauth: a user API answers JSON with status 200, or the sign-in is refused",
+      (userAnswer (some (.text "{\"id\":1}"))).toOption == some (Json.mkObj [("id", (1 : Nat))])
+        && (match userAnswer (some (.text "{}" 401)) with
+          | .error (.userApi "status 401") => true | _ => false)
+        && (userAnswer (some (.text "not json")) matches .error (.userApi _))
+        && (userAnswer none matches .error (.userApi _))),
+    ("oauth: a refusal is answered 403 with its reason, and no value",
+      let r := refusedResponse (.denied "access_denied")
+      r.status == 403 && String.fromUTF8? r.body == some "sign-in refused: the provider said access_denied\n"
+        && [OAuth.Refusal.unknownProvider, .unknownState, .otherBrowser, .otherProvider, .expired,
+            .malformed, .token "x", .idToken .nonce, .userApi "y"].all (!·.describe.isEmpty)),
     ("oauth: the code is exchanged with the verifier and the client's secret",
       tokenForm client ⟨"c"⟩ ⟨"v"⟩ == [("grant_type", "authorization_code"), ("code", "c"),
         ("redirect_uri", client.redirect), ("client_id", "app"), ("client_secret", "s3cret"),
