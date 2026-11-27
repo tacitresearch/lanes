@@ -68,6 +68,7 @@ public import Lanes.Data.Ip
 public import Lanes.Data.Json
 public import Lanes.Data.List
 public import Lanes.Data.Quorum
+public import Lanes.Data.RateLimit
 public import Lanes.Data.Sha256
 public import Lanes.Data.Sodium
 public import Lanes.Data.TimeFormat
@@ -88,9 +89,13 @@ public import Lanes.Http.Conn
 public import Lanes.Http.ConnSound
 public import Lanes.Http.Cookie
 public import Lanes.Http.CookieSound
+public import Lanes.Http.Url
+public import Lanes.Http.UrlSound
 public import Lanes.Http.Front
 public import Lanes.Http.FrontSound
 public import Lanes.Http.Gate
+public import Lanes.Http.MediaType
+public import Lanes.Http.MediaTypeSound
 public import Lanes.Http.ReadRequest
 public import Lanes.Http.ReadRequestSound
 public import Lanes.Http.Route
