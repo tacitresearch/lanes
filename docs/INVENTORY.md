@@ -22,9 +22,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Runtime` | 180 | 100 | 21 | 0 | 29 | 30 | 0 |
 | `Lanes/Semantics` | 63 | 11 | 0 | 0 | 0 | 51 | 1 |
 | `Lanes/Testing` | 106 | 0 | 0 | 1 | 105 | 0 | 0 |
-| `Lanes/Web` | 691 | 357 | 57 | 46 | 175 | 54 | 2 |
-| `LanesCli` | 126 | 0 | 0 | 0 | 55 | 0 | 71 |
-| All | 2494 | 1293 | 132 | 124 | 483 | 341 | 121 |
+| `Lanes/Web` | 696 | 357 | 57 | 46 | 180 | 54 | 2 |
+| `LanesCli` | 129 | 0 | 0 | 0 | 57 | 0 | 72 |
+| All | 2502 | 1293 | 132 | 124 | 490 | 341 | 122 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -2798,6 +2798,16 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.isQuotable` | proved | `MediaType.isQdtext_of`, `MediaType.quoted_esc` |
 | `Http.quoted` | proved | `MediaType.quoted_esc` |
 
+## `Lanes/Web/Http/JournalName.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Http.journalName` | tested | `Tests/Web.lean` |
+| `Http.gateOf` | tested | `Tests/Web.lean` |
+| `Http.formerGate` | tested | `Tests/Web.lean` |
+| `Http.regate` | tested | `Tests/Web.lean` |
+| `Http.regateUpgrade` | tested | `Tests/Web.lean` |
+
 ## `Lanes/Web/Http/Loopback.lean`
 
 | Definition | Status | Evidence |
@@ -3464,6 +3474,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Cli.New.Source.toToml` | tested | `Tests/New.lean` |
+| `Cli.New.repository` | tested | `Tests/New.lean` |
+| `Cli.New.pinned` | tested | `Tests/New.lean` |
+| `Cli.New.ofCheckout` | none |  |
 | `Cli.New.moduleName` | tested | `Tests/New.lean` |
 | `Cli.New.validName` | none |  |
 | `Cli.New.files` | tested | `Tests/New.lean` |
