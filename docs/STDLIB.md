@@ -136,8 +136,8 @@ API. P1 is common, P2 rare.
 | `crypto/pbkdf2` | e | `Lanes/Lib/Crypto/Pbkdf2.lean`, over libsodium's HMAC, for SCRAM-SHA-256 only (RFC 7914 vectors); passwords are digested with Argon2id (D46) |
 | `crypto/rand` | a | `IO.getRandomBytes` (reads `/dev/urandom`); Lanes binds libsodium's `randombytes_buf`, which uses `getrandom(2)` and also works where `/dev` is not mounted (D46) |
 | `crypto/subtle` | c | libsodium `sodium_memcmp`, bound (D46): compiled Lean promises nothing about timing, so the Lean comparison is only the reference |
-| `crypto/tls` | c | OpenSSL 3 `libssl` for the client (P0); inbound TLS stays at the reverse proxy |
-| `crypto/x509`, `crypto/x509/pkix` | c | OpenSSL 3, verifying against the system's roots with the hostname checked (P0, with TLS) |
+| `crypto/tls` | e | the client, from the OpenSSL Lean's toolchain ships, bound in `native/tls.c` and `Lanes/Web/IO/Tls.lean`; inbound TLS stays at the load balancer or reverse proxy |
+| `crypto/x509`, `crypto/x509/pkix` | e | OpenSSL's, inside the TLS client: the chain verified against the system's roots or a file given, the name or address checked (`Lanes/Web/IO/Tls.lean`); certificates are not parsed in Lean |
 | `crypto/aes`, `crypto/cipher` | c | libsodium `crypto_aead_xchacha20poly1305_ietf` (or `crypto_aead_aes256gcm`), for encrypted cookies and data at rest (P1) |
 | `crypto/ed25519` | c | libsodium `crypto_sign` (P1: webhook signatures) |
 | `crypto/ecdh` | c | libsodium `crypto_scalarmult` for X25519; P-256 from OpenSSL's `libcrypto` (P2) |

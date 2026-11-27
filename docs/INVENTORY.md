@@ -21,9 +21,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Proof` | 35 | 12 | 0 | 0 | 0 | 22 | 1 |
 | `Lanes/Runtime` | 156 | 93 | 18 | 0 | 15 | 30 | 0 |
 | `Lanes/Semantics` | 57 | 9 | 0 | 0 | 0 | 47 | 1 |
-| `Lanes/Web` | 315 | 188 | 14 | 8 | 64 | 39 | 2 |
+| `Lanes/Web` | 329 | 188 | 28 | 8 | 64 | 39 | 2 |
 | `LanesCli` | 110 | 0 | 0 | 0 | 46 | 0 | 64 |
-| All | 1683 | 950 | 62 | 80 | 194 | 279 | 118 |
+| All | 1697 | 950 | 76 | 80 | 194 | 279 | 118 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -2259,7 +2259,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
+| `Http.Client.Call.at` | trusted | TRUSTED.md: The HTTP client adapter's handler |
 | `Http.Client.outside` | trusted | TRUSTED.md: The HTTP client adapter's handler |
+| `Http.Client.exchangeExplained` | trusted | TRUSTED.md: The HTTP client adapter's handler |
 | `Http.Client.exchange` | trusted | TRUSTED.md: The HTTP client adapter's handler |
 | `Http.Client.handler` | trusted | TRUSTED.md: The HTTP client adapter's handler |
 
@@ -2277,6 +2279,23 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Server.trace` | trusted | TRUSTED.md: The HTTP adapter's IO |
 | `Http.Server.wait` | trusted | TRUSTED.md: The HTTP adapter's IO |
 | `Http.Server.tryInput` | trusted | TRUSTED.md: The HTTP adapter's IO |
+
+## `Lanes/Web/IO/Tls.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Tls.systemFiles` | trusted | TRUSTED.md: The TLS client |
+| `Tls.Trust.path` | trusted | TRUSTED.md: The TLS client |
+| `Tls.SessionImpl` | trusted | TRUSTED.md: The TLS client |
+| `Tls.Session.start` | trusted | TRUSTED.md: The TLS client |
+| `Tls.Session.feed` | trusted | TRUSTED.md: The TLS client |
+| `Tls.Session.take` | trusted | TRUSTED.md: The TLS client |
+| `Tls.Session.handshake` | trusted | TRUSTED.md: The TLS client |
+| `Tls.Session.write` | trusted | TRUSTED.md: The TLS client |
+| `Tls.Session.read` | trusted | TRUSTED.md: The TLS client |
+| `Tls.Session.closed` | trusted | TRUSTED.md: The TLS client |
+| `Tls.Session.shutdown` | trusted | TRUSTED.md: The TLS client |
+| `Tls.Session.readAll` | trusted | TRUSTED.md: The TLS client |
 
 ## `LanesCli/Generated.lean`
 

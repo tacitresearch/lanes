@@ -19,6 +19,7 @@ import Tests.Durable
 import Tests.Ending
 import Tests.Clock
 import Tests.HttpClient
+import Tests.Tls
 import Tests.ReadRequest
 import Tests.Codec
 import Tests.Peers
@@ -71,7 +72,7 @@ def live : IO (List (String × Bool)) := do
   return (← group "runtime" Tests.Runtime.tests) ++ (← group "web" Tests.Web.tests)
     ++ (← Tests.Durable.tests) ++ (← group "ending" Tests.Ending.tests)
     ++ (← safely "clock" Tests.Clock.live)
-    ++ (← safely "http client" Tests.HttpClient.live)
+    ++ (← safely "http client" Tests.HttpClient.live) ++ (← safely "tls" Tests.Tls.live)
     ++ (← safely "peers" Tests.Peers.live) ++ (← safely "peers on a journal" Tests.Peers.durable)
     ++ (← safely "transport" Tests.Peers.transport) ++ (← safely "fronted" Tests.Fronted.live)
     ++ (← safely "full inbox" Tests.Fronted.busyTest) ++ (← safely "node" Tests.Fronted.nodeTest)
@@ -83,7 +84,7 @@ def live : IO (List (String × Bool)) := do
 def main (args : List String) : IO UInt32 := do
   let pure := Tests.Engine.tests ++ Tests.Bank.tests ++ Tests.Json.tests ++ Tests.Html.tests
     ++ Tests.KV.tests ++ Tests.Gate.tests ++ Tests.Fronted.tests ++ Tests.Join.tests
-    ++ Tests.Kernel.tests ++ Tests.Frame.tests ++ Tests.Clock.tests ++ Tests.HttpClient.tests
+    ++ Tests.Kernel.tests ++ Tests.Frame.tests ++ Tests.Clock.tests ++ Tests.HttpClient.tests ++ Tests.Tls.tests
     ++ Tests.Fair.tests ++ Tests.Codec.tests ++ Tests.Durable.fileTests ++ Tests.Split.tests
     ++ Tests.Peers.tests ++ Tests.Courier.tests ++ Tests.Mailbox.tests ++ Tests.Batch.tests
     ++ Tests.Crypto.tests ++ Tests.Auth.tests ++ Tests.Clients.tests ++ Tests.Lease.tests

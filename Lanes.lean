@@ -101,6 +101,7 @@ public import Lanes.Web.Http.Wire
 public import Lanes.Web.Http.WireSpec
 public import Lanes.Web.IO.Client
 public import Lanes.Web.IO.Server
+public import Lanes.Web.IO.Tls
 
 /-!
 The Lanes API: everything an application's executable code needs, and the tools its proofs use.

@@ -14,14 +14,15 @@ advisory's thread; a fix is coordinated there and published with the advisory.
 - The HTTP server and the parsers: the request reader, the response reader, the wire format,
   forms, cookies, routes, JSON, Base64, IP addresses, dates.
 - The cryptography bindings and what is built on them: libsodium through `native/lanes.c`,
-  signed tokens, form tokens, sessions and password digests.
+  the TLS client through `native/tls.c`, signed tokens, form tokens, sessions and password
+  digests.
 - A theorem whose statement does not mean what its docs say: a headline theorem that is
   vacuous, has a premise its docs leave out, or states less than `README.md`,
   `docs/ARCHITECTURE.md` or `docs/INVENTORY.md` claims. Lanes' claims rest on its theorems, so
   this is a vulnerability, not a documentation bug.
 - The CI workflows and the runner machine (`docs/RUNNERS.md`).
 
-Out of scope: the Lean kernel, compiler and runtime, `Std`, libuv, libsodium itself and the
+Out of scope: the Lean kernel, compiler and runtime, `Std`, libuv, libsodium and OpenSSL themselves, and the
 operating system; report those to their projects. Applications built on Lanes are in scope only
 where the fault is in Lanes.
 
