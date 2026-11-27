@@ -62,7 +62,7 @@ inductive Range where
   | starting (first : Nat)
   /-- The last `bytes` bytes. -/
   | final (bytes : Nat)
-  deriving DecidableEq, Repr
+  deriving DecidableEq, Repr, Hashable
 
 def Range.header : Range → String
   | .span first last _ => "bytes=" ++ toString first ++ "-" ++ toString last
@@ -81,7 +81,7 @@ inductive Op where
   with `delimiter` after the prefix rolled up into one prefix each. -/
   | list (keyPrefix : String := "") (delimiter : Option String := none)
     (continuation : Option String := none) (pageSize : PageSize := ⟨1000, by decide⟩)
-  deriving DecidableEq, Repr
+  deriving DecidableEq, Repr, Hashable
 
 namespace Op
 
@@ -157,14 +157,14 @@ structure Info where
   etag : Option String := none
   contentType : Option String := none
   lastModified : Option String := none
-  deriving DecidableEq, Repr
+  deriving DecidableEq, Repr, Hashable
 
 structure Entry where
   key : String
   size : Nat
   etag : String := ""
   lastModified : String := ""
-  deriving DecidableEq, Repr
+  deriving DecidableEq, Repr, Hashable
 
 structure Page where
   entries : List Entry
@@ -172,7 +172,7 @@ structure Page where
   prefixes : List String := []
   /-- What `Op.list` takes to go on, when the listing goes on. -/
   next : Option String := none
-  deriving DecidableEq, Repr
+  deriving DecidableEq, Repr, Hashable
 
 inductive Answer where
   | stored (etag : Option String)
@@ -187,7 +187,7 @@ inductive Answer where
   | refused (status : Nat) (code : String)
   /-- A success whose body this reader does not understand. -/
   | unreadable
-  deriving DecidableEq, Repr
+  deriving DecidableEq, Repr, Hashable
 
 def unescapeKey (s : String) : Option String := percentDecode s (plusIsSpace := true)
 
