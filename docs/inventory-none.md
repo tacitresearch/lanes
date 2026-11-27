@@ -23,6 +23,7 @@ enumeration are fields of its type. That the declaration is the one written is w
 - `Declare.comparedByBEq`
 - `Declare.independent`
 - `Declare.enum`
+- `Declare.migrate`
 
 ## Without evidence on the day the inventory was introduced (2026-11-26)
 

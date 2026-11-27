@@ -8,9 +8,15 @@ under Unreleased (`CONTRIBUTING.md`).
 
 ## [Unreleased]
 
+### Added
+
+- Migrations: a deploy that changes a state or message type reads the old version's journal and snapshot. `Journal.Store` has a `version`, which its files carry with the name (`Journal.label`; version 0 is the name alone, so every existing journal reads as before), and `upgrades`, each an older version's system, codecs and a `Migration` to the new one. A start replays the old files through the old step functions, migrates the kernel, hands over the old outputs not yet handed over (`Journal.Log.pending`), saves under the new label and begins the journal at that mark (`Journal.Log.migrate`). A `Migration` carries the proof that every state an old actor reaches lands in an inductive invariant of the new one, which then holds of every actor afterwards (`Migration.inv_exec`, `Journal.Upgrade.inv_load`); dying during the migration gives the same kernel at the next start (`Journal.Upgrade.begin_crash`). `examples/migration` shows a deploy that adds a field.
+- `lanes_data … from Old := f` declares how a value of a type's previous version becomes one of this (`T.migrate`, an instance of `Migrate`).
+
 ### Changed
 
 - Module paths are reorganised by concern: `Lanes.Actors` is split into `Lanes/Core`, `Lanes/Proof`, `Lanes/Runtime`, `Lanes/Durable`, `Lanes/Net` and `Lanes/Outside`, HTTP, HTML and authentication are under `Lanes/Web`, the standard library under `Lanes/Lib`, and each area's IO in an `IO/` directory; `import Lanes` leaves out the framework's soundness theorems, which a proof imports with `import Lanes.Proofs` (or `Lanes.Semantics`); `Examples/` and `systems/` are one `examples/` directory of Lake packages, `examples/counter` being what `lanes new` writes.
+- `Journal.Disk.Holds`, `Journal.Disk.Torn`, `Journal.Kept` and `Journal.memo` take the kernel a history starts from (`start`, boot by default), and their theorems hold for any; `Journal.Kept.saved` says a history without a snapshot starts at boot. `Journal.Store.open` needs `Hashable` of the identities, and a refused journal of an older version without an upgrade is reported with its version.
 
 ## [0.1.0] - unreleased
 

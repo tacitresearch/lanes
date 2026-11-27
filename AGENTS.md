@@ -252,6 +252,11 @@ lanes_data inductive Id (F : Type) where
   read back only if the property holds. A field whose type names an earlier field is refused.
   `extends`, indices and recursive types are not accepted: write those with `structure` or
   `inductive` and the codec with `Codec.struct%` or `Codec.sum%`.
+- A line `from Old := f` after `deriving` says how a value of the type's previous version
+  becomes one of this: it gives `T.migrate` and a `Migrate Old T` instance. A deploy that
+  changes a persisted type keeps the old version's types, codecs and step functions in a module
+  of their own, and reads its files through a `Journal.Upgrade` whose `Migration` proves that
+  the migrated states satisfy the new actors' inductive invariants (`examples/migration`).
 
 ## Proofs
 

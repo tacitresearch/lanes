@@ -22,6 +22,7 @@ proved function tells it to.
 | The kernel | `Lanes/Runtime/{Kernel,KernelSound,KernelTimers}.lean` | `Kernel.exec_reachable`, `Kernel.exec_outputs`, `Kernel.exec_wellFormed` |
 | The shell | `Lanes/Runtime/IO/Shell.lean`, `Lanes/Runtime/{Batch,Mailbox,MailboxSound}.lean` | `Batch.run_kernel`, `Batch.run_sound`, `Mailbox.batch_since_take`; the shell itself is trusted |
 | Journal, snapshots, disk | `Lanes/Durable/{Journal,Snapshot,Disk,Frame}.lean`, `Lanes/Durable/IO/Journal.lean` | `Journal.open?_cut`, `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Journal.Disk.Holds.save_crash` |
+| Migrations | `Lanes/Durable/{Migration,Upgrade}.lean` | `Migration.inv_exec`, `Journal.Upgrade.begin_crash`, `Journal.Upgrade.holds`, `Journal.Upgrade.inv_load` |
 | Joins | `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`, `Lanes/Semantics/FairJoin.lean` | `System.Reachable.left`, `SysState.run_left`, `System.Run.Fair.left` |
 | Shards and the transport | `Lanes/Runtime/{Shard,ShardSound,ShardsSound}.lean`, `Lanes/Net/{Courier,CourierSound}.lean`, `Lanes/Net/IO/{Peers,Node}.lean` | `System.ShardsReachable.unsharded`, `Peers.Courier.written_sublist_sent` |
 | The gate and the HTTP server | `Lanes/Web/Http/{Gate,Front,FrontSound,Waiting,Conn,ConnSound}.lean`, `Lanes/Semantics/Front.lean`, `Lanes/Web/IO/Server.lean` | `Http.served_answered_le_arrived`, `Http.served_pending_answered`, `Http.Waiting.exec_answered`, `Http.Conn.run_writes` |
@@ -108,6 +109,24 @@ the process dies anywhere in an append or a save, the files load as the kernel t
 death left (`Journal.Disk.Torn.mend`), so this holds over any number of starts, saves and deaths.
 `Lanes/Durable/IO/Journal.lean` performs the writes, each synced with `fsync` before the next, so a loss
 of power leaves what a death would; that the file system is the model is trusted.
+
+The files carry a label, the application's name for the system and the version of its types
+(`Journal.label`; version 0 is the name alone, as every journal was named before versions). A
+deploy that changes a type keeps the old version's system and reads its files through an
+upgrade (`docs/decisions/new-a-migration-carries-the-kernel-across.md`,
+`Lanes/Durable/Upgrade.lean`): the start replays them with the old codecs and step
+functions, migrates the kernel (`Migration`, `Lanes/Durable/Migration.lean`), hands over the old
+outputs not yet handed over, saves the result under the new label and begins the journal at
+that mark, whose index is the old history's length. Dying anywhere in those writes, the next
+start gives the same migrated kernel (`Journal.Upgrade.begin_crash`). `Disk.Holds` and
+`Disk.Torn` take the kernel a history starts from, boot or a migrated kernel, and the files after
+a migration are those of a running shard that started there (`Journal.Upgrade.holds`), so the
+crash theorems go on. What the proofs of the new version still say is what is inductive: a
+`Migration` carries an invariant of each new actor that its steps and restarts keep, and the
+proof that every state an old actor reaches migrates into it; it then holds of every actor in
+every state the new shard reaches (`Migration.inv_exec`, `Kernel.exec_inductive`) and at every
+later start (`Journal.Upgrade.inv_load`). An invariant proved only from boot, and refinement,
+do not carry over.
 
 ## Composition: joins, shards and the transport
 
