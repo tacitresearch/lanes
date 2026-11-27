@@ -29,8 +29,8 @@ the compiler's path. Every function Lanes took from libsodium is also in that li
 toolchain's OpenSSL has no headers; `scripts/tls-declarations.py` compiles it against the
 system's headers. The Argon2id parameters go through `OSSL_PARAM_BLD`, so the C never lays out an
 `OSSL_PARAM` by hand, and are freed with `OSSL_PARAM_clear_free`, which wipes the copy of the
-password. The C went from 147 lines to 188: fifteen functions and six type names, declared by hand,
-replace one `#include`.
+password. The C went from 147 lines to 188: fifteen functions and six type names, declared by
+hand, replace one `#include`.
 
 **Random bytes.** Lean's runtime reads `/dev/urandom` (`BCryptGenRandom` on Windows), the
 operating system's secure source, so `randomBytes` is `IO.getRandomBytes` and the C has no random

@@ -15,7 +15,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Core` | 103 | 45 | 0 | 34 | 1 | 10 | 13 |
 | `Lanes/Data` | 68 | 43 | 0 | 4 | 1 | 0 | 20 |
 | `Lanes/Durable` | 70 | 58 | 2 | 0 | 0 | 9 | 1 |
-| `Lanes/Lib` | 603 | 384 | 32 | 1 | 102 | 75 | 9 |
+| `Lanes/Lib` | 604 | 384 | 33 | 1 | 102 | 75 | 9 |
 | `Lanes/Net` | 37 | 6 | 5 | 0 | 0 | 25 | 1 |
 | `Lanes/Outside` | 172 | 133 | 4 | 6 | 1 | 28 | 0 |
 | `Lanes/Proof` | 40 | 16 | 0 | 0 | 0 | 23 | 1 |
@@ -24,7 +24,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Testing` | 106 | 0 | 0 | 1 | 105 | 0 | 0 |
 | `Lanes/Web` | 691 | 357 | 57 | 46 | 175 | 54 | 2 |
 | `LanesCli` | 126 | 0 | 0 | 0 | 55 | 0 | 71 |
-| All | 2470 | 1289 | 126 | 124 | 469 | 341 | 121 |
+| All | 2471 | 1289 | 127 | 124 | 469 | 341 | 121 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -716,6 +716,17 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Md5.State.bytes` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Multipart.lean`, `Tests/Postgres.lean` |
 | `Md5.hash` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Multipart.lean`, `Tests/Postgres.lean` |
 
+## `Lanes/Lib/Crypto/Native.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Sha256.hash` | trusted | TRUSTED.md: The C |
+| `hmac` | trusted | TRUSTED.md: The C |
+| `Bytes.same` | trusted | TRUSTED.md: The C |
+| `randomBytes` | trusted | TRUSTED.md: The C |
+| `Argon2id.derive` | trusted | TRUSTED.md: The C |
+| `Argon2id.hash` | trusted | TRUSTED.md: The C |
+
 ## `Lanes/Lib/Crypto/Pbkdf2.lean`
 
 | Definition | Status | Evidence |
@@ -799,16 +810,6 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `SigningKey.ofPem` | trusted | TRUSTED.md: The signing key |
 | `SigningKey.sign` | trusted | TRUSTED.md: The signing key |
 
-## `Lanes/Lib/Crypto/Native.lean`
-
-| Definition | Status | Evidence |
-| --- | --- | --- |
-| `Sha256.hash` | trusted | TRUSTED.md: The C |
-| `hmac` | trusted | TRUSTED.md: The C |
-| `Bytes.same` | trusted | TRUSTED.md: The C |
-| `randomBytes` | trusted | TRUSTED.md: The C |
-| `Argon2id.hash` | trusted | TRUSTED.md: The C |
-
 ## `Lanes/Lib/Crypto/Verify.lean`
 
 | Definition | Status | Evidence |
@@ -825,7 +826,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Base64.Alphabet.valueOf` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
 | `Base64.Alphabet.value?` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
 | `Base64.Encoding.std` | proved | `Postgres.Conn.onMessage_binds`, `Postgres.Scram.respond_binds` |
-| `Base64.Encoding.rawStd` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
+| `Base64.Encoding.rawStd` | tested | `Tests/Crypto.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
 | `Base64.Encoding.url` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
 | `Base64.Encoding.rawUrl` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean`, `Tests/Oracle/Jose.lean` and 1 more |
 | `Base64.sextet` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 4 more |
@@ -2423,10 +2424,10 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Auth.instReprDigest` | tested | `Tests/Auth.lean` |
 | `Auth.Digest.codec` | proved | its type, `Codec` |
 | `Auth.instCodableDigest` | proved | its type, `Codable` |
-| `Auth.Digest.hex` | tested | `Tests/Auth.lean` |
+| `Auth.Digest.hex` | tested | `Tests/Auth.lean`, `Tests/Crypto.lean` |
 | `Auth.Digest.ofHex?` | tested | `Tests/Auth.lean` |
-| `Auth.Password.salt` | tested | `Tests/Auth.lean` |
-| `Auth.Password.digest` | tested | `Tests/Auth.lean` |
+| `Auth.Password.salt` | tested | `Tests/Auth.lean`, `Tests/Crypto.lean` |
+| `Auth.Password.digest` | tested | `Tests/Auth.lean`, `Tests/Crypto.lean` |
 | `Auth.Attempts.codec` | proved | its type, `Codec` |
 | `Auth.instCodableAttempts` | proved | its type, `Codable` |
 | `Auth.Attempts.fail` | proved | `Auth.Attempts.bounded_fail`, `Auth.Attempts.fail_repeat`, `Auth.Attempts.locked_stays` and 1 more |
