@@ -21,9 +21,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Proof` | 35 | 12 | 0 | 0 | 0 | 22 | 1 |
 | `Lanes/Runtime` | 156 | 93 | 18 | 0 | 15 | 30 | 0 |
 | `Lanes/Semantics` | 57 | 9 | 0 | 0 | 0 | 47 | 1 |
-| `Lanes/Web` | 328 | 188 | 27 | 8 | 64 | 39 | 2 |
+| `Lanes/Web` | 329 | 188 | 28 | 8 | 64 | 39 | 2 |
 | `LanesCli` | 110 | 0 | 0 | 0 | 46 | 0 | 64 |
-| All | 1517 | 835 | 67 | 76 | 170 | 252 | 117 |
+| All | 1518 | 835 | 68 | 76 | 170 | 252 | 117 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -2017,6 +2017,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Http.Client.Call.at` | trusted | TRUSTED.md: The HTTP client adapter's handler |
 | `Http.Client.outside` | trusted | TRUSTED.md: The HTTP client adapter's handler |
+| `Http.Client.exchangeExplained` | trusted | TRUSTED.md: The HTTP client adapter's handler |
 | `Http.Client.exchange` | trusted | TRUSTED.md: The HTTP client adapter's handler |
 | `Http.Client.handler` | trusted | TRUSTED.md: The HTTP client adapter's handler |
 
