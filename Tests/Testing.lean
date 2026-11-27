@@ -83,11 +83,11 @@ def providerTests : List (String × Bool) :=
   [ ("kit provider: the user API's answers read back as the identity of the user",
       (OAuth.readUser "https://hub.example" [parse (OAuth.userJson u), parse (OAuth.emailsJson u)]).toOption
         == some { issuer := "https://hub.example", subject := "7", email := some "7@example.com",
-                  emailVerified := true }),
+                  emailVerified := true, name := Lanes.OAuth.DisplayName.of? "Mona \"the\" Cat" }),
     ("kit provider: a subject that is not a number is a string, and no address no email",
       (OAuth.readUser "i" [parse (OAuth.userJson { subject := "x\"y", email := none }),
         parse (OAuth.emailsJson { subject := "x\"y", email := none })]).toOption.any
-        fun id => id.subject == "x\"y" && id.email.isNone) ]
+        fun id => id.subject == "x\"y" && id.email.isNone && id.name.map (·.val) == some "x\"y") ]
 
 def tests : List (String × Bool) := s3Tests ++ browserTests ++ httpTests ++ providerTests
 

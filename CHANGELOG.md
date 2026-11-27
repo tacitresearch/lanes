@@ -30,6 +30,7 @@ under Unreleased (`CONTRIBUTING.md`).
 
 ### Changed
 
+- `OAuth.Identity` has a `name`, a `DisplayName` of at most 64 characters with no control or reordering mark: OpenID Connect's `name` claim, or GitHub's `name` and else its `login`, cleaned (`DisplayName.clean`); it enters the system in the header `x-lanes-identity-name`, which a client's is dropped from. Google's preset asks for the scope `profile` by default. Code that takes an `Identity` apart by position gains a field.
 - The HTTP client's `Host` names the port when it is not the scheme's (`Call.authority`), and a call can be sent as `HEAD` (`Call.headOnly`), its answer read without a body (`Response.readHead`).
 - `Http.serve`, `serveWith` and `serveFronted` take `arrive`, work a request needs in IO before it is prepared, which may answer it instead; none by default.
 - The `main` that `lanes new` writes reads its address from `LANES_HOST` (`127.0.0.1` unless set; `0.0.0.0` behind a load balancer), how long an idle connection is kept from `LANES_IDLE_MS`, and how long a stop drains from `LANES_DRAIN_MS`. The environment rather than flags: the arguments `[port] [journal]` stay as they were, an application's own arguments need not share a parser with these, and a systemd unit or a container sets them without touching the command line, as `infra/app/app-instance.sh` does.

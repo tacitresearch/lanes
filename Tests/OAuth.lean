@@ -216,7 +216,21 @@ def claimTests : List (String × Bool) :=
         "{\"iss\":\"i\",\"sub\":\"s\",\"aud\":\"a\",\"exp\":\"5\"}",
         "{\"iss\":\"i\",\"sub\":\"s\",\"aud\":\"a\",\"exp\":5,\"email_verified\":\"true\"}",
         "{\"iss\":\"i\",\"sub\":\"s\",\"aud\":\"a\",\"exp\":5,\"nonce\":1}",
-        "{\"sub\":\"s\",\"aud\":\"a\",\"exp\":5}", "[]", "" ].all (readClaims · |>.isNone)) ]
+        "{\"iss\":\"i\",\"sub\":\"s\",\"aud\":\"a\",\"exp\":5,\"name\":7}",
+        "{\"sub\":\"s\",\"aud\":\"a\",\"exp\":5}", "[]", "" ].all (readClaims · |>.isNone)),
+    ("id token: the name is read, and the identity's is cleaned and bounded, or none",
+      let named (n : String) := (readClaims s!"\{\"iss\":\"i\",\"sub\":\"s\",\"aud\":\"a\",\"exp\":5,\
+        \"name\":{Json.renderString n}}").bind fun c => c.identity.name.map (·.val)
+      named "Ada <Lovelace>" == some "Ada <Lovelace>" && named " a\x00b\u202Ec\n" == some "abc"
+        && named (String.ofList (List.replicate 200 'n')) == some (String.ofList (List.replicate 64 'n'))
+        && named "\x01 " == none
+        && (readClaims "{\"iss\":\"i\",\"sub\":\"s\",\"aud\":\"a\",\"exp\":5}").any
+          (·.identity.name.isNone)),
+    ("id token: a display name is of 1 to 64 allowed characters",
+      (DisplayName.of? "Ada").isSome && (DisplayName.of? "").isNone
+        && (DisplayName.of? "a\nb").isNone && (DisplayName.of? "a\u2066b").isNone
+        && (DisplayName.of? (String.ofList (List.replicate 65 'a'))).isNone
+        && (DisplayName.of? "\u00e9\u00e8").isSome) ]
 
 def edgeTests : List (String × Bool) :=
   let r : Request := {
@@ -235,7 +249,13 @@ def edgeTests : List (String × Bool) :=
         && identity? (strip r) == none && (strip r).header? "cookie" == some "a=b"
         && identity? (withIdentity (strip r) id) == some id
         && identity? (withIdentity (strip r) { id with email := none, emailVerified := false })
-          == some { id with email := none, emailVerified := false }),
+          == some { id with email := none, emailVerified := false }
+        && identity? (withIdentity (strip r) { id with name := DisplayName.of? "Ada <L>" })
+          == some { id with name := DisplayName.of? "Ada <L>" }
+        && (identity? (strip { r with headers := r.headers ++ [("x-lanes-identity-name", "x")] })).isNone),
+    ("oauth edge: a name header that is not a display name is no name",
+      (identity? { r with headers := r.headers ++ [("x-lanes-identity-name", "a\nb")] }).any
+        (·.name.isNone)),
     ("oauth edge: the request that enters the system has no code", (withIdentity r id).query == []),
     ("oauth edge: the redirect sets a cookie for the sign-in's routes, HttpOnly, Lax, Secure",
       let response := beginResponse "sign-in" "lanes-sign-in" true {} "https://x" "v"
@@ -356,13 +376,13 @@ def appBridge : Bridge Tests.Gate.echoSig where
   decode _ r :=
     match identity? r with
     | some id => .error (.text s!"{id.issuer} {id.subject} {id.email} {id.emailVerified} \
-        query={r.query.length}")
+        name={(id.name.map (·.val)).getD "-"} query={r.query.length}")
     | none => .error (.text "who?" 401)
   encode id := some (id, .text "ok")
 
 def origin : String := "http://app.example"
 
-def user : User := { subject := "user-1", email := some "u@example.com" }
+def user : User := { subject := "user-1", email := some "u@example.com", name := some " Ada <L>\n" }
 
 /-- Begins a sign-in in a browser of its own, plays the user who agrees at the provider, which
 then issues a code whose ID token is as `token` says, and calls the callback back, with the
@@ -421,9 +441,9 @@ def live : Async (List (String × Bool)) := do
         ("oauth live: a sign-in is begun with a redirect and a cookie for the sign-in's routes",
           begun.any fun r => r.status == 302
             && (r.headers.lookup "set-cookie").any (·.endsWith "Path=/sign-in; Max-Age=600; HttpOnly; SameSite=Lax")),
-        ("oauth live: an OpenID Connect sign-in gives the system the identity, and not the code",
+        ("oauth live: an OpenID Connect sign-in gives the system the identity, its name cleaned, and not the code",
           status good == 200
-            && text good == "https://id.example user-1 (some u@example.com) true query=0"),
+            && text good == "https://id.example user-1 (some u@example.com) true name=Ada <L> query=0"),
         ("oauth live: the same callback again is refused", refused replay "no sign-in waits"),
         ("oauth live: a state never issued is refused", refused wrongState "no sign-in waits"),
         ("oauth live: a callback from another browser is refused", refused otherBrowser "another browser"),
@@ -438,8 +458,8 @@ def live : Async (List (String × Bool)) := do
         ("oauth live: an ID token whose payload was changed is refused", refused tampered "signature"),
         ("oauth live: the JWK Set is fetched once, an unknown kid within the wait included",
           fetches == 1),
-        ("oauth live: a provider without ID tokens is asked its user API with the access token",
-          text viaApi == "https://hub.example 42 (some o@example.com) true query=0"),
+        ("oauth live: a provider without ID tokens is asked its user API, the login its name without one",
+          text viaApi == "https://hub.example 42 (some o@example.com) true name=octo query=0"),
         ("oauth live: identity headers a client sends do not reach the system", status forged == 401),
         ("oauth live: the provider's error is a refusal", refused denied "access_denied") ]
     finally

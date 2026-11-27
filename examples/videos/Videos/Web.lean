@@ -362,11 +362,15 @@ def commentInput (id : ReqId) (r : Http.Request) (m : Member) (session : Sid) (v
   if h : Remark.valid body then .ok (.request (.comment id m session v ⟨body, h⟩))
   else bad "a comment is 1 to 500 characters"
 
-/-- The name a channel shows: what comes before the `@` of the address, since an identity carries
-no name of its own, and the whole address would be shown to everyone. -/
+/-- The name a channel shows: the provider's name for the member, which anyone may choose and the
+pages show as text; without one, what comes before the `@` of the address, since the whole
+address would be shown to everyone. -/
 def channelName (who : OAuth.Identity) : String :=
   let user := (who.email.getD "").takeWhile (· != '@') |>.toString
-  (if user.isEmpty then who.subject else user).take 40 |>.toString
+  let name := match who.name with
+    | some n => n.val
+    | none => if user.isEmpty then who.subject else user
+  name.take 40 |>.toString
 
 def decode (s : Settings) (id : ReqId) (r : Http.Request) : Except Http.Response Input :=
   let ask (c : Command) : Except Http.Response Input := .ok (.request c)

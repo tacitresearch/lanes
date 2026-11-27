@@ -247,7 +247,10 @@ provider and not expired (`OAuth.Pending.callback_ok`), and no state more often 
 an ID token only if its header names RS256 or ES256, a key of the provider's set of that
 algorithm and `kid` checks it, and every claim passes (`OAuth.IdToken.verify_accepted`,
 `Lanes/Web/Auth/Jose.lean`). The system gets the identity in headers a client cannot send
-(`OAuth.identity?_strip`). Vendors' presets are packages under `integrations/` (D61).
+(`OAuth.identity?_strip`), read back as written (`OAuth.identity?_withIdentity`). Its name, the
+provider's `name` or GitHub's `login`, is a `DisplayName`: at most 64 characters, none of them a
+control or reordering mark, by its type (`OAuth.DisplayName.length_le`), and text a page shows
+escaped. Vendors' presets are packages under `integrations/` (D61).
 
 ## Adapters
 

@@ -27,7 +27,8 @@ open Lanes Lanes.Http Lanes.OAuth Lanes.Testing Std Std.Async Videos Videos.Web
 def origin : String := "http://videos.test"
 
 def alice : Testing.OAuth.User := { subject := "1", login := "alice", email := some "alice@example.com" }
-def bob : Testing.OAuth.User := { subject := "2", login := "bob", email := some "bob@example.com" }
+def bob : Testing.OAuth.User :=
+  { subject := "2", login := "bob", name := some "Bob \"<b>\" & co", email := some "bob@example.com" }
 
 /-- The form token of the session a browser holds, as a page of the site carries it. -/
 def csrf (b : Browser) : Async String := do
@@ -112,6 +113,7 @@ def flow (d : Deployment) (provider : Testing.OAuth.Fake) (held : String → Asy
   let secretToAlice ← aliceB.get ["v", "1"]
   let channelToBob ← bobB.get ["c", "0"]
   let channelToAlice ← aliceB.get ["c", "0"]
+  let bobsChannel ← anon.get ["c", "1"]
   let (_, ghostPut) ← create aliceB "Ghost" "public"
   let early ← post aliceB ["videos", "2", "uploaded"]
   let ghostEarly ← aliceB.get ["v", "2"]
@@ -161,8 +163,11 @@ def flow (d : Deployment) (provider : Testing.OAuth.Fake) (held : String → Asy
     ("videos: a private video is its owner's alone",
       status secretToBob == 404 && status secretToAnon == 404 && status secretToAlice == 200
         && !shows channelToBob "Diary" && shows channelToAlice "Diary"),
-    ("videos: a channel is named without its member's address",
-      shows channelToBob "<h1>alice</h1>" && !shows channelToBob "@example.com"),
+    ("videos: a channel is named by the provider's name or the login, never by the address",
+      shows channelToBob "<h1>alice</h1>" && !shows channelToBob "@example.com"
+        && !shows bobsChannel "@example.com"),
+    ("videos: a name the provider gave is shown as text, escaped",
+      shows bobsChannel "<h1>Bob &quot;&lt;b&gt;&quot; &amp; co</h1>" && !shows bobsChannel "<b>"),
     ("videos: a video the store does not hold is not ready, watched or listed",
       status early == 409 && status ghostEarly == 404 && shows feedEarly "Cats"
         && !shows feedEarly "Ghost" && shows waiting "Not confirmed yet"),

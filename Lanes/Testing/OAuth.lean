@@ -101,9 +101,11 @@ def readUser (issuer : String) : List Json → Except String Identity
     let primary := match emails with
       | .arr all => all.toList.find? (yes · "primary")
       | _ => none
+    let name := ((user.getObjValAs? String "name").toOption.bind DisplayName.clean).orElse
+      fun _ => (user.getObjValAs? String "login").toOption.bind DisplayName.clean
     return {
       issuer, subject, email := primary.bind fun e => (e.getObjValAs? String "email").toOption,
-      emailVerified := primary.any (yes · "verified") }
+      emailVerified := primary.any (yes · "verified"), name }
   | _ => .error "two answers expected"
 
 /-- The provider with a user API, to sign in with as `name`; its answers are read by `read`. -/

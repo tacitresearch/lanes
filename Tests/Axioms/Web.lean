@@ -7,6 +7,9 @@ import Lanes.Semantics
 /-! The axiom gate (rule 5.5, see `Tests/Axioms.lean`) for the theorems of `Lanes/Web/`. -/
 
 -- Lanes.Web.Auth.IdToken
+/-- info: 'Lanes.OAuth.DisplayName.length_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.OAuth.DisplayName.length_le
+
 /-- info: 'Lanes.OAuth.IdToken.check_ok_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.OAuth.IdToken.check_ok_iff
 

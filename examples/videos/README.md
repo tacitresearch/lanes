@@ -22,7 +22,9 @@ lake test             # model checks, the bridge, and the site over HTTP against
   atomic owner: a delete vanishes from the feed, the channel and the watch page at once.
 - **Sign-in** is Lanes' (`Lanes.OAuth`, D72), in `serve`'s `arrive`: the system gets only the
   identity the provider vouched for, by its issuer and subject, and a member is made the first
-  time one signs in. A session is a signed cookie and an entry of the member's `Auth.Sessions`.
+  time one signs in, its channel named by the provider's name for it (the login, without one),
+  which the pages show as text. A session is a signed cookie and an entry of the member's
+  `Auth.Sessions`.
 - **Upload.** "Upload" makes a record, `pending`, and answers a page whose form carries a link
   presigned for a `PUT` of `videos/<id>`, with the content type signed. The browser puts the file
   there itself (`upload.js`, a dozen lines that `fetch` the link and then post the next form),
@@ -89,7 +91,7 @@ actor crashes and starts again anywhere. What each browser is shown is judged as
 | Seeded: the browser's word taken for the upload (`trustBrowser`) | | found in 18 steps |
 | Seeded: a check the store did not answer in time taken as found (`readyOnTimeout`) | | found in 21 steps |
 
-Over HTTP (`Videos/EndToEnd.lean`, 19 checks): the site as `Main` serves it, on a journal, against
+Over HTTP (`Videos/EndToEnd.lean`, 20 checks): the site as `Main` serves it, on a journal, against
 the test kit of Lanes (`Lanes.Testing`): its identity provider in GitHub's shape, read by
 `GitHub.read`, its fake S3, which checks every signature, the presigned links' included, and its
 browser, which keeps the cookies. Two members sign in; a video is made, put
@@ -196,8 +198,8 @@ package; none touches the library.
 8. **The S3 client takes keys only from the environment**: no instance role (IMDSv2), so the
    deployment needs a long-lived IAM user's keys; and the stack does not tell the application its
    media bucket, so `VIDEOS_BUCKET` is set by hand in `secrets.env`.
-9. **An identity has no name.** `OAuth.Identity` carries an issuer, a subject and an address, so
-   a channel is named by what comes before the `@`; a GitHub login or a Google name is not given.
+9. **An identity had no name** (since fixed: `OAuth.Identity.name`, the provider's name or
+   GitHub's login, which a channel now shows). A channel was named by what came before the `@`.
 10. **Sessions do not end on their own.** `Auth.Sessions` has no time; ending them after a while
     needs a timer per session, as rookery's are, which this site does not have.
 

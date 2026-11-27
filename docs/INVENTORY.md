@@ -22,9 +22,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Runtime` | 158 | 93 | 20 | 0 | 15 | 30 | 0 |
 | `Lanes/Semantics` | 57 | 9 | 0 | 0 | 0 | 47 | 1 |
 | `Lanes/Testing` | 63 | 0 | 0 | 1 | 62 | 0 | 0 |
-| `Lanes/Web` | 504 | 259 | 48 | 24 | 126 | 45 | 2 |
+| `Lanes/Web` | 510 | 264 | 48 | 24 | 126 | 46 | 2 |
 | `LanesCli` | 110 | 0 | 0 | 0 | 46 | 0 | 64 |
-| All | 1988 | 1040 | 98 | 97 | 344 | 291 | 118 |
+| All | 1994 | 1045 | 98 | 97 | 344 | 292 | 118 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -2014,6 +2014,12 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
+| `OAuth.DisplayName.maxChars` | proved | `OAuth.DisplayName.length_le` |
+| `OAuth.DisplayName.allowed` | proved | through `OAuth.DisplayName.val`, `OAuth.Identity`: `OAuth.DisplayName.length_le`, `OAuth.IdToken.check_ok_iff` and 3 more |
+| `OAuth.DisplayName.Valid` | spec | a predicate |
+| `OAuth.DisplayName.instDecidableValid` | proved | its type, `Decidable` |
+| `OAuth.DisplayName.of?` | proved | through `OAuth.IdToken.Claims.identity`: `OAuth.IdToken.check_ok_iff`, `OAuth.IdToken.verify_accepted` |
+| `OAuth.DisplayName.clean` | proved | through `OAuth.IdToken.Claims.identity`: `OAuth.IdToken.check_ok_iff`, `OAuth.IdToken.verify_accepted` |
 | `OAuth.IdToken.Claims.identity` | proved | `OAuth.IdToken.check_ok_iff`, `OAuth.IdToken.verify_accepted` |
 | `OAuth.IdToken.optional` | proved | through `OAuth.IdToken.verify`: `OAuth.IdToken.verify_accepted` |
 | `OAuth.IdToken.string?` | proved | through `OAuth.IdToken.verify`: `OAuth.IdToken.verify_accepted` |
