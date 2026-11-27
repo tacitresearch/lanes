@@ -56,6 +56,7 @@ import Tests.Ops
 import Tests.Postgres
 import Tests.PostgresConn
 import Tests.PostgresPool
+import Tests.PostgresSettings
 import Tests.PostgresLive
 import Tests.PostgresTls
 import Tests.Store
@@ -123,6 +124,7 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.HttpConn.tests ++ Tests.Loopback.tests
     ++ Tests.Jobs.tests ++ Tests.Schedule.tests ++ Tests.Outside.tests ++ Tests.Postgres.vectorTests
     ++ Tests.Postgres.downgradeTests ++ Tests.Postgres.tlsTests ++ Tests.Postgres.endPointTests
+    ++ Tests.PostgresSettings.tests
     ++ Tests.Ops.tests
     ++ Tests.SigV4.tests ++ Tests.S3.tests ++ Tests.MultipartModel.tests ++ Tests.S3Upload.tests
     ++ Tests.Testing.tests

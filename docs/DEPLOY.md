@@ -364,15 +364,40 @@ With `DatabaseEngine` `postgres`, the stack adds RDS PostgreSQL (`db.t4g.micro`,
 one zone, seven days of automated backups, a final snapshot when it is deleted, deletion
 protection on) in two private subnets, reachable on 5432 from the instance only. Its password is
 made by Secrets Manager. Before each start of the application, as root, the unit writes the
-database's IPv4 address and password to `/run/lanes-app/db-address` and `/run/lanes-app/db-password`,
-readable by the application only, and `/etc/lanes/app.env` gives `LANES_DB_HOST` (the
-endpoint's name), `LANES_DB_PORT`, `LANES_DB_NAME` (`lanes`) and `LANES_DB_CA`, beside
-`AWS_REGION`; the user is `lanes`. RDS may move the database to another address (a maintenance,
-a replaced host); the next start of the application reads the new one.
+password to `/run/lanes-app/db-password`, readable by the application only. `/etc/lanes/app.env`
+gives `LANES_DB_HOST` (the endpoint's name), `LANES_DB_PORT`, `LANES_DB_NAME` (`lanes`),
+`LANES_DB_USER` (`lanes`), `LANES_DB_PASSWORD_FILE` and `LANES_DB_CA`, beside `AWS_REGION`.
 
-The connection is TLS, required by the server: the stack's parameter group sets `rds.force_ssl`
-to 1 (and `password_encryption` to SCRAM, which the client requires). At setup and at each
-`configure`, the instance fetches RDS's global bundle of authorities,
+The application's `main` connects with one line:
+
+```lean
+  let db ← Postgres.Client.fromEnv
+```
+
+`Postgres.Client.fromEnv` (`Lanes/Lib/Postgres/IO/Client.lean`) reads libpq's variables
+(`PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD` or `PGPASSFILE`, `PGDATABASE`, `PGSSLMODE`,
+`PGSSLROOTCERT`, `PGCHANNELBINDING`), then the deploy's `LANES_DB_*`. On the instance it
+connects to the endpoint by name, over TLS, checks RDS's certificate against the bundle the
+instance installed, and binds SCRAM to that certificate. Each new connection resolves the name
+again, so it follows RDS to a new address after a failover or a maintenance; the pool
+(`Postgres.Pool`, `Lanes/Lib/Postgres/IO/Pool.lean`) closes a connection that broke and opens a
+new one. On a developer's machine the same line reaches `localhost` without TLS. A setting can be
+changed after: `{ (← Postgres.Client.fromEnv) with timeout_ms := 5000 }`.
+
+What the client does by default (`SslMode.defaultFor`, `Lanes/Lib/Postgres/Settings.lean`):
+
+| Host | TLS |
+| --- | --- |
+| `localhost`, `127.0.0.0/8`, `::1` | none, unless `PGSSLMODE` or `sslmode` asks for it |
+| any other address or name | required; the certificate must chain to the authorities and be for the host's name; SCRAM is bound to it when the server offers `SCRAM-SHA-256-PLUS` |
+
+The authorities are `PGSSLROOTCERT`, else `LANES_DB_CA`, else `/etc/lanes/db-ca.pem` when it is
+there, else the system's. `PGSSLMODE` `allow` and `prefer`, which give TLS up when the server
+refuses it, are refused.
+
+**For auditors.** The stack's parameter group sets `rds.force_ssl` to 1 and
+`password_encryption` to SCRAM. At setup and at each `configure`, the instance fetches RDS's
+global bundle of authorities,
 `https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem`, checks that it has the
 SHA-256 of the stack's parameter `DatabaseCaBundleSha256`, and installs it as
 `/etc/lanes/db-ca.pem` (`LANES_DB_CA`); a bundle with another hash is refused, and the one
@@ -380,28 +405,11 @@ installed before is kept. The application trusts every authority in that file an
 When AWS changes the bundle (it adds the authorities of new regions), setup and `configure` stop
 with `does not have the SHA-256`: check the new bundle (`curl -fsSL <url> | sha256sum`, and
 `openssl crl2pkcs7 -nocrl -certfile global-bundle.pem | openssl pkcs7 -print_certs -noout`
-lists its authorities), then update the stack with its hash.
-
-The application's `main` reads these into the client's configuration
-(`Lanes/Lib/Postgres/IO/Client.lean`, `docs/decisions/D68-postgres-protocol-in-lean.md`): the
-client takes an IPv4 address, and checks the certificate against the endpoint's name.
-
-```lean
-  let address := (← IO.FS.readFile "/run/lanes-app/db-address").trimAscii.toString
-  let password := (← IO.FS.readFile "/run/lanes-app/db-password").trimAscii.toString
-  let db : Postgres.Client.Config :=
-    { host := address, port := ((← IO.getEnv "LANES_DB_PORT").bind String.toNat?).getD 5432 |>.toUInt16,
-      sslmode := .verifyFull, trust := .file ((← IO.getEnv "LANES_DB_CA").getD "/etc/lanes/db-ca.pem"),
-      serverName := ← IO.getEnv "LANES_DB_HOST",
-      conn := { user := "lanes", database := "lanes", password := some password,
-                channelBinding := .require } }
-```
-
-`channelBinding := .require` makes SCRAM bind the certificate RDS presented
-(`SCRAM-SHA-256-PLUS`), so that a party in the middle with a certificate from one of the bundle's
-authorities is refused by the server. A pool of connections is `Postgres.Pool`
-(`Lanes/Lib/Postgres/IO/Pool.lean`): at most `max` open, each handed back checked, one that broke
-closed and replaced.
+lists its authorities), then update the stack with its hash. Channel binding
+(`SCRAM-SHA-256-PLUS`) means that a party in the middle with a certificate from one of the
+bundle's authorities is refused by the server; a client that could have bound and was not
+offered it says so, and a server that did offer it then refuses it, so the binding cannot be
+stripped. `docs/decisions/D83-postgres-over-tls.md` says why.
 
 ## What a stop does
 

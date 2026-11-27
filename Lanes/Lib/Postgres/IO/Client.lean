@@ -6,6 +6,7 @@ module
 
 public import Std.Async
 public import Lanes.Runtime.IO.Shell
+public import Lanes.Lib.Postgres.Settings
 public import Lanes.Lib.Postgres.Table
 public import Lanes.Lib.Crypto.Certificate
 public import Lanes.Web.IO.Tls
@@ -27,7 +28,11 @@ certificate for channel binding is `Certificate.endPoint`, pure.
 `Session` is a connection used by one task at a time. `Store.handler` runs the transactional
 store of `Lanes/Outside/Store/Basic.lean` on a table (`Lanes/Lib/Postgres/Table.lean`) as an
 adapter: each transaction on a connection of its own, each request on a task of its own, its
-answer handed back as an input. To an IPv4 address.
+answer handed back as an input.
+
+`connect` resolves the host at each call, so that a new connection, the pool's too, follows a
+name to a new address after a failover. `Client.fromEnv` reads the configuration from the
+environment through `Settings.read`, pure.
 -/
 
 public section
@@ -36,29 +41,19 @@ namespace Lanes.Postgres
 
 open Std Std.Async
 
-/-- Whether the connection is encrypted, and what the server's certificate must be. There is no
-`prefer`, which gives TLS up when the server refuses it. -/
-inductive SslMode where
-  | disable
-  /-- TLS, the certificate chained to `trust`, for any name: libpq's `verify-ca`. -/
-  | require
-  /-- TLS, the certificate chained to `trust` and for `serverName`. -/
-  | verifyFull
-  deriving DecidableEq, Repr, Hashable
-
 structure Client.Config where
-  /-- An IPv4 address. Names are not resolved. -/
+  /-- An IPv4 or IPv6 address, or a name, resolved at each connect to its first IPv4 address
+  (`Address.of`). -/
   host : String
   port : UInt16 := 5432
   conn : Conn.Config
   /-- How long connecting and authenticating, and each request, may take (rule 3.4). -/
   timeout_ms : Nat := 10000
-  /-- A server without TLS needs `.disable`. -/
-  sslmode : SslMode := .verifyFull
+  /-- No TLS to this machine, full verification elsewhere, unless given. -/
+  sslmode : SslMode := SslMode.defaultFor host
   /-- The authorities the server's certificate must chain to: for RDS, its bundle. -/
   trust : Tls.Trust := .system
-  /-- The name the certificate must be for, and the one sent as SNI: `host` if none. For RDS,
-  its endpoint, when `host` is the endpoint's address. -/
+  /-- The name the certificate must be for, and the one sent as SNI: `host` if none. -/
   serverName : Option String := none
   /-- PostgreSQL 17's direct TLS: the handshake at once, with ALPN, without `SSLRequest`. -/
   direct : Bool := false
@@ -66,6 +61,30 @@ structure Client.Config where
 /-- The encryption `Conn.step` is told to use. -/
 def Client.Config.encryption (cfg : Client.Config) : Conn.Encryption :=
   if cfg.sslmode = .disable then .plain else if cfg.direct then .direct else .negotiated
+
+theorem Client.Config.sslmode_default (host : String) (conn : Conn.Config) :
+    ({ host, conn } : Client.Config).sslmode = SslMode.defaultFor host := rfl
+
+/-- The configuration the settings give. -/
+def Client.Config.ofSettings (s : Settings) : Client.Config :=
+  { host := s.host, port := s.port, sslmode := s.sslmode,
+    trust := s.rootCert.elim .system fun path => .file path,
+    conn := { user := s.user, database := s.database, password := s.password,
+              channelBinding := s.channelBinding } }
+
+/-- The process's environment and files. -/
+def Env.io : Env IO where
+  var name := IO.getEnv name
+  file path := do try return some (← IO.FS.readFile path) catch _ => return none
+  present path := System.FilePath.pathExists path
+
+/-- The configuration libpq's environment variables give, or a deploy's (`Settings.read`), with
+TLS as `SslMode.defaultFor` the host unless `PGSSLMODE` says; an error says what cannot be
+done. -/
+def Client.fromEnv : IO Client.Config := do
+  match ← (Settings.read Env.io).run with
+  | .ok s => return .ofSettings s
+  | .error why => throw (IO.userError s!"lanes: PostgreSQL: {why}")
 
 structure Session where
   socket : TCP.Socket.Client
@@ -184,9 +203,21 @@ def close (s : Session) : Async Unit := do
 
 end Session
 
-/-- Connect and authenticate: a session open for requests, or why it closed. -/
+/-- Where `host` is now: a name is resolved at each call, to its first IPv4 address, so that a
+new connection follows it to a new address. -/
+def resolve (host : String) (port : UInt16) : Async (Option Std.Net.SocketAddress) := do
+  match Address.of host with
+  | .v4 a b c d => return some (.v4 ⟨.ofParts a b c d, port⟩)
+  | .v6 literal => return (Std.Net.IPv6Addr.ofString literal).map fun addr => .v6 ⟨addr, port⟩
+  | .name name =>
+    let found ← DNS.getAddrInfo name "" (some .ipv4)
+    return found.toList.findSome? fun
+      | .v4 addr => some (.v4 ⟨addr, port⟩)
+      | .v6 _ => none
+
+/-- Connect and authenticate: a session open for requests, or why it closed. The host is
+resolved again at each call. -/
 def connect (cfg : Client.Config) : Async (Except (Option Closing) Session) := do
-  let some addr := Std.Net.IPv4Addr.ofString cfg.host | return .error none
   let nonce := Base64.encode .std (← randomBytes 18)
   let conn := { cfg.conn with nonce, encryption := cfg.encryption }
   let name := cfg.serverName.getD cfg.host
@@ -201,7 +232,8 @@ def connect (cfg : Client.Config) : Async (Except (Option Closing) Session) := d
     | .close why => some (.error why)
     | _ => none
   let attempt : Async (Option (Except Closing Unit)) := do
-    socket.connect (.v4 ⟨addr, cfg.port⟩)
+    let some addr ← resolve cfg.host cfg.port | return none
+    socket.connect addr
     let (c, actions) := Conn.start conn
     s.conn.set c
     s.await opened (← s.perform actions)
