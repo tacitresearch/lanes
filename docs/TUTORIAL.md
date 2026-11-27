@@ -4,8 +4,8 @@ Fifteen minutes from `lanes new` to a change that is model-checked and proved. Y
 programming, not much Lean. Install what the quick start in `README.md` lists first: elan, a C
 compiler, libsodium and pkg-config.
 
-The code of each step is kept, compiled and run by `lake test`, in `Tests/Tutorial/`, so this
-page cannot drift from what Lanes does.
+The code of each step is kept in `Tests/Tutorial/`: `lake build` compiles it, and `lake test`
+fails if this page quotes anything but that code and what the checker prints for it.
 
 ## 1. Make an app and run it
 
@@ -14,7 +14,7 @@ git clone https://github.com/tacitresearch/lanes
 cd lanes
 lake exe lanes new tut --dir ../tut
 cd ../tut
-lake exe cache get   # prebuilt Mathlib, once: 500 MB to fetch
+lake exe cache get   # prebuilt Mathlib, once: 500 MB to fetch, 7.5 GB on disk
 lake test            # the first time builds Lanes and the app (minutes), then runs the checks
 lake exe tut         # serves http://127.0.0.1:8080; Ctrl-C stops it
 ```
@@ -62,8 +62,9 @@ increment is refused at the limit:
 The count is a `Nat`, and on a `Nat` `0 - 1` is `0`: without the `if`, a decrement at zero
 would answer that it was applied, and Lean would not complain. Step 3 shows what does.
 
-In `Main.lean`, a route, a line in the bridge that turns the route into the request, a button,
-and a message that says which limit refused it:
+In `Main.lean`, add a route to `namespace Routes`, a line after the increment's in `bridge`
+(which turns an HTTP request into a `Request`), and a button. Replace `CounterView` with one
+whose message says which bound refused the request:
 
 ```lean
 def decrement : Http.Route Unit := .post (.seg "decrement")
@@ -140,6 +141,8 @@ its own witness, since a refused decrement now meets the old `!·.applied` too:
         w.state.outbox.any fun r => !r.applied && r.value == 0 ]
 ```
 
+Each property is a function of a state of the search, `w`. `w.state.state ()` is the count
+held by the one actor, whose name is `()`, and `w.state.outbox` the responses not yet sent.
 `lake test` prints:
 
 ```text
@@ -176,8 +179,8 @@ states: 167, transitions: 223, depth: 5
 coverage: input 134, start 40, crash 23, deliver 19, output 7, drop 0 (never fired), duplicate 0 (never fired), timeout 0 (never fired)
 ```
 
-Read it as a story. A client sends `increment 1`. The actor, `()` because there is one, starts
-(every actor starts through its recovery, even the first time) and takes it: the count is 1.
+Read it as a story. A client sends `increment 1`. The actor starts (every start, the first
+too, goes through its recovery) and takes it: the count is 1.
 Then `decrement 4` arrives and is refused at 1. The state reached shows the count and the two
 answers not yet sent. Put `0 <` back and the check passes again. `lake test` exits with 1 on a
 `FAIL`, so CI stops on it.
@@ -266,3 +269,18 @@ too (`no-sorry`). Lanes keeps its own gates in `Tests/Axioms/`.
 
 The code of this step is `Tests/Tutorial/Counter.lean` (the theorems) and
 `Tests/Tutorial/Proofs.lean` (the gate).
+
+## 5. Where next
+
+Read the examples in the order `examples/README.md` gives:
+
+1. `examples/counter`: what `lanes new` wrote, which you now know.
+2. `examples/bank`: actors that send each other messages, an invariant of the whole system,
+   and the checker finding the credit a lossy link drops.
+3. `examples/bank-web`: the bank behind a web page, with a journal that survives `kill -9`.
+4. `examples/kv-cache`: a store checked against a five-line spec, and a cache that breaks it.
+5. `examples/election`: timers, crashes and an invariant under every fault.
+6. `examples/watchdog`: what fairness says.
+7. `examples/raft-kv`, `examples/ledger`, `examples/rookery`: the serious systems.
+
+The rules your app's `AGENTS.md` points to are in `AGENTS.md`, sections Design, Code and Proofs.
