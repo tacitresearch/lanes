@@ -126,6 +126,36 @@ theorem step_state {env : EnvModel σ} {c c' : SysState sys} {ev : Event σ}
       exact .inr (.inr ⟨i, by simp⟩)
     · contradiction
 
+/-- A property of each actor that its own steps and restarts keep holds along every run, from
+whatever state the run starts in, under every environment model. -/
+theorem run_inductive {env : EnvModel σ} {P : ∀ i, sys.State i → Prop}
+    (hP : ∀ i, (sys.actor i).Inductive (P i)) {c c' : SysState sys} {evs : List (Event σ)}
+    (hrun : c.run env evs = some c') (hc : ∀ i, P i (c.state i)) : ∀ i, P i (c'.state i) := by
+  induction evs generalizing c with
+  | nil =>
+    simp only [run, Option.some.injEq] at hrun
+    exact hrun ▸ hc
+  | cons ev evs ih =>
+    simp only [run] at hrun
+    cases hstep : c.step env ev with
+    | none => simp [hstep] at hrun
+    | some c₁ =>
+      refine ih (by simpa [hstep] using hrun) fun i => ?_
+      rcases step_state hstep with h | ⟨j, msg, h⟩ | ⟨j, h⟩ <;> rw [h]
+      · exact hc i
+      · by_cases hi : i = j
+        · subst hi
+          rw [update_self]
+          exact (hP i).step _ msg (hc i)
+        · rw [update_of_ne _ _ hi]
+          exact hc i
+      · by_cases hi : i = j
+        · subst hi
+          rw [update_self]
+          exact (hP i).recover _ (hc i)
+        · rw [update_of_ne _ _ hi]
+          exact hc i
+
 end SysState
 
 namespace System

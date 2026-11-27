@@ -123,6 +123,21 @@ file with another name is refused. -/
 def header (system : String) : ByteArray :=
   ("lanes journal 1\n" ++ system).toUTF8
 
+/-- What names a store's files: the application's name for its system and the version of its
+types. Version 0 is the name alone, as every journal was named before there were versions, so
+those journals are version 0. A file of an older version is read through an upgrade
+(`Lanes.Journal.Upgrade`). -/
+def label (system : String) (version : Nat) : String :=
+  if version = 0 then system else system ++ "\nversion " ++ toString version
+
+theorem label_zero (system : String) : label system 0 = system := by
+  simp [label]
+
+theorem header_inj {a b : String} (h : header a = header b) : a = b := by
+  have := congrArg String.fromUTF8? h
+  rw [header, header, Codec.fromUTF8?_toUTF8, Codec.fromUTF8?_toUTF8] at this
+  simpa using this
+
 /-- The system a journal file's first frame names, if it is the header of a journal. -/
 def named? (first : ByteArray) : Option String :=
   (String.fromUTF8? first).bind fun text => (text.dropPrefix? "lanes journal 1\n").map (·.toString)
@@ -265,6 +280,12 @@ the last `handed` mark. -/
 def recover (sys : System σ) (past : List (Entry σ)) : Kernel sys × List σ.Out :=
   past.foldl replay1 (Kernel.boot sys)
 
+/-- `recover` from another start than boot: a kernel and the outputs it has not handed over. A
+shard whose kernel was migrated from an older system's starts there (`Lanes.Migration`). -/
+def replay {sys : System σ} (start : Kernel sys × List σ.Out) (past : List (Entry σ)) :
+    Kernel sys × List σ.Out :=
+  past.foldl replay1 start
+
 theorem replay1_handed {sys : System σ} (k : Kernel sys) (pending : List σ.Out) :
     replay1 (k, pending) .handed = (k, []) := rfl
 
@@ -329,6 +350,11 @@ reported, with actors at rest released: the run before the crash, continued. -/
 theorem recover_kernel (sys : System σ) (past : List (Entry σ)) :
     (recover sys past).1 = ((Kernel.boot sys).1.exec (ops past)).kernel :=
   (foldl_replay1 past (Kernel.boot sys).1 (Kernel.boot sys).2).1
+
+/-- Replaying from any kernel gives the kernel the entries' requests lead to from it. -/
+theorem replay_kernel {sys : System σ} (start : Kernel sys × List σ.Out) (past : List (Entry σ)) :
+    (replay start past).1 = (start.1.exec (ops past)).kernel :=
+  (foldl_replay1 past start.1 start.2).1
 
 /-- What is handed over again after a restart is the tail of what the run produced: nothing is
 invented and nothing is out of order. -/
@@ -408,6 +434,21 @@ private theorem since_append (index : Nat) {before : List (Entry σ)} (rest : Li
     simp only [h entry List.mem_cons_self, ↓reduceIte]
     exact ih fun e he => h e (List.mem_cons_of_mem _ he)
 
+/-- `resume_eq_recover` for a history that starts anywhere: the snapshot holds the kernel as
+it was after `before`, replayed from `start`. -/
+theorem resume_eq_replay (sys : System σ) (start : Kernel sys × List σ.Out)
+    (before rest : List (Entry σ)) (index lost : Nat)
+    (h : ∀ entry ∈ before, entry.savedAt ≠ some index) :
+    resume sys (some (index, (replay start before).1.image))
+        (before.drop lost ++ .snapshot index :: rest)
+      = some (replay start (before ++ .snapshot index :: rest)) := by
+  have hsince := since_append index (before := before.drop lost) rest fun e he =>
+    h e (List.mem_of_mem_drop he)
+  simp only [resume, hsince, Option.map_some, replay, List.foldl_append, List.foldl_cons]
+  generalize before.foldl replay1 start = acc
+  obtain ⟨k, pending⟩ := acc
+  rfl
+
 /--
 Starting from a snapshot gives exactly what replaying the whole history gives: the same kernel
 and the same outputs to hand over again. The history is `before`, the mark, then `rest`; the
@@ -418,13 +459,8 @@ theorem resume_eq_recover (sys : System σ) (before rest : List (Entry σ)) (ind
     (h : ∀ entry ∈ before, entry.savedAt ≠ some index) :
     resume sys (some (index, (recover sys before).1.image))
         (before.drop lost ++ .snapshot index :: rest)
-      = some (recover sys (before ++ .snapshot index :: rest)) := by
-  have hsince := since_append index (before := before.drop lost) rest fun e he =>
-    h e (List.mem_of_mem_drop he)
-  simp only [resume, hsince, Option.map_some, recover, List.foldl_append, List.foldl_cons]
-  generalize before.foldl replay1 (Kernel.boot sys) = acc
-  obtain ⟨k, pending⟩ := acc
-  rfl
+      = some (recover sys (before ++ .snapshot index :: rest)) :=
+  resume_eq_replay sys (Kernel.boot sys) before rest index lost h
 
 /-! One turn of a shard, as a pure function: everything the shell asks of the kernel between two
 looks at its inbox, and what it must write in the journal for it. -/
