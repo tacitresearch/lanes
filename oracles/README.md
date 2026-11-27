@@ -33,19 +33,21 @@ every module a row names exists, and so does every path it cites.
 | `oracles/go` | Go's standard library, `golang.org/x/time` and Prometheus's `expfmt` | Go 1.24.7, x/time 0.11.0, prometheus/common 0.67.5 | `oracles/go/go.mod`, `oracles/go/go.sum` | Base64, IP addresses, times, JSON, media types, rate limits, URLs, XML, mail addresses, the metrics page; and, with Node and h11 (`oracles/go/requests/requests.py`, by hand), the request reader |
 | `oracles/botocore` | botocore, and `cryptography` for the signatures it is given | 1.44.12, cryptography 50.0.2 | `oracles/botocore/requirements.txt` | Signature Version 4; CloudFront's signed URLs (`oracles/botocore/cloudfront.jsonl`), signed with the published test keys of `oracles/botocore/keys/` |
 | `oracles/jwcrypto` | jwcrypto | 1.6.2 | `oracles/jwcrypto/requirements.txt` | JWS in compact form and JWK Sets |
-| `oracles/moto` | moto's server, S3 and SES API v2 | 5.2.6 | `oracles/moto/requirements.txt` | the object store's and the email model's recorded runs |
+| `oracles/moto` | moto's server, S3, SES API v2 and SQS | 5.2.6 | `oracles/moto/requirements.txt` | the recorded runs of the object store, multipart, email and queue models, and of `POST` forms |
 | `oracles/postgres` | PostgreSQL | 16 (16.15 recorded) | the CI job's `postgresql-16` | the store model's recorded runs |
 
 ## Protocol modules
 
 | Module | Oracle | Or why not |
 | --- | --- | --- |
+| `Lanes/Lib/Crypto/Certificate.lean` | `Tests/PostgresTls.lean` | The hash for channel binding of certificates `openssl` made, against `openssl dgst`, and accepted by PostgreSQL 16 |
 | `Lanes/Lib/Crypto/Hmac.lean` | | Not a format: RFC 4231's vectors, and libsodium on thousands of inputs (`Tests/Crypto.lean`) |
 | `Lanes/Lib/Crypto/Md5.lean` | | Not a format: RFC 1321's examples, and the digests psql sent in the recorded sessions (`Tests/Postgres.lean`) |
 | `Lanes/Lib/Crypto/Pbkdf2.lean` | | Not a format: through SCRAM, against RFC 7677 and libpq's recorded session (`Tests/Postgres.lean`) |
 | `Lanes/Lib/Crypto/PublicKey.lean` | `Tests/Signature.lean`, `Tests/Sign.lean` | The DER of keys and signatures against what the `openssl` command writes, and read back from OpenSSL's; a public key's PEM against `openssl pkey -pubout` |
 | `Lanes/Lib/Crypto/Sign.lean` | `Tests/Sign.lean`, `oracles/botocore` | A binding: RFC 6979's signatures, `openssl dgst -sign`, and `cryptography`'s signatures in the CloudFront oracle |
 | `Lanes/Lib/Crypto/Sha256.lean` | | Not a format: FIPS 180-4's examples, and libsodium on thousands of inputs (`Tests/Crypto.lean`) |
+| `Lanes/Lib/Crypto/Sha512.lean` | | Not a format: FIPS 180-4's examples, as `openssl dgst` computes them (`Tests/Crypto.lean`) |
 | `Lanes/Lib/Crypto/Sodium.lean` | | A binding: libsodium against the Lean references (`Tests/Crypto.lean`) |
 | `Lanes/Lib/Crypto/Verify.lean` | `Tests/Signature.lean` | A binding: OpenSSL's check against `Rsa.verifyReference` and keys `openssl` made |
 | `Lanes/Lib/Encoding/Base64.lean` | `oracles/go/base64` | |
@@ -63,7 +65,8 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Lib/Postgres/Bytes.lean` | `Tests/Postgres.lean`, `oracles/postgres` | The fields of the messages, in the sessions recorded from PostgreSQL 16 and psql 16 (`Tests/Postgres/`) |
 | `Lanes/Lib/Postgres/Conn.lean` | `Tests/Postgres.lean`, `oracles/postgres` | A state machine, not a format: the recorded sessions, and the live runs |
 | `Lanes/Lib/Postgres/Message.lean` | `Tests/Postgres.lean`, `oracles/postgres` | The messages, in the recorded sessions; written and read again against a live server |
-| `Lanes/Lib/Postgres/Scram.lean` | `Tests/Postgres.lean` | RFC 7677's example and libpq's recorded session |
+| `Lanes/Lib/Postgres/Pool.lean` | | Decisions, not a format: proved (`Pool.run_size`, `Pool.never_again`) and model-checked (`Tests/PostgresPool.lean`) |
+| `Lanes/Lib/Postgres/Scram.lean` | `Tests/Postgres.lean`, `Tests/PostgresTls.lean` | RFC 7677's example and libpq's recorded session; with channel binding, Python's `hashlib` and PostgreSQL 16 with TLS |
 | `Lanes/Lib/Postgres/Table.lean` | `oracles/postgres` | The SQL of the store's operations, against PostgreSQL itself |
 | `Lanes/Lib/RateLimit.lean` | `oracles/go/rate` | |
 | `Lanes/Lib/Time/Civil.lean` | `oracles/go/time` | Through the formats, whose dates it computes |
@@ -94,9 +97,12 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Web/Http/Wire.lean` | `oracles/go/requests` | The writer proved against the reader (`Lanes/Web/Http/WireSound.lean`); the responses it reads against `openssl s_server` (`Tests/Tls.lean`) and moto (`oracles/moto`) |
 | `Lanes/Web/Http/WireSpec.lean` | | The spec the wire format is proved against |
 | `Lanes/Web/S3/Basic.lean` | `oracles/moto`, `oracles/botocore` | Its calls signed as botocore signs, and run against moto |
+| `Lanes/Web/S3/Multipart.lean` | `oracles/moto/s3-multipart.jsonl`, `Tests/S3Upload.lean` | The flow and the calls by hand against moto (`Tests/Oracle/Service/S3Multipart.lean`); botocore 1.44's presigned `UploadPart` recorded as a vector; the flow model-checked against `Lanes/Outside/Multipart.lean`. Known: moto 5.2.6 answers `500`, not `404 NoSuchUpload`, to a part sent after an abort |
+| `Lanes/Web/S3/Post.lean` | `oracles/moto/s3-post.jsonl`, `Tests/S3Upload.lean` | Forms posted to moto (`Tests/Oracle/Service/S3Post.lean`): moto reads the form and stores the file at its key, with its type. Known: moto 5.2.6 reads no policy, so it admits a file over the range, another key and an expired policy, which `Post.check` refuses as S3 documents; that check is AWS's documented example and botocore 1.44's `generate_presigned_post`, recorded as vectors, and the policy is proved to read back (`S3.Post.form_policy`) |
 | `Lanes/Web/S3/Xml.lean` | `oracles/go/xml` | |
 | `integrations/aws/Aws/CloudFront.lean` | `oracles/botocore` | The policy and the whole link, signature included, against botocore's `CloudFrontSigner` |
 | `integrations/aws/Aws/Ses.lean` | `oracles/go/mail`, `oracles/moto` | The address check against `net/mail`; the calls against moto |
+| `integrations/aws/Aws/Sqs.lean` | `oracles/moto/sqs.jsonl` | The calls against moto (`integrations/aws/Checks/SqsMoto.lean`) |
 
 ## Outside models
 
@@ -110,8 +116,9 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Outside/Effects/Payments.lean` | | Owed: Stripe's test mode needs a key, and stripe-mock keeps no state; runs written by hand (`Tests/Outside.lean`) |
 | `Lanes/Outside/Events.lean` | | Owed, with Payments: webhooks need a service that sends them; runs written by hand (`Tests/Outside.lean`) |
 | `Lanes/Outside/Idempotent.lean` | | Owed, with Payments: SES and S3 take no idempotency key; runs written by hand (`Tests/Outside.lean`) |
-| `Lanes/Outside/ObjectStore.lean` | `oracles/moto/s3.jsonl` | |
-| `Lanes/Outside/Queue.lean` | | Owed: moto's SQS could record a run, as `oracles/moto` does for S3 and SES; checked against a seeded bug in `Tests/Queue.lean` |
+| `Lanes/Outside/Multipart.lean` | `oracles/moto/s3-multipart.jsonl` | Parts by their size and digests, not their bytes |
+| `Lanes/Outside/ObjectStore.lean` | `oracles/moto/s3.jsonl`, `oracles/moto/s3-post.jsonl` | `POST` uploads as writes granted to a browser |
+| `Lanes/Outside/Queue.lean` | `oracles/moto/sqs.jsonl` | A standard queue with a dead-letter queue, and a FIFO queue, through `Aws.Sqs`. Known: moto 5.2.6 deletes a message with any receipt it was given, where SQS may keep it after a delete with a stale one; the model allows both |
 | `Lanes/Outside/Rpc.lean` | `oracles/moto/s3.jsonl`, `oracles/moto/ses.jsonl` | The calls the object store's and the email model are made of |
 | `Lanes/Outside/Store/Basic.lean` | `oracles/postgres/store.jsonl` | |
 | `Lanes/Outside/Throttle.lean` | | Owed: no service in CI answers 429 as a real one does; checked against a seeded bug in `Tests/Throttle.lean` |

@@ -10,3 +10,4 @@ import Aws.SesSound
 import Aws.IO.Ses
 import Aws.CloudFront
 import Aws.CloudFrontSound
+import Aws.Sqs

@@ -197,4 +197,36 @@ theorem dropWhile_append_of_forall {p : α → Bool} {l₁ l₂ : List α} (h : 
   | cons x l ih =>
     simp [h x (by simp), ih fun y hy => h y (by simp [hy])]
 
+theorem eq_of_mem_of_nodup_map {f : α → β} {l : List α} (h : (l.map f).Nodup) {x y : α}
+    (hx : x ∈ l) (hy : y ∈ l) (hxy : f x = f y) : x = y := by
+  induction l with
+  | nil => simp at hx
+  | cons a l ih =>
+    simp only [List.map_cons, List.nodup_cons, List.mem_map, not_exists, not_and] at h
+    simp only [List.mem_cons] at hx hy
+    rcases hx with hx | hx <;> rcases hy with hy | hy
+    · exact hx.trans hy.symm
+    · subst hx; exact absurd hxy.symm (h.1 y hy)
+    · subst hy; exact absurd hxy (h.1 x hx)
+    · exact ih h.2 hx hy
+
+theorem getElem?_append_singleton {l : List α} {x y : α} {n : Nat}
+    (h : (l ++ [x])[n]? = some y) : l[n]? = some y ∨ (n = l.length ∧ y = x) := by
+  rw [List.getElem?_append] at h
+  split at h
+  · exact .inl h
+  · next hn =>
+    rw [List.getElem?_singleton] at h
+    split at h
+    · next h0 => exact .inr ⟨by omega, (Option.some.inj h).symm⟩
+    · simp at h
+
+theorem getElem?_append_of_map {l m : List α} {g : α → β} {n : Nat} {b : β}
+    (h : (l[n]?).map g = some b) : (l ++ m)[n]? = l[n]? := by
+  have : n < l.length := by
+    cases hn : l[n]? with
+    | none => simp [hn] at h
+    | some _ => exact (List.getElem?_eq_some_iff.mp hn).1
+  exact List.getElem?_append_left this
+
 end Lanes

@@ -13,7 +13,13 @@ import Lanes.Semantics
 /-- info: 'Lanes.Outside.after_both' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Outside.after_both
 
+/-- info: 'Lanes.Outside.run_induction' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Outside.run_induction
+
 -- Lanes.Outside.Rpc
+/-- info: 'Lanes.Rpc.allow_answer' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Rpc.allow_answer
+
 /-- info: 'Lanes.Rpc.server_invariant' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Rpc.server_invariant
 
@@ -30,6 +36,13 @@ import Lanes.Semantics
 /-- info: 'Lanes.Idempotent.answer_repeat' depends on axioms: [propext, Classical.choice] -/
 #guard_msgs in #print axioms Lanes.Idempotent.answer_repeat
 
+-- Lanes.Outside.Multipart
+/-- info: 'Lanes.Multipart.read_listed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Multipart.read_listed
+
+/-- info: 'Lanes.Multipart.completed_sent' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Multipart.completed_sent
+
 -- Lanes.Outside.ObjectStore
 /-- info: 'Lanes.ObjectStore.read_sent' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.ObjectStore.read_sent
@@ -45,9 +58,36 @@ import Lanes.Semantics
 /-- info: 'Lanes.Effects.at_most_once' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Effects.at_most_once
 
+/-- info: 'Lanes.Effects.Lifecycle.reaches_terminal' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Effects.Lifecycle.reaches_terminal
+
+/-- info: 'Lanes.Effects.sound_after' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Effects.sound_after
+
+/-- info: 'Lanes.Effects.Sound.allow' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Effects.Sound.allow
+
+/-- info: 'Lanes.Effects.Sound.observe' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Effects.Sound.observe
+
+/-- info: 'Lanes.Effects.Sound.shows_reply' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Effects.Sound.shows_reply
+
+/-- info: 'Lanes.Effects.Sound.shows_report' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Effects.Sound.shows_report
+
+/-- info: 'Lanes.Effects.allow_requests' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Effects.allow_requests
+
+/-- info: 'Lanes.Effects.observe_routes' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Effects.observe_routes
+
 -- Lanes.Outside.Effects.Payments
 /-- info: 'Lanes.Payments.final' depends on axioms: [propext, Classical.choice] -/
 #guard_msgs in #print axioms Lanes.Payments.final
+
+/-- info: 'Lanes.Payments.succeeded_terminal' depends on axioms: [propext, Classical.choice] -/
+#guard_msgs in #print axioms Lanes.Payments.succeeded_terminal
 
 -- Lanes.Outside.Effects.Email
 /-- info: 'Lanes.Email.final' depends on axioms: [propext, Classical.choice] -/

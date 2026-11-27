@@ -8,14 +8,16 @@ import Checks.Ses
 import Checks.Mail
 import Checks.CloudFront
 import Checks.SesMoto
+import Checks.SqsMoto
 import Tests.Durable
 
 /-!
 The AWS integration's checks, run by `lake test`: the refresh policy model-checked, and the
 credentials, S3 and SES against fakes run here, the answers of Go's `net/mail` recorded in
 `oracles/go/mail/answers.jsonl` replayed against the address check, botocore's CloudFront links
-recorded in `oracles/botocore/cloudfront.jsonl` replayed against ours, and the run recorded against
-moto's SES, `oracles/moto/ses.jsonl`, checked against the email model. Nothing calls AWS.
+recorded in `oracles/botocore/cloudfront.jsonl` replayed against ours, and the runs recorded against
+moto's SES and SQS, `oracles/moto/ses.jsonl` and `oracles/moto/sqs.jsonl`, checked against the
+email and queue models. Nothing calls AWS.
 -/
 
 open Tests.Durable (safely)
@@ -24,8 +26,10 @@ def main : IO UInt32 := do
   IO.println Checks.Refresh.report
   let live := (← safely "credentials" Checks.Imds.live) ++ (← safely "ses" Checks.Ses.live)
   let replayed := (← Checks.Mail.package.replay "../..") ++ (← Checks.CloudFront.package.replay "../..") ++ (← Checks.SesMoto.oracle.replayFile "../..")
+    ++ (← Checks.SqsMoto.oracle.replayFile "../..")
   let tests := Checks.Refresh.tests ++ Checks.Imds.unitTests ++ Checks.Ses.tests
-    ++ Checks.CloudFront.tests ++ replayed ++ live
+    ++ Checks.CloudFront.tests ++ Checks.SqsMoto.unitTests
+    ++ replayed ++ live
   let failed := tests.filter (!·.2)
   for (name, ok) in tests do IO.println s!"{if ok then "ok  " else "FAIL"} {name}"
   IO.println s!"{tests.length - failed.length} passed, {failed.length} failed"

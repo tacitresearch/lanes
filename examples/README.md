@@ -28,7 +28,8 @@ there.
 7. `payments`: a shop that charges each order through a model of a payment service, whose
    answers may be late, lost or `unknown` and whose webhooks come late, twice and out of order.
    A retry without the idempotency key charges an order twice, and the checker finds it; with
-   the key, an order is charged at most once in every run, proved.
+   the key, an order is charged at most once in every run, and an order the shop calls paid has
+   a payment that succeeded, both proved.
 8. `migration`: a deploy that changes the state type. Version 1 of a quota service runs on a
    journal; version 2 adds a quota to each user, reads version 1's files through an upgrade,
    and carries its invariant across with the migration's proof.

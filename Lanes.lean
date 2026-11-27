@@ -39,11 +39,13 @@ public import Lanes.Durable.Migration
 public import Lanes.Durable.Reading
 public import Lanes.Durable.Snapshot
 public import Lanes.Durable.Upgrade
+public import Lanes.Lib.Crypto.Certificate
 public import Lanes.Lib.Crypto.Hmac
 public import Lanes.Lib.Crypto.Md5
 public import Lanes.Lib.Crypto.Pbkdf2
 public import Lanes.Lib.Crypto.PublicKey
 public import Lanes.Lib.Crypto.Sha256
+public import Lanes.Lib.Crypto.Sha512
 public import Lanes.Lib.Crypto.Sodium
 public import Lanes.Lib.Crypto.Verify
 public import Lanes.Lib.Crypto.Sign
@@ -57,7 +59,9 @@ public import Lanes.Lib.Net.Url
 public import Lanes.Lib.Postgres.Bytes
 public import Lanes.Lib.Postgres.Conn
 public import Lanes.Lib.Postgres.IO.Client
+public import Lanes.Lib.Postgres.IO.Pool
 public import Lanes.Lib.Postgres.Message
+public import Lanes.Lib.Postgres.Pool
 public import Lanes.Lib.Postgres.Scram
 public import Lanes.Lib.Postgres.Table
 public import Lanes.Lib.RateLimit
@@ -73,6 +77,7 @@ public import Lanes.Outside.Effects.Email
 public import Lanes.Outside.Effects.Payments
 public import Lanes.Outside.Events
 public import Lanes.Outside.Idempotent
+public import Lanes.Outside.Multipart
 public import Lanes.Outside.ObjectStore
 public import Lanes.Outside.Queue
 public import Lanes.Outside.IO.Clock
@@ -122,6 +127,8 @@ public import Lanes.Web.Http.Waiting
 public import Lanes.Web.Http.Wire
 public import Lanes.Web.Http.WireSpec
 public import Lanes.Web.S3.Basic
+public import Lanes.Web.S3.Multipart
+public import Lanes.Web.S3.Post
 public import Lanes.Web.S3.Xml
 public import Lanes.Web.IO.Client
 public import Lanes.Web.IO.Ops

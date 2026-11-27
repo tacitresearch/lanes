@@ -644,4 +644,26 @@ theorem implements_timed (config : Config N) (env : EnvModel (sig N C))
       exact .quiet (fun _ _ h => by simpa using h) (sends_rearm n _) (emits_rearm n _)
     | ledger => exact .quiet (fun _ _ h => by simpa using h) rfl rfl
 
+/-- One shard's kernel meets every premise of `implements_timed`: its links are reliable and
+ordered, and no actor crashes but by stopping itself, which the ledger never does. A process that
+dies is not a crash of the semantics: it starts again from its journal as the kernel the
+journal's requests lead to (`Journal.recover_kernel`). -/
+theorem implements_timed_kernel (config : Config N) :
+    (system N C config).Implements Kernel.env (spec N C config) (deadlines .atLedger)
+      (delivered .atLedger) :=
+  implements_timed config Kernel.env (fun _ => ⟨rfl, rfl, rfl⟩) (fun _ => rfl) rfl
+
+/-- Whatever a shell does with one shard's kernel, the events it reports, but for the starts that
+bring actors at rest back, are a run of the system that the spec explains as a sequential
+history in real-time order. -/
+theorem kernel_history [Hashable (sig N C).Id] (config : Config N)
+    (ops : List (Kernel.Op (sig N C))) :
+    ∃ evs c, (SysState.init (system N C config) Kernel.env).run Kernel.env evs = some c ∧
+      Event.awake evs = Event.awake ((Kernel.boot (system N C config)).2.map .output ++
+        ((Kernel.boot (system N C config)).1.exec ops).events) ∧
+      ∃ acts cut, System.Implements.Explains (spec N C config) (deadlines .atLedger)
+        (delivered .atLedger) evs acts cut := by
+  obtain ⟨evs, c, hrun, hawake, -⟩ := (Kernel.exec_reachable (system N C config) ops).1
+  exact ⟨evs, c, hrun, hawake, (implements_timed_kernel config).history hrun⟩
+
 end Ledger

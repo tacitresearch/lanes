@@ -54,10 +54,14 @@ import Tests.WallClock
 import Tests.Ops
 import Tests.Postgres
 import Tests.PostgresConn
+import Tests.PostgresPool
 import Tests.PostgresLive
+import Tests.PostgresTls
 import Tests.Store
 import Tests.SigV4
 import Tests.S3
+import Tests.Multipart
+import Tests.S3Upload
 import Tests.Testing
 
 /-!
@@ -99,7 +103,9 @@ def live : IO (List (String × Bool)) := do
     ++ (← safely "release" Tests.Release.liveTests) ++ (← safely "jobs" Tests.Jobs.live)
     ++ (← safely "ops" Tests.Ops.live) ++ (← Tests.Crypto.live)
     ++ (← safely "postgres" Tests.PostgresLive.live)
-    ++ (← safely "s3" Tests.S3.live) ++ (← safely "test kit" Tests.Testing.live)
+    ++ (← safely "postgres tls" Tests.PostgresTls.live)
+    ++ (← safely "s3" Tests.S3.live) ++ (← safely "s3 uploads" Tests.S3Upload.live)
+    ++ (← safely "test kit" Tests.Testing.live)
 
 def main (args : List String) : IO UInt32 := do
   let pure := Tests.Engine.tests ++ Tests.Bank.tests ++ Tests.Json.tests ++ Tests.Html.tests
@@ -113,20 +119,24 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.Release.tests ++ Tests.ReadRequest.tests ++ Tests.Oracle.unitTests
     ++ Tests.HttpConn.tests ++ Tests.Loopback.tests
     ++ Tests.Jobs.tests ++ Tests.Schedule.tests ++ Tests.Outside.tests ++ Tests.Postgres.vectorTests
-    ++ Tests.Postgres.downgradeTests ++ Tests.Ops.tests
-    ++ Tests.SigV4.tests ++ Tests.S3.tests ++ Tests.Testing.tests
+    ++ Tests.Postgres.downgradeTests ++ Tests.Postgres.tlsTests ++ Tests.Postgres.endPointTests
+    ++ Tests.Ops.tests
+    ++ Tests.SigV4.tests ++ Tests.S3.tests ++ Tests.MultipartModel.tests ++ Tests.S3Upload.tests
+    ++ Tests.Testing.tests
     ++ Tests.Queue.tests ++ Tests.Cache.tests ++ Tests.WallClock.tests ++ Tests.Throttle.tests
     ++ Tests.SharedCache.tests
   match args with
   | [] =>
     let pure := pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.Lint.tests)
       ++ (← Tests.New.tests) ++ (← Tests.Tutorial.tests) ++ (← Tests.Oracle.replayAll) ++ (← Tests.Oracle.Service.replayAll)
-      ++ (← Tests.Json.suite) ++ (← Tests.HttpConn.checks) ++ (← Tests.Postgres.psqlTests) ++ (← Tests.PostgresConn.checks) ++ (← Tests.StoreModel.checks)
+      ++ (← Tests.Json.suite) ++ (← Tests.HttpConn.checks) ++ (← Tests.Postgres.psqlTests) ++ (← Tests.PostgresConn.checks) ++ (← Tests.PostgresPool.checks) ++ (← Tests.StoreModel.checks)
+      ++ (← Tests.MultipartModel.checks)
     failures pure
     report (pure ++ (← live)) pure.length
   | ["fast"] => report (pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.Lint.tests)
       ++ (← Tests.New.tests) ++ (← Tests.Tutorial.tests) ++ (← Tests.Oracle.replayAll) ++ (← Tests.Oracle.Service.replayAll)
-      ++ (← Tests.Json.suite) ++ (← Tests.HttpConn.checks) ++ (← Tests.Postgres.psqlTests) ++ (← Tests.PostgresConn.checks) ++ (← Tests.StoreModel.checks))
+      ++ (← Tests.Json.suite) ++ (← Tests.HttpConn.checks) ++ (← Tests.Postgres.psqlTests) ++ (← Tests.PostgresConn.checks) ++ (← Tests.PostgresPool.checks) ++ (← Tests.StoreModel.checks)
+      ++ (← Tests.MultipartModel.checks))
   | ["live"] => report (← live)
   | ["journal-child", path] =>
     Tests.Durable.child path

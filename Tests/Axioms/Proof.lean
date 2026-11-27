@@ -52,6 +52,21 @@ import Lanes.Semantics
 /-- info: 'Lanes.System.Reachable.right_of_quiet_boot' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Reachable.right_of_quiet_boot
 
+/-- info: 'Lanes.System.Reachable.right_unwired' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Reachable.right_unwired
+
+/-- info: 'Lanes.SysState.exists_blockRight' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SysState.exists_blockRight
+
+/-- info: 'Lanes.SysState.init_thinRight' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SysState.init_thinRight
+
+/-- info: 'Lanes.SysState.deliverable_of_thinRight' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SysState.deliverable_of_thinRight
+
+/-- info: 'Lanes.SysState.hasMail_of_thinRight' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SysState.hasMail_of_thinRight
+
 -- Lanes.Proof.Lift
 /-- info: 'Lanes.SysState.run_inductive' depends on axioms: [propext, Classical.choice] -/
 #guard_msgs in #print axioms Lanes.SysState.run_inductive
@@ -100,3 +115,9 @@ import Lanes.Semantics
 -- Lanes.Proof.Outputs
 /-- info: 'Lanes.System.Emits.outputs' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Emits.outputs
+
+/-- info: 'Lanes.Outside.Beside.holds' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Outside.Beside.holds
+
+/-- info: 'Lanes.Outside.Beside.keeps' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Outside.Beside.keeps
