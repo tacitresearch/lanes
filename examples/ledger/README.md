@@ -164,8 +164,8 @@ axiom gate:
   every notice the ledger serves is of a deadline armed in the spec.
 
 The links from the users to the ledger must be ordered (a
-reordering link gives a stale view, above). That `Bytes.same`, HMAC and PBKDF2
-are what they say is tested against published vectors (`TRUSTED.md`).
+reordering link gives a stale view, above). That SHA-256, HMAC and `Bytes.same` are what they
+say is tested against published vectors, and Argon2id is libsodium's (`TRUSTED.md`).
 
 ## The web front
 
@@ -195,10 +195,9 @@ round of framework work is planned from this.
 
 ### Missing, and added
 
-- **SHA-256, HMAC-SHA-256, PBKDF2**: `Lanes/Lib/Crypto/Sha256.lean`, `Lanes/Lib/Crypto/Hmac.lean`, pure
-  Lean, Std only, tested against FIPS 180-4, RFC 4231 and RFC 7914 (`Tests/Crypto.lean`).
-  Proved: digest and tag lengths, hex round trip, `Bytes.same a b = true ↔ a = b`. About 2 µs a
-  block, so a PBKDF2 iteration is about 4 µs.
+- **SHA-256, HMAC-SHA-256**: `Lanes/Lib/Crypto/Sha256.lean`, `Lanes/Lib/Crypto/Hmac.lean`, bound
+  to libsodium with a Lean reference beside each, tested against FIPS 180-4 and RFC 4231
+  (`Tests/Crypto.lean`). Proved: the digest's length and `Bytes.same a b = true ↔ a = b`.
 - **Cookies**: `Lanes/Web/Http/Cookie.lean`. Reading `Cookie` headers; `Set-Cookie` from a
   `Cookie` with every attribute named and safe defaults; a value that could add an attribute is
   not set. Also the origin check for forms, a per-route body limit and `Cache-Control:
@@ -226,9 +225,9 @@ round of framework work is planned from this.
    journalled the raw `(ReqId × Request)` the gate receives, so every log-in's form body and
    every request's `Cookie` header was on disk until a snapshot cut the journal, and a lawful
    codec cannot scrub them: its law is that what is read is what was written. The same placement
-   made two more defects: the bridge's PBKDF2 ran inside the gate's step, on the shard's one
-   thread, so every log-in stopped every other request for 84 ms; and a restart replayed every
-   log-in since the last snapshot through PBKDF2 again. Now the server applies the pure
+   made two more defects: the bridge's password digest ran inside the gate's step, on the
+   shard's one thread, so every log-in stopped every other request for 84 ms; and a restart
+   replayed every log-in since the last snapshot through the digest again. Now the server applies the pure
    `Bridge.prepare` to a request on the handler's task, before it has an id, and the system and
    its journal see only the prepared request. The ledger's `prepare` replaces the `password`
    field by its digest and the `Cookie` header by the name and session it verifies, and drops
