@@ -97,6 +97,11 @@ What is being worked on now, and why: `docs/PLAN.md`.
   again at each start. SES sends simple messages (no attachments, templates or raw MIME), to
   bare addresses, with no webhooks; it takes no idempotency key, so a send whose answer was lost
   may be sent twice if it is sent again.
+- CloudFront's signed URLs and cookies (`Aws.CloudFront`) have not run against CloudFront: they
+  are compared with botocore's `CloudFrontSigner`, and what CloudFront takes is read from AWS's
+  SDKs, not its documentation. The cookies have no `Domain`, so they reach CloudFront only when it
+  serves the site's own host. Keys are RSA of 2048 bits or P-256, in a PEM that is not encrypted;
+  a policy's addresses are IPv4.
 - A job submitted when `maxInFlight` jobs are active is refused, not queued.
 - Beside a system, that the answer reaches the requester, and at most once, is not yet carried
   through the join: it is proved of the jobs actor alone.

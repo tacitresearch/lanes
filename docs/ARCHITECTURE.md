@@ -40,7 +40,7 @@ proved function tells it to.
 | The proof layer | `Lanes/Semantics/` | refinement, specs, fairness, leads-to |
 | Data and the standard library | `Lanes/Data/`, `Lanes/Lib/` | codec laws, `Quorum.majority_inter`, `Bytes.same_iff`, `Json.parse_iff`, `Url.parse_print` |
 | Sign-in with OAuth 2.0 and OpenID Connect | `Lanes/Web/Auth/{Jose,IdToken,OAuth}.lean`, `Lanes/Web/IO/SignIn.lean` | `OAuth.check_ok`, `OAuth.Used.accepted_once`, `OAuth.Used.length_claim`, `OAuth.IdToken.verify_accepted`, `Jose.verify_ok`, `OAuth.Keys.no_fetch_within`; the edge is trusted, tested end to end against a provider run in the test |
-| Bound C | `native/lanes.c`, `Lanes/Lib/Crypto/Sodium.lean`; `native/verify.c`, `Lanes/Lib/Crypto/Verify.lean` | trusted; tested against the Lean references and published vectors |
+| Bound C | `native/lanes.c`, `Lanes/Lib/Crypto/Sodium.lean`; `native/verify.c`, `Lanes/Lib/Crypto/Verify.lean`; `native/sign.c`, `Lanes/Lib/Crypto/Sign.lean` | trusted; tested against the Lean references and published vectors |
 | TLS client | `native/tls.c`, `Lanes/Web/IO/Tls.lean` | trusted; tested against `openssl s_server` |
 
 ## Actors and the semantics
@@ -327,6 +327,10 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   proved to read back with exactly its recipients (`Ses.toAddresses_json`), its answers read as
   the email model's (`Ses.Answer.modelled`), and runs against a fake SES and against moto's SES
   are ones the model allows; SES takes no key, so each send is a request without one.
+  CloudFront's signed URLs and cookies (`Aws.CloudFront`) are pure: a canned policy is the
+  document AWS gives for the URL and the time (`CloudFront.cannedPolicy_eq`), CloudFront's base64
+  reads back (`CloudFront.decode_encode`) and every cookie is valid (`CloudFront.cookies_valid`);
+  the policy and the link, signature included, are botocore's on generated links.
 - **Sign-in** (`Lanes/Web/IO/SignIn.lean`): the random values of a beginning and the key of the
   tickets, the states used and each provider's keys held in references, and the calls to the token endpoint,
   the JWK Set and a user API; every decision is `Lanes/Web/Auth/OAuth.lean`'s (above).
@@ -478,7 +482,11 @@ Signatures under RSA and P-256 public keys are checked by the same OpenSSL's lib
 ECDSA signature's are written in Lean, which also decides which keys are valid and what size a
 signature has (`Lanes/Lib/Crypto/PublicKey.lean`), and RSA's check has a Lean reference,
 `Rsa.verifyReference`, that `Tests/Signature.lean` compares with it beside RFC 7515's and RFC 7520's
-vectors.
+vectors. Signatures are made by the same libcrypto with a private key read from PEM once and
+kept by OpenSSL (`native/sign.c`, `Lanes/Lib/Crypto/Sign.lean`): RSASSA-PKCS1-v1_5, and ECDSA with
+RFC 6979's nonce, so signing is a function and pure. Lean takes a key only if its public half,
+read back from OpenSSL's DER (`PublicKey.ofSpki?_spki`), is valid; trusted, and tested against
+RFC 6979's vectors, `openssl dgst -sign` and `cryptography` (`Tests/Sign.lean`, `oracles/botocore`).
 
 ## A request, end to end
 

@@ -103,8 +103,8 @@ theorem urlSafe_keyId (k : KeyId) : k.val.toList.all urlSafe = true := by
 
 /-- Every parameter of a link is named by a token after `CloudFront-` and valued in letters,
 digits, `-`, `_` and `~`, which neither a URL nor a cookie escapes. -/
-theorem fields_safe (keyId : KeyId) (digest : Digest) (g : Grant) (signature : ByteArray) :
-    ∀ kv ∈ fields keyId digest g signature,
+theorem fields_safe (keyId : KeyId) (hash : HashAlgorithm) (g : Grant) (signature : ByteArray) :
+    ∀ kv ∈ fields keyId hash g signature,
       Http.token ("CloudFront-" ++ kv.1) = true ∧ kv.2.toList.all urlSafe = true := by
   intro kv hkv
   simp only [fields, List.cons_append, List.mem_cons, List.mem_append] at hkv
@@ -118,13 +118,13 @@ theorem fields_safe (keyId : KeyId) (digest : Digest) (g : Grant) (signature : B
     subst h; exact ⟨by decide, by decide⟩
 
 /-- Every cookie of a grant is valid, so `Response.setCookie` sets each one. -/
-theorem cookies_valid (keyId : KeyId) (digest : Digest) (g : Grant) (signature : ByteArray)
+theorem cookies_valid (keyId : KeyId) (hash : HashAlgorithm) (g : Grant) (signature : ByteArray)
     {path : String} (hpath : path.toList.all Http.cookieOctet = true) :
-    ∀ c ∈ cookies (fields keyId digest g signature) path, c.valid = true := by
+    ∀ c ∈ cookies (fields keyId hash g signature) path, c.valid = true := by
   intro c hc
   simp only [cookies, List.mem_map] at hc
   obtain ⟨kv, hkv, rfl⟩ := hc
-  obtain ⟨hname, hvalue⟩ := fields_safe keyId digest g signature kv hkv
+  obtain ⟨hname, hvalue⟩ := fields_safe keyId hash g signature kv hkv
   simp only [Http.Cookie.valid, hname, hpath, Bool.true_and, Bool.and_true]
   exact List.all_eq_true.mpr fun c hc => cookieOctet_of_urlSafe (List.all_eq_true.mp hvalue c hc)
 

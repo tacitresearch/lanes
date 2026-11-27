@@ -40,7 +40,7 @@ abbrev Resource := {s : String // s ≠ "" ∧ s.toList.all resourceChar = true}
 def Resource.of? (s : String) : Option Resource :=
   if h : s ≠ "" ∧ s.toList.all resourceChar = true then some ⟨s, h⟩ else none
 
-/-- A range of IPv4 addresses, `a.b.c.d/bits`. A policy cannot name IPv6 addresses. -/
+/-- A range of IPv4 addresses, `a.b.c.d/bits`, as AWS's examples of a policy give them. -/
 structure Cidr where
   addr : Fin (2 ^ 32)
   bits : Fin 33
@@ -120,13 +120,13 @@ def Grant.policy (url : Resource) : Grant → Policy
 
 /-- The parameters of a link, in the order AWS writes them, given the signature of the policy;
 the names of the cookies are these with `CloudFront-` before them. -/
-def fields (keyId : KeyId) (digest : Digest) (g : Grant) (signature : ByteArray) :
+def fields (keyId : KeyId) (hash : HashAlgorithm) (g : Grant) (signature : ByteArray) :
     List (String × String) :=
   (match g with
     | .canned e => ("Expires", toString e)
     | .custom p => ("Policy", encode p.text.toUTF8))
   :: [("Signature", encode signature), ("Key-Pair-Id", keyId.val)]
-  ++ if digest = .sha256 then [("Hash-Algorithm", "SHA256")] else []
+  ++ if hash = .sha256 then [("Hash-Algorithm", "SHA256")] else []
 
 /-- `url` with `fields` added to its query. -/
 def link (url : Resource) (fields : List (String × String)) : String :=
@@ -142,7 +142,7 @@ def cookies (fields : List (String × String)) (path : String := "/") : List Coo
 structure Signer where
   keyId : KeyId
   key : SigningKey
-  digest : Digest := .sha1
+  hash : HashAlgorithm := .sha1
   deriving Repr
 
 /-- The keys CloudFront takes: RSA of 2048 bits and P-256. -/
@@ -151,16 +151,16 @@ def accepted : PublicKey → Bool
   | .p256 .. => true
 
 /-- A signer with the key in `pem`. -/
-def Signer.ofPem (keyId : String) (pem : ByteArray) (digest : Digest := .sha1) :
+def Signer.ofPem (keyId : String) (pem : ByteArray) (hash : HashAlgorithm := .sha1) :
     Except String Signer := do
   let some keyId := KeyId.of? keyId | throw "cloudfront: a key's ID is letters and digits"
   let key ← SigningKey.ofPem pem
   unless accepted key.publicKey do throw "cloudfront: the key is neither RSA of 2048 bits nor P-256"
-  return { keyId, key, digest }
+  return { keyId, key, hash }
 
 def Signer.fields (s : Signer) (url : Resource) (g : Grant) : Except String (List (String × String)) :=
-  match s.key.sign s.digest (g.policy url).text.toUTF8 with
-  | some signature => .ok (CloudFront.fields s.keyId s.digest g signature)
+  match s.key.sign s.hash (g.policy url).text.toUTF8 with
+  | some signature => .ok (CloudFront.fields s.keyId s.hash g signature)
   | none => .error "cloudfront: OpenSSL could not sign"
 
 /-- The link to `url` that `g` grants. -/

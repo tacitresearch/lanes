@@ -66,7 +66,17 @@ def tests : List (String × Bool) :=
       ["", "-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----\n",
         String.fromUTF8! (rsaPem.extract 0 400)].all fun s =>
         SigningKey.ofPem s.toUTF8 matches .error "signing key: not a private key in PEM, or encrypted"),
-    ("sign: a key shows as <signing key>", rsa.any fun k => reprStr k == "<signing key>") ]
+    ("sign: a key shows as <signing key>", rsa.any fun k => reprStr k == "<signing key>"),
+    ("sign: a public key's DER reads back as the key; cut short or retagged it does not",
+      [rsa, p256].all fun k => k.any fun k =>
+        let der := k.publicKey.spki
+        (PublicKey.ofSpki? der).any (·.spki == der)
+          && (PublicKey.ofSpki? (der.extract 0 (der.size - 1))).isNone
+          && (PublicKey.ofSpki? (der.set! 0 0x31)).isNone
+          && (PublicKey.ofSpki? (der.push 0)).isNone),
+    ("sign: Der.read? reads each length tlv writes, and what follows",
+      [0, 1, 127, 128, 255, 256, 65535, 70000].all fun n =>
+        Der.read? (Der.tlv 4 (List.replicate n 7) ++ [9]) == some (4, List.replicate n 7, [9])) ]
 
 def file (dir : System.FilePath) (name : String) : IO ByteArray := IO.FS.readBinFile (dir / name)
 
@@ -89,10 +99,10 @@ def live : IO (List (String × Bool)) := do
     for i in [0:12] do
       let msg := ("{\"Statement\":[" ++ toString i ++ "]}").toUTF8 ++ (← randomBytes (i * 29).toUSize)
       IO.FS.writeBinFile (dir / "msg") msg
-      for (digest, flag) in [(Digest.sha1, "-sha1"), (.sha256, "-sha256")] do
+      for (hash, flag) in [(HashAlgorithm.sha1, "-sha1"), (.sha256, "-sha256")] do
         let theirs ← Tests.Signature.run dir #["dgst", flag, "-sign", "rsa.pem", "-out", "out", "msg"]
-        same := same && rsa.sign digest msg == some theirs
-        let some ours := p256.sign digest msg | checks := false
+        same := same && rsa.sign hash msg == some theirs
+        let some ours := p256.sign hash msg | checks := false
         IO.FS.writeBinFile (dir / "sig") ours
         IO.FS.writeFile (dir / "pub.pem") p256.publicKey.pem
         let verify := #["dgst", flag, "-verify", "pub.pem", "-signature", "sig", "msg"]

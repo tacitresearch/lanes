@@ -22,7 +22,7 @@ nonce from the key and the message as RFC 6979 says, so one key signs one messag
 namespace Lanes
 
 /-- The hash a signature is made over. -/
-inductive Digest where
+inductive HashAlgorithm where
   | sha1
   | sha256
   deriving DecidableEq, Repr, Hashable
@@ -72,11 +72,11 @@ def ofPem (pem : ByteArray) : Except String SigningKey :=
       if hv : publicKey.valid then .ok ⟨key, publicKey, h, hv⟩
       else .error "signing key: RSA of fewer than 2048 or more than 8192 bits"
 
-/-- The signature of `msg` over `digest`: RSASSA-PKCS1-v1_5 under an RSA key, and under a P-256
+/-- The signature of `msg` over `hash`: RSASSA-PKCS1-v1_5 under an RSA key, and under a P-256
 key ECDSA with RFC 6979's nonce, written as DER. `none` only if OpenSSL fails. -/
 @[no_expose]
-def sign (k : SigningKey) (digest : Digest) (msg : ByteArray) : Option ByteArray :=
-  k.key.signWith (digest == .sha256) (k.publicKey matches .p256 ..) msg
+def sign (k : SigningKey) (hash : HashAlgorithm) (msg : ByteArray) : Option ByteArray :=
+  k.key.signWith (hash == .sha256) (k.publicKey matches .p256 ..) msg
 
 end SigningKey
 

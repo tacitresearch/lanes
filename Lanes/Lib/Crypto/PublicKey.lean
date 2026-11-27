@@ -120,24 +120,26 @@ def derSignature (key : PublicKey) (sig : ByteArray) : Option ByteArray :=
         Der.integer (sig.extract 32 64).data.toList]).toArray⟩
     else none
 
-/-- The key `der` names, as `spki` would write it: a guess at the fields, kept only if `spki`
-writes `der` again (`ofSpki?_spki`). -/
+/-- A guess at the fields of the key `bytes` is the DER of. -/
+private def spkiFields (bytes : List UInt8) : Option PublicKey := do
+  let (_, body, _) ← Der.read? bytes
+  let (_, _, rest) ← Der.read? body
+  let (_, bits, _) ← Der.read? rest
+  match bits with
+  | 0 :: 0x04 :: point => some (.p256 ⟨(point.take 32).toArray⟩ ⟨(point.drop 32).toArray⟩)
+  | 0 :: inner => do
+    let (_, ints, _) ← Der.read? inner
+    let (_, n, rest) ← Der.read? ints
+    let (_, e, _) ← Der.read? rest
+    some (.rsa ⟨(n.dropWhile (· == 0)).toArray⟩ ⟨(e.dropWhile (· == 0)).toArray⟩)
+  | _ => none
+
+/-- The key `der` names, as `spki` writes it: the guess is kept only if `spki` writes `der`
+again (`ofSpki?_spki`). -/
+@[no_expose]
 def ofSpki? (der : ByteArray) : Option PublicKey := do
-  let key ← fields der.data.toList
+  let key ← spkiFields der.data.toList
   if key.spki = der then some key else none
-where
-  fields (bytes : List UInt8) : Option PublicKey := do
-    let (_, body, _) ← Der.read? bytes
-    let (_, _, rest) ← Der.read? body
-    let (_, bits, _) ← Der.read? rest
-    match bits with
-    | 0 :: 0x04 :: point => some (.p256 ⟨(point.take 32).toArray⟩ ⟨(point.drop 32).toArray⟩)
-    | 0 :: inner => do
-      let (_, ints, _) ← Der.read? inner
-      let (_, n, rest) ← Der.read? ints
-      let (_, e, _) ← Der.read? rest
-      some (.rsa ⟨(n.dropWhile (· == 0)).toArray⟩ ⟨(e.dropWhile (· == 0)).toArray⟩)
-    | _ => none
 
 theorem ofSpki?_spki {der : ByteArray} {key : PublicKey} (h : ofSpki? der = some key) :
     key.spki = der := by
