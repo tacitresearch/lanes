@@ -16,7 +16,8 @@ signature from the bytes it receives, the presigned links' and the upload forms'
 included, and enforces a policy's size. A browser is the kit's: it signs in, makes a video,
 posts the file with the form the page carries, asks the site to check, watches through the link
 the page's `<video>` carries, likes, comments, and deletes. Midway the server is stopped and
-started again on its journal, and the flow goes on.
+started again on its journal, and the flow goes on. Twice the store refuses a call once, a check
+and a delete, and the scheduler's next attempt succeeds.
 
 `flow` is also what `videosLive` runs against a real bucket.
 -/
@@ -80,11 +81,13 @@ def fetchVideo (page : Option Http.Response) : Async (Option ByteArray) := do
 provider as GitHub. -/
 def deployment (bucket : S3.Bucket) (creds : SigV4.Credentials) (provider : Testing.OAuth.Fake)
     (journal : System.FilePath) (keyPrefix : String := "videos/") : Deployment :=
-  { config := { pageSize := 1 }
+  { config := { pageSize := 1
+                checkRetry := { maxAttempts := 2, deadline_ms := 3000, base_ms := 50, cap_ms := 50 }
+                deleteRetry := { maxAttempts := 4, deadline_ms := 3000, base_ms := 50, cap_ms := 200 } }
     settings := { key := .of "the key of the test deployment".toUTF8, origin, secure := false
                   bucket, creds, providers := ["hub"], keyPrefix
                   maxUpload_bytes := ⟨maxUpload_bytes, by decide⟩ }
-    server := { port := 0, system := "videos 1"
+    server := { port := 0, system := "videos 2"
                 ops := { readinessPath := some "/readyz", livenessPath := some "/healthz"
                          metricsPath := some "/metrics" } }
     journal := some journal
@@ -99,8 +102,10 @@ def eventually (check : Async Bool) : Async Bool := do
   check
 
 /-- The flow, against the store `d` names; `held` says whether the store holds a key, where the
-test can see. -/
-def flow (d : Deployment) (provider : Testing.OAuth.Fake) (held : String → Async Bool) :
+test can see, and `refuse` has the store refuse the next call and says whether it did (a real
+store cannot be told to, and says `true`). -/
+def flow (d : Deployment) (provider : Testing.OAuth.Fake) (held : String → Async Bool)
+    (refuse : Async Unit := pure ()) (refused : Async Bool := pure true) :
     Async (List (String × Bool)) := do
   let server ← start d
   let port := server.port.getD 0
@@ -131,7 +136,9 @@ def flow (d : Deployment) (provider : Testing.OAuth.Fake) (held : String → Asy
   let notTheirs ← post bobB ["v", "0", "delete"]
   let (_, secretPut) ← create aliceB "Diary" "private"
   let _ ← upload secretPut
-  let _ ← post aliceB ["videos", "1", "uploaded"]
+  refuse
+  let retried ← post aliceB ["videos", "1", "uploaded"]
+  let checkRefused ← refused
   let secretToBob ← bobB.get ["v", "1"]
   let secretToAnon ← anon.get ["v", "1"]
   let secretToAlice ← aliceB.get ["v", "1"]
@@ -157,10 +164,12 @@ def flow (d : Deployment) (provider : Testing.OAuth.Fake) (held : String → Asy
   let uncommented ← post bobB ["v", "0", "comments", "0", "delete"]
   let uncommentedByOwner ← post aliceB ["v", "0", "comments", "1", "delete"]
   let afterUncomment ← anon.get ["v", "0"]
+  refuse
   let deleted ← post aliceB ["v", "0", "delete"]
   let gone ← bobB.get ["v", "0"]
   let feedAfter ← anon.get [] [("before", "2")]
   let objectGone ← eventually do return !(← held (d.settings.objectKey 0))
+  let deleteRefused ← refused
   let token ← csrf bobB
   let signedOut ← bobB.post ["sign-out"] [("csrf", token)]
   let cleared ← bobB.cookie sessionCookie
@@ -214,8 +223,12 @@ def flow (d : Deployment) (provider : Testing.OAuth.Fake) (held : String → Asy
       status uncommentedByCarol == 404 && status uncommented == 303
         && status uncommentedByOwner == 303 && !shows afterUncomment "Nice cats"
         && !shows afterUncomment "Buy pills"),
-    ("videos: a deleted video is not served, and its object is deleted in the store",
-      status deleted == 303 && status gone == 404 && !shows feedAfter "Cats" && objectGone),
+    ("videos: a check the store refuses once is tried again, and the video is ready",
+      checkRefused && status retried == 303 && location retried == "/v/1"),
+    ("videos: a deleted video is not served, and its object is deleted in the store, though the "
+      ++ "store refused the first delete",
+      status deleted == 303 && status gone == 404 && !shows feedAfter "Cats" && objectGone
+        && deleteRefused),
     ("videos: signed out, the cookie is cleared and the session is over",
       status signedOut == 303 && cleared.isNone && status stillOut == 303 && location stillOut == "/") ]
 
@@ -238,8 +251,8 @@ def settings : Web.Settings :=
 
 def decoded (r : Http.Request) : Option Input :=
   match (bridge settings).decode 0 ((bridge settings).prepare r) with
-  | .ok i => some i
-  | .error _ => none
+  | .ok (.inr i) => some i
+  | _ => none
 
 def withCookie (value : String) (r : Http.Request) : Http.Request :=
   { r with headers := r.headers ++ [("cookie", s!"{settings.cookieName}={value}")] }
@@ -271,8 +284,9 @@ def bridgeTests : List (String × Bool) :=
       (decoded (make "ok" "mp4")).isSome && decoded (make (String.ofList (List.replicate 101 'x')) "mp4") == none
         && decoded (make "ok" "avi") == none),
     ("bridge: a store call is the head or the delete of the video's key, and only those",
-      (storeCall settings ⟨0, 1000, .head 4⟩).any (· matches .head _)
-        && (storeCall settings ⟨0, 1000, .delete 4⟩).any (· matches .delete _)
+      (storeCall settings (Key.check 4 0).op).any (· matches .head _)
+        && (storeCall settings (Key.expire 4).op).any (· matches .head _)
+        && (storeCall settings (Key.delete 4).op).any (· matches .delete _)
         && storeReply none == .unknown && storeReply (some (.refused 500 "")) == .answer .failed) ]
 
 /-- What a shared cache in front may keep (`Http.SharedCache.leaks`): every reply and every
@@ -312,7 +326,8 @@ def run : IO (List (String × Bool)) := do
       let store ← Testing.S3.Fake.start creds "videos"
       let provider ← Testing.OAuth.Fake.start (oidc := false)
       let d := deployment store.bucket creds provider journal
-      let results ← flow d provider fun key => store.holds key
+      let results ← flow d provider (fun key => store.holds key) (store.refuse 1)
+        (return (← store.refusing) == 0)
       store.stop
       provider.stop
       return results : Async _).block

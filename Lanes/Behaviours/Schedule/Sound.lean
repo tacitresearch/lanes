@@ -26,6 +26,8 @@ included:
   (`Schedule.within`); an attempt is dispatched only for a job with none out
   (`Schedule.dispatch_due`), and an attempt out ends only with its answer or, abandoned, with
   the end of its wait (`Schedule.attempt_ends`).
+- *The outside's word.* A job succeeds with an answer only in the step that takes that answer,
+  accepted by `Config.ok`, to its attempt out (`Schedule.succeeded_replied`).
 - While it is up, the timer each job waits on is armed (`Schedule.armed`).
 
 `Lanes.Semantics.Schedule` builds the liveness proof on the facts about one job here.
@@ -619,6 +621,83 @@ theorem attempt_ends {msg : Schedule.Msg K P A} {key : K} {j : Job K P}
     rcases onJob_attempt_ends hout hend with ⟨r, rfl⟩ | ⟨rfl, habandon⟩
     · exact .inl ⟨r, rfl⟩
     · exact .inr ⟨rfl, habandon⟩
+
+theorem fail_not_succeeded {now_ms : Nat} {j : Job K P} {last : Option A} {key : K} {a : A} :
+    (.emit (.answer key (.succeeded a)) : Eff K P A) ∉ (fail config now_ms j last).2 := by
+  unfold fail
+  dsimp only
+  split
+  · split <;> simp
+  · simp
+
+theorem onJob_succeeded {now_ms : Nat} {j : Job K P} {act : Act A} {key : K} {a : A}
+    (h : (.emit (.answer key (.succeeded a)) : Eff K P A) ∈ (onJob config now_ms j act).effs) :
+    act = .reply j.attempt (.answer a) ∧ j.phase ≠ .waiting ∧ key = j.key ∧ config.ok a = true := by
+  have hover {now_ms : Nat} {result : Option A}
+      (h : (.emit (.answer key (.succeeded a)) : Eff K P A) ∈ (over config now_ms j result).2) :
+      result = some a ∧ key = j.key ∧ config.ok a = true := by
+    unfold over at h
+    split at h
+    · simp at h
+    · next a' _ =>
+      split at h
+      · next hok =>
+        simp only [List.mem_singleton, Effect.emit.injEq, Output.answer.injEq,
+          Outcome.succeeded.injEq] at h
+        obtain ⟨rfl, rfl⟩ := h
+        exact ⟨rfl, rfl, hok⟩
+      · exact absurd h fail_not_succeeded
+    · exact absurd h fail_not_succeeded
+  cases act with
+  | cancel => simp only [onJob] at h; split at h <;> simp at h
+  | reply attempt r =>
+    simp only [onJob] at h
+    split at h
+    · next hcond =>
+      simp only [List.mem_cons, reduceCtorEq, false_or] at h
+      obtain ⟨hr, hk, hok⟩ := hover h
+      cases r with
+      | unknown => simp [answerOf] at hr
+      | answer a' =>
+        simp only [answerOf, Option.some.injEq] at hr
+        subst hr
+        exact ⟨by rw [hcond.2], hcond.1, hk, hok⟩
+    · simp at h
+  | due =>
+    simp only [onJob] at h
+    split at h
+    · unfold run at h
+      split at h <;> simp at h
+    · simp at h
+  | expire =>
+    simp only [onJob] at h
+    split at h
+    · rcases List.mem_cons.mp h with h | h
+      · simp at h
+      · simpa using (hover h).1
+    · simp at h
+
+/-- The scheduler says a job succeeded with an answer only in the step that takes that answer,
+accepted by `Config.ok`, to the job's attempt out: what it reports as the outside's answer is
+the outside's. -/
+theorem succeeded_replied {msg : Schedule.Msg K P A} {key : K} {a : A}
+    (h : (.emit (.answer key (.succeeded a)) : Eff K P A) ∈ (step config s msg).2) :
+    ∃ j, entry s.jobs key = some j ∧ j.phase ≠ .waiting ∧
+      msg = .reply key j.attempt (.answer a) ∧ config.ok a = true := by
+  rcases step_cases (config := config) (s := s) msg with
+    ⟨now_ms, spec, rfl⟩ | ⟨_, _, _, _, hs⟩ | ⟨key', act, j, rfl, hj, hs⟩
+  · simp only [step_schedule, enroll] at h
+    split at h
+    · simp at h
+    · split at h
+      · simp at h
+      · split at h <;> simp at h
+  · simp [hs] at h
+  · rw [hs] at h
+    obtain ⟨hact, hwait, rfl, hok⟩ := onJob_succeeded h
+    obtain ⟨-, hkey⟩ := entry_some hj
+    subst hkey hact
+    exact ⟨j, hj, hwait, rfl, hok⟩
 
 omit [DecidableEq K] [DecidableEq P] [DecidableEq A] in
 theorem timer_act_key {b : Job K P} {key : K} {act : Act A}

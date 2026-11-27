@@ -43,8 +43,11 @@ there.
 11. `videos`: a video site whose members sign in with Google or GitHub and upload straight to
     S3 from the browser, with presigned links, then watch, like, comment and delete. Checked
     beside the object store's model, with its timeouts and crashes, where taking the browser's
-    word for an upload is found; private videos, deletes, confirmed uploads and likes proved;
-    tested over HTTP against a fake S3 through a restart. Lanes' V1 acceptance application.
+    word for an upload is found; private videos, deletes, confirmed uploads and likes proved.
+    Its checks, the last check of an upload never confirmed and the deletes of objects are jobs
+    of the scheduler, retried with a backoff; every job proved to end in a fair run. Tested over
+    HTTP against a fake S3 that refuses a call once, through a restart. Lanes' V1 acceptance
+    application.
 12. `upload`: uploads of any size, handed to the system in pieces and answered with their size
     and checksum: a request that streams, through the gate a piece at a time.
 13. `reminders`: reminders over HTTP, each a job of the scheduler (`Lanes.Schedule`) that posts
@@ -62,8 +65,8 @@ there.
 | Invariants under every fault (`Monotone`), ghosts | `election`, `ledger`, `raft-kv` |
 | Refinement to a spec (`System.Implements`, `System.Refines`) | `counter`, `kv-cache`, `ledger`, `raft-kv`, `rookery` |
 | A request takes effect once (`Once.actor`, `Service.once`) | `kv-cache`, `raft-kv` |
-| Fairness and liveness | `watchdog`, `reminders` |
-| Work due later, retried with a backoff, periodic sweeps (`Schedule.attach`) | `reminders` |
+| Fairness and liveness | `watchdog`, `reminders`, `videos` |
+| Work due later, retried with a backoff, periodic sweeps (`Schedule.attach`) | `reminders`, `videos` |
 | A model of an external service: timeouts with unknown outcome, idempotency keys, webhooks (`Lanes/Outside/`) | `payments`, `videos` |
 | Files in S3: presigned uploads and downloads, `HEAD` and delete, the object store's model | `videos` |
 | A database: the store model, lost commits, PostgreSQL | `todo-db` |

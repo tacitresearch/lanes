@@ -92,7 +92,7 @@ def main (args : List String) : IO UInt32 := do
       maxUpload_bytes }
   let server ← (Web.start {
     settings, journal
-    server := { host, port := port.toUInt16, system := "videos 1", idle_ms
+    server := { host, port := port.toUInt16, system := "videos 2", idle_ms
                 ops := { readinessPath := some "/readyz", livenessPath := some "/healthz"
                          metricsPath := some "/metrics", accessLog := .stderr, requestIds := true } }
     signIn := { providers, secure } }).block

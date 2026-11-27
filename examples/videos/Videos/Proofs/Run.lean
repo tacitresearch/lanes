@@ -28,7 +28,7 @@ variable (config : Config)
 
 def step (s : Site) : Turn → Site × List Out
   | .inl i => s.handle config i
-  | .inr () => s.recover config
+  | .inr () => s.recover
 
 /-- The site after the turns, and every output they gave, in order. -/
 def run (s : Site) : List Turn → Site × List Out
@@ -116,15 +116,13 @@ theorem grows_seen {s : Site} {req : ReqId} {viewer : Viewer} {m : Member} {v : 
     · exact grows_refl s
   · exact grows_refl s
 
-theorem grows_check (s : Site) (req : ReqId) (viewer : Viewer) {video : Video}
-    (hv : video ∈ s.videos) : Grows s (s.check config req viewer video).1 := by
+theorem grows_check (s : Site) (req : ReqId) (viewer : Viewer) {video : Video} (at_s : Nat)
+    (hv : video ∈ s.videos) : Grows s (s.check config req viewer video at_s).1 := by
   unfold check
   dsimp only
   split
   · exact grows_setVideo ⟨video, hv, rfl⟩
-  · have h := grows_setVideo (s := s) (x := { video with status := .checking s.nextCall req })
-      ⟨video, hv, rfl⟩
-    exact ⟨h.1, h.2⟩
+  · exact grows_setVideo ⟨video, hv, rfl⟩
 
 theorem watch_fst (s : Site) (req : ReqId) (viewer : Viewer) (v : VideoId) (at_s : Nat) :
     (s.watch req viewer v at_s).1 = s := by
@@ -169,7 +167,7 @@ theorem grows_request (s : Site) (c : Command) (at_s : Nat) :
     unfold uploaded
     split
     · exact grows_refl s
-    · exact grows_check config s req _ hw
+    · exact grows_check config s req _ at_s hw
   | watch req viewer v =>
     show Grows s (s.watch req _ v at_s).1
     rw [watch_fst]
@@ -192,47 +190,68 @@ theorem grows_request (s : Site) (c : Command) (at_s : Nat) :
     · exact grows_setVideo ⟨w, hw, rfl⟩
     · exact grows_refl s
   | delete req m session v =>
-    refine grows_withSession fun _ => grows_owned fun w _ => ?_
-    have h := grows_filter s (·.id != w.id)
-    exact ⟨h.1, h.2⟩
+    exact grows_withSession fun _ => grows_owned fun w _ => grows_filter s (·.id != w.id)
   | feed => exact grows_refl s
   | channel req viewer whose =>
     show Grows s (s.channel req _ whose).1
     rw [channel_fst]
     exact grows_refl s
 
-theorem grows_stored (s : Site) (call : Nat) (reply : Rpc.Reply StoreAnswer) :
-    Grows s (s.stored config call reply).1 := by
-  unfold stored
+theorem grows_found (s : Site) {video : Video} (hv : video ∈ s.videos) (size : Nat) :
+    Grows s (s.found config video size).1 :=
+  grows_setVideo ⟨video, hv, rfl⟩
+
+theorem grows_unconfirmed (s : Site) {video : Video} (hv : video ∈ s.videos) (req : ReqId)
+    (r : Reply) : Grows s (s.unconfirmed video req r).1 := by
+  unfold unconfirmed
   split
-  · next video hfind =>
-    have hv := List.mem_of_find?_eq_some hfind
-    split
-    · unfold checked
-      split
-      · exact grows_setVideo ⟨video, hv, rfl⟩
-      · exact grows_setVideo ⟨video, hv, rfl⟩
-      · split
-        · exact grows_setVideo ⟨video, hv, rfl⟩
-        · exact grows_setVideo ⟨video, hv, rfl⟩
-      · exact grows_setVideo ⟨video, hv, rfl⟩
-    · exact grows_refl s
+  · exact grows_setVideo ⟨video, hv, rfl⟩
+  · exact grows_refl s
+
+theorem grows_checked (s : Site) {video : Video} (hv : video ∈ s.videos) (req : ReqId)
+    (o : Outcome) : Grows s (s.checked config video req o).1 := by
+  unfold checked
+  split
+  · exact grows_found config s hv _
+  · exact grows_unconfirmed s hv req _
   · split
-    · unfold deleteAnswered
-      split
-      · exact grows_videos rfl rfl
-      · exact grows_videos rfl rfl
-      · split
-        · exact grows_videos rfl rfl
-        · exact grows_videos rfl rfl
+    · exact grows_found config s hv _
+    · exact grows_unconfirmed s hv req _
+  all_goals first
+    | exact grows_unconfirmed s hv req _
+    | exact grows_refl s
+
+theorem grows_expired (s : Site) {video : Video} (hv : video ∈ s.videos) (o : Outcome) :
+    Grows s (s.expired config video o).1 := by
+  unfold expired
+  split
+  · exact grows_found config s hv _
+  · exact grows_filter s (·.id != video.id)
+  · exact grows_refl s
+
+theorem grows_unready {s : Site} {v : VideoId} {f : Video → Site × List Out}
+    (hf : ∀ w ∈ s.videos, Grows s (f w).1) : Grows s (s.unready v f).1 := by
+  unfold unready
+  split
+  · next hfind =>
+    split
     · exact grows_refl s
+    · exact hf _ (find?_mem hfind)
+  · exact grows_refl s
+
+theorem grows_job (s : Site) (key : Key) (o : Outcome) : Grows s (s.job config key o).1 := by
+  cases key with
+  | check v req => exact grows_unready fun _ hw => grows_checked config s hw req o
+  | expire v => exact grows_unready fun _ hw => grows_expired config s hw o
+  | delete v => exact grows_refl s
 
 theorem grows_handle (s : Site) (i : Input) : Grows s (s.handle config i).1 := by
   cases i with
   | request c at_s => exact grows_request config s c at_s
-  | store call reply => exact grows_stored config s call reply
+  | job key o => exact grows_job config s key o
+  | noticed _ => exact grows_refl s
 
-theorem grows_recover (s : Site) : Grows s (s.recover config).1 := by
+theorem grows_recover (s : Site) : Grows s s.recover.1 := by
   refine ⟨Nat.le_refl _, fun w hw => ?_⟩
   simp only [Site.recover, List.mem_map] at hw
   obtain ⟨w', hw', rfl⟩ := hw
@@ -241,7 +260,7 @@ theorem grows_recover (s : Site) : Grows s (s.recover config).1 := by
 theorem grows_step (s : Site) (e : Turn) : Grows s (s.step config e).1 := by
   cases e with
   | inl i => exact grows_handle config s i
-  | inr _ => exact grows_recover config s
+  | inr _ => exact grows_recover s
 
 /-- Every video's id is below the next one, so no video made later has it. -/
 def Fresh (s : Site) : Prop := ∀ w ∈ s.videos, w.id < s.next
