@@ -21,6 +21,7 @@ import Tests.Clock
 import Tests.HttpClient
 import Tests.Tls
 import Tests.Signature
+import Tests.Sign
 import Tests.OAuth
 import Tests.ReadRequest
 import Tests.Codec
@@ -92,7 +93,8 @@ def live : IO (List (String × Bool)) := do
     ++ (← Tests.Durable.tests) ++ (← group "ending" Tests.Ending.tests)
     ++ (← safely "clock" Tests.Clock.live)
     ++ (← safely "http client" Tests.HttpClient.live) ++ (← safely "tls" Tests.Tls.live)
-    ++ (← safely "signature" (liftM Tests.Signature.live)) ++ (← safely "oauth" Tests.OAuth.live)
+    ++ (← safely "signature" (liftM Tests.Signature.live)) ++ (← safely "sign" (liftM Tests.Sign.live))
+    ++ (← safely "oauth" Tests.OAuth.live)
     ++ (← safely "peers" Tests.Peers.live) ++ (← safely "peers on a journal" Tests.Peers.durable)
     ++ (← safely "transport" Tests.Peers.transport) ++ (← safely "fronted" Tests.Fronted.live)
     ++ (← safely "full inbox" Tests.Fronted.busyTest) ++ (← safely "node" Tests.Fronted.nodeTest)
@@ -109,7 +111,7 @@ def main (args : List String) : IO UInt32 := do
   let pure := Tests.Engine.tests ++ Tests.Bank.tests ++ Tests.Json.tests ++ Tests.Html.tests
     ++ Tests.KV.tests ++ Tests.Gate.tests ++ Tests.Fronted.tests ++ Tests.Join.tests
     ++ Tests.Kernel.tests ++ Tests.Frame.tests ++ Tests.Clock.tests ++ Tests.HttpClient.tests ++ Tests.Tls.tests
-    ++ Tests.Signature.tests ++ Tests.OAuth.tests
+    ++ Tests.Signature.tests ++ Tests.Sign.tests ++ Tests.OAuth.tests
     ++ Tests.Fair.tests ++ Tests.Codec.tests ++ Tests.Durable.fileTests ++ Tests.Split.tests
     ++ Tests.Peers.tests ++ Tests.Courier.tests ++ Tests.Mailbox.tests ++ Tests.Batch.tests
     ++ Tests.Pace.tests
