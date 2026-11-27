@@ -7,7 +7,7 @@ module
 public import Std.Async
 public import Lanes.Runtime.IO.Shell
 public import Lanes.Outside.Basic
-public import Lanes.Web.Http.Wire
+public import Lanes.Web.Http.Sse
 
 /-!
 The HTTP client as an adapter. A system calls another service with an output and gets the
@@ -91,6 +91,25 @@ def fetch (port : UInt16) (request : Request) (config : Config := {}) (host := "
   match ← (exchange { host, port, request } config).block with
   | some response => return response
   | none => throw (IO.userError s!"lanes: no response from {host}:{port} to {request.target}")
+
+/-- A stream of events from a server on this machine, for tests: the events read once `enough`
+holds of them, or when the server ends the stream, or at the deadline. -/
+def events (port : UInt16) (request : Request) (enough : List Sse.Event → Bool)
+    (timeout_ms : Nat := 5000) (host := "127.0.0.1") : IO (List Sse.Event) := do
+  let some addr := Std.Net.IPv4Addr.ofString host | return []
+  let some bytes := request.wire host | return []
+  let socket ← TCP.Socket.Client.mk
+  let received ← IO.mkRef ByteArray.empty
+  let read : Async Unit := do
+    socket.connect (.v4 ⟨addr, port⟩)
+    socket.send bytes
+    repeat
+      let some more ← socket.recv? 65536 | break
+      received.modify (· ++ more)
+      if enough (Sse.received (← received.get)) then break
+  try (Async.race (try read catch _ => pure ()) (Async.sleep (.ofNat timeout_ms))).block
+  finally socket.close
+  return Sse.received (← received.get)
 
 /-- Makes the call on a task of its own, so the shard does not wait for the network, and hands
 the answer back as an input. An answer that finds the inbox full is dropped. -/

@@ -6,6 +6,7 @@ import Lanes
 import Tests.Gate
 import Tests.Web
 import Tests.Fixtures.BankWeb
+import Tests.Fixtures.Upload
 
 /-!
 `Http.Loopback`: an application's front end driven with no socket, through the connection, the
@@ -27,6 +28,27 @@ def text (r : Except String Response) : String :=
   | .error _ => ""
 
 def bank := Tests.Fixtures.Bank.bank Tests.Fixtures.BankWeb.Acct 100
+
+open Tests.Fixtures.Upload in
+/-- Requests that stream, with no socket: uploads in pieces, a streamed response, events. -/
+def streamed : List (String × Bool) :=
+  let lb := Loopback.start system bridge
+    (conn := { streams := some Tests.Fixtures.Upload.streams, piece_max := 1000, poll_ms := 10 })
+  let (lb, up) := lb.send { method := .put, path := ["upload"], body := body 100000 }
+  let (lb, count) := lb.get ["count"]
+  let (lb, written) := lb.converse
+    ["GET /events HTTP/1.1\r\nHost: h\r\nLast-Event-ID: 0\r\nConnection: close\r\n\r\n".toUTF8]
+  let bytes := "POST /upload HTTP/1.1\r\nHost: h\r\nTransfer-Encoding: chunked\r\n\r\n".toUTF8
+    ++ chunked (body 5000) 300
+  let (_, pieces) := lb.converse ((List.range ((bytes.size + 99) / 100)).map fun k =>
+    bytes.extract (k * 100) (k * 100 + 100))
+  [ ("loopback: an upload of 100 KB in pieces of 1000 bytes is answered with its size and checksum",
+      text up == s!"100000 bytes, Adler-32 {checksum (body 100000)}\n"),
+    ("loopback: an upload in chunks, sent 100 bytes at a time, likewise",
+      ((String.fromUTF8? pieces).getD "").endsWith s!"5000 bytes, Adler-32 {checksum (body 5000)}\n"),
+    ("loopback: a streamed response is read back whole", text count == "0\n1\n2\n"),
+    ("loopback: a stream of events resumes after the event the client last read",
+      (Sse.received written).map (·.data) == ["e1", "e2"]) ]
 
 def tests : List (String × Bool) :=
   let lb := Loopback.start (Server.system echo) bridge
@@ -56,6 +78,6 @@ def tests : List (String × Bool) :=
     ("loopback: a body over the connection's limit is refused 413", status tooLarge == 413),
     ("loopback: the bank moves money and shows it, its state carried from one request to the "
       ++ "next", status moved == 200 && (text balance).endsWith "<span>130</span>"
-        && status refused == 200 && (text after).endsWith "<span>70</span>") ]
+        && status refused == 200 && (text after).endsWith "<span>70</span>") ] ++ streamed
 
 end Tests.Loopback

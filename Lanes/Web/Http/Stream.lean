@@ -20,7 +20,9 @@ deadline and the gate's bound (`docs/decisions/` "Streams go through the gate").
   it with a part (`Response.part`), with nothing yet (`Response.nothing`), or with the end
   (`Response.finished`).
 
-Both carry headers whose names are not tokens, which no request read from a client has.
+Both carry headers whose names are not tokens, which no request read from a client has, and
+the server tags each with the id its head entered the system with (`Stream.tag`), so that the
+system knows which request it belongs to.
 -/
 
 @[expose] public section
@@ -40,10 +42,11 @@ inductive Mode where
 def kindName : String := ":stream"
 def indexName : String := ":index"
 def afterName : String := ":after"
+def headName : String := ":head"
 
 inductive Msg where
-  | piece (index : Nat) (data : ByteArray) (last : Bool)
-  | pull (index : Nat) (after : Option String)
+  | piece (head : Nat) (index : Nat) (data : ByteArray) (last : Bool)
+  | pull (head : Nat) (index : Nat) (after : Option String)
   deriving DecidableEq, Repr
 
 /-- Piece `index` of the body of the request whose head is `head`. -/
@@ -60,20 +63,18 @@ def pull (head : Request) (index : Nat) (after : Option String) : Request :=
       :: ((after.map (afterName, ·)).toList ++ head.headers)
     body := .empty }
 
+/-- A piece or a pull of the request whose head entered the system with the id `head`. -/
+def tag (r : Request) (head : Nat) : Request :=
+  { r with headers := (headName, toString head) :: r.headers }
+
 /-- What a request handed to the system is, if it is a piece or a pull. -/
-def msg? (r : Request) : Option Msg :=
-  match r.headers with
-  | (kind, k) :: (index, i) :: rest =>
-    if kind == kindName && index == indexName then
-      match decimal? i, k with
-      | some n, "piece" => some (.piece n r.body false)
-      | some n, "last" => some (.piece n r.body true)
-      | some n, "pull" =>
-        match rest with
-        | (after, a) :: _ => some (.pull n (if after == afterName then some a else none))
-        | [] => some (.pull n none)
-      | _, _ => none
-    else none
+def msg? (r : Request) : Option Msg := do
+  let head ← (r.headers.lookup headName).bind decimal?
+  let index ← (r.headers.lookup indexName).bind decimal?
+  match r.headers.lookup kindName with
+  | some "piece" => some (.piece head index r.body false)
+  | some "last" => some (.piece head index r.body true)
+  | some "pull" => some (.pull head index (r.headers.lookup afterName))
   | _ => none
 
 /-- How the system answers a pull. -/

@@ -134,4 +134,23 @@ def splitLf : List Char → List Char → List (List Char)
 def parse (text : List Char) : List Event :=
   Reader.lines {} (splitLf text [])
 
+/-- The data of the whole chunks from `pos` on, after `acc`. -/
+def chunksFrom (bytes : ByteArray) : (fuel pos : Nat) → ByteArray → ByteArray
+  | 0, _, acc => acc
+  | fuel + 1, pos, acc =>
+    match chunkHead bytes pos with
+    | .done (some (size, start)) =>
+      if size = 0 || bytes.size < start + size + 2 then acc
+      else chunksFrom bytes fuel (start + size + 2) (acc ++ bytes.extract start (start + size))
+    | _ => acc
+
+/-- The events a client has read of a streamed response once it has received `bytes`: its head,
+then the whole chunks so far. -/
+def received (bytes : ByteArray) : List Event :=
+  match headEnd bytes with
+  | none => []
+  | some start =>
+    parse ((String.fromUTF8? (chunksFrom bytes bytes.size start .empty)).getD "").toList
+
 end Lanes.Http.Sse
+

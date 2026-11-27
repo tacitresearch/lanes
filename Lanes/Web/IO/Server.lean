@@ -130,6 +130,8 @@ private structure Loop where
   waits to be written is bounded by what is in flight. -/
   writing : Option (WriteEnd × Nat) := none
   resumeSet : Bool := false
+  /-- The ids the heads of the requests that stream entered the system with, by number. -/
+  heads : List (Nat × ReqId) := []
   /-- The connection will be told `sent` when the last write ends. -/
   sentSet : Bool := false
   left : Bool := false
@@ -203,8 +205,9 @@ private def hangUp (socket : TCP.Socket.Client) (reading : Option ReadEnd) (ling
 /-- How a connection's loop reaches the rest of the server. -/
 private structure Ctx where
   config : ServerConfig
-  /-- Hand a request to the system, with whom to tell its answer. -/
-  submit : Request → (Response → BaseIO Unit) → BaseIO Unit
+  /-- Hand a request to the system, with whom to tell its answer; the id it entered with, unless
+  the system was too busy to take it. -/
+  submit : Request → (Response → BaseIO Unit) → BaseIO (Option ReqId)
   /-- Forget the connection, which has closed. -/
   leave : BaseIO Unit
 
@@ -247,13 +250,23 @@ private partial def react (ctx : Ctx) (line : Line) (loop : Loop) (event : Conn.
       todo := rest
       match action with
       | .submit seq request =>
-        ctx.submit request fun r => tell ctx line false (.conn (.answered seq r))
+        discard <| ctx.submit request fun r => tell ctx line false (.conn (.answered seq r))
       | .begin seq request =>
-        ctx.submit request fun r => tell ctx line false (.conn (.responded seq r))
+        let id ← ctx.submit request fun r => tell ctx line false (.conn (.responded seq r))
+        let heads := loop.heads.filter (·.1 ≥ loop.conn.written)
+        loop := { loop with heads := match id with
+          | some id => (seq, id) :: heads
+          | none => heads }
       | .piece seq index request =>
-        ctx.submit request fun r => tell ctx line false (.conn (.took seq index r))
+        let reply := fun r => tell ctx line false (.conn (.took seq index r))
+        match loop.heads.lookup seq with
+        | some id => discard <| ctx.submit (Stream.tag request id) reply
+        | none => reply (.text "the request is not with the system\n" 400)
       | .pull seq index request =>
-        ctx.submit request fun r => tell ctx line false (.conn (.pulled seq index r))
+        let reply := fun r => tell ctx line false (.conn (.pulled seq index r))
+        match loop.heads.lookup seq with
+        | some id => discard <| ctx.submit (Stream.tag request id) reply
+        | none => reply (.text "the request is not with the system\n" 400)
       | .interim _ bytes | .write _ bytes | .part _ bytes =>
         let failed ← failedWrite loop
         let sent ← (line.socket.native.send #[bytes]).toBaseIO
@@ -408,14 +421,15 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
   let server : Server system := {
     runtime, listener, waiting, connections := ← Mutex.new {}, down
     localPort := (← listener.getSockName).port, lanes }
-  let submit (request : Request) (answer : Response → BaseIO Unit) : BaseIO Unit := do
+  let submit (request : Request) (answer : Response → BaseIO Unit) : BaseIO (Option ReqId) := do
     let request := prepare request
     let admitted ← waiting.atomically do
       let id ← modifyGet (·.wait answer)
-      if ← runtime.tryInput (enter (id, request)) then return true
+      if ← runtime.tryInput (enter (id, request)) then return some id
       modify (·.release id)
-      return false
-    unless admitted do answer busy
+      return none
+    if admitted.isNone then answer busy
+    return admitted
   let adopt (socket : TCP.Socket.Client) : Async Unit := do
     try socket.noDelay catch _ => pure ()
     let next ← server.connections.atomically (return (← get).next)

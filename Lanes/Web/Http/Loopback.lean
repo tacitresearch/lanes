@@ -52,6 +52,8 @@ structure Exchange where
   asked : List (ReqId × (Response → Conn.Event)) := []
   written : ByteArray := .empty
   closed : Bool := false
+  /-- The ids the heads of the requests that stream entered the system with, by number. -/
+  heads : List (Nat × ReqId) := []
   /-- Time does not pass beyond this. -/
   until_ms : Nat := 0
 
@@ -77,9 +79,15 @@ def perform (lb : Loopback sys bridge gate) (x : Exchange) :
   | action :: rest =>
     let (lb, x) := match action with
       | .submit seq request => lb.submit x request (.answered seq)
-      | .begin seq request => lb.submit x request (.responded seq)
-      | .piece seq index request => lb.submit x request (.took seq index)
-      | .pull seq index request => lb.submit x request (.pulled seq index)
+      | .begin seq request =>
+        let (lb', x) := lb.submit x request (.responded seq)
+        (lb', { x with heads := (seq, lb.nextId) :: x.heads })
+      | .piece seq index request => match x.heads.lookup seq with
+        | some id => lb.submit x (Stream.tag request id) (.took seq index)
+        | none => (lb, x)
+      | .pull seq index request => match x.heads.lookup seq with
+        | some id => lb.submit x (Stream.tag request id) (.pulled seq index)
+        | none => (lb, x)
       | .interim _ bytes | .write _ bytes | .part _ bytes =>
         (lb, { x with written := x.written ++ bytes })
       | .close => (lb, { x with closed := true })
@@ -95,9 +103,10 @@ def tell (lb : Loopback sys bridge gate) (x : Exchange) (e : Conn.Event) (fuel :
   | 0 => (lb, x)
   | fuel + 1 => if x.conn.unsent then tell lb x .sent fuel else (lb, x)
 
-/-- Let the kernel work and the connection hear the answers, until both are quiet: then let time
-pass to the kernel's next timer, and go on, until the connection closes or `fuel` runs out. -/
-def settle (lb : Loopback sys bridge gate) (x : Exchange) :
+/-- Let the kernel work and the connection hear the answers, until both are quiet: then, with
+`timers`, let time pass to the next timer of the kernel or the connection, and go on, until the
+connection closes or `fuel` runs out. -/
+def settle (lb : Loopback sys bridge gate) (x : Exchange) (timers : Bool) :
     Nat → Loopback sys bridge gate × Exchange
   | 0 => (lb, x)
   | fuel + 1 =>
@@ -111,18 +120,18 @@ def settle (lb : Loopback sys bridge gate) (x : Exchange) :
           | _ => none
         match Conn.earlier timer (x.conn.wakeAt lb.conn) with
         | some at_ms =>
-          if x.until_ms < at_ms then (lb, x)
+          if !timers || x.until_ms < at_ms then (lb, x)
           else
             let now_ms := max lb.now_ms at_ms
             let (lb, x) := tell { lb with kernel := lb.kernel.advance now_ms, now_ms } x .tick
-            settle lb x fuel
+            settle lb x timers fuel
         | none => (lb, x)
       else
         let (lb, x) := step.outputs.foldl (init := (lb, x)) fun (lb, x) out =>
           match told x out with
           | (x, some e) => tell lb x e
           | (x, none) => (lb, x)
-        settle lb x fuel
+        settle lb x timers fuel
 
 /-- Send `pieces` on a new connection, each as the server would receive it, then the end of
 them, and what the server writes back. -/
@@ -131,10 +140,10 @@ def converse (lb : Loopback sys bridge gate) (pieces : List ByteArray) :
   let x : Exchange := { conn := { since_ms := lb.now_ms }, until_ms := lb.now_ms + lb.wait_ms }
   let (lb, x) := pieces.foldl (init := (lb, x)) fun (lb, x) bytes =>
     let (lb, x) := lb.tell x (.received bytes)
-    lb.settle x lb.fuel
-  let (lb, x) := lb.settle x lb.fuel
+    lb.settle x false lb.fuel
+  let (lb, x) := lb.settle x true lb.fuel
   let (lb, x) := lb.tell x .ended
-  let (lb, x) := lb.settle x lb.fuel
+  let (lb, x) := lb.settle x true lb.fuel
   (lb, x.written)
 
 /-- One request on a connection of its own, and its response as the client reads it. -/

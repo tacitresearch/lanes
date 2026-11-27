@@ -5,6 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import Lanes
 import Tests.Gate
 import Tests.Fixtures.BankWeb
+import Tests.Fixtures.Upload
 
 /-! End-to-end tests of the HTTP adapter over a real socket. -/
 
@@ -320,12 +321,62 @@ def wireTest (ioThreads : Nat := 0) : Async (List (String × Bool)) := do
     ("web: stop closes a connection kept open, after its response",
       (first.bind String.fromUTF8?).any (·.endsWith "kept") && stopped && after == none) ]
 
+/-! Requests that stream, over a real socket: uploads far larger than a piece, framed by their
+length and in chunks, a streamed response, a stream of events, one resumed after the event the
+client last read, and `stop` with a stream of events open. -/
+
+def letters (n : Nat) : ByteArray :=
+  ByteArray.mk ((Array.range n).map fun k => (k % 26 + 97).toUInt8)
+
+/-- Answers a stream of events, and every pull of it with nothing: a stream that never ends. -/
+def endless : Bridge (Server.sig ReqId ReqId) where
+  decode _ r :=
+    if r.path == ["events"] then .error (if (Stream.msg? r).isSome then Response.nothing else Response.events)
+    else .error (.text "no" 404)
+  encode _ := none
+
+open Tests.Fixtures.Upload in
+def streamTest (ioThreads : Nat := 0) : Async (List (String × Bool)) := do
+  let server ← serve system bridge
+    { port := 0, ioThreads, streams := some streams, piece_max := 8192, poll_ms := 20 }
+  let some port := server.port | return [("web: the server reports its port", false)]
+  let large := body 1000000
+  let byLength ← (Client.fetch port { method := .put, path := ["upload"], body := large }
+    { maxResponseBytes := 4096 } : IO Response)
+  let head := "POST /upload HTTP/1.1\r\nHost: h\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n"
+  let inChunks ← exchange port [head ++ String.fromUTF8! (chunked (letters 30000) 777)]
+  let counted ← (Client.fetch port { method := .get, path := ["count"] } : IO Response)
+  let events ← (Client.events port { method := .get, path := ["events"] } (·.length ≥ 3) : IO _)
+  let resumed ← (Client.events port
+    { method := .get, path := ["events"], headers := [("last-event-id", "1")] } (·.length ≥ 1) : IO _)
+  server.stop
+  let quiet ← serve (Server.system mute) endless
+    { port := 0, ioThreads, streams := some streams, poll_ms := 20, heartbeat_ms := 50 }
+  let some quietPort := quiet.port | return [("web: the server reports its port", false)]
+  background do
+    discard <| (Client.events quietPort { method := .get, path := ["events"] } (fun _ => false) 1500 : IO _)
+  Async.sleep 300
+  let stopped ← Async.race (do quiet.stop; return true) (do Async.sleep 3000; return false)
+  let text := fun (r : Response) => (String.fromUTF8? r.body).getD ""
+  return [
+    ("web: an upload of 1 MB framed by its length is handed on in pieces and answered with its "
+      ++ "size and checksum", text byLength == s!"1000000 bytes, Adler-32 {checksum large}\n"),
+    ("web: an upload in chunks likewise",
+      inChunks.any (·.endsWith s!"30000 bytes, Adler-32 {checksum (letters 30000)}\n")),
+    ("web: a streamed response is read back whole, in chunks",
+      text counted == "0\n1\n2\n" && counted.headers.contains ("transfer-encoding", "chunked")),
+    ("web: a stream of events carries each event once, in order",
+      events.map (·.data) == ["e0", "e1", "e2"] && events.map (·.id) == [some "0", some "1", some "2"]),
+    ("web: a stream of events resumes after the event the client last read",
+      resumed.map (·.data) == ["e2"]),
+    ("web: stop ends a stream of events that is open", stopped) ]
+
 def tests : IO (List (String × Bool)) := do
   let onLanes := fun (results : List (String × Bool)) =>
     results.map fun (name, ok) => (s!"{name} (on 2 IO threads)", ok)
   return (← (serveTest 0).block) ++ (← linkTest.block) ++ (← deadlineTest.block)
     ++ (← durableTest.block) ++ (← oldJournalTest.block) ++ (← prepareTest.block)
-    ++ (← journalFailTest.block) ++ (← (wireTest 0).block)
-    ++ onLanes ((← (serveTest 2).block) ++ (← (wireTest 2).block))
+    ++ (← journalFailTest.block) ++ (← (wireTest 0).block) ++ (← (streamTest 0).block)
+    ++ onLanes ((← (serveTest 2).block) ++ (← (wireTest 2).block) ++ (← (streamTest 2).block))
 
 end Tests.Web
