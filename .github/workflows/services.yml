@@ -1,6 +1,7 @@
 name: Services
 
-# The service oracles (oracles/README.md): the S3 client and the SES adapter against moto, and
+# The service oracles (oracles/README.md): the S3 client, its POST forms and multipart uploads,
+# the SES adapter and SQS's calls against moto, and
 # the store's adapter against PostgreSQL 16, each run checked against our model of the service.
 # They start services and take longer than a pull request should wait, so they run nightly on
 # the default branch and by hand; the pure oracles run in ci.yml. Each run's records are kept as
@@ -58,7 +59,7 @@ jobs:
           (cd integrations/aws && lake build serviceOracle)
       - name: The store model against PostgreSQL 16
         run: oracles/postgres/run.sh --record
-      - name: The object store and email models against moto
+      - name: The object store, multipart, email and queue models against moto
         run: oracles/moto/run.sh --record
       - if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
