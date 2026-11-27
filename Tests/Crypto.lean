@@ -168,8 +168,48 @@ def argon2idTests : List (String × Bool) :=
     ("argon2id: the least cost libsodium accepts, and an empty password",
       (hash { ops := 1, mem_kib := 8 } "" 0).size == 32) ]
 
+/-- Hashes made by libsodium 1.0.18's `crypto_pwhash` (Argon2id, version 19, one lane, 32 bytes)
+before Lanes dropped it: password, salt and hash in hex, then passes and KiB. A digest stored
+then must verify now. The memory of 9, 13 and 1023 KiB is not a multiple of 4, which Argon2
+rounds down. -/
+def libsodiumVectors : List (String × String × Nat × Nat × String) :=
+  [ ("70617373776f7264", "01010101010101010101010101010101", 1, 64,
+      "f630e220ef8ab2bc6bc39ff1dc6a039847b68849ca3c96371937ef53db99db55"),
+    ("", "00000000000000000000000000000000", 1, 8,
+      "cfa0d2d242da6703d311d7eefc922e39cc60c9f4ec93a67d20995be541a06be4"),
+    ("636f727265637420686f727365206261747465727920737461706c65",
+      "000102030405060708090a0b0c0d0e0f", 2, 19456,
+      "818259b6310026a8e0dbac5d2e6927abcfdb07b32258fac4f61b18b80f929085"),
+    ("70c3a4737377c3b6726420e29c9300", "f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff", 3, 4096,
+      "930e7c2a0884d4d65932f4699f4945ca0085a18023218dc9e3a8b69fc029ed86"),
+    (String.join (List.replicate 7 "6162636465666768696a6b6c6d6e6f707172737475767778797a")
+        ++ "6162636465666768696a6b6c6d6e6f707172",
+      "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a", 1, 9,
+      "423cbc7de648527dc7bd9e7b0bee04f3d0fd4b31abe704da7e6c8a1068c85662"),
+    ("746869727465656e", "a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5", 4, 13,
+      "36977690d21e6a85c32451f702149aa86ff4f4955661714ade441a305bcdccc7"),
+    ("6f6464206d656d6f7279", "77777777777777777777777777777777", 1, 1023,
+      "9e2d8c722f6d670e2b21f592e6a69ca98a6c9e6bce66422c17c2304e7044791a") ]
+
+def libsodiumTests : List (String × Bool) :=
+  (libsodiumVectors.map fun (password, salt, ops, kib, digest) =>
+    (s!"argon2id: as libsodium made it, {password.length / 2} bytes, {ops} passes over {kib} KiB",
+      match Bytes.unhex? password, Bytes.unhex? salt with
+      | some password, some salt =>
+        if h : salt.size = 16 ∧ 0 < ops.toUInt32 ∧ 8 ≤ kib.toUInt32 then
+          let cost : Argon2id := { ops := ops.toUInt32, mem_kib := kib.toUInt32,
+                                   ops_pos := h.2.1, mem_min := h.2.2 }
+          Bytes.hex (cost.hash password salt h.1) == digest
+        else false
+      | _, _ => false))
+  ++ [ ("argon2id: a password digest stored when libsodium made it",
+      (({ cost := { ops := 2, mem_kib := 64 }, pepper := bytesOf "pepper of the deployment" }
+        : Auth.Password).digest "alice" "longenough").hex
+        == "d8da2482ae31637fd29537b3d11e1dd5960a0677b6ca8f3fabc11ea8301296da") ]
+
 def tests : List (String × Bool) :=
   sha256Tests ++ sha512Tests ++ hmacTests ++ bytesTests ++ differentialTests ++ argon2idTests
+    ++ libsodiumTests
 
 def live : IO (List (String × Bool)) := do
   let a ← Lanes.randomBytes 32
