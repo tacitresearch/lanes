@@ -6,8 +6,9 @@
 - The client's TLS context, with its trust store, is made for each call (about 3 ms with
   Ubuntu's). Revocation is not checked. OpenSSL fixes reach Lanes with Lean's toolchain.
 - The PostgreSQL client speaks plain TCP to IPv4 addresses (no TLS yet). It has no `COPY`,
-  `LISTEN`/`NOTIFY`, binary formats, named statements, cancellation or pool; a message is decoded through a list of bytes, so
-  `message_max` (1 MiB by default) also bounds the memory a reply takes. Its live tests run
+  `LISTEN`/`NOTIFY`, binary formats, named statements, cancellation or pool; a message is
+  decoded through a list of bytes, so `message_max` (1 MiB by default) also bounds the memory a
+  reply takes. Its live tests run
   only when `LANES_POSTGRES` names a server; CI runs none.
 - That a PostgreSQL server behaves like the store model at an isolation level is a premise, tested
   on a few recorded runs, not proved. The model keeps at most `history_max` transactions in its
