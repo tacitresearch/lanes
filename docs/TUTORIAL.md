@@ -190,3 +190,79 @@ checker finds an increment delivered twice and counted twice. That is why `imple
 
 The code of this step is `Tests/Tutorial/Check.lean`, where `buggy` is the bug.
 `Tests/Tutorial.lean` checks that the two outputs above are what the checker prints.
+
+## 4. Prove it for every run
+
+**A proof covers every run.** The check covered a limit of 2, four requests and one crash. The
+two theorems at the end of `Tut/Counter.lean` cover every limit, every sequence of requests and
+every fault:
+
+```lean
+/-- The counter never exceeds its limit. -/
+theorem counter_le_limit (config : Config) :
+    (Server.actor (service config)).Invariant fun count => count ≤ config.limit := by
+  actor_invariant [Server.actor, service]
+
+/-- In every reachable state of the system, under any environment model. -/
+theorem system_le_limit (config : Config) (env : EnvModel sig) :
+    (system config).Invariant env fun c => c.state () ≤ config.limit :=
+  System.invariant_of_actor (system config) () (counter_le_limit config) env
+```
+
+`actor_invariant` proves the first by induction: the property holds at the start, every message
+keeps it, and recovery keeps it. It splits on the message, unfolds the definitions in brackets,
+and closes each case with `grind`, which splits the `if`s and does the arithmetic. You did not
+touch it in step 2: `lake build` proved it again with the `decrement` case. The second theorem
+lifts what one actor keeps to the whole system, in every environment.
+
+A case `actor_invariant` cannot close is left as a goal. Write `≤` for `<` in the increment, and
+`lake build` stops (after a long `trace:` line with the command it ran):
+
+```
+error: Tut/Counter.lean:60:2: unsolved goals
+case refine_2.increment
+config : Config
+s✝ : Nat
+h✝ : s✝ ≤ config.limit
+req✝ : ReqId
+⊢ (if s✝ ≤ config.limit then (s✝ + 1, [{ req := req✝, value := s✝ + 1, applied := true }])
+      else (s✝, [{ req := req✝, value := s✝, applied := false }])).fst ≤
+    config.limit
+```
+
+Read the goal: the count `s✝` is at most the limit (`h✝`), and after an increment it must
+still be. At `s✝ = config.limit` it is not. A `✝` marks a name Lean made up.
+
+**The axiom gate.** A theorem proves what it states only if nothing under it was assumed.
+`#print axioms` lists the axioms a theorem rests on, through every lemma it uses. Lean's three
+standard ones are expected. A `sorry` anywhere below shows as `sorryAx`, and an `axiom`
+someone declared shows by its name. `#guard_msgs` turns any other list into a build error. Add
+a gate for each headline theorem at the end of `Tut/Proofs.lean`:
+
+```lean
+/-- info: 'Tut.system_le_limit' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Tut.system_le_limit
+
+/-- info: 'Tut.implements' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Tut.implements
+```
+
+Now put `sorry` in place of `actor_invariant [Server.actor, service]`. The proof of
+`counter_le_limit` is only a warning, but the gate of `system_le_limit`, which rests on it,
+fails:
+
+```
+warning: Tut/Counter.lean:58:8: declaration uses `sorry`
+info: Tut/Proofs.lean:25:15: 'Tut.system_le_limit' depends on axioms: [propext, sorryAx, Classical.choice]
+error: Tut/Proofs.lean:25:0: ❌️ Docstring on `#guard_msgs` does not match generated message:
+
+- info: 'Tut.system_le_limit' depends on axioms: [propext, Classical.choice, Quot.sound]
++ info: 'Tut.system_le_limit' depends on axioms: [propext, sorryAx, Classical.choice]
+```
+
+`lake test` still passes with the `sorry`: it builds only what the checks import. So before
+calling a change done, run `lake build`, and `lake exe lanes lint`, which reports the `sorry`
+too (`no-sorry`). Lanes keeps its own gates in `Tests/Axioms/`.
+
+The code of this step is `Tests/Tutorial/Counter.lean` (the theorems) and
+`Tests/Tutorial/Proofs.lean` (the gate).

@@ -31,7 +31,7 @@ def occursIn (needle haystack : String) : Bool :=
   (haystack.splitOn needle).length > 1
 
 def sources : List String :=
-  ["Counter.lean", "Main.lean", "Check.lean"]
+  ["Counter.lean", "Main.lean", "Check.lean", "Proofs.lean"]
 
 def tests : IO (List (String × Bool)) := do
   let doc ← IO.FS.readFile "docs/TUTORIAL.md"
