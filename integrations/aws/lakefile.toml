@@ -9,9 +9,16 @@ path = "../.."
 
 [[lean_lib]]
 name = "Aws"
+# The axiom gate is a root of its own, so that `lake build` checks it.
+roots = ["Aws", "Aws.Axioms"]
 
 # The refresh policy model-checked, and the credentials, S3 and SES against fakes run in the
 # test; run by `lake test`. Nothing calls AWS.
 [[lean_exe]]
 name = "check"
 root = "Check"
+
+# What `check` runs: the model checks, and the tests against fakes run in the test.
+[[lean_lib]]
+name = "Checks"
+globs = ["Checks.+"]

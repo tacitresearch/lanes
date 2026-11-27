@@ -52,6 +52,8 @@ waits at least a millisecond. -/
 def Config.Valid (cfg : Config) : Prop :=
   cfg.deadline_ms + cfg.skew_ms < cfg.margin_ms ∧ 0 < cfg.backoff_ms ∧ cfg.backoff_ms ≤ cfg.maxBackoff_ms
 
+instance (cfg : Config) : Decidable cfg.Valid := by unfold Config.Valid; infer_instance
+
 /-- Credentials and when they expire, in milliseconds since the epoch. -/
 structure Held (C : Type) where
   creds : C
