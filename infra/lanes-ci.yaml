@@ -8,7 +8,7 @@ Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label: { default: GitHub }
-        Parameters: [GitHubRepository, GitHubToken, ExistingOidcProviderArn, ScriptRef]
+        Parameters: [GitHubRepository, GitHubOwnerId, GitHubRepositoryId, GitHubToken, ExistingOidcProviderArn, ScriptRef]
       - Label: { default: The runner machine }
         Parameters: [InstanceType, VolumeSize, RunnerCount, IdleHours, KeyName, VpcId, SubnetId, ImageId]
 
@@ -18,6 +18,19 @@ Parameters:
     Default: tacitresearch/lanes
     AllowedPattern: "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
     Description: The repository whose workflows may start and stop the machine, as owner/name.
+  GitHubOwnerId:
+    Type: String
+    Default: "316370654"
+    AllowedPattern: "^[0-9]+$"
+    Description: >-
+      The numeric id of the repository's owner. GitHub names the repository in its tokens as
+      owner@ownerId/name@repositoryId; matching the ids means a repository made later under the
+      same name cannot assume the role. The `repository_owner_id` of a run's OIDC token.
+  GitHubRepositoryId:
+    Type: String
+    Default: "1472755265"
+    AllowedPattern: "^[0-9]+$"
+    Description: The numeric id of the repository, the `repository_id` of a run's OIDC token.
   GitHubToken:
     Type: String
     NoEcho: true
@@ -121,8 +134,14 @@ Resources:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
               StringLike:
                 token.actions.githubusercontent.com:sub:
-                  - !Sub repo:${GitHubRepository}:ref:refs/heads/*
-                  - !Sub repo:${GitHubRepository}:pull_request
+                  - !Sub
+                    - "repo:${Owner}@${GitHubOwnerId}/${Name}@${GitHubRepositoryId}:ref:refs/heads/*"
+                    - Owner: !Select [0, !Split ["/", !Ref GitHubRepository]]
+                      Name: !Select [1, !Split ["/", !Ref GitHubRepository]]
+                  - !Sub
+                    - "repo:${Owner}@${GitHubOwnerId}/${Name}@${GitHubRepositoryId}:pull_request"
+                    - Owner: !Select [0, !Split ["/", !Ref GitHubRepository]]
+                      Name: !Select [1, !Split ["/", !Ref GitHubRepository]]
       Policies:
         - PolicyName: start-stop-the-runner-machine
           PolicyDocument:

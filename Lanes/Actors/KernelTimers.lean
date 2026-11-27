@@ -272,9 +272,18 @@ private theorem settle_kept (k : Kernel sys) (i : σ.Id) (r : sys.State i × Lis
         List.filter_cons_of_pos (by simpa using hi)]
   · exact ⟨hclock, hturn, fun e rest hq => .inl ⟨rest ++ sent, by rw [hsent, hq]; rfl⟩⟩
 
+private theorem Kept.rest {i : σ.Id} (h : Kept i k k') : Kept i k (k'.rest i) := by
+  refine ⟨by simp [h.clock], by simp [h.turn], fun e rest hq => ?_⟩
+  rcases h.oldest e rest hq with ⟨rest', hq'⟩ | ⟨hi, hdown⟩
+  · exact .inl ⟨rest', by simpa using hq'⟩
+  · rcases cell_rest k' i with hcell | ⟨-, -, -, hcell⟩
+    · exact .inr ⟨hi, by rw [hcell]; exact hdown⟩
+    · exact .inr ⟨hi, by simp [hcell]⟩
+
 private theorem handle_kept (k : Kernel sys) (i : σ.Id) (msg : σ.Msg i) :
-    Kept i k (k.handle i msg).1 :=
-  settle_kept k i _
+    Kept i k (k.handle i msg).1 := by
+  rw [handle_eq]
+  exact (settle_kept k i _).rest
 
 private theorem fire_kept (k : Kernel sys) (i : σ.Id) (msg : σ.Msg i) (due : Due) :
     Kept i k (k.fire i msg due).kernel := by
@@ -578,9 +587,16 @@ theorem settle (h : k.WellFormed) {i : σ.Id} (hup : (k.cell i).up = true)
   · exact hall.1.down i
   · exact hall.1
 
+theorem rest (h : k.WellFormed) (i : σ.Id) : (k.rest i).WellFormed := by
+  rcases cell_rest k i with hcell | ⟨-, -, htimers, hcell⟩
+  · exact h.congr hcell (rest_agenda k i) (rest_nextToken k i)
+  · exact (h.setCell (c := { state := (sys.actor i).init }) htimers.symm fun _ => rfl).congr
+      (hcell.trans (cell_setCell k i _).symm) (rest_agenda k i) (rest_nextToken k i)
+
 theorem handle (h : k.WellFormed) {i : σ.Id} (hup : (k.cell i).up = true) (msg : σ.Msg i) :
-    (k.handle i msg).1.WellFormed :=
-  h.settle hup _
+    (k.handle i msg).1.WellFormed := by
+  rw [handle_eq]
+  exact (h.settle hup _).rest i
 
 theorem startActor (h : k.WellFormed) (i : σ.Id) : (k.startActor i).1.WellFormed :=
   (h.setCell (c := { (k.cell i) with up := true }) rfl (fun hdown => nomatch hdown)).settle

@@ -14,8 +14,10 @@ public import Lanes.Data.Json.Basic
 # JSON parser
 
 `Json.parse` reads one JSON document (RFC 8259) from a string. It is strict: no trailing commas,
-no leading zeros, no raw control characters in strings, no unpaired `\u` surrogates, no duplicate
-object keys, and nothing but whitespace after the value.
+no leading zeros, no raw control characters in strings, no unpaired `\u` surrogates, and nothing
+but whitespace after the value. An object is built by `Json.mkObj`, so a key given twice keeps its
+last value, as in Go's `encoding/json` and JavaScript's `JSON.parse`: RFC 8259 allows the text,
+and the JSON test suite counts it as valid.
 
 Every function here is total. The original is written in `Std.Internal.Parsec`, whose loops are
 `partial`: a `Parsec` result does not say that the position moved forward, so nothing shows the
@@ -200,39 +202,46 @@ def fraction (maxDigits whole count : Nat) (p : s.Pos) :
     | .error e => .error e
   | none => .ok (whole, 0, ⟨p, String.Pos.le_refl p⟩)
 
+/-- The digits of an exponent at `p2`, after its marker at `p1` and its sign. -/
+def exponentDigits (maxDigits : Nat) (negative : Bool) (p p1 p2 : s.Pos) (h : p ≤ p2) :
+    Except String (Int × { q : s.Pos // p ≤ q }) :=
+  match digitsFrom maxDigits p p2 h 0 0 with
+  | .ok (_, 0, _) => fail p2 "digit expected in the exponent"
+  | .ok (n, _, q) =>
+    if n > maxDigits then fail p1 s!"exponent larger than {maxDigits}"
+    else .ok (if negative then -(n : Int) else n, q)
+  | .error e => .error e
+
 def exponent (maxDigits : Nat) (p : s.Pos) : Except String (Int × { q : s.Pos // p ≤ q }) :=
   match accept (fun c => c == 'e' || c == 'E') p with
   | some ⟨p1, h1⟩ =>
-    let negative := (accept (· == '-') p1).isSome
-    let p2 : { q : s.Pos // p1 ≤ q } :=
-      match accept (fun c => c == '-' || c == '+') p1 with
-      | some ⟨q, hq⟩ => ⟨q, by pos_order⟩
-      | none => ⟨p1, String.Pos.le_refl p1⟩
-    match digitsFrom maxDigits p p2.1 (by have := p2.2; pos_order) 0 0 with
-    | .ok (_, 0, _) => fail p2.1 "digit expected in the exponent"
-    | .ok (n, _, q) =>
-      if n > maxDigits then fail p1 s!"exponent larger than {maxDigits}"
-      else .ok (if negative then -(n : Int) else n, q)
-    | .error e => .error e
+    match accept (· == '-') p1 with
+    | some ⟨p2, h2⟩ => exponentDigits maxDigits true p p1 p2 (by pos_order)
+    | none =>
+      match accept (· == '+') p1 with
+      | some ⟨p2, h2⟩ => exponentDigits maxDigits false p p1 p2 (by pos_order)
+      | none => exponentDigits maxDigits false p p1 p1 (by pos_order)
   | none => .ok (0, ⟨p, String.Pos.le_refl p⟩)
 
-def num (maxDigits : Nat) (p : s.Pos) : Except String (JsonNumber × { q : s.Pos // p ≤ q }) :=
-  let negative := (accept (· == '-') p).isSome
-  let p1 : { q : s.Pos // p ≤ q } :=
-    match accept (· == '-') p with
-    | some ⟨q, hq⟩ => ⟨q, by pos_order⟩
-    | none => ⟨p, String.Pos.le_refl p⟩
-  match whole maxDigits p1.1 with
+/-- The number at `p1`, after its sign: `negative` if there was a minus. -/
+def unsigned (maxDigits : Nat) (negative : Bool) (p p1 : s.Pos) (h : p ≤ p1) :
+    Except String (JsonNumber × { q : s.Pos // p ≤ q }) :=
+  match whole maxDigits p1 with
   | .ok (n, count, ⟨p2, h2⟩) =>
     match fraction maxDigits n count p2 with
     | .ok (digits, decimals, ⟨p3, h3⟩) =>
       match exponent maxDigits p3 with
       | .ok (e, ⟨p4, h4⟩) =>
         let mantissa : Int := if negative then -(digits : Int) else digits
-        .ok (.ofScientific mantissa (e - decimals), ⟨p4, by have := p1.2; pos_order⟩)
+        .ok (.ofScientific mantissa (e - decimals), ⟨p4, by pos_order⟩)
       | .error e => .error e
     | .error e => .error e
   | .error e => .error e
+
+def num (maxDigits : Nat) (p : s.Pos) : Except String (JsonNumber × { q : s.Pos // p ≤ q }) :=
+  match accept (· == '-') p with
+  | some ⟨p1, h1⟩ => unsigned maxDigits true p p1 (by pos_order)
+  | none => unsigned maxDigits false p p (String.Pos.le_refl p)
 
 /-! ### Values -/
 
@@ -324,10 +333,7 @@ def fields (depth maxDigits : Nat) (start p : s.Pos) (h : start < p)
         fields depth maxDigits start p5 (by pos_order) (acc.push (name, fieldValue))
       | none =>
         match accept (· == '}') p3 with
-        | some ⟨q, hq⟩ =>
-          match mkObj? (acc.push (name, fieldValue)).toList with
-          | .ok object => .ok (object, ⟨q, by pos_order⟩)
-          | .error e => fail start e
+        | some ⟨q, hq⟩ => .ok (mkObj (acc.push (name, fieldValue)).toList, ⟨q, by pos_order⟩)
         | none => fail p3 "',' or '}' expected"
     | .error e => .error e
   | .error e => .error e

@@ -24,17 +24,6 @@ enumeration are fields of its type. That the declaration is the one written is w
 - `Declare.independent`
 - `Declare.enum`
 
-## Specs reached through a definition of another module
-
-`Once.server_implements` and `Examples.KV.implements_once` are stated with
-`System.ImplementsOnce`, which unfolds to these; the inventory follows a statement's definitions
-only within their own module, so it does not see that the theorems state them.
-
-### `Lanes/Semantics/Once.lean`
-
-- `Service.Once.take`
-- `Service.once`
-
 ## Without evidence on the day the inventory was introduced (2026-11-26)
 
 Each is to be proved, tested, made private or removed.
@@ -68,7 +57,6 @@ Each is to be proved, tested, made private or removed.
 
 ### `Lanes/Actors/Run.lean`
 
-- `Effect.sends`
 - `Effect.armed`
 - `Effect.emits`
 
@@ -89,12 +77,6 @@ Each is to be proved, tested, made private or removed.
 - `Effect.isStop`
 - `Envelope.sameLink`
 - `EnvModel.distributed`
-
-### `Lanes/Auth/Login.lean`
-
-- `Auth.instHashableDigest`
-- `Auth.instReprDigest`
-- `Auth.Attempts.unlock`
 
 ### `Lanes/Check/Fuzz.lean`
 
@@ -126,8 +108,6 @@ Each is to be proved, tested, made private or removed.
 - `JsonNumber.instCoeNat`
 - `JsonNumber.instCoeInt`
 - `JsonNumber.instInhabited`
-- `JsonNumber.maxLeadingZeros`
-- `JsonNumber.toString`
 - `JsonNumber.instToString`
 - `Json.instCoeNat`
 - `Json.instCoeInt`
@@ -138,37 +118,6 @@ Each is to be proved, tested, made private or removed.
 
 - `Json.instToString`
 
-### `Lanes/Html/Basic.lean`
-
-- `Html.empty`
-- `Html.instInhabited`
-- `instToHtmlArray`
-- `instToHtmlOption`
-- `instToAttrInt`
-- `instToAttrOption`
-
-### `Lanes/Html/Htmx.lean`
-
-- `Hx.confirm`
-- `Hx.boost`
-- `Hx.pushUrl`
-- `Hx.indicator`
-- `Http.Request.isHtmx`
-- `Http.Response.hxRedirect`
-
-### `Lanes/Http/Basic.lean`
-
-- `Http.Request.param?`
-- `Http.Request.header?`
-- `Http.Response.json`
-- `Http.Response.redirect`
-- `Http.Response.withHeader`
-
-### `Lanes/Http/Cookie.lean`
-
-- `Http.Request.bodyWithin`
-- `Http.Response.noStore`
-
 ### `Lanes/Http/Front.lean`
 
 - `Http.servedActors`
@@ -176,14 +125,6 @@ Each is to be proved, tested, made private or removed.
 ### `Lanes/Http/Gate.lean`
 
 - `Http.instReprGateMsgOfOut`
-
-### `Lanes/Http/Route.lean`
-
-- `Http.Slug.instToString`
-- `Http.Path.append`
-- `Http.Route.put`
-- `Http.Route.patch`
-- `Http.Route.delete`
 
 ### `Lanes/Semantics/Liveness.lean`
 

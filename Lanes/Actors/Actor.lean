@@ -35,6 +35,14 @@ structure Actor (S Msg Eff : Type) where
   whose state is persisted overrides this; `fun s => (s, [])` says all of it survives.
   -/
   recover : S → S × List Eff := fun _ => (init, [])
+  /--
+  States that starting the actor anew gives, with nothing to do. An actor in one of them, with
+  no timers, can be released from memory, since starting it again gives it back
+  (`docs/decisions/D51-release-actors-at-rest.md`). The default declares none.
+  -/
+  fresh : S → Bool := fun _ => false
+  fresh_recover : ∀ s, fresh s = true → recover init = (s, []) := by
+    intro _ h; exact absurd h (by decide)
 
 namespace Actor
 
@@ -57,11 +65,15 @@ def mapEff {Eff' : Type} (f : Eff → List Eff') (A : Actor S Msg Eff) : Actor S
   init := A.init
   step s m := ((A.step s m).1, (A.step s m).2.flatMap f)
   recover s := ((A.recover s).1, (A.recover s).2.flatMap f)
+  fresh := A.fresh
+  fresh_recover s h := by simp [A.fresh_recover s h]
 
 def comapMsg {Msg' : Type} (f : Msg' → Msg) (A : Actor S Msg Eff) : Actor S Msg' Eff where
   init := A.init
   step s m := A.step s (f m)
   recover := A.recover
+  fresh := A.fresh
+  fresh_recover := A.fresh_recover
 
 inductive Reachable (A : Actor S Msg Eff) : S → Prop
   | init : Reachable A A.init

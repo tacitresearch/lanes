@@ -7,7 +7,7 @@ import LanesCli.Generated
 /-!
 # `lanes lint`
 
-Source-level checks of the LANES_STYLE rules that can be decided from the text of a project:
+Source-level checks of the rules in `AGENTS.md` that can be decided from the text of a project:
 
 - `no-sorry` (rule 4): no `sorry` or `admit`.
 - `trusted-listed` (rule 5.5): `partial`, `unsafe`, `axiom`, `panic!`, `@[implemented_by]` and
@@ -19,6 +19,9 @@ Source-level checks of the LANES_STYLE rules that can be decided from the text o
 - `layering` (rule 1.6): files that import Mathlib, CSLib or a proof module (`Lanes.Semantics`,
   `App.Proofs`) live in a proof directory, one named `…Proofs` included, or are named
   `…Proofs.lean`, so executable code never links them.
+- `links`: every repository path that a Markdown file at the root or under `docs/` writes in
+  backquotes exists (`a/{b,c}.lean` names two). `docs/history/` and `docs/decisions/` record
+  the past and are not checked.
 - `inventory`, `inventory-none`, in Lanes itself: `docs/INVENTORY.md` is up to date, and every
   definition of `Lanes/` without evidence is on `docs/inventory-none.md`. These read the built
   modules, so `lanesInventory`, which links `Lean`, does them; `--fix` has it rewrite the file.
@@ -160,6 +163,105 @@ def checkC (root file : System.FilePath) (trusted : String) : List Finding :=
   if (trusted.splitOn relative).length > 1 then []
   else [⟨relative, 1, "trusted-listed", "C in a file that TRUSTED.md does not name (rule 5.5)"⟩]
 
+/-! ## Paths that docs cite -/
+
+/-- The inline code spans of Markdown text outside fenced blocks, each with the line it starts
+on. A span that runs past the end of its line is kept open, so the spans after it stay paired. -/
+def codeSpans (text : String) : List (Nat × String) := Id.run do
+  let mut spans : Array (Nat × String) := #[]
+  let mut fenced := false
+  -- An open span: how many backquotes opened it, its line, and its text so far.
+  let mut current : Option (Nat × Nat × Array Char) := none
+  for (line, k) in (text.splitOn "\n").zipIdx do
+    if line.trimAsciiStart.toString.startsWith "```" then
+      fenced := !fenced
+      continue
+    if fenced then continue
+    let chars := line.toList.toArray
+    let mut i := 0
+    while h : i < chars.size do
+      if chars[i] == '`' then
+        let mut j := i
+        while j < chars.size && chars[j]! == '`' do j := j + 1
+        let run := j - i
+        match current with
+        | none => current := some (run, k + 1, #[])
+        | some (ticks, start, acc) =>
+          if run == ticks then
+            spans := spans.push (start, String.ofList acc.toList)
+            current := none
+          else current := some (ticks, start, acc ++ (Array.replicate run '`'))
+        i := j
+      else
+        if let some (ticks, start, acc) := current then
+          current := some (ticks, start, acc.push chars[i])
+        i := i + 1
+    if let some (ticks, start, acc) := current then
+      current := some (ticks, start, acc.push ' ')
+  return spans.toList
+
+/-- The text before the first `{`, inside it up to the next `}`, and after that. -/
+def firstBraces (path : String) : Option (String × String × String) :=
+  match path.splitOn "{" with
+  | before :: after :: rest =>
+    match ("{".intercalate (after :: rest)).splitOn "}" with
+    | inner :: tail :: more => some (before, inner, "}".intercalate (tail :: more))
+    | _ => none
+  | _ => none
+
+/-- `a/{b,c}.lean` as `a/b.lean` and `a/c.lean`; a path without braces as itself. Each round
+takes one group of braces out of every path, and a path has fewer groups than characters. -/
+def expandBraces (path : String) : List String := Id.run do
+  let mut done : List String := []
+  let mut todo := [path]
+  for _ in [0:path.length] do
+    let mut next : List String := []
+    for p in todo do
+      match firstBraces p with
+      | some (before, inner, after) => next := next ++ (inner.splitOn ",").map (before ++ · ++ after)
+      | none => done := done ++ [p]
+    todo := next
+  return done ++ todo
+
+/-- A code span that is written as a path in the repository: it has a `/`, no blanks and no
+placeholder (`<area>`, `*`, `…`), and its first part is at the root of the project. Module
+names (`Lanes.Http`), Go packages (`net/http`) and URLs are not. -/
+def citedPaths (root : System.FilePath) (span : String) : IO (List String) := do
+  let bad := [' ', '\t', '<', '>', '*', '?', '$', '|', '…', '"', '\'', '(', ')', '#', ':', '=']
+  if !span.contains '/' || span.any (bad.contains ·) || span.startsWith "/"
+      || span.startsWith "~" || span.startsWith "-" || span.contains '\\' then
+    return []
+  let paths := expandBraces span
+  let first := (span.splitOn "/").headD ""
+  if first.isEmpty || first == "." || first == ".." || first == ".lake" || first == ".git"
+      || first.contains '{' || !(← (root / first).pathExists) then
+    return []
+  return paths
+
+/-- The Markdown files whose citations are checked: those at the root and under `docs/`, but
+not the records of the past, `docs/history/` and `docs/decisions/`, nor `docs/STATUS.md`, which
+is written from `docs/status/`, whose fragments are checked instead. -/
+def citingDocs (root : System.FilePath) : IO (List String) := do
+  let top := (← Generated.markdownIn root)
+  let docs := root / "docs"
+  let nested ← if ← docs.isDir then
+      docs.walkDir fun dir => return !["history", "decisions"].contains (dir.fileName.getD "")
+    else pure #[]
+  let below := nested.toList.filterMap fun file =>
+    let relative := (file.toString.dropPrefix (root.toString ++ "/")).toString
+    if file.extension == some "md" && relative != "docs/STATUS.md" then some relative else none
+  return top ++ Generated.sortStrings below
+
+/-- `links`: every repository path a doc cites in backquotes exists. -/
+def checkLinks (root : System.FilePath) : IO (List Finding) := do
+  let mut findings : List Finding := []
+  for doc in ← citingDocs root do
+    for (line, span) in codeSpans (← IO.FS.readFile (root / doc)) do
+      for path in ← citedPaths root span do
+        if !(← (root / path).pathExists) then
+          findings := ⟨doc, line, "links", s!"`{path}` does not exist"⟩ :: findings
+  return findings.reverse
+
 structure Options where
   /-- Rewrite the generated files instead of reporting them. -/
   fix : Bool := false
@@ -210,6 +312,7 @@ def lint (root : System.FilePath) (options : Options := {}) : IO Report := do
   findings := findings ++ (← sourceFiles root "c").toList.flatMap (checkC root · trusted)
   for file in files do
     findings := findings ++ (← checkFile root file trusted)
+  findings := findings ++ (← checkLinks root)
   findings := findings ++ (← inventory root options.fix)
   return ⟨findings, fixed, files.size⟩
 
