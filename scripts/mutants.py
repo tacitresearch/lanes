@@ -151,10 +151,10 @@ MUTANTS = [
      "Lanes/Runtime/IO/Shell.lean",
      "  let mut written := (journal.map (·.past.length)).getD 0", "  let mut written := 0"),
     ("journal: what is cut off is not kept", "Lanes/Durable/IO/Journal.lean",
-     """      IO.FS.writeBinFile (store.path.addExtension "cut")
-        (disk.journal.extract found.size disk.journal.size)
+     """        IO.FS.writeBinFile (store.path.addExtension "cut")
+          (disk.journal.extract found.size disk.journal.size)
 """,
-     "      pure ()\n"),
+     "        pure ()\n"),
     ("journal: the mark of a save is not counted", "Lanes/Durable/IO/Journal.lean",
      "        (perform store.path handle true)\n      count.modify (· + 1)",
      "        (perform store.path handle true)"),
