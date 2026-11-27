@@ -364,7 +364,7 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   transaction in progress (`Conn.step_committed`), the server is trusted after SCRAM only once
   it proved it knows the password (`Conn.onMessage_saslFinal`), and a connection that ends
   answers every request in flight `unknown` (`Conn.step_lost`); model-checked first
-  (`Tests/PostgresConn.lean`). With TLS (`docs/decisions/new-postgres-over-tls.md`), after
+  (`Tests/PostgresConn.lean`). With TLS (`docs/decisions/D83-postgres-over-tls.md`), after
   `SSLRequest` or direct, nothing but `SSLRequest` leaves before the handshake is done
   (`Conn.tls_first`) and `N` closes the connection (`Conn.step_refusedTls`); SCRAM binds the hash
   of the server's certificate (`SCRAM-SHA-256-PLUS`), the one the handshake gave
