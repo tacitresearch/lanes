@@ -9,6 +9,7 @@ public import Lanes.Durable.IO.Journal
 public import Lanes.Web.Http.Conn
 public import Lanes.Web.Http.Front
 public import Lanes.Web.Http.Waiting
+public import Lanes.Web.IO.CLoop
 public import Lanes.Web.IO.Ops
 
 /-!
@@ -69,6 +70,9 @@ structure ServerConfig where
   whichever of Lean's task threads tells it something. Four by default: on the warm machine they
   serve 21–30% more requests a second than `0` for a quarter less CPU (`bench/README.md`). -/
   ioThreads : Nat := 4
+  /-- Which loop runs the connections: Lean's, on `Std.Net`, or `ioThreads` threads of C, each
+  with its own epoll and listening socket (`Lanes/Web/IO/CLoop.lean`), on Linux only. -/
+  loop : IOLoop := .lean
   gate : GateConfig := {}
   /-- Where to keep a journal. With one, the system behind the server survives the process:
   it starts in the state it was in (`docs/decisions/` D24). -/
@@ -165,7 +169,8 @@ never reused, and the server is what allocates them. -/
 structure Server (system : System τ) [Hashable τ.Id] where
   private mk ::
   private runtime : Runtime system
-  private listener : TCP.Socket.Server
+  private listener : Option TCP.Socket.Server
+  private cloop : Option CLoop.Handle
   private waiting : Mutex (Waiting (Response → BaseIO Unit))
   private connections : Mutex Connections
   private down : IO.Promise Unit
@@ -317,16 +322,18 @@ private def Server.finish {system : System τ} [Hashable τ.Id] (server : Server
 
 private def shutDown {system : System τ} [Hashable τ.Id] (server : Server system) :
     Async Unit := do
-  try server.listener.close catch _ => pure ()
+  if let some listener := server.listener then try listener.close catch _ => pure ()
   let alive ← server.connections.atomically do
     modify fun c => { c with count.stopping := true }
     return (← get).alive.toList
   for (_, c) in alive do c.tell (.conn .stop)
+  if let some h := server.cloop then CLoop.stop h
 
 private def awaitConnections {system : System τ} [Hashable τ.Id] (server : Server system) :
     Async Unit := do
   for (_, c) in ← server.connections.atomically (return (← get).alive.toList) do
     discard <| await c.line.ended.result?
+  if let some h := server.cloop then discard <| await (← BaseIO.asTask (prio := .dedicated) (CLoop.join h))
 
 /-- The address a connection comes from, if the socket tells it. -/
 private def peerOf (socket : TCP.Socket.Client) : BaseIO (Option Ip.Addr) := do
@@ -376,23 +383,33 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
     | .inl (id, response) =>
       if let some waiter := (← waiting.atomically (modifyGet (·.answer id))) then
         waiter response
-  let listener ← try
-      let listener ← TCP.Socket.Server.mk
-      listener.bind (.v4 ⟨addr, config.port⟩)
-      listener.listen 1024
-      pure listener
+  let threads := max 1 config.ioThreads
+  let (listener, cloop) ← try
+      match config.loop with
+      | .lean =>
+        let listener ← TCP.Socket.Server.mk
+        listener.bind (.v4 ⟨addr, config.port⟩)
+        listener.listen 1024
+        try listener.noDelay catch _ => pure ()
+        pure (some listener, none)
+      | .c =>
+        let h ← CLoop.new config.host config.port threads.toUInt32 config.connections_max.toUInt32
+          config.write_ms.toUInt64 config.linger_ms.toUInt64 (max 1 config.tick_ms).toUInt64
+        pure (none, some h)
     catch e =>
       runtime.stop
       throw e
-  try listener.noDelay catch _ => pure ()
+  let localPort ← match listener, cloop with
+    | some listener, _ => pure (← listener.getSockName).port
+    | none, some h => pure (CLoop.port h)
+    | none, none => pure config.port
   let down ← IO.Promise.new
-  let lanes ← (List.range config.ioThreads).toArray.mapM fun _ => do
+  let lanes ← (List.range (if cloop.isSome then 0 else config.ioThreads)).toArray.mapM fun _ => do
     let lane : Lane := { parker := ← Parker.new, ready := ← Mutex.new #[], done := down }
     discard <| IO.asTask (prio := .dedicated) lane.run
     return lane
   let server : Server system := {
-    runtime, listener, waiting, connections := ← Mutex.new {}, down
-    localPort := (← listener.getSockName).port, lanes, ops }
+    runtime, listener, cloop, waiting, connections := ← Mutex.new {}, down, localPort, lanes, ops }
   let hand (request : Request) (answer : Response → BaseIO Unit) : BaseIO Unit := do
     let request := prepare request
     let admitted ← waiting.atomically do
@@ -438,14 +455,24 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
       ops.refused
       socket.close
     | some ctx => tell ctx line false .resume
-  discard <| IO.asTask (prio := .dedicated) (ticker server config.tick_ms)
-  background do
-    repeat
-      match ← (try some <$> listener.accept catch _ => pure none) with
-      | some socket => adopt socket
-      | none =>
-        if (← server.connections.atomically (return (← get).count.stopping)) then break
-        Async.sleep 50
+  if let some h := cloop then
+    let admit := do
+      let admitted ← server.connections.atomically do
+        modifyGet fun c => let (ok, count) := c.count.admit config.connections_max; (ok, { c with count })
+      unless admitted do ops.refused
+      return admitted
+    let peer (a : Ip.Addr) := if config.ops.active then some a else none
+    CLoop.start h threads config.conn (fun a => ops.front probe (peer a) arrived) admit
+      (server.connections.atomically (modify fun c => { c with count := c.count.leave }))
+  if let some listener := listener then
+    discard <| IO.asTask (prio := .dedicated) (ticker server config.tick_ms)
+    background do
+      repeat
+        match ← (try some <$> listener.accept catch _ => pure none) with
+        | some socket => adopt socket
+        | none =>
+          if (← server.connections.atomically (return (← get).count.stopping)) then break
+          Async.sleep 50
   background do
     if (← runtime.ended).isSome then
       for (_, waiter) in ← waiting.atomically (modifyGet Waiting.drain) do waiter busy

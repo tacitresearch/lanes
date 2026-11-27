@@ -28,8 +28,8 @@ def fetch (port : UInt16) (path : String) (method : String := "GET") (body : Str
   socket.close
   return (String.fromUTF8? received).getD ""
 
-def serveTest (ioThreads : Nat := 0) : Async (List (String × Bool)) := do
-  let server ← serve (Server.system echo) bridge { port := 0, ioThreads } { record := true }
+def serveTest (ioThreads : Nat := 0) (loop : IOLoop := .lean) : Async (List (String × Bool)) := do
+  let server ← serve (Server.system echo) bridge { port := 0, ioThreads, loop } { record := true }
   let some port := server.port | return [("web: the server reports its port", false)]
   let ok ← fetch port "/"
   let refused ← fetch port "/bad"
@@ -267,9 +267,9 @@ def get (path : String) (close : Bool := false) : String :=
 def statuses (text : String) : List String :=
   (text.splitOn "HTTP/1.1 ").drop 1 |>.map (·.take 3 |>.toString)
 
-def wireTest (ioThreads : Nat := 0) : Async (List (String × Bool)) := do
+def wireTest (ioThreads : Nat := 0) (loop : IOLoop := .lean) : Async (List (String × Bool)) := do
   let server ← serve (Server.system mute) slugBridge
-    { port := 0, head_ms := 300, idle_ms := 300, connections_max := 3, ioThreads }
+    { port := 0, head_ms := 300, idle_ms := 300, connections_max := 3, ioThreads, loop }
   let some port := server.port | return [("web: the server reports its port", false)]
   let pipelined ← exchange port [get "/echo/a" ++ get "/echo/b" ++ get "/echo/c" true]
   let pieces ← exchange port ["GE", "T /echo/s HTTP/1.1\r\nHo", "st: h\r\nConnection: close\r\n", "\r\n"]
@@ -287,7 +287,7 @@ def wireTest (ioThreads : Nat := 0) : Async (List (String × Bool)) := do
   -- deadline would free a place for the one beyond it. Each held connection is answered once
   -- before the next, so all three are counted when the fourth arrives.
   let bound ← serve (Server.system mute) slugBridge
-    { port := 0, head_ms := 10000, idle_ms := 10000, connections_max := 3, ioThreads }
+    { port := 0, head_ms := 10000, idle_ms := 10000, connections_max := 3, ioThreads, loop }
   let some boundPort := bound.port | return [("web: the server reports its port", false)]
   let held ← (List.range 3).mapM fun _ => do
     let socket ← TCP.Socket.Client.mk
@@ -299,7 +299,7 @@ def wireTest (ioThreads : Nat := 0) : Async (List (String × Bool)) := do
   let beyond ← exchange boundPort [get "/echo/n" true]
   for (socket, _) in held do socket.close
   discard <| Async.race (do bound.stop; return true) (do Async.sleep 3000; return false)
-  let server ← serve (Server.system mute) slugBridge { port := 0, ioThreads }
+  let server ← serve (Server.system mute) slugBridge { port := 0, ioThreads, loop }
   let some port := server.port | return [("web: the server reports its port", false)]
   let socket ← TCP.Socket.Client.mk
   socket.connect (.v4 ⟨.ofParts 127 0 0 1, port⟩)
@@ -330,12 +330,27 @@ def wireTest (ioThreads : Nat := 0) : Async (List (String × Bool)) := do
     ("web: stop closes a connection kept open, after its response",
       (first.bind String.fromUTF8?).any (·.endsWith "kept") && stopped && after == none) ]
 
+/-- The C loop: on Linux the tests of the server on one and on two of its threads; elsewhere,
+that the server refuses it when it starts. -/
+def cLoopTests : Async (List (String × Bool)) := do
+  let on (n : Nat) (results : List (String × Bool)) : List (String × Bool) :=
+    results.map fun (name, ok) => (s!"{name} (on the C loop, {n} threads)", ok)
+  if System.Platform.isWindows || System.Platform.isOSX then
+    let refused ← try
+        discard <| serve (Server.system echo) bridge { port := 0, loop := .c }
+        pure false
+      catch e => pure ((toString e).startsWith "lanes: the C loop")
+    return [("web: the C loop is refused where it does not run", refused)]
+  let one ← (· ++ ·) <$> serveTest 1 .c <*> wireTest 1 .c
+  let two ← (· ++ ·) <$> serveTest 2 .c <*> wireTest 2 .c
+  return on 1 one ++ on 2 two
+
 def tests : IO (List (String × Bool)) := do
   let onLanes := fun (results : List (String × Bool)) =>
     results.map fun (name, ok) => (s!"{name} (on 2 IO threads)", ok)
   return (← (serveTest 0).block) ++ (← linkTest.block) ++ (← deadlineTest.block)
     ++ (← durableTest.block) ++ (← oldJournalTest.block) ++ (← prepareTest.block)
     ++ (← journalFailTest.block) ++ (← (wireTest 0).block)
-    ++ onLanes ((← (serveTest 2).block) ++ (← (wireTest 2).block))
+    ++ onLanes ((← (serveTest 2).block) ++ (← (wireTest 2).block)) ++ (← cLoopTests.block)
 
 end Tests.Web
