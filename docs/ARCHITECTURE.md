@@ -492,6 +492,14 @@ a refinement check means every run's inputs and outputs are a trace of the spec
 (`Check.refines_sound`, `Check.refines_traces`). Under D45 a PASS finds bugs; the claim rests on a
 theorem.
 
+Two other searches reach further (`docs/decisions/new-checker-scale.md`). `Check.fingerprint`
+(`Lanes/Check/Fingerprint.lean`) keeps a hash of each state instead of the state: what it reports
+replays and is checked again (`Check.fingerprint_violated`, `Check.systemFingerprinted_violated`),
+but a pass is not exhaustive, and the report says it was fingerprinted. `Check.systemReduced`
+(`Lanes/Check/Reduce.lean`) searches the worlds through a representative of each: a complete pass
+is a pass of `Check.system` when the representative is a `World.Reduction`
+(`Check.systemReduced_sound`).
+
 ## The proof layer
 
 `Lanes/Semantics/` imports CSLib and Mathlib; nothing executable imports it (D11, rule 1.6).
