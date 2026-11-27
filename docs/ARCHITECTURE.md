@@ -229,7 +229,7 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   itself (`Request.fields_framing`), and the reader is proved to read a response written as a
   server writes it as soon as its last byte is there, to stay within its limit and to end
   (`Lanes/Web/Http/WireSound.lean`: `Response.read_wire`, `Response.read_more`; D39).
-- **S3** (`Lanes/Web/IO/S3.lean`, `docs/decisions/new-s3-and-signature-version-4.md`): put,
+- **S3** (`Lanes/Web/IO/S3.lean`, `docs/decisions/D71-s3-and-signature-version-4.md`): put,
   get with a range, head, delete and ListObjectsV2 on a bucket, named virtual-hosted or by path
   at any endpoint (AWS, MinIO, LocalStack), and links a browser follows to get or put an object.
   Pure: each operation as a call signed with Signature Version 4 (`Lanes/Web/Http/SigV4.lean`),
