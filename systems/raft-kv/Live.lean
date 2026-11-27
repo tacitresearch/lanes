@@ -62,10 +62,15 @@ def run : Async (List (String × Bool)) := do
   let answers ← IO.mkRef #[]
   let mut nodes : List (Fin 3 × Running) := []
   for k in List.finRange 3 do nodes := nodes ++ [(k, ← start dir ports answers k (create := true))]
+  -- A node that is not the leader drops a request, and an entry a deposed leader appended may
+  -- never commit, so a client sends again to the leader of the moment. A put of the same value
+  -- and a get may take effect twice.
   let ask := fun (nodes : List (Fin 3 × Running)) (req : ReqId) (cmd : Command) => do
-    let some leader ← await? 5000 (leaderAmong nodes) | return none
-    if let some (_, node) := nodes.find? (·.1 == leader) then node.input ⟨req, leader, cmd⟩
-    await? 3000 (answerTo answers req)
+    for _ in [0:8] do
+      let some leader ← await? 5000 (leaderAmong nodes) | return none
+      if let some (_, node) := nodes.find? (·.1 == leader) then node.input ⟨req, leader, cmd⟩
+      if let some a ← await? 1000 (answerTo answers req) then return some a
+    return none
   let first ← await? 5000 (leaderAmong nodes)
   let wrote ← ask nodes 1 (.put "a" "1")
   let read ← ask nodes 2 (.get "a")
