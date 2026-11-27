@@ -204,12 +204,12 @@ that performs IO is in an `IO/` directory of its area and named in `TRUSTED.md`.
 | `Lanes/Runtime/` | The kernel and its proofs, batches, the inbox, shards; the shell and the parker in `IO/` | `Std` only |
 | `Lanes/Durable/` | The journal, snapshots, the disk model, the framing of a file; the journal's files in `IO/` | `Std` only |
 | `Lanes/Net/` | The courier, every decision of the transport, and its proofs; the transport and a process with an HTTP front in `IO/` | `Std` only |
-| `Lanes/Outside/` | What the outside may do (`Outside`), the home of models of external systems; the clock in `IO/` | `Std` only |
+| `Lanes/Outside/` | What the outside may do (`Outside`), the home of models of external systems (calls, idempotency keys, webhooks, payments, email, and transactional stores in `Store/`); the clock in `IO/` | `Std` only |
 | `Lanes/Web/` | HTTP as data, its grammar, the gate, routes, cookies, the wire format and the server's connections (`Http/`); HTML values and templates (`Html/`); tokens, password digests, failed attempts, sessions (`Auth/`); the server and the client in `IO/` | `Std` only |
 | `Lanes/Behaviours/` | Standard actors with their specs and proofs, by feature (`Server`, `Jobs/`, `Once/`) | `Std` only |
 | `Lanes/Check/` | Model checker | `Std` only |
 | `Lanes/Data/` | `Enum`, codecs and `lanes_data`, the queue, quorums | `Std` only |
-| `Lanes/Lib/` | The standard library: encodings (Base64, JSON), addresses and URLs, time, SHA-256, HMAC and `Sodium`, media types, rate limits (`docs/STDLIB.md`) | `Std` only |
+| `Lanes/Lib/` | The standard library: encodings (Base64, JSON), addresses and URLs, time, SHA-256, HMAC, MD5, PBKDF2 and `Sodium`, the PostgreSQL protocol (`Postgres/`), media types, rate limits (`docs/STDLIB.md`) | `Std` only |
 | `Lanes/Semantics/` | The semantics as a CSLib `LTS`, refinement, specs, fairness and leads-to, and the liveness of the gate and of jobs | CSLib, Mathlib |
 | `native/` | The C that binds libsodium, `fsync`, a timed wait and OpenSSL's TLS client, all of it trusted | libsodium, OpenSSL, libc |
 | `LanesCli/` | The `lanes` command: `new`, `lint`, `check`, `inventory` | `Std` only; `Lean` in `Inventory`, which only `lanesInventory` links |

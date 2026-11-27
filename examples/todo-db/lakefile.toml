@@ -1,0 +1,24 @@
+name = "todoDb"
+version = "0.1.0"
+defaultTargets = ["TodoDb", "check", "todoLive"]
+testDriver = "check"
+
+[[require]]
+name = "lanes"
+path = "../.."
+
+# `TodoDb.Proofs` is a root of its own so that `lake build` builds the proofs and `check`,
+# which imports `TodoDb`, does not link them.
+[[lean_lib]]
+name = "TodoDb"
+roots = ["TodoDb", "TodoDb.Proofs", "TodoDb.Proofs.Axioms"]
+
+# Model checks, run by `lake test`. Check before you prove (Lanes rule 5.1).
+[[lean_exe]]
+name = "check"
+root = "Check"
+
+# The system on a real PostgreSQL, when LANES_POSTGRES names one.
+[[lean_exe]]
+name = "todoLive"
+root = "Live"
