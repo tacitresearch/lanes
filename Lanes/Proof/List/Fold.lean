@@ -5,7 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 /-!
-A log read by a monitor that may reject it: `foldlM` into `Option`.
+A log read by a monitor that may reject it, `foldlM` into `Option`; and right folds by `max`.
 -/
 
 public section
@@ -39,5 +39,23 @@ theorem foldlM_some_inv {M : Type} {f : M → α → Option M} {l : List α} {m 
     obtain ⟨m', hx, hl⟩ := foldlM_cons_some h
     exact ih (fun m y m'' hy => hstep m y m'' (List.mem_cons_of_mem _ hy))
       (hstep m x m' List.mem_cons_self hm hx) hl
+
+/-- A right fold by `max` is at least where it starts. -/
+theorem le_foldr_max (f : α → Nat) (init : Nat) (l : List α) :
+    init ≤ l.foldr (fun a m => max (f a) m) init := by
+  induction l with
+  | nil => exact Nat.le_refl _
+  | cons a l ih => simp only [List.foldr_cons]; omega
+
+/-- A right fold by `max` is at least each element's value. -/
+theorem le_foldr_max_of_mem (f : α → Nat) (init : Nat) {l : List α} {a : α} (h : a ∈ l) :
+    f a ≤ l.foldr (fun a m => max (f a) m) init := by
+  induction l with
+  | nil => cases h
+  | cons b l ih =>
+    simp only [List.foldr_cons]
+    rcases List.mem_cons.mp h with rfl | h
+    · omega
+    · have := ih h; omega
 
 end Lanes

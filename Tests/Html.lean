@@ -162,7 +162,9 @@ def tests : List (String × Bool) :=
         && (Http.Response.redirect "/a").status == 303
         && (Http.Response.redirect "/a").headers == [("location", "/a")]
         && ((Http.Response.text "x").withHeader "a" "b").headers.getLast? == some ("a", "b")
-        && Http.Response.empty.noStore.headers == [("cache-control", "no-store")]),
+        && Http.Response.empty.noStore.headers == [("cache-control", "no-store")]
+        && Http.Response.empty.noFraming.headers
+          == [("content-security-policy", "frame-ancestors 'none'")]),
     ("route: put, patch and delete routes take their methods, and a path appended to another reads both",
       let item : Http.Route (Nat × Http.Slug) := .put (("items" /> .nat).append .slug)
       let request (method : Http.Method) : Http.Request := { method, path := ["items", "3", "x"] }

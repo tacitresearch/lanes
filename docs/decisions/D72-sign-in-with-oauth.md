@@ -196,3 +196,31 @@ signed authorization requests.
 - Whether one package per vendor under `integrations/` is the shape, or one package of presets.
 - Whether pending sign-ins should survive a restart, journalled, at the price of the verifier in
   the journal.
+
+*Amendment: the browser keeps the sign-in.* A review found that anyone could evict every pending
+sign-in: `GET /sign-in/<provider>` needs nothing, and the table of 1024 dropped its oldest, so
+about a hundred requests a second refused every user's callback. The server now keeps nothing for
+a sign-in begun. The binding cookie holds a `Ticket`, the provider, the state and the expiry,
+under an HMAC-SHA-256 tag (`Auth.sign`, purpose `sign-in`) by a key `SignIn.start` draws; the
+nonce and the PKCE verifier are tags of the state under the same key (`Ticket.grant`), so neither
+is in the cookie, which a callback carries into the system. The cookie is `__Host-lanes-sign-in`,
+with `Path=/`, unless `secure` is off for a test over plain HTTP. A callback is accepted only with
+the ticket of its own cookie, which only the key can make, for its state, on its provider's route
+and before its expiry (`OAuth.check_ok`): bound to its browser and its provider, and expiring, as
+before. After the code is exchanged and the identity verified, the state is claimed in `Used`,
+the one structure the server keeps: the states of accepted callbacks with their expiries, and a
+floor below which tickets are refused. A state claimed is refused again (`Refusal.used`), so over
+any run a state is accepted again only with a ticket that expires later (`Used.accepted_later`),
+and since the key tags one ticket for each random state, no state is accepted twice
+(`Used.accepted_once`). `Used` holds at most `Settings.maxUsed` states (16384;
+`Used.length_claim`), each dropped when its ticket expires. When it is full it drops the oldest and
+raises the floor to their expiries: their replays stay refused, and so do the tickets that expire
+no later, sign-ins begun before them; a newer ticket is accepted. No live state is forgotten, and
+since a state is claimed only after the provider gave a code for it, filling the set takes a
+sign-in at the provider for each state, not one anonymous request. The key is drawn at each
+start and the states used are in memory, so a restart refuses the callbacks of sign-ins begun
+before it, as it did. A provider's error no longer uses up a state, which is now only in the
+browser. An identity from a provider with several issuers names the first
+(`OAuth.Identity.under`), so Google's two issuers give a user one key. `Tests/OAuth.lean`
+model-checks the edge with its tickets in two browsers' cookies, the states used and a restart
+that draws another key; the properties are those above.

@@ -230,10 +230,44 @@ def scramConfig (nonce : String) : Conn.Config :=
 
 def scramConfig' (nonce : String) : Conn.Config := { scramConfig nonce with user := "lanes_scram" }
 
-def md5Config : Conn.Config := { user := "lanes_md5", database := "lanes_test", password := some "md5-pw" }
+def md5Config : Conn.Config :=
+  { user := "lanes_md5", database := "lanes_test", password := some "md5-pw", allowMd5 := true,
+    requireScram := false }
 
 def clearConfig (allow : Bool) : Conn.Config :=
-  { user := "lanes_clear", database := "lanes_test", password := some "clear-pw", allowCleartext := allow }
+  { user := "lanes_clear", database := "lanes_test", password := some "clear-pw", allowCleartext := allow,
+    requireScram := false }
+
+/-- What a connection with a password does when the server answers its start-up with `first`
+and then says it is ready. -/
+def afterAuth (cfg : Conn.Config) (first : Backend) : List Conn.Action :=
+  let (c, _) := Conn.start cfg
+  let (c, a) := Conn.step cfg c (.received first.encode)
+  let (_, b) := Conn.step cfg c (.received (Backend.readyForQuery .idle).encode)
+  a ++ b
+
+def sends (actions : List Conn.Action) : Bool := actions.any fun | .send _ => true | _ => false
+
+/-- A server that never proves it knows the password: `AuthenticationOk` at once, which is
+`trust`, or a request for MD5 or a cleartext password, any of which an impostor on the path can
+send. -/
+def downgradeTests : List (String × Bool) :=
+  let cfg : Conn.Config :=
+    { user := "lanes", database := "lanes", password := some "pw", nonce := "abcdefghijklmnop" }
+  let md5 := Backend.authMd5 ⟨#[1, 2, 3, 4]⟩
+  [ ("postgres: with a password, AuthenticationOk before SCRAM closes the connection, unopened",
+      let a := afterAuth cfg .authOk
+      !a.contains .opened && a.contains (.close .signature)),
+    ("postgres: with a password, MD5 and cleartext are refused by default, nothing sent",
+      let m := afterAuth cfg md5
+      let t := afterAuth { cfg with allowCleartext := true } .authCleartext
+      !sends m && m.contains (.close .method) && !sends t && t.contains (.close .method)
+        && !sends (afterAuth { cfg with allowMd5 := true } md5)),
+    ("postgres: with requireScram off, trust and an allowed MD5 open as before",
+      (afterAuth { cfg with requireScram := false } .authOk).contains .opened
+        && sends (afterAuth { cfg with requireScram := false, allowMd5 := true } md5)),
+    ("postgres: without a password, a server that trusts the user opens",
+      (afterAuth { cfg with password := none } .authOk).contains .opened) ]
 
 def psqlTests : IO (List (String × Bool)) := do
   let names := ["psql-trust", "psql-cleartext", "psql-md5", "psql-scram", "psql-scram-wrong",

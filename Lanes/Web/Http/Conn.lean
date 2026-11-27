@@ -201,8 +201,15 @@ are left out, and a response that cannot be written so becomes a `500`. -/
 def closing (close : Bool) : List (String × String) :=
   if close then [("Connection", "close")] else []
 
+/-- `X-Content-Type-Options: nosniff`, unless the response sets it: a browser then takes a body
+as the type it is labelled, never a script or a page it guessed, the refusals' plain text
+included. -/
+def nosniff (r : Response) : List (String × String) :=
+  if r.headers.any (·.1.toLower == "x-content-type-options") then []
+  else [("X-Content-Type-Options", "nosniff")]
+
 def sendable (close : Bool) (r : Response) : Response :=
-  let kept := { r with headers := r.headers.filter Response.kept ++ closing close }
+  let kept := { r with headers := r.headers.filter Response.kept ++ nosniff r ++ closing close }
   if kept.writable then kept else { status := 500 }
 
 /-- The bytes of the response to a request; to `HEAD`, without the body. -/

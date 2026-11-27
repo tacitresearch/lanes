@@ -106,7 +106,8 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.Release.tests ++ Tests.ReadRequest.tests ++ Tests.Oracle.unitTests
     ++ Tests.HttpConn.tests ++ Tests.Loopback.tests
     ++ Tests.Jobs.tests ++ Tests.Schedule.tests ++ Tests.Outside.tests ++ Tests.Postgres.vectorTests
-    ++ Tests.Ops.tests ++ Tests.SigV4.tests ++ Tests.S3.tests ++ Tests.Testing.tests
+    ++ Tests.Postgres.downgradeTests ++ Tests.Ops.tests
+    ++ Tests.SigV4.tests ++ Tests.S3.tests ++ Tests.Testing.tests
   match args with
   | [] =>
     let pure := pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.Lint.tests)

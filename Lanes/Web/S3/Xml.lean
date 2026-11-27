@@ -97,21 +97,24 @@ def entity? (name : List Char) : Option Char :=
   | _ => none
 
 /-- Text with its references replaced and a carriage return, alone or before a line feed, read
-as a line feed; `none` for a reference that is not one, a `<`, `]]>`, or a character XML does
-not allow. -/
-def unescape : (fuel : Nat) → List Char → Option (List Char)
-  | 0, _ => none
-  | _, [] => some []
-  | fuel + 1, '&' :: rest => do
+as a line feed, after `acc` reversed; `none` for a reference that is not one, a `<`, `]]>`, or a
+character XML does not allow. Every call is a tail call, so a text of any length takes no stack.
+A reference's name runs to the next `;`: those characters are consumed when it is one, and the
+text is refused when it is not, so each character is looked at a bounded number of times and the
+time is linear in the text. -/
+def unescape : (fuel : Nat) → List Char → List Char → Option (List Char)
+  | 0, _, _ => none
+  | _, [], acc => some acc.reverse
+  | fuel + 1, '&' :: rest, acc =>
     let (name, tail) := rest.span (· != ';')
-    let tail ← tail.tail?
-    let c ← entity? name
-    return c :: (← unescape fuel tail)
-  | _, '<' :: _ => none
-  | _, ']' :: ']' :: '>' :: _ => none
-  | fuel + 1, '\r' :: '\n' :: rest => ('\n' :: ·) <$> unescape fuel rest
-  | fuel + 1, '\r' :: rest => ('\n' :: ·) <$> unescape fuel rest
-  | fuel + 1, c :: rest => if xmlChar c.toNat then (c :: ·) <$> unescape fuel rest else none
+    match tail, entity? name with
+    | ';' :: tail, some c => unescape fuel tail (c :: acc)
+    | _, _ => none
+  | _, '<' :: _, _ => none
+  | _, ']' :: ']' :: '>' :: _, _ => none
+  | fuel + 1, '\r' :: '\n' :: rest, acc => unescape fuel rest ('\n' :: acc)
+  | fuel + 1, '\r' :: rest, acc => unescape fuel rest ('\n' :: acc)
+  | fuel + 1, c :: rest, acc => if xmlChar c.toNat then unescape fuel rest (c :: acc) else none
 
 /-- `s` as XML text: `&`, `<`, `>`, `"` and `'` as entities. -/
 def escape (s : String) : String :=
@@ -146,7 +149,7 @@ def tokens : (fuel : Nat) → List Char → List Token → Option (List Token)
     tokens fuel tail ((if closed then [.stop name, .start name] else [.start name]) ++ acc)
   | fuel + 1, chars, acc => do
     let (text, tail) := chars.span (· != '<')
-    let text ← unescape (text.length + 1) text
+    let text ← unescape (text.length + 1) text []
     tokens fuel tail (.text (String.ofList text) :: acc)
 
 /-- The elements open, innermost first, each with its children so far in reverse. -/
