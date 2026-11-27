@@ -26,7 +26,7 @@ proved function tells it to.
 | Joins | `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`, `Lanes/Semantics/FairJoin.lean` | `System.Reachable.left`, `SysState.run_left`, `System.Run.Fair.left` |
 | Shards and the transport | `Lanes/Runtime/{Shard,ShardSound,ShardsSound}.lean`, `Lanes/Net/{Courier,CourierSound}.lean`, `Lanes/Net/IO/{Peers,Node}.lean` | `System.ShardsReachable.unsharded`, `Peers.Courier.written_sublist_sent` |
 | The gate and the HTTP server | `Lanes/Web/Http/{Gate,Front,FrontSound,Waiting,Conn,ConnSound}.lean`, `Lanes/Semantics/Front.lean`, `Lanes/Web/IO/Server.lean` | `Http.served_answered_le_arrived`, `Http.served_pending_answered`, `Http.Waiting.exec_answered`, `Http.Conn.run_writes` |
-| Metrics, health and the access log | `Lanes/Lib/Metrics.lean`, `Lanes/Web/Http/{Ops,OpsSound}.lean`, `Lanes/Web/IO/Ops.lean` | `Metrics.Histogram.observeAll_eq`, `Metrics.readLabelValue_escapeLabel`, `Http.Ops.route?_default`, `Http.Ops.answer_ready`, `Http.Ops.Access.parse_line`; that none of it reaches a system is trusted and tested |
+| Metrics, health and the access log | `Lanes/Lib/Metrics.lean`, `Lanes/Web/Http/{Ops,OpsSound}.lean`, `Lanes/Web/IO/Ops.lean` | `Metrics.Histogram.observeAll_eq`, `Metrics.readLabelValue_escapeLabel`, `Http.Ops.route?_default`, `Http.Ops.route?_metrics`, `Http.Ops.answer_ready`, `Http.Ops.Access.parse_line`; that none of it reaches a system is trusted and tested |
 | Other adapters | `Lanes/Outside/Basic.lean`, `Lanes/Outside/IO/Clock.lean`, `Lanes/Web/IO/Client.lean`, `Lanes/Web/Http/{Grammar,Wire,WireSound}.lean` | `Response.read_wire`, `Request.fields_framing`; conformance tests |
 | Models of external services | `Lanes/Outside/{Rpc,Idempotent,Events,ObjectStore}.lean`, `Lanes/Outside/Effects/`, `Lanes/Proof/Outputs.lean` | `Idempotent.at_most_once`, `Rpc.answered_le_called`, `Events.deliveries_le`, `ObjectStore.read_sent`, `System.Emits.outputs`; that a real service conforms is trusted |
 | Signature Version 4 and the S3 client | `Lanes/Web/Http/{SigV4,SigV4Sound}.lean`, `Lanes/Web/S3/{Basic,Xml}.lean`, `Lanes/Web/IO/S3.lean` | `SigV4.target_sign`, `SigV4.sortQuery_sorted`, `SigV4.canonicalHeaders_sorted`, `SigV4.encode_chunks`; signatures tested against AWS's vectors, the client against a fake S3; its IO trusted |
@@ -36,7 +36,8 @@ proved function tells it to.
 | The checker | `Lanes/Check/`, `Lanes/Semantics/{Monitor,MonitorSound}.lean` | `Check.search_sound`, `Check.system_sound_of_respects`, `Check.refines_traces` |
 | The proof layer | `Lanes/Semantics/` | refinement, specs, fairness, leads-to |
 | Data and the standard library | `Lanes/Data/`, `Lanes/Lib/` | codec laws, `Quorum.majority_inter`, `Bytes.same_iff`, `Json.parse_iff`, `Url.parse_print` |
-| Bound C | `native/lanes.c`, `Lanes/Lib/Crypto/Sodium.lean` | trusted; tested against the Lean references |
+| Sign-in with OAuth 2.0 and OpenID Connect | `Lanes/Web/Auth/{Jose,IdToken,OAuth}.lean`, `Lanes/Web/IO/SignIn.lean` | `OAuth.Pending.callback_ok`, `OAuth.Pending.accepted_le_issued`, `OAuth.IdToken.verify_accepted`, `Jose.verify_ok`, `OAuth.Keys.no_fetch_within`; the edge is trusted, tested end to end against a provider run in the test |
+| Bound C | `native/lanes.c`, `Lanes/Lib/Crypto/Sodium.lean`; `native/verify.c`, `Lanes/Lib/Crypto/Verify.lean` | trusted; tested against the Lean references and published vectors |
 | TLS client | `native/tls.c`, `Lanes/Web/IO/Tls.lean` | trusted; tested against `openssl s_server` |
 
 ## Actors and the semantics
@@ -212,13 +213,19 @@ readiness, request ids and a JSON access log. What is decided is pure. `Lanes/Li
 renders counters, gauges and histograms, whose buckets count the observations at or below their
 bounds (`Metrics.Histogram.observeAll_eq`) and whose label values a reader reads back as written
 (`Metrics.readLabelValue_escapeLabel`). `Lanes/Web/Http/Ops.lean` says which request is the
-operators', none with nothing configured (`Http.Ops.route?_default`), that readiness answers
+operators', none with nothing configured (`Http.Ops.route?_default`), that the metrics page is
+answered only to a peer on a loopback address unless the configuration lets others in, however
+its path is written (`Http.Ops.route?_metrics`), while liveness and readiness answer every peer
+(`Http.Ops.route?_peer`), that readiness answers
 `200` exactly when the shard has recovered and the server is not stopping or draining
 (`Http.Ops.answer_ready`), and what a log line holds, the JSON text of its record
 (`Http.Ops.Access.parse_line`). `Lanes/Web/IO/Ops.lean` answers an operator's request before it
 is prepared or has an id, so it never reaches the shard, and passes every other request on as it
 came; it counts the journal's appends by wrapping its storage. So a run writes the same journal
-with all of it on as off, which is trusted and tested (`Tests/Ops.lean`).
+with all of it on as off, which is trusted and tested (`Tests/Ops.lean`). `Server.stopOnSignal`
+is a stop that drops nothing in flight: at SIGTERM or SIGINT readiness answers `503`, the
+requests the shard has taken are answered until none is left or a deadline passes, and then the
+server stops; trusted and tested with a child process.
 
 Around it, pure and in `Std` only: requests and responses as data; typed routes whose links the
 server reads back and `dispatch` hands to their route's handler (`Http.dispatch_link`); forms
@@ -232,6 +239,17 @@ exactly what was signed for their purpose and session (`Auth.verify_eq_some`,
 `Auth.checkForm_iff`) and another's only through an HMAC collision (`Auth.verify_sign_other`,
 `Auth.checkForm_other`), Argon2id password digests, failed attempts that lock at their limit
 (`Auth.Attempts.locked_unlock_repeat`) and sessions that keep the newest (`Auth.Sessions.ids_starts`).
+
+Sign-in with another service (`docs/decisions/D72-sign-in-with-oauth.md`) is OAuth 2.0's authorization
+code flow with PKCE and OpenID Connect on it, decided in `Lanes/Web/Auth/OAuth.lean` and done
+where a request arrives, before the system (`serve`'s `arrive`, `Lanes/Web/IO/SignIn.lean`), so no
+code or token is journalled. A callback is accepted only for a state issued to its browser and
+provider and not expired (`OAuth.Pending.callback_ok`), and no state more often than it was issued
+(`OAuth.Pending.accepted_le_issued`), which is also model-checked against an attacker's browser;
+an ID token only if its header names RS256 or ES256, a key of the provider's set of that
+algorithm and `kid` checks it, and every claim passes (`OAuth.IdToken.verify_accepted`,
+`Lanes/Web/Auth/Jose.lean`). The system gets the identity in headers a client cannot send
+(`OAuth.identity?_strip`). Vendors' presets are packages under `integrations/` (D61).
 
 ## Adapters
 
@@ -258,6 +276,9 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   document type and every entity it does not know (`Lanes/Web/S3/Xml.lean`). The signatures are
   tested against AWS's test suite and S3's documented examples, the client against a fake S3
   that checks every signature from the bytes it receives. Bodies are whole, in memory.
+- **Sign-in** (`Lanes/Web/IO/SignIn.lean`): the random values of a beginning, the pending
+  sign-ins and each provider's keys held in references, and the calls to the token endpoint,
+  the JWK Set and a user API; every decision is `Lanes/Web/Auth/OAuth.lean`'s (above).
 - **HTTP server, journal, transport**: above.
 - **Models of external services** (`Lanes/Outside/`, D61 and the decision on models of external
   services): what a service a system calls may do, built from three combinators on a model of
@@ -380,12 +401,19 @@ verified, against the system's trust store or a file given, and so is the name o
 for. A response is ended only by the server's `close_notify`. That TLS is done right is trusted,
 not proved: `Tests/Tls.lean` checks the refusals against `openssl s_server`.
 
+Signatures under RSA and P-256 public keys are checked by the same OpenSSL's libcrypto
+(`native/verify.c`, declared in `Lanes/Lib/Crypto/Verify.lean`), with SHA-256: the key's DER and an
+ECDSA signature's are written in Lean, which also decides which keys are valid and what size a
+signature has (`Lanes/Lib/Crypto/PublicKey.lean`), and RSA's check has a Lean reference,
+`Rsa.verifyReference`, that `Tests/Signature.lean` compares with it beside RFC 7515's and RFC 7520's
+vectors.
+
 ## A request, end to end
 
 One process running `Http.serve` on a journal:
 
-1. `Lanes/Web/IO/Server.lean` reads the request from its socket and applies `Bridge.prepare` on the
-   request's own task.
+1. `Lanes/Web/IO/Server.lean` reads the request from its socket and, on the request's own task,
+   applies `arrive` if it was given one (which may answer it instead) and `Bridge.prepare`.
 2. `Http.Waiting` hands it an id; the server offers the input to the shard's inbox and answers
    `503` if the inbox refuses it.
 3. The shell takes the batch; `Batch.run` journals the input, and the shell appends the entry and
@@ -417,6 +445,7 @@ key-value store with front ends, whose read cache breaks refinement (`examples/k
 service (`examples/payments`, `Shop.charged_at_most_once`); `examples/raft-kv`, a replicated key-value store proved to implement the
 map it replicates (`RaftKV.implementsMachine`), and `once` of it in every environment with the
 memo in the map (`RaftKV.implementsMachine_once`); `examples/ledger`, a multi-user web ledger;
+`examples/sign-in`, members of a video site signed in with Google or GitHub, with sessions;
 and `examples/rookery`, a small social network for bots whose claims are proved of its spec,
 which it is proved to implement with deadlines (`Rookery.implements`); the theorem that joins the
 two is not written. Each claim, its evidence and its premises are in `docs/CLAIMS.md`. The tests use copies of
