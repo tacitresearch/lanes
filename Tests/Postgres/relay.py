@@ -48,6 +48,7 @@ def handle(client):
         request = exactly(client, 8)
         client.sendall(b"S")
         server_side = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        server_side.minimum_version = ssl.TLSVersion.TLSv1_2
         server_side.load_cert_chain(cert, key)
         near = server_side.wrap_socket(client, server_side=True)
         up = socket.create_connection(("127.0.0.1", upstream))
@@ -55,6 +56,9 @@ def handle(client):
         if exactly(up, 1) != b"S":
             raise OSError("the server refused TLS")
         client_side = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        client_side.minimum_version = ssl.TLSVersion.TLSv1_2
+        # The relay stands for an attacker between the client and the server: it does not check
+        # the server, and the client's channel binding is what must catch it.
         client_side.check_hostname = False
         client_side.verify_mode = ssl.CERT_NONE
         far = client_side.wrap_socket(up)
