@@ -15,16 +15,16 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Core` | 103 | 43 | 0 | 34 | 1 | 10 | 15 |
 | `Lanes/Data` | 68 | 43 | 0 | 4 | 1 | 0 | 20 |
 | `Lanes/Durable` | 70 | 58 | 2 | 0 | 0 | 9 | 1 |
-| `Lanes/Lib` | 593 | 371 | 26 | 1 | 111 | 75 | 9 |
+| `Lanes/Lib` | 603 | 384 | 32 | 1 | 102 | 75 | 9 |
 | `Lanes/Net` | 37 | 6 | 5 | 0 | 0 | 25 | 1 |
 | `Lanes/Outside` | 159 | 119 | 4 | 6 | 1 | 29 | 0 |
 | `Lanes/Proof` | 40 | 16 | 0 | 0 | 0 | 23 | 1 |
 | `Lanes/Runtime` | 173 | 94 | 21 | 0 | 28 | 30 | 0 |
 | `Lanes/Semantics` | 63 | 11 | 0 | 0 | 0 | 51 | 1 |
-| `Lanes/Testing` | 92 | 0 | 0 | 1 | 91 | 0 | 0 |
+| `Lanes/Testing` | 94 | 0 | 0 | 1 | 93 | 0 | 0 |
 | `Lanes/Web` | 676 | 354 | 57 | 46 | 163 | 54 | 2 |
 | `LanesCli` | 125 | 0 | 0 | 0 | 51 | 0 | 74 |
-| All | 2408 | 1251 | 120 | 124 | 447 | 340 | 126 |
+| All | 2420 | 1264 | 126 | 124 | 440 | 340 | 126 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -143,24 +143,24 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Schedule.Msg.codec` | proved | its type, `Codec` |
 | `Schedule.instCodableMsg` | proved | its type, `Codable` |
 | `Schedule.hashJitter` | checked | `Tests/Schedule.lean` |
-| `Schedule.Config.cap` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
+| `Schedule.Config.cap` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 14 more |
 | `Schedule.Config.backoff` | proved | `Schedule.retry_waits` |
-| `Schedule.Config.wait` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
+| `Schedule.Config.wait` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 14 more |
 | `Schedule.keys` | proved | `Schedule.attach_held_leaves`, `Schedule.every_noticed`, `Schedule.held_leaves` |
-| `Schedule.entry` | proved | `Schedule.attach_held_leaves`, `Schedule.attempt_ends`, `Schedule.dispatch_due` and 4 more |
-| `Schedule.put` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
-| `Schedule.remove` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
-| `Schedule.set` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
-| `Schedule.sig` | proved | `Schedule.actor_attempts`, `Schedule.actor_within`, `Schedule.armed` and 10 more |
+| `Schedule.entry` | proved | `Schedule.attach_held_leaves`, `Schedule.attempt_ends`, `Schedule.dispatch_due` and 5 more |
+| `Schedule.put` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 14 more |
+| `Schedule.remove` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 14 more |
+| `Schedule.set` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 14 more |
+| `Schedule.sig` | proved | `Schedule.actor_attempts`, `Schedule.actor_within`, `Schedule.armed` and 11 more |
 | `Schedule.timer` | proved | through `Schedule.actor`, `Schedule.attach` and 1 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 9 more |
-| `Schedule.fail` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
-| `Schedule.over` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
-| `Schedule.run` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
-| `Schedule.answerOf` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
-| `Schedule.onJob` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
-| `Schedule.touch` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
-| `Schedule.enroll` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
-| `Schedule.step` | proved | `Schedule.attempt_ends`, `Schedule.dispatch_due`, `Schedule.now_le_step` and 1 more |
+| `Schedule.fail` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 14 more |
+| `Schedule.over` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 14 more |
+| `Schedule.run` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 14 more |
+| `Schedule.answerOf` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 14 more |
+| `Schedule.onJob` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 14 more |
+| `Schedule.touch` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 14 more |
+| `Schedule.enroll` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 14 more |
+| `Schedule.step` | proved | `Schedule.attempt_ends`, `Schedule.dispatch_due`, `Schedule.now_le_step` and 2 more |
 | `Schedule.rearm` | proved | through `Schedule.actor`, `Schedule.attach` and 1 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 9 more |
 | `Schedule.actor` | proved | `Schedule.actor_attempts`, `Schedule.actor_within` |
 | `Schedule.system` | proved | `Schedule.armed`, `Schedule.attempts`, `Schedule.calls_le_scheduled` and 4 more |
@@ -728,24 +728,28 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Bytes.toNat` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Jose.lean`, `Tests/Signature.lean` |
+| `Bytes.toNat` | proved | through `PublicKey.ofSpki?`: `PublicKey.ofSpki?_spki` |
 | `Bytes.ofNat` | proved | `Bytes.size_ofNat` |
-| `Der.digits` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Jose.lean`, `Tests/Signature.lean` |
-| `Der.length` | tested | `Tests/Signature.lean` |
-| `Der.tlv` | tested | `Tests/Signature.lean` |
-| `Der.integer` | tested | `Tests/Signature.lean` |
-| `Der.sequence` | tested | `Tests/Signature.lean` |
-| `Der.bitString` | tested | `Tests/Signature.lean` |
-| `Der.rsaAlgorithm` | tested | `Tests/Signature.lean` |
-| `Der.p256Algorithm` | tested | `Tests/Signature.lean` |
-| `PublicKey.rsaSize` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Jose.lean`, `Tests/Signature.lean` |
-| `PublicKey.valid` | tested | `Tests/Signature.lean` |
-| `PublicKey.spki` | tested | `Tests/Signature.lean` |
-| `PublicKey.derSignature` | tested | `Tests/Signature.lean` |
+| `Der.digits` | proved | through `PublicKey.ofSpki?`: `PublicKey.ofSpki?_spki` |
+| `Der.length` | proved | through `PublicKey.ofSpki?`: `PublicKey.ofSpki?_spki` |
+| `Der.tlv` | proved | through `PublicKey.ofSpki?`: `PublicKey.ofSpki?_spki` |
+| `Der.integer` | proved | through `PublicKey.ofSpki?`: `PublicKey.ofSpki?_spki` |
+| `Der.sequence` | proved | through `PublicKey.ofSpki?`: `PublicKey.ofSpki?_spki` |
+| `Der.bitString` | proved | through `PublicKey.ofSpki?`: `PublicKey.ofSpki?_spki` |
+| `Der.rsaAlgorithm` | proved | through `PublicKey.ofSpki?`: `PublicKey.ofSpki?_spki` |
+| `Der.p256Algorithm` | proved | through `PublicKey.ofSpki?`: `PublicKey.ofSpki?_spki` |
+| `Der.read?` | proved | through `PublicKey.ofSpki?`: `PublicKey.ofSpki?_spki` |
+| `PublicKey.rsaSize` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Jose.lean`, `Tests/Sign.lean` and 1 more |
+| `PublicKey.valid` | proved | through `PublicKey.ofSpki?`: `PublicKey.ofSpki?_spki` |
+| `PublicKey.spki` | proved | `PublicKey.ofSpki?_spki` |
+| `PublicKey.derSignature` | tested | `Tests/Sign.lean`, `Tests/Signature.lean` |
+| `PublicKey.ofSpki?` | proved | `PublicKey.ofSpki?_spki` |
+| `PublicKey.lines` | tested | `Tests/Sign.lean` |
+| `PublicKey.pem` | tested | `Tests/Sign.lean` |
 | `Rsa.powMod` | proved | `Rsa.powMod_eq` |
-| `Rsa.digestInfo` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Jose.lean`, `Tests/Signature.lean` |
-| `Rsa.encode` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Jose.lean`, `Tests/Signature.lean` |
-| `Rsa.verifyReference` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Jose.lean`, `Tests/Signature.lean` |
+| `Rsa.digestInfo` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Jose.lean`, `Tests/Sign.lean` and 1 more |
+| `Rsa.encode` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Jose.lean`, `Tests/Sign.lean` and 1 more |
+| `Rsa.verifyReference` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Jose.lean`, `Tests/Sign.lean` and 1 more |
 
 ## `Lanes/Lib/Crypto/Sha256.lean`
 
@@ -781,6 +785,17 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Sha512.State.bytes` | tested | `Tests/Crypto.lean`, `Tests/Postgres.lean` |
 | `Sha512.hash` | tested | `Tests/Crypto.lean` |
 | `Sha512.hash384` | tested | `Tests/Crypto.lean`, `Tests/Postgres.lean` |
+
+## `Lanes/Lib/Crypto/Sign.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `PrivateKeyImpl` | trusted | TRUSTED.md: The signing key |
+| `PrivateKey.readPem` | trusted | TRUSTED.md: The signing key |
+| `PrivateKey.spki` | trusted | TRUSTED.md: The signing key |
+| `instReprSigningKey` | trusted | TRUSTED.md: The signing key |
+| `SigningKey.ofPem` | trusted | TRUSTED.md: The signing key |
+| `SigningKey.sign` | trusted | TRUSTED.md: The signing key |
 
 ## `Lanes/Lib/Crypto/Sodium.lean`
 
@@ -2313,6 +2328,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Testing.S3.Fake.object?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `Testing.S3.Fake.holds` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `Testing.S3.Fake.keys` | tested | `Tests/S3.lean` |
+| `Testing.S3.Fake.refuse` | tested | `Tests/S3.lean` |
+| `Testing.S3.Fake.refusing` | tested | `Tests/S3.lean` |
 | `Testing.S3.Fake.stop` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `Testing.S3.follow` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and 2 more |
 | `Testing.S3.code` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3Upload.lean` |
