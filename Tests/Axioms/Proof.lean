@@ -53,6 +53,9 @@ import Lanes.Semantics
 #guard_msgs in #print axioms Lanes.System.Reachable.right_of_quiet_boot
 
 -- Lanes.Proof.Lift
+/-- info: 'Lanes.SysState.run_inductive' depends on axioms: [propext, Classical.choice] -/
+#guard_msgs in #print axioms Lanes.SysState.run_inductive
+
 /-- info: 'Lanes.System.Reachable.actor' depends on axioms: [propext, Classical.choice] -/
 #guard_msgs in #print axioms Lanes.System.Reachable.actor
 

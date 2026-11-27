@@ -12,7 +12,8 @@ public import Lanes.Data.Enum
 text what Lean's own deriving handlers cannot give an application that imports only `Std`:
 `Codable` (a codec, by `Codec.struct%` or `Codec.sum%`), `Enum`, and `LawfulBEq` (a `BEq` field
 by field, with its law, for a structure holding a function on an `Enum` type). Every other class
-in the `deriving` clause goes to Lean.
+in the `deriving` clause goes to Lean. A clause `from Old := f` after it says how a value of the
+type's previous version becomes one of this (`T.migrate`, an instance of `Migrate`).
 
 A deriving handler needs `Lean.Elab`, which an application must not link, and a macro sees only
 syntax: so the declaration is written inside the command, which reads the fields from it.
@@ -21,6 +22,17 @@ syntax: so the declaration is written inside the command, which reads the fields
 @[expose] public section
 
 namespace Lanes
+
+/-- How a value of an older version of a type becomes a value of this one. A migration of a
+system (`Lanes.Migration`) takes its states and messages through it; `lanes_data` declares one
+with `from Old := f`. -/
+class Migrate (α β : Type) where
+  migrate : α → β
+
+/-- A type that did not change migrates to itself. -/
+instance Migrate.same {α : Type} : Migrate α α := ⟨id⟩
+
+theorem Migrate.migrate_same {α : Type} (a : α) : Migrate.migrate (β := α) a = a := rfl
 
 /-- A type written as another that holds the same values: listed by listing the other. -/
 @[instance_reducible] def Enum.ofEquiv {α β : Type} [Enum α] (f : α → β) (g : β → α)
@@ -32,12 +44,14 @@ syntax lanesDataField := ppLine (docComment)? ident " : " term (" := " term)?
 syntax lanesDataArgs := " (" ident+ " : " term ")"
 syntax lanesDataCtor := ppLine (docComment)? "| " rawIdent lanesDataArgs*
 syntax lanesDataDeriving := ppLine "deriving " ident,+
+syntax lanesDataFrom := ppLine "from " term " := " term
 
 syntax (name := lanesDataStructure) (docComment)? "lanes_data " "structure " ident
-  bracketedBinder* " where" manyIndent(lanesDataField) (lanesDataDeriving)? : command
+  bracketedBinder* " where" manyIndent(lanesDataField) (lanesDataDeriving)? (lanesDataFrom)? :
+  command
 
 syntax (name := lanesDataInductive) (docComment)? "lanes_data " "inductive " ident
-  bracketedBinder* " where" lanesDataCtor* (lanesDataDeriving)? : command
+  bracketedBinder* " where" lanesDataCtor* (lanesDataDeriving)? (lanesDataFrom)? : command
 
 namespace Declare
 
@@ -136,6 +150,16 @@ meta def independent (ours : Array Name) (names : Array Ident) (types : Array (T
         {classes} takes each field by its type alone. Put the property in the type of \
         `{named.getId}` instead, as a subtype `\{x : α // p x}`, or both in a sigma type."
 
+/-- `from Old := f`: `T.migrate`, how a value of the type's previous version becomes one of
+this, and the `Migrate` instance from it. -/
+meta def migrate (T : Ident) (p : Params) (applied : TSyntax `term)
+    (previous : Option (TSyntax `term × TSyntax `term)) : MacroM (Array (TSyntax `command)) := do
+  let some (old, f) := previous | return #[]
+  let name := mkIdentFrom T (T.getId ++ `migrate)
+  let binders := p.binders
+  return #[← `(def $name $binders:bracketedBinder* : $old → $applied := $f),
+    ← `(instance $binders:bracketedBinder* : Lanes.Migrate $old $applied := ⟨$name⟩)]
+
 meta def enum (p : Params) (applied : TSyntax `term) (code : TSyntax `term)
     (to back : TSyntax `term) : MacroM (TSyntax `command) := do
   let instBinders := p.binders ++ (← classBinders ``Lanes.Enum p.types)
@@ -148,7 +172,8 @@ open Lean Declare in
 macro_rules
   | `(lanesDataStructure|
       $[$doc:docComment]? lanes_data structure $T $bs:bracketedBinder* where
-        $[$[$fdocs:docComment]? $fields : $types $[:= $defaults]?]* $[deriving $classes,*]?) => do
+        $[$[$fdocs:docComment]? $fields : $types $[:= $defaults]?]* $[deriving $classes,*]?
+        $[from $old := $f]?) => do
     let p ← params bs
     let (lean, ours) := splitDeriving (classes.map (·.getElems) |>.getD #[])
     independent ours fields types
@@ -156,7 +181,7 @@ macro_rules
     let applied ← `($T $pargs*)
     let decl ← `(command| $[$doc:docComment]? structure $T:ident $bs:bracketedBinder* where
       $[$[$fdocs:docComment]? $fields:ident : $types $[:= $defaults]?]*)
-    let mut cmds := #[decl] ++ (← leanDeriving T lean)
+    let mut cmds := #[decl] ++ (← leanDeriving T lean) ++ (← migrate T p applied ((old.bind fun o => f.map (o, ·))))
     if ours.contains `Codable then
       let codecs ← types.mapM fun t => `((Lanes.Codable.codec : Lanes.Codec $t))
       cmds := cmds ++ (← codable T p (← `(Codec.struct% $T { $[$fields := $codecs],* })))
@@ -191,7 +216,8 @@ open Lean Declare in
 macro_rules
   | `(lanesDataInductive|
       $[$doc:docComment]? lanes_data inductive $T $bs:bracketedBinder* where
-        $[$[$cdocs:docComment]? | $ctors $[($argss* : $tyss)]*]* $[deriving $classes,*]?) => do
+        $[$[$cdocs:docComment]? | $ctors $[($argss* : $tyss)]*]* $[deriving $classes,*]?
+        $[from $old := $f]?) => do
     let p ← params bs
     let (lean, ours) := splitDeriving (classes.map (·.getElems) |>.getD #[])
     let pargs := p.args
@@ -200,7 +226,7 @@ macro_rules
       (xs.zip ts).mapM fun (x, t) => `(bracketedBinder| ($x* : $t))
     let decl ← `(command| $[$doc:docComment]? inductive $T $bs:bracketedBinder* where
       $[$[$cdocs:docComment]? | $ctors:ident $binders*]*)
-    let mut cmds := #[decl] ++ (← leanDeriving T lean)
+    let mut cmds := #[decl] ++ (← leanDeriving T lean) ++ (← migrate T p applied ((old.bind fun o => f.map (o, ·))))
     let args : Array (Array Ident) := (argss.zip tyss).map fun (xs, ts) =>
       (xs.zip ts).foldl (init := #[]) fun acc (ys, _) => acc ++ ys
     let argTypes : Array (Array (TSyntax `term)) := (argss.zip tyss).map fun (xs, ts) =>
