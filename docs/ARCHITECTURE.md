@@ -230,7 +230,7 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   allowed), MD5 or SCRAM-SHA-256; the extended query protocol with parameters, text both ways;
   errors; transactions; plain TCP. The messages are proved to read back as written
   (`Backend.read_encode`, `Frontend.decode_encode`) and tested against recorded sessions of
-  `psql` and of this client. A connection is a pure `Pg.Conn.step` (`Lanes/Lib/Postgres/Conn.lean`), as
+  `psql` and of this client. A connection is a pure `Postgres.Conn.step` (`Lanes/Lib/Postgres/Conn.lean`), as
   the HTTP server's is: replies answer requests in the order sent (`Conn.run_fifo`), a request is
   sent only to an open connection and is read by the server as sent (`Conn.step_query`,
   `Conn.valid_decode`), `committed` is answered only for a `COMMIT` the server committed from a

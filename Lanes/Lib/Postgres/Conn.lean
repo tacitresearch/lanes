@@ -11,8 +11,8 @@ public import Lanes.Lib.Postgres.Scram
 # A connection to PostgreSQL, as a pure function
 
 The IO that runs a connection (`Lanes.Lib.Postgres.IO.Client`) tells it what happened
-(`Pg.Conn.Event`: bytes received, the end of them, a broken socket, a request to send, `stop`)
-and does what it answers (`Pg.Conn.Action`: send bytes, send a request's bytes, report the
+(`Postgres.Conn.Event`: bytes received, the end of them, a broken socket, a request to send, `stop`)
+and does what it answers (`Postgres.Conn.Action`: send bytes, send a request's bytes, report the
 connection open, answer a request, close), and asks it how many bytes it takes (`Conn.room`).
 Everything else is decided here: the start-up, which authentication to answer and how, whether
 the server proved it knows the password, what the bytes received are as messages, which request

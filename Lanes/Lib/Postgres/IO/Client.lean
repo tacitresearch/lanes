@@ -9,7 +9,7 @@ public import Lanes.Runtime.IO.Shell
 public import Lanes.Lib.Postgres.Table
 
 /-!
-The IO of a connection to PostgreSQL. It opens a TCP socket, tells the connection (`Pg.Conn.step`)
+The IO of a connection to PostgreSQL. It opens a TCP socket, tells the connection (`Postgres.Conn.step`)
 what happened, and does what it answers: send bytes, report a reply. It decides nothing (rule
 3.9): which bytes to send, what the server's bytes mean, which reply answers which request and
 what a reply to `COMMIT` means are `Conn.step`'s, proved in `Lanes/Lib/Postgres/ConnSound.lean`.

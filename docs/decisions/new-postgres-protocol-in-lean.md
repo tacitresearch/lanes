@@ -20,7 +20,7 @@ is the socket, which `Std.Net` already gives, and timing, which matters only for
 server's SCRAM signature, which libsodium's comparison does (`Bytes.same`).
 
 So the protocol is pure Lean in `Lanes/Lib/Postgres/`: messages as data with encoders and
-decoders proved to be inverses, and one connection as a pure function `Pg.Conn.step`, as
+decoders proved to be inverses, and one connection as a pure function `Postgres.Conn.step`, as
 `Http.Conn.step` is for a connection of the HTTP server. A trusted IO file opens the socket,
 feeds the bytes to `step` and performs what it answers (rule 3.9).
 
@@ -93,6 +93,14 @@ equivalent to running them one at a time, in an order in which a transaction com
 one that committed before it began. Each model allows more than PostgreSQL does (it is a sound
 over-approximation, so that a server that behaves like PostgreSQL behaves like the model), and the
 tests record runs against a real server and check them with `Outside.allows`.
+
+The store is not built from the combinators of
+`docs/decisions/D65-models-of-external-services.md` (`Rpc.Server`, `Idempotent.server`), which
+give each request an effect slot of its own. A transaction's effect is not its own: what it may
+read and whether it may commit depend on the others committed around it, which is what an
+isolation level says, so the model keeps whole databases rather than slots. A store whose
+requests carry idempotency keys could still be wrapped by `Idempotent.server`; whether the store
+should be rebuilt on `Rpc.Server` is left open.
 
 ## The trust boundary
 
