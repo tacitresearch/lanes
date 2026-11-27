@@ -59,12 +59,13 @@ def social : Script :=
 
 /-- `1` gets a token and posts through the API: a post sent twice with one sequence number, as a
 bot that retries; an older number; two more posts, the window full; a token of the wrong
-generation. -/
+generation; a read, a delete, and the read again with its `seq`, as a bot that retries it. -/
 def bots : Script :=
   [ (signUp 2 1 true, []), (logIn 4 1, [2]), (.newToken 5 1 4, [4]),
     (api 6 1 1 (.post hi), [5]), (api 7 1 1 (.post hi), [5]),
     (api 8 1 0 (.post yo), [6, 7]), (api 9 1 2 (.post yo), [6, 7]),
-    (api 10 1 3 (.post yo), [9]), (api 11 1 4 .timeline (token := 2), [9]) ]
+    (api 10 1 3 (.post yo), [9]), (api 11 1 4 .timeline (token := 2), [9]),
+    (api 12 1 5 .timeline, [10]), (api 13 1 6 (.delete 0), [12]), (api 14 1 5 .timeline, [13]) ]
 
 /-- Two wrong credentials lock `0`; a second log-in of `1` closes its first session; a session
 is no key to another account; a log-out ends a session. -/
@@ -207,7 +208,9 @@ def botWitnesses : List (Check.Property SpecWorld) :=
     .sometimes "a post is accepted again once the window ends" fun w =>
       replied w.answered 10 (.posted 2),
     .sometimes "a token of another generation is refused" fun w =>
-      replied w.answered 11 .badToken ]
+      replied w.answered 11 .badToken,
+    .sometimes "a read retried after a delete is answered afresh" fun w =>
+      replied w.answered 13 .deleted && (feedOf w.answered 14).any (!·.contains 0) ]
 
 def abuseWitnesses (answered : SpecWorld → List (Response N)) :
     List (Check.Property SpecWorld) :=

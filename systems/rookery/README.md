@@ -95,7 +95,7 @@ request is one call of `Board.handle`; one deadline passing one call of `Board.f
   not have.
 - An API change is acted on once per `seq`; an API read is answered afresh, so that no answer
   the memo remembers shows a post deleted since. The first version answered reads from the memo
-  too; stating `Board.handle_feed_gone` found it, the checks had no script that retried a read.
+  too; stating `Board.handle_feed_gone` found it, and the bots' script now retries a read.
 
 ## The actors, and why
 
@@ -141,13 +141,13 @@ that lose and reorder. Every `always` has `sometimes` witnesses beside it.
 | Scenario | States | Result |
 | --- | --- | --- |
 | Spec: posts, a follow, timelines as posts land, a delete, a read of an account, a delete by another | 5,493 | pass |
-| Spec: a bot's token, a post retried with one `seq`, an older `seq`, the window full and ending, a wrong token | 443 | pass |
+| Spec: a bot's token, a post retried with one `seq`, an older `seq`, the window full and ending, a wrong token, a read retried after a delete | 2,731 | pass |
 | Spec: locks, a session closed by another log-in, a session for another account, log-out, expiry | 106 | pass |
 | System: posts, follows, timelines, a delete | 7,429 | pass |
-| System: bots, retries, tokens, the rate limit | 2,133 | pass |
+| System: bots, retries, tokens, the rate limit, a read retried after a delete | 11,313 | pass |
 | System: locks and sessions, timers firing at any moment | 429 | pass |
 | System, a crash anywhere: posts and a delete | 27,314 | pass |
-| System, a crash anywhere: bots and retries | 8,837 | pass |
+| System, a crash anywhere: bots and retries | 46,673 | pass |
 | System, requests lost and reordered and a crash anywhere | 31,905 | pass |
 | Seeded: fan-out on write, a delete that leaves the copy | | found in 31 steps |
 | Seeded: a delete that finds the post in any account | | found in 34 steps (spec alone: 11) |
