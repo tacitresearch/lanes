@@ -7,23 +7,23 @@ import Videos.Web
 /-!
 # Serving the site
 
-The site behind the gate, with the sign-in and the time stamp in `arrive`, on a journal with
-snapshots, its calls to the store made through the S3 client and their answers handed back as
-inputs. `Main`, the end-to-end test and the live smoke start it the same way.
+The site and its scheduler behind the gate, with the sign-in and the time stamp in `arrive`, on
+a journal with snapshots. Each attempt the scheduler dispatches is made through the S3 client,
+cut off at the attempt's deadline, and its answer, or `unknown` when there is none, is handed
+back as an input. `Main`, the end-to-end test and the live smoke start it the same way.
 
 `S3.handler` needs the `Runtime` of the system, which `Http.serveFronted` keeps to itself, so
 the call is made here with `S3.exchange` and answered with `Server.tryInput`. An answer that
-finds the inbox full is dropped; the site then waits for the member to check again, and a delete
-is sent again at the next start.
+finds the inbox full is dropped: the end of the attempt's wait then counts it as failed, and the
+next attempt comes after the backoff. This file only performs (rule 3.9).
 -/
 
 namespace Videos.Web
 
 open Lanes Lanes.Http Lanes.OAuth Std.Async
 
-/-- The S3 call of a call to the store. -/
-def storeCall (s : Settings) (call : Rpc.Call StoreOp) : Option S3.Op :=
-  match call.request with
+/-- The S3 call of what a job asks the store. -/
+def storeCall (s : Settings) : StoreOp → Option S3.Op
   | .head v => (S3.Key.of? (s.objectKey v)).map .head
   | .delete v => (S3.Key.of? (s.objectKey v)).map .delete
 
@@ -52,8 +52,9 @@ def nowSeconds : IO Nat :=
 def openLog (d : Deployment) (path : System.FilePath) : IO (Journal.Log (Site' d)) :=
   Journal.Store.open (sys := Site' d)
     { path, system := d.server.journalName
-      input := Codec.sum (Codec.pair Codec.nat Http.Request.codec) (Codec.of Input)
-      actors := some (frontedActors (actors d.config) (Codec.of Out) (bridge d.settings) d.server.gate) }
+      input := Codec.sum (Codec.pair Codec.nat Http.Request.codec) (Codec.of (SchedIn ⊕ Input))
+      actors := some (frontedActors (actors d.config) (Codec.of (SchedOut ⊕ Out)) (bridge d.settings)
+        d.server.gate) }
 
 def start (d : Deployment) : Async (Server (Site' d)) := do
   let signIn ← SignIn.start d.signIn
@@ -62,18 +63,18 @@ def start (d : Deployment) : Async (Server (Site' d)) := do
     | .ok r => return .ok (stamp (← nowSeconds) r)
     | answer => return answer
   let running : IO.Promise (Option (Server (Site' d))) ← IO.Promise.new
-  let perform (call : Rpc.Call StoreOp) : Async Unit := do
-    let answer ← match storeCall d.settings call with
+  let perform (a : Schedule.Attempt Key Unit) : Async Unit := do
+    let answer ← match storeCall d.settings a.key.op with
       | some op =>
-        try S3.exchange d.settings.bucket d.settings.creds op { d.http with timeout_ms := call.deadline_ms }
+        try S3.exchange d.settings.bucket d.settings.creds op { d.http with timeout_ms := a.deadline_ms }
         catch _ => pure none
       | none => pure none
     if let some (some server) ← await running.result? then
-      discard <| server.tryInput (.store call.id (storeReply answer))
-  let onOutput : Out → Async Unit
-    | .store call => background (perform call)
-    | .orphan v => IO.eprintln s!"videos: gave up deleting {d.settings.objectKey v} from the store"
-    | .reply .. => pure ()
+      discard <| server.tryInput (.inl (.reply a.key a.attempt (storeReply answer)))
+  let onOutput : SchedOut ⊕ Out → Async Unit
+    | .inl (.call a) => background (perform a)
+    | .inr (.orphan v) => IO.eprintln s!"videos: gave up deleting {d.settings.objectKey v} from the store"
+    | _ => pure ()
   let log ← match d.journal with
     | some path => some <$> openLog d path
     | none => pure none
