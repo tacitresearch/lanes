@@ -25,7 +25,7 @@ proved function tells it to.
 | The shell | `Lanes/Runtime/IO/Shell.lean`, `Lanes/Runtime/{Batch,Mailbox,MailboxSound,Pace}.lean` | `Batch.run_kernel`, `Batch.run_sound`, `Batch.run_spread`, `Mailbox.batch_since_take`; the shell itself is trusted |
 | Journal, snapshots, disk | `Lanes/Durable/{Journal,Snapshot,Disk,Frame}.lean`, `Lanes/Durable/IO/Journal.lean` | `Journal.open?_cut`, `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Journal.Disk.Holds.save_crash` |
 | Migrations | `Lanes/Durable/{Migration,Upgrade}.lean` | `Migration.inv_exec`, `Journal.Upgrade.begin_crash`, `Journal.Upgrade.holds`, `Journal.Upgrade.inv_load` |
-| Joins | `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`, `Lanes/Semantics/FairJoin.lean` | `System.Reachable.left`, `SysState.run_left`, `System.Run.Fair.left` |
+| Joins | `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`, `Lanes/Semantics/FairJoin.lean` | `System.Reachable.left`, `SysState.run_left`, `System.Run.Fair.left`, `System.Run.Fair.right` |
 | Shards and the transport | `Lanes/Runtime/{Shard,ShardSound,ShardsSound}.lean`, `Lanes/Net/{Courier,CourierSound}.lean`, `Lanes/Net/IO/{Peers,Node}.lean` | `System.ShardsReachable.unsharded`, `Peers.Courier.written_sublist_sent` |
 | The gate and the HTTP server | `Lanes/Web/Http/{Gate,Front,FrontSound,Waiting,Conn,ConnSound,Stream,Sse,SseSound,Loopback}.lean`, `Lanes/Semantics/Front.lean`, `Lanes/Web/IO/Server.lean` | `Http.served_answered_le_arrived`, `Http.served_pending_answered`, `Http.Waiting.exec_answered`, `Http.Conn.run_writes`, `Http.Conn.read_streamed`, `Http.Sse.parse_written` |
 | Metrics, health and the access log | `Lanes/Lib/Metrics.lean`, `Lanes/Web/Http/{Ops,OpsSound}.lean`, `Lanes/Web/IO/Ops.lean` | `Metrics.Histogram.observeAll_eq`, `Metrics.readLabelValue_escapeLabel`, `Http.Ops.route?_default`, `Http.Ops.route?_metrics`, `Http.Ops.answer_ready`, `Http.Ops.Access.parse_line`; that none of it reaches a system is trusted and tested |
@@ -162,7 +162,9 @@ the wiring routes to the other becomes a message to the actor its `accept` names
 applies to a join, because it is an ordinary `System` (D25). What is proved of `a` for every
 environment holds of `a` inside any join: of states (`System.Reachable.left`,
 `System.Invariant.join_left`), of runs (`SysState.run_left`) and of fair runs
-(`System.Run.Fair.left`, `System.LeadsTo.join_left`, D41); for `b`, up to `SysState.Equiv`.
+(`System.Run.Fair.left`, `System.LeadsTo.join_left`, D41). For `b`, which boots second, it
+holds of states up to `SysState.Equiv` and of fair runs exactly (`System.Run.Fair.right`,
+`System.LeadsTo.join_right`).
 `System.filterMapIO` renames inputs and outputs and hides some; a system behind it does what it
 does in the open (`SysState.run_filterMapIO`).
 
