@@ -382,10 +382,12 @@ def candidates (c : Case) : List (Url × List String) :=
             ({ query.1 with fragment := b'.fragment }, query.2 ++ ["Go keeps the base's fragment for an empty reference; RFC 3986 §5.2.2 the reference's"])
           else query
         let goEmpty : List (Url × List String) := if fragment.2.isEmpty then [] else [fragment]
-        let doubled : List (Url × List String) := if t.path.startsWith "//" then
-            [({ t with path := t.path.drop 1 |>.toString }, ["Go writes a resolved path that starts with // with one /"])]
-          else []
-        ([(t, [])] ++ opaqueRef ++ goEmpty ++ doubled).flatMap fun ((t', ro) : Url × List String) =>
+        let firsts : List (Url × List String) := [(t, [])] ++ opaqueRef ++ goEmpty
+        let doubled : List (Url × List String) := firsts.filterMap fun (u, r) =>
+          if u.path.startsWith "//" then
+            some ({ u with path := u.path.drop 1 |>.toString }, r ++ ["Go writes a resolved path that starts with // with one /"])
+          else none
+        (firsts ++ doubled).flatMap fun ((t', ro) : Url × List String) =>
           let noAuthority : List (Url × List String) := if b.authority.isNone && t'.authority.isNone
             then [({ t' with authority := some emptyAuthority }, ["Go writes an empty authority where the base has none"])]
             else []
@@ -393,16 +395,26 @@ def candidates (c : Case) : List (Url × List String) :=
     | _, _ => []
   | _ => []
 
-def explained (go : Answer) (u : Url) (reasons : List String) : Option String :=
-  let (v, lost) := losses u
-  let reasons := reasons ++ lost
-  if go == some (urlJson v) && !reasons.isEmpty then some ("; ".intercalate reasons)
-  else if withoutString go == withoutString (some (urlJson u)) then
-    if (go.any (·.getObjValD "string" == .str v.print) || reasons.contains tripleSlash) && !reasons.isEmpty then
-      some ("; ".intercalate reasons)
-    else if !(spellings u).isEmpty then some ("; ".intercalate (reasons ++ spellings u))
-    else none
+/-- Go writes a path that decodes to `*` as `*` (go.dev/issue/11202). -/
+def star (go : Answer) (u : Url) : Option Url :=
+  if Http.percentDecode u.path == some "*" && u.path != "*"
+      && go.any (·.getObjValD "path" == .str "*") then some { u with path := "*" }
   else none
+
+def explained (go : Answer) (u : Url) (reasons : List String) : Option String :=
+  match star go u with
+  | some u' => explained' go u' (reasons ++ ["Go writes a path that decodes to * as *"])
+  | none => explained' go u reasons
+where explained' (go : Answer) (u : Url) (reasons : List String) : Option String :=
+    let (v, lost) := losses u
+    let reasons := reasons ++ lost
+    if go == some (urlJson v) && !reasons.isEmpty then some ("; ".intercalate reasons)
+    else if withoutString go == withoutString (some (urlJson u)) then
+      if (go.any (·.getObjValD "string" == .str v.print) || reasons.contains tripleSlash) && !reasons.isEmpty then
+        some ("; ".intercalate reasons)
+      else if !(spellings u).isEmpty then some ("; ".intercalate (reasons ++ spellings u))
+      else none
+    else none
 
 /-- Go decodes a query to bytes; ours to text. -/
 def queryBytes (c : Case) (go : Answer) : Bool :=

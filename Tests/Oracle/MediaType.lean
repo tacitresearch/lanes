@@ -178,10 +178,10 @@ def braces : Bool → List Char → Bool
   | _, [] => false
 
 /-- Go accepts a name repeated with the same value. -/
-def sameRepeated (cs : List Char) (go : Answer) : Bool :=
-  (parseRaw cs).any fun m =>
-    let m' := { m with params := m.params.foldl (fun ps p => if ps.contains p then ps else ps ++ [p]) [] }
-    m'.params.length < m.params.length && m'.valid && go == some (mediaJson m')
+def withoutRepeats (cs : List Char) : Option MediaType := do
+  let m ← parseRaw cs
+  let m' := { m with params := m.params.foldl (fun ps p => if ps.contains p then ps else ps ++ [p]) [] }
+  if m'.params.length < m.params.length && m'.valid then some m' else none
 
 def known (c : Case) (go : Answer) : Option String :=
   let ours := answer c
@@ -195,8 +195,6 @@ def known (c : Case) (go : Answer) : Option String :=
       some "RFC 9110 §5.6.6 allows empty parameters; Go only one trailing ;"
     else if go != ours && ((cs.splitOn ';').drop 1).any (fun p => ((cut '=' p).1).contains '*') then
       some "Go decodes RFC 2231 names (name*, name*0); RFC 9110 media types have none"
-    else if ours.isNone && sameRepeated cs go then
-      some "Go accepts a name repeated with the same value; RFC 6838 §4.3 a name once"
     else if ours.isNone && go.isSome && braces false cs then
       some "Go's tokens allow { and }, which RFC 9110 §5.6.2 excludes"
     else
@@ -207,9 +205,14 @@ def known (c : Case) (go : Answer) : Option String :=
           (parse (String.ofList fixed)) with
       | some more => if (reasons ++ more).isEmpty then none else some ("; ".intercalate (reasons ++ more))
       | none =>
-        if ours.isNone && go.isSome && cs.any (fun c => c.toNat < 32 && c != '\t' || c.toNat == 127) then
-          some "Go accepts controls in a quoted string; RFC 9110 §5.6.4 does not"
-        else none
+        let repeated := if ours.isNone then (withoutRepeats fixed).bind fun m =>
+            (sameValue (some (mediaJson m)) go (some m)).map fun more => "; ".intercalate
+              (reasons ++ ["Go accepts a name repeated with the same value; RFC 6838 §4.3 a name once"] ++ more)
+          else none
+        repeated.or <|
+          if ours.isNone && go.isSome && cs.any (fun c => c.toNat < 32 && c != '\t' || c.toNat == 127) then
+            some "Go accepts controls in a quoted string; RFC 9110 §5.6.4 does not"
+          else none
 
 def package : Package where
   name := "mime"
