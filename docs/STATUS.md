@@ -46,19 +46,19 @@ What is being worked on now, and why: `docs/PLAN.md`.
   hides them, and keeps the outputs it wires in its signature though none is put out;
   `Http.fronted` hides both. A fair run of a join is a fair run of its left side
   (`System.Run.Fair.left`), not yet of its right side (D41).
-- No WebSockets, and no TLS server: TLS is terminated in front, by the load balancer or a
-  reverse proxy. The HTTP client speaks HTTP/1.1, plain or over TLS, over IPv4, a connection per
-  call, with no proxy (`CONNECT`); a name resolves to its first IPv4 address. The PostgreSQL
-  client speaks plain TCP to IPv4 addresses; call past the local network through a tunnel. It has
-  no `COPY`, `LISTEN`/`NOTIFY`, binary formats, named statements, cancellation or pool; a message
-  is decoded through a list of bytes, so `message_max` (1 MiB by default) also bounds the memory
-  a reply takes. Its live tests run only when `LANES_POSTGRES` names a server; CI runs none.
+- No WebSockets, and no TLS server: TLS is terminated in front, by the load
+  balancer or a reverse proxy. The HTTP client speaks HTTP/1.1, plain or over TLS, over IPv4, a
+  connection per call, with no proxy (`CONNECT`); a name resolves to its first IPv4 address.
+- The client's TLS context, with its trust store, is made for each call (about 3 ms with
+  Ubuntu's). Revocation is not checked. OpenSSL fixes reach Lanes with Lean's toolchain.
+- The PostgreSQL client speaks plain TCP to IPv4 addresses (no TLS yet). It has no `COPY`,
+  `LISTEN`/`NOTIFY`, binary formats, named statements, cancellation or pool; a message is
+  decoded through a list of bytes, so `message_max` (1 MiB by default) also bounds the memory a
+  reply takes. Its live tests run only when `LANES_POSTGRES` names a server; CI runs none.
 - That a PostgreSQL server behaves like the store model at an isolation level is a premise, tested
   on a few recorded runs, not proved. The model keeps at most `history_max` transactions in its
   serial order while one is open, and a run beyond its bounds is outside it. At read committed,
   `append` is checked for a free key at its answer only.
-- The client's TLS context, with its trust store, is made for each call (about 3 ms with
-  Ubuntu's). Revocation is not checked. OpenSSL fixes reach Lanes with Lean's toolchain.
 - Several shards run as several processes joined by TCP (`Lanes.Peers`); there is no router
   between shards in one process any more (D37), so the cores of a machine are used by running a
   process on each. That shards behave as the one system is proved for the semantics, for two
