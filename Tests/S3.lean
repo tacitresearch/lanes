@@ -357,6 +357,10 @@ def endToEnd : Async (List (String × Bool)) := do
   let downloaded ← follow download .get
   let tampered ← follow (download.replace "a%20b" "x") .get
   let keptPicture ← store.holds "up/a b.png"
+  store.refuse 1
+  let refused ← ex (.head (key "up/a b.png"))
+  let afterRefusal ← ex (.head (key "up/a b.png"))
+  let left ← store.refusing
   store.stop
   let kept ← store.keys
   return [
@@ -387,7 +391,9 @@ def endToEnd : Async (List (String × Bool)) := do
     ("s3 fake: a presigned put, with the type it was signed for, stores",
       uploaded.any (·.status == 200) && wrongType.any (·.status == 403) && keptPicture),
     ("s3 fake: a presigned get brings it back, and a link changed is refused",
-      (downloaded.map (·.body)) == some (bytes "picture") && tampered.any (·.status == 403)) ]
+      (downloaded.map (·.body)) == some (bytes "picture") && tampered.any (·.status == 403)),
+    ("s3 fake: told to refuse one request, it answers 503 to the next and then as before",
+      refused == some (.refused 503 "") && afterRefusal.any (· matches .found _) && left == 0) ]
 
 /-- A system calls the fake through `S3.handler`, and the run is one the model allows. -/
 def conformance : Async (List (String × Bool)) := do

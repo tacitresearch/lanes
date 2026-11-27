@@ -21,10 +21,10 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Proof` | 40 | 16 | 0 | 0 | 0 | 23 | 1 |
 | `Lanes/Runtime` | 173 | 94 | 21 | 0 | 28 | 30 | 0 |
 | `Lanes/Semantics` | 63 | 11 | 0 | 0 | 0 | 51 | 1 |
-| `Lanes/Testing` | 82 | 0 | 0 | 1 | 81 | 0 | 0 |
+| `Lanes/Testing` | 84 | 0 | 0 | 1 | 83 | 0 | 0 |
 | `Lanes/Web` | 676 | 354 | 57 | 46 | 163 | 54 | 2 |
 | `LanesCli` | 125 | 0 | 0 | 0 | 51 | 0 | 74 |
-| All | 2407 | 1262 | 126 | 124 | 428 | 340 | 127 |
+| All | 2409 | 1262 | 126 | 124 | 430 | 340 | 127 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -143,24 +143,24 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Schedule.Msg.codec` | proved | its type, `Codec` |
 | `Schedule.instCodableMsg` | proved | its type, `Codable` |
 | `Schedule.hashJitter` | checked | `Tests/Schedule.lean` |
-| `Schedule.Config.cap` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
+| `Schedule.Config.cap` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 14 more |
 | `Schedule.Config.backoff` | proved | `Schedule.retry_waits` |
-| `Schedule.Config.wait` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
+| `Schedule.Config.wait` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 14 more |
 | `Schedule.keys` | proved | `Schedule.attach_held_leaves`, `Schedule.every_noticed`, `Schedule.held_leaves` |
-| `Schedule.entry` | proved | `Schedule.attach_held_leaves`, `Schedule.attempt_ends`, `Schedule.dispatch_due` and 4 more |
-| `Schedule.put` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
-| `Schedule.remove` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
-| `Schedule.set` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
-| `Schedule.sig` | proved | `Schedule.actor_attempts`, `Schedule.actor_within`, `Schedule.armed` and 10 more |
+| `Schedule.entry` | proved | `Schedule.attach_held_leaves`, `Schedule.attempt_ends`, `Schedule.dispatch_due` and 5 more |
+| `Schedule.put` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 14 more |
+| `Schedule.remove` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 14 more |
+| `Schedule.set` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 14 more |
+| `Schedule.sig` | proved | `Schedule.actor_attempts`, `Schedule.actor_within`, `Schedule.armed` and 11 more |
 | `Schedule.timer` | proved | through `Schedule.actor`, `Schedule.attach` and 1 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 9 more |
-| `Schedule.fail` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
-| `Schedule.over` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
-| `Schedule.run` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
-| `Schedule.answerOf` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
-| `Schedule.onJob` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
-| `Schedule.touch` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
-| `Schedule.enroll` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
-| `Schedule.step` | proved | `Schedule.attempt_ends`, `Schedule.dispatch_due`, `Schedule.now_le_step` and 1 more |
+| `Schedule.fail` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 14 more |
+| `Schedule.over` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 14 more |
+| `Schedule.run` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 14 more |
+| `Schedule.answerOf` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 14 more |
+| `Schedule.onJob` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 14 more |
+| `Schedule.touch` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 14 more |
+| `Schedule.enroll` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 14 more |
+| `Schedule.step` | proved | `Schedule.attempt_ends`, `Schedule.dispatch_due`, `Schedule.now_le_step` and 2 more |
 | `Schedule.rearm` | proved | through `Schedule.actor`, `Schedule.attach` and 1 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 9 more |
 | `Schedule.actor` | proved | `Schedule.actor_attempts`, `Schedule.actor_within` |
 | `Schedule.system` | proved | `Schedule.armed`, `Schedule.attempts`, `Schedule.calls_le_scheduled` and 4 more |
@@ -2317,6 +2317,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Testing.S3.Fake.object?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `Testing.S3.Fake.holds` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `Testing.S3.Fake.keys` | tested | `Tests/S3.lean` |
+| `Testing.S3.Fake.refuse` | tested | `Tests/S3.lean` |
+| `Testing.S3.Fake.refusing` | tested | `Tests/S3.lean` |
 | `Testing.S3.Fake.stop` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `Testing.S3.follow` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 1 more |
 | `Testing.S3.code` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3Upload.lean` |

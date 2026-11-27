@@ -52,17 +52,32 @@ theorem quiet_answer {req : ReqId} {viewer : Viewer} {r : Reply} (h : r.cards = 
     Quiet (answer req viewer r) := by
   simp [Quiet, answer, Out.cards, h]
 
-theorem quiet_store (c : Rpc.Call StoreOp) : Quiet [.store c] := by simp [Quiet, Out.cards]
+theorem quiet_schedule (key : Key) (retry : Schedule.Retry) (at_s at_ms : Nat) :
+    Quiet [schedule key retry at_s at_ms] := by
+  simp [Quiet, schedule, Out.cards]
 
-theorem quiet_orphans (l : List Deleting) : Quiet (l.map (Out.orphan ·.video)) := by
-  simp [Quiet, Out.cards]
+theorem quiet_orphan (l : List Out) (h : ∀ o ∈ l, ∃ v, o = .orphan v) : Quiet l := by
+  intro o ho
+  obtain ⟨v, rfl⟩ := h o ho
+  rfl
 
-theorem quiet_waiter (video : Video) (viewer : Viewer) :
-    Quiet (match video.status with
-      | .checking _ waiter => answer waiter viewer (.unconfirmed video.id)
-      | _ => []) := by
+theorem quiet_expiry (v : VideoId) (at_s : Nat) : Quiet (expiry config v at_s) := by
+  unfold expiry
   split
-  · exact quiet_answer rfl
+  · exact quiet_schedule _ _ _ _
+  · exact quiet_nil
+
+theorem quiet_unexpire (v : VideoId) : Quiet (unexpire config v) := by
+  unfold unexpire
+  split
+  · simp [Quiet, Out.cards]
+  · exact quiet_nil
+
+theorem quiet_waiterOf (video : Video) (viewer : Viewer) (r : Reply) (h : r.cards = []) :
+    Quiet (waiterOf video viewer r) := by
+  unfold waiterOf
+  split
+  · exact quiet_answer h
   · exact quiet_nil
 
 theorem viewer_accepts {s : Site} {life : Auth.Lifetime} {at_s : Nat} {x : Viewer} {m : Member}
@@ -117,22 +132,22 @@ theorem quiet_create (s : Site) (req : ReqId) (viewer : Viewer) (m : Member) (ti
   unfold create
   split
   · exact quiet_answer rfl
-  · exact quiet_answer rfl
+  · exact quiet_append (quiet_answer rfl) (quiet_expiry config _ _)
 
-theorem quiet_check (s : Site) (req : ReqId) (viewer : Viewer) (video : Video) :
-    Quiet (s.check config req viewer video).2 := by
+theorem quiet_check (s : Site) (req : ReqId) (viewer : Viewer) (video : Video) (at_s : Nat) :
+    Quiet (s.check config req viewer video at_s).2 := by
   unfold check
   dsimp only
   split
-  · exact quiet_append (quiet_waiter video viewer) (quiet_answer rfl)
-  · exact quiet_append (quiet_waiter video viewer) (quiet_store _)
+  · exact quiet_append (quiet_waiterOf video viewer _ rfl) (quiet_answer rfl)
+  · exact quiet_append (quiet_waiterOf video viewer _ rfl) (quiet_schedule _ _ _ _)
 
-theorem quiet_uploaded (s : Site) (req : ReqId) (viewer : Viewer) (video : Video) :
-    Quiet (s.uploaded config req viewer video).2 := by
+theorem quiet_uploaded (s : Site) (req : ReqId) (viewer : Viewer) (at_s : Nat) (video : Video) :
+    Quiet (s.uploaded config req viewer at_s video).2 := by
   unfold uploaded
   split
   · exact quiet_answer rfl
-  · exact quiet_check config s req viewer video
+  · exact quiet_check config s req viewer video at_s
 
 theorem quiet_like (s : Site) (req : ReqId) (viewer : Viewer) (m : Member) (video : Video)
     (on : Bool) : Quiet (s.like req viewer m video on).2 :=
@@ -152,57 +167,70 @@ theorem quiet_uncomment (s : Site) (req : ReqId) (viewer : Viewer) (m : Member) 
   · exact quiet_answer rfl
   · exact quiet_answer rfl
 
-theorem quiet_delete (s : Site) (req : ReqId) (viewer : Viewer) (video : Video) :
-    Quiet (s.delete config req viewer video).2 := by
-  unfold delete pushDeleting
-  exact quiet_append (quiet_append (quiet_append (quiet_waiter video viewer) (quiet_answer rfl))
-    (quiet_store _)) (quiet_orphans _)
+theorem quiet_delete (s : Site) (req : ReqId) (viewer : Viewer) (at_s : Nat) (video : Video) :
+    Quiet (s.delete config req viewer at_s video).2 :=
+  quiet_append (quiet_append (quiet_append (quiet_waiterOf video viewer _ rfl) (quiet_answer rfl))
+    (quiet_schedule _ _ _ _)) (quiet_unexpire config _)
 
-theorem quiet_checked (s : Site) (video : Video) (waiter : ReqId) (reply : Rpc.Reply StoreAnswer) :
-    Quiet (s.checked config video waiter reply).2 := by
+theorem quiet_found (s : Site) (video : Video) (size : Nat) :
+    Quiet (s.found config video size).2 :=
+  quiet_append (quiet_waiterOf video none _ rfl) (quiet_unexpire config _)
+
+theorem quiet_unconfirmed (s : Site) (video : Video) (req : ReqId) (r : Reply) (h : r.cards = []) :
+    Quiet (s.unconfirmed video req r).2 := by
+  unfold unconfirmed
+  split
+  · exact quiet_answer h
+  · exact quiet_nil
+
+theorem quiet_checked (s : Site) (video : Video) (req : ReqId) (o : Outcome) :
+    Quiet (s.checked config video req o).2 := by
   unfold checked
   split
-  · exact quiet_answer rfl
-  · exact quiet_answer rfl
+  · exact quiet_found config _ _ _
+  · exact quiet_unconfirmed s video req _ rfl
   · split
-    · exact quiet_answer rfl
-    · exact quiet_answer rfl
-  · exact quiet_answer rfl
+    · exact quiet_found config _ _ _
+    · exact quiet_unconfirmed s video req _ rfl
+  all_goals first
+    | exact quiet_unconfirmed s video req _ rfl
+    | exact quiet_nil
 
-theorem quiet_deleteAnswered (s : Site) (d : Deleting) (reply : Rpc.Reply StoreAnswer) :
-    Quiet (s.deleteAnswered config d reply).2 := by
-  unfold deleteAnswered
+theorem quiet_expired (s : Site) (video : Video) (o : Outcome) :
+    Quiet (s.expired config video o).2 := by
+  unfold expired
   split
+  · exact quiet_found config _ _ _
+  · exact quiet_waiterOf video none _ rfl
   · exact quiet_nil
-  · exact quiet_nil
-  · split
-    · exact quiet_store _
-    · simp [Quiet, Out.cards]
 
-theorem quiet_stored (s : Site) (call : Nat) (reply : Rpc.Reply StoreAnswer) :
-    Quiet (s.stored config call reply).2 := by
-  unfold stored
+theorem quiet_unready {s : Site} {v : VideoId} {f : Video → Site × List Out}
+    (hf : ∀ w, Quiet (f w).2) : Quiet (s.unready v f).2 := by
+  unfold unready
   split
   · split
-    · exact quiet_checked config _ _ _ _
     · exact quiet_nil
-  · split
-    · exact quiet_deleteAnswered config _ _ _
-    · exact quiet_nil
+    · exact hf _
+  · exact quiet_nil
 
-theorem quiet_recover (s : Site) : Quiet (s.recover config).2 := by
+theorem quiet_job (s : Site) (key : Key) (o : Outcome) : Quiet (s.job config key o).2 := by
+  cases key with
+  | check v req => exact quiet_unready fun _ => quiet_checked config _ _ _ _
+  | expire v => exact quiet_unready fun _ => quiet_expired config _ _ _
+  | delete v =>
+    refine quiet_orphan _ fun o' ho => ?_
+    simp only [job] at ho
+    split at ho
+    · exact ⟨v, by simpa using ho⟩
+    · cases ho
+
+theorem quiet_recover (s : Site) : Quiet s.recover.2 := by
   unfold Site.recover
-  refine quiet_append ?_ ?_
-  rotate_left
-  · intro o ho
-    obtain ⟨d, -, rfl⟩ := List.mem_map.mp ho
-    rfl
   intro o ho
   obtain ⟨v, -, hv⟩ := List.mem_filterMap.mp ho
   split at hv
   · cases hv; rfl
   · cases hv
-
 theorem shows_watch (s : Site) (life : Auth.Lifetime) (req : ReqId) (viewer : Viewer)
     (v : VideoId) (at_s : Nat) (hviewer : ∀ m sid, viewer = some (m, sid) → s.accepts life at_s m sid = true) :
     ∀ o ∈ (s.watch req viewer v at_s).2, s.Shows life at_s o := by
@@ -287,7 +315,7 @@ theorem shows_request (s : Site) (c : Command) (at_s : Nat) :
   | create req m session title about visibility media =>
     exact quiet (quiet_withSession fun _ => quiet_create config _ _ _ _ _ _ _ _ _)
   | uploaded req m session v =>
-    exact quiet (quiet_withSession fun _ => quiet_owned fun _ => quiet_uploaded config _ _ _ _)
+    exact quiet (quiet_withSession fun _ => quiet_owned fun _ => quiet_uploaded config _ _ _ _ _)
   | watch req viewer v =>
     exact shows_watch s _ req _ v at_s fun _ _ h => viewer_accepts h
   | like req m session v on =>
@@ -297,7 +325,7 @@ theorem shows_request (s : Site) (c : Command) (at_s : Nat) :
   | uncomment req m session v c =>
     exact quiet (quiet_withSession fun _ => quiet_seen fun _ => quiet_uncomment _ _ _ _ _ _)
   | delete req m session v =>
-    exact quiet (quiet_withSession fun _ => quiet_owned fun _ => quiet_delete config _ _ _ _)
+    exact quiet (quiet_withSession fun _ => quiet_owned fun _ => quiet_delete config _ _ _ _ _)
   | feed req viewer before => exact shows_feed config s _ _ req _ before
   | channel req viewer whose => exact shows_channel s _ _ req _ whose fun _ _ h => viewer_accepts h
 
@@ -307,11 +335,12 @@ theorem shows_handle (s : Site) (i : Input) :
     ∀ o ∈ (s.handle config i).2, s.Shows config.lifetime i.at_s o := by
   cases i with
   | request c at_s => exact shows_request config s c at_s
-  | store call reply => exact fun o ho => shows_of_cards (quiet_stored config s call reply o ho)
+  | job key o => exact fun o' ho => shows_of_cards (quiet_job config s key o o' ho)
+  | noticed _ => exact fun o ho => by simp [handle] at ho
 
 theorem shows_recover (s : Site) (at_s : Nat) :
-    ∀ o ∈ (s.recover config).2, s.Shows config.lifetime at_s o :=
-  fun o ho => shows_of_cards (quiet_recover config s o ho)
+    ∀ o ∈ s.recover.2, s.Shows config.lifetime at_s o :=
+  fun o ho => shows_of_cards (quiet_recover s o ho)
 
 end Site
 

@@ -16,8 +16,10 @@ SignatureDoesNotMatch`. It answers `PUT`, `GET` (with a range), `HEAD`, `DELETE`
 ListObjectsV2. It takes a browser's `POST` form only with its policy's signature, before its
 expiry, with every condition met and every field named, and refuses as S3 does
 (`EntityTooLarge`, `EntityTooSmall`, `AccessDenied`). It takes multipart uploads with S3's part
-sizes, part order and ETags, and answers a Complete made twice the same. `follow` fetches a link
-as a browser does, with no credentials, and `postForm` posts a form as a browser's `FormData`.
+sizes, part order and ETags, and answers a Complete made twice the same. `Fake.refuse n` has it
+answer the next `n` signed requests `503 SlowDown`, as S3 does under load, so that a test can
+see a retry. `follow` fetches a link as a browser does, with no credentials, and `postForm`
+posts a form as a browser's `FormData`.
 -/
 
 @[expose] public section
@@ -300,6 +302,8 @@ structure State where
   /-- Uploads completed: the id, the key, the listing and the object's ETag. -/
   completed : List (String × String × List (Nat × String) × String) := []
   next : Nat := 0
+  /-- The signed requests still to answer `503 SlowDown`. -/
+  refusing : Nat := 0
 
 def unquote (s : String) : String := s.replace "\"" ""
 
@@ -394,6 +398,9 @@ def serveMultipart (bucket : String) (st : State) (r : Raw) (k : String)
 request, or one `serve` answers. -/
 def serveAll (creds : SigV4.Credentials) (bucket region : String) (now_s : Int) (st : State)
     (r : Raw) : ByteArray × State :=
+  if 0 < st.refusing && (r.headers.lookup "authorization").isSome then
+    (failure 503 "SlowDown" (r.verb == "HEAD"), { st with refusing := st.refusing - 1 })
+  else
   let byForm := r.verb == "POST" && (r.headers.lookup "authorization").isNone
     && ((r.headers.lookup "content-type").getD "").startsWith "multipart/form-data"
   if byForm then
@@ -461,6 +468,14 @@ def Fake.holds (f : Fake) (key : String) : IO Bool :=
 
 def Fake.keys (f : Fake) : IO (List String) :=
   return (← f.state.get).objects.map (·.1)
+
+/-- The next `n` signed requests are answered `503 SlowDown`. -/
+def Fake.refuse (f : Fake) (n : Nat) : IO Unit :=
+  f.state.modify fun st => { st with refusing := n }
+
+/-- How many signed requests are still to be refused. -/
+def Fake.refusing (f : Fake) : IO Nat :=
+  return (← f.state.get).refusing
 
 def Fake.stop (f : Fake) : Async Unit := f.server.close
 
