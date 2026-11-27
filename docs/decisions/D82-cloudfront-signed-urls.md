@@ -1,4 +1,4 @@
-# D?. CloudFront signed URLs and cookies, and signatures made with a private key
+# D82. CloudFront signed URLs and cookies, and signatures made with a private key
 
 A site such as `examples/videos` keeps its content private in S3 and hands browsers presigned
 links (D71). Behind a CDN, the link is CloudFront's: a URL that carries a policy, a signature by
