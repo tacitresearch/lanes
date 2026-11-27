@@ -300,7 +300,7 @@ map it replicates (`RaftKV.implementsMachine`), and `once` of it in every enviro
 memo in the map (`RaftKV.implementsMachine_once`); `examples/ledger`, a multi-user web ledger;
 and `examples/rookery`, a small social network for bots whose claims are proved of its spec,
 which it is proved to implement with deadlines (`Rookery.implements`). The tests use copies of
-the small ones in `Tests/Fixtures/`, so an example can change for its reader alone. `lanes new`
+the small ones' systems in `Tests/Fixtures/`, so an example can change for its reader alone. `lanes new`
 (`LanesCli/New.lean`, `templates/app/`) creates an application; `lanes lint`
 (`LanesCli/Lint.lean`) checks the rules of `AGENTS.md` that the text can show, the generated files
 and the inventory (`LanesCli/Inventory.lean`).

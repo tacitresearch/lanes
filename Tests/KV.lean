@@ -12,12 +12,12 @@ response against the map spec.
 
 Without caching the store refines the spec with messages lost and reordered and a crash, and
 breaks it when any link it uses hands a message over twice: every handling of a message answers
-a client or sends on, so a request handed over twice is answered twice. `Tests/Fixtures/KVProofs.lean`
+a client or sends on, so a request handed over twice is answered twice. The `kv-cache` example
 proves the first for every instance, and that caching breaks it with one front end already.
 
 Behind `Once.actor`, with requests named by front end and number, the store refines `once` of
 the map spec with every link duplicating, losing and reordering; without the memo a retry and a
-duplicated read take effect twice (`Tests.Fixtures.KV.implements_once` proves the first).
+duplicated read take effect twice (the example's `KV.implements_once` proves the first).
 -/
 
 namespace Tests.KV
