@@ -18,9 +18,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Env` | 30 | 0 | 30 | 0 | 0 | 0 | 0 |
 | `Lanes/Html` | 58 | 22 | 0 | 0 | 28 | 8 | 0 |
 | `Lanes/Http` | 181 | 120 | 1 | 8 | 28 | 22 | 2 |
-| `Lanes/Semantics` | 54 | 9 | 0 | 0 | 0 | 44 | 1 |
+| `Lanes/Semantics` | 57 | 9 | 0 | 0 | 0 | 47 | 1 |
 | `LanesCli` | 110 | 0 | 0 | 0 | 42 | 0 | 68 |
-| All | 1283 | 659 | 46 | 74 | 169 | 211 | 124 |
+| All | 1286 | 659 | 46 | 74 | 169 | 214 | 124 |
 
 ## `Lanes/Actors/Actor.lean`
 
@@ -341,7 +341,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `SysState.grow` | proved | `Account.Moves.grow`, `Account.Moves.handle`, `Account.implements` and 7 more |
+| `SysState.grow` | proved | `Account.Fires.grow`, `Account.Fires.handle`, `Account.Moves.grow` and 11 more |
 | `SysState.Pending` | spec | a predicate |
 
 ## `Lanes/Actors/Outside.lean`
@@ -375,7 +375,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Effect.sends` | proved | `Account.Moves.grow`, `Account.Moves.handle` |
+| `Effect.sends` | proved | `Account.Fires.grow`, `Account.Fires.handle`, `Account.Moves.grow` and 1 more |
 | `Effect.armed` | none |  |
 | `Effect.emits` | none |  |
 | `Effect.retime` | spec | used only in statements |
@@ -502,7 +502,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Effect.isStop` | none |  |
 | `Effect.instDecidableEq` | proved | its type, `Decidable` |
-| `Envelope.instDecidableEq` | proved | `Account.Moves.handle`, `Account.implements`, `System.Refines.of_events` and 3 more |
+| `Envelope.instDecidableEq` | proved | `Account.Fires.handle`, `Account.Moves.handle`, `Account.implements` and 6 more |
 | `Envelope.sameLink` | none |  |
 | `Link.reliable` | proved | `Examples.Watchdog.exists_fair_run_never_barks`, `Examples.Watchdog.impatient_barks` |
 | `Link.network` | checked | `Tests/Bank.lean`, `Tests/Election.lean`, `Tests/Join.lean` and 1 more |
@@ -514,20 +514,20 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `update` | proved | through `SysState.down`, `SysState.init` and 4 more: `Account.implements`, `Check.system_violated` and 36 more |
+| `update` | proved | through `SysState.down`, `SysState.init` and 4 more: `Account.implements`, `Account.implements_timed` and 38 more |
 | `Event.timed` | spec | used only in statements |
 | `Event.visible` | spec | used only in statements |
 | `SysState.blank` | proved | `System.Inductive.of_monotone`, `System.Monotone.and` |
 | `SysState.hasMail` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 24 more |
-| `SysState.perform` | proved | through `SysState.init`, `SysState.run` and 3 more: `Account.implements`, `Check.system_violated` and 35 more |
-| `SysState.performAll` | proved | through `SysState.init`, `SysState.run` and 3 more: `Account.implements`, `Check.system_violated` and 35 more |
-| `SysState.down` | proved | `Account.implements`, `System.Refines.of_events`, `linkMsgs_down` |
+| `SysState.perform` | proved | through `SysState.init`, `SysState.run` and 3 more: `Account.implements`, `Account.implements_timed` and 37 more |
+| `SysState.performAll` | proved | through `SysState.init`, `SysState.run` and 3 more: `Account.implements`, `Account.implements_timed` and 37 more |
+| `SysState.down` | proved | `Account.implements`, `Account.implements_timed`, `System.Refines.of_events` and 2 more |
 | `SysState.settle` | proved | `SysState.Loses.settle` |
 | `SysState.handle` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 24 more |
-| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and 2 more: `Account.implements`, `Check.system_violated` and 34 more |
-| `SysState.deliverable` | proved | `Account.implements`, `System.Refines.of_events`, `linkMsgs_of_deliverable` |
+| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and 2 more: `Account.implements`, `Account.implements_timed` and 36 more |
+| `SysState.deliverable` | proved | `Account.implements`, `Account.implements_timed`, `System.Refines.of_events` and 2 more |
 | `SysState.step` | proved | `Http.Gate.answered_of_leaves`, `Http.Gate.deadline_not_restarted`, `Shards.AtHome.step` and 7 more |
-| `SysState.init` | proved | `Account.implements`, `Check.system_violated`, `Http.Gate.answered_le_handled` and 19 more |
+| `SysState.init` | proved | `Account.implements`, `Account.implements_timed`, `Check.system_violated` and 21 more |
 | `SysState.run` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and 12 more |
 | `System.Invariant` | spec | a predicate |
 
@@ -1615,7 +1615,10 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Account.owed` | proved | `Account.Moves.of_le` |
 | `Account.Sim` | spec | a predicate |
 | `Account.Moves` | spec | a predicate |
+| `Account.Fires` | spec | a predicate |
+| `Account.Passes` | spec | a predicate |
 | `Account.Handles` | spec | a predicate |
+| `Account.HandlesFire` | spec | a predicate |
 
 ## `Lanes/Semantics/FairJoin.lean`
 
@@ -1696,7 +1699,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Spec.lts` | proved | `Check.Monitor.complete`, `Check.Monitor.ok_iff`, `Check.Monitor.sound` and 8 more |
+| `Spec.lts` | proved | `Account.Holds.passes`, `Check.Monitor.complete`, `Check.Monitor.ok_iff` and 10 more |
 | `Spec.Reachable` | spec | a predicate |
 | `Spec.Invariant` | spec | a predicate |
 | `Refines` | spec | a predicate |
@@ -1705,7 +1708,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Service.spec` | proved | `Account.implements`, `Check.Monitor.complete`, `Check.Monitor.ok_iff` and 8 more |
+| `Service.spec` | proved | `Account.Holds.passes`, `Account.implements`, `Account.implements_timed` and 10 more |
 | `Service.Stable` | spec | a predicate |
 | `Service.Only` | spec | a predicate |
 | `Service.Took` | spec | a predicate |
@@ -1722,7 +1725,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `System.sem` | proved | `Account.implements`, `Examples.KV.caching_not_implements`, `Examples.KV.implements` and 13 more |
+| `System.sem` | proved | `Account.implements`, `Account.implements_timed`, `Examples.KV.caching_not_implements` and 15 more |
 | `System.Refines` | spec | a predicate |
 
 ## `LanesCli/Generated.lean`
