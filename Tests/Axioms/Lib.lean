@@ -17,6 +17,9 @@ import Lanes.Semantics
 /-- info: 'Lanes.Rsa.powMod_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Rsa.powMod_eq
 
+/-- info: 'Lanes.PublicKey.ofSpki?_spki' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.PublicKey.ofSpki?_spki
+
 -- Lanes.Lib.Encoding.Base64
 /-- info: 'Lanes.Base64.decode_eq_some_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Base64.decode_eq_some_iff

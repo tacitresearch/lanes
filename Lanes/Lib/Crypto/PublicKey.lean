@@ -5,12 +5,17 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Lanes.Lib.Crypto.Sodium
+public import Lanes.Lib.Encoding.Base64
 
 /-!
 Public keys that check signatures: RSA, and ECDSA on P-256. A key is written as the DER
 `SubjectPublicKeyInfo` OpenSSL reads (RFC 5280 §4.1.2.7, RFC 3279 §2.3.1, RFC 5480 §2), and an
 ECDSA signature, which JWS writes as `r ‖ s`, as the DER `ECDSA-Sig-Value` (RFC 3279 §2.2.3),
 so that the binding (`Lanes/Lib/Crypto/Verify.lean`) only hands them over.
+
+A key is also read back from the DER OpenSSL writes for it (`PublicKey.ofSpki?`), for the
+public half of a private key (`Lanes/Lib/Crypto/Sign.lean`), only when `spki` writes that DER
+again, and written as PEM for whoever checks its signatures.
 
 Which keys are accepted is decided here: an RSA modulus of 2048 to 8192 bits with an odd
 exponent above one, a P-256 point given in full. `Rsa.verifyReference` is RSASSA-PKCS1-v1_5
@@ -66,6 +71,18 @@ def p256Algorithm : List UInt8 :=
   sequence [[0x06, 0x07, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01],
     [0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07]]
 
+/-- The tag, the content and what follows of the DER element at the start of `bytes`, with a
+length of up to three bytes. -/
+def read? : List UInt8 → Option (UInt8 × List UInt8 × List UInt8)
+  | tag :: n :: rest => do
+    let k := n.toNat - 0x80
+    let (size, rest) ← if n < 0x80 then some (n.toNat, rest)
+      else if 0 < k ∧ k ≤ 3 ∧ k ≤ rest.length then
+        some ((rest.take k).foldl (fun m b => m * 256 + b.toNat) 0, rest.drop k)
+      else none
+    if size ≤ rest.length then some (tag, rest.take size, rest.drop size) else none
+  | _ => none
+
 end Der
 
 inductive PublicKey where
@@ -102,6 +119,47 @@ def derSignature (key : PublicKey) (sig : ByteArray) : Option ByteArray :=
       some ⟨(Der.sequence [Der.integer (sig.extract 0 32).data.toList,
         Der.integer (sig.extract 32 64).data.toList]).toArray⟩
     else none
+
+/-- A guess at the fields of the key `bytes` is the DER of. -/
+private def spkiFields (bytes : List UInt8) : Option PublicKey := do
+  let (_, body, _) ← Der.read? bytes
+  let (_, _, rest) ← Der.read? body
+  let (_, bits, _) ← Der.read? rest
+  match bits with
+  | 0 :: 0x04 :: point => some (.p256 ⟨(point.take 32).toArray⟩ ⟨(point.drop 32).toArray⟩)
+  | 0 :: inner => do
+    let (_, ints, _) ← Der.read? inner
+    let (_, n, rest) ← Der.read? ints
+    let (_, e, _) ← Der.read? rest
+    some (.rsa ⟨(n.dropWhile (· == 0)).toArray⟩ ⟨(e.dropWhile (· == 0)).toArray⟩)
+  | _ => none
+
+/-- The key `der` names, as `spki` writes it: the guess is kept only if `spki` writes `der`
+again (`ofSpki?_spki`). -/
+@[no_expose]
+def ofSpki? (der : ByteArray) : Option PublicKey := do
+  let key ← spkiFields der.data.toList
+  if key.spki = der then some key else none
+
+theorem ofSpki?_spki {der : ByteArray} {key : PublicKey} (h : ofSpki? der = some key) :
+    key.spki = der := by
+  simp only [ofSpki?, bind, Option.bind_eq_some_iff] at h
+  obtain ⟨k, _, hk⟩ := h
+  split at hk
+  · cases hk; assumption
+  · cases hk
+
+/-- `text` cut into lines of at most `width` characters. -/
+def lines (width : Nat) (text : List Char) : List (List Char) :=
+  if _ : text = [] ∨ width = 0 then [text]
+  else text.take width :: if text.length ≤ width then [] else lines width (text.drop width)
+termination_by text.length
+decreasing_by simp_all; omega
+
+/-- The key as a PEM `PUBLIC KEY`, as `openssl pkey -pubout` writes it. -/
+def pem (key : PublicKey) : String :=
+  let body := (lines 64 (Base64.encode .std key.spki).toList).map (String.ofList · ++ "\n")
+  "-----BEGIN PUBLIC KEY-----\n" ++ String.join body ++ "-----END PUBLIC KEY-----\n"
 
 end PublicKey
 
