@@ -9,15 +9,16 @@ public import Lanes.Web.IO.Client
 
 /-!
 Sign-in with another service, performed: what `Lanes/Web/Auth/OAuth.lean` decides, done where a
-request arrives, before the system sees it (`serve`'s `arrive`). It draws the random bytes, keeps
-the pending sign-ins and the providers' keys, and calls the token endpoint, the JWK Set and the
-user API through the HTTP client. A request to begin is answered here with the redirect; a
+request arrives, before the system sees it (`serve`'s `arrive`). It draws the random bytes and
+the key that tags the browsers' tickets, keeps the states used and the providers' keys, and calls
+the token endpoint, the JWK Set and the user API through the HTTP client. A request to begin is answered here with the redirect; a
 callback enters the system with the identity verified in its headers (`OAuth.identity?`) and
 without its code, or is answered here with the refusal. So no code, token or secret reaches the
 system or its journal, and nothing here is printed.
 
-The pending sign-ins live in memory: after a restart the callbacks of those begun before are
-refused, and the user begins again.
+A sign-in begun is kept by the browser, in its cookie. The key and the states used live in
+memory: after a restart the callbacks of sign-ins begun before are refused, as tagged by another
+key, and the user begins again.
 -/
 
 public section
@@ -31,7 +32,8 @@ structure SignIn.Config where
   settings : Settings := {}
   /-- The first segment of the sign-in's routes. -/
   pathPrefix : String := "sign-in"
-  /-- The cookie that binds a sign-in to the browser it was begun in. -/
+  /-- The cookie that binds a sign-in to the browser it was begun in, `__Host-` before it when
+  `secure`. -/
   cookie : String := "lanes-sign-in"
   /-- Whether that cookie is sent over HTTPS only; `false` only to test over plain HTTP. -/
   secure : Bool := true
@@ -39,11 +41,12 @@ structure SignIn.Config where
 
 structure SignIn where
   config : SignIn.Config
-  pending : IO.Ref Pending
+  key : Hmac.Key
+  used : IO.Ref Used
   keys : IO.Ref (List (String × Keys))
 
 def SignIn.start (config : SignIn.Config) : IO SignIn :=
-  return { config, pending := ← IO.mkRef {}, keys := ← IO.mkRef [] }
+  return { config, key := .of (← randomBytes 32), used := ← IO.mkRef {}, keys := ← IO.mkRef [] }
 
 namespace SignIn
 
@@ -87,7 +90,7 @@ private def identify (s : SignIn) (p : Provider) (c : Client) (g : Grant) (token
     let keys ← keysFor s p jwks kid now
     let expect := { issuers, clientId := c.id, nonce := g.nonce, now_s := now / 1000,
                     skew_s := s.config.settings.skew_s }
-    return (IdToken.verify keys expect token.value).mapError .idToken
+    return (IdToken.verify keys expect token.value).map (Identity.under issuers) |>.mapError .idToken
   | .userApi urls read =>
     let mut answers := []
     for url in urls do
@@ -97,27 +100,37 @@ private def identify (s : SignIn) (p : Provider) (c : Client) (g : Grant) (token
       | .error why => return .error why
     return (read answers).mapError .userApi
 
-/-- The provider's callback: the state checked, then the code exchanged and the user known. -/
+/-- The provider's callback: the browser's ticket checked, then the code exchanged and the user
+known, and only then the state claimed, so that a state is used up only by a sign-in that
+succeeded and filling the set takes a code from the provider for each state. -/
 def finish (s : SignIn) (p : Provider) (c : Client) (r : Request) :
     IO (Except Refusal Identity) := do
   let now ← wallMs
+  let limit := s.config.settings.maxUsed
   let answer := Answer.read r.query
   let some state := answer.state | return .error .malformed
-  let binding := (r.cookie? s.config.cookie).getD ""
-  let grant ← s.pending.modifyGet fun pend =>
-    let (rest, grant) := pend.callback now p.name binding state
-    (grant, rest)
-  match answer, grant with
+  let ticket := check s.key now p.name (r.cookie? (hostCookie s.config.cookie s.config.secure)) state
+  match answer, ticket with
   | .error e _, _ => return .error (.denied e)
   | _, .error why => return .error why
   | .malformed, _ => return .error .malformed
-  | .code code _, .ok g =>
+  | .code code _, .ok t =>
+    if let .error why := ((← s.used.get).claim limit now t).2 then return .error why
+    let g := t.grant s.key
     let form := encodeForm (tokenForm c code g.verifier)
     let answered ← call s.config.http p.token .post
       [("content-type", "application/x-www-form-urlencoded")] form.toUTF8
     match tokenAnswer answered with
     | .error why => return .error why
-    | .ok tokens => identify s p c g tokens now
+    | .ok tokens =>
+      match ← identify s p c g tokens now with
+      | .error why => return .error why
+      | .ok id =>
+        let later ← wallMs
+        let claimed ← s.used.modifyGet fun u =>
+          let (u, claimed) := u.claim limit later t
+          (claimed, u)
+        return claimed.map fun () => id
 
 /-- What the server does with a request before it enters the system (`serve`'s `arrive`). -/
 def arrive (s : SignIn) (r : Request) : IO (Except Response Request) := do
@@ -127,14 +140,8 @@ def arrive (s : SignIn) (r : Request) : IO (Except Response Request) := do
   | .other => return .ok r
   | .begin name =>
     let some (p, c) := provider name | return .ok r
-    let seed : Seed := { state := ← randomBytes 32, nonce := ← randomBytes 32,
-                         verifier := ← randomBytes 32, binding := ← randomBytes 32 }
-    let now ← wallMs
-    let (url, binding) ← s.pending.modifyGet fun pend =>
-      let (rest, url, binding) := begin s.config.settings p c pend now seed
-      ((url, binding), rest)
-    return .error (beginResponse s.config.pathPrefix s.config.cookie s.config.secure
-      s.config.settings url binding)
+    let (url, ticket) := begin s.config.settings s.key p c (← wallMs) (← randomBytes 32)
+    return .error (beginResponse s.config.cookie s.config.secure s.config.settings url ticket)
   | .callback name =>
     let some (p, c) := provider name | return .ok r
     match ← s.finish p c r with

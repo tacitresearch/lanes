@@ -100,8 +100,8 @@ port: its policies decode to the documents Lanes writes, its signatures are Lane
 its policies, and its fields are Lanes' fields, in order. Its presigned `UploadPart` URL has the
 signature `presignPart` computes.
 
-The fake S3 (`Tests/S3.lean`, extended in `Tests/S3Upload.lean`) takes a form only with the
-policy's signature and token, runs `Post.check` and refuses as S3 does; and multipart uploads with
+The test kit's fake S3 (`Lanes/Testing/S3.lean`), which `Tests/S3Upload.lean` and
+`examples/videos` run against, takes a form only with the policy's signature and token, runs `Post.check` and refuses as S3 does; and multipart uploads with
 S3's rules: ETags as MD5s, a multipart object's ETag as the MD5 of the parts' MD5s and their
 number, parts out of order and sent again, a listing in order and with the last ETags, 5 MiB
 before the last part, a Complete made twice answered the same, an abort. Against it: the

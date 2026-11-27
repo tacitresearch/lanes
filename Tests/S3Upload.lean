@@ -3,6 +3,7 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
+import Lanes.Testing
 import Tests.S3
 
 /-!
@@ -14,10 +15,10 @@ Bounded and large uploads: the browser's `POST` under a policy, and multipart up
   conditions read from botocore's policy are those `Post.conditions` gives, the fields are the
   same, and the signature of botocore's policy is botocore's.
 - What `Post.check` refuses, the multipart calls and the answers read.
-- The fake S3 of `Tests/S3.lean`, extended: it takes a `POST` form only with the policy's
-  signature, before its expiry, with every condition met and every field named, and refuses as
-  S3 does (`EntityTooLarge`, `EntityTooSmall`, `AccessDenied`); and multipart uploads, with
-  S3's part sizes, part order, ETags and a Complete made twice. A server's multipart upload
+- The test kit's fake S3 (`Lanes/Testing/S3.lean`): it takes a `POST` form only with the
+  policy's signature, before its expiry, with every condition met and every field named, and
+  refuses as S3 does (`EntityTooLarge`, `EntityTooSmall`, `AccessDenied`); and multipart
+  uploads, with S3's part sizes, part order, ETags and a Complete made twice. A server's multipart upload
   (`S3.upload`), a browser's parts through presigned links with their length signed, and the run
   checked against the multipart model.
 -/
@@ -25,7 +26,9 @@ Bounded and large uploads: the browser's `POST` under a policy, and multipart up
 namespace Tests.S3Upload
 
 open Lanes Lanes.S3 Lanes.Http Std Std.Async
-open Tests.S3 (bytes creds key docTime raw? answer failure time? verified splitTarget Raw bucketAt config follow)
+open Tests.S3 (bytes creds key docTime config)
+open Lanes.Testing (status)
+open Lanes.Testing.S3 (Fake follow postForm code etag)
 
 /-! ## AWS's documented example -/
 
@@ -271,265 +274,23 @@ def planTests : List (String × Bool) :=
 def tests : List (String × Bool) :=
   awsTests ++ vectorTests ++ partTests ++ checkTests ++ callTests ++ answerTests ++ planTests
 
-/-! ## The fake S3, with forms and multipart uploads -/
-
-/-- Where `pat` is in `data`, from `start`. -/
-def find? (data pat : ByteArray) (start : Nat) : Option Nat := Id.run do
-  for i in [start:data.size + 1 - pat.size] do
-    if (List.range pat.size).all fun j => data[i + j]! == pat[j]! then return some i
-  return none
-
-def split (data sep : ByteArray) : List ByteArray := Id.run do
-  let mut parts := #[]
-  let mut from_ := 0
-  for _ in [0:data.size + 1] do
-    match find? data sep from_ with
-    | some i =>
-      parts := parts.push (data.extract from_ i)
-      from_ := i + sep.size
-    | none => break
-  return (parts.push (data.extract from_ data.size)).toList
-
-structure FormPart where
-  name : String
-  filename : Option String
-  value : ByteArray
-
-def quoted (header name : String) : Option String := do
-  let rest ← (header.splitOn (name ++ "=\""))[1]?
-  (rest.splitOn "\"").head?
-
-def formParts (contentType : String) (body : ByteArray) : Option (List FormPart) := do
-  let boundary ← (contentType.splitOn "boundary=")[1]?
-  let chunks := split (bytes "\r\n" ++ body) (bytes ("\r\n--" ++ boundary))
-  (chunks.drop 1).dropLast.mapM fun chunk => do
-    let headEnd ← find? chunk (bytes "\r\n\r\n") 0
-    let head ← String.fromUTF8? (chunk.extract 0 headEnd)
-    let disposition ← (head.splitOn "\r\n").find? (·.toLower.startsWith "content-disposition")
-    return { name := ← quoted disposition "name", filename := quoted disposition "filename"
-             value := chunk.extract (headEnd + 4) chunk.size }
-
-/-- A body as a browser's `FormData` sends it: the fields, then the file. -/
-def formBody (boundary : String) (fields : List (String × String)) (filename : String)
-    (file : ByteArray) : ByteArray :=
-  let field (n v : String) := s!"--{boundary}\r\nContent-Disposition: form-data; name=\"{n}\"\r\n\r\n{v}\r\n"
-  bytes (String.join (fields.map fun (n, v) => field n v))
-    ++ bytes s!"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\nContent-Type: application/octet-stream\r\n\r\n"
-    ++ file ++ bytes s!"\r\n--{boundary}--\r\n"
-
-structure Upload where
-  id : String
-  key : String
-  contentType : String
-  /-- By number: the body and its ETag. -/
-  parts : List (Nat × ByteArray × String)
-
-structure Fake where
-  objects : List (String × ByteArray × String) := []
-  uploads : List Upload := []
-  /-- Uploads completed: the id, the key, the listing and the object's ETag. -/
-  completed : List (String × String × List (Nat × String) × String) := []
-  next : Nat := 0
-  /-- The least a part but the last may hold: 5 MiB, as S3. -/
-  minPart : Nat := Multipart.minPart_bytes
-
-def etag (body : ByteArray) : String := "\"" ++ Bytes.hex (Md5.hash body) ++ "\""
-
-def unquote (s : String) : String := (s.replace "\"" "")
-
-/-- A multipart object's ETag, as S3 makes it: the MD5 of the parts' MD5s, and their number. -/
-def multipartEtag (parts : List ByteArray) : String :=
-  "\"" ++ Bytes.hex (Md5.hash (parts.foldl (fun acc p => acc ++ Md5.hash p) .empty)) ++ "-"
-    ++ toString parts.length ++ "\""
-
-def xml (body : String) : ByteArray := bytes ("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" ++ body)
-
-def xmlAnswer (body : String) : ByteArray := answer 200 [("Content-Type", "application/xml")] (xml body)
-
-/-- A form posted to the bucket, as S3 takes one. -/
-def servePost (creds : SigV4.Credentials) (now_s : Int) (st : Fake) (r : Raw) : ByteArray × Fake :=
-  let refuse (status : Nat) (code : String) := (failure status code, st)
-  match (r.headers.lookup "content-type").bind (formParts · r.body) with
-  | none => refuse 400 "MalformedPOSTRequest"
-  | some parts =>
-    let fields := (parts.filter fun p => p.filename.isNone && p.name != "file").map fun p =>
-      (p.name, (String.fromUTF8? p.value).getD "")
-    let get := Post.lookup fields
-    match parts.find? (·.name == "file"), get "policy", get "x-amz-signature",
-        get "x-amz-credential", (get "x-amz-date").bind time? with
-    | some file, some policy, some signature, some credential, some t =>
-      match credential.splitOn "/" with
-      | [id, _, region, service, "aws4_request"] =>
-        if id != creds.accessKeyId
-            || Post.signature creds.secretAccessKey t ⟨region, service⟩ policy != signature then
-          refuse 403 "SignatureDoesNotMatch"
-        else if (creds.sessionToken.map (·.reveal)) != get "x-amz-security-token" then
-          refuse 403 "InvalidToken"
-        else match Post.decode? policy with
-          | none => refuse 400 "InvalidPolicyDocument"
-          | some d =>
-            let filename := file.filename.getD ""
-            let fields := fields.map fun (n, v) =>
-              if n.toLower == "key" then (n, v.replace "${filename}" filename) else (n, v)
-            match Post.check d "videos" fields file.value.size now_s, Post.lookup fields "key" with
-            | .ok (), some k =>
-              let type := (Post.lookup fields "content-type").getD "binary/octet-stream"
-              (answer 204 [("ETag", etag file.value), ("Location", "/videos/" ++ k)] .empty,
-                { st with objects := (k, file.value, type) :: st.objects.filter (·.1 != k) })
-            | .error (.unmet (.length _ max)), _ =>
-              if file.value.size > max then refuse 400 "EntityTooLarge" else refuse 400 "EntityTooSmall"
-            | .error .unreadable, _ => refuse 400 "InvalidPolicyDocument"
-            | _, _ => refuse 403 "AccessDenied"
-      | _ => refuse 403 "AuthorizationQueryParametersError"
-    | _, _, _, _, _ => refuse 403 "AccessDenied"
-
-def listPartsXml (u : Upload) (after : Nat) : String :=
-  let parts := (u.parts.filter (·.1 > after)).mergeSort (fun a b => a.1 ≤ b.1)
-  "<ListPartsResult><Bucket>videos</Bucket><Key>" ++ Xml.escape u.key ++ "</Key><UploadId>" ++ u.id
-    ++ "</UploadId><IsTruncated>false</IsTruncated>"
-    ++ String.join (parts.map fun (n, body, e) => s!"<Part><PartNumber>{n}</PartNumber><ETag>{Xml.escape e}</ETag><Size>{body.size}</Size></Part>")
-    ++ "</ListPartsResult>"
-
-def completedXml (k e : String) : String :=
-  "<CompleteMultipartUploadResult><Location>/videos/" ++ Xml.escape k ++ "</Location><Bucket>videos</Bucket><Key>"
-    ++ Xml.escape k ++ "</Key><ETag>" ++ Xml.escape e ++ "</ETag></CompleteMultipartUploadResult>"
-
-def manifest? (body : ByteArray) : Option (List (Nat × String)) := do
-  let root ← (String.fromUTF8? body).bind Xml.parse
-  unless root.name == "CompleteMultipartUpload" do none
-  (root.all "Part").mapM fun p => do return (← decimal? (← p.text? "PartNumber"), ← p.text? "ETag")
-
-def complete (st : Fake) (u : Upload) (listing : List (Nat × String)) : ByteArray × Fake :=
-  let refuse (status : Nat) (code : String) := (failure status code, st)
-  if listing.isEmpty then refuse 400 "MalformedXML"
-  else if !decide ((listing.map (·.1)).Pairwise (· < ·)) then refuse 400 "InvalidPartOrder"
-  else match listing.mapM fun ((n, e) : Nat × String) =>
-      (u.parts.lookup n).filter fun ((_, held) : ByteArray × String) => unquote held == unquote e with
-    | none => refuse 400 "InvalidPart"
-    | some held =>
-      if (held.dropLast.any fun ((body, _) : ByteArray × String) => body.size < st.minPart) then
-        refuse 400 "EntityTooSmall"
-      else
-        let bodies := held.map (·.1)
-        let e := multipartEtag bodies
-        let listing := listing.map fun (n, e) => (n, unquote e)
-        (xmlAnswer (completedXml u.key e),
-          { st with objects := (u.key, bodies.foldl (· ++ ·) .empty, u.contentType) :: st.objects.filter (·.1 != u.key)
-                    uploads := st.uploads.filter (·.id != u.id)
-                    completed := (u.id, u.key, listing, e) :: st.completed })
-
-def serveMultipart (st : Fake) (r : Raw) (k : String) (query : List (String × String)) :
-    Option (ByteArray × Fake) :=
-  let upload := (query.lookup "uploadId").bind fun id => st.uploads.find? (·.id == id)
-  let gone := (failure 404 "NoSuchUpload", st)
-  match r.verb, query.lookup "uploads", query.lookup "uploadId" with
-  | "POST", some _, _ =>
-    let id := s!"upload-{st.next}"
-    let type := (r.headers.lookup "content-type").getD "binary/octet-stream"
-    some (xmlAnswer s!"<InitiateMultipartUploadResult><Bucket>videos</Bucket><Key>{Xml.escape k}</Key><UploadId>{id}</UploadId></InitiateMultipartUploadResult>",
-      { st with next := st.next + 1, uploads := ⟨id, k, type, []⟩ :: st.uploads })
-  | "PUT", _, some _ => some <| match upload, (query.lookup "partNumber").bind String.toNat? with
-    | some u, some n =>
-      if n < 1 || n > 10000 then (failure 400 "InvalidArgument", st)
-      else
-        let u := { u with parts := (n, r.body, etag r.body) :: u.parts.filter (·.1 != n) }
-        (answer 200 [("ETag", etag r.body)] .empty,
-          { st with uploads := u :: st.uploads.filter (·.id != u.id) })
-    | _, _ => gone
-  | "GET", _, some _ => some <| match upload with
-    | some u => (xmlAnswer (listPartsXml u (((query.lookup "part-number-marker").bind String.toNat?).getD 0)), st)
-    | none => gone
-  | "POST", _, some id => some <| match upload, manifest? r.body with
-    | some u, some listing => complete st u listing
-    | none, some listing =>
-      match st.completed.find? (·.1 == id) with
-      | some (_, k', done, e) =>
-        if done == listing.map (fun (n, e) => (n, unquote e)) then (xmlAnswer (completedXml k' e), st) else gone
-      | none => gone
-    | _, none => (failure 400 "MalformedXML", st)
-  | "DELETE", _, some id => some <| match upload with
-    | some _ => (answer 204 [] .empty, { st with uploads := st.uploads.filter (·.id != id) })
-    | none => gone
-  | _, _, _ => none
-
-/-- What the fake answers, and its state after: forms and multipart uploads here, the rest as
-`Tests.S3.serve` answers them. -/
-def serve (creds : SigV4.Credentials) (now_s : Int) (st : Fake) (r : Raw) : ByteArray × Fake :=
-  let byForm := r.verb == "POST" && (r.headers.lookup "authorization").isNone
-    && ((r.headers.lookup "content-type").getD "").startsWith "multipart/form-data"
-  if byForm then
-    match splitTarget r.target with
-    | some (["videos"], _) => servePost creds now_s st r
-    | _ => (failure 404 "NoSuchBucket", st)
-  else
-    let plain : Unit → ByteArray × Fake := fun () =>
-      let (reply, objects) := Tests.S3.serve creds st.objects r
-      (reply, { st with objects })
-    match verified creds r with
-    | some ("videos" :: segments, query) =>
-      (serveMultipart st r ("/".intercalate segments) query).getD (plain ())
-    | _ => plain ()
-
-def fake (creds : SigV4.Credentials) : Async (TCP.Socket.Server × UInt16 × IO.Ref Fake) := do
-  let state ← IO.mkRef ({} : Fake)
-  let server ← TCP.Socket.Server.mk
-  server.bind (.v4 ⟨.ofParts 127 0 0 1, 0⟩)
-  server.listen 128
-  let tcpPort := (← server.getSockName).port
-  background do
-    try
-      repeat
-        let client ← server.accept
-        background do
-          try
-            let mut received := ByteArray.empty
-            repeat
-              let some arrived ← client.recv? 65536 | break
-              received := received ++ arrived
-              if let some r := raw? received then
-                let now_s := (← S3.now).toUnix
-                let reply ← state.modifyGet fun st => serve creds now_s st r
-                client.send reply
-                break
-          catch _ => pure ()
-          client.close
-    catch _ => pure ()
-  return (server, tcpPort, state)
-
-/-- Posts `fields` and then `file` to `url`, as a browser's `fetch` of a `FormData` does. -/
-def postFields (url : String) (fields : List (String × String)) (file : ByteArray)
-    (filename : String := "clip.mp4") : Async (Option Response) := do
-  let parts := url.splitOn "/"
-  let origin := "/".intercalate (parts.take 3)
-  let path := (parts.drop 3).filter (!·.isEmpty)
-  let boundary := "----LanesFormBoundary7MA4YWxkTrZu0gW"
-  let body := formBody boundary fields filename file
-  let headers := [("content-type", s!"multipart/form-data; boundary={boundary}")]
-  let some c := Client.Call.at origin { method := .post, path, headers, body } | return none
-  try Client.exchange c config catch _ => return none
+/-! ## Forms against the fake S3 of the test kit -/
 
 /-- Posts `form` with `file`; `change` alters the fields first. -/
 def post (form : Post.Form) (file : ByteArray) (filename : String := "clip.mp4")
     (change : List (String × String) → List (String × String) := id) : Async (Option Response) :=
-  postFields form.url (change form.fields) file filename
-
-def status (r : Option Response) : Nat := (r.map (·.status)).getD 0
-
-def code (r : Option Response) : String := (r.map (errorCode ·.body)).getD ""
-
-def objectOf (st : IO.Ref Fake) (k : String) : Async (Option (ByteArray × String)) := do
-  return (← st.get).objects.lookup k
+  postForm form.url (change form.fields) file filename config
 
 def postTests : Async (List (String × Bool)) := do
-  let (server, tcpPort, st) ← fake creds
-  let b := bucketAt tcpPort
+  let store ← Fake.start creds "videos"
+  let b := store.bucket
   let t ← S3.now
   let policy : Post.Policy := { key := .exact (key "up/a.mp4"), length := range 1 100
                                 contentType := some "video/mp4", expiry := expiry 600 }
   let form := Post.form b creds t policy
   let clip := bytes "twenty bytes of clip"
   let ok ← post form clip
-  let stored ← objectOf st "up/a.mp4"
+  let stored ← store.object? "up/a.mp4"
   let large ← post form (ByteArray.mk (Array.replicate 101 65))
   let empty ← post form .empty
   let set (name value : String) (fs : List (String × String)) :=
@@ -544,13 +305,14 @@ def postTests : Async (List (String × Bool)) := do
   let outside ← post prefixed clip (change := set "key" "user/bob/cat.png")
   let old := Post.form b creds (Civil.DateTime.ofUnix (t.toUnix - 3600)) { policy with expiry := expiry 60 }
   let expired ← post old clip
-  server.close
+  let chosenKept ← store.holds "user/alice/cat.png"
+  store.stop
   let withToken := { creds with sessionToken := some ⟨"tok"⟩ }
-  let (tokenServer, tokenPort, _) ← fake withToken
-  let tb := bucketAt tokenPort
+  let tokenStore ← Fake.start withToken "videos"
+  let tb := tokenStore.bucket
   let tokened ← post (Post.form tb withToken t policy) clip
   let untokened ← post (Post.form tb creds t policy) clip
-  tokenServer.close
+  tokenStore.stop
   return [
     ("s3 fake, post: a form under its policy stores the file, with its type",
       status ok == 204 && stored == some (clip, "video/mp4")),
@@ -562,7 +324,7 @@ def postTests : Async (List (String × Bool)) := do
     ("s3 fake, post: a policy changed after signing is refused",
       status tampered == 403 && code tampered == "SignatureDoesNotMatch"),
     ("s3 fake, post: under a prefix the file's name is the key's end, and a key outside it refused",
-      status chosen == 204 && (← objectOf st "user/alice/cat.png").isSome && status outside == 403),
+      status chosen == 204 && chosenKept && status outside == 403),
     ("s3 fake, post: an expired policy is refused", status expired == 403 && code expired == "AccessDenied"),
     ("s3 fake, post: a session token is a field the policy names, and one missing refused",
       status tokened == 204 && status untokened == 403) ]
@@ -620,8 +382,8 @@ def recorded (b : Bucket) (flow : Multipart.Flow) (body : ByteArray) :
   return (f.phase, events.toList)
 
 def multipartTests : Async (List (String × Bool)) := do
-  let (server, tcpPort, st) ← fake creds
-  let b := bucketAt tcpPort
+  let store ← Fake.start creds "videos"
+  let b := store.bucket
   let ex (op : Op) := exchange b creds op { config with maxResponseBytes := 16 * mib }
   let body := filled (5 * mib) 97 ++ bytes "end"
   let k := key "big/a.mp4"
@@ -667,8 +429,7 @@ def multipartTests : Async (List (String × Bool)) := do
   let byLinks := (manifest [(⟨1, by decide⟩, browserEtag put1), (⟨2, by decide⟩, browserEtag put2)])
   let linked ← ex (.completeUpload k4 id4 byLinks)
   let linkedObject ← ex (.get k4)
-  server.close
-  let _ := st
+  store.stop
   return [
     ("s3 fake, multipart: the server's upload of 5 MiB and 3 bytes, in two parts, completes",
       match phase with

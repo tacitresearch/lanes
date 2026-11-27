@@ -9,7 +9,8 @@ import Videos.Proofs.Shows
 # A private video is its owner's alone
 
 Of every input and every site, an output that shows a private video answers a request made with
-a live session of its owner (`Site.handle_private`); a start shows nothing. The system emits only
+a session of its owner that let it in when it arrived, open and not past its lifetime
+(`Site.handle_private`); a start shows nothing. The system emits only
 such outputs, so in every run of it, under every environment model, every output that shows a
 private video is addressed to its owner (`private_to_owner`). The bridge sends an answer only to
 the connection that made the request (`Http.served`), and a request names a member only through
@@ -22,16 +23,18 @@ namespace Videos
 
 open Lanes
 
-/-- An output that shows a private video answers a request made with a live session of its
-owner. -/
+/-- An output that shows a private video answers a request made with a session of its owner
+that let the request in when it arrived. -/
 theorem Site.handle_private (config : Config) (s : Site) (i : Input) :
     ∀ o ∈ (s.handle config i).2, ∀ c ∈ o.cards, c.visibility = .private →
-      ∃ req sid r, o = .reply req (some (c.owner, sid)) r ∧ s.live c.owner sid = true := by
+      ∃ req sid r, o = .reply req (some (c.owner, sid)) r
+        ∧ s.accepts config.lifetime i.at_s c.owner sid = true := by
   intro o ho c hc hp
   obtain ⟨w, -, rfl, -, hpriv⟩ := s.shows_handle config i o ho c hc
   exact hpriv hp
 
-theorem Out.private_ok_of_shows {s : Site} {o : Out} (h : s.Shows o) : o.private_ok := by
+theorem Out.private_ok_of_shows {s : Site} {life : Auth.Lifetime} {at_s : Nat} {o : Out}
+    (h : s.Shows life at_s o) : o.private_ok := by
   intro c hc hp
   obtain ⟨w, -, rfl, -, hpriv⟩ := h c hc
   obtain ⟨req, sid, r, rfl, -⟩ := hpriv hp
@@ -42,7 +45,7 @@ theorem emits_private (config : Config) : (system config).Emits Out.private_ok :
   · have : out ∈ (s.handle config i).2 := by simpa [site] using hout
     exact Out.private_ok_of_shows (s.shows_handle config i out this)
   · have : out ∈ (s.recover config).2 := by simpa [site] using hout
-    exact Out.private_ok_of_shows (s.shows_recover config out this)
+    exact Out.private_ok_of_shows (s.shows_recover config 0 out this)
 
 /-- A private video is its owner's alone: in every run of the system, under every environment
 model, every output that shows a private video is addressed to its owner. -/

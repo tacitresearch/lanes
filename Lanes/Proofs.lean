@@ -6,6 +6,7 @@ module
 
 public import Lanes
 public import Lanes.Behaviours.Jobs.Sound
+public import Lanes.Behaviours.Schedule.Sound
 public import Lanes.Check.SearchSound
 public import Lanes.Check.SystemSound
 public import Lanes.Lib.Encoding.Json.BasicSound

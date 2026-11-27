@@ -41,6 +41,9 @@ import Lanes.Semantics
 /-- info: 'Lanes.ObjectStore.read_sent' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.ObjectStore.read_sent
 
+/-- info: 'Lanes.ObjectStore.held_sent' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.ObjectStore.held_sent
+
 -- Lanes.Outside.Events
 /-- info: 'Lanes.Events.deliveries_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Events.deliveries_le

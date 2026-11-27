@@ -262,10 +262,10 @@ def Feed (posts : List (Name × Post)) : Html :=
 /-! ## The bridge -/
 
 def page (html : Html) (status : Nat := 200) : Http.Response :=
-  (Http.Response.html html.document status).noStore
+  (Http.Response.html html.document status).noStore.noFraming
 
 def fragment (html : Html) : Http.Response :=
-  (Http.Response.html html.render).noStore
+  (Http.Response.html html.render).noStore.noFraming
 
 def notLoggedIn : Http.Response :=
   (Http.Response.redirect (Routes.login.link ())).hxRedirect Routes.login ()

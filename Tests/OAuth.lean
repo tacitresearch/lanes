@@ -3,14 +3,15 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
-import Tests.Signature
+import Lanes.Testing
 import Tests.Web
 
 /-!
 Sign-in with another service (`Lanes/Web/Auth/OAuth.lean`, `Lanes/Web/IO/SignIn.lean`). The pure
-decisions one by one; the pending sign-ins as an actor, model-checked against two browsers, one of
-them an attacker's, that replay and swap callbacks; and the whole flow end to end over HTTP,
-against a provider run in the test: an authorization endpoint the test plays, a token endpoint
+decisions one by one; the edge as an actor, its tickets in the browsers' cookies and the states it
+used, model-checked against two browsers, one of them an attacker's, that replay and swap
+callbacks across a restart; and the whole flow end to end over HTTP, against the test kit's
+provider (`Lanes/Testing/OAuth.lean`): an authorization endpoint the test plays, a token endpoint
 that checks PKCE and signs ID tokens with an RSA key made by `openssl`, a JWK Set, and a user API
 for a provider without ID tokens. No real provider is called.
 -/
@@ -18,10 +19,11 @@ for a provider without ID tokens. No real provider is called.
 namespace Tests.OAuth
 
 open Lanes Lanes.OAuth Lanes.Http Std Std.Async
+open Lanes.Testing (queryOf)
 
-def seed (n : Nat) : Seed :=
-  let b (k : Nat) := ByteArray.mk (Array.replicate 32 (UInt8.ofNat (n * 4 + k)))
-  { state := b 0, nonce := b 1, verifier := b 2, binding := b 3 }
+def key : Hmac.Key := .of "the edge's key".toUTF8
+
+def stateOf (n : Nat) : ByteArray := ByteArray.mk (Array.replicate 32 (UInt8.ofNat n))
 
 def oidc : Provider :=
   { name := "id", authorize := "https://id.example/authorize", token := "https://id.example/token",
@@ -33,21 +35,22 @@ def plain : Provider :=
 def client : Client :=
   { id := "app", secret := ⟨"s3cret"⟩, redirect := "https://app.example/sign-in/id/callback" }
 
-def settings : Settings := { maxPending := 2 }
-
-/-- The query of a URL, decoded. -/
-def queryOf (url : String) : List (String × String) :=
-  ((Url.parse url).bind (·.query)).map parseForm |>.getD []
+def settings : Settings := { maxUsed := 2 }
 
 def get (q : List (String × String)) (name : String) : Option String :=
   (q.find? (·.1 == name)).map (·.2)
 
-def accepted (r : Pending × Except OAuth.Refusal Grant) : Bool := r.2 matches .ok _
-
-def refusal (r : Pending × Except OAuth.Refusal Grant) : Option OAuth.Refusal :=
-  match r.2 with
+def refusal (r : Except OAuth.Refusal α) : Option OAuth.Refusal :=
+  match r with
   | .error why => some why
   | .ok _ => none
+
+def ticketOf (n now_ms : Nat) (provider : String := "id") : Ticket :=
+  { provider, state := b64 (stateOf n), expires_ms := now_ms + settings.ttl_ms }
+
+/-- The states a run of claims accepts. -/
+def acceptedStates (limit : Nat) (ops : List (Nat × Ticket)) : List String :=
+  (Used.run {} limit ops).2.map (·.state)
 
 def claims : IdToken.Claims :=
   { iss := "https://id.example", sub := "u1", aud := ["app"], azp := some "app", exp := 2000,
@@ -64,56 +67,70 @@ def checked (c : IdToken.Claims) (x : IdToken.Expect := expect) : Option IdToken
 def readClaims (json : String) : Option IdToken.Claims := IdToken.Claims.read json.toUTF8
 
 def flowTests : List (String × Bool) :=
-  let (p, url, binding) := begin settings oidc client {} 1000 (seed 0)
+  let (url, cookie) := begin settings key oidc client 1000 (stateOf 0)
   let q := queryOf url
   let state := (get q "state").getD ""
-  let verifier := b64 (seed 0).verifier
+  let t := ticketOf 0 1000
+  let g := t.grant key
+  let verifier := g.verifier.value
+  let accepts (r : Except OAuth.Refusal Ticket) := r.toOption == some t
   [ ("oauth: the S256 challenge of RFC 7636 appendix B",
       challenge "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
         == "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"),
     ("oauth: the authorization URL asks for a code, with the state, the S256 challenge and a nonce",
       url.startsWith "https://id.example/authorize?" && get q "response_type" == some "code"
         && get q "client_id" == some "app" && get q "redirect_uri" == some client.redirect
-        && get q "scope" == some "openid email" && state == b64 (seed 0).state
+        && get q "scope" == some "openid email" && state == b64 (stateOf 0)
         && get q "code_challenge" == some (challenge verifier)
-        && get q "code_challenge_method" == some "S256"
-        && get q "nonce" == some (b64 (seed 0).nonce) && binding == b64 (seed 0).binding
-        && state.length == 43 && verifier.length == 43),
+        && get q "code_challenge_method" == some "S256" && get q "nonce" == some g.nonce
+        && state.length == 43 && verifier.length == 43 && g.nonce.length == 43),
+    ("oauth: the cookie holds the ticket under the server's tag, and neither the nonce nor the verifier",
+      Ticket.ofCookie key cookie == some t && Ticket.ofCookie (.of "another key".toUTF8) cookie == none
+        && (cookie.splitOn verifier).length == 1 && (cookie.splitOn g.nonce).length == 1
+        && Ticket.ofCookie key (cookie.replace s!".{t.expires_ms}." s!".{t.expires_ms + 1}.") == none
+        && Ticket.ofCookie key ((ticketOf 1 5 "a.b").toCookie key) == some (ticketOf 1 5 "a.b")
+        && (ticketOf 1 5).grant key != g),
     ("oauth: OAuth 2.0 alone is asked for no nonce, and extra parameters are added",
-      let (_, url, _) := begin settings { plain with extra := [("prompt", "consent")] } client {}
-        1000 (seed 0)
+      let (url, _) := begin settings key { plain with extra := [("prompt", "consent")] } client
+        1000 (stateOf 0)
       (get (queryOf url) "nonce").isNone && get (queryOf url) "prompt" == some "consent"),
-    ("oauth: a callback under the state, from the browser, before it expires, is accepted once",
-      match p.callback 2000 "id" binding state with
-      | (rest, .ok g) =>
-        g.nonce == b64 (seed 0).nonce && g.verifier == ⟨verifier⟩
-          && refusal (rest.callback 2000 "id" binding state) == some .unknownState
-      | _ => false),
-    ("oauth: a state never issued is refused",
-      refusal (p.callback 2000 "id" binding "forged") == some .unknownState),
-    ("oauth: from another browser the state is refused, and used up",
-      let (rest, r) := p.callback 2000 "id" "other" state
-      refusal (rest, r) == some .otherBrowser && refusal (rest.callback 2000 "id" binding state) == some .unknownState),
+    ("oauth: a callback with its browser's ticket, on its provider's route, before it expires, is accepted",
+      accepts (check key 2000 "id" (some cookie) state)),
+    ("oauth: a browser without a ticket of the server's is refused",
+      refusal (check key 2000 "id" none state) == some .unknownState
+        && refusal (check key 2000 "id" (some "forged") state) == some .unknownState
+        && refusal (check (.of "another key".toUTF8) 2000 "id" (some cookie) state)
+          == some .unknownState),
+    ("oauth: a state that is not its browser's ticket's is refused: another browser's, or none issued",
+      let (_, other) := begin settings key oidc client 1000 (stateOf 1)
+      refusal (check key 2000 "id" (some other) state) == some .otherBrowser
+        && refusal (check key 2000 "id" (some cookie) "forged") == some .otherBrowser),
     ("oauth: on another provider's route the state is refused",
-      refusal (p.callback 2000 "plain" binding state) == some .otherProvider),
+      refusal (check key 2000 "plain" (some cookie) state) == some .otherProvider),
     ("oauth: a callback once the sign-in has expired is refused",
-      refusal (p.callback (1000 + settings.ttl_ms) "id" binding state) == some .expired
-        && accepted (p.callback (999 + settings.ttl_ms) "id" binding state)),
-    ("oauth: at most maxPending sign-ins wait, the oldest dropped first",
-      let (p2, _, _) := begin settings oidc client p 1001 (seed 1)
-      let (p3, _, _) := begin settings oidc client p2 1002 (seed 2)
-      p3.entries.length == 2
-        && refusal (p3.callback 2000 "id" binding state) == some .unknownState
-        && accepted (p3.callback 2000 "id" (b64 (seed 2).binding) (b64 (seed 2).state))),
-    ("oauth: a sign-in that has expired is dropped when another begins",
-      let (p2, _, _) := begin { settings with maxPending := 10 } oidc client p
-        (1000 + settings.ttl_ms) (seed 1)
-      p2.entries.length == 1),
-    ("oauth: over a run, a state is accepted as often as it is issued and no more",
-      let e := (seed 0).entry "id" 10
-      let ops := [Pending.Op.begin 4 0 e, .callback 1 "id" e.binding e.state,
-        .callback 1 "id" e.binding e.state, .begin 4 2 e, .callback 3 "id" e.binding e.state]
-      (Pending.run {} ops).2 == [e.state, e.state]),
+      refusal (check key (1000 + settings.ttl_ms) "id" (some cookie) state) == some .expired
+        && accepts (check key (999 + settings.ttl_ms) "id" (some cookie) state)),
+    ("oauth: a state is claimed once, and not once its ticket has expired",
+      let (u, r) := ({} : Used).claim 2 2000 t
+      r.toOption == some () && refusal (u.claim 2 2001 t).2 == some .used
+        && refusal (({} : Used).claim 2 t.expires_ms t).2 == some .expired),
+    ("oauth: beginnings keep nothing: after 1024 others begun and done, a victim's sign-in is accepted",
+      let others := (List.range 1024).map fun i =>
+        (1001 + i, { ticketOf 0 (1001 + i) with state := s!"other {i}" })
+      let (u, done) := Used.run {} ({} : Settings).maxUsed others
+      done.length == 1024 && accepts (check key 3000 "id" (some cookie) state)
+        && (u.claim ({} : Settings).maxUsed 3000 t).2.toOption == some ()),
+    ("oauth: a full set drops its oldest states, refuses them and older tickets, and takes newer ones",
+      let at_ (n x : Nat) : Ticket := { provider := "id", state := s!"s{n}", expires_ms := x }
+      let full := (Used.run {} 2 [(0, at_ 1 10), (0, at_ 2 20), (0, at_ 3 30)]).1
+      full.states.length == 2 && full.floor_ms == 10
+        && refusal (full.claim 2 0 (at_ 1 10)).2 == some .expired
+        && refusal (full.claim 2 0 (at_ 2 20)).2 == some .used
+        && refusal (full.claim 2 0 (at_ 9 15)).2 == some .expired
+        && (full.claim 2 0 (at_ 4 40)).2.toOption == some ()
+        && refusal ((full.claim 2 0 (at_ 4 40)).1.claim 2 0 (at_ 2 20)).2 == some .expired),
+    ("oauth: over a run, a state is accepted once however often its ticket comes",
+      acceptedStates 4 [(1, t), (1, t), (2, ticketOf 1 0), (3, t)] == [t.state, (ticketOf 1 0).state]),
     ("oauth: the provider's answer is a code and the state, or an error",
       (match Answer.read [("state", "s"), ("code", "c")] with
         | .code c s => c == ⟨"c"⟩ && s == "s" | _ => false)
@@ -150,7 +167,7 @@ def flowTests : List (String × Bool) :=
       let r := refusedResponse (.denied "access_denied")
       r.status == 403 && String.fromUTF8? r.body == some "sign-in refused: the provider said access_denied\n"
         && [OAuth.Refusal.unknownProvider, .unknownState, .otherBrowser, .otherProvider, .expired,
-            .malformed, .token "x", .idToken .nonce, .userApi "y"].all (!·.describe.isEmpty)),
+            .used, .malformed, .token "x", .idToken .nonce, .userApi "y"].all (!·.describe.isEmpty)),
     ("oauth: the code is exchanged with the verifier and the client's secret",
       tokenForm client ⟨"c"⟩ ⟨"v"⟩ == [("grant_type", "authorization_code"), ("code", "c"),
         ("redirect_uri", client.redirect), ("client_id", "app"), ("client_secret", "s3cret"),
@@ -219,7 +236,21 @@ def claimTests : List (String × Bool) :=
         "{\"iss\":\"i\",\"sub\":\"s\",\"aud\":\"a\",\"exp\":\"5\"}",
         "{\"iss\":\"i\",\"sub\":\"s\",\"aud\":\"a\",\"exp\":5,\"email_verified\":\"true\"}",
         "{\"iss\":\"i\",\"sub\":\"s\",\"aud\":\"a\",\"exp\":5,\"nonce\":1}",
-        "{\"sub\":\"s\",\"aud\":\"a\",\"exp\":5}", "[]", "" ].all (readClaims · |>.isNone)) ]
+        "{\"iss\":\"i\",\"sub\":\"s\",\"aud\":\"a\",\"exp\":5,\"name\":7}",
+        "{\"sub\":\"s\",\"aud\":\"a\",\"exp\":5}", "[]", "" ].all (readClaims · |>.isNone)),
+    ("id token: the name is read, and the identity's is cleaned and bounded, or none",
+      let named (n : String) := (readClaims s!"\{\"iss\":\"i\",\"sub\":\"s\",\"aud\":\"a\",\"exp\":5,\
+        \"name\":{Json.renderString n}}").bind fun c => c.identity.name.map (·.val)
+      named "Ada <Lovelace>" == some "Ada <Lovelace>" && named " a\x00b\u202Ec\n" == some "abc"
+        && named (String.ofList (List.replicate 200 'n')) == some (String.ofList (List.replicate 64 'n'))
+        && named "\x01 " == none
+        && (readClaims "{\"iss\":\"i\",\"sub\":\"s\",\"aud\":\"a\",\"exp\":5}").any
+          (·.identity.name.isNone)),
+    ("id token: a display name is of 1 to 64 allowed characters",
+      (DisplayName.of? "Ada").isSome && (DisplayName.of? "").isNone
+        && (DisplayName.of? "a\nb").isNone && (DisplayName.of? "a\u2066b").isNone
+        && (DisplayName.of? (String.ofList (List.replicate 65 'a'))).isNone
+        && (DisplayName.of? "\u00e9\u00e8").isSome) ]
 
 def edgeTests : List (String × Bool) :=
   let r : Request := {
@@ -238,18 +269,33 @@ def edgeTests : List (String × Bool) :=
         && identity? (strip r) == none && (strip r).header? "cookie" == some "a=b"
         && identity? (withIdentity (strip r) id) == some id
         && identity? (withIdentity (strip r) { id with email := none, emailVerified := false })
-          == some { id with email := none, emailVerified := false }),
+          == some { id with email := none, emailVerified := false }
+        && identity? (withIdentity (strip r) { id with name := DisplayName.of? "Ada <L>" })
+          == some { id with name := DisplayName.of? "Ada <L>" }
+        && (identity? (strip { r with headers := r.headers ++ [("x-lanes-identity-name", "x")] })).isNone),
+    ("oauth edge: a name header that is not a display name is no name",
+      (identity? { r with headers := r.headers ++ [("x-lanes-identity-name", "a\nb")] }).any
+        (·.name.isNone)),
     ("oauth edge: the request that enters the system has no code", (withIdentity r id).query == []),
-    ("oauth edge: the redirect sets a cookie for the sign-in's routes, HttpOnly, Lax, Secure",
-      let response := beginResponse "sign-in" "lanes-sign-in" true {} "https://x" "v"
+    ("oauth edge: the redirect sets a __Host- cookie, HttpOnly, Lax, Secure, and over plain HTTP no prefix",
+      let response := beginResponse "lanes-sign-in" true {} "https://x" "v"
       response.status == 302 && response.headers.contains ("location", "https://x")
         && response.headers.contains ("set-cookie",
-          "lanes-sign-in=v; Path=/sign-in; Max-Age=600; HttpOnly; Secure; SameSite=Lax")),
+          "__Host-lanes-sign-in=v; Path=/; Max-Age=600; HttpOnly; Secure; SameSite=Lax")
+        && (beginResponse "lanes-sign-in" false {} "https://x" "v").headers.contains ("set-cookie",
+          "lanes-sign-in=v; Path=/; Max-Age=600; HttpOnly; SameSite=Lax")),
+    ("oauth edge: an identity from any of a provider's issuers names the first",
+      let ids := ["https://id.example", "id.example"]
+      Identity.under ids { id with issuer := "id.example" } == { id with issuer := "https://id.example" }
+        && Identity.under ids { id with issuer := "https://id.example" }
+          == { id with issuer := "https://id.example" }
+        && Identity.under ids { id with issuer := "other" } == { id with issuer := "other" }),
     ("oauth edge: a secret is never printed",
       toString (⟨"s3cret"⟩ : Secret) == "<secret>"
         && ((toString (repr client)).splitOn "s3cret").length == 1
         && ((toString (repr ({ access := ⟨"tok"⟩, idToken := some ⟨"idt"⟩ } : Tokens))).splitOn "tok").length == 1
-        && ((toString (repr ((seed 0).entry "id" 0))).splitOn (b64 (seed 0).verifier)).length == 1),
+        && ((toString (repr ((ticketOf 0 0).grant key))).splitOn
+          ((ticketOf 0 0).grant key).verifier.value).length == 1),
     ("oauth edge: endpoints are parsed into calls",
       Endpoint.parse "https://oauth2.googleapis.com/token"
           == some { https := true, host := "oauth2.googleapis.com", port := 443, path := ["token"],
@@ -261,9 +307,10 @@ def edgeTests : List (String × Bool) :=
         && [ "ftp://a/b", "https://u@a/b", "https://a/b#f", "https://[::1]/", "/a", "https://a:0/" ].all
           (Endpoint.parse · |>.isNone)) ]
 
-/-! The pending sign-ins as an actor, against two browsers: the victim's, 0, and an attacker's, 1.
-A browser's cookie is the binding of the last sign-in it began. The attacker presents the victim's
-state, and has the victim's browser present its own (login CSRF); each browser replays. -/
+/-! The edge as an actor, against two browsers: the victim's, 0, and an attacker's, 1. A
+browser's cookie is the ticket of the last sign-in it began, and a restart of the edge keeps the
+browsers' cookies but draws another key and forgets the states used. The attacker presents the
+victim's state, and has the victim's browser present its own (login CSRF); each browser replays. -/
 
 namespace Model
 
@@ -277,9 +324,10 @@ inductive Out where
   | refused (browser state : Fin 2)
   deriving DecidableEq, Repr, Hashable
 
-/-- `issued` and `accepted` are ghosts: pairs of a state and a browser. -/
+/-- `issued` and `accepted` are ghosts: pairs of a state and a browser. `jar` is the browsers'. -/
 structure State where
-  pending : Pending := {}
+  epoch : Nat := 0
+  used : Used := {}
   jar : List (Fin 2 × String) := []
   issued : List (Fin 2 × Fin 2) := []
   accepted : List (Fin 2 × Fin 2) := []
@@ -291,11 +339,12 @@ abbrev sig : Signature where
   In := In
   Out := Out
 
-def entry (i : Fin 2) : Entry :=
-  { state := s!"s{i}", binding := s!"k{i}", expires_ms := 10,
-    grant := { provider := "p", nonce := "", verifier := ⟨""⟩ } }
+def ticket (i : Fin 2) : Ticket := { provider := "p", state := s!"s{i}", expires_ms := 10 }
 
-/-- The edge's store, which a restart empties. -/
+/-- The key of the edge's `epoch`th start. -/
+def keyOf (epoch : Nat) : Hmac.Key := .of s!"key {epoch}".toUTF8
+
+/-- The edge, which a restart gives another key and no states used. -/
 abbrev signIn : System sig where
   State _ := State
   actor _ :=
@@ -303,15 +352,17 @@ abbrev signIn : System sig where
       step := fun s msg =>
         match msg with
         | .begin i b =>
-          ({ s with pending := s.pending.begin 2 0 (entry i), issued := (i, b) :: s.issued,
-                    jar := (b, (entry i).binding) :: s.jar.filter (·.1 != b) }, [])
+          ({ s with issued := (i, b) :: s.issued,
+                    jar := (b, (ticket i).toCookie (keyOf s.epoch)) :: s.jar.filter (·.1 != b) }, [])
         | .callback b i =>
-          let (pending, answer) :=
-            s.pending.callback 0 "p" ((s.jar.lookup b).getD "") (entry i).state
-          match answer with
-          | .ok _ => ({ s with pending, accepted := (i, b) :: s.accepted }, [.emit (.accepted b i)])
-          | .error _ => ({ s with pending }, [.emit (.refused b i)])
-      recover := fun s => ({ s with pending := {} }, []) }
+          match check (keyOf s.epoch) 0 "p" (s.jar.lookup b) (ticket i).state with
+          | .error _ => (s, [.emit (.refused b i)])
+          | .ok t =>
+            let (used, claimed) := s.used.claim 2 0 t
+            match claimed with
+            | .ok _ => ({ s with used, accepted := (i, b) :: s.accepted }, [.emit (.accepted b i)])
+            | .error _ => ({ s with used }, [.emit (.refused b i)])
+      recover := fun s => ({ s with epoch := s.epoch + 1, used := {} }, []) }
   accept x := ⟨(), x⟩
 
 instance : sig.Inspect := {}
@@ -349,257 +400,105 @@ def modelTests : List (String × Bool) :=
 
 def tests : List (String × Bool) := flowTests ++ keysTests ++ claimTests ++ edgeTests ++ modelTests
 
-/-! ## End to end, against a provider run in the test -/
+/-! ## End to end, against the test kit's provider (`Lanes/Testing/OAuth.lean`) -/
 
-/-- What the provider's token endpoint puts in the ID token of a code. -/
-inductive Kind where
-  | good
-  | expired
-  | wrongAudience
-  | wrongIssuer
-  | wrongNonce
-  | algNone
-  /-- HS256, with the provider's RSA public key, as PEM, for the HMAC secret. -/
-  | hs256
-  | unknownKid
-  /-- The payload changed after it was signed. -/
-  | tampered
-  deriving DecidableEq, Repr
-
-structure Code where
-  kind : Kind
-  nonce : String
-  challenge : String
-  provider : String
-  used : Bool := false
-
-structure Provider' where
-  dir : System.FilePath
-  codes : IO.Ref (List (String × Code))
-  jwksFetches : IO.Ref Nat
-  issuer : String
-  jwks : String
-
-def b64s (s : String) : String := b64 s.toUTF8
-
-def sign (dir : System.FilePath) (input : String) : IO ByteArray := do
-  IO.FS.writeFile (dir / "msg") input
-  Tests.Signature.run dir #["dgst", "-sha256", "-sign", "key.pem", "-out", "out", "msg"]
-
-def mint (p : Provider') (kind : Kind) (nonce : String) : IO String := do
-  let now := (← Std.Time.Timestamp.now).toMillisecondsSinceUnixEpoch.toInt.toNat / 1000
-  let iss := if kind == .wrongIssuer then "https://evil.example" else p.issuer
-  let aud := if kind == .wrongAudience then "other" else "app"
-  let exp := if kind == .expired then now - 3600 else now + 600
-  let nonce := if kind == .wrongNonce then "forged" else nonce
-  let payload (sub : String) :=
-    s!"\{\"iss\":\"{iss}\",\"sub\":\"{sub}\",\"aud\":\"{aud}\",\"azp\":\"{aud}\",\"exp\":{exp},\
-      \"iat\":{now},\"nonce\":\"{nonce}\",\"email\":\"u@example.com\",\"email_verified\":true}"
-  let header := match kind with
-    | .algNone => "{\"alg\":\"none\",\"kid\":\"k1\"}"
-    | .hs256 => "{\"alg\":\"HS256\",\"kid\":\"k1\"}"
-    | .unknownKid => "{\"alg\":\"RS256\",\"kid\":\"k9\"}"
-    | _ => "{\"alg\":\"RS256\",\"kid\":\"k1\",\"typ\":\"JWT\"}"
-  let input := b64s header ++ "." ++ b64s (payload "user-1")
-  let pem ← IO.FS.readBinFile (p.dir / "pub.pem")
-  let signature ← match kind with
-    | .algNone => pure ByteArray.empty
-    | .hs256 => pure (hmac pem input.toUTF8)
-    | .good | .expired | .wrongAudience | .wrongIssuer | .wrongNonce | .unknownKid | .tampered =>
-      sign p.dir input
-  let body := if kind == .tampered then b64s (payload "admin") else b64s (payload "user-1")
-  return b64s header ++ "." ++ body ++ "." ++ b64 signature
-
-def json (body : String) (status : Nat := 200) : Response :=
-  Response.ofText "application/json" body status
-
-/-- The provider: `/token` and `/hub/token`, `/jwks`, and a user API at `/hub/user` and
-`/hub/emails` for the provider without ID tokens. -/
-def handle (p : Provider') (r : Request) : IO Response := do
-  match r.method, r.path with
-  | .get, ["jwks"] =>
-    p.jwksFetches.modify (· + 1)
-    return json (← IO.FS.readFile (p.dir / "jwks.json"))
-  | .post, [_, "token"] | .post, ["token"] =>
-    let form := parseForm ((String.fromUTF8? r.body).getD "")
-    let field (name : String) := get form name
-    let code := (field "code").getD ""
-    let found ← p.codes.modifyGet fun codes =>
-      match codes.lookup code with
-      | some c => (some c, (code, { c with used := true }) :: codes.filter (·.1 != code))
-      | none => (none, codes)
-    let some c := found | return json "{\"error\":\"invalid_grant\"}" 400
-    let redirect := s!"{if c.provider == "hub" then "hub" else "id"}"
-    unless !c.used && field "grant_type" == some "authorization_code"
-        && field "client_id" == some "app" && field "client_secret" == some "s3cret"
-        && (field "redirect_uri").any (·.endsWith s!"/sign-in/{redirect}/callback")
-        && (field "code_verifier").any (challenge · == c.challenge) do
-      return json "{\"error\":\"invalid_grant\"}" 400
-    if c.provider == "hub" then
-      return json s!"\{\"access_token\":\"at-{code}\",\"token_type\":\"bearer\"}"
-    return json s!"\{\"access_token\":\"at-{code}\",\"token_type\":\"Bearer\",\"expires_in\":3600,\
-      \"id_token\":\"{← mint p c.kind c.nonce}\"}"
-  | .get, ["hub", "user"] =>
-    if (r.header? "authorization").any (·.startsWith "Bearer at-") then
-      return json "{\"id\":42,\"login\":\"octo\"}"
-    return json "{\"message\":\"Bad credentials\"}" 401
-  | .get, ["hub", "emails"] =>
-    return json "[{\"email\":\"o@example.com\",\"primary\":true,\"verified\":true}]"
-  | _, _ => return .text "not found" 404
-
-/-- A server of `handle`, a request a connection. -/
-def fake (handler : Request → IO Response) : Async (TCP.Socket.Server × UInt16) := do
-  let server ← TCP.Socket.Server.mk
-  server.bind (.v4 ⟨.ofParts 127 0 0 1, 0⟩)
-  server.listen 16
-  let port := (← server.getSockName).port
-  background do
-    try
-      repeat
-        let client ← server.accept
-        background do
-          try
-            let mut got := ByteArray.empty
-            repeat
-              let some bytes ← client.recv? 65536 | break
-              got := got ++ bytes
-              match Request.read {} got 0 with
-              | .done incoming _ =>
-                client.send (Response.wire (← handler incoming.request))
-                break
-              | .more => pure ()
-              | .refuse _ => break
-          catch _ => pure ()
-          client.close
-    catch _ => pure ()
-  return (server, port)
-
-/-- The user API's answers, as an integration reads them: the user's number, and the primary
-address if it is verified. -/
-def yes (j : Json) (key : String) : Bool := (j.getObjValAs? Bool key).toOption == some true
-
-def readHub : List Json → Except String Identity
-  | [user, emails] => do
-    let id ← user.getObjValAs? Nat "id"
-    let primary := match emails with
-      | .arr all => all.toList.find? (yes · "primary")
-      | _ => none
-    return {
-      issuer := "https://hub.example", subject := toString id,
-      email := primary.bind fun e => (e.getObjValAs? String "email").toOption,
-      emailVerified := primary.any (yes · "verified") }
-  | _ => .error "two answers expected"
+open Lanes.Testing
+open Lanes.Testing.OAuth (Fake Token User)
 
 /-- Answers what the sign-in let in: the identity it verified, and whether a query came with it. -/
 def appBridge : Bridge Tests.Gate.echoSig where
   decode _ r :=
     match identity? r with
     | some id => .error (.text s!"{id.issuer} {id.subject} {id.email} {id.emailVerified} \
-        query={r.query.length}")
+        name={(id.name.map (·.val)).getD "-"} query={r.query.length}")
     | none => .error (.text "who?" 401)
   encode id := some (id, .text "ok")
 
-def browse (port : UInt16) (path : List String) (query : List (String × String) := [])
-    (headers : List (String × String) := []) : Async (Option Response) :=
-  Client.exchange { host := "127.0.0.1", port, request := { method := .get, path, query, headers } }
-    { timeout_ms := 10000 }
+def origin : String := "http://app.example"
 
-def body (r : Option Response) : String :=
-  (r.bind fun r => String.fromUTF8? r.body).getD ""
+def user : User := { subject := "user-1", email := some "u@example.com", name := some " Ada <L>\n" }
 
-/-- Begins a sign-in as a browser, plays the user who agrees at the provider, which then issues a
-code of `kind`, and calls the callback back. The first response is the callback's; the state,
-the cookie and the code are given back to try again. -/
-def flow (app : UInt16) (p : Provider') (name : String) (kind : Kind) (n : Nat)
-    (cookie : Option String := none) (state : Option String := none) :
-    Async (Option Response × String × String × String) := do
-  let some begun ← browse app ["sign-in", name] | return (none, "", "", "")
-  let location := (begun.headers.lookup "location").getD ""
-  let binding := ((begun.headers.lookup "set-cookie").getD "").takeWhile (· != ';')
-    |>.toString |>.drop "lanes-sign-in=".length |>.toString
-  let q := queryOf location
-  let code := s!"code-{n}"
-  let issue : Code := {
-    kind, nonce := (get q "nonce").getD "", provider := name,
-    challenge := (get q "code_challenge").getD "" }
-  p.codes.modify ((code, issue) :: ·)
-  let issued := (get q "state").getD ""
-  let answer ← browse app ["sign-in", name, "callback"]
-    [("code", code), ("state", state.getD issued)]
-    [("cookie", s!"lanes-sign-in={cookie.getD binding}")]
-  return (answer, issued, binding, code)
+/-- Begins a sign-in in a browser of its own, plays the user who agrees at the provider, which
+then issues a code whose ID token is as `token` says, and calls the callback back, with the
+sign-in's ticket cookie, or `cookie` in its place (`some none`: no cookie), and the state, or
+`state` in its place. The callback's answer is given, with its query and the ticket, to try
+again. -/
+def flow (app : UInt16) (p : Fake) (name : String) (token : Token) (who : User := user)
+    (cookie : Option (Option String) := none) (state : Option String := none) :
+    Async (Option Response × List (String × String) × String) := do
+  let b ← Browser.new app origin
+  let begun ← b.get ["sign-in", name]
+  let binding := (← b.cookie "lanes-sign-in").getD ""
+  match cookie with
+  | some (some c) => b.keep { name := "lanes-sign-in", value := c }
+  | some none => b.forget "lanes-sign-in"
+  | none => pure ()
+  let query := (← p.approve (location begun) who token).map fun (k, v) =>
+    if k == "state" then (k, state.getD v) else (k, v)
+  return (← b.get ["sign-in", name, "callback"] query, query, binding)
 
 def refused (r : Option Response) (why : String) : Bool :=
-  r.any (·.status == 403) && ((body r).splitOn why).length > 1
+  status r == 403 && shows r why
 
 def live : Async (List (String × Bool)) := do
-  unless ← Tests.Tls.hasOpenssl do
+  unless ← Testing.OAuth.hasOpenssl do
     IO.println "oauth: skipped the flow end to end, there is no openssl command"
     return []
-  let dir : System.FilePath :=
-    s!"{(← IO.getEnv "TMPDIR").getD "/tmp"}/lanes-oauth-{← IO.monoNanosNow}"
-  IO.FS.createDirAll dir
-  let servers ← IO.mkRef ([] : List TCP.Socket.Server)
+  let p ← Fake.start
   try
-    Tests.Tls.run dir #["genrsa", "-out", "key.pem", "2048"]
-    Tests.Tls.run dir #["rsa", "-in", "key.pem", "-pubout", "-out", "pub.pem"]
-    let printed ← IO.Process.run
-      { cmd := "openssl", args := #["rsa", "-in", "key.pem", "-noout", "-modulus"], cwd := dir }
-    let n := b64 (Tests.Signature.modulus printed)
-    IO.FS.writeFile (dir / "jwks.json") s!"\{\"keys\":[\{\"kty\":\"RSA\",\"kid\":\"k1\",\
-      \"use\":\"sig\",\"alg\":\"RS256\",\"n\":\"{n}\",\"e\":\"AQAB\"},\
-      \{\"kty\":\"oct\",\"kid\":\"k1\",\"k\":\"c2VjcmV0\"}]}"
-    let providerState : Provider' := {
-      dir, codes := ← IO.mkRef [], jwksFetches := ← IO.mkRef 0, issuer := "https://id.example",
-      jwks := "" }
-    let (fakeServer, fakePort) ← fake (handle providerState)
-    servers.modify (fakeServer :: ·)
-    let at_ (path : String) := s!"http://127.0.0.1:{fakePort}/{path}"
-    let id : Provider := {
-      name := "id", authorize := "https://id.example/authorize", token := at_ "token",
-      scopes := ["openid", "email"], source := .idToken ["https://id.example"] (at_ "jwks") }
-    let hub : Provider := {
-      name := "hub", authorize := "https://hub.example/authorize", token := at_ "hub/token",
-      scopes := ["read:user"], source := .userApi [at_ "hub/user", at_ "hub/emails"] readHub }
-    let appClient (name : String) : Client := {
-      id := "app", secret := ⟨"s3cret"⟩, redirect := s!"http://app.example/sign-in/{name}/callback" }
     let signIn ← SignIn.start {
-      providers := [(id, appClient "id"), (hub, appClient "hub")], secure := false,
-      http := { timeout_ms := 5000 } }
+      providers := [(p.oidc "id", p.client origin "id"), (p.userApi "hub", p.client origin "hub")]
+      secure := false, http := { timeout_ms := 5000 } }
     let app ← serve (Server.system Tests.Web.mute) appBridge { port := 0 }
       (arrive := some signIn.arrive)
     let some appPort := app.port | return [("oauth: the application listens", false)]
     try
-      let (good, state, binding, code) ← flow appPort providerState "id" .good 1
-      let replay ← browse appPort ["sign-in", "id", "callback"] [("code", code), ("state", state)]
-        [("cookie", s!"lanes-sign-in={binding}")]
-      let (wrongState, _, _, _) ← flow appPort providerState "id" .good 2 (state := some "forged")
-      let (otherBrowser, _, _, _) ← flow appPort providerState "id" .good 3 (cookie := some "other")
-      let (expired, _, _, _) ← flow appPort providerState "id" .expired 4
-      let (audience, _, _, _) ← flow appPort providerState "id" .wrongAudience 5
-      let (issuer, _, _, _) ← flow appPort providerState "id" .wrongIssuer 6
-      let (nonce, _, _, _) ← flow appPort providerState "id" .wrongNonce 7
-      let (none_, _, _, _) ← flow appPort providerState "id" .algNone 8
-      let (hs256, _, _, _) ← flow appPort providerState "id" .hs256 9
-      let (unknownKid, _, _, _) ← flow appPort providerState "id" .unknownKid 10
-      let (tampered, _, _, _) ← flow appPort providerState "id" .tampered 11
-      let fetches ← providerState.jwksFetches.get
-      let (viaApi, _, _, _) ← flow appPort providerState "hub" .good 12
-      let forged ← browse appPort [] [] [("x-lanes-identity-issuer", "https://id.example"),
-        ("x-lanes-identity-subject", "admin"), ("x-lanes-identity-email-verified", "true")]
-      let denied ← browse appPort ["sign-in", "id", "callback"]
-        [("error", "access_denied"), ("state", "s")]
-      let begun ← browse appPort ["sign-in", "id"]
+      let (good, query, binding) ← flow appPort p "id" .good
+      let again ← Browser.new appPort origin
+      again.keep { name := "lanes-sign-in", value := binding }
+      let replay ← again.get ["sign-in", "id", "callback"] query
+      let (wrongState, _, _) ← flow appPort p "id" .good (state := some "forged")
+      let (_, _, otherCookie) ← flow appPort p "id" .good (state := some "forged")
+      let (otherBrowser, _, _) ← flow appPort p "id" .good (cookie := some (some otherCookie))
+      let (noCookie, _, _) ← flow appPort p "id" .good (cookie := some none)
+      let (expired, _, _) ← flow appPort p "id" .expired
+      let (audience, _, _) ← flow appPort p "id" .wrongAudience
+      let (issuer, _, _) ← flow appPort p "id" .wrongIssuer
+      let (nonce, _, _) ← flow appPort p "id" .wrongNonce
+      let (none_, _, _) ← flow appPort p "id" .algNone
+      let (hs256, _, _) ← flow appPort p "id" .hs256
+      let (unknownKid, _, _) ← flow appPort p "id" .unknownKid
+      let (tampered, _, _) ← flow appPort p "id" .tampered
+      let fetches ← p.jwksFetches.get
+      let viaApi ← Testing.OAuth.signIn (← Browser.new appPort origin) p "hub"
+        { subject := "42", login := "octo", email := some "o@example.com" }
+      let anon ← Browser.new appPort origin
+      let forged ← anon.get [] (headers := [("x-lanes-identity-issuer", "https://id.example"),
+        ("x-lanes-identity-subject", "admin"), ("x-lanes-identity-email-verified", "true")])
+      let denied ← anon.get ["sign-in", "id", "callback"] [("error", "access_denied"), ("state", "s")]
+      let begun ← anon.get ["sign-in", "id"]
+      let secureIn ← SignIn.start {
+        providers := [(p.oidc "id", p.client origin "id")], http := { timeout_ms := 5000 } }
+      let secureApp ← serve (Server.system Tests.Web.mute) appBridge { port := 0 }
+        (arrive := some secureIn.arrive)
+      let secureB ← Browser.new (secureApp.port.getD 0) origin
+      let secureGood ← Testing.OAuth.signIn secureB p "id" user
+      let secureTicket ← secureB.cookie "__Host-lanes-sign-in"
+      let plainTicket ← secureB.cookie "lanes-sign-in"
+      secureApp.stop
       return [
-        ("oauth live: a sign-in is begun with a redirect and a cookie for the sign-in's routes",
+        ("oauth live: a sign-in is begun with a redirect and a cookie, over plain HTTP without __Host-",
           begun.any fun r => r.status == 302
-            && (r.headers.lookup "set-cookie").any (·.endsWith "Path=/sign-in; Max-Age=600; HttpOnly; SameSite=Lax")),
-        ("oauth live: an OpenID Connect sign-in gives the system the identity, and not the code",
-          good.any (·.status == 200)
-            && body good == "https://id.example user-1 (some u@example.com) true query=0"),
-        ("oauth live: the same callback again is refused", refused replay "no sign-in waits"),
-        ("oauth live: a state never issued is refused", refused wrongState "no sign-in waits"),
-        ("oauth live: a callback from another browser is refused", refused otherBrowser "another browser"),
+            && (r.headers.lookup "set-cookie").any fun c =>
+              c.startsWith "lanes-sign-in=" && c.endsWith "Path=/; Max-Age=600; HttpOnly; SameSite=Lax"),
+        ("oauth live: an OpenID Connect sign-in gives the system the identity, its name cleaned, and not the code",
+          status good == 200
+            && text good == "https://id.example user-1 (some u@example.com) true name=Ada <L> query=0"),
+        ("oauth live: the same callback again is refused", refused replay "used already"),
+        ("oauth live: a state never issued is refused", refused wrongState "another browser"),
+        ("oauth live: a callback with another browser's ticket is refused",
+          refused otherBrowser "another browser"),
+        ("oauth live: a callback without a ticket is refused", refused noCookie "no sign-in waits"),
         ("oauth live: an expired ID token is refused", refused expired "expired"),
         ("oauth live: an ID token for another audience is refused", refused audience "audience"),
         ("oauth live: an ID token from another issuer is refused", refused issuer "issuer"),
@@ -611,15 +510,15 @@ def live : Async (List (String × Bool)) := do
         ("oauth live: an ID token whose payload was changed is refused", refused tampered "signature"),
         ("oauth live: the JWK Set is fetched once, an unknown kid within the wait included",
           fetches == 1),
-        ("oauth live: a provider without ID tokens is asked its user API with the access token",
-          body viaApi == "https://hub.example 42 (some o@example.com) true query=0"),
-        ("oauth live: identity headers a client sends do not reach the system",
-          forged.any (·.status == 401)),
-        ("oauth live: the provider's error is a refusal", refused denied "access_denied") ]
+        ("oauth live: a provider without ID tokens is asked its user API, the login its name without one",
+          text viaApi == "https://hub.example 42 (some o@example.com) true name=octo query=0"),
+        ("oauth live: identity headers a client sends do not reach the system", status forged == 401),
+        ("oauth live: the provider's error is a refusal", refused denied "access_denied"),
+        ("oauth live: over HTTPS the ticket is a __Host- cookie, which the kit's browser carries back",
+          status secureGood == 200 && secureTicket.isSome && plainTicket.isNone) ]
     finally
       app.stop
   finally
-    for server in ← servers.get do server.close
-    IO.FS.removeDirAll dir
+    p.stop
 
 end Tests.OAuth
