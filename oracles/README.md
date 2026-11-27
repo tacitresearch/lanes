@@ -88,6 +88,7 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Web/Http/ReadRequest.lean` | `oracles/go/requests` | Go's, Node's and h11's servers on `Tests/ReadRequest.corpus`, by hand |
 | `Lanes/Web/Http/Route.lean` | | Routes as values, proved (`Lanes/Web/Http/RouteSound.lean`) |
 | `Lanes/Web/Http/SigV4.lean` | `oracles/botocore` | |
+| `Lanes/Web/Http/SharedCache.lean` | | RFC 9111's rules for a shared cache, as decisions on a response, not a format; checked against a seeded bug in `Tests/SharedCache.lean`. A run through a real CDN or Varnish is owed |
 | `Lanes/Web/Http/Sse.lean` | | Proved to read what it writes against a model of the WHATWG reader (`Lanes/Web/Http/SseSound.lean`); a comparison with another reader, a browser's, is owed |
 | `Lanes/Web/Http/Stream.lean` | | Pieces and parts of a streamed body through the gate, not a format: the bytes are `Conn`'s and `Wire`'s |
 | `Lanes/Web/Http/Waiting.lean` | | Request ids, not a format |
@@ -102,11 +103,15 @@ every module a row names exists, and so does every path it cites.
 | Model | Recorded run | Or why not |
 | --- | --- | --- |
 | `Lanes/Outside/Basic.lean` | | What an outside may do, `Outside`, and no service |
+| `Lanes/Outside/Cache.lean` | | Owed: a recorded run against Redis needs a service in the nightly job; checked against a seeded bug in `Tests/Cache.lean` |
+| `Lanes/Outside/Clock.lean` | | A clock is not a service to record: its jumps and skew are what NTP and the kernel document; checked against a seeded bug in `Tests/WallClock.lean` |
 | `Lanes/Outside/Effects/Basic.lean` | | The class of services with a lifecycle; its instances are below |
 | `Lanes/Outside/Effects/Email.lean` | `oracles/moto/ses.jsonl` | |
 | `Lanes/Outside/Effects/Payments.lean` | | Owed: Stripe's test mode needs a key, and stripe-mock keeps no state; runs written by hand (`Tests/Outside.lean`) |
 | `Lanes/Outside/Events.lean` | | Owed, with Payments: webhooks need a service that sends them; runs written by hand (`Tests/Outside.lean`) |
 | `Lanes/Outside/Idempotent.lean` | | Owed, with Payments: SES and S3 take no idempotency key; runs written by hand (`Tests/Outside.lean`) |
 | `Lanes/Outside/ObjectStore.lean` | `oracles/moto/s3.jsonl` | |
+| `Lanes/Outside/Queue.lean` | | Owed: moto's SQS could record a run, as `oracles/moto` does for S3 and SES; checked against a seeded bug in `Tests/Queue.lean` |
 | `Lanes/Outside/Rpc.lean` | `oracles/moto/s3.jsonl`, `oracles/moto/ses.jsonl` | The calls the object store's and the email model are made of |
 | `Lanes/Outside/Store/Basic.lean` | `oracles/postgres/store.jsonl` | |
+| `Lanes/Outside/Throttle.lean` | | Owed: no service in CI answers 429 as a real one does; checked against a seeded bug in `Tests/Throttle.lean` |
