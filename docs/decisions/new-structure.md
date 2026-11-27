@@ -1,7 +1,7 @@
 # D?. A cleaner repository structure (proposal)
 
 The owner asked for a pass over the repository's structure. This is a proposal for the owner to
-accept or edit, part by part. Nothing moves in this change: five pull requests are open, and
+accept or edit, part by part. Nothing moves in this change: several pull requests are open, and
 moves would conflict with each of them. The numbers are measured on `origin/main` at `c1d9d9d`
 (pull request #75).
 
