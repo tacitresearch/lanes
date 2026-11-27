@@ -216,7 +216,9 @@ theorem.
   `Lanes/Semantics/Simulation.lean`).
 - `Service.spec` turns a sequential `Service` into what a concurrent implementation must refine,
   with deadlines as visible steps, and `System.Implements` is refinement to it: linearizability,
-  stated as refinement (`Lanes/Semantics/Service.lean`, D42). `Server.implements` proves the
+  stated as refinement (`Lanes/Semantics/Service.lean`, D42). A deadline passes in the system
+  as a timer it names fires, or as a message it names is delivered
+  (`docs/decisions/new-a-deadline-passes-where-it-is-served.md`). `Server.implements` proves the
   `Server` behaviour (`Lanes/Behaviours/Server.lean`) implements its spec.
 - A request named by its client takes effect once (`Lanes/Semantics/Once.lean`, D48):
   `Service.once` is the spec, `Lanes/Behaviours/Once.lean` the memo that meets it, and

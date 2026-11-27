@@ -20,8 +20,9 @@ Two other shapes were weighed. A `Deadlines` that is a structure of two maps, or
 events, would change the type of every system's deadlines and of every statement that names
 one. A deadline passing on an output (the ledger emitting a notice) would make the notice
 visible to clients, which the spec does not have. A second map, defaulting to none everywhere
-it is taken, changes no statement: every theorem that held for `deadlines` holds for
-`deadlines` and `delivered`, and with `delivered` left out it is the theorem of before.
+it is taken, changes no statement but by that argument: the monitor's and the refinement
+rules' theorems hold for every `deadlines` and `delivered`, and with `delivered` left out each
+is the theorem of before.
 
 *Where it is taken.* `Event.timed`, `System.Refines`, `System.Implements` and
 `Service.monitored` take `delivered` after `deadlines`, with the default none.
@@ -62,7 +63,14 @@ Limits:
   a deployment the ledger and its users are one shard, which a crash restarts from its journal
   whole, so a notice in flight is not lost; the semantics crashes one actor at a time.
 - *How long a deadline lasts is still not checked* (D42).
+- *The kernel's theorem of what can be seen is stated for timers.* `Kernel.exec_visible` and
+  `Released.visible` take `deadlines` only, so they say nothing yet of a deadline a delivery
+  passes; their proofs read only that a start is not visible, and carry over.
 
-Used: `systems/ledger`, whose timed refinement is model-checked and proved
-(`Ledger.implements_timed`), and the old design kept as `Ending.atUser`, in which the checker
-still finds the race.
+Used: `systems/ledger`. A view racing the end of its session passes (22,109 states, and 95,966
+with a user crashing), and the abuse scenario with timers firing at any moment (108,105 states,
+527,757 with a user crashing); the old design, kept as `Ending.atUser`, still fails in 43 steps,
+and a notice lost fails in 16 steps on a lossy link and in 17 with the ledger crashing. The
+timed refinement is proved (`Ledger.implements_timed`). A lease in `Tests/Lease.lean` that is
+freed as the server handles its timer's notice refines its spec with that delivery named, and
+does not with the timer named instead.
