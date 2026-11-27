@@ -1,8 +1,9 @@
 #!/bin/bash
 # Runs the command line of the systemd unit app-instance.sh writes, on this machine, against a
-# built Lanes executable, to show that its arguments and paths work: the executable starts in its
-# journal's directory, answers, writes its journal there, dies at SIGTERM, and starts again on the
-# same journal. It runs as you, without systemd, so the unit's sandboxing is not tried.
+# built Lanes executable, with the unit's environment, to show that its arguments and paths work:
+# the executable starts in its journal's directory, answers, writes its journal there, stops at
+# SIGTERM, and starts again on the same journal. It runs as you, without systemd, so the unit's
+# sandboxing is not tried.
 #
 #   infra/app/smoke.sh BINARY [ARGS] [PATH]
 #
@@ -34,6 +35,8 @@ printf '%s=%q\n' APP smoke BINARY "$name" ARGS "$args" PORT "$port" READY_PATH "
 command=$(sed -n 's/^ExecStart=//p' "$work/lanes-app.service")
 directory=$(sed -n 's/^WorkingDirectory=//p' "$work/lanes-app.service")
 writable=$(sed -n 's/^ReadWritePaths=//p' "$work/lanes-app.service")
+environment=$(sed -n 's/^Environment=//p' "$work/lanes-app.service")
+say "Environment=$environment"
 say "ExecStart=$command"
 [ "$directory" = "$writable" ] || die "the working directory $directory is not the writable one, $writable"
 if command -v systemd-analyze >/dev/null; then
@@ -44,7 +47,8 @@ fi
 
 start() {
   read -r -a argv <<<"$command"
-  (cd "$directory" && exec "${argv[@]}") >>"$work/out.log" 2>&1 &
+  read -r -a vars <<<"$environment"
+  (cd "$directory" && exec env "${vars[@]}" "${argv[@]}") >>"$work/out.log" 2>&1 &
   pid=$!
   for _ in $(seq 1 100); do
     if curl -fs -o /dev/null --max-time 2 "http://127.0.0.1:$port$path"; then return 0; fi
@@ -68,8 +72,8 @@ journal=$(find "$directory" -maxdepth 1 -type f -name '*.journal' | head -1)
 say "journal $journal, $(stat -c %s "$journal") bytes, beside: $(find "$directory" -mindepth 1 -maxdepth 1 -printf "%f ")"
 term
 case "$status" in
-  143) say "SIGTERM ended it at once (status 143: no handler, so nothing drained)" ;;
-  0) say "SIGTERM: it stopped by itself, status 0" ;;
+  0) say "SIGTERM: it drained and stopped, status 0" ;;
+  143) say "SIGTERM ended it at once (status 143: its main does not call Server.stopOnSignal)" ;;
   *) die "SIGTERM: status $status" ;;
 esac
 start

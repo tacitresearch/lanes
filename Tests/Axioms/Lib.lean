@@ -224,6 +224,12 @@ import Lanes.Semantics
 /-- info: 'Lanes.Ip.Prefix.contains_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Ip.Prefix.contains_iff
 
+/-- info: 'Lanes.Ip.isLoopback_v4' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Ip.isLoopback_v4
+
+/-- info: 'Lanes.Ip.isLoopback_v6' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Ip.isLoopback_v6
+
 /-- info: 'Lanes.Ip.Prefix.masked_masked' depends on axioms: [propext] -/
 #guard_msgs in #print axioms Lanes.Ip.Prefix.masked_masked
 

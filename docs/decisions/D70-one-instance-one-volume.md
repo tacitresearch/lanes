@@ -68,3 +68,8 @@ stop drops the requests in flight. The data is safe (rule 3.3). A drain, SIGTERM
 `Server.drain`, then `Server.stop` once nothing is in flight or a deadline passes, is proposed in
 `docs/DEPLOY.md`, and the unit's stop timeout and the target group's deregistration delay are
 already sized for it.
+
+*Amendment: a stop drains.* The `main` of `lanes new` ends in `Server.stopOnSignal`, which at
+SIGTERM drains for up to `LANES_DRAIN_MS` and exits 0; the unit sets it to `DrainSeconds`, and
+the address and the idle time with `LANES_HOST` and `LANES_IDLE_MS`, so a deployment needs no
+change to `main` but its operators' pages (`docs/DEPLOY.md`, "What a stop does").
