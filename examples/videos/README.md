@@ -45,7 +45,7 @@ lake exe videosTest pipeline   # only the model checks whose names contain a wor
   to check again from the channel. A day after the record was made (`Config.pending_s`), an
   upload still not confirmed is checked a last time: found, it is confirmed; not there, its
   record is taken out. The site never carries video bytes.
-- **Transcode** (`docs/decisions/new-video-pipeline.md`). A confirmed upload is `transcoding`:
+- **Transcode** (`docs/decisions/D91-the-video-pipeline.md`). A confirmed upload is `transcoding`:
   the scheduler posts round 0's job to the worker (`Lanes.Transcode`, a JSON job over HTTP with
   its signature, `Config.transcodeRetry`), whose targets are `videos/<id>.mp4`, a playable
   rendition, and `videos/<id>.jpg`, its thumbnail. The worker posts its report to `/transcoded`,

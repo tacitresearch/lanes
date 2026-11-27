@@ -270,7 +270,7 @@ in `Lanes/Web/Http/FrontSound.lean` to answer each arrival at most once and in
   reports a job done only once it was sent the job, could read the source and wrote the job's
   targets, and reports each job one way; and that a report signed with the key it shares with
   the caller is the worker's. It is tested only against runs written by hand and the test kit's
-  worker, not against a real one (`docs/decisions/new-video-pipeline.md`).
+  worker, not against a real one (`docs/decisions/D91-the-video-pipeline.md`).
 
 ## Trusted by tests, not by applications
 
