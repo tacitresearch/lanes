@@ -164,7 +164,7 @@ and the RFCs' own.
 | `os` | a | `IO.FS` (files, directories, `rename`, `Handle.lock`, `createTempFile`), `IO.getEnv`, `IO.Process.exit`, `IO.appPath` |
 | `os` (`File.Sync`) | c | `fsync(2)` and `fdatasync(2)`, also on the directory after a rename. Lean's `IO` has none. Done: bound in `native/lanes.c` and used by `Lanes/Durable/IO/Journal.lean` (D46) |
 | `os/exec` | a | `IO.Process.spawn`, `IO.Process.output`, `Std.Async.Process` |
-| `os/signal` | a | `Std.Async.Signal` (`SIGTERM` for a clean stop) |
+| `os/signal` | a | `Std.Async.Signal`; `Http.Server.stopOnSignal` drains at `SIGTERM` |
 | `os/user` | d | an application does not look up OS users |
 | `io/fs`, `path/filepath` | a | `IO.FS` (`readDir`, `metadata`, `walkDir`), `System.FilePath` |
 | `path` | b | P1 |

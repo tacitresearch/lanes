@@ -188,8 +188,8 @@ What is being worked on now, and why: `docs/PLAN.md`.
   it arrive, so one sent a byte at a time costs time quadratic in its length, within its limit
   and its deadline.
 - The connection's own refusals (`400`, `408`, `413`, `431`, `501`) are neither counted in the
-  metrics nor logged. The metrics page and the health checks are on the application's port: a
-  load balancer's rules keep them from the internet.
+  metrics nor logged. The metrics page and the health checks are on the application's port; the
+  page is answered only to a loopback peer by default, and the health checks to every peer.
 - No adapter: the shop runs only in the checker and the proof.
 - That no to-do is stored twice is checked, for one and two to-dos, not proved: the proof covers
   the actor, and the rest rests on the table's primary key, a premise of the store model.

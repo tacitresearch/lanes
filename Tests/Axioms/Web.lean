@@ -239,6 +239,21 @@ import Lanes.Semantics
 /-- info: 'Lanes.Http.Ops.route?_some' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.Ops.route?_some
 
+/-- info: 'Lanes.Http.Ops.allows_eq_true' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Ops.allows_eq_true
+
+/-- info: 'Lanes.Http.Ops.route?_metrics' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Ops.route?_metrics
+
+/-- info: 'Lanes.Http.Ops.route?_metrics_loopback' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Ops.route?_metrics_loopback
+
+/-- info: 'Lanes.Http.Ops.route?_hidden' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Ops.route?_hidden
+
+/-- info: 'Lanes.Http.Ops.route?_peer' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Ops.route?_peer
+
 /-- info: 'Lanes.Http.Ops.answer_ready' depends on axioms: [propext] -/
 #guard_msgs in #print axioms Lanes.Http.Ops.answer_ready
 

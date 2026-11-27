@@ -546,7 +546,8 @@ def stopOnSignal (server : Server system) (drain_ms : Nat) (listening : IO Unit 
   let deadline := (← IO.monoMsNow) + drain_ms
   repeat
     let inFlight ← server.inFlight
-    if inFlight == 0 || deadline ≤ (← IO.monoMsNow) then break
+    let now ← IO.monoMsNow
+    if inFlight == 0 || deadline ≤ now then break
     Async.sleep 10
   server.stop
 

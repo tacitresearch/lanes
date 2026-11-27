@@ -83,3 +83,4 @@ decision without a number.
 - [D67. A TLS client, from the OpenSSL Lean's toolchain ships](D67-a-tls-client-from-the-openssl-lean-ships.md)
 - [D68. PostgreSQL is spoken in Lean, and a transactional store is a model](D68-postgres-protocol-in-lean.md)
 - [D69. The server tells its operators how it is, and nothing it tells enters a system](D69-observability.md)
+- [D70. An application is deployed as one instance with its journal on a volume of its own, behind a load balancer](D70-one-instance-one-volume.md)
