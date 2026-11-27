@@ -147,10 +147,21 @@ def rewriteTotal (readme : String) (total : Nat) : String :=
       else String.ofList (cs.drop number.length).reverse ++ withCommas (roundedTotal total)
   " lines of trusted code".intercalate fixed
 
+/-- Trusted sources written `` `path`, lines `` with no number before `lines`, as a merge
+leaves an entry when it drops the count: `trustedSizes` cannot read them, so they would be
+left out of the total. -/
+def countless (trusted : String) : List String :=
+  let parts := trusted.splitOn "`"
+  (parts.zip (parts.drop 1)).filterMap fun (path, after) =>
+    let rest := (after.toList.drop 1).dropWhile (· == ' ')
+    if isTrustedSource path && after.startsWith "," && String.ofList (rest.take 5) == "lines"
+    then some path else none
+
 def trustedPlan (root : System.FilePath) : IO Plan := do
   let some trusted ← readIfExists (root / "TRUSTED.md") | return {}
   let mut actual : List (String × Nat) := []
-  let mut problems : List Problem := []
+  let mut problems : List Problem := (countless trusted).map fun path =>
+    ("TRUSTED.md", 1, "trusted-size", s!"`{path}` is listed with no line count: write `{path}`, N lines")
   for (path, _) in trustedSizes trusted do
     match ← readIfExists (root / path) with
     | some text => actual := (path, lineCount text) :: actual

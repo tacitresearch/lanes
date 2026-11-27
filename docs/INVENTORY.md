@@ -23,8 +23,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Semantics` | 63 | 11 | 0 | 0 | 0 | 51 | 1 |
 | `Lanes/Testing` | 84 | 0 | 0 | 1 | 83 | 0 | 0 |
 | `Lanes/Web` | 676 | 354 | 57 | 46 | 163 | 54 | 2 |
-| `LanesCli` | 125 | 0 | 0 | 0 | 51 | 0 | 74 |
-| All | 2416 | 1268 | 126 | 124 | 431 | 340 | 127 |
+| `LanesCli` | 126 | 0 | 0 | 0 | 55 | 0 | 71 |
+| All | 2417 | 1268 | 126 | 124 | 435 | 340 | 124 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -3246,13 +3246,14 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Cli.Generated.writeIfChanged` | none |  |
 | `Cli.Generated.stale` | none |  |
 | `Cli.Generated.markdownIn` | none |  |
-| `Cli.Generated.parseCount` | none |  |
-| `Cli.Generated.isTrustedSource` | none |  |
-| `Cli.Generated.trustedSizes` | none |  |
+| `Cli.Generated.parseCount` | tested | `Tests/Lint.lean` |
+| `Cli.Generated.isTrustedSource` | tested | `Tests/Lint.lean` |
+| `Cli.Generated.trustedSizes` | tested | `Tests/Lint.lean` |
 | `Cli.Generated.rewriteSizes` | none |  |
 | `Cli.Generated.withCommas` | tested | `Tests/Lint.lean` |
 | `Cli.Generated.roundedTotal` | tested | `Tests/Lint.lean` |
 | `Cli.Generated.rewriteTotal` | none |  |
+| `Cli.Generated.countless` | tested | `Tests/Lint.lean` |
 | `Cli.Generated.trustedPlan` | none |  |
 | `Cli.Generated.decisionsDir` | none |  |
 | `Cli.Generated.parseDecisionName` | none |  |
