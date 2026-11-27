@@ -62,7 +62,7 @@ is in `docs/CLAIMS.md`. In short:
 - **Tested**: processes killed with SIGKILL and started again, JSON, Base64, URLs, IP
   addresses, media types and dates against Go's standard library, the bound C against its Lean
   references.
-- **Trusted**: About 3,050 lines of trusted code, listed with their sizes in `TRUSTED.md`: the
+- **Trusted**: About 3,150 lines of trusted code, listed with their sizes in `TRUSTED.md`: the
   IO shells, the HTTP wire format where its proof does not reach, the C that binds libsodium,
   `fsync`, a timed wait and OpenSSL's TLS client, and the template macro, with the assumptions the runtime makes. `lanes lint` fails if a trusted file changes without the
   list, and `scripts/mutants.py` holds known ways of breaking that code, each of which must
@@ -127,6 +127,8 @@ lake exe my-app      # serves http://127.0.0.1:8080
 
 `docs/TUTORIAL.md` then takes the app through a change, a model check and a proof, in fifteen
 minutes.
+`docs/DEPLOY.md` then puts it on AWS behind HTTPS: one instance with its journal on a disk of its
+own, backed up, deployed from GitHub.
 
 The app gets Lanes from GitHub (`rev = "main"` in its `lakefile.toml`), not from the clone,
 which it does not need once the app is made. Any Lake project can depend on Lanes the same way:
