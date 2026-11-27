@@ -178,7 +178,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Check.Property.holds` | proved | `Check.refines_sound`, `Check.refines_traces`, `Check.system_sound` and 1 more |
 | `Check.Trace.last` | proved | `Check.search_deadlock`, `Check.search_reached`, `Check.search_violated` and 2 more |
 | `Check.Trace.labels` | proved | `Check.system_violated` |
-| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 14 more |
+| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 15 more |
 | `Check.Path.last` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
 | `Check.Path.toTraceAux` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
 | `Check.Path.toTrace` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
@@ -229,9 +229,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Check.Report.map` | proved | through `Check.system`: `Check.refines_sound`, `Check.refines_traces` and 3 more |
 | `Check.model` | proved | `Scenario.reachable_iff` |
 | `Check.system` | proved | `Check.refines_sound`, `Check.refines_traces`, `Check.system_sound` and 2 more |
-| `Check.Trace.render` | checked | `Tests/Election.lean` |
-| `Check.Report.render` | checked | `Tests/Election.lean` |
-| `Check.Report.renderSystem` | checked | `Tests/Election.lean` |
+| `Check.Trace.render` | checked | `Tests/Election.lean`, `Tests/Tutorial.lean` |
+| `Check.Report.render` | checked | `Tests/Election.lean`, `Tests/Tutorial.lean` |
+| `Check.Report.renderSystem` | checked | `Tests/Election.lean`, `Tests/Tutorial.lean` |
 
 ## `Lanes/Check/SystemSound.lean`
 
@@ -339,7 +339,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Driver.silent` | checked | `Tests/Election.lean` |
 | `Driver.script` | checked | `Tests/KV.lean` |
-| `Driver.anyOrder` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 3 more |
+| `Driver.anyOrder` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 5 more |
 | `World.init` | checked | `Tests/Bank.lean` |
 | `World.next` | proved | `World.Equiv.next` |
 | `simulate` | checked | `Tests/Bank.lean` |
