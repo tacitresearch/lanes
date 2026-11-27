@@ -25,13 +25,13 @@ proved function tells it to.
 | The shell | `Lanes/Runtime/IO/Shell.lean`, `Lanes/Runtime/{Batch,Mailbox,MailboxSound,Pace}.lean` | `Batch.run_kernel`, `Batch.run_sound`, `Batch.run_spread`, `Mailbox.batch_since_take`; the shell itself is trusted |
 | Journal, snapshots, disk | `Lanes/Durable/{Journal,Snapshot,Disk,Frame,Reading}.lean`, `Lanes/Durable/IO/Journal.lean` | `Journal.open?_cut`, `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Journal.Disk.Holds.save_crash`, `Journal.Disk.Torn.load_readings` |
 | Migrations | `Lanes/Durable/{Migration,Upgrade}.lean` | `Migration.inv_exec`, `Journal.Upgrade.begin_crash`, `Journal.Upgrade.holds`, `Journal.Upgrade.inv_load` |
-| Joins | `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`, `Lanes/Semantics/FairJoin.lean` | `System.Reachable.left`, `SysState.run_left`, `System.Run.Fair.left` |
+| Joins | `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`, `Lanes/Semantics/FairJoin.lean` | `System.Reachable.left`, `SysState.run_left`, `System.Run.Fair.left`, `System.Run.Fair.right` |
 | Shards and the transport | `Lanes/Runtime/{Shard,ShardSound,ShardsSound}.lean`, `Lanes/Net/{Courier,CourierSound}.lean`, `Lanes/Net/IO/{Peers,Node}.lean` | `System.ShardsReachable.unsharded`, `Peers.Courier.written_sublist_sent` |
 | The gate and the HTTP server | `Lanes/Web/Http/{Gate,Front,FrontSound,Waiting,Conn,ConnSound,Stream,Sse,SseSound,Loopback}.lean`, `Lanes/Semantics/Front.lean`, `Lanes/Web/IO/Server.lean` | `Http.served_answered_le_arrived`, `Http.served_pending_answered`, `Http.Waiting.exec_answered`, `Http.Conn.run_writes`, `Http.Conn.read_streamed`, `Http.Sse.parse_written` |
 | Metrics, health and the access log | `Lanes/Lib/Metrics.lean`, `Lanes/Web/Http/{Ops,OpsSound}.lean`, `Lanes/Web/IO/Ops.lean` | `Metrics.Histogram.observeAll_eq`, `Metrics.readLabelValue_escapeLabel`, `Http.Ops.route?_default`, `Http.Ops.route?_metrics`, `Http.Ops.answer_ready`, `Http.Ops.Access.parse_line`; that none of it reaches a system is trusted and tested |
 | Other adapters | `Lanes/Outside/Basic.lean`, `Lanes/Outside/{Clock,IO/Clock}.lean`, `Lanes/Web/IO/Client.lean`, `Lanes/Web/Http/{Grammar,Wire,WireSound}.lean` | `Response.read_wire`, `Request.fields_framing`; conformance tests |
-| Models of external services | `Lanes/Outside/{Rpc,Idempotent,Events,ObjectStore,Queue,Cache,Clock,Throttle}.lean`, `Lanes/Outside/Effects/`, `Lanes/Web/Http/SharedCache.lean`, `Lanes/Proof/Outputs.lean` | `Idempotent.at_most_once`, `Rpc.answered_le_called`, `Events.deliveries_le`, `ObjectStore.read_sent`, `ObjectStore.held_sent`, `Queue.received_le`, `Cache.read_sent`, `Clock.wall_back_le`, `Throttle.wait_le`, `SharedCache.serve_storable`, `SharedCache.serve_of_leaks`, `System.Emits.outputs`; that a real service conforms is trusted |
-| Signature Version 4 and the S3 client | `Lanes/Web/Http/{SigV4,SigV4Sound}.lean`, `Lanes/Web/S3/{Basic,Xml}.lean`, `Lanes/Web/IO/S3.lean` | `SigV4.target_sign`, `SigV4.sortQuery_sorted`, `SigV4.canonicalHeaders_sorted`, `SigV4.encode_chunks`; signatures tested against AWS's vectors, the client against a fake S3; its IO trusted |
+| Models of external services | `Lanes/Outside/{Rpc,Idempotent,Events,ObjectStore,Multipart,Queue,Cache,Clock,Throttle}.lean`, `Lanes/Outside/Effects/`, `Lanes/Web/Http/SharedCache.lean`, `Lanes/Proof/Outputs.lean` | `Idempotent.at_most_once`, `Rpc.answered_le_called`, `Events.deliveries_le`, `ObjectStore.read_sent`, `ObjectStore.held_sent`, `Multipart.read_listed`, `Queue.received_le`, `Cache.read_sent`, `Clock.wall_back_le`, `Throttle.wait_le`, `SharedCache.serve_storable`, `SharedCache.serve_of_leaks`, `System.Emits.outputs`; that a real service conforms is trusted |
+| Signature Version 4 and the S3 client | `Lanes/Web/Http/{SigV4,SigV4Sound}.lean`, `Lanes/Web/S3/{Basic,Xml,Post,PostSound,Multipart}.lean`, `Lanes/Web/IO/S3.lean` | `SigV4.target_sign`, `SigV4.sortQuery_sorted`, `SigV4.canonicalHeaders_sorted`, `SigV4.encode_chunks`, `S3.Post.form_policy`, `S3.Post.admitted_bounded`, `S3.Multipart.Plan.count_le`, `S3.Multipart.Plan.range_full`; signatures tested against AWS's vectors and botocore, the client against a fake S3, the multipart flow model-checked; its IO trusted |
 | PostgreSQL and the store model | `Lanes/Lib/Postgres/{Bytes,Message,MessageSound,Scram,Conn,ConnSound,Table}.lean`, `Lanes/Lib/Postgres/IO/Client.lean`, `Lanes/Outside/Store/{Basic,Sound}.lean` | `Backend.read_encode`, `Frontend.decode_encode`, `Conn.run_fifo`, `Conn.step_committed`, `Conn.step_query`, `Store.write_skew`, `Store.lost_commit_either`; the IO is trusted, and that the server behaves like the model is a premise |
 | Jobs: work outside a step | `Lanes/Behaviours/Jobs/{Basic,Sound}.lean`, `Lanes/Semantics/Jobs.lean`, `Lanes/Behaviours/Jobs/IO/Pool.lean` | `Jobs.answered_le_handled`, `Jobs.retry_same`, `Jobs.submitted_answered`; the pool is trusted |
 | Schedule: work that is due later | `Lanes/Behaviours/Schedule/{Basic,Sound}.lean`, `Lanes/Semantics/Schedule.lean` | `Schedule.dispatch_due`, `Schedule.calls_le_scheduled`, `Schedule.attempt_ends`, `Schedule.held_ends`; that the time it knows is not ahead of the clock is a premise |
@@ -81,6 +81,10 @@ semantics reaches and the events it reports are a run reaching it (`Kernel.exec_
 and its outputs are exactly that run's (`Kernel.exec_outputs`). Its agenda holds exactly the
 pending timers (`Kernel.exec_wellFormed`), it never sleeps past one, and neither due timers nor
 queued messages starve the other (`Kernel.WellFormed.step_of_queued`, `step_of_due`).
+Before a step the kernel takes the actor's state out of its cell (`Kernel.takeState`), so the step
+holds the only reference and updates the state in place; that changes no value
+(`Kernel.handle_eq`), and `Tests/Scale.lean` measures that a step costs the same whatever the
+state's size (`docs/decisions/D84-the-kernel-takes-the-state-out-before-the-step.md`).
 
 The shell (`Lanes/Runtime/IO/Shell.lean`) is one thread per shard. Senders put commands in a
 bounded inbox (`Lanes/Runtime/Mailbox.lean`, pure: who is refused, who waits, who is woken). The
@@ -165,7 +169,9 @@ the wiring routes to the other becomes a message to the actor its `accept` names
 applies to a join, because it is an ordinary `System` (D25). What is proved of `a` for every
 environment holds of `a` inside any join: of states (`System.Reachable.left`,
 `System.Invariant.join_left`), of runs (`SysState.run_left`) and of fair runs
-(`System.Run.Fair.left`, `System.LeadsTo.join_left`, D41); for `b`, up to `SysState.Equiv`.
+(`System.Run.Fair.left`, `System.LeadsTo.join_left`, D41). For `b`, which boots second, it
+holds of states up to `SysState.Equiv` and of fair runs exactly (`System.Run.Fair.right`,
+`System.LeadsTo.join_right`).
 `System.filterMapIO` renames inputs and outputs and hides some; a system behind it does what it
 does in the open (`SysState.run_filterMapIO`).
 
@@ -319,7 +325,18 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   the bytes it receives, and against moto's S3, whose run the object store's model allows
   (`oracles/README.md`). Bodies are whole, in memory. The
   credentials are read at each call from a `SigV4.Source`: fixed, or kept fresh by something
-  else.
+  else. A browser uploads with a form under a policy (`Lanes/Web/S3/Post.lean`), which bounds
+  the size a presigned put cannot: the policy a form carries reads back, as S3 reads it, as
+  exactly the conditions and the expiry given (`S3.Post.form_policy`, `S3.Post.expiration_parse`),
+  and a file S3 admits under it is within its size range and before its expiry
+  (`S3.Post.admitted_bounded`); tested against AWS's documented example and botocore. Large
+  objects go in parts (`Lanes/Web/S3/Multipart.lean`): a plan proved to cut a body into at most
+  10,000 parts, each but the last of at least 5 MiB, together the body in order
+  (`Plan.count_le`, `Plan.range_full`, `Plan.range_next`, `Plan.range_last`); links for a
+  browser's parts with their length signed (`S3.presignPart`); and a server's upload as a pure
+  flow, retrying, aborting what it gives up and asking the object's `HEAD` after a Complete
+  whose answer was lost, which `S3.upload` performs, model-checked against the multipart model
+  below (`docs/decisions/D78-bounded-and-large-uploads.md`).
 - **AWS** (`integrations/aws`, `docs/decisions/D74-aws-integration.md`): a role's credentials
   from an instance's metadata service (IMDSv2) or a container's endpoint, and email through SES.
   When to fetch and what may be handed out is a pure machine, `Aws.Refresh.step`: nothing is
@@ -349,7 +366,11 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   unless a write that timed out, was refused or overlapped it may have come after; a get is
   answered only with an object a put sent (`ObjectStore.read_sent`), and a head says a key holds
   one only when a put sent one under it (`ObjectStore.held_sent`); a write granted to someone else,
-  a browser's through a presigned link, is never answered and may land or not. `Effects` is the class of services that hold things with a lifecycle,
+  a browser's through a presigned link or a form, is never answered and may land or not.
+  `Multipart.server` is a store's multipart uploads, parts lost, sent again, out of order and
+  completed twice: an object a read sees is exactly the parts some Complete of its key listed, in
+  order, each sent as that part with the tag listed (`Multipart.read_listed`,
+  `Multipart.completed_sent`). `Effects` is the class of services that hold things with a lifecycle,
   made under a key and reported by webhooks, with two instances: payments, with the statuses
   Stripe documents for a PaymentIntent (`Lanes/Outside/Effects/Payments.lean`), and email
   (`Lanes/Outside/Effects/Email.lean`). A system's part of a proof is a fact about what its steps

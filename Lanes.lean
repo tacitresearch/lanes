@@ -72,6 +72,7 @@ public import Lanes.Outside.Effects.Email
 public import Lanes.Outside.Effects.Payments
 public import Lanes.Outside.Events
 public import Lanes.Outside.Idempotent
+public import Lanes.Outside.Multipart
 public import Lanes.Outside.ObjectStore
 public import Lanes.Outside.Queue
 public import Lanes.Outside.IO.Clock
@@ -81,6 +82,7 @@ public import Lanes.Outside.Throttle
 public import Lanes.Proof.Deed
 public import Lanes.Proof.Equiv
 public import Lanes.Proof.Ghost
+public import Lanes.Proof.HashMap
 public import Lanes.Proof.Lift
 public import Lanes.Proof.List
 public import Lanes.Proof.Loses
@@ -120,6 +122,8 @@ public import Lanes.Web.Http.Waiting
 public import Lanes.Web.Http.Wire
 public import Lanes.Web.Http.WireSpec
 public import Lanes.Web.S3.Basic
+public import Lanes.Web.S3.Multipart
+public import Lanes.Web.S3.Post
 public import Lanes.Web.S3.Xml
 public import Lanes.Web.IO.Client
 public import Lanes.Web.IO.Ops

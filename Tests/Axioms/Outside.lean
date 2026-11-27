@@ -36,6 +36,13 @@ import Lanes.Semantics
 /-- info: 'Lanes.Idempotent.answer_repeat' depends on axioms: [propext, Classical.choice] -/
 #guard_msgs in #print axioms Lanes.Idempotent.answer_repeat
 
+-- Lanes.Outside.Multipart
+/-- info: 'Lanes.Multipart.read_listed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Multipart.read_listed
+
+/-- info: 'Lanes.Multipart.completed_sent' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Multipart.completed_sent
+
 -- Lanes.Outside.ObjectStore
 /-- info: 'Lanes.ObjectStore.read_sent' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.ObjectStore.read_sent
