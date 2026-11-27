@@ -48,3 +48,9 @@ axioms. If a `sorry` or a new axiom reaches one, this file stops compiling.
 
 /-- info: 'Videos.Site.delete_reported' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Videos.Site.delete_reported
+
+/-- info: 'Videos.Site.listed_transcoded' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Videos.Site.listed_transcoded
+
+/-- info: 'Videos.Site.report_names' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Videos.Site.report_names

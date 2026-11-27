@@ -74,12 +74,14 @@ theorem delete_schedules {s : Site} {req : ReqId} {m : Member} {session : Sid} {
         have hv : v = video.id := by
           simp only [List.mem_append, answer, List.mem_singleton, Out.reply.injEq,
             Reply.deleted.injEq] at h
-          rcases h with ((h | h) | h) | h
+          rcases h with (((h | h) | h) | h) | h
           · unfold waiterOf at h
             split at h <;> simp [answer] at h
           · exact h.2.2
           · simp [schedule] at h
           · unfold unexpire at h
+            split at h <;> simp at h
+          · unfold unstart at h
             split at h <;> simp at h
         subst hv
         simp

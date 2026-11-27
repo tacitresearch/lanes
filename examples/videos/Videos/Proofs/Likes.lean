@@ -57,6 +57,15 @@ theorem nodup_like {likes : List Member} (h : likes.Nodup) (m : Member) (on : Bo
     · next hm => exact List.nodup_cons.mpr ⟨by simpa using hm, h⟩
   · exact h.erase m
 
+theorem likedOnce_settle {s : Site} (h : s.LikedOnce) (r : Report) : (s.settle r).LikedOnce := by
+  unfold settle
+  split
+  · next video hfind =>
+    split
+    · exact likedOnce_setVideo h (h video (find?_mem hfind))
+    · exact h
+  · exact h
+
 theorem likedOnce_request {s : Site} (h : s.LikedOnce) (c : Command) (at_s : Nat) :
     (s.request config c at_s).1.LikedOnce := by
   let P : Site × List Out → Prop := fun r => r.1.LikedOnce
@@ -88,12 +97,12 @@ theorem likedOnce_request {s : Site} (h : s.LikedOnce) (c : Command) (at_s : Nat
     show (s.uploaded config req viewer at_s w).1.LikedOnce
     unfold uploaded
     split
-    · exact h
     · unfold check
       dsimp only
       split
       · exact likedOnce_setVideo h (h w hw)
       · exact likedOnce_setVideo (x := { w with status := .checking req }) h (h w hw)
+    · exact h
   | watch req viewer v =>
     show (s.watch req _ v at_s).1.LikedOnce
     rw [watch_fst]
@@ -125,6 +134,19 @@ theorem likedOnce_request {s : Site} (h : s.LikedOnce) (c : Command) (at_s : Nat
     show (s.channel req _ whose).1.LikedOnce
     rw [channel_fst]
     exact h
+  | retry req m session v =>
+    refine withSession_cases (P := P) same fun viewer => owned_cases (P := P) same fun w hw => ?_
+    show (s.retry config req viewer w).1.LikedOnce
+    unfold retry
+    split
+    · exact likedOnce_setVideo h (h w hw)
+    · exact h
+  | report req r signature =>
+    show (s.report config req r signature).1.LikedOnce
+    unfold report
+    split
+    · exact likedOnce_settle h r
+    · exact h
 
 theorem likedOnce_unconfirmed {s : Site} (h : s.LikedOnce) {video : Video} (hv : video ∈ s.videos)
     (req : ReqId) (r : Reply) : (s.unconfirmed video req r).1.LikedOnce := by
@@ -141,7 +163,7 @@ theorem likedOnce_job {s : Site} (h : s.LikedOnce) (key : Key) (o : Outcome) :
     likedOnce_setVideo h (h w hw)
   cases key with
   | check v req =>
-    refine unready_cases (P := P) same fun w hw _ => ?_
+    refine awaiting_cases (P := P) same fun w hw _ _ => ?_
     show (s.checked config w req o).1.LikedOnce
     unfold checked
     split
@@ -154,12 +176,17 @@ theorem likedOnce_job {s : Site} (h : s.LikedOnce) (key : Key) (o : Outcome) :
       | exact likedOnce_unconfirmed h hw req _
       | exact h
   | expire v =>
-    refine unready_cases (P := P) same fun w hw _ => ?_
+    refine awaiting_cases (P := P) same fun w hw _ _ => ?_
     show (s.expired config w o).1.LikedOnce
     unfold expired
     split
     · exact found hw _
     · exact fun x hx => h x (List.mem_filter.mp hx).1
+    · exact h
+  | transcode r =>
+    show (if o.givenUp then s.settle (.failed r) else s, ([] : List Out)).1.LikedOnce
+    split
+    · exact likedOnce_settle h _
     · exact h
   | delete v => exact h
 

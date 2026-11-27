@@ -41,7 +41,7 @@ abbrev alone (config : Config) : System sig where
   boot := [()]
 
 /-- How the site uses the scheduler. -/
-def use : Schedule.Use sig Key Unit StoreAnswer where
+def use : Schedule.Use sig Key Unit Answer where
   scheduled
     | .schedule now_ms spec => some (now_ms, spec)
     | _ => none
@@ -51,9 +51,9 @@ def use : Schedule.Use sig Key Unit StoreAnswer where
   notice key _ _ := .noticed key
   answer := .job
 
-abbrev SchedIn := Schedule.Input Key Unit StoreAnswer
-abbrev SchedOut := Schedule.Output Key Unit StoreAnswer
-abbrev fullSig := joinSig (Schedule.sig Key Unit StoreAnswer) sig
+abbrev SchedIn := Schedule.Input Key Unit Answer
+abbrev SchedOut := Schedule.Output Key Unit Answer
+abbrev fullSig := joinSig (Schedule.sig Key Unit Answer) sig
 
 /-- The site with the scheduler beside it: what runs. -/
 abbrev system (config : Config) : System fullSig :=

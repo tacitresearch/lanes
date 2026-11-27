@@ -154,3 +154,10 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Throttle.wait_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Throttle.wait_le
+
+-- Lanes.Outside.Transcode
+/-- info: 'Lanes.Transcode.reports_agree' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Transcode.reports_agree
+
+/-- info: 'Lanes.Transcode.done_given' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Transcode.done_given

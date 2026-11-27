@@ -7,7 +7,8 @@ import Videos.EndToEnd
 /-!
 `videosLive`: the end-to-end flow (`Videos.EndToEnd.flow`) against the bucket the environment
 names, as `videos` reads it (`VIDEOS_BUCKET`, `AWS_REGION`, `VIDEOS_S3_ENDPOINT`, `AWS_*`), with
-the test kit's provider still run here. Every key it writes is under `videos-live-<n>/`, and it deletes
+the test kit's provider and its transcode worker, which reads and writes that bucket, still run
+here. Every key it writes is under `videos-live-<n>/`, and it deletes
 what is left at the end. Not run by `lake test`: it needs a bucket, credentials and the network.
 The bucket's CORS rules do not matter here, since no browser is involved.
 -/
@@ -33,14 +34,17 @@ def main : IO UInt32 := do
   let results ← try
       (do
         let provider ← Testing.OAuth.Fake.start (oidc := false)
-        let d := deployment b creds provider journal keyPrefix
+        let worker ← Testing.Transcode.Fake.start workerKey b creds
+        let d := deployment b creds provider worker journal keyPrefix
         let held (key : String) : Async Bool := do
           let some k := S3.Key.of? key | return false
           return (← S3.exchange b creds (.head k)) matches some (.found _)
-        let results ← flow d provider held
+        let results ← flow d provider worker held
         for v in [0, 1, 2] do
-          if let some k := S3.Key.of? (d.settings.objectKey v) then
-            discard <| S3.exchange b creds (.delete k)
+          for key in [d.settings.objectKey v, d.settings.renditionKey v, d.settings.thumbnailKey v] do
+            if let some k := S3.Key.of? key then
+              discard <| S3.exchange b creds (.delete k)
+        worker.stop
         provider.stop
         return results : Async _).block
     finally
