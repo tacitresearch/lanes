@@ -64,8 +64,9 @@ structure ServerConfig where
   tick_ms : Nat := 25
   /-- Threads of the server's own that run the connections, each connection on one of them for
   its whole life, dealt in turn as they are accepted. With `0`, a connection's loop runs on
-  whichever of Lean's task threads tells it something. -/
-  ioThreads : Nat := 0
+  whichever of Lean's task threads tells it something. Four by default: on the warm machine they
+  serve 21–30% more requests a second than `0` for a quarter less CPU (`bench/README.md`). -/
+  ioThreads : Nat := 4
   gate : GateConfig := {}
   /-- Where to keep a journal. With one, the system behind the server survives the process:
   it starts in the state it was in (`docs/decisions/` D24). -/

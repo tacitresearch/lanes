@@ -14,6 +14,7 @@ under Unreleased (`CONTRIBUTING.md`).
 
 ### Changed
 
+- The HTTP server runs its connections on four threads of its own by default (`ServerConfig.ioThreads := 4`); `0` keeps the earlier behaviour.
 - Module paths are reorganised by concern: `Lanes.Actors` is split into `Lanes/Core`, `Lanes/Proof`, `Lanes/Runtime`, `Lanes/Durable`, `Lanes/Net` and `Lanes/Outside`, HTTP, HTML and authentication are under `Lanes/Web`, the standard library under `Lanes/Lib`, and each area's IO in an `IO/` directory; `import Lanes` leaves out the framework's soundness theorems, which a proof imports with `import Lanes.Proofs` (or `Lanes.Semantics`); `Examples/` and `systems/` are one `examples/` directory of Lake packages, `examples/counter` being what `lanes new` writes.
 - `Tests/Fixtures/` keeps the small applications' systems and the two bank theorems the tests carry to shards; the proofs of election, the key-value store and the watchdog are only in their examples.
 
