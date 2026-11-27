@@ -89,4 +89,7 @@ decision without a number.
 - [D73. The shard chooses from its own timing whether a batch's steps are worked out in parallel](D73-adaptive-waves.md)
 - [D74. AWS as an integration: a role's credentials refreshed by a proved policy, and SES as the email model](D74-aws-integration.md)
 - [D76. Bodies and responses stream through the gate, in pieces and parts, one at a time](D76-streams-through-the-gate.md)
+- [D77. A test kit, `Lanes.Testing`, beside `Lanes` and not in it](D77-a-test-kit.md)
 - [D78. Uploads bounded by a signed policy, and large ones in parts](D78-bounded-and-large-uploads.md)
+- [D79. Work that is due later is a job of the scheduler: held by its id, run by its own timer, retried until it ends](D79-work-that-is-due-later-is-a-job-of-the-scheduler.md)
+- [D80. Every parser has an oracle and every model a recorded run, in one place, and lint keeps the list](D80-oracles.md)
