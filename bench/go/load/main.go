@@ -38,10 +38,12 @@ type result struct {
 	ServerRSSkB int64   `json:"server_rss_peak_kb"`
 	Threads     int64   `json:"server_threads"`
 	LoadCPUs    float64 `json:"load_cpu_s"`
-	// CPU time spent on the -cpus set by anything but the server and this process: other
-	// jobs on the machine, kernel threads. Softirq time (the loopback's packets) is apart.
-	OtherCPUs   float64 `json:"other_cpu_s"`
-	SoftirqCPUs float64 `json:"softirq_s"`
+	// CPU time spent on the -cpus set by anything but the server, this process and the
+	// kernel's threads: other jobs on the machine. Kernel threads are counted on every CPU, so
+	// this is exact when -cpus covers the machine. Softirq time is apart from all of these.
+	OtherCPUs         float64 `json:"other_cpu_s"`
+	KernelThreadsCPUs float64 `json:"kernel_threads_cpu_s"`
+	SoftirqCPUs       float64 `json:"softirq_s"`
 }
 
 // The kernel's USER_HZ, which /proc/<pid>/stat and /proc/stat count in; 100 on Linux.
@@ -108,6 +110,35 @@ func processTicks(pid int) int64 {
 	u, _ := strconv.ParseInt(f[11], 10, 64)
 	k, _ := strconv.ParseInt(f[12], 10, 64)
 	return u + k
+}
+
+// kernelThreadTicks sums utime + stime of the kernel's threads (kthreadd, pid 2, and its
+// children), such as ksoftirqd, which carry the loopback's packets under load.
+func kernelThreadTicks() int64 {
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return 0
+	}
+	var total int64
+	for _, e := range entries {
+		pid, err := strconv.Atoi(e.Name())
+		if err != nil {
+			continue
+		}
+		data, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+		if err != nil {
+			continue
+		}
+		s := string(data)
+		f := strings.Fields(s[strings.LastIndexByte(s, ')')+1:])
+		if len(f) < 13 || (pid != 2 && f[1] != "2") {
+			continue
+		}
+		u, _ := strconv.ParseInt(f[11], 10, 64)
+		k, _ := strconv.ParseInt(f[12], 10, 64)
+		total += u + k
+	}
+	return total
 }
 
 // status reads a "Name: value kB" field of /proc/<pid>/status.
@@ -298,6 +329,7 @@ func main() {
 	}
 	time.Sleep(*warmup)
 	serverBefore, selfBefore := processTicks(*pid), selfCPU()
+	kernelBefore := kernelThreadTicks()
 	busyBefore, softBefore := cpuTicks(cpuSet)
 	measuring.Store(true)
 	began := time.Now()
@@ -305,6 +337,7 @@ func main() {
 	stop.Store(true)
 	seconds := time.Since(began).Seconds()
 	busyAfter, softAfter := cpuTicks(cpuSet)
+	kernelAfter := kernelThreadTicks()
 	serverAfter, selfAfter := processTicks(*pid), selfCPU()
 	wg.Wait()
 	serverCPU := float64(serverAfter-serverBefore) / userHz
@@ -326,10 +359,11 @@ func main() {
 		Conns: *conns, Seconds: seconds, Requests: len(all), RPS: float64(len(all)) / seconds,
 		P50us: pct(0.50), P90us: pct(0.90), P99us: pct(0.99), MaxUs: pct(1),
 		Errors: errorCount.Load(), Reconnects: reconnects.Load(), Non2xx: non2xx.Load(),
-		LoadCPUs:    loadCPU,
-		OtherCPUs:   float64(busyAfter-busyBefore)/userHz - loadCPU,
-		SoftirqCPUs: float64(softAfter-softBefore) / userHz,
+		LoadCPUs:          loadCPU,
+		KernelThreadsCPUs: float64(kernelAfter-kernelBefore) / userHz,
+		SoftirqCPUs:       float64(softAfter-softBefore) / userHz,
 	}
+	res.OtherCPUs = float64(busyAfter-busyBefore)/userHz - loadCPU - res.KernelThreadsCPUs
 	if *pid != 0 {
 		res.ServerCPUs = serverCPU
 		res.OtherCPUs -= serverCPU
@@ -343,6 +377,6 @@ func main() {
 	fmt.Printf("%d connections, %.1f s: %d requests, %.0f req/s\n", res.Conns, res.Seconds, res.Requests, res.RPS)
 	fmt.Printf("latency p50 %.0f us, p90 %.0f us, p99 %.0f us, max %.0f us\n", res.P50us, res.P90us, res.P99us, res.MaxUs)
 	fmt.Printf("errors %d, reconnects %d, non-2xx %d\n", res.Errors, res.Reconnects, res.Non2xx)
-	fmt.Printf("CPU s: server %.2f, load generator %.2f, other %.2f, softirq %.2f\n",
-		res.ServerCPUs, res.LoadCPUs, res.OtherCPUs, res.SoftirqCPUs)
+	fmt.Printf("CPU s: server %.2f, load generator %.2f, kernel threads %.2f, other %.2f, softirq %.2f\n",
+		res.ServerCPUs, res.LoadCPUs, res.KernelThreadsCPUs, res.OtherCPUs, res.SoftirqCPUs)
 }

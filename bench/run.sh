@@ -32,10 +32,10 @@ for name in "${SERVERS[@]}"; do server_argv "$name" 0 /nonexistent; done
 
 # "0-2,5" -> "0 1 2 5"
 expand_cpus() {
-  local part out=()
+  local part c out=()
   IFS=, read -ra parts <<<"$1"
   for part in "${parts[@]}"; do
-    if [[ $part == *-* ]]; then out+=($(seq "${part%-*}" "${part#*-}")); else out+=("$part"); fi
+    for ((c = ${part%-*}; c <= ${part#*-}; c++)); do out+=("$c"); done
   done
   echo "${out[@]}"
 }
@@ -85,6 +85,18 @@ idle_now() {
   echo "run.sh: $start_jobs other jobs, $start_cores cores busy, load $(cut -d' ' -f1-3 /proc/loadavg)" >&2
   [ "$start_jobs" -eq 0 ] && awk -v c="$start_cores" -v m="$IDLE_CORES" 'BEGIN {exit !(c <= m)}'
 }
+
+# bench/.lake/packages is the repository's (README.md): a dependency pinned at another commit
+# here would make Lake check that commit out there.
+python3 - <<'EOF'
+import json, sys
+pins = lambda path: {p["name"]: p.get("rev") for p in json.load(open(path))["packages"]}
+root, here = pins("../lake-manifest.json"), pins("lake-manifest.json")
+here.pop("lanes", None)
+if root != here:
+    sys.exit("run.sh: bench/lake-manifest.json does not pin what lake-manifest.json pins: "
+             + ", ".join(sorted(k for k in root.keys() | here.keys() if root.get(k) != here.get(k))))
+EOF
 
 if [ "${BUILD:-1}" = 1 ]; then
   (cd go && go build -o ../.build/ ./...)

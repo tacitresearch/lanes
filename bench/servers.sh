@@ -5,6 +5,7 @@
 ALL_SERVERS=(go1 go tcp std std-unlimited lanes lanes-journal lanes-snapshot)
 
 # Sets SERVER to the command that runs server <name> on <port>, keeping any journal in <dir>.
+# shellcheck disable=SC2034
 server_argv() {
   local name=$1 port=$2 dir=$3 bin=.lake/build/bin
   case $name in

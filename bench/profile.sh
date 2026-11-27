@@ -76,6 +76,7 @@ case $WHAT in
     pid=
     requests=$(grep -o '"requests":[0-9]*' "$SCRATCH/load.json" | cut -d: -f2)
     echo "$requests requests measured; the last dump is the measured window:"
+    # shellcheck disable=SC2012
     last=$(ls -t "$out"* | head -1)
     callgrind_annotate --inclusive=yes "$last" | head -60 | awk -v n="$requests" '
       /^ *[0-9,]+ / { ir = $1; gsub(",", "", ir); printf "%12.0f instr/req  %s\n", ir / n, $0; next } { print }'

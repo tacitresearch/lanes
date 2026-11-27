@@ -30,6 +30,7 @@ type load struct {
 	Threads     int64   `json:"server_threads"`
 	LoadCPUs    float64 `json:"load_cpu_s"`
 	OtherCPUs   float64 `json:"other_cpu_s"`
+	KernelCPUs  float64 `json:"kernel_threads_cpu_s"`
 	SoftirqCPUs float64 `json:"softirq_s"`
 }
 
