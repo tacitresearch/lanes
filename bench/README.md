@@ -149,7 +149,7 @@ work is now as large as the cost of crossing threads.
 
 ## Parallel actors and IO threads
 
-`docs/decisions/new-actors-run-in-parallel.md`: connections on threads of the server's own
+`docs/decisions/D64-actors-run-in-parallel.md`: connections on threads of the server's own
 (`lanes-io`) and the actors of a wave stepping in parallel (`lanes-par`, `lanes-many-par`,
 `lanes-heavy-par`). Measured in the shared 4-core container, the server on 2 CPUs and the load on
 the other 2, `IO_THREADS=2 WORKERS=2`, three runs of 5 s, other agents building on the machine
@@ -214,3 +214,24 @@ one shard, and a shard is one thread, so the application's logic uses one core w
 number of connections; the IO path and running actors in parallel are the next steps.
 `lanes-journal` syncs the journal once a batch before it answers, and a batch is what has
 arrived since the last, so more connections share a sync.
+
+### Parallel actors and IO threads on the warm machine (2026-11-27, commit baec29b81c11)
+
+Same machine and settings as above; `IO_THREADS` and `WORKERS` 8 (a quarter of the server's 32
+CPUs). Requests a second at 1 / 16 / 64 connections, CPU µs a request at 64.
+
+| server | req/s | CPU µs/req |
+| --- | --- | ---: |
+| `go` | 29,926 / 125,774 / 139,730 | 93 |
+| `lanes` | 10,518 / 34,223 / 37,177 | 85 |
+| `lanes-io` | 13,719 / 42,482 / 45,088 | 60 |
+| `lanes-par` | 10,671 / 33,975 / 36,790 | 89 |
+| `lanes-io-par` | 11,529 / 40,600 / 44,335 | 62 |
+| `lanes-many` | 10,992 / 34,715 / 37,474 | 89 |
+| `lanes-many-par` | 10,451 / 29,755 / 33,798 | 114 |
+| `lanes-heavy` | 7,530 / 20,524 / 20,453 | 142 |
+| `lanes-heavy-par` | 7,351 / 28,670 / 31,921 | 147 |
+
+IO threads gain 21–30% and cut CPU a request by a quarter. Parallel actors gain 40–56% when each
+step does real work (`heavy`) and cost about 10% when steps are trivial (`many`), so `workers`
+stays 1 by default until the shell chooses it from its own timing.

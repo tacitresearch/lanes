@@ -92,7 +92,7 @@ that plan. Handling one actor's message changes no other actor's state (`Kernel.
 the result is `runBatch`'s, value for value (`Kernel.runWaves_eq`), and the journal and everything
 proved of the kernel are unchanged. Steps cheaper than a few microseconds cost more to hand to
 another thread than they save
-(`docs/decisions/new-actors-run-in-parallel.md`).
+(`docs/decisions/D64-actors-run-in-parallel.md`).
 
 ## Journal, snapshots and the disk model
 

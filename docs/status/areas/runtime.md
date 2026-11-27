@@ -51,4 +51,4 @@
   wave, their steps committed in queue order by one thread; the gate of an HTTP server is one
   actor. A step handed to another thread costs a microsecond or two more, in Lean's reference
   counts of objects threads share, so cheap steps run slower that way, and an actor's state a
-  task has seen is never updated in place again (`docs/decisions/new-actors-run-in-parallel.md`).
+  task has seen is never updated in place again (`docs/decisions/D64-actors-run-in-parallel.md`).

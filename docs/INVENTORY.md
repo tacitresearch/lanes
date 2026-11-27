@@ -12,18 +12,18 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | `Lanes/Behaviours` | 66 | 36 | 5 | 18 | 0 | 7 | 0 |
 | `Lanes/Check` | 74 | 54 | 0 | 8 | 0 | 10 | 2 |
-| `Lanes/Core` | 104 | 40 | 0 | 34 | 1 | 10 | 19 |
+| `Lanes/Core` | 102 | 40 | 0 | 34 | 1 | 10 | 17 |
 | `Lanes/Data` | 66 | 42 | 0 | 4 | 1 | 0 | 19 |
 | `Lanes/Durable` | 53 | 45 | 2 | 0 | 0 | 5 | 1 |
 | `Lanes/Lib` | 361 | 257 | 5 | 0 | 42 | 48 | 9 |
 | `Lanes/Net` | 37 | 6 | 5 | 0 | 0 | 25 | 1 |
 | `Lanes/Outside` | 10 | 0 | 5 | 2 | 3 | 0 | 0 |
-| `Lanes/Proof` | 34 | 13 | 0 | 0 | 0 | 20 | 1 |
+| `Lanes/Proof` | 34 | 12 | 0 | 0 | 0 | 21 | 1 |
 | `Lanes/Runtime` | 156 | 93 | 18 | 0 | 15 | 30 | 0 |
 | `Lanes/Semantics` | 57 | 9 | 0 | 0 | 0 | 47 | 1 |
 | `Lanes/Web` | 315 | 188 | 14 | 8 | 64 | 39 | 2 |
 | `LanesCli` | 110 | 0 | 0 | 0 | 46 | 0 | 64 |
-| All | 1443 | 783 | 54 | 74 | 172 | 241 | 119 |
+| All | 1441 | 782 | 54 | 74 | 172 | 242 | 117 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -246,7 +246,6 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Actor.run` | spec | used only in statements |
 | `Actor.mapEff` | none |  |
-| `Actor.comapMsg` | none |  |
 | `Actor.Invariant` | spec | a predicate |
 
 ## `Lanes/Core/FairScheduler.lean`
@@ -269,7 +268,6 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `instHashableEmpty_lanes` | checked | `Tests/Election.lean`, `Tests/Join.lean` |
-| `instReprEmpty_lanes` | none |  |
 | `instHashableEnvelope` | checked | `Tests/Join.lean` |
 | `instHashableEffect` | checked | `Tests/KV.lean` |
 | `instReprEffect` | checked | `Tests/KV.lean` |
@@ -362,7 +360,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Effect.instDecidableEq` | proved | its type, `Decidable` |
 | `Envelope.instDecidableEq` | proved | `Account.Fires.handle`, `Account.Moves.handle`, `Account.implements` and 6 more |
 | `Envelope.sameLink` | none |  |
-| `Link.reliable` | proved | `Tests.Fixtures.Watchdog.exists_fair_run_never_barks`, `Tests.Fixtures.Watchdog.impatient_barks` |
+| `Link.reliable` | proved | through `EnvModel.link`, `EnvModel.lossy` and 1 more: `Account.implements`, `Account.implements_timed` and 20 more |
 | `Link.network` | checked | `Tests/Bank.lean`, `Tests/Election.lean`, `Tests/Join.lean` and 1 more |
 | `Link.unordered` | checked | `Tests/Election.lean`, `Tests/Jobs.lean` |
 | `EnvModel.reliable` | spec | used only in statements |
@@ -1113,7 +1111,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `System.withGhost` | proved | `SysState.erase_step`, `System.Invariant.of_ghost`, `System.Invariant.to_ghost` and 2 more |
+| `System.withGhost` | spec | used only in statements |
 | `SysState.erase` | spec | used only in statements |
 
 ## `Lanes/Proof/JoinSound.lean`
@@ -1436,7 +1434,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Spec.stutter` | proved | through `System.Run`, `System.Run.event` and 2 more: `Http.Gate.pending_answered`, `Http.fronted_pending_answered` and 13 more |
+| `Spec.stutter` | proved | through `System.Run`, `System.Run.event` and 2 more: `Http.Gate.pending_answered`, `Http.fronted_pending_answered` and 11 more |
 | `Obligation.event` | proved | `System.LeadsTo.ensures_of_invariant` |
 | `Obligation.Due` | spec | a predicate |
 | `Obligation.Restarted` | spec | a predicate |
@@ -1493,7 +1491,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Service.spec` | proved | `Account.Holds.passes`, `Account.implements`, `Account.implements_timed` and 10 more |
+| `Service.spec` | proved | `Account.Holds.passes`, `Account.implements`, `Account.implements_timed` and 8 more |
 | `Service.Stable` | spec | a predicate |
 | `Service.Only` | spec | a predicate |
 | `Service.Took` | spec | a predicate |
@@ -1510,7 +1508,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `System.sem` | proved | `Account.implements`, `Account.implements_timed`, `Once.server_implements` and 15 more |
+| `System.sem` | proved | `Account.implements`, `Account.implements_timed`, `Once.server_implements` and 12 more |
 | `System.Refines` | spec | a predicate |
 
 ## `Lanes/Web/Auth/Login.lean`
