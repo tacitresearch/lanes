@@ -65,7 +65,7 @@ is in `docs/CLAIMS.md`. In short:
   reference implementations (Go's standard library, `expfmt`, botocore, jwcrypto), the models of
   S3, its multipart uploads, SES, SQS and PostgreSQL against runs recorded from moto and
   PostgreSQL (`oracles/README.md`), the bound C against its Lean references.
-- **Trusted**: About 3,550 lines of trusted code, listed with their sizes in `TRUSTED.md`: the
+- **Trusted**: About 4,200 lines of trusted code, listed with their sizes in `TRUSTED.md`: the
   IO shells, the HTTP wire format where its proof does not reach, the C that binds libsodium,
   `fsync`, a timed wait, OpenSSL's TLS client, its signature check and its signing, the sign-in's IO, the AWS integration's IO, and the template macro, with the assumptions the runtime makes. `lanes lint` fails if a trusted file changes without the
   list, and `scripts/mutants.py` holds known ways of breaking that code, each of which must
