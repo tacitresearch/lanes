@@ -22,11 +22,12 @@ review. The order of work:
    what Lean already has; what is pure, built here and proved, and tested against Go's
    implementation on generated inputs; what touches the operating system or cryptography and is
    bound (D46); what is not needed.
-4. **Trusted and assumed things keep shrinking**: our own HTTP/1.1 request reader in place of
-   `Std.Http`'s, exactly-once requests in place of the premise that links from clients do not
-   duplicate, idle actors saved to storage when they rest. `fsync` and cryptography bound to
-   libsodium are done (D46); exactly-once requests are in for the key-value store (D48); actors
-   back where a start puts them are released (`docs/decisions/D51-release-actors-at-rest.md`).
+4. **Trusted and assumed things keep shrinking**: exactly-once requests in place of the premise
+   that links from clients do not duplicate, idle actors saved to storage when they rest. The
+   server reads requests with its own reader (`Lanes/Web/Http/ReadRequest.lean`, D49); `fsync`
+   and cryptography bound to libsodium are done (D46); exactly-once requests are in for the
+   key-value store (D48); actors back where a start puts them are released
+   (`docs/decisions/D51-release-actors-at-rest.md`).
 5. **Specs are what a person reviews.** Each system's spec and its premises sit in one place, and
    a person reads them before any public claim.
 
@@ -40,8 +41,8 @@ claim is what a critic tests first.
 | A. Settle the contracts | Durability; a composition operator with its theorem; adapters with a model of the outside; fairness, so liveness can be stated; codecs for inputs | The bank survives `kill -9` with recovery covered by a theorem; the gate is rebuilt with the general operator; one real adapter passes conformance against its model | Done: the journal (D24) and its crash theorems, `System.join` (D25) with the gate joined in front (D31, D43), `Outside` and conformance tests for the server, the clock and the client (D26), fair runs and leads-to (D27), `lanes_data` (D38) |
 | B. Scale | Several shards; node-to-node transport; checker v2; snapshots | A Raft-sized model check finishes in minutes; a shard restarts from a snapshot in time that does not grow with its history | Shards proved for any number (D28), the transport with its courier proved (D30), snapshots (D29), the checker 3.5 times faster (D33): Raft's largest check, 7.8 million states, takes minutes. Open: checker v2 (states as flat data, symmetry, parallel search, a lasso search), and a proof that the running processes implement `System.shards` |
 | C. Acceptance test | `examples/raft-kv` | Linearizability proved against the map spec; runs on three machines; survives fault injection | Met but for three machines: proved to implement the map it replicates (`RaftKV.implementsMachine`), run as three processes on one machine through `kill -9` and pauses. Frozen as a regression suite. Not done: liveness, membership change, log compaction |
-| D. Batteries | Database, HTTP client, sessions and auth, server push, jobs, observability | `examples/ledger` is a full web application using all of them | HTTP client (no TLS), sessions and authentication, `fsync`, libsodium. `examples/ledger` runs with sessions and a journal, checked and not yet proved. Not built: a database, server push, jobs, observability, TLS. Now ordered by the standard library's P0 (`docs/STDLIB.md`) |
-| E. Developer experience | A macro that hides signature boilerplate; `lanes prove`; counterexample-to-induction; a cheaper proof API; tutorial; trace viewer | A new user ships a checked application in a day | `lanes_data` and `instance_by_cases`; `lanes new` with a proved counter. In progress: the cheaper proof API (direction 1). Not built: `lanes prove`, counterexample-to-induction, a tutorial, a trace viewer |
+| D. Batteries | Database, HTTP client, sessions and auth, server push, jobs, observability | `examples/ledger` is a full web application using all of them | HTTP client (no TLS), sessions and authentication, jobs, `fsync`, libsodium. `examples/ledger` runs with sessions and a journal, and is proved to implement its spec with its deadlines (`Ledger.implements_timed`). Not built: a database, server push, observability, TLS. Now ordered by the standard library's P0 (`docs/STDLIB.md`) |
+| E. Developer experience | A macro that hides signature boilerplate; `lanes prove`; counterexample-to-induction; a cheaper proof API; tutorial; trace viewer | A new user ships a checked application in a day | `lanes_data` and `instance_by_cases`; `lanes new` with a proved counter. In progress: the cheaper proof API (direction 1). `docs/TUTORIAL.md`. Not built: `lanes prove`, counterexample-to-induction, a trace viewer |
 
 A came first because B to D build on its contracts; C came before D because Raft found the
 mistakes in A and B while they were cheap to fix. Since D45 the direction above sets the order
@@ -69,7 +70,7 @@ test of phase D and the measure of direction 1.
 ## Standing risks
 
 - **Lean as a production runtime.** A thread crossing costs tens of microseconds; Std has no TLS
-  and no database client; `Std.Async` and `Std.Http` are young. There is no preemption, so one
+  and no database client; `Std.Async` is young. There is no preemption, so one
   slow `step` stalls its shard.
 - **Proof cost.** The key-value store's refinement took about 300 lines, Raft's safety about a
   thousand and its refinement some 800 more; how much a relation library and automation close

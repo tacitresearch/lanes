@@ -101,10 +101,6 @@ theorem perform_up (c : SysState sys) (i : σ.Id) (eff : Effect σ i) :
     (c.perform i eff).up = c.up := by
   cases eff <;> rfl
 
-theorem perform_same_of_ne (c : SysState sys) {i j : σ.Id} (eff : Effect σ i) (hj : j ≠ i) :
-    Same c (c.perform i eff) j := by
-  cases eff <;> simp [Same, perform, hj]
-
 namespace Released
 
 theorem refl (a : SysState sys) : Released a a := ⟨fun i => .inl (Same.refl a i), rfl, rfl⟩

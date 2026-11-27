@@ -14,7 +14,7 @@ machine through the workflow.
 | `go` | Go `net/http`, `GOMAXPROCS` the server's CPUs (Go's default) | `go/hello/main.go` |
 | `tcp` | `Std.Net` TCP on libuv, a task per connection, a fixed response per request head; no HTTP parsing. The floor under `Std.Http` | `TcpHello.lean` |
 | `tcp-park` | `tcp` with its main thread asleep rather than waiting on a task (below) | `TcpHello.lean` |
-| `std` | `Std.Http.Server` with its default configuration, which is what Lanes runs; it closes a connection after 100 requests | `StdHello.lean` |
+| `std` | `Std.Http.Server` with its default configuration, which Lanes ran before its own server (D57); it closes a connection after 100 requests | `StdHello.lean` |
 | `std-unlimited` | `std` with no limit of requests per connection | `StdHello.lean` |
 | `lanes` | `Lanes.Http.serve` with one actor (`Server.system`) that answers each request; no journal | `LanesHello.lean` |
 | `lanes-journal` | `lanes` with a journal: every request is appended and synced (`fsync`, `Lanes/Durable/IO/Journal.lean`) before it is answered; the journal only grows | `LanesHello.lean` |
