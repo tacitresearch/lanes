@@ -225,7 +225,8 @@ def expandBraces (path : String) : List String := Id.run do
 
 /-- A code span that is written as a path in the repository: it has a `/`, no blanks and no
 placeholder (`<area>`, `*`, `…`), and its first part is at the root of the project. Module
-names (`Lanes.Http`), Go packages (`net/http`) and URLs are not. -/
+names (`Lanes.Http`), Go packages (`net/http`) and URLs are not, nor what a build writes under a
+`.lake` at any depth, which a fresh checkout has not. -/
 def citedPaths (root : System.FilePath) (span : String) : IO (List String) := do
   let bad := [' ', '\t', '<', '>', '*', '?', '$', '|', '…', '"', '\'', '(', ')', '#', ':', '=']
   if !span.contains '/' || span.any (bad.contains ·) || span.startsWith "/"
@@ -233,19 +234,23 @@ def citedPaths (root : System.FilePath) (span : String) : IO (List String) := do
     return []
   let paths := expandBraces span
   let first := (span.splitOn "/").headD ""
-  if first.isEmpty || first == "." || first == ".." || first == ".lake" || first == ".git"
+  if first.isEmpty || first == "." || first == ".." || first == ".git"
+      || (span.splitOn "/").contains ".lake"
       || first.contains '{' || !(← (root / first).pathExists) then
     return []
   return paths
 
 /-- The Markdown files whose citations are checked: those at the root and under `docs/`, but
 not the records of the past, `docs/history/` and `docs/decisions/`, nor `docs/STATUS.md`, which
-is written from `docs/status/`, whose fragments are checked instead. -/
+is written from `docs/status/`, whose fragments are checked instead, nor what a package under
+`docs/` keeps in its `.lake/`. -/
 def citingDocs (root : System.FilePath) : IO (List String) := do
   let top := (← Generated.markdownIn root)
   let docs := root / "docs"
   let nested ← if ← docs.isDir then
-      docs.walkDir fun dir => return !["history", "decisions"].contains (dir.fileName.getD "")
+      docs.walkDir fun dir =>
+        let name := dir.fileName.getD ""
+        return !(["history", "decisions"].contains name || name.startsWith ".")
     else pure #[]
   let below := nested.toList.filterMap fun file =>
     let relative := (file.toString.dropPrefix (root.toString ++ "/")).toString

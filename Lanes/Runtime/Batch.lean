@@ -49,8 +49,9 @@ structure Config where
   fuel : Nat
   /-- How many entries to write between two saves, if the journal can save. -/
   snapshotEvery : Option Nat
-  /-- Threads to work out the steps of a wave of `inputs` on (`Kernel.runWaves`). -/
-  workers : Nat := 1
+  /-- How the steps of a wave of `inputs` are spread over threads (`Kernel.runWaves`). It does
+  not change the batch (`run_spread`). -/
+  spread : Kernel.Spread := {}
 
 /-- The shard's part of a batch so far, besides its kernel. -/
 structure Scan (sys : System σ) (P : σ.Id → Type) (W : Type) where
@@ -95,7 +96,7 @@ def work (c : Config) (input : Option σ.In) : Kernel sys × Scan sys P W → Ke
 
 /-- The turn of inputs that arrived together, with `fuel` for each. -/
 def workAll (c : Config) (xs : List σ.In) : Kernel sys × Scan sys P W → Kernel sys × Scan sys P W :=
-  workWith fun k => Journal.turnAll k c.now_ms xs (c.fuel * max 1 xs.length) c.workers
+  workWith fun k => Journal.turnAll k c.now_ms xs (c.fuel * max 1 xs.length) c.spread
 
 /-- Write what was kept back, and save if that many entries are due. -/
 def flush (c : Config) : Kernel sys × Scan sys P W → Kernel sys × Scan sys P W
@@ -130,14 +131,16 @@ def finish (c : Config) (ks : Kernel sys × Scan sys P W) : Result sys P W :=
       resolved := (s.waiting.filter fun w => k.quiet w.1).map (·.2)
       waiting := s.waiting.filter fun w => !k.quiet w.1 }
 
-/-- Inputs next to each other as one command, so that they are accepted together. -/
-def group : List (Command σ P W) → List (Command σ P W)
+/-- Inputs next to each other as one command, so that they are accepted together, at most `most`
+to a command: a turn's entries are written together, so a save is put off by at most a turn. -/
+def group (most : Nat) : List (Command σ P W) → List (Command σ P W)
   | [] => []
   | .input x :: rest =>
-    match group rest with
-    | .inputs xs :: more => .inputs (x :: xs) :: more
+    match group most rest with
+    | .inputs xs :: more =>
+      if xs.length < most then .inputs (x :: xs) :: more else .inputs [x] :: .inputs xs :: more
     | more => .inputs [x] :: more
-  | c :: rest => c :: group rest
+  | c :: rest => c :: group most rest
 
 /-- The inputs a command carries. -/
 def Command.ins : Command σ P W → List σ.In
@@ -147,8 +150,8 @@ def Command.ins : Command σ P W → List σ.In
 
 omit [Hashable σ.Id] in
 /-- Grouping keeps every input, in order. -/
-theorem group_ins (commands : List (Command σ P W)) :
-    (group commands).flatMap Command.ins = commands.flatMap Command.ins := by
+theorem group_ins (most : Nat) (commands : List (Command σ P W)) :
+    (group most commands).flatMap Command.ins = commands.flatMap Command.ins := by
   induction commands with
   | nil => rfl
   | cons c rest ih =>
@@ -159,7 +162,7 @@ theorem group_ins (commands : List (Command σ P W)) :
       · next xs more h =>
         rw [h] at ih
         simp only [List.flatMap_cons, Command.ins] at ih ⊢
-        rw [← ih]; rfl
+        split <;> simp only [List.flatMap_cons, Command.ins, ← ih] <;> rfl
       · simp only [List.flatMap_cons, Command.ins, ← ih]
     | inputs xs => simp only [group, List.flatMap_cons, ih]
     | idle timers waiter => simp only [group, List.flatMap_cons, ih]
@@ -277,7 +280,7 @@ private theorem inv_work (c : Config) (input : Option σ.In) {k0 : Kernel sys}
 
 private theorem inv_workAll (c : Config) (xs : List σ.In) {k0 : Kernel sys}
     {ks : Kernel sys × Scan sys P W} (h : Inv k0 ks) : Inv k0 (workAll c xs ks) :=
-  inv_workWith _ (fun k => Journal.turnAll_eq_exec k c.now_ms xs _ c.workers) h
+  inv_workWith _ (fun k => Journal.turnAll_eq_exec k c.now_ms xs _ c.spread) h
 
 private theorem inv_flush (c : Config) {k0 : Kernel sys} {ks : Kernel sys × Scan sys P W}
     (h : Inv k0 ks) :
@@ -603,5 +606,29 @@ theorem flush_save (c : Config) (k : Kernel sys) (s : Scan sys P W) :
   obtain ⟨written, waiting, acts, entries, events, outputs, worked⟩ := s
   simp only [flush]
   split <;> simp_all
+
+private theorem workAll_spread (c : Config) (spread : Kernel.Spread) :
+    workAll (sys := sys) (P := P) (W := W) { c with spread } = workAll c := by
+  funext xs ks
+  unfold workAll
+  congr 1
+  funext k
+  rw [Journal.turnAll_spread, Journal.turnAll_spread (spread := c.spread)]
+
+private theorem scan_spread (c : Config) (spread : Kernel.Spread) :
+    scan (sys := sys) (P := P) (W := W) { c with spread } = scan c := by
+  funext ks command
+  cases command with
+  | inputs xs => simp only [scan, workAll_spread]; rfl
+  | _ => rfl
+
+/-- How the waves of a batch are spread over threads changes nothing it does: the same kernel,
+the same acts, the same answers (`Journal.turnAll_spread`, from `Kernel.runWaves_eq`). So the
+shell may choose the spread of each batch as it likes, from its own timing. -/
+theorem run_spread (c : Config) (spread : Kernel.Spread) (k : Kernel sys) (written : Nat)
+    (waiting : Array (Bool × W)) (commands : List (Command σ P W)) :
+    run { c with spread } k written waiting commands = run c k written waiting commands := by
+  simp only [run, scan_spread]
+  rfl
 
 end Lanes.Batch

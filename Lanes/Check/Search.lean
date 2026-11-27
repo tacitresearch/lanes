@@ -42,10 +42,14 @@ two states with different hashes are different without being compared.
 
 namespace Lanes.Check
 
+/-- A transition system as the search sees it: its initial states and, from each state, the
+transitions out of it with their labels. -/
 structure Model (S L : Type) where
   init : List S
   next : S → List (L × S)
 
+/-- What a check asks of the states: an `always` property of every reachable state, a
+`sometimes` property of at least one. -/
 inductive Property (S : Type) where
   | always (name : String) (p : S → Bool)
   /--
@@ -66,6 +70,8 @@ def holds : Property S → S → Bool
 
 end Property
 
+/-- The bounds and switches of a search. By default it explores up to ten million states, to
+any depth, and does not report deadlocks. -/
 structure Options (S : Type) where
   /-- States violating the constraint are dropped: neither counted, checked nor expanded. -/
   constraint : S → Bool := fun _ => true
@@ -82,6 +88,8 @@ structure Options (S : Type) where
   (`docs/decisions/` D33). -/
   tasks : Bool := false
 
+/-- A run of the model: the state it starts in, then each transition's label and the state
+it leads to. -/
 structure Trace (S L : Type) where
   init : S
   steps : List (L × S)
@@ -100,11 +108,16 @@ def labels (t : Trace S L) : List L :=
 
 end Trace
 
+/-- Why a check failed: an `always` property violated, with a shortest trace to it; a state
+with no successors, when `Options.checkDeadlock` asks; or `sometimes` properties that no
+state satisfied. -/
 inductive Failure (S L : Type) where
   | violated (property : String) (trace : Trace S L)
   | deadlock (trace : Trace S L)
   | unreached (properties : List String)
 
+/-- What a search found. A pass covers every reachable state only when `complete` is true
+(`Check.search_sound`). -/
 structure Report (S L : Type) where
   failure : Option (Failure S L)
   /-- A shortest trace to a witness of each `sometimes` property that was reached, in the order
@@ -124,6 +137,7 @@ namespace Report
 
 variable {S L : Type}
 
+/-- No property failed. Only with `complete` is that a statement about the whole instance. -/
 def ok (r : Report S L) : Bool :=
   r.failure.isNone
 

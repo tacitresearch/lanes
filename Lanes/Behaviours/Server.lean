@@ -23,6 +23,7 @@ the state fits in one actor; move to several actors and a protocol only when it 
 
 namespace Lanes.Server
 
+/-- One actor, whose messages are the service's inputs. -/
 abbrev sig (In Out : Type) [DecidableEq In] [DecidableEq Out] : Signature where
   Id := Unit
   Msg _ := In
@@ -37,6 +38,8 @@ def actor (svc : Service In Out S) : (sig In Out).Actor () S where
   step s x := ((svc.step s x).1, (svc.step s x).2.map .emit)
   recover s := (s, [])
 
+/-- `svc` run as one actor: each input is its message and each output is emitted.
+`Lanes.Semantics.Service` proves that it refines `svc`. -/
 abbrev system (svc : Service In Out S) : System (sig In Out) where
   State _ := S
   actor _ := actor svc
