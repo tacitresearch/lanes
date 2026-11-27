@@ -63,6 +63,7 @@ under Unreleased (`CONTRIBUTING.md`).
 
 ### Fixed
 
+- A step copied its actor's whole state, so its cost grew with the state's size (about 1.5 ms a write for 10⁶ numbers): the kernel read the state from its table and left it there. It now takes the state out before the step, which updates it in place (0.4 µs at any size; `docs/decisions/D84-the-kernel-takes-the-state-out-before-the-step.md`). Steps worked out ahead on the task pool still copy; with large states and several busy actors use `parallel := .off`.
 - The store model (`Lanes/Outside/Store/Basic.lean`) refused every read after a scan that saw its transaction's own write, at serializable, so it refused runs PostgreSQL gives; `Store.Read.all` carries the keys the transaction had written. Found by the PostgreSQL oracle.
 - The S3 XML reader (`Lanes/Web/S3/Xml.lean`) reads line ends as XML 1.0 does and refuses characters and references outside its `Char` production, names that start with a digit, `-` or `.`, `]]>` in text, `--` in a comment and a processing instruction without a target; it reads a character reference with leading zeros. Found by the `encoding/xml` oracle.
 
