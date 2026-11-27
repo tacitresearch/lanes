@@ -389,6 +389,12 @@ def main (args : List String) : IO UInt32 := do
         | some (.violated "every response is one the spec allows" _) => true
         | _ => false)
       fun _ => check timed' .viaLedger expiryRace [] ledgerCrashing 1)
+    results := results.push (← timed
+      "the same with links to the ledger that lose: a session's end lost on the way"
+      (fun r => match r.failure with
+        | some (.violated "every response is one the spec allows" _) => true
+        | _ => false)
+      fun _ => check timed' .viaLedger expiryRace [] lossyToLedger)
   if args.contains "timed" then
     results := results.push (← timed "locks, evictions and refusals, with timers firing at any moment"
       (fun r => r.ok && r.complete)

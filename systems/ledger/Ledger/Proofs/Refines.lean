@@ -20,8 +20,7 @@ unmarks. The ledger serves the oldest message on the link; the requests before i
 message was lost take effect then if the user answered them (`answered`), and never if the
 book was to serve them, which leaves the user's record as it was.
 
-With timers the system does not implement the spec with deadlines: a view decided before a
-session ends and served after it can see a payment asked after the end (`Check.lean`).
+With timers, `Ledger.Proofs.Timed` proves the system implements the spec with its deadlines.
 -/
 
 namespace Ledger
