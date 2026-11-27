@@ -92,3 +92,7 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Journal.recover_outputs' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Journal.recover_outputs
+
+-- Lanes.Durable.Snapshot
+/-- info: 'Lanes.Journal.saved?_saved' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.saved?_saved

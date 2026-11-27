@@ -1,0 +1,71 @@
+/-
+Copyright (c) 2026 The Lanes Authors. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+-/
+import Lanes
+
+/-!
+# A counter service
+
+The spec, the actor and its proof. This file is logic only: no IO (Lanes rule 2.4).
+-/
+
+namespace Tut
+
+open Lanes
+
+/-- Identifies a client request, so its response can be matched to it. -/
+abbrev ReqId := Nat
+
+/-- `lanes_data` derives the codec that writes requests and responses to the journal, with its
+round-trip law, from the declaration. -/
+lanes_data inductive Request where
+  | increment (req : ReqId)
+  | decrement (req : ReqId)
+  | read (req : ReqId)
+  deriving DecidableEq, Repr, Hashable, Codable
+
+lanes_data structure Response where
+  req : ReqId
+  value : Nat
+  /-- Whether the request was applied. An increment at the limit is refused, and so is a
+  decrement at zero. -/
+  applied : Bool
+  deriving DecidableEq, Repr, Hashable, Codable
+
+/-- Explicit configuration (rule 2.5). -/
+structure Config where
+  /-- The counter never exceeds this (rule 2.6: bounded everything). -/
+  limit : Nat := 1000
+
+abbrev sig : Signature := Server.sig Request Response
+
+/--
+The spec: what each request does, as if requests were handled one at a time. This is the part
+to review. It is also the implementation, because the `Server` behaviour runs it as an actor.
+-/
+def service (config : Config) : Service sig.In sig.Out Nat where
+  init := 0
+  step count
+    | .increment req =>
+      if count < config.limit then (count + 1, [⟨req, count + 1, true⟩])
+      else (count, [⟨req, count, false⟩])
+    | .decrement req =>
+      if 0 < count then (count - 1, [⟨req, count - 1, true⟩])
+      else (count, [⟨req, count, false⟩])
+    | .read req => (count, [⟨req, count, true⟩])
+
+abbrev system (config : Config) : System sig :=
+  Server.system (service config)
+
+/-- The counter never exceeds its limit. -/
+theorem counter_le_limit (config : Config) :
+    (Server.actor (service config)).Invariant fun count => count ≤ config.limit := by
+  actor_invariant [Server.actor, service]
+
+/-- In every reachable state of the system, under any environment model. -/
+theorem system_le_limit (config : Config) (env : EnvModel sig) :
+    (system config).Invariant env fun c => c.state () ≤ config.limit :=
+  System.invariant_of_actor (system config) () (counter_le_limit config) env
+
+end Tut

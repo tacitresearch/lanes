@@ -64,10 +64,6 @@ Each is to be proved, tested, made private or removed.
 - `Service.State.fire`
 - `Service.State.ret`
 
-### `Lanes/Durable/Snapshot.lean`
-
-- `Journal.saved?`
-
 ### `Lanes/Core/System.lean`
 
 - `Effect.isStop`
