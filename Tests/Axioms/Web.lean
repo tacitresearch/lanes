@@ -535,3 +535,13 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Http.Response.read_wireToEnd_open' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.Response.read_wireToEnd_open
+
+-- Lanes.Web.Http.SharedCache
+/-- info: 'Lanes.Http.SharedCache.serve_storable' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.SharedCache.serve_storable
+
+/-- info: 'Lanes.Http.SharedCache.serve_reuses' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.SharedCache.serve_reuses
+
+/-- info: 'Lanes.Http.SharedCache.serve_of_leaks' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.SharedCache.serve_of_leaks
