@@ -74,12 +74,6 @@ Each is to be proved, tested, made private or removed.
 - `Envelope.sameLink`
 - `EnvModel.distributed`
 
-### `Lanes/Auth/Login.lean`
-
-- `Auth.instHashableDigest`
-- `Auth.instReprDigest`
-- `Auth.Attempts.unlock`
-
 ### `Lanes/Check/Fuzz.lean`
 
 - `Check.FuzzReport.render`
@@ -110,8 +104,6 @@ Each is to be proved, tested, made private or removed.
 - `JsonNumber.instCoeNat`
 - `JsonNumber.instCoeInt`
 - `JsonNumber.instInhabited`
-- `JsonNumber.maxLeadingZeros`
-- `JsonNumber.toString`
 - `JsonNumber.instToString`
 - `Json.instCoeNat`
 - `Json.instCoeInt`
@@ -122,37 +114,6 @@ Each is to be proved, tested, made private or removed.
 
 - `Json.instToString`
 
-### `Lanes/Html/Basic.lean`
-
-- `Html.empty`
-- `Html.instInhabited`
-- `instToHtmlArray`
-- `instToHtmlOption`
-- `instToAttrInt`
-- `instToAttrOption`
-
-### `Lanes/Html/Htmx.lean`
-
-- `Hx.confirm`
-- `Hx.boost`
-- `Hx.pushUrl`
-- `Hx.indicator`
-- `Http.Request.isHtmx`
-- `Http.Response.hxRedirect`
-
-### `Lanes/Http/Basic.lean`
-
-- `Http.Request.param?`
-- `Http.Request.header?`
-- `Http.Response.json`
-- `Http.Response.redirect`
-- `Http.Response.withHeader`
-
-### `Lanes/Http/Cookie.lean`
-
-- `Http.Request.bodyWithin`
-- `Http.Response.noStore`
-
 ### `Lanes/Http/Front.lean`
 
 - `Http.servedActors`
@@ -160,14 +121,6 @@ Each is to be proved, tested, made private or removed.
 ### `Lanes/Http/Gate.lean`
 
 - `Http.instReprGateMsgOfOut`
-
-### `Lanes/Http/Route.lean`
-
-- `Http.Slug.instToString`
-- `Http.Path.append`
-- `Http.Route.put`
-- `Http.Route.patch`
-- `Http.Route.delete`
 
 ### `Lanes/Semantics/Liveness.lean`
 

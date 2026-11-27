@@ -26,7 +26,7 @@ proved function tells it to.
 | The gate and the HTTP server | `Lanes/Http/{Gate,Front,FrontSound,Waiting}.lean`, `Lanes/Semantics/FrontLive.lean`, `Lanes/Env/Http.lean` | `Http.served_answered_le_arrived`, `Http.served_pending_answered`, `Http.Waiting.exec_answered` |
 | Other adapters | `Lanes/Actors/Outside.lean`, `Lanes/Env/{Clock,HttpClient}.lean`, `Lanes/Http/{Wire,WireSound}.lean` | `Response.read_wire`, `Request.fields_framing`; conformance tests |
 | Jobs: work outside a step | `Lanes/Behaviours/{Jobs,JobsSound}.lean`, `Lanes/Semantics/JobsLive.lean`, `Lanes/Env/Jobs.lean` | `Jobs.answered_le_handled`, `Jobs.retry_same`, `Jobs.submitted_answered`; the pool is trusted |
-| Web | `Lanes/Http/{Basic,Route,Cookie}.lean`, `Lanes/Html/`, `Lanes/Auth/` | `Route.match?_link`, `Html.escape_safe`, `Auth.verify_sign` |
+| Web | `Lanes/Http/{Basic,Route,RouteSound,Cookie,CookieSound}.lean`, `Lanes/Html/`, `Lanes/Auth/` | `Html.lex_render`, `Html.safeUrl_scheme`, `Http.dispatch_link`, `Http.parseForm_encodeForm`, `Http.readSetCookie_header`, `Auth.verify_eq_some`, `Auth.checkForm_other` |
 | The checker | `Lanes/Check/`, `Lanes/Semantics/{Monitor,MonitorSound}.lean` | `Check.search_sound`, `Check.system_sound_of_respects`, `Check.refines_traces` |
 | The proof layer | `Lanes/Semantics/` | refinement, specs, fairness, leads-to |
 | Data | `Lanes/Data/` | codec laws, `Quorum.majority_inter`, `Bytes.same_iff` |
@@ -165,11 +165,18 @@ inbox is full and `405` for a method an application cannot handle. `Http.serveFr
 `fronted sys`, whose other inputs and outputs pass the gate by, and `Http.serveShard`
 (`Lanes/Env/Node.lean`) runs it with the transport: one process with an HTTP front and peers.
 
-Around it, pure and in `Std` only: requests and responses as data, typed routes that print links
-and match requests (`Route.match?_link`), HTML values with text escaped by type
-(`Html.escape_safe`) and a template macro (`Lanes/Html/Syntax.lean`, trusted), htmx attributes
-taken from routes, cookies, and `Lanes/Auth/` (signed tokens, `Auth.verify_sign`; form tokens;
-Argon2id password digests; failed attempts; bounded sessions).
+Around it, pure and in `Std` only: requests and responses as data; typed routes whose links the
+server reads back and `dispatch` hands to their route's handler (`Http.dispatch_link`); forms
+(`Http.parseForm_encodeForm`); HTML values that a browser reads as the tree they were rendered
+from, so text stays text (`Html.lex_render`, against a model of the HTML tokenizer), with URL
+attributes limited to `Html.allowedSchemes` (`Html.safeUrl_scheme`), and a template macro
+(`Lanes/Html/Syntax.lean`, trusted); htmx attributes taken from routes (`Hx.request_match?`);
+cookies a browser stores with exactly the attributes they name (`Http.readSetCookie_header`,
+against RFC 6265's algorithm); and `Lanes/Auth/`: signed tokens and form tokens that accept
+exactly what was signed for their purpose and session (`Auth.verify_eq_some`,
+`Auth.checkForm_iff`) and another's only through an HMAC collision (`Auth.verify_sign_other`,
+`Auth.checkForm_other`), Argon2id password digests, failed attempts that lock at their limit
+(`Auth.Attempts.locked_unlock_repeat`) and sessions that keep the newest (`Auth.Sessions.ids_starts`).
 
 ## Adapters
 
@@ -234,7 +241,9 @@ theorem.
   `Service.once` is the spec, `Lanes/Behaviours/Once.lean` the memo that meets it, and
   `System.Refines.of_handles` the relation rule that a duplicated message cannot break. The
   key-value store implements it with no premise on its links
-  (`Examples.KV.implements_once`).
+  (`Examples.KV.implements_once`), and so does Raft with the memo in its replicated machine
+  (`RaftKV.implementsMachine_once`). `System.Refines.filterMapIO` carries a refinement through
+  hiding outputs the spec allows at any time (`Spec.showing`).
 - Liveness (`Lanes/Semantics/Liveness.lean`, D27): infinite runs (`System.Run`), weak fairness
   per obligation (`System.Run.Fair`), `System.LeadsTo` and its rule
   (`System.LeadsTo.ensures_of_invariant`). Every finite run extends to a fair one
@@ -284,7 +293,8 @@ also served over HTTP by `Examples/BankWeb.lean`), a key-value store with front 
 (`Examples/Election.lean`) and a watchdog (`Examples/Watchdog.lean`). `systems/` holds serious
 applications, each its own Lake package that requires Lanes as a user would (`systems/README.md`):
 `systems/raft-kv`, a replicated key-value store proved to implement the map it replicates
-(`RaftKV.implementsMachine`), and `systems/ledger`, a multi-user web ledger. `lanes new`
+(`RaftKV.implementsMachine`), and `once` of it in every environment with the memo in the map
+(`RaftKV.implementsMachine_once`), and `systems/ledger`, a multi-user web ledger. `lanes new`
 (`LanesCli/New.lean`, `templates/app/`) creates an application; `lanes lint`
 (`LanesCli/Lint.lean`) checks the rules of `AGENTS.md` that the text can show, the generated files
 and the inventory (`LanesCli/Inventory.lean`).

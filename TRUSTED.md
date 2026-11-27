@@ -198,7 +198,10 @@ in `Lanes/Http/FrontSound.lean` to answer each arrival at most once and in
   against RFC 4231 (`Tests/Crypto.lean`). Proved: a digest and a tag are 32 bytes, hex reads back
   (`Bytes.unhex?_hex`), and `Bytes.same a b` holds exactly when `a = b` (`Bytes.same_iff`).
   Assumed: that HMAC-SHA-256 is a pseudorandom function, so that nobody without the key can make
-  a tag; that is what makes a session cookie or a form token of `Lanes.Auth` unforgeable; and
+  a tag; that is what makes a session cookie or a form token of `Lanes.Auth` unforgeable.
+  Everything else about them is proved: `verify` and `checkForm` accept exactly what `sign` and
+  `formToken` make, and a token for another purpose or session passes only if two different
+  messages have one tag (`Auth.verify_sign_other`, `Auth.checkForm_other`); and
   that Argon2id makes a password digest slow to guess from, at the cost the application gives
   it.
 

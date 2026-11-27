@@ -73,49 +73,84 @@ theorem escape_safe (s : String) {d : Char} (h : d ∈ (escape s).toList) :
   obtain ⟨c, _, hc⟩ := h
   exact escapeChar_safe hc
 
+def nameChar (c : Char) : Bool :=
+  c.isAlphanum || c == '-' || c == '_' || c == ':'
+
 /-- Keep only the characters allowed in a tag or attribute name. Names come from templates, but
 a name built at run time must not be able to inject markup either. -/
 def safeName (name : String) : String :=
-  String.ofList (name.toList.filter fun c => c.isAlphanum || c == '-' || c == '_' || c == ':')
+  String.ofList (name.toList.filter nameChar)
 
 def voidTags : List String :=
   ["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track",
    "wbr"]
 
+/-- Elements whose content a browser runs as code without decoding it. They render without
+children, as templates write them. -/
+def rawTextTags : List String :=
+  ["script", "style"]
+
 def urlAttrs : List String :=
   ["href", "src", "action", "formaction", "xlink:href"]
 
+def allowedSchemes : List String :=
+  ["http", "https", "mailto", "tel"]
+
 def blockedUrl : String := "about:invalid#blocked"
+
+/-- Space and the control characters, which browsers ignore in and around a URL's scheme. -/
+def urlBlank (c : Char) : Bool :=
+  c.val ≤ 0x20
 
 /--
 A URL that is safe to put in a URL attribute: `url` itself if it is relative or its scheme is
-`http`, `https`, `mailto` or `tel`, and `blockedUrl` otherwise. This keeps `javascript:` and
-`data:` URLs built from user data out of links and forms. Browsers ignore spaces and control
-characters in a scheme, so they are ignored here too.
+one of `allowedSchemes`, and `blockedUrl` otherwise. This keeps `javascript:` and `data:` URLs
+built from user data out of links and forms.
 -/
 def safeUrl (url : String) : String :=
-  let visible := url.toList.filter fun c => c.val > 0x20
+  let visible := url.toList.filter (!urlBlank ·)
   let scheme := visible.takeWhile fun c => c != ':' && c != '/' && c != '?' && c != '#'
   if (visible.drop scheme.length).head? == some ':' then
-    if ["http", "https", "mailto", "tel"].contains (String.ofList (scheme.map Char.toLower)) then url
+    if allowedSchemes.contains (String.ofList (scheme.map Char.toLower)) then url
     else blockedUrl
   else url
 
+/-- The value an attribute named `name` is given: a URL attribute's goes through `safeUrl`. -/
+def Attr.shown (name value : String) : String :=
+  if urlAttrs.contains name.toLower then safeUrl value else value
+
+/-- An attribute whose name keeps no character is left out. -/
 def Attr.render (a : Attr) : String :=
   let name := safeName a.name
-  match a.value with
-  | some v => s!" {name}=\"{escape (if urlAttrs.contains name.toLower then safeUrl v else v)}\""
-  | none => s!" {name}"
+  if name.isEmpty then ""
+  else
+    match a.value with
+    | some v => " " ++ name ++ "=\"" ++ escape (Attr.shown name v) ++ "\""
+    | none => " " ++ name
+
+/-- Whether a name can start a tag: the HTML tokenizer reads `<` before anything but a letter
+as text. -/
+def isTagName (name : String) : Bool :=
+  name.toList.head?.any Char.isAlpha
+
+def startTag (tag attrs : String) : String :=
+  "<" ++ tag ++ attrs ++ ">"
+
+def endTag (tag : String) : String :=
+  "</" ++ tag ++ ">"
 
 mutual
 
+/-- An element whose name is no tag name renders as its children. -/
 def render : Html → String
   | .text s => escape s
   | .element tag attrs children =>
     let tag := safeName tag
-    let attrs := String.join (attrs.map Attr.render)
-    if voidTags.contains tag then s!"<{tag}{attrs}>"
-    else s!"<{tag}{attrs}>{renderAll children}</{tag}>"
+    let start := startTag tag (String.join (attrs.map Attr.render))
+    if !isTagName tag then renderAll children
+    else if voidTags.contains tag.toLower then start
+    else if rawTextTags.contains tag.toLower then start ++ endTag tag
+    else start ++ renderAll children ++ endTag tag
   | .fragment children => renderAll children
 
 def renderAll : List Html → String

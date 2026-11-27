@@ -138,6 +138,33 @@ def tests : List (String × Bool) :=
       let fields := [("name", "Ada Lovelace"), ("q", "a&b=c+d"), ("é", "%41"), ("", "")]
       Http.parseForm (Http.encodeForm fields) == fields),
     ("http: percent decoding handles UTF-8",
-      Http.percentDecode "caf%C3%A9" == some "café") ]
+      Http.percentDecode "caf%C3%A9" == some "café"),
+    ("html: arrays and options splice as children, integers and options as attributes",
+      (<p data-n={(-3 : Int)} title={(none : Option String)} lang={some "en"}>
+          {#["a", "b"]}{(none : Option String)}{some "c"}</p> : Html).render
+        == "<p data-n=\"-3\" lang=\"en\">abc</p>"
+        && (default : Html).render == "" && Html.empty.render == ""),
+    ("htmx: confirm, boost, push-url and indicator name their attributes",
+      (<form {Hx.confirm "Sure?"} {Hx.boost} {Hx.pushUrl} {Hx.indicator "#spin"}/>).render
+        == "<form hx-confirm=\"Sure?\" hx-boost=\"true\" hx-push-url=\"true\" "
+          ++ "hx-indicator=\"#spin\"></form>"),
+    ("htmx: a request htmx made is told apart, and a redirect names the route's link",
+      let account : Http.Route Nat := .get ("accounts" /> .nat)
+      Http.Request.isHtmx { method := .get, path := [], headers := [("hx-request", "true")] }
+        && !Http.Request.isHtmx { method := .get, path := [] }
+        && (Http.Response.empty.hxRedirect account 4).headers == [("hx-redirect", "/accounts/4")]),
+    ("http: responses carry their content type, location and headers",
+      (Http.Response.json "{}").headers == [("content-type", "application/json")]
+        && (Http.Response.redirect "/a").status == 303
+        && (Http.Response.redirect "/a").headers == [("location", "/a")]
+        && ((Http.Response.text "x").withHeader "a" "b").headers.getLast? == some ("a", "b")
+        && Http.Response.empty.noStore.headers == [("cache-control", "no-store")]),
+    ("route: put, patch and delete routes take their methods, and a path appended to another reads both",
+      let item : Http.Route (Nat × Http.Slug) := .put (("items" /> .nat).append .slug)
+      let request (method : Http.Method) : Http.Request := { method, path := ["items", "3", "x"] }
+      ((item.match? (request .put)).map fun (n, s) => (n, toString s)) == some (3, "x")
+        && (item.match? (request .get)).isNone
+        && (Http.Route.patch (.seg "a")).method == .patch
+        && (Http.Route.delete (.seg "a")).method == .delete) ]
 
 end Tests.Html
