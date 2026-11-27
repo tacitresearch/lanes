@@ -22,7 +22,7 @@ def main : IO UInt32 := do
     | IO.println "LANES_POSTGRES is not set: no server to run against"; return 0
   let [host, portText] := spec.splitOn ":" | IO.println "LANES_POSTGRES is host:port"; return 2
   let cfg : Postgres.Client.Config :=
-    { host, port := portText.toNat!.toUInt16
+    { host, port := portText.toNat!.toUInt16, sslmode := .disable
       conn := { user := "lanes_scram", database := "lanes_test", password := some "scram-pw" } }
   let setup ← (do
     let .ok s ← Postgres.connect cfg | throw (IO.userError "cannot connect")

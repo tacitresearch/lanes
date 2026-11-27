@@ -8,7 +8,8 @@ import Lanes
 SHA-256 against the examples of FIPS 180-4 (as NIST publishes them) and HMAC-SHA-256 against
 RFC 4231, each run on libsodium's and on the Lean reference; then the two compared on thousands
 of random inputs of every length around a block, which is what the trust in libsodium rests on
-(`TRUSTED.md`). Argon2id has no reference, so only its properties are tested.
+(`TRUSTED.md`). SHA-512 and SHA-384, pure Lean, against the same examples, as `openssl dgst`
+computes them. Argon2id has no reference, so only its properties are tested.
 -/
 
 namespace Tests.Crypto
@@ -40,6 +41,29 @@ def sha256Tests : List (String × Bool) :=
   ++ [ ("sha-256: every length from 0 to 130 pads to whole blocks",
       (List.range 131).all fun n => (n + (Sha256.padding n).size) % 64 == 0
         && (Sha256.reference (repeated 0 n)).size == 32) ]
+
+def sha512Vectors : List (String × ByteArray × String × String) :=
+  [ ("the empty message", .empty,
+      "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e",
+      "38b060a751ac96384cd9327eb1b1e36a21fdb71114be07434c0cc7bf63f6e1da274edebfe76f65fbd51ad2f14898b95b"),
+    ("abc", bytesOf "abc",
+      "ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f",
+      "cb00753f45a35e8bb5a03d699ac65007272c32ab0eded1631a8b605a43ff5bed8086072ba1e7cc2358baeca134c825a7"),
+    ("the 896-bit message, two blocks",
+      bytesOf ("abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmno"
+        ++ "ijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu"),
+      "8e959b75dae313da8cf4f72814fc143f8f7779c6eb9f7fa17299aeadb6889018501d289e4900f7e4331b99dec4b5433ac7d329eeb6dd26545e96e55b874be909",
+      "09330c33f71147e83d192fc782cd1b4753111b173b3b05d22fa08086e3b0f712fcc7c71a557e2db966c3e9fa91746039"),
+    ("a million times a", repeated 0x61 1000000,
+      "e718483d0ce769644e2e42c7bc15b4638e1f98b13b2044285632a803afa973ebde0ff244877ea60a4cb0432ce577c31beb009c5c2c49aa2e4eadb217ad8cc09b",
+      "9d0e1809716474cb086e834e310a4a1ced149e9c00f248527972cec5704c2a5b07b8b3dc38ecc4ebae97ddd87f3d8985") ]
+
+def sha512Tests : List (String × Bool) :=
+  sha512Vectors.flatMap (fun (name, msg, d512, d384) =>
+    [ (s!"sha-512: {name}", Bytes.hex (Sha512.hash msg) == d512),
+      (s!"sha-384: {name}", Bytes.hex (Sha512.hash384 msg) == d384) ])
+  ++ [ ("sha-512: every length from 0 to 260 pads to whole blocks of 128",
+      (List.range 261).all fun n => (n + (Sha512.padding n).size) % 128 == 0) ]
 
 def hmacVectors : List (String × ByteArray × ByteArray × String) :=
   [ ("RFC 4231 case 1", repeated 0x0b 20, bytesOf "Hi There",
@@ -145,7 +169,7 @@ def argon2idTests : List (String × Bool) :=
       (hash { ops := 1, mem_kib := 8 } "" 0).size == 32) ]
 
 def tests : List (String × Bool) :=
-  sha256Tests ++ hmacTests ++ bytesTests ++ differentialTests ++ argon2idTests
+  sha256Tests ++ sha512Tests ++ hmacTests ++ bytesTests ++ differentialTests ++ argon2idTests
 
 def live : IO (List (String × Bool)) := do
   let a ← Lanes.randomBytes 32

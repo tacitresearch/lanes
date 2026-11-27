@@ -127,6 +127,7 @@ and name the stack after the application. The parameters:
 | `MediaUser` | `false` | `true` for an IAM user, for an S3 client that reads a key from the environment (see "Media") |
 | `MailIdentity` | empty | An SES identity the instance may send email from (see "Email") |
 | `DatabaseEngine` | `none` | `postgres` adds RDS PostgreSQL (see "The database") |
+| `DatabaseCaBundleSha256` | the bundle's of 2026-10-14 | The SHA-256 of RDS's bundle of authorities, which the instance fetches (see "The database") |
 
 The script sets the machine up as root, at the first boot and at each `configure`, so the stack
 names it by a commit, never a branch, and by its hash, and the instance runs no other: a script
@@ -364,14 +365,43 @@ one zone, seven days of automated backups, a final snapshot when it is deleted, 
 protection on) in two private subnets, reachable on 5432 from the instance only. Its password is
 made by Secrets Manager. Before each start of the application, as root, the unit writes the
 database's IPv4 address and password to `/run/lanes-app/db-address` and `/run/lanes-app/db-password`,
-readable by the application only, and `/etc/lanes/app.env` gives `LANES_DB_HOST`, `LANES_DB_PORT`
-and `LANES_DB_NAME` (`lanes`), beside `AWS_REGION`; the user is `lanes`. The application's `main` reads them into
-the client's configuration (`Lanes/Lib/Postgres/IO/Client.lean`,
-`docs/decisions/D68-postgres-protocol-in-lean.md`). That client takes an IPv4 address, not a
-name, and speaks plain TCP, so the stack's parameter group turns off `rds.force_ssl`, which RDS
-sets from PostgreSQL 15 on: the traffic stays inside the VPC, unencrypted. RDS may move the
-database to another address (a maintenance, a replaced host); the next start of the application
-reads the new one.
+readable by the application only, and `/etc/lanes/app.env` gives `LANES_DB_HOST` (the
+endpoint's name), `LANES_DB_PORT`, `LANES_DB_NAME` (`lanes`) and `LANES_DB_CA`, beside
+`AWS_REGION`; the user is `lanes`. RDS may move the database to another address (a maintenance,
+a replaced host); the next start of the application reads the new one.
+
+The connection is TLS, required by the server: the stack's parameter group sets `rds.force_ssl`
+to 1 (and `password_encryption` to SCRAM, which the client requires). At setup and at each
+`configure`, the instance fetches RDS's global bundle of authorities,
+`https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem`, checks that it has the
+SHA-256 of the stack's parameter `DatabaseCaBundleSha256`, and installs it as
+`/etc/lanes/db-ca.pem` (`LANES_DB_CA`); a bundle with another hash is refused, and the one
+installed before is kept. The application trusts every authority in that file and no other.
+When AWS changes the bundle (it adds the authorities of new regions), setup and `configure` stop
+with `does not have the SHA-256`: check the new bundle (`curl -fsSL <url> | sha256sum`, and
+`openssl crl2pkcs7 -nocrl -certfile global-bundle.pem | openssl pkcs7 -print_certs -noout`
+lists its authorities), then update the stack with its hash.
+
+The application's `main` reads these into the client's configuration
+(`Lanes/Lib/Postgres/IO/Client.lean`, `docs/decisions/D68-postgres-protocol-in-lean.md`): the
+client takes an IPv4 address, and checks the certificate against the endpoint's name.
+
+```lean
+  let address := (← IO.FS.readFile "/run/lanes-app/db-address").trimAscii.toString
+  let password := (← IO.FS.readFile "/run/lanes-app/db-password").trimAscii.toString
+  let db : Postgres.Client.Config :=
+    { host := address, port := ((← IO.getEnv "LANES_DB_PORT").bind String.toNat?).getD 5432 |>.toUInt16,
+      sslmode := .verifyFull, trust := .file ((← IO.getEnv "LANES_DB_CA").getD "/etc/lanes/db-ca.pem"),
+      serverName := ← IO.getEnv "LANES_DB_HOST",
+      conn := { user := "lanes", database := "lanes", password := some password,
+                channelBinding := .require } }
+```
+
+`channelBinding := .require` makes SCRAM bind the certificate RDS presented
+(`SCRAM-SHA-256-PLUS`), so that a party in the middle with a certificate from one of the bundle's
+authorities is refused by the server. A pool of connections is `Postgres.Pool`
+(`Lanes/Lib/Postgres/IO/Pool.lean`): at most `max` open, each handed back checked, one that broke
+closed and replaced.
 
 ## What a stop does
 

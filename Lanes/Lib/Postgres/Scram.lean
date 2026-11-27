@@ -10,8 +10,9 @@ public import Lanes.Lib.Encoding.Base64
 
 /-!
 What a client computes to authenticate to PostgreSQL: the MD5 digest it answers `md5` with, and
-SCRAM-SHA-256 (RFC 5802, RFC 7677) without channel binding, as pure functions of the password,
-the client's nonce and what the server sent.
+SCRAM-SHA-256 (RFC 5802, RFC 7677), with or without channel binding (`SCRAM-SHA-256-PLUS`, of
+type `tls-server-end-point`, RFC 5929), as pure functions of the password, the client's nonce,
+the hash of the server's certificate and what the server sent.
 
 The nonce is drawn by the IO that runs the connection and passed in, so that these stay
 functions. The client does not trust the server before the server has proved it knows the
@@ -34,6 +35,34 @@ namespace Scram
 
 def mechanism : String := "SCRAM-SHA-256"
 
+def mechanismPlus : String := "SCRAM-SHA-256-PLUS"
+
+/-- What the client says of channel binding (RFC 5802 §6, the GS2 header). -/
+inductive Binding where
+  /-- `n`: the client does not bind, as without TLS. -/
+  | none
+  /-- `y`: the client would bind, and thinks the server cannot; a server that offered
+  `SCRAM-SHA-256-PLUS` refuses it, so stripping the offer is seen. -/
+  | unoffered
+  /-- `p=tls-server-end-point`: bound to the hash of the server's certificate. -/
+  | endPoint (hash : ByteArray)
+  deriving DecidableEq, Hashable
+
+def Binding.header : Binding → String
+  | .none => "n,,"
+  | .unoffered => "y,,"
+  | .endPoint _ => "p=tls-server-end-point,,"
+
+def Binding.mechanism : Binding → String
+  | .endPoint _ => mechanismPlus
+  | _ => Scram.mechanism
+
+/-- What the client's last message says in `c=`, in base 64: the GS2 header, and then the
+binding data, if any. -/
+def Binding.data : Binding → ByteArray
+  | .endPoint hash => "p=tls-server-end-point,,".toUTF8 ++ hash
+  | b => b.header.toUTF8
+
 /-- A name in a SCRAM message, with `=` and `,` escaped. PostgreSQL ignores it and uses the
 user of the start-up message, so libpq sends it empty. -/
 def saslName (s : String) : String :=
@@ -41,8 +70,8 @@ def saslName (s : String) : String :=
 
 def firstBare (user nonce : String) : String := "n=" ++ saslName user ++ ",r=" ++ nonce
 
-/-- The client's first message: no channel binding (`n,,`), then the bare part. -/
-def first (user nonce : String) : String := "n,," ++ firstBare user nonce
+/-- The client's first message: the GS2 header, then the bare part. -/
+def first (binding : Binding) (user nonce : String) : String := binding.header ++ firstBare user nonce
 
 /-- What the server's first message says. -/
 structure ServerFirst where
@@ -78,8 +107,8 @@ inductive Refusal where
 /-- What the client answers to the server's first message `serverFirst`: its last message, and
 the signature the server's last must carry. At most `iterations_max` iterations are computed, so
 that a server cannot make the client work without bound (rule 2.6). -/
-def respond (user password clientNonce serverFirst : String) (iterations_max : Nat) :
-    Except Refusal (String × ByteArray) :=
+def respond (binding : Binding) (user password clientNonce serverFirst : String)
+    (iterations_max : Nat) : Except Refusal (String × ByteArray) :=
   match parseServerFirst serverFirst with
   | none => .error .malformed
   | some sf =>
@@ -90,7 +119,7 @@ def respond (user password clientNonce serverFirst : String) (iterations_max : N
       let salted := Pbkdf2.derive password.toUTF8 sf.salt sf.iterations 32
       let clientKey := hmac salted "Client Key".toUTF8
       let storedKey := Sha256.hash clientKey
-      let withoutProof := "c=biws,r=" ++ sf.nonce
+      let withoutProof := "c=" ++ Base64.encode .std binding.data ++ ",r=" ++ sf.nonce
       let auth := firstBare user clientNonce ++ "," ++ serverFirst ++ "," ++ withoutProof
       let proof := Pbkdf2.xor clientKey (hmac storedKey auth.toUTF8)
       let serverKey := hmac salted "Server Key".toUTF8
@@ -103,18 +132,40 @@ def verify (expected : ByteArray) (serverFinal : String) : Bool :=
   | some signature => Bytes.same expected signature
   | none => false
 
-theorem respond_nonce {user password clientNonce serverFirst : String} {iterations_max : Nat}
-    {sf : ServerFirst} (h : parseServerFirst serverFirst = some sf)
+theorem respond_nonce {binding : Binding} {user password clientNonce serverFirst : String}
+    {iterations_max : Nat} {sf : ServerFirst} (h : parseServerFirst serverFirst = some sf)
     (hn : clientNonce.isPrefixOf sf.nonce = false) :
-    respond user password clientNonce serverFirst iterations_max = .error .nonce := by
+    respond binding user password clientNonce serverFirst iterations_max = .error .nonce := by
   simp [respond, h, hn]
 
-theorem respond_iterations {user password clientNonce serverFirst : String} {iterations_max : Nat}
-    {sf : ServerFirst} (h : parseServerFirst serverFirst = some sf)
+theorem respond_iterations {binding : Binding} {user password clientNonce serverFirst : String}
+    {iterations_max : Nat} {sf : ServerFirst} (h : parseServerFirst serverFirst = some sf)
     (hn : clientNonce.isPrefixOf sf.nonce = true) (hl : clientNonce.length < sf.nonce.length)
     (hi : iterations_max < sf.iterations) :
-    respond user password clientNonce serverFirst iterations_max = .error .iterations := by
+    respond binding user password clientNonce serverFirst iterations_max = .error .iterations := by
   simp [respond, h, hn, show ¬ sf.nonce.length ≤ clientNonce.length by omega, hi]
+
+/-- The client's last message binds what `binding` says: it starts with `c=` and the GS2
+header and binding data in base 64 (`Binding.data`), which for `tls-server-end-point` are the
+header and the certificate's hash given (`Binding.data_endPoint`). The server compares that
+with its own, so a client that went through a relay holding another certificate is refused;
+and the proof is computed over it, so it cannot be changed on the way. -/
+theorem respond_binds {binding : Binding} {user password clientNonce serverFirst : String}
+    {iterations_max : Nat} {final : String} {signature : ByteArray}
+    (h : respond binding user password clientNonce serverFirst iterations_max = .ok (final, signature)) :
+    ∃ nonce proof, final = "c=" ++ Base64.encode .std binding.data ++ ",r=" ++ nonce ++ ",p=" ++ proof := by
+  unfold respond at h
+  split at h
+  · cases h
+  · split at h
+    · cases h
+    · split at h
+      · cases h
+      · simp only [Except.ok.injEq, Prod.mk.injEq] at h
+        exact ⟨_, _, h.1.symm⟩
+
+theorem Binding.data_endPoint (hash : ByteArray) :
+    (Binding.endPoint hash).data = "p=tls-server-end-point,,".toUTF8 ++ hash := rfl
 
 end Scram
 

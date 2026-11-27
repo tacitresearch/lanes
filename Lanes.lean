@@ -39,11 +39,13 @@ public import Lanes.Durable.Migration
 public import Lanes.Durable.Reading
 public import Lanes.Durable.Snapshot
 public import Lanes.Durable.Upgrade
+public import Lanes.Lib.Crypto.Certificate
 public import Lanes.Lib.Crypto.Hmac
 public import Lanes.Lib.Crypto.Md5
 public import Lanes.Lib.Crypto.Pbkdf2
 public import Lanes.Lib.Crypto.PublicKey
 public import Lanes.Lib.Crypto.Sha256
+public import Lanes.Lib.Crypto.Sha512
 public import Lanes.Lib.Crypto.Sodium
 public import Lanes.Lib.Crypto.Verify
 public import Lanes.Lib.Encoding.Base64
@@ -56,7 +58,9 @@ public import Lanes.Lib.Net.Url
 public import Lanes.Lib.Postgres.Bytes
 public import Lanes.Lib.Postgres.Conn
 public import Lanes.Lib.Postgres.IO.Client
+public import Lanes.Lib.Postgres.IO.Pool
 public import Lanes.Lib.Postgres.Message
+public import Lanes.Lib.Postgres.Pool
 public import Lanes.Lib.Postgres.Scram
 public import Lanes.Lib.Postgres.Table
 public import Lanes.Lib.RateLimit
