@@ -700,18 +700,18 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Md5.shifts` | tested | `Tests/Postgres.lean` |
-| `Md5.sines` | tested | `Tests/Postgres.lean` |
-| `Md5.initial` | tested | `Tests/Postgres.lean` |
-| `Md5.rotl` | tested | `Tests/Postgres.lean` |
-| `Md5.mix` | tested | `Tests/Postgres.lean` |
-| `Md5.compress` | tested | `Tests/Postgres.lean` |
-| `Md5.wordAt` | tested | `Tests/Postgres.lean` |
-| `Md5.blockAt` | tested | `Tests/Postgres.lean` |
-| `Md5.padding` | tested | `Tests/Postgres.lean` |
-| `Md5.absorb` | tested | `Tests/Postgres.lean` |
-| `Md5.State.bytes` | tested | `Tests/Postgres.lean` |
-| `Md5.hash` | tested | `Tests/Postgres.lean` |
+| `Md5.shifts` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Multipart.lean`, `Tests/Postgres.lean` |
+| `Md5.sines` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Multipart.lean`, `Tests/Postgres.lean` |
+| `Md5.initial` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Multipart.lean`, `Tests/Postgres.lean` |
+| `Md5.rotl` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Multipart.lean`, `Tests/Postgres.lean` |
+| `Md5.mix` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Multipart.lean`, `Tests/Postgres.lean` |
+| `Md5.compress` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Multipart.lean`, `Tests/Postgres.lean` |
+| `Md5.wordAt` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Multipart.lean`, `Tests/Postgres.lean` |
+| `Md5.blockAt` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Multipart.lean`, `Tests/Postgres.lean` |
+| `Md5.padding` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Multipart.lean`, `Tests/Postgres.lean` |
+| `Md5.absorb` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Multipart.lean`, `Tests/Postgres.lean` |
+| `Md5.State.bytes` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Multipart.lean`, `Tests/Postgres.lean` |
+| `Md5.hash` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Multipart.lean`, `Tests/Postgres.lean` |
 
 ## `Lanes/Lib/Crypto/Pbkdf2.lean`
 
@@ -875,7 +875,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Json.instCoeInt` | none |  |
 | `Json.instCoeString` | none |  |
 | `Json.instCoeBool` | none |  |
-| `Json.instOfNat` | tested | `Tests/Json.lean` |
+| `Json.instOfNat` | tested | `Tests/Json.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` |
 | `Json.sortFields` | proved | through `Json.depth`, `Json.mkObj` and 1 more: `Http.Ops.Access.parse_line`, `Json.getObjVal?_mkObj` and 7 more |
 | `Json.dedupFields` | proved | through `Json.depth`, `Json.mkObj` and 1 more: `Http.Ops.Access.parse_line`, `Json.getObjVal?_mkObj` and 7 more |
 | `Json.duplicateKey?` | tested | `Tests/Json.lean` |
@@ -2230,7 +2230,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Testing.json` | tested | `Tests/Testing.lean` |
 | `Testing.text` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
 | `Testing.shows` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
-| `Testing.status` | tested | `Tests/OAuth.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `Testing.status` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and 2 more |
 | `Testing.location` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
 | `Testing.unescape` | tested | `Tests/Testing.lean` |
 | `Testing.between` | tested | `Tests/Testing.lean` |
@@ -2270,25 +2270,25 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Testing.S3.raw?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
-| `Testing.S3.answer` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
-| `Testing.S3.failure` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
-| `Testing.S3.time?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
-| `Testing.S3.decodePair` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
-| `Testing.S3.splitTarget` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `Testing.S3.raw?` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 2 more |
+| `Testing.S3.answer` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 2 more |
+| `Testing.S3.failure` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 2 more |
+| `Testing.S3.time?` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 2 more |
+| `Testing.S3.decodePair` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 2 more |
+| `Testing.S3.splitTarget` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 2 more |
 | `Testing.S3.authField` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
 | `Testing.S3.verified` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
 | `Testing.S3.escapeKey` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
 | `Testing.S3.listXml` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
 | `Testing.S3.range?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
 | `Testing.S3.serve` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
-| `Testing.S3.find?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
-| `Testing.S3.split` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
-| `Testing.S3.quoted` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
-| `Testing.S3.formParts` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
-| `Testing.S3.formBody` | tested | `Tests/S3Upload.lean`, `Tests/Testing.lean` |
-| `Testing.S3.etag` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
-| `Testing.S3.servePost` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `Testing.S3.find?` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 2 more |
+| `Testing.S3.split` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 2 more |
+| `Testing.S3.quoted` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 2 more |
+| `Testing.S3.formParts` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 2 more |
+| `Testing.S3.formBody` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3Upload.lean` and 1 more |
+| `Testing.S3.etag` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 2 more |
+| `Testing.S3.servePost` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 2 more |
 | `Testing.S3.unquote` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
 | `Testing.S3.multipartEtag` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
 | `Testing.S3.xmlAnswer` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
@@ -2305,9 +2305,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Testing.S3.Fake.refuse` | tested | `Tests/S3.lean` |
 | `Testing.S3.Fake.refusing` | tested | `Tests/S3.lean` |
 | `Testing.S3.Fake.stop` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
-| `Testing.S3.follow` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
-| `Testing.S3.code` | tested | `Tests/S3Upload.lean` |
-| `Testing.S3.postForm` | tested | `Tests/S3Upload.lean` |
+| `Testing.S3.follow` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3.lean` and 1 more |
+| `Testing.S3.code` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3Upload.lean` |
+| `Testing.S3.postForm` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3Upload.lean` |
 
 ## `Lanes/Web/Auth/IdToken.lean`
 
@@ -2856,7 +2856,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `SigV4.canonicalRequest` | proved | through `SigV4.sign`: `SigV4.target_sign` |
 | `SigV4.algorithm` | proved | through `SigV4.sign`: `SigV4.target_sign` |
 | `SigV4.unsignedPayload` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/SigV4.lean`, `Tests/S3.lean` and 1 more |
-| `SigV4.payloadHash` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean` and 4 more |
+| `SigV4.payloadHash` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean` and 6 more |
 | `SigV4.stringToSign` | proved | through `SigV4.sign`: `SigV4.target_sign` |
 | `SigV4.signingKey` | proved | through `SigV4.sign`: `SigV4.target_sign` |
 | `SigV4.signature` | proved | through `SigV4.sign`: `SigV4.target_sign` |
@@ -3076,10 +3076,10 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `S3.Endpoint.aws` | tested | `Tests/S3.lean` |
-| `S3.Key.of?` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/S3.lean` and 2 more |
+| `S3.Key.of?` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/Oracle/Service/S3Multipart.lean` and 4 more |
 | `S3.Range.header` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
-| `S3.PartNumber.of?` | tested | `Tests/S3Upload.lean` |
-| `S3.Manifest.of?` | tested | `Tests/S3Upload.lean` |
+| `S3.PartNumber.of?` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Multipart.lean`, `Tests/S3Upload.lean` |
+| `S3.Manifest.of?` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Multipart.lean`, `Tests/S3Upload.lean` |
 | `S3.Manifest.xml` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `S3.Op.method` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `S3.Op.verb` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
@@ -3089,7 +3089,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `S3.Op.body` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `S3.Bucket.host` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
 | `S3.Bucket.path` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
-| `S3.Bucket.scope` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/S3.lean` and 2 more |
+| `S3.Bucket.scope` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/Oracle/Service/S3Multipart.lean` and 4 more |
 | `S3.call` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `S3.unescapeKey` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `S3.entry?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
@@ -3102,8 +3102,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `S3.completed` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `S3.info` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `S3.interpret` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
-| `S3.Op.modelled` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/S3.lean` |
-| `S3.Answer.modelled` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/S3.lean` |
+| `S3.Op.modelled` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/Oracle/Service/S3Post.lean` and 1 more |
+| `S3.Answer.modelled` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/Oracle/Service/S3Post.lean` and 1 more |
 | `S3.presign` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
 | `S3.presignPart` | tested | `Tests/S3Upload.lean` |
 
@@ -3114,13 +3114,13 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `S3.Multipart.minPart_bytes` | proved | `S3.Multipart.Plan.range_full` |
 | `S3.Multipart.maxPart_bytes` | proved | `S3.Multipart.Plan.range_full` |
 | `S3.Multipart.maxParts` | proved | `S3.Multipart.Plan.count_le` |
-| `S3.Multipart.maxObject_bytes` | tested | `Tests/S3Upload.lean` |
+| `S3.Multipart.maxObject_bytes` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Multipart.lean`, `Tests/S3Upload.lean` |
 | `S3.Multipart.Plan.count` | proved | `S3.Multipart.Plan.count_le`, `S3.Multipart.Plan.range_full`, `S3.Multipart.Plan.range_last` and 1 more |
 | `S3.Multipart.Plan.range` | proved | `S3.Multipart.Plan.range_full`, `S3.Multipart.Plan.range_last`, `S3.Multipart.Plan.range_next` |
 | `S3.Multipart.Plan.of?` | tested | `Tests/S3Upload.lean` |
-| `S3.Multipart.Plan.auto` | tested | `Tests/S3Upload.lean` |
+| `S3.Multipart.Plan.auto` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Multipart.lean`, `Tests/S3Upload.lean` |
 | `S3.Multipart.Flow.next` | checked | `Tests/Multipart.lean` |
-| `S3.Multipart.Flow.op` | tested | `Tests/S3Upload.lean` |
+| `S3.Multipart.Flow.op` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Multipart.lean`, `Tests/S3Upload.lean` |
 | `S3.Multipart.Flow.retry` | checked | `Tests/Multipart.lean` |
 | `S3.Multipart.Flow.moveTo` | checked | `Tests/Multipart.lean` |
 | `S3.Multipart.Flow.transient` | checked | `Tests/Multipart.lean` |
@@ -3129,7 +3129,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `S3.Multipart.Flow.onComplete.markLost` | checked | `Tests/Multipart.lean` |
 | `S3.Multipart.Flow.answer` | checked | `Tests/Multipart.lean` |
 | `S3.Multipart.Flow.start` | checked | `Tests/Multipart.lean` |
-| `S3.Multipart.Flow.bound` | tested | `Tests/S3Upload.lean` |
+| `S3.Multipart.Flow.bound` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Multipart.lean`, `Tests/S3Upload.lean` |
 
 ## `Lanes/Web/S3/Post.lean`
 
@@ -3158,7 +3158,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `S3.Post.eqs` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
 | `S3.Post.conditions` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
 | `S3.Post.document` | proved | `S3.Post.form_policy` |
-| `S3.Post.Form.fields` | tested | `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `S3.Post.Form.fields` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3Upload.lean` and 1 more |
 | `S3.Bucket.url` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
 | `S3.Post.form` | proved | `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
 
