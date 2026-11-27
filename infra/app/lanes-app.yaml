@@ -1027,8 +1027,8 @@ Resources:
           SourceSecurityGroupId: !GetAtt InstanceSecurityGroup.GroupId
           Description: the application's instance
 
-  # The Lanes PostgreSQL client speaks plain TCP (D68), and RDS refuses that by default from
-  # PostgreSQL 15 on; the traffic stays inside the VPC.
+  # The Lanes PostgreSQL client speaks plain TCP (docs/decisions/D68), and RDS refuses that from
+  # PostgreSQL 15 on unless told otherwise; the traffic stays inside the VPC.
   DatabaseParameters:
     Type: AWS::RDS::DBParameterGroup
     Condition: HasDatabase

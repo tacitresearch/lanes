@@ -26,6 +26,8 @@ browser ──HTTPS──▶ load balancer ──HTTP──▶ one EC2 instance 
 - **The load balancer** ends TLS (Lanes has no TLS server), redirects HTTP to HTTPS, sends
   traffic to the instance only once its readiness page answers 200, and answers 404 for the
   metrics page.
+- **Calls out over HTTPS** verify the server against Ubuntu's trust store, which the instance
+  has (the TLS client: `docs/decisions/D67-a-tls-client-from-the-openssl-lean-ships.md`).
 - **Media does not pass through the application.** The browser uploads to S3 with a presigned
   PUT and reads with a presigned GET; the application signs, S3 carries the bytes.
 - **Deploys** build the executable on GitHub, put it in a release bucket under its commit, and
@@ -124,8 +126,8 @@ waits for its first release; until then the load balancer has no healthy target.
 
 ## 3. GitHub
 
-Copy `.github/workflows/deploy-example.yml` into the application's repository as
-`.github/workflows/deploy.yml` and set its `app-dir` default to `.`. Then, in the repository,
+Copy `.github/workflows/deploy-example.yml` into the application's repository, under the same
+directory, as `deploy.yml`, and set its `app-dir` default to `.`. Then, in the repository,
 **Settings → Secrets and variables → Actions → Variables → New repository variable**:
 `LANES_DEPLOY`, the stack's output `GitHubVariable` (one line of JSON: the role, the region, the
 release location, the document and the readiness URL). Without it the workflow does nothing.
@@ -140,8 +142,9 @@ names repositories by id (as `tacitresearch/lanes` does, `docs/RUNNERS.md`) give
 **Actions → Deploy → Run workflow** on `main`. The workflow:
 
 1. builds the executable with `lake build <BinaryName>` on Ubuntu 24.04 and strips it. Lean links
-   its runtime and Lanes links libsodium into it, so it needs only the C library (glibc 2.17 or
-   later, checked by `ldd`);
+   its runtime (OpenSSL included) and Lanes links libsodium into it, so it needs only the C
+   library (glibc 2.25 or later for `examples/counter`; the workflow checks with `ldd` that
+   nothing else is needed);
 2. puts it at `s3://<bucket>/<prefix>/releases/<commit>/<BinaryName>`;
 3. runs the stack's Systems Manager document on the instance: `app-instance.sh deploy <commit>
    <sha256>` fetches the file, refuses it unless its SHA-256 is the one the build computed,
@@ -288,9 +291,13 @@ protection on) in two private subnets, reachable on 5432 from the instance only.
 made by Secrets Manager. Before each start of the application, as root, the unit writes the
 database's IPv4 address and password to `/run/lanes-app/db-address` and `/run/lanes-app/db-password`,
 readable by the application only, and `/etc/lanes/app.env` gives `LANES_DB_HOST`, `LANES_DB_PORT`
-and `LANES_DB_NAME` (`lanes`). The Lanes PostgreSQL client (in review) takes an IPv4 address and
-speaks plain TCP, so the stack's parameter group turns off `rds.force_ssl`, which RDS sets from
-PostgreSQL 15 on: the traffic stays inside the VPC, unencrypted.
+and `LANES_DB_NAME` (`lanes`); the user is `lanes`. The application's `main` reads them into
+the client's configuration (`Lanes/Lib/Postgres/IO/Client.lean`,
+`docs/decisions/D68-postgres-protocol-in-lean.md`). That client takes an IPv4 address, not a
+name, and speaks plain TCP, so the stack's parameter group turns off `rds.force_ssl`, which RDS
+sets from PostgreSQL 15 on: the traffic stays inside the VPC, unencrypted. RDS may move the
+database to another address (a maintenance, a replaced host); the next start of the application
+reads the new one.
 
 ## What a stop does
 
@@ -396,9 +403,10 @@ Nothing here could run where it was written: that container has no AWS credentia
 the template with `cfn-lint` (no error, warning or informational finding, in three regions); the
 scripts and the workflow's scripts with `shellcheck` and `actionlint`; the rendered units with
 `systemd-analyze verify` (systemd 255, as on Ubuntu 24.04); the CloudWatch agent's configuration
-as JSON and the Prometheus configuration as YAML; `infra/app/smoke.sh` against an executable of
-`examples/bank-web` (it starts in the journal's directory, answers, writes its journal there,
-ends at SIGTERM with status 143 and starts again on the same journal); and deploy, rollback,
+as JSON and the Prometheus configuration as YAML; `infra/app/smoke.sh` against `examples/counter`
+built from this branch (it starts in the journal's directory, answers, writes its journal there,
+ends at SIGTERM with status 143 and starts again on the same journal); the `main` of step 1,
+built into the counter and answering on an address other than loopback; and deploy, rollback,
 the refusal of a wrong SHA-256 and the rollback of a release that never becomes ready, with
 stubs of `aws` and `systemctl`.
 
