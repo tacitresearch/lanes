@@ -37,6 +37,7 @@ public import Lanes.Web.Http.RouteSound
 public import Lanes.Web.Http.SseSound
 public import Lanes.Web.Http.SigV4Sound
 public import Lanes.Web.Http.WireSound
+public import Lanes.Web.S3.PostSound
 
 /-!
 The framework's soundness theorems: what the kernel, the shell, joins, shards, the transport,

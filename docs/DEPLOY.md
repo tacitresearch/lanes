@@ -15,7 +15,7 @@ browser ──HTTPS──▶ load balancer ──HTTP──▶ one EC2 instance 
    │               (ACM certificate,        (systemd: the app,       │
    │                /readyz checks,          as user `lanes`)        └─ snapshots (DLM)
    │                /metrics refused)              │
-   └──presigned PUT and GET──▶ media bucket ◀──────┘──▶ CloudWatch: logs, metrics, alarms
+   └──signed POST, PUT, GET──▶ media bucket ◀──────┘──▶ CloudWatch: logs, metrics, alarms
                                                     └──▶ PostgreSQL (RDS), optional
 ```
 
@@ -28,8 +28,9 @@ browser ──HTTPS──▶ load balancer ──HTTP──▶ one EC2 instance 
   metrics page, which the application itself answers only to the machine it runs on.
 - **Calls out over HTTPS** verify the server against Ubuntu's trust store, which the instance
   has (the TLS client: `docs/decisions/D67-a-tls-client-from-the-openssl-lean-ships.md`).
-- **Media does not pass through the application.** The browser uploads to S3 with a presigned
-  PUT and reads with a presigned GET; the application signs, S3 carries the bytes.
+- **Media does not pass through the application.** The browser uploads to S3 with a form under
+  a signed policy that bounds its size (`POST`), or by parts with presigned `PUT`s, and reads with
+  a presigned GET; the application signs, S3 carries the bytes.
 - **Deploys** build the executable on GitHub, put it in a release bucket under its commit, and
   have the instance fetch it, check its SHA-256, switch to it and restart, through Systems
   Manager. No AWS key is stored in GitHub, and the instance takes no connection but the load
@@ -290,9 +291,10 @@ keeps its id, its addresses and its volumes) whether or not an address is given.
 
 ## Media
 
-The media bucket blocks public access, refuses requests without TLS, allows a presigned `PUT`,
-`GET` and `HEAD` from `https://<DomainName>` (CORS, exposing `ETag`), and aborts multipart
-uploads left incomplete for two days. The instance role may read and write it. The unit gives
+The media bucket blocks public access, refuses requests without TLS, allows a form's `POST` and
+a presigned `PUT`, `GET` and `HEAD` from `https://<DomainName>` (CORS, exposing `ETag`, which a
+browser reads from each part it puts), and aborts multipart uploads left incomplete for two
+days. The instance role may read and write it. The unit gives
 the application the bucket's name and its region in `/etc/lanes/app.env`, as
 `LANES_MEDIA_BUCKET` and `AWS_REGION`; `/etc/lanes/secrets.env`, read after it, may set either
 again.
