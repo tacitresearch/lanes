@@ -1,6 +1,7 @@
 import Ledger.Proofs.Book
 import Ledger.Proofs.Actors
 import Ledger.Proofs.Refines
+import Ledger.Proofs.Timed
 
 /-!
 The axiom gate (rule 5.5): each headline theorem depends only on Lean's three standard axioms.
@@ -21,6 +22,9 @@ If a `sorry` or a new axiom reaches one, this file stops compiling.
 
 /-- info: 'Ledger.implements' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Ledger.implements
+
+/-- info: 'Ledger.implements_timed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Ledger.implements_timed
 
 /-- info: 'Lanes.Auth.verify_sign' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Auth.verify_sign

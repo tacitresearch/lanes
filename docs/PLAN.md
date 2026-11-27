@@ -20,8 +20,10 @@ because a launch claim is what a critic tests first.
    request-and-reply service repeats, a cheaper invariant rule, then a counterexample-to-induction
    finder. The measure is `systems/ledger`'s refinement of its spec, proved, where today it is
    checked on instances.
-   Done towards it: a request named by its client takes effect once (`Service.once`, D48), and
-   `System.Refines.of_handles`, a relation rule that a duplicated message cannot break.
+   Done towards it: a request named by its client takes effect once (`Service.once`, D48),
+   `System.Refines.of_handles`, a relation rule that a duplicated message cannot break, and
+   deadlines that pass where a message is served, with which the ledger's timed refinement is
+   proved (`Account.implements_timed`, `Ledger.implements_timed`).
 2. **Evidence for every definition of `Lanes/`.** The inventory is generated (`docs/INVENTORY.md`,
    D47); what has none is listed in `docs/inventory-none.md`, which only shrinks. Take entries off
    it by proving, testing or listing them in `TRUSTED.md`.

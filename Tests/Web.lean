@@ -57,10 +57,10 @@ def serveTest : Async (List (String × Bool)) := do
     ("web: once each request is answered none is in flight", left == 0),
     ("web: HEAD is answered as GET without the body",
       head.startsWith "HTTP/1.1 200" && !head.endsWith "ok"),
-    ("web: a method no application handles is refused", options.startsWith "HTTP/1.1 405") ]
+    ("web: a method no application handles is refused", options.startsWith "HTTP/1.1 501") ]
 
 /-! Links through a real server: what `Route.link` prints, sent over a socket and decoded by
-`Std.Http`, must match the route it came from with the value it was printed from. -/
+the server's reader, must match the route it came from with the value it was printed from. -/
 
 def echoSlug : Route Slug := .get ("echo" /> .slug)
 
@@ -237,9 +237,92 @@ def journalFailTest : Async (List (String × Bool)) := do
         && answers.any fun a => !(a.getD "").startsWith "HTTP/1.1 200"),
     ("web: and the server ends with the error", waited == some true) ]
 
+/-! The connection loop over a real socket: the bytes as a client sends them, in pieces, pipelined,
+slowly or too many, and connections kept, left idle, beyond the bound and open at `stop`. -/
+
+/-- Write `pieces` with `gap_ms` between them, wait `wait_ms`, then read until the server closes
+or three seconds pass; `none` if the connection was reset. -/
+def exchange (port : UInt16) (pieces : List String) (gap_ms : Nat := 0) (wait_ms : Nat := 0) :
+    Async (Option String) := do
+  let socket ← TCP.Socket.Client.mk
+  socket.connect (.v4 ⟨.ofParts 127 0 0 1, port⟩)
+  for piece in pieces do
+    socket.send piece.toUTF8
+    if gap_ms > 0 then Async.sleep (.ofNat gap_ms)
+  if wait_ms > 0 then Async.sleep (.ofNat wait_ms)
+  let reading : Async (Option ByteArray) := do
+    let mut received := ByteArray.empty
+    repeat
+      match ← socket.recv? 65536 with
+      | some bytes => received := received ++ bytes
+      | none => break
+    return some received
+  let got ← try Async.race reading (do Async.sleep 3000; return none) catch _ => pure none
+  socket.close
+  return got.map fun bytes => (String.fromUTF8? bytes).getD ""
+
+def get (path : String) (close : Bool := false) : String :=
+  s!"GET {path} HTTP/1.1\r\nHost: h\r\n" ++ (if close then "Connection: close\r\n" else "") ++ "\r\n"
+
+def statuses (text : String) : List String :=
+  (text.splitOn "HTTP/1.1 ").drop 1 |>.map (·.take 3 |>.toString)
+
+def wireTest : Async (List (String × Bool)) := do
+  let server ← serve (Server.system mute) slugBridge
+    { port := 0, head_ms := 300, idle_ms := 300, connections_max := 3 }
+  let some port := server.port | return [("web: the server reports its port", false)]
+  let pipelined ← exchange port [get "/echo/a" ++ get "/echo/b" ++ get "/echo/c" true]
+  let pieces ← exchange port ["GE", "T /echo/s HTTP/1.1\r\nHo", "st: h\r\nConnection: close\r\n", "\r\n"]
+    (gap_ms := 30)
+  let many ← exchange port ((List.range 100).map (fun _ => get "/echo/k") ++ [get "/echo/end" true])
+  let refused ← exchange port
+    ["GET /echo/x HTTP/1.1\r\nHost: h\r\nContent-Length: 1\r\nContent-Length: 1\r\n\r\nx"
+      ++ String.ofList (List.replicate 200000 'z')] (wait_ms := 300)
+  let slow ← exchange port ["GET /echo/x HTTP/1.1\r\nHost: h\r\n"]
+  let started ← IO.monoMsNow
+  let idle ← exchange port []
+  let idled := (← IO.monoMsNow) - started
+  let held ← (List.range 3).mapM fun _ => do
+    let socket ← TCP.Socket.Client.mk
+    socket.connect (.v4 ⟨.ofParts 127 0 0 1, port⟩)
+    return socket
+  Async.sleep 50
+  let beyond ← exchange port [get "/echo/n" true]
+  for socket in held do socket.close
+  let ended ← Async.race (do server.stop; return true) (do Async.sleep 3000; return false)
+  let server ← serve (Server.system mute) slugBridge { port := 0 }
+  let some port := server.port | return [("web: the server reports its port", false)]
+  let socket ← TCP.Socket.Client.mk
+  socket.connect (.v4 ⟨.ofParts 127 0 0 1, port⟩)
+  socket.send (get "/echo/kept").toUTF8
+  let first ← socket.recv? 65536
+  let stopped ← Async.race (do server.stop; return true) (do Async.sleep 3000; return false)
+  let after ← try Async.race (socket.recv? 65536) (do Async.sleep 3000; return some ByteArray.empty)
+    catch _ => pure none
+  socket.close
+  return [
+    ("web: pipelined requests in one write are answered in order, and the connection closes "
+      ++ "after the one that asks", pipelined.any fun text =>
+        statuses text == ["200", "200", "200"]
+          && ((text.splitOn "\r\n\r\n").drop 1).map (·.takeWhile (· != 'H') |>.toString)
+            == ["a", "b", "c"]),
+    ("web: a request sent in pieces is read", pieces.any (·.endsWith "s")),
+    ("web: a hundred and one requests on one connection are each answered",
+      many.any fun text => (statuses text).length == 101 && text.endsWith "end"),
+    ("web: a request refused with more bytes behind it is answered 400, not reset",
+      refused.any (statuses · == ["400"])),
+    ("web: a head that does not arrive in time is answered 408 and the connection closed",
+      slow.any (statuses · == ["408"])),
+    ("web: an idle connection is closed at its deadline, with nothing written",
+      idle == some "" && 250 ≤ idled),
+    ("web: a connection beyond the bound is closed without an answer", beyond.getD "" == ""),
+    ("web: and stop then returns, every connection answered and closed", ended),
+    ("web: stop closes a connection kept open, after its response",
+      (first.bind String.fromUTF8?).any (·.endsWith "kept") && stopped && after == none) ]
+
 def tests : IO (List (String × Bool)) := do
   return (← serveTest.block) ++ (← linkTest.block) ++ (← deadlineTest.block)
     ++ (← durableTest.block) ++ (← oldJournalTest.block) ++ (← prepareTest.block)
-    ++ (← journalFailTest.block)
+    ++ (← journalFailTest.block) ++ (← wireTest.block)
 
 end Tests.Web

@@ -15,6 +15,12 @@ spec has it, when the ledger handles it. A log-out answered by the user itself w
 while a transfer of the same session is still on its way, and a view asked after the log-out
 could miss it; `Answering.fromUser` builds that system, and the checker finds the run
 (`Check.lean`). The README says why the book is one actor.
+
+A deadline is the same: the user's timer ends a session or lifts a lock in its record, and tells
+the ledger on the same link, and the deadline passes when the ledger serves that notice
+(`Ledger.delivered`), after the requests the user decided before it and before those it decided
+after. A deadline passing at the user's timer (`Ending.atUser`) lets a view decided before a
+session's end be served after a payment asked after it; the checker finds that run too.
 -/
 
 namespace Ledger
@@ -36,6 +42,10 @@ lanes_data inductive LedgerMsg (N : Type) where
   | answer (req : ReqId) (reply : Reply N)
   /-- Sent only by `user owner` (`Ledger.Proofs`). -/
   | serve (req : ReqId) (owner : N) (op : Op)
+  /-- `user owner`'s lock has lifted. -/
+  | unlocked (owner : N)
+  /-- `user owner`'s session has ended. -/
+  | ended (owner : N) (session : Sid)
   deriving DecidableEq, Repr, Hashable, Codable
 
 abbrev Msg (N C : Type) : Id N → Type
@@ -57,6 +67,13 @@ inductive Answering where
   | fromUser
   deriving DecidableEq, Repr
 
+/-- Where a deadline a user's timer marks passes: where the ledger serves the user's notice of
+it, or at the timer. Only `atLedger` is the spec. -/
+inductive Ending where
+  | atLedger
+  | atUser
+  deriving DecidableEq, Repr
+
 variable {N C : Type} [DecidableEq N] [DecidableEq C]
 
 def timerEffects (config : Config N) (self : N) (timers : Timers) :
@@ -75,12 +92,33 @@ def tell (answering : Answering) (self : N) (req : ReqId) :
     | .fromUser => .emit ⟨req, r⟩
   | .serve op => .send .ledger (.serve req self op)
 
-/-- A user's timers are the spec's deadlines; the ledger has none. -/
-def deadlines : Deadlines (sig N C) (Deadline N)
-  | .user n, .unlock => some (.unlock n)
-  | .user n, .expire session => some (.expire n session)
-  | .user _, .ask .. => none
-  | .ledger, _ => none
+/-- What the ledger is told of a deadline. -/
+def Deadline.notice : Deadline N → LedgerMsg N
+  | .unlock n => .unlocked n
+  | .expire n session => .ended n session
+
+/-- The notice of a deadline, sent to the ledger where the deadline passes there. -/
+def notice (ending : Ending) (self : N) (d : Deadline N) : List (Effect (sig N C) (.user self)) :=
+  match ending with
+  | .atLedger => [.send .ledger d.notice]
+  | .atUser => []
+
+/-- With `atUser`, a user's timers are the spec's deadlines. -/
+def deadlines : Ending → Deadlines (sig N C) (Deadline N)
+  | .atUser, .user n, .unlock => some (.unlock n)
+  | .atUser, .user n, .expire session => some (.expire n session)
+  | .atUser, .user _, .ask .. => none
+  | .atUser, .ledger, _ => none
+  | .atLedger, _, _ => none
+
+/-- With `atLedger`, the ledger serving a notice is the deadline passing. -/
+def delivered : Ending → Deadlines (sig N C) (Deadline N)
+  | .atLedger, .ledger, .unlocked n => some (.unlock n)
+  | .atLedger, .ledger, .ended n session => some (.expire n session)
+  | .atLedger, .ledger, .answer .. => none
+  | .atLedger, .ledger, .serve .. => none
+  | .atLedger, .user _, _ => none
+  | .atUser, _, _ => none
 
 /-- A user's record survives a restart; its timers are armed again. -/
 def rearm (config : Config N) (self : N) : Option (Profile C) → List (Effect (sig N C) (.user self))
@@ -91,15 +129,22 @@ def rearm (config : Config N) (self : N) : Option (Profile C) → List (Effect (
         | some d => p.sessions.ids.map fun session => .after d (.expire session)
         | none => [])
 
-def user (config : Config N) (answering : Answering) (self : N) :
+/-- A user's timer: the deadline passes in its record if it is armed there, and the ledger is
+told. -/
+def user (config : Config N) (answering : Answering) (self : N) (ending : Ending := .atLedger) :
     (sig N C).Actor (.user self) (Option (Profile C)) where
   init := none
   step u
     | .ask req ask =>
       let (u, verdict, timers) := User.decide config self req u ask
       (u, tell answering self req verdict :: timerEffects config self timers)
-    | .unlock => (User.unlock u, [])
-    | .expire session => (User.expire session u, [])
+    | .unlock =>
+      if u.any (·.attempts.locked) then (User.unlock u, notice ending self (.unlock self))
+      else (u, [])
+    | .expire session =>
+      if u.any (·.sessions.live session) then
+        (User.expire session u, notice ending self (.expire self session))
+      else (u, [])
   recover u := (u, rearm config self u)
   fresh u := u.isNone
   fresh_recover u h := by cases u <;> simp_all [rearm]
@@ -111,15 +156,16 @@ def ledger (config : Config N) : (sig N C).Actor .ledger (Book N) where
     | .serve req owner op =>
       let (b, reply) := b.serve config owner req op
       (b, [.emit ⟨req, reply⟩])
+    | .unlocked _ | .ended .. => (b, [])
   recover b := (b, [])
 
 abbrev system (N C : Type) [DecidableEq N] [DecidableEq C] (config : Config N)
-    (answering : Answering := .viaLedger) : System (sig N C) where
+    (answering : Answering := .viaLedger) (ending : Ending := .atLedger) : System (sig N C) where
   State
     | .user _ => Option (Profile C)
     | .ledger => Book N
   actor
-    | .user n => user config answering n
+    | .user n => user config answering n ending
     | .ledger => ledger config
   accept r := ⟨.user r.name, .ask r.req r.ask⟩
 

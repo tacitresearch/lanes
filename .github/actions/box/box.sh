@@ -75,10 +75,12 @@ stop_box() {
     done | python3 -c '
 import json, os, sys
 mine, workflows = os.environ["GITHUB_RUN_ID"], os.environ["WORKFLOWS"].split()
-for line in sys.stdin.read().split("\n"):
-    if not line.strip():
-        continue
-    for run in json.loads(line)["workflow_runs"]:
+text, decoder, at, pages = sys.stdin.read(), json.JSONDecoder(), 0, []
+while text[at:].strip():
+    page, at = decoder.raw_decode(text, len(text) - len(text[at:].lstrip()))
+    pages.append(page)
+for page in pages:
+    for run in page["workflow_runs"]:
         name = run["path"].split("@")[0].rsplit("/", 1)[-1]
         if str(run["id"]) != mine and name in workflows:
             print(run["id"], name, run["status"])'

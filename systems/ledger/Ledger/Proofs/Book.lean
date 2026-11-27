@@ -255,6 +255,7 @@ theorem ledger_sound (config : Config N) :
         cases msg with
         | answer => exact h
         | serve req owner op => exact Book.serve_sound h config owner req op
+        | unlocked | ended => exact h
       recover := fun _ h => h }
 
 /-- In every reachable state of the system, under every environment model, the book conserves

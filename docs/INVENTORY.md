@@ -17,10 +17,10 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Data` | 348 | 233 | 5 | 4 | 44 | 33 | 29 |
 | `Lanes/Env` | 30 | 0 | 30 | 0 | 0 | 0 | 0 |
 | `Lanes/Html` | 58 | 22 | 0 | 0 | 28 | 8 | 0 |
-| `Lanes/Http` | 181 | 120 | 1 | 8 | 28 | 22 | 2 |
-| `Lanes/Semantics` | 54 | 9 | 0 | 0 | 0 | 44 | 1 |
+| `Lanes/Http` | 213 | 144 | 1 | 8 | 29 | 29 | 2 |
+| `Lanes/Semantics` | 57 | 9 | 0 | 0 | 0 | 47 | 1 |
 | `LanesCli` | 110 | 0 | 0 | 0 | 42 | 0 | 68 |
-| All | 1283 | 659 | 46 | 74 | 169 | 211 | 124 |
+| All | 1318 | 683 | 46 | 74 | 170 | 221 | 124 |
 
 ## `Lanes/Actors/Actor.lean`
 
@@ -341,7 +341,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `SysState.grow` | proved | `Account.Moves.grow`, `Account.Moves.handle`, `Account.implements` and 7 more |
+| `SysState.grow` | proved | `Account.Fires.grow`, `Account.Fires.handle`, `Account.Moves.grow` and 11 more |
 | `SysState.Pending` | spec | a predicate |
 
 ## `Lanes/Actors/Outside.lean`
@@ -375,7 +375,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Effect.sends` | proved | `Account.Moves.grow`, `Account.Moves.handle` |
+| `Effect.sends` | proved | `Account.Fires.grow`, `Account.Fires.handle`, `Account.Moves.grow` and 1 more |
 | `Effect.armed` | none |  |
 | `Effect.emits` | none |  |
 | `Effect.retime` | spec | used only in statements |
@@ -502,7 +502,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Effect.isStop` | none |  |
 | `Effect.instDecidableEq` | proved | its type, `Decidable` |
-| `Envelope.instDecidableEq` | proved | `Account.Moves.handle`, `Account.implements`, `System.Refines.of_events` and 3 more |
+| `Envelope.instDecidableEq` | proved | `Account.Fires.handle`, `Account.Moves.handle`, `Account.implements` and 6 more |
 | `Envelope.sameLink` | none |  |
 | `Link.reliable` | proved | `Examples.Watchdog.exists_fair_run_never_barks`, `Examples.Watchdog.impatient_barks` |
 | `Link.network` | checked | `Tests/Bank.lean`, `Tests/Election.lean`, `Tests/Join.lean` and 1 more |
@@ -514,20 +514,20 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `update` | proved | through `SysState.down`, `SysState.init` and 4 more: `Account.implements`, `Check.system_violated` and 36 more |
+| `update` | proved | through `SysState.down`, `SysState.init` and 4 more: `Account.implements`, `Account.implements_timed` and 38 more |
 | `Event.timed` | spec | used only in statements |
 | `Event.visible` | spec | used only in statements |
 | `SysState.blank` | proved | `System.Inductive.of_monotone`, `System.Monotone.and` |
 | `SysState.hasMail` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 24 more |
-| `SysState.perform` | proved | through `SysState.init`, `SysState.run` and 3 more: `Account.implements`, `Check.system_violated` and 35 more |
-| `SysState.performAll` | proved | through `SysState.init`, `SysState.run` and 3 more: `Account.implements`, `Check.system_violated` and 35 more |
-| `SysState.down` | proved | `Account.implements`, `System.Refines.of_events`, `linkMsgs_down` |
+| `SysState.perform` | proved | through `SysState.init`, `SysState.run` and 3 more: `Account.implements`, `Account.implements_timed` and 37 more |
+| `SysState.performAll` | proved | through `SysState.init`, `SysState.run` and 3 more: `Account.implements`, `Account.implements_timed` and 37 more |
+| `SysState.down` | proved | `Account.implements`, `Account.implements_timed`, `System.Refines.of_events` and 2 more |
 | `SysState.settle` | proved | `SysState.Loses.settle` |
 | `SysState.handle` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 24 more |
-| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and 2 more: `Account.implements`, `Check.system_violated` and 34 more |
-| `SysState.deliverable` | proved | `Account.implements`, `System.Refines.of_events`, `linkMsgs_of_deliverable` |
+| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and 2 more: `Account.implements`, `Account.implements_timed` and 36 more |
+| `SysState.deliverable` | proved | `Account.implements`, `Account.implements_timed`, `System.Refines.of_events` and 2 more |
 | `SysState.step` | proved | `Http.Gate.answered_of_leaves`, `Http.Gate.deadline_not_restarted`, `Shards.AtHome.step` and 7 more |
-| `SysState.init` | proved | `Account.implements`, `Check.system_violated`, `Http.Gate.answered_le_handled` and 19 more |
+| `SysState.init` | proved | `Account.implements`, `Account.implements_timed`, `Check.system_violated` and 21 more |
 | `SysState.run` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and 12 more |
 | `System.Invariant` | spec | a predicate |
 
@@ -712,7 +712,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Check.Property.holds` | proved | `Check.refines_sound`, `Check.refines_traces`, `Check.system_sound` and 1 more |
 | `Check.Trace.last` | proved | `Check.search_deadlock`, `Check.search_reached`, `Check.search_violated` and 2 more |
 | `Check.Trace.labels` | proved | `Check.system_violated` |
-| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 13 more |
+| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 14 more |
 | `Check.Path.last` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
 | `Check.Path.toTraceAux` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
 | `Check.Path.toTrace` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
@@ -1386,13 +1386,55 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Request.text?` | proved | through `Http.Request.field?`, `Http.Request.form`: `Http.Request.field?_eq_lookup`, `Http.Request.form_encodeForm` |
 | `Http.Request.form` | proved | `Http.Request.field?_eq_lookup`, `Http.Request.form_encodeForm` |
 | `Http.Request.field?` | proved | `Http.Request.field?_eq_lookup` |
-| `Http.Response.ofText` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean` |
-| `Http.Response.text` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean` |
+| `Http.Response.ofText` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean`, `Tests/HttpConn.lean` |
+| `Http.Response.text` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean`, `Tests/HttpConn.lean` |
 | `Http.Response.html` | tested | `Tests/Fronted.lean`, `Tests/Html.lean`, `Tests/Web.lean` |
 | `Http.Response.json` | tested | `Tests/Html.lean` |
 | `Http.Response.empty` | tested | `Tests/Auth.lean`, `Tests/Html.lean` |
 | `Http.Response.redirect` | tested | `Tests/Html.lean` |
 | `Http.Response.withHeader` | tested | `Tests/Html.lean` |
+
+## `Lanes/Http/Conn.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Http.Conn.closing` | proved | through `Http.Conn.answer`, `Http.Conn.encode` and 3 more: `Http.Conn.answer_ignored`, `Http.Conn.answer_waiting` and 11 more |
+| `Http.Conn.sendable` | proved | `Http.Conn.read_encode`, `Http.Conn.sendable_writable` |
+| `Http.Conn.encode` | proved | `Http.Conn.answer_waiting`, `Http.Conn.read_encode` |
+| `Http.Conn.refusal` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and 7 more |
+| `Http.Conn.timeout` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and 7 more |
+| `Http.Conn.continueWire` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and 7 more |
+| `Http.Conn.next` | proved | `Http.Conn.run_submits` |
+| `Http.Conn.room` | proved | `Http.Conn.wantsInput_room` |
+| `Http.Conn.wantsInput` | proved | `Http.Conn.wantsInput_room` |
+| `Http.Conn.deadline` | proved | `Http.Conn.step_tick` |
+| `Http.Conn.settle` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and 7 more |
+| `Http.Conn.waitMore` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and 7 more |
+| `Http.Conn.take` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and 7 more |
+| `Http.Conn.flushSlots` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and 7 more |
+| `Http.Conn.flush` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and 7 more |
+| `Http.Conn.finish` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and 7 more |
+| `Http.Conn.advance` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and 7 more |
+| `Http.Conn.answer` | proved | `Http.Conn.answer_ignored`, `Http.Conn.answer_waiting` |
+| `Http.Conn.receive` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and 7 more |
+| `Http.Conn.expire` | proved | through `Http.Conn.run`, `Http.Conn.step`: `Http.Conn.run_buffer`, `Http.Conn.run_slots` and 7 more |
+| `Http.Conn.step` | proved | `Http.Conn.step_closed`, `Http.Conn.step_notReading`, `Http.Conn.step_reading` and 2 more |
+| `Http.Conn.run` | proved | `Http.Conn.run_buffer`, `Http.Conn.run_slots`, `Http.Conn.run_submits` and 1 more |
+| `Http.Conn.Count.admit` | proved | `Http.Conn.Count.admit_le`, `Http.Conn.Count.admit_stopping` |
+| `Http.Conn.Count.leave` | tested | `Tests/HttpConn.lean` |
+
+## `Lanes/Http/ConnSound.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Http.Conn.Action.wrote` | spec | used only in statements |
+| `Http.Conn.Action.submitted` | spec | used only in statements |
+| `Http.Conn.Frame` | spec | a predicate |
+| `Http.Conn.Writes` | spec | a predicate |
+| `Http.Conn.Submits` | spec | a predicate |
+| `Http.Conn.Keeps` | spec | a predicate |
+| `Http.Conn.Bounded` | spec | a predicate |
+| `Http.Conn.Reads` | spec | a predicate |
 
 ## `Lanes/Http/Cookie.lean`
 
@@ -1477,33 +1519,33 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Http.Refusal.status` | tested | `Tests/ReadRequest.lean` |
-| `Http.matchAt` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 12 more |
-| `Http.find` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 12 more |
-| `Http.pieces` | proved | through `Http.Request.read`, `Http.Request.readHead` and 1 more: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 16 more |
-| `Http.Request.Limits.message_max` | spec | used only in statements |
-| `Http.Request.elements` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 12 more |
-| `Http.Request.version?` | proved | through `Http.Request.read`, `Http.Request.readHead` and 1 more: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 16 more |
-| `Http.Request.method?` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 12 more |
-| `Http.Request.pchar` | proved | through `Http.Request.read`, `Http.Request.readHead` and 1 more: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 16 more |
-| `Http.Request.targetChar` | proved | through `Http.Request.read`, `Http.Request.readHead` and 1 more: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 16 more |
-| `Http.Request.hostChar` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 12 more |
-| `Http.Request.segments?` | proved | through `Http.Request.read`, `Http.Request.readHead` and 1 more: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 16 more |
-| `Http.Request.queryPart?` | proved | through `Http.Request.read`, `Http.Request.readHead` and 1 more: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 16 more |
-| `Http.Request.pair?` | proved | through `Http.Request.read`, `Http.Request.readHead` and 1 more: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 16 more |
-| `Http.Request.query?` | proved | through `Http.Request.read`, `Http.Request.readHead` and 1 more: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 16 more |
+| `Http.matchAt` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and 13 more |
+| `Http.find` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and 13 more |
+| `Http.pieces` | proved | through `Http.Request.read`, `Http.Request.readHead` and 1 more: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and 17 more |
+| `Http.Request.Limits.message_max` | proved | `Http.Request.read_done`, `Http.Request.read_more` |
+| `Http.Request.elements` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and 13 more |
+| `Http.Request.version?` | proved | through `Http.Request.read`, `Http.Request.readHead` and 1 more: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and 17 more |
+| `Http.Request.method?` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and 13 more |
+| `Http.Request.pchar` | proved | through `Http.Request.read`, `Http.Request.readHead` and 1 more: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and 17 more |
+| `Http.Request.targetChar` | proved | through `Http.Request.read`, `Http.Request.readHead` and 1 more: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and 17 more |
+| `Http.Request.hostChar` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and 13 more |
+| `Http.Request.segments?` | proved | through `Http.Request.read`, `Http.Request.readHead` and 1 more: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and 17 more |
+| `Http.Request.queryPart?` | proved | through `Http.Request.read`, `Http.Request.readHead` and 1 more: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and 17 more |
+| `Http.Request.pair?` | proved | through `Http.Request.read`, `Http.Request.readHead` and 1 more: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and 17 more |
+| `Http.Request.query?` | proved | through `Http.Request.read`, `Http.Request.readHead` and 1 more: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and 17 more |
 | `Http.Request.target?` | proved | `Http.Route.link_target`, `Http.Route.match?_target`, `Http.dispatch_link` and 1 more |
-| `Http.Request.fieldLine?` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 12 more |
-| `Http.Request.host?` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 12 more |
-| `Http.Request.tabbedFraming` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 12 more |
-| `Http.Request.framing?` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Request.readHead_headWire`, `Http.Request.read_append` and 12 more |
+| `Http.Request.fieldLine?` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and 13 more |
+| `Http.Request.host?` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and 13 more |
+| `Http.Request.tabbedFraming` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and 13 more |
+| `Http.Request.framing?` | proved | through `Http.Request.read`, `Http.Request.readHead`: `Http.Conn.step_submit_read`, `Http.Request.readHead_headWire` and 13 more |
 | `Http.Request.parseHead` | proved | `Http.Request.readHead_headWire` |
 | `Http.Request.readHead` | proved | `Http.Request.readHead_headWire`, `Http.Request.read_badChunkSize` |
-| `Http.Request.chunkSize` | proved | through `Http.Request.read`: `Http.Request.read_append`, `Http.Request.read_badChunkSize` and 11 more |
-| `Http.Request.chunks` | proved | through `Http.Request.read`: `Http.Request.read_append`, `Http.Request.read_badChunkSize` and 11 more |
-| `Http.Request.Head.close` | proved | through `Http.Request.read`: `Http.Request.read_append`, `Http.Request.read_badChunkSize` and 11 more |
+| `Http.Request.chunkSize` | proved | through `Http.Request.read`: `Http.Conn.step_submit_read`, `Http.Request.read_append` and 12 more |
+| `Http.Request.chunks` | proved | through `Http.Request.read`: `Http.Conn.step_submit_read`, `Http.Request.read_append` and 12 more |
+| `Http.Request.Head.close` | proved | through `Http.Request.read`: `Http.Conn.step_submit_read`, `Http.Request.read_append` and 12 more |
 | `Http.Request.Head.expectsContinue` | tested | `Tests/ReadRequest.lean` |
-| `Http.Request.Head.incoming` | proved | through `Http.Request.read`: `Http.Request.read_append`, `Http.Request.read_badChunkSize` and 11 more |
-| `Http.Request.read` | proved | `Http.Request.read_append`, `Http.Request.read_badChunkSize`, `Http.Request.read_bareCR` and 10 more |
+| `Http.Request.Head.incoming` | proved | through `Http.Request.read`: `Http.Conn.step_submit_read`, `Http.Request.read_append` and 12 more |
+| `Http.Request.read` | proved | `Http.Conn.step_submit_read`, `Http.Request.read_append`, `Http.Request.read_badChunkSize` and 11 more |
 
 ## `Lanes/Http/ReadRequestSound.lean`
 
@@ -1559,7 +1601,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Http.tokenChar` | proved | through `Http.Request.fields`, `Http.Request.wire` and 3 more: `Http.Request.fields_framing`, `Http.Request.head_plain` and 15 more |
+| `Http.tokenChar` | proved | through `Http.Request.fields`, `Http.Request.wire` and 3 more: `Http.Conn.read_encode`, `Http.Request.fields_framing` and 16 more |
 | `Http.token` | proved | `Http.parseCookies_cookieHeader` |
 | `Http.plain` | proved | `Http.Request.head_plain` |
 | `Http.visible` | proved | through `Http.Request.wire`: `Http.Request.head_plain`, `Http.Request.read_wire` and 1 more |
@@ -1570,34 +1612,34 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Request.fields` | proved | `Http.Request.fields_framing` |
 | `Http.Request.head` | proved | `Http.Request.head_plain` |
 | `Http.Request.wire` | proved | `Http.Request.head_plain`, `Http.Request.read_wire`, `Http.Request.read_wire_extract` |
-| `Http.Reading.map` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Response.read_append`, `Http.Response.read_ended` and 10 more |
-| `Http.headEnd` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Response.read_append`, `Http.Response.read_ended` and 10 more |
-| `Http.crlf` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Response.read_append`, `Http.Response.read_ended` and 10 more |
-| `Http.skip` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Response.read_append`, `Http.Response.read_ended` and 10 more |
-| `Http.hex` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Response.read_append`, `Http.Response.read_ended` and 10 more |
-| `Http.chunkSizeDigits_max` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Response.read_append`, `Http.Response.read_ended` and 10 more |
-| `Http.chunkExtensionBytes_max` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Response.read_append`, `Http.Response.read_ended` and 10 more |
-| `Http.sizeLineEnd` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Response.read_append`, `Http.Response.read_ended` and 10 more |
-| `Http.chunkHead` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Response.read_append`, `Http.Response.read_ended` and 10 more |
-| `Http.dechunk` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Response.read_append`, `Http.Response.read_ended` and 10 more |
-| `Http.decimal?` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Response.read_append`, `Http.Response.read_ended` and 10 more |
-| `Http.splitLines` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Response.read_append`, `Http.Response.read_ended` and 10 more |
-| `Http.statusLine?` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Response.read_append`, `Http.Response.read_ended` and 10 more |
-| `Http.trimOws` | proved | through `Http.Request.fieldName`, `Http.Response.read` and 1 more: `Http.Request.read_lengthAndCoding`, `Http.Request.read_twoLengths` and 12 more |
-| `Http.headerLine?` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Response.read_append`, `Http.Response.read_ended` and 10 more |
-| `Http.head?` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Response.read_append`, `Http.Response.read_ended` and 10 more |
-| `Http.framing?` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Response.read_append`, `Http.Response.read_ended` and 10 more |
+| `Http.Reading.map` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Conn.read_encode`, `Http.Response.read_append` and 11 more |
+| `Http.headEnd` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Conn.read_encode`, `Http.Response.read_append` and 11 more |
+| `Http.crlf` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Conn.read_encode`, `Http.Response.read_append` and 11 more |
+| `Http.skip` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Conn.read_encode`, `Http.Response.read_append` and 11 more |
+| `Http.hex` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Conn.read_encode`, `Http.Response.read_append` and 11 more |
+| `Http.chunkSizeDigits_max` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Conn.read_encode`, `Http.Response.read_append` and 11 more |
+| `Http.chunkExtensionBytes_max` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Conn.read_encode`, `Http.Response.read_append` and 11 more |
+| `Http.sizeLineEnd` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Conn.read_encode`, `Http.Response.read_append` and 11 more |
+| `Http.chunkHead` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Conn.read_encode`, `Http.Response.read_append` and 11 more |
+| `Http.dechunk` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Conn.read_encode`, `Http.Response.read_append` and 11 more |
+| `Http.decimal?` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Conn.read_encode`, `Http.Response.read_append` and 11 more |
+| `Http.splitLines` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Conn.read_encode`, `Http.Response.read_append` and 11 more |
+| `Http.statusLine?` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Conn.read_encode`, `Http.Response.read_append` and 11 more |
+| `Http.trimOws` | proved | through `Http.Request.fieldName`, `Http.Response.read` and 1 more: `Http.Conn.read_encode`, `Http.Request.read_lengthAndCoding` and 13 more |
+| `Http.headerLine?` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Conn.read_encode`, `Http.Response.read_append` and 11 more |
+| `Http.head?` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Conn.read_encode`, `Http.Response.read_append` and 11 more |
+| `Http.framing?` | proved | through `Http.Response.read`, `Http.readFrom`: `Http.Conn.read_encode`, `Http.Response.read_append` and 11 more |
 | `Http.readFrom` | proved | `Http.Response.read_some` |
-| `Http.Response.read` | proved | `Http.Response.read_append`, `Http.Response.read_ended`, `Http.Response.read_more` and 9 more |
+| `Http.Response.read` | proved | `Http.Conn.read_encode`, `Http.Response.read_append`, `Http.Response.read_ended` and 10 more |
 | `Http.Response.parse` | trusted | TRUSTED.md: The HTTP wire format |
 
 ## `Lanes/Http/WireSpec.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Http.Response.kept` | proved | through `Http.Response.writable`: `Http.Response.read_wire`, `Http.Response.read_wireAfter` and 6 more |
-| `Http.Response.lowered` | proved | `Http.Response.read_wire`, `Http.Response.read_wireAfter`, `Http.Response.read_wireChunked` and 1 more |
-| `Http.Response.writable` | proved | `Http.Response.read_wire`, `Http.Response.read_wireAfter`, `Http.Response.read_wireAfter_extract` and 5 more |
+| `Http.Response.kept` | proved | through `Http.Response.writable`: `Http.Conn.sendable_writable`, `Http.Response.read_wire` and 7 more |
+| `Http.Response.lowered` | proved | `Http.Conn.read_encode`, `Http.Response.read_wire`, `Http.Response.read_wireAfter` and 2 more |
+| `Http.Response.writable` | proved | `Http.Conn.sendable_writable`, `Http.Response.read_wire`, `Http.Response.read_wireAfter` and 6 more |
 | `Http.Response.headWire` | proved | through `Http.Response.wire`, `Http.Response.wireAfter` and 2 more: `Http.Response.read_wire`, `Http.Response.read_wireAfter` and 6 more |
 | `Http.Response.wire` | proved | `Http.Response.read_wire`, `Http.Response.read_wire_extract` |
 | `Http.Response.chunk` | proved | through `Http.Response.wireChunked`: `Http.Response.read_wireChunked`, `Http.Response.read_wireChunked_extract` |
@@ -1615,7 +1657,10 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Account.owed` | proved | `Account.Moves.of_le` |
 | `Account.Sim` | spec | a predicate |
 | `Account.Moves` | spec | a predicate |
+| `Account.Fires` | spec | a predicate |
+| `Account.Passes` | spec | a predicate |
 | `Account.Handles` | spec | a predicate |
+| `Account.HandlesFire` | spec | a predicate |
 
 ## `Lanes/Semantics/FairJoin.lean`
 
@@ -1696,7 +1741,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Spec.lts` | proved | `Check.Monitor.complete`, `Check.Monitor.ok_iff`, `Check.Monitor.sound` and 8 more |
+| `Spec.lts` | proved | `Account.Holds.passes`, `Check.Monitor.complete`, `Check.Monitor.ok_iff` and 10 more |
 | `Spec.Reachable` | spec | a predicate |
 | `Spec.Invariant` | spec | a predicate |
 | `Refines` | spec | a predicate |
@@ -1705,7 +1750,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Service.spec` | proved | `Account.implements`, `Check.Monitor.complete`, `Check.Monitor.ok_iff` and 8 more |
+| `Service.spec` | proved | `Account.Holds.passes`, `Account.implements`, `Account.implements_timed` and 10 more |
 | `Service.Stable` | spec | a predicate |
 | `Service.Only` | spec | a predicate |
 | `Service.Took` | spec | a predicate |
@@ -1722,7 +1767,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `System.sem` | proved | `Account.implements`, `Examples.KV.caching_not_implements`, `Examples.KV.implements` and 13 more |
+| `System.sem` | proved | `Account.implements`, `Account.implements_timed`, `Examples.KV.caching_not_implements` and 15 more |
 | `System.Refines` | spec | a predicate |
 
 ## `LanesCli/Generated.lean`

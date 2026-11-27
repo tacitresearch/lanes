@@ -235,7 +235,9 @@ theorem.
   `Lanes/Semantics/Simulation.lean`).
 - `Service.spec` turns a sequential `Service` into what a concurrent implementation must refine,
   with deadlines as visible steps, and `System.Implements` is refinement to it: linearizability,
-  stated as refinement (`Lanes/Semantics/Service.lean`, D42). `Server.implements` proves the
+  stated as refinement (`Lanes/Semantics/Service.lean`, D42). A deadline passes in the system
+  as a timer it names fires, or as a message it names is delivered
+  (`docs/decisions/D56-a-deadline-passes-where-it-is-served.md`). `Server.implements` proves the
   `Server` behaviour (`Lanes/Behaviours/Server.lean`) implements its spec.
 - A request named by its client takes effect once (`Lanes/Semantics/Once.lean`, D48):
   `Service.once` is the spec, `Lanes/Behaviours/Once.lean` the memo that meets it, and
@@ -294,7 +296,9 @@ also served over HTTP by `Examples/BankWeb.lean`), a key-value store with front 
 applications, each its own Lake package that requires Lanes as a user would (`systems/README.md`):
 `systems/raft-kv`, a replicated key-value store proved to implement the map it replicates
 (`RaftKV.implementsMachine`), and `once` of it in every environment with the memo in the map
-(`RaftKV.implementsMachine_once`), and `systems/ledger`, a multi-user web ledger. `lanes new`
+(`RaftKV.implementsMachine_once`); `systems/ledger`, a multi-user web ledger; and
+`systems/rookery`, a small social network for bots whose claims are proved of its spec, which it
+is proved to implement with deadlines (`Rookery.implements`). `lanes new`
 (`LanesCli/New.lean`, `templates/app/`) creates an application; `lanes lint`
 (`LanesCli/Lint.lean`) checks the rules of `AGENTS.md` that the text can show, the generated files
 and the inventory (`LanesCli/Inventory.lean`).
