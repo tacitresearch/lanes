@@ -44,6 +44,55 @@ import Lanes.Semantics
 /-- info: 'Lanes.Http.Request.bodyWithin_iff' depends on axioms: [propext] -/
 #guard_msgs in #print axioms Lanes.Http.Request.bodyWithin_iff
 
+-- Lanes.Http.ConnSound
+/-- info: 'Lanes.Http.Conn.wantsInput_room' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Lanes.Http.Conn.wantsInput_room
+
+/-- info: 'Lanes.Http.Conn.run_writes' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Conn.run_writes
+
+/-- info: 'Lanes.Http.Conn.run_submits' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Conn.run_submits
+
+/-- info: 'Lanes.Http.Conn.run_buffer' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Conn.run_buffer
+
+/-- info: 'Lanes.Http.Conn.run_slots' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Conn.run_slots
+
+/-- info: 'Lanes.Http.Conn.step_closed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Conn.step_closed
+
+/-- info: 'Lanes.Http.Conn.step_notReading' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Conn.step_notReading
+
+/-- info: 'Lanes.Http.Conn.step_reading' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Conn.step_reading
+
+/-- info: 'Lanes.Http.Conn.step_tick' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Conn.step_tick
+
+/-- info: 'Lanes.Http.Conn.answer_ignored' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Conn.answer_ignored
+
+/-- info: 'Lanes.Http.Conn.answer_waiting' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Conn.answer_waiting
+
+/-- info: 'Lanes.Http.Conn.step_submit_read' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Conn.step_submit_read
+
+/-- info: 'Lanes.Http.Conn.sendable_writable' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Conn.sendable_writable
+
+/-- info: 'Lanes.Http.Conn.read_encode' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Conn.read_encode
+
+/-- info: 'Lanes.Http.Conn.Count.admit_le' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Lanes.Http.Conn.Count.admit_le
+
+/-- info: 'Lanes.Http.Conn.Count.admit_stopping' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Lanes.Http.Conn.Count.admit_stopping
+
 -- Lanes.Http.Front
 /-- info: 'Lanes.Http.gateActor_bounded' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.gateActor_bounded

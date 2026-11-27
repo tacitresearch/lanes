@@ -10,16 +10,16 @@ public import Lanes.Data.Codec
 # HTTP requests and responses as data
 
 Plain data types for an HTTP exchange. Application logic, specs and tests use these and never
-touch a socket or `Std.Http`: the server adapter (`Lanes.Env.Http`) converts at the edge. That
-keeps handlers pure and keeps the young `Std.Http` API behind one thin wrapper.
+touch a socket: the server reads them from bytes and writes them as bytes at the edge
+(`Lanes.Http.Conn`, `Lanes.Env.Http`), which keeps handlers pure.
 -/
 
 @[expose] public section
 
 namespace Lanes.Http
 
-/-- The request methods an application sees. The adapter answers `HEAD` as `GET` without the
-body and refuses the rest with `405`. -/
+/-- The request methods an application sees. The server answers `HEAD` as `GET` without the
+body and refuses the rest with `501`. -/
 inductive Method where
   | get | post | put | patch | delete
   deriving DecidableEq, Repr, Hashable
@@ -54,7 +54,7 @@ def Request.codec : Codec Request :=
 
 structure Response where
   status : Nat := 200
-  /-- `Content-Length` and `Date` are added by the server. -/
+  /-- `Content-Length` is added by the server, and `Connection: close` when it closes after. -/
   headers : List (String × String) := []
   body : ByteArray := .empty
   deriving DecidableEq, Repr, Hashable, Inhabited
