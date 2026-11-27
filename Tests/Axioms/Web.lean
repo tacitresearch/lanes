@@ -232,6 +232,32 @@ import Lanes.Semantics
 /-- info: 'Lanes.Http.plain_of_visible' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.plain_of_visible
 
+-- Lanes.Web.Http.Ops
+/-- info: 'Lanes.Http.Ops.route?_default' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Ops.route?_default
+
+/-- info: 'Lanes.Http.Ops.route?_some' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Ops.route?_some
+
+/-- info: 'Lanes.Http.Ops.answer_ready' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Lanes.Http.Ops.answer_ready
+
+/-- info: 'Lanes.Http.Ops.lookup_bumpKey' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Lanes.Http.Ops.lookup_bumpKey
+
+/-- info: 'Lanes.Http.Ops.RequestId.accept?_eq_some' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Ops.RequestId.accept?_eq_some
+
+/-- info: 'Lanes.Http.Ops.RequestId.accept?_ofBytes' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Ops.RequestId.accept?_ofBytes
+
+/-- info: 'Lanes.Http.Ops.RequestId.header_tag' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Ops.RequestId.header_tag
+
+-- Lanes.Web.Http.OpsSound
+/-- info: 'Lanes.Http.Ops.Access.parse_line' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Ops.Access.parse_line
+
 -- Lanes.Web.Http.ReadRequestSound
 /-- info: 'Lanes.Http.findL_lines' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.findL_lines

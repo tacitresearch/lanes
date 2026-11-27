@@ -30,6 +30,7 @@ public import Lanes.Web.Html.HtmxSound
 public import Lanes.Web.Http.ConnSound
 public import Lanes.Web.Http.CookieSound
 public import Lanes.Web.Http.FrontSound
+public import Lanes.Web.Http.OpsSound
 public import Lanes.Web.Http.ReadRequestSound
 public import Lanes.Web.Http.RouteSound
 public import Lanes.Web.Http.WireSound

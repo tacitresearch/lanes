@@ -15,15 +15,15 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Core` | 102 | 40 | 0 | 34 | 1 | 10 | 17 |
 | `Lanes/Data` | 68 | 43 | 0 | 4 | 1 | 0 | 20 |
 | `Lanes/Durable` | 67 | 57 | 2 | 0 | 0 | 7 | 1 |
-| `Lanes/Lib` | 486 | 331 | 13 | 2 | 66 | 65 | 9 |
+| `Lanes/Lib` | 511 | 341 | 13 | 2 | 76 | 70 | 9 |
 | `Lanes/Net` | 37 | 6 | 5 | 0 | 0 | 25 | 1 |
 | `Lanes/Outside` | 110 | 81 | 5 | 6 | 1 | 17 | 0 |
 | `Lanes/Proof` | 35 | 12 | 0 | 0 | 0 | 22 | 1 |
-| `Lanes/Runtime` | 156 | 93 | 18 | 0 | 15 | 30 | 0 |
+| `Lanes/Runtime` | 158 | 93 | 20 | 0 | 15 | 30 | 0 |
 | `Lanes/Semantics` | 57 | 9 | 0 | 0 | 0 | 47 | 1 |
-| `Lanes/Web` | 329 | 188 | 28 | 8 | 64 | 39 | 2 |
+| `Lanes/Web` | 362 | 201 | 39 | 8 | 73 | 39 | 2 |
 | `LanesCli` | 110 | 0 | 0 | 0 | 46 | 0 | 64 |
-| All | 1697 | 950 | 76 | 80 | 194 | 279 | 118 |
+| All | 1757 | 973 | 89 | 80 | 213 | 284 | 118 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -702,7 +702,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `JsonNumber.ofScientific` | proved | `Json.ofScientific_mantissa` |
 | `JsonNumber.instCoeNat` | none |  |
 | `JsonNumber.instCoeInt` | none |  |
-| `JsonNumber.instOfNat` | tested | `Tests/Json.lean` |
+| `JsonNumber.instOfNat` | tested | `Tests/Json.lean`, `Tests/Ops.lean` |
 | `JsonNumber.instInhabited` | none |  |
 | `JsonNumber.instOfScientific` | tested | `Tests/Json.lean` |
 | `JsonNumber.instNeg` | tested | `Tests/Json.lean` |
@@ -729,8 +729,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Json.instCoeString` | none |  |
 | `Json.instCoeBool` | none |  |
 | `Json.instOfNat` | tested | `Tests/Json.lean` |
-| `Json.sortFields` | proved | through `Json.depth`, `Json.mkObj` and 1 more: `Json.getObjVal?_mkObj`, `Json.parse_complete` and 6 more |
-| `Json.dedupFields` | proved | through `Json.depth`, `Json.mkObj` and 1 more: `Json.getObjVal?_mkObj`, `Json.parse_complete` and 6 more |
+| `Json.sortFields` | proved | through `Json.depth`, `Json.mkObj` and 1 more: `Http.Ops.Access.parse_line`, `Json.getObjVal?_mkObj` and 7 more |
+| `Json.dedupFields` | proved | through `Json.depth`, `Json.mkObj` and 1 more: `Http.Ops.Access.parse_line`, `Json.getObjVal?_mkObj` and 7 more |
 | `Json.duplicateKey?` | tested | `Tests/Json.lean` |
 | `Json.mkObj` | proved | `Json.getObjVal?_mkObj` |
 | `Json.mkObj?` | tested | `Tests/Json.lean` |
@@ -800,33 +800,33 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Json.Parser.fail` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.next?` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.accept` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.skipWsFrom` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.skipWs` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.acceptAll` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.hexDigit?` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.hexDigit` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.hex4` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.lowSurrogate` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.escape` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.strFrom` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.str` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.digitsFrom` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.whole` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.fraction` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.exponentDigits` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.exponent` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.unsigned` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.num` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.literal` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.key` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.Parser.value` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
+| `Json.Parser.fail` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.next?` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.accept` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.skipWsFrom` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.skipWs` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.acceptAll` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.hexDigit?` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.hexDigit` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.hex4` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.lowSurrogate` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.escape` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.strFrom` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.str` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.digitsFrom` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.whole` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.fraction` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.exponentDigits` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.exponent` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.unsigned` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.num` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.literal` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.key` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.Parser.value` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
 | `Json.Parser.elements` | spec | used only in statements |
 | `Json.Parser.fields` | spec | used only in statements |
-| `Json.Parser.document` | proved | through `Json.parse`: `Json.parse_complete`, `Json.parse_compress` and 3 more |
-| `Json.parse` | proved | `Json.parse_complete`, `Json.parse_compress`, `Json.parse_iff` and 2 more |
+| `Json.Parser.document` | proved | through `Json.parse`: `Http.Ops.Access.parse_line`, `Json.parse_complete` and 4 more |
+| `Json.parse` | proved | `Http.Ops.Access.parse_line`, `Json.parse_complete`, `Json.parse_compress` and 3 more |
 
 ## `Lanes/Lib/Encoding/Json/ParserSound.lean`
 
@@ -856,6 +856,36 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Json.prettyTo` | proved | through `Json.pretty`: `Json.fromUTF8?_pretty`, `Json.parse_pretty` and 1 more |
 | `Json.pretty` | proved | `Json.fromUTF8?_pretty`, `Json.parse_pretty`, `Json.text_pretty` |
 | `Json.instToString` | none |  |
+
+## `Lanes/Lib/Metrics.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Metrics.Histogram.bump` | proved | through `Metrics.Histogram.observeAll`: `Metrics.Histogram.buckets_pairwise`, `Metrics.Histogram.observeAll_eq` |
+| `Metrics.Histogram.observe` | proved | through `Metrics.Histogram.observeAll`: `Metrics.Histogram.buckets_pairwise`, `Metrics.Histogram.observeAll_eq` |
+| `Metrics.Histogram.observeAll` | proved | `Metrics.Histogram.buckets_pairwise`, `Metrics.Histogram.observeAll_eq` |
+| `Metrics.Histogram.buckets` | spec | used only in statements |
+| `Metrics.escapeLabelChar` | proved | through `Metrics.escapeLabel`: `Metrics.newline_not_mem_escapeLabel`, `Metrics.readLabelValue_escapeLabel` |
+| `Metrics.escapeLabel` | proved | `Metrics.newline_not_mem_escapeLabel`, `Metrics.readLabelValue_escapeLabel` |
+| `Metrics.escapeHelpChar` | proved | through `Metrics.escapeHelp`: `Metrics.newline_not_mem_escapeHelp`, `Metrics.readHelp_escapeHelp` |
+| `Metrics.escapeHelp` | proved | `Metrics.newline_not_mem_escapeHelp`, `Metrics.readHelp_escapeHelp` |
+| `Metrics.readLabelValue` | spec | used only in statements |
+| `Metrics.readHelp` | spec | used only in statements |
+| `Metrics.nameChar` | proved | through `Metrics.sanitize`: `Metrics.sanitize_of_valid`, `Metrics.valid_sanitize` |
+| `Metrics.validChars` | spec | used only in statements |
+| `Metrics.valid` | spec | used only in statements |
+| `Metrics.sanitizeChars` | proved | through `Metrics.sanitize`: `Metrics.sanitize_of_valid`, `Metrics.valid_sanitize` |
+| `Metrics.sanitize` | proved | `Metrics.sanitize_of_valid`, `Metrics.valid_sanitize` |
+| `Metrics.trimZeros` | tested | `Tests/Ops.lean` |
+| `Metrics.decimal` | tested | `Tests/Ops.lean` |
+| `Metrics.decimalInt` | tested | `Tests/Ops.lean` |
+| `Metrics.Series.kind` | tested | `Tests/Ops.lean` |
+| `Metrics.renderLabels` | tested | `Tests/Ops.lean` |
+| `Metrics.sample` | tested | `Tests/Ops.lean` |
+| `Metrics.renderHistogram` | tested | `Tests/Ops.lean` |
+| `Metrics.Family.render` | tested | `Tests/Ops.lean` |
+| `Metrics.render` | tested | `Tests/Ops.lean` |
+| `Metrics.contentType` | tested | `Tests/Ops.lean` |
 
 ## `Lanes/Lib/Mime/MediaType.lean`
 
@@ -1562,6 +1592,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Runtime.trace` | trusted | TRUSTED.md: The runtime shell |
 | `Runtime.state` | trusted | TRUSTED.md: The runtime shell |
 | `Runtime.stop` | trusted | TRUSTED.md: The runtime shell |
+| `Runtime.hasRecovered` | trusted | TRUSTED.md: The runtime shell |
+| `Runtime.depth` | trusted | TRUSTED.md: The runtime shell |
 | `Runtime.ended` | trusted | TRUSTED.md: The runtime shell |
 
 ## `Lanes/Runtime/Kernel.lean`
@@ -2127,6 +2159,33 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.isQuotable` | proved | `MediaType.isQdtext_of`, `MediaType.quoted_esc` |
 | `Http.quoted` | proved | `MediaType.quoted_esc` |
 
+## `Lanes/Web/Http/Ops.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Http.LogSink.isOn` | tested | `Tests/Ops.lean` |
+| `Http.OpsConfig.counting` | tested | `Tests/Ops.lean` |
+| `Http.OpsConfig.active` | tested | `Tests/Ops.lean` |
+| `Http.Ops.pathText` | proved | `Http.Ops.route?_some` |
+| `Http.Ops.route?` | proved | `Http.Ops.route?_default`, `Http.Ops.route?_some` |
+| `Http.Ops.Health.ready` | proved | `Http.Ops.answer_ready` |
+| `Http.Ops.answer` | proved | `Http.Ops.answer_ready` |
+| `Http.Ops.methodName` | proved | through `Http.Ops.Access.json`: `Http.Ops.Access.parse_line` |
+| `Http.Ops.statusClass` | tested | `Tests/Ops.lean` |
+| `Http.Ops.bumpKey` | proved | `Http.Ops.lookup_bumpKey` |
+| `Http.Ops.Stats.answered` | tested | `Tests/Ops.lean` |
+| `Http.Ops.Stats.refuse` | tested | `Tests/Ops.lean` |
+| `Http.Ops.Stats.appended` | tested | `Tests/Ops.lean` |
+| `Http.Ops.Stats.saved` | tested | `Tests/Ops.lean` |
+| `Http.Ops.families` | tested | `Tests/Ops.lean` |
+| `Http.Ops.RequestId.allowed` | proved | `Http.Ops.RequestId.accept?_eq_some` |
+| `Http.Ops.RequestId.accept?` | proved | `Http.Ops.RequestId.accept?_eq_some`, `Http.Ops.RequestId.accept?_ofBytes` |
+| `Http.Ops.RequestId.ofBytes` | proved | `Http.Ops.RequestId.accept?_ofBytes` |
+| `Http.Ops.RequestId.tag` | proved | `Http.Ops.RequestId.header_tag` |
+| `Http.Ops.Access.time` | proved | through `Http.Ops.Access.json`: `Http.Ops.Access.parse_line` |
+| `Http.Ops.Access.json` | proved | `Http.Ops.Access.parse_line` |
+| `Http.Ops.Access.line` | proved | `Http.Ops.Access.parse_line` |
+
 ## `Lanes/Web/Http/ReadRequest.lean`
 
 | Definition | Status | Evidence |
@@ -2265,6 +2324,21 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Client.exchange` | trusted | TRUSTED.md: The HTTP client adapter's handler |
 | `Http.Client.handler` | trusted | TRUSTED.md: The HTTP client adapter's handler |
 
+## `Lanes/Web/IO/Ops.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Http.Ops.new` | trusted | TRUSTED.md: What the server tells its operators |
+| `Http.Ops.drain` | trusted | TRUSTED.md: What the server tells its operators |
+| `Http.Ops.journal` | trusted | TRUSTED.md: What the server tells its operators |
+| `Http.Ops.refused` | trusted | TRUSTED.md: What the server tells its operators |
+| `Http.Ops.write` | trusted | TRUSTED.md: What the server tells its operators |
+| `Http.Ops.health` | trusted | TRUSTED.md: What the server tells its operators |
+| `Http.Ops.page` | trusted | TRUSTED.md: What the server tells its operators |
+| `Http.Ops.freshId` | trusted | TRUSTED.md: What the server tells its operators |
+| `Http.Ops.wallMs` | trusted | TRUSTED.md: What the server tells its operators |
+| `Http.Ops.front` | trusted | TRUSTED.md: What the server tells its operators |
+
 ## `Lanes/Web/IO/Server.lean`
 
 | Definition | Status | Evidence |
@@ -2275,6 +2349,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.serve` | trusted | TRUSTED.md: The HTTP adapter's IO |
 | `Http.Server.port` | trusted | TRUSTED.md: The HTTP adapter's IO |
 | `Http.Server.stop` | trusted | TRUSTED.md: The HTTP adapter's IO |
+| `Http.Server.drain` | trusted | TRUSTED.md: The HTTP adapter's IO |
 | `Http.Server.inFlight` | trusted | TRUSTED.md: The HTTP adapter's IO |
 | `Http.Server.trace` | trusted | TRUSTED.md: The HTTP adapter's IO |
 | `Http.Server.wait` | trusted | TRUSTED.md: The HTTP adapter's IO |
