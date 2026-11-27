@@ -1,4 +1,4 @@
-# D?. Sign-in with OAuth 2.0 and OpenID Connect, done where a request arrives
+# D72. Sign-in with OAuth 2.0 and OpenID Connect, done where a request arrives
 
 The first application Lanes is for is a video site whose users sign in with Google or GitHub.
 This adds the authorization code flow with PKCE (RFC 6749 §4.1, RFC 7636), OpenID Connect's ID

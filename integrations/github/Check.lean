@@ -6,7 +6,7 @@ import GitHub
 
 /-!
 GitHub's answers in the shapes its REST documentation gives them, written by hand: none was
-recorded from GitHub (`docs/decisions/new-sign-in-with-oauth.md`).
+recorded from GitHub (`docs/decisions/D72-sign-in-with-oauth.md`).
 -/
 
 open Lanes Lanes.OAuth

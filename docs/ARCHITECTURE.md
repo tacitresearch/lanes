@@ -229,7 +229,7 @@ exactly what was signed for their purpose and session (`Auth.verify_eq_some`,
 `Auth.checkForm_other`), Argon2id password digests, failed attempts that lock at their limit
 (`Auth.Attempts.locked_unlock_repeat`) and sessions that keep the newest (`Auth.Sessions.ids_starts`).
 
-Sign-in with another service (`docs/decisions/new-sign-in-with-oauth.md`) is OAuth 2.0's authorization
+Sign-in with another service (`docs/decisions/D72-sign-in-with-oauth.md`) is OAuth 2.0's authorization
 code flow with PKCE and OpenID Connect on it, decided in `Lanes/Web/Auth/OAuth.lean` and done
 where a request arrives, before the system (`serve`'s `arrive`, `Lanes/Web/IO/SignIn.lean`), so no
 code or token is journalled. A callback is accepted only for a state issued to its browser and
