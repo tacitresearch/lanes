@@ -70,6 +70,8 @@ development is of processes in that algorithm), so those two are defined here.
 - `System.Run.Fair.output_taken`: an emitted output is eventually handed over.
 - `System.Run.Fair.delivered`: a message in flight on a link that loses nothing, to an actor
   that stays up, is eventually handed to it; the measure is what is ahead of it on its link.
+- `System.Run.Fair.handled`: the same when the receiver is not crashed and never stops, though
+  it may be down: it has mail, so it is started.
 - `System.Run.Impatient.fair`: a run that fires every timer that stays pending is fair.
 -/
 
@@ -337,6 +339,51 @@ theorem Fair.delivered (hfair : r.Fair) {e : Envelope σ}
     rw [List.length_erase_of_mem hahead] at this
     have hpos := List.length_pos_of_mem hahead
     omega
+
+/-- In a fair run, a message in flight on a link that does not lose it is handed to its
+receiver, when the environment does not crash the receiver and the receiver never stops. A
+receiver that is down has mail, so fairness starts it, and then it stays up. -/
+theorem Fair.handled (hfair : r.Fair) {e : Envelope σ}
+    (hlossless : (env.link e.src e.dst).lossy = false) (hcrash : env.mayCrash e.dst = false)
+    (hruns : ∀ s msg, ((sys.actor e.dst).step s msg).2.any Effect.isStop = false)
+    (hrecovers : ∀ s, ((sys.actor e.dst).recover s).2.any Effect.isStop = false)
+    (he : e ∈ (r.state n).net) :
+    ∃ m, n ≤ m ∧ (r.event m = some (.deliver e) ∨ r.event m = some (.duplicate e)) := by
+  by_contra hnever
+  have hnot (m : ℕ) (hm : n ≤ m) :
+      r.event m ≠ some (.deliver e) ∧ r.event m ≠ some (.duplicate e) :=
+    ⟨fun h => hnever ⟨m, hm, .inl h⟩, fun h => hnever ⟨m, hm, .inr h⟩⟩
+  have hkeep (m : ℕ) (hm : n ≤ m) : e ∈ (r.state m).net := by
+    induction m, hm using Nat.le_induction with
+    | base => exact he
+    | succ m hm ih =>
+      cases hev : r.event m with
+      | none => exact step_none hev ▸ ih
+      | some ev =>
+        exact SysState.mem_net_of_step ih (step_some hev) hlossless hcrash hruns hrecovers
+          (fun h => (hnot m hm).1 (h ▸ hev)) (fun h => (hnot m hm).2 (h ▸ hev))
+  have hstays (k : ℕ) (hk : (r.state k).up e.dst = true) (m : ℕ) (hm : k ≤ m) :
+      (r.state m).up e.dst = true := by
+    induction m, hm using Nat.le_induction with
+    | base => exact hk
+    | succ m hm ih =>
+      cases hev : r.event m with
+      | none => exact step_none hev ▸ ih
+      | some ev => exact SysState.up_of_step hcrash hruns ih (step_some hev)
+  by_cases hup : ∃ k, n ≤ k ∧ (r.state k).up e.dst = true
+  · obtain ⟨k, hk, hupk⟩ := hup
+    obtain ⟨m, hm, h⟩ := hfair.delivered hlossless (hstays k hupk) (hkeep k hk)
+    exact hnever ⟨m, by omega, h⟩
+  · have hdown (m : ℕ) (hm : n ≤ m) : (r.state m).up e.dst = false := by
+      simpa using fun h => hup ⟨m, hm, h⟩
+    obtain ⟨m, hm, hev⟩ := hfair.taken (ob := .start e.dst)
+      (fun m hm => ⟨hdown m hm, List.any_eq_true.mpr ⟨e, hkeep m hm, by simp⟩⟩)
+      (fun _ _ ⟨_, _, h⟩ => h)
+    obtain ⟨-, -, hc'⟩ := SysState.step_start.mp (step_some hev)
+    have hup' : (r.state (m + 1)).up e.dst = true := by
+      rw [hc', SysState.startActor, SysState.settle_up_of_running (hrecovers _)]
+      simp
+    simp [hdown (m + 1) (by omega)] at hup'
 
 end Run
 
