@@ -12,18 +12,18 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | `Lanes/Behaviours` | 66 | 36 | 5 | 18 | 0 | 7 | 0 |
 | `Lanes/Check` | 74 | 54 | 0 | 8 | 0 | 10 | 2 |
-| `Lanes/Core` | 102 | 40 | 0 | 34 | 1 | 10 | 17 |
+| `Lanes/Core` | 103 | 41 | 0 | 34 | 1 | 11 | 16 |
 | `Lanes/Data` | 68 | 43 | 0 | 4 | 1 | 0 | 20 |
 | `Lanes/Durable` | 67 | 57 | 2 | 0 | 0 | 7 | 1 |
 | `Lanes/Lib` | 511 | 341 | 13 | 2 | 76 | 70 | 9 |
 | `Lanes/Net` | 37 | 6 | 5 | 0 | 0 | 25 | 1 |
 | `Lanes/Outside` | 110 | 81 | 5 | 6 | 1 | 17 | 0 |
-| `Lanes/Proof` | 35 | 12 | 0 | 0 | 0 | 22 | 1 |
+| `Lanes/Proof` | 36 | 12 | 0 | 0 | 0 | 23 | 1 |
 | `Lanes/Runtime` | 158 | 93 | 20 | 0 | 15 | 30 | 0 |
-| `Lanes/Semantics` | 57 | 9 | 0 | 0 | 0 | 47 | 1 |
+| `Lanes/Semantics` | 60 | 11 | 0 | 0 | 0 | 48 | 1 |
 | `Lanes/Web` | 362 | 201 | 39 | 8 | 73 | 39 | 2 |
 | `LanesCli` | 110 | 0 | 0 | 0 | 46 | 0 | 64 |
-| All | 1757 | 973 | 89 | 80 | 213 | 284 | 118 |
+| All | 1762 | 976 | 89 | 80 | 213 | 287 | 117 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -330,6 +330,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Event.quiet` | spec | used only in statements |
 | `SysState.startedWith` | spec | used only in statements |
 | `SysState.started` | spec | used only in statements |
+| `SysState.nextOnLink` | spec | used only in statements |
 
 ## `Lanes/Core/Scheduler.lean`
 
@@ -358,9 +359,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Effect.isStop` | none |  |
 | `Effect.instDecidableEq` | proved | its type, `Decidable` |
-| `Envelope.instDecidableEq` | proved | `Account.Fires.handle`, `Account.Moves.handle`, `Account.implements` and 6 more |
-| `Envelope.sameLink` | none |  |
-| `Link.reliable` | proved | through `EnvModel.link`, `EnvModel.lossy` and 1 more: `Account.implements`, `Account.implements_timed` and 20 more |
+| `Envelope.instDecidableEq` | proved | `Account.Fires.handle`, `Account.Moves.handle`, `Account.implements` and 8 more |
+| `Envelope.sameLink` | proved | through `SysState.nextOnLink`: `SysState.nextOnLink_spec` |
+| `Link.reliable` | proved | through `EnvModel.link`, `EnvModel.lossy` and 2 more: `Account.implements`, `Account.implements_timed` and 25 more |
 | `Link.network` | checked | `Tests/Bank.lean`, `Tests/Election.lean`, `Tests/Join.lean` and 1 more |
 | `Link.unordered` | checked | `Tests/Election.lean`, `Tests/Jobs.lean`, `Tests/Outside.lean` |
 | `EnvModel.reliable` | spec | used only in statements |
@@ -370,21 +371,21 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `update` | proved | through `SysState.down`, `SysState.init` and 4 more: `Account.implements`, `Account.implements_timed` and 40 more |
+| `update` | proved | through `SysState.down`, `SysState.handle` and 5 more: `Account.implements`, `Account.implements_timed` and 45 more |
 | `Event.timed` | spec | used only in statements |
 | `Event.visible` | spec | used only in statements |
 | `SysState.blank` | proved | `System.Inductive.of_monotone`, `System.Monotone.and`, `System.Monotone.and_net` |
-| `SysState.hasMail` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 26 more |
-| `SysState.perform` | proved | through `SysState.init`, `SysState.run` and 3 more: `Account.implements`, `Account.implements_timed` and 39 more |
-| `SysState.performAll` | proved | through `SysState.init`, `SysState.run` and 3 more: `Account.implements`, `Account.implements_timed` and 39 more |
+| `SysState.hasMail` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 29 more |
+| `SysState.perform` | proved | through `SysState.handle`, `SysState.init` and 4 more: `Account.implements`, `Account.implements_timed` and 44 more |
+| `SysState.performAll` | proved | through `SysState.handle`, `SysState.init` and 4 more: `Account.implements`, `Account.implements_timed` and 44 more |
 | `SysState.down` | proved | `Account.implements`, `Account.implements_timed`, `System.Refines.of_events` and 2 more |
 | `SysState.settle` | proved | `SysState.Loses.settle` |
-| `SysState.handle` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 26 more |
-| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and 2 more: `Account.implements`, `Account.implements_timed` and 38 more |
-| `SysState.deliverable` | proved | `Account.implements`, `Account.implements_timed`, `System.Refines.of_events` and 2 more |
-| `SysState.step` | proved | `Http.Gate.answered_of_leaves`, `Http.Gate.deadline_not_restarted`, `Shards.AtHome.step` and 7 more |
-| `SysState.init` | proved | `Account.implements`, `Account.implements_timed`, `Check.system_violated` and 22 more |
-| `SysState.run` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and 14 more |
+| `SysState.handle` | proved | `Http.fronted_handle_arrive`, `Http.served_handle_arrive` |
+| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and 2 more: `Account.implements`, `Account.implements_timed` and 41 more |
+| `SysState.deliverable` | proved | `Account.implements`, `Account.implements_timed`, `SysState.nextOnLink_spec` and 3 more |
+| `SysState.step` | proved | `Http.Gate.answered_of_leaves`, `Http.Gate.deadline_not_restarted`, `Shards.AtHome.step` and 8 more |
+| `SysState.init` | proved | `Account.implements`, `Account.implements_timed`, `Check.system_violated` and 24 more |
+| `SysState.run` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and 16 more |
 | `System.Invariant` | spec | a predicate |
 
 ## `Lanes/Data/Codec.lean`
@@ -1501,6 +1502,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `afterFirst` | spec | used only in statements |
+| `beforeFirst` | spec | used only in statements |
 
 ## `Lanes/Proof/Lossy.lean`
 
@@ -1797,6 +1799,14 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `System.fairSchedule` | spec | used only in statements |
 | `System.Run.fairAfter` | spec | used only in statements |
 
+## `Lanes/Semantics/History.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Service.act` | proved | `System.Implements.produced` |
+| `Service.play` | proved | `System.Implements.produced` |
+| `Service.Produces` | spec | a predicate |
+
 ## `Lanes/Semantics/Link.lean`
 
 | Definition | Status | Evidence |
@@ -1808,7 +1818,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Spec.stutter` | proved | through `System.Run`, `System.Run.event` and 2 more: `Http.Gate.pending_answered`, `Http.fronted_pending_answered` and 11 more |
+| `Spec.stutter` | proved | through `System.Run`, `System.Run.event` and 2 more: `Http.Gate.pending_answered`, `Http.fronted_arrival_answered` and 14 more |
 | `Obligation.event` | proved | `System.LeadsTo.ensures_of_invariant` |
 | `Obligation.Due` | spec | a predicate |
 | `Obligation.Restarted` | spec | a predicate |
@@ -1865,7 +1875,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Service.spec` | proved | `Account.Holds.passes`, `Account.implements`, `Account.implements_timed` and 8 more |
+| `Service.spec` | proved | `Account.Holds.passes`, `Account.implements`, `Account.implements_timed` and 10 more |
 | `Service.Stable` | spec | a predicate |
 | `Service.Only` | spec | a predicate |
 | `Service.Took` | spec | a predicate |
@@ -1882,7 +1892,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `System.sem` | proved | `Account.implements`, `Account.implements_timed`, `Once.server_implements` and 12 more |
+| `System.sem` | proved | `Account.implements`, `Account.implements_timed`, `Once.server_implements` and 14 more |
 | `System.Refines` | spec | a predicate |
 
 ## `Lanes/Web/Auth/Login.lean`
@@ -2099,16 +2109,16 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Http.gateSig` | proved | `Http.Gate.answered_le_handled`, `Http.Gate.answered_of_leaves`, `Http.Gate.deadline_not_restarted` and 12 more |
+| `Http.gateSig` | proved | `Http.Gate.always_up`, `Http.Gate.answered_le_handled`, `Http.Gate.answered_of_leaves` and 19 more |
 | `Http.gateActor` | proved | `Http.gateActor_bounded` |
-| `Http.gateSystem` | proved | `Http.Gate.answered_le_handled`, `Http.Gate.answered_of_leaves`, `Http.Gate.deadline_not_restarted` and 3 more |
-| `Http.frontWiring` | proved | through `Http.fronted`, `Http.served`: `Http.fronted_answered_le_arrived`, `Http.fronted_answered_nodup` and 10 more |
-| `Http.frontedSig` | proved | `Http.fronted_answered_le_arrived`, `Http.fronted_answered_nodup`, `Http.fronted_deadlines_armed` and 3 more |
-| `Http.frontedInput` | proved | through `Http.fronted`, `Http.served`: `Http.fronted_answered_le_arrived`, `Http.fronted_answered_nodup` and 10 more |
-| `Http.frontedOutput` | proved | through `Http.fronted`, `Http.served`: `Http.fronted_answered_le_arrived`, `Http.fronted_answered_nodup` and 10 more |
-| `Http.fronted` | proved | `Http.fronted_answered_le_arrived`, `Http.fronted_answered_nodup`, `Http.fronted_deadlines_armed` and 3 more |
-| `Http.servedSig` | proved | `Http.kernel_served_answered_le_arrived`, `Http.served_answered_le_arrived`, `Http.served_answered_nodup` and 3 more |
-| `Http.served` | proved | `Http.kernel_served_answered_le_arrived`, `Http.served_answered_le_arrived`, `Http.served_answered_nodup` and 3 more |
+| `Http.gateSystem` | proved | `Http.Gate.always_up`, `Http.Gate.answered_le_handled`, `Http.Gate.answered_of_leaves` and 4 more |
+| `Http.frontWiring` | proved | through `Http.fronted`, `Http.served`: `Http.fronted_answered_le_arrived`, `Http.fronted_answered_nodup` and 16 more |
+| `Http.frontedSig` | proved | `Http.fronted_answered_le_arrived`, `Http.fronted_answered_nodup`, `Http.fronted_arrival_answered` and 6 more |
+| `Http.frontedInput` | proved | through `Http.fronted`, `Http.served`: `Http.fronted_answered_le_arrived`, `Http.fronted_answered_nodup` and 16 more |
+| `Http.frontedOutput` | proved | through `Http.fronted`, `Http.served`: `Http.fronted_answered_le_arrived`, `Http.fronted_answered_nodup` and 16 more |
+| `Http.fronted` | proved | `Http.fronted_answered_le_arrived`, `Http.fronted_answered_nodup`, `Http.fronted_arrival_answered` and 6 more |
+| `Http.servedSig` | proved | `Http.kernel_served_answered_le_arrived`, `Http.served_answered_le_arrived`, `Http.served_answered_nodup` and 6 more |
+| `Http.served` | proved | `Http.kernel_served_answered_le_arrived`, `Http.served_answered_le_arrived`, `Http.served_answered_nodup` and 6 more |
 | `Signature.Inspect.gate` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean` |
 | `System.Inspect.gate` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean` |
 | `Signature.Inspect.fronted` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean` |
@@ -2139,11 +2149,11 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Http.instHashableGateMsgOfOut` | proved | through `Http.Gate.step`: `Http.Gate.step_bounded` |
+| `Http.instHashableGateMsgOfOut` | proved | through `Http.Gate.step`: `Http.Gate.step_arrive`, `Http.Gate.step_bounded` |
 | `Http.instReprGateMsgOfOut` | none |  |
-| `Http.busy` | proved | through `Http.Gate.step`: `Http.Gate.step_bounded` |
-| `Http.timedOut` | proved | through `Http.Gate.step`: `Http.Gate.step_bounded` |
-| `Http.Gate.step` | proved | `Http.Gate.step_bounded` |
+| `Http.busy` | proved | through `Http.Gate.step`: `Http.Gate.step_arrive`, `Http.Gate.step_bounded` |
+| `Http.timedOut` | proved | through `Http.Gate.step`: `Http.Gate.step_arrive`, `Http.Gate.step_bounded` |
+| `Http.Gate.step` | proved | `Http.Gate.step_arrive`, `Http.Gate.step_bounded` |
 
 ## `Lanes/Web/Http/Grammar.lean`
 
