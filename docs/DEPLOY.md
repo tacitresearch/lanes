@@ -275,7 +275,7 @@ uploads left incomplete for two days. The instance role may read and write it.
 
 The S3 client (`Lanes/Web/IO/S3.lean`) reads its credentials from a source at every call
 (`SigV4.Source`). The default path is the instance role's credentials, which the AWS integration
-(`integrations/aws`, `docs/decisions/new-aws-integration.md`) fetches from the metadata service
+(`integrations/aws`, `docs/decisions/D74-aws-integration.md`) fetches from the metadata service
 with IMDSv2, as the instance requires, and fetches again five minutes before they expire. Nothing
 is stored on the instance and nothing needs rotating. Require the package in the application's
 lakefile (`path` or `git`, as `examples/sign-in` requires Google's and GitHub's), and in `main`:

@@ -278,7 +278,7 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   that checks every signature from the bytes it receives. Bodies are whole, in memory. The
   credentials are read at each call from a `SigV4.Source`: fixed, or kept fresh by something
   else.
-- **AWS** (`integrations/aws`, `docs/decisions/new-aws-integration.md`): a role's credentials
+- **AWS** (`integrations/aws`, `docs/decisions/D74-aws-integration.md`): a role's credentials
   from an instance's metadata service (IMDSv2) or a container's endpoint, and email through SES.
   When to fetch and what may be handed out is a pure machine, `Aws.Refresh.step`: nothing is
   handed out within `skew_ms` of its expiry, and only what an answer gave (`Refresh.current_fresh`,

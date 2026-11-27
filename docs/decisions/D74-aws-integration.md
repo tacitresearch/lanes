@@ -1,4 +1,4 @@
-# D?. AWS as an integration: a role's credentials refreshed by a proved policy, and SES as the email model
+# D74. AWS as an integration: a role's credentials refreshed by a proved policy, and SES as the email model
 
 The reference deployment runs the application on one EC2 instance with a role
 (`docs/decisions/D70-one-instance-one-volume.md`), but the S3 client read keys only from the
