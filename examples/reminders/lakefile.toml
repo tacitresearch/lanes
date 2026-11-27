@@ -1,0 +1,24 @@
+name = "reminders"
+version = "0.1.0"
+defaultTargets = ["Reminders", "reminders", "test"]
+testDriver = "test"
+
+[[require]]
+name = "lanes"
+path = "../.."
+
+# `Reminders.Proofs` is a root of its own so that `lake build` builds the proofs and the
+# executables, which import `Reminders`, do not link them.
+[[lean_lib]]
+name = "Reminders"
+roots = ["Reminders", "Reminders.Proofs", "Reminders.Proofs.Axioms"]
+
+# The application.
+[[lean_exe]]
+name = "reminders"
+root = "Main"
+
+# Model checks and the application over HTTP through a restart, run by `lake test`.
+[[lean_exe]]
+name = "test"
+root = "Test"

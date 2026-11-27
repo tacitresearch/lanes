@@ -250,3 +250,16 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.System.Refines.traces_of_run' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Refines.traces_of_run
+
+-- Lanes.Semantics.Schedule
+/-- info: 'Lanes.Schedule.held_leaves' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Schedule.held_leaves
+
+/-- info: 'Lanes.Schedule.held_ends' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Schedule.held_ends
+
+/-- info: 'Lanes.Schedule.every_noticed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Schedule.every_noticed
+
+/-- info: 'Lanes.Schedule.attach_held_leaves' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Schedule.attach_held_leaves

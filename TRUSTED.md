@@ -160,6 +160,16 @@ in `Lanes/Web/Http/FrontSound.lean` to answer each arrival at most once and in
   kernel does: one that stays pending and is not armed again fires, and one that is armed
   again starts its delay again, so a liveness theorem does not assume that a timer fires
   while its actor keeps arming it.
+- **What the scheduler's time means.** The semantics has no clock, so the scheduler
+  (`Lanes/Behaviours/Schedule/Basic.lean`) keeps the latest time it knows: the times its
+  schedulings carry and the times its own timers were armed for, when they fire. What is proved
+  is said of that time (`Schedule.dispatch_due`, `Schedule.retry_waits`). That it is never ahead
+  of the real time is assumed: that the time a system puts in a scheduling is not ahead of the
+  clock (the examples take it from the wall clock where a request arrives), and that the runtime
+  fires a timer no earlier than its delay after it was armed, which the kernel does by firing
+  only timers whose deadline its clock has reached (`Kernel.timerNext`) and the shell by
+  reporting the clock as it reads it. A clock set back makes it lag, which makes jobs late, not
+  early.
 - **What the gate guarantees, and under what.** These are theorems about `served sys`, the
   system `serve` and `serveWith` run: `fronted sys`, the gate joined in front of `sys`, with
   requests its only inputs and responses its only outputs. *At most once* is proved. In every
