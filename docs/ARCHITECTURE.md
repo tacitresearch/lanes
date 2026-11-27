@@ -329,14 +329,16 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   the size a presigned put cannot: the policy a form carries reads back, as S3 reads it, as
   exactly the conditions and the expiry given (`S3.Post.form_policy`, `S3.Post.expiration_parse`),
   and a file S3 admits under it is within its size range and before its expiry
-  (`S3.Post.admitted_bounded`); tested against AWS's documented example and botocore. Large
+  (`S3.Post.admitted_bounded`); tested against AWS's documented example and botocore, and its
+  forms posted to moto, which reads them but checks no policy. Large
   objects go in parts (`Lanes/Web/S3/Multipart.lean`): a plan proved to cut a body into at most
   10,000 parts, each but the last of at least 5 MiB, together the body in order
   (`Plan.count_le`, `Plan.range_full`, `Plan.range_next`, `Plan.range_last`); links for a
   browser's parts with their length signed (`S3.presignPart`); and a server's upload as a pure
   flow, retrying, aborting what it gives up and asking the object's `HEAD` after a Complete
   whose answer was lost, which `S3.upload` performs, model-checked against the multipart model
-  below (`docs/decisions/D78-bounded-and-large-uploads.md`).
+  below (`docs/decisions/D78-bounded-and-large-uploads.md`), and run against moto's S3, with
+  calls by hand, in a run the model allows.
 - **AWS** (`integrations/aws`, `docs/decisions/D74-aws-integration.md`): a role's credentials
   from an instance's metadata service (IMDSv2) or a container's endpoint, and email through SES.
   When to fetch and what may be handed out is a pure machine, `Aws.Refresh.step`: nothing is
@@ -348,7 +350,8 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   timeouts. A task in `Aws/IO/Credentials.lean` only performs. SES's `SendEmail` is a JSON document
   proved to read back with exactly its recipients (`Ses.toAddresses_json`), its answers read as
   the email model's (`Ses.Answer.modelled`), and runs against a fake SES and against moto's SES
-  are ones the model allows; SES takes no key, so each send is a request without one.
+  are ones the model allows; SES takes no key, so each send is a request without one. SQS's
+  calls (`Aws.Sqs`: create a queue, send, receive, delete) are data, with no handler.
 - **Sign-in** (`Lanes/Web/IO/SignIn.lean`): the random values of a beginning and the key of the
   tickets, the states used and each provider's keys held in references, and the calls to the token endpoint,
   the JWK Set and a user API; every decision is `Lanes/Web/Auth/OAuth.lean`'s (above).
@@ -381,7 +384,8 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
 - **More outside systems** (the decision on models of more outside systems), each with a fixture
   in `Tests/` whose seeded bug the checker finds: a queue as SQS gives one, received at least once,
   again at any moment until deleted with its latest receipt, in any order or by FIFO group, at most
-  `maxReceives` times a copy (`Lanes/Outside/Queue.lean`, `Queue.received_le`); a cache in front
+  `maxReceives` times a copy (`Lanes/Outside/Queue.lean`, `Queue.received_le`), and a run of
+  moto's SQS through `integrations/aws`'s calls (`Aws.Sqs`) that the model allows; a cache in front
   of a store, evicting at any moment, with leases and, optionally, stale reads
   (`Lanes/Outside/Cache.lean`, `Cache.read_sent`, `Cache.fill_unleased`); a service that throttles
   with `429` and `Retry-After`, a combinator over `Rpc.Server` (`Lanes/Outside/Throttle.lean`,
@@ -483,9 +487,9 @@ theorem.
   stated as refinement (`Lanes/Semantics/Service.lean`, D42); that this is the textbook definition is argued, not proved.
   What it gives is proved: every run of a system that implements a service has a sequential
   history of the service's acts that produces each output it hands over, takes each input
-  after it arrives, and respects real-time order (`System.Implements.history`,
-  `Lanes/Semantics/History.lean`), so what is proved of the service's functions holds of the
-  system's outputs. A deadline passes in the system
+  after it arrives, and respects real-time order, with each deadline passing where the run
+  shows it (`System.Implements.history`, `Lanes/Semantics/History.lean`), so what is proved of
+  the service's functions holds of the system's outputs. A deadline passes in the system
   as a timer it names fires, or as a message it names is delivered
   (`docs/decisions/D56-a-deadline-passes-where-it-is-served.md`). `Server.implements` proves the
   `Server` behaviour (`Lanes/Behaviours/Server.lean`) implements its spec in an environment

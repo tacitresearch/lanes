@@ -32,7 +32,7 @@ every module a row names exists, and so does every path it cites.
 | `oracles/go` | Go's standard library, `golang.org/x/time` and Prometheus's `expfmt` | Go 1.24.7, x/time 0.11.0, prometheus/common 0.67.5 | `oracles/go/go.mod`, `oracles/go/go.sum` | Base64, IP addresses, times, JSON, media types, rate limits, URLs, XML, mail addresses, the metrics page; and, with Node and h11 (`oracles/go/requests/requests.py`, by hand), the request reader |
 | `oracles/botocore` | botocore | 1.44.12 | `oracles/botocore/requirements.txt` | Signature Version 4 |
 | `oracles/jwcrypto` | jwcrypto | 1.6.2 | `oracles/jwcrypto/requirements.txt` | JWS in compact form and JWK Sets |
-| `oracles/moto` | moto's server, S3 and SES API v2 | 5.2.6 | `oracles/moto/requirements.txt` | the object store's and the email model's recorded runs |
+| `oracles/moto` | moto's server, S3, SES API v2 and SQS | 5.2.6 | `oracles/moto/requirements.txt` | the recorded runs of the object store, multipart, email and queue models, and of `POST` forms |
 | `oracles/postgres` | PostgreSQL | 16 (16.15 recorded) | the CI job's `postgresql-16` | the store model's recorded runs |
 
 ## Protocol modules
@@ -95,10 +95,11 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Web/Http/Wire.lean` | `oracles/go/requests` | The writer proved against the reader (`Lanes/Web/Http/WireSound.lean`); the responses it reads against `openssl s_server` (`Tests/Tls.lean`) and moto (`oracles/moto`) |
 | `Lanes/Web/Http/WireSpec.lean` | | The spec the wire format is proved against |
 | `Lanes/Web/S3/Basic.lean` | `oracles/moto`, `oracles/botocore` | Its calls signed as botocore signs, and run against moto |
-| `Lanes/Web/S3/Multipart.lean` | `Tests/S3Upload.lean` | botocore 1.44's presigned `UploadPart` recorded as a vector; the flow model-checked against `Lanes/Outside/Multipart.lean` and run against the test kit's fake S3. A run against moto's multipart upload is owed |
-| `Lanes/Web/S3/Post.lean` | `Tests/S3Upload.lean` | botocore 1.44's `generate_presigned_post` recorded as vectors, and AWS's documented example; the policy proved to read back (`S3.Post.form_policy`). A form posted to moto is owed |
+| `Lanes/Web/S3/Multipart.lean` | `oracles/moto/s3-multipart.jsonl`, `Tests/S3Upload.lean` | The flow and the calls by hand against moto (`Tests/Oracle/Service/S3Multipart.lean`); botocore 1.44's presigned `UploadPart` recorded as a vector; the flow model-checked against `Lanes/Outside/Multipart.lean`. Known: moto 5.2.6 answers `500`, not `404 NoSuchUpload`, to a part sent after an abort |
+| `Lanes/Web/S3/Post.lean` | `oracles/moto/s3-post.jsonl`, `Tests/S3Upload.lean` | Forms posted to moto (`Tests/Oracle/Service/S3Post.lean`): moto reads the form and stores the file at its key, with its type. Known: moto 5.2.6 reads no policy, so it admits a file over the range, another key and an expired policy, which `Post.check` refuses as S3 documents; that check is AWS's documented example and botocore 1.44's `generate_presigned_post`, recorded as vectors, and the policy is proved to read back (`S3.Post.form_policy`) |
 | `Lanes/Web/S3/Xml.lean` | `oracles/go/xml` | |
 | `integrations/aws/Aws/Ses.lean` | `oracles/go/mail`, `oracles/moto` | The address check against `net/mail`; the calls against moto |
+| `integrations/aws/Aws/Sqs.lean` | `oracles/moto/sqs.jsonl` | The calls against moto (`integrations/aws/Checks/SqsMoto.lean`) |
 
 ## Outside models
 
@@ -112,9 +113,9 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Outside/Effects/Payments.lean` | | Owed: Stripe's test mode needs a key, and stripe-mock keeps no state; runs written by hand (`Tests/Outside.lean`) |
 | `Lanes/Outside/Events.lean` | | Owed, with Payments: webhooks need a service that sends them; runs written by hand (`Tests/Outside.lean`) |
 | `Lanes/Outside/Idempotent.lean` | | Owed, with Payments: SES and S3 take no idempotency key; runs written by hand (`Tests/Outside.lean`) |
-| `Lanes/Outside/Multipart.lean` | | Owed: moto has multipart uploads, and a run of `S3.upload` against it is not yet recorded; runs against the test kit's fake S3, checked with the model (`Tests/S3Upload.lean`) |
-| `Lanes/Outside/ObjectStore.lean` | `oracles/moto/s3.jsonl` | |
-| `Lanes/Outside/Queue.lean` | | Owed: moto's SQS could record a run, as `oracles/moto` does for S3 and SES; checked against a seeded bug in `Tests/Queue.lean` |
+| `Lanes/Outside/Multipart.lean` | `oracles/moto/s3-multipart.jsonl` | Parts by their size and digests, not their bytes |
+| `Lanes/Outside/ObjectStore.lean` | `oracles/moto/s3.jsonl`, `oracles/moto/s3-post.jsonl` | `POST` uploads as writes granted to a browser |
+| `Lanes/Outside/Queue.lean` | `oracles/moto/sqs.jsonl` | A standard queue with a dead-letter queue, and a FIFO queue, through `Aws.Sqs`. Known: moto 5.2.6 deletes a message with any receipt it was given, where SQS may keep it after a delete with a stale one; the model allows both |
 | `Lanes/Outside/Rpc.lean` | `oracles/moto/s3.jsonl`, `oracles/moto/ses.jsonl` | The calls the object store's and the email model are made of |
 | `Lanes/Outside/Store/Basic.lean` | `oracles/postgres/store.jsonl` | |
 | `Lanes/Outside/Throttle.lean` | | Owed: no service in CI answers 429 as a real one does; checked against a seeded bug in `Tests/Throttle.lean` |
