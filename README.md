@@ -45,15 +45,33 @@ FAIL: "money is conserved" is violated after 4 steps
 
 ## Start an application
 
-Lanes links libsodium and needs a C compiler: `apt-get install libsodium-dev pkg-config` (or
-`brew install libsodium pkg-config`).
+You need [elan](https://github.com/leanprover/elan), which installs Lean and Lake, a C
+compiler, and libsodium, which Lanes links, with pkg-config to find it:
 
 ```bash
-lake exe lanes new my-app
-cd my-app
-lake exe cache get   # prebuilt Mathlib, once
-lake test            # model checks
+curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh
+sudo apt-get install build-essential libsodium-dev pkg-config   # Debian, Ubuntu
+brew install libsodium pkg-config                               # macOS, with xcode-select --install
+```
+
+```bash
+git clone https://github.com/tacitresearch/lanes
+cd lanes
+lake exe lanes new my-app --dir ../my-app   # builds the `lanes` command, under a minute
+cd ../my-app
+lake exe cache get   # prebuilt Mathlib, once per project: 500 MB to fetch, 7.5 GB on disk
+lake test            # builds Lanes and the app (minutes, once), runs the model checks
 lake exe my-app      # serves http://127.0.0.1:8080
+```
+
+The app gets Lanes from GitHub (`rev = "main"` in its `lakefile.toml`), not from the clone,
+which it does not need once the app is made. Any Lake project can depend on Lanes the same way:
+
+```toml
+[[require]]
+name = "lanes"
+git = "https://github.com/tacitresearch/lanes"
+rev = "main"
 ```
 
 The generated app is a counter service: a spec-sized actor, its invariant proved in one line, a

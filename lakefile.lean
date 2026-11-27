@@ -5,21 +5,37 @@ open Lake DSL System
 
 package lanes where
   version := v!"0.1.0"
+  description := "Verified software in Lean 4: actors with pure step functions, a model checker, proofs and a runtime"
+  keywords := #["software-verification", "actors", "model-checking", "distributed-systems", "web"]
+  license := "Apache-2.0"
   testDriver := "lanesTest"
 
 require cslib from git "https://github.com/leanprover/cslib" @ "910210f7d155e22a2244591e394bd16fbb0ddbb3"
 
-/-- `native/lanes.c`, compiled by the system's C compiler against its libsodium headers. -/
+def needSodium : String :=
+  "lanes links libsodium statically and finds it with pkg-config: install them \
+  (apt-get install libsodium-dev pkg-config, or brew install libsodium pkg-config)"
+
+def pkgConfigSodium (option : String) : FetchM String := do
+  let some out ← captureProc? { cmd := "pkg-config", args := #[option, "libsodium"] }
+    | error needSodium
+  return out.trimAscii.toString
+
+/-- `native/lanes.c`, compiled by the system's C compiler against its libsodium headers, which
+Homebrew on Apple silicon puts outside the compiler's search path. -/
 target native pkg : FilePath := do
   let src ← inputTextFile (pkg.dir / "native" / "lanes.c")
-  buildO (pkg.buildDir / "native" / "lanes.o") src #["-I", (← getLeanIncludeDir).toString]
-    #["-O2", "-fPIC", "-DNDEBUG", "-Wall"]
+  let sodiumFlags := (← pkgConfigSodium "--cflags").splitOn " " |>.filter (· != "") |>.toArray
+  buildO (pkg.buildDir / "native" / "lanes.o") src
+    (#["-I", (← getLeanIncludeDir).toString] ++ sodiumFlags) #["-O2", "-fPIC", "-DNDEBUG", "-Wall"]
 
 /-- The system's libsodium, linked statically: a binary does not need it installed to run. -/
 target sodium : FilePath := do
-  let some dir ← captureProc? { cmd := "pkg-config", args := #["--variable=libdir", "libsodium"] }
-    | error "lanes needs libsodium and pkg-config: install libsodium-dev and pkg-config"
-  inputBinFile (FilePath.mk dir.trimAscii.toString / "libsodium.a")
+  let lib := FilePath.mk (← pkgConfigSodium "--variable=libdir") / "libsodium.a"
+  unless ← lib.pathExists do
+    error s!"lanes links libsodium statically, and {lib} is not there: install the static \
+      library too (libsodium-static on Fedora)"
+  inputBinFile lib
 
 @[default_target]
 lean_lib Lanes where
