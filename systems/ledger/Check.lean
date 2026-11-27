@@ -6,11 +6,13 @@ import Ledger
 Two users, `0` the administrator and `1`, two accounts each, with a right credential and a wrong
 one. Each scenario is a list of requests, each sent once the requests it lists have been
 answered, as a user who waits for a page does; the rest race. The monitor checks every
-response, and every lock lifting and session ending, against the spec (`Ledger.spec`), and
-every state is checked against the safety properties of `Ledger.Spec` and of the actors.
+response, and every lock lifting and session ending (the ledger serving the user's notice of
+it), against the spec (`Ledger.spec`), and every state is checked against the safety
+properties of `Ledger.Spec` and of the actors.
 
-`ledgerCheck` prints each report and fails if one is not as expected. `ledgerCheck timed-crash`
-runs the scenario with timers and a crash anywhere, which `lake test` leaves out for its size.
+`ledgerCheck` prints each report and fails if one is not as expected. `ledgerCheck timed` runs
+the abuse scenario with timers, and with a user crashing, which `lake test` leaves out for
+their size.
 -/
 
 namespace Ledger.Check
@@ -26,7 +28,8 @@ def wrong : C := 1
 instance : ∀ i, Repr (Msg N C i) := by instance_by_cases
 instance : ∀ i, Hashable (Msg N C i) := by instance_by_cases
 instance : (sig N C).Inspect := {}
-instance (config : Config N) (answering : Answering) : (system N C config answering).Inspect := by
+instance (config : Config N) (answering : Answering) (ending : Ending) :
+    (system N C config answering ending).Inspect := by
   instance_by_cases
 
 /-- A request and the requests whose answers it waits for. -/
@@ -35,8 +38,8 @@ abbrev Script := List (Request N C × List ReqId)
 def clients (script : Script) : Driver (sig N C) (Waiting (Request N C)) :=
   Driver.after (fun out => some out.req) script
 
-abbrev World' (config : Config N) (answering : Answering) :=
-  World (system N C config answering)
+abbrev World' (config : Config N) (answering : Answering) (ending : Ending := .atLedger) :=
+  World (system N C config answering ending)
     (Waiting (Request N C) × Check.Monitor (Request N C) (Response N) (SpecState N C))
 
 def untimed : Config N :=
@@ -54,14 +57,15 @@ def isAudit (script : Script) (req : ReqId) : Bool :=
 
 section Properties
 
-variable {config : Config N} {answering : Answering}
+variable {config : Config N} {answering : Answering} {ending : Ending}
 
-def book (w : World' config answering) : Book N := w.state.state .ledger
+def book (w : World' config answering ending) : Book N := w.state.state .ledger
 
-def profile (w : World' config answering) (n : N) : Option (Profile C) := w.state.state (.user n)
+def profile (w : World' config answering ending) (n : N) : Option (Profile C) :=
+  w.state.state (.user n)
 
-def props (config : Config N) (answering : Answering) (script : Script) :
-    List (Check.Property (World' config answering)) :=
+def props (config : Config N) (answering : Answering) (ending : Ending) (script : Script) :
+    List (Check.Property (World' config answering ending)) :=
   [ Check.refines "every response is one the spec allows",
     .always "money is conserved in each currency" fun w =>
       (book w).conserved .eur && (book w).conserved .usd,
@@ -83,12 +87,19 @@ def props (config : Config N) (answering : Answering) (script : Script) :
 
 end Properties
 
+/-- A check of the system in which deadlines pass as `ending` says. -/
+def checkEnding (ending : Ending) (config : Config N) (answering : Answering) (script : Script)
+    (witnesses : List (Check.Property (World' config answering ending)))
+    (env : EnvModel (sig N C) := {}) (maxCrashes : Nat := 0) :=
+  Check.system (system N C config answering ending)
+    { env, maxCrashes,
+      driver := (spec N C config).monitored (clients script) (deadlines ending) (delivered ending) }
+    (props config answering ending script ++ witnesses)
+
 def check (config : Config N) (answering : Answering) (script : Script)
     (witnesses : List (Check.Property (World' config answering)))
     (env : EnvModel (sig N C) := {}) (maxCrashes : Nat := 0) :=
-  Check.system (system N C config answering)
-    { env, maxCrashes, driver := (spec N C config).monitored (clients script) deadlines }
-    (props config answering script ++ witnesses)
+  checkEnding .atLedger config answering script witnesses env maxCrashes
 
 /-- Links between actors that reorder: what several shards joined by TCP give. -/
 def reordering : EnvModel (sig N C) where
@@ -97,6 +108,14 @@ def reordering : EnvModel (sig N C) where
 /-- Any actor may crash; it comes back with its state, as a shard does from its journal. -/
 def crashing : EnvModel (sig N C) where
   mayCrash _ := true
+
+/-- Any user may crash; the ledger does not, so no notice of a deadline is lost. -/
+def usersCrashing : EnvModel (sig N C) where
+  mayCrash i := i != .ledger
+
+/-- Only the ledger may crash, and what is in flight to it is lost. -/
+def ledgerCrashing : EnvModel (sig N C) where
+  mayCrash i := i == .ledger
 
 /-- Requests lost and reordered on their way in, and any actor crashing; the links from the users
 to the ledger are reliable. -/
@@ -157,6 +176,12 @@ def abuse : Script :=
 moment. -/
 def expiryRace : Script :=
   setup ++ [(act 9 0 3 (.transfer 0 2 5), [8]), (act 10 1 4 .accounts, [8])]
+
+/-- Two wrong credentials lock `1`'s account, then the right one is tried, and the session it
+may open is used. -/
+def lockRace : Script :=
+  [ (signUp 1 1, []), (logIn 2 1 wrong, [1]), (logIn 3 1 wrong, [2]), (logIn 4 1, [3]),
+    (act 5 1 4 .accounts, [4]) ]
 
 def answered (w : World' config answering) (req : ReqId) (reply : Reply N) : Bool :=
   w.state.outbox.any fun r => r.req == req && r.reply == reply
@@ -265,6 +290,20 @@ def tests : List (String × Bool) :=
 
 end Bridge
 
+/-- `1`'s session ends at any moment while a view of `1`'s and a payment to `1` race. -/
+def expiryWitnesses : List (Check.Property (World' timed' .viaLedger)) :=
+  [ .sometimes "the view sees the payment" fun w =>
+      w.state.outbox.any fun r => r.req == 10 && match r.reply with
+        | .accounts list => list.any fun (_, a) => a.balance == 5
+        | _ => false,
+    .sometimes "the view comes after the session's end" fun w => answered w 10 .noSession ]
+
+def lockWitnesses : List (Check.Property (World' timed' .viaLedger)) :=
+  [ .sometimes "a lock lifts" fun w => answered w 4 (.loggedIn 1 4),
+    .sometimes "a lock holds" fun w => answered w 4 .locked,
+    .sometimes "a session ends on its own" fun w => answered w 5 .noSession,
+    .sometimes "a session lasts" fun w => answered w 5 (.accounts []) ]
+
 def timedWitnesses : List (Check.Property (World' timed' .viaLedger)) :=
   [ .sometimes "a lock lifts" fun w => answered w 6 (.loggedIn 1 6),
     .sometimes "a lock holds" fun w => answered w 6 .locked,
@@ -292,7 +331,8 @@ instance (config : Config N) : (leaky config).Inspect := by instance_by_cases
 
 def checkLeaky :=
   Check.system (leaky timed')
-    { driver := (spec N C timed').monitored (clients abuse) deadlines }
+    { driver := (spec N C timed').monitored (clients abuse) (deadlines .atLedger)
+        (delivered .atLedger) }
     [Check.refines "every response is one the spec allows"]
 
 def timed {sys : System (sig N C)} [sys.Inspect] {D : Type} (name : String)
@@ -321,24 +361,41 @@ def main (args : List String) : IO UInt32 := do
   if all || args.contains "abuse" then
     results := results.push (← timed "locks, evictions and refusals" (fun r => r.ok && r.complete)
       fun _ => check untimed .viaLedger abuse abuseWitnesses)
-    results := results.push (← timed "with timers: sessions end and locks lift at any moment"
+    results := results.push (← timed "with timers: a lock lifts and a session ends at any moment"
       (fun r => r.ok && r.complete)
-      fun _ => check timed' .viaLedger abuse timedWitnesses)
+      fun _ => check timed' .viaLedger lockRace lockWitnesses)
     results := results.push (← timed "the same, with a lockout that does not lock"
       (fun r => match r.failure with
         | some (.violated "every response is one the spec allows" _) => true
         | _ => false)
       fun _ => checkLeaky)
     results := results.push (← timed
-      "a session ending while a view is on its way: the view sees a payment asked after the end"
+      "a session ending while a view is on its way, the end served by the ledger"
+      (fun r => r.ok && r.complete)
+      fun _ => check timed' .viaLedger expiryRace expiryWitnesses)
+    results := results.push (← timed
+      "the same with the end at the user: the view sees a payment asked after the end"
       (fun r => match r.failure with
         | some (.violated "every response is one the spec allows" _) => true
         | _ => false)
-      fun _ => check timed' .viaLedger expiryRace [])
-  if args.contains "timed-crash" then
-    results := results.push (← timed "with timers and a crash anywhere"
+      fun _ => checkEnding .atUser timed' .viaLedger expiryRace [])
+    results := results.push (← timed
+      "the same with the end served by the ledger and a user crashing"
       (fun r => r.ok && r.complete)
-      fun _ => check timed' .viaLedger abuse [] crashing 1)
+      fun _ => check timed' .viaLedger expiryRace [] usersCrashing 1)
+    results := results.push (← timed
+      "the same with the ledger crashing: a session's end lost with what was in flight"
+      (fun r => match r.failure with
+        | some (.violated "every response is one the spec allows" _) => true
+        | _ => false)
+      fun _ => check timed' .viaLedger expiryRace [] ledgerCrashing 1)
+  if args.contains "timed" then
+    results := results.push (← timed "locks, evictions and refusals, with timers firing at any moment"
+      (fun r => r.ok && r.complete)
+      fun _ => check timed' .viaLedger abuse timedWitnesses)
+    results := results.push (← timed "the same with a user crashing anywhere"
+      (fun r => r.ok && r.complete)
+      fun _ => check timed' .viaLedger abuse [] usersCrashing 1)
   if all || args.contains "faults" then
     results := results.push (← timed "a log-out racing a transfer, with links that reorder"
       (fun r => match r.failure with
