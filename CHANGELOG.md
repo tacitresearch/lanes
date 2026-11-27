@@ -58,6 +58,7 @@ under Unreleased (`CONTRIBUTING.md`).
 
 ### Changed
 
+- One crypto library (`docs/decisions/new-one-crypto-library.md`): SHA-256, HMAC-SHA-256, the comparison of byte strings and Argon2id come from the OpenSSL Lean's toolchain ships, as TLS does, and random bytes from Lean's `IO.getRandomBytes`. Building or running an application installs no library; `pkg-config` is not needed. Password digests are the same bytes as before, tested against hashes libsodium made and RFC 9106's example. `Lanes/Lib/Crypto/Sodium.lean` is `Lanes/Lib/Crypto/Native.lean`, every name kept; `Argon2id.derive` takes RFC 9106's lanes, secret and associated data.
 - `examples/videos` uploads by a `POST` form whose policy bounds the size (`VIDEOS_MAX_UPLOAD_BYTES`, 2 GiB by default) instead of a presigned `PUT`; the deployment's media bucket allows `POST` from the site.
 - `S3.Op` has the multipart operations and `S3.Answer` their answers (`started`, `completed`, `parts`): a `match` on either without a wildcard needs the new cases.
 - `S3.exchange` and `S3.handler` read the credentials of each call from a `SigV4.Source` (fixed credentials still coerce to one), so credentials refreshed elsewhere are used as they change; a call with none is not sent and is answered `unknown`.
@@ -89,6 +90,7 @@ under Unreleased (`CONTRIBUTING.md`).
 
 ### Removed
 
+- libsodium: the lakefile no longer finds it with `pkg-config` or links `libsodium.a`, and CI, the runner and the template no longer install it. `Lanes.Lib.Crypto.Sodium` only imports `Lanes.Lib.Crypto.Native`, and is deprecated.
 - `Actor.comapMsg`, which nothing used; the `Repr Empty` instance of `Lanes/Core/Inspect.lean`, which Lean has; helper lemmas of the soundness proofs that no proof used.
 
 ### Security

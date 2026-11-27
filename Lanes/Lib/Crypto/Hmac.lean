@@ -10,8 +10,8 @@ public import Lanes.Lib.Crypto.Sha256
 HMAC-SHA-256 (RFC 2104) in pure Lean, with what a signed token needs around it: hex, and a
 comparison that reads every byte whatever it finds.
 
-These are the references: programs use libsodium's (`hmac`, `Bytes.same`,
-`Lanes/Lib/Crypto/Sodium.lean`), and `Tests/Crypto.lean` checks they agree. Tested against RFC 4231.
+These are the references: programs use OpenSSL's (`hmac`, `Bytes.same`,
+`Lanes/Lib/Crypto/Native.lean`), and `Tests/Crypto.lean` checks they agree. Tested against RFC 4231.
 -/
 
 @[expose] public section

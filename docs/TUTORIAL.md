@@ -1,8 +1,8 @@
 # Tutorial
 
 Fifteen minutes from `lanes new` to a change that is model-checked and proved. You need some
-programming, not much Lean. Install what the quick start in `README.md` lists first: elan, a C
-compiler, libsodium and pkg-config.
+programming, not much Lean. Install what the quick start in `README.md` lists first: elan and
+a C compiler.
 
 The code of each step is kept in `Tests/Tutorial/`: `lake build` compiles it, and `lake test`
 fails if this page quotes anything but that code and what the checker prints for it.

@@ -173,7 +173,7 @@ names repositories by id (as `tacitresearch/lanes` does, `docs/RUNNERS.md`) give
 **Actions → Deploy → Run workflow** on `main`. The workflow:
 
 1. builds the executable with `lake build <BinaryName>` on Ubuntu 24.04 and strips it. Lean links
-   its runtime (OpenSSL included) and Lanes links libsodium into it, so it needs only the C
+   its runtime, OpenSSL included, into it, so it needs only the C
    library (glibc 2.25 or later for `examples/counter`; the workflow checks with `ldd` that
    nothing else is needed);
 2. puts it at `s3://<bucket>/<prefix>/releases/<commit>/<BinaryName>`;

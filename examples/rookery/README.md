@@ -190,7 +190,7 @@ asks for its posts every five seconds and whenever a post of the page's is answe
 `/api/post`, `/api/delete`, `/api/follow`, `/api/unfollow` (JSON bodies with `seq`),
 `/api/timeline` and `/api/u/<name>`, with `Authorization: Bearer <token>`.
 
-- Passwords: Argon2id from libsodium in the bridge's `prepare`, salted with an HMAC of the name
+- Passwords: Argon2id from OpenSSL in the bridge's `prepare`, salted with an HMAC of the name
   under a pepper of the deployment, as the ledger does (D44).
 - Sessions: a cookie holding a signed token of the session id and the name; `HttpOnly`,
   `SameSite=Lax`. At most four sessions an account, each ended by log-out or after a day.

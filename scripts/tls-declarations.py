@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Checks the OpenSSL declarations of `native/tls.c`, `native/verify.c` and `native/sign.c`
-against the system's OpenSSL headers.
+"""Checks the OpenSSL declarations of `native/tls.c`, `native/verify.c`, `native/sign.c` and
+`native/lanes.c` against the system's OpenSSL headers.
 
 The OpenSSL that these files link is the one Lean's toolchain ships, which has no headers, so
 each file declares what it calls. This compiles each with the system's headers included first
@@ -16,10 +16,12 @@ import sys
 import tempfile
 
 HEADERS = ("#include <openssl/ssl.h>\n#include <openssl/x509v3.h>\n#include <openssl/err.h>\n"
-           "#include <openssl/evp.h>\n#include <openssl/x509.h>\n#include <openssl/pem.h>\n")
+           "#include <openssl/evp.h>\n#include <openssl/x509.h>\n#include <openssl/pem.h>\n"
+           "#include <openssl/sha.h>\n#include <openssl/hmac.h>\n#include <openssl/crypto.h>\n"
+           "#include <openssl/kdf.h>\n#include <openssl/param_build.h>\n")
 lean = subprocess.run(["lean", "--print-prefix"], capture_output=True, text=True, check=True)
 flags = subprocess.run(["pkg-config", "--cflags", "openssl"], capture_output=True, text=True)
-for name in ["native/tls.c", "native/verify.c", "native/sign.c"]:
+for name in ["native/tls.c", "native/verify.c", "native/sign.c", "native/lanes.c"]:
     source = open(name).read()
     pairs = []
     if "enum {" in source:

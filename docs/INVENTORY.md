@@ -799,7 +799,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `SigningKey.ofPem` | trusted | TRUSTED.md: The signing key |
 | `SigningKey.sign` | trusted | TRUSTED.md: The signing key |
 
-## `Lanes/Lib/Crypto/Sodium.lean`
+## `Lanes/Lib/Crypto/Native.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |

@@ -11,7 +11,7 @@ SHA-256 (FIPS 180-4) in pure Lean. `digestFrom` continues a hash from a state th
 taken whole blocks, which is what HMAC needs to hash its two padded keys once per key instead of
 once per message (`Lanes.Hmac`).
 
-This is the reference: programs use libsodium's (`Sha256.hash`, `Lanes/Lib/Crypto/Sodium.lean`), and
+This is the reference: programs use OpenSSL's (`Sha256.hash`, `Lanes/Lib/Crypto/Native.lean`), and
 `Tests/Crypto.lean` checks the two agree. Tested against the NIST examples. That it is SHA-256 is
 not proved; that a digest is 32 bytes is.
 -/

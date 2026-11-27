@@ -3,13 +3,15 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
+import Lanes.Lib.Crypto.Sodium -- deprecated_module: ignore
 
 /-!
 SHA-256 against the examples of FIPS 180-4 (as NIST publishes them) and HMAC-SHA-256 against
-RFC 4231, each run on libsodium's and on the Lean reference; then the two compared on thousands
-of random inputs of every length around a block, which is what the trust in libsodium rests on
+RFC 4231, each run on OpenSSL's and on the Lean reference; then the two compared on thousands
+of random inputs of every length around a block, which is what the trust in the binding rests on
 (`TRUSTED.md`). SHA-512 and SHA-384, pure Lean, against the same examples, as `openssl dgst`
-computes them. Argon2id has no reference, so only its properties are tested.
+computes them. Argon2id has no reference: it is tested against RFC 9106's example, against
+hashes libsodium made when Lanes linked it, and for its properties.
 -/
 
 namespace Tests.Crypto
@@ -140,13 +142,13 @@ def differentialTests : List (String × Bool) :=
   let messages := inputs 1 2000 1000 300
   let keys := inputs 2 400 200 130
   let compared := pairs 3 5000
-  [ ("libsodium: sha-256 equals the reference on 2301 messages of every length to 300 and to 1000",
+  [ ("openssl: sha-256 equals the reference on 2301 messages of every length to 300 and to 1000",
       messages.all fun m => Sha256.hash m == Sha256.reference m),
-    ("libsodium: hmac-sha-256 equals the reference on 531 keys of every length to 130, each with a message",
+    ("openssl: hmac-sha-256 equals the reference on 531 keys of every length to 130, each with a message",
       (keys.zip messages).all fun (k, m) => hmac k m == Hmac.reference k m),
-    ("libsodium: comparison equals the reference on 5000 pairs, equal, one byte apart, or not",
+    ("openssl: comparison equals the reference on 5000 pairs, equal, one byte apart, or not",
       compared.all fun (a, b) => Bytes.same a b == Bytes.sameReference a b),
-    ("libsodium: and those pairs are equal and unequal, and unequal in their last byte",
+    ("openssl: and those pairs are equal and unequal, and unequal in their last byte",
       compared.any (fun (a, b) => Bytes.same a b && a.size > 0)
         && compared.any (fun (a, b) => !Bytes.same a b && a.size == b.size)
         && Bytes.same (repeated 0 64) (repeated 0 64)
@@ -165,7 +167,7 @@ def argon2idTests : List (String × Bool) :=
       h != hash cost "passwore" 1 && h != hash cost "password" 2
         && h != hash { ops := 2, mem_kib := 64 } "password" 1
         && h != hash { ops := 1, mem_kib := 128 } "password" 1),
-    ("argon2id: the least cost libsodium accepts, and an empty password",
+    ("argon2id: the least cost, and an empty password",
       (hash { ops := 1, mem_kib := 8 } "" 0).size == 32) ]
 
 /-- Hashes made by libsodium 1.0.18's `crypto_pwhash` (Argon2id, version 19, one lane, 32 bytes)
@@ -207,9 +209,54 @@ def libsodiumTests : List (String × Bool) :=
         : Auth.Password).digest "alice" "longenough").hex
         == "d8da2482ae31637fd29537b3d11e1dd5960a0677b6ca8f3fabc11ea8301296da") ]
 
+/-- Strings libsodium 1.0.18's `crypto_pwhash_str` made, each with its password. Lanes stores raw
+digests, not these, but the hash in each must be `Argon2id.hash` of its salt at its cost. -/
+def libsodiumStrings : List (String × String) :=
+  [ ("password",
+      "$argon2id$v=19$m=65536,t=2,p=1$E+tvRm1Cu4oTuZFABAPCHw$LsKhhcuq+lm2cwEIYZpzPqBwajj1j8tESD/wTFB7y7s"),
+    ("", "$argon2id$v=19$m=8,t=1,p=1$yI8PO5+wXyL1PST2IX2uKQ$5x9249jB5yknGVeLbz2vmyfo/ACC/wO0iO/DPRDNDik"),
+    ("correct horse battery staple",
+      "$argon2id$v=19$m=19456,t=2,p=1$zzMGlkKU3Ui8mxjYogWDIQ$o9Qpy1K8M5YKtnbOCFdB2qU7nPt9/Y0zJ30MGJayw5M"),
+    ("pässwörd",
+      "$argon2id$v=19$m=1023,t=3,p=1$8AnvIv1+aZqutOp1asgPtA$Xqgs3JYhyhyNs8kck9wdtKu6nLCsy+I6ZHk9mqMifOk") ]
+
+def verifiesString (password encoded : String) : Bool :=
+  let number (field key : String) : Option Nat :=
+    match field.splitOn "=" with
+    | [k, n] => if k == key then n.toNat? else none
+    | _ => none
+  match encoded.splitOn "$" with
+  | ["", "argon2id", "v=19", params, salt, digest] =>
+    match params.splitOn ",", Base64.decode .rawStd salt, Base64.decode .rawStd digest with
+    | [m, t, "p=1"], some salt, some digest =>
+      match number m "m", number t "t" with
+      | some kib, some ops =>
+        if h : salt.size = 16 ∧ 0 < ops.toUInt32 ∧ 8 ≤ kib.toUInt32 then
+          let cost : Argon2id := { ops := ops.toUInt32, mem_kib := kib.toUInt32,
+                                   ops_pos := h.2.1, mem_min := h.2.2 }
+          Bytes.same (cost.hash (bytesOf password) salt h.1) digest
+        else false
+      | _, _ => false
+    | _, _, _ => false
+  | _ => false
+
+def libsodiumStringTests : List (String × Bool) :=
+  (libsodiumStrings.map fun (password, encoded) =>
+    (s!"argon2id: libsodium's string {encoded.take 30}… verifies", verifiesString password encoded))
+  ++ [ ("argon2id: and not with another password",
+      !verifiesString "passwore" (libsodiumStrings.head?.map (·.2) |>.getD "")) ]
+
+/-- RFC 9106 §5.3:32 bytes of 1 as the password, 16 of 2 as the salt, 8 of 3 as the secret and 12
+of 4 as associated data, three passes over 32 KiB in four lanes. -/
+def rfc9106Tests : List (String × Bool) :=
+  let tag := ({ ops := 3, mem_kib := 32 } : Argon2id).derive 4 (repeated 1 32) (salt 2).1
+    (repeated 3 8) (repeated 4 12) (salt 2).2 ⟨by decide, by decide, by decide⟩
+  [ ("argon2id: RFC 9106's example",
+      Bytes.hex tag == "0d640df58d78766c08c037a34a8b53c9d01ef0452d75b65eb52520e96b01e659") ]
+
 def tests : List (String × Bool) :=
   sha256Tests ++ sha512Tests ++ hmacTests ++ bytesTests ++ differentialTests ++ argon2idTests
-    ++ libsodiumTests
+    ++ libsodiumTests ++ libsodiumStringTests ++ rfc9106Tests
 
 def live : IO (List (String × Bool)) := do
   let a ← Lanes.randomBytes 32

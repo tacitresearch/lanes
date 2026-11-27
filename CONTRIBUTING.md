@@ -7,8 +7,8 @@ semantics, a proved runtime kernel, a model checker, proofs, and adapters.
 
 `AGENTS.md` is the rules file, for people and agents alike: how to build, the checks to run
 before a change is done, the design rules, the code and proof conventions, and the layout of
-the repository. Read it first; this file does not repeat it. Lanes links libsodium, so a clone
-needs a C compiler, `libsodium-dev` and `pkg-config` (`README.md`).
+the repository. Read it first; this file does not repeat it. A clone needs elan and a C compiler
+(`README.md`).
 
 ## How a change is made
 

@@ -5,7 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Lanes.Lib.Metrics
-public import Lanes.Lib.Crypto.Sodium
+public import Lanes.Lib.Crypto.Native
 public import Lanes.Lib.Encoding.Json
 public import Lanes.Lib.Net.Ip
 public import Lanes.Proof.Utf8
