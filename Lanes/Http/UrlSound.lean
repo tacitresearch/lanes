@@ -728,4 +728,330 @@ theorem normalize_normalize (u : Url) : u.normalize.normalize = u.normalize := b
   cases scheme <;> cases authority <;> cases query <;> cases fragment <;>
     simp [lower_lower, pct_pct, Authority.normalize_normalize]
 
+/-! ### Printing and parsing -/
+
+theorem mem_encoded {allowed : Char → Bool} {cs : List Char} (h : encoded allowed cs) {c : Char}
+    (hc : c ∈ cs) : allowed c ∨ c = '%' ∨ isHex c := by
+  fun_induction encoded allowed cs
+  case case1 hd l rest ih =>
+    simp only [Bool.and_eq_true] at h
+    simp only [List.mem_cons] at hc
+    rcases hc with rfl | rfl | rfl | hc
+    · exact .inr (.inl rfl)
+    · exact .inr (.inr h.1.1)
+    · exact .inr (.inr h.1.2)
+    · exact ih h.2 hc
+  case case2 => simp at h
+  case case3 x rest _ _ ih =>
+    simp only [Bool.and_eq_true] at h
+    simp only [List.mem_cons] at hc
+    rcases hc with rfl | hc
+    · exact .inl h.1
+    · exact ih h.2 hc
+  case case4 => cases hc
+
+theorem not_mem_encoded {allowed : Char → Bool} {cs : List Char} (h : encoded allowed cs) {d : Char}
+    (hd : allowed d = false ∧ d ≠ '%' ∧ isHex d = false) : d ∉ cs := fun hm => by
+  rcases mem_encoded h hm with e | e | e
+  · rw [hd.1] at e; cases e
+  · exact hd.2.1 e
+  · rw [hd.2.2] at e; cases e
+
+theorem cut_append {c : Char} {x : List Char} (y : List Char) (h : c ∉ x) :
+    cut c (x ++ c :: y) = (x, some y) := by
+  induction x with
+  | nil => simp [cut]
+  | cons a x ih =>
+    have ha : a ≠ c := fun e => h (e ▸ List.mem_cons_self)
+    simp [cut, ha, ih (fun hm => h (List.mem_cons_of_mem _ hm))]
+
+theorem cut_none {c : Char} {x : List Char} (h : c ∉ x) : cut c x = (x, none) := by
+  induction x with
+  | nil => simp [cut]
+  | cons a x ih =>
+    have ha : a ≠ c := fun e => h (e ▸ List.mem_cons_self)
+    simp [cut, ha, ih (fun hm => h (List.mem_cons_of_mem _ hm))]
+
+theorem cut_opt {c : Char} {x : List Char} (y : Option String) (h : c ∉ x) :
+    cut c (x ++ (y.map (c :: ·.toList)).getD []) = (x, y.map String.toList) := by
+  cases y with
+  | none => simpa using cut_none h
+  | some y => simpa using cut_append y.toList h
+
+theorem schemeEnd_append {s : List Char} (r : List Char) (h1 : ':' ∉ s) (h2 : '/' ∉ s) :
+    schemeEnd (s ++ ':' :: r) = some (s, r) := by
+  induction s with
+  | nil => simp [schemeEnd]
+  | cons a s ih =>
+    have ha1 : a ≠ ':' := fun e => h1 (e ▸ List.mem_cons_self)
+    have ha2 : a ≠ '/' := fun e => h2 (e ▸ List.mem_cons_self)
+    rw [List.cons_append, schemeEnd, ih (fun hm => h1 (List.mem_cons_of_mem _ hm))
+      (fun hm => h2 (List.mem_cons_of_mem _ hm))]
+    · rfl
+    · exact ha1
+    · exact ha2
+
+theorem schemeEnd_none {x : List Char} (h : ':' ∉ (breakSlash x).1) : schemeEnd x = none := by
+  induction x with
+  | nil => rfl
+  | cons a x ih =>
+    by_cases ha : a = '/'
+    · subst ha; rfl
+    · by_cases hb : a = ':'
+      · subst hb; simp [breakSlash] at h
+      · rw [schemeEnd, ih]
+        · rfl
+        · rw [breakSlash] at h
+          · exact fun hm => h (List.mem_cons_of_mem _ hm)
+          · exact ha
+        · exact hb
+        · exact ha
+
+theorem breakSlash_append {a p : List Char} (h : '/' ∉ a) (hp : p.head?.all (· == '/')) :
+    breakSlash (a ++ p) = (a, p) := by
+  induction a with
+  | nil =>
+    cases p with
+    | nil => rfl
+    | cons c p =>
+      simp at hp
+      subst hp
+      rfl
+  | cons c a ih =>
+    have hc : c ≠ '/' := fun e => h (e ▸ List.mem_cons_self)
+    rw [List.cons_append, breakSlash, ih (fun hm => h (List.mem_cons_of_mem _ hm))]
+    exact hc
+
+/-- The characters that delimit the components after a host: none of them is in a host. -/
+def Delim (c : Char) : Prop := c = '#' ∨ c = '?' ∨ c = '/' ∨ c = '@'
+
+theorem delim_not_ip {c : Char} (hc : Delim c) : c ∉ Digits.lower ∧ c ≠ '.' ∧ c ≠ ':' ∧ c ≠ '[' ∧ c ≠ ']' := by
+  rcases hc with rfl | rfl | rfl | rfl <;> decide
+
+theorem not_mem_print4 {c : Char} (n : Nat) (hc : c ∉ Digits.lower ∧ c ≠ '.') : c ∉ Ip.print4 n :=
+  fun hm => (Ip.mem_print4 hm).elim hc.1 hc.2
+
+theorem not_mem_print6 {c : Char} (n : Fin (2 ^ 128)) (hc : c ∉ Digits.lower ∧ c ≠ '.' ∧ c ≠ ':') :
+    c ∉ Ip.print6 n.val := fun hm => by
+  have := Ip.mem_print (a := .v6 n) (c := c) (by simpa [Ip.print] using hm)
+  rcases this with h | h | h
+  · exact hc.1 h
+  · exact hc.2.1 h
+  · exact hc.2.2 h
+
+theorem not_mem_host {h : Host} (hv : h.valid) {c : Char} (hc : Delim c) : c ∉ h.chars := by
+  obtain ⟨h1, h2, h3, h4, h5⟩ := delim_not_ip hc
+  match h, hv with
+  | .ip (.v4 n), _ => exact not_mem_print4 _ ⟨h1, h2⟩
+  | .ip (.v6 n), _ =>
+    simp only [Host.chars, List.cons_append, List.mem_cons, List.mem_append, not_or]
+    exact ⟨h4, not_mem_print6 n ⟨h1, h2, h3⟩, h5, by simp⟩
+  | .name s, hv =>
+    simp only [Host.valid, Bool.and_eq_true] at hv
+    exact not_mem_encoded hv.1 (by rcases hc with rfl | rfl | rfl | rfl <;> decide)
+
+theorem not_mem_digits {p : List Char} (hp : p.all isDigit) {c : Char} (hc : isDigit c = false) :
+    c ∉ p := fun hm => by
+  have := List.all_eq_true.mp hp c hm
+  rw [hc] at this; cases this
+
+theorem not_mem_port {port : Option String} (hp : port.all (·.toList.all isDigit)) {c : Char}
+    (hc : Delim c) : c ∉ (port.map (':' :: ·.toList)).getD [] := by
+  have hd : isDigit c = false := by rcases hc with rfl | rfl | rfl | rfl <;> decide
+  cases port with
+  | none => simp
+  | some p =>
+    simp only [Option.all_some] at hp
+    simp only [Option.map_some, Option.getD_some, List.mem_cons, not_or]
+    exact ⟨by rcases hc with rfl | rfl | rfl | rfl <;> decide, not_mem_digits hp hd⟩
+
+theorem not_mem_authority {a : Authority} (hv : a.valid) {c : Char} (hc : c = '#' ∨ c = '?' ∨ c = '/') :
+    c ∉ a.chars := by
+  obtain ⟨userinfo, host, port⟩ := a
+  simp only [Authority.valid, Bool.and_eq_true] at hv
+  obtain ⟨⟨hu, hh⟩, hp⟩ := hv
+  have hc' : Delim c := by rcases hc with h | h | h <;> simp [Delim, h]
+  simp only [Authority.chars, List.mem_append, not_or]
+  refine ⟨⟨?_, not_mem_host hh hc'⟩, not_mem_port hp hc'⟩
+  cases userinfo with
+  | none => simp
+  | some u =>
+    simp only [Option.all_some] at hu
+    have := not_mem_encoded hu (d := c) (by rcases hc with rfl | rfl | rfl <;> decide)
+    simp only [Option.map_some, Option.getD_some, List.mem_append, List.mem_singleton, not_or]
+    exact ⟨this, by rcases hc with rfl | rfl | rfl <;> decide⟩
+
+theorem parseHost_chars {h : Host} (hv : h.valid) {port : Option String}
+    (hp : port.all (·.toList.all isDigit)) :
+    parseHost (h.chars ++ (port.map (':' :: ·.toList)).getD []) = some (h, port.map String.toList) := by
+  match h, hv with
+  | .ip (.v6 n), _ =>
+    have hb : ']' ∉ Ip.print6 n.val := not_mem_print6 n (by decide)
+    simp only [Host.chars, List.cons_append, List.append_assoc]
+    rw [parseHost, cut_append _ hb]
+    cases port with
+    | none => simp [Ip.parse6_print6]
+    | some p => simp [Ip.parse6_print6]
+  | .ip (.v4 n), _ =>
+    have hc : ':' ∉ Ip.print4 n.val := Ip.not_colon_print4 _
+    have hb : '[' ∉ Ip.print4 n.val := not_mem_print4 _ (by decide)
+    simp only [Host.chars]
+    rw [parseHost, cut_opt _ hc]
+    · simp [Ip.parse4_print4]
+    · intro rest e
+      cases hq : Ip.print4 n.val with
+      | nil => exact absurd (Ip.dot_print4 n.val) (by rw [hq]; simp)
+      | cons x xs => rw [hq] at e hb; simp at e; exact hb (by simp [e.1])
+  | .name s, hv =>
+    simp only [Host.valid, Bool.and_eq_true] at hv
+    have hc : ':' ∉ s.toList := not_mem_encoded hv.1 (by decide)
+    have hb : '[' ∉ s.toList := not_mem_encoded hv.1 (by decide)
+    have h4 : Ip.parse4 s.toList = none := by simpa using hv.2
+    simp only [Host.chars]
+    rw [parseHost, cut_opt _ hc]
+    · simp [h4]
+    · intro rest e
+      cases hq : s.toList with
+      | nil =>
+        rw [hq] at e
+        cases port <;> simp at e
+      | cons x xs => rw [hq] at e hb; simp at e; exact hb (by simp [e.1])
+
+theorem parseAuthority_chars {a : Authority} (hv : a.valid) : parseAuthority a.chars = some a := by
+  obtain ⟨userinfo, host, port⟩ := a
+  simp only [Authority.valid, Bool.and_eq_true] at hv
+  obtain ⟨⟨hu, hh⟩, hp⟩ := hv
+  have hhp : '@' ∉ host.chars ++ (port.map (':' :: ·.toList)).getD [] := by
+    simp only [List.mem_append, not_or]
+    exact ⟨not_mem_host hh (by simp [Delim]), not_mem_port hp (by simp [Delim])⟩
+  simp only [Authority.chars, List.append_assoc]
+  cases userinfo with
+  | none =>
+    simp only [Option.map_none, Option.getD_none, List.nil_append, parseAuthority, cut_none hhp,
+      parseHost_chars hh hp]
+    cases port <;> simp
+  | some u =>
+    simp only [Option.all_some] at hu
+    have hat : '@' ∉ u.toList := not_mem_encoded hu (by decide)
+    simp only [Option.map_some, Option.getD_some, List.append_assoc, List.singleton_append,
+      parseAuthority, cut_append _ hat, parseHost_chars hh hp]
+    cases port <;> simp
+
+theorem schemeOk_spec {s : List Char} (h : schemeOk s) :
+    (∀ c, (c = '#' ∨ c = '?' ∨ c = ':' ∨ c = '/') → c ∉ s) ∧ lower s = s := by
+  match s, h with
+  | c :: rest, h =>
+    simp only [schemeOk, Bool.and_eq_true, beq_iff_eq] at h
+    refine ⟨fun d hd hm => ?_, h.2⟩
+    have := List.all_eq_true.mp h.1.2 d hm
+    rcases hd with rfl | rfl | rfl | rfl <;> simp [isSchemeChar, isAlpha, isDigit] at this
+
+theorem pathChars_eq {u : Url} (h : u.pathFits) : u.pathChars = u.path.toList := by
+  unfold pathChars
+  split
+  · rename_i hc
+    simp only [pathFits] at h
+    simp only [Bool.and_eq_true, Option.isNone_iff_eq_none, beq_iff_eq] at hc
+    rw [hc.1] at h
+    simp [hc.2] at h
+  · rfl
+
+theorem not_mem_schemePart {scheme : Option String} (hs : scheme.all (schemeOk ·.toList))
+    {c : Char} (hc : c = '#' ∨ c = '?') : c ∉ (scheme.map (·.toList ++ [':'])).getD [] := by
+  cases scheme with
+  | none => simp
+  | some s =>
+    simp only [Option.all_some] at hs
+    simp only [Option.map_some, Option.getD_some, List.mem_append, List.mem_singleton, not_or]
+    exact ⟨(schemeOk_spec hs).1 c (by rcases hc with h | h <;> simp [h]),
+      by rcases hc with rfl | rfl <;> decide⟩
+
+theorem not_mem_authorityPart {authority : Option Authority} (ha : authority.all Authority.valid)
+    {c : Char} (hc : c = '#' ∨ c = '?') : c ∉ (authority.map ('/' :: '/' :: ·.chars)).getD [] := by
+  cases authority with
+  | none => simp
+  | some a =>
+    simp only [Option.all_some] at ha
+    simp only [Option.map_some, Option.getD_some, List.mem_cons, not_or]
+    exact ⟨by rcases hc with rfl | rfl <;> decide, by rcases hc with rfl | rfl <;> decide,
+      not_mem_authority ha (by rcases hc with h | h <;> simp [h])⟩
+
+theorem parseRaw_chars {u : Url} (hv : u.valid) : parseRaw u.chars = some u := by
+  have hfit : u.pathFits := by simp only [valid, Bool.and_eq_true] at hv; exact hv.2
+  have hpc := pathChars_eq hfit
+  obtain ⟨scheme, authority, path, query, fragment⟩ := u
+  simp only [valid, Bool.and_eq_true] at hv
+  obtain ⟨⟨⟨⟨⟨hs, ha⟩, hp⟩, hq⟩, hf⟩, -⟩ := hv
+  simp only [chars, hpc]
+  have hF : '#' ∉ (scheme.map (·.toList ++ [':'])).getD [] ++ (authority.map ('/' :: '/' :: ·.chars)).getD []
+      ++ path.toList ++ (query.map ('?' :: ·.toList)).getD [] := by
+    simp only [List.mem_append, not_or]
+    refine ⟨⟨⟨not_mem_schemePart hs (.inl rfl), not_mem_authorityPart ha (.inl rfl)⟩,
+      not_mem_encoded hp (by decide)⟩, ?_⟩
+    cases query with
+    | none => simp
+    | some q =>
+      simp only [Option.all_some] at hq
+      simp only [Option.map_some, Option.getD_some, List.mem_cons, not_or]
+      exact ⟨by decide, not_mem_encoded hq (by decide)⟩
+  have hQ : '?' ∉ (scheme.map (·.toList ++ [':'])).getD [] ++ (authority.map ('/' :: '/' :: ·.chars)).getD []
+      ++ path.toList := by
+    simp only [List.mem_append, not_or]
+    exact ⟨⟨not_mem_schemePart hs (.inr rfl), not_mem_authorityPart ha (.inr rfl)⟩,
+      not_mem_encoded hp (by decide)⟩
+  simp only [parseRaw, cut_opt _ hF, cut_opt _ hQ]
+  simp only [pathFits] at hfit
+  cases scheme with
+  | some sc =>
+    simp only [Option.all_some] at hs
+    obtain ⟨hsc, hlow⟩ := schemeOk_spec hs
+    cases authority with
+    | some a =>
+      simp only [Option.all_some] at ha
+      simp only [] at hfit
+      have e := schemeEnd_append (s := sc.toList) ('/' :: '/' :: (a.chars ++ path.toList))
+        (hsc ':' (by simp)) (hsc '/' (by simp))
+      simp only [Option.map_some, Option.getD_some, List.append_assoc, List.cons_append]
+      have hb := breakSlash_append (not_mem_authority ha (by simp)) hfit
+      cases query <;> cases fragment <;> simp [Function.comp_def, hlow, e, hb, parseAuthority_chars ha]
+    | none =>
+      simp only [] at hfit
+      have e := schemeEnd_append (s := sc.toList) path.toList (hsc ':' (by simp)) (hsc '/' (by simp))
+      simp only [Option.map_some, Option.map_none, Option.getD_some, Option.getD_none,
+        List.append_assoc, List.singleton_append, e]
+      split
+      · rename_i heq
+        simp only [Bool.and_eq_true, bne_iff_ne] at hfit
+        exact absurd (by simp [heq]) hfit.1
+      · cases query <;> cases fragment <;> simp [hlow]
+  | none =>
+    cases authority with
+    | some a =>
+      simp only [Option.all_some] at ha
+      simp only [] at hfit
+      simp only [Option.map_some, Option.map_none, Option.getD_some, Option.getD_none,
+        List.nil_append, List.cons_append, schemeEnd,
+        breakSlash_append (not_mem_authority ha (by simp)) hfit, parseAuthority_chars ha,
+        Option.map_some]
+      cases query <;> cases fragment <;> simp
+    | none =>
+      simp only [Option.isSome_none, Bool.false_or, Bool.and_eq_true, Bool.not_eq_true',
+        List.contains_eq_mem, decide_eq_false_iff_not, bne_iff_ne] at hfit
+      simp only [Option.map_none, Option.getD_none, List.nil_append, schemeEnd_none hfit.2]
+      split
+      · rename_i heq
+        exact absurd (by simp [heq]) hfit.1
+      · cases query <;> cases fragment <;> simp
+
+theorem parse_print_of_valid {u : Url} (h : u.valid) : parse u.print = some u := by
+  simp [parse, print, parseRaw_chars h, h]
+
+theorem valid_of_parse {s : String} {u : Url} (h : parse s = some u) : u.valid := by
+  simp only [parse, Option.filter_eq_some_iff] at h
+  exact h.2
+
+/-- What `parse` reads, `print` writes so that it reads back the same. -/
+theorem parse_print {s : String} {u : Url} (h : parse s = some u) : parse u.print = some u :=
+  parse_print_of_valid (valid_of_parse h)
+
 end Lanes.Url
