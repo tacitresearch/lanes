@@ -42,6 +42,10 @@ import tempfile
 MUTANTS = [
     ("runtime: nothing handed over again after a restart", "Lanes/Runtime/IO/Shell.lean",
      "  handOver outputs\n  let since := start.clock_ms", "  let since := start.clock_ms"),
+    ("runtime: the outputs an older version had not handed over are dropped at a migration",
+     "Lanes/Runtime/IO/Shell.lean", "    deliver log.pending\n", ""),
+    ("journal: a migration is not written", "Lanes/Durable/IO/Journal.lean",
+     "      migrate := upgraded.writes.forM (perform store.path handle true)\n", ""),
     ("runtime: commands left in the inbox when the shard ends", "Lanes/Runtime/IO/Shell.lean",
      "  discard <| rt.inbox.modifyGet Mailbox.take\n", ""),
     ("runtime: a snapshot is not taken", "Lanes/Runtime/IO/Shell.lean",
