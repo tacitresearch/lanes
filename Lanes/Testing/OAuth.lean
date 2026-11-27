@@ -8,8 +8,8 @@ public import Lanes.Testing.Browser
 
 /-!
 A fake identity provider for tests, on a local port, of both kinds `Lanes.OAuth` signs in with:
-OpenID Connect, whose token endpoint gives an ID token signed with RS256 under an RSA key made by
-the `openssl` command, with a JWK Set; and OAuth 2.0 with a user API shaped as GitHub's
+OpenID Connect, with a discovery document, whose token endpoint gives an ID token signed with
+RS256 under an RSA key made by the `openssl` command, with a JWK Set; and OAuth 2.0 with a user API shaped as GitHub's
 (`/api/user`, `/api/emails`). The test plays the user at the authorization endpoint:
 `Fake.approve` reads the redirect a sign-in began with and issues a code for a user. The token
 endpoint checks what a provider checks: the code is one it issued and not used before, for this
@@ -83,11 +83,33 @@ def openssl (dir : System.FilePath) (args : Array String) : IO String := do
 
 def Fake.at (f : Fake) (path : String) : String := s!"http://127.0.0.1:{f.port}/{path}"
 
+/-- The authorization endpoint it names. The test plays the user there (`Fake.approve`), so it
+is never fetched. -/
+def Fake.authorization (_ : Fake) : String := "https://id.example/authorize"
+
 /-- The provider of OpenID Connect, to sign in with as `name`. -/
 def Fake.oidc (f : Fake) (name : String := "id") (scopes : List String := ["openid", "email"]) :
     Provider :=
-  { name, authorize := "https://id.example/authorize", token := f.at "oidc/token", scopes
+  { name, authorize := f.authorization, token := f.at "oidc/token", scopes
     source := .idToken [f.issuer] (f.at "oidc/jwks") }
+
+def str (s : String) : String := Json.renderString s
+
+/-- Its discovery document (OpenID Connect Discovery 1.0 §3), served at
+`/.well-known/openid-configuration`: the fields the specification requires, and what the token
+endpoint takes. `OAuth.Discovery.read` of it gives the provider `Fake.oidc` gives. -/
+def Fake.discovery (f : Fake) : String :=
+  let strs (l : List String) : Json := .arr (l.map Json.str).toArray
+  (Json.mkObj [("issuer", .str f.issuer), ("authorization_endpoint", .str f.authorization),
+    ("token_endpoint", .str (f.at "oidc/token")), ("jwks_uri", .str (f.at "oidc/jwks")),
+    ("response_types_supported", strs ["code"]), ("subject_types_supported", strs ["public"]),
+    ("id_token_signing_alg_values_supported", strs ["RS256"]),
+    ("code_challenge_methods_supported", strs ["S256"]),
+    ("grant_types_supported", strs ["authorization_code"]),
+    ("token_endpoint_auth_methods_supported", strs ["client_secret_post"]),
+    ("scopes_supported", strs ["openid", "email", "profile"]),
+    ("claims_supported", strs ["iss", "sub", "aud", "exp", "iat", "nonce", "email",
+      "email_verified", "name"])]).compress
 
 def yes (j : Json) (key : String) : Bool := (j.getObjValAs? Bool key).toOption == some true
 
@@ -119,8 +141,6 @@ def Fake.client (f : Fake) (origin name : String) : Client :=
   { id := f.clientId, secret := ⟨f.clientSecret⟩, redirect := s!"{origin}/sign-in/{name}/callback" }
 
 def b64s (s : String) : String := b64 s.toUTF8
-
-def str (s : String) : String := Json.renderString s
 
 def nowSeconds : IO Nat :=
   return (← Std.Time.Timestamp.now).toMillisecondsSinceUnixEpoch.toInt.toNat / 1000
@@ -178,9 +198,10 @@ def Fake.user? (f : Fake) (r : Request) : IO (Option User) := do
   let [_, code] := auth.splitOn "Bearer at-" | return none
   return ((← f.codes.get).lookup code).map (·.user)
 
-/-- The token endpoint, the JWK Set and the user API. -/
+/-- The discovery document, the token endpoint, the JWK Set and the user API. -/
 def Fake.handle (f : Fake) (r : Request) : IO Response := do
   match r.method, r.path with
+  | .get, [".well-known", "openid-configuration"] => return json f.discovery
   | .get, ["oidc", "jwks"] =>
     f.jwksFetches.modify (· + 1)
     match f.keys with
