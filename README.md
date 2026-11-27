@@ -64,9 +64,9 @@ is in `docs/CLAIMS.md`. In short:
 - **Tested**: processes killed with SIGKILL and started again, JSON, Base64, URLs, IP
   addresses, media types and dates against Go's standard library, the bound C against its Lean
   references.
-- **Trusted**: About 3,500 lines of trusted code, listed with their sizes in `TRUSTED.md`: the
+- **Trusted**: About 3,600 lines of trusted code, listed with their sizes in `TRUSTED.md`: the
   IO shells, the HTTP wire format where its proof does not reach, the C that binds libsodium,
-  `fsync`, a timed wait, OpenSSL's TLS client and its signature check, the sign-in's IO, and the template macro, with the assumptions the runtime makes. `lanes lint` fails if a trusted file changes without the
+  `fsync`, a timed wait, OpenSSL's TLS client and its signature check, the sign-in's IO, the AWS integration's IO, and the template macro, with the assumptions the runtime makes. `lanes lint` fails if a trusted file changes without the
   list, and `scripts/mutants.py` holds known ways of breaking that code, each of which must
   fail a test.
 
