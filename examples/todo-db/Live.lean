@@ -7,10 +7,16 @@ import TodoDb
 
 /-!
 The fixed to-do list on a real PostgreSQL, through the client's store adapter
-(`Postgres.Store.handler`): `LANES_POSTGRES=host:port` names a server set up by
-`scripts/postgres-test-server`, and the to-dos go in the table `todo_db` of `lanes_test`, as
-`lanes_scram`. It adds three to-dos, one of them twice under the same key, and prints the rows.
-Without `LANES_POSTGRES` it says so and exits.
+(`Postgres.Store.handler`), connected as libpq's variables say (`Postgres.Client.fromEnv`). For
+a server set up by `scripts/postgres-test-server` on port 5433:
+
+```bash
+PGHOST=localhost PGPORT=5433 PGUSER=lanes_scram PGPASSWORD=scram-pw PGDATABASE=lanes_test \
+  lake exe todoLive
+```
+
+The to-dos go in the table `todo_db`. It adds three to-dos, one of them twice under the same
+key, and prints the rows. Without `PGHOST` it says so and exits.
 -/
 
 open Lanes TodoDb Std.Async
@@ -18,12 +24,9 @@ open Lanes TodoDb Std.Async
 def table : Postgres.Table := { name := "todo_db" }
 
 def main : IO UInt32 := do
-  let some spec ← IO.getEnv "LANES_POSTGRES"
-    | IO.println "LANES_POSTGRES is not set: no server to run against"; return 0
-  let [host, portText] := spec.splitOn ":" | IO.println "LANES_POSTGRES is host:port"; return 2
-  let cfg : Postgres.Client.Config :=
-    { host, port := portText.toNat!.toUInt16, sslmode := .disable
-      conn := { user := "lanes_scram", database := "lanes_test", password := some "scram-pw" } }
+  if (← IO.getEnv "PGHOST").isNone then
+    IO.println "PGHOST is not set: no server to run against"; return 0
+  let cfg ← Postgres.Client.fromEnv
   let setup ← (do
     let .ok s ← Postgres.connect cfg | throw (IO.userError "cannot connect")
     discard <| s.exec (.statement table.create)

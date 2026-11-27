@@ -393,6 +393,10 @@ import Lanes.Semantics
 /-- info: 'Lanes.Postgres.Frame.read_done' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Postgres.Frame.read_done
 
+-- Lanes.Lib.Postgres.IO.Client
+/-- info: 'Lanes.Postgres.Client.Config.sslmode_default' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.Client.Config.sslmode_default
+
 -- Lanes.Lib.Postgres.Pool
 /-- info: 'Lanes.Postgres.Pool.run_size' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Postgres.Pool.run_size
@@ -416,6 +420,18 @@ import Lanes.Semantics
 /-- info: 'Lanes.Postgres.Scram.Binding.data_endPoint' depends on axioms: [propext, Classical.choice] -/
 #guard_msgs in #print axioms Lanes.Postgres.Scram.Binding.data_endPoint
 
+-- Lanes.Lib.Postgres.Settings
+/-- info: 'Lanes.Postgres.SslMode.defaultFor_loopback' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.SslMode.defaultFor_loopback
+
+/-- info: 'Lanes.Postgres.SslMode.defaultFor_remote' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.SslMode.defaultFor_remote
+
+/-- info: 'Lanes.Postgres.SslMode.defaultFor_disable' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.SslMode.defaultFor_disable
+
+/-- info: 'Lanes.Postgres.Address.name_remote' does not depend on any axioms -/
+#guard_msgs in #print axioms Lanes.Postgres.Address.name_remote
 
 -- Lanes.Lib.RateLimit
 /-- info: 'Lanes.RateLimit.credit_allow_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
