@@ -12,19 +12,19 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | `Lanes/Behaviours` | 134 | 81 | 5 | 24 | 0 | 24 | 0 |
 | `Lanes/Check` | 74 | 54 | 0 | 8 | 0 | 10 | 2 |
-| `Lanes/Core` | 103 | 41 | 0 | 34 | 1 | 11 | 16 |
+| `Lanes/Core` | 103 | 42 | 0 | 34 | 1 | 10 | 16 |
 | `Lanes/Data` | 68 | 43 | 0 | 4 | 1 | 0 | 20 |
 | `Lanes/Durable` | 70 | 58 | 2 | 0 | 0 | 9 | 1 |
-| `Lanes/Lib` | 532 | 347 | 13 | 2 | 91 | 70 | 9 |
+| `Lanes/Lib` | 593 | 371 | 26 | 1 | 111 | 75 | 9 |
 | `Lanes/Net` | 37 | 6 | 5 | 0 | 0 | 25 | 1 |
-| `Lanes/Outside` | 156 | 119 | 4 | 6 | 1 | 26 | 0 |
-| `Lanes/Proof` | 36 | 12 | 0 | 0 | 0 | 23 | 1 |
+| `Lanes/Outside` | 159 | 119 | 4 | 6 | 1 | 29 | 0 |
+| `Lanes/Proof` | 40 | 16 | 0 | 0 | 0 | 23 | 1 |
 | `Lanes/Runtime` | 173 | 94 | 21 | 0 | 28 | 30 | 0 |
-| `Lanes/Semantics` | 61 | 11 | 0 | 0 | 0 | 49 | 1 |
+| `Lanes/Semantics` | 63 | 11 | 0 | 0 | 0 | 51 | 1 |
 | `Lanes/Testing` | 84 | 0 | 0 | 1 | 83 | 0 | 0 |
-| `Lanes/Web` | 672 | 354 | 53 | 46 | 163 | 54 | 2 |
+| `Lanes/Web` | 676 | 354 | 57 | 46 | 163 | 54 | 2 |
 | `LanesCli` | 125 | 0 | 0 | 0 | 51 | 0 | 74 |
-| All | 2325 | 1220 | 103 | 125 | 419 | 331 | 127 |
+| All | 2399 | 1249 | 120 | 124 | 439 | 340 | 127 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -257,7 +257,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Check.Property.holds` | proved | `Check.refines_sound`, `Check.refines_traces`, `Check.system_sound` and 1 more |
 | `Check.Trace.last` | proved | `Check.search_deadlock`, `Check.search_reached`, `Check.search_violated` and 2 more |
 | `Check.Trace.labels` | proved | `Check.system_violated` |
-| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Cache.lean` and 27 more |
+| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Cache.lean` and 28 more |
 | `Check.Path.last` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
 | `Check.Path.toTraceAux` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
 | `Check.Path.toTrace` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
@@ -383,10 +383,10 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `instDecidableEqJoinMsg` | proved | its type, `Decidable` |
-| `joinSig` | proved | `Jobs.attach_active_leaves`, `Jobs.attach_within`, `Schedule.attach_held_leaves` and 13 more |
-| `Wiring.left` | proved | through `Schedule.attach`, `SysState.over` and 4 more: `Schedule.attach_held_leaves`, `Schedule.attach_within` and 17 more |
-| `Wiring.right` | proved | through `Schedule.attach`, `System.join` and 1 more: `Schedule.attach_held_leaves`, `Schedule.attach_within` and 12 more |
-| `System.join` | proved | `SysState.exists_block`, `SysState.run_left`, `System.Invariant.join_left` and 9 more |
+| `joinSig` | proved | `Jobs.attach_active_leaves`, `Jobs.attach_within`, `Obligation.Due.of_thinRight` and 23 more |
+| `Wiring.left` | proved | through `Schedule.attach`, `SysState.over` and 5 more: `Obligation.Due.of_thinRight`, `Schedule.attach_held_leaves` and 26 more |
+| `Wiring.right` | proved | through `Schedule.attach`, `System.join` and 2 more: `Obligation.Due.of_thinRight`, `Schedule.attach_held_leaves` and 21 more |
+| `System.join` | proved | `Obligation.Due.of_thinRight`, `SysState.deliverable_of_thinRight`, `SysState.exists_block` and 18 more |
 | `Signature.withIO` | proved | `SysState.run_filterMapIO`, `System.Invariant.filterMapIO`, `System.LeadsTo.filterMapIO` and 2 more |
 | `Effect.filterMapOut` | proved | through `SysState.over`, `System.filterMapIO` and 1 more: `SysState.run_filterMapIO`, `System.Invariant.filterMapIO` and 3 more |
 | `System.filterMapIO` | proved | `SysState.run_filterMapIO`, `System.Invariant.filterMapIO`, `System.LeadsTo.filterMapIO` and 2 more |
@@ -450,21 +450,21 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `update` | proved | through `SysState.down`, `SysState.handle` and 5 more: `Account.implements`, `Account.implements_timed` and 46 more |
-| `Event.timed` | spec | used only in statements |
+| `update` | proved | through `SysState.down`, `SysState.handle` and 5 more: `Account.implements`, `Account.implements_timed` and 51 more |
+| `Event.timed` | proved | `Account.implements`, `Account.implements_timed`, `Check.refines_traces` and 16 more |
 | `Event.visible` | spec | used only in statements |
 | `SysState.blank` | proved | `System.Inductive.of_monotone`, `System.Monotone.and`, `System.Monotone.and_net` |
-| `SysState.hasMail` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 30 more |
-| `SysState.perform` | proved | through `SysState.handle`, `SysState.init` and 4 more: `Account.implements`, `Account.implements_timed` and 45 more |
-| `SysState.performAll` | proved | through `SysState.handle`, `SysState.init` and 4 more: `Account.implements`, `Account.implements_timed` and 45 more |
+| `SysState.hasMail` | proved | `SysState.hasMail_of_thinRight` |
+| `SysState.perform` | proved | through `SysState.handle`, `SysState.init` and 4 more: `Account.implements`, `Account.implements_timed` and 50 more |
+| `SysState.performAll` | proved | through `SysState.handle`, `SysState.init` and 4 more: `Account.implements`, `Account.implements_timed` and 50 more |
 | `SysState.down` | proved | `Account.implements`, `Account.implements_timed`, `System.Refines.of_events` and 2 more |
 | `SysState.settle` | proved | `SysState.Loses.settle` |
 | `SysState.handle` | proved | `Http.fronted_handle_arrive`, `Http.served_handle_arrive` |
-| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and 2 more: `Account.implements`, `Account.implements_timed` and 42 more |
-| `SysState.deliverable` | proved | `Account.implements`, `Account.implements_timed`, `SysState.nextOnLink_spec` and 3 more |
-| `SysState.step` | proved | `Http.Gate.answered_of_leaves`, `Http.Gate.deadline_not_restarted`, `Shards.AtHome.step` and 8 more |
-| `SysState.init` | proved | `Account.implements`, `Account.implements_timed`, `Check.system_violated` and 25 more |
-| `SysState.run` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and 17 more |
+| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and 2 more: `Account.implements`, `Account.implements_timed` and 47 more |
+| `SysState.deliverable` | proved | `Account.implements`, `Account.implements_timed`, `SysState.deliverable_of_thinRight` and 4 more |
+| `SysState.step` | proved | `Http.Gate.answered_of_leaves`, `Http.Gate.deadline_not_restarted`, `Outside.Beside.keeps` and 11 more |
+| `SysState.init` | proved | `Account.implements`, `Account.implements_timed`, `Check.system_violated` and 28 more |
+| `SysState.run` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and 20 more |
 | `System.Invariant` | spec | a predicate |
 
 ## `Lanes/Data/Codec.lean`
@@ -670,6 +670,18 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Journal.Begun.toFound` | proved | `Journal.Begun.resume_upgraded` |
 | `Journal.Upgrade.past` | spec | used only in statements |
 
+## `Lanes/Lib/Crypto/Certificate.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Certificate.Hash.apply` | tested | `Tests/Postgres.lean`, `Tests/PostgresTls.lean` |
+| `Certificate.element` | tested | `Tests/Postgres.lean`, `Tests/PostgresTls.lean` |
+| `Certificate.signatureAlgorithm` | tested | `Tests/Postgres.lean`, `Tests/PostgresTls.lean` |
+| `Certificate.pkcs1` | tested | `Tests/Postgres.lean`, `Tests/PostgresTls.lean` |
+| `Certificate.ecdsa` | tested | `Tests/Postgres.lean`, `Tests/PostgresTls.lean` |
+| `Certificate.hashOf` | tested | `Tests/Postgres.lean`, `Tests/PostgresTls.lean` |
+| `Certificate.endPoint` | tested | `Tests/Postgres.lean`, `Tests/PostgresTls.lean` |
+
 ## `Lanes/Lib/Crypto/Hmac.lean`
 
 | Definition | Status | Evidence |
@@ -751,6 +763,24 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Sha256.State.bytes` | tested | `Tests/Crypto.lean` |
 | `Sha256.reference` | tested | `Tests/Crypto.lean` |
 
+## `Lanes/Lib/Crypto/Sha512.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Sha512.roundConstants` | tested | `Tests/Crypto.lean`, `Tests/Postgres.lean` |
+| `Sha512.initial` | tested | `Tests/Crypto.lean` |
+| `Sha512.initial384` | tested | `Tests/Crypto.lean`, `Tests/Postgres.lean` |
+| `Sha512.rotr` | tested | `Tests/Crypto.lean`, `Tests/Postgres.lean` |
+| `Sha512.schedule` | tested | `Tests/Crypto.lean`, `Tests/Postgres.lean` |
+| `Sha512.compress` | tested | `Tests/Crypto.lean`, `Tests/Postgres.lean` |
+| `Sha512.wordAt` | tested | `Tests/Crypto.lean`, `Tests/Postgres.lean` |
+| `Sha512.blockAt` | tested | `Tests/Crypto.lean`, `Tests/Postgres.lean` |
+| `Sha512.padding` | tested | `Tests/Crypto.lean`, `Tests/Postgres.lean` |
+| `Sha512.absorb` | tested | `Tests/Crypto.lean`, `Tests/Postgres.lean` |
+| `Sha512.State.bytes` | tested | `Tests/Crypto.lean`, `Tests/Postgres.lean` |
+| `Sha512.hash` | tested | `Tests/Crypto.lean` |
+| `Sha512.hash384` | tested | `Tests/Crypto.lean`, `Tests/Postgres.lean` |
+
 ## `Lanes/Lib/Crypto/Sodium.lean`
 
 | Definition | Status | Evidence |
@@ -771,24 +801,24 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Base64.Alphabet.last` | proved | through `Base64.decode`, `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 4 more |
-| `Base64.Alphabet.code` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 2 more |
-| `Base64.Alphabet.char` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 2 more |
+| `Base64.Alphabet.last` | proved | through `Base64.decode`, `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 6 more |
+| `Base64.Alphabet.code` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 4 more |
+| `Base64.Alphabet.char` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 4 more |
 | `Base64.Alphabet.valueOf` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
 | `Base64.Alphabet.value?` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
-| `Base64.Encoding.std` | checked | `Tests/PostgresConn.lean` |
+| `Base64.Encoding.std` | proved | `Postgres.Conn.onMessage_binds`, `Postgres.Scram.respond_binds` |
 | `Base64.Encoding.rawStd` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
 | `Base64.Encoding.url` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
 | `Base64.Encoding.rawUrl` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean`, `Tests/Oracle/Jose.lean` and 1 more |
-| `Base64.sextet` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 2 more |
+| `Base64.sextet` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 4 more |
 | `Base64.byte` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
-| `Base64.pad` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 2 more |
-| `Base64.encodeList` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 2 more |
+| `Base64.pad` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 4 more |
+| `Base64.encodeList` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and 4 more |
 | `Base64.full` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
 | `Base64.tail1` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
 | `Base64.tail2` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
 | `Base64.decodeList` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and 2 more |
-| `Base64.encode` | proved | `Base64.allowed_of_mem_encode`, `Base64.decode_encode`, `Base64.decode_eq_some_iff` and 1 more |
+| `Base64.encode` | proved | `Base64.allowed_of_mem_encode`, `Base64.decode_encode`, `Base64.decode_eq_some_iff` and 3 more |
 | `Base64.decode` | proved | `Base64.decode_encode`, `Base64.decode_eq_none_of_length`, `Base64.decode_eq_none_of_not_allowed` and 1 more |
 | `Base64.Encoding.Allowed` | spec | a predicate |
 | `Base64.encodedLength` | spec | used only in statements |
@@ -1171,31 +1201,41 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Postgres.Isolation.sql` | proved | through `Postgres.Conn.Request.encode`, `Postgres.Conn.Request.messages` and 2 more: `Postgres.Conn.run_fifo`, `Postgres.Conn.run_queue` and 7 more |
-| `Postgres.Conn.Request.kind` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_fifo`, `Postgres.Conn.run_queue` and 6 more |
+| `Postgres.Isolation.sql` | proved | through `Postgres.Conn.Request.encode`, `Postgres.Conn.Request.messages` and 2 more: `Postgres.Conn.run_beforeTls`, `Postgres.Conn.run_bound` and 14 more |
+| `Postgres.Conn.Request.kind` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_beforeTls`, `Postgres.Conn.run_bound` and 13 more |
 | `Postgres.Conn.instDecidableNamed` | proved | its type, `Decidable` |
 | `Postgres.Conn.instDecidablePredOptionByteArrayValueOk` | proved | its type, `Decidable` |
 | `Postgres.Conn.instDecidablePredFrontendOk` | proved | its type, `Decidable` |
-| `Postgres.Conn.fits` | proved | through `Postgres.Conn.run`, `Postgres.Conn.start` and 2 more: `Postgres.Conn.run_fifo`, `Postgres.Conn.run_queue` and 8 more |
+| `Postgres.Conn.fits` | proved | through `Postgres.Conn.run`, `Postgres.Conn.start` and 2 more: `Postgres.Conn.run_beforeTls`, `Postgres.Conn.run_bound` and 15 more |
 | `Postgres.Conn.Request.messages` | proved | `Postgres.Conn.valid_decode` |
 | `Postgres.Conn.Request.encode` | proved | `Postgres.Conn.step_query` |
 | `Postgres.Conn.valid` | proved | `Postgres.Conn.step_query`, `Postgres.Conn.valid_decode` |
-| `Postgres.Conn.room` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_fifo`, `Postgres.Conn.run_queue` and 6 more |
-| `Postgres.Conn.fail` | proved | `Postgres.Conn.onMessage_sasl_authOk` |
+| `Postgres.Conn.room` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_beforeTls`, `Postgres.Conn.run_bound` and 13 more |
+| `Postgres.Conn.fail` | proved | `Postgres.Conn.onMessage_sasl_authOk`, `Postgres.Conn.step_refusedTls` |
 | `Postgres.Conn.outcome` | proved | `Postgres.Conn.outcome_committed` |
-| `Postgres.Conn.texts` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_requireScram` and 10 more |
-| `Postgres.Conn.onReply` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_requireScram` and 10 more |
-| `Postgres.Conn.nonceOk` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_requireScram` and 10 more |
+| `Postgres.Conn.texts` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_binds`, `Postgres.Conn.onMessage_opened` and 18 more |
+| `Postgres.Conn.onReply` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_binds`, `Postgres.Conn.onMessage_opened` and 18 more |
+| `Postgres.Conn.nonceOk` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_binds`, `Postgres.Conn.onMessage_opened` and 18 more |
 | `Postgres.Conn.Config.scramOnly` | proved | `Postgres.Conn.onMessage_requireScram` |
-| `Postgres.Conn.onAuth` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_requireScram` and 10 more |
-| `Postgres.Conn.onSasl` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_requireScram` and 10 more |
-| `Postgres.Conn.onSaslFinal` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_requireScram` and 10 more |
-| `Postgres.Conn.onMessage` | proved | `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_requireScram`, `Postgres.Conn.onMessage_saslFinal` and 1 more |
-| `Postgres.Conn.drain` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_fifo`, `Postgres.Conn.run_queue` and 6 more |
-| `Postgres.Conn.receive` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_fifo`, `Postgres.Conn.run_queue` and 6 more |
-| `Postgres.Conn.submit` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_fifo`, `Postgres.Conn.run_queue` and 6 more |
-| `Postgres.Conn.start` | proved | `Postgres.Conn.start_queue` |
-| `Postgres.Conn.step` | proved | `Postgres.Conn.step_buffer`, `Postgres.Conn.step_closed`, `Postgres.Conn.step_committed` and 3 more |
+| `Postgres.Conn.unbound` | proved | through `Postgres.Conn.choose`, `Postgres.Conn.onMessage` and 2 more: `Postgres.Conn.choose_endPoint`, `Postgres.Conn.choose_require` and 20 more |
+| `Postgres.Conn.choose` | proved | `Postgres.Conn.choose_endPoint`, `Postgres.Conn.choose_require` |
+| `Postgres.Conn.onAuth` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_binds`, `Postgres.Conn.onMessage_opened` and 18 more |
+| `Postgres.Conn.onSasl` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_binds`, `Postgres.Conn.onMessage_opened` and 18 more |
+| `Postgres.Conn.onSaslFinal` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_binds`, `Postgres.Conn.onMessage_opened` and 18 more |
+| `Postgres.Conn.onMessage` | proved | `Postgres.Conn.onMessage_binds`, `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_requireScram` and 2 more |
+| `Postgres.Conn.drain` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_beforeTls`, `Postgres.Conn.run_bound` and 13 more |
+| `Postgres.Conn.receive` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_beforeTls`, `Postgres.Conn.run_bound` and 13 more |
+| `Postgres.Conn.submit` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_beforeTls`, `Postgres.Conn.run_bound` and 13 more |
+| `Postgres.Conn.startup` | proved | `Postgres.Conn.step_secured` |
+| `Postgres.Conn.sslRequest` | proved | `Postgres.Conn.tls_first` |
+| `Postgres.Conn.alpn` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_beforeTls`, `Postgres.Conn.run_bound` and 13 more |
+| `Postgres.Conn.start` | proved | `Postgres.Conn.run_bound`, `Postgres.Conn.start_queue`, `Postgres.Conn.tls_first` |
+| `Postgres.Conn.beforeTls` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_beforeTls`, `Postgres.Conn.run_bound` and 13 more |
+| `Postgres.Conn.alpnOk` | proved | `Postgres.Conn.step_secured` |
+| `Postgres.Conn.secure` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_beforeTls`, `Postgres.Conn.run_bound` and 13 more |
+| `Postgres.Conn.Phase.beforeTls` | proved | `Postgres.Conn.run_beforeTls`, `Postgres.Conn.step_beforeTls` |
+| `Postgres.Conn.reusable` | tested | `Tests/Postgres.lean` |
+| `Postgres.Conn.step` | proved | `Postgres.Conn.step_beforeTls`, `Postgres.Conn.step_buffer`, `Postgres.Conn.step_closed` and 7 more |
 | `Postgres.Conn.run` | spec | used only in statements |
 
 ## `Lanes/Lib/Postgres/ConnSound.lean`
@@ -1208,11 +1248,20 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Postgres.Conn.Fifo` | spec | a predicate |
 | `Postgres.Conn.Commits` | spec | a predicate |
 | `Postgres.Conn.Answered` | spec | a predicate |
+| `Postgres.Conn.Action.bytes` | spec | used only in statements |
+| `Postgres.Conn.sent` | spec | used only in statements |
+| `Postgres.Conn.Bound` | spec | a predicate |
 
 ## `Lanes/Lib/Postgres/IO/Client.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
+| `Postgres.Client.Config.encryption` | trusted | TRUSTED.md: The PostgreSQL client's IO |
+| `Postgres.Session.flush` | trusted | TRUSTED.md: The PostgreSQL client's IO |
+| `Postgres.Session.transmit` | trusted | TRUSTED.md: The PostgreSQL client's IO |
+| `Postgres.Session.receive` | trusted | TRUSTED.md: The PostgreSQL client's IO |
+| `Postgres.Session.handshake` | trusted | TRUSTED.md: The PostgreSQL client's IO |
+| `Postgres.Session.perform` | trusted | TRUSTED.md: The PostgreSQL client's IO |
 | `Postgres.Session.tell` | trusted | TRUSTED.md: The PostgreSQL client's IO |
 | `Postgres.Session.await` | trusted | TRUSTED.md: The PostgreSQL client's IO |
 | `Postgres.Session.within` | trusted | TRUSTED.md: The PostgreSQL client's IO |
@@ -1222,13 +1271,25 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Postgres.Store.perform` | trusted | TRUSTED.md: The PostgreSQL client's IO |
 | `Postgres.Store.handler` | trusted | TRUSTED.md: The PostgreSQL client's IO |
 
+## `Lanes/Lib/Postgres/IO/Pool.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Postgres.Pool.new` | trusted | TRUSTED.md: The PostgreSQL pool's IO |
+| `Postgres.Pool.fresh` | trusted | TRUSTED.md: The PostgreSQL pool's IO |
+| `Postgres.Pool.answer` | trusted | TRUSTED.md: The PostgreSQL pool's IO |
+| `Postgres.Pool.tell` | trusted | TRUSTED.md: The PostgreSQL pool's IO |
+| `Postgres.Pool.checkout` | trusted | TRUSTED.md: The PostgreSQL pool's IO |
+| `Postgres.Pool.checkin` | trusted | TRUSTED.md: The PostgreSQL pool's IO |
+| `Postgres.Pool.withSession` | trusted | TRUSTED.md: The PostgreSQL pool's IO |
+
 ## `Lanes/Lib/Postgres/Message.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Postgres.TxStatus.byte` | proved | through `Postgres.Backend.body`: `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` |
 | `Postgres.TxStatus.ofByte` | proved | through `Postgres.Backend.decode`, `Postgres.Backend.decodeBody`: `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` |
-| `Postgres.protocol30` | proved | through `Postgres.Frontend.decode`: `Postgres.Conn.valid_decode`, `Postgres.Frontend.decode_encode` |
+| `Postgres.protocol30` | proved | through `Postgres.Frontend.decode`, `Postgres.Frontend.encode`: `Postgres.Conn.onMessage_binds`, `Postgres.Conn.step_secured` and 2 more |
 | `Postgres.Column.put` | proved | through `Postgres.Backend.body`: `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` |
 | `Postgres.Column.get` | proved | through `Postgres.Backend.decode`, `Postgres.Backend.decodeBody` and 1 more: `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` and 2 more |
 | `Postgres.Column.Ok` | spec | a predicate |
@@ -1238,7 +1299,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Postgres.getFields` | proved | through `Postgres.Backend.decode`, `Postgres.Backend.decodeBody`: `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` |
 | `Postgres.getNames` | proved | through `Postgres.Backend.decodeBody`, `Postgres.Frame.read`: `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` and 2 more |
 | `Postgres.Named` | spec | a predicate |
-| `Postgres.putParam` | proved | through `Postgres.Frontend.body`, `Postgres.Frontend.encode`: `Postgres.Conn.valid_decode`, `Postgres.Frontend.decode_encode` |
+| `Postgres.putParam` | proved | through `Postgres.Frontend.body`, `Postgres.Frontend.encode`: `Postgres.Conn.onMessage_binds`, `Postgres.Conn.step_secured` and 2 more |
 | `Postgres.getParam` | proved | through `Postgres.Backend.decode`, `Postgres.Backend.decodeBody` and 1 more: `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` and 2 more |
 | `Postgres.Backend.tag` | proved | `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` |
 | `Postgres.Backend.body` | proved | `Postgres.Backend.decodeBody_body`, `Postgres.Backend.read_encode` |
@@ -1247,11 +1308,11 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Postgres.Backend.decodeBody` | proved | `Postgres.Backend.decodeBody_body` |
 | `Postgres.Backend.decode` | proved | `Postgres.Backend.read_encode` |
 | `Postgres.Frontend.expect` | spec | used only in statements |
-| `Postgres.Frontend.tag` | proved | through `Postgres.Frontend.body`, `Postgres.Frontend.encode`: `Postgres.Conn.valid_decode`, `Postgres.Frontend.decode_encode` |
+| `Postgres.Frontend.tag` | proved | through `Postgres.Frontend.body`, `Postgres.Frontend.encode`: `Postgres.Conn.onMessage_binds`, `Postgres.Conn.step_secured` and 2 more |
 | `Postgres.Frontend.body` | proved | `Postgres.Frontend.decode_encode` |
 | `Postgres.Frontend.Ok` | spec | a predicate |
-| `Postgres.Frontend.wire` | proved | through `Postgres.Frontend.encode`: `Postgres.Conn.valid_decode`, `Postgres.Frontend.decode_encode` |
-| `Postgres.Frontend.encode` | proved | `Postgres.Conn.valid_decode`, `Postgres.Frontend.decode_encode` |
+| `Postgres.Frontend.wire` | proved | through `Postgres.Frontend.encode`: `Postgres.Conn.onMessage_binds`, `Postgres.Conn.step_secured` and 2 more |
+| `Postgres.Frontend.encode` | proved | `Postgres.Conn.onMessage_binds`, `Postgres.Conn.step_secured`, `Postgres.Conn.valid_decode` and 1 more |
 | `Postgres.Frontend.decodeBody` | proved | through `Postgres.Frontend.decode`: `Postgres.Conn.valid_decode`, `Postgres.Frontend.decode_encode` |
 | `Postgres.Frontend.decodeStartup` | proved | through `Postgres.Frontend.decode`: `Postgres.Conn.valid_decode`, `Postgres.Frontend.decode_encode` |
 | `Postgres.Frontend.decode` | proved | `Postgres.Conn.valid_decode`, `Postgres.Frontend.decode_encode` |
@@ -1259,18 +1320,38 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Postgres.Backend.encode` | proved | `Postgres.Backend.read_encode` |
 | `Postgres.Frame.read` | proved | `Postgres.Backend.read_encode`, `Postgres.Frame.read_done`, `Postgres.Frame.read_more` |
 
+## `Lanes/Lib/Postgres/Pool.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Postgres.Pool.State.size` | proved | `Postgres.Pool.run_size` |
+| `Postgres.Pool.refill` | proved | through `Postgres.Pool.run`: `Postgres.Pool.never_again`, `Postgres.Pool.run_size` and 1 more |
+| `Postgres.Pool.hand` | proved | through `Postgres.Pool.run`: `Postgres.Pool.never_again`, `Postgres.Pool.run_size` and 1 more |
+| `Postgres.Pool.onCheckout` | proved | through `Postgres.Pool.run`: `Postgres.Pool.never_again`, `Postgres.Pool.run_size` and 1 more |
+| `Postgres.Pool.onOpened` | proved | through `Postgres.Pool.run`: `Postgres.Pool.never_again`, `Postgres.Pool.run_size` and 1 more |
+| `Postgres.Pool.onFailed` | proved | through `Postgres.Pool.run`: `Postgres.Pool.never_again`, `Postgres.Pool.run_size` and 1 more |
+| `Postgres.Pool.onCheckin` | proved | through `Postgres.Pool.run`: `Postgres.Pool.never_again`, `Postgres.Pool.run_size` and 1 more |
+| `Postgres.Pool.onExpire` | proved | through `Postgres.Pool.run`: `Postgres.Pool.never_again`, `Postgres.Pool.run_size` and 1 more |
+| `Postgres.Pool.step` | proved | through `Postgres.Pool.run`: `Postgres.Pool.never_again`, `Postgres.Pool.run_size` and 1 more |
+| `Postgres.Pool.run` | spec | used only in statements |
+| `Postgres.Pool.Out` | spec | a predicate |
+
 ## `Lanes/Lib/Postgres/Scram.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Postgres.md5Answer` | checked | `Tests/PostgresConn.lean` |
-| `Postgres.Scram.mechanism` | tested | `Tests/Postgres.lean` |
-| `Postgres.Scram.saslName` | proved | through `Postgres.Scram.respond`: `Postgres.Scram.respond_iterations`, `Postgres.Scram.respond_nonce` |
-| `Postgres.Scram.firstBare` | proved | through `Postgres.Scram.respond`: `Postgres.Scram.respond_iterations`, `Postgres.Scram.respond_nonce` |
+| `Postgres.Scram.mechanism` | proved | through `Postgres.Scram.Binding.data`, `Postgres.Scram.respond`: `Postgres.Conn.onMessage_binds`, `Postgres.Scram.Binding.data_endPoint` and 3 more |
+| `Postgres.Scram.mechanismPlus` | proved | `Postgres.Conn.choose_endPoint` |
+| `Postgres.Scram.Binding.header` | proved | through `Postgres.Scram.Binding.data`, `Postgres.Scram.respond`: `Postgres.Conn.onMessage_binds`, `Postgres.Scram.Binding.data_endPoint` and 3 more |
+| `Postgres.Scram.Binding.mechanism` | proved | through `Postgres.Scram.Binding.data`, `Postgres.Scram.respond`: `Postgres.Conn.onMessage_binds`, `Postgres.Scram.Binding.data_endPoint` and 3 more |
+| `Postgres.Scram.Binding.data` | proved | `Postgres.Conn.onMessage_binds`, `Postgres.Scram.Binding.data_endPoint`, `Postgres.Scram.respond_binds` |
+| `Postgres.Scram.saslName` | proved | through `Postgres.Scram.respond`: `Postgres.Scram.respond_binds`, `Postgres.Scram.respond_iterations` and 1 more |
+| `Postgres.Scram.firstBare` | proved | through `Postgres.Scram.respond`: `Postgres.Scram.respond_binds`, `Postgres.Scram.respond_iterations` and 1 more |
 | `Postgres.Scram.first` | tested | `Tests/Postgres.lean` |
-| `Postgres.Scram.field` | proved | through `Postgres.Scram.respond`, `Postgres.Scram.verify`: `Postgres.Conn.onMessage_requireScram`, `Postgres.Conn.onMessage_saslFinal` and 2 more |
+| `Postgres.Scram.field` | proved | through `Postgres.Scram.respond`, `Postgres.Scram.verify`: `Postgres.Conn.onMessage_requireScram`, `Postgres.Conn.onMessage_saslFinal` and 3 more |
 | `Postgres.Scram.parseServerFirst` | proved | `Postgres.Scram.respond_iterations`, `Postgres.Scram.respond_nonce` |
-| `Postgres.Scram.respond` | proved | `Postgres.Scram.respond_iterations`, `Postgres.Scram.respond_nonce` |
+| `Postgres.Scram.respond` | proved | `Postgres.Scram.respond_binds`, `Postgres.Scram.respond_iterations`, `Postgres.Scram.respond_nonce` |
 | `Postgres.Scram.verify` | proved | `Postgres.Conn.onMessage_requireScram`, `Postgres.Conn.onMessage_saslFinal` |
 
 ## `Lanes/Lib/Postgres/Table.lean`
@@ -1420,8 +1501,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Outside.any` | tested | `Tests/Jobs.lean`, `Tests/S3.lean` |
 | `Outside.driver` | checked | `Tests/Cache.lean`, `Tests/Clock.lean`, `Tests/HttpClient.lean` and 9 more |
-| `Outside.see` | proved | through `Outside.after`: `Cache.read_sent`, `Clock.wall_back_le` and 17 more |
-| `Outside.after` | proved | `Cache.read_sent`, `Clock.wall_back_le`, `Clock.wall_latest_le` and 16 more |
+| `Outside.see` | proved | `Outside.Beside.keeps`, `Outside.run_induction` |
+| `Outside.after` | proved | `Cache.read_sent`, `Clock.wall_back_le`, `Clock.wall_latest_le` and 19 more |
 | `Outside.allows` | checked | `Tests/Outside.lean`, `Tests/Queue.lean`, `Tests/Throttle.lean` and 1 more |
 | `Outside.both` | proved | `Outside.after_both` |
 | `Outside.mine` | spec | used only in statements |
@@ -1457,24 +1538,27 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Effects.instEnumPhase` | proved | its type, `Enum` |
 | `Effects.Phase.final` | spec | used only in statements |
 | `Effects.Lifecycle.Final` | spec | a predicate |
-| `Effects.Lifecycle.reachable` | proved | through `Effects.outside`: `Effects.at_most_once` |
-| `Effects.Lifecycle.reachable.go` | proved | through `Effects.outside`: `Effects.at_most_once` |
-| `Effects.Lifecycle.reaches` | proved | through `Effects.outside`: `Effects.at_most_once` |
-| `Effects.Lifecycle.seen` | proved | through `Effects.outside`: `Effects.at_most_once` |
+| `Effects.Lifecycle.reachable` | proved | through `Effects.Lifecycle.reaches`, `Effects.outside`: `Effects.Lifecycle.reaches_terminal`, `Effects.Sound.allow` and 7 more |
+| `Effects.Lifecycle.reachable.go` | proved | through `Effects.Lifecycle.reaches`, `Effects.outside`: `Effects.Lifecycle.reaches_terminal`, `Effects.Sound.allow` and 7 more |
+| `Effects.Lifecycle.reaches` | proved | `Effects.Lifecycle.reaches_terminal` |
+| `Effects.Lifecycle.seen` | proved | through `Effects.outside`: `Effects.Sound.allow`, `Effects.Sound.observe` and 6 more |
 | `Effects.Answer.codec` | proved | its type, `Codec` |
 | `Effects.instCodableAnswer` | proved | its type, `Codable` |
-| `Effects.Answer.isRefused` | proved | through `Effects.outside`: `Effects.at_most_once` |
+| `Effects.Answer.isRefused` | proved | through `Effects.outside`: `Effects.Sound.allow`, `Effects.Sound.observe` and 6 more |
 | `Effects.Report.codec` | proved | its type, `Codec` |
 | `Effects.instCodableReport` | proved | its type, `Codable` |
 | `Effects.Thing.codec` | proved | its type, `Codec` |
 | `Effects.instCodableThing` | proved | its type, `Codable` |
-| `Effects.ids` | proved | through `Effects.outside`: `Effects.at_most_once` |
-| `Effects.answered` | proved | through `Effects.outside`: `Effects.at_most_once` |
-| `Effects.moved` | proved | through `Effects.outside`: `Effects.at_most_once` |
-| `Effects.reported` | proved | through `Effects.outside`: `Effects.at_most_once` |
-| `Effects.server` | proved | through `Effects.outside`: `Effects.at_most_once` |
-| `Effects.service` | proved | through `Effects.outside`: `Effects.at_most_once` |
-| `Effects.outside` | proved | `Effects.at_most_once` |
+| `Effects.ids` | proved | through `Effects.outside`: `Effects.Sound.allow`, `Effects.Sound.observe` and 6 more |
+| `Effects.answered` | proved | through `Effects.outside`: `Effects.Sound.allow`, `Effects.Sound.observe` and 6 more |
+| `Effects.moved` | proved | through `Effects.outside`: `Effects.Sound.allow`, `Effects.Sound.observe` and 6 more |
+| `Effects.reported` | proved | through `Effects.outside`: `Effects.Sound.allow`, `Effects.Sound.observe` and 6 more |
+| `Effects.server` | proved | through `Effects.outside`: `Effects.Sound.allow`, `Effects.Sound.observe` and 6 more |
+| `Effects.service` | proved | through `Effects.outside`: `Effects.Sound.allow`, `Effects.Sound.observe` and 6 more |
+| `Effects.outside` | proved | `Effects.Sound.allow`, `Effects.Sound.observe`, `Effects.Sound.shows_reply` and 5 more |
+| `Effects.Lifecycle.Terminal` | spec | a predicate |
+| `Effects.Shows` | spec | a predicate |
+| `Effects.Keeps` | spec | a predicate |
 
 ## `Lanes/Outside/Effects/Email.lean`
 
@@ -1495,10 +1579,10 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Payments.Status.codec` | proved | its type, `Codec` |
 | `Payments.instCodableStatus` | proved | its type, `Codable` |
 | `Payments.instEnumStatus` | proved | its type, `Enum` |
-| `Payments.Status.next` | proved | through `Payments.lifecycle`: `Payments.final` |
-| `Payments.Status.phase` | proved | through `Payments.lifecycle`: `Payments.final` |
-| `Payments.Status.event` | proved | through `Payments.lifecycle`: `Payments.final` |
-| `Payments.lifecycle` | proved | `Payments.final` |
+| `Payments.Status.next` | proved | through `Payments.lifecycle`: `Payments.final`, `Payments.succeeded_terminal` |
+| `Payments.Status.phase` | proved | through `Payments.lifecycle`: `Payments.final`, `Payments.succeeded_terminal` |
+| `Payments.Status.event` | proved | through `Payments.lifecycle`: `Payments.final`, `Payments.succeeded_terminal` |
+| `Payments.lifecycle` | proved | `Payments.final`, `Payments.succeeded_terminal` |
 | `Payments.outside` | checked | `Tests/Outside.lean` |
 
 ## `Lanes/Outside/Events.lean`
@@ -1587,7 +1671,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Rpc.instCodableCall` | proved | its type, `Codable` |
 | `Rpc.Reply.codec` | proved | its type, `Codec` |
 | `Rpc.instCodableReply` | proved | its type, `Codable` |
-| `Rpc.outside` | proved | `Cache.read_sent`, `Events.deliveries_le`, `Idempotent.at_most_once` and 8 more |
+| `Rpc.outside` | proved | `Cache.read_sent`, `Events.deliveries_le`, `Idempotent.at_most_once` and 9 more |
 | `Rpc.Port.reported` | spec | used only in statements |
 | `Rpc.called` | spec | used only in statements |
 | `Rpc.answered` | spec | used only in statements |
@@ -1679,16 +1763,20 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Envelope.left?` | proved | through `SysState.left`, `SysState.thinLeft` and 1 more: `SysState.run_left`, `System.Invariant.join_left` and 4 more |
-| `Envelope.right?` | proved | through `SysState.right`: `System.Invariant.join_right`, `System.Reachable.right` and 1 more |
+| `Envelope.left?` | proved | through `Event.right?`, `Event.rightDeed` and 4 more: `Obligation.right?_inr`, `SysState.run_left` and 7 more |
+| `Envelope.right?` | proved | through `Event.right?`, `SysState.right` and 2 more: `Obligation.Due.of_thinRight`, `Obligation.right?_inr` and 10 more |
 | `EnvModel.left` | proved | `SysState.run_left`, `System.Invariant.join_left`, `System.LeadsTo.join_left` and 3 more |
-| `EnvModel.right` | proved | `System.Invariant.join_right`, `System.Reachable.right`, `System.Reachable.right_of_quiet_boot` |
+| `EnvModel.right` | proved | `Obligation.Due.of_thinRight`, `SysState.deliverable_of_thinRight`, `SysState.init_thinRight` and 6 more |
 | `SysState.left` | proved | `SysState.run_left`, `System.Invariant.join_left`, `System.LeadsTo.join_left` and 1 more |
-| `SysState.right` | proved | `System.Invariant.join_right`, `System.Reachable.right`, `System.Reachable.right_of_quiet_boot` |
+| `SysState.right` | proved | `System.Invariant.join_right`, `System.LeadsTo.join_right`, `System.Reachable.right` and 2 more |
 | `SysState.thinLeft` | proved | `System.LeadsTo.join_left`, `System.Run.Fair.left` |
-| `Event.left?` | proved | through `Event.leftDeed`, `Wiring.leftView`: `SysState.run_left`, `System.Run.Fair.left` and 1 more |
+| `Event.left?` | proved | through `Event.leftDeed`, `Event.right?` and 3 more: `Obligation.right?_inr`, `SysState.run_left` and 4 more |
 | `Event.leftDeed` | proved | `SysState.run_left`, `System.Run.Fair.left` |
 | `Wiring.shown` | proved | `SysState.run_left`, `System.Run.Fair.left` |
+| `SysState.thinRight` | proved | `Obligation.Due.of_thinRight`, `SysState.deliverable_of_thinRight`, `SysState.hasMail_of_thinRight` and 3 more |
+| `Event.right?` | proved | `Obligation.right?_inr` |
+| `Event.rightDeed` | proved | `System.Run.Fair.right` |
+| `Wiring.shownRight` | proved | `SysState.init_thinRight`, `System.Run.Fair.right` |
 | `Wiring.wired` | spec | used only in statements |
 
 ## `Lanes/Proof/List/Prefix.lean`
@@ -1999,6 +2087,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Obligation.inl` | spec | used only in statements |
 | `Wiring.leftView` | spec | used only in statements |
+| `Obligation.inr` | spec | used only in statements |
+| `Wiring.rightView` | spec | used only in statements |
 | `SysState.unhidden` | spec | used only in statements |
 | `SysState.hidden` | spec | used only in statements |
 | `System.underView` | spec | used only in statements |
@@ -2032,8 +2122,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Spec.stutter` | proved | through `System.Run`, `System.Run.event` and 2 more: `Http.Gate.pending_answered`, `Http.fronted_arrival_answered` and 15 more |
-| `Obligation.event` | proved | `System.LeadsTo.ensures_of_invariant` |
+| `Spec.stutter` | proved | through `System.Run`, `System.Run.event` and 2 more: `Http.Gate.pending_answered`, `Http.fronted_arrival_answered` and 16 more |
+| `Obligation.event` | proved | `Obligation.right?_inr`, `System.LeadsTo.ensures_of_invariant` |
 | `Obligation.Due` | spec | a predicate |
 | `Obligation.Restarted` | spec | a predicate |
 | `System.Run.idle` | none |  |
@@ -2967,7 +3057,11 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Tls.systemFiles` | trusted | TRUSTED.md: The TLS client |
 | `Tls.Trust.path` | trusted | TRUSTED.md: The TLS client |
 | `Tls.SessionImpl` | trusted | TRUSTED.md: The TLS client |
+| `Tls.alpnWire` | trusted | TRUSTED.md: The TLS client |
 | `Tls.Session.start` | trusted | TRUSTED.md: The TLS client |
+| `Tls.Session.startChain` | trusted | TRUSTED.md: The TLS client |
+| `Tls.Session.peer` | trusted | TRUSTED.md: The TLS client |
+| `Tls.Session.alpn` | trusted | TRUSTED.md: The TLS client |
 | `Tls.Session.feed` | trusted | TRUSTED.md: The TLS client |
 | `Tls.Session.take` | trusted | TRUSTED.md: The TLS client |
 | `Tls.Session.handshake` | trusted | TRUSTED.md: The TLS client |
