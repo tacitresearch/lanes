@@ -45,5 +45,6 @@ because a launch claim is what a critic tests first.
    conformance to a class is a trusted premise tested against the real service. The combinators
    and the API with idempotency keys and webhooks are written, with payments and email as
    instances (`Lanes/Outside/Effects/`, `examples/payments`), and the object store, with an S3
-   client (`Lanes/Outside/ObjectStore.lean`, `Lanes/Web/IO/S3.lean`); next are the store and the
-   queue, and a first integration that records runs of a real service.
+   client (`Lanes/Outside/ObjectStore.lean`, `Lanes/Web/IO/S3.lean`), and email through SES in
+   `integrations/aws`, against a fake; next are the store and the queue, and a first integration
+   that records runs of a real service.

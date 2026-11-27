@@ -30,3 +30,8 @@ root = "LanesMany"
 [[lean_exe]]
 name = "benchWaves"
 root = "Waves"
+
+# The shell alone, parallel off, on and auto, on trivial, heavy, narrow and wide steps.
+[[lean_exe]]
+name = "benchAuto"
+root = "Auto"

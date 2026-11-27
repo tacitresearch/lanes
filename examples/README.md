@@ -39,7 +39,12 @@ there.
 10. `sign-in`: the start of a video site whose members sign in with Google or GitHub. The
     sign-in is Lanes' and runs before the system, which gets only the identity it verified and
     gives the member a session.
-11. `upload`: uploads of any size, handed to the system in pieces and answered with their size
+11. `videos`: a video site whose members sign in with Google or GitHub and upload straight to
+    S3 from the browser, with presigned links, then watch, like, comment and delete. Checked
+    beside the object store's model, with its timeouts and crashes, where taking the browser's
+    word for an upload is found; private videos, deletes, confirmed uploads and likes proved;
+    tested over HTTP against a fake S3 through a restart. Lanes' V1 acceptance application.
+12. `upload`: uploads of any size, handed to the system in pieces and answered with their size
     and checksum: a request that streams, through the gate a piece at a time.
 12. `raft-kv`, `ledger`, `rookery`: the serious systems below.
 
@@ -53,14 +58,15 @@ there.
 | Refinement to a spec (`System.Implements`, `System.Refines`) | `counter`, `kv-cache`, `ledger`, `raft-kv`, `rookery` |
 | A request takes effect once (`Once.actor`, `Service.once`) | `kv-cache`, `raft-kv` |
 | Fairness and liveness | `watchdog` |
-| A model of an external service: timeouts with unknown outcome, idempotency keys, webhooks (`Lanes/Outside/`) | `payments` |
+| A model of an external service: timeouts with unknown outcome, idempotency keys, webhooks (`Lanes/Outside/`) | `payments`, `videos` |
+| Files in S3: presigned uploads and downloads, `HEAD` and delete, the object store's model | `videos` |
 | A database: the store model, lost commits, PostgreSQL | `todo-db` |
-| Model checks, a bug found, random runs | `bank`, `kv-cache`, `election`, `payments`, `todo-db` |
+| Model checks, a bug found, random runs | `bank`, `kv-cache`, `election`, `payments`, `todo-db`, `videos` |
 | HTTP, routes, htmx, templates | `counter`, `bank-web`, `ledger`, `rookery` |
 | A journal and snapshots across `kill -9` | `bank-web`, `ledger`, `raft-kv`, `rookery` |
 | A changed state type: an upgrade, a migration and its proof (`Migration`, `Journal.Upgrade`) | `migration` |
 | Sessions, log-in, cookies, tokens | `ledger`, `rookery` |
-| Sign-in with Google or GitHub (OAuth 2.0, OpenID Connect) | `sign-in` |
+| Sign-in with Google or GitHub (OAuth 2.0, OpenID Connect) | `sign-in`, `videos` |
 | A JSON API and rate limits | `rookery` |
 | Request bodies in pieces, responses in parts, Server-Sent Events | `upload`, `rookery` |
 | Shards in several processes, joined by TCP | `raft-kv` |
@@ -88,7 +94,7 @@ lake exe raftChaos    # a minute of random faults; not part of the tests
 and in the same way, in `examples/ledger`, `lake build`, `lake test` and `lake exe ledgerLive`;
 in `examples/rookery`, `lake build`, `lake test` and `lake exe rookeryLive`; and in each small
 one, `lake build` and `lake test` (`bank-web` needs `bank` beside it, which it requires by path,
-and `sign-in` the presets in `integrations/`;
+and `sign-in` and `videos` the presets in `integrations/`).;
 `upload`'s test drives its front end with no socket, and `lake exe upload 8080` serves it:
 `curl -T file http://127.0.0.1:8080/upload`).
 

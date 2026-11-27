@@ -8,13 +8,27 @@ public import Lanes.Web.S3.Basic
 public import Std.Time
 
 /-!
-The S3 client's IO: credentials from the environment, the time to sign with, and the call made
-through the HTTP client. A system calls the store with an output and is told the answer, or
-`unknown`, with an input (`S3.handler`); what the answer means and what is signed are the pure
-`Lanes.Web.S3.Basic`. Secrets are never formatted or logged here.
+The S3 client's IO: credentials from the environment, or read at each call from a source, the
+time to sign with, and the call made through the HTTP client. A system calls the store with an
+output and is told the answer, or `unknown`, with an input (`S3.handler`); what the answer means
+and what is signed are the pure `Lanes.Web.S3.Basic`. Secrets are never formatted or logged
+here.
 -/
 
 public section
+
+namespace Lanes.SigV4
+
+/-- Credentials as each call reads them: fixed, or kept fresh by something else, such as an
+integration that fetches a role's before they expire. `none` when there are none now. -/
+structure Source where
+  read : IO (Option Credentials)
+
+def Source.fixed (creds : Credentials) : Source := ⟨pure (some creds)⟩
+
+instance : Coe Credentials Source := ⟨Source.fixed⟩
+
+end Lanes.SigV4
 
 namespace Lanes.S3
 
@@ -35,9 +49,11 @@ def now : IO Civil.DateTime := do
   return Civil.DateTime.ofUnix (ms / 1000)
 
 /-- Does `op` on `b`: the answer, or `none` when there is none by the deadline, which says
-nothing about whether it took effect. -/
-def exchange (b : Bucket) (creds : SigV4.Credentials) (op : Op) (config : Client.Config := {})
+nothing about whether it took effect, or when the source has no credentials, and nothing is
+sent. -/
+def exchange (b : Bucket) (creds : SigV4.Source) (op : Op) (config : Client.Config := {})
     (payload : Payload := .signed) : Async (Option Answer) := do
+  let some creds ← creds.read | return none
   let call := S3.call b creds (← now) op payload
   return (← Client.exchange call config).map (interpret op)
 
@@ -49,7 +65,7 @@ structure Port (σ : Signature) where
 /-- Makes the call on a task of its own, with the call's deadline, and hands the answer back as
 an input, or `unknown`. An answer that finds the inbox full is dropped. -/
 def handler {σ : Signature} {sys : System σ} [Hashable σ.Id] (port : Port σ) (b : Bucket)
-    (creds : SigV4.Credentials) (config : Client.Config := {}) (rt : Runtime sys) (out : σ.Out) :
+    (creds : SigV4.Source) (config : Client.Config := {}) (rt : Runtime sys) (out : σ.Out) :
     Async Unit := do
   if let some call := port.called out then
     background do

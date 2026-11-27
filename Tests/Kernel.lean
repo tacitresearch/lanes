@@ -212,8 +212,8 @@ def countInputs : List countSig.In :=
 
 def waveTests : List (String × Bool) :=
   let k := ((Kernel.boot counters).1.acceptAll countInputs)
-  let planned := k.plan 4 (k.queue.toList.take 8)
-  let waves := k.runWaves 4 64
+  let planned := k.plan { workers := 4 } (k.queue.toList.take 8)
+  let waves := k.runWaves { workers := 4 } 64
   let batch := k.runBatch 64
   [ ("kernel waves: the steps of every actor with mail are worked out ahead",
       planned.steps.size == 3 && (planned.get 2).length == 3),

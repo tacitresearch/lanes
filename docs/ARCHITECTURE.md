@@ -20,7 +20,7 @@ proved function tells it to.
 | Actors and systems | `Lanes/Core/{Actor,System,World,Step,Run}.lean` | the definition everything else is about |
 | Proof tools for systems | `Lanes/Proof/{Lift,Ghost,Monotone,Equiv,Deed}.lean` | `System.invariant_of_actor`, `Inductive.of_monotone`, `System.Invariant.of_ghost` |
 | The kernel | `Lanes/Runtime/{Kernel,KernelSound,KernelTimers,Wave}.lean` | `Kernel.exec_reachable`, `Kernel.exec_outputs`, `Kernel.exec_wellFormed`, `Kernel.runWaves_eq` |
-| The shell | `Lanes/Runtime/IO/Shell.lean`, `Lanes/Runtime/{Batch,Mailbox,MailboxSound}.lean` | `Batch.run_kernel`, `Batch.run_sound`, `Mailbox.batch_since_take`; the shell itself is trusted |
+| The shell | `Lanes/Runtime/IO/Shell.lean`, `Lanes/Runtime/{Batch,Mailbox,MailboxSound,Pace}.lean` | `Batch.run_kernel`, `Batch.run_sound`, `Batch.run_spread`, `Mailbox.batch_since_take`; the shell itself is trusted |
 | Journal, snapshots, disk | `Lanes/Durable/{Journal,Snapshot,Disk,Frame}.lean`, `Lanes/Durable/IO/Journal.lean` | `Journal.open?_cut`, `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Journal.Disk.Holds.save_crash` |
 | Migrations | `Lanes/Durable/{Migration,Upgrade}.lean` | `Migration.inv_exec`, `Journal.Upgrade.begin_crash`, `Journal.Upgrade.holds`, `Journal.Upgrade.inv_load` |
 | Joins | `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`, `Lanes/Semantics/FairJoin.lean` | `System.Reachable.left`, `SysState.run_left`, `System.Run.Fair.left` |
@@ -91,15 +91,23 @@ since the last, in order, and the inbox never holds more than its capacity
 (`Mailbox.batch_since_take`, `Mailbox.Reachable.bounded`). Trusted: that the shell performs the
 acts as given (`TRUSTED.md`, the first row).
 
-With `Runtime.Config.workers` above one (one by default), the inputs that arrive together are one
-turn (`Journal.turnAll`), and its work is done a wave at a time (`Lanes/Runtime/Wave.lean`): the
-steps of the actors with mail in the wave are worked out on Lean's task pool, each actor's in the
-order of its messages, and the kernel then does the wave as `runBatch` does, taking each step from
-that plan. Handling one actor's message changes no other actor's state (`Kernel.frame_handle`), so
-the result is `runBatch`'s, value for value (`Kernel.runWaves_eq`), and the journal and everything
-proved of the kernel are unchanged. Steps cheaper than a few microseconds cost more to hand to
-another thread than they save
+Unless `Runtime.Config.parallel` is `off` or there is one worker, the inputs that arrive together
+are one turn (`Journal.turnAll`), a group of at most `min batch snapshotEvery`, and its work is
+done a wave at a time (`Lanes/Runtime/Wave.lean`): the steps of the actors with mail in the wave
+are worked out on Lean's task pool, each actor's in the order of its messages, and the kernel then
+does the wave as `runBatch` does, taking each step from that plan. Handling one actor's message
+changes no other actor's state (`Kernel.frame_handle`), so the result is `runBatch`'s, value for
+value, however the wave is spread over threads (`Kernel.runWaves_eq`), and the journal and
+everything proved of the kernel are unchanged
 (`docs/decisions/D64-actors-run-in-parallel.md`).
+
+Steps cheaper than a few microseconds cost more to hand to another thread than they save, and
+whether costlier ones gain depends on the cores free. With `parallel` `auto`, the default, the
+shell times each batch and `Pace` (`Lanes/Runtime/Pace.lean`, pure) chooses from those times
+whether the next runs on the shard's thread or on the pool: cheap work never goes to the pool,
+costlier work goes the way that has been faster, and the other is measured again now and then.
+A batch is the same whatever the choice (`Batch.run_spread`), so the timing and the choice are
+trusted only for speed (`docs/decisions/D73-adaptive-waves.md`).
 
 ## Journal, snapshots and the disk model
 
@@ -190,7 +198,11 @@ often than it arrived where the link from outside to the gate does not duplicate
 (`Http.served_deadlines_armed`), and in a fair run in which the gate does not crash every request
 the gate admits is answered (`Http.served_pending_answered`). These come from the gate alone
 (`Http.Gate.answered_le_handled`, `Http.Gate.pending_answered`) by projection through the join.
-That an arrival reaches the gate is checked, not proved.
+Every request that arrives is answered, in a fair run in which the gate does not crash and the
+link from outside to the gate loses nothing (`Http.served_arrival_answered`): a message in
+flight on such a link to an actor that stays up is handed to it (`System.Run.Fair.delivered`),
+and the gate answers an arrival at once or admits it. With distinct ids and a link from outside
+that does not duplicate, each request is answered exactly once.
 
 The server (`Lanes/Web/IO/Server.lean`) reads a request, prepares it with `Bridge.prepare` on the
 request's own task, so a password or a cookie the bridge turns into what the system needs never
@@ -289,7 +301,21 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   what an answer means (`S3.interpret`), and a reader of the XML S3 writes, which refuses a
   document type and every entity it does not know (`Lanes/Web/S3/Xml.lean`). The signatures are
   tested against AWS's test suite and S3's documented examples, the client against a fake S3
-  that checks every signature from the bytes it receives. Bodies are whole, in memory.
+  that checks every signature from the bytes it receives. Bodies are whole, in memory. The
+  credentials are read at each call from a `SigV4.Source`: fixed, or kept fresh by something
+  else.
+- **AWS** (`integrations/aws`, `docs/decisions/D74-aws-integration.md`): a role's credentials
+  from an instance's metadata service (IMDSv2) or a container's endpoint, and email through SES.
+  When to fetch and what may be handed out is a pure machine, `Aws.Refresh.step`: nothing is
+  handed out within `skew_ms` of its expiry, and only what an answer gave (`Refresh.current_fresh`,
+  `Refresh.current_answered`); credentials held are fetched again at the margin before they
+  expire, and an answer within the deadline replaces them while they are still handed out
+  (`Refresh.refresh_in_time`); the wait after failures is bounded (`Refresh.backoff_le`,
+  `Refresh.retry_within`); model-checked first against a model of the metadata service with
+  timeouts. A task in `Aws/IO/Credentials.lean` only performs. SES's `SendEmail` is a JSON document
+  proved to read back with exactly its recipients (`Ses.toAddresses_json`), its answers read as
+  the email model's (`Ses.Answer.modelled`), and a run against a fake SES is one the model
+  allows; SES takes no key, so each send is a request without one.
 - **Sign-in** (`Lanes/Web/IO/SignIn.lean`): the random values of a beginning, the pending
   sign-ins and each provider's keys held in references, and the calls to the token endpoint,
   the JWK Set and a user API; every decision is `Lanes/Web/Auth/OAuth.lean`'s (above).
@@ -375,7 +401,12 @@ theorem.
   `Lanes/Semantics/Simulation.lean`).
 - `Service.spec` turns a sequential `Service` into what a concurrent implementation must refine,
   with deadlines as visible steps, and `System.Implements` is refinement to it: linearizability,
-  stated as refinement (`Lanes/Semantics/Service.lean`, D42); that this is the textbook definition is argued, not proved. A deadline passes in the system
+  stated as refinement (`Lanes/Semantics/Service.lean`, D42); that this is the textbook definition is argued, not proved.
+  What it gives is proved: every run of a system that implements a service has a sequential
+  history of the service's acts that produces each output it hands over, takes each input
+  after it arrives, and respects real-time order (`System.Implements.history`,
+  `Lanes/Semantics/History.lean`), so what is proved of the service's functions holds of the
+  system's outputs. A deadline passes in the system
   as a timer it names fires, or as a message it names is delivered
   (`docs/decisions/D56-a-deadline-passes-where-it-is-served.md`). `Server.implements` proves the
   `Server` behaviour (`Lanes/Behaviours/Server.lean`) implements its spec in an environment

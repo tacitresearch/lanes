@@ -66,7 +66,6 @@ Each is to be proved, tested, made private or removed.
 ### `Lanes/Core/System.lean`
 
 - `Effect.isStop`
-- `Envelope.sameLink`
 - `EnvModel.distributed`
 
 ### `Lanes/Check/Fuzz.lean`

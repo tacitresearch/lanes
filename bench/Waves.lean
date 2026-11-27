@@ -47,7 +47,7 @@ def main (args : List String) : IO Unit := do
   let start ← IO.monoNanosNow
   for r in [0:rounds] do
     let k1 := k.acceptAll ((List.range inputs).map (· + r * inputs))
-    match k1.runWaves workers (inputs * 4) with
+    match k1.runWaves { workers } (inputs * 4) with
     | { kernel, outputs := out, .. } =>
       k := kernel
       outputs := outputs + out.length
