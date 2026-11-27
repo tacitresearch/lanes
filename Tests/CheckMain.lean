@@ -14,7 +14,7 @@ never in a repeat loop. -/
 
 def main : IO UInt32 := do
   let results := Tests.Election.tests ++ Tests.Election.fuzzTests ++ (← Tests.Election.speed)
-    ++ (← Tests.Election.tasksTests) ++ (← Tests.Scale.tests) ++ (← Tests.HttpStream.checks)
+    ++ (← Tests.Election.tasksTests) ++ (← Tests.Election.fingerprintTests) ++ (← Tests.Scale.tests) ++ (← Tests.HttpStream.checks)
     ++ (← Tests.Cache.checks) ++ (← Tests.MonitorSpeed.checks)
   for (name, ok) in results do
     if !ok then IO.println s!"FAIL {name}"

@@ -48,6 +48,7 @@ import Tests.Jobs
 import Tests.Schedule
 import Tests.Outside
 import Tests.Queue
+import Tests.Reduce
 import Tests.SharedCache
 import Tests.Cache
 import Tests.Throttle
@@ -128,7 +129,7 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.Ops.tests
     ++ Tests.SigV4.tests ++ Tests.S3.tests ++ Tests.MultipartModel.tests ++ Tests.S3Upload.tests
     ++ Tests.Testing.tests
-    ++ Tests.Queue.tests ++ Tests.Cache.tests ++ Tests.WallClock.tests ++ Tests.Throttle.tests
+    ++ Tests.Queue.tests ++ Tests.Reduce.tests ++ Tests.Cache.tests ++ Tests.WallClock.tests ++ Tests.Throttle.tests
     ++ Tests.SharedCache.tests
   match args with
   | [] =>

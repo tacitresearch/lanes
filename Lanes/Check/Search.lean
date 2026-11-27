@@ -132,6 +132,9 @@ structure Report (S L : Type) where
   complete : Bool
   /-- How many transitions carried each label name, most frequent first. -/
   coverage : List (String × Nat)
+  /-- Whether states were told apart by their hash alone (`Check.fingerprint`): then two that
+  collide are taken as one, and a pass, even complete, is not exhaustive. -/
+  fingerprinted : Bool := false
 
 namespace Report
 
