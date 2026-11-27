@@ -327,6 +327,12 @@ import Lanes.Semantics
 /-- info: 'Lanes.Http.Request.head_plain' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.Request.head_plain
 
+/-- info: 'Lanes.Http.Request.fields_token' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Request.fields_token
+
+/-- info: 'Lanes.Http.Request.target_visible' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Request.target_visible
+
 /-- info: 'Lanes.Http.Response.read_ended' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.Response.read_ended
 
