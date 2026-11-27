@@ -8,6 +8,7 @@ public import Std.Async
 public import Std.Sync
 public import Lanes.Runtime.Batch
 public import Lanes.Runtime.Mailbox
+public import Lanes.Runtime.Pace
 public import Lanes.Runtime.IO.Park
 
 /-!
@@ -19,7 +20,9 @@ are due, how long to sleep and when the shard is idle are the kernel's answers
 By `Kernel.exec_reachable` nothing this loop does can take the system outside the semantics.
 What is trusted is that it hands outputs on as the kernel gave them. With `workers` above one,
 the inputs that arrive together are accepted together and the steps of the actors they reach
-are worked out in parallel, which changes nothing the kernel does (`Kernel.runWaves_eq`).
+are worked out in parallel, which changes nothing the kernel does (`Kernel.runWaves_eq`). Whether
+a batch is worked out in parallel is `Pace`'s choice, from this loop's timing of the batches
+before it; it is trusted only to be fast, since no spread changes a batch (`Batch.run_spread`).
 
 The inbox is bounded, which is the system's back-pressure: `input` waits for room and
 `tryInput` refuses (rule 3.8).
@@ -33,6 +36,21 @@ open Std Std.Async
 
 variable {σ : Signature}
 
+/-- Whether the actors a turn reaches step in parallel. -/
+inductive Runtime.Parallel where
+  | off
+  /-- Every wave with mail for more than one actor (D64). -/
+  | on
+  /-- A batch at a time, as `Pace` chooses from how long the batches before it took. -/
+  | auto
+  deriving DecidableEq, Repr
+
+/-- How many batches that did work ran on the shard's thread, and how many on the pool. -/
+structure Runtime.Batches where
+  inline : Nat := 0
+  pool : Nat := 0
+  deriving Repr
+
 structure Runtime.Config where
   /-- Inputs wait here for the shard. When it is full, `tryInput` refuses. At least one. -/
   inboxCapacity : Nat := 1024
@@ -45,10 +63,14 @@ structure Runtime.Config where
   /-- With a journal that can save the kernel: how many entries to write between two saves.
   After a save the journal is cut, so this bounds how much a restart replays. -/
   snapshotEvery : Nat := 65536
-  /-- Threads that work out the steps of different actors at once (`Kernel.runWaves`). With one,
-  each input is a turn of its own, as the kernel was always run; with more, the inputs that
-  arrive together are one turn, and the actors they reach step in parallel. -/
-  workers : Nat := 1
+  /-- The most threads that work out the steps of different actors at once (`Kernel.runWaves`);
+  `0` is the machine's hardware threads. With one, or with `parallel` off, each input is a turn
+  of its own, as the kernel was always run; otherwise the inputs that arrive together are one
+  turn, and the actors they reach may step in parallel. -/
+  workers : Nat := 0
+  parallel : Runtime.Parallel := .auto
+  /-- What `auto` counts as worth the pool. -/
+  pace : Pace.Config := {}
 
 /-- What a durable shard needs of its journal's storage. `Lanes.Journal.Store.open` gives one
 backed by a file. -/
@@ -89,6 +111,7 @@ structure Runtime (sys : System σ) [Hashable σ.Id] where
   private inbox : IO.Ref (Mailbox (Cmd sys) Wake)
   private parker : Parker
   private log : IO.Ref (Array (Event σ))
+  private ran : IO.Ref Runtime.Batches
   private finished : IO.Promise (Option IO.Error)
 
 private initialize live : IO.Ref Nat ← IO.mkRef 0
@@ -171,19 +194,36 @@ private def loop (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
   let save := journal.bind (·.save)
   let snapshotEvery := save.map fun _ => rt.config.snapshotEvery
   let mut written := (journal.map (·.past.length)).getD 0
+  let workers := match rt.config.workers with
+    | 0 => (System.Platform.Internal.getHardwareConcurrency ()).toNat
+    | n => n
+  let parallel := if workers ≤ 1 then .off else rt.config.parallel
+  let mut pace : Pace := {}
   repeat
     let now ← clock
     let wait ← kernel.modifyGet fun k => ((k.advance now).wait, k)
     let (batch, closed) ← rt.take wait
     if batch.isEmpty && closed then break
-    let workers := rt.config.workers
+    let spread : Kernel.Spread := match parallel with
+      | .off => {}
+      | .on => { workers }
+      | .auto => pace.spread rt.config.pace workers
     let config : Batch.Config :=
-      { now_ms := ← clock, fuel := max 1 rt.config.batch, snapshotEvery, workers }
+      { now_ms := ← clock, fuel := max 1 rt.config.batch, snapshotEvery, spread }
     let held ← waiting.get
-    let batch := if workers ≤ 1 then batch else Batch.group batch
+    let batch := if parallel == .off then batch
+      else Batch.group (max 1 rt.config.snapshotEvery) batch
+    let start_ns ← IO.monoNanosNow
     let (acts, resolved, still, count) ← kernel.modifyGet fun k =>
       match Batch.run config k written held batch with
       | { kernel, written, acts, resolved, waiting } => ((acts, resolved, waiting, written), kernel)
+    let units := Pace.work acts
+    if units != 0 then
+      if parallel == .auto then
+        pace := pace.observe rt.config.pace workers spread ((← IO.monoNanosNow) - start_ns) units
+      rt.ran.modify fun b =>
+        if 1 < spread.workers then { b with pool := b.pool + 1 }
+        else { b with inline := b.inline + 1 }
     written := count
     for act in acts do
       match act with
@@ -236,6 +276,7 @@ def startWith (sys : System σ) [Hashable σ.Id] (config : Runtime.Config := {})
     inbox := ← IO.mkRef {}
     parker := ← Parker.new
     log := ← IO.mkRef #[]
+    ran := ← IO.mkRef {}
     finished := ← IO.Promise.new }
   live.modify (· + 1)
   discard <| IO.asTask (prio := .dedicated) (rt.run (onOutput rt) journal)
@@ -285,6 +326,10 @@ def idle (rt : Runtime sys) (timers : Bool := false) : Async Unit := do
   let done ← IO.Promise.new
   rt.send (.idle timers done)
   unless (← await done.result?) == some true do throw stopped
+
+/-- How many batches have run on the shard's thread and how many on the pool. -/
+def batches (rt : Runtime sys) : BaseIO Runtime.Batches :=
+  rt.ran.get
 
 /-- The events performed so far. Empty unless `Config.record` is on. -/
 def trace (rt : Runtime sys) : BaseIO (Array (Event σ)) :=
