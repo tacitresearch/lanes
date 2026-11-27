@@ -57,7 +57,12 @@ def main():
             except ValueError:
                 answer = {"id": c["id"], "ok": False}
             else:
-                answer = {"id": c["id"], "ok": True, "out": sign(case)}
+                try:
+                    answer = {"id": c["id"], "ok": True, "out": sign(case)}
+                except ValueError:
+                    # Python 3.14's `email` refuses a header name that is not a token, or a value
+                    # with a line break, so botocore cannot be given such a request at all.
+                    answer = {"id": c["id"], "ok": False}
             out.write(json.dumps(answer, ensure_ascii=False) + "\n")
 
 
