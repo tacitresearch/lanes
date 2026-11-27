@@ -149,6 +149,7 @@ def flow (d : Deployment) (held : String → Async Bool) : Async (List (String �
   let anon : Browser := { port }
   let alice ← anon.signIn "alice"
   let bob ← anon.signIn "bob"
+  let carol ← anon.signIn "dave"
   let healthz ← anon.call .get ["healthz"]
   let readyz ← anon.call .get ["readyz"]
   let metrics ← anon.call .get ["metrics"]
@@ -161,6 +162,7 @@ def flow (d : Deployment) (held : String → Async Bool) : Async (List (String �
   let _ ← bob.post ["v", "0", "like"]
   let _ ← alice.post ["v", "0", "like"]
   let commented ← bob.post ["v", "0", "comment"] [("body", "Nice cats")]
+  let _ ← carol.post ["v", "0", "comment"] [("body", "Buy pills")]
   let afterLikes ← anon.call .get ["v", "0"]
   let forged ← bob.call .post ["v", "0", "like"] [("csrf", "forged")]
   let notTheirs ← bob.post ["v", "0", "delete"]
@@ -180,14 +182,16 @@ def flow (d : Deployment) (held : String → Async Bool) : Async (List (String �
   server.stop
   let server ← start d
   let port := server.port.getD 0
-  let (anon, alice, bob) := ({ anon with port }, { alice with port }, { bob with port })
+  let (anon, alice, bob, carol) :=
+    ({ anon with port }, { alice with port }, { bob with port }, { carol with port })
   let _ ← upload ghostPut
   let late ← alice.post ["videos", "2", "uploaded"]
   let kept ← anon.call .get ["v", "0"]
   let feed ← anon.call .get []
   let older ← anon.call .get [] (query := [("before", "2")])
-  let uncommentedByAlice ← alice.post ["v", "0", "comments", "0", "delete"]
+  let uncommentedByCarol ← carol.post ["v", "0", "comments", "0", "delete"]
   let uncommented ← bob.post ["v", "0", "comments", "0", "delete"]
+  let uncommentedByOwner ← alice.post ["v", "0", "comments", "1", "delete"]
   let afterUncomment ← anon.call .get ["v", "0"]
   let deleted ← alice.post ["v", "0", "delete"]
   let gone ← bob.call .get ["v", "0"]
@@ -228,9 +232,10 @@ def flow (d : Deployment) (held : String → Async Bool) : Async (List (String �
       status late == 303 && has feed "Ghost" && !has feed "Diary"),
     ("videos: the feed comes a page at a time, newest first",
       has feed "?before=2" && !has feed "Cats" && has older "Cats"),
-    ("videos: only its author deletes a comment",
-      status uncommentedByAlice == 404 && status uncommented == 303
-        && !has afterUncomment "Nice cats"),
+    ("videos: only its author, or the video's owner, deletes a comment",
+      status uncommentedByCarol == 404 && status uncommented == 303
+        && status uncommentedByOwner == 303 && !has afterUncomment "Nice cats"
+        && !has afterUncomment "Buy pills"),
     ("videos: a deleted video is not served, and its object is deleted in the store",
       status deleted == 303 && status gone == 404 && !has feedAfter "Cats" && objectGone),
     ("videos: signed out, the session is over",

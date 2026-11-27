@@ -132,13 +132,16 @@ def env : EnvModel sig where
   restarts _ := true
 
 def config : Config :=
-  { maxMembers := 2, maxSessions := 1, maxVideos := 2, maxPending := 1, maxComments := 1
-    maxDeleting := 1, maxAttempts := 2, pageSize := 1 }
+  { maxMembers := 2, maxSessions := 1, maxVideos := 2, maxOwned := 1, maxPending := 1,
+    maxComments := 2, maxCommentsEach := 1, maxDeleting := 1, maxAttempts := 2, pageSize := 1 }
 
 def bounded (config : Config) (s : Site) : Bool :=
   s.channels.length ≤ config.maxMembers && s.videos.length ≤ config.maxVideos
     && s.deleting.length ≤ config.maxDeleting
     && s.videos.all (·.comments.length ≤ config.maxComments)
+    && s.channels.all (fun (m, _) => (s.videos.filter (·.owner == m)).length ≤ config.maxOwned)
+    && s.videos.all (fun v => v.comments.all fun c =>
+      (v.comments.filter (·.author == c.author)).length ≤ config.maxCommentsEach)
     && s.channels.all fun (_, ch) => ch.sessions.ids.length ≤ config.maxSessions
 
 def t : Title := ⟨"t", by decide⟩
@@ -214,6 +217,26 @@ def found {S L : Type} (r : Check.Report S L) : Option (String × Nat) :=
   match r.failure with
   | some (.violated p t) => some (p, t.steps.length)
   | _ => none
+
+/-- One member cannot fill the site: their videos, and their comments on one video, are bounded
+far below the site's; a video's owner takes out anyone's comment on it. -/
+def capTests : List (String × Bool) :=
+  let cfg : Config := { maxOwned := 2, maxCommentsEach := 2 }
+  let video (id owner : Nat) : Video :=
+    { id, owner, title := t, about := none_, visibility := .public, media := .mp4, status := .ready 1 }
+  let s : Site := { videos := [video 1 0, video 0 0], next := 2 }
+  let says (r : Site × List Out) (reply : Reply) := r.2 == [.reply 9 none reply]
+  let c (id author : Nat) : Comment := { id, author, body := hi }
+  let v := { video 0 0 with comments := [c 0 1, c 1 1] }
+  [ ("caps: a member with maxOwned videos is refused another, and another member is not",
+      says (s.create cfg 9 none 0 t none_ .public .mp4 0) .tooMany
+        && (s.create cfg 9 none 1 t none_ .public .mp4 0).1.videos.length == 3),
+    ("caps: a member with maxCommentsEach comments on a video is refused another, another member is not",
+      says (s.comment cfg 9 none 1 v hi) (.tooManyComments 0)
+        && says (s.comment cfg 9 none 2 v hi) (.commented 0)),
+    ("caps: a video's owner takes out another member's comment on it, a third member cannot",
+      says (s.uncomment 9 none 0 v 0) (.uncommented 0) && says (s.uncomment 9 none 2 v 0) .notFound
+        && says (s.uncomment 9 none 1 v 1) (.uncommented 0)) ]
 
 def run : IO (List (String × Bool)) := do
   let life' := check config life [shown, goneWhileHeld, twoLikes]

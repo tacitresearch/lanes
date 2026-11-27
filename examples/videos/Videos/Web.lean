@@ -259,7 +259,7 @@ def WatchPage (s : Settings) (viewer : Viewer) (view : View) (at_s : Nat) : Html
           <p>{r.body}</p>
           {match viewer with
             | some v =>
-              if v.1 == r.author then
+              if v.1 == r.author || mine then
                 <form method="post" action={Routes.uncomment.link (c.id, r.id, ())}>
                   {csrf s v}
                   <button type="submit">"Delete"</button>
