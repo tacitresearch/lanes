@@ -85,6 +85,7 @@ public import Lanes.Web.Http.Front
 public import Lanes.Web.Http.Gate
 public import Lanes.Web.Http.ReadRequest
 public import Lanes.Web.Http.Route
+public import Lanes.Web.Http.SigV4
 public import Lanes.Web.Http.Waiting
 public import Lanes.Web.Http.Wire
 public import Lanes.Web.Http.WireSpec
