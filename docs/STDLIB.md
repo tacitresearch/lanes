@@ -137,14 +137,14 @@ API. P1 is common, P2 rare.
 | `crypto/rand` | a | `IO.getRandomBytes` (reads `/dev/urandom`); Lanes binds libsodium's `randombytes_buf`, which uses `getrandom(2)` and also works where `/dev` is not mounted (D46) |
 | `crypto/subtle` | c | libsodium `sodium_memcmp`, bound (D46): compiled Lean promises nothing about timing, so the Lean comparison is only the reference |
 | `crypto/tls` | e | the client, from the OpenSSL Lean's toolchain ships, bound in `native/tls.c` and `Lanes/Web/IO/Tls.lean`; inbound TLS stays at the load balancer or reverse proxy |
-| `crypto/x509`, `crypto/x509/pkix` | e | OpenSSL's, inside the TLS client: the chain verified against the system's roots or a file given, the name or address checked (`Lanes/Web/IO/Tls.lean`); certificates are not parsed in Lean |
+| `crypto/x509`, `crypto/x509/pkix` | e | OpenSSL's, inside the TLS client: the chain verified against the system's roots or a file given, the name or address checked (`Lanes/Web/IO/Tls.lean`); of a certificate, Lean reads only the signature algorithm, for channel binding (`Lanes/Lib/Crypto/Certificate.lean`) |
 | `crypto/aes`, `crypto/cipher` | c | libsodium `crypto_aead_xchacha20poly1305_ietf` (or `crypto_aead_aes256gcm`), for encrypted cookies and data at rest (P1) |
 | `crypto/ed25519` | c | libsodium `crypto_sign` (P1: webhook signatures) |
 | `crypto/ecdh` | c | libsodium `crypto_scalarmult` for X25519; P-256 from OpenSSL's `libcrypto` (P2) |
 | `crypto/ecdsa` | e | verifying only: P-256 with SHA-256 from the OpenSSL Lean's toolchain ships, bound in `native/verify.c` and `Lanes/Lib/Crypto/Verify.lean`, the key's and the signature's DER written in Lean (`Lanes/Lib/Crypto/PublicKey.lean`); for ES256 tokens. Signing (WebAuthn, Web Push) is not bound |
 | `crypto/rsa` | e | verifying only: PKCS #1 v1.5 with SHA-256, bound from the same OpenSSL (`native/verify.c`), with a Lean reference (`Rsa.verifyReference`); for RS256 tokens. No signing, PSS or encryption |
 | `crypto/sha1` | c | `libcrypto` (P1: TOTP is HMAC-SHA-1; also the WebSocket handshake) |
-| `crypto/sha512` | c | libsodium `crypto_hash_sha512` (P2) |
+| `crypto/sha512` | e | `Lanes/Lib/Crypto/Sha512.lean`, SHA-512 and SHA-384 in pure Lean (NIST vectors, `openssl dgst`), for the hash of a certificate that channel binding sends; libsodium has SHA-512 and not SHA-384 |
 | `crypto/hkdf` | c | libsodium `crypto_kdf_hkdf_sha256` (P1: deriving keys from one secret) |
 | `crypto` | d | a registry of hash functions; Lean calls functions by name |
 | `crypto/md5` | e | `Lanes/Lib/Crypto/Md5.lean`, pure Lean, for PostgreSQL's `md5` authentication only (RFC 1321 vectors); broken as a hash |

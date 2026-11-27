@@ -1,17 +1,25 @@
 #!/usr/bin/env bash
 # A PostgreSQL cluster for the live tests of the PostgreSQL client (`Tests/PostgresLive.lean`):
 #
-#   scripts/postgres-test-server DIR PORT    # make it in DIR and start it on 127.0.0.1:PORT
+#   scripts/postgres-test-server DIR PORT [tls]  # make it in DIR and start it on 127.0.0.1:PORT
 #   LANES_POSTGRES=127.0.0.1:PORT lake test
-#   pg_ctl -D DIR/data stop                  # stop it
+#   LANES_POSTGRES_TLS=127.0.0.1:PORT LANES_POSTGRES_CERTS=DIR lake test   # with tls
+#   pg_ctl -D DIR/data stop                      # stop it
 #
 # Run it as a user other than root (PostgreSQL refuses root), with PostgreSQL's binaries on PATH
 # (on Debian and Ubuntu, /usr/lib/postgresql/<version>/bin). It makes a database `lanes_test` and
 # one user per way of authenticating: `lanes_trust` (none), `lanes_clear` (`clear-pw`, asked in
 # cleartext), `lanes_md5` (`md5-pw`, stored as MD5) and `lanes_scram` (`scram-pw`, SCRAM-SHA-256).
+#
+# With `tls`, the server also takes TLS, with a certificate for localhost and 127.0.0.1 signed with
+# ECDSA and SHA-384 by an authority made here (DIR/ca.pem), logs each connection, and has a user
+# `lanes_tls` (`tls-pw`) that may connect over TLS only. DIR/relay.pem is a second certificate
+# from the same authority for the same names, which `Tests/PostgresTls.lean` gives a relay in the
+# middle, so that channel binding is seen to refuse it.
 set -euo pipefail
 dir=$1
 port=$2
+tls=${3:-}
 initdb -D "$dir/data" -U postgres --auth=trust -E UTF8 --locale=C.UTF-8 > "$dir/initdb.log"
 cat > "$dir/data/pg_hba.conf" <<'EOF'
 local all postgres trust
@@ -25,6 +33,34 @@ port = $port
 listen_addresses = '127.0.0.1'
 unix_socket_directories = '$dir'
 EOF
+if [ "$tls" = tls ]; then
+  (
+    cd "$dir"
+    printf '[req]\ndistinguished_name = dn\n[dn]\n[ca]\nbasicConstraints = critical,CA:TRUE\nkeyUsage = critical,keyCertSign,cRLSign\n' > ca.cnf
+    printf 'subjectAltName=DNS:localhost,IP:127.0.0.1\nextendedKeyUsage=serverAuth\n' > leaf.ext
+    openssl ecparam -name prime256v1 -genkey -noout -out ca.key
+    openssl req -x509 -new -key ca.key -out ca.pem -days 30 -subj "/CN=Lanes test PostgreSQL" \
+      -config ca.cnf -extensions ca
+    serial=1
+    for name in server relay; do
+      serial=$((serial + 1))
+      digest=-sha256
+      if [ "$name" = server ]; then digest=-sha384; fi
+      openssl ecparam -name prime256v1 -genkey -noout -out "$name.key"
+      openssl req -new -key "$name.key" -subj "/CN=$name" -out "$name.csr" -config ca.cnf
+      openssl x509 -req -in "$name.csr" -CA ca.pem -CAkey ca.key -set_serial "$serial" -days 30 \
+        "$digest" -extfile leaf.ext -out "$name.pem" 2> /dev/null
+    done
+    chmod 600 ./*.key
+  )
+  cat >> "$dir/data/postgresql.conf" <<EOF
+ssl = on
+ssl_cert_file = '$dir/server.pem'
+ssl_key_file = '$dir/server.key'
+log_connections = on
+EOF
+  echo "hostssl all lanes_tls 127.0.0.1/32 scram-sha-256" >> "$dir/data/pg_hba.conf"
+fi
 pg_ctl -D "$dir/data" -l "$dir/log" -w start
 psql -h "$dir" -p "$port" -U postgres -v ON_ERROR_STOP=1 -q <<'EOF'
 CREATE USER lanes_trust;
@@ -33,9 +69,10 @@ SET password_encryption = 'md5';
 CREATE USER lanes_md5 PASSWORD 'md5-pw';
 SET password_encryption = 'scram-sha-256';
 CREATE USER lanes_scram PASSWORD 'scram-pw';
+CREATE USER lanes_tls PASSWORD 'tls-pw';
 CREATE DATABASE lanes_test;
-GRANT ALL ON DATABASE lanes_test TO lanes_trust, lanes_clear, lanes_md5, lanes_scram;
+GRANT ALL ON DATABASE lanes_test TO lanes_trust, lanes_clear, lanes_md5, lanes_scram, lanes_tls;
 \c lanes_test
-GRANT ALL ON SCHEMA public TO lanes_trust, lanes_clear, lanes_md5, lanes_scram;
+GRANT ALL ON SCHEMA public TO lanes_trust, lanes_clear, lanes_md5, lanes_scram, lanes_tls;
 EOF
 echo "PostgreSQL is on 127.0.0.1:$port; LANES_POSTGRES=127.0.0.1:$port lake test runs the live tests"

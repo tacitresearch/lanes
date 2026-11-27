@@ -5,7 +5,9 @@ Released under Apache 2.0 license as described in the file LICENSE.
 A TLS client from OpenSSL, declared in `Lanes/Web/IO/Tls.lean`. It does no IO: the caller hands
 it the bytes that arrived and sends the bytes it gives back, so it sits on any socket. The
 server's certificate is always verified, against the certificates of a file the caller names,
-and so is the name or address it is for. Arguments are borrowed.
+and so is the name or address it is for unless the caller asks for the chain only. It gives the
+server's certificate, for channel binding, and offers and reports ALPN protocols. Arguments are
+borrowed.
 
 The OpenSSL is the one Lean's toolchain ships and links into every executable, which comes
 without headers; the functions below are declared as OpenSSL 3 and 4 declare them
@@ -14,6 +16,7 @@ without headers; the functions below are declared as OpenSSL 3 and 4 declare the
 #include <limits.h>
 #include <pthread.h>
 #include <stdio.h>
+#include <string.h>
 #include <lean/lean.h>
 
 typedef struct ssl_st SSL;
@@ -23,6 +26,7 @@ typedef struct bio_st BIO;
 typedef struct bio_method_st BIO_METHOD;
 typedef struct X509_VERIFY_PARAM_st X509_VERIFY_PARAM;
 typedef struct x509_store_ctx_st X509_STORE_CTX;
+typedef struct x509_st X509;
 const SSL_METHOD *TLS_client_method(void);
 SSL_CTX *SSL_CTX_new(const SSL_METHOD *method);
 void SSL_CTX_free(SSL_CTX *ctx);
@@ -54,6 +58,11 @@ int SSL_get_shutdown(const SSL *ssl);
 int SSL_shutdown(SSL *ssl);
 long SSL_get_verify_result(const SSL *ssl);
 const char *X509_verify_cert_error_string(long code);
+int SSL_set_alpn_protos(SSL *ssl, const unsigned char *protos, unsigned int size);
+void SSL_get0_alpn_selected(const SSL *ssl, const unsigned char **data, unsigned int *size);
+X509 *SSL_get1_peer_certificate(const SSL *ssl);
+int i2d_X509(const X509 *cert, unsigned char **out);
+void X509_free(X509 *cert);
 unsigned long ERR_get_error(void);
 const char *ERR_reason_error_string(unsigned long code);
 void ERR_clear_error(void);
@@ -90,8 +99,10 @@ static lean_obj_res lanes_tls_error(SSL *ssl, const char *what) {
 static lean_obj_res lanes_tls_unit(void) { return lean_io_result_mk_ok(lean_box(0)); }
 
 /* A session with the server `host`, an IP address when `ip`, whose certificate must chain to
-   one in the PEM file `trust`. */
-LEAN_EXPORT lean_obj_res lanes_tls_new(b_lean_obj_arg trust, b_lean_obj_arg host, uint8_t ip) {
+   one in the PEM file `trust`, and be for `host` when `check`; offering the ALPN protocols
+   `alpn`, in the form TLS sends them, if there are any. */
+LEAN_EXPORT lean_obj_res lanes_tls_new(b_lean_obj_arg trust, b_lean_obj_arg host, uint8_t ip,
+                                       uint8_t check, b_lean_obj_arg alpn) {
     pthread_once(&lanes_tls_once, lanes_tls_register);
     ERR_clear_error();
     const char *name = lean_string_cstr(host);
@@ -105,10 +116,14 @@ LEAN_EXPORT lean_obj_res lanes_tls_new(b_lean_obj_arg trust, b_lean_obj_arg host
     SSL_set_verify(ssl, SSL_VERIFY_PEER, NULL);
     X509_VERIFY_PARAM *param = SSL_get0_param(ssl);
     X509_VERIFY_PARAM_set_hostflags(param, X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS);
-    int named = ip ? X509_VERIFY_PARAM_set1_ip_asc(param, name)
-                   : SSL_set1_host(ssl, name)
+    int named = ip ? !check || X509_VERIFY_PARAM_set1_ip_asc(param, name)
+                   : (!check || SSL_set1_host(ssl, name))
                      && SSL_ctrl(ssl, SSL_CTRL_SET_TLSEXT_HOSTNAME, TLSEXT_NAMETYPE_host_name,
                                  (void *)name);
+    size_t protos = lean_sarray_size(alpn);
+    if (named && protos != 0)
+        named = protos <= UINT_MAX
+            && SSL_set_alpn_protos(ssl, lean_sarray_cptr(alpn), (unsigned int)protos) == 0;
     BIO *in = BIO_new(BIO_s_mem()), *out = BIO_new(BIO_s_mem());
     if (!named || !in || !out) {
         if (in) BIO_free(in);
@@ -195,4 +210,25 @@ LEAN_EXPORT lean_obj_res lanes_tls_shutdown(b_lean_obj_arg tls) {
     SSL_shutdown(lean_get_external_data(tls));
     ERR_clear_error();
     return lanes_tls_unit();
+}
+
+/* The server's certificate, as DER: none before the handshake. */
+LEAN_EXPORT lean_obj_res lanes_tls_peer(b_lean_obj_arg tls) {
+    X509 *cert = SSL_get1_peer_certificate(lean_get_external_data(tls));
+    int size = cert ? i2d_X509(cert, NULL) : 0;
+    lean_object *bytes = lean_alloc_sarray(1, 0, size > 0 ? (size_t)size : 0);
+    unsigned char *out = lean_sarray_cptr(bytes);
+    if (size > 0 && i2d_X509(cert, &out) == size) lean_to_sarray(bytes)->m_size = (size_t)size;
+    if (cert) X509_free(cert);
+    return lean_io_result_mk_ok(bytes);
+}
+
+/* The ALPN protocol the server chose: none if it chose none. */
+LEAN_EXPORT lean_obj_res lanes_tls_alpn(b_lean_obj_arg tls) {
+    const unsigned char *data = NULL;
+    unsigned int size = 0;
+    SSL_get0_alpn_selected(lean_get_external_data(tls), &data, &size);
+    lean_object *bytes = lean_alloc_sarray(1, data ? size : 0, data ? size : 0);
+    if (data && size) memcpy(lean_sarray_cptr(bytes), data, size);
+    return lean_io_result_mk_ok(bytes);
 }

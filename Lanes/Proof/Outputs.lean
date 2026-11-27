@@ -5,6 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Lanes.Proof.Monotone
+public import Lanes.Outside.Basic
 
 /-!
 # What a system hands to the outside
@@ -13,6 +14,9 @@ An output handed to the outside world is one an actor emitted. So what holds of 
 each step and each start may emit holds of every output in every run, under every environment
 model. A model of something outside (`Outside`) that is shown to behave whenever the outputs it
 sees are of some form is then shown to behave beside the system (`Outside.after_invariant`).
+What holds of the system and of the outside together, each input as the outside allows it, is
+proved by the rule of `Inductive.of_monotone` with the outside's memory beside the state
+(`Outside.Beside`).
 -/
 
 @[expose] public section
@@ -54,3 +58,102 @@ theorem Emits.outputs {good : σ.Out → Prop} (h : sys.Emits good) {env : EnvMo
     exact hinv c₁ hc₁ out (SysState.step_output.mp hstep).1
 
 end Lanes.System
+
+namespace Lanes
+
+variable {σ : Signature} {sys : System σ}
+
+/-- The proof rule of `Inductive.of_monotone` for a property of the system's state and the
+memory of an outside beside it: it holds of the blank state and the outside's start, removing
+messages, timers and outputs cannot break it, and it is kept by each input the outside allows,
+by each output it sees, by any actor handling a message in flight to it or armed as its timer
+in a reachable state, and by any actor recovering. It then holds after every run the outside
+allows (`Outside.Beside.holds`). -/
+structure Outside.Beside {D : Type} (outside : Outside σ D) (sys : System σ) (env : EnvModel σ)
+    (P : SysState sys → D → Prop) : Prop where
+  blank : P (SysState.blank sys) outside.init
+  below : ∀ c c' d, P c d → c'.Below c → P c' d
+  input : ∀ c d x d', P c d → outside.allow d x = some d' →
+    P { c with net := c.net ++ [⟨none, (sys.accept x).1, (sys.accept x).2⟩] } d'
+  output : ∀ c d out, P c d → out ∈ c.outbox →
+    P { c with outbox := c.outbox.erase out } (outside.observe d out)
+  step : ∀ c d i msg, sys.Reachable env c → P c d →
+    ((∃ src, ⟨src, i, msg⟩ ∈ c.net) ∨ msg ∈ c.timers i) →
+      P (c.grow i ((sys.actor i).step (c.state i) msg)) d
+  recover : ∀ c d i, P c d → P (c.grow i ((sys.actor i).recover (c.state i))) d
+
+namespace Outside.Beside
+
+open SysState
+
+variable {D : Type} {outside : Outside σ D} {env : EnvModel σ} {P : SysState sys → D → Prop}
+
+theorem init (h : outside.Beside sys env P) : P (SysState.init sys env) outside.init :=
+  init_induction h.blank fun c i hc => h.below _ _ _ (h.recover c _ i hc) (Below.startActor c env i)
+
+/-- Each event that the system and the outside both allow keeps the property. -/
+theorem keeps (h : outside.Beside sys env P) {c c' : SysState sys} {d d' : D} {ev : Event σ}
+    (hc : sys.Reachable env c) (hP : P c d) (hstep : c.step env ev = some c')
+    (hsee : outside.see d ev = some d') : P c' d' := by
+  cases ev with
+  | input x =>
+    obtain rfl := step_input.mp hstep
+    exact h.input c d x d' hP hsee
+  | deliver e =>
+    obtain ⟨_, hdeliverable, rfl⟩ := step_deliver.mp hstep
+    obtain rfl := Option.some.inj hsee
+    have hbelow : SysState.Below { c with net := c.net.erase e } c :=
+      ⟨rfl, fun _ h => List.mem_of_mem_erase h, fun _ _ h => h, fun _ h => h⟩
+    exact h.below _ _ _
+      (h.step c d e.dst e.msg hc hP (.inl ⟨e.src, mem_of_deliverable hdeliverable⟩))
+      (Below.handle hbelow ..)
+  | duplicate e =>
+    obtain ⟨_, _, hdeliverable, rfl⟩ := step_duplicate.mp hstep
+    obtain rfl := Option.some.inj hsee
+    exact h.below _ _ _
+      (h.step c d e.dst e.msg hc hP (.inl ⟨e.src, mem_of_deliverable hdeliverable⟩))
+      (Below.handle (Below.refl c) ..)
+  | drop e =>
+    obtain ⟨_, _, rfl⟩ := step_drop.mp hstep
+    obtain rfl := Option.some.inj hsee
+    exact h.below _ _ _ hP ⟨rfl, fun _ h => List.mem_of_mem_erase h, fun _ _ h => h, fun _ h => h⟩
+  | timeout i msg =>
+    obtain ⟨_, hmem, rfl⟩ := step_timeout.mp hstep
+    obtain rfl := Option.some.inj hsee
+    have hbelow : SysState.Below
+        { c with timers := update c.timers i ((c.timers i).erase msg) } c := by
+      refine ⟨rfl, fun _ h => h, ?_, fun _ h => h⟩
+      intro j m hm
+      by_cases hj : j = i
+      · subst hj
+        simp only [update_self] at hm
+        exact List.mem_of_mem_erase hm
+      · simpa [hj] using hm
+    exact h.below _ _ _ (h.step c d i msg hc hP (.inr hmem)) (Below.handle hbelow ..)
+  | output out =>
+    obtain ⟨hmem, rfl⟩ := step_output.mp hstep
+    obtain rfl := Option.some.inj hsee
+    exact h.output c d out hP hmem
+  | crash i =>
+    obtain ⟨_, _, rfl⟩ := step_crash.mp hstep
+    obtain rfl := Option.some.inj hsee
+    refine h.below _ _ _ hP ⟨rfl, fun _ h => (List.mem_filter.mp h).1, ?_, fun _ h => h⟩
+    intro j m hm
+    by_cases hj : j = i
+    · subst hj; simp [down] at hm
+    · simpa [down, hj] using hm
+  | start i =>
+    obtain ⟨_, _, rfl⟩ := step_start.mp hstep
+    obtain rfl := Option.some.inj hsee
+    exact h.below _ _ _ (h.recover c d i hP) (Below.startActor c env i)
+
+/-- The property holds after every run that the outside allows. -/
+theorem holds (h : outside.Beside sys env P) {events : List (Event σ)} {c : SysState sys} {d : D}
+    (hrun : (SysState.init sys env).run env events = some c)
+    (hd : outside.after events = some d) : P c d :=
+  outside.run_induction (P := fun _ c d => P c d) h.init
+    (fun _ _ _ _ _ _ hc hP hstep hsee => h.keeps hc hP hstep hsee) hrun hd
+
+end Outside.Beside
+
+end Lanes

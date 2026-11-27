@@ -11,12 +11,14 @@ public import Lanes.Lib.Postgres.Scram
 # A connection to PostgreSQL, as a pure function
 
 The IO that runs a connection (`Lanes.Lib.Postgres.IO.Client`) tells it what happened
-(`Postgres.Conn.Event`: bytes received, the end of them, a broken socket, a request to send, `stop`)
-and does what it answers (`Postgres.Conn.Action`: send bytes, send a request's bytes, report the
-connection open, answer a request, close), and asks it how many bytes it takes (`Conn.room`).
-Everything else is decided here: the start-up, which authentication to answer and how, whether
-the server proved it knows the password, what the bytes received are as messages, which request
-each reply answers, and what a reply to `COMMIT` means.
+(`Postgres.Conn.Event`: bytes received, the end of them, a broken socket, a request to send, the
+TLS handshake done or failed, `stop`) and does what it answers (`Postgres.Conn.Action`: send
+bytes, send a request's bytes, start TLS, report the connection open, answer a request, close),
+and asks it how many bytes it takes (`Conn.room`). Everything else is decided here: whether to
+ask for TLS (`SSLRequest`) and what the server's answer means, that nothing else is sent before
+the handshake is done, the start-up, which authentication to answer and how, with which channel
+binding, whether the server proved it knows the password, what the bytes received are as
+messages, which request each reply answers, and what a reply to `COMMIT` means.
 
 Requests are sent only once the connection is open, at most `inflight_max` at a time, each
 ended by its own `Sync` (or a simple query), so the server answers each with one
@@ -107,9 +109,35 @@ inductive Closing where
   | scram (why : Scram.Refusal)
   /-- The configuration cannot be sent: a NUL in the user, an empty nonce. -/
   | invalid
+  /-- The server answered `SSLRequest` with `N`, and TLS is required. -/
+  | refusedTls
+  /-- The TLS handshake failed, with OpenSSL's reason. -/
+  | tls (why : String)
+  /-- Direct TLS, and the server did not choose the ALPN protocol `postgresql`. -/
+  | alpn
   deriving DecidableEq, Repr
 
 namespace Conn
+
+/-- How a connection is encrypted. There is no `prefer`: a connection that asked for TLS and is
+answered `N` closes, rather than go on in the clear. -/
+inductive Encryption where
+  | plain
+  /-- TLS after PostgreSQL's `SSLRequest` and the server's `S`. -/
+  | negotiated
+  /-- TLS from the first byte, with the ALPN protocol `postgresql`: PostgreSQL 17's
+  `sslnegotiation=direct`. -/
+  | direct
+  deriving DecidableEq, Repr, Hashable
+
+/-- Whether SCRAM binds the TLS channel (`SCRAM-SHA-256-PLUS`, `tls-server-end-point`). With
+`prefer`, a server that offers it is answered with it, and one that does not is told the client
+could have (`Scram.Binding.unoffered`), which a server that did offer it refuses. -/
+inductive ChannelBinding where
+  | require
+  | prefer
+  | disable
+  deriving DecidableEq, Repr, Hashable
 
 /-- Every limit is explicit (rule 2.6). -/
 structure Config where
@@ -136,6 +164,9 @@ structure Config where
   inflight_max : Nat := 16
   /-- SCRAM's iteration count, which the server chooses and the client pays for. -/
   iterations_max : Nat := 100000
+  /-- Set by the IO from its TLS mode. -/
+  encryption : Encryption := .plain
+  channelBinding : ChannelBinding := .prefer
 
 inductive Kind where
   | begin
@@ -163,12 +194,16 @@ structure Pending where
   deriving DecidableEq, Repr, Hashable
 
 inductive Phase where
+  /-- `SSLRequest` is sent; the server is to answer `S` or `N`. -/
+  | sslRequest
+  /-- The IO runs the TLS handshake. -/
+  | handshake
   /-- The start-up is sent; the server is to say how to authenticate. -/
   | startup
   /-- A password or its digest is sent. -/
   | password
-  /-- SCRAM's first message is sent. -/
-  | sasl
+  /-- SCRAM's first message is sent, with this channel binding. -/
+  | sasl (binding : Scram.Binding)
   /-- SCRAM's last message is sent, and the server must answer with `signature`. -/
   | saslFinal (signature : ByteArray)
   /-- The server proved it knows the password. -/
@@ -185,6 +220,11 @@ inductive Event where
   | ended
   | broken
   | submit (id : Nat) (request : Request)
+  /-- The TLS handshake is done: the hash of the server's certificate for channel binding
+  (`Certificate.endPoint`), if it has one, and the ALPN protocol the server chose, empty if
+  none. -/
+  | secured (endPoint : Option ByteArray) (alpn : ByteArray)
+  | insecure (why : String)
   /-- The client is done with the connection. -/
   | stop
 
@@ -193,6 +233,8 @@ inductive Action where
   | send (bytes : ByteArray)
   /-- The bytes of the request numbered `id`. -/
   | query (id : Nat) (bytes : ByteArray)
+  /-- Run the TLS handshake, and from then on send and receive through it. -/
+  | startTls
   /-- Authenticated and ready for requests. -/
   | opened
   | reply (id : Nat) (reply : Reply)
@@ -209,6 +251,8 @@ structure Conn where
   pos : Nat := 0
   /-- The requests sent whose replies are not complete, oldest first. -/
   queue : List Conn.Pending := []
+  /-- What the TLS handshake gave to bind SCRAM to. -/
+  endPoint : Option ByteArray := none
 
 namespace Conn
 
@@ -308,6 +352,24 @@ def nonceOk (nonce : String) : Bool :=
 /-- Whether the server must prove it knows the password by SCRAM before the connection opens. -/
 def Config.scramOnly (cfg : Config) : Bool := cfg.requireScram && cfg.password.isSome
 
+/-- SCRAM without channel binding, if it may be: `y` with TLS when the server did not offer
+binding, else `n`. -/
+def unbound (mechanisms : List String) : Option Scram.Binding :=
+  if cfg.channelBinding = .require ∨ Scram.mechanism ∉ mechanisms then none
+  else if cfg.encryption ≠ .plain ∧ cfg.channelBinding = .prefer
+      ∧ Scram.mechanismPlus ∉ mechanisms then some .unoffered
+  else some .none
+
+/-- The channel binding to answer the server's mechanisms with, if any may be: bound to the
+certificate's hash whenever there is TLS, the server offers it and it is not disabled. -/
+def choose (c : Conn) (mechanisms : List String) : Option Scram.Binding :=
+  match c.endPoint with
+  | some hash =>
+    if cfg.encryption ≠ .plain ∧ cfg.channelBinding ≠ .disable ∧ Scram.mechanismPlus ∈ mechanisms
+    then some (.endPoint hash)
+    else unbound cfg mechanisms
+  | none => unbound cfg mechanisms
+
 /-- The server asks how to authenticate. -/
 def onAuth (c : Conn) : Backend → Conn × List Action
   | .authOk => if cfg.scramOnly then fail c .signature else ({ c with phase := .authed }, [])
@@ -330,20 +392,22 @@ def onAuth (c : Conn) : Backend → Conn × List Action
     match cfg.password with
     | some _ =>
       if !nonceOk cfg.nonce then fail c .invalid
-      else if Scram.mechanism ∈ mechanisms then
-        ({ c with phase := .sasl },
-          [.send (Frontend.saslInitial Scram.mechanism (Scram.first "" cfg.nonce).toUTF8).encode])
-      else fail c .method
+      else
+        match choose cfg c mechanisms with
+        | some b =>
+          ({ c with phase := .sasl b },
+            [.send (Frontend.saslInitial b.mechanism (Scram.first b "" cfg.nonce).toUTF8).encode])
+        | none => fail c .method
     | none => fail c .method
   | .errorResponse fields => fail c (.server fields)
   | .noticeResponse _ => (c, [])
   | _ => fail c .protocol
 
-def onSasl (c : Conn) : Backend → Conn × List Action
+def onSasl (c : Conn) (binding : Scram.Binding) : Backend → Conn × List Action
   | .authSaslContinue data =>
     match String.fromUTF8? data, cfg.password with
     | some serverFirst, some password =>
-      match Scram.respond "" password cfg.nonce serverFirst cfg.iterations_max with
+      match Scram.respond binding "" password cfg.nonce serverFirst cfg.iterations_max with
       | .ok (final, signature) =>
         ({ c with phase := .saslFinal signature }, [.send (Frontend.saslResponse final.toUTF8).encode])
       | .error why => fail c (.scram why)
@@ -373,7 +437,7 @@ def onMessage (c : Conn) (m : Backend) : Conn × List Action :=
     | .errorResponse fields => fail c (.server fields)
     | .noticeResponse _ => (c, [])
     | _ => fail c .protocol
-  | .sasl => onSasl cfg c m
+  | .sasl binding => onSasl cfg c binding m
   | .saslFinal signature => onSaslFinal c signature m
   | .saslDone =>
     match m with
@@ -396,6 +460,7 @@ def onMessage (c : Conn) (m : Backend) : Conn × List Action :=
       | .errorResponse fields => fail c (.server fields)
       | _ => fail c .protocol
   | .closed => (c, [])
+  | .sslRequest | .handshake => fail c .protocol
 
 /-- Every message whole in the buffer, in turn. Each takes at least five bytes, so `fuel` one
 more than the bytes there is enough. -/
@@ -426,12 +491,59 @@ def submit (id : Nat) (r : Request) (c : Conn) : Conn × List Action :=
   else if !valid cfg r then (c, [.reply id (.refused .invalid)])
   else ({ c with queue := c.queue ++ [{ id, kind := Request.kind r }] }, [.query id (Request.encode r)])
 
-/-- The connection as it starts: the start-up message, with `client_encoding` UTF-8, so that
-text is UTF-8 both ways. -/
+/-- The start-up message, with `client_encoding` UTF-8, so that text is UTF-8 both ways. -/
+def startup : Frontend :=
+  .startup [("user", cfg.user), ("database", cfg.database), ("client_encoding", "UTF8")]
+
+/-- `SSLRequest`: a length of 8 and the code 80877103. -/
+def sslRequest : ByteArray := ⟨(putU32 8 ++ putU32 80877103).toArray⟩
+
+/-- The ALPN protocol of PostgreSQL. -/
+def alpn : ByteArray := "postgresql".toUTF8
+
+/-- The connection as it starts: the start-up message, or first `SSLRequest`, or first TLS. -/
 def start : Conn × List Action :=
-  let m := Frontend.startup [("user", cfg.user), ("database", cfg.database), ("client_encoding", "UTF8")]
-  if fits cfg m then ({}, [.send m.encode])
-  else ({ phase := .closed }, [.close .invalid])
+  if !fits cfg (startup cfg) then ({ phase := .closed }, [.close .invalid])
+  else
+    match cfg.encryption with
+    | .plain => ({}, [.send (startup cfg).encode])
+    | .negotiated => ({ phase := .sslRequest }, [.send sslRequest])
+    | .direct => ({ phase := .handshake }, [.startTls])
+
+/-- Bytes before TLS: the server's answer to `SSLRequest`, one byte, `S` or `N`, and none during
+the handshake. Bytes after an `S` were sent before the handshake, in the clear, and are not
+taken as the server's (CVE-2021-23222). -/
+def beforeTls (c : Conn) (bytes : ByteArray) : Conn × List Action :=
+  if c.phase = .handshake then if bytes.isEmpty then (c, []) else fail c .protocol
+  else
+    match bytes.data.toList with
+    | [] => (c, [])
+    | [83] => ({ c with phase := .handshake }, [.startTls])
+    | 78 :: _ => fail c .refusedTls
+    | _ => fail c .protocol
+
+/-- With direct TLS, the server must have chosen `postgresql`, so that a server of another
+protocol that takes the certificate is not spoken to; otherwise it chose it or none. -/
+def alpnOk (selected : ByteArray) : Bool :=
+  match cfg.encryption with
+  | .direct => selected == alpn
+  | _ => selected.isEmpty || selected == alpn
+
+/-- The handshake is done: only now is the start-up sent. -/
+def secure (c : Conn) (endPoint : Option ByteArray) (selected : ByteArray) : Conn × List Action :=
+  if c.phase ≠ .handshake then fail c .protocol
+  else if !alpnOk cfg selected then fail c .alpn
+  else ({ c with phase := .startup, endPoint }, [.send (startup cfg).encode])
+
+/-- Whether the connection is before TLS: nothing but `SSLRequest` has been sent. -/
+def Phase.beforeTls : Phase → Bool
+  | .sslRequest | .handshake => true
+  | _ => false
+
+/-- Whether a connection may be handed to another client: open, outside a transaction, and with
+no request in flight. -/
+def reusable (c : Conn) : Bool :=
+  c.phase == .ready && c.status == .idle && c.queue.isEmpty
 
 /-- What the connection does about one thing that happened. A closed connection refuses every
 request and does nothing else. More bytes than `room` closes it. -/
@@ -440,14 +552,18 @@ def step (c : Conn) (e : Event) : Conn × List Action :=
   | .submit id r => submit cfg id r c
   | .received bytes =>
     if c.phase = .closed then (c, [])
+    else if c.phase.beforeTls then beforeTls c bytes
     else if room cfg c < bytes.size then fail c .protocol
     else
       let c := receive bytes c
       drain cfg (c.buffer.size - c.pos + 1) c
   | .ended => if c.phase = .closed then (c, []) else fail c .ended
   | .broken => if c.phase = .closed then (c, []) else fail c .broken
+  | .secured endPoint selected => if c.phase = .closed then (c, []) else secure cfg c endPoint selected
+  | .insecure why => if c.phase = .closed then (c, []) else fail c (.tls why)
   | .stop =>
     if c.phase = .closed then (c, [])
+    else if c.phase.beforeTls then fail c .stopped
     else
       let (c, actions) := fail c .stopped
       (c, .send Frontend.terminate.encode :: actions)

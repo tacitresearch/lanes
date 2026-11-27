@@ -81,6 +81,11 @@ theorem final : lifecycle.Final := by
   intro a b h
   cases a <;> cases b <;> simp_all [lifecycle, Status.next, Status.phase, Phase.final]
 
+/-- A payment that succeeded stays so. -/
+theorem succeeded_terminal : lifecycle.Terminal .succeeded := by
+  intro x
+  cases x <;> rfl
+
 abbrev Answer (R : Type) : Type := Effects.Answer R Status
 
 abbrev Webhook (R P : Type) : Type := Report R Status P
