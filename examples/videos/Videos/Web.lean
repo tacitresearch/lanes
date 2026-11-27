@@ -18,9 +18,10 @@ upload. The bridge is where a request becomes an input and an output a response:
   names a member, and drops a header of that name a client sends;
 - a form that changes something carries a token bound to the session (`Auth.formToken`) and
   comes from this origin;
-- the store's links are signed in `encode` with the deployment's credentials: a put for the
-  upload, whose content type is signed, and a get for the `<video>`. Video bytes go between the
-  browser and the store; the site sees none.
+- the store's links are signed in `encode` with the deployment's credentials: a form the
+  browser posts the upload with, whose policy fixes the key and the content type and bounds the
+  size (`maxUpload_bytes`), and a get for the `<video>`. Video bytes go between the browser and
+  the store; the site sees none.
 -/
 
 namespace Videos.Web
@@ -39,8 +40,11 @@ structure Settings where
   creds : SigV4.Credentials
   /-- The names of the sign-in's providers, for its links. -/
   providers : List String := []
-  /-- How long an upload link lasts. -/
+  /-- How long an upload's form is good for. -/
   upload_s : SigV4.Expiry := ⟨900, by decide⟩
+  /-- The largest video a member may upload, which the store refuses past: at most what S3
+  takes in one `POST`. -/
+  maxUpload_bytes : {n : Nat // 0 < n ∧ n ≤ S3.Post.maxObject_bytes} := ⟨2 * 1024 ^ 3, by decide⟩
   /-- How long a link to watch lasts. -/
   watch_s : SigV4.Expiry := ⟨21600, by decide⟩
   maxBody_bytes : Nat := 16384
@@ -107,6 +111,14 @@ def link (s : Settings) (method : Method) (v : VideoId) (at_s : Nat) (expiry : S
   | some key => S3.presign s.bucket s.creds (Civil.DateTime.ofUnix at_s) method key expiry contentType
   | none => Html.blockedUrl
 
+/-- The form a browser posts the video with: its key and its content type exact, and from one
+byte to `maxUpload_bytes`, for `upload_s` from `at_s`. -/
+def uploadForm (s : Settings) (v : VideoId) (media : Media) (at_s : Nat) : Option S3.Post.Form :=
+  (S3.Key.of? (s.objectKey v)).map fun key =>
+    S3.Post.form s.bucket s.creds (Civil.DateTime.ofUnix at_s)
+      { key := .exact key, contentType := some media.mime, expiry := s.upload_s
+        length := ⟨1, s.maxUpload_bytes.val, s.maxUpload_bytes.property.1, s.maxUpload_bytes.property.2⟩ }
+
 /-! ## Views -/
 
 def style : String :=
@@ -118,15 +130,17 @@ def style : String :=
   "font-size:.85rem}video{width:100%;max-height:70vh;background:#000}.error{color:#b00}" ++
   "label{display:block;margin:.4rem 0}input[type=text],textarea{width:100%;box-sizing:border-box}"
 
-/-- Puts the chosen file to the link the page carries, with the content type the link signs,
-then posts the form that asks the site to check. -/
+/-- Posts the upload form, its fields and then the chosen file, to the store, then posts the form
+that asks the site to check. A file over the limit is not sent; the store would refuse it. -/
 def script : String :=
   "document.addEventListener('DOMContentLoaded',function(){" ++
   "var f=document.getElementById('upload');if(!f)return;" ++
   "f.addEventListener('submit',function(e){e.preventDefault();" ++
   "var file=f.querySelector('input[type=file]').files[0];if(!file)return;" ++
-  "var s=document.getElementById('status');s.textContent='Uploading…';" ++
-  "fetch(f.dataset.put,{method:'PUT',headers:{'Content-Type':f.dataset.type},body:file})" ++
+  "var s=document.getElementById('status');" ++
+  "if(file.size>Number(f.dataset.max)){s.textContent='The file is larger than the site takes.';return;}" ++
+  "s.textContent='Uploading…';" ++
+  "fetch(f.action,{method:'POST',body:new FormData(f)})" ++
   ".then(function(r){if(!r.ok)throw new Error('the store answered '+r.status);" ++
   "s.textContent='Checking…';document.getElementById('confirm').submit();})" ++
   ".catch(function(err){s.textContent='The upload failed: '+err.message;});});});"
@@ -214,12 +228,16 @@ def UploadPage (s : Settings) (viewer : Member × Sid) (v : VideoId) (media : Me
     Html :=
   Layout s "Upload" (some viewer) [
     <h1>"Choose the file"</h1>,
-    <form id="upload" data-put={link s .put v at_s s.upload_s (some media.mime)}
-        data-type={media.mime}>
-      <input type="file" name="file" accept={media.mime} required/>
-      <button type="submit">"Upload"</button>
-      <span id="status" role="status"></span>
-    </form>,
+    match uploadForm s v media at_s with
+    | some form =>
+      <form id="upload" method="post" action={form.url} enctype="multipart/form-data"
+          data-max={toString s.maxUpload_bytes.val}>
+        {form.fields.map fun (name, value) => <input type="hidden" name={name} value={value}/>}
+        <input type="file" name="file" accept={media.mime} required/>
+        <button type="submit">"Upload"</button>
+        <span id="status" role="status"></span>
+      </form>
+    | none => <p class="error">"This video cannot be uploaded."</p>,
     <form id="confirm" method="post" action={Routes.uploaded.link (v, ())}>
       {csrf s viewer}
       <p class="meta">"Uploaded already? "<button type="submit">"Check again"</button></p>

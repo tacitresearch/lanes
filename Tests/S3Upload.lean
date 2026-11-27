@@ -496,19 +496,22 @@ def fake (creds : SigV4.Credentials) : Async (TCP.Socket.Server × UInt16 × IO.
     catch _ => pure ()
   return (server, tcpPort, state)
 
-/-- Posts `form` with `file`, as a browser's `fetch` of a `FormData` does; `change` alters the
-fields first. -/
-def post (form : Post.Form) (file : ByteArray) (filename : String := "clip.mp4")
-    (change : List (String × String) → List (String × String) := id) : Async (Option Response) := do
-  let parts := form.url.splitOn "/"
+/-- Posts `fields` and then `file` to `url`, as a browser's `fetch` of a `FormData` does. -/
+def postFields (url : String) (fields : List (String × String)) (file : ByteArray)
+    (filename : String := "clip.mp4") : Async (Option Response) := do
+  let parts := url.splitOn "/"
   let origin := "/".intercalate (parts.take 3)
   let path := (parts.drop 3).filter (!·.isEmpty)
   let boundary := "----LanesFormBoundary7MA4YWxkTrZu0gW"
-  let body := formBody boundary (change form.fields) filename file
+  let body := formBody boundary fields filename file
   let headers := [("content-type", s!"multipart/form-data; boundary={boundary}")]
-  let some c := Client.Call.at origin { method := .post, path, headers, body }
-    | return none
+  let some c := Client.Call.at origin { method := .post, path, headers, body } | return none
   try Client.exchange c config catch _ => return none
+
+/-- Posts `form` with `file`; `change` alters the fields first. -/
+def post (form : Post.Form) (file : ByteArray) (filename : String := "clip.mp4")
+    (change : List (String × String) → List (String × String) := id) : Async (Option Response) :=
+  postFields form.url (change form.fields) file filename
 
 def status (r : Option Response) : Nat := (r.map (·.status)).getD 0
 

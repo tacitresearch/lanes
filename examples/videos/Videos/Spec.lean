@@ -9,7 +9,7 @@ import Lanes
 
 A video site, as if inputs were handled one at a time. Members sign in with another service
 (Google, GitHub) and each has a channel. A member makes a video record, which starts `pending`,
-and gets a link to put the video in the store (S3) from the browser: the bytes never pass
+and gets a form to post the video to the store (S3) from the browser: the bytes never pass
 through the site. The browser then says it is done, the site asks the store whether the object
 is there (a `HEAD`), and only a `found` answer makes the video `ready`. Ready videos are watched,
 liked once per member, commented on and listed in a feed; a video is public (in the feed and its
@@ -56,7 +56,7 @@ lanes_data inductive Visibility where
   | private
   deriving DecidableEq, Repr, Hashable, Codable
 
-/-- What an upload may be. The link signs it, so the browser's put must send it. -/
+/-- What an upload may be. The upload form's policy names it, so the browser must send it. -/
 lanes_data inductive Media where
   | mp4
   | webm
@@ -155,7 +155,7 @@ lanes_data inductive Command where
   /-- The sign-in verified this identity (`Lanes.OAuth`). -/
   | signIn (req : ReqId) (issuer subject name : String)
   | signOut (req : ReqId) (member : Member) (session : Sid)
-  /-- `at_s` is when the request arrived, in seconds since the epoch: the upload link is
+  /-- `at_s` is when the request arrived, in seconds since the epoch: the upload form is
   signed for it. -/
   | create (req : ReqId) (member : Member) (session : Sid) (title : {s : String // Title.valid s})
     (about : {s : String // About.valid s}) (visibility : Visibility) (media : Media) (at_s : Nat)
@@ -212,7 +212,7 @@ lanes_data inductive Reply where
   | full
   | signedOut
   | noSession
-  /-- The record is made: the bridge signs the link for the upload at `at_s`. -/
+  /-- The record is made: the bridge signs the form for the upload at `at_s`. -/
   | created (video : VideoId) (media : Media) (at_s : Nat)
   | tooMany
   | confirmed (video : VideoId)

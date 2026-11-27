@@ -3,7 +3,7 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Videos.Serve
-import Tests.S3
+import Tests.S3Upload
 import Tests.OAuth
 
 /-!
@@ -11,9 +11,10 @@ import Tests.OAuth
 
 The site served as `Main` serves it, on a journal, with two members signing in through a
 provider run in the test (a token endpoint and a user API, as GitHub's), and a store run in the
-test: Lanes' fake S3 (`Tests/S3.lean`), which checks every signature from the bytes it receives,
-the presigned links' included. A browser is played with the HTTP client: it signs in, makes a
-video, puts the file to the link the page carries, asks the site to check, watches through the
+test: Lanes' fake S3 (`Tests/S3.lean`, `Tests/S3Upload.lean`), which checks every signature from
+the bytes it receives, the presigned links' and the upload forms' policies included, and enforces
+a policy's size. A browser is played with the HTTP client: it signs in, makes a video, posts the
+file with the form the page carries, asks the site to check, watches through the
 link the page's `<video>` carries, likes, comments, and deletes. Midway the server is stopped and
 started again on its journal, and the flow goes on.
 
@@ -97,17 +98,35 @@ def Browser.post (b : Browser) (path : List String) (form : List (String × Stri
     Async (Option Http.Response) := do
   b.call .post path (("csrf", ← b.csrf) :: form)
 
-/-- Makes a video and returns the link for its upload. -/
+/-- Where an upload form posts, and its fields, as a page carries them. -/
+structure Upload where
+  url : String := ""
+  fields : List (String × String) := []
+
+/-- The upload form of a page: its action and its hidden fields, in order. -/
+def uploadOf (page : Option Http.Response) : Upload := Id.run do
+  let some form := between page "<form id=\"upload\"" "</form>" | return {}
+  let url := ((form.splitOn "action=\"")[1]?.bind (·.splitOn "\"" |>.head?)).getD ""
+  let fields := (form.splitOn "<input type=\"hidden\" name=\"").drop 1 |>.filterMap fun rest =>
+    match rest.splitOn "\" value=\"" with
+    | name :: value :: _ => some (name, (value.splitOn "\"").headD "")
+    | _ => none
+  return { url, fields }
+
+/-- Makes a video and returns the form for its upload. -/
 def Browser.create (b : Browser) (title : String) (visibility : String) :
-    Async (Option Http.Response × String) := do
+    Async (Option Http.Response × Upload) := do
   let page ← b.post ["videos"] [("title", title), ("about", s!"About {title}."),
     ("visibility", visibility), ("media", "mp4")]
-  return (page, (between page "data-put=\"" "\"").getD "")
+  return (page, uploadOf page)
 
 def clip : ByteArray := "a few bytes of video".toUTF8
 
-def upload (url : String) : Async (Option Http.Response) := do
-  try Tests.S3.follow url .put clip [("content-type", "video/mp4")] catch _ => return none
+/-- The most the test's deployment takes in one upload. -/
+def maxUpload_bytes : Nat := 1024
+
+def upload (form : Upload) (file : ByteArray := clip) : Async (Option Http.Response) := do
+  try Tests.S3Upload.postFields form.url form.fields file catch _ => return none
 
 def fetchVideo (page : Option Http.Response) : Async (Option ByteArray) := do
   let some src := between page "<video controls preload=\"metadata\" src=\"" "\"" | return none
@@ -127,7 +146,8 @@ def deployment (bucket : S3.Bucket) (creds : SigV4.Credentials) (providerPort : 
   let at_ (path : String) := s!"http://127.0.0.1:{providerPort}/{path}"
   { config := { pageSize := 1 }
     settings := { key := .of "the key of the test deployment".toUTF8, origin, secure := false
-                  bucket, creds, providers := ["hub"], keyPrefix }
+                  bucket, creds, providers := ["hub"], keyPrefix
+                  maxUpload_bytes := ⟨maxUpload_bytes, by decide⟩ }
     server := { port := 0, system := "videos 1"
                 ops := { readinessPath := some "/readyz", livenessPath := some "/healthz"
                          metricsPath := some "/metrics" } }
@@ -173,6 +193,7 @@ def flow (d : Deployment) (held : String → Async Bool) : Async (List (String �
   let channelToBob ← bob.call .get ["c", "0"]
   let channelToAlice ← alice.call .get ["c", "0"]
   let (_, ghostPut) ← alice.create "Ghost" "public"
+  let tooLarge ← upload ghostPut (ByteArray.mk (Array.replicate (maxUpload_bytes + 1) 0))
   let early ← alice.post ["videos", "2", "uploaded"]
   let ghostEarly ← alice.call .get ["v", "2"]
   let feedEarly ← anon.call .get []
@@ -200,11 +221,18 @@ def flow (d : Deployment) (held : String → Async Bool) : Async (List (String �
     ("videos: ops pages answer", status healthz == 200 && status readyz == 200 && status metrics == 200),
     ("videos: a member signs in through the provider and gets a session",
       alice.session.isSome && bob.session.isSome && alice.session != bob.session),
-    ("videos: making a video gives a page with a signed upload link for its object",
-      status made == 200 && (put.splitOn (d.settings.objectKey 0 ++ "?")).length == 2
-        && (put.splitOn "X-Amz-SignedHeaders=content-type%3Bhost").length == 2),
-    ("videos: the browser puts the file to the store with the link",
-      status uploaded == 200),
+    ("videos: making a video gives a page with a form whose policy is for its object, its type and the size allowed",
+      status made == 200 && put.url == d.settings.bucket.url
+        && put.fields.lookup "key" == some (d.settings.objectKey 0)
+        && (match (put.fields.lookup "policy").bind S3.Post.decode? with
+          | some doc => doc.conditions.contains (.length 1 maxUpload_bytes)
+              && doc.conditions.contains (.eq "key" (d.settings.objectKey 0))
+              && doc.conditions.contains (.eq "Content-Type" "video/mp4")
+          | none => false)),
+    ("videos: the browser posts the file to the store with the form",
+      status uploaded == 204),
+    ("videos: a file larger than the site takes is refused by the store",
+      status tooLarge == 400 && Tests.S3Upload.code tooLarge == "EntityTooLarge"),
     ("videos: asked to check, the site asks the store and the video is ready",
       status confirmed == 303 && location confirmed == "/v/0"),
     ("videos: the watch page's video is a signed link the store serves",
@@ -294,10 +322,10 @@ def run : IO (List (String × Bool)) := do
   let journal ← scratch
   try
     (do
-      let (s3, s3Port, objects) ← Tests.S3.fake Tests.S3.creds
+      let (s3, s3Port, store) ← Tests.S3Upload.fake Tests.S3.creds
       let (hubServer, hubPort) ← Tests.OAuth.fake provider
       let d := deployment (Tests.S3.bucketAt s3Port) Tests.S3.creds hubPort journal
-      let results ← flow d fun key => return ((← objects.get).lookup key).isSome
+      let results ← flow d fun key => return ((← store.get).objects.lookup key).isSome
       s3.close
       hubServer.close
       return results : Async _).block

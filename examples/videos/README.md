@@ -23,12 +23,15 @@ lake test             # model checks, the bridge, and the site over HTTP against
 - **Sign-in** is Lanes' (`Lanes.OAuth`, D72), in `serve`'s `arrive`: the system gets only the
   identity the provider vouched for, by its issuer and subject, and a member is made the first
   time one signs in. A session is a signed cookie and an entry of the member's `Auth.Sessions`.
-- **Upload.** "Upload" makes a record, `pending`, and answers a page whose form carries a link
-  presigned for a `PUT` of `videos/<id>`, with the content type signed. The browser puts the file
-  there itself (`upload.js`, a dozen lines that `fetch` the link and then post the next form),
-  and posts "uploaded". The site then asks the store with a `HEAD` and answers that request only
-  when the store has: `found` makes the video `ready`; `missing`, an error or no answer in time
-  leaves it `pending`, to check again from the channel. The site never carries video bytes.
+- **Upload.** "Upload" makes a record, `pending`, and answers a page whose form posts to the
+  bucket under a policy signed for fifteen minutes (`Lanes.S3.Post`): the key `videos/<id>` and
+  the content type exactly, and a size from one byte to `maxUpload_bytes` (2 GiB, or
+  `VIDEOS_MAX_UPLOAD_BYTES`), which the store refuses past (`EntityTooLarge`). The browser posts
+  the file there itself (`upload.js`, a dozen lines that `fetch` the form's `FormData` and then
+  post the next form, and that do not send a file over the limit), and posts "uploaded". The site
+  then asks the store with a `HEAD` and answers that request only when the store has: `found`
+  makes the video `ready`; `missing`, an error or no answer in time leaves it `pending`, to check
+  again from the channel. The site never carries video bytes.
 - **Watch.** The page's `<video>` has a link presigned for a `GET`, signed when the request
   arrived: `arrive` writes the time into the request, so the time is in the journal and the
   link is the same on replay. Links are signed in the bridge's `encode`, with the deployment's
@@ -66,9 +69,9 @@ the system into the run of the spec its actor performed is not written (as for r
   through a cookie it verified, that a form needs its token, that the time is the server's
   (`bridge:` tests, and over HTTP).
 - **Links handed out before a delete are the store's.** A watch link lasts six hours and an upload
-  link fifteen minutes. A link signed before the delete still works until it expires or the
-  store's delete lands, and an upload link used after the delete leaves an object no record
-  names. A lifecycle rule on the bucket, or a second delete after the upload link expires, would
+  form fifteen minutes. A link signed before the delete still works until it expires or the
+  store's delete lands, and an upload form used after the delete leaves an object no record
+  names. A lifecycle rule on the bucket, or a second delete after the upload form expires, would
   close it.
 - **The store** is as `Lanes.ObjectStore` models it, with the browser's upload as a put the site
   hands out and never hears answered, and a `HEAD` as its get (`Videos/Check.lean`).
@@ -89,11 +92,12 @@ actor crashes and starts again anywhere. What each browser is shown is judged as
 | Seeded: the browser's word taken for the upload (`trustBrowser`) | | found in 18 steps |
 | Seeded: a check the store did not answer in time taken as found (`readyOnTimeout`) | | found in 21 steps |
 
-Over HTTP (`Videos/EndToEnd.lean`, 19 checks): the site as `Main` serves it, on a journal, with a
+Over HTTP (`Videos/EndToEnd.lean`, 20 checks): the site as `Main` serves it, on a journal, with a
 provider of the test's (a token endpoint and a user API, as GitHub's) and Lanes' fake S3, which
-checks every signature, the presigned links' included. Two members sign in; a video is made, put
-to the store through its link, checked and watched through the `<video>`'s link; likes counted
-once, a comment, a forged form, another's delete; a private video seen by its owner alone; an
+checks every signature, the presigned links' and the upload forms' included, and refuses a file
+over a policy's size. Two members sign in; a video is made, posted to the store with its form,
+checked and watched through the `<video>`'s link; a file over the limit refused by the store;
+likes counted once, a comment, a forged form, another's delete; a private video seen by its owner alone; an
 upload not yet in the store not listed; then the server is stopped and started again on its
 journal, and the sessions, likes and comments are there, an upload begun before is checked and
 listed, the feed comes a page at a time, comments are deleted by their author only, a delete
@@ -111,10 +115,9 @@ lake exe videos 8080 videos.journal videos.secrets
 redirect URI `<VIDEOS_URL>/sign-in/<google|github>/callback` is made, and `Secure` cookies when
 it is `https:`), `LANES_HOST`, `LANES_IDLE_MS` and `LANES_DRAIN_MS` (as `lanes new` reads
 them; SIGTERM drains for that long, `Server.stopOnSignal`), `VIDEOS_BUCKET`, `AWS_REGION`,
-`VIDEOS_S3_ENDPOINT` (MinIO or LocalStack, as `http://host:port`), the `AWS_*` credentials and
-each provider's client. The
-bucket's CORS rules must allow `PUT` and `GET` from the site's origin with a `Content-Type`
-header. For a local store, MinIO with a bucket and a CORS rule for `http://localhost:8080` will
+`VIDEOS_S3_ENDPOINT` (MinIO or LocalStack, as `http://host:port`), the `AWS_*` credentials,
+`VIDEOS_MAX_UPLOAD_BYTES` and each provider's client. The bucket's CORS rules must allow `POST`
+and `GET` from the site's origin. For a local store, MinIO with a bucket and a CORS rule for `http://localhost:8080` will
 do; over plain HTTP set nothing else, since `VIDEOS_URL` defaults to `http://localhost:<port>`.
 
 `lake exe videosLive` runs the end-to-end flow against the bucket the same variables name, with
@@ -149,8 +152,8 @@ GOOGLE_CLIENT_SECRET=...
 ```
 
 and each provider is registered with `https://<DomainName>/sign-in/<google|github>/callback`. The
-stack's media bucket already allows the presigned `PUT`, `GET` and `HEAD` from
-`https://<DomainName>`. The key in `videos.secrets` is made at the first start; losing it ends
+stack's media bucket already allows the upload form's `POST`, and the presigned `GET` and
+`HEAD`, from `https://<DomainName>`. The key in `videos.secrets` is made at the first start; losing it ends
 every session, nothing else.
 
 
@@ -176,9 +179,11 @@ package; none touches the library.
    links are signed there, with a time, so `arrive` writes the time into the request and it
    rides through the spec as `at_s`; the form tokens need the session, so every answer carries
    the viewer (`Out.reply`).
-4. **An upload's size cannot be bounded.** A presigned `PUT` signs the content type, not a
-   length, and S3 takes up to 5 GB in one; a presigned `POST` with a policy
-   (`content-length-range`) or multipart uploads would bound it and let large videos resume.
+4. **A large upload does not resume.** A video is one `POST` under a policy that bounds its
+   size (`Lanes.S3.Post`), so a failed upload starts again from its first byte. Lanes has
+   multipart uploads (`Lanes.S3.Multipart`, and `S3.presignPart` for a browser's parts, each
+   length signed), but the site would have to keep each upload's id and parts, which the spec
+   does not: not wired.
 5. **Nothing runs in the background.** A delete the store did not answer is sent again at once,
    up to `maxAttempts`, then given up; an upload never confirmed stays `pending` until its owner
    deletes it. Retries with a backoff, a sweep of what was given up, thumbnails and transcoding

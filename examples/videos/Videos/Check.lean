@@ -10,7 +10,7 @@ import Videos.System
 The site beside two members' browsers, which follow a script, and beside the model of an object
 store (`Lanes.ObjectStore`, D71), which answers each call at most once, late, never, refused or
 `unknown`, and whose writes that were not answered may take effect at any moment or never. The
-browser's upload is a put the site hands out and never hears the answer to (the presigned link):
+browser's upload is a put the site hands out and never hears the answer to (the upload form):
 the model may let it land before the site asks, after, or never. The site's `HEAD` is the model's
 get, and its delete the model's delete. The site's actor may crash and start again anywhere.
 

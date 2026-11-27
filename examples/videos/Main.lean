@@ -24,6 +24,8 @@ From the environment, read once at start (rule 2.5):
   LocalStack), named by path;
 - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN`: the S3 client's
   credentials (`S3.credentialsFromEnv`);
+- `VIDEOS_MAX_UPLOAD_BYTES`: the largest video a member may upload, which the upload form's
+  policy makes the store refuse past (2 GiB if unset, at most 5 GiB);
 - `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`:
   a provider for each pair that is set.
 -/
@@ -67,6 +69,10 @@ def main (args : List String) : IO UInt32 := do
   let host := (← IO.getEnv "LANES_HOST").getD "127.0.0.1"
   let idle_ms ← ms "LANES_IDLE_MS" 10000
   let drain_ms ← ms "LANES_DRAIN_MS" 10000
+  let maxUpload ← ms "VIDEOS_MAX_UPLOAD_BYTES" (2 * 1024 ^ 3)
+  let some maxUpload_bytes := if h : 0 < maxUpload ∧ maxUpload ≤ S3.Post.maxObject_bytes then
+      some ⟨maxUpload, h⟩ else none
+    | IO.eprintln "videos: VIDEOS_MAX_UPLOAD_BYTES is from 1 byte to 5 GiB"; return 2
   let some b ← bucket | IO.eprintln "videos: VIDEOS_BUCKET is not set"; return 2
   let some creds ← S3.credentialsFromEnv
     | IO.eprintln "videos: AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are not set"; return 2
@@ -75,7 +81,8 @@ def main (args : List String) : IO UInt32 := do
     if let some c ← client origin p.name then providers := providers ++ [(p, c)]
   let secure := origin.startsWith "https:"
   let settings : Web.Settings :=
-    { key := .of key, origin, secure, bucket := b, creds, providers := providers.map (·.1.name) }
+    { key := .of key, origin, secure, bucket := b, creds, providers := providers.map (·.1.name)
+      maxUpload_bytes }
   let server ← (Web.start {
     settings, journal
     server := { host, port := port.toUInt16, system := "videos 1", idle_ms
