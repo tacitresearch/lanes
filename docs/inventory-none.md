@@ -24,17 +24,6 @@ enumeration are fields of its type. That the declaration is the one written is w
 - `Declare.independent`
 - `Declare.enum`
 
-## Specs reached through a definition of another module
-
-`Once.server_implements` and `Examples.KV.implements_once` are stated with
-`System.ImplementsOnce`, which unfolds to these; the inventory follows a statement's definitions
-only within their own module, so it does not see that the theorems state them.
-
-### `Lanes/Semantics/Once.lean`
-
-- `Service.Once.take`
-- `Service.once`
-
 ## Without evidence on the day the inventory was introduced (2026-11-26)
 
 Each is to be proved, tested, made private or removed.
@@ -119,8 +108,6 @@ Each is to be proved, tested, made private or removed.
 - `JsonNumber.instCoeNat`
 - `JsonNumber.instCoeInt`
 - `JsonNumber.instInhabited`
-- `JsonNumber.maxLeadingZeros`
-- `JsonNumber.toString`
 - `JsonNumber.instToString`
 - `Json.instCoeNat`
 - `Json.instCoeInt`
