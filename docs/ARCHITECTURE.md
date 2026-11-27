@@ -102,11 +102,15 @@ Unless `Runtime.Config.parallel` is `off` or there is one worker, the inputs tha
 are one turn (`Journal.turnAll`), a group of at most `min batch snapshotEvery`, and its work is
 done a wave at a time (`Lanes/Runtime/Wave.lean`): the steps of the actors with mail in the wave
 are worked out on Lean's task pool, each actor's in the order of its messages, and the kernel then
-does the wave as `runBatch` does, taking each step from that plan. Handling one actor's message
-changes no other actor's state (`Kernel.frame_handle`), so the result is `runBatch`'s, value for
-value, however the wave is spread over threads (`Kernel.runWaves_eq`), and the journal and
-everything proved of the kernel are unchanged
-(`docs/decisions/D64-actors-run-in-parallel.md`).
+does the wave as `runBatch` does, taking each step from that plan. A plan keeps each actor's last
+state only, so its steps update the state in place; the kernel writes it at the actor's last
+step, or works out the state the steps taken leave where they stop early (`Kernel.Plan.real`).
+Handling one actor's message neither reads nor writes another actor's cell
+(`Kernel.handle_setState`), and writes to cells already in the table commute
+(`DHashMap.insert_comm_of_contains`), so the result is `runBatch`'s, value for value, however the
+wave is spread over threads (`Kernel.runWaves_eq`), and the journal and everything proved of the
+kernel are unchanged (`docs/decisions/D64-actors-run-in-parallel.md`,
+`docs/decisions/D88-waves-in-place.md`).
 
 Steps cheaper than a few microseconds cost more to hand to another thread than they save, and
 whether costlier ones gain depends on the cores free. With `parallel` `auto`, the default, the
@@ -171,7 +175,9 @@ environment holds of `a` inside any join: of states (`System.Reachable.left`,
 `System.Invariant.join_left`), of runs (`SysState.run_left`) and of fair runs
 (`System.Run.Fair.left`, `System.LeadsTo.join_left`, D41). For `b`, which boots second, it
 holds of states up to `SysState.Equiv` and of fair runs exactly (`System.Run.Fair.right`,
-`System.LeadsTo.join_right`).
+`System.LeadsTo.join_right`). What one side sends the other through the wiring is handled
+there in every fair run, on a link that loses nothing, by an actor that is not crashed and
+never stops (`System.Run.Fair.routed_right`, `System.Run.Fair.routed_left`).
 `System.filterMapIO` renames inputs and outputs and hides some; a system behind it does what it
 does in the open (`SysState.run_filterMapIO`).
 
@@ -456,8 +462,13 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   end of its wait (`Schedule.attempt_ends`); a job succeeds with an answer only in the step that
   takes that answer to its attempt out (`Schedule.succeeded_replied`). In a fair run in which it
   does not crash, every job
-  ends and its end is handed over (`Schedule.held_ends`), and a periodic job is noticed again and
-  again (`Schedule.every_noticed`). That the times it is told are not ahead of the clock, and
+  ends and its end is handed over (`Schedule.held_ends`); beside a system, the end is handled by
+  it, when the links to it lose nothing and its actors neither crash nor stop
+  (`Schedule.attach_end_handled`). The step in which a job leaves tells its requester once: one
+  answer that ends it, `succeeded`, `failed` or `cancelled`, or the notice of a job that runs
+  once (`Schedule.told_of_leaves`); so a call job's end, beside a system, is such an answer
+  (`Schedule.attach_answer_handled`). A periodic job is noticed again and again
+  (`Schedule.every_noticed`). That the times it is told are not ahead of the clock, and
   that the runtime fires a timer no earlier than its delay, are premises (`TRUSTED.md`;
   `docs/decisions/D79-work-that-is-due-later-is-a-job-of-the-scheduler.md`).
 

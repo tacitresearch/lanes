@@ -107,6 +107,33 @@ def page : Option Response :=
     "<form><input name=\"csrf\" value=\"a&amp;b\"/></form><p>&lt;x&gt; &quot;y&quot;</p>")
     with headers := [("set-cookie", "s=1; Path=/"), ("set-cookie", "t=2; Path=/"), ("location", "/v/3")] }
 
+/-- A page with three forms: the upload's attributes in another order and its values escaped, as
+`Lanes.Html` renders them; another as other servers write one, in capitals and unquoted. -/
+def formPage : Option Response :=
+  let upload := Html.element "form"
+    [⟨"method", some "post"⟩, ⟨"action", some "http://store.test/b?x=1&y=2"⟩, ⟨"id", some "upload"⟩]
+    [ .element "input" [⟨"type", some "hidden"⟩, ⟨"name", some "policy"⟩, ⟨"value", some "a\"b'c<d>&e"⟩] [],
+      .element "input" [⟨"name", some "title"⟩, ⟨"value", some "not hidden"⟩] [],
+      .element "input" [⟨"value", some "v"⟩, ⟨"name", some "key"⟩, ⟨"type", some "hidden"⟩] [],
+      .element "input" [⟨"type", some "file"⟩, ⟨"name", some "file"⟩] [] ]
+  some (Response.ofText "text/html"
+    ("<form id=\"search\" action=\"/find\"><input type=\"hidden\" name=\"q\" value=\"x\"></form>"
+      ++ Html.render upload
+      ++ "<FORM ID='other' ACTION=/go><INPUT TYPE=hidden NAME=n VALUE=1 /><input type='hidden' \
+        name='m' value='&#39;&#x41;&amp;lt;'></form>"))
+
+def pageFormTests : List (String × Bool) :=
+  [ ("kit http: a page's form by id, its action and its hidden fields in order, unescaped",
+      form? formPage "upload" == some { action := "http://store.test/b?x=1&y=2"
+                                        fields := [("policy", "a\"b'c<d>&e"), ("key", "v")] }),
+    ("kit http: a form written in capitals, its values bare or in single quotes",
+      form? formPage "other" == some { action := "/go", fields := [("n", "1"), ("m", "'A&lt;")] }
+        && (form? formPage "search").map (·.fields) == some [("q", "x")]),
+    ("kit http: no form of that id, and no page",
+      form? formPage "none" == none && form? none "upload" == none),
+    ("kit http: escapes undone once, numeric ones included, and an & that starts none kept",
+      unescape "&amp;lt; &#60;&#x3E; &quot;&apos; a & b &unknown; &#x; &#;" == "&lt; <> \"' a & b &unknown; &#x; &#;") ]
+
 def httpTests : List (String × Bool) :=
   [ ("kit http: a page's hidden field, unescaped", field page "csrf" == some "a&b"),
     ("kit http: the text between two markers, unescaped",
@@ -164,8 +191,8 @@ def workerTests : List (String × Bool) :=
           body := (Transcode.jobBody { job with source := "videos/9" } "http://site.test/transcoded").toUTF8 }).1.status
             == 403) ]
 
-def tests : List (String × Bool) := s3Tests ++ formTests ++ browserTests ++ httpTests ++ providerTests
-  ++ workerTests
+def tests : List (String × Bool) :=
+  s3Tests ++ formTests ++ browserTests ++ httpTests ++ pageFormTests ++ providerTests ++ workerTests
 
 /-- The browser against a site of `listen` that sets a cookie, clears it, and has a form. -/
 def live : Async (List (String × Bool)) := do

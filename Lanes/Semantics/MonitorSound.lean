@@ -49,7 +49,7 @@ theorem Service.State.equiv_iff_toAbs_eq {a b : Service.State In Out S} :
     a.equiv b = true ↔ a.toAbs = b.toAbs := by
   refine ⟨State.toAbs_eq_of_equiv, fun h => ?_⟩
   simp only [State.toAbs, Abs.mk.injEq, Multiset.coe_eq_coe] at h
-  simp [State.equiv, List.isPerm_iff, h.1, h.2.1, h.2.2]
+  exact State.equiv_iff.mpr ⟨beq_iff_eq.mpr h.1, h.2.1, h.2.2⟩
 
 namespace Check.Monitor
 
@@ -90,6 +90,7 @@ theorem abs_input (svc : Service In Out S T) (m : Monitor In Out S) (x : In) :
     rw [← State.toAbs_call] at hτ
     exact close_complete svc (List.mem_map_of_mem hs) hτ
 
+omit [LawfulBEq S] in
 /-- After an output the monitor holds every state it held that was waiting to deliver that
 output, with the output delivered. -/
 theorem abs_output (m : Monitor In Out S) (out : Out) :
@@ -98,15 +99,11 @@ theorem abs_output (m : Monitor In Out S) (out : Out) :
   ext a
   constructor
   · rintro ⟨st, hst, rfl⟩
-    rcases mem_or_mem_of_mem_insertAll hst with h | h
-    · cases h
-    · obtain ⟨s, hs, hret⟩ := List.mem_filterMap.mp h
-      exact ⟨s.toAbs, ⟨s, hs, rfl⟩, State.ret_eq_some hret⟩
+    obtain ⟨s, hs, hret⟩ := List.mem_filterMap.mp hst
+    exact ⟨s.toAbs, ⟨s, hs, rfl⟩, State.ret_eq_some hret⟩
   · rintro ⟨_, ⟨s, hs, rfl⟩, hmem, rfl⟩
     obtain ⟨s', hret⟩ := State.ret_of_mem hmem
-    have hmem : s' ∈ m.candidates.filterMap (·.ret out) := List.mem_filterMap.mpr ⟨s, hs, hret⟩
-    obtain ⟨t, ht, hts⟩ := exists_mem_insertAll_toAbs_eq (known := []) hmem
-    exact ⟨t, ht, hts.trans (State.ret_eq_some hret).2⟩
+    exact ⟨s', List.mem_filterMap.mpr ⟨s, hs, hret⟩, (State.ret_eq_some hret).2⟩
 
 /-- After a deadline passes the monitor holds every state reached, from a state it held in which
 the deadline is armed, by its passing and then any number of pending inputs taking effect. -/

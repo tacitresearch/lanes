@@ -53,7 +53,6 @@ Each is to be proved, tested, made private or removed.
 ### `Lanes/Core/Run.lean`
 
 - `Effect.armed`
-- `Effect.emits`
 
 ### `Lanes/Core/Service.lean`
 
@@ -61,11 +60,9 @@ Each is to be proved, tested, made private or removed.
 - `Service.State.call`
 - `Service.apply`
 - `Service.State.fire`
-- `Service.State.ret`
 
 ### `Lanes/Core/System.lean`
 
-- `Effect.isStop`
 - `EnvModel.distributed`
 
 ### `Lanes/Check/Fuzz.lean`

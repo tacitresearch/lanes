@@ -38,6 +38,7 @@ NOTIFY_URL=http://127.0.0.1:9090 NOTIFY_PATH=/notify lake exe reminders 8080 rem
 | The reminders stay within `maxReminders`, in every run and environment | `Reminders.bounded` |
 | The scheduler holds at most `maxReminders + 1` jobs, no id twice | `Reminders.jobs_bounded` |
 | In a fair run in which the scheduler does not crash, every reminder's delivery ends | `Reminders.delivery_ends` |
+| If the reminders do not crash either and the link to them loses nothing, every reminder's delivery is answered to them: sent, given up on or cancelled | `Reminders.delivery_answered` |
 | No attempt before its time, none while another of its reminder is out, no more than its attempts | the scheduler's: `Schedule.dispatch_due`, `Schedule.attempt_ends`, `Schedule.calls_le_scheduled` |
 
 Checked (`Reminders/Check.lean`, run by `lake test`): two reminders' worth of requests, a

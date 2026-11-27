@@ -13,7 +13,9 @@ restarts), the reminders stay within `maxReminders` (`Reminders.bounded`) and th
 beside them holds no more than `maxReminders + 1` jobs, no id twice
 (`Reminders.jobs_bounded`). In a fair run in which the scheduler does not crash, the delivery
 of every reminder comes to an end, whatever the notification service does
-(`Reminders.delivery_ends`): it is sent, given up on, or cancelled.
+(`Reminders.delivery_ends`). If the reminders do not crash either and the link from the
+scheduler to them loses nothing, the end reaches them as an answer: sent, given up on, or
+cancelled (`Reminders.delivery_answered`).
 
 What an attempt is, that none starts before its time, that none starts while another of its
 reminder is out, and that a reminder is called no more often than its attempts, is the
@@ -89,5 +91,46 @@ theorem delivery_ends (config : Config)
           j.work.periodic = false)
       (fun c => Key.reminder id ∉ Schedule.keys (c.state (.inl ()) : Schedule.State Key Task).jobs) :=
   Schedule.attach_held_leaves (reminders config) config.scheduler use hcrash (.reminder id)
+
+theorem app_runs (config : Config) (s : State) (x : In) :
+    ((app config).step s x).2.any Effect.isStop = false := by
+  cases x with
+  | remind req now_ms text in_s =>
+    simp only [app, step, remind]
+    split
+    · simp [reply, Effect.isStop]
+    · split <;> simp [reply, Effect.isStop]
+  | cancel req id =>
+    simp only [app, step, cancel]
+    split <;> simp [reply, Effect.isStop]
+  | list req => simp [app, step, reply, Effect.isStop]
+  | noticed key task now_ms => cases key <;> simp [app, step]
+  | answered key outcome =>
+    cases key with
+    | sweep => simp [app, step]
+    | reminder id =>
+      simp only [app, step]
+      cases outcome with
+      | failed payload attempts last => cases payload <;> simp [answered, Effect.isStop]
+      | _ => simp [answered]
+
+/-- Every reminder held is answered: in a fair run in which neither the scheduler nor the
+reminders are crashed and the link from the scheduler to the reminders loses nothing, the job of
+a reminder, a call held while the scheduler is up, is answered to the reminders at a later
+position. The answer ends it: sent (`succeeded`), given up on (`failed`) or cancelled. -/
+theorem delivery_answered (config : Config)
+    {env : EnvModel (joinSig (Schedule.sig Key Task Answer) sig)}
+    (hcrash : env.mayCrash (.inl ()) = false) (hcrashes : env.mayCrash (.inr ()) = false)
+    (hlossless : (env.link (some (.inl ())) (.inr ())).lossy = false) (id : Nat)
+    {r : (system config).Run env} (hfair : r.Fair) {n : ℕ}
+    (hup : (r.state n).up (.inl ()) = true) {j : Schedule.Job Key Task}
+    (hj : Schedule.entry ((r.state n).state (.inl ()) : Schedule.State Key Task).jobs
+      (.reminder id) = some j) {retry : Schedule.Retry} (hwork : j.work = .call retry) :
+    ∃ m o, n ≤ m ∧ o.isEnd = true ∧
+      (r.event m = some (.deliver ⟨some (.inl ()), .inr (), .answered (.reminder id) o⟩) ∨
+        r.event m = some (.duplicate ⟨some (.inl ()), .inr (), .answered (.reminder id) o⟩)) :=
+  Schedule.attach_answer_handled (reminders config) config.scheduler use hcrash
+    (fun _ => hlossless) (fun _ => hcrashes) (fun _ => app_runs config)
+    (fun _ s => by simp [app, Effect.isStop]) (.reminder id) hfair hup hj hwork
 
 end Reminders

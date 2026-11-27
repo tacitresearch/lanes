@@ -17,6 +17,19 @@ import Lanes.Semantics
 /-- info: 'Lanes.netEquiv_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.netEquiv_iff
 
+-- Lanes.Check.Monitor
+/-- info: 'Lanes.Service.State.equiv_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Service.State.equiv_iff
+
+/-- info: 'Lanes.Service.State.equiv_of_ret' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Service.State.equiv_of_ret
+
+/-- info: 'Lanes.Check.Monitor.distinct_filterMap_ret' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.Monitor.distinct_filterMap_ret
+
+/-- info: 'Lanes.Check.Monitor.withinFrom_eq' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.Monitor.withinFrom_eq
+
 -- Lanes.Check.SearchSound
 /-- info: 'Lanes.Check.search_violated' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Check.search_violated
