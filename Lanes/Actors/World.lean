@@ -104,15 +104,20 @@ inductive Visible (In Out : Type) (T : Type := Empty) : Type where
   | output (out : Out)
   | fire (t : T)
 
-/-- Which timers of a system, by actor and message, are deadlines of a spec, and which. The
-others are internal. -/
+/-- Which messages an actor handles, by actor and message, are deadlines of a spec, and which:
+as timers firing (`deadlines`), or as messages delivered (`delivered`). The others are
+internal. -/
 abbrev Deadlines (σ : Signature) (T : Type) : Type := (i : σ.Id) → σ.Msg i → Option T
 
-@[simp] def Event.timed {T : Type} (deadlines : Deadlines σ T) :
-    Event σ → Option (Visible σ.In σ.Out T)
+/-- What the outside world sees of an event: inputs, outputs, the timers `deadlines` names and
+the deliveries `delivered` names, each passing its deadline. A message handed over a second
+time passes it again. -/
+@[simp] def Event.timed {T : Type} (deadlines : Deadlines σ T)
+    (delivered : Deadlines σ T := fun _ _ => none) : Event σ → Option (Visible σ.In σ.Out T)
   | .input x => some (.input x)
   | .output out => some (.output out)
   | .timeout i msg => (deadlines i msg).map .fire
+  | .deliver e | .duplicate e => (delivered e.dst e.msg).map .fire
   | _ => none
 
 def Event.visible : Event σ → Option (Visible σ.In σ.Out) :=

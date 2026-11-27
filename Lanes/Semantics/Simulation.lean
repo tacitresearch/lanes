@@ -26,8 +26,9 @@ internal steps of the spec. The rules here make that usable for a `System`.
 - `Refines.of_lift`: refinement carried back along a function that loses state the steps do not
   read.
 - `System.Refines.of_ghost`: what a system with ghosts refines, the system without them refines.
-- `System.Refines.of_events`: refinement of a system case by event, with only the losses the
-  environment has.
+- `System.Refines.of_timed_events`: refinement of a system case by event, with only the losses
+  the environment has, and timers and deliveries passing deadlines; `of_events` with no
+  delivery that does.
 - `System.Refines.of_steps`: refinement of a system in the cases of `Inductive.of_monotone`,
   for a relation that losing messages and timers cannot break.
 - `System.Refines.of_handles`: the same with handling a message as one case, whether the message
@@ -166,11 +167,14 @@ Refinement of a system, case by event, with only the losses the environment has:
 dropped on a lossy link, an actor taken down when it may crash or stops itself, and timers. The
 relation must not read timers or which actors are up (`frame`). An actor that handles a message
 or recovers is `grow`, with nothing lost; the delivery case knows the message is deliverable,
-so on an ordered link it is the oldest. Each case is answered by internal steps of the spec,
-except an input and an output, by the same visible step.
+so on an ordered link it is the oldest. Each case is answered by a step of the spec with the
+event's label: an input and an output by the same visible step, a timer that `deadlines` names
+and a message handed over that `delivered` names by its deadline passing, and the rest by
+internal steps.
 -/
-theorem Refines.of_events {T : Type} {spec : Spec S (Option (Visible σ.In σ.Out T))}
-    {deadlines : Deadlines σ T} {inv : SysState sys → Prop} (hinv : sys.Invariant env inv)
+theorem Refines.of_timed_events {T : Type} {spec : Spec S (Option (Visible σ.In σ.Out T))}
+    {deadlines delivered : Deadlines σ T} {inv : SysState sys → Prop}
+    (hinv : sys.Invariant env inv)
     (rel : SysState sys → S → Prop)
     (init : ∃ t, spec.init t ∧ rel (SysState.init sys env) t)
     (frame : ∀ c t up timers, rel c t → (∀ i msg, msg ∈ timers i → msg ∈ c.timers i) →
@@ -181,11 +185,13 @@ theorem Refines.of_events {T : Type} {spec : Spec S (Option (Visible σ.In σ.Ou
       ∃ t', spec.lts.STr t (some (.output out)) t' ∧
         rel { c with outbox := c.outbox.erase out } t')
     (deliver : ∀ c t e, inv c → rel c t → c.deliverable env e = true →
-      ∃ t', spec.lts.τSTr t t' ∧ rel (({ c with net := c.net.erase e }).grow e.dst
-        ((sys.actor e.dst).step (c.state e.dst) e.msg)) t')
+      ∃ t', spec.lts.STr t ((delivered e.dst e.msg).map Visible.fire) t' ∧
+        rel (({ c with net := c.net.erase e }).grow e.dst
+          ((sys.actor e.dst).step (c.state e.dst) e.msg)) t')
     (duplicate : ∀ c t e, inv c → rel c t → c.deliverable env e = true →
-      (env.link e.src e.dst).duplicating = true → ∃ t', spec.lts.τSTr t t' ∧
-        rel (c.grow e.dst ((sys.actor e.dst).step (c.state e.dst) e.msg)) t')
+      (env.link e.src e.dst).duplicating = true →
+        ∃ t', spec.lts.STr t ((delivered e.dst e.msg).map Visible.fire) t' ∧
+          rel (c.grow e.dst ((sys.actor e.dst).step (c.state e.dst) e.msg)) t')
     (drop : ∀ c t e, inv c → rel c t → e ∈ c.net → (env.link e.src e.dst).lossy = true →
       ∃ t', spec.lts.τSTr t t' ∧ rel { c with net := c.net.erase e } t')
     (down : ∀ c t i, rel c t → env.mayCrash i = true ∨ sys.Stops i →
@@ -195,7 +201,7 @@ theorem Refines.of_events {T : Type} {spec : Spec S (Option (Visible σ.In σ.Ou
         rel (c.grow i ((sys.actor i).step (c.state i) msg)) t')
     (recover : ∀ c t i, inv c → rel c t → ∃ t', spec.lts.τSTr t t' ∧
       rel (c.grow i ((sys.actor i).recover (c.state i))) t') :
-    sys.Refines env spec deadlines := by
+    sys.Refines env spec deadlines delivered := by
   refine Lanes.Refines.of_invariant (invariant_iff.mp hinv) rel ?_ ?_
   · rintro _ rfl
     exact init
@@ -224,11 +230,11 @@ theorem Refines.of_events {T : Type} {spec : Spec S (Option (Visible σ.In σ.Ou
   | deliver e =>
     obtain ⟨_, hdeliverable, rfl⟩ := SysState.step_deliver.mp hstep
     obtain ⟨t', ht', hrel'⟩ := deliver c t e hc hrel hdeliverable
-    exact settle _ _ e.dst _ _ t' rfl rfl rfl (fun _ _ h => h) (stops _ _ _) (internal ht') hrel'
+    exact settle _ _ e.dst _ _ t' rfl rfl rfl (fun _ _ h => h) (stops _ _ _) ht' hrel'
   | duplicate e =>
     obtain ⟨_, hdup, hdeliverable, rfl⟩ := SysState.step_duplicate.mp hstep
     obtain ⟨t', ht', hrel'⟩ := duplicate c t e hc hrel hdeliverable hdup
-    exact settle _ _ e.dst _ _ t' rfl rfl rfl (fun _ _ h => h) (stops _ _ _) (internal ht') hrel'
+    exact settle _ _ e.dst _ _ t' rfl rfl rfl (fun _ _ h => h) (stops _ _ _) ht' hrel'
   | drop e =>
     obtain ⟨hlossy, hmem, rfl⟩ := SysState.step_drop.mp hstep
     obtain ⟨t', ht', hrel'⟩ := drop c t e hc hrel hmem hlossy
@@ -254,6 +260,44 @@ theorem Refines.of_events {T : Type} {spec : Spec S (Option (Visible σ.In σ.Ou
     obtain ⟨t', ht', hrel'⟩ := recover c t i hc hrel
     exact settle _ c i _ _ t' rfl rfl rfl (fun _ _ h => h) (fun h => ⟨c.state i, .inl h⟩)
       (internal ht') hrel'
+
+/-- `of_timed_events` with no message handed over passing a deadline: each delivery and
+duplicate is answered by internal steps of the spec. -/
+theorem Refines.of_events {T : Type} {spec : Spec S (Option (Visible σ.In σ.Out T))}
+    {deadlines : Deadlines σ T} {inv : SysState sys → Prop} (hinv : sys.Invariant env inv)
+    (rel : SysState sys → S → Prop)
+    (init : ∃ t, spec.init t ∧ rel (SysState.init sys env) t)
+    (frame : ∀ c t up timers, rel c t → (∀ i msg, msg ∈ timers i → msg ∈ c.timers i) →
+      rel { c with up, timers } t)
+    (input : ∀ c t x, inv c → rel c t → ∃ t', spec.lts.STr t (some (.input x)) t' ∧
+      rel { c with net := c.net ++ [⟨none, (sys.accept x).1, (sys.accept x).2⟩] } t')
+    (output : ∀ c t out, inv c → rel c t → out ∈ c.outbox →
+      ∃ t', spec.lts.STr t (some (.output out)) t' ∧
+        rel { c with outbox := c.outbox.erase out } t')
+    (deliver : ∀ c t e, inv c → rel c t → c.deliverable env e = true →
+      ∃ t', spec.lts.τSTr t t' ∧ rel (({ c with net := c.net.erase e }).grow e.dst
+        ((sys.actor e.dst).step (c.state e.dst) e.msg)) t')
+    (duplicate : ∀ c t e, inv c → rel c t → c.deliverable env e = true →
+      (env.link e.src e.dst).duplicating = true → ∃ t', spec.lts.τSTr t t' ∧
+        rel (c.grow e.dst ((sys.actor e.dst).step (c.state e.dst) e.msg)) t')
+    (drop : ∀ c t e, inv c → rel c t → e ∈ c.net → (env.link e.src e.dst).lossy = true →
+      ∃ t', spec.lts.τSTr t t' ∧ rel { c with net := c.net.erase e } t')
+    (down : ∀ c t i, rel c t → env.mayCrash i = true ∨ sys.Stops i →
+      ∃ t', spec.lts.τSTr t t' ∧ rel (c.down env i) t')
+    (timeout : ∀ c t i msg, inv c → rel c t → msg ∈ c.timers i →
+      ∃ t', spec.lts.STr t ((deadlines i msg).map Visible.fire) t' ∧
+        rel (c.grow i ((sys.actor i).step (c.state i) msg)) t')
+    (recover : ∀ c t i, inv c → rel c t → ∃ t', spec.lts.τSTr t t' ∧
+      rel (c.grow i ((sys.actor i).recover (c.state i))) t') :
+    sys.Refines env spec deadlines :=
+  Refines.of_timed_events (delivered := fun _ _ => none) hinv rel init frame input output
+    (fun c t e hc h hd => by
+      obtain ⟨t', ht', h'⟩ := deliver c t e hc h hd
+      exact ⟨t', (LTS.sTr_τSTr_iff spec.lts).mpr ht', h'⟩)
+    (fun c t e hc h hd hdup => by
+      obtain ⟨t', ht', h'⟩ := duplicate c t e hc h hd hdup
+      exact ⟨t', (LTS.sTr_τSTr_iff spec.lts).mpr ht', h'⟩)
+    drop down timeout recover
 
 /--
 Refinement of a system, for a relation that losing messages and timers cannot break (`loses`).
