@@ -11,13 +11,11 @@ cut that often. -/
 
 open Lanes Lanes.Http
 
-abbrev helloSig : Signature := Server.sig ReqId ReqId
-
-def hello : Service helloSig Unit where
+def hello : Service ReqId ReqId Unit where
   init := ()
   step _ id := ((), [id])
 
-def bridge : Bridge helloSig where
+def bridge : Bridge (Server.sig ReqId ReqId) where
   decode id _ := .ok id
   encode id := some (id, .text "hello\n")
 

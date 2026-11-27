@@ -8,38 +8,16 @@
 # <server> is a name of run.sh (go, tcp, std, lanes, lanes-journal, ...). Build with run.sh first.
 set -euo pipefail
 cd "$(dirname "$0")"
+. ./servers.sh
 WHAT=$1
 NAME=$2
 CONNS=${3:-16}
 SECONDS_EACH=${4:-5}
-BIN=.lake/build/bin
 PORT=$((18900 + RANDOM % 50))
 SCRATCH=$(mktemp -d /tmp/lanesprofile.XXXXXX)
 pid=
 trap '[ -n "$pid" ] && kill "$pid" 2>/dev/null; rm -rf "$SCRATCH"' EXIT
-
-command_of() {
-  case $1 in
-    go1) echo "env GOMAXPROCS=1 .build/hello -port $PORT" ;;
-    go) echo ".build/hello -port $PORT" ;;
-    tcp) echo "$BIN/benchTcp $PORT" ;;
-    std) echo "$BIN/benchStd $PORT" ;;
-    std-unlimited) echo "$BIN/benchStd $PORT 1000000000" ;;
-    lanes) echo "$BIN/benchLanes $PORT" ;;
-    lanes-journal) echo "$BIN/benchLanes $PORT $SCRATCH/j" ;;
-    lanes-snapshot) echo "$BIN/benchLanes $PORT $SCRATCH/j 1024" ;;
-    *) echo "unknown server $1" >&2; exit 2 ;;
-  esac
-}
-
-wait_port() {
-  for _ in $(seq 1 600); do
-    (exec 3<>/dev/tcp/127.0.0.1/$PORT) 2>/dev/null && return
-    sleep 0.1
-  done
-  echo "the server did not start" >&2
-  exit 1
-}
+server_argv "$NAME" "$PORT" "$SCRATCH"
 
 load() {
   .build/load -addr "127.0.0.1:$PORT" -c "$CONNS" -d "${SECONDS_EACH}s" -warmup 1s "$@"
@@ -53,11 +31,9 @@ thread_ticks() {
 
 case $WHAT in
   threads)
-    # shellcheck disable=SC2046
-    exec_cmd=$(command_of "$NAME")
-    $exec_cmd > /dev/null 2>&1 &
+    "${SERVER[@]}" > /dev/null 2>&1 &
     pid=$!
-    wait_port
+    wait_port "$PORT" || { echo "the server did not start" >&2; exit 1; }
     load > "$SCRATCH/load.txt" &
     lpid=$!
     sleep 1
@@ -70,9 +46,9 @@ case $WHAT in
       '{d = ($5 - $3) / t; if (d > 0) printf "%s %s %.2f\n", $1, $2, d}' | sort -k3 -nr
     ;;
   syscalls)
-    $(command_of "$NAME") > /dev/null 2>&1 &
+    "${SERVER[@]}" > /dev/null 2>&1 &
     pid=$!
-    wait_port
+    wait_port "$PORT" || { echo "the server did not start" >&2; exit 1; }
     strace -f -c -p "$pid" -o "$SCRATCH/strace.txt" &
     spid=$!
     sleep 0.5
@@ -86,11 +62,10 @@ case $WHAT in
     ;;
   callgrind)
     out=${OUT:-callgrind.$NAME.out}
-    # shellcheck disable=SC2046
     valgrind --tool=callgrind --callgrind-out-file="$out" --dump-instr=no \
-      $(command_of "$NAME") > /dev/null 2> "$SCRATCH/valgrind.txt" &
+      "${SERVER[@]}" > /dev/null 2> "$SCRATCH/valgrind.txt" &
     pid=$!
-    wait_port
+    wait_port "$PORT" || { echo "the server did not start" >&2; exit 1; }
     load -warmup 2s > /dev/null
     callgrind_control -z "$pid" > /dev/null
     load -json -warmup 0s > "$SCRATCH/load.json"

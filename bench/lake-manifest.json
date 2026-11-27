@@ -9,7 +9,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": false,
    "dir": "..",
-   "configFile": "lakefile.toml"
+   "configFile": "lakefile.lean"
   },
   {
    "url": "https://github.com/leanprover/cslib",
@@ -133,6 +133,5 @@
   }
  ],
  "name": "lanesBench",
- "lakeDir": ".lake",
- "fixedToolchain": false
+ "lakeDir": ".lake"
 }

@@ -17,6 +17,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 )
 
@@ -32,9 +33,106 @@ type result struct {
 	Errors     int64   `json:"errors"`
 	Reconnects int64   `json:"reconnects"`
 	Non2xx     int64   `json:"non2xx"`
+	// Measured over the same window as the requests, when -pid is given.
+	ServerCPUs  float64 `json:"server_cpu_s"`
+	ServerRSSkB int64   `json:"server_rss_peak_kb"`
+	Threads     int64   `json:"server_threads"`
+	LoadCPUs    float64 `json:"load_cpu_s"`
+	// CPU time spent on the -cpus set by anything but the server and this process: other
+	// jobs on the machine, kernel threads. Softirq time (the loopback's packets) is apart.
+	OtherCPUs   float64 `json:"other_cpu_s"`
+	SoftirqCPUs float64 `json:"softirq_s"`
 }
 
-var errClosed = errors.New("server closed the connection")
+// The kernel's USER_HZ, which /proc/<pid>/stat and /proc/stat count in; 100 on Linux.
+const userHz = 100
+
+// cpuList parses a list such as "0-3,8,10-11" into a set; empty means every CPU.
+func cpuList(s string) (map[int]bool, error) {
+	if s == "" {
+		return nil, nil
+	}
+	set := map[int]bool{}
+	for _, part := range strings.Split(s, ",") {
+		lo, hi, isRange := strings.Cut(part, "-")
+		a, err := strconv.Atoi(lo)
+		if err != nil {
+			return nil, err
+		}
+		b := a
+		if isRange {
+			if b, err = strconv.Atoi(hi); err != nil {
+				return nil, err
+			}
+		}
+		for c := a; c <= b; c++ {
+			set[c] = true
+		}
+	}
+	return set, nil
+}
+
+// cpuTicks sums the busy (user, nice, system) and softirq ticks of the CPUs in set.
+func cpuTicks(set map[int]bool) (busy, softirq int64) {
+	data, err := os.ReadFile("/proc/stat")
+	if err != nil {
+		return 0, 0
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		f := strings.Fields(line)
+		if len(f) < 8 || !strings.HasPrefix(f[0], "cpu") || f[0] == "cpu" {
+			continue
+		}
+		n, err := strconv.Atoi(f[0][3:])
+		if err != nil || (set != nil && !set[n]) {
+			continue
+		}
+		v := func(i int) int64 { x, _ := strconv.ParseInt(f[i], 10, 64); return x }
+		busy += v(1) + v(2) + v(3)
+		softirq += v(7)
+	}
+	return busy, softirq
+}
+
+// processTicks is utime + stime of a process, from the fields after its name in /proc/<pid>/stat.
+func processTicks(pid int) int64 {
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+	if err != nil {
+		return 0
+	}
+	s := string(data)
+	f := strings.Fields(s[strings.LastIndexByte(s, ')')+1:])
+	if len(f) < 13 {
+		return 0
+	}
+	u, _ := strconv.ParseInt(f[11], 10, 64)
+	k, _ := strconv.ParseInt(f[12], 10, 64)
+	return u + k
+}
+
+// status reads a "Name: value kB" field of /proc/<pid>/status.
+func status(pid int, name string) int64 {
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/status", pid))
+	if err != nil {
+		return 0
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if rest, ok := strings.CutPrefix(line, name+":"); ok {
+			f := strings.Fields(rest)
+			if len(f) > 0 {
+				x, _ := strconv.ParseInt(f[0], 10, 64)
+				return x
+			}
+		}
+	}
+	return 0
+}
+
+func selfCPU() time.Duration {
+	var ru syscall.Rusage
+	syscall.Getrusage(syscall.RUSAGE_SELF, &ru)
+	return time.Duration(ru.Utime.Nano() + ru.Stime.Nano())
+}
 
 // readResponse reads one response and says whether the connection stays open.
 func readResponse(r *bufio.Reader) (status int, keep bool, err error) {
@@ -114,7 +212,14 @@ func main() {
 	warmup := flag.Duration("warmup", time.Second, "unmeasured time before the measurement")
 	path := flag.String("path", "/", "request path")
 	asJSON := flag.Bool("json", false, "print one JSON line")
+	pid := flag.Int("pid", 0, "the server's process, whose CPU time and peak RSS to measure")
+	cpus := flag.String("cpus", "", "the CPUs to measure other work on, as 0-3,8 (default all)")
 	flag.Parse()
+	cpuSet, err := cpuList(*cpus)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "bad -cpus:", err)
+		os.Exit(2)
+	}
 
 	request := []byte("GET " + *path + " HTTP/1.1\r\nHost: 127.0.0.1\r\nUser-Agent: lanesbench\r\n\r\n")
 	var errorCount, reconnects, non2xx atomic.Int64
@@ -192,12 +297,18 @@ func main() {
 		}(w)
 	}
 	time.Sleep(*warmup)
+	serverBefore, selfBefore := processTicks(*pid), selfCPU()
+	busyBefore, softBefore := cpuTicks(cpuSet)
 	measuring.Store(true)
 	began := time.Now()
 	time.Sleep(*duration)
 	stop.Store(true)
 	seconds := time.Since(began).Seconds()
+	busyAfter, softAfter := cpuTicks(cpuSet)
+	serverAfter, selfAfter := processTicks(*pid), selfCPU()
 	wg.Wait()
+	serverCPU := float64(serverAfter-serverBefore) / userHz
+	loadCPU := (selfAfter - selfBefore).Seconds()
 
 	var all []time.Duration
 	for _, l := range latencies {
@@ -215,6 +326,15 @@ func main() {
 		Conns: *conns, Seconds: seconds, Requests: len(all), RPS: float64(len(all)) / seconds,
 		P50us: pct(0.50), P90us: pct(0.90), P99us: pct(0.99), MaxUs: pct(1),
 		Errors: errorCount.Load(), Reconnects: reconnects.Load(), Non2xx: non2xx.Load(),
+		LoadCPUs:    loadCPU,
+		OtherCPUs:   float64(busyAfter-busyBefore)/userHz - loadCPU,
+		SoftirqCPUs: float64(softAfter-softBefore) / userHz,
+	}
+	if *pid != 0 {
+		res.ServerCPUs = serverCPU
+		res.OtherCPUs -= serverCPU
+		res.ServerRSSkB = status(*pid, "VmHWM")
+		res.Threads = status(*pid, "Threads")
 	}
 	if *asJSON {
 		json.NewEncoder(os.Stdout).Encode(res)
@@ -223,4 +343,6 @@ func main() {
 	fmt.Printf("%d connections, %.1f s: %d requests, %.0f req/s\n", res.Conns, res.Seconds, res.Requests, res.RPS)
 	fmt.Printf("latency p50 %.0f us, p90 %.0f us, p99 %.0f us, max %.0f us\n", res.P50us, res.P90us, res.P99us, res.MaxUs)
 	fmt.Printf("errors %d, reconnects %d, non-2xx %d\n", res.Errors, res.Reconnects, res.Non2xx)
+	fmt.Printf("CPU s: server %.2f, load generator %.2f, other %.2f, softirq %.2f\n",
+		res.ServerCPUs, res.LoadCPUs, res.OtherCPUs, res.SoftirqCPUs)
 }
