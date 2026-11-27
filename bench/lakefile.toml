@@ -1,6 +1,6 @@
 name = "lanesBench"
 version = "0.1.0"
-defaultTargets = ["benchStd", "benchTcp", "benchLanes"]
+defaultTargets = ["benchStd", "benchTcp", "benchLanes", "benchMany"]
 
 [[require]]
 name = "lanes"
@@ -20,3 +20,13 @@ root = "TcpHello"
 [[lean_exe]]
 name = "benchLanes"
 root = "LanesHello"
+
+# `Lanes.Http.serve` with K counters, each request to one of them, optionally with work per step.
+[[lean_exe]]
+name = "benchMany"
+root = "LanesMany"
+
+# The kernel alone: Kernel.runWaves on K counters, with work per step, on 1 or more workers.
+[[lean_exe]]
+name = "benchWaves"
+root = "Waves"

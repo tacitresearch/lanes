@@ -62,6 +62,11 @@ structure ServerConfig where
   linger_ms : Nat := 2000
   /-- How often deadlines are looked at: a connection is told one has passed up to this late. -/
   tick_ms : Nat := 25
+  /-- Threads of the server's own that run the connections, each connection on one of them for
+  its whole life, dealt in turn as they are accepted. With `0`, a connection's loop runs on
+  whichever of Lean's task threads tells it something. Four by default: on the warm machine they
+  serve 21–30% more requests a second than `0` for a quarter less CPU (`bench/README.md`). -/
+  ioThreads : Nat := 4
   gate : GateConfig := {}
   /-- Where to keep a journal. With one, the system behind the server survives the process:
   it starts in the state it was in (`docs/decisions/` D24). -/
@@ -111,11 +116,34 @@ private structure Loop where
   resumeSet : Bool := false
   left : Bool := false
 
+/-- A thread of the server's own that runs the loops of the connections dealt to it, one after
+another, and parks when none has anything to do. -/
+private structure Lane where
+  parker : Parker
+  ready : Mutex (Array (BaseIO Unit))
+  done : IO.Promise Unit
+
+private def Lane.post (lane : Lane) (job : BaseIO Unit) : BaseIO Unit := do
+  lane.ready.atomically (modify (·.push job))
+  lane.parker.unpark
+
+/-- Run what is posted until `down` is resolved. -/
+private def Lane.run (lane : Lane) : BaseIO Unit := do
+  repeat
+    let jobs ← lane.ready.atomically (modifyGet fun jobs => (jobs, #[]))
+    if jobs.isEmpty then
+      if ← IO.hasFinished lane.done.result? then break
+      lane.parker.park
+    else
+      for job in jobs do job
+
 private structure Line where
   socket : TCP.Socket.Client
   box : Mutex Box
   loop : IO.Ref Loop
   ended : IO.Promise Unit
+  /-- The thread this connection's loop runs on, if the server has threads of its own. -/
+  lane : Option Lane := none
 
 /-- What the server keeps of a connection. -/
 private structure Open where
@@ -137,6 +165,7 @@ structure Server (system : System τ) [Hashable τ.Id] where
   private connections : Mutex Connections
   private down : IO.Promise Unit
   private localPort : UInt16
+  private lanes : Array Lane
 
 /-- Everything written is sent before the end of the connection, and what the client still
 sends is read and dropped for a while, so that its last response is not lost to a reset. The
@@ -174,13 +203,15 @@ private def writeBy (write_ms : Nat) (loop : Loop) : BaseIO (Option Nat) := do
 
 mutual
 
-/-- Tell the connection's loop `ev`. If the loop is not running it runs now, on this thread
-when `here`, else on a task of its own. -/
+/-- Tell the connection's loop `ev`. If the loop is not running it runs now: on its lane if it
+has one, else on this thread when `here`, else on a task of its own. -/
 private partial def tell (ctx : Ctx) (line : Line) (here : Bool) (ev : Ev) : BaseIO Unit := do
   let start ← line.box.atomically do
     modifyGet fun b => (!b.running, { b with events := ev :: b.events, running := true })
   if start then
-    if here then run ctx line else discard <| BaseIO.asTask (run ctx line)
+    match line.lane with
+    | some lane => lane.post (run ctx line)
+    | none => if here then run ctx line else discard <| BaseIO.asTask (run ctx line)
 
 /-- Do what the connection asks after `event`. When a write fails, what the connection asks
 after `broken` is done in place of the rest. -/
@@ -243,12 +274,14 @@ private partial def settle (ctx : Ctx) (line : Line) (loop : Loop) : BaseIO Loop
       match ← (line.socket.native.recv? size).toBaseIO with
       | .ok r =>
         loop := { loop with reading := some r }
-        discard <| BaseIO.mapTask (t := r.result?) fun res => tell ctx line true (.read res)
+        discard <| BaseIO.mapTask (t := r.result?) (sync := line.lane.isSome) fun res =>
+          tell ctx line true (.read res)
       | .error e => tell ctx line true (.read (some (.error e)))
     else if !loop.resumeSet then
       if let some (w, _) := loop.writing then
         loop := { loop with resumeSet := true }
-        discard <| BaseIO.mapTask (t := w.result?) fun _ => tell ctx line true .resume
+        discard <| BaseIO.mapTask (t := w.result?) (sync := line.lane.isSome) fun _ =>
+          tell ctx line true .resume
   let alarm_ms := match conn.deadline config.conn, writing with
     | some a, some b => some (min a b)
     | a, b => a <|> b
@@ -269,6 +302,12 @@ private partial def run (ctx : Ctx) (line : Line) : BaseIO Unit := do
     line.loop.set loop
 
 end
+
+/-- The server is down, and its lanes end. -/
+private def Server.finish {system : System τ} [Hashable τ.Id] (server : Server system) :
+    BaseIO Unit := do
+  server.down.resolve ()
+  for lane in server.lanes do lane.parker.unpark
 
 private def shutDown {system : System τ} [Hashable τ.Id] (server : Server system) :
     Async Unit := do
@@ -330,9 +369,14 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
       runtime.stop
       throw e
   try listener.noDelay catch _ => pure ()
+  let down ← IO.Promise.new
+  let lanes ← (List.range config.ioThreads).toArray.mapM fun _ => do
+    let lane : Lane := { parker := ← Parker.new, ready := ← Mutex.new #[], done := down }
+    discard <| IO.asTask (prio := .dedicated) lane.run
+    return lane
   let server : Server system := {
-    runtime, listener, waiting, connections := ← Mutex.new {}, down := ← IO.Promise.new
-    localPort := (← listener.getSockName).port }
+    runtime, listener, waiting, connections := ← Mutex.new {}, down
+    localPort := (← listener.getSockName).port, lanes }
   let submit (request : Request) (answer : Response → BaseIO Unit) : BaseIO Unit := do
     let request := prepare request
     let admitted ← waiting.atomically do
@@ -343,9 +387,10 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
     unless admitted do answer busy
   let adopt (socket : TCP.Socket.Client) : Async Unit := do
     try socket.noDelay catch _ => pure ()
+    let next ← server.connections.atomically (return (← get).next)
     let line : Line := {
       socket, box := ← Mutex.new {}, loop := ← IO.mkRef { conn := { since_ms := ← IO.monoMsNow } }
-      ended := ← IO.Promise.new }
+      ended := ← IO.Promise.new, lane := server.lanes[next % max 1 server.lanes.size]? }
     let admitted ← server.connections.atomically do
       let c ← get
       let (admitted, count) := c.count.admit config.connections_max
@@ -374,7 +419,7 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
       for (_, waiter) in ← waiting.atomically (modifyGet Waiting.drain) do waiter busy
       shutDown server
       awaitConnections server
-      server.down.resolve ()
+      server.finish
   return server
 
 /-- `serve` on a journal that is already open. -/
@@ -436,7 +481,7 @@ def stop (server : Server system) : Async Unit := do
   server.runtime.stop
   for (_, waiter) in ← server.waiting.atomically (modifyGet Waiting.drain) do waiter busy
   awaitConnections server
-  server.down.resolve ()
+  server.finish
 
 /-- The requests the shard has taken and the server has not yet answered. -/
 def inFlight (server : Server system) : BaseIO Nat :=
