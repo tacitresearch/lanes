@@ -10,20 +10,21 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Area | Definitions | proved | trusted | checked | tested | spec | none |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `Lanes/Behaviours` | 66 | 36 | 5 | 18 | 0 | 7 | 0 |
+| `Lanes/Behaviours` | 134 | 81 | 5 | 24 | 0 | 24 | 0 |
 | `Lanes/Check` | 74 | 54 | 0 | 8 | 0 | 10 | 2 |
 | `Lanes/Core` | 103 | 42 | 0 | 34 | 1 | 10 | 16 |
 | `Lanes/Data` | 68 | 43 | 0 | 4 | 1 | 0 | 20 |
 | `Lanes/Durable` | 67 | 57 | 2 | 0 | 0 | 7 | 1 |
-| `Lanes/Lib` | 531 | 345 | 13 | 2 | 92 | 70 | 9 |
+| `Lanes/Lib` | 532 | 346 | 13 | 2 | 92 | 70 | 9 |
 | `Lanes/Net` | 37 | 6 | 5 | 0 | 0 | 25 | 1 |
-| `Lanes/Outside` | 119 | 86 | 5 | 6 | 1 | 21 | 0 |
+| `Lanes/Outside` | 121 | 87 | 5 | 6 | 1 | 22 | 0 |
 | `Lanes/Proof` | 36 | 12 | 0 | 0 | 0 | 23 | 1 |
 | `Lanes/Runtime` | 172 | 93 | 21 | 0 | 28 | 30 | 0 |
-| `Lanes/Semantics` | 60 | 11 | 0 | 0 | 0 | 48 | 1 |
-| `Lanes/Web` | 575 | 296 | 52 | 31 | 146 | 48 | 2 |
+| `Lanes/Semantics` | 61 | 11 | 0 | 0 | 0 | 49 | 1 |
+| `Lanes/Testing` | 63 | 0 | 0 | 1 | 62 | 0 | 0 |
+| `Lanes/Web` | 601 | 313 | 52 | 34 | 148 | 52 | 2 |
 | `LanesCli` | 120 | 0 | 0 | 0 | 46 | 0 | 74 |
-| All | 2028 | 1081 | 103 | 103 | 315 | 299 | 127 |
+| All | 2189 | 1145 | 103 | 113 | 379 | 322 | 127 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -113,6 +114,84 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Check.refinesOnce` | checked | `Tests/KV.lean` |
 | `Service.onceMonitored` | checked | `Tests/KV.lean` |
 
+## `Lanes/Behaviours/Schedule/Basic.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Schedule.Retry.codec` | proved | its type, `Codec` |
+| `Schedule.instCodableRetry` | proved | its type, `Codable` |
+| `Schedule.Work.codec` | proved | its type, `Codec` |
+| `Schedule.instCodableWork` | proved | its type, `Codable` |
+| `Schedule.Spec.codec` | proved | its type, `Codec` |
+| `Schedule.instCodableSpec` | proved | its type, `Codable` |
+| `Schedule.Phase.codec` | proved | its type, `Codec` |
+| `Schedule.instCodablePhase` | proved | its type, `Codable` |
+| `Schedule.Job.codec` | proved | its type, `Codec` |
+| `Schedule.instCodableJob` | proved | its type, `Codable` |
+| `Schedule.State.codec` | proved | its type, `Codec` |
+| `Schedule.instCodableState` | proved | its type, `Codable` |
+| `Schedule.Attempt.codec` | proved | its type, `Codec` |
+| `Schedule.instCodableAttempt` | proved | its type, `Codable` |
+| `Schedule.Refusal.codec` | proved | its type, `Codec` |
+| `Schedule.instCodableRefusal` | proved | its type, `Codable` |
+| `Schedule.Outcome.codec` | proved | its type, `Codec` |
+| `Schedule.instCodableOutcome` | proved | its type, `Codable` |
+| `Schedule.Input.codec` | proved | its type, `Codec` |
+| `Schedule.instCodableInput` | proved | its type, `Codable` |
+| `Schedule.Output.codec` | proved | its type, `Codec` |
+| `Schedule.instCodableOutput` | proved | its type, `Codable` |
+| `Schedule.Msg.codec` | proved | its type, `Codec` |
+| `Schedule.instCodableMsg` | proved | its type, `Codable` |
+| `Schedule.hashJitter` | checked | `Tests/Schedule.lean` |
+| `Schedule.Config.cap` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
+| `Schedule.Config.backoff` | proved | `Schedule.retry_waits` |
+| `Schedule.Config.wait` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
+| `Schedule.keys` | proved | `Schedule.attach_held_leaves`, `Schedule.every_noticed`, `Schedule.held_leaves` |
+| `Schedule.entry` | proved | `Schedule.attach_held_leaves`, `Schedule.attempt_ends`, `Schedule.dispatch_due` and 4 more |
+| `Schedule.put` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
+| `Schedule.remove` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
+| `Schedule.set` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
+| `Schedule.sig` | proved | `Schedule.actor_attempts`, `Schedule.actor_within`, `Schedule.armed` and 10 more |
+| `Schedule.timer` | proved | through `Schedule.actor`, `Schedule.attach` and 1 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 9 more |
+| `Schedule.fail` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
+| `Schedule.over` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
+| `Schedule.run` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
+| `Schedule.answerOf` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
+| `Schedule.onJob` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
+| `Schedule.touch` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
+| `Schedule.enroll` | proved | through `Schedule.actor`, `Schedule.attach` and 2 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 13 more |
+| `Schedule.step` | proved | `Schedule.attempt_ends`, `Schedule.dispatch_due`, `Schedule.now_le_step` and 1 more |
+| `Schedule.rearm` | proved | through `Schedule.actor`, `Schedule.attach` and 1 more: `Schedule.actor_attempts`, `Schedule.actor_within` and 9 more |
+| `Schedule.actor` | proved | `Schedule.actor_attempts`, `Schedule.actor_within` |
+| `Schedule.system` | proved | `Schedule.armed`, `Schedule.attempts`, `Schedule.calls_le_scheduled` and 4 more |
+| `Schedule.Use.wiring` | spec | used only in statements |
+| `Schedule.attach` | spec | used only in statements |
+| `Schedule.sameBag` | checked | `Tests/Schedule.lean` |
+| `Schedule.bagHash` | checked | `Tests/Schedule.lean` |
+| `Schedule.instBEqCallee` | checked | `Tests/Schedule.lean` |
+| `Schedule.instHashableCallee` | checked | `Tests/Schedule.lean` |
+| `Schedule.callee` | checked | `Tests/Schedule.lean` |
+
+## `Lanes/Behaviours/Schedule/Sound.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Schedule.Msg.target` | spec | used only in statements |
+| `Schedule.Act.msg` | spec | used only in statements |
+| `Schedule.Work.periodic` | spec | used only in statements |
+| `Schedule.isCall` | spec | used only in statements |
+| `Schedule.left` | spec | used only in statements |
+| `Schedule.Moved` | spec | a predicate |
+| `Schedule.Same` | spec | a predicate |
+| `Schedule.OwnTimers` | spec | a predicate |
+| `Schedule.Job.Within` | spec | a predicate |
+| `Schedule.Spec.job` | spec | used only in statements |
+| `Schedule.State.Within` | spec | a predicate |
+| `Schedule.State.Attempts` | spec | a predicate |
+| `Schedule.Armed` | spec | a predicate |
+| `Schedule.calls` | spec | used only in statements |
+| `Schedule.schedulings` | spec | used only in statements |
+
 ## `Lanes/Behaviours/Server.lean`
 
 | Definition | Status | Evidence |
@@ -178,7 +257,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Check.Property.holds` | proved | `Check.refines_sound`, `Check.refines_traces`, `Check.system_sound` and 1 more |
 | `Check.Trace.last` | proved | `Check.search_deadlock`, `Check.search_reached`, `Check.search_violated` and 2 more |
 | `Check.Trace.labels` | proved | `Check.system_violated` |
-| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 20 more |
+| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 21 more |
 | `Check.Path.last` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
 | `Check.Path.toTraceAux` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
 | `Check.Path.toTrace` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
@@ -304,9 +383,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `instDecidableEqJoinMsg` | proved | its type, `Decidable` |
-| `joinSig` | proved | `Jobs.attach_active_leaves`, `Jobs.attach_within`, `SysState.exists_block` and 11 more |
-| `Wiring.left` | proved | through `SysState.over`, `System.filterMapIO` and 3 more: `SysState.exists_block`, `SysState.run_filterMapIO` and 15 more |
-| `Wiring.right` | proved | through `System.join`, `Wiring.leftView`: `SysState.exists_block`, `SysState.run_left` and 10 more |
+| `joinSig` | proved | `Jobs.attach_active_leaves`, `Jobs.attach_within`, `Schedule.attach_held_leaves` and 13 more |
+| `Wiring.left` | proved | through `Schedule.attach`, `SysState.over` and 4 more: `Schedule.attach_held_leaves`, `Schedule.attach_within` and 17 more |
+| `Wiring.right` | proved | through `Schedule.attach`, `System.join` and 1 more: `Schedule.attach_held_leaves`, `Schedule.attach_within` and 12 more |
 | `System.join` | proved | `SysState.exists_block`, `SysState.run_left`, `System.Invariant.join_left` and 9 more |
 | `Signature.withIO` | proved | `SysState.run_filterMapIO`, `System.Invariant.filterMapIO`, `System.LeadsTo.filterMapIO` and 2 more |
 | `Effect.filterMapOut` | proved | through `SysState.over`, `System.filterMapIO` and 1 more: `SysState.run_filterMapIO`, `System.Invariant.filterMapIO` and 3 more |
@@ -363,7 +442,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Envelope.sameLink` | proved | through `SysState.nextOnLink`: `SysState.nextOnLink_spec` |
 | `Link.reliable` | proved | through `EnvModel.link`, `EnvModel.lossy` and 2 more: `Account.implements`, `Account.implements_timed` and 25 more |
 | `Link.network` | checked | `Tests/Bank.lean`, `Tests/Election.lean`, `Tests/Join.lean` and 1 more |
-| `Link.unordered` | checked | `Tests/Election.lean`, `Tests/Jobs.lean`, `Tests/Outside.lean` |
+| `Link.unordered` | checked | `Tests/Election.lean`, `Tests/Jobs.lean`, `Tests/Outside.lean` and 1 more |
 | `EnvModel.reliable` | spec | used only in statements |
 | `EnvModel.distributed` | none |  |
 
@@ -371,21 +450,21 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `update` | proved | through `SysState.down`, `SysState.handle` and 5 more: `Account.implements`, `Account.implements_timed` and 48 more |
+| `update` | proved | through `SysState.down`, `SysState.handle` and 5 more: `Account.implements`, `Account.implements_timed` and 49 more |
 | `Event.timed` | proved | `Account.implements`, `Account.implements_timed`, `Check.refines_traces` and 16 more |
 | `Event.visible` | spec | used only in statements |
 | `SysState.blank` | proved | `System.Inductive.of_monotone`, `System.Monotone.and`, `System.Monotone.and_net` |
-| `SysState.hasMail` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 32 more |
-| `SysState.perform` | proved | through `SysState.handle`, `SysState.init` and 4 more: `Account.implements`, `Account.implements_timed` and 47 more |
-| `SysState.performAll` | proved | through `SysState.handle`, `SysState.init` and 4 more: `Account.implements`, `Account.implements_timed` and 47 more |
+| `SysState.hasMail` | proved | through `SysState.run`, `SysState.step` and 1 more: `Check.system_violated`, `Http.Gate.answered_le_handled` and 33 more |
+| `SysState.perform` | proved | through `SysState.handle`, `SysState.init` and 4 more: `Account.implements`, `Account.implements_timed` and 48 more |
+| `SysState.performAll` | proved | through `SysState.handle`, `SysState.init` and 4 more: `Account.implements`, `Account.implements_timed` and 48 more |
 | `SysState.down` | proved | `Account.implements`, `Account.implements_timed`, `System.Refines.of_events` and 2 more |
 | `SysState.settle` | proved | `SysState.Loses.settle` |
 | `SysState.handle` | proved | `Http.fronted_handle_arrive`, `Http.served_handle_arrive` |
-| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and 2 more: `Account.implements`, `Account.implements_timed` and 44 more |
+| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and 2 more: `Account.implements`, `Account.implements_timed` and 45 more |
 | `SysState.deliverable` | proved | `Account.implements`, `Account.implements_timed`, `SysState.nextOnLink_spec` and 3 more |
 | `SysState.step` | proved | `Http.Gate.answered_of_leaves`, `Http.Gate.deadline_not_restarted`, `Outside.Beside.keeps` and 10 more |
-| `SysState.init` | proved | `Account.implements`, `Account.implements_timed`, `Check.system_violated` and 26 more |
-| `SysState.run` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and 18 more |
+| `SysState.init` | proved | `Account.implements`, `Account.implements_timed`, `Check.system_violated` and 27 more |
+| `SysState.run` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and 19 more |
 | `System.Invariant` | spec | a predicate |
 
 ## `Lanes/Data/Codec.lean`
@@ -804,7 +883,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `instToJsonOption` | proved | `fromJson?_toJson_none`, `fromJson?_toJson_some` |
 | `instFromJsonProd` | proved | `fromJson?_toJson_prod` |
 | `instToJsonProd` | proved | `fromJson?_toJson_prod` |
-| `Json.getObjValAs?` | tested | `Tests/Json.lean`, `Tests/OAuth.lean` |
+| `Json.getObjValAs?` | tested | `Tests/Json.lean` |
 | `Json.opt` | tested | `Tests/Json.lean` |
 
 ## `Lanes/Lib/Encoding/Json/Grammar.lean`
@@ -1096,13 +1175,14 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Postgres.Conn.room` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_fifo`, `Postgres.Conn.run_queue` and 6 more |
 | `Postgres.Conn.fail` | proved | `Postgres.Conn.onMessage_sasl_authOk` |
 | `Postgres.Conn.outcome` | proved | `Postgres.Conn.outcome_committed` |
-| `Postgres.Conn.texts` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_saslFinal` and 9 more |
-| `Postgres.Conn.onReply` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_saslFinal` and 9 more |
-| `Postgres.Conn.nonceOk` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_saslFinal` and 9 more |
-| `Postgres.Conn.onAuth` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_saslFinal` and 9 more |
-| `Postgres.Conn.onSasl` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_saslFinal` and 9 more |
-| `Postgres.Conn.onSaslFinal` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_saslFinal` and 9 more |
-| `Postgres.Conn.onMessage` | proved | `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_saslFinal`, `Postgres.Conn.onMessage_sasl_authOk` |
+| `Postgres.Conn.texts` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_requireScram` and 10 more |
+| `Postgres.Conn.onReply` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_requireScram` and 10 more |
+| `Postgres.Conn.nonceOk` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_requireScram` and 10 more |
+| `Postgres.Conn.Config.scramOnly` | proved | `Postgres.Conn.onMessage_requireScram` |
+| `Postgres.Conn.onAuth` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_requireScram` and 10 more |
+| `Postgres.Conn.onSasl` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_requireScram` and 10 more |
+| `Postgres.Conn.onSaslFinal` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_requireScram` and 10 more |
+| `Postgres.Conn.onMessage` | proved | `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_requireScram`, `Postgres.Conn.onMessage_saslFinal` and 1 more |
 | `Postgres.Conn.drain` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_fifo`, `Postgres.Conn.run_queue` and 6 more |
 | `Postgres.Conn.receive` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_fifo`, `Postgres.Conn.run_queue` and 6 more |
 | `Postgres.Conn.submit` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_fifo`, `Postgres.Conn.run_queue` and 6 more |
@@ -1180,10 +1260,10 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Postgres.Scram.saslName` | proved | through `Postgres.Scram.respond`: `Postgres.Scram.respond_iterations`, `Postgres.Scram.respond_nonce` |
 | `Postgres.Scram.firstBare` | proved | through `Postgres.Scram.respond`: `Postgres.Scram.respond_iterations`, `Postgres.Scram.respond_nonce` |
 | `Postgres.Scram.first` | tested | `Tests/Postgres.lean` |
-| `Postgres.Scram.field` | proved | through `Postgres.Scram.respond`, `Postgres.Scram.verify`: `Postgres.Conn.onMessage_saslFinal`, `Postgres.Scram.respond_iterations` and 1 more |
+| `Postgres.Scram.field` | proved | through `Postgres.Scram.respond`, `Postgres.Scram.verify`: `Postgres.Conn.onMessage_requireScram`, `Postgres.Conn.onMessage_saslFinal` and 2 more |
 | `Postgres.Scram.parseServerFirst` | proved | `Postgres.Scram.respond_iterations`, `Postgres.Scram.respond_nonce` |
 | `Postgres.Scram.respond` | proved | `Postgres.Scram.respond_iterations`, `Postgres.Scram.respond_nonce` |
-| `Postgres.Scram.verify` | proved | `Postgres.Conn.onMessage_saslFinal` |
+| `Postgres.Scram.verify` | proved | `Postgres.Conn.onMessage_requireScram`, `Postgres.Conn.onMessage_saslFinal` |
 
 ## `Lanes/Lib/Postgres/Table.lean`
 
@@ -1216,7 +1296,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Civil.daysInMonth` | proved | through `Civil.Date.toDays`, `Civil.DateTime` and 1 more: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 4 more |
 | `Civil.Valid` | spec | a predicate |
 | `Civil.instDecidableValid` | proved | its type, `Decidable` |
-| `Civil.Date.mk?` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Time.lean`, `Tests/S3.lean` |
+| `Civil.Date.mk?` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Time.lean` |
 | `Civil.marchMonth` | proved | through `Civil.Date.toDays`, `Civil.DateTime.toUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 2 more |
 | `Civil.ofMarchMonth` | proved | through `Civil.Date.ofDays`, `Civil.DateTime.ofUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 2 more |
 | `Civil.daysBefore` | proved | through `Civil.Date.toDays`, `Civil.DateTime.toUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 2 more |
@@ -1331,9 +1411,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Outside.any` | tested | `Tests/Jobs.lean`, `Tests/S3.lean` |
-| `Outside.driver` | checked | `Tests/Clock.lean`, `Tests/HttpClient.lean`, `Tests/Jobs.lean` and 2 more |
+| `Outside.driver` | checked | `Tests/Clock.lean`, `Tests/HttpClient.lean`, `Tests/Jobs.lean` and 3 more |
 | `Outside.see` | proved | `Outside.Beside.keeps`, `Outside.run_induction` |
-| `Outside.after` | proved | `Effects.at_most_once`, `Effects.sound_after`, `Events.deliveries_le` and 9 more |
+| `Outside.after` | proved | `Effects.at_most_once`, `Effects.sound_after`, `Events.deliveries_le` and 10 more |
 | `Outside.allows` | checked | `Tests/Outside.lean` |
 | `Outside.both` | proved | `Outside.after_both` |
 | `Outside.mine` | spec | used only in statements |
@@ -1432,12 +1512,14 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `ObjectStore.Request.key` | proved | through `ObjectStore.server`: `ObjectStore.read_sent` |
-| `ObjectStore.Request.leaves` | proved | through `ObjectStore.server`: `ObjectStore.read_sent` |
-| `ObjectStore.State.possible` | proved | through `ObjectStore.server`: `ObjectStore.read_sent` |
-| `ObjectStore.State.settle` | proved | through `ObjectStore.server`: `ObjectStore.read_sent` |
-| `ObjectStore.server` | proved | `ObjectStore.read_sent` |
+| `ObjectStore.Request.key` | proved | through `ObjectStore.server`: `ObjectStore.held_sent`, `ObjectStore.read_sent` |
+| `ObjectStore.Request.leaves` | proved | through `ObjectStore.server`: `ObjectStore.held_sent`, `ObjectStore.read_sent` |
+| `ObjectStore.insertNew` | proved | through `ObjectStore.server`: `ObjectStore.held_sent`, `ObjectStore.read_sent` |
+| `ObjectStore.State.possible` | proved | through `ObjectStore.server`: `ObjectStore.held_sent`, `ObjectStore.read_sent` |
+| `ObjectStore.State.settle` | proved | through `ObjectStore.server`: `ObjectStore.held_sent`, `ObjectStore.read_sent` |
+| `ObjectStore.server` | proved | `ObjectStore.held_sent`, `ObjectStore.read_sent` |
 | `ObjectStore.Sound` | spec | a predicate |
+| `ObjectStore.HeldSent` | spec | a predicate |
 
 ## `Lanes/Outside/Rpc.lean`
 
@@ -1447,7 +1529,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Rpc.instCodableCall` | proved | its type, `Codable` |
 | `Rpc.Reply.codec` | proved | its type, `Codec` |
 | `Rpc.instCodableReply` | proved | its type, `Codable` |
-| `Rpc.outside` | proved | `Events.deliveries_le`, `Idempotent.at_most_once`, `Idempotent.keys_nodup` and 4 more |
+| `Rpc.outside` | proved | `Events.deliveries_le`, `Idempotent.at_most_once`, `Idempotent.keys_nodup` and 5 more |
 | `Rpc.Port.reported` | spec | used only in statements |
 | `Rpc.called` | spec | used only in statements |
 | `Rpc.answered` | spec | used only in statements |
@@ -1504,7 +1586,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Event.deed` | proved | through `deeds`, `handled`: `Http.Gate.answered_le_handled`, `Jobs.answered_le_handled` and 1 more |
+| `Event.deed` | proved | through `deeds`, `handled`: `Http.Gate.answered_le_handled`, `Jobs.answered_le_handled` and 2 more |
 | `deeds` | spec | used only in statements |
 | `Deed.handles` | spec | used only in statements |
 | `handled` | spec | used only in statements |
@@ -1881,7 +1963,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Spec.stutter` | proved | through `System.Run`, `System.Run.event` and 2 more: `Http.Gate.pending_answered`, `Http.fronted_arrival_answered` and 14 more |
+| `Spec.stutter` | proved | through `System.Run`, `System.Run.event` and 2 more: `Http.Gate.pending_answered`, `Http.fronted_arrival_answered` and 15 more |
 | `Obligation.event` | proved | `System.LeadsTo.ensures_of_invariant` |
 | `Obligation.Due` | spec | a predicate |
 | `Obligation.Restarted` | spec | a predicate |
@@ -1934,6 +2016,12 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Spec.Invariant` | spec | a predicate |
 | `Refines` | spec | a predicate |
 
+## `Lanes/Semantics/Schedule.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Schedule.Nearer` | spec | a predicate |
+
 ## `Lanes/Semantics/Service.lean`
 
 | Definition | Status | Evidence |
@@ -1958,10 +2046,99 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `System.sem` | proved | `Account.implements`, `Account.implements_timed`, `Once.server_implements` and 14 more |
 | `System.Refines` | spec | a predicate |
 
+## `Lanes/Testing/Browser.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Testing.Browser.new` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.Browser.at` | tested | `Tests/Testing.lean` |
+| `Testing.Kept.parse` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.Kept.covers` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.Browser.cookie` | tested | `Tests/OAuth.lean` |
+| `Testing.Browser.keep` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.Browser.forget` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.Browser.record` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.Browser.call` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.Browser.get` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.Browser.post` | tested | `Tests/Testing.lean` |
+| `Testing.Browser.submit` | tested | `Tests/Testing.lean` |
+
+## `Lanes/Testing/Http.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Testing.listen` | tested | `Tests/Testing.lean` |
+| `Testing.json` | tested | `Tests/Testing.lean` |
+| `Testing.text` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.shows` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.status` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.location` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.unescape` | tested | `Tests/Testing.lean` |
+| `Testing.between` | tested | `Tests/Testing.lean` |
+| `Testing.field` | tested | `Tests/Testing.lean` |
+| `Testing.setCookie` | tested | `Tests/Testing.lean` |
+| `Testing.queryOf` | checked | `Tests/OAuth.lean` |
+| `Testing.segments` | tested | `Tests/Testing.lean` |
+
+## `Lanes/Testing/OAuth.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Testing.OAuth.hasOpenssl` | tested | `Tests/OAuth.lean` |
+| `Testing.OAuth.openssl` | tested | `Tests/OAuth.lean` |
+| `Testing.OAuth.Fake.at` | tested | `Tests/OAuth.lean` |
+| `Testing.OAuth.Fake.oidc` | tested | `Tests/OAuth.lean` |
+| `Testing.OAuth.yes` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.OAuth.readUser` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.OAuth.Fake.userApi` | tested | `Tests/OAuth.lean` |
+| `Testing.OAuth.Fake.client` | tested | `Tests/OAuth.lean` |
+| `Testing.OAuth.b64s` | tested | `Tests/OAuth.lean` |
+| `Testing.OAuth.str` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.OAuth.nowSeconds` | tested | `Tests/OAuth.lean` |
+| `Testing.OAuth.Fake.mint` | tested | `Tests/OAuth.lean` |
+| `Testing.OAuth.userJson` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.OAuth.emailsJson` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.OAuth.Fake.take` | tested | `Tests/OAuth.lean` |
+| `Testing.OAuth.Fake.user?` | tested | `Tests/OAuth.lean` |
+| `Testing.OAuth.Fake.handle` | tested | `Tests/OAuth.lean` |
+| `Testing.OAuth.makeKeys` | tested | `Tests/OAuth.lean` |
+| `Testing.OAuth.Fake.start` | tested | `Tests/OAuth.lean` |
+| `Testing.OAuth.Fake.stop` | tested | `Tests/OAuth.lean` |
+| `Testing.OAuth.Fake.approve` | tested | `Tests/OAuth.lean` |
+| `Testing.OAuth.signIn` | tested | `Tests/OAuth.lean` |
+
+## `Lanes/Testing/S3.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Testing.S3.raw?` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
+| `Testing.S3.answer` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
+| `Testing.S3.failure` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
+| `Testing.S3.time?` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
+| `Testing.S3.decodePair` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
+| `Testing.S3.splitTarget` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
+| `Testing.S3.authField` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
+| `Testing.S3.verified` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
+| `Testing.S3.escapeKey` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
+| `Testing.S3.listXml` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
+| `Testing.S3.range?` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
+| `Testing.S3.serve` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
+| `Testing.S3.Fake.start` | tested | `Tests/S3.lean` |
+| `Testing.S3.Fake.holds` | tested | `Tests/S3.lean` |
+| `Testing.S3.Fake.keys` | tested | `Tests/S3.lean` |
+| `Testing.S3.Fake.stop` | tested | `Tests/S3.lean` |
+| `Testing.S3.follow` | tested | `Tests/S3.lean` |
+
 ## `Lanes/Web/Auth/IdToken.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
+| `OAuth.DisplayName.maxChars` | proved | `OAuth.DisplayName.length_le` |
+| `OAuth.DisplayName.allowed` | proved | through `OAuth.DisplayName.val`, `OAuth.Identity` and 1 more: `OAuth.DisplayName.length_le`, `OAuth.IdToken.check_ok_iff` and 4 more |
+| `OAuth.DisplayName.Valid` | spec | a predicate |
+| `OAuth.DisplayName.instDecidableValid` | proved | its type, `Decidable` |
+| `OAuth.DisplayName.of?` | proved | through `OAuth.IdToken.Claims.identity`: `OAuth.IdToken.check_ok_iff`, `OAuth.IdToken.verify_accepted` |
+| `OAuth.DisplayName.clean` | proved | through `OAuth.IdToken.Claims.identity`: `OAuth.IdToken.check_ok_iff`, `OAuth.IdToken.verify_accepted` |
 | `OAuth.IdToken.Claims.identity` | proved | `OAuth.IdToken.check_ok_iff`, `OAuth.IdToken.verify_accepted` |
 | `OAuth.IdToken.optional` | proved | through `OAuth.IdToken.verify`: `OAuth.IdToken.verify_accepted` |
 | `OAuth.IdToken.string?` | proved | through `OAuth.IdToken.verify`: `OAuth.IdToken.verify_accepted` |
@@ -2006,30 +2183,47 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Auth.Attempts.succeed` | proved | `Auth.Attempts.bounded_succeed`, `Auth.Attempts.locked_stays` |
 | `Auth.Attempts.unlock` | spec | used only in statements |
 | `Auth.Attempts.Bounded` | spec | a predicate |
+| `Auth.Session.codec` | proved | its type, `Codec` |
+| `Auth.instCodableSession` | proved | its type, `Codable` |
+| `Auth.Session.expired` | proved | `Auth.Session.expired_mono`, `Auth.Sessions.accepts_iff` |
 | `Auth.Sessions.codec` | proved | its type, `Codec` |
 | `Auth.instCodableSessions` | proved | its type, `Codable` |
+| `Auth.Sessions.ids` | proved | `Auth.Sessions.ids_starts`, `Auth.Sessions.length_close_le`, `Auth.Sessions.length_start_le` and 1 more |
+| `Auth.Sessions.at_s` | proved | through `Auth.Sessions.accepts`, `Auth.Sessions.start` and 1 more: `Auth.Sessions.Ended.run`, `Auth.Sessions.accepts_iff` and 5 more |
+| `Auth.Sessions.sweep` | proved | `Auth.Sessions.sweep_ended` |
 | `Auth.Sessions.start` | proved | `Auth.Sessions.ids_starts`, `Auth.Sessions.length_start_le`, `Auth.Sessions.live_open` and 1 more |
-| `Auth.Sessions.close` | proved | `Auth.Sessions.live_close` |
+| `Auth.Sessions.close` | proved | `Auth.Sessions.length_close_le`, `Auth.Sessions.live_close` |
 | `Auth.Sessions.live` | proved | `Auth.Sessions.live_close`, `Auth.Sessions.live_open` |
+| `Auth.Sessions.accepts` | proved | `Auth.Sessions.Ended.run`, `Auth.Sessions.accepts_iff`, `Auth.Sessions.sweep_ended` |
+| `Auth.Sessions.touch` | proved | through `Auth.Sessions.Op.apply`: `Auth.Sessions.Ended.run` |
+| `Auth.Sessions.Ended` | spec | a predicate |
+| `Auth.Sessions.Op.apply` | spec | used only in statements |
+| `Auth.Sessions.Op.opens` | spec | used only in statements |
 
 ## `Lanes/Web/Auth/OAuth.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `OAuth.instReprSecret` | checked | `Tests/OAuth.lean` |
+| `OAuth.instReprSecret` | tested | `Tests/OAuth.lean` |
 | `OAuth.instToStringSecret` | tested | `Tests/OAuth.lean` |
 | `OAuth.b64` | checked | `Tests/OAuth.lean` |
 | `OAuth.challenge` | checked | `Tests/OAuth.lean` |
 | `OAuth.same` | proved | `OAuth.same_iff` |
-| `OAuth.Pending.begin` | proved | `OAuth.Pending.length_begin` |
-| `OAuth.Pending.callback` | proved | `OAuth.Pending.callback_ok`, `OAuth.Pending.callback_removes`, `OAuth.Pending.callback_sublist` |
-| `OAuth.Pending.Op.issues` | spec | used only in statements |
-| `OAuth.Pending.run` | proved | `OAuth.Pending.accepted_le_issued` |
-| `OAuth.Seed.entry` | checked | `Tests/OAuth.lean` |
+| `OAuth.Ticket.payload` | checked | `Tests/OAuth.lean` |
+| `OAuth.Ticket.read` | proved | through `OAuth.check`: `OAuth.check_ok` |
+| `OAuth.Ticket.toCookie` | checked | `Tests/OAuth.lean` |
+| `OAuth.Ticket.ofCookie` | proved | `OAuth.check_ok` |
+| `OAuth.Ticket.derive` | checked | `Tests/OAuth.lean` |
+| `OAuth.Ticket.grant` | checked | `Tests/OAuth.lean` |
+| `OAuth.check` | proved | `OAuth.check_ok` |
+| `OAuth.Used.claim` | proved | `OAuth.Used.claim_holds`, `OAuth.Used.claim_ok`, `OAuth.Used.claim_ok_holds` and 1 more |
+| `OAuth.Used.Holds` | spec | a predicate |
+| `OAuth.Used.run` | proved | `OAuth.Used.accepted_later`, `OAuth.Used.accepted_once` |
 | `OAuth.authorizeUrl` | checked | `Tests/OAuth.lean` |
 | `OAuth.Discovery.read` | checked | `Tests/OAuth.lean` |
 | `OAuth.Discovery.provider` | checked | `Tests/OAuth.lean` |
 | `OAuth.begin` | checked | `Tests/OAuth.lean` |
+| `OAuth.Identity.under` | proved | `OAuth.Identity.under_cons` |
 | `OAuth.Answer.state` | checked | `Tests/OAuth.lean` |
 | `OAuth.Answer.read` | checked | `Tests/OAuth.lean` |
 | `OAuth.tokenForm` | checked | `Tests/OAuth.lean` |
@@ -2053,7 +2247,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Hmac.Key.of` | tested | `Tests/Auth.lean` |
+| `Hmac.Key.of` | checked | `Tests/OAuth.lean` |
 | `Hmac.Key.mac` | proved | `Auth.checkForm_other`, `Auth.verify_sign_other` |
 | `Auth.message` | proved | `Auth.checkForm_other`, `Auth.message_inj`, `Auth.verify_sign_other` |
 | `Auth.tag` | proved | through `Auth.checkForm`, `Auth.sign`: `Auth.checkForm_formToken`, `Auth.checkForm_iff` and 4 more |
@@ -2170,6 +2364,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Http.Conn.closing` | proved | through `Http.Conn.answer`, `Http.Conn.encode` and 8 more: `Http.Conn.answer_ignored`, `Http.Conn.answer_waiting` and 20 more |
+| `Http.Conn.nosniff` | proved | through `Http.Conn.answer`, `Http.Conn.encode` and 7 more: `Http.Conn.answer_ignored`, `Http.Conn.answer_waiting` and 19 more |
 | `Http.Conn.sendable` | proved | `Http.Conn.read_encode`, `Http.Conn.sendable_writable` |
 | `Http.Conn.encode` | proved | `Http.Conn.answer_waiting`, `Http.Conn.read_encode` |
 | `Http.Conn.refusal` | proved | through `Http.Conn.pump`, `Http.Conn.run` and 1 more: `Http.Conn.pump_piece`, `Http.Conn.run_buffer` and 8 more |
@@ -2247,9 +2442,11 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Request.cookie?` | tested | `Tests/Auth.lean` |
 | `Http.Request.sameOrigin` | proved | `Http.Request.sameOrigin_iff` |
 | `Http.Request.bodyWithin` | spec | used only in statements |
+| `Http.hostCookie` | tested | `Tests/Auth.lean` |
 | `Http.Response.setCookie` | proved | `Http.setCookie_read` |
 | `Http.Response.clearCookie` | tested | `Tests/Auth.lean` |
 | `Http.Response.noStore` | tested | `Tests/Html.lean` |
+| `Http.Response.noFraming` | tested | `Tests/Html.lean` |
 
 ## `Lanes/Web/Http/CookieSound.lean`
 
@@ -2677,7 +2874,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `S3.Endpoint.aws` | tested | `Tests/S3.lean` |
-| `S3.Key.of?` | tested | `Tests/S3.lean` |
+| `S3.Key.of?` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
 | `S3.Range.header` | tested | `Tests/S3.lean` |
 | `S3.Op.verb` | tested | `Tests/S3.lean` |
 | `S3.Op.method` | tested | `Tests/S3.lean` |
@@ -2685,9 +2882,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `S3.Op.query` | tested | `Tests/S3.lean` |
 | `S3.Op.headers` | tested | `Tests/S3.lean` |
 | `S3.Op.body` | tested | `Tests/S3.lean` |
-| `S3.Bucket.host` | tested | `Tests/S3.lean` |
-| `S3.Bucket.path` | tested | `Tests/S3.lean` |
-| `S3.Bucket.scope` | tested | `Tests/S3.lean` |
+| `S3.Bucket.host` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
+| `S3.Bucket.path` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
+| `S3.Bucket.scope` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
 | `S3.call` | tested | `Tests/S3.lean` |
 | `S3.unescapeKey` | tested | `Tests/S3.lean` |
 | `S3.entry?` | tested | `Tests/S3.lean` |
@@ -2697,7 +2894,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `S3.interpret` | tested | `Tests/S3.lean` |
 | `S3.Op.modelled` | tested | `Tests/S3.lean` |
 | `S3.Answer.modelled` | tested | `Tests/S3.lean` |
-| `S3.presign` | tested | `Tests/S3.lean` |
+| `S3.presign` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
 
 ## `Lanes/Web/S3/Xml.lean`
 
