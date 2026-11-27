@@ -130,6 +130,9 @@ lake exe my-app      # serves http://127.0.0.1:8080
 
 `docs/TUTORIAL.md` then takes the app through a change, a model check and a proof, in fifteen
 minutes.
+`docs/TUTORIAL-WEB.md` then builds a web app on it: sign-in with an OpenID Connect provider,
+uploads to S3 under a size limit, a test of the whole site against the test kit's fakes, a
+property checked and proved, and what a deploy needs.
 `docs/DEPLOY.md` then puts it on AWS behind HTTPS: one instance with its journal on a disk of its
 own, backed up, deployed from GitHub.
 
