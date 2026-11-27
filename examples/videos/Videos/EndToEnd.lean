@@ -247,6 +247,35 @@ def bridgeTests : List (String × Bool) :=
         && (storeCall settings ⟨0, 1000, .delete 4⟩).any (· matches .delete _)
         && storeReply none == .unknown && storeReply (some (.refused 500 "")) == .answer .failed) ]
 
+/-- What a shared cache in front may keep (`Http.SharedCache.leaks`): every reply and every
+answer the bridge gives without the system, as each of three viewers would get it. None is kept
+and given to another viewer. -/
+def sharedCacheTests : List (String × Bool) :=
+  let viewers : List Viewer := [none, some (0, 7), some (1, 8)]
+  let asking (viewer : Viewer) (r : Http.Request) : Http.Request :=
+    match viewer with
+    | some (m, session) => withCookie (sessionToken settings m session) r
+    | none => r
+  let card : Card := ⟨1, 0, "a", "t", .public, 2⟩
+  let view : View := ⟨card, "about", .mp4, false, [⟨0, 1, "b", "hi"⟩]⟩
+  let replies : List Reply :=
+    [.signedIn 0 7, .full, .signedOut, .noSession, .created 1 .mp4 100, .tooMany, .confirmed 1,
+      .notUploaded 1, .unconfirmed 1, .watch view 100, .notFound, .liked 1 2 true, .commented 1,
+      .tooManyComments 1, .uncommented 1, .deleted 1, .feed [card] none,
+      .channel 0 "a" [card] [(2, "x")]]
+  let encoded := replies.zipIdx.flatMap fun (r, n) => viewers.map fun viewer =>
+    (asking viewer { method := .get, path := ["reply", toString n] }, encodeReply settings viewer r)
+  let paths : List (List String) :=
+    [[], ["style.css"], ["upload.js"], ["new"], ["v", "3"], ["c", "0"], ["nope"],
+      ["sign-in", "github", "callback"]]
+  let direct := paths.flatMap fun path => viewers.filterMap fun viewer =>
+    let r := asking viewer { method := .get, path }
+    match (bridge settings).decode 0 ((bridge settings).prepare r) with
+    | .error answer => some (r, answer)
+    | .ok _ => none
+  [ ("shared cache: no reply, and no answer the bridge gives itself, may be kept and given to "
+      ++ "another viewer", Http.SharedCache.leaks (encoded ++ direct) == []) ]
+
 /-- The flow against the fake S3 and the provider, both run here. -/
 def run : IO (List (String × Bool)) := do
   let journal ← scratch

@@ -36,6 +36,7 @@ public import Lanes.Durable.Frame
 public import Lanes.Durable.IO.Journal
 public import Lanes.Durable.Journal
 public import Lanes.Durable.Migration
+public import Lanes.Durable.Reading
 public import Lanes.Durable.Snapshot
 public import Lanes.Durable.Upgrade
 public import Lanes.Lib.Crypto.Hmac
@@ -64,15 +65,19 @@ public import Lanes.Lib.Time.Format
 public import Lanes.Net.IO.Node
 public import Lanes.Net.IO.Peers
 public import Lanes.Outside.Basic
+public import Lanes.Outside.Cache
+public import Lanes.Outside.Clock
 public import Lanes.Outside.Effects.Basic
 public import Lanes.Outside.Effects.Email
 public import Lanes.Outside.Effects.Payments
 public import Lanes.Outside.Events
 public import Lanes.Outside.Idempotent
 public import Lanes.Outside.ObjectStore
+public import Lanes.Outside.Queue
 public import Lanes.Outside.IO.Clock
 public import Lanes.Outside.Rpc
 public import Lanes.Outside.Store.Basic
+public import Lanes.Outside.Throttle
 public import Lanes.Proof.Deed
 public import Lanes.Proof.Equiv
 public import Lanes.Proof.Ghost
@@ -107,6 +112,7 @@ public import Lanes.Web.Http.Gate
 public import Lanes.Web.Http.Ops
 public import Lanes.Web.Http.ReadRequest
 public import Lanes.Web.Http.Route
+public import Lanes.Web.Http.SharedCache
 public import Lanes.Web.Http.Sse
 public import Lanes.Web.Http.Stream
 public import Lanes.Web.Http.SigV4

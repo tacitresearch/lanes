@@ -110,3 +110,40 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Store.sees_acknowledged' depends on axioms: [propext, Classical.choice] -/
 #guard_msgs in #print axioms Lanes.Store.sees_acknowledged
+
+-- Lanes.Outside.Clock
+/-- info: 'Lanes.Clock.outside_ge' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Clock.outside_ge
+
+/-- info: 'Lanes.Clock.wall_latest_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Clock.wall_latest_le
+
+/-- info: 'Lanes.Clock.wall_back_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Clock.wall_back_le
+
+-- Lanes.Outside.Queue
+/-- info: 'Lanes.Queue.received_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Queue.received_le
+
+/-- info: 'Lanes.Queue.fifo_received_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Queue.fifo_received_le
+
+/-- info: 'Lanes.Queue.deleted_not_received' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Queue.deleted_not_received
+
+-- Lanes.Outside.Cache
+/-- info: 'Lanes.Cache.fill_unleased' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Cache.fill_unleased
+
+/-- info: 'Lanes.Cache.read_sent' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Cache.read_sent
+
+-- Lanes.Outside.Throttle
+/-- info: 'Lanes.Throttle.throttled_inner' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Throttle.throttled_inner
+
+/-- info: 'Lanes.Throttle.within_not_throttled' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Throttle.within_not_throttled
+
+/-- info: 'Lanes.Throttle.wait_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Throttle.wait_le
