@@ -44,5 +44,6 @@ because a launch claim is what a critic tests first.
    ambiguous, idempotency, an event stream), and vendors as packages under `integrations/` whose
    conformance to a class is a trusted premise tested against the real service. The combinators
    and the API with idempotency keys and webhooks are written, with payments and email as
-   instances (`Lanes/Outside/Effects/`, `examples/payments`); next are the store, the object
-   store and the queue, and a first integration that records runs of a real service.
+   instances (`Lanes/Outside/Effects/`, `examples/payments`), and the object store, with an S3
+   client (`Lanes/Outside/ObjectStore.lean`, `Lanes/Web/IO/S3.lean`); next are the store and the
+   queue, and a first integration that records runs of a real service.

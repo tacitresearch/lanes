@@ -84,3 +84,4 @@ decision without a number.
 - [D68. PostgreSQL is spoken in Lean, and a transactional store is a model](D68-postgres-protocol-in-lean.md)
 - [D69. The server tells its operators how it is, and nothing it tells enters a system](D69-observability.md)
 - [D70. An application is deployed as one instance with its journal on a volume of its own, behind a load balancer](D70-one-instance-one-volume.md)
+- [D71. S3 and Signature Version 4, in Lanes as the protocol of a class of object stores](D71-s3-and-signature-version-4.md)

@@ -30,6 +30,10 @@ import Lanes.Semantics
 /-- info: 'Lanes.Idempotent.answer_repeat' depends on axioms: [propext, Classical.choice] -/
 #guard_msgs in #print axioms Lanes.Idempotent.answer_repeat
 
+-- Lanes.Outside.ObjectStore
+/-- info: 'Lanes.ObjectStore.read_sent' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.ObjectStore.read_sent
+
 -- Lanes.Outside.Events
 /-- info: 'Lanes.Events.deliveries_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Events.deliveries_le
