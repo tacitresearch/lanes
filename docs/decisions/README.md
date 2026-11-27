@@ -93,3 +93,4 @@ decision without a number.
 - [D78. Uploads bounded by a signed policy, and large ones in parts](D78-bounded-and-large-uploads.md)
 - [D79. Work that is due later is a job of the scheduler: held by its id, run by its own timer, retried until it ends](D79-work-that-is-due-later-is-a-job-of-the-scheduler.md)
 - [D80. Every parser has an oracle and every model a recorded run, in one place, and lint keeps the list](D80-oracles.md)
+- [D81. Models of more outside systems: queues, caches, clocks, shared caches, rate limits and disk faults](D81-more-outside-models.md)

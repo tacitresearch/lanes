@@ -14,17 +14,17 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Check` | 74 | 54 | 0 | 8 | 0 | 10 | 2 |
 | `Lanes/Core` | 103 | 41 | 0 | 34 | 1 | 11 | 16 |
 | `Lanes/Data` | 68 | 43 | 0 | 4 | 1 | 0 | 20 |
-| `Lanes/Durable` | 67 | 57 | 2 | 0 | 0 | 7 | 1 |
+| `Lanes/Durable` | 70 | 58 | 2 | 0 | 0 | 9 | 1 |
 | `Lanes/Lib` | 532 | 347 | 13 | 2 | 91 | 70 | 9 |
 | `Lanes/Net` | 37 | 6 | 5 | 0 | 0 | 25 | 1 |
-| `Lanes/Outside` | 130 | 94 | 5 | 6 | 1 | 24 | 0 |
+| `Lanes/Outside` | 156 | 119 | 4 | 6 | 1 | 26 | 0 |
 | `Lanes/Proof` | 36 | 12 | 0 | 0 | 0 | 23 | 1 |
 | `Lanes/Runtime` | 172 | 93 | 21 | 0 | 28 | 30 | 0 |
 | `Lanes/Semantics` | 61 | 11 | 0 | 0 | 0 | 49 | 1 |
 | `Lanes/Testing` | 82 | 0 | 0 | 1 | 81 | 0 | 0 |
-| `Lanes/Web` | 660 | 343 | 53 | 43 | 166 | 53 | 2 |
+| `Lanes/Web` | 672 | 354 | 53 | 46 | 163 | 54 | 2 |
 | `LanesCli` | 125 | 0 | 0 | 0 | 51 | 0 | 74 |
-| All | 2281 | 1182 | 104 | 122 | 420 | 326 | 127 |
+| All | 2322 | 1219 | 103 | 125 | 417 | 331 | 127 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -257,7 +257,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Check.Property.holds` | proved | `Check.refines_sound`, `Check.refines_traces`, `Check.system_sound` and 1 more |
 | `Check.Trace.last` | proved | `Check.search_deadlock`, `Check.search_reached`, `Check.search_violated` and 2 more |
 | `Check.Trace.labels` | proved | `Check.system_violated` |
-| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Clients.lean` and 22 more |
+| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Cache.lean` and 27 more |
 | `Check.Path.last` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
 | `Check.Path.toTraceAux` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
 | `Check.Path.toTrace` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
@@ -570,7 +570,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Journal.Disk.read` | proved | `Journal.Disk.Torn.mend`, `Journal.Disk.Torn.mend_crash`, `Journal.Disk.Torn.read` and 2 more |
 | `Journal.Disk.start` | proved | `Journal.Disk.read_of_start`, `Journal.Disk.start_foreign` |
 | `Journal.Disk.mend` | proved | `Journal.Disk.Torn.mend`, `Journal.Disk.Torn.mend_crash` |
-| `Journal.Disk.load` | proved | `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Torn.load` and 2 more |
+| `Journal.Disk.load` | proved | `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Torn.load` and 3 more |
 | `Journal.appendWrites` | proved | `Journal.Disk.Holds.append`, `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash` |
 | `Journal.saveWrites` | proved | `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save`, `Journal.Disk.Holds.save_crash` |
 | `Journal.memo` | spec | used only in statements |
@@ -617,9 +617,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Journal.Entry.op?` | proved | through `Journal.ops`: `Journal.recover_handed`, `Journal.recover_kernel` and 4 more |
 | `Journal.Entry.marks` | spec | used only in statements |
 | `Journal.ops` | proved | `Journal.recover_handed`, `Journal.recover_kernel`, `Journal.recover_outputs` and 3 more |
-| `Journal.replay1` | proved | through `Journal.Begun.toFound`, `Journal.recover` and 4 more: `Journal.Begun.resume_upgraded`, `Journal.Disk.Holds.load_append_crash` and 19 more |
+| `Journal.replay1` | proved | through `Journal.Begun.toFound`, `Journal.recover` and 4 more: `Journal.Begun.resume_upgraded`, `Journal.Disk.Holds.load_append_crash` and 20 more |
 | `Journal.recover` | proved | `Journal.Disk.load_cut`, `Journal.Upgrade.begin_crash`, `Journal.Upgrade.begin_torn` and 7 more |
-| `Journal.replay` | proved | `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save` and 4 more |
+| `Journal.replay` | proved | `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save` and 5 more |
 | `Journal.Entry.savedAt` | proved | `Journal.Disk.Holds.append`, `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash` and 3 more |
 | `Journal.since` | proved | through `Journal.Begun.load`, `Journal.Begun.toFound` and 1 more: `Journal.Begun.resume_upgraded`, `Journal.Upgrade.begin_crash` and 2 more |
 | `Journal.resume` | proved | `Journal.Begun.resume_upgraded`, `Journal.resume_eq_recover`, `Journal.resume_eq_replay` |
@@ -635,6 +635,14 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Migration.envelope` | proved | through `Migration.kernel`: `Journal.Upgrade.begin_crash`, `Journal.Upgrade.inv_load` and 4 more |
 | `Migration.image` | proved | through `Migration.kernel`: `Journal.Upgrade.begin_crash`, `Journal.Upgrade.inv_load` and 4 more |
 | `Migration.kernel` | proved | `Journal.Upgrade.begin_crash`, `Journal.Upgrade.inv_load`, `Migration.cell_kernel` and 3 more |
+
+## `Lanes/Durable/Reading.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Journal.Reading.OfJournal` | spec | a predicate |
+| `Journal.Reading.OfSnapshot` | spec | a predicate |
+| `Journal.Disk.ofReadings` | proved | `Journal.Disk.Torn.load_readings`, `Journal.Disk.ofReadings_eq` |
 
 ## `Lanes/Durable/Snapshot.lean`
 
@@ -1411,12 +1419,34 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Outside.any` | tested | `Tests/Jobs.lean`, `Tests/S3.lean` |
-| `Outside.driver` | checked | `Tests/Clock.lean`, `Tests/HttpClient.lean`, `Tests/Jobs.lean` and 4 more |
-| `Outside.see` | proved | through `Outside.after`: `Effects.at_most_once`, `Events.deliveries_le` and 10 more |
-| `Outside.after` | proved | `Effects.at_most_once`, `Events.deliveries_le`, `Idempotent.at_most_once` and 9 more |
-| `Outside.allows` | checked | `Tests/Outside.lean` |
+| `Outside.driver` | checked | `Tests/Cache.lean`, `Tests/Clock.lean`, `Tests/HttpClient.lean` and 9 more |
+| `Outside.see` | proved | through `Outside.after`: `Cache.read_sent`, `Clock.wall_back_le` and 17 more |
+| `Outside.after` | proved | `Cache.read_sent`, `Clock.wall_back_le`, `Clock.wall_latest_le` and 16 more |
+| `Outside.allows` | checked | `Tests/Outside.lean`, `Tests/Queue.lean`, `Tests/Throttle.lean` and 1 more |
 | `Outside.both` | proved | `Outside.after_both` |
 | `Outside.mine` | spec | used only in statements |
+
+## `Lanes/Outside/Cache.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Cache.Request.key` | proved | through `Cache.server`: `Cache.fill_unleased`, `Cache.read_sent` |
+| `Cache.Request.leaves` | proved | through `Cache.server`: `Cache.fill_unleased`, `Cache.read_sent` |
+| `Cache.Core.possible` | proved | through `Cache.server`: `Cache.fill_unleased`, `Cache.read_sent` |
+| `Cache.Core.receive` | proved | through `Cache.server`: `Cache.fill_unleased`, `Cache.read_sent` |
+| `Cache.Core.settle` | proved | through `Cache.server`: `Cache.fill_unleased`, `Cache.read_sent` |
+| `Cache.Core.answer` | proved | through `Cache.server`: `Cache.fill_unleased`, `Cache.read_sent` |
+| `Cache.readOf` | proved | through `Cache.server`: `Cache.fill_unleased`, `Cache.read_sent` |
+| `Cache.sentOf` | proved | through `Cache.server`: `Cache.fill_unleased`, `Cache.read_sent` |
+| `Cache.mayRead` | proved | through `Cache.server`: `Cache.fill_unleased`, `Cache.read_sent` |
+| `Cache.server` | proved | `Cache.fill_unleased`, `Cache.read_sent` |
+
+## `Lanes/Outside/Clock.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Clock.outside` | proved | `Clock.outside_ge` |
+| `Clock.wall` | proved | `Clock.wall_back_le`, `Clock.wall_latest_le` |
 
 ## `Lanes/Outside/Effects/Basic.lean`
 
@@ -1475,7 +1505,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Events.count` | proved | through `Events.bounded`: `Events.deliveries_le` |
+| `Events.count` | proved | `Queue.received_le` |
 | `Events.bump` | proved | through `Events.bounded`: `Events.deliveries_le` |
 | `Events.bounded` | proved | `Events.deliveries_le` |
 | `Events.deliveries` | spec | used only in statements |
@@ -1484,7 +1514,6 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Clock.outside` | trusted | TRUSTED.md: The clock adapter's handler |
 | `Clock.latest` | trusted | TRUSTED.md: The clock adapter's handler |
 | `Clock.Wall.start` | trusted | TRUSTED.md: The clock adapter's handler |
 | `Clock.Wall.now` | trusted | TRUSTED.md: The clock adapter's handler |
@@ -1535,6 +1564,21 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `ObjectStore.Sound` | spec | a predicate |
 | `ObjectStore.HeldSent` | spec | a predicate |
 
+## `Lanes/Outside/Queue.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Queue.Message.codec` | proved | its type, `Codec` |
+| `Queue.instCodableMessage` | proved | its type, `Codable` |
+| `Queue.inOrder` | proved | through `Queue.outside`: `Queue.deleted_not_received`, `Queue.fifo_received_le` and 1 more |
+| `Queue.ready` | proved | through `Queue.outside`: `Queue.deleted_not_received`, `Queue.fifo_received_le` and 1 more |
+| `Queue.receive` | proved | through `Queue.outside`: `Queue.deleted_not_received`, `Queue.fifo_received_le` and 1 more |
+| `Queue.delete` | proved | through `Queue.outside`: `Queue.deleted_not_received`, `Queue.fifo_received_le` and 1 more |
+| `Queue.send` | proved | through `Queue.outside`: `Queue.deleted_not_received`, `Queue.fifo_received_le` and 1 more |
+| `Queue.outside` | proved | `Queue.deleted_not_received`, `Queue.fifo_received_le`, `Queue.received_le` |
+| `Queue.receives` | spec | used only in statements |
+| `Queue.OneCopy` | spec | a predicate |
+
 ## `Lanes/Outside/Rpc.lean`
 
 | Definition | Status | Evidence |
@@ -1543,7 +1587,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Rpc.instCodableCall` | proved | its type, `Codable` |
 | `Rpc.Reply.codec` | proved | its type, `Codec` |
 | `Rpc.instCodableReply` | proved | its type, `Codable` |
-| `Rpc.outside` | proved | `Events.deliveries_le`, `Idempotent.at_most_once`, `Idempotent.keys_nodup` and 6 more |
+| `Rpc.outside` | proved | `Cache.read_sent`, `Events.deliveries_le`, `Idempotent.at_most_once` and 8 more |
 | `Rpc.Port.reported` | spec | used only in statements |
 | `Rpc.called` | spec | used only in statements |
 | `Rpc.answered` | spec | used only in statements |
@@ -1595,6 +1639,16 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Store.writeSkew` | spec | used only in statements |
 | `Store.lostUpdate` | spec | used only in statements |
 | `Store.earlier` | spec | used only in statements |
+
+## `Lanes/Outside/Throttle.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Throttle.Answer.codec` | proved | its type, `Codec` |
+| `Throttle.instCodableAnswer` | proved | its type, `Codable` |
+| `Throttle.Event.codec` | proved | its type, `Codec` |
+| `Throttle.instCodableEvent` | proved | its type, `Codable` |
+| `Throttle.server` | proved | `Throttle.throttled_inner`, `Throttle.wait_le`, `Throttle.within_not_throttled` |
 
 ## `Lanes/Proof/Deed.lean`
 
@@ -2380,17 +2434,17 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.parseForm` | proved | `Http.parseForm_encodeForm` |
 | `Http.encodeForm` | proved | `Http.Request.form_encodeForm`, `Http.parseForm_encodeForm` |
 | `Http.Request.param?` | spec | used only in statements |
-| `Http.Request.header?` | proved | `Http.Conn.respond_opens`, `Http.Request.header?_eq_lookup`, `Http.Request.sameOrigin_iff` |
+| `Http.Request.header?` | proved | `Http.Conn.respond_opens`, `Http.Request.header?_eq_lookup`, `Http.Request.sameOrigin_iff` and 1 more |
 | `Http.Request.text?` | proved | through `Http.Request.field?`, `Http.Request.form`: `Http.Request.field?_eq_lookup`, `Http.Request.form_encodeForm` |
 | `Http.Request.form` | proved | `Http.Request.field?_eq_lookup`, `Http.Request.form_encodeForm` |
 | `Http.Request.field?` | proved | `Http.Request.field?_eq_lookup` |
-| `Http.Response.ofText` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean`, `Tests/HttpConn.lean` and 2 more |
-| `Http.Response.text` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean`, `Tests/HttpConn.lean` and 2 more |
+| `Http.Response.ofText` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean`, `Tests/HttpConn.lean` and 3 more |
+| `Http.Response.text` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean`, `Tests/HttpConn.lean` and 3 more |
 | `Http.Response.html` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and 2 more |
 | `Http.Response.json` | tested | `Tests/Html.lean` |
 | `Http.Response.empty` | tested | `Tests/Auth.lean`, `Tests/Html.lean` |
-| `Http.Response.redirect` | tested | `Tests/Html.lean` |
-| `Http.Response.withHeader` | tested | `Tests/Html.lean` |
+| `Http.Response.redirect` | checked | `Tests/SharedCache.lean` |
+| `Http.Response.withHeader` | checked | `Tests/SharedCache.lean` |
 
 ## `Lanes/Web/Http/Conn.lean`
 
@@ -2478,7 +2532,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.hostCookie` | tested | `Tests/Auth.lean` |
 | `Http.Response.setCookie` | proved | `Http.setCookie_read` |
 | `Http.Response.clearCookie` | tested | `Tests/Auth.lean` |
-| `Http.Response.noStore` | tested | `Tests/Html.lean` |
+| `Http.Response.noStore` | checked | `Tests/SharedCache.lean` |
 | `Http.Response.noFraming` | tested | `Tests/Html.lean` |
 
 ## `Lanes/Web/Http/CookieSound.lean`
@@ -2666,6 +2720,23 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Route.link` | proved | `Http.Route.link_target`, `Http.Route.match?_target`, `Http.dispatch_link` |
 | `Http.Route.handle` | proved | `Http.dispatch_link` |
 | `Http.dispatch` | proved | `Http.dispatch_eq_none`, `Http.dispatch_eq_some`, `Http.dispatch_link` |
+
+## `Lanes/Web/Http/SharedCache.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Http.SharedCache.directives` | proved | through `Http.SharedCache.leaks`, `Http.SharedCache.outside` and 1 more: `Http.SharedCache.serve_of_leaks`, `Http.SharedCache.serve_reuses` and 1 more |
+| `Http.SharedCache.says` | proved | `Http.SharedCache.serve_storable` |
+| `Http.SharedCache.vary` | proved | `Http.SharedCache.serve_reuses` |
+| `Http.SharedCache.explicitlyFresh` | proved | through `Http.SharedCache.leaks`, `Http.SharedCache.outside`: `Http.SharedCache.serve_of_leaks`, `Http.SharedCache.serve_storable` |
+| `Http.SharedCache.heuristic` | proved | through `Http.SharedCache.leaks`, `Http.SharedCache.outside`: `Http.SharedCache.serve_of_leaks`, `Http.SharedCache.serve_storable` |
+| `Http.SharedCache.storable` | proved | `Http.SharedCache.serve_storable` |
+| `Http.SharedCache.reuses` | proved | through `Http.SharedCache.Store.serve?`, `Http.SharedCache.leaks`: `Http.SharedCache.serve_of_leaks`, `Http.SharedCache.serve_reuses` and 1 more |
+| `Http.SharedCache.Store.observe` | proved | through `Http.SharedCache.outside`: `Http.SharedCache.serve_storable` |
+| `Http.SharedCache.Store.serve?` | proved | `Http.SharedCache.serve_of_leaks`, `Http.SharedCache.serve_reuses`, `Http.SharedCache.serve_storable` |
+| `Http.SharedCache.outside` | proved | `Http.SharedCache.serve_storable` |
+| `Http.SharedCache.Store.Sound` | spec | a predicate |
+| `Http.SharedCache.leaks` | proved | `Http.SharedCache.serve_of_leaks` |
 
 ## `Lanes/Web/Http/SigV4.lean`
 
