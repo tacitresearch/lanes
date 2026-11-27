@@ -141,12 +141,12 @@ lanes_data structure Board (N C : Type) where
 
 /-- The settings the spec and the system are built with. Every bound is here (rule 2.6). -/
 structure Config where
-  maxAccounts : Nat := 10000
+  maxAccounts : Nat := 1000
   maxSessions : Nat := 4
   maxFailures : Nat := 5
   /-- Posts an account keeps: one more is refused until it deletes one. -/
-  maxPosts : Nat := 200
-  maxFollows : Nat := 200
+  maxPosts : Nat := 100
+  maxFollows : Nat := 100
   maxPerWindow : Nat := 10
   timelineMax : Nat := 50
   window_ms : Nat := 60000

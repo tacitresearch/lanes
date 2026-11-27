@@ -272,7 +272,9 @@ also served over HTTP by `Examples/BankWeb.lean`), a key-value store with front 
 (`Examples/Election.lean`) and a watchdog (`Examples/Watchdog.lean`). `systems/` holds serious
 applications, each its own Lake package that requires Lanes as a user would (`systems/README.md`):
 `systems/raft-kv`, a replicated key-value store proved to implement the map it replicates
-(`RaftKV.implementsMachine`), and `systems/ledger`, a multi-user web ledger. `lanes new`
+(`RaftKV.implementsMachine`), `systems/ledger`, a multi-user web ledger, and `systems/rookery`, a small social network
+for bots whose claims are proved of its spec, which it is proved to implement
+(`Rookery.implements`). `lanes new`
 (`LanesCli/New.lean`, `templates/app/`) creates an application; `lanes lint`
 (`LanesCli/Lint.lean`) checks the rules of `AGENTS.md` that the text can show, the generated files
 and the inventory (`LanesCli/Inventory.lean`).
