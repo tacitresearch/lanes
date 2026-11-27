@@ -345,6 +345,34 @@ import Lanes.Semantics
 /-- info: 'Lanes.Http.dispatch_link' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.dispatch_link
 
+-- Lanes.Web.Http.SigV4Sound
+/-- info: 'Lanes.SigV4.encode_chunks' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SigV4.encode_chunks
+
+/-- info: 'Lanes.SigV4.decodePath_canonicalPath' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SigV4.decodePath_canonicalPath
+
+/-- info: 'Lanes.SigV4.sortQuery_perm' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SigV4.sortQuery_perm
+
+/-- info: 'Lanes.SigV4.sortQuery_sorted' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SigV4.sortQuery_sorted
+
+/-- info: 'Lanes.SigV4.canonicalQuery_sortQuery' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SigV4.canonicalQuery_sortQuery
+
+/-- info: 'Lanes.SigV4.canonicalHeaders_sorted' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SigV4.canonicalHeaders_sorted
+
+/-- info: 'Lanes.SigV4.mem_canonicalHeaders' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SigV4.mem_canonicalHeaders
+
+/-- info: 'Lanes.SigV4.canonicalHeaders_lower' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SigV4.canonicalHeaders_lower
+
+/-- info: 'Lanes.SigV4.target_sign' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.SigV4.target_sign
+
 -- Lanes.Web.Http.Waiting
 /-- info: 'Lanes.Http.Waiting.exec_handed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.Waiting.exec_handed
@@ -376,6 +404,12 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Http.Response.read_ended' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.Response.read_ended
+
+/-- info: 'Lanes.Http.Request.headOnly_plain' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Request.headOnly_plain
+
+/-- info: 'Lanes.Http.Response.readHead_ended' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Response.readHead_ended
 
 -- Lanes.Web.Http.WireSound
 /-- info: 'Lanes.Http.Response.read_more' depends on axioms: [propext, Classical.choice, Quot.sound] -/

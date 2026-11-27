@@ -28,7 +28,8 @@ proved function tells it to.
 | The gate and the HTTP server | `Lanes/Web/Http/{Gate,Front,FrontSound,Waiting,Conn,ConnSound}.lean`, `Lanes/Semantics/Front.lean`, `Lanes/Web/IO/Server.lean` | `Http.served_answered_le_arrived`, `Http.served_pending_answered`, `Http.Waiting.exec_answered`, `Http.Conn.run_writes` |
 | Metrics, health and the access log | `Lanes/Lib/Metrics.lean`, `Lanes/Web/Http/{Ops,OpsSound}.lean`, `Lanes/Web/IO/Ops.lean` | `Metrics.Histogram.observeAll_eq`, `Metrics.readLabelValue_escapeLabel`, `Http.Ops.route?_default`, `Http.Ops.route?_metrics`, `Http.Ops.answer_ready`, `Http.Ops.Access.parse_line`; that none of it reaches a system is trusted and tested |
 | Other adapters | `Lanes/Outside/Basic.lean`, `Lanes/Outside/IO/Clock.lean`, `Lanes/Web/IO/Client.lean`, `Lanes/Web/Http/{Grammar,Wire,WireSound}.lean` | `Response.read_wire`, `Request.fields_framing`; conformance tests |
-| Models of external services | `Lanes/Outside/{Rpc,Idempotent,Events}.lean`, `Lanes/Outside/Effects/`, `Lanes/Proof/Outputs.lean` | `Idempotent.at_most_once`, `Rpc.answered_le_called`, `Events.deliveries_le`, `System.Emits.outputs`; that a real service conforms is trusted |
+| Models of external services | `Lanes/Outside/{Rpc,Idempotent,Events,ObjectStore}.lean`, `Lanes/Outside/Effects/`, `Lanes/Proof/Outputs.lean` | `Idempotent.at_most_once`, `Rpc.answered_le_called`, `Events.deliveries_le`, `ObjectStore.read_sent`, `System.Emits.outputs`; that a real service conforms is trusted |
+| Signature Version 4 and the S3 client | `Lanes/Web/Http/{SigV4,SigV4Sound}.lean`, `Lanes/Web/S3/{Basic,Xml}.lean`, `Lanes/Web/IO/S3.lean` | `SigV4.target_sign`, `SigV4.sortQuery_sorted`, `SigV4.canonicalHeaders_sorted`, `SigV4.encode_chunks`; signatures tested against AWS's vectors, the client against a fake S3; its IO trusted |
 | PostgreSQL and the store model | `Lanes/Lib/Postgres/{Bytes,Message,MessageSound,Scram,Conn,ConnSound,Table}.lean`, `Lanes/Lib/Postgres/IO/Client.lean`, `Lanes/Outside/Store/{Basic,Sound}.lean` | `Backend.read_encode`, `Frontend.decode_encode`, `Conn.run_fifo`, `Conn.step_committed`, `Conn.step_query`, `Store.write_skew`, `Store.lost_commit_either`; the IO is trusted, and that the server behaves like the model is a premise |
 | Jobs: work outside a step | `Lanes/Behaviours/Jobs/{Basic,Sound}.lean`, `Lanes/Semantics/Jobs.lean`, `Lanes/Behaviours/Jobs/IO/Pool.lean` | `Jobs.answered_le_handled`, `Jobs.retry_same`, `Jobs.submitted_answered`; the pool is trusted |
 | Web | `Lanes/Web/Http/{Basic,Route,RouteSound,Cookie,CookieSound}.lean`, `Lanes/Web/Html/`, `Lanes/Web/Auth/` | `Html.lex_render`, `Html.safeUrl_scheme`, `Http.dispatch_link`, `Http.parseForm_encodeForm`, `Http.readSetCookie_header`, `Auth.verify_eq_some`, `Auth.checkForm_other` |
@@ -245,10 +246,20 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
 - **Clock** (`Lanes/Outside/IO/Clock.lean`): the time as an input, never earlier than one given before,
   also across a restart.
 - **HTTP client** (`Lanes/Web/IO/Client.lean`): HTTP/1.1, or HTTPS through the TLS binding
-  below, one request per connection. The bytes are pure (`Lanes/Web/Http/Wire.lean`): the request writer frames the message
+  below, one request per connection; a `HEAD` is read without a body (`Response.readHead`). The bytes are pure (`Lanes/Web/Http/Wire.lean`): the request writer frames the message
   itself (`Request.fields_framing`), and the reader is proved to read a response written as a
   server writes it as soon as its last byte is there, to stay within its limit and to end
   (`Lanes/Web/Http/WireSound.lean`: `Response.read_wire`, `Response.read_more`; D39).
+- **S3** (`Lanes/Web/IO/S3.lean`, `docs/decisions/D71-s3-and-signature-version-4.md`): put,
+  get with a range, head, delete and ListObjectsV2 on a bucket, named virtual-hosted or by path
+  at any endpoint (AWS, MinIO, LocalStack), and links a browser follows to get or put an object.
+  Pure: each operation as a call signed with Signature Version 4 (`Lanes/Web/Http/SigV4.lean`),
+  whose target is the canonical path and query that were signed (`SigV4.target_sign`), with the
+  query and the signed headers in order (`SigV4.sortQuery_sorted`, `canonicalHeaders_sorted`);
+  what an answer means (`S3.interpret`), and a reader of the XML S3 writes, which refuses a
+  document type and every entity it does not know (`Lanes/Web/S3/Xml.lean`). The signatures are
+  tested against AWS's test suite and S3's documented examples, the client against a fake S3
+  that checks every signature from the bytes it receives. Bodies are whole, in memory.
 - **HTTP server, journal, transport**: above.
 - **Models of external services** (`Lanes/Outside/`, D61 and the decision on models of external
   services): what a service a system calls may do, built from three combinators on a model of
@@ -259,13 +270,16 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   repeat the first's answer or a refusal, and proves that a request always sent under one key
   has at most one effect in every run the model allows (`Idempotent.at_most_once`).
   `Events.bounded` delivers events late, out of order and up to `maxDeliveries` times
-  (`Events.deliveries_le`). `Effects` is the class of services that hold things with a lifecycle,
+  (`Events.deliveries_le`). `ObjectStore.server` is an object store whose reads see the last write answered,
+  unless a write that timed out, was refused or overlapped it may have come after; a get is
+  answered only with an object a put sent (`ObjectStore.read_sent`). `Effects` is the class of services that hold things with a lifecycle,
   made under a key and reported by webhooks, with two instances: payments, with the statuses
   Stripe documents for a PaymentIntent (`Lanes/Outside/Effects/Payments.lean`), and email
   (`Lanes/Outside/Effects/Email.lean`). A system's part of a proof is a fact about what its steps
   emit, lifted to every run by `System.Emits.outputs`; `examples/payments` proves a shop charges
   each order at most once that way (`Shop.charged_at_most_once`). That a real service does only
-  what its model allows is trusted; no adapter talks to one yet.
+  what its model allows is trusted; the S3 client's runs against a fake are checked against the
+  object store's, and no adapter talks to a real service yet.
 - **PostgreSQL** (`Lanes/Lib/Postgres/`): the frontend/backend protocol 3.0 in Lean, not libpq
   (`docs/decisions/D68-postgres-protocol-in-lean.md`): start-up with trust, cleartext (only when
   allowed), MD5 or SCRAM-SHA-256; the extended query protocol with parameters, text both ways;

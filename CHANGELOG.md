@@ -10,6 +10,7 @@ under Unreleased (`CONTRIBUTING.md`).
 
 ### Added
 
+- An S3 client (`Lanes.S3`): put, get with a range, head, delete and ListObjectsV2, virtual-hosted or path-style at any endpoint (AWS, MinIO, LocalStack), presigned links for a browser's get and put, credentials from `AWS_*` or given, and `S3.handler` for a system; requests signed with AWS Signature Version 4 (`Lanes.SigV4`), proved to send the canonical path and query that were signed and tested against AWS's test suite and S3's examples; a reader of the XML S3 writes; and a model of an object store with read-after-write and uncertain writes (`ObjectStore.server`, `ObjectStore.read_sent`).
 - HTTPS in the HTTP client: a TLS 1.2 and 1.3 client from the OpenSSL Lean's toolchain ships (`native/tls.c`, `Lanes.Tls`), with the certificate verified against the system's trust store or a file given and the name or address checked, always; `Client.Call` takes a `scheme`, `Call.at` builds a call from an `https://` or `http://` origin, and names are resolved. Nothing new to install.
 - Models of external services (`Lanes/Outside/`): `Rpc.outside`, a call answered at most once, `unknown` at its deadline with its effect left open, or never; `Idempotent.server`, idempotency keys, proved to give a request always sent under one key at most one effect in every run the model allows (`Idempotent.at_most_once`); `Events.bounded`, webhooks late, out of order and repeated up to a bound; `Effects`, services that hold things with a lifecycle, and its instances `Payments` (the statuses Stripe documents for a PaymentIntent) and `Email`. `Outside.see`, `Outside.after_induction`, `Outside.after_invariant` and `Outside.after_both` reason about runs a model allows; `System.Emits.outputs` lifts what actors emit to every output of every run.
 - `examples/payments`: a shop that charges each order through the payment model, checked with the classic bug seeded (a retry without the key charges twice) and proved to charge each order at most once (`Shop.charged_at_most_once`).
@@ -25,6 +26,7 @@ under Unreleased (`CONTRIBUTING.md`).
 
 ### Changed
 
+- The HTTP client's `Host` names the port when it is not the scheme's (`Call.authority`), and a call can be sent as `HEAD` (`Call.headOnly`), its answer read without a body (`Response.readHead`).
 - The `main` that `lanes new` writes reads its address from `LANES_HOST` (`127.0.0.1` unless set; `0.0.0.0` behind a load balancer), how long an idle connection is kept from `LANES_IDLE_MS`, and how long a stop drains from `LANES_DRAIN_MS`. The environment rather than flags: the arguments `[port] [journal]` stay as they were, an application's own arguments need not share a parser with these, and a systemd unit or a container sets them without touching the command line, as `infra/app/app-instance.sh` does.
 - `Http.Ops.route?` and `Ops.front` take the address of the request's peer.
 - The HTTP server runs its connections on four threads of its own by default (`ServerConfig.ioThreads := 4`); `0` keeps the earlier behaviour.
