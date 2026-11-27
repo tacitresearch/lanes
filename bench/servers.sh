@@ -1,7 +1,8 @@
 # The servers of the benchmark, sourced by run.sh and profile.sh from bench/.
 # shellcheck shell=bash
 
-# Every server, in the order run.sh runs them.
+# Every server, in the order run.sh runs them. lanes-io-N and lanes-cloop-N, not in the list, are
+# lanes-io and lanes-cloop on N threads whatever IO_THREADS is.
 ALL_SERVERS=(go1 go tcp tcp-park std std-unlimited lanes lanes-journal lanes-snapshot
   lanes-io lanes-cloop lanes-par lanes-io-par lanes-many lanes-many-par lanes-many-auto lanes-heavy
   lanes-heavy-par lanes-heavy-auto)
@@ -31,6 +32,8 @@ server_argv() {
     lanes-snapshot) SERVER=("$bin/benchLanes" "$port" "$dir/j" 1024) ;;
     lanes-io) SERVER=("$bin/benchLanes" "$port" "io=$io") ;;
     lanes-cloop) SERVER=("$bin/benchLanes" "$port" "io=$io" loop=c) ;;
+    lanes-cloop-[0-9]*) SERVER=("$bin/benchLanes" "$port" "io=${name#lanes-cloop-}" loop=c) ;;
+    lanes-io-[0-9]*) SERVER=("$bin/benchLanes" "$port" "io=${name#lanes-io-}") ;;
     lanes-par) SERVER=("$bin/benchLanes" "$port" "workers=$workers") ;;
     lanes-io-par) SERVER=("$bin/benchLanes" "$port" "io=$io" "workers=$workers") ;;
     lanes-many) SERVER=("$bin/benchMany" "$port" "$K" 0) ;;

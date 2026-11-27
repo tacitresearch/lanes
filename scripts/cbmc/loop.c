@@ -13,6 +13,9 @@
 size_t model_live;
 
 #define FDS 12
+#ifndef EVENTS
+#define EVENTS 1 /* a turn's events */
+#endif
 #define OPEN_WANT 5
 static int fd_open[FDS];
 static int next_fd = 5;
@@ -106,7 +109,7 @@ int epoll_wait(int epfd, struct epoll_event *events, int max, int timeout) {
     check_open(epfd);
     if (nondet_u8() & 1) __atomic_store_n(&the_loop.stopping, 1, __ATOMIC_RELEASE);
     int n = nondet_int();
-    __CPROVER_assume(n >= 0 && n <= 2 && n <= max);
+    __CPROVER_assume(n >= 0 && n <= EVENTS && n <= max);
     for (int k = 0; k < n; k++) {
         uint8_t which = nondet_u8();
         events[k].events = nondet_unsigned();

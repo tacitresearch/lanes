@@ -405,9 +405,16 @@ def cLoopTests : Async (List (String × Bool)) := do
         pure false
       catch e => pure ((toString e).startsWith "lanes: the C loop")
     return [("web: the C loop is refused where it does not run", refused)]
-  let one := (← serveTest 1 .c) ++ (← wireTest 1 .c) ++ (← streamTest 1 .c)
-  let two := (← serveTest 2 .c) ++ (← wireTest 2 .c) ++ (← streamTest 2 .c)
-  return on 1 one ++ on 2 two
+  -- A loop that loses an answer leaves its client waiting: fail at once rather than wait.
+  let suites := [(1, "server", serveTest 1 .c), (1, "wire", wireTest 1 .c),
+    (1, "stream", streamTest 1 .c), (2, "server", serveTest 2 .c), (2, "wire", wireTest 2 .c),
+    (2, "stream", streamTest 2 .c)]
+  let mut results := []
+  for (n, name, suite) in suites do
+    match ← Async.race (some <$> suite) (do Async.sleep 15000; return none) with
+    | some r => results := results ++ on n r
+    | none => return results ++ [(s!"web: the {name} tests end within 15 s on the C loop", false)]
+  return results
 
 def tests : IO (List (String × Bool)) := do
   let onLanes := fun (results : List (String × Bool)) =>

@@ -252,6 +252,44 @@ gains, and the differences are inside the noise. `lanes-heavy-auto` used the CPU
 `lanes-heavy`, not that of `lanes-heavy-par`: it kept to the shard's thread. The warm machine,
 with cores to spare, is where `lanes-heavy-auto` should come out near `lanes-heavy-par`.
 
+## A loop of C
+
+`docs/decisions/new-a-loop-of-c.md`: `lanes-cloop` runs the connections on `IO_THREADS` threads
+of C, each with its own epoll and listening socket (`ServerConfig.loop := .c`). Measured in the
+shared 4-core container, the server on CPUs 0–1 and the load on 2–3, `LEAN_NUM_THREADS=2`; four
+rounds of one run of 5 s per server and connection count, the servers taking turns within a
+round. The first round had under a core of other CPU; the other three had two to three cores of
+it (other agents building, load average 4 to 9.5), so only the direction counts. Requests a
+second, the median of four and the range, and the median CPU µs a request:
+
+| server | 1 conn | 16 conns | 64 conns | CPU µs/req at 1 / 16 / 64 |
+| --- | ---: | ---: | ---: | --- |
+| `go` | 15,572 (12,968–17,281) | 98,152 (76,772–130,776) | 110,605 (59,948–157,086) | 53 / 12 / 12 |
+| `lanes-io`, 4 threads | 7,901 (5,883–9,929) | 28,890 (23,716–32,023) | 34,364 (28,756–37,975) | 97 / 35 / 35 |
+| `lanes-cloop`, 1 thread | 12,822 (7,919–14,380) | 43,907 (23,562–46,538) | 51,444 (41,002–52,922) | 51 / 21 / 19 |
+| `lanes-cloop`, 2 threads | 10,963 (8,618–14,596) | 45,661 (42,860–48,567) | 53,602 (51,209–56,261) | 63 / 22 / 20 |
+| `lanes-cloop`, 4 threads | 11,835 (11,076–11,970) | 36,013 (30,594–57,914) | 50,533 (32,947–68,427) | 60 / 30 / 24 |
+
+In the quiet first round alone, at 64 connections: `go` 117,208, `lanes-io` 34,577,
+`lanes-cloop` 52,899, 54,712 and 68,427 on 1, 2 and 4 threads.
+
+The C loop serves about 1.5 times what `lanes-io` does at 16 and 64 connections and 1.6 times at
+one, for 40–45% less CPU a request (19–22 µs against 35); Go serves about twice what it does, for
+12 µs. Four threads on two CPUs are oversubscribed and cost CPU. A request costs 5 system calls
+(`profile.sh syscalls`, 16 connections): 1.3 reads, 1.3 writes, 1.8 `futex` (handing the request
+to the shard and its answer back), and a share of an `epoll_wait` and of the eventfd's write and
+read; `lanes-io` makes 15, 11 of them `futex`. On one loop thread at 16 connections the loop's
+thread used about 10 µs a request and the shard's about 7 (`profile.sh threads`).
+
+On the warm machine, the servers to compare are the Lean loop and the C loop at the same
+threads; `lanes-io-N` and `lanes-cloop-N` are those servers on N threads whatever `IO_THREADS`
+is:
+
+```bash
+gh workflow run bench.yml -f seconds=10 -f runs=3 \
+  -f servers="go lanes-io-8 lanes-cloop-1 lanes-cloop-2 lanes-cloop-4 lanes-cloop-8 lanes-cloop-16"
+```
+
 ## Results
 
 The latest run on the warm machine.

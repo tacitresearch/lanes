@@ -319,9 +319,10 @@ MUTANTS = [
      "        event(w, c, STOP, lean_alloc_sarray(1, 0, 0), now);\n", ""),
     ("cloop: a thread is not woken for its answers", "native/loop.c",
      "    if (thread < l->threads && write(", "    if (0 && write("),
-    ("cloop: a closed connection is closed before what the client still sends is drained",
-     "native/loop.c", "            while (c->readable) {\n",
-     "            release(w, c);\n            return;\n            while (c->readable) {\n"),
+    ("cloop: what a connection owes when it closes is dropped", "native/loop.c",
+     "    if (closed) {\n        lean_dec_ref(c->line);",
+     "    if (closed) {\n        if (c->out) lean_dec_ref(c->out);\n        c->out = NULL;\n"
+     "        lean_dec_ref(c->line);"),
     ("cloop: a connection that closes is not counted out", "Lanes/Web/IO/CLoop.lean",
      "  if conn.closed && !wasClosed then h.leave\n", ""),
     ("libsodium: the comparison reads only the first byte", "native/lanes.c",
