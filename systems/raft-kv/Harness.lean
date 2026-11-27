@@ -14,21 +14,31 @@ namespace Harness
 
 open Lanes Std Std.Async
 
-/-- What a node sent before it closed the connection, or `none` if it could not be reached. -/
-def converse (port : UInt16) (method path body : String) : Async (Option ByteArray) := do
-  try
-    let socket ← TCP.Socket.Client.mk
-    socket.connect (.v4 ⟨.ofParts 127 0 0 1, port⟩)
-    socket.send (s!"{method} {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n"
-      ++ s!"Content-Type: text/plain\r\nContent-Length: {body.utf8ByteSize}\r\n\r\n{body}").toUTF8
-    let mut received := ByteArray.empty
-    repeat
-      match ← socket.recv? 4096 with
-      | some bytes => received := received ++ bytes
-      | none => break
-    socket.close
-    return some received
-  catch _ => return none
+/-- How long one exchange with a node may take. A node answers within its gate's deadline, 1.5 s,
+if only with `504`. -/
+def exchange_ms : Nat := 5000
+
+/-- What a node sent before it closed the connection, or `none` if it could not be reached or had
+not closed it after `deadline_ms`. The socket is closed whoever wins the race, which ends the
+read that lost it. -/
+def converse (port : UInt16) (method path body : String) (deadline_ms : Nat := exchange_ms) :
+    Async (Option ByteArray) := do
+  let socket ← try TCP.Socket.Client.mk catch _ => return none
+  let attempt : Async (Option ByteArray) := do
+    try
+      socket.connect (.v4 ⟨.ofParts 127 0 0 1, port⟩)
+      socket.send (s!"{method} {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n"
+        ++ s!"Content-Type: text/plain\r\nContent-Length: {body.utf8ByteSize}\r\n\r\n{body}").toUTF8
+      let mut received := ByteArray.empty
+      repeat
+        match ← socket.recv? 4096 with
+        | some bytes => received := received ++ bytes
+        | none => break
+      return some received
+    catch _ => return none
+  let patience := (fun _ => (none : Option ByteArray)) <$> Async.sleep (.ofNat deadline_ms)
+  try Async.race attempt patience
+  finally try socket.close catch _ => pure ()
 
 /-- A response is an answer only when all of it arrived: a node killed while it sends leaves a
 status line that says `200` and less body than it announced. -/
@@ -36,10 +46,11 @@ def answer? (received : ByteArray) : Option (Nat × String) := do
   let response ← Http.Response.parse received
   return (response.status, ← String.fromUTF8? response.body)
 
-/-- The status and body of one HTTP exchange, or `none` if the node did not answer. -/
-def call (port : UInt16) (method path : String) (body : String := "") :
-    Async (Option (Nat × String)) :=
-  return (← converse port method path body).bind answer?
+/-- The status and body of one HTTP exchange, or `none` if the node did not answer by the
+deadline. -/
+def call (port : UInt16) (method path : String) (body : String := "")
+    (deadline_ms : Nat := exchange_ms) : Async (Option (Nat × String)) :=
+  return (← converse port method path body deadline_ms).bind answer?
 
 abbrev Node := IO.Process.Child { stdin := .null, stdout := .piped, stderr := .inherit }
 
@@ -136,18 +147,30 @@ def launch (name : String) (snapshotEvery : Nat) : IO (Option Cluster) := do
     IO.FS.removeDirAll c.dir
   return none
 
-/-- Ask each running node in turn, for a few seconds, until one gives an answer `accept` takes. -/
+/-- How long a client goes on asking the nodes for one answer before it gives up. An answer has
+taken up to 5 s with the machine idle and 10 s with four times as many busy threads as cores.
+`raftProcs` gives up on at most ten requests before it ends, which keeps it within the 300 s
+that `scripts/mutants.py` allows it. -/
+def patience_ms : Nat := 20000
+
+/-- Ask each running node in turn until one gives an answer `accept` takes, or `patience_ms` has
+passed, which is said on the standard output. -/
 def ask {α : Type} (c : Cluster) (method path body : String)
     (accept : Nat × String → Option α) : Async (Option (Nat × α)) := do
-  for _ in [0:12] do
+  let until_ms := (← IO.monoMsNow) + patience_ms
+  repeat
     let last ← c.answered.get
     for k in last :: (List.range 3).filter (· != last) do
-      if c.up k then
-        if let some answer ← call (c.httpPort k) method path body then
+      let now_ms ← IO.monoMsNow
+      if c.up k && now_ms < until_ms then
+        let deadline_ms := min exchange_ms (until_ms - now_ms)
+        if let some answer ← call (c.httpPort k) method path body deadline_ms then
           if let some a := accept answer then
             c.answered.set k
             return some (k, a)
+    if (← IO.monoMsNow) + 250 ≥ until_ms then break
     Async.sleep 250
+  IO.println s!"{method} {path}: no node answered in {patience_ms} ms"
   return none
 
 /-- Write through whichever node answers. The node that did. -/
