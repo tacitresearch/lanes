@@ -9,6 +9,7 @@ import Tests.Axioms.Data
 import Tests.Axioms.Durable
 import Tests.Axioms.Lib
 import Tests.Axioms.Net
+import Tests.Axioms.Outside
 import Tests.Axioms.Proof
 import Tests.Axioms.Runtime
 import Tests.Axioms.Semantics

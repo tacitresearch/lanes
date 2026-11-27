@@ -50,7 +50,13 @@ public import Lanes.Lib.Time.Format
 public import Lanes.Net.IO.Node
 public import Lanes.Net.IO.Peers
 public import Lanes.Outside.Basic
+public import Lanes.Outside.Effects.Basic
+public import Lanes.Outside.Effects.Email
+public import Lanes.Outside.Effects.Payments
+public import Lanes.Outside.Events
+public import Lanes.Outside.Idempotent
 public import Lanes.Outside.IO.Clock
+public import Lanes.Outside.Rpc
 public import Lanes.Proof.Deed
 public import Lanes.Proof.Equiv
 public import Lanes.Proof.Ghost
@@ -59,6 +65,7 @@ public import Lanes.Proof.List
 public import Lanes.Proof.Loses
 public import Lanes.Proof.Lossy
 public import Lanes.Proof.Monotone
+public import Lanes.Proof.Outputs
 public import Lanes.Proof.Past
 public import Lanes.Runtime.Batch
 public import Lanes.Runtime.IO.Park
