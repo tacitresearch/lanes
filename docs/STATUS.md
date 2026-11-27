@@ -52,7 +52,10 @@ What is being worked on now, and why: `docs/PLAN.md`.
   balancer or a reverse proxy. The HTTP client speaks HTTP/1.1, plain or over TLS, over IPv4, a
   connection per call, with no proxy (`CONNECT`); a name resolves to its first IPv4 address.
 - The client's TLS context, with its trust store, is made for each call (about 3 ms with
-  Ubuntu's). Revocation is not checked. OpenSSL fixes reach Lanes with Lean's toolchain.
+  Ubuntu's). Revocation is not checked. OpenSSL fixes reach Lanes with Lean's toolchain. The
+  trust store is `SSL_CERT_FILE` when it is set. The C declares the functions of the OpenSSL the
+  toolchain links, 4.1.0, and `scripts/tls-declarations.py` checks them against the system's
+  headers, 3.0 on Ubuntu 24.04: 4.1's headers are generated from templates by its own build.
 - The PostgreSQL client speaks plain TCP to IPv4 addresses (no TLS yet). It has no `COPY`,
   `LISTEN`/`NOTIFY`, binary formats, named statements, cancellation or pool; a message is
   decoded through a list of bytes, so `message_max` (1 MiB by default) also bounds the memory a
