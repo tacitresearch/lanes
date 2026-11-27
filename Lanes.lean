@@ -84,6 +84,7 @@ public import Lanes.Http.Front
 public import Lanes.Http.FrontSound
 public import Lanes.Http.Gate
 public import Lanes.Http.MediaType
+public import Lanes.Http.MediaTypeSound
 public import Lanes.Http.ReadRequest
 public import Lanes.Http.ReadRequestSound
 public import Lanes.Http.Route
