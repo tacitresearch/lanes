@@ -15,16 +15,16 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Core` | 103 | 41 | 0 | 34 | 1 | 11 | 16 |
 | `Lanes/Data` | 68 | 43 | 0 | 4 | 1 | 0 | 20 |
 | `Lanes/Durable` | 70 | 58 | 2 | 0 | 0 | 9 | 1 |
-| `Lanes/Lib` | 593 | 370 | 26 | 1 | 112 | 75 | 9 |
+| `Lanes/Lib` | 593 | 371 | 26 | 1 | 111 | 75 | 9 |
 | `Lanes/Net` | 37 | 6 | 5 | 0 | 0 | 25 | 1 |
-| `Lanes/Outside` | 144 | 112 | 4 | 6 | 1 | 21 | 0 |
+| `Lanes/Outside` | 156 | 119 | 4 | 6 | 1 | 26 | 0 |
 | `Lanes/Proof` | 36 | 12 | 0 | 0 | 0 | 23 | 1 |
 | `Lanes/Runtime` | 173 | 94 | 21 | 0 | 28 | 30 | 0 |
 | `Lanes/Semantics` | 61 | 11 | 0 | 0 | 0 | 49 | 1 |
-| `Lanes/Testing` | 63 | 0 | 0 | 1 | 62 | 0 | 0 |
-| `Lanes/Web` | 620 | 324 | 56 | 37 | 148 | 53 | 2 |
+| `Lanes/Testing` | 82 | 0 | 0 | 1 | 81 | 0 | 0 |
+| `Lanes/Web` | 676 | 354 | 57 | 46 | 163 | 54 | 2 |
 | `LanesCli` | 125 | 0 | 0 | 0 | 51 | 0 | 74 |
-| All | 2301 | 1206 | 119 | 115 | 404 | 330 | 127 |
+| All | 2388 | 1244 | 120 | 124 | 437 | 336 | 127 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -257,7 +257,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Check.Property.holds` | proved | `Check.refines_sound`, `Check.refines_traces`, `Check.system_sound` and 1 more |
 | `Check.Trace.last` | proved | `Check.search_deadlock`, `Check.search_reached`, `Check.search_violated` and 2 more |
 | `Check.Trace.labels` | proved | `Check.system_violated` |
-| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Cache.lean` and 27 more |
+| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Cache.lean` and 28 more |
 | `Check.Path.last` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
 | `Check.Path.toTraceAux` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
 | `Check.Path.toTrace` | proved | through `Check.Search.run`, `Check.Search.runBatches` and 1 more: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and 10 more |
@@ -1381,36 +1381,36 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Civil.isLeap` | proved | through `Civil.Date.toDays`, `Civil.DateTime` and 1 more: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 4 more |
-| `Civil.daysInMonth` | proved | through `Civil.Date.toDays`, `Civil.DateTime` and 1 more: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 4 more |
+| `Civil.isLeap` | proved | through `Civil.Date.toDays`, `Civil.DateTime` and 1 more: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 7 more |
+| `Civil.daysInMonth` | proved | through `Civil.Date.toDays`, `Civil.DateTime` and 1 more: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 7 more |
 | `Civil.Valid` | spec | a predicate |
 | `Civil.instDecidableValid` | proved | its type, `Decidable` |
-| `Civil.Date.mk?` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Time.lean` |
-| `Civil.marchMonth` | proved | through `Civil.Date.toDays`, `Civil.DateTime.toUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 2 more |
-| `Civil.ofMarchMonth` | proved | through `Civil.Date.ofDays`, `Civil.DateTime.ofUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 2 more |
-| `Civil.daysBefore` | proved | through `Civil.Date.toDays`, `Civil.DateTime.toUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 2 more |
+| `Civil.Date.mk?` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Time.lean`, `Tests/S3Upload.lean` |
+| `Civil.marchMonth` | proved | through `Civil.Date.toDays`, `Civil.DateTime.toUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 4 more |
+| `Civil.ofMarchMonth` | proved | through `Civil.Date.ofDays`, `Civil.DateTime.ofUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 4 more |
+| `Civil.daysBefore` | proved | through `Civil.Date.toDays`, `Civil.DateTime.toUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 4 more |
 | `Civil.marchLength` | spec | used only in statements |
-| `Civil.dayOfEra` | proved | through `Civil.Date.toDays`, `Civil.DateTime.toUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 2 more |
-| `Civil.daysFrom` | proved | through `Civil.Date.toDays`, `Civil.DateTime.toUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 2 more |
+| `Civil.dayOfEra` | proved | through `Civil.Date.toDays`, `Civil.DateTime.toUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 4 more |
+| `Civil.daysFrom` | proved | through `Civil.Date.toDays`, `Civil.DateTime.toUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 4 more |
 | `Civil.Date.toDays` | proved | `Civil.ofDays_toDays`, `Civil.toDays_ofDays` |
-| `Civil.yearOfEra` | proved | through `Civil.Date.ofDays`, `Civil.DateTime.ofUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 2 more |
-| `Civil.civilOf` | proved | through `Civil.Date.ofDays`, `Civil.DateTime.ofUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 2 more |
-| `Civil.civil` | proved | through `Civil.Date.ofDays`, `Civil.DateTime.ofUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 2 more |
+| `Civil.yearOfEra` | proved | through `Civil.Date.ofDays`, `Civil.DateTime.ofUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 4 more |
+| `Civil.civilOf` | proved | through `Civil.Date.ofDays`, `Civil.DateTime.ofUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 4 more |
+| `Civil.civil` | proved | through `Civil.Date.ofDays`, `Civil.DateTime.ofUnix`: `Civil.ofDays_toDays`, `Civil.ofUnix_toUnix` and 4 more |
 | `Civil.LongYear` | spec | a predicate |
 | `Civil.Date.ofDays` | proved | `Civil.ofDays_toDays`, `Civil.toDays_ofDays` |
 | `Civil.Date.weekday` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Time.lean` |
-| `Civil.TimeOfDay.seconds` | proved | through `Civil.DateTime.toUnix`: `Civil.ofUnix_toUnix`, `Civil.toUnix_ofUnix` |
-| `Civil.TimeOfDay.ofSeconds` | proved | through `Civil.DateTime.ofUnix`: `Civil.ofUnix_toUnix`, `Civil.toUnix_ofUnix` |
-| `Civil.DateTime.toUnix` | proved | `Civil.ofUnix_toUnix`, `Civil.toUnix_ofUnix` |
-| `Civil.DateTime.ofUnix` | proved | `Civil.ofUnix_toUnix`, `Civil.toUnix_ofUnix` |
+| `Civil.TimeOfDay.seconds` | proved | through `Civil.DateTime.toUnix`: `Civil.ofUnix_toUnix`, `Civil.toUnix_ofUnix` and 2 more |
+| `Civil.TimeOfDay.ofSeconds` | proved | through `Civil.DateTime.ofUnix`: `Civil.ofUnix_toUnix`, `Civil.toUnix_ofUnix` and 2 more |
+| `Civil.DateTime.toUnix` | proved | `Civil.ofUnix_toUnix`, `Civil.toUnix_ofUnix`, `S3.Post.admitted_bounded` and 1 more |
+| `Civil.DateTime.ofUnix` | proved | `Civil.ofUnix_toUnix`, `Civil.toUnix_ofUnix`, `S3.Post.admitted_bounded` and 1 more |
 
 ## `Lanes/Lib/Time/Format.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `TimeFormat.isDigit` | proved | through `TimeFormat.parseHttpDate`, `TimeFormat.parseRfc3339`: `TimeFormat.parseHttpDate_print`, `TimeFormat.parseRfc3339_print` |
-| `TimeFormat.num?` | proved | through `TimeFormat.parseHttpDate`, `TimeFormat.parseRfc3339`: `TimeFormat.parseHttpDate_print`, `TimeFormat.parseRfc3339_print` |
-| `TimeFormat.Timestamp.toUnix` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Time.lean` |
+| `TimeFormat.isDigit` | proved | through `TimeFormat.parseHttpDate`, `TimeFormat.parseRfc3339`: `S3.Post.expiration_parse`, `TimeFormat.parseHttpDate_print` and 1 more |
+| `TimeFormat.num?` | proved | through `TimeFormat.parseHttpDate`, `TimeFormat.parseRfc3339`: `S3.Post.expiration_parse`, `TimeFormat.parseHttpDate_print` and 1 more |
+| `TimeFormat.Timestamp.toUnix` | proved | `S3.Post.expiration_parse` |
 | `TimeFormat.d2` | proved | through `TimeFormat.printHttpDate?`, `TimeFormat.printRfc3339?`: `TimeFormat.parseHttpDate_print`, `TimeFormat.parseRfc3339_print` |
 | `TimeFormat.d4` | proved | through `TimeFormat.printHttpDate?`, `TimeFormat.printRfc3339?`: `TimeFormat.parseHttpDate_print`, `TimeFormat.parseRfc3339_print` |
 | `TimeFormat.clock` | proved | through `TimeFormat.printHttpDate?`, `TimeFormat.printRfc3339?`: `TimeFormat.parseHttpDate_print`, `TimeFormat.parseRfc3339_print` |
@@ -1421,10 +1421,10 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `TimeFormat.InRange` | spec | a predicate |
 | `TimeFormat.instDecidableInRange` | proved | its type, `Decidable` |
 | `TimeFormat.printRfc3339?` | proved | `TimeFormat.parseRfc3339_print` |
-| `TimeFormat.clock?` | proved | through `TimeFormat.parseHttpDate`, `TimeFormat.parseRfc3339`: `TimeFormat.parseHttpDate_print`, `TimeFormat.parseRfc3339_print` |
-| `TimeFormat.fraction?` | proved | through `TimeFormat.parseHttpDate`, `TimeFormat.parseRfc3339`: `TimeFormat.parseHttpDate_print`, `TimeFormat.parseRfc3339_print` |
-| `TimeFormat.offset?` | proved | through `TimeFormat.parseHttpDate`, `TimeFormat.parseRfc3339`: `TimeFormat.parseHttpDate_print`, `TimeFormat.parseRfc3339_print` |
-| `TimeFormat.parseRfc3339` | proved | `TimeFormat.parseRfc3339_print` |
+| `TimeFormat.clock?` | proved | through `TimeFormat.parseHttpDate`, `TimeFormat.parseRfc3339`: `S3.Post.expiration_parse`, `TimeFormat.parseHttpDate_print` and 1 more |
+| `TimeFormat.fraction?` | proved | through `TimeFormat.parseHttpDate`, `TimeFormat.parseRfc3339`: `S3.Post.expiration_parse`, `TimeFormat.parseHttpDate_print` and 1 more |
+| `TimeFormat.offset?` | proved | through `TimeFormat.parseHttpDate`, `TimeFormat.parseRfc3339`: `S3.Post.expiration_parse`, `TimeFormat.parseHttpDate_print` and 1 more |
+| `TimeFormat.parseRfc3339` | proved | `S3.Post.expiration_parse`, `TimeFormat.parseRfc3339_print` |
 | `TimeFormat.dayNames` | proved | through `TimeFormat.printHttpDate?`: `TimeFormat.parseHttpDate_print` |
 | `TimeFormat.longDayNames` | proved | through `TimeFormat.parseHttpDate`: `TimeFormat.parseHttpDate_print` |
 | `TimeFormat.monthNames` | proved | through `TimeFormat.printHttpDate?`: `TimeFormat.parseHttpDate_print` |
@@ -1500,9 +1500,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Outside.any` | tested | `Tests/Jobs.lean`, `Tests/S3.lean` |
-| `Outside.driver` | checked | `Tests/Cache.lean`, `Tests/Clock.lean`, `Tests/HttpClient.lean` and 8 more |
-| `Outside.see` | proved | through `Outside.after`: `Cache.read_sent`, `Clock.wall_back_le` and 15 more |
-| `Outside.after` | proved | `Cache.read_sent`, `Clock.wall_back_le`, `Clock.wall_latest_le` and 14 more |
+| `Outside.driver` | checked | `Tests/Cache.lean`, `Tests/Clock.lean`, `Tests/HttpClient.lean` and 9 more |
+| `Outside.see` | proved | through `Outside.after`: `Cache.read_sent`, `Clock.wall_back_le` and 17 more |
+| `Outside.after` | proved | `Cache.read_sent`, `Clock.wall_back_le`, `Clock.wall_latest_le` and 16 more |
 | `Outside.allows` | checked | `Tests/Outside.lean`, `Tests/Queue.lean`, `Tests/Throttle.lean` and 1 more |
 | `Outside.both` | proved | `Outside.after_both` |
 | `Outside.mine` | spec | used only in statements |
@@ -1615,6 +1615,23 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Idempotent.server` | proved | `Idempotent.answer_repeat`, `Idempotent.at_most_once`, `Idempotent.keys_nodup` |
 | `Idempotent.Holds` | spec | a predicate |
 
+## `Lanes/Outside/Multipart.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Multipart.State.matches` | proved | through `Multipart.server`: `Multipart.completed_sent`, `Multipart.read_listed` |
+| `Multipart.State.held` | proved | through `Multipart.server`: `Multipart.completed_sent`, `Multipart.read_listed` |
+| `Multipart.ordered` | proved | through `Multipart.server`: `Multipart.completed_sent`, `Multipart.read_listed` |
+| `Multipart.State.valid` | proved | through `Multipart.server`: `Multipart.completed_sent`, `Multipart.read_listed` |
+| `Multipart.State.readable` | proved | through `Multipart.server`: `Multipart.completed_sent`, `Multipart.read_listed` |
+| `Multipart.State.done` | proved | through `Multipart.server`: `Multipart.completed_sent`, `Multipart.read_listed` |
+| `Multipart.server` | proved | `Multipart.completed_sent`, `Multipart.read_listed` |
+| `Multipart.Parts` | spec | a predicate |
+| `Multipart.Listed` | spec | a predicate |
+| `Multipart.Sent` | spec | a predicate |
+| `Multipart.Sound` | spec | a predicate |
+| `Multipart.Grows` | spec | a predicate |
+
 ## `Lanes/Outside/ObjectStore.lean`
 
 | Definition | Status | Evidence |
@@ -1651,7 +1668,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Rpc.instCodableCall` | proved | its type, `Codable` |
 | `Rpc.Reply.codec` | proved | its type, `Codec` |
 | `Rpc.instCodableReply` | proved | its type, `Codable` |
-| `Rpc.outside` | proved | `Cache.read_sent`, `Events.deliveries_le`, `Idempotent.at_most_once` and 6 more |
+| `Rpc.outside` | proved | `Cache.read_sent`, `Events.deliveries_le`, `Idempotent.at_most_once` and 8 more |
 | `Rpc.Port.reported` | spec | used only in statements |
 | `Rpc.called` | spec | used only in statements |
 | `Rpc.answered` | spec | used only in statements |
@@ -2204,7 +2221,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Testing.json` | tested | `Tests/Testing.lean` |
 | `Testing.text` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
 | `Testing.shows` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
-| `Testing.status` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
+| `Testing.status` | tested | `Tests/OAuth.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
 | `Testing.location` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
 | `Testing.unescape` | tested | `Tests/Testing.lean` |
 | `Testing.between` | tested | `Tests/Testing.lean` |
@@ -2244,23 +2261,42 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Testing.S3.raw?` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
-| `Testing.S3.answer` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
-| `Testing.S3.failure` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
-| `Testing.S3.time?` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
-| `Testing.S3.decodePair` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
-| `Testing.S3.splitTarget` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
-| `Testing.S3.authField` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
-| `Testing.S3.verified` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
-| `Testing.S3.escapeKey` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
-| `Testing.S3.listXml` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
-| `Testing.S3.range?` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
-| `Testing.S3.serve` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
-| `Testing.S3.Fake.start` | tested | `Tests/S3.lean` |
-| `Testing.S3.Fake.holds` | tested | `Tests/S3.lean` |
+| `Testing.S3.raw?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `Testing.S3.answer` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `Testing.S3.failure` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `Testing.S3.time?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `Testing.S3.decodePair` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `Testing.S3.splitTarget` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `Testing.S3.authField` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `Testing.S3.verified` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `Testing.S3.escapeKey` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `Testing.S3.listXml` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `Testing.S3.range?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `Testing.S3.serve` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `Testing.S3.find?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `Testing.S3.split` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `Testing.S3.quoted` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `Testing.S3.formParts` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `Testing.S3.formBody` | tested | `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `Testing.S3.etag` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `Testing.S3.servePost` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `Testing.S3.unquote` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `Testing.S3.multipartEtag` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `Testing.S3.xmlAnswer` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `Testing.S3.listPartsXml` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `Testing.S3.completedXml` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `Testing.S3.manifest?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `Testing.S3.complete` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `Testing.S3.serveMultipart` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `Testing.S3.serveAll` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `Testing.S3.Fake.start` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
+| `Testing.S3.Fake.object?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
+| `Testing.S3.Fake.holds` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `Testing.S3.Fake.keys` | tested | `Tests/S3.lean` |
-| `Testing.S3.Fake.stop` | tested | `Tests/S3.lean` |
-| `Testing.S3.follow` | tested | `Tests/S3.lean` |
+| `Testing.S3.Fake.stop` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
+| `Testing.S3.follow` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
+| `Testing.S3.code` | tested | `Tests/S3Upload.lean` |
+| `Testing.S3.postForm` | tested | `Tests/S3Upload.lean` |
 
 ## `Lanes/Web/Auth/IdToken.lean`
 
@@ -2809,7 +2845,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `SigV4.canonicalRequest` | proved | through `SigV4.sign`: `SigV4.target_sign` |
 | `SigV4.algorithm` | proved | through `SigV4.sign`: `SigV4.target_sign` |
 | `SigV4.unsignedPayload` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/SigV4.lean`, `Tests/S3.lean` and 1 more |
-| `SigV4.payloadHash` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean` and 3 more |
+| `SigV4.payloadHash` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean` and 4 more |
 | `SigV4.stringToSign` | proved | through `SigV4.sign`: `SigV4.target_sign` |
 | `SigV4.signingKey` | proved | through `SigV4.sign`: `SigV4.target_sign` |
 | `SigV4.signature` | proved | through `SigV4.sign`: `SigV4.target_sign` |
@@ -2975,6 +3011,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `S3.credentialsFromEnv` | trusted | TRUSTED.md: The S3 client's IO |
 | `S3.now` | trusted | TRUSTED.md: The S3 client's IO |
 | `S3.exchange` | trusted | TRUSTED.md: The S3 client's IO |
+| `S3.upload` | trusted | TRUSTED.md: The S3 client's IO |
 | `S3.handler` | trusted | TRUSTED.md: The S3 client's IO |
 
 ## `Lanes/Web/IO/Server.lean`
@@ -3028,27 +3065,97 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `S3.Endpoint.aws` | tested | `Tests/S3.lean` |
-| `S3.Key.of?` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/S3.lean` and 1 more |
-| `S3.Range.header` | tested | `Tests/S3.lean` |
-| `S3.Op.verb` | tested | `Tests/S3.lean` |
-| `S3.Op.method` | tested | `Tests/S3.lean` |
-| `S3.Op.segments` | tested | `Tests/S3.lean` |
-| `S3.Op.query` | tested | `Tests/S3.lean` |
-| `S3.Op.headers` | tested | `Tests/S3.lean` |
-| `S3.Op.body` | tested | `Tests/S3.lean` |
-| `S3.Bucket.host` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
-| `S3.Bucket.path` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
-| `S3.Bucket.scope` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/S3.lean` and 1 more |
-| `S3.call` | tested | `Tests/S3.lean` |
-| `S3.unescapeKey` | tested | `Tests/S3.lean` |
-| `S3.entry?` | tested | `Tests/S3.lean` |
-| `S3.page?` | tested | `Tests/S3.lean` |
-| `S3.errorCode` | tested | `Tests/S3.lean` |
-| `S3.info` | tested | `Tests/S3.lean` |
-| `S3.interpret` | tested | `Tests/S3.lean` |
+| `S3.Key.of?` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/S3.lean` and 2 more |
+| `S3.Range.header` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
+| `S3.PartNumber.of?` | tested | `Tests/S3Upload.lean` |
+| `S3.Manifest.of?` | tested | `Tests/S3Upload.lean` |
+| `S3.Manifest.xml` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
+| `S3.Op.method` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
+| `S3.Op.verb` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
+| `S3.Op.segments` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
+| `S3.Op.query` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
+| `S3.Op.headers` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
+| `S3.Op.body` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
+| `S3.Bucket.host` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `S3.Bucket.path` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `S3.Bucket.scope` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/S3.lean` and 2 more |
+| `S3.call` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
+| `S3.unescapeKey` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
+| `S3.entry?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
+| `S3.page?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
+| `S3.errorCode` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
+| `S3.root?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
+| `S3.started?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
+| `S3.part?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
+| `S3.parts?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
+| `S3.completed` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
+| `S3.info` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
+| `S3.interpret` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `S3.Op.modelled` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/S3.lean` |
 | `S3.Answer.modelled` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/S3.lean` |
-| `S3.presign` | tested | `Tests/S3.lean`, `Tests/Testing.lean` |
+| `S3.presign` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `S3.presignPart` | tested | `Tests/S3Upload.lean` |
+
+## `Lanes/Web/S3/Multipart.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `S3.Multipart.minPart_bytes` | proved | `S3.Multipart.Plan.range_full` |
+| `S3.Multipart.maxPart_bytes` | proved | `S3.Multipart.Plan.range_full` |
+| `S3.Multipart.maxParts` | proved | `S3.Multipart.Plan.count_le` |
+| `S3.Multipart.maxObject_bytes` | tested | `Tests/S3Upload.lean` |
+| `S3.Multipart.Plan.count` | proved | `S3.Multipart.Plan.count_le`, `S3.Multipart.Plan.range_full`, `S3.Multipart.Plan.range_last` and 1 more |
+| `S3.Multipart.Plan.range` | proved | `S3.Multipart.Plan.range_full`, `S3.Multipart.Plan.range_last`, `S3.Multipart.Plan.range_next` |
+| `S3.Multipart.Plan.of?` | tested | `Tests/S3Upload.lean` |
+| `S3.Multipart.Plan.auto` | tested | `Tests/S3Upload.lean` |
+| `S3.Multipart.Flow.next` | checked | `Tests/Multipart.lean` |
+| `S3.Multipart.Flow.op` | tested | `Tests/S3Upload.lean` |
+| `S3.Multipart.Flow.retry` | checked | `Tests/Multipart.lean` |
+| `S3.Multipart.Flow.moveTo` | checked | `Tests/Multipart.lean` |
+| `S3.Multipart.Flow.transient` | checked | `Tests/Multipart.lean` |
+| `S3.Multipart.Flow.uploaded` | checked | `Tests/Multipart.lean` |
+| `S3.Multipart.Flow.onComplete` | checked | `Tests/Multipart.lean` |
+| `S3.Multipart.Flow.onComplete.markLost` | checked | `Tests/Multipart.lean` |
+| `S3.Multipart.Flow.answer` | checked | `Tests/Multipart.lean` |
+| `S3.Multipart.Flow.start` | checked | `Tests/Multipart.lean` |
+| `S3.Multipart.Flow.bound` | tested | `Tests/S3Upload.lean` |
+
+## `Lanes/Web/S3/Post.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `S3.Post.Condition.json` | proved | through `S3.Post.Condition.holds`, `S3.Post.Document.encode` and 1 more: `S3.Post.admitted_bounded`, `S3.Post.check_holds` and 2 more |
+| `S3.Post.field?` | proved | through `S3.Post.decode?`: `S3.Post.admitted_bounded`, `S3.Post.decode?_encode` and 1 more |
+| `S3.Post.Condition.read?` | proved | through `S3.Post.decode?`: `S3.Post.admitted_bounded`, `S3.Post.decode?_encode` and 1 more |
+| `S3.Post.Document.json` | proved | through `S3.Post.Document.encode`, `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.decode?_encode` and 1 more |
+| `S3.Post.Document.read?` | proved | through `S3.Post.decode?`: `S3.Post.admitted_bounded`, `S3.Post.decode?_encode` and 1 more |
+| `S3.Post.Document.encode` | proved | `S3.Post.decode?_encode` |
+| `S3.Post.decode?` | proved | `S3.Post.admitted_bounded`, `S3.Post.decode?_encode`, `S3.Post.form_policy` |
+| `S3.Post.signature` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
+| `S3.Post.lookup` | proved | through `S3.Post.Condition.holds`, `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.check_holds` and 1 more |
+| `S3.Post.Condition.holds` | proved | `S3.Post.check_holds` |
+| `S3.Post.Condition.field?` | proved | through `S3.Post.check`, `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.check_holds` and 1 more |
+| `S3.Post.exempt` | proved | through `S3.Post.check`, `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.check_holds` and 1 more |
+| `S3.Post.check` | proved | `S3.Post.admitted_bounded`, `S3.Post.check_holds` |
+| `S3.Post.KeyRule.condition` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
+| `S3.Post.KeyRule.field` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
+| `S3.Post.maxObject_bytes` | proved | through `S3.Post.Length.max`, `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
+| `S3.Post.expiration` | proved | `S3.Post.expiration_parse` |
+| `S3.Post.credential` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
+| `S3.Post.typed` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
+| `S3.Post.signer` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
+| `S3.Post.eqs` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
+| `S3.Post.conditions` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
+| `S3.Post.document` | proved | `S3.Post.form_policy` |
+| `S3.Post.Form.fields` | tested | `Tests/S3Upload.lean`, `Tests/Testing.lean` |
+| `S3.Bucket.url` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
+| `S3.Post.form` | proved | `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
+
+## `Lanes/Web/S3/PostSound.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `S3.Post.Condition.Small` | spec | a predicate |
 
 ## `Lanes/Web/S3/Xml.lean`
 
