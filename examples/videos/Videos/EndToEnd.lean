@@ -183,7 +183,8 @@ def flow (d : Deployment) (provider : Testing.OAuth.Fake) (worker : Testing.Tran
   let (_, ghostPut) ← create aliceB "Ghost" "public"
   let tooLarge ← upload ghostPut (ByteArray.mk (Array.replicate (maxUpload_bytes + 1) 0))
   let early ← post aliceB ["videos", "2", "uploaded"]
-  let ghostEarly ← aliceB.get ["v", "2"]
+  let ghostEarly ← bobB.get ["v", "2"]
+  let ghostToOwner ← aliceB.get ["v", "2"]
   let feedEarly ← anon.get []
   let waiting ← aliceB.get ["c", "0"]
   server.stop
@@ -272,7 +273,8 @@ def flow (d : Deployment) (provider : Testing.OAuth.Fake) (worker : Testing.Tran
     ("videos: a name the provider gave is shown as text, escaped",
       shows bobsChannel "<h1>Bob &quot;&lt;b&gt;&quot; &amp; co</h1>" && !shows bobsChannel "<b>"),
     ("videos: a video the store does not hold is not ready, watched or listed",
-      status early == 409 && status ghostEarly == 404 && shows feedEarly "Cats"
+      status early == 409 && status ghostEarly == 404 && shows ghostToOwner "not confirmed yet"
+        && shows feedEarly "Cats"
         && !shows feedEarly "Ghost" && shows waiting "not confirmed yet"),
     ("videos: after a restart on the journal, sessions, likes and comments are kept",
       shows kept "2 likes" && shows kept "Nice cats"),

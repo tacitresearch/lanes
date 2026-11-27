@@ -11,8 +11,8 @@ should be is at the end.
 cd examples/videos
 mkdir -p .lake && ln -s ../../../.lake/packages .lake/packages   # share the fetched dependencies
 lake build            # the site, the proofs and the tests
-lake test             # model checks, the bridge, and the site over HTTP against a fake S3 and worker
-lake exe videosTest pipeline   # only the model checks whose names contain a word
+lake test             # model checks, the bridge, and the site over HTTP against a fake S3 and worker, ~10 min
+lake exe videosTest pipeline   # only the model checks whose names contain a word; `http`, only the site
 ```
 
 ## How it works
@@ -134,18 +134,32 @@ the scheduler crashes and starts again anywhere. What each browser is shown is j
 shown: besides the claims above, nothing is shown that the worker did not report done, signed,
 or whose rendition and thumbnail the store may not hold.
 
+The worker's faults multiply every interleaving, so they are explored where they are the point.
+In the scenarios about the site and the store the worker takes each job and reports it done once,
+at any moment while its video is there; in the two about a check under way it never answers, and
+only the site crashes, as the scenarios too large for both to crash did before. The pipeline
+explores a job not answered, refused or `unknown` (with no crash), a report late, failed or
+never, and a retry; the forgery a report delivered twice and one posted by someone else. And of
+runs with no crash, every state with no successor (the script done, every message delivered,
+every timer fired, the worker's reports spent) has no video transcoding: a confirmed upload ends
+ready or failed. That is the liveness claim, checked and not proved.
+
 | Scenario | States | Result |
 | --- | --- | --- |
-| A public video: made, checked, watched, liked three times, deleted, asked for after the delete | 139,273 | pass |
-| A private video: asked for by another member, a stranger and its owner; channels, the feed, a like and a comment by another | 4,426 | pass |
-| A video deleted while its check may be out | 1,405,675 | pass |
-| A second check asked for while the first may be out | 872,632 | pass |
+| A public video: made, checked, transcoded, watched, liked three times, deleted, asked for after the delete | 1,838,171 | pass |
+| A private video: asked for by another member, a stranger and its owner; channels, the feed, a like and a comment by another | 33,850 | pass |
+| A video deleted while its check may be out (the site crashes) | 1,648,323 | pass |
+| A second check asked for while the first may be out (the site crashes) | 1,414,585 | pass |
 | A delete tried twice: deleted after its first attempt failed, or given up and reported | 61,578 | pass |
-| An upload never confirmed, checked a last time, twice: made ready and shown, or taken out | 130,833 | pass |
-| A session past its lifetime: a private video watched inside it, asked for and liked after it, then watched in a new session | 2,988 | pass |
-| Seeded: the browser's word taken for the upload (`trustBrowser`) | | found in 15 steps |
-| Seeded: a check the store did not answer in time taken as found (`readyOnTimeout`) | | found in 20 steps |
+| An upload never confirmed, checked a last time, twice: confirmed, transcoded and shown, or taken out | 359,757 | pass |
+| A session past its lifetime: a private video watched inside it, asked for and liked after it, then watched in a new session | 24,529 | pass |
+| The pipeline: a job not answered, refused or `unknown` (with no crash), a report late, failed or never, shown to the owner, tried again and shown (the site crashes) | 2,852,633 | pass |
+| Reports delivered twice, and one forged by someone else | 286,132 | pass |
+| With no crash, every run that cannot go on leaves each confirmed upload ready or failed | 2,812,148 | pass |
+| Seeded: the browser's word taken for the upload (`trustBrowser`) | | found in 20 steps |
+| Seeded: a check the store did not answer in time taken as found (`readyOnTimeout`) | | found in 25 steps |
 | Seeded: sessions that never end (`lifetime := {}`) | | found in 20 steps |
+| Seeded: a report taken whatever its signature (`trustUnsigned`) | | found in 21 steps |
 
 Once a video's delete is answered, in every state its delete is under way, or the store said
 it deleted the object, or the site reported it given up; this is checked of runs with no crash.

@@ -33,6 +33,10 @@ crashes only by stopping itself, which neither does, and the death of the proces
 the journal, mail included (`TRUSTED.md`, "Environment model"). Every `always` has `sometimes`
 beside it (rule 5.3).
 
+The worker's faults multiply every interleaving, so each scenario explores those it is about
+(`Worker`): the scenarios about the site and the store have a worker that reports each job done
+once (`quiet`), or never answers (`silent`); the pipeline and the forgery explore its faults.
+
 Of runs with no crash, every run that cannot go on, every message delivered, every timer fired
 and the worker done reporting, leaves no video transcoding: a confirmed upload ends ready or
 failed (`pipeline`, the checker's deadlocks). That is the liveness claim, checked and not
@@ -135,11 +139,19 @@ def port : Rpc.Port fullSig (Transcode.Request Round Object Unit) (Transcode.Ans
     | _ => none
 
 /-- How the worker reports: each report delivered up to `deliveries` times; failures reported
-or not; and whether anyone else posts reports. -/
+or not; and whether anyone else posts reports. Which answers are explored: every answer the store
+may give, or only `found` and `unknown` where the scenario is about the worker; and every answer
+to a job, or only `accepted` where it is not (a job not answered still times out). -/
 structure Worker where
   deliveries : Nat := 1
   failures : Bool := true
   forging : Bool := false
+  everyAnswer : Bool := true
+  startFaults : Bool := true
+  /-- Whether a report may come after its video's delete was answered. -/
+  late : Bool := true
+  /-- A worker that never answers and never reports, where the scenario is about the store. -/
+  silent : Bool := false
 
 def store (worker : Worker) : Outside fullSig Store :=
   Rpc.outside port (Transcode.service worker.deliveries () true)
@@ -184,6 +196,8 @@ structure Browsers where
   refused : List ReqId := []
   /-- What a video not ready was shown waiting for, to its owner. -/
   stages : List Stage := []
+  /-- The videos whose upload a waiting request was told is confirmed. -/
+  confirmed : List VideoId := []
   deriving DecidableEq, Hashable, Repr
 
 instance : BEq Browsers := instBEqOfDecidableEq
@@ -203,7 +217,8 @@ def Browsers.send (b : Browsers) (c : Command) (at_s : Nat) : Option Browsers :=
   | none => none
 
 /-- What each claim says of a reply as a browser sees it, with the store as it is then. A
-session is named by the request that signed in, so it began when that request arrived. -/
+session is named by the request that signed in, so it began when that request arrived. The
+answers to reports show nothing and nobody waits for them, so they are not kept as answered. -/
 def judge (life : Auth.Lifetime) (b : Browsers) (held : Store) (req : ReqId) (viewer : Viewer)
     (r : Reply) : Browsers :=
   let cards := r.cards
@@ -227,13 +242,16 @@ def judge (life : Auth.Lifetime) (b : Browsers) (held : Store) (req : ReqId) (vi
     ("a video is shown whose rendition or thumbnail the store may not hold", playableOk),
     ("a session past its lifetime is let in", liveOk)].filterMap
       fun (name, ok) => if ok then none else some name
-  let b := { b with answered := req :: b.answered, broken := b.broken ++ fail }
+  let answered := { b with answered := req :: b.answered, broken := b.broken ++ fail }
   match r with
-  | .deleted v => { b with deleted := v :: b.deleted }
-  | .watch view _ => { b with watched := (view.card.id, viewer.map (·.1)) :: b.watched }
+  | .deleted v => { answered with deleted := v :: b.deleted }
+  | .watch view _ => { answered with watched := (view.card.id, viewer.map (·.1)) :: b.watched }
+  | .preparing _ _ stage =>
+    if b.stages.contains stage then answered else { answered with stages := stage :: b.stages }
+  | .confirmed v => if b.confirmed.contains v then answered else { answered with confirmed := v :: b.confirmed }
+  | .reported => b
   | .forged => if b.refused.contains req then b else { b with refused := req :: b.refused }
-  | .preparing _ _ stage => if b.stages.contains stage then b else { b with stages := stage :: b.stages }
-  | _ => b
+  | _ => answered
 
 /-- The store's answer to an attempt out: what it tells of a delete. -/
 def Browsers.answered' (b : Browsers) : SchedIn → Option Browsers
@@ -307,8 +325,9 @@ def forgedReport (r : Report) : SchedIn ⊕ Input :=
 
 /-- The worker's reports of every job it was given, and, with `forging`, a done report of the
 first round of video 0 signed by someone else. -/
-def reports (worker : Worker) (d : Store) : List (SchedIn ⊕ Input) :=
-  let rounds := d.server.inner.jobs.map (·.2.id)
+def reports (worker : Worker) (d : Browsers × Store) : List (SchedIn ⊕ Input) :=
+  let rounds := (d.2.server.inner.jobs.map (·.2.id)).filter fun r =>
+    !worker.silent && (worker.late || !d.1.deleted.contains r.video)
   (rounds.flatMap fun r => signedReport (.done r) :: if worker.failures then [signedReport (.failed r)] else [])
     ++ if worker.forging then [forgedReport (.done ⟨0, 0⟩)] else []
 
@@ -316,9 +335,12 @@ def samples (worker : Worker) (d : Browsers × Store) : List (SchedIn ⊕ Input)
   (d.1.todo.filterMap fun (c, at_s, deps) =>
       if d.1.ready deps then some (Sum.inr (Input.request c at_s)) else none)
     ++ ((d.2.pending.filterMap attemptOf).flatMap fun (key, attempt) =>
-      (match key with | .transcode _ => workerAnswers | _ => answers).map fun r =>
+      (match key with
+        | .transcode _ =>
+          if worker.silent then [] else if worker.startFaults then workerAnswers else [.answer .accepted]
+        | _ => if worker.everyAnswer then answers else [.unknown, .answer (.found 1)]).map fun r =>
         Sum.inl (Schedule.Input.reply key attempt r))
-    ++ reports worker d.2
+    ++ reports worker d
 
 abbrev W (config : Config) := World (system config) (Browsers × Store)
 
@@ -445,9 +467,24 @@ def pipeline : Script := .of <|
   [ (.create 3 0 1 t none_ .public .mp4, [1]), (.uploaded 4 0 1 0, [3]),
     (.watch 5 (some (0, 1)) 0, [4]), (.retry 6 0 1 0, [5]), (.watch 7 none 0, [6]) ]
 
-/-- The worker as the pipeline is checked against: reports delivered twice, failures, and
-reports forged by others. -/
-def faulty : Worker := { deliveries := 2, forging := true }
+/-- `0` makes a public video and says it is uploaded; it asks for it, and a stranger asks for
+it. -/
+def forgery : Script := .of <|
+  signIns.take 1 ++
+  [ (.create 3 0 1 t none_ .public .mp4, [1]), (.uploaded 4 0 1 0, [3]),
+    (.watch 5 (some (0, 1)) 0, [4]), (.watch 6 none 0, [5]) ]
+
+/-- A worker that takes each job and reports it done, once, at any moment while its video is
+there: for the scenarios about the site and the store, whose interleavings the worker's faults
+would multiply past what the checker holds. The worker's faults are the pipeline's. -/
+def quiet : Worker := { failures := false, startFaults := false, late := false }
+
+/-- The worker as the pipeline is checked against: a job not answered, refused or `unknown`,
+and its report late, failed or never. -/
+def faulty : Worker := { everyAnswer := false }
+
+/-- Reports delivered twice, and forged by others, beside the worker's. -/
+def forged : Worker := { deliveries := 2, forging := true, failures := false, everyAnswer := false }
 
 def lapsing : Config := { checkTwice with pending_s := some 1 }
 
@@ -474,6 +511,10 @@ def claims {config : Config} : List (Check.Property (W config)) :=
 
 def shown {config : Config} : Check.Property (W config) :=
   .sometimes "a video is shown" fun w => !w.driver.1.watched.isEmpty
+
+def confirmedOnce {config : Config} : Check.Property (W config) :=
+  .sometimes "a check confirms an upload and its request is told" fun w =>
+    !w.driver.1.confirmed.isEmpty
 
 def goneWhileHeld {config : Config} : Check.Property (W config) :=
   .sometimes "a video is deleted while its object may still be in the store" fun w =>
@@ -595,34 +636,41 @@ def seeded {config : Config} (r : Check.Report (W config) (Event fullSig)) (clai
 def unconfirmed : String := "a video is shown only once the store said it holds its object"
 
 def runs : List Run :=
-  [ ⟨"check: a video's life, with the store's and the worker's faults and a crash anywhere",
-      fun () => passes (check config life [shown, goneWhileHeld, twoLikes]) 3⟩,
-    ⟨"check: a private video, with the store's and the worker's faults and a crash anywhere",
-      fun () => passes (check config secret [ownerWatches, othersAsk]) 2⟩,
-    ⟨"check: a video deleted while its check may be out, and a crash anywhere",
-      fun () => passes (check config gone [goneWhileHeld]) 1⟩,
-    ⟨"check: a second check while the first may be out, and a crash anywhere",
-      fun () => passes (check config twice [shown]) 1⟩,
+  [ ⟨"check: a video's life, with the store's faults and a crash anywhere",
+      fun () => passes (check config life [shown, goneWhileHeld, twoLikes] (worker := quiet)) 3⟩,
+    ⟨"check: a private video, with the store's faults and a crash anywhere",
+      fun () => passes (check config secret [ownerWatches, othersAsk] (worker := quiet)) 2⟩,
+    ⟨"check: a video deleted while its check may be out, and a crash of the site anywhere",
+      fun () => passes (check config gone [goneWhileHeld] (crashing := siteCrashes)
+        (worker := { silent := true })) 1⟩,
+    ⟨"check: a second check while the first may be out, and a crash of the site anywhere",
+      fun () => passes (check config twice [confirmedOnce] (crashing := siteCrashes)
+        (worker := { silent := true })) 1⟩,
     ⟨"check: a delete tried twice, deleted or reported, and a crash anywhere",
-      fun () => passes (check deleteTwice purge [goneWhileHeld, deletedAfterRetry, reported]) 3⟩,
+      fun () => passes (check deleteTwice purge [goneWhileHeld, deletedAfterRetry, reported]
+        (worker := quiet)) 3⟩,
     ⟨"check: an upload never confirmed, checked a last time, twice, and a crash anywhere",
-      fun () => passes (check lapsing lapsed [lapsedReady, lapsedOut, checkedAgain]) 3⟩,
+      fun () => passes (check lapsing lapsed [lapsedReady, lapsedOut, checkedAgain] (worker := quiet)) 3⟩,
     ⟨"check: a session past its lifetime lets nothing in, and a new sign-in does",
-      fun () => passes (check short expiry [watchedTwice]) 1⟩,
-    ⟨"check: the pipeline, with reports late, twice, failed and forged, and a crash anywhere",
-      fun () => passes (check config pipeline [shown, preparing, failedShown, shownAfterRetry,
-        forgedRefused, deliveredTwice] (worker := faulty)) 6⟩,
+      fun () => passes (check short expiry [watchedTwice] (worker := quiet)) 1⟩,
+    ⟨"check: the pipeline, with jobs and reports late, failed or never, a retry, and a crash of the site anywhere",
+      fun () => passes (check config pipeline [shown, preparing, failedShown, shownAfterRetry]
+        (crashing := siteCrashes) (worker := { faulty with startFaults := false })) 4⟩,
+    ⟨"check: reports delivered twice and forged beside the worker's, and a crash anywhere",
+      fun () => passes (check config forgery [shown, forgedRefused, deliveredTwice]
+        (worker := forged)) 3⟩,
     ⟨"check: with no crash, every run that cannot go on leaves each confirmed upload ready or failed",
-      fun () => passes (check config pipeline [shown, failedShown] 0 (worker := faulty) (live := true)) 2⟩,
+      fun () => passes (check config pipeline [shown, failedShown, shownAfterRetry] 0
+        (worker := faulty) (live := true)) 3⟩,
     ⟨"check, seeded: trusting the browser shows a video the store never confirmed",
-      fun () => seeded (check trusting life [] 0) unconfirmed⟩,
+      fun () => seeded (check trusting life [] 0 (worker := quiet)) unconfirmed⟩,
     ⟨"check, seeded: a check that timed out taken as found shows such a video",
-      fun () => seeded (check hasty life [] 0) unconfirmed⟩,
+      fun () => seeded (check hasty life [] 0 (worker := quiet)) unconfirmed⟩,
     ⟨"check, seeded: sessions that never end let a request in past the lifetime",
-      fun () => seeded (check { short with lifetime := {} } expiry [] 0 short.lifetime)
+      fun () => seeded (check { short with lifetime := {} } expiry [] 0 short.lifetime (worker := quiet))
         "a session past its lifetime lets no request in"⟩,
     ⟨"check, seeded: a report taken unsigned shows a video the worker never reported done",
-      fun () => seeded (check credulous pipeline [] 0 (worker := faulty))
+      fun () => seeded (check credulous forgery [] 0 (worker := forged))
         "a video is shown only once the worker reported it done, signed"⟩ ]
 
 /-- The checks whose names contain one of `only`, or all of them. -/
