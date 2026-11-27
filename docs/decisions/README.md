@@ -92,3 +92,5 @@ decision without a number.
 - [D77. A test kit, `Lanes.Testing`, beside `Lanes` and not in it](D77-a-test-kit.md)
 - [D79. Work that is due later is a job of the scheduler: held by its id, run by its own timer, retried until it ends](D79-work-that-is-due-later-is-a-job-of-the-scheduler.md)
 - [D80. Every parser has an oracle and every model a recorded run, in one place, and lint keeps the list](D80-oracles.md)
+- [D81. Models of more outside systems: queues, caches, clocks, shared caches, rate limits and disk faults](D81-more-outside-models.md)
+- [D84. The kernel takes an actor's state out of its cell before the step](D84-the-kernel-takes-the-state-out-before-the-step.md)

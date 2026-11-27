@@ -23,14 +23,14 @@ proved function tells it to.
 | Proof tools for systems | `Lanes/Proof/{Lift,Ghost,Monotone,Equiv,Deed}.lean` | `System.invariant_of_actor`, `Inductive.of_monotone`, `System.Invariant.of_ghost` |
 | The kernel | `Lanes/Runtime/{Kernel,KernelSound,KernelTimers,Wave}.lean` | `Kernel.exec_reachable`, `Kernel.exec_outputs`, `Kernel.exec_wellFormed`, `Kernel.runWaves_eq` |
 | The shell | `Lanes/Runtime/IO/Shell.lean`, `Lanes/Runtime/{Batch,Mailbox,MailboxSound,Pace}.lean` | `Batch.run_kernel`, `Batch.run_sound`, `Batch.run_spread`, `Mailbox.batch_since_take`; the shell itself is trusted |
-| Journal, snapshots, disk | `Lanes/Durable/{Journal,Snapshot,Disk,Frame}.lean`, `Lanes/Durable/IO/Journal.lean` | `Journal.open?_cut`, `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Journal.Disk.Holds.save_crash` |
+| Journal, snapshots, disk | `Lanes/Durable/{Journal,Snapshot,Disk,Frame,Reading}.lean`, `Lanes/Durable/IO/Journal.lean` | `Journal.open?_cut`, `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Journal.Disk.Holds.save_crash`, `Journal.Disk.Torn.load_readings` |
 | Migrations | `Lanes/Durable/{Migration,Upgrade}.lean` | `Migration.inv_exec`, `Journal.Upgrade.begin_crash`, `Journal.Upgrade.holds`, `Journal.Upgrade.inv_load` |
 | Joins | `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`, `Lanes/Semantics/FairJoin.lean` | `System.Reachable.left`, `SysState.run_left`, `System.Run.Fair.left` |
 | Shards and the transport | `Lanes/Runtime/{Shard,ShardSound,ShardsSound}.lean`, `Lanes/Net/{Courier,CourierSound}.lean`, `Lanes/Net/IO/{Peers,Node}.lean` | `System.ShardsReachable.unsharded`, `Peers.Courier.written_sublist_sent` |
 | The gate and the HTTP server | `Lanes/Web/Http/{Gate,Front,FrontSound,Waiting,Conn,ConnSound,Stream,Sse,SseSound,Loopback}.lean`, `Lanes/Semantics/Front.lean`, `Lanes/Web/IO/Server.lean` | `Http.served_answered_le_arrived`, `Http.served_pending_answered`, `Http.Waiting.exec_answered`, `Http.Conn.run_writes`, `Http.Conn.read_streamed`, `Http.Sse.parse_written` |
 | Metrics, health and the access log | `Lanes/Lib/Metrics.lean`, `Lanes/Web/Http/{Ops,OpsSound}.lean`, `Lanes/Web/IO/Ops.lean` | `Metrics.Histogram.observeAll_eq`, `Metrics.readLabelValue_escapeLabel`, `Http.Ops.route?_default`, `Http.Ops.route?_metrics`, `Http.Ops.answer_ready`, `Http.Ops.Access.parse_line`; that none of it reaches a system is trusted and tested |
-| Other adapters | `Lanes/Outside/Basic.lean`, `Lanes/Outside/IO/Clock.lean`, `Lanes/Web/IO/Client.lean`, `Lanes/Web/Http/{Grammar,Wire,WireSound}.lean` | `Response.read_wire`, `Request.fields_framing`; conformance tests |
-| Models of external services | `Lanes/Outside/{Rpc,Idempotent,Events,ObjectStore}.lean`, `Lanes/Outside/Effects/`, `Lanes/Proof/Outputs.lean` | `Idempotent.at_most_once`, `Rpc.answered_le_called`, `Events.deliveries_le`, `ObjectStore.read_sent`, `ObjectStore.held_sent`, `System.Emits.outputs`; that a real service conforms is trusted |
+| Other adapters | `Lanes/Outside/Basic.lean`, `Lanes/Outside/{Clock,IO/Clock}.lean`, `Lanes/Web/IO/Client.lean`, `Lanes/Web/Http/{Grammar,Wire,WireSound}.lean` | `Response.read_wire`, `Request.fields_framing`; conformance tests |
+| Models of external services | `Lanes/Outside/{Rpc,Idempotent,Events,ObjectStore,Queue,Cache,Clock,Throttle}.lean`, `Lanes/Outside/Effects/`, `Lanes/Web/Http/SharedCache.lean`, `Lanes/Proof/Outputs.lean` | `Idempotent.at_most_once`, `Rpc.answered_le_called`, `Events.deliveries_le`, `ObjectStore.read_sent`, `ObjectStore.held_sent`, `Queue.received_le`, `Cache.read_sent`, `Clock.wall_back_le`, `Throttle.wait_le`, `SharedCache.serve_storable`, `SharedCache.serve_of_leaks`, `System.Emits.outputs`; that a real service conforms is trusted |
 | Signature Version 4 and the S3 client | `Lanes/Web/Http/{SigV4,SigV4Sound}.lean`, `Lanes/Web/S3/{Basic,Xml}.lean`, `Lanes/Web/IO/S3.lean` | `SigV4.target_sign`, `SigV4.sortQuery_sorted`, `SigV4.canonicalHeaders_sorted`, `SigV4.encode_chunks`; signatures tested against AWS's vectors, the client against a fake S3; its IO trusted |
 | PostgreSQL and the store model | `Lanes/Lib/Postgres/{Bytes,Message,MessageSound,Scram,Conn,ConnSound,Table}.lean`, `Lanes/Lib/Postgres/IO/Client.lean`, `Lanes/Outside/Store/{Basic,Sound}.lean` | `Backend.read_encode`, `Frontend.decode_encode`, `Conn.run_fifo`, `Conn.step_committed`, `Conn.step_query`, `Store.write_skew`, `Store.lost_commit_either`; the IO is trusted, and that the server behaves like the model is a premise |
 | Jobs: work outside a step | `Lanes/Behaviours/Jobs/{Basic,Sound}.lean`, `Lanes/Semantics/Jobs.lean`, `Lanes/Behaviours/Jobs/IO/Pool.lean` | `Jobs.answered_le_handled`, `Jobs.retry_same`, `Jobs.submitted_answered`; the pool is trusted |
@@ -81,6 +81,10 @@ semantics reaches and the events it reports are a run reaching it (`Kernel.exec_
 and its outputs are exactly that run's (`Kernel.exec_outputs`). Its agenda holds exactly the
 pending timers (`Kernel.exec_wellFormed`), it never sleeps past one, and neither due timers nor
 queued messages starve the other (`Kernel.WellFormed.step_of_queued`, `step_of_due`).
+Before a step the kernel takes the actor's state out of its cell (`Kernel.takeState`), so the step
+holds the only reference and updates the state in place; that changes no value
+(`Kernel.handle_eq`), and `Tests/Scale.lean` measures that a step costs the same whatever the
+state's size (`docs/decisions/D84-the-kernel-takes-the-state-out-before-the-step.md`).
 
 The shell (`Lanes/Runtime/IO/Shell.lean`) is one thread per shard. Senders put commands in a
 bounded inbox (`Lanes/Runtime/Mailbox.lean`, pure: who is refused, who waits, who is woken). The
@@ -135,7 +139,10 @@ the process dies anywhere in an append or a save, the files load as the kernel t
 (`Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.save_crash`), and a start mends what a
 death left (`Journal.Disk.Torn.mend`), so this holds over any number of starts, saves and deaths.
 `Lanes/Durable/IO/Journal.lean` performs the writes, each synced with `fsync` before the next, so a loss
-of power leaves what a death would; that the file system is the model is trusted.
+of power leaves what a death would; that the file system is the model is trusted. A read at a start
+may fail: only "no such file" is a file not there (`Journal.Reading`), a failed read refuses the
+start (`Disk.ofReadings`), and one whose reads do not fail loads what `Disk.Torn.load` says
+(`Journal.Disk.Torn.load_readings`), so a read error never loses committed entries.
 
 The files carry a label, the application's name for the system and the version of its types
 (`Journal.label`; version 0 is the name alone, as every journal was named before versions). A
@@ -295,7 +302,9 @@ performs; a conformance test records a real run and checks it with `Outside.allo
 adapter has something to decide, it is a pure function with its theorems (rule 3.9).
 
 - **Clock** (`Lanes/Outside/IO/Clock.lean`): the time as an input, never earlier than one given before,
-  also across a restart.
+  also across a restart. Its model is the monotonic clock (`Clock.outside`, `Lanes/Outside/Clock.lean`);
+  the wall clock as the operating system reads it, which NTP may set back by up to twice its skew
+  (`Clock.wall`, `Clock.wall_back_le`), is a model of its own for a system that reads it.
 - **HTTP client** (`Lanes/Web/IO/Client.lean`): HTTP/1.1, or HTTPS through the TLS binding
   below, one request per connection; a `HEAD` is read without a body (`Response.readHead`). The bytes are pure (`Lanes/Web/Http/Wire.lean`): the request writer frames the message
   itself (`Request.fields_framing`), and the reader is proved to read a response written as a
@@ -356,6 +365,18 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   each order at most once that way (`Shop.charged_at_most_once`). That a real service does only
   what its model allows is trusted; the S3 client's runs against a fake are checked against the
   object store's, and no adapter talks to a real service yet.
+- **More outside systems** (the decision on models of more outside systems), each with a fixture
+  in `Tests/` whose seeded bug the checker finds: a queue as SQS gives one, received at least once,
+  again at any moment until deleted with its latest receipt, in any order or by FIFO group, at most
+  `maxReceives` times a copy (`Lanes/Outside/Queue.lean`, `Queue.received_le`); a cache in front
+  of a store, evicting at any moment, with leases and, optionally, stale reads
+  (`Lanes/Outside/Cache.lean`, `Cache.read_sent`, `Cache.fill_unleased`); a service that throttles
+  with `429` and `Retry-After`, a combinator over `Rpc.Server` (`Lanes/Outside/Throttle.lean`,
+  `Throttle.throttled_inner`, `Throttle.wait_le`); and a shared cache in front of the server, what
+  RFC 9111 lets a CDN keep (`Lanes/Web/Http/SharedCache.lean`), which serves nothing `private` or
+  `no-store` (`SharedCache.serve_storable`), and whose `leaks` is a check an application runs on
+  its exchanges: with no leak, the cache gives each request what the origin gave it
+  (`SharedCache.serve_of_leaks`). `examples/videos` is checked with it.
 - **PostgreSQL** (`Lanes/Lib/Postgres/`): the frontend/backend protocol 3.0 in Lean, not libpq
   (`docs/decisions/D68-postgres-protocol-in-lean.md`): start-up with trust, cleartext (only when
   allowed), MD5 or SCRAM-SHA-256; the extended query protocol with parameters, text both ways;
