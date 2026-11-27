@@ -91,9 +91,12 @@ instance : DecidableEq (Effect σ self) := fun a b =>
 
 end Effect
 
+/-- An actor that can be identity `i` of a system: it handles `σ.Msg i` and returns
+`Effect σ i`, so it can only send a message its receiver accepts. -/
 abbrev Signature.Actor (σ : Signature) (i : σ.Id) (S : Type) : Type :=
   Lanes.Actor S (σ.Msg i) (Effect σ i)
 
+/-- A message in flight, with the link it travels on. -/
 structure Envelope (σ : Signature) where
   /-- The sending actor, or `none` for a message that came from outside the system. -/
   src : Option σ.Id
@@ -132,6 +135,7 @@ structure System (σ : Signature) where
   /-- Actors started when the system starts, in order. All others start on their first message. -/
   boot : List σ.Id := []
 
+/-- What a link may do to the messages on it. The default delivers them in order, once each. -/
 structure Link where
   ordered : Bool := true
   lossy : Bool := false
@@ -146,6 +150,7 @@ def reliable : Link := {}
 forged. -/
 def network : Link := { ordered := false, lossy := true, duplicating := true }
 
+/-- Delivers every message once, in any order. -/
 def unordered : Link := { ordered := false }
 
 end Link
@@ -166,8 +171,11 @@ namespace EnvModel
 
 variable {σ : Signature}
 
+/-- Every link reliable and no actor crashing: one process that does not fail. -/
 def reliable : EnvModel σ := {}
 
+/-- Messages between actors may be lost, reordered and duplicated (`Link.network`); inputs
+arrive reliably, and no actor crashes. -/
 def distributed : EnvModel σ where
   link src _ := if src.isSome then Link.network else Link.reliable
 

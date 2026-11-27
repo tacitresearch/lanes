@@ -73,6 +73,9 @@ theorem apply_update {ι : Type} [DecidableEq ι] {β γ : ι → Type} (f : (j 
 
 variable {σ : Signature}
 
+/-- A whole system at one moment: each actor's state and whether it is up, the messages in
+flight, each actor's pending timers, and the outputs not yet handed to the outside. The
+semantics is `SysState.step`, one function on it. -/
 structure SysState (sys : System σ) where
   state : (i : σ.Id) → sys.State i
   up : σ.Id → Bool
@@ -86,6 +89,9 @@ theorem SysState.ext' {sys : System σ} {a b : SysState sys} (hstate : a.state =
     (houtbox : a.outbox = b.outbox) : a = b := by
   cases a; cases b; simp_all
 
+/-- One thing that can happen to a system. Inputs come from outside; drops, duplicates and
+crashes are what the environment model allows; the rest follow from what the actors did.
+`SysState.step` says when each is enabled. -/
 inductive Event (σ : Signature) : Type where
   | input (x : σ.In)
   | deliver (e : Envelope σ)
@@ -205,9 +211,12 @@ def step (env : EnvModel σ) (c : SysState sys) : Event σ → Option (SysState 
   | .start i =>
     if !c.up i && (c.hasMail i || env.restarts i) then some (c.startActor env i) else none
 
+/-- The state at the start: no actor up, then each actor of `sys.boot` started in order. -/
 def init (sys : System σ) (env : EnvModel σ) : SysState sys :=
   sys.boot.foldl (fun c i => c.startActor env i) (blank sys)
 
+/-- The state after the events, in order, or `none` if one of them is not enabled. A
+counterexample of the checker, and a run of the scheduler, replay through it. -/
 def run (env : EnvModel σ) (c : SysState sys) : List (Event σ) → Option (SysState sys)
   | [] => some c
   | ev :: evs => (c.step env ev).bind fun c' => c'.run env evs
@@ -228,14 +237,18 @@ namespace System
 
 variable (sys : System σ)
 
+/-- The states the semantics reaches from `SysState.init` by enabled events under `env`. -/
 inductive Reachable (env : EnvModel σ) : SysState sys → Prop
   | init : Reachable env (SysState.init sys env)
   | step {c c' : SysState sys} (ev : Event σ) :
     Reachable env c → c.step env ev = some c' → Reachable env c'
 
+/-- `P` holds in every state the system reaches under `env`. -/
 def Invariant (env : EnvModel σ) (P : SysState sys → Prop) : Prop :=
   ∀ c, sys.Reachable env c → P c
 
+/-- `P` holds at the start and every enabled event keeps it, which gives `Invariant`
+(`System.Inductive.invariant`). -/
 structure Inductive (env : EnvModel σ) (P : SysState sys → Prop) : Prop where
   init : P (SysState.init sys env)
   step : ∀ c ev c', P c → c.step env ev = some c' → P c'

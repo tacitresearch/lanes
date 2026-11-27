@@ -32,6 +32,8 @@ instance (priority := low) reprBody : Repr ByteArray where
     | some s => repr s
     | none => s!"<{b.size} bytes>"
 
+/-- A request as the server has read it, already parsed: a system sees this, never bytes
+(rule 2.2). -/
 structure Request where
   method : Method
   /-- The path as decoded segments: `/todos/42` is `["todos", "42"]`. -/
@@ -52,6 +54,7 @@ def Request.codec : Codec Request :=
   Codec.struct% Request { method := Method.codec, path := Codec.list Codec.string,
     query := fields, headers := fields, body := Codec.bytes }
 
+/-- A response as data, which the server writes. -/
 structure Response where
   status : Nat := 200
   /-- `Content-Length` is added by the server, and `Connection: close` when it closes after. -/

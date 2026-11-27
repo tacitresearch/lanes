@@ -25,6 +25,8 @@ namespace Lanes.Journal
 
 variable {σ : Signature}
 
+/-- One thing a shard asked of its kernel: an input, a clock reading, a batch of work, or a
+mark. Replaying the entries rebuilds the kernel (`Journal.recover_kernel`). -/
 inductive Entry (σ : Signature) where
   | input (x : σ.In)
   | advance (now_ms : Nat)
@@ -150,6 +152,7 @@ theorem file_eq (input : Codec σ.In) (system : String) (entries : List (Entry �
     file input system entries = Frame.one (header system) ++ encode input entries :=
   Frame.encode_cons ..
 
+/-- Why a journal's files are not opened. A refused file is left as it is. -/
 inductive Refusal where
   /-- The file is not a journal of `system`: it is the journal of the system `named`, or no
   journal at all. -/
