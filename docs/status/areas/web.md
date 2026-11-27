@@ -28,7 +28,7 @@
   metrics nor logged. The metrics page and the health checks are on the application's port; the
   page is answered only to a loopback peer by default, and the health checks to every peer.
 - The C loop (`ServerConfig.loop := .c`) runs on Linux only, binds IPv4 only, and is a
-  prototype off by default (`docs/decisions/new-a-loop-of-c.md`); its C is tested and
+  prototype off by default (`docs/decisions/D85-a-loop-of-c.md`); its C is tested and
   mutation-tested, not model-checked.
 - A response streams to an HTTP/1.0 client in chunks, which it does not read. A body that
   streams is no longer handed on once the client ends its side. That the pieces of a whole run
