@@ -1,4 +1,4 @@
-# D?. Uploads bounded by a signed policy, and large ones in parts
+# D78. Uploads bounded by a signed policy, and large ones in parts
 
 D71 gave the browser presigned links to put and get an object. A presigned `PUT` signs the
 method, the key and the headers named, never the length, so whoever holds a link may put up to

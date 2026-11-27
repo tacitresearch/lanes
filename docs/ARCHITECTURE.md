@@ -296,7 +296,7 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   browser's parts with their length signed (`S3.presignPart`); and a server's upload as a pure
   flow, retrying, aborting what it gives up and asking the object's `HEAD` after a Complete
   whose answer was lost, which `S3.upload` performs, model-checked against the multipart model
-  below (`docs/decisions/new-bounded-and-large-uploads.md`).
+  below (`docs/decisions/D78-bounded-and-large-uploads.md`).
 - **AWS** (`integrations/aws`, `docs/decisions/D74-aws-integration.md`): a role's credentials
   from an instance's metadata service (IMDSv2) or a container's endpoint, and email through SES.
   When to fetch and what may be handed out is a pure machine, `Aws.Refresh.step`: nothing is
