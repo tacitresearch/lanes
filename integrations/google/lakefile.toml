@@ -1,0 +1,16 @@
+name = "google"
+version = "0.1.0"
+defaultTargets = ["Google", "check"]
+testDriver = "check"
+
+[[require]]
+name = "lanes"
+path = "../.."
+
+[[lean_lib]]
+name = "Google"
+
+# The preset against Google's discovery document and keys as recorded, run by `lake test`.
+[[lean_exe]]
+name = "check"
+root = "Check"

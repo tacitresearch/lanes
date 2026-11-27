@@ -40,8 +40,10 @@ public import Lanes.Durable.Upgrade
 public import Lanes.Lib.Crypto.Hmac
 public import Lanes.Lib.Crypto.Md5
 public import Lanes.Lib.Crypto.Pbkdf2
+public import Lanes.Lib.Crypto.PublicKey
 public import Lanes.Lib.Crypto.Sha256
 public import Lanes.Lib.Crypto.Sodium
+public import Lanes.Lib.Crypto.Verify
 public import Lanes.Lib.Encoding.Base64
 public import Lanes.Lib.Encoding.Digits
 public import Lanes.Lib.Encoding.Json
@@ -86,7 +88,10 @@ public import Lanes.Runtime.IO.Shell
 public import Lanes.Runtime.Kernel
 public import Lanes.Runtime.Shard
 public import Lanes.Runtime.Wave
+public import Lanes.Web.Auth.IdToken
+public import Lanes.Web.Auth.Jose
 public import Lanes.Web.Auth.Login
+public import Lanes.Web.Auth.OAuth
 public import Lanes.Web.Auth.Token
 public import Lanes.Web.Html.Basic
 public import Lanes.Web.Html.Htmx
@@ -108,6 +113,7 @@ public import Lanes.Web.S3.Xml
 public import Lanes.Web.IO.Client
 public import Lanes.Web.IO.Ops
 public import Lanes.Web.IO.S3
+public import Lanes.Web.IO.SignIn
 public import Lanes.Web.IO.Server
 public import Lanes.Web.IO.Tls
 
