@@ -69,6 +69,7 @@ public import Lanes.Outside.Effects.Payments
 public import Lanes.Outside.Events
 public import Lanes.Outside.Idempotent
 public import Lanes.Outside.ObjectStore
+public import Lanes.Outside.Queue
 public import Lanes.Outside.IO.Clock
 public import Lanes.Outside.Rpc
 public import Lanes.Outside.Store.Basic
