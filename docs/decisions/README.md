@@ -71,4 +71,5 @@ decision without a number.
 - [D55. Work outside a step is a job: an actor with an outbox, a deadline per attempt and a bound](D55-jobs.md)
 - [D56. A deadline may pass where a message is served](D56-a-deadline-passes-where-it-is-served.md)
 - [D57. The server runs its own connections, and a pure function decides for each](D57-the-server-runs-its-own-connections.md)
+- [D58. URLs, media types and rate limits against Go, and where they depart from it](D58-urls-media-types-rate-limits-against-go.md)
 - [D59. Threads park, and a connection's loop runs where it is told something](D59-threads-park.md)

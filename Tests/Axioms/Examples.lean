@@ -7,6 +7,7 @@ import Examples.ElectionProofs
 import Examples.KVProofs
 import Examples.WatchdogProofs
 import Tests.BatchProofs
+import Tests.Oracle.Url
 
 /-! The axiom gate (rule 5.5, see `Tests/Axioms.lean`) for the theorems of `Examples/` and `Tests/`. -/
 
@@ -48,3 +49,7 @@ import Tests.BatchProofs
 
 /-- info: 'Tests.Batch.implements_withPast' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Tests.Batch.implements_withPast
+
+-- Tests.Oracle.Url
+/-- info: 'Tests.Oracle.Url.resolve_examples' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Tests.Oracle.Url.resolve_examples

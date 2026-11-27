@@ -87,7 +87,7 @@ API. P1 is common, P2 rare.
 | `encoding` | e | the interfaces; Lanes' equivalent is `Codec` with its round-trip law (`Lanes/Data/Codec.lean`, `lanes_data`) |
 | `encoding/json` | e | `Lanes.Json` (`Lanes/Data/Json/`, D15): total, bounded, strict. Its print-then-parse round trip is not proved yet; JSONTestSuite and Go are its oracles |
 | `encoding/hex` | e | `Bytes.hex`, `Bytes.unhex?` (`Lanes/Data/Hmac.lean`, `Bytes.unhex?_hex` proved) |
-| `encoding/base64` | b | P0 |
+| `encoding/base64` | b | P0, built: `Lanes/Data/Base64.lean` |
 | `encoding/base32` | b | P1 |
 | `encoding/binary` | b | P2; fixed-width big-endian is in `Lanes.Frame` already |
 | `encoding/csv` | b | P1 |
@@ -99,7 +99,7 @@ API. P1 is common, P2 rare.
 | `compress/flate`, `compress/gzip`, `compress/zlib` | b | P2: the reverse proxy compresses responses, and a client can ask for none |
 | `compress/bzip2`, `compress/lzw` | d | legacy formats |
 | `archive/tar`, `archive/zip` | d | an export is JSON or CSV |
-| `mime` | b | P0 for media types; P1 for the extension table |
+| `mime` | b | P0 for media types, built: `Lanes/Http/MediaType.lean`; P1 for the extension table |
 | `mime/multipart` | b | P1 |
 | `mime/quotedprintable` | b | P2 |
 | `html` | e | escaping in `Lanes.Html` (`Lanes/Html/Basic.lean`, proved safe). Unescaping (`html.UnescapeString`) is P2, and the table of character references exists in `Lean.Data.Html.CharRef` (not linkable) |
@@ -111,8 +111,8 @@ API. P1 is common, P2 rare.
 | Go package | Class | Where, or why not |
 | --- | --- | --- |
 | `net` | a | `Std.Async.TCP`, `Std.Async.UDP`, `Std.Async.DNS` (libuv's `getaddrinfo`), `Std.Net.Addr`. Lanes uses TCP (`Lanes.Peers`, the HTTP client) and not yet DNS |
-| `net/netip` | b | P0; `Std.Net.Addr` has the address types, but parsing and printing are libuv's `inet_pton` and `inet_ntop`, and there are no prefixes |
-| `net/url` | b | P0; percent encoding and forms are in Lanes (`Lanes/Http/Basic.lean`, `percentDecode_percentEncode` proved), and `Std.Http.Data.URI` parses RFC 3986 with no theorems |
+| `net/netip` | b | P0, built: `Lanes/Data/Ip.lean` (`Std.Net.Addr` parses and prints with libuv's `inet_pton` and `inet_ntop`, and has no prefixes) |
+| `net/url` | b | P0, built: `Lanes/Http/Url.lean` (references, resolution, normalization, queries) with `Lanes/Http/UrlSound.lean`; forms in `Lanes/Http/Basic.lean`. `Std.Http.Data.URI` parses RFC 3986 with no theorems |
 | `net/http` (server) | e | `Lanes.Env.Http` on `Std.Http.Server`, with the gate (`Lanes/Http/Gate.lean`) deciding; routes `Lanes/Http/Route.lean`; cookies `Lanes/Http/Cookie.lean`; sessions and log-in `Lanes/Auth/` |
 | `net/http` (client) | e | `Lanes.Env.HttpClient` and `Lanes.Http.Wire` (the reader proved). `Std.Http` has no client, only a pure redirect planner (`Std.Http.Protocol.H1.Redirect`). Missing: TLS (c, P0) and names (DNS, P0) |
 | `net/http` (`DetectContentType`) | b | P1, to check an upload is what it claims |
@@ -169,7 +169,7 @@ and the RFCs' own.
 | `path` | b | P1 |
 | `embed` | a | `include_str` (`Init.Notation`), used for templates. There is no `include_bytes`; binary assets would need a small macro |
 | `time` | a | `Std.Time` (civil dates and times, `Duration`, `Timestamp.now`), `IO.monoNanosNow`; `Lanes.Clock` (`Lanes/Env/Clock.lean`) is the adapter that makes time an input (D23) |
-| `time` (formats) | b | P0. `Std.Time.Formats` has `iso8601` (whole seconds only) and `httpDate`, with no theorems, and `rfc850` is written `dd-MM-uuuu` under a docstring that says `dd-MMM-YY` |
+| `time` (formats) | b | P0, built: `Lanes/Data/TimeFormat.lean`. `Std.Time.Formats` has `iso8601` (whole seconds only) and `httpDate`, with no theorems, and `rfc850` is written `dd-MM-uuuu` under a docstring that says `dd-MMM-YY` |
 | `time/tzdata` | a | `Std.Time.Zoned.Database` reads TZif files from the system's `zoneinfo`; an embedded copy is not needed on a server |
 | `context` | e | deadlines are `Effect.after` and `Effect.cancel` (`Lanes/Actors/System.lean`, D3); a request's deadline is the gate's |
 | `sync`, `sync/atomic` | a | `Std.Sync` (`Mutex`, `Channel`, `Semaphore`, `Barrier`, `Notify`, `Broadcast`), `IO.Ref`. Lanes actors share nothing, so applications do not use them |
@@ -205,7 +205,7 @@ and the RFCs' own.
 | `x/text/cases` | b | P1 |
 | `x/text/secure/precis` | b | P1 |
 | `x/text/language`, `x/text/encoding` | d | one language and UTF-8 only, for now |
-| `x/time/rate` | b | P0 |
+| `x/time/rate` | b | P0, built: `Lanes/Data/RateLimit.lean` (the bucket; not yet the table of buckets per key) |
 | `x/sync` (`errgroup`, `semaphore`, `singleflight`) | d | concurrency is actors |
 | `x/oauth2` | b | P1 |
 
@@ -213,12 +213,12 @@ and the RFCs' own.
 
 | Package | An application uses it for | Spec | Oracle | Size | P |
 | --- | --- | --- | --- | --- | --- |
-| `encoding/base64` | opaque pagination cursors, `Authorization: Basic`, JWT segments, `data:` URLs | RFC 4648 §4, §5; `decode (encode b) = some b`, and `decode` accepts only canonical text (strict padding, zero trailing bits) | Go `base64.StdEncoding.Strict()`, `RawURLEncoding`; RFC 4648 §10 vectors | small | P0 |
-| `net/netip` | the client's address from the proxy's `X-Forwarded-For`, as a rate-limit key; `/64` prefixes for IPv6; host literals in URLs | RFC 4291 §2.2 (text forms), RFC 5952 (canonical output), RFC 4632 (prefixes), RFC 6874 (zones in URLs); `parse (print a) = some a`, masking idempotent, `contains` agrees with masking | Go `netip.ParseAddr`, `ParsePrefix`, `Addr.String`, `Prefix.Masked` | small | P0 |
-| `net/url` | URLs of outbound API calls and their query strings, `Location` of redirects, links in posts | RFC 3986 §3 grammar, §5.2 resolution (§5.4's examples as theorems), §6.2.2 normalization; `parse (print u) = some u` | Go `url.Parse`, `ResolveReference`, `Values.Encode`; WHATWG `urltestdata.json` for the `http(s)` cases where WHATWG and RFC 3986 agree (they differ on purpose elsewhere) | medium | P0 |
-| `time` (formats) | timestamps of posts in JSON and `<time datetime>`, `Date`, `Expires`, `Last-Modified`, `Retry-After` and cookie `Expires` | RFC 3339 §5.6; RFC 9110 §5.6.7 (IMF-fixdate to write; the two obsolete forms read only); days from a civil date and back as inverse functions (Hinnant's algorithm) | Go `time.Parse(time.RFC3339Nano, …)`, `Format`, `http.ParseTime`, `http.TimeFormat` | small | P0 |
-| `mime` (media types) | checking the `Content-Type` of forms and of API responses, and its `charset` | RFC 9110 §8.3.1 (with the `token` and `quoted-string` of §5.6, shared with `Lanes.Http.Cookie`), RFC 2231 parameters; `parse (format m) = some m` | Go `mime.ParseMediaType`, `FormatMediaType` | small | P0 |
-| `x/time/rate` | limits per user and per address on posts and log-ins; keeping under an API's quota | the token bucket of x/time/rate: `tokens t = min burst (tokens t₀ + rate·(t − t₀))`, allowed iff `n ≤ tokens`; theorem: in any window of length `w` at most `burst + rate·w` events are allowed | x/time/rate `AllowN(t, n)` and `ReserveN`, which take the time as an argument and so replay exactly | small | P0 |
+| `encoding/base64` | opaque pagination cursors, `Authorization: Basic`, JWT segments, `data:` URLs | RFC 4648 §4, §5; `decode (encode b) = some b`, and `decode` accepts only canonical text (strict padding, zero trailing bits) | Go `base64.StdEncoding.Strict()`, `RawURLEncoding`; RFC 4648 §10 vectors | small | P0, built |
+| `net/netip` | the client's address from the proxy's `X-Forwarded-For`, as a rate-limit key; `/64` prefixes for IPv6; host literals in URLs | RFC 4291 §2.2 (text forms), RFC 5952 (canonical output), RFC 4632 (prefixes), RFC 6874 (zones in URLs); `parse (print a) = some a`, masking idempotent, `contains` agrees with masking | Go `netip.ParseAddr`, `ParsePrefix`, `Addr.String`, `Prefix.Masked` | small | P0, built |
+| `net/url` | URLs of outbound API calls and their query strings, `Location` of redirects, links in posts | RFC 3986 §3 grammar, §5.2 resolution (§5.4's examples as theorems), §6.2.2 normalization; `parse (print u) = some u` | Go `url.Parse`, `ResolveReference`, `Values.Encode`; WHATWG `urltestdata.json` for the `http(s)` cases where WHATWG and RFC 3986 agree (they differ on purpose elsewhere) | medium | P0, built |
+| `time` (formats) | timestamps of posts in JSON and `<time datetime>`, `Date`, `Expires`, `Last-Modified`, `Retry-After` and cookie `Expires` | RFC 3339 §5.6; RFC 9110 §5.6.7 (IMF-fixdate to write; the two obsolete forms read only); days from a civil date and back as inverse functions (Hinnant's algorithm) | Go `time.Parse(time.RFC3339Nano, …)`, `Format`, `http.ParseTime`, `http.TimeFormat` | small | P0, built |
+| `mime` (media types) | checking the `Content-Type` of forms and of API responses, and its `charset` | RFC 9110 §8.3.1 (with the `token` and `quoted-string` of §5.6, shared with `Lanes.Http.Cookie`), RFC 2231 parameters; `parse (format m) = some m` | Go `mime.ParseMediaType`, `FormatMediaType` | small | P0, built |
+| `x/time/rate` | limits per user and per address on posts and log-ins; keeping under an API's quota | the token bucket of x/time/rate: `tokens t = min burst (tokens t₀ + rate·(t − t₀))`, allowed iff `n ≤ tokens`; theorem: in any window of length `w` at most `burst + rate·w` events are allowed | x/time/rate `AllowN(t, n)` and `ReserveN`, which take the time as an argument and so replay exactly | small | P0, built |
 | `encoding/base32` | TOTP secrets | RFC 4648 §6; laws as base64 | Go `base32.StdEncoding` | small | P1 |
 | `encoding/csv` | exports and imports | RFC 4180 grammar; `parse (print rows) = some rows` | Go `encoding/csv` (it reads `\r\n` as `\n` and is lenient with options; compare with those off) | small | P1 |
 | `mime/multipart` | uploads (avatars, attachments) | RFC 7578, RFC 2046 §5.1; `parse (write parts) = some parts`, a boundary never occurs in a part | Go `multipart.Reader`, `multipart.Writer` | medium | P1 |
@@ -255,17 +255,16 @@ and the RFCs' own.
 
 Each step depends only on steps above it and on what Lanes has.
 
-1. **Base64** (`Lanes.Data.Base64`). No dependencies.
-2. **IP addresses** (`Lanes.Data.Ip`, `net/netip`). No dependencies; replaces
-   `Std.Net.IPv4Addr.ofString` where a decision rests on it.
-3. **URLs** (`Lanes.Http.Url`, `net/url`). Needs 2 for host literals, and the percent
-   encoding of `Lanes/Http/Basic.lean`.
-4. **Media types** (`Lanes.Http.MediaType`, `mime`). Needs the RFC 9110 `token` and
-   `quoted-string` grammar, which `Lanes.Http.Cookie` and `Lanes.Http.Wire` should then share.
-5. **Time formats** (`Lanes.Data.TimeFormat`). Needs days from a civil date and back,
-   proved inverse; uses `Std.Time` types only as data.
-6. **Rate limits** (`Lanes.Data.RateLimit`, x/time/rate). Needs time as data (D23) and 2
-   for its keys; a table of buckets per key in a `Std.TreeMap`, with buckets that are full
+1. **Base64**: done, `Lanes/Data/Base64.lean`.
+2. **IP addresses**: done, `Lanes/Data/Ip.lean`. Replaces `Std.Net.IPv4Addr.ofString` where a
+   decision rests on it.
+3. **URLs**: done, `Lanes/Http/Url.lean`, with host literals from 2 and percent decoding from
+   `Lanes/Http/Basic.lean`.
+4. **Media types**: done, `Lanes/Http/MediaType.lean`. Its RFC 9110 `token` and
+   `quoted-string` grammar is its own; `Lanes.Http.Cookie` and `Lanes.Http.Wire` should share it.
+5. **Time formats**: done, `Lanes/Data/TimeFormat.lean`, on `Lanes/Data/Civil.lean`.
+6. **Rate limits**: the bucket is done, `Lanes/Data/RateLimit.lean`. Still to build: a table
+   of buckets per key (an address from 2, a user) in a `Std.TreeMap`, with buckets that are full
    dropped so the table stays bounded.
 7. **`fsync`**: done (D46), in `native/lanes.c`, used by `Lanes/Env/Journal.lean`.
 8. **libsodium**: done (D46): Argon2id for `Password.digest`, `sodium_memcmp` for `Bytes.same`,
@@ -274,17 +273,16 @@ Each step depends only on steps above it and on what Lanes has.
    verifying against the system's roots with the host name checked, and `Std.Async.DNS` for
    names (the client takes IPv4 addresses only today). Needs 3 for scheme, host and port, and 2.
 
-Steps 1, 2, 4 and 5 are independent and can go on parallel branches; 3 waits for 2, 6 for
-2, and 9 for 3. The (e) rows that decide and are not yet proved come after: `Lanes.Json`'s
-round trip (oracles JSONTestSuite and Go `encoding/json`) and the cookie parser (Go
+What is left of 6 and step 9 can go on parallel branches. The (e) rows that decide and are not
+yet proved come after: `Lanes.Json`'s round trip (oracles JSONTestSuite and Go `encoding/json`) and the cookie parser (Go
 `http.ParseCookie`, `http.ParseSetCookie`).
 
 ### Differential tests against Go
 
 - **Where.** A Go module in `oracle/` (`oracle/go.mod`, Go pinned like the Lean toolchain,
-  `golang.org/x/time` pinned in `go.sum`), with one small program per package,
-  `oracle/<package>/main.go`. The Lean side is `Tests/Oracle/<Package>.lean`, run by a new
-  executable `lanesOracle` (`Tests.OracleMain`).
+  `golang.org/x/time` pinned in `oracle/go.sum`), with one small program per package,
+  `oracle/<package>/main.go`. The Lean side is `Tests/Oracle/<Package>.lean`, run by
+  `lanesOracle` (`Tests/OracleMain.lean`; D50).
 - **Protocol.** Lean generates cases from a seed and writes them as JSON lines,
   `{"id": 7, "op": "parse", "in": "<hex>"}`; inputs are hex so that invalid UTF-8 survives. The
   Go program reads every line from standard input and answers one line per case:
@@ -298,9 +296,10 @@ round trip (oracles JSONTestSuite and Go `encoding/json`) and the cookie parser 
   cases taken from Go's own `_test.go` tables), mutated. A disagreement prints the seed, the
   input and both answers, and is shrunk by deleting bytes while Go and Lean still disagree.
 - **Known differences.** Where our spec departs from Go on purpose (Go's `url.Parse` accepts
-  some inputs RFC 3986 rejects), the difference is a predicate in `Tests.Oracle.Known` with
-  a reason, and the comparison skips only the cases it matches. A rate limiter's cases use
-  rates and times at which Go's float64 token count is exact, because the spec's is a rational.
+  some inputs RFC 3986 rejects), the difference is a `known` predicate of the package's
+  `Tests/Oracle/<Package>.lean` with a reason, and the comparison skips only the cases it
+  matches. The rate limiter's cases use rates and times at which Go's float64 token count is
+  exact (`Tests/Oracle/RateLimit.lean`), because ours is exact.
 - **Without Go.** Static vectors (RFC test vectors, the Unicode files, urltestdata,
   JSONTestSuite) are committed in a `vectors` directory beside the oracle tests, with their source and licence, and
   run in `lake test`, which never needs Go.

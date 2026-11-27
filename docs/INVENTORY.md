@@ -14,13 +14,13 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Auth` | 28 | 19 | 0 | 0 | 7 | 2 | 0 |
 | `Lanes/Behaviours` | 44 | 36 | 0 | 1 | 0 | 7 | 0 |
 | `Lanes/Check` | 91 | 54 | 0 | 25 | 0 | 10 | 2 |
-| `Lanes/Data` | 348 | 233 | 5 | 4 | 44 | 33 | 29 |
+| `Lanes/Data` | 355 | 238 | 5 | 4 | 45 | 34 | 29 |
 | `Lanes/Env` | 30 | 0 | 30 | 0 | 0 | 0 | 0 |
 | `Lanes/Html` | 58 | 22 | 0 | 0 | 28 | 8 | 0 |
-| `Lanes/Http` | 213 | 144 | 1 | 8 | 29 | 29 | 2 |
+| `Lanes/Http` | 300 | 213 | 1 | 8 | 32 | 44 | 2 |
 | `Lanes/Semantics` | 57 | 9 | 0 | 0 | 0 | 47 | 1 |
 | `LanesCli` | 110 | 0 | 0 | 0 | 42 | 0 | 68 |
-| All | 1326 | 683 | 54 | 74 | 170 | 221 | 124 |
+| All | 1420 | 757 | 54 | 74 | 174 | 237 | 124 |
 
 ## `Lanes/Actors/Actor.lean`
 
@@ -963,8 +963,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Hmac.Pads.of` | tested | `Tests/Crypto.lean` |
 | `Hmac.reference` | tested | `Tests/Crypto.lean` |
 | `Bytes.sameReference` | tested | `Tests/Crypto.lean` |
-| `Bytes.hexDigit` | tested | `Tests/Crypto.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` and 1 more |
-| `Bytes.hex` | tested | `Tests/Crypto.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` and 1 more |
+| `Bytes.hexDigit` | tested | `Tests/Crypto.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` and 2 more |
+| `Bytes.hex` | tested | `Tests/Crypto.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` and 2 more |
 | `Bytes.nibble?` | tested | `Tests/Crypto.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
 | `Bytes.unhexList` | tested | `Tests/Crypto.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
 | `Bytes.unhex?` | tested | `Tests/Crypto.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` |
@@ -1054,7 +1054,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Json.getBool?` | proved | `Json.getBool?_eq_ok` |
 | `Json.getObjVal?` | proved | `Json.getObjVal?_eq_ok`, `Json.getObjVal?_mkObj` |
 | `Json.getArrVal?` | proved | `Json.getArrVal?_eq_ok` |
-| `Json.getObjValD` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` and 1 more |
+| `Json.getObjValD` | tested | `Tests/Json.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Basic.lean` and 3 more |
 
 ## `Lanes/Data/Json/Classes.lean`
 
@@ -1178,6 +1178,18 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Quorum.isMajority` | proved | `Quorum.majority_inter` |
+
+## `Lanes/Data/RateLimit.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `RateLimit.Config.cap` | proved | `RateLimit.allowed_le`, `RateLimit.credit_allowAll_le`, `RateLimit.credit_allow_le` and 1 more |
+| `RateLimit.full` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/RateLimit.lean` |
+| `RateLimit.refill` | proved | through `RateLimit.allow`, `RateLimit.allowAll` and 1 more: `RateLimit.allow_after_reserve`, `RateLimit.allowed_le` and 3 more |
+| `RateLimit.allow` | proved | `RateLimit.allow_after_reserve`, `RateLimit.credit_allow_le` |
+| `RateLimit.wait` | proved | through `RateLimit.reserve`: `RateLimit.allow_after_reserve`, `RateLimit.credit_reserve_le` |
+| `RateLimit.reserve` | proved | `RateLimit.allow_after_reserve`, `RateLimit.credit_reserve_le` |
+| `RateLimit.allowAll` | spec | used only in statements |
 
 ## `Lanes/Data/Sha256.lean`
 
@@ -1527,6 +1539,38 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.timedOut` | proved | through `Http.Gate.step`: `Http.Gate.step_bounded` |
 | `Http.Gate.step` | proved | `Http.Gate.step_bounded` |
 
+## `Lanes/Http/MediaType.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `MediaType.isTchar` | proved | through `MediaType.format`, `MediaType.valid`: `MediaType.parse_format`, `MediaType.parse_format_eq` and 1 more |
+| `MediaType.isWs` | proved | through `MediaType.parse`: `MediaType.parse_format`, `MediaType.parse_format_eq` and 1 more |
+| `MediaType.isQdtext` | proved | through `MediaType.parse`: `MediaType.parse_format`, `MediaType.parse_format_eq` and 1 more |
+| `MediaType.isQuotable` | proved | through `MediaType.parse`, `MediaType.valid`: `MediaType.parse_format`, `MediaType.parse_format_eq` and 1 more |
+| `MediaType.token` | proved | through `MediaType.parse`: `MediaType.parse_format`, `MediaType.parse_format_eq` and 1 more |
+| `MediaType.skipWs` | proved | through `MediaType.parse`: `MediaType.parse_format`, `MediaType.parse_format_eq` and 1 more |
+| `MediaType.quoted` | proved | through `MediaType.parse`: `MediaType.parse_format`, `MediaType.parse_format_eq` and 1 more |
+| `MediaType.value` | proved | through `MediaType.parse`: `MediaType.parse_format`, `MediaType.parse_format_eq` and 1 more |
+| `MediaType.parseParams` | proved | through `MediaType.parse`: `MediaType.parse_format`, `MediaType.parse_format_eq` and 1 more |
+| `MediaType.parseRaw` | proved | through `MediaType.parse`: `MediaType.parse_format`, `MediaType.parse_format_eq` and 1 more |
+| `MediaType.isToken` | proved | through `MediaType.format`, `MediaType.valid`: `MediaType.parse_format`, `MediaType.parse_format_eq` and 1 more |
+| `MediaType.names` | proved | through `MediaType.format`, `MediaType.lower`: `MediaType.parse_format`, `MediaType.parse_format_eq` and 1 more |
+| `MediaType.valid` | proved | `MediaType.parse_format`, `MediaType.parse_format_eq` |
+| `MediaType.lower` | proved | `MediaType.parse_format`, `MediaType.parse_format_eq` |
+| `MediaType.parse` | proved | `MediaType.parse_format`, `MediaType.parse_format_eq`, `MediaType.parse_print` |
+| `MediaType.quote` | proved | through `MediaType.format`: `MediaType.parse_format`, `MediaType.parse_format_eq` and 1 more |
+| `MediaType.valueChars` | proved | through `MediaType.format`: `MediaType.parse_format`, `MediaType.parse_format_eq` and 1 more |
+| `MediaType.chars` | proved | through `MediaType.format`: `MediaType.parse_format`, `MediaType.parse_format_eq` and 1 more |
+| `MediaType.format` | proved | `MediaType.parse_format`, `MediaType.parse_format_eq`, `MediaType.parse_print` |
+
+## `Lanes/Http/MediaTypeSound.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `MediaType.EndsToken` | spec | a predicate |
+| `MediaType.esc` | spec | used only in statements |
+| `MediaType.paramChars` | spec | used only in statements |
+
 ## `Lanes/Http/ReadRequest.lean`
 
 | Definition | Status | Evidence |
@@ -1596,6 +1640,81 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Route.link` | proved | `Http.Route.link_target`, `Http.Route.match?_target`, `Http.dispatch_link` |
 | `Http.Route.handle` | proved | `Http.dispatch_link` |
 | `Http.dispatch` | proved | `Http.dispatch_eq_none`, `Http.dispatch_eq_some`, `Http.dispatch_link` |
+
+## `Lanes/Http/Url.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Url.isAlpha` | proved | through `Url.normalize`, `Url.parse` and 1 more: `Tests.Oracle.Url.resolve_examples`, `Url.normalize_normalize` and 2 more |
+| `Url.isDigit` | proved | through `Url.normalize`, `Url.parse` and 1 more: `Tests.Oracle.Url.resolve_examples`, `Url.normalize_normalize` and 2 more |
+| `Url.isHex` | proved | through `Url.normalize`, `Url.parse` and 1 more: `Tests.Oracle.Url.resolve_examples`, `Url.normalize_normalize` and 2 more |
+| `Url.isUnreserved` | proved | through `Url.normalize`, `Url.parse` and 1 more: `Tests.Oracle.Url.resolve_examples`, `Url.normalize_normalize` and 2 more |
+| `Url.isSubDelim` | proved | through `Url.normalize`, `Url.parse` and 1 more: `Tests.Oracle.Url.resolve_examples`, `Url.normalize_normalize` and 2 more |
+| `Url.isPchar` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
+| `Url.isPathChar` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
+| `Url.isQueryChar` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
+| `Url.isUserChar` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
+| `Url.isNameChar` | proved | through `Url.normalize`, `Url.parse` and 1 more: `Tests.Oracle.Url.resolve_examples`, `Url.normalize_normalize` and 2 more |
+| `Url.isSchemeChar` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
+| `Url.encoded` | proved | through `Url.normalize`, `Url.parse` and 1 more: `Tests.Oracle.Url.resolve_examples`, `Url.normalize_normalize` and 2 more |
+| `Url.lowerChar` | proved | through `Url.normalize`, `Url.parse` and 1 more: `Tests.Oracle.Url.resolve_examples`, `Url.normalize_normalize` and 2 more |
+| `Url.lower` | proved | through `Url.normalize`, `Url.parse` and 1 more: `Tests.Oracle.Url.resolve_examples`, `Url.normalize_normalize` and 2 more |
+| `Url.schemeOk` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
+| `Url.Host.chars` | proved | through `Url.print`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
+| `Url.Authority.chars` | proved | through `Url.print`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
+| `Url.pathChars` | proved | through `Url.print`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
+| `Url.chars` | proved | through `Url.print`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
+| `Url.print` | proved | `Url.parse_print`, `Url.parse_print_of_valid` |
+| `Url.cut` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
+| `Url.breakSlash` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
+| `Url.schemeEnd` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
+| `Url.parseHost` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
+| `Url.parseAuthority` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
+| `Url.parseRaw` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
+| `Url.Host.valid` | proved | through `Url.normalize`, `Url.parse` and 1 more: `Tests.Oracle.Url.resolve_examples`, `Url.normalize_normalize` and 2 more |
+| `Url.Authority.valid` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
+| `Url.pathFits` | proved | through `Url.parse`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.parse_print` and 1 more |
+| `Url.valid` | proved | `Url.parse_print_of_valid` |
+| `Url.parse` | proved | `Url.parse_print`, `Url.parse_print_of_valid` |
+| `Url.dots` | proved | through `Url.normalize`, `Url.removeDots` and 2 more: `Tests.Oracle.Url.resolve_examples`, `Url.dotFree_removeDots` and 6 more |
+| `Url.piece` | proved | through `Url.normalize`, `Url.removeDots` and 2 more: `Tests.Oracle.Url.resolve_examples`, `Url.dotFree_removeDots` and 6 more |
+| `Url.join` | proved | through `Url.normalize`, `Url.removeDots` and 2 more: `Tests.Oracle.Url.resolve_examples`, `Url.dotFree_removeDots` and 6 more |
+| `Url.removeDotsChars` | proved | through `Url.normalize`, `Url.removeDots` and 2 more: `Tests.Oracle.Url.resolve_examples`, `Url.dotFree_removeDots` and 6 more |
+| `Url.removeDots` | proved | `Url.dotFree_removeDots`, `Url.removeDots_of_dotFree`, `Url.removeDots_removeDots` and 1 more |
+| `Url.directory` | proved | through `Url.resolve`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.dotFree_resolve` and 2 more |
+| `Url.merge` | proved | through `Url.resolve`, `Url.resolveText`: `Tests.Oracle.Url.resolve_examples`, `Url.dotFree_resolve` and 2 more |
+| `Url.resolve` | proved | `Url.dotFree_resolve`, `Url.resolve_of_absolute`, `Url.resolve_of_scheme` |
+| `Url.resolveExamples` | proved | `Tests.Oracle.Url.resolve_examples` |
+| `Url.resolveText` | proved | `Tests.Oracle.Url.resolve_examples` |
+| `Url.hexValue` | proved | through `Url.normalize`: `Url.normalize_normalize` |
+| `Url.upperHex` | proved | through `Url.normalize`: `Url.normalize_normalize` |
+| `Url.pct` | proved | through `Url.normalize`: `Url.normalize_normalize` |
+| `Url.lowerName` | proved | through `Url.normalize`: `Url.normalize_normalize` |
+| `Url.Host.normalize` | proved | through `Url.normalize`: `Url.normalize_normalize` |
+| `Url.Authority.normalize` | proved | through `Url.normalize`: `Url.normalize_normalize` |
+| `Url.relativePath` | proved | through `Url.normalize`: `Url.normalize_normalize` |
+| `Url.normalizePath` | proved | through `Url.normalize`: `Url.normalize_normalize` |
+| `Url.normalize` | proved | `Url.normalize_normalize` |
+| `Url.queryEscape` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Url.lean` |
+| `Url.encodeQuery` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Url.lean` |
+| `Url.decodeQuery` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Url.lean` |
+
+## `Lanes/Http/UrlSound.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Url.NonDot` | spec | a predicate |
+| `Url.DotFree` | spec | a predicate |
+| `Url.Good` | spec | a predicate |
+| `Url.Stack` | spec | a predicate |
+| `Url.AccOk` | spec | a predicate |
+| `Url.Inv` | spec | a predicate |
+| `Url.segs` | spec | used only in statements |
+| `Url.Ends` | spec | a predicate |
+| `Url.isUpperHex` | spec | used only in statements |
+| `Url.pctOk` | spec | used only in statements |
+| `Url.pending` | spec | used only in statements |
+| `Url.Delim` | spec | a predicate |
 
 ## `Lanes/Http/Waiting.lean`
 

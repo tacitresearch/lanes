@@ -218,6 +218,22 @@ import Lanes.Semantics
 /-- info: 'Lanes.Quorum.majority_inter' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Quorum.majority_inter
 
+-- Lanes.Data.RateLimit
+/-- info: 'Lanes.RateLimit.credit_allow_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.RateLimit.credit_allow_le
+
+/-- info: 'Lanes.RateLimit.credit_reserve_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.RateLimit.credit_reserve_le
+
+/-- info: 'Lanes.RateLimit.credit_allowAll_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.RateLimit.credit_allowAll_le
+
+/-- info: 'Lanes.RateLimit.allowed_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.RateLimit.allowed_le
+
+/-- info: 'Lanes.RateLimit.allow_after_reserve' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.RateLimit.allow_after_reserve
+
 -- Lanes.Data.TimeFormat
 /-- info: 'Lanes.TimeFormat.parseRfc3339_print' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.TimeFormat.parseRfc3339_print

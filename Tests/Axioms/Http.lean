@@ -132,6 +132,16 @@ import Lanes.Semantics
 /-- info: 'Lanes.Http.Gate.step_bounded' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.Gate.step_bounded
 
+-- Lanes.Http.MediaTypeSound
+/-- info: 'Lanes.MediaType.parse_format' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.MediaType.parse_format
+
+/-- info: 'Lanes.MediaType.parse_format_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.MediaType.parse_format_eq
+
+/-- info: 'Lanes.MediaType.parse_print' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.MediaType.parse_print
+
 -- Lanes.Http.ReadRequestSound
 /-- info: 'Lanes.Http.findL_lines' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.findL_lines
@@ -203,6 +213,34 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Http.dispatch_link' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.dispatch_link
+
+-- Lanes.Http.UrlSound
+/-- info: 'Lanes.Url.parse_print' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Url.parse_print
+
+/-- info: 'Lanes.Url.parse_print_of_valid' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Url.parse_print_of_valid
+
+/-- info: 'Lanes.Url.dotFree_removeDots' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Url.dotFree_removeDots
+
+/-- info: 'Lanes.Url.removeDots_of_dotFree' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Url.removeDots_of_dotFree
+
+/-- info: 'Lanes.Url.removeDots_removeDots' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Url.removeDots_removeDots
+
+/-- info: 'Lanes.Url.resolve_of_scheme' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Url.resolve_of_scheme
+
+/-- info: 'Lanes.Url.resolve_of_absolute' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Url.resolve_of_absolute
+
+/-- info: 'Lanes.Url.dotFree_resolve' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Url.dotFree_resolve
+
+/-- info: 'Lanes.Url.normalize_normalize' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Url.normalize_normalize
 
 -- Lanes.Http.Waiting
 /-- info: 'Lanes.Http.Waiting.exec_handed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
