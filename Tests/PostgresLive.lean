@@ -29,9 +29,11 @@ def server : IO (Option (String × UInt16)) := do
   | [host, port] => return port.toNat?.map fun p => (host, p.toUInt16)
   | _ => return none
 
+/-- `legacy` lets the server skip SCRAM and ask for MD5, as `lanes_md5` and `lanes_clear` need. -/
 def config (host : String) (port : UInt16) (user : String) (password : Option String)
-    (allowCleartext : Bool := false) : Client.Config :=
-  { host, port, conn := { user, database := "lanes_test", password, allowCleartext } }
+    (allowCleartext : Bool := false) (legacy : Bool := false) : Client.Config :=
+  { host, port, conn := { user, database := "lanes_test", password, allowCleartext,
+                          allowMd5 := legacy, requireScram := !legacy } }
 
 def opens (cfg : Client.Config) : IO Bool := do
   match ← (connect cfg).block with
@@ -78,7 +80,9 @@ def reset (cfg : Client.Config) : IO Unit := do
   discard <| (s.exec (.statement { sql := s!"DELETE FROM {table.name}" })).block
   (s.close).block
 
-def writeSkew (cfg : Client.Config) (isolation : Store.Isolation) : IO (Bool × Bool) := do
+/-- Two transactions that each read the key the other writes: whether both committed, and the
+run recorded. -/
+def writeSkewRun (cfg : Client.Config) (isolation : Store.Isolation) : IO (Bool × Recorder) := do
   reset cfg
   let r ← Recorder.new cfg isolation
   discard <| r.ask 1 .begin
@@ -89,16 +93,20 @@ def writeSkew (cfg : Client.Config) (isolation : Store.Isolation) : IO (Bool × 
   discard <| r.ask 2 (.write 1 "two")
   let a ← r.ask 1 .commit
   let b ← r.ask 2 .commit
-  return (a == .committed && b == .committed, ← r.allowed [])
+  return (a == .committed && b == .committed, r)
+
+def writeSkew (cfg : Client.Config) (isolation : Store.Isolation) : IO (Bool × Bool) := do
+  let (both, r) ← writeSkewRun cfg isolation
+  return (both, ← r.allowed [])
 
 /-- A `COMMIT` sent and its connection broken before the reply is read: the outcome is unknown
 to the client, and what a later transaction reads must be one the model allows. -/
-def lostCommit (cfg : Client.Config) (isolation : Store.Isolation) : IO (Bool × Bool) := do
+def lostCommitRun (cfg : Client.Config) (isolation : Store.Isolation) : IO (Bool × Recorder) := do
   reset cfg
   let r ← Recorder.new cfg isolation
   discard <| r.ask 1 .begin
   discard <| r.ask 1 (.insert 7 "seven")
-  let some s := (← r.sessions.get).lookup 1 | return (false, false)
+  let some s := (← r.sessions.get).lookup 1 | return (false, r)
   r.events.modify (· ++ [.inl { id := 100, txn := 1, op := .commit }])
   discard <| (s.tell (.submit 9 .commit)).block
   let late ← (s.tell .broken).block
@@ -108,6 +116,10 @@ def lostCommit (cfg : Client.Config) (isolation : Store.Isolation) : IO (Bool ×
   discard <| r.ask 2 .begin
   discard <| r.ask 2 (.read 7)
   discard <| r.ask 2 .commit
+  return (lost, r)
+
+def lostCommit (cfg : Client.Config) (isolation : Store.Isolation) : IO (Bool × Bool) := do
+  let (lost, r) ← lostCommitRun cfg isolation
   return (lost, ← r.allowed [])
 
 def live : IO (List (String × Bool)) := do
@@ -119,9 +131,11 @@ def live : IO (List (String × Bool)) := do
   | .error (some _) => return [(s!"postgres live: the server at {host}:{port} refused lanes_trust", false)]
   | .ok s => (s.close).block
   let scram ← opens (config host port "lanes_scram" (some "scram-pw"))
-  let md5 ← opens (config host port "lanes_md5" (some "md5-pw"))
-  let clear ← opens (config host port "lanes_clear" (some "clear-pw") (allowCleartext := true))
-  let clearRefused ← opens (config host port "lanes_clear" (some "clear-pw"))
+  let md5 ← opens (config host port "lanes_md5" (some "md5-pw") (legacy := true))
+  let md5Refused ← opens (config host port "lanes_md5" (some "md5-pw"))
+  let clear ← opens (config host port "lanes_clear" (some "clear-pw") (allowCleartext := true)
+    (legacy := true))
+  let clearRefused ← opens (config host port "lanes_clear" (some "clear-pw") (legacy := true))
   let wrong ← (connect (config host port "lanes_scram" (some "wrong"))).block
   let wrongRefused := match wrong with
     | .error (some (.server fields)) => fields.any (·.value == "28P01")
@@ -144,6 +158,7 @@ def live : IO (List (String × Bool)) := do
     ("postgres live: SCRAM-SHA-256, MD5 and an allowed cleartext password authenticate",
       scram && md5 && clear),
     ("postgres live: a cleartext password is not sent unless allowed", !clearRefused),
+    ("postgres live: by default a server that asks for MD5 is refused", !md5Refused),
     ("postgres live: a wrong password is refused", wrongRefused),
     ("postgres live: rows with a parameter, NULL and UTF-8; an error with its SQLSTATE",
       rows == .rows { columns := ["a", "b", "c"], rows := [[some "x", none, some "é"]], tag := "SELECT 1" }

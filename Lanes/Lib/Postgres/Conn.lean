@@ -121,7 +121,15 @@ structure Config where
   /-- Whether the password may be sent as it is when the server asks so. Over plain TCP anyone
   on the path reads it, so it is off unless asked for. -/
   allowCleartext : Bool := false
-  allowMd5 : Bool := true
+  /-- Whether an MD5 digest of the password may be sent when the server asks for one. The digest
+  can be guessed against offline by whoever asked, so it is off unless asked for. -/
+  allowMd5 : Bool := false
+  /-- With a password, whether the server must prove it knows it, by SCRAM, before the
+  connection opens: an `AuthenticationOk` before SCRAM's last message, or a request for a
+  cleartext password or an MD5 digest, closes it. A server that skips SCRAM could be anyone on
+  the path. Turn it off, with `allowMd5` or `allowCleartext`, only for a server that has no
+  SCRAM. -/
+  requireScram : Bool := true
   /-- A message's length, counting its four bytes of length. -/
   message_max : Nat := 1048576
   rows_max : Nat := 100000
@@ -297,19 +305,23 @@ def onReply (c : Conn) (p : Pending) (rest : List Pending) : Backend → Conn ×
 def nonceOk (nonce : String) : Bool :=
   !nonce.isEmpty && nonce.toList.all fun ch => '!' ≤ ch && ch ≤ '~' && ch != ','
 
+/-- Whether the server must prove it knows the password by SCRAM before the connection opens. -/
+def Config.scramOnly (cfg : Config) : Bool := cfg.requireScram && cfg.password.isSome
+
 /-- The server asks how to authenticate. -/
 def onAuth (c : Conn) : Backend → Conn × List Action
-  | .authOk => ({ c with phase := .authed }, [])
+  | .authOk => if cfg.scramOnly then fail c .signature else ({ c with phase := .authed }, [])
   | .authCleartext =>
     match cfg.password with
     | some password =>
-      if cfg.allowCleartext then ({ c with phase := .password }, [.send (Frontend.password password).encode])
+      if cfg.allowCleartext && !cfg.requireScram then
+        ({ c with phase := .password }, [.send (Frontend.password password).encode])
       else fail c .method
     | none => fail c .method
   | .authMd5 salt =>
     match cfg.password with
     | some password =>
-      if cfg.allowMd5 then
+      if cfg.allowMd5 && !cfg.requireScram then
         ({ c with phase := .password },
           [.send (Frontend.password (md5Answer cfg.user password salt)).encode])
       else fail c .method

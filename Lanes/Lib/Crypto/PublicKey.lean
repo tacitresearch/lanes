@@ -82,7 +82,8 @@ def rsaSize (n : ByteArray) : Nat := (Der.digits (Bytes.toNat n)).length
 /-- An RSA modulus of 2048 to 8192 bits and an odd exponent above one; or a point of P-256
 given as two coordinates of 32 bytes each. That the point is on the curve is OpenSSL's check. -/
 def valid : PublicKey → Bool
-  | .rsa n e => 256 ≤ rsaSize n && rsaSize n ≤ 1024 && Bytes.toNat e % 2 == 1 && 1 < Bytes.toNat e
+  | .rsa n e =>
+    2 ^ 2047 ≤ Bytes.toNat n && Bytes.toNat n < 2 ^ 8192 && Bytes.toNat e % 2 == 1 && 1 < Bytes.toNat e
   | .p256 x y => x.size == 32 && y.size == 32
 
 def spki : PublicKey → ByteArray

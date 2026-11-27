@@ -335,6 +335,9 @@ import Lanes.Semantics
 /-- info: 'Lanes.Postgres.Conn.onMessage_saslFinal' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Postgres.Conn.onMessage_saslFinal
 
+/-- info: 'Lanes.Postgres.Conn.onMessage_requireScram' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.Conn.onMessage_requireScram
+
 /-- info: 'Lanes.Postgres.Conn.onMessage_sasl_authOk' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Postgres.Conn.onMessage_sasl_authOk
 

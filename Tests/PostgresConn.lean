@@ -7,8 +7,9 @@ import Lanes
 /-!
 A connection to PostgreSQL against a server that does what it may. The server is a model written
 here: it reads what the client sends with `Frontend.decode`, authenticates it by trust, MD5 or
-SCRAM (or answers SCRAM with a signature that is not the password's), runs a transaction's
-statements (one returns rows, one fails, one succeeds) and keeps which `COMMIT`s it committed.
+SCRAM (or answers SCRAM with a signature that is not the password's, or skips it to a client that
+requires it), runs a transaction's statements (one returns rows, one fails, one succeeds) and
+keeps which `COMMIT`s it committed.
 What it writes reaches the client in pieces of one, seven or all the bytes, only while the
 connection takes them; the server may leave at any moment, losing what it has not delivered; the
 client submits its requests whenever it is open, pipelining up to the bound, and may stop. The
@@ -26,6 +27,8 @@ inductive Method where
   | scram
   /-- SCRAM, but the server's last message carries a signature that is not the password's. -/
   | forged
+  /-- `AuthenticationOk` at once, as trust, to a client that requires SCRAM. -/
+  | impostor
   deriving DecidableEq, Hashable, Repr
 
 def password : String := "pw"
@@ -39,6 +42,11 @@ def serverFirst : String := "r=" ++ nonce ++ "sv,s=" ++ Base64.encode .std salt 
 def cfg : Config :=
   { user := "u", database := "d", password := some password, nonce, message_max := 96,
     inflight_max := 2, iterations_max := 4 }
+
+/-- A server of trust or MD5 is reached only by a client that lets it skip SCRAM. -/
+def cfgOf : Method → Config
+  | .trust | .md5 => { cfg with requireScram := false, allowMd5 := true }
+  | .scram | .forged | .impostor => cfg
 
 inductive ServerPhase where
   | startup
@@ -77,7 +85,7 @@ def serve (s : Server) (m : Frontend) : Server × ByteArray :=
   match s.phase, m with
   | .startup, .startup _ =>
     match s.method with
-    | .trust => ({ s with phase := .ready }, welcome)
+    | .trust | .impostor => ({ s with phase := .ready }, welcome)
     | .md5 => ({ s with phase := .password }, frame (.authMd5 salt))
     | .scram | .forged => ({ s with phase := .saslInitial }, frame (.authSasl ["SCRAM-SHA-256"]))
   | .password, .password p =>
@@ -199,20 +207,20 @@ def perform (w : World) : Action → World
 
 def tell (w : World) (e : Event) : World :=
   let closed := w.conn.phase == .closed
-  let (conn, actions) := w.conn.step cfg e
+  let (conn, actions) := w.conn.step (cfgOf w.server.method) e
   let notRefusal := actions.any fun | .reply _ (.refused _) => false | _ => true
   let w := actions.foldl perform { w with conn, stray := w.stray || (closed && notRefusal) }
   { w with wasFull := w.wasFull || conn.queue.length == cfg.inflight_max }
 
 def initial (method : Method) (script : List Request) : World :=
-  let (conn, actions) := Conn.start cfg
+  let (conn, actions) := Conn.start (cfgOf method)
   actions.foldl perform { conn, server := { method }, script }
 
 def next (w : World) : List (String × World) :=
   if w.conn.phase == .closed then []
   else
     let left := w.wire.size - w.delivered
-    let room := w.conn.room cfg
+    let room := w.conn.room (cfgOf w.server.method)
     let deliveries := if w.gone then [] else
       [1, 7, 1000].filterMap fun piece =>
         let n := min piece (min room left)
@@ -265,11 +273,12 @@ def properties (method : Method) : List (Property World) :=
     .always "no more requests are in flight than the bound" fun w =>
       w.conn.queue.length ≤ cfg.inflight_max,
     .always "a server that does not prove the password is never trusted" fun w =>
-      method != .forged || !w.opened ]
+      (method != .forged && method != .impostor) || !w.opened ]
 
 def sometimes (method : Method) (failing : Bool) : List (Property World) :=
-  if method == .forged then
-    [.sometimes "the forged signature closes the connection" fun w => w.conn.phase == .closed && !w.gone]
+  if method == .forged || method == .impostor then
+    [.sometimes "the server that did not prove the password closes the connection" fun w =>
+      w.conn.phase == .closed && !w.gone]
   else
     [ .sometimes "the connection opens" (·.opened),
       .sometimes "a reply is read from more than one piece" (·.pieced),
@@ -301,7 +310,8 @@ def checks : IO (List (String × Bool)) := do
       ("trust, a transaction that fails, then rows", .trust, failing, true),
       ("MD5, a transaction that commits", .md5, committing, false),
       ("SCRAM, a transaction that commits", .scram, committing, false),
-      ("SCRAM with a forged signature", .forged, committing, false) ]
+      ("SCRAM with a forged signature", .forged, committing, false),
+      ("trust to a client that requires SCRAM", .impostor, committing, false) ]
   return cases.map fun (name, method, script, fails) =>
     let r := report method script fails
     (s!"postgres conn: {name}: every promise holds against a server that may do anything", r.ok && r.complete)

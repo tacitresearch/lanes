@@ -79,20 +79,29 @@ import Lanes.Semantics
 /-- info: 'Lanes.OAuth.same_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.OAuth.same_iff
 
-/-- info: 'Lanes.OAuth.Pending.length_begin' depends on axioms: [propext] -/
-#guard_msgs in #print axioms Lanes.OAuth.Pending.length_begin
+/-- info: 'Lanes.OAuth.check_ok' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.OAuth.check_ok
 
-/-- info: 'Lanes.OAuth.Pending.callback_ok' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.OAuth.Pending.callback_ok
+/-- info: 'Lanes.OAuth.Used.length_claim' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.OAuth.Used.length_claim
 
-/-- info: 'Lanes.OAuth.Pending.callback_removes' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.OAuth.Pending.callback_removes
+/-- info: 'Lanes.OAuth.Used.claim_ok' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.OAuth.Used.claim_ok
 
-/-- info: 'Lanes.OAuth.Pending.callback_sublist' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.OAuth.Pending.callback_sublist
+/-- info: 'Lanes.OAuth.Used.claim_holds' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.OAuth.Used.claim_holds
 
-/-- info: 'Lanes.OAuth.Pending.accepted_le_issued' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.OAuth.Pending.accepted_le_issued
+/-- info: 'Lanes.OAuth.Used.claim_ok_holds' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.OAuth.Used.claim_ok_holds
+
+/-- info: 'Lanes.OAuth.Used.accepted_later' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.OAuth.Used.accepted_later
+
+/-- info: 'Lanes.OAuth.Used.accepted_once' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.OAuth.Used.accepted_once
+
+/-- info: 'Lanes.OAuth.Identity.under_cons' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.OAuth.Identity.under_cons
 
 /-- info: 'Lanes.OAuth.Keys.lookup_fetch' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.OAuth.Keys.lookup_fetch

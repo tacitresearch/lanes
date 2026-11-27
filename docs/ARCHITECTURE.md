@@ -39,7 +39,7 @@ proved function tells it to.
 | The checker | `Lanes/Check/`, `Lanes/Semantics/{Monitor,MonitorSound}.lean` | `Check.search_sound`, `Check.system_sound_of_respects`, `Check.refines_traces` |
 | The proof layer | `Lanes/Semantics/` | refinement, specs, fairness, leads-to |
 | Data and the standard library | `Lanes/Data/`, `Lanes/Lib/` | codec laws, `Quorum.majority_inter`, `Bytes.same_iff`, `Json.parse_iff`, `Url.parse_print` |
-| Sign-in with OAuth 2.0 and OpenID Connect | `Lanes/Web/Auth/{Jose,IdToken,OAuth}.lean`, `Lanes/Web/IO/SignIn.lean` | `OAuth.Pending.callback_ok`, `OAuth.Pending.accepted_le_issued`, `OAuth.IdToken.verify_accepted`, `Jose.verify_ok`, `OAuth.Keys.no_fetch_within`; the edge is trusted, tested end to end against a provider run in the test |
+| Sign-in with OAuth 2.0 and OpenID Connect | `Lanes/Web/Auth/{Jose,IdToken,OAuth}.lean`, `Lanes/Web/IO/SignIn.lean` | `OAuth.check_ok`, `OAuth.Used.accepted_once`, `OAuth.Used.length_claim`, `OAuth.IdToken.verify_accepted`, `Jose.verify_ok`, `OAuth.Keys.no_fetch_within`; the edge is trusted, tested end to end against a provider run in the test |
 | Bound C | `native/lanes.c`, `Lanes/Lib/Crypto/Sodium.lean`; `native/verify.c`, `Lanes/Lib/Crypto/Verify.lean` | trusted; tested against the Lean references and published vectors |
 | TLS client | `native/tls.c`, `Lanes/Web/IO/Tls.lean` | trusted; tested against `openssl s_server` |
 
@@ -278,9 +278,10 @@ again (`Auth.Sessions.accepts_iff`, `Auth.Sessions.Ended.run`).
 Sign-in with another service (`docs/decisions/D72-sign-in-with-oauth.md`) is OAuth 2.0's authorization
 code flow with PKCE and OpenID Connect on it, decided in `Lanes/Web/Auth/OAuth.lean` and done
 where a request arrives, before the system (`serve`'s `arrive`, `Lanes/Web/IO/SignIn.lean`), so no
-code or token is journalled. A callback is accepted only for a state issued to its browser and
-provider and not expired (`OAuth.Pending.callback_ok`), and no state more often than it was issued
-(`OAuth.Pending.accepted_le_issued`), which is also model-checked against an attacker's browser;
+code or token is journalled. A sign-in begun is a ticket the browser keeps in a cookie under the
+server's tag, so beginnings take no room on the server. A callback is accepted only with its
+browser's ticket, for its state and provider, not expired (`OAuth.check_ok`), and no state twice
+(`OAuth.Used.accepted_once`), which is also model-checked against an attacker's browser;
 an ID token only if its header names RS256 or ES256, a key of the provider's set of that
 algorithm and `kid` checks it, and every claim passes (`OAuth.IdToken.verify_accepted`,
 `Lanes/Web/Auth/Jose.lean`). The system gets the identity in headers a client cannot send
@@ -311,9 +312,11 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   whose target is the canonical path and query that were signed (`SigV4.target_sign`), with the
   query and the signed headers in order (`SigV4.sortQuery_sorted`, `canonicalHeaders_sorted`);
   what an answer means (`S3.interpret`), and a reader of the XML S3 writes, which refuses a
-  document type and every entity it does not know (`Lanes/Web/S3/Xml.lean`). The signatures are
-  tested against AWS's test suite and S3's documented examples, the client against a fake S3
-  that checks every signature from the bytes it receives. Bodies are whole, in memory. The
+  document type and every entity it does not know (`Lanes/Web/S3/Xml.lean`), tested against Go's
+  `encoding/xml`. The signatures are tested against AWS's test suite, S3's documented examples and
+  botocore on generated requests, the client against a fake S3 that checks every signature from
+  the bytes it receives, and against moto's S3, whose run the object store's model allows
+  (`oracles/README.md`). Bodies are whole, in memory. The
   credentials are read at each call from a `SigV4.Source`: fixed, or kept fresh by something
   else.
 - **AWS** (`integrations/aws`, `docs/decisions/D74-aws-integration.md`): a role's credentials
@@ -326,10 +329,10 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   `Refresh.retry_within`); model-checked first against a model of the metadata service with
   timeouts. A task in `Aws/IO/Credentials.lean` only performs. SES's `SendEmail` is a JSON document
   proved to read back with exactly its recipients (`Ses.toAddresses_json`), its answers read as
-  the email model's (`Ses.Answer.modelled`), and a run against a fake SES is one the model
-  allows; SES takes no key, so each send is a request without one.
-- **Sign-in** (`Lanes/Web/IO/SignIn.lean`): the random values of a beginning, the pending
-  sign-ins and each provider's keys held in references, and the calls to the token endpoint,
+  the email model's (`Ses.Answer.modelled`), and runs against a fake SES and against moto's SES
+  are ones the model allows; SES takes no key, so each send is a request without one.
+- **Sign-in** (`Lanes/Web/IO/SignIn.lean`): the random values of a beginning and the key of the
+  tickets, the states used and each provider's keys held in references, and the calls to the token endpoint,
   the JWK Set and a user API; every decision is `Lanes/Web/Auth/OAuth.lean`'s (above).
 - **HTTP server, journal, transport**: above.
 - **Models of external services** (`Lanes/Outside/`, D61 and the decision on models of external
@@ -373,7 +376,8 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   `Store.lost_update`, `Store.lost_commit_either`, `Store.lost_commit_later`). A table of
   PostgreSQL runs it (`Lanes/Lib/Postgres/Table.lean`, `Postgres.Store.handler`); that the server
   behaves like the model at the level chosen is the premise of a theorem proved against it,
-  tested on recorded runs (`Tests/PostgresLive.lean`). `examples/todo-db` is checked against it.
+  tested on runs recorded from PostgreSQL 16, some interleaved at random
+  (`oracles/postgres/store.jsonl`). `examples/todo-db` is checked against it.
 - **Jobs** (`Lanes/Behaviours/Jobs/Basic.lean`): work that must not run in a
   step, an outbound call or slow pure work, is submitted to the jobs actor under a key the
   requester chooses, beside the system that submits it (`Jobs.attach`). The actor dispatches
