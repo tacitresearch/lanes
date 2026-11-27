@@ -8,7 +8,9 @@ from the built library in `docs/INVENTORY.md` (D47), and what has none is on
 `docs/inventory-none.md`: that is where a claim is checked, and this page only names the
 headline theorems. `import Lanes` gives the API; the soundness theorems named here are in
 `Lanes.Proofs` (`Lanes/Proofs.lean`), which `Lanes.Semantics` imports. Those are gated in `Tests/Axioms/`, which stops compiling if a `sorry` or a
-new axiom reaches them.
+new axiom reaches them. `Lanes.Testing` (`Lanes/Testing.lean`) is the test kit an application's
+tests run against: a fake S3 that checks signatures, a fake identity provider and a scripted
+browser; no binary that serves imports it (`docs/decisions/new-a-test-kit.md`).
 
 The idea in one line: all logic is pure step functions, the semantics is one executable function
 over them, and the code that runs, the checker that explores and the proofs that cover are all

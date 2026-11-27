@@ -89,9 +89,10 @@ actor crashes and starts again anywhere. What each browser is shown is judged as
 | Seeded: the browser's word taken for the upload (`trustBrowser`) | | found in 18 steps |
 | Seeded: a check the store did not answer in time taken as found (`readyOnTimeout`) | | found in 21 steps |
 
-Over HTTP (`Videos/EndToEnd.lean`, 19 checks): the site as `Main` serves it, on a journal, with a
-provider of the test's (a token endpoint and a user API, as GitHub's) and Lanes' fake S3, which
-checks every signature, the presigned links' included. Two members sign in; a video is made, put
+Over HTTP (`Videos/EndToEnd.lean`, 19 checks): the site as `Main` serves it, on a journal, against
+the test kit of Lanes (`Lanes.Testing`): its identity provider in GitHub's shape, read by
+`GitHub.read`, its fake S3, which checks every signature, the presigned links' included, and its
+browser, which keeps the cookies. Two members sign in; a video is made, put
 to the store through its link, checked and watched through the `<video>`'s link; likes counted
 once, a comment, a forged form, another's delete; a private video seen by its owner alone; an
 upload not yet in the store not listed; then the server is stopped and started again on its
@@ -188,10 +189,10 @@ package; none touches the library.
    (`Videos/Check.lean`). Its state keeps every write settled, sent and read in lists that only
    grow, so states that differ only in history are distinct: the scenario of a video's life has
    741,759 states for thirteen requests.
-7. **No kit for tests.** The fake S3 and the fake provider are test files of Lanes
-   (`Tests/S3.lean`, `Tests/OAuth.lean`), imported here from the `Tests` library, which an
-   application outside this repository cannot do; the browser (cookies, form tokens, following
-   links) is written again here, as rookery and the ledger did.
+7. **No kit for tests** (since fixed: `Lanes.Testing`, which this package's tests use). The fake
+   S3 and the fake provider were test files of Lanes, which an application outside this
+   repository cannot import; the browser (cookies, form tokens, following links) was written
+   again here, as rookery and the ledger did.
 8. **The S3 client takes keys only from the environment**: no instance role (IMDSv2), so the
    deployment needs a long-lived IAM user's keys; and the stack does not tell the application its
    media bucket, so `VIDEOS_BUCKET` is set by hand in `secrets.env`.

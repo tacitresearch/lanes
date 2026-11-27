@@ -26,6 +26,7 @@ under Unreleased (`CONTRIBUTING.md`).
 - A PostgreSQL client in Lean (`Lanes/Lib/Postgres/`): the frontend/backend protocol 3.0 with trust, cleartext, MD5 and SCRAM-SHA-256 authentication, the extended query protocol with parameters in text, errors and transactions, over plain TCP; messages proved to read back as written, a connection as a pure `Postgres.Conn.step` proved to answer requests in order and never to report a failed transaction committed, and an IO file that only performs. MD5 and PBKDF2-HMAC-SHA-256 in Lean (`Lanes/Lib/Crypto/`).
 - A transactional store model (`Lanes/Outside/Store/`) at read committed and serializable, with lost `COMMIT` answers, as an `Outside`, and an adapter that runs it on a PostgreSQL table (`Postgres.Store.handler`).
 - `examples/todo-db`: a to-do list in PostgreSQL, where the checker finds the duplicate row that retrying a lost commit makes, and the fix is proved.
+- A test kit, `import Lanes.Testing`, which `import Lanes` does not include: a fake S3 that checks every signature as S3 would, a fake identity provider of OpenID Connect and of OAuth 2.0 with a user API (`Testing.OAuth.Fake`, `Testing.OAuth.signIn`), a scripted browser that keeps cookies (`Testing.Browser`), a server of a handler (`Testing.listen`) and readers of a response. The fakes that `Tests/S3.lean` and `Tests/OAuth.lean` held moved there.
 
 ### Changed
 

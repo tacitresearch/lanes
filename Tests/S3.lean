@@ -3,14 +3,14 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
+import Lanes.Testing
 
 /-!
 The S3 client: the XML reader on ListObjectsV2 and error documents as S3 writes them, and on
 what it must refuse; the calls built for each operation and each way of naming a bucket; what a
-response means; the model of an object store; and the client against a fake S3 in the test, over
-plain HTTP, which reads each request off the wire, checks its signature with the same key as S3
-would, from the bytes it received, and keeps the objects. A system calling the fake through
-`S3.handler` is checked against the model. Nothing here calls AWS.
+response means; the model of an object store; and the client against the test kit's fake S3
+(`Lanes/Testing/S3.lean`), over plain HTTP, which checks each signature as S3 would. A system
+calling the fake through `S3.handler` is checked against the model. Nothing here calls AWS.
 -/
 
 namespace Tests.S3
@@ -275,218 +275,15 @@ def modelTests : List (String × Bool) :=
 def tests : List (String × Bool) :=
   xmlTests ++ callTests ++ interpretTests ++ modelTests
 
-/-! ## A fake S3 -/
+/-! ## Against the fake S3 of the test kit (`Lanes/Testing/S3.lean`) -/
 
-structure Raw where
-  verb : String
-  target : String
-  /-- Lowercase names, values trimmed, in order. -/
-  headers : List (String × String)
-  body : ByteArray
-
-def raw? (received : ByteArray) : Option Raw := do
-  let bodyStart ← headEnd received
-  let head ← String.fromUTF8? (received.extract 0 (bodyStart - 4))
-  let lines := head.splitOn "\r\n"
-  let [verb, target, _] := (lines.headD "").splitOn " " | none
-  let headers := (lines.drop 1).filterMap fun line =>
-    match line.splitOn ":" with
-    | name :: rest => some (name.toLower, (":".intercalate rest).trimAscii.toString)
-    | [] => none
-  let length := ((headers.lookup "content-length").bind (·.toNat?)).getD 0
-  if bodyStart + length ≤ received.size then
-    some { verb, target, headers, body := received.extract bodyStart (bodyStart + length) }
-  else none
-
-def answer (status : Nat) (headers : List (String × String)) (body : ByteArray)
-    (head : Bool := false) : ByteArray :=
-  let lines := s!"HTTP/1.1 {status} S3" :: (headers.map fun (n, v) => n ++ ": " ++ v)
-    ++ (if headers.any (·.1 == "Content-Length") then [] else [s!"Content-Length: {body.size}"])
-    ++ ["Connection: close"]
-  ("\r\n".intercalate lines ++ "\r\n\r\n").toUTF8 ++ (if head then .empty else body)
-
-def failure (status : Nat) (code : String) (head : Bool := false) : ByteArray :=
-  answer status [("Content-Type", "application/xml")]
-    (bytes s!"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Error><Code>{code}</Code></Error>") head
-
-/-- `yyyymmddThhmmssZ` as the time it names. -/
-def time? (s : String) : Option Civil.DateTime := do
-  let cs := s.toList
-  unless cs.length == 16 && cs[8]? == some 'T' && cs[15]? == some 'Z' do none
-  let num (from_ n : Nat) := (String.ofList ((cs.drop from_).take n)).toNat?
-  let date ← Civil.Date.mk? (← num 0 4) (← num 4 2) (← num 6 2)
-  return Civil.DateTime.ofUnix (date.toDays * 86400 + (← num 9 2) * 3600 + (← num 11 2) * 60
-    + (← num 13 2))
-
-def decodePair (pair : String) : Option (String × String) :=
-  match pair.splitOn "=" with
-  | [k] => (percentDecode k).map (·, "")
-  | k :: v => do return (← percentDecode k, ← percentDecode ("=".intercalate v))
-  | [] => none
-
-def splitTarget (target : String) : Option (List String × List (String × String)) := do
-  let (path, query) := match target.splitOn "?" with
-    | [p] => (p, "")
-    | p :: q => (p, "?".intercalate q)
-    | [] => ("", "")
-  let path ← match path.toList with
-    | '/' :: rest => some rest
-    | _ => none
-  let segments ← (path.splitOn '/').mapM fun s => percentDecode (String.ofList s)
-  let query ← if query.isEmpty then some [] else (query.splitOn "&").mapM decodePair
-  return (segments, query)
-
-/-- The value after `name=` in an `Authorization` header. -/
-def field (auth name : String) : Option String :=
-  (auth.splitOn (name ++ "="))[1]? |>.map fun rest => (rest.splitOn ",").headD ""
-
-/-- Whether `r` is signed with `creds`, in its header or in its query, as S3 would check it
-from the bytes received; and the path and query it names. -/
-def verified (creds : SigV4.Credentials) (r : Raw) :
-    Option (List String × List (String × String)) := do
-  let (path, query) ← splitTarget r.target
-  let scope : SigV4.Scope := ⟨"us-east-1", "s3"⟩
-  let signedPairs (names : List String) := names.flatMap fun name =>
-    (r.headers.filter (·.1 == name)).map fun (_, v) => (name, v)
-  match r.headers.lookup "authorization" with
-  | some auth =>
-    let names := ((field auth "SignedHeaders").getD "").splitOn ";"
-    let t ← time? (← r.headers.lookup "x-amz-date")
-    let payload ← r.headers.lookup "x-amz-content-sha256"
-    unless payload == SigV4.unsignedPayload || payload == SigV4.payloadHash r.body do none
-    unless names.contains "host" && names.contains "x-amz-content-sha256" do none
-    unless (creds.sessionToken.map (·.reveal)) == r.headers.lookup "x-amz-security-token" do none
-    unless creds.sessionToken.isNone || names.contains "x-amz-security-token" do none
-    let expected := SigV4.authorization creds t scope r.verb path query (signedPairs names) payload
-    if expected == auth then some (path, query) else none
-  | none =>
-    let signature ← query.lookup "X-Amz-Signature"
-    let rest := query.filter (·.1 != "X-Amz-Signature")
-    let t ← time? (← query.lookup "X-Amz-Date")
-    let expires ← (← query.lookup "X-Amz-Expires").toNat?
-    unless 0 < expires && expires ≤ 604800 do none
-    let names := (← query.lookup "X-Amz-SignedHeaders").splitOn ";"
-    let canonical := SigV4.canonicalRequest r.verb path rest (signedPairs names) SigV4.unsignedPayload
-    if SigV4.signature creds.secretAccessKey t scope canonical == signature then
-      some (path, rest.filter fun (k, _) => !k.startsWith "X-Amz-")
-    else none
-
-/-- A key as S3 escapes it with `encoding-type=url`: a space as `+`. -/
-def escapeKey (k : String) : String :=
-  String.join (k.toList.map fun c => if c == ' ' then "+" else SigV4.encode c.toString)
-
-def listXml (objects : List (String × ByteArray × String)) (query : List (String × String)) :
-    ByteArray :=
-  let keyPrefix := (query.lookup "prefix").getD ""
-  let after := (query.lookup "continuation-token").getD ""
-  let max := ((query.lookup "max-keys").bind (·.toNat?)).getD 1000
-  let matching := (objects.map (·.1)).filter fun k => k.startsWith keyPrefix && after < k
-  let sorted := matching.mergeSort (· ≤ ·)
-  let rolled (k : String) : Option String := (query.lookup "delimiter").bind fun d =>
-    let rest := (k.drop keyPrefix.length).toString
-    match rest.splitOn d with
-    | first :: _ :: _ => some (keyPrefix ++ first ++ d)
-    | _ => none
-  let page := sorted.take max
-  let truncated := sorted.length > max
-  let contents := page.filterMap fun k =>
-    if (rolled k).isSome then none
-    else (objects.lookup k).map fun (body, _) =>
-      s!"<Contents><Key>{escapeKey k}</Key><Size>{body.size}</Size><ETag>&quot;e&quot;</ETag></Contents>"
-  let prefixes := (page.filterMap rolled).eraseDups.map fun p =>
-    s!"<CommonPrefixes><Prefix>{escapeKey p}</Prefix></CommonPrefixes>"
-  bytes ("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ListBucketResult><IsTruncated>"
-    ++ toString (decide truncated) ++ "</IsTruncated>" ++ String.join contents ++ String.join prefixes
-    ++ (if truncated then s!"<NextContinuationToken>{Xml.escape page.getLast!}</NextContinuationToken>"
-      else "") ++ "</ListBucketResult>")
-
-def range? (header : String) (size : Nat) : Option (Nat × Nat) :=
-  match (header.drop 6).toString.splitOn "-", header.startsWith "bytes=" with
-  | ["", n], true => n.toNat?.map fun n => (size - n, size)
-  | [a, ""], true => a.toNat?.map fun a => (a, size)
-  | [a, b], true => do return (← a.toNat?, min size ((← b.toNat?) + 1))
-  | _, _ => none
-
-/-- What the fake answers, and the objects after: path-style, one bucket, `videos`. -/
-def serve (creds : SigV4.Credentials) (objects : List (String × ByteArray × String)) (r : Raw) :
-    ByteArray × List (String × ByteArray × String) :=
-  let head := r.verb == "HEAD"
-  match verified creds r with
-  | none => (failure 403 "SignatureDoesNotMatch" head, objects)
-  | some (path, query) =>
-    match path, r.verb with
-    | ["videos"], "GET" =>
-      if query.lookup "list-type" == some "2" then
-        (answer 200 [("Content-Type", "application/xml")] (listXml objects query), objects)
-      else (failure 400 "InvalidRequest", objects)
-    | "videos" :: segments, verb =>
-      let k := "/".intercalate segments
-      match verb, objects.lookup k with
-      | "PUT", _ =>
-        let type := (r.headers.lookup "content-type").getD "binary/octet-stream"
-        (answer 200 [("ETag", "\"" ++ (SigV4.payloadHash r.body).take 32 ++ "\"")] .empty,
-          (k, r.body, type) :: objects.filter (·.1 != k))
-      | "DELETE", _ => (answer 204 [] .empty, objects.filter (·.1 != k))
-      | "GET", some (body, type) =>
-        match (r.headers.lookup "range").map (range? · body.size) with
-        | some (some (first, stop)) =>
-          (answer 206 [("Content-Type", type)] (body.extract first stop), objects)
-        | some none => (failure 416 "InvalidRange", objects)
-        | none => (answer 200 [("Content-Type", type), ("ETag", "\"e\"")] body, objects)
-      | "HEAD", some (body, type) =>
-        (answer 200 [("Content-Type", type), ("Content-Length", toString body.size)] body true,
-          objects)
-      | _, none => (failure 404 "NoSuchKey" head, objects)
-      | _, _ => (failure 405 "MethodNotAllowed", objects)
-    | _, _ => (failure 404 "NoSuchBucket" head, objects)
-
-/-- The fake on a local port, with the objects in a reference; each request is read whole, then
-answered, then the connection closed. -/
-def fake (creds : SigV4.Credentials) : Async (TCP.Socket.Server × UInt16 × IO.Ref (List (String × ByteArray × String))) := do
-  let objects ← IO.mkRef []
-  let server ← TCP.Socket.Server.mk
-  server.bind (.v4 ⟨.ofParts 127 0 0 1, 0⟩)
-  server.listen 128
-  let tcpPort := (← server.getSockName).port
-  background do
-    try
-      repeat
-        let client ← server.accept
-        background do
-          try
-            let mut received := ByteArray.empty
-            repeat
-              let some arrived ← client.recv? 65536 | break
-              received := received ++ arrived
-              if let some r := raw? received then
-                let reply ← objects.modifyGet fun objs => serve creds objs r
-                client.send reply
-                break
-          catch _ => pure ()
-          client.close
-    catch _ => pure ()
-  return (server, tcpPort, objects)
-
-def bucketAt (tcpPort : UInt16) : Bucket :=
-  { name := "videos", region := "us-east-1",
-    endpoint := { host := "127.0.0.1", port := tcpPort, scheme := .http, addressing := .path } }
+open Lanes.Testing.S3 (Fake follow)
 
 def config : Client.Config := { timeout_ms := 3000 }
 
-/-- A link fetched as a browser would: no credentials, the link's own target. -/
-def follow (url : String) (method : Method) (body : ByteArray := .empty)
-    (headers : List (String × String) := []) : Async (Option Response) := do
-  let parts := url.splitOn "/"
-  let origin := "/".intercalate (parts.take 3)
-  let target := "/" ++ "/".intercalate (parts.drop 3)
-  let some (path, query) := splitTarget target | return none
-  let some c := Client.Call.at origin { method, path, query, headers, body } | return none
-  if c.request.target != target then return none
-  Client.exchange c config
-
 def endToEnd : Async (List (String × Bool)) := do
-  let (server, tcpPort, objects) ← fake creds
-  let b := bucketAt tcpPort
+  let store ← Fake.start creds
+  let b := store.bucket
   let ex (op : Op) := exchange b creds op config
   let clip := bytes "0123456789 a video"
   let k := key "clips/a b/ሴ.mp4"
@@ -504,10 +301,10 @@ def endToEnd : Async (List (String × Bool)) := do
   let second ← ex (.list "clips/" none next ⟨1, by decide⟩)
   let forged ← exchange b { creds with secretAccessKey := ⟨"not the secret"⟩ } (.get k) config
   let withToken := { creds with sessionToken := some ⟨"tok"⟩ }
-  let (tokenServer, tokenPort, _) ← fake withToken
-  let tokened ← exchange (bucketAt tokenPort) withToken (.put k clip) config
-  let untokened ← exchange (bucketAt tokenPort) creds (.put k clip) config
-  tokenServer.close
+  let tokenStore ← Fake.start withToken
+  let tokened ← exchange tokenStore.bucket withToken (.put k clip) config
+  let untokened ← exchange tokenStore.bucket creds (.put k clip) config
+  tokenStore.stop
   let deleted ← ex (.delete k)
   let gone ← ex (.get k)
   let goneHead ← ex (.head k)
@@ -519,8 +316,9 @@ def endToEnd : Async (List (String × Bool)) := do
   let download := presign b creds t .get (key "up/a b.png") expiry
   let downloaded ← follow download .get
   let tampered ← follow (download.replace "a%20b" "x") .get
-  server.close
-  let kept := (← objects.get).map (·.1)
+  let keptPicture ← store.holds "up/a b.png"
+  store.stop
+  let kept ← store.keys
   return [
     ("s3 fake: a put is signed as S3 checks it, and stored", put.any (· matches .stored (some _))),
     ("s3 fake: a get brings it back, with its type",
@@ -547,14 +345,14 @@ def endToEnd : Async (List (String × Bool)) := do
     ("s3 fake: deleted, then missing to a get and to a head",
       deleted == some .deleted && gone == some .missing && goneHead == some .missing),
     ("s3 fake: a presigned put, with the type it was signed for, stores",
-      uploaded.any (·.status == 200) && wrongType.any (·.status == 403) && kept.contains "up/a b.png"),
+      uploaded.any (·.status == 200) && wrongType.any (·.status == 403) && keptPicture),
     ("s3 fake: a presigned get brings it back, and a link changed is refused",
       (downloaded.map (·.body)) == some (bytes "picture") && tampered.any (·.status == 403)) ]
 
 /-- A system calls the fake through `S3.handler`, and the run is one the model allows. -/
 def conformance : Async (List (String × Bool)) := do
-  let (server, tcpPort, _) ← fake creds
-  let b := bucketAt tcpPort
+  let store ← Fake.start creds
+  let b := store.bucket
   let done ← IO.mkRef 0
   let all ← IO.Promise.new
   let calls := 7
@@ -577,7 +375,7 @@ def conformance : Async (List (String × Bool)) := do
   rt.idle
   let events := (← rt.trace).toList
   rt.stop
-  server.close
+  store.stop
   let answers := events.filterMap fun | .output (.done id a) => some (id, a) | _ => none
   return [
     ("s3 handler: each call answered, in the order made",
