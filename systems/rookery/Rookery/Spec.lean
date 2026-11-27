@@ -71,8 +71,8 @@ lanes_data inductive Request (N C : Type) where
   | web (req : ReqId) (name : N) (session : Sid) (op : Op N)
   /-- `token` is the generation of the token the request carried; `seq` its sequence number. -/
   | api (req : ReqId) (name : N) (token : Nat) (seq : Nat) (op : Op N)
-  /-- An account's posts, newest first, which anyone may read. -/
-  | profile (req : ReqId) (name : N)
+  /-- An account's posts, newest first, which anyone may read; `json` if asked through the API. -/
+  | profile (req : ReqId) (name : N) (json : Bool)
   deriving DecidableEq, Repr, Hashable, Codable
 
 /-- No reply carries a credential, and none can: `Reply` does not mention its type. -/
@@ -105,6 +105,8 @@ lanes_data inductive Reply (N : Type) where
 lanes_data structure Response (N : Type) where
   req : ReqId
   reply : Reply N
+  /-- Whether the request came through the API, so the bridge answers in JSON. -/
+  json : Bool := false
   deriving DecidableEq, Repr, Hashable, Codable
 
 /-- An account. Its posts are kept in it, newest first, so a post's author is the account that
@@ -178,7 +180,13 @@ def req : Request N C → ReqId
 /-- The account the request is made as, or, for `profile`, the account it reads. -/
 def name : Request N C → N
   | .signUp _ n .. | .logIn _ n .. | .logOut _ n .. | .newToken _ n .. | .web _ n ..
-  | .api _ n .. | .profile _ n => n
+  | .api _ n .. | .profile _ n _ => n
+
+/-- Whether the request came through the API. -/
+def json : Request N C → Bool
+  | .api .. => true
+  | .profile _ _ json => json
+  | _ => false
 
 end Request
 
@@ -292,7 +300,7 @@ def handle (config : Config) (b : Board N C) : Request N C → Board N C × Repl
     match b.get? n with
     | some p => b.api config n p token seq op
     | none => (b, .badToken, {})
-  | .profile _ n => (b, .feed (((b.postsOf n).map (n, ·)).take config.timelineMax), {})
+  | .profile _ n _ => (b, .feed (((b.postsOf n).map (n, ·)).take config.timelineMax), {})
 
 def fire (b : Board N C) : Deadline N → Board N C
   | .window n => b.update n fun p => { p with window := 0 }
@@ -307,7 +315,7 @@ of `Board.fire`. -/
 def spec (N C : Type) [DecidableEq N] [DecidableEq C] (config : Config) :
     Service (Request N C) (Response N) (Board N C) (Deadline N) where
   init := {}
-  step b r := ((b.handle config r).1, [⟨r.req, (b.handle config r).2.1⟩])
+  step b r := ((b.handle config r).1, [⟨r.req, (b.handle config r).2.1, r.json⟩])
   armed _ _ := true
   fire b d := (b.fire d, [])
 

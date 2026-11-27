@@ -143,7 +143,7 @@ theorem handle_window (b : Board N C) (r : Request N C) :
           · exact .same
           · exact act_window config hp op
     · exact .same
-  | profile req n => exact .same
+  | profile req n json => exact .same
 
 theorem windowOf_handle_ne (b : Board N C) (r : Request N C) {m : N} (hm : m ≠ r.name) :
     (b.handle config r).1.windowOf m = b.windowOf m := by
@@ -402,7 +402,7 @@ theorem Bounded.handle {b : Board N C} (h : b.Bounded config) (r : Request N C) 
           · exact h
           · exact act_bounded config h hp op
     · exact h
-  | profile req n => exact h
+  | profile req n json => exact h
 
 theorem Bounded.update {b : Board N C} (h : b.Bounded config) (n : N)
     {g : Profile N C → Profile N C} (hg : ∀ p, Fine config p → Fine config (g p)) :

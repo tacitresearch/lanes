@@ -173,7 +173,7 @@ theorem handle_get?_ne (r : Request N C) (h : m ≠ r.name) :
     split
     · exact api_get?_ne config h token seq op
     · rfl
-  | profile req n => rfl
+  | profile req n json => rfl
 
 end Others
 
@@ -277,7 +277,7 @@ theorem handle_posts (r : Request N C) :
     split
     · next p hp => exact api_posts config hp token seq op
     · exact .same
-  | profile req n => exact .same
+  | profile req n json => exact .same
 
 end Own
 

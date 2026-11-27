@@ -55,7 +55,7 @@ def social : Script :=
   setup ++
   [ (web 6 0 3 (.post hi), [5]), (web 7 0 3 (.post yo), [6]),
     (web 8 1 4 .timeline, [6]), (web 9 0 3 (.delete 0), [7, 8]),
-    (web 10 1 4 .timeline, [9]), (.profile 11 0, [10]), (web 12 1 4 (.delete 1), [10]) ]
+    (web 10 1 4 .timeline, [9]), (.profile 11 0 false, [10]), (web 12 1 4 (.delete 1), [10]) ]
 
 /-- `1` gets a token and posts through the API: a post sent twice with one sequence number, as a
 bot that retries; an older number; two more posts, the window full; a token of the wrong
@@ -143,11 +143,12 @@ def judge (h : History) (b b' : Board N C) (r : Request N C) (reply : Reply N) :
     if ok then none else some name
   { h with broken := h.broken ++ fail }
 
-def specStep (w : SpecWorld) (k : Nat) : Option SpecWorld := do
+def specStep (handle : Board N C → Request N C → Board N C × Reply N × Timers)
+    (w : SpecWorld) (k : Nat) : Option SpecWorld := do
   let (r, after) ← w.todo[k]?
   if !after.all fun id => w.answered.any (·.req == id) then none
-  let (b', reply, _) := w.board.handle config r
-  some { board := b', todo := w.todo.eraseIdx k, answered := ⟨r.req, reply⟩ :: w.answered
+  let (b', reply, _) := handle w.board r
+  some { board := b', todo := w.todo.eraseIdx k, answered := ⟨r.req, reply, r.json⟩ :: w.answered
          history := judge w.history w.board b' r reply }
 
 def armed (b : Board N C) : List (Deadline N) :=
@@ -161,11 +162,13 @@ def fireStep (w : SpecWorld) (d : Deadline N) : SpecWorld :=
     | _ => w.history
   { w with board := w.board.fire d, history }
 
-def specModel (script : Script) : Check.Model SpecWorld String where
+def specModel (script : Script)
+    (handle : Board N C → Request N C → Board N C × Reply N × Timers := (·.handle config)) :
+    Check.Model SpecWorld String where
   init := [{ board := {}, todo := script, answered := [], history := {} }]
   next w :=
     ((List.range w.todo.length).filterMap fun k =>
-      (specStep w k).map fun w' => ("request", w')) ++
+      (specStep handle w k).map fun w' => ("request", w')) ++
     (armed w.board).map fun d => ("deadline", fireStep w d)
 
 def specClaims : List (Check.Property SpecWorld) :=
@@ -279,7 +282,7 @@ def boardWith {S : Type} (init : S)
   step s
     | .request r =>
       let (s', reply, timers) := handle s r
-      (s', .emit ⟨r.req, reply⟩ :: timerEffects quiet r.name timers)
+      (s', .emit ⟨r.req, reply, r.json⟩ :: timerEffects quiet r.name timers)
     | .deadline d => (fire s d, [])
   recover s := (s, [])
 
@@ -339,6 +342,93 @@ instance : offByOneSystem.Inspect := {}
 def matchesSpec {sys : System (sig N C)} : Check.Property (World' sys) :=
   Check.refines "every response and every deadline is one the spec allows"
 
+/-! ## The bridge, without a socket -/
+
+namespace Bridge
+
+open Rookery.Web Lanes.Http
+
+def settings : Settings :=
+  { key := .of "test key".toUTF8
+    password := { cost := { ops := 1, mem_kib := 8 }, pepper := "pepper".toUTF8 }
+    origin := "http://127.0.0.1:8080", secure := false }
+
+def ann : Name := ⟨"ann", rfl⟩
+def bob : Name := ⟨"bob", rfl⟩
+
+def cookieOf (name : Name) (session : Sid) : String := sessionToken settings name session
+
+def request (method : Method) (path : List String) (headers : List (String × String))
+    (body : String) : Http.Request :=
+  { method, path, headers := ("origin", settings.origin) :: headers, body := body.toUTF8 }
+
+def webPost (path : String) (fields : List (String × String)) (cookie : Option String) :
+    Http.Request :=
+  request .post [path] ((cookie.map fun c => [("cookie", s!"{sessionCookie}={c}")]).getD [])
+    ("&".intercalate (fields.map fun (k, v) => s!"{k}={v}"))
+
+def apiPost (path : String) (body : String) (token : String) : Http.Request :=
+  request .post ["api", path] [("authorization", s!"Bearer {token}")] body
+
+def decoded (r : Http.Request) : Except Http.Response In :=
+  decode settings 9 (prepare settings r)
+
+def same : Except Http.Response In → Except Http.Response In → Bool
+  | .ok a, .ok b => a == b
+  | .error a, .error b => a == b
+  | _, _ => false
+
+def status : Except Http.Response In → Nat
+  | .ok _ => 0
+  | .error r => r.status
+
+def contains (bytes : ByteArray) (text : String) : Bool :=
+  (((String.fromUTF8? bytes).getD "").splitOn text).length > 1
+
+def tests : List (String × Bool) :=
+  let csrf := Auth.formToken settings.key (cookieOf ann 7)
+  let hello : Body := ⟨"hello", rfl⟩
+  [ ("bridge: a session's cookie makes a request of its account, whatever the form says",
+      same (decoded (webPost "post" [("body", "hello"), ("csrf", csrf), ("name", "bob")]
+          (some (cookieOf ann 7))))
+        (.ok (.web 9 ann 7 (.post hello)))),
+    ("bridge: a cookie whose payload names another account does not verify",
+      let forged := Auth.tag settings.key "session" "7.ann" ++ ".7.bob"
+      same (decoded (webPost "post" [("body", "hello"), ("csrf", csrf)] (some forged)))
+        (.error notLoggedIn)),
+    ("bridge: a form token of another session is refused",
+      status (decoded (webPost "post" [("body", "hello"),
+        ("csrf", Auth.formToken settings.key (cookieOf ann 8))] (some (cookieOf ann 7)))) == 403),
+    ("bridge: an API token makes a request of its account and generation",
+      same (decoded (apiPost "post" "{\"text\": \"hello\", \"seq\": 4}" (apiToken settings bob 2)))
+        (.ok (.api 9 bob 2 4 (.post hello)))),
+    ("bridge: an API token that does not verify is refused",
+      status (decoded (apiPost "post" "{\"text\": \"hello\", \"seq\": 4}"
+        (Auth.tag settings.key "api" "2.ann" ++ ".2.bob"))) == 401),
+    ("bridge: a session cookie is no API token",
+      status (decoded (apiPost "post" "{\"text\": \"hello\", \"seq\": 4}" (cookieOf bob 2)))
+        == 401),
+    ("bridge: a change through the API carries its seq",
+      status (decoded (apiPost "post" "{\"text\": \"hello\"}" (apiToken settings bob 2))) == 400),
+    ("bridge: a password enters the system only as its digest",
+      same (decoded (webPost "login" [("name", "ann"), ("password", "longenough")] none))
+        (.ok (.logIn 9 ann (settings.password.digest "ann" "longenough")))),
+    ("bridge: what enters the system holds no password, no cookie and no token",
+      let prepared := prepare settings (webPost "login"
+        [("name", "ann"), ("password", "longenough")] (some (cookieOf ann 7)))
+      let api := prepare settings (apiPost "post" "{}" (apiToken settings bob 2))
+      !contains prepared.body "longenough" && !(prepared.headers.any (·.1 == "cookie"))
+        && !(api.headers.any (·.1 == "authorization"))),
+    ("bridge: a verified header a client sends itself is dropped",
+      let claimed := request .post ["api", "post"] [(verifiedToken, "2.bob")]
+        "{\"text\": \"hello\", \"seq\": 4}"
+      status (decoded claimed) == 401),
+    ("bridge: a post too long is refused before it reaches the system",
+      status (decoded (webPost "post" [("body", String.ofList (List.replicate 281 'a')),
+        ("csrf", csrf)] (some (cookieOf ann 7)))) == 200) ]
+
+end Bridge
+
 /-! ## Running them -/
 
 def timed {S L : Type} (name : String) (ok : Check.Report S L → Bool)
@@ -393,6 +483,10 @@ def main (args : List String) : IO UInt32 := do
     results := results.push (← timed
       "the system with requests lost and reordered and a crash anywhere: a delete and timelines"
       passes renderSystem fun _ => check social (systemClaims quiet) lossyIn 1)
+  if all || args.contains "bridge" then
+    for (name, ok) in Bridge.tests do
+      IO.println s!"== {name}: {if ok then "as expected" else "NOT AS EXPECTED"}"
+      results := results.push ok
   if all || args.contains "bugs" then
     let spec := "every response and every deadline is one the spec allows"
     results := results.push (← timed "seeded: a timeline that keeps a deleted post"
@@ -401,6 +495,13 @@ def main (args : List String) : IO UInt32 := do
       (violates spec) renderSystem fun _ => check (sys := anyoneDeletesSystem) social [matchesSpec])
     results := results.push (← timed "seeded: a rate limit off by one"
       (violates spec) renderSystem fun _ => check (sys := offByOneSystem) bots [matchesSpec])
+    let claims := "each claim holds of every request"
+    results := results.push (← timed "seeded, in the spec alone: a delete by another account"
+      (violates claims) renderSpec fun _ =>
+        Check.search (specModel social anyoneDeletes) specClaims {} id)
+    results := results.push (← timed "seeded, in the spec alone: a rate limit off by one"
+      (violates "no account has more than maxPerWindow posts accepted in a window") renderSpec
+      fun _ => Check.search (specModel bots offByOne) (specClaims.drop 1) {} id)
   return if results.all id then 0 else 1
 
 end Rookery.Check

@@ -80,12 +80,12 @@ variable (config : Config)
 
 theorem board_step_request (b : Board N C) (r : Request N C) :
     (board config).step b (.request r) = ((b.handle config r).1,
-      .emit ⟨r.req, (b.handle config r).2.1⟩ :: timerEffects config r.name (b.handle config r).2.2) :=
+      .emit ⟨r.req, (b.handle config r).2.1, r.json⟩ :: timerEffects config r.name (b.handle config r).2.2) :=
   rfl
 
 theorem step_request (b : Board N C) (r : Request N C) :
     Effect.sends (σ := sig N C) () ((board config).step b (.request r)).2 = [] ∧
-      Effect.emits ((board config).step b (.request r)).2 = [⟨r.req, (b.handle config r).2.1⟩] := by
+      Effect.emits ((board config).step b (.request r)).2 = [⟨r.req, (b.handle config r).2.1, r.json⟩] := by
   have ht := isTimer_timerEffects (C := C) config r.name (b.handle config r).2.2
   have hs := sends_of_timers ht
   have he := emits_of_timers ht

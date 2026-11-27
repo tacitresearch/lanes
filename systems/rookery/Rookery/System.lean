@@ -58,7 +58,7 @@ def board (config : Config) : (sig N C).Actor () (Board N C) where
   step b
     | .request r =>
       let (b', reply, timers) := b.handle config r
-      (b', .emit ⟨r.req, reply⟩ :: timerEffects config r.name timers)
+      (b', .emit ⟨r.req, reply, r.json⟩ :: timerEffects config r.name timers)
     | .deadline d => (b.fire d, [])
   recover b := (b, rearm config b)
 

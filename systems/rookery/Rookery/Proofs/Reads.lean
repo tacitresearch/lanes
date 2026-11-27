@@ -188,7 +188,7 @@ theorem Quiet.handle {b : Board N C} (h : b.Quiet) (r : Request N C) :
             simp only [act_memo] at he
             exact h.record n seq hq e he
     · exact h
-  | profile req n => exact h
+  | profile req n json => exact h
 
 theorem Quiet.fire {b : Board N C} (h : b.Quiet) (d : Deadline N) : (b.fire d).Quiet := by
   cases d <;> exact h
@@ -254,7 +254,7 @@ theorem handle_feed {b : Board N C} (hq : b.Quiet) {r : Request N C} {list : Lis
             rw [h] at this
             cases this
     · cases h
-  | profile req n =>
+  | profile req n json =>
     simp only [handle, Reply.feed.injEq] at h
     exact .inr h.symm
 
@@ -293,7 +293,7 @@ theorem act_secret (b : Board N C) (n : N) (p : Profile N C) (op : Op N) :
 /-- A reply carries the secrets of no account but the one the request is made as, and a read of
 an account's posts carries none. -/
 theorem handle_secret {b : Board N C} (hq : b.Quiet) {r : Request N C} {m : N}
-    (h : (b.handle config r).2.1.secretOf = some m) : m = r.name ∧ ∀ q n, r ≠ .profile q n := by
+    (h : (b.handle config r).2.1.secretOf = some m) : m = r.name ∧ ∀ q n j, r ≠ .profile q n j := by
   have nope : ∀ {x : Reply N}, x.secretOf = none → x.secretOf = some m → False := by
     intro x h₁ h₂; rw [h₁] at h₂; cases h₂
   cases r with
@@ -338,7 +338,7 @@ theorem handle_secret {b : Board N C} (hq : b.Quiet) {r : Request N C} {m : N}
           · cases h
           · exact (nope (act_secret config b n p op) h).elim
     · cases h
-  | profile req n => cases h
+  | profile req n json => cases h
 
 end Board
 
