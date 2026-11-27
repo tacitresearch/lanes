@@ -1,4 +1,4 @@
-# D?. PostgreSQL is spoken in Lean, and a transactional store is a model
+# D68. PostgreSQL is spoken in Lean, and a transactional store is a model
 
 Applications keep their state as actor state with a journal, and that stays the default. Some
 must share a database with other programs, or want SQL and its indexes. This decision is how a

@@ -226,7 +226,7 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   each order at most once that way (`Shop.charged_at_most_once`). That a real service does only
   what its model allows is trusted; no adapter talks to one yet.
 - **PostgreSQL** (`Lanes/Lib/Postgres/`): the frontend/backend protocol 3.0 in Lean, not libpq
-  (`docs/decisions/new-postgres-protocol-in-lean.md`): start-up with trust, cleartext (only when
+  (`docs/decisions/D68-postgres-protocol-in-lean.md`): start-up with trust, cleartext (only when
   allowed), MD5 or SCRAM-SHA-256; the extended query protocol with parameters, text both ways;
   errors; transactions; plain TCP. The messages are proved to read back as written
   (`Backend.read_encode`, `Frontend.decode_encode`) and tested against recorded sessions of
