@@ -124,6 +124,9 @@ lake test            # builds Lanes and the app (minutes, once), runs the model 
 lake exe my-app      # serves http://127.0.0.1:8080
 ```
 
+`docs/TUTORIAL.md` then takes the app through a change, a model check and a proof, in fifteen
+minutes.
+
 The app gets Lanes from GitHub (`rev = "main"` in its `lakefile.toml`), not from the clone,
 which it does not need once the app is made. Any Lake project can depend on Lanes the same way:
 

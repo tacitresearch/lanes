@@ -9,6 +9,8 @@ there.
 
 ## In what order to read them
 
+`docs/TUTORIAL.md` comes first: it changes the counter, checks it and proves it.
+
 1. `counter`: exactly what `lake exe lanes new counter` writes. A spec as a `Service`, run as an
    actor by the `Server` behaviour, an invariant, refinement to the spec, model checks, and a
    web page with htmx. `lake test` fails if it and the template differ.
