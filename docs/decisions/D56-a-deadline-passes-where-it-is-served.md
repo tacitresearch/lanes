@@ -1,4 +1,4 @@
-# D?. A deadline may pass where a message is served
+# D56. A deadline may pass where a message is served
 
 The ledger did not refine its timed spec (`systems/ledger/README.md`, friction log; D42's
 limits). `user n` decides a view while its session is live, the session's timer fires at

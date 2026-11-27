@@ -43,7 +43,7 @@ Time passes in the spec as deadlines (`Deadline`): a locked account's lock lifti
 session ending, armed while the account is locked and the session live, read from the user's
 record. The user's timers `unlock` and `expire` lift the lock or end the session in its record
 and tell the ledger (`unlocked`, `ended`), and the ledger serving that notice is the deadline
-passing (`Ledger.delivered`, `docs/decisions/new-a-deadline-passes-where-it-is-served.md`), so
+passing (`Ledger.delivered`, `docs/decisions/D56-a-deadline-passes-where-it-is-served.md`), so
 the checker sees a lock lift or a session end at that moment and holds the spec to it: before
 the lock's deadline the account refuses even the right credential, and after a session's it
 serves the session nothing. How long a lock or a session
@@ -243,7 +243,7 @@ round of framework work is planned from this.
    `Sessions` or `Book`, and each had a constant (`Attempts.none`, `Sessions.none`,
    `Book.empty`). It takes them now, and the constants are gone.
 4. **With deadlines the system was not its spec. Fixed
-   (`docs/decisions/new-a-deadline-passes-where-it-is-served.md`).** A view that `user 1`
+   (`docs/decisions/D56-a-deadline-passes-where-it-is-served.md`).** A view that `user 1`
    decided while its session was live reached the ledger after a payment the administrator
    asked once the session had ended, and showed it: the spec puts the view before the
    session's end and the payment after (found in 43 steps). The user decided at one moment and
