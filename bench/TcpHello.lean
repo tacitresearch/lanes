@@ -6,7 +6,8 @@ import Std.Async
 
 /-! The floor under `Std.Http`: `Std.Net` TCP on libuv, one `Async` task per connection, and
 a fixed response for every blank line that ends a request head. No parsing beyond that:
-`benchTcp [port]`. -/
+`benchTcp [port] [park]`. With `park` the main thread sleeps instead of waiting on the accept
+loop's task: Lean's task manager wakes every thread waiting on a task whenever any task ends. -/
 
 open Std Std.Async Std.Net
 
@@ -40,8 +41,12 @@ def main (args : List String) : IO Unit := do
   server.noDelay
   IO.println s!"listening on {port}"
   (← IO.getStdout).flush
-  Async.block do
+  let accept : Async Unit := do
     repeat
       let client ← server.accept
       client.noDelay
       background (try serveClient client catch _ => client.close)
+  if args[1]? == some "park" then
+    discard accept.asTask
+    repeat IO.sleep 60000
+  else accept.block

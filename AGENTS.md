@@ -202,7 +202,7 @@ Layout, and what each part may import:
 | `Lanes/Http/`, `Lanes/Html/` | HTTP as data, the gate, routes, the wire format; HTML values and templates | `Std` only |
 | `Lanes/Env/` | Adapters' IO: HTTP server and client, clock, journal files, transport | `Std` only |
 | `Lanes/Semantics/` | The semantics as a CSLib `LTS`, refinement, specs, fairness and leads-to | CSLib, Mathlib |
-| `native/` | The C that binds libsodium and `fsync`, all of it trusted | libsodium, libc |
+| `native/` | The C that binds libsodium, `fsync` and a timed wait, all of it trusted | libsodium, libc |
 | `LanesCli/` | The `lanes` command: `new`, `lint`, `check`, `inventory` | `Std` only; `Lean` in `Inventory`, which only `lanesInventory` links |
 | `templates/app/` | The application `lanes new` creates | |
 | `Examples/` | Reference apps, checked and proved | anything |

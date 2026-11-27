@@ -183,7 +183,7 @@ def shard (sys : System σ) [Hashable σ.Id] (hosts : σ.Id → Bool) (config : 
   let rt ← Runtime.start (sys.shard hosts) runtimeConfig (journal := journal) fun
     | .inl out => onOutput out
     | .inr parcel => peers.send parcel
-  ready.resolve fun parcel => discard <| rt.tryInput (.inr parcel)
+  ready.resolve fun parcel => (discard <| rt.tryInput (.inr parcel) : Async Unit)
   return (rt, peers)
 
 end Lanes.Peers

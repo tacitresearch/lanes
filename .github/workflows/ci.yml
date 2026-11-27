@@ -10,6 +10,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  merge_group:
   workflow_dispatch:
 
 permissions:
@@ -198,10 +199,45 @@ jobs:
       - name: Over HTTP, killed and started again
         run: lake exe rookeryLive
 
+  # What a user on a Mac does: Homebrew's libsodium (under /opt/homebrew on Apple silicon), the
+  # build, the tests and a generated app, on GitHub's runner.
+  macos:
+    runs-on: macos-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: lean
+        uses: ./.github/actions/lean
+      - name: Build
+        run: lake build --wfail
+      - if: steps.lean.outputs.packages-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .lake/packages
+          key: ${{ steps.lean.outputs.packages-key }}
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .lake/build
+          key: ${{ steps.lean.outputs.build-key }}
+      - name: Test
+        run: lake test
+      - name: Generated app builds and passes its checks
+        run: |
+          rm -f .lake/build/lib/lean/LanesCli/New.* .lake/build/ir/LanesCli/New.*
+          lake exe lanes new demo-app --dir "$RUNNER_TEMP/demo-app" --lanes-path "$GITHUB_WORKSPACE"
+          cd "$RUNNER_TEMP/demo-app"
+          mkdir -p .lake && ln -sfn "$GITHUB_WORKSPACE/.lake/packages" .lake/packages
+          lake build
+          lake test
+          .lake/build/bin/demo-app 8090 & pid=$!
+          for _ in $(seq 1 50); do curl -sf http://127.0.0.1:8090/count >/dev/null && break; sleep 0.2; done
+          curl -sf http://127.0.0.1:8090/count
+          kill "$pid"
+
   # The one check branch protection requires. A job that is skipped counts as passed there, so
   # this job always runs and fails unless every job before it succeeded.
   build:
-    needs: [runner, compile, check, oracle, test, raft-kv, ledger, rookery]
+    needs: [runner, compile, check, oracle, test, raft-kv, ledger, rookery, macos]
     if: always()
     runs-on: ubuntu-latest
     steps:
