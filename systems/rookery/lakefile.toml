@@ -1,0 +1,30 @@
+name = "rookery"
+version = "0.1.0"
+defaultTargets = ["Rookery", "rookeryCheck", "rookery", "rookeryLive"]
+testDriver = "rookeryCheck"
+
+[[require]]
+name = "lanes"
+path = "../.."
+
+# `Rookery.Proofs` is a root of its own so that `lake build` builds the proofs and the
+# executables, which import `Rookery`, do not link them.
+[[lean_lib]]
+name = "Rookery"
+roots = ["Rookery", "Rookery.Proofs"]
+
+# Model checks of the spec alone and of the system, run by `lake test` (Lanes rule 5.1).
+[[lean_exe]]
+name = "rookeryCheck"
+root = "Check"
+
+# The web application: `rookery [port] [journal] [secrets] [memory_kib]`.
+[[lean_exe]]
+name = "rookery"
+root = "Main"
+
+# Accounts, posts, follows, timelines, deletes and rate limits over HTTP, the server killed
+# with SIGKILL and started again.
+[[lean_exe]]
+name = "rookeryLive"
+root = "Live"
