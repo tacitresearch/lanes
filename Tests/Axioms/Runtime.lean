@@ -222,6 +222,24 @@ import Lanes.Semantics
 /-- info: 'Lanes.Kernel.frame_fire' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Kernel.frame_fire
 
+/-- info: 'Lanes.Kernel.setState_settle' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.setState_settle
+
+/-- info: 'Lanes.Kernel.handle_setState' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.handle_setState
+
+/-- info: 'Lanes.Kernel.Plan.fixAll_local' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.Plan.fixAll_local
+
+/-- info: 'Lanes.Kernel.handleAhead_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.handleAhead_eq
+
+/-- info: 'Lanes.Kernel.run1Ahead_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.run1Ahead_eq
+
+/-- info: 'Lanes.Kernel.stepAhead_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.stepAhead_eq
+
 /-- info: 'Lanes.Kernel.runBatchAhead_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Kernel.runBatchAhead_eq
 
@@ -230,6 +248,9 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Kernel.runBatch_add' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Kernel.runBatch_add
+
+/-- info: 'Lanes.Kernel.wave_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.wave_eq
 
 /-- info: 'Lanes.Kernel.waves_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Kernel.waves_eq
