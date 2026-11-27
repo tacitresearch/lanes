@@ -464,7 +464,10 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   does not crash, every job
   ends and its end is handed over (`Schedule.held_ends`); beside a system, the end is handled by
   it, when the links to it lose nothing and its actors neither crash nor stop
-  (`Schedule.attach_end_handled`). A periodic job is noticed again and again
+  (`Schedule.attach_end_handled`). The step in which a job leaves tells its requester once: one
+  answer that ends it, `succeeded`, `failed` or `cancelled`, or the notice of a job that runs
+  once (`Schedule.told_of_leaves`); so a call job's end, beside a system, is such an answer
+  (`Schedule.attach_answer_handled`). A periodic job is noticed again and again
   (`Schedule.every_noticed`). That the times it is told are not ahead of the clock, and
   that the runtime fires a timer no earlier than its delay, are premises (`TRUSTED.md`;
   `docs/decisions/D79-work-that-is-due-later-is-a-job-of-the-scheduler.md`).

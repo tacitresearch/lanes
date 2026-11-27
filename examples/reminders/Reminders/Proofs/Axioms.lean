@@ -17,3 +17,6 @@ axioms. If a `sorry` or a new axiom reaches one, this file stops compiling.
 
 /-- info: 'Reminders.delivery_ends' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Reminders.delivery_ends
+
+/-- info: 'Reminders.delivery_answered' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Reminders.delivery_answered

@@ -119,6 +119,11 @@ lanes_data inductive Outcome (P A : Type) where
   | failed (payload : P) (attempts : Nat) (last : Option A)
   deriving DecidableEq, Repr, Hashable, Codable
 
+/-- Whether an answer ends a job. The others answer a scheduling. -/
+def Outcome.isEnd {P A : Type} : Outcome P A → Bool
+  | .cancelled | .succeeded _ | .failed .. => true
+  | .scheduled | .already | .refused _ => false
+
 lanes_data inductive Input (K P A : Type) where
   /-- `now_ms` is the time the request was made, which the scheduler learns. -/
   | schedule (now_ms : Nat) (spec : Spec K P)

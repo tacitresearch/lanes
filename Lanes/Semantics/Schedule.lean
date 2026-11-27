@@ -14,8 +14,9 @@ public import Lanes.Semantics.Liveness
 In a fair run in which the scheduler does not crash, every job it holds that is not periodic
 leaves it (`Schedule.held_leaves`), and the step in which it leaves emits its end: a success, a
 dead letter, a cancellation or its notice (`Schedule.ends_of_leaves`), which is then handed over
-(`Schedule.held_ends`). That holds whatever the service does: it may answer an attempt late,
-wrongly, `unknown` or never. A periodic job is noticed again and again while it is held
+(`Schedule.held_ends`). That step tells the requester once: one answer that ends the job, or the
+notice of a job that runs once, and nothing else about it (`Schedule.told_of_leaves`). That holds
+whatever the service does: it may answer an attempt late, wrongly, `unknown` or never. A periodic job is noticed again and again while it is held
 (`Schedule.every_noticed`).
 
 Fairness is the repository's (`System.Run.Fair`): a timer that stays armed and that no step arms
@@ -34,7 +35,8 @@ comes.
 
 Beside a system (`Schedule.attach`) the end is a message to it, and fairness delivers it
 (`System.Run.Fair.routed_right`) when the links to it lose nothing and its actors are not
-crashed and never stop.
+crashed and never stop. A call job's end is then an answer, `succeeded`, `failed` or
+`cancelled`: never `scheduled` or `already`, which answer a scheduling, and never a notice.
 
 ## Main statements
 
@@ -43,6 +45,8 @@ crashed and never stop.
 - `Schedule.every_noticed`: a periodic job held is noticed, or stops being held.
 - `Schedule.attach_held_leaves`: the same beside any system.
 - `Schedule.attach_end_handled`: beside any system, the end is handled by that system.
+- `Schedule.attach_answer_handled`: beside any system, a call job's answer that ends it is
+  handled by that system.
 -/
 
 @[expose] public section
@@ -452,11 +456,49 @@ theorem attach_held_leaves {τ : Signature} (sys : System τ) (config : Config K
       c.up () = true ∧ ∃ j, entry (c.state ()).jobs key = some j ∧ j.work.periodic = false)
     (Q := fun s _ => key ∉ keys (s ()).jobs) (held_leaves config (env := env.left) hcrash key)
 
+/-- Beside any system, the job held under `key` at position `n` is the same job at `k`: the
+same work and payload. Or it left at a position between, where it was still that job. -/
+theorem attach_held_same {τ : Signature} {sys : System τ} {use : Use τ K P A}
+    {env : EnvModel (joinSig (sig K P A) τ)} {r : (attach sys config use).Run env} {n : ℕ}
+    {key : K} {j : Job K P} (hj : entry ((r.state n).state (.inl ()) : State K P).jobs key = some j)
+    (k : ℕ) (hk : n ≤ k) :
+    (∃ j', entry ((r.state k).state (.inl ()) : State K P).jobs key = some j' ∧ Same j j') ∨
+      ∃ i j', n ≤ i ∧ i < k ∧ entry ((r.state i).state (.inl ()) : State K P).jobs key = some j' ∧
+        Same j j' ∧ key ∉ keys ((r.state (i + 1)).state (.inl ()) : State K P).jobs := by
+  induction k, hk using Nat.le_induction with
+  | base => exact .inl ⟨j, hj, rfl, rfl, rfl⟩
+  | succ k hk ih =>
+    rcases ih with ⟨j', hj', hsame⟩ | ⟨i, j', hi, hik, hj', hsame, hout⟩
+    · have hnext : ((r.state (k + 1)).state (.inl ()) : State K P) = (r.state k).state (.inl ()) ∨
+          ∃ msg, ((r.state (k + 1)).state (.inl ()) : State K P) =
+            (step config ((r.state k).state (.inl ())) msg).1 := by
+        cases hev : r.event k with
+        | none => exact .inl (by rw [System.Run.step_none hev])
+        | some ev =>
+          rcases SysState.step_left_state (System.Run.step_some hev) () with
+            hs | ⟨msg, -, hs⟩ | ⟨-, hs⟩
+          · exact .inl hs
+          · exact .inr ⟨msg, hs⟩
+          · exact .inl hs
+      cases he : entry ((r.state (k + 1)).state (.inl ()) : State K P).jobs key with
+      | none => exact .inr ⟨k, j', hk, by omega, hj', hsame, entry_eq_none.mp he⟩
+      | some j'' =>
+        refine .inl ⟨j'', rfl, ?_⟩
+        rcases hnext with hs | ⟨msg, hs⟩
+        · rw [hs, hj'] at he
+          cases he
+          exact hsame
+        · rw [hs] at he
+          obtain ⟨h1, h2, h3⟩ := entry_step_same hj' he
+          exact ⟨h1.trans hsame.1, h2.trans hsame.2.1, h3.trans hsame.2.2⟩
+    · exact .inr ⟨i, j', hi, by omega, hj', hsame, hout⟩
+
 /-- Beside any system, the end of every job held that is not periodic is handled by that system:
-in a fair run in which the scheduler is not crashed, a job held while it is up has its answer or
-its notice delivered, at a later position, to the actor of `sys` that takes it. The links from
-the scheduler to `sys` must lose nothing, and the actors of `sys` must not be crashed and never
-stop: a loss, a crash or a stop can take the end out of flight. -/
+in a fair run in which the scheduler is not crashed, a job held while it is up has its end
+delivered, at a later position, to the actor of `sys` that takes it. The end is an answer that
+ends the job (`succeeded`, `failed` or `cancelled`), or, for a job that runs once, its notice.
+The links from the scheduler to `sys` must lose nothing, and the actors of `sys` must not be
+crashed and never stop: a loss, a crash or a stop can take the end out of flight. -/
 theorem attach_end_handled {τ : Signature} (sys : System τ) (config : Config K P A)
     (use : Use τ K P A) {env : EnvModel (joinSig (sig K P A) τ)}
     (hcrash : env.mayCrash (.inl ()) = false)
@@ -468,40 +510,67 @@ theorem attach_end_handled {τ : Signature} (sys : System τ) (config : Config K
     (hup : (r.state n).up (.inl ()) = true) {j : Job K P}
     (hj : entry ((r.state n).state (.inl ()) : State K P).jobs key = some j)
     (hp : j.work.periodic = false) :
-    ∃ m x, n ≤ m ∧ ((∃ o, x = use.answer key o) ∨ ∃ p t, x = use.notice key p t) ∧
+    ∃ m x, n ≤ m ∧
+      ((∃ o, o.isEnd = true ∧ x = use.answer key o) ∨
+        (j.work = .once ∧ ∃ t, x = use.notice key j.payload t)) ∧
       (r.event m = some (.deliver ⟨some (.inl ()), .inr (sys.accept x).1, (sys.accept x).2⟩) ∨
         r.event m =
           some (.duplicate ⟨some (.inl ()), .inr (sys.accept x).1, (sys.accept x).2⟩)) := by
   obtain ⟨m, hm, hgone⟩ := System.LeadsTo.iff.mp (attach_held_leaves sys config use hcrash key)
     r hfair n ⟨hup, j, hj, hp⟩
-  have hin : key ∈ keys ((r.state n).state (.inl ()) : State K P).jobs :=
-    mem_keys.mpr ⟨j, (entry_some hj).1, (entry_some hj).2⟩
-  have hleaves : ∃ k, n ≤ k ∧ key ∈ keys ((r.state k).state (.inl ()) : State K P).jobs ∧
-      key ∉ keys ((r.state (k + 1)).state (.inl ()) : State K P).jobs := by
-    induction m, hm using Nat.le_induction with
-    | base => exact absurd hin hgone
-    | succ m hm ih =>
-      by_cases hin' : key ∈ keys ((r.state m).state (.inl ()) : State K P).jobs
-      · exact ⟨m, hm, hin', hgone⟩
-      · exact ih hin'
-  obtain ⟨k, hk, hin', hout⟩ := hleaves
-  obtain ⟨j', hj'⟩ := Option.ne_none_iff_exists'.mp (entry_eq_none.not.mpr (not_not.mpr hin'))
+  rcases attach_held_same hj m hm with ⟨j', hj', -⟩ | ⟨k, j', hk, -, hj', hsame, hout⟩
+  · exact absurd (mem_keys.mpr ⟨j', (entry_some hj').1, (entry_some hj').2⟩) hgone
+  have hin' : key ∈ keys ((r.state k).state (.inl ()) : State K P).jobs :=
+    mem_keys.mpr ⟨j', (entry_some hj').1, (entry_some hj').2⟩
   cases hev : r.event k with
   | none => exact absurd (System.Run.step_none hev ▸ hin') hout
   | some ev =>
     rcases SysState.step_left_state (System.Run.step_some hev) () with
       hs | ⟨msg, hdeed, hs⟩ | ⟨-, hs⟩
     · exact absurd (hs ▸ hin') hout
-    · obtain ⟨out, x, hemit, hx, hend⟩ : ∃ out x, (.emit out : Eff K P A) ∈
+    · have hmem {out : Output K P A}
+          (h : (Effect.emits (step config ((r.state k).state (.inl ())) msg).2).filter
+            (tells key) = [out]) :
+          (.emit out : Eff K P A) ∈ (step config ((r.state k).state (.inl ())) msg).2 :=
+        Effect.mem_emits.mp (List.mem_of_mem_filter (by rw [h]; exact List.mem_singleton_self out))
+      obtain ⟨out, x, hemit, hx, hend⟩ : ∃ out x, (.emit out : Eff K P A) ∈
           (step config ((r.state k).state (.inl ())) msg).2 ∧ use.wiring.toRight out = some x ∧
-          ((∃ o, x = use.answer key o) ∨ ∃ p t, x = use.notice key p t) := by
-        rcases ends_of_leaves (config := config) hj' (entry_eq_none.mpr (hs ▸ hout)) with
-          ⟨o, ho⟩ | ⟨t, ho⟩
-        · exact ⟨_, _, ho, rfl, .inl ⟨o, rfl⟩⟩
-        · exact ⟨_, _, ho, rfl, .inr ⟨_, t, rfl⟩⟩
+          ((∃ o, o.isEnd = true ∧ x = use.answer key o) ∨
+            (j.work = .once ∧ ∃ t, x = use.notice key j.payload t)) := by
+        rcases told_of_leaves (config := config) hj' (entry_eq_none.mpr (hs ▸ hout)) with
+          ⟨o, hend, ho⟩ | ⟨honce, t, ho⟩
+        · exact ⟨_, _, hmem ho, rfl, .inl ⟨o, hend, rfl⟩⟩
+        · exact ⟨_, _, hmem ho, rfl, .inr ⟨hsame.2.1.symm.trans honce, t, by rw [hsame.2.2]⟩⟩
       obtain ⟨m, hm, h⟩ := hfair.routed_right hev hdeed hemit hx (hlossless _) (hcrashes _)
         (hruns _) (hrecovers _)
       exact ⟨m, x, by omega, hend, h⟩
     · exact absurd (hs ▸ hin') hout
+
+/-- Beside any system, every call job held is answered: in a fair run in which the scheduler is
+not crashed, a call job held while it is up has an answer that ends it (`succeeded`, `failed` or
+`cancelled`) delivered, at a later position, to the actor of `sys` that takes it. The premises
+are those of `attach_end_handled`. -/
+theorem attach_answer_handled {τ : Signature} (sys : System τ) (config : Config K P A)
+    (use : Use τ K P A) {env : EnvModel (joinSig (sig K P A) τ)}
+    (hcrash : env.mayCrash (.inl ()) = false)
+    (hlossless : ∀ j, (env.link (some (.inl ())) (.inr j)).lossy = false)
+    (hcrashes : ∀ j, env.mayCrash (.inr j) = false)
+    (hruns : ∀ j s msg, ((sys.actor j).step s msg).2.any Effect.isStop = false)
+    (hrecovers : ∀ j s, ((sys.actor j).recover s).2.any Effect.isStop = false) (key : K)
+    {r : (attach sys config use).Run env} (hfair : r.Fair) {n : ℕ}
+    (hup : (r.state n).up (.inl ()) = true) {j : Job K P}
+    (hj : entry ((r.state n).state (.inl ()) : State K P).jobs key = some j) {retry : Retry}
+    (hwork : j.work = .call retry) :
+    ∃ m o, n ≤ m ∧ o.isEnd = true ∧
+      (r.event m = some (.deliver ⟨some (.inl ()), .inr (sys.accept (use.answer key o)).1,
+          (sys.accept (use.answer key o)).2⟩) ∨
+        r.event m = some (.duplicate ⟨some (.inl ()), .inr (sys.accept (use.answer key o)).1,
+          (sys.accept (use.answer key o)).2⟩)) := by
+  obtain ⟨m, x, hm, ⟨o, hend, rfl⟩ | ⟨honce, -⟩, h⟩ :=
+    attach_end_handled sys config use hcrash hlossless hcrashes hruns hrecovers key hfair hup hj
+      (by simp [hwork, Work.periodic])
+  · exact ⟨m, o, hm, hend, h⟩
+  · rw [hwork] at honce
+    cases honce
 
 end Lanes.Schedule

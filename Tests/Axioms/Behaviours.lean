@@ -72,6 +72,12 @@ import Lanes.Semantics
 /-- info: 'Lanes.Schedule.succeeded_replied' depends on axioms: [propext, Classical.choice] -/
 #guard_msgs in #print axioms Lanes.Schedule.succeeded_replied
 
+/-- info: 'Lanes.Schedule.told_of_leaves' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Schedule.told_of_leaves
+
+/-- info: 'Lanes.Schedule.leaves_answered' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Schedule.leaves_answered
+
 /-- info: 'Lanes.Schedule.calls_le_scheduled' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Schedule.calls_le_scheduled
 
