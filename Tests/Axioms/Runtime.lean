@@ -34,6 +34,9 @@ import Lanes.Semantics
 /-- info: 'Lanes.Batch.due_iff' depends on axioms: [propext, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Batch.due_iff
 
+/-- info: 'Lanes.Batch.run_spread' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Batch.run_spread
+
 -- Lanes.Runtime.KernelSound
 /-- info: 'Lanes.Kernel.exec_inductive' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Kernel.exec_inductive

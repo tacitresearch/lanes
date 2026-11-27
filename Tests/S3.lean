@@ -292,6 +292,14 @@ def tests : List (String × Bool) :=
 
 open Lanes.Testing.S3 (Fake follow)
 
+/-- The fake's reading of a request and its check of a signature, under the names
+`integrations/aws` uses for its fake SES. -/
+abbrev Raw := Lanes.Testing.S3.Raw
+
+def verified (creds : SigV4.Credentials) (r : Raw) (scope : SigV4.Scope := ⟨"us-east-1", "s3"⟩) :
+    Option (List String × List (String × String)) :=
+  Lanes.Testing.S3.verified creds scope r
+
 def config : Client.Config := { timeout_ms := 3000 }
 
 def endToEnd : Async (List (String × Bool)) := do
@@ -312,7 +320,8 @@ def endToEnd : Async (List (String × Bool)) := do
   let first ← ex (.list "clips/" none none ⟨1, by decide⟩)
   let next := match first with | some (.listed p) => p.next | _ => none
   let second ← ex (.list "clips/" none next ⟨1, by decide⟩)
-  let forged ← exchange b { creds with secretAccessKey := ⟨"not the secret"⟩ } (.get k) config
+  let forged ← exchange b ({ creds with secretAccessKey := ⟨"not the secret"⟩ } : SigV4.Credentials)
+    (.get k) config
   let withToken := { creds with sessionToken := some ⟨"tok"⟩ }
   let tokenStore ← Fake.start withToken
   let tokened ← exchange tokenStore.bucket withToken (.put k clip) config

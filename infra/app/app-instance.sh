@@ -50,7 +50,7 @@ die() { say "$*"; exit 1; }
 # The keys the configuration may set, and nothing else.
 CONF_KEYS=(APP BINARY ARGS PORT READY_PATH METRICS_PATH DRAIN_SECONDS RELEASES LOG_GROUP
   METRICS_LOG_GROUP METRICS_NAMESPACE SCRIPT_URL SCRIPT_SHA256 DB_HOST DB_PORT DB_NAME DB_SECRET
-  MEDIA_BUCKET)
+  MAIL_IDENTITY MEDIA_BUCKET)
 
 load_conf() {
   # shellcheck source=/dev/null
@@ -74,6 +74,7 @@ load_conf() {
   DB_PORT=${DB_PORT:-}
   DB_NAME=${DB_NAME:-}
   DB_SECRET=${DB_SECRET:-}
+  MAIL_IDENTITY=${MAIL_IDENTITY:-}
   MEDIA_BUCKET=${MEDIA_BUCKET:-}
   CONFIG_PARAMETER=${CONFIG_PARAMETER:-}
   AWS_REGION=${AWS_REGION:-}
@@ -88,7 +89,10 @@ check_conf() {
   [[ $READY_PATH =~ ^/[A-Za-z0-9_./-]*$ ]] || die "READY_PATH '$READY_PATH' is not a path"
   [[ $METRICS_PATH =~ ^(/[A-Za-z0-9_./-]*)?$ ]] || die "METRICS_PATH '$METRICS_PATH' is not a path"
   [[ $DRAIN_SECONDS =~ ^[0-9]{1,3}$ ]] || die "DRAIN_SECONDS '$DRAIN_SECONDS' is not a number"
-  [[ $MEDIA_BUCKET =~ ^([a-z0-9][a-z0-9.-]{1,61}[a-z0-9])?$ ]] || die "MEDIA_BUCKET '$MEDIA_BUCKET' is not a bucket name"
+  [[ $MAIL_IDENTITY =~ ^([A-Za-z0-9._+-]+@)?([A-Za-z0-9-]+\.)*[A-Za-z0-9-]*$ ]] \
+    || die "MAIL_IDENTITY '$MAIL_IDENTITY' is not an address or a domain"
+  [[ $MEDIA_BUCKET =~ ^([a-z0-9][a-z0-9.-]{1,61}[a-z0-9])?$ ]] \
+    || die "MEDIA_BUCKET '$MEDIA_BUCKET' is not a bucket name"
 }
 
 # The arguments the application is started with.
@@ -280,13 +284,16 @@ write_units() {
   copytruncate
 }
 EOF
-  # What the stack tells the application; secrets.env, read after, may set any of it again.
+  # The region, for the role's credentials (which the application fetches from the metadata
+  # service itself), S3 and SES; the media bucket, and the database and the mail identity when
+  # there are. secrets.env, read after, may set any of it again.
   {
     printf '%s=%s\n' AWS_REGION "$(region)"
     if [ -n "$MEDIA_BUCKET" ]; then printf '%s=%s\n' LANES_MEDIA_BUCKET "$MEDIA_BUCKET"; fi
     if [ -n "$DB_HOST" ]; then
       printf '%s=%s\n' LANES_DB_HOST "$DB_HOST" LANES_DB_PORT "$DB_PORT" LANES_DB_NAME "$DB_NAME"
     fi
+    if [ -n "$MAIL_IDENTITY" ]; then printf '%s=%s\n' LANES_MAIL_IDENTITY "$MAIL_IDENTITY"; fi
   } >/etc/lanes/app.env
   systemctl daemon-reload
   systemctl enable lanes-volume.service lanes-app.service lanes-log.service

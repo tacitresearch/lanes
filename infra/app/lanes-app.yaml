@@ -19,7 +19,7 @@ Metadata:
       - Label: { default: "Backups, logs and alarms" }
         Parameters: [SnapshotIntervalHours, SnapshotRetainCount, JournalSnapshotId, LogRetentionDays, AlarmEmail]
       - Label: { default: Media and the database }
-        Parameters: [MediaUser, DatabaseEngine, DatabaseInstanceClass, DatabaseStorage, DatabaseEngineVersion]
+        Parameters: [MediaUser, MailIdentity, DatabaseEngine, DatabaseInstanceClass, DatabaseStorage, DatabaseEngineVersion]
 
 Parameters:
   AppName:
@@ -213,12 +213,20 @@ Parameters:
     Description: An address told when the site has no healthy target, the journal's disk fills or the host fails. Optional.
   MediaUser:
     Type: String
-    Default: "true"
+    Default: "false"
     AllowedValues: ["true", "false"]
     Description: >-
-      Make an IAM user with the media bucket's rights only, for an S3 client that reads its
-      credentials from the environment; you make its access key. false once the client takes
-      the instance role's credentials (IMDSv2), which already have those rights.
+      true makes an IAM user with the media bucket's rights only, for an S3 client that reads a
+      key from the environment; you make its access key. Not needed when the application takes
+      the instance role's credentials from the metadata service (integrations/aws), which
+      already have those rights.
+  MailIdentity:
+    Type: String
+    Default: ""
+    AllowedPattern: "^(([A-Za-z0-9._+-]+@)?([A-Za-z0-9-]+\\.)+[A-Za-z0-9-]+)?$"
+    Description: >-
+      An SES identity (a verified domain or address) the instance role may send email from
+      with ses:SendEmail, and nothing else. Empty for no email.
   DatabaseEngine:
     Type: String
     Default: none
@@ -258,6 +266,7 @@ Conditions:
   FromSnapshot: !Not [!Equals [!Ref JournalSnapshotId, ""]]
   HasAlarmEmail: !Not [!Equals [!Ref AlarmEmail, ""]]
   CreateMediaUser: !Equals [!Ref MediaUser, "true"]
+  HasMailIdentity: !Not [!Equals [!Ref MailIdentity, ""]]
   HasDatabase: !Equals [!Ref DatabaseEngine, postgres]
 
 Resources:
@@ -536,8 +545,9 @@ Resources:
             Action: [s3:ListBucket, s3:ListBucketMultipartUploads]
             Resource: !GetAtt MediaBucket.Arn
 
-  # For an S3 client that reads AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY: the user's access
-  # key, made by hand, goes in /etc/lanes/secrets.env on the instance (docs/DEPLOY.md).
+  # Only for an S3 client that reads AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY: the user's
+  # access key, made by hand, goes in /etc/lanes/secrets.env on the instance (docs/DEPLOY.md).
+  # The instance role's credentials, from the metadata service, need none.
   MediaUserAccount:
     Type: AWS::IAM::User
     Condition: CreateMediaUser
@@ -573,6 +583,7 @@ Resources:
           DB_PORT=${DbPort}
           DB_NAME=${DbName}
           DB_SECRET=${DbSecret}
+          MAIL_IDENTITY=${MailIdentity}
           MEDIA_BUCKET=${MediaBucket}
         - Bucket: !If [CreateReleaseBucket, !Ref ReleaseStore, !Ref ReleaseBucket]
           Prefix: !If [DefaultPrefix, !Ref AppName, !Ref ReleasePrefix]
@@ -599,7 +610,8 @@ Resources:
 
   # What the instance may do, and nothing else: read its releases, read and write the media,
   # write its logs and metrics, attach its own journal volume to itself, be reached by Systems
-  # Manager, and read the database's password.
+  # Manager, read the database's password, and send email from its SES identity. The
+  # application takes these credentials from the metadata service (IMDSv2) and refreshes them.
   InstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -679,6 +691,16 @@ Resources:
                 - Effect: Allow
                   Action: secretsmanager:GetSecretValue
                   Resource: !Ref DatabaseSecret
+          - !Ref AWS::NoValue
+        - !If
+          - HasMailIdentity
+          - PolicyName: send-email
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action: ses:SendEmail
+                  Resource: !Sub "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/${MailIdentity}"
           - !Ref AWS::NoValue
 
   InstanceProfile:

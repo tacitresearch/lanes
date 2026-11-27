@@ -78,8 +78,11 @@ def replay {σ : Signature} (sys : System σ) [Hashable σ.Id] (rt : Runtime sys
   let events ← rt.trace
   return (SysState.init sys Kernel.env).run Kernel.env events.toList
 
-def flakyTest (workers : Nat := 1) : Async (List (String × Bool)) := do
-  let config : Runtime.Config := { record := true, inboxCapacity := 8, workers }
+/-- How the tests below that take it run their actors: on one worker, or in parallel. -/
+def serial : Runtime.Config := { workers := 1 }
+
+def flakyTest (shape : Runtime.Config := serial) : Async (List (String × Bool)) := do
+  let config : Runtime.Config := { shape with record := true, inboxCapacity := 8 }
   let outputs ← IO.mkRef (#[] : Array Nat)
   let rt ← Runtime.start flaky config fun out => outputs.modify (·.push out)
   let clients := (List.finRange 3).toArray.map fun (k : Fin 3) => (do
@@ -110,8 +113,8 @@ def flakyTest (workers : Nat := 1) : Async (List (String × Bool)) := do
 /-! The bank under concurrent clients. -/
 
 open Tests.Fixtures.Bank in
-def bankTest (workers : Nat := 1) : Async (List (String × Bool)) := do
-  let config : Runtime.Config := { record := true, workers }
+def bankTest (shape : Runtime.Config := serial) : Async (List (String × Bool)) := do
+  let config : Runtime.Config := { shape with record := true }
   let responses ← IO.mkRef 0
   let rt ← Runtime.start (bank (Fin 3) 100) config fun _ => responses.modify (· + 1)
   let clients := (List.finRange 3).toArray.map fun (k : Fin 3) => (do
@@ -161,8 +164,8 @@ abbrev flood : System floodSig where
   actor := flooder
   accept x := ⟨x.1, .burst x.2⟩
 
-def floodTest (workers : Nat := 1) : Async (List (String × Bool)) := do
-  let config : Runtime.Config := { record := true, inboxCapacity := 2, workers }
+def floodTest (shape : Runtime.Config := serial) : Async (List (String × Bool)) := do
+  let config : Runtime.Config := { shape with record := true, inboxCapacity := 2 }
   let rt ← Runtime.start flood config
   discard <| Async.concurrentlyAll #[rt.input (0, 200), rt.input (1, 200)]
   rt.idle
@@ -424,6 +427,80 @@ def afterRestartTest : Async (List (String × Bool)) := do
     ("timers: one armed after a restart on a journal is due after its own delay", fired.isSome),
     ("durable: a shard whose journal has failed takes nothing more while it ends", !accepted) ]
 
+/-! Auto: a hub fans each input out to some of 16 workers, whose steps cost a number of rounds of
+hashing. Heavy inputs to all 16 take the pace onto the pool and trivial ones to one worker take it
+back off. Each input is sent once the one before is handled, so each is a batch of its own and
+the journal does not depend on how inputs arrive together: with auto it is the journal of a
+shard on one worker, entry for entry but for the clock, and so are the outputs. -/
+
+def mix : Nat → UInt64 → UInt64
+  | 0, h => h
+  | n + 1, h => mix n (mixHash h n.toUInt64)
+
+abbrev fanSig : Signature where
+  Id := Fin 17
+  Msg _ := Nat × Nat
+  In := Nat × Nat
+  Out := Fin 17 × UInt64
+
+/-- Actor 0 sends `(width, rounds)` on to actors 1 to `width`; the others hash `rounds` times. -/
+abbrev fan : System fanSig where
+  State _ := UInt64
+  actor i := {
+    init := 0
+    step := fun s (width, rounds) =>
+      if i = 0 then (s, (List.range width).map fun j => .send (Fin.ofNat 17 (j + 1)) (0, rounds))
+      else
+        let h := mix rounds (s + 1)
+        (h, [.emit (i, h)]) }
+  accept x := ⟨0, x⟩
+
+def shape : Journal.Entry fanSig → String
+  | .input x => s!"input {x}"
+  | .advance _ => "advance"
+  | .batch fuel => s!"batch {fuel}"
+  | .handed => "handed"
+  | .snapshot index => s!"snapshot {index}"
+
+/-- The phases, each a list of inputs; the journal, the outputs, and the batches run on the
+shard's thread and on the pool by the end of each phase. -/
+def fanRun (config : Runtime.Config) (phases : List (List (Nat × Nat))) :
+    Async (List String × Array (Fin 17 × UInt64) × List Runtime.Batches) := do
+  let entries ← IO.mkRef (#[] : Array (Journal.Entry fanSig))
+  let log : Journal.Log fan := {
+    past := []
+    append := fun es => entries.modify (· ++ es.toArray)
+    note := fun _ => pure ()
+    close := pure () }
+  let outputs ← IO.mkRef #[]
+  let rt ← Runtime.start fan config (fun out => outputs.modify (·.push out)) (some log)
+  let mut seen := []
+  for phase in phases do
+    for x in phase do
+      rt.input x
+      rt.idle
+    seen := seen ++ [← rt.batches]
+  rt.stop
+  return ((← entries.get).toList.map shape, ← outputs.get, seen)
+
+def autoTest : Async (List (String × Bool)) := do
+  let heavy := List.replicate 20 (16, 100000)
+  let trivial := List.replicate 300 (1, 0)
+  let phases := [heavy, trivial, heavy, trivial]
+  let (serialJournal, serialOut, _) ← fanRun serial phases
+  let (journal, out, seen) ← fanRun { workers := 4, pace := { cheap_ns := 20000 } } phases
+  let phase := fun (k : Nat) =>
+    let now := seen.getD k {}
+    let before : Runtime.Batches := if k = 0 then {} else seen.getD (k - 1) {}
+    (now.inline - before.inline, now.pool - before.pool)
+  return [
+    ("auto: heavy inputs to every worker are tried on the pool, trivial ones run on one thread",
+      (phase 0).1 > 0 && (phase 0).2 > 0 && (phase 1).1 ≥ 250),
+    ("auto: the journal, but for the clock, is the one of a shard on one worker",
+      journal == serialJournal && journal.length ≥ 3 * 640),
+    ("auto: and so are the outputs, in order",
+      out == serialOut && out.size == 2 * 20 * 16 + 2 * 300) ]
+
 /-- A parker: an `unpark` before the `park` is kept, a timed park ends, a task and an `Async`
 are waited for on one. -/
 def parkerTest : IO (List (String × Bool)) := do
@@ -447,9 +524,9 @@ def parkerTest : IO (List (String × Bool)) := do
       blocked == 8 && failed matches .error _) ]
 
 def tests : IO (List (String × Bool)) := do
-  let a ← (flakyTest 1).block
-  let b ← (bankTest 1).block
-  let c ← (floodTest 1).block
+  let a ← flakyTest.block
+  let b ← bankTest.block
+  let c ← floodTest.block
   let d ← busyTest.block
   let e ← timerTest.block
   let f ← backPressureTest.block
@@ -457,10 +534,15 @@ def tests : IO (List (String × Bool)) := do
   let h ← batchTest.block
   let i ← outputsTest.block
   let j ← busyStopTest.block
-  let onWorkers := fun (results : List (String × Bool)) =>
-    results.map fun (name, ok) => (s!"{name} (on 4 workers)", ok)
-  let w := onWorkers ((← (flakyTest 4).block) ++ (← (bankTest 4).block) ++ (← (floodTest 4).block))
-  return a ++ b ++ c ++ d ++ e ++ f ++ g ++ h ++ i ++ j ++ w ++ (← dutiesTest.block)
-    ++ (← afterRestartTest.block) ++ (← parkerTest)
+  let shaped := fun (label : String) (shape : Runtime.Config) => do
+    let results := (← (flakyTest shape).block) ++ (← (bankTest shape).block)
+      ++ (← (floodTest shape).block)
+    return results.map fun (name, ok) => (s!"{name} ({label})", ok)
+  let w ← shaped "on 4 workers" { workers := 4, parallel := .on }
+  let u ← shaped "auto, 4 workers" { workers := 4, parallel := .auto }
+  let v ← shaped "auto trying the pool often, 4 workers"
+    { workers := 4, parallel := .auto, pace := { cheap_ns := 0, probeEvery := 1 } }
+  return a ++ b ++ c ++ d ++ e ++ f ++ g ++ h ++ i ++ j ++ w ++ u ++ v ++ (← dutiesTest.block)
+    ++ (← afterRestartTest.block) ++ (← autoTest.block) ++ (← parkerTest)
 
 end Tests.Runtime
