@@ -34,8 +34,9 @@ the two standards and Go part.
   against it as if its path were `/`, writing an empty authority; and writes a result whose path
   starts with `//` with one `/`. Ours writes such a path after no authority as `/.//`, as the
   WHATWG standard does, so that it does not read back as an authority.
-- *Printing.* Go writes an IP literal as it was written and a userinfo and a host re-encoded from
-  their bytes; ours writes an address as RFC 5952 does and the rest as it was read.
+- *Printing.* Go writes an IP literal as it was written, a userinfo and a host re-encoded from
+  their bytes, and a path that decodes to `*` as `*`; ours writes an address as RFC 5952 does
+  and the rest as it was read.
 
 **Media types.** The type, subtype and names are kept in lowercase, a name occurs once (RFC 6838
 §4.3), and a field value has no whitespace at its ends (RFC 9110 §5.5).
