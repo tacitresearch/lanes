@@ -15,16 +15,16 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Core` | 103 | 41 | 0 | 34 | 1 | 11 | 16 |
 | `Lanes/Data` | 68 | 43 | 0 | 4 | 1 | 0 | 20 |
 | `Lanes/Durable` | 70 | 58 | 2 | 0 | 0 | 9 | 1 |
-| `Lanes/Lib` | 531 | 345 | 13 | 2 | 92 | 70 | 9 |
+| `Lanes/Lib` | 532 | 346 | 13 | 2 | 92 | 70 | 9 |
 | `Lanes/Net` | 37 | 6 | 5 | 0 | 0 | 25 | 1 |
 | `Lanes/Outside` | 144 | 112 | 4 | 6 | 1 | 21 | 0 |
 | `Lanes/Proof` | 36 | 12 | 0 | 0 | 0 | 23 | 1 |
 | `Lanes/Runtime` | 172 | 93 | 21 | 0 | 28 | 30 | 0 |
 | `Lanes/Semantics` | 61 | 11 | 0 | 0 | 0 | 49 | 1 |
 | `Lanes/Testing` | 63 | 0 | 0 | 1 | 62 | 0 | 0 |
-| `Lanes/Web` | 604 | 320 | 52 | 34 | 143 | 53 | 2 |
+| `Lanes/Web` | 613 | 324 | 52 | 37 | 145 | 53 | 2 |
 | `LanesCli` | 120 | 0 | 0 | 0 | 46 | 0 | 74 |
-| All | 2217 | 1176 | 102 | 113 | 374 | 325 | 127 |
+| All | 2227 | 1181 | 102 | 116 | 376 | 325 | 127 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -1183,13 +1183,14 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Postgres.Conn.room` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_fifo`, `Postgres.Conn.run_queue` and 6 more |
 | `Postgres.Conn.fail` | proved | `Postgres.Conn.onMessage_sasl_authOk` |
 | `Postgres.Conn.outcome` | proved | `Postgres.Conn.outcome_committed` |
-| `Postgres.Conn.texts` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_saslFinal` and 9 more |
-| `Postgres.Conn.onReply` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_saslFinal` and 9 more |
-| `Postgres.Conn.nonceOk` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_saslFinal` and 9 more |
-| `Postgres.Conn.onAuth` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_saslFinal` and 9 more |
-| `Postgres.Conn.onSasl` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_saslFinal` and 9 more |
-| `Postgres.Conn.onSaslFinal` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_saslFinal` and 9 more |
-| `Postgres.Conn.onMessage` | proved | `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_saslFinal`, `Postgres.Conn.onMessage_sasl_authOk` |
+| `Postgres.Conn.texts` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_requireScram` and 10 more |
+| `Postgres.Conn.onReply` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_requireScram` and 10 more |
+| `Postgres.Conn.nonceOk` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_requireScram` and 10 more |
+| `Postgres.Conn.Config.scramOnly` | proved | `Postgres.Conn.onMessage_requireScram` |
+| `Postgres.Conn.onAuth` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_requireScram` and 10 more |
+| `Postgres.Conn.onSasl` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_requireScram` and 10 more |
+| `Postgres.Conn.onSaslFinal` | proved | through `Postgres.Conn.onMessage`, `Postgres.Conn.run` and 1 more: `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_requireScram` and 10 more |
+| `Postgres.Conn.onMessage` | proved | `Postgres.Conn.onMessage_opened`, `Postgres.Conn.onMessage_requireScram`, `Postgres.Conn.onMessage_saslFinal` and 1 more |
 | `Postgres.Conn.drain` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_fifo`, `Postgres.Conn.run_queue` and 6 more |
 | `Postgres.Conn.receive` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_fifo`, `Postgres.Conn.run_queue` and 6 more |
 | `Postgres.Conn.submit` | proved | through `Postgres.Conn.run`, `Postgres.Conn.step`: `Postgres.Conn.run_fifo`, `Postgres.Conn.run_queue` and 6 more |
@@ -1267,10 +1268,10 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Postgres.Scram.saslName` | proved | through `Postgres.Scram.respond`: `Postgres.Scram.respond_iterations`, `Postgres.Scram.respond_nonce` |
 | `Postgres.Scram.firstBare` | proved | through `Postgres.Scram.respond`: `Postgres.Scram.respond_iterations`, `Postgres.Scram.respond_nonce` |
 | `Postgres.Scram.first` | tested | `Tests/Postgres.lean` |
-| `Postgres.Scram.field` | proved | through `Postgres.Scram.respond`, `Postgres.Scram.verify`: `Postgres.Conn.onMessage_saslFinal`, `Postgres.Scram.respond_iterations` and 1 more |
+| `Postgres.Scram.field` | proved | through `Postgres.Scram.respond`, `Postgres.Scram.verify`: `Postgres.Conn.onMessage_requireScram`, `Postgres.Conn.onMessage_saslFinal` and 2 more |
 | `Postgres.Scram.parseServerFirst` | proved | `Postgres.Scram.respond_iterations`, `Postgres.Scram.respond_nonce` |
 | `Postgres.Scram.respond` | proved | `Postgres.Scram.respond_iterations`, `Postgres.Scram.respond_nonce` |
-| `Postgres.Scram.verify` | proved | `Postgres.Conn.onMessage_saslFinal` |
+| `Postgres.Scram.verify` | proved | `Postgres.Conn.onMessage_requireScram`, `Postgres.Conn.onMessage_saslFinal` |
 
 ## `Lanes/Lib/Postgres/Table.lean`
 
@@ -2106,7 +2107,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Testing.Kept.covers` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
 | `Testing.Browser.cookie` | tested | `Tests/OAuth.lean` |
 | `Testing.Browser.keep` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
-| `Testing.Browser.forget` | tested | `Tests/Testing.lean` |
+| `Testing.Browser.forget` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
 | `Testing.Browser.record` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
 | `Testing.Browser.call` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
 | `Testing.Browser.get` | tested | `Tests/OAuth.lean`, `Tests/Testing.lean` |
@@ -2184,7 +2185,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `OAuth.DisplayName.maxChars` | proved | `OAuth.DisplayName.length_le` |
-| `OAuth.DisplayName.allowed` | proved | through `OAuth.DisplayName.val`, `OAuth.Identity`: `OAuth.DisplayName.length_le`, `OAuth.IdToken.check_ok_iff` and 3 more |
+| `OAuth.DisplayName.allowed` | proved | through `OAuth.DisplayName.val`, `OAuth.Identity` and 1 more: `OAuth.DisplayName.length_le`, `OAuth.IdToken.check_ok_iff` and 4 more |
 | `OAuth.DisplayName.Valid` | spec | a predicate |
 | `OAuth.DisplayName.instDecidableValid` | proved | its type, `Decidable` |
 | `OAuth.DisplayName.of?` | proved | through `OAuth.IdToken.Claims.identity`: `OAuth.IdToken.check_ok_iff`, `OAuth.IdToken.verify_accepted` |
@@ -2254,20 +2255,26 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `OAuth.instReprSecret` | checked | `Tests/OAuth.lean` |
+| `OAuth.instReprSecret` | tested | `Tests/OAuth.lean` |
 | `OAuth.instToStringSecret` | tested | `Tests/OAuth.lean` |
 | `OAuth.b64` | checked | `Tests/OAuth.lean` |
 | `OAuth.challenge` | checked | `Tests/OAuth.lean` |
 | `OAuth.same` | proved | `OAuth.same_iff` |
-| `OAuth.Pending.begin` | proved | `OAuth.Pending.length_begin` |
-| `OAuth.Pending.callback` | proved | `OAuth.Pending.callback_ok`, `OAuth.Pending.callback_removes`, `OAuth.Pending.callback_sublist` |
-| `OAuth.Pending.Op.issues` | spec | used only in statements |
-| `OAuth.Pending.run` | proved | `OAuth.Pending.accepted_le_issued` |
-| `OAuth.Seed.entry` | checked | `Tests/OAuth.lean` |
+| `OAuth.Ticket.payload` | checked | `Tests/OAuth.lean` |
+| `OAuth.Ticket.read` | proved | through `OAuth.check`: `OAuth.check_ok` |
+| `OAuth.Ticket.toCookie` | checked | `Tests/OAuth.lean` |
+| `OAuth.Ticket.ofCookie` | proved | `OAuth.check_ok` |
+| `OAuth.Ticket.derive` | checked | `Tests/OAuth.lean` |
+| `OAuth.Ticket.grant` | checked | `Tests/OAuth.lean` |
+| `OAuth.check` | proved | `OAuth.check_ok` |
+| `OAuth.Used.claim` | proved | `OAuth.Used.claim_holds`, `OAuth.Used.claim_ok`, `OAuth.Used.claim_ok_holds` and 1 more |
+| `OAuth.Used.Holds` | spec | a predicate |
+| `OAuth.Used.run` | proved | `OAuth.Used.accepted_later`, `OAuth.Used.accepted_once` |
 | `OAuth.authorizeUrl` | checked | `Tests/OAuth.lean` |
 | `OAuth.Discovery.read` | checked | `Tests/OAuth.lean` |
 | `OAuth.Discovery.provider` | checked | `Tests/OAuth.lean` |
 | `OAuth.begin` | checked | `Tests/OAuth.lean` |
+| `OAuth.Identity.under` | proved | `OAuth.Identity.under_cons` |
 | `OAuth.Answer.state` | checked | `Tests/OAuth.lean` |
 | `OAuth.Answer.read` | checked | `Tests/OAuth.lean` |
 | `OAuth.tokenForm` | checked | `Tests/OAuth.lean` |
@@ -2291,7 +2298,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Hmac.Key.of` | tested | `Tests/Auth.lean` |
+| `Hmac.Key.of` | checked | `Tests/OAuth.lean` |
 | `Hmac.Key.mac` | proved | `Auth.checkForm_other`, `Auth.verify_sign_other` |
 | `Auth.message` | proved | `Auth.checkForm_other`, `Auth.message_inj`, `Auth.verify_sign_other` |
 | `Auth.tag` | proved | through `Auth.checkForm`, `Auth.sign`: `Auth.checkForm_formToken`, `Auth.checkForm_iff` and 4 more |
@@ -2408,6 +2415,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Http.Conn.closing` | proved | through `Http.Conn.answer`, `Http.Conn.encode` and 8 more: `Http.Conn.answer_ignored`, `Http.Conn.answer_waiting` and 20 more |
+| `Http.Conn.nosniff` | proved | through `Http.Conn.answer`, `Http.Conn.encode` and 7 more: `Http.Conn.answer_ignored`, `Http.Conn.answer_waiting` and 19 more |
 | `Http.Conn.sendable` | proved | `Http.Conn.read_encode`, `Http.Conn.sendable_writable` |
 | `Http.Conn.encode` | proved | `Http.Conn.answer_waiting`, `Http.Conn.read_encode` |
 | `Http.Conn.refusal` | proved | through `Http.Conn.pump`, `Http.Conn.run` and 1 more: `Http.Conn.pump_piece`, `Http.Conn.run_buffer` and 8 more |
@@ -2485,9 +2493,11 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Request.cookie?` | tested | `Tests/Auth.lean` |
 | `Http.Request.sameOrigin` | proved | `Http.Request.sameOrigin_iff` |
 | `Http.Request.bodyWithin` | spec | used only in statements |
+| `Http.hostCookie` | tested | `Tests/Auth.lean` |
 | `Http.Response.setCookie` | proved | `Http.setCookie_read` |
 | `Http.Response.clearCookie` | tested | `Tests/Auth.lean` |
 | `Http.Response.noStore` | checked | `Tests/SharedCache.lean` |
+| `Http.Response.noFraming` | tested | `Tests/Html.lean` |
 
 ## `Lanes/Web/Http/CookieSound.lean`
 
