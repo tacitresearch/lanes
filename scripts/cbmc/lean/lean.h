@@ -13,7 +13,7 @@ typedef struct lean_object {
     int rc;
     int kind; /* 0 a constructor, 1 a byte array, 2 an array, 3 anything else */
     size_t size; /* the bytes of a byte array, the fields of a constructor or an array */
-    struct lean_object **fields;
+    struct lean_object *fields[2]; /* inline, to keep CBMC's objects few */
     uint64_t scalars[4];
     uint8_t *data;
 } lean_object;
@@ -34,9 +34,9 @@ static inline lean_object *model_new(int kind, size_t size) {
     o->rc = 1;
     o->kind = kind;
     o->size = size;
-    o->fields = (kind == 0 || kind == 2) ? calloc(size ? size : 1, sizeof(lean_object *)) : NULL;
+    assert(kind == 1 || size <= 2);
+    o->fields[0] = o->fields[1] = NULL;
     o->data = kind == 1 ? malloc(size ? size : 1) : NULL;
-    __CPROVER_assume((kind != 0 && kind != 2) || o->fields != NULL);
     __CPROVER_assume(kind != 1 || o->data != NULL);
     model_live++;
     return o;
@@ -54,7 +54,6 @@ static inline int model_drop(lean_object *o) {
 }
 
 static inline void model_free(lean_object *o) {
-    free(o->fields);
     free(o->data);
     free(o);
     model_live--;
@@ -63,16 +62,15 @@ static inline void model_free(lean_object *o) {
 /* Two levels deep, which is as deep as the objects of the model go: a turn and its line and
    bytes, an answer box and its letters. */
 static inline void model_drop_field(lean_object *o, size_t i) {
-    if (!o->fields || i >= o->size) return;
+    if (o->kind == 1 || i >= o->size) return;
     lean_object *f = o->fields[i];
     if (!f || lean_is_scalar(f) || !model_drop(f)) return;
-    assert(!f->fields || f->size == 0 || lean_is_scalar(f->fields[0]));
+    assert(f->kind == 1 || f->size == 0 || lean_is_scalar(f->fields[0]));
     model_free(f);
 }
 
 static inline void lean_dec_ref(lean_object *o) {
     if (!model_drop(o)) return;
-    assert(!o->fields || o->size <= 2);
     model_drop_field(o, 0);
     model_drop_field(o, 1);
     model_free(o);

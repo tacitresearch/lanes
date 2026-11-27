@@ -1,12 +1,15 @@
-/* A thread of `native/loop.c` under CBMC (`scripts/cbmc.sh`), on a table of two connections.
-   Lean's side, the sockets, epoll and the clock are stubs that may do anything their contracts
-   allow: events with any token, reads and writes of any length or failing, turns that close or
-   not and ask for any number of bytes, answers for any token. CBMC checks every path of a few
-   turns of the loop for: reads and copies within the buffer and within what Lean asked for; no
-   system call on a socket that is not open, none closed twice, no empty write; no turn of Lean
-   without a line, nor on a closed connection; no Lean object dropped more often than it is
-   held, nor used once freed; no panic; and once the thread ends, every object it held dropped
-   and every socket closed. */
+/* The table of connections of `native/loop.c` under CBMC (`scripts/cbmc.sh`), checked as an
+   induction on a table of two connections. From any table the invariant of `check` allows (each
+   slot free, open and reading, open with bytes unwritten, or closed by Lean and draining), each
+   thing a thread does (drive a connection after an event, accept, take the mailbox, sweep the
+   deadlines, stop) leaves a table it allows, so every run of a thread keeps it. Lean's side, the
+   sockets and the clock are stubs that may do anything their contracts allow: reads and writes
+   of any length or failing, turns that close or not and ask for any number of bytes, answers for
+   any token. CBMC checks on every path: reads and copies within the buffer and within what Lean
+   asked for; no system call on a socket that is not open, none closed twice, no empty write; no
+   turn of Lean without a line, nor of a connection Lean has closed; no Lean object dropped more
+   often than it is held, used once freed, or left held by nobody; no panic. Not checked here:
+   the dispatch of `work`, and the set-up and the end of a thread. */
 #define READ_MAX 16 /* the buffer, 64 KiB in the loop, small enough to check */
 #include "../../native/loop.c"
 
@@ -194,25 +197,94 @@ ssize_t read(int fd, void *buf, size_t len) {
     return 8;
 }
 
+/* A slot as the invariant allows it, with the objects it holds counted in `held`. */
+static void some_slot(conn_t *c, int fd, size_t *held) {
+    *c = (conn_t){ .fd = -1 };
+    uint8_t shape = nondet_u8() % 4;
+    if (shape == 0) return;
+    c->fd = fd;
+    fd_open[fd] = 1;
+    c->gen = nondet_unsigned();
+    c->want = nondet_u64();
+    c->deadline_ms = nondet_u64();
+    __CPROVER_assume(c->deadline_ms < 100000);
+    c->out_ms = nondet_u64();
+    __CPROVER_assume(c->out_ms < 100000);
+    c->readable = nondet_u8() & 1;
+    c->shut = nondet_u8() & 1;
+    c->notify = nondet_u8() & 1;
+    if (shape != 3) {
+        c->line = model_new(3, 0);
+        ++*held;
+        c->shut = 0;
+    }
+    if (shape >= 2) {
+        size_t n = nondet_size(), sent = nondet_size();
+        __CPROVER_assume(n >= 1 && n <= 3 && sent < n);
+        c->out = model_new(1, n);
+        c->sent = sent;
+        ++*held;
+    }
+}
+
+/* Free slots are exactly those listed free, each once; open ones hold open sockets, each its
+   own, and live objects; a free slot holds nothing. Returns the objects the table holds. */
+static size_t check(worker_t *w) {
+    size_t held = 0;
+    assert(w->free_count <= 2);
+    for (uint32_t i = 0; i < 2; i++) {
+        conn_t *c = &w->conns[i];
+        int listed = 0;
+        for (uint32_t k = 0; k < w->free_count; k++) listed += w->free_slots[k] == i;
+        assert(listed == (c->fd < 0));
+        if (c->fd < 0) { assert(!c->line && !c->out); continue; }
+        check_open(c->fd);
+        if (c->line) { assert(c->line->rc == 1); held++; }
+        if (c->out) {
+            assert(c->out->rc == 1 && c->sent < lean_sarray_size(c->out));
+            held++;
+        }
+    }
+    if (w->conns[0].fd >= 0) assert(w->conns[0].fd != w->conns[1].fd);
+    return held;
+}
+
 int main(void) {
     static conn_t conns[2];
-    static uint32_t free_slots[2] = { 1, 0 };
+    static uint32_t free_slots[2];
+    size_t held = 0;
     the_handler = model_new(3, 0);
     the_loop = (loop_t){ .threads = 1, .conns_max = 2, .write_ms = 30000, .linger_ms = 2000,
                          .tick_ms = 25, .workers = &the_worker };
-    the_worker.loop = &the_loop;
-    the_worker.epoll = 2;
-    the_worker.listen = 3;
-    the_worker.wake = 4;
-    the_worker.handler = the_handler;
-    the_worker.conns = conns;
-    the_worker.free_slots = free_slots;
-    the_worker.free_count = 2;
-    conns[0].fd = conns[1].fd = -1;
+    the_worker = (worker_t){ .loop = &the_loop, .epoll = 2, .listen = 3, .wake = 4,
+                             .handler = the_handler, .conns = conns, .free_slots = free_slots };
     fd_open[2] = fd_open[3] = fd_open[4] = 1;
-    work(&the_worker);
-    assert(model_live == 1 && the_handler->rc == 1);
-    for (int fd = 5; fd < FDS; fd++) assert(!fd_open[fd]);
-    assert(!fd_open[3]);
+    some_slot(&conns[0], 5, &held);
+    some_slot(&conns[1], 6, &held);
+    for (uint32_t i = 0; i < 2; i++)
+        if (conns[i].fd < 0) free_slots[the_worker.free_count++] = i;
+    next_fd = 7;
+    assert(check(&the_worker) == held && model_live == held + 1);
+    uint64_t now = 1000 + (nondet_unsigned() % 200000);
+    uint8_t op = nondet_u8() % 5;
+#ifdef OP
+    op = OP; /* one operation at a time: -D OP=0 to 4 */
+#endif
+    switch (op) {
+    case 0: {
+        conn_t *c = &conns[nondet_u8() & 1];
+        __CPROVER_assume(c->fd >= 0);
+        c->readable |= nondet_u8() & 1;
+        drive(&the_worker, c, now);
+        break;
+    }
+    case 1: accept_some(&the_worker, now); break;
+    case 2: take_mail(&the_worker, now); break;
+    case 3: sweep(&the_worker, now); break;
+    default: stop_all(&the_worker, now); break;
+    }
+    held = check(&the_worker);
+    assert(model_live == held + 1 && "an object is held by nobody, or freed while held");
+    assert(the_handler->rc == 1);
     return 0;
 }
