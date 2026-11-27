@@ -89,12 +89,26 @@ jobs:
         with:
           clean: false
       - uses: ./.github/actions/lean
-      # Our parsers against Go's standard library on generated inputs; Go fetches the toolchain
-      # `oracle/go.mod` pins. It fails only on a difference no decision covers.
-      - name: Against Go, fixed seed
+      # The pure oracles (oracles/README.md): our parsers and encoders against Go's standard
+      # library, expfmt, botocore and jwcrypto on generated inputs. Go fetches the toolchain
+      # `oracles/go/go.mod` pins; the Python references get virtual environments made from their
+      # requirements.txt. It fails only on a difference no decision covers. The service
+      # oracles run in services.yml.
+      - name: Python's venv, for the Python references
+        run: |
+          if python3 -m venv --help >/dev/null 2>&1; then exit 0; fi
+          sudo apt-get update -q && sudo apt-get install -yq python3-venv
+      - name: The references, fixed seed
         run: lake exe lanesOracle --cases 20000
-      - name: Against Go, a new seed each run
+      - name: The references, a new seed each run
         run: lake exe lanesOracle --cases 20000 --seed ${{ github.run_id }}
+      - name: SES's address check against net/mail
+        run: |
+          mkdir -p integrations/aws/.lake
+          ln -sfn "$GITHUB_WORKSPACE/.lake/packages" integrations/aws/.lake/packages
+          cd integrations/aws
+          lake exe oracle --cases 20000
+          lake exe oracle --cases 20000 --seed ${{ github.run_id }}
 
   test:
     needs: [runner, compile]

@@ -201,7 +201,9 @@ def attributesOk : (fuel : Nat) → List Char → Bool
     | '>' :: _ | '/' :: '>' :: _ => true
     | c :: _ =>
       cs.head?.any space && nameStart c &&
-        let (_, afterName) := rest.span Xml.nameChar
+        let (name, afterName) := rest.span Xml.nameChar
+        -- Go reads an attribute's name as a QName too: one colon at most.
+        name.count ':' ≤ 1 &&
         match afterName.dropWhile space with
         | '=' :: v =>
           match v.dropWhile space with

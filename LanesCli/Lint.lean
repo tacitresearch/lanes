@@ -22,6 +22,10 @@ Source-level checks of the rules in `AGENTS.md` that can be decided from the tex
 - `links`: every repository path that a Markdown file at the root or under `docs/` writes in
   backquotes exists (`a/{b,c}.lean` names two). `docs/history/` and `docs/decisions/` record
   the past and are not checked.
+- `oracles`, where there is an `oracles/README.md`: its tables name a reference for each folder
+  of `oracles/`, and an oracle, or why there is none, for each module of `Lanes/Lib/` and
+  `Lanes/Web/` and each model of `Lanes/Outside/` that is not a proof or IO; every module and
+  path they name exists (`docs/decisions/new-oracles.md`).
 - `inventory`, `inventory-none`, in Lanes itself: `docs/INVENTORY.md` is up to date, and every
   definition of `Lanes/` without evidence is on `docs/inventory-none.md`. These read the built
   modules, so `lanesInventory`, which links `Lean`, does them; `--fix` has it rewrite the file.
@@ -262,6 +266,74 @@ def checkLinks (root : System.FilePath) : IO (List Finding) := do
           findings := ⟨doc, line, "links", s!"`{path}` does not exist"⟩ :: findings
   return findings.reverse
 
+/-! ## The oracles' manifest -/
+
+/-- The cells of a Markdown table's row: `| a | b |` is `["a", "b"]`. -/
+def cells (line : String) : List String :=
+  ((line.trimAscii.toString.splitOn "|").drop 1).dropLast.map (·.trimAscii.toString)
+
+/-- The rows of the table under `heading`, each with its line, without its head and rule. -/
+def tableRows (text heading : String) : List (Nat × List String) :=
+  let lines := (text.splitOn "\n").zipIdx
+  let after := (lines.dropWhile (·.1 != heading)).drop 1
+  let section_ := after.takeWhile fun (l, _) => !l.startsWith "#"
+  let rows := section_.filter (·.1.startsWith "|")
+  (rows.drop 2).map fun (l, i) => (i + 1, cells l)
+
+def spans (cell : String) : List String := (codeSpans cell).map (·.2)
+
+/-- The modules under `dirs` that must have a row: neither proofs (`…Sound.lean`) nor IO. -/
+def inScope (root : System.FilePath) (dirs : List String) : IO (List String) := do
+  let mut out := []
+  for dir in dirs do
+    if ← (root / dir).isDir then
+      for file in ← sourceFiles (root / dir) do
+        let relative := (file.toString.dropPrefix (root.toString ++ "/")).toString
+        unless relative.endsWith "Sound.lean" || (relative.splitOn "/").contains "IO" do
+          out := out ++ [relative]
+  return out
+
+/-- `oracles`: `oracles/README.md` has a row for each folder of `oracles/`, for each module of
+`Lanes/Lib/` and `Lanes/Web/` and each model of `Lanes/Outside/`, but proofs and IO; a module's
+row names an oracle or says why there is none; and every module and path the rows name exists. -/
+def checkOracles (root : System.FilePath) : IO (List Finding) := do
+  let doc := "oracles/README.md"
+  unless ← (root / doc).pathExists do return []
+  let text ← IO.FS.readFile (root / doc)
+  let mut findings : List Finding := []
+  let refs := tableRows text "## References"
+  for (line, row) in refs do
+    for path in spans (row.headD "") do
+      unless ← (root / path).isDir do
+        findings := findings ++ [⟨doc, line, "oracles", s!"`{path}` is not a folder"⟩]
+  for entry in ← (root / "oracles").readDir do
+    if ← entry.path.isDir then
+      let folder := s!"oracles/{entry.fileName}"
+      unless refs.any (fun (_, row) => (spans (row.headD "")).contains folder) do
+        findings := findings ++ [⟨doc, 1, "oracles",
+          s!"`{folder}` has no row under References: its reference, version and pin"⟩]
+  for (heading, dirs) in [("## Protocol modules", ["Lanes/Lib", "Lanes/Web"]),
+      ("## Outside models", ["Lanes/Outside"])] do
+    let rows := tableRows text heading
+    for (line, row) in rows do
+      match row with
+      | first :: oracle :: rest =>
+        let oracles ← (spans oracle).flatMapM (citedPaths root)
+        let cited ← (rest.flatMap spans).flatMapM (citedPaths root)
+        for path in spans first ++ oracles ++ cited do
+          unless ← (root / path).pathExists do
+            findings := findings ++ [⟨doc, line, "oracles", s!"`{path}` does not exist"⟩]
+        if oracles.isEmpty && (rest.headD "").isEmpty then
+          findings := findings ++ [⟨doc, line, "oracles",
+            s!"{", ".intercalate (spans first)} names no oracle and gives no reason"⟩]
+      | _ => findings := findings ++ [⟨doc, line, "oracles", "a row of fewer than three cells"⟩]
+    let listed := rows.flatMap fun (_, row) => spans (row.headD "")
+    for module in ← inScope root dirs do
+      unless listed.contains module do
+        findings := findings ++ [⟨doc, 1, "oracles",
+          s!"`{module}` has no row under {heading.drop 3}: name its oracle, or why it has none"⟩]
+  return findings
+
 structure Options where
   /-- Rewrite the generated files instead of reporting them. -/
   fix : Bool := false
@@ -313,6 +385,7 @@ def lint (root : System.FilePath) (options : Options := {}) : IO Report := do
   for file in files do
     findings := findings ++ (← checkFile root file trusted)
   findings := findings ++ (← checkLinks root)
+  findings := findings ++ (← checkOracles root)
   findings := findings ++ (← inventory root options.fix)
   return ⟨findings, fixed, files.size⟩
 
