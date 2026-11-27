@@ -86,21 +86,23 @@ def splitTarget (target : String) : Option (List String × List (String × Strin
 def authField (auth name : String) : Option String :=
   (auth.splitOn (name ++ "="))[1]? |>.map fun rest => (rest.splitOn ",").headD ""
 
-/-- Whether `r` is signed with `creds` for `region`, in its header or in its query, as S3 would
-check it from the bytes received; and the path and query it names. -/
-def verified (creds : SigV4.Credentials) (region : String) (r : Raw) :
+/-- Whether `r` is signed with `creds` for `scope`, in its header or in its query, as S3 would
+check it from the bytes received; and the path and query it names. S3 wants the payload's hash
+in `x-amz-content-sha256`; another service hashes the body it received. -/
+def verified (creds : SigV4.Credentials) (scope : SigV4.Scope) (r : Raw) :
     Option (List String × List (String × String)) := do
   let (path, query) ← splitTarget r.target
-  let scope : SigV4.Scope := ⟨region, "s3"⟩
+  let s3 := scope.service == "s3"
   let signedPairs (names : List String) := names.flatMap fun name =>
     (r.headers.filter (·.1 == name)).map fun (_, v) => (name, v)
   match r.headers.lookup "authorization" with
   | some auth =>
     let names := ((authField auth "SignedHeaders").getD "").splitOn ";"
     let t ← time? (← r.headers.lookup "x-amz-date")
-    let payload ← r.headers.lookup "x-amz-content-sha256"
+    let payload ← if s3 then r.headers.lookup "x-amz-content-sha256"
+      else some (SigV4.payloadHash r.body)
     unless payload == SigV4.unsignedPayload || payload == SigV4.payloadHash r.body do none
-    unless names.contains "host" && names.contains "x-amz-content-sha256" do none
+    unless names.contains "host" && (!s3 || names.contains "x-amz-content-sha256") do none
     unless (creds.sessionToken.map (·.reveal)) == r.headers.lookup "x-amz-security-token" do none
     unless creds.sessionToken.isNone || names.contains "x-amz-security-token" do none
     let expected := SigV4.authorization creds t scope r.verb path query (signedPairs names) payload
@@ -160,7 +162,7 @@ def range? (header : String) (size : Nat) : Option (Nat × Nat) :=
 def serve (creds : SigV4.Credentials) (bucket region : String) (objects : Objects) (r : Raw) :
     ByteArray × Objects :=
   let head := r.verb == "HEAD"
-  match verified creds region r with
+  match verified creds ⟨region, "s3"⟩ r with
   | none => (failure 403 "SignatureDoesNotMatch" head, objects)
   | some (path, query) =>
     match path with

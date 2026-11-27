@@ -292,13 +292,24 @@ def tests : List (String × Bool) :=
 
 open Lanes.Testing.S3 (Fake follow)
 
-/-- The fake's reading of a request and its check of a signature, under the names
-`integrations/aws` uses for its fake SES. -/
-abbrev Raw := Lanes.Testing.S3.Raw
+/-! The fake's parts under the names `integrations/aws` uses for its fakes of the metadata
+service and of SES, from before the fake moved to the test kit. -/
+
+export Lanes.Testing.S3 (Raw raw? answer)
 
 def verified (creds : SigV4.Credentials) (r : Raw) (scope : SigV4.Scope := ⟨"us-east-1", "s3"⟩) :
     Option (List String × List (String × String)) :=
   Lanes.Testing.S3.verified creds scope r
+
+/-- The fake S3 on a local port, with its bucket `videos`: the server, its port and its objects. -/
+def fake (creds : SigV4.Credentials) :
+    Async (TCP.Socket.Server × UInt16 × IO.Ref Lanes.Testing.S3.Objects) := do
+  let f ← Fake.start creds "videos"
+  return (f.server, f.bucket.endpoint.port, f.objects)
+
+def bucketAt (tcpPort : UInt16) : Bucket :=
+  { name := "videos", region := "us-east-1",
+    endpoint := { host := "127.0.0.1", port := tcpPort, scheme := .http, addressing := .path } }
 
 def config : Client.Config := { timeout_ms := 3000 }
 
