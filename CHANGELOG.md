@@ -33,6 +33,7 @@ the Lake file.
 - A generated inventory giving every public definition its status and evidence, and an axiom gate per area.
 - Reference examples: a bank, leader election, a key-value store with front ends, a watchdog.
 - Applications built on Lanes: raft-kv (Raft, proved to implement its map, acting once per command), ledger (proved against its timed spec) and rookery (a message board with a JSON API).
+- macOS support: libsodium found through pkg-config (Homebrew on Apple silicon included), and a macOS CI job.
 - CI with one required check, a merge queue, a mutation gate for trusted code, and a benchmark workflow on a warm runner machine.
 
 ### Changed
