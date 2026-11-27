@@ -21,9 +21,9 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Proof` | 36 | 12 | 0 | 0 | 0 | 23 | 1 |
 | `Lanes/Runtime` | 158 | 93 | 20 | 0 | 15 | 30 | 0 |
 | `Lanes/Semantics` | 60 | 11 | 0 | 0 | 0 | 48 | 1 |
-| `Lanes/Web` | 506 | 259 | 50 | 24 | 126 | 45 | 2 |
+| `Lanes/Web` | 513 | 262 | 50 | 27 | 127 | 45 | 2 |
 | `LanesCli` | 110 | 0 | 0 | 0 | 46 | 0 | 64 |
-| All | 1932 | 1043 | 100 | 96 | 282 | 294 | 117 |
+| All | 1939 | 1046 | 100 | 99 | 283 | 294 | 117 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -1994,20 +1994,26 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `OAuth.instReprSecret` | checked | `Tests/OAuth.lean` |
+| `OAuth.instReprSecret` | tested | `Tests/OAuth.lean` |
 | `OAuth.instToStringSecret` | tested | `Tests/OAuth.lean` |
 | `OAuth.b64` | checked | `Tests/OAuth.lean` |
 | `OAuth.challenge` | checked | `Tests/OAuth.lean` |
 | `OAuth.same` | proved | `OAuth.same_iff` |
-| `OAuth.Pending.begin` | proved | `OAuth.Pending.length_begin` |
-| `OAuth.Pending.callback` | proved | `OAuth.Pending.callback_ok`, `OAuth.Pending.callback_removes`, `OAuth.Pending.callback_sublist` |
-| `OAuth.Pending.Op.issues` | spec | used only in statements |
-| `OAuth.Pending.run` | proved | `OAuth.Pending.accepted_le_issued` |
-| `OAuth.Seed.entry` | checked | `Tests/OAuth.lean` |
+| `OAuth.Ticket.payload` | checked | `Tests/OAuth.lean` |
+| `OAuth.Ticket.read` | proved | through `OAuth.check`: `OAuth.check_ok` |
+| `OAuth.Ticket.toCookie` | checked | `Tests/OAuth.lean` |
+| `OAuth.Ticket.ofCookie` | proved | `OAuth.check_ok` |
+| `OAuth.Ticket.derive` | checked | `Tests/OAuth.lean` |
+| `OAuth.Ticket.grant` | checked | `Tests/OAuth.lean` |
+| `OAuth.check` | proved | `OAuth.check_ok` |
+| `OAuth.Used.claim` | proved | `OAuth.Used.claim_holds`, `OAuth.Used.claim_ok`, `OAuth.Used.claim_ok_holds` and 1 more |
+| `OAuth.Used.Holds` | spec | a predicate |
+| `OAuth.Used.run` | proved | `OAuth.Used.accepted_later`, `OAuth.Used.accepted_once` |
 | `OAuth.authorizeUrl` | checked | `Tests/OAuth.lean` |
 | `OAuth.Discovery.read` | checked | `Tests/OAuth.lean` |
 | `OAuth.Discovery.provider` | checked | `Tests/OAuth.lean` |
 | `OAuth.begin` | checked | `Tests/OAuth.lean` |
+| `OAuth.Identity.under` | proved | `OAuth.Identity.under_cons` |
 | `OAuth.Answer.state` | checked | `Tests/OAuth.lean` |
 | `OAuth.Answer.read` | checked | `Tests/OAuth.lean` |
 | `OAuth.tokenForm` | checked | `Tests/OAuth.lean` |
@@ -2031,7 +2037,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Hmac.Key.of` | tested | `Tests/Auth.lean` |
+| `Hmac.Key.of` | checked | `Tests/OAuth.lean` |
 | `Hmac.Key.mac` | proved | `Auth.checkForm_other`, `Auth.verify_sign_other` |
 | `Auth.message` | proved | `Auth.checkForm_other`, `Auth.message_inj`, `Auth.verify_sign_other` |
 | `Auth.tag` | proved | through `Auth.checkForm`, `Auth.sign`: `Auth.checkForm_formToken`, `Auth.checkForm_iff` and 4 more |
@@ -2201,6 +2207,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Http.Request.cookie?` | tested | `Tests/Auth.lean` |
 | `Http.Request.sameOrigin` | proved | `Http.Request.sameOrigin_iff` |
 | `Http.Request.bodyWithin` | spec | used only in statements |
+| `Http.hostCookie` | tested | `Tests/Auth.lean` |
 | `Http.Response.setCookie` | proved | `Http.setCookie_read` |
 | `Http.Response.clearCookie` | tested | `Tests/Auth.lean` |
 | `Http.Response.noStore` | tested | `Tests/Html.lean` |

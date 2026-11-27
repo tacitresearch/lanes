@@ -104,6 +104,13 @@ def bodyWithin (r : Request) (limit : Nat) : Bool :=
 
 end Request
 
+/-- A cookie's name, with the `__Host-` prefix when the cookie is `Secure`: a browser then keeps
+it only if it was set over HTTPS with `Path=/` and no `Domain`, so no subdomain and no page over
+plain HTTP can set it in its place. Over plain HTTP, for a test, a browser would drop a cookie of
+that name, so the prefix is left off. -/
+def hostCookie (name : String) (secure : Bool) : String :=
+  if secure then "__Host-" ++ name else name
+
 namespace Response
 
 /-- Adds the cookie if `Cookie.valid` holds of it, and leaves the response as it was if not. -/

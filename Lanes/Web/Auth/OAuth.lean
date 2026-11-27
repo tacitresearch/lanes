@@ -5,20 +5,23 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Lanes.Web.Auth.IdToken
+public import Lanes.Web.Auth.Token
+public import Lanes.Proof.List.Fold
 public import Lanes.Web.Http.Cookie
 public import Lanes.Lib.Net.Url
 
 /-!
 Sign-in with another service: OAuth 2.0's authorization code flow with PKCE (RFC 6749 §4.1,
 RFC 7636), and OpenID Connect on it, as pure decisions. `Lanes/Web/IO/SignIn.lean` performs them:
-it draws the random bytes, keeps the pending sign-ins and calls the provider.
+it draws the random bytes and the key, keeps the states used and calls the provider.
 
-A sign-in begun is an `Entry` of `Pending`, under a random `state` and bound to the browser by a
-random value in a cookie; it waits for the provider's callback for a while (`Settings.ttl_ms`),
-and there are at most `Settings.maxPending`, the oldest dropped first. A callback is accepted only
-for a state kept, from the browser it was begun in, before it expires (`Pending.callback_ok`), and
-the state is gone after (`Pending.callback_removes`), so over any run no state is accepted more
-often than it was issued (`Pending.accepted_le_issued`).
+A sign-in begun is a `Ticket`, a random `state` with its provider and expiry, which the browser
+keeps in a cookie under the server's tag: the server keeps nothing for it, so beginnings, however
+many, crowd out no one. A callback is accepted only with the ticket of its browser's cookie, for
+its state and provider, before it expires (`check_ok`); once its sign-in is done the state is
+claimed (`Used.claim`), and over any run no state is accepted twice (`Used.accepted_once`). The
+states claimed are kept until they expire, at most `Settings.maxUsed`; a full set drops the oldest
+and refuses every ticket that expires no later than they do, never one that could be a replay.
 
 A provider is OpenID Connect (an ID token, checked by `IdToken.verify`) or OAuth 2.0 alone, whose
 user is known by calling its API with the access token (`Source.userApi`). Endpoints are given
@@ -74,8 +77,9 @@ structure Client where
 structure Settings where
   /-- How long a sign-in begun waits for its callback. -/
   ttl_ms : Nat := 600000
-  /-- Sign-ins waiting at once; beyond, the oldest is dropped. -/
-  maxPending : Nat := 1024
+  /-- States of accepted callbacks kept, against replays, until their tickets expire; beyond, the
+  oldest are dropped and the sign-ins that expire no later than they do are refused. -/
+  maxUsed : Nat := 16384
   /-- How far a provider's clock may be from this one. -/
   skew_s : Nat := 60
   /-- A JWK Set is fetched again at most this often, however many tokens name keys it lacks. -/
@@ -89,13 +93,6 @@ def b64 (bytes : ByteArray) : String := Base64.encode .rawUrl bytes
 /-- The S256 challenge of a PKCE verifier (RFC 7636 §4.2). -/
 def challenge (verifier : String) : String := b64 (Sha256.hash verifier.toUTF8)
 
-/-- Fresh bytes for one sign-in from the operating system's random source, 32 of each. -/
-structure Seed where
-  state : ByteArray
-  nonce : ByteArray
-  verifier : ByteArray
-  binding : ByteArray
-
 /-- What a callback accepted gives: what the code is exchanged with and the ID token checked
 against. -/
 structure Grant where
@@ -104,28 +101,27 @@ structure Grant where
   verifier : Secret
   deriving DecidableEq, Repr, Hashable
 
-structure Entry where
+/-- A sign-in begun, which the browser keeps in its binding cookie under the server's tag
+(`Ticket.toCookie`), so that the server keeps nothing for a sign-in until its callback is accepted.
+The nonce and the PKCE verifier are tags of the state under the server's key (`Ticket.grant`):
+neither is in the cookie, which the request carries into the system. -/
+structure Ticket where
+  provider : String
   state : String
-  /-- The value of the browser's cookie. -/
-  binding : String
   expires_ms : Nat
-  grant : Grant
-  deriving DecidableEq, Repr, Hashable
-
-/-- The sign-ins begun and not yet called back, newest first. -/
-structure Pending where
-  entries : List Entry := []
   deriving DecidableEq, Repr, Hashable
 
 inductive Refusal where
   | unknownProvider
-  /-- No sign-in waits under the state: never issued, used already, or dropped. -/
+  /-- The browser holds no sign-in of the server's: none begun there, or begun before a restart. -/
   | unknownState
   /-- The state was issued to another browser. -/
   | otherBrowser
   /-- The state was issued for another provider's sign-in. -/
   | otherProvider
   | expired
+  /-- A callback under the state was accepted already. -/
+  | used
   /-- The provider's answer is an error, such as the user's refusal. -/
   | denied (error : String)
   /-- The callback has no code or no state. -/
@@ -142,178 +138,257 @@ def same (a b : String) : Bool := Bytes.same a.toUTF8 b.toUTF8
 theorem same_iff (a b : String) : same a b = true ↔ a = b := by
   simp [same, Bytes.same_iff, String.toByteArray_inj]
 
-namespace Pending
+namespace Ticket
 
-/-- A sign-in begun: kept first, with the others that have not expired, at most `limit`. -/
-def begin (p : Pending) (limit now_ms : Nat) (e : Entry) : Pending :=
-  ⟨(e :: p.entries.filter (now_ms < ·.expires_ms)).take limit⟩
+/-- The state is base64url, without `.`, so the fields read back apart. -/
+def payload (t : Ticket) : String := t.state ++ "." ++ toString t.expires_ms ++ "." ++ t.provider
 
-theorem length_begin (p : Pending) (limit now_ms : Nat) (e : Entry) :
-    (p.begin limit now_ms e).entries.length ≤ limit :=
-  List.length_take_le ..
+def read (payload : String) : Option Ticket :=
+  match payload.splitOn "." with
+  | state :: expires :: provider => do
+    return { provider := ".".intercalate provider, state, expires_ms := ← expires.toNat? }
+  | _ => none
 
-/-- The provider's callback, from the browser with the cookie `binding`, under `state`, on the
-route of `provider`. Whatever the answer, no sign-in waits under the state after. -/
-def callback (p : Pending) (now_ms : Nat) (provider binding state : String) :
-    Pending × Except Refusal Grant :=
-  match p.entries.find? (same ·.state state) with
-  | none => (p, .error .unknownState)
-  | some e =>
-    let rest : Pending := ⟨p.entries.filter (!same ·.state state)⟩
-    if !same e.binding binding then (rest, .error .otherBrowser)
-    else if e.grant.provider != provider then (rest, .error .otherProvider)
-    else if e.expires_ms ≤ now_ms then (rest, .error .expired)
-    else (rest, .ok e.grant)
+/-- The binding cookie's value. -/
+def toCookie (key : Hmac.Key) (t : Ticket) : String := Auth.sign key "sign-in" t.payload
 
-/-- A callback is accepted only for a sign-in begun under its state, in its browser, for its
-provider, and not expired. -/
-theorem callback_ok {p : Pending} {now_ms : Nat} {provider binding state : String} {g : Grant}
-    (h : (p.callback now_ms provider binding state).2 = .ok g) :
-    ∃ e ∈ p.entries, e.state = state ∧ e.binding = binding ∧ e.grant.provider = provider
-      ∧ now_ms < e.expires_ms ∧ e.grant = g := by
-  unfold callback at h
+/-- The ticket of a binding cookie, if the server's key tagged it. -/
+def ofCookie (key : Hmac.Key) (cookie : String) : Option Ticket :=
+  (Auth.verify key "sign-in" cookie).bind read
+
+def derive (key : Hmac.Key) (purpose state : String) : String :=
+  b64 (key.mac (Auth.message purpose state))
+
+/-- The nonce and the PKCE verifier (43 characters, RFC 7636 §4.1) of the sign-in. -/
+def grant (key : Hmac.Key) (t : Ticket) : Grant :=
+  { provider := t.provider, nonce := derive key "sign-in nonce" t.state,
+    verifier := ⟨derive key "sign-in verifier" t.state⟩ }
+
+end Ticket
+
+/-- The provider's callback for `state`, on the route of `provider`, from a browser whose binding
+cookie is `cookie`: its ticket, if the server tagged it for this state, this provider, and it has
+not expired. -/
+def check (key : Hmac.Key) (now_ms : Nat) (provider : String) (cookie : Option String)
+    (state : String) : Except Refusal Ticket :=
+  match cookie.bind (Ticket.ofCookie key) with
+  | none => .error .unknownState
+  | some t =>
+    if !same t.state state then .error .otherBrowser
+    else if t.provider != provider then .error .otherProvider
+    else if t.expires_ms ≤ now_ms then .error .expired
+    else .ok t
+
+/-- A callback is accepted only with a ticket that the server's key tagged and that this
+request's cookie carries, for its state, on its provider's route, before its expiry. -/
+theorem check_ok {key : Hmac.Key} {now_ms : Nat} {provider : String} {cookie : Option String}
+    {state : String} {t : Ticket} (h : check key now_ms provider cookie state = .ok t) :
+    (∃ c, cookie = some c ∧ Ticket.ofCookie key c = some t) ∧ t.state = state
+      ∧ t.provider = provider ∧ now_ms < t.expires_ms := by
+  unfold check at h
   split at h
   · cases h
-  · rename_i e hf
-    have hmem := List.mem_of_find?_eq_some hf
-    have hs : same e.state state = true := List.find?_some (p := fun (x : Entry) => same x.state state) hf
-    have hs := (same_iff _ _).mp hs
+  · rename_i t' hc
     split at h; · cases h
     split at h; · cases h
     split at h; · cases h
-    rename_i hb hp hx
-    simp only [Bool.not_eq_true', Bool.not_eq_false, bne_iff_ne, ne_eq,
-      Decidable.not_not] at hb hp hx
+    rename_i hs hp hx
     cases h
-    exact ⟨e, hmem, hs, (same_iff _ _).mp hb, hp, by omega, rfl⟩
+    simp only [Bool.not_eq_true', Bool.not_eq_false, bne_iff_ne, ne_eq, Decidable.not_not] at hs hp hx
+    obtain ⟨c, rfl, hu⟩ := Option.bind_eq_some_iff.mp hc
+    exact ⟨⟨c, rfl, hu⟩, (same_iff _ _).mp hs, hp, by omega⟩
 
-/-- After a callback, no sign-in waits under its state. -/
-theorem callback_removes (p : Pending) (now_ms : Nat) (provider binding state : String) :
-    ∀ e ∈ (p.callback now_ms provider binding state).1.entries, e.state ≠ state := by
-  intro e he
-  unfold callback at he
-  split at he
-  · rename_i hf
-    intro hs
-    have := List.find?_eq_none.mp hf e he
-    simp [hs, (same_iff state state).mpr rfl] at this
-  · have hrest : ∀ e ∈ p.entries.filter (!same ·.state state), e.state ≠ state := by
-      intro e he hs
-      simp [List.mem_filter, hs, (same_iff state state).mpr rfl] at he
-    split at he
-    · exact hrest e he
-    · split at he
-      · exact hrest e he
-      · split at he <;> exact hrest e he
+/-- The states of the callbacks accepted, each kept until its ticket expires, so that none is
+accepted twice: all the server keeps of sign-ins. -/
+structure Used where
+  /-- Tickets that expire at this time or before are refused: the latest time a claim was made
+  at, or later once a full set dropped states. -/
+  floor_ms : Nat := 0
+  /-- Newest first, each with its ticket's expiry. -/
+  states : List (String × Nat) := []
+  deriving DecidableEq, Repr, Hashable
 
-theorem callback_sublist (p : Pending) (now_ms : Nat) (provider binding state : String) :
-    (p.callback now_ms provider binding state).1.entries.Sublist p.entries := by
-  unfold callback
+namespace Used
+
+/-- A callback's ticket claimed, once its sign-in is done: refused if it has expired or its state
+was claimed before, else kept. With `limit` states kept, the oldest are dropped and the floor
+raised to their expiries: a replay of a dropped state is still refused, as are tickets that expire
+no later, and a ticket newer than those dropped is accepted. -/
+def claim (u : Used) (limit now_ms : Nat) (t : Ticket) : Used × Except Refusal Unit :=
+  let floor := max u.floor_ms now_ms
+  let live := u.states.filter (floor < ·.2)
+  if t.expires_ms ≤ floor then (⟨floor, live⟩, .error .expired)
+  else if live.any (same ·.1 t.state) then (⟨floor, live⟩, .error .used)
+  else
+    let raised := (live.drop (limit - 1)).foldr (fun e m => max e.2 m) floor
+    let kept := (live.take (limit - 1)).filter (raised < ·.2)
+    if t.expires_ms ≤ raised then (⟨raised, kept⟩, .error .expired)
+    else (⟨raised, (t.state, t.expires_ms) :: kept⟩, .ok ())
+
+theorem length_claim (u : Used) {limit : Nat} (now_ms : Nat) (t : Ticket) (hl : 0 < limit)
+    (hu : u.states.length ≤ limit) : (u.claim limit now_ms t).1.states.length ≤ limit := by
+  have hf := (List.filter_sublist (p := (max u.floor_ms now_ms < ·.2)) (l := u.states)).length_le
+  unfold claim; dsimp only
   split
-  · exact .refl _
+  · exact Nat.le_trans hf hu
   · split
-    · exact List.filter_sublist
+    · exact Nat.le_trans hf hu
+    · have hk := (List.filter_sublist (l := (u.states.filter (max u.floor_ms now_ms < ·.2)).take
+        (limit - 1)) (p := (((u.states.filter (max u.floor_ms now_ms < ·.2)).drop (limit - 1)).foldr
+          (fun e m => max e.2 m) (max u.floor_ms now_ms) < ·.2))).length_le
+      have ht := List.length_take_le (limit - 1) (u.states.filter (max u.floor_ms now_ms < ·.2))
+      split
+      · simp only; omega
+      · simp only [List.length_cons]; omega
+
+/-- A ticket claimed has not expired. -/
+theorem claim_ok {u : Used} {limit now_ms : Nat} {t : Ticket}
+    (h : (u.claim limit now_ms t).2 = .ok ()) : now_ms < t.expires_ms := by
+  unfold claim at h; dsimp only at h
+  split at h; · cases h
+  split at h; · cases h
+  split at h; · cases h
+  rename_i hx
+  have := le_foldr_max (fun (e : String × Nat) => e.2) (max u.floor_ms now_ms)
+    ((u.states.filter (max u.floor_ms now_ms < ·.2)).drop (limit - 1))
+  omega
+
+/-- What the set knows of a state accepted with expiry `x`: kept, or refused by the floor. -/
+def Holds (u : Used) (s : String) (x : Nat) : Prop := (s, x) ∈ u.states ∨ x ≤ u.floor_ms
+
+private theorem holds_live {u : Used} {s : String} {x floor : Nat} (h : Holds u s x)
+    (hf : u.floor_ms ≤ floor) : (s, x) ∈ u.states.filter (floor < ·.2) ∨ x ≤ floor := by
+  rcases h with h | h
+  · by_cases hx : floor < x
+    · exact .inl (List.mem_filter.mpr ⟨h, by simpa using hx⟩)
+    · exact .inr (by omega)
+  · exact .inr (by omega)
+
+private theorem holds_kept {live : List (String × Nat)} {s : String} {x floor k : Nat}
+    (h : (s, x) ∈ live ∨ x ≤ floor) :
+    (s, x) ∈ (live.take k).filter ((live.drop k).foldr (fun e m => max e.2 m) floor < ·.2)
+      ∨ x ≤ (live.drop k).foldr (fun e m => max e.2 m) floor := by
+  have h0 := le_foldr_max (fun (e : String × Nat) => e.2) floor (live.drop k)
+  rcases h with h | h
+  · rw [← List.take_append_drop k live] at h
+    rcases List.mem_append.mp h with h | h
+    · by_cases hx : (live.drop k).foldr (fun e m => max e.2 m) floor < x
+      · exact .inl (List.mem_filter.mpr ⟨h, by simpa using hx⟩)
+      · exact .inr (by omega)
+    · exact .inr (le_foldr_max_of_mem (fun (e : String × Nat) => e.2) floor h)
+  · exact .inr (by omega)
+
+/-- What the set knows of a state, it knows after any claim. -/
+theorem claim_holds {u : Used} {s : String} {x : Nat} (limit now_ms : Nat) (t : Ticket)
+    (h : Holds u s x) : Holds (u.claim limit now_ms t).1 s x := by
+  have hl := holds_live h (Nat.le_max_left u.floor_ms now_ms)
+  have hk := holds_kept (k := limit - 1) hl
+  unfold claim Holds; dsimp only
+  split
+  · exact hl
+  · split
+    · exact hl
     · split
-      · exact List.filter_sublist
-      · split <;> exact List.filter_sublist
+      · exact hk
+      · rcases hk with hk | hk
+        · exact .inl (List.mem_cons_of_mem _ hk)
+        · exact .inr hk
 
-/-- What happens to the sign-ins: one begun, or a callback. -/
-inductive Op where
-  | begin (limit now_ms : Nat) (e : Entry)
-  | callback (now_ms : Nat) (provider binding state : String)
+/-- A ticket claimed expires after every state of its own the set knew of, and is kept. -/
+theorem claim_ok_holds {u : Used} {limit now_ms : Nat} {t : Ticket}
+    (h : (u.claim limit now_ms t).2 = .ok ()) :
+    (∀ x, Holds u t.state x → x < t.expires_ms)
+      ∧ Holds (u.claim limit now_ms t).1 t.state t.expires_ms := by
+  have h0 := le_foldr_max (fun (e : String × Nat) => e.2) (max u.floor_ms now_ms)
+    ((u.states.filter (max u.floor_ms now_ms < ·.2)).drop (limit - 1))
+  unfold claim at h ⊢; dsimp only at h ⊢
+  split at h; · cases h
+  rename_i hfresh
+  split at h; · cases h
+  rename_i hnew
+  split at h; · cases h
+  rename_i hraised
+  refine ⟨fun x hx => ?_, ?_⟩
+  · rcases holds_live hx (Nat.le_max_left u.floor_ms now_ms) with hx | hx
+    · exact absurd (List.any_eq_true.mpr ⟨_, hx, (same_iff _ _).mpr rfl⟩) hnew
+    · omega
+  · simp only [hfresh, hnew, hraised, ite_false, Holds, Bool.false_eq_true]
+    exact .inl List.mem_cons_self
 
-def Op.issues (state : String) : Op → Bool
-  | .begin _ _ e => e.state == state
-  | .callback .. => false
-
-/-- The sign-ins after `ops`, and the states of the callbacks accepted, in order. -/
-def run (p : Pending) : List Op → Pending × List String
-  | [] => (p, [])
-  | .begin limit now_ms e :: ops => run (p.begin limit now_ms e) ops
-  | .callback now_ms provider binding state :: ops =>
-    let next := run (p.callback now_ms provider binding state).1 ops
-    match (p.callback now_ms provider binding state).2 with
-    | .ok _ => (next.1, state :: next.2)
+/-- The tickets accepted over a run of claims at the times given, in order. -/
+def run (u : Used) (limit : Nat) : List (Nat × Ticket) → Used × List Ticket
+  | [] => (u, [])
+  | (now_ms, t) :: ops =>
+    let next := run (u.claim limit now_ms t).1 limit ops
+    match (u.claim limit now_ms t).2 with
+    | .ok _ => (next.1, t :: next.2)
     | .error _ => next
 
-private theorem count_begin (p : Pending) (limit now_ms : Nat) (e : Entry) (s : String) :
-    (p.begin limit now_ms e).entries.countP (·.state == s)
-      ≤ p.entries.countP (·.state == s) + (if e.state == s then 1 else 0) := by
-  simp only [begin]
-  have h1 := (List.take_sublist limit (e :: p.entries.filter (now_ms < ·.expires_ms))).countP_le
-    (p := (·.state == s))
-  have h2 := (List.filter_sublist (p := (now_ms < ·.expires_ms)) (l := p.entries)).countP_le
-    (p := (·.state == s))
-  rw [List.countP_cons] at h1
-  cases hb : (e.state == s) <;>
-    simp only [hb, ite_true, Bool.false_eq_true, ite_false] at h1 ⊢ <;> omega
+private theorem run_lt {s : String} {x : Nat} (limit : Nat) :
+    ∀ (ops : List (Nat × Ticket)) (u : Used), Holds u s x →
+      ∀ b ∈ (run u limit ops).2, b.state = s → x < b.expires_ms
+  | [], _, _ => by simp [run]
+  | (now_ms, t) :: ops, u, h => by
+    have ih := run_lt limit ops _ (claim_holds limit now_ms t h)
+    simp only [run]
+    cases hc : (u.claim limit now_ms t).2 with
+    | error _ => exact ih
+    | ok _ =>
+      intro b hb hs
+      rcases List.mem_cons.mp hb with rfl | hb
+      · exact (claim_ok_holds hc).1 x (hs ▸ h)
+      · exact ih b hb hs
 
-/-- Over any run from no sign-ins, no state is accepted more often than it was issued: a state
-issued once is accepted at most once. -/
-theorem accepted_le_issued (ops : List Op) (s : String) :
-    (run {} ops).2.count s ≤ ops.countP (·.issues s) := by
-  suffices h : ∀ (p : Pending),
-      (run p ops).2.count s ≤ p.entries.countP (·.state == s) + ops.countP (·.issues s) by
-    simpa using h {}
-  induction ops with
-  | nil => intro p; simp [run]
-  | cons op ops ih =>
-    intro p
-    cases op with
-    | begin limit now_ms e =>
-      have h1 := ih (p.begin limit now_ms e)
-      have h2 := count_begin p limit now_ms e s
-      have hc : (Op.begin limit now_ms e :: ops).countP (·.issues s)
-          = ops.countP (·.issues s) + if e.state == s then 1 else 0 := by
-        simp [List.countP_cons, Op.issues]
-      simp only [run]
-      rw [hc]
-      cases hb : (e.state == s) <;>
-        simp only [hb, ite_true, Bool.false_eq_true, ite_false] at h2 ⊢ <;> omega
-    | callback now_ms provider binding state =>
-      have hq := ih (p.callback now_ms provider binding state).1
-      have hsub := (callback_sublist p now_ms provider binding state).countP_le
-        (p := (·.state == s))
-      have hiss : (Op.callback now_ms provider binding state :: ops).countP (·.issues s)
-          = ops.countP (·.issues s) := by
-        simp [Op.issues]
-      simp only [run]
-      rw [hiss]
-      cases hc : (p.callback now_ms provider binding state).2 with
-      | error _ => simp only; omega
-      | ok g =>
-        simp only [List.count_cons]
-        by_cases hs : state = s
-        · subst hs
-          obtain ⟨e, he, hes, -⟩ := callback_ok hc
-          have hzero : (p.callback now_ms provider binding state).1.entries.countP
-              (·.state == state) = 0 :=
-            List.countP_eq_zero.mpr fun e' he' => by
-              simpa using callback_removes p now_ms provider binding state e' he'
-          have hpos : 0 < p.entries.countP (·.state == state) :=
-            List.countP_pos_iff.mpr ⟨e, he, by simp [hes]⟩
-          simp only [beq_self_eq_true, ite_true]
-          omega
-        · have : (state == s) = false := by simpa using hs
-          simp only [this, Bool.false_eq_true, ite_false, Nat.add_zero]
-          omega
+private theorem run_sublist (limit : Nat) :
+    ∀ (ops : List (Nat × Ticket)) (u : Used), (run u limit ops).2.Sublist (ops.map (·.2))
+  | [], _ => by simp [run]
+  | (now_ms, t) :: ops, u => by
+    have ih := run_sublist limit ops (u.claim limit now_ms t).1
+    simp only [run, List.map_cons]
+    cases (u.claim limit now_ms t).2 with
+    | error _ => exact ih.cons _
+    | ok _ => exact ih.cons_cons _
 
-end Pending
+/-- Over any run of claims, a state accepted again is accepted with a ticket that expires later.
+The server tags one ticket for each random state, so each state is accepted at most once
+(`accepted_once`). -/
+theorem accepted_later (u : Used) (limit : Nat) :
+    ∀ ops : List (Nat × Ticket),
+      (run u limit ops).2.Pairwise (fun a b => a.state = b.state → a.expires_ms < b.expires_ms)
+  | [] => by simp [run]
+  | (now_ms, t) :: ops => by
+    have ih := accepted_later (u.claim limit now_ms t).1 limit ops
+    simp only [run]
+    cases hc : (u.claim limit now_ms t).2 with
+    | error _ => exact ih
+    | ok _ =>
+      refine List.Pairwise.cons (fun b hb hs => ?_) ih
+      exact run_lt limit ops _ (claim_ok_holds hc).2 b hb hs.symm
 
-/-- The entry a seed makes. -/
-def Seed.entry (seed : Seed) (provider : String) (expires_ms : Nat) : Entry :=
-  { state := b64 seed.state, binding := b64 seed.binding, expires_ms,
-    grant := { provider, nonce := b64 seed.nonce, verifier := ⟨b64 seed.verifier⟩ } }
+/-- When the tickets presented for one state have one expiry, as those the server tags do, no
+state is accepted twice. -/
+theorem accepted_once (u : Used) (limit : Nat) (ops : List (Nat × Ticket))
+    (h : ∀ a ∈ ops, ∀ b ∈ ops, a.2.state = b.2.state → a.2.expires_ms = b.2.expires_ms) :
+    ((run u limit ops).2.map (·.state)).Nodup := by
+  have hsub := run_sublist limit ops u
+  refine List.pairwise_map.mpr ((accepted_later u limit ops).imp_of_mem fun {a b} ha hb hab hs => ?_)
+  obtain ⟨a', ha', rfl⟩ := List.mem_map.mp (hsub.subset ha)
+  obtain ⟨b', hb', rfl⟩ := List.mem_map.mp (hsub.subset hb)
+  have := h a' ha' b' hb' hs
+  have := hab hs
+  omega
+
+end Used
 
 /-- The URL the browser is sent to (RFC 6749 §4.1.1, RFC 7636 §4.3, OpenID Connect Core
 §3.1.2.1); a nonce only for OpenID Connect. -/
-def authorizeUrl (provider : Provider) (client : Client) (e : Entry) : String :=
+def authorizeUrl (provider : Provider) (client : Client) (state : String) (g : Grant) : String :=
   let nonce := match provider.source with
-    | .idToken .. => [("nonce", e.grant.nonce)]
+    | .idToken .. => [("nonce", g.nonce)]
     | .userApi .. => []
   let params := [("response_type", "code"), ("client_id", client.id),
     ("redirect_uri", client.redirect), ("scope", " ".intercalate provider.scopes),
-    ("state", e.state), ("code_challenge", challenge e.grant.verifier.value),
+    ("state", state), ("code_challenge", challenge g.verifier.value),
     ("code_challenge_method", "S256")] ++ nonce ++ provider.extra
   provider.authorize ++ (if provider.authorize.contains '?' then "&" else "?") ++ encodeForm params
 
@@ -345,12 +420,24 @@ def Discovery.provider (d : Discovery) (name : String) (scopes : List String := 
     Provider :=
   { name, authorize := d.authorize, token := d.token, scopes, source := .idToken [d.issuer] d.jwks }
 
-/-- A sign-in begun now: the pending sign-ins with its entry, the URL to send the browser to,
-and the value of the cookie that binds it to the browser. -/
-def begin (settings : Settings) (provider : Provider) (client : Client) (p : Pending)
-    (now_ms : Nat) (seed : Seed) : Pending × String × String :=
-  let e := seed.entry provider.name (now_ms + settings.ttl_ms)
-  (p.begin settings.maxPending now_ms e, authorizeUrl provider client e, e.binding)
+/-- A sign-in begun now under the random bytes `state`: the URL to send the browser to, and the
+value of the cookie that binds it to the browser. -/
+def begin (settings : Settings) (key : Hmac.Key) (provider : Provider) (client : Client)
+    (now_ms : Nat) (state : ByteArray) : String × String :=
+  let t : Ticket := { provider := provider.name, state := b64 state,
+                      expires_ms := now_ms + settings.ttl_ms }
+  (authorizeUrl provider client t.state (t.grant key), t.toCookie key)
+
+/-- The issuers of one provider name the same users: an identity from any of them names the
+first, so that a user has one key whichever the token named. -/
+def Identity.under (issuers : List String) (id : Identity) : Identity :=
+  match issuers with
+  | first :: _ => if id.issuer ∈ issuers then { id with issuer := first } else id
+  | [] => id
+
+theorem Identity.under_cons {first : String} {rest : List String} {id : Identity}
+    (h : id.issuer ∈ first :: rest) : Identity.under (first :: rest) id = { id with issuer := first } := by
+  simp only [under, h, ite_true]
 
 /-- What the provider sent the browser back with (RFC 6749 §4.1.2, §4.1.2.1). -/
 inductive Answer where
@@ -524,17 +611,18 @@ theorem identity?_withIdentity (r : Request) (id : Identity) :
       hs "x-lanes-identity-email-verified" (by simp [identityHeaders])]
 
 /-- The redirect that begins a sign-in, with the cookie that binds it to the browser: sent back
-on the provider's redirect, a top-level navigation, so `SameSite=Lax`, and only to the sign-in's
-own routes. -/
-def beginResponse (pathPrefix cookie : String) (secure : Bool) (settings : Settings)
-    (url binding : String) : Response :=
+on the provider's redirect, a top-level navigation, so `SameSite=Lax`; over HTTPS a `__Host-`
+cookie (`hostCookie`), which no other site or subdomain can set. -/
+def beginResponse (cookie : String) (secure : Bool) (settings : Settings) (url ticket : String) :
+    Response :=
   (Response.redirect url 302).setCookie
-    { name := cookie, value := binding, path := "/" ++ pathPrefix,
+    { name := hostCookie cookie secure, value := ticket, path := "/",
       maxAge_s := some (settings.ttl_ms / 1000), secure, sameSite := .lax }
 
 def Refusal.describe : Refusal → String
   | .unknownProvider => "unknown provider"
   | .unknownState => "no sign-in waits for this answer"
+  | .used => "the sign-in was used already"
   | .otherBrowser => "the sign-in was begun in another browser"
   | .otherProvider => "the sign-in was begun with another provider"
   | .expired => "the sign-in took too long"

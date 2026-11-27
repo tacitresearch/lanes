@@ -32,6 +32,10 @@ def cookieTests : List (String × Bool) :=
       (Response.empty.setCookie { name := "session", value := "v; Domain=evil" }).headers == []),
     ("cookie: a name that is not a token is not set",
       (Response.empty.setCookie { name := "a b", value := "v" }).headers == []),
+    ("cookie: a Secure cookie is named __Host-, one over plain HTTP is not",
+      hostCookie "session" true == "__Host-session" && hostCookie "session" false == "session"
+        && (Response.empty.setCookie { name := hostCookie "session" true, value := "v" }).headers
+          == [("set-cookie", "__Host-session=v; Path=/; HttpOnly; Secure; SameSite=Lax")]),
     ("cookie: clearing sends an empty value that expires at once",
       (Response.empty.clearCookie { name := "session", value := "v", secure := false }).headers
         == [("set-cookie", "session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax")]),
