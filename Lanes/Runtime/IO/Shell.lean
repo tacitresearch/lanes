@@ -212,7 +212,7 @@ private def loop (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
       { now_ms := ← clock, fuel := max 1 rt.config.batch, snapshotEvery, spread }
     let held ← waiting.get
     let batch := if parallel == .off then batch
-      else Batch.group (max 1 rt.config.snapshotEvery) batch
+      else Batch.group (max 1 (min rt.config.batch rt.config.snapshotEvery)) batch
     let start_ns ← IO.monoNanosNow
     let (acts, resolved, still, count) ← kernel.modifyGet fun k =>
       match Batch.run config k written held batch with
