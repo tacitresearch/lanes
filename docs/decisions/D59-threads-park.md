@@ -1,4 +1,4 @@
-# D?. Threads park, and a connection's loop runs where it is told something
+# D59. Threads park, and a connection's loop runs where it is told something
 
 The server of `docs/decisions/D57-the-server-runs-its-own-connections.md` spent about 300 µs of
 CPU on a request that answers `hello`, on two cores. Nothing spun. Lean's
