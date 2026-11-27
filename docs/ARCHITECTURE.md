@@ -193,7 +193,7 @@ reaches the journal (D44), takes an id from `Http.Waiting` (pure: each id handed
 answered at most once and to its own waiter: `Http.Waiting.exec_handed_nodup`,
 `Http.Waiting.exec_answered`), and hands the input to the shard. It answers `503` itself when the
 inbox is full and `405` for a method an application cannot handle. With `ServerConfig.ioThreads`
-above zero, the connections run on that many threads of the server's own, each on one for its
+above zero (four by default), the connections run on that many threads of the server's own, each on one for its
 whole life; Lean has one libuv loop a process, which every read and write still goes through. `Http.serveFronted` serves
 `fronted sys`, whose other inputs and outputs pass the gate by, and `Http.serveShard`
 (`Lanes/Net/IO/Node.lean`) runs it with the transport: one process with an HTTP front and peers.
