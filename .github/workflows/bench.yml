@@ -43,6 +43,10 @@ on:
         description: How long to wait for the machine to become idle
         required: false
         default: "30"
+      lean-threads:
+        description: Lean's worker threads for the servers (as many as the server's CPUs when empty)
+        required: false
+        default: ""
       hosted:
         description: Run on GitHub's runners, whatever the variables say
         type: boolean
@@ -140,10 +144,15 @@ jobs:
           SERVERS: ${{ inputs.servers }}
           REQUIRE_IDLE: ${{ inputs.require-idle && '1' || '0' }}
           IDLE_WAIT_MINUTES: ${{ inputs.idle-wait-minutes }}
+          LEAN_THREADS: ${{ inputs.lean-threads }}
         run: |
           for n in "$SECONDS_EACH" "$RUNS" "$IDLE_WAIT_MINUTES"; do
             [[ $n =~ ^[0-9]+$ ]] || { echo "::error::$n is not a number"; exit 2; }
           done
+          if [ -n "$LEAN_THREADS" ]; then
+            [[ $LEAN_THREADS =~ ^[0-9]+$ ]] || { echo "::error::$LEAN_THREADS is not a number"; exit 2; }
+            export LEAN_NUM_THREADS=$LEAN_THREADS
+          fi
           read -ra servers <<<"$SERVERS"
           status=0
           bench/run.sh "${servers[@]}" || status=$?
