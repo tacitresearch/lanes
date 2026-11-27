@@ -143,12 +143,14 @@ end Service
 
 /--
 `sys` implements the service `svc` under `env`: everything a client can observe of the running
-system is a behaviour of the service with each input taking effect at one instant, and each
-timer `deadlines` names passing that deadline as it fires.
+system is a behaviour of the service with each input taking effect at one instant, each
+timer `deadlines` names passing that deadline as it fires, and each message `delivered` names
+passing it as it is handled.
 -/
 abbrev System.Implements {σ : Signature} (sys : System σ) (env : EnvModel σ)
-    (svc : Service σ.In σ.Out S T) (deadlines : Deadlines σ T := fun _ _ => none) : Prop :=
-  sys.Refines env svc.spec deadlines
+    (svc : Service σ.In σ.Out S T) (deadlines : Deadlines σ T := fun _ _ => none)
+    (delivered : Deadlines σ T := fun _ _ => none) : Prop :=
+  sys.Refines env svc.spec deadlines delivered
 
 namespace Server
 

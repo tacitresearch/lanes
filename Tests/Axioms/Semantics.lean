@@ -22,6 +22,18 @@ import Lanes.Semantics
 /-- info: 'Lanes.Account.Moves.grow' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Account.Moves.grow
 
+/-- info: 'Lanes.Account.implements_timed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Account.implements_timed
+
+/-- info: 'Lanes.Account.Holds.passes' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Account.Holds.passes
+
+/-- info: 'Lanes.Account.Fires.handle' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Account.Fires.handle
+
+/-- info: 'Lanes.Account.Fires.grow' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Account.Fires.grow
+
 -- Lanes.Semantics.FairJoin
 /-- info: 'Lanes.Wiring.leftView_projects' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Wiring.leftView_projects
@@ -191,6 +203,9 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.System.Refines.of_events' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Refines.of_events
+
+/-- info: 'Lanes.System.Refines.of_timed_events' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Refines.of_timed_events
 
 /-- info: 'Lanes.System.Refines.of_steps' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Refines.of_steps

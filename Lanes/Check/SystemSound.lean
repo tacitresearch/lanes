@@ -35,8 +35,8 @@ variable {σ : Signature} {sys : System σ} {D : Type}
 
 /-- The events that involve neither the driver nor the crash budget. -/
 def Event.isInternal : Event σ → Bool
-  | .deliver _ | .duplicate _ | .drop _ | .start _ => true
-  | .input _ | .output _ | .timeout .. | .crash _ => false
+  | .drop _ | .start _ => true
+  | .input _ | .output _ | .timeout .. | .deliver _ | .duplicate _ | .crash _ => false
 
 /--
 The instance a check covers: the worlds the semantics reaches when the driver chooses the
@@ -59,6 +59,13 @@ inductive Scenario.Reachable (sys : System σ) (sc : Scenario σ D)
     Reachable sys sc constraint w → w.state.step sc.env (.timeout i msg) = some c →
     constraint { w with state := c, driver := sc.driver.timeout w.driver i msg } = true →
     Reachable sys sc constraint { w with state := c, driver := sc.driver.timeout w.driver i msg }
+  /-- A message handed to its receiver, once or a second time: the driver sees it. -/
+  | deliver {w : World sys D} {e : Envelope σ} {ev : Event σ} {c : SysState sys} :
+    Reachable sys sc constraint w → (ev = .deliver e ∨ ev = .duplicate e) →
+    w.state.step sc.env ev = some c →
+    constraint { w with state := c, driver := sc.driver.deliver w.driver e.dst e.msg } = true →
+    Reachable sys sc constraint
+      { w with state := c, driver := sc.driver.deliver w.driver e.dst e.msg }
   | crash {w : World sys D} {i : σ.Id} {c : SysState sys} :
     Reachable sys sc constraint w → w.crashes < sc.maxCrashes →
     w.state.step sc.env (.crash i) = some c →
@@ -72,8 +79,8 @@ theorem Scenario.Reachable.system {sc : Scenario σ D} {constraint : World sys D
     {w : World sys D} (h : sc.Reachable sys constraint w) : sys.Reachable sc.env w.state := by
   induction h with
   | init => exact .init
-  | input _ _ hstep _ ih | output _ hstep _ ih | timeout _ hstep _ ih | crash _ _ hstep _ ih
-  | internal _ _ hstep _ ih =>
+  | input _ _ hstep _ ih | output _ hstep _ ih | timeout _ hstep _ ih | deliver _ _ hstep _ ih
+  | crash _ _ hstep _ ih | internal _ _ hstep _ ih =>
     exact .step _ ih hstep
 
 theorem World.mem_next_iff [Enum σ.Id] {sc : Scenario σ D} {w w' : World sys D} {ev : Event σ} :
@@ -83,6 +90,8 @@ theorem World.mem_next_iff [Enum σ.Id] {sc : Scenario σ D} {w w' : World sys D
         ∃ d, (x, d) ∈ sc.driver.inputs w.driver ∧ w' = { w with state := c, driver := d }
       | .output out => w' = { w with state := c, driver := sc.driver.observe w.driver out }
       | .timeout i msg => w' = { w with state := c, driver := sc.driver.timeout w.driver i msg }
+      | .deliver e | .duplicate e =>
+        w' = { w with state := c, driver := sc.driver.deliver w.driver e.dst e.msg }
       | .crash _ =>
         w.crashes < sc.maxCrashes ∧ w' = { w with state := c, crashes := w.crashes + 1 }
       | _ => w' = { w with state := c } := by
@@ -166,6 +175,10 @@ theorem Scenario.Reachable.model [Enum σ.Id] {sc : Scenario σ D}
     exact model_step ih ((World.mem_next_iff (ev := .output out)).mpr ⟨_, hstep, rfl⟩) hc
   | @timeout _ i msg _ _ hstep hc ih =>
     exact model_step ih ((World.mem_next_iff (ev := .timeout i msg)).mpr ⟨_, hstep, rfl⟩) hc
+  | @deliver _ e ev _ _ hev hstep hc ih =>
+    rcases hev with rfl | rfl
+    · exact model_step ih ((World.mem_next_iff (ev := .deliver e)).mpr ⟨_, hstep, rfl⟩) hc
+    · exact model_step ih ((World.mem_next_iff (ev := .duplicate e)).mpr ⟨_, hstep, rfl⟩) hc
   | @crash _ i _ _ hbudget hstep hc ih =>
     exact model_step ih ((World.mem_next_iff (ev := .crash i)).mpr ⟨_, hstep, hbudget, rfl⟩) hc
   | @internal _ ev _ _ hev hstep hc ih =>
@@ -197,7 +210,13 @@ theorem Scenario.Reachable.of_model [Enum σ.Id] {sc : Scenario σ D}
       obtain ⟨hbudget, hw'⟩ := hw'
       simp only [hw'] at hc ⊢
       exact .crash ih hbudget hstep hc
-    | deliver e | duplicate e | drop e | start i =>
+    | deliver e =>
+      simp only [hw'] at hc ⊢
+      exact .deliver ih (.inl rfl) hstep hc
+    | duplicate e =>
+      simp only [hw'] at hc ⊢
+      exact .deliver ih (.inr rfl) hstep hc
+    | drop e | start i =>
       simp only [hw'] at hc ⊢
       exact .internal ih rfl hstep hc
 

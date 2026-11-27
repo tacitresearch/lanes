@@ -51,7 +51,9 @@ theorem serve_sent_by_owner (config : Config N) (answering : Answering) (i : Id 
           simp only [tell, Effect.send.injEq, heq_eq_eq, LedgerMsg.serve.injEq] at h
           rw [h.2.2.1]
       · exact absurd h (not_send_timerEffects config n _)
-    | unlock | expire => simp [system, user] at h
+    | unlock | expire =>
+      simp only [system, user] at h
+      split at h <;> simp [notice, Deadline.notice] at h
 
 /-- Every request to serve user `owner` on its way to the ledger was sent by `user owner`, in
 every state of every run under every environment model. -/
@@ -136,16 +138,22 @@ theorem user_bounded (config : Config N) (answering : Answering) (self : N) :
         cases msg with
         | ask req q => exact bounded_decide config self req h q
         | unlock =>
-          intro q hq
-          cases u with
-          | none => cases hq
-          | some p =>
-            cases hq
-            exact ⟨(h p rfl).1, by simp [Auth.Attempts.Bounded, Auth.Attempts.unlock]; omega⟩
+          simp only [user]
+          split
+          · intro q hq
+            cases u with
+            | none => cases hq
+            | some p =>
+              cases hq
+              exact ⟨(h p rfl).1, by simp [Auth.Attempts.Bounded, Auth.Attempts.unlock]; omega⟩
+          · exact h
         | expire session =>
-          cases u with
-          | none => intro q hq; cases hq
-          | some p => exact bounded_close h session
+          simp only [user]
+          split
+          · cases u with
+            | none => intro q hq; cases hq
+            | some p => exact bounded_close h session
+          · exact h
       recover := fun _ h => h }
 
 end Ledger
