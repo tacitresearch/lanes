@@ -67,3 +67,4 @@ decision without a number.
 - [D51. An actor at rest is released, and the kernel's theorems hold up to the starts that bring it back](D51-release-actors-at-rest.md)
 - [D52. A service behind actors is proved with one simulation, and an application gives only its steps](D52-standard-simulation.md)
 - [D53. A JSON key given twice keeps its last value](D53-json-repeated-keys.md)
+- [D54. Raft acts once on a command its client names, and an answer it no longer keeps is not handed over](D54-raft-acts-once.md)

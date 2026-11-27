@@ -1,4 +1,4 @@
-# D?. Raft acts once on a command its client names, and an answer it no longer keeps is not handed over
+# D54. Raft acts once on a command its client names, and an answer it no longer keeps is not handed over
 
 `systems/raft-kv/RaftKV/Once.lean`, `systems/raft-kv/RaftKVProofs/Once.lean`,
 `systems/raft-kv/RaftKVProofs.lean`, `systems/raft-kv/Check.lean`, `Lanes/Semantics/Once.lean`.
