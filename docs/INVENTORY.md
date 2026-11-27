@@ -10,7 +10,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Area | Definitions | proved | trusted | checked | tested | spec | none |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `Lanes/Actors` | 339 | 166 | 10 | 36 | 20 | 85 | 22 |
+| `Lanes/Actors` | 347 | 166 | 18 | 36 | 20 | 85 | 22 |
 | `Lanes/Auth` | 28 | 19 | 0 | 0 | 7 | 2 | 0 |
 | `Lanes/Behaviours` | 44 | 36 | 0 | 1 | 0 | 7 | 0 |
 | `Lanes/Check` | 91 | 54 | 0 | 25 | 0 | 10 | 2 |
@@ -20,7 +20,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Http` | 213 | 144 | 1 | 8 | 29 | 29 | 2 |
 | `Lanes/Semantics` | 54 | 9 | 0 | 0 | 0 | 44 | 1 |
 | `LanesCli` | 110 | 0 | 0 | 0 | 42 | 0 | 68 |
-| All | 1315 | 683 | 46 | 74 | 170 | 218 | 124 |
+| All | 1323 | 683 | 54 | 74 | 170 | 218 | 124 |
 
 ## `Lanes/Actors/Actor.lean`
 
@@ -353,6 +353,19 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Outside.after` | tested | `Tests/Clock.lean`, `Tests/Fronted.lean`, `Tests/HttpClient.lean` and 2 more |
 | `Outside.allows` | tested | `Tests/Clock.lean`, `Tests/Fronted.lean`, `Tests/HttpClient.lean` and 2 more |
 | `Outside.both` | checked | `Tests/Clock.lean`, `Tests/HttpClient.lean`, `Tests/Jobs.lean` |
+
+## `Lanes/Actors/Park.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `ParkerImpl` | trusted | TRUSTED.md: The C |
+| `Parker.new` | trusted | TRUSTED.md: The C |
+| `Parker.parkFor` | trusted | TRUSTED.md: The C |
+| `Parker.park` | trusted | TRUSTED.md: The C |
+| `Parker.parkAtMost` | trusted | TRUSTED.md: The C |
+| `Parker.unpark` | trusted | TRUSTED.md: The C |
+| `Parker.wait` | trusted | TRUSTED.md: The C |
+| `block` | trusted | TRUSTED.md: The C |
 
 ## `Lanes/Actors/Past.lean`
 

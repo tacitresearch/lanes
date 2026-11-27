@@ -167,10 +167,10 @@ private def failedWrite (loop : Loop) : BaseIO Bool := do
   if !(← IO.hasFinished w.result?) then return false
   return !(w.result?.get matches some (.ok ()))
 
-private def writeDone (loop : Loop) : BaseIO Bool := do
-  match loop.writing with
-  | none => return true
-  | some (w, _) => IO.hasFinished w.result?
+/-- When the last write is to have ended, while it has not. -/
+private def writeBy (write_ms : Nat) (loop : Loop) : BaseIO (Option Nat) := do
+  let some (w, start) := loop.writing | return none
+  return if ← IO.hasFinished w.result? then none else some (start + write_ms)
 
 mutual
 
@@ -220,10 +220,8 @@ private partial def handle (ctx : Ctx) (line : Line) (loop : Loop) : Ev → Base
       | _ => .broken
   | .resume => return { loop with resumeSet := false }
   | .alarm => do
-    let late ← match loop.writing with
-      | some (w, start) => do
-        pure (!(← IO.hasFinished w.result?) && start + ctx.config.write_ms ≤ (← IO.monoMsNow))
-      | none => pure false
+    let now ← IO.monoMsNow
+    let late := (← writeBy ctx.config.write_ms loop).any (· ≤ now)
     react ctx line loop (if late then .broken else .tick)
 
 /-- After the events: read if the connection wants bytes and the last write has ended, say when
@@ -238,8 +236,9 @@ private partial def settle (ctx : Ctx) (line : Line) (loop : Loop) : BaseIO Loop
     line.box.atomically (modify fun b => { b with alarm_ms := none })
     return { loop with left := true }
   let mut loop := loop
+  let writing ← writeBy config.write_ms loop
   if conn.wantsInput config.conn && loop.reading.isNone then
-    if ← writeDone loop then
+    if writing.isNone then
       let size := (min (conn.room config.conn) 65536).toUInt64
       match ← (line.socket.native.recv? size).toBaseIO with
       | .ok r =>
@@ -250,10 +249,7 @@ private partial def settle (ctx : Ctx) (line : Line) (loop : Loop) : BaseIO Loop
       if let some (w, _) := loop.writing then
         loop := { loop with resumeSet := true }
         discard <| BaseIO.mapTask (t := w.result?) fun _ => tell ctx line true .resume
-  let writeBy ← match loop.writing with
-    | some (_, start) => do pure (if ← writeDone loop then none else some (start + config.write_ms))
-    | none => pure none
-  let alarm_ms := match conn.deadline config.conn, writeBy with
+  let alarm_ms := match conn.deadline config.conn, writing with
     | some a, some b => some (min a b)
     | a, b => a <|> b
   line.box.atomically (modify fun b => { b with alarm_ms })
