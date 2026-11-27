@@ -498,3 +498,32 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Http.Response.read_wireToEnd_open' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.Response.read_wireToEnd_open
+
+-- Lanes.Web.S3.Multipart
+/-- info: 'Lanes.S3.Multipart.Plan.count_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.S3.Multipart.Plan.count_le
+
+/-- info: 'Lanes.S3.Multipart.Plan.range_full' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.S3.Multipart.Plan.range_full
+
+/-- info: 'Lanes.S3.Multipart.Plan.range_next' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.S3.Multipart.Plan.range_next
+
+/-- info: 'Lanes.S3.Multipart.Plan.range_last' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.S3.Multipart.Plan.range_last
+
+-- Lanes.Web.S3.PostSound
+/-- info: 'Lanes.S3.Post.form_policy' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.S3.Post.form_policy
+
+/-- info: 'Lanes.S3.Post.decode?_encode' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.S3.Post.decode?_encode
+
+/-- info: 'Lanes.S3.Post.expiration_parse' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.S3.Post.expiration_parse
+
+/-- info: 'Lanes.S3.Post.check_holds' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.S3.Post.check_holds
+
+/-- info: 'Lanes.S3.Post.admitted_bounded' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.S3.Post.admitted_bounded

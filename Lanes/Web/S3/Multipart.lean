@@ -41,7 +41,7 @@ structure Plan where
   size : Nat
   partSize : PartSize
   fits : size ≤ maxParts * partSize.val
-  deriving DecidableEq, Repr
+  deriving DecidableEq, Repr, Hashable
 
 namespace Plan
 
@@ -154,7 +154,7 @@ structure Flow where
   phase : Phase := .creating
   /-- Of the call now due, how many were made. -/
   attempts : Nat := 0
-  deriving DecidableEq, Repr
+  deriving DecidableEq, Repr, Hashable
 
 namespace Flow
 
