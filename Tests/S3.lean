@@ -268,6 +268,19 @@ def modelTests : List (String × Bool) :=
           out 2 (.get k), answered 2 .missing]
         && !run [put 0 "a", answered 0 (.stored none), out 1 (.delete k), answered 1 .deleted,
           out 2 (.get k), answered 2 (obj "a")]),
+    ("object store: a head says a key holds an object only when a write may have left one",
+      run [put 0 "a", answered 0 (.stored none), out 1 (.head k), answered 1 (.found { size := 1 })]
+        && !run [out 0 (.head k), answered 0 (.found { size := 1 })]
+        && run [out 0 (.head k), answered 0 .missing]
+        && !run [put 0 "a", answered 0 (.stored none), out 1 (.head k), answered 1 .missing]
+        && run [put 0 "a", timedOut 0, out 1 (.head k), answered 1 .missing]),
+    ("object store: a write granted to someone else is never answered, and may land or not",
+      let srv : Rpc.Server (ObjectStore.State String String) _ _ Empty := ObjectStore.server
+      let d := srv.receive srv.init ⟨0, 1000, .granted "k" "v"⟩
+      let d := srv.receive d ⟨1, 1000, .get "k"⟩
+      (srv.answer d 1 (.found "v")).isSome && (srv.answer d 1 .missing).isSome
+        && (srv.answer d 1 (.found "w")).isNone && (srv.answer d 0 .stored).isNone
+        && (srv.answer d 0 .refused).isNone),
     ("object store: a call is answered once, and only one that was made",
       !run [put 0 "a", answered 0 (.stored none), answered 0 (.stored none)]
         && !run [answered 0 (.stored none)]) ]

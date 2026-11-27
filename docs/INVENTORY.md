@@ -17,14 +17,14 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Lanes/Durable` | 67 | 57 | 2 | 0 | 0 | 7 | 1 |
 | `Lanes/Lib` | 531 | 345 | 13 | 2 | 92 | 70 | 9 |
 | `Lanes/Net` | 37 | 6 | 5 | 0 | 0 | 25 | 1 |
-| `Lanes/Outside` | 116 | 86 | 5 | 6 | 1 | 18 | 0 |
+| `Lanes/Outside` | 118 | 87 | 5 | 6 | 1 | 19 | 0 |
 | `Lanes/Proof` | 35 | 12 | 0 | 0 | 0 | 22 | 1 |
 | `Lanes/Runtime` | 158 | 93 | 20 | 0 | 15 | 30 | 0 |
 | `Lanes/Semantics` | 57 | 9 | 0 | 0 | 0 | 47 | 1 |
 | `Lanes/Testing` | 63 | 0 | 0 | 1 | 62 | 0 | 0 |
 | `Lanes/Web` | 521 | 272 | 48 | 24 | 126 | 49 | 2 |
 | `LanesCli` | 110 | 0 | 0 | 0 | 46 | 0 | 64 |
-| All | 2005 | 1053 | 98 | 97 | 344 | 295 | 118 |
+| All | 2007 | 1054 | 98 | 97 | 344 | 296 | 118 |
 
 ## `Lanes/Behaviours/Jobs/Basic.lean`
 
@@ -1332,8 +1332,8 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | --- | --- | --- |
 | `Outside.any` | tested | `Tests/Jobs.lean`, `Tests/S3.lean` |
 | `Outside.driver` | checked | `Tests/Clock.lean`, `Tests/HttpClient.lean`, `Tests/Jobs.lean` and 2 more |
-| `Outside.see` | proved | through `Outside.after`: `Effects.at_most_once`, `Events.deliveries_le` and 7 more |
-| `Outside.after` | proved | `Effects.at_most_once`, `Events.deliveries_le`, `Idempotent.at_most_once` and 6 more |
+| `Outside.see` | proved | through `Outside.after`: `Effects.at_most_once`, `Events.deliveries_le` and 8 more |
+| `Outside.after` | proved | `Effects.at_most_once`, `Events.deliveries_le`, `Idempotent.at_most_once` and 7 more |
 | `Outside.allows` | checked | `Tests/Outside.lean` |
 | `Outside.both` | proved | `Outside.after_both` |
 | `Outside.mine` | spec | used only in statements |
@@ -1429,12 +1429,14 @@ none are on `docs/inventory-none.md`, which only shrinks.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `ObjectStore.Request.key` | proved | through `ObjectStore.server`: `ObjectStore.read_sent` |
-| `ObjectStore.Request.leaves` | proved | through `ObjectStore.server`: `ObjectStore.read_sent` |
-| `ObjectStore.State.possible` | proved | through `ObjectStore.server`: `ObjectStore.read_sent` |
-| `ObjectStore.State.settle` | proved | through `ObjectStore.server`: `ObjectStore.read_sent` |
-| `ObjectStore.server` | proved | `ObjectStore.read_sent` |
+| `ObjectStore.Request.key` | proved | through `ObjectStore.server`: `ObjectStore.held_sent`, `ObjectStore.read_sent` |
+| `ObjectStore.Request.leaves` | proved | through `ObjectStore.server`: `ObjectStore.held_sent`, `ObjectStore.read_sent` |
+| `ObjectStore.insertNew` | proved | through `ObjectStore.server`: `ObjectStore.held_sent`, `ObjectStore.read_sent` |
+| `ObjectStore.State.possible` | proved | through `ObjectStore.server`: `ObjectStore.held_sent`, `ObjectStore.read_sent` |
+| `ObjectStore.State.settle` | proved | through `ObjectStore.server`: `ObjectStore.held_sent`, `ObjectStore.read_sent` |
+| `ObjectStore.server` | proved | `ObjectStore.held_sent`, `ObjectStore.read_sent` |
 | `ObjectStore.Sound` | spec | a predicate |
+| `ObjectStore.HeldSent` | spec | a predicate |
 
 ## `Lanes/Outside/Rpc.lean`
 
@@ -1444,7 +1446,7 @@ none are on `docs/inventory-none.md`, which only shrinks.
 | `Rpc.instCodableCall` | proved | its type, `Codable` |
 | `Rpc.Reply.codec` | proved | its type, `Codec` |
 | `Rpc.instCodableReply` | proved | its type, `Codable` |
-| `Rpc.outside` | proved | `Events.deliveries_le`, `Idempotent.at_most_once`, `Idempotent.keys_nodup` and 3 more |
+| `Rpc.outside` | proved | `Events.deliveries_le`, `Idempotent.at_most_once`, `Idempotent.keys_nodup` and 4 more |
 | `Rpc.Port.reported` | spec | used only in statements |
 | `Rpc.called` | spec | used only in statements |
 | `Rpc.answered` | spec | used only in statements |

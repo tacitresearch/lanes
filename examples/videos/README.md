@@ -73,8 +73,9 @@ the system into the run of the spec its actor performed is not written (as for r
   store's delete lands, and an upload link used after the delete leaves an object no record
   names. A lifecycle rule on the bucket, or a second delete after the upload link expires, would
   close it.
-- **The store** is as `Lanes.ObjectStore` models it, with the browser's upload as a put the site
-  hands out and never hears answered, and a `HEAD` as its get (`Videos/Check.lean`).
+- **The store** is as `Lanes.ObjectStore` models it, with the browser's upload as a write the
+  site grants and never hears answered (`granted`), and its `HEAD` as the model's head
+  (`Videos/Check.lean`).
 
 ## What is checked
 
@@ -86,9 +87,9 @@ actor crashes and starts again anywhere. What each browser is shown is judged as
 
 | Scenario | States | Result |
 | --- | --- | --- |
-| A public video: made, checked twice, watched, liked three times, deleted, asked for during and after the delete | 741,759 | pass |
+| A public video: made, checked twice, watched, liked three times, deleted, asked for during and after the delete | 736,480 | pass |
 | A private video: asked for by another member, a stranger and its owner; channels, the feed, a like and a comment by another | 561 | pass |
-| A video deleted while its check may be out | 240,716 | pass |
+| A video deleted while its check may be out | 237,289 | pass |
 | A session past its lifetime: a private video watched inside it, asked for and liked after it, then watched in a new session | 376 | pass |
 | Seeded: the browser's word taken for the upload (`trustBrowser`) | | found in 18 steps |
 | Seeded: a check the store did not answer in time taken as found (`readyOnTimeout`) | | found in 21 steps |
@@ -190,11 +191,11 @@ package; none touches the library.
    up to `maxAttempts`, then given up; an upload never confirmed stays `pending` until its owner
    deletes it. Retries with a backoff, a sweep of what was given up, thumbnails and transcoding
    all want a job with a deadline, and the store's own events (S3 notifications) a way in.
-6. **The object store's model** has no `HEAD` and no write by someone else, such as the browser
-   with a presigned link; the check maps the `HEAD` to a get and the link to a put no one answers
-   (`Videos/Check.lean`). Its state keeps every write settled, sent and read in lists that only
-   grow, so states that differ only in history are distinct: the scenario of a video's life has
-   741,759 states for thirteen requests.
+6. **The object store's model** had no `HEAD` and no write by someone else, such as the
+   browser with a presigned link (since fixed: `head` and `granted`, and `ObjectStore.held_sent`;
+   its histories are sets now, and a key's settled outcomes replace its earlier ones). That cut
+   the scenario of a video's life only from 741,759 states to 736,480 for thirteen requests: what
+   remains is the interleavings of the store's answers with the site's crashes, not history.
 7. **No kit for tests** (since fixed: `Lanes.Testing`, which this package's tests use). The fake
    S3 and the fake provider were test files of Lanes, which an application outside this
    repository cannot import; the browser (cookies, form tokens, following links) was written

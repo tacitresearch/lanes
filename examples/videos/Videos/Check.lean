@@ -10,17 +10,18 @@ import Videos.System
 The site beside two members' browsers, which follow a script, and beside the model of an object
 store (`Lanes.ObjectStore`, D71), which answers each call at most once, late, never, refused or
 `unknown`, and whose writes that were not answered may take effect at any moment or never. The
-browser's upload is a put the site hands out and never hears the answer to (the presigned link):
-the model may let it land before the site asks, after, or never. The site's `HEAD` is the model's
-get, and its delete the model's delete. The site's actor may crash and start again anywhere.
+browser's upload is a write the site grants and never hears the answer to (the presigned link,
+the model's `granted`): the model may let it land before the site asks, after, or never. The
+site's `HEAD` is the model's head, and its delete the model's delete. The site's actor may crash
+and start again anywhere.
 
 What the browsers see is judged as they see it: no private video shown to anyone but its owner;
 nothing shown to a request made after its delete was answered; nothing shown that the store did
 not first say it holds. The state is judged too: each like counted once, every bound. Every
 `always` has `sometimes` beside it (rule 5.3).
 
-Two seeded bugs, each found: a video made ready because the browser says so, and a check the
-store did not answer in time taken as found.
+Three seeded bugs, each found: a video made ready because the browser says so, a check the
+store did not answer in time taken as found, and sessions that never end.
 -/
 
 namespace Videos.Check
@@ -33,20 +34,20 @@ instance (config : Config) : (system config).Inspect := {}
 /-- The model's state: what the store may hold, for videos' objects. -/
 abbrev Store := Rpc.State (ObjectStore.State VideoId Unit)
 
-/-- The browser's put of video `v`'s object, as the model's call: a call of its own, which the
-site never sees answered. -/
+/-- The browser's put of video `v`'s object, granted by the link the site handed out, as the
+model's call: a call of its own, which the site never sees answered. -/
 def uploadCall (v : VideoId) : Nat := 1000 + v
 
 def storeAnswer : StoreAnswer → ObjectStore.Answer Unit
-  | .found _ => .found ()
+  | .found _ => .present
   | .missing => .missing
   | .deleted => .deleted
   | .failed => .refused
 
 def port : Rpc.Port sig (ObjectStore.Request VideoId Unit) (ObjectStore.Answer Unit) Empty where
   called
-    | .reply _ _ (.created v _ _) => some ⟨uploadCall v, 0, .put v ()⟩
-    | .store ⟨id, deadline, .head v⟩ => some ⟨id, deadline, .get v⟩
+    | .reply _ _ (.created v _ _) => some ⟨uploadCall v, 0, .granted v ()⟩
+    | .store ⟨id, deadline, .head v⟩ => some ⟨id, deadline, .head v⟩
     | .store ⟨id, deadline, .delete v⟩ => some ⟨id, deadline, .delete v⟩
     | _ => none
   replied
@@ -106,7 +107,7 @@ def judge (life : Auth.Lifetime) (b : Browsers) (held : Store) (req : ReqId) (vi
   let before := ((b.sent.lookup req).getD [])
   let privateOk := cards.all fun c => c.visibility != .private || viewer.map (·.1) == some c.owner
   let goneOk := cards.all fun c => !before.contains c.id
-  let confirmedOk := cards.all fun c => held.server.read.contains (c.id, ())
+  let confirmedOk := cards.all fun c => held.server.held.contains c.id
   let fail := [("a private video is shown to someone else", privateOk),
     ("a deleted video is shown", goneOk),
     ("a video is shown that the store did not say it holds", confirmedOk),
