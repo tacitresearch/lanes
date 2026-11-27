@@ -247,7 +247,7 @@ in `Lanes/Web/Http/FrontSound.lean` to answer each arrival at most once and in
 
 ## Trusted by tests, not by applications
 
-The test kit, `Lanes/Testing/` (`docs/decisions/new-a-test-kit.md`): a fake S3, a fake identity
+The test kit, `Lanes/Testing/` (`docs/decisions/D77-a-test-kit.md`): a fake S3, a fake identity
 provider, a scripted browser and a server of a handler, all of them IO on local sockets. No
 deployed system imports it (`import Lanes` does not include it), so no property of an
 application rests on it, and its lines are not counted above. The tests that run against it do
