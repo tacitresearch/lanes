@@ -119,6 +119,11 @@ runs:
         path: .lake/build
         key: ${{ steps.keys.outputs.build }}
         restore-keys: ${{ steps.keys.outputs.build-prefix }}
+    # Lake does not track the templates `LanesCli/New.lean` embeds with `include_str`, so a restored
+    # build would keep the templates of the commit it was saved from: build that module again.
+    - name: Forget the embedded templates
+      shell: bash
+      run: rm -f .lake/build/lib/lean/LanesCli/New.* .lake/build/ir/LanesCli/New.*
     - name: Fetch Mathlib's build
       if: steps.shared.outputs.warm != 'true' && steps.packages.outputs.cache-hit != 'true'
       shell: bash

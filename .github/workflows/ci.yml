@@ -105,11 +105,8 @@ jobs:
       - uses: ./.github/actions/lean
       - name: Test
         run: lake test
-      # Lake does not track the templates `LanesCli/New.lean` reads with `include_str`, so a
-      # restored build would keep the old ones: build `lanes new` again from the templates.
       - name: Generated app builds and passes its checks
         run: |
-          rm -f .lake/build/lib/lean/LanesCli/New.* .lake/build/ir/LanesCli/New.*
           lake exe lanes new demo-app --dir "$RUNNER_TEMP/demo-app" --lanes-path "$GITHUB_WORKSPACE"
           cd "$RUNNER_TEMP/demo-app"
           mkdir -p .lake && ln -sfn "$GITHUB_WORKSPACE/.lake/packages" .lake/packages
@@ -266,7 +263,6 @@ jobs:
         run: lake test
       - name: Generated app builds and passes its checks
         run: |
-          rm -f .lake/build/lib/lean/LanesCli/New.* .lake/build/ir/LanesCli/New.*
           lake exe lanes new demo-app --dir "$RUNNER_TEMP/demo-app" --lanes-path "$GITHUB_WORKSPACE"
           cd "$RUNNER_TEMP/demo-app"
           mkdir -p .lake && ln -sfn "$GITHUB_WORKSPACE/.lake/packages" .lake/packages
