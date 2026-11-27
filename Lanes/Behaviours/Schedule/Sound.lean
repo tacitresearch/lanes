@@ -963,4 +963,13 @@ theorem calls_le_scheduled (env : EnvModel (sig K P A)) {events : List (Event (s
   rw [calls_snoc, schedulings_snoc, Nat.mul_add]
   omega
 
+/-- Beside any system, the scheduler holds no more jobs than `maxJobs`, and no id twice. -/
+theorem attach_within {τ : Signature} (sys : System τ) (config : Config K P A) (use : Use τ K P A)
+    (env : EnvModel (joinSig (sig K P A) τ)) :
+    (attach sys config use).Invariant env
+      fun c => (c.state (.inl ()) : State K P).Within config :=
+  System.Invariant.join_left_state (a := system config) (b := sys) (w := use.wiring)
+    (Q := fun s : (_ : Unit) → State K P => (s ()).Within config)
+    fun env => within config env
+
 end Lanes.Schedule
