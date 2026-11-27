@@ -34,7 +34,9 @@ public import Lanes.Durable.Disk
 public import Lanes.Durable.Frame
 public import Lanes.Durable.IO.Journal
 public import Lanes.Durable.Journal
+public import Lanes.Durable.Migration
 public import Lanes.Durable.Snapshot
+public import Lanes.Durable.Upgrade
 public import Lanes.Lib.Crypto.Hmac
 public import Lanes.Lib.Crypto.Md5
 public import Lanes.Lib.Crypto.Pbkdf2

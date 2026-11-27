@@ -68,6 +68,11 @@ variable {sys : System σ}
 def savedHeader (system : String) : ByteArray :=
   ("lanes snapshot 1\n" ++ system).toUTF8
 
+theorem savedHeader_inj {a b : String} (h : savedHeader a = savedHeader b) : a = b := by
+  have := congrArg String.fromUTF8? h
+  rw [savedHeader, savedHeader, Codec.fromUTF8?_toUTF8, Codec.fromUTF8?_toUTF8] at this
+  simpa using this
+
 def savedRecords (c : Image.Codecs sys) (system : String) (index : Nat) (image : Image sys) :
     List ByteArray :=
   savedHeader system :: (Codec.pair .nat c.image).write (index, image)
@@ -87,6 +92,16 @@ def saved? (c : Image.Codecs sys) (system : String) (bytes : ByteArray) :
       | _ => none
     else none
   | [] => none
+
+/-- A snapshot of another system, or of another version of this one, is refused. -/
+theorem saved?_other {τ : Signature} {other : System τ} (c₀ : Image.Codecs other) (c : Image.Codecs sys)
+    {named system : String} (hne : named ≠ system) (index : Nat) (image : Image other)
+    (h : (savedRecords c₀ named index image).all Frame.fits = true) :
+    saved? c system (saved c₀ named index image) = none := by
+  simp only [saved?, saved, savedRecords] at h ⊢
+  rw [Frame.decode_encode (Frame.all_fits_iff.mp h)]
+  have : savedHeader named ≠ savedHeader system := fun heq => hne (savedHeader_inj heq)
+  simp [this]
 
 theorem saved?_saved (c : Image.Codecs sys) (system : String) (index : Nat) (image : Image sys)
     (h : (savedRecords c system index image).all Frame.fits = true) :
