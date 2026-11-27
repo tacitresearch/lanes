@@ -242,7 +242,8 @@ def verifiesString (password encoded : String) : Bool :=
 
 def libsodiumStringTests : List (String × Bool) :=
   (libsodiumStrings.map fun (password, encoded) =>
-    (s!"argon2id: libsodium's string {encoded.take 30}… verifies", verifiesString password encoded))
+    (s!"argon2id: libsodium's string {encoded.take 30}… verifies",
+      verifiesString password encoded))
   ++ [ ("argon2id: and not with another password",
       !verifiesString "passwore" (libsodiumStrings.head?.map (·.2) |>.getD "")) ]
 
