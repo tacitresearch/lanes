@@ -133,9 +133,18 @@ def rest (k : Kernel sys) (i : σ.Id) : Kernel sys :=
     { k with cells := k.cells.erase i }
   else k
 
+/-- The state of `i`, taken out of its cell, which keeps its place in the table with `init` in
+its stead until `settle` writes the next state. The step is then given the only reference to the
+state, and updates it in place: read where it is, it would be shared with the table, and copied
+on every step (`docs/decisions/D84-the-kernel-takes-the-state-out-before-the-step.md`). -/
+def takeState (k : Kernel sys) (i : σ.Id) : Kernel sys × sys.State i :=
+  match k.cells.get? i with
+  | some c => (k.setCell i { c with state := (sys.actor i).init }, c.state)
+  | none => (k, (sys.actor i).init)
+
 def handle (k : Kernel sys) (i : σ.Id) (msg : σ.Msg i) : Kernel sys × List σ.Out :=
-  let r := (sys.actor i).step (k.cell i).state msg
-  let (k, outs) := k.settle i r
+  let (k, s) := k.takeState i
+  let (k, outs) := k.settle i ((sys.actor i).step s msg)
   (k.rest i, outs)
 
 def startActor (k : Kernel sys) (i : σ.Id) : Kernel sys × List σ.Out :=

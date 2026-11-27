@@ -82,6 +82,7 @@ public import Lanes.Outside.Throttle
 public import Lanes.Proof.Deed
 public import Lanes.Proof.Equiv
 public import Lanes.Proof.Ghost
+public import Lanes.Proof.HashMap
 public import Lanes.Proof.Lift
 public import Lanes.Proof.List
 public import Lanes.Proof.Loses
