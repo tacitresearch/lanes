@@ -1,0 +1,22 @@
+name = "upload"
+version = "0.1.0"
+defaultTargets = ["Upload", "upload", "check"]
+testDriver = "check"
+
+[[require]]
+name = "lanes"
+path = "../.."
+
+[[lean_lib]]
+name = "Upload"
+globs = ["Upload.+"]
+
+# The web application: `upload [port] [journal]`.
+[[lean_exe]]
+name = "upload"
+root = "Main"
+
+# Model checks of the service, and uploads through the whole front end, run by `lake test`.
+[[lean_exe]]
+name = "check"
+root = "Check"

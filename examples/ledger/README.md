@@ -302,8 +302,9 @@ round of framework work is planned from this.
   `Hashable` and `Repr`. `Name` (in `Ledger/Web.lean`) still has its instances and codec by
   hand until that file can be edited; declared as a structure with a proof field, as it is,
   `lanes_data` refuses it and says to use a subtype.
-- **No HTTP client for tests.** `Live.lean` speaks HTTP over a socket with `Request.wire` and
-  `Response.parse`, which are good, but each test of a server will write the same twenty lines.
+- Fixed in Lanes: **no HTTP client for tests.** `Live.lean` spoke HTTP over a socket with
+  `Request.wire` and `Response.parse` in twenty lines each test of a server would write again;
+  it calls `Http.Client.fetch` now, and a pure test of a front end has `Http.Loopback`.
 - **Secrets on disk** are written with default permissions: Lean's `IO` has no `chmod`.
 - **The origin of the pages** must be configured, since the bridge is built before the server
   knows its port, and a page reached as `localhost` instead of `127.0.0.1` fails the origin
