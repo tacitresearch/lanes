@@ -5,6 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Lanes.Services.Aws.Refresh
+public import Lanes.Services.S3.Basic
 
 /-!
 # A role's credentials, from where AWS gives them to a machine
@@ -27,6 +28,10 @@ Two sources, each a few HTTP calls whose answers are read here; the edge
 
 Both answer the same JSON: `AccessKeyId`, `SecretAccessKey`, `Token` and `Expiration`, the last
 in RFC 3339, and the metadata service a `Code` that must be `Success`.
+
+Which of them a process uses is `Imds.chain`, the order AWS's SDKs look in: keys in the
+environment, then a container's endpoint, then the instance's metadata service, unless
+`AWS_EC2_METADATA_DISABLED` is `true`.
 -/
 
 @[expose] public section
@@ -170,13 +175,72 @@ def endpoint? (url : String) : Option Client.Call := do
 contents, if `AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE` named one, as `tokenFile`. `none` when
 neither URI is set, or the one set is not taken. -/
 def containerSource? (get : String → Option String) (tokenFile : Option String := none) :
-    Option Source := do
-  let url ← match (get "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI").filter (!·.isEmpty) with
+    Option Source :=
+  let url := match (get "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI").filter (!·.isEmpty) with
     | some relative => some ("http://" ++ ecsHost ++ relative)
     | none => (get "AWS_CONTAINER_CREDENTIALS_FULL_URI").filter (!·.isEmpty)
-  let call ← endpoint? url
   let token := (tokenFile.map (·.trimAscii.toString)).orElse fun _ =>
     get "AWS_CONTAINER_AUTHORIZATION_TOKEN"
-  return .container call ((token.filter (!·.isEmpty)).map (⟨·⟩))
+  (url.bind endpoint?).map fun call => .container call ((token.filter (!·.isEmpty)).map (⟨·⟩))
+
+/-! ## Where a process's credentials come from -/
+
+inductive Origin where
+  /-- Keys in the environment, used as they are: they do not expire, or their owner renews
+  them. -/
+  | keys (creds : SigV4.Credentials)
+  /-- A role's, fetched from `source` and again before they expire. -/
+  | role (source : Source)
+  /-- None: no keys, no container's endpoint, and the metadata service turned off. -/
+  | none
+
+/-- Whether `AWS_EC2_METADATA_DISABLED` turns the metadata service off, as the SDKs read it. -/
+def metadataDisabled (get : String → Option String) : Bool :=
+  (get "AWS_EC2_METADATA_DISABLED").any (·.toLower == "true")
+
+/-- The first source, in the order AWS's SDKs look, that the environment `get` gives: keys
+(`S3.credentialsOf?`), then a container's endpoint (`containerSource?`, with the token file's
+contents), then the instance's metadata service. -/
+def chain (get : String → Option String) (tokenFile : Option String := none) : Origin :=
+  match S3.credentialsOf? get with
+  | some creds => .keys creds
+  | none =>
+    match containerSource? get tokenFile with
+    | some source => .role source
+    | none => if metadataDisabled get then .none else .role .instance
+
+theorem chain_keys {get : String → Option String} {tokenFile : Option String}
+    {creds : SigV4.Credentials} (h : S3.credentialsOf? get = some creds) :
+    chain get tokenFile = .keys creds := by
+  simp [chain, h]
+
+theorem chain_container {get : String → Option String} {tokenFile : Option String}
+    {source : Source} (hk : S3.credentialsOf? get = none)
+    (hc : containerSource? get tokenFile = some source) : chain get tokenFile = .role source := by
+  simp [chain, hk, hc]
+
+theorem containerSource?_container {get : String → Option String} {tokenFile : Option String}
+    {s : Source} (h : containerSource? get tokenFile = some s) :
+    ∃ call auth, s = .container call auth := by
+  simp only [containerSource?, Option.map_eq_some_iff] at h
+  obtain ⟨_, _, rfl⟩ := h
+  exact ⟨_, _, rfl⟩
+
+/-- The metadata service is asked only when nothing comes before it and it is not turned off. -/
+theorem chain_instance {get : String → Option String} {tokenFile : Option String}
+    (h : chain get tokenFile = .role .instance) :
+    S3.credentialsOf? get = none ∧ metadataDisabled get = false := by
+  unfold chain at h
+  split at h
+  · cases h
+  · rename_i hk
+    split at h
+    · rename_i hc
+      cases h
+      obtain ⟨_, _, h⟩ := containerSource?_container hc
+      cases h
+    · constructor
+      · exact hk
+      · cases hm : metadataDisabled get <;> simp_all
 
 end Aws.Imds
