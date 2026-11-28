@@ -1,6 +1,6 @@
 # D61. Models of external systems: classes in Lanes, vendors in integrations
 
-Status: Accepted
+Status: Partly superseded by new-volatile-actors.md (vendors as Lake packages under `integrations/`: they live in `Lanes/Services/`)
 
 A system talks to things it does not contain through outputs and inputs (D26), and what such a
 thing may do is an `Outside` (`Lanes/Outside/Basic.lean`): the checker explores the system

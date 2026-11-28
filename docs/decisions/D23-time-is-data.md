@@ -1,6 +1,6 @@
 # D23. Time is data, and a shard is a thread
 
-Status: Accepted
+Status: Partly superseded by new-volatile-actors.md (a shard on one thread: the scheduler becomes free-running)
 
 *Refines D18, after a second independent review.*
 

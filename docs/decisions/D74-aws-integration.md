@@ -1,6 +1,6 @@
 # D74. AWS as an integration: a role's credentials refreshed by a proved policy, and SES as the email model
 
-Status: Accepted
+Status: Partly superseded by new-volatile-actors.md (AWS as a Lake package under `integrations/`: it is `Services/Aws`)
 
 The reference deployment runs the application on one EC2 instance with a role
 (`docs/decisions/D70-one-instance-one-volume.md`), but the S3 client read keys only from the

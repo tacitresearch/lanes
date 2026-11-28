@@ -1,6 +1,6 @@
 # D70. An application is deployed as one instance with its journal on a volume of its own, behind a load balancer
 
-Status: Accepted
+Status: Superseded by new-volatile-actors.md
 
 A Lanes application is a process that holds a shard: a journal and a snapshot on local disk,
 replayed at every start (D24, D29), and a lock beside them so that only one process writes them.

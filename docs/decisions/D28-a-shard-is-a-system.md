@@ -1,6 +1,6 @@
 # D28. A shard is a system, and a cluster is runtimes with a router
 
-Status: Partly superseded by D37 (the router between shards in one process)
+Status: Superseded by new-volatile-actors.md
 
 `Lanes/Runtime/Shard.lean`; the in-process router of this section is gone (D37). `System.shard sys hosts` is `sys` as a
 shard that hosts some of its actors sees it: a message to an actor hosted elsewhere leaves as

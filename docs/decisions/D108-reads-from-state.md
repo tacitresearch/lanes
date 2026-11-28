@@ -1,6 +1,6 @@
 # D108. Reads from the state
 
-Status: Accepted
+Status: Partly superseded by new-volatile-actors.md (its reasons: a read no longer skips a journal's sync, and waves are gone)
 
 `Lanes/Runtime/Batch.lean`, `Lanes/Runtime/PeekSound.lean`, `Lanes/Runtime/IO/Shell.lean`,
 `Lanes/Web/Http/View.lean`, `Lanes/Web/IO/Server.lean`, `Lanes/Web/Http/Loopback.lean`,

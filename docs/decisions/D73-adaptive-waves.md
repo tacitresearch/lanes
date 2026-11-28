@@ -1,6 +1,6 @@
 # D73. The shard chooses from its own timing whether a batch's steps are worked out in parallel
 
-Status: Accepted
+Status: Superseded by new-volatile-actors.md
 
 D64 let a shard's actors step in parallel within a wave, behind `Runtime.Config.workers`, off by
 default. On the warm machine it gained 40–56% where each step does real work (`lanes-heavy-par`)

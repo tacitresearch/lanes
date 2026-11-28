@@ -1,6 +1,6 @@
 # D24. Durability is a journal of what the kernel was asked, replayed
 
-Status: Partly superseded by D66 (a changed system refusing its old files)
+Status: Superseded by new-volatile-actors.md
 
 *Departs from `DESIGN.md`, which backs `Actor.recover` with stored state.*
 

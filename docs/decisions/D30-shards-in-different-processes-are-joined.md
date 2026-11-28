@@ -1,6 +1,6 @@
 # D30. Shards in different processes are joined by a link that promises little
 
-Status: Accepted
+Status: Superseded by new-volatile-actors.md
 
 `Lanes/Net/IO/Peers.lean`, `Lanes/Runtime/Shard.lean` (`Parcel`). A process runs `System.shard` on
 the ordinary runtime. A parcel its shard puts out is framed and sent over TCP to the process

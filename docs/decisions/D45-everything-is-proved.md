@@ -1,6 +1,6 @@
 # D45. Everything is proved; the checker finds bugs, a proof is the evidence
 
-Status: Accepted
+Status: Partly superseded by new-volatile-actors.md (the generated inventory of every public definition)
 
 Lanes is for software that an agent writes and nobody reads line by line. That works only if
 what the agent ships carries its own evidence, and the only evidence that does not need a person

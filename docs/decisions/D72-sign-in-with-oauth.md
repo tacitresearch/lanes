@@ -1,6 +1,6 @@
 # D72. Sign-in with OAuth 2.0 and OpenID Connect, done where a request arrives
 
-Status: Accepted
+Status: Partly superseded by new-volatile-actors.md (each provider a Lake package of its own: Google and GitHub are presets of `Services/Oidc`)
 
 The first application Lanes is for is a video site whose users sign in with Google or GitHub.
 This adds the authorization code flow with PKCE (RFC 6749 §4.1, RFC 7636), OpenID Connect's ID
