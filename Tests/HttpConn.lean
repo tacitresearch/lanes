@@ -91,7 +91,7 @@ def perform (w : World) : Action → World
   | .interim seq _ => { w with out := w.out ++ [.interim seq] }
   | .write seq bytes => { w with out := w.out ++ [.write seq bytes] }
   | .close => { w with out := w.out ++ [.close] }
-  | .begin .. | .piece .. | .pull .. | .part .. => { w with stray := true }
+  | .begin .. | .piece .. | .pull .. | .part .. | .switch .. => { w with stray := true }
 
 def tell (w : World) (e : Event) : World :=
   let (conn, actions) := w.conn.step cfg w.now e

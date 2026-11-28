@@ -69,6 +69,8 @@ theorem flushSlots_spec : ∀ (n : Nat) (slots : List Slot),
   | n, .asked _ _ :: rest => by simp [flushSlots]
   | n, .opened .. :: rest => by simp [flushSlots]
   | n, .stream _ :: rest => by simp [flushSlots]
+  | n, .upgrading _ :: rest => by simp [flushSlots]
+  | n, .switched .. :: rest => by simp [flushSlots]
   | n, .ready bytes :: rest => by
     obtain ⟨h1, h2, h3, h4, h5⟩ := flushSlots_spec (n + 1) rest
     rcases e : flushSlots (n + 1) rest with ⟨actions, m, left⟩
@@ -108,7 +110,10 @@ theorem take_of
         [.submit (next c) incoming.request])
     (hbegin : ∀ c head start, c.closed = false → c.reading = true →
       c.slots.length < cfg.inflight_max → streamHead? cfg c = some (head, start) →
-      P c (begin now c head start) [.begin (next c) (head.incoming .empty).request]) :
+      P c (begin now c head start) [.begin (next c) (head.incoming .empty).request])
+    (hupgrade : ∀ c head start, c.closed = false → c.reading = true →
+      c.slots.length < cfg.inflight_max → upgradeHead? cfg c = some (head, start) →
+      P c (beginUpgrade now c head start) [.begin (next c) (head.incoming .empty).request]) :
     ∀ fuel c, P c (take cfg now fuel c).1 (take cfg now fuel c).2
   | 0, c => hstay c
   | fuel + 1, c => by
@@ -130,21 +135,25 @@ theorem take_of
           have hl : c.slots.length < cfg.inflight_max := by omega
           split
           · rename_i head start hs
-            exact trans (hbegin c head start hc1 hc2 hl hs)
-              (take_of hwait hstay hfull hrefuse hdone hbegin fuel _)
+            exact hupgrade c head start hc1 hc2 hl hs
           · split
-            · rename_i h
-              exact hwait c hc1 hc2 hl h
-            · rename_i why h
-              exact hrefuse c why hc1 hc2 hl h
-            · rename_i incoming stop h
-              exact trans (hdone c incoming stop hc1 hc2 hl h)
-                (take_of hwait hstay hfull hrefuse hdone hbegin fuel _)
+            · rename_i head start hs
+              exact trans (hbegin c head start hc1 hc2 hl hs)
+                (take_of hwait hstay hfull hrefuse hdone hbegin hupgrade fuel _)
+            · split
+              · rename_i h
+                exact hwait c hc1 hc2 hl h
+              · rename_i why h
+                exact hrefuse c why hc1 hc2 hl h
+              · rename_i incoming stop h
+                exact trans (hdone c incoming stop hc1 hc2 hl h)
+                  (take_of hwait hstay hfull hrefuse hdone hbegin hupgrade fuel _)
 
 include trans in
 theorem drain_of
     (hflush : ∀ c, P c (flush now c).1 (flush now c).2)
-    (hstream : ∀ c, P c (flushStream cfg now c).1 (flushStream cfg now c).2) (c : Conn) :
+    (hstream : ∀ c, P c (flushStream cfg now c).1 (flushStream cfg now c).2)
+    (hswitch : ∀ c, P c (flushSwitch c).1 (flushSwitch c).2) (c : Conn) :
     P c (drain cfg now c).1 (drain cfg now c).2 := by
   have h1 := hflush c
   rcases e1 : flush now c with ⟨c1, a1⟩
@@ -155,18 +164,22 @@ theorem drain_of
   have h3 := hflush c2
   rcases e3 : flush now c2 with ⟨c3, a3⟩
   rw [e3] at h3
-  simp only [drain, e1, e2, e3]
-  exact trans (trans h1 h2) h3
+  have h4 := hswitch c3
+  rcases e4 : flushSwitch c3 with ⟨c4, a4⟩
+  rw [e4] at h4
+  simp only [drain, e1, e2, e3, e4]
+  exact trans (trans (trans h1 h2) h3) h4
 
 include trans in
 theorem advance_of
     (htake : ∀ fuel c, P c (take cfg now fuel c).1 (take cfg now fuel c).2)
     (hflush : ∀ c, P c (flush now c).1 (flush now c).2)
     (hstream : ∀ c, P c (flushStream cfg now c).1 (flushStream cfg now c).2)
+    (hswitch : ∀ c, P c (flushSwitch c).1 (flushSwitch c).2)
     (hpump : ∀ c, P c (pump cfg now c).1 (pump cfg now c).2)
     (hfinish : ∀ c, P c (finish c).1 (finish c).2) (c : Conn) :
     P c (advance cfg now c).1 (advance cfg now c).2 := by
-  have h1 := drain_of P trans hflush hstream c
+  have h1 := drain_of P trans hflush hstream hswitch c
   rcases e1 : drain cfg now c with ⟨c1, a1⟩
   rw [e1] at h1
   have h2 := htake (cfg.inflight_max + 1) c1
@@ -175,7 +188,7 @@ theorem advance_of
   have h3 := hpump c2
   rcases e3 : pump cfg now c2 with ⟨c3, a3⟩
   rw [e3] at h3
-  have h4 := drain_of P trans hflush hstream c3
+  have h4 := drain_of P trans hflush hstream hswitch c3
   rcases e4 : drain cfg now c3 with ⟨c4, a4⟩
   rw [e4] at h4
   have h5 := hfinish c4
@@ -300,9 +313,7 @@ def Calm (c c' : Conn) : Prop :=
 theorem respond_calm (seq : Nat) (r : Response) (c : Conn) : Calm c (respond seq r c) := by
   unfold respond
   split
-  · split
-    · simp [Calm]
-    · simp [Calm]
+  · split <;> simp [Calm]
   · simp [Calm]
 
 theorem pulled_calm (now seq index : Nat) (r : Response) (c : Conn) :
@@ -479,6 +490,57 @@ theorem streamHead?_some {c : Conn} {head : Request.Head} {start : Nat}
       · cases h
     · cases h
 
+/-- The request that may switch protocols is handed on: the next request starts after it. -/
+theorem upgradeHead?_some {c : Conn} {head : Request.Head} {start : Nat}
+    (h : upgradeHead? cfg c = some (head, start)) : start ≤ c.buffer.size := by
+  unfold upgradeHead? at h
+  split at h
+  · cases h
+  · split at h
+    · rename_i head' start' hr
+      split at h
+      · cases h
+        exact (Request.readHead_done hr).2.2.1
+      · cases h
+    · cases h
+
+/-- What `flushSwitch` does: it may close the connection, and nothing else changes; it writes
+nothing and hands nothing on. -/
+theorem flushSwitch_frame (c : Conn) :
+    (flushSwitch c).1.buffer = c.buffer ∧ (flushSwitch c).1.pos = c.pos
+      ∧ (flushSwitch c).1.slots = c.slots ∧ (flushSwitch c).1.written = c.written
+      ∧ (flushSwitch c).1.reading = c.reading
+      ∧ ∀ a ∈ (flushSwitch c).2, a.wrote = none ∧ a.submitted = none ∧ ∀ s r, a ≠ .submit s r := by
+  unfold flushSwitch
+  split
+  · simp
+  · split <;> simp [Action.wrote, Action.submitted]
+
+/-- The connection is handed over only once every earlier response is written, and then does
+nothing more. -/
+theorem flushSwitch_switch {c : Conn} {seq : Nat} {head : Request} {r : Response} {rest : ByteArray}
+    (h : Action.switch seq head r rest ∈ (flushSwitch c).2) :
+    seq = c.written ∧ (flushSwitch c).1.closed = true
+      ∧ ∃ slots, c.slots = .switched head r :: slots := by
+  unfold flushSwitch at h ⊢
+  split at h
+  · cases h
+  · rename_i hc
+    split at h
+    · rename_i head' r' slots hs
+      simp only [List.mem_singleton, Action.switch.injEq] at h
+      obtain ⟨rfl, rfl, rfl, -⟩ := h
+      simp [hs, hc]
+    · cases h
+
+/-- An answer of `101` to a request that may switch protocols switches it; any other is written,
+and the connection closes after it. -/
+theorem respond_upgrading {seq : Nat} {c : Conn} {head : Request} (hw : c.written ≤ seq)
+    (h : c.slots[seq - c.written]? = some (.upgrading head)) (r : Response) :
+    (respond seq r c).slots = c.slots.set (seq - c.written)
+      (if r.status == 101 then .switched head r else .ready (encode false true r)) := by
+  simp [respond, hw, h]
+
 /-! Responses in order, each once -/
 
 /-- The writes of `actions` are of the requests numbered from `c.written` to `c'.written`, in
@@ -511,10 +573,15 @@ theorem Writes.calm {c c' : Conn} (h : Calm c c') : Writes c c' [] :=
 theorem step_writes (now : Nat) (c : Conn) (e : Event) :
     Writes c (step cfg now c e).1 (step cfg now c e).2 := by
   refine step_of Writes Writes.trans (fun c => advance_of Writes Writes.trans
-      (take_of Writes Writes.trans ?wait ?stay ?full ?refuse ?done ?begin) ?flush ?stream ?pump
+      (take_of Writes Writes.trans ?wait ?stay ?full ?refuse ?done ?begin ?upgrade) ?flush ?stream ?switch ?pump
       ?finish c)
     ?stay ?receive ?answer ?expire ?quiet ?close ?respond ?took ?pulled ?sent c e
   case begin => exact fun c _ _ _ _ _ _ => Writes.none rfl (by simp [Action.wrote])
+  case upgrade => exact fun c _ _ _ _ _ _ => Writes.none rfl (by simp [Action.wrote])
+  case switch =>
+    intro c
+    obtain ⟨-, -, -, hw, -, ha⟩ := flushSwitch_frame c
+    exact Writes.none hw fun a h => (ha a h).1
   case stream =>
     intro c
     obtain ⟨-, -, -, -, h⟩ := flushStream_frame (cfg := cfg) now c
@@ -606,13 +673,21 @@ theorem Submits.calm {c c' : Conn} (h : Calm c c') : Submits c c' [] :=
 theorem step_submits (now : Nat) (c : Conn) (e : Event) :
     Submits c (step cfg now c e).1 (step cfg now c e).2 := by
   refine step_of Submits Submits.trans (fun c => advance_of Submits Submits.trans
-      (take_of Submits Submits.trans ?wait ?stay ?full ?refuse ?done ?begin) ?flush ?stream ?pump
+      (take_of Submits Submits.trans ?wait ?stay ?full ?refuse ?done ?begin ?upgrade) ?flush ?stream ?switch ?pump
       ?finish c)
     ?stay ?receive ?answer ?expire ?quiet ?close ?respond ?took ?pulled ?sent c e
   case begin =>
     intro c _ _ _ _ _ _
     refine ⟨by simp only [next, begin, List.length_append]; omega, by simp [Action.submitted], ?_⟩
     simp [Action.submitted, next, begin]
+  case upgrade =>
+    intro c _ _ _ _ _ _
+    refine ⟨by simp only [next, beginUpgrade, List.length_append]; omega, by simp [Action.submitted], ?_⟩
+    simp [Action.submitted, next, beginUpgrade]
+  case switch =>
+    intro c
+    obtain ⟨-, -, hs, hw, -, ha⟩ := flushSwitch_frame c
+    exact Submits.none (by simp [next, hs, hw]) fun a h => (ha a h).2.1
   case stream =>
     intro c
     obtain ⟨-, -, -, hs, h⟩ := flushStream_frame (cfg := cfg) now c
@@ -695,12 +770,20 @@ theorem step_buffer (now : Nat) (c : Conn) (e : Event) (h : Bounded cfg c) :
     Bounded cfg (step cfg now c e).1 := by
   refine step_of (Keeps (Bounded cfg)) Keeps.trans
     (fun c => advance_of (Keeps (Bounded cfg)) Keeps.trans
-      (take_of (Keeps (Bounded cfg)) Keeps.trans ?wait ?stay ?full ?refuse ?done ?begin) ?flush
-      ?stream ?pump ?finish c)
+      (take_of (Keeps (Bounded cfg)) Keeps.trans ?wait ?stay ?full ?refuse ?done ?begin ?upgrade) ?flush
+      ?stream ?switch ?pump ?finish c)
     ?stay ?receive ?answer ?expire ?quiet ?close ?respond ?took ?pulled ?sent c e h
   case begin =>
     intro c head start _ _ _ hs h
     exact ⟨(streamHead?_some hs).2, h.2⟩
+  case upgrade =>
+    intro c head start _ _ _ hs h
+    exact ⟨by simpa [beginUpgrade] using upgradeHead?_some (cfg := cfg) hs,
+      by simpa [beginUpgrade] using h.2⟩
+  case switch =>
+    intro c h
+    obtain ⟨hb, hp, -⟩ := flushSwitch_frame c
+    exact ⟨by rw [hb, hp]; exact h.1, by rw [hb]; exact h.2⟩
   case stream =>
     intro c h
     obtain ⟨hb, hp, -⟩ := flushStream_frame (cfg := cfg) now c
@@ -770,9 +853,14 @@ theorem step_slots (now : Nat) (c : Conn) (e : Event) (h : c.slots.length ≤ cf
   refine step_of (Keeps fun c => c.slots.length ≤ cfg.inflight_max) Keeps.trans
     (fun c => advance_of (Keeps fun c => c.slots.length ≤ cfg.inflight_max) Keeps.trans
       (take_of (Keeps fun c => c.slots.length ≤ cfg.inflight_max) Keeps.trans ?wait ?stay ?full
-        ?refuse ?done ?begin) ?flush ?stream ?pump ?finish c)
+        ?refuse ?done ?begin ?upgrade) ?flush ?stream ?switch ?pump ?finish c)
     ?stay ?receive ?answer ?expire ?quiet ?close ?respond ?took ?pulled ?sent c e h
   case begin => exact fun _ _ _ _ _ hl _ _ => by simp [begin]; omega
+  case upgrade => exact fun _ _ _ _ _ hl _ _ => by simp [beginUpgrade]; omega
+  case switch =>
+    intro c h
+    rw [(flushSwitch_frame c).2.2.1]
+    exact h
   case stream =>
     intro c h
     obtain ⟨-, -, -, -, hs⟩ := flushStream_frame (cfg := cfg) now c
@@ -843,10 +931,15 @@ theorem step_notReading (now : Nat) {c : Conn} (h : c.reading = false) (bytes : 
 theorem advance_quiet (now : Nat) (c : Conn) (h : c.reading = false) :
     (advance cfg now c).1.reading = false := by
   refine advance_of (Keeps fun c => c.reading = false) Keeps.trans
-    (take_of (Keeps fun c => c.reading = false) Keeps.trans ?wait ?stay ?full ?refuse ?done ?begin)
-    ?flush ?stream ?pump ?finish c h
+    (take_of (Keeps fun c => c.reading = false) Keeps.trans ?wait ?stay ?full ?refuse ?done ?begin ?upgrade)
+    ?flush ?stream ?switch ?pump ?finish c h
   case wait => exact fun _ _ hr _ _ h => by rw [h] at hr; cases hr
   case begin => exact fun _ _ _ _ hr _ _ h => by rw [h] at hr; cases hr
+  case upgrade => exact fun _ _ _ _ hr _ _ h => by rw [h] at hr; cases hr
+  case switch =>
+    intro c h
+    rw [(flushSwitch_frame c).2.2.2.2.1]
+    exact h
   case stream =>
     intro c h
     cases h' : (flushStream cfg now c).1.reading
@@ -979,9 +1072,14 @@ theorem Reads.quiet {c c' : Conn} {actions : List Action} (hb : c'.buffer = c.bu
 
 theorem advance_reads (now : Nat) (c : Conn) : Reads cfg c (advance cfg now c).1 (advance cfg now c).2 := by
   refine advance_of (Reads cfg) Reads.trans
-    (take_of (Reads cfg) Reads.trans ?wait ?stay ?full ?refuse ?done ?begin) ?flush ?stream ?pump
+    (take_of (Reads cfg) Reads.trans ?wait ?stay ?full ?refuse ?done ?begin ?upgrade) ?flush ?stream ?switch ?pump
     ?finish c
   case begin => exact fun c _ _ _ _ _ _ => Reads.quiet rfl (by simp)
+  case upgrade => exact fun c _ _ _ _ _ _ => Reads.quiet rfl (by simp)
+  case switch =>
+    intro c
+    obtain ⟨hb, -, -, -, -, ha⟩ := flushSwitch_frame c
+    exact Reads.quiet hb fun s r h => (ha _ h).2.2 s r rfl
   case stream =>
     intro c
     obtain ⟨hb, -, -, hs, -⟩ := flushStream_frame (cfg := cfg) now c
@@ -1089,17 +1187,21 @@ theorem respond_opens {seq : Nat} {c : Conn} {head : Request} {close : Bool}
                  after := head.header? "last-event-id" }) := by
   simp [respond, hw, h, hm, hs]
 
-/-- An answer to a request that is not waiting as one that streams changes nothing. -/
+/-- An answer to a request that is not waiting as one that streams or switches protocols
+changes nothing. -/
 theorem respond_ignored {seq : Nat} {c : Conn}
-    (h : c.written ≤ seq → ∀ head headOnly close,
-      c.slots[seq - c.written]? ≠ some (.opened head headOnly close)) (r : Response) :
+    (h : c.written ≤ seq → (∀ head headOnly close,
+      c.slots[seq - c.written]? ≠ some (.opened head headOnly close))
+      ∧ ∀ head, c.slots[seq - c.written]? ≠ some (.upgrading head)) (r : Response) :
     respond seq r c = c := by
   unfold respond
   split
   · rename_i hw
     split
     · rename_i head headOnly close e
-      exact absurd e (h hw head headOnly close)
+      exact absurd e ((h hw).1 head headOnly close)
+    · rename_i head e
+      exact absurd e ((h hw).2 head)
     · rfl
   · rfl
 

@@ -57,6 +57,13 @@ def Gate.receive {E : Type} (does : Gate.Effects σ E) (pending : List ReqId)
   if answer.1 ∈ pending then (pending.erase answer.1, [does.disarm answer.1, does.respond answer.1 answer.2])
   else (pending, [])
 
+/-- An answer to an id the gate is not waiting on leaves it as it was and does nothing, so the
+server may take it elsewhere: to the connection that switched protocols under that id. -/
+theorem Gate.receive_absent {E : Type} (does : Gate.Effects σ E) (pending : List ReqId)
+    {id : ReqId} (h : id ∉ pending) (response : Response) :
+    Gate.receive does pending (id, response) = (pending, []) := by
+  simp [Gate.receive, h]
+
 theorem Gate.step_arrive_eq {E : Type} (bridge : Bridge σ) (config : GateConfig)
     (does : Gate.Effects σ E) (pending : List ReqId) (id : ReqId) (request : Request) :
     Gate.step bridge config does pending (.arrive id request)

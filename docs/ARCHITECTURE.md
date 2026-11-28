@@ -396,6 +396,21 @@ it reads back as it is (`Http.Sse.Event.ofResponse_valid`). `Http.Loopback` runs
 no socket, for tests: the connection, the gate as the server runs it, and `admitted sys` on a
 kernel of its own.
 
+A request may switch protocols (`serve`'s `upgrade`, `Lanes/Web/Http/Upgrade.lean`, the decision
+"WebSockets behind the gate"): its head is handed on alone and nothing after it is read; the
+system's `101` is not written by the connection, which hands itself over once every earlier
+response is written (`Http.Conn.flushSwitch_switch`, `Http.Conn.respond_upgrading`) to the
+protocol's pure machine, run by the same loop. The protocol's requests go through the gate as
+pieces do, and the system reaches the connection with outputs that answer the head's id, which
+the gate would drop (`Http.Gate.receive_absent`). WebSockets are such a protocol
+(`Lanes/Web/Http/WebSocketSession.lean`, a root of its own, so a program that does not import it
+does not build or link it): each message received is a request through the gate, answered
+`Response.taken` before the next is handed on; a socket holds at most one place among the gate's
+pending requests, and only while that request is with the system (`WebSocket.Session.step_submits`,
+`step_withSystem`); everything it writes after the `101` is frames a client reads back
+(`WebSocket.Session.step_writes`); the system is told once when a socket ends. An open socket
+counts as a connection against `connections_max`. `examples/chat` is a room built on it.
+
 The server tells its operators how it is, each part off by default (`ServerConfig.ops`,
 `docs/decisions/D69-observability.md`): a metrics page in the Prometheus text format, liveness,
 readiness, request ids and a JSON access log. What is decided is pure. `Lanes/Lib/Metrics.lean`
@@ -430,6 +445,8 @@ Where: `Lanes/Web/` (`Http/`, `IO/Server.lean`), `Lanes/Semantics/Front.lean`.
 | A streamed response is read back by the client as its head with the parts the system gave, in order, as its body | `Http.Conn.read_streamed`, `Http.Conn.pulled_part`, `Http.Conn.flushStream_ended`, `Lanes/Web/Http/ConnSound.lean`; gate `Tests/Axioms/Web.lean` | Parts of at most sixteen hex digits of size and a body under 10^18 bytes; each of a step, the whole run model-checked (`Tests/HttpStream.lean`); the IO trusted to give each answer to the pull it was asked under | proved of each step; checked of a run |
 | The pieces of a streamed request body make up the body the strict reader reads, in order, one with the system at a time | `Http.Conn.pump_piece` (each piece is what `Inflow.gather` reads at the connection's position), `Http.Conn.gather_length` (of a body framed by its length, the bytes from that position, the last piece exactly at its end); `Tests/HttpStream.lean` | Of a whole run, model-checked on a body framed by its length and one in chunks, not proved; the IO trusted to tag each piece with its head's id | proved of each step; checked of a run |
 | The client's reader of Server-Sent Events reads back the events a stream writes, in order, each once | `Http.Sse.parse_written`, `Http.Sse.Event.ofResponse_valid`, `Lanes/Web/Http/SseSound.lean`; gate `Tests/Axioms/Web.lean` | Against a model of the WHATWG reader that splits lines at LF, gives each event its own block's `id` and `retry`, and takes a `retry` of at most eighteen digits | proved |
+| Everything a WebSocket writes after the `101` is frames a client reads back: unmasked, none longer than `frame_max`, every control frame whole and at most 125 bytes, a close's reason cut to fit | `WebSocket.Session.step_writes`, `WebSocket.Conn.receive_sends`, `WebSocket.size_closePayload`, with `WebSocket.decode_encode`, `Lanes/Web/Http/WebSocketSessionSound.lean`; gate `Tests/Axioms/Web.lean`; live against Python's websockets client (`Tests/WebSocket.lean`) | The loop writes what the session asks, in order (trusted) | proved of each step |
+| A WebSocket holds at most one place among the gate's pending requests: it hands the system at most one request in a step, and none while one is with it but on that one's answer | `WebSocket.Session.step_submits`, `WebSocket.Session.step_withSystem`; `Http.Gate.receive_absent` for the outputs that go to a socket instead of the gate | The loop submits what the session asks and tells it each answer under its index (trusted) | proved of each step |
 | A streamed connection holds at most one piece and one part of a stream, and pulls only once what it wrote was sent | `Http.Conn.flushStream_going`, `Http.Conn.pulled_large`, `Lanes/Web/Http/ConnSound.lean`; `Tests/HttpStream.lean` | The loop tells `sent` when its last write ends (trusted) | proved of each step |
 | HTTP: requests a second at 1, 16 and 64 connections against Go `net/http` | `bench/run.sh` through the Bench workflow on a c7a.16xlarge, commit 70d61f52d0aa, 2026-11-27 (`bench/README.md`) | One set of runs; the report is the workflow's artifact, not in the repository | tested (measured) |
 
@@ -442,7 +459,7 @@ Also:
 - The server reads and writes HTTP/1.1 itself on `Std.Net`, with no `Std.Http`: each connection is `Http.Conn.step`, pure, model-checked against a client that sends in any pieces, pipelines and leaves, and proved to write responses in the order requests were read, each once (`Http.Conn.run_writes`), to hand on only requests the strict reader reads (`Http.Conn.step_submit_read`), to keep its buffer within `message_max` and its requests in flight within `inflight_max` (`Http.Conn.run_buffer`, `run_slots`), to take nothing once closed or no longer reading (`Http.Conn.step_closed`, `step_notReading`, `step_reading`), to stop reading at a deadline (`Http.Conn.step_tick`) and to write what the client's reader reads back (`Http.Conn.read_encode`), with `100 Continue`, keep-alive, pipelining, deadlines for a slow head or body and a bound on connections (`docs/decisions/D57-the-server-runs-its-own-connections.md`).
 - The strict reader of requests (`Http.Request.read`, `docs/decisions/D49-the-server-reads-requests-by-a-strict-profile.md`) is proved final once it answers (`Http.Request.read_append`), to wait only within its limits and answer within them (`Http.Request.read_more`, `read_done`), to read back what `Request.wire` writes wherever it starts and whatever follows, at its last byte and not before (`read_wire`, `read_wire_extract`), and to refuse a length beside a coding, two lengths, a blank before a colon, obs-fold, a bare CR or LF and a malformed chunk size for every head of those shapes (`read_lengthAndCoding`, `read_twoLengths`, `read_blankInName`, `read_fold`, `read_bareCR`, `read_bareLF`, `read_badChunkSize`); its other refusals, and its verdicts against Go's, Node's and h11's parsers on a corpus, are tested (`oracles/go/requests/requests.py`: stricter or alike on every case).
 - The HTTP server passes against the gate's assumption.
-- WebSockets (RFC 6455, `Lanes/Web/Http/WebSocket.lean`, its own root): the opening handshake read from a request and answered, frames written and read back (`WebSocket.decode_encode`), and a server's side of a connection, pure: fragments put together within a message's limit, a ping answered, a close echoed, text checked as UTF-8 and the close codes of §7.4; compared with Python's websockets on generated byte streams (`oracles/websockets`). The server does not yet hand an upgraded connection to it: the codec is for an application's own socket loop until it does.
+- WebSockets (RFC 6455, `Lanes/Web/Http/WebSocket.lean`, its own root): the opening handshake read from a request and answered, frames written and read back (`WebSocket.decode_encode`), and a server's side of a connection, pure: fragments put together within a message's limit, a ping answered, a close echoed, text checked as UTF-8 and the close codes of §7.4; compared with Python's websockets on generated byte streams (`oracles/websockets`). The server runs it behind the gate (`Lanes/Web/Http/WebSocketSession.lean`, above). Not done: a WebSocket client, extensions (permessage-deflate), and `Http.Loopback` running a protocol switched to, which ends its exchange at the switch.
 
 ## Pages, sessions and sign-in
 
@@ -1298,7 +1315,7 @@ key-value store with front ends, whose read cache breaks refinement (`examples/k
 service from an outbox (`examples/payments`, `Shop.charged_at_most_once`); a to-do list kept in PostgreSQL
 (`examples/todo-db`); `examples/sign-in`, members of a video site signed in with Google or
 GitHub, with sessions; uploads that stream (`examples/upload`); reminders in a jobs table
-(`examples/reminders`);
+(`examples/reminders`); a chat room over WebSockets (`examples/chat`);
 and `examples/rookery`, a small social network for bots kept in PostgreSQL, whose claims are
 proved per transaction and so of every database the store's model allows (`Rookery.others_kept`,
 `Rookery.bounded_always`). The tests import none of them; the systems of `examples/kv-cache` and
