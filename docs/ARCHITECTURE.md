@@ -360,8 +360,10 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   calls (`Aws.Sqs`: create a queue, send, receive, delete) are data, with no handler.
   CloudFront's signed URLs and cookies (`Aws.CloudFront`) are pure: a canned policy is the
   document AWS gives for the URL and the time (`CloudFront.cannedPolicy_eq`), CloudFront's base64
-  reads back (`CloudFront.decode_encode`) and every cookie is valid (`CloudFront.cookies_valid`);
-  the policy and the link, signature included, are botocore's on generated links.
+  reads back (`CloudFront.decode_encode`) and every cookie is valid, for a path and a domain
+  that need no escaping (`CloudFront.cookies_valid`); a domain lets a distribution on another
+  host of the site's get them. The policy and the link, signature included, are botocore's on
+  generated links.
 - **Sign-in** (`Lanes/Web/IO/SignIn.lean`): the random values of a beginning and the key of the
   tickets, the states used and each provider's keys held in references, and the calls to the token endpoint,
   the JWK Set and a user API; every decision is `Lanes/Web/Auth/OAuth.lean`'s (above).

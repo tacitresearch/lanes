@@ -28,12 +28,15 @@ def SameSite.name : SameSite → String
   | .lax => "Lax"
   | .none => "None"
 
-/-- The defaults are the safe ones: not readable by scripts, sent only over HTTPS, and not sent
-with a request another site starts, except a top-level `GET`. -/
+/-- The defaults are the safe ones: not readable by scripts, sent only over HTTPS, not sent with
+a request another site starts, except a top-level `GET`, and sent only to the host that set it. -/
 structure Cookie where
   name : String
   value : String
   path : String := "/"
+  /-- `Domain`: the cookie is also sent to every host under this one, such as a CDN on
+  `cdn.example.com` for a site on `www.example.com` that sets it for `example.com`. -/
+  domain : Option String := none
   maxAge_s : Option Nat := none
   httpOnly : Bool := true
   secure : Bool := true
@@ -46,12 +49,17 @@ def cookieOctet (c : Char) : Bool :=
 
 namespace Cookie
 
+/-- A browser keeps a cookie named with the `__Host-` prefix only if it has no `Domain`
+(`hostCookie`), so such a cookie with one is not valid. -/
 def valid (c : Cookie) : Bool :=
   token c.name && c.value.toList.all cookieOctet && c.path.toList.all cookieOctet
+    && c.domain.all (·.toList.all cookieOctet)
+    && (c.domain.isNone || !c.name.startsWith "__Host-")
 
 /-- What `header` gives after the name and value, in order. -/
 def attributes (c : Cookie) : List String :=
-  ["Path=" ++ c.path] ++ (c.maxAge_s.map fun s => "Max-Age=" ++ toString s).toList
+  ["Path=" ++ c.path] ++ (c.domain.map ("Domain=" ++ ·)).toList
+    ++ (c.maxAge_s.map fun s => "Max-Age=" ++ toString s).toList
     ++ (if c.httpOnly then ["HttpOnly"] else []) ++ (if c.secure then ["Secure"] else [])
     ++ ["SameSite=" ++ c.sameSite.name]
 
