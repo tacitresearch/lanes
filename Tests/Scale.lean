@@ -152,20 +152,20 @@ def fastest (run : IO Nat) : IO Nat :=
 def tests : IO (List (String × Bool)) := do
   let small ← (cost 1000).block
   let large ← (cost 100000).block
-  IO.println s!"scale: {messages} messages take {small} ms with 1000 actors, {large} ms with 100000"
-  IO.println s!"flood: {← (flood 1 200000).block} inputs a second from one sender, {← (flood 4 100000).block} from four; the kernel alone does {← kernelAlone 200000} turns a second"
+  IO.eprintln s!"scale: {messages} messages take {small} ms with 1000 actors, {large} ms with 100000"
+  IO.eprintln s!"flood: {← (flood 1 200000).block} inputs a second from one sender, {← (flood 4 100000).block} from four; the kernel alone does {← kernelAlone 200000} turns a second"
   let aloneSmall ← fastest (kernelWrites 10000)
   let aloneLarge ← fastest (kernelWrites 1000000)
   let shardSmall ← fastest (shardWrites 10000)
   let shardLarge ← fastest (shardWrites 1000000)
   let us (ns : Nat) := s!"{ns / writes / 1000}.{ns / writes / 100 % 10} µs"
-  IO.println s!"in place: a write to a state of 10^4 numbers takes {us aloneSmall} in the kernel and {us shardSmall} on a shard, to one of 10^6 {us aloneLarge} and {us shardLarge}"
+  IO.eprintln s!"in place: a write to a state of 10^4 numbers takes {us aloneSmall} in the kernel and {us shardSmall} on a shard, to one of 10^6 {us aloneLarge} and {us shardLarge}"
   let autoSmall ← fastest (pairWrites .auto 10000)
   let autoLarge ← fastest (pairWrites .auto 1000000)
   let onSmall ← fastest (pairWrites .on 10000)
   let onLarge ← fastest (pairWrites .on 1000000)
   let copy ← fastest (copyNs 1000000)
-  IO.println s!"in place on two busy actors: a write to a state of 10^4 numbers takes {us autoSmall} with parallel auto and {us onSmall} on, to one of 10^6 {us autoLarge} and {us onLarge}; a copy of 10^6 numbers takes {copy / 1000} µs"
+  IO.eprintln s!"in place on two busy actors: a write to a state of 10^4 numbers takes {us autoSmall} with parallel auto and {us onSmall} on, to one of 10^6 {us autoLarge} and {us onLarge}; a copy of 10^6 numbers takes {copy / 1000} µs"
   return [("scale: a message costs the same whatever the number of actors",
       large ≤ 4 * small + 50),
     ("scale: a step updates its actor's state in place, whatever its size, in the kernel",

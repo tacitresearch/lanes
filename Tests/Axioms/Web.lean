@@ -199,6 +199,49 @@ import Lanes.Semantics
 /-- info: 'Lanes.Hx.render_plain' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Hx.render_plain
 
+-- Lanes.Web.Http.Admit
+
+/-- info: 'Lanes.Http.Gate.step_arrive_eq' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Gate.step_arrive_eq
+
+/-- info: 'Lanes.Http.Gate.step_answer_eq' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Gate.step_answer_eq
+
+/-- info: 'Lanes.Http.Gate.admit_refused' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Gate.admit_refused
+
+-- Lanes.Web.Http.AdmitSound
+
+/-- info: 'Lanes.Http.Front.swap_inj' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Lanes.Http.Front.swap_inj
+
+/-- info: 'Lanes.Http.Front.conv_inj' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Front.conv_inj
+
+/-- info: 'Lanes.Http.Front.toSys_conv' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Front.toSys_conv
+
+/-- info: 'Lanes.Http.Front.toGate_answer' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Front.toGate_answer
+
+/-- info: 'Lanes.Http.Front.rel_emit' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Front.rel_emit
+
+/-- info: 'Lanes.Http.Front.World.refines' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Front.World.refines
+
+/-- info: 'Lanes.Http.Front.World.answered_le_arrived' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Front.World.answered_le_arrived
+
+/-- info: 'Lanes.Http.Front.run_answered_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Front.run_answered_le
+
+/-- info: 'Lanes.Http.Front.run_bounded' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Front.run_bounded
+
+/-- info: 'Lanes.Http.Front.pending_answered' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Front.pending_answered
+
 -- Lanes.Web.Http.Basic
 /-- info: 'Lanes.Http.parseForm_encodeForm' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.parseForm_encodeForm

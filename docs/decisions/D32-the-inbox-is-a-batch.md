@@ -1,6 +1,8 @@
 # D32. The inbox is a batch, and waiting for room is the rare path
 
-`Lanes/Actors/Mailbox.lean`, `Lanes/Actors/Runtime.lean`. Measured on one shard, for the first
+Status: Accepted
+
+`Lanes/Runtime/Mailbox.lean`, `Lanes/Runtime/IO/Shell.lean`. Measured on one shard, for the first
 time: the kernel does over two million turns a second, and a shard took fifteen thousand
 inputs. Two things cost, and the second was found only by measuring each piece alone.
 

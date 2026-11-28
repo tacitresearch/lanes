@@ -493,6 +493,6 @@ def actors (config : Config) : Kernel.Image.Codecs (Sys config) where
   msg _ := Codec.of (Msg Name Digest)
 
 def saving (config : Config) : Http.Saving (Sys config) :=
-  { actors := actors config, out := Codec.of Out }
+  { actors := actors config }
 
 end Rookery.Web

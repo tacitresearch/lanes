@@ -14,7 +14,8 @@ deadline passes. What is left in IO is reading and writing sockets.
 
 The decisions are `Gate.step`, which does not know where the gate sits. `Lanes.Web.Http.Front` has
 the gate as a system of its own (`gateSystem`), `fronted sys` with it joined in front of `sys`,
-and `served sys`, which is what `Http.serve` runs.
+and `served sys`, the specification of `Http.serve`; `Lanes.Web.Http.Admit` has the gate before the
+shard, as `Http.serve` runs it.
 -/
 
 @[expose] public section

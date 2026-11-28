@@ -8,8 +8,8 @@ import Lean
 # The inventory
 
 Every public definition of `Lanes` and `LanesCli` with one status and its evidence, read from the
-built modules: `docs/INVENTORY.md`. The rules are those of
-`docs/decisions/D47-the-inventory-is-computed.md`. This module imports `Lean`, so only the
+built modules and printed by `lanes inventory`; no committed file holds it. The rules are those
+of `docs/decisions/D47-the-inventory-is-computed.md`. This module imports `Lean`, so only the
 `lanesInventory` executable links it; `lanes` starts that with `lake exe`.
 -/
 
@@ -18,14 +18,19 @@ namespace Lanes.Cli.Inventory
 open Lean
 
 inductive Status where
-  | proved | trusted | checked | tested | spec | none
+  | proved
+  /-- A bound function whose theorems are about its Lean body: the C runs, and is trusted. -/
+  | reference
+  | trusted | checked | tested | spec | none
   deriving DecidableEq, Inhabited
 
 def Status.label : Status → String
-  | .proved => "proved" | .trusted => "trusted" | .checked => "checked"
+  | .proved => "proved" | .reference => "proved of its reference, C trusted"
+  | .trusted => "trusted" | .checked => "checked"
   | .tested => "tested" | .spec => "spec" | .none => "none"
 
-def Status.all : List Status := [.proved, .trusted, .checked, .tested, .spec, .none]
+def Status.all : List Status :=
+  [.proved, .reference, .trusted, .checked, .tested, .spec, .none]
 
 structure Entry where
   name : Name
@@ -34,7 +39,6 @@ structure Entry where
   status : Status
   evidence : String
 
-def inventoryFile : String := "docs/INVENTORY.md"
 def noneFile : String := "docs/inventory-none.md"
 
 /-! ## Reading the project -/
@@ -161,6 +165,12 @@ def inDeriving (lines : Array String) (pos : Position) : Bool :=
     || (previous.startsWith "deriving" && previous.endsWith ","))
 
 def generatedParsers : List Name := [``ParserDescr, ``TrailingParserDescr, ``Parser.Category]
+
+/-- Whether `n` is bound: `@[extern]`, so that compiled code calls C, with a Lean body beside it,
+its reference (rule 2.7). Lean reasons about the body, so a theorem of it is a theorem of the
+reference, not of the C. -/
+def isBound (env : Environment) (n : Name) : Bool :=
+  isExtern env n && env.find? n matches some (.defnInfo _)
 
 /-- Whether `n` is a theorem, or the private name Lean files a theorem's matchers under. What
 those define is part of a proof: it neither runs nor states. -/
@@ -417,9 +427,14 @@ def entries (root : System.FilePath) (f : Facts) : IO (Array Entry) := do
         (.proved, s!"through {listOf through.toList.eraseDups.toArray 2}: "
           ++ listOf (ts.map (display ·.1)).toList.eraseDups.toArray 2)
       else (.none, "")
+    let row := trusted.find? (·.1 == path)
+    let (status, evidence) :=
+      if status == .proved && isBound f.env name then
+        (.reference, evidence ++ (row.map fun (_, what) => s!"; the C: TRUSTED.md: {what}").getD "")
+      else (status, evidence)
     let (status, evidence) :=
       if status != .none then (status, evidence)
-      else if let some (_, what) := trusted.find? (·.1 == path) then (.trusted, s!"TRUSTED.md: {what}")
+      else if let some (_, what) := row then (.trusted, s!"TRUSTED.md: {what}")
       else if !(tests checked).isEmpty then (.checked, listOf (tests checked))
       else if !(tests tested).isEmpty then (.tested, listOf (tests tested))
       else (.none, "")
@@ -459,8 +474,8 @@ def summary (es : Array Entry) : String := Id.run do
 def render (es : Array Entry) : String := Id.run do
   let mut out := "# Inventory\n\n"
     ++ "Every public definition of `Lanes` and `LanesCli`, with its status and the evidence for it.\n"
-    ++ "Generated from the built modules by `lake exe lanes lint --fix` (`LanesCli/Inventory.lean`);\n"
-    ++ "do not edit. What each status means, and what is not listed, is in\n"
+    ++ "Printed from the built modules by `lake exe lanes inventory` (`LanesCli/Inventory.lean`).\n"
+    ++ "What each status means, and what is not listed, is in\n"
     ++ "`docs/decisions/D47-the-inventory-is-computed.md`. The definitions of `Lanes/` with status\n"
     ++ "none are on `docs/inventory-none.md`, which only shrinks. `lake exe lanes stats` counts\n"
     ++ "them by area.\n"
@@ -489,11 +504,6 @@ abbrev Finding := String × Nat × String × String
 
 def check (root : System.FilePath) (es : Array Entry) : IO (Array Finding) := do
   let mut findings := #[]
-  let expected := render es
-  let current ← if ← (root / inventoryFile).pathExists then IO.FS.readFile (root / inventoryFile)
-    else pure ""
-  if current != expected then
-    findings := findings.push (inventoryFile, 1, "inventory", "out of date: run `lake exe lanes lint --fix`")
   let text ← if ← (root / noneFile).pathExists then IO.FS.readFile (root / noneFile) else pure ""
   let allow := allowed text
   let none := es.filter fun e => e.status == .none && e.module.getRoot == `Lanes
@@ -516,12 +526,9 @@ def load (root : System.FilePath) : IO (Array Entry) := do
   let env ← importModules ((← imports root).map ({ module := · })) {}
   entries root (← readFacts root env)
 
-def counts (es : Array Entry) : String :=
-  ", ".intercalate (Status.all.map fun s => s!"{(es.filter (·.status == s)).size} {s.label}")
-
-/-- `lanesInventory [--fix | --check | --summary | --list <status>]`: write the inventory and
-print its counts, write it and then check, only check, print the counts by area, or print the
-library's definitions of a status. -/
+/-- `lanesInventory [--check | --summary | --list <status>]`: print the inventory, check the
+definitions without evidence against `docs/inventory-none.md`, print the counts by area, or
+print the library's definitions of a status. -/
 def run (args : List String) : IO UInt32 := do
   let root : System.FilePath := "."
   let es ← load root
@@ -534,13 +541,10 @@ def run (args : List String) : IO UInt32 := do
       if e.status.label == s && e.module.getRoot == `Lanes then
         IO.println s!"{pathOfModule e.module}:{e.line}\t{display e.name}\t{e.evidence}"
     return 0
+  | [] =>
+    IO.print (render es)
+    return 0
   | _ =>
-  let write := args.isEmpty || args == ["--fix"]
-  if write then
-    IO.FS.writeFile (root / inventoryFile) (render es)
-    if args.isEmpty then
-      IO.println s!"wrote {inventoryFile}: {es.size} definitions, {counts es}"
-      return 0
   let findings ← check root es
   for (file, line, rule, message) in findings do
     IO.println s!"{file}:{line}: [{rule}] {message}"

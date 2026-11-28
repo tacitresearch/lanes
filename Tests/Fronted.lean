@@ -273,14 +273,14 @@ def tests : List (String × Bool) :=
     (maxDepth := some 8)
   [ ("fronted: each request is answered exactly once, whatever the timers do, and its memo "
         ++ "passes the gate by",
-      two.ok && two.complete && two.witnesses.length == 5),
+      two.ok && two.witnesses.length == 5),
     ("fronted: an input that is no request reaches the system behind the gate",
-      noted.ok && noted.complete
+      noted.ok
         && noted.witnesses.any fun (name, _) => name == "a memo passes the gate by"),
     ("fronted: a request the bridge refuses is answered without entering the system",
-      refused.ok && refused.complete),
+      refused.ok),
     ("fronted: beyond maxPending a request gets 503 and is still answered exactly once",
-      full.ok && full.complete),
+      full.ok),
     ("fronted: a request id used twice is answered twice, and the check says so",
       match reused.failure with
       | some (.violated "no request is answered twice" _) => true
@@ -291,17 +291,17 @@ def tests : List (String × Bool) :=
       | _ => false),
     ("fronted: no id is answered more often than it arrived and pending deadlines stay armed, "
         ++ "though actors crash and links lose and reorder",
-      lossy.ok && lossy.complete && lossy.witnesses.length == 2),
+      lossy.ok && lossy.witnesses.length == 2),
     ("fronted: the same when every link but the one from outside to the gate duplicates, "
         ++ "to depth 10",
-      duplicating.ok && duplicating.witnesses.length == 2),
+      duplicating.passed && duplicating.witnesses.length == 2),
     ("fronted: at most once per arrival needs the link from outside to the gate not to duplicate",
       match duplicatedOutside.failure with
       | some (.violated "no request is answered more often than it arrived" _) => true
       | _ => false),
     ("gate alone: no id is answered more often than it arrived, whatever arrives on its two "
         ++ "inputs, though it crashes and its links lose and reorder",
-      alone.ok && alone.complete),
+      alone.ok),
     ("gate alone: on the link a join gives it from outside, which duplicates, one arrival is "
         ++ "answered twice",
       match aloneInJoin.failure with
@@ -309,7 +309,7 @@ def tests : List (String × Bool) :=
       | _ => false),
     ("gate alone, on that link: a pending request's deadline stays armed, can fire and is "
         ++ "armed again by no step, and a gate that cannot crash stays up, to depth 9",
-      liveInJoin.ok && liveInJoin.witnesses.length == 1),
+      liveInJoin.passed && liveInJoin.witnesses.length == 1),
     ("gate alone: a request leaves the pending list only in a step that emits its answer",
       gateLeavingIsAnswered) ]
 
@@ -320,7 +320,7 @@ open Std Std.Async Tests.Fixtures.Bank Tests.Fixtures.BankWeb
 structure Node where
   port : UInt16
   stop : Async Unit
-  trace : BaseIO (List (Event (frontedSig (shardSig (sig Acct)))))
+  trace : BaseIO (List (Event (admittedFrontedSig (shardSig (sig Acct)))))
 
 def live : Async (List (String × Bool)) := do
   let shardOf (account : Acct) : Nat := account.val % 2
@@ -356,7 +356,11 @@ def live : Async (List (String × Bool)) := do
   let elsewhere ← Tests.Web.fetch second.port "/accounts/0"
   for node in nodes do node.stop
   let traces ← nodes.toList.mapM (·.trace)
-  let creditsIn (events : List (Event (frontedSig (shardSig (sig Acct))))) : Nat :=
+  let fresh : Outside (admittedFrontedSig (shardSig (sig Acct))) (List Http.ReqId) :=
+    { init := [], allow := fun used x => match x with
+        | .inl (id, _) => if id ∈ used then none else some (id :: used)
+        | .inr _ => some used }
+  let creditsIn (events : List (Event (admittedFrontedSig (shardSig (sig Acct))))) : Nat :=
     events.countP fun
       | .input (.inr (.inr ⟨_, .credit _⟩)) => true
       | _ => false
@@ -368,8 +372,8 @@ def live : Async (List (String × Bool)) := do
     ("fronted: the same the other way", back.startsWith "HTTP/1.1 200" && returned),
     ("fronted: each credit entered the other shard as a parcel, past its gate",
       traces.map creditsIn == [1, 1]),
-    ("fronted: each front does only what the gate's model of its outside allows",
-      traces.all (frontedOutside (shardSig (sig Acct))).allows),
+    ("fronted: each shard is handed each request its gate admits once, under an id of its own",
+      traces.all fresh.allows),
     ("fronted: a known limit, a response put out on another shard does not come back to the "
         ++ "front that took the request, which answers 504",
       elsewhere.startsWith "HTTP/1.1 504") ]
@@ -377,7 +381,8 @@ def live : Async (List (String × Bool)) := do
 /-! The desk behind a front, over a socket. -/
 
 /-- The handler of the desk's memos holds the shard, so a request waits in the inbox, which has
-room for one, and the next finds it full. -/
+room for one, and the next finds it full. The first request's answer is handed over before its
+memo, so it is answered before the shard is held. -/
 def busyTest : Async (List (String × Bool)) := do
   let entered : IO.Promise Unit ← IO.Promise.new
   let release : IO.Promise Unit ← IO.Promise.new
@@ -394,7 +399,7 @@ def busyTest : Async (List (String × Bool)) := do
   let mut held := 0
   for _ in [0:200] do
     held ← server.inFlight
-    if held == 2 then break
+    if held == 1 then break
     Async.sleep 10
   let third ← Tests.Web.fetch port "/"
   let during ← server.inFlight
@@ -404,9 +409,9 @@ def busyTest : Async (List (String × Bool)) := do
   server.stop
   return [
     ("fronted: a request that finds the inbox full is answered 503 at once",
-      held == 2 && third.startsWith "HTTP/1.1 503"),
-    ("fronted: it is not in flight, and those that were are answered when the shard goes on",
-      during == 2 && answers.all (·.startsWith "HTTP/1.1 200") && after == 0) ]
+      held == 1 && third.startsWith "HTTP/1.1 503"),
+    ("fronted: it is not in flight, and the one that was is answered when the shard goes on",
+      during == 1 && answers.all (·.startsWith "HTTP/1.1 200") && after == 0) ]
 
 def deskPeers (port : UInt16) : Peers.Config deskSig :=
   { listen := { port }, home := fun _ => pure none, id := Codec.unit, msg := fun _ => Ask.codec
@@ -449,7 +454,7 @@ def nodeDurable : Async (List (String × Bool)) := do
   let fetched (method path' body : String) : Async String := do
     try
       let log ← Journal.Store.open
-        (sys := fronted ((bank Acct 100).shard here) Tests.Fixtures.BankWeb.bridge.shard {})
+        (sys := admittedFronted ((bank Acct 100).shard here) Tests.Fixtures.BankWeb.bridge.shard)
         { path
           input := Codec.sum (Codec.pair Codec.nat Request.codec)
             (Codec.sum (Tests.Fixtures.Bank.Request.codec Codec.fin) (Codec.sigma Codec.fin msg)) }
@@ -475,11 +480,11 @@ def durable : Async (List (String × Bool)) := do
   let journal : System.FilePath := s!"{dir}/lanes-fronted-{← IO.monoNanosNow}.journal"
   let start := do
     let log ← Journal.Store.open
-      (sys := fronted (bank Acct 100) Tests.Fixtures.BankWeb.bridge {})
+      (sys := admittedFronted (bank Acct 100) Tests.Fixtures.BankWeb.bridge)
       { path := journal
         input := Codec.sum (Codec.pair Codec.nat Request.codec)
           (Tests.Fixtures.Bank.Request.codec Codec.fin)
-        actors := some (frontedActors (actors Codec.fin 100) Response.codec
+        actors := some (admittedFrontedActors (actors Codec.fin 100)
           Tests.Fixtures.BankWeb.bridge) }
     serveFronted (bank Acct 100) Tests.Fixtures.BankWeb.bridge { port := 0 }
       { record := true, snapshotEvery := 4 } (log := some log)

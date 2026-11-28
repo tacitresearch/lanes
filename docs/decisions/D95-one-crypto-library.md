@@ -1,5 +1,7 @@
 # D95. One crypto library: the OpenSSL Lean ships
 
+Status: Accepted
+
 `native/lanes.c`, `Lanes/Lib/Crypto/Native.lean`, `lakefile.lean`. The owner approved dropping
 libsodium, so that building and running a Lanes application needs no C library beyond what
 Lean's toolchain ships. This supersedes the part of D46 that chose libsodium as a system

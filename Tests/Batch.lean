@@ -80,7 +80,7 @@ def tests : List (String × Bool) :=
   let lost := check faulty 1
   let twice := check repeating 0
   [ ("batch: with requests lost and reordered and a crash, the server refines its service",
-      lost.ok && lost.complete),
+      lost.ok),
     ("batch: the check is not vacuous: two requests are answered",
       lost.witnesses.length == 1),
     ("batch: a request handed over twice breaks refinement",

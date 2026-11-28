@@ -1,5 +1,7 @@
 # D12. Template tags have no space after `<`
 
+Status: Accepted
+
 `<div>` is a tag; `a < b` is a comparison. The grammar requires the tag name to follow `<`
 directly.
 

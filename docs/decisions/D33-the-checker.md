@@ -1,7 +1,9 @@
 # D33. The checker: measure, then normalise once per state
 
+Status: Accepted
+
 `Lanes/Check/{Search,SearchSound,System,SystemSound,EquivDecide}.lean`,
-`Lanes/Actors/{Inspect,Scheduler}.lean`. The checker explored about 15,000 states per second.
+`Lanes/Core/Inspect.lean`, `Lanes/Core/Scheduler.lean`. The checker explored about 15,000 states per second.
 The work was to find out why before changing anything, and to keep every theorem about the
 search that runs.
 

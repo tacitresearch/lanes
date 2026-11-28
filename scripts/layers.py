@@ -115,10 +115,9 @@ def report_moves(mods):
 
 
 TEXT = (".lean", ".md", ".py", ".yml", ".yaml", ".toml", ".sh", ".tmpl", ".json")
-SKIP = ("./.lake", "./.git", "./docs/decisions", "./docs/history")
+SKIP = ("./.lake", "./.git", "./docs/decisions")
 # Written by `lanes lint --fix`, or a record of the past, or this table.
-GENERATED = {"docs/INVENTORY.md", "docs/STATUS.md", "docs/changes/before-fragments.md",
-             "CHANGELOG.md", "scripts/layers.py"}
+GENERATED = {"docs/changes/before-fragments.md", "CHANGELOG.md", "scripts/layers.py"}
 
 
 def report_cost(mods):
@@ -171,7 +170,7 @@ def report_cost(mods):
     print(f"{moved} files move into packages/, {len(renamed)} of them with a new module name")
     print(f"{import_lines} import lines name a renamed module")
     print(f"{path_refs} references to an old path and {name_refs} to an old module name "
-          f"outside import lines (docs/decisions, docs/history and generated files keep theirs or are rewritten)")
+          f"outside import lines (docs/decisions and generated files keep theirs or are rewritten)")
     print(f"{len(files_touched)} files change, the moved ones included; lines changed by place:")
     for top, n in by_dir.most_common():
         print(f"  {top:24} {n:5}")

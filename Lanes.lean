@@ -39,10 +39,13 @@ public import Lanes.Data.Schema
 public import Lanes.Durable.Disk
 public import Lanes.Durable.Frame
 public import Lanes.Durable.IO.Journal
+public import Lanes.Durable.IO.Ship
 public import Lanes.Durable.Journal
 public import Lanes.Durable.Migration
 public import Lanes.Durable.OutputId
 public import Lanes.Durable.Reading
+public import Lanes.Durable.Restore
+public import Lanes.Durable.Ship
 public import Lanes.Durable.Snapshot
 public import Lanes.Durable.Upgrade
 public import Lanes.Lib.Crypto.Certificate
@@ -113,6 +116,7 @@ public import Lanes.Runtime.Log
 public import Lanes.Runtime.Pace
 public import Lanes.Runtime.Shard
 public import Lanes.Runtime.Wave
+public import Lanes.Runtime.WavePlan
 public import Lanes.Web.Auth.IdToken
 public import Lanes.Web.Auth.Jose
 public import Lanes.Web.Auth.Login
@@ -122,6 +126,7 @@ public import Lanes.Web.Auth.Token
 public import Lanes.Web.Html.Basic
 public import Lanes.Web.Html.Htmx
 public import Lanes.Web.Html.Syntax
+public import Lanes.Web.Http.Admit
 public import Lanes.Web.Http.Basic
 public import Lanes.Web.Http.Conn
 public import Lanes.Web.Http.Cookie
@@ -139,6 +144,7 @@ public import Lanes.Web.Http.SigV4
 public import Lanes.Web.Http.Waiting
 public import Lanes.Web.Http.Wire
 public import Lanes.Web.Http.WireSpec
+public import Lanes.Web.S3.Backup
 public import Lanes.Web.S3.Basic
 public import Lanes.Web.S3.Multipart
 public import Lanes.Web.S3.Post

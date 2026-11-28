@@ -1,6 +1,8 @@
 # D29. A snapshot is a restart without the crash
 
-`Lanes/Actors/{Kernel,Journal,Snapshot,Disk}.lean`, `Lanes/Env/Journal.lean`. A journal that only
+Status: Accepted
+
+`Lanes/Runtime/Kernel.lean`, `Lanes/Durable/Journal.lean`, `Lanes/Durable/Snapshot.lean`, `Lanes/Durable/Disk.lean`, `Lanes/Durable/IO/Journal.lean`. A journal that only
 grows makes a restart take as long as the shard has lived. A snapshot saves the kernel, and the
 journal is cut at the point of the save.
 
@@ -27,7 +29,7 @@ journal is cut at the point of the save.
   entirely is refused, not repaired (`Journal.saved?`).
 - *The order of a save* is: mark the journal, put the snapshot in place, replace the journal by
   one that starts at the mark. It is a pure function, `Journal.saveWrites`, over a model of the
-  two files (`Lanes/Actors/Disk.lean`): a journal that is appended to, where the death of the
+  two files (`Lanes/Durable/Disk.lean`): a journal that is appended to, where the death of the
   process leaves any number of the first bytes of the append, and files that are replaced
   whole. What a start computes from the files is `Disk.load`: `open?`, `saved?`, `resume`.
   `Disk.Holds.save_crash`: if the process dies at any byte of the mark or between any two of

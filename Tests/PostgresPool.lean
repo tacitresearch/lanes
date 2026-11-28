@@ -91,6 +91,6 @@ def properties : List (Property World) :=
 def checks : IO (List (String × Bool)) := do
   let r := report
   return [("postgres pool: the bounds hold and a broken connection is never handed out again",
-    r.ok && r.complete)]
+    r.ok)]
 
 end Tests.PostgresPool

@@ -209,7 +209,6 @@ def bridge (s : Settings) : Bridge sig where
 
 def saving (config : Config) : Http.Saving (system config) where
   actors := { id := Codec.unit, state := fun _ => Codec.of State, msg := fun _ => Request.codec }
-  out := Response.codec
 
 /-! ## Where a request arrives -/
 
@@ -253,7 +252,7 @@ structure Deployment where
   server : Http.ServerConfig
   signIn : OAuth.SignIn.Config
 
-abbrev Site (d : Deployment) := Http.served (system d.config) (bridge d.settings) d.server.gate
+abbrev Site (d : Deployment) := Http.admitted (system d.config) (bridge d.settings)
 
 def start (d : Deployment) : Async (Http.Server (Site d)) := do
   let signIn ← OAuth.SignIn.start d.signIn

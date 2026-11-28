@@ -42,10 +42,11 @@ def kept : Bool :=
 
 #guard kept
 
-/-- The gate passes the declaration on, so the deployed system releases strangers too. -/
+/-- The shard behind the gate passes the declaration on, so the deployed system releases
+strangers too. -/
 example (config : Config Web.Name) (bridge : Http.Bridge (sig Web.Name Web.Digest))
-    (gate : Http.GateConfig) (n : Web.Name) :
-    ((Http.served (Web.Sys config) bridge gate).actor (.inr (.user n))).fresh none = true :=
+    (n : Web.Name) :
+    ((Http.admitted (Web.Sys config) bridge).actor (.inr (.user n))).fresh none = true :=
   rfl
 
 end Ledger.Release

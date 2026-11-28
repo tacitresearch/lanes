@@ -1,5 +1,6 @@
 import Lanes
 import BankWeb
+import Lanes.Testing
 
 /-!
 What the page asks for and what the bridge makes of it, run by `lake test`: every request the
@@ -53,8 +54,5 @@ def tests : List (String × Bool) :=
       page.contains "hx-get=\"/accounts/2\" hx-trigger=\"load, transferred from:body\""
         && page.contains "<form hx-post=\"/transfer\" hx-target=\"#result\">") ]
 
-def main : IO UInt32 := do
-  let failed := tests.filter (!·.2)
-  for (name, ok) in tests do
-    IO.println s!"{if ok then "ok  " else "FAIL"} {name}"
-  return if failed.isEmpty then 0 else 1
+def main (args : List String) : IO UInt32 :=
+  Lanes.Testing.report args (Lanes.Testing.Result.tests tests .test)

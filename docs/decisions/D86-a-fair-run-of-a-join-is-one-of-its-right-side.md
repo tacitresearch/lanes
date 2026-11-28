@@ -1,5 +1,7 @@
 # D86. A fair run of a join is a fair run of its right side too, by the join with its sides exchanged
 
+Status: Accepted
+
 *Supersedes the limit of D41 that the right side is not done.*
 
 `Lanes/Proof/JoinSound.lean` (section `ThinnedRight`), `Lanes/Semantics/FairJoin.lean` (`The

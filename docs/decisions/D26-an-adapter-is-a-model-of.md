@@ -1,6 +1,8 @@
 # D26. An adapter is a model of the outside and a handler, tested against each other
 
-`Lanes/Actors/Outside.lean`, `Lanes/Env/Clock.lean`. Whatever a system does not contain (a
+Status: Accepted
+
+`Lanes/Outside/Basic.lean`, `Lanes/Outside/IO/Clock.lean`. Whatever a system does not contain (a
 client, a clock, another service) reaches it through outputs and inputs, never through an
 effect that does IO, so `step` stays pure and every answer from outside is in the journal when
 a shard is replayed. An adapter for such a thing is two parts:

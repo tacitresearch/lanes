@@ -44,7 +44,7 @@ def tests : IO (List (String × Bool)) := do
   let outputs := [fixed.renderSystem, bug.renderSystem]
   return [("tutorial: it has lean blocks", !lean.isEmpty),
       ("tutorial: the counter of step 3 passes its check", fixed.ok),
-      ("tutorial: the bug of step 3 fails it", !bug.ok)]
+      ("tutorial: the bug of step 3 fails it", !bug.passed)]
     ++ lean.zipIdx.map (fun ((_, body), k) =>
       (s!"tutorial: lean block {k + 1} is in Tests/Tutorial/", code.any (occursIn body)))
     ++ text.zipIdx.map (fun (body, k) =>

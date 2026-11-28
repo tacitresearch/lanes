@@ -33,7 +33,7 @@ every module a row names exists, and so does every path it cites.
 | `oracles/go` | Go's standard library, `golang.org/x/time` and Prometheus's `expfmt` | Go 1.24.7, x/time 0.11.0, prometheus/common 0.67.5 | `oracles/go/go.mod`, `oracles/go/go.sum` | Base64, IP addresses, times, JSON, media types, rate limits, URLs, XML, mail addresses, the metrics page; and, with Node and h11 (`oracles/go/requests/requests.py`, by hand), the request reader |
 | `oracles/botocore` | botocore, and `cryptography` for the signatures it is given | 1.44.12, cryptography 50.0.2 | `oracles/botocore/requirements.txt` | Signature Version 4; CloudFront's signed URLs (`oracles/botocore/cloudfront.jsonl`), signed with the published test keys of `oracles/botocore/keys/` |
 | `oracles/jwcrypto` | jwcrypto | 1.6.2 | `oracles/jwcrypto/requirements.txt` | JWS in compact form and JWK Sets |
-| `oracles/moto` | moto's server, S3, SES API v2 and SQS | 5.2.6 | `oracles/moto/requirements.txt` | the recorded runs of the object store, multipart, email and queue models, and of `POST` forms |
+| `oracles/moto` | moto's server, S3, SES API v2 and SQS | 5.2.6 | `oracles/moto/requirements.txt` | the recorded runs of the object store, multipart, email and queue models, of `POST` forms, and of a journal shipped and restored |
 | `oracles/postgres` | PostgreSQL | 16 (16.15 recorded) | the CI job's `postgresql-16` | the store model's recorded runs |
 
 ## Protocol modules
@@ -84,11 +84,12 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Web/Html/Syntax.lean` | | The template syntax, elaborated to `Html.Basic`'s values |
 | `Lanes/Web/Http/Basic.lean` | | HTTP as data, not text |
 | `Lanes/Web/Http/Conn.lean` | | A connection's decisions, proved (`Lanes/Web/Http/ConnSound.lean`); its bytes are `Wire`'s and `ReadRequest`'s |
-| `Lanes/Web/Http/Cookie.lean` | | Proved to read back what it writes (`Lanes/Web/Http/CookieSound.lean`); Go's `http.ParseCookie` is owed (`docs/STDLIB.md`) |
+| `Lanes/Web/Http/Cookie.lean` | | Proved to read back what it writes (`Lanes/Web/Http/CookieSound.lean`); Go's `http.ParseCookie` is owed |
 | `Lanes/Web/Http/Front.lean` | | Decisions, not a format |
 | `Lanes/Web/Http/Gate.lean` | | Decisions, not a format |
 | `Lanes/Web/Http/Grammar.lean` | | RFC 9110's tokens and field values, used by the reader and the writer |
-| `Lanes/Web/Http/JournalName.lean` | | A journal's name, read back only as it is written, and a migration across gates; tested (`Tests/Web.lean`) |
+| `Lanes/Web/Http/Admit.lean` | | Decisions and a system, not a format |
+| `Lanes/Web/Http/JournalName.lean` | | A journal's name, read back only as it is written; tested (`Tests/Web.lean`) |
 | `Lanes/Web/Http/Loopback.lean` | | A front end with no socket for tests, not a format: its bytes are `Conn`'s and `Wire`'s |
 | `Lanes/Web/Http/Ops.lean` | | Routes and access for the operators' endpoints; their page is `Metrics`' |
 | `Lanes/Web/Http/ReadRequest.lean` | `oracles/go/requests` | Go's, Node's and h11's servers on `Tests/ReadRequest.corpus`, by hand |
@@ -100,6 +101,7 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Web/Http/Waiting.lean` | | Request ids, not a format |
 | `Lanes/Web/Http/Wire.lean` | `oracles/go/requests` | The writer proved against the reader (`Lanes/Web/Http/WireSound.lean`); the responses it reads against `openssl s_server` (`Tests/Tls.lean`) and moto (`oracles/moto`) |
 | `Lanes/Web/Http/WireSpec.lean` | | The spec the wire format is proved against |
+| `Lanes/Web/S3/Backup.lean` | `oracles/moto/s3-backup.jsonl` | A conditional put made twice against moto, read by `S3.shipped` as stored and then as there already, and a journal shipped through `S3.backup` and restored (`Tests/Oracle/Service/S3Backup.lean`) |
 | `Lanes/Web/S3/Basic.lean` | `oracles/moto`, `oracles/botocore` | Its calls signed as botocore signs, and run against moto |
 | `Lanes/Web/S3/Multipart.lean` | `oracles/moto/s3-multipart.jsonl`, `Tests/S3Upload.lean` | The flow and the calls by hand against moto (`Tests/Oracle/Service/S3Multipart.lean`); botocore 1.44's presigned `UploadPart` recorded as a vector; the flow model-checked against `Lanes/Outside/Multipart.lean`. Known: moto 5.2.6 answers `500`, not `404 NoSuchUpload`, to a part sent after an abort |
 | `Lanes/Web/S3/Post.lean` | `oracles/moto/s3-post.jsonl`, `Tests/S3Upload.lean` | Forms posted to moto (`Tests/Oracle/Service/S3Post.lean`): moto reads the form and stores the file at its key, with its type. Known: moto 5.2.6 reads no policy, so it admits a file over the range, another key and an expired policy, which `Post.check` refuses as S3 documents; that check is AWS's documented example and botocore 1.44's `generate_presigned_post`, recorded as vectors, and the policy is proved to read back (`S3.Post.form_policy`) |

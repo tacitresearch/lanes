@@ -1,7 +1,0 @@
-### Deterministic scheduler
-
-Where: `Lanes/Core/{Scheduler,FairScheduler}.lean`, `Lanes/Check/Fuzz.lean`.
-
-- Seeded runs, replayable event lists, drivers for the outside world.
-- `Check.fuzz` runs many seeded runs with the environment's faults against `always` and `sometimes` properties and reports the seed and trace of a failure.
-- `FairScheduler` takes the event the system has owed longest, counting a timer that is armed again as owed from then; its run is a fair run of the proof layer.

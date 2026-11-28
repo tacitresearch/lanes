@@ -1,5 +1,7 @@
 # D73. The shard chooses from its own timing whether a batch's steps are worked out in parallel
 
+Status: Accepted
+
 D64 let a shard's actors step in parallel within a wave, behind `Runtime.Config.workers`, off by
 default. On the warm machine it gained 40–56% where each step does real work (`lanes-heavy-par`)
 and cost about 10% where steps are trivial (`lanes-many-par`); the kernel alone cost about a

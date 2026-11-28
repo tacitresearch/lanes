@@ -1,7 +1,9 @@
 # D60. Examples are for reading, fixtures are for the tests
 
-There were two places for applications: `Examples/`, a library of the root package with small
-reference apps, and `systems/`, three Lake packages that depend on Lanes by path. Ten test files
+Status: Partly superseded by D63 (the examples' proofs copied into the fixtures)
+
+There were two places for applications: `Examples/` (removed), a library of the root package with small
+reference apps, and `systems/` (removed), three Lake packages that depend on Lanes by path. Ten test files
 imported `Examples.*`, the axiom gate gated their theorems, and the inventory counted them as
 evidence, so an example could not be made clearer for its reader without touching the tests.
 
@@ -16,7 +18,7 @@ keep the hyphens.
 What the tests need is in the root package, in `Tests/Fixtures/`, under `Tests.Fixtures.*`: the
 bank, its web front, the key-value store, election and the watchdog, and their proofs, which the
 axiom gate and the inventory cite (`Link.reliable` is proved only through the watchdog's
-theorems). They are the files that were in `Examples/`, moved; the examples are copies of them
+theorems). They are the files that were in `Examples/` (removed), moved; the examples are copies of them
 written for reading, with their own namespaces (`Bank`, `KV`). The two may now differ, and a
 change for the reader is not a change to the tests. The cost is that the small proofs are
 compiled twice in CI.

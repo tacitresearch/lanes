@@ -1,10 +1,12 @@
 # D45. Everything is proved; the checker finds bugs, a proof is the evidence
 
+Status: Accepted
+
 Lanes is for software that an agent writes and nobody reads line by line. That works only if
 what the agent ships carries its own evidence, and the only evidence that does not need a person
 to weigh it is a proof the Lean kernel checks. So the rule is no longer "library and protocol
 code is proved, application code is model-checked": every definition Lanes ships, and every
-application built in `systems/`, is proved against a spec, or binds something outside Lean that
+application built in `examples/`, is proved against a spec, or binds something outside Lean that
 is named in `TRUSTED.md`, or is IO that only performs and is named there too.
 
 The model checker keeps its place before a proof (rule 5.1): it finds the bug, the missing

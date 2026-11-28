@@ -157,29 +157,29 @@ def tests : List (String × Bool) :=
   let duplicatedOutside := checkArrivals [(1, get ["bad"])] (hostile fun _ _ => true)
     (maxDepth := some 8)
   [ ("gate: each request is answered exactly once, whatever the timers do",
-      two.ok && two.complete && two.witnesses.length == 4),
+      two.ok && two.witnesses.length == 4),
     ("gate: a request the bridge refuses is answered without entering the system",
-      refused.ok && refused.complete),
+      refused.ok),
     ("gate: beyond maxPending a request gets 503 and is still answered exactly once",
-      full.ok && full.complete),
+      full.ok),
     ("gate: exactly once needs distinct request ids, which the adapter allocates",
-      !reused.ok),
+      !reused.passed),
     ("gate: exactly once needs a gate that does not crash, which one shard guarantees",
       match crashing.failure with
       | some (.deadlock _) => true
       | _ => false),
     ("gate: no id is answered more often than it arrived and pending deadlines stay armed, "
         ++ "though actors crash and links lose and reorder",
-      lossy.ok && lossy.complete && lossy.witnesses.length == 2),
+      lossy.ok && lossy.witnesses.length == 2),
     ("gate: the same when every link but the one from outside duplicates, to depth 12",
-      duplicating.ok && duplicating.witnesses.length == 2),
+      duplicating.passed && duplicating.witnesses.length == 2),
     ("gate: at most once per arrival needs the link from outside not to duplicate",
       match duplicatedOutside.failure with
       | some (.violated "no request is answered more often than it arrived" _) => true
       | _ => false),
     ("gate: a pending request's deadline can fire and firing it removes the request, with and "
         ++ "without faults; a gate that cannot crash stays up; no step arms a deadline again",
-      two.ok && two.complete && full.ok && full.complete && lossy.ok && lossy.complete),
+      two.ok && full.ok && lossy.ok),
     ("gate: a request leaves the pending list only in a step that emits its answer",
       leavingIsAnswered) ]
 

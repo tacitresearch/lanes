@@ -1,5 +1,7 @@
 # D49. The server reads requests by a strict profile, and every refusal closes the connection
 
+Status: Accepted
+
 The server is to read HTTP/1.1 itself, on `Std.Net`, so that what it accepts is decided by a
 proved reader rather than by `Std.Http`. Request smuggling lives in the gap between two parsers
 that frame the same bytes differently: a proxy that reads `Transfer-Encoding` and a backend that
@@ -10,7 +12,7 @@ that every reasonable parser frames the same way, and to refuse the rest. RFC 91
 of these choices to the recipient ("MAY", "either reject or replace"); the reader takes the
 rejecting branch each time. Stricter than RFC 9112 is allowed; looser is a bug.
 
-`Request.read limits bytes pos` (`Lanes/Http/ReadRequest.lean`) looks at the bytes from `pos` and
+`Request.read limits bytes pos` (`Lanes/Web/Http/ReadRequest.lean`) looks at the bytes from `pos` and
 answers one of three things: it needs more; here is a request and the index just after it; or
 refuse with a status. A refusal is final: the server answers it and closes the connection,
 since after bytes it cannot frame it cannot know where the next request starts. After a request,
@@ -109,8 +111,8 @@ chunks takes six bytes on the wire for each byte of data.
 
 ## What is proved and what is tested
 
-The reader is total (no `partial`), and these are proved (`Lanes/Http/ReadRequestSound.lean`,
-every one on the standard axioms alone, `Tests/Axioms/Http.lean`):
+The reader is total (no `partial`), and these are proved (`Lanes/Web/Http/ReadRequestSound.lean`,
+every one on the standard axioms alone, `Tests/Axioms/Web.lean`):
 
 - *Answers stay.* What the reader makes of the first `n` bytes is that it needs more, or what
   it makes of all of them (`Request.read_extract`); an answer given stays whatever arrives after
@@ -149,7 +151,7 @@ the whole; and each limit at its edge.
 
 ## Against other parsers
 
-`scripts/requests.py` puts the corpus to Go 1.24's `net/http`, Node 22's `http` (llhttp, not
+`oracles/go/requests/requests.py` puts the corpus to Go 1.24's `net/http`, Node 22's `http` (llhttp, not
 lenient) and h11 0.16. No disagreement is looser: where the reader reads a request, every other
 parser reads the same one, with the same method and body length. It is stricter on 132 verdicts
 out of 390, all decided above: the target's characters and escapes, the absolute and asterisk

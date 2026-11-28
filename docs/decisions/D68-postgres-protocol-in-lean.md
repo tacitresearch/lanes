@@ -1,5 +1,7 @@
 # D68. PostgreSQL is spoken in Lean, and a transactional store is a model
 
+Status: Accepted
+
 Applications keep their state as actor state with a journal, and that stays the default. Some
 must share a database with other programs, or want SQL and its indexes. This decision is how a
 Lanes system talks to PostgreSQL, and what a theorem about such a system may assume of it.
@@ -32,7 +34,7 @@ protocol is not one vendor's: CockroachDB, YugabyteDB, Neon, Aurora, AlloyDB, Ma
 others speak it, as many servers speak HTTP. What is a vendor's is the claim that a given server
 behaves like the store model at an isolation level, and that claim is a premise, not code. The
 model of the class is in `Lanes/Outside/Store/`, where D61 puts models of external systems. The
-owner may still prefer the client in an `integrations/postgres` package; nothing in `Lanes/`
+owner may still prefer the client in an `integrations/postgres` (removed) package; nothing in `Lanes/`
 imports it but its tests.
 
 ## In scope now

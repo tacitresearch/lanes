@@ -1,7 +1,9 @@
 # D27. Liveness: infinite runs, weak fairness per obligation, leads-to
 
+Status: Accepted
+
 `Lanes/Semantics/Liveness.lean`, `Lanes/Semantics/FairRuns.lean`,
-`Lanes/Semantics/GateLive.lean`. Everything proved before this was safety. "Every request is
+`Lanes/Semantics/GateLive.lean` (removed). Everything proved before this was safety. "Every request is
 eventually answered" is about infinite runs, and only about those in which the system is not
 held back forever.
 
@@ -79,7 +81,7 @@ Consequences:
   (`System.Reachable.exists_fair_run`) and a leads-to theorem is never true for lack of runs
   (`System.LeadsTo.reachable`). It holds for every system and environment model with no
   assumption, infinitely many identities included. The fair run is the one `FairScheduler`
-  makes (`Lanes/Actors/FairScheduler.lean`, executable, checked on runs in `Tests/Fair.lean`):
+  makes (`Lanes/Core/FairScheduler.lean`, executable, checked on runs in `Tests/Fair.lean`):
   it keeps the owed events in a queue and takes the one owed longest. The queue needs no list
   of all actors, because an event changes the timers of one actor at most, and that is what
   makes the proof work for an infinite signature. Being due is computable (`SysState.owed`,
@@ -91,7 +93,7 @@ Consequences:
   that is armed again before its turn does not fire. The scheduler has turns and no clock, so
   a keep-alive stays quiet under it only when the step that arms it comes round first
   (`Tests/Fair.lean` has a watchdog that does and one whose keeper has stopped).
-- What the change buys is a theorem (`Examples/WatchdogProofs.lean`). A dog arms its `silence`
+- What the change buys is a theorem (`Examples/WatchdogProofs.lean` (removed)). A dog arms its `silence`
   timer again at every `ping`. The run in which its keeper pings forever is fair, with the
   timer pending at every position and never firing (`exists_fair_run_never_barks`); in every
   impatient run the dog barks (`impatient_barks`).

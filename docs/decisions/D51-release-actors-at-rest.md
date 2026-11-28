@@ -1,9 +1,11 @@
 # D51. An actor at rest is released, and the kernel's theorems hold up to the starts that bring it back
 
-`Lanes/Actors/{Actor,Release,Kernel,KernelSound,KernelTimers}.lean`, `Tests/Release.lean`,
-`systems/ledger/Release.lean`. The kernel started an actor at its first message and kept its
+Status: Accepted
+
+`Lanes/Core/Actor.lean`, `Lanes/Runtime/Release.lean`, `Lanes/Runtime/Kernel.lean`, `Lanes/Runtime/KernelSound.lean`, `Lanes/Runtime/KernelTimers.lean`, `Tests/Release.lean`,
+`examples/ledger/Release.lean`. The kernel started an actor at its first message and kept its
 cell for ever, so a system with an actor per identity grew with every identity ever addressed:
-in `systems/ledger` a stranger guessing names added an actor a guess.
+in `examples/ledger` a stranger guessing names added an actor a guess.
 
 - *What may be released.* An actor declares the states that starting it gives, with nothing to
   do: `Actor.fresh`, with the proof `fresh_recover` that `recover init` is that state and no

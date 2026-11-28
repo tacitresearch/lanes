@@ -153,18 +153,19 @@ def Trace.render {S L : Type} (showState : S → String) (showLabel : L → Stri
   let steps := t.steps.zipIdx.map fun ((l, _), k) => s!"  {k + 1}. {showLabel l}"
   "\n".intercalate (steps ++ ["  state reached:", showState t.last])
 
-/-- The report as the checker prints it: the verdict, the trace to a failure and the state it
-reaches, the witnesses, the counts, and how often each kind of transition was taken. -/
+/-- The report as the checker prints it: the verdict, which says whether a pass is complete or
+bounded (`Report.verdict`), the trace to a failure and the state it reaches, the witnesses, the
+counts, and how often each kind of transition was taken. -/
 def Report.render {S L : Type} (showState : S → String) (showLabel : L → String)
     (r : Report S L) : String :=
   let verdict := match r.failure with
     | none =>
       if r.fingerprinted then
-        [if r.complete then "PASS (fingerprinted): every state explored up to a hash collision, \
-            so states whose hash collides with one seen were not"
-         else "PASS (fingerprinted, bounded): the search hit a bound, and states whose hash \
+        [if r.complete then "PASS (bounded, fingerprinted): every state explored up to a hash \
+            collision, so states whose hash collides with one seen were not"
+         else "PASS (bounded, fingerprinted): the search hit a bound, and states whose hash \
             collides with one seen were not explored"]
-      else if r.complete then ["PASS: every reachable state explored"]
+      else if r.complete then ["PASS (complete): every reachable state explored"]
       else ["PASS (bounded): the search hit a bound, so only part of the state space is covered"]
     | some (.violated p t) =>
       [s!"FAIL: \"{p}\" is violated after {t.steps.length} steps",

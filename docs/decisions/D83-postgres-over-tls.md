@@ -1,5 +1,7 @@
 # D83. PostgreSQL over TLS, with channel binding, and a pool of connections
 
+Status: Accepted
+
 D68 left TLS, channel binding and a pool out of the PostgreSQL client, and D70's stack turned off
 `rds.force_ssl` because of it: the database's traffic crossed the VPC in the clear, and SCRAM
 proved that the server knew the password but not that it was the server meant. D67 has since

@@ -1,6 +1,8 @@
 # D37. No router between shards in one process
 
-`Lanes/Actors/Cluster.lean` is deleted. It started a runtime per shard in one process and
+Status: Accepted
+
+`Lanes/Actors/Cluster.lean` (removed) is deleted. It started a runtime per shard in one process and
 carried parcels between them on a lane of the inbox that was never full. It came before the
 transport between processes (D30) and was never given a journal; its 106 lines were trusted,
 and what it did, the transport does with its decisions proved and model-checked and with
