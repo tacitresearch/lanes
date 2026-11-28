@@ -94,15 +94,13 @@ def serve {n : Nat} (args : Args) (self : Fin n) (key : ByteArray) : IO UInt32 :
   let http : Http.ServerConfig :=
     { port := args.httpPort.toUInt16, gate := { requestTimeout_ms := 1500 } }
   let log ← Journal.Store.open
-    (sys := Http.fronted (TextShard n raft self) (bridge self).shard http.gate)
+    (sys := Http.admittedFronted (TextShard n raft self) (bridge self).shard)
     { path := args.journal, create := args.create
-      -- The gate is an actor of the node's system, and its step function reads its own
-      -- configuration as the nodes read theirs (`journalName`).
-      system := s!"{journalName n self raft}, behind a gate of "
-        ++ s!"{http.gate.requestTimeout_ms} ms and {http.gate.maxPending} requests"
+      -- The journal holds only what the gate admitted, so the gate's settings are not in its
+      -- name; the nodes' are (`journalName`).
+      system := Http.admittedName (journalName n self raft)
       input := Codec.sum (Codec.pair Codec.nat Http.Request.codec) (shardInput n)
-      actors := some (Http.frontedActors (shardActors n raft self) (shardOutput n)
-        (bridge self).shard http.gate) }
+      actors := some (Http.admittedFrontedActors (shardActors n raft self) (bridge self).shard) }
   let (server, _) ← (Http.serveShard (TextCluster n raft) (· == self) (bridge self)
     { listen := { port := (args.ports[self.val]?.getD 0).toUInt16 }
       home := fun i => return args.ports[i.val]?.map fun port => { port := port.toUInt16 }

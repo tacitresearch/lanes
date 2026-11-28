@@ -21,8 +21,10 @@ is behind it; its outputs are responses and the inputs it passes on. Its decisio
 passes on is an input of `sys`, and an output of `sys` that the bridge reads as a response goes
 to the gate. Every other output of `sys` is an output of `fronted sys`, and `sys` still takes
 inputs that do not come through the gate. So a shard of a system spread over processes can sit
-behind a gate: its parcels pass the gate by, both ways. `served sys bridge` is `fronted sys` seen
-as `Http.serve` runs it: requests in, responses out, and nothing else in or out.
+behind a gate: its parcels pass the gate by, both ways. `served sys bridge` is `fronted sys` with
+requests in, responses out, and nothing else in or out: what `Http.serve` does, which runs the
+gate before the shard (`Lanes.Web.Http.Admit`) and is proved to be this
+(`Lanes.Web.Http.AdmitSound`).
 
 `Lanes.Web.Http.FrontSound` proves that the gate alone answers no more often than it handles an
 arrival, and, by projection, that `fronted sys` and `served sys` answer no request more often than
@@ -99,8 +101,8 @@ abbrev fronted (sys : System σ) (bridge : Bridge σ) (config : GateConfig := {}
 abbrev servedSig (σ : Signature) : Signature :=
   (frontedSig σ).withIO (ReqId × Request) (ReqId × Response)
 
-/-- `sys` with the gate joined in front of it, as `Http.serve` runs it: what `sys` puts out that
-is no response is not put out, as the gate drops an output it cannot read. -/
+/-- `sys` with the gate joined in front of it, with requests its only inputs: what `sys` puts
+out that is no response is not put out, as the gate drops an output it cannot read. -/
 abbrev served (sys : System σ) (bridge : Bridge σ) (config : GateConfig := {}) :
     System (servedSig σ) :=
   (fronted sys bridge config).filterMapIO .inl Sum.getLeft?
@@ -149,39 +151,5 @@ def Bridge.shard (bridge : Bridge σ) : Bridge (shardSig σ) where
     | .inl out => bridge.encode out
     | .inr _ => none
   prepare := bridge.prepare
-
-/-- How the actors of a fronted system are written to a snapshot, given how the system's own
-are, and its outputs, which may be on their way to the gate. -/
-def frontedActors {sys : System σ} (actors : Kernel.Image.Codecs sys) (out : Codec σ.Out)
-    (bridge : Bridge σ) (config : GateConfig := {}) :
-    Kernel.Image.Codecs (fronted sys bridge config) where
-  id := Codec.sum Codec.unit actors.id
-  state
-    | .inl _ => Codec.list Codec.nat
-    | .inr i => actors.state i
-  msg
-    | .inl _ => Codec.sum% GateMsg { arrive (id := Codec.nat) (request := Request.codec),
-        answer (out := out), expire (id := Codec.nat) }
-    | .inr i => actors.msg i
-
-def servedActors {sys : System σ} (actors : Kernel.Image.Codecs sys) (out : Codec σ.Out)
-    (bridge : Bridge σ) (config : GateConfig := {}) :
-    Kernel.Image.Codecs (served sys bridge config) :=
-  let fronted := frontedActors actors out bridge config
-  { id := fronted.id, state := fronted.state, msg := fronted.msg }
-
-/-- What the gate assumes of whoever sends it requests: an id is used once. Other inputs are
-not its concern. -/
-def frontedOutside (σ : Signature) : Outside (frontedSig σ) (List ReqId) where
-  init := []
-  allow used
-    | .inl (id, _) => if id ∈ used then none else some (id :: used)
-    | .inr _ => some used
-
-/-- What the gate assumes of whoever sends `served sys` requests: an id is used once. The
-server allocates ids, and is tested to stay within this. -/
-def servedOutside (σ : Signature) : Outside (servedSig σ) (List ReqId) where
-  init := []
-  allow used x := if x.1 ∈ used then none else some (x.1 :: used)
 
 end Lanes.Http

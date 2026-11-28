@@ -87,7 +87,8 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Web/Http/Front.lean` | | Decisions, not a format |
 | `Lanes/Web/Http/Gate.lean` | | Decisions, not a format |
 | `Lanes/Web/Http/Grammar.lean` | | RFC 9110's tokens and field values, used by the reader and the writer |
-| `Lanes/Web/Http/JournalName.lean` | | A journal's name, read back only as it is written, and a migration across gates; tested (`Tests/Web.lean`) |
+| `Lanes/Web/Http/Admit.lean` | | Decisions and a system, not a format |
+| `Lanes/Web/Http/JournalName.lean` | | A journal's name, read back only as it is written; tested (`Tests/Web.lean`) |
 | `Lanes/Web/Http/Loopback.lean` | | A front end with no socket for tests, not a format: its bytes are `Conn`'s and `Wire`'s |
 | `Lanes/Web/Http/Ops.lean` | | Routes and access for the operators' endpoints; their page is `Metrics`' |
 | `Lanes/Web/Http/ReadRequest.lean` | `oracles/go/requests` | Go's, Node's and h11's servers on `Tests/ReadRequest.corpus`, by hand |

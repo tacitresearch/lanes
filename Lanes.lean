@@ -124,6 +124,7 @@ public import Lanes.Web.Auth.Token
 public import Lanes.Web.Html.Basic
 public import Lanes.Web.Html.Htmx
 public import Lanes.Web.Html.Syntax
+public import Lanes.Web.Http.Admit
 public import Lanes.Web.Http.Basic
 public import Lanes.Web.Http.Conn
 public import Lanes.Web.Http.Cookie

@@ -9,7 +9,7 @@ public import Lanes.Net.IO.Peers
 
 /-!
 One process of a system spread over several, with an HTTP front: the two adapters put together.
-The process runs `fronted (sys.shard hosts)` on one runtime. A request enters through the gate,
+The process runs `admittedFronted (sys.shard hosts)` on one runtime. A request enters through the gate,
 a parcel from another process enters beside it, and of what the shard puts out a response goes
 back through the gate and a parcel goes to `Peers`.
 
@@ -29,8 +29,8 @@ variable {σ : Signature}
 def serveShard (sys : System σ) [Hashable σ.Id] (hosts : σ.Id → Bool) (bridge : Bridge σ)
     (peers : Peers.Config σ) (config : ServerConfig := {}) (runtimeConfig : Runtime.Config := {})
     (onOutput : σ.Out → Async Unit := fun _ => pure ())
-    (log : Option (Journal.Log (fronted (sys.shard hosts) bridge.shard config.gate)) := none) :
-    Async (Server (fronted (sys.shard hosts) bridge.shard config.gate) × Peers σ) := do
+    (log : Option (Journal.Log (admittedFronted (sys.shard hosts) bridge.shard)) := none) :
+    Async (Server (admittedFronted (sys.shard hosts) bridge.shard) × Peers σ) := do
   let ready : IO.Promise (Parcel σ → Async Unit) ← IO.Promise.new
   let peers ← Peers.start peers fun parcel => do
     if let some offer ← await ready.result? then offer parcel

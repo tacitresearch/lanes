@@ -51,6 +51,7 @@ different lines. The numbers give the order in which they were taken.
 - [D45. Everything is proved; the checker finds bugs, a proof is the evidence](D45-everything-is-proved.md)
 - [D60. Examples are for reading, fixtures are for the tests](D60-examples-are-for-reading.md)
 - [D63. The fixtures hold what the tests use, the examples the proofs](D63-fixtures-hold-what-tests-use.md)
+- [D106. The gate before the shard](D106-gate-before-shard.md)
 - [D93. Each generated line is about one item, and unreleased changes are fragments](D93-generated-lines-are-local.md)
 - [D20. History variables are ghosts with an erasure theorem](D20-history-variables-are-ghosts-with-an.md)
 - [D104. Honest results: a bounded pass exits 2, each failure has a kind, a binding is proved of its reference](D104-honest-results.md)

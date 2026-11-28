@@ -471,7 +471,7 @@ them by area.
 | `Envelope.sameLink` | proved | through `SysState.nextOnLink`: `SysState.nextOnLink_spec` |
 | `Link.reliable` | proved | through `EnvModel.link`, `EnvModel.lossy` and others: `Account.implements`, `Account.implements_timed` and others |
 | `Link.network` | checked | `Tests/Bank.lean`, `Tests/Election.lean`, `Tests/Join.lean` and others |
-| `Link.unordered` | checked | `Tests/Election.lean`, `Tests/Jobs.lean`, `Tests/Outside.lean` and others |
+| `Link.unordered` | proved | through `Http.Front.servedEnv`: `Http.Front.World.refines` |
 | `EnvModel.reliable` | spec | used only in statements |
 | `EnvModel.distributed` | none |  |
 
@@ -479,21 +479,21 @@ them by area.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `update` | proved | through `SysState.down`, `SysState.handle` and others: `Account.implements`, `Account.implements_timed` and others |
+| `update` | proved | through `Http.Front.World.init`, `SysState.down` and others: `Account.implements`, `Account.implements_timed` and others |
 | `Event.timed` | proved | `Account.implements`, `Account.implements_timed`, `Check.refines_traces` and others |
 | `Event.visible` | spec | used only in statements |
 | `SysState.blank` | proved | `System.Inductive.of_monotone`, `System.Monotone.and`, `System.Monotone.and_net` |
 | `SysState.hasMail` | proved | `SysState.hasMail_of_thinRight` |
-| `SysState.perform` | proved | through `SysState.handle`, `SysState.init` and others: `Account.implements`, `Account.implements_timed` and others |
-| `SysState.performAll` | proved | through `SysState.handle`, `SysState.init` and others: `Account.implements`, `Account.implements_timed` and others |
+| `SysState.perform` | proved | through `Http.Front.World.init`, `SysState.handle` and others: `Account.implements`, `Account.implements_timed` and others |
+| `SysState.performAll` | proved | through `Http.Front.World.init`, `SysState.handle` and others: `Account.implements`, `Account.implements_timed` and others |
 | `SysState.down` | proved | `Account.implements`, `Account.implements_timed`, `System.Refines.of_events` and others |
 | `SysState.settle` | proved | `SysState.Loses.settle` |
 | `SysState.handle` | proved | `Http.fronted_handle_arrive`, `Http.served_handle_arrive` |
-| `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and others: `Account.implements`, `Account.implements_timed` and others |
+| `SysState.startActor` | proved | through `Http.Front.World.init`, `SysState.init` and others: `Account.implements`, `Account.implements_timed` and others |
 | `SysState.deliverable` | proved | `Account.implements`, `Account.implements_timed`, `SysState.deliverable_of_thinRight` and others |
 | `SysState.step` | proved | `Http.Gate.answered_of_leaves`, `Http.Gate.deadline_not_restarted`, `Outside.Beside.keeps` and others |
 | `SysState.init` | proved | `Account.implements`, `Account.implements_timed`, `Check.systemFingerprinted_violated` and others |
-| `SysState.run` | proved | `Check.systemFingerprinted_violated`, `Check.system_violated`, `Http.Gate.answered_le_handled` and others |
+| `SysState.run` | proved | `Check.systemFingerprinted_violated`, `Check.system_violated`, `Http.Front.World.refines` and others |
 | `System.Invariant` | spec | a predicate |
 
 ## `Lanes/Data/Body.lean`
@@ -2940,6 +2940,53 @@ them by area.
 | `Http.Response.trigger` | tested | `Tests/Fixtures/BankWeb.lean`, `Tests/Fronted.lean`, `Tests/Html.lean` and others |
 | `Http.Response.hxRedirect` | tested | `Tests/Html.lean` |
 
+## `Lanes/Web/Http/Admit.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Http.Gate.acts` | proved | `Http.Gate.admit_refused` |
+| `Http.Gate.admit` | proved | `Http.Gate.admit_refused`, `Http.Gate.step_arrive_eq` |
+| `Http.Gate.receive` | proved | `Http.Gate.step_answer_eq` |
+| `Http.sinkSig` | proved | through `Http.Front.World.init`, `Http.admittedSig`: `Http.Front.World.answered_le_arrived`, `Http.Front.World.refines` and others |
+| `Http.sink` | proved | through `Http.Front.World.init`, `Http.admitted`: `Http.Front.World.answered_le_arrived`, `Http.Front.World.refines` and others |
+| `Http.admitInput` | proved | through `Http.Front.World.init`, `Http.admitted`: `Http.Front.World.answered_le_arrived`, `Http.Front.World.refines` and others |
+| `Http.admitOutput` | proved | through `Http.Front.World.init`, `Http.admitted`: `Http.Front.World.answered_le_arrived`, `Http.Front.World.refines` and others |
+| `Http.admittedFrontedSig` | proved | through `Http.Front.World.init`, `Http.admittedSig`: `Http.Front.World.answered_le_arrived`, `Http.Front.World.refines` and others |
+| `Http.admittedFronted` | proved | through `Http.Front.World.init`, `Http.admitted`: `Http.Front.World.answered_le_arrived`, `Http.Front.World.refines` and others |
+| `Http.admittedSig` | proved | `Http.Front.conv_inj`, `Http.Front.rel_emit`, `Http.Front.toSys_conv` |
+| `Http.admitted` | proved | `Http.Front.rel_emit` |
+| `Http.admittedFrontedActors` | tested | `Tests/Fronted.lean`, `Tests/Web.lean` |
+| `Http.admittedActors` | tested | `Tests/Web.lean` |
+
+## `Lanes/Web/Http/AdmitSound.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Http.Gate.Act.answers` | spec | used only in statements |
+| `Http.GateMsg.arrives` | spec | used only in statements |
+| `Http.Front.arm` | spec | used only in statements |
+| `Http.Front.step` | spec | used only in statements |
+| `Http.Front.run` | spec | used only in statements |
+| `Http.Front.Inv` | spec | a predicate |
+| `Http.Front.World.act` | spec | used only in statements |
+| `Http.Front.World.decide` | spec | used only in statements |
+| `Http.Front.World.step` | spec | used only in statements |
+| `Http.Front.World.run` | spec | used only in statements |
+| `Http.Front.World.init` | spec | used only in statements |
+| `Http.Front.World.Event.visible` | spec | used only in statements |
+| `Http.Front.servedEnv` | spec | used only in statements |
+| `Http.Front.swap` | proved | `Http.Front.swap_inj` |
+| `Http.Front.conv` | proved | `Http.Front.conv_inj`, `Http.Front.toSys_conv` |
+| `Http.Front.toSys` | proved | `Http.Front.toSys_conv` |
+| `Http.Front.toGate` | proved | `Http.Front.toGate_answer` |
+| `Http.Front.responds` | proved | `Http.Front.rel_emit` |
+| `Http.Front.newE` | spec | used only in statements |
+| `Http.Front.oldE` | spec | used only in statements |
+| `Http.Front.oldG` | spec | used only in statements |
+| `Http.Front.Gate.Act.perform` | spec | used only in statements |
+| `Http.Front.World.arrived` | spec | used only in statements |
+| `Http.Front.World.answered` | spec | used only in statements |
+
 ## `Lanes/Web/Http/Basic.lean`
 
 | Definition | Status | Evidence |
@@ -3069,16 +3116,16 @@ them by area.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Http.gateSig` | proved | `Http.Gate.always_up`, `Http.Gate.answered_le_handled`, `Http.Gate.answered_of_leaves` and others |
+| `Http.gateSig` | proved | `Http.Front.rel_emit`, `Http.Gate.always_up`, `Http.Gate.answered_le_handled` and others |
 | `Http.gateActor` | proved | `Http.gateActor_bounded` |
 | `Http.gateSystem` | proved | `Http.Gate.always_up`, `Http.Gate.answered_le_handled`, `Http.Gate.answered_of_leaves` and others |
-| `Http.frontWiring` | proved | through `Http.fronted`, `Http.served`: `Http.fronted_answered_le_arrived`, `Http.fronted_answered_nodup` and others |
+| `Http.frontWiring` | proved | through `Http.fronted`, `Http.served`: `Http.Front.World.refines`, `Http.Front.rel_emit` and others |
 | `Http.frontedSig` | proved | `Http.fronted_answered_le_arrived`, `Http.fronted_answered_nodup`, `Http.fronted_arrival_answered` and others |
-| `Http.frontedInput` | proved | through `Http.fronted`, `Http.served`: `Http.fronted_answered_le_arrived`, `Http.fronted_answered_nodup` and others |
-| `Http.frontedOutput` | proved | through `Http.fronted`, `Http.served`: `Http.fronted_answered_le_arrived`, `Http.fronted_answered_nodup` and others |
+| `Http.frontedInput` | proved | through `Http.fronted`, `Http.served`: `Http.Front.World.refines`, `Http.Front.rel_emit` and others |
+| `Http.frontedOutput` | proved | through `Http.fronted`, `Http.served`: `Http.Front.World.refines`, `Http.Front.rel_emit` and others |
 | `Http.fronted` | proved | `Http.fronted_answered_le_arrived`, `Http.fronted_answered_nodup`, `Http.fronted_arrival_answered` and others |
-| `Http.servedSig` | proved | `Http.kernel_served_answered_le_arrived`, `Http.served_answered_le_arrived`, `Http.served_answered_nodup` and others |
-| `Http.served` | proved | `Http.kernel_served_answered_le_arrived`, `Http.served_answered_le_arrived`, `Http.served_answered_nodup` and others |
+| `Http.servedSig` | proved | `Http.Front.World.refines`, `Http.Front.conv_inj`, `Http.Front.rel_emit` and others |
+| `Http.served` | proved | `Http.Front.World.refines`, `Http.Front.rel_emit`, `Http.Front.toGate_answer` and others |
 | `Signature.Inspect.gate` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean` |
 | `System.Inspect.gate` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean` |
 | `Signature.Inspect.fronted` | checked | `Tests/Fronted.lean`, `Tests/Gate.lean` |
@@ -3086,10 +3133,6 @@ them by area.
 | `Signature.Inspect.served` | checked | `Tests/Gate.lean` |
 | `System.Inspect.served` | checked | `Tests/Gate.lean` |
 | `Http.Bridge.shard` | tested | `Tests/Fronted.lean` |
-| `Http.frontedActors` | tested | `Tests/Fronted.lean` |
-| `Http.servedActors` | none |  |
-| `Http.frontedOutside` | tested | `Tests/Fronted.lean`, `Tests/Web.lean` |
-| `Http.servedOutside` | tested | `Tests/Web.lean` |
 
 ## `Lanes/Web/Http/FrontSound.lean`
 
@@ -3109,11 +3152,11 @@ them by area.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Http.instHashableGateMsgOfOut` | proved | through `Http.Gate.step`: `Http.Gate.step_arrive`, `Http.Gate.step_bounded` |
+| `Http.instHashableGateMsgOfOut` | proved | through `Http.Front.World.run`, `Http.Front.run` and others: `Http.Front.World.answered_le_arrived`, `Http.Front.World.refines` and others |
 | `Http.instReprGateMsgOfOut` | none |  |
-| `Http.busy` | proved | through `Http.Gate.step`: `Http.Gate.step_arrive`, `Http.Gate.step_bounded` |
-| `Http.timedOut` | proved | through `Http.Gate.step`: `Http.Gate.step_arrive`, `Http.Gate.step_bounded` |
-| `Http.Gate.step` | proved | `Http.Gate.step_arrive`, `Http.Gate.step_bounded` |
+| `Http.busy` | proved | through `Http.Front.World.run`, `Http.Front.run` and others: `Http.Front.World.answered_le_arrived`, `Http.Front.World.refines` and others |
+| `Http.timedOut` | proved | through `Http.Front.World.run`, `Http.Front.run` and others: `Http.Front.World.answered_le_arrived`, `Http.Front.World.refines` and others |
+| `Http.Gate.step` | proved | `Http.Gate.step_answer_eq`, `Http.Gate.step_arrive`, `Http.Gate.step_arrive_eq` and others |
 
 ## `Lanes/Web/Http/Grammar.lean`
 
@@ -3135,19 +3178,21 @@ them by area.
 | --- | --- | --- |
 | `Http.journalName` | tested | `Tests/Web.lean` |
 | `Http.gateOf` | tested | `Tests/Web.lean` |
-| `Http.formerGate` | tested | `Tests/Web.lean` |
-| `Http.regate` | tested | `Tests/Web.lean` |
-| `Http.regateUpgrade` | tested | `Tests/Web.lean` |
+| `Http.admittedName` | tested | `Tests/Web.lean` |
 
 ## `Lanes/Web/Http/Loopback.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Http.Loopback.start` | tested | `Tests/Loopback.lean` |
+| `Http.Loopback.act` | tested | `Tests/Loopback.lean` |
+| `Http.Loopback.decide` | tested | `Tests/Loopback.lean` |
+| `Http.Loopback.expire` | tested | `Tests/Loopback.lean` |
 | `Http.Loopback.submit` | tested | `Tests/Loopback.lean` |
 | `Http.Loopback.told` | tested | `Tests/Loopback.lean` |
 | `Http.Loopback.perform` | tested | `Tests/Loopback.lean` |
 | `Http.Loopback.tell` | tested | `Tests/Loopback.lean` |
+| `Http.Loopback.tellAnswers` | tested | `Tests/Loopback.lean` |
 | `Http.Loopback.settle` | tested | `Tests/Loopback.lean` |
 | `Http.Loopback.converse` | tested | `Tests/Loopback.lean` |
 | `Http.Loopback.send` | tested | `Tests/Loopback.lean` |
@@ -3369,8 +3414,8 @@ them by area.
 | --- | --- | --- |
 | `Http.Waiting.start` | proved | through `Http.Waiting.exec`: `Http.Waiting.exec_answered`, `Http.Waiting.exec_drain` and others |
 | `Http.Waiting.wait` | proved | through `Http.Waiting.exec`: `Http.Waiting.exec_answered`, `Http.Waiting.exec_drain` and others |
-| `Http.Waiting.releases` | proved | through `Http.Waiting.exec`: `Http.Waiting.exec_answered`, `Http.Waiting.exec_drain` and others |
-| `Http.Waiting.release` | proved | through `Http.Waiting.exec`: `Http.Waiting.exec_answered`, `Http.Waiting.exec_drain` and others |
+| `Http.Waiting.releases` | spec | used only in statements |
+| `Http.Waiting.release` | spec | used only in statements |
 | `Http.Waiting.answer` | proved | through `Http.Waiting.exec`: `Http.Waiting.exec_answered`, `Http.Waiting.exec_drain` and others |
 | `Http.Waiting.drain` | proved | through `Http.Waiting.exec`: `Http.Waiting.exec_answered`, `Http.Waiting.exec_drain` and others |
 | `Http.Waiting.Trace.apply` | spec | used only in statements |
