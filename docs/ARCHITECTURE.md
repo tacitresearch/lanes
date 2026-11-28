@@ -1279,7 +1279,7 @@ below has its claims, their evidence and premises, and its limits.
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
 | Counter (what `lanes new` writes): the count never passes its limit, in every database the store may hold | `Counter.within_always`, from `Counter.preserves` and `Db.invariant`, `examples/counter/Counter/Proofs.lean` | PostgreSQL at `SERIALIZABLE` behaves like the store's model | proved, no axiom gate |
-| Counter: it refuses to start when the database's tables differ from the declared ones, and a restart keeps the count | `examples/counter/Check.lean` on PostgreSQL, when `LANES_POSTGRES` names one | | tested |
+| Counter: two instances started at once run the migrations once and both start; it refuses to start when the database's tables differ from the declared ones; a restart keeps the count | `examples/counter/Check.lean` on PostgreSQL, when `LANES_POSTGRES` names one | | tested |
 
 ### Bank
 

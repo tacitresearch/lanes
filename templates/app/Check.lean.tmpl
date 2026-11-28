@@ -85,6 +85,8 @@ def live : IO (List (String × Bool)) := do
   Lanes.block do
     let errors ← Postgres.Typed.reset pg schema (migrations.map (·.1))
     unless errors.isEmpty do return [(s!"{{name}}: the tables are dropped: {errors}", false)]
+    let starts ← [0, 1].mapM fun _ => IO.asTask (Postgres.Typed.prepare pg schema migrations).block
+    let prepared ← starts.mapM fun t => (IO.wait t : IO _)
     let .ok first ← Web.start pg migrations { port := 0 } config
       | return [("{{name}}: the migrations make the declared tables", false)]
     let some port := first.port | return [("{{name}}: the server reports its port", false)]
@@ -99,6 +101,8 @@ def live : IO (List (String × Bool)) := do
     let kept ← fetch port .get ["count"]
     again.stop
     return [
+      ("{{name}}: two instances started at once run the migrations once, and both may start",
+        prepared.all fun | Except.ok [] => true | _ => false),
       ("{{name}}: on PostgreSQL, three increments with a limit of 2 count to 2", shows counted "Count: 2"),
       ("{{name}}: it refuses to start on a table that differs from the declared one", !refused.isEmpty),
       ("{{name}}: a restart keeps the count", shows kept "Count: 2") ]
