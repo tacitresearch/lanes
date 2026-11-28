@@ -139,6 +139,10 @@ jobs:
         run: |
           if python3 -m venv --help >/dev/null 2>&1; then exit 0; fi
           sudo apt-get update -q && sudo apt-get install -yq python3-venv
+      - name: libpq, for oracles/libpq
+        run: |
+          if ldconfig -p | grep -q 'libpq\.so\.5 '; then exit 0; fi
+          sudo apt-get update -q && sudo apt-get install -yq libpq5
       - name: The references, fixed seed
         run: lake exe lanesOracle --cases 20000
       - name: The references, a new seed each run

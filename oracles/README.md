@@ -36,6 +36,7 @@ every module a row names exists, and so does every path it cites.
 | `oracles/jwcrypto` | jwcrypto | 1.6.2 | `oracles/jwcrypto/requirements.txt` | JWS in compact form and JWK Sets |
 | `oracles/moto` | moto's server, S3, SES API v2 and SQS | 5.2.6 | `oracles/moto/requirements.txt` | the recorded runs of the object store, multipart, email and queue models, and of `POST` forms |
 | `oracles/google` | Google's OpenID Connect provider: its discovery document and JWK Set | Fetched on 2026-11-27 | the files themselves | Google's sign-in preset (`Tests/Oidc/Google.lean`) |
+| `oracles/libpq` | libpq, the system's `libpq.so.5`, loaded with ctypes | 16 (16.15 recorded) | the CI job's `libpq5` | PostgreSQL's connection strings, URIs and service file |
 | `oracles/postgres` | PostgreSQL | 16 (16.15 recorded) | the CI job's `postgresql-16` | the recorded runs of the key-value and the typed store models, and the typed store's answers against their meaning |
 
 ## Protocol modules
@@ -134,11 +135,12 @@ Each service's protocol modules and models (`Lanes/Services/README.md`).
 | `Lanes/Services/Oidc/Google.lean` | `oracles/google` | The preset's endpoints, issuers and algorithms against Google's discovery document and JWK Set as recorded (`Tests/Oidc/Google.lean`) |
 | `Lanes/Services/Postgres.lean` | | Imports the modules below |
 | `Lanes/Services/Postgres/Bytes.lean` | `Tests/Postgres.lean`, `oracles/postgres` | The fields of the messages, in the sessions recorded from PostgreSQL 16 and psql 16 (`Tests/Postgres/`) |
+| `Lanes/Services/Postgres/ConnInfo.lean` | `oracles/libpq` | Connection strings and URIs against `PQconninfoParse`, and service files against what `PQconnectStartParams` takes from them (`Tests/Oracle/Libpq.lean`). Known: libpq keeps percent-decoded bytes that are not UTF-8, which a Lean string cannot hold; `sslnegotiation` is PostgreSQL 17's |
 | `Lanes/Services/Postgres/Conn.lean` | `Tests/Postgres.lean`, `oracles/postgres` | A state machine, not a format: the recorded sessions, and the live runs |
 | `Lanes/Services/Postgres/Message.lean` | `Tests/Postgres.lean`, `oracles/postgres` | The messages, in the recorded sessions; written and read again against a live server |
 | `Lanes/Services/Postgres/Pool.lean` | | Decisions, not a format: proved (`Pool.run_size`, `Pool.never_again`) and model-checked (`Tests/PostgresPool.lean`) |
 | `Lanes/Services/Postgres/Scram.lean` | `Tests/Postgres.lean`, `Tests/PostgresTls.lean` | RFC 7677's example and libpq's recorded session; with channel binding, Python's `hashlib` and PostgreSQL 16 with TLS |
-| `Lanes/Services/Postgres/Settings.lean` | `Tests/PostgresLive.lean` | libpq's variables and password file: `psql` connects with the same, against PostgreSQL 16 |
+| `Lanes/Services/Postgres/Settings.lean` | `Tests/PostgresLive.lean`, `oracles/libpq` | libpq's variables and password file: `psql` connects with the same, against PostgreSQL 16; its strings and service files through `ConnInfo.lean`'s oracle; which source wins, by hand from libpq's documentation (`Tests/PostgresSettings.lean`) |
 | `Lanes/Services/Postgres/Sql.lean` | `oracles/postgres/db.jsonl` | The SQL of the typed store's operations against PostgreSQL itself: every answer of generated transactions compared with its meaning (`Tests/Oracle/Service/Db.lean`); a value reads back from its parameter (`Postgres.Sql.decode_param`) |
 | `Lanes/Services/Postgres/Table.lean` | `oracles/postgres` | The SQL of the store's operations, against PostgreSQL itself |
 | `Lanes/Services/S3.lean` | | Imports the modules below |

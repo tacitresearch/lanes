@@ -5,6 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import Tests.Oracle.Base64
 import Tests.Oracle.Ip
 import Tests.Oracle.Jose
+import Tests.Oracle.Libpq
 import Tests.Oracle.Json
 import Tests.Oracle.MediaType
 import Tests.Oracle.Metrics
@@ -22,7 +23,7 @@ namespace Tests.Oracle
 
 def packages : List Package :=
   [Base64.package, Ip.package, Time.package, Json.package, MediaType.package, RateLimit.package,
-    Url.package, Xml.package, Metrics.package, SigV4.package, Jose.package,
+    Url.package, Xml.package, Metrics.package, SigV4.package, Jose.package, Libpq.package,
     Checks.Mail.package, Checks.CloudFront.package]
 
 def unitTests : List (String × Bool) := Base64.tests ++ Ip.tests ++ Jose.tests ++ MediaType.tests ++ RateLimit.tests ++ Time.tests ++ Url.tests
