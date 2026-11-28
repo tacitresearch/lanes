@@ -423,7 +423,9 @@ opened when no open pull request adds files to what it moves.
 Steps 2 to 6 and step 7 touch different files and can go in parallel. Step 10's pull requests
 are queued one after another, each built on the last.
 
-## 11. Questions for the owner
+## 11. Details settled
+
+Each detail below is settled at the default it states (the owner's rule: small and reversible choices are taken at their default, and changed later if needed).
 
 Each with the default this proposal takes.
 
