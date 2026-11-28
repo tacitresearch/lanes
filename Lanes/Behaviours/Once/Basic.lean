@@ -69,46 +69,48 @@ def Memo.seen (memo : Memo C E) (c : C) (n : Nat) : Seen E :=
   | none => .fresh
 
 /-- `a`, acting once on each request `key` names. A message `key` reads as `none` is not a
-request and is handled as `a` handles it. A restart that forgets the memo acts on a repeat. -/
-def actor {S Msg : Type} (a : Actor S Msg E) (key : Msg → Option (C × Nat)) :
-    Actor (S × Memo C E) Msg E where
+request and is handled as `a` handles it. A restart that forgets the memo acts on a repeat. `a` is
+told the step's context. -/
+def actor {S Msg Id : Type} (a : Actor S Msg E Id) (key : Msg → Option (C × Nat)) :
+    Actor (S × Memo C E) Msg E Id where
   init := (a.init, {})
-  step
+  stepAt ctx
     | (s, memo), m =>
       match key m with
-      | none => let (s', effs) := a.step s m; ((s', memo), effs)
+      | none => let (s', effs) := a.stepAt ctx s m; ((s', memo), effs)
       | some (c, n) =>
         match memo.seen c n with
-        | .fresh => let (s', effs) := a.step s m; ((s', memo.record c n effs), effs)
+        | .fresh => let (s', effs) := a.stepAt ctx s m; ((s', memo.record c n effs), effs)
         | .again effs => ((s, memo), effs)
         | .stale => ((s, memo), [])
-  recover
-    | (s, memo) => let (s', effs) := a.recover s; ((s', memo), effs)
+  recoverAt t
+    | (s, memo) => let (s', effs) := a.recoverAt t s; ((s', memo), effs)
 
 section Step
 
-variable {S Msg : Type} (a : Actor S Msg E) (key : Msg → Option (C × Nat)) (s : S)
-  (memo : Memo C E) (m : Msg)
+variable {S Msg Id : Type} (a : Actor S Msg E Id) (key : Msg → Option (C × Nat)) (s : S)
+  (memo : Memo C E) (m : Msg) {ctx : Ctx Id} {t : Moment}
 
 theorem step_of_none (hk : key m = none) :
-    (actor a key).step (s, memo) m = (((a.step s m).1, memo), (a.step s m).2) := by
+    (actor a key).stepAt ctx (s, memo) m = (((a.stepAt ctx s m).1, memo), (a.stepAt ctx s m).2) := by
   simp [actor, hk]
 
 theorem step_of_fresh {c : C} {n : Nat} (hk : key m = some (c, n)) (hs : memo.seen c n = .fresh) :
-    (actor a key).step (s, memo) m =
-      (((a.step s m).1, memo.record c n (a.step s m).2), (a.step s m).2) := by
+    (actor a key).stepAt ctx (s, memo) m =
+      (((a.stepAt ctx s m).1, memo.record c n (a.stepAt ctx s m).2), (a.stepAt ctx s m).2) := by
   simp [actor, hk, hs]
 
 theorem step_of_again {c : C} {n : Nat} {effs : List E} (hk : key m = some (c, n))
-    (hs : memo.seen c n = .again effs) : (actor a key).step (s, memo) m = ((s, memo), effs) := by
+    (hs : memo.seen c n = .again effs) :
+    (actor a key).stepAt ctx (s, memo) m = ((s, memo), effs) := by
   simp [actor, hk, hs]
 
 theorem step_of_stale {c : C} {n : Nat} (hk : key m = some (c, n)) (hs : memo.seen c n = .stale) :
-    (actor a key).step (s, memo) m = ((s, memo), []) := by
+    (actor a key).stepAt ctx (s, memo) m = ((s, memo), []) := by
   simp [actor, hk, hs]
 
 theorem recover_eq (p : S × Memo C E) :
-    (actor a key).recover p = (((a.recover p.1).1, p.2), (a.recover p.1).2) :=
+    (actor a key).recoverAt t p = (((a.recoverAt t p.1).1, p.2), (a.recoverAt t p.1).2) :=
   rfl
 
 end Step

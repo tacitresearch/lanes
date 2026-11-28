@@ -39,8 +39,8 @@ def Conserved (c : SysState (bank A opening)) : Prop :=
 /-- What handling a message does to the whole state: the money moved, and nothing else that
 `Conserved` reads. -/
 theorem handle_spec (env : EnvModel (sig A)) (c : SysState (bank A opening)) (a : A)
-    (msg : Msg A) :
-    let c' := c.handle env a msg
+    (msg : Msg A) (src : Sender A) :
+    let c' := c.handle env a msg src
     (Enum.sum fun b : A => (c'.state b).balance) + (c'.net.map inFlight).sum
         = (Enum.sum fun b : A => (c.state b).balance) + (c.net.map inFlight).sum
           + (match msg with | .credit amount => (amount : Int) | _ => 0)
@@ -78,6 +78,7 @@ theorem money_conserved (env : EnvModel (sig A)) (henv : env.Faultless) :
       obtain ⟨_, hdeliverable, rfl⟩ := SysState.step_deliver.mp hstep
       have hmem := SysState.mem_of_deliverable hdeliverable
       obtain ⟨hmoney, htimers'⟩ := handle_spec env { c with net := c.net.erase e } e.dst e.msg
+        (.ofSrc e.src)
       refine ⟨?_, fun a => by rw [htimers']; exact htimers a⟩
       rw [hmoney]
       simp only [sum_map_erase inFlight hmem]
@@ -107,5 +108,8 @@ theorem money_conserved (env : EnvModel (sig A)) (henv : env.Faultless) :
     | restart =>
       obtain ⟨hmay, -⟩ := SysState.step_restart.mp hstep
       simp [henv.noRestarts] at hmay
+    | tick m =>
+      obtain rfl := SysState.step_tick.mp hstep
+      exact ⟨hsum, htimers⟩
 
 end Tests.Fixtures.Bank

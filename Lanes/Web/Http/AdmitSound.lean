@@ -418,6 +418,7 @@ structure Rel (w : World sys bridge) (c : SysState (served sys bridge config)) :
   outbox : c.outbox = w.answers
   sysNet : c.net.filter toSys = w.shard.net.filterMap conv
   gateNet : (c.net.filterMap toGate).Perm ((w.shard.outbox.filter (responds bridge)).map .answer)
+  clock : c.clock = w.shard.clock
 
 /-! What an actor of the application does, in each. -/
 
@@ -435,26 +436,30 @@ def oldE (bridge : Bridge σ) {j : σ.Id} : Effect σ j → List (Effect (served
   | .cancel m => [.cancel m]
   | .stop => [.stop]
 
-theorem admitted_step (j : σ.Id) (s : sys.State j) (m : σ.Msg j) :
-    ((admitted sys bridge).actor (.inr j)).step s m
-      = (((sys.actor j).step s m).1, ((sys.actor j).step s m).2.flatMap newE) := by
-  simp only [Actor.mapEff, List.flatMap_assoc, Prod.mk.injEq, true_and]
+theorem admitted_step (j : σ.Id) (t : Moment) (src : Sender (Unit ⊕ σ.Id)) (s : sys.State j)
+    (m : σ.Msg j) :
+    ((admitted sys bridge).actor (.inr j)).stepAt ⟨t, src⟩ s m
+      = (((sys.actor j).stepAt ⟨t, Sender.right src⟩ s m).1,
+          ((sys.actor j).stepAt ⟨t, Sender.right src⟩ s m).2.flatMap newE) := by
+  simp only [Actor.mapEff, Actor.mapSrc, List.flatMap_assoc, Prod.mk.injEq, true_and]
   congr 1
   funext eff
   cases eff <;> simp [Wiring.right, Effect.filterMapOut, admitOutput, newE]
 
-theorem admitted_recover (j : σ.Id) (s : sys.State j) :
-    ((admitted sys bridge).actor (.inr j)).recover s
-      = (((sys.actor j).recover s).1, ((sys.actor j).recover s).2.flatMap newE) := by
-  simp only [Actor.mapEff, List.flatMap_assoc, Prod.mk.injEq, true_and]
+theorem admitted_recover (j : σ.Id) (t : Moment) (s : sys.State j) :
+    ((admitted sys bridge).actor (.inr j)).recoverAt t s
+      = (((sys.actor j).recoverAt t s).1, ((sys.actor j).recoverAt t s).2.flatMap newE) := by
+  simp only [Actor.mapEff, Actor.mapSrc, List.flatMap_assoc, Prod.mk.injEq, true_and]
   congr 1
   funext eff
   cases eff <;> simp [Wiring.right, Effect.filterMapOut, admitOutput, newE]
 
-theorem served_step (j : σ.Id) (s : sys.State j) (m : σ.Msg j) :
-    ((served sys bridge config).actor (.inr j)).step s m
-      = (((sys.actor j).step s m).1, ((sys.actor j).step s m).2.flatMap (oldE bridge)) := by
-  simp only [Actor.mapEff, List.flatMap_assoc, Prod.mk.injEq, true_and]
+theorem served_step (j : σ.Id) (t : Moment) (src : Sender (Unit ⊕ σ.Id)) (s : sys.State j)
+    (m : σ.Msg j) :
+    ((served sys bridge config).actor (.inr j)).stepAt ⟨t, src⟩ s m
+      = (((sys.actor j).stepAt ⟨t, Sender.right src⟩ s m).1,
+          ((sys.actor j).stepAt ⟨t, Sender.right src⟩ s m).2.flatMap (oldE bridge)) := by
+  simp only [Actor.mapEff, Actor.mapSrc, List.flatMap_assoc, Prod.mk.injEq, true_and]
   congr 1
   funext eff
   cases eff with
@@ -463,10 +468,11 @@ theorem served_step (j : σ.Id) (s : sys.State j) (m : σ.Msg j) :
     by_cases h : (bridge.encode out).isSome = true <;> simp [h, Effect.filterMapOut, frontedOutput]
   | _ => simp [Wiring.right, Effect.filterMapOut, oldE]
 
-theorem served_recover (j : σ.Id) (s : sys.State j) :
-    ((served sys bridge config).actor (.inr j)).recover s
-      = (((sys.actor j).recover s).1, ((sys.actor j).recover s).2.flatMap (oldE bridge)) := by
-  simp only [Actor.mapEff, List.flatMap_assoc, Prod.mk.injEq, true_and]
+theorem served_recover (j : σ.Id) (t : Moment) (s : sys.State j) :
+    ((served sys bridge config).actor (.inr j)).recoverAt t s
+      = (((sys.actor j).recoverAt t s).1,
+          ((sys.actor j).recoverAt t s).2.flatMap (oldE bridge)) := by
+  simp only [Actor.mapEff, Actor.mapSrc, List.flatMap_assoc, Prod.mk.injEq, true_and]
   congr 1
   funext eff
   cases eff with
@@ -511,11 +517,11 @@ theorem gate_step_acts {E : Type} (does : Gate.Effects σ E) (pending : List Req
     simp only [Gate.step]
     split <;> rfl
 
-theorem served_gate_step (pending : List ReqId) (msg : GateMsg σ) :
-    ((served sys bridge config).actor (.inl ())).step pending msg
+theorem served_gate_step (ctx : Ctx (Unit ⊕ σ.Id)) (pending : List ReqId) (msg : GateMsg σ) :
+    ((served sys bridge config).actor (.inl ())).stepAt ctx pending msg
       = ((Gate.step bridge config Gate.acts pending msg).1,
           (Gate.step bridge config Gate.acts pending msg).2.flatMap (oldG sys config)) := by
-  simp only [Actor.mapEff, gateActor]
+  simp only [Actor.mapEff, Actor.mapSrc, gateActor]
   rw [gate_step_acts]
   simp only [List.flatMap_assoc, List.flatMap_map, Prod.mk.injEq, true_and]
   congr 1
@@ -590,6 +596,7 @@ theorem rel_send {w : World sys bridge} {c : SysState (served sys bridge config)
   sysNet := by simp [List.filter_append, h.sysNet, toSys_conv hx, hx]
   gateNet := by
     simpa [List.filterMap_append, toGate_of_toSys (toSys_conv hx)] using h.gateNet
+  clock := h.clock
 
 /-- An output of an actor of the application: in the shard's outbox, and an answer on its way
 to the gate in `served sys` if it is a response. -/
@@ -734,11 +741,12 @@ theorem rel_settle {w : World sys bridge} {c : SysState (served sys bridge confi
   · exact h1
 
 theorem rel_handle {w : World sys bridge} {c : SysState (served sys bridge config)} (h : Rel w c)
-    (j : σ.Id) (m : σ.Msg j) :
-    Rel { w with shard := w.shard.handle .reliable (.inr j) m }
-      (c.handle servedEnv (.inr j) m) := by
+    (j : σ.Id) (m : σ.Msg j) {src src' : Sender (Unit ⊕ σ.Id)}
+    (hsrc : Sender.right src' = Sender.right src) :
+    Rel { w with shard := w.shard.handle .reliable (.inr j) m src }
+      (c.handle servedEnv (.inr j) m src') := by
   simp only [SysState.handle]
-  rw [admitted_step, served_step, h.state j]
+  rw [admitted_step, served_step, h.state j, h.clock, hsrc]
   exact rel_settle h j _ _
 
 theorem rel_start {w : World sys bridge} {c : SysState (served sys bridge config)} (h : Rel w c)
@@ -746,7 +754,8 @@ theorem rel_start {w : World sys bridge} {c : SysState (served sys bridge config
     Rel { w with shard := w.shard.startActor .reliable (.inr j) }
       (c.startActor servedEnv (.inr j)) := by
   simp only [SysState.startActor]
-  rw [admitted_recover, served_recover, h.state j]
+  rw [admitted_recover, served_recover, h.state j,
+    show (sys.actor j).recoverAt c.clock = (sys.actor j).recoverAt w.shard.clock by rw [h.clock]]
   exact rel_settle (rel_up h j true) j _ _
 
 /-! The gate's side. -/
@@ -831,8 +840,9 @@ theorem forward_mem {pending : List ReqId} {msg : GateMsg σ} {x : σ.In}
 
 theorem rel_decide {w : World sys bridge} {c : SysState (served sys bridge config)} (h : Rel w c)
     (msg : GateMsg σ) (entry : Option (ReqId × Request))
-    (hentry : ∀ id request, msg = .arrive id request → entry = some (id, request)) :
-    Rel (w.decide bridge config msg entry) (c.handle servedEnv (.inl ()) msg) := by
+    (hentry : ∀ id request, msg = .arrive id request → entry = some (id, request))
+    (src : Sender (Unit ⊕ σ.Id)) :
+    Rel (w.decide bridge config msg entry) (c.handle servedEnv (.inl ()) msg src) := by
   simp only [SysState.handle]
   rw [served_gate_step, h.pending]
   have hstop : ((Gate.step bridge config Gate.acts w.front.pending msg).2.flatMap
@@ -855,9 +865,11 @@ theorem rel_shard {w : World sys bridge} {c : SysState (served sys bridge config
     (s : SysState (admitted sys bridge)) (hstate : ∀ j, s.state (.inr j) = w.shard.state (.inr j))
     (hup : ∀ j, s.up (.inr j) = w.shard.up (.inr j))
     (htimers : ∀ j, s.timers (.inr j) = w.shard.timers (.inr j))
-    (hnet : s.net.filterMap conv = w.shard.net.filterMap conv) (houtbox : s.outbox = w.shard.outbox) :
+    (hnet : s.net.filterMap conv = w.shard.net.filterMap conv) (houtbox : s.outbox = w.shard.outbox)
+    (hclock : s.clock = w.shard.clock) :
     Rel { w with shard := s } c :=
   { h with
+    clock := h.clock.trans hclock.symm
     state := fun j => (h.state j).trans (hstate j).symm
     up := fun j => (h.up j).trans (hup j).symm
     timers := fun j => (h.timers j).trans (htimers j).symm
@@ -871,7 +883,7 @@ theorem sink_settle (s : SysState (admitted sys bridge)) (env : EnvModel (admitt
 theorem rel_sink_state {w : World sys bridge} {c : SysState (served sys bridge config)}
     (h : Rel w c) (u : Unit) :
     Rel { w with shard := { w.shard with state := update w.shard.state (.inl ()) u } } c :=
-  rel_shard h _ (fun _ => by simp [update]) (fun _ => rfl) (fun _ => rfl) rfl rfl
+  rel_shard h _ (fun _ => by simp [update]) (fun _ => rfl) (fun _ => rfl) rfl rfl rfl
 
 theorem conv_sameLink {e : Envelope (admittedSig σ)} {x : Envelope (servedSig σ)}
     (hx : conv e = some x) (a : Envelope (admittedSig σ)) :
@@ -971,11 +983,13 @@ theorem sim_arrive {w : World sys bridge} {c : SysState (served sys bridge confi
     · simp [SysState.deliverable, servedEnv, Link.unordered]
     · rw [List.erase_append_right _ (arrival_not_mem h id request)]
       simp
+      rfl
   rw [SysState.run, hin, Option.bind_some, SysState.run, hdel]
   rfl
 
-theorem sink_handle (s : SysState (admitted sys bridge)) (env : EnvModel (admittedSig σ)) (m : Unit) :
-    s.handle env (.inl ()) m = { s with state := update s.state (.inl ()) () } :=
+theorem sink_handle (s : SysState (admitted sys bridge)) (env : EnvModel (admittedSig σ)) (m : Unit)
+    (src : Sender (Unit ⊕ σ.Id)) :
+    s.handle env (.inl ()) m src = { s with state := update s.state (.inl ()) () } :=
   sink_settle s env ()
 
 theorem sink_start (s : SysState (admitted sys bridge)) (env : EnvModel (admittedSig σ)) :
@@ -1001,6 +1015,7 @@ theorem sim_shard {w w' : World sys bridge} {c : SysState (served sys bridge con
       rw [sink_handle]
       have h1 : Rel { w with shard := { w.shard with net := w.shard.net.erase ⟨src, .inl (), m⟩ } } c :=
         rel_shard h _ (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) (filterMap_erase_of_none rfl _) rfl
+          rfl
       exact rel_sink_state h1 ()
     · let x : Envelope (servedSig σ) := ⟨swap src, .inr j, m⟩
       have hx : conv ⟨src, .inr j, m⟩ = some x := rfl
@@ -1011,7 +1026,8 @@ theorem sim_shard {w w' : World sys bridge} {c : SysState (served sys bridge con
             rw [filter_erase_of_pos _ _ (toSys_conv hx), h.sysNet,
               filterMap_erase (fun y => ⟨fun hy => conv_inj hy hx, fun hy => hy ▸ hx⟩)]
           gateNet := by rw [filterMap_erase_of_none rfl]; exact h.gateNet }
-      refine ⟨[.deliver x], _, ?_, rel_handle h1 j m, rfl⟩
+      refine ⟨[.deliver x], _, ?_,
+        rel_handle h1 j m (src' := .ofSrc (swap src)) (by rcases src with _ | (_ | _) <;> rfl), rfl⟩
       rw [SysState.run, SysState.step_deliver.mpr
         ⟨by rw [h.up]; exact hup, deliverable_eq h hx hd, rfl⟩]
       rfl
@@ -1035,6 +1051,12 @@ theorem sim_shard {w w' : World sys bridge} {c : SysState (served sys bridge con
     obtain ⟨s, hs, -⟩ := hstep
     obtain ⟨hmay, -⟩ := SysState.step_restart.mp hs
     simp [EnvModel.reliable] at hmay
+  | tick m =>
+    simp only [World.step, Option.map_eq_some_iff] at hstep
+    obtain ⟨s, hs, rfl⟩ := hstep
+    obtain rfl := SysState.step_tick.mp hs
+    exact ⟨[.tick m], { c with clock := m }, by simp [SysState.run, SysState.step_tick],
+      { h with clock := rfl }, rfl⟩
   | timeout i m =>
     simp only [World.step, Option.map_eq_some_iff] at hstep
     obtain ⟨s, hs, rfl⟩ := hstep
@@ -1044,11 +1066,11 @@ theorem sim_shard {w w' : World sys bridge} {c : SysState (served sys bridge con
       rw [sink_handle]
       have h1 : Rel { w with shard := { w.shard with
           timers := update w.shard.timers (.inl ()) ((w.shard.timers (.inl ())).erase m) } } c :=
-        rel_shard h _ (fun _ => rfl) (fun _ => rfl) (fun _ => by simp [update]) rfl rfl
+        rel_shard h _ (fun _ => rfl) (fun _ => rfl) (fun _ => by simp [update]) rfl rfl rfl
       exact rel_sink_state h1 ()
     · let c₁ : SysState (served sys bridge config) :=
         { c with timers := update c.timers (.inr j) ((c.timers (.inr j)).erase m) }
-      refine ⟨[.timeout (.inr j) m], c₁.handle servedEnv (.inr j) m, ?_, ?_, rfl⟩
+      refine ⟨[.timeout (.inr j) m], c₁.handle servedEnv (.inr j) m .timer, ?_, ?_, rfl⟩
       · rw [SysState.run, SysState.step_timeout.mpr
           ⟨by rw [h.up]; exact hup, by rw [h.timers]; exact hm, rfl⟩]
         rfl
@@ -1056,7 +1078,7 @@ theorem sim_shard {w w' : World sys bridge} {c : SysState (served sys bridge con
           rw [h.timers j]
         simp only [c₁]
         rw [hv]
-        exact rel_handle (rel_timers h j _) j m
+        exact rel_handle (rel_timers h j _) j m (src' := .timer) rfl
   | start i =>
     simp only [World.step, Option.map_eq_some_iff] at hstep
     obtain ⟨s, hs, rfl⟩ := hstep
@@ -1065,7 +1087,7 @@ theorem sim_shard {w w' : World sys bridge} {c : SysState (served sys bridge con
     · refine ⟨[], c, rfl, ?_, rfl⟩
       rw [sink_start]
       exact rel_shard h _ (fun _ => by simp [update]) (fun _ => by simp [update]) (fun _ => rfl)
-        rfl rfl
+        rfl rfl rfl
     · have hmail' : c.hasMail (.inr j) = true := by
         rw [hasMail_eq h]
         simpa [EnvModel.reliable] using hmail
@@ -1081,7 +1103,7 @@ theorem sim_step {w w' : World sys bridge} {c : SysState (served sys bridge conf
   | arrive id request =>
     simp only [World.step, Option.some.injEq] at hstep
     subst hstep
-    refine ⟨_, _, sim_arrive h id request, rel_decide h _ _ fun _ _ e => by cases e; rfl, ?_⟩
+    refine ⟨_, _, sim_arrive h id request, rel_decide h _ _ (fun _ _ e => by cases e; rfl) .outside, ?_⟩
     simp [Lanes.Event.visible, World.Event.visible]
   | expire id =>
     simp only [World.step] at hstep
@@ -1099,7 +1121,7 @@ theorem sim_step {w w' : World sys bridge} {c : SysState (served sys bridge conf
             exact (map_erase fun x _ hx => GateMsg.expire.inj hx).symm
           timers := fun j => by simp [h.timers j] }
       refine ⟨[.timeout (.inl ()) (.expire id)], _, ?_,
-        rel_decide h1 (.expire id) none (fun _ _ e => by cases e),
+        rel_decide h1 (.expire id) none (fun _ _ e => by cases e) .timer,
         by simp [Lanes.Event.visible, World.Event.visible]⟩
       simp [SysState.run, SysState.step_timeout.mpr ⟨h.gateUp, hmem, rfl⟩]
     · simp at hstep
@@ -1127,11 +1149,12 @@ theorem sim_step {w w' : World sys bridge} {c : SysState (served sys bridge conf
                 refine (h.gateNet.erase _).trans ?_
                 rw [filter_erase_of_pos _ _ hr, map_erase fun x _ hx => GateMsg.answer.inj hx] }
           refine ⟨[.deliver ⟨src, .inl (), .answer out⟩], _, ?_,
-            rel_decide h1 (.answer out) none (fun _ _ e => by cases e),
+            rel_decide h1 (.answer out) none (fun _ _ e => by cases e) (.ofSrc src),
             by simp [Lanes.Event.visible, World.Event.visible]⟩
           have hdel := SysState.step_deliver (env := servedEnv) (c := c)
             (c' := ({ c with net := c.net.erase ⟨src, .inl (), .answer out⟩ } :
-              SysState (served sys bridge config)).handle servedEnv (.inl ()) (.answer out))
+              SysState (served sys bridge config)).handle servedEnv (.inl ()) (.answer out)
+                (.ofSrc src))
             (e := ⟨src, .inl (), .answer out⟩)
           simp only [SysState.run, hdel.mpr ⟨h.gateUp, by
             simp [SysState.deliverable, servedEnv, Link.unordered, he], rfl⟩, Option.bind_some]
@@ -1178,23 +1201,35 @@ theorem rel_init : Rel (World.init sys bridge)
     (SysState.init (served sys bridge config) servedEnv) := by
   have h0 : Rel ({ shard := SysState.blank (admitted sys bridge) } : World sys bridge)
       ((SysState.blank (served sys bridge config)).startActor servedEnv (.inl ())) :=
-    { pending := by simp [SysState.startActor, SysState.settle, SysState.blank, Actor.mapEff, gateActor,
+    { pending := by simp [SysState.startActor, SysState.settle, SysState.blank, Actor.mapEff, Actor.mapSrc,
+        gateActor,
         SysState.performAll]
-      state := fun _ => by simp [SysState.startActor, SysState.settle, SysState.blank, Actor.mapEff, gateActor,
+      state := fun _ => by simp [SysState.startActor, SysState.settle, SysState.blank, Actor.mapEff, Actor.mapSrc,
+        gateActor,
         SysState.performAll]
-      gateUp := by simp [SysState.startActor, SysState.settle, SysState.blank, Actor.mapEff, gateActor,
+      gateUp := by simp [SysState.startActor, SysState.settle, SysState.blank, Actor.mapEff, Actor.mapSrc,
+        gateActor,
         SysState.performAll]
-      up := fun _ => by simp [SysState.startActor, SysState.settle, SysState.blank, Actor.mapEff, gateActor,
+      up := fun _ => by simp [SysState.startActor, SysState.settle, SysState.blank, Actor.mapEff, Actor.mapSrc,
+        gateActor,
         SysState.performAll]
-      gateTimers := by simp [SysState.startActor, SysState.settle, SysState.blank, Actor.mapEff, gateActor,
+      gateTimers := by simp [SysState.startActor, SysState.settle, SysState.blank, Actor.mapEff, Actor.mapSrc,
+        gateActor,
         SysState.performAll]
-      timers := fun _ => by simp [SysState.startActor, SysState.settle, SysState.blank, Actor.mapEff, gateActor,
+      timers := fun _ => by simp [SysState.startActor, SysState.settle, SysState.blank, Actor.mapEff, Actor.mapSrc,
+        gateActor,
         SysState.performAll]
-      outbox := by simp [SysState.startActor, SysState.settle, SysState.blank, Actor.mapEff, gateActor,
+      outbox := by simp [SysState.startActor, SysState.settle, SysState.blank, Actor.mapEff, Actor.mapSrc,
+        gateActor,
         SysState.performAll]
-      sysNet := by simp [SysState.startActor, SysState.settle, SysState.blank, Actor.mapEff, gateActor,
+      sysNet := by simp [SysState.startActor, SysState.settle, SysState.blank, Actor.mapEff, Actor.mapSrc,
+        gateActor,
         SysState.performAll]
-      gateNet := by simp [SysState.startActor, SysState.settle, SysState.blank, Actor.mapEff, gateActor,
+      gateNet := by simp [SysState.startActor, SysState.settle, SysState.blank, Actor.mapEff, Actor.mapSrc,
+        gateActor,
+        SysState.performAll]
+      clock := by simp [SysState.startActor, SysState.settle, SysState.blank, Actor.mapEff, Actor.mapSrc,
+        gateActor,
         SysState.performAll] }
   have := rel_boot h0 sys.boot
   have hsink : (sink.boot.map (Sum.inl (β := σ.Id))) = [] := rfl
