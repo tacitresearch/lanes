@@ -72,6 +72,7 @@ public import Lanes.Lib.Postgres.Table
 public import Lanes.Lib.RateLimit
 public import Lanes.Lib.Time.Civil
 public import Lanes.Lib.Time.Format
+public import Lanes.Net.Handshake
 public import Lanes.Net.IO.Node
 public import Lanes.Net.IO.Peers
 public import Lanes.Outside.Basic
