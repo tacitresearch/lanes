@@ -58,11 +58,6 @@ import Lanes.Services
 /-- info: 'Aws.Imds.chain_instance' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Aws.Imds.chain_instance
 
--- Lanes.Services.Aws.Ses
-
-/-- info: 'Aws.Ses.Sent.admitted_nodup' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Aws.Ses.Sent.admitted_nodup
-
 -- Lanes.Services.Aws.SesSound
 
 /-- info: 'Aws.Ses.json_parse' depends on axioms: [propext, Classical.choice, Quot.sound] -/

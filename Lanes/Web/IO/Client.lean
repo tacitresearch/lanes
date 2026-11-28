@@ -7,6 +7,7 @@ module
 public import Std.Async
 public import Lanes.Runtime.IO.Shell
 public import Lanes.Outside.Basic
+public import Lanes.Web.Http.Compress
 public import Lanes.Web.Http.Sse
 public import Lanes.Web.IO.Tls
 public import Lanes.Lib.Net.Url
@@ -95,6 +96,10 @@ structure Config where
   maxResponseBytes : Nat := 1048576
   /-- What an `https` server's certificate must chain to. -/
   trust : Tls.Trust := .system
+  /-- Ask for gzip and read a response in gzip or `deflate`, as Go's client does, unless the
+  request names its own `Accept-Encoding`; decoded, a body is bounded by `maxResponseBytes`
+  too. -/
+  acceptGzip : Bool := true
 
 private def converse (socket : TCP.Socket.Client) (address : Std.Net.SocketAddress)
     (request : ByteArray) (read : ByteArray → Bool → Reading Response) : Async (Option Response) := do
@@ -150,6 +155,10 @@ connection or handshake refused, with OpenSSL's reason, no whole answer, or the 
 `Async.race` leaves the loser running, so the socket is closed whoever wins: that fails what a
 call given up on still waits for, and ends its task. -/
 def exchangeExplained (call : Call) (config : Config) : Async (Except String Response) := do
+  let gzip := config.acceptGzip && !call.headOnly
+    && (headerValue? call.request.headers "accept-encoding").isNone
+  let call := if gzip then { call with request := { call.request with
+    headers := call.request.headers ++ [("accept-encoding", "gzip")] } } else call
   let wire := if call.headOnly then call.request.wireHead else call.request.wire
   let some request := wire call.authority | return .error "the request cannot be written"
   let read := if call.headOnly then Response.readHead config.maxResponseBytes
@@ -162,7 +171,9 @@ def exchangeExplained (call : Call) (config : Config) : Async (Except String Res
         | .http => converse socket address request read
         | .https =>
           converseTls socket address request (← Tls.Session.start config.trust call.host) read
-      return answer.elim (.error "the connection ended without a whole answer") .ok
+      return match answer with
+        | none => .error "the connection ended without a whole answer"
+        | some r => if gzip then decode config.maxResponseBytes r else .ok r
     catch e => pure (.error (toString e))
   let patience := (fun _ => (.error "no answer by the deadline" : Except String Response)) <$>
     Async.sleep (.ofNat config.timeout_ms)

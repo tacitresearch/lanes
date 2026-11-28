@@ -115,8 +115,9 @@ consistent cut would need every worker to stop at once, or every actor to keep t
 had, which costs every step to serve a read that few applications need. What needs a consistent
 read of several things keeps them in one actor, or in the store, whose transactions give one
 (`docs/decisions/D111-typed-store.md`). The bank's total (`Tests/Reads.lean`) now can miss a
-transfer in flight, and a read after a response sees the actor that gave it, not yet the actors
-it sent messages to; the tests say so.
+transfer in flight (its source read after the debit, its destination before the credit) or count
+one twice (its source read before the debit, its destination after the credit), and a read after
+a response sees the actor that gave it, not yet the actors it sent messages to; the tests say so.
 
 ## Waves and batches removed
 

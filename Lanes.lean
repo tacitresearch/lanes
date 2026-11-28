@@ -28,6 +28,10 @@ public import Lanes.Core.World
 public import Lanes.Data.Declare
 public import Lanes.Data.Enum
 public import Lanes.Data.Fifo
+public import Lanes.Lib.Compress.Checksum
+public import Lanes.Lib.Compress.Deflate
+public import Lanes.Lib.Compress.Gzip
+public import Lanes.Lib.Compress.Inflate
 public import Lanes.Db.Basic
 public import Lanes.Db.Columns
 public import Lanes.Db.Jobs
@@ -51,8 +55,10 @@ public import Lanes.Lib.Encoding.Base64
 public import Lanes.Lib.Encoding.Digits
 public import Lanes.Lib.Encoding.Json
 public import Lanes.Lib.File
+public import Lanes.Lib.Log
 public import Lanes.Lib.Metrics
 public import Lanes.Lib.Mime.MediaType
+public import Lanes.Lib.Mime.Multipart
 public import Lanes.Lib.Net.Ip
 public import Lanes.Lib.Net.Percent
 public import Lanes.Lib.Net.Url
@@ -86,6 +92,7 @@ public import Lanes.Proof.Lossy
 public import Lanes.Proof.Monotone
 public import Lanes.Proof.Outputs
 public import Lanes.Proof.Past
+public import Lanes.Runtime.IO.Log
 public import Lanes.Runtime.Peek
 public import Lanes.Runtime.IO.Park
 public import Lanes.Runtime.IO.Shell
@@ -103,6 +110,7 @@ public import Lanes.Web.Html.Htmx
 public import Lanes.Web.Html.Syntax
 public import Lanes.Web.Http.Admit
 public import Lanes.Web.Http.Basic
+public import Lanes.Web.Http.Compress
 public import Lanes.Web.Http.Conn
 public import Lanes.Web.Http.Cookie
 public import Lanes.Web.Http.Front

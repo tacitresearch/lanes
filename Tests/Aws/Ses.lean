@@ -204,42 +204,31 @@ def conformance : Async (List (String × Bool)) := do
       world.allows events),
     ("ses handler: and the model refuses an answer given twice", !world.allows twice) ]
 
-/-- `handlerOnce` given one key twice, and once more after its state is read back from its
-file, sends it once; each repeat is answered `unknown`. -/
-def once : Async (List (String × Bool)) := do
+/-- `perform`, the worker's attempt: the message its render makes of the job's work, sent with the
+attempt's deadline, the job's id unsent. -/
+def outbox : Async (List (String × Bool)) := do
   let seen ← IO.mkRef []
   let (server, port_) ← Fake.serve (handle Tests.S3.creds seen)
-  let dir := (← IO.getEnv "TMPDIR").getD "/tmp"
-  let path : System.FilePath := s!"{dir}/lanes-ses-once-{← IO.monoNanosNow}"
-  let done ← IO.mkRef #[]
-  let rt ← Runtime.startWith mailer {} fun _ out => do
-    if let .done _ a := out then done.modify (·.push (kind a))
-  let e := endpointAt port_
-  let some m := msg? ["ann@b.co"] | return [("ses once: the message", false)]
-  let out : Out := .send ⟨0, 1000, m⟩
-  let keyed (k : String) : Out → Option String := fun _ => some k
-  let state ← Once.open path
-  handlerOnce state port (keyed "welcome-ann") e Tests.S3.creds config rt out
-  let _ ← Fake.waitFor 3000 do return (← done.get).size ≥ 1
-  handlerOnce state port (keyed "welcome-ann") e Tests.S3.creds config rt out
-  let reopened ← Once.open path
-  handlerOnce reopened port (keyed "welcome-ann") e Tests.S3.creds config rt out
-  handlerOnce reopened port (keyed "welcome-bob") e Tests.S3.creds config rt out
-  let _ ← Fake.waitFor 3000 do return (← done.get).size ≥ 4
-  rt.stop
+  let some fallback := msg? ["ann@b.co"] | return [("ses outbox: the message", false)]
+  let render (to : String) : Message := (msg? [to]).getD fallback
+  let attempt := perform render (endpointAt port_) Tests.S3.creds config
+  let sent ← attempt 7 1000 "ann@b.co"
+  let slow ← attempt 8 200 "slow@b.co"
   server.close
-  IO.FS.removeFile path
-  let answers := (← done.get).toList
   return [
-    ("ses once: an output whose key was sent is not sent again, also after a restart",
-      (← seen.get).length == 2 && answers.count "unknown" == 2 && answers.count "sent" == 2),
-    ("ses once: the state reads back as written, and a key that is no line is refused",
-      Sent.read (Sent.write ["k", "j"]) == ["k", "j"] && !Sent.admits [] "a\nb"
-        && !Sent.admits [] "") ]
+    ("ses outbox: an attempt sends the message of the job's work, once",
+      sent == some (.sent "m-0") && (← seen.get) == [["ann@b.co"], ["slow@b.co"]]),
+    ("ses outbox: an attempt with no answer by its deadline is none", slow.isNone) ]
 
-def tests : List (String × Bool) := addressTests ++ requestTests ++ answerTests
+def outboxTests : List (String × Bool) :=
+  [ ("ses outbox: sent is done, throttling and a 5xx another attempt, a refusal for good",
+      classify (.sent "m") == .ok && classify (.rejected 429 "TooManyRequestsException") matches .retry _
+        && classify (.uncertain 500 "") matches .retry _
+        && classify (.rejected 400 "MessageRejected") matches .fatal _) ]
+
+def tests : List (String × Bool) := addressTests ++ requestTests ++ answerTests ++ outboxTests
 
 def live : Async (List (String × Bool)) := do
-  return (← exchanges) ++ (← conformance) ++ (← once)
+  return (← exchanges) ++ (← conformance) ++ (← outbox)
 
 end Checks.Ses
