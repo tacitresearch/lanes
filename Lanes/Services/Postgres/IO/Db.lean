@@ -94,12 +94,87 @@ def migrate (s : Session) (files : List String) : Async (List String) := do
       | other => return [s!"{sql}: {repr other}"]
   return []
 
+/-- The key of the advisory lock `migrateOnce` takes: any number, the same in every instance. -/
+def migrationsLock : Nat := 7406223
+
+/-- Run the migrations that `lanes_migrations` does not record, each a file's name and text, in
+the order of their names, and record them. It is one transaction under an advisory lock, so that
+instances started at once run each migration once, and a migration that fails leaves nothing of
+the run. The errors, if any. -/
+def migrateOnce (s : Session) (files : List (String × String)) : Async (List String) := do
+  let exec := fun (sql : String) (params : List (Option String)) => s.exec (.statement { sql, params })
+  let fail := fun (what : String) (r : Reply) => do
+    discard <| s.exec .rollback
+    return [s!"{what}: {repr r}"]
+  match ← s.exec (.begin .readCommitted) with
+  | .rows _ => pure ()
+  | r => return [s!"BEGIN: {repr r}"]
+  for sql in [s!"SELECT pg_advisory_xact_lock({migrationsLock})", Sql.migrationsCreate] do
+    match ← exec sql [] with
+    | .rows _ => pure ()
+    | r => return (← fail sql r)
+  let applied ← match ← exec s!"SELECT name FROM {Sql.migrationsTable}" [] with
+    | .rows r => pure (r.rows.filterMap fun row => row.head?.join)
+    | r => return (← fail "the migrations run" r)
+  for (name, text) in Sql.pending applied files do
+    for sql in Sql.statements text do
+      match ← exec sql [] with
+      | .rows _ => pure ()
+      | r => return (← fail s!"{name}: {sql}" r)
+    match ← exec s!"INSERT INTO {Sql.migrationsTable} (name) VALUES ($1)" [some name] with
+    | .rows _ => pure ()
+    | r => return (← fail name r)
+  match ← s.exec .commit with
+  | .committed => return []
+  | r => return [s!"COMMIT: {repr r}"]
+
+/-- The migrations of a directory: each `.sql` file's name and text. -/
+def readMigrations (dir : System.FilePath) : IO (List (String × String)) := do
+  let files := (← dir.readDir).toList.filter (·.fileName.endsWith ".sql")
+  files.mapM fun e => return (e.fileName, ← IO.FS.readFile e.path)
+
 /-- How the tables of the session's current schema differ from `schema`
 (`Postgres.Sql.catalogDiff`); empty when they agree. -/
 def checkSchema (s : Session) (schema : Schema) : Async (List String) := do
   match ← s.exec (.statement Sql.columnsQuery), ← s.exec (.statement Sql.keysQuery) with
   | .rows columns, .rows keys => return Sql.catalogDiff schema columns.rows keys.rows
   | a, b => return [s!"the catalog: {repr a}, {repr b}"]
+
+/-- How the tables `schema` names differ from the database's (`Postgres.Sql.tablesDiff`). -/
+def checkTables (s : Session) (schema : Schema) : Async (List String) := do
+  match ← s.exec (.statement Sql.columnsQuery), ← s.exec (.statement Sql.keysQuery) with
+  | .rows columns, .rows keys => return Sql.tablesDiff schema columns.rows keys.rows
+  | a, b => return [s!"the catalog: {repr a}, {repr b}"]
+
+/-- What an application does before it serves: run the migrations not yet run
+(`migrateOnce`), then compare the tables `schema` declares with the database's
+(`checkTables`). The problems, if any. An application refuses to start on any, rather than run
+its transactions on tables they were not written for. -/
+def prepare (cfg : Client.Config) (schema : Schema) (files : List (String × String)) :
+    Async (List String) := do
+  match ← connect cfg with
+  | .error _ => return [s!"cannot connect to PostgreSQL at {cfg.host}:{cfg.port}"]
+  | .ok s =>
+    let errors ← migrateOnce s files
+    let diff ← if errors.isEmpty then checkTables s schema else pure []
+    s.close
+    return errors ++ diff
+
+/-- For tests: drop the schema's tables and forget the migrations named, so that `prepare` runs
+them again on tables that hold nothing. -/
+def reset (cfg : Client.Config) (schema : Schema) (names : List String) : Async (List String) := do
+  match ← connect cfg with
+  | .error _ => return [s!"cannot connect to PostgreSQL at {cfg.host}:{cfg.port}"]
+  | .ok s =>
+    let drops := schema.map fun t => (s!"DROP TABLE IF EXISTS {Sql.quote t.name} CASCADE", [])
+    let forget := names.map fun n => (s!"DELETE FROM {Sql.migrationsTable} WHERE name = $1", [some n])
+    let mut errors := []
+    for (sql, params) in drops ++ [(Sql.migrationsCreate, [])] ++ forget do
+      match ← s.exec (.statement { sql, params }) with
+      | .rows _ => pure ()
+      | r => errors := errors ++ [s!"{sql}: {repr r}"]
+    s.close
+    return errors
 
 /-- The store as an adapter: each call on a task of its own, its result handed back as an input.
 A result that finds the inbox full is dropped, which the model allows as a lost answer. -/

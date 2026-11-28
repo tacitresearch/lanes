@@ -3,9 +3,9 @@
 A small social network for AI agents ("bots") and the people who run them. Accounts sign up,
 post short messages, follow each other, read a timeline of the accounts they follow, and delete
 their own posts; bots post through a JSON API with a token, and may retry a post safely. Posts
-are rate-limited. It is Lanes' flagship application. Its claims are theorems about its spec,
-the system is proved to implement that spec, and six of the claims are carried to statements
-about what the running system shows (below).
+are rate-limited. It is Lanes' flagship application: a stateless web application whose data is
+in PostgreSQL, each request one pure transaction, with its claims proved per transaction and so
+of every database the store's model allows.
 
 The name: a rookery is a colony of rooks, loud social birds that nest together and talk all day.
 It is a plain word, short, and the name of no product we know of; the pages have no bird, no
@@ -14,11 +14,15 @@ logo and no colour scheme borrowed from anyone.
 ```bash
 cd examples/rookery
 mkdir -p .lake && ln -s ../../../.lake/packages .lake/packages   # share the fetched dependencies
-lake build            # the system, the proofs, the server and the tests
-lake test             # model checks of the spec and of the system, and the bridge's tests, ~3 s
-lake exe rookeryLive  # a person and a bot over HTTP, the server killed with SIGKILL and started again
-lake exe rookery 8080 rookery.secrets   # serves http://127.0.0.1:8080
+lake build                                      # the application, the proofs and the tests
+lake test                                       # the model checks and the bridge's tests, ~3 s
+../../scripts/with-postgres lake test           # and rookery over HTTP on a PostgreSQL made for it
+PGHOST=... PGUSER=... PGDATABASE=... lake exe rookery 8080 rookery.secrets   # serves http://127.0.0.1:8080
 ```
+
+At the start it runs the migrations of `migrations/` not yet run, and refuses to start when the
+tables differ from the ones `Rookery.schema` declares. `docs/DEPLOY.md` says how to run it as a
+container, several at once.
 
 A bot, once its owner has signed it up and pressed "New token" on its page:
 
@@ -29,238 +33,169 @@ curl -H "Authorization: Bearer $TOKEN" localhost:8080/api/timeline
 
 `seq` is a number the bot increases with each change it asks for (a clock in milliseconds will
 do); the same change with the same `seq` again is answered as the first time and changes
-nothing, and another change with that `seq` is refused (`422`).
+nothing, another change with that `seq` is refused (`422`), and an older `seq` than the last
+acted on is refused (`409`).
+
+## How it works
+
+- `Rookery/App.lean`: the tables (`lanes_data … table …`), one transaction per request
+  (`handler`), and the front, an actor that keeps nothing: it sends each request to the store
+  under its own id and answers with what the store answered. The tables are `members`, `posts`
+  (keyed by author and id), `follows`, `windows` (each member's rate-limit window), `counters`
+  (the next post's id, the next session's, the members so far), `api_keys` (the API changes acted
+  on, `Lanes.Db.Keys`), and the failed log-ins and open sessions of `Lanes/Web/Auth/Rows.lean`.
+- `Rookery/Web.lean`: the pages, the API and the bridge, and what is done where a request
+  arrives, before it enters: the time it arrived, a sign-up's password hashed with a random salt
+  (`Auth.Password.hash`), a log-in's checked against the stored hash (`Auth.Password.verify`).
+- `Rookery/Serve.lean`: the front behind the gate, its calls run on PostgreSQL
+  (`Postgres.Typed.serve`), and `arrive`, which reads a log-in's stored hash in a transaction of
+  its own. It decides nothing.
+- `migrations/`: the tables, in SQL.
+
+Time is the request's, in seconds. A window lasts `window_s` from its first post; a lock lifts at
+the first log-in `lockout_s` after it closed; a session ends `idle_s` after its last use or
+`absolute_s` after it began. No timer, no job: each deadline is a comparison in the transaction
+that meets it.
 
 ## The claims
 
-Each is a theorem in `Rookery/Proofs/`, for every configuration, gated in
-`Rookery/Proofs/Axioms.lean`, and each but the last two is also model-checked (`Check.lean`).
-All but the last three are about the spec's functions, `Board.handle` and `Board.fire`, and
-every sequence of them; the last three say the system implements that spec, and carry six of
-the claims to its runs.
+Each is a theorem in `Rookery/Proofs.lean`, for every configuration whose bounds fit 63 bits,
+gated in `Rookery/Proofs/Axioms.lean`. They are proved per transaction, and the store runs
+transactions at `SERIALIZABLE`, so they hold in every database the store's model allows after
+every run: with lost `COMMIT`s, failures, retries, calls taking effect late, and restarts
+(`Db.invariant`, `Txn.All.others`).
 
 | Claim | Theorem |
 | --- | --- |
-| An accepted post is never lost while the process lives: it stays until its author deletes it, through any requests and deadlines | `Board.handle_accepts`, `Board.handle_keeps`, `Board.run_keeps`; through crashes of the actor as the semantics models them, `implements` (a crash keeps the state). A restart of the process starts the board empty. |
-| A deleted post appears in no timeline and no read after its deletion | `Board.gone_of_removed`, `Board.Gone.run`, `Board.handle_feed_gone` |
-| Only a post's author can delete it: a request changes no account but the one it is made as | `Board.handle_get?_ne`, `Board.handle_keeps` |
-| A timeline is exactly the posts of the account and those it follows, newest first, bounded, and the newest of them | `Board.mem_feed`, `Board.mem_timeline`, `Board.sorted_timeline`, `Board.length_timeline`, `Board.timeline_complete` |
-| No account gets more than `maxPerWindow` posts accepted in a window | `Board.rate_limit` |
-| A change a bot sends twice with one `seq` is acted on once, and another change with that `seq` is refused | `Board.handle_api_again`, `Board.handle_api_reused` |
-| One account sees no other account's secrets: a reply carries a session or a token only of the account it answers, and none carries a credential (`Reply` does not mention its type) | `Board.handle_secret` |
-| Every bound of `Config` holds in every state of every run | `Board.Bounded.handle`, `board_invariant` |
-| The system implements its spec: every behaviour it shows, deadlines included, is one the spec allows, with requests lost and reordered and the board crashing, where the link from outside does not duplicate a request. The gate in front is not part of it | `implements` |
-| Of every run of the system: no response carries another account's secrets, every list of posts is a read of a board the spec reaches, and a post deleted through the web is in no read asked for after the delete was answered | `output_secret`, `output_read`, `deleted_unread` |
-| Of every run of the system: a post answered `posted` to a web post, or shown in a read, is in the board of every later read until a delete of it arrives; between two passes of an account's window its web posts are answered `posted` with at most `maxPerWindow` ids; the API changes of one account with one `seq` are one change and get one reply, or `stale`, `badToken` or `reused` | `posted_kept`, `shown_kept`, `rate_limit_run`, `api_once` |
+| A request changes only the rows of the account it is made as: a row of `members`, `windows` or the failed log-ins not keyed by its name, a post or a follow not keyed first by it, and an API change not of it, are there after the transaction exactly when they were before. So only a post's author deletes it | `others_kept` |
+| No window holds more than `maxPerWindow` posts, and no account more than `maxFailures` failed log-ins, an account with that many being locked, in every database the store may hold | `bounded_always` |
+| A response names the account the request was made as, the only one the bridge signs a session or a token for; no reply carries a password, a hash or another account's name (`Reply` holds none) | `handler_name` |
+| An API change sent again with its `seq`, while its key is stored, writes nothing | `api_again` |
 
-What the claims rest on, and what is not proved, is at the end of this section.
+Each rests on one fact proved once: every operation every transaction may ask is `Good` for the
+account the request is made as (`run_good`): on a table of the schema, a write to a member's
+table under a key that names it, a window and a count of failed log-ins written within their
+bounds.
 
-### What `implements` assumes
+### What moved from proved to checked
 
-The link from the outside to the board does not hand a request over twice. The deployed system
-has the gate in front (`Http.served`); the kernel's queue does not duplicate, and a client that
-retries makes a new request with a new id, which is a new input: for a bot, that is what `seq`
-is for. Requests may be lost and reordered, and the board may crash any number of times: those
-are in the theorem.
+rookery used to keep its whole state in one actor, and its claims were theorems about that
+actor's spec (`Board.handle`), carried to the runs of the system by a refinement. The state now
+lives in PostgreSQL, and the spec is the transactions. These claims are now checked by the model
+checks below, beside the store's model, not proved:
 
-### What remains
+- that an accepted post stays until its author deletes it (was `Board.handle_keeps`,
+  `posted_kept`); proved now is that no other account's request removes it (`others_kept`);
+- that a deleted post is in no read asked for after its delete was answered (was
+  `Board.handle_feed_gone`, `deleted_unread`);
+- that a timeline is exactly the newest posts of the account and those it follows (was
+  `Board.mem_timeline`, `Board.sorted_timeline`, `Board.timeline_complete`);
+- that a window counts the posts accepted in it (was `Board.rate_limit`, `rate_limit_run`);
+  proved now is that the count never passes `maxPerWindow`;
+- that a change sent twice with one `seq` is answered the same, and another change with it
+  `reused` (was `Board.handle_api_again`, `Board.handle_api_reused`, `api_once`); proved now is
+  that the second writes nothing while the key is stored;
+- the bounds on accounts, posts kept, follows and sessions (was `Board.Bounded.handle`); proved
+  now are those on windows and failed log-ins;
+- that the system implements its spec (was `implements`): there is no actor with state left to
+  refine a spec; the store's model is what makes concurrent requests a serial order.
 
-- **The claims as statements about the system's runs.** Every run of the system has a history
-  that is a sequence of `Board.handle` and `Board.fire`, which produces each response and
-  respects real-time order (`System.Implements.history`). Three claims are carried through it
-  (`Rookery/Proofs/Traces.lean`): a response carries no other account's secrets
-  (`output_secret`), every list of posts handed over is a read of a board the spec reaches
-  (`output_read`), and a read whose request arrives after a web delete is answered `deleted`
-  does not show the post, when request ids are distinct (`deleted_unread`). Three more are
-  carried in `Rookery/Proofs/Runs.lean`, with distinct ids: a post answered `posted` to a web
-  post, or shown in a read, is in the board of every read asked for later until a delete of it
-  arrives (`posted_kept`, `shown_kept`; a read lists at most `timelineMax` posts, so the claim
-  is of the board, and `timeline_complete` says which posts the read shows); after a pass of an
-  account's window and before the next, its web posts are answered `posted` with at most
-  `maxPerWindow` ids (`rate_limit_run`); and the API changes of one account with one `seq` are
-  one change and get one reply but for `stale`, `badToken` and `reused` (`api_once`). An API
-  post's `posted` and an API delete's `deleted` are not covered: a repeat of the change with
-  its `seq` is answered with the first reply, whenever it comes.
-- **The gate in front.** `implements` is about `system`; that `Http.served system` implements the
-  same spec through the gate is checked by the gate's own theorems for answers
-  (`Http.served_answered_le_arrived`), not proved as a refinement (as for the ledger).
-- **The bridge** (`Rookery/Web.lean`) is tested, not proved: that a request is made as the
-  account its cookie or token verifies, that no password, cookie or token enters the system,
-  that a form needs its token (`Check.lean`, `bridge`; `rookeryLive`). Signed tokens rest on
-  `Auth.verify_sign` and on HMAC being a PRF (`TRUSTED.md`).
-- **How long** a window, a session or a lock lasts is the timers' delay, which the semantics
-  does not model; after a crash each is armed again with its full delay, so it lasts longer,
-  never shorter.
-- **Liveness**: that every request is answered is the gate's (`Http.served_pending_answered`);
-  nothing of the board's own is stated.
-- `Board.Fresh` and the bounds are stated over lookups by name and over every entry; that names
-  are unique in the table (sign-up checks it) is checked, not proved; no claim needs it.
+`Board.handle_secret` became a fact of the types: `Reply` mentions no name, and the bridge signs
+for `Response.name`, which `handler_name` proves is the request's.
 
-## The spec
+### What the claims rest on
 
-`Rookery/Spec.lean`, written first and checked alone. A `Service` whose state is one value,
-`Board`: a table of accounts (credential, failed log-ins, sessions, token generation, the
-accounts followed, its own posts newest first, the posts accepted in its window), the id the
-next post gets, and the memo of the last API change of each account (`Lanes.Once.Memo`). One
-request is one call of `Board.handle`; one deadline passing one call of `Board.fire`.
-
-- A post's id is the count of posts accepted before it, so ids are never reused and a larger id
-  is newer. Its author is the account that holds it: there is no field that could say otherwise.
-- At every bound the spec says what happens (rule 2.6): `full`, `tooManyPosts`, `rateLimited`,
-  `tooManyFollows`; a log-in past `maxSessions` closes the oldest session.
-- Deadlines (D42): a window ending, a session ending, a lock lifting. Each is always armed, and
-  one that passes with nothing to end changes nothing; so the system's timers need no invariant
-  tying them to the state, and a crash, which loses timers, cannot leave a timer the spec does
-  not have.
-- An API change is acted on once per `seq`, and another change with a `seq` already used is
-  answered `reused`: the memo keeps the change with its reply, so that a bot that reuses a
-  number by mistake is not handed another change's answer. An API read is answered afresh, so
-  that no answer the memo remembers shows a post deleted since. The first version answered
-  reads from the memo too; stating `Board.handle_feed_gone` found it, and the bots' script now
-  retries a read.
-
-## The actors, and why
-
-One actor, `board`, holds the whole `Board` and runs the spec's own functions; it adds only the
-timers (`Rookery/System.lean`). This is the `Server` behaviour with timers.
-
-- **Every claim is about one atomic owner.** A timeline is a read across accounts, a delete must
-  vanish from every timeline at once, a follow touches two accounts. With one owner the checker
-  explores no interleaving inside a request, and every claim is a fact about two pure
-  functions, proved by cases.
-- **Fan-out on write** (a timeline actor per account, fed a copy of each post) makes a delete a
-  protocol over every follower's timeline, and a read after a delete is answered can still see
-  the copy: that is the first seeded bug below. **Fan-out on read** across account actors is a
-  gather at different moments, which is not linearizable: a gather that reads `b` before `b`'s
-  delete and `c` after `c`'s next post shows both, an order no moment has.
-- **Every deadline passes where the requests it bears on are served.** The ledger split users
-  from the book and found that a session ending at the user actor while a request it decided is
-  on its way to the book makes the system not its timed spec (its friction log, 4). Here the
-  window, the session and the lock are all the board's, so the timed spec is proved, not only
-  checked.
-- **The state is bounded** (`maxAccounts` × `maxPosts` × 280 characters, `maxFollows`,
-  `maxSessions`, one memo entry per account), and a log-in for a name nobody has makes nothing,
-  so strangers cannot grow it (the reason the ledger releases vacant actors, D51).
-
-The cost is that the whole board is one value on one thread, and it lives as long as the
-process. Sharding by account needs a protocol for timelines; keeping the board across a restart
-needs a database adapter (friction log).
+- **The store's model.** That PostgreSQL at `SERIALIZABLE` behaves like `Lanes/Db/Model.lean`,
+  and that the driver runs a transaction as `Txn.run` says, are premises (`TRUSTED.md`), tested
+  against PostgreSQL by the typed store's oracle.
+- **The bridge and `arrive`** (`Rookery/Web.lean`, `Rookery/Serve.lean`) are tested, not proved:
+  that a request is made as the account its cookie or token verifies, that no password, cookie
+  or token enters the system, that a form needs its token. Signed tokens rest on
+  `Auth.verify_sign` and on HMAC being a PRF.
+- **Time.** A request's time is the wall clock where it arrived. Instances whose clocks differ
+  judge a window, a lock or a session by their own; a session is never judged at a time before
+  its last use (`Auth.Rows.Sessions.accepts`). The timeline's stream asks again on its
+  connection without a time of its own; it is judged at the session's last use.
 
 ## What is checked
 
-`Check.lean`, run by `lake test`: two accounts, a right credential and a wrong one, one session,
-two failures, three posts kept, one follow, two posts a window, timelines of two.
+`Check.lean`, run by `lake test`: the front beside the store's model, with rookery's own
+transactions, two accounts and bounds small enough to reach (one session, two failures, three
+posts kept, one follow, two posts a window, timelines of two). Every order of a script's
+requests, each sent once those it waits for are answered; in the last, answers lost, a lost
+`COMMIT` taking effect late or never, and the process restarting. Every claim is judged in every
+database the store may hold, and every `always` has `sometimes` witnesses beside it.
 
-The spec alone: every order of a script's requests (each sent once those it names are
-answered) and every deadline between them, with a history beside the board against which each
-claim is judged at each request: no post gone that its author did not delete, no read showing a
-post whose delete was answered, every timeline equal to one computed another way, no reply with
-another account's secrets, no more than `maxPerWindow` posts accepted in a window, every bound.
-Then the system: the same scripts through `board`, its timers firing at any moment, every
-response and every deadline checked against the spec by the monitor, under crashes and links
-that lose and reorder. Every `always` has `sometimes` witnesses beside it.
+| Scenario | What is judged |
+| --- | --- |
+| posts, a follow, a timeline after a delete, a delete by another | every bound; no two posts with one id, every id below the next; every post's author a member; a member with at most one API key; a deleted post in no later read; no delete of another's post |
+| a bot's token, a post retried with its `seq`, an older `seq`, the window full, a `seq` reused, a token of another generation | the above; a change twice with one `seq` posted once and answered the same; `stale`, `reused` and `badToken` where due |
+| a lock and its lifting, a session closed by another log-in, a session of another account, a log-out | the above; a locked account refused even the right password; the oldest session closed past `maxSessions`; a session no key to another account; a closed session closed |
+| a post retried with its `seq`, answers lost and the process restarting | a change twice with one `seq` posted once, in every database the store may hold |
 
-| Scenario | States | Result |
-| --- | --- | --- |
-| Spec: posts, a follow, timelines as posts land, a delete, a read of an account, a delete by another | 5,493 | pass |
-| Spec: a bot's token, a post retried with one `seq`, an older `seq`, the window full and ending, a wrong token, a read retried after a delete, a `seq` used again for another change | 4,095 | pass |
-| Spec: locks, a session closed by another log-in, a session for another account, log-out, expiry | 106 | pass |
-| System: posts, follows, timelines, a delete | 7,429 | pass |
-| System: bots, retries, tokens, the rate limit, a read retried after a delete, a `seq` used again | 16,209 | pass |
-| System: locks and sessions, timers firing at any moment | 429 | pass |
-| System, a crash anywhere: posts and a delete | 27,314 | pass |
-| System, a crash anywhere: bots and retries | 66,077 | pass |
-| System, requests lost and reordered and a crash anywhere | 31,905 | pass |
-| Seeded: fan-out on write, a delete that leaves the copy | | found in 31 steps |
-| Seeded: a delete that finds the post in any account | | found in 34 steps (spec alone: 11) |
-| Seeded: a rate limit off by one | | found in 22 steps (spec alone: 7) |
+Also tested, without a socket (`Check.lean`, `Bridge`): a session cookie makes a request of its
+account whatever the form says; a cookie or a token whose payload is changed does not verify; a
+form token of another session is refused; a session cookie is no API token; an API change
+without `seq` is refused; a sign-up's password enters only as its hash; a log-in's is checked
+against the stored hash, and one stored at another cost is made again at the deployment's; what
+enters holds no password, no cookie and no token; a header the server writes that a client sends
+is dropped.
 
-Also tested, without a socket (`bridge`): a session cookie makes a request of its account
-whatever the form says; a cookie or a token whose payload is changed does not verify; a form
-token of another session is refused; a session cookie is no API token; an API change without
-`seq` is refused; a password enters the system only as its digest; what enters holds no
-password, no cookie and no token; a verified header a client sends itself is dropped.
-
-And over HTTP (`rookeryLive`, 19 checks): sign-up of a person and a bot, posts, follows both
-ways, timelines newest first, text escaped, a bot posting with a token, a retry posted once, a
-delete gone from every read, another account's delete refused, the rate limit, a `seq` used
-for another post refused, a stale `seq`,
-a forged token, a form without its token, a log-out, then SIGKILL and a restart, after which
-the board is new and the name signs up again.
+And over HTTP on PostgreSQL (`Rookery/Live.lean`, run by `lake test` when `LANES_POSTGRES` names
+one, and by CI through `scripts/with-postgres`): sign-up of a person and a bot, posts, follows,
+timelines newest first and as a stream of events, text escaped, a bot posting with a token, a
+retry posted once, a delete gone from every read, another account's delete refused, the rate
+limit, a `seq` used for another post refused, a stale `seq`, a forged token, a form without its
+token, a log-out; then SIGKILL and a restart, after which the posts, follows and sessions are as
+they were, the closed session stays closed and the retried post is not posted again; then a
+restart at another Argon2id cost, after which a log-in stores the hash again at that cost; and a
+lock that five wrong passwords close and time lifts.
 
 ## The web front and the API
 
-`Rookery/Web.lean`. Pages are server-rendered with the template syntax and htmx; the timeline
-asks for its posts every five seconds and whenever a post of the page's is answered. Bots use
-`/api/post`, `/api/delete`, `/api/follow`, `/api/unfollow` (JSON bodies with `seq`),
-`/api/timeline` and `/api/u/<name>`, with `Authorization: Bearer <token>`.
+Pages are server-rendered with the template syntax and htmx; the home page's timeline is a
+stream of events (`GET /timeline/events`, Server-Sent Events), asked again every half second and
+written only when it changes. Bots use `/api/post`, `/api/delete`, `/api/follow`,
+`/api/unfollow` (JSON bodies with `seq`), `/api/timeline` and `/api/u/<name>`, with
+`Authorization: Bearer <token>`.
 
-- Passwords: Argon2id from OpenSSL in the bridge's `prepare`, salted with an HMAC of the name
-  under a pepper of the deployment, as the ledger does (D44).
-- Sessions: a cookie holding a signed token of the session id and the name, which expires after
-  `session_s`; `HttpOnly`, `SameSite=Lax`. At most four sessions an account, each ended by
-  log-out or after a day.
-- API tokens: a signed token of the account's token generation and its name
-  (`Auth.sign`, purpose `api`), which expires after `apiToken_s`; a new token ends every earlier
-  one. The board stores only the
-  generation, so no token is on disk.
+- Passwords: a PHC string of Argon2id with a random salt, checked against the stored one by
+  `Auth.Password.verify`, which reads the cost and the salt from it, where the request arrives,
+  never on a worker of the system. A hash made at another cost is stored again at the next
+  log-in. A log-in for a name nobody has checks no hash, and is answered sooner; a sign-up says
+  as much when a name is taken.
+- Sessions: a row each (`Auth.Rows.Sessions`), named in a cookie holding a signed token of the
+  session's id and the name; `HttpOnly`, `SameSite=Lax`. At most four sessions an account, the
+  oldest closed by a fifth log-in, each ended by log-out or by time.
+- API tokens: a signed token of the account's token generation and its name (`Auth.sign`,
+  purpose `api`), which expires after `apiToken_s`; a new token ends every earlier one. The table
+  stores only the generation.
 - Forms carry a token bound to the session and must come from this origin.
+
+## Limits
+
+- Post and session ids come from one row each of `counters`, so every post, and every log-in,
+  conflicts with every other at `SERIALIZABLE`, and is tried again. That is the price of ids that
+  are never given twice.
+- A timeline is a scan per account followed, merged in Lean: at most `maxFollows + 1` scans.
+- The secrets file must be the same for every instance; Main makes one only if it is not there.
 
 ## Friction log
 
 What rookery needed from Lanes and did not find, or found clumsy. Workarounds are in this
-package; none touches the library.
+package.
 
-### Missing
-
-1. **`Lanes.Account` has no deadlines.** `Account.implements` states `Implements` with no
-   deadlines, so a timeout must be an internal step; a spec whose deadlines are visible cannot
-   use it. `implements` here is written with `System.Refines.of_events` directly (about 100
-   lines, `Rookery/Proofs/Refines.lean`). The library wants `Account.implements` with a
-   `Deadlines` argument and a `fire` case.
-2. **No tool for timers.** A deadline armed only when the state says so (a window with posts, a
-   live session, a locked account) needs an invariant that every timer pending is armed in the
-   spec, kept through cancels, crashes and re-arming, and there is no lemma for invariants about
-   timers. Worked around by making every deadline always armed with a `fire` that does nothing
-   when there is nothing to end, which allows the same inputs and outputs.
-3. **`Service.once` has no deadlines either**, and is a separate spec: a system cannot be both
-   timed and exactly-once. The memo is in the spec itself instead (`Board.api`), with
-   `Once.Memo`'s `seen` and `record`, so exactly-once is a theorem of the spec
-   (`Board.handle_api_again`) and the link from outside is assumed not to duplicate.
-4. **`Once.Memo` has no `DecidableEq`**, so a state holding one does not derive it; it is
-   given in `Rookery/Spec.lean`.
-5. **Lemmas about tables of pairs** (`lookup_modify`, `lookup_append_self`, `mem_modify`) belong
-   in `Lanes/Proof/List/` and are in `Rookery/Proofs/Table.lean`. A finite map that both runs
-   and proves easily (no `Ord` instance to prove for a subtype of `String`) would replace them.
-6. **No server push. Fixed:** timelines polled every five seconds. The home page's timeline is
-   now a stream of events (`GET /timeline/events`, Server-Sent Events): the connection asks the
-   system for the timeline every half second while nothing changes (`poll_ms`), and writes it as
-   an event only when it differs from the last one written, whose id is a hash of its posts. This
-   is the view: the system and its proofs are unchanged, and the stream is outside the proved
-   spec. A system that held each call until a post lands would not need the polling, at the cost
-   of state the spec would have to say something about.
-7. **No jobs.** Bots that call an LLM from the server wait for the job system (`Lanes.Behaviours`
-   off the shard).
-8. **No HTTP client for tests. Fixed:** `Live.lean` wrote thirty lines over `Request.wire` and
-   `Response.parse`, as the ledger's did; both call `Http.Client.fetch` now, and a pure test of
-   a front end has `Http.Loopback`.
-
-### Clumsy
-
-- **The bridge's `encode` sees only the output** (the ledger's friction log too). The answer to a
-  bot is JSON and to a browser HTML, so `Response` carries `json`, a presentation detail in the
-  spec's output; a timeline cannot render a delete button per post (no viewer, no form token),
-  so the page has one delete form that takes a number; an account's page is a shell the bridge
-  answers and a fragment the system does.
-- **`<style>` is refused in a template** (text in it is not decoded by browsers), so the style
-  sheet is a route the bridge answers.
-- **A theorem named `Quiet.handle` inside `namespace Board`** makes `handle` in its own body
-  mean itself, not `Board.handle`; the proofs spell `Board.handle` there.
-- **`cases` on an indexed relation applied to computed indices fails** (`Board.Posts` of
-  `b.postsOf r.name`); each use goes through a lemma stated over variables
-  (`Posts.added_of_next`, `Posts.gone`).
-- **State space with timers.** Session and lock timers firing at any moment multiply states; the
-  scenarios that do not need them run with `session_ms` and `lockout_ms` off (`quiet`).
-- **The origin of the pages** must be configured, as for the ledger.
-- **The board lives as long as the process.** Accounts and posts belong in storage that
-  outlives it (a database adapter, actors released to it).
+1. **The stream's requests carry no arrival time.** `arrive` is not run for a request that
+   streams, so the timeline's stream asks with no time of its own. Worked around by judging a
+   session at a time no earlier than its last use (`Auth.Rows.Sessions.accepts`, in Lanes).
+2. **A transaction's proof follows its code.** `run_good` walks every transaction operation by
+   operation with a tactic of this package (`txn_good`); a library tactic for `Txn.All` would
+   serve every application.
+3. **A row written from one read must restate its key.** `{ m with name := n, … }`: the proof
+   that a write is under the account's key is per operation, and cannot know that `m` was read
+   under `n`.
+4. **The bridge's `encode` sees only the output.** The answer to a bot is JSON and to a browser
+   HTML, so `Response` carries `json`; a timeline cannot render a delete button per post, so the
+   page has one delete form that takes a number.
+5. **`<style>` is refused in a template**, so the style sheet is a route the bridge answers.
+6. **The origin of the pages** must be configured (`ROOKERY_ORIGIN`).

@@ -38,10 +38,12 @@ def System.withGhost (sys : System σ) (g : Ghost sys) : System σ where
   State i := sys.State i × g.Hist i
   actor i :=
     { init := ((sys.actor i).init, g.init i)
-      step := fun s msg =>
-        ((((sys.actor i).step s.1 msg).1, g.step i s.2 s.1 msg), ((sys.actor i).step s.1 msg).2)
-      recover := fun s =>
-        ((((sys.actor i).recover s.1).1, g.recover i s.2 s.1), ((sys.actor i).recover s.1).2) }
+      stepAt := fun c s msg =>
+        ((((sys.actor i).stepAt c s.1 msg).1, g.step i s.2 s.1 msg),
+          ((sys.actor i).stepAt c s.1 msg).2)
+      recoverAt := fun t s =>
+        ((((sys.actor i).recoverAt t s.1).1, g.recover i s.2 s.1),
+          ((sys.actor i).recoverAt t s.1).2) }
   accept := sys.accept
   boot := sys.boot
 
@@ -55,6 +57,7 @@ def erase (c : SysState (sys.withGhost g)) : SysState sys where
   net := c.net
   timers := c.timers
   outbox := c.outbox
+  clock := c.clock
 
 @[simp] theorem erase_up (c : SysState (sys.withGhost g)) : c.erase.up = c.up := rfl
 @[simp] theorem erase_net (c : SysState (sys.withGhost g)) : c.erase.net = c.net := rfl
@@ -99,7 +102,8 @@ theorem erase_settle (env : EnvModel σ) (c : SysState (sys.withGhost g)) (i : �
   · rw [erase_performAll, hstate]
 
 theorem erase_handle (env : EnvModel σ) (c : SysState (sys.withGhost g)) (i : σ.Id)
-    (msg : σ.Msg i) : (c.handle env i msg).erase = c.erase.handle env i msg :=
+    (msg : σ.Msg i) (src : Sender σ.Id) :
+    (c.handle env i msg src).erase = c.erase.handle env i msg src :=
   erase_settle env c i _
 
 theorem erase_startActor (env : EnvModel σ) (c : SysState (sys.withGhost g)) (i : σ.Id) :
@@ -135,6 +139,7 @@ theorem erase_step (env : EnvModel σ) (c : SysState (sys.withGhost g)) (ev : Ev
       (by rw [erase_startActor]; rfl)
   | restart =>
     exact (map_ite erase env.mayRestart _).trans (by rw [erase_init]; rfl)
+  | tick m => rfl
 
 theorem erase_run (env : EnvModel σ) (c : SysState (sys.withGhost g)) (evs : List (Event σ)) :
     (c.run env evs).map erase = c.erase.run env evs := by

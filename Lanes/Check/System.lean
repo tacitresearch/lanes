@@ -57,7 +57,7 @@ def Node.of [Enum σ.Id] {env : EnvModel σ} (world : World sys D) : Node sys en
 agree often differ only in the order of the messages in flight. -/
 instance [σ.Inspect] [sys.Inspect] [BEq D] {env : EnvModel σ} : BEq (Node sys env D) where
   beq a b := a.world.crashes == b.world.crashes && a.world.restarts == b.world.restarts
-    && Slot.allSame a.slots b.slots
+    && a.world.state.clock == b.world.state.clock && Slot.allSame a.slots b.slots
     && SysState.netEquiv env a.world.state.net b.world.state.net
     && a.world.state.outbox.isPerm b.world.state.outbox
     && a.world.driver == b.world.driver

@@ -27,7 +27,7 @@ def tests : IO (List (String × Bool)) := do
     return (← IO.FS.readFile s!"Tests/TutorialWeb/{f}").replace "import Tests.TutorialWeb." "import Shelf."
   let lean := (blocks doc).filter (·.1 == "lean")
   let text := (blocks doc).filterMap fun (info, body) => if info == "text" then some body else none
-  let fixed := report Shelf.service
+  let fixed := report Shelf.handler
   let bug := report buggy
   let outputs := [fixed.renderSystem, bug.renderSystem]
   return [("tutorial web: it has lean blocks", !lean.isEmpty),

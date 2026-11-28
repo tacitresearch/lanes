@@ -94,6 +94,9 @@ theorem step_of_ne_actor {i : σ.Id} (hstep : c.step env ev = some c') (hi : ev.
     rw [startActor, settle_up_of_ne _ hne, settle_timers_of_ne _ hne]
     exact ⟨update_of_ne _ _ hne, rfl⟩
   | restart => exact absurd rfl hev
+  | tick m =>
+    obtain rfl := step_tick.mp hstep
+    exact ⟨rfl, rfl⟩
 
 /-- An actor that is not started with the system has no timer armed when the system starts. -/
 theorem init_timers_of_not_mem_boot {i : σ.Id} (hi : i ∉ sys.boot) :
@@ -122,7 +125,7 @@ theorem step_of_owed (howed : c.owed env ev = true) : ∃ c', c.step env ev = so
   | output out =>
     simp only [owed, List.contains_iff_mem] at howed
     exact ⟨_, step_output.mpr ⟨howed, rfl⟩⟩
-  | input _ | duplicate _ | drop _ | crash _ | restart => simp [owed] at howed
+  | input _ | duplicate _ | drop _ | crash _ | restart | tick _ => simp [owed] at howed
 
 /-- An owed event is listed by `maybeOwed`, if it is not a timer of an actor outside
 `actors`. -/
@@ -145,7 +148,7 @@ theorem mem_maybeOwed {actors : List σ.Id} (howed : c.owed env ev = true)
   | output out =>
     simp only [owed, List.contains_iff_mem] at howed
     simp [howed]
-  | input _ | duplicate _ | drop _ | crash _ | restart => simp [owed] at howed
+  | input _ | duplicate _ | drop _ | crash _ | restart | tick _ => simp [owed] at howed
 
 end SysState
 

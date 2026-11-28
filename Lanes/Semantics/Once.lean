@@ -325,7 +325,7 @@ theorem Once.server_implements {In Out C : Type} [DecidableEq In] [DecidableEq O
   · intro c t out _ h hmem
     exact ⟨t, .single ⟨h.outbox out hmem, rfl⟩, h.value, h.net,
       fun o ho => h.outbox o (List.mem_of_mem_erase ho), h.timers, h.memo⟩
-  · rintro c t net ⟨⟩ x _ h hnet hpend
+  · rintro c t net ⟨⟩ x ctx _ h hnet hpend
     obtain ⟨src, hmem⟩ := hpend.resolve_right (h.timers x)
     have harrived : t.arrived x := h.net _ hmem
     have hval := h.value
@@ -441,5 +441,6 @@ theorem System.Refines.filterMapIO {σ : Signature} {sys : System σ} {Out T : T
     | crash i => subst hunder; exact hτ ht'
     | start i => subst hunder; exact hτ ht'
     | restart => subst hunder; exact hτ ht'
+    | tick m => subst hunder; exact hτ ht'
 
 end Lanes

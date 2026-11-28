@@ -89,6 +89,8 @@ theorem cell_rest (k : Kernel sys) (i : σ.Id) :
 
 @[simp] theorem abs_outbox (k : Kernel sys) (ob : List σ.Out) : (k.abs ob).outbox = ob := rfl
 
+@[simp] theorem abs_clock (k : Kernel sys) (ob : List σ.Out) : (k.abs ob).clock = {} := rfl
+
 @[simp] theorem abs_unschedule (k : Kernel sys) (dues : List Due) (ob : List σ.Out) :
     (k.unschedule dues).abs ob = k.abs ob := rfl
 
@@ -120,7 +122,7 @@ theorem abs_setCell (k : Kernel sys) (ob : List σ.Out) (i : σ.Id) (c : Cell sy
         state := update (k.abs ob).state i c.state
         up := update (k.abs ob).up i c.up
         timers := update (k.abs ob).timers i (c.timers.map (·.1)) } := by
-  apply SysState.ext'
+  refine SysState.ext' ?_ ?_ ?_ ?_ ?_
   · simp only [abs_state, cell_setCell]; exact apply_update (fun _ c => Cell.state c) k.cell i c
   · simp only [abs_up, cell_setCell]; exact apply_update (fun _ c => Cell.up c) k.cell i c
   · rfl
@@ -151,7 +153,7 @@ theorem abs_perform (k : Kernel sys) (ob : List σ.Out) (i : σ.Id) (eff : Effec
   | after delay_ms msg =>
     simp only [perform, List.append_nil]
     rw [abs_setCell]
-    apply SysState.ext'
+    refine SysState.ext' ?_ ?_ ?_ ?_ ?_
     · exact update_eq_self _ i
     · exact update_eq_self _ i
     · rfl
@@ -162,7 +164,7 @@ theorem abs_perform (k : Kernel sys) (ob : List σ.Out) (i : σ.Id) (eff : Effec
   | cancel msg =>
     simp only [perform, List.append_nil]
     rw [abs_setCell]
-    apply SysState.ext'
+    refine SysState.ext' ?_ ?_ ?_ ?_ ?_
     · exact update_eq_self _ i
     · exact update_eq_self _ i
     · rfl
@@ -175,9 +177,32 @@ theorem abs_perform (k : Kernel sys) (ob : List σ.Out) (i : σ.Id) (eff : Effec
 /-! The definitions take pairs apart by pattern, for the compiler's sake. These say the same
 with projections, which is easier to reason about. -/
 
+private theorem foldl_perform_rev (i : σ.Id) (effs : List (Effect σ i)) :
+    ∀ (k : Kernel sys) (outs : List σ.Out),
+      effs.foldl (fun acc eff => ((acc.1.perform i eff).1, (acc.1.perform i eff).2.reverse ++ acc.2))
+          (k, outs)
+        = ((effs.foldl (fun acc eff => ((acc.1.perform i eff).1, acc.2 ++ (acc.1.perform i eff).2))
+              (k, outs.reverse)).1,
+            (effs.foldl (fun acc eff => ((acc.1.perform i eff).1, acc.2 ++ (acc.1.perform i eff).2))
+              (k, outs.reverse)).2.reverse) := by
+  induction effs with
+  | nil => intro k outs; simp
+  | cons eff effs ih => intro k outs; simp [ih]
+
+/-- `performAll` gathers the outputs newest first and turns them round once: it is the fold that
+appends each effect's outputs, in time linear in their number. -/
 theorem performAll_eq (k : Kernel sys) (i : σ.Id) (effs : List (Effect σ i)) :
     k.performAll i effs = effs.foldl
-      (fun acc eff => ((acc.1.perform i eff).1, acc.2 ++ (acc.1.perform i eff).2)) (k, []) := rfl
+      (fun acc eff => ((acc.1.perform i eff).1, acc.2 ++ (acc.1.perform i eff).2)) (k, []) := by
+  have h := foldl_perform_rev i effs k []
+  simp only [List.reverse_nil] at h
+  unfold performAll
+  rw [show (effs.foldl (init := (k, ([] : List σ.Out))) fun (x : Kernel sys × List σ.Out) eff =>
+      match x with
+      | (k, outs) => match k.perform i eff with | (k, more) => (k, more.reverse ++ outs))
+      = effs.foldl (fun acc eff => ((acc.1.perform i eff).1, (acc.1.perform i eff).2.reverse ++ acc.2))
+          (k, []) from rfl, h]
+  simp
 
 theorem settle_eq (k : Kernel sys) (i : σ.Id) (r : sys.State i × List (Effect σ i)) :
     k.settle i r =
@@ -196,9 +221,10 @@ theorem run1_eq (k : Kernel sys) :
       | none => { kernel := k }
       | some (e, rest) =>
         if (k.cell e.dst).up then
-          { kernel := (({ k with queue := rest }).handle e.dst e.msg).1
-            events := .deliver e :: (({ k with queue := rest }).handle e.dst e.msg).2.map .output
-            outputs := (({ k with queue := rest }).handle e.dst e.msg).2 }
+          { kernel := (({ k with queue := rest }).handle e.dst e.msg (.ofSrc e.src)).1
+            events := .deliver e ::
+              (({ k with queue := rest }).handle e.dst e.msg (.ofSrc e.src)).2.map .output
+            outputs := (({ k with queue := rest }).handle e.dst e.msg (.ofSrc e.src)).2 }
         else
           { kernel := (k.startActor e.dst).1
             events := .start e.dst :: (k.startActor e.dst).2.map .output
@@ -208,12 +234,13 @@ theorem fire_eq (k : Kernel sys) (i : σ.Id) (msg : σ.Msg i) (due : Due) :
     k.fire i msg due =
       if (k.cell i).up && (k.cell i).timers.contains (msg, due) then
         { kernel := (((k.unschedule [due]).setCell i
-            { (k.cell i) with timers := (k.cell i).timers.eraseP (·.1 = msg) }).handle i msg).1
+            { (k.cell i) with timers := (k.cell i).timers.eraseP (·.1 = msg) }).handle i msg .timer).1
           events := .timeout i msg :: (((k.unschedule [due]).setCell i
-            { (k.cell i) with timers := (k.cell i).timers.eraseP (·.1 = msg) }).handle i msg).2.map
-              .output
+            { (k.cell i) with timers := (k.cell i).timers.eraseP (·.1 = msg) }).handle i msg
+              .timer).2.map .output
           outputs := (((k.unschedule [due]).setCell i
-            { (k.cell i) with timers := (k.cell i).timers.eraseP (·.1 = msg) }).handle i msg).2 }
+            { (k.cell i) with timers := (k.cell i).timers.eraseP (·.1 = msg) }).handle i msg
+              .timer).2 }
       else { kernel := k } := rfl
 
 theorem runBatch_succ (k : Kernel sys) (fuel : Nat) :
@@ -264,7 +291,7 @@ theorem abs_down (k : Kernel sys) (ob : List σ.Out) (i : σ.Id) :
     ((k.cell i).timers.map Prod.snd)).setCell i
       { (k.cell i) with up := false, timers := [] }).abs ob) = _
   rw [abs_setCell]
-  apply SysState.ext'
+  refine SysState.ext' ?_ ?_ ?_ ?_ ?_
   · exact update_eq_self _ i
   · rfl
   · simp [SysState.down, env, Link.reliable]
@@ -277,7 +304,7 @@ theorem abs_settle (k : Kernel sys) (ob : List σ.Out) (i : σ.Id)
   have hset : (k.setCell i { (k.cell i) with state := r.1 }).abs ob
       = { k.abs ob with state := update (k.abs ob).state i r.1 } := by
     rw [abs_setCell]
-    apply SysState.ext'
+    refine SysState.ext' ?_ ?_ ?_ ?_ ?_
     · rfl
     · exact update_eq_self _ i
     · rfl
@@ -311,9 +338,10 @@ theorem settle_setCell {k : Kernel sys} {i : σ.Id} {c : Cell sys i} (h : k.cell
 
 /-- `handle` takes the state out of its cell before the step (`takeState`), and that changes no
 value: it is `settle` on the step from the state the cell holds. -/
-theorem handle_eq (k : Kernel sys) (i : σ.Id) (msg : σ.Msg i) :
-    k.handle i msg = (((k.settle i ((sys.actor i).step (k.cell i).state msg)).1).rest i,
-      (k.settle i ((sys.actor i).step (k.cell i).state msg)).2) := by
+theorem handle_eq (k : Kernel sys) (i : σ.Id) (msg : σ.Msg i) (src : Sender σ.Id) :
+    k.handle i msg src
+      = (((k.settle i ((sys.actor i).stepAt { src } (k.cell i).state msg)).1).rest i,
+        (k.settle i ((sys.actor i).stepAt { src } (k.cell i).state msg)).2) := by
   unfold handle takeState
   cases h : k.cells.get? i with
   | none =>
@@ -325,11 +353,13 @@ theorem handle_eq (k : Kernel sys) (i : σ.Id) (msg : σ.Msg i) :
 
 /-- Handling a message is the semantics' `handle`, with the actor released if that leaves it at
 rest. -/
-theorem abs_handle (k : Kernel sys) (ob : List σ.Out) (i : σ.Id) (msg : σ.Msg i) :
-    ((k.abs ob).handle env i msg).Released ((k.handle i msg).1.abs (ob ++ (k.handle i msg).2)) := by
+theorem abs_handle (k : Kernel sys) (ob : List σ.Out) (i : σ.Id) (msg : σ.Msg i)
+    (src : Sender σ.Id) :
+    ((k.abs ob).handle env i msg src).Released
+      ((k.handle i msg src).1.abs (ob ++ (k.handle i msg src).2)) := by
   rw [handle_eq]
-  have h := abs_rest (k.settle i ((sys.actor i).step (k.cell i).state msg)).1
-    (ob ++ (k.settle i ((sys.actor i).step (k.cell i).state msg)).2) i
+  have h := abs_rest (k.settle i ((sys.actor i).stepAt { src } (k.cell i).state msg)).1
+    (ob ++ (k.settle i ((sys.actor i).stepAt { src } (k.cell i).state msg)).2) i
   rw [abs_settle] at h
   exact h
 
@@ -338,7 +368,7 @@ theorem abs_startActor (k : Kernel sys) (ob : List σ.Out) (i : σ.Id) :
   have hup : (k.setCell i { (k.cell i) with up := true }).abs ob
       = { k.abs ob with up := update (k.abs ob).up i true } := by
     rw [abs_setCell]
-    apply SysState.ext'
+    refine SysState.ext' ?_ ?_ ?_ ?_ ?_
     · exact update_eq_self _ i
     · rfl
     · rfl
@@ -347,7 +377,7 @@ theorem abs_startActor (k : Kernel sys) (ob : List σ.Out) (i : σ.Id) :
   unfold SysState.startActor
   rw [← hup]
   exact abs_settle (k.setCell i { (k.cell i) with up := true }) ob i
-    ((sys.actor i).recover (k.cell i).state)
+    ((sys.actor i).recoverAt {} (k.cell i).state)
 
 omit [Hashable σ.Id] in
 /-- Handing over every waiting output, oldest first, empties the outbox. -/
@@ -416,7 +446,7 @@ theorem run1_sound (k : Kernel sys) : (k.abs).Leads env k.run1.events k.run1.ker
         apply SysState.ext' <;> simp [cell, hnet]
       refine leads_step (SysState.step_deliver.mpr ⟨hup, hdel, rfl⟩) ?_
       rw [← habs]
-      simpa using abs_handle ({ k with queue := rest }) [] e.dst e.msg
+      simpa using abs_handle ({ k with queue := rest }) [] e.dst e.msg (.ofSrc e.src)
     · simp only [hup, ite_false, Bool.false_eq_true]
       have hstep : (k.abs).step env (.start e.dst)
           = some ((k.startActor e.dst).1.abs (k.startActor e.dst).2) := by
@@ -450,7 +480,7 @@ theorem fire_sound (k : Kernel sys) (i : σ.Id) (msg : σ.Msg i) (due : Due) :
     have habs : k'.abs
         = { k.abs with timers := update (k.abs).timers i (((k.abs).timers i).erase msg) } := by
       rw [← hk', abs_setCell]
-      apply SysState.ext'
+      refine SysState.ext' ?_ ?_ ?_ ?_ ?_
       · exact update_eq_self _ i
       · exact update_eq_self _ i
       · rfl
@@ -462,7 +492,7 @@ theorem fire_sound (k : Kernel sys) (i : σ.Id) (msg : σ.Msg i) (due : Due) :
     · simp only [abs_timers, List.mem_map]
       exact ⟨(msg, due), hfire.2, rfl⟩
     · rw [← habs]
-      simpa using abs_handle k' [] i msg
+      simpa using abs_handle k' [] i msg .timer
   · simp only [hfire, Bool.false_eq_true, ite_false]
     exact .of_run rfl
 

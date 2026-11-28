@@ -17,6 +17,9 @@ see. A worker keeps the state in its own hands while it steps the actor, so the 
 update it in place, and the first step of a turn copies it. These tests send one message at a
 time, so each is a turn and each write a copy and the walk that shares it again; the bound is a
 few copies, so that a copy at every step of a turn would be caught.
+
+Nor must an effect of a step cost more for the effects before it in the same step: a list that
+an output is appended to makes a step with many outputs quadratic.
 -/
 
 namespace Tests.Scale
@@ -149,6 +152,55 @@ def copyNs (size : Nat) : IO Nat := do
   let elapsed := (← IO.monoNanosNow) - t0
   return if a[0]! + b[0]! == 1 then elapsed else 0
 
+abbrev burstSig : Signature where
+  Id := Fin 2
+  Msg _ := Nat
+  In := Nat
+  Out := Nat
+
+/-- On input `n`, actor 0 puts out `n` outputs and sends `n` messages to actor 1, which counts
+them. -/
+abbrev burst : System burstSig where
+  State _ := Nat
+  actor i := {
+    init := 0
+    step := fun s n =>
+      if i = 0 then (s, (List.range n).flatMap fun k => [.emit k, .send 1 k]) else (s + 1, []) }
+  accept n := ⟨0, n⟩
+
+/-- Nanoseconds for the scheduler to write back a step with `n` outputs and `n` sends
+(`Sched.Slot.put`). -/
+def putNs (n : Nat) : IO Nat := do
+  let effects ← IO.lazyPure fun _ => (List.range n).flatMap fun k =>
+    [(.emit k : Effect burstSig 0), .send 1 k]
+  let slot : Sched.Slot burst 0 := { Sched.Slot.fresh burst 0 with cell := { state := 0, up := true } }
+  let t0 ← IO.monoNanosNow
+  let c ← IO.lazyPure fun _ => (slot.put 0 ((0 : Nat), effects)).2
+  let elapsed := (← IO.monoNanosNow) - t0
+  return if c.outputs.length == n && c.sends.length == n then elapsed else 1000000000000
+
+/-- Nanoseconds for the kernel to take the input, start actor 0 and step it on it. -/
+def kernelNs (n : Nat) : IO Nat := do
+  let k := (Kernel.boot burst).1
+  let t0 ← IO.monoNanosNow
+  let r ← IO.lazyPure fun _ => k.exec [.input n, .batch 2]
+  let elapsed := (← IO.monoNanosNow) - t0
+  return if r.outputs.length == n && r.kernel.queue.length == n then elapsed else 1000000000000
+
+/-- Nanoseconds on the runtime from the input until actor 1 has taken every message and every
+output is handed over. -/
+def runtimeNs (n : Nat) : IO Nat := (do
+  let outputs ← IO.mkRef 0
+  let rt ← Runtime.start burst { workers := 2 } fun _ => outputs.modify (· + 1)
+  rt.idle
+  let t0 ← IO.monoNanosNow
+  rt.input n
+  rt.idle
+  let elapsed := (← IO.monoNanosNow) - t0
+  let ok := (← rt.state 1) == n && (← outputs.get) == n
+  rt.stop
+  return if ok then elapsed else 1000000000000 : Async Nat).block
+
 def fastest (run : IO Nat) : IO Nat :=
   return min (← run) (min (← run) (← run))
 
@@ -167,7 +219,15 @@ def tests : IO (List (String × Bool)) := do
   let pairLarge ← fastest (pairWrites 1000000)
   let copy ← fastest (copyNs 1000000)
   IO.eprintln s!"two busy actors on four workers: a write to a state of 10^4 numbers takes {us pairSmall}, to one of 10^6 {us pairLarge}; a copy of 10^6 numbers takes {copy / 1000} µs"
-  return [("scale: a message costs the same whatever the number of actors",
+  let sizes := [1000, 10000, 100000]
+  let burstTimes ← [putNs, kernelNs, runtimeNs].mapM fun run => sizes.mapM (fastest ∘ run)
+  let ms (ns : Nat) := s!"{ns / 1000000}.{ns / 100000 % 10} ms"
+  IO.eprintln s!"a step with 10^3, 10^4, 10^5 outputs and as many sends: written back in {(burstTimes[0]!).map ms}, through the kernel in {(burstTimes[1]!).map ms}, on the runtime until all are handled in {(burstTimes[2]!).map ms}"
+  -- Ten times the effects: linear is ten times the time, quadratic a hundred.
+  let linear (ts : List Nat) := (ts.zip ts.tail).all fun (a, b) => b ≤ 25 * a + 50000000
+  return [("scale: a step's outputs and sends cost time linear in their number",
+      burstTimes.all linear),
+    ("scale: a message costs the same whatever the number of actors",
       large ≤ 4 * small + 50),
     ("scale: a step updates its actor's state in place, whatever its size, in the kernel",
       aloneLarge ≤ 10 * aloneSmall + 50000000),

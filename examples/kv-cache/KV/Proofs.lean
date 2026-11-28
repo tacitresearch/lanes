@@ -51,8 +51,8 @@ abbrev Abs (K V F : Type) [DecidableEq K] [DecidableEq V] [DecidableEq F] :=
 
 theorem unarmed {i : Id F} {m : (sig K V F).Msg i} (h : (system K V F false).Armed i m) : False := by
   cases h with
-  | step s msg h => cases i <;> cases msg <;> simp [system, front, store] at h; split at h <;> simp at h
-  | recover s h => cases i <;> simp [system, front, store] at h
+  | step _ s msg h => cases i <;> cases msg <;> simp [system, front, store] at h; split at h <;> simp at h
+  | recover _ s h => cases i <;> simp [system, front, store] at h
 
 def account : Account (system K V F false) (K → Option V) Unit where
   pend := pend
@@ -130,6 +130,11 @@ structure OnceSim (c : SysState (onceSystem K V F)) (t : OnceAbs K V F) : Prop w
   timers : ∀ i (m : Msg K V F i), m ∉ c.timers i
   memo : (c.state .store).2.Agrees t.taken (EffCovered t)
 
+/-- The store does not read the step's context. -/
+theorem store_stepAt (ctx : Ctx (Id F)) (data : K → Option V) (msg : StoreMsg K V F) :
+    store.stepAt ctx data msg = store.step data msg :=
+  rfl
+
 /-- The store acting on `msg` is the spec's step on the request it carries. -/
 theorem store_step (data : K → Option V) {src : Option (Id F)} {msg : StoreMsg K V F}
     {x : Request K V F} (hx : pend ⟨src, .store, msg⟩ = some x) :
@@ -189,7 +194,7 @@ theorem onStore (h : OnceSim c t) {net : List (Envelope (sig K V F))} (hnet : ne
     {msg : StoreMsg K V F}
     (hmem : ∃ src, (⟨src, .store, msg⟩ : Envelope (sig K V F)) ∈ c.net) :
     ∃ t', ((spec K V F).once requestKey).lts.τSTr t t' ∧ OnceSim (({ c with net }).grow .store
-      ((Once.actor store storeKey).step (c.state .store) msg)) t' := by
+      ((Once.actor store storeKey).stepAt {} (c.state .store) msg)) t' := by
   obtain ⟨src, hmem⟩ := hmem
   obtain ⟨x, hx⟩ : ∃ x, pend ⟨src, .store, msg⟩ = some x := by cases msg <;> exact ⟨_, rfl⟩
   have harrived : t.arrived x := (h.net _ hmem).1 x hx
@@ -208,7 +213,7 @@ theorem onStore (h : OnceSim c t) {net : List (Envelope (sig K V F))} (hnet : ne
         EffCovered (t.take (spec K V F) requestKey x) eff :=
       hcovers _ fun o ho => Or.inr (by rw [hval]; exact ho)
     refine ⟨_, hstep, ?_⟩
-    rw [Once.step_of_fresh _ _ _ _ _ hkey hs]
+    rw [Once.step_of_fresh _ _ _ _ _ hkey hs, store_stepAt]
     refine h.grow hg hnet ?_ ?_ heffs
     · simp [Service.Once.take, hval, hvalue]
     · simp only [SysState.grow_state_self]
@@ -250,7 +255,7 @@ theorem implements_once (env : EnvModel (sig K V F)) (hrestart : env.mayRestart 
   · intro c t out _ h hmem
     exact ⟨t, .single ⟨h.outbox out hmem, rfl⟩, h.value, h.net,
       fun o ho => h.outbox o (List.mem_of_mem_erase ho), h.timers, h.memo⟩
-  · intro c t net i msg _ h hnet hpend
+  · intro c t net i msg _ _ h hnet hpend
     have hpend := hpend.resolve_right (h.timers i msg)
     cases i with
     | front f => exact ⟨t, .refl, h.onFront hnet hpend⟩

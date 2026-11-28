@@ -334,8 +334,8 @@ actor sends to the other actors. -/
 theorem SysState.mem_net_of_leftDeed {c c' : SysState (a.join b w)} {ev : Event (joinSig σ τ)}
     (hstep : c.step env ev = some c') {i : σ.Id} {msg : σ.Msg i}
     (hdeed : ev.leftDeed = some (.handle i msg)) {e : Envelope (joinSig σ τ)}
-    (he : e ∈ Effect.sends (σ := joinSig σ τ) (.inl i)
-      (((a.actor i).step (c.state (.inl i)) msg).2.flatMap fun eff => [w.left b eff]))
+    (he : ∀ ctx, e ∈ Effect.sends (σ := joinSig σ τ) (.inl i)
+      (((a.actor i).stepAt ctx (c.state (.inl i)) msg).2.flatMap fun eff => [w.left b eff]))
     (hne : e.dst ≠ .inl i) : e ∈ c'.net := by
   cases ev with
   | deliver x =>
@@ -344,7 +344,8 @@ theorem SysState.mem_net_of_leftDeed {c c' : SysState (a.join b w)} {ev : Event 
       obtain ⟨rfl, hm⟩ := hdeed
       cases hm
       obtain ⟨-, -, rfl⟩ := SysState.step_deliver.mp hstep
-      exact SysState.mem_net_settle_of_sends he hne
+      exact SysState.mem_net_settle_of_sends
+        (he { toMoment := c.clock, src := Sender.left (.ofSrc src) }) hne
     · simp [Event.leftDeed] at hdeed
   | duplicate x =>
     obtain ⟨src, i' | j, m⟩ := x
@@ -352,7 +353,8 @@ theorem SysState.mem_net_of_leftDeed {c c' : SysState (a.join b w)} {ev : Event 
       obtain ⟨rfl, hm⟩ := hdeed
       cases hm
       obtain ⟨-, -, -, rfl⟩ := SysState.step_duplicate.mp hstep
-      exact SysState.mem_net_settle_of_sends he hne
+      exact SysState.mem_net_settle_of_sends
+        (he { toMoment := c.clock, src := Sender.left (.ofSrc src) }) hne
     · simp [Event.leftDeed] at hdeed
   | timeout x m =>
     rcases x with i' | j
@@ -360,18 +362,18 @@ theorem SysState.mem_net_of_leftDeed {c c' : SysState (a.join b w)} {ev : Event 
       obtain ⟨rfl, hm⟩ := hdeed
       cases hm
       obtain ⟨-, -, rfl⟩ := SysState.step_timeout.mp hstep
-      exact SysState.mem_net_settle_of_sends he hne
+      exact SysState.mem_net_settle_of_sends (he { toMoment := c.clock, src := .timer }) hne
     · simp [Event.leftDeed] at hdeed
   | output o => rcases o with o | o <;> simp [Event.leftDeed] at hdeed
-  | input _ | drop _ | crash _ | start _ | restart => simp [Event.leftDeed] at hdeed
+  | input _ | drop _ | crash _ | start _ | restart | tick _ => simp [Event.leftDeed] at hdeed
 
 /-- A step of the join in which an actor of `b` handles a message puts in flight what that
 actor sends to the other actors. -/
 theorem SysState.mem_net_of_rightDeed {c c' : SysState (a.join b w)} {ev : Event (joinSig σ τ)}
     (hstep : c.step env ev = some c') {j : τ.Id} {msg : τ.Msg j}
     (hdeed : ev.rightDeed = some (.handle j msg)) {e : Envelope (joinSig σ τ)}
-    (he : e ∈ Effect.sends (σ := joinSig σ τ) (.inr j)
-      (((b.actor j).step (c.state (.inr j)) msg).2.flatMap fun eff => [w.right a eff]))
+    (he : ∀ ctx, e ∈ Effect.sends (σ := joinSig σ τ) (.inr j)
+      (((b.actor j).stepAt ctx (c.state (.inr j)) msg).2.flatMap fun eff => [w.right a eff]))
     (hne : e.dst ≠ .inr j) : e ∈ c'.net := by
   cases ev with
   | deliver x =>
@@ -381,7 +383,8 @@ theorem SysState.mem_net_of_rightDeed {c c' : SysState (a.join b w)} {ev : Event
       obtain ⟨rfl, hm⟩ := hdeed
       cases hm
       obtain ⟨-, -, rfl⟩ := SysState.step_deliver.mp hstep
-      exact SysState.mem_net_settle_of_sends he hne
+      exact SysState.mem_net_settle_of_sends
+        (he { toMoment := c.clock, src := Sender.right (.ofSrc src) }) hne
   | duplicate x =>
     obtain ⟨src, i | j', m⟩ := x
     · simp [Event.rightDeed] at hdeed
@@ -389,7 +392,8 @@ theorem SysState.mem_net_of_rightDeed {c c' : SysState (a.join b w)} {ev : Event
       obtain ⟨rfl, hm⟩ := hdeed
       cases hm
       obtain ⟨-, -, -, rfl⟩ := SysState.step_duplicate.mp hstep
-      exact SysState.mem_net_settle_of_sends he hne
+      exact SysState.mem_net_settle_of_sends
+        (he { toMoment := c.clock, src := Sender.right (.ofSrc src) }) hne
   | timeout x m =>
     rcases x with i | j'
     · simp [Event.rightDeed] at hdeed
@@ -397,30 +401,32 @@ theorem SysState.mem_net_of_rightDeed {c c' : SysState (a.join b w)} {ev : Event
       obtain ⟨rfl, hm⟩ := hdeed
       cases hm
       obtain ⟨-, -, rfl⟩ := SysState.step_timeout.mp hstep
-      exact SysState.mem_net_settle_of_sends he hne
+      exact SysState.mem_net_settle_of_sends (he { toMoment := c.clock, src := .timer }) hne
   | output o => rcases o with o | o <;> simp [Event.rightDeed] at hdeed
-  | input _ | drop _ | crash _ | start _ | restart => simp [Event.rightDeed] at hdeed
+  | input _ | drop _ | crash _ | start _ | restart | tick _ => simp [Event.rightDeed] at hdeed
 
 /-- A step of the join leaves an actor of `a` as it was, or is that actor handling a message, or
 starting, where the process does not restart. -/
 theorem SysState.step_left_state {c c' : SysState (a.join b w)} {ev : Event (joinSig σ τ)}
     (hrestart : env.mayRestart = false) (hstep : c.step env ev = some c') (i : σ.Id) :
     c'.state (.inl i) = c.state (.inl i) ∨
-      (∃ msg, ev.leftDeed = some (.handle i msg) ∧
-        c'.state (.inl i) = ((a.actor i).step (c.state (.inl i)) msg).1) ∨
+      (∃ msg ctx, ev.leftDeed = some (.handle i msg) ∧
+        c'.state (.inl i) = ((a.actor i).stepAt ctx (c.state (.inl i)) msg).1) ∨
       (ev = .start (.inl i) ∧
-        c'.state (.inl i) = ((a.actor i).recover (c.state (.inl i))).1) := by
+        c'.state (.inl i) = ((a.actor i).recoverAt c.clock (c.state (.inl i))).1) := by
   have hhandle (c₀ : SysState (a.join b w)) (hs : c₀.state = c.state) (x : σ.Id ⊕ τ.Id)
-      (m : JoinMsg σ τ x) (hdeed : ∀ m' : σ.Msg i, x = .inl i → HEq m m' →
-        ev.leftDeed = some (.handle i m')) :
-      (c₀.handle env x m).state (.inl i) = c.state (.inl i) ∨
-        ∃ msg, ev.leftDeed = some (.handle i msg) ∧
-          (c₀.handle env x m).state (.inl i) = ((a.actor i).step (c.state (.inl i)) msg).1 := by
+      (m : JoinMsg σ τ x) (src : Sender (σ.Id ⊕ τ.Id)) (hdeed : ∀ m' : σ.Msg i, x = .inl i →
+        HEq m m' → ev.leftDeed = some (.handle i m')) :
+      (c₀.handle env x m src).state (.inl i) = c.state (.inl i) ∨
+        ∃ msg ctx, ev.leftDeed = some (.handle i msg) ∧
+          (c₀.handle env x m src).state (.inl i)
+            = ((a.actor i).stepAt ctx (c.state (.inl i)) msg).1 := by
     rw [SysState.handle_state, hs]
     rcases x with i' | j
     · by_cases h : i' = i
       · subst h
-        exact .inr ⟨m, hdeed m rfl HEq.rfl, by simp [Actor.mapEff]⟩
+        exact .inr ⟨m, { toMoment := c₀.clock, src := Sender.left src }, hdeed m rfl HEq.rfl,
+          by simp [Actor.mapEff, Actor.mapSrc]⟩
       · exact .inl (update_of_ne _ _ (by simpa using Ne.symm h))
     · exact .inl (update_of_ne _ _ (by simp))
   cases ev with
@@ -430,17 +436,17 @@ theorem SysState.step_left_state {c c' : SysState (a.join b w)} {ev : Event (joi
   | deliver e =>
     obtain ⟨src, x, m⟩ := e
     obtain ⟨-, -, rfl⟩ := SysState.step_deliver.mp hstep
-    exact (hhandle { c with net := c.net.erase ⟨src, x, m⟩ } rfl x m fun _ hx hm => by
+    exact (hhandle { c with net := c.net.erase ⟨src, x, m⟩ } rfl x m _ fun _ hx hm => by
       subst hx; cases hm; rfl).imp_right .inl
   | duplicate e =>
     obtain ⟨src, x, m⟩ := e
     obtain ⟨-, -, -, rfl⟩ := SysState.step_duplicate.mp hstep
-    exact (hhandle c rfl x m fun _ hx hm => by
+    exact (hhandle c rfl x m _ fun _ hx hm => by
       subst hx; cases hm; rfl).imp_right .inl
   | timeout x m =>
     obtain ⟨-, -, rfl⟩ := SysState.step_timeout.mp hstep
-    exact (hhandle { c with timers := update c.timers x ((c.timers x).erase m) } rfl x m fun _ hx hm => by
-      subst hx; cases hm; rfl).imp_right .inl
+    exact (hhandle { c with timers := update c.timers x ((c.timers x).erase m) } rfl x m _
+      fun _ hx hm => by subst hx; cases hm; rfl).imp_right .inl
   | drop _ =>
     obtain ⟨-, -, rfl⟩ := SysState.step_drop.mp hstep
     exact .inl rfl
@@ -456,10 +462,13 @@ theorem SysState.step_left_state {c c' : SysState (a.join b w)} {ev : Event (joi
     rcases x with i' | j
     · by_cases h : i' = i
       · subst h
-        exact .inr (.inr ⟨rfl, by simp [Actor.mapEff]⟩)
+        exact .inr (.inr ⟨rfl, by simp [Actor.mapEff, Actor.mapSrc]⟩)
       · exact .inl (update_of_ne _ _ (by simpa using Ne.symm h))
     · exact .inl (update_of_ne _ _ (by simp))
   | restart => simp [SysState.step_restart_of_noRestarts hrestart] at hstep
+  | tick _ =>
+    obtain rfl := SysState.step_tick.mp hstep
+    exact .inl rfl
 
 /-- In a fair run of a join, a message in flight to an actor of `b` is handled by it, on a link
 that does not lose it, when the environment neither crashes that actor nor restarts the process
@@ -468,13 +477,13 @@ theorem System.Run.Fair.handled_right {r : (a.join b w).Run env} (hfair : r.Fair
     {src : Option (σ.Id ⊕ τ.Id)} {j : τ.Id} {msg : τ.Msg j}
     (hlossless : (env.link src (.inr j)).lossy = false) (hcrash : env.mayCrash (.inr j) = false)
     (hrestart : env.mayRestart = false)
-    (hruns : ∀ s m, ((b.actor j).step s m).2.any Effect.isStop = false)
-    (hrecovers : ∀ s, ((b.actor j).recover s).2.any Effect.isStop = false)
+    (hruns : ∀ ctx s m, ((b.actor j).stepAt ctx s m).2.any Effect.isStop = false)
+    (hrecovers : ∀ t s, ((b.actor j).recoverAt t s).2.any Effect.isStop = false)
     (he : (⟨src, .inr j, msg⟩ : Envelope (joinSig σ τ)) ∈ (r.state n).net) :
     ∃ m, n ≤ m ∧ (r.event m = some (.deliver ⟨src, .inr j, msg⟩) ∨
       r.event m = some (.duplicate ⟨src, .inr j, msg⟩)) :=
-  hfair.handled hlossless hcrash hrestart (fun s m => (w.isStop_right _).trans (hruns s m))
-    (fun s => (w.isStop_right _).trans (hrecovers s)) he
+  hfair.handled hlossless hcrash hrestart (fun _ s m => (w.isStop_right _).trans (hruns _ s m))
+    (fun t s => (w.isStop_right _).trans (hrecovers t s)) he
 
 /-- In a fair run of a join, a message in flight to an actor of `a` is handled by it, on a link
 that does not lose it, when the environment neither crashes that actor nor restarts the process
@@ -483,13 +492,13 @@ theorem System.Run.Fair.handled_left {r : (a.join b w).Run env} (hfair : r.Fair)
     {src : Option (σ.Id ⊕ τ.Id)} {i : σ.Id} {msg : σ.Msg i}
     (hlossless : (env.link src (.inl i)).lossy = false) (hcrash : env.mayCrash (.inl i) = false)
     (hrestart : env.mayRestart = false)
-    (hruns : ∀ s m, ((a.actor i).step s m).2.any Effect.isStop = false)
-    (hrecovers : ∀ s, ((a.actor i).recover s).2.any Effect.isStop = false)
+    (hruns : ∀ ctx s m, ((a.actor i).stepAt ctx s m).2.any Effect.isStop = false)
+    (hrecovers : ∀ t s, ((a.actor i).recoverAt t s).2.any Effect.isStop = false)
     (he : (⟨src, .inl i, msg⟩ : Envelope (joinSig σ τ)) ∈ (r.state n).net) :
     ∃ m, n ≤ m ∧ (r.event m = some (.deliver ⟨src, .inl i, msg⟩) ∨
       r.event m = some (.duplicate ⟨src, .inl i, msg⟩)) :=
-  hfair.handled hlossless hcrash hrestart (fun s m => (w.isStop_left _).trans (hruns s m))
-    (fun s => (w.isStop_left _).trans (hrecovers s)) he
+  hfair.handled hlossless hcrash hrestart (fun _ s m => (w.isStop_left _).trans (hruns _ s m))
+    (fun t s => (w.isStop_left _).trans (hrecovers t s)) he
 
 /-- In a fair run of a join, an output that an actor of `a` emits as it handles a message, and
 that the wiring routes to `b`, is handled by the actor of `b` that takes it, at a later
@@ -498,17 +507,17 @@ restarts the process and it never stops. -/
 theorem System.Run.Fair.routed_right {r : (a.join b w).Run env} (hfair : r.Fair) {n : Nat}
     {ev : Event (joinSig σ τ)} {i : σ.Id} {msg : σ.Msg i} {out : σ.Out} {x : τ.In}
     (hev : r.event n = some ev) (hdeed : ev.leftDeed = some (.handle i msg))
-    (hout : .emit out ∈ ((a.actor i).step ((r.state n).state (.inl i)) msg).2)
+    (hout : ∀ ctx, .emit out ∈ ((a.actor i).stepAt ctx ((r.state n).state (.inl i)) msg).2)
     (hx : w.toRight out = some x)
     (hlossless : (env.link (some (.inl i)) (.inr (b.accept x).1)).lossy = false)
     (hcrash : env.mayCrash (.inr (b.accept x).1) = false) (hrestart : env.mayRestart = false)
-    (hruns : ∀ s m, ((b.actor (b.accept x).1).step s m).2.any Effect.isStop = false)
-    (hrecovers : ∀ s, ((b.actor (b.accept x).1).recover s).2.any Effect.isStop = false) :
+    (hruns : ∀ ctx s m, ((b.actor (b.accept x).1).stepAt ctx s m).2.any Effect.isStop = false)
+    (hrecovers : ∀ t s, ((b.actor (b.accept x).1).recoverAt t s).2.any Effect.isStop = false) :
     ∃ m, n < m ∧
       (r.event m = some (.deliver ⟨some (.inl i), .inr (b.accept x).1, (b.accept x).2⟩) ∨
         r.event m = some (.duplicate ⟨some (.inl i), .inr (b.accept x).1, (b.accept x).2⟩)) := by
   have he := SysState.mem_net_of_leftDeed (System.Run.step_some hev) hdeed
-    (w.mem_sends_left hout hx) (by simp)
+    (fun ctx => w.mem_sends_left (hout ctx) hx) (by simp)
   obtain ⟨m, hm, h⟩ := hfair.handled_right hlossless hcrash hrestart hruns hrecovers he
   exact ⟨m, by omega, h⟩
 
@@ -519,17 +528,17 @@ restarts the process and it never stops. -/
 theorem System.Run.Fair.routed_left {r : (a.join b w).Run env} (hfair : r.Fair) {n : Nat}
     {ev : Event (joinSig σ τ)} {j : τ.Id} {msg : τ.Msg j} {out : τ.Out} {x : σ.In}
     (hev : r.event n = some ev) (hdeed : ev.rightDeed = some (.handle j msg))
-    (hout : .emit out ∈ ((b.actor j).step ((r.state n).state (.inr j)) msg).2)
+    (hout : ∀ ctx, .emit out ∈ ((b.actor j).stepAt ctx ((r.state n).state (.inr j)) msg).2)
     (hx : w.toLeft out = some x)
     (hlossless : (env.link (some (.inr j)) (.inl (a.accept x).1)).lossy = false)
     (hcrash : env.mayCrash (.inl (a.accept x).1) = false) (hrestart : env.mayRestart = false)
-    (hruns : ∀ s m, ((a.actor (a.accept x).1).step s m).2.any Effect.isStop = false)
-    (hrecovers : ∀ s, ((a.actor (a.accept x).1).recover s).2.any Effect.isStop = false) :
+    (hruns : ∀ ctx s m, ((a.actor (a.accept x).1).stepAt ctx s m).2.any Effect.isStop = false)
+    (hrecovers : ∀ t s, ((a.actor (a.accept x).1).recoverAt t s).2.any Effect.isStop = false) :
     ∃ m, n < m ∧
       (r.event m = some (.deliver ⟨some (.inr j), .inl (a.accept x).1, (a.accept x).2⟩) ∨
         r.event m = some (.duplicate ⟨some (.inr j), .inl (a.accept x).1, (a.accept x).2⟩)) := by
   have he := SysState.mem_net_of_rightDeed (System.Run.step_some hev) hdeed
-    (w.mem_sends_right hout hx) (by simp)
+    (fun ctx => w.mem_sends_right (hout ctx) hx) (by simp)
   obtain ⟨m, hm, h⟩ := hfair.handled_left hlossless hcrash hrestart hruns hrecovers he
   exact ⟨m, by omega, h⟩
 
@@ -571,7 +580,7 @@ theorem SysState.hidden_quiet (c : SysState sys) : ∀ ev ∈ c.hidden output, e
 /-- What is seen of `c` does not change when its hidden outputs are handed over. -/
 theorem SysState.over_unhidden (c : SysState sys) :
     (c.unhidden output).over input output = c.over input output := by
-  refine SysState.ext' rfl rfl rfl rfl ?_
+  refine SysState.ext' rfl rfl rfl rfl ?_ rfl
   show (c.outbox.filter _).filterMap output = c.outbox.filterMap output
   rw [List.filterMap_filter]
   congr 1

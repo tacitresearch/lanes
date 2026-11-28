@@ -57,13 +57,14 @@ theorem Loses.settle {c₀ c : SysState sys} (h : c₀.Loses c) (env : EnvModel 
   outbox := by rw [settle_outbox_eq, h.outbox]; rfl
 
 theorem Loses.handle {c₀ c : SysState sys} (h : c₀.Loses c) (env : EnvModel σ) (i : σ.Id)
-    (msg : σ.Msg i) :
-    (c₀.handle env i msg).Loses (c.grow i ((sys.actor i).step (c.state i) msg)) := by
+    (msg : σ.Msg i) (src : Sender σ.Id) :
+    (c₀.handle env i msg src).Loses
+      (c.grow i ((sys.actor i).stepAt { toMoment := c₀.clock, src } (c.state i) msg)) := by
   rw [← congrFun h.state i]
   exact Loses.settle h env i _
 
 theorem Loses.startActor (c : SysState sys) (env : EnvModel σ) (i : σ.Id) :
-    (c.startActor env i).Loses (c.grow i ((sys.actor i).recover (c.state i))) :=
+    (c.startActor env i).Loses (c.grow i ((sys.actor i).recoverAt c.clock (c.state i))) :=
   Loses.settle (c₀ := { c with up := update c.up i true }) (c := c)
     ⟨rfl, List.Sublist.refl _, fun _ _ h => h, rfl⟩ env i _
 

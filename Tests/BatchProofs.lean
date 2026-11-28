@@ -74,8 +74,8 @@ theorem implements (svc : Service In Out S) (env : EnvModel (sig In Out))
   obtain rfl : src = none := by
     cases hsent with
     | accept => rfl
-    | step s msg h => cases msg <;> simp [actor] at h
-    | recover s h => simp [actor] at h
+    | step _ s msg h => cases msg <;> simp [actor] at h
+    | recover _ s h => simp [actor] at h
   simp [henv] at hdup
 
 /-- The same of the server that remembers every state it has been in, and back. -/
