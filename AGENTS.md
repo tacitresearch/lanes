@@ -28,7 +28,9 @@ lake exe lanes docstrings  # how many public declarations of `import Lanes` have
 - Run `lake build --wfail`, `lake test`, `lake exe lanesCheck` and `lake exe lanes lint` before
   calling a task done. CI runs them in that order, then `lint --fix` must change nothing, then a
   generated app is built and tested, the small examples are built and checked, and
-  `examples/raft-kv`, `examples/ledger` and `examples/rookery` run as jobs of their own.
+  `examples/raft-kv`, `examples/ledger` and `examples/rookery` run as jobs of their own. A pull
+  request that changes only documentation is built and linted, and the other jobs are skipped
+  (the `changes` job of `.github/workflows/ci.yml` says which files count).
 - `lanes lint` checks the text of a project: `no-sorry` (no `sorry` or `admit`), `trusted-listed`
   (`partial`, `unsafe`, `axiom`, `panic!`, `implemented_by`, `extern` and C only in files
   `TRUSTED.md` names), `trusted-size` (each trusted file has the line count `TRUSTED.md` gives),
