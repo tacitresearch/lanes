@@ -181,7 +181,13 @@ def serve (creds : SigV4.Credentials) (bucket region : String) (objects : Object
       if b != bucket then (failure 404 "NoSuchBucket" head, objects) else
       let k := "/".intercalate segments
       match r.verb, objects.lookup k with
-      | "PUT", _ =>
+      | "PUT", some _ =>
+        if r.headers.lookup "if-none-match" == some "*" then (failure 412 "PreconditionFailed", objects)
+        else
+          let type := (r.headers.lookup "content-type").getD "binary/octet-stream"
+          (answer 200 [("ETag", "\"" ++ (SigV4.payloadHash r.body).take 32 ++ "\"")] .empty,
+            (k, r.body, type) :: objects.filter (·.1 != k))
+      | "PUT", none =>
         let type := (r.headers.lookup "content-type").getD "binary/octet-stream"
         (answer 200 [("ETag", "\"" ++ (SigV4.payloadHash r.body).take 32 ++ "\"")] .empty,
           (k, r.body, type) :: objects.filter (·.1 != k))

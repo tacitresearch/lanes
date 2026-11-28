@@ -31,8 +31,8 @@ variable {σ : Signature}
 
 /-- Where a shard keeps its journal and how its inputs are written. -/
 structure Store (sys : System σ) where
-  /-- The journal's file. Its snapshot, its lock and a write that did not finish are kept beside
-  it, with the extensions `.snapshot`, `.lock` and `.cut`. -/
+  /-- The journal's file. Its snapshot, its lock, its id and a write that did not finish are kept
+  beside it, with the extensions `.snapshot`, `.lock`, `.id` and `.cut`. -/
   path : System.FilePath
   /-- How the journal writes inputs. A start replays them through the step functions, from
   the last snapshot if there is one. -/
@@ -53,6 +53,13 @@ structure Store (sys : System σ) where
   /-- Whether a journal that is not there is begun. Without it a start that finds none is
   refused, which is what a shard that must not come back having forgotten needs. -/
   create : Bool := true
+  /-- The files are a copy restored from elsewhere, production into staging: this is a start
+  with no effects. The outputs the files owe are not handed over but marked handed, and the
+  journal takes a new id, so that no output of the copy has the id of one of the original's.
+  Set it for the first start of a copy only: every start with it drops what the shard owes.
+  Jobs the copy holds in flight are attempted again when their deadlines pass, by the copy's
+  own workers and under new ids. -/
+  restored : Bool := false
 
 /-- A label as a person reads it: the name, then the version if there is one. -/
 private def shown (label : String) : String :=
@@ -92,6 +99,21 @@ private def replace (path : System.FilePath) (bytes : ByteArray) : IO Unit := do
   fsync scratch.toString
   IO.FS.rename scratch path
   syncDir path
+
+/-- The journal's id, kept beside it. A journal begun now, a restored copy, and a journal from
+before there were ids take a new one, which is written before anything else, so that the
+journal never has outputs under an id that a start could forget. -/
+private def journalIdAt (path : System.FilePath) (fresh : Bool) : IO String := do
+  if !fresh then
+    match ← reading path with
+    | .bytes bytes =>
+      if let some id := (String.fromUTF8? bytes).map (·.trimAscii.toString) then
+        unless id.isEmpty do return id
+    | .absent => pure ()
+    | .failed why => throw (IO.userError s!"lanes: {why}")
+  let id := journalId (← IO.getRandomBytes 16)
+  replace path (id ++ "\n").toUTF8
+  return id
 
 /-- One write, done as `Disk.apply` says. Without `flush` an append may be lost with the
 process, and comes before whatever is appended after it. -/
@@ -135,9 +157,13 @@ def Store.open {sys : System σ} [Hashable σ.Id] (store : Store sys) : IO (Log 
       | .error refusal =>
         throw (IO.userError s!"lanes: the journal {store.path} is refused: \
           {refusal.explain system !store.upgrades.isEmpty}")
+    let fresh := match begun with
+      | .found found => found.size = 0
+      | .upgraded _ => false
+    let id ← journalIdAt (store.path.addExtension "id") (fresh || store.restored)
     let handle ← IO.mkRef (← IO.FS.Handle.mk store.path .append)
     let mut migrate : IO Unit := pure ()
-    let mut pending : List σ.Out := []
+    let mut pending : List (Origin × σ.Out) := []
     match begun with
     | .found found =>
       if found.size < disk.journal.size then
@@ -150,7 +176,7 @@ def Store.open {sys : System σ} [Hashable σ.Id] (store : Store sys) : IO (Log 
         unless (savedRecords actors system upgraded.index upgraded.image).all Frame.fits
             && Entry.fits store.input (.snapshot upgraded.index) do
           throw (IO.userError "lanes: an actor is too large to save")
-      pending := upgraded.pending
+      pending := Upgrade.label upgraded.index (Upgrade.owed store.upgrades disk) upgraded.pending
       migrate := upgraded.writes.forM (perform store.path handle true)
     let found := begun.toFound
     let count ← IO.mkRef found.index
@@ -168,7 +194,8 @@ def Store.open {sys : System σ} [Hashable σ.Id] (store : Store sys) : IO (Log 
         (perform store.path handle true)
       count.modify (· + 1)
     return {
-      past := found.past, saved := found.saved, index := found.index, pending, migrate
+      past := found.past, saved := found.saved, index := found.index, pending, migrate, id
+      restored := store.restored
       append := write true
       note := write false
       save := store.actors.map save

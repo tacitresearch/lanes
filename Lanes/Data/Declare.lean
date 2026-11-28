@@ -40,9 +40,14 @@ theorem Migrate.migrate_same {α : Type} (a : α) : Migrate.migrate (β := α) a
   all := (Enum.all (α := α)).map f
   complete b := h b ▸ List.mem_map_of_mem (Enum.complete (g b))
 
-syntax lanesDataField := ppLine (docComment)? ident " : " term (" := " term)?
-syntax lanesDataArgs := " (" ident+ " : " term ")"
-syntax lanesDataCtor := ppLine (docComment)? "| " rawIdent lanesDataArgs*
+/-- `(was a b)` after a field, an argument or a constructor: its former names, which a reader of
+data written under one of them takes for it. `was` stays an ordinary identifier elsewhere. -/
+syntax lanesDataWas := atomic(" (" &"was " rawIdent+ ")")
+syntax lanesDataField :=
+  ppLine (docComment)? ident (lanesDataWas)? " : " term (" := " term)?
+syntax lanesDataArg := ident (lanesDataWas)?
+syntax lanesDataArgs := " (" lanesDataArg+ " : " term (" := " term)? ")"
+syntax lanesDataCtor := ppLine (docComment)? "| " rawIdent (lanesDataWas)? lanesDataArgs*
 syntax lanesDataDeriving := ppLine "deriving " ident,+
 syntax lanesDataFrom := ppLine "from " term " := " term
 
@@ -100,9 +105,12 @@ meta def leanDeriving (T : Ident) (classes : Array Ident) : MacroM (Array (TSynt
       ⟨mkNode `Lean.Parser.Command.derivingClass #[mkNullNode, c]⟩
     return #[← `(deriving instance $[$classes],* for $T:ident)]
 
-/-- `T.codec`, taking a codec for each type parameter, and the `Codable` instance from it. -/
-meta def codable (T : Ident) (p : Params) (body : TSyntax `term) :
+/-- `T.codec`, taking a codec for each type parameter, and the `Codable` instance from it.
+`body` is given the schemas of the type parameters, which the codec's schema names. -/
+meta def codable (T : Ident) (p : Params)
+    (body : Array (TSyntax `term) → MacroM (TSyntax `term)) :
     MacroM (Array (TSyntax `command)) := do
+  let body ← body (← p.types.mapM fun x => `((Lanes.Codec.of $x).schema))
   let codecs ← p.types.mapM fun x =>
     return mkIdent (← Macro.addMacroScope (x.getId.appendBefore "codec"))
   let codecBinders ← (p.types.zip codecs).mapM fun (x, c) =>
@@ -166,25 +174,60 @@ meta def enum (p : Params) (applied : TSyntax `term) (code : TSyntax `term)
   `(instance $instBinders:bracketedBinder* : Lanes.Enum $applied :=
       Lanes.Enum.ofEquiv (α := $code) $back $to (by intro x; cases x <;> rfl))
 
+/-- A schema holds a default as a value, so `Codable` refuses a default that names a field. -/
+meta def constantDefaults (ours : Array Name) (names : Array Ident)
+    (defaults : Array (Option (TSyntax `term))) : MacroM Unit := do
+  unless ours.contains `Codable do return
+  for d in defaults do
+    let some d := d | continue
+    let named? := names.find? fun n =>
+      (d.raw.find? fun s =>
+        s.isIdent && s.getId.eraseMacroScopes.getRoot == n.getId.eraseMacroScopes).isSome
+    if let some named := named? then
+      Macro.throwErrorAt d s!"lanes_data: this default names `{named.getId}`, and the schema \
+        `Codable` derives holds a default as a value. Give one that names no field."
+
+/-- A constructor's arguments, one by one: the name, its former names, the type and the
+default. -/
+meta def ctorArgs (groups : Array (TSyntax `Lanes.lanesDataArgs)) :
+    MacroM (Array (Ident × Array Ident × TSyntax `term × Option (TSyntax `term))) :=
+  groups.foldlM (init := #[]) fun acc g => do
+    match g with
+    | `(lanesDataArgs| ($[$xs $[(was $olds*)]?]* : $t $[:= $d]?)) =>
+      return acc ++ (xs.zip olds).map fun (x, o) => (x, o.getD #[], t, d)
+    | _ => Macro.throwUnsupported
+
+/-- A group of arguments as a binder of `inductive`, without the former names. -/
+meta def ctorBinder (g : TSyntax `Lanes.lanesDataArgs) :
+    MacroM (TSyntax `Lean.Parser.Term.bracketedBinder) := do
+  match g with
+  | `(lanesDataArgs| ($[$xs $[(was $_olds*)]?]* : $t)) => `(bracketedBinder| ($xs* : $t))
+  | `(lanesDataArgs| ($[$xs $[(was $_olds*)]?]* : $t := $d)) =>
+    `(bracketedBinder| ($xs* : $t := $d))
+  | _ => Macro.throwUnsupported
+
 end Declare
 
 open Lean Declare in
 macro_rules
   | `(lanesDataStructure|
       $[$doc:docComment]? lanes_data structure $T $bs:bracketedBinder* where
-        $[$[$fdocs:docComment]? $fields : $types $[:= $defaults]?]* $[deriving $classes,*]?
-        $[from $old := $f]?) => do
+        $[$[$fdocs:docComment]? $fields $[(was $folds*)]? : $types $[:= $defaults]?]*
+        $[deriving $classes,*]? $[from $old := $f]?) => do
     let p ← params bs
     let (lean, ours) := splitDeriving (classes.map (·.getElems) |>.getD #[])
     independent ours fields types
+    constantDefaults ours fields defaults
     let pargs := p.args
     let applied ← `($T $pargs*)
     let decl ← `(command| $[$doc:docComment]? structure $T:ident $bs:bracketedBinder* where
       $[$[$fdocs:docComment]? $fields:ident : $types $[:= $defaults]?]*)
     let mut cmds := #[decl] ++ (← leanDeriving T lean) ++ (← migrate T p applied ((old.bind fun o => f.map (o, ·))))
     if ours.contains `Codable then
-      let codecs ← types.mapM fun t => `((Lanes.Codable.codec : Lanes.Codec $t))
-      cmds := cmds ++ (← codable T p (← `(Codec.struct% $T { $[$fields := $codecs],* })))
+      let specs ← (fields.zip (folds.zip (types.zip defaults))).mapM fun (x, olds, t, d) => do
+        let d ← d.mapM fun d => `(($d : $t))
+        return (x, ← `((Lanes.Codable.codec : Lanes.Codec $t)), olds.getD #[], d)
+      cmds := cmds ++ (← codable T p fun args => Codec.structTerm T args specs)
     if ours.contains `Enum then
       let r := mkIdent (← Macro.addMacroScope `r)
       let projections ← fields.mapM fun f => `($r.$f:ident)
@@ -216,26 +259,29 @@ open Lean Declare in
 macro_rules
   | `(lanesDataInductive|
       $[$doc:docComment]? lanes_data inductive $T $bs:bracketedBinder* where
-        $[$[$cdocs:docComment]? | $ctors $[($argss* : $tyss)]*]* $[deriving $classes,*]?
+        $[$[$cdocs:docComment]? | $ctors $[(was $colds*)]? $argss*]* $[deriving $classes,*]?
         $[from $old := $f]?) => do
     let p ← params bs
     let (lean, ours) := splitDeriving (classes.map (·.getElems) |>.getD #[])
     let pargs := p.args
     let applied ← `($T $pargs*)
-    let binders ← (argss.zip tyss).mapM fun (xs, ts) =>
-      (xs.zip ts).mapM fun (x, t) => `(bracketedBinder| ($x* : $t))
+    let binders ← argss.mapM (·.mapM ctorBinder)
     let decl ← `(command| $[$doc:docComment]? inductive $T $bs:bracketedBinder* where
       $[$[$cdocs:docComment]? | $ctors:ident $binders*]*)
     let mut cmds := #[decl] ++ (← leanDeriving T lean) ++ (← migrate T p applied ((old.bind fun o => f.map (o, ·))))
-    let args : Array (Array Ident) := (argss.zip tyss).map fun (xs, ts) =>
-      (xs.zip ts).foldl (init := #[]) fun acc (ys, _) => acc ++ ys
-    let argTypes : Array (Array (TSyntax `term)) := (argss.zip tyss).map fun (xs, ts) =>
-      (xs.zip ts).foldl (init := #[]) fun acc (ys, t) => acc ++ ys.map fun _ => t
-    for (xs, ts) in args.zip argTypes do independent ours xs ts
+    let fieldss ← argss.mapM ctorArgs
+    let args : Array (Array Ident) := fieldss.map (·.map (·.1))
+    let argTypes : Array (Array (TSyntax `term)) := fieldss.map (·.map (·.2.2.1))
+    for fields in fieldss do
+      independent ours (fields.map (·.1)) (fields.map (·.2.2.1))
+      constantDefaults ours (fields.map (·.1)) (fields.map (·.2.2.2))
     if ours.contains `Codable then
-      let codecs ← argTypes.mapM (·.mapM fun t => `((Lanes.Codable.codec : Lanes.Codec $t)))
-      cmds := cmds ++
-        (← codable T p (← `(Codec.sum% $T { $[$ctors $[($args := $codecs)]*],* })))
+      let specs ← (ctors.zip (colds.zip fieldss)).mapM fun (ctor, olds, fields) => do
+        let fields ← fields.mapM fun (x, xolds, t, d) => do
+          let d ← d.mapM fun d => `(($d : $t))
+          return (x, ← `((Lanes.Codable.codec : Lanes.Codec $t)), xolds, d)
+        return (ctor, olds.getD #[], fields)
+      cmds := cmds ++ (← codable T p fun args => Codec.sumTerm T args specs)
     if ours.contains `Enum then
       let n := ctors.size
       let mut cases : Array (TSyntax `term) := #[]
