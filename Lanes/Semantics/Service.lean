@@ -163,13 +163,13 @@ def abs {svc : Service In Out S} (c : SysState (system svc)) : Service.Abs In Ou
 
 /-- What handling a request does: the service's step on the state, its outputs appended. -/
 theorem handle_eq (svc : Service In Out S) (env : EnvModel (sig In Out))
-    (c : SysState (system svc)) (x : In) :
-    c.handle env () x =
+    (c : SysState (system svc)) (x : In) (src : Sender Unit) :
+    c.handle env () x src =
       { c with state := update c.state () (svc.step (c.state ()) x).1
                outbox := c.outbox ++ (svc.step (c.state ()) x).2 } := by
-  have h : ∀ s, (actor svc).step s x =
+  have h : ∀ ctx s, (actor svc).stepAt ctx s x =
       ((svc.step s x).1, (svc.step s x).2.map (Effect.emit (σ := sig In Out))) :=
-    fun _ => rfl
+    fun _ _ => rfl
   simp only [SysState.handle, SysState.settle, h]
   rw [SysState.any_isStop_emit]
   exact SysState.performAll_emit (sys := system svc) _ _ _
@@ -213,6 +213,7 @@ theorem implements (svc : Service In Out S) (env : EnvModel (sig In Out))
     | restart =>
       obtain ⟨hmay, -⟩ := SysState.step_restart.mp hstep
       simp [henv.noRestarts] at hmay
+    | tick m => obtain rfl := SysState.step_tick.mp hstep; exact hinv
   · intro c ev c' hinv hstep
     cases ev with
     | input x =>
@@ -253,6 +254,9 @@ theorem implements (svc : Service In Out S) (env : EnvModel (sig In Out))
     | restart =>
       obtain ⟨hmay, -⟩ := SysState.step_restart.mp hstep
       simp [henv.noRestarts] at hmay
+    | tick m =>
+      obtain rfl := SysState.step_tick.mp hstep
+      exact .inl ⟨rfl, rfl⟩
 
 end Server
 

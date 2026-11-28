@@ -126,6 +126,7 @@ def Event.render : Event σ → String
   | .crash i => s!"crash {brief i}"
   | .start i => s!"start {brief i}"
   | .restart => "restart"
+  | .tick m => s!"tick {m.now_ms} {m.seed}"
 
 def Event.kind : Event σ → String
   | .input _ => "input"
@@ -137,6 +138,7 @@ def Event.kind : Event σ → String
   | .crash _ => "crash"
   | .start _ => "start"
   | .restart => "restart"
+  | .tick _ => "tick"
 
 def Event.kinds : List String :=
   ["input", "deliver", "duplicate", "drop", "timeout", "output", "crash", "start", "restart"]
@@ -330,7 +332,7 @@ def netEquiv (env : EnvModel σ) : List (Envelope σ) → List (Envelope σ) →
 def equiv (env : EnvModel σ) (a b : SysState sys) : Bool :=
   (Enum.all (α := σ.Id)).all (fun i =>
       a.state i == b.state i && a.up i == b.up i && a.timers i == b.timers i)
-    && netEquiv env a.net b.net && a.outbox.isPerm b.outbox
+    && netEquiv env a.net b.net && a.outbox.isPerm b.outbox && a.clock == b.clock
 
 /-- A hash of the messages in flight and the pending outputs that does not depend on their
 order. -/
@@ -344,7 +346,7 @@ def hash (c : SysState sys) : UInt64 :=
   let actors := (Enum.all (α := σ.Id)).foldl (init := 7) fun h i =>
     mixHash h (mixHash (Hashable.hash (c.state i))
       (mixHash (Hashable.hash (c.up i)) (Hashable.hash (c.timers i))))
-  mixHash actors c.trafficHash
+  mixHash (mixHash actors c.trafficHash) (Hashable.hash c.clock)
 
 def render (c : SysState sys) : String :=
   let actors := (Enum.all (α := σ.Id)).filterMap fun i =>
@@ -352,7 +354,8 @@ def render (c : SysState sys) : String :=
     some s!"  {brief i} [{if c.up i then "up" else "down"}] {brief (c.state i)}{timers}"
   let net := c.net.map fun e => s!"  in flight: {e.render}"
   let outbox := c.outbox.map fun o => s!"  pending output: {brief o}"
-  "\n".intercalate (actors ++ net ++ outbox)
+  let clock := if c.clock == {} then [] else [s!"  clock: {c.clock.now_ms} ms, seed {c.clock.seed}"]
+  "\n".intercalate (actors ++ net ++ outbox ++ clock)
 
 end SysState
 

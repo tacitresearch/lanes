@@ -54,24 +54,26 @@ namespace SysState
   unfold settle
   split <;> simp
 
-@[simp] theorem handle_state (env : EnvModel σ) (c : SysState sys) (i : σ.Id) (msg : σ.Msg i) :
-    (c.handle env i msg).state = update c.state i ((sys.actor i).step (c.state i) msg).1 := by
+@[simp] theorem handle_state (env : EnvModel σ) (c : SysState sys) (i : σ.Id) (msg : σ.Msg i)
+    (src : Sender σ.Id) :
+    (c.handle env i msg src).state
+      = update c.state i ((sys.actor i).stepAt { toMoment := c.clock, src } (c.state i) msg).1 := by
   simp [handle]
 
 @[simp] theorem startActor_state (env : EnvModel σ) (c : SysState sys) (i : σ.Id) :
-    (c.startActor env i).state = update c.state i ((sys.actor i).recover (c.state i)).1 := by
+    (c.startActor env i).state = update c.state i ((sys.actor i).recoverAt c.clock (c.state i)).1 := by
   simp [startActor]
 
 /--
 How one event changes actor states: not at all, or one actor `i` moves by its own `step` on some
-message, or one actor `i` moves by its own `recover`, or a restart puts every actor back in its
-state at `SysState.init`.
+message in some context, or one actor `i` moves by its own `recover` at some moment, or a restart
+puts every actor back in its state at `SysState.init`.
 -/
 theorem step_state {env : EnvModel σ} {c c' : SysState sys} {ev : Event σ}
     (h : c.step env ev = some c') :
     c'.state = c.state ∨
-    (∃ i msg, c'.state = update c.state i ((sys.actor i).step (c.state i) msg).1) ∨
-    (∃ i, c'.state = update c.state i ((sys.actor i).recover (c.state i)).1) ∨
+    (∃ i ctx msg, c'.state = update c.state i ((sys.actor i).stepAt ctx (c.state i) msg).1) ∨
+    (∃ i t, c'.state = update c.state i ((sys.actor i).recoverAt t (c.state i)).1) ∨
     (ev = .restart ∧ c'.state = (init sys env).state) := by
   cases ev with
   | input x =>
@@ -83,14 +85,14 @@ theorem step_state {env : EnvModel σ} {c c' : SysState sys} {ev : Event σ}
     split at h
     · simp only [Option.some.injEq] at h
       subst h
-      exact .inr (.inl ⟨e.dst, e.msg, by simp⟩)
+      exact .inr (.inl ⟨e.dst, _, e.msg, by simp; rfl⟩)
     · contradiction
   | duplicate e =>
     simp only [step] at h
     split at h
     · simp only [Option.some.injEq] at h
       subst h
-      exact .inr (.inl ⟨e.dst, e.msg, by simp⟩)
+      exact .inr (.inl ⟨e.dst, _, e.msg, by simp; rfl⟩)
     · contradiction
   | drop e =>
     simp only [step] at h
@@ -104,7 +106,7 @@ theorem step_state {env : EnvModel σ} {c c' : SysState sys} {ev : Event σ}
     split at h
     · simp only [Option.some.injEq] at h
       subst h
-      exact .inr (.inl ⟨i, msg, by simp⟩)
+      exact .inr (.inl ⟨i, _, msg, by simp; rfl⟩)
     · contradiction
   | output out =>
     simp only [step] at h
@@ -125,7 +127,7 @@ theorem step_state {env : EnvModel σ} {c c' : SysState sys} {ev : Event σ}
     split at h
     · simp only [Option.some.injEq] at h
       subst h
-      exact .inr (.inr (.inl ⟨i, by simp⟩))
+      exact .inr (.inr (.inl ⟨i, _, by simp; rfl⟩))
     · contradiction
   | restart =>
     simp only [step] at h
@@ -134,21 +136,25 @@ theorem step_state {env : EnvModel σ} {c c' : SysState sys} {ev : Event σ}
       subst h
       exact .inr (.inr (.inr ⟨rfl, rfl⟩))
     · contradiction
+  | tick m =>
+    simp only [step, Option.some.injEq] at h
+    subst h
+    exact .inl rfl
 
 /-- `step_state` for an event other than a restart. -/
 theorem step_state_of_ne_restart {env : EnvModel σ} {c c' : SysState sys} {ev : Event σ}
     (h : c.step env ev = some c') (hev : ev ≠ .restart) :
     c'.state = c.state ∨
-    (∃ i msg, c'.state = update c.state i ((sys.actor i).step (c.state i) msg).1) ∨
-    (∃ i, c'.state = update c.state i ((sys.actor i).recover (c.state i)).1) :=
+    (∃ i ctx msg, c'.state = update c.state i ((sys.actor i).stepAt ctx (c.state i) msg).1) ∨
+    (∃ i t, c'.state = update c.state i ((sys.actor i).recoverAt t (c.state i)).1) :=
   (step_state h).imp_right fun h => h.imp_right fun h => h.resolve_right fun h' => hev h'.1
 
 /-- `step_state` where the environment never restarts the process. -/
 theorem step_state_of_noRestarts {env : EnvModel σ} {c c' : SysState sys} {ev : Event σ}
     (h : c.step env ev = some c') (hrestart : env.mayRestart = false) :
     c'.state = c.state ∨
-    (∃ i msg, c'.state = update c.state i ((sys.actor i).step (c.state i) msg).1) ∨
-    (∃ i, c'.state = update c.state i ((sys.actor i).recover (c.state i)).1) :=
+    (∃ i ctx msg, c'.state = update c.state i ((sys.actor i).stepAt ctx (c.state i) msg).1) ∨
+    (∃ i t, c'.state = update c.state i ((sys.actor i).recoverAt t (c.state i)).1) :=
   step_state_of_ne_restart h (by rintro rfl; simp [step, hrestart] at h)
 
 theorem startActor_reachable {env : EnvModel σ} {c : SysState sys}
@@ -159,7 +165,7 @@ theorem startActor_reachable {env : EnvModel σ} {c : SysState sys}
   by_cases hj : j = i
   · subst hj
     rw [update_self]
-    exact .recover (h j)
+    exact .recover _ (h j)
   · rw [update_of_ne _ _ hj]
     exact h j
 
@@ -193,18 +199,18 @@ theorem run_inductive {env : EnvModel σ} {P : ∀ i, sys.State i → Prop}
     | none => simp [hstep] at hrun
     | some c₁ =>
       refine ih (by simpa [hstep] using hrun) fun i => ?_
-      rcases step_state hstep with h | ⟨j, msg, h⟩ | ⟨j, h⟩ | ⟨-, h⟩ <;> rw [h]
+      rcases step_state hstep with h | ⟨j, ctx, msg, h⟩ | ⟨j, t, h⟩ | ⟨-, h⟩ <;> rw [h]
       · exact hc i
       · by_cases hi : i = j
         · subst hi
           rw [update_self]
-          exact (hP i).step _ msg (hc i)
+          exact (hP i).step ctx _ msg (hc i)
         · rw [update_of_ne _ _ hi]
           exact hc i
       · by_cases hi : i = j
         · subst hi
           rw [update_self]
-          exact (hP i).recover _ (hc i)
+          exact (hP i).recover t _ (hc i)
         · rw [update_of_ne _ _ hi]
           exact hc i
       · exact (hP i).invariant _ (init_reachable env i)
@@ -222,21 +228,21 @@ theorem Reachable.actor {env : EnvModel σ} {c : SysState sys} (hc : sys.Reachab
   induction hc generalizing i with
   | init => exact SysState.init_reachable env i
   | step ev _ hstep ih =>
-    rcases SysState.step_state hstep with h | ⟨k, msg, h⟩ | ⟨k, h⟩ | ⟨-, h⟩
+    rcases SysState.step_state hstep with h | ⟨k, ctx, msg, h⟩ | ⟨k, t, h⟩ | ⟨-, h⟩
     · rw [h]
       exact ih i
     · rw [h]
       by_cases hi : i = k
       · subst hi
         rw [update_self]
-        exact .step msg (ih i)
+        exact .step ctx msg (ih i)
       · rw [update_of_ne _ _ hi]
         exact ih i
     · rw [h]
       by_cases hi : i = k
       · subst hi
         rw [update_self]
-        exact .recover (ih i)
+        exact .recover t (ih i)
       · rw [update_of_ne _ _ hi]
         exact ih i
     · rw [h]

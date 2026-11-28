@@ -144,7 +144,8 @@ theorem step_le (config : Config) (uploads : State) (msg : Request)
 theorem uploads_le (config : Config) :
     (Server.actor (service config)).Invariant fun uploads => uploads.length ≤ config.uploads_max :=
   Actor.Inductive.invariant
-    ⟨by simp [Server.actor, service], fun s msg h => step_le config s msg h, fun _ h => h⟩
+    ⟨by simp [Server.actor, service], fun _ s msg h => step_le config s msg h,
+      fun _ _ h => h⟩
 
 /-- The piece an upload waits for is taken: the upload goes on from what it had, with the piece's
 bytes after them. -/

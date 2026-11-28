@@ -328,12 +328,13 @@ def startedWith (c : SysState sys) (i : σ.Id) (r : sys.State i × List (Effect 
   timers := update c.timers i
     (if r.2.any Effect.isStop then [] else Effect.retime r.2 (c.timers i))
   outbox := c.outbox ++ Effect.emits r.2
+  clock := c.clock
 
 def started (c : SysState sys) (i : σ.Id) : SysState sys :=
-  c.startedWith i ((sys.actor i).recover (c.state i))
+  c.startedWith i ((sys.actor i).recoverAt c.clock (c.state i))
 
 theorem startActor_eq_started (c : SysState sys) (i : σ.Id)
-    (h : ((sys.actor i).recover (c.state i)).2.any Effect.isStop = true →
+    (h : ((sys.actor i).recoverAt c.clock (c.state i)).2.any Effect.isStop = true →
       ∀ src, (env.link src i).lossy = true) : c.startActor env i = c.started i := by
   simp only [startActor, settle_eq, started, startedWith]
   split
@@ -475,7 +476,8 @@ theorem deliver_ahead {c c' : SysState sys} {x : Envelope σ}
   obtain ⟨-, -, rfl⟩ := step_deliver.mp hstep
   have he' : e ∈ c.net.erase x := (List.mem_erase_of_ne (Ne.symm hx)).mpr he
   obtain ⟨hmem, hsub⟩ := settle_ahead (c := { c with net := c.net.erase x }) (i := x.dst)
-    (r := (sys.actor x.dst).step (c.state x.dst) x.msg) he' hup
+    (r := (sys.actor x.dst).stepAt { toMoment := c.clock, src := .ofSrc x.src } (c.state x.dst)
+      x.msg) he' hup
   rw [beforeFirst_erase hx] at hsub
   exact ⟨hmem, hsub⟩
 
@@ -518,6 +520,9 @@ theorem step_ahead {c c' : SysState sys} {ev : Event σ} (hstep : c.step env ev 
     obtain ⟨-, -, rfl⟩ := step_start.mp hstep
     exact settle_ahead (c := { c with up := _ }) he hup
   | restart => simp [step_restart_of_noRestarts hrestart] at hstep
+  | tick m =>
+    obtain rfl := step_tick.mp hstep
+    exact ⟨he, List.Sublist.refl _⟩
 
 /-- The message a delivery of which brings `e` nearer: the oldest on its link if the link is
 ordered, else `e` itself. While nothing ahead of `e` changes, it stays the same. -/
@@ -585,22 +590,22 @@ never stops. -/
 theorem mem_net_of_step {c c' : SysState sys} {ev : Event σ} (he : e ∈ c.net)
     (hstep : c.step env ev = some c') (hlossless : (env.link e.src e.dst).lossy = false)
     (hcrash : env.mayCrash e.dst = false) (hrestart : env.mayRestart = false)
-    (hruns : ∀ s msg, ((sys.actor e.dst).step s msg).2.any Effect.isStop = false)
-    (hrecovers : ∀ s, ((sys.actor e.dst).recover s).2.any Effect.isStop = false)
+    (hruns : ∀ ctx s msg, ((sys.actor e.dst).stepAt ctx s msg).2.any Effect.isStop = false)
+    (hrecovers : ∀ t s, ((sys.actor e.dst).recoverAt t s).2.any Effect.isStop = false)
     (hdeliver : ev ≠ .deliver e) (hdup : ev ≠ .duplicate e) : e ∈ c'.net := by
-  have hhandle (c₀ : SysState sys) (h₀ : e ∈ c₀.net) (j : σ.Id) (msg : σ.Msg j) :
-      e ∈ (c₀.handle env j msg).net :=
-    mem_net_settle h₀ fun h => by subst h; exact hruns _ _
+  have hhandle (c₀ : SysState sys) (h₀ : e ∈ c₀.net) (j : σ.Id) (msg : σ.Msg j)
+      (src : Sender σ.Id) : e ∈ (c₀.handle env j msg src).net :=
+    mem_net_settle h₀ fun h => by subst h; exact hruns _ _ _
   cases ev with
   | input x =>
     obtain rfl := step_input.mp hstep
     exact List.mem_append_left _ he
   | deliver x =>
     obtain ⟨-, -, rfl⟩ := step_deliver.mp hstep
-    exact hhandle _ ((List.mem_erase_of_ne fun h => hdeliver (by rw [h])).mpr he) _ _
+    exact hhandle _ ((List.mem_erase_of_ne fun h => hdeliver (by rw [h])).mpr he) _ _ _
   | duplicate x =>
     obtain ⟨-, -, -, rfl⟩ := step_duplicate.mp hstep
-    exact hhandle _ he _ _
+    exact hhandle _ he _ _ _
   | drop x =>
     obtain ⟨hlossy, -, rfl⟩ := step_drop.mp hstep
     refine (List.mem_erase_of_ne fun h => ?_).mpr he
@@ -608,7 +613,7 @@ theorem mem_net_of_step {c c' : SysState sys} {ev : Event σ} (he : e ∈ c.net)
     simp [hlossless] at hlossy
   | timeout i msg =>
     obtain ⟨-, -, rfl⟩ := step_timeout.mp hstep
-    exact hhandle { c with timers := update c.timers i ((c.timers i).erase msg) } he i msg
+    exact hhandle { c with timers := update c.timers i ((c.timers i).erase msg) } he i msg _
   | output out =>
     obtain ⟨-, rfl⟩ := step_output.mp hstep
     exact he
@@ -618,8 +623,11 @@ theorem mem_net_of_step {c c' : SysState sys} {ev : Event σ} (he : e ∈ c.net)
     simp [down, he, hi]
   | start i =>
     obtain ⟨-, -, rfl⟩ := step_start.mp hstep
-    exact mem_net_settle he fun h => by subst h; exact hrecovers _
+    exact mem_net_settle he fun h => by subst h; exact hrecovers _ _
   | restart => simp [step_restart_of_noRestarts hrestart] at hstep
+  | tick m =>
+    obtain rfl := step_tick.mp hstep
+    exact he
 
 end Kept
 
@@ -673,5 +681,8 @@ theorem System.Reachable.accepted {env : EnvModel σ} {c : SysState sys} (h : sy
     | restart =>
       obtain ⟨_, rfl⟩ := SysState.step_restart.mp hstep
       exact hinit
+    | tick m =>
+      obtain rfl := SysState.step_tick.mp hstep
+      exact ih
 
 end Lanes

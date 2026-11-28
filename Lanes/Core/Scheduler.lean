@@ -70,14 +70,22 @@ structure World (sys : System σ) (D : Type) where
   crashes : Nat := 0
   restarts : Nat := 0
 
-/-- One instance to run or check: the environment model, the driver of the inputs, and how
-many crashes and process restarts a run may take. A restart is explored only where `env`
-allows it (`EnvModel.mayRestart`), as a crash is only where `env.mayCrash` does. -/
+/-- One instance to run or check: the environment model, the driver of the inputs, how many
+crashes and process restarts a run may take, and the moments the environment may give the
+steps. A restart is explored only where `env` allows it (`EnvModel.mayRestart`), as a crash is
+only where `env.mayCrash` does. With no moments, nothing ticks and every step is told the time
+0 and the seed 0; with some, the clock ticks to each later one (`Moment.later`), so a run is
+finite. -/
 structure Scenario (σ : Signature) (D : Type) where
   env : EnvModel σ := {}
   driver : Driver σ D
   maxCrashes : Nat := 0
   maxRestarts : Nat := 0
+  moments : List Moment := []
+
+/-- Whether `b` comes after `a`, by time and then by seed: the order the checker ticks in. -/
+def Moment.later (a b : Moment) : Bool :=
+  a.now_ms < b.now_ms || (a.now_ms == b.now_ms && a.seed < b.seed)
 
 namespace World
 
@@ -110,7 +118,9 @@ def next [Enum σ.Id] (sc : Scenario σ D) (w : World sys D) : List (Event σ ×
   let inputs := (sc.driver.inputs w.driver).filterMap fun (x, d) =>
     (w.state.step sc.env (.input x)).map fun c =>
       (Event.input x, { w with state := c, driver := d })
-  internal ++ inputs
+  let ticks := (sc.moments.filter (Moment.later w.state.clock)).map fun m =>
+    (Event.tick m, { w with state := { w.state with clock := m } })
+  internal ++ inputs ++ ticks
 
 end World
 

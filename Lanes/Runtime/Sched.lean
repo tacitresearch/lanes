@@ -101,10 +101,13 @@ def input {i : σ.Id} : Work σ i → Bool
 
 end Work
 
-def Job.run {sys : System σ} {i : σ.Id} (j : Job sys i) : sys.State i × List (Effect σ i) :=
+/-- The step, told the moment `t` the runtime read and who sent the message. -/
+def Job.run {sys : System σ} {i : σ.Id} (j : Job sys i) (t : Moment) :
+    sys.State i × List (Effect σ i) :=
   match j.work with
-  | .deliver _ m | .timeout m => (sys.actor i).step j.state m
-  | .start => (sys.actor i).recover j.state
+  | .deliver src m => (sys.actor i).stepAt { toMoment := t, src := .ofSrc src } j.state m
+  | .timeout m => (sys.actor i).stepAt { toMoment := t, src := .timer } j.state m
+  | .start => (sys.actor i).recoverAt t j.state
 
 /-- Arm the timer for `msg` at `due`, replacing the one for `msg` if it is pending. -/
 def arm {α β : Type} [DecidableEq α] (timers : List (α × β)) (msg : α) (due : β) :
