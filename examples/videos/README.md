@@ -15,6 +15,8 @@ lake test             # model checks at small bounds, the bridge, and the site o
 lake exe videosTest pipeline   # only the model checks whose names contain a word; `http`, only the site
 lake exe videosTest large      # the model checks at large bounds, nightly in CI: about ten minutes
 lake exe videosWaves           # how wide the waves of the journal are, an actor and a scheduler for each member
+lake exe videosWaves kernel    # the same for the kernel's waves of messages, a batch at a time
+lake exe videosWaves time      # how long the batches take serial, in waves and with `auto`: p50, p99, entries a second
 ```
 
 ## How it works

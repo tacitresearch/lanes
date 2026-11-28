@@ -29,7 +29,7 @@ machine through the workflow.
 | `lanes-heavy-par` | `lanes-heavy` with `WORKERS`, `parallel := .on` | `LanesMany.lean` |
 | `lanes-heavy-auto` | `lanes-heavy` with `WORKERS`, `parallel := .auto` | `LanesMany.lean` |
 
-`IO_THREADS` and `WORKERS` are a quarter of the server's CPUs each by default (8 and 8 on the warm machine), `K` and `SPIN` as above; all four are read from the environment by `servers.sh`. `benchWaves` (`Waves.lean`) is the kernel alone, without IO: `benchWaves K spin workers inputs rounds`. `benchAuto` (`Auto.lean`) is the shard without IO in its three modes: `benchAuto [workers] [runs] [scale] [workload…]`.
+`IO_THREADS` and `WORKERS` are a quarter of the server's CPUs each by default (8 and 8 on the warm machine), `K` and `SPIN` as above; all four are read from the environment by `servers.sh`. `benchWaves` (`Waves.lean`) is the kernel alone, without IO: `benchWaves K spin workers inputs rounds`. `benchAuto` (`Auto.lean`) is the shard without IO in its three modes: `benchAuto [workers] [runs] [scale] [workload…]`. `benchMixed` (`Mixed.lean`) is the shard without IO at mixed step costs, against two prototypes of free-running actors: `benchMixed [workers] [runs] [requests] [workload…]`, or `mixed.sh` (below).
 
 `lanes*` run whatever `Lanes.Http.serve` is on the commit measured: a new HTTP server under
 that name is measured by the same rows. `servers.sh` holds the commands.
@@ -250,6 +250,19 @@ Two CPUs are already full with libuv's thread, the shard and the connections (D6
 gains, and the differences are inside the noise. `lanes-heavy-auto` used the CPU a request of
 `lanes-heavy`, not that of `lanes-heavy-par`: it kept to the shard's thread. The warm machine,
 with cores to spare, is where `lanes-heavy-auto` should come out near `lanes-heavy-par`.
+
+### Mixed step costs
+
+`benchMixed` (`Mixed.lean`) asks whether waves, or actors that run free of them, keep the
+latency of cheap steps low when some steps are costly. 64 clients each keep one request
+outstanding to one of 64 counters, and each step costs what the workload draws: all 2 µs, one in
+fifty 500 µs and the rest 2 µs, one in five 50 µs and the rest 1 µs, or all 50 µs. It runs the
+shell serial, in waves and auto, and two prototypes of free-running actors with no kernel, journal
+or order between actors, and gives p50, p99, the p99 of the cheap steps and answers a second, as
+medians over the runs with their spread. `mixed.sh` runs it pinned to the first half of the CPUs
+and writes `results/<date>-<commit>-mixed.md`; the workflow runs it with `mixed` set (`gh
+workflow run bench.yml -f servers=none -f mixed=true`). The numbers and what was decided from
+them are in `docs/decisions/new-waves-default.md`.
 
 ## Results
 

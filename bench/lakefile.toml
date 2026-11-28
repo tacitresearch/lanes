@@ -35,3 +35,8 @@ root = "Waves"
 [[lean_exe]]
 name = "benchAuto"
 root = "Auto"
+
+# Mixed step costs at p99: the shell serial, in waves and auto, and free-running actors.
+[[lean_exe]]
+name = "benchMixed"
+root = "Mixed"

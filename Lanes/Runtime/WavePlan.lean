@@ -18,7 +18,8 @@ each wave in parallel, gives each actor its entries in the journal's order.
 `Kernel.mail` is the plan for a wave of messages, each of which has one receiver. This plan is
 for entries applied whole, each with every actor its messages reach, and is what
 `examples/videos/Videos/Waves.lean` measures a workload with
-(`docs/decisions/new-waves-premise.md`).
+(`docs/decisions/D107-waves-premise.md`). The runtime does not apply entries in these waves: on
+the video site the kernel's waves of messages are wider (`docs/decisions/new-waves-default.md`).
 -/
 
 @[expose] public section

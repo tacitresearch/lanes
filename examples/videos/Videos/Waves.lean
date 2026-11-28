@@ -120,9 +120,10 @@ def drain (k : K) : (fuel : Nat) → K × List Actor × List fullSig.Out
   | fuel + 1 =>
     if k.wait != .none then (k, [], [])
     else
-      let r := k.step
-      let (k, more, outs) := drain r.kernel fuel
-      (k, r.events.filterMap touchedBy ++ more, r.outputs ++ outs)
+      match k.step with
+      | { kernel, events, outputs } =>
+        let (k, more, outs) := drain kernel fuel
+        (k, events.filterMap touchedBy ++ more, outputs ++ outs)
 
 def answerFor : Op → Answer
   | .head _ => .found 1000
@@ -173,9 +174,17 @@ def Driver.stamp (d : Driver) : Entry → Driver × Entry
 def isReady (k : K) (v : VideoId) : Bool :=
   (((k.cell (.inr v.owner)).state : Site).find? v).any (·.status.isReady)
 
+/-- The kernel with `entries` accepted, taken out of the driver, which then holds none: a kernel
+held twice would copy its table of actors at its next write. -/
+def Driver.begin (d : Driver) (entries : List Entry) : K × Driver :=
+  let now := at_s d * 1000
+  let k := d.k
+  let d := { d with k := {} }
+  ((k.advance now).acceptAll entries, d)
+
 def Driver.feed (d : Driver) (x : Entry) (measured : Bool) : Driver :=
   let (d, x) := d.stamp x
-  let k := (d.k.advance (at_s d * 1000)).accept x |>.kernel
+  let (k, d) := d.begin [x]
   let (k, touched, outs) := drain k 100000
   let d := { d with k, entry := d.entry + 1
                     log := if measured then d.log.push touched.eraseDups else d.log }
@@ -268,9 +277,8 @@ def Driver.tick (d : Driver) (w : Workload) (measured : Bool) : Driver :=
     | some x => count (d.feed x measured) false
     | none => if read then count d true else d
 
-/-- Every member signs in, `warmVideos` videos are made and their pipelines run out, then
-`actions` actions of the browsers are measured. -/
-def run (w : Workload) : Driver := Id.run do
+/-- Every member signs in, and `warmVideos` videos are made and their pipelines run out. -/
+def warm (w : Workload) : Driver := Id.run do
   let (k, _) := Kernel.boot (system config)
   let mut d : Driver := { k, gen := ⟨w.seed⟩ }
   for m in [0:w.members] do
@@ -284,9 +292,86 @@ def run (w : Workload) : Driver := Id.run do
   for _ in [0:40 * w.warmVideos] do
     if d.later.isEmpty then break
     d := d.tick w false
+  return d
+
+/-- `warm`, then `actions` actions of the browsers, each entry fed alone and measured. -/
+def run (w : Workload) : Driver := Id.run do
+  let mut d := warm w
   while d.actions < w.actions do
     d := d.tick w true
   return d
+
+/-! ## Batches, as a shard takes them
+
+A shard takes what has arrived at once, accepts it, and runs until it is quiet; the answers to
+the calls of one batch come in a later one. -/
+
+/-- Up to `n` entries, the oldest due first and then the browsers', each stamped: the inputs of
+one batch. Reads are counted and make no entry. -/
+def Driver.gather (d : Driver) (w : Workload) (n : Nat) : List Entry × Driver := Id.run do
+  let mut d := d
+  let mut taken : Array Entry := #[]
+  for _ in [0:4 * n + 16] do
+    if n ≤ taken.size || w.actions ≤ d.actions then break
+    let (due, d') := d.due
+    d := d'
+    let x? ← match due with
+      | x :: rest =>
+        d := { d with later := (rest.map fun x => (d.entry, x)) ++ d.later }
+        pure (some x)
+      | [] =>
+        let (x, read, d') := d.browse w
+        d := d'
+        if read then d := { d with actions := d.actions + 1, reads := d.reads + 1 }
+        pure x
+    if let some x := x? then
+      let (d', x) := d.stamp x
+      d := { d' with entry := d'.entry + 1, actions := d'.actions + 1 }
+      taken := taken.push x
+  return (taken.toList, d)
+
+/-- The driver after a batch of `entries` left the kernel `k` with `outs`. -/
+def Driver.settle (d : Driver) (k : K) (entries : List Entry) (outs : List fullSig.Out) : Driver :=
+  let d := { d with k }.take outs
+  entries.foldl (init := d) fun d x =>
+    match x with
+    | .inr (.request (.report _ r _) _) =>
+      if isReady d.k r.round.video then { d with ready := d.ready.push r.round.video } else d
+    | _ => d
+
+/-- A wave of the kernel's, as `Kernel.waves` cuts it: its messages, its receivers, and the most
+messages one receiver has in it. -/
+structure KernelWave where
+  messages : Nat
+  actors : Nat
+  most : Nat
+
+/-- The kernel's waves for a batch: the messages queued when each begins, until it is quiet. -/
+def kernelWaves (k : K) : (fuel : Nat) → List KernelWave
+  | 0 => []
+  | fuel + 1 =>
+    if k.wait != .none then []
+    else
+      let n := max 1 k.queue.length
+      let mail := Kernel.mail (k.queue.toList.take n)
+      let wave : KernelWave :=
+        { messages := n, actors := mail.size, most := mail.fold (fun m _ ms => max m ms.length) 0 }
+      wave :: kernelWaves (k.runBatch n).kernel fuel
+
+/-- The kernel's waves of every batch of `n` entries of the workload, the batches as `gather`
+takes them. -/
+def batchWaves (w : Workload) (n : Nat) : List (List KernelWave) := Id.run do
+  let mut d := warm w
+  let mut out := #[]
+  for _ in [0:w.actions + 1] do
+    if w.actions ≤ d.actions then break
+    let (batch, d') := d.gather w n
+    let (k, d') := d'.begin batch
+    d := d'
+    out := out.push (kernelWaves k 100000)
+    match k.runBatch 1000000 with
+    | { kernel, outputs, .. } => d := d.settle kernel batch outputs
+  return out.toList
 
 /-! ## The waves -/
 

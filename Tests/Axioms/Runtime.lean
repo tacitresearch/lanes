@@ -207,6 +207,9 @@ import Lanes.Semantics
 /-- info: 'Lanes.Batch.chain_peek_after' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Batch.chain_peek_after
 
+/-- info: 'Lanes.Batch.chain_spread' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Batch.chain_spread
+
 -- Lanes.Runtime.Release
 /-- info: 'Lanes.Event.filterMap_eq_of_awake' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Event.filterMap_eq_of_awake

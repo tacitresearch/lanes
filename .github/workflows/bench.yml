@@ -31,9 +31,14 @@ on:
         required: false
         default: "3"
       servers:
-        description: Servers to run, separated by spaces (all when empty; see bench/servers.sh)
+        description: Servers to run, separated by spaces (all when empty, none when "none"; see bench/servers.sh)
         required: false
         default: ""
+      mixed:
+        description: Also run bench/mixed.sh, the shard at mixed step costs (p50, p99, throughput)
+        type: boolean
+        required: false
+        default: false
       require-idle:
         description: Fail unless the machine is idle at the start and throughout
         type: boolean
@@ -153,6 +158,7 @@ jobs:
             [[ $LEAN_THREADS =~ ^[0-9]+$ ]] || { echo "::error::$LEAN_THREADS is not a number"; exit 2; }
             export LEAN_NUM_THREADS=$LEAN_THREADS
           fi
+          [ "$SERVERS" != none ] || exit 0
           read -ra servers <<<"$SERVERS"
           status=0
           bench/run.sh "${servers[@]}" || status=$?
@@ -163,6 +169,16 @@ jobs:
             *) echo "::error::run.sh failed ($status)" ;;
           esac
           exit "$status"
+      - name: Mixed step costs
+        if: ${{ !cancelled() && inputs.mixed }}
+        env:
+          LEAN_THREADS: ${{ inputs.lean-threads }}
+        run: |
+          if [ -n "$LEAN_THREADS" ]; then
+            [[ $LEAN_THREADS =~ ^[0-9]+$ ]] || { echo "::error::$LEAN_THREADS is not a number"; exit 2; }
+            export LEAN_NUM_THREADS=$LEAN_THREADS
+          fi
+          bench/mixed.sh
       - name: Report
         if: ${{ !cancelled() }}
         run: |

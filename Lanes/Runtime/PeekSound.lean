@@ -9,7 +9,7 @@ public import Lanes.Runtime.KernelSound
 
 /-!
 What a peek sees over the shard's whole history, which answering a read from the state rests on
-(`docs/decisions/new-reads-from-state.md`).
+(`docs/decisions/D108-reads-from-state.md`).
 
 `chain` is the batches one after another, as the shell runs them. Every act of it is sound where
 it falls (`chain_sound`): a peek is answered with the states of the kernel the journal so far
@@ -17,7 +17,8 @@ describes, once every output that journal produced is handed over (`chain_peek`)
 linearizable at the boundary where it is answered: it sees every entry before it and none after,
 it never shows a state a crash could take back, and one asked after a write's response was handed
 over sees a world the semantics reaches by a run that put that response out first
-(`chain_peek_after`).
+(`chain_peek_after`). However each batch is spread over threads, the history is the one a single
+thread gives (`chain_spread`).
 -/
 
 @[expose] public section
@@ -34,6 +35,21 @@ def chain (k : Kernel sys) (written : Nat) (waiting : Array (Bool × W)) :
   | (c, commands) :: rest =>
     let r := run c k written waiting commands
     r.acts.toList ++ chain r.kernel r.written r.waiting rest
+
+/-- However each batch of the history is spread over threads, the `n`th as `spread n` says, the
+history is the one a single thread gives: the same acts, so the same journal entries, outputs
+and answers. The shell's `auto` gives each batch the spread `Pace` chooses from its timing, which
+is such a choice. -/
+theorem chain_spread (spread : Nat → Kernel.Spread) (k : Kernel sys) (written : Nat)
+    (waiting : Array (Bool × W)) (batches : List (Config × List (Command σ P W))) :
+    chain k written waiting (batches.mapIdx fun n b => ({ b.1 with spread := spread n }, b.2))
+      = chain k written waiting batches := by
+  induction batches generalizing spread k written waiting with
+  | nil => rfl
+  | cons b rest ih =>
+    rw [List.mapIdx_cons]
+    simp only [chain, run_spread]
+    rw [ih (fun n => spread (n + 1))]
 
 theorem Sound.of_append {k : Kernel sys} {xs ys : List (Act sys P)} (h : Sound k (xs ++ ys)) :
     Sound k xs :=

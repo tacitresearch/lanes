@@ -81,6 +81,10 @@ def replay {σ : Signature} (sys : System σ) [Hashable σ.Id] (rt : Runtime sys
 /-- How the tests below that take it run their actors: on one worker, or in parallel. -/
 def serial : Runtime.Config := { workers := 1 }
 
+/-- Waves are the default: `auto`, on as many workers as the machine has hardware threads
+(`docs/decisions/new-waves-default.md`). -/
+example : ({} : Runtime.Config).parallel = .auto ∧ ({} : Runtime.Config).workers = 0 := ⟨rfl, rfl⟩
+
 def flakyTest (shape : Runtime.Config := serial) : Async (List (String × Bool)) := do
   let config : Runtime.Config := { shape with record := true, inboxCapacity := 8 }
   let outputs ← IO.mkRef (#[] : Array Nat)

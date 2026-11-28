@@ -33,7 +33,7 @@ proved function tells it to.
 | Actors and systems | `Lanes/Core/{Actor,System,World,Step,Run}.lean` | the definition everything else is about |
 | Proof tools for systems | `Lanes/Proof/{Lift,Ghost,Monotone,Equiv,Deed}.lean` | `System.invariant_of_actor`, `Inductive.of_monotone`, `System.Invariant.of_ghost` |
 | The kernel | `Lanes/Runtime/{Kernel,KernelSound,KernelTimers,Wave}.lean` | `Kernel.exec_reachable`, `Kernel.exec_outputs`, `Kernel.exec_wellFormed`, `Kernel.runWaves_eq` |
-| The shell | `Lanes/Runtime/IO/Shell.lean`, `Lanes/Runtime/{Batch,PeekSound,Mailbox,MailboxSound,Pace}.lean` | `Batch.run_kernel`, `Batch.run_sound`, `Batch.run_spread`, `Batch.run_erase_peeks`, `Batch.chain_peek_after`, `Mailbox.batch_since_take`; the shell itself is trusted |
+| The shell | `Lanes/Runtime/IO/Shell.lean`, `Lanes/Runtime/{Batch,PeekSound,Mailbox,MailboxSound,Pace}.lean` | `Batch.run_kernel`, `Batch.run_sound`, `Batch.run_spread`, `Batch.chain_spread`, `Batch.run_erase_peeks`, `Batch.chain_peek_after`, `Mailbox.batch_since_take`; the shell itself is trusted |
 | Journal, snapshots, disk | `Lanes/Durable/{Journal,Snapshot,Disk,Frame,Reading}.lean`, `Lanes/Runtime/Log.lean`, `Lanes/Durable/IO/Journal.lean` | `Journal.open?_cut`, `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Journal.Disk.Holds.save_crash`, `Journal.Disk.Torn.load_readings` |
 | Migrations | `Lanes/Durable/{Migration,Upgrade}.lean` | `Migration.inv_exec`, `Journal.Upgrade.begin_crash`, `Journal.Upgrade.holds`, `Journal.Upgrade.inv_load` |
 | Joins | `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`, `Lanes/Semantics/FairJoin.lean` | `System.Reachable.left`, `SysState.run_left`, `System.Run.Fair.left`, `System.Run.Fair.right` |
@@ -180,8 +180,11 @@ Also:
   change nothing anyone can see by it (`Kernel.exec_visible`; a hundred thousand identities
   touched leave none in the kernel).
 - The shard chooses from its own timing whether the actors of a wave step in parallel on Lean's
-  task pool (`Runtime.Config.parallel := .auto`), proved to change nothing the kernel does
-  whatever is chosen (`Kernel.runWaves_eq`, `Batch.run_spread`).
+  task pool (`Runtime.Config.parallel := .auto`, the default, on the machine's hardware threads),
+  proved to change nothing the kernel does whatever is chosen, batch by batch and over the whole
+  history (`Kernel.runWaves_eq`, `Batch.run_spread`, `Batch.chain_spread`). Waves of whole journal
+  entries are not the runtime's, and actors that run free of waves are not built: measured at
+  mixed step costs in `docs/decisions/new-waves-default.md`.
 - No sleeper or waiting sender of the inbox is forgotten (`Mailbox.woken_after_rest`,
   `Mailbox.wake_since_take`): proved for every capacity and every sequence of operations.
 - Waves are as wide as an application spreads its work over actors. `Lanes/Runtime/WavePlan.lean`
@@ -193,7 +196,8 @@ Also:
 ### Limits
 
 - A timer does not advance while the process is down, and after a restart it also loses the time that had passed since the last journal entry before the process died.
-- Actors step in parallel only with `Runtime.Config.workers` above one, and then only within a wave, their steps committed in queue order by one thread; the gate of an HTTP server is one actor. A step handed to another thread costs a microsecond or two more, in Lean's reference counts of objects threads share, so cheap steps run slower that way (`docs/decisions/D64-actors-run-in-parallel.md`).
+- Actors step in parallel only with `Runtime.Config.workers` other than one (`0`, the default, is the machine's hardware threads), and then only within a wave, their steps committed in queue order by one thread; the gate of an HTTP server is one actor. A step handed to another thread costs a microsecond or two more, in Lean's reference counts of objects threads share, so cheap steps run slower that way (`docs/decisions/D64-actors-run-in-parallel.md`).
+- A wave ends when its costliest step does, and its batch's outputs are handed over after the batch: with one step in fifty at 500 µs and the rest at 2 µs, waves answer no more than one thread does, and a cheap step waits as long as a costly one (`docs/decisions/new-waves-default.md`).
 - Lean never updates in place an object another thread has seen, so each actor the pool steps has its state copied once a wave, in its task, and once more by its next step on the shard's thread. With `parallel := .on`, a write to one of two busy actors whose states hold a million numbers costs about a tenth of a millisecond, where it costs a microsecond on the shard's thread. `.auto` keeps such steps on the shard's thread (`docs/decisions/D88-waves-in-place.md`).
 - One shard takes about 1.8 million inputs a second from one sender and about a million from four that contend for its inbox, on a four-core machine; its kernel alone does between two and three million turns a second. With a journal every batch is one write, so the disk is the limit there. A shard with nothing to do sleeps, and waking it costs tens of microseconds.
 - That a pending timer fires in time is proved as far as the kernel goes: its agenda holds exactly the pending timers, it never tells the shell to sleep past one, and it fires one that is due on its next step or, when a message is waiting too, the step after (`Kernel.exec_wellFormed`, `Kernel.WellFormed.wait_of_due`, `step_of_due`, `wait_for_ms`). That the clock advances and the shell's sleep ends is assumed (see `TRUSTED.md`).
