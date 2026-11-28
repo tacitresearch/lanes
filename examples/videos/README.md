@@ -25,7 +25,7 @@ lake exe videosWaves           # how wide the waves of the journal are, an actor
   of the member's actor, and `Site.read` for a read of the members' sites put together
   (`Site.union`). `Videos/System.lean` runs the first two in an actor for each member, named by
   the identity that signs in (`Who`), so the work of two members touches no actor in common
-  (`docs/decisions/new-videos-per-member.md`). A video's id is its owner and a number of the
+  (`docs/decisions/D109-videos-per-member.md`). A video's id is its owner and a number of the
   owner's (`VideoId`). A delete is one step of the owner's actor, and every read of the video
   reads the owner's site, so the video leaves the feed, the channel and the watch page at one
   boundary.
@@ -225,7 +225,7 @@ Every bound holds in every state of every scenario: each member's videos (`maxVi
 `maxOwned`), pending uploads, comments on one of their videos (`maxComments`, and
 `maxCommentsEach` of each other member), sessions and jobs, each in that member's site or
 scheduler. How many members there are is not bounded: no actor counts them
-(`docs/decisions/new-videos-per-member.md`). `capTests` checks each bound at its limit, that a
+(`docs/decisions/D109-videos-per-member.md`). `capTests` checks each bound at its limit, that a
 video's owner takes out anyone's comment on it, and that an input goes to the actor of the member
 it is about.
 
