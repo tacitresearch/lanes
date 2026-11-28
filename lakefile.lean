@@ -51,7 +51,7 @@ lean_lib Lanes where
   -- imported by `Lanes`: a program that does not import one does not build it or link it.
   roots := #[`Lanes, `Lanes.Proofs, `Lanes.Semantics, `Lanes.Testing, `Lanes.Services,
     `Lanes.Services.S3.Testing, `Lanes.Lib.Encoding.Csv, `Lanes.Lib.Encoding.CsvSound, `Lanes.Lib.Path,
-    `Lanes.Lib.PathSound, `Lanes.Lib.Glob]
+    `Lanes.Lib.PathSound, `Lanes.Lib.Glob, `Lanes.Web.Html.Sanitize, `Lanes.Web.Html.SanitizeSound]
   moreLinkObjs := #[native, tls, verify, sign]
 
 /-! Files that modules embed with `include_str`, which Lake does not track. A library that `needs`

@@ -31,7 +31,7 @@ every module a row names exists, and so does every path it cites.
 
 | Folder | Reference | Version | Pinned in | The reference for |
 | --- | --- | --- | --- | --- |
-| `oracles/go` | Go's standard library, `golang.org/x/time` and Prometheus's `expfmt` | Go 1.24.7, x/time 0.11.0, prometheus/common 0.67.5 | `oracles/go/go.mod`, `oracles/go/go.sum` | Base64, CSV, paths and globs, IP addresses, times, JSON, media types, rate limits, URLs, XML, mail addresses, the metrics page; and, with Node and h11 (`oracles/go/requests/requests.py`, by hand), the request reader |
+| `oracles/go` | Go's standard library, `golang.org/x/time` and Prometheus's `expfmt` | Go 1.24.7, x/time 0.11.0, prometheus/common 0.67.5 | `oracles/go/go.mod`, `oracles/go/go.sum` | Base64, CSV, paths and globs, HTML's character references, IP addresses, times, JSON, media types, rate limits, URLs, XML, mail addresses, the metrics page; and, with Node and h11 (`oracles/go/requests/requests.py`, by hand), the request reader |
 | `oracles/botocore` | botocore, and `cryptography` for the signatures it is given | 1.44.12, cryptography 50.0.2 | `oracles/botocore/requirements.txt` | Signature Version 4; CloudFront's signed URLs (`oracles/botocore/cloudfront.jsonl`), signed with the published test keys of `oracles/botocore/keys/` |
 | `oracles/jwcrypto` | jwcrypto | 1.6.2 | `oracles/jwcrypto/requirements.txt` | JWS in compact form and JWK Sets |
 | `oracles/moto` | moto's server, S3, SES API v2 and SQS | 5.2.6 | `oracles/moto/requirements.txt` | the recorded runs of the object store, multipart, email and queue models, and of `POST` forms |
@@ -80,8 +80,11 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Web/Auth/Password.lean` | | PHC strings of Argon2id: read and written back as libsodium's `crypto_pwhash_str` wrote four (`Tests/Crypto.lean`), and proved to read back as written (`Auth.Phc.parse?_encode`); no reference is run on generated strings, since none is linked in CI's toolchain |
 | `Lanes/Web/Auth/Token.lean` | | Tokens only Lanes writes and reads; proved to accept exactly what it signs, before it expires (`Auth.verify_eq_some`) |
 | `Lanes/Web/Html/Basic.lean` | | Proved against a model of the HTML tokenizer (`Html.lex_render`); not yet compared with html5lib or a browser |
+| `Lanes/Web/Html/Entities.lean` | `oracles/go/html` | The table: every name is asked of Go's `html.UnescapeString` (`Tests/Oracle/Html.lean`, replayed in `lake test`). Known: Go leaves out `&nLt;` and `&nGt;` |
 | `Lanes/Web/Html/Htmx.lean` | | Attributes from routes, not a format of its own |
+| `Lanes/Web/Html/Sanitize.lean` | | Its output is proved to hold only what the policy allows (`Html.sanitize_safe`), whatever its reader makes of the input; the reader is tested on attacks written by hand and on generated inputs, whose output it must read back as written (`Tests/Oracle/Html.lean`). A comparison with html5lib's tokenizer is owed |
 | `Lanes/Web/Html/Syntax.lean` | | The template syntax, elaborated to `Html.Basic`'s values |
+| `Lanes/Web/Html/Unescape.lean` | `oracles/go/html` | Known: Go reads `&#x;` as U+FFFD and keeps a decimal reference of one digit without `;`, where the WHATWG standard keeps the first as written and reads the second |
 | `Lanes/Web/Http/Basic.lean` | | HTTP as data, not text |
 | `Lanes/Web/Http/Conn.lean` | | A connection's decisions, proved (`Lanes/Web/Http/ConnSound.lean`); its bytes are `Wire`'s and `ReadRequest`'s |
 | `Lanes/Web/Http/Cookie.lean` | | Proved to read back what it writes (`Lanes/Web/Http/CookieSound.lean`); Go's `http.ParseCookie` is owed |
