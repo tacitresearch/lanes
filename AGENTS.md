@@ -31,6 +31,30 @@ lake exe lanes docstrings  # how many public declarations of `import Lanes` have
   `examples/raft-kv`, `examples/ledger` and `examples/rookery` run as jobs of their own. A pull
   request that changes only documentation is built and linted, and the other jobs are skipped
   (the `changes` job of `.github/workflows/ci.yml` says which files count).
+- Lake's artifact cache is on for Lanes, the examples, the integrations and generated apps
+  (`enableArtifactCache` and `restoreAllArtifacts` in each lakefile; D99, section 6). Lake keeps
+  each build output once, named by a hash of its content, in the toolchain's cache,
+  `$ELAN_HOME/toolchains/<toolchain>/lake/cache` (`ELAN_HOME` is `~/.elan` by default;
+  `LAKE_CACHE_DIR` moves it), with a record of which outputs each module's inputs gave. A build
+  whose inputs are recorded there makes hard links in `.lake/build` instead of building. So the
+  worktrees and apps of a machine share one copy: a new worktree builds only what no checkout
+  built before, and its `.lake/build` takes almost no disk of its own. Start a worktree with only
+  `.lake/packages` (a link to the shared one); copying a warm `.lake/build` gains nothing. The
+  dependencies, Mathlib among them, are linked into the cache too, and their files become
+  read-only. Never write into a file of `.lake/build` or `.lake/packages` in place: it is also
+  the cache's file, and the read-only bit does not stop root. Lake deletes an output before
+  building it again, and several worktrees can build at once: an output is stored once under its
+  hash and never rewritten, and two builds of a module give the same bytes. An entry is found
+  only by the hash of everything a module's build reads, so it is as good as a build, provided
+  each file read by `include_str` is declared (below), and except for warnings: Lake does not
+  replay the warnings of a module it links from the cache, so `lake build --wfail` shows a
+  module's warnings only when the module is built, or was last built, in this checkout. CI gives
+  each job an empty cache of its own, so it sees them all. A checkout whose lakefile does not
+  turn the cache on still reads it (Lake's default) and adds nothing to it. The cache only grows;
+  delete the directory to reclaim it. To build from source, delete `.lake/build` and run
+  `LAKE_CACHE_DIR= lake build`: set and empty, it gives the checkout an empty cache of its own,
+  in `.lake/cache` (`LAKE_NO_CACHE` stops downloads only). Nothing is fetched from a remote cache
+  yet (#98).
 - **Small bounds on every pull request, large bounds on a schedule.** A pull request's checks
   are fast and exhaustive at small bounds: each example's `lake test` takes under a minute, and
   a pull request's CI under ten minutes. A model-checking scenario has a small version, in `lake
@@ -54,11 +78,17 @@ lake exe lanes docstrings  # how many public declarations of `import Lanes` have
   it has an axiom gate. A new definition of `Lanes/` with no theorem, test or row of `TRUSTED.md`
   fails `lanes lint` unless it is on `docs/inventory-none.md` under a heading that says why; when
   one there gets evidence, take it off.
-- Templates are embedded with `include_str`, which Lake does not track: after editing
-  `templates/`, delete `.lake/build/lib/lean/LanesCli/New.*` and `.lake/build/ir/LanesCli/New.*`,
-  rebuild `lanes`, and write `examples/counter` again (move it aside, run `lake exe lanes new
+- Lake hashes a module's source and imports, not the files it reads with `include_str`. So each
+  embedded file is an `input_dir` or `input_file` target that the module's library or executable
+  `needs` (`templates/`, `lean-toolchain` and the test keys in `lakefile.lean`; the
+  integrations' lakefiles likewise), which puts the files' hashes in the trace of every module of
+  that library: an edit rebuilds them, and neither `.lake/build` nor the artifact cache serves a
+  copy built from the old files. A new `include_str` adds its file the same way. After editing
+  `templates/`, run `lake build lanes` (`LanesCli.New` is built again, not restored; nothing is
+  to be deleted) and write `examples/counter` again (move it aside, run `lake exe lanes new
   counter --dir examples/counter --lanes-path ../..`, put its `lake-manifest.json` back): `lake
-  test` fails while the two differ. Then build and test it.
+  test` fails while the two differ, and rebuilds all of `Tests`, which needs the templates. Then
+  build and test `examples/counter`.
 - Oracles (rule 5.9, `docs/decisions/D80-oracles.md`) are in `oracles/`, one folder per
   reference implementation with its pin, and `oracles/README.md` lists every protocol module and
   every model against its oracle or the reason it has none (lint `oracles`). *Pure oracles*: a
@@ -241,7 +271,7 @@ that performs IO is in an `IO/` directory of its area and named in `TRUSTED.md`.
 | `Lanes/Web/` | HTTP as data, its grammar, the gate, routes, cookies, the wire format, the server's connections and Signature Version 4 (`Http/`); HTML values and templates (`Html/`); tokens, password digests, failed attempts, sessions (`Auth/`); the S3 client's calls and answers (`S3/`); the server, the client, the S3 client and the jobs pool's worker over HTTP in `IO/` | `Std` only |
 | `Lanes/Behaviours/` | Standard actors with their specs and proofs, by feature (`Server`, `Jobs/`, `Once/`, `Schedule/`) | `Std` only |
 | `Lanes/Check/` | Model checker | `Std` only |
-| `Lanes/Data/` | `Enum`, codecs and `lanes_data`, schemas and values, the body of a value (`Body`), the queue, quorums | `Std` only |
+| `Lanes/Data/` | `Enum`, codecs and `lanes_data`, schemas and values, the body of a value (`Body`), matching by name (`Match`), the queue, quorums | `Std` only |
 | `Lanes/Lib/` | The standard library: encodings (Base64, JSON), addresses and URLs, time, SHA-256, HMAC, MD5, PBKDF2 and `Native`, the PostgreSQL protocol (`Postgres/`), media types, rate limits (`docs/STDLIB.md`) | `Std` only |
 | `Lanes/Testing/` | The test kit, for tests and never in `import Lanes`: a fake S3 that checks signatures, a fake identity provider, a scripted browser, a server of a handler and readers of a response (`docs/decisions/D77-a-test-kit.md`) | `Std` only |
 | `Lanes/Semantics/` | The semantics as a CSLib `LTS`, refinement, specs, fairness and leads-to, and the liveness of the gate, of jobs and of the scheduler | CSLib, Mathlib |
@@ -285,7 +315,11 @@ lanes_data inductive Id (F : Type) where
   (`Lanes/Data/Schema.lean`); `lake exe lanes journal schema --type T` prints it. `Body.write`
   and `Body.read` turn a `Value` into bytes and back with its schema, under `Codec.Limits`, and
   each value has one body (`Body.read_eq_ok_iff`); `Body.encode` and `Body.decode` do it for a
-  type, through its `Schema.Of` (`Body.decode_encode`). The files do not use it yet. Every
+  type, through its `Schema.Of` (`Body.decode_encode`). Data written under an older schema is
+  read by name: `Schema.Plan.of` matches the writer's schema with the reader's once, refusing
+  what cannot be read with a `Codec.Error` that names it, and `Body.decodeWith` reads each value
+  through the plan (`Lanes/Data/Match.lean`; `Schema.Plan.of_insertIdx`,
+  `Schema.Plan.of_rename`). The files do not use it yet. Every
   field's type needs `Codable`: `Nat`, `Int`, `String`, `Bool`, `Unit`, `ByteArray`, `Fin n`,
   `Option`, `List`, pairs, sums, sigma types, subtypes, `Std.ExtTreeMap`, and types declared
   this way.

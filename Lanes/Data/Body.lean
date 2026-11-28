@@ -74,6 +74,15 @@ inductive Error.Problem where
   | misfit
   /-- A value that fits the schema but that its type does not take, such as `5` for a `Fin 3`. -/
   | refused
+  /-- A reader's field that the data does not have, with no default. -/
+  | noDefault
+  /-- A type that is not the one the data has: the data's, then the reader's. -/
+  | changed (data reader : String)
+  /-- A reader's field or constructor that takes, by a former name, one of the data's that
+  another takes too. -/
+  | ambiguous (data : String)
+  /-- A constructor of the data that the reader's type does not have. -/
+  | absent
   deriving Repr, DecidableEq, Inhabited
 
 /-- An error of the body: the byte where it is, the path to it, outermost first, and what. -/
@@ -101,6 +110,16 @@ def Problem.text : Problem → String
   | .trailing count => s!"{count} bytes after the value"
   | .misfit => "a value that does not fit its schema"
   | .refused => "a value its type does not take"
+  | .noDefault => "a field the data does not have, with no default"
+  | .changed data reader => s!"the data's type is {data}, the reader's {reader}"
+  | .ambiguous data => s!"takes the data's {data}, which another takes too"
+  | .absent => "a constructor of the data that the reader's type does not have"
+
+/-- Whether the problem is at a byte. One found by matching the writer's schema with the
+reader's is not. -/
+def Problem.atByte : Problem → Bool
+  | .noDefault | .changed _ _ | .ambiguous _ | .absent => false
+  | _ => true
 
 /-- The path as text: `Shape.circle.centre / Point.x`, a type inside another after a slash. -/
 def pathText (path : List Step) : String :=
@@ -110,8 +129,9 @@ def pathText (path : List Step) : String :=
 
 instance : ToString Error where
   toString e :=
-    let path := pathText e.path
-    s!"byte {e.offset}{if path.isEmpty then "" else ", " ++ path}: {e.problem.text}"
+    let place := (if e.problem.atByte then [s!"byte {e.offset}"] else [])
+      ++ (if e.path.isEmpty then [] else [pathText e.path])
+    if place.isEmpty then e.problem.text else ", ".intercalate place ++ ": " ++ e.problem.text
 
 end Error
 

@@ -14,6 +14,16 @@ import Lanes.Semantics
 /-- info: 'Lanes.Body.encode_decode' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Body.encode_decode
 
+-- Lanes.Data.MatchSound
+/-- info: 'Lanes.Body.decodeWith_encode_self' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Body.decodeWith_encode_self
+/-- info: 'Lanes.Schema.Plan.of_insertIdx' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Schema.Plan.of_insertIdx
+/-- info: 'Lanes.Schema.Plan.of_rename' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Schema.Plan.of_rename
+/-- info: 'Lanes.Body.decodeWith_migrate' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Body.decodeWith_migrate
+
 -- Lanes.Data.Codec
 /-- info: 'Lanes.Codec.extTreeMap' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Codec.extTreeMap
