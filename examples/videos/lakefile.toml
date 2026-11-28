@@ -1,6 +1,6 @@
 name = "videos"
 version = "0.1.0"
-defaultTargets = ["Videos", "videosTest", "videos", "videosLive"]
+defaultTargets = ["Videos", "videosTest", "videos", "videosLive", "videosWaves"]
 testDriver = "videosTest"
 
 [[require]]
@@ -34,7 +34,7 @@ name = "videos"
 root = "Main"
 
 # How wide the waves of the site's journal are, as it runs and split by member (`Videos.Waves`):
-# `videosWaves [entries]`. Not run by `lake test`.
+# `videosWaves [entries]`. Built by `lake build`, not run by `lake test`.
 [[lean_exe]]
 name = "videosWaves"
 root = "Waves"

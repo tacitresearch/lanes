@@ -75,23 +75,25 @@ Views uniform, entries per wave for batches of 64 and 256, in the same order: 1.
   them, their count a read over the members, remove that.
 
 So the premise holds for an application partitioned all the way, and not for one with a shared
-index or a shared scheduler. What it changes in the order of #106:
+index or a shared scheduler. The guidance D96 leaves to this test follows: an actor per entity,
+and no actor that most writes touch, so no index told of every change, no directory asked at
+every sign-in and no single scheduler. What it changes in the order of #106:
 
 1. **Reads from state, over several actors, before the split.** The feed is a read over every
    member; journalled, it touches every member or an index actor that every like must tell.
    Splitting videos before such reads exist buys about four, and its proofs (one atomic owner
    today) would have to be redone again when the feed moves.
-2. **A scheduler per entity.** `Schedule.attach` gives one scheduler actor; once reads leave the
-   journal it is touched by most uploads and deletes. Its jobs are keyed by video, so they can
-   be held by the video's owner.
+2. **A scheduler per entity.** `Schedule.attach` gives one scheduler actor, which every upload
+   and every delete touches several times. The site's jobs are keyed by video (`Videos.Key`),
+   so they can be held beside the video's owner.
 3. **Actors named by what names them outside.** A sign-in that asks a directory for the member's
    number puts every sign-in on one actor; an actor named by the identity needs no directory.
 4. **Then split videos,** with the claims proved again over the split: a delete no longer
    vanishes from the feed and the watch page in one step, so `Videos.Site.deleted_never_served`
    becomes a claim about reads at batch boundaries.
 5. **Waves as the default** keeps its place after these. For an application of one actor they
-   cost nothing (`Kernel.runWaves_eq`, and `Pace` keeps cheap work on the shard's thread) and
-   give nothing.
+   change nothing that can be observed (`Kernel.runWaves_eq`), `Pace` keeps cheap work on the
+   shard's thread, and they give nothing.
 
 ## Not measured
 
