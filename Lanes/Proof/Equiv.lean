@@ -15,8 +15,7 @@ net is one list, so a state records that order although nothing observes it.
 equivalent states enable the same events and lead to equivalent states.
 
 The checker merges states by it. So do theorems about systems put together: a join seen from
-one side, or shards seen as one system, is a state of that system up to this relation, not up
-to equality.
+one side is a state of that system up to this relation, not up to equality.
 -/
 
 @[expose] public section

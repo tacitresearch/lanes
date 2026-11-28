@@ -86,7 +86,7 @@ structure Runtime.Config where
   stepLimitMs : Nat := 30000
   /-- What the watchdog does with a step that has run longer than `stepLimitMs`. -/
   onStuck : Runtime.Stuck → IO Unit := Runtime.Stuck.restart
-  /-- Where the shard reports what goes wrong outside the system: an output handler that failed,
+  /-- Where the runtime reports what goes wrong outside the system: an output handler that failed,
   a worker stopped on an error. -/
   log : Log.Logger := {}
 

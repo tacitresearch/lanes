@@ -48,7 +48,7 @@ def serveTest (ioThreads : Nat := 0) : Async (List (String × Bool)) := do
   let fresh : Outside (admittedSig echoSig) (List ReqId) :=
     { init := [], allow := fun used x => if x.1 ∈ used then none else some (x.1 :: used) }
   return [
-    ("web: the shard is handed each request the gate admits once, under an id of its own",
+    ("web: the runtime is handed each request the gate admits once, under an id of its own",
       fresh.allows events && inputs == 52),
     ("web: a model the run does not fit is rejected", !(atMost 10).allows events),
     ("web: a request is answered through the gate",
@@ -157,7 +157,7 @@ def prepareTest : Async (List (String × Bool)) := do
     | .input (_, request) => some request
     | _ => none
   return [
-    ("web: the shard is handed a request as the bridge prepared it",
+    ("web: the runtime is handed a request as the bridge prepared it",
       secret.startsWith "HTTP/1.1 200" && plain.startsWith "HTTP/1.1 200"
         && requests.any (·.path == ["checked"])),
     ("web: and not what was sent",
