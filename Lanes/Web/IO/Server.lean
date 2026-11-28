@@ -86,6 +86,9 @@ structure ServerConfig where
   /-- Where to keep a journal. With one, the system behind the server survives the process:
   it starts in the state it was in (`docs/decisions/` D24). -/
   journal : Option System.FilePath := none
+  /-- The journal is a copy restored from elsewhere, production into staging: the first start
+  of the copy hands over nothing the journal owes (`Journal.Store.restored`). -/
+  restored : Bool := false
   /-- The application's name for the system and the version of its step functions. A journal
   written under another name is refused: replayed through other step functions it would give
   another state. A journal written behind another `gate` is not: it is replayed behind the gate
@@ -415,7 +418,7 @@ journal is cut.
 private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig)
     (runtimeConfig : Runtime.Config) (log : Option (Journal.Log system))
     (prepare : Request → Request) (enter : ReqId × Request → τ.In)
-    (onOutput : τ.Out → (ReqId × Response) ⊕ Async Unit)
+    (onOutput : Journal.OutputId → τ.Out → (ReqId × Response) ⊕ Async Unit)
     (arrive : Option (Request → IO (Except Response Request))) :
     Async (Server system) := do
   let some addr := Std.Net.IPv4Addr.ofString config.host
@@ -423,8 +426,8 @@ private def serveOn (system : System τ) [Hashable τ.Id] (config : ServerConfig
   let ops ← Ops.new config.ops
   let log := log.map ops.journal
   let waiting ← Mutex.new (Waiting.start ((log.map (·.index)).getD 0))
-  let runtime ← Runtime.start system runtimeConfig (journal := log) fun out => do
-    match onOutput out with
+  let runtime ← Runtime.startWith system runtimeConfig (journal := log) fun _ id out => do
+    match onOutput id out with
     | .inr other => other
     | .inl (id, response) =>
       if let some waiter := (← waiting.atomically (modifyGet (·.answer id))) then
@@ -521,18 +524,21 @@ def serveWith (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : 
     (log : Option (Journal.Log (served sys bridge config.gate)))
     (arrive : Option (Request → IO (Except Response Request)) := none) :
     Async (Server (served sys bridge config.gate)) :=
-  serveOn (served sys bridge config.gate) config runtimeConfig log bridge.prepare id .inl arrive
+  serveOn (served sys bridge config.gate) config runtimeConfig log bridge.prepare id (fun _ => .inl)
+    arrive
 
 /-- Serve `sys` behind a gate it shares the process with other things: an output of `sys` that
-the bridge does not read as a response comes to `onOutput`, and `Server.tryInput` hands `sys`
-an input that is no request. `config.journal` is not used: open `log` yourself. -/
+the bridge does not read as a response comes to `onOutput` with its id, which a driver passes on
+as the idempotency key (`Journal.OutputId`), and `Server.tryInput` hands `sys` an input that is
+no request. `config.journal` is not used: open `log` yourself. -/
 def serveFronted (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : ServerConfig := {})
-    (runtimeConfig : Runtime.Config := {}) (onOutput : σ.Out → Async Unit := fun _ => pure ())
+    (runtimeConfig : Runtime.Config := {})
+    (onOutput : Journal.OutputId → σ.Out → Async Unit := fun _ _ => pure ())
     (log : Option (Journal.Log (fronted sys bridge config.gate)) := none)
     (arrive : Option (Request → IO (Except Response Request)) := none) :
     Async (Server (fronted sys bridge config.gate)) :=
   serveOn (fronted sys bridge config.gate) config runtimeConfig log bridge.prepare .inl
-    (Sum.map id onOutput) arrive
+    (fun oid => Sum.map id (onOutput oid)) arrive
 
 /-- What `serve` needs to save the kernel and cut the journal: how the system's actors and its
 outputs are written. -/
@@ -581,7 +587,8 @@ def serve (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : Serv
       | _, _ => []
     let store : Journal.Store (served sys bridge config.gate) :=
       { path, input := Codec.pair Codec.nat Request.codec, system := config.journalName, upgrades
-        actors := saving.map fun s => servedActors s.actors s.out bridge config.gate }
+        actors := saving.map fun s => servedActors s.actors s.out bridge config.gate
+        restored := config.restored }
     try store.open
     catch e =>
       if name.any (· != config.journalName) && upgrades.isEmpty then

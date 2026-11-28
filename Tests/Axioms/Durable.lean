@@ -121,6 +121,37 @@ import Lanes.Semantics
 /-- info: 'Lanes.Migration.inv_exec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Migration.inv_exec
 
+-- Lanes.Durable.OutputId
+/-- info: 'Lanes.Journal.placed_append' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.placed_append
+
+/-- info: 'Lanes.Journal.placed_snd' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.placed_snd
+
+/-- info: 'Lanes.Journal.turn_placed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.turn_placed
+
+/-- info: 'Lanes.Journal.turnAll_placed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.turnAll_placed
+
+/-- info: 'Lanes.Journal.recoverIds_erase' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.recoverIds_erase
+
+/-- info: 'Lanes.Journal.resumeIds_erase' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.resumeIds_erase
+
+/-- info: 'Lanes.Journal.recoverIds_suffix' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.recoverIds_suffix
+
+/-- info: 'Lanes.Journal.ids_append' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.ids_append
+
+/-- info: 'Lanes.Journal.recoverIds_handed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.recoverIds_handed
+
+/-- info: 'Lanes.Journal.resumeIds_eq_recoverIds' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.resumeIds_eq_recoverIds
+
 -- Lanes.Durable.Snapshot
 /-- info: 'Lanes.Journal.savedHeader_inj' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Journal.savedHeader_inj
@@ -161,6 +192,9 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Journal.Upgrade.inv_load' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Journal.Upgrade.inv_load
+
+/-- info: 'Lanes.Journal.Upgrade.label_snd' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Upgrade.label_snd
 
 -- Lanes.Durable.Reading
 /-- info: 'Lanes.Journal.Disk.ofReadings_eq' depends on axioms: [propext, Classical.choice] -/

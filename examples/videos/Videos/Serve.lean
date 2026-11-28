@@ -104,7 +104,7 @@ def start (d : Deployment) : Async (Server (Site' d)) := do
   let log ← match d.journal with
     | some path => some <$> openLog d path
     | none => pure none
-  let server ← serveFronted (system d.config) (bridge d.settings) d.server d.runtime onOutput log
+  let server ← serveFronted (system d.config) (bridge d.settings) d.server d.runtime (fun _ => onOutput) log
     (arrive := some arrive)
   running.resolve (some server)
   return server
