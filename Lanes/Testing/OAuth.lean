@@ -5,6 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Lanes.Testing.Browser
+public import Lanes.Web.IO.SignIn
 
 /-!
 A fake identity provider for tests, on a local port, of both kinds `Lanes.OAuth` signs in with:

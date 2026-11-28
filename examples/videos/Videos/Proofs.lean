@@ -10,15 +10,17 @@ import Videos.Proofs.Likes
 import Videos.Proofs.Private
 import Videos.Proofs.Jobs
 import Videos.Proofs.Ready
+import Videos.Proofs.Members
 import Videos.Proofs.Reads
 import Videos.Proofs.Axioms
 
 /-!
 # What is proved
 
-For every configuration (the seeded bugs off where it matters) and every site, input and start
-of the actor (`Shows`, `Run`), and so for every run of the spec's functions (`Gone`,
-`Confirmed`) and every run of the site beside its scheduler under every environment model
-(`Likes`, `Private`, `Jobs`), and every fair run of it (`Jobs`, `Ready`). The README lists each claim
-with its theorem.
+For every configuration (the seeded bugs off where it matters) and every site, input, start of
+a member's actor and read (`Shows`, `Run`), and so for every run of the spec's functions and
+every read of the members' sites (`Gone`, `Confirmed`), every run of the members beside their
+schedulers under every environment model (`Members`, `Likes`, `Private`, `Jobs`), and every
+fair run of them (`Jobs`, `Ready`), and every view (`Reads`). The README lists each claim with
+its theorem.
 -/

@@ -6,43 +6,47 @@ schema: Videos.EndToEnd.snapshotSchema
 import: Videos.EndToEnd
 corpus: ../../Tests/Journals/videos
 
-Prod Nat (Prod (List (Σ (Sum Unit (Sum Unit Unit)))) (Prod (List (Prod (Option (Sum Unit (Sum Unit Unit))) (Σ (Sum Unit (Sum Unit Unit))))) (Prod (List (Prod (Prod Nat Nat) (Σ (Sum Unit (Sum Unit Unit))))) (Prod Nat (Prod Nat Bool)))))
+Prod Nat (Prod (List (Σ (Sum Unit (Sum Videos.Who Videos.Who)))) (Prod (List (Prod (Option (Sum Unit (Sum Videos.Who Videos.Who))) (Σ (Sum Unit (Sum Videos.Who Videos.Who))))) (Prod (List (Prod (Prod Nat Nat) (Σ (Sum Unit (Sum Videos.Who Videos.Who))))) (Prod Nat (Prod Nat Bool)))))
 
-structure Prod Nat (Prod (List (Σ (Sum Unit (Sum Unit Unit)))) (Prod (List (Prod (Option (Sum Unit (Sum Unit Unit))) (Σ (Sum Unit (Sum Unit Unit))))) (Prod (List (Prod (Prod Nat Nat) (Σ (Sum Unit (Sum Unit Unit))))) (Prod Nat (Prod Nat Bool))))) where
+structure Prod Nat (Prod (List (Σ (Sum Unit (Sum Videos.Who Videos.Who)))) (Prod (List (Prod (Option (Sum Unit (Sum Videos.Who Videos.Who))) (Σ (Sum Unit (Sum Videos.Who Videos.Who))))) (Prod (List (Prod (Prod Nat Nat) (Σ (Sum Unit (Sum Videos.Who Videos.Who))))) (Prod Nat (Prod Nat Bool))))) where
   fst : Nat
-  snd : Prod (List (Σ (Sum Unit (Sum Unit Unit)))) (Prod (List (Prod (Option (Sum Unit (Sum Unit Unit))) (Σ (Sum Unit (Sum Unit Unit))))) (Prod (List (Prod (Prod Nat Nat) (Σ (Sum Unit (Sum Unit Unit))))) (Prod Nat (Prod Nat Bool))))
+  snd : Prod (List (Σ (Sum Unit (Sum Videos.Who Videos.Who)))) (Prod (List (Prod (Option (Sum Unit (Sum Videos.Who Videos.Who))) (Σ (Sum Unit (Sum Videos.Who Videos.Who))))) (Prod (List (Prod (Prod Nat Nat) (Σ (Sum Unit (Sum Videos.Who Videos.Who))))) (Prod Nat (Prod Nat Bool))))
 
-structure Prod (List (Σ (Sum Unit (Sum Unit Unit)))) (Prod (List (Prod (Option (Sum Unit (Sum Unit Unit))) (Σ (Sum Unit (Sum Unit Unit))))) (Prod (List (Prod (Prod Nat Nat) (Σ (Sum Unit (Sum Unit Unit))))) (Prod Nat (Prod Nat Bool)))) where
-  fst : List (Σ (Sum Unit (Sum Unit Unit)))
-  snd : Prod (List (Prod (Option (Sum Unit (Sum Unit Unit))) (Σ (Sum Unit (Sum Unit Unit))))) (Prod (List (Prod (Prod Nat Nat) (Σ (Sum Unit (Sum Unit Unit))))) (Prod Nat (Prod Nat Bool)))
+structure Prod (List (Σ (Sum Unit (Sum Videos.Who Videos.Who)))) (Prod (List (Prod (Option (Sum Unit (Sum Videos.Who Videos.Who))) (Σ (Sum Unit (Sum Videos.Who Videos.Who))))) (Prod (List (Prod (Prod Nat Nat) (Σ (Sum Unit (Sum Videos.Who Videos.Who))))) (Prod Nat (Prod Nat Bool)))) where
+  fst : List (Σ (Sum Unit (Sum Videos.Who Videos.Who)))
+  snd : Prod (List (Prod (Option (Sum Unit (Sum Videos.Who Videos.Who))) (Σ (Sum Unit (Sum Videos.Who Videos.Who))))) (Prod (List (Prod (Prod Nat Nat) (Σ (Sum Unit (Sum Videos.Who Videos.Who))))) (Prod Nat (Prod Nat Bool)))
 
-inductive Sum Unit (Sum Unit Unit) where
+inductive Sum Unit (Sum Videos.Who Videos.Who) where
   | inl (val : Unit)
-  | inr (val : Sum Unit Unit)
+  | inr (val : Sum Videos.Who Videos.Who)
 
-inductive Sum Unit Unit where
-  | inl (val : Unit)
-  | inr (val : Unit)
+inductive Sum Videos.Who Videos.Who where
+  | inl (val : Videos.Who)
+  | inr (val : Videos.Who)
 
-structure Prod (List (Prod (Option (Sum Unit (Sum Unit Unit))) (Σ (Sum Unit (Sum Unit Unit))))) (Prod (List (Prod (Prod Nat Nat) (Σ (Sum Unit (Sum Unit Unit))))) (Prod Nat (Prod Nat Bool))) where
-  fst : List (Prod (Option (Sum Unit (Sum Unit Unit))) (Σ (Sum Unit (Sum Unit Unit))))
-  snd : Prod (List (Prod (Prod Nat Nat) (Σ (Sum Unit (Sum Unit Unit))))) (Prod Nat (Prod Nat Bool))
+structure Videos.Who where
+  issuer : String
+  subject : String
 
-structure Prod (Option (Sum Unit (Sum Unit Unit))) (Σ (Sum Unit (Sum Unit Unit))) where
-  fst : Option (Sum Unit (Sum Unit Unit))
-  snd : Σ (Sum Unit (Sum Unit Unit))
+structure Prod (List (Prod (Option (Sum Unit (Sum Videos.Who Videos.Who))) (Σ (Sum Unit (Sum Videos.Who Videos.Who))))) (Prod (List (Prod (Prod Nat Nat) (Σ (Sum Unit (Sum Videos.Who Videos.Who))))) (Prod Nat (Prod Nat Bool))) where
+  fst : List (Prod (Option (Sum Unit (Sum Videos.Who Videos.Who))) (Σ (Sum Unit (Sum Videos.Who Videos.Who))))
+  snd : Prod (List (Prod (Prod Nat Nat) (Σ (Sum Unit (Sum Videos.Who Videos.Who))))) (Prod Nat (Prod Nat Bool))
 
-inductive Option (Sum Unit (Sum Unit Unit)) where
+structure Prod (Option (Sum Unit (Sum Videos.Who Videos.Who))) (Σ (Sum Unit (Sum Videos.Who Videos.Who))) where
+  fst : Option (Sum Unit (Sum Videos.Who Videos.Who))
+  snd : Σ (Sum Unit (Sum Videos.Who Videos.Who))
+
+inductive Option (Sum Unit (Sum Videos.Who Videos.Who)) where
   | none
-  | some (val : Sum Unit (Sum Unit Unit))
+  | some (val : Sum Unit (Sum Videos.Who Videos.Who))
 
-structure Prod (List (Prod (Prod Nat Nat) (Σ (Sum Unit (Sum Unit Unit))))) (Prod Nat (Prod Nat Bool)) where
-  fst : List (Prod (Prod Nat Nat) (Σ (Sum Unit (Sum Unit Unit))))
+structure Prod (List (Prod (Prod Nat Nat) (Σ (Sum Unit (Sum Videos.Who Videos.Who))))) (Prod Nat (Prod Nat Bool)) where
+  fst : List (Prod (Prod Nat Nat) (Σ (Sum Unit (Sum Videos.Who Videos.Who))))
   snd : Prod Nat (Prod Nat Bool)
 
-structure Prod (Prod Nat Nat) (Σ (Sum Unit (Sum Unit Unit))) where
+structure Prod (Prod Nat Nat) (Σ (Sum Unit (Sum Videos.Who Videos.Who))) where
   fst : Prod Nat Nat
-  snd : Σ (Sum Unit (Sum Unit Unit))
+  snd : Σ (Sum Unit (Sum Videos.Who Videos.Who))
 
 structure Prod Nat Nat where
   fst : Nat
@@ -61,42 +65,50 @@ inductive Bool where
   | true
 
 frame:
-BQACBA0FAAIC7gFQcm9kIE5hdCAoUHJvZCAoTGlzdCAozqMgKFN1bSBVbml0IChTdW0gVW5pdCBVbml0KSkpKSAoUHJvZCAo
-TGlzdCAoUHJvZCAoT3B0aW9uIChTdW0gVW5pdCAoU3VtIFVuaXQgVW5pdCkpKSAozqMgKFN1bSBVbml0IChTdW0gVW5pdCBV
-bml0KSkpKSkgKFByb2QgKExpc3QgKFByb2QgKFByb2QgTmF0IE5hdCkgKM6jIChTdW0gVW5pdCAoU3VtIFVuaXQgVW5pdCkp
-KSkpIChQcm9kIE5hdCAoUHJvZCBOYXQgQm9vbCkpKSkpBQACAgRQcm9kBAIFAAQCA2ZzdAQABQAABQAABQAEAgNzbmQEAAUI
-AQLjAVByb2QgKExpc3QgKM6jIChTdW0gVW5pdCAoU3VtIFVuaXQgVW5pdCkpKSkgKFByb2QgKExpc3QgKFByb2QgKE9wdGlv
-biAoU3VtIFVuaXQgKFN1bSBVbml0IFVuaXQpKSkgKM6jIChTdW0gVW5pdCAoU3VtIFVuaXQgVW5pdCkpKSkpIChQcm9kIChM
-aXN0IChQcm9kIChQcm9kIE5hdCBOYXQpICjOoyAoU3VtIFVuaXQgKFN1bSBVbml0IFVuaXQpKSkpKSAoUHJvZCBOYXQgKFBy
-b2QgTmF0IEJvb2wpKSkpBQAABQACAuMBUHJvZCAoTGlzdCAozqMgKFN1bSBVbml0IChTdW0gVW5pdCBVbml0KSkpKSAoUHJv
-ZCAoTGlzdCAoUHJvZCAoT3B0aW9uIChTdW0gVW5pdCAoU3VtIFVuaXQgVW5pdCkpKSAozqMgKFN1bSBVbml0IChTdW0gVW5p
-dCBVbml0KSkpKSkgKFByb2QgKExpc3QgKFByb2QgKFByb2QgTmF0IE5hdCkgKM6jIChTdW0gVW5pdCAoU3VtIFVuaXQgVW5p
-dCkpKSkpIChQcm9kIE5hdCAoUHJvZCBOYXQgQm9vbCkpKSkFAAICBFByb2QEAgUABAIDZnN0BAAFBQEFBwEFCAECGFN1bSBV
-bml0IChTdW0gVW5pdCBVbml0KQUAAAUABAIDc25kBAAFCAECtQFQcm9kIChMaXN0IChQcm9kIChPcHRpb24gKFN1bSBVbml0
-IChTdW0gVW5pdCBVbml0KSkpICjOoyAoU3VtIFVuaXQgKFN1bSBVbml0IFVuaXQpKSkpKSAoUHJvZCAoTGlzdCAoUHJvZCAo
-UHJvZCBOYXQgTmF0KSAozqMgKFN1bSBVbml0IChTdW0gVW5pdCBVbml0KSkpKSkgKFByb2QgTmF0IChQcm9kIE5hdCBCb29s
-KSkpBQAABQACAhhTdW0gVW5pdCAoU3VtIFVuaXQgVW5pdCkFAQICA1N1bQQCBQADAgNpbmwEAAQBBQAEAgN2YWwEAAUEAAUA
-AAUAAwIDaW5yBAAEAQUABAIDdmFsBAAFCAECDVN1bSBVbml0IFVuaXQFAAAFAAICDVN1bSBVbml0IFVuaXQFAQICA1N1bQQC
-BQADAgNpbmwEAAQBBQAEAgN2YWwEAAUEAAUAAAUAAwIDaW5yBAAEAQUABAIDdmFsBAAFBAAFAAAFAAICtQFQcm9kIChMaXN0
-IChQcm9kIChPcHRpb24gKFN1bSBVbml0IChTdW0gVW5pdCBVbml0KSkpICjOoyAoU3VtIFVuaXQgKFN1bSBVbml0IFVuaXQp
-KSkpKSAoUHJvZCAoTGlzdCAoUHJvZCAoUHJvZCBOYXQgTmF0KSAozqMgKFN1bSBVbml0IChTdW0gVW5pdCBVbml0KSkpKSkg
-KFByb2QgTmF0IChQcm9kIE5hdCBCb29sKSkpBQACAgRQcm9kBAIFAAQCA2ZzdAQABQUBBQgBAkhQcm9kIChPcHRpb24gKFN1
-bSBVbml0IChTdW0gVW5pdCBVbml0KSkpICjOoyAoU3VtIFVuaXQgKFN1bSBVbml0IFVuaXQpKSkFAAAFAAQCA3NuZAQABQgB
-AlxQcm9kIChMaXN0IChQcm9kIChQcm9kIE5hdCBOYXQpICjOoyAoU3VtIFVuaXQgKFN1bSBVbml0IFVuaXQpKSkpKSAoUHJv
-ZCBOYXQgKFByb2QgTmF0IEJvb2wpKQUAAAUAAgJIUHJvZCAoT3B0aW9uIChTdW0gVW5pdCAoU3VtIFVuaXQgVW5pdCkpKSAo
-zqMgKFN1bSBVbml0IChTdW0gVW5pdCBVbml0KSkpBQACAgRQcm9kBAIFAAQCA2ZzdAQABQgBAiFPcHRpb24gKFN1bSBVbml0
-IChTdW0gVW5pdCBVbml0KSkFAAAFAAQCA3NuZAQABQcBBQgBAhhTdW0gVW5pdCAoU3VtIFVuaXQgVW5pdCkFAAAFAAICIU9w
-dGlvbiAoU3VtIFVuaXQgKFN1bSBVbml0IFVuaXQpKQUBAgIGT3B0aW9uBAIFAAMCBG5vbmUEAAQABQADAgRzb21lBAAEAQUA
-BAIDdmFsBAAFCAECGFN1bSBVbml0IChTdW0gVW5pdCBVbml0KQUAAAUAAgJcUHJvZCAoTGlzdCAoUHJvZCAoUHJvZCBOYXQg
-TmF0KSAozqMgKFN1bSBVbml0IChTdW0gVW5pdCBVbml0KSkpKSkgKFByb2QgTmF0IChQcm9kIE5hdCBCb29sKSkFAAICBFBy
-b2QEAgUABAIDZnN0BAAFBQEFCAECM1Byb2QgKFByb2QgTmF0IE5hdCkgKM6jIChTdW0gVW5pdCAoU3VtIFVuaXQgVW5pdCkp
-KQUAAAUABAIDc25kBAAFCAECGFByb2QgTmF0IChQcm9kIE5hdCBCb29sKQUAAAUAAgIzUHJvZCAoUHJvZCBOYXQgTmF0KSAo
-zqMgKFN1bSBVbml0IChTdW0gVW5pdCBVbml0KSkpBQACAgRQcm9kBAIFAAQCA2ZzdAQABQgBAgxQcm9kIE5hdCBOYXQFAAAF
-AAQCA3NuZAQABQcBBQgBAhhTdW0gVW5pdCAoU3VtIFVuaXQgVW5pdCkFAAAFAAICDFByb2QgTmF0IE5hdAUAAgIEUHJvZAQC
-BQAEAgNmc3QEAAUAAAUAAAUABAIDc25kBAAFAAAFAAAFAAICGFByb2QgTmF0IChQcm9kIE5hdCBCb29sKQUAAgIEUHJvZAQC
-BQAEAgNmc3QEAAUAAAUAAAUABAIDc25kBAAFCAECDVByb2QgTmF0IEJvb2wFAAAFAAICDVByb2QgTmF0IEJvb2wFAAICBFBy
-b2QEAgUABAIDZnN0BAAFAAAFAAAFAAQCA3NuZAQABQgBAgRCb29sBQAABQACAgRCb29sBQECAgRCb29sBAIFAAMCBWZhbHNl
-BAAEAAUAAwIEdHJ1ZQQABAAFCAEC7gFQcm9kIE5hdCAoUHJvZCAoTGlzdCAozqMgKFN1bSBVbml0IChTdW0gVW5pdCBVbml0
-KSkpKSAoUHJvZCAoTGlzdCAoUHJvZCAoT3B0aW9uIChTdW0gVW5pdCAoU3VtIFVuaXQgVW5pdCkpKSAozqMgKFN1bSBVbml0
-IChTdW0gVW5pdCBVbml0KSkpKSkgKFByb2QgKExpc3QgKFByb2QgKFByb2QgTmF0IE5hdCkgKM6jIChTdW0gVW5pdCAoU3Vt
-IFVuaXQgVW5pdCkpKSkpIChQcm9kIE5hdCAoUHJvZCBOYXQgQm9vbCkpKSkp
+BQACBA4FAAICngJQcm9kIE5hdCAoUHJvZCAoTGlzdCAozqMgKFN1bSBVbml0IChTdW0gVmlkZW9zLldobyBWaWRlb3MuV2hv
+KSkpKSAoUHJvZCAoTGlzdCAoUHJvZCAoT3B0aW9uIChTdW0gVW5pdCAoU3VtIFZpZGVvcy5XaG8gVmlkZW9zLldobykpKSAo
+zqMgKFN1bSBVbml0IChTdW0gVmlkZW9zLldobyBWaWRlb3MuV2hvKSkpKSkgKFByb2QgKExpc3QgKFByb2QgKFByb2QgTmF0
+IE5hdCkgKM6jIChTdW0gVW5pdCAoU3VtIFZpZGVvcy5XaG8gVmlkZW9zLldobykpKSkpIChQcm9kIE5hdCAoUHJvZCBOYXQg
+Qm9vbCkpKSkpBQACAgRQcm9kBAIFAAQCA2ZzdAQABQAABQAABQAEAgNzbmQEAAUIAQKTAlByb2QgKExpc3QgKM6jIChTdW0g
+VW5pdCAoU3VtIFZpZGVvcy5XaG8gVmlkZW9zLldobykpKSkgKFByb2QgKExpc3QgKFByb2QgKE9wdGlvbiAoU3VtIFVuaXQg
+KFN1bSBWaWRlb3MuV2hvIFZpZGVvcy5XaG8pKSkgKM6jIChTdW0gVW5pdCAoU3VtIFZpZGVvcy5XaG8gVmlkZW9zLldobykp
+KSkpIChQcm9kIChMaXN0IChQcm9kIChQcm9kIE5hdCBOYXQpICjOoyAoU3VtIFVuaXQgKFN1bSBWaWRlb3MuV2hvIFZpZGVv
+cy5XaG8pKSkpKSAoUHJvZCBOYXQgKFByb2QgTmF0IEJvb2wpKSkpBQAABQACApMCUHJvZCAoTGlzdCAozqMgKFN1bSBVbml0
+IChTdW0gVmlkZW9zLldobyBWaWRlb3MuV2hvKSkpKSAoUHJvZCAoTGlzdCAoUHJvZCAoT3B0aW9uIChTdW0gVW5pdCAoU3Vt
+IFZpZGVvcy5XaG8gVmlkZW9zLldobykpKSAozqMgKFN1bSBVbml0IChTdW0gVmlkZW9zLldobyBWaWRlb3MuV2hvKSkpKSkg
+KFByb2QgKExpc3QgKFByb2QgKFByb2QgTmF0IE5hdCkgKM6jIChTdW0gVW5pdCAoU3VtIFZpZGVvcy5XaG8gVmlkZW9zLldo
+bykpKSkpIChQcm9kIE5hdCAoUHJvZCBOYXQgQm9vbCkpKSkFAAICBFByb2QEAgUABAIDZnN0BAAFBQEFBwEFCAECJFN1bSBV
+bml0IChTdW0gVmlkZW9zLldobyBWaWRlb3MuV2hvKQUAAAUABAIDc25kBAAFCAEC2QFQcm9kIChMaXN0IChQcm9kIChPcHRp
+b24gKFN1bSBVbml0IChTdW0gVmlkZW9zLldobyBWaWRlb3MuV2hvKSkpICjOoyAoU3VtIFVuaXQgKFN1bSBWaWRlb3MuV2hv
+IFZpZGVvcy5XaG8pKSkpKSAoUHJvZCAoTGlzdCAoUHJvZCAoUHJvZCBOYXQgTmF0KSAozqMgKFN1bSBVbml0IChTdW0gVmlk
+ZW9zLldobyBWaWRlb3MuV2hvKSkpKSkgKFByb2QgTmF0IChQcm9kIE5hdCBCb29sKSkpBQAABQACAiRTdW0gVW5pdCAoU3Vt
+IFZpZGVvcy5XaG8gVmlkZW9zLldobykFAQICA1N1bQQCBQADAgNpbmwEAAQBBQAEAgN2YWwEAAUEAAUAAAUAAwIDaW5yBAAE
+AQUABAIDdmFsBAAFCAECGVN1bSBWaWRlb3MuV2hvIFZpZGVvcy5XaG8FAAAFAAICGVN1bSBWaWRlb3MuV2hvIFZpZGVvcy5X
+aG8FAQICA1N1bQQCBQADAgNpbmwEAAQBBQAEAgN2YWwEAAUIAQIKVmlkZW9zLldobwUAAAUAAwIDaW5yBAAEAQUABAIDdmFs
+BAAFCAECClZpZGVvcy5XaG8FAAAFAAICClZpZGVvcy5XaG8FAAICClZpZGVvcy5XaG8EAgUABAIGaXNzdWVyBAAFAgAFAAAF
+AAQCB3N1YmplY3QEAAUCAAUAAAUAAgLZAVByb2QgKExpc3QgKFByb2QgKE9wdGlvbiAoU3VtIFVuaXQgKFN1bSBWaWRlb3Mu
+V2hvIFZpZGVvcy5XaG8pKSkgKM6jIChTdW0gVW5pdCAoU3VtIFZpZGVvcy5XaG8gVmlkZW9zLldobykpKSkpIChQcm9kIChM
+aXN0IChQcm9kIChQcm9kIE5hdCBOYXQpICjOoyAoU3VtIFVuaXQgKFN1bSBWaWRlb3MuV2hvIFZpZGVvcy5XaG8pKSkpKSAo
+UHJvZCBOYXQgKFByb2QgTmF0IEJvb2wpKSkFAAICBFByb2QEAgUABAIDZnN0BAAFBQEFCAECYFByb2QgKE9wdGlvbiAoU3Vt
+IFVuaXQgKFN1bSBWaWRlb3MuV2hvIFZpZGVvcy5XaG8pKSkgKM6jIChTdW0gVW5pdCAoU3VtIFZpZGVvcy5XaG8gVmlkZW9z
+LldobykpKQUAAAUABAIDc25kBAAFCAECaFByb2QgKExpc3QgKFByb2QgKFByb2QgTmF0IE5hdCkgKM6jIChTdW0gVW5pdCAo
+U3VtIFZpZGVvcy5XaG8gVmlkZW9zLldobykpKSkpIChQcm9kIE5hdCAoUHJvZCBOYXQgQm9vbCkpBQAABQACAmBQcm9kIChP
+cHRpb24gKFN1bSBVbml0IChTdW0gVmlkZW9zLldobyBWaWRlb3MuV2hvKSkpICjOoyAoU3VtIFVuaXQgKFN1bSBWaWRlb3Mu
+V2hvIFZpZGVvcy5XaG8pKSkFAAICBFByb2QEAgUABAIDZnN0BAAFCAECLU9wdGlvbiAoU3VtIFVuaXQgKFN1bSBWaWRlb3Mu
+V2hvIFZpZGVvcy5XaG8pKQUAAAUABAIDc25kBAAFBwEFCAECJFN1bSBVbml0IChTdW0gVmlkZW9zLldobyBWaWRlb3MuV2hv
+KQUAAAUAAgItT3B0aW9uIChTdW0gVW5pdCAoU3VtIFZpZGVvcy5XaG8gVmlkZW9zLldobykpBQECAgZPcHRpb24EAgUAAwIE
+bm9uZQQABAAFAAMCBHNvbWUEAAQBBQAEAgN2YWwEAAUIAQIkU3VtIFVuaXQgKFN1bSBWaWRlb3MuV2hvIFZpZGVvcy5XaG8p
+BQAABQACAmhQcm9kIChMaXN0IChQcm9kIChQcm9kIE5hdCBOYXQpICjOoyAoU3VtIFVuaXQgKFN1bSBWaWRlb3MuV2hvIFZp
+ZGVvcy5XaG8pKSkpKSAoUHJvZCBOYXQgKFByb2QgTmF0IEJvb2wpKQUAAgIEUHJvZAQCBQAEAgNmc3QEAAUFAQUIAQI/UHJv
+ZCAoUHJvZCBOYXQgTmF0KSAozqMgKFN1bSBVbml0IChTdW0gVmlkZW9zLldobyBWaWRlb3MuV2hvKSkpBQAABQAEAgNzbmQE
+AAUIAQIYUHJvZCBOYXQgKFByb2QgTmF0IEJvb2wpBQAABQACAj9Qcm9kIChQcm9kIE5hdCBOYXQpICjOoyAoU3VtIFVuaXQg
+KFN1bSBWaWRlb3MuV2hvIFZpZGVvcy5XaG8pKSkFAAICBFByb2QEAgUABAIDZnN0BAAFCAECDFByb2QgTmF0IE5hdAUAAAUA
+BAIDc25kBAAFBwEFCAECJFN1bSBVbml0IChTdW0gVmlkZW9zLldobyBWaWRlb3MuV2hvKQUAAAUAAgIMUHJvZCBOYXQgTmF0
+BQACAgRQcm9kBAIFAAQCA2ZzdAQABQAABQAABQAEAgNzbmQEAAUAAAUAAAUAAgIYUHJvZCBOYXQgKFByb2QgTmF0IEJvb2wp
+BQACAgRQcm9kBAIFAAQCA2ZzdAQABQAABQAABQAEAgNzbmQEAAUIAQINUHJvZCBOYXQgQm9vbAUAAAUAAgINUHJvZCBOYXQg
+Qm9vbAUAAgIEUHJvZAQCBQAEAgNmc3QEAAUAAAUAAAUABAIDc25kBAAFCAECBEJvb2wFAAAFAAICBEJvb2wFAQICBEJvb2wE
+AgUAAwIFZmFsc2UEAAQABQADAgR0cnVlBAAEAAUIAQKeAlByb2QgTmF0IChQcm9kIChMaXN0ICjOoyAoU3VtIFVuaXQgKFN1
+bSBWaWRlb3MuV2hvIFZpZGVvcy5XaG8pKSkpIChQcm9kIChMaXN0IChQcm9kIChPcHRpb24gKFN1bSBVbml0IChTdW0gVmlk
+ZW9zLldobyBWaWRlb3MuV2hvKSkpICjOoyAoU3VtIFVuaXQgKFN1bSBWaWRlb3MuV2hvIFZpZGVvcy5XaG8pKSkpKSAoUHJv
+ZCAoTGlzdCAoUHJvZCAoUHJvZCBOYXQgTmF0KSAozqMgKFN1bSBVbml0IChTdW0gVmlkZW9zLldobyBWaWRlb3MuV2hvKSkp
+KSkgKFByb2QgTmF0IChQcm9kIE5hdCBCb29sKSkpKSk=

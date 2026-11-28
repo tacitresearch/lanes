@@ -30,18 +30,23 @@ job; and the delete of a deleted video's objects, retried until the store takes 
 (`Out.orphan`) if it never does. The worker's reports come as requests (webhooks), each with its
 signature.
 
-The whole state is one value, `Site`, and one input is one call of `Site.handle`: a request, or
-the scheduler's word on a job. A start of the actor is one call of `Site.recover`. The system
-runs these functions in one actor (`Videos.System`), so what is proved of them (`Videos.Proofs`)
-is proved of the code that runs.
+The state of a member is one value, `Site`: their channel and their videos. One input is one
+call of `Site.handle`: a request, the scheduler's word on a job, or a visit; a start of the
+member's actor is one call of `Site.recover`. A member's actor runs these functions on its own
+`Site` (`Videos.System`), so what is proved of them (`Videos.Proofs`) is proved of the code that
+runs. A member is named by the identity that signs in (`Who`), and a video by its owner and a
+number of the owner's (`VideoId`), so that every write goes to one member's actor and no actor
+is asked who is who. A like, a comment and the taking out of a comment are the visitor's
+session, checked by the visitor's actor, then a visit to the owner's (`Visit`), which holds the
+video. The feed, a watch page and a channel page change nothing (`Read`): they are answered
+from the states of the members they read, put together (`Site.union`).
 
-Every bound is in `Config` (rule 2.6), with what happens at it: a sign-in past `maxMembers` is
-`full`, a video past `maxVideos`, past its member's `maxOwned` or past
-`maxPending` uploads not yet confirmed is `tooMany`, a comment past `maxComments` or past its
+Every bound is in `Config` (rule 2.6), with what happens at it: a video past `maxVideos` or
+`maxOwned` of its member, or past `maxPending` uploads not yet confirmed is `tooMany`, a comment past `maxComments` or past its
 member's `maxCommentsEach` on the video is `tooManyComments`, a job past `maxJobs` is refused by
 the scheduler: a check is then `unconfirmed`, a transcode `failed`, a delete given up and
-reported. The bounds of one member are far below those of the site, so that one member cannot
-fill the site's.
+reported. Each bound is a member's: no actor counts the members, so how many there are is not
+bounded here (`docs/decisions/new-videos-per-member.md`).
 -/
 
 namespace Videos
@@ -49,10 +54,29 @@ namespace Videos
 open Lanes
 
 abbrev ReqId := Nat
-abbrev Member := Nat
+
+/-- A part of an identity: not empty, not `.` or `..`, and no line break, so that it is a path
+segment of a link and a part of a line. -/
+def Name.valid (s : String) : Bool := !s.isEmpty && s != "." && s != ".." && !s.contains '\n'
+
+/-- A member, by the identity that signs in: the provider's issuer and its subject, which do not
+change. Each member's actor is named by it. -/
+lanes_data structure Who where
+  issuer : {s : String // Name.valid s}
+  subject : {s : String // Name.valid s}
+  deriving DecidableEq, Repr, Hashable, Codable
+
+abbrev Member := Who
 /-- A session is named by the id of the sign-in request that opened it, which is never reused. -/
 abbrev Sid := Nat
-abbrev VideoId := Nat
+/-- A video, by its owner and the number the owner gave it: an owner gives no number twice, so
+no id is used twice. -/
+lanes_data structure VideoId where
+  owner : Who
+  n : Nat
+  deriving DecidableEq, Repr, Hashable, Codable
+
+/-- A comment, by the number the video's owner gave it. -/
 abbrev CommentId := Nat
 
 def Title.valid (s : String) : Bool := 0 < s.length && s.length ≤ 100
@@ -124,6 +148,8 @@ def Status.stage? : Status → Option Stage
 lanes_data structure Comment where
   id : CommentId
   author : Member
+  /-- The author's name when it was written, as the author's actor said it. -/
+  name : String
   body : {s : String // Remark.valid s}
   deriving DecidableEq, Repr, Hashable, Codable
 
@@ -135,17 +161,16 @@ lanes_data structure Video where
   visibility : Visibility
   media : Media
   status : Status
+  /-- When its record was made: the feed is newest first. -/
+  made_s : Nat
   /-- The members who like it. -/
   likes : List Member := []
   /-- Oldest first. -/
   comments : List Comment := []
   deriving DecidableEq, Repr, Hashable, Codable
 
-/-- A member: who signed in, by the other service's issuer and subject, which do not change; the
-name shown; the sessions open. -/
+/-- A member: the name shown, and the sessions open. -/
 lanes_data structure Channel where
-  issuer : String
-  subject : String
   name : String
   sessions : Auth.Sessions := {}
   deriving DecidableEq, Repr, Hashable, Codable
@@ -154,8 +179,8 @@ lanes_data structure Site where
   channels : List (Member × Channel) := []
   /-- Newest first. -/
   videos : List Video := []
-  /-- The id the next video gets: none is used twice. -/
-  next : VideoId := 0
+  /-- The number the next video gets: none is used twice. -/
+  next : Nat := 0
   nextComment : CommentId := 0
   deriving DecidableEq, Repr, Hashable, Codable
 
@@ -168,8 +193,13 @@ lanes_data structure Round where
   n : Nat
   deriving DecidableEq, Repr, Hashable, Codable
 
+/-- A video's id as text: its owner's issuer and subject, percent-encoded, and its number, each
+after a `/`. No two ids have the same text. -/
+def VideoId.code (v : VideoId) : String :=
+  s!"{Http.percentEncode v.owner.issuer.val}/{Http.percentEncode v.owner.subject.val}/{v.n}"
+
 /-- The job's id on the wire. -/
-def Round.id (r : Round) : String := s!"{r.video}.{r.n}"
+def Round.id (r : Round) : String := s!"{r.video.code}/{r.n}"
 
 /-- What the worker reports of a round. The keys it wrote are the site's own, so the site does not
 read them. -/
@@ -244,14 +274,13 @@ abbrev Viewer := Option (Member × Sid)
 session cookie it has verified. -/
 lanes_data inductive Command where
   /-- The sign-in verified this identity (`Lanes.OAuth`). -/
-  | signIn (req : ReqId) (issuer subject name : String)
+  | signIn (req : ReqId) (who : Who) (name : String)
   | signOut (req : ReqId) (member : Member) (session : Sid)
   /-- The upload form is signed for the time the request arrived. -/
   | create (req : ReqId) (member : Member) (session : Sid) (title : {s : String // Title.valid s})
     (about : {s : String // About.valid s}) (visibility : Visibility) (media : Media)
   /-- The browser says the upload is done. -/
   | uploaded (req : ReqId) (member : Member) (session : Sid) (video : VideoId)
-  | watch (req : ReqId) (viewer : Option (Member × Sid)) (video : VideoId)
   /-- `on` to like, off to take the like back. -/
   | like (req : ReqId) (member : Member) (session : Sid) (video : VideoId) (on : Bool)
   | comment (req : ReqId) (member : Member) (session : Sid) (video : VideoId)
@@ -259,14 +288,61 @@ lanes_data inductive Command where
   | uncomment (req : ReqId) (member : Member) (session : Sid) (video : VideoId)
     (comment : CommentId)
   | delete (req : ReqId) (member : Member) (session : Sid) (video : VideoId)
-  /-- The newest public videos older than `before`, if given. -/
-  | feed (req : ReqId) (viewer : Option (Member × Sid)) (before : Option VideoId)
-  | channel (req : ReqId) (viewer : Option (Member × Sid)) (whose : Member)
   /-- The owner asks for a failed transcode to be tried again. -/
   | retry (req : ReqId) (member : Member) (session : Sid) (video : VideoId)
   /-- The worker's report, posted to the site, with the signature it came with. -/
   | report (req : ReqId) (r : Report) (signature : String)
   deriving DecidableEq, Repr, Hashable, Codable
+
+/-- Where a video falls in the feed: when its record was made, then its id. -/
+lanes_data structure Cursor where
+  made_s : Nat
+  video : VideoId
+  deriving DecidableEq, Repr, Hashable, Codable
+
+/-- Whether `a` is older than `b`: made earlier, or at the same time and before in the order of
+ids. -/
+def Cursor.lt (a b : Cursor) : Bool :=
+  let ai := a.video.owner.issuer.val
+  let bi := b.video.owner.issuer.val
+  let asub := a.video.owner.subject.val
+  let bsub := b.video.owner.subject.val
+  a.made_s < b.made_s || (a.made_s == b.made_s && (decide (ai < bi) || (ai == bi
+    && (decide (asub < bsub) || (asub == bsub && a.video.n < b.video.n)))))
+
+/-- A request that changes nothing: answered from the states of the members it reads. -/
+lanes_data inductive Read where
+  | watch (viewer : Option (Member × Sid)) (video : VideoId)
+  /-- The newest public videos older than `before`, if given. -/
+  | feed (viewer : Option (Member × Sid)) (before : Option Cursor)
+  | channel (viewer : Option (Member × Sid)) (whose : Member)
+  deriving DecidableEq, Repr, Hashable, Codable
+
+/-- The members whose sites a read is answered from: a video's owner or the channel's member,
+then the viewer. The feed reads every member's (`Read.every`). -/
+def Read.names : Read → List Member
+  | .watch viewer v => [v.owner] ++ (viewer.map (·.1)).toList.filter (· != v.owner)
+  | .channel viewer whose => [whose] ++ (viewer.map (·.1)).toList.filter (· != whose)
+  | .feed _ _ => []
+
+/-- Whether a read is answered from every member's site: the feed. -/
+def Read.every : Read → Bool
+  | .feed .. => true
+  | _ => false
+
+/-- What a member's actor asks of a video's owner's, once it let the request in with the
+session `viewer` names. -/
+lanes_data inductive Visit where
+  | like (req : ReqId) (viewer : Option (Member × Sid)) (member : Member) (video : VideoId)
+    (on : Bool)
+  | comment (req : ReqId) (viewer : Option (Member × Sid)) (member : Member) (name : String)
+    (video : VideoId) (body : {s : String // Remark.valid s})
+  | uncomment (req : ReqId) (viewer : Option (Member × Sid)) (member : Member) (video : VideoId)
+    (comment : CommentId)
+  deriving DecidableEq, Repr, Hashable, Codable
+
+def Visit.video : Visit → VideoId
+  | .like _ _ _ v _ | .comment _ _ _ _ v _ | .uncomment _ _ _ v _ => v
 
 lanes_data inductive Input where
   /-- A request, and when it arrived, in seconds since the epoch: the server's clock, which
@@ -277,6 +353,8 @@ lanes_data inductive Input where
   | job (key : Key) (outcome : Schedule.Outcome Unit Answer)
   /-- A notice of the scheduler. The site schedules only calls, so none comes. -/
   | noticed (key : Key)
+  /-- Another member's actor asks this one, the video's owner's. -/
+  | visit (v : Visit)
   deriving DecidableEq, Repr, Hashable, Codable
 
 /-- When an input arrived: a request's time; the scheduler's word carries none. -/
@@ -314,7 +392,6 @@ lanes_data structure View where
 lanes_data inductive Reply where
   /-- A session opened at `at_s`: the bridge signs its cookie then. -/
   | signedIn (member : Member) (session : Sid) (at_s : Nat)
-  | full
   | signedOut
   | noSession
   /-- The record is made: the bridge signs the form for the upload at `at_s`. -/
@@ -326,7 +403,7 @@ lanes_data inductive Reply where
   | notUploaded (video : VideoId)
   /-- The store did not say, or another check took this one's place: try again. -/
   | unconfirmed (video : VideoId)
-  /-- The bridge signs the link to watch it at `at_s`. -/
+  /-- The bridge signs the link to watch it at `at_s`. Only a read answers it. -/
   | watch (view : View) (at_s : Nat)
   /-- No such video, or none this viewer may see: which one is not said. -/
   | notFound
@@ -342,7 +419,7 @@ lanes_data inductive Reply where
   | tooManyComments (video : VideoId)
   | uncommented (video : VideoId)
   | deleted (video : VideoId)
-  | feed (cards : List Card) (next : Option VideoId)
+  | feed (cards : List Card) (next : Option Cursor)
   /-- A member's videos; `pending`, the titles of those not ready and what each waits for, only
   to their owner. -/
   | channel (whose : Member) (name : String) (cards : List Card)
@@ -357,16 +434,18 @@ lanes_data inductive Out where
   | cancel (key : Key)
   /-- The object of a deleted video that the store did not say it deleted, given up on. -/
   | orphan (video : VideoId)
+  /-- A visit to the actor of `to`, the video's owner. -/
+  | visit (to : Member) (v : Visit)
   deriving DecidableEq, Repr, Hashable, Codable
 
 /-- The settings the spec and the system are built with. Every bound is here (rule 2.6). -/
 structure Config where
-  maxMembers : Nat := 10000
   maxSessions : Nat := 4
   /-- How long a session lets requests in after its sign-in. The site does not record each use
   (`Auth.Sessions.touch`), so an idle limit would count from the sign-in too. -/
   lifetime : Auth.Lifetime := { absolute_s := some (30 * 86400) }
-  maxVideos : Nat := 10000
+  /-- Videos a member's site holds. -/
+  maxVideos : Nat := 100
   /-- Videos of one member, ready or not. -/
   maxOwned : Nat := 100
   /-- Videos of one member not yet ready. -/
@@ -376,8 +455,8 @@ structure Config where
   maxCommentsEach : Nat := 10
   /-- The key the site shares with the worker, which signs its reports. -/
   workerKey : Hmac.Key
-  /-- The jobs the scheduler holds: checks, last checks, transcodes and deletes. -/
-  maxJobs : Nat := 30000
+  /-- The jobs each member's scheduler holds: checks, last checks, transcodes and deletes. -/
+  maxJobs : Nat := 300
   /-- How a check is retried. A member waits for it, so it is short. -/
   checkRetry : Schedule.Retry :=
     { maxAttempts := 2, deadline_ms := 5000, base_ms := 500, cap_ms := 500, jitter_ms := 250 }
@@ -399,7 +478,7 @@ structure Config where
   /-- A seeded bug: a report is taken whatever its signature. -/
   trustUnsigned : Bool := false
 
-/-- The scheduler beside the site. An error is worth another attempt; any other answer is the
+/-- The scheduler beside each member. An error is worth another attempt; any other answer is the
 store's word. Two jobs that failed together wait different times (`Schedule.hashJitter`). -/
 def Config.scheduler (config : Config) : Schedule.Config Key Unit Answer where
   maxJobs := config.maxJobs
@@ -440,7 +519,13 @@ def view (s : Site) (v : Video) (viewer : Option Member) : View :=
   { card := s.card v, about := v.about.val, media := v.media
     liked := viewer.any (v.likes.contains ·)
     comments := v.comments.map fun c =>
-      { id := c.id, author := c.author, authorName := s.name c.author, body := c.body.val } }
+      { id := c.id, author := c.author, authorName := c.name, body := c.body.val } }
+
+/-- The sites of several members as one: each member's channel and videos, from that member's
+site. -/
+def union (sites : List (Member × Site)) : Site :=
+  { channels := sites.flatMap fun (m, s) => s.channels.filter (·.1 == m)
+    videos := sites.flatMap fun (m, s) => s.videos.filter (·.id.owner == m) }
 
 end Site
 
@@ -452,6 +537,8 @@ def Video.listed (v : Video) : Bool :=
   v.status.isReady && v.visibility == .public
 
 def Video.waiting (v : Video) : Bool := !v.status.isReady
+
+def Video.cursor (v : Video) : Cursor := ⟨v.made_s, v.id⟩
 
 /-- What a report makes of a status: the round under way, or a failed one, done is ready; the
 round under way failed is failed. Any other report changes nothing. -/
@@ -477,17 +564,13 @@ namespace Site
 
 variable (config : Config)
 
-/-- A sign-in at `at_s`: the member's sessions over by then are swept, and one is opened. -/
-def signIn (s : Site) (req : ReqId) (issuer subject name : String) (at_s : Nat) : Site × List Out :=
-  let start (m : Member) (ch : Channel) : Site × List Out :=
-    let (sessions, _) := ch.sessions.start config.maxSessions req at_s config.lifetime
-    ({ s with channels := (m, { ch with name, sessions }) :: s.channels.filter (·.1 != m) },
-      answer req (some (m, req)) (.signedIn m req at_s))
-  match s.channels.find? fun (_, ch) => ch.issuer == issuer && ch.subject == subject with
-  | some (m, ch) => start m ch
-  | none =>
-    if config.maxMembers ≤ s.channels.length then (s, answer req none .full)
-    else start s.channels.length { issuer, subject, name }
+/-- A sign-in at `at_s`: the member's sessions over by then are swept, and one is opened. The
+first makes the member's channel. -/
+def signIn (s : Site) (req : ReqId) (who : Who) (name : String) (at_s : Nat) : Site × List Out :=
+  let ch := (s.channel? who).getD { name }
+  let (sessions, _) := ch.sessions.start config.maxSessions req at_s config.lifetime
+  ({ s with channels := (who, { ch with name, sessions }) :: s.channels.filter (·.1 != who) },
+    answer req (some (who, req)) (.signedIn who req at_s))
 
 /-- `f`, for a session of `m` that lets in a request of `at_s`. -/
 def withSession (s : Site) (life : Auth.Lifetime) (at_s : Nat) (req : ReqId) (m : Member)
@@ -529,9 +612,11 @@ def create (s : Site) (req : ReqId) (viewer : Viewer) (m : Member) (title : Titl
       || config.maxPending ≤ (s.videos.filter fun v => v.owner == m && v.waiting).length then
     (s, answer req viewer .tooMany)
   else
-    let video : Video := { id := s.next, owner := m, title, about, visibility, media, status := .pending }
+    let id : VideoId := ⟨m, s.next⟩
+    let video : Video :=
+      { id, owner := m, title, about, visibility, media, status := .pending, made_s := at_s }
     ({ s with videos := video :: s.videos, next := s.next + 1 },
-      answer req viewer (.created s.next media at_s) ++ expiry config s.next at_s)
+      answer req viewer (.created id media at_s) ++ expiry config id at_s)
 
 /-- The start of round `round` of a transcode, due at once. -/
 def start (round : Round) : Out := schedule (.transcode round) config.transcodeRetry 0 0
@@ -588,13 +673,13 @@ def like (s : Site) (req : ReqId) (viewer : Viewer) (m : Member) (video : Video)
     else video.likes.erase m
   (s.setVideo { video with likes }, answer req viewer (.liked video.id likes.length on))
 
-def comment (s : Site) (req : ReqId) (viewer : Viewer) (m : Member) (video : Video) (body : Remark) :
-    Site × List Out :=
+def comment (s : Site) (req : ReqId) (viewer : Viewer) (m : Member) (name : String) (video : Video)
+    (body : Remark) : Site × List Out :=
   if config.maxComments ≤ video.comments.length
       || config.maxCommentsEach ≤ (video.comments.filter (·.author == m)).length then
     (s, answer req viewer (.tooManyComments video.id))
   else
-    let c : Comment := { id := s.nextComment, author := m, body }
+    let c : Comment := { id := s.nextComment, author := m, name, body }
     ({ s.setVideo { video with comments := video.comments ++ [c] } with
         nextComment := s.nextComment + 1 },
       answer req viewer (.commented video.id))
@@ -627,10 +712,12 @@ def watch (s : Site) (req : ReqId) (viewer : Viewer) (v : VideoId) (at_s : Nat) 
     else (s, answer req viewer .notFound)
   | none => (s, answer req viewer .notFound)
 
-def feed (s : Site) (req : ReqId) (viewer : Viewer) (before : Option VideoId) : Site × List Out :=
-  let all := s.videos.filter fun v => v.listed && before.all (v.id < ·)
+/-- The newest listed videos older than `before`, newest first. -/
+def feed (s : Site) (req : ReqId) (viewer : Viewer) (before : Option Cursor) : Site × List Out :=
+  let all := (s.videos.filter fun v => v.listed && before.all (v.cursor.lt ·)).mergeSort
+    fun a b => !a.cursor.lt b.cursor
   let page := all.take config.pageSize
-  let next := if config.pageSize < all.length then page.getLast?.map (·.id) else none
+  let next := if config.pageSize < all.length then page.getLast?.map (·.cursor) else none
   (s, answer req viewer (.feed (page.map s.card) next))
 
 /-- A member's own page shows all of their ready videos and the titles of the others; anyone
@@ -649,7 +736,7 @@ def channel (s : Site) (req : ReqId) (viewer : Viewer) (whose : Member) : Site �
 def request (s : Site) (c : Command) (at_s : Nat) : Site × List Out :=
   let life := config.lifetime
   match c with
-  | .signIn req issuer subject name => s.signIn config req issuer subject name at_s
+  | .signIn req who name => s.signIn config req who name at_s
   | .signOut req m session => s.withSession life at_s req m session fun _ =>
     ({ s with channels := s.channels.map fun (n, ch) =>
         (n, if n = m then { ch with sessions := ch.sessions.close session } else ch) },
@@ -659,17 +746,14 @@ def request (s : Site) (c : Command) (at_s : Nat) : Site × List Out :=
       s.create config req viewer m title about visibility media at_s
   | .uploaded req m session v => s.withSession life at_s req m session fun viewer =>
     s.owned req viewer m v (s.uploaded config req viewer at_s)
-  | .watch req viewer v => s.watch req (s.viewer life at_s viewer) v at_s
   | .like req m session v on => s.withSession life at_s req m session fun viewer =>
-    s.seen req viewer m v fun video => s.like req viewer m video on
+    (s, [.visit v.owner (.like req viewer m v on)])
   | .comment req m session v body => s.withSession life at_s req m session fun viewer =>
-    s.seen req viewer m v fun video => s.comment config req viewer m video body
+    (s, [.visit v.owner (.comment req viewer m (s.name m) v body)])
   | .uncomment req m session v c => s.withSession life at_s req m session fun viewer =>
-    s.seen req viewer m v fun video => s.uncomment req viewer m video c
+    (s, [.visit v.owner (.uncomment req viewer m v c)])
   | .delete req m session v => s.withSession life at_s req m session fun viewer =>
     s.owned req viewer m v (s.delete config req viewer at_s)
-  | .feed req viewer before => s.feed config req (s.viewer life at_s viewer) before
-  | .channel req viewer whose => s.channel req (s.viewer life at_s viewer) whose
   | .retry req m session v => s.withSession life at_s req m session fun viewer =>
     s.owned req viewer m v (s.retry config req viewer)
   | .report req r signature => s.report config req r signature
@@ -718,10 +802,27 @@ def job (s : Site) : Key → Outcome → Site × List Out
   | .transcode r, o => (if o.givenUp then s.settle (.failed r) else s, [])
   | .delete v, o => (s, if o.givenUp then [.orphan v] else [])
 
+/-- A visit from another member's actor, which let the request in: the video owner's part. -/
+def visit (s : Site) : Visit → Site × List Out
+  | .like req viewer m v on => s.seen req viewer m v fun video => s.like req viewer m video on
+  | .comment req viewer m name v body =>
+    s.seen req viewer m v fun video => s.comment config req viewer m name video body
+  | .uncomment req viewer m v c => s.seen req viewer m v fun video => s.uncomment req viewer m video c
+
 def handle (s : Site) : Input → Site × List Out
   | .request c at_s => s.request config c at_s
   | .job key o => s.job config key o
   | .noticed _ => (s, [])
+  | .visit v => s.visit config v
+
+/-- A read at `at_s`, answered from a site: in the view, the union of the members it reads. Its
+one output is the reply. -/
+def read (s : Site) (r : Read) (at_s : Nat) : List Out :=
+  let life := config.lifetime
+  match r with
+  | .watch viewer v => (s.watch 0 (s.viewer life at_s viewer) v at_s).2
+  | .feed viewer before => (s.feed config 0 (s.viewer life at_s viewer) before).2
+  | .channel viewer whose => (s.channel 0 (s.viewer life at_s viewer) whose).2
 
 /-- A start: the requests that waited for a check are gone with the connections, so each is
 told to try again and its video is pending. The jobs are the scheduler's, which keeps them, and a

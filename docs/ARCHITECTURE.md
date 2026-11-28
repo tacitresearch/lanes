@@ -34,7 +34,7 @@ proved function tells it to.
 | Proof tools for systems | `Lanes/Proof/{Lift,Ghost,Monotone,Equiv,Deed}.lean` | `System.invariant_of_actor`, `Inductive.of_monotone`, `System.Invariant.of_ghost` |
 | The kernel | `Lanes/Runtime/{Kernel,KernelSound,KernelTimers,Wave}.lean` | `Kernel.exec_reachable`, `Kernel.exec_outputs`, `Kernel.exec_wellFormed`, `Kernel.runWaves_eq` |
 | The shell | `Lanes/Runtime/IO/Shell.lean`, `Lanes/Runtime/{Batch,PeekSound,Mailbox,MailboxSound,Pace}.lean` | `Batch.run_kernel`, `Batch.run_sound`, `Batch.run_spread`, `Batch.run_erase_peeks`, `Batch.chain_peek_after`, `Mailbox.batch_since_take`; the shell itself is trusted |
-| Journal, snapshots, disk | `Lanes/Durable/{Journal,Snapshot,Disk,Frame,Reading}.lean`, `Lanes/Durable/IO/Journal.lean` | `Journal.open?_cut`, `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Journal.Disk.Holds.save_crash`, `Journal.Disk.Torn.load_readings` |
+| Journal, snapshots, disk | `Lanes/Durable/{Journal,Snapshot,Disk,Frame,Reading}.lean`, `Lanes/Runtime/Log.lean`, `Lanes/Durable/IO/Journal.lean` | `Journal.open?_cut`, `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Journal.Disk.Holds.save_crash`, `Journal.Disk.Torn.load_readings` |
 | Migrations | `Lanes/Durable/{Migration,Upgrade}.lean` | `Migration.inv_exec`, `Journal.Upgrade.begin_crash`, `Journal.Upgrade.holds`, `Journal.Upgrade.inv_load` |
 | Joins | `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`, `Lanes/Semantics/FairJoin.lean` | `System.Reachable.left`, `SysState.run_left`, `System.Run.Fair.left`, `System.Run.Fair.right` |
 | Shards and the transport | `Lanes/Runtime/{Shard,ShardSound,ShardsSound}.lean`, `Lanes/Net/{Courier,CourierSound,Handshake,HandshakeSound}.lean`, `Lanes/Net/IO/{Peers,Node}.lean` | `System.ShardsReachable.unsharded`, `Peers.Courier.written_sublist_sent`, `Peers.Handshake.Reachable.ready_proved` |
@@ -130,8 +130,10 @@ entries, hand over these outputs, save this image, answer this peek. The shell p
 in order and decides nothing. Proved: the journal describes the kernel (`Batch.run_kernel`); an
 output is handed over only after the entries that produce it are appended, and a save falls
 only where every output is handed over (`Batch.run_sound`); a peek, which reads the states of a
-list of actors, is answered at the end of its batch after every other act, with the states of
-the kernel the batch's journal describes (`Batch.run_peeks`), and a batch with its peeks taken
+list of actors and of every actor started that a predicate holds of (an actor not started has
+its initial state: `Batch.Peek.init_of_not_others`), is answered at the end of its batch after
+every other act, with the states of the kernel the batch's journal describes
+(`Batch.run_peeks`), and a batch with its peeks taken
 out is the same batch (`Batch.run_erase_peeks`), so reads leave no trace in the journal; over
 the whole history, a peek asked after an output was handed over sees a world the semantics
 reaches by a run that put that output out first (`Batch.chain_peek_after`,
@@ -201,11 +203,12 @@ Also:
 
 Durability is a journal of what the kernel was asked, not of actor states (D24): replaying it
 through the same pure kernel gives the same state, so a restart is not a fault any proof has to
-account for. Pure, in `Lanes/Durable/Journal.lean` and `Lanes/Durable/Frame.lean`: a file reads back
-as the entries written (`Journal.open?_file`); a file cut at any byte opens and gives exactly the
-entries wholly written before the cut, and anything else wrong with it is refused, not repaired
-(`Journal.open?_cut`); recovery rebuilds exactly the kernel those entries lead to
-(`Journal.recover_kernel`), and hands over again exactly what was produced after the last mark
+account for. Pure, in `Lanes/Durable/Journal.lean` and `Lanes/Durable/Frame.lean`: a file reads
+back as the entries written (`Journal.open?_file`); a file cut at any byte opens and gives exactly
+the entries wholly written before the cut, and anything else wrong with it is refused, not
+repaired (`Journal.open?_cut`). In `Lanes/Runtime/Log.lean`, what the entries ask of the kernel,
+which the runtime needs without a journal: recovery rebuilds exactly the kernel those entries
+lead to (`Journal.recover_kernel`), and hands over again exactly what was produced after the last mark
 (`Journal.recover_handed`).
 
 The files are in format 2 (`Lanes/Durable/Format.lean`, D97): each begins with a header, a
@@ -318,14 +321,15 @@ local journal had after that many entries and hands nothing over
 (`Journal.Restore.journal_restores`, from `Journal.resumeIds_eq_recoverIds`), a restored copy
 under D105. The thread that puts is `Lanes/Durable/IO/Ship.lean`, trusted (`TRUSTED.md`).
 
-Where: `Lanes/Durable/`, `Lanes/Durable/IO/Journal.lean`, `examples/migration`.
+Where: `Lanes/Durable/`, `Lanes/Runtime/Log.lean`, `Lanes/Durable/IO/Journal.lean`,
+`examples/migration`.
 
 ### Claims
 
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
 | A journal cut at any byte opens and gives the entries written before the cut; other damage is refused | `Journal.open?_cut`, `Lanes/Durable/Journal.lean`; gate `Tests/Axioms/Durable.lean` | A checksum makes a damaged entry unlikely, not impossible, to pass (TRUSTED) | proved |
-| Recovery rebuilds the kernel the journal describes; a snapshot gives what a full replay gives | `Journal.recover_kernel`, `Journal.resume_eq_recover`; gate `Tests/Axioms/Durable.lean` | None | proved |
+| Recovery rebuilds the kernel the journal describes; a snapshot gives what a full replay gives | `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Lanes/Runtime/Log.lean`; gate `Tests/Axioms/Runtime.lean` | None | proved |
 | A process that dies anywhere in an append or a save leaves files that load as the kernel it had | `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.save_crash`, `Journal.Disk.Torn.mend`, `Lanes/Durable/Disk.lean`; gate `Tests/Axioms/Durable.lean`; a child killed with SIGKILL while it works, `Tests/Durable.lean` | The file system behaves as the model: flushed bytes stay, a torn append leaves a prefix, a rename is atomic | proved over a model; the model trusted; tested |
 | A start whose read of the journal or the snapshot fails refuses, and one whose reads do not loads the kernel the shard had: a read error never loses committed entries | `Journal.Disk.Torn.load_readings`, `Journal.Disk.ofReadings_eq`, `Lanes/Durable/Reading.lean`; gate `Tests/Axioms/Durable.lean`; a journal that is a link to itself refused and left as it was, `Tests/Durable.lean` | A read that fails says so, and only "no such file" is read as a file not there (`Lanes/Durable/IO/Journal.lean`, trusted) | proved over a model; tested |
 | A start on the files of an older version replays them as that version did, migrates the kernel, and dying anywhere in the migration's writes gives the same migrated kernel at the next start | `Journal.Upgrade.begin_torn`, `Journal.Upgrade.begin_crash`, `Lanes/Durable/Upgrade.lean`; gate `Tests/Axioms/Durable.lean`; `examples/migration/Check.lean` (version 1 stopped, version 2 started on its files, a migration cut after its first write) | The old shard started at boot and its journal has its prelude; the old and new labels differ; the store reads the old label with the old system's codecs; the file system behaves as the model | proved over a model; tested |
@@ -453,7 +457,9 @@ armed is passed to it (`Http.Front.pending_answered`).
 
 A request that changes nothing can be answered from the state (`Lanes/Web/Http/View.lean`, the
 decision "Reads from the state"). The application gives `serve` a `view` beside its bridge: for a
-request it names, the actors it reads and its response from their states. Such a read never
+request it names, the actors it reads, a predicate for the actors of which it reads every one
+started (`View.every`: the video site's feed reads every member), and its response from their
+states. Such a read never
 enters the system. It waits behind a gate of its own, `Gate.step` over `readSig`
 (`ServerConfig.reads`: its own deadline and bound), for a peek of those actors at the end of the
 shard's next batch (`Runtime.tryPeek`), and is answered from their states off the shard's thread,
@@ -936,7 +942,8 @@ that the runtime fires a timer no earlier than its delay, are premises (`TRUSTED
 `docs/decisions/D79-work-that-is-due-later-is-a-job-of-the-scheduler.md`).
 
 Where: `Lanes/Behaviours/Server.lean`, `Lanes/Behaviours/Once/`, `Lanes/Behaviours/Jobs/`,
-`Lanes/Behaviours/Schedule/`, `Lanes/Semantics/{Service,Once,Jobs,Schedule}.lean`.
+`Lanes/Web/IO/Jobs.lean`, `Lanes/Behaviours/Schedule/`,
+`Lanes/Semantics/{Service,Once,Jobs,Schedule}.lean`.
 
 ### Claims
 
@@ -951,6 +958,7 @@ Where: `Lanes/Behaviours/Server.lean`, `Lanes/Behaviours/Once/`, `Lanes/Behaviou
 | Schedule: beside a system, the end of every job held that is not periodic is handled by that system: an answer that ends it (`succeeded`, `failed` or `cancelled`), or the notice of a job that runs once; a call job's end is such an answer | `Schedule.attach_end_handled`, `Schedule.attach_answer_handled`, `Lanes/Semantics/Schedule.lean`; gate `Tests/Axioms/Semantics.lean` | A fair run in which the scheduler does not crash; the links from the scheduler to the system lose nothing; no actor of the system is crashed or stops; whatever the service does | proved |
 | Schedule: a job leaves only in a step that tells its requester once and no more: one answer that ends it, or the notice of a job that runs once | `Schedule.told_of_leaves`, `Schedule.leaves_answered`; gate `Tests/Axioms/Behaviours.lean` | None: every step | proved |
 | Schedule: an id held is one job however often it is scheduled; beyond `maxJobs` or `maxPayload` a scheduling is refused | `Schedule.within`; `Tests/Schedule.lean` | None | proved (the bound); checked (the answers) |
+| Schedule: a scheduler for each entity (`Schedule.attachBy`), the job of a key held by the scheduler of the entity its key names: each holds at most `maxJobs` jobs and no id twice, and each job it holds that is not periodic ends | `Schedule.attachBy_within`, `Schedule.attachBy_held_leaves`, `Schedule.armedBy`; gates `Tests/Axioms/Behaviours.lean`, `Tests/Axioms/Semantics.lean` | For the second: a fair run in which that scheduler does not crash; whatever the service does | proved |
 
 Also:
 
@@ -1106,7 +1114,7 @@ RFC and compared with a reference implementation on generated inputs, and every 
 decided (rule 5.9, D50, `docs/decisions/D80-oracles.md`); `oracles/README.md` names the oracle
 of each module, and `lake exe lanesOracle` asks them.
 
-Where: `Lanes/Data/`, `Lanes/Lib/`, `native/`, `oracles/`.
+Where: `Lanes/Data/`, `Lanes/Lib/`, `Lanes/Lib/Net/Percent.lean`, `native/`, `oracles/`.
 
 ### Claims
 
@@ -1211,11 +1219,17 @@ the numbers of new ones, and the pinned schemas after a change old files read), 
 evidence, read from the built modules; lint fails on one of `Lanes/` without evidence that is
 not on `docs/inventory-none.md`), prints the schema of a type's codec as the build derives
 it (`lanes journal schema`, `LanesCli/Journal.lean`), and prints or checks a journal or a snapshot
-file by its own schema (`lanes journal dump` and `lanes journal verify`, over `Journal.inspect`). CI (`.github/`) runs the build with
-warnings as errors, lint, the tests, the model checks, the differential tests against the
-oracles, the examples and a generated app on every pull request, and the build and tests on
-macOS; a pull request that changes only documentation is built and linted only. Model checks
-run at small bounds on a pull request and at large bounds nightly (`.github/workflows/large.yml`).
+file by its own schema (`lanes journal dump` and `lanes journal verify`, over `Journal.inspect`).
+Lint's rule `layering` keeps each module
+of `Lanes/` from importing a package above its own: `LanesCli/Layers.lean` gives the packages of
+`docs/decisions/D99-layered-packages.md`, what each requires, and each file's package by the
+longest prefix of its path. The runtime requires std, for the HMAC of the courier's handshake
+(`Lanes/Net/Handshake.lean`), and the framing of files and links (`Lanes/Durable/Frame.lean`) is
+in std, for its SHA-256 checksum. CI (`.github/`) runs the build with warnings as errors, lint,
+the tests, the model checks, the differential tests against the oracles, the examples and a
+generated app on every pull request, and the build and tests on macOS; a pull request that
+changes only documentation is built and linted only. Model checks run at small bounds on a pull
+request and at large bounds nightly (`.github/workflows/large.yml`).
 The axiom gate (`Tests/Axioms.lean`) stops compiling when a `sorry` or a new axiom reaches a
 headline theorem.
 
@@ -1227,6 +1241,7 @@ Where: `LanesCli/`, `Lanes/Core/ByCases.lean`, `.github/`, `infra/`, `scripts/`,
 | --- | --- | --- | --- |
 | The number of trusted lines, and each trusted file's size | Written by `lake exe lanes lint --fix`; lint `trusted-size` fails when a file differs |  | checked |
 | Each known way of breaking trusted code fails a test | `scripts/mutants.py`, nightly (`.github/workflows/mutants.yml`) | A list of known mutants, not a measure of coverage | tested |
+| No module of `Lanes/` imports a module of a package its own does not require | `LanesCli/Layers.lean`, `Cli.Lint.checkLayers`; lint `layering`; `Tests/Lint.lean`; a file in no package is reported too |  | checked |
 | Every public definition has a status and its evidence | `lake exe lanes inventory`, computed from the built modules; lint `inventory`, `inventory-none` | Those with none are on `docs/inventory-none.md` | checked |
 
 Also:
@@ -1440,28 +1455,29 @@ pinned in `examples/videos/schemas/`, and files it wrote are in the corpus,
 
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
-| Videos: the scheduler beside the site holds at most `maxJobs` jobs and no key twice | `Videos.jobs_bounded`, `examples/videos/Videos/Proofs/Jobs.lean`; gate `examples/videos/Videos/Proofs/Axioms.lean` | None: every environment | proved |
-| Videos: every check, last check, start of a transcode and delete ends, whatever the store and the worker do | `Videos.job_ends`; same gate | A fair run in which the scheduler does not crash; the job is not periodic (the site schedules none, but the system takes schedulings from outside) | proved |
+| Videos: each member's scheduler holds at most `maxJobs` jobs and no key twice | `Videos.jobs_bounded`, `examples/videos/Videos/Proofs/Jobs.lean`; gate `examples/videos/Videos/Proofs/Axioms.lean` | None: every environment | proved |
+| Videos: every check, last check, start of a transcode and delete ends, whatever the store and the worker do | `Videos.job_ends`; same gate | A fair run in which the member's scheduler does not crash; the job is not periodic (the site schedules none, but the system takes schedulings from outside) | proved |
+| Videos: no output of the system shows a video, and a read shows a private one only to a session of its owner that the owner's site lets in at the read's time | `Videos.Site.quiet_handle`, `Videos.private_to_owner`, `Videos.Site.read_private`; same gate | None | proved |
+| Videos: once a delete is answered, no later output of the owner's actor shows the video, and no read after it, whatever other members' sites it reads; the video leaves the feed, its channel and its watch page at one boundary | `Videos.Site.deleted_never_served`, `Videos.Site.Gone.run`; same gate; `Lanes.Batch.run_peeks` for the boundary | About runs of the spec's functions on the owner's site | proved |
+| Videos: a view answers the spec's read of the sites of the members it reads, each that actor's state at the peek's boundary; for the feed, every member's actor started, the rest having the empty site | `Videos.Web.view_answers`; same gate | None | proved |
 | Videos: a delete answered schedules the delete of the object, whose end is reported exactly when the scheduler gave it up | `Videos.Site.delete_schedules`, `Videos.Site.delete_reported`; same gate | None | proved |
 | Videos: once its job is over, a deleted video's object was deleted by the store, or is reported | `examples/videos/Videos/Check.lean`, run by its `lake test` | Runs with no crash of an actor (a crash loses its mail; on one shard neither actor crashes alone); one video, two attempts | checked, not proved |
-| Videos: a video is shown only after a job asking the store for its upload succeeded with `found`, which the scheduler says only of the store's answer | `Videos.Site.listed_confirmed`, `Schedule.succeeded_replied`; same gate and `Tests/Axioms/Behaviours.lean` | The seeded bugs off; the adapter asks the store what the key says (`Videos.Web.exchangeOf`, tested) | proved |
+| Videos: a read shows a video only if the run of its owner's site has a job asking the store for its upload that succeeded with `found`, which the scheduler says only of the store's answer | `Videos.Site.listed_confirmed`, `Schedule.succeeded_replied`; same gate and `Tests/Axioms/Behaviours.lean` | The seeded bugs off; the adapter asks the store what the key says (`Videos.Web.exchangeOf`, tested); about runs of the spec's functions | proved |
 | Videos: a check and a delete the store refuses once are tried again and succeed | `examples/videos/Videos/EndToEnd.lean`, run by its `lake test` | The test kit's fake S3, told to refuse (`Testing.S3.Fake.refuse`) | tested |
-| Videos: a video is listed as ready only after a request in which the worker reported a round of its transcode done, with a signature that checks under the worker's key | `Videos.Site.listed_transcoded`, `examples/videos/Videos/Proofs/Confirmed.lean`; same gate | The seeded bugs off (`Config.Honest`); about runs of the spec's functions | proved |
+| Videos: a read shows a video as ready only if the run of its owner's site has a request in which the worker reported a round of its transcode done, with a signature that checks under the worker's key | `Videos.Site.listed_transcoded`, `examples/videos/Videos/Proofs/Confirmed.lean`; same gate | The seeded bugs off (`Config.Honest`); about runs of the spec's functions | proved |
 | Videos: a report of the worker changes only the video its round names, whatever its signature | `Videos.Site.report_names`; same gate | None | proved |
 | Videos: nothing is shown whose rendition and thumbnail the store may not hold, and a report taken unsigned shows a video the worker never reported done | `examples/videos/Videos/Check.lean`, run by its `lake test` | The worker's model, honest; reports twice, failed and forged; one video, a crash anywhere | checked |
-| Videos: with an honest worker that reports, a confirmed upload ends ready or failed | `Videos.report_settles`, `Videos.Site.report_leaves`, `examples/videos/Videos/Proofs/Ready.lean`; same gate; the whole, with the worker's model, `examples/videos/Videos/Check.lean`: of runs with no crash, every state with no successor has no video transcoding | A fair run; the site not crashed; the link from outside to it lossless; the worker's signed report of the round is an input of the run (the premise). The check: runs with no crash, one video and one retry | proved from the report; checked as a whole |
+| Videos: with an honest worker that reports, a confirmed upload ends ready or failed | `Videos.report_settles`, `Videos.Site.report_leaves`, `examples/videos/Videos/Proofs/Ready.lean`; same gate; the whole, with the worker's model, `examples/videos/Videos/Check.lean`: of runs with no crash, every state with no successor has no video transcoding | A fair run; the owner's actor not crashed; the link from outside to it lossless; the worker's signed report of the round is an input of the run (the premise). The check: runs with no crash, one video and one retry | proved from the report; checked as a whole |
 | Videos: an upload is transcoding, then ready, its page playing the rendition with the thumbnail as its poster; a transcode that failed is shown to its owner and tried again; a report forged with another key is refused | `examples/videos/Videos/EndToEnd.lean`, run by its `lake test` | The test kit's fake S3 and worker (`Lanes.Testing.Transcode`) | tested |
 
 Also:
 
 - Checked: a pipeline: a confirmed upload is given to a transcode worker outside the site (`Lanes.Transcode`, a JSON job over HTTP and a signed webhook back), and the video is ready only once the worker reports, signed, a playable rendition and a thumbnail, which its page plays and shows; a failed transcode is shown to its owner with a retry.
-- Checked: bounds on one member's videos and comments far below the site's, so that one member cannot fill them.
+- Checked: bounds on one member's videos and comments, held in that member's site.
 - Checked: model-checked beside the worker's and the object store's models with their timeouts, late, repeated and forged reports and crashes, four seeded bugs found (the browser's word taken for an upload, a timed-out check taken as found, sessions that never end, a report taken unsigned).
-- Checked: one actor that runs the spec's functions, on `Http.serveFronted` with a journal and snapshots, its calls to the store and the worker jobs of the scheduler beside it (`Lanes.Schedule`), retried with a backoff, kept on the journal and bounded by `maxJobs`: a check, the last check of an upload a day after it was begun, which confirms it or takes it out, the start of a round of a transcode, and the delete of a deleted video's objects, reported if given up.
+- Checked: an actor for each member, named by the identity that signs in (`Videos.Who`), that runs the spec's functions on the member's site, on `Http.serveFronted` with a journal and snapshots, and a scheduler for each member beside it (`Schedule.attachBy`), whose jobs are the calls to the store and the worker, retried with a backoff, kept on the journal and bounded by `maxJobs`: a check, the last check of an upload a day after it was begun, which confirms it or takes it out, the start of a round of a transcode, and the delete of a deleted video's objects, reported if given up. A like, a comment and the taking out of a comment are let in by the visitor's actor and taken by the owner's (`Videos.Visit`). The feed, watch pages and channel pages are reads from the members' actors (`Videos.Web.view`). How widely the work spreads over the actors is measured with `lake exe videosWaves` (`docs/decisions/D109-videos-per-member.md`).
 - Checked: public, unlisted and private videos, a feed by pages, channels.
-- Proved: a deleted video never shown again, and a video shown only after the scheduler said a check of it succeeded with `found`, which it says only of the store's answer, and after the worker reported it done with its signature, in every run of the spec's functions (`Videos.Site.deleted_never_served`, `Videos.Site.listed_confirmed`, `Videos.Site.listed_transcoded`, `Schedule.succeeded_replied`).
-- Proved: a private video shown only to its owner in every run of the system (`Videos.private_to_owner`), and only in answer to a session of the owner's that let the request in when it arrived (`Videos.Site.handle_private`).
-- Proved: each like counted once in every reachable state (`Videos.likes_distinct`).
+- Proved: each like counted once in every reachable state of every member's site (`Videos.likes_distinct`).
 
 ### Raft key-value store
 

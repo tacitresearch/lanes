@@ -118,7 +118,7 @@ theorem chain_peek {k : Kernel sys} {written : Nat} {waiting : Array (Bool × W)
     {batches : List (Config × List (Command σ P W))} {before after : List (Act sys P)}
     {ids : List σ.Id} {reply : P ids} {peek : Peek sys ids}
     (h : chain k written waiting batches = before ++ .answer ids reply peek :: after) :
-    peek = Peek.of (k.exec (journal before)).kernel ids
+    peek = Peek.of (k.exec (journal before)).kernel ids peek.every
       ∧ handed before = (k.exec (journal before)).outputs :=
   (chain_sound k written waiting batches).1 before _ after h
 
@@ -161,8 +161,11 @@ theorem chain_peek_after (past : List (Kernel.Op σ)) (written : Nat) (waiting :
     (hshown : shown <+: before) (ho : o ∈ handed shown) :
     ∃ evs more c, (SysState.init sys Kernel.env).Leads Kernel.env
         ((Kernel.boot sys).2.map .output ++ evs ++ more) c
-      ∧ o ∈ Event.outputs evs ∧ ∀ i (hi : i ∈ ids), peek.get i hi = c.state i := by
+      ∧ o ∈ Event.outputs evs ∧ (∀ i (hi : i ∈ ids), peek.get i hi = c.state i)
+      ∧ (∀ x ∈ peek.others, peek.every x.1 = true ∧ x.2 = c.state x.1)
+      ∧ ∀ i, peek.every i = true → i ∉ peek.others.map (·.1) → c.state i = (sys.actor i).init := by
   obtain ⟨hpeek, -⟩ := chain_peek h
+  generalize peek.every = every at hpeek ⊢
   obtain ⟨tail, rfl⟩ := hshown
   have hsound : Sound ((Kernel.boot sys).1.exec past).kernel shown :=
     Sound.of_append (Sound.of_append (xs := shown ++ tail)
@@ -176,8 +179,16 @@ theorem chain_peek_after (past : List (Kernel.Op σ)) (written : Nat) (waiting :
   · rw [Event.outputs_append, Kernel.exec_outputs (((Kernel.boot sys).1.exec past).kernel)]
     apply List.mem_append_right
     exact hsound.handed_prefix.subset ho
-  · intro i hi
-    rw [hpeek, Peek.get_of, hj, Kernel.exec_append]
+  subst hpeek
+  refine ⟨fun i hi => ?_, fun x hx => ?_, fun i hp hi => ?_⟩
+  · rw [Peek.get_of, hj, Kernel.exec_append]
     rfl
+  · obtain ⟨hp, hx⟩ := Peek.others_of hx
+    refine ⟨hp, ?_⟩
+    rw [hx, hj, Kernel.exec_append]
+    rfl
+  · have := Peek.init_of_not_others hp hi
+    rw [hj, Kernel.exec_append] at this
+    exact this
 
 end Lanes.Batch
