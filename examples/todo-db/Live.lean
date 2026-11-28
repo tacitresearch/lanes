@@ -40,7 +40,7 @@ def main : IO UInt32 := do
   let outs ← IO.mkRef ([] : List Out)
   let requests := [Request.add 7 "milk", .add 7 "eggs", .add 7 "milk", .add 8 "milk", .complete 7 1, .list 7]
   let run : Async Unit := do
-    let rt ← Runtime.startWith (system {}) {} fun rt _ out => do
+    let rt ← Runtime.startWith (system {}) {} fun rt out => do
       outs.modify (· ++ [out])
       Postgres.Typed.handler port store rt out
     for (r, n) in requests.zip (List.range requests.length) do

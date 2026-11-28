@@ -183,7 +183,7 @@ def conformance : Async (List (String × Bool)) := do
   let seen ← IO.mkRef []
   let (server, port_) ← Fake.serve (handle Tests.S3.creds seen)
   let done ← IO.mkRef 0
-  let rt ← Runtime.startWith mailer { record := true } fun rt _ out => do
+  let rt ← Runtime.startWith mailer { record := true } fun rt out => do
     Ses.handler port (endpointAt port_) Tests.S3.creds config rt out
     if let .done .. := out then done.modify (· + 1)
   let asks := [["ann@b.co"], ["rejected@b.co"], ["flaky@b.co"], ["slow@b.co"], ["bo@c.co", "cy@d.co"]]
@@ -204,7 +204,7 @@ def conformance : Async (List (String × Bool)) := do
       world.allows events),
     ("ses handler: and the model refuses an answer given twice", !world.allows twice) ]
 
-/-- `handlerOnce` given one output twice, and once more after its state is read back from its
+/-- `handlerOnce` given one key twice, and once more after its state is read back from its
 file, sends it once; each repeat is answered `unknown`. -/
 def once : Async (List (String × Bool)) := do
   let seen ← IO.mkRef []
@@ -212,29 +212,30 @@ def once : Async (List (String × Bool)) := do
   let dir := (← IO.getEnv "TMPDIR").getD "/tmp"
   let path : System.FilePath := s!"{dir}/lanes-ses-once-{← IO.monoNanosNow}"
   let done ← IO.mkRef #[]
-  let rt ← Runtime.startWith mailer {} fun _ _ out => do
+  let rt ← Runtime.startWith mailer {} fun _ out => do
     if let .done _ a := out then done.modify (·.push (kind a))
   let e := endpointAt port_
   let some m := msg? ["ann@b.co"] | return [("ses once: the message", false)]
   let out : Out := .send ⟨0, 1000, m⟩
-  let id : Journal.OutputId := ⟨"j", ⟨3, 0⟩⟩
+  let keyed (k : String) : Out → Option String := fun _ => some k
   let state ← Once.open path
-  handlerOnce state port e Tests.S3.creds config rt id out
+  handlerOnce state port (keyed "welcome-ann") e Tests.S3.creds config rt out
   let _ ← Fake.waitFor 3000 do return (← done.get).size ≥ 1
-  handlerOnce state port e Tests.S3.creds config rt id out
+  handlerOnce state port (keyed "welcome-ann") e Tests.S3.creds config rt out
   let reopened ← Once.open path
-  handlerOnce reopened port e Tests.S3.creds config rt id out
-  handlerOnce reopened port e Tests.S3.creds config rt ⟨"j", ⟨4, 0⟩⟩ out
+  handlerOnce reopened port (keyed "welcome-ann") e Tests.S3.creds config rt out
+  handlerOnce reopened port (keyed "welcome-bob") e Tests.S3.creds config rt out
   let _ ← Fake.waitFor 3000 do return (← done.get).size ≥ 4
   rt.stop
   server.close
   IO.FS.removeFile path
   let answers := (← done.get).toList
   return [
-    ("ses once: an output handed over again is not sent again, also after a restart",
+    ("ses once: an output whose key was sent is not sent again, also after a restart",
       (← seen.get).length == 2 && answers.count "unknown" == 2 && answers.count "sent" == 2),
-    ("ses once: the state reads back as written",
-      Sent.read? (Sent.write [("j", ⟨3, 0⟩), ("k", ⟨12, 1⟩)]) == some [("j", ⟨3, 0⟩), ("k", ⟨12, 1⟩)]) ]
+    ("ses once: the state reads back as written, and a key that is no line is refused",
+      Sent.read (Sent.write ["k", "j"]) == ["k", "j"] && !Sent.admits [] "a\nb"
+        && !Sent.admits [] "") ]
 
 def tests : List (String × Bool) := addressTests ++ requestTests ++ answerTests
 

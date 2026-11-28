@@ -16,7 +16,7 @@ elsewhere, with channel binding where the server offers it (`Conn.ChannelBinding
 machine is `127.0.0.0/8`, `::1` and `localhost`, which the client reaches at `127.0.0.1` without
 asking DNS (`Address.of`), so that a name cannot turn TLS off.
 
-`Settings.read` reads libpq's environment variables, then a deploy's (`docs/DEPLOY.md`), then
+`Settings.read` reads libpq's environment variables, then a deploy's (`LANES_DB_*`), then
 libpq's defaults, through `Env`, which the IO gives (`Postgres.Client.fromEnv`) and a test fakes.
 A password file is libpq's (`PassFile.find`).
 -/
@@ -178,7 +178,7 @@ structure Settings where
 
 namespace Settings
 
-/-- Where `infra/app/app-instance.sh` installs RDS's authorities. -/
+/-- Where a deploy installs the authorities of its database's certificate, such as RDS's. -/
 def deployCa : String := "/etc/lanes/db-ca.pem"
 
 variable {m : Type → Type} [Monad m]

@@ -212,31 +212,27 @@ def churned (release : Bool) (count : Nat) : Kernel (churn Nat release) × Nat :
     let (k, outs) := touch k n
     (k, zeros + outs.countP (· == (n, 0)))
 
-/-- A journal that keeps nothing and, at each save, notes how many actors the image holds. -/
-def sizes (sys : System (sig Nat)) (saved : IO.Ref (Array Nat)) : Journal.Log sys where
-  past := []
-  append _ := pure ()
-  note _ := pure ()
-  save := some fun image => saved.modify (·.push image.cells.length)
-  close := pure ()
+/-- How many actors a live shard holds: those a peek at every actor finds started. -/
+def held {release : Bool} (rt : Runtime (churn Nat release)) : Async Nat := do
+  let reply : IO.Promise (Option Nat) ← IO.Promise.new
+  discard <| rt.tryPeek [] (fun p => reply.resolve (p.map (·.others.length))) (every := fun _ => true)
+  return ((← await reply.result?).join).getD 0
 
-/-- A live shard on which `touched` identities are touched once each: the sizes of the
-images it saved, how many outputs said zero, and what was handed over afterwards, when an
-identity touched before is touched again and one never touched is touched. The handler counts
-rather than keeps: it runs on the shard's thread, and an array two threads can see is copied on
-every push. -/
-def live (release : Bool) (touched : Nat) : Async (Array Nat × Nat × List (Nat × Nat)) := do
-  let saved ← IO.mkRef #[]
+/-- A live shard on which `touched` identities are touched once each: how many actors it holds
+then, how many outputs said zero, and what was handed over afterwards, when an identity touched
+before is touched again and one never touched is touched. The handler counts rather than keeps:
+it runs on the shard's thread, and an array two threads can see is copied on every push. -/
+def live (release : Bool) (touched : Nat) : Async (Nat × Nat × List (Nat × Nat)) := do
   let zeros ← IO.mkRef 0
   let after ← IO.mkRef false
   let shown ← IO.mkRef #[]
-  let rt ← Runtime.start (churn Nat release) { snapshotEvery := touched / 10 }
+  let rt ← Runtime.start (churn Nat release) {}
     (fun out => do
       if ← after.get then shown.modify (·.push out)
       else if out.2 == 0 then zeros.modify (· + 1))
-    (journal := some (sizes _ saved))
   for n in [0:touched] do rt.input (n, .ping)
   rt.idle
+  let actors ← held rt
   after.set true
   rt.input (7, .set 5)
   rt.input (7, .ping)
@@ -245,7 +241,7 @@ def live (release : Bool) (touched : Nat) : Async (Array Nat × Nat × List (Nat
   rt.input (strangers + 1, .ping)
   rt.idle
   rt.stop
-  return (← saved.get, ← zeros.get, (← shown.get).toList)
+  return (actors, ← zeros.get, (← shown.get).toList)
 
 def tests : List (String × Bool) :=
   let r := search side properties { maxDepth := some 4, constraint := fun p => p.kept.nextToken ≤ 2 }
@@ -261,17 +257,16 @@ def tests : List (String × Bool) :=
     ("release: the kernel that keeps them grows with every identity touched",
       kept.cells.size == 2000 && keptZeros == 2000),
     ("release: a hundred thousand identities touched, and the kernel holds none of them",
-      released.cells.size == 0 && releasedZeros == strangers && released.image.cells.isEmpty),
+      released.cells.size == 0 && releasedZeros == strangers),
     ("release: a released actor touched again is as new",
       again == [(5, 3), (5, 0), (6, 0)] && released.cells.size == 0) ]
 
 def liveTests : Async (List (String × Bool)) := do
-  let (saved, count, after) ← live true strangers
-  let (keptSaved, _, _) ← live false (strangers / 5)
-  IO.eprintln s!"release: {strangers} identities touched; {saved.size} images saved hold at most {saved.foldl max 0} actors, {keptSaved.foldl max 0} of {strangers / 5} without release"
+  let (actors, count, after) ← live true strangers
+  let (keptActors, _, _) ← live false (strangers / 5)
+  IO.eprintln s!"release: {strangers} identities touched; the shard holds {actors} actors, {keptActors} of {strangers / 5} without release"
   return [("release: a live shard touched by a hundred thousand identities stays small",
-      count == strangers && saved.size ≥ 5 && saved.all (· ≤ 1)
-        && keptSaved.foldl max 0 ≥ strangers / 10),
+      count == strangers && actors ≤ 1 && keptActors ≥ strangers / 10),
     ("release: on a live shard a released actor touched again is as new",
       after == [(7, 5), (7, 0), (strangers + 1, 0)])]
 

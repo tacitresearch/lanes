@@ -56,7 +56,7 @@ def main (args : List String) : IO Unit := do
   let actors := max 1 ((positional[1]? >>= String.toNat?).getD 64)
   let work := (positional[2]? >>= String.toNat?).getD 0
   let config : Http.ServerConfig :=
-    { port := port.toUInt16, system := "bench many", ioThreads := (option args "io").getD 0 }
+    { port := port.toUInt16, ioThreads := (option args "io").getD 0 }
   let runtimeConfig : Runtime.Config :=
     { workers := (option args "workers").getD 1, parallel := parallel args }
   let server ← (Http.serve (many (actors - 1) work) (bridge (actors - 1)) config runtimeConfig).block

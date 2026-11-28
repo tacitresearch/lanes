@@ -31,26 +31,17 @@ import Lanes.Semantics
 /-- info: 'Lanes.Batch.run_resolved' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Batch.run_resolved
 
-/-- info: 'Lanes.Batch.flush_save' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Batch.flush_save
-
-/-- info: 'Lanes.Batch.due_iff' depends on axioms: [propext, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Batch.due_iff
-
 /-- info: 'Lanes.Batch.run_spread' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Batch.run_spread
 
-/-- info: 'Lanes.Batch.run_ids' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Batch.run_ids
+/-- info: 'Lanes.Batch.turnAll_eq_exec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Batch.turnAll_eq_exec
 
-/-- info: 'Lanes.Batch.run_ids_spread' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Batch.run_ids_spread
+/-- info: 'Lanes.Batch.turnAll_spread' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Batch.turnAll_spread
 
-/-- info: 'Lanes.Batch.history_ops' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Batch.history_ops
-
-/-- info: 'Lanes.Batch.grown_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Batch.grown_eq
+/-- info: 'Lanes.Batch.turn_eq_exec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Batch.turn_eq_exec
 
 -- Lanes.Runtime.KernelSound
 /-- info: 'Lanes.Kernel.exec_inductive' depends on axioms: [propext, Classical.choice, Quot.sound] -/
@@ -80,9 +71,6 @@ import Lanes.Semantics
 /-- info: 'Lanes.Kernel.runBatch_outputs' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Kernel.runBatch_outputs
 
-/-- info: 'Lanes.Kernel.abs_image_kernel' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Kernel.abs_image_kernel
-
 /-- info: 'Lanes.Kernel.exec_reachable' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Kernel.exec_reachable
 
@@ -93,9 +81,6 @@ import Lanes.Semantics
 #guard_msgs in #print axioms Lanes.Kernel.exec_visible
 
 -- Lanes.Runtime.KernelTimers
-/-- info: 'Lanes.Kernel.WellFormed.image' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Kernel.WellFormed.image
-
 /-- info: 'Lanes.Kernel.boot_wellFormed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Kernel.boot_wellFormed
 
@@ -131,34 +116,6 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Kernel.WellFormed.wait_forever' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Kernel.WellFormed.wait_forever
-
--- Lanes.Runtime.Log
-/-- info: 'Lanes.Journal.replay_kernel' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Journal.replay_kernel
-
-/-- info: 'Lanes.Journal.resume_eq_replay' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Journal.resume_eq_replay
-
-/-- info: 'Lanes.Journal.recover_handed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Journal.recover_handed
-
-/-- info: 'Lanes.Journal.resume_eq_recover' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Journal.resume_eq_recover
-
-/-- info: 'Lanes.Journal.turns_kernel' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Journal.turns_kernel
-
-/-- info: 'Lanes.Journal.turnAll_eq_exec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Journal.turnAll_eq_exec
-
-/-- info: 'Lanes.Journal.turnAll_spread' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Journal.turnAll_spread
-
-/-- info: 'Lanes.Journal.recover_kernel' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Journal.recover_kernel
-
-/-- info: 'Lanes.Journal.recover_outputs' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Journal.recover_outputs
 
 -- Lanes.Runtime.MailboxSound
 /-- info: 'Lanes.Mailbox.Reachable.sound' depends on axioms: [propext, Classical.choice, Quot.sound] -/
@@ -217,57 +174,6 @@ import Lanes.Semantics
 /-- info: 'Lanes.SysState.Leads.reachable' depends on axioms: [propext, Classical.choice] -/
 #guard_msgs in #print axioms Lanes.SysState.Leads.reachable
 
--- Lanes.Runtime.Shard
-/-- info: 'Lanes.Parcel.receive_send' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Parcel.receive_send
-
--- Lanes.Runtime.ShardSound
-/-- info: 'Lanes.SysState.AtHome.step' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.SysState.AtHome.step
-
-/-- info: 'Lanes.SysState.init_merged_equiv' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.SysState.init_merged_equiv
-
-/-- info: 'Lanes.System.SplitReachable.merged_of_init' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.System.SplitReachable.merged_of_init
-
-/-- info: 'Lanes.System.SplitReachable.merged' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.System.SplitReachable.merged
-
-/-- info: 'Lanes.System.Invariant.split' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.System.Invariant.split
-
-/-- info: 'Lanes.System.Invariant.split_state' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.System.Invariant.split_state
-
-/-- info: 'Lanes.System.SplitReachable.merged_exact' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.System.SplitReachable.merged_exact
-
-/-- info: 'Lanes.System.Invariant.split_of_forall' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.System.Invariant.split_of_forall
-
--- Lanes.Runtime.ShardsSound
-/-- info: 'Lanes.Shards.AtHome.step' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Shards.AtHome.step
-
-/-- info: 'Lanes.SysState.init_unsharded_equiv' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.SysState.init_unsharded_equiv
-
-/-- info: 'Lanes.System.ShardsReachable.unsharded_of_init' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.System.ShardsReachable.unsharded_of_init
-
-/-- info: 'Lanes.System.ShardsReachable.unsharded' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.System.ShardsReachable.unsharded
-
-/-- info: 'Lanes.System.Invariant.shards' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.System.Invariant.shards
-
-/-- info: 'Lanes.System.Invariant.shards_of_forall' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.System.Invariant.shards_of_forall
-
-/-- info: 'Lanes.System.Invariant.shards_state' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.System.Invariant.shards_state
-
 -- Lanes.Runtime.Wave
 /-- info: 'Lanes.Kernel.frame_handle' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Kernel.frame_handle
@@ -316,13 +222,3 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Kernel.exec_inputs' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Kernel.exec_inputs
-
--- Lanes.Runtime.WavePlan
-/-- info: 'Lanes.WavePlan.levels_lt' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.WavePlan.levels_lt
-
-/-- info: 'Lanes.WavePlan.disjoint_of_level' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.WavePlan.disjoint_of_level
-
-/-- info: 'Lanes.WavePlan.disjoint_of_split' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.WavePlan.disjoint_of_split

@@ -36,9 +36,6 @@ REQUIRES, PACKAGES = read_layers()
 # Each file's path inside its package: a path prefix today and the path it becomes. The longest
 # prefix wins; a path that no prefix names keeps its path.
 MOVES = [
-    ("Lanes/Durable/Frame.lean", "Lanes/Lib/Frame.lean"),
-    ("Lanes/Durable/OutputId.lean", "Lanes/Runtime/OutputId.lean"),
-    ("Lanes/Net/", "Lanes/Peers/"),
     ("Lanes/Outside/IO/Clock.lean", "Lanes/Runtime/IO/Clock.lean"),
     ("Lanes/Lib/Net/", "Lanes/Net/"),
     ("Lanes/Web/IO/Tls.lean", "Lanes/Net/IO/Tls.lean"),
@@ -52,8 +49,6 @@ MOVES = [
     ("Lanes/Web/IO/S3.lean", "Lanes/S3/IO/Client.lean"),
     ("Lanes/Web/IO/SignIn.lean", "Lanes/Auth/IO/SignIn.lean"),
     ("Lanes/Web/IO/", "Lanes/Http/IO/"),
-    ("Lanes/Web/Transcode.lean", "Lanes/Http/Transcode.lean"),
-    ("Lanes/Net/IO/Node.lean", "Lanes/Http/IO/Node.lean"),
 ]
 
 IMPORT = re.compile(r"^(?:public\s+|private\s+)?(?:meta\s+)?import\s+(?:all\s+)?(\S+)")

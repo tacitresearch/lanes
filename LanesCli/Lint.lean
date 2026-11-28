@@ -2,8 +2,8 @@
 Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
+import LanesCli.Generated
 import LanesCli.Layers
-import LanesCli.Schemas
 
 /-!
 # `lanes lint`
@@ -24,18 +24,12 @@ Source-level checks of the rules in `AGENTS.md` that can be decided from the tex
   `Lanes/` imports modules of Lanes only from its own package and the packages it requires
   (`LanesCli/Layers.lean`), so each layer builds without the ones above it.
 - `links`: every repository path that a Markdown file at the root or under `docs/` writes in
-  backquotes exists (`a/{b,c}.lean` names two). `docs/decisions/` records the past and is not
-  checked.
+  backquotes exists (`a/{b,c}.lean` names two). `docs/decisions/` and `CHANGELOG.md` record the
+  past and are not checked.
 - `oracles`, where there is an `oracles/README.md`: its tables name a reference for each folder
   of `oracles/`, and an oracle, or why there is none, for each module of `Lanes/Lib/` and
   `Lanes/Web/` and each model of `Lanes/Outside/` that is not a proof or IO; every module and
   path they name exists (`docs/decisions/D80-oracles.md`).
-- `schema`: every pinned schema (a `.schema` file, `Lanes/Durable/Pin.lean`) against the schema
-  the build derives, and every file of the corpus it names read with the build's schema. A
-  change that old files read is reported, and `--fix` pins it; one that opening would refuse,
-  or a corpus file the build does not read, is a finding that names the field or the
-  constructor (`LanesCli/Schemas.lean`). This reads the built modules, so lint builds the
-  modules the pinned files import first, and reports a build that fails as `build`.
 
 Comments and string literals are ignored. The checks that need the elaborator (`no-io-in-step`,
 `bounded`, `field-leak`) are not implemented yet.
@@ -283,7 +277,7 @@ def citedPaths (root : System.FilePath) (span : String) : IO (List String) := do
 not the record of the past, `docs/decisions/`, nor what a package under `docs/` keeps in its
 `.lake/`. -/
 def citingDocs (root : System.FilePath) : IO (List String) := do
-  let top := (← Generated.markdownIn root)
+  let top := (← Generated.markdownIn root).filter (· != "CHANGELOG.md")
   let docs := root / "docs"
   let nested ← if ← docs.isDir then
       docs.walkDir fun dir =>
@@ -386,36 +380,13 @@ structure Report where
   fixed : List Generated.Edit
   files : Nat
 
-/-- Lint `schema` runs Lean on a program that imports the modules the pinned files name, so
-those are built first, with `lake build`: a project with no pinned file builds nothing. A build
-that fails is one finding, of rule `build`. -/
-def buildPinned (root : System.FilePath) : IO (List Finding) := do
-  let paths ← Schemas.files root
-  let mut modules : List String := []
-  for path in paths do
-    if let .ok (h, _) := Lanes.Journal.Pin.parse (← IO.FS.readFile (root / path)) then
-      for m in "Lanes.Durable.Inspect" :: h.imports do
-        unless modules.contains m do modules := modules ++ [m]
-  if modules.isEmpty then return []
-  let out ← IO.Process.output
-    { cmd := "lake", args := #["build"] ++ (modules.map ("+" ++ ·)).toArray, cwd := some root }
-  if out.exitCode == 0 then return []
-  return [⟨paths.headD "lakefile.lean", 1, "build",
-    s!"`lake build` of the modules the pinned schemas import failed: {(out.stderr ++ out.stdout).trimAscii}"⟩]
-
 def lint (root : System.FilePath) (options : Options := {}) : IO Report := do
-  let built ← buildPinned root
   let fixed ← if options.fix then Generated.fix root options.main else pure []
   let plan ← Generated.plan root options.main
-  let schemas ← if built.isEmpty then Schemas.plan root else pure {}
-  if options.fix then
-    for e in schemas.edits do Generated.apply root e
-  let fixed := fixed ++ if options.fix then schemas.edits else []
   let mut findings : List Finding :=
-    (plan.problems ++ schemas.problems).map
+    plan.problems.map
       (fun (file, line, rule, message) => ⟨file, line, rule, message⟩)
-      ++ (plan.edits ++ if options.fix then [] else schemas.edits).map
-        fun e => ⟨e.path, 1, e.rule, e.message⟩
+      ++ plan.edits.map fun e => ⟨e.path, 1, e.rule, e.message⟩
   let trustedFile := root / "TRUSTED.md"
   let trusted ← if ← trustedFile.pathExists then IO.FS.readFile trustedFile else pure ""
   let files ← sourceFiles root
@@ -425,7 +396,6 @@ def lint (root : System.FilePath) (options : Options := {}) : IO Report := do
   findings := findings ++ (← checkLayers root files)
   findings := findings ++ (← checkLinks root)
   findings := findings ++ (← checkOracles root)
-  findings := built ++ findings
   return ⟨findings, fixed, files.size⟩
 
 /-- A JSON string: `s` quoted, with the characters JSON must escape escaped. -/
@@ -445,11 +415,9 @@ def jsonString (s : String) : String :=
   "\"" ++ body ++ "\""
 
 /-- What a finding is a failure of, in the kinds `lanes check` and the test runner give: a
-`sorry` is a proof that does not hold, a build that failed is a build, and every other finding
-is a check of the text. -/
+`sorry` is a proof that does not hold, and every other finding is a check of the text. -/
 def Finding.kind (f : Finding) : String :=
   if f.rule == "no-sorry" then "proof"
-  else if f.rule == "build" then "build"
   else "check"
 
 def Finding.json (f : Finding) : String :=

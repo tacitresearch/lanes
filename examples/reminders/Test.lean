@@ -5,9 +5,9 @@ import Lanes.Testing
 /-!
 `lake test`: the model checks of `Reminders.Check`, then the application over HTTP. A local
 notification service answers `503` to the first two deliveries of a reminder and takes the third;
-the reminder is sent with the same `Idempotency-Key` each time. Then the server is stopped and
-started again on its journal: the reminder sent is still sent, the one due in an hour still
-waits, and it can be cancelled.
+the reminder is sent with the same `Idempotency-Key` each time. A reminder due in an hour waits,
+and is cancelled. Then the server is stopped and started again: its reminders lived as long as
+the process, and the list is empty.
 -/
 
 open Std Std.Async Lanes Lanes.Http Reminders
@@ -58,32 +58,29 @@ def waitFor (port : UInt16) (text : String) (patience_ms : Nat := 8000) : Async 
 
 def shows (shown text : String) : Bool := (shown.splitOn text).length > 1
 
-def deployment (journal : System.FilePath) (notifyPort : UInt16) : Serve.Deployment :=
+def deployment (notifyPort : UInt16) : Serve.Deployment :=
   { config :=
       { retry := { maxAttempts := 4, deadline_ms := 1000, base_ms := 50, cap_ms := 200, jitter_ms := 20 }
         sweep_ms := 3600000 }
-    server := { port := 0, system := "reminders test" }
-    journal := some journal
+    server := { port := 0 }
     notify := { host := "127.0.0.1", port := notifyPort, request := { method := .post, path := ["notify"] } } }
 
 def live : Async (List (String × Bool)) := do
   let service ← serve (Server.system notify) notifyBridge { port := 0 }
   let some notifyPort := service.port | return [("the notification service reports its port", false)]
-  let journal : System.FilePath := ".lake" / "reminders-test.journal"
-  if ← journal.pathExists then IO.FS.removeFile journal
-  let d := deployment journal notifyPort
+  let d := deployment notifyPort
   let first ← Serve.start d
   let some port := first.port | return [("the server reports its port", false)]
   post port ["remind"] "text=tea&in=0"
   let sent ← waitFor port "tea (sent)"
   post port ["remind"] "text=later&in=3600"
   let waiting ← waitFor port "later (waiting)"
+  post port ["cancel", "1"] ""
+  let cancelled ← waitFor port "later (cancelled)"
   first.stop
   let again ← Serve.start d
   let some port := again.port | return [("the server reports its port again", false)]
-  let replayed ← page port
-  post port ["cancel", "1"] ""
-  let cancelled ← waitFor port "later (cancelled)"
+  let restarted ← page port
   again.stop
   let tries ← deliveries notifyPort "reminder-0"
   service.stop
@@ -91,9 +88,9 @@ def live : Async (List (String × Bool)) := do
     ("reminders: a reminder the service refuses twice is sent on its third attempt",
       shows sent "tea (sent)" && tries == 3),
     ("reminders: a reminder due later waits", shows waiting "later (waiting)"),
-    ("reminders: after a restart on the journal, what was sent is sent and what waits still waits",
-      shows replayed "tea (sent)" && shows replayed "later (waiting)"),
-    ("reminders: a reminder that waits is cancelled", shows cancelled "later (cancelled)") ]
+    ("reminders: a reminder that waits is cancelled", shows cancelled "later (cancelled)"),
+    ("reminders: they live as long as the process: after a restart the list is empty",
+      !restarted.isEmpty && !shows restarted "tea" && !shows restarted "later") ]
 
 def main (args : List String) : IO UInt32 := do
   let checked := Check.check Check.scenario

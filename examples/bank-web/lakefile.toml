@@ -18,7 +18,7 @@ path = "../bank"
 [[lean_lib]]
 name = "BankWeb"
 
-# The web application: `bankWeb [port] [journal]`.
+# The web application: `bankWeb [port]`.
 [[lean_exe]]
 name = "bankWeb"
 root = "Main"

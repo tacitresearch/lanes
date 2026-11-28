@@ -16,9 +16,7 @@ machine through the workflow.
 | `tcp-park` | `tcp` with its main thread asleep rather than waiting on a task (below) | `TcpHello.lean` |
 | `std` | `Std.Http.Server` with its default configuration, which Lanes ran before its own server (D57); it closes a connection after 100 requests | `StdHello.lean` |
 | `std-unlimited` | `std` with no limit of requests per connection | `StdHello.lean` |
-| `lanes` | `Lanes.Http.serve` with one actor (`Server.system`) that answers each request; no journal; one worker, so `Runtime.Config.parallel` is off | `LanesHello.lean` |
-| `lanes-journal` | `lanes` with a journal: every request is appended and synced (`fsync`, `Lanes/Durable/IO/Journal.lean`) before it is answered; the journal only grows | `LanesHello.lean` |
-| `lanes-snapshot` | `lanes-journal`, also saving the kernel and cutting the journal every 1024 inputs | `LanesHello.lean` |
+| `lanes` | `Lanes.Http.serve` with one actor (`Server.system`) that answers each request; one worker, so `Runtime.Config.parallel` is off | `LanesHello.lean` |
 | `lanes-io` | `lanes` with its connections on `IO_THREADS` threads of the server's own (`ServerConfig.ioThreads`) | `LanesHello.lean` |
 | `lanes-par` | `lanes` with `WORKERS` threads to work out actors' steps on every wave (`Runtime.Config.workers`, `parallel := .on`): one actor, so this measures what grouping inputs and planning waves cost | `LanesHello.lean` |
 | `lanes-io-par` | both | `LanesHello.lean` |
@@ -37,7 +35,7 @@ that name is measured by the same rows. `servers.sh` holds the commands.
 ## What is measured
 
 For each server, at 1, 16 and 64 connections, three runs of 10 s after a 1 s warm-up, each run
-a fresh server process on a fresh port and an empty journal. The table gives medians over the
+a fresh server process on a fresh port. The table gives medians over the
 runs and the spread of the rate (lowest, highest, and (highest − lowest) / median):
 
 - requests a second; latency p50, p99 and max, from the load generator's clock around each
@@ -67,7 +65,7 @@ Locally (Lean's toolchain, Go 1.24 or later, `taskset`):
 mkdir -p bench/.lake && ln -sfn ../../.lake/packages bench/.lake/packages   # once: the repository's packages
 bench/run.sh                                          # everything, about 20 minutes
 RUNS=1 SECONDS_EACH=2 bench/run.sh go std lanes       # a quick look at some servers
-SERVER_CPUS=0-7 LOAD_CPUS=8-15 CONNS="16" bench/run.sh lanes-journal
+SERVER_CPUS=0-7 LOAD_CPUS=8-15 CONNS="16" bench/run.sh lanes-io
 ```
 
 The settings are in the head of `run.sh`: `RUNS`, `SECONDS_EACH`, `WARMUP_SECONDS`, `CONNS`,
@@ -230,7 +228,7 @@ inputs and 50,000 trivial ones, so that auto has to follow a change twice a roun
 
 A group of inputs costs more a message the larger it is: `Batch.run` alone on 1,024 trivial
 inputs, as one group, took 1.3–1.4 µs a message against 0.55 for the same inputs as separate
-turns; as groups of 64, 0.565 against 0.61. So a group holds at most `min batch snapshotEvery`
+turns; as groups of 64, 0.565 against 0.61. So a group holds at most `batch`
 inputs.
 
 Over HTTP, the server on two CPUs and the load on the other two, `WORKERS=2`, four rounds of one
@@ -268,13 +266,10 @@ Requests a second:
 | --- | ---: | ---: | ---: | --- |
 | `go` (Go `net/http`) | 29,870 | 125,809 | 137,938 | up to 12.8 cores |
 | `lanes` | 11,395 | 34,516 | 37,098 | 3.2 cores, 85–101 µs a request |
-| `lanes-journal` (every request synced before it is answered) | 344 | 2,393 | 8,632 | |
 
 At 64 connections Lanes answers about a quarter of what Go does (3.7×). `lanes` is one actor on
 one shard, and a shard is one thread, so the application's logic uses one core whatever the
 number of connections; the IO path and running actors in parallel are the next steps.
-`lanes-journal` syncs the journal once a batch before it answers, and a batch is what has
-arrived since the last, so more connections share a sync.
 
 ### Parallel actors and IO threads on the warm machine (2026-11-27, commit baec29b81c11)
 

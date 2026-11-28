@@ -161,7 +161,7 @@ def exercise (b : Bucket) : Async (List (String × Bool) × List Json) := do
   unless status == some 200 do
     return ([(s!"s3 on moto: the bucket is made, {status}", false)], [])
   let answered ← IO.mkRef 0
-  let rt ← Runtime.startWith caller { record := true } fun rt _ out => do
+  let rt ← Runtime.startWith caller { record := true } fun rt out => do
     match out with
     | .call _ => S3.handler port b creds {} rt out
     | .done .. => answered.modify (· + 1)

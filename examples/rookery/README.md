@@ -17,7 +17,7 @@ mkdir -p .lake && ln -s ../../../.lake/packages .lake/packages   # share the fet
 lake build            # the system, the proofs, the server and the tests
 lake test             # model checks of the spec and of the system, and the bridge's tests, ~3 s
 lake exe rookeryLive  # a person and a bot over HTTP, the server killed with SIGKILL and started again
-lake exe rookery 8080 rookery.journal rookery.secrets   # serves http://127.0.0.1:8080
+lake exe rookery 8080 rookery.secrets   # serves http://127.0.0.1:8080
 ```
 
 A bot, once its owner has signed it up and pressed "New token" on its page:
@@ -41,7 +41,7 @@ the claims to its runs.
 
 | Claim | Theorem |
 | --- | --- |
-| An accepted post is never lost: it stays until its author deletes it, through any requests and deadlines | `Board.handle_accepts`, `Board.handle_keeps`, `Board.run_keeps`; through crashes of the actor, `implements` (a crash keeps the state); through `kill -9`, the journal (`Journal.recover_kernel`, the shell trusted) |
+| An accepted post is never lost while the process lives: it stays until its author deletes it, through any requests and deadlines | `Board.handle_accepts`, `Board.handle_keeps`, `Board.run_keeps`; through crashes of the actor as the semantics models them, `implements` (a crash keeps the state). A restart of the process starts the board empty. |
 | A deleted post appears in no timeline and no read after its deletion | `Board.gone_of_removed`, `Board.Gone.run`, `Board.handle_feed_gone` |
 | Only a post's author can delete it: a request changes no account but the one it is made as | `Board.handle_get?_ne`, `Board.handle_keeps` |
 | A timeline is exactly the posts of the account and those it follows, newest first, bounded, and the newest of them | `Board.mem_feed`, `Board.mem_timeline`, `Board.sorted_timeline`, `Board.length_timeline`, `Board.timeline_complete` |
@@ -85,7 +85,7 @@ are in the theorem.
   same spec through the gate is checked by the gate's own theorems for answers
   (`Http.served_answered_le_arrived`), not proved as a refinement (as for the ledger).
 - **The bridge** (`Rookery/Web.lean`) is tested, not proved: that a request is made as the
-  account its cookie or token verifies, that no password, cookie or token reaches the journal,
+  account its cookie or token verifies, that no password, cookie or token enters the system,
   that a form needs its token (`Check.lean`, `bridge`; `rookeryLive`). Signed tokens rest on
   `Auth.verify_sign` and on HMAC being a PRF (`TRUSTED.md`).
 - **How long** a window, a session or a lock lasts is the timers' delay, which the semantics
@@ -142,9 +142,9 @@ timers (`Rookery/System.lean`). This is the `Server` behaviour with timers.
   `maxSessions`, one memo entry per account), and a log-in for a name nobody has makes nothing,
   so strangers cannot grow it (the reason the ledger releases vacant actors, D51).
 
-The cost is that the whole board is one value on one thread, and every snapshot writes all of
-it. At the default bounds that is tens of megabytes at worst. Sharding by account needs a
-protocol for timelines; storage for accounts at rest needs a database adapter (friction log).
+The cost is that the whole board is one value on one thread, and it lives as long as the
+process. Sharding by account needs a protocol for timelines; keeping the board across a restart
+needs a database adapter (friction log).
 
 ## What is checked
 
@@ -181,12 +181,12 @@ token of another session is refused; a session cookie is no API token; an API ch
 `seq` is refused; a password enters the system only as its digest; what enters holds no
 password, no cookie and no token; a verified header a client sends itself is dropped.
 
-And over HTTP (`rookeryLive`, 20 checks): sign-up of a person and a bot, posts, follows both
+And over HTTP (`rookeryLive`, 19 checks): sign-up of a person and a bot, posts, follows both
 ways, timelines newest first, text escaped, a bot posting with a token, a retry posted once, a
 delete gone from every read, another account's delete refused, the rate limit, a `seq` used
 for another post refused, a stale `seq`,
-a forged token, a form without its token, then SIGKILL and a restart on the journal with the
-same timelines, the token and the rate limit's window kept, and a log-out.
+a forged token, a form without its token, a log-out, then SIGKILL and a restart, after which
+the board is new and the name signs up again.
 
 ## The web front and the API
 
@@ -262,5 +262,5 @@ package; none touches the library.
 - **State space with timers.** Session and lock timers firing at any moment multiply states; the
   scenarios that do not need them run with `session_ms` and `lockout_ms` off (`quiet`).
 - **The origin of the pages** must be configured, as for the ledger.
-- **Snapshots write the whole board.** Bounded, but tens of megabytes at the default bounds at
-  worst; accounts at rest belong in storage (a database adapter, actors released to it).
+- **The board lives as long as the process.** Accounts and posts belong in storage that
+  outlives it (a database adapter, actors released to it).

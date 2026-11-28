@@ -7,6 +7,7 @@ module
 public import Lanes.Proof.JoinSound
 public import Lanes.Proof.Lift
 public import Lanes.Proof.MapIOSound
+public import Lanes.Runtime.KernelSound
 public import Lanes.Web.Http.Front
 
 /-!

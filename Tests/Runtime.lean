@@ -403,40 +403,11 @@ def dutiesTest : Async (List (String × Bool)) := do
     ("outputs: a handler that throws does not end the shard, and is not called again for that "
       ++ "output", alive == some true && (← seen.get) == #[1, 3]) ]
 
-/-- A shard started on a journal goes on from the journal's clock, so a timer armed after the
-restart is due after its delay, not after the uptime of the run before. And a shard whose
-journal has failed takes nothing more, also while the journal is still being closed. -/
-def afterRestartTest : Async (List (String × Bool)) := do
-  let ticked ← IO.Promise.new
-  let log : Journal.Log clockSystem := {
-    past := [.advance 3600000, .batch 1]
-    append := fun _ => pure (), note := fun _ => pure (), close := pure () }
-  let rt ← Runtime.start clockSystem {} (journal := some log) fun out => do
-    if out == tickOutput then ticked.resolve ()
-  rt.input (.arm 30)
-  let fired ← soon 2000 (await ticked.result?)
-  rt.stop
-  let failed ← IO.Promise.new
-  let failing : Journal.Log clockSystem := {
-    past := []
-    append := fun _ => do failed.resolve (); throw (IO.userError "no room on the device")
-    note := fun _ => pure ()
-    close := IO.sleep 400 }
-  let dying ← Runtime.start clockSystem {} (journal := some failing)
-  discard <| dying.tryInput (.echo 1)
-  discard <| await failed.result?
-  Async.sleep 100
-  let accepted ← dying.tryInput (.echo 2)
-  discard <| soon 2000 dying.ended
-  return [
-    ("timers: one armed after a restart on a journal is due after its own delay", fired.isSome),
-    ("durable: a shard whose journal has failed takes nothing more while it ends", !accepted) ]
-
 /-! Auto: a hub fans each input out to some of 16 workers, whose steps cost a number of rounds of
 hashing. Heavy inputs to all 16 take the pace onto the pool and trivial ones to one worker take it
 back off. Each input is sent once the one before is handled, so each is a batch of its own and
-the journal does not depend on how inputs arrive together: with auto it is the journal of a
-shard on one worker, entry for entry but for the clock, and so are the outputs. -/
+what the kernel does does not depend on how inputs arrive together: with auto its events are
+those of a shard on one worker, event for event, and so are the outputs. -/
 
 def mix : Nat → UInt64 → UInt64
   | 0, h => h
@@ -460,25 +431,18 @@ abbrev fan : System fanSig where
         (h, [.emit (i, h)]) }
   accept x := ⟨0, x⟩
 
-def shape : Journal.Entry fanSig → String
+def shape : Event fanSig → String
   | .input x => s!"input {x}"
-  | .advance _ => "advance"
-  | .batch fuel => s!"batch {fuel}"
-  | .handed => "handed"
-  | .snapshot index => s!"snapshot {index}"
+  | .deliver e => s!"deliver {e.dst} {e.msg}"
+  | .output (i, h) => s!"output {i} {h}"
+  | _ => "other"
 
-/-- The phases, each a list of inputs; the journal, the outputs, and the batches run on the
+/-- The phases, each a list of inputs; the events, the outputs, and the batches run on the
 shard's thread and on the pool by the end of each phase. -/
 def fanRun (config : Runtime.Config) (phases : List (List (Nat × Nat))) :
     Async (List String × Array (Fin 17 × UInt64) × List Runtime.Batches) := do
-  let entries ← IO.mkRef (#[] : Array (Journal.Entry fanSig))
-  let log : Journal.Log fan := {
-    past := []
-    append := fun es => entries.modify (· ++ es.toArray)
-    note := fun _ => pure ()
-    close := pure () }
   let outputs ← IO.mkRef #[]
-  let rt ← Runtime.start fan config (fun out => outputs.modify (·.push out)) (some log)
+  let rt ← Runtime.start fan { config with record := true } (fun out => outputs.modify (·.push out))
   let mut seen := []
   for phase in phases do
     for x in phase do
@@ -486,14 +450,14 @@ def fanRun (config : Runtime.Config) (phases : List (List (Nat × Nat))) :
       rt.idle
     seen := seen ++ [← rt.batches]
   rt.stop
-  return ((← entries.get).toList.map shape, ← outputs.get, seen)
+  return ((← rt.trace).toList.map shape, ← outputs.get, seen)
 
 def autoTest : Async (List (String × Bool)) := do
   let heavy := List.replicate 20 (16, 100000)
   let trivial := List.replicate 300 (1, 0)
   let phases := [heavy, trivial, heavy, trivial]
-  let (serialJournal, serialOut, _) ← fanRun serial phases
-  let (journal, out, seen) ← fanRun { workers := 4, pace := { cheap_ns := 20000 } } phases
+  let (serialEvents, serialOut, _) ← fanRun serial phases
+  let (events, out, seen) ← fanRun { workers := 4, pace := { cheap_ns := 20000 } } phases
   let phase := fun (k : Nat) =>
     let now := seen.getD k {}
     let before : Runtime.Batches := if k = 0 then {} else seen.getD (k - 1) {}
@@ -501,8 +465,8 @@ def autoTest : Async (List (String × Bool)) := do
   return [
     ("auto: heavy inputs to every worker are tried on the pool, trivial ones run on one thread",
       (phase 0).1 > 0 && (phase 0).2 > 0 && (phase 1).1 ≥ 250),
-    ("auto: the journal, but for the clock, is the one of a shard on one worker",
-      journal == serialJournal && journal.length ≥ 3 * 640),
+    ("auto: the events are those of a shard on one worker",
+      events == serialEvents && events.length ≥ 3 * 640),
     ("auto: and so are the outputs, in order",
       out == serialOut && out.size == 2 * 20 * 16 + 2 * 300) ]
 
@@ -548,6 +512,6 @@ def tests : IO (List (String × Bool)) := do
   let v ← shaped "auto trying the pool often, 4 workers"
     { workers := 4, parallel := .auto, pace := { cheap_ns := 0, probeEvery := 1 } }
   return a ++ b ++ c ++ d ++ e ++ f ++ g ++ h ++ i ++ j ++ w ++ u ++ v ++ (← dutiesTest.block)
-    ++ (← afterRestartTest.block) ++ (← autoTest.block) ++ (← parkerTest)
+    ++ (← autoTest.block) ++ (← parkerTest)
 
 end Tests.Runtime

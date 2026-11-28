@@ -6,7 +6,7 @@ import Lanes
 import Tests.TutorialWeb.Web
 
 /-!
-`shelf [port] [journal] [secrets]`: the site. `secrets` holds the key that signs session cookies
+`shelf [port] [secrets]`: the site. `secrets` holds the key that signs session cookies
 and form tokens, 32 random bytes made at the first start. Everything else comes from the
 environment, read once here (rule 2.5); no key or secret is in the code.
 -/
@@ -44,8 +44,7 @@ def ms (name : String) (default : Nat) : IO Nat := do
 
 def main (args : List String) : IO Unit := do
   let port := (args[0]? >>= String.toNat?).getD 8080
-  let journal := args[1]?.map System.FilePath.mk
-  let key ← loadKey ((args[2]?.map System.FilePath.mk).getD "shelf.secrets")
+  let key ← loadKey ((args[1]?.map System.FilePath.mk).getD "shelf.secrets")
   let origin := ((← IO.getEnv "LANES_URL").filter (!·.isEmpty)).getD s!"http://localhost:{port}"
   let region := ((← IO.getEnv "AWS_REGION").filter (!·.isEmpty)).getD "us-east-1"
   let bucket : S3.Bucket :=
@@ -56,7 +55,7 @@ def main (args : List String) : IO Unit := do
   let settings : Settings := { keys := .of (.of key), origin, bucket, creds, providers := ["oidc"] }
   let server ← (start {
     settings
-    server := { host, port := port.toUInt16, journal, system := "shelf 1"
+    server := { host, port := port.toUInt16
                 idle_ms := ← ms "LANES_IDLE_MS" 10000
                 ops := { readinessPath := some "/readyz", livenessPath := some "/healthz"
                          metricsPath := some "/metrics", accessLog := .stderr } }

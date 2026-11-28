@@ -263,7 +263,7 @@ def check {sys : System (sig N C)} [sys.Inspect] (script : Script)
   Check.system sys
     { env, maxCrashes, driver := (spec N C config).monitored (clients script) deadlines } props
 
-/-- The board may crash; it comes back with its state, as a shard does from its journal. -/
+/-- The board may crash; it comes back with its state, as the semantics models a crash. -/
 def crashing : EnvModel (sig N C) where
   mayCrash _ := true
 
