@@ -9,9 +9,11 @@ public import Lanes.Behaviours.Server
 public import Lanes.Check.Clients
 public import Lanes.Check.Complete
 public import Lanes.Check.EquivDecide
+public import Lanes.Check.Fingerprint
 public import Lanes.Check.Fuzz
 public import Lanes.Check.Monitor
 public import Lanes.Check.MonitorEquiv
+public import Lanes.Check.Reduce
 public import Lanes.Check.Search
 public import Lanes.Check.System
 public import Lanes.Check.WorldEquiv

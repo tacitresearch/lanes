@@ -195,6 +195,29 @@ them by area.
 | --- | --- | --- |
 | `Matches` | spec | a predicate |
 
+## `Lanes/Check/Fingerprint.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Check.Fingerprint.Search.add` | proved | through `Check.Fingerprint.Search.run`, `Check.Fingerprint.Search.runParallel` and others: `Check.Fingerprint.Search.runParallel_eq`, `Check.fingerprint_deadlock` and others |
+| `Check.Fingerprint.Search.start` | proved | `Check.fingerprint_tasks` |
+| `Check.Fingerprint.Search.successors` | proved | through `Check.Fingerprint.Search.run`, `Check.Fingerprint.Search.runParallel` and others: `Check.Fingerprint.Search.runParallel_eq`, `Check.fingerprint_deadlock` and others |
+| `Check.Fingerprint.Search.visit` | proved | through `Check.Fingerprint.Search.run`, `Check.Fingerprint.Search.runParallel` and others: `Check.Fingerprint.Search.runParallel_eq`, `Check.fingerprint_deadlock` and others |
+| `Check.Fingerprint.Search.expandWith` | proved | through `Check.Fingerprint.Search.run`, `Check.Fingerprint.Search.runParallel` and others: `Check.Fingerprint.Search.runParallel_eq`, `Check.fingerprint_deadlock` and others |
+| `Check.Fingerprint.Search.expand` | proved | through `Check.Fingerprint.Search.run`, `Check.Fingerprint.Search.runParallel` and others: `Check.Fingerprint.Search.runParallel_eq`, `Check.fingerprint_deadlock` and others |
+| `Check.Fingerprint.Search.advance` | proved | through `Check.Fingerprint.Search.run`, `Check.Fingerprint.Search.runParallel` and others: `Check.Fingerprint.Search.runParallel_eq`, `Check.fingerprint_deadlock` and others |
+| `Check.Fingerprint.Search.run` | proved | `Check.Fingerprint.Search.runParallel_eq`, `Check.fingerprint_tasks` |
+| `Check.Fingerprint.Search.batchSize` | proved | through `Check.Fingerprint.Search.runParallel`, `Check.fingerprint`: `Check.Fingerprint.Search.runParallel_eq`, `Check.fingerprint_deadlock` and others |
+| `Check.Fingerprint.Search.expandInTasks` | proved | through `Check.Fingerprint.Search.runParallel`, `Check.fingerprint`: `Check.Fingerprint.Search.runParallel_eq`, `Check.fingerprint_deadlock` and others |
+| `Check.Fingerprint.Search.runParallel` | proved | `Check.Fingerprint.Search.runParallel_eq` |
+| `Check.Fingerprint.Search.choicesTo` | proved | through `Check.fingerprint`: `Check.fingerprint_deadlock`, `Check.fingerprint_fingerprinted` and others |
+| `Check.Fingerprint.replaySteps` | proved | through `Check.fingerprint`: `Check.fingerprint_deadlock`, `Check.fingerprint_fingerprinted` and others |
+| `Check.Fingerprint.replay` | proved | through `Check.fingerprint`: `Check.fingerprint_deadlock`, `Check.fingerprint_fingerprinted` and others |
+| `Check.Fingerprint.recheck` | proved | through `Check.fingerprint`: `Check.fingerprint_deadlock`, `Check.fingerprint_fingerprinted` and others |
+| `Check.Fingerprint.Found.record` | proved | through `Check.fingerprint`: `Check.fingerprint_deadlock`, `Check.fingerprint_fingerprinted` and others |
+| `Check.Fingerprint.Search.report` | proved | `Check.fingerprint_tasks` |
+| `Check.fingerprint` | proved | `Check.fingerprint_deadlock`, `Check.fingerprint_fingerprinted`, `Check.fingerprint_tasks` and others |
+
 ## `Lanes/Check/Fuzz.lean`
 
 | Definition | Status | Evidence |
@@ -233,14 +256,27 @@ them by area.
 | --- | --- | --- |
 | `Check.Monitor.Within` | spec | a predicate |
 
+## `Lanes/Check/Reduce.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Check.Model.reduce` | proved | `Check.Model.Reduction.of_reduced`, `Check.Model.Reduction.reachable`, `Check.search_reduce_deadlock` and others |
+| `Check.systemReduced` | proved | `Check.systemReduced_sound` |
+
+## `Lanes/Check/ReduceSound.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Check.World.SameUpTo` | spec | a predicate |
+
 ## `Lanes/Check/Search.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Check.Property.name` | proved | `Check.search_unreached` |
-| `Check.Property.holds` | proved | `Check.refines_sound`, `Check.refines_traces`, `Check.system_sound` and others |
-| `Check.Trace.last` | proved | `Check.search_deadlock`, `Check.search_reached`, `Check.search_violated` and others |
-| `Check.Trace.labels` | proved | `Check.system_violated` |
+| `Check.Property.holds` | proved | `Check.World.Reduction.ofDriver`, `Check.refines_sound`, `Check.refines_traces` and others |
+| `Check.Trace.last` | proved | `Check.fingerprint_deadlock`, `Check.fingerprint_violated`, `Check.fingerprint_witness` and others |
+| `Check.Trace.labels` | proved | `Check.systemFingerprinted_violated`, `Check.system_violated` |
 | `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Cache.lean` and others |
 | `Check.Path.last` | proved | through `Check.Search.run`, `Check.Search.runBatches` and others: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and others |
 | `Check.Path.toTraceAux` | proved | through `Check.Search.run`, `Check.Search.runBatches` and others: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and others |
@@ -287,11 +323,16 @@ them by area.
 | --- | --- | --- |
 | `Check.Node.of` | proved | `Scenario.reachable_iff` |
 | `Check.instBEqNodeOfInspect` | proved | `Check.Node.beq_iff` |
-| `Check.instHashableNodeOfInspect` | proved | through `Check.system`: `Check.refines_sound`, `Check.refines_traces` and others |
-| `Check.Trace.map` | proved | through `Check.system`: `Check.refines_sound`, `Check.refines_traces` and others |
-| `Check.Report.map` | proved | through `Check.system`: `Check.refines_sound`, `Check.refines_traces` and others |
+| `Check.Node.tagged` | proved | through `Check.Node.trafficHash`, `Check.system` and others: `Check.Node.trafficHash_eq`, `Check.refines_sound` and others |
+| `Check.Node.trafficHash` | proved | `Check.Node.trafficHash_eq` |
+| `Check.instHashableNodeOfInspect` | proved | through `Check.system`, `Check.systemFingerprinted`: `Check.refines_sound`, `Check.refines_traces` and others |
+| `Check.Trace.map` | proved | through `Check.system`, `Check.systemFingerprinted`: `Check.refines_sound`, `Check.refines_traces` and others |
+| `Check.Report.map` | proved | through `Check.system`, `Check.systemFingerprinted`: `Check.refines_sound`, `Check.refines_traces` and others |
 | `Check.model` | proved | `Scenario.reachable_iff` |
 | `Check.system` | proved | `Check.refines_sound`, `Check.refines_traces`, `Check.system_sound` and others |
+| `Check.Node.props` | proved | through `Check.systemFingerprinted`: `Check.systemFingerprinted_violated` |
+| `Check.Node.options` | proved | through `Check.systemFingerprinted`: `Check.systemFingerprinted_violated` |
+| `Check.systemFingerprinted` | proved | `Check.systemFingerprinted_violated` |
 | `Check.Trace.render` | checked | `Tests/Election.lean`, `Tests/Tutorial.lean`, `Tests/TutorialWeb.lean` |
 | `Check.Report.render` | checked | `Tests/Election.lean`, `Tests/Tutorial.lean`, `Tests/TutorialWeb.lean` |
 | `Check.Report.renderSystem` | checked | `Tests/Election.lean`, `Tests/Tutorial.lean`, `Tests/TutorialWeb.lean` |
@@ -447,8 +488,8 @@ them by area.
 | `SysState.startActor` | proved | through `SysState.init`, `SysState.run` and others: `Account.implements`, `Account.implements_timed` and others |
 | `SysState.deliverable` | proved | `Account.implements`, `Account.implements_timed`, `SysState.deliverable_of_thinRight` and others |
 | `SysState.step` | proved | `Http.Gate.answered_of_leaves`, `Http.Gate.deadline_not_restarted`, `Outside.Beside.keeps` and others |
-| `SysState.init` | proved | `Account.implements`, `Account.implements_timed`, `Check.system_violated` and others |
-| `SysState.run` | proved | `Check.system_violated`, `Http.Gate.answered_le_handled`, `Http.fronted_answered_le_arrived` and others |
+| `SysState.init` | proved | `Account.implements`, `Account.implements_timed`, `Check.systemFingerprinted_violated` and others |
+| `SysState.run` | proved | `Check.systemFingerprinted_violated`, `Check.system_violated`, `Http.Gate.answered_le_handled` and others |
 | `System.Invariant` | spec | a predicate |
 
 ## `Lanes/Data/Codec.lean`
