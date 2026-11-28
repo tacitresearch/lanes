@@ -34,7 +34,7 @@ abbrev Site (d : Deployment) := admittedFronted system (Web.bridge d.settings)
 whose hash cannot be read is answered `503`. -/
 def arrive (s : Web.Settings) (hashes : Postgres.Typed.Store String (Option String))
     (r : Http.Request) : IO (Except Http.Response Http.Request) := do
-  let now_s := (← Http.Ops.wallMs) / 1000
+  let now_s := (← Log.wallMs) / 1000
   let salt ← Lanes.randomBytes 16
   let name := if (Web.Routes.logIn.match? r).isSome then r.field? "name" else none
   match name with

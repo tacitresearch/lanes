@@ -3,9 +3,9 @@ import Rookery.Serve
 /-!
 rookery as a web application: `rookery [port] [secrets] [memory_kib] [maxPerWindow] [lockout_s]`.
 
-Everything it keeps is in PostgreSQL, connected as libpq's variables say (`PGHOST`, `PGPORT`,
-`PGUSER`, `PGPASSWORD`, `PGDATABASE`, `PGSSLMODE`) or a deploy's (`LANES_DB_*`,
-`Postgres.Client.fromEnv`). At the start it runs the migrations of `LANES_MIGRATIONS`
+Everything it keeps is in PostgreSQL, connected as `DATABASE_URL` says (a `postgresql://` URI),
+and for what it leaves out libpq's variables (`PGHOST`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`,
+`PGSSLMODE`, …) or a deploy's (`LANES_DB_*`, `Postgres.Client.fromEnv`). At the start it runs the migrations of `LANES_MIGRATIONS`
 (`migrations` unless set) not yet run, and refuses to start when the tables differ from the
 declared ones. So the process can be killed, replaced or run as several instances at any moment.
 
@@ -47,7 +47,7 @@ def main (args : List String) : IO UInt32 := do
   let d : Serve.Deployment :=
     { config := { maxPerWindow, lockout_s }, settings
       server := { host, port := port.toUInt16, poll_ms := 500 }
-      postgres := ← Postgres.Client.fromEnv
+      postgres := ← Postgres.Client.fromEnv ((← IO.getEnv "DATABASE_URL").getD "")
       migrations := ← Postgres.Typed.readMigrations ((← IO.getEnv "LANES_MIGRATIONS").getD "migrations") }
   match ← (Serve.start d).block with
   | .error problems =>

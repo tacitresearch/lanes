@@ -21,7 +21,8 @@ What the answer means is said in the terms of `Lanes.Email`, the model of an ema
 not send; a `5xx`, an answer not understood and no answer are `unknown`, since the message may
 have been sent. SES takes no idempotency key, so a call is a request without one (`modelPort`),
 which the model gives an effect of its own each time it is sent: a resend after `unknown` may
-send the message twice, and a system that must not send twice must not resend.
+send the message twice. An email sent from an outbox is sent at most once when its job has one
+attempt (`jobPort`).
 -/
 
 @[expose] public section
@@ -204,68 +205,38 @@ def outside {σ : Signature} (port : Port σ) :
     Outside σ (Rpc.State (Effects.Model Empty Ref Email.Status Message)) :=
   Email.outside (modelPort port) 0
 
-/-! ## Each output sent once
+/-! ## Sent from an outbox
 
-SES takes no idempotency key, so the adapter keeps its own: the keys the application gave the
-outputs it sent, such as `confirmation-<order>`. An output whose key was sent before is not sent
-again (`Sent.admitted_nodup`), whoever hands it over and however often, also after a restart of
-the process. The service the system then sees is SES behind keys, as `Idempotent.server` models
-one, where `Idempotent.at_most_once` holds. A key is a line of the adapter's file: it is not
-empty and has no line feed (`Sent.valid`). -/
+An email that must be sent once is a job of an outbox (`Lanes/Db/Jobs.lean`), written in the
+transaction that causes it, and the worker (`Lanes/Db/Worker.lean`) sends it: an attempt per
+claim, numbered by the job's id and lease (`jobPort`). SES takes no idempotency key, so nothing
+at SES tells an attempt made again from a new message. What is sent once rests on the table:
+with `attempts_max := 1` and no period, a job's claim counts its one attempt, and every later
+claim fails the job instead of taking it (`Config.claimed`, `Queue.claim_attempts`), so each
+email is sent at most once, and one whose answer is lost, or `uncertain`, is left failed, sent
+or not. With more attempts it is sent until SES takes it, and an attempt made again after a
+lost answer, a `5xx` or a restart may send it twice. -/
 
-/-- The keys of the outputs sent, newest first. -/
-abbrev Sent := List String
+/-- What the worker makes of an answer: sent is done; a `5xx` and throttling (`429`) are worth
+another attempt; any other refusal is for good. -/
+def classify : Answer → Lanes.Db.Jobs.Verdict
+  | .sent _ => .ok
+  | .rejected status code =>
+    if status == 429 then .retry s!"{status} {code}" else .fatal s!"{status} {code}"
+  | .uncertain status code => .retry s!"{status} {code}"
 
-/-- Whether `key` can be kept: not empty, and no line feed. -/
-def Sent.valid (key : String) : Bool :=
-  !key.isEmpty && !key.contains '\n'
-
-/-- Whether the output with `key` is new: a valid key not sent before. -/
-def Sent.admits (sent : Sent) (key : String) : Bool :=
-  Sent.valid key && !sent.contains key
-
-def Sent.record (sent : Sent) (key : String) : Sent :=
-  key :: sent
-
-/-- One output handed over: sent and remembered if it is new. Those sent so far are listed last
-first. -/
-def Sent.step (acc : Sent × List String) (key : String) : Sent × List String :=
-  if acc.1.admits key then (acc.1.record key, key :: acc.2) else acc
-
-private theorem Sent.step_inv {acc : Sent × List String} (h : acc.1 = acc.2) (hn : acc.2.Nodup)
-    (key : String) : (Sent.step acc key).1 = (Sent.step acc key).2 ∧ (Sent.step acc key).2.Nodup := by
-  obtain ⟨sent, done⟩ := acc
-  simp only at h hn
-  subst h
-  unfold Sent.step
-  split
-  · next hadmit =>
-    refine ⟨rfl, List.nodup_cons.mpr ⟨fun hm => ?_, hn⟩⟩
-    simp only [Sent.admits, Bool.and_eq_true, Bool.not_eq_true', List.contains_eq_mem,
-      decide_eq_false_iff_not] at hadmit
-    exact hadmit.2 hm
-  · exact ⟨rfl, hn⟩
-
-/-- However often outputs are handed over again, no key is sent twice: the keys sent are
-distinct. -/
-theorem Sent.admitted_nodup (keys : List String) : (keys.foldl Sent.step ([], [])).2.Nodup := by
-  suffices ∀ (keys : List String) acc, acc.1 = acc.2 → acc.2.Nodup →
-      (keys.foldl Sent.step acc).2.Nodup from this keys _ rfl List.nodup_nil
-  intro keys
-  induction keys with
-  | nil => exact fun _ _ hn => hn
-  | cons key rest ih =>
-    intro acc h hn
-    obtain ⟨h', hn'⟩ := Sent.step_inv h hn key
-    exact ih _ h' hn'
-
-/-- The state as a file: a line for each key. -/
-def Sent.write (sent : Sent) : String :=
-  String.join (sent.map (· ++ "\n"))
-
-/-- The state a file holds. -/
-def Sent.read (text : String) : Sent :=
-  (text.splitOn "\n").filter (· != "")
+/-- The worker's attempts as sends: an attempt at a job sends the message `render` makes of its
+work, as call `Worker.attemptNumber id lease`. -/
+def jobPort {Q A W : Type} [DecidableEq Q] [DecidableEq A] [DecidableEq W] (render : W → Message) :
+    Port (Lanes.Db.Worker.sig Q A W Answer) where
+  called
+    | .run id lease deadline_ms work =>
+      some ⟨Lanes.Db.Worker.attemptNumber id lease, deadline_ms, render work⟩
+    | _ => none
+  reply call r := .ran (Int64.ofNat (call / 2 ^ 64)) (Int64.ofNat (call % 2 ^ 64)) r
+  replied
+    | .ran id lease r => some (Lanes.Db.Worker.attemptNumber id lease, r)
+    | _ => none
 
 /-- What the document says the recipients are. -/
 def toAddresses (j : Json) : Except String (List String) := do

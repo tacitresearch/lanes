@@ -93,6 +93,32 @@ def unitTests : List (String × Bool) :=
           && (r.splitOn "<secret>").length == 3
       | .error _ => false) ]
 
+/-- Which source a process's credentials come from, and how long what is signed with them
+lasts. -/
+def chainTests : List (String × Bool) :=
+  let keys := [("AWS_ACCESS_KEY_ID", "AKIAEXAMPLE"), ("AWS_SECRET_ACCESS_KEY", "s")]
+  let ecs := [("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", "/v2/credentials/abc")]
+  [ ("credentials chain: keys in the environment come first, with their session token",
+      match chain (env (keys ++ ("AWS_SESSION_TOKEN", "t") :: ecs)) with
+      | .keys c => c.accessKeyId == "AKIAEXAMPLE" && c.sessionToken.map (·.reveal) == some "t"
+      | _ => false),
+    ("credentials chain: then a container's endpoint, then the instance's metadata service",
+      (match chain (env ecs) with | .role (.container c _) => c.host == "169.254.170.2" | _ => false)
+        && (match chain (env [("AWS_ACCESS_KEY_ID", "AKIAEXAMPLE")]) with
+            | .role (.instance ..) => true
+            | _ => false)),
+    ("credentials chain: with the metadata service turned off there are none, and keys still come first",
+      (match chain (env [("AWS_EC2_METADATA_DISABLED", "TRUE")]) with | .none => true | _ => false)
+        && (match chain (env (("AWS_EC2_METADATA_DISABLED", "true") :: keys)) with
+            | .keys _ => true
+            | _ => false)),
+    ("signing: a link or a form lasts as asked, or until its credentials expire, whichever is sooner",
+      S3.expiryWithin ⟨900, by decide⟩ 1000 none == some ⟨900, by decide⟩
+        && S3.expiryWithin ⟨900, by decide⟩ 1000 (some 121500) == some ⟨120, by decide⟩
+        && S3.expiryWithin ⟨60, by decide⟩ 0 (some 3600000) == some ⟨60, by decide⟩
+        && S3.expiryWithin ⟨900, by decide⟩ 1000 (some 1999) == none
+        && S3.expiryWithin ⟨900, by decide⟩ 5000 (some 1000) == none) ]
+
 /-! ## A fake metadata service -/
 
 structure Metadata where
@@ -238,7 +264,47 @@ def s3 : Async (List (String × Bool)) := do
       put.any (· matches .stored _) && got.any (· matches .object _ _)),
     ("s3 with no credentials: nothing is sent, and there is no answer", none_.isNone) ]
 
+/-- What `X-Amz-Expires` a link says. -/
+def expiresOf (link : String) : Option Nat :=
+  ((link.splitOn "X-Amz-Expires=")[1]?).bind fun rest =>
+    (String.ofList (rest.toList.takeWhile (· != '&'))).toNat?
+
+/-- A form and a link signed at the moment with the instance role's credentials and their token,
+which the fake S3 takes; the link lasts no longer than the credentials. -/
+def signNow : Async (List (String × Bool)) := do
+  let m ← Metadata.new 100 (rotate := false)
+  let (server, port) ← Fake.serve m.handle
+  let p ← Credentials.start (instanceAt port) quick
+  let _ ← Fake.waitFor 2000 do return (← keyOf p).isSome
+  let store ← Lanes.Testing.S3.Fake.start (keysOf 0) "videos"
+  let b := store.bucket
+  let k := Tests.S3.key "up/a.mp4"
+  let policy : S3.Post.Policy :=
+    { key := .exact k, length := ⟨1, 100, by decide, by decide⟩, expiry := ⟨900, by decide⟩ }
+  let form ← S3.Post.formNow b p.source policy
+  let posted ← match form with
+    | some f => Lanes.Testing.S3.postForm f.url f.fields "a clip".toUTF8
+    | none => pure none
+  let link ← S3.presignNow b p.source .get k ⟨3600, by decide⟩
+  let got ← match link with
+    | some l => Lanes.Testing.S3.follow l .get
+    | none => pure none
+  let none_ ← S3.presignNow b (⟨pure none⟩ : SigV4.Source) .get k ⟨60, by decide⟩
+  p.stop
+  store.stop
+  server.close
+  return [
+    ("s3 with the instance's role: a form signed at the moment, with the session token, uploads",
+      (form.any fun f => f.fields.any (·.1 == "x-amz-security-token"))
+        && posted.any (·.status == 204)),
+    ("s3 with the instance's role: a link signed at the moment, with the session token, gets the file",
+      (link.any fun l => (l.splitOn "X-Amz-Security-Token").length == 2)
+        && (got.map (·.body)) == some "a clip".toUTF8),
+    ("s3 with the instance's role: an hour asked, with 100 s of credentials left, the link lasts at most 100 s",
+      (link.bind expiresOf).any fun e => 90 ≤ e && e ≤ 100),
+    ("s3 with no credentials: no link", none_.isNone) ]
+
 def live : Async (List (String × Bool)) := do
-  return (← refreshes) ++ (← outages) ++ (← containerEndpoint) ++ (← s3)
+  return (← refreshes) ++ (← outages) ++ (← containerEndpoint) ++ (← s3) ++ (← signNow)
 
 end Checks.Imds

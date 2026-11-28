@@ -44,12 +44,14 @@ ENTRYPOINT ["myapp", "8080"]
 
 ## Configuration, from the environment
 
-- **The database**: libpq's variables (`PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`,
-  `PGDATABASE`, `PGSSLMODE`), or a deploy's (`LANES_DB_HOST`, `LANES_DB_PORT`, `LANES_DB_USER`,
-  `LANES_DB_NAME`, `LANES_DB_PASSWORD_FILE`, `LANES_DB_CA`), read by `Postgres.Client.fromEnv`
-  (`Lanes/Services/Postgres/Settings.lean`). Give the password as a file the platform mounts
-  from its secret store (`LANES_DB_PASSWORD_FILE`), not as a variable a process listing shows.
-  TLS is verified to the host's name unless the host is this machine.
+- **The database**: `DATABASE_URL`, a `postgresql://` URI or libpq's `keyword=value` pairs,
+  which what `lanes new` writes passes to `Postgres.Client.fromEnv`; for what it leaves out,
+  libpq's variables (`PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`, `PGSSLMODE`, …),
+  then a deploy's (`LANES_DB_HOST`, `LANES_DB_PORT`, `LANES_DB_USER`, `LANES_DB_NAME`,
+  `LANES_DB_PASSWORD_FILE`, `LANES_DB_CA`), as `Lanes/Services/Postgres/README.md` says. Give the
+  password as a file the platform mounts from its secret store (`LANES_DB_PASSWORD_FILE`), not in
+  the URL or a variable a process listing shows. TLS is verified to the host's name unless the
+  host is this machine.
 - **Where to listen and how to stop**: `LANES_HOST` (`0.0.0.0` in a container), `LANES_IDLE_MS`,
   and `LANES_DRAIN_MS`, how long SIGTERM waits for the requests in flight.
 - **Secrets of the application** (a key that signs cookies, a pepper), the same for every

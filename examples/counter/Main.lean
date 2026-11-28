@@ -6,8 +6,9 @@ stopped, replaced or run as several instances behind a load balancer at any mome
 
 Everything comes from the environment, so that a deployment sets it without a change here:
 
-- the database, as libpq's variables say (`PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`,
-  `PGDATABASE`, `PGSSLMODE`) or a deploy's (`LANES_DB_HOST`, `LANES_DB_PASSWORD_FILE`, …:
+- the database: `DATABASE_URL`, a `postgresql://` URI or libpq's `keyword=value` pairs, and
+  for what it leaves out libpq's variables (`PGHOST`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`,
+  `PGSSLMODE`, …) or a deploy's (`LANES_DB_HOST`, `LANES_DB_PASSWORD_FILE`, …:
   `Postgres.Client.fromEnv`);
 - the migrations, the `.sql` files of `LANES_MIGRATIONS` (`migrations` unless set), each run once,
   in the order of their names, at the start;
@@ -35,7 +36,7 @@ def main (args : List String) : IO UInt32 := do
       ops := { readinessPath := some "/readyz", livenessPath := some "/healthz",
                metricsPath := some "/metrics", accessLog := .stderr, requestIds := true } }
   let drain_ms ← ms "LANES_DRAIN_MS" 10000
-  let postgres ← Postgres.Client.fromEnv
+  let postgres ← Postgres.Client.fromEnv ((← IO.getEnv "DATABASE_URL").getD "")
   let migrations ← Postgres.Typed.readMigrations ((← IO.getEnv "LANES_MIGRATIONS").getD "migrations")
   match ← (Web.start postgres migrations config).block with
   | .error problems =>
