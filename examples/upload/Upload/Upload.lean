@@ -20,7 +20,7 @@ abbrev ReqId := Nat
 lanes_data structure Sum where
   a : Nat := 1
   b : Nat := 0
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 def Sum.add (s : Sum) (byte : UInt8) : Sum :=
   let a := (s.a + byte.toNat) % 65521
@@ -43,7 +43,7 @@ lanes_data structure Progress where
   next : Nat := 0
   size : Nat := 0
   sum : Sum := {}
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 def Progress.take (p : Progress) (data : ByteArray) : Progress :=
   { next := p.next + 1, size := p.size + data.size, sum := p.sum.feed data }
@@ -53,7 +53,7 @@ lanes_data inductive Request where
   | start (req : ReqId)
   /-- Piece `index` of the body of the upload `head`. -/
   | piece (req head index : Nat) (data : ByteArray) (last : Bool)
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data inductive Answer where
   | taken
@@ -62,12 +62,12 @@ lanes_data inductive Answer where
   | unknown
   | outOfOrder
   | done (size sum : Nat)
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data structure Response where
   req : ReqId
   answer : Answer
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 structure Config where
   /-- Uploads under way at once; one more is answered `busy` (rule 2.6). -/

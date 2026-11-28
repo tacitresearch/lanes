@@ -19,6 +19,9 @@ again at any later time, whatever `inner` has done since, up to `maxDeliveries` 
 (rule 2.6: the bound keeps the checker finite, and is the most a test of the real service may
 see). That an event about an earlier state may still come after a later one is for `inner` to
 allow, since only it knows which states a thing went through.
+
+Not yet checked against a real service: no run recorded from one that sends webhooks; the runs
+are written by hand (`oracles/README.md`).
 -/
 
 @[expose] public section

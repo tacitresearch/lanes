@@ -6,8 +6,7 @@
 #
 # It makes a virtual environment from oracles/moto/requirements.txt (in LANES_ORACLE_CACHE, or
 # .lake/oracles), starts moto_server on a free port, runs `lake exe lanesServiceOracle s3 s3-post
-# s3-multipart` and, in integrations/aws, `lake exe serviceOracle` (SES and SQS), then stops moto
-# by its process id. Without python3 it says it is skipped.
+# s3-multipart ses sqs`, then stops moto by its process id. Without python3 it says it is skipped.
 set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 python=${LANES_PYTHON:-python3}
@@ -36,6 +35,5 @@ done
 "$venv/bin/pip" show moto | grep '^Version'
 export LANES_MOTO="127.0.0.1:$port"
 status=0
-(cd "$root" && lake exe lanesServiceOracle s3 s3-post s3-multipart "$@") || status=1
-(cd "$root/integrations/aws" && lake exe serviceOracle "$@") || status=1
+(cd "$root" && lake exe lanesServiceOracle s3 s3-post s3-multipart ses sqs "$@") || status=1
 exit $status

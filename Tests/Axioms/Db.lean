@@ -6,6 +6,13 @@ import Lanes.Semantics
 
 /-! The axiom gate (rule 5.5, see `Tests/Axioms.lean`) for the theorems of `Lanes/Db/`. -/
 
+-- Lanes.Db.Columns
+/-- info: 'Lanes.Db.Columns.toRow_of_ofRow' depends on axioms: [propext, Classical.choice] -/
+#guard_msgs in #print axioms Lanes.Db.Columns.toRow_of_ofRow
+
+/-- info: 'Lanes.Db.Columns.table' depends on axioms: [propext, Classical.choice] -/
+#guard_msgs in #print axioms Lanes.Db.Columns.table
+
 -- Lanes.Db.Sound
 /-- info: 'Lanes.Db.invariant' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Db.invariant
@@ -33,3 +40,66 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Db.Value.compare_eq_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Db.Value.compare_eq_iff
+
+/-- info: 'Lanes.Db.world_invariant' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Db.world_invariant
+
+/-- info: 'Lanes.Db.worlds_ne_nil' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Db.worlds_ne_nil
+
+/-- info: 'Lanes.Db.TableOf.every_apply' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Db.TableOf.every_apply
+
+/-- info: 'Lanes.Db.Op.unique_apply' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Db.Op.unique_apply
+
+-- Lanes.Db.JobsSound
+/-- info: 'Lanes.Db.Jobs.Queue.keeps_beside' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Db.Jobs.Queue.keeps_beside
+
+/-- info: 'Lanes.Db.Jobs.Queue.claimed_has' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Db.Jobs.Queue.claimed_has
+
+/-- info: 'Lanes.Db.Jobs.Queue.enqueue_keeps' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Db.Jobs.Queue.enqueue_keeps
+
+/-- info: 'Lanes.Db.Jobs.Queue.claim_length' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Db.Jobs.Queue.claim_length
+
+/-- info: 'Lanes.Db.Jobs.Queue.claim_attempts' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Db.Jobs.Queue.claim_attempts
+
+/-- info: 'Lanes.Db.Jobs.Queue.claim_takes' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Db.Jobs.Queue.claim_takes
+
+/-- info: 'Lanes.Db.Jobs.Queue.finish_stale' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Db.Jobs.Queue.finish_stale
+
+/-- info: 'Lanes.Db.Jobs.Queue.one_per_key' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Db.Jobs.Queue.one_per_key
+
+/-- info: 'Lanes.Db.Jobs.Queue.keeps_of_adds' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Db.Jobs.Queue.keeps_of_adds
+
+/-- info: 'Lanes.Db.Jobs.Queue.fixed_of_adds' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Db.Jobs.Queue.fixed_of_adds
+
+/-- info: 'Lanes.Db.Jobs.Queue.handler_fixed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Db.Jobs.Queue.handler_fixed
+
+/-- info: 'Lanes.Db.Jobs.Queue.enqueue_adds' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Db.Jobs.Queue.enqueue_adds
+
+-- Lanes.Db.OnceSound
+/-- info: 'Lanes.Db.Keys.once_again' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Db.Keys.once_again
+
+-- Lanes.Db.WorkerSound
+/-- info: 'Lanes.Db.Worker.committed_only' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Db.Worker.committed_only
+
+/-- info: 'Lanes.Db.Worker.once_each' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Db.Worker.once_each
+
+/-- info: 'Lanes.Db.Worker.slots_held' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Db.Worker.slots_held

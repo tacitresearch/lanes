@@ -17,8 +17,8 @@ public import Lanes.Lib.Encoding.Json.Printer
 the JSON has the wrong shape. Adapters use them to turn text into typed messages once, at the edge
 (rule 2.2).
 
-There is no `deriving` handler: one needs `Lean` meta code, which runtime modules cannot import.
-Instances for structures are written by hand with `Json.mkObj`, `Json.opt` and `Json.getObjValAs?`.
+Lean's `deriving` handlers need `Lean` meta code, which runtime modules cannot import. A type
+declared with `lanes_data` derives its instances instead (`Lanes/Lib/Encoding/Json/Derive.lean`).
 
 The encodings are those of `Lean.Data.Json`.
 -/
@@ -91,6 +91,24 @@ instance {α : Type u} [ToJson α] : ToJson (Option α) where
     | none => .null
     | some a => toJson a
 
+/-- A number within the range of a signed 64-bit integer. -/
+instance : FromJson Int64 where
+  fromJson? j :=
+    match j.getInt? with
+    | .ok i =>
+      if h : Int64.minValue.toInt ≤ i ∧ i ≤ Int64.maxValue.toInt then .ok (Int64.ofIntLE i h.1 h.2)
+      else .error s!"expected a 64-bit integer, got {i}"
+    | .error e => .error e
+instance : ToJson Int64 := ⟨fun i => .num i.toInt⟩
+
+/-- Read back only if the property holds. -/
+instance {α : Type u} {p : α → Prop} [DecidablePred p] [FromJson α] : FromJson {a // p a} where
+  fromJson? j :=
+    match (fromJson? j : Except String α) with
+    | .ok a => if h : p a then .ok ⟨a, h⟩ else .error s!"a value does not have its property: '{j}'"
+    | .error e => .error e
+instance {α : Type u} {p : α → Prop} [ToJson α] : ToJson {a // p a} := ⟨fun a => toJson a.val⟩
+
 instance {α : Type u} {β : Type v} [FromJson α] [FromJson β] : FromJson (α × β) where
   fromJson? j :=
     match j.getArr? with
@@ -107,7 +125,8 @@ instance {α : Type u} {β : Type v} [ToJson α] [ToJson β] : ToJson (α × β)
 
 /-! ### Encodings that lose nothing -/
 
-/-- `Option α` has no instance, because `some none` and `none` are both encoded as `null`. -/
+/-- `Option α` has an instance only when `α` is never encoded as `null` (`NonNullJson`), the
+encoding of `none`: `some none` and `none` would both be `null`. -/
 class LawfulJson (α : Type u) [ToJson α] [FromJson α] : Prop where
   fromJson?_toJson (a : α) : fromJson? (toJson a) = .ok a
 
@@ -121,6 +140,15 @@ instance : LawfulJson String := ⟨fun _ => rfl⟩
 instance : LawfulJson Nat := ⟨fun n => by simp [toJson, fromJson?, Json.getNat?]⟩
 instance : LawfulJson Int := ⟨fun n => by simp [toJson, fromJson?, Json.getInt?]⟩
 instance {n : Nat} : LawfulJson (Fin n) := ⟨fun i => by simp [toJson, fromJson?, Json.getNat?]⟩
+
+instance : LawfulJson Int64 :=
+  ⟨fun i => by
+    have : -9223372036854775808 ≤ i.toInt := i.minValue_le_toInt
+    simp [toJson, fromJson?, Json.getInt?, i.toInt_le, this]⟩
+
+instance {α : Type u} {p : α → Prop} [DecidablePred p] [ToJson α] [FromJson α] [LawfulJson α] :
+    LawfulJson {a // p a} :=
+  ⟨fun a => by simp [toJson, fromJson?, fromJson?_toJson a.val, a.property]⟩
 
 theorem mapM_fromJson?_toJson {α : Type u} [ToJson α] [FromJson α] [LawfulJson α] (l : List α) :
     l.mapM (fromJson? (α := α) ∘ toJson) = .ok l := by
@@ -139,6 +167,26 @@ instance {α : Type u} {β : Type v} [ToJson α] [FromJson α] [LawfulJson α]
     [ToJson β] [FromJson β] [LawfulJson β] : LawfulJson (α × β) :=
   ⟨fun pair => by simp [toJson, fromJson?, Json.getArr?, fromJson?_toJson]⟩
 
+/-- `toJson` never gives `null`, the encoding of `none`, so `Option α` loses nothing. -/
+class NonNullJson (α : Type u) [ToJson α] : Prop where
+  toJson_ne_null (a : α) : toJson a ≠ .null
+
+export NonNullJson (toJson_ne_null)
+
+instance : NonNullJson Unit := ⟨fun _ => nofun⟩
+instance : NonNullJson Bool := ⟨fun _ => nofun⟩
+instance : NonNullJson Nat := ⟨fun _ => nofun⟩
+instance : NonNullJson Int := ⟨fun _ => nofun⟩
+instance : NonNullJson Int64 := ⟨fun _ => nofun⟩
+instance : NonNullJson String := ⟨fun _ => nofun⟩
+instance : NonNullJson JsonNumber := ⟨fun _ => nofun⟩
+instance {n : Nat} : NonNullJson (Fin n) := ⟨fun _ => nofun⟩
+instance {α : Type u} [ToJson α] : NonNullJson (List α) := ⟨fun _ => nofun⟩
+instance {α : Type u} [ToJson α] : NonNullJson (Array α) := ⟨fun _ => nofun⟩
+instance {α : Type u} {β : Type v} [ToJson α] [ToJson β] : NonNullJson (α × β) := ⟨fun _ => nofun⟩
+instance {α : Type u} {p : α → Prop} [ToJson α] [NonNullJson α] : NonNullJson {a // p a} :=
+  ⟨fun a => toJson_ne_null a.val⟩
+
 /-! The law for each instance, by name, and what holds of `Option`. -/
 
 theorem fromJson?_toJson_json (j : Json) : fromJson? (toJson j) = .ok j := fromJson?_toJson j
@@ -151,6 +199,12 @@ theorem fromJson?_toJson_int (i : Int) : fromJson? (toJson i) = .ok i := fromJso
 theorem fromJson?_toJson_string (s : String) : fromJson? (toJson s) = .ok s := fromJson?_toJson s
 theorem fromJson?_toJson_fin {n : Nat} (i : Fin n) : fromJson? (toJson i) = .ok i :=
   fromJson?_toJson i
+
+theorem fromJson?_toJson_int64 (i : Int64) : fromJson? (toJson i) = .ok i := fromJson?_toJson i
+
+theorem fromJson?_toJson_subtype {α : Type u} {p : α → Prop} [DecidablePred p] [ToJson α]
+    [FromJson α] [LawfulJson α] (a : {a // p a}) : fromJson? (toJson a) = .ok a :=
+  fromJson?_toJson a
 
 theorem fromJson?_toJson_array {α : Type u} [ToJson α] [FromJson α] [LawfulJson α]
     (a : Array α) : fromJson? (toJson a) = .ok a := fromJson?_toJson a
@@ -174,6 +228,13 @@ theorem fromJson?_toJson_some {α : Type u} [ToJson α] [FromJson α] [LawfulJso
   split
   · exact absurd ‹_› h
   · rw [fromJson?_toJson]; rfl
+
+instance {α : Type u} [ToJson α] [FromJson α] [LawfulJson α] [NonNullJson α] :
+    LawfulJson (Option α) :=
+  ⟨fun | none => rfl | some a => fromJson?_toJson_some (toJson_ne_null a)⟩
+
+theorem fromJson?_toJson_option {α : Type u} [ToJson α] [FromJson α] [LawfulJson α]
+    [NonNullJson α] (a : Option α) : fromJson? (toJson a) = .ok a := fromJson?_toJson a
 
 namespace Json
 

@@ -20,7 +20,7 @@ open Lanes.Db
 
 /-- A user's to-dos are unique by title, and to-dos by id. -/
 def Unique (db : Db) : Prop :=
-  ((db.rows todos.table.name).map byTitle.project).Nodup
+  ((db.rows todos.table.name).map todos.byTitle.project).Nodup
     ∧ ((db.rows todos.table.name).map todos.table.keyOf).Nodup
 
 theorem nodup_map_inj {α β : Type} {f : α → β} :
@@ -34,13 +34,8 @@ theorem nodup_map_inj {α β : Type} {f : α → β} :
     · exact absurd (List.mem_map.mpr ⟨x, hx, by rw [hf, hy]⟩) h.1
     · exact nodup_map_inj h.2 hx hy hf
 
-theorem ofRow_eq {r : Row} {t : Todo} (h : todos.ofRow r = some t) : r = todos.toRow t := by
-  dsimp only [todos] at h ⊢
-  split at h
-  · simp only [Option.some.injEq] at h
-    subst h
-    rfl
-  · cases h
+theorem ofRow_eq {r : Row} {t : Todo} (h : todos.ofRow r = some t) : r = todos.toRow t :=
+  Columns.toRow_of_ofRow _ h
 
 theorem unique_of_reads {α : Type} {t : Txn α} (hr : t.Reads) {db : Db} {a : α} {db' : Db}
     (h : t.run db = .ok (a, db')) (hu : Unique db) : Unique db' := by
@@ -55,7 +50,7 @@ theorem rows_after {o : Op} {db : Db} {r : o.Ret} {db' : Db} (h : o.apply db = .
   simp [hw]
 
 theorem insert_preserves (owner : Int64) (title : String) {db : Db}
-    (hfree : ∀ r ∈ db.rows todos.table.name, byTitle.project r ≠ [.int owner, .text title])
+    (hfree : ∀ r ∈ db.rows todos.table.name, todos.byTitle.project r ≠ [.int owner, .text title])
     (hu : Unique db) {a : Answer} {db' : Db} (h : (insertNew owner title).run db = .ok (a, db')) :
     Unique db' := by
   unfold insertNew at h
@@ -146,11 +141,11 @@ theorem update_preserves {db : Db} (hu : Unique db) {t t' : Todo} (hid : t'.id =
       refine nodup_map_inj hu.2 hx hmem ?_
       simpa [Table.hasKey, todos, Table.keyOf, hid] using hk
     constructor
-    · rw [List.map_congr_left (l := db.rows todos.table.name) (g := byTitle.project) fun x hx => by
+    · rw [List.map_congr_left (l := db.rows todos.table.name) (g := todos.byTitle.project) fun x hx => by
         by_cases hk : todos.table.hasKey (todos.table.keyOf (todos.toRow t')) x = true
         · simp only [Function.comp_apply, hk, ↓reduceIte]
           rw [same x hx hk]
-          simp [todos, Index.project, byTitle, howner, htitle]
+          simp [todos, Index.project, todos.byTitle, howner, htitle]
         · simp [hk]]
       exact hu.1
     · rw [List.map_congr_left (l := db.rows todos.table.name) (g := todos.table.keyOf) fun x hx => by

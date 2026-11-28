@@ -22,7 +22,7 @@ locked until the application unlocks it, by a timer or by hand. -/
 lanes_data structure Attempts where
   failures : Nat := 0
   locked : Bool := false
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 namespace Attempts
 
@@ -94,7 +94,7 @@ lanes_data structure Session where
   id : Nat
   started_s : Nat := 0
   used_s : Nat := 0
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 /-- Whether the session is over at `now_s`. Once over, it stays over: `Session.expired_mono`. -/
 def Session.expired (life : Lifetime) (now_s : Nat) (e : Session) : Bool :=
@@ -117,7 +117,7 @@ earliest time expiry is judged at, so a clock that steps back does not bring a s
 lanes_data structure Sessions where
   entries : List Session := []
   seen_s : Nat := 0
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 namespace Sessions
 

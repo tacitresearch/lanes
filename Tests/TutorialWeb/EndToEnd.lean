@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes.Testing
 import Tests.TutorialWeb.Web
+import Lanes.Services.S3.Testing
 
 /-!
 Step 4 of `docs/TUTORIAL-WEB.md`: the shelf over HTTP, against the test kit's fake identity

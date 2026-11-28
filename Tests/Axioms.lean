@@ -12,6 +12,7 @@ import Tests.Axioms.Outside
 import Tests.Axioms.Proof
 import Tests.Axioms.Runtime
 import Tests.Axioms.Semantics
+import Tests.Axioms.Services
 import Tests.Axioms.Tests
 import Tests.Axioms.Web
 

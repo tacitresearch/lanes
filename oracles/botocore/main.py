@@ -1,5 +1,5 @@
 """Signature Version 4 as botocore signs, for `Tests/Oracle/SigV4.lean`, and CloudFront's signed
-URLs as `botocore.signers.CloudFrontSigner` writes them, for `integrations/aws/Checks/CloudFront.lean`.
+URLs as `botocore.signers.CloudFrontSigner` writes them, for `Tests/Aws/CloudFront.lean`.
 
 Reads the cases `lanesOracle` writes, one JSON object per line ({"id", "op", "in": hex}), and
 answers one per line ({"id", "ok", "out"}). Ops: sign, cloudfront.

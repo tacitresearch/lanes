@@ -48,6 +48,7 @@ two new decisions land at different lines. The numbers give the order in which t
 - [D3. `Effect` is `send | emit | after | cancel | stop`; no `io`, no `reply`](D3-effect-is-send-emit-after-cancel.md)
 - [D45. Everything is proved; the checker finds bugs, a proof is the evidence](D45-everything-is-proved.md): partly superseded by D110-volatile-actors.md (the generated inventory of every public definition)
 - [D60. Examples are for reading, fixtures are for the tests](D60-examples-are-for-reading.md): partly superseded by D63 (the examples' proofs copied into the fixtures)
+- [D117. A file system that may lose power, as a platform model](D117-file-system-model.md)
 - [D63. The fixtures hold what the tests use, the examples the proofs](D63-fixtures-hold-what-tests-use.md)
 - [D116. Actors run free on worker threads, proved to refine the interleaving semantics](D116-free-running.md)
 - [D106. The gate before the shard](D106-gate-before-shard.md): partly superseded by D110-volatile-actors.md (its reasons of waves and a runtime of objects, and the section on the journal)
@@ -55,7 +56,6 @@ two new decisions land at different lines. The numbers give the order in which t
 - [D20. History variables are ghosts with an erasure theorem](D20-history-variables-are-ghosts-with-an.md)
 - [D104. Honest results: a bounded pass exits 2, each failure has a kind, a binding is proved of its reference](D104-honest-results.md)
 - [D2. Identities name actors that always exist (virtual actors)](D2-identities-name-actors-that-always-exist.md)
-- [D55. Work outside a step is a job: an actor with an outbox, a deadline per attempt and a bound](D55-jobs.md): partly superseded by D110-volatile-actors.md (jobs that survive a restart through the journal: they are rows in the database)
 - [D15. JSON is a `Std`-only port of `Lean.Data.Json`](D15-json-is-a-std-only-port.md)
 - [D53. A JSON key given twice keeps its last value](D53-json-repeated-keys.md)
 - [D99. Layered packages in one repository, one version, prebuilt builds (proposal)](D99-layered-packages.md): partly superseded by D110-volatile-actors.md (the durable layer, the courier, and services as packages of their own: they live in one area of the same package); its section 3, Mathlib and CSLib removed, is done (D112-proof-libraries.md)
@@ -70,6 +70,7 @@ two new decisions land at different lines. The numbers give the order in which t
 - [D6. One executable definition of the semantics](D6-one-executable-definition-of-the-semantics.md)
 - [D43. One gate: `serve` runs the gate joined in front](D43-one-gate.md)
 - [D80. Every parser has an oracle and every model a recorded run, in one place, and lint keeps the list](D80-oracles.md)
+- [D114. The outbox and jobs are rows, performed by a worker under the row's id as the key](D114-outbox-jobs.md)
 - [D83. PostgreSQL over TLS, with channel binding, and a pool of connections](D83-postgres-over-tls.md)
 - [D68. PostgreSQL is spoken in Lean, and a transactional store is a model](D68-postgres-protocol-in-lean.md): partly superseded by D111-typed-store.md (the store model: typed tables, keys and scans replace the key-value model for new code)
 - [D112. Mathlib and CSLib in the proof layer, measured](D112-proof-libraries.md)
@@ -81,6 +82,8 @@ two new decisions land at different lines. The numbers give the order in which t
 - [D22. Routes are values with a proof; htmx attributes come from them](D22-routes-are-values-with-a-proof.md)
 - [D96. One model with proofs, and runtimes proved against it](D96-runtime-contract.md): partly superseded by D110-volatile-actors.md (the default runtime, and the contract's clauses that rest on a journal: one order, output ids, no acknowledged input lost across a restart)
 - [D71. S3 and Signature Version 4, in Lanes as the protocol of a class of object stores](D71-s3-and-signature-version-4.md)
+- [D115. `lanes_data` derives JSON and rows, each with its round trip; the binary codec goes](D115-serialization.md)
+- [D113. A vendor service gets a model only when a proof depends on it](D113-service-models.md)
 - [D72. Sign-in with OAuth 2.0 and OpenID Connect, done where a request arrives](D72-sign-in-with-oauth.md): partly superseded by D110-volatile-actors.md (each provider a Lake package of its own: Google and GitHub are presets of `Services/Oidc`)
 - [D52. A service behind actors is proved with one simulation, and an application gives only its steps](D52-standard-simulation.md)
 - [D5. Start is recovery](D5-start-is-recovery.md)
@@ -103,7 +106,7 @@ two new decisions land at different lines. The numbers give the order in which t
 - [D23. Time is data, and a shard is a thread](D23-time-is-data.md): partly superseded by D110-volatile-actors.md (a shard on one thread: the scheduler becomes free-running)
 - [D10. Toolchain and pins](D10-toolchain-and-pins.md): partly superseded by D99-layered-packages.md, D110-volatile-actors.md and D112-proof-libraries.md (CSLib and Mathlib, which Lanes no longer requires, and a toolchain that follows CSLib's)
 - [D111. The typed store: pure transactions over typed tables, at SERIALIZABLE](D111-typed-store.md)
-- [D38. Types are declared inside a command that derives what Lean's handlers cannot](D38-types-are-declared-inside-a-command.md): partly superseded by D110-volatile-actors.md (the binary codec `Codable`: `lanes_data` derives JSON and database rows)
+- [D38. Types are declared inside a command that derives what Lean's handlers cannot](D38-types-are-declared-inside-a-command.md): partly superseded by D110-volatile-actors.md and D115-serialization.md (the binary codec `Codable`: `lanes_data` derives JSON and database rows)
 - [D17. URL attributes are rendered through `Html.safeUrl`](D17-url-attributes-are-rendered-through-html.md)
 - [D58. URLs, media types and rate limits against Go, and where they depart from it](D58-urls-media-types-rate-limits-against-go.md)
 - [D109. The video site split into an actor per member, and a scheduler per entity](D109-videos-per-member.md): partly superseded by D110-volatile-actors.md (the video site, which leaves the main branch, and the waves it was split for)
@@ -120,6 +123,7 @@ two new decisions land at different lines. The numbers give the order in which t
 - [D35. An append carries a batch, and only news brings the next](D35-an-append-carries-a-batch.md): superseded by D110-volatile-actors.md
 - [D97. A data format that outlives its version: one schema per file, values read by name](D97-data-format.md): superseded by D110-volatile-actors.md
 - [D24. Durability is a journal of what the kernel was asked, replayed](D24-durability-is-a-journal-of-what.md): superseded by D110-volatile-actors.md
+- [D55. Work outside a step is a job: an actor with an outbox, a deadline per attempt and a bound](D55-jobs.md): superseded by D114-outbox-jobs.md
 - [D94. A served journal is versioned by the application's name; the gate's settings are read from it](D94-journal-version.md): superseded by D110-volatile-actors.md
 - [D103. Former names and defaults in `lanes_data`: `(was old)` and `:= value`](D103-lanes-data-aliases.md): superseded by D110-volatile-actors.md
 - [D37. No router between shards in one process](D37-no-router-between-shards-in-one.md): superseded by D110-volatile-actors.md
