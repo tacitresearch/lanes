@@ -29,7 +29,28 @@ inductive Value where
   | bytes (b : ByteArray)
   | list (items : List Value)
   | ctor (index : Nat) (fields : List Value)
-  deriving Inhabited, BEq
+  deriving Inhabited
+
+mutual
+
+/-- Written by hand: Lean derives no lawful equality for a type nested in `List`. -/
+def Value.beq : Value → Value → Bool
+  | .nat a, .nat b => a == b
+  | .int a, .int b => a == b
+  | .string a, .string b => a == b
+  | .bytes a, .bytes b => a == b
+  | .list as, .list bs => Value.beqAll as bs
+  | .ctor i as, .ctor j bs => i == j && Value.beqAll as bs
+  | _, _ => false
+
+def Value.beqAll : List Value → List Value → Bool
+  | [], [] => true
+  | a :: as, b :: bs => Value.beq a b && Value.beqAll as bs
+  | _, _ => false
+
+end
+
+instance : BEq Value := ⟨Value.beq⟩
 
 /-- A field of a record or of a constructor. `σ` is `Schema`, given as a parameter so that
 `Schema` can hold fields. -/
@@ -64,7 +85,40 @@ inductive Schema where
   /-- A pair whose second part's schema depends on the value of the first (`Codec.sigma`), so
   only the first part's schema is known here. -/
   | dependent (index : Schema)
-  deriving BEq, Inhabited
+  deriving Inhabited
+
+mutual
+
+/-- Written by hand, as `Value.beq` is. -/
+def Schema.beq : Schema → Schema → Bool
+  | .nat, .nat | .int, .int | .string, .string | .bytes, .bytes | .unit, .unit => true
+  | .list a, .list b | .dependent a, .dependent b => Schema.beq a b
+  | .map k v, .map k' v' => Schema.beq k k' && Schema.beq v v'
+  | .record t as fs, .record t' as' fs' =>
+    t == t' && Schema.beqAll as as' && Schema.beqFields fs fs'
+  | .sum t as cs, .sum t' as' cs' => t == t' && Schema.beqAll as as' && Schema.beqCtors cs cs'
+  | _, _ => false
+
+def Schema.beqAll : List Schema → List Schema → Bool
+  | [], [] => true
+  | a :: as, b :: bs => Schema.beq a b && Schema.beqAll as bs
+  | _, _ => false
+
+def Schema.beqFields : List (Schema.Field Schema) → List (Schema.Field Schema) → Bool
+  | [], [] => true
+  | ⟨n, a, s, d⟩ :: fs, ⟨n', a', s', d'⟩ :: fs' =>
+    n == n' && a == a' && Schema.beq s s' && d == d' && Schema.beqFields fs fs'
+  | _, _ => false
+
+def Schema.beqCtors : List (Schema.Ctor Schema) → List (Schema.Ctor Schema) → Bool
+  | [], [] => true
+  | ⟨n, a, fs⟩ :: cs, ⟨n', a', fs'⟩ :: cs' =>
+    n == n' && a == a' && Schema.beqFields fs fs' && Schema.beqCtors cs cs'
+  | _, _ => false
+
+end
+
+instance : BEq Schema := ⟨Schema.beq⟩
 
 /-- A type's schema, with a map each way between its values and `Value`, and the law that ties
 them. -/

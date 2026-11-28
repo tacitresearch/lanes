@@ -497,36 +497,37 @@ them by area.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Codec.Error.Step.text` | tested | `Tests/Body.lean` |
-| `Codec.Error.Problem.text` | tested | `Tests/Body.lean` |
-| `Codec.Error.pathText` | tested | `Tests/Body.lean` |
-| `Codec.Error.instToString` | tested | `Tests/Body.lean` |
-| `Body.fail` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
-| `Body.within` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
-| `Body.writeNat` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
-| `Body.natBytes` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
-| `Body.zigzag` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Codec.Error.Step.text` | tested | `Tests/Body.lean`, `Tests/Match.lean` |
+| `Codec.Error.Problem.text` | tested | `Tests/Body.lean`, `Tests/Match.lean` |
+| `Codec.Error.Problem.atByte` | tested | `Tests/Body.lean`, `Tests/Match.lean` |
+| `Codec.Error.pathText` | tested | `Tests/Body.lean`, `Tests/Match.lean` |
+| `Codec.Error.instToString` | tested | `Tests/Body.lean`, `Tests/Match.lean` |
+| `Body.fail` | proved | through `Body.encode`, `Body.write` and others: `Body.decodeWith_encode_self`, `Body.decodeWith_migrate` and others |
+| `Body.within` | proved | through `Body.encode`, `Body.write` and others: `Body.decodeWith_encode_self`, `Body.decodeWith_migrate` and others |
+| `Body.writeNat` | proved | through `Body.encode`, `Body.write`: `Body.decodeWith_encode_self`, `Body.decodeWith_migrate` and others |
+| `Body.natBytes` | proved | through `Body.encode`, `Body.write`: `Body.decodeWith_encode_self`, `Body.decodeWith_migrate` and others |
+| `Body.zigzag` | proved | through `Body.encode`, `Body.write`: `Body.decodeWith_encode_self`, `Body.decodeWith_migrate` and others |
 | `Body.unzigzag` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
-| `Body.writeNum` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
-| `Body.writeBlob` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
-| `Body.writeCount` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.writeNum` | proved | through `Body.encode`, `Body.write`: `Body.decodeWith_encode_self`, `Body.decodeWith_migrate` and others |
+| `Body.writeBlob` | proved | through `Body.encode`, `Body.write`: `Body.decodeWith_encode_self`, `Body.decodeWith_migrate` and others |
+| `Body.writeCount` | proved | through `Body.encode`, `Body.write`: `Body.decodeWith_encode_self`, `Body.decodeWith_migrate` and others |
 | `Body.readNatFrom` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
 | `Body.readNat` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
 | `Body.readBlob` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
 | `Body.readCount` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
 | `Body.consumes` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
 | `Body.consumesFields` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
-| `Body.Tag.nat` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
-| `Body.Tag.int` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
-| `Body.Tag.string` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
-| `Body.Tag.bytes` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
-| `Body.Tag.list` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
-| `Body.Tag.ctor` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
-| `Body.writeAt` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.Tag.nat` | proved | through `Body.encode`, `Body.write`: `Body.decodeWith_encode_self`, `Body.decodeWith_migrate` and others |
+| `Body.Tag.int` | proved | through `Body.encode`, `Body.write`: `Body.decodeWith_encode_self`, `Body.decodeWith_migrate` and others |
+| `Body.Tag.string` | proved | through `Body.encode`, `Body.write`: `Body.decodeWith_encode_self`, `Body.decodeWith_migrate` and others |
+| `Body.Tag.bytes` | proved | through `Body.encode`, `Body.write`: `Body.decodeWith_encode_self`, `Body.decodeWith_migrate` and others |
+| `Body.Tag.list` | proved | through `Body.encode`, `Body.write`: `Body.decodeWith_encode_self`, `Body.decodeWith_migrate` and others |
+| `Body.Tag.ctor` | proved | through `Body.encode`, `Body.write`: `Body.decodeWith_encode_self`, `Body.decodeWith_migrate` and others |
+| `Body.writeAt` | proved | through `Body.encode`, `Body.write`: `Body.decodeWith_encode_self`, `Body.decodeWith_migrate` and others |
 | `Body.writeFields` | spec | used only in statements |
 | `Body.writeItems` | spec | used only in statements |
 | `Body.writeEntries` | spec | used only in statements |
-| `Body.writeTagged` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.writeTagged` | proved | through `Body.encode`, `Body.write`: `Body.decodeWith_encode_self`, `Body.decodeWith_migrate` and others |
 | `Body.writeTaggedItems` | spec | used only in statements |
 | `Body.readAt` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
 | `Body.readFields` | spec | used only in statements |
@@ -536,7 +537,7 @@ them by area.
 | `Body.readTaggedItems` | spec | used only in statements |
 | `Body.write` | proved | `Body.encode_decode`, `Body.read_eq_ok_iff` |
 | `Body.read` | proved | `Body.read_eq_ok_iff` |
-| `Body.encode` | proved | `Body.decode_encode` |
+| `Body.encode` | proved | `Body.decodeWith_encode_self`, `Body.decodeWith_migrate`, `Body.decode_encode` |
 | `Body.decode` | proved | `Body.decode_encode`, `Body.encode_decode` |
 
 ## `Lanes/Data/Codec.lean`
@@ -640,6 +641,34 @@ them by area.
 | `Fifo.length` | proved | `Peers.Courier.Reachable.queue_le` |
 | `Fifo.isEmpty` | checked | `Tests/Courier.lean`, `Tests/Kernel.lean`, `Tests/Release.lean` |
 
+## `Lanes/Data/Match.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Schema.Plan.claim` | proved | through `Schema.Plan.apply`, `Schema.Plan.of`: `Body.decodeWith_encode_self`, `Body.decodeWith_migrate` and others |
+| `Schema.Plan.clash` | proved | through `Schema.Plan.apply`, `Schema.Plan.of`: `Body.decodeWith_encode_self`, `Body.decodeWith_migrate` and others |
+| `Schema.Plan.unambiguous` | proved | through `Schema.Plan.apply`, `Schema.Plan.of`: `Body.decodeWith_encode_self`, `Body.decodeWith_migrate` and others |
+| `Schema.Plan.pick` | proved | through `Schema.Plan.apply`, `Schema.Plan.of`: `Body.decodeWith_encode_self`, `Body.decodeWith_migrate` and others |
+| `Schema.Plan.of` | proved | `Body.decodeWith_encode_self`, `Body.decodeWith_migrate`, `Schema.Plan.of_insertIdx` and others |
+| `Schema.Plan.ofFields` | proved | through `Schema.Plan.apply`, `Schema.Plan.of`: `Body.decodeWith_encode_self`, `Body.decodeWith_migrate` and others |
+| `Schema.Plan.ofCtors` | proved | through `Schema.Plan.apply`, `Schema.Plan.of`: `Body.decodeWith_encode_self`, `Body.decodeWith_migrate` and others |
+| `Schema.Plan.apply` | proved | `Schema.Plan.of_insertIdx`, `Schema.Plan.of_rename` |
+| `Schema.Plan.applyItems` | spec | used only in statements |
+| `Schema.Plan.applyEntries` | spec | used only in statements |
+| `Schema.Plan.applyFields` | spec | used only in statements |
+| `Schema.Plan.applyCtor` | spec | used only in statements |
+| `Schema.Migration.of` | proved | `Body.decodeWith_migrate` |
+| `Body.readWith` | proved | through `Body.decodeWith`: `Body.decodeWith_encode_self`, `Body.decodeWith_migrate` |
+| `Body.decodeWith` | proved | `Body.decodeWith_encode_self`, `Body.decodeWith_migrate` |
+
+## `Lanes/Data/MatchSound.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Schema.Plan.Known` | spec | a predicate |
+| `Schema.Plan.knownPlan` | spec | used only in statements |
+| `Schema.Plan.knownValue` | spec | used only in statements |
+
 ## `Lanes/Data/Quorum.lean`
 
 | Definition | Status | Evidence |
@@ -650,6 +679,14 @@ them by area.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
+| `Value.beq` | proved | through `Body.encode`, `Schema` and others: `Body.decodeWith_encode_self`, `Body.decodeWith_migrate` and others |
+| `Value.beqAll` | proved | through `Body.encode`, `Schema` and others: `Body.decodeWith_encode_self`, `Body.decodeWith_migrate` and others |
+| `instBEqValue` | tested | `Tests/Body.lean`, `Tests/Schema.lean` |
+| `Schema.beq` | tested | `Tests/Schema.lean` |
+| `Schema.beqAll` | tested | `Tests/Schema.lean` |
+| `Schema.beqFields` | tested | `Tests/Schema.lean` |
+| `Schema.beqCtors` | tested | `Tests/Schema.lean` |
+| `instBEqSchema` | tested | `Tests/Schema.lean` |
 | `Schema.Fields.nil` | proved | its type, `Schema.Fields` |
 | `Schema.Fields.cons` | proved | its type, `Schema.Fields` |
 | `Schema.Ctors.nil` | proved | its type, `Schema.Ctors` |
