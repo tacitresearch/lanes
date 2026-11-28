@@ -230,17 +230,17 @@ def tests : List (String × Bool) :=
   let sweep := checkSweep ()
   [ (s!"schedule: no attempt early, at most maxAttempts, one out per id, retries, "
         ++ s!"dead letters ({main.states} states)",
-      main.ok && main.complete && main.witnesses.length == 4),
+      main.ok && main.witnesses.length == 4),
     (s!"schedule: an id scheduled twice is one job; a payload too large and a job beyond maxJobs "
         ++ s!"are refused ({crowd.states} states)",
-      crowd.ok && crowd.complete && crowd.witnesses.length == 3),
+      crowd.ok && crowd.witnesses.length == 3),
     (s!"schedule: a cancel while an attempt is out ends with it ({cancel.states} states)",
-      cancel.ok && cancel.complete && cancel.witnesses.length == 1),
+      cancel.ok && cancel.witnesses.length == 1),
     (s!"schedule: the same when the scheduler crashes and restarts and inputs are reordered "
         ++ s!"({faulty.states} states)",
-      faulty.ok && faulty.complete),
+      faulty.ok),
     (s!"schedule: a periodic sweep is noticed again and again until cancelled ({sweep.states} states)",
-      sweep.ok && sweep.complete && sweep.witnesses.length == 2),
+      sweep.ok && sweep.witnesses.length == 2),
     (s!"schedule: a start that dispatches the attempt out again has two out at once "
         ++ s!"(found in {(hastyFound ()).getD 0} steps)", (hastyFound ()).isSome) ]
 

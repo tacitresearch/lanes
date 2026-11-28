@@ -10,6 +10,7 @@ import Checks.CloudFront
 import Checks.SesMoto
 import Checks.SqsMoto
 import Tests.Durable
+import Lanes.Testing
 
 /-!
 The AWS integration's checks, run by `lake test`: the refresh policy model-checked, and the
@@ -22,15 +23,12 @@ email and queue models. Nothing calls AWS.
 
 open Tests.Durable (safely)
 
-def main : IO UInt32 := do
-  IO.println Checks.Refresh.report
+def main (args : List String) : IO UInt32 := do
+  unless Lanes.Testing.wantsJson args do IO.println Checks.Refresh.report
   let live := (← safely "credentials" Checks.Imds.live) ++ (← safely "ses" Checks.Ses.live)
   let replayed := (← Checks.Mail.package.replay "../..") ++ (← Checks.CloudFront.package.replay "../..") ++ (← Checks.SesMoto.oracle.replayFile "../..")
     ++ (← Checks.SqsMoto.oracle.replayFile "../..")
-  let tests := Checks.Refresh.tests ++ Checks.Imds.unitTests ++ Checks.Ses.tests
-    ++ Checks.CloudFront.tests ++ Checks.SqsMoto.unitTests
-    ++ replayed ++ live
-  let failed := tests.filter (!·.2)
-  for (name, ok) in tests do IO.println s!"{if ok then "ok  " else "FAIL"} {name}"
-  IO.println s!"{tests.length - failed.length} passed, {failed.length} failed"
-  return if failed.isEmpty then 0 else 1
+  let tests := Checks.Imds.unitTests ++ Checks.Ses.tests ++ Checks.CloudFront.tests
+    ++ Checks.SqsMoto.unitTests ++ replayed ++ live
+  Lanes.Testing.report args (Lanes.Testing.Result.tests Checks.Refresh.tests .check
+    ++ Lanes.Testing.Result.tests tests)

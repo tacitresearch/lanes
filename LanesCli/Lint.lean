@@ -346,6 +346,8 @@ structure Options where
   fix : Bool := false
   /-- This is the main branch: decisions without a number are numbered, or reported. -/
   main : Bool := false
+  /-- Print the report as JSON (`Report.json`). -/
+  json : Bool := false
 
 structure Report where
   findings : List Finding
@@ -396,8 +398,48 @@ def lint (root : System.FilePath) (options : Options := {}) : IO Report := do
   findings := findings ++ (← inventory root)
   return ⟨findings, fixed, files.size⟩
 
+/-- A JSON string: `s` quoted, with the characters JSON must escape escaped. -/
+def jsonString (s : String) : String :=
+  let body := s.foldl (init := "") fun acc c =>
+    match c with
+    | '"' => acc ++ "\\\""
+    | '\\' => acc ++ "\\\\"
+    | '\n' => acc ++ "\\n"
+    | '\r' => acc ++ "\\r"
+    | '\t' => acc ++ "\\t"
+    | c =>
+      if c.toNat < 0x20 then
+        let hex := String.ofList (Nat.toDigits 16 c.toNat)
+        acc ++ "\\u" ++ String.ofList (List.replicate (4 - hex.length) '0') ++ hex
+      else acc.push c
+  "\"" ++ body ++ "\""
+
+/-- What a finding is a failure of, in the kinds `lanes check` and the test runner give: a
+`sorry` is a proof that does not hold, an inventory that could not be built is a build, and
+every other finding is a check of the text. -/
+def Finding.kind (f : Finding) : String :=
+  if f.rule == "no-sorry" then "proof"
+  else if f.rule == "inventory" && f.message.startsWith "`lake exe lanesInventory` failed" then "build"
+  else "check"
+
+def Finding.json (f : Finding) : String :=
+  "{" ++ ",".intercalate [s!"\"name\":{jsonString f.rule}", s!"\"kind\":{jsonString f.kind}",
+    "\"status\":\"failed\"", s!"\"path\":{jsonString f.file.toString}", s!"\"line\":{f.line}",
+    s!"\"detail\":{jsonString f.message}"] ++ "}"
+
+/-- The report as one JSON object: the files read, what `--fix` rewrote, the number of findings
+and each finding with its kind. -/
+def Report.json (r : Report) : String :=
+  "{" ++ ",".intercalate [s!"\"files\":{r.files}",
+    "\"fixed\":[" ++ ",".intercalate (r.fixed.map (jsonString ·.describe)) ++ "]",
+    s!"\"failed\":{r.findings.length}",
+    "\"results\":[" ++ ",".intercalate (r.findings.map (·.json)) ++ "]"] ++ "}"
+
 def run (root : System.FilePath) (options : Options := {}) : IO Nat := do
   let report ← lint root options
+  if options.json then
+    IO.println report.json
+    return report.findings.length
   for e in report.fixed do
     IO.println s!"fixed {e.describe}"
   for f in report.findings do

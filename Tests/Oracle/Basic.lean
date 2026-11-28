@@ -140,7 +140,7 @@ def Package.replay (p : Package) (root : System.FilePath := ".") : IO (List (Str
   | .ok vectors =>
     let failed := vectors.filter fun (c, go) => p.judge c go = .differ
     for (c, go) in failed.toList.take 5 do
-      IO.println s!"oracle {p.name}: {c.op} {Bytes.hex c.input}: ours {(p.answer c).map Json.compress}, reference {go.map Json.compress}"
+      IO.eprintln s!"oracle {p.name}: {c.op} {Bytes.hex c.input}: ours {(p.answer c).map Json.compress}, reference {go.map Json.compress}"
     return [(s!"oracle vectors of {p.name}: {vectors.size} recorded answers of oracles/{p.reference.dir} agree", failed.isEmpty)]
 
 end Tests.Oracle

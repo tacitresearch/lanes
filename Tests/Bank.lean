@@ -39,7 +39,7 @@ def tests : List (String × Bool) :=
   let again := simulate Bank2 { driver := Driver.anyOrder transfers } (seed := 42)
   let replayed := (SysState.init Bank2 {}).run {} run.events.toList
   [ ("bank, reliable links: all properties hold, 293 states",
-      reliable.ok && reliable.complete && reliable.states == 293),
+      reliable.ok && reliable.states == 293),
     ("bank, reliable links: both vacuity checks have witnesses",
       reliable.witnesses.length == 2),
     ("bank, lossy links: conservation violated by dropping a credit",

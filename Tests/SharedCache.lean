@@ -86,7 +86,7 @@ def tests : List (String × Bool) :=
       match buggy.failure with
       | some (.violated "no client may be served a page made for another" _) => true
       | _ => false),
-    (s!"shared cache: sent no-store it is not kept ({fixed.states} states)", fixed.ok && fixed.complete),
+    (s!"shared cache: sent no-store it is not kept ({fixed.states} states)", fixed.ok),
     ("shared cache: the leaks check finds the first and not the second",
       (leaks (exchanges false)).length == 2 && leaks (exchanges true) == []),
     ("shared cache: private, no-store, no-cache, Vary: * and a POST are not kept; Vary: Cookie keys by the cookie",

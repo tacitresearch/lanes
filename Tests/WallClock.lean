@@ -125,9 +125,9 @@ def tests : List (String × Bool) :=
       | some (.violated "an expired token is never valid again" _) => true
       | _ => false),
     (s!"wall clock: worked out from the latest time seen, it never does ({fixed.states} states)",
-      fixed.ok && fixed.complete),
+      fixed.ok),
     (s!"wall clock: against a monotonic clock the first is not caught ({monotonic.states} states)",
-      monotonic.ok && monotonic.complete),
+      monotonic.ok),
     ("wall clock: a reading twice the skew before the latest is allowed, and no further",
       (Clock.wall port 1).allows [ask 0, tell 0 5, ask 1, tell 1 3]
         && !(Clock.wall port 1).allows [ask 0, tell 0 5, ask 1, tell 1 2]),

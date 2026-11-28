@@ -885,7 +885,9 @@ replays any run.
 What a result means is proved: the checker lists exactly the enabled events
 (`SysState.mem_successors_iff`); a complete PASS means each `always` property holds in every
 reachable world of the instance (`Check.search_sound`, `Check.system_sound_of_respects`, under
-lawful `==`); a reported violation is a real run (`Check.system_violated`); and a complete PASS of
+lawful `==` and `Model.Respects`: properties and a constraint that give one verdict on the worlds
+the checker merges); a bounded pass is not a complete one: it prints `PASS (bounded)` and the
+runner exits 2 (`Check.Report.verdict`); a reported violation is a real run (`Check.system_violated`); and a complete PASS of
 a refinement check means every run's inputs and outputs are a trace of the spec
 (`Check.refines_sound`, `Check.refines_traces`). Under D45 a PASS finds bugs; the claim rests on a
 theorem.
@@ -904,7 +906,7 @@ Where: `Lanes/Check/`, `Lanes/Semantics/Monitor.lean`, `Lanes/Semantics/MonitorS
 
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
-| A complete PASS of the checker means each `always` property holds in every reachable state of the instance | `Check.search_sound`, `Check.system_sound_of_respects`; gate `Tests/Axioms/Check.lean` | `==` on actor states is equality and on the driver an equivalence, with a matching hash; only the instance checked, within its bounds | proved |
+| A complete PASS of the checker means each `always` property holds in every reachable state of the instance | `Check.search_sound`, `Check.system_sound_of_respects`; gate `Tests/Axioms/Check.lean`; a bounded pass says `PASS (bounded)` and exits 2 (`Check.Report.verdict`, `Check.Report.ok_iff`) | `==` on actor states is equality and on the driver an equivalence, with a matching hash; the model respects `==` (`Model.Respects`, which `Check.model_respects` gives for `Check.system`): the driver respects its `==` (`Driver.Respects`), and the properties and the constraint give one verdict on worlds the checker merges (`World.Equiv`: the order of messages on a link that does not order them, and of pending outputs), so a property that reads such an order makes a PASS unsound; only the instance checked, within its bounds | proved |
 | A reported violation is a real run | `Check.system_violated`; gate `Tests/Axioms/Check.lean` | None | proved |
 | A violation, deadlock or witness the fingerprinted checker reports is real, though its pass is not exhaustive | `Check.fingerprint_violated`, `Check.fingerprint_deadlock`, `Check.fingerprint_witness`, `Check.systemFingerprinted_violated`, `Lanes/Check/FingerprintSound.lean`; gate `Tests/Axioms/Check.lean`; the report says "fingerprinted" (`Check.fingerprint_fingerprinted`) | None for what it reports; a pass covers only the states whose hash no other state seen had | proved; the pass not exhaustive |
 | Computing successors in tasks changes nothing: the fingerprinted search in tasks stores the same states in the same order and gives the same report | `Fingerprint.Search.runParallel_eq`, `Check.fingerprint_tasks`; gate `Tests/Axioms/Check.lean`; compared as text by `lake exe lanesCheck` (`Tests/Election.lean`) | None | proved |

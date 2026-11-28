@@ -272,9 +272,9 @@ def tests : List (String × Bool) :=
   let unkeyed := check false [0]
   [ (s!"payments model: one effect per order under every answer, timeout and webhook "
         ++ s!"({keyed.states} states)",
-      keyed.ok && keyed.complete && keyed.witnesses.length == 4),
+      keyed.ok && keyed.witnesses.length == 4),
     (s!"payments model: the same with a crash ({crashing.states} states)",
-      crashing.ok && crashing.complete),
+      crashing.ok),
     ("payments model: a retry without the key is a second effect",
       match unkeyed.failure with
       | some (.violated "each order has at most one effect" _) => true

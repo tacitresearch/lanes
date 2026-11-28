@@ -677,7 +677,7 @@ structure Run where
 
 def passes {config : Config} (r : Check.Report (W config) (Event fullSig)) (witnesses : Nat) :
     String × Bool :=
-  (r.renderSystem, r.ok && r.complete && r.witnesses.length == witnesses)
+  (r.renderSystem, r.ok && r.witnesses.length == witnesses)
 
 /-- A seeded bug, found as a violation of `claim`. -/
 def seeded {config : Config} (r : Check.Report (W config) (Event fullSig)) (claim : String) :
@@ -782,8 +782,8 @@ def runs : Size → List Run
 
 /-- The checks of `size` whose names contain one of `only`, or all of them. They share nothing,
 so up to `jobs` run at once, each on a thread of its own; each report is printed in order. -/
-def run (size : Size := .small) (only : List String := []) (jobs : Nat := 4) :
-    IO (List (String × Bool)) := do
+def run (size : Size := .small) (only : List String := []) (jobs : Nat := 4)
+    (quiet : Bool := false) : IO (List (String × Bool)) := do
   let chosen := (runs size).filter fun r => only.isEmpty || only.any (r.name.contains ·)
   let mut results := []
   let n := max jobs 1
@@ -791,8 +791,9 @@ def run (size : Size := .small) (only : List String := []) (jobs : Nat := 4) :
     let tasks := batch.map fun r => Task.spawn (prio := .dedicated) fun () => r.result ()
     for (r, task) in batch.zip tasks do
       let (report, ok) ← IO.wait task
-      IO.println s!"{r.name}: {report}"
-      (← IO.getStdout).flush
+      unless quiet do
+        IO.println s!"{r.name}: {report}"
+        (← IO.getStdout).flush
       results := results ++ [(r.name, ok)]
   return results
 

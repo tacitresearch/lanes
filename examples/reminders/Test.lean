@@ -1,5 +1,6 @@
 import Reminders.Check
 import Reminders.Serve
+import Lanes.Testing
 
 /-!
 `lake test`: the model checks of `Reminders.Check`, then the application over HTTP. A local
@@ -94,13 +95,10 @@ def live : Async (List (String × Bool)) := do
       shows replayed "tea (sent)" && shows replayed "later (waiting)"),
     ("reminders: a reminder that waits is cancelled", shows cancelled "later (cancelled)") ]
 
-def main : IO UInt32 := do
+def main (args : List String) : IO UInt32 := do
   let checked := Check.check Check.scenario
-  IO.println checked.renderSystem
-  let results : List (String × Bool) :=
-    [("reminders: checked beside a service that fails, answers unknown, late or never",
-      checked.ok && checked.complete && checked.witnesses.length == 4)]
-  let results := results ++ (← Lanes.block live)
-  for (name, ok) in results do
-    IO.println s!"{if ok then "ok  " else "FAIL"} {name}"
-  return if results.all (·.2) then 0 else 1
+  let check := Lanes.Testing.Result.check
+    "reminders: checked beside a service that fails, answers unknown, late or never"
+    checked checked.renderSystem
+  let check := if checked.witnesses.length == 4 then check else { check with status := .failed }
+  Lanes.Testing.report args (check :: Lanes.Testing.Result.tests (← Lanes.block live))

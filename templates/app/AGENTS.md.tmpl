@@ -5,7 +5,8 @@ A [Lanes](https://github.com/tacitresearch/lanes) application. It needs elan and
 ```bash
 lake exe cache get      # once: prebuilt Mathlib
 lake build
-lake test               # model checks
+lake test               # model checks, then the proofs
+lake test -- --json     # the same, as JSON: each result with its kind (check, proof)
 lake exe {{name}} 8080  # run
 lake exe {{name}} 8080 app.journal  # run, and keep state across restarts
 ```
@@ -29,14 +30,19 @@ and Proofs. The ones every change here meets:
 - Write almost no comments. A comment is for a *why* that a name, a type or a theorem cannot
   carry. If code needs explaining, rename or restructure it.
 - Run `lake build && lake test && lake exe lanes lint` before claiming a task is done.
+  `lake test` exits 0 only when every check explored its whole instance and the proofs build
+  with no warning (a `sorry` is one); it exits 2 when a check passed but hit a bound, which is
+  not a pass of the instance.
 
 ## Layout
 
-- `{{Name}}/Counter.lean`: logic. The spec, the actor and its invariant. Pure: no IO.
-- `{{Name}}/Proofs.lean`: proofs that need `Lanes.Semantics`, such as refinement to the spec.
-- `Check.lean`: model checks on small instances, run by `lake test`.
+- `{{Name}}/Counter.lean`: logic. The spec and the actor. Pure: no IO, and no theorems.
+- `{{Name}}/Proofs.lean`: the theorems: the invariant, refinement to the spec.
+- `Check.lean`: model checks on small instances, run by `lake test`, which then builds the
+  proofs. It does not import them, so a broken proof does not stop the checks.
 - `Main.lean`: the edge. HTTP, HTML views, `main`.
 
 Executable code imports `Lanes`. Proof files that need refinement or Mathlib import
-`Lanes.Semantics`; keep that import out of anything `Main.lean` depends on, or the binary grows
-by over 100 MB.
+`Lanes.Semantics`; keep that import, and every theorem, out of anything `Main.lean` and
+`Check.lean` depend on: the binary would grow by over 100 MB, and a broken proof would stop the
+checks.

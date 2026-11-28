@@ -1,5 +1,6 @@
 import Lanes
 import Bank
+import Lanes.Testing
 
 /-!
 Model checks of the bank on two accounts and three transfers in any order, run by `lake test`
@@ -38,7 +39,7 @@ def tests : List (String × Bool) :=
   let again := simulate Bank2 { driver := Driver.anyOrder transfers } (seed := 42)
   let replayed := (SysState.init Bank2 {}).run {} run.events.toList
   [ ("reliable links: every property holds in every reachable state",
-      reliable.ok && reliable.complete),
+      reliable.ok),
     ("reliable links: both sometimes properties have a witness", reliable.witnesses.length == 2),
     ("lossy links: dropping a credit breaks conservation",
       match broken.failure with
@@ -56,8 +57,5 @@ def tests : List (String × Bool) :=
       | some c => c.equiv {} run.final.state
       | none => false) ]
 
-def main : IO UInt32 := do
-  let failed := tests.filter (!·.2)
-  for (name, ok) in tests do
-    IO.println s!"{if ok then "ok  " else "FAIL"} {name}"
-  return if failed.isEmpty then 0 else 1
+def main (args : List String) : IO UInt32 :=
+  Lanes.Testing.report args (Lanes.Testing.Result.tests tests .check)

@@ -18,14 +18,19 @@ namespace Lanes.Cli.Inventory
 open Lean
 
 inductive Status where
-  | proved | trusted | checked | tested | spec | none
+  | proved
+  /-- A bound function whose theorems are about its Lean body: the C runs, and is trusted. -/
+  | reference
+  | trusted | checked | tested | spec | none
   deriving DecidableEq, Inhabited
 
 def Status.label : Status → String
-  | .proved => "proved" | .trusted => "trusted" | .checked => "checked"
+  | .proved => "proved" | .reference => "proved of its reference, C trusted"
+  | .trusted => "trusted" | .checked => "checked"
   | .tested => "tested" | .spec => "spec" | .none => "none"
 
-def Status.all : List Status := [.proved, .trusted, .checked, .tested, .spec, .none]
+def Status.all : List Status :=
+  [.proved, .reference, .trusted, .checked, .tested, .spec, .none]
 
 structure Entry where
   name : Name
@@ -160,6 +165,12 @@ def inDeriving (lines : Array String) (pos : Position) : Bool :=
     || (previous.startsWith "deriving" && previous.endsWith ","))
 
 def generatedParsers : List Name := [``ParserDescr, ``TrailingParserDescr, ``Parser.Category]
+
+/-- Whether `n` is bound: `@[extern]`, so that compiled code calls C, with a Lean body beside it,
+its reference (rule 2.7). Lean reasons about the body, so a theorem of it is a theorem of the
+reference, not of the C. -/
+def isBound (env : Environment) (n : Name) : Bool :=
+  isExtern env n && env.find? n matches some (.defnInfo _)
 
 /-- Whether `n` is a theorem, or the private name Lean files a theorem's matchers under. What
 those define is part of a proof: it neither runs nor states. -/
@@ -416,9 +427,14 @@ def entries (root : System.FilePath) (f : Facts) : IO (Array Entry) := do
         (.proved, s!"through {listOf through.toList.eraseDups.toArray 2}: "
           ++ listOf (ts.map (display ·.1)).toList.eraseDups.toArray 2)
       else (.none, "")
+    let row := trusted.find? (·.1 == path)
+    let (status, evidence) :=
+      if status == .proved && isBound f.env name then
+        (.reference, evidence ++ (row.map fun (_, what) => s!"; the C: TRUSTED.md: {what}").getD "")
+      else (status, evidence)
     let (status, evidence) :=
       if status != .none then (status, evidence)
-      else if let some (_, what) := trusted.find? (·.1 == path) then (.trusted, s!"TRUSTED.md: {what}")
+      else if let some (_, what) := row then (.trusted, s!"TRUSTED.md: {what}")
       else if !(tests checked).isEmpty then (.checked, listOf (tests checked))
       else if !(tests tested).isEmpty then (.tested, listOf (tests tested))
       else (.none, "")
