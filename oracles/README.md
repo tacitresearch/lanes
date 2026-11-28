@@ -34,7 +34,7 @@ every module a row names exists, and so does every path it cites.
 | `oracles/botocore` | botocore, and `cryptography` for the signatures it is given | 1.44.12, cryptography 50.0.2 | `oracles/botocore/requirements.txt` | Signature Version 4; CloudFront's signed URLs (`oracles/botocore/cloudfront.jsonl`), signed with the published test keys of `oracles/botocore/keys/` |
 | `oracles/jwcrypto` | jwcrypto | 1.6.2 | `oracles/jwcrypto/requirements.txt` | JWS in compact form and JWK Sets |
 | `oracles/moto` | moto's server, S3, SES API v2 and SQS | 5.2.6 | `oracles/moto/requirements.txt` | the recorded runs of the object store, multipart, email and queue models, of `POST` forms, and of a journal shipped and restored |
-| `oracles/postgres` | PostgreSQL | 16 (16.15 recorded) | the CI job's `postgresql-16` | the store model's recorded runs |
+| `oracles/postgres` | PostgreSQL | 16 (16.15 recorded) | the CI job's `postgresql-16` | the recorded runs of the key-value and the typed store models, and the typed store's answers against their meaning |
 
 ## Protocol modules
 
@@ -68,6 +68,7 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Lib/Postgres/Message.lean` | `Tests/Postgres.lean`, `oracles/postgres` | The messages, in the recorded sessions; written and read again against a live server |
 | `Lanes/Lib/Postgres/Pool.lean` | | Decisions, not a format: proved (`Pool.run_size`, `Pool.never_again`) and model-checked (`Tests/PostgresPool.lean`) |
 | `Lanes/Lib/Postgres/Scram.lean` | `Tests/Postgres.lean`, `Tests/PostgresTls.lean` | RFC 7677's example and libpq's recorded session; with channel binding, Python's `hashlib` and PostgreSQL 16 with TLS |
+| `Lanes/Lib/Postgres/Sql.lean` | `oracles/postgres/db.jsonl` | The SQL of the typed store's operations against PostgreSQL itself: every answer of generated transactions compared with its meaning (`Tests/Oracle/Service/Db.lean`); a value reads back from its parameter (`Postgres.Sql.decode_param`) |
 | `Lanes/Lib/Postgres/Settings.lean` | `Tests/PostgresLive.lean` | libpq's variables and password file: `psql` connects with the same, against PostgreSQL 16 |
 | `Lanes/Lib/Postgres/Table.lean` | `oracles/postgres` | The SQL of the store's operations, against PostgreSQL itself |
 | `Lanes/Lib/RateLimit.lean` | `oracles/go/rate` | |
@@ -130,5 +131,6 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Outside/Queue.lean` | `oracles/moto/sqs.jsonl` | A standard queue with a dead-letter queue, and a FIFO queue, through `Aws.Sqs`. Known: moto 5.2.6 deletes a message with any receipt it was given, where SQS may keep it after a delete with a stale one; the model allows both |
 | `Lanes/Outside/Rpc.lean` | `oracles/moto/s3.jsonl`, `oracles/moto/ses.jsonl` | The calls the object store's and the email model are made of |
 | `Lanes/Outside/Store/Basic.lean` | `oracles/postgres/store.jsonl` | |
+| `Lanes/Db/Model.lean` | `oracles/postgres/db.jsonl` | Generated transactions one at a time and three at once, through `Lanes/Lib/Postgres/IO/Db.lean`. Not recorded: a lost `COMMIT`, which the key-value store's runs record at the protocol |
 | `Lanes/Outside/Throttle.lean` | | Owed: no service in CI answers 429 as a real one does; checked against a seeded bug in `Tests/Throttle.lean` |
 | `Lanes/Outside/Transcode.lean` | | Owed: no reference worker, and a vendor's (MediaConvert, Mux) does not speak the wire format; runs written by hand (`Tests/Outside.lean`), and the test kit's worker in `examples/videos`, not recorded |

@@ -87,6 +87,7 @@ def homes : List (String × Package) := [
   ("Lanes/Check/", .actors),
   ("Lanes/Behaviours/", .actors),
   ("Lanes/Outside/", .actors),
+  ("Lanes/Db/", .actors),
   ("Lanes/Semantics/", .actors),
   ("Lanes/Lib/", .std),
   ("Lanes/Durable/Frame.lean", .std),
