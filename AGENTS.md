@@ -161,13 +161,15 @@ size.
 
 1.8 **Decide what belongs from first principles, not from our examples.** Lanes is a runtime and
 library people use to build software in Lean, so a piece is judged by what it gives them, not by
-whether our own examples happen to use it. For any piece, whether added, kept or removed, weigh:
-reach (would people building software in Lean want it, and what could they build with it that
-they cannot today?), cost (code, proofs, trusted lines, and concepts a newcomer must learn) and
-coupling (does it stand alone as a library piece, or does it force a design choice on the core?).
-A general piece whose reach is worth its cost stays even if no example uses it; a piece that pulls
-its design into everything else goes even if it works. Say how you weighed these in the PR when you
-add or remove something. *Why:* a library is used for things its authors did not build, and the
+whether our own examples happen to use it. For any piece, whether added, kept or removed, weigh
+its reach against its total cost. Reach: would people building software in Lean want it, and what
+could they build with it that they cannot today? Total cost: its own code, proofs, trusted lines
+and concepts a newcomer must learn, plus what it costs people who never use it (a design choice it
+forces on the core, imports, build time, rules everyone must follow). Coupling is part of the cost,
+never a merit: a low cost to non-users is necessary for an optional piece, but never sufficient. A
+general piece whose reach is worth its total cost stays even if no example uses it; a piece that
+pulls its design into everything else goes even if it works. Say how you weighed these in the PR
+when you add or remove something. *Why:* a library is used for things its authors did not build, and the
 journal showed that a feature can be finished, proved and still not worth its cost (D110).
 
 2.1 **Make illegal states unrepresentable.** A role is a sum type that carries its own data, not
