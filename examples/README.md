@@ -35,10 +35,11 @@ there.
 8. `migration`: a deploy that changes the state type. Version 1 of a quota service runs on a
    journal; version 2 adds a quota to each user, reads version 1's files through an upgrade,
    and carries its invariant across with the migration's proof.
-9. `todo-db`: a to-do list kept in PostgreSQL, checked against the transactional store model with
-   lost `COMMIT` answers. Appending and retrying a lost commit stores a to-do twice, and the
-   checker finds it; the fix inserts under the user's key after reading it, and is proved to send
-   nothing else. `lake exe todoLive` runs it on a real server.
+9. `todo-db`: a to-do list kept in PostgreSQL through the typed store: one pure transaction per
+   request, at `SERIALIZABLE`. A user's to-dos are unique by title, proved per transaction and so
+   in every database the store model allows; adding without looking first, and retrying a lost
+   answer, stores a title twice, and the checker finds it. `lake exe todoLive` runs it on a real
+   server.
 10. `sign-in`: the start of a video site whose members sign in with Google or GitHub. The
     sign-in is Lanes' and runs before the system, which gets only the identity it verified and
     gives the member a session.
@@ -71,7 +72,7 @@ there.
 | Work due later, retried with a backoff, periodic sweeps (`Schedule.attach`) | `reminders`, `videos` |
 | A model of an external service: timeouts with unknown outcome, idempotency keys, webhooks (`Lanes/Outside/`) | `payments`, `videos` |
 | Files in S3: presigned uploads and downloads, `HEAD` and delete, the object store's model | `videos` |
-| A database: the store model, lost commits, PostgreSQL | `todo-db` |
+| A database: typed tables, pure transactions, an invariant per transaction, PostgreSQL | `todo-db` |
 | Model checks, a bug found, random runs | `bank`, `kv-cache`, `election`, `payments`, `todo-db`, `videos` |
 | HTTP, routes, htmx, templates | `counter`, `bank-web`, `ledger`, `rookery` |
 | A journal and snapshots across `kill -9` | `bank-web`, `ledger`, `raft-kv`, `rookery` |

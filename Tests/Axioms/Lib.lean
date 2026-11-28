@@ -485,3 +485,10 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.TimeFormat.parseHttpDate_print' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.TimeFormat.parseHttpDate_print
+
+-- Lanes.Lib.Postgres.Sql
+/-- info: 'Lanes.Postgres.Sql.decode_param' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.Sql.decode_param
+
+/-- info: 'Lanes.Postgres.Sql.decodeRow_param' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.Sql.decodeRow_param

@@ -41,6 +41,7 @@ proved function tells it to.
 | Models of external services | `Lanes/Outside/{Rpc,Idempotent,Events,ObjectStore,Multipart,Queue,Cache,Clock,Throttle}.lean`, `Lanes/Outside/Effects/`, `Lanes/Web/Http/SharedCache.lean`, `Lanes/Proof/Outputs.lean` | `Idempotent.at_most_once`, `Rpc.answered_le_called`, `Events.deliveries_le`, `ObjectStore.read_sent`, `ObjectStore.held_sent`, `Multipart.read_listed`, `Queue.received_le`, `Cache.read_sent`, `Clock.wall_back_le`, `Throttle.wait_le`, `SharedCache.serve_storable`, `SharedCache.serve_of_leaks`, `System.Emits.outputs`; that a real service conforms is trusted |
 | Signature Version 4 and the S3 client | `Lanes/Web/Http/{SigV4,SigV4Sound}.lean`, `Lanes/Web/S3/{Basic,Xml,Post,PostSound,Multipart}.lean`, `Lanes/Web/IO/S3.lean` | `SigV4.target_sign`, `SigV4.sortQuery_sorted`, `SigV4.canonicalHeaders_sorted`, `SigV4.encode_chunks`, `S3.Post.form_policy`, `S3.Post.admitted_bounded`, `S3.Multipart.Plan.count_le`, `S3.Multipart.Plan.range_full`; signatures tested against AWS's vectors and botocore, the client against a fake S3, the multipart flow model-checked; its IO trusted |
 | PostgreSQL and the store model | `Lanes/Lib/Postgres/{Bytes,Message,MessageSound,Scram,Conn,ConnSound,Pool,Settings,Table}.lean`, `Lanes/Lib/Postgres/IO/{Client,Pool}.lean`, `Lanes/Lib/Crypto/Certificate.lean`, `Lanes/Outside/Store/{Basic,Sound}.lean` | `Backend.read_encode`, `Frontend.decode_encode`, `Conn.run_fifo`, `Conn.step_committed`, `Conn.step_query`, `Conn.tls_first`, `Conn.run_bound`, `Conn.onMessage_binds`, `Pool.run_size`, `Pool.never_again`, `SslMode.defaultFor_disable`, `Store.write_skew`, `Store.lost_commit_either`; the IO is trusted, and that the server behaves like the model is a premise |
+| The typed store | `Lanes/Db/{Basic,Query,Txn,Retry,Model,Sound}.lean`, `Lanes/Lib/Postgres/Sql.lean`, `Lanes/Lib/Postgres/IO/Db.lean` | `Db.invariant`, `Retry.loop_committed`, `Txn.interp_apply`, `Postgres.Sql.decode_param`; the driver is trusted, and that PostgreSQL at `SERIALIZABLE` behaves like the model is a premise |
 | Jobs: work outside a step | `Lanes/Behaviours/Jobs/{Basic,Sound}.lean`, `Lanes/Semantics/Jobs.lean`, `Lanes/Behaviours/Jobs/IO/Pool.lean` | `Jobs.answered_le_handled`, `Jobs.retry_same`, `Jobs.submitted_answered`; the pool is trusted |
 | Schedule: work that is due later | `Lanes/Behaviours/Schedule/{Basic,Sound}.lean`, `Lanes/Semantics/Schedule.lean` | `Schedule.dispatch_due`, `Schedule.calls_le_scheduled`, `Schedule.attempt_ends`, `Schedule.held_ends`; that the time it knows is not ahead of the clock is a premise |
 | Web | `Lanes/Web/Http/{Basic,Route,RouteSound,Cookie,CookieSound}.lean`, `Lanes/Web/Html/`, `Lanes/Web/Auth/` | `Html.lex_render`, `Html.safeUrl_scheme`, `Http.dispatch_link`, `Http.parseForm_encodeForm`, `Http.readSetCookie_header`, `Auth.verify_eq_some`, `Auth.checkForm_other` |
@@ -869,7 +870,7 @@ later. Its litmus runs are theorems (`Lanes/Outside/Store/Sound.lean`: `Store.wr
 PostgreSQL runs it (`Lanes/Lib/Postgres/Table.lean`, `Postgres.Store.handler`); that the server
 behaves like the model at the level chosen is the premise of a theorem proved against it,
 tested on runs recorded from PostgreSQL 16, some interleaved at random
-(`oracles/postgres/store.jsonl`). `examples/todo-db` is checked against it.
+(`oracles/postgres/store.jsonl`). The typed store (below) is the API applications use.
 
 Where: `Lanes/Lib/Postgres/`, `Lanes/Lib/Crypto/{Certificate,Sha512}.lean`, `Lanes/Outside/Store/`.
 
@@ -886,7 +887,7 @@ Where: `Lanes/Lib/Postgres/`, `Lanes/Lib/Crypto/{Certificate,Sha512}.lean`, `Lan
 | A PostgreSQL server reached through a relay that holds another valid certificate refuses a client that binds, as it refuses libpq | `Tests/PostgresTls.lean`, against PostgreSQL 16 with TLS and `Tests/Postgres/relay.py`, run by hand on 2026-11-27 (`LANES_POSTGRES_TLS` set), beside `psql` with `channel_binding=require` | A local server; no CI job | tested by hand |
 | The PostgreSQL pool never has more than `max` connections open or being opened, nor more than `waiting_max` clients waiting, and never hands out again a connection handed back broken | `Pool.run_size`, `Pool.run_waiting`, `Pool.never_again`, `Lanes/Lib/Postgres/Pool.lean`; gate `Tests/Axioms/Lib.lean`; model-checked in `Tests/PostgresPool.lean`; live in `Tests/PostgresTls.lean` | The IO never reports a connection opened under a number used before, and tells the policy what happened (`Lanes/Lib/Postgres/IO/Pool.lean`, trusted); a connection is reusable as `Conn.reusable` says | proved for the policy; the IO trusted |
 | Unless asked otherwise, the PostgreSQL client uses no TLS to this machine and full verification to any other host, and goes without TLS only to a loopback address | `SslMode.defaultFor_disable`, `SslMode.defaultFor_loopback`, `SslMode.defaultFor_remote`, `Lanes/Lib/Postgres/Settings.lean`; gate `Tests/Axioms/Lib.lean`; `Tests/PostgresSettings.lean` | That `localhost` is `127.0.0.1` (RFC 6761) and that the IO connects where `Address.of` says (`TRUSTED.md`) | proved |
-| The client works against a real PostgreSQL | `Tests/PostgresLive.lean`, against PostgreSQL 16 (`LANES_POSTGRES` set); `oracles/postgres/run.sh`, nightly in the Services workflow; `examples/todo-db` `lake exe todoLive` | A local server | tested against PostgreSQL 16, nightly |
+| The client works against a real PostgreSQL | `Tests/PostgresLive.lean`, against PostgreSQL 16 (`LANES_POSTGRES` set); `oracles/postgres/run.sh`, nightly in the Services workflow | A local server | tested against PostgreSQL 16, nightly |
 | The store model allows write skew and lost updates at read committed and refuses them at serializable; a lost `COMMIT` may or may not have taken effect, and later | `Store.write_skew`, `Store.lost_update`, `Store.lost_commit_either`, `Store.lost_commit_later`, `Lanes/Outside/Store/Sound.lean`; gate `Tests/Axioms/Outside.lean` | The runs stated | proved |
 | PostgreSQL behaves like the store model at the isolation level chosen | Runs against PostgreSQL 16 at both levels, recorded and checked with `Store.State.run`, nightly, and the record again in `lake test`: write skew, a lost `COMMIT` and 50 runs of transactions interleaved at random (`oracles/postgres/store.jsonl`, `Tests/Oracle/Service/Postgres.lean`) | Every theorem proved against the store model rests on it; no two transactions open at once write one key, so no request waits on a lock | trusted, tested against PostgreSQL 16 |
 
@@ -897,6 +898,50 @@ Also:
 ### Limits
 
 - That a PostgreSQL server behaves like the store model at an isolation level is a premise, tested on a few recorded runs, not proved. The model keeps at most `history_max` transactions in its serial order while one is open, and a run beyond its bounds is outside it. At read committed, `append` is checked for a free key at its answer only.
+
+## The typed store
+
+Durable state in PostgreSQL through typed tables and pure transactions
+(`docs/decisions/new-typed-store.md`). A table (`Lanes/Db/Basic.lean`) has typed columns of
+64-bit integers, bytes, text compared byte by byte and booleans, each nullable or not, a primary
+key on its first columns, and secondary indexes, unique or not. The query subset
+(`Lanes/Db/Query.lean`) is a row by key, a scan on the key or an index with equality on its first
+columns and a range on the next, ordered, with a limit, and an insert, update, upsert or delete
+of one row by key; each means a pure function of the database (`Op.apply`). A write that would
+take a key or a unique value already taken does nothing and answers `false`.
+
+A request handler is `Q → Txn A` (`Lanes/Db/Txn.lean`): a free monad over the operations, so
+that an operation may depend on what earlier ones answered, with no IO and room for one
+transaction only. `Txn.run` is what it means; `TableOf α` puts a Lean type on a table. The
+driver (`Lanes/Lib/Postgres/IO/Db.lean`) runs it at `SERIALIZABLE`, one statement per operation
+(`Lanes/Lib/Postgres/Sql.lean`, pure), and tries again after a serialization failure, a deadlock,
+a unique violation or a connection lost before `COMMIT`, up to `attempts_max` attempts, as
+`Retry.next` says (`Lanes/Db/Retry.lean`). The model (`Lanes/Db/Model.lean`) is an `Outside`: a
+call takes effect at one moment between its request and its reply, as one run of its handler; a
+failed call never did; a call answered unknown may have taken effect, or may later, or never.
+
+Where: `Lanes/Db/`, `Lanes/Lib/Postgres/Sql.lean`, `Lanes/Lib/Postgres/IO/Db.lean`.
+
+### Claims
+
+| Claim | Evidence | Premises | Status |
+| --- | --- | --- | --- |
+| An invariant of the database that every transaction of a handler keeps holds in every database the model allows after every run, with lost `COMMIT`s, failures and calls taking effect late | `Db.invariant`, `Lanes/Db/Sound.lean`; gate `Tests/Axioms/Db.lean` | The start satisfies it; PostgreSQL behaves like the model | proved |
+| A call that committed after retries answers what one run of its transaction answers on the state it committed against, and leaves that run's state | `Retry.loop_committed`; gate `Tests/Axioms/Db.lean` | Failed attempts were rolled back; the driver follows `Retry.next` (trusted) | proved |
+| A transaction answered operation by operation with their meanings is its meaning | `Txn.interp_apply`; gate `Tests/Axioms/Db.lean` | The driver feeds each answer to the next step (trusted) | proved |
+| A value reads back from the text the driver sends it as | `Postgres.Sql.decode_param`, `Postgres.Sql.decodeRow_param`; gate `Tests/Axioms/Lib.lean` | Values of their columns' types | proved |
+| PostgreSQL answers every operation of the subset as its meaning says, and behaves like the model at `SERIALIZABLE` | `Tests/Oracle/Service/Db.lean` against PostgreSQL 16: generated transactions one at a time, every answer compared with `Txn.run`, and three at once, checked with `Db.State.run`; nightly, recorded in `oracles/postgres/db.jsonl` and checked again by `lake test` | Every theorem proved against the model rests on it | trusted, tested against PostgreSQL 16 |
+| The meaning, the SQL, the replies, the retry decision and the model's litmus runs | `Tests/Db.lean`, in `lake test` | | tested |
+
+### Limits
+
+- A call takes effect at one moment between its request and its reply, an order that follows
+  real time. PostgreSQL's `SERIALIZABLE` promises a serial order only; that it also follows real
+  time for transactions that do not overlap is tested on the recorded runs, not documented.
+- No SQL arithmetic, `LIKE`, floats, JSON, joins or engine-assigned ids: that logic is in Lean.
+  Key and index columns are never `NULL`.
+- A lost `COMMIT` is not in the recorded runs of the typed store; the key-value store's runs
+  record one at the protocol.
 
 ## Behaviours: servers, jobs and the scheduler
 
@@ -1383,7 +1428,8 @@ Also:
 
 ### To-do list
 
-Stores to-dos in PostgreSQL through the client's store adapter.
+Stores to-dos in PostgreSQL through the typed store: one pure transaction per request, a user's
+to-dos unique by title with no constraint saying so.
 
 Where: `examples/todo-db/TodoDb.lean`.
 
@@ -1391,12 +1437,9 @@ Where: `examples/todo-db/TodoDb.lean`.
 
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
-| To-do list: appending and retrying a lost `COMMIT` stores a to-do twice; the keyed insert never does | `examples/todo-db/Check.lean`, run by `lake test` in the example and by CI | The store model (and so the premise that PostgreSQL behaves like it); one or two to-dos, two attempts | checked |
-| To-do list: the fixed actor inserts only the to-do being stored, under its user's key, after reading the key free, and never appends, replaces or deletes | `TodoDb.keyed_requests`, `TodoDb.keyed_no_unkeyed`, and for every output of every run `TodoDb.outputs_noUnkeyed`, `examples/todo-db/TodoDb/Proofs.lean`; gate `examples/todo-db/TodoDb/Proofs/Axioms.lean` | That no to-do is stored twice follows with the table's primary key, a premise of the store model | proved |
-
-#### Limits
-
-- That no to-do is stored twice is checked, for one and two to-dos, not proved: the proof covers the actor, and the rest rests on the table's primary key, a premise of the store model.
+| To-do list: every transaction keeps a user's to-dos unique by title and to-dos unique by id, so every database the store model allows after every run does | `TodoDb.preserves`, `TodoDb.unique_always` (through `Db.invariant`), `examples/todo-db/TodoDb/Proofs.lean`; gate `examples/todo-db/TodoDb/Proofs/Axioms.lean` | PostgreSQL behaves like the typed store's model | proved |
+| To-do list: adding without looking the title up, and retrying a lost answer, stores a title twice; the checked handler never does, with failures and lost answers | `examples/todo-db/Check.lean`, run by `lake test` in the example and by CI | One user, up to three requests, two attempts | checked |
+| To-do list: the answers on a real PostgreSQL | `examples/todo-db/Live.lean` (`lake exe todoLive`) | A local server | tested by hand |
 
 ### Uploads
 
