@@ -8,7 +8,10 @@ public import Lanes.Data.Body
 public import Lanes.Proof.ByteArray
 
 /-!
-The body reads back what it writes: `Body.read_write`, for every schema, value and limits.
+The body reads back what it writes (`Body.read_write`), and what reads is what the writer writes
+for the value read (`Body.write_read`), for every schema, value and limits: a value has one body.
+Each reader is proved with the writer it mirrors (`readAt_writeAt`, `writeAt_readAt`), from any
+bytes before the value and after it.
 -/
 
 @[expose] public section

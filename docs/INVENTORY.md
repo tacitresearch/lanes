@@ -492,6 +492,50 @@ them by area.
 | `SysState.run` | proved | `Check.systemFingerprinted_violated`, `Check.system_violated`, `Http.Gate.answered_le_handled` and others |
 | `System.Invariant` | spec | a predicate |
 
+## `Lanes/Data/Body.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Codec.Error.Step.text` | tested | `Tests/Body.lean` |
+| `Codec.Error.Problem.text` | tested | `Tests/Body.lean` |
+| `Codec.Error.pathText` | tested | `Tests/Body.lean` |
+| `Codec.Error.instToString` | tested | `Tests/Body.lean` |
+| `Body.fail` | proved | through `Body.write`: `Body.read_eq_ok_iff` |
+| `Body.within` | proved | through `Body.write`: `Body.read_eq_ok_iff` |
+| `Body.writeNat` | proved | through `Body.write`: `Body.read_eq_ok_iff` |
+| `Body.natBytes` | proved | through `Body.write`: `Body.read_eq_ok_iff` |
+| `Body.zigzag` | proved | through `Body.write`: `Body.read_eq_ok_iff` |
+| `Body.unzigzag` | proved | through `Body.read`: `Body.read_eq_ok_iff` |
+| `Body.writeNum` | proved | through `Body.write`: `Body.read_eq_ok_iff` |
+| `Body.writeBlob` | proved | through `Body.write`: `Body.read_eq_ok_iff` |
+| `Body.writeCount` | proved | through `Body.write`: `Body.read_eq_ok_iff` |
+| `Body.readNatFrom` | proved | through `Body.read`: `Body.read_eq_ok_iff` |
+| `Body.readNat` | proved | through `Body.read`: `Body.read_eq_ok_iff` |
+| `Body.readBlob` | proved | through `Body.read`: `Body.read_eq_ok_iff` |
+| `Body.readCount` | proved | through `Body.read`: `Body.read_eq_ok_iff` |
+| `Body.consumes` | proved | through `Body.read`: `Body.read_eq_ok_iff` |
+| `Body.consumesFields` | proved | through `Body.read`: `Body.read_eq_ok_iff` |
+| `Body.Tag.nat` | proved | through `Body.write`: `Body.read_eq_ok_iff` |
+| `Body.Tag.int` | proved | through `Body.write`: `Body.read_eq_ok_iff` |
+| `Body.Tag.string` | proved | through `Body.write`: `Body.read_eq_ok_iff` |
+| `Body.Tag.bytes` | proved | through `Body.write`: `Body.read_eq_ok_iff` |
+| `Body.Tag.list` | proved | through `Body.write`: `Body.read_eq_ok_iff` |
+| `Body.Tag.ctor` | proved | through `Body.write`: `Body.read_eq_ok_iff` |
+| `Body.writeAt` | proved | through `Body.write`: `Body.read_eq_ok_iff` |
+| `Body.writeFields` | spec | used only in statements |
+| `Body.writeItems` | spec | used only in statements |
+| `Body.writeEntries` | spec | used only in statements |
+| `Body.writeTagged` | proved | through `Body.write`: `Body.read_eq_ok_iff` |
+| `Body.writeTaggedItems` | spec | used only in statements |
+| `Body.readAt` | proved | through `Body.read`: `Body.read_eq_ok_iff` |
+| `Body.readFields` | spec | used only in statements |
+| `Body.readItems` | spec | used only in statements |
+| `Body.readEntries` | spec | used only in statements |
+| `Body.readTagged` | proved | through `Body.read`: `Body.read_eq_ok_iff` |
+| `Body.readTaggedItems` | spec | used only in statements |
+| `Body.write` | proved | `Body.read_eq_ok_iff` |
+| `Body.read` | proved | `Body.read_eq_ok_iff` |
+
 ## `Lanes/Data/Codec.lean`
 
 | Definition | Status | Evidence |
@@ -511,8 +555,8 @@ them by area.
 | `Codec.sum` | proved | its type, `Codec` |
 | `Codec.option` | proved | its type, `Codec` |
 | `Codec.padded` | proved | its type, `Codec` |
-| `Codec.hasAtLeast` | tested | `Tests/Codec.lean`, `Tests/Durable.lean`, `Tests/MonitorSpeed.lean` and others |
-| `Codec.readMany` | tested | `Tests/Codec.lean`, `Tests/Durable.lean`, `Tests/MonitorSpeed.lean` and others |
+| `Codec.hasAtLeast` | tested | `Tests/Body.lean`, `Tests/Codec.lean`, `Tests/Durable.lean` and others |
+| `Codec.readMany` | tested | `Tests/Body.lean`, `Tests/Codec.lean`, `Tests/Durable.lean` and others |
 | `Codec.list` | proved | its type, `Codec` |
 | `Codec.extTreeMap` | proved | its type, `Codec` |
 | `Codable.instByteArray` | proved | its type, `Codable` |
@@ -1602,6 +1646,35 @@ them by area.
 | `Peers.Action.parcel?` | spec | used only in statements |
 | `Peers.Courier.leftover` | spec | used only in statements |
 
+## `Lanes/Net/Handshake.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Peers.Handshake.magic` | proved | through `Peers.Handshake.Hello.read`, `Peers.Handshake.Hello.write` and others: `Peers.Handshake.Hello.read_write_append`, `Peers.Handshake.Reachable.ready_proved` and others |
+| `Peers.Handshake.version` | proved | `Peers.Handshake.Hello.read_write_append` |
+| `Peers.Handshake.proofSize` | proved | `Peers.Handshake.Reachable.ready_proved` |
+| `Peers.Handshake.Hello.records` | proved | `Peers.Handshake.Hello.read_write_append` |
+| `Peers.Handshake.Hello.write` | proved | `Peers.Handshake.Hello.read_write_append` |
+| `Peers.Handshake.Hello.read` | proved | `Peers.Handshake.Hello.read_write_append`, `Peers.Handshake.Reachable.ready_proved`, `Peers.Handshake.hear_differs` |
+| `Peers.Handshake.Role.other` | proved | `Peers.Handshake.Reachable.ready_proved` |
+| `Peers.Handshake.Role.label` | proved | through `Peers.Handshake.hear`, `Peers.Handshake.step`: `Peers.Handshake.Reachable.ready_proved`, `Peers.Handshake.hear_differs` |
+| `Peers.Handshake.Refusal.message` | tested | `Tests/Fronted.lean`, `Tests/Peers.lean` |
+| `Peers.Handshake.Refusal.quiet` | tested | `Tests/Fronted.lean`, `Tests/Peers.lean` |
+| `Peers.Handshake.transcript` | proved | `Peers.Handshake.Reachable.ready_proved` |
+| `Peers.Handshake.proofOf` | proved | `Peers.Handshake.Reachable.ready_proved` |
+| `Peers.Handshake.differs` | proved | `Peers.Handshake.Reachable.ready_proved`, `Peers.Handshake.hear_differs` |
+| `Peers.Handshake.refuse` | proved | through `Peers.Handshake.hear`, `Peers.Handshake.step`: `Peers.Handshake.Reachable.ready_proved`, `Peers.Handshake.hear_differs` |
+| `Peers.Handshake.check` | proved | through `Peers.Handshake.hear`, `Peers.Handshake.step`: `Peers.Handshake.Reachable.ready_proved`, `Peers.Handshake.hear_differs` |
+| `Peers.Handshake.hear` | proved | `Peers.Handshake.hear_differs` |
+| `Peers.Handshake.start` | tested | `Tests/Peers.lean` |
+| `Peers.Handshake.step` | proved | `Peers.Handshake.Reachable.ready_proved` |
+
+## `Lanes/Net/HandshakeSound.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Peers.Handshake.Heard` | spec | a predicate |
+
 ## `Lanes/Net/IO/Node.lean`
 
 | Definition | Status | Evidence |
@@ -1612,6 +1685,7 @@ them by area.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
+| `Peers.Config.minKeyBytes` | trusted | TRUSTED.md: The transport between processes |
 | `Peers.start` | trusted | TRUSTED.md: The transport between processes |
 | `Peers.send` | trusted | TRUSTED.md: The transport between processes |
 | `Peers.stop` | trusted | TRUSTED.md: The transport between processes |
