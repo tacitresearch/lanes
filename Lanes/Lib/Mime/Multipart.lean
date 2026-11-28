@@ -113,9 +113,13 @@ def headers (data : ByteArray) : (fuel : Nat) → (pos : Nat) →
           | none => .error .malformed
           | some h => (headers data fuel (e + 2)).map fun (hs, start) => (h :: hs, start)
 
+/-- A part from its bytes. No bytes at all is a part with no header and no body: RFC 2046's
+`body-part` is header lines and, only if there is a body, the empty line and the body. -/
 def part (limits : Limits) (bytes : ByteArray) : Except Error Part :=
-  (headers bytes limits.headers_max 0).map fun (headers, start) =>
-    { headers, body := bytes.extract start bytes.size }
+  if bytes.size = 0 then .ok {}
+  else
+    (headers bytes limits.headers_max 0).map fun (headers, start) =>
+      { headers, body := bytes.extract start bytes.size }
 
 /-- The parts after a delimiter that ends at `pos`, at most `fuel` of them. -/
 def parts (limits : Limits) (delim data : ByteArray) : (fuel : Nat) → (pos : Nat) →

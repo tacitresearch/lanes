@@ -77,7 +77,7 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Lib/Log.lean` | | Proved one line of JSON text that the parser reads back as the record (`Log.render_oneLine`, `Log.parse_render`); its fields in `slog`'s order checked by hand (`Tests/Log.lean`) |
 | `Lanes/Lib/Metrics.lean` | `oracles/go/expfmt` | |
 | `Lanes/Lib/Mime/MediaType.lean` | `oracles/go/mime` | |
-| `Lanes/Lib/Mime/Multipart.lean` | `oracles/go/multipart` | Go's `Reader` is laxer, each a `known` difference in `Tests/Oracle/Multipart.lean`: it reads a body with no delimiter as no parts, takes a bare line feed for CR LF, a delimiter not on a line of its own as text, header names that are no tokens, folded header lines and headers that are not UTF-8; ours refuses them. Proved to read back what it writes (`Multipart.parse_write`) |
+| `Lanes/Lib/Mime/Multipart.lean` | `oracles/go/multipart` | Go's `Reader` is laxer, each a `known` difference in `Tests/Oracle/Multipart.lean`: it reads a body with no delimiter as no parts, takes a bare line feed for CR LF, a delimiter not on a line of its own as text, header names that are no tokens, folded header lines, headers that are not UTF-8, and a body that ends after a delimiter with no last delimiter; ours refuses them. Proved to read back what it writes (`Multipart.parse_write`) |
 | `Lanes/Lib/Net/Ip.lean` | `oracles/go/netip` | |
 | `Lanes/Lib/Net/Percent.lean` | `oracles/go/url` | Through the URL's cases, which decode and encode with it (`Tests/Oracle/Url.lean`) |
 | `Lanes/Lib/Net/Url.lean` | `oracles/go/url` | |

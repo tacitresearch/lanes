@@ -95,6 +95,10 @@ def tests : List (String × Bool) :=
       refused (parse {} "B" "nothing here".toUTF8) .malformed
         && refused (parse {} "B" "--B\r\n\r\nx\r\n".toUTF8) .malformed
         && refused (parse {} "B" "--Bx\r\n\r\nx\r\n--B--".toUTF8) .malformed),
+    ("form-data: a part with no header and no body, as RFC 2046's grammar allows",
+      match parse {} "B" "--B\r\n\r\n--B--\r\n".toUTF8 with
+      | .ok [p] => p == {}
+      | _ => false),
     ("form-data: a header line with no colon, or a name that is no token, is refused",
       refused (parse {} "B" "--B\r\nno colon\r\n\r\nx\r\n--B--".toUTF8) .malformed
         && refused (parse {} "B" "--B\r\nbad name: v\r\n\r\nx\r\n--B--".toUTF8) .malformed),

@@ -120,12 +120,35 @@ def folded (c : Case) : Bool :=
     c.input[i]! == 13 && c.input[i + 1]? == some 10
       && (c.input[i + 2]? == some 32 || c.input[i + 2]? == some 9)
 
+/-- The body with its last delimiter made the last one RFC 2046 has, `--` after it: what Go
+reads when a body ends after a delimiter, without its parts, with no `--`. -/
+def closedAtLast (c : Case) : Option Case :=
+  let data := crlf ++ c.input
+  let delim := delimiter (c.op.drop 6).toString
+  match ((List.range data.size).filter fun i => matchesAt data delim i).getLast? with
+  | some i =>
+    let closed := data.extract 0 i ++ delim ++ dashes ++ crlf
+    some ⟨c.op, closed.extract 2 closed.size⟩
+  | none => none
+
 def edges : List Case :=
   [ ⟨"parse-B", "--B--\r\n".toUTF8⟩,
     ⟨"parse-B", "--B\r\n\r\n\r\n--B--".toUTF8⟩,
     ⟨"parse-B", "pre\r\n--B  \r\ncontent-type: a/b\r\n\r\nx\r\n--B--\r\nepi".toUTF8⟩,
     ⟨"parse-B", "--B\r\n\r\nx\r\n".toUTF8⟩,
     ⟨"parse-B", "--B\r\nno colon\r\n\r\nx\r\n--B--".toUTF8⟩,
+    ⟨"parse-B", "--B\r\n\r\nx\r\n--B \t\r\nh: v\r\n".toUTF8⟩,
+    ⟨"parse-B", "--B\t\r\n\r\n--B--\r\n".toUTF8⟩,
+    ⟨"parse-B", "--B\r\n--B--\r\n".toUTF8⟩,
+    -- CI's seed 46140667000: the body ends after a delimiter and its blanks.
+    ⟨"parse-(aXYZ-ba?", (Bytes.unhex? ("2d2d286158595a2d62613f0d0a636f6e74656e742d646973706f736974696f6e3a20666f726d2d646174613b20"
+      ++ "6e616d653d6261636b5c736c6173680d0a636f6e74656e742d7472616e736665722d656e636f64696e673a2062"
+      ++ "0d0a0d0aece9f15582866235e21c0286f499c59026999b250d0a2d2d286158595a2d62613f0d0a636f6e74656e"
+      ++ "742d646973706f736974696f6e3a20666f726d2d646174613b206e616d653d22636166c3a9223b2066696c656e"
+      ++ "616d653d612e7478740d0a636f6e74656e742d747970653a20696d6167652f706e670d0a0d0addf79e72a89b33"
+      ++ "4592dc6f381255caffeb0d0a2d2d286158595a2d62613f0d0a636f6e74656e742d646973706f736974696f6e3a"
+      ++ "20666f726d2d646174613b206e616d653d2d2d0d0a0d0a3030312039317863c3a90d0a2d2d286158595a2d6261"
+      ++ "3f20090d0a")).getD .empty⟩,
     ⟨"parse-B", ("--B\r\n\r\n".toUTF8 ++ ⟨#[0, 255, 13, 10, 45, 45, 66, 66]⟩
       ++ "\r\n--B--\r\n".toUTF8)⟩ ]
 
@@ -148,6 +171,8 @@ def package : Package where
       else if (goHeaders go).any fun (_, v) => v.contains '\uFFFD' then
         some "Go takes a header that is not UTF-8; ours refuses it"
       else if folded c then some "Go unfolds a header line folded onto the next; ours refuses it"
+      else if (closedAtLast c).any fun d => answer d = go then
+        some "Go reads a body that ends after a delimiter, with no last delimiter, as the parts before it; RFC 2046 requires the last delimiter, so ours refuses it"
       else none
     else none
 

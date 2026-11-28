@@ -258,7 +258,8 @@ theorem part_of (limits : Limits) (p : Part) (ok : ∀ h ∈ p.headers, HeaderOk
     simp [Part.bytes, crlf]
   have hL : p.bytes.data.toList
       = bytesOf (headerText p.headers) ++ [13, 10] ++ p.body.data.toList := by simpa using hd
-  rw [part, headers_of _ p.headers ok _ 0 hl hd]
+  have hne : p.bytes.size ≠ 0 := by rw [size_eq_length, hL]; simp
+  rw [part, ite_eq_right hne, headers_of _ p.headers ok _ 0 hl hd]
   simp only [Except.map, Except.ok.injEq]
   congr
   apply eq_of_toList
@@ -457,6 +458,8 @@ theorem length_le_of_headers {data : ByteArray} : ∀ {fuel pos : Nat}
 theorem headers_le_of_part {limits : Limits} {bytes : ByteArray} {p : Part}
     (h : part limits bytes = .ok p) : p.headers.length ≤ limits.headers_max := by
   unfold part at h
+  split at h
+  · cases h; simp
   cases hr : headers bytes limits.headers_max 0 with
   | error => simp [hr, Except.map] at h
   | ok r =>

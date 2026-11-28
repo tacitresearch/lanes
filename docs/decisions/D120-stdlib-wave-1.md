@@ -50,9 +50,10 @@ fields and their order.
 
 ## Forms are read as RFC 2046 and RFC 7578 say
 
-`Multipart.parse` refuses what RFC 2046 forbids where Go's `mime/multipart` takes it: a body with
-no delimiter (Go reads no parts), a delimiter not on a line of its own, a bare line feed for
-CR LF, a header name that is no token, a folded header line and a header that is not UTF-8. Each
+`Multipart.parse` refuses what RFC 2046 forbids where Go's `mime/multipart` takes it: a body
+with no delimiter (Go reads no parts), a delimiter not on a line of its own, a bare line feed
+for CR LF, a header name that is no token, a folded header line, a header that is not UTF-8, and
+a body that ends after a delimiter with no last delimiter (Go reads the parts before it). Each
 is a decided difference of the oracle (`Tests/Oracle/Multipart.lean`). Browsers write none of
 them. A parser that refuses is one whose theorem says what it reads (`Multipart.parse_write`);
 one that guesses would need a spec of its guesses.
