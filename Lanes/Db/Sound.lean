@@ -894,6 +894,24 @@ theorem TableOf.every_apply {α : Type} (t : TableOf α) {P : α → Prop} (o : 
     · exact hw x hx a ha
   · exact hP x hx a ha
 
+/-- What a read by key found is a row of the table, so a value every row admits. -/
+theorem TableOf.get_every {α : Type} (t : TableOf α) {P : α → Prop} {db : Db} (hP : t.Every P db)
+    {key : Row} {a : α} {db' : Db} (h : (t.get key).run db = .ok (some a, db')) : P a := by
+  simp only [TableOf.get, Txn.bind_eq] at h
+  obtain ⟨found, db₁, hget, h⟩ := Txn.run_bind_ok_inv h
+  have happ := Txn.run_single hget
+  have hfind := (Op.apply_ok _ happ).2
+  cases found with
+  | none => simp at h
+  | some r =>
+    simp only [Functor.map] at h
+    obtain ⟨a', db₂, hdec, h⟩ := Txn.run_bind_ok_inv h
+    simp only [Function.comp, Txn.run_pure, Except.ok.injEq, Prod.mk.injEq, Option.some.injEq] at h
+    rw [h.1] at hdec
+    have hf : (db.rows t.table.name).find? (t.table.hasKey key) = some r := hfind.symm
+    have hmem : r ∈ db.rows t.table.name := List.mem_of_find?_eq_some hf
+    exact hP r hmem a (TableOf.run_decode _ hdec)
+
 /-! ## Rows a transaction does not write
 
 A transaction whose writes to a table are all to keys of some set leaves every row of another

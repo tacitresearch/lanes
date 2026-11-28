@@ -31,7 +31,7 @@ def occursIn (needle haystack : String) : Bool :=
   (haystack.splitOn needle).length > 1
 
 def sources : List String :=
-  ["Counter.lean", "Main.lean", "Check.lean", "Proofs.lean"]
+  ["Counter.lean", "Web.lean", "Main.lean", "Check.lean", "Proofs.lean"]
 
 def tests : IO (List (String × Bool)) := do
   let doc ← IO.FS.readFile "docs/TUTORIAL.md"
@@ -39,7 +39,7 @@ def tests : IO (List (String × Bool)) := do
     return (← IO.FS.readFile s!"Tests/Tutorial/{f}").replace "import Tests.Tutorial." "import Tut."
   let lean := (blocks doc).filter (·.1 == "lean")
   let text := (blocks doc).filterMap fun (info, body) => if info == "text" then some body else none
-  let fixed := report Tut.service
+  let fixed := report Tut.handler
   let bug := report buggy
   let outputs := [fixed.renderSystem, bug.renderSystem]
   return [("tutorial: it has lean blocks", !lean.isEmpty),
