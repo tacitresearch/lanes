@@ -116,10 +116,6 @@ Each is to be proved, tested, made private or removed.
 
 - `Json.instToString`
 
-### `Lanes/Web/Http/Front.lean`
-
-- `Http.servedActors`
-
 ### `Lanes/Web/Http/Gate.lean`
 
 - `Http.instReprGateMsgOfOut`

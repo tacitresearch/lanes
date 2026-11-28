@@ -86,8 +86,8 @@ structure ServerConfig where
   whichever of Lean's task threads tells it something. Four by default: on the warm machine they
   serve 21–30% more requests a second than `0` for a quarter less CPU (`bench/README.md`). -/
   ioThreads : Nat := 4
-  /-- The gate's bounds. The gate's decisions are recorded in the journal as their outcomes, so
-  a journal does not depend on them. -/
+  /-- The gate's bounds. A journal holds only the requests the gate admitted, so it does not
+  depend on them. -/
   gate : GateConfig := {}
   /-- Where to keep a journal. With one, the system behind the server survives the process:
   it starts in the state it was in (`docs/decisions/` D24). -/
@@ -200,6 +200,9 @@ private structure Desk where
   waiting : Waiting (Response → BaseIO Unit)
   pending : List ReqId := []
   deadlines : Std.HashMap ReqId Nat := {}
+
+/-- What the lock's cell holds while its desk is out of it. -/
+private def Desk.hole : Desk := { waiting := Waiting.start 0 }
 
 /-- Do what the gate decided, but pass nothing on: arm and disarm deadlines, and take the
 waiters of the requests it answers, with their answers. -/
@@ -445,11 +448,12 @@ history at the next start is longer than the id of any request that left a trace
 and ids stay fresh across restarts and after the journal is cut. A request the gate refused left
 none, and its id may be given again after a restart.
 
-A request is decoded on its own thread, then the gate decides under the table's lock
-(`Gate.admit`), and an admitted request is handed to the shard under the same lock, so that a
-refusal by the shard's inbox (`503`) leaves the gate's state as it was. An answer is encoded on
-the shard's thread and read by the gate under the lock (`Gate.answered`); deadlines are looked
-at by the ticker.
+An arrival takes the table's lock once: it is given its id, decoded, and the gate decides
+(`Gate.admit`); an admitted request is handed to the shard under the same lock, so that a refusal
+by the shard's inbox (`503`) leaves the gate's state as it was. `decode` runs under the lock, as
+it ran on the shard's one thread when the gate was an actor; taking it out would cost a second
+lock an arrival. An answer is encoded on the shard's thread and read by the gate
+under the lock (`Gate.receive`); deadlines are looked at by the ticker.
 -/
 private def serveOn (system : System τ) [Hashable τ.Id] (bridge : Bridge σ) (config : ServerConfig)
     (runtimeConfig : Runtime.Config) (log : Option (Journal.Log system))
@@ -465,12 +469,10 @@ private def serveOn (system : System τ) [Hashable τ.Id] (bridge : Bridge σ) (
   let desk ← Mutex.new ({ waiting := Waiting.start ((log.map (·.index)).getD 0) } : Desk)
   /- Do what the gate decides on `msg`, but pass nothing on; answer whom it answers. -/
   let decide (now : Nat) (msg : Desk → List ReqId × List (Gate.Act σ)) : BaseIO Unit := do
-    let calls ← desk.atomically do
-      let d ← get
+    let calls ← desk.atomically (modifyGet fun d =>
       let (pending, acts) := msg d
       let (d, calls) := Desk.apply { d with pending } (now + gate.requestTimeout_ms) acts
-      set d
-      return calls
+      (calls, d))
     for call in calls do call
   let runtime ← Runtime.startWith system runtimeConfig (journal := log) fun _ id out => do
     let out := output out
@@ -496,22 +498,21 @@ private def serveOn (system : System τ) [Hashable τ.Id] (bridge : Bridge σ) (
     localPort := (← listener.getSockName).port, lanes, ops }
   let hand (request : Request) (answer : Response → BaseIO Unit) : BaseIO (Option ReqId) := do
     let request := bridge.prepare request
-    let id ← desk.atomically (modifyGet fun d =>
-      let (id, waiting) := d.waiting.wait answer
-      (id, { d with waiting }))
-    let decoded := bridge.decode id request
     let now ← IO.monoMsNow
-    let (taken, calls) ← desk.atomically do
-      let d ← get
-      let (pending, acts) := Gate.admit gate Gate.acts d.pending id decoded
+    let (id, taken, calls) ← desk.atomically do
+      -- Taken out of the lock's cell while it is held, so that its tables are updated in place.
+      let d ← modifyGet fun d => (d, Desk.hole)
+      let (id, waiting) := d.waiting.wait answer
+      let d := { d with waiting }
+      let (pending, acts) := Gate.admit gate Gate.acts d.pending id (bridge.decode id request)
       if acts.any (· matches .forward _) then
         unless ← runtime.tryInput (enter (id, request)) do
           let (waiter, waiting) := d.waiting.answer id
           set { d with waiting }
-          return (false, (waiter.map (· busy)).toList)
+          return (id, false, (waiter.map (· busy)).toList)
       let (d', calls) := Desk.apply { d with pending } (now + gate.requestTimeout_ms) acts
       set d'
-      return (true, calls)
+      return (id, true, calls)
     for call in calls do call
     return if taken then some id else none
   let arriving ← IO.mkRef (0 : Nat)

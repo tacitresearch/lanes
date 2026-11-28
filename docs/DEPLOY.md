@@ -69,8 +69,9 @@ than `Server.wait`:
 
 Keep the `system` name your `main` has: it is the version of the step functions, and a journal
 written under another name is refused. The gate's settings (`ServerConfig.gate`) are not part of
-it: a journal written behind another gate is replayed behind that gate and carried across, if
-`serve` is given its `saving` (`Lanes/Web/Http/JournalName.lean`).
+it: the journal holds only the requests the gate admitted, so it is read behind any gate. A
+journal written while the gate was an actor of the system is refused, saying why
+(`Lanes/Web/Http/JournalName.lean`).
 
 The instance's security group admits that port from the load balancer only.
 

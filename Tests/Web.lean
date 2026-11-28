@@ -248,7 +248,7 @@ def guarded : Bridge echoSig :=
   { bridge with
     prepare := fun r =>
       if r.headers.any (·.1 == "x-secret") then
-        { r with headers := r.headers.filter (·.1 != "x-secret"), path := ["bad"] }
+        { r with headers := r.headers.filter (·.1 != "x-secret"), path := ["checked"] }
       else r }
 
 def prepareTest : Async (List (String × Bool)) := do
@@ -265,10 +265,10 @@ def prepareTest : Async (List (String × Bool)) := do
   for file in [journal, journal.addExtension "lock"] do
     if ← file.pathExists then IO.FS.removeFile file
   return [
-    ("web: the system sees a request as the bridge prepared it",
-      secret.startsWith "HTTP/1.1 400" && plain.startsWith "HTTP/1.1 200"),
+    ("web: the shard is handed a request as the bridge prepared it",
+      secret.startsWith "HTTP/1.1 200" && plain.startsWith "HTTP/1.1 200" && holds "checked"),
     ("web: and the journal holds the prepared request, not what was sent",
-      !holds "hunter2hunter2" && !holds "x-secret" && holds "bad") ]
+      !holds "hunter2hunter2" && !holds "x-secret") ]
 
 /-- `arrive` runs for at most `arriving_max` requests at once, each on a thread of its own: one
 more is answered `503` before its work begins, and once one is done the next is taken. -/
