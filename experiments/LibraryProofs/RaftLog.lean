@@ -4,7 +4,7 @@ import Mathlib.Data.List.Infix
 Raft's log reasoning (`examples/raft-kv/RaftKV/Proofs/Log.lean`, section `Matching`) again, with
 Mathlib's prefix lemmas or core's `grind`. `termAt`, `merge` and `Matching` are copied from
 `examples/raft-kv/RaftKV/Protocol.lean` and `Log.lean` with entries reduced to their term, which
-is all these proofs look at. Run with `lake env lean experiments/libraries/RaftLog.lean`.
+is all these proofs look at. Run with `lake env lean experiments/LibraryProofs/RaftLog.lean`.
 -/
 
 namespace Experiment

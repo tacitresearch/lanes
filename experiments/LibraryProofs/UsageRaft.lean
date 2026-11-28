@@ -3,7 +3,7 @@ import RaftKV.Proofs
 import Lean
 
 /-! Which Mathlib, CSLib and Batteries declarations the proof layer of Lanes uses directly, in the
-types and proofs of its own declarations. Run with `lake env lean experiments/libraries/Usage.lean`. -/
+types and proofs of its own declarations. Run from `examples/raft-kv` with `lake env lean ../../experiments/LibraryProofs/UsageRaft.lean`. -/
 
 open Lean Meta
 

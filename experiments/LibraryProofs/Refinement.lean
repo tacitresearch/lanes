@@ -4,7 +4,7 @@ import Lanes.Semantics.Refinement
 `Lanes.Refines` read as a CSLib simulation, and `Lanes.Refines.trans` proved with CSLib's
 `IsSimulation.comp`, `IsSimulation.isSimulation_saturate_left` and `saturate_tr_saturate_sTr`
 in place of the hand-written `follow_τ` and `follow_sTr` (`Lanes/Semantics/Refinement.lean`).
-Run with `lake env lean experiments/libraries/Refinement.lean`.
+Run with `lake env lean experiments/LibraryProofs/Refinement.lean`.
 
 `Refines impl spec f` asks each step of `impl` labelled `μ` to be answered by a saturated step of
 `spec` labelled `f μ`. That is a simulation of `impl` by `spec`'s saturation pulled back along

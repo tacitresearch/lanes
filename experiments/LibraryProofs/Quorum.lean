@@ -3,7 +3,7 @@ import Std
 /-!
 `Lanes.Quorum.majority_inter` again, with library lemmas in place of the induction of
 `countP_add_countP_le` (`Lanes/Data/Quorum.lean`). Run with
-`lake env lean experiments/libraries/Quorum.lean`.
+`lake env lean experiments/LibraryProofs/Quorum.lean`.
 
 Found: Lean core has what the hand-written induction proves, `List.length_eq_countP_add_countP`
 and `List.countP_mono_left`. Mathlib adds `Finset.inter_nonempty_of_card_lt_card_add_card`, which

@@ -3,7 +3,7 @@ import Lanes.Proofs
 import Lean
 
 /-! How many modules of each package `import Lanes.Semantics` and `import Lanes.Proofs` load,
-and the size of their `.olean` files. Run with `lake env lean experiments/libraries/Closure.lean`. -/
+and the size of their `.olean` files. Run with `lake env lean experiments/LibraryProofs/Closure.lean`. -/
 
 open Lean
 

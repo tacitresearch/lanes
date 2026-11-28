@@ -1,9 +1,8 @@
-import Lanes.Semantics
-import Lanes.Proofs
+import Ledger.Proofs
 import Lean
 
 /-! Which Mathlib, CSLib and Batteries declarations the proof layer of Lanes uses directly, in the
-types and proofs of its own declarations. Run with `lake env lean experiments/libraries/Usage.lean`. -/
+types and proofs of its own declarations. Run from `examples/ledger` with `lake env lean ../../experiments/LibraryProofs/UsageLedger.lean`. -/
 
 open Lean Meta
 
@@ -20,7 +19,7 @@ def libOf (env : Environment) (n : Name) : Option Name := do
   for (n, ci) in env.constants.toList do
     let some idx := env.getModuleIdxFor? n | continue
     let m := env.header.moduleNames[idx.toNat]!
-    unless m.getRoot == `Lanes do continue
+    unless m.getRoot == `Ledger do continue
     let cs := ci.getUsedConstantsAsSet
     let mut any := false
     for c in cs do

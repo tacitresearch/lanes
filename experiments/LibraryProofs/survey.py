@@ -7,9 +7,9 @@ its section, as `example <statement> := by exact?`. A statement that does not el
 mentions a definition of Lanes, so no library can have it. One that `exact?` closes is in the
 library, and `exact?` names the lemma.
 
-  python3 experiments/libraries/survey.py --import Mathlib --out OUT.lean FILE...
+  python3 experiments/LibraryProofs/survey.py --import Mathlib --out OUT.lean FILE...
   lake env lean OUT.lean > OUT.log 2>&1
-  python3 experiments/libraries/survey.py --parse OUT.lean OUT.log
+  python3 experiments/LibraryProofs/survey.py --parse OUT.lean OUT.log
 """
 import re
 import sys

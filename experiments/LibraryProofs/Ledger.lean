@@ -5,7 +5,7 @@ The ledger's money conservation rests on one lemma about sums, `Lanes.sum_map_se
 (`Lanes/Proof/List/Basic.lean`, 15 lines), used twice in `Ledger.Book.transfer_sound`
 (`examples/ledger/Ledger/Proofs/Book.lean`). Here it is again from Mathlib's `List.sum_set'`.
 The rest of `transfer_sound` is about the book (which accounts change, by how much) and no
-library has it. Run with `lake env lean experiments/libraries/Ledger.lean`.
+library has it. Run with `lake env lean experiments/LibraryProofs/Ledger.lean`.
 -/
 
 namespace Experiment

@@ -3,7 +3,7 @@ import Mathlib.Data.List.Count
 /-!
 Heavy proofs of `Lanes/Proof/List/` again, with Mathlib's lemmas or core's `grind`. Each states
 the same as the Lanes theorem of the same name. Run with
-`lake env lean experiments/libraries/ListProofs.lean`.
+`lake env lean experiments/LibraryProofs/ListProofs.lean`.
 -/
 
 namespace Experiment
