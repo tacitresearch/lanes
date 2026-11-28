@@ -56,7 +56,7 @@ open Lanes
 abbrev ReqId := Nat
 
 /-- A part of an identity: not empty, not `.` or `..`, and no line break, so that it is a path
-segment and a line of a cookie's payload. -/
+segment of a link and a part of a line. -/
 def Name.valid (s : String) : Bool := !s.isEmpty && s != "." && s != ".." && !s.contains '\n'
 
 /-- A member, by the identity that signs in: the provider's issuer and its subject, which do not

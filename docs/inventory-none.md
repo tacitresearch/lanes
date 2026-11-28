@@ -40,9 +40,6 @@ enumeration are fields of its type. That the declaration is the one written is w
 
 Each is to be proved, tested, made private or removed.
 
-### `Lanes/Core/Actor.lean`
-
-- `Actor.mapEff`
 
 ### `Lanes/Net/CourierSound.lean`
 

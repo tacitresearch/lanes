@@ -14,26 +14,34 @@ lake build            # the site, the proofs and the tests
 lake test             # model checks at small bounds, the bridge, and the site over HTTP against a fake S3 and worker, under a minute
 lake exe videosTest pipeline   # only the model checks whose names contain a word; `http`, only the site
 lake exe videosTest large      # the model checks at large bounds, nightly in CI: about ten minutes
-lake exe videosWaves           # how wide the waves of the journal are, as it runs and split by member
+lake exe videosWaves           # how wide the waves of the journal are, an actor and a scheduler for each member
 ```
 
 ## How it works
 
-- **The spec is the code.** `Videos/Spec.lean` is one value, `Site`, and two functions:
-  `Site.handle` for an input (a request, or the scheduler's word on a job) and `Site.recover` for
-  a start of the actor. `Videos/System.lean` runs them in one actor, so every claim is about one
-  atomic owner: a delete vanishes from the feed, the channel and the watch page at once.
-- **Work that is due later** is the scheduler's (`Lanes.Schedule`, D79), beside the site in the
-  same shard and on the same journal. Every call to the store or the worker is a job, held under
+- **The spec is the code.** `Videos/Spec.lean` is a member's state, one value, `Site` (their
+  channel and their videos), and three functions: `Site.handle` for an input (a request, the
+  scheduler's word on a job, or a visit from another member's actor), `Site.recover` for a start
+  of the member's actor, and `Site.read` for a read of the members' sites put together
+  (`Site.union`). `Videos/System.lean` runs the first two in an actor for each member, named by
+  the identity that signs in (`Who`), so the work of two members touches no actor in common
+  (`docs/decisions/new-videos-per-member.md`). A video's id is its owner and a number of the
+  owner's (`VideoId`). A delete is one step of the owner's actor, and every read of the video
+  reads the owner's site, so the video leaves the feed, the channel and the watch page at one
+  boundary.
+- **Work that is due later** is the schedulers' (`Lanes.Schedule`, D79): each member has one
+  (`Schedule.attachBy`), which holds the jobs of the member's videos, in the same shard and on the
+  same journal. Every call to the store or the worker is a job, held under
   a key that names what it is for and so what it asks (`Videos.Key`, `Key.op`): a check, the last
   check of an upload, the start of a round of a transcode, the delete of a video's objects. A job survives a restart, is retried with a
-  backoff and a jitter (`Config.checkRetry`, `Config.deleteRetry`), and the scheduler holds at
-  most `maxJobs`; past it a job is refused. Each attempt carries its deadline, and the S3 client
+  backoff and a jitter (`Config.checkRetry`, `Config.deleteRetry`), and each member's scheduler
+  holds at most `maxJobs`; past it a job is refused. Each attempt carries its deadline, and the S3 client
   cuts the call off there.
 - **Sign-in** is Lanes' (`Lanes.OAuth`, D72), in `serve`'s `arrive`: the system gets only the
-  identity the provider vouched for, by its issuer and subject, and a member is made the first
-  time one signs in, its channel named by the provider's name for it (the login, without one),
-  which the pages show as text. A session is a signed cookie and an entry of the member's
+  identity the provider vouched for, by its issuer and subject, which name the member's actor; a
+  member's channel is made the first time they sign in, named by the provider's name for them
+  (the login, without one), which the pages show as text. Links name a member by the issuer and
+  the subject, and a video by those and its number. A session is a signed cookie and an entry of the member's
   `Auth.Sessions`, and lets requests in for 30 days after its sign-in (`Config.lifetime`), judged
   at the time each request arrived; a sign-in sweeps the member's sessions that are over.
 - **Upload.** "Upload" makes a record, `pending`, and answers a page whose form posts to the
@@ -65,7 +73,9 @@ lake exe videosWaves           # how wide the waves of the journal are, as it ru
   round under way; one given up on, or refused because the scheduler is full, is
   logged (`Out.orphan`).
 - **Reads.** The feed, a watch page and a channel page change nothing (`Web.read?`). `Web.view`
-  answers them from the site's state, read at the end of a batch of the shard
+  answers them from the members' sites, read at the end of a batch of the shard: a watch page
+  from the owner's actor and the viewer's, a channel page from the member's and the viewer's,
+  the feed from every member's
   (`Lanes.Http.View`, `docs/decisions/D108-reads-from-state.md`): they take no entry in the journal
   and no step, and wait at most `ServerConfig.reads`' deadline for the read, then get `504`.
 - **Pages** are server-rendered with Lanes' templates. Every form that changes something carries
@@ -73,7 +83,8 @@ lake exe videosWaves           # how wide the waves of the journal are, as it ru
   sheet and the script are served by the bridge, since templates refuse inline code.
 - **Ops**: `/healthz`, `/readyz`, `/metrics` and the access log (`ServerConfig.ops`); SIGTERM
   drains the requests in flight before it stops (`Server.stopOnSignal`).
-- **Storage**: the journal, with a snapshot every 256 inputs, of the site and its scheduler. No
+- **Storage**: the journal, with a snapshot every 256 inputs, of the members' actors and their
+  schedulers. No
   database.
 
 ## The claims
@@ -83,23 +94,24 @@ model-checked (`Videos/Check.lean`).
 
 | Claim | Theorem |
 | --- | --- |
-| A private video is its owner's alone: in every run of the system, under every environment model, an output that shows one is addressed to its owner; and of every input, only in an answer to a session of the owner that let the request in when it arrived, open and not past its lifetime | `Videos.private_to_owner`, `Videos.Site.handle_private` |
-| A like counts each member once: in every reachable state of the system, under every environment model, no video's likes name a member twice, so the count shown is the number of distinct likers | `Videos.likes_distinct`, `Videos.count_distinct` |
-| A deleted video is never served again: once a delete is answered, no output of any later input or start shows it, however the store answers the delete (late, refused, `unknown`, never) | `Videos.Site.deleted_never_served`, `Videos.Site.Gone.run` |
-| A video is shown only once the store confirmed its upload: an output that shows a video comes after an input in which the scheduler said a job that asks the store for its upload's `HEAD` succeeded with `found`; and the scheduler says so only in the step that takes the store's `found` to that job's attempt | `Videos.Site.listed_confirmed` (the seeded bugs off: `Config.Honest`), `Schedule.succeeded_replied` |
-| A video is listed as ready only after a done report for it whose signature checks: an output that shows a video comes after a request in which the worker reported a round of the video's transcode done, signed under the worker's key | `Videos.Site.listed_transcoded` (the seeded bugs off) |
+| A private video is its owner's alone: no output of the system shows a video, so in every run, under every environment model, an output that shows one is addressed to its owner; and a read shows one only in an answer to a session of the owner that the owner's site lets in at the read's time, open and not past its lifetime | `Videos.private_to_owner`, `Videos.Site.quiet_handle`, `Videos.Site.read_private` |
+| A like counts each member once: in every reachable state of the system, under every environment model, no video's likes in any member's site name a member twice, so the count shown is the number of distinct likers | `Videos.likes_distinct`, `Videos.count_distinct` |
+| A deleted video is never served again: once a delete is answered, no output of any later input or start of the owner's actor shows it, and no read after it does, whatever other members' sites it reads, however the store answers the delete (late, refused, `unknown`, never) | `Videos.Site.deleted_never_served`, `Videos.Site.Gone.run` |
+| A video is shown only once the store confirmed its upload: a read shows a video only if the run of the site it is in has an input in which the scheduler said a job that asks the store for its upload's `HEAD` succeeded with `found`; and the scheduler says so only in the step that takes the store's `found` to that job's attempt | `Videos.Site.listed_confirmed` (the seeded bugs off: `Config.Honest`), `Schedule.succeeded_replied` |
+| A video is listed as ready only after a done report for it whose signature checks: a read shows a video only if the run of the site it is in has a request in which the worker reported a round of the video's transcode done, signed under the worker's key | `Videos.Site.listed_transcoded` (the seeded bugs off) |
 | A report changes only the video its round names: every other video, every channel and every count is as it was, whatever the report and its signature | `Videos.Site.report_names` |
-| A round the worker reports ends: in a fair run in which the site is not crashed and the link from outside to it loses nothing, a report of a round signed by the worker is followed by a position where no video of that round is transcoding, each ready or failed | `Videos.report_settles`, `Videos.Site.report_leaves` |
-| What an output shows is a ready video of the site, and a private one only to a session of its owner that let the request in | `Videos.Site.shows_handle` |
-| The scheduler holds at most `maxJobs` jobs and no key twice: one delete of an object at a time | `Videos.jobs_bounded` |
-| Every job ends, whatever the store and the worker do: in a fair run in which the scheduler does not crash, a check, a last check, the start of a transcode or a delete held stops being held | `Videos.job_ends` |
+| A round the worker reports ends: in a fair run in which the owner's actor is not crashed and the link from outside to it loses nothing, a report of a round signed by the worker is followed by a position where no video of that round is transcoding, each ready or failed | `Videos.report_settles`, `Videos.Site.report_leaves` |
+| What a read shows is a ready video of the sites it reads, and a private one only to a session of its owner that the owner's site lets in | `Videos.Site.shows_read` |
+| Each member's scheduler holds at most `maxJobs` jobs and no key twice: one delete of an object at a time, since every key of a member's video goes to that member's scheduler | `Videos.jobs_bounded` |
+| Every job ends, whatever the store and the worker do: in a fair run in which the member's scheduler does not crash, a check, a last check, the start of a transcode or a delete held stops being held | `Videos.job_ends` |
 | A delete answered schedules the delete of the object, and its end is reported as given up exactly when the scheduler gave it up | `Videos.Site.delete_schedules`, `Videos.Site.delete_reported` |
-| A read answered from the state is what the system answers the same request with: the bridge decodes the feed, a watch or a channel page as an input that leaves the site as it was, and encodes its one output as the view's response from that site; with the peek at a batch boundary (`Lanes.Batch.run_peeks`), it is the answer the request would get as the next entry there | `Videos.Web.view_answers` |
+| A read answered from the state is the spec's read of the members' sites it reads: a view's response, from any kernel of the shard, is `Site.read` of the sites of the members it names, each that actor's state, and for the feed of every member's actor started, every other having the empty site; with the peek at a batch boundary (`Lanes.Batch.run_peeks`), each is the state the journal before the boundary leaves | `Videos.Web.view_answers` |
 
-`listed_confirmed`, `listed_transcoded`, `report_names`, `deleted_never_served`, `Gone.run` and
-`shows_handle` are about runs of the spec's functions, `Site.handle` and `Site.recover`, which is what the actor runs; the others
-about the runs of the site beside its scheduler. The theorem that turns a run of the system into
-the run of the spec its actor performed is not written (as for rookery). That a deleted video's
+`listed_confirmed`, `listed_transcoded`, `report_names`, `deleted_never_served`, `Gone.run`,
+`shows_read` and `read_private` are about runs of the spec's functions, `Site.handle` and
+`Site.recover`, which is what a member's actor runs, and its reads; the others about the runs of
+the members beside their schedulers. The theorem that turns a run of the system into the runs of
+the spec its members' actors performed is not written (as for rookery). That a deleted video's
 object is eventually deleted from the store is not proved, and is false: the store may refuse
 every attempt, and an upload begun before the delete may land after it. What is proved is that
 the delete ends and is reported if it gave up, but for the step between: that the scheduler's
@@ -130,27 +142,32 @@ worker's model, that it reports, the whole is checked.
 
 ## What is checked
 
-`Videos/Check.lean`: two members, at most two videos and one per member, one
-pending upload per member, two comments and one per member on a video, three jobs, one attempt
-for each job or two where the scenario says. The site and its scheduler beside the browsers,
-which follow a script, and the worker's model with the object store's, which answers each
-attempt out at most once, late, never, refused or `unknown`, lets an upload not answered and the
-worker's writes land at any moment or never, and has the worker report each job it was given
-done or failed, late or never; in the pipeline, twice, and anyone else post reports not signed
-with the worker's key. Every timer of the scheduler fires at any moment, and the site's actor or
-the scheduler crashes and starts again anywhere. What each browser is shown is judged as it is
-shown: besides the claims above, nothing is shown that the worker did not report done, signed,
-or whose rendition and thumbnail the store may not hold.
+`Videos/Check.lean`: two members, `a` and `b`, each with its actor and its scheduler, the system's
+own, named by the check's two members (`Check.checked`: the checker enumerates the actors, and a
+member is any identity); at most one video each, one pending upload, two comments and one per
+member on a video, three jobs per member, one attempt for each job or two where the scenario
+says. The members beside the browsers, which follow a script, and the worker's model with the
+object store's, which answers each attempt out at most once, late, never, refused or `unknown`,
+lets an upload not answered and the worker's writes land at any moment or never, and has the
+worker report each job it was given done or failed, late or never; in the pipeline, twice, and
+anyone else post reports not signed with the worker's key. Every timer of a scheduler fires at
+any moment, and an actor crashes and starts again anywhere: in the small scenarios `a`'s actor
+and scheduler, `b` taking part only in visits and reads, and in the large ones every actor its
+scenario uses. A write's answer is judged as it is given; the reads (a watch page, a channel
+page and the feed, by `a`, `b` or a stranger) are judged at every state, since a read may fall at
+any boundary: besides the claims above, nothing is shown that the worker did not report done,
+signed, or whose rendition and thumbnail the store may not hold. The actors are started with the
+system, which a start of an empty site or scheduler does not change.
 
 The worker's faults multiply every interleaving, so they are explored where they are the point.
 In the scenarios about the site and the store the worker takes each job and reports it done once,
 at any moment while its video is there; in the two about a check under way it never answers, and
-only the site crashes, as the scenarios too large for both to crash did before. The pipeline
-explores a job not answered, refused or `unknown` (with no crash), a report late, failed or
-never, and a retry; the forgery a report delivered twice and one posted by someone else. And of
-runs with no crash, every state with no successor (the script done, every message delivered,
-every timer fired, the worker's reports spent) has no video transcoding: a confirmed upload ends
-ready or failed. The site's part of it is proved (`Videos.report_settles`).
+only `a`'s actor crashes. The pipeline explores a job not answered, refused or `unknown` (with no
+crash), a report late, failed or never, and a retry; the forgery a report delivered twice and one
+posted by someone else. And of runs with no crash, every state with no successor (the script
+done, every message delivered, every timer fired, the worker's reports spent) has no video
+transcoding: a confirmed upload ends ready or failed. The site's part of it is proved
+(`Videos.report_settles`).
 
 Each scenario is checked at two sizes (`Videos.Check.Size`). `lake test` checks the small
 ones, exhaustively and exactly, in under a minute: each is a large one's script cut to the
@@ -163,38 +180,37 @@ stored once for each order its requests were answered in.
 
 | Small scenario, in `lake test` | States | Witnesses |
 | --- | --- | --- |
-| A public video watched by another member, who likes it twice, and its owner likes it | 18,253 | shown; two likes |
-| A video shown to its owner, deleted, and asked for again (no crash; `found` or `unknown`) | 158,493 | shown; deleted while its object may be in the store |
-| A private video: asked for by another member, a stranger and its owner; channels, the feed, a like and a comment by another | 33,850 | watched by its owner; asked for by another member and a stranger |
-| A video deleted while its check may be out (the site crashes; `found` or `unknown`) | 171,620 | deleted while its object may be in the store |
+| A public video watched by another member, who likes it twice, and its owner likes it | 14,979 | shown; two likes |
+| A video shown to its owner and deleted (no crash; `found` or `unknown`) | 58,360 | shown; deleted while its object may be in the store; not shown once deleted |
+| A private video: asked for by another member, a stranger and its owner; channels, the feed, a like and a comment by another | 8,627 | watched by its owner; ready and asked for by another member and a stranger |
+| A video deleted while its check may be out (the owner's actor crashes; `found` or `unknown`) | 171,053 | deleted while its object may be in the store |
 | A second check asked for while the first may be out (no crash) | 110,472 | a check confirms an upload and its request is told |
-| A delete tried twice: deleted after its first attempt failed, or given up and reported | 54,278 | deleted while held; deleted after a failed first delete; given up and reported |
-| An upload never confirmed, checked a last time, twice, its owner asking for it | 194,312 | made ready by its last check and shown; taken out; a last check tried again |
-| A session past its lifetime: a private video watched inside it, asked for and liked after it, then watched in a new session | 24,529 | watched by its owner in two sessions |
-| The pipeline up to the owner asking for the video (the site crashes) | 6,758 | shown; shown being prepared; shown failed |
-| Reports delivered twice, and one forged, the owner asking for the video | 131,105 | shown; a forged report refused; a report delivered twice |
-| With no crash, every run that cannot go on leaves the upload ready or failed | 2,668 | shown; shown failed |
+| A delete tried twice: deleted after its first attempt failed, or given up and reported | 19,646 | deleted while held; deleted after a failed first delete; given up and reported |
+| An upload never confirmed, checked a last time, twice, its owner asking for it | 35,890 | made ready by its last check and shown; taken out; a last check tried again |
+| A session past its lifetime: a private video watched inside it, asked for and liked after it, then watched in a new session | 7,363 | watched inside the lifetime; watched in a new session past it |
+| The pipeline up to the owner asking for the video (the owner's actor crashes) | 1,967 | shown; shown being prepared; shown failed |
+| Reports delivered twice, and one forged, the owner asking for the video | 32,374 | shown; a forged report refused; a report delivered twice |
+| With no crash, every run that cannot go on leaves the upload ready or failed | 829 | shown; shown failed |
 | With no crash, a failed transcode tried again; every run that cannot go on leaves it ready or failed | 159,358 | ready after the retry |
 | Seeded: the browser's word taken for the upload (`trustBrowser`) | | found in 20 steps |
 | Seeded: a check the store did not answer in time taken as found (`readyOnTimeout`) | | found in 25 steps |
 | Seeded: sessions that never end (`lifetime := {}`) | | found in 20 steps |
-| Seeded: a report taken whatever its signature (`trustUnsigned`) | | found in 21 steps |
+| Seeded: a report taken whatever its signature (`trustUnsigned`) | | found in 19 steps |
 
 | Large scenario, nightly | States |
 | --- | --- |
-| A public video: made, checked, transcoded, watched, liked three times, deleted, asked for after the delete | 1,670,057 |
-| A private video: asked for by another member, a stranger and its owner; channels, the feed, a like and a comment by another (two crashes) | 98,679 |
-| A video deleted while its check may be out (the site crashes) | 1,039,400 |
-| A second check asked for while the first may be out (the site crashes) | 742,505 |
-| A delete tried twice: deleted after its first attempt failed, or given up and reported (two crashes) | 119,578 |
-| An upload never confirmed, checked a last time, twice: confirmed, transcoded and shown, or taken out | 326,923 |
-| A session past its lifetime: a private video watched inside it, asked for and liked after it, then watched in a new session (two crashes) | 71,713 |
-| The pipeline: a job not answered, refused or `unknown` (with no crash), a report late, failed or never, shown to the owner, tried again and shown (the site crashes) | 2,620,912 |
-| Reports delivered twice, and one forged by someone else | 286,132 |
-| With no crash, every run that cannot go on leaves each confirmed upload ready or failed | 2,511,218 |
+| A public video: made, checked, transcoded, watched, liked three times, deleted, watched after the delete (every actor crashes) | 867,999 |
+| A private video: asked for by another member, a stranger and its owner; channels, the feed, a like and a comment by another (two crashes, every actor) | 43,600 |
+| A video deleted while its check may be out (the owner's actor crashes) | 371,520 |
+| A second check asked for while the first may be out (the owner's actor crashes) | 529,308 |
+| A delete tried twice: deleted after its first attempt failed, or given up and reported (two crashes) | 41,442 |
+| An upload never confirmed, checked a last time, twice: confirmed, transcoded and shown, or taken out | 35,890 |
+| A session past its lifetime: a private video watched inside it, asked for and liked after it, then watched in a new session (two crashes) | 20,427 |
+| The pipeline: a job not answered, refused or `unknown` (with no crash), a report late, failed or never, shown to the owner, tried again and shown (the owner's actor crashes) | 365,090 |
+| Reports delivered twice, and one forged by someone else (every actor crashes) | 42,560 |
+| With no crash, every run that cannot go on leaves each confirmed upload ready or failed | 412,024 |
 
-Each passes with every witness it names reached: about 11 minutes of processor time in all,
-two at a time.
+Each passes with every witness it names reached, in a few minutes, two at a time.
 
 Once a video's delete is answered, in every state its delete is under way, or the store said
 it deleted the object, or the site reported it given up; this is checked of runs with no crash.
@@ -202,13 +218,16 @@ A crash in the semantics loses an actor's mail (`SysState.down`), and the checke
 steps, the scheduler crashing with the delete's scheduling in its mail: never held, never
 reported. On one shard an actor crashes only by stopping itself, which neither does, and the
 death of the process returns to the journal, the kernel's queue included (`TRUSTED.md`,
-"Environment model"); if the scheduler ever runs apart from the site, the site must keep what it
-scheduled until the scheduler answers.
+"Environment model"); if a scheduler ever runs apart from its member's actor, the actor must
+keep what it scheduled until the scheduler answers.
 
-Every bound holds in every state of every scenario, those of one member among them: one member's
-videos (`maxOwned`) and comments on one video (`maxCommentsEach`) are bounded far below the site's
-(`maxVideos`, `maxComments`), so one member cannot fill them for everyone. `capTests` checks
-each at its limit, and that a video's owner takes out anyone's comment on it.
+Every bound holds in every state of every scenario: each member's videos (`maxVideos`,
+`maxOwned`), pending uploads, comments on one of their videos (`maxComments`, and
+`maxCommentsEach` of each other member), sessions and jobs, each in that member's site or
+scheduler. How many members there are is not bounded: no actor counts them
+(`docs/decisions/new-videos-per-member.md`). `capTests` checks each bound at its limit, that a
+video's owner takes out anyone's comment on it, and that an input goes to the actor of the member
+it is about.
 
 Over HTTP (`Videos/EndToEnd.lean`): the site as `Main` serves it, on a journal, against the test
 kit of Lanes (`Lanes.Testing`): its identity provider in GitHub's shape, read by `GitHub.read`,
@@ -299,8 +318,9 @@ package; none touches the library.
 
 ### Missing, or in the way
 
-1. **Every page view is journalled.** A watch, a feed page or a channel page is a request, so it
-   enters the journal, with its headers, and is synced before it is answered; ten page views
+1. **Every page view was journalled** (since fixed: reads from the state, D108, and a read over
+   every member, `Http.View.every`). A watch, a feed page or a channel page was a request, so it
+   entered the journal, with its headers, and was synced before it was answered; ten page views
    added 3.4 KB to the journal of a smoke run, and each is replayed at every start until a
    snapshot cuts it. A site that is read a thousand times for each write wants reads answered
    from the state without a journal entry.
@@ -349,6 +369,13 @@ package; none touches the library.
     judged at the time a request arrived, and this site's sessions last 30 days). Ending them
     needed a timer per session, as rookery's are. Each request now carries its time
     (`Input.request`), and the site does not record each use, which an idle limit would need.
+11. **The checker enumerates the actors.** Members are named by any identity, so `Who` has no
+    `Enum`, and the checker needs one for the actors' ids. `Videos.Check.checked` maps the two
+    members of the checks to the system's actors, about 40 lines; a system over a finite set of
+    its actors' ids would be the library's.
+12. **A scheduler per entity, and actors named by an identity, were not there** (since fixed:
+    `Schedule.attachBy`). With one scheduler and members numbered by a directory, every upload
+    and every sign-in touched one actor, which bounded the waves (D107).
 
 ### Clumsy
 
