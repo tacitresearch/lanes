@@ -49,7 +49,6 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Lib/Crypto/Sign.lean` | `Tests/Sign.lean`, `oracles/botocore` | A binding: RFC 6979's signatures, `openssl dgst -sign`, and `cryptography`'s signatures in the CloudFront oracle |
 | `Lanes/Lib/Crypto/Sha256.lean` | | Not a format: FIPS 180-4's examples, and OpenSSL on thousands of inputs (`Tests/Crypto.lean`) |
 | `Lanes/Lib/Crypto/Sha512.lean` | | Not a format: FIPS 180-4's examples, as `openssl dgst` computes them (`Tests/Crypto.lean`) |
-| `Lanes/Lib/Crypto/Sodium.lean` | | Deprecated: imports `Lanes/Lib/Crypto/Native.lean` and nothing else |
 | `Lanes/Lib/Crypto/Verify.lean` | `Tests/Signature.lean` | A binding: OpenSSL's check against `Rsa.verifyReference` and keys `openssl` made |
 | `Lanes/Lib/Encoding/Base64.lean` | `oracles/go/base64` | |
 | `Lanes/Lib/Encoding/Digits.lean` | | Numbers in a base, read back as written (`Lanes/Lib/Encoding/Digits.lean`'s theorems); compared through every format that uses them |

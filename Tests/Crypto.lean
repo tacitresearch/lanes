@@ -3,7 +3,6 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
-import Lanes.Lib.Crypto.Sodium -- deprecated_module: ignore
 
 /-!
 SHA-256 against the examples of FIPS 180-4 (as NIST publishes them) and HMAC-SHA-256 against
