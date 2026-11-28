@@ -37,7 +37,7 @@ lanes_data structure Message (B : Type) where
   /-- The message group of a FIFO queue. -/
   group : Nat := 0
   body : B
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 /-- Which outputs send and delete, and which inputs are receives, with their receipts. -/
 structure Port (σ : Signature) (B : Type) where

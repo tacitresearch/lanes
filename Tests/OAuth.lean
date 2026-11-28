@@ -5,6 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import Lanes
 import Lanes.Testing
 import Tests.Web
+import Lanes.Services.S3.Testing
 
 /-!
 Sign-in with another service (`Lanes/Web/Auth/OAuth.lean`, `Lanes/Web/IO/SignIn.lean`). The pure

@@ -166,20 +166,24 @@ def layerTests (root : System.FilePath) : IO (List (String × Bool)) := do
   write root "Lanes/Web/B.lean" "module\n\n/- import Lanes.Web.D -/\npublic import Lanes.Runtime.A\n"
   write root "Lanes/Data/C.lean" "module\n"
   write root "Lanes/Stray.lean" "module\n"
+  write root "Lanes/Services/S/A.lean" "module\n\npublic import Lanes.Web.B\n"
+  write root "Lanes/Web/F.lean" "module\n\npublic import Lanes.Services.S.A\n"
   let report ← lint root
   let found := (report.findings.filter (·.rule == "layering")).map fun f => (f.file.toString, f.line)
   return [
-    ("lint layering: an import of a package not required, and a module in no package, are found; "
-        ++ "imports down, of Std and in comments are not",
-      found == [("Lanes/Runtime/A.lean", 5), ("Lanes/Stray.lean", 1)]),
+    ("lint layering: an import of a package not required, of a service from the core, and a "
+        ++ "module in no package, are found; imports down, of Std and in comments are not",
+      found == [("Lanes/Runtime/A.lean", 5), ("Lanes/Stray.lean", 1), ("Lanes/Web/F.lean", 3)]),
     ("Layers: what each package requires, below too",
       Layers.Package.runtime.mayImport .model && Layers.Package.web.mayImport .std
         && !Layers.Package.std.mayImport .actors && !Layers.Package.runtime.mayImport .web
+        && Layers.Package.services.mayImport .web
+        && Layers.Package.all.all (fun p => p == .services || !p.mayImport .services)
         && Layers.Package.all.all fun p => p.mayImport p),
     ("Layers.home?: the longest prefix wins",
       Layers.home? "Lanes/Web/IO/Tls.lean" == some .std
         && Layers.home? "Lanes/Web/Http/Basic.lean" == some .web
-        && Layers.home? "Lanes/Lib/Postgres/Conn.lean" == some .postgres
+        && Layers.home? "Lanes/Services/Postgres/Conn.lean" == some .services
         && Layers.home? "Tests/Main.lean" == none),
     ("Layers.imported?: the module of an import line, with its modifiers",
       Layers.imported? "public meta import all Lanes.X" == some "Lanes.X"

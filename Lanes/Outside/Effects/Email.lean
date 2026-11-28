@@ -33,7 +33,7 @@ lanes_data inductive Status where
   | sent
   | delivered
   | bounced
-  deriving DecidableEq, Repr, Hashable, Codable, Enum
+  deriving DecidableEq, Repr, Hashable, Enum
 
 namespace Status
 

@@ -21,6 +21,9 @@ is the adapter). Two models of what it may be told:
 
 A duration worked out as the difference of two wall-clock readings may be negative, or zero in
 `Nat`, however much time passed; one worked out from a monotonic clock may not.
+
+The clock is a platform model, not a service. Not yet checked against a real clock: its jumps
+and skew are what NTP and the kernel document (`oracles/README.md`).
 -/
 
 @[expose] public section

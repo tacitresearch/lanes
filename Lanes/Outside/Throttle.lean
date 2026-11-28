@@ -25,6 +25,9 @@ as one throttled for the load of others may.
 Proved: a throttled answer leaves the inner service as it was (`Throttle.throttled_inner`), and
 the service never asks for a wait of more than `maxRetryAfter` ticks from now
 (`Throttle.wait_le`), in every run the model allows.
+
+Not yet checked against a real service: no run recorded from one that answers `429`
+(`oracles/README.md`).
 -/
 
 @[expose] public section
@@ -35,13 +38,13 @@ lanes_data inductive Answer (A : Type) where
   | ok (a : A)
   /-- The request was not executed: call again in `retryAfter` ticks. -/
   | throttled (retryAfter : Nat)
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data inductive Event (E : Type) where
   /-- A tick of time passed. -/
   | tick
   | inner (e : E)
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 structure Config where
   /-- The longest `Retry-After` the service gives, at least one tick. -/

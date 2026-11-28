@@ -15,19 +15,19 @@ open Lanes
 /-- Identifies a client request, so its response can be matched to it. -/
 abbrev ReqId := Nat
 
-/-- `lanes_data` derives a codec for requests and responses, with its round-trip law, from the
-declaration. -/
+/-- Declared with `lanes_data`, whose `deriving` also takes `ToJson, FromJson`, with their
+round-trip law, and whose `table` line maps a structure to rows of the typed store. -/
 lanes_data inductive Request where
   | increment (req : ReqId)
   | read (req : ReqId)
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data structure Response where
   req : ReqId
   value : Nat
   /-- Whether the request was applied. An increment at the limit is refused. -/
   applied : Bool
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 /-- Explicit configuration (rule 2.5). -/
 structure Config where

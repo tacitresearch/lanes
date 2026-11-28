@@ -22,19 +22,19 @@ lanes_data structure Upload where
   id : FileId
   owner : Member
   size : Option Nat
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data structure State where
   next : FileId := 0
   uploads : List Upload := []
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data inductive Request where
   | list (req : ReqId) (who : Member) (at_s : Nat)
   | begin (req : ReqId) (who : Member) (at_s : Nat)
   | seen (req : ReqId) (who : Member) (file : FileId) (size : Option Nat)
   | delete (req : ReqId) (who : Member) (file : FileId)
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data inductive Answer where
   | shelf (viewer : Member) (files : List Upload) (at_s : Nat)
@@ -44,12 +44,12 @@ lanes_data inductive Answer where
   | deleted (file : FileId)
   | refused (file : FileId)
   | full
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data structure Response where
   req : ReqId
   answer : Answer
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 abbrev sig : Signature := Server.sig Request Response
 
