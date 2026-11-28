@@ -39,6 +39,7 @@ two new decisions land at different lines. The numbers give the order in which t
 - [D74. AWS as an integration: a role's credentials refreshed by a proved policy, and SES as the email model](D74-aws-integration.md): partly superseded by D110-volatile-actors.md (AWS as a Lake package under `integrations/`: it is `Services/Aws`)
 - [D46. Bind what touches physics](D46-bind-what-touches-physics.md): partly superseded by D95-one-crypto-library.md (libsodium)
 - [D78. Uploads bounded by a signed policy, and large ones in parts](D78-bounded-and-large-uploads.md)
+- [D118. CBOR is the standard binary encoding, derived by `lanes_data` as JSON is](D118-cbor.md)
 - [D92. The checker at scale: a hash that sees order, a fingerprinted mode, reductions](D92-checker-scale.md)
 - [D82. CloudFront signed URLs and cookies, and signatures made with a private key](D82-cloudfront-signed-urls.md)
 - [D25. Composition is a join, and what survives it is projection](D25-composition-is-a-join.md)
