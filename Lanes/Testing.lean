@@ -12,7 +12,7 @@ public import Lanes.Testing.Run
 /-!
 The test kit: what an application's tests run against, imported as `Lanes.Testing` beside
 `Lanes`, and never by `import Lanes`, so no deployed binary links it
-(`docs/decisions/D77-a-test-kit.md`). A fake identity provider, a scripted browser, helpers for HTTP, and the runner of a test program
-(`Testing.report`). The fakes of services are with the services: the fake S3, which checks
-signatures, is `Lanes.Services.S3.Testing`.
+(`docs/decisions/D77-a-test-kit.md`). A fake identity provider, a scripted browser, helpers for
+HTTP, and the runner of a test program (`Testing.report`). The fakes of services are with the
+services: the fake S3, which checks signatures, is `Lanes.Services.S3.Testing`.
 -/

@@ -40,8 +40,8 @@ public import Lanes.Web.Http.WireSound
 
 /-!
 The framework's soundness theorems: what the kernel, the shell, joins, the checker, the HTTP
-reader and server, HTML, tokens, JSON, URLs and media types
-are proved to do. `import Lanes` leaves them out so that an application builds and imports less; a proof that
-cites one imports this, and `Lanes.Semantics` imports it. It imports only `Std`. The services'
-soundness theorems are imported by `Lanes.Services`.
+reader and server, HTML, tokens, JSON, URLs and media types are proved to do. `import Lanes`
+leaves them out so that an application builds and imports less; a proof that cites one imports
+this, and `Lanes.Semantics` imports it. It imports only `Std`. The services' soundness theorems
+are imported by `Lanes.Services`.
 -/
