@@ -569,7 +569,7 @@ of the entity that `owner` names for its key. None is booted: each starts on its
 abbrev systemBy {E : Type} [DecidableEq E] (config : Config K P A) (owner : K → E) :
     System (sigBy E K P A) where
   State _ := State K P
-  actor e := (actor config).mapEff fun eff => [Eff.at e eff]
+  actor e := ((actor config).mapSrc (Sender.map fun _ => ())).mapEff fun eff => [Eff.at e eff]
   accept
     | .schedule now_ms spec => ⟨owner spec.key, .schedule now_ms spec⟩
     | .cancel key => ⟨owner key, .cancel key⟩

@@ -94,7 +94,7 @@ end Effect
 /-- An actor that can be identity `i` of a system: it handles `σ.Msg i` and returns
 `Effect σ i`, so it can only send a message its receiver accepts. -/
 abbrev Signature.Actor (σ : Signature) (i : σ.Id) (S : Type) : Type :=
-  Lanes.Actor S (σ.Msg i) (Effect σ i)
+  Lanes.Actor S (σ.Msg i) (Effect σ i) σ.Id
 
 /-- A message in flight, with the link it travels on. -/
 structure Envelope (σ : Signature) where

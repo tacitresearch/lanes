@@ -257,8 +257,8 @@ private theorem Kept.rest {i : σ.Id} (h : Kept i k k') : Kept i k (k'.rest i) :
     · exact .inr ⟨hi, by rw [hcell]; exact hdown⟩
     · exact .inr ⟨hi, by simp [hcell]⟩
 
-private theorem handle_kept (k : Kernel sys) (i : σ.Id) (msg : σ.Msg i) :
-    Kept i k (k.handle i msg).1 := by
+private theorem handle_kept (k : Kernel sys) (i : σ.Id) (msg : σ.Msg i) (src : Sender σ.Id) :
+    Kept i k (k.handle i msg src).1 := by
   rw [handle_eq]
   exact (settle_kept k i _).rest
 
@@ -267,7 +267,7 @@ private theorem fire_kept (k : Kernel sys) (i : σ.Id) (msg : σ.Msg i) (due : D
   rw [fire_eq]
   split
   · obtain ⟨hclock, hturn, holdest⟩ := handle_kept ((k.unschedule [due]).setCell i
-      { (k.cell i) with timers := (k.cell i).timers.eraseP (·.1 = msg) }) i msg
+      { (k.cell i) with timers := (k.cell i).timers.eraseP (·.1 = msg) }) i msg .timer
     exact ⟨hclock, hturn, holdest⟩
   · exact ⟨rfl, rfl, fun e rest hq => .inl ⟨rest, hq⟩⟩
 
@@ -278,8 +278,8 @@ private theorem run1_kept (k : Kernel sys) :
   · exact ⟨rfl, rfl⟩
   · rename_i e rest _
     split
-    · exact ⟨(handle_kept { k with queue := rest } e.dst e.msg).clock,
-        (handle_kept { k with queue := rest } e.dst e.msg).turn⟩
+    · exact ⟨(handle_kept { k with queue := rest } e.dst e.msg _).clock,
+        (handle_kept { k with queue := rest } e.dst e.msg _).turn⟩
     · exact ⟨(settle_kept (k.setCell e.dst { (k.cell e.dst) with up := true }) e.dst _).clock,
         (settle_kept (k.setCell e.dst { (k.cell e.dst) with up := true }) e.dst _).turn⟩
 
@@ -558,8 +558,8 @@ theorem rest (h : k.WellFormed) (i : σ.Id) : (k.rest i).WellFormed := by
   · exact (h.setCell (c := { state := (sys.actor i).init }) htimers.symm fun _ => rfl).congr
       (hcell.trans (cell_setCell k i _).symm) (rest_agenda k i) (rest_nextToken k i)
 
-theorem handle (h : k.WellFormed) {i : σ.Id} (hup : (k.cell i).up = true) (msg : σ.Msg i) :
-    (k.handle i msg).1.WellFormed := by
+theorem handle (h : k.WellFormed) {i : σ.Id} (hup : (k.cell i).up = true) (msg : σ.Msg i)
+    (src : Sender σ.Id) : (k.handle i msg src).1.WellFormed := by
   rw [handle_eq]
   exact (h.settle hup _).rest i
 
@@ -580,7 +580,7 @@ theorem run1 (h : k.WellFormed) : k.run1.kernel.WellFormed := by
   · rename_i e rest _
     split
     · rename_i hup
-      exact handle (k := { k with queue := rest }) (h.congr rfl rfl rfl) hup e.msg
+      exact handle (k := { k with queue := rest }) (h.congr rfl rfl rfl) hup e.msg _
     · exact h.startActor _
 
 theorem fire (h : k.WellFormed) (i : σ.Id) (msg : σ.Msg i) (due : Due) :

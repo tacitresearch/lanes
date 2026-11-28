@@ -500,8 +500,8 @@ theorem step_runs (config : Config K P A) (s : State K P) (msg : Schedule.Msg K 
   · simp [h]
   · simpa [h] using onJob_runs
 
-theorem recover_runs (config : Config K P A) (s : State K P) :
-    ((actor config).recover s).2.any Effect.isStop = false := by
+theorem recover_runs (config : Config K P A) (t : Moment) (s : State K P) :
+    ((actor config).recoverAt t s).2.any Effect.isStop = false := by
   simp [actor, rearm, Effect.isStop]
 
 /-- The scheduler's time never goes back. -/
@@ -570,13 +570,14 @@ theorem attempts_step (config : Config K P A) {s : State K P} (msg : Schedule.Ms
 theorem actor_within (config : Config K P A) :
     (actor (K := K) (P := P) config).Invariant (State.Within config) :=
   Actor.Inductive.invariant
-    ⟨⟨by simp [actor], by simp [actor, keys]⟩, fun _ msg h => within_step config msg h,
-      fun _ h => h⟩
+    ⟨⟨by simp [actor], by simp [actor, keys]⟩, fun _ _ msg h => within_step config msg h,
+      fun _ _ h => h⟩
 
 theorem actor_attempts (config : Config K P A) :
     (actor (K := K) (P := P) config).Invariant (State.Attempts config) :=
   Actor.Inductive.invariant
-    ⟨by simp [actor, State.Attempts], fun _ msg h => attempts_step config msg h, fun _ h => h⟩
+    ⟨by simp [actor, State.Attempts], fun _ _ msg h => attempts_step config msg h,
+      fun _ _ h => h⟩
 
 /-! What an attempt is: never before its time, one at a time, and the next only after a wait. -/
 
@@ -814,13 +815,15 @@ theorem attempts (config : Config K P A) (env : EnvModel (sig K P A)) :
     (system (K := K) (P := P) config).Invariant env fun c => (c.state ()).Attempts config :=
   System.invariant_of_actor _ () (actor_attempts config) env
 
-theorem handle_eq (c : SysState (system (K := K) (P := P) config)) (msg : Schedule.Msg K P A) :
-    c.handle env () msg = { c with
+theorem handle_eq (c : SysState (system (K := K) (P := P) config)) (msg : Schedule.Msg K P A)
+    (src : Sender Unit) :
+    c.handle env () msg src = { c with
       state := update c.state () (step config (c.state ()) msg).1
       net := c.net ++ Effect.sends () (step config (c.state ()) msg).2
       timers := update c.timers () (Effect.retime (step config (c.state ()) msg).2 (c.timers ()))
       outbox := c.outbox ++ Effect.emits (step config (c.state ()) msg).2 } := by
-  have hr : ((actor config).step (c.state ()) msg).2.any Effect.isStop = false :=
+  have hr : ((actor config).stepAt { toMoment := c.clock, src } (c.state ()) msg).2.any
+      Effect.isStop = false :=
     step_runs config (c.state ()) msg
   simp only [SysState.handle, SysState.settle_eq, hr, Bool.false_eq_true, ↓reduceIte]
   rfl
@@ -832,7 +835,7 @@ theorem startActor_eq (c : SysState (system (K := K) (P := P) config)) :
       timers := update c.timers ()
         (Effect.retime ((c.state ()).jobs.map (rearm (c.state ()))) (c.timers ()))
       outbox := c.outbox ++ Effect.emits ((c.state ()).jobs.map (rearm (c.state ()))) } := by
-  have hr := recover_runs (K := K) (P := P) config (c.state ())
+  have hr := recover_runs (K := K) (P := P) config c.clock (c.state ())
   simp only [SysState.startActor, SysState.settle_eq, hr, Bool.false_eq_true, ↓reduceIte]
   simp only [actor, SysState.mk.injEq, and_true]
   funext i
@@ -895,6 +898,9 @@ theorem armed (config : Config K P A) (env : EnvModel (sig K P A)) :
     | restart =>
       obtain ⟨_, rfl⟩ := SysState.step_restart.mp hstep
       exact armed_start (env := env) (SysState.blank _)
+    | tick m =>
+      obtain rfl := SysState.step_tick.mp hstep
+      exact ih
 
 /-! ### No more calls than attempts allowed -/
 
@@ -971,8 +977,8 @@ private theorem owed_step (key : K) {s : State K P} (h : s.Attempts config)
       exact Nat.le_refl _
 
 private theorem owed_handle (key : K) (c : SysState (system (K := K) (P := P) config))
-    (h : (c.state ()).Attempts config) (i : Unit) (msg : Schedule.Msg K P A) :
-    owed key (c.handle env i msg)
+    (h : (c.state ()).Attempts config) (i : Unit) (msg : Schedule.Msg K P A) (src : Sender Unit) :
+    owed key (c.handle env i msg src)
       ≤ owed key c + max 1 config.maxAttempts * (schedules key msg).toNat := by
   obtain rfl : i = () := rfl
   have hs := owed_step (config := config) key h msg
@@ -1031,6 +1037,7 @@ private theorem owed_event (key : K) {c c' : SysState (system (K := K) (P := P) 
   | deliver e =>
     obtain ⟨_, _, rfl⟩ := SysState.step_deliver.mp hstep
     have h := owed_handle (env := env) key { c with net := c.net.erase e } hatt e.dst e.msg
+      (.ofSrc e.src)
     have hsched := schedulings_handle e.dst e.msg key
     have hsame : owed key { c with net := c.net.erase e } = owed key c := rfl
     have hcalls : calls key [Deed.handle (σ := sig K P A) e.dst e.msg] = 0 := rfl
@@ -1039,7 +1046,7 @@ private theorem owed_event (key : K) {c c' : SysState (system (K := K) (P := P) 
     omega
   | duplicate e =>
     obtain ⟨_, _, _, rfl⟩ := SysState.step_duplicate.mp hstep
-    have h := owed_handle (env := env) key c hatt e.dst e.msg
+    have h := owed_handle (env := env) key c hatt e.dst e.msg (.ofSrc e.src)
     have hsched := schedulings_handle e.dst e.msg key
     have hcalls : calls key [Deed.handle (σ := sig K P A) e.dst e.msg] = 0 := rfl
     simp only [Event.deed, Option.toList_some]
@@ -1053,7 +1060,7 @@ private theorem owed_event (key : K) {c c' : SysState (system (K := K) (P := P) 
   | timeout i msg =>
     obtain ⟨_, _, rfl⟩ := SysState.step_timeout.mp hstep
     have h := owed_handle (env := env) key
-      { c with timers := update c.timers i ((c.timers i).erase msg) } hatt i msg
+      { c with timers := update c.timers i ((c.timers i).erase msg) } hatt i msg .timer
     have hsched := schedulings_handle i msg key
     have hsame : owed key { c with timers := update c.timers i ((c.timers i).erase msg) }
         = owed key c := rfl
@@ -1079,6 +1086,11 @@ private theorem owed_event (key : K) {c c' : SysState (system (K := K) (P := P) 
   | restart =>
     obtain ⟨_, rfl⟩ := SysState.step_restart.mp hstep
     simp [owed_init, Event.deed, calls, schedulings]
+  | tick m =>
+    obtain rfl := SysState.step_tick.mp hstep
+    simp only [Event.deed, Option.toList_none, calls, schedulings, List.countP_nil,
+      Nat.zero_add, Nat.mul_zero, Nat.add_zero]
+    exact Nat.le_refl _
 
 /-- The scheduler calls no key more often than `max 1 maxAttempts` times for each scheduling of
 it that it handled, in every environment: whatever arrives and however often, and whatever the
@@ -1114,7 +1126,8 @@ environment: each runs the scheduler's own steps. -/
 theorem withinBy {E : Type} [DecidableEq E] (config : Config K P A) (owner : K → E)
     (env : EnvModel (sigBy E K P A)) (e : E) :
     (systemBy config owner).Invariant env fun c => (c.state e : State K P).Within config :=
-  System.invariant_of_actor _ e (Actor.Invariant.mapEff _ (actor_within config)) env
+  System.invariant_of_actor _ e
+    (Actor.Invariant.mapEff _ (Actor.Invariant.mapSrc _ (actor_within config))) env
 
 /-- Beside any system, each scheduler of `attachBy` holds no more jobs than `maxJobs`, and no
 id twice. -/
@@ -1167,8 +1180,9 @@ theorem after_mem_at {e : E} {effs : List (Eff K P A)} {d : Nat} {msg : Schedule
 
 variable {config : Config K P A} {owner : K → E} {env : EnvModel (sigBy E K P A)}
 
-theorem handleBy_eq (c : SysState (systemBy config owner)) (e : E) (msg : Schedule.Msg K P A) :
-    c.handle env e msg = { c with
+theorem handleBy_eq (c : SysState (systemBy config owner)) (e : E) (msg : Schedule.Msg K P A)
+    (src : Sender E) :
+    c.handle env e msg src = { c with
       state := update c.state e (step config (c.state e) msg).1
       net := c.net ++ Effect.sends e (Eff.allAt e (step config (c.state e) msg).2)
       timers := update c.timers e (Effect.retime (Eff.allAt e (step config (c.state e) msg).2)
@@ -1177,7 +1191,7 @@ theorem handleBy_eq (c : SysState (systemBy config owner)) (e : E) (msg : Schedu
   have hr : (Eff.allAt e (step config (c.state e) msg).2).any Effect.isStop = false := by
     rw [isStop_at]; exact step_runs config (c.state e) msg
   simp only [SysState.handle, SysState.settle_eq]
-  simp only [Actor.mapEff, actor] at hr ⊢
+  simp only [Actor.mapEff, Actor.mapSrc, actor] at hr ⊢
   simp only [hr, Bool.false_eq_true, ↓reduceIte]
 
 theorem startActorBy_eq (c : SysState (systemBy config owner)) (e : E) :
@@ -1189,9 +1203,9 @@ theorem startActorBy_eq (c : SysState (systemBy config owner)) (e : E) :
       outbox := c.outbox ++ Effect.emits (Eff.allAt e ((c.state e).jobs.map (rearm (A := A) (c.state e)))) } := by
   have hr : (Eff.allAt e ((c.state e).jobs.map (rearm (A := A) (c.state e)))).any Effect.isStop
       = false := by
-    rw [isStop_at]; exact recover_runs (K := K) (P := P) config (c.state e)
+    rw [isStop_at]; exact recover_runs (K := K) (P := P) config c.clock (c.state e)
   simp only [SysState.startActor, SysState.settle_eq]
-  simp only [Actor.mapEff, actor] at hr ⊢
+  simp only [Actor.mapEff, Actor.mapSrc, actor] at hr ⊢
   simp only [hr, Bool.false_eq_true, ↓reduceIte]
   simp only [SysState.mk.injEq, and_true]
   funext i
@@ -1239,7 +1253,7 @@ theorem armedBy (config : Config K P A) (owner : K → E) (env : EnvModel (sigBy
     (systemBy config owner).Invariant env ArmedBy := by
   intro c hc
   induction hc with
-  | init => intro e _ j hj; simp [SysState.init, SysState.blank, Actor.mapEff, actor] at hj
+  | init => intro e _ j hj; simp [SysState.init, SysState.blank, Actor.mapEff, Actor.mapSrc, actor] at hj
   | @step c c' ev hc hstep ih =>
     cases ev with
     | input x =>
@@ -1279,12 +1293,16 @@ theorem armedBy (config : Config K P A) (owner : K → E) (env : EnvModel (sigBy
     | restart =>
       obtain ⟨_, rfl⟩ := SysState.step_restart.mp hstep
       intro e _ j hj
-      simp [SysState.init, SysState.blank, Actor.mapEff, actor] at hj
+      simp [SysState.init, SysState.blank, Actor.mapEff, Actor.mapSrc, actor] at hj
+    | tick m =>
+      obtain rfl := SysState.step_tick.mp hstep
+      exact ih
 
 /-- Every job each scheduler of `systemBy` holds is within its attempts, in every environment. -/
 theorem attemptsBy (config : Config K P A) (owner : K → E) (env : EnvModel (sigBy E K P A))
     (e : E) : (systemBy config owner).Invariant env fun c => (c.state e : State K P).Attempts config :=
-  System.invariant_of_actor _ e (Actor.Invariant.mapEff _ (actor_attempts config)) env
+  System.invariant_of_actor _ e
+    (Actor.Invariant.mapEff _ (Actor.Invariant.mapSrc _ (actor_attempts config))) env
 
 end By
 

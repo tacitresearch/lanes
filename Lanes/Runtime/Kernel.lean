@@ -75,6 +75,7 @@ def abs (k : Kernel sys) (outbox : List σ.Out := []) : SysState sys where
   net := k.queue.toList
   timers i := (k.cell i).timers.map (·.1)
   outbox := outbox
+  clock := {}
 
 /-- The environment the kernel stays within: one shard, so every link is reliable and ordered,
 and nothing crashes. -/
@@ -142,14 +143,15 @@ def takeState (k : Kernel sys) (i : σ.Id) : Kernel sys × sys.State i :=
   | some c => (k.setCell i { c with state := (sys.actor i).init }, c.state)
   | none => (k, (sys.actor i).init)
 
-def handle (k : Kernel sys) (i : σ.Id) (msg : σ.Msg i) : Kernel sys × List σ.Out :=
+def handle (k : Kernel sys) (i : σ.Id) (msg : σ.Msg i) (src : Sender σ.Id := .outside) :
+    Kernel sys × List σ.Out :=
   let (k, s) := k.takeState i
-  let (k, outs) := k.settle i ((sys.actor i).step s msg)
+  let (k, outs) := k.settle i ((sys.actor i).stepAt { src } s msg)
   (k.rest i, outs)
 
 def startActor (k : Kernel sys) (i : σ.Id) : Kernel sys × List σ.Out :=
   let c := k.cell i
-  (k.setCell i { c with up := true }).settle i ((sys.actor i).recover c.state)
+  (k.setCell i { c with up := true }).settle i ((sys.actor i).recoverAt {} c.state)
 
 def boot (sys : System σ) [Hashable σ.Id] : Kernel sys × List σ.Out :=
   sys.boot.foldl (init := ({}, [])) fun (k, outs) i =>
@@ -167,7 +169,7 @@ def run1 (k : Kernel sys) : Step sys :=
   | none => { kernel := k }
   | some (e, rest) =>
     if (k.cell e.dst).up then
-      let (k, outs) := ({ k with queue := rest }).handle e.dst e.msg
+      let (k, outs) := ({ k with queue := rest }).handle e.dst e.msg (.ofSrc e.src)
       { kernel := k, events := .deliver e :: outs.map .output, outputs := outs }
     else
       let (k, outs) := k.startActor e.dst
@@ -180,7 +182,7 @@ def fire (k : Kernel sys) (i : σ.Id) (msg : σ.Msg i) (due : Due) : Step sys :=
   let c := k.cell i
   if c.up && c.timers.contains (msg, due) then
     let (k, outs) := ((k.unschedule [due]).setCell i
-      { c with timers := c.timers.eraseP (·.1 = msg) }).handle i msg
+      { c with timers := c.timers.eraseP (·.1 = msg) }).handle i msg .timer
     { kernel := k, events := .timeout i msg :: outs.map .output, outputs := outs }
   else { kernel := k }
 

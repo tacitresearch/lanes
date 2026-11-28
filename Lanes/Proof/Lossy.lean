@@ -101,7 +101,7 @@ private theorem startActor_drops (i : σ.Id) :
     | some a₁ =>
       obtain ⟨hlossy, hmem, rfl⟩ := step_drop.mp hstep
       obtain ⟨hkept, heq⟩ := settle_erase (env := env.lossy) { a with up := update a.up i true } i
-        ((sys.actor i).recover (a.state i)) hmem hlossy
+        ((sys.actor i).recoverAt a.clock (a.state i)) hmem hlossy
       have hstep' : (a.startActor env.lossy i).step env.lossy (.drop d)
           = some (({ a with net := a.net.erase d } : SysState sys).startActor env.lossy i) :=
         step_drop.mpr ⟨hlossy, hkept, heq⟩
@@ -122,7 +122,7 @@ theorem init_lossy (sys : System σ) (env : EnvModel σ) :
   | cons i l ih =>
     intro a c drops h
     obtain ⟨more, hmore⟩ := settle_lossy (env := env) { c with up := update c.up i true } i
-      ((sys.actor i).recover (c.state i))
+      ((sys.actor i).recoverAt c.clock (c.state i))
     exact ih _ _ (drops ++ more) (by
       rw [List.map_append, run_append, startActor_drops i drops h]
       exact hmore)
@@ -163,6 +163,9 @@ theorem step_lossy {c c' : SysState sys} {ev : Event σ} (h : c.step env ev = so
   | restart =>
     obtain ⟨hmay, rfl⟩ := step_restart.mp h
     exact after (step_restart.mpr ⟨hmay, rfl⟩) (init_lossy sys env)
+  | tick m =>
+    obtain rfl := step_tick.mp h
+    exact after (step_tick.mpr rfl) ⟨[], rfl⟩
 
 end SysState
 

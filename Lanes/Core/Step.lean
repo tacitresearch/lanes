@@ -22,6 +22,32 @@ variable {σ : Signature} {sys : System σ} {env : EnvModel σ} {c c' : SysState
 
 @[simp] theorem performAll_nil (c : SysState sys) (i : σ.Id) : c.performAll i [] = c := rfl
 
+/-! Only a tick moves the clock. -/
+
+@[simp] theorem perform_clock (c : SysState sys) (i : σ.Id) (eff : Effect σ i) :
+    (c.perform i eff).clock = c.clock := by
+  cases eff <;> rfl
+
+@[simp] theorem performAll_clock (c : SysState sys) (i : σ.Id) (effs : List (Effect σ i)) :
+    (c.performAll i effs).clock = c.clock := by
+  induction effs generalizing c with
+  | nil => rfl
+  | cons eff effs ih => exact (ih _).trans (perform_clock c i eff)
+
+@[simp] theorem down_clock (c : SysState sys) (i : σ.Id) : (c.down env i).clock = c.clock := rfl
+
+@[simp] theorem settle_clock (c : SysState sys) (i : σ.Id) (r : sys.State i × List (Effect σ i)) :
+    (c.settle env i r).clock = c.clock := by
+  unfold settle; split <;> simp
+
+@[simp] theorem handle_clock (c : SysState sys) (i : σ.Id) (msg : σ.Msg i) (src : Sender σ.Id) :
+    (c.handle env i msg src).clock = c.clock := by
+  simp [handle]
+
+@[simp] theorem startActor_clock (c : SysState sys) (i : σ.Id) :
+    (c.startActor env i).clock = c.clock := by
+  simp [startActor]
+
 @[simp] theorem performAll_cons (c : SysState sys) (i : σ.Id) (eff : Effect σ i)
     (effs : List (Effect σ i)) :
     c.performAll i (eff :: effs) = (c.perform i eff).performAll i effs := rfl
@@ -102,7 +128,7 @@ theorem step_input {x : σ.In} :
 theorem step_deliver {e : Envelope σ} :
     c.step env (.deliver e) = some c' ↔
       c.up e.dst = true ∧ c.deliverable env e = true ∧
-        c' = ({ c with net := c.net.erase e }).handle env e.dst e.msg := by
+        c' = ({ c with net := c.net.erase e }).handle env e.dst e.msg (.ofSrc e.src) := by
   simp only [step]
   split
   · next h =>
@@ -117,7 +143,7 @@ theorem step_deliver {e : Envelope σ} :
 theorem step_duplicate {e : Envelope σ} :
     c.step env (.duplicate e) = some c' ↔
       c.up e.dst = true ∧ (env.link e.src e.dst).duplicating = true ∧
-        c.deliverable env e = true ∧ c' = c.handle env e.dst e.msg := by
+        c.deliverable env e = true ∧ c' = c.handle env e.dst e.msg (.ofSrc e.src) := by
   simp only [step]
   split
   · next h =>
@@ -146,7 +172,8 @@ theorem step_drop {e : Envelope σ} :
 theorem step_timeout {i : σ.Id} {msg : σ.Msg i} :
     c.step env (.timeout i msg) = some c' ↔
       c.up i = true ∧ msg ∈ c.timers i ∧
-        c' = ({ c with timers := update c.timers i ((c.timers i).erase msg) }).handle env i msg := by
+        c' = ({ c with timers := update c.timers i ((c.timers i).erase msg) }).handle env i msg
+          .timer := by
   simp only [step]
   split
   · next h =>
@@ -211,17 +238,21 @@ theorem step_restart :
 theorem step_restart_of_noRestarts (h : env.mayRestart = false) : c.step env .restart = none := by
   simp [step, h]
 
+theorem step_tick {m : Moment} : c.step env (.tick m) = some c' ↔ c' = { c with clock := m } := by
+  simp only [step, Option.some.injEq]
+  exact eq_comm
+
 /-- An actor that never stops itself stays up for as long as the environment neither crashes
 it nor restarts the process. -/
 theorem up_of_step {i : σ.Id} {ev : Event σ} (hcrash : env.mayCrash i = false)
     (hrestart : env.mayRestart = false)
-    (hruns : ∀ s msg, ((sys.actor i).step s msg).2.any Effect.isStop = false)
+    (hruns : ∀ ctx s msg, ((sys.actor i).stepAt ctx s msg).2.any Effect.isStop = false)
     (hup : c.up i = true) (hstep : c.step env ev = some c') : c'.up i = true := by
-  have hhandle (c : SysState sys) (j : σ.Id) (msg : σ.Msg j) (hc : c.up i = true) :
-      (c.handle env j msg).up i = true := by
+  have hhandle (c : SysState sys) (j : σ.Id) (msg : σ.Msg j) (src : Sender σ.Id)
+      (hc : c.up i = true) : (c.handle env j msg src).up i = true := by
     by_cases hj : i = j
     · subst hj
-      rw [handle, settle_up_of_running (hruns _ _)]
+      rw [handle, settle_up_of_running (hruns _ _ _)]
       exact hc
     · rw [handle, settle_up_of_ne _ hj]
       exact hc
@@ -231,16 +262,16 @@ theorem up_of_step {i : σ.Id} {ev : Event σ} (hcrash : env.mayCrash i = false)
     exact hup
   | deliver e =>
     obtain ⟨_, _, rfl⟩ := step_deliver.mp hstep
-    exact hhandle _ _ _ hup
+    exact hhandle _ _ _ _ hup
   | duplicate e =>
     obtain ⟨_, _, _, rfl⟩ := step_duplicate.mp hstep
-    exact hhandle _ _ _ hup
+    exact hhandle _ _ _ _ hup
   | drop e =>
     obtain ⟨_, _, rfl⟩ := step_drop.mp hstep
     exact hup
   | timeout j msg =>
     obtain ⟨_, _, rfl⟩ := step_timeout.mp hstep
-    exact hhandle _ _ _ hup
+    exact hhandle _ _ _ _ hup
   | output out =>
     obtain ⟨_, rfl⟩ := step_output.mp hstep
     exact hup
@@ -258,6 +289,9 @@ theorem up_of_step {i : σ.Id} {ev : Event σ} (hcrash : env.mayCrash i = false)
     rw [startActor, settle_up_of_ne _ hj]
     simpa [hj] using hup
   | restart => simp [step_restart_of_noRestarts hrestart] at hstep
+  | tick m =>
+    obtain rfl := step_tick.mp hstep
+    exact hup
 
 /-- An emitted output stays in the outbox until it is handed over, unless the process
 restarts. -/
@@ -297,6 +331,9 @@ theorem mem_outbox_of_step {out : σ.Out} {ev : Event σ} (hout : out ∈ c.outb
     obtain ⟨_, _, rfl⟩ := step_start.mp hstep
     exact hsettle _ _ _ hout
   | restart => simp [step_restart_of_noRestarts hrestart] at hstep
+  | tick m =>
+    obtain rfl := step_tick.mp hstep
+    exact hout
 
 end Lanes.SysState
 

@@ -25,22 +25,22 @@ namespace Lanes.System
 
 variable {σ : Signature} {sys : System σ}
 
-/-- Every output an actor's step or start emits is one `good` admits. -/
+/-- Every output an actor's step or start emits is one `good` admits, whatever it is told. -/
 def Emits (sys : System σ) (good : σ.Out → Prop) : Prop :=
-  (∀ i s msg out, Effect.emit out ∈ ((sys.actor i).step s msg).2 → good out) ∧
-    ∀ i s out, Effect.emit out ∈ ((sys.actor i).recover s).2 → good out
+  (∀ i ctx s msg out, Effect.emit out ∈ ((sys.actor i).stepAt ctx s msg).2 → good out) ∧
+    ∀ i t s out, Effect.emit out ∈ ((sys.actor i).recoverAt t s).2 → good out
 
 theorem Emits.outbox {good : σ.Out → Prop} (h : sys.Emits good) :
     sys.Monotone fun c => ∀ out ∈ c.outbox, good out where
   blank := by simp [SysState.blank]
   below _ _ hc hbelow out hout := hc out (hbelow.outbox out hout)
   input c _ hc := hc
-  step c i msg hc _ out hout := by
+  step c i msg hc _ ctx out hout := by
     simp only [SysState.grow, List.mem_append] at hout
-    exact hout.elim (hc out) fun hout => h.1 i _ msg out (Effect.mem_emits.mp hout)
-  recover c i hc out hout := by
+    exact hout.elim (hc out) fun hout => h.1 i ctx _ msg out (Effect.mem_emits.mp hout)
+  recover c i hc t out hout := by
     simp only [SysState.grow, List.mem_append] at hout
-    exact hout.elim (hc out) fun hout => h.2 i _ out (Effect.mem_emits.mp hout)
+    exact hout.elim (hc out) fun hout => h.2 i t _ out (Effect.mem_emits.mp hout)
 
 /-- Every output of a run is one `good` admits, if every output an actor emits is. -/
 theorem Emits.outputs {good : σ.Out → Prop} (h : sys.Emits good) {env : EnvModel σ}
@@ -80,8 +80,8 @@ structure Outside.Beside {D : Type} (outside : Outside σ D) (sys : System σ) (
     P { c with outbox := c.outbox.erase out } (outside.observe d out)
   step : ∀ c d i msg, sys.Reachable env c → P c d →
     ((∃ src, ⟨src, i, msg⟩ ∈ c.net) ∨ msg ∈ c.timers i) →
-      P (c.grow i ((sys.actor i).step (c.state i) msg)) d
-  recover : ∀ c d i, P c d → P (c.grow i ((sys.actor i).recover (c.state i))) d
+      ∀ ctx, P (c.grow i ((sys.actor i).stepAt ctx (c.state i) msg)) d
+  recover : ∀ c d i, P c d → ∀ t, P (c.grow i ((sys.actor i).recoverAt t (c.state i))) d
   restart : env.mayRestart = true → ∀ c d, sys.Reachable env c → P c d →
     P (SysState.init sys env) d
 
@@ -92,7 +92,8 @@ open SysState
 variable {D : Type} {outside : Outside σ D} {env : EnvModel σ} {P : SysState sys → D → Prop}
 
 theorem init (h : outside.Beside sys env P) : P (SysState.init sys env) outside.init :=
-  init_induction h.blank fun c i hc => h.below _ _ _ (h.recover c _ i hc) (Below.startActor c env i)
+  init_induction h.blank fun c i hc =>
+    h.below _ _ _ (h.recover c _ i hc _) (Below.startActor c env i)
 
 /-- Each event that the system and the outside both allow keeps the property. -/
 theorem keeps (h : outside.Beside sys env P) {c c' : SysState sys} {d d' : D} {ev : Event σ}
@@ -108,13 +109,13 @@ theorem keeps (h : outside.Beside sys env P) {c c' : SysState sys} {d d' : D} {e
     have hbelow : SysState.Below { c with net := c.net.erase e } c :=
       ⟨rfl, fun _ h => List.mem_of_mem_erase h, fun _ _ h => h, fun _ h => h⟩
     exact h.below _ _ _
-      (h.step c d e.dst e.msg hc hP (.inl ⟨e.src, mem_of_deliverable hdeliverable⟩))
+      (h.step c d e.dst e.msg hc hP (.inl ⟨e.src, mem_of_deliverable hdeliverable⟩) _)
       (Below.handle hbelow ..)
   | duplicate e =>
     obtain ⟨_, _, hdeliverable, rfl⟩ := step_duplicate.mp hstep
     obtain rfl := Option.some.inj hsee
     exact h.below _ _ _
-      (h.step c d e.dst e.msg hc hP (.inl ⟨e.src, mem_of_deliverable hdeliverable⟩))
+      (h.step c d e.dst e.msg hc hP (.inl ⟨e.src, mem_of_deliverable hdeliverable⟩) _)
       (Below.handle (Below.refl c) ..)
   | drop e =>
     obtain ⟨_, _, rfl⟩ := step_drop.mp hstep
@@ -132,7 +133,7 @@ theorem keeps (h : outside.Beside sys env P) {c c' : SysState sys} {d d' : D} {e
         simp only [update_self] at hm
         exact List.mem_of_mem_erase hm
       · simpa [hj] using hm
-    exact h.below _ _ _ (h.step c d i msg hc hP (.inr hmem)) (Below.handle hbelow ..)
+    exact h.below _ _ _ (h.step c d i msg hc hP (.inr hmem) _) (Below.handle hbelow ..)
   | output out =>
     obtain ⟨hmem, rfl⟩ := step_output.mp hstep
     obtain rfl := Option.some.inj hsee
@@ -148,11 +149,15 @@ theorem keeps (h : outside.Beside sys env P) {c c' : SysState sys} {d d' : D} {e
   | start i =>
     obtain ⟨_, _, rfl⟩ := step_start.mp hstep
     obtain rfl := Option.some.inj hsee
-    exact h.below _ _ _ (h.recover c d i hP) (Below.startActor c env i)
+    exact h.below _ _ _ (h.recover c d i hP _) (Below.startActor c env i)
   | restart =>
     obtain ⟨hmay, rfl⟩ := step_restart.mp hstep
     obtain rfl := Option.some.inj hsee
     exact h.restart hmay c d hc hP
+  | tick m =>
+    obtain rfl := step_tick.mp hstep
+    obtain rfl := Option.some.inj hsee
+    exact h.below _ _ _ hP ⟨rfl, fun _ h => h, fun _ _ h => h, fun _ h => h⟩
 
 /-- The property holds after every run that the outside allows. -/
 theorem holds (h : outside.Beside sys env P) {events : List (Event σ)} {c : SysState sys} {d : D}

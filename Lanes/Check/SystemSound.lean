@@ -37,12 +37,13 @@ variable {σ : Signature} {sys : System σ} {D : Type}
 /-- The events that involve neither the driver nor a budget. -/
 def Event.isInternal : Event σ → Bool
   | .drop _ | .start _ => true
-  | .input _ | .output _ | .timeout .. | .deliver _ | .duplicate _ | .crash _ | .restart => false
+  | .input _ | .output _ | .timeout .. | .deliver _ | .duplicate _ | .crash _ | .restart
+  | .tick _ => false
 
 /--
 The instance a check covers: the worlds the semantics reaches when the driver chooses the
-inputs and sees the outputs, at most `maxCrashes` crashes and `maxRestarts` restarts happen
-and no world violates the constraint.
+inputs and sees the outputs, at most `maxCrashes` crashes and `maxRestarts` restarts happen,
+the clock moves only forward along `moments`, and no world violates the constraint.
 -/
 inductive Scenario.Reachable (sys : System σ) (sc : Scenario σ D)
     (constraint : World sys D → Bool) : World sys D → Prop
@@ -77,6 +78,11 @@ inductive Scenario.Reachable (sys : System σ) (sc : Scenario σ D)
     w.state.step sc.env .restart = some c →
     constraint { w with state := c, restarts := w.restarts + 1 } = true →
     Reachable sys sc constraint { w with state := c, restarts := w.restarts + 1 }
+  /-- The clock moves forward to one of the scenario's moments. -/
+  | tick {w : World sys D} {m : Moment} {c : SysState sys} :
+    Reachable sys sc constraint w → m ∈ sc.moments → w.state.clock.later m = true →
+    w.state.step sc.env (.tick m) = some c →
+    constraint { w with state := c } = true → Reachable sys sc constraint { w with state := c }
   | internal {w : World sys D} {ev : Event σ} {c : SysState sys} :
     Reachable sys sc constraint w → ev.isInternal = true → w.state.step sc.env ev = some c →
     constraint { w with state := c } = true → Reachable sys sc constraint { w with state := c }
@@ -86,7 +92,8 @@ theorem Scenario.Reachable.system {sc : Scenario σ D} {constraint : World sys D
   induction h with
   | init => exact .init
   | input _ _ hstep _ ih | output _ hstep _ ih | timeout _ hstep _ ih | deliver _ _ hstep _ ih
-  | crash _ _ hstep _ ih | restart _ _ hstep _ ih | internal _ _ hstep _ ih =>
+  | crash _ _ hstep _ ih | restart _ _ hstep _ ih | internal _ _ hstep _ ih
+  | tick _ _ _ hstep _ ih =>
     exact .step _ ih hstep
 
 theorem World.mem_next_iff [Enum σ.Id] {sc : Scenario σ D} {w w' : World sys D} {ev : Event σ} :
@@ -102,13 +109,15 @@ theorem World.mem_next_iff [Enum σ.Id] {sc : Scenario σ D} {w w' : World sys D
         w.crashes < sc.maxCrashes ∧ w' = { w with state := c, crashes := w.crashes + 1 }
       | .restart =>
         w.restarts < sc.maxRestarts ∧ w' = { w with state := c, restarts := w.restarts + 1 }
+      | .tick m => m ∈ sc.moments ∧ w.state.clock.later m = true ∧ w' = { w with state := c }
       | _ => w' = { w with state := c } := by
-  simp only [World.next, List.mem_append, List.mem_filterMap]
+  simp only [World.next, List.mem_append, List.mem_filterMap, List.mem_map, List.mem_filter]
   constructor
-  · rintro (⟨⟨ev₀, c⟩, hsucc, hsome⟩ | ⟨⟨x, d⟩, hinput, hsome⟩)
-    · obtain ⟨hstep, hnotInput⟩ := SysState.mem_successors_iff.mp hsucc
+  · rintro ((⟨⟨ev₀, c⟩, hsucc, hsome⟩ | ⟨⟨x, d⟩, hinput, hsome⟩) | ⟨m, ⟨hm, hlater⟩, hsome⟩)
+    · obtain ⟨hstep, hnotInput, hnotTick⟩ := SysState.mem_successors_iff.mp hsucc
       cases ev₀ with
       | input x => exact absurd rfl (hnotInput x)
+      | tick m => exact absurd rfl (hnotTick m)
       | crash i =>
         by_cases hbudget : w.crashes < sc.maxCrashes
         · simp only [hbudget, ite_true, Option.some.injEq, Prod.mk.injEq] at hsome
@@ -128,20 +137,29 @@ theorem World.mem_next_iff [Enum σ.Id] {sc : Scenario σ D} {w w' : World sys D
     · simp only [Option.map_eq_some_iff, Prod.mk.injEq] at hsome
       obtain ⟨c, hstep, rfl, rfl⟩ := hsome
       exact ⟨c, hstep, d, hinput, rfl⟩
+    · simp only [Prod.mk.injEq] at hsome
+      obtain ⟨rfl, rfl⟩ := hsome
+      exact ⟨_, SysState.step_tick.mpr rfl, hm, hlater, rfl⟩
   · rintro ⟨c, hstep, hw'⟩
     cases ev with
     | input x =>
       obtain ⟨d, hinput, rfl⟩ := hw'
-      exact .inr ⟨(x, d), hinput, by simp [hstep]⟩
+      exact .inl (.inr ⟨(x, d), hinput, by simp [hstep]⟩)
     | crash i =>
       obtain ⟨hbudget, rfl⟩ := hw'
-      exact .inl ⟨(_, c), SysState.mem_successors_iff.mpr ⟨hstep, by simp⟩, by simp [hbudget]⟩
+      exact .inl (.inl ⟨(_, c), SysState.mem_successors_iff.mpr ⟨hstep, by simp, by simp⟩,
+        by simp [hbudget]⟩)
     | restart =>
       obtain ⟨hbudget, rfl⟩ := hw'
-      exact .inl ⟨(_, c), SysState.mem_successors_iff.mpr ⟨hstep, by simp⟩, by simp [hbudget]⟩
+      exact .inl (.inl ⟨(_, c), SysState.mem_successors_iff.mpr ⟨hstep, by simp, by simp⟩,
+        by simp [hbudget]⟩)
+    | tick m =>
+      obtain ⟨hm, hlater, rfl⟩ := hw'
+      obtain rfl := SysState.step_tick.mp hstep
+      exact .inr ⟨m, ⟨hm, hlater⟩, rfl⟩
     | output out | deliver e | duplicate e | drop e | timeout i msg | start i =>
       subst hw'
-      exact .inl ⟨(_, c), SysState.mem_successors_iff.mpr ⟨hstep, by simp⟩, rfl⟩
+      exact .inl (.inl ⟨(_, c), SysState.mem_successors_iff.mpr ⟨hstep, by simp, by simp⟩, rfl⟩)
 
 namespace Check
 
@@ -200,6 +218,8 @@ theorem Scenario.Reachable.model [Enum σ.Id] {sc : Scenario σ D}
     exact model_step ih ((World.mem_next_iff (ev := .crash i)).mpr ⟨_, hstep, hbudget, rfl⟩) hc
   | @restart _ _ _ hbudget hstep hc ih =>
     exact model_step ih ((World.mem_next_iff (ev := .restart)).mpr ⟨_, hstep, hbudget, rfl⟩) hc
+  | @tick _ m _ _ hm hlater hstep hc ih =>
+    exact model_step ih ((World.mem_next_iff (ev := .tick m)).mpr ⟨_, hstep, hm, hlater, rfl⟩) hc
   | @internal _ ev _ _ hev hstep hc ih =>
     exact model_step ih ((World.mem_next_iff (ev := ev)).mpr ⟨_, hstep, by
       cases ev <;> first | rfl | exact absurd hev (by simp [Event.isInternal])⟩) hc
@@ -239,6 +259,10 @@ theorem Scenario.Reachable.of_model [Enum σ.Id] {sc : Scenario σ D}
     | duplicate e =>
       simp only [hw'] at hc ⊢
       exact .deliver ih (.inr rfl) hstep hc
+    | tick m =>
+      obtain ⟨hm, hlater, hw'⟩ := hw'
+      simp only [hw'] at hc ⊢
+      exact .tick ih hm hlater hstep hc
     | drop e | start i =>
       simp only [hw'] at hc ⊢
       exact .internal ih rfl hstep hc
@@ -331,7 +355,7 @@ end Check
 
 theorem SysState.Equiv.hash_eq [σ.Inspect] [sys.Inspect] {env : EnvModel σ} {a b : SysState sys}
     (h : SysState.Equiv env a b) : a.hash = b.hash := by
-  simp only [SysState.hash, h.state, h.up, h.timers, h.trafficHash_eq]
+  simp only [SysState.hash, h.state, h.up, h.timers, h.clock, h.trafficHash_eq]
 
 /-- `w` with no messages in flight and no pending outputs. -/
 def World.quiet (w : World sys D) : World sys D :=
@@ -353,11 +377,11 @@ theorem congr {p : World sys D → α}
     (h : World.Equiv env a b) : p a = p b := by
   have hb : b = { a with state := { a.state with net := b.state.net, outbox := b.state.outbox },
                          driver := b.driver } := by
-    obtain ⟨⟨hstate, hup, htimers, _, _⟩, _, hcrashes, hrestarts⟩ := h
-    obtain ⟨⟨_, _, _, _, _⟩, _, _, _⟩ := a
-    obtain ⟨⟨_, _, _, _, _⟩, _, _, _⟩ := b
-    simp only at hstate hup htimers hcrashes hrestarts
-    simp [hstate, hup, htimers, hcrashes, hrestarts]
+    obtain ⟨⟨hstate, hup, htimers, _, _, hclock⟩, _, hcrashes, hrestarts⟩ := h
+    obtain ⟨⟨_, _, _, _, _, _⟩, _, _, _⟩ := a
+    obtain ⟨⟨_, _, _, _, _, _⟩, _, _, _⟩ := b
+    simp only at hstate hup htimers hclock hcrashes hrestarts
+    simp [hstate, hup, htimers, hclock, hcrashes, hrestarts]
   rw [hb]
   exact hp a _ _ _ h.net_perm h.state.outbox h.driver
 
@@ -378,8 +402,8 @@ restarts, `hp` is
 theorem eq_of_quiet [LawfulBEq D] {p : World sys D → α} (hp : ∀ w, p w = p w.quiet)
     (h : World.Equiv env a b) : p a = p b := by
   have hquiet : a.quiet = b.quiet := by
-    simp only [World.quiet, h.state.state, h.state.up, h.state.timers, eq_of_beq h.driver,
-      h.crashes, h.restarts]
+    simp only [World.quiet, h.state.state, h.state.up, h.state.timers, h.state.clock,
+      eq_of_beq h.driver, h.crashes, h.restarts]
   rw [hp a, hp b, hquiet]
 
 end World.Equiv
@@ -410,7 +434,7 @@ theorem Node.beq_iff [BEq D] [∀ i, LawfulBEq (sys.State i)] {a b : Node sys en
       ∧ (a.world.driver == b.world.driver) = true
       ∧ SysState.Equiv env a.world.state b.world.state := by
   change (a.world.crashes == b.world.crashes && a.world.restarts == b.world.restarts
-    && Slot.allSame a.slots b.slots
+    && a.world.state.clock == b.world.state.clock && Slot.allSame a.slots b.slots
     && SysState.netEquiv env a.world.state.net b.world.state.net
     && a.world.state.outbox.isPerm b.world.state.outbox
     && a.world.driver == b.world.driver) = true ↔ _
@@ -418,12 +442,12 @@ theorem Node.beq_iff [BEq D] [∀ i, LawfulBEq (sys.State i)] {a b : Node sys en
   simp only [Bool.and_eq_true, beq_iff_eq, Slot.allSame_iff, netEquiv_iff, List.isPerm_iff,
     and_assoc]
   constructor
-  · rintro ⟨hc, hr, hall, hnet, hout, hd⟩
+  · rintro ⟨hc, hr, hclock, hall, hnet, hout, hd⟩
     exact ⟨hc, hr, hd, funext fun i => (hall i (Enum.complete i)).1,
       funext fun i => (hall i (Enum.complete i)).2.1,
-      funext fun i => (hall i (Enum.complete i)).2.2, hnet, hout⟩
+      funext fun i => (hall i (Enum.complete i)).2.2, hnet, hout, hclock⟩
   · rintro ⟨hc, hr, hd, h⟩
-    exact ⟨hc, hr, fun i _ => ⟨congrFun h.state i, congrFun h.up i, congrFun h.timers i⟩,
+    exact ⟨hc, hr, h.clock, fun i _ => ⟨congrFun h.state i, congrFun h.up i, congrFun h.timers i⟩,
       h.net, h.outbox, hd⟩
 
 theorem Node.beq_iff_equiv [BEq D] [∀ i, LawfulBEq (sys.State i)] {a b : Node sys env D} :
@@ -519,6 +543,7 @@ theorem World.step_of_mem_next [Enum σ.Id] {sc : Scenario σ D} {w w' : World s
   | input x => obtain ⟨d, _, rfl⟩ := hw; rfl
   | crash i => obtain ⟨_, rfl⟩ := hw; rfl
   | restart => obtain ⟨_, rfl⟩ := hw; rfl
+  | tick m => obtain ⟨_, _, rfl⟩ := hw; rfl
   | output out | deliver e | duplicate e | drop e | timeout i msg | start i => subst hw; rfl
 
 namespace Check

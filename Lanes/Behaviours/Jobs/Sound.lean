@@ -60,8 +60,8 @@ theorem step_runs (config : Config R) (active : List (Active K J)) (msg : Jobs.M
   cases msg <;> simp only [step, fail] <;> repeat' split
   all_goals simp [Effect.isStop]
 
-theorem recover_runs (config : Config R) (active : List (Active K J)) :
-    ((actor config).recover active).2.any Effect.isStop = false := by
+theorem recover_runs (config : Config R) (t : Moment) (active : List (Active K J)) :
+    ((actor config).recoverAt t active).2.any Effect.isStop = false := by
   simp only [actor, List.any_map, List.any_eq_false, Function.comp_def, rearm]
   intro a _
   split <;> simp [Effect.isStop]
@@ -500,13 +500,14 @@ theorem attempts (config : Config R) (env : EnvModel (sig K J R)) :
     (system (K := K) (J := J) config).Invariant env fun c => Attempts config (c.state ()) :=
   System.invariant_of_actor _ () (actor_attempts config) env
 
-theorem handle_eq (c : SysState (system (K := K) (J := J) config)) (msg : Jobs.Msg K J R) :
-    c.handle env () msg = { c with
+theorem handle_eq (c : SysState (system (K := K) (J := J) config)) (msg : Jobs.Msg K J R)
+    (src : Sender Unit) :
+    c.handle env () msg src = { c with
       state := update c.state () (step config (c.state ()) msg).1
       net := c.net ++ Effect.sends () (step config (c.state ()) msg).2
       timers := update c.timers () (Effect.retime (step config (c.state ()) msg).2 (c.timers ()))
       outbox := c.outbox ++ Effect.emits (step config (c.state ()) msg).2 } := by
-  have hr : ((actor config).step (c.state ()) msg).2.any Effect.isStop = false :=
+  have hr : ((actor config).stepAt ⟨c.clock, src⟩ (c.state ()) msg).2.any Effect.isStop = false :=
     step_runs config (c.state ()) msg
   simp only [SysState.handle, SysState.settle_eq, hr, Bool.false_eq_true, ↓reduceIte]
   rfl
@@ -517,7 +518,7 @@ theorem startActor_eq (c : SysState (system (K := K) (J := J) config)) :
       net := c.net ++ Effect.sends () ((c.state ()).map (rearm config))
       timers := update c.timers () (Effect.retime ((c.state ()).map (rearm config)) (c.timers ()))
       outbox := c.outbox ++ Effect.emits ((c.state ()).map (rearm config)) } := by
-  have hr := recover_runs (K := K) (J := J) config (c.state ())
+  have hr := recover_runs (K := K) (J := J) config c.clock (c.state ())
   simp only [SysState.startActor, SysState.settle_eq, hr, Bool.false_eq_true, ↓reduceIte]
   simp only [actor, SysState.mk.injEq, and_true]
   funext i
@@ -587,6 +588,9 @@ theorem armed (config : Config R) (env : EnvModel (sig K J R)) :
     | restart =>
       obtain ⟨_, rfl⟩ := SysState.step_restart.mp hstep
       exact armed_start (env := env) (SysState.blank _)
+    | tick m =>
+      obtain rfl := SysState.step_tick.mp hstep
+      exact ih
 
 /-! ### No key is answered more often than it is submitted -/
 
@@ -704,8 +708,8 @@ private theorem owed_step (key : K) (active : List (Active K J)) (msg : Jobs.Msg
     · simp [Effect.emits]
 
 private theorem owed_handle (key : K) (c : SysState (system (K := K) (J := J) config))
-    (i : Unit) (msg : Jobs.Msg K J R) :
-    owed key (c.handle env i msg) ≤ owed key c + (submits key msg).toNat := by
+    (i : Unit) (msg : Jobs.Msg K J R) (src : Sender Unit) :
+    owed key (c.handle env i msg src) ≤ owed key c + (submits key msg).toNat := by
   obtain rfl : i = () := rfl
   have h := owed_step (config := config) key (c.state ()) msg
   rw [handle_eq]
@@ -768,6 +772,7 @@ private theorem owed_event (key : K) {c c' : SysState (system (K := K) (J := J) 
   | deliver e =>
     obtain ⟨_, _, rfl⟩ := SysState.step_deliver.mp hstep
     have h := owed_handle (env := env) key { c with net := c.net.erase e } e.dst e.msg
+      (.ofSrc e.src)
     have hhandled := handled_handle e.dst e.msg key
     have hsame : owed key { c with net := c.net.erase e } = owed key c := rfl
     have hanswered : (answered [Deed.handle (σ := sig K J R) e.dst e.msg]).count key = 0 := rfl
@@ -775,7 +780,7 @@ private theorem owed_event (key : K) {c c' : SysState (system (K := K) (J := J) 
     omega
   | duplicate e =>
     obtain ⟨_, _, _, rfl⟩ := SysState.step_duplicate.mp hstep
-    have h := owed_handle (env := env) key c e.dst e.msg
+    have h := owed_handle (env := env) key c e.dst e.msg (.ofSrc e.src)
     have hhandled := handled_handle e.dst e.msg key
     have hanswered : (answered [Deed.handle (σ := sig K J R) e.dst e.msg]).count key = 0 := rfl
     simp only [Event.deed, Option.toList_some]
@@ -786,7 +791,7 @@ private theorem owed_event (key : K) {c c' : SysState (system (K := K) (J := J) 
   | timeout i msg =>
     obtain ⟨_, _, rfl⟩ := SysState.step_timeout.mp hstep
     have h := owed_handle (env := env) key
-      { c with timers := update c.timers i ((c.timers i).erase msg) } i msg
+      { c with timers := update c.timers i ((c.timers i).erase msg) } i msg .timer
     have hhandled := handled_handle i msg key
     have hsame : owed key { c with timers := update c.timers i ((c.timers i).erase msg) }
         = owed key c := rfl
@@ -809,6 +814,9 @@ private theorem owed_event (key : K) {c c' : SysState (system (K := K) (J := J) 
   | restart =>
     obtain ⟨_, rfl⟩ := SysState.step_restart.mp hstep
     simp [owed_init, Event.deed, answered, handled]
+  | tick m =>
+    obtain rfl := SysState.step_tick.mp hstep
+    simp [owed, Event.deed, answered, handled]
 
 /-- The jobs actor answers no key more often than it handles a submission of it: in every
 environment, whatever arrives and however often. It may crash and restart, the process may

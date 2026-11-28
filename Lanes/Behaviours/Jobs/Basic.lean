@@ -460,13 +460,13 @@ theorem attempts_step (config : Config R) {active : List (Active K J)} (msg : Jo
 theorem actor_within (config : Config R) :
     (actor (K := K) (J := J) config).Invariant (Within config) :=
   Actor.Inductive.invariant
-    ⟨⟨by simp [actor], by simp [actor, keys]⟩, fun _ msg h => within_step config msg h,
-      fun _ h => h⟩
+    ⟨⟨by simp [actor], by simp [actor, keys]⟩, fun _ _ msg h => within_step config msg h,
+      fun _ _ h => h⟩
 
 theorem actor_attempts (config : Config R) :
     (actor (K := K) (J := J) config).Invariant (Attempts config) :=
   Actor.Inductive.invariant
-    ⟨by simp [actor, Attempts], fun _ msg h => attempts_step config msg h, fun _ h => h⟩
+    ⟨by simp [actor, Attempts], fun _ _ msg h => attempts_step config msg h, fun _ _ h => h⟩
 
 /-! A retry carries the job it retries. -/
 

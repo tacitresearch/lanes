@@ -123,9 +123,9 @@ private def owed (id : ReqId) (c : SysState (gateSystem bridge config)) : Nat :=
   c.outbox.countP (answers id) + List.count id (c.state ())
 
 /-- One step of the gate adds at most one to what it owes `id`, and only for an arrival. -/
-private theorem owed_step (id : ReqId) (pending : List ReqId) (msg : GateMsg σ) :
-    (Effect.emits ((gateActor bridge config).step pending msg).2).countP (answers id)
-        + List.count id ((gateActor bridge config).step pending msg).1
+private theorem owed_step (id : ReqId) (ctx : Ctx Unit) (pending : List ReqId) (msg : GateMsg σ) :
+    (Effect.emits ((gateActor bridge config).stepAt ctx pending msg).2).countP (answers id)
+        + List.count id ((gateActor bridge config).stepAt ctx pending msg).1
       ≤ List.count id pending + (arrives id msg).toNat := by
   cases msg with
   | arrive id' request =>
@@ -156,16 +156,18 @@ private theorem owed_settle (id : ReqId) (c : SysState (gateSystem bridge config
   split <;> simp [owed, SysState.down, List.countP_append]
 
 private theorem owed_handle (id : ReqId) (c : SysState (gateSystem bridge config)) (i : Unit)
-    (msg : GateMsg σ) : owed id (c.handle env i msg) ≤ owed id c + (arrives id msg).toNat := by
+    (msg : GateMsg σ) (src : Sender Unit) :
+    owed id (c.handle env i msg src) ≤ owed id c + (arrives id msg).toNat := by
   obtain rfl : i = () := rfl
-  have h := owed_step (bridge := bridge) (config := config) id (c.state ()) msg
+  have h := owed_step (bridge := bridge) (config := config) id ⟨c.clock, src⟩ (c.state ()) msg
   rw [SysState.handle, owed_settle]
   simp only [owed]
   omega
 
 private theorem owed_start (id : ReqId) (c : SysState (gateSystem bridge config)) (i : Unit) :
     owed id (c.startActor env i) = owed id c := by
-  have hquiet : (Effect.emits ((gateActor bridge config).recover (c.state ())).2) = [] := by
+  have hquiet : (Effect.emits ((gateActor bridge config).recoverAt c.clock (c.state ())).2) = []
+      := by
     simp [gateActor, Effect.emits]
   rw [SysState.startActor, owed_settle, hquiet]
   simp [owed, gateActor]
@@ -227,6 +229,7 @@ private theorem owed_event (id : ReqId) {c c' : SysState (gateSystem bridge conf
   | deliver e =>
     obtain ⟨_, _, rfl⟩ := SysState.step_deliver.mp hstep
     have h := owed_handle (env := env) id { c with net := c.net.erase e } e.dst e.msg
+      (.ofSrc e.src)
     have hhandled := handled_handle e.dst e.msg id
     have hsame : owed id { c with net := c.net.erase e } = owed id c := rfl
     have hanswered : (answered [Deed.handle (σ := gateSig σ) e.dst e.msg]).count id = 0 := rfl
@@ -234,7 +237,7 @@ private theorem owed_event (id : ReqId) {c c' : SysState (gateSystem bridge conf
     omega
   | duplicate e =>
     obtain ⟨_, _, _, rfl⟩ := SysState.step_duplicate.mp hstep
-    have h := owed_handle (env := env) id c e.dst e.msg
+    have h := owed_handle (env := env) id c e.dst e.msg (.ofSrc e.src)
     have hhandled := handled_handle e.dst e.msg id
     have hanswered : (answered [Deed.handle (σ := gateSig σ) e.dst e.msg]).count id = 0 := rfl
     simp only [Event.deed, Option.toList_some]
@@ -247,7 +250,7 @@ private theorem owed_event (id : ReqId) {c c' : SysState (gateSystem bridge conf
   | timeout i msg =>
     obtain ⟨_, _, rfl⟩ := SysState.step_timeout.mp hstep
     have h := owed_handle (env := env) id
-      { c with timers := update c.timers i ((c.timers i).erase msg) } i msg
+      { c with timers := update c.timers i ((c.timers i).erase msg) } i msg .timer
     have hhandled := handled_handle i msg id
     have hsame : owed id { c with timers := update c.timers i ((c.timers i).erase msg) }
         = owed id c := rfl
@@ -274,6 +277,11 @@ private theorem owed_event (id : ReqId) {c c' : SysState (gateSystem bridge conf
     obtain ⟨_, rfl⟩ := SysState.step_restart.mp hstep
     have := quiet (ev := (.restart : Event (gateSig σ))) rfl id
     have h := owed_init (bridge := bridge) (config := config) (env := env) id
+    omega
+  | tick m =>
+    obtain rfl := SysState.step_tick.mp hstep
+    have := quiet (ev := (.tick m : Event (gateSig σ))) rfl id
+    simp only [owed]
     omega
 
 /-- The gate alone answers no request more often than it handles an arrival of it: in every
@@ -389,6 +397,9 @@ theorem deadlines_armed (bridge : Bridge σ) (config : GateConfig) (env : EnvMod
     | restart =>
       obtain ⟨_, rfl⟩ := SysState.step_restart.mp hstep
       exact armed_start (env := env) (SysState.blank _)
+    | tick m =>
+      obtain rfl := SysState.step_tick.mp hstep
+      exact ih
 
 end Gate
 
@@ -409,8 +420,8 @@ private def tame : Effect (gateSig σ) () → Bool
   | .emit _ | .after _ (.expire _) | .cancel _ => true
   | _ => false
 
-private theorem gate_tame (pending : List ReqId) (msg : GateMsg σ) :
-    ((gateActor bridge config).step pending msg).2.all tame = true := by
+private theorem gate_tame (ctx : Ctx Unit) (pending : List ReqId) (msg : GateMsg σ) :
+    ((gateActor bridge config).stepAt ctx pending msg).2.all tame = true := by
   cases msg <;> simp only [gateActor, Gate.step] <;> repeat' split
   all_goals simp [tame]
 
@@ -464,11 +475,11 @@ private theorem avoids_right (id : ReqId) {j : σ.Id} (effs : List (Effect σ j)
 private theorem onlyPut (sys : System σ) (bridge : Bridge σ) (config : GateConfig) (id : ReqId) :
     (wired sys bridge config).OnlyPut (arriving id) where
   step
-    | .inl (), _, msg => avoids_left id (gate_tame _ msg)
-    | .inr _, _, _ => avoids_right id _
+    | .inl (), ctx, _, msg => avoids_left id (gate_tame { ctx with src := Sender.left ctx.src } _ msg)
+    | .inr _, _, _, _ => avoids_right id _
   recover
-    | .inl (), pending => avoids_left id (by simp [gateActor, tame])
-    | .inr _, _ => avoids_right id _
+    | .inl (), _, pending => avoids_left id (by simp [gateActor, Actor.mapSrc, tame])
+    | .inr _, _, _ => avoids_right id _
 
 /-- The gate's deeds alone are its deeds in the join: what the wiring hides is no answer. -/
 private theorem shown_answered (events : List (Event (gateSig σ))) :

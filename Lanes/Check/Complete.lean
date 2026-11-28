@@ -9,8 +9,8 @@ public import Lanes.Core.Step
 
 /-!
 The checker explores a state through `SysState.successors`. `step_of_mem_successors` says it
-only follows real steps. This file proves the other direction: it misses none. Inputs are the
-one exception, by design: they are the driver's choice.
+only follows real steps. This file proves the other direction: it misses none. Inputs and ticks
+are the exceptions, by design: they are the driver's and the scenario's choice.
 -/
 
 public section
@@ -20,7 +20,7 @@ namespace Lanes.SysState
 variable {σ : Signature} {sys : System σ} [Enum σ.Id] {env : EnvModel σ} {c c' : SysState sys}
 
 theorem mem_candidates {ev : Event σ} (hstep : c.step env ev = some c')
-    (hinput : ∀ x, ev ≠ .input x) : ev ∈ c.candidates := by
+    (hinput : ∀ x, ev ≠ .input x) (htick : ∀ m, ev ≠ .tick m) : ev ∈ c.candidates := by
   simp only [candidates, List.mem_append, List.mem_map, List.mem_flatMap, List.mem_eraseDups,
     List.mem_singleton]
   cases ev with
@@ -39,21 +39,29 @@ theorem mem_candidates {ev : Event σ} (hstep : c.step env ev = some c')
   | crash i => exact .inl (.inl (.inr ⟨i, Enum.complete i, rfl⟩))
   | start i => exact .inl (.inr ⟨i, Enum.complete i, rfl⟩)
   | restart => exact .inr rfl
+  | tick m => exact absurd rfl (htick m)
 
-/-- The checker misses no step: every enabled event other than an input is a listed successor. -/
+/-- The checker misses no step: every enabled event other than an input or a tick is a listed
+successor. -/
 theorem mem_successors {ev : Event σ} (hstep : c.step env ev = some c')
-    (hinput : ∀ x, ev ≠ .input x) : (ev, c') ∈ c.successors env := by
+    (hinput : ∀ x, ev ≠ .input x) (htick : ∀ m, ev ≠ .tick m) : (ev, c') ∈ c.successors env := by
   simp only [successors, List.mem_filterMap, Option.map_eq_some_iff, Prod.mk.injEq]
-  exact ⟨ev, mem_candidates hstep hinput, c', hstep, rfl, rfl⟩
+  exact ⟨ev, mem_candidates hstep hinput htick, c', hstep, rfl, rfl⟩
 
-/-- The listed successors are exactly the enabled events other than inputs. -/
+/-- The listed successors are exactly the enabled events other than inputs and ticks. -/
 theorem mem_successors_iff {ev : Event σ} :
-    (ev, c') ∈ c.successors env ↔ c.step env ev = some c' ∧ ∀ x, ev ≠ .input x := by
-  refine ⟨fun h => ⟨step_of_mem_successors h, ?_⟩, fun h => mem_successors h.1 h.2⟩
-  intro x hx
-  subst hx
-  simp only [successors, List.mem_filterMap, Option.map_eq_some_iff, Prod.mk.injEq] at h
-  obtain ⟨ev, hmem, _, _, rfl, _⟩ := h
-  simp [candidates] at hmem
+    (ev, c') ∈ c.successors env ↔
+      c.step env ev = some c' ∧ (∀ x, ev ≠ .input x) ∧ ∀ m, ev ≠ .tick m := by
+  refine ⟨fun h => ⟨step_of_mem_successors h, ?_, ?_⟩, fun h => mem_successors h.1 h.2.1 h.2.2⟩
+  · intro x hx
+    subst hx
+    simp only [successors, List.mem_filterMap, Option.map_eq_some_iff, Prod.mk.injEq] at h
+    obtain ⟨ev, hmem, _, _, rfl, _⟩ := h
+    simp [candidates] at hmem
+  · intro m hm
+    subst hm
+    simp only [successors, List.mem_filterMap, Option.map_eq_some_iff, Prod.mk.injEq] at h
+    obtain ⟨ev, hmem, _, _, rfl, _⟩ := h
+    simp [candidates] at hmem
 
 end Lanes.SysState
