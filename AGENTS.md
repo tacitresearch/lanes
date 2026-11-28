@@ -223,13 +223,14 @@ with its spec and its proof (`Server.implements`).
 3.6 **One message, one atomic transition.** What must touch two actors at once goes through a
 protocol or a single owner, never shared state.
 
-3.7 **Batch at the edges.** The shell batches inputs and the handing over of outputs; `step`
-still sees one message at a time, and a theorem says the batch is unobservable
-(`Batch.run_kernel`).
+3.7 **Batch at the edges.** Adapters batch what they exchange with the outside (a connection's
+writes, a pool's queries), and a worker steps one actor on several messages in a turn; `step`
+still sees one message at a time, and each step is one event of the semantics
+(`Sched.Step.sound`).
 
 3.8 **Back-pressure, not unbounded inboxes.** The inbox is bounded (`inboxCapacity`); when it is
-full the sender is refused (`tryInput`, the server's `503`). The kernel's queue between actors
-has no bound yet (`TRUSTED.md`).
+full the sender is refused (`tryInput`, the server's `503`). The mailboxes between actors have
+no bound yet (`TRUSTED.md`).
 
 3.9 **An adapter decides nothing in IO.** It is a pure function or a system that decides, a model
 of the outside it talks to (`Outside`), and a handler that only performs (D26, D40). *Why:* every
