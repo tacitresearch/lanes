@@ -176,6 +176,11 @@ Also:
   whatever is chosen (`Kernel.runWaves_eq`, `Batch.run_spread`).
 - No sleeper or waiting sender of the inbox is forgotten (`Mailbox.woken_after_rest`,
   `Mailbox.wake_since_take`): proved for every capacity and every sequence of operations.
+- Waves are as wide as an application spreads its work over actors. `Lanes/Runtime/WavePlan.lean`
+  splits a batch of journal entries, each touching several actors, into waves whose entries share
+  no actor, each actor's entries in the journal's order (`WavePlan.levels_lt`), and
+  `examples/videos` measures its journal with it (`lake exe videosWaves`,
+  `docs/decisions/D107-waves-premise.md`).
 
 ### Limits
 
