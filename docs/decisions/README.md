@@ -48,6 +48,7 @@ two new decisions land at different lines. The numbers give the order in which t
 - [D3. `Effect` is `send | emit | after | cancel | stop`; no `io`, no `reply`](D3-effect-is-send-emit-after-cancel.md)
 - [D45. Everything is proved; the checker finds bugs, a proof is the evidence](D45-everything-is-proved.md): partly superseded by D110-volatile-actors.md (the generated inventory of every public definition)
 - [D60. Examples are for reading, fixtures are for the tests](D60-examples-are-for-reading.md): partly superseded by D63 (the examples' proofs copied into the fixtures)
+- [D117. A file system that may lose power, as a platform model](D117-file-system-model.md)
 - [D63. The fixtures hold what the tests use, the examples the proofs](D63-fixtures-hold-what-tests-use.md)
 - [D116. Actors run free on worker threads, proved to refine the interleaving semantics](D116-free-running.md)
 - [D106. The gate before the shard](D106-gate-before-shard.md): partly superseded by D110-volatile-actors.md (its reasons of waves and a runtime of objects, and the section on the journal)

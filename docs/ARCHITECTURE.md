@@ -36,6 +36,7 @@ proved function tells it to.
 | The gate and the HTTP server | `Lanes/Web/Http/{Gate,Front,FrontSound,Admit,AdmitSound,View,Waiting,Conn,ConnSound,Stream,Sse,SseSound,Loopback}.lean`, `Lanes/Semantics/Front.lean`, `Lanes/Web/IO/Server.lean` | `Http.served_answered_le_arrived`, `Http.served_pending_answered`, `Http.Front.World.refines`, `Http.Front.pending_answered`, `Http.Waiting.exec_answered`, `Http.Conn.run_writes`, `Http.Conn.read_streamed`, `Http.Sse.parse_written` |
 | Metrics, health and the access log | `Lanes/Lib/Metrics.lean`, `Lanes/Web/Http/{Ops,OpsSound}.lean`, `Lanes/Web/IO/Ops.lean` | `Metrics.Histogram.observeAll_eq`, `Metrics.readLabelValue_escapeLabel`, `Http.Ops.route?_default`, `Http.Ops.route?_metrics`, `Http.Ops.answer_ready`, `Http.Ops.Access.parse_line`; that none of it reaches a system is trusted and tested |
 | Other adapters | `Lanes/Outside/Basic.lean`, `Lanes/Outside/{Clock,IO/Clock}.lean`, `Lanes/Web/IO/Client.lean`, `Lanes/Web/Http/{Grammar,Wire,WireSound}.lean` | `Response.read_wire`, `Request.fields_framing`; conformance tests |
+| The platform: the file system | `Lanes/Outside/FileSystem/{Basic,Replace,Log}.lean`, `Lanes/Outside/FileSystem.lean`, `Lanes/Outside/IO/FileSystem.lean`, `Lanes/Lib/File.lean` | `Replace.crash`, `Replace.failed`, `Replace.done`, `Log.crash`, `Log.failed`, `Fs.crash_mem_crashes`; the crash rules and the binding are trusted |
 | Models of external services | `Lanes/Outside/{Rpc,Idempotent,Events,ObjectStore,Queue,Cache,Clock,Throttle}.lean`, `Lanes/Services/S3/MultipartModel.lean`, `Lanes/Services/Stripe/Payments.lean`, `Lanes/Outside/Effects/`, `Lanes/Web/Http/SharedCache.lean`, `Lanes/Proof/Outputs.lean` | `Idempotent.at_most_once`, `Rpc.answered_le_called`, `Events.deliveries_le`, `ObjectStore.read_sent`, `ObjectStore.held_sent`, `Multipart.read_listed`, `Queue.received_le`, `Cache.read_sent`, `Clock.wall_back_le`, `Throttle.wait_le`, `SharedCache.serve_storable`, `SharedCache.serve_of_leaks`, `System.Emits.outputs`; that a real service conforms is trusted |
 | Signature Version 4 and the S3 client | `Lanes/Web/Http/{SigV4,SigV4Sound}.lean`, `Lanes/Services/S3/{Basic,Xml,Post,PostSound,Multipart}.lean`, `Lanes/Services/S3/IO/Client.lean` | `SigV4.target_sign`, `SigV4.sortQuery_sorted`, `SigV4.canonicalHeaders_sorted`, `SigV4.encode_chunks`, `S3.Post.form_policy`, `S3.Post.admitted_bounded`, `S3.Multipart.Plan.count_le`, `S3.Multipart.Plan.range_full`; signatures tested against AWS's vectors and botocore, the client against a fake S3, the multipart flow model-checked; its IO trusted |
 | AWS | `Lanes/Services/Aws/{Refresh,Imds,Ses,SesSound,Sqs,CloudFront,CloudFrontSound}.lean`, `Lanes/Services/Aws/IO/{Credentials,Ses}.lean` | `Aws.Refresh.current_fresh`, `Aws.Refresh.refresh_in_time`, `Aws.Ses.toAddresses_json`, `Aws.CloudFront.cannedPolicy_eq`; the IO is trusted |
@@ -48,7 +49,7 @@ proved function tells it to.
 | The proof layer | `Lanes/Semantics/` | refinement, specs, fairness, leads-to |
 | Data and the standard library | `Lanes/Data/`, `Lanes/Lib/` | `Json.Fields.readObject_object`, `Json.Codec.ofAlts`, `Bytes.same_iff`, `Json.parse_iff`, `Url.parse_print` |
 | Sign-in with OAuth 2.0 and OpenID Connect | `Lanes/Web/Auth/{Jose,IdToken,OAuth}.lean`, `Lanes/Web/IO/SignIn.lean`, the presets `Lanes/Services/Oidc/` | `OAuth.check_ok`, `OAuth.Used.accepted_once`, `OAuth.Used.length_claim`, `OAuth.IdToken.verify_accepted`, `Jose.verify_ok`, `OAuth.Keys.no_fetch_within`; the edge is trusted, tested end to end against a provider run in the test |
-| Bound C | `native/lanes.c`, `Lanes/Lib/Crypto/Native.lean`, `Lanes/Lib/File.lean`; `native/verify.c`, `Lanes/Lib/Crypto/Verify.lean`; `native/sign.c`, `Lanes/Lib/Crypto/Sign.lean` | trusted; tested against the Lean references and published vectors |
+| Bound C | `native/lanes.c`, `Lanes/Lib/Crypto/Native.lean`, `Lanes/Outside/IO/FileSystem.lean`; `native/verify.c`, `Lanes/Lib/Crypto/Verify.lean`; `native/sign.c`, `Lanes/Lib/Crypto/Sign.lean` | trusted; tested against the Lean references and published vectors |
 | TLS client | `native/tls.c`, `Lanes/Web/IO/Tls.lean` | trusted; tested against `openssl s_server` |
 
 ## Actors and the semantics
@@ -561,11 +562,59 @@ checked, a model plus an oracle; the sign-in presets, AWS's role credentials, Cl
 are clients only, with tests, and SQS's calls are paired with the queue shape when an
 application needs it.
 
-The one platform model in the core is the clock: monotonic (`Clock.outside`) and the wall clock
-(`Clock.wall`), in `Lanes/Outside/Clock.lean`. Randomness, environment variables and
-configuration, the file system with crash semantics, the network and DNS, signals and shutdown,
-and standard input and output have no model yet, only bindings (`Lanes/Lib/Crypto/Native.lean`,
-`Lanes/Lib/File.lean`) or none: each is a checklist line of issue #245.
+The platform models in the core are the clock, monotonic (`Clock.outside`) and the wall clock
+(`Clock.wall`) in `Lanes/Outside/Clock.lean`, and the file system with crash semantics
+(`Lanes/Outside/FileSystem/`, below). Randomness, environment variables and configuration, the
+network and DNS, signals and shutdown, and standard input and output have no model yet, only
+bindings (`Lanes/Lib/Crypto/Native.lean`) or none: each is a checklist line of issue #245.
+
+## The platform: the file system
+
+The platform models are what the machine a program runs on may do (D110, the environment's
+first layer); the clock is one, in the adapters above. The file system is a value (`Fs`): every
+inode, a file being what is on the disk for sure and the changes since its last `fsync`, a
+directory the same for its entries. `Fs.step` is what a call does, `Fs.failures` what an `io`
+error may leave, since it may hide whether the call took effect, and `Fs.crash` what a loss of
+power may leave, every outcome listed by `Fs.crashes` (`Fs.crash_mem_crashes`), so a test can
+check every one. The model is pure, in the lowest package, so that the standard library and an
+application's proofs use it without actors; as an outside (`FileSystem.server`, through
+`Rpc.outside`) it adds `io` faults and a power loss as an event, for the checker and for runs
+checked against it. `FileSystem.IO.perform` makes each call with Lean's `IO.FS` and the calls
+bound in `native/lanes.c`, deciding nothing.
+
+Two patterns are proved, the ones a journal, SQLite or Raft is built on. `Replace.plan` replaces
+a file whole: it unlinks a temporary file a crash left, writes the new bytes beside the target,
+syncs them, renames them over it and syncs the directory; `File.replace` runs it. `Log` is a file
+only appended to and synced from time to time.
+
+Where: `Lanes/Outside/FileSystem/`, `Lanes/Outside/FileSystem.lean`,
+`Lanes/Outside/IO/FileSystem.lean`, `Lanes/Lib/File.lean`.
+
+### Claims
+
+| Claim | Evidence | Premises | Status |
+| --- | --- | --- | --- |
+| After a crash at any point of `Replace.plan`, or an `io` error that stops it, the file holds what it held before or the new bytes; once the plan has run it holds the new bytes through any crash, and the plan may run again | `Replace.crash`, `Replace.failed`, `Replace.done`, `Lanes/Outside/FileSystem/Replace.lean`; gate `Tests/Axioms/Outside.lean` | Of the model: a directory with nothing a crash could lose on the way to it, `Replace.Ready` | proved |
+| After a crash at any point, an append-only log reads as a prefix of everything appended and holds everything appended before the last `fsync`; after an `io` error the same holds of a program that stops appending | `Log.crash`, `Log.failed`, `Log.read`, `Lanes/Outside/FileSystem/Log.lean`; gate `Tests/Axioms/Outside.lean` | Of the model: the log's entry in a settled directory, `Log.Ready` | proved |
+| Every crash the model allows is one `Fs.crashes` lists | `Fs.crash_mem_crashes`, `Lanes/Outside/FileSystem/Basic.lean`; gate `Tests/Axioms/Outside.lean` | None | proved |
+| Without faults the file system outside is a function of the calls | `FileSystem.server_same`, `Lanes/Outside/FileSystem.lean`; gate `Tests/Axioms/Outside.lean` | None | proved |
+| Both patterns hold at every crash point and after every error of small runs, and a rewrite in place fails the same check | `Tests/FileSystem.lean` | The runs there | checked |
+| The binding answers as the model, errors included, on the local file system | `Tests/FileSystem.lean`, each `lake test` in a temporary directory | The script there | tested |
+| A loss of power leaves what the model says: the file system honours `fsync` of a file and of a directory, a rename is atomic, a file's changes since its last `fsync` survive as their first few in order, the next torn, a directory's as their first few, each whole | `TRUSTED.md`, the file system's binding | ext4's behaviour; POSIX does not promise it | trusted |
+
+### Limits
+
+- The model's crash rules are ext4's, with its default `data=ordered`. XFS may leave zeros where
+  an append did not reach the disk, and pages written in place may reach it in any order: a
+  program must not rely on the order of writes it has not synced, and a log's reader should
+  check each entry (a length and a checksum) as well as rely on `Log.crash`.
+- There are no links, symbolic or hard, no permissions, no file times, no space limit and no
+  concurrent writers. Calls take effect in the order they are sent.
+- After an `fsync` fails the model lets the file be as a crash may leave it, on the disk and to
+  reads; Linux may instead keep serving the lost pages from memory for a while. A program that
+  sees a failed `fsync` should stop and recover from what is on the disk.
+- A loss of power cannot be tested: the crash rules are trusted, and only their consequences are
+  checked against the model.
 
 ## S3 and Signature Version 4
 
@@ -1015,11 +1064,12 @@ Also:
 
 ## Bound C
 
-What Lean cannot express or check is bound, as other languages bind it (D46): `fsync`
-(`File.fsync`, which `File.replace` uses to replace a file whole), and from
+What Lean cannot express or check is bound, as other languages bind it (D46): the file calls
+`IO.FS` lacks, `fsync`, a write at an offset or at the end of a file that is there and a
+truncation (the platform area above), and from
 OpenSSL's libcrypto SHA-256, HMAC-SHA-256, constant-time comparison, Argon2id and random bytes
 (`RAND_bytes`, as `Lanes.randomBytes`: `IO.getRandomBytes` makes no promise that its bytes are
-fit for keys) (`native/lanes.c`, declared in `Lanes/Lib/Crypto/Native.lean` and `Lanes/Lib/File.lean`). A bound
+fit for keys) (`native/lanes.c`, declared in `Lanes/Lib/Crypto/Native.lean` and `Lanes/Outside/IO/FileSystem.lean`). A bound
 function with a Lean reference (`Sha256.reference`, `Hmac.reference`, `Bytes.sameReference`) has
 that reference as its body, so its theorems (`Bytes.same_iff`) are about the reference, and what
 is trusted is that the C computes the same, which `Tests/Crypto.lean` tests.

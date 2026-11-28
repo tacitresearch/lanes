@@ -29,6 +29,7 @@ import Tests.Batch
 import Tests.Sched
 import Tests.Reads
 import Tests.Crypto
+import Tests.FileSystem
 import Tests.Auth
 import Tests.Clients
 import Tests.Lease
@@ -104,6 +105,7 @@ def live : IO (List (String × Bool)) := do
     ++ (← safely "full inbox" Tests.Fronted.busyTest) ++ (← safely "memos" Tests.Fronted.memoTest)
     ++ (← safely "release" Tests.Release.liveTests) ++ (← safely "jobs" Tests.Jobs.live)
     ++ (← safely "ops" Tests.Ops.live) ++ (← Tests.Crypto.live)
+    ++ (← safely "file system" Tests.FileSystem.live)
     ++ (← safely "postgres" Tests.PostgresLive.live)
     ++ (← safely "postgres tls" Tests.PostgresTls.live)
     ++ (← safely "s3" Tests.S3.live) ++ (← safely "s3 uploads" Tests.S3Upload.live)
@@ -120,7 +122,7 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.Fair.tests ++ Tests.Derive.tests
     ++ Tests.Sched.tests ++ Tests.Batch.tests
     ++ Tests.Reads.tests
-    ++ Tests.Crypto.tests ++ Tests.Auth.tests ++ Tests.Clients.tests ++ Tests.Lease.tests
+    ++ Tests.Crypto.tests ++ Tests.FileSystem.tests ++ Tests.Auth.tests ++ Tests.Clients.tests ++ Tests.Lease.tests
     ++ Tests.Release.tests ++ Tests.ReadRequest.tests ++ Tests.Oracle.unitTests
     ++ Tests.HttpConn.tests ++ Tests.Loopback.tests
     ++ Tests.Jobs.tests ++ Tests.Schedule.tests ++ Tests.Outside.tests ++ Tests.Postgres.vectorTests
