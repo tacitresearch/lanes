@@ -115,7 +115,7 @@ def saved? (c : Image.Codecs sys) (system : String) (bytes : ByteArray) :
     Option (Nat × Image sys) :=
   (savedOpen? c system bytes).toOption
 
-private theorem savedBody_ok {c : Image.Codecs sys} {system : String} {index : Nat}
+theorem savedBody_ok {c : Image.Codecs sys} {system : String} {index : Nat}
     {image : Image sys} (h : savedFits c system index image = true) :
     Prelude.fits .snapshot system (savedOf c).schema = true
       ∧ savedBody c index image = .ok (okBytes (savedBody c index image))
@@ -126,7 +126,7 @@ private theorem savedBody_ok {c : Image.Codecs sys} {system : String} {index : N
   · next bytes hbody => exact ⟨hp, by rw [hbody]; rfl, by rw [hbody]; exact hb⟩
   · cases hb
 
-private theorem decode_saved {c : Image.Codecs sys} {system : String} {index : Nat}
+theorem decode_saved {c : Image.Codecs sys} {system : String} {index : Nat}
     {image : Image sys} (h : savedFits c system index image = true) :
     Frame.decode (saved c system index image) = savedRecords c system index image := by
   obtain ⟨hp, -, hb⟩ := savedBody_ok h

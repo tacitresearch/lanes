@@ -373,6 +373,25 @@ def argument (text : String) : String :=
 
 mutual
 
+/-- A value with no schema, as the second part of a `dependent` pair is written: a constructor
+is its index after `#`, then its fields. -/
+def _root_.Lanes.Value.text : Value → String
+  | .nat n => toString n
+  | .int i => toString i
+  | .string s => s.quote
+  | .bytes b => toString b.toList
+  | .list vs => "[" ++ ", ".intercalate (Value.texts vs) ++ "]"
+  | .ctor k [] => "#" ++ toString k
+  | .ctor k vs => "#" ++ toString k ++ "(" ++ ", ".intercalate (Value.texts vs) ++ ")"
+
+def _root_.Lanes.Value.texts : List Value → List String
+  | [] => []
+  | v :: vs => Value.text v :: Value.texts vs
+
+end
+
+mutual
+
 /-- A value as Lean writes it, read with its schema; `?` where it does not fit. -/
 def display : Schema → Value → String
   | .nat, .nat n => toString n
@@ -386,6 +405,7 @@ def display : Schema → Value → String
       | _ => "?") ++ "}"
   | .record _ _ fields, .ctor 0 vs => "{ " ++ ", ".intercalate (displayFields fields vs) ++ " }"
   | .sum _ _ ctors, .ctor k vs => displayCtor ctors k vs
+  | .dependent index, .ctor 0 [i, v] => "⟨" ++ index.display i ++ ", " ++ v.text ++ "⟩"
   | _, _ => "?"
 
 def displayFields : List (Field Schema) → List Value → List String

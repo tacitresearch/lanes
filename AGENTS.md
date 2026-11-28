@@ -321,7 +321,9 @@ lanes_data inductive Id (F : Type) where
   through the plan (`Lanes/Data/Match.lean`; `Schema.Plan.of_insertIdx`,
   `Schema.Plan.of_rename`). The journal and the snapshot are written so, in format 2 of the
   files (`Lanes/Durable/Format.lean`): a header, a manifest and the schema, then one body per
-  entry, read through the plan from the file's schema. Every
+  entry, read through the plan from the file's schema. `lake exe lanes journal dump <file>`
+  prints a file by the names in its schema, and `lanes journal verify <file> [--type T]` checks
+  it, and that `T`'s schema reads it (`Lanes/Durable/Inspect.lean`). Every
   field's type needs `Codable`: `Nat`, `Int`, `String`, `Bool`, `Unit`, `ByteArray`, `Fin n`,
   `Option`, `List`, pairs, sums, sigma types, subtypes, `Std.ExtTreeMap`, and types declared
   this way.

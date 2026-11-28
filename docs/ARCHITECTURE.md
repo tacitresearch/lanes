@@ -141,6 +141,18 @@ is accepted by a reader of the same with no plan (`Journal.Prelude.check_frames`
 format 1 is refused as such (`Refusal.format`), and no cut of a format-2 file looks like one
 (`Journal.Kind.formerly_cut`).
 
+A file holds its schema, so it reads with no application code (`Lanes/Durable/Inspect.lean`).
+`Journal.inspect` reads a journal or a snapshot as opening would and says all it finds instead of
+stopping at the first refusal: every frame's length and checksum, the prelude
+(`Journal.Prelude.read`, which `Prelude.check` is built on), each record read with the file's
+schema, and whether the tail is torn, which a journal opens with, or damaged; given a reader's
+schema, it matches the two with `Schema.Plan.of` and reads each record through the plan, as
+opening does. `lanes journal dump` and `lanes journal verify` print it (`LanesCli/Journal.lean`).
+What the writer writes passes (`Journal.inspect_file`, `Journal.inspect_saved`), and so does a
+journal cut at any byte (`Journal.inspect_cut`). The reader's schema comes from the build, as a
+type or a codec only; `verify` does not run a type's own check of a value (a `Fin`'s bound, a
+subtype's property), which opening does.
+
 A snapshot is the kernel's image (`Lanes/Durable/Snapshot.lean`), saved with codecs the
 application gives for its actors; a shard that saves goes on with the restored kernel, so a
 snapshot is a restart without the crash (D29). Starting from a snapshot gives what replaying the
@@ -657,4 +669,5 @@ two is not written. Each claim, its evidence and its premises are in `docs/CLAIM
 the small ones' systems, and the bank's two theorems, in `Tests/Fixtures/`, so an example can change for its reader alone. `lanes new`
 (`LanesCli/New.lean`, `templates/app/`) creates an application; `lanes lint`
 (`LanesCli/Lint.lean`) checks the rules of `AGENTS.md` that the text can show, the generated files
-and the inventory (`LanesCli/Inventory.lean`).
+and the inventory (`LanesCli/Inventory.lean`); `lanes journal` (`LanesCli/Journal.lean`) prints a
+type's schema, and dumps or verifies a journal or a snapshot file.

@@ -278,7 +278,10 @@ them by area.
 | `Check.Property.holds` | proved | `Check.World.Reduction.ofDriver`, `Check.refines_sound`, `Check.refines_traces` and others |
 | `Check.Trace.last` | proved | `Check.fingerprint_deadlock`, `Check.fingerprint_violated`, `Check.fingerprint_witness` and others |
 | `Check.Trace.labels` | proved | `Check.systemFingerprinted_violated`, `Check.system_violated` |
-| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Cache.lean` and others |
+| `Check.Verdict.exitCode` | checked | `Tests/Testing.lean` |
+| `Check.Report.verdict` | proved | through `Check.Report.ok`: `Check.Report.ok_iff` |
+| `Check.Report.ok` | proved | `Check.Report.ok_iff` |
+| `Check.Report.passed` | checked | `Tests/Election.lean`, `Tests/Engine.lean`, `Tests/Fronted.lean` and others |
 | `Check.Path.last` | proved | through `Check.Search.run`, `Check.Search.runBatches` and others: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and others |
 | `Check.Path.toTraceAux` | proved | through `Check.Search.run`, `Check.Search.runBatches` and others: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and others |
 | `Check.Path.toTrace` | proved | through `Check.Search.run`, `Check.Search.runBatches` and others: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and others |
@@ -683,12 +686,12 @@ them by area.
 | --- | --- | --- |
 | `Value.beq` | proved | through `Body.encode`, `Schema` and others: `Body.decodeWith_encode_self`, `Body.decodeWith_migrate` and others |
 | `Value.beqAll` | proved | through `Body.encode`, `Schema` and others: `Body.decodeWith_encode_self`, `Body.decodeWith_migrate` and others |
-| `instBEqValue` | tested | `Tests/Body.lean`, `Tests/Schema.lean` |
-| `Schema.beq` | tested | `Tests/Schema.lean` |
-| `Schema.beqAll` | tested | `Tests/Schema.lean` |
-| `Schema.beqFields` | tested | `Tests/Schema.lean` |
-| `Schema.beqCtors` | tested | `Tests/Schema.lean` |
-| `instBEqSchema` | tested | `Tests/Schema.lean` |
+| `instBEqValue` | tested | `Tests/Body.lean`, `Tests/Inspect.lean`, `Tests/Schema.lean` |
+| `Schema.beq` | tested | `Tests/Inspect.lean`, `Tests/Schema.lean` |
+| `Schema.beqAll` | tested | `Tests/Inspect.lean`, `Tests/Schema.lean` |
+| `Schema.beqFields` | tested | `Tests/Inspect.lean`, `Tests/Schema.lean` |
+| `Schema.beqCtors` | tested | `Tests/Inspect.lean`, `Tests/Schema.lean` |
+| `instBEqSchema` | tested | `Tests/Inspect.lean`, `Tests/Schema.lean` |
 | `Schema.Fields.nil` | proved | its type, `Schema.Fields` |
 | `Schema.Fields.cons` | proved | its type, `Schema.Fields` |
 | `Schema.Ctors.nil` | proved | its type, `Schema.Ctors` |
@@ -715,6 +718,8 @@ them by area.
 | `Schema.namedFields` | proved | through `Schema.toValue`: `Schema.ofValue?_toValue` |
 | `Schema.namedCtors` | proved | through `Schema.toValue`: `Schema.ofValue?_toValue` |
 | `Schema.argument` | tested | `Tests/Schema.lean` |
+| `Value.text` | tested | `Tests/Schema.lean` |
+| `Value.texts` | tested | `Tests/Schema.lean` |
 | `Schema.display` | tested | `Tests/Schema.lean` |
 | `Schema.displayFields` | tested | `Tests/Schema.lean` |
 | `Schema.displayArgs` | tested | `Tests/Schema.lean` |
@@ -774,6 +779,7 @@ them by area.
 | `Journal.Prelude.frames` | proved | `Journal.Disk.start_foreign` |
 | `Journal.Prelude.fits` | proved | `Journal.Disk.start_foreign`, `Journal.Prelude.check_frames`, `Journal.Prelude.check_other` and others |
 | `Journal.Prelude.other` | proved | through `Journal.Prelude.check`: `Journal.Prelude.check_frames`, `Journal.Prelude.check_other` |
+| `Journal.Prelude.read` | proved | through `Journal.Prelude.check`: `Journal.Prelude.check_frames`, `Journal.Prelude.check_other` |
 | `Journal.Prelude.check` | proved | `Journal.Prelude.check_frames`, `Journal.Prelude.check_other` |
 | `Journal.Prelude.named?` | proved | `Journal.Prelude.named?_frames` |
 | `Journal.Kind.formerly` | proved | `Journal.Kind.formerly_cut` |
@@ -809,12 +815,56 @@ them by area.
 | `Journal.Ship.Shipper.close` | trusted | TRUSTED.md: The journal's shipper |
 | `Journal.Ship.Shipper.counts` | trusted | TRUSTED.md: The journal's shipper |
 
+## `Lanes/Durable/Inspect.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Value.json` | proved | through `Journal.verify`: `Journal.inspect_cut`, `Journal.inspect_file` and others |
+| `Value.jsons` | proved | through `Journal.verify`: `Journal.inspect_cut`, `Journal.inspect_file` and others |
+| `Schema.json` | proved | through `Journal.verify`: `Journal.inspect_cut`, `Journal.inspect_file` and others |
+| `Schema.jsonFields` | proved | through `Journal.verify`: `Journal.inspect_cut`, `Journal.inspect_file` and others |
+| `Schema.jsonCtor` | proved | through `Journal.verify`: `Journal.inspect_cut`, `Journal.inspect_file` and others |
+| `Journal.Kind.of?` | proved | through `Journal.verify`: `Journal.inspect_cut`, `Journal.inspect_file` and others |
+| `Journal.schemaText` | tested | `Tests/Inspect.lean` |
+| `Journal.schemaOfText?` | tested | `Tests/Inspect.lean` |
+| `Journal.Inspect.Tail.of` | proved | through `Journal.verify`: `Journal.inspect_cut`, `Journal.inspect_file` and others |
+| `Journal.Inspect.records` | proved | through `Journal.verify`: `Journal.inspect_cut`, `Journal.inspect_file` and others |
+| `Journal.Inspect.Record.finding` | proved | through `Journal.verify`: `Journal.inspect_cut`, `Journal.inspect_file` and others |
+| `Journal.Inspect.tailFindings` | proved | through `Journal.verify`: `Journal.inspect_cut`, `Journal.inspect_file` and others |
+| `Journal.Inspect.stranger` | proved | through `Journal.verify`: `Journal.inspect_cut`, `Journal.inspect_file` and others |
+| `Journal.Inspect.planFor` | proved | through `Journal.verify`: `Journal.inspect_cut`, `Journal.inspect_file` and others |
+| `Journal.Inspect.ofPrelude` | proved | through `Journal.verify`: `Journal.inspect_cut`, `Journal.inspect_file` and others |
+| `Journal.inspect` | proved | `Journal.inspect_file`, `Journal.inspect_saved` |
+| `Journal.verify` | proved | `Journal.inspect_cut`, `Journal.inspect_file`, `Journal.inspect_saved` |
+| `Journal.Inspect.Tail.text` | tested | `Tests/Inspect.lean` |
+| `Journal.Inspect.refusalText` | tested | `Tests/Inspect.lean` |
+| `Journal.Inspect.Finding.text` | tested | `Tests/Inspect.lean` |
+| `Journal.Inspect.Finding.check` | tested | `Tests/Inspect.lean` |
+| `Journal.Inspect.bounded` | tested | `Tests/Inspect.lean` |
+| `Journal.Inspection.kindName` | tested | `Tests/Inspect.lean` |
+| `Journal.Inspection.kindJson` | tested | `Tests/Inspect.lean` |
+| `Journal.Inspection.systemText` | tested | `Tests/Inspect.lean` |
+| `Journal.Inspection.checks` | tested | `Tests/Inspect.lean` |
+| `Journal.Inspection.passed` | tested | `Tests/Inspect.lean` |
+| `Journal.Inspection.results` | tested | `Tests/Inspect.lean` |
+| `Journal.Inspection.verifyText` | tested | `Tests/Inspect.lean` |
+| `Journal.Inspection.manifestJson` | tested | `Tests/Inspect.lean` |
+| `Journal.Inspection.tailJson` | tested | `Tests/Inspect.lean` |
+| `Journal.Inspection.verifyJson` | tested | `Tests/Inspect.lean` |
+| `Journal.Inspection.recordText` | tested | `Tests/Inspect.lean` |
+| `Journal.Inspection.recordJson` | tested | `Tests/Inspect.lean` |
+| `Journal.Inspection.manifestLines` | tested | `Tests/Inspect.lean` |
+| `Journal.Inspection.indent` | tested | `Tests/Inspect.lean` |
+| `Journal.Inspection.dumpText` | tested | `Tests/Inspect.lean` |
+| `Journal.Inspection.dumpJson` | tested | `Tests/Inspect.lean` |
+
 ## `Lanes/Durable/Journal.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Journal.Entry.schema` | proved | its type, `Schema.Of` |
-| `Journal.Entry.own` | proved | through `Journal.open?`, `Journal.prelude` and others: `Journal.Disk.load_cut`, `Journal.Disk.open?_of_read` and others |
+| `Journal.Entry.schema` | proved | `Journal.inspect_file` |
+| `Journal.Entry.own` | proved | `Journal.inspect_cut`, `Journal.inspect_file` |
+| `Journal.Entry.schemaOf` | tested | `Tests/Inspect.lean` |
 | `Journal.Entry.write` | proved | through `Journal.Entry.fits`, `Journal.encode`: `Journal.Disk.Holds.append`, `Journal.Disk.Holds.append_crash` and others |
 | `Journal.Entry.bytes` | proved | through `Journal.encode`, `Journal.file` and others: `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash` and others |
 | `Journal.Entry.ofBytes` | proved | through `Journal.open?`: `Journal.Disk.open?_of_read`, `Journal.open?_cut` and others |
@@ -826,7 +876,7 @@ them by area.
 | `Journal.prelude` | proved | `Journal.Upgrade.decode_torn` |
 | `Journal.preludeFits` | proved | `Journal.Disk.load_cut`, `Journal.Disk.start_foreign`, `Journal.Disk.torn_nil` and others |
 | `Journal.frames` | proved | `Journal.Disk.load_cut`, `Journal.open?_cut` |
-| `Journal.file` | proved | `Journal.Disk.load_cut`, `Journal.Restore.piece?_file`, `Journal.open?_cut` and others |
+| `Journal.file` | proved | `Journal.Disk.load_cut`, `Journal.Restore.piece?_file`, `Journal.inspect_cut` and others |
 | `Journal.named?` | proved | through `Journal.Begun.load`, `Journal.Begun.toFound` and others: `Journal.Begun.resume_upgraded`, `Journal.Disk.open?_of_read` and others |
 | `Journal.manifest?` | tested | `Tests/Format.lean` |
 | `Journal.open?` | proved | `Journal.Disk.open?_of_read`, `Journal.open?_cut`, `Journal.open?_file` |
@@ -926,11 +976,11 @@ them by area.
 | `Kernel.Image.Codecs.cell` | proved | its type, `Codec` |
 | `Kernel.Image.Codecs.envelope` | proved | its type, `Codec` |
 | `Kernel.Image.Codecs.image` | proved | its type, `Codec` |
-| `Journal.savedOf` | proved | its type, `Schema.Of` |
+| `Journal.savedOf` | proved | `Journal.inspect_saved` |
 | `Journal.savedBody` | proved | through `Journal.saved`, `Journal.savedFits`: `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save` and others |
-| `Journal.savedRecords` | proved | through `Journal.saved`: `Journal.Ship.snapshotOf?_saveWrites`, `Journal.saved?_other` and others |
+| `Journal.savedRecords` | proved | through `Journal.saved`: `Journal.Ship.snapshotOf?_saveWrites`, `Journal.inspect_saved` and others |
 | `Journal.savedFits` | proved | `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save`, `Journal.Disk.Holds.save_crash` and others |
-| `Journal.saved` | proved | `Journal.Ship.snapshotOf?_saveWrites`, `Journal.saved?_other`, `Journal.saved?_saved` and others |
+| `Journal.saved` | proved | `Journal.Ship.snapshotOf?_saveWrites`, `Journal.inspect_saved`, `Journal.saved?_other` and others |
 | `Journal.savedOpen?` | proved | `Journal.savedOpen?_saved` |
 | `Journal.saved?` | proved | `Journal.saved?_other`, `Journal.saved?_saved` |
 
@@ -998,7 +1048,7 @@ them by area.
 | --- | --- | --- |
 | `Sha256.hash` | trusted | TRUSTED.md: The C |
 | `hmac` | trusted | TRUSTED.md: The C |
-| `Bytes.same` | trusted | TRUSTED.md: The C |
+| `Bytes.same` | proved of its reference, C trusted | `Bytes.same_iff`; the C: TRUSTED.md: The C |
 | `randomBytes` | trusted | TRUSTED.md: The C |
 | `Argon2id.derive` | proved | `Auth.Password.verify_phc` |
 | `Argon2id.hash` | trusted | TRUSTED.md: The C |
@@ -2661,6 +2711,27 @@ them by area.
 | `Testing.OAuth.Fake.approve` | tested | `Tests/OAuth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
 | `Testing.OAuth.signIn` | tested | `Tests/OAuth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
 
+## `Lanes/Testing/Run.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Testing.Kind.label` | checked | `Tests/Testing.lean` |
+| `Testing.Status.label` | checked | `Tests/Testing.lean` |
+| `Testing.Status.ofVerdict` | checked | `Tests/Testing.lean` |
+| `Testing.Result.ofBool` | checked | `Tests/Testing.lean` |
+| `Testing.Result.tests` | checked | `Tests/Testing.lean` |
+| `Testing.Result.check` | checked | `Tests/Testing.lean` |
+| `Testing.Result.toJson` | checked | `Tests/Testing.lean` |
+| `Testing.count` | checked | `Tests/Testing.lean` |
+| `Testing.exitCode` | checked | `Tests/Testing.lean` |
+| `Testing.toJson` | checked | `Tests/Testing.lean` |
+| `Testing.line` | checked | `Tests/Testing.lean` |
+| `Testing.render` | checked | `Tests/Testing.lean` |
+| `Testing.wantsJson` | checked | `Tests/Testing.lean` |
+| `Testing.report` | checked | `Tests/Testing.lean` |
+| `Testing.messages` | checked | `Tests/Testing.lean` |
+| `Testing.build` | checked | `Tests/Testing.lean` |
+
 ## `Lanes/Testing/S3.lean`
 
 | Definition | Status | Evidence |
@@ -3781,6 +3852,7 @@ them by area.
 | `Cli.Inventory.ranges` | tested | `Tests/Inventory.lean` |
 | `Cli.Inventory.inDeriving` | tested | `Tests/Inventory.lean` |
 | `Cli.Inventory.generatedParsers` | tested | `Tests/Inventory.lean` |
+| `Cli.Inventory.isBound` | none |  |
 | `Cli.Inventory.ofTheorem` | tested | `Tests/Inventory.lean` |
 | `Cli.Inventory.readFacts` | tested | `Tests/Inventory.lean` |
 | `Cli.Inventory.isProp` | tested | `Tests/Inventory.lean` |
@@ -3810,10 +3882,20 @@ them by area.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Cli.Journal.values` | none |  |
-| `Cli.Journal.schemaProgram` | none |  |
-| `Cli.Journal.usage` | none |  |
-| `Cli.Journal.run` | none |  |
+| `Cli.Journal.values` | tested | `Tests/Inspect.lean` |
+| `Cli.Journal.valued` | tested | `Tests/Inspect.lean` |
+| `Cli.Journal.positional` | tested | `Tests/Inspect.lean` |
+| `Cli.Journal.imports` | tested | `Tests/Inspect.lean` |
+| `Cli.Journal.schemaProgram` | tested | `Tests/Inspect.lean` |
+| `Cli.Journal.readerProgram` | tested | `Tests/Inspect.lean` |
+| `Cli.Journal.readerTerm` | tested | `Tests/Inspect.lean` |
+| `Cli.Journal.usage` | tested | `Tests/Inspect.lean` |
+| `Cli.Journal.runLean` | tested | `Tests/Inspect.lean` |
+| `Cli.Journal.reader` | tested | `Tests/Inspect.lean` |
+| `Cli.Journal.number?` | tested | `Tests/Inspect.lean` |
+| `Cli.Journal.dump` | tested | `Tests/Inspect.lean` |
+| `Cli.Journal.verify` | tested | `Tests/Inspect.lean` |
+| `Cli.Journal.run` | tested | `Tests/Inspect.lean` |
 
 ## `LanesCli/Lint.lean`
 
@@ -3843,6 +3925,10 @@ them by area.
 | `Cli.Lint.parseFinding` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.inventory` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.lint` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.jsonString` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.Finding.kind` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.Finding.json` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.Report.json` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.run` | none |  |
 
 ## `LanesCli/Main.lean`
@@ -3852,6 +3938,7 @@ them by area.
 | `usage` | none |  |
 | `flag?` | none |  |
 | `stats` | none |  |
+| `checkJson` | none |  |
 | `main` | none |  |
 
 ## `LanesCli/New.lean`

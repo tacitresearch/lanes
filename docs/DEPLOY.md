@@ -228,6 +228,16 @@ snapshot the journal's volume (**EC2 → Volumes → the volume tagged `lanes-jo
 Create snapshot**). To go back after it: deploy forward with a fix, or restore that snapshot and
 then roll back, losing what the new version wrote.
 
+## Inspecting a journal
+
+A journal or a snapshot holds its own schema, so a copy of it reads without the application's
+code. Copy the file off the instance (from `/srv/lanes/journal/`) and, in a checkout of the
+application, run `lake exe lanes journal verify <file>`: it checks every frame, the manifest and
+the schema, and that every entry reads, and says whether the tail is torn (a write the process
+did not finish, which a start cuts off) or damaged; it exits 0 or 1. Give `--type <the inputs'
+type> --import <its module>` to check that the build reads it as a start would. `lake exe lanes
+journal dump <file> [--from <n>] [--count <n>] [--json]` prints the manifest and the entries.
+
 ## Backups and restore
 
 Data Lifecycle Manager snapshots the volume tagged `lanes-journal=<AppName>` every

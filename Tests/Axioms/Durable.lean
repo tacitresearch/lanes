@@ -59,6 +59,16 @@ import Lanes.Semantics
 /-- info: 'Lanes.Journal.Prelude.named?_frames' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Journal.Prelude.named?_frames
 
+-- Lanes.Durable.Inspect
+/-- info: 'Lanes.Journal.inspect_file' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.inspect_file
+
+/-- info: 'Lanes.Journal.inspect_cut' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.inspect_cut
+
+/-- info: 'Lanes.Journal.inspect_saved' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.inspect_saved
+
 -- Lanes.Durable.Frame
 /-- info: 'Lanes.Frame.encode_append' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Frame.encode_append
