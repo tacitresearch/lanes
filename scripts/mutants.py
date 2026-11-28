@@ -249,9 +249,12 @@ MUTANTS = [
 ]
 
 
+# `limit_s` is when a run that has not ended counts as hung: well above how long the check takes
+# on the code as it is (`lanesTest` takes about two minutes on a busy machine), since a mutant
+# that delays timers makes every run that waits for one slower.
 CHECKS = {
     "lanesTest": dict(cwd=".", build="lake build lanesTest",
-                      run="./.lake/build/bin/lanesTest", limit_s=120),
+                      run="./.lake/build/bin/lanesTest", limit_s=360),
 }
 
 WORDS = {
