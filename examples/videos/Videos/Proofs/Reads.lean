@@ -12,7 +12,7 @@ the site's state, and they never enter the system. Of every request the view nam
 every state of the system (`Web.view_answers`): the bridge decodes the request as the input
 `read?` gives, the site takes that input to the state it was in, with one output, and the bridge
 encodes that output as the view's response. So a read answered by a peek at a batch boundary
-(`Lanes.Batch.run_peeks`) is what the request would be answered if it were the next entry of the
+(`Lanes.Batch.run_peeks`) is the answer the request would get if it were the next entry of the
 journal there and delivered at once, and leaving it out of the journal changes nothing else
 (`Lanes.Batch.run_erase_peeks`).
 -/
