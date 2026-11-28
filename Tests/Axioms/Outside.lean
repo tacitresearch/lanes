@@ -165,3 +165,16 @@ import Lanes.Semantics
 -- Lanes.Outside.FileSystem
 /-- info: 'Lanes.FileSystem.server_same' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.FileSystem.server_same
+
+-- Lanes.Outside.Environment
+/-- info: 'Lanes.Environment.Reader.run_bind' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Environment.Reader.run_bind
+
+/-- info: 'Lanes.Environment.Reader.run_congr' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Environment.Reader.run_congr
+
+/-- info: 'Lanes.Environment.secret_problems' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Environment.secret_problems
+
+/-- info: 'Lanes.Environment.field_secret_problems' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Environment.field_secret_problems

@@ -86,16 +86,16 @@ private def identify (s : SignIn) (p : Provider) (c : Client) (g : Grant) (token
   match p.source with
   | .idToken issuers jwks =>
     let some token := tokens.idToken | return .error (.idToken (.jose .malformed))
-    let kid := (Jose.Compact.read token.value).toOption.bind (·.kid)
+    let kid := (Jose.Compact.read token.reveal).toOption.bind (·.kid)
     let keys ← keysFor s p jwks kid now
     let expect := { issuers, clientId := c.id, nonce := g.nonce, now_s := now / 1000,
                     skew_s := s.config.settings.skew_s }
-    return (IdToken.verify keys expect token.value).map (Identity.under issuers) |>.mapError .idToken
+    return (IdToken.verify keys expect token.reveal).map (Identity.under issuers) |>.mapError .idToken
   | .userApi urls read =>
     let mut answers := []
     for url in urls do
       match userAnswer (← call s.config.http url .get
-          [("authorization", s!"Bearer {tokens.access.value}")]) with
+          [("authorization", s!"Bearer {tokens.access.reveal}")]) with
       | .ok j => answers := answers ++ [j]
       | .error why => return .error why
     return (read answers).mapError .userApi
