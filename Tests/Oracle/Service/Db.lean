@@ -18,6 +18,9 @@ unique and a non-unique index, run through the driver (`Lanes/Lib/Postgres/IO/Db
   and the driver retries; the run is checked against the model (`State.run`, what
   `Db.outside` allows).
 
+- **Migrations.** `Tests/Fixtures/migrations/` run in a schema of their own leave exactly the
+  tables, columns and keys of the schema (`Postgres.Sql.catalogDiff`).
+
 Each run is kept in `oracles/postgres/db.jsonl`, one run a line, and `lake test` checks the
 record against the model again.
 
@@ -305,13 +308,36 @@ def concurrent (st : Lanes.Postgres.Typed.Store (List Step) (List Out)) (seed ro
     for t in tasks do discard <| IO.wait t
   events.get
 
+def migrations : List System.FilePath :=
+  ["Tests/Fixtures/migrations/0001_items.sql", "Tests/Fixtures/migrations/0002_pairs.sql"]
+
+/-- The migrations applied in a schema of their own, and the catalog compared with `schema`;
+then the same with a column left out of the schema, which must be found. -/
+def migrated (cfg : Lanes.Postgres.Client.Config) : IO (List (String × Bool)) := do
+  let .ok s ← (Lanes.Postgres.connect cfg).block | return [("typed store migrations: connects", false)]
+  let files ← migrations.mapM IO.FS.readFile
+  let setup := ["DROP SCHEMA IF EXISTS lanes_migrations CASCADE", "CREATE SCHEMA lanes_migrations",
+    "SET search_path TO lanes_migrations"]
+  for sql in setup do discard <| (s.exec (.statement { sql })).block
+  let errors ← (Lanes.Postgres.Typed.migrate s files).block
+  let diff ← (Lanes.Postgres.Typed.checkSchema s schema).block
+  let short : Schema := [{ items with columns := items.columns.take 5 }, pairs]
+  let found ← (Lanes.Postgres.Typed.checkSchema s short).block
+  discard <| (s.exec (.statement { sql := "DROP SCHEMA lanes_migrations CASCADE" })).block
+  (s.close).block
+  for e in errors ++ diff do IO.println s!"  {e}"
+  return [("typed store migrations: the SQL migrations run", errors.isEmpty),
+    ("typed store migrations: the database has exactly the schema's tables, columns and keys", diff.isEmpty),
+    ("typed store migrations: a column the schema leaves out is found", found == ["column not declared: lanes_items, note, text, YES, C"])]
+
 def run (host : String) (tcpPort : UInt16) : IO (List (String × Bool) × List Json) := do
   let cfg := Tests.PostgresLive.config host tcpPort "lanes_trust" none
+  let checks ← migrated cfg
   let errors ← reset cfg
   unless errors.isEmpty do
     return ([(s!"typed store on postgres: the schema is created: {errors}", false)], [])
   let st : Lanes.Postgres.Typed.Store (List Step) (List Out) := { pool := ← Lanes.Postgres.Pool.new cfg, handler, attempts_max := 20 }
-  let mut checks := []
+  let mut checks := checks
   let mut lines := []
   for seed in [0:20] do
     discard <| reset cfg

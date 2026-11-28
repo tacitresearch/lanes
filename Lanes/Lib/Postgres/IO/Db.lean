@@ -84,6 +84,23 @@ def create (s : Session) (schema : Schema) : Async (List String) := do
       | other => errors := errors ++ [s!"{stmt.sql}: {repr other}"]
   return errors
 
+/-- Run migrations, each the text of a file, in order, statement by statement
+(`Postgres.Sql.statements`); the errors, stopping at the first. -/
+def migrate (s : Session) (files : List String) : Async (List String) := do
+  for file in files do
+    for sql in Sql.statements file do
+      match ← s.exec (.statement { sql }) with
+      | .rows _ => pure ()
+      | other => return [s!"{sql}: {repr other}"]
+  return []
+
+/-- How the tables of the session's current schema differ from `schema`
+(`Postgres.Sql.catalogDiff`); empty when they agree. -/
+def checkSchema (s : Session) (schema : Schema) : Async (List String) := do
+  match ← s.exec (.statement Sql.columnsQuery), ← s.exec (.statement Sql.keysQuery) with
+  | .rows columns, .rows keys => return Sql.catalogDiff schema columns.rows keys.rows
+  | a, b => return [s!"the catalog: {repr a}, {repr b}"]
+
 /-- The store as an adapter: each call on a task of its own, its result handed back as an input.
 A result that finds the inbox full is dropped, which the model allows as a lost answer. -/
 def handler {σ : Signature} {sys : System σ} [Hashable σ.Id] {Q A : Type}

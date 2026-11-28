@@ -932,6 +932,7 @@ Where: `Lanes/Db/`, `Lanes/Lib/Postgres/Sql.lean`, `Lanes/Lib/Postgres/IO/Db.lea
 | A value reads back from the text the driver sends it as | `Postgres.Sql.decode_param`, `Postgres.Sql.decodeRow_param`; gate `Tests/Axioms/Lib.lean` | Values of their columns' types | proved |
 | PostgreSQL answers every operation of the subset as its meaning says, and behaves like the model at `SERIALIZABLE` | `Tests/Oracle/Service/Db.lean` against PostgreSQL 16: generated transactions one at a time, every answer compared with `Txn.run`, and three at once, checked with `Db.State.run`; nightly, recorded in `oracles/postgres/db.jsonl` and checked again by `lake test` | Every theorem proved against the model rests on it | trusted, tested against PostgreSQL 16 |
 | The meaning, the SQL, the replies, the retry decision and the model's litmus runs | `Tests/Db.lean`, in `lake test` | | tested |
+| SQL migrations leave exactly the tables, columns, types, nullability and primary keys the schema declares | `Tests/Oracle/Service/Db.lean`: `Tests/Fixtures/migrations/` against PostgreSQL 16 in a schema of their own, compared by `Postgres.Sql.catalogDiff`, and a column left out of the schema found; `examples/todo-db` `todoLive` | Indexes are not compared | tested against PostgreSQL 16, nightly |
 
 ### Limits
 

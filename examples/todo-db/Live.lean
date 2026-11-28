@@ -15,8 +15,9 @@ PGHOST=localhost PGPORT=5433 PGUSER=lanes_scram PGPASSWORD=scram-pw PGDATABASE=l
   lake exe todoLive
 ```
 
-It drops and creates the table `todos` from the schema, adds three to-dos, one of them twice,
-completes one and lists the user's. Without `PGHOST` it says so and exits.
+It drops the table `todos`, runs the migrations of `migrations/`, checks that the table they
+made is the one `TodoDb.schema` declares (`Postgres.Sql.catalogDiff`), adds three to-dos, one of
+them twice, completes one and lists the user's. Without `PGHOST` it says so and exits.
 -/
 
 open Lanes TodoDb Std.Async
@@ -27,9 +28,14 @@ def main : IO UInt32 := do
   let cfg ← Postgres.Client.fromEnv
   let .ok s ← (Postgres.connect cfg).block | throw (IO.userError "cannot connect")
   discard <| (s.exec (.statement { sql := "DROP TABLE IF EXISTS todos" })).block
-  let errors ← (Postgres.Typed.create s schema).block
+  let errors ← (Postgres.Typed.migrate s [← IO.FS.readFile "migrations/0001_todos.sql"]).block
+  let ours := fun (rows : List (List (Option String))) => rows.filter (·.head? == some (some "todos"))
+  let diff ← match ← (s.exec (.statement Postgres.Sql.columnsQuery)).block,
+      ← (s.exec (.statement Postgres.Sql.keysQuery)).block with
+    | .rows cols, .rows keys => pure (Postgres.Sql.catalogDiff schema (ours cols.rows) (ours keys.rows))
+    | _, _ => pure ["the catalog could not be read"]
   (s.close).block
-  unless errors.isEmpty do IO.println s!"{errors}"; return 1
+  unless (errors ++ diff).isEmpty do IO.println s!"{errors ++ diff}"; return 1
   let store : Postgres.Typed.Store Request Answer := { pool := ← Postgres.Pool.new cfg, handler := handler true }
   let outs ← IO.mkRef ([] : List Out)
   let requests := [Request.add 7 "milk", .add 7 "eggs", .add 7 "milk", .add 8 "milk", .complete 7 1, .list 7]

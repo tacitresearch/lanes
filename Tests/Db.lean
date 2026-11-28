@@ -84,7 +84,14 @@ def sqlTests : List (String × Bool) :=
       Lanes.Postgres.Sql.param (.bytes ⟨#[0, 255]⟩) == some "\\x00ff"
         && Lanes.Postgres.Sql.decode { name := "b", ty := .bytes } (some "\\x00ff") == some (.bytes ⟨#[0, 255]⟩)
         && Lanes.Postgres.Sql.decode { name := "f", ty := .bool } (some "t") == some (.bool true)
-        && Lanes.Postgres.Sql.decode { name := "i", ty := .int } (some "9223372036854775808") == none) ]
+        && Lanes.Postgres.Sql.decode { name := "i", ty := .int } (some "9223372036854775808") == none),
+    ("typed store migrations: a file's statements end at a line ending with a semicolon",
+      Lanes.Postgres.Sql.statements "-- kv\nCREATE TABLE kv (\n  k bigint\n);\n\nCREATE INDEX i ON kv (k);\n"
+        == ["CREATE TABLE kv (\nk bigint\n);", "CREATE INDEX i ON kv (k);"]),
+    ("typed store migrations: the catalog the schema expects agrees with it, and a column missing is named",
+      Lanes.Postgres.Sql.catalogDiff [kv] (Lanes.Postgres.Sql.expectedColumns [kv]) (Lanes.Postgres.Sql.expectedKeys [kv]) == []
+        && Lanes.Postgres.Sql.catalogDiff [kv] ((Lanes.Postgres.Sql.expectedColumns [kv]).take 2) (Lanes.Postgres.Sql.expectedKeys [kv])
+          == ["column missing: kv, n, bigint, YES, NULL"]) ]
 
 def retryTests : List (String × Bool) :=
   let fields (code : String) : List Lanes.Postgres.Field := [{ code := 'C'.toNat.toUInt8, value := code }]

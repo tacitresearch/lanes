@@ -145,8 +145,19 @@ left, a last call reading every row; and three calls at once, on the same few ke
 against the model. The runs are kept in `oracles/postgres/db.jsonl`, which `lake test` checks
 against the model again.
 
-## Not in this decision
+## Migrations
 
-Migrations checked against the typed schema (a test that the database after the SQL migrations
-has exactly the declared tables and columns) and a SQLite driver behind the same API are later
-work.
+Migrations are plain SQL files, run in order, statement by statement (a statement ends with `;`
+at the end of a line, `Postgres.Sql.statements`), by `Postgres.Typed.migrate`. They are not
+generated from the schema: a migration says how the old tables become the new ones, which the
+schema cannot. They are checked against it: `Postgres.Typed.checkSchema` reads the catalog
+(`information_schema`) and `Postgres.Sql.catalogDiff` compares it with the schema, tables,
+columns, types, nullability, text's collation and primary keys, in both directions. The oracle
+runs `Tests/Fixtures/migrations/` in a schema of its own and finds exactly its schema, and finds
+a column the schema leaves out; `examples/todo-db` runs `migrations/` before it starts. Indexes
+are not compared yet: they change no answer, only speed. `Postgres.Sql.create` still writes the
+tables from the schema, for tests.
+
+## Later
+
+A SQLite driver behind the same API, with a model of its file system (#239).

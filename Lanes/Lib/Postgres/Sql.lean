@@ -168,6 +168,54 @@ def create (t : Table) : List Statement :=
     t.indexes.map fun i =>
       { sql := s!"CREATE {if i.unique then "UNIQUE " else ""}INDEX {quote (t.name ++ "_" ++ i.name)} ON {quote t.name} ({", ".intercalate (i.columns.map (colName t))})" }
 
+/-! ## Migrations, checked against the schema -/
+
+/-- The statements of a migration file: each ends with `;` at the end of a line. Lines that are
+blank or start with `--` between statements are dropped. -/
+def statements (file : String) : List String :=
+  let lines := (file.splitOn "\n").map (·.trimAscii.toString)
+  let (done, cur) := lines.foldl (fun (acc : List String × List String) line =>
+    let (done, cur) := acc
+    if cur.isEmpty && (line.isEmpty || line.startsWith "--") then (done, cur)
+    else if line.endsWith ";" then (done ++ ["\n".intercalate (cur ++ [line])], [])
+    else (done, cur ++ [line])) ([], [])
+  if cur.isEmpty then done else done ++ ["\n".intercalate cur]
+
+/-- The columns of the tables of the current schema, from the catalog, in order. -/
+def columnsQuery : Statement :=
+  { sql := "SELECT table_name::text, column_name::text, data_type::text, is_nullable::text, collation_name::text FROM information_schema.columns WHERE table_schema = current_schema() ORDER BY table_name, ordinal_position" }
+
+/-- The primary keys' columns, in order. -/
+def keysQuery : Statement :=
+  { sql := "SELECT tc.table_name::text, kcu.column_name::text FROM information_schema.table_constraints tc JOIN information_schema.key_column_usage kcu ON kcu.constraint_schema = tc.constraint_schema AND kcu.constraint_name = tc.constraint_name WHERE tc.constraint_type = 'PRIMARY KEY' AND tc.table_schema = current_schema() ORDER BY tc.table_name, kcu.ordinal_position" }
+
+def catalogType : Ty → String
+  | .int => "bigint"
+  | .bytes => "bytea"
+  | .text => "text"
+  | .bool => "boolean"
+
+/-- What `columnsQuery` answers for the schema, tables sorted by name. -/
+def expectedColumns (schema : Schema) : List (List (Option String)) :=
+  ((schema.map (·.name)).mergeSort (fun a b => decide (a ≤ b))).flatMap fun name =>
+    ((schema.find? (·.name == name)).map (·.columns)).getD [] |>.map fun c =>
+      [some name, some c.name, some (catalogType c.ty), some (if c.nullable then "YES" else "NO"),
+       if c.ty == .text then some "C" else none]
+
+/-- What `keysQuery` answers for the schema. -/
+def expectedKeys (schema : Schema) : List (List (Option String)) :=
+  ((schema.map (·.name)).mergeSort (fun a b => decide (a ≤ b))).flatMap fun name =>
+    ((schema.find? (·.name == name)).map fun t => (t.columns.take t.key).map fun c => [some name, some c.name]).getD []
+
+/-- How the catalog's answers differ from the schema's: rows the schema has and the database
+not, and rows the database has and the schema not. Empty when they agree. -/
+def catalogDiff (schema : Schema) (columns keys : List (List (Option String))) : List String :=
+  let render := fun (r : List (Option String)) => ", ".intercalate (r.map fun v => v.getD "NULL")
+  let diff := fun (what : String) (want got : List (List (Option String))) =>
+    (want.filter (!got.contains ·)).map (s!"{what} missing: " ++ render ·)
+      ++ (got.filter (!want.contains ·)).map (s!"{what} not declared: " ++ render ·)
+  diff "column" (expectedColumns schema) columns ++ diff "key" (expectedKeys schema) keys
+
 /-! ## Replies -/
 
 /-- What a reply to an operation's statement means; `none` if it is not one that statement
