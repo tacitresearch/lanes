@@ -6,7 +6,7 @@ import Lanes
 import Tests.Gate
 
 /-!
-`multipart/form-data` (`Lanes/Lib/Mime/Multipart.lean`): a body as Chrome sends one, read; parts
+`multipart/form-data` (`Lanes/Web/Http/Multipart.lean`): a body as Chrome sends one, read; parts
 written and read back; the limits; a request's form and file, and a form posted through a front
 end with no socket.
 -/

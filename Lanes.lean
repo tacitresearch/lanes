@@ -1,7 +1,6 @@
 module
 
 public import Lanes.Behaviours.Once.Basic
-public import Lanes.Behaviours.Once.Check
 public import Lanes.Behaviours.Server
 public import Lanes.Check.Clients
 public import Lanes.Check.Complete
@@ -10,6 +9,7 @@ public import Lanes.Check.Fingerprint
 public import Lanes.Check.Fuzz
 public import Lanes.Check.Monitor
 public import Lanes.Check.MonitorEquiv
+public import Lanes.Check.Once
 public import Lanes.Check.Reduce
 public import Lanes.Check.Search
 public import Lanes.Check.System
@@ -57,9 +57,8 @@ public import Lanes.Lib.Encoding.Json
 public import Lanes.Lib.File
 public import Lanes.Lib.Log
 public import Lanes.Lib.Metrics
-public import Lanes.Lib.Mime.MediaType
-public import Lanes.Lib.Mime.Multipart
 public import Lanes.Lib.Net.Ip
+public import Lanes.Lib.Net.IO.Tls
 public import Lanes.Lib.Net.Percent
 public import Lanes.Lib.Net.Url
 public import Lanes.Lib.RateLimit
@@ -116,6 +115,8 @@ public import Lanes.Web.Http.Cookie
 public import Lanes.Web.Http.Front
 public import Lanes.Web.Http.Gate
 public import Lanes.Web.Http.Loopback
+public import Lanes.Web.Http.MediaType
+public import Lanes.Web.Http.Multipart
 public import Lanes.Web.Http.Ops
 public import Lanes.Web.Http.ReadRequest
 public import Lanes.Web.Http.Route
@@ -132,7 +133,6 @@ public import Lanes.Web.IO.Jobs
 public import Lanes.Web.IO.Ops
 public import Lanes.Web.IO.Server
 public import Lanes.Web.IO.SignIn
-public import Lanes.Web.IO.Tls
 
 /-!
 The Lanes API: everything an application's executable code needs, and the tools its proofs use.

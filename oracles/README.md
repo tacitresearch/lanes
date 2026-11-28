@@ -81,8 +81,6 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Lib/Glob.lean` | `oracles/go/path` | Known: `**` as a whole name of a pattern matches across `/`, where Go reads it as `*` |
 | `Lanes/Lib/Log.lean` | | Proved one line of JSON text that the parser reads back as the record (`Log.render_oneLine`, `Log.parse_render`); its fields in `slog`'s order checked by hand (`Tests/Log.lean`) |
 | `Lanes/Lib/Metrics.lean` | `oracles/go/expfmt` | |
-| `Lanes/Lib/Mime/MediaType.lean` | `oracles/go/mime` | |
-| `Lanes/Lib/Mime/Multipart.lean` | `oracles/go/multipart` | Go's `Reader` is laxer, each a `known` difference in `Tests/Oracle/Multipart.lean`: it reads a body with no delimiter as no parts, takes a bare line feed for CR LF, a delimiter not on a line of its own as text, header names that are no tokens, folded header lines, headers that are not UTF-8, and a body that ends after a delimiter with no last delimiter; ours refuses them. Proved to read back what it writes (`Multipart.parse_write`) |
 | `Lanes/Lib/Net/Ip.lean` | `oracles/go/netip` | |
 | `Lanes/Lib/Net/Percent.lean` | `oracles/go/url` | Through the URL's cases, which decode and encode with it (`Tests/Oracle/Url.lean`) |
 | `Lanes/Lib/Net/Url.lean` | `oracles/go/url` | |
@@ -112,6 +110,8 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Web/Http/Grammar.lean` | | RFC 9110's tokens and field values, used by the reader and the writer |
 | `Lanes/Web/Http/Admit.lean` | | Decisions and a system, not a format |
 | `Lanes/Web/Http/Loopback.lean` | | A front end with no socket for tests, not a format: its bytes are `Conn`'s and `Wire`'s |
+| `Lanes/Web/Http/MediaType.lean` | `oracles/go/mime` | |
+| `Lanes/Web/Http/Multipart.lean` | `oracles/go/multipart` | Go's `Reader` is laxer, each a `known` difference in `Tests/Oracle/Multipart.lean`: it reads a body with no delimiter as no parts, takes a bare line feed for CR LF, a delimiter not on a line of its own as text, header names that are no tokens, folded header lines, headers that are not UTF-8, and a body that ends after a delimiter with no last delimiter; ours refuses them. Proved to read back what it writes (`Multipart.parse_write`) |
 | `Lanes/Web/Http/Ops.lean` | | Routes and access for the operators' endpoints; their page is `Metrics`' |
 | `Lanes/Web/Http/ReadRequest.lean` | `oracles/go/requests` | Go's, Node's and h11's servers on `Tests/ReadRequest.corpus`, by hand |
 | `Lanes/Web/Http/Route.lean` | | Routes as values, proved (`Lanes/Web/Http/RouteSound.lean`) |

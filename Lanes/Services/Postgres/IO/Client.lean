@@ -9,7 +9,7 @@ public import Lanes.Runtime.IO.Shell
 public import Lanes.Services.Postgres.Settings
 public import Lanes.Services.Postgres.Table
 public import Lanes.Lib.Crypto.Certificate
-public import Lanes.Web.IO.Tls
+public import Lanes.Lib.Net.IO.Tls
 
 /-!
 The IO of a connection to PostgreSQL. It opens a TCP socket, tells the connection (`Postgres.Conn.step`)
