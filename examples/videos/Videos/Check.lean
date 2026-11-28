@@ -738,7 +738,7 @@ def smallRuns : List Run :=
 def largeRuns : List Run :=
   [ ⟨"check: a video's life, with the store's faults and a crash anywhere",
       fun () => passes (check config life [shown, goneWhileHeld, twoLikes] (worker := quiet)) 3⟩,
-    ⟨"check: a private video, with the store's faults and a crash anywhere",
+    ⟨"check: a private video, with the store's faults and two crashes anywhere",
       fun () => passes (check config secret [ownerWatches, othersAsk] (worker := quiet) (maxCrashes := 2)) 2⟩,
     ⟨"check: a video deleted while its check may be out, and a crash of the site anywhere",
       fun () => passes (check config gone [goneWhileHeld] (crashing := siteCrashes)
@@ -751,7 +751,7 @@ def largeRuns : List Run :=
         (worker := quiet) (maxCrashes := 2)) 3⟩,
     ⟨"check: an upload never confirmed, checked a last time, twice, and a crash anywhere",
       fun () => passes (check lapsing lapsed [lapsedReady, lapsedOut, checkedAgain] (worker := quiet)) 3⟩,
-    ⟨"check: a session past its lifetime lets nothing in, and a new sign-in does, and two crashes anywhere",
+    ⟨"check: a session past its lifetime lets nothing in, and a new sign-in does, with two crashes anywhere",
       fun () => passes (check short expiry [watchedTwice] (worker := quiet) (maxCrashes := 2)) 1⟩,
     ⟨"check: the pipeline, with jobs and reports late, failed or never, a retry, and a crash of the site anywhere",
       fun () => passes (check config pipeline [shown, preparing, failedShown, shownAfterRetry]
