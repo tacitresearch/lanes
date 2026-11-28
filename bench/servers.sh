@@ -3,11 +3,10 @@
 
 # Every server, in the order run.sh runs them.
 ALL_SERVERS=(go1 go tcp tcp-park std std-unlimited lanes
-  lanes-io lanes-par lanes-io-par lanes-many lanes-many-par lanes-many-auto lanes-heavy
-  lanes-heavy-par lanes-heavy-auto)
+  lanes-io lanes-par lanes-io-par lanes-many lanes-many-par lanes-heavy lanes-heavy-par)
 
 # The threads of the servers that run in parallel: IO_THREADS run connections
-# (ServerConfig.ioThreads) and WORKERS work out actors' steps (Runtime.Config.workers); by default
+# (ServerConfig.ioThreads) and WORKERS run the actors (Runtime.Config.workers); by default
 # a quarter of LEAN_NUM_THREADS each, which run.sh sets to the server's CPUs. K actors in
 # lanes-many* and lanes-heavy*, and SPIN rounds of hashing in each step of lanes-heavy*.
 K=${K:-64}
@@ -32,11 +31,8 @@ server_argv() {
     lanes-io-par) SERVER=("$bin/benchLanes" "$port" "io=$io" "workers=$workers") ;;
     lanes-many) SERVER=("$bin/benchMany" "$port" "$K" 0) ;;
     lanes-many-par) SERVER=("$bin/benchMany" "$port" "$K" 0 "workers=$workers") ;;
-    lanes-many-auto) SERVER=("$bin/benchMany" "$port" "$K" 0 "workers=$workers" parallel=auto) ;;
     lanes-heavy) SERVER=("$bin/benchMany" "$port" "$K" "$SPIN") ;;
     lanes-heavy-par) SERVER=("$bin/benchMany" "$port" "$K" "$SPIN" "workers=$workers") ;;
-    lanes-heavy-auto)
-      SERVER=("$bin/benchMany" "$port" "$K" "$SPIN" "workers=$workers" parallel=auto) ;;
     *) echo "unknown server $name; the servers are ${ALL_SERVERS[*]}" >&2; return 2 ;;
   esac
 }

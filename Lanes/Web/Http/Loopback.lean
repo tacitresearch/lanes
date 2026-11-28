@@ -105,7 +105,7 @@ def decideRead (lb : Loopback sys bridge gate) (msg : GateMsg readSig) (v : Opti
 def answerPeeks (lb : Loopback sys bridge gate) : Loopback sys bridge gate :=
   lb.peeks.foldl (init := { lb with peeks := [] }) fun lb (id, v) =>
     lb.decideRead (.answer (id, (v.admitted (bridge := bridge)).respond
-      (Batch.Peek.of lb.kernel (v.reads.map .inr) (frontEvery v.every)))) none
+      (Peek.of lb.kernel (v.reads.map .inr) (frontEvery v.every)))) none
 
 /-- Pass the deadlines due by `now_ms` to the gates. -/
 def expire (lb : Loopback sys bridge gate) (now_ms : Nat) : Loopback sys bridge gate :=

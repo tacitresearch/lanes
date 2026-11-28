@@ -1,6 +1,6 @@
 name = "lanesBench"
 version = "0.1.0"
-defaultTargets = ["benchStd", "benchTcp", "benchLanes", "benchMany"]
+defaultTargets = ["benchStd", "benchTcp", "benchLanes", "benchMany", "benchMixed"]
 
 [[require]]
 name = "lanes"
@@ -26,12 +26,7 @@ root = "LanesHello"
 name = "benchMany"
 root = "LanesMany"
 
-# The kernel alone: Kernel.runWaves on K counters, with work per step, on 1 or more workers.
+# Mixed step costs at p99: the runtime on one worker and on several, closed loop.
 [[lean_exe]]
-name = "benchWaves"
-root = "Waves"
-
-# The shell alone, parallel off, on and auto, on trivial, heavy, narrow and wide steps.
-[[lean_exe]]
-name = "benchAuto"
-root = "Auto"
+name = "benchMixed"
+root = "Mixed"
