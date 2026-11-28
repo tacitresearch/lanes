@@ -1,4 +1,6 @@
-# D?. One model with proofs, and runtimes proved against it
+# D96. One model with proofs, and runtimes proved against it
+
+Status: Accepted
 
 *Status: Accepted. The contract below is experimental until the multi-core runtime implements
 it: until then its statement may still change.*
