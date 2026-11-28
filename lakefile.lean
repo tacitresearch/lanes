@@ -9,6 +9,15 @@ package lanes where
   keywords := #["software-verification", "actors", "model-checking", "distributed-systems", "web"]
   license := "Apache-2.0"
   testDriver := "lanesTest"
+  -- Lake's local artifact cache (D99, section 6): each output is stored once per toolchain, by
+  -- its content, and shared by every checkout and application on the machine (AGENTS.md, "Build
+  -- and checks"). A dependency that sets neither option takes the workspace root's.
+  enableArtifactCache := true
+  -- The outputs are also hard-linked into `.lake/build`, where `lake exe`, `lanesInventory`,
+  -- `docs/api`, CI's caches and the scripts read them.
+  restoreAllArtifacts := true
+  -- No remote cache yet (#98). It goes here: `downloadCacheService := "<name>"`, with a
+  -- `cache_service <name> := …` declared below the package.
 
 require cslib from git "https://github.com/leanprover/cslib" @ "910210f7d155e22a2244591e394bd16fbb0ddbb3"
 

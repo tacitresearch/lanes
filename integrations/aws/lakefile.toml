@@ -2,6 +2,10 @@ name = "aws"
 version = "0.1.0"
 defaultTargets = ["Aws", "check"]
 testDriver = "check"
+# Lake's artifact cache: each output is stored once per toolchain, by its content, shared by
+# every project on this machine, and hard-linked into `.lake/build`.
+enableArtifactCache = true
+restoreAllArtifacts = true
 
 [[require]]
 name = "lanes"
