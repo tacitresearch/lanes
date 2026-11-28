@@ -44,8 +44,8 @@ theorem sound_run (es : List (Board.Event N C)) {b : Board N C} (h : Sound confi
   | nil => exact h
   | cons e es ih =>
     cases e with
-    | inl r => exact ih ((board_inductive config).step b (.request r) h)
-    | inr d => exact ih ((board_inductive config).step b (.deadline d) h)
+    | inl r => exact ih ((board_inductive config).step {} b (.request r) h)
+    | inr d => exact ih ((board_inductive config).step {} b (.deadline d) h)
 
 /-- Every board a history of the spec reaches is sound. -/
 theorem sound_play (acts : List (Service.Act (Request N C) (Deadline N))) :

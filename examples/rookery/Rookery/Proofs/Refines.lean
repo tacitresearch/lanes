@@ -105,25 +105,26 @@ theorem armed_deadline {i : Unit} {msg : (sig N C).Msg i} (h : (system N C confi
     · cases he'; exact ⟨d, rfl⟩
     · cases he'
   cases h with
-  | step s m he =>
+  | step _ s m he =>
     cases m with
     | request r =>
       simp only [system, board, List.mem_cons, reduceCtorEq, false_or] at he
       exact of_timer (isTimer_timerEffects config r.name _) he
     | deadline d => simp [system, board] at he
-  | recover s he => exact of_timer (isTimer_rearm config s) he
+  | recover _ s he => exact of_timer (isTimer_rearm config s) he
 
 /-- Every message on its way to the board is a request from the outside. -/
 theorem sent_request {e : Envelope (sig N C)} (h : (system N C config).Sent e) :
     ∃ r, e = ⟨none, (), .request r⟩ := by
   cases h with
   | accept r => exact ⟨r, rfl⟩
-  | step s m he =>
+  | step _ s m he =>
     cases m with
-    | request r => rw [(step_request config s r).1] at he; cases he
+    | request r => rw [show ((system N C config).actor ()).stepAt _ s _ = (board config).step s _
+        from rfl, (step_request config s r).1] at he; cases he
     | deadline d => simp [system, board, Effect.sends] at he
-  | recover s he =>
-    rw [show (((system N C config).actor ()).recover s).2 = rearm config s from rfl,
+  | recover t s he =>
+    rw [show (((system N C config).actor ()).recoverAt t s).2 = rearm config s from rfl,
       sends_of_timers (isTimer_rearm config s)] at he
     cases he
 
@@ -133,14 +134,19 @@ theorem sent_request {e : Envelope (sig N C)} (h : (system N C config).Sent e) :
 def Sound (b : Board N C) : Prop :=
   b.Bounded config ∧ b.Fresh ∧ b.Quiet
 
+/-- The board does not read the step's context. -/
+theorem board_stepAt (ctx : Ctx (sig N C).Id) (b : Board N C) (msg : (sig N C).Msg ()) :
+    (board config).stepAt ctx b msg = (board config).step b msg :=
+  rfl
+
 theorem board_inductive :
     (board (N := N) (C := C) config).Inductive (Sound (N := N) (C := C) config) where
   init := ⟨Board.bounded_init config, Board.fresh_init, Board.quiet_init⟩
-  step b msg h := by
+  step _ b msg h := by
     cases msg with
     | request r => exact ⟨h.1.handle config r, h.2.1.handle config r, h.2.2.handle config r⟩
     | deadline d => exact ⟨h.1.fire config d, h.2.1.fire d, h.2.2.fire d⟩
-  recover _ h := h
+  recover _ _ h := h
 
 /-- In every state of every run, under every environment model, the board is sound. -/
 theorem board_invariant (env : EnvModel (sig N C)) :
@@ -171,7 +177,7 @@ theorem implements (env : EnvModel (sig N C)) (henv : (env.link none ()).duplica
     (hrestart : env.mayRestart = false) :
     (system N C config).Implements env (spec N C config) deadlines := by
   refine System.Refines.of_events (System.traced _ env) (Rel config) ⟨_, rfl, ?_⟩
-    (fun c t _ _ h _ => h) ?input ?output ?deliver ?duplicate ?drop ?down ?timeout ?recover
+    (fun c t _ _ _ h _ => h) ?input ?output ?deliver ?duplicate ?drop ?down ?timeout ?recover
     (fun h => absurd h (by simp [hrestart]))
   · exact ⟨rfl, by simp [requests, SysState.init, SysState.blank],
       by simp [SysState.init, SysState.blank]⟩
@@ -198,7 +204,7 @@ theorem implements (env : EnvModel (sig N C)) (henv : (env.link none ()).duplica
     refine ⟨_, .single ⟨r, hpend, rfl⟩, ?_, ?_, ?_⟩
     · simp [SysState.grow, hv, spec, system, board]
     · have hs := (step_request config (c.state ()) r).1
-      simp only [SysState.grow, system] at hs ⊢
+      simp only [SysState.grow, system, board_stepAt] at hs ⊢
       rw [hs, List.append_nil]
       have hperm := Bag.coe_eq_coe.mpr
         (filterMap_perm_erase (f := fun e : Envelope (sig N C) => match e.msg with
@@ -210,7 +216,7 @@ theorem implements (env : EnvModel (sig N C)) (henv : (env.link none ()).duplica
       have := Bag.erase_le_erase r hp
       simpa using this
     · have hs := (step_request config (c.state ()) r).2
-      simp only [SysState.grow, system] at hs ⊢
+      simp only [SysState.grow, system, board_stepAt] at hs ⊢
       rw [hs, ← Bag.coe_add, hv]
       exact Bag.add_le_add ho (Bag.le_of_eq rfl)
   case duplicate =>
