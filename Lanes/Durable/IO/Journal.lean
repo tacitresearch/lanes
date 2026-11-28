@@ -76,12 +76,19 @@ private def Refusal.explain (system : String) (upgrades : Bool) : Refusal → St
       ++ if upgrades then ", and no upgrade reads it" else ""
   | .foreign none => "it is not a journal"
   | .unreadable entry =>
-    s!"entry {entry} is intact and cannot be read, so it was written with another codec"
+    s!"entry {entry} is intact and cannot be read: it holds what this system's inputs do not"
   | .damaged byte => s!"it is damaged at byte {byte}"
   | .snapshot => "its snapshot cannot be read"
   | .apart => "it does not continue its snapshot"
-  | .name => "the system's name is too long for a journal"
+  | .name => "the system's name or the schema of its inputs is too large for a journal"
   | .missing => "it is not there, and this store may not begin one"
+  | .format 1 => "it is in format 1, which this Lanes does not read: move the journal and its \
+      snapshot aside to begin anew"
+  | .format version => s!"it is in format {version}, which this Lanes does not read"
+  | .manifest => "its manifest cannot be read, or does not name the schema that follows it"
+  | .policy runtime version => s!"it was written by the runtime \"{runtime}\" under policy \
+      {version}, not by \"{Journal.runtime}\" under policy {Journal.policy}"
+  | .schema error => s!"its schema cannot be read by this system's types: {error}"
 
 /-- Wait until what has been written to the file or directory at `path` is on the disk. -/
 @[extern "lanes_fsync"]
@@ -186,10 +193,18 @@ def Store.open {sys : System σ} [Hashable σ.Id] (store : Store sys) : IO (Log 
         IO.FS.writeBinFile (store.path.addExtension "cut")
           (disk.journal.extract found.size disk.journal.size)
       syncDir store.path
-      (disk.mend system found.size).forM (perform store.path handle true)
+      if !found.current then
+        if let some m := manifest? disk.journal then
+          IO.eprintln s!"lanes: the journal {store.path} was written by Lanes {m.lanes} with Lean \
+            {m.toolchain}, or with another schema of its inputs; it is written again with this \
+            one's, Lanes {lanesVersion}"
+      unless found.current || found.past.all (Entry.fits store.input) do
+        throw (IO.userError s!"lanes: the journal {store.path} cannot be written again with \
+          this system's schema: an entry is too large")
+      (disk.mend store.input system found).forM (perform store.path handle true)
     | .upgraded upgraded =>
       if let some actors := store.actors then
-        unless (savedRecords actors system upgraded.index upgraded.image).all Frame.fits
+        unless savedFits actors system upgraded.index upgraded.image
             && Entry.fits store.input (.snapshot upgraded.index) do
           throw (IO.userError "lanes: an actor is too large to save")
       pending := Upgrade.label upgraded.index (Upgrade.owed store.upgrades disk) upgraded.pending
@@ -216,7 +231,7 @@ def Store.open {sys : System σ} [Hashable σ.Id] (store : Store sys) : IO (Log 
       tell (.wrote entries flush)
     let save := fun (actors : Kernel.Image.Codecs sys) (image : Kernel.Image sys) => do
       let index ← count.get
-      unless (savedRecords actors system index image).all Frame.fits
+      unless savedFits actors system index image
           && Entry.fits store.input (.snapshot index) do
         throw (IO.userError "lanes: an actor is too large to save")
       let writes := saveWrites store.input actors system index image

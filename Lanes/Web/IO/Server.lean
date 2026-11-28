@@ -674,12 +674,12 @@ since the journal holds only what the gate admitted. -/
 def ServerConfig.journalName (config : ServerConfig) : String :=
   admittedName config.system
 
-/-- The name in the header of the journal at `path`, if there is one: what its first frame says.
+/-- The name in the manifest of the journal at `path`, if there is one.
 The start reads the files again, under the lock, and decides on what it finds there. -/
 private def journalHeader (path : System.FilePath) : IO (Option String) := do
   let some bytes ← (try some <$> IO.FS.withFile path .read (·.read 65536) catch _ => pure none)
     | return none
-  return (Frame.decode bytes).head?.bind Journal.named?
+  return Journal.named? bytes
 
 private def gated (path : System.FilePath) (old : GateConfig) : IO.Error :=
   IO.userError s!"lanes: the journal {path} was written with the gate as an actor of the \

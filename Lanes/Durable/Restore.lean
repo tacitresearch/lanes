@@ -191,7 +191,7 @@ def journal (snapshot : Option Nat) (point : Nat) (pieces : List (Piece σ)) :
 
 /-- A segment the shipper put reads back as the piece it was. -/
 theorem piece?_file (input : Codec σ.In) {system : String} {entries : List (Entry σ)}
-    (hsystem : Frame.fits (header system) = true)
+    (hsystem : preludeFits input system = true)
     (h : ∀ entry ∈ entries, Entry.fits input entry = true) (first : Nat) :
     piece? input system first entries.length (file input system entries)
       = some ⟨first, entries⟩ := by

@@ -429,6 +429,128 @@ def text (s : Schema) : String :=
     if seen.any (·.name == t.name) then seen else seen ++ [t]) []
   "\n\n".intercalate (s.name :: types.filterMap declaration) ++ "\n"
 
+/-! A schema as a value, so that a file can hold the schema of what it holds. -/
+
+/-- A field's default as a value: `none` is `.ctor 0 []`, `some v` is `.ctor 1 [v]`. -/
+def defaultValue : Option Value → Value
+  | none => .ctor 0 []
+  | some v => .ctor 1 [v]
+
+def defaultOf? : Value → Option (Option Value)
+  | .ctor 0 [] => some none
+  | .ctor 1 [v] => some (some v)
+  | _ => none
+
+def stringsOf? : List Value → Option (List String)
+  | [] => some []
+  | .string s :: vs => (stringsOf? vs).map (s :: ·)
+  | _ => none
+
+mutual
+
+/-- Each kind of schema is a constructor, in the order `Schema` declares them. -/
+def toValue : Schema → Value
+  | .nat => .ctor 0 []
+  | .int => .ctor 1 []
+  | .string => .ctor 2 []
+  | .bytes => .ctor 3 []
+  | .unit => .ctor 4 []
+  | .list item => .ctor 5 [toValue item]
+  | .map key value => .ctor 6 [toValue key, toValue value]
+  | .record type args fields => .ctor 7 [.string type, .list (toValues args), .list (fieldValues fields)]
+  | .sum type args ctors => .ctor 8 [.string type, .list (toValues args), .list (ctorValues ctors)]
+  | .dependent index => .ctor 9 [toValue index]
+
+def toValues : List Schema → List Value
+  | [] => []
+  | s :: ss => toValue s :: toValues ss
+
+def fieldValues : List (Field Schema) → List Value
+  | [] => []
+  | ⟨name, aliases, s, default⟩ :: fs =>
+    .ctor 0 [.string name, .list (aliases.map .string), toValue s, defaultValue default]
+      :: fieldValues fs
+
+def ctorValues : List (Ctor Schema) → List Value
+  | [] => []
+  | ⟨name, aliases, fields⟩ :: cs =>
+    .ctor 0 [.string name, .list (aliases.map .string), .list (fieldValues fields)] :: ctorValues cs
+
+end
+
+mutual
+
+def ofValue? : Value → Option Schema
+  | .ctor 0 [] => some .nat
+  | .ctor 1 [] => some .int
+  | .ctor 2 [] => some .string
+  | .ctor 3 [] => some .bytes
+  | .ctor 4 [] => some .unit
+  | .ctor 5 [item] => (ofValue? item).map .list
+  | .ctor 6 [key, value] => do return .map (← ofValue? key) (← ofValue? value)
+  | .ctor 7 [.string type, .list args, .list fields] => do
+    return .record type (← ofValues? args) (← fieldsOf? fields)
+  | .ctor 8 [.string type, .list args, .list ctors] => do
+    return .sum type (← ofValues? args) (← ctorsOf? ctors)
+  | .ctor 9 [index] => (ofValue? index).map .dependent
+  | _ => none
+
+def ofValues? : List Value → Option (List Schema)
+  | [] => some []
+  | v :: vs => do return (← ofValue? v) :: (← ofValues? vs)
+
+def fieldsOf? : List Value → Option (List (Field Schema))
+  | [] => some []
+  | .ctor 0 [.string name, .list aliases, s, default] :: fs => do
+    return ⟨name, ← stringsOf? aliases, ← ofValue? s, ← defaultOf? default⟩ :: (← fieldsOf? fs)
+  | _ :: _ => none
+
+def ctorsOf? : List Value → Option (List (Ctor Schema))
+  | [] => some []
+  | .ctor 0 [.string name, .list aliases, .list fields] :: cs => do
+    return ⟨name, ← stringsOf? aliases, ← fieldsOf? fields⟩ :: (← ctorsOf? cs)
+  | _ :: _ => none
+
+end
+
+theorem defaultOf?_defaultValue (d : Option Value) : defaultOf? (defaultValue d) = some d := by
+  cases d <;> rfl
+
+theorem stringsOf?_map (ss : List String) : stringsOf? (ss.map .string) = some ss := by
+  induction ss with
+  | nil => rfl
+  | cons s ss ih => simp [stringsOf?, ih]
+
+mutual
+
+theorem ofValue?_toValue : (s : Schema) → ofValue? (toValue s) = some s
+  | .nat | .int | .string | .bytes | .unit => rfl
+  | .list item => by simp [toValue, ofValue?, ofValue?_toValue item]
+  | .dependent index => by simp [toValue, ofValue?, ofValue?_toValue index]
+  | .map key value => by simp [toValue, ofValue?, ofValue?_toValue key, ofValue?_toValue value]
+  | .record type args fields => by
+    simp [toValue, ofValue?, ofValues?_toValues args, fieldsOf?_fieldValues fields]
+  | .sum type args ctors => by
+    simp [toValue, ofValue?, ofValues?_toValues args, ctorsOf?_ctorValues ctors]
+
+theorem ofValues?_toValues : (ss : List Schema) → ofValues? (toValues ss) = some ss
+  | [] => rfl
+  | s :: ss => by simp [toValues, ofValues?, ofValue?_toValue s, ofValues?_toValues ss]
+
+theorem fieldsOf?_fieldValues : (fs : List (Field Schema)) → fieldsOf? (fieldValues fs) = some fs
+  | [] => rfl
+  | ⟨name, aliases, s, default⟩ :: fs => by
+    simp [fieldValues, fieldsOf?, stringsOf?_map, ofValue?_toValue s, defaultOf?_defaultValue,
+      fieldsOf?_fieldValues fs]
+
+theorem ctorsOf?_ctorValues : (cs : List (Ctor Schema)) → ctorsOf? (ctorValues cs) = some cs
+  | [] => rfl
+  | ⟨name, aliases, fields⟩ :: cs => by
+    simp [ctorValues, ctorsOf?, stringsOf?_map, fieldsOf?_fieldValues fields,
+      ctorsOf?_ctorValues cs]
+
+end
+
 end Schema
 
 end Lanes

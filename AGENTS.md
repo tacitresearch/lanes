@@ -298,7 +298,9 @@ lanes_data inductive Id (F : Type) where
   read by name: `Schema.Plan.of` matches the writer's schema with the reader's once, refusing
   what cannot be read with a `Codec.Error` that names it, and `Body.decodeWith` reads each value
   through the plan (`Lanes/Data/Match.lean`; `Schema.Plan.of_insertIdx`,
-  `Schema.Plan.of_rename`). The files do not use it yet. Every
+  `Schema.Plan.of_rename`). The journal and the snapshot are written so, in format 2 of the
+  files (`Lanes/Durable/Format.lean`): a header, a manifest and the schema, then one body per
+  entry, read through the plan from the file's schema. Every
   field's type needs `Codable`: `Nat`, `Int`, `String`, `Bool`, `Unit`, `ByteArray`, `Fin n`,
   `Option`, `List`, pairs, sums, sigma types, subtypes, `Std.ExtTreeMap`, and types declared
   this way.

@@ -63,9 +63,9 @@ namespace Upgrade
 
 variable {sys : System σ}
 
-/-- Whether this upgrade reads a journal whose first frame is `first`. -/
-def reads (u : Upgrade sys) (first : ByteArray) : Bool :=
-  first == header u.system
+/-- Whether this upgrade reads a journal whose manifest names `named`. -/
+def reads (u : Upgrade sys) (named : String) : Bool :=
+  u.system == named
 
 /-- Save the migrated kernel under the new name, then begin the journal at its mark. -/
 def writes (input : Codec σ.In) (c : Image.Codecs sys) (system : String) (index : Nat)
@@ -109,7 +109,7 @@ def begin (input : Codec σ.In) (actors : Option (Image.Codecs sys)) (system : S
     Except Refusal (Begun sys) :=
   match disk.start input actors system create with
   | .error (.foreign named) =>
-    match actors, (Frame.decode disk.journal).head?.bind fun first => upgrades.find? (·.reads first) with
+    match actors, named.bind fun named => upgrades.find? (·.reads named) with
     | some c, some u => (u.start input c system disk).map .upgraded
     | _, _ => .error (.foreign named)
   | result => result.map .found
@@ -124,7 +124,7 @@ variable {sys : System σ}
 `start` migrates into `Upgraded.pending`, in order (`Journal.resumeIds`). The old history keeps
 its places, so an output it owed keeps its id across the migration. -/
 def owed (upgrades : List (Upgrade sys)) (disk : Disk) : List Origin :=
-  match (Frame.decode disk.journal).head?.bind fun first => upgrades.find? (·.reads first) with
+  match (named? disk.journal).bind fun named => upgrades.find? (·.reads named) with
   | none => []
   | some u =>
     match disk.read u.input u.actors u.system with
@@ -177,19 +177,12 @@ theorem resume_upgraded (up : Upgraded sys) :
 end Begun
 
 /-! The theorems. The old shard's files are what its death may leave (`Disk.Torn`) of a history
-that started at boot, and its journal has at least its header. -/
+that started at boot, and its journal has at least its prelude. -/
 
 theorem Entry.fits_handed (input : Codec σ.In) : Entry.fits input .handed = true := by
-  have h0 := Char.utf8Size_le_four (Nat.digitChar 0)
-  have h1 := Char.utf8Size_le_four (Nat.digitChar 1)
-  have r0 : (Nat.repr 0).utf8ByteSize = (Nat.digitChar 0).utf8Size := by
-    rw [Nat.repr_of_lt (by decide), String.utf8ByteSize_singleton]
-  have r1 : (Nat.repr 1).utf8ByteSize = (Nat.digitChar 1).utf8Size := by
-    rw [Nat.repr_of_lt (by decide), String.utf8ByteSize_singleton]
-  simp only [Entry.fits, Entry.bytes, Entry.codec, Codec.map, Codec.sum, Codec.unit, Codec.nat,
-    Frame.fits, Frame.encode, Frame.one, toString, String.toUTF8_eq_toByteArray]
-  simp [String.size_toByteArray, Frame.fits, r0, r1]
-  omega
+  simp [Entry.fits, Entry.write, Body.encode, Entry.schema, Schema.Of.map, Schema.Of.variants,
+    Schema.Ctors.cons, Schema.Fields.nil, Body.write, Body.writeAt, Body.writeNum, Body.writeFields, Body.natBytes,
+    Body.writeNat, Frame.fits, Kind.limits, Body.within]
 
 namespace Disk
 
@@ -212,14 +205,14 @@ theorem open?_of_read (h : disk.read input actors system = .ok found) :
         exact hopen
   · cases h
 
-/-- A journal whose header names another system is refused as that system's, whatever its
+/-- A journal whose manifest names another system is refused as that system's, whatever its
 snapshot. -/
-theorem start_foreign {named : String} {payloads : List ByteArray} (create : Bool)
-    (hheader : Frame.fits (header system) = true) (hne : named ≠ system)
-    (hdecode : Frame.decode disk.journal = header named :: payloads) :
-    disk.start input actors system create = .error (.foreign (named? (header named))) := by
-  have hdiff : header named ≠ header system := fun h => hne (header_inj h)
-  simp [start, read, hheader, open?, hdecode, hdiff]
+theorem start_foreign {named : String} {s : Schema} {payloads : List ByteArray} (create : Bool)
+    (hheader : preludeFits input system = true) (hne : named ≠ system)
+    (hold : Prelude.fits .journal named s = true)
+    (hdecode : Frame.decode disk.journal = Prelude.frames .journal named s ++ payloads) :
+    disk.start input actors system create = .error (.foreign (some named)) := by
+  simp [start, read, hheader, open?, hdecode, Prelude.frames, Prelude.check_other hold hne]
 
 end Disk
 
@@ -256,30 +249,32 @@ theorem start_torn (hold : Disk.Torn u.old u.input c₀ u.system history disk)
   simp only [start, hnone, hactors, hread, hresume, hindex]
 
 omit [Hashable σ.Id] in
-/-- The first frame of a journal the old shard began. -/
+/-- The prelude of a journal the old shard began, once it is whole. -/
 theorem decode_torn (hold : Disk.Torn u.old u.input c₀ u.system history disk)
-    (hstarted : Frame.decode disk.journal ≠ []) :
-    ∃ payloads, Frame.decode disk.journal = header u.system :: payloads := by
-  obtain ⟨found, hread, -⟩ := hold.read
-  have hopen := Disk.open?_of_read hread
-  unfold open? at hopen
-  split at hopen
-  · next hnil => exact absurd hnil hstarted
-  · next first payloads hcons =>
-    by_cases hfirst : first = header u.system
-    · exact ⟨payloads, hfirst ▸ hcons⟩
-    · simp [hfirst] at hopen
+    (hstarted : 3 ≤ (Frame.decode disk.journal).length) :
+    ∃ payloads, Frame.decode disk.journal = prelude u.input u.system ++ payloads := by
+  obtain ⟨lost, mark, more, n, hkept, hmore, -, hjournal, -⟩ := hold
+  have hfits : ∀ entry ∈ history.drop lost ++ more, Entry.fits u.input entry = true :=
+    fun entry hentry => (List.mem_append.mp hentry).elim
+      (fun hk => hkept.entries entry (List.mem_of_mem_drop hk)) (hmore entry)
+  rw [hjournal, file, Frame.decode_take_eq (frames_fit u.input hkept.prelude hfits)] at hstarted ⊢
+  generalize Frame.whole (frames u.input u.system (history.drop lost ++ more)) n = w at hstarted ⊢
+  obtain ⟨k, rfl⟩ : ∃ k, w = k + 3 := ⟨w - 3, by simp [frames, prelude, Prelude.frames] at hstarted; omega⟩
+  exact ⟨(write u.input (history.drop lost ++ more)).take k, by simp [frames, prelude, Prelude.frames]⟩
 
 /-- A start on the old version's files migrates them. -/
 theorem begin_torn (hold : Disk.Torn u.old u.input c₀ u.system history disk)
     (hactors : u.actors = some c₀) (hne : u.system ≠ system)
-    (hheader : Frame.fits (header system) = true) (hstarted : Frame.decode disk.journal ≠ [])
-    (hfind : upgrades.find? (·.reads (header u.system)) = some u) :
+    (hheader : preludeFits input system = true) (hstarted : 3 ≤ (Frame.decode disk.journal).length)
+    (hfind : upgrades.find? (·.reads u.system) = some u) :
     Disk.begin input (some c) system create upgrades disk
       = .ok (.upgraded (u.upgraded input c system history.length (recover u.old history))) := by
   obtain ⟨payloads, hdecode⟩ := decode_torn hold hstarted
-  simp only [Disk.begin, Disk.start_foreign create hheader hne hdecode, hdecode, List.head?_cons,
-    Option.bind_some, hfind, start_torn hold hactors hne, Except.map]
+  have hfit : Prelude.fits .journal u.system (Entry.own u.input) = true := by
+    obtain ⟨_, _, _, _, hkept, -⟩ := hold
+    exact hkept.prelude
+  simp only [Disk.begin, Disk.start_foreign create hheader hne hfit hdecode, Option.bind_some,
+    hfind, start_torn hold hactors hne, Except.map]
 
 /-- Wherever the process dies during the two writes of a migration, the next start gives the
 same migrated kernel: before the first, by migrating again, and the outputs to hand over with
@@ -287,11 +282,11 @@ it; after it, from the snapshot under the new name, with nothing to hand over, s
 outputs were handed over before the first write. Never a refusal. -/
 theorem begin_crash (hold : Disk.Torn u.old u.input c₀ u.system history disk)
     (hactors : u.actors = some c₀) (hne : u.system ≠ system)
-    (hheader : Frame.fits (header system) = true) (hstarted : Frame.decode disk.journal ≠ [])
-    (hfind : upgrades.find? (·.reads (header u.system)) = some u)
+    (hheader : preludeFits input system = true) (hstarted : 3 ≤ (Frame.decode disk.journal).length)
+    (hfind : upgrades.find? (·.reads u.system) = some u)
     (hmark : Entry.fits input (.snapshot history.length) = true)
-    (hsaved : (savedRecords c system history.length
-      (u.migration.kernel (recover u.old history).1).image).all Frame.fits = true)
+    (hsaved : savedFits c system history.length
+      (u.migration.kernel (recover u.old history).1).image = true)
     (done part : Nat) :
     (Disk.begin input (some c) system create upgrades
         (disk.crash (u.upgraded input c system history.length (recover u.old history)).writes
@@ -299,6 +294,9 @@ theorem begin_crash (hold : Disk.Torn u.old u.input c₀ u.system history disk)
       = .ok ((u.migration.kernel (recover u.old history).1).image.kernel,
           if done = 0 then (recover u.old history).2.map u.migration.output else []) := by
   obtain ⟨payloads, hdecode⟩ := decode_torn hold hstarted
+  have hfit : Prelude.fits .journal u.system (Entry.own u.input) = true := by
+    obtain ⟨_, _, _, _, hkept, -⟩ := hold
+    exact hkept.prelude
   match done with
   | 0 =>
     show (Disk.begin input (some c) system create upgrades disk).bind Begun.load = _
@@ -307,18 +305,23 @@ theorem begin_crash (hold : Disk.Torn u.old u.input c₀ u.system history disk)
   | 1 =>
     have hstart := Disk.start_foreign (input := input) (actors := some c)
       (disk := { disk with snapshot := some (saved c system history.length
-        (u.migration.kernel (recover u.old history).1).image) }) create hheader hne hdecode
+        (u.migration.kernel (recover u.old history).1).image) }) create hheader hne hfit hdecode
     simp only [upgraded, writes, Disk.crash, Disk.apply] at hstart ⊢
-    simp [Disk.begin, hstart, hdecode, hfind, start, saved?_saved c system _ _ hsaved, Except.map]
+    simp [Disk.begin, hstart, hfind, start, saved?_saved c system _ _ hsaved, Except.map]
     rfl
   | done + 2 =>
     rw [Disk.crash_of_length_le _ (by simp [upgraded, writes])]
-    have hopen := open?_file input (entries := [Entry.snapshot history.length]) hheader
-      (by simpa using hmark)
+    have hfits : ∀ entry ∈ [Entry.snapshot history.length], Entry.fits input entry = true := by
+      simpa using hmark
+    have hopen := open?_file input hheader hfits
     have hsize : (file input system [Entry.snapshot history.length]).size ≠ 0 := by
-      simp [file, Frame.size_encode, Frame.span]
+      simp [file, Frame.size_encode, Frame.span, frames, prelude, Prelude.frames]
+    have hcurrent : (Frame.decode (file input system [Entry.snapshot history.length])).take 3
+        = prelude input system := by
+      rw [file, Frame.decode_encode (frames_fit input hheader hfits)]
+      simp [frames, prelude, Prelude.frames]
     simp [upgraded, writes, Disk.apply, Disk.begin, Disk.start, Disk.read, hheader, hopen,
-      saved?_saved c system _ _ hsaved, hsize, Except.map]
+      savedOpen?_saved c system _ _ hsaved, hsize, hcurrent, Except.map]
     simp [Except.bind, Begun.load, resume, since, Entry.savedAt]
 
 /-- The history of a shard that started from a migrated kernel, up to its first mark: as many
@@ -354,9 +357,9 @@ private theorem placed_past {index i j : Nat}
 from the migrated kernel. So the theorems of `Disk.Holds` and `Disk.Torn` go on from here:
 whatever turns and saves it does, and wherever it dies, it loads as the kernel its history
 leads to from the migrated one. -/
-theorem holds (k : Kernel sys) (index : Nat) (hheader : Frame.fits (header system) = true)
+theorem holds (k : Kernel sys) (index : Nat) (hheader : preludeFits input system = true)
     (hmark : Entry.fits input (.snapshot index) = true)
-    (hsaved : (savedRecords c system index k.image).all Frame.fits = true) (disk : Disk) :
+    (hsaved : savedFits c system index k.image = true) (disk : Disk) :
     Disk.Holds sys (start := (k, [])) input c system (past index)
       ((writes input c system index k.image).foldl Disk.apply disk) := by
   have htake : (past index : List (Entry σ)).take index = List.replicate index .handed := by
@@ -365,7 +368,7 @@ theorem holds (k : Kernel sys) (index : Nat) (hheader : Frame.fits (header syste
     simp [past]
   refine ⟨index, some index, ?_, ?_, ?_⟩
   · exact {
-      header := hheader
+      prelude := hheader
       entries := by
         intro e he
         simp only [past, List.mem_append, List.mem_replicate, List.mem_singleton] at he
