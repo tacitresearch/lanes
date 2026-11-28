@@ -6,7 +6,7 @@
 #   callgrind  instructions per request by function, from valgrind --tool=callgrind
 #   perf       context switches per request and where the CPU goes, from perf ($PERF, or perf)
 #
-# <server> is a name of run.sh (go, tcp, std, lanes, lanes-journal, ...). Build with run.sh first.
+# <server> is a name of run.sh (go, tcp, std, lanes, lanes-io, ...). Build with run.sh first.
 set -euo pipefail
 cd "$(dirname "$0")"
 . ./servers.sh

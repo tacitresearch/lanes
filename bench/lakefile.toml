@@ -16,7 +16,7 @@ root = "StdHello"
 name = "benchTcp"
 root = "TcpHello"
 
-# `Lanes.Http.serve` with one actor that answers each request, optionally journaled.
+# `Lanes.Http.serve` with one actor that answers each request.
 [[lean_exe]]
 name = "benchLanes"
 root = "LanesHello"

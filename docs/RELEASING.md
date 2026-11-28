@@ -44,9 +44,9 @@ module without that line is stable. `lanes lint` does not check this yet.
 ## Checklist
 
 1. Write the release's section of `CHANGELOG.md`, `## [X.Y.Z] - YYYY-MM-DD`: the net change since
-   the last tag, from `git log vPREV..HEAD`, the decisions accepted since and, before the first
-   release, the files in `docs/changes/` (`lake exe lanes changelog --release X.Y.Z YYYY-MM-DD`
-   gathers them). Something added and taken out again between releases is not in it. Keep it
+   the last tag, from the pull requests merged since (`git log --merges vPREV..HEAD`, each with its
+   description), the decisions accepted since and, before the first release, the Unreleased
+   section. Something added and taken out again between releases is not in it. Keep it
    short: one line per change a user notices, breaking changes first, and the toolchain line.
    Then update the compare links at the bottom.
 2. Set `version` in `lakefile.lean` to `X.Y.Z`, in the same pull request.

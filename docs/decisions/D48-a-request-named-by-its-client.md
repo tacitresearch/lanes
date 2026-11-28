@@ -1,6 +1,6 @@
 # D48. A request named by its client takes effect once, and its answer may be handed over again
 
-Status: Accepted
+Status: Partly superseded by D110-volatile-actors.md (a memo that survives a restart: a key that must is a row in the database)
 
 `Lanes/Behaviours/Once/Basic.lean`, `Lanes/Semantics/Once.lean`, `Lanes/Behaviours/Once/Check.lean`,
 `Examples/{KV,KVProofs}.lean` (removed). Every refinement theorem so far assumed that some link does not

@@ -7,10 +7,7 @@ that is not here, or whose evidence does not say what its sentence says, is a de
 (`SECURITY.md` treats a theorem that states less than its docs claim as one). A limit here is
 one the design accepts; a limit that can be fixed is an issue labelled `known-limit`.
 
-The status of every public definition (proved, with its theorems; trusted; checked; tested; a
-spec; or none) is computed from the built library and printed by `lake exe lanes inventory`
-(D47), and what has none is on `docs/inventory-none.md`: that is where a definition is checked,
-and this page names the headline theorems. `import Lanes` gives the API; the soundness theorems
+This page names the headline theorems. `import Lanes` gives the API; the soundness theorems
 named here are in `Lanes.Proofs` (`Lanes/Proofs.lean`), which `Lanes.Semantics` imports. Those
 are gated in `Tests/Axioms/`, which stops compiling if a `sorry` or a new axiom reaches them.
 
@@ -983,10 +980,7 @@ The `lanes` command (`LanesCli/`) creates an application (`lanes new`, which wri
 (`lanes lint`, `LanesCli/Lint.lean`: the rules `AGENTS.md` lists, among them that every
 repository path a doc cites exists), writes what is derived from other files (`--fix`,
 `LanesCli/Generated.lean`: the line counts of `TRUSTED.md`, the index of decisions and
-the numbers of new ones), runs the model checks (`lanes check`), prints the inventory
-(`lanes inventory`, `LanesCli/Inventory.lean`: every public definition with its status and its
-evidence, read from the built modules; lint fails on one of `Lanes/` without evidence that is
-not on `docs/inventory-none.md`). Lint's rule `layering` keeps each module
+the numbers of new ones), runs the model checks (`lanes check`). Lint's rule `layering` keeps each module
 of `Lanes/` from importing a package above its own: `LanesCli/Layers.lean` gives the packages of
 `docs/decisions/D99-layered-packages.md`, what each requires, and each file's package by the
 longest prefix of its path. CI (`.github/`) runs the build with warnings as errors, lint,
@@ -1006,19 +1000,13 @@ Where: `LanesCli/`, `Lanes/Core/ByCases.lean`, `.github/`, `infra/`, `scripts/`,
 | The number of trusted lines, and each trusted file's size | Written by `lake exe lanes lint --fix`; lint `trusted-size` fails when a file differs |  | checked |
 | Each known way of breaking trusted code fails a test | `scripts/mutants.py`, nightly (`.github/workflows/mutants.yml`) | A list of known mutants, not a measure of coverage | tested |
 | No module of `Lanes/` imports a module of a package its own does not require | `LanesCli/Layers.lean`, `Cli.Lint.checkLayers`; lint `layering`; `Tests/Lint.lean`; a file in no package is reported too |  | checked |
-| Every public definition has a status and its evidence | `lake exe lanes inventory`, computed from the built modules; lint `inventory`, `inventory-none` | Those with none are on `docs/inventory-none.md` | checked |
 
 Also:
 
 - The mutation gate in parallel shards, nightly, by hand and on pull requests labelled `mutants`, on GitHub's runners or a warm EC2 machine the workflow starts and stops (`infra/README.md`).
 - `instance_by_cases` for instances defined by cases on an identity (`Inspect` of a system whose actors differ).
-- `lanes changelog`: the Unreleased section, gathered from `docs/changes/`, one fragment per change, and written into `CHANGELOG.md` at a release (`docs/RELEASING.md`).
-- `lanes stats`: the totals no committed file holds, since each would change with every item (trusted lines, decisions, the inventory by area).
+- `lanes stats`: the totals no committed file holds, since each would change with every item (trusted lines, decisions).
 - `scripts/lean-goals` for a file's errors and goals from a language server kept open.
-
-### Limits
-
-- The inventory's "proved" is only as strong as the gates: a gated theorem covers every definition its statement names and what those run in their own module, whether or not it says all they are for. A test or a check covers what it names in the same way, which makes the checker's own plumbing (`Check.Report.ok`, `Inspect`) "checked" because checks use it. `lanes_data`, `macro_rules` and `elab_rules` are invisible to it: a test uses the syntax, not a constant. `LanesCli/` is listed but not held to the list of definitions without evidence.
 
 ## Applications
 

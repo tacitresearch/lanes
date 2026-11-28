@@ -21,10 +21,7 @@ lake test                  # pure tests and live runtime tests, about two minute
 lake exe lanesCheck        # larger model checks, random runs and the scale benchmark, about 20 s: run once, never in a loop
 lake exe lanes lint        # the checks below, and that generated files are up to date
 lake exe lanes lint --fix  # rewrite the generated files: TRUSTED.md's line counts, the decisions' index
-lake exe lanes stats       # the totals no file holds: trusted lines, decisions, the inventory by area
-lake exe lanes changelog   # the Unreleased section, gathered from `docs/changes/`
-lake exe lanes inventory  # every public definition with its status; --list none: those without evidence
-lake exe lanes docstrings  # how many public declarations of `import Lanes` have a docstring
+lake exe lanes stats       # the totals no file holds: trusted lines, decisions
 ```
 
 - Run `lake build --wfail`, `lake test`, `lake exe lanesCheck` and `lake exe lanes lint` before
@@ -75,18 +72,11 @@ lake exe lanes docstrings  # how many public declarations of `import Lanes` have
   (`partial`, `unsafe`, `axiom`, `panic!`, `implemented_by`, `extern` and C only in files
   `TRUSTED.md` names), `trusted-size` (each trusted file has the line count `TRUSTED.md` gives),
   `layering` (rule 1.6), `decisions` (the index agrees with the decisions, and each has its
-  number and status line),
-  `changelog` (each fragment in `docs/changes/` reads), `inventory` and `inventory-none` (below), `links` (every repository path in backquotes in
+  number and status line), `links` (every repository path in backquotes in
   `*.md` and `docs/*.md` exists) and `oracles` (`oracles/README.md` names an oracle, or why there
   is none, for every protocol module and model, and every path it names exists). It does not
-  check `no-io-in-step`, `bounded`, `field-leak` or
-  `fn-length`: those need the elaborator. The inventory's checks read the built
-  modules: run `lake build lanesInventory` before `lake exe lanes lint --fix`.
-- `lake exe lanes inventory` prints every public definition with a status, read from the built
-  modules (`docs/decisions/D47-the-inventory-is-computed.md`); no committed file holds it. A theorem makes what it states proved when
-  it has an axiom gate. A new definition of `Lanes/` with no theorem, test or row of `TRUSTED.md`
-  fails `lanes lint` unless it is on `docs/inventory-none.md` under a heading that says why; when
-  one there gets evidence, take it off.
+  check `no-io-in-step`, `bounded`, `field-leak` or `fn-length`: those need the elaborator. Lint
+  reads only text.
 - Lake hashes a module's source and imports, not the files it reads with `include_str`. So each
   embedded file is an `input_dir` or `input_file` target that the module's library or executable
   `needs` (`templates/`, `lean-toolchain` and the test keys in `lakefile.lean`; the

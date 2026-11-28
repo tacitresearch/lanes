@@ -1,3 +1,0 @@
-### Added
-
-- The decision on the data format (`docs/decisions/D97-data-format.md`): a schema derived from the types and written once per file or stream, values read by name with declared defaults and aliases, a manifest, the decoded input journalled instead of the HTTP request with the gate's decisions recorded, a snapshot image defined by the model, migrations that run the new `boot` and `recover`, `lanes journal dump`, a corpus of old journals and a schema check in CI, a 128-bit checksum, and erasure that is opt-in, with sealed values reserved. It changes no code yet; the order of work is in the decision.

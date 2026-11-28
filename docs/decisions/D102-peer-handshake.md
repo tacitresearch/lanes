@@ -1,6 +1,6 @@
 # D102. Peers open every connection with a versioned handshake and a shared key
 
-Status: Accepted
+Status: Superseded by D110-volatile-actors.md
 
 Peers talked plain TCP: a process took parcels from whoever connected, read them with the
 positional codec, and had no way to tell a peer of another version, of another system, or

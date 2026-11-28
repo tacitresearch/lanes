@@ -2,7 +2,7 @@
 Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import LanesCli.Changelog
+import LanesCli.Generated
 import LanesCli.Layers
 
 /-!
@@ -18,23 +18,18 @@ Source-level checks of the rules in `AGENTS.md` that can be decided from the tex
   lines, so trusted code cannot grow without the list changing; `--fix` rewrites the counts.
 - `decisions`: the index of `docs/decisions/` agrees with the decisions, and each decision has
   its number and its status line (`LanesCli/Generated.lean`).
-- `changelog`, where there is a `docs/changes/`: each fragment reads as sections and entries,
-  and `CHANGELOG.md`'s Unreleased section has none of its own (`LanesCli/Changelog.lean`).
 - `layering` (rule 1.6): files that import Mathlib, CSLib or a proof module (`Lanes.Semantics`,
   `App.Proofs`) live in a proof directory, one named `…Proofs` included, or are named
   `…Proofs.lean`, so executable code never links them. In Lanes itself, also: each module of
   `Lanes/` imports modules of Lanes only from its own package and the packages it requires
   (`LanesCli/Layers.lean`), so each layer builds without the ones above it.
 - `links`: every repository path that a Markdown file at the root or under `docs/` writes in
-  backquotes exists (`a/{b,c}.lean` names two). `docs/decisions/` records the past and is not
-  checked.
+  backquotes exists (`a/{b,c}.lean` names two). `docs/decisions/` and `CHANGELOG.md` record the
+  past and are not checked.
 - `oracles`, where there is an `oracles/README.md`: its tables name a reference for each folder
   of `oracles/`, and an oracle, or why there is none, for each module of `Lanes/Lib/` and
   `Lanes/Web/` and each model of `Lanes/Outside/` that is not a proof or IO; every module and
   path they name exists (`docs/decisions/D80-oracles.md`).
-- `inventory`, `inventory-none`, in Lanes itself: the inventory can be computed, and every
-  definition of `Lanes/` without evidence is on `docs/inventory-none.md`. These read the built
-  modules, so `lanesInventory`, which links `Lean`, does them.
 
 Comments and string literals are ignored. The checks that need the elaborator (`no-io-in-step`,
 `bounded`, `field-leak`) are not implemented yet.
@@ -282,7 +277,7 @@ def citedPaths (root : System.FilePath) (span : String) : IO (List String) := do
 not the record of the past, `docs/decisions/`, nor what a package under `docs/` keeps in its
 `.lake/`. -/
 def citingDocs (root : System.FilePath) : IO (List String) := do
-  let top := (← Generated.markdownIn root)
+  let top := (← Generated.markdownIn root).filter (· != "CHANGELOG.md")
   let docs := root / "docs"
   let nested ← if ← docs.isDir then
       docs.walkDir fun dir =>
@@ -385,39 +380,11 @@ structure Report where
   fixed : List Generated.Edit
   files : Nat
 
-/-- `path:line: [rule] message`, as `lanesInventory` prints a finding. -/
-def parseFinding (text : String) : Option Finding := do
-  let (place, rest) ← match text.splitOn ": [" with
-    | place :: rest@(_ :: _) => some (place, ": [".intercalate rest)
-    | _ => none
-  let (file, line) ← match place.splitOn ":" with
-    | [file, line] => line.toNat?.map (file, ·)
-    | _ => none
-  let (rule, message) ← match rest.splitOn "] " with
-    | rule :: message@(_ :: _) => some (rule, "] ".intercalate message)
-    | _ => none
-  return ⟨file, line, rule, message⟩
-
-/-- The inventory's findings, in Lanes itself: a project with `Lanes.lean` and the inventory's
-program. They need the built modules and `Lean`, so `lanesInventory` finds them. -/
-def inventory (root : System.FilePath) : IO (List Finding) := do
-  if !(← (root / "Lanes.lean").pathExists) || !(← (root / "LanesCli" / "Inventory.lean").pathExists)
-  then return []
-  let out ← IO.Process.output
-    { cmd := "lake", args := #["exe", "lanesInventory", "--check"], cwd := some root }
-  let findings := (out.stdout.splitOn "\n").filterMap parseFinding
-  if out.exitCode != 0 && findings.isEmpty then
-    return [⟨"LanesCli/Inventory.lean", 1, "inventory",
-      s!"`lake exe lanesInventory` failed: {(out.stderr ++ out.stdout).trimAscii}"⟩]
-  return findings
-
 def lint (root : System.FilePath) (options : Options := {}) : IO Report := do
-  -- The inventory builds what it reads.
-  let inventoryFindings ← inventory root
   let fixed ← if options.fix then Generated.fix root options.main else pure []
   let plan ← Generated.plan root options.main
   let mut findings : List Finding :=
-    (plan.problems ++ (← Changelog.check root)).map
+    plan.problems.map
       (fun (file, line, rule, message) => ⟨file, line, rule, message⟩)
       ++ plan.edits.map fun e => ⟨e.path, 1, e.rule, e.message⟩
   let trustedFile := root / "TRUSTED.md"
@@ -429,7 +396,6 @@ def lint (root : System.FilePath) (options : Options := {}) : IO Report := do
   findings := findings ++ (← checkLayers root files)
   findings := findings ++ (← checkLinks root)
   findings := findings ++ (← checkOracles root)
-  findings := findings ++ inventoryFindings
   return ⟨findings, fixed, files.size⟩
 
 /-- A JSON string: `s` quoted, with the characters JSON must escape escaped. -/
@@ -449,11 +415,9 @@ def jsonString (s : String) : String :=
   "\"" ++ body ++ "\""
 
 /-- What a finding is a failure of, in the kinds `lanes check` and the test runner give: a
-`sorry` is a proof that does not hold, an inventory that could not be built is a build, and
-every other finding is a check of the text. -/
+`sorry` is a proof that does not hold, and every other finding is a check of the text. -/
 def Finding.kind (f : Finding) : String :=
   if f.rule == "no-sorry" then "proof"
-  else if f.rule == "inventory" && f.message.startsWith "`lake exe lanesInventory` failed" then "build"
   else "check"
 
 def Finding.json (f : Finding) : String :=

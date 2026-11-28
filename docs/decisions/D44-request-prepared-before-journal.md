@@ -1,6 +1,6 @@
 # D44. A request is prepared before it is journalled
 
-Status: Accepted
+Status: Partly superseded by D110-volatile-actors.md (the journal that preparing kept secrets out of)
 
 `Lanes/Web/Http/Gate.lean` (`Bridge.prepare`), `Lanes/Web/IO/Server.lean`, `examples/ledger/Ledger/Web.lean`.
 The ledger found that `serve` journalled the request as it came: every log-in's password and

@@ -1,9 +1,9 @@
 # Lean on Lanes
 
-Lanes is a framework for writing distributed and web software in Lean 4 and proving it
-against a spec: each actor is a pure step function, actors share no state, and IO happens only
-at the edges. The step function that runs in production is the one the model checker explores
-and the proofs are about.
+Lanes is a runtime and library for building software in Lean 4. Programs are actors whose
+logic is a pure step function. The runtime runs them, and the same step functions are
+model-checked and proved against a spec. The library has what applications need: encodings,
+cryptography, time, HTTP, PostgreSQL, storage, and models of outside services.
 
 > Status: early beta. What is missing is under [Status](#status).
 
@@ -70,9 +70,6 @@ Every claim, with its theorem, check or test, its premises and its status, is in
   list, and `scripts/mutants.py` holds known ways of breaking that code, each of which must
   fail a test.
 
-`lake exe lanes inventory` prints every public definition with its status, computed from the
-built library, and `docs/inventory-none.md` lists those with no evidence yet.
-
 ## Examples
 
 `examples/README.md` says what each example shows and in what order to read them. The
@@ -99,9 +96,9 @@ Hello world over HTTP/1.1 with keep-alive, requests a second, on a c7a.16xlarge,
 | Go `net/http` | 29,870 | 125,809 | 137,938 | up to 12.8 cores |
 | Lanes | 11,395 | 34,516 | 37,098 | 3.2 cores, 85–101 µs a request |
 
-Lanes is about 4× behind Go at 64 connections today. The benchmark's application is one actor
-on one shard, and a shard runs on one thread, so its logic uses one core. The IO path and running
-actors in parallel are the next steps. The method and settings are in `bench/README.md`.
+Lanes is about 4× behind Go at 64 connections at that commit. The benchmark's application is one
+actor, and the runtime ran its steps on one thread, so its logic used one core. The IO path and
+running actors in parallel are the next steps. The method and settings are in `bench/README.md`.
 
 ## Quick start
 

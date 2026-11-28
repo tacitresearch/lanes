@@ -1,6 +1,6 @@
 # D66. A migration carries the old kernel across a deploy, once, with a proof
 
-Status: Accepted
+Status: Superseded by D110-volatile-actors.md
 
 *Supersedes the part of D24 and D36 that has a changed system refuse its old files.*
 

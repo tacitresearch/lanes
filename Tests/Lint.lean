@@ -186,51 +186,16 @@ def layerTests (root : System.FilePath) : IO (List (String × Bool)) := do
         && Layers.imported? "import Lanes" == some "Lanes"
         && Layers.imported? "def x := 1" == none)]
 
-def changelog : String :=
-  "# Changelog\n\nIntro.\n\n## [Unreleased]\n\nNote.\n\n## [0.1.0] - 2026-01-01\n\nOld.\n"
-
-def changelogTests (root : System.FilePath) : IO (List (String × Bool)) := do
-  project root
-  discard <| lint root { fix := true }
-  write root "CHANGELOG.md" (changelog.replace "Note.\n" "Note.\n\n- A line here.\n")
-  write root "docs/changes/README.md" "# Unreleased changes\n\nNot a fragment.\n"
-  write root "docs/changes/good.md" "### Added\n\n- Good.\n"
-  write root "docs/changes/bad.md" "### Improved\n\n- Bad.\n"
-  let report ← lint root { fix := true }
-  let found := (report.findings.filter (·.rule == "changelog")).map fun f => (f.file.toString, f.line)
-  let parsed := Changelog.parse "### Added\n\n- One.\n  Continued.\n\n### Fixed\n\n- Two.\n"
-  let refused := fun text => match Changelog.parse text with
-    | .error (line, _) => some line
-    | .ok _ => none
-  let a : Changelog.Fragment := [("Fixed", ["- A fix."]), ("Added", ["- A."])]
-  let b : Changelog.Fragment := [("Added", ["- B."])]
-  return [
-    ("lint changelog: a fragment that does not read, and an entry in CHANGELOG.md's Unreleased "
-        ++ "section, are reported; the folder's README is no fragment",
-      found == [("docs/changes/bad.md", 1), ("CHANGELOG.md", 9)]),
-    ("Changelog.parse: sections in order, an entry with its next line",
-      parsed matches .ok [("Added", ["- One.\n  Continued."]), ("Fixed", ["- Two."])]),
-    ("Changelog.parse: an entry before a heading, a heading with no entry, another section's name "
-        ++ "and a line of text are refused at their lines",
-      refused "- No heading.\n" == some 1 && refused "### Added\n" == some 1
-        && refused "### Improved\n- x\n" == some 1 && refused "### Added\n- x\nText.\n" == some 3),
-    ("Changelog.assemble: each section once, in Keep a Changelog's order, the fragments in order",
-      Changelog.assemble [a, b] == "### Added\n\n- A.\n- B.\n\n### Fixed\n\n- A fix.\n"),
-    ("Changelog.insertRelease: the release goes after the Unreleased section's text",
-      (Changelog.insertRelease changelog "0.2.0" "2026-02-01" "### Added\n\n- New.\n").toOption
-        == some ("# Changelog\n\nIntro.\n\n## [Unreleased]\n\nNote.\n\n## [0.2.0] - 2026-02-01\n\n"
-          ++ "### Added\n\n- New.\n\n## [0.1.0] - 2026-01-01\n\nOld.\n"))]
 
 def tests : IO (List (String × Bool)) := do
   let root ← scratch
   let other ← scratch
   let third ← scratch
   let fourth ← scratch
-  let fifth ← scratch
   let sixth ← scratch
   try
     let results := (← fixTests root) ++ (← problemTests other) ++ (← linkTests third)
-      ++ (← oracleTests fourth) ++ (← changelogTests fifth) ++ (← layerTests sixth)
+      ++ (← oracleTests fourth) ++ (← layerTests sixth)
     return results ++ [
       ("withCommas", Generated.withCommas 1587 == "1,587" && Generated.withCommas 50 == "50"
         && Generated.withCommas 1000000 == "1,000,000"),
@@ -248,16 +213,14 @@ def tests : IO (List (String × Bool)) := do
           == ["A/B.lean"]),
       ("--json: a string is quoted with JSON's escapes",
         jsonString "a \"b\"\\\n\x01" == "\"a \\\"b\\\"\\\\\\n\\u0001\""),
-      ("--json: a `sorry` is a proof's failure, a failed inventory a build's, the rest checks",
+      ("--json: a `sorry` is a proof's failure, the rest checks",
         (Finding.mk "A.lean" 3 "no-sorry" "x").kind == "proof"
-          && (Finding.mk "docs/INVENTORY.md" 1 "inventory" "`lake exe lanesInventory` failed: y").kind
-            == "build"
           && (Finding.mk "B.md" 1 "links" "z").kind == "check"),
       ("--json: the report gives the files, what was fixed, and each finding with its place",
         (Report.mk [⟨"A.lean", 3, "no-sorry", "no"⟩] [] 2).json
           == "{\"files\":2,\"fixed\":[],\"failed\":1,\"results\":[{\"name\":\"no-sorry\",\"kind\":\"proof\",\"status\":\"failed\",\"path\":\"A.lean\",\"line\":3,\"detail\":\"no\"}]}")]
   finally
-    for dir in [root, other, third, fourth, fifth, sixth] do
+    for dir in [root, other, third, fourth, sixth] do
       if ← dir.pathExists then IO.FS.removeDirAll dir
 
 end Tests.Lint
