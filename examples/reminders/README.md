@@ -1,58 +1,55 @@
 # reminders
 
 A reminder is a text and a time. At its time it is posted to a notification service, and posted
-again with a backoff until the service takes it (`2xx`), its attempts run out, or it is
-cancelled. It is the smallest application of the scheduler, `Lanes.Schedule`
-(`Lanes/Behaviours/Schedule/Basic.lean`): the reminders hold the list; the scheduler beside them
-holds the jobs, runs each at its time, retries it and gives up on it. Both live as long as the
-process: a restart starts with no reminders.
+again with a backoff until the service takes it (`2xx`), refuses it for good (`4xx`), its
+attempts run out, or it is cancelled. It is the smallest application of a jobs table
+(`Lanes/Db/Jobs.lean`): each reminder is a job of the table `reminders` in PostgreSQL, and the
+worker beside the application (`Lanes/Db/Worker.lean`) delivers it. Everything is in the
+table, so a restart loses no reminder and delivers none again that was taken.
 
 ```bash
 cd examples/reminders
 mkdir -p .lake && ln -s ../../../.lake/packages .lake/packages   # share the fetched dependencies
 lake build            # the application, the proofs and the tests
-lake test             # the model check, then the application over HTTP through a restart
+lake test             # the model check; with LANES_POSTGRES=host:port, the application on it too
+psql -f migrations/0001_reminders.sql                            # once, as libpq's variables say
 NOTIFY_URL=http://127.0.0.1:9090 NOTIFY_PATH=/notify lake exe reminders 8080
 ```
 
 ## How it works
 
-- `Reminders/App.lean`: one actor that holds the reminders, joined with the scheduler
-  (`Schedule.attach`). `POST /remind` (a `text` and `in` seconds) schedules a job under the
-  reminder's id, a call of the service with the text, due at the time the request arrived plus
-  `in`; `POST /cancel/<id>` cancels it. The scheduler tells the reminders how each job ended:
-  sent, given up on (the dead letter, which is logged) or cancelled.
-- A periodic job sweeps the reminders that are over out of the list every `sweep_ms`, which keeps
-  it within `maxReminders`. The reminders schedule the sweep at every start; the scheduler
-  holds it under one id, so the second scheduling and every later one is answered `already`.
-- `Reminders/Serve.lean` performs the scheduler's calls with the HTTP client, the reminder's id
-  in `Idempotency-Key` on every attempt, cut off at the attempt's deadline, and hands the answer,
-  or `unknown`, back as an input. It decides nothing.
-- The time a request arrived is written into it before it enters the system (`Web.stamp`), so
-  `step` stays pure; the scheduler learns the time from it and from its own timers.
+- `Reminders/App.lean`: the table, and one transaction per request: `remind` (a `text` and
+  `in` seconds) counts the reminders waiting and adds one, due at the time the request arrived
+  plus `in`; `cancel` stops one that waits; `list` shows the latest. The front holds nothing:
+  it sends each request to the store under the request's own number and answers with what the
+  store answered.
+- `Reminders/Serve.lean` runs the front's calls on PostgreSQL through the typed store's driver,
+  and starts the worker, whose attempts are `POST`s of the text with `reminder-` and the job's
+  id in `Idempotency-Key`, the same on every attempt, cut off at the attempt's deadline. It
+  decides nothing.
+- The time a request arrived is written into it by the server (`Web.stamp`); the worker takes
+  the time from the wall clock.
 
 ## The claims
 
 | Claim | Where |
 | --- | --- |
-| The reminders stay within `maxReminders`, in every run and environment | `Reminders.bounded` |
-| The scheduler holds at most `maxReminders + 1` jobs, no id twice | `Reminders.jobs_bounded` |
-| In a fair run in which the scheduler does not crash, every reminder's delivery ends | `Reminders.delivery_ends` |
-| If the reminders do not crash either and the link to them loses nothing, every reminder's delivery is answered to them: sent, given up on or cancelled | `Reminders.delivery_answered` |
-| No attempt before its time, none while another of its reminder is out, no more than its attempts | the scheduler's: `Schedule.dispatch_due`, `Schedule.attempt_ends`, `Schedule.calls_le_scheduled` |
+| Every transaction of the reminders keeps the table: it adds or cancels reminders, and never changes what one says | `Reminders.keeps` |
+| A reminder is delivered only once every database the store may hold has it, with its text: a request whose transaction did not commit delivers nothing | `Reminders.delivered_committed` |
+| At a service that honours idempotency keys, no reminder takes effect twice | `Reminders.delivered_once` |
+| A claim takes every reminder due, no more than its limit; the attempts of a reminder are bounded; only the current attempt's answer counts | the jobs table's: `Queue.claim_takes`, `Queue.claim_length`, `Queue.claim_attempts`, `Queue.finish_stale` |
 
-Checked (`Reminders/Check.lean`, run by `lake test`): two reminders' worth of requests, a
-service that answers `200`, `503` or `unknown`, late or never, every timer firing at any moment;
-a reminder the list calls sent was taken by the service, none is delivered more often than its
-attempts allow, the sweep is one job; a retry that succeeds, a reminder given up on, one
-cancelled while its delivery is out and the sweep emptying the list are each reached (22,709
-states). Over HTTP (`Test.lean`): a service that refuses the first two deliveries takes the third,
-under one key; a reminder that waits is cancelled; after a restart the list is empty.
+Checked (`Reminders/Check.lean`, run by `lake test`): two reminders and a cancel, a store that
+loses answers and whose lost `COMMIT`s take effect late, a service that answers `200`, `503`
+or `unknown`, or never, and a worker that crashes; a reminder sent was taken by the service,
+none takes effect twice, no more than `maxReminders` wait; a retry that succeeds and a cancel
+are each reached. Over HTTP on PostgreSQL (`Test.lean`, when `LANES_POSTGRES` is set): a
+service that refuses the first two deliveries takes the third, under one key; a reminder that
+waits is cancelled; after a restart on the same database the reminders are as they were and
+none is delivered again.
 
 ## Limits
 
-- The sweep is scheduled at time 0, and its run time moves on from the time the scheduler knew
-  when it last ran; after a start it runs at once.
 - A request carries no form token: anyone who can reach the server can schedule and cancel.
-- The reminders are lost with the process. Keeping them across a restart is a service's job,
-  such as PostgreSQL's (`examples/todo-db`).
+- That no more than `maxReminders` wait is checked, not proved.
+- Reminders that are over stay in the table; nothing sweeps them.

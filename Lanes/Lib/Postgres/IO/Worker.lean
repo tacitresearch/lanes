@@ -39,7 +39,7 @@ def Worker.start (cfg : Db.Worker.Config R) (store : Store (Q ⊕ Req) (A ⊕ An
     Async (Worker (Q := Q) (A := A) (W := W) cfg) := do
   let clock ← Clock.Wall.start
   let stopping ← IO.mkRef false
-  let rt ← Runtime.startWith (Db.Worker.system (Q := Q) (A := A) (W := W) cfg) {} fun rt _ out => do
+  let rt ← Runtime.startWith (Db.Worker.system (Q := Q) (A := A) (W := W) cfg) {} fun rt out => do
     match out with
     | .store _ => handler Db.Worker.storePort store rt out
     | .run id lease deadline_ms work =>

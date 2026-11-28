@@ -63,6 +63,14 @@ theorem ofRow_some {x : Row} {j : Job W} (h : q.ofRow x = some j) : ∃ rest, x 
     exact ⟨_, rfl⟩
   · cases h
 
+theorem ofRow_key {x : Row} {j : Job W} (h : q.ofRow x = some j) : x.getD 1 .null = .text j.key := by
+  unfold ofRow at h
+  split at h
+  · simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.some.injEq] at h
+    obtain ⟨_, _, _, _, rfl⟩ := h
+    rfl
+  · cases h
+
 theorem keyOf_of_ofRow {x : Row} {j : Job W} (h : q.ofRow x = some j) :
     q.table.keyOf x = [.int j.id] := by
   obtain ⟨rest, rfl⟩ := ofRow_some h
@@ -80,6 +88,19 @@ theorem keeps_of_eq {db db' : Db} (h : q.jobs db' = q.jobs db) (hF : q.Functiona
   unfold Functional Has at *
   rw [h]
   exact ⟨hF, fun _ _ hh => hh⟩
+
+theorem rows_empty (schema : Schema) (name : String) : (Db.empty schema).rows name = [] := by
+  unfold Db.empty Db.rows
+  induction schema with
+  | nil => rfl
+  | cons t ts ih =>
+    simp only [List.map_cons, List.lookup_cons]
+    split <;> simp_all
+
+/-- An empty table has no id twice. -/
+theorem functional_empty (schema : Schema) : q.Functional (Db.empty schema) := by
+  intro j hj
+  simp [jobs, rows_empty] at hj
 
 /-! ## Keeping the table -/
 
@@ -610,6 +631,121 @@ theorem finish_stale (cfg : Config) {id lease now : Int64} {v : Verdict} {db : D
     split at h₂
     · next hc => exact absurd hc.2 (hstale j hj hid)
     · simp at h₂; exact ⟨h₂.2.symm, h₂.1⟩
+
+
+/-! ## One job per key -/
+
+/-- No two jobs of distinct ids hold one key. -/
+def KeyUnique (db : Db) : Prop := q.table.Unique byKey (db.rows q.name)
+
+/-- An operation on a table named as the jobs table is on the jobs table. -/
+def OnTable (o : Op) : Prop := o.table.name = q.name → o.table = q.table
+
+theorem keyUnique_jobs {db : Db} (h : q.KeyUnique db) :
+    ∀ j ∈ q.jobs db, ∀ j' ∈ q.jobs db, j.key = j'.key → j.id = j'.id := by
+  intro j hj j' hj' hk
+  obtain ⟨x, hx, hxj⟩ := mem_jobs.mp hj
+  obtain ⟨y, hy, hyj⟩ := mem_jobs.mp hj'
+  have hp : byKey.project x = byKey.project y := by
+    simp only [Index.project, byKey, List.map_cons, List.map_nil, ofRow_key hxj, ofRow_key hyj, hk]
+  have := h x hx y hy hp
+  rw [keyOf_of_ofRow hxj, keyOf_of_ofRow hyj] at this
+  simpa using this
+
+variable (q)
+
+theorem decode_all (r : Row) : (q.rows.decode r).All q.OnTable := by
+  unfold TableOf.decode; split
+  · exact .pure _
+  · exact .abort _
+
+theorem get_all (key : Row) : (q.rows.get key).All q.OnTable :=
+  Txn.All.bind (Txn.All.single fun _ => rfl) fun r => by
+    cases r with
+    | some x => exact Txn.All.bind (decode_all q x) fun _ => .pure _
+    | none => exact .pure _
+
+theorem scan_all (s : Scan) : (q.rows.scan s).All q.OnTable :=
+  Txn.All.bind (Txn.All.single fun _ => rfl) fun rows => Txn.All.mapM _ (decode_all q) rows
+
+theorem lookup_all (i : Index) (vals : Row) (limit : Nat) : (q.rows.lookup i vals limit).All q.OnTable :=
+  Txn.All.bind (Txn.All.single fun _ => rfl) fun rows => Txn.All.mapM _ (decode_all q) rows
+
+theorem insert_all (j : Job W) : (q.rows.insert j).All q.OnTable := Txn.All.single fun _ => rfl
+
+theorem update_all (j : Job W) : (q.rows.update j).All q.OnTable := Txn.All.single fun _ => rfl
+
+theorem nextId_all : q.nextId.All q.OnTable :=
+  Txn.All.bind (scan_all q _) fun js => by cases js <;> exact .pure _
+
+theorem enqueue_all (key : String) (work : W) (due every : Int64) :
+    (q.enqueue key work due every).All q.OnTable := by
+  refine Txn.All.bind (lookup_all q _ _ _) fun js => ?_
+  cases js with
+  | cons j _ => exact .pure _
+  | nil =>
+    refine Txn.All.bind (nextId_all q) fun id => Txn.All.bind (insert_all q _) fun b => ?_
+    cases b
+    · exact .abort _
+    · exact .pure _
+
+theorem cancel_all (key : String) : (q.cancel key).All q.OnTable := by
+  refine Txn.All.bind (lookup_all q _ _ _) fun js => ?_
+  cases js with
+  | nil => exact .pure _
+  | cons j _ =>
+    simp only
+    split
+    · exact update_all q _
+    · exact .pure _
+
+theorem claimAll_all (cfg : Config) (now : Int64) : ∀ js, (q.claimAll cfg now js).All q.OnTable
+  | [] => .pure _
+  | j :: js => Txn.All.bind (update_all q _) fun _ =>
+      Txn.All.bind (claimAll_all cfg now js) fun _ => .pure _
+
+theorem finish_all (cfg : Config) (id lease now : Int64) (v : Verdict) :
+    (q.finish cfg id lease now v).All q.OnTable := by
+  refine Txn.All.bind (get_all q _) fun r => ?_
+  cases r with
+  | none => exact .pure _
+  | some j =>
+    simp only
+    split
+    · exact update_all q _
+    · exact .pure _
+
+theorem handler_all (cfg : Config) (r : Req) : (q.handler cfg r).All q.OnTable := by
+  cases r with
+  | claim now limit => exact Txn.All.map _ (Txn.All.bind (scan_all q _) fun js => claimAll_all q cfg now js)
+  | finish id lease now v => exact Txn.All.map _ (finish_all q cfg id lease now v)
+
+variable {q}
+
+/-- **One job per key.** Beside an application whose operations on a table of the jobs table's
+name are on that table, every database the store may hold, after every run and once any call
+still outstanding or lost takes effect, has no two jobs of distinct ids under one key: at most
+one job, and so at most one current attempt (`finish_stale`), per key. -/
+theorem one_per_key [DecidableEq W] {Q A : Type} [DecidableEq Q] [DecidableEq A] {app : Handler Q A}
+    (happ : ∀ x, (app x).All q.OnTable) (cfg : Config) {σ : Signature} (dbcfg : Db.Config)
+    (port : Db.Port σ (Q ⊕ Req) (A ⊕ Ans W)) {start : Db} (hstart : q.KeyUnique start)
+    {events : List (Event σ)} {s : Db.State (Q ⊕ Req) (A ⊕ Ans W)}
+    (hrun : (Db.outside dbcfg (beside app (q.handler cfg)) start port).after events = some s) :
+    ∀ w ∈ s.worlds, ∀ w' ∈ w.expand (beside app (q.handler cfg)) w.fuel,
+      ∀ j ∈ q.jobs w'.db, ∀ j' ∈ q.jobs w'.db, j.key = j'.key → j.id = j'.id := by
+  have hP : Preserves (beside app (q.handler cfg)) q.KeyUnique := by
+    intro x db a db' hU hrun
+    have hall : (beside app (q.handler cfg) x).All q.OnTable := by
+      cases x with
+      | inl x => exact Txn.All.map _ (happ x)
+      | inr r => exact Txn.All.map _ (handler_all q cfg r)
+    exact Txn.All.unique q.table (i := byKey) (by simp [table]) rfl hall db a db' hU hrun
+  intro w hw w' hw'
+  exact keyUnique_jobs (Db.invariant dbcfg port hstart hP hrun w hw w' hw')
+
+theorem keyUnique_empty (schema : Schema) : q.KeyUnique (Db.empty schema) := by
+  intro x hx
+  simp [rows_empty] at hx
 
 end Queue
 

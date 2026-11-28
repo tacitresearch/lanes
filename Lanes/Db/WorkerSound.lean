@@ -45,23 +45,6 @@ open Jobs
 
 variable {Q A W R : Type} [DecidableEq Q] [DecidableEq A] [DecidableEq W] [DecidableEq R]
 
-/-- The inputs the clients of the worker's model send: ticks, and the application's
-transactions. -/
-def isClient : In Q A W R → Bool
-  | .tick _ | .submit _ => true
-  | _ => false
-
-def isStored : In Q A W R → Bool
-  | .ran .. => false
-  | _ => true
-
-/-- The worker's outsides: its clients (any clock, and the application), the store, with the
-application's transactions beside the worker's, and the service the attempts go to. -/
-def world {D S E : Type} (clients : Outside (sig Q A W R) D) (dbcfg : Db.Config)
-    (h : Handler (Q ⊕ Req) (A ⊕ Ans W)) (start : Db) (svc : Rpc.Server S (Idempotent.Keyed Int64 W) R E) :
-    Outside (sig Q A W R) ((D × Db.State (Q ⊕ Req) (A ⊕ Ans W)) × Rpc.State S) :=
-  (clients.both (Db.outside dbcfg h start storePort) isClient).both (Rpc.outside runPort svc) isStored
-
 /-! ## At most once -/
 
 theorem filter_key_le {S' : Type} {f : S' → Option Int64} :

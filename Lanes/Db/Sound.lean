@@ -624,4 +624,173 @@ theorem Op.update_rows (t : Table) (row : Row) (rows : List Row) :
 theorem Op.delete_rows (t : Table) (key : Row) (rows : List Row) :
     ((Op.delete t key).onRows rows).2 = rows.filter (!t.hasKey key ·) := rfl
 
+
+/-! ## Unique indexes
+
+The store refuses a write that would give two rows of distinct keys the values of a unique index
+(`Table.clashes`), so a unique index stays unique under every operation on its table
+(`Op.unique_apply`). -/
+
+/-- No two rows of distinct keys have the same values in the index `i`. -/
+def Table.Unique (t : Table) (i : Index) (rows : List Row) : Prop :=
+  ∀ x ∈ rows, ∀ y ∈ rows, i.project x = i.project y → t.keyOf x = t.keyOf y
+
+theorem Table.not_clashes {t : Table} {rows : List Row} {r : Row} (h : t.clashes rows r = false)
+    {i : Index} (hi : i ∈ t.indexes) (hu : i.unique = true) :
+    ∀ x ∈ rows, i.project x = i.project r → t.keyOf x = t.keyOf r := by
+  intro x hx hp
+  simp only [Table.clashes, List.any_eq_false, Bool.and_eq_true, not_and] at h
+  by_cases hk : t.keyOf x = t.keyOf r
+  · exact hk
+  · exfalso
+    apply h i hi hu
+    rw [List.any_eq_true]
+    exact ⟨x, hx, by simp [hk, hp]⟩
+
+theorem Table.Unique.sub {t : Table} {i : Index} {rows rows' : List Row} (h : t.Unique i rows)
+    (hsub : ∀ x ∈ rows', x ∈ rows) : t.Unique i rows' :=
+  fun x hx y hy hp => h x (hsub x hx) y (hsub y hy) hp
+
+theorem Table.Unique.add {t : Table} {i : Index} {rows rows' : List Row} {r : Row} (h : t.Unique i rows)
+    (hsub : ∀ x ∈ rows', x = r ∨ x ∈ rows)
+    (hr : ∀ x ∈ rows', x ≠ r → i.project x = i.project r → t.keyOf x = t.keyOf r) : t.Unique i rows' := by
+  intro x hx y hy hp
+  rcases hsub x hx with rfl | hx' <;> rcases hsub y hy with rfl | hy'
+  · rfl
+  · by_cases hyx : y = x
+    · rw [hyx]
+    · exact (hr y hy hyx hp.symm).symm
+  · by_cases hxy : x = y
+    · rw [hxy]
+    · exact hr x hx hxy hp
+  · exact h x hx' y hy' hp
+
+theorem Table.mem_insertSorted (t : Table) (r : Row) (rows : List Row) :
+    ∀ x, x ∈ t.insertSorted r rows ↔ x = r ∨ x ∈ rows := by
+  intro x
+  rw [(t.insertSorted_perm r rows).mem_iff, List.mem_cons]
+
+/-- **A unique index stays unique.** Every operation on a table keeps each of its unique indexes
+unique: a write that would break one does nothing. -/
+theorem Op.unique_rows (o : Op) {i : Index} (hi : i ∈ o.table.indexes) (hu : i.unique = true)
+    (rows : List Row) (h : o.table.Unique i rows) : o.table.Unique i (o.onRows rows).2 := by
+  cases o with
+  | get t k => exact h
+  | scan s => exact h
+  | insert t r =>
+    simp only [Op.onRows]
+    split
+    · exact h
+    · next hc =>
+      simp only [Bool.or_eq_true, not_or, Bool.not_eq_true] at hc
+      refine h.add (fun x hx => (t.mem_insertSorted r rows x).mp hx) fun x hx hxr hp => ?_
+      rcases (t.mem_insertSorted r rows x).mp hx with rfl | hx
+      · exact absurd rfl hxr
+      · exact Table.not_clashes hc.2 hi hu x hx hp
+  | update t r =>
+    simp only [Op.onRows]
+    split
+    · exact h
+    · next hc =>
+      simp only [Bool.or_eq_true, not_or, Bool.not_eq_true] at hc
+      have hmem : ∀ x ∈ rows.map (fun x => if t.hasKey (t.keyOf r) x then r else x), x = r ∨ x ∈ rows := by
+        intro x hx
+        obtain ⟨y, hy, rfl⟩ := List.mem_map.mp hx
+        split
+        · exact .inl rfl
+        · exact .inr hy
+      exact h.add hmem fun x hx _ hp => by
+        obtain ⟨y, hy, rfl⟩ := List.mem_map.mp hx
+        by_cases hk : t.hasKey (t.keyOf r) y = true
+        · simp [hk]
+        · simp only [hk, Bool.false_eq_true, ↓reduceIte] at hp ⊢
+          exact Table.not_clashes hc.2 hi hu y hy hp
+  | upsert t r =>
+    simp only [Op.onRows]
+    split
+    · exact h
+    · next hc =>
+      simp only [Bool.not_eq_true] at hc
+      have hmem : ∀ x ∈ t.insertSorted r (t.without (t.keyOf r) rows), x = r ∨ x ∈ rows := by
+        intro x hx
+        rcases (t.mem_insertSorted r _ x).mp hx with rfl | hx
+        · exact .inl rfl
+        · exact .inr (List.mem_filter.mp hx).1
+      exact h.add hmem fun x hx hxr hp => by
+        rcases (t.mem_insertSorted r _ x).mp hx with rfl | hx
+        · exact absurd rfl hxr
+        · exact Table.not_clashes hc hi hu x (List.mem_filter.mp hx).1 hp
+  | delete t k => exact h.sub fun x hx => (List.mem_filter.mp hx).1
+
+theorem Op.unique_apply (o : Op) {db : Db} {r : o.Ret} {db' : Db} (h : o.apply db = .ok (r, db'))
+    (t : Table) (i : Index) (hi : i ∈ t.indexes) (hu : i.unique = true)
+    (ht : o.table.name = t.name → o.table = t) (hU : t.Unique i (db.rows t.name)) :
+    t.Unique i (db'.rows t.name) := by
+  rw [Op.rows_apply o h]
+  split
+  · next hw =>
+    obtain ⟨-, hn⟩ := hw
+    have := ht hn.symm
+    subst this
+    rw [← hn]
+    exact o.unique_rows hi hu _ hU
+  · exact hU
+
+/-- Every operation a transaction may ask satisfies `P`. -/
+inductive Txn.All {α : Type} (P : Op → Prop) : Txn α → Prop where
+  | pure (a : α) : Txn.All P (.pure a)
+  | abort (why : String) : Txn.All P (.abort why)
+  | op (o : Op) (k : o.Ret → Txn α) : P o → (∀ r, Txn.All P (k r)) → Txn.All P (.op o k)
+
+namespace Txn.All
+
+variable {P : Op → Prop}
+
+theorem bind {α β : Type} {t : Txn α} {f : α → Txn β} (ht : t.All P) (hf : ∀ a, (f a).All P) :
+    (t.bind f).All P := by
+  induction ht with
+  | pure a => exact hf a
+  | abort why => exact .abort why
+  | op o k hp _ ih => exact .op o _ hp ih
+
+theorem map {α β : Type} {t : Txn α} (f : α → β) (ht : t.All P) : (f <$> t).All P :=
+  bind ht fun a => .pure (f a)
+
+theorem of_reads {α : Type} {t : Txn α} (ht : t.Reads) (hP : ∀ o, o.writes = false → P o) : t.All P := by
+  induction ht with
+  | pure a => exact .pure a
+  | abort why => exact .abort why
+  | op o k hw _ ih => exact .op o k (hP o hw) ih
+
+theorem single {o : Op} (hp : P o) : (Txn.op o Txn.pure).All P := .op o _ hp fun r => .pure r
+
+theorem mapM {α β : Type} (f : α → Txn β) (hf : ∀ a, (f a).All P) : ∀ xs : List α, (xs.mapM f).All P := by
+  intro xs
+  induction xs with
+  | nil => exact .pure []
+  | cons x xs ih =>
+    simp only [List.mapM_cons]
+    exact bind (hf x) fun b => bind ih fun bs => .pure _
+
+/-- What every operation keeps, a transaction of them keeps. -/
+theorem keeps {α : Type} {t : Txn α} (ht : t.All P) {I : Db → Prop}
+    (hI : ∀ o, P o → ∀ db r db', I db → o.apply db = .ok (r, db') → I db') :
+    ∀ db a db', I db → t.run db = .ok (a, db') → I db' := by
+  induction ht with
+  | pure a => intro db a' db' h hrun; simp at hrun; exact hrun.2 ▸ h
+  | abort why => intro _ _ _ _ hrun; simp at hrun
+  | op o k hp _ ih =>
+    intro db a db' h hrun
+    obtain ⟨r, db₁, ha, hk⟩ := run_op_ok_inv hrun
+    exact ih r db₁ a db' (hI o hp db r db₁ h ha) hk
+
+end Txn.All
+
+/-- A unique index of a table stays unique under every transaction whose operations on a table
+of its name are on that table. -/
+theorem Txn.All.unique {α : Type} {t : Txn α} (tbl : Table) {i : Index} (hi : i ∈ tbl.indexes)
+    (hu : i.unique = true) (ht : t.All fun o => o.table.name = tbl.name → o.table = tbl) :
+    ∀ db a db', tbl.Unique i (db.rows tbl.name) → t.run db = .ok (a, db') → tbl.Unique i (db'.rows tbl.name) :=
+  ht.keeps fun o ho _ _ _ hU ha => Op.unique_apply o ha tbl i hi hu ho hU
+
 end Lanes.Db
