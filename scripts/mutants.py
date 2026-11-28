@@ -46,8 +46,8 @@ MUTANTS = [
     # step runs should leave alone (booting, the ledger, release, stop, the timers' thread, the
     # record's lock); a mutant whose text moves is reported STALE, and is refreshed here.
     ("runtime: what booting puts out is not handed over", "Lanes/Runtime/IO/Shell.lean",
-     "    rt.arm i c.armed\n    handOver onOutput c.outputs\n    rt.ledgerDo fun l => ((), { l with timers",
-     "    rt.arm i c.armed\n    rt.ledgerDo fun l => ((), { l with timers"),
+     "    handOver rt.config.log onOutput c.outputs\n    rt.ledgerDo fun l => ((), { l with timers",
+     "    rt.ledgerDo fun l => ((), { l with timers"),
     ("runtime: tryInput takes an input past the inbox's capacity", "Lanes/Runtime/IO/Shell.lean",
      "(Sched.Ledger.offer rt.capacity)", "(Sched.Ledger.offer (rt.capacity + 1))"),
     ("runtime: an inbox of no capacity takes nothing", "Lanes/Runtime/IO/Shell.lean",
@@ -110,7 +110,7 @@ MUTANTS = [
     ("http: a connection's deadline is never acted on", "Lanes/Web/IO/Server.lean",
      "        if t ≤ now then c.tell .alarm", "        if t ≤ now && false then c.tell .alarm"),
     ("http: every answer goes to the first request of its connection", "Lanes/Web/IO/Server.lean",
-     "tell ctx line false (.conn (.answered seq r))", "tell ctx line false (.conn (.answered 0 r))"),
+     "react ctx line loop (.answered seq (match", "react ctx line loop (.answered 0 (match"),
     ("http: no bound on connections", "Lanes/Web/IO/Server.lean",
      "c.count.admit config.connections_max", "c.count.admit (config.connections_max + 1)"),
     ("http: a connection is closed at once, with what the client still sends unread",
