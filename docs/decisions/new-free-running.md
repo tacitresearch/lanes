@@ -133,28 +133,34 @@ inbox could be taken at once for one journal write (D32). `Peek` moved to
 `bench/Mixed.lean` (`bench/mixed.sh`), brought from the paused branch `claude/waves-default`: 64
 clients each keep one request outstanding to one of 64 counters, closed loop, each step costing
 what the workload draws. `serial` is the runtime on one worker, `free` on four; the two
-prototypes of the earlier measurement are kept as bounds. One session of five runs of 32,000
-requests on the shared four-core container, other agents' work giving a load of 8 to 11 (more
-than the four cores); medians, with the spread (highest − lowest) / median:
+prototypes of the earlier measurement are kept as bounds (`bench/README.md`). Five runs of 32,000
+requests on the shared four-core container, all four CPUs, a load of about 2.4 from other agents'
+work; medians, with the spread (highest − lowest) / median:
 
 | Steps | Way | p50 µs | p99 µs | Answers a second |
 | --- | --- | ---: | ---: | ---: |
-| All 2 µs | serial | 305 (2%) | 4,435 (181%) | 143,105 (83%) |
-| | free | 21 (57%) | 10,982 (49%) | 124,204 (67%) |
-| 1 in 50 at 500 µs, else 2 µs | serial | 851 (3%) | 4,018 (149%) | 56,933 (10%) |
-| | free | 124 (69%) | 11,415 (44%) | 59,611 (37%) |
-| 1 in 5 at 50 µs, else 1 µs | serial | 910 (5%) | 1,607 (75%) | 75,716 (22%) |
-| | free | 172 (50%) | 8,096 (86%) | 88,875 (89%) |
-| All 50 µs | serial | 4,140 (2%) | 6,119 (9%) | 18,234 (4%) |
-| | free | 450 (28%) | 3,995 (54%) | 55,355 (31%) |
+| All 2 µs | serial | 291 (7%) | 687 (65%) | 247,019 (20%) |
+| | free | 68 (23%) | 628 (21%) | 325,901 (20%) |
+| 1 in 50 at 500 µs, else 2 µs | serial | 827 (3%) | 2,912 (18%) | 66,979 (9%) |
+| | free | 225 (8%) | 1,268 (9%) | 191,696 (12%) |
+| 1 in 5 at 50 µs, else 1 µs | serial | 896 (4%) | 1,594 (10%) | 76,493 (5%) |
+| | free | 140 (49%) | 4,198 (317%) | 153,603 (79%) |
+| All 50 µs | serial | 4,083 (1%) | 5,408 (5%) | 18,671 (1%) |
+| | free | 353 (13%) | 3,164 (22%) | 66,701 (11%) |
 
-Free-running is five to fifteen times lower at p50 on every workload, and three times the
-throughput where steps cost 50 µs. At p99 it is worse than one worker on cheap steps on this
-machine: with more runnable threads than cores, a worker descheduled while it holds an actor, or
-inside one of the short sections on the shared ledger, holds up whoever needs it for a time
-slice. A spread of 50 to 180% at p99 says the machine, not the runtime, sets these tails. The
-warm runner, idle and with more cores, should confirm before any number here is quoted as the
-runtime's.
+Free-running is four to twelve times lower at p50, with 1.3 to 3.6 times the throughput, and at
+p99 it is lower on three workloads and higher on one, whose spread (317%) says the run, not the
+runtime, set it. These match the earlier prototype's finding (3 to 5 times lower at p50, about
+twice the throughput, p99 similar).
+
+Two earlier sessions, before the ledger took a turn's counts at once (one update a turn instead
+of one a step) and with the machine loaded beyond its cores (load 3 to 11), gave the same p50
+gains but p99 two to fifteen times worse than one worker: with more runnable threads than cores,
+a worker descheduled while it holds an actor, or inside one of the short sections on a shared
+reference, holds up whoever needs it for a time slice. Lean's references spin while another
+thread holds them. The warm runner, idle and with more cores, should confirm these numbers
+before any is quoted as the runtime's, and say whether the tails under load need a ledger per
+worker.
 
 ## What remains
 
@@ -166,5 +172,6 @@ runtime's.
   `default` or aborts the process, and a step has no fuel. Handling one needs either fuel in the
   step's type (part of the step context's change) or a watchdog that restarts the process. It
   waits for the step context.
-- **Contention.** Every step updates the one ledger, and every push may look up a shared table
-  of slots. A ledger per worker, summed on demand, is the next step if the warm runner shows it.
+- **Contention.** Every turn updates the one ledger (and every step that takes an input), and
+  every push may look up a shared table of slots. A ledger per worker, summed on demand, is the
+  next step if the warm runner shows tails under load.

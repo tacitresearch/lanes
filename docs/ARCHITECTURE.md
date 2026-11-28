@@ -199,7 +199,7 @@ Also:
   write-back walks it. The steps of one turn update it in place. A write to a state of a million
   numbers costs about two copies when each message is a turn of its own (`Tests/Scale.lean`).
 - A peek of several actors is not a consistent cut (above).
-- Every step updates one shared ledger (inputs waiting, items in mailboxes) and every push may
+- Every turn updates one shared ledger (inputs waiting, items in mailboxes) and every push may
   look up a shared table of slots; on many cores these are points of contention.
 - That a queued actor is eventually stepped and a due timer pushed rests on the workers and the
   agenda's thread running (`TRUSTED.md`, "Progress"). No bound is proved.
