@@ -1,4 +1,6 @@
-# D?. A small proof surface, and each property written once (a proposal)
+# D98. A small proof surface, and each property written once (a proposal)
+
+Status: Accepted
 
 *A proposal for tacitresearch/lanes#100, part C of the design direction (#93). It moves no code.
 The owner agreed to the headline on 2026-11-27; the parts below are for the owner to decide.
