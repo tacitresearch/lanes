@@ -15,7 +15,7 @@ path = "../.."
 name = "Upload"
 globs = ["Upload.+"]
 
-# The web application: `upload [port] [journal]`.
+# The web application: `upload [port]`.
 [[lean_exe]]
 name = "upload"
 root = "Main"

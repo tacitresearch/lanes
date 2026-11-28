@@ -16,10 +16,9 @@ is the operators', what each answers, what an id may be and what a line holds ar
 pure and proved.
 
 It never enters a system and never changes what enters one: an operator's request is answered
-here, before the request is prepared or has an id; any other request goes on as it came; the
-journal's storage is given the entries and images it was given, and counts them after they are
-written (`docs/decisions/D69-observability.md`). With nothing configured, `front` and `journal`
-return what they are given.
+here, before the request is prepared or has an id; any other request goes on as it came
+(`docs/decisions/D69-observability.md`). With nothing configured, `front` returns what it is
+given.
 -/
 
 public section
@@ -49,18 +48,6 @@ def new (config : OpsConfig) : BaseIO Ops :=
 /-- From now on readiness answers `503`, so that a load balancer stops sending requests. -/
 def drain (ops : Ops) : BaseIO Unit :=
   ops.draining.set true
-
-/-- The journal's storage, counting appends and saves when the server counts. -/
-def journal {σ : Signature} {sys : System σ} (ops : Ops) (log : Journal.Log sys) :
-    Journal.Log sys :=
-  if !ops.config.counting then log
-  else { log with
-    append := fun entries => do
-      log.append entries
-      ops.stats.modify (·.appended entries.length)
-    save := log.save.map fun save image => do
-      save image
-      ops.stats.modify (·.saved) }
 
 /-- A connection was closed at `connections_max`. -/
 def refused (ops : Ops) : BaseIO Unit := do

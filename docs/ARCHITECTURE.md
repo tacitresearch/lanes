@@ -31,10 +31,7 @@ proved function tells it to.
 | Proof tools for systems | `Lanes/Proof/{Lift,Ghost,Monotone,Equiv,Deed}.lean` | `System.invariant_of_actor`, `Inductive.of_monotone`, `System.Invariant.of_ghost` |
 | The kernel | `Lanes/Runtime/{Kernel,KernelSound,KernelTimers,Wave}.lean` | `Kernel.exec_reachable`, `Kernel.exec_outputs`, `Kernel.exec_wellFormed`, `Kernel.runWaves_eq` |
 | The shell | `Lanes/Runtime/IO/Shell.lean`, `Lanes/Runtime/{Batch,PeekSound,Mailbox,MailboxSound,Pace}.lean` | `Batch.run_kernel`, `Batch.run_sound`, `Batch.run_spread`, `Batch.run_erase_peeks`, `Batch.chain_peek_after`, `Mailbox.batch_since_take`; the shell itself is trusted |
-| Journal, snapshots, disk | `Lanes/Durable/{Journal,Snapshot,Disk,Frame,Reading}.lean`, `Lanes/Runtime/Log.lean`, `Lanes/Durable/IO/Journal.lean` | `Journal.open?_cut`, `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Journal.Disk.Holds.save_crash`, `Journal.Disk.Torn.load_readings` |
-| Migrations | `Lanes/Durable/{Migration,Upgrade}.lean` | `Migration.inv_exec`, `Journal.Upgrade.begin_crash`, `Journal.Upgrade.holds`, `Journal.Upgrade.inv_load` |
 | Joins | `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`, `Lanes/Semantics/FairJoin.lean` | `System.Reachable.left`, `SysState.run_left`, `System.Run.Fair.left`, `System.Run.Fair.right` |
-| Shards and the transport | `Lanes/Runtime/{Shard,ShardSound,ShardsSound}.lean`, `Lanes/Net/{Courier,CourierSound,Handshake,HandshakeSound}.lean`, `Lanes/Net/IO/{Peers,Node}.lean` | `System.ShardsReachable.unsharded`, `Peers.Courier.written_sublist_sent`, `Peers.Handshake.Reachable.ready_proved` |
 | The gate and the HTTP server | `Lanes/Web/Http/{Gate,Front,FrontSound,Admit,AdmitSound,View,Waiting,Conn,ConnSound,Stream,Sse,SseSound,Loopback}.lean`, `Lanes/Semantics/Front.lean`, `Lanes/Web/IO/Server.lean` | `Http.served_answered_le_arrived`, `Http.served_pending_answered`, `Http.Front.World.refines`, `Http.Front.pending_answered`, `Http.Waiting.exec_answered`, `Http.Conn.run_writes`, `Http.Conn.read_streamed`, `Http.Sse.parse_written` |
 | Metrics, health and the access log | `Lanes/Lib/Metrics.lean`, `Lanes/Web/Http/{Ops,OpsSound}.lean`, `Lanes/Web/IO/Ops.lean` | `Metrics.Histogram.observeAll_eq`, `Metrics.readLabelValue_escapeLabel`, `Http.Ops.route?_default`, `Http.Ops.route?_metrics`, `Http.Ops.answer_ready`, `Http.Ops.Access.parse_line`; that none of it reaches a system is trusted and tested |
 | Other adapters | `Lanes/Outside/Basic.lean`, `Lanes/Outside/{Clock,IO/Clock}.lean`, `Lanes/Web/IO/Client.lean`, `Lanes/Web/Http/{Grammar,Wire,WireSound}.lean` | `Response.read_wire`, `Request.fields_framing`; conformance tests |
@@ -47,9 +44,9 @@ proved function tells it to.
 | Web | `Lanes/Web/Http/{Basic,Route,RouteSound,Cookie,CookieSound}.lean`, `Lanes/Web/Html/`, `Lanes/Web/Auth/` | `Html.lex_render`, `Html.safeUrl_scheme`, `Http.dispatch_link`, `Http.parseForm_encodeForm`, `Http.readSetCookie_header`, `Auth.verify_eq_some`, `Auth.checkForm_other` |
 | The checker | `Lanes/Check/`, `Lanes/Semantics/{Monitor,MonitorSound}.lean` | `Check.search_sound`, `Check.system_sound_of_respects`, `Check.refines_traces` |
 | The proof layer | `Lanes/Semantics/` | refinement, specs, fairness, leads-to |
-| Data and the standard library | `Lanes/Data/`, `Lanes/Lib/` | codec laws, the body of a value read back as written and written one way (`Body.read_eq_ok_iff`), old data read by name, with defaults and former names (`Schema.Plan.of_insertIdx`, `Schema.Plan.of_rename`), `Quorum.majority_inter`, `Bytes.same_iff`, `Json.parse_iff`, `Url.parse_print` |
+| Data and the standard library | `Lanes/Data/`, `Lanes/Lib/` | codec laws, `Bytes.same_iff`, `Json.parse_iff`, `Url.parse_print` |
 | Sign-in with OAuth 2.0 and OpenID Connect | `Lanes/Web/Auth/{Jose,IdToken,OAuth}.lean`, `Lanes/Web/IO/SignIn.lean` | `OAuth.check_ok`, `OAuth.Used.accepted_once`, `OAuth.Used.length_claim`, `OAuth.IdToken.verify_accepted`, `Jose.verify_ok`, `OAuth.Keys.no_fetch_within`; the edge is trusted, tested end to end against a provider run in the test |
-| Bound C | `native/lanes.c`, `Lanes/Lib/Crypto/Native.lean`; `native/verify.c`, `Lanes/Lib/Crypto/Verify.lean`; `native/sign.c`, `Lanes/Lib/Crypto/Sign.lean` | trusted; tested against the Lean references and published vectors |
+| Bound C | `native/lanes.c`, `Lanes/Lib/Crypto/Native.lean`, `Lanes/Lib/File.lean`; `native/verify.c`, `Lanes/Lib/Crypto/Verify.lean`; `native/sign.c`, `Lanes/Lib/Crypto/Sign.lean` | trusted; tested against the Lean references and published vectors |
 | TLS client | `native/tls.c`, `Lanes/Web/IO/Tls.lean` | trusted; tested against `openssl s_server` |
 
 ## Actors and the semantics
@@ -104,7 +101,10 @@ Also:
 
 ## The kernel and the shell
 
-The runtime of one shard is a pure kernel inside a thin shell (D18, D23, D40).
+The runtime of one shard is a pure kernel inside a thin shell (D18, D23, D40). Its state lives as
+long as the process: every start is a boot, with every actor in its initial state, as in Go,
+Tokio or Erlang. State that must outlive the process lives in a service outside, reached through
+a modelled adapter (`Lanes/Outside/`, PostgreSQL's store model).
 
 The kernel (`Lanes/Runtime/Kernel.lean`) is every runtime decision as pure functions over a hash
 map of actors, a queue of messages and an agenda of timers: accept an input, deliver the oldest
@@ -123,16 +123,17 @@ state's size (`docs/decisions/D84-the-kernel-takes-the-state-out-before-the-step
 The shell (`Lanes/Runtime/IO/Shell.lean`) is one thread per shard. Senders put commands in a
 bounded inbox (`Lanes/Runtime/Mailbox.lean`, pure: who is refused, who waits, who is woken). The
 shell takes everything that has arrived at once and calls `Batch.run` (`Lanes/Runtime/Batch.lean`),
-a pure function that returns the kernel after the batch and a list of acts: append these journal
-entries, hand over these outputs, save this image, answer this peek. The shell performs the acts
-in order and decides nothing. Proved: the journal describes the kernel (`Batch.run_kernel`); an
-output is handed over only after the entries that produce it are appended, and a save falls
-only where every output is handed over (`Batch.run_sound`); a peek, which reads the states of a
+a pure function that returns the kernel after the batch and a list of acts: record these events,
+hand over these outputs, answer this peek, and the requests the kernel was asked (`work`), for
+which the shell does nothing. The shell performs the acts in order and decides nothing. Proved:
+the kernel after a batch is the one its requests lead to (`Batch.run_kernel`), so by
+`Kernel.exec_reachable` a run of the semantics; every output they produced is handed over, in
+order (`Batch.run_handed`, `Batch.run_sound`); a peek, which reads the states of a
 list of actors and of every actor started that a predicate holds of (an actor not started has
 its initial state: `Batch.Peek.init_of_not_others`), is answered at the end of its batch after
-every other act, with the states of the kernel the batch's journal describes
+every other act, with the states of the kernel the batch's requests lead to
 (`Batch.run_peeks`), and a batch with its peeks taken
-out is the same batch (`Batch.run_erase_peeks`), so reads leave no trace in the journal; over
+out is the same batch (`Batch.run_erase_peeks`), so reads change nothing else; over
 the whole history, a peek asked after an output was handed over sees a world the semantics
 reaches by a run that put that output out first (`Batch.chain_peek_after`,
 `Lanes/Runtime/PeekSound.lean`); a take returns exactly what went in
@@ -141,7 +142,7 @@ since the last, in order, and the inbox never holds more than its capacity
 acts as given (`TRUSTED.md`, the first row).
 
 Unless `Runtime.Config.parallel` is `off` or there is one worker, the inputs that arrive together
-are one turn (`Journal.turnAll`), a group of at most `min batch snapshotEvery`, and its work is
+are one turn (`Batch.turnAll`), a group of at most `batch`, and its work is
 done a wave at a time (`Lanes/Runtime/Wave.lean`): the steps of the actors with mail in the wave
 are worked out on Lean's task pool, each actor's in the order of its messages, and the kernel then
 does the wave as `runBatch` does, taking each step from that plan. A plan keeps each actor's last
@@ -150,8 +151,8 @@ step, or works out the state the steps taken leave where they stop early (`Kerne
 Handling one actor's message neither reads nor writes another actor's cell
 (`Kernel.handle_setState`), and writes to cells already in the table commute
 (`DHashMap.insert_comm_of_contains`), so the result is `runBatch`'s, value for value, however the
-wave is spread over threads (`Kernel.runWaves_eq`), and the journal and everything proved of the
-kernel are unchanged (`docs/decisions/D64-actors-run-in-parallel.md`,
+wave is spread over threads (`Kernel.runWaves_eq`), and everything proved of the
+kernel is unchanged (`docs/decisions/D64-actors-run-in-parallel.md`,
 `docs/decisions/D88-waves-in-place.md`).
 
 Steps cheaper than a few microseconds cost more to hand to another thread than they save, and
@@ -169,8 +170,8 @@ Where: `Lanes/Runtime/`, `Lanes/Proof/Lossy.lean`.
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
 | The kernel stays in a state the semantics reaches, and its events are a run reaching it, for any sequence of operations, inputs and clock readings | `Kernel.exec_reachable`, `Kernel.exec_outputs`, `Lanes/Runtime/KernelSound.lean`; gate `Tests/Axioms/Runtime.lean` | The shell hands inputs and outputs on unchanged (TRUSTED, "Assumptions the runtime makes") | proved |
-| The journal describes the kernel; an output is handed over only after its entries are appended | `Batch.run_kernel`, `Batch.run_sound`, `Lanes/Runtime/Batch.lean`; gate `Tests/Axioms/Runtime.lean` | The shell performs the acts in order (`Lanes/Runtime/IO/Shell.lean`) | proved; the shell trusted |
-| One shard takes about 1.8 million inputs a second from one sender; a message costs the same at 1,000 and 100,000 actors | The scale benchmark in `lake exe lanesCheck` (`Tests/Scale.lean`) | A four-core machine; no journal | tested |
+| A batch is a run of the kernel: the kernel after it is the one its requests lead to, and every output they produced is handed over, in order | `Batch.run_kernel`, `Batch.run_handed`, `Batch.run_sound`, `Lanes/Runtime/Batch.lean`; gate `Tests/Axioms/Runtime.lean` | The shell performs the acts in order (`Lanes/Runtime/IO/Shell.lean`) | proved; the shell trusted |
+| One shard takes about 1.8 million inputs a second from one sender; a message costs the same at 1,000 and 100,000 actors | The scale benchmark in `lake exe lanesCheck` (`Tests/Scale.lean`) | A four-core machine | tested |
 
 Also:
 
@@ -182,181 +183,19 @@ Also:
   whatever is chosen (`Kernel.runWaves_eq`, `Batch.run_spread`).
 - No sleeper or waiting sender of the inbox is forgotten (`Mailbox.woken_after_rest`,
   `Mailbox.wake_since_take`): proved for every capacity and every sequence of operations.
-- Waves are as wide as an application spreads its work over actors. `Lanes/Runtime/WavePlan.lean`
-  splits a batch of journal entries, each touching several actors, into waves whose entries share
-  no actor, each actor's entries in the journal's order (`WavePlan.levels_lt`), and
-  `examples/videos` measures its journal with it (`lake exe videosWaves`,
-  `docs/decisions/D107-waves-premise.md`).
+- Waves are as wide as an application spreads its work over actors
+  (`docs/decisions/D107-waves-premise.md`).
 
 ### Limits
 
-- A timer does not advance while the process is down, and after a restart it also loses the time that had passed since the last journal entry before the process died.
+- Actor state, timers included, is lost with the process: a restart is a boot. The semantics has no restart event yet, so no theorem relates a run before a restart to one after it.
 - Actors step in parallel only with `Runtime.Config.workers` above one, and then only within a wave, their steps committed in queue order by one thread; the gate of an HTTP server is one actor. A step handed to another thread costs a microsecond or two more, in Lean's reference counts of objects threads share, so cheap steps run slower that way (`docs/decisions/D64-actors-run-in-parallel.md`).
 - Lean never updates in place an object another thread has seen, so each actor the pool steps has its state copied once a wave, in its task, and once more by its next step on the shard's thread. With `parallel := .on`, a write to one of two busy actors whose states hold a million numbers costs about a tenth of a millisecond, where it costs a microsecond on the shard's thread. `.auto` keeps such steps on the shard's thread (`docs/decisions/D88-waves-in-place.md`).
-- One shard takes about 1.8 million inputs a second from one sender and about a million from four that contend for its inbox, on a four-core machine; its kernel alone does between two and three million turns a second. With a journal every batch is one write, so the disk is the limit there. A shard with nothing to do sleeps, and waking it costs tens of microseconds.
+- One shard takes about 1.8 million inputs a second from one sender and about a million from four that contend for its inbox, on a four-core machine; its kernel alone does between two and three million turns a second. A shard with nothing to do sleeps, and waking it costs tens of microseconds.
 - That a pending timer fires in time is proved as far as the kernel goes: its agenda holds exactly the pending timers, it never tells the shell to sleep past one, and it fires one that is due on its next step or, when a message is waiting too, the step after (`Kernel.exec_wellFormed`, `Kernel.WellFormed.wait_of_due`, `step_of_due`, `wait_for_ms`). That the clock advances and the shell's sleep ends is assumed (see `TRUSTED.md`).
-- The events a releasing kernel reports are a run of the semantics but for the starts that bring released actors back, so a replay through `SysState.run` must skip a start of an actor that is up. Declaring `fresh` changes what an old journal replays to: its name must change.
+- The events a releasing kernel reports are a run of the semantics but for the starts that bring released actors back, so a replay through `SysState.run` must skip a start of an actor that is up.
 
-## Journal, snapshots and the disk model
-
-Durability is a journal of what the kernel was asked, not of actor states (D24): replaying it
-through the same pure kernel gives the same state, so a restart is not a fault any proof has to
-account for. Pure, in `Lanes/Durable/Journal.lean` and `Lanes/Durable/Frame.lean`: a file reads
-back as the entries written (`Journal.open?_file`); a file cut at any byte opens and gives exactly
-the entries wholly written before the cut, and anything else wrong with it is refused, not
-repaired (`Journal.open?_cut`). In `Lanes/Runtime/Log.lean`, what the entries ask of the kernel,
-which the runtime needs without a journal: recovery rebuilds exactly the kernel those entries
-lead to (`Journal.recover_kernel`), and hands over again exactly what was produced after the last mark
-(`Journal.recover_handed`).
-
-The files are in format 2 (`Lanes/Durable/Format.lean`, D97): each begins with a header, a
-manifest (the format, the Lanes and Lean that wrote it, the application's label, the runtime and
-its policy, the digest of the schema) and the schema of what follows, then holds one body per entry
-in a frame whose checksum is the first 128 bits of SHA-256. A reader matches the file's schema with
-its own by name (`Schema.Plan.of`), so a journal written with an older schema of the inputs opens,
-and a start writes it again with its own (`Disk.mend`). A prelude written for a system and a schema
-is accepted by a reader of the same with no plan (`Journal.Prelude.check_frames`); a file of
-format 1 is refused as such (`Refusal.format`), and no cut of a format-2 file looks like one
-(`Journal.Kind.formerly_cut`).
-
-A file holds its schema, so it reads with no application code (`Lanes/Durable/Inspect.lean`).
-`Journal.inspect` reads a journal or a snapshot as opening would and says all it finds instead of
-stopping at the first refusal: every frame's length and checksum, the prelude
-(`Journal.Prelude.read`, which `Prelude.check` is built on), each record read with the file's
-schema, and whether the tail is torn, which a journal opens with, or damaged; given a reader's
-schema, it matches the two with `Schema.Plan.of` and reads each record through the plan, as
-opening does. `lanes journal dump` and `lanes journal verify` print it (`LanesCli/Journal.lean`).
-What the writer writes passes (`Journal.inspect_file`, `Journal.inspect_saved`), and so does a
-journal cut at any byte (`Journal.inspect_cut`). The reader's schema comes from the build, as a
-type or a codec only; `verify` does not run a type's own check of a value (a `Fin`'s bound, a
-subtype's property), which opening does.
-
-The schemas of an application's files are pinned, and files it wrote are kept, so that a change
-to its types is checked against what it wrote before (D97, 3.8 and 3.9). A pinned schema is a
-`.schema` file (`Lanes/Durable/Pin.lean`): a header that names the kind of file, the term the
-build gives the schema from, the modules it needs, the declared migrations and the corpus; then
-the schema as text, for review, and its frame in Base64, for the check. Lint `schema`
-(`LanesCli/Schemas.lean`) gets the build's schema from Lean and compares it with the pinned one
-through `Schema.Plan.of`, the matching a file is opened with (`Schema.compare`,
-`Lanes/Data/Diff.lean`): a change passes exactly when the plan is made
-(`Schema.compare_reads_iff`), and is refused with the plan's error, which names the field
-(`Schema.compare_refused_iff`). A change that passes is listed (fields added with a default or
-dropped, renames read through a former name, constructors added or removed, reorders) and
-pinned by `--fix`; one refused fails unless the pinned file declares a migration. Every file of
-the pin's kind in its corpus is then read with the build's schema as opening reads it
-(`Journal.inspect`), so a constructor removed while a file still holds it fails, naming the
-file and the constructor. A file of a header alone is pinned by `--fix`. A pinned file inside
-another Lake package is that package's: `examples/videos` pins its own in
-`examples/videos/schemas/`, checked by `lake exe lanes lint` run there, as CI does.
-
-The corpus is `Tests/Journals/<application>/<release>/`: journals and snapshots that
-applications wrote at a release, each with the dump `lanes journal dump` gave of it when it was
-added (`<file>.dump`). `lake test` checks that each passes `verify` and dumps as it did, and
-opens the bank's with the bank of the build (`Tests/Corpus.lean`, the bank of
-`Tests/Fixtures/Bank.lean`, whose schemas are pinned in `Tests/Schemas/`). The videos site's
-come from its end-to-end run (`lake exe videosTest corpus <dir>`). The corpus is frozen at
-0.1.0: from that release on its files are only added, one directory per release
-(`docs/RELEASING.md`), and never rewritten; a dump that differs is a change in what Lanes reads
-of an old file, fixed in the reader.
-
-Each output carries an id: its journal's, made at random when the journal is begun, and its
-origin, the place in the history of the entry that produced it and its place among that entry's
-outputs (`docs/decisions/D105-output-ids.md`). A batch hands an output over with the origin its
-history gives it (`Batch.run_ids`), however its waves are spread (`Batch.run_ids_spread`), and a
-restart hands it over again with the same one (`Journal.recoverIds_suffix`,
-`Journal.recoverIds_handed`, from a snapshot `Journal.resumeIds_eq_recoverIds`), so a driver
-passes the id on as the idempotency key: in `Idempotency-Key` (`Http.Client.handlerKeyed`), as a
-conditional write to S3 (`S3.Op.put` with `ifAbsent`), or as SES's adapter's own record of what
-it sent (`Aws.Ses.handlerOnce`). A copy of the files restored elsewhere, production into
-staging, starts with `Journal.Store.restored`: it hands over nothing it owes and takes a new
-journal id.
-
-A snapshot is the kernel's image (`Lanes/Durable/Snapshot.lean`), saved with codecs the
-application gives for its actors; a shard that saves goes on with the restored kernel, so a
-snapshot is a restart without the crash (D29). Starting from a snapshot gives what replaying the
-whole history gives (`Journal.resume_eq_recover`).
-
-What is written, in what order, and what a start makes of the files are pure functions over a
-model of the two files (`Lanes/Durable/Disk.lean`: `Journal.Disk.start`, `Disk.mend`,
-`appendWrites`, `saveWrites`), in which an append may stop at any byte and a rename is atomic. If
-the process dies anywhere in an append or a save, the files load as the kernel the shard had
-(`Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.save_crash`), and a start mends what a
-death left (`Journal.Disk.Torn.mend`), so this holds over any number of starts, saves and deaths.
-`Lanes/Durable/IO/Journal.lean` performs the writes, each synced with `fsync` before the next, so a loss
-of power leaves what a death would; that the file system is the model is trusted. A read at a start
-may fail: only "no such file" is a file not there (`Journal.Reading`), a failed read refuses the
-start (`Disk.ofReadings`), and one whose reads do not fail loads what `Disk.Torn.load` says
-(`Journal.Disk.Torn.load_readings`), so a read error never loses committed entries.
-
-The files carry a label, the application's name for the system and the version of its types
-(`Journal.label`; version 0 is the name alone, as every journal was named before versions). A
-deploy that changes a type keeps the old version's system and reads its files through an
-upgrade (`docs/decisions/D66-a-migration-carries-the-kernel-across.md`,
-`Lanes/Durable/Upgrade.lean`): the start replays them with the old codecs and step
-functions, migrates the kernel (`Migration`, `Lanes/Durable/Migration.lean`), hands over the old
-outputs not yet handed over, saves the result under the new label and begins the journal at
-that mark, whose index is the old history's length. Dying anywhere in those writes, the next
-start gives the same migrated kernel (`Journal.Upgrade.begin_crash`). `Disk.Holds` and
-`Disk.Torn` take the kernel a history starts from, boot or a migrated kernel, and the files after
-a migration are those of a running shard that started there (`Journal.Upgrade.holds`), so the
-crash theorems go on. What the proofs of the new version still say is what is inductive: a
-`Migration` carries an invariant of each new actor that its steps and restarts keep, and the
-proof that every state an old actor reaches migrates into it; it then holds of every actor in
-every state the new shard reaches (`Migration.inv_exec`, `Kernel.exec_inductive`) and at every
-later start (`Journal.Upgrade.inv_load`). An invariant proved only from boot, and refinement,
-do not carry over.
-
-A journal may also be shipped to an object store as it is written (`Journal.Store.ship`), after
-Litestream: what is written is sealed into segments, by size, by age and at each save, and each
-segment and snapshot is put once, with a conditional write, under a key that names the journal,
-its positions and its SHA-256. Nothing the shard does waits for it. What to seal, what to put
-next, the backoff and what is dropped at the bound are pure (`Lanes/Durable/Ship.lean`), and
-every segment put holds the history's entries at the positions its key names
-(`Journal.Ship.Holds.put`). A restore (`Lanes/Durable/Restore.lean`, `Journal.Store.restore`)
-picks a point, the newest snapshot before it and the segments after it, checks that they join,
-and writes a journal that ends with a `handed` mark and has no id: its start gives the kernel the
-local journal had after that many entries and hands nothing over
-(`Journal.Restore.journal_restores`, from `Journal.resumeIds_eq_recoverIds`), a restored copy
-under D105. The thread that puts is `Lanes/Durable/IO/Ship.lean`, trusted (`TRUSTED.md`).
-
-Where: `Lanes/Durable/`, `Lanes/Runtime/Log.lean`, `Lanes/Durable/IO/Journal.lean`,
-`examples/migration`.
-
-### Claims
-
-| Claim | Evidence | Premises | Status |
-| --- | --- | --- | --- |
-| A journal cut at any byte opens and gives the entries written before the cut; other damage is refused | `Journal.open?_cut`, `Lanes/Durable/Journal.lean`; gate `Tests/Axioms/Durable.lean` | A checksum makes a damaged entry unlikely, not impossible, to pass (TRUSTED) | proved |
-| Recovery rebuilds the kernel the journal describes; a snapshot gives what a full replay gives | `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Lanes/Runtime/Log.lean`; gate `Tests/Axioms/Runtime.lean` | None | proved |
-| A process that dies anywhere in an append or a save leaves files that load as the kernel it had | `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.save_crash`, `Journal.Disk.Torn.mend`, `Lanes/Durable/Disk.lean`; gate `Tests/Axioms/Durable.lean`; a child killed with SIGKILL while it works, `Tests/Durable.lean` | The file system behaves as the model: flushed bytes stay, a torn append leaves a prefix, a rename is atomic | proved over a model; the model trusted; tested |
-| A start whose read of the journal or the snapshot fails refuses, and one whose reads do not loads the kernel the shard had: a read error never loses committed entries | `Journal.Disk.Torn.load_readings`, `Journal.Disk.ofReadings_eq`, `Lanes/Durable/Reading.lean`; gate `Tests/Axioms/Durable.lean`; a journal that is a link to itself refused and left as it was, `Tests/Durable.lean` | A read that fails says so, and only "no such file" is read as a file not there (`Lanes/Durable/IO/Journal.lean`, trusted) | proved over a model; tested |
-| A start on the files of an older version replays them as that version did, migrates the kernel, and dying anywhere in the migration's writes gives the same migrated kernel at the next start | `Journal.Upgrade.begin_torn`, `Journal.Upgrade.begin_crash`, `Lanes/Durable/Upgrade.lean`; gate `Tests/Axioms/Durable.lean`; `examples/migration/Check.lean` (version 1 stopped, version 2 started on its files, a migration cut after its first write) | The old shard started at boot and its journal has its prelude; the old and new labels differ; the store reads the old label with the old system's codecs; the file system behaves as the model | proved over a model; tested |
-| After a migration the files are those of a running shard that started from the migrated kernel, so every crash theorem goes on | `Journal.Upgrade.holds`, with `Journal.Disk.Holds` and `Journal.Disk.Torn` taking the kernel a history starts from; gate `Tests/Axioms/Durable.lean` | The mark and the migrated snapshot fit in a frame | proved over a model |
-| Across a migration, an invariant of each new actor that its own steps keep, and that every state an old actor reaches migrates into, holds of every actor in every state the new shard reaches and at every later start | `Migration.inv_exec`, `Kernel.exec_inductive`, `Journal.Upgrade.inv_load`; gate `Tests/Axioms/Durable.lean`, `Tests/Axioms/Runtime.lean`; `Quota.within_quota`, `Quota.within_quota_at_start`, gate `examples/migration/Quota/Axioms.lean` | The application proves `Migration.keeps` and `Migration.lands`; for `inv_load`, the old shard started at boot. Invariants proved only from boot and refinement to the spec are not carried | proved |
-| A label of version 0 is the system's name alone | `Journal.label_zero`; `ledgerLive`, `rookeryLive`, `raftLive`, `raftProcs` replay their journals (CI) | None | proved; tested |
-| A file is in format 2: a header, a manifest and the schema, then one body per entry; a prelude written for a system and a schema is accepted by a reader of the same with no plan, and refused by a reader of another system as that system's | `Journal.Prelude.check_frames`, `Journal.Prelude.check_other`, `Journal.Prelude.named?_frames`, `Lanes/Durable/Format.lean`; gate `Tests/Axioms/Durable.lean`; `Tests/Format.lean` | The manifest and the schema fit their bounds and a frame (`Journal.preludeFits`) | proved; tested |
-| A file of format 1 is refused as format 1, never read as something else, and no cut of a format-2 file looks like one | `Journal.Kind.formerly_cut`, `Journal.open?`; gate `Tests/Axioms/Durable.lean`; format-1 journals and a snapshot built byte by byte, refused, `Tests/Format.lean` | None | proved; tested |
-| A journal written with an older schema of its inputs opens through matching by name, and a start writes it again with its own schema before it appends | `Journal.open?`, `Disk.mend`; `Tests/Format.lean` (an argument added with a default, a constructor inserted; a field with no default refused at the prelude, naming it); the rules of matching, `Lanes/Data/MatchSound.lean` | The disk theorems are of files written with the reader's own schema | proved for the same schema; tested for older ones |
-| `lanes journal verify` passes every file the writer writes, a journal cut at any byte included, and `dump` shows the records written | `Journal.inspect_file`, `Journal.inspect_cut`, `Journal.inspect_saved`, `Lanes/Durable/Inspect.lean`; gate `Tests/Axioms/Durable.lean`; `Tests/Inspect.lean` (a torn tail, a flipped byte, format 1, an older schema with and without a reader that reads it) | The reader's schema is given as a schema: a type's own check of a value (a `Fin`'s bound) is not run | proved; tested |
-| A pinned schema's change passes lint exactly when opening would read the files written under it; one refused names the type and the field | `Schema.compare_reads_iff`, `Schema.compare_refused_iff`, `Schema.compare_insertIdx`, `Schema.compare_rename`, `Lanes/Data/Diff.lean`; gate `Tests/Axioms/Data.lean`; `Tests/Pin.lean` (a field added with and without a default, a rename, a type changed with and without a migration, a removed constructor in the corpus and not) | The pinned schema is the one the files were written with; the declared migrations are matched by their schemas, their functions not run | proved; tested |
-| Every file of the corpus passes `verify` and dumps as it did when it was added, and the bank's open with the bank of the build | `Tests/Corpus.lean`, run by `lake test`; lint `schema` reads each with the build's schema of its pinned file | The corpus holds the files of each release | tested |
-| Every journal append is synced before the next, so a loss of power leaves what a death would | `Lanes/Durable/IO/Journal.lean` (`append` flushes and calls `fsync`, `native/lanes.c`) | `fsync` and the disk do what they promise | trusted |
-| Every segment the shipper puts holds the history's entries at the positions its key names; a restore at a point starts with the kernel the local journal had after that many entries, and hands nothing over | `Journal.Ship.Holds.put`, `Journal.Restore.journal_restores`, `Lanes/Durable/{Ship,Restore}.lean`; gate `Tests/Axioms/Durable.lean`; `Tests/Ship.lean`, against the fake S3; through `S3.backup` against moto, `oracles/moto/s3-backup.jsonl` | The object store keeps what it answered put; the thread that puts performs what `Ship` decides (`Lanes/Durable/IO/Ship.lean`, TRUSTED) | proved; the IO trusted, tested |
-
-Also:
-
-- A journal that is damaged, another system's, of another format or runtime policy, or holding
-  inputs its reader's types cannot read is refused and left as it is (`Journal.open?`), and one
-  process at a time holds a journal.
-- A shard with codecs for its actors saves its kernel and cuts the journal, so a restart
-  replays only what came after the last save; tested by killing a process while it saves.
-
-### Limits
-
-- A journal is begun at any path that has none, unless the store says otherwise (`Journal.Store.create`). An application whose shard makes promises to others, as a Raft node does with its vote, has to say so itself, as `raftNode` does.
-- A journal is cut only if the application gives codecs for its actors (`Journal.Store.actors`, `Http.Saving`); without them it grows without bound and a restart replays all of it. A codec's law is an equality, so a state that holds a map holds a `Std.ExtTreeMap` (`Codec.extTreeMap`): a `TreeMap` or a `HashMap` has no codec. The codecs are derived by `lanes_data` from the declarations of the state and the messages, or written with `Codec.struct%` and `Codec.sum%` for a type it does not accept (recursive, with indices). The order in which a save replaces the journal's past is proved to lose nothing wherever the process dies (`Journal.Disk.Holds.save_crash`), over a model of the two files. That the operating system's rename is atomic, that flushed bytes survive the process and that synced ones survive a loss of power is trusted. Every flushed write is synced (`fsync`), about 0.2 ms a batch on the disk it was measured on.
-
-## Composition: joins, shards and the transport
+## Composition: joins
 
 `System.join a b wiring` (`Lanes/Core/Join.lean`) is two systems as one: an output of one that
 the wiring routes to the other becomes a message to the actor its `accept` names. Every tool
@@ -371,35 +210,8 @@ never stops (`System.Run.Fair.routed_right`, `System.Run.Fair.routed_left`).
 `System.filterMapIO` renames inputs and outputs and hides some; a system behind it does what it
 does in the open (`SysState.run_filterMapIO`).
 
-A shard is a system too (D28): `System.shard` (`Lanes/Runtime/Shard.lean`) gives, as
-`System.shard sys hosts`, `sys` as a shard sees it, where a message to an actor hosted elsewhere leaves as a parcel and a parcel that
-arrives is an input. It runs on the unchanged kernel and keeps the ordinary journal. Shards
-joined behave as the one system, for two (`System.SplitReachable.merged`) and for any number
-(`System.shards`, `System.ShardsReachable.unsharded`), under a condition on booting
-(`System.SteadyBoot`), so the system's invariants hold of them (`System.Invariant.split`,
-`System.Invariant.shards`).
-
-Shards in different processes are joined by TCP, with a link that promises no more than
-`Link.network` (D30). There is no router inside a process (D37); a machine's cores are used by
-running a process per core. Every decision of the transport is the courier, `Peers.Courier.step`
-(`Lanes/Net/Courier.lean`), a pure function proved for every limit and every sequence of
-events (`Lanes/Net/CourierSound.lean`): one write at a time on a connection, writes only where
-it dialed and only what it was sent, in order and at most once
-(`Peers.Courier.written_sublist_sent`), a bounded queue, everything closed at `stop`
-(`Peers.Courier.stop_closes`), and what it delivers is what its reader makes of the bytes
-(`Peers.Courier.delivered_read`). Every connection opens with a handshake,
-`Peers.Handshake.step` (`Lanes/Net/Handshake.lean`), also pure: each side sends the magic, the
-handshake's version, the system's name, the SHA-256 of `Peers.Config.schema` and a fresh nonce,
-refuses a hello that differs (`Peers.Handshake.hear_differs`), and is connected only once the
-other side has sent the HMAC-SHA-256, under the shared `Peers.Config.key`, of its role and of
-both hellos, its own nonce included (`Peers.Handshake.Reachable.ready_proved`), so a replayed
-handshake does not check. The parcels after it are neither signed nor encrypted.
-`Lanes/Net/IO/Peers.lean` only performs. That the running processes implement `System.shards`
-is trusted.
-
 Where: `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`,
-`Lanes/Semantics/FairJoin.lean`, `Lanes/Runtime/{Shard,ShardSound,ShardsSound}.lean`,
-`Lanes/Net/{Courier,CourierSound}.lean`, `Lanes/Net/IO/{Peers,Node}.lean`.
+`Lanes/Semantics/FairJoin.lean`.
 
 ### Claims
 
@@ -407,28 +219,11 @@ Where: `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`,
 | --- | --- | --- | --- |
 | What is proved of either side of a join holds of it in the join: of its states, its runs and its fair runs, so leads-to carries over | Left: `System.Reachable.left`, `SysState.run_left`, `System.Run.Fair.left`, `System.LeadsTo.join_left`; right: `System.Reachable.right`, `System.Run.Fair.right`, `System.LeadsTo.join_right`; `Lanes/Proof/JoinSound.lean`, `Lanes/Semantics/FairJoin.lean`; gates `Tests/Axioms/Proof.lean`, `Tests/Axioms/Semantics.lean` | The side alone gets its inputs on `Link.network` (`EnvModel.left`, `EnvModel.right`). States of the right side only up to `SysState.Equiv`, since it boots second. Fair runs are seen without the messages from outside in flight, and leads-to only of the side's actors' states | proved |
 | What one side of a join sends the other through the wiring is handled by the other side | `System.Run.Fair.routed_right`, `System.Run.Fair.routed_left`, from `System.Run.Fair.handled_right`, `handled_left` and `System.Run.Fair.handled`; `Lanes/Semantics/FairJoin.lean`, `Lanes/Semantics/Liveness.lean`; gate `Tests/Axioms/Semantics.lean` | A fair run; the link from the sender to the receiving actor loses nothing; the environment does not crash the receiving actor, and it never stops, in a step or a start. Each is needed: a loss, a crash or a stop can take the message out of flight. Only outputs emitted as the sender handles a message, not as it starts | proved |
-| Any number of shards joined behave as the one system | `System.SplitReachable.merged`, `System.ShardsReachable.unsharded`; gate `Tests/Axioms/Runtime.lean` | Well-routed runs, booting under `System.SteadyBoot`, states up to `SysState.Equiv` | proved |
-| Processes joined by TCP implement `System.shards` | None |  | trusted |
-| The transport's decisions: one write at a time, only what it was sent, in order, at most once, a bounded queue | `Peers.Courier.written_sublist_sent` and the others of `Lanes/Net/CourierSound.lean`; gate `Tests/Axioms/Net.lean` | The IO of `Lanes/Net/IO/Peers.lean` performs what the courier says | proved; the IO trusted |
-| A connection between peers carries parcels only once the other side has sent the HMAC-SHA-256, under the shared key, of its role and of both hellos, its own nonce included; a hello of another system, version or schema is refused | `Peers.Handshake.Reachable.ready_proved`, `Peers.Handshake.hear_differs`, `Lanes/Net/HandshakeSound.lean`; gate `Tests/Axioms/Net.lean`; `Tests/Peers.lean` (`docs/decisions/D102-peer-handshake.md`) | That nobody without the key makes the tag (HMAC); the parcels after the handshake are neither signed nor encrypted | proved |
-
-Also:
-
-- Shards joined are model-checked on three shards with the bank and a relay of boot actors with
-  timers and stops.
-- Of `System.shards sys hosts`, with `hosts : σ.Id → Fin n`, every state of a well-routed run,
-  read as one state, is one the system reaches alone up to `SysState.Equiv`, so its invariants
-  hold there (`System.Invariant.split`, `split_state`, `shards`, `shards_state`): proved.
-- The courier also leaves a process alone for `retry_ms` after a break, and its proofs hold for
-  every limit (`Peers.Courier.written_between`, `write_dialed`, `Reachable.queue_le`,
-  `rest_after_break`); it is model-checked with a handler and a network that fails, and reading
-  the stream is proved (`Parcel.receive_send`). `Peers` is the transport that performs it.
 
 ### Limits
 
 - `System.join` leaves the inputs it wires open to the outside until `mapIO` or `filterMapIO` hides them, and keeps the outputs it wires in its signature though none is put out; `Http.fronted` hides both. A fair run of a join is a fair run of each side (`System.Run.Fair.left`, `System.Run.Fair.right`).
-- A boot actor that stops as it starts does not behave the same on several shards: the shards boot one after another, so a message another boot actor sent it may be kept where the one system loses it (`Tests/Split.lean`, `fragile`). The theorem assumes it away (`System.SteadyBoot`); invariants of actor states proved for every environment are not affected.
-- Several shards run as several processes joined by TCP (`Lanes.Peers`); there is no router between shards in one process any more (D37), so the cores of a machine are used by running a process on each. That shards behave as the one system is proved for the semantics, for two shards (`Lanes/Runtime/ShardSound.lean`) and for any number (`Lanes/Runtime/ShardsSound.lean`), with an actor's shard fixed for the whole run: an actor that moves, or a `Peers.Config.home` that is `none`, is outside it. It is not proved for the running program, where it is still trusted that the runtimes and the transport implement `System.shards` with links between shards no better than `Link.network`.
+- A system runs on one shard, in one process. Clustering across processes is not on main (it is kept on the branch `claude/archive-journal-runtime`).
 
 ## The gate and the HTTP server
 
@@ -456,16 +251,15 @@ armed is passed to it (`Http.Front.pending_answered`).
 A request that changes nothing can be answered from the state (`Lanes/Web/Http/View.lean`, the
 decision "Reads from the state"). The application gives `serve` a `view` beside its bridge: for a
 request it names, the actors it reads, a predicate for the actors of which it reads every one
-started (`View.every`: the video site's feed reads every member), and its response from their
+started (`View.every`), and its response from their
 states. Such a read never
 enters the system. It waits behind a gate of its own, `Gate.step` over `readSig`
 (`ServerConfig.reads`: its own deadline and bound), for a peek of those actors at the end of the
 shard's next batch (`Runtime.tryPeek`), and is answered from their states off the shard's thread,
-or `504` at its deadline. So it reads every actor it names at one boundary between entries, sees
-every entry before it and none after (`Batch.run_peeks`), and leaves the journal, the outputs and
-their ids as they would be without it (`Batch.run_erase_peeks`). That a view answers what the
-request would if it entered is the application's claim, proved of its views
-(`Videos.Web.view_answers` in `examples/videos`). `Http.Front.World` does not model reads: that
+or `504` at its deadline. So it reads every actor it names at one boundary between batches, sees
+every request asked of the kernel before it and none after (`Batch.run_peeks`), and leaves the
+work and the outputs as they would be without it (`Batch.run_erase_peeks`). That a view answers
+what the request would if it entered is the application's claim. `Http.Front.World` does not model reads: that
 the server does what the gate of reads decides is trusted, as for the gate.
 
 Proved of `served sys` for every system, bridge and configuration: no request is answered more
@@ -482,19 +276,17 @@ that does not duplicate, each request is answered exactly once.
 
 The server (`Lanes/Web/IO/Server.lean`) reads a request, prepares it with `Bridge.prepare` on the
 request's own task, so a password or a cookie the bridge turns into what the system needs never
-reaches the journal (D44), takes an id from `Http.Waiting` (pure: each id handed out once, each
+reaches the system (D44), takes an id from `Http.Waiting` (pure: each id handed out once, each
 answered at most once and to its own waiter: `Http.Waiting.exec_handed_nodup`,
 `Http.Waiting.exec_answered`), puts it before the gate and hands what the gate admits to the
 shard. The gate decides under the same lock that hands out the id (`Gate.admit`), so a `503`
 from a full inbox leaves the gate's state as it was; it reads the shard's outputs
 (`Gate.receive`), and the server's ticker hands it each deadline that passes, which it answers
-`504` (`docs/decisions/D106-gate-before-shard.md`). The journal holds only what the gate
-admitted, so a replay reads none of the gate's settings. It answers
+`504` (`docs/decisions/D106-gate-before-shard.md`). It answers
 `503` itself when the inbox is full and `501` for a method it does not know (#171). With `ServerConfig.ioThreads`
 above zero (four by default), the connections run on that many threads of the server's own, each on one for its
 whole life; Lean has one libuv loop a process, which every read and write still goes through. `Http.serveFronted` serves
-`admittedFronted sys`, whose other inputs and outputs pass the gate by, and `Http.serveShard`
-(`Lanes/Net/IO/Node.lean`) runs it with the transport: one process with an HTTP front and peers.
+`admittedFronted sys`, whose other inputs and outputs pass the gate by.
 
 A request may stream (`ServerConfig.streams`, the decision "Bodies and responses stream through
 the gate"): its head is handed on alone, its body follows in pieces of at most `piece_max` bytes,
@@ -525,12 +317,12 @@ operators', none with nothing configured (`Http.Ops.route?_default`), that the m
 answered only to a peer on a loopback address unless the configuration lets others in, however
 its path is written (`Http.Ops.route?_metrics`), while liveness and readiness answer every peer
 (`Http.Ops.route?_peer`), that readiness answers
-`200` exactly when the shard has recovered and the server is not stopping or draining
+`200` exactly when the shard has booted and the server is not stopping or draining
 (`Http.Ops.answer_ready`), and what a log line holds, the JSON text of its record
 (`Http.Ops.Access.parse_line`). `Lanes/Web/IO/Ops.lean` answers an operator's request before it
 is prepared or has an id, so it never reaches the shard, and passes every other request on as it
-came; it counts the journal's appends by wrapping its storage. So a run writes the same journal
-with all of it on as off, which is trusted and tested (`Tests/Ops.lean`). `Server.stopOnSignal`
+came. So the same inputs enter the system with all of it on as off, which is trusted and tested
+(`Tests/Ops.lean`). `Server.stopOnSignal`
 is a stop that drops nothing in flight: at SIGTERM or SIGINT readiness answers `503`, the
 requests the shard has taken are answered until none is left or a deadline passes, and then the
 server stops; trusted and tested with a child process.
@@ -554,11 +346,10 @@ Where: `Lanes/Web/` (`Http/`, `IO/Server.lean`), `Lanes/Semantics/Front.lean`.
 
 Also:
 
-- A journal of the gate `serve` ran before `docs/decisions/D43-one-gate.md` is refused; one `serve` wrote behind a gate of other settings is replayed behind that gate and carried across (`Http.regateUpgrade`, `docs/decisions/D94-journal-version.md`).
 - Proved of `fronted sys` by projection from the gate alone, for every `sys`: at most once per arrival where the link from outside to the gate does not duplicate (`Http.fronted_answered_le_arrived`, from `Http.Gate.answered_le_handled`) and deadlines stay armed (`Http.fronted_deadlines_armed`); and in every fair run in which the gate does not crash a request the gate has admitted is answered (`Http.fronted_pending_leaves`, `Http.fronted_pending_answered`, from `Http.Gate.pending_leaves` and `Http.Gate.pending_answered` of the gate alone, through the hidden inputs and outputs and the join); model-checked with the properties checked of `served`, and the premises of the leads-to rule on the gate alone with the link a join gives it from outside.
 - Proved of `served sys` for every system, bridge and configuration: an arrival is answered at most once in any environment whose link from outside to the gate does not duplicate (`Http.served_answered_le_arrived`, `Http.kernel_served_answered_le_arrived`, with crashes, loss, reordering and duplication elsewhere allowed), a waiting request keeps its deadline armed (`Http.served_deadlines_armed`), and in every fair run in which the gate does not crash a request the gate has admitted is answered, by the system or with `504` (`Http.served_pending_leaves`, `Http.served_pending_answered`). These are the theorems of `fronted sys` carried through its hidden inputs and outputs.
-- The server prepares each request as its bridge says (`Bridge.prepare`, pure) on the request's own task before it enters the shard, so a password or a cookie a bridge takes out is never journalled and slow work is not done on the shard's thread (`docs/decisions/D44-request-prepared-before-journal.md`).
-- For its operators, each off by default (`ServerConfig.ops`, `docs/decisions/D69-observability.md`): a metrics page in the Prometheus text format (requests by method and status class, latency, connections open and refused, requests in flight, the inbox, the journal's appends and saves), liveness, readiness that answers `200` exactly when the shard has recovered and the server is not stopping or draining (`Http.Ops.answer_ready`, `Server.drain`), request ids taken from a client only when bounded and plain (`Http.Ops.RequestId.accept?_eq_some`), and a JSON access log whose lines are the JSON text of their records (`Http.Ops.Access.parse_line`) and hold no query, header or body; none of it reaches a system, which is trusted and tested: a journal holds the same inputs with all of it on as off.
+- The server prepares each request as its bridge says (`Bridge.prepare`, pure) on the request's own task before it enters the shard, so a password or a cookie a bridge takes out never enters the system and slow work is not done on the shard's thread (`docs/decisions/D44-request-prepared-before-journal.md`).
+- For its operators, each off by default (`ServerConfig.ops`, `docs/decisions/D69-observability.md`): a metrics page in the Prometheus text format (requests by method and status class, latency, connections open and refused, requests in flight, the inbox), liveness, readiness that answers `200` exactly when the shard has booted and the server is not stopping or draining (`Http.Ops.answer_ready`, `Server.drain`), request ids taken from a client only when bounded and plain (`Http.Ops.RequestId.accept?_eq_some`), and a JSON access log whose lines are the JSON text of their records (`Http.Ops.Access.parse_line`) and hold no query, header or body; none of it reaches a system, which is trusted and tested: the same inputs enter the system with all of it on as off.
 - The server reads and writes HTTP/1.1 itself on `Std.Net`, with no `Std.Http`: each connection is `Http.Conn.step`, pure, model-checked against a client that sends in any pieces, pipelines and leaves, and proved to write responses in the order requests were read, each once (`Http.Conn.run_writes`), to hand on only requests the strict reader reads (`Http.Conn.step_submit_read`), to keep its buffer within `message_max` and its requests in flight within `inflight_max` (`Http.Conn.run_buffer`, `run_slots`), to take nothing once closed or no longer reading (`Http.Conn.step_closed`, `step_notReading`, `step_reading`), to stop reading at a deadline (`Http.Conn.step_tick`) and to write what the client's reader reads back (`Http.Conn.read_encode`), with `100 Continue`, keep-alive, pipelining, deadlines for a slow head or body and a bound on connections (`docs/decisions/D57-the-server-runs-its-own-connections.md`).
 - The strict reader of requests (`Http.Request.read`, `docs/decisions/D49-the-server-reads-requests-by-a-strict-profile.md`) is proved final once it answers (`Http.Request.read_append`), to wait only within its limits and answer within them (`Http.Request.read_more`, `read_done`), to read back what `Request.wire` writes wherever it starts and whatever follows, at its last byte and not before (`read_wire`, `read_wire_extract`), and to refuse a length beside a coding, two lengths, a blank before a colon, obs-fold, a bare CR or LF and a malformed chunk size for every head of those shapes (`read_lengthAndCoding`, `read_twoLengths`, `read_blankInName`, `read_fold`, `read_bareCR`, `read_bareLF`, `read_badChunkSize`); its other refusals, and its verdicts against Go's, Node's and h11's parsers on a corpus, are tested (`oracles/go/requests/requests.py`: stricter or alike on every case).
 - The HTTP server passes against the gate's assumption.
@@ -587,7 +378,7 @@ again (`Auth.Sessions.accepts_iff`, `Auth.Sessions.Ended.run`).
 Sign-in with another service (`docs/decisions/D72-sign-in-with-oauth.md`) is OAuth 2.0's authorization
 code flow with PKCE and OpenID Connect on it, decided in `Lanes/Web/Auth/OAuth.lean` and done
 where a request arrives, before the system (`serve`'s `arrive`, `Lanes/Web/IO/SignIn.lean`), so no
-code or token is journalled. A sign-in begun is a ticket the browser keeps in a cookie under the
+code or token enters the system. A sign-in begun is a ticket the browser keeps in a cookie under the
 server's tag, so beginnings take no room on the server. A callback is accepted only with its
 browser's ticket, for its state and provider, not expired (`OAuth.check_ok`), and no state twice
 (`OAuth.Used.accepted_once`), which is also model-checked against an attacker's browser;
@@ -614,7 +405,7 @@ Where: `Lanes/Web/Http/`, `Lanes/Web/Html/`, `Lanes/Web/Auth/`, `Lanes/Web/IO/Si
 | The template macro produces the element the template shows | `Tests/Html.lean` |  | trusted, tested |
 | A sign-in's callback is accepted only with its browser's ticket, for its state and its provider and not expired, and no state twice, among at most `maxUsed` states kept | `OAuth.check_ok`, `OAuth.Used.accepted_later`, `OAuth.Used.accepted_once`, `OAuth.Used.length_claim`, `Lanes/Web/Auth/OAuth.lean`; gate `Tests/Axioms/Web.lean`; model-checked against an attacker's browser across a restart and tested end to end (`Tests/OAuth.lean`) | The edge keeps the states used and performs what it decides (TRUSTED, "The sign-in's IO"); the key and the random source | proved; the edge trusted, tested |
 | An ID token is accepted only when its header names RS256 or ES256, a key of the provider's set of that algorithm and `kid` checks its signature, and every claim passes | `OAuth.IdToken.verify_accepted`, `OAuth.IdToken.check_ok_iff`, `Jose.verify_ok`; gate `Tests/Axioms/Web.lean`; refusals of `none`, HS256 keyed by the public key, an unknown `kid`, a changed payload and each claim tested end to end (`Tests/OAuth.lean`); `Jose.verify` against jwcrypto 1.6.2 on generated tokens, valid and tampered (`oracles/jwcrypto`) | The signature check (`native/verify.c`); the provider holds only its keys in its set (TRUSTED, "Identity providers"); the wall clock | proved of the decision; the signature trusted, tested |
-| No code, token or client secret of a sign-in reaches the system or its journal, and a client cannot send the identity headers | `OAuth.identity?_strip`, `OAuth.identity?_withIdentity`; `Tests/OAuth.lean` end to end | That the edge lets a callback in only through `withIdentity` (TRUSTED, "The sign-in's IO") | proved of the headers; trusted, tested |
+| No code, token or client secret of a sign-in reaches the system, and a client cannot send the identity headers | `OAuth.identity?_strip`, `OAuth.identity?_withIdentity`; `Tests/OAuth.lean` end to end | That the edge lets a callback in only through `withIdentity` (TRUSTED, "The sign-in's IO") | proved of the headers; trusted, tested |
 
 Also:
 
@@ -647,8 +438,8 @@ that does IO (D26). An adapter is a model of the outside, an `Outside`
 performs; a conformance test records a real run and checks it with `Outside.allows`. Where an
 adapter has something to decide, it is a pure function with its theorems (rule 3.9).
 
-- **Clock** (`Lanes/Outside/IO/Clock.lean`): the time as an input, never earlier than one given before,
-  also across a restart. Its model is the monotonic clock (`Clock.outside`, `Lanes/Outside/Clock.lean`);
+- **Clock** (`Lanes/Outside/IO/Clock.lean`): the time as an input, never earlier than one given
+  before, nor than the floor it was started with. Its model is the monotonic clock (`Clock.outside`, `Lanes/Outside/Clock.lean`);
   the wall clock as the operating system reads it, which NTP may set back by up to twice its skew
   (`Clock.wall`, `Clock.wall_back_le`), is a model of its own for a system that reads it.
 - **HTTP client** (`Lanes/Web/IO/Client.lean`): HTTP/1.1, or HTTPS through the TLS binding
@@ -693,7 +484,7 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   RFC 9111 lets a CDN keep (`Lanes/Web/Http/SharedCache.lean`), which serves nothing `private` or
   `no-store` (`SharedCache.serve_storable`), and whose `leaks` is a check an application runs on
   its exchanges: with no leak, the cache gives each request what the origin gave it
-  (`SharedCache.serve_of_leaks`). `examples/videos` is checked with it.
+  (`SharedCache.serve_of_leaks`).
 
 Where: `Lanes/Outside/`, `Lanes/Outside/{Rpc,Idempotent,Events,Queue,Cache,Clock,Throttle}.lean`,
 `Lanes/Outside/Effects/`, `Lanes/Outside/IO/Clock.lean`, `Lanes/Web/IO/{Client,Tls}.lean`,
@@ -708,9 +499,6 @@ Where: `Lanes/Outside/`, `Lanes/Outside/{Rpc,Idempotent,Events,Queue,Cache,Clock
 | A real payment or email service does only what its model allows | The assumptions listed in `docs/decisions/D65-models-of-external-services.md`; for email, a run through `Ses.handler` against moto's SES, `oracles/moto/ses.jsonl`; for payments, runs written by hand, `Tests/Outside.lean` | Keys that do not expire; webhooks within `maxDeliveries`; that moto answers as SES does | trusted; email tested against moto's SES, nightly; payments not tested against a service |
 | A get from the object store's model is answered only with an object a put sent under that key, in every run the model allows | `ObjectStore.read_sent`, `Lanes/Outside/ObjectStore.lean`; gate `Tests/Axioms/Outside.lean` | None | proved |
 | A head of the object store's model says a key holds an object only when a put, the system's or one it granted someone else, sent one under it, in every run the model allows | `ObjectStore.held_sent`, `Lanes/Outside/ObjectStore.lean`; gate `Tests/Axioms/Outside.lean` | None | proved |
-| A transcode worker's model, honest, reports a job done only if a call of the run sent a job of that id, naming that job's targets; honest or not, two reports delivered for one job are the same report | `Transcode.done_given`, `Transcode.reports_agree`, `Lanes/Outside/Transcode.lean`; gate `Tests/Axioms/Outside.lean` | Of the model; `done_given` assumes the worker honest (`docs/decisions/D91-the-video-pipeline.md`) | proved |
-| A real transcode worker does only what its model allows, and a report signed with the shared key is the worker's | The honesty assumption of `Lanes/Outside/Transcode.lean`; HMAC-SHA-256 (`TRUSTED.md`); the test kit's worker against runs written by hand (`Tests/Outside.lean`) | No real worker speaks the format yet | trusted; not tested against a real worker |
-| A report's signature is accepted exactly when it is the tag of its job and status under the key | `Transcode.verify_iff`, `Lanes/Web/Transcode.lean`; gate `Tests/Axioms/Web.lean` | That nobody without the key makes the tag is HMAC's | proved |
 | A queue's model gives each message at most `maxReceives` times a copy, at most `maxReceives` times from a FIFO queue, and never again once deleted with its latest receipt unless it is sent again | `Queue.received_le`, `Queue.fifo_received_le`, `Queue.deleted_not_received`, `Lanes/Outside/Queue.lean`; gate `Tests/Axioms/Outside.lean` | Of the model | proved |
 | A consumer that applies every message it receives applies one twice; one with a table of the ids it applied applies each once, through redeliveries, a crash and a FIFO queue | `Tests/Queue.lean` | Two messages, two receives a copy, one crash | checked |
 | A cache's model answers a get only with a value a write sent under its key, and never stores a fill sent when its token was not the key's lease | `Cache.read_sent`, `Cache.fill_unleased`, `Lanes/Outside/Cache.lean`; gate `Tests/Axioms/Outside.lean` | Of the model | proved |
@@ -720,14 +508,14 @@ Where: `Lanes/Outside/`, `Lanes/Outside/{Rpc,Idempotent,Events,Queue,Cache,Clock
 | A throttled answer leaves the service as it was, the service never asks for a wait of more than `maxRetryAfter`, and within a limit of `burst` a call is not throttled | `Throttle.throttled_inner`, `Throttle.wait_le`, `Throttle.within_not_throttled`, `Lanes/Outside/Throttle.lean`; gate `Tests/Axioms/Outside.lean` | Of the model | proved |
 | A caller that retries a `429` at once calls while told to wait and may give up; one that waits as told calls only when it may and gets through | `Tests/Throttle.lean` | Two requests, three attempts each, one call a tick | checked |
 | A shared cache's model serves nothing `private` or `no-store`, and only to a request whose varying headers are the stored one's; with no `leaks` among some exchanges, it gives each of their requests what the origin gave it | `SharedCache.serve_storable`, `SharedCache.serve_reuses`, `SharedCache.serve_of_leaks`, `Lanes/Web/Http/SharedCache.lean`; gate `Tests/Axioms/Web.lean` | RFC 9111's rules for a shared cache (TRUSTED) | proved |
-| A page that shows a session's records, sent without `Cache-Control`, is served to another client; sent `no-store` it is not. No reply of `examples/videos` leaks | `Tests/SharedCache.lean`; `Videos.EndToEnd.sharedCacheTests`, `examples/videos/Videos/EndToEnd.lean` | Every reply for three viewers, and the bridge's own answers to eight paths | checked; tested |
+| A page that shows a session's records, sent without `Cache-Control`, is served to another client; sent `no-store` it is not | `Tests/SharedCache.lean` | The seeded case | checked |
 | Every output of every run is one some actor's step or start emits | `System.Emits.outputs`, `Lanes/Proof/Outputs.lean`; gate `Tests/Axioms/Proof.lean` | None | proved |
 
 Also:
 
 - The clock adapter, the HTTP client and the pool of the jobs actor each have a model, a
-  handler and a conformance test; the clock gives wall time that never goes back, also across a
-  restart.
+  handler and a conformance test; the clock gives wall time that never goes back, nor before the
+  floor it was started with.
 - The HTTP client's reader reads back a response framed by its length, in chunks, by the end of
   the connection, or after interim responses, as soon as its last byte is there and not before
   (`Response.read_wire`, `read_wire_extract`, `read_more`, `read_some`, `read_append`): proved;
@@ -964,8 +752,8 @@ holds jobs under ids the requester chooses, beside the system that schedules the
 a deterministic jitter, until it is accepted, its attempts or its time run out (the dead
 letter) or it is cancelled; a notice at a time; or a notice every period, the sweep that expires
 what is over. An id held is one job however often it is scheduled (`already`); beyond `maxJobs`
-or `maxPayload` a scheduling is refused at once. Its state is the journal's, and each job waits
-on one timer, armed again at every start. The semantics has no clock, so the scheduler keeps
+or `maxPayload` a scheduling is refused at once. Its state lives as long as the process, and each
+job waits on one timer. The semantics has no clock, so the scheduler keeps
 the latest time it was told or its timers were armed for, and an attempt carries that time.
 Proved, in every environment: an attempt starts only by its job's timer, for a job due by the
 time known (`Schedule.dispatch_due`), the next only the backoff after a failure
@@ -1017,7 +805,7 @@ Also:
 - A scheduling when `maxJobs` jobs are held is refused, not queued.
 - An attempt whose deadline passes keeps running in its worker; a pure worker cannot be cut off, so the work done at once can exceed `maxInFlight`.
 - The scheduler's time is what it was told and what its timers were armed for: after a long time without input, or after a start, a job may be late by that much; that it is never early rests on the times it is told and on the runtime's timers (`TRUSTED.md`).
-- Work outside a step goes through the jobs actor (`Lanes.Jobs`). On a journal, a job whose result was not journalled when the process died is attempted again with its key, so a far side that must not act twice has to deduplicate by it.
+- Work outside a step goes through the jobs actor (`Lanes.Jobs`). Jobs, and scheduled work, live as long as the process: a job under way when it dies is not attempted again, and a far side that must not act twice still deduplicates by the job's key.
 
 ## The checker
 
@@ -1062,12 +850,12 @@ Where: `Lanes/Check/`, `Lanes/Semantics/Monitor.lean`, `Lanes/Semantics/MonitorS
 | A violation, deadlock or witness the fingerprinted checker reports is real, though its pass is not exhaustive | `Check.fingerprint_violated`, `Check.fingerprint_deadlock`, `Check.fingerprint_witness`, `Check.systemFingerprinted_violated`, `Lanes/Check/FingerprintSound.lean`; gate `Tests/Axioms/Check.lean`; the report says "fingerprinted" (`Check.fingerprint_fingerprinted`) | None for what it reports; a pass covers only the states whose hash no other state seen had | proved; the pass not exhaustive |
 | Computing successors in tasks changes nothing: the fingerprinted search in tasks stores the same states in the same order and gives the same report | `Fingerprint.Search.runParallel_eq`, `Check.fingerprint_tasks`; gate `Tests/Axioms/Check.lean`; compared as text by `lake exe lanesCheck` (`Tests/Election.lean`) | None | proved |
 | A complete PASS of a reduced check is a PASS of the check, for invariants, refinement checks and deadlocks | `Check.search_reduce_sound`, `Check.search_reduce_deadlock_free`, `Check.search_reduce_unreached`, `Check.systemReduced_sound`, `Lanes/Check/ReduceSound.lean`; gate `Tests/Axioms/Check.lean`; applied to `Tests/Reduce.lean` in `Tests/ReduceProofs.lean` | The reduction is a `Model.Reduction` (or a `World.Reduction`, for instance a driver's state in a canonical form, `Check.World.Reduction.ofDriver`), and keeps equivalent worlds equivalent; the premises of `Check.system_sound_of_respects` | proved |
-| States the checker merges have one hash, which tells apart orders of the messages on an ordered link | `Check.Node.trafficHash_eq`, `Lanes/Check/SystemSound.lean`; gate `Tests/Axioms/Check.lean`; no two stored states of the videos checks share a hash | None | proved; the absence of collisions measured |
+| States the checker merges have one hash, which tells apart orders of the messages on an ordered link | `Check.Node.trafficHash_eq`, `Lanes/Check/SystemSound.lean`; gate `Tests/Axioms/Check.lean` | None | proved |
 | A complete PASS of a refinement check means every run's inputs and outputs are a trace of the spec | `Check.refines_sound`, `Check.refines_traces`, `Lanes/Semantics/MonitorSound.lean`; gate `Tests/Axioms/Semantics.lean` | `==` on the spec's state is equality; the instance only | proved |
 
 Also:
 
-- A fingerprinted mode, off by default (`Check.fingerprint`, `Check.systemFingerprinted`), keeps a 64-bit hash of each state seen instead of the state: about a third of the memory and two thirds of the time on the videos checks, a pass not exhaustive and said so (`Report.fingerprinted`), and every trace it reports replayed from its choices and checked again (`Check.fingerprint_violated`, `Check.systemFingerprinted_violated`); with `Options.tasks` its levels' successors are computed in tasks, the same function (`Fingerprint.Search.runParallel_eq`).
+- A fingerprinted mode, off by default (`Check.fingerprint`, `Check.systemFingerprinted`), keeps a 64-bit hash of each state seen instead of the state: about a third of the memory and two thirds of the time, a pass not exhaustive and said so (`Report.fingerprinted`), and every trace it reports replayed from its choices and checked again (`Check.fingerprint_violated`, `Check.systemFingerprinted_violated`); with `Options.tasks` its levels' successors are computed in tasks, the same function (`Fingerprint.Search.runParallel_eq`).
 - Proved of the checker: it lists exactly the enabled events of a state, merging states is safe, a complete PASS means every `always` property holds in every world of the instance (`Check.system_sound_of_respects`; `==` must be equality on actor states, and on the driver's state an equivalence that the driver respects, `Driver.Respects`; the hash only decides how many states are stored; `Check.system_sound` is the case where it is equality), the spec monitor accepts exactly what the spec allows, deadlines included (`Check.Monitor.ok_iff`), a monitor never holds a candidate twice (in its type), so monitors compare and hash as sets and a monitored driver respects `==` (`Service.monitored_respects`), a complete PASS of a refinement check means the monitor has a candidate in every world (`Check.refines_sound`) and the inputs, outputs and deadlines passing of every run of the instance are a trace of the spec (`Check.refines_traces`; the spec's state must have `==` as equality), and a reported violation is a real run of the semantics (`Check.system_violated`).
 - Reductions (`Model.reduce`, `Check.systemReduced`): a complete pass of a model reduced by a `Model.Reduction` is a pass of the model, for invariants, refinement checks and deadlocks (`Check.search_reduce_sound`, `Check.systemReduced_sound`, `Check.search_reduce_deadlock_free`), with a driver's state kept in a canonical form as the instance proved in general (`Check.World.Reduction.ofDriver`).
 - Refinement to a `Service` without a mapping, with the spec's deadlines passing as the system's timers named for them fire, or as the messages named for them are delivered (`Service.monitored svc driver deadlines delivered`, which sees deliveries through `Driver.deliver`; `docs/decisions/D42-a-spec-names-its-inputs-and.md`, `docs/decisions/D56-a-deadline-passes-where-it-is-served.md`), and to `once` of one (`Service.onceMonitored`, not yet proved sound).
@@ -1096,8 +884,7 @@ Also:
   `Service.once` is the spec, `Lanes/Behaviours/Once/Basic.lean` the memo that meets it, and
   `System.Refines.of_handles` the relation rule that a duplicated message cannot break. The
   key-value store implements it with no premise on its links
-  (`KV.implements_once`, `examples/kv-cache`), and so does Raft with the memo in its replicated machine
-  (`RaftKV.implementsMachine_once`). `System.Refines.filterMapIO` carries a refinement through
+  (`KV.implements_once`, `examples/kv-cache`). `System.Refines.filterMapIO` carries a refinement through
   hiding outputs the spec allows at any time (`Spec.showing`).
 - Liveness (`Lanes/Semantics/Liveness.lean`, D27): infinite runs (`System.Run`), weak fairness
   per obligation (`System.Run.Fair`), `System.LeadsTo` and its rule
@@ -1111,7 +898,7 @@ Where: `Lanes/Semantics/`.
 
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
-| A request named by its client takes effect at most once, under every fault | `KV.implements_once` (`examples/kv-cache`), `RaftKV.implementsMachine_once`; gates in their examples | The memo (`Once.actor`, `Machine.once`) is in the system | proved |
+| A request named by its client takes effect at most once, under every fault | `KV.implements_once` (`examples/kv-cache`); gate in its example | The memo (`Once.actor`, `Machine.once`) is in the system | proved |
 | `System.Implements` is linearizability | Its definition: weak simulation to `Service.spec` (`Lanes/Semantics/Service.lean`, D42) |  | a definition; not proved equal to Herlihy and Wing's |
 | A system that implements a service has, for every run, a sequential history of the service that produces each output, takes each input after it arrives, and orders an output handed over before an input arrives before that input's effect | `System.Implements.history`, `System.Implements.produced`, `Lanes/Semantics/History.lean`; gate `Tests/Axioms/Semantics.lean` | `System.Implements` | proved |
 
@@ -1134,23 +921,10 @@ Also:
 
 ## Data and the standard library
 
-What every layer uses is in `Lanes/Data/`: `Enum`, codecs and `lanes_data`, schemas and values
-(`Lanes/Data/Schema.lean`), the body of a value (`Lanes/Data/Body.lean`), the queue and quorums.
-A codec carries its type's `Schema`: a table of the named types it uses, each declared once
-with the names of its fields and constructors, their defaults and former names
-(`docs/decisions/D103-lanes-data-aliases.md`), and the type itself, in which every use of a named
-type is a reference by its name; and a map each way to `Value`. `lake exe lanes journal schema
---type T` prints it. The body writes a `Value` as bytes
-with its schema, which holds every name, so the bytes hold none, and reads it back under
-`Codec.Limits` (`docs/decisions/D97-data-format.md`). Data written under an older schema is
-read by name (`Lanes/Data/Match.lean`): `Schema.Plan.of` matches the writer's schema with the
-reader's once, each pair of named types once, refusing what cannot be read with a `Codec.Error`
-that names it, and
-`Body.decodeWith` reads each value through the plan. The journal and the snapshot use both, in
-format 2 of the files (Journal, snapshots and the disk model). `Schema.compare`
-(`Lanes/Data/Diff.lean`) says what changed between a pinned schema and the build's, by the same
-plan, for `lanes lint`. The
-standard library is in `Lanes/Lib/`: encodings, addresses and URLs, time, media types,
+What every layer uses is in `Lanes/Data/`: `Enum`, codecs and `lanes_data`, and the queue. A
+codec writes a value as records and reads it back, with its law as a field; the journal and the
+peers that used to write with codecs are no longer on main, and serialization is to be reworked.
+The standard library is in `Lanes/Lib/`: encodings, addresses and URLs, time, media types,
 metrics, rate limits, the PostgreSQL protocol (below) and cryptography, with the C it binds
 (Bound C). All of it is total and `Std`-only. A parser or encoder is proved against its
 RFC and compared with a reference implementation on generated inputs, and every difference is
@@ -1164,13 +938,9 @@ Where: `Lanes/Data/`, `Lanes/Lib/`, `Lanes/Lib/Net/Percent.lean`, `native/`, `or
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
 | A codec reads back what it writes | The law is a field of `Codec` (`Lanes/Data/Codec.lean`), so every codec, those `lanes_data` derives among them, carries its proof | None | proved (by its type) |
-| A value read back from its schema's `Value` is itself | The law `ofValue (toValue a) = some a` is a field of `Schema.Of` (`Lanes/Data/Schema.lean`), so every codec's schema carries its proof; `Tests/Schema.lean` | None | proved (by its type) |
-| A body reads as a value exactly when the value writes as that body, so each value has one body and what is written reads back; a type's value decodes as itself | `Body.read_eq_ok_iff`, `Body.decode_encode`, `Body.encode_decode`, `Lanes/Data/BodySound.lean`; gate `Tests/Axioms/Data.lean` | Within `Codec.Limits`: the writer refuses what the reader would | proved |
-| Data written under an older schema reads by name: with the same schema a value reads back as itself; a field added with a default, anywhere, keeps every old field's value and takes its default; a renamed constructor reads through its former name; a type changed with a declared migration reads as the migrated value | `Body.decodeWith_encode_self`, `Schema.Plan.of_insertIdx`, `Schema.Plan.of_rename`, `Body.decodeWith_migrate`, `Lanes/Data/MatchSound.lean`; gate `Tests/Axioms/Data.lean` | Names unique within a record or a sum, and no former name that is another's current one; for a field added and a constructor renamed, the record or the sum is the schema's root and its fields' types are one type in both schemas (`Schema.Plan.Alike`) | proved |
 
 Also:
 
-- Majority quorums (`Quorum.majority_inter`).
 - Base64 (RFC 4648, each byte string with exactly one spelling: `Base64.decode_eq_some_iff`), compared with Go's standard library on generated cases (`lake exe lanesOracle`).
 - Civil dates with day numbers and POSIX seconds (`Civil.ofDays_toDays`, `Civil.toDays_ofDays`).
 - IP addresses and CIDR prefixes (RFC 4291 text forms, RFC 5952 output, `Ip.parse_print`, `Ip.Prefix.parse_print`, `Ip.Prefix.contains_iff`), compared with Go's standard library on generated cases.
@@ -1181,20 +951,20 @@ Also:
 - SHA-256, HMAC-SHA-256, the comparison of byte strings, and Argon2id from OpenSSL's libcrypto (`Native`, bound from `native/lanes.c`), random bytes from its `RAND_bytes` (`Lanes.randomBytes`), with SHA-256, HMAC-SHA-256 and the comparison also in pure Lean as references, both tested against the NIST and RFC 4231 vectors and compared on thousands of random inputs (`Bytes.same_iff`, `Bytes.unhex?_hex` proved).
 - The token bucket of x/time/rate with exact arithmetic (`RateLimit.allowed_le`: at most `burst + rate · w` in a window of `w`; `RateLimit.allow_after_reserve`), compared with Go's on generated cases.
 - URI references (RFC 3986: `Url.parse_print`, resolution as §5.2 with §5.4's examples evaluated and no dot segment left, `Url.dotFree_resolve`, idempotent normalization, `Url.normalize_normalize`), compared with Go's standard library on generated cases.
-- `Frame` (length and checksum framing with the torn-write theorem); the checksum is the first 128 bits of SHA-256, and FNV-1a is no longer used.
 - `lanes_data` (a structure or an inductive type declared once, deriving `Codable`, `Enum` and a field-by-field `LawfulBEq` from the declaration's text, without linking `Lean`).
 
 ### Limits
 
-- A recursive type has no codec. Its schema can be written (a named type may refer to itself, and the body, matching and the diff read such schemas, `Tests/Match.lean`), but a codec is a value, and neither `lanes_data` nor `Codec.struct%` and `Codec.sum%` can define one that refers to itself.
+- A recursive type has no codec: a codec is a value, and neither `lanes_data` nor `Codec.struct%` and `Codec.sum%` can define one that refers to itself.
 - IPv6 zones (`fe80::1%eth0`) are refused, also in URLs, and a leap second (`23:59:60`) is not a time.
 
 ## Bound C
 
-What Lean cannot express or check is bound, as other languages bind it (D46): `fsync`, and from
+What Lean cannot express or check is bound, as other languages bind it (D46): `fsync`
+(`File.fsync`, which `File.replace` uses to replace a file whole), and from
 OpenSSL's libcrypto SHA-256, HMAC-SHA-256, constant-time comparison, Argon2id and random bytes
 (`RAND_bytes`, as `Lanes.randomBytes`: `IO.getRandomBytes` makes no promise that its bytes are
-fit for keys) (`native/lanes.c`, declared in `Lanes/Lib/Crypto/Native.lean` and `Lanes/Durable/IO/Journal.lean`). A bound
+fit for keys) (`native/lanes.c`, declared in `Lanes/Lib/Crypto/Native.lean` and `Lanes/Lib/File.lean`). A bound
 function with a Lean reference (`Sha256.reference`, `Hmac.reference`, `Bytes.sameReference`) has
 that reference as its body, so its theorems (`Bytes.same_iff`) are about the reference, and what
 is trusted is that the C computes the same, which `Tests/Crypto.lean` tests.
@@ -1227,7 +997,7 @@ RFC 6979's vectors, `openssl dgst -sign` and `cryptography` (`Tests/Sign.lean`, 
 | Bound C computes what its Lean reference computes | `Tests/Crypto.lean` against the references and published vectors | That HMAC-SHA-256 is a pseudorandom function makes tokens unforgeable | trusted, tested |
 | An HTTPS call reaches only a server whose certificate chains to the trust store and is for the name or address called, and a response framed by the end of the connection is taken only after the server's `close_notify` | `Tests/Tls.lean` against `openssl s_server`, and the mutants of `scripts/mutants.py` named `tls` and `https client` | OpenSSL's TLS and certificate code; the trust store, which `SSL_CERT_FILE` names when set; that `native/tls.c` declares OpenSSL's functions as the linked OpenSSL 4.1.0 does, checked only against the system's headers, 3.0 on Ubuntu 24.04 (`scripts/tls-declarations.py`) | trusted, tested |
 | A signature checks under an RSA or P-256 key as the published vectors say, and RSA's check agrees with its Lean reference | `Tests/Signature.lean`: RFC 7515 A.2 and A.3, RFC 7520 §4.1, keys made by `openssl`, `Rsa.verifyReference` on every signature changed in a byte; the mutants named `signature` | OpenSSL's signature code; that `native/verify.c` declares OpenSSL's functions as the linked OpenSSL 4.1.0 does, checked only against the system's headers, 3.0 on Ubuntu 24.04 (`scripts/tls-declarations.py`) | trusted, tested |
-| `Bytes.same a b` holds exactly when `a = b` | `Bytes.same_iff`, `Lanes/Lib/Crypto/Native.lean`; gate `examples/ledger/Ledger/Proofs/Axioms.lean` | Of the Lean reference; that the C computes the same is tested | proved of the reference; the C trusted |
+| `Bytes.same a b` holds exactly when `a = b` | `Bytes.same_iff`, `Lanes/Lib/Crypto/Native.lean`; gate `Tests/Axioms/Lib.lean` | Of the Lean reference; that the C computes the same is tested | proved of the reference; the C trusted |
 
 ## The test kit
 
@@ -1235,7 +1005,7 @@ RFC 6979's vectors, `openssl dgst -sign` and `cryptography` (`Tests/Sign.lean`, 
 fake S3 that checks signatures, a fake identity provider, a scripted browser, a server of a
 handler and readers of a response. `import Lanes.Testing` is for an application's tests and
 not in `import Lanes`, so no binary that serves links it (`docs/decisions/D77-a-test-kit.md`).
-`Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/OAuth.lean` and `examples/videos` run against it.
+`Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/OAuth.lean` and `Tests/TutorialWeb/` run against it.
 
 Where: `Lanes/Testing/`.
 
@@ -1254,22 +1024,16 @@ Where: `Lanes/Testing/`.
 The `lanes` command (`LanesCli/`) creates an application (`lanes new`, which writes
 `templates/app/`, its types declared with `lanes_data`), checks the text of a project
 (`lanes lint`, `LanesCli/Lint.lean`: the rules `AGENTS.md` lists, among them that every
-repository path a doc cites exists, and that the build reads the files its pinned schemas
-wrote), writes what is derived from other files (`--fix`,
+repository path a doc cites exists), writes what is derived from other files (`--fix`,
 `LanesCli/Generated.lean`: the line counts of `TRUSTED.md`, the index of decisions and
-the numbers of new ones, and the pinned schemas after a change old files read), runs the model checks (`lanes check`), prints the schema of a type's codec as the build derives
-it (`lanes journal schema`, `LanesCli/Journal.lean`), and prints or checks a journal or a snapshot
-file by its own schema (`lanes journal dump` and `lanes journal verify`, over `Journal.inspect`).
-Lint's rule `layering` keeps each module
+the numbers of new ones), runs the model checks (`lanes check`). Lint's rule `layering` keeps each module
 of `Lanes/` from importing a package above its own: `LanesCli/Layers.lean` gives the packages of
 `docs/decisions/D99-layered-packages.md`, what each requires, and each file's package by the
-longest prefix of its path. The runtime requires std, for the HMAC of the courier's handshake
-(`Lanes/Net/Handshake.lean`), and the framing of files and links (`Lanes/Durable/Frame.lean`) is
-in std, for its SHA-256 checksum. CI (`.github/`) runs the build with warnings as errors, lint,
+longest prefix of its path. CI (`.github/`) runs the build with warnings as errors, lint,
 the tests, the model checks, the differential tests against the oracles, the examples and a
 generated app on every pull request, and the build and tests on macOS; a pull request that
 changes only documentation is built and linted only. Model checks run at small bounds on a pull
-request and at large bounds nightly (`.github/workflows/large.yml`).
+request.
 The axiom gate (`Tests/Axioms.lean`) stops compiling when a `sorry` or a new axiom reaches a
 headline theorem.
 
@@ -1296,16 +1060,16 @@ Also:
 would, in the order `examples/README.md` reads them: the counter `lanes new` writes
 (`examples/counter`); the bank (`examples/bank`), also served over HTTP (`examples/bank-web`); a
 key-value store with front ends, whose read cache breaks refinement (`examples/kv-cache`,
-`KV.implements`, `KV.caching_not_implements`); leader election (`examples/election`); a watchdog
+`KV.implements`, `KV.caching_not_implements`); a watchdog
 (`examples/watchdog`); a shop that charges each order at most once through a model of a payment
-service (`examples/payments`, `Shop.charged_at_most_once`); `examples/raft-kv`, a replicated key-value store proved to implement the
-map it replicates (`RaftKV.implementsMachine`), and `once` of it in every environment with the
-memo in the map (`RaftKV.implementsMachine_once`); `examples/ledger`, a multi-user web ledger;
-`examples/sign-in`, members of a video site signed in with Google or GitHub, with sessions;
+service (`examples/payments`, `Shop.charged_at_most_once`); a to-do list kept in PostgreSQL
+(`examples/todo-db`); `examples/sign-in`, members of a video site signed in with Google or
+GitHub, with sessions; uploads that stream (`examples/upload`); reminders on the scheduler
+(`examples/reminders`);
 and `examples/rookery`, a small social network for bots whose claims are proved of its spec,
 which it is proved to implement with deadlines (`Rookery.implements`); the theorem that joins the
-two is not written. The tests import none of them; the systems of `examples/kv-cache`,
-`examples/election` and `examples/watchdog` are copied into `Tests/Fixtures/`, and
+two is not written. The tests import none of them; the systems of `examples/kv-cache` and
+`examples/watchdog` are copied into `Tests/Fixtures/`, and
 `Tests/Copies.lean` fails when a copy differs from its example. Each application
 below has its claims, their evidence and premises, and its limits.
 
@@ -1325,7 +1089,6 @@ Where: `examples/bank/Bank.lean`.
 
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
-| The bank, killed with `kill -9` and started again, has the balance it had | Run by hand on 2026-11-27: account 2 answers `142` after a transfer of 42 and a restart (`examples/bank-web`) | One process, one shard | tested by hand |
 | Under lossy links the checker finds the credit the bank loses | `examples/bank/Check.lean` ("lossy links"), run by `lake test`; the trace in `README.md` reproduced on 2026-11-27 | None | checked |
 | Bank: no balance is ever negative | `Bank.balance_nonneg`, `examples/bank/Bank.lean`; gate `examples/bank/Bank/Proofs/Axioms.lean` | None | proved |
 | Bank: money is conserved, for any number of accounts | `Bank.money_conserved`, `examples/bank/Bank/Proofs.lean`; same gate | A faultless environment | proved |
@@ -1355,21 +1118,6 @@ Also:
   with a key, a value and a front end: the checker's run replays in every one (by the standard
   simulation `Lanes.Account`).
 - Proved: without caching it implements the map spec for all keys, values and front ends in every environment whose links do not duplicate.
-
-### Leader election
-
-Where: `examples/election/Election.lean`.
-
-#### Claims
-
-| Claim | Evidence | Premises | Status |
-| --- | --- | --- | --- |
-| Election: at most one leader per term | `Election.election_safety`, `examples/election/Election/Proofs.lean`; gate `examples/election/Election/Proofs/Axioms.lean` | `votesOncePerTerm` | proved |
-
-Also:
-
-- Checked: a split-brain bug found.
-- Checked: at most one leader per term on 3 nodes with reordering and a crash (165k states).
 
 ### Watchdog
 
@@ -1406,7 +1154,7 @@ Also:
 
 ### Reminders
 
-Reminders over HTTP, each a job of the scheduler that posts its text to a notification service at its time and retries until it is taken, gives up or is cancelled; a periodic sweep, scheduled at every start and held as one job; on a journal.
+Reminders over HTTP, each a job of the scheduler that posts its text to a notification service at its time and retries until it is taken, gives up or is cancelled; a periodic sweep, scheduled at every start and held as one job; they live as long as the process.
 
 Where: `examples/reminders/Reminders/App.lean`.
 
@@ -1417,11 +1165,11 @@ Where: `examples/reminders/Reminders/App.lean`.
 | Reminders: the reminders and the scheduler's jobs stay within their bounds | `Reminders.bounded`, `Reminders.jobs_bounded`, `examples/reminders/Reminders/Proofs.lean`; gate `examples/reminders/Reminders/Proofs/Axioms.lean` | None | proved |
 | Reminders: every reminder's delivery ends, sent, given up on or cancelled | `Reminders.delivery_ends`; same gate | A fair run in which the scheduler does not crash | proved |
 | Reminders: every reminder's delivery is answered to the reminders, sent, given up on or cancelled | `Reminders.delivery_answered`; same gate | A fair run in which neither the scheduler nor the reminders crash and the link from the scheduler to the reminders loses nothing; the reminder's job is a call | proved |
-| Reminders: a reminder refused twice is sent on its third attempt, under one key, and a restart on the journal keeps what was sent and what waits | `examples/reminders/Test.lean`, run by its `lake test` | A local notification service | tested |
+| Reminders: a reminder refused twice is sent on its third attempt, under one key; one that waits is cancelled; after a restart the list is empty | `examples/reminders/Test.lean`, run by its `lake test` | A local notification service | tested |
 
 Also:
 
-- Checked: over HTTP, a reminder refused twice is sent on its third attempt under one key, and a restart on the journal keeps what was sent and what waits.
+- Tested: over HTTP, a reminder refused twice is sent on its third attempt under one key, one that waits is cancelled, and after a restart the list is empty.
 
 #### Limits
 
@@ -1475,89 +1223,6 @@ Also:
 - Checked: what the bridge and the steps make of requests is tested without a socket.
 - Proved: the sign-in's own guarantees are Lanes'.
 
-### Videos
-
-Lanes' V1 acceptance application: a video site whose members sign in with Google or GitHub, upload from the browser to S3 with a form whose signed policy bounds the size (2 GiB by default), and watch, like, comment and delete.
-
-Where: `examples/videos`, a package of its own. The schemas of its journal and snapshot are
-pinned in `examples/videos/schemas/`, and files it wrote are in the corpus,
-`Tests/Journals/videos/` (Journal, snapshots and the disk model).
-
-#### Claims
-
-| Claim | Evidence | Premises | Status |
-| --- | --- | --- | --- |
-| Videos: each member's scheduler holds at most `maxJobs` jobs and no key twice | `Videos.jobs_bounded`, `examples/videos/Videos/Proofs/Jobs.lean`; gate `examples/videos/Videos/Proofs/Axioms.lean` | None: every environment | proved |
-| Videos: every check, last check, start of a transcode and delete ends, whatever the store and the worker do | `Videos.job_ends`; same gate | A fair run in which the member's scheduler does not crash; the job is not periodic (the site schedules none, but the system takes schedulings from outside) | proved |
-| Videos: no output of the system shows a video, and a read shows a private one only to a session of its owner that the owner's site lets in at the read's time | `Videos.Site.quiet_handle`, `Videos.private_to_owner`, `Videos.Site.read_private`; same gate | None | proved |
-| Videos: once a delete is answered, no later output of the owner's actor shows the video, and no read after it, whatever other members' sites it reads; the video leaves the feed, its channel and its watch page at one boundary | `Videos.Site.deleted_never_served`, `Videos.Site.Gone.run`; same gate; `Lanes.Batch.run_peeks` for the boundary | About runs of the spec's functions on the owner's site | proved |
-| Videos: a view answers the spec's read of the sites of the members it reads, each that actor's state at the peek's boundary; for the feed, every member's actor started, the rest having the empty site | `Videos.Web.view_answers`; same gate | None | proved |
-| Videos: a delete answered schedules the delete of the object, whose end is reported exactly when the scheduler gave it up | `Videos.Site.delete_schedules`, `Videos.Site.delete_reported`; same gate | None | proved |
-| Videos: once its job is over, a deleted video's object was deleted by the store, or is reported | `examples/videos/Videos/Check.lean`, run by its `lake test` | Runs with no crash of an actor (a crash loses its mail; on one shard neither actor crashes alone); one video, two attempts | checked, not proved |
-| Videos: a read shows a video only if the run of its owner's site has a job asking the store for its upload that succeeded with `found`, which the scheduler says only of the store's answer | `Videos.Site.listed_confirmed`, `Schedule.succeeded_replied`; same gate and `Tests/Axioms/Behaviours.lean` | The seeded bugs off; the adapter asks the store what the key says (`Videos.Web.exchangeOf`, tested); about runs of the spec's functions | proved |
-| Videos: a check and a delete the store refuses once are tried again and succeed | `examples/videos/Videos/EndToEnd.lean`, run by its `lake test` | The test kit's fake S3, told to refuse (`Testing.S3.Fake.refuse`) | tested |
-| Videos: a read shows a video as ready only if the run of its owner's site has a request in which the worker reported a round of its transcode done, with a signature that checks under the worker's key | `Videos.Site.listed_transcoded`, `examples/videos/Videos/Proofs/Confirmed.lean`; same gate | The seeded bugs off (`Config.Honest`); about runs of the spec's functions | proved |
-| Videos: a report of the worker changes only the video its round names, whatever its signature | `Videos.Site.report_names`; same gate | None | proved |
-| Videos: nothing is shown whose rendition and thumbnail the store may not hold, and a report taken unsigned shows a video the worker never reported done | `examples/videos/Videos/Check.lean`, run by its `lake test` | The worker's model, honest; reports twice, failed and forged; one video, a crash anywhere | checked |
-| Videos: with an honest worker that reports, a confirmed upload ends ready or failed | `Videos.report_settles`, `Videos.Site.report_leaves`, `examples/videos/Videos/Proofs/Ready.lean`; same gate; the whole, with the worker's model, `examples/videos/Videos/Check.lean`: of runs with no crash, every state with no successor has no video transcoding | A fair run; the owner's actor not crashed; the link from outside to it lossless; the worker's signed report of the round is an input of the run (the premise). The check: runs with no crash, one video and one retry | proved from the report; checked as a whole |
-| Videos: an upload is transcoding, then ready, its page playing the rendition with the thumbnail as its poster; a transcode that failed is shown to its owner and tried again; a report forged with another key is refused | `examples/videos/Videos/EndToEnd.lean`, run by its `lake test` | The test kit's fake S3 and worker (`Lanes.Testing.Transcode`) | tested |
-
-Also:
-
-- Checked: a pipeline: a confirmed upload is given to a transcode worker outside the site (`Lanes.Transcode`, a JSON job over HTTP and a signed webhook back), and the video is ready only once the worker reports, signed, a playable rendition and a thumbnail, which its page plays and shows; a failed transcode is shown to its owner with a retry.
-- Checked: bounds on one member's videos and comments, held in that member's site.
-- Checked: model-checked beside the worker's and the object store's models with their timeouts, late, repeated and forged reports and crashes, four seeded bugs found (the browser's word taken for an upload, a timed-out check taken as found, sessions that never end, a report taken unsigned).
-- Checked: an actor for each member, named by the identity that signs in (`Videos.Who`), that runs the spec's functions on the member's site, on `Http.serveFronted` with a journal and snapshots, and a scheduler for each member beside it (`Schedule.attachBy`), whose jobs are the calls to the store and the worker, retried with a backoff, kept on the journal and bounded by `maxJobs`: a check, the last check of an upload a day after it was begun, which confirms it or takes it out, the start of a round of a transcode, and the delete of a deleted video's objects, reported if given up. A like, a comment and the taking out of a comment are let in by the visitor's actor and taken by the owner's (`Videos.Visit`). The feed, watch pages and channel pages are reads from the members' actors (`Videos.Web.view`). How widely the work spreads over the actors is measured with `lake exe videosWaves` (`docs/decisions/D109-videos-per-member.md`).
-- Checked: public, unlisted and private videos, a feed by pages, channels.
-- Proved: each like counted once in every reachable state of every member's site (`Videos.likes_distinct`).
-
-### Raft key-value store
-
-Where: `examples/raft-kv`, a package of its own.
-
-#### Claims
-
-| Claim | Evidence | Premises | Status |
-| --- | --- | --- | --- |
-| Raft: election safety, log matching, leader completeness, state machine safety, for every number of nodes and every fault | `RaftKV.election_safety`, `RaftKV.log_matching`, `RaftKV.leader_completeness`, `RaftKV.applied_agree_over_time` and the rest of `examples/raft-kv/RaftKV/Proofs/`; gate `examples/raft-kv/RaftKV/Proofs/Axioms.lean` | A finite set of nodes; a crash keeps what a node had; both protocol switches on for the second table | proved |
-| Raft: the cluster is the one map to its clients (refinement, so linearizable as `System.Implements` defines it) | `RaftKV.implementsMachine`, `examples/raft-kv/RaftKVProofs.lean` (gated there) | A request is not handed to a node twice by the link from its client | proved |
-| Raft with the memo: each command takes effect at most once, with no premise on links | `RaftKV.implementsMachine_once`, same file | The machine behind `Machine.once`; `raftNode` runs the plain map, not this | proved |
-| Raft: three processes killed with SIGKILL, two at a time, keep every acknowledged write | `lake exe raftProcs`, a CI job | One machine | tested |
-| Raft: a minute of random kills and pauses loses no acknowledged write | `lake exe raftChaos`, by hand, one run with seed 7 | Not in CI | tested by hand |
-| Raft: a request is eventually answered |  |  | not proved: a cluster that answers nothing refines its spec too |
-
-Also:
-
-- Checked: a node that votes for a candidate with a shorter log is caught in 15 steps.
-- Checked: runs as three processes, each with an HTTP front, a journal it cuts and a snapshot, joined by TCP: every node killed with SIGKILL and started from its snapshot, two at a time, has what was acknowledged (`raftProcs`), and a minute of nodes killed and paused at random loses no acknowledged write (`raftChaos`, not in CI).
-- Checked: what a PASS of these checks means is a theorem (`RaftKVProofs/Checked.lean`).
-- Proved: election safety and state machine safety also over time: no term has two leaders and no index two entries at any two points of a run.
-- Proved: every invariant of Raft's safety argument, for every number of nodes and every environment model (`examples/raft-kv/RaftKV/Proofs/`): election safety, log matching, leader completeness, agreement on committed entries, state machine safety, and that no `append` carries more than `maxAppend` entries.
-- Proved: on these invariants, the cluster refines its spec in every environment that does not hand a request to a node twice, and, with the machine behind a memo of the commands its clients name, implements `once` of it in every environment, links from clients repeating included (`RaftKV.implementsMachine_once`; `examples/raft-kv/RaftKVProofs/`). The processes run the plain map, not the memo.
-
-### Ledger
-
-A multi-user double-entry ledger with sign-up, log-in, sessions and an audit, as a web application. Its friction log is in `examples/ledger/README.md`.
-
-Where: `examples/ledger`, a package of its own.
-
-#### Claims
-
-| Claim | Evidence | Premises | Status |
-| --- | --- | --- | --- |
-| Ledger: money conserved in each currency, no overdraft, paired entries, cached balances | `Ledger.book_invariant`, `examples/ledger/Ledger/Proofs/`; gate `examples/ledger/Ledger/Proofs/Axioms.lean` | None: every run and environment model | proved |
-| Ledger: a user is shown only its own records; the ledger serves `n` only when `user n` asks; sessions and failed log-ins within bounds | `Ledger.serve_onlyOf`, `Ledger.serve_from_owner`, `Ledger.user_bounded`; same gate | None | proved |
-| Ledger, without timers: implements its spec | `Ledger.implements`, `examples/ledger/Ledger/Proofs/Refines.lean`; same gate | Each user's link to the ledger is ordered and does not duplicate; no request is handed to a user twice | proved |
-| Ledger, with timers: implements its spec with its deadlines | `Ledger.implements_timed`, `examples/ledger/Ledger/Proofs/Timed.lean`; for one shard's kernel, every premise discharged, `Ledger.implements_timed_kernel`, and of the events the kernel reports, `Ledger.kernel_history`; same gate | Each user's link to the ledger is ordered and neither loses nor duplicates; no request is handed to a user twice; the ledger does not crash in the semantics. `Kernel.env` meets all three, and a process that dies restarts the shard whole from its journal (`Journal.recover_kernel`), which is no crash of the semantics. The crash premise cannot be dropped: a crash of the ledger loses what is in flight to it, and `examples/ledger/Check.lean` ("the same with the ledger crashing") finds a session's end lost in 17 steps. Not covered: outputs handed over again after a restart (TRUSTED, "Durability") | proved |
-| Ledger: served over HTTP through SIGKILL and a restart | `lake exe ledgerLive`, a CI job |  | tested |
-
-Also:
-
-- Checked: a log-out answered by the user actor, or links that reorder, give a stale view the checker finds.
-- Checked: refinement to its spec and every safety property on two users with two accounts each, transfers racing, with crashes.
-- Checked: with timers, checked against the spec's lockouts and session ends, each passing as the ledger serves the user's notice of it, which a lockout that does not lock fails, and which a session's end seen at the user's timer fails when a view races it (`Ending.atUser`, found in 43 steps), as does a notice lost on a lossy link or in a crash of the ledger.
-- Proved: sessions and failed log-ins within their bounds, for every run and environment model.
-
 ### rookery
 
 A small social network for bots and their owners as a web application with a JSON API: sign-up, log-in, sessions, API tokens, posts, follows, timelines, deletes and a rate limit, all in one actor that runs the spec's functions. Its friction log is in `examples/rookery/README.md`.
@@ -1572,7 +1237,7 @@ Where: `examples/rookery`, a package of its own.
 | Rookery: the system implements its spec with deadlines | `Rookery.implements`, `examples/rookery/Rookery/Proofs/Refines.lean`; same gate | The link from outside to the board does not duplicate; requests may be lost and reordered and the board may crash | proved |
 | Rookery, of every run of the system: a response carries the secrets of no account but the one its request, which arrived before it, was made as; every list of posts handed over is a read of a board the spec's functions reach (so the timeline claims above apply to it); once a delete made through the web is answered `deleted`, no read whose request arrives afterwards shows the post | `Rookery.output_secret`, `Rookery.output_read`, `Rookery.deleted_unread`, `examples/rookery/Rookery/Proofs/Traces.lean`, from `Rookery.implements` and `System.Implements.history`; same gate | The link from outside to the board does not duplicate; for the third, requests have distinct ids. Of `system`, not of `Http.served system` (the gate's refinement is not proved) | proved |
 | Rookery, of every run of the system: a post answered `posted` to a web post, or shown in a read, is on its author's account in the board of every read whose request arrives later, until a request made as its author to delete it arrives (the read lists at most `timelineMax` posts, so it is the board that holds the post, and the timeline claims say which the read shows); after a position where an account's window passes and before the next, the web posts it makes that arrive after it are answered `posted` with at most `maxPerWindow` distinct ids; of the API changes one account sends with one `seq`, every two replies but `stale`, `badToken` and `reused` are the same, to the same change | `Rookery.posted_kept`, `Rookery.shown_kept`, `Rookery.rate_limit_run`, `Rookery.api_once`, `examples/rookery/Rookery/Proofs/Runs.lean`, from `Rookery.implements` and `System.Implements.history` (which passes each deadline where the run shows it, `System.Implements.Explains.fired`, `fires`); same gate | The link from outside to the board does not duplicate; requests have distinct ids. Of `system`, not of `Http.served system`. The rate limit counts web posts only, and `posted_kept` starts from a web post or a read: an API post's repeated `seq` is answered `posted` from the memo, after the post was deleted or in a later window | proved |
-| Rookery: a request is made as the account its cookie or token verifies; no secret reaches the journal | `examples/rookery/Check.lean` (`bridge`), `lake exe rookeryLive` (CI) | HMAC is a pseudorandom function | tested |
+| Rookery: a request is made as the account its cookie or token verifies; no secret reaches the system | `examples/rookery/Check.lean` (`bridge`), `lake exe rookeryLive` (CI) | HMAC is a pseudorandom function | tested |
 
 Also:
 
@@ -1585,5 +1250,5 @@ Also:
 
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
-| Ledger and rookery: the system behind the HTTP gate (`Http.served`) implements the spec | Only the gate's own theorems (at most once, deadlines, answers) |  | not proved |
+| Rookery: the system behind the HTTP gate (`Http.served`) implements the spec | Only the gate's own theorems (at most once, deadlines, answers) |  | not proved |
 | Every request to an application is answered | Only the gate's: an admitted request is answered, at the latest with `504` |  | not proved for the applications' own logic |

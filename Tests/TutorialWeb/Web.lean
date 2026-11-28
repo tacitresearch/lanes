@@ -69,7 +69,7 @@ def arrived (r : Http.Request) : Nat := ((r.header? arrivedHeader).bind String.t
 
 /-- What the server makes of a request before the system sees it: the member its cookie names,
 if the cookie is signed with a key of the site's and has not expired when the request arrived,
-and no cookie, so none is journalled. -/
+and no cookie, so none enters the system. -/
 def prepare (s : Settings) (r : Http.Request) : Http.Request :=
   let kept := r.headers.filter fun (name, _) => name != "cookie" && name != memberHeader
   let member := (r.cookie? s.cookieName).bind (Auth.verify s.keys "session" (arrived r))
@@ -207,9 +207,6 @@ def bridge (s : Settings) : Bridge sig where
   encode r := some (r.req, encode s r.answer)
   prepare := prepare s
 
-def saving (config : Config) : Http.Saving (system config) where
-  actors := { id := Codec.unit, state := fun _ => Codec.of State, msg := fun _ => Request.codec }
-
 /-! ## Where a request arrives -/
 
 /-- The request with the time it arrived, and no header of the server's that a client sent. -/
@@ -256,7 +253,6 @@ abbrev Site (d : Deployment) := Http.admitted (system d.config) (bridge d.settin
 
 def start (d : Deployment) : Async (Http.Server (Site d)) := do
   let signIn ← OAuth.SignIn.start d.signIn
-  Http.serve (system d.config) (bridge d.settings) d.server {} (some (saving d.config))
-    (arrive := some (arrive d.settings signIn))
+  Http.serve (system d.config) (bridge d.settings) d.server (arrive := some (arrive d.settings signIn))
 
 end Shelf

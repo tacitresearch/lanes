@@ -2,7 +2,6 @@
 Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import LanesCli.Journal
 import LanesCli.Lint
 import LanesCli.New
 
@@ -18,9 +17,7 @@ Usage:
       Create a new application.
   lanes lint [--fix] [--main] [--json] [<path>]
       Check a project against the rules of Lanes (AGENTS.md), and the files derived from others.
-      --fix rewrites the derived files: the line counts of TRUSTED.md and the decisions' index,
-      and each pinned schema (a .schema file) after a change that the files it wrote still read.
-      The pinned schemas are read with the build: lint builds the modules they name first.
+      --fix rewrites the derived files: the line counts of TRUSTED.md and the decisions' index.
       --main numbers new decisions (with --fix) or reports them: use it on the main branch.
       --json prints the findings as JSON, each with its kind: proof for a `sorry`, build for
       a build that failed, else check.
@@ -32,16 +29,6 @@ Usage:
       build's failure when the driver did not build.
   lanes stats
       Print the totals no committed file holds: trusted lines and decisions.
-  lanes journal schema (--type <type> | --codec <term>) [--import <module>]...
-      Print the schema of a type's codec, or of a codec, as the build derives it: the type,
-      then each named type in it. The modules default to `Lanes`; build them first.
-  lanes journal dump <file> [--from <n>] [--count <n>] [--json]
-      Print a journal or a snapshot as text, or JSON lines: its manifest, its schema, and each
-      record read by name with the file's own schema, with the byte its frame starts at.
-  lanes journal verify <file> [--json] [(--type <type> | --codec <term> | --schema <term>)
-      [--import <module>]...]
-      Check every frame, the prelude and every record, and tell a torn tail from damage; given
-      the reader's types, check that they read the file as opening would. Exits 0 or 1.
 "
 
 def flag? (args : List String) (name : String) : Option String :=
@@ -103,7 +90,6 @@ def main (args : List String) : IO UInt32 := do
     let child ← IO.Process.spawn { cmd := "lake", args := #["test"] }
     return (← child.wait)
   | ["check", "--json"] => checkJson
-  | "journal" :: rest => Journal.run rest
   | _ =>
     IO.print usage
     return if args.isEmpty || args == ["--help"] || args == ["help"] then 0 else 1

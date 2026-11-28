@@ -60,8 +60,9 @@ Every claim, with its theorem, check or test, its premises and its status, is in
   `docs/ARCHITECTURE.md`. Each has premises, which it gives.
 - **Checked**: model checks of the examples on small instances, and of what the proofs do not
   yet cover, such as that a request reaches the gate.
-- **Tested**: the parsers and encoders against reference implementations (Go's standard
-  library, `expfmt`, botocore, jwcrypto), the models of S3, its multipart uploads, SES, SQS and PostgreSQL against runs recorded from moto and
+- **Tested**: servers stopped with requests in flight, the parsers and encoders against
+  reference implementations (Go's standard library, `expfmt`, botocore, jwcrypto), the models of
+  S3, its multipart uploads, SES, SQS and PostgreSQL against runs recorded from moto and
   PostgreSQL (`oracles/README.md`), the bound C against its Lean references.
 - **Trusted**: the trusted code, listed with each file's size in `TRUSTED.md`: the
   IO shells, the HTTP wire format where its proof does not reach, the C that binds OpenSSL's
@@ -79,8 +80,11 @@ proved of its spec and which is proved to implement that spec. To run it, from t
 lake exe cache get   # prebuilt Mathlib, once
 cd examples/rookery && mkdir -p .lake && ln -s ../../../.lake/packages .lake/packages
 lake build && lake test
-lake exe rookery 8080 rookery.journal rookery.secrets   # serves http://127.0.0.1:8080
+lake exe rookery 8080 rookery.secrets   # serves http://127.0.0.1:8080
 ```
+
+`examples/todo-db` keeps its state in PostgreSQL, through a modelled adapter: actor state lives
+as long as the process, and what must outlive it lives in a service outside.
 
 ## Performance
 
@@ -122,7 +126,7 @@ lake exe my-app      # serves http://127.0.0.1:8080
 minutes.
 `docs/TUTORIAL-WEB.md` then builds a web app on it: sign-in with an OpenID Connect provider,
 uploads to S3 under a size limit, a test of the whole site against the test kit's fakes, a
-property checked and proved, and what a deploy needs.
+property checked and proved, and what running it needs.
 
 The app gets Lanes from GitHub, not from the clone, which it does not need once the app is
 made. Its `lakefile.toml` requires the release tag the clone is at, or else the clone's commit

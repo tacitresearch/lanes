@@ -4,7 +4,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Durable.OutputId
+public import Lanes.Runtime.KernelSound
+public import Lanes.Runtime.Wave
 public import Lanes.Proof.List
 
 /-!
@@ -12,19 +13,23 @@ What a shard does with everything it takes from its inbox at once, as a pure fun
 turns it asks of the kernel, and the acts the shell is to perform for them, in order. The shell
 (`Lanes.Runtime`) performs them and decides nothing.
 
-Of every batch: the journal describes the kernel (`run_kernel`); an output is handed over only
-once the entries that produce it are appended, a save falls where every output produced has
-been handed over, and a peek is answered with the states of the kernel the journal describes,
-once every output it produced is handed over (`run_sound`); who waits for the shard to be idle
-is answered when the kernel is quiet (`run_resolved`). Each output is handed over with its
-origin in the history the batch writes (`run_ids`), however its waves are spread
-(`run_ids_spread`).
+A turn is everything the shell asks of the kernel between two looks at its inbox, and the
+requests (`Kernel.Op`) it is: what the turn does is what those requests do (`turn_eq_exec`,
+`turnAll_eq_exec`). A batch keeps them, as a `work` act the shell performs nothing for, so that
+every other act can be tied to the kernel.
+
+Of every batch: the kernel after it is the one its requests lead to (`run_kernel`); every output
+those requests produced is handed over and every event recorded, in order (`run_handed`); and a
+peek is answered with the states of the kernel the requests so far lead to, once every output
+they produced is handed over (`run_sound`). By `Kernel.exec_reachable` that is a run of the
+semantics. Who waits for the shard to be idle is answered when the kernel is quiet
+(`run_resolved`).
 
 A peek reads the states of some actors and writes nothing. It is answered at the end of its
 batch, after every other act, with the states of the kernel the whole batch leaves: it sees every
-entry before that boundary and none after it (`run_peeks`). A batch with its peeks taken out is
-the same batch, act for act (`run_erase_peeks`), so the journal, the outputs, their ids and the
-saves are those of the inputs alone.
+request before that boundary and none after it (`run_peeks`). A batch with its peeks taken out is
+the same batch, act for act (`run_erase_peeks`), so the work and the outputs are those of the
+inputs alone.
 
 The reply handles are opaque: `P ids` answers a peek at the actors `ids` and `W` an idle, as `W`
 wakes a sleeper in `Mailbox`.
@@ -39,7 +44,7 @@ variable {σ : Signature}
 inductive Command (σ : Signature) (P : List σ.Id → Type) (W : Type) where
   | input (x : σ.In)
   /-- Inputs that arrived together, accepted in order before any work is done for them, so that
-  the actors they reach can step in parallel (`Journal.turnAll`). -/
+  the actors they reach can step in parallel (`turnAll`). -/
   | inputs (xs : List σ.In)
   | idle (timers : Bool) (waiter : W)
   /-- Read the states of the actors `ids`, and of every actor started that `every` holds of, at
@@ -55,40 +60,31 @@ structure Peek (sys : System σ) (ids : List σ.Id) where
   others : List ((i : σ.Id) × sys.State i) := []
 
 inductive Act (sys : System σ) (P : List σ.Id → Type) where
-  | append (entries : Array (Journal.Entry σ))
+  /-- The requests the kernel was asked since the act before, in order. The shell performs
+  nothing for it: it is what ties every other act to the kernel (`run_kernel`, `run_sound`). -/
+  | work (ops : Array (Kernel.Op σ))
   | record (events : Array (Event σ))
-  /-- Hand these outputs over, each with its origin, then note a `handed` mark. -/
-  | handOver (outputs : Array (Journal.Origin × σ.Out))
-  /-- Save this image of the kernel. The kernel goes on as the image restores it. -/
-  | save (image : Kernel.Image sys)
+  | handOver (outputs : Array σ.Out)
   | answer (ids : List σ.Id) (reply : P ids) (peek : Peek sys ids)
 
 structure Config where
   now_ms : Nat
-  /-- How many entries the shard's history has before the batch, so where the origins of its
-  outputs start. -/
-  index : Nat := 0
   fuel : Nat
-  /-- How many entries to write between two saves, if the journal can save. -/
-  snapshotEvery : Option Nat
   /-- How the steps of a wave of `inputs` are spread over threads (`Kernel.runWaves`). It does
   not change the batch (`run_spread`). -/
   spread : Kernel.Spread := {}
 
 /-- The shard's part of a batch so far, besides its kernel. -/
 structure Scan (sys : System σ) (P : List σ.Id → Type) (W : Type) where
-  /-- Entries written since the last save. -/
-  written : Nat
   waiting : Array (Bool × W)
   acts : Array (Act sys P) := #[]
-  entries : Array (Journal.Entry σ) := #[]
+  ops : Array (Kernel.Op σ) := #[]
   events : Array (Event σ) := #[]
-  outputs : Array (Journal.Origin × σ.Out) := #[]
+  outputs : Array σ.Out := #[]
   worked : Bool := false
 
 structure Result (sys : System σ) [Hashable σ.Id] (P : List σ.Id → Type) (W : Type) where
   kernel : Kernel sys
-  written : Nat
   acts : Array (Act sys P)
   resolved : Array W
   waiting : Array (Bool × W)
@@ -127,32 +123,8 @@ def Command.peek? : Command σ P W → Option ((ids : List σ.Id) × (σ.Id → 
   | .peek ids every reply => some ⟨ids, every, reply⟩
   | _ => none
 
-def due (c : Config) (written : Nat) : Bool :=
-  c.snapshotEvery.any fun n => max 1 n ≤ written
-
 def put (acts : Array (Act sys P)) (skip : Bool) (act : Act sys P) : Array (Act sys P) :=
   if skip then acts else acts.push act
-
-/-- What an act adds to the shard's history, an entry each, as requests of the kernel: the
-entries it appends, the `handed` mark the shell notes after a hand-over, the mark of a save. -/
-def Act.steps : Act sys P → List (Option (Kernel.Op σ))
-  | .append entries => Journal.steps entries.toList
-  | .handOver outputs => if outputs.isEmpty then [] else [none]
-  | .save _ => [some .snapshot]
-  | _ => []
-
-def history (acts : List (Act sys P)) : List (Option (Kernel.Op σ)) := acts.flatMap Act.steps
-
-/-- How many entries an act adds to the history. -/
-def Act.grows : Act sys P → Nat
-  | .append entries => entries.size
-  | .handOver outputs => if outputs.isEmpty then 0 else 1
-  | .save _ => 1
-  | _ => 0
-
-/-- How many entries acts add to the history: `(history acts).length` (`grown_eq`). -/
-def grown (acts : Array (Act sys P)) : Nat :=
-  acts.foldl (init := 0) fun n act => n + act.grows
 
 variable [Hashable σ.Id]
 
@@ -196,46 +168,127 @@ theorem Peek.init_of_not_others {k : Kernel sys} {ids : List σ.Id} {every : σ.
     simp only [Peek.of, List.mem_filterMap]
     exact ⟨⟨i, cell⟩, Std.DHashMap.mem_toList_iff_get?_eq_some.mpr hget, by simp [hp]⟩
 
-/-- A turn, kept back to be written with the turns after it. Its outputs are all its last
-entry's (`Journal.turn_placed`), so their origin is where that entry falls in the history. -/
-def workWith (index : Nat) (turn : Kernel sys → Journal.Turn sys) :
+/-! One turn, as a pure function: everything the shell asks of the kernel between two looks at
+its inbox, and the requests that is. -/
+
+structure Turn (sys : System σ) [Hashable σ.Id] where
+  kernel : Kernel sys
+  events : List (Event σ) := []
+  outputs : List σ.Out := []
+  ops : List (Kernel.Op σ) := []
+
+/--
+Take an input if there is one and do up to `fuel` units of work at time `now_ms`. If there is
+no input and nothing to do yet, the kernel is left exactly as it was, clock included, and
+nothing is asked of it: so the requests always describe the kernel (`turn_eq_exec`).
+-/
+def turn (k : Kernel sys) (now_ms : Nat) (input : Option σ.In) (fuel : Nat) : Turn sys :=
+  if input.isNone && (k.advance now_ms).wait != .none then { kernel := k }
+  else
+    let k := k.advance now_ms
+    let clock := k.clock_ms
+    match input with
+    | none =>
+      match k.runBatch fuel with
+      | { kernel, events, outputs } =>
+        { kernel, events, outputs, ops := [.advance clock, .batch fuel] }
+    | some x =>
+      match k.accept x with
+      | { kernel, events := accepted, .. } =>
+        match kernel.runBatch fuel with
+        | { kernel, events, outputs } =>
+          { kernel, events := accepted ++ events, outputs
+            ops := [.advance clock, .input x, .batch fuel] }
+
+private theorem advance_clock (k : Kernel sys) (now_ms : Nat) :
+    k.advance (k.advance now_ms).clock_ms = k.advance now_ms := by
+  simp only [Kernel.advance]
+  congr 1
+  omega
+
+/-- What a turn does is what its requests do: the same kernel, the same events, the same
+outputs. Nothing is assumed of the clock. -/
+theorem turn_eq_exec (k : Kernel sys) (now_ms : Nat) (input : Option σ.In) (fuel : Nat) :
+    (turn k now_ms input fuel).kernel = (k.exec (turn k now_ms input fuel).ops).kernel
+      ∧ (turn k now_ms input fuel).events = (k.exec (turn k now_ms input fuel).ops).events
+      ∧ (turn k now_ms input fuel).outputs = (k.exec (turn k now_ms input fuel).ops).outputs := by
+  unfold turn
+  split
+  · exact ⟨rfl, rfl, rfl⟩
+  · cases input with
+    | none =>
+      simp [Kernel.apply, Kernel.exec, advance_clock]
+    | some x =>
+      simp [Kernel.apply, Kernel.exec, advance_clock, Kernel.accept]
+
+/-- `turn` for inputs that arrived together: each is accepted, in order, and then up to `fuel`
+units of work are done, the steps of different actors worked out as `spread` says
+(`Kernel.runWaves`, which is `runBatch`). The requests are `advance`, the inputs and one
+`batch`. -/
+def turnAll (k : Kernel sys) (now_ms : Nat) (inputs : List σ.In) (fuel : Nat)
+    (spread : Kernel.Spread) : Turn sys :=
+  if inputs.isEmpty && (k.advance now_ms).wait != .none then { kernel := k }
+  else
+    let k := k.advance now_ms
+    let clock := k.clock_ms
+    match (k.acceptAll inputs).runWaves spread fuel with
+    | { kernel, events, outputs } =>
+      { kernel, events := inputs.map .input ++ events, outputs
+        ops := .advance clock :: (inputs.map .input ++ [.batch fuel]) }
+
+theorem turnAll_eq_exec (k : Kernel sys) (now_ms : Nat) (inputs : List σ.In) (fuel : Nat)
+    (spread : Kernel.Spread) :
+    (turnAll k now_ms inputs fuel spread).kernel
+        = (k.exec (turnAll k now_ms inputs fuel spread).ops).kernel
+      ∧ (turnAll k now_ms inputs fuel spread).events
+          = (k.exec (turnAll k now_ms inputs fuel spread).ops).events
+      ∧ (turnAll k now_ms inputs fuel spread).outputs
+          = (k.exec (turnAll k now_ms inputs fuel spread).ops).outputs := by
+  unfold turnAll
+  split
+  · exact ⟨rfl, rfl, rfl⟩
+  · simp only [Kernel.exec_cons, Kernel.exec_append, Kernel.exec_inputs, Kernel.runWaves_eq,
+      Kernel.apply, advance_clock]
+    simp [Kernel.exec]
+
+/-- How a turn's waves are spread does not change the turn (`Kernel.runWaves_eq`). -/
+theorem turnAll_spread (k : Kernel sys) (now_ms : Nat) (inputs : List σ.In) (fuel : Nat)
+    (spread : Kernel.Spread) :
+    turnAll k now_ms inputs fuel spread = turnAll k now_ms inputs fuel {} := by
+  unfold turnAll
+  simp only [Kernel.runWaves_eq]
+
+/-! A batch. -/
+
+/-- A turn, kept back to be handed over with the turns after it. -/
+def workWith (turn : Kernel sys → Turn sys) :
     Kernel sys × Scan sys P W → Kernel sys × Scan sys P W
-  | (k, ⟨written, waiting, acts, entries, events, outputs, _⟩) =>
+  | (k, ⟨waiting, acts, ops, events, outputs, _⟩) =>
     match turn k with
-    | { kernel, events := more, outputs := out, entries := new } =>
-      (kernel, { written, waiting, acts, entries := entries ++ new
-                 events := events ++ more
-                 outputs := outputs ++ Journal.tag (index + grown acts + entries.size + new.length) out
-                 worked := true })
+    | { kernel, events := more, outputs := out, ops := new } =>
+      (kernel, { waiting, acts, ops := ops ++ new, events := events ++ more
+                 outputs := outputs ++ out, worked := true })
 
 def work (c : Config) (input : Option σ.In) : Kernel sys × Scan sys P W → Kernel sys × Scan sys P W :=
-  workWith c.index fun k => Journal.turn k c.now_ms input c.fuel
+  workWith fun k => turn k c.now_ms input c.fuel
 
 /-- The turn of inputs that arrived together, with `fuel` for each. -/
 def workAll (c : Config) (xs : List σ.In) : Kernel sys × Scan sys P W → Kernel sys × Scan sys P W :=
-  workWith c.index fun k => Journal.turnAll k c.now_ms xs (c.fuel * max 1 xs.length) c.spread
+  workWith fun k => turnAll k c.now_ms xs (c.fuel * max 1 xs.length) c.spread
 
-/-- Write what was kept back, and save if that many entries are due. -/
-def flush (c : Config) : Kernel sys × Scan sys P W → Kernel sys × Scan sys P W
-  | (k, ⟨written, waiting, acts, entries, events, outputs, worked⟩) =>
-    let written := written + entries.size
-    let acts := put (put (put acts entries.isEmpty (.append entries)) events.isEmpty
-      (.record events)) outputs.isEmpty (.handOver outputs)
-    if due c written then
-      match k.image with
-      | image => (image.kernel, { written := 0, waiting, acts := acts.push (.save image), worked })
-    else (k, { written, waiting, acts, worked })
+/-- Hand over what was kept back. -/
+def flush : Kernel sys × Scan sys P W → Kernel sys × Scan sys P W
+  | (k, ⟨waiting, acts, ops, events, outputs, worked⟩) =>
+    (k, { waiting, worked
+          acts := put (put (put acts ops.isEmpty (.work ops)) events.isEmpty (.record events))
+            outputs.isEmpty (.handOver outputs) })
 
 def scan (c : Config) (ks : Kernel sys × Scan sys P W) :
     Command σ P W → Kernel sys × Scan sys P W
-  | .input x =>
-    match work c (some x) ks with
-    | (k, s) => if due c (s.written + s.entries.size) then flush c (k, s) else (k, s)
-  | .inputs xs =>
-    match workAll c xs ks with
-    | (k, s) => if due c (s.written + s.entries.size) then flush c (k, s) else (k, s)
+  | .input x => work c (some x) ks
+  | .inputs xs => workAll c xs ks
   | .idle timers waiter =>
-    match flush c ks with
+    match flush ks with
     | (k, s) => (k, { s with waiting := s.waiting.push (timers, waiter) })
   | .peek .. => ks
 
@@ -244,18 +297,18 @@ def answers (k : Kernel sys) (peeks : List ((ids : List σ.Id) × (σ.Id → Boo
     List (Act sys P) :=
   peeks.map fun p => .answer p.1 p.2.2 (Peek.of k p.1 p.2.1)
 
-/-- The end of a batch: what is kept back is written, and the peeks are answered from the kernel
-that leaves. -/
-def finish (c : Config) (ks : Kernel sys × Scan sys P W) (peeks : List ((ids : List σ.Id) × (σ.Id → Bool) × P ids)) :
-    Result sys P W :=
-  match flush c (if ks.2.worked then ks else work c none ks) with
+/-- The end of a batch: what is kept back is handed over, and the peeks are answered from the
+kernel that leaves. -/
+def finish (c : Config) (ks : Kernel sys × Scan sys P W)
+    (peeks : List ((ids : List σ.Id) × (σ.Id → Bool) × P ids)) : Result sys P W :=
+  match flush (if ks.2.worked then ks else work c none ks) with
   | (k, s) =>
-    { kernel := k, written := s.written, acts := s.acts ++ (answers k peeks).toArray
+    { kernel := k, acts := s.acts ++ (answers k peeks).toArray
       resolved := (s.waiting.filter fun w => k.quiet w.1).map (·.2)
       waiting := s.waiting.filter fun w => !k.quiet w.1 }
 
 /-- Inputs next to each other as one command, so that they are accepted together, at most `most`
-to a command: a turn's entries are written together, so a save is put off by at most a turn. -/
+to a command. -/
 def group (most : Nat) : List (Command σ P W) → List (Command σ P W)
   | [] => []
   | .input x :: rest =>
@@ -293,22 +346,17 @@ theorem group_ins (most : Nat) (commands : List (Command σ P W)) :
 
 /-- One batch: a turn for each input, at one time; when no input came, one turn without. Its
 peeks are answered at its end. -/
-def run (c : Config) (k : Kernel sys) (written : Nat) (waiting : Array (Bool × W))
+def run (c : Config) (k : Kernel sys) (waiting : Array (Bool × W))
     (commands : List (Command σ P W)) : Result sys P W :=
-  finish c (commands.foldl (scan c) (k, { written, waiting })) (commands.filterMap Command.peek?)
+  finish c (commands.foldl (scan c) (k, { waiting })) (commands.filterMap Command.peek?)
 
-/-! What the acts amount to. A save is written as a `snapshot` mark, whatever its index. -/
+/-! What the acts amount to. -/
 
 def Act.ops : Act sys P → List (Kernel.Op σ)
-  | .append entries => Journal.ops entries.toList
-  | .save _ => [.snapshot]
+  | .work ops => ops.toList
   | _ => []
 
 def Act.outputs : Act sys P → List σ.Out
-  | .handOver outputs => outputs.toList.map Prod.snd
-  | _ => []
-
-def Act.placed : Act sys P → List (Journal.Origin × σ.Out)
   | .handOver outputs => outputs.toList
   | _ => []
 
@@ -316,30 +364,24 @@ def Act.events : Act sys P → List (Event σ)
   | .record events => events.toList
   | _ => []
 
-def journal (acts : List (Act sys P)) : List (Kernel.Op σ) := acts.flatMap Act.ops
+/-- The requests the acts asked of the kernel. -/
+def requests (acts : List (Act sys P)) : List (Kernel.Op σ) := acts.flatMap Act.ops
 
 def handed (acts : List (Act sys P)) : List σ.Out := acts.flatMap Act.outputs
-
-/-- The outputs handed over, each with its origin. -/
-def handedIds (acts : List (Act sys P)) : List (Journal.Origin × σ.Out) := acts.flatMap Act.placed
 
 def recorded (acts : List (Act sys P)) : List (Event σ) := acts.flatMap Act.events
 
 /-- What an act may do after `before`, from kernel `k`: hand over or record exactly what the
-journal so far produced and was not yet handed over or recorded, and save the kernel the journal
-describes, or answer a peek with that kernel's states, once every output it produced is handed
-over. -/
+requests so far produced and was not yet handed over or recorded, and answer a peek with the
+states of the kernel those requests lead to, once every output they produced is handed over. -/
 def Act.Sound (k : Kernel sys) (before : List (Act sys P)) : Act sys P → Prop
-  | .append _ => True
-  | .record events => recorded before ++ events.toList = (k.exec (journal before)).events
+  | .work _ => True
+  | .record events => recorded before ++ events.toList = (k.exec (requests before)).events
   | .handOver outputs =>
-    handed before ++ outputs.toList.map Prod.snd = (k.exec (journal before)).outputs
-  | .save image =>
-    image = (k.exec (journal before)).kernel.image
-      ∧ handed before = (k.exec (journal before)).outputs
+    handed before ++ outputs.toList = (k.exec (requests before)).outputs
   | .answer ids _ peek =>
-    peek = Peek.of (k.exec (journal before)).kernel ids peek.every
-      ∧ handed before = (k.exec (journal before)).outputs
+    peek = Peek.of (k.exec (requests before)).kernel ids peek.every
+      ∧ handed before = (k.exec (requests before)).outputs
 
 def Sound (k : Kernel sys) (acts : List (Act sys P)) : Prop :=
   ∀ before act after, acts = before ++ act :: after → act.Sound k before
@@ -360,71 +402,63 @@ private theorem toList_put (acts : Array (Act sys P)) (skip : Bool) (act : Act s
     (put acts skip act).toList = if skip then acts.toList else acts.toList ++ [act] := by
   unfold put; split <;> simp
 
-omit [Hashable σ.Id] in
-private theorem ops_empty : Journal.ops (#[] : Array (Journal.Entry σ)).toList = [] := rfl
-
-omit [Hashable σ.Id] in
-private theorem ops_nil : Journal.ops ([] : List (Journal.Entry σ)) = [] := rfl
-
 private structure Inv (k0 : Kernel sys) (ks : Kernel sys × Scan sys P W) : Prop where
-  kernel : ks.1 = (k0.exec (journal ks.2.acts.toList ++ Journal.ops ks.2.entries.toList)).kernel
-  outputs : handed ks.2.acts.toList ++ ks.2.outputs.toList.map Prod.snd
-    = (k0.exec (journal ks.2.acts.toList ++ Journal.ops ks.2.entries.toList)).outputs
+  kernel : ks.1 = (k0.exec (requests ks.2.acts.toList ++ ks.2.ops.toList)).kernel
+  outputs : handed ks.2.acts.toList ++ ks.2.outputs.toList
+    = (k0.exec (requests ks.2.acts.toList ++ ks.2.ops.toList)).outputs
   events : recorded ks.2.acts.toList ++ ks.2.events.toList
-    = (k0.exec (journal ks.2.acts.toList ++ Journal.ops ks.2.entries.toList)).events
+    = (k0.exec (requests ks.2.acts.toList ++ ks.2.ops.toList)).events
   sound : Sound k0 ks.2.acts.toList
 
-private theorem inv_start (k : Kernel sys) (written : Nat) (waiting : Array (Bool × W)) :
-    Inv k (k, ({ written, waiting } : Scan sys P W)) where
-  kernel := rfl
-  outputs := rfl
-  events := rfl
+private theorem inv_start (k : Kernel sys) (waiting : Array (Bool × W)) :
+    Inv k (k, ({ waiting } : Scan sys P W)) where
+  kernel := by simp [requests, Kernel.exec]
+  outputs := by simp [handed, requests, Kernel.exec]
+  events := by simp [recorded, requests, Kernel.exec]
   sound := fun before act after h => by simp at h
 
-private theorem inv_workWith (index : Nat) (turn : Kernel sys → Journal.Turn sys)
-    (hturn : ∀ k, (turn k).kernel = (k.exec (Journal.ops (turn k).entries)).kernel
-      ∧ (turn k).events = (k.exec (Journal.ops (turn k).entries)).events
-      ∧ (turn k).outputs = (k.exec (Journal.ops (turn k).entries)).outputs) {k0 : Kernel sys}
-    {ks : Kernel sys × Scan sys P W} (h : Inv k0 ks) : Inv k0 (workWith index turn ks) := by
-  obtain ⟨k, ⟨written, waiting, acts, entries, events, outputs, worked⟩⟩ := ks
+private theorem inv_workWith (turn : Kernel sys → Turn sys)
+    (hturn : ∀ k, (turn k).kernel = (k.exec (turn k).ops).kernel
+      ∧ (turn k).events = (k.exec (turn k).ops).events
+      ∧ (turn k).outputs = (k.exec (turn k).ops).outputs) {k0 : Kernel sys}
+    {ks : Kernel sys × Scan sys P W} (h : Inv k0 ks) : Inv k0 (workWith turn ks) := by
+  obtain ⟨k, ⟨waiting, acts, ops, events, outputs, worked⟩⟩ := ks
   obtain ⟨hk, ho, he, hs⟩ := h
   obtain ⟨tk, te, to⟩ := hturn k
   simp only at hk ho he hs
-  have hexec : ∀ more : List (Journal.Entry σ),
-      k0.exec (journal acts.toList ++ Journal.ops (entries.toList ++ more))
-        = { kernel := (k.exec (Journal.ops more)).kernel
-            events := (k0.exec (journal acts.toList ++ Journal.ops entries.toList)).events
-              ++ (k.exec (Journal.ops more)).events
-            outputs := (k0.exec (journal acts.toList ++ Journal.ops entries.toList)).outputs
-              ++ (k.exec (Journal.ops more)).outputs } := by
+  have hexec : ∀ more : List (Kernel.Op σ),
+      k0.exec (requests acts.toList ++ (ops.toList ++ more))
+        = { kernel := (k.exec more).kernel
+            events := (k0.exec (requests acts.toList ++ ops.toList)).events
+              ++ (k.exec more).events
+            outputs := (k0.exec (requests acts.toList ++ ops.toList)).outputs
+              ++ (k.exec more).outputs } := by
     intro more
-    rw [Journal.ops, List.filterMap_append, ← List.append_assoc, Kernel.exec_append, ← Journal.ops,
-      ← Journal.ops, ← hk]
+    rw [← List.append_assoc, Kernel.exec_append, ← hk]
   refine ⟨?_, ?_, ?_, hs⟩ <;>
-    simp only [workWith, Array.toList_appendList, List.map_append,
-      Journal.tag_snd, hexec, ← tk, ← te, ← to, ← ho, ← he, List.append_assoc]
+    simp only [workWith, Array.toList_appendList, hexec, ← tk, ← te, ← to, ← ho, ← he,
+      List.append_assoc]
 
 private theorem inv_work (c : Config) (input : Option σ.In) {k0 : Kernel sys}
     {ks : Kernel sys × Scan sys P W} (h : Inv k0 ks) : Inv k0 (work c input ks) :=
-  inv_workWith _ _ (fun k => Journal.turn_eq_exec k c.now_ms input c.fuel) h
+  inv_workWith _ (fun k => turn_eq_exec k c.now_ms input c.fuel) h
 
 private theorem inv_workAll (c : Config) (xs : List σ.In) {k0 : Kernel sys}
     {ks : Kernel sys × Scan sys P W} (h : Inv k0 ks) : Inv k0 (workAll c xs ks) :=
-  inv_workWith _ _ (fun k => Journal.turnAll_eq_exec k c.now_ms xs _ c.spread) h
+  inv_workWith _ (fun k => turnAll_eq_exec k c.now_ms xs _ c.spread) h
 
-private theorem inv_flush (c : Config) {k0 : Kernel sys} {ks : Kernel sys × Scan sys P W}
-    (h : Inv k0 ks) :
-    Inv k0 (flush c ks) ∧ (flush c ks).2.entries = #[] ∧ (flush c ks).2.events = #[]
-      ∧ (flush c ks).2.outputs = #[] := by
-  obtain ⟨k, ⟨written, waiting, acts, entries, events, outputs, worked⟩⟩ := ks
+private theorem inv_flush {k0 : Kernel sys} {ks : Kernel sys × Scan sys P W} (h : Inv k0 ks) :
+    Inv k0 (flush ks) ∧ (flush ks).2.ops = #[] ∧ (flush ks).2.events = #[]
+      ∧ (flush ks).2.outputs = #[] := by
+  obtain ⟨k, ⟨waiting, acts, ops, events, outputs, worked⟩⟩ := ks
   obtain ⟨hk, ho, he, hs⟩ := h
   simp only at hk ho he hs
-  generalize hx : k0.exec (journal acts.toList ++ Journal.ops entries.toList) = x at hk ho he
-  let a1 := put acts entries.isEmpty (.append entries)
+  generalize hx : k0.exec (requests acts.toList ++ ops.toList) = x at hk ho he
+  let a1 := put acts ops.isEmpty (.work ops)
   let a2 := put a1 events.isEmpty (.record events)
   let a3 := put a2 outputs.isEmpty (.handOver outputs)
-  have j1 : journal a1.toList = journal acts.toList ++ Journal.ops entries.toList := by
-    simp only [a1, toList_put]; split <;> simp_all [journal, Act.ops, Journal.ops]
+  have j1 : requests a1.toList = requests acts.toList ++ ops.toList := by
+    simp only [a1, toList_put]; split <;> simp_all [requests, Act.ops]
   have r1 : recorded a1.toList = recorded acts.toList := by
     simp only [a1, toList_put]; split <;> simp [recorded, Act.events]
   have h1 : handed a1.toList = handed acts.toList := by
@@ -433,8 +467,8 @@ private theorem inv_flush (c : Config) {k0 : Kernel sys} {ks : Kernel sys × Sca
     simp only [a1, toList_put]; split
     · exact hs
     · exact sound_push hs trivial
-  have j2 : journal a2.toList = journal a1.toList := by
-    simp only [a2, toList_put]; split <;> simp [journal, Act.ops]
+  have j2 : requests a2.toList = requests a1.toList := by
+    simp only [a2, toList_put]; split <;> simp [requests, Act.ops]
   have r2 : recorded a2.toList = recorded acts.toList ++ events.toList := by
     simp only [a2, toList_put]; split <;> simp_all [recorded, Act.events]
   have h2 : handed a2.toList = handed acts.toList := by
@@ -443,64 +477,31 @@ private theorem inv_flush (c : Config) {k0 : Kernel sys} {ks : Kernel sys × Sca
     simp only [a2, toList_put]; split
     · exact s1
     · exact sound_push s1 (by simp only [Act.Sound, r1, j1, hx, he])
-  have j3 : journal a3.toList = journal acts.toList ++ Journal.ops entries.toList := by
-    rw [← j1, ← j2]; simp only [a3, toList_put]; split <;> simp [journal, Act.ops]
+  have j3 : requests a3.toList = requests acts.toList ++ ops.toList := by
+    rw [← j1, ← j2]; simp only [a3, toList_put]; split <;> simp [requests, Act.ops]
   have r3 : recorded a3.toList = recorded acts.toList ++ events.toList := by
     rw [← r2]; simp only [a3, toList_put]; split <;> simp [recorded, Act.events]
-  have h3 : handed a3.toList = handed acts.toList ++ outputs.toList.map Prod.snd := by
+  have h3 : handed a3.toList = handed acts.toList ++ outputs.toList := by
     simp only [a3, toList_put]; split <;> simp_all [handed, Act.outputs]
   have s3 : Sound k0 a3.toList := by
     simp only [a3, toList_put]; split
     · exact s2
     · exact sound_push s2 (by simp only [Act.Sound, h2, j2, j1, hx, ho])
-  have flushed : flush c (k, ⟨written, waiting, acts, entries, events, outputs, worked⟩)
-      = if due c (written + entries.size) then
-          (k.image.kernel, { written := 0, waiting, acts := a3.push (.save k.image), worked })
-        else (k, { written := written + entries.size, waiting, acts := a3, worked }) := rfl
-  have hsave : journal (a3.push (.save k.image)).toList = journal a3.toList ++ [.snapshot] := by
-    simp [journal, Act.ops]
-  have hsaveh : handed (a3.push (.save k.image)).toList = handed a3.toList := by
-    simp [handed, Act.outputs]
-  have hsaver : recorded (a3.push (.save k.image)).toList = recorded a3.toList := by
-    simp [recorded, Act.events]
+  have flushed : flush (k, ⟨waiting, acts, ops, events, outputs, worked⟩)
+      = (k, { waiting, acts := a3, worked }) := rfl
   rw [flushed]
-  split
-  · refine ⟨⟨?_, ?_, ?_, ?_⟩, rfl, rfl, rfl⟩ <;>
-      simp only [ops_nil, List.append_nil, hsave, j3]
-    · rw [Kernel.exec_append, hx, ← hk]; rfl
-    · rw [Kernel.exec_append, hx, ← ho, hsaveh, h3]; simp [Kernel.exec, Kernel.apply]
-    · rw [Kernel.exec_append, hx, ← he, hsaver, r3]; simp [Kernel.exec, Kernel.apply]
-    · rw [Array.toList_push]
-      refine sound_push (act := .save k.image) s3 ?_
-      simp only [Act.Sound]
-      exact ⟨by rw [j3, hx, hk], by rw [j3, hx, h3, ho]⟩
-  · refine ⟨⟨?_, ?_, ?_, s3⟩, rfl, rfl, rfl⟩ <;>
-      simp only [ops_nil, List.append_nil, j3, hx]
-    · exact hk
-    · rw [h3, ho]; simp
-    · rw [r3, he]
+  refine ⟨⟨?_, ?_, ?_, s3⟩, rfl, rfl, rfl⟩ <;> simp only [List.append_nil, j3, hx]
+  · exact hk
+  · rw [h3, ho]
+  · rw [r3, he]
 
 private theorem inv_scan (c : Config) {k0 : Kernel sys} {ks : Kernel sys × Scan sys P W}
     (h : Inv k0 ks) (command : Command σ P W) : Inv k0 (scan c ks command) := by
   cases command with
-  | input x =>
-    have hw := inv_work c (some x) h
-    simp only [scan]
-    generalize work c (some x) ks = w at hw
-    obtain ⟨k, s⟩ := w
-    split
-    · exact (inv_flush c hw).1
-    · exact hw
-  | inputs xs =>
-    have hw := inv_workAll c xs h
-    simp only [scan]
-    generalize workAll c xs ks = w at hw
-    obtain ⟨k, s⟩ := w
-    split
-    · exact (inv_flush c hw).1
-    · exact hw
+  | input x => exact inv_work c (some x) h
+  | inputs xs => exact inv_workAll c xs h
   | idle timers waiter =>
-    obtain ⟨⟨hk, ho, he, hs⟩, -⟩ := inv_flush c h
+    obtain ⟨⟨hk, ho, he, hs⟩, -⟩ := inv_flush h
     exact ⟨hk, ho, he, hs⟩
   | peek ids every reply => exact h
 
@@ -512,32 +513,31 @@ private theorem inv_foldl (c : Config) {k0 : Kernel sys} (commands : List (Comma
 
 private theorem answers_mem {k : Kernel sys} {peeks : List ((ids : List σ.Id) × (σ.Id → Bool) × P ids)}
     {a : Act sys P} (h : a ∈ answers k peeks) :
-    a.ops = [] ∧ a.outputs = [] ∧ a.events = [] ∧ a.steps = [] ∧ a.placed = [] := by
+    a.ops = [] ∧ a.outputs = [] ∧ a.events = [] := by
   simp only [answers, List.mem_map] at h
   obtain ⟨p, -, rfl⟩ := h
-  exact ⟨rfl, rfl, rfl, rfl, rfl⟩
+  exact ⟨rfl, rfl, rfl⟩
 
-/-- Answers write nothing, hand nothing over and record nothing. -/
+/-- Answers ask nothing of the kernel, hand nothing over and record nothing. -/
 private theorem answers_none (k : Kernel sys) (peeks : List ((ids : List σ.Id) × (σ.Id → Bool) × P ids))
     (acts : List (Act sys P)) :
-    journal (acts ++ answers k peeks) = journal acts ∧ handed (acts ++ answers k peeks) = handed acts
-      ∧ recorded (acts ++ answers k peeks) = recorded acts
-      ∧ history (acts ++ answers k peeks) = history acts
-      ∧ handedIds (acts ++ answers k peeks) = handedIds acts := by
-  simp only [journal, handed, recorded, history, handedIds, List.flatMap_append]
-  refine ⟨?_, ?_, ?_, ?_, ?_⟩ <;>
+    requests (acts ++ answers k peeks) = requests acts
+      ∧ handed (acts ++ answers k peeks) = handed acts
+      ∧ recorded (acts ++ answers k peeks) = recorded acts := by
+  simp only [requests, handed, recorded, List.flatMap_append]
+  refine ⟨?_, ?_, ?_⟩ <;>
     rw [(List.flatMap_eq_nil_iff (l := answers k peeks)).mpr (fun a ha => by simp [answers_mem ha]),
       List.append_nil]
 
 private theorem sound_answers {k0 k : Kernel sys} (peeks : List ((ids : List σ.Id) × (σ.Id → Bool) × P ids)) :
-    ∀ {acts : List (Act sys P)}, Sound k0 acts → k = (k0.exec (journal acts)).kernel →
-      handed acts = (k0.exec (journal acts)).outputs → Sound k0 (acts ++ answers k peeks) := by
+    ∀ {acts : List (Act sys P)}, Sound k0 acts → k = (k0.exec (requests acts)).kernel →
+      handed acts = (k0.exec (requests acts)).outputs → Sound k0 (acts ++ answers k peeks) := by
   induction peeks with
   | nil => intro acts h _ _; simpa [answers] using h
   | cons p peeks ih =>
     intro acts h hk hh
-    have hj : journal (acts ++ [Act.answer p.1 p.2.2 (Peek.of k p.1 p.2.1)]) = journal acts := by
-      simp [journal, Act.ops]
+    have hj : requests (acts ++ [Act.answer p.1 p.2.2 (Peek.of k p.1 p.2.1)]) = requests acts := by
+      simp [requests, Act.ops]
     have hh' : handed (acts ++ [Act.answer p.1 p.2.2 (Peek.of k p.1 p.2.1)]) = handed acts := by
       simp [handed, Act.outputs]
     have := ih (acts := acts ++ [.answer p.1 p.2.2 (Peek.of k p.1 p.2.1)])
@@ -547,55 +547,54 @@ private theorem sound_answers {k0 k : Kernel sys} (peeks : List ((ids : List σ.
 
 private theorem inv_finish (c : Config) {k0 : Kernel sys} {ks : Kernel sys × Scan sys P W}
     (peeks : List ((ids : List σ.Id) × (σ.Id → Bool) × P ids)) (h : Inv k0 ks) :
-    (finish c ks peeks).kernel = (k0.exec (journal (finish c ks peeks).acts.toList)).kernel
+    (finish c ks peeks).kernel = (k0.exec (requests (finish c ks peeks).acts.toList)).kernel
       ∧ handed (finish c ks peeks).acts.toList
-          = (k0.exec (journal (finish c ks peeks).acts.toList)).outputs
+          = (k0.exec (requests (finish c ks peeks).acts.toList)).outputs
       ∧ recorded (finish c ks peeks).acts.toList
-          = (k0.exec (journal (finish c ks peeks).acts.toList)).events
+          = (k0.exec (requests (finish c ks peeks).acts.toList)).events
       ∧ Sound k0 (finish c ks peeks).acts.toList := by
   have hw : Inv k0 (if ks.2.worked then ks else work c none ks) := by
     split
     · exact h
     · exact inv_work c none h
-  obtain ⟨⟨hk, ho, he, hs⟩, hentries, hevents, houtputs⟩ := inv_flush c hw
+  obtain ⟨⟨hk, ho, he, hs⟩, hops, hevents, houtputs⟩ := inv_flush hw
   simp only [finish]
-  generalize flush c (if ks.2.worked then ks else work c none ks) = f
-    at hk ho he hs hentries hevents houtputs
+  generalize flush (if ks.2.worked then ks else work c none ks) = f
+    at hk ho he hs hops hevents houtputs
   obtain ⟨k, s⟩ := f
-  simp only at hk ho he hs hentries hevents houtputs
-  rw [hentries, ops_empty, List.append_nil] at hk ho he
-  rw [houtputs, Array.toList_empty, List.map_nil, List.append_nil] at ho
+  simp only at hk ho he hs hops hevents houtputs
+  rw [hops, Array.toList_empty, List.append_nil] at hk ho he
+  rw [houtputs, Array.toList_empty, List.append_nil] at ho
   rw [hevents, Array.toList_empty, List.append_nil] at he
-  obtain ⟨hj, hh, hr, -, -⟩ := answers_none k peeks s.acts.toList
+  obtain ⟨hj, hh, hr⟩ := answers_none k peeks s.acts.toList
   simp only [Array.toList_append, hj, hh, hr]
   exact ⟨hk, ho, he, sound_answers peeks hs hk ho⟩
 
-/-- The journal describes the kernel: the kernel after a batch is the one the entries it
-appends and the saves it makes lead to. -/
-theorem run_kernel (c : Config) (k : Kernel sys) (written : Nat) (waiting : Array (Bool × W))
+/-- The kernel after a batch is the one its requests lead to. By `Kernel.exec_reachable` that is
+a state the semantics reaches by the events they reported. -/
+theorem run_kernel (c : Config) (k : Kernel sys) (waiting : Array (Bool × W))
     (commands : List (Command σ P W)) :
-    (run c k written waiting commands).kernel
-      = (k.exec (journal (run c k written waiting commands).acts.toList)).kernel :=
-  (inv_finish c _ (inv_foldl c commands (inv_start k written waiting))).1
+    (run c k waiting commands).kernel
+      = (k.exec (requests (run c k waiting commands).acts.toList)).kernel :=
+  (inv_finish c _ (inv_foldl c commands (inv_start k waiting))).1
 
-/-- By the end of a batch every output its entries produced has been handed over, and every
+/-- By the end of a batch every output its requests produced has been handed over, and every
 event recorded. -/
-theorem run_handed (c : Config) (k : Kernel sys) (written : Nat) (waiting : Array (Bool × W))
+theorem run_handed (c : Config) (k : Kernel sys) (waiting : Array (Bool × W))
     (commands : List (Command σ P W)) :
-    handed (run c k written waiting commands).acts.toList
-        = (k.exec (journal (run c k written waiting commands).acts.toList)).outputs
-      ∧ recorded (run c k written waiting commands).acts.toList
-        = (k.exec (journal (run c k written waiting commands).acts.toList)).events :=
-  let h := inv_finish c _ (inv_foldl c commands (inv_start k written waiting))
+    handed (run c k waiting commands).acts.toList
+        = (k.exec (requests (run c k waiting commands).acts.toList)).outputs
+      ∧ recorded (run c k waiting commands).acts.toList
+        = (k.exec (requests (run c k waiting commands).acts.toList)).events :=
+  let h := inv_finish c _ (inv_foldl c commands (inv_start k waiting))
   ⟨h.2.1, h.2.2.1⟩
 
-/-- Every act of a batch is sound where it falls. So an output is handed over only after the
-entries that produce it are appended, which is what makes it durable; a save falls only where
-everything produced has been handed over, as the mark it leaves says; and a peek is answered
-with the state of the kernel the journal so far describes. -/
-theorem run_sound (c : Config) (k : Kernel sys) (written : Nat) (waiting : Array (Bool × W))
-    (commands : List (Command σ P W)) : Sound k (run c k written waiting commands).acts.toList :=
-  (inv_finish c _ (inv_foldl c commands (inv_start k written waiting))).2.2.2
+/-- Every act of a batch is sound where it falls. So outputs are handed over and events recorded
+exactly as the kernel produced them, in order, and a peek is answered with the state of the
+kernel the requests so far lead to, after every output they produced. -/
+theorem run_sound (c : Config) (k : Kernel sys) (waiting : Array (Bool × W))
+    (commands : List (Command σ P W)) : Sound k (run c k waiting commands).acts.toList :=
+  (inv_finish c _ (inv_foldl c commands (inv_start k waiting))).2.2.2
 
 private theorem foldl_erase (c : Config) (commands : List (Command σ P W)) :
     ∀ ks : Kernel sys × Scan sys P W,
@@ -618,29 +617,28 @@ private theorem peeks_erase (commands : List (Command σ P W)) :
   | cons command rest ih =>
     cases command <;> simp_all [Command.isPeek, Command.peek?]
 
-/-- A batch with its peeks taken out is the same batch: the same kernel, the same count, the
-same waiters, and the same acts but for the answers, which come after all of them. So the
-journal, the outputs and their ids, and the saves are those of the inputs alone, wherever the
-peeks fell among them. -/
-theorem run_erase_peeks (c : Config) (k : Kernel sys) (written : Nat) (waiting : Array (Bool × W))
+/-- A batch with its peeks taken out is the same batch: the same kernel, the same waiters, and
+the same acts but for the answers, which come after all of them. So the work and the outputs are
+those of the inputs alone, wherever the peeks fell among them. -/
+theorem run_erase_peeks (c : Config) (k : Kernel sys) (waiting : Array (Bool × W))
     (commands : List (Command σ P W)) :
-    run c k written waiting commands =
-      let r := run c k written waiting (commands.filter (!·.isPeek))
+    run c k waiting commands =
+      let r := run c k waiting (commands.filter (!·.isPeek))
       { r with acts := r.acts ++ (answers r.kernel (commands.filterMap Command.peek?)).toArray } := by
   simp only [run, foldl_erase, peeks_erase, finish]
-  generalize commands.foldl (scan c) (k, { written, waiting }) = ks
-  generalize flush c (if ks.2.worked then ks else work c none ks) = f
+  generalize commands.foldl (scan c) (k, { waiting }) = ks
+  generalize flush (if ks.2.worked then ks else work c none ks) = f
   obtain ⟨k', s⟩ := f
   simp [answers]
 
 /-- Each peek of a batch is answered at the batch's end, after every other act, with the states
-of the kernel that the batch's whole journal describes: it sees every entry before that boundary
-and none after it. The other acts are those of the batch without its peeks. -/
-theorem run_peeks (c : Config) (k : Kernel sys) (written : Nat) (waiting : Array (Bool × W))
+of the kernel that the batch's requests lead to: it sees every request before that boundary and
+none after it. The other acts are those of the batch without its peeks. -/
+theorem run_peeks (c : Config) (k : Kernel sys) (waiting : Array (Bool × W))
     (commands : List (Command σ P W)) :
-    let r := run c k written waiting (commands.filter (!·.isPeek))
-    (run c k written waiting commands).acts.toList
-      = r.acts.toList ++ answers (k.exec (journal r.acts.toList)).kernel
+    let r := run c k waiting (commands.filter (!·.isPeek))
+    (run c k waiting commands).acts.toList
+      = r.acts.toList ++ answers (k.exec (requests r.acts.toList)).kernel
           (commands.filterMap Command.peek?) := by
   intro r
   rw [run_erase_peeks]
@@ -649,12 +647,11 @@ theorem run_peeks (c : Config) (k : Kernel sys) (written : Nat) (waiting : Array
 
 private theorem waiting_work (c : Config) (input : Option σ.In) (ks : Kernel sys × Scan sys P W) :
     (work c input ks).2.waiting = ks.2.waiting := by
-  obtain ⟨k, ⟨_, _, _, _, _, _, _⟩⟩ := ks; rfl
+  obtain ⟨k, ⟨_, _, _, _, _, _⟩⟩ := ks; rfl
 
-private theorem waiting_flush (c : Config) (ks : Kernel sys × Scan sys P W) :
-    (flush c ks).2.waiting = ks.2.waiting := by
-  obtain ⟨k, ⟨_, _, _, _, _, _, _⟩⟩ := ks
-  simp only [flush]; split <;> rfl
+private theorem waiting_flush (ks : Kernel sys × Scan sys P W) :
+    (flush ks).2.waiting = ks.2.waiting := by
+  obtain ⟨k, ⟨_, _, _, _, _, _⟩⟩ := ks; rfl
 
 private theorem waiting_foldl (c : Config) (commands : List (Command σ P W)) :
     ∀ ks : Kernel sys × Scan sys P W, (commands.foldl (scan c) ks).2.waiting.toList
@@ -665,65 +662,36 @@ private theorem waiting_foldl (c : Config) (commands : List (Command σ P W)) :
     intro ks
     rw [List.foldl_cons, ih, List.filterMap_cons]
     cases command with
-    | input x =>
-      simp only [scan, Command.idle?]
-      have hw := waiting_work c (some x) ks
-      generalize work c (some x) ks = w at hw
-      obtain ⟨k, s⟩ := w
-      split <;> simp [waiting_flush, ← hw]
+    | input x => simp [scan, Command.idle?, waiting_work]
     | inputs xs =>
-      simp only [scan, Command.idle?]
       have hw : (workAll c xs ks).2.waiting = ks.2.waiting := by
-        obtain ⟨k, ⟨_, _, _, _, _, _, _⟩⟩ := ks; rfl
-      generalize workAll c xs ks = w at hw
-      obtain ⟨k, s⟩ := w
-      split <;> simp [waiting_flush, ← hw]
+        obtain ⟨k, ⟨_, _, _, _, _, _⟩⟩ := ks; rfl
+      simp [scan, Command.idle?, hw]
     | idle timers waiter => simp [scan, Command.idle?, waiting_flush]
     | peek ids every reply => simp [scan, Command.idle?]
 
 /-- Those waiting for the shard to be idle, from before the batch and from its commands in
 order, are answered at its end exactly when the kernel is then quiet, with or without timers as
 each asked; the others go on waiting. -/
-theorem run_resolved (c : Config) (k : Kernel sys) (written : Nat) (waiting : Array (Bool × W))
+theorem run_resolved (c : Config) (k : Kernel sys) (waiting : Array (Bool × W))
     (commands : List (Command σ P W)) :
-    (run c k written waiting commands).resolved.toList
+    (run c k waiting commands).resolved.toList
         = ((waiting.toList ++ commands.filterMap Command.idle?).filter
-            fun w => (run c k written waiting commands).kernel.quiet w.1).map (·.2)
-      ∧ (run c k written waiting commands).waiting.toList
+            fun w => (run c k waiting commands).kernel.quiet w.1).map (·.2)
+      ∧ (run c k waiting commands).waiting.toList
         = (waiting.toList ++ commands.filterMap Command.idle?).filter
-            fun w => !(run c k written waiting commands).kernel.quiet w.1 := by
-  have hf := waiting_foldl c commands (k, { written, waiting })
+            fun w => !(run c k waiting commands).kernel.quiet w.1 := by
+  have hf := waiting_foldl c commands (k, { waiting })
   simp only [run, finish]
-  generalize commands.foldl (scan c) (k, { written, waiting }) = ks at hf
-  have hw : (flush c (if ks.2.worked then ks else work c none ks)).2.waiting = ks.2.waiting := by
+  generalize commands.foldl (scan c) (k, { waiting }) = ks at hf
+  have hw : (flush (if ks.2.worked then ks else work c none ks)).2.waiting = ks.2.waiting := by
     rw [waiting_flush]; split
     · rfl
     · exact waiting_work c none ks
-  generalize flush c (if ks.2.worked then ks else work c none ks) = f at hw
+  generalize flush (if ks.2.worked then ks else work c none ks) = f at hw
   obtain ⟨k', s⟩ := f
   simp only at hw
   constructor <;> simp only [Array.toList_map, Array.toList_filter, hw, hf]
-
-theorem due_iff (c : Config) (written : Nat) :
-    due c written = true ↔ ∃ n, c.snapshotEvery = some n ∧ max 1 n ≤ written := by
-  unfold due
-  cases c.snapshotEvery <;> simp
-
-/-- Where a save falls: when what is kept back is written and that brings the entries written
-since the last save to `max 1 snapshotEvery`, if the journal can save. The count starts again
-after it. Kept-back entries are written at an idle, at the end of the batch, and after an input
-when a save is due. -/
-theorem flush_save (c : Config) (k : Kernel sys) (s : Scan sys P W) :
-    (flush c (k, s)).2.written
-        = (if due c (s.written + s.entries.size) then 0 else s.written + s.entries.size)
-      ∧ (flush c (k, s)).2.acts.toList
-        = (put (put (put s.acts s.entries.isEmpty (.append s.entries)) s.events.isEmpty
-            (.record s.events)) s.outputs.isEmpty (.handOver s.outputs)).toList
-          ++ (if due c (s.written + s.entries.size) then [.save k.image] else [])
-      ∧ (flush c (k, s)).1 = if due c (s.written + s.entries.size) then k.image.kernel else k := by
-  obtain ⟨written, waiting, acts, entries, events, outputs, worked⟩ := s
-  simp only [flush]
-  split <;> simp_all
 
 private theorem workAll_spread (c : Config) (spread : Kernel.Spread) :
     workAll (sys := sys) (P := P) (W := W) { c with spread } = workAll c := by
@@ -731,210 +699,22 @@ private theorem workAll_spread (c : Config) (spread : Kernel.Spread) :
   unfold workAll
   congr 1
   funext k
-  rw [Journal.turnAll_spread, Journal.turnAll_spread (spread := c.spread)]
+  rw [turnAll_spread, turnAll_spread (spread := c.spread)]
 
 private theorem scan_spread (c : Config) (spread : Kernel.Spread) :
     scan (sys := sys) (P := P) (W := W) { c with spread } = scan c := by
   funext ks command
   cases command with
-  | inputs xs => simp only [scan, workAll_spread]; rfl
+  | inputs xs => simp only [scan, workAll_spread]
   | _ => rfl
 
 /-- How the waves of a batch are spread over threads changes nothing it does: the same kernel,
-the same acts, the same answers (`Journal.turnAll_spread`, from `Kernel.runWaves_eq`). So the
-shell may choose the spread of each batch as it likes, from its own timing. -/
-theorem run_spread (c : Config) (spread : Kernel.Spread) (k : Kernel sys) (written : Nat)
+the same acts, the same answers (`turnAll_spread`, from `Kernel.runWaves_eq`). So the shell may
+choose the spread of each batch as it likes, from its own timing. -/
+theorem run_spread (c : Config) (spread : Kernel.Spread) (k : Kernel sys)
     (waiting : Array (Bool × W)) (commands : List (Command σ P W)) :
-    run { c with spread } k written waiting commands = run c k written waiting commands := by
+    run { c with spread } k waiting commands = run c k waiting commands := by
   simp only [run, scan_spread]
   rfl
-
-/-! The origins of the outputs handed over. -/
-
-omit [Hashable σ.Id] in
-private theorem steps_grows (act : Act sys P) : act.steps.length = act.grows := by
-  cases act with
-  | handOver outputs => simp only [Act.steps, Act.grows]; split <;> rfl
-  | append entries => simp [Act.steps, Act.grows, Journal.steps]
-  | _ => rfl
-
-omit [Hashable σ.Id] in
-theorem grown_eq (acts : Array (Act sys P)) : grown acts = (history acts.toList).length := by
-  rw [grown, ← Array.foldl_toList]
-  suffices h : ∀ (l : List (Act sys P)) n,
-      l.foldl (fun n act => n + act.grows) n = n + (history l).length by
-    simpa using h acts.toList 0
-  intro l
-  induction l with
-  | nil => simp [history]
-  | cons a l ih =>
-    intro n
-    rw [List.foldl_cons, ih]
-    simp [history, List.flatMap_cons, steps_grows, Nat.add_assoc]
-
-omit [Hashable σ.Id] in
-/-- The history the acts write asks of the kernel what their journal does. -/
-theorem history_ops (acts : List (Act sys P)) : (history acts).filterMap id = journal acts := by
-  induction acts with
-  | nil => rfl
-  | cons act acts ih =>
-    rw [history, List.flatMap_cons, List.filterMap_append, ← history, ih]
-    show List.filterMap id act.steps ++ journal acts = act.ops ++ journal acts
-    congr 1
-    cases act with
-    | append entries => exact Journal.steps_ops _
-    | handOver outputs => simp only [Act.steps, Act.ops]; split <;> rfl
-    | _ => rfl
-
-private def IdInv (index : Nat) (k0 : Kernel sys) (ks : Kernel sys × Scan sys P W) : Prop :=
-  handedIds ks.2.acts.toList ++ ks.2.outputs.toList
-    = Journal.placed k0 index (history ks.2.acts.toList ++ Journal.steps ks.2.entries.toList)
-
-private theorem placed_marks (k : Kernel sys) (index : Nat) {marks : List (Option (Kernel.Op σ))}
-    (h : ∀ m ∈ marks, m = none ∨ m = some .snapshot) : Journal.placed k index marks = [] := by
-  induction marks generalizing k index with
-  | nil => rfl
-  | cons m rest ih =>
-    rw [Journal.placed, ih _ _ fun m hm => h m (List.mem_cons_of_mem _ hm)]
-    rcases h m List.mem_cons_self with rfl | rfl <;> rfl
-
-private theorem idinv_start (index : Nat) (k : Kernel sys) (written : Nat)
-    (waiting : Array (Bool × W)) : IdInv index k (k, ({ written, waiting } : Scan sys P W)) :=
-  rfl
-
-private theorem idinv_workWith (index : Nat) (turn : Kernel sys → Journal.Turn sys)
-    (hplaced : ∀ k i, Journal.placed k i (Journal.steps (turn k).entries)
-      = Journal.tag (i + (turn k).entries.length) (turn k).outputs)
-    {k0 : Kernel sys} {ks : Kernel sys × Scan sys P W} (h : Inv k0 ks) (hi : IdInv index k0 ks) :
-    IdInv index k0 (workWith index turn ks) := by
-  obtain ⟨k, ⟨written, waiting, acts, entries, events, outputs, worked⟩⟩ := ks
-  have hk := h.kernel
-  unfold IdInv at hi ⊢
-  simp only at hk hi
-  have hops : (history acts.toList ++ Journal.steps entries.toList).filterMap id
-      = journal acts.toList ++ Journal.ops entries.toList := by
-    rw [List.filterMap_append, history_ops, Journal.steps_ops]
-  have hp := hplaced k (index + (history acts.toList ++ Journal.steps entries.toList).length)
-  simp only [workWith]
-  generalize turn k = t at hp ⊢
-  obtain ⟨tk, tev, tout, tent⟩ := t
-  simp only [Array.toList_appendList, Journal.steps_append]
-  rw [← List.append_assoc (history acts.toList), Journal.placed_append, hops, ← hk, hp, ← hi,
-    List.append_assoc, grown_eq]
-  simp [Nat.add_assoc]
-
-private theorem flush_empty (c : Config) (ks : Kernel sys × Scan sys P W) :
-    (flush c ks).2.entries = #[] ∧ (flush c ks).2.outputs = #[] := by
-  obtain ⟨k, ⟨_, _, _, _, _, _, _⟩⟩ := ks
-  simp only [flush]; split <;> exact ⟨rfl, rfl⟩
-
-private theorem idinv_flush (c : Config) {index : Nat} {k0 : Kernel sys}
-    {ks : Kernel sys × Scan sys P W} (hi : IdInv index k0 ks) : IdInv index k0 (flush c ks) := by
-  obtain ⟨k, s⟩ := ks
-  obtain ⟨he, ho⟩ := flush_empty c (k, s)
-  obtain ⟨-, hacts, -⟩ := flush_save c k s
-  unfold IdInv at hi ⊢
-  simp only at hi
-  rw [he, ho, hacts]
-  have hh : handedIds (put (put (put s.acts s.entries.isEmpty (.append s.entries)) s.events.isEmpty
-      (.record s.events)) s.outputs.isEmpty (.handOver s.outputs)).toList
-        = handedIds s.acts.toList ++ s.outputs.toList := by
-    simp only [toList_put]
-    cases hE : s.entries.isEmpty <;> cases hV : s.events.isEmpty <;>
-      cases hO : s.outputs.isEmpty <;> simp_all [handedIds, Act.placed, Array.isEmpty_iff]
-  have hs : history (put (put (put s.acts s.entries.isEmpty (.append s.entries)) s.events.isEmpty
-      (.record s.events)) s.outputs.isEmpty (.handOver s.outputs)).toList
-        = history s.acts.toList ++ Journal.steps s.entries.toList
-          ++ (if s.outputs.isEmpty then [] else [none]) := by
-    simp only [toList_put]
-    cases hE : s.entries.isEmpty <;> cases hV : s.events.isEmpty <;>
-      cases hO : s.outputs.isEmpty <;> simp_all [history, Act.steps, Journal.steps, Array.isEmpty_iff]
-  have hsave : ∀ m ∈ history (if due c (s.written + s.entries.size) then [Act.save (P := P) k.image]
-      else []), m = none ∨ m = some .snapshot := by
-    intro m hm
-    split at hm <;> simp_all [history, Act.steps]
-  have hout : ∀ m ∈ (if s.outputs.isEmpty then [] else [none] : List (Option (Kernel.Op σ))),
-      m = none ∨ m = some .snapshot := by
-    intro m hm
-    split at hm <;> simp_all
-  have hnone : handedIds (if due c (s.written + s.entries.size) then [Act.save (P := P) k.image]
-      else []) = [] := by
-    split <;> rfl
-  simp only [handedIds, history, List.flatMap_append] at hh hs hnone hsave hi ⊢
-  rw [hh, hnone, hs, show Journal.steps ([] : List (Journal.Entry σ)) = [] from rfl]
-  simp only [List.append_nil]
-  rw [Journal.placed_append, placed_marks _ _ hsave, List.append_nil, Journal.placed_append,
-    placed_marks _ _ hout, List.append_nil, ← hi]
-
-private theorem idinv_scan (c : Config) {k0 : Kernel sys} {ks : Kernel sys × Scan sys P W}
-    (h : Inv k0 ks) (hi : IdInv c.index k0 ks) (command : Command σ P W) :
-    IdInv c.index k0 (scan c ks command) := by
-  cases command with
-  | input x =>
-    have hw : IdInv c.index k0 (work c (some x) ks) := idinv_workWith c.index _
-      (fun k i => Journal.turn_placed k c.now_ms (some x) c.fuel i) h hi
-    simp only [scan]
-    generalize work c (some x) ks = w at hw
-    obtain ⟨k, s⟩ := w
-    split
-    · exact idinv_flush c hw
-    · exact hw
-  | inputs xs =>
-    have hw : IdInv c.index k0 (workAll c xs ks) := idinv_workWith c.index _
-      (fun k i => Journal.turnAll_placed k c.now_ms xs (c.fuel * max 1 xs.length) c.spread i) h hi
-    simp only [scan]
-    generalize workAll c xs ks = w at hw
-    obtain ⟨k, s⟩ := w
-    split
-    · exact idinv_flush c hw
-    · exact hw
-  | idle timers waiter =>
-    have hf := idinv_flush c hi
-    simp only [scan]
-    generalize flush c ks = f at hf
-    obtain ⟨k, s⟩ := f
-    exact hf
-  | peek ids every reply => exact hi
-
-private theorem idinv_foldl (c : Config) {k0 : Kernel sys} (commands : List (Command σ P W)) :
-    ∀ {ks : Kernel sys × Scan sys P W}, Inv k0 ks → IdInv c.index k0 ks →
-      IdInv c.index k0 (commands.foldl (scan c) ks) := by
-  induction commands with
-  | nil => exact fun _ hi => hi
-  | cons command commands ih => exact fun h hi => ih (inv_scan c h command) (idinv_scan c h hi command)
-
-/-- A batch hands each output over with its origin in the history it writes: the entries it
-appends, the `handed` mark the shell notes after each hand-over and the mark of each save, after
-the `c.index` entries the history had. With `Journal.ids_append`, that is the origin the whole
-history gives the output, which a restart gives it again (`Journal.recoverIds_suffix`). -/
-theorem run_ids (c : Config) (k : Kernel sys) (written : Nat) (waiting : Array (Bool × W))
-    (commands : List (Command σ P W)) :
-    handedIds (run c k written waiting commands).acts.toList
-      = Journal.placed k c.index (history (run c k written waiting commands).acts.toList) := by
-  have h := inv_foldl c commands (inv_start k written waiting)
-  have hi := idinv_foldl c commands (inv_start k written waiting) (idinv_start c.index k written waiting)
-  simp only [run, finish]
-  generalize commands.foldl (scan c) (k, { written, waiting }) = ks at h hi
-  have hw : IdInv c.index k (if ks.2.worked then ks else work c none ks) := by
-    split
-    · exact hi
-    · exact idinv_workWith c.index _ (fun k i => Journal.turn_placed k c.now_ms none c.fuel i) h hi
-  have hf := idinv_flush c hw
-  obtain ⟨he, ho⟩ := flush_empty c (if ks.2.worked then ks else work c none ks)
-  generalize flush c (if ks.2.worked then ks else work c none ks) = f at hf he ho
-  obtain ⟨k', s⟩ := f
-  unfold IdInv at hf
-  simp only at hf he ho ⊢
-  rw [he, ho] at hf
-  obtain ⟨-, -, -, hhist, hids⟩ := answers_none k' (commands.filterMap Command.peek?) s.acts.toList
-  simp only [Array.toList_append, hhist, hids]
-  simpa [Journal.steps] using hf
-
-/-- How the waves of a batch are spread changes no output's id (`run_spread`). -/
-theorem run_ids_spread (c : Config) (spread : Kernel.Spread) (k : Kernel sys) (written : Nat)
-    (waiting : Array (Bool × W)) (commands : List (Command σ P W)) :
-    handedIds (run { c with spread } k written waiting commands).acts.toList
-      = handedIds (run c k written waiting commands).acts.toList := by
-  rw [run_spread]
 
 end Lanes.Batch

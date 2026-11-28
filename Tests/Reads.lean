@@ -3,14 +3,13 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
-import Tests.Durable
 import Tests.Web
 import Tests.Fixtures.BankWeb
 
 /-!
 Reads answered from the state (`Http.View`): a batch's peeks against the same batch without
 them; the bank's balances and their total read from the accounts' states, through `Loopback`
-and over a socket on a journal; and a read's deadline and bound.
+and over a socket; and a read's deadline and bound.
 -/
 
 namespace Tests.Reads
@@ -22,7 +21,7 @@ abbrev bankSys := bank Acct 100
 
 def total : Route Unit := .get (.seg "total")
 
-/-- A balance, as the bridge answers a journalled `balance`. -/
+/-- A balance, as the bridge answers a `balance` that enters the system. -/
 def balanceView (a : Acct) : View bankSys where
   reads := [a]
   answer get _ := Response.html (OutcomeView (.balance (get a List.mem_cons_self).balance)).render
@@ -37,8 +36,8 @@ def view (r : Request) : Option (View bankSys) :=
   (dispatch [Routes.account.handle fun n _ => (toAcct n).map balanceView,
     total.handle fun () _ => some totalView] r).join
 
-/-- A balance read from the state is what the journalled query answers from the same state,
-which the query leaves as it was. -/
+/-- A balance read from the state is what the query that enters the system answers from the same
+state, which the query leaves as it was. -/
 theorem balanceView_answers (id : Http.ReqId) (a : Acct) (s : Account) :
     (bankSys.actor a).step s (.query id) = (s, [.emit ⟨id, .balance s.balance⟩])
       ∧ bridge.encode ⟨id, .balance s.balance⟩ = some (id, (balanceView a).answer (fun _ _ => s) []) :=
@@ -52,13 +51,13 @@ def transfer (req src dst amount : Nat) : Tests.Fixtures.Bank.Request Acct :=
 abbrev Cmd := Batch.Command (sig Acct) (fun _ => Unit) Unit
 
 def batchTests : List (String × Bool) :=
-  let config : Batch.Config := { now_ms := 0, fuel := 64, snapshotEvery := none }
+  let config : Batch.Config := { now_ms := 0, fuel := 64 }
   let k := (Kernel.boot bankSys).1
   let commands : List Cmd :=
     [.peek [0] (fun _ => false) (), .input (transfer 0 0 1 30),
       .peek (List.finRange 3) (fun _ => false) (), .input (transfer 1 1 2 50)]
-  let r := Batch.run config k 0 #[] commands
-  let alone := Batch.run config k 0 #[] (commands.filter (!·.isPeek))
+  let r := Batch.run config k #[] commands
+  let alone := Batch.run config k #[] (commands.filter (!·.isPeek))
   let answered := r.acts.toList.filterMap fun
     | .answer _ _ peek => some (peek.states.map fun e => (e.1, e.2.balance))
     | _ => none
@@ -69,11 +68,10 @@ def batchTests : List (String × Bool) :=
         && last.all (· matches .answer ..)),
     ("reads: a batch without its peeks has the same acts but the answers",
       alone.acts.size + 2 == r.acts.size
-        && (Batch.journal alone.acts.toList).length == (Batch.journal r.acts.toList).length
-        && (Batch.history alone.acts.toList).length == (Batch.history r.acts.toList).length
+        && (Batch.requests alone.acts.toList).length == (Batch.requests r.acts.toList).length
         && Batch.handed alone.acts.toList == Batch.handed r.acts.toList),
     ("reads: a peek of every actor started reads each once, at the batch's end",
-      let every := Batch.run config k 0 #[] (commands ++ [.peek [] (fun a => a != 2) ()])
+      let every := Batch.run config k #[] (commands ++ [.peek [] (fun a => a != 2) ()])
       match every.acts.toList.getLast? with
       | some (.answer _ _ peek) =>
         let got := (peek.others.map fun e => (e.1.val, e.2.balance)).mergeSort (·.1 ≤ ·.1)
@@ -106,17 +104,13 @@ def loopbackTests : List (String × Bool) :=
       text sum == "300" && status missing == 404),
     ("reads: no read is left waiting", lb.reads.isEmpty && lb.peeks.isEmpty && lb.pending.isEmpty) ]
 
-/-! Over a socket, on a journal. -/
+/-! Over a socket. -/
 
 def body (response : String) : String :=
   ((response.splitOn "\r\n\r\n").drop 1).headD ""
 
-def durableTest : Async (List (String × Bool)) := do
-  let dir := (← IO.getEnv "TMPDIR").getD "/tmp"
-  let journal : System.FilePath := s!"{dir}/lanes-reads-{← IO.monoNanosNow}.journal"
-  let start := serve bankSys bridge { port := 0, journal := some journal } { record := true }
-    (view := view)
-  let server ← start
+def socketTest : Async (List (String × Bool)) := do
+  let server ← serve bankSys bridge { port := 0 } { record := true } (view := view)
   let some port := server.port | return [("reads: the server reports its port", false)]
   let before ← fetch port "/accounts/1"
   let moved ← fetch port "/transfer" (method := "POST") (body := "src=0&dst=1&amount=30")
@@ -125,30 +119,15 @@ def durableTest : Async (List (String × Bool)) := do
     if n % 4 == 0 then fetch port "/transfer" (method := "POST") (body := s!"src={n % 3}&dst={(n + 1) % 3}&amount=1")
     else fetch port "/total")
   let totals := (mixed.toList.zipIdx.filter (·.2 % 4 != 0)).map (body ·.1)
-  let final ← fetch port "/accounts/1"
   server.stop
   let inputs := (← server.trace).toList.countP (· matches .input _)
-  let server ← start
-  let some port := server.port | return [("reads: the server reports its port", false)]
-  let again ← fetch port "/accounts/1"
-  server.stop
-  let log ← Journal.Store.open (sys := admitted bankSys bridge)
-    { path := journal, input := Codec.pair Codec.nat Request.codec
-      system := ServerConfig.journalName {} }
-  let entries := log.past.countP (· matches .input _)
-  log.close
-  for file in [journal, journal.addExtension "lock", journal.addExtension "id"] do
-    if ← file.pathExists then IO.FS.removeFile file
   return [
     ("reads: over a socket a balance is read from the state and sees the transfer before it",
       body before == "<span>100</span>" && moved.startsWith "HTTP/1.1 200"
         && body after == "<span>130</span>"),
     ("reads: a total read beside concurrent transfers always sees every account at one boundary",
       totals.length == 30 && totals.all (· == "300")),
-    ("reads: only the transfers enter the system, and only they are journalled",
-      inputs == 11 && entries == 11),
-    ("reads: after a restart on the journal, reads see the state it describes",
-      again.startsWith "HTTP/1.1 200" && body again == body final) ]
+    ("reads: only the transfers enter the system", inputs == 11) ]
 
 /-! A read's deadline and bound, beside a shard held up by its output handler. -/
 
@@ -181,9 +160,9 @@ def countView (r : Request) : Option (View counterSys) :=
   else none
 
 def deadlineTest : Async (List (String × Bool)) := do
-  let onOutput : Journal.OutputId → Told → Async Unit
-    | _, .stalled => IO.sleep 400
-    | _, _ => pure ()
+  let onOutput : Told → Async Unit
+    | .stalled => IO.sleep 400
+    | _ => pure ()
   let server ← serveFronted counterSys counterBridge
     { port := 0, reads := { requestTimeout_ms := 50 } } {} onOutput (view := countView)
   let some port := server.port | return [("reads: the server reports its port", false)]
@@ -209,7 +188,7 @@ def deadlineTest : Async (List (String × Bool)) := do
       refused.startsWith "HTTP/1.1 503" && body written == "1") ]
 
 def live : Async (List (String × Bool)) := do
-  return (← durableTest) ++ (← deadlineTest)
+  return (← socketTest) ++ (← deadlineTest)
 
 def tests : List (String × Bool) := batchTests ++ loopbackTests
 

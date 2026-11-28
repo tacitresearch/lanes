@@ -167,12 +167,11 @@ for name in "${SERVERS[@]}"; do
         -cpus "$SERVER_CPUS,$LOAD_CPUS" -json > "$SCRATCH/load.json"
       alive=true
       kill -0 "$pid" 2>/dev/null || alive=false
-      journal=$(cat "$SCRATCH"/j "$SCRATCH"/j.snapshot 2>/dev/null | wc -c || true)
       kill "$pid" 2>/dev/null || true
       wait "$pid" 2>/dev/null || true
       pid=
-      printf '{"server":"%s","run":%d,"load1":%s,"other_jobs":%d,"journal_bytes":%s,"alive":%s,"load":%s}\n' \
-        "$name" "$run" "$load1" "$run_jobs" "$journal" "$alive" "$(cat "$SCRATCH/load.json")" \
+      printf '{"server":"%s","run":%d,"load1":%s,"other_jobs":%d,"alive":%s,"load":%s}\n' \
+        "$name" "$run" "$load1" "$run_jobs" "$alive" "$(cat "$SCRATCH/load.json")" \
         | tee -a "$base.jsonl"
     done
   done

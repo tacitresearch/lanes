@@ -130,12 +130,8 @@ jobs:
           clean: false
       - id: lean
         uses: ./.github/actions/lean
-        with:
-          system: raft-kv
       - name: Build what the checks run
-        run: |
-          lake build lanesTest
-          (cd examples/raft-kv && lake build raftNode raftProcs raftLive)
+        run: lake build lanesTest
       - if: steps.lean.outputs.packages-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -146,11 +142,6 @@ jobs:
         with:
           path: .lake/build
           key: ${{ steps.lean.outputs.build-key }}
-      - if: steps.lean.outputs.warm != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: examples/raft-kv/.lake/build
-          key: ${{ steps.lean.outputs.system-key }}
 
   shard:
     needs: [plan, mutants-build]
@@ -166,8 +157,6 @@ jobs:
         with:
           clean: false
       - uses: ./.github/actions/lean
-        with:
-          system: raft-kv
       - name: Mutants of shard ${{ matrix.shard }}
         run: >-
           python3 scripts/mutants.py --all --baseline

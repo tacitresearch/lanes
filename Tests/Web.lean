@@ -114,14 +114,11 @@ def deadlineTest : Async (List (String × Bool)) := do
     ("web: requests the system never answers get 504 at their deadline, and none is left in "
       ++ "flight", answers.all (·.startsWith "HTTP/1.1 504") && left == 0) ]
 
-/-! The bank over HTTP with a journal: stop the server, start another on the same journal. -/
+/-! The bank over HTTP: stop the server, start another. -/
 
-def durableTest : Async (List (String × Bool)) := do
-  let dir := (← IO.getEnv "TMPDIR").getD "/tmp"
-  let journal : System.FilePath := s!"{dir}/lanes-web-{← IO.monoNanosNow}.journal"
+def restartTest : Async (List (String × Bool)) := do
   let start := serve (Tests.Fixtures.Bank.bank Tests.Fixtures.BankWeb.Acct 100) Tests.Fixtures.BankWeb.bridge
-    { port := 0, journal := some journal } { record := true, snapshotEvery := 4 }
-    (some { actors := Tests.Fixtures.Bank.actors Codec.fin 100 })
+    { port := 0 }
   let server ← start
   let some port := server.port | return [("web: the server reports its port", false)]
   let moved ← fetch port "/transfer" (method := "POST") (body := "src=0&dst=1&amount=30")
@@ -130,121 +127,17 @@ def durableTest : Async (List (String × Bool)) := do
   let server ← start
   let some port := server.port | return [("web: the server reports its port", false)]
   let after ← fetch port "/accounts/1"
-  let again ← fetch port "/transfer" (method := "POST") (body := "src=1&dst=2&amount=130")
-  let last ← fetch port "/accounts/2"
   let taken ← try
       discard <| serve (Tests.Fixtures.Bank.bank Tests.Fixtures.BankWeb.Acct 100) Tests.Fixtures.BankWeb.bridge
-        { port, journal := some (journal.addExtension "other") }
+        { port }
       pure false
     catch _ => pure true
-  let free ← (Journal.Store.open
-    (sys := admitted (Tests.Fixtures.Bank.bank Tests.Fixtures.BankWeb.Acct 100) Tests.Fixtures.BankWeb.bridge)
-    { path := journal.addExtension "other", input := Codec.pair Codec.nat Request.codec
-      system := ServerConfig.journalName {}
-      actors := some (admittedActors (Tests.Fixtures.Bank.actors Codec.fin 100)
-        Tests.Fixtures.BankWeb.bridge) }).toBaseIO
-  if let .ok log := free then log.close
   server.stop
-  let ids := (← server.trace).toList.filterMap fun
-    | .input (id, _) => some id
-    | _ => none
-  for file in [journal.addExtension "other", (journal.addExtension "other").addExtension "lock"] do
-    if ← file.pathExists then IO.FS.removeFile file
-  let cut ← (journal.addExtension "snapshot").pathExists
-  for file in [journal, journal.addExtension "lock", journal.addExtension "snapshot"] do
-    if ← file.pathExists then IO.FS.removeFile file
   return [
-    ("web: the bank behind a journal keeps its balances across a restart",
+    ("web: the bank's state lives as long as its process: a restart starts it afresh",
       moved.startsWith "HTTP/1.1 200" && before.endsWith "<span>130</span>"
-        && after.endsWith "<span>130</span>"),
-    ("web: and goes on from them",
-      again.startsWith "HTTP/1.1 200" && last.endsWith "<span>230</span>"),
-    ("web: request ids used before the restart are not used again, though the journal was cut",
-      cut && ids.length == 3 && ids.all (2 ≤ ·)),
-    ("web: a server that cannot bind its port fails, and leaves its journal free",
-      taken && free.toOption.isSome) ]
-
-/-- A journal written by `serve` when the gate was an actor of the system behind it and the
-journal was named by the application alone, is refused and left as it was: replayed
-through the gate in front it may give a state that gate never reaches. -/
-def oldJournalTest : Async (List (String × Bool)) := do
-  let dir := (← IO.getEnv "TMPDIR").getD "/tmp"
-  let journal : System.FilePath := s!"{dir}/lanes-web-old-{← IO.monoNanosNow}.journal"
-  let old := Journal.file (σ := servedSig echoSig) (Codec.pair Codec.nat Request.codec) "echo 1"
-    [.input (0, get [])]
-  IO.FS.writeBinFile journal old
-  let config : ServerConfig := { port := 0, journal := some journal, system := "echo 1" }
-  let refusal ← try
-      (← serve (Server.system echo) bridge config).stop
-      pure ""
-    catch e => pure (toString e)
-  let after ← IO.FS.readBinFile journal
-  for file in [journal, journal.addExtension "lock"] do
-    if ← file.pathExists then IO.FS.removeFile file
-  return [
-    ("web: a journal of the server from before its gate was a front is refused, saying why",
-      refusal == s!"lanes: the journal {journal} is refused: it is the journal of \"echo 1\", "
-        ++ "not of \"echo 1, admitted\". `ServerConfig.system` "
-        ++ "names the step functions a journal is replayed through: start the version that "
-        ++ "wrote it, or move the journal and its snapshot aside to begin anew"),
-    ("web: and is left as it was", after == old) ]
-
-/-- A journal's name from when the gate was an actor says the gate it was written behind, and is
-read back only exactly; the name of a journal now says nothing of the gate. -/
-def gateNameTests : List (String × Bool) :=
-  let gate : GateConfig := { requestTimeout_ms := 1500, maxPending := 7 }
-  let name := journalName "bank 1" gate
-  [ ("web: a journal's name gives back its gate",
-      (gateOf "bank 1" name).map (fun g => (g.requestTimeout_ms, g.maxPending)) == some (1500, 7)),
-    ("web: and only for its application, written as `journalName` writes it",
-      (gateOf "bank 2" name).isNone
-        && (gateOf "bank 1" "bank 1, behind a gate of 01500 ms and 7 requests").isNone
-        && (gateOf "bank 1" "bank 1").isNone),
-    ("web: the name of a journal now is the same behind every gate, and no gate's",
-      ServerConfig.journalName { system := "bank 1", gate }
-          == ServerConfig.journalName { system := "bank 1" }
-        && (gateOf "bank 1" (ServerConfig.journalName { system := "bank 1" })).isNone
-        && admittedName "bank 1" == "bank 1, admitted") ]
-
-/-- The bank's journal, written behind one gate, is read behind another as it is: the journal
-holds what the gate admitted, so a replay reads none of its settings. A journal written while the
-gate was an actor is refused, saying why, and left as it was. -/
-def regateTest : Async (List (String × Bool)) := do
-  let dir := (← IO.getEnv "TMPDIR").getD "/tmp"
-  let journal : System.FilePath := s!"{dir}/lanes-web-regate-{← IO.monoNanosNow}.journal"
-  let start (gate : GateConfig) :=
-    serve (Tests.Fixtures.Bank.bank Tests.Fixtures.BankWeb.Acct 100) Tests.Fixtures.BankWeb.bridge
-      { port := 0, journal := some journal, system := "bank 1", gate } {}
-  let server ← start {}
-  let some port := server.port | return [("web: the server reports its port", false)]
-  let moved ← fetch port "/transfer" (method := "POST") (body := "src=0&dst=1&amount=30")
-  server.stop
-  let server ← start { requestTimeout_ms := 45000, maxPending := 3 }
-  let some port := server.port | return [("web: the server reports its port", false)]
-  let after ← fetch port "/accounts/1"
-  server.stop
-  for file in [journal, journal.addExtension "lock", journal.addExtension "snapshot"] do
-    if ← file.pathExists then IO.FS.removeFile file
-  let old := Journal.file (σ := servedSig echoSig) (Codec.pair Codec.nat Request.codec)
-    (journalName "echo 1" {}) [.input (0, get [])]
-  IO.FS.writeBinFile journal old
-  let config : ServerConfig := { port := 0, journal := some journal, system := "echo 1" }
-  let refusal ← try
-      (← serve (Server.system echo) bridge config).stop
-      pure ""
-    catch e => pure (toString e)
-  let left ← IO.FS.readBinFile journal
-  for file in [journal, journal.addExtension "lock"] do
-    if ← file.pathExists then IO.FS.removeFile file
-  return [
-    ("web: a journal written behind one gate is read behind another as it is",
-      moved.startsWith "HTTP/1.1 200" && after.endsWith "<span>130</span>"),
-    ("web: a journal written while the gate was an actor is refused, saying why",
-      refusal == s!"lanes: the journal {journal} was written with the gate as an actor of the \
-        system, behind a gate of 30000 ms and 1024 requests. Its requests are replayed through \
-        the gate's decisions, which this server makes before the shard: start the version that \
-        wrote it, or move the journal and its snapshot aside to begin anew"),
-    ("web: and is left as it was", left == old) ]
+        && after.endsWith "<span>100</span>"),
+    ("web: a server that cannot bind its port fails", taken) ]
 
 /-- A bridge whose `prepare` takes a secret header out and says on the path that it did. -/
 def guarded : Bridge echoSig :=
@@ -255,23 +148,20 @@ def guarded : Bridge echoSig :=
       else r }
 
 def prepareTest : Async (List (String × Bool)) := do
-  let dir := (← IO.getEnv "TMPDIR").getD "/tmp"
-  let journal : System.FilePath := s!"{dir}/lanes-web-prepare-{← IO.monoNanosNow}.journal"
-  let server ← serve (Server.system echo) guarded { port := 0, journal := some journal }
+  let server ← serve (Server.system echo) guarded { port := 0 } { record := true }
   let some port := server.port | return [("web: the server reports its port", false)]
   let secret ← fetch port "/" (headers := "X-Secret: hunter2hunter2\r\n")
   let plain ← fetch port "/"
   server.stop
-  let bytes := (← IO.FS.readBinFile journal).data.toList
-  let holds (text : String) := (List.range bytes.length).any fun k =>
-    text.toUTF8.data.toList.isPrefixOf (bytes.drop k)
-  for file in [journal, journal.addExtension "lock"] do
-    if ← file.pathExists then IO.FS.removeFile file
+  let requests := (← server.trace).toList.filterMap fun
+    | .input (_, request) => some request
+    | _ => none
   return [
     ("web: the shard is handed a request as the bridge prepared it",
-      secret.startsWith "HTTP/1.1 200" && plain.startsWith "HTTP/1.1 200" && holds "checked"),
-    ("web: and the journal holds the prepared request, not what was sent",
-      !holds "hunter2hunter2" && !holds "x-secret") ]
+      secret.startsWith "HTTP/1.1 200" && plain.startsWith "HTTP/1.1 200"
+        && requests.any (·.path == ["checked"])),
+    ("web: and not what was sent",
+      requests.all fun r => !r.headers.any (·.1.toLower == "x-secret")) ]
 
 /-- `arrive` runs for at most `arriving_max` requests at once, each on a thread of its own: one
 more is answered `503` before its work begins, and once one is done the next is taken. -/
@@ -294,34 +184,6 @@ def arriveTest : Async (List (String × Bool)) := do
   return [
     ("web: beyond arriving_max, a request whose work is in IO is answered 503 at once",
       second.startsWith "HTTP/1.1 503" && first.endsWith "worked" && third.endsWith "worked") ]
-
-/-- The journal stops taking writes while the server runs. A request in flight is answered, the
-server shuts down, and `wait` fails, so that the process ends and can be started again. -/
-def journalFailTest : Async (List (String × Bool)) := do
-  let calls ← IO.mkRef 0
-  let log : Journal.Log (admitted (Server.system echo) bridge) := {
-    past := []
-    append := fun _ => do
-      if (← calls.modifyGet fun n => (n, n + 1)) ≥ 2 then
-        throw (IO.userError "no room on the device")
-    note := fun _ => pure ()
-    close := pure () }
-  let server ← serveWith (Server.system echo) bridge { port := 0 } {} (some log)
-  let some port := server.port | return [("web: the server reports its port", false)]
-  let within := fun (action : Async String) =>
-    Async.race (some <$> action) (do Async.sleep 3000; return none)
-  let mut answers := #[]
-  for _ in [0:4] do
-    answers := answers.push (← within (try fetch port "/" catch _ => pure "refused"))
-  let waited ← Async.race (try server.wait; pure (some false) catch _ => pure (some true))
-    (do Async.sleep 3000; return none)
-  return [
-    ("web: when the journal cannot be written, no request is left without an answer",
-      answers.all (·.isSome)),
-    ("web: requests before the failure are answered and later ones are refused",
-      (answers[0]!.getD "").startsWith "HTTP/1.1 200"
-        && answers.any fun a => !(a.getD "").startsWith "HTTP/1.1 200"),
-    ("web: and the server ends with the error", waited == some true) ]
 
 /-! The connection loop over a real socket: the bytes as a client sends them, in pieces, pipelined,
 slowly or too many, and connections kept, left idle, beyond the bound and open at `stop`. -/
@@ -483,9 +345,9 @@ def tests : IO (List (String × Bool)) := do
   let onLanes := fun (results : List (String × Bool)) =>
     results.map fun (name, ok) => (s!"{name} (on 2 IO threads)", ok)
   return (← (serveTest 0).block) ++ (← linkTest.block) ++ (← deadlineTest.block)
-    ++ (← durableTest.block) ++ (← oldJournalTest.block) ++ gateNameTests ++ (← regateTest.block)
+    ++ (← restartTest.block)
     ++ (← prepareTest.block)
-    ++ (← journalFailTest.block) ++ (← arriveTest.block) ++ (← (wireTest 0).block)
+    ++ (← arriveTest.block) ++ (← (wireTest 0).block)
     ++ (← (streamTest 0).block)
     ++ onLanes ((← (serveTest 2).block) ++ (← (wireTest 2).block) ++ (← (streamTest 2).block))
 

@@ -38,10 +38,9 @@ structure Bridge (σ : Signature) where
   /-- The request an output answers, or `none` for an output that is not an HTTP response. -/
   encode : σ.Out → Option (ReqId × Response)
   /-- What the server makes of a request before it gives it an id, on the request's own task:
-  the system, its journal and its theorems see only what this returns. A secret is turned here
-  into what the system needs of it (a password into its digest, a cookie into the user it
-  verifies), so it is never journalled, and work too slow for the shard's one thread is done
-  here, once, not again at every replay. -/
+  the system and its theorems see only what this returns. A secret is turned here into what the
+  system needs of it (a password into its digest, a cookie into the user it verifies), so it
+  never enters the system, and work too slow for the shard's one thread is done here, once. -/
   prepare : Request → Request := id
 
 /-- The gate's bounds: how long a request waits for the system before it is answered `504`,

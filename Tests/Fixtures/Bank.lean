@@ -90,12 +90,6 @@ abbrev bank (A : Type) [DecidableEq A] (opening : Nat) : System (sig A) where
     | .transfer t => ⟨t.src, .transfer t.req t.dst t.amount⟩
     | .balance req account => ⟨account, .query req⟩
 
-/-- How the bank's actors are written to a snapshot. -/
-def actors (account : Codec A) (opening : Nat) : Kernel.Image.Codecs (bank A opening) where
-  id := account
-  state _ := Account.codec
-  msg _ := Msg.codec account
-
 /-- A balance is never negative. -/
 theorem Account.balance_nonneg (opening : Nat) (self : A) :
     (account opening self).Invariant fun s => 0 ≤ s.balance := by

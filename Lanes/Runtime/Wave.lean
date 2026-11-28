@@ -26,8 +26,8 @@ state in the cell, and writes it (`Plan.fixAt`, `Plan.real`). That costs the ste
 rare. A state a task has seen is shared, so its first write still copies it: once a wave for
 each actor worked out on the pool.
 
-So the work done is `runBatch`'s, value for value (`Kernel.runWaves_eq`): the journal, replay,
-snapshots and every theorem about the kernel are unchanged, and which thread worked out a step
+So the work done is `runBatch`'s, value for value (`Kernel.runWaves_eq`): every theorem about the
+kernel is unchanged, and which thread worked out a step
 cannot be told. What makes it so is that handling a message for one actor neither reads nor
 writes another actor's cell, and that writes to two cells already in the table, or a write to
 one and the removal of another, can be made in either order (`DHashMap.insert_comm_of_contains`).

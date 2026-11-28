@@ -3,7 +3,7 @@
 The sequel to `docs/TUTORIAL.md`. It builds a shelf of files: members sign in with an OpenID
 Connect provider, upload files straight from the browser to S3, see everyone's files, and
 delete their own. Then it tests the whole site against fakes, checks and proves one property,
-and says what a deploy needs. Read the first tutorial before this one.
+and says what running it needs. Read the first tutorial before this one.
 
 The code of each step is kept in `Tests/TutorialWeb/`: `lake build` compiles it, and `lake test`
 fails if this page quotes anything but that code and what the checker prints for it, and runs
@@ -16,13 +16,14 @@ lake exe lanes new shelf --dir ../shelf
 cd ../shelf
 lake exe cache get
 lake test
-lake exe shelf 8080 shelf.journal   # serves http://127.0.0.1:8080, keeps its state in shelf.journal
+lake exe shelf 8080   # serves http://127.0.0.1:8080
 ```
 
-This is the counter of the first tutorial. One actor holds the state, the `Server` behaviour
-runs the spec as that actor, and the server writes every request to the journal before it
-answers it. Stop the process and start it again on the same journal: the count is still there,
-replayed through `step`. The shelf keeps its files the same way. It needs no database.
+This is the counter of the first tutorial. One actor holds the state, and the `Server`
+behaviour runs the spec as that actor. The state lives as long as the process: stop it and
+start it again, and the count is back at zero. The shelf keeps its list of files the same way,
+and the files themselves in S3, which outlives the process. A list that must survive a restart
+belongs in a service outside, such as PostgreSQL (`examples/todo-db`).
 
 **The spec.** Replace `Shelf/Counter.lean` with `Shelf/Files.lean`. A member is a string the
 bridge makes from the identity the sign-in verified (step 2). An upload is begun, then seen in
@@ -87,7 +88,7 @@ interleave, so no list shows half a delete, and every claim below is about one f
 **Why the time is in the request.** The pages carry links signed for the store, and a signature
 names a time. `step` cannot read a clock, so the server writes the time a request arrived into
 it (step 3) and the bridge reads it as `at_s`. The answer carries it back, and the bridge signs
-with it. The time is then in the journal, and a replay signs the same links.
+with it. Every link a page carries is then a function of the request.
 
 The bound is proved as the counter's limit was, and you already know the tactic:
 
@@ -108,11 +109,10 @@ The sign-in is Lanes' (`Lanes/Web/IO/SignIn.lean`, `docs/decisions/D72-sign-in-w
 It runs where a request arrives, in the server's `arrive`, before the request enters the
 system. It answers `/sign-in/<provider>` with the redirect to the provider, takes the
 provider's callback, exchanges the code, checks the ID token, and lets the callback in with the
-identity it verified in its headers. No code, token or client secret reaches the system or its
-journal.
+identity it verified in its headers. No code, token or client secret reaches the system.
 
 A provider is OpenID Connect or OAuth 2.0 with a user API. For GitHub, require
-`integrations/github` in the lakefile and use `GitHub.provider`, as `examples/videos` does. Any
+`integrations/github` in the lakefile and use `GitHub.provider`. Any
 OpenID Connect provider (Google, Okta, Keycloak) is read from its discovery document, kept with
 the deployment so that nothing is fetched at start. In `Main.lean`:
 
@@ -145,7 +145,7 @@ def memberOf (who : OAuth.Identity) : Member := OAuth.b64 (who.issuer ++ " " ++ 
 
 Every later request names its member through that cookie. `prepare` runs before the request
 gets its id: it checks the cookie's signature, writes the member into a header of its own, and
-drops the cookies, so none is journalled:
+drops the cookies, so none enters the system:
 
 ```lean
 def prepare (s : Settings) (r : Http.Request) : Http.Request :=
@@ -178,7 +178,7 @@ provider it was given (its row in `TRUSTED.md`); the signature check, OpenSSL's
 itself; and the bridge, which is tested in step 4, not proved. A session ends when its cookie's
 token expires, `session_s` after the sign-in (`Auth.verify_expired`), or when the site's keys
 drop the key that signed it. For sessions the system keeps, which a log-out closes and an idle
-lifetime ends, see `Auth.Sessions` in `examples/videos`.
+lifetime ends, see `Auth.Sessions` (`Lanes/Web/Auth/Login.lean`).
 
 In the test, the provider is the test kit's (`Lanes/Testing/OAuth.lean`): an OpenID Connect
 provider on a local port, which signs ID tokens with an RSA key that the `openssl` command makes.
@@ -233,30 +233,29 @@ def arrive (s : Settings) (signIn : OAuth.SignIn) (r : Http.Request) :
     | none => return .ok r
 ```
 
-The `seen` request then carries `some size` or `none`, and `service` lists only the former. The
-store's answer is in the journal with the request, so a replay does not ask again. This is the
-only IO of the app, and it is trusted to write the size only from the store's answer; step 4
-tests that a forged header is not believed. `examples/videos` makes the same check an output of
-its system, through `Http.serveFronted`, which takes more code.
+The `seen` request then carries `some size` or `none`, and `service` lists only the former. This
+is the only IO of the app, and it is trusted to write the size only from the store's answer;
+step 4 tests that a forged header is not believed. The same check can be an output of the
+system, through `Http.serveFronted`, which takes more code.
 
 The pages link each file with a `GET` presigned at the time of the listing, for an hour. A
 delete takes the record off the shelf, not the object out of the bucket: deleting it is a call
-to the store, as `examples/videos` makes it. The code of this step is `Tests/TutorialWeb/Web.lean`.
+to the store (`S3.handler`). The code of this step is `Tests/TutorialWeb/Web.lean`.
 
 ## 4. Test the whole site
 
 The test kit (`Lanes.Testing`, `docs/decisions/D77-a-test-kit.md`) runs locally, with no
 network: a fake S3 that checks every signature and every policy as S3 does, a fake identity
 provider, and a browser that keeps cookies and posts forms. Import it from tests only, so no
-binary that serves links it. The site runs as `main` runs it, on a journal, with the fakes in
-place of AWS and the provider:
+binary that serves links it. The site runs as `main` runs it, with the fakes in place of AWS and
+the provider:
 
 ```lean
 def deployment (store : Testing.S3.Fake) (creds : SigV4.Credentials)
-    (provider : Testing.OAuth.Fake) (journal : System.FilePath) : Deployment :=
+    (provider : Testing.OAuth.Fake) : Deployment :=
   { settings := { keys := .of (.of "the key of the test".toUTF8), origin, bucket := store.bucket, creds
                   providers := ["id"], length := ⟨1, 1024, by decide, by decide⟩ }
-    server := { port := 0, journal := some journal, system := "shelf 1" }
+    server := { port := 0 }
     signIn := { providers := [(provider.oidc "id", provider.client origin "id")], secure := false
                 http := { timeout_ms := 5000 } } }
 ```
@@ -278,8 +277,8 @@ and asks the site to list it. Bob sees it and fetches it through its link:
 ```
 
 The test then posts a file over the limit, which the store refuses, and asks for it to be
-listed, with and without a forged header, which the site refuses. It stops the server, starts
-it again on its journal, finds Alice's file still listed, and has Alice delete it. Each check is
+listed, with and without a forged header, which the site refuses. Alice deletes her file; the
+test stops the server, starts it again and finds the shelf empty. Each check is
 a line of `lake test`, such as `tutorial web: another member's delete is refused`. In the app,
 put this in `Shelf/EndToEnd.lean` and run `EndToEnd.live` from the `main` of `Check.lean`. The
 code of this step is `Tests/TutorialWeb/EndToEnd.lean`.
@@ -379,25 +378,10 @@ The member in a request is the one the bridge read from a signed cookie (step 2)
 bridge's, tested. The code of this step is `Tests/TutorialWeb/Check.lean`,
 `Tests/TutorialWeb/Files.lean` and `Tests/TutorialWeb/Proofs.lean`.
 
-## 6. Deploy
+## 6. Run it
 
-`docs/DEPLOY.md` takes an app from `lanes new` to AWS. Do what it says, with these parameters:
-`AppName` and `BinaryName` `shelf`, `AppArguments` `{port} {journal} {data}/shelf.secrets`,
-`HealthCheckPath` `/readyz`, `DomainName` the site, and `MediaUser` `true`. The shelf signs its
-upload forms and links in the bridge, a pure function given its credentials once at start, and
-the instance role's credentials expire within hours; so this `main` reads a key of the media
-user from the environment. An app that only calls S3 from IO uses the instance role and no key
-(DEPLOY.md's "Media").
-
-`infra/app/lanes-app.yaml` makes the load balancer with its certificate, one instance, the
-journal's volume with daily snapshots, and the media bucket: public access blocked, TLS only, a
-form's `POST` and a presigned `GET` allowed from `https://<DomainName>`. `infra/app/app-instance.sh`
-sets the machine up: the user `lanes`, the systemd unit with `LANES_HOST`, `LANES_IDLE_MS` and
-`LANES_DRAIN_MS`, and `/etc/lanes/app.env` with `LANES_URL` (`https://<DomainName>`),
-`LANES_MEDIA_BUCKET` and `AWS_REGION`.
-
-The rest of the configuration is read once, in `main` (rule 2.5). Nothing secret is in the code
-or the repository:
+The configuration is read once, in `main` (rule 2.5). Nothing secret is in the code or the
+repository:
 
 ```lean
   let origin := ((← IO.getEnv "LANES_URL").filter (!·.isEmpty)).getD s!"http://localhost:{port}"
@@ -407,31 +391,18 @@ or the repository:
   let some creds ← S3.credentialsFromEnv
 ```
 
-On the instance, as root, put the provider's discovery document in `/etc/lanes/oidc.json`, and
-the secrets in `/etc/lanes/secrets.env`, which only root can read and systemd hands to the app:
-
-```bash
-sudo install -m 600 /dev/null /etc/lanes/secrets.env
-sudo tee /etc/lanes/secrets.env >/dev/null <<'EOF'
-SHELF_OIDC_DISCOVERY=/etc/lanes/oidc.json
-SHELF_OIDC_CLIENT_ID=...
-SHELF_OIDC_CLIENT_SECRET=...
-AWS_ACCESS_KEY_ID=...
-AWS_SECRET_ACCESS_KEY=...
-EOF
-sudo systemctl restart lanes-app
-```
-
-Register `https://<DomainName>/sign-in/oidc/callback` with the provider. The session key is made
-at the first start in `{data}/shelf.secrets`, beside the journal; losing it ends every session
-and nothing else.
+The shelf signs its upload forms and links in the bridge, a pure function given its credentials
+once at start, so `main` reads a key of a user that may use the media bucket from the
+environment, with `SHELF_OIDC_DISCOVERY`, the path of the provider's discovery document, and
+`SHELF_OIDC_CLIENT_ID` and `SHELF_OIDC_CLIENT_SECRET`. The bucket allows a form's `POST` and a
+presigned `GET` from the site's origin. Register `<LANES_URL>/sign-in/oidc/callback` with the
+provider. The session key is made at the first start in `shelf.secrets`, or the path given
+after the port; losing it ends every session and nothing else.
 
 ## 7. Where next
 
 What this shelf leaves out, and where to see it done:
 
-- Sessions that end, a channel per member, private files, a check of the store run as an output
-  of the system, and the object deleted with its record: `examples/videos`.
-- An upload begun and never finished keeps its place on the shelf; `examples/videos` bounds what
-  each member may have waiting.
+- A list that survives a restart: keep it in PostgreSQL, as `examples/todo-db` keeps its items.
+- An upload begun and never finished keeps its place on the shelf.
 - Uploads larger than one `POST`: `Lanes.S3.Multipart` and `S3.presignPart`.
