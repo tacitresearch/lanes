@@ -39,11 +39,12 @@ NOTIFY_URL=http://127.0.0.1:9090 NOTIFY_PATH=/notify lake exe reminders 8080
 | At a service that honours idempotency keys, no reminder takes effect twice | `Reminders.delivered_once` |
 | A claim takes every reminder due, no more than its limit; the attempts of a reminder are bounded; only the current attempt's answer counts | the jobs table's: `Queue.claim_takes`, `Queue.claim_length`, `Queue.claim_attempts`, `Queue.finish_stale` |
 
-Checked (`Reminders/Check.lean`, run by `lake test`): two reminders and a cancel, a store that
-loses answers and whose lost `COMMIT`s take effect late, a service that answers `200`, `503`
-or `unknown`, or never, and a worker that crashes; a reminder sent was taken by the service,
-none takes effect twice, no more than `maxReminders` wait; a retry that succeeds and a cancel
-are each reached. Over HTTP on PostgreSQL (`Test.lean`, when `LANES_POSTGRES` is set): a
+Checked (`Reminders/Check.lean`, run by `lake test`), beside the store's model and a service
+that answers `200`, `503` or `unknown`, or never: a reminder is delivered only once every
+database the store may hold has it, none takes effect twice, a reminder sent was taken, no more
+than `maxReminders` wait; a retry that succeeds, and a cancel followed by a second reminder, are
+each reached. Lost answers and crashes of the worker are checked of the worker itself
+(`Tests/Worker.lean`). Over HTTP on PostgreSQL (`Test.lean`, when `LANES_POSTGRES` is set): a
 service that refuses the first two deliveries takes the third, under one key; a reminder that
 waits is cancelled; after a restart on the same database the reminders are as they were and
 none is delivered again.

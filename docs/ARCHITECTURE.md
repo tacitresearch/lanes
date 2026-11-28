@@ -1160,7 +1160,7 @@ Where: `examples/reminders/Reminders/App.lean`.
 | --- | --- | --- | --- |
 | Reminders: every transaction keeps the table | `Reminders.keeps`, `examples/reminders/Reminders/Proofs.lean`; gate `examples/reminders/Reminders/Proofs/Axioms.lean` | None | proved |
 | Reminders: a reminder is delivered only once every database the store may hold has it; at a service that honours keys, none takes effect twice | `Reminders.delivered_committed`, `Reminders.delivered_once`; same gate | Every environment model; PostgreSQL behaves like the model; the service as `Idempotent.server` | proved |
-| Reminders: no more than `maxReminders` wait; a reminder sent was taken | `examples/reminders/Reminders/Check.lean`, run by its `lake test` | One reminder and a cancel, lost answers | checked |
+| Reminders: no more than `maxReminders` wait; a reminder sent was taken | `examples/reminders/Reminders/Check.lean`, run by its `lake test` | A reminder refused and sent on a retry; a cancel and a second reminder | checked |
 | Reminders: a reminder refused twice is sent on its third attempt, under one key; one that waits is cancelled; after a restart on the same database the reminders are as they were and none is delivered again | `examples/reminders/Test.lean`, when `LANES_POSTGRES` names a server | A local notification service | tested |
 
 Also:

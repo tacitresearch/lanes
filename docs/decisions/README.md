@@ -54,7 +54,6 @@ two new decisions land at different lines. The numbers give the order in which t
 - [D20. History variables are ghosts with an erasure theorem](D20-history-variables-are-ghosts-with-an.md)
 - [D104. Honest results: a bounded pass exits 2, each failure has a kind, a binding is proved of its reference](D104-honest-results.md)
 - [D2. Identities name actors that always exist (virtual actors)](D2-identities-name-actors-that-always-exist.md)
-- [D55. Work outside a step is a job: an actor with an outbox, a deadline per attempt and a bound](D55-jobs.md): partly superseded by D110-volatile-actors.md (jobs that survive a restart through the journal: they are rows in the database)
 - [D15. JSON is a `Std`-only port of `Lean.Data.Json`](D15-json-is-a-std-only-port.md)
 - [D53. A JSON key given twice keeps its last value](D53-json-repeated-keys.md)
 - [D99. Layered packages in one repository, one version, prebuilt builds (proposal)](D99-layered-packages.md): partly superseded by D110-volatile-actors.md (the durable layer, the courier, and services as packages of their own: they live in one area of the same package)
@@ -119,6 +118,7 @@ two new decisions land at different lines. The numbers give the order in which t
 - [D35. An append carries a batch, and only news brings the next](D35-an-append-carries-a-batch.md): superseded by D110-volatile-actors.md
 - [D97. A data format that outlives its version: one schema per file, values read by name](D97-data-format.md): superseded by D110-volatile-actors.md
 - [D24. Durability is a journal of what the kernel was asked, replayed](D24-durability-is-a-journal-of-what.md): superseded by D110-volatile-actors.md
+- [D55. Work outside a step is a job: an actor with an outbox, a deadline per attempt and a bound](D55-jobs.md): superseded by new-outbox-jobs.md
 - [D94. A served journal is versioned by the application's name; the gate's settings are read from it](D94-journal-version.md): superseded by D110-volatile-actors.md
 - [D103. Former names and defaults in `lanes_data`: `(was old)` and `:= value`](D103-lanes-data-aliases.md): superseded by D110-volatile-actors.md
 - [D37. No router between shards in one process](D37-no-router-between-shards-in-one.md): superseded by D110-volatile-actors.md

@@ -114,9 +114,12 @@ def live : IO (List (String × Bool)) := do
         shows restarted "tea (sent)" && shows restarted "later (cancelled)" && tries == 3) ]
 
 def main (args : List String) : IO UInt32 := do
-  let checked := Check.check [0, 200] Check.scenario
-  let check := Lanes.Testing.Result.check
-    "reminders: checked beside the store's model and a service that fails, answers unknown or never"
-    checked checked.renderSystem
-  let check := if checked.witnesses.length == 2 then check else { check with status := .failed }
-  Lanes.Testing.report args (check :: Lanes.Testing.Result.tests (← live))
+  let delivered := Check.delivered
+  let cancelled := Check.cancelled
+  let checks := [
+    Lanes.Testing.Result.check
+      "reminders: checked beside the store's model and a service that refuses, answers unknown or never"
+      delivered delivered.renderSystem,
+    Lanes.Testing.Result.check "reminders: a reminder cancelled, and the bound on those that wait"
+      cancelled cancelled.renderSystem ]
+  Lanes.Testing.report args (checks ++ Lanes.Testing.Result.tests (← live))
