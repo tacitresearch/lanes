@@ -198,16 +198,18 @@ def stranger (bytes first : ByteArray) : Refusal :=
     | .foreign _ => Prelude.other .snapshot first
     | refusal => refusal
 
-/-- The plan to the reader's schema, if there is a reader, and what matching finds. -/
-def planFor (writer : Schema) : Option Schema → Option Schema.Plan × List Finding
+/-- The plan to the reader's schema, if there is a reader, and what matching finds, with the
+declared migrations `ms`. -/
+def planFor (ms : List Schema.Migration) (writer : Schema) :
+    Option Schema → Option Schema.Plan × List Finding
   | none => (none, [])
   | some reader =>
-    match Schema.Plan.of [] writer reader with
+    match Schema.Plan.of ms writer reader with
     | .ok plan => (some plan, [])
     | .error e => (none, [.reader e])
 
 /-- A file of `kind` whose prelude is whole: its records after it, and their findings. -/
-def ofPrelude (kind : Kind) (reader : Option Schema) (tail : Tail)
+def ofPrelude (kind : Kind) (reader : Option Schema) (ms : List Schema.Migration) (tail : Tail)
     (first manifest schema : ByteArray) (payloads : List ByteArray) : Inspection :=
   let prelude := [0, 20 + first.size, 40 + first.size + manifest.size]
   match Prelude.read kind none first manifest schema with
@@ -218,7 +220,7 @@ def ofPrelude (kind : Kind) (reader : Option Schema) (tail : Tail)
   | .ok (m, writer) =>
     let rs := records kind.limits writer 0 (60 + first.size + manifest.size + schema.size)
       payloads
-    let (plan, matched) := planFor writer reader
+    let (plan, matched) := planFor ms writer reader
     let count := if kind = .snapshot ∧ payloads.length ≠ 1 ∧ tail = .clean then
       [.count payloads.length] else []
     { kind, prelude, manifest := m, schema := writer, records := rs, tail
@@ -229,8 +231,10 @@ end Inspect
 
 open Inspect in
 /-- What a journal or a snapshot holds and what is wrong with it, with the reader's schema of
-its records when one is given: for a journal, the schema of its entries (`Entry.schemaOf`). -/
-def inspect (bytes : ByteArray) (reader : Option Schema := none) : Inspection :=
+its records when one is given: for a journal, the schema of its entries (`Entry.schemaOf`).
+Opening reads with no migration; `lanes lint` gives the ones a pinned schema declares. -/
+def inspect (bytes : ByteArray) (reader : Option Schema := none)
+    (migrations : List Schema.Migration := []) : Inspection :=
   let frames := Frame.decode bytes
   let tail := Tail.of bytes (Frame.span frames)
   match frames with
@@ -243,7 +247,8 @@ def inspect (bytes : ByteArray) (reader : Option Schema := none) : Inspection :=
     | none => { tail, findings := [.refused (stranger bytes first)] }
     | some kind =>
       match rest with
-      | manifest :: schema :: payloads => ofPrelude kind reader tail first manifest schema payloads
+      | manifest :: schema :: payloads =>
+        ofPrelude kind reader migrations tail first manifest schema payloads
       | _ =>
         { kind, prelude := [0], tail
           findings := (if kind = .snapshot then [.refused .snapshot] else [])
@@ -302,8 +307,9 @@ theorem tailFindings_none {bytes : ByteArray} {size : Nat}
   · rfl
   · simp [tailFindings]
 
-theorem planFor_same {s : Schema} {reader : Option Schema} (hr : reader = none ∨ reader = some s) :
-    ∃ plan, (plan = none ∨ plan = some .same) ∧ planFor s reader = (plan, []) := by
+theorem planFor_same {ms : List Schema.Migration} {s : Schema} {reader : Option Schema}
+    (hr : reader = none ∨ reader = some s) :
+    ∃ plan, (plan = none ∨ plan = some .same) ∧ planFor ms s reader = (plan, []) := by
   rcases hr with rfl | rfl
   · exact ⟨none, .inl rfl, rfl⟩
   · exact ⟨some .same, .inr rfl, by simp [planFor, Schema.Plan.of_self]⟩
@@ -325,7 +331,7 @@ theorem inspect_whole (input : Codec σ.In) {system : String} {entries : List (E
     (inspect bytes reader).findings = []
       ∧ (inspect bytes reader).records.map (·.value)
         = ((entries.take k).map (Entry.schema input).toValue).map .ok := by
-  obtain ⟨plan, hplan, hfor⟩ := planFor_same hr
+  obtain ⟨plan, hplan, hfor⟩ := planFor_same (ms := []) hr
   have htake : (write input entries).take k = write input (entries.take k) := by
     simp [write, List.map_take]
   have hfits : ∀ e ∈ entries.take k, Entry.fits input e = true :=
@@ -408,7 +414,7 @@ theorem inspect_saved {sys : System σ} (c : Kernel.Image.Codecs sys) {system : 
       ∧ (inspect (saved c system index image) reader).records.map (·.value)
         = [.ok ((savedOf c).toValue (index, image))] := by
   obtain ⟨hp, hbody, -⟩ := savedBody_ok h
-  obtain ⟨plan, hplan, hfor⟩ := planFor_same hr
+  obtain ⟨plan, hplan, hfor⟩ := planFor_same (ms := []) hr
   have hread : Body.read Kind.snapshot.limits (savedOf c).schema (okBytes (savedBody c index image))
       = .ok ((savedOf c).toValue (index, image)) := Body.read_write hbody
   have hsize : Frame.span (savedRecords c system index image)

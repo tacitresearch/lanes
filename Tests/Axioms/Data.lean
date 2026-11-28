@@ -26,6 +26,18 @@ import Lanes.Semantics
 /-- info: 'Lanes.Body.decodeWith_migrate' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Body.decodeWith_migrate
 
+-- Lanes.Data.Diff
+/-- info: 'Lanes.Schema.compare_eq_same_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Schema.compare_eq_same_iff
+/-- info: 'Lanes.Schema.compare_reads_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Schema.compare_reads_iff
+/-- info: 'Lanes.Schema.compare_refused_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Schema.compare_refused_iff
+/-- info: 'Lanes.Schema.compare_insertIdx' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Schema.compare_insertIdx
+/-- info: 'Lanes.Schema.compare_rename' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Schema.compare_rename
+
 -- Lanes.Data.Codec
 /-- info: 'Lanes.Codec.extTreeMap' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Codec.extTreeMap

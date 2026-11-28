@@ -32,6 +32,7 @@ public import Lanes.Data.Body
 public import Lanes.Data.Match
 public import Lanes.Data.Codec
 public import Lanes.Data.Declare
+public import Lanes.Data.Diff
 public import Lanes.Data.Enum
 public import Lanes.Data.Fifo
 public import Lanes.Data.Quorum
@@ -44,6 +45,7 @@ public import Lanes.Durable.IO.Ship
 public import Lanes.Durable.Journal
 public import Lanes.Durable.Migration
 public import Lanes.Durable.OutputId
+public import Lanes.Durable.Pin
 public import Lanes.Durable.Reading
 public import Lanes.Durable.Restore
 public import Lanes.Durable.Ship

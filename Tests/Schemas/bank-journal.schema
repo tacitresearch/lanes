@@ -1,0 +1,37 @@
+-- The pinned schema of an application's files. `lanes lint` checks that the build's schema
+-- reads what this one wrote, and the corpus; `lanes lint --fix` writes this file again after
+-- a change that old files read. The text is for people; the frame is what is checked.
+kind: journal
+schema: Tests.Corpus.Bank.journal
+import: Tests.Corpus
+corpus: Tests/Journals/bank
+
+Lanes.Journal.Entry (Tests.Fixtures.Bank.Request Nat)
+
+inductive Lanes.Journal.Entry (Tests.Fixtures.Bank.Request Nat) where
+  | input (x : Tests.Fixtures.Bank.Request Nat)
+  | advance (now_ms : Nat)
+  | batch (fuel : Nat)
+  | handed
+  | snapshot (index : Nat)
+
+inductive Tests.Fixtures.Bank.Request Nat where
+  | transfer (t : Tests.Fixtures.Bank.Transfer Nat)
+  | balance (req : Nat) (account : Nat)
+
+structure Tests.Fixtures.Bank.Transfer Nat where
+  req : Nat
+  src : Nat
+  dst : Nat
+  amount : Nat
+
+frame:
+BQgDAhNMYW5lcy5Kb3VybmFsLkVudHJ5BAEFCAMCG1Rlc3RzLkZpeHR1cmVzLkJhbmsuUmVxdWVzdAQBBQAABAIFAAMCCHRy
+YW5zZmVyBAAEAQUABAIBdAQABQcDAhxUZXN0cy5GaXh0dXJlcy5CYW5rLlRyYW5zZmVyBAEFAAAEBAUABAIDcmVxBAAFAAAF
+AAAFAAQCA3NyYwQABQAABQAABQAEAgNkc3QEAAUAAAUAAAUABAIGYW1vdW50BAAFAAAFAAAFAAAFAAMCB2JhbGFuY2UEAAQC
+BQAEAgNyZXEEAAUAAAUAAAUABAIHYWNjb3VudAQABQAABQAABAUFAAMCBWlucHV0BAAEAQUABAIBeAQABQgDAhtUZXN0cy5G
+aXh0dXJlcy5CYW5rLlJlcXVlc3QEAQUAAAQCBQADAgh0cmFuc2ZlcgQABAEFAAQCAXQEAAUHAwIcVGVzdHMuRml4dHVyZXMu
+QmFuay5UcmFuc2ZlcgQBBQAABAQFAAQCA3JlcQQABQAABQAABQAEAgNzcmMEAAUAAAUAAAUABAIDZHN0BAAFAAAFAAAFAAQC
+BmFtb3VudAQABQAABQAABQAABQADAgdiYWxhbmNlBAAEAgUABAIDcmVxBAAFAAAFAAAFAAQCB2FjY291bnQEAAUAAAUAAAUA
+AAUAAwIHYWR2YW5jZQQABAEFAAQCBm5vd19tcwQABQAABQAABQADAgViYXRjaAQABAEFAAQCBGZ1ZWwEAAUAAAUAAAUAAwIG
+aGFuZGVkBAAEAAUAAwIIc25hcHNob3QEAAQBBQAEAgVpbmRleAQABQAABQAA
