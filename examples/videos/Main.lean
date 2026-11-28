@@ -101,7 +101,7 @@ def main (args : List String) : IO UInt32 := do
       maxUpload_bytes, worker, callback }
   let server ← (Web.start {
     config := { workerKey := .of secret.toUTF8 }, settings, journal
-    server := { host, port := port.toUInt16, system := "videos 3", idle_ms
+    server := { host, port := port.toUInt16, system := "videos 4", idle_ms
                 ops := { readinessPath := some "/readyz", livenessPath := some "/healthz"
                          metricsPath := some "/metrics", accessLog := .stderr, requestIds := true } }
     signIn := { providers, secure } }).block

@@ -106,7 +106,7 @@ def deployment (bucket : S3.Bucket) (creds : SigV4.Credentials) (provider : Test
                   bucket, creds, providers := ["hub"], keyPrefix
                   maxUpload_bytes := ⟨maxUpload_bytes, by decide⟩
                   worker := worker.origin, callback := s!"{origin}/transcoded" }
-    server := { port := 0, system := "videos 3"
+    server := { port := 0, system := "videos 4"
                 ops := { readinessPath := some "/readyz", livenessPath := some "/healthz"
                          metricsPath := some "/metrics" } }
     journal := some journal
