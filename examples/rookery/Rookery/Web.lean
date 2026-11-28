@@ -424,6 +424,7 @@ def encodeJson : Reply Name → Http.Response
   | .notYours => jsonError "the account has no post with that id" 404
   | .badToken => jsonError "a token is missing or does not verify" 401
   | .stale => jsonError "a request with a later seq was already acted on" 409
+  | .reused => jsonError "this seq was already used for another request" 422
   | _ => jsonError "not an answer the API gives" 500
 
 /-- What a timeline shows, as the id of the event that shows it: the same posts, the same id. -/
@@ -455,7 +456,7 @@ def encodeHtml (s : Settings) : Reply Name → Http.Response
   | .noSuchAccount => fragment (Error "No such account.")
   | .tooManyFollows => fragment (Error "You follow as many as you may.")
   | .feed posts => (fragment (Feed posts)).withHeader "event-id" (feedId posts)
-  | .badToken | .stale => forbidden
+  | .badToken | .stale | .reused => forbidden
 
 /-- The requests that stream: the timeline as events. -/
 def streams (r : Http.Request) : Bool :=

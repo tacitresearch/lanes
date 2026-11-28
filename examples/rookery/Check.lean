@@ -59,13 +59,15 @@ def social : Script :=
 
 /-- `1` gets a token and posts through the API: a post sent twice with one sequence number, as a
 bot that retries; an older number; two more posts, the window full; a token of the wrong
-generation; a read, a delete, and the read again with its `seq`, as a bot that retries it. -/
+generation; a read, a delete, and the read again with its `seq`, as a bot that retries it; a
+post with the delete's `seq`. -/
 def bots : Script :=
   [ (signUp 2 1 true, []), (logIn 4 1, [2]), (.newToken 5 1 4, [4]),
     (api 6 1 1 (.post hi), [5]), (api 7 1 1 (.post hi), [5]),
     (api 8 1 0 (.post yo), [6, 7]), (api 9 1 2 (.post yo), [6, 7]),
     (api 10 1 3 (.post yo), [9]), (api 11 1 4 .timeline (token := 2), [9]),
-    (api 12 1 5 .timeline, [10]), (api 13 1 6 (.delete 0), [12]), (api 14 1 5 .timeline, [13]) ]
+    (api 12 1 5 .timeline, [10]), (api 13 1 6 (.delete 0), [12]), (api 14 1 5 .timeline, [13]),
+    (api 15 1 6 (.post hi), [14]) ]
 
 /-- Two wrong credentials lock `0`; a second log-in of `1` closes its first session; a session
 is no key to another account; a log-out ends a session. -/
@@ -204,6 +206,8 @@ def botWitnesses : List (Check.Property SpecWorld) :=
   [ .sometimes "a post retried is posted once, and both get its id" fun w =>
       replied w.answered 6 (.posted 0) && replied w.answered 7 (.posted 0),
     .sometimes "an older sequence number is stale" fun w => replied w.answered 8 .stale,
+    .sometimes "a sequence number used for another change is refused" fun w =>
+      replied w.answered 15 .reused,
     .sometimes "the window is full" fun w => replied w.answered 10 .rateLimited,
     .sometimes "a post is accepted again once the window ends" fun w =>
       replied w.answered 10 (.posted 2),

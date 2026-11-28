@@ -48,6 +48,9 @@ If a `sorry` or a new axiom reaches one, this file stops compiling.
 /-- info: 'Rookery.Board.handle_api_again' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Rookery.Board.handle_api_again
 
+/-- info: 'Rookery.Board.handle_api_reused' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Rookery.Board.handle_api_reused
+
 /-- info: 'Rookery.Board.handle_secret' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Rookery.Board.handle_secret
 
