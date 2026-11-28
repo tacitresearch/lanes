@@ -136,3 +136,6 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Sched.Ledger.done_wakes' depends on axioms: [propext] -/
 #guard_msgs in #print axioms Lanes.Sched.Ledger.done_wakes
+
+/-- info: 'Lanes.Sched.Ledger.done_armed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Sched.Ledger.done_armed

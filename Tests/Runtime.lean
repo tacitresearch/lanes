@@ -641,21 +641,21 @@ abbrev tickers : System tickSig where
 
 def timerCountTest : Async (List (String × Bool)) := do
   let rt ← Runtime.start tickers { workers := 4 }
-  let mut late := 0
-  let mut early := 0
-  for round in [1:301] do
+  let mut ended := true
+  let mut counted := true
+  for round in [1:1001] do
     for i in List.finRange 8 do rt.input i
-    match ← soon 5000 (rt.idle (timers := true)) with
-    | none => late := late + 1; break
-    | some () =>
-      let ticks ← (List.finRange 8).mapM fun i => rt.state i
-      unless ticks.all (· == round) do early := early + 1; break
+    if (← soon 5000 (rt.idle (timers := true))).isNone then
+      ended := false
+      break
+    unless (← (List.finRange 8).mapM fun i => rt.state i).all (· == round) do
+      counted := false
+      break
   rt.stop
   return [
-    ("timers: on four workers, waiting for the timers ends once each has gone off",
-      late == 0),
+    ("timers: on four workers, waiting for the timers ends once each has gone off", ended),
     ("timers: on four workers, waiting for the timers does not end before each has gone off",
-      early == 0) ]
+      counted) ]
 
 /-- A parker: an `unpark` before the `park` is kept, a timed park ends, a task and an `Async`
 are waited for on one. -/

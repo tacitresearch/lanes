@@ -293,6 +293,13 @@ def done (highWater gone before after : Nat) (l : Ledger W I) : (List W × List 
   let (idle, l') := l'.settle
   ((room, idle), l')
 
+/-- A turn left `n` more timers pending than it found. The shell counts them before it lets go
+of the actor, and the rest of the turn with `done` after: the next turn of the actor, perhaps on
+another worker at once, may take those timers, and must find them counted
+(`Ledger.done_armed`). -/
+def armed (n : Nat) (l : Ledger W I) : Ledger W I :=
+  { l with timers := l.timers + n }
+
 /-- Take no more inputs. Every sender waiting for room and every idle waiter is to be told. -/
 def close (l : Ledger W I) : (List W × List I) × Ledger W I :=
   ((l.waiting, l.idlers.map (·.2)), { l with closed := true, waiting := [], idlers := [] })
