@@ -179,7 +179,7 @@ It is preserved on the branch `claude/archive-journal-runtime`.
 - The per-definition inventory.
 - The per-PR changelog machinery.
 - Mathlib and CSLib, from the core library. The proof study recommended it
-  (`docs/decisions/new-proof-libraries.md` on the branch `claude/cslib-mathlib-study`), and #130
+  (`docs/decisions/D111-proof-libraries.md`), and #130
   adds an example application that uses Mathlib for its own proofs.
 
 ## What changes in designs that assumed the journal

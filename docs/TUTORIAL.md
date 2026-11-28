@@ -14,7 +14,6 @@ git clone https://github.com/tacitresearch/lanes
 cd lanes
 lake exe lanes new tut --dir ../tut
 cd ../tut
-lake exe cache get   # prebuilt Mathlib, once: 500 MB to fetch, 7.5 GB on disk
 lake test            # the first time builds Lanes and the app (minutes), then checks and proves
 lake exe tut         # serves http://127.0.0.1:8080; Ctrl-C stops it
 ```
