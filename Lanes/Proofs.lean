@@ -12,6 +12,7 @@ public import Lanes.Check.ReduceSound
 public import Lanes.Check.SearchSound
 public import Lanes.Check.SystemSound
 public import Lanes.Data.BodySound
+public import Lanes.Data.MatchSound
 public import Lanes.Lib.Encoding.Json.BasicSound
 public import Lanes.Lib.Encoding.Json.ParserSound
 public import Lanes.Lib.Encoding.Json.PrinterSound

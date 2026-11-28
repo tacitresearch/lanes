@@ -9,6 +9,9 @@ description: >
   `lake exe cache get` when missing), the build on the commit, falling back to the newest
   earlier one. With `system`, `examples/<system>` gets the same packages and its own build back.
   Saving is left to the jobs that build, when `warm` is not true: see the keys in the outputs.
+  Each job gets an empty Lake artifact cache of its own, in `.lake/cache` (AGENTS.md, "Build and
+  checks"): Lake does not replay the warnings of a module it takes from that cache, so a cache
+  shared with other jobs would let `--wfail` pass over a warning that another job saw.
 inputs:
   system:
     description: A directory under `examples/` whose build to restore as well.
@@ -48,6 +51,11 @@ runs:
           exit 0
         fi
         sudo apt-get update -q && sudo apt-get install -yq openssl libssl-dev pkg-config
+    - name: An empty Lake artifact cache, the job's own
+      shell: bash
+      run: |
+        rm -rf "$GITHUB_WORKSPACE/.lake/cache"
+        echo "LAKE_CACHE_DIR=$GITHUB_WORKSPACE/.lake/cache" >> "$GITHUB_ENV"
     - name: Install elan and the toolchain
       shell: bash
       run: |
@@ -128,11 +136,6 @@ runs:
         path: .lake/build
         key: ${{ steps.keys.outputs.build }}
         restore-keys: ${{ steps.keys.outputs.build-prefix }}
-    # Lake does not track the templates `LanesCli/New.lean` embeds with `include_str`, so a restored
-    # build would keep the templates of the commit it was saved from: build that module again.
-    - name: Forget the embedded templates
-      shell: bash
-      run: rm -f .lake/build/lib/lean/LanesCli/New.* .lake/build/ir/LanesCli/New.*
     - name: Fetch Mathlib's build
       if: steps.shared.outputs.warm != 'true' && steps.packages.outputs.cache-hit != 'true'
       shell: bash

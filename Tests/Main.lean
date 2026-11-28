@@ -27,6 +27,7 @@ import Tests.ReadRequest
 import Tests.Codec
 import Tests.Schema
 import Tests.Body
+import Tests.Match
 import Tests.Peers
 import Tests.Courier
 import Tests.HttpConn
@@ -68,6 +69,7 @@ import Tests.SigV4
 import Tests.S3
 import Tests.Multipart
 import Tests.S3Upload
+import Tests.Ship
 import Tests.Testing
 
 /-!
@@ -111,6 +113,7 @@ def live : IO (List (String × Bool)) := do
     ++ (← safely "postgres" Tests.PostgresLive.live)
     ++ (← safely "postgres tls" Tests.PostgresTls.live)
     ++ (← safely "s3" Tests.S3.live) ++ (← safely "s3 uploads" Tests.S3Upload.live)
+    ++ (← safely "ship" Tests.Ship.live)
     ++ (← safely "test kit" Tests.Testing.live)
     ++ (← safely "test kit worker" Tests.Testing.workerLive)
     ++ (← safely "tutorial web" Tests.TutorialWeb.live)
@@ -120,7 +123,7 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.KV.tests ++ Tests.Gate.tests ++ Tests.Fronted.tests ++ Tests.Join.tests
     ++ Tests.Kernel.tests ++ Tests.Frame.tests ++ Tests.Clock.tests ++ Tests.HttpClient.tests ++ Tests.Tls.tests
     ++ Tests.Signature.tests ++ Tests.Sign.tests ++ Tests.OAuth.tests
-    ++ Tests.Fair.tests ++ Tests.Codec.tests ++ Tests.Schema.tests ++ Tests.Body.tests ++ Tests.Durable.fileTests ++ Tests.Split.tests
+    ++ Tests.Fair.tests ++ Tests.Codec.tests ++ Tests.Schema.tests ++ Tests.Body.tests ++ Tests.Match.tests ++ Tests.Durable.fileTests ++ Tests.Split.tests
     ++ Tests.Peers.tests ++ Tests.Courier.tests ++ Tests.Mailbox.tests ++ Tests.Batch.tests
     ++ Tests.Pace.tests
     ++ Tests.Crypto.tests ++ Tests.Auth.tests ++ Tests.Clients.tests ++ Tests.Lease.tests
@@ -131,6 +134,7 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.PostgresSettings.tests
     ++ Tests.Ops.tests
     ++ Tests.SigV4.tests ++ Tests.S3.tests ++ Tests.MultipartModel.tests ++ Tests.S3Upload.tests
+    ++ Tests.Ship.tests
     ++ Tests.Testing.tests
     ++ Tests.Queue.tests ++ Tests.Reduce.tests ++ Tests.Cache.tests ++ Tests.WallClock.tests ++ Tests.Throttle.tests
     ++ Tests.SharedCache.tests

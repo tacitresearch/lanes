@@ -38,7 +38,7 @@ proved function tells it to.
 | Web | `Lanes/Web/Http/{Basic,Route,RouteSound,Cookie,CookieSound}.lean`, `Lanes/Web/Html/`, `Lanes/Web/Auth/` | `Html.lex_render`, `Html.safeUrl_scheme`, `Http.dispatch_link`, `Http.parseForm_encodeForm`, `Http.readSetCookie_header`, `Auth.verify_eq_some`, `Auth.checkForm_other` |
 | The checker | `Lanes/Check/`, `Lanes/Semantics/{Monitor,MonitorSound}.lean` | `Check.search_sound`, `Check.system_sound_of_respects`, `Check.refines_traces` |
 | The proof layer | `Lanes/Semantics/` | refinement, specs, fairness, leads-to |
-| Data and the standard library | `Lanes/Data/`, `Lanes/Lib/` | codec laws, the body of a value read back as written and written one way (`Body.read_eq_ok_iff`), `Quorum.majority_inter`, `Bytes.same_iff`, `Json.parse_iff`, `Url.parse_print` |
+| Data and the standard library | `Lanes/Data/`, `Lanes/Lib/` | codec laws, the body of a value read back as written and written one way (`Body.read_eq_ok_iff`), old data read by name, with defaults and former names (`Schema.Plan.of_insertIdx`, `Schema.Plan.of_rename`), `Quorum.majority_inter`, `Bytes.same_iff`, `Json.parse_iff`, `Url.parse_print` |
 | Sign-in with OAuth 2.0 and OpenID Connect | `Lanes/Web/Auth/{Jose,IdToken,OAuth}.lean`, `Lanes/Web/IO/SignIn.lean` | `OAuth.check_ok`, `OAuth.Used.accepted_once`, `OAuth.Used.length_claim`, `OAuth.IdToken.verify_accepted`, `Jose.verify_ok`, `OAuth.Keys.no_fetch_within`; the edge is trusted, tested end to end against a provider run in the test |
 | Bound C | `native/lanes.c`, `Lanes/Lib/Crypto/Native.lean`; `native/verify.c`, `Lanes/Lib/Crypto/Verify.lean`; `native/sign.c`, `Lanes/Lib/Crypto/Sign.lean` | trusted; tested against the Lean references and published vectors |
 | TLS client | `native/tls.c`, `Lanes/Web/IO/Tls.lean` | trusted; tested against `openssl s_server` |
@@ -171,6 +171,19 @@ proof that every state an old actor reaches migrates into it; it then holds of e
 every state the new shard reaches (`Migration.inv_exec`, `Kernel.exec_inductive`) and at every
 later start (`Journal.Upgrade.inv_load`). An invariant proved only from boot, and refinement,
 do not carry over.
+
+A journal may also be shipped to an object store as it is written (`Journal.Store.ship`), after
+Litestream: what is written is sealed into segments, by size, by age and at each save, and each
+segment and snapshot is put once, with a conditional write, under a key that names the journal,
+its positions and its SHA-256. Nothing the shard does waits for it. What to seal, what to put
+next, the backoff and what is dropped at the bound are pure (`Lanes/Durable/Ship.lean`), and
+every segment put holds the history's entries at the positions its key names
+(`Journal.Ship.Holds.put`). A restore (`Lanes/Durable/Restore.lean`, `Journal.Store.restore`)
+picks a point, the newest snapshot before it and the segments after it, checks that they join,
+and writes a journal that ends with a `handed` mark and has no id: its start gives the kernel the
+local journal had after that many entries and hands nothing over
+(`Journal.Restore.journal_restores`, from `Journal.resumeIds_eq_recoverIds`), a restored copy
+under D105. The thread that puts is `Lanes/Durable/IO/Ship.lean`, trusted (`TRUSTED.md`).
 
 ## Composition: joins, shards and the transport
 
