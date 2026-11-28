@@ -219,6 +219,18 @@ is accepted by a reader of the same with no plan (`Journal.Prelude.check_frames`
 format 1 is refused as such (`Refusal.format`), and no cut of a format-2 file looks like one
 (`Journal.Kind.formerly_cut`).
 
+A file holds its schema, so it reads with no application code (`Lanes/Durable/Inspect.lean`).
+`Journal.inspect` reads a journal or a snapshot as opening would and says all it finds instead of
+stopping at the first refusal: every frame's length and checksum, the prelude
+(`Journal.Prelude.read`, which `Prelude.check` is built on), each record read with the file's
+schema, and whether the tail is torn, which a journal opens with, or damaged; given a reader's
+schema, it matches the two with `Schema.Plan.of` and reads each record through the plan, as
+opening does. `lanes journal dump` and `lanes journal verify` print it (`LanesCli/Journal.lean`).
+What the writer writes passes (`Journal.inspect_file`, `Journal.inspect_saved`), and so does a
+journal cut at any byte (`Journal.inspect_cut`). The reader's schema comes from the build, as a
+type or a codec only; `verify` does not run a type's own check of a value (a `Fin`'s bound, a
+subtype's property), which opening does.
+
 Each output carries an id: its journal's, made at random when the journal is begun, and its
 origin, the place in the history of the entry that produced it and its place among that entry's
 outputs (`docs/decisions/D105-output-ids.md`). A batch hands an output over with the origin its
@@ -297,6 +309,7 @@ Where: `Lanes/Durable/`, `Lanes/Runtime/Log.lean`, `Lanes/Durable/IO/Journal.lea
 | A file is in format 2: a header, a manifest and the schema, then one body per entry; a prelude written for a system and a schema is accepted by a reader of the same with no plan, and refused by a reader of another system as that system's | `Journal.Prelude.check_frames`, `Journal.Prelude.check_other`, `Journal.Prelude.named?_frames`, `Lanes/Durable/Format.lean`; gate `Tests/Axioms/Durable.lean`; `Tests/Format.lean` | The manifest and the schema fit their bounds and a frame (`Journal.preludeFits`) | proved; tested |
 | A file of format 1 is refused as format 1, never read as something else, and no cut of a format-2 file looks like one | `Journal.Kind.formerly_cut`, `Journal.open?`; gate `Tests/Axioms/Durable.lean`; format-1 journals and a snapshot built byte by byte, refused, `Tests/Format.lean` | None | proved; tested |
 | A journal written with an older schema of its inputs opens through matching by name, and a start writes it again with its own schema before it appends | `Journal.open?`, `Disk.mend`; `Tests/Format.lean` (an argument added with a default, a constructor inserted; a field with no default refused at the prelude, naming it); the rules of matching, `Lanes/Data/MatchSound.lean` | The disk theorems are of files written with the reader's own schema | proved for the same schema; tested for older ones |
+| `lanes journal verify` passes every file the writer writes, a journal cut at any byte included, and `dump` shows the records written | `Journal.inspect_file`, `Journal.inspect_cut`, `Journal.inspect_saved`, `Lanes/Durable/Inspect.lean`; gate `Tests/Axioms/Durable.lean`; `Tests/Inspect.lean` (a torn tail, a flipped byte, format 1, an older schema with and without a reader that reads it) | The reader's schema is given as a schema: a type's own check of a value (a `Fin`'s bound) is not run | proved; tested |
 | Every journal append is synced before the next, so a loss of power leaves what a death would | `Lanes/Durable/IO/Journal.lean` (`append` flushes and calls `fsync`, `native/lanes.c`) | `fsync` and the disk do what they promise | trusted |
 | Every segment the shipper puts holds the history's entries at the positions its key names; a restore at a point starts with the kernel the local journal had after that many entries, and hands nothing over | `Journal.Ship.Holds.put`, `Journal.Restore.journal_restores`, `Lanes/Durable/{Ship,Restore}.lean`; gate `Tests/Axioms/Durable.lean`; `Tests/Ship.lean`, against the fake S3; through `S3.backup` against moto, `oracles/moto/s3-backup.jsonl` | The object store keeps what it answered put; the thread that puts performs what `Ship` decides (`Lanes/Durable/IO/Ship.lean`, TRUSTED) | proved; the IO trusted, tested |
 
@@ -1162,8 +1175,10 @@ repository path a doc cites exists), writes what is derived from other files (`-
 the numbers of new ones), runs the model checks (`lanes check`), prints the inventory
 (`lanes inventory`, `LanesCli/Inventory.lean`: every public definition with its status and its
 evidence, read from the built modules; lint fails on one of `Lanes/` without evidence that is
-not on `docs/inventory-none.md`), and prints the schema of a type's codec as the build derives
-it (`lanes journal schema`, `LanesCli/Journal.lean`). Lint's rule `layering` keeps each module
+not on `docs/inventory-none.md`), prints the schema of a type's codec as the build derives
+it (`lanes journal schema`, `LanesCli/Journal.lean`), and prints or checks a journal or a snapshot
+file by its own schema (`lanes journal dump` and `lanes journal verify`, over `Journal.inspect`).
+Lint's rule `layering` keeps each module
 of `Lanes/` from importing a package above its own: `LanesCli/Layers.lean` gives the packages of
 `docs/decisions/D99-layered-packages.md`, what each requires, and each file's package by the
 longest prefix of its path. The runtime requires std, for the HMAC of the courier's handshake

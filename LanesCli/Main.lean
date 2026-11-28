@@ -39,6 +39,13 @@ Usage:
   lanes journal schema (--type <type> | --codec <term>) [--import <module>]...
       Print the schema of a type's codec, or of a codec, as the build derives it: the type,
       then each named type in it. The modules default to `Lanes`; build them first.
+  lanes journal dump <file> [--from <n>] [--count <n>] [--json]
+      Print a journal or a snapshot as text, or JSON lines: its manifest, its schema, and each
+      record read by name with the file's own schema, with the byte its frame starts at.
+  lanes journal verify <file> [--json] [(--type <type> | --codec <term> | --schema <term>)
+      [--import <module>]...]
+      Check every frame, the prelude and every record, and tell a torn tail from damage; given
+      the reader's types, check that they read the file as opening would. Exits 0 or 1.
   lanes docstrings [--list]
       In Lanes itself: how many public declarations of `import Lanes` have a docstring, by
       module, or list those that have none. It reports and fails nothing.

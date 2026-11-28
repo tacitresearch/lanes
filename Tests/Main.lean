@@ -17,6 +17,7 @@ import Tests.Join
 import Tests.Frame
 import Tests.Durable
 import Tests.Format
+import Tests.Inspect
 import Tests.Ending
 import Tests.Clock
 import Tests.HttpClient
@@ -104,6 +105,7 @@ def live : IO (List (String × Bool)) := do
   let group (name : String) (tests : IO (List (String × Bool))) := safely name (liftM tests)
   return (← group "runtime" Tests.Runtime.tests) ++ (← group "web" Tests.Web.tests)
     ++ (← Tests.Durable.tests) ++ (← group "format" Tests.Format.storeTest)
+    ++ (← group "journal verify" Tests.Inspect.cliTests)
     ++ (← group "ending" Tests.Ending.tests)
     ++ (← safely "clock" Tests.Clock.live)
     ++ (← safely "http client" Tests.HttpClient.live) ++ (← safely "tls" Tests.Tls.live)
@@ -129,7 +131,7 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.KV.tests ++ Tests.Gate.tests ++ Tests.Fronted.tests ++ Tests.Join.tests
     ++ Tests.Kernel.tests ++ Tests.Frame.tests ++ Tests.Clock.tests ++ Tests.HttpClient.tests ++ Tests.Tls.tests
     ++ Tests.Signature.tests ++ Tests.Sign.tests ++ Tests.OAuth.tests
-    ++ Tests.Fair.tests ++ Tests.Codec.tests ++ Tests.Schema.tests ++ Tests.Body.tests ++ Tests.Match.tests ++ Tests.Durable.fileTests ++ Tests.Format.tests ++ Tests.Format.rewriteTests ++ Tests.Split.tests
+    ++ Tests.Fair.tests ++ Tests.Codec.tests ++ Tests.Schema.tests ++ Tests.Body.tests ++ Tests.Match.tests ++ Tests.Durable.fileTests ++ Tests.Format.tests ++ Tests.Format.rewriteTests ++ Tests.Inspect.tests ++ Tests.Split.tests
     ++ Tests.Peers.tests ++ Tests.Courier.tests ++ Tests.Mailbox.tests ++ Tests.Batch.tests
     ++ Tests.Pace.tests ++ Tests.Reads.tests
     ++ Tests.Crypto.tests ++ Tests.Auth.tests ++ Tests.Clients.tests ++ Tests.Lease.tests

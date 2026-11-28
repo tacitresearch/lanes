@@ -161,16 +161,17 @@ def other (kind : Kind) (first : ByteArray) : Refusal :=
   | some version => .format version
   | none => .foreign none
 
-/-- What a reader of `system`, whose values have the schema `reader`, makes of a prelude: the
-writer's schema and the plan from it to the reader's, or why the file is refused. -/
-def check (kind : Kind) (system : String) (reader : Schema) (first manifest schema : ByteArray) :
-    Except Refusal (Schema × Schema.Plan) :=
+/-- What a reader makes of a prelude before it compares schemas: the manifest and the writer's
+schema, or why the file is refused. A reader of `some system` refuses another system's file;
+`none` takes any, as `lanes journal verify` does. -/
+def read (kind : Kind) (system : Option String) (first manifest schema : ByteArray) :
+    Except Refusal (Manifest × Schema) :=
   if first ≠ kind.header then .error (other kind first) else
   match Body.decode schemaLimits Manifest.codec.toOf manifest with
   | .error _ => .error .manifest
   | .ok m =>
     if m.format ≠ 2 then .error (.format m.format)
-    else if m.system ≠ system then .error (.foreign (some m.system))
+    else if system.any (· ≠ m.system) then .error (.foreign (some m.system))
     else if m.runtime ≠ runtime ∨ m.policy ≠ policy then .error (.policy m.runtime m.policy)
     else if m.schema ≠ Sha256.hash schema then .error .manifest
     else
@@ -179,10 +180,18 @@ def check (kind : Kind) (system : String) (reader : Schema) (first manifest sche
       | .ok v =>
         match Schema.ofValue? v with
         | none => .error (.schema { offset := 0, problem := .misfit })
-        | some writer =>
-          match Schema.Plan.of [] writer reader with
-          | .ok plan => .ok (writer, plan)
-          | .error e => .error (.schema e)
+        | some writer => .ok (m, writer)
+
+/-- What a reader of `system`, whose values have the schema `reader`, makes of a prelude: the
+writer's schema and the plan from it to the reader's, or why the file is refused. -/
+def check (kind : Kind) (system : String) (reader : Schema) (first manifest schema : ByteArray) :
+    Except Refusal (Schema × Schema.Plan) :=
+  match read kind (some system) first manifest schema with
+  | .error refusal => .error refusal
+  | .ok (_, writer) =>
+    match Schema.Plan.of [] writer reader with
+    | .ok plan => .ok (writer, plan)
+    | .error e => .error (.schema e)
 
 /-- The system a prelude names, whatever the schema. -/
 def named? (kind : Kind) (first manifest : ByteArray) : Option String :=
@@ -218,13 +227,22 @@ theorem readAny_schemaFrame {kind : Kind} {system : String} {s : Schema}
   rw [schemaFrame, okBytes_ok hb]
   exact Body.readAny_writeAny hb
 
+/-- A prelude written for a system and a schema reads back as its manifest and that schema, by
+a reader of that system or of any. -/
+theorem read_frames {kind : Kind} {system : String} {s : Schema} (h : fits kind system s = true)
+    {reader : Option String} (hr : reader.all (· = system)) :
+    read kind reader kind.header (manifestFrame system s) (schemaFrame s)
+      = .ok (manifest system s, s) := by
+  cases reader <;>
+    simp_all [read, decode_manifestFrame h, readAny_schemaFrame h, Schema.ofValue?_toValue,
+      manifest]
+
 /-- A reader of the system and the schema a prelude was written for accepts it, and needs no
 plan. -/
 theorem check_frames {kind : Kind} {system : String} {s : Schema}
     (h : fits kind system s = true) :
     check kind system s kind.header (manifestFrame system s) (schemaFrame s) = .ok (s, .same) := by
-  simp [check, decode_manifestFrame h, readAny_schemaFrame h, Schema.ofValue?_toValue,
-    Schema.Plan.of_self, manifest]
+  simp [check, read_frames h (reader := some system) (by simp), Schema.Plan.of_self]
 
 theorem named?_frames {kind : Kind} {system : String} {s : Schema}
     (h : fits kind system s = true) :
@@ -236,7 +254,7 @@ theorem check_other {kind : Kind} {named system : String} {s r : Schema}
     (h : fits kind named s = true) (hne : named ≠ system) :
     check kind system r kind.header (manifestFrame named s) (schemaFrame s)
       = .error (.foreign (some named)) := by
-  simp [check, decode_manifestFrame h, manifest, hne]
+  simp [check, read, decode_manifestFrame h, manifest, Ne.symm hne]
 
 end Prelude
 
@@ -260,10 +278,10 @@ theorem former_thirteen (kind : Kind) : ∃ b, kind.former[13]? = some b ∧ b �
 theorem size_header (kind : Kind) : 1 < kind.header.size := by
   cases kind <;> decide
 
-/-- No file of format 2, cut anywhere, begins as a file of format 1 did: its twenty-second byte
-is the second of its header, and that is not the format 1 file's. -/
-theorem formerly_cut (kind : Kind) (rest : ByteArray) (n : Nat) :
-    kind.formerly ((Frame.one kind.header ++ rest).extract 0 n) = false := by
+/-- No file of format 2, cut anywhere, begins as a file of format 1 of either kind did: its
+twenty-second byte is the second of its header, and that is not the format 1 file's. -/
+theorem formerly_cut_of (kind other : Kind) (rest : ByteArray) (n : Nat) :
+    kind.formerly ((Frame.one other.header ++ rest).extract 0 n) = false := by
   rw [formerly, beq_eq_false_iff_ne]
   intro h
   have h13 := congrArg (·[13]?) h
@@ -272,10 +290,14 @@ theorem formerly_cut (kind : Kind) (rest : ByteArray) (n : Nat) :
   simp only [hb, getElem?_extract, hL, ↓reduceIte, Nat.zero_add] at h13
   by_cases hn : 8 + 13 < n
   · simp only [hn, ↓reduceIte] at h13
-    rw [show 8 + 13 = 20 + 1 from rfl, Frame.getElem?_one_append _ (size_header kind),
+    rw [show 8 + 13 = 20 + 1 from rfl, Frame.getElem?_one_append _ (size_header other),
       header_one] at h13
     exact hne (Option.some.inj h13).symm
   · simp [hn] at h13
+
+theorem formerly_cut (kind : Kind) (rest : ByteArray) (n : Nat) :
+    kind.formerly ((Frame.one kind.header ++ rest).extract 0 n) = false :=
+  formerly_cut_of kind kind rest n
 
 end Kind
 

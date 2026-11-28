@@ -38,6 +38,7 @@ public import Lanes.Data.Quorum
 public import Lanes.Data.Schema
 public import Lanes.Durable.Disk
 public import Lanes.Durable.Frame
+public import Lanes.Durable.Inspect
 public import Lanes.Durable.IO.Journal
 public import Lanes.Durable.IO.Ship
 public import Lanes.Durable.Journal

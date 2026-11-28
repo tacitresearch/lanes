@@ -51,6 +51,18 @@ def schema (input : Codec σ.In) : Schema.Of (Entry σ) :=
 /-- The schema a binary writes its entries with. -/
 abbrev own (input : Codec σ.In) : Schema := (schema input).schema
 
+/-- The schema of an entry whose inputs have the schema `input`, for a reader that has no codec
+of them, such as `lanes journal verify` (`own_eq_schemaOf`). -/
+def schemaOf (input : Schema) : Schema :=
+  .sum "Lanes.Journal.Entry" [input]
+    [{ name := "input", fields := [{ name := "x", schema := input }] },
+     { name := "advance", fields := [{ name := "now_ms", schema := .nat }] },
+     { name := "batch", fields := [{ name := "fuel", schema := .nat }] },
+     { name := "handed", fields := [] },
+     { name := "snapshot", fields := [{ name := "index", schema := .nat }] }]
+
+theorem own_eq_schemaOf (input : Codec σ.In) : own input = schemaOf input.schema := rfl
+
 def write (input : Codec σ.In) (entry : Entry σ) : Except Codec.Error ByteArray :=
   Body.encode Kind.journal.limits (schema input) entry
 
