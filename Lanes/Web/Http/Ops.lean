@@ -7,9 +7,9 @@ module
 public import Lanes.Lib.Metrics
 public import Lanes.Lib.Crypto.Native
 public import Lanes.Lib.Encoding.Json
+public import Lanes.Lib.Log
 public import Lanes.Lib.Net.Ip
 public import Lanes.Proof.Utf8
-public import Lanes.Lib.Time.Format
 public import Lanes.Web.Http.Basic
 
 /-!
@@ -26,24 +26,15 @@ any other as if there were none (`route?_hidden`); liveness and readiness answer
 alike (`route?_peer`). Readiness answers `200` exactly when the shard has recovered and the server is
 not stopping (`answer_ready`). A request id taken from a client is bounded and has only letters,
 digits and `-._` (`RequestId.accept?_eq_some`), and so does one made (`RequestId.accept?_ofBytes`);
-a response carries exactly one (`header_tag`). A line of the access log is the JSON text of its
-record (`Ops.Access.parse_line`, in `Lanes/Web/Http/OpsSound.lean`). It holds the method, the path without its query, the status, the
-time taken, the size of the body and the request id; never a header, a query or a body.
+a response carries exactly one (`header_tag`). A line of the access log is a log record
+(`Lanes/Lib/Log.lean`): one line, the JSON text of its record (`Ops.Access.parse_line`, in
+`Lanes/Web/Http/OpsSound.lean`). It holds the method, the path without its query, the status,
+the time taken, the size of the body and the request id; never a header, a query or a body.
 -/
 
 @[expose] public section
 
 namespace Lanes.Http
-
-/-- Where the access log goes: nowhere, a line at a time to standard error, or to a function. -/
-inductive LogSink where
-  | off
-  | stderr
-  | call (write : String → IO Unit)
-
-def LogSink.isOn : LogSink → Bool
-  | .off => false
-  | _ => true
 
 /-- Who may read the metrics page. Its path is matched after percent-decoding, so a rule of a
 load balancer on the path as written (`/metrics`) lets `/%6Detrics` by; this is what keeps the
@@ -69,7 +60,7 @@ structure OpsConfig where
   livenessPath : Option String := none
   /-- `200` once the shard has booted, and `503` from `Server.drain` or `stop`. -/
   readinessPath : Option String := none
-  accessLog : LogSink := .off
+  accessLog : Log.Sink := .off
   /-- Answer every request with an `X-Request-Id`: the client's if it is well formed, else a
   new one. The access log carries it either way. -/
   requestIds : Bool := false
@@ -397,20 +388,22 @@ structure Access where
   bytes : Nat
   requestId : String
 
-def Access.time (a : Access) : String :=
-  let dateTime := Civil.DateTime.ofUnix (a.time_ms / 1000 : Nat)
-  let nanos : Fin 1000000000 := ⟨a.time_ms % 1000 * 1000000, by omega⟩
-  (TimeFormat.printRfc3339? { dateTime, nanos, offset := ⟨0, by decide⟩ }).getD ""
+/-- The record of a request, as `slog`'s JSON handler writes an attribute list: the time, `INFO`,
+`request`, then the fields in a fixed order and the request id. -/
+def Access.record (a : Access) : Log.Record where
+  time_ms := a.time_ms
+  level := .info
+  msg := "request"
+  attrs := [("method", .str (methodName a.method)), ("path", .str (pathText a.path)),
+    ("status", .num a.status), ("duration_ms", .num (JsonNumber.ofDecimal a.duration_us 3)),
+    ("bytes", .num a.bytes)]
+  requestId := some a.requestId
 
-/-- The record's fields in a fixed order, as `slog`'s JSON handler writes them. -/
 def Access.json (a : Access) : Json :=
-  .obj #[("time", .str a.time), ("method", .str (methodName a.method)),
-    ("path", .str (pathText a.path)), ("status", .num a.status),
-    ("duration_ms", .num (JsonNumber.ofDecimal a.duration_us 3)), ("bytes", .num a.bytes),
-    ("request_id", .str a.requestId)]
+  a.record.json
 
 def Access.line (a : Access) : String :=
-  a.json.compress
+  Log.render a.record
 
 end Ops
 

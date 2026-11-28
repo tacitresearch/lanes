@@ -252,6 +252,14 @@ def post (lb : Loopback sys bridge gate) (path : List String) (fields : List (St
   lb.send { method := .post, path, body := (encodeForm fields).toUTF8
             headers := ("Content-Type", "application/x-www-form-urlencoded") :: headers }
 
+/-- A form posted as `multipart/form-data`: text fields and files (`Multipart.Part.field`,
+`Multipart.Part.file`). -/
+def postParts (lb : Loopback sys bridge gate) (path : List String) (parts : List Multipart.Part)
+    (boundary : String := "lanes-loopback-boundary") (headers : List (String × String) := []) :
+    Loopback sys bridge gate × Except String Response :=
+  lb.send { method := .post, path, body := Multipart.write boundary parts
+            headers := ("Content-Type", s!"multipart/form-data; boundary={boundary}") :: headers }
+
 end Loopback
 
 end Lanes.Http

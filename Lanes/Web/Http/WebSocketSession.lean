@@ -313,9 +313,9 @@ def step (now_ms : Nat) (s : Session) : Http.Upgrade.Event → Session × List H
   | .attached rest =>
     if s.attached || s.shut then (s, [])
     else
-      let s := receive now_ms rest { s with attached := true, heard_ms := now_ms, writing := true }
-      let (s, actions) := advance now_ms s
-      (s, .write s.hello :: actions)
+      let (s', actions) :=
+        advance now_ms (receive now_ms rest { s with attached := true, heard_ms := now_ms, writing := true })
+      (s', .write s.hello :: actions)
   | .received bytes => advance now_ms (receive now_ms bytes s)
   | .ended | .broken => advance now_ms { s with ended := s.ended <|> some 1006 }
   | .sent => advance now_ms { s with writing := false }
