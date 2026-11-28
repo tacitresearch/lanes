@@ -86,10 +86,11 @@ def flowTests : List (String × Bool) :=
         && get q "code_challenge_method" == some "S256" && get q "nonce" == some g.nonce
         && state.length == 43 && verifier.length == 43 && g.nonce.length == 43),
     ("oauth: the cookie holds the ticket under the server's tag, and neither the nonce nor the verifier",
-      Ticket.ofCookie key cookie == some t && Ticket.ofCookie (.of "another key".toUTF8) cookie == none
+      Ticket.ofCookie key 0 cookie == some t && Ticket.ofCookie (.of "another key".toUTF8) 0 cookie == none
+        && Ticket.ofCookie key (t.expires_ms + 3600 * 1000) cookie == none && cookie.startsWith "v1.0." 
         && (cookie.splitOn verifier).length == 1 && (cookie.splitOn g.nonce).length == 1
-        && Ticket.ofCookie key (cookie.replace s!".{t.expires_ms}." s!".{t.expires_ms + 1}.") == none
-        && Ticket.ofCookie key ((ticketOf 1 5 "a.b").toCookie key) == some (ticketOf 1 5 "a.b")
+        && Ticket.ofCookie key 0 (cookie.replace s!".{t.expires_ms}." s!".{t.expires_ms + 1}.") == none
+        && Ticket.ofCookie key 0 ((ticketOf 1 5 "a.b").toCookie key) == some (ticketOf 1 5 "a.b")
         && (ticketOf 1 5).grant key != g),
     ("oauth: OAuth 2.0 alone is asked for no nonce, and extra parameters are added",
       let (url, _) := begin settings key { plain with extra := [("prompt", "consent")] } client

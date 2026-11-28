@@ -5,11 +5,11 @@ one that is not here, and on an entry here that has evidence now or no longer ex
 only shrinks. Each entry is under a heading that says why it is here; a new one needs a heading
 of its own. The rules are in `docs/decisions/D47-the-inventory-is-computed.md`.
 
-## Helpers of `lanes_data`, run by the compiler: a test uses the command, not them
+## Helpers of `lanes_data` and of the codec macros, run by the compiler: a test uses the command, not them
 
 What they write is checked by Lean like any declaration, and the laws of a codec and of an
 enumeration are fields of its type. That the declaration is the one written is what
-`Tests/Codec.lean` tests, through the command, which names no constant.
+`Tests/Codec.lean` and `Tests/Schema.lean` test, through the command, which names no constant.
 
 - `Declare.params`
 - `Declare.classBinders`
@@ -24,6 +24,17 @@ enumeration are fields of its type. That the declaration is the one written is w
 - `Declare.independent`
 - `Declare.enum`
 - `Declare.migrate`
+- `Declare.constantDefaults`
+- `Declare.ctorArgs`
+- `Declare.ctorBinder`
+- `Codec.fieldTuple`
+- `Codec.injectCtor`
+- `Codec.nameLit`
+- `Codec.typeName`
+- `Codec.fieldsTerm`
+- `Codec.structTerm`
+- `Codec.sumBytes`
+- `Codec.sumTerm`
 
 ## Without evidence on the day the inventory was introduced (2026-11-26)
 

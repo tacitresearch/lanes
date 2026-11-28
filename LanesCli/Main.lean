@@ -2,6 +2,7 @@
 Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
+import LanesCli.Journal
 import LanesCli.Lint
 import LanesCli.New
 
@@ -36,6 +37,9 @@ Usage:
   lanes inventory [--list <status>]
       In Lanes itself: write docs/INVENTORY.md, every public definition with its status and
       its evidence, or list the library's definitions of one status (`lake exe lanesInventory`).
+  lanes journal schema (--type <type> | --codec <term>) [--import <module>]...
+      Print the schema of a type's codec, or of a codec, as the build derives it: the type,
+      then each named type in it. The modules default to `Lanes`; build them first.
   lanes docstrings [--list]
       In Lanes itself: how many public declarations of `import Lanes` have a docstring, by
       module, or list those that have none. It reports and fails nothing.
@@ -105,6 +109,7 @@ def main (args : List String) : IO UInt32 := do
     let child ← IO.Process.spawn { cmd := "lake", args := #["test"] }
     return (← child.wait)
   | ["check", "--json"] => checkJson
+  | "journal" :: rest => Journal.run rest
   | "docstrings" :: rest =>
     let child ← IO.Process.spawn
       { cmd := "lake", args := #["exe", "lanesInventory", "--docstrings"] ++ rest }

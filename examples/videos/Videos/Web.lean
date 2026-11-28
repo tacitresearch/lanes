@@ -32,8 +32,11 @@ open Lanes Lanes.Http
 open scoped Lanes.Html
 
 structure Settings where
-  /-- The key session cookies and form tokens are signed with. -/
-  key : Hmac.Key
+  /-- The keys session cookies and form tokens are signed with. -/
+  keys : Auth.Keys
+  /-- How long a session's cookie is good for, in seconds; the session's lifetime in the system
+  may end it sooner. -/
+  session_s : Nat := 30 * 24 * 3600
   /-- The origin pages are served from, which a cross-site form does not have. -/
   origin : String
   /-- Whether cookies go over HTTPS only: true behind TLS. -/
@@ -113,8 +116,12 @@ def reportOf? (r : Transcode.Report String String) : Option Report :=
   | .done job _ => (Round.ofId? job).map .done
   | .failed job => (Round.ofId? job).map .failed
 
-def sessionToken (s : Settings) (m : Member) (session : Sid) : String :=
-  Auth.sign s.key "session" s!"{m}.{session}"
+/-- A session as a token's payload and what a form token is bound to. -/
+def sessionOf (m : Member) (session : Sid) : String := s!"{m}.{session}"
+
+/-- The token of a session's cookie, signed at `at_s`. -/
+def sessionToken (s : Settings) (m : Member) (session : Sid) (at_s : Nat) : String :=
+  Auth.sign s.keys "session" (at_s + s.session_s) (sessionOf m session)
 
 def cookie (s : Settings) (value : String) : Cookie :=
   { name := s.cookieName, value, secure := s.secure, sameSite := .lax }
@@ -123,9 +130,12 @@ def cookie (s : Settings) (value : String) : Cookie :=
 def stamp (now_s : Nat) (r : Http.Request) : Http.Request :=
   { r with headers := r.headers.filter (·.1 != arrivedHeader) ++ [(arrivedHeader, toString now_s)] }
 
+def arrived (r : Http.Request) : Nat := ((r.header? arrivedHeader).bind String.toNat?).getD 0
+
 def prepare (s : Settings) (r : Http.Request) : Http.Request :=
   let kept := r.headers.filter fun (name, _) => name != "cookie" && name != sessionHeader
-  let session := (r.cookie? s.cookieName >>= Auth.verify s.key "session").map (sessionHeader, ·)
+  let session := (r.cookie? s.cookieName >>= Auth.verify s.keys "session" (arrived r)).map
+    (sessionHeader, ·)
   { r with headers := kept ++ session.toList }
 
 def session? (r : Http.Request) : Option (Member × Sid) := do
@@ -133,7 +143,6 @@ def session? (r : Http.Request) : Option (Member × Sid) := do
   | [m, session] => return (← m.toNat?, ← session.toNat?)
   | _ => none
 
-def arrived (r : Http.Request) : Nat := ((r.header? arrivedHeader).bind String.toNat?).getD 0
 
 /-! ## Links to the store -/
 
@@ -178,7 +187,7 @@ def script : String :=
   ".catch(function(err){s.textContent='The upload failed: '+err.message;});});});"
 
 def csrf (s : Settings) (viewer : Member × Sid) : Html :=
-  <input type="hidden" name="csrf" value={Auth.formToken s.key (sessionToken s viewer.1 viewer.2)}/>
+  <input type="hidden" name="csrf" value={Auth.formToken s.keys (sessionOf viewer.1 viewer.2)}/>
 
 def Nav (s : Settings) (viewer : Viewer) : Html :=
   match viewer with
@@ -396,7 +405,7 @@ def signedIn (s : Settings) (r : Http.Request) (f : Member → Sid → Except Ht
   | none => .error home
   | some (m, session) =>
     if r.sameOrigin s.origin
-        && (r.field? "csrf").any (Auth.checkForm s.key (sessionToken s m session)) then
+        && (r.field? "csrf").any (Auth.checkForm s.keys (sessionOf m session)) then
       f m session
     else .error forbidden
 
@@ -482,7 +491,7 @@ def decode (s : Settings) (id : ReqId) (r : Http.Request) : Except Http.Response
     ] r).getD (.error (page (Message s none "Not found" "There is no such page.") 404))
 
 def encodeReply (s : Settings) (viewer : Viewer) : Reply → Http.Response
-  | .signedIn m session => home.setCookie (cookie s (sessionToken s m session))
+  | .signedIn m session at_s => home.setCookie (cookie s (sessionToken s m session at_s))
   | .full => page (Message s none "Full" "No more members can join.") 503
   | .signedOut | .noSession => home.clearCookie (cookie s "")
   | .created v media at_s => match viewer with
