@@ -73,17 +73,20 @@ Every claim, with its theorem, check or test, its premises and its status, is in
 ## Examples
 
 `examples/README.md` says what each example shows and in what order to read them. The
-flagship is `examples/rookery`, a small social network for people and bots, whose claims are
-proved of its spec and which is proved to implement that spec. To run it, from the clone:
+flagship is `examples/rookery`, a small social network for people and bots, kept in PostgreSQL:
+each request is one pure transaction, and its claims are proved per transaction, so they hold in
+every database the store's model allows. To run it, from the clone:
 
 ```bash
 cd examples/rookery
 lake build && lake test
-lake exe rookery 8080 rookery.secrets   # serves http://127.0.0.1:8080
+../../scripts/with-postgres lake test                          # and over HTTP on PostgreSQL
+PGHOST=... PGUSER=... lake exe rookery 8080 rookery.secrets    # serves http://127.0.0.1:8080
 ```
 
-`examples/todo-db` keeps its state in PostgreSQL, through a modelled adapter: actor state lives
-as long as the process, and what must outlive it lives in a service outside.
+An application is a stateless process: actor state lives as long as the process, and what must
+outlive it, or that several instances must agree on, lives in PostgreSQL
+(`docs/ARCHITECTURE.md`, "The model"; `docs/DEPLOY.md`).
 
 ## Performance
 
@@ -102,8 +105,8 @@ running actors in parallel are the next steps. The method and settings are in `b
 ## Quick start
 
 You need [elan](https://github.com/leanprover/elan), which installs Lean and Lake, and a C
-compiler. The cryptography and TLS come from the OpenSSL in Lean's toolchain, so there is no
-library to install:
+compiler; to run an app, PostgreSQL. The cryptography and TLS come from the OpenSSL in Lean's
+toolchain, so there is no library to install:
 
 ```bash
 curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh
@@ -116,8 +119,8 @@ git clone https://github.com/tacitresearch/lanes
 cd lanes
 lake exe lanes new my-app --dir ../my-app   # builds the `lanes` command, under a minute
 cd ../my-app
-lake test            # builds Lanes and the app (minutes, once), runs the model checks
-lake exe my-app      # serves http://127.0.0.1:8080
+lake test            # builds Lanes and the app (minutes, once), runs the model check and the proofs
+PGHOST=localhost PGUSER=postgres lake exe my-app   # serves http://127.0.0.1:8080
 ```
 
 `docs/TUTORIAL.md` then takes the app through a change, a model check and a proof, in fifteen
@@ -138,8 +141,11 @@ git = "https://github.com/tacitresearch/lanes"
 rev = "<a release tag or a commit>"
 ```
 
-The generated app is a counter service: a spec-sized actor, its invariant proved in one line, a
-model check with vacuity witnesses, and a server-rendered page.
+The generated app is a counter kept in PostgreSQL: a typed table and its migration, one pure
+transaction per request behind an actor that keeps nothing, its invariant proved per
+transaction, a model check beside the store's model with vacuity witnesses, and a
+server-rendered page. It runs its migrations at the start and refuses to start on tables other
+than the declared ones.
 
 ## Status
 

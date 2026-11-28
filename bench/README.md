@@ -148,7 +148,7 @@ work is now as large as the cost of crossing threads.
 ## Parallel actors and IO threads
 
 `docs/decisions/D64-actors-run-in-parallel.md`: connections on threads of the server's own
-(`lanes-io`) and the actors of a wave stepping in parallel (`lanes-par`, `lanes-many-par`,
+(`lanes-io`) and actors stepping in parallel (`lanes-par`, `lanes-many-par`,
 `lanes-heavy-par`). Measured in the shared 4-core container, the server on 2 CPUs and the load on
 the other 2, `IO_THREADS=2 WORKERS=2`, three runs of 5 s, other agents building on the machine
 (10 of 72 runs disturbed), so only the direction counts:
