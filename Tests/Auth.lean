@@ -167,6 +167,8 @@ def hashTests : List (String × Bool) :=
         && Stored.read? "$argon2id$v=19$m=64,t=0,p=1$BwcHBwcHBwcHBwcHBwcHBw$AAAA" == none
         && Stored.read? "$argon2id$v=19$t=1,m=64,p=1$BwcHBwcHBwcHBwcHBwcHBw$AAAA" == none
         && Stored.read? "zz" == none),
+    ("password: a hash prints its cost only",
+      match stored with | .phc p => reprStr p == "<argon2id m=64,t=1,p=1>" | .raw _ => false),
     ("password: two hashes of one password under two salts differ",
       stored != Stored.phc (password.hash (salt16 8).1 (salt16 8).2 "correct horse")) ]
 

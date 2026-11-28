@@ -256,9 +256,9 @@ def tests : List (String × Bool) :=
       let forged := token.replace ".7.alice" ".7.bob"
       same (decoded (post "transfer" transfer forged)) (.error notLoggedIn)),
     ("bridge: a cookie names no one from its expiry on",
-      let at (now_s : Nat) := decode settings 9 (prepare settings (stamp now_s (post "transfer" transfer)))
-      same (at (999 + settings.session_s)) (.ok (.act 9 alice 7 (.transfer 1 2 5)))
-        && same (at (1000 + settings.session_s)) (.error notLoggedIn)),
+      let arriving (now_s : Nat) := decode settings 9 (prepare settings (stamp now_s (post "transfer" transfer)))
+      same (arriving (999 + settings.session_s)) (.ok (.act 9 alice 7 (.transfer 1 2 5)))
+        && same (arriving (1000 + settings.session_s)) (.error notLoggedIn)),
     ("bridge: a form token of another session is refused",
       same (decoded (post "transfer" ((transfer.take 3) ++
         [("csrf", Auth.formToken settings.keys (sessionOf alice 8))])))

@@ -148,7 +148,7 @@ def prepare (s : Settings) (r : Http.Request) : Http.Request :=
       then (encodeForm (r.form.filter (·.1 != "password"))).toUTF8 else r.body }
 
 /-- The session `prepare` verified, as its form tokens are bound to, and its user and id. -/
-def verified? (s : Settings) (r : Http.Request) : Option (String × Name × Sid) := do
+def verified? (r : Http.Request) : Option (String × Name × Sid) := do
   match (← r.header? verifiedSession).splitOn "." with
   | [sid, name] =>
     let name ← Name.ofString? name
@@ -315,16 +315,16 @@ def forbidden : Http.Response :=
 /-- A request whose cookie names a session, as an input; or how the bridge answers it. -/
 def signedIn (s : Settings) (id : ReqId) (r : Http.Request) (changes : Bool)
     (op : Http.Request → Except Http.Response Op) : Except Http.Response In :=
-  match verified? s r with
+  match verified? r with
   | none => .error notLoggedIn
   | some (session, name, sid) =>
     if changes && !(r.sameOrigin s.origin && (r.field? "csrf").any (Auth.checkForm s.keys session))
     then .error forbidden
     else (op r).map (.act id name sid)
 
-def shell (s : Settings) (r : Http.Request) (view : String → Name → Html) :
+def shell (r : Http.Request) (view : String → Name → Html) :
     Except Http.Response In :=
-  match verified? s r with
+  match verified? r with
   | some (session, name, _) => .error (page (view session name))
   | none => .error notLoggedIn
 
@@ -344,7 +344,7 @@ def decode (s : Settings) (id : ReqId) (r : Http.Request) : Except Http.Response
   if !r.bodyWithin s.maxBody_bytes then .error (Http.Response.text "too large\n" 413)
   else
     (dispatch [
-      Routes.home.handle fun () r => shell s r (AccountsPage s),
+      Routes.home.handle fun () r => shell r (AccountsPage s),
       Routes.login.handle fun () _ => .error (page (LoginPage)),
       Routes.signUp.handle fun () r =>
         if r.sameOrigin s.origin then (credentials s r).map fun (n, d) => .signUp id n d
@@ -357,10 +357,10 @@ def decode (s : Settings) (id : ReqId) (r : Http.Request) : Except Http.Response
       Routes.openAccount.handle fun () r => signedIn s id r true openOp,
       Routes.transfer.handle fun () r => signedIn s id r true transferOp,
       Routes.transfers.handle fun () r =>
-        shell s r fun session name => ListPage s session name "Transfers" Routes.transferList,
+        shell r fun session name => ListPage s session name "Transfers" Routes.transferList,
       Routes.transferList.handle fun () r => signedIn s id r false fun _ => .ok .entries,
       Routes.audit.handle fun () r =>
-        shell s r fun session name => ListPage s session name "Audit" Routes.auditList,
+        shell r fun session name => ListPage s session name "Audit" Routes.auditList,
       Routes.auditList.handle fun () r => signedIn s id r false fun _ => .ok .audit
     ] r).getD (.error (Http.Response.text "not found\n" 404))
 
