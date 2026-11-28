@@ -1,5 +1,7 @@
 # D88. Steps worked out on the pool update their states in place
 
+Status: Accepted
+
 `Lanes/Runtime/Wave.lean`, `Lanes/Runtime/Pace.lean`, `Lanes/Proof/HashMap.lean`,
 `Tests/Scale.lean`, `Tests/Pace.lean`. D84 made a step on the shard's thread update its actor's
 state in place and left the steps worked out on the pool copying it. With two busy actors of a

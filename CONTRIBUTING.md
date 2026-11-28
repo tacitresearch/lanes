@@ -20,8 +20,11 @@ the repository. Read it first; this file does not repeat it. A clone needs elan 
 - Before asking for review, merge `main` into the branch and run the checks again (`AGENTS.md`,
   "Parallel branches").
 - A design that is settled or changed gets a decision file in `docs/decisions/`, written as
-  `AGENTS.md` says (a new file, numbered on `main`). A decision is never rewritten: a new one
-  supersedes it.
+  `AGENTS.md` says (a new file, numbered on `main`, with a status line under its title). A
+  decision is never rewritten: a new one supersedes it and changes the old one's status line.
+- What works and what is claimed of it is in `docs/ARCHITECTURE.md`, with the evidence; a limit
+  that can be fixed is an issue labelled `known-limit`. A change updates either in the same pull
+  request.
 - Cite the rules that shaped a choice in the pull request description, by number ("rule 2.6").
 
 ## What is reviewed by a person
@@ -33,16 +36,11 @@ tests, which CI runs; a reviewer reads those for what they claim, not line by li
 
 ## The changelog
 
-A pull request that changes the library, the C, the `lanes` command or the app template adds a
-file to `docs/changes/`, named after the change (`docs/changes/<slug>.md`): a section, such as
-`### Added`, and its entry, one line that starts with `- `. The sections are Added, Changed,
-Deprecated, Removed, Fixed and Security (`docs/changes/README.md`). Two pull requests then never
-edit the same file. `CHANGELOG.md` holds the released history; `lake exe lanes changelog` prints
-the Unreleased section from the fragments, and the release writes it there (`docs/RELEASING.md`).
-`lanes lint` checks each fragment, and a CI job (`changelog`) checks that there is one. A change
-with nothing to tell a user (a proof refactored, a comment fixed) gets the label `no-changelog`
-instead; push again after adding the label, since the job reads the labels the pull request had
-when it ran.
+No pull request writes a changelog entry. `CHANGELOG.md` says what changed between two releases,
+for someone who uses Lanes: the net change, a short list, not the history (git and
+`docs/decisions/` hold that). It is written when a release is cut (`docs/RELEASING.md`), from the
+git log since the last tag and the decisions accepted since. The files left in `docs/changes/`
+are raw material for the first release's notes.
 
 ## Agents
 

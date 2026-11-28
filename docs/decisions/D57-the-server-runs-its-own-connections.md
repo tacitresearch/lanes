@@ -1,5 +1,7 @@
 # D57. The server runs its own connections, and a pure function decides for each
 
+Status: Accepted
+
 The server read requests with `Std.Http.Server`: code of the standard library that Lanes
 trusted without having written it, which framed requests by rules of its own and closed a
 connection after a hundred requests. `docs/decisions/D49-the-server-reads-requests-by-a-strict-profile.md`
@@ -48,8 +50,8 @@ socket (`Conn.wantsInput`), how many bytes at most (`Conn.room`), and until when
 
 ## What is proved and what is checked
 
-Proved for every configuration and every sequence of events (`Lanes/Http/ConnSound.lean`, on the
-standard axioms, `Tests/Axioms/Http.lean`): the writes of a run are of the requests numbered
+Proved for every configuration and every sequence of events (`Lanes/Web/Http/ConnSound.lean`, on the
+standard axioms, `Tests/Axioms/Web.lean`): the writes of a run are of the requests numbered
 `written, written + 1, …`, none left out and none twice (`Conn.run_writes`); requests are handed
 on in increasing order (`Conn.run_submits`); every request handed on is one `Request.read` reads
 in the connection's bytes (`Conn.step_submit_read`); an answer to a request not waiting changes
@@ -95,7 +97,7 @@ and `stop` closing a connection kept open.
 
 ## Trusted
 
-What remains trusted is the loop in `Lanes/Env/Http.lean`, the IO that performs: that it tells
+What remains trusted is the loop in `Lanes/Web/IO/Server.lean`, the IO that performs: that it tells
 each connection what happened when it happened, reads only when asked and no more than asked,
 does the actions in order, gives each answer to the connection and number it was asked under,
 writes within `write_ms` or reports the socket broken, and on a close sends what was written,

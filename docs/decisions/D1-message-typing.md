@@ -1,5 +1,7 @@
 # D1. Message typing: per-actor message types, indexed by identity
 
+Status: Accepted
+
 *Settles DESIGN "Decisions to settle" 1 and the open question on typed references.*
 
 A `Signature` has `Id : Type` and `Msg : Id → Type`. `Effect.send (to : σ.Id) (msg : σ.Msg to)`

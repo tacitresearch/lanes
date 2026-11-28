@@ -47,8 +47,8 @@ FAIL: "money is conserved" is violated after 4 steps
 
 ## What is proved, checked, tested and trusted
 
-Every claim the documents make, with its theorem, check or test, its premises and its status,
-is in `docs/CLAIMS.md`. In short:
+Every claim, with its theorem, check or test, its premises and its status, is in
+`docs/ARCHITECTURE.md`, area by area, with the limits of each. In short:
 
 - **Proved** (Lean theorems, each with an axiom gate in `Tests/Axioms/`): the runtime kernel
   follows the semantics whatever the shell asks of it; a journal cut at any byte recovers the
@@ -58,7 +58,7 @@ is in `docs/CLAIMS.md`. In short:
   answers every request it admits; a sign-in accepts no state more often than it was issued, and
   an ID token only when signed for an allowed algorithm with every claim passing; and the
   parsers, routes, HTML rendering and tokens of
-  `docs/ARCHITECTURE.md`. Each has premises, which `docs/CLAIMS.md` gives.
+  `docs/ARCHITECTURE.md`. Each has premises, which it gives.
 - **Checked**: model checks of the examples on small instances, and of what the proofs do not
   yet cover, such as that a request reaches the gate.
 - **Tested**: processes killed with SIGKILL and started again, the parsers and encoders against
@@ -71,8 +71,8 @@ is in `docs/CLAIMS.md`. In short:
   list, and `scripts/mutants.py` holds known ways of breaking that code, each of which must
   fail a test.
 
-`docs/INVENTORY.md`, generated from the built library, gives every public definition its
-status, and `docs/inventory-none.md` lists those with no evidence yet.
+`lake exe lanes inventory` prints every public definition with its status, computed from the
+built library, and `docs/inventory-none.md` lists those with no evidence yet.
 
 ## Examples
 
@@ -154,26 +154,14 @@ model check with vacuity witnesses, and a server-rendered page.
 
 ## Status
 
-Early beta: the API will change. What works, area by area, and its known limits are in
-`docs/STATUS.md`. Not there yet:
+Early beta: the API will change. What is missing and can be fixed is in the issues labelled
+`known-limit`; the limits the design accepts are in `docs/ARCHITECTURE.md`, with each area.
 
-- a TLS server: the load balancer or a reverse proxy ends TLS in front (the HTTP client and the
-  PostgreSQL client speak TLS, `docs/decisions/D67-a-tls-client-from-the-openssl-lean-ships.md`);
-- observability beyond the server's metrics, health checks and access log;
-- for `Http.serve`, migrations of a journal across changed step functions: a shard of its own
-  migrates (`Journal.Upgrade`, `examples/migration`), but `serve` replays a journal only
-  through the step functions that wrote it;
-- a deploy to AWS that has been run: the stack and the workflow are written and checked, not run
-  (`docs/DEPLOY.md`);
-- liveness of the applications, and, for rookery, the theorem that joins its claims with its
-  refinement into statements about the running system; the HTTP gate is proved for answers,
-  not as a refinement.
-
-`CONTRIBUTING.md` says how a change is made, `AGENTS.md` has the rules and the layout,
-`SECURITY.md` how to report a vulnerability (a theorem that states less than the docs claim is
-one), and `CHANGELOG.md` what each release changed. `docs/ARCHITECTURE.md` says how the pieces fit
-and where each is proved, `docs/ROADMAP.md` the direction, and `docs/decisions/` why each piece is
-the way it is. The API reference, every module and declaration of `import Lanes` and
+`CONTRIBUTING.md` says how a change is made, `AGENTS.md` has the rules, `SECURITY.md` how to
+report a vulnerability (a theorem that states less than the docs claim is one), and
+`CHANGELOG.md` what each release changed. `docs/ARCHITECTURE.md` says how the pieces fit, what
+is claimed of each and on what evidence, `docs/ROADMAP.md` where the direction and the work
+are, and `docs/decisions/` why each piece is the way it is. The API reference, every module and declaration of `import Lanes` and
 `import Lanes.Proofs` with its docstring, is built with doc-gen4 by `docs/api/`
 (`docs/api/README.md`).
 

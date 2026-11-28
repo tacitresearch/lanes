@@ -1,5 +1,7 @@
 # D24. Durability is a journal of what the kernel was asked, replayed
 
+Status: Partly superseded by D66 (a changed system refusing its old files)
+
 *Departs from `DESIGN.md`, which backs `Actor.recover` with stored state.*
 
 A shard keeps a journal: every input, every clock reading and every batch of work it asks of
@@ -47,5 +49,5 @@ under an environment model with crashes, after a crash.
 What is proved: nothing new is needed for the kernel. `Kernel.exec_reachable` and
 `Kernel.exec_outputs` already hold for any list of requests, so they hold for the replayed one.
 What has to be proved is that the file gives back the list that was written
-(`Lanes/Data/Frame.lean`, and the law every `Codec` carries), including when the last write was
+(`Lanes/Durable/Frame.lean`, and the law every `Codec` carries), including when the last write was
 torn. What stays trusted is that the shell syncs before it hands outputs over.

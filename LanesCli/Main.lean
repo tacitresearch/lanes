@@ -18,8 +18,7 @@ Usage:
       Create a new application.
   lanes lint [--fix] [--main] [--json] [<path>]
       Check a project against the rules of Lanes (AGENTS.md), and the files derived from others.
-      --fix rewrites the derived files: line counts, the decisions' index, docs/STATUS.md and
-      the order of its fragments' items, and in Lanes itself docs/INVENTORY.md.
+      --fix rewrites the derived files: the line counts of TRUSTED.md and the decisions' index.
       --main numbers new decisions (with --fix) or reports them: use it on the main branch.
       --json prints the findings as JSON, each with its kind: proof for a `sorry`, else check.
   lanes check [--json]
@@ -35,8 +34,8 @@ Usage:
       Print the totals no committed file holds: trusted lines, decisions, unreleased changes,
       and in Lanes itself the inventory's statuses by area (`lake exe lanesInventory --summary`).
   lanes inventory [--list <status>]
-      In Lanes itself: write docs/INVENTORY.md, every public definition with its status and
-      its evidence, or list the library's definitions of one status (`lake exe lanesInventory`).
+      In Lanes itself: print every public definition with its status and its evidence, or list
+      the library's definitions of one status (`lake exe lanesInventory`).
   lanes journal schema (--type <type> | --codec <term>) [--import <module>]...
       Print the schema of a type's codec, or of a codec, as the build derives it: the type,
       then each named type in it. The modules default to `Lanes`; build them first.
@@ -58,7 +57,7 @@ def stats (root : System.FilePath) : IO UInt32 := do
   IO.println s!"- Decisions: {decisions.length}"
   IO.println s!"- Changelog fragments in docs/changes/: {(← Changelog.files root).length}"
   if !(← (root / "LanesCli" / "Inventory.lean").pathExists) then return 0
-  IO.println "\nThe inventory (docs/INVENTORY.md), definitions by status:\n"
+  IO.println "\nThe inventory (`lanes inventory`), definitions by status:\n"
   let child ← IO.Process.spawn
     { cmd := "lake", args := #["exe", "lanesInventory", "--summary"], cwd := some root }
   child.wait

@@ -1,5 +1,7 @@
 # D80. Every parser has an oracle and every model a recorded run, in one place, and lint keeps the list
 
+Status: Accepted
+
 D50 compared the standard library's parsers with Go's, and the other comparisons grew one at a
 time: Signature Version 4 against botocore on five examples, JWS by hand, PostgreSQL's messages
 against psql's recorded sessions, TLS against `openssl s_server`, and the models of outside
@@ -17,7 +19,7 @@ standard library, `golang.org/x/time`, Prometheus's `expfmt`; Go and each module
 Lean: the reference's program, its pin, and what was recorded from it (`answers.jsonl` for a pure
 oracle, `<model>.jsonl` for a service). `oracles/README.md` is the manifest: each folder's
 reference, version, pin and what it is the reference for, and each protocol module and model
-against its oracle, or the reason it has none. `oracle/` moved to `oracles/go/` with `git mv`,
+against its oracle, or the reason it has none. `oracle/` (removed) moved to `oracles/go/` with `git mv`,
 and `Tests/Oracle/vectors/<package>.jsonl` to `oracles/go/<package>/answers.jsonl`.
 
 The Lean halves stay in `Tests/Oracle/` (`<Package>.lean` for a pure oracle, `Service/` for a

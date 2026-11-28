@@ -1,5 +1,7 @@
 # D79. Work that is due later is a job of the scheduler: held by its id, run by its own timer, retried until it ends
 
+Status: Accepted
+
 `Lanes/Behaviours/Schedule/{Basic,Sound}.lean`, `Lanes/Semantics/Schedule.lean`,
 `Tests/Schedule.lean`, `examples/reminders`. Every application wants work done later: a reminder,
 an email, a delete in a store retried until it lands, an upload that expires if it is never

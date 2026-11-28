@@ -6,7 +6,7 @@ description: >
   runners are online; stopping it is left to the last run of `workflows` to end. Route `fresh`
   launches a machine of `instance-type` that sets itself up with infra/ec2-runner.sh (from the
   checkout) under the label `run-label`, and terminates it and its runners again. See
-  docs/RUNNERS.md.
+  infra/README.md.
 inputs:
   mode:
     description: start or stop.

@@ -1,5 +1,7 @@
 # D5. Start is recovery
 
+Status: Accepted
+
 `Actor.recover : S → S × List Eff` runs on every start, including the first, and returns the
 state to resume from with startup effects. The default keeps nothing (`fun _ => (init, [])`).
 A crash, or `stop`, loses the actor's timers and the mailbox contents that arrived over links
