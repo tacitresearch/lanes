@@ -2,7 +2,6 @@
 Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import LanesCli.Changelog
 import LanesCli.Layers
 import LanesCli.Schemas
 
@@ -19,8 +18,6 @@ Source-level checks of the rules in `AGENTS.md` that can be decided from the tex
   lines, so trusted code cannot grow without the list changing; `--fix` rewrites the counts.
 - `decisions`: the index of `docs/decisions/` agrees with the decisions, and each decision has
   its number and its status line (`LanesCli/Generated.lean`).
-- `changelog`, where there is a `docs/changes/`: each fragment reads as sections and entries,
-  and `CHANGELOG.md`'s Unreleased section has none of its own (`LanesCli/Changelog.lean`).
 - `layering` (rule 1.6): files that import Mathlib, CSLib or a proof module (`Lanes.Semantics`,
   `App.Proofs`) live in a proof directory, one named `…Proofs` included, or are named
   `…Proofs.lean`, so executable code never links them. In Lanes itself, also: each module of
@@ -37,10 +34,8 @@ Source-level checks of the rules in `AGENTS.md` that can be decided from the tex
   the build derives, and every file of the corpus it names read with the build's schema. A
   change that old files read is reported, and `--fix` pins it; one that opening would refuse,
   or a corpus file the build does not read, is a finding that names the field or the
-  constructor (`LanesCli/Schemas.lean`). This reads the built modules: build first.
-- `inventory`, `inventory-none`, in Lanes itself: the inventory can be computed, and every
-  definition of `Lanes/` without evidence is on `docs/inventory-none.md`. These read the built
-  modules, so `lanesInventory`, which links `Lean`, does them.
+  constructor (`LanesCli/Schemas.lean`). This reads the built modules, so lint builds the
+  modules the pinned files import first, and reports a build that fails as `build`.
 
 Comments and string literals are ignored. The checks that need the elaborator (`no-io-in-step`,
 `bounded`, `field-leak`) are not implemented yet.
@@ -391,43 +386,33 @@ structure Report where
   fixed : List Generated.Edit
   files : Nat
 
-/-- `path:line: [rule] message`, as `lanesInventory` prints a finding. -/
-def parseFinding (text : String) : Option Finding := do
-  let (place, rest) ← match text.splitOn ": [" with
-    | place :: rest@(_ :: _) => some (place, ": [".intercalate rest)
-    | _ => none
-  let (file, line) ← match place.splitOn ":" with
-    | [file, line] => line.toNat?.map (file, ·)
-    | _ => none
-  let (rule, message) ← match rest.splitOn "] " with
-    | rule :: message@(_ :: _) => some (rule, "] ".intercalate message)
-    | _ => none
-  return ⟨file, line, rule, message⟩
-
-/-- The inventory's findings, in Lanes itself: a project with `Lanes.lean` and the inventory's
-program. They need the built modules and `Lean`, so `lanesInventory` finds them. -/
-def inventory (root : System.FilePath) : IO (List Finding) := do
-  if !(← (root / "Lanes.lean").pathExists) || !(← (root / "LanesCli" / "Inventory.lean").pathExists)
-  then return []
+/-- Lint `schema` runs Lean on a program that imports the modules the pinned files name, so
+those are built first, with `lake build`: a project with no pinned file builds nothing. A build
+that fails is one finding, of rule `build`. -/
+def buildPinned (root : System.FilePath) : IO (List Finding) := do
+  let paths ← Schemas.files root
+  let mut modules : List String := []
+  for path in paths do
+    if let .ok (h, _) := Lanes.Journal.Pin.parse (← IO.FS.readFile (root / path)) then
+      for m in "Lanes.Durable.Inspect" :: h.imports do
+        unless modules.contains m do modules := modules ++ [m]
+  if modules.isEmpty then return []
   let out ← IO.Process.output
-    { cmd := "lake", args := #["exe", "lanesInventory", "--check"], cwd := some root }
-  let findings := (out.stdout.splitOn "\n").filterMap parseFinding
-  if out.exitCode != 0 && findings.isEmpty then
-    return [⟨"LanesCli/Inventory.lean", 1, "inventory",
-      s!"`lake exe lanesInventory` failed: {(out.stderr ++ out.stdout).trimAscii}"⟩]
-  return findings
+    { cmd := "lake", args := #["build"] ++ (modules.map ("+" ++ ·)).toArray, cwd := some root }
+  if out.exitCode == 0 then return []
+  return [⟨paths.headD "lakefile.lean", 1, "build",
+    s!"`lake build` of the modules the pinned schemas import failed: {(out.stderr ++ out.stdout).trimAscii}"⟩]
 
 def lint (root : System.FilePath) (options : Options := {}) : IO Report := do
-  -- The inventory builds what it reads, which the pinned schemas' program imports too.
-  let inventoryFindings ← inventory root
+  let built ← buildPinned root
   let fixed ← if options.fix then Generated.fix root options.main else pure []
   let plan ← Generated.plan root options.main
-  let schemas ← Schemas.plan root
+  let schemas ← if built.isEmpty then Schemas.plan root else pure {}
   if options.fix then
     for e in schemas.edits do Generated.apply root e
   let fixed := fixed ++ if options.fix then schemas.edits else []
   let mut findings : List Finding :=
-    (plan.problems ++ schemas.problems ++ (← Changelog.check root)).map
+    (plan.problems ++ schemas.problems).map
       (fun (file, line, rule, message) => ⟨file, line, rule, message⟩)
       ++ (plan.edits ++ if options.fix then [] else schemas.edits).map
         fun e => ⟨e.path, 1, e.rule, e.message⟩
@@ -440,7 +425,7 @@ def lint (root : System.FilePath) (options : Options := {}) : IO Report := do
   findings := findings ++ (← checkLayers root files)
   findings := findings ++ (← checkLinks root)
   findings := findings ++ (← checkOracles root)
-  findings := findings ++ inventoryFindings
+  findings := built ++ findings
   return ⟨findings, fixed, files.size⟩
 
 /-- A JSON string: `s` quoted, with the characters JSON must escape escaped. -/
@@ -460,11 +445,11 @@ def jsonString (s : String) : String :=
   "\"" ++ body ++ "\""
 
 /-- What a finding is a failure of, in the kinds `lanes check` and the test runner give: a
-`sorry` is a proof that does not hold, an inventory that could not be built is a build, and
-every other finding is a check of the text. -/
+`sorry` is a proof that does not hold, a build that failed is a build, and every other finding
+is a check of the text. -/
 def Finding.kind (f : Finding) : String :=
   if f.rule == "no-sorry" then "proof"
-  else if f.rule == "inventory" && f.message.startsWith "`lake exe lanesInventory` failed" then "build"
+  else if f.rule == "build" then "build"
   else "check"
 
 def Finding.json (f : Finding) : String :=

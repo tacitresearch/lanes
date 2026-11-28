@@ -33,6 +33,3 @@ Lake would otherwise check another revision out in the root's copy. Never link t
 directory, and never run `lake update` here. When the root's manifest or the toolchain changes,
 write this manifest again: the root's entries, marked `inherited`, after `lanes` and doc-gen4 at
 the new tag, then doc-gen4's own dependencies from its manifest at that tag.
-
-How much of the API has docstrings: `lake exe lanes docstrings`, and `--list` for the
-declarations without one.
