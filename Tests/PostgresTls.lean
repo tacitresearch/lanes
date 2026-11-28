@@ -113,7 +113,7 @@ def offline : Async (List (String × Bool)) := do
     let noAlpn ← start "good" false
     let refused ← connect (connection noAlpn trust (direct := true))
     let named ← connect (connection noAlpn trust (direct := true) (serverName := some "elsewhere.example"))
-    let chained ← connect (connection noAlpn trust (direct := true) (sslmode := .require)
+    let chained ← connect (connection noAlpn trust (direct := true) (sslmode := .verifyCa)
       (serverName := some "elsewhere.example"))
     let untrusted ← connect (connection noAlpn .system (direct := true))
     let (child, withAlpn) ← sServer dir "good" true

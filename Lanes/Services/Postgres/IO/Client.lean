@@ -31,8 +31,12 @@ adapter: each transaction on a connection of its own, each request on a task of 
 answer handed back as an input.
 
 `connect` resolves the host at each call, so that a new connection, the pool's too, follows a
-name to a new address after a failover. `Client.fromEnv` reads the configuration from the
-environment through `Settings.read`, pure.
+name to a new address after a failover. With more hosts it tries each in order, as libpq does,
+and, when the configuration asks for a kind of server (`TargetSessionAttrs`), asks each server
+it reaches `ServerState.query` and keeps the first one `TargetSessionAttrs.accepts`.
+`Client.fromEnv` reads the configuration from a connection string, the service file and the
+environment through `Settings.read`, pure; the IO gives it a file's mode from `stat`'s output,
+which Lean's `IO.FS.Metadata` leaves out.
 -/
 
 public section
@@ -58,6 +62,11 @@ structure Client.Config where
   serverName : Option String := none
   /-- PostgreSQL 17's direct TLS: the handshake at once, with ALPN, without `SSLRequest`. -/
   direct : Bool := false
+  /-- Hosts tried in order after `host`, each with its password, as libpq tries a list. -/
+  moreHosts : List Target := []
+  /-- How long connecting to one host and authenticating may take, if not `timeout_ms`. -/
+  connectTimeout_ms : Option Nat := none
+  targetSessionAttrs : TargetSessionAttrs := .any
 
 /-- The encryption `Conn.step` is told to use. -/
 def Client.Config.encryption (cfg : Client.Config) : Conn.Encryption :=
@@ -66,24 +75,48 @@ def Client.Config.encryption (cfg : Client.Config) : Conn.Encryption :=
 theorem Client.Config.sslmode_default (host : String) (conn : Conn.Config) :
     ({ host, conn } : Client.Config).sslmode = SslMode.defaultFor host := rfl
 
+/-- The parameters of the start-up the settings add. -/
+def Settings.parameters (s : Settings) : List (String × String) :=
+  (s.applicationName.map ("application_name", ·)).toList ++ (s.options.map ("options", ·)).toList
+
 /-- The configuration the settings give. -/
 def Client.Config.ofSettings (s : Settings) : Client.Config :=
-  { host := s.host, port := s.port, sslmode := s.sslmode,
+  { host := s.host, port := s.port, sslmode := s.sslmode, direct := s.direct,
     trust := s.rootCert.elim .system fun path => .file path,
+    moreHosts := s.moreHosts, connectTimeout_ms := s.connectTimeout_ms,
+    targetSessionAttrs := s.targetSessionAttrs,
     conn := { user := s.user, database := s.database, password := s.password,
-              channelBinding := s.channelBinding } }
+              channelBinding := s.channelBinding, parameters := s.parameters } }
 
-/-- The process's environment and files. -/
+/-- `st_mode` as `stat` prints it: GNU's `%f` in hex, else BSD's `%p` in octal. -/
+def statMode (path : String) : IO (Option UInt32) := do
+  let run (args : Array String) : IO (Option String) := do
+    try
+      let out ← IO.Process.output { cmd := "stat", args := args.push path }
+      return if out.exitCode == 0 then some out.stdout.trimAscii.toString else none
+    catch _ => return none
+  let parse (base : Nat) (text : String) : Option UInt32 :=
+    if text.isEmpty then none
+    else (Digits.values? base text.toList).map fun ds => (Digits.join base ds).toUInt32
+  if let some n := (← run #["-L", "-c", "%f"]).bind (parse 16) then return some n
+  return (← run #["-L", "-f", "%p"]).bind (parse 8)
+
+/-- The process's environment and files. A file that is there and whose mode `stat` cannot
+give has every permission bit, so a password file is refused rather than read unchecked. -/
 def Env.io : Env IO where
   var name := IO.getEnv name
   file path := do try return some (← IO.FS.readFile path) catch _ => return none
-  present path := System.FilePath.pathExists path
+  mode path := do
+    let some info ← (try some <$> System.FilePath.metadata path catch _ => pure none) | return none
+    if let some m ← statMode path then return some m
+    return some (if info.type == .file then 0o100777 else 0o777)
 
-/-- The configuration libpq's environment variables give, or a deploy's (`Settings.read`), with
-TLS as `SslMode.defaultFor` the host unless `PGSSLMODE` says; an error says what cannot be
+/-- The configuration the connection string `conninfo` gives, a URI or `keyword=value` pairs,
+then the service, then libpq's environment variables, then a deploy's (`Settings.read`), with TLS
+as `SslMode.defaultForAll` the hosts unless the settings say; an error says what cannot be
 done. -/
-def Client.fromEnv : IO Client.Config := do
-  match ← (Settings.read Env.io).run with
+def Client.fromEnv (conninfo : String := "") : IO Client.Config := do
+  match ← (Settings.read Env.io conninfo).run with
   | .ok s => return .ofSettings s
   | .error why => throw (IO.userError s!"lanes: PostgreSQL: {why}")
 
@@ -226,12 +259,12 @@ def resolve (host : String) (port : UInt16) : Async (Option Std.Net.SocketAddres
       | .v4 addr => .v4 ⟨addr, port⟩
       | .v6 addr => .v6 ⟨addr, port⟩
 
-/-- Connect and authenticate: a session open for requests, or why it closed. The host is
-resolved again at each call. -/
-def connect (cfg : Client.Config) : Async (Except (Option Closing) Session) := do
+/-- Connect to one host and authenticate: a session open for requests, or why it closed. The
+host is resolved again at each call. -/
+def connectTo (cfg : Client.Config) (t : Target) : Async (Except (Option Closing) Session) := do
   let nonce := Base64.encode .std (← randomBytes 18)
-  let conn := { cfg.conn with nonce, encryption := cfg.encryption }
-  let name := cfg.serverName.getD cfg.host
+  let conn := { cfg.conn with nonce, encryption := cfg.encryption, password := t.password }
+  let name := cfg.serverName.getD t.host
   let startTls := match cfg.sslmode with
     | .verifyFull => Tls.Session.start cfg.trust name ["postgresql"]
     | _ => Tls.Session.startChain cfg.trust name ["postgresql"]
@@ -243,15 +276,38 @@ def connect (cfg : Client.Config) : Async (Except (Option Closing) Session) := d
     | .close why => some (.error why)
     | _ => none
   let attempt : Async (Option (Except Closing Unit)) := do
-    let some addr ← resolve cfg.host cfg.port | return none
+    let some addr ← resolve t.host t.port | return none
     socket.connect addr
     let (c, actions) := Conn.start conn
     s.conn.set c
     s.await opened (← s.perform actions)
-  match ← (try Session.within cfg.timeout_ms attempt catch _ => pure none) with
+  match ← (try Session.within (cfg.connectTimeout_ms.getD cfg.timeout_ms) attempt catch _ => pure none) with
   | some (.ok ()) => return .ok s
   | some (.error why) => socket.close; return .error (some why)
   | none => socket.close; return .error none
+
+/-- Whether the session's server is of the kind `want` asks for: asked only when it matters. -/
+def Session.suits (s : Session) (want : TargetSessionAttrs) : Async Bool := do
+  if want == .any then return true
+  let reply ← try s.exec (.statement { sql := ServerState.query }) catch _ => pure .unknown
+  return (ServerState.ofReply reply).any want.accepts
+
+/-- Connect to the first host, of `host` then `moreHosts`, that opens a session and is of the
+kind `targetSessionAttrs` asks for, in the passes `TargetSessionAttrs.passes` gives. Otherwise
+why the last host closed, or `none` when it did not answer or was not of that kind. -/
+def connect (cfg : Client.Config) : Async (Except (Option Closing) Session) := do
+  let targets := { host := cfg.host, port := cfg.port, password := cfg.conn.password : Target }
+    :: cfg.moreHosts
+  let mut last : Except (Option Closing) Session := .error none
+  for want in cfg.targetSessionAttrs.passes do
+    for t in targets do
+      match ← connectTo cfg t with
+      | .ok s =>
+        if ← s.suits want then return .ok s
+        try s.close catch _ => pure ()
+        last := .error none
+      | .error why => last := .error why
+  return last
 
 namespace Store
 

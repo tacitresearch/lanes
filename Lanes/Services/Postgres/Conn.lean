@@ -167,6 +167,9 @@ structure Config where
   /-- Set by the IO from its TLS mode. -/
   encryption : Encryption := .plain
   channelBinding : ChannelBinding := .prefer
+  /-- More parameters of the start-up, after the user, the database and `client_encoding`:
+  `application_name`, `options`. -/
+  parameters : List (String × String) := []
 
 inductive Kind where
   | begin
@@ -493,7 +496,8 @@ def submit (id : Nat) (r : Request) (c : Conn) : Conn × List Action :=
 
 /-- The start-up message, with `client_encoding` UTF-8, so that text is UTF-8 both ways. -/
 def startup : Frontend :=
-  .startup [("user", cfg.user), ("database", cfg.database), ("client_encoding", "UTF8")]
+  .startup ([("user", cfg.user), ("database", cfg.database), ("client_encoding", "UTF8")]
+    ++ cfg.parameters)
 
 /-- `SSLRequest`: a length of 8 and the code 80877103. -/
 def sslRequest : ByteArray := ⟨(putU32 8 ++ putU32 80877103).toArray⟩
