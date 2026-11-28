@@ -15,7 +15,7 @@ a choice. Each rule says why, so a case it does not cover can be judged.
 ```bash
 lake exe cache get         # once, in a fresh clone: prebuilt Mathlib; never build Mathlib from source
 lake build --wfail         # the library, warnings as errors (as CI builds it)
-lake test                  # pure tests and live runtime tests, a few seconds
+lake test                  # pure tests and live runtime tests, about two minutes
 lake exe lanesCheck        # larger model checks, random runs and the scale benchmark, about 20 s: run once, never in a loop
 lake exe lanes lint        # the checks below, and that generated files are up to date
 lake exe lanes lint --fix  # rewrite the generated files: line counts, decisions' index, STATUS, INVENTORY
@@ -29,6 +29,15 @@ lake exe lanes docstrings  # how many public declarations of `import Lanes` have
   calling a task done. CI runs them in that order, then `lint --fix` must change nothing, then a
   generated app is built and tested, the small examples are built and checked, and
   `examples/raft-kv`, `examples/ledger` and `examples/rookery` run as jobs of their own.
+- **Small bounds on every pull request, large bounds on a schedule.** A pull request's checks
+  are fast and exhaustive at small bounds: each example's `lake test` takes under a minute, and
+  a pull request's CI under ten minutes. A model-checking scenario has a small version, in `lake
+  test`, and its large version, run nightly by `.github/workflows/large.yml` (in
+  `examples/videos`, `Videos.Check.Size` and `lake exe videosTest large`). A small version still
+  reaches every witness it names (rule 5.3), and fails if one is not reached, so it cannot pass
+  by exploring nothing. Both are exact: the fingerprinted mode is not a pull request's check. A
+  check over its budget is made smaller, never moved to the schedule alone. *Why:* iteration
+  speed; a check that takes ten minutes is run less, and bugs wait for it.
 - `lanes lint` checks the text of a project: `no-sorry` (no `sorry` or `admit`), `trusted-listed`
   (`partial`, `unsafe`, `axiom`, `panic!`, `implemented_by`, `extern` and C only in files
   `TRUSTED.md` names), `trusted-size` (each trusted file has the line count `TRUSTED.md` gives),
