@@ -18,7 +18,7 @@ between two of its steps; the states of different actors are not read at one mom
 A read waits for its peek behind a gate of its own, with its own bounds (`ServerConfig.reads`):
 the gate's decisions (`Gate.step`) over `readSig`, where a read enters as its id and the peek's
 answer is its response. So a read is answered once, at most `maxPending` wait at once, and one the
-shard has not answered by its deadline is answered `504`, as a request the system has not
+runtime has not answered by its deadline is answered `504`, as a request the system has not
 answered is. Whether a view answers what the request would if it entered the system is the
 application's claim, proved of its views.
 -/
@@ -53,7 +53,7 @@ theorem View.respond_of [Hashable σ.Id] (v : View sys) (k : Kernel sys) :
   funext i h
   exact Peek.get_of k v.reads v.every i h
 
-/-- The states of the actors of `sys` among those of the shard behind the server. -/
+/-- The states of the actors of `sys` among those of the system behind the server. -/
 def unfront {α : Type} {S : α ⊕ σ.Id → Type} (others : List ((i : α ⊕ σ.Id) × S i)) :
     List ((i : σ.Id) × S (.inr i)) :=
   others.filterMap fun
@@ -65,7 +65,7 @@ def frontEvery {α : Type} (every : σ.Id → Bool) : α ⊕ σ.Id → Bool
   | .inr i => every i
   | .inl _ => false
 
-/-- A view of `sys` as the shard behind the server's front reads it. -/
+/-- A view of `sys` as the runtime behind the server's front reads it. -/
 def View.fronted {bridge : Bridge σ} (v : View sys) : View (admittedFronted sys bridge) where
   reads := v.reads.map .inr
   every := frontEvery v.every
@@ -76,8 +76,8 @@ def View.admitted {bridge : Bridge σ} (v : View sys) : View (admitted sys bridg
   every := frontEvery v.every
   answer get others := v.answer (fun i h => get (.inr i) (List.mem_map_of_mem h)) (unfront others)
 
-/-- A view of `sys` behind the front answers from a kernel of the shard as it does from the
-states of `sys`'s actors in it. -/
+/-- A view of `sys` behind the front answers from a kernel of `admittedFronted sys` as it does from
+the states of `sys`'s actors in it. -/
 theorem View.fronted_respond [Hashable σ.Id] {bridge : Bridge σ} (v : View sys)
     (k : Kernel (Http.admittedFronted sys bridge)) :
     (v.fronted (bridge := bridge)).respond (Peek.of k (v.reads.map .inr) (frontEvery v.every))

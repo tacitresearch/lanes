@@ -7,21 +7,21 @@ module
 public import Lanes.Web.Http.Front
 
 /-!
-The gate off the shard's hot path (`docs/decisions/D96-runtime-contract.md`,
+The gate off the runtime's hot path (`docs/decisions/D96-runtime-contract.md`,
 `docs/decisions/D106-gate-before-shard.md`). The gate's decisions are `Gate.step`, and they need
 not be made by an actor: the server makes them where a request arrives, with the waiting list in
-its own memory, and hands the shard only what the gate admitted. The shard then runs
+its own memory, and hands the runtime only what the gate admitted. The runtime then runs
 `admitted sys bridge`: `sys` itself, with no actor that every request goes through.
 
 `Gate.Act` is what the gate does, as data, so the server and `Loopback` perform the same
 decisions. `Gate.admit` and `Gate.receive` are `Gate.step` on an arrival and on an answer with
 `decode` and `encode` taken out, so that the server runs those outside its lock.
 
-A request the gate admitted reaches the shard as `(id, request)`, and the shard decodes it again.
+A request the gate admitted reaches the runtime as `(id, request)`, and is decoded again there.
 A request that does not decode there goes to `.inl ()`, an actor that does nothing; the gate
 admits only requests that decode, so none does.
 
-`Lanes.Web.Http.AdmitSound` proves that a run of the server's front with the shard is a run of
+`Lanes.Web.Http.AdmitSound` proves that a run of the server's front with the runtime is a run of
 `served sys`, with the same answers, and that the gate's theorems hold of the front.
 -/
 
@@ -94,7 +94,7 @@ theorem Gate.admit_refused (config : GateConfig) (pending : List ReqId) (id : Re
       · rfl
       · exact absurd (by simp_all [Gate.acts]) (h x)
 
-/-! ## The shard's system -/
+/-! ## The system the runtime runs -/
 
 /-- One actor, `()`, that takes a message and does nothing. -/
 abbrev sinkSig : Signature where
@@ -113,7 +113,7 @@ def sink : System sinkSig where
       fresh_recover _ _ _ := rfl }
   accept _ := ⟨(), ()⟩
 
-/-- Where an input of the shard goes: a request to the actor `decode` names, or to the sink if
+/-- Where an input of the runtime goes: a request to the actor `decode` names, or to the sink if
 it no longer decodes; any other input to `sys` as it is. -/
 def admitInput (bridge : Bridge σ) : (ReqId × Request) ⊕ σ.In → Unit ⊕ σ.In
   | .inl (id, request) =>
@@ -129,7 +129,7 @@ def admitOutput : Empty ⊕ σ.Out → Option σ.Out
 abbrev admittedFrontedSig (σ : Signature) : Signature :=
   (joinSig sinkSig σ).withIO ((ReqId × Request) ⊕ σ.In) σ.Out
 
-/-- What the shard runs behind the server's front, for `Http.serveFronted`: the requests the gate
+/-- What the runtime runs behind the server's front, for `Http.serveFronted`: the requests the gate
 admitted, and inputs that are no request, go to `sys`; every output of `sys` comes out, for the
 front to read. -/
 abbrev admittedFronted (sys : System σ) (bridge : Bridge σ) : System (admittedFrontedSig σ) :=
@@ -138,7 +138,7 @@ abbrev admittedFronted (sys : System σ) (bridge : Bridge σ) : System (admitted
 abbrev admittedSig (σ : Signature) : Signature :=
   (admittedFrontedSig σ).withIO (ReqId × Request) σ.Out
 
-/-- What the shard runs behind the server's front, for `Http.serve`: only requests come in. -/
+/-- What the runtime runs behind the server's front, for `Http.serve`: only requests come in. -/
 abbrev admitted (sys : System σ) (bridge : Bridge σ) : System (admittedSig σ) :=
   (admittedFronted sys bridge).filterMapIO .inl some
 

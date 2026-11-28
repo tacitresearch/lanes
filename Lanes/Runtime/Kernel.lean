@@ -10,8 +10,10 @@ public import Lanes.Core.World
 public import Lanes.Data.Fifo
 
 /-!
-The kernel is the runtime's whole decision logic as pure functions over a hash map of actors,
-a queue of messages and an agenda of timers. It runs one shard: one thread, no concurrency.
+The kernel is a runtime's whole decision logic as pure functions over a hash map of actors, a
+queue of messages and an agenda of timers, on one thread with no concurrency. It is the reference
+that `Http.Loopback` and the tests run; the runtime runs actors on worker threads through
+`Lanes.Runtime.Sched` instead (`docs/decisions/D116-free-running.md`).
 `Kernel.abs` reads a kernel state as a `SysState`, and `Lanes.Runtime.KernelSound` proves that
 each kernel operation is a run of `SysState.step`. The shell around it only moves data.
 
@@ -77,7 +79,7 @@ def abs (k : Kernel sys) (outbox : List σ.Out := []) : SysState sys where
   outbox := outbox
   clock := {}
 
-/-- The environment the kernel stays within: one shard, so every link is reliable and ordered,
+/-- The environment the kernel stays within: one thread, so every link is reliable and ordered,
 and nothing crashes. -/
 def env : EnvModel σ := {}
 

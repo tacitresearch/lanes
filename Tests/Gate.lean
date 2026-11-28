@@ -164,7 +164,7 @@ def tests : List (String × Bool) :=
       full.ok),
     ("gate: exactly once needs distinct request ids, which the adapter allocates",
       !reused.passed),
-    ("gate: exactly once needs a gate that does not crash, which one shard guarantees",
+    ("gate: exactly once needs a gate that does not crash, which a gate that is no actor guarantees",
       match crashing.failure with
       | some (.deadlock _) => true
       | _ => false),

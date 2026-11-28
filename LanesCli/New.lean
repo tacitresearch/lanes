@@ -82,7 +82,9 @@ def validName (name : String) : Bool :=
 def files : List (String × String) :=
   [ ("lakefile.toml", include_str "../templates/app/lakefile.toml.tmpl"),
     ("{{Name}}/Counter.lean", include_str "../templates/app/Counter.lean.tmpl"),
+    ("{{Name}}/Web.lean", include_str "../templates/app/Web.lean.tmpl"),
     ("{{Name}}/Proofs.lean", include_str "../templates/app/Proofs.lean.tmpl"),
+    ("migrations/0001_counts.sql", include_str "../templates/app/migration.sql.tmpl"),
     ("Check.lean", include_str "../templates/app/Check.lean.tmpl"),
     ("Main.lean", include_str "../templates/app/Main.lean.tmpl"),
     ("AGENTS.md", include_str "../templates/app/AGENTS.md.tmpl"),

@@ -827,6 +827,47 @@ theorem keeps {α : Type} {t : Txn α} (ht : t.All P) {I : Db → Prop}
 
 end Txn.All
 
+/-! ## What each operation of a table asks
+
+`Txn.All` of a transaction built from a table's operations is proved one operation at a time:
+a read decodes rows, which asks nothing more, and a write is the one operation. -/
+
+section
+variable {P : Op → Prop} {α : Type} (t : TableOf α)
+
+theorem TableOf.decode_all (r : Row) : (t.decode r).All P := by
+  unfold TableOf.decode; split
+  · exact .pure _
+  · exact .abort _
+
+theorem TableOf.get_all (key : Row) (h : P (.get t.table key)) : (t.get key).All P :=
+  Txn.All.bind (Txn.All.single h) fun r => by
+    cases r with
+    | some x => exact Txn.All.map _ (t.decode_all x)
+    | none => exact .pure _
+
+theorem TableOf.scan_all (s : Scan) (h : P (.scan { s with table := t.table })) : (t.scan s).All P :=
+  Txn.All.bind (Txn.All.single h) fun rows => Txn.All.mapM _ t.decode_all rows
+
+theorem TableOf.lookup_all (i : Index) (vals : Row) (limit : Nat)
+    (h : P (.scan { table := t.table, index := some i, eq := vals, limit })) :
+    (t.lookup i vals limit).All P :=
+  Txn.All.bind (Txn.All.single h) fun rows => Txn.All.mapM _ t.decode_all rows
+
+theorem TableOf.insert_all (a : α) (h : P (.insert t.table (t.toRow a))) : (t.insert a).All P :=
+  Txn.All.single h
+
+theorem TableOf.update_all (a : α) (h : P (.update t.table (t.toRow a))) : (t.update a).All P :=
+  Txn.All.single h
+
+theorem TableOf.upsert_all (a : α) (h : P (.upsert t.table (t.toRow a))) : (t.upsert a).All P :=
+  Txn.All.single h
+
+theorem TableOf.delete_all (key : Row) (h : P (.delete t.table key)) : (t.delete key).All P :=
+  Txn.All.single h
+
+end
+
 /-- A unique index of a table stays unique under every transaction whose operations on a table
 of its name are on that table. -/
 theorem Txn.All.unique {α : Type} {t : Txn α} (tbl : Table) {i : Index} (hi : i ∈ tbl.indexes)
@@ -893,5 +934,123 @@ theorem TableOf.every_apply {α : Type} (t : TableOf α) {P : α → Prop} (o : 
     · exact hP x (hc.2 ▸ hx) a ha
     · exact hw x hx a ha
   · exact hP x hx a ha
+
+/-- What a read by key found is a row of the table, so a value every row admits. -/
+theorem TableOf.get_every {α : Type} (t : TableOf α) {P : α → Prop} {db : Db} (hP : t.Every P db)
+    {key : Row} {a : α} {db' : Db} (h : (t.get key).run db = .ok (some a, db')) : P a := by
+  simp only [TableOf.get, Txn.bind_eq] at h
+  obtain ⟨found, db₁, hget, h⟩ := Txn.run_bind_ok_inv h
+  have happ := Txn.run_single hget
+  have hfind := (Op.apply_ok _ happ).2
+  cases found with
+  | none => simp at h
+  | some r =>
+    simp only [Functor.map] at h
+    obtain ⟨a', db₂, hdec, h⟩ := Txn.run_bind_ok_inv h
+    simp only [Function.comp, Txn.run_pure, Except.ok.injEq, Prod.mk.injEq, Option.some.injEq] at h
+    rw [h.1] at hdec
+    have hf : (db.rows t.table.name).find? (t.table.hasKey key) = some r := hfind.symm
+    have hmem : r ∈ db.rows t.table.name := List.mem_of_find?_eq_some hf
+    exact hP r hmem a (TableOf.run_decode _ hdec)
+
+/-! ## Rows a transaction does not write
+
+A transaction whose writes to a table are all to keys of some set leaves every row of another
+key as it was (`Txn.All.others`): what one user's requests cannot touch of another's, when each
+user's rows are those whose keys name them. -/
+
+/-- The key of the row a write puts in its table or takes out. -/
+def Op.writtenKey : Op → Option Row
+  | .insert t r | .update t r | .upsert t r => some (t.keyOf r)
+  | .delete _ k => some k
+  | _ => none
+
+/-- What an operation may do to the table `t`: if it is on a table of that name, it is on `t`,
+and what it writes is under a key `K` admits. -/
+def Op.WritesWithin (t : Table) (K : Row → Prop) (o : Op) : Prop :=
+  o.table.name = t.name → o.table = t ∧ ∀ k, o.writtenKey = some k → K k
+
+theorem Op.others_onRows (o : Op) {K : Row → Prop} (hk : ∀ k, o.writtenKey = some k → K k)
+    (rows : List Row) {x : Row} (hx : ¬ K (o.table.keyOf x)) :
+    x ∈ (o.onRows rows).2 ↔ x ∈ rows := by
+  have other : ∀ (key : Row), K key → (o.table.hasKey key x) = false := fun key hK => by
+    simp only [Table.hasKey, beq_eq_false_iff_ne]
+    intro heq
+    exact hx (heq ▸ hK)
+  cases o with
+  | get t k => exact .rfl
+  | scan s => exact .rfl
+  | insert t r =>
+    have hr := hk _ rfl
+    simp only [Op.onRows]
+    split
+    · exact .rfl
+    · rw [t.mem_insertSorted]
+      exact ⟨fun h => h.resolve_left fun he => hx (he ▸ hr), .inr⟩
+  | update t r =>
+    have hr := other _ (hk _ rfl)
+    simp only [Op.onRows]
+    split
+    · exact .rfl
+    · simp only [List.mem_map]
+      constructor
+      · rintro ⟨y, hy, hxy⟩
+        split at hxy
+        · subst hxy
+          exact absurd (hk _ rfl) (by simpa [Op.table] using hx)
+        · exact hxy ▸ hy
+      · intro h
+        exact ⟨x, h, by simp only [Op.table] at hr; simp [hr]⟩
+  | upsert t r =>
+    have hr := other _ (hk _ rfl)
+    simp only [Op.onRows]
+    split
+    · exact .rfl
+    · rw [t.mem_insertSorted]
+      simp only [Table.without, List.mem_filter]
+      constructor
+      · rintro (he | ⟨h, -⟩)
+        · subst he
+          exact absurd (hk _ rfl) (by simpa [Op.table] using hx)
+        · exact h
+      · intro h
+        exact .inr ⟨h, by simp only [Op.table] at hr; simp [hr]⟩
+  | delete t k =>
+    have hr := other _ (hk _ rfl)
+    simp only [Op.onRows, Table.without, List.mem_filter]
+    simp only [Op.table] at hr
+    simp [hr]
+
+/-- An operation that writes the table `t` only under keys `K` admits leaves each row of `t`
+whose key `K` does not admit there exactly when it was there before. -/
+theorem Op.others_apply (o : Op) {t : Table} {K : Row → Prop} (ho : o.WritesWithin t K)
+    {db : Db} {r : o.Ret} {db' : Db} (h : o.apply db = .ok (r, db')) {x : Row}
+    (hx : ¬ K (t.keyOf x)) : x ∈ db'.rows t.name ↔ x ∈ db.rows t.name := by
+  rw [Op.rows_apply o h]
+  split
+  · next hc =>
+    obtain ⟨heq, hk⟩ := ho hc.2.symm
+    rw [← hc.2]
+    exact o.others_onRows hk _ (heq ▸ hx)
+  · exact .rfl
+
+/-- **Rows a transaction does not write.** A transaction each of whose operations writes the
+table `t` only under keys `K` admits leaves each row of `t` whose key `K` does not admit there
+exactly when it was there before. -/
+theorem Txn.All.others {α : Type} {t : Txn α} {tbl : Table} {K : Row → Prop}
+    (ht : t.All (Op.WritesWithin tbl K)) {db : Db} {a : α} {db' : Db} (h : t.run db = .ok (a, db'))
+    {x : Row} (hx : ¬ K (tbl.keyOf x)) : x ∈ db'.rows tbl.name ↔ x ∈ db.rows tbl.name :=
+  ht.keeps (I := fun d => x ∈ d.rows tbl.name ↔ x ∈ db.rows tbl.name)
+    (fun o ho _ _ _ hI ha => (o.others_apply ho ha hx).trans hI) db a db' .rfl h
+
+/-- Two properties of every operation of one transaction are one. -/
+theorem Txn.All.and {α : Type} {P Q : Op → Prop} {t : Txn α} (hp : t.All P) (hq : t.All Q) :
+    t.All fun o => P o ∧ Q o := by
+  induction hp with
+  | pure a => exact .pure a
+  | abort why => exact .abort why
+  | op o k hpo _ ih =>
+    cases hq with
+    | op _ _ hqo hk => exact .op o k ⟨hpo, hqo⟩ fun r => ih r (hk r)
 
 end Lanes.Db

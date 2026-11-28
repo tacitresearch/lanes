@@ -20,7 +20,7 @@ passes on is an input of `sys`, and an output of `sys` that the bridge reads as 
 to the gate. Every other output of `sys` is an output of `fronted sys`, and `sys` still takes
 inputs that do not come through the gate. `served sys bridge` is `fronted sys` with
 requests in, responses out, and nothing else in or out: what `Http.serve` does, which runs the
-gate before the shard (`Lanes.Web.Http.Admit`) and is proved to be this
+gate before the runtime (`Lanes.Web.Http.Admit`) and is proved to be this
 (`Lanes.Web.Http.AdmitSound`).
 
 `Lanes.Web.Http.FrontSound` proves that the gate alone answers no more often than it handles an

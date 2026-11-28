@@ -5,7 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import Lanes
 
 /-!
-The cost of a message must not grow with the number of actors a shard holds, nor with the size
+The cost of a message must not grow with the number of actors a runtime holds, nor with the size
 of the state of the actor that takes it. A shell that keeps a second reference to the kernel
 makes every step copy the actor table, and a kernel that steps a state its table still holds
 makes every step copy the state. No functional test notices either: it only shows as time. So
@@ -38,7 +38,7 @@ abbrev counters : System sig where
 
 def messages : Nat := 20000
 
-/-- Milliseconds to send `messages` messages to one actor of a shard that holds `actors`. -/
+/-- Milliseconds to send `messages` messages to one actor of a runtime that holds `actors`. -/
 def cost (actors : Nat) : Async Nat := do
   let rt ← Runtime.start counters
   for i in [0:actors] do rt.input (i + 1)
@@ -51,7 +51,7 @@ def cost (actors : Nat) : Async Nat := do
   rt.stop
   return if handled then elapsed else 1000000
 
-/-- Inputs a second through one shard with `producers` senders that do not wait for each other,
+/-- Inputs a second through one runtime with `producers` senders that do not wait for each other,
 each input one message to an actor. -/
 def flood (producers each : Nat) : Async Nat := do
   let rt ← Runtime.start counters { inboxCapacity := 4096 }
@@ -63,7 +63,7 @@ def flood (producers each : Nat) : Async Nat := do
   rt.stop
   return producers * each * 1000000000 / max 1 elapsed
 
-/-- Turns a second of the kernel alone, one input each: what a shard could do if nothing else
+/-- Turns a second of the kernel alone, one input each: what a runtime could do if nothing else
 cost anything. -/
 def kernelAlone (turns : Nat) : IO Nat := do
   let t0 ← IO.monoNanosNow
@@ -103,8 +103,8 @@ def kernelWrites (size : Nat) : IO Nat := do
   let elapsed := (← IO.monoNanosNow) - t0
   return if (k.cell ()).state[writes % size]! == writes then elapsed else 1000000000000
 
-/-- `kernelWrites` on a shard. -/
-def shardWrites (size : Nat) : IO Nat := (do
+/-- `kernelWrites` on the runtime. -/
+def runtimeWrites (size : Nat) : IO Nat := (do
   let rt ← Runtime.start (array (Array.replicate size 0))
   rt.input 0
   rt.idle
@@ -129,7 +129,7 @@ abbrev pair (initial : Array Nat) : System pairSig where
     { init := initial, step := fun s n => (s.set! (n % s.size) n, []), recover := fun s => (s, []) }
   accept n := ⟨Fin.ofNat 2 n, n⟩
 
-/-- `shardWrites` with the writes shared by two busy actors, on four workers. -/
+/-- `runtimeWrites` with the writes shared by two busy actors, on four workers. -/
 def pairWrites (size : Nat) : IO Nat := (do
   let rt ← Runtime.start (pair (Array.replicate size 0)) { workers := 4 }
   rt.input 0
@@ -211,10 +211,10 @@ def tests : IO (List (String × Bool)) := do
   IO.eprintln s!"flood: {← (flood 1 200000).block} inputs a second from one sender, {← (flood 4 100000).block} from four; the kernel alone does {← kernelAlone 200000} turns a second"
   let aloneSmall ← fastest (kernelWrites 10000)
   let aloneLarge ← fastest (kernelWrites 1000000)
-  let shardSmall ← fastest (shardWrites 10000)
-  let shardLarge ← fastest (shardWrites 1000000)
+  let runtimeSmall ← fastest (runtimeWrites 10000)
+  let runtimeLarge ← fastest (runtimeWrites 1000000)
   let us (ns : Nat) := s!"{ns / writes / 1000}.{ns / writes / 100 % 10} µs"
-  IO.eprintln s!"in place: a write to a state of 10^4 numbers takes {us aloneSmall} in the kernel and {us shardSmall} on the runtime, to one of 10^6 {us aloneLarge} and {us shardLarge}"
+  IO.eprintln s!"in place: a write to a state of 10^4 numbers takes {us aloneSmall} in the kernel and {us runtimeSmall} on the runtime, to one of 10^6 {us aloneLarge} and {us runtimeLarge}"
   let pairSmall ← fastest (pairWrites 10000)
   let pairLarge ← fastest (pairWrites 1000000)
   let copy ← fastest (copyNs 1000000)
@@ -232,7 +232,7 @@ def tests : IO (List (String × Bool)) := do
     ("scale: a step updates its actor's state in place, whatever its size, in the kernel",
       aloneLarge ≤ 10 * aloneSmall + 50000000),
     ("scale: on the runtime, a write costs at most a few copies of the state",
-      shardLarge ≤ 6 * writes * copy + 50000000 && shardSmall < 1000000000000),
+      runtimeLarge ≤ 6 * writes * copy + 50000000 && runtimeSmall < 1000000000000),
     ("scale: and on two busy actors on four workers",
       pairLarge ≤ 6 * writes * copy + 50000000 && pairSmall < 1000000000000)]
 

@@ -26,6 +26,49 @@ over them, and the code that runs, the checker that explores and the proofs that
 about that function. IO happens only in a few small shells, each of which performs what a pure,
 proved function tells it to.
 
+## The model, and how a request goes through it
+
+An application is a process that keeps nothing it cannot lose
+(`docs/decisions/D110-volatile-actors.md`). Its actors are volatile: a restart puts every one
+back at its initial state, as in Go, Tokio or Erlang. What must outlive the process lives in
+services outside, each with a model in Lanes: PostgreSQL first, through the typed store
+(`docs/decisions/D111-typed-store.md`); S3 for objects; email and payments.
+
+A request to a web application goes like this, in what `lanes new` writes (`examples/counter`)
+and in `examples/rookery`:
+
+1. The server reads it (`Http.Conn`), does what it needs in IO on the request's own task
+   (`arrive`: the time it arrived, a password checked against its stored hash), and the bridge
+   takes out what must not enter the system and parses the rest into an input (`Bridge.prepare`,
+   `Bridge.decode`). The gate admits it, or answers `503` (`Http.served`).
+2. The front, an actor that keeps nothing, sends it to the store as a call: the request as data,
+   under the request's id.
+3. The store runs the application's handler for it, a pure function from the request to one
+   transaction (`Handler`, `Txn`), on PostgreSQL at `SERIALIZABLE`, trying it again on a conflict
+   (`Postgres.Typed.Store.call`). The transaction is all the request does, so trying it again
+   repeats nothing.
+4. The answer comes back to the front as an input, out as an output, and the bridge renders it.
+
+Effects and work for later are rows written by that transaction: an email, a charge, a reminder
+is a job of an outbox, performed by a worker under the row's id as the idempotency key
+(`docs/decisions/D114-outbox-jobs.md`); a key a client sends to act once is a row
+(`Keys.once`). So an effect is performed only for a transaction that committed.
+
+What is claimed of the application's data is proved per transaction: an invariant every
+transaction keeps holds in every database the store's model allows (`Db.invariant`), and rows a
+transaction does not write stay as they were (`Txn.All.others`). That PostgreSQL behaves like the
+model is a premise, checked against runs recorded from PostgreSQL (`oracles/postgres/`).
+
+**Several instances.** An actor's state is a cache of its process; whatever several instances
+must agree on lives in the database. So an instance can be replaced, scaled or restarted at any
+moment, and the normal deploy is several behind a load balancer, each running the migrations not
+yet run at its start and refusing to start on tables other than the declared ones
+(`Postgres.Typed.prepare`). `docs/DEPLOY.md` says how.
+
+Actors with state of their own are still the tool for what lives in one process: a cache, a
+protocol in progress, a coordination; `examples/bank` and `examples/kv-cache` show them, and the
+semantics, the checker and the proofs below are about every system of actors.
+
 | Piece | Where | Proved by |
 | --- | --- | --- |
 | Actors and systems | `Lanes/Core/{Actor,System,World,Step,Run}.lean` | the definition everything else is about |
@@ -123,7 +166,7 @@ Also:
   `answered_le_handled`, `System.handled_le_put`, `Worker.committed_only`,
   `Shop.charged_at_most_once`), and one that does not takes `env.mayRestart = false` or
   `EnvModel.Faultless` (`Server.implements`, `Once.server_implements`, `KV.implements_once`,
-  `Rookery.implements`, every leads-to).
+  every leads-to).
 - The deterministic scheduler gives seeded runs, replayable event lists and drivers for the
   outside world; `FairScheduler` takes the event the system has owed longest, counting a timer
   that is armed again as owed from then, and its run is a fair run of the proof layer.
@@ -283,10 +326,10 @@ the specification of what `Http.serve` does.
 
 `Http.serve` does not run the gate as an actor, which would make it a serial point for every
 request (`docs/decisions/D96-runtime-contract.md`). It makes the gate's decisions before the
-shard, under the lock of its table of waiting requests, and hands the shard only what the gate
-admitted; the shard runs `Http.admitted sys` (`Lanes/Web/Http/Admit.lean`), which is `sys` with
+runtime, under the lock of its table of waiting requests, and hands the runtime only what the gate
+admitted; the runtime runs `Http.admitted sys` (`Lanes/Web/Http/Admit.lean`), which is `sys` with
 no actor every request goes through. `Http.Front.World` models the server so: the front's state
-beside the shard's. Every run of it is a run of `served sys`, with the same requests arriving and
+beside the runtime's. Every run of it is a run of `served sys`, with the same requests arriving and
 the same answers handed over in the same order (`Http.Front.World.refines`,
 `Lanes/Web/Http/AdmitSound.lean`), so every theorem below holds of the server
 (`Http.Front.World.answered_le_arrived`). Of the front alone: it answers no request more often
@@ -325,8 +368,8 @@ request's own task, so a password or a cookie the bridge turns into what the sys
 reaches the system (D44), takes an id from `Http.Waiting` (pure: each id handed out once, each
 answered at most once and to its own waiter: `Http.Waiting.exec_handed_nodup`,
 `Http.Waiting.exec_answered`), puts it before the gate and hands what the gate admits to the
-shard. The gate decides under the same lock that hands out the id (`Gate.admit`), so a `503`
-from a full inbox leaves the gate's state as it was; it reads the shard's outputs
+runtime. The gate decides under the same lock that hands out the id (`Gate.admit`), so a `503`
+from a full inbox leaves the gate's state as it was; it reads the runtime's outputs
 (`Gate.receive`), and the server's ticker hands it each deadline that passes, which it answers
 `504` (`docs/decisions/D106-gate-before-shard.md`). It answers
 `503` itself when the inbox is full and `501` for a method it does not know (#171). With `ServerConfig.ioThreads`
@@ -378,14 +421,14 @@ operators', none with nothing configured (`Http.Ops.route?_default`), that the m
 answered only to a peer on a loopback address unless the configuration lets others in, however
 its path is written (`Http.Ops.route?_metrics`), while liveness and readiness answer every peer
 (`Http.Ops.route?_peer`), that readiness answers
-`200` exactly when the shard has booted and the server is not stopping or draining
+`200` exactly when the runtime has booted and the server is not stopping or draining
 (`Http.Ops.answer_ready`), and what a log line holds, the JSON text of its record
 (`Http.Ops.Access.parse_line`). `Lanes/Web/IO/Ops.lean` answers an operator's request before it
-is prepared or has an id, so it never reaches the shard, and passes every other request on as it
+is prepared or has an id, so it never reaches the runtime, and passes every other request on as it
 came. So the same inputs enter the system with all of it on as off, which is trusted and tested
 (`Tests/Ops.lean`). `Server.stopOnSignal`
 is a stop that drops nothing in flight: at SIGTERM or SIGINT readiness answers `503`, the
-requests the shard has taken are answered until none is left or a deadline passes, and then the
+requests the runtime has taken are answered until none is left or a deadline passes, and then the
 server stops; trusted and tested with a child process.
 
 Where: `Lanes/Web/` (`Http/`, `IO/Server.lean`), `Lanes/Semantics/Front.lean`.
@@ -411,8 +454,8 @@ Also:
 
 - Proved of `fronted sys` by projection from the gate alone, for every `sys`: at most once per arrival where the link from outside to the gate does not duplicate (`Http.fronted_answered_le_arrived`, from `Http.Gate.answered_le_handled`) and deadlines stay armed (`Http.fronted_deadlines_armed`); and in every fair run in which the gate does not crash a request the gate has admitted is answered (`Http.fronted_pending_leaves`, `Http.fronted_pending_answered`, from `Http.Gate.pending_leaves` and `Http.Gate.pending_answered` of the gate alone, through the hidden inputs and outputs and the join); model-checked with the properties checked of `served`, and the premises of the leads-to rule on the gate alone with the link a join gives it from outside.
 - Proved of `served sys` for every system, bridge and configuration: an arrival is answered at most once in any environment whose link from outside to the gate does not duplicate (`Http.served_answered_le_arrived`, `Http.kernel_served_answered_le_arrived`, with crashes, loss, reordering and duplication elsewhere allowed), a waiting request keeps its deadline armed (`Http.served_deadlines_armed`), and in every fair run in which the gate does not crash a request the gate has admitted is answered, by the system or with `504` (`Http.served_pending_leaves`, `Http.served_pending_answered`). These are the theorems of `fronted sys` carried through its hidden inputs and outputs.
-- The server prepares each request as its bridge says (`Bridge.prepare`, pure) on the request's own task before it enters the shard, so a password or a cookie a bridge takes out never enters the system and slow work is not done on the shard's thread (`docs/decisions/D44-request-prepared-before-journal.md`).
-- For its operators, each off by default (`ServerConfig.ops`, `docs/decisions/D69-observability.md`): a metrics page in the Prometheus text format (requests by method and status class, latency, connections open and refused, requests in flight, the inbox), liveness, readiness that answers `200` exactly when the shard has booted and the server is not stopping or draining (`Http.Ops.answer_ready`, `Server.drain`), request ids taken from a client only when bounded and plain (`Http.Ops.RequestId.accept?_eq_some`), and a JSON access log whose lines are the JSON text of their records (`Http.Ops.Access.parse_line`) and hold no query, header or body; none of it reaches a system, which is trusted and tested: the same inputs enter the system with all of it on as off.
+- The server prepares each request as its bridge says (`Bridge.prepare`, pure) on the request's own task before it enters the runtime, so a password or a cookie a bridge takes out never enters the system and slow work is not done in a step (`docs/decisions/D44-request-prepared-before-journal.md`).
+- For its operators, each off by default (`ServerConfig.ops`, `docs/decisions/D69-observability.md`): a metrics page in the Prometheus text format (requests by method and status class, latency, connections open and refused, requests in flight, the inbox), liveness, readiness that answers `200` exactly when the runtime has booted and the server is not stopping or draining (`Http.Ops.answer_ready`, `Server.drain`), request ids taken from a client only when bounded and plain (`Http.Ops.RequestId.accept?_eq_some`), and a JSON access log whose lines are the JSON text of their records (`Http.Ops.Access.parse_line`) and hold no query, header or body; none of it reaches a system, which is trusted and tested: the same inputs enter the system with all of it on as off.
 - The server reads and writes HTTP/1.1 itself on `Std.Net`, with no `Std.Http`: each connection is `Http.Conn.step`, pure, model-checked against a client that sends in any pieces, pipelines and leaves, and proved to write responses in the order requests were read, each once (`Http.Conn.run_writes`), to hand on only requests the strict reader reads (`Http.Conn.step_submit_read`), to keep its buffer within `message_max` and its requests in flight within `inflight_max` (`Http.Conn.run_buffer`, `run_slots`), to take nothing once closed or no longer reading (`Http.Conn.step_closed`, `step_notReading`, `step_reading`), to stop reading at a deadline (`Http.Conn.step_tick`) and to write what the client's reader reads back (`Http.Conn.read_encode`), with `100 Continue`, keep-alive, pipelining, deadlines for a slow head or body and a bound on connections (`docs/decisions/D57-the-server-runs-its-own-connections.md`).
 - The strict reader of requests (`Http.Request.read`, `docs/decisions/D49-the-server-reads-requests-by-a-strict-profile.md`) is proved final once it answers (`Http.Request.read_append`), to wait only within its limits and answer within them (`Http.Request.read_more`, `read_done`), to read back what `Request.wire` writes wherever it starts and whatever follows, at its last byte and not before (`read_wire`, `read_wire_extract`), and to refuse a length beside a coding, two lengths, a blank before a colon, obs-fold, a bare CR or LF and a malformed chunk size for every head of those shapes (`read_lengthAndCoding`, `read_twoLengths`, `read_blankInName`, `read_fold`, `read_bareCR`, `read_bareLF`, `read_badChunkSize`); its other refusals, and its verdicts against Go's, Node's and h11's parsers on a corpus, are tested (`oracles/go/requests/requests.py`: stricter or alike on every case).
 - The HTTP server passes against the gate's assumption.
@@ -440,8 +483,10 @@ and end after a lifetime, judged at the time a request arrived, so that one over
 again (`Auth.Sessions.accepts_iff`, `Auth.Sessions.Ended.run`). Those two are an actor's state,
 lost at a restart; what must survive one is in rows (`Lanes/Web/Auth/Rows.lean`): failed log-ins,
 a row per user that each transaction updates with `Auth.Attempts.fail` and `succeed`, so a
-restart unlocks no account; and open sessions, a row each, which a log-out deletes, so that a
-session closed before its signed token expires stays closed.
+restart unlocks no account; and open sessions, a row each with an index by user, which a log-out
+deletes, so that a session closed before its signed token expires stays closed. A session is
+judged at a time no earlier than its last use, so a clock that steps back, another instance's
+that lags, or a request with no time neither ends one nor lets in one that is over.
 
 Sign-in with another service (`docs/decisions/D72-sign-in-with-oauth.md`) is OAuth 2.0's authorization
 code flow with PKCE and OpenID Connect on it, decided in `Lanes/Web/Auth/OAuth.lean` and done
@@ -889,6 +934,8 @@ Where: `Lanes/Db/`, `Lanes/Services/Postgres/Sql.lean`, `Lanes/Services/Postgres
 | A value reads back from the text the driver sends it as | `Postgres.Sql.decode_param`, `Postgres.Sql.decodeRow_param`; gate `Tests/Axioms/Lib.lean` | Values of their columns' types | proved |
 | PostgreSQL answers every operation of the subset as its meaning says, and behaves like the model at `SERIALIZABLE` | `Tests/Oracle/Service/Db.lean` against PostgreSQL 16: generated transactions one at a time, every answer compared with `Txn.run`, and three at once, checked with `Db.State.run`; nightly, recorded in `oracles/postgres/db.jsonl` and checked again by `lake test` | Every theorem proved against the model rests on it | trusted, tested against PostgreSQL 16 |
 | The meaning, the SQL, the replies, the retry decision and the model's litmus runs | `Tests/Db.lean`, in `lake test` | | tested |
+| A transaction each of whose operations writes a table only under keys of a set leaves every row of that table whose key is outside it as it was: what one user's requests cannot touch of another's | `Txn.All.others`, `Lanes/Db/Sound.lean`; gate `Tests/Axioms/Db.lean`; used by `Rookery.others_kept` | None | proved |
+| At its start an application runs the migrations not yet run, each once even with instances started at once, and refuses to start when the tables it declares differ from the database's | `Postgres.Typed.prepare`, `Postgres.Typed.migrateOnce` (`lanes_migrations`, an advisory lock), `Postgres.Sql.tablesDiff`; `examples/counter/Check.lean` and `examples/rookery/Rookery/Live.lean` on PostgreSQL | The IO is trusted (`TRUSTED.md`) | tested against PostgreSQL 16, when `LANES_POSTGRES` is set |
 | SQL migrations leave exactly the tables, columns, types, nullability and primary keys the schema declares | `Tests/Oracle/Service/Db.lean`: `Tests/Fixtures/migrations/` against PostgreSQL 16 in a schema of their own, compared by `Postgres.Sql.catalogDiff`, and a column left out of the schema found; `examples/todo-db` `todoLive` | Indexes are not compared | tested against PostgreSQL 16, nightly |
 
 ### Limits
@@ -1267,9 +1314,9 @@ service from an outbox (`examples/payments`, `Shop.charged_at_most_once`); a to-
 (`examples/todo-db`); `examples/sign-in`, members of a video site signed in with Google or
 GitHub, with sessions; uploads that stream (`examples/upload`); reminders in a jobs table
 (`examples/reminders`); a chat room over WebSockets (`examples/chat`);
-and `examples/rookery`, a small social network for bots whose claims are proved of its spec,
-which it is proved to implement with deadlines (`Rookery.implements`); the theorem that joins the
-two is not written. The tests import none of them; the systems of `examples/kv-cache` and
+and `examples/rookery`, a small social network for bots kept in PostgreSQL, whose claims are
+proved per transaction and so of every database the store's model allows (`Rookery.others_kept`,
+`Rookery.bounded_always`). The tests import none of them; the systems of `examples/kv-cache` and
 `examples/watchdog` are copied into `Tests/Fixtures/`, and
 `Tests/Copies.lean` fails when a copy differs from its example. Each application
 below has its claims, their evidence and premises, and its limits.
@@ -1280,7 +1327,8 @@ below has its claims, their evidence and premises, and its limits.
 
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
-| Counter (what `lanes new` writes): implements its spec | `Counter.implements`, `examples/counter/Counter/Proofs.lean` | A faultless environment | proved, no axiom gate |
+| Counter (what `lanes new` writes): the count never passes its limit, in every database the store may hold | `Counter.within_always`, from `Counter.preserves` and `Db.invariant`, `examples/counter/Counter/Proofs.lean` | PostgreSQL at `SERIALIZABLE` behaves like the store's model | proved, no axiom gate |
+| Counter: two instances started at once run the migrations once and both start; it refuses to start when the database's tables differ from the declared ones; a restart keeps the count | `examples/counter/Check.lean` on PostgreSQL, when `LANES_POSTGRES` names one | | tested |
 
 ### Bank
 
@@ -1421,7 +1469,7 @@ Also:
 
 ### rookery
 
-A small social network for bots and their owners as a web application with a JSON API: sign-up, log-in, sessions, API tokens, posts, follows, timelines, deletes and a rate limit, all in one actor that runs the spec's functions. Its friction log is in `examples/rookery/README.md`.
+A small social network for bots and their owners as a web application with a JSON API: sign-up, log-in, sessions, API tokens, posts, follows, timelines, deletes and a rate limit. Its data is in PostgreSQL, each request one pure transaction behind a front that keeps nothing; its failed log-ins and sessions are rows (`Lanes/Web/Auth/Rows.lean`), its API memo `Keys.once`. Its README says which claims moved from proved to checked when it left its one actor, and its friction log.
 
 Where: `examples/rookery`, a package of its own.
 
@@ -1429,16 +1477,11 @@ Where: `examples/rookery`, a package of its own.
 
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
-| Rookery: posts never lost and deleted only by their author, a deleted post in no read, timelines exactly the newest posts followed, the rate limit, API changes acted on once per `seq` and another change with a `seq` used refused, no other account's secrets, every bound | `examples/rookery/Rookery/Proofs/` (`Board.run_keeps`, `Board.Gone.run`, `Board.timeline_complete`, `Board.rate_limit`, `Board.handle_api_again`, `Board.handle_api_reused`, `Board.handle_secret`, `Board.Bounded.handle` and the rest); gate `examples/rookery/Rookery/Proofs/Axioms.lean` | Statements about the spec's functions (`Board.handle`, `Board.fire`) and every sequence of them, for every configuration | proved, of the spec |
-| Rookery: the system implements its spec with deadlines | `Rookery.implements`, `examples/rookery/Rookery/Proofs/Refines.lean`; same gate | The link from outside to the board does not duplicate and the process does not restart; requests may be lost and reordered and the board may crash | proved |
-| Rookery, of every run of the system: a response carries the secrets of no account but the one its request, which arrived before it, was made as; every list of posts handed over is a read of a board the spec's functions reach (so the timeline claims above apply to it); once a delete made through the web is answered `deleted`, no read whose request arrives afterwards shows the post | `Rookery.output_secret`, `Rookery.output_read`, `Rookery.deleted_unread`, `examples/rookery/Rookery/Proofs/Traces.lean`, from `Rookery.implements` and `System.Implements.history`; same gate | The link from outside to the board does not duplicate and the process does not restart; for the third, requests have distinct ids. Of `system`, not of `Http.served system` (the gate's refinement is not proved) | proved |
-| Rookery, of every run of the system: a post answered `posted` to a web post, or shown in a read, is on its author's account in the board of every read whose request arrives later, until a request made as its author to delete it arrives (the read lists at most `timelineMax` posts, so it is the board that holds the post, and the timeline claims say which the read shows); after a position where an account's window passes and before the next, the web posts it makes that arrive after it are answered `posted` with at most `maxPerWindow` distinct ids; of the API changes one account sends with one `seq`, every two replies but `stale`, `badToken` and `reused` are the same, to the same change | `Rookery.posted_kept`, `Rookery.shown_kept`, `Rookery.rate_limit_run`, `Rookery.api_once`, `examples/rookery/Rookery/Proofs/Runs.lean`, from `Rookery.implements` and `System.Implements.history` (which passes each deadline where the run shows it, `System.Implements.Explains.fired`, `fires`); same gate | The link from outside to the board does not duplicate and the process does not restart; requests have distinct ids. Of `system`, not of `Http.served system`. The rate limit counts web posts only, and `posted_kept` starts from a web post or a read: an API post's repeated `seq` is answered `posted` from the memo, after the post was deleted or in a later window | proved |
-| Rookery: a request is made as the account its cookie or token verifies; no secret reaches the system | `examples/rookery/Check.lean` (`bridge`), `lake exe rookeryLive` (CI) | HMAC is a pseudorandom function | tested |
-
-Also:
-
-- Checked: the spec model-checked alone and the system against it on two accounts, with timers firing at any moment, crashes, and requests lost and reordered.
-- Checked: three seeded bugs (fan-out on write that keeps a deleted post, a delete by another account, a rate limit off by one) found.
+| Rookery: a request changes only the rows of the account it is made as, so only a post's author deletes it | `Rookery.others_kept`, from `Rookery.run_good` and `Txn.All.others`, `examples/rookery/Rookery/Proofs.lean`; gate `examples/rookery/Rookery/Proofs/Axioms.lean` | Of each transaction | proved |
+| Rookery: no window holds more than `maxPerWindow` posts and no account more than `maxFailures` failed log-ins, in every database the store may hold | `Rookery.bounded_always`, from `Db.invariant`; same gate | PostgreSQL at `SERIALIZABLE` behaves like the store's model | proved |
+| Rookery: a response names the account its request was made as, the only one a session or token is signed for; an API change sent again with its `seq` writes nothing while its key is stored | `Rookery.handler_name`, `Rookery.api_again`; same gate | | proved |
+| Rookery: a deleted post is in no later read, a retried change is answered the same, a lock and the oldest session closed where due, the bounds on accounts, posts kept, follows and sessions | `examples/rookery/Check.lean`, beside the store's model, with lost answers and a restart | Small bounds | checked |
+| Rookery: a request is made as the account its cookie or token verifies; no password, cookie or token reaches the system; passwords are checked against the stored PHC hash and stored again at a new cost; after SIGKILL and a restart everything is as it was | `examples/rookery/Check.lean` (`Bridge`), `examples/rookery/Rookery/Live.lean` on PostgreSQL (CI, through `scripts/with-postgres`) | HMAC is a pseudorandom function | tested |
 
 ### Every application
 
@@ -1446,5 +1489,4 @@ Also:
 
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
-| Rookery: the system behind the HTTP gate (`Http.served`) implements the spec | Only the gate's own theorems (at most once, deadlines, answers) |  | not proved |
 | Every request to an application is answered | Only the gate's: an admitted request is answered, at the latest with `504` |  | not proved for the applications' own logic |

@@ -35,36 +35,34 @@ type load struct {
 }
 
 type run struct {
-	Server       string  `json:"server"`
-	Run          int     `json:"run"`
-	Load1        float64 `json:"load1"`
-	OtherJobs    int     `json:"other_jobs"`
-	JournalBytes int64   `json:"journal_bytes"`
-	Alive        bool    `json:"alive"`
-	Load         load    `json:"load"`
+	Server    string  `json:"server"`
+	Run       int     `json:"run"`
+	Load1     float64 `json:"load1"`
+	OtherJobs int     `json:"other_jobs"`
+	Alive     bool    `json:"alive"`
+	Load      load    `json:"load"`
 }
 
 type row struct {
-	Server        string  `json:"server"`
-	Conns         int     `json:"conns"`
-	Runs          int     `json:"runs"`
-	RPS           float64 `json:"rps_median"`
-	RPSMin        float64 `json:"rps_min"`
-	RPSMax        float64 `json:"rps_max"`
-	SpreadPct     float64 `json:"rps_spread_pct"`
-	P50us         float64 `json:"p50_us_median"`
-	P99us         float64 `json:"p99_us_median"`
-	MaxUs         float64 `json:"max_us_median"`
-	ServerCores   float64 `json:"server_cpu_cores_median"`
-	CPUPerReqUs   float64 `json:"server_cpu_us_per_request_median"`
-	RSSMB         float64 `json:"server_rss_peak_mb_max"`
-	Threads       int64   `json:"server_threads_max"`
-	Reconnects    float64 `json:"reconnects_median"`
-	Errors        int64   `json:"errors_total"`
-	OtherCores    float64 `json:"other_cpu_cores_max"`
-	Disturbed     int     `json:"disturbed_runs"`
-	Crashed       int     `json:"crashed_runs"`
-	JournalMBEach float64 `json:"journal_mb_max"`
+	Server      string  `json:"server"`
+	Conns       int     `json:"conns"`
+	Runs        int     `json:"runs"`
+	RPS         float64 `json:"rps_median"`
+	RPSMin      float64 `json:"rps_min"`
+	RPSMax      float64 `json:"rps_max"`
+	SpreadPct   float64 `json:"rps_spread_pct"`
+	P50us       float64 `json:"p50_us_median"`
+	P99us       float64 `json:"p99_us_median"`
+	MaxUs       float64 `json:"max_us_median"`
+	ServerCores float64 `json:"server_cpu_cores_median"`
+	CPUPerReqUs float64 `json:"server_cpu_us_per_request_median"`
+	RSSMB       float64 `json:"server_rss_peak_mb_max"`
+	Threads     int64   `json:"server_threads_max"`
+	Reconnects  float64 `json:"reconnects_median"`
+	Errors      int64   `json:"errors_total"`
+	OtherCores  float64 `json:"other_cpu_cores_max"`
+	Disturbed   int     `json:"disturbed_runs"`
+	Crashed     int     `json:"crashed_runs"`
 }
 
 func median(xs []float64) float64 {
@@ -146,7 +144,7 @@ func main() {
 	totalDisturbed := 0
 	for _, k := range order {
 		rs := groups[k]
-		var rps, p50, p99, mx, cores, perReq, rss, rec, other, journal []float64
+		var rps, p50, p99, mx, cores, perReq, rss, rec, other []float64
 		out := row{Server: k.server, Conns: k.conns, Runs: len(rs)}
 		for _, r := range rs {
 			l := r.Load
@@ -163,7 +161,6 @@ func main() {
 			}
 			rss = append(rss, float64(l.ServerRSSkB)/1024)
 			rec = append(rec, float64(l.Reconnects))
-			journal = append(journal, float64(r.JournalBytes)/1e6)
 			out.Threads = max(out.Threads, l.Threads)
 			out.Errors += l.Errors + l.Non2xx
 			if disturbed(r) {
@@ -184,7 +181,6 @@ func main() {
 		_, out.RSSMB = minMax(rss)
 		out.Reconnects = median(rec)
 		_, out.OtherCores = minMax(other)
-		_, out.JournalMBEach = minMax(journal)
 		rows = append(rows, out)
 	}
 

@@ -7,7 +7,10 @@ Status: **checked: model plus oracle**.
   (`Scram.lean`), libpq's connection strings, URIs and service file (`ConnInfo.lean`), libpq's
   settings, which source wins and what the client refuses (`Settings.lean`), the pool's policy (`Pool.lean`), the
   key-value store's SQL (`Table.lean`) and the typed store's (`Sql.lean`). IO, which only
-  performs: `IO/Client.lean`, `IO/Pool.lean` and the typed store's driver `IO/Db.lean`.
+  performs: `IO/Client.lean`, `IO/Pool.lean`, the typed store's driver `IO/Db.lean` (with
+  `prepare`, which an application runs at its start: the migrations not yet run, once each, then
+  its declared tables compared with the database's), the worker of a jobs table `IO/Worker.lean`,
+  and `IO/Serve.lean`, which serves a system whose calls the driver runs.
 - **Model**: two shapes of the core. The key-value store, `Lanes/Outside/Store/Basic.lean`, for
   `Postgres.Store.handler`; and the typed store, `Lanes/Db/Model.lean`, for
   `Postgres.Typed.handler`.

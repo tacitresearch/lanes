@@ -12,7 +12,6 @@ cd examples/reminders
 mkdir -p .lake && ln -s ../../../.lake/packages .lake/packages   # share the fetched dependencies
 lake build            # the application, the proofs and the tests
 lake test             # the model check; with LANES_POSTGRES=host:port, the application on it too
-psql -f migrations/0001_reminders.sql                            # once, as libpq's variables say
 NOTIFY_URL=http://127.0.0.1:9090 NOTIFY_PATH=/notify lake exe reminders 8080
 ```
 
