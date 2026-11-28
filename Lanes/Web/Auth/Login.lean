@@ -4,65 +4,18 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Lib.Crypto.Native
+public import Lanes.Web.Auth.Password
 public import Lanes.Data.Declare
 
 /-!
-What an actor that lets users log in keeps, as pure data: the digest of a password, the count of
-failed attempts that locks an account, and the bounded list of a user's sessions.
-
-A password never enters a system. Its digest (`Password.digest`, Argon2id) is derived where the
-request arrives, on the task that reads it and not in the shard, so the journal, which records
-what the system was asked, holds digests only. The salt is derived from the user's name and a
-secret of the deployment, because the digest of a log-in is computed before the system, which
-could hold a random salt, has seen it.
+What an actor that lets users log in keeps, as pure data: the count of failed attempts that
+locks an account, and the bounded list of a user's sessions. A password's hash or digest is
+`Lanes.Web.Auth.Password`'s.
 -/
 
 @[expose] public section
 
 namespace Lanes.Auth
-
-/-- A password digest. Two are compared in time that does not depend on where they differ, so
-`if d = stored` in a step function does not leak the stored digest byte by byte. -/
-structure Digest where
-  bytes : ByteArray
-
-instance : DecidableEq Digest := fun a b =>
-  if h : Bytes.same a.bytes b.bytes then
-    isTrue (by cases a; cases b; exact congrArg _ ((Bytes.same_iff _ _).mp h))
-  else isFalse (by intro heq; exact h ((Bytes.same_iff _ _).mpr (heq ▸ rfl)))
-
-instance : Hashable Digest := ⟨fun d => hash d.bytes⟩
-
-instance : Repr Digest := ⟨fun d _ => s!"<digest {(Bytes.hex d.bytes).take 8}>"⟩
-
-def Digest.codec : Codec Digest :=
-  Codec.bytes.map (·.bytes) (fun b => some ⟨b⟩) (fun _ => rfl)
-
-instance : Codable Digest := ⟨Digest.codec⟩
-
-/-- A digest as text, so that a request prepared where it arrives can carry it into the bridge
-in place of the password. -/
-def Digest.hex (d : Digest) : String := Bytes.hex d.bytes
-
-def Digest.ofHex? (s : String) : Option Digest := (Bytes.unhex? s).map (⟨·⟩)
-
-theorem Digest.ofHex?_hex (d : Digest) : ofHex? d.hex = some d := by
-  simp [ofHex?, hex, Bytes.unhex?_hex]
-
-structure Password where
-  cost : Argon2id
-  /-- A secret of the deployment, kept with its key; changing it changes every digest. -/
-  pepper : ByteArray
-
-def Password.salt (config : Password) (user : String) : ByteArray :=
-  (hmac config.pepper ("salt\x00" ++ user).toUTF8).extract 0 16
-
-theorem Password.size_salt (config : Password) (user : String) : (config.salt user).size = 16 := by
-  simp [Password.salt, Hmac.size_hmac]
-
-def Password.digest (config : Password) (user password : String) : Digest :=
-  ⟨config.cost.hash password.toUTF8 (config.salt user) (config.size_salt user)⟩
 
 /-- Failed log-ins since the account was last unlocked. At `limit` the account locks, and stays
 locked until the application unlocks it, by a timer or by hand. -/
