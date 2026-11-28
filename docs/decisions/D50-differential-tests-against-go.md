@@ -4,7 +4,7 @@ Status: Accepted
 
 A proof says the code meets its spec; it does not say the spec reads the standard right. Go's
 standard library has had years of use, so each package of the standard library Lanes builds
-(`docs/STDLIB.md`) is also run against Go's on generated inputs, and each input on which the
+(`docs/STDLIB.md` (removed)) is also run against Go's on generated inputs, and each input on which the
 two differ is either a misreading of ours, fixed, or a place where we depart from Go on purpose,
 written down as a predicate with its reason.
 

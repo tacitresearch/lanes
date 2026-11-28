@@ -20,8 +20,11 @@ the repository. Read it first; this file does not repeat it. A clone needs elan 
 - Before asking for review, merge `main` into the branch and run the checks again (`AGENTS.md`,
   "Parallel branches").
 - A design that is settled or changed gets a decision file in `docs/decisions/`, written as
-  `AGENTS.md` says (a new file, numbered on `main`). A decision is never rewritten: a new one
-  supersedes it.
+  `AGENTS.md` says (a new file, numbered on `main`, with a status line under its title). A
+  decision is never rewritten: a new one supersedes it and changes the old one's status line.
+- What works and what is claimed of it is in `docs/ARCHITECTURE.md`, with the evidence; a limit
+  that can be fixed is an issue labelled `known-limit`. A change updates either in the same pull
+  request.
 - Cite the rules that shaped a choice in the pull request description, by number ("rule 2.6").
 
 ## What is reviewed by a person

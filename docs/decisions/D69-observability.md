@@ -113,7 +113,7 @@ slows the requests it logs, since a line is written before its response is hande
 - **OpenTelemetry.** OTLP needs protobuf and an HTTP client with TLS; the text format is scraped
   by Prometheus, by Amazon Managed Service for Prometheus and by the CloudWatch agent.
 
-Not done: the text format is not yet tested against Go's `expfmt` parser, which `docs/STDLIB.md`
+Not done: the text format is not yet tested against Go's `expfmt` parser, which `docs/STDLIB.md` (removed)
 names as its oracle; it is tested against text checked by hand.
 
 *Amendment: the metrics page is for the machine it runs on.* A load balancer's rule does not keep

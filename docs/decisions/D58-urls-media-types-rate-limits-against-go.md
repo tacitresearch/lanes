@@ -2,7 +2,7 @@
 
 Status: Accepted
 
-D50's pattern, applied to three more packages of `docs/STDLIB.md`'s P0: `Lanes.Url`
+D50's pattern, applied to three more packages of `docs/STDLIB.md` (removed)'s P0: `Lanes.Url`
 (`Lanes/Lib/Net/Url.lean`, RFC 3986) against `net/url`, `Lanes.MediaType`
 (`Lanes/Lib/Mime/MediaType.lean`, RFC 9110 §8.3.1) against `mime.ParseMediaType`, and
 `Lanes.RateLimit` (`Lanes/Lib/RateLimit.lean`) against `golang.org/x/time/rate`, pinned in

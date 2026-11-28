@@ -104,7 +104,7 @@ job never gives but the statement allows.
 ## Consequences
 
 - Liveness of a requester beside a behaviour now crosses the join: what `Jobs.attach` answers can
-  be delivered the same way, which `docs/status/areas/behaviours.md` lists as not yet carried.
+  be delivered the same way, which `docs/status/areas/behaviours.md` (removed) lists as not yet carried.
 - `routed_right` covers outputs emitted as an actor handles a message, not as it starts.
   `handled_right` covers any message in flight, so a start's output is delivered once it is
   known to be in flight.

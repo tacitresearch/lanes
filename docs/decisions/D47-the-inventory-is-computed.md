@@ -4,7 +4,7 @@ Status: Partly superseded by new-each-doc-has-one-job.md (the committed inventor
 
 D45 asks that every public definition Lanes ships have one status, stated by the code and
 generated. `lake exe lanes inventory` writes it to
-`docs/INVENTORY.md`; `lanes lint` fails when that file is stale and when a definition of
+`docs/INVENTORY.md` (removed); `lanes lint` fails when that file is stale and when a definition of
 `Lanes/` has no evidence and is not on `docs/inventory-none.md`.
 
 The program (`LanesCli/Inventory.lean`, the executable `lanesInventory`) loads the built modules
