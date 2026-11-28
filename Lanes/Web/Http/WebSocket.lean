@@ -111,10 +111,13 @@ structure Limits where
   /-- A message, all its fragments together. -/
   maxMessage : Nat := 1 <<< 24
 
-/-- The close codes a connection is failed with. -/
+/-- The close codes a connection is failed or closed with. -/
+def goingAway : Nat := 1001
 def protocolError : Nat := 1002
 def invalidData : Nat := 1007
+def policyViolation : Nat := 1008
 def tooBig : Nat := 1009
+def internalError : Nat := 1011
 
 /-- XOR with the key, the `i`th byte with the key's `i % 4`th; it undoes itself. -/
 def applyMask (key : Vector UInt8 4) (b : ByteArray) : ByteArray :=
@@ -218,8 +221,15 @@ inductive Message where
 def validCode (c : Nat) : Bool :=
   (1000 ≤ c && c ≤ 1003) || (1007 ≤ c && c ≤ 1014) || (3000 ≤ c && c ≤ 4999)
 
+/-- The first `n` bytes of `b` at most, cut where a character begins. -/
+def cut (b : ByteArray) : Nat → ByteArray
+  | 0 => .empty
+  | n + 1 => if (String.fromUTF8? (b.extract 0 (n + 1))).isSome then b.extract 0 (n + 1) else cut b n
+
+/-- A close frame's payload: the code, then the reason, cut to 123 bytes so that the frame's
+payload is at most 125. -/
 def closePayload (code : Nat) (reason : String := "") : ByteArray :=
-  ⟨#[(code / 256).toUInt8, (code % 256).toUInt8]⟩ ++ reason.toUTF8
+  ⟨#[(code / 256).toUInt8, (code % 256).toUInt8]⟩ ++ cut reason.toUTF8 123
 
 /-- The code and reason of a close frame's payload, or the code to fail with. -/
 def readClose (p : ByteArray) : Except Nat (Option (Nat × String)) :=

@@ -132,7 +132,7 @@ def socketTest : Async (List (String × Bool)) := do
       within),
     ("reads: only the transfers enter the system", inputs == 11) ]
 
-/-! A read's deadline and bound, beside a shard held up by its output handler. -/
+/-! A read's deadline and bound, beside an actor held up by its output handler. -/
 
 inductive Ask where
   | add (id : Http.ReqId)
@@ -184,7 +184,7 @@ def deadlineTest : Async (List (String × Bool)) := do
   let written ← fetch port "/add" (method := "POST")
   full.stop
   return [
-    ("reads: a read the shard cannot answer by its deadline gets 504, and the shard goes on",
+    ("reads: a read the runtime cannot answer by its deadline gets 504, and the runtime goes on",
       body added == "1" && late.startsWith "HTTP/1.1 504" && body stalled == "1"
         && body read == "1" && left == 0),
     ("reads: beyond its bound a read gets 503, and requests still enter",

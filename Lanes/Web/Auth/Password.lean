@@ -18,7 +18,7 @@ Argon2's reference implementation write it (`Phc`). It carries what made it, so
 `Password.verify` reads the cost and the salt from it: raising the cost or changing the pepper
 leaves it readable, and `Verdict.rehash` says when to store it again at the deployment's cost.
 A new hash has a salt of 16 random bytes (`Password.hash`). Verifying needs the stored hash, so
-it is done where both it and the password are, off the shard: an adapter's handler, or a
+it is done where both it and the password are, outside any step: an adapter's handler, or a
 request's own task.
 
 A digest (`Digest`, `Password.digest`) is the raw 32 bytes of Argon2id under a salt derived from

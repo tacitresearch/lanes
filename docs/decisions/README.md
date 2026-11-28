@@ -73,6 +73,7 @@ two new decisions land at different lines. The numbers give the order in which t
 - [D80. Every parser has an oracle and every model a recorded run, in one place, and lint keeps the list](D80-oracles.md)
 - [D114. The outbox and jobs are rows, performed by a worker under the row's id as the key](D114-outbox-jobs.md)
 - [D119. Connecting to managed PostgreSQL as libpq does, and signing with a role's credentials](D119-pg-aws-options.md)
+- [D125. The environment, signals and randomness, as platform models](D125-platform-models.md)
 - [D83. PostgreSQL over TLS, with channel binding, and a pool of connections](D83-postgres-over-tls.md)
 - [D68. PostgreSQL is spoken in Lean, and a transactional store is a model](D68-postgres-protocol-in-lean.md): partly superseded by D111-typed-store.md (the store model: typed tables, keys and scans replace the key-value model for new code)
 - [D112. Mathlib and CSLib in the proof layer, measured](D112-proof-libraries.md)
@@ -118,6 +119,7 @@ two new decisions land at different lines. The numbers give the order in which t
 - [D109. The video site split into an actor per member, and a scheduler per entity](D109-videos-per-member.md): partly superseded by D110-volatile-actors.md (the video site, which leaves the main branch, and the waves it was split for)
 - [D110. Actors are volatile, and durable state lives in outside services with models](D110-volatile-actors.md)
 - [D107. The waves' premise, measured on the video site: the work spreads once reads leave the journal](D107-waves-premise.md): partly superseded by D110-volatile-actors.md (waves as the default: it stands as a measurement)
+- [D124. WebSockets behind the gate](D124-websocket-server.md)
 
 ### Superseded
 

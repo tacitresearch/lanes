@@ -267,7 +267,7 @@ def timerTest : Async (List (String × Bool)) := do
   rt.stop
   return results
 
-/-- The shard is held inside the output handler, so what the inbox does is not a matter of
+/-- The actor is held inside the output handler, so what the inbox does is not a matter of
 timing: it takes `inboxCapacity` inputs and refuses the next. -/
 def backPressureTest : Async (List (String × Bool)) := do
   let entered ← IO.Promise.new
@@ -362,7 +362,7 @@ def linkOrderTest : Async (List (String × Bool)) := do
   return [("link: what a step sends to one actor arrives in the order it was sent",
     got == [10, 11, 12, 20, 21, 22])]
 
-/-! A shard that always has work must still stop. -/
+/-! A runtime that always has work must still stop. -/
 
 abbrev pingSig : Signature where
   Id := Bool
@@ -380,15 +380,15 @@ def busyStopTest : Async (List (String × Bool)) := do
   rt.input ()
   Async.sleep 20
   rt.stop
-  return [("stop: a shard that never runs out of work still ends",
+  return [("stop: a runtime that never runs out of work still ends",
     (← throws (rt.input ())) && !(← rt.tryInput ()))]
 
 def soon {α : Type} (ms : Nat) (action : Async α) : Async (Option α) :=
   Async.race (some <$> action) (do Async.sleep (.ofNat ms); return none)
 
 /-- Commands handed over before `stop` are finished by it, even by a worker that lets go of the
-actor after each one (a budget of one), an inbox configured with no room
-still takes one input at a time, and a handler that throws does not end the shard. -/
+actor after each (a budget of one), an inbox configured with no room still takes one input at a
+time, and a handler that throws does not end the runtime. -/
 def dutiesTest : Async (List (String × Bool)) := do
   let entered ← IO.Promise.new
   let release ← IO.Promise.new
@@ -426,7 +426,7 @@ def dutiesTest : Async (List (String × Bool)) := do
     ("stop: commands handed over before it are finished", ended.isSome
       && (← outputs.get) == #[0, 1, 2, 3, 4, 5]),
     ("inbox: a capacity of zero still takes an input", taken.isSome),
-    ("outputs: a handler that throws does not end the shard, and is not called again for that "
+    ("outputs: a handler that throws does not end the runtime, and is not called again for that "
       ++ "output", alive == some true && (← seen.get) == #[1, 3]) ]
 
 /-! An actor at rest leaves the table (D51), but not while a timer of its is pending: started
@@ -558,6 +558,17 @@ def watchdogTest : Async (List (String × Bool)) := do
   return [
     ("watchdog: a step that runs past the limit is reported once, as a delivery",
       reports.size == 1 && reports.all fun s => s.kind == "deliver" && s.elapsed_ms > 20) ]
+
+/-- `stop` wakes the watchdog and waits for it to end, so a runtime stopped with the watchdog
+on leaves no thread asleep behind it. -/
+def watchdogStopTest : Async (List (String × Bool)) := do
+  let rt ← Runtime.start clockSystem { stepLimitMs := 30000 }
+  rt.input (.echo 1)
+  rt.idle
+  let t0 ← IO.monoMsNow
+  rt.stop
+  let elapsed := (← IO.monoMsNow) - t0
+  return [("watchdog: stop returns within 200 ms, the watchdog ended", elapsed < 200)]
 
 /-! The mail between actors (`docs/decisions/D123-runtime-limits.md`). A hub fans each input out
 to a sink, whose first output the handler holds until released: while it is held, the sink's
@@ -699,7 +710,7 @@ def tests : IO (List (String × Bool)) := do
   let u ← shaped "on 2 workers, a budget of 1" { workers := 2, budget := 1 }
   return a ++ b ++ c ++ d ++ e ++ f ++ g ++ h ++ i ++ j ++ k ++ w ++ u ++ (← dutiesTest.block)
     ++ (← restingTest.block) ++ (← fanTest.block) ++ (← contextTest.block)
-    ++ (← watchdogTest.block) ++ (← parkerTest)
+    ++ (← watchdogTest.block) ++ (← watchdogStopTest.block) ++ (← parkerTest)
     ++ (← highWaterTest.block) ++ (← overflowTest.block) ++ (← runawayTest.block)
 
 end Tests.Runtime

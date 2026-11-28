@@ -211,8 +211,8 @@ def events (port : UInt16) (request : Request) (enough : List Sse.Event → Bool
   finally discard socket.close.toBaseIO
   return Sse.received (← received.get)
 
-/-- Makes the call on a task of its own, so the shard does not wait for the network, and hands
-the answer back as an input. An answer that finds the inbox full is dropped. -/
+/-- Makes the call on a task of its own, so the worker that put the output out does not wait for
+the network, and hands the answer back as an input. An answer that finds the inbox full is dropped. -/
 def handler {sys : System σ} [Hashable σ.Id] (port : Port σ) (config : Config := {})
     (rt : Runtime sys) (out : σ.Out) : Async Unit := do
   if let some (id, call) := port.called out then

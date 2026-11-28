@@ -326,10 +326,10 @@ the specification of what `Http.serve` does.
 
 `Http.serve` does not run the gate as an actor, which would make it a serial point for every
 request (`docs/decisions/D96-runtime-contract.md`). It makes the gate's decisions before the
-shard, under the lock of its table of waiting requests, and hands the shard only what the gate
-admitted; the shard runs `Http.admitted sys` (`Lanes/Web/Http/Admit.lean`), which is `sys` with
+runtime, under the lock of its table of waiting requests, and hands the runtime only what the gate
+admitted; the runtime runs `Http.admitted sys` (`Lanes/Web/Http/Admit.lean`), which is `sys` with
 no actor every request goes through. `Http.Front.World` models the server so: the front's state
-beside the shard's. Every run of it is a run of `served sys`, with the same requests arriving and
+beside the runtime's. Every run of it is a run of `served sys`, with the same requests arriving and
 the same answers handed over in the same order (`Http.Front.World.refines`,
 `Lanes/Web/Http/AdmitSound.lean`), so every theorem below holds of the server
 (`Http.Front.World.answered_le_arrived`). Of the front alone: it answers no request more often
@@ -368,8 +368,8 @@ request's own task, so a password or a cookie the bridge turns into what the sys
 reaches the system (D44), takes an id from `Http.Waiting` (pure: each id handed out once, each
 answered at most once and to its own waiter: `Http.Waiting.exec_handed_nodup`,
 `Http.Waiting.exec_answered`), puts it before the gate and hands what the gate admits to the
-shard. The gate decides under the same lock that hands out the id (`Gate.admit`), so a `503`
-from a full inbox leaves the gate's state as it was; it reads the shard's outputs
+runtime. The gate decides under the same lock that hands out the id (`Gate.admit`), so a `503`
+from a full inbox leaves the gate's state as it was; it reads the runtime's outputs
 (`Gate.receive`), and the server's ticker hands it each deadline that passes, which it answers
 `504` (`docs/decisions/D106-gate-before-shard.md`). It answers
 `503` itself when the inbox is full and `501` for a method it does not know (#171). With `ServerConfig.ioThreads`
@@ -396,6 +396,21 @@ it reads back as it is (`Http.Sse.Event.ofResponse_valid`). `Http.Loopback` runs
 no socket, for tests: the connection, the gate as the server runs it, and `admitted sys` on a
 kernel of its own.
 
+A request may switch protocols (`serve`'s `upgrade`, `Lanes/Web/Http/Upgrade.lean`, the decision
+"WebSockets behind the gate"): its head is handed on alone and nothing after it is read; the
+system's `101` is not written by the connection, which hands itself over once every earlier
+response is written (`Http.Conn.flushSwitch_switch`, `Http.Conn.respond_upgrading`) to the
+protocol's pure machine, run by the same loop. The protocol's requests go through the gate as
+pieces do, and the system reaches the connection with outputs that answer the head's id, which
+the gate would drop (`Http.Gate.receive_absent`). WebSockets are such a protocol
+(`Lanes/Web/Http/WebSocketSession.lean`, a root of its own, so a program that does not import it
+does not build or link it): each message received is a request through the gate, answered
+`Response.taken` before the next is handed on; a socket holds at most one place among the gate's
+pending requests, and only while that request is with the system (`WebSocket.Session.step_submits`,
+`step_withSystem`); everything it writes after the `101` is frames a client reads back
+(`WebSocket.Session.step_writes`); the system is told once when a socket ends. An open socket
+counts as a connection against `connections_max`. `examples/chat` is a room built on it.
+
 The server tells its operators how it is, each part off by default (`ServerConfig.ops`,
 `docs/decisions/D69-observability.md`): a metrics page in the Prometheus text format, liveness,
 readiness, request ids and a JSON access log. What is decided is pure. `Lanes/Lib/Metrics.lean`
@@ -406,15 +421,16 @@ operators', none with nothing configured (`Http.Ops.route?_default`), that the m
 answered only to a peer on a loopback address unless the configuration lets others in, however
 its path is written (`Http.Ops.route?_metrics`), while liveness and readiness answer every peer
 (`Http.Ops.route?_peer`), that readiness answers
-`200` exactly when the shard has booted and the server is not stopping or draining
+`200` exactly when the runtime has booted and the server is not stopping or draining
 (`Http.Ops.answer_ready`), and what a log line holds, the JSON text of its record
 (`Http.Ops.Access.parse_line`). `Lanes/Web/IO/Ops.lean` answers an operator's request before it
-is prepared or has an id, so it never reaches the shard, and passes every other request on as it
+is prepared or has an id, so it never reaches the runtime, and passes every other request on as it
 came. So the same inputs enter the system with all of it on as off, which is trusted and tested
 (`Tests/Ops.lean`). `Server.stopOnSignal`
 is a stop that drops nothing in flight: at SIGTERM or SIGINT readiness answers `503`, the
-requests the shard has taken are answered until none is left or a deadline passes, and then the
-server stops; trusted and tested with a child process.
+requests the runtime has taken are answered until none is left or a deadline passes, and then the
+server stops, as `Http.Shutdown.step` decides (the platform's signals, below); performed by
+trusted IO and tested with a child process.
 
 Where: `Lanes/Web/` (`Http/`, `IO/Server.lean`), `Lanes/Semantics/Front.lean`.
 
@@ -430,6 +446,8 @@ Where: `Lanes/Web/` (`Http/`, `IO/Server.lean`), `Lanes/Semantics/Front.lean`.
 | A streamed response is read back by the client as its head with the parts the system gave, in order, as its body | `Http.Conn.read_streamed`, `Http.Conn.pulled_part`, `Http.Conn.flushStream_ended`, `Lanes/Web/Http/ConnSound.lean`; gate `Tests/Axioms/Web.lean` | Parts of at most sixteen hex digits of size and a body under 10^18 bytes; each of a step, the whole run model-checked (`Tests/HttpStream.lean`); the IO trusted to give each answer to the pull it was asked under | proved of each step; checked of a run |
 | The pieces of a streamed request body make up the body the strict reader reads, in order, one with the system at a time | `Http.Conn.pump_piece` (each piece is what `Inflow.gather` reads at the connection's position), `Http.Conn.gather_length` (of a body framed by its length, the bytes from that position, the last piece exactly at its end); `Tests/HttpStream.lean` | Of a whole run, model-checked on a body framed by its length and one in chunks, not proved; the IO trusted to tag each piece with its head's id | proved of each step; checked of a run |
 | The client's reader of Server-Sent Events reads back the events a stream writes, in order, each once | `Http.Sse.parse_written`, `Http.Sse.Event.ofResponse_valid`, `Lanes/Web/Http/SseSound.lean`; gate `Tests/Axioms/Web.lean` | Against a model of the WHATWG reader that splits lines at LF, gives each event its own block's `id` and `retry`, and takes a `retry` of at most eighteen digits | proved |
+| Everything a WebSocket writes after the `101` is frames a client reads back: unmasked, none longer than `frame_max`, every control frame whole and at most 125 bytes, a close's reason cut to fit | `WebSocket.Session.step_writes`, `WebSocket.Conn.receive_sends`, `WebSocket.size_closePayload`, with `WebSocket.decode_encode`, `Lanes/Web/Http/WebSocketSessionSound.lean`; gate `Tests/Axioms/Web.lean`; live against Python's websockets client (`Tests/WebSocket.lean`) | The loop writes what the session asks, in order (trusted) | proved of each step |
+| A WebSocket holds at most one place among the gate's pending requests: it hands the system at most one request in a step, and none while one is with it but on that one's answer | `WebSocket.Session.step_submits`, `WebSocket.Session.step_withSystem`; `Http.Gate.receive_absent` for the outputs that go to a socket instead of the gate | The loop submits what the session asks and tells it each answer under its index (trusted) | proved of each step |
 | A streamed connection holds at most one piece and one part of a stream, and pulls only once what it wrote was sent | `Http.Conn.flushStream_going`, `Http.Conn.pulled_large`, `Lanes/Web/Http/ConnSound.lean`; `Tests/HttpStream.lean` | The loop tells `sent` when its last write ends (trusted) | proved of each step |
 | HTTP: requests a second at 1, 16 and 64 connections against Go `net/http` | `bench/run.sh` through the Bench workflow on a c7a.16xlarge, commit 70d61f52d0aa, 2026-11-27 (`bench/README.md`) | One set of runs; the report is the workflow's artifact, not in the repository | tested (measured) |
 
@@ -437,12 +455,12 @@ Also:
 
 - Proved of `fronted sys` by projection from the gate alone, for every `sys`: at most once per arrival where the link from outside to the gate does not duplicate (`Http.fronted_answered_le_arrived`, from `Http.Gate.answered_le_handled`) and deadlines stay armed (`Http.fronted_deadlines_armed`); and in every fair run in which the gate does not crash a request the gate has admitted is answered (`Http.fronted_pending_leaves`, `Http.fronted_pending_answered`, from `Http.Gate.pending_leaves` and `Http.Gate.pending_answered` of the gate alone, through the hidden inputs and outputs and the join); model-checked with the properties checked of `served`, and the premises of the leads-to rule on the gate alone with the link a join gives it from outside.
 - Proved of `served sys` for every system, bridge and configuration: an arrival is answered at most once in any environment whose link from outside to the gate does not duplicate (`Http.served_answered_le_arrived`, `Http.kernel_served_answered_le_arrived`, with crashes, loss, reordering and duplication elsewhere allowed), a waiting request keeps its deadline armed (`Http.served_deadlines_armed`), and in every fair run in which the gate does not crash a request the gate has admitted is answered, by the system or with `504` (`Http.served_pending_leaves`, `Http.served_pending_answered`). These are the theorems of `fronted sys` carried through its hidden inputs and outputs.
-- The server prepares each request as its bridge says (`Bridge.prepare`, pure) on the request's own task before it enters the shard, so a password or a cookie a bridge takes out never enters the system and slow work is not done on the shard's thread (`docs/decisions/D44-request-prepared-before-journal.md`).
-- For its operators, each off by default (`ServerConfig.ops`, `docs/decisions/D69-observability.md`): a metrics page in the Prometheus text format (requests by method and status class, latency, connections open and refused, requests in flight, the inbox), liveness, readiness that answers `200` exactly when the shard has booted and the server is not stopping or draining (`Http.Ops.answer_ready`, `Server.drain`), request ids taken from a client only when bounded and plain (`Http.Ops.RequestId.accept?_eq_some`), and a JSON access log whose lines are the JSON text of their records (`Http.Ops.Access.parse_line`) and hold no query, header or body; none of it reaches a system, which is trusted and tested: the same inputs enter the system with all of it on as off.
+- The server prepares each request as its bridge says (`Bridge.prepare`, pure) on the request's own task before it enters the runtime, so a password or a cookie a bridge takes out never enters the system and slow work is not done in a step (`docs/decisions/D44-request-prepared-before-journal.md`).
+- For its operators, each off by default (`ServerConfig.ops`, `docs/decisions/D69-observability.md`): a metrics page in the Prometheus text format (requests by method and status class, latency, connections open and refused, requests in flight, the inbox), liveness, readiness that answers `200` exactly when the runtime has booted and the server is not stopping or draining (`Http.Ops.answer_ready`, `Server.drain`), request ids taken from a client only when bounded and plain (`Http.Ops.RequestId.accept?_eq_some`), and a JSON access log whose lines are the JSON text of their records (`Http.Ops.Access.parse_line`) and hold no query, header or body; none of it reaches a system, which is trusted and tested: the same inputs enter the system with all of it on as off.
 - The server reads and writes HTTP/1.1 itself on `Std.Net`, with no `Std.Http`: each connection is `Http.Conn.step`, pure, model-checked against a client that sends in any pieces, pipelines and leaves, and proved to write responses in the order requests were read, each once (`Http.Conn.run_writes`), to hand on only requests the strict reader reads (`Http.Conn.step_submit_read`), to keep its buffer within `message_max` and its requests in flight within `inflight_max` (`Http.Conn.run_buffer`, `run_slots`), to take nothing once closed or no longer reading (`Http.Conn.step_closed`, `step_notReading`, `step_reading`), to stop reading at a deadline (`Http.Conn.step_tick`) and to write what the client's reader reads back (`Http.Conn.read_encode`), with `100 Continue`, keep-alive, pipelining, deadlines for a slow head or body and a bound on connections (`docs/decisions/D57-the-server-runs-its-own-connections.md`).
 - The strict reader of requests (`Http.Request.read`, `docs/decisions/D49-the-server-reads-requests-by-a-strict-profile.md`) is proved final once it answers (`Http.Request.read_append`), to wait only within its limits and answer within them (`Http.Request.read_more`, `read_done`), to read back what `Request.wire` writes wherever it starts and whatever follows, at its last byte and not before (`read_wire`, `read_wire_extract`), and to refuse a length beside a coding, two lengths, a blank before a colon, obs-fold, a bare CR or LF and a malformed chunk size for every head of those shapes (`read_lengthAndCoding`, `read_twoLengths`, `read_blankInName`, `read_fold`, `read_bareCR`, `read_bareLF`, `read_badChunkSize`); its other refusals, and its verdicts against Go's, Node's and h11's parsers on a corpus, are tested (`oracles/go/requests/requests.py`: stricter or alike on every case).
 - The HTTP server passes against the gate's assumption.
-- WebSockets (RFC 6455, `Lanes/Web/Http/WebSocket.lean`, its own root): the opening handshake read from a request and answered, frames written and read back (`WebSocket.decode_encode`), and a server's side of a connection, pure: fragments put together within a message's limit, a ping answered, a close echoed, text checked as UTF-8 and the close codes of §7.4; compared with Python's websockets on generated byte streams (`oracles/websockets`). The server does not yet hand an upgraded connection to it: the codec is for an application's own socket loop until it does.
+- WebSockets (RFC 6455, `Lanes/Web/Http/WebSocket.lean`, its own root): the opening handshake read from a request and answered, frames written and read back (`WebSocket.decode_encode`), and a server's side of a connection, pure: fragments put together within a message's limit, a ping answered, a close echoed, text checked as UTF-8 and the close codes of §7.4; compared with Python's websockets on generated byte streams (`oracles/websockets`). The server runs it behind the gate (`Lanes/Web/Http/WebSocketSession.lean`, above). Not done: a WebSocket client, extensions (permessage-deflate), and `Http.Loopback` running a protocol switched to, which ends its exchange at the switch.
 
 ## Pages, sessions and sign-in
 
@@ -650,10 +668,12 @@ are clients only, with tests, and SQS's calls are paired with the queue shape wh
 application needs it.
 
 The platform models in the core are the clock, monotonic (`Clock.outside`) and the wall clock
-(`Clock.wall`) in `Lanes/Outside/Clock.lean`, and the file system with crash semantics
-(`Lanes/Outside/FileSystem/`, below). Randomness, environment variables and configuration, the
-network and DNS, signals and shutdown, and standard input and output have no model yet, only
-bindings (`Lanes/Lib/Crypto/Native.lean`) or none: each is a checklist line of issue #245.
+(`Clock.wall`) in `Lanes/Outside/Clock.lean`, the file system with crash semantics
+(`Lanes/Outside/FileSystem/`), the environment a process starts with, and the stop a signal
+starts (both below). Randomness needs no model of its own: a step is told a seed, and every
+theorem about a step holds for every seed (below). The network and DNS, and standard input and
+output, have no model: the decision "The environment, signals and randomness, as platform
+models" says what one would give and cost.
 
 ## The platform: the file system
 
@@ -702,6 +722,62 @@ Where: `Lanes/Outside/FileSystem/`, `Lanes/Outside/FileSystem.lean`,
   sees a failed `fsync` should stop and recover from what is on the disk.
 - A loss of power cannot be tested: the crash rules are trusted, and only their consequences are
   checked against the model.
+
+## The platform: the environment and signals
+
+The environment a process starts with is a value (`Environment.Vars`, any list of variables, an
+empty value as unset), and an application's configuration is read from it once by a reader
+(`Environment.Reader`, `Lanes/Outside/Environment.lean`): data that names each variable it asks
+for, with its parser, default and text. A reader written with `do` goes on past a variable it
+cannot read, so `Environment.read` and `Environment.load` list every problem at once; a variable
+read as a `Secret` (`Lanes/Data/Secret.lean`, the one type of secret in Lanes) never has its
+value in a problem or in a `Repr`. A test or the checker runs an application under several
+configurations by giving each its `Vars`; `describe` lists the variables, for a deploy's
+documentation. `Environment.load` (`Lanes/Outside/IO/Environment.lean`) runs the model's own
+interpreter, `Reader.runM`, with `IO.getEnv`.
+
+SIGTERM and SIGINT start a stop that loses nothing taken; SIGKILL and a loss of power are the
+semantics' restart. A server drains as `Http.Shutdown.step` decides (`Lanes/Web/Http/Shutdown.lean`):
+readiness answers `503` while it goes on serving, and it stops when nothing is in flight or
+`drain_ms` has passed. The listener stays open while it drains, so that a request a load balancer
+sends before it reads readiness is served; `Server.stop` then closes it, stops the runtime and
+answers `503` to whatever still waits. A process without a server stops with
+`Runtime.stopOnSignal`, and `Runtime.stop` returns once every input taken has reached its actor
+(D116). Both wait through `awaitStopSignal` (`Lanes/Runtime/IO/Signal.lean`), over `Std.Async`'s
+signal waiters, with no C of Lanes; it lets the waiters go after the first signal, so a second
+ends the process at once.
+
+Randomness: a step is told a `seed` (D121), and every theorem about a step quantifies over its
+context, so the seed's model is any `UInt64`; the checker explores the seeds a scenario's
+moments list. Pure code that needs more draws from `mkStdGen ctx.seed.toNat`, Lean's generator.
+A key, token or nonce is never made from the seed (64 bits, recorded in a trace, from a generator
+that is not cryptographic): it comes from `IO.getRandomBytes` (`Crypto.randomBytes`) in an
+adapter or at start.
+
+Where: `Lanes/Outside/Environment.lean`, `Lanes/Outside/IO/Environment.lean`,
+`Lanes/Data/Secret.lean`, `Lanes/Web/Http/Shutdown.lean`, `Lanes/Runtime/IO/Signal.lean`,
+`Lanes/Web/IO/Server.lean`.
+
+### Claims
+
+| Claim | Evidence | Premises | Status |
+| --- | --- | --- | --- |
+| A reader lists every problem it finds: those of each part, in order, whatever an earlier part found | `Environment.Reader.run_bind`, `Lanes/Outside/Environment.lean`; gate `Tests/Axioms/Outside.lean`; `Tests/Environment.lean` | A part read only because of an earlier value may be asked, or not, because of that value's stand-in | proved |
+| A reader reads only the variables it asks for | `Environment.Reader.run_congr`; gate `Tests/Axioms/Outside.lean` | None | proved |
+| A secret's value, and what its parser said of it, never reach a problem; a `Secret` prints as `<secret>` | `Environment.secret_problems`, `Environment.field_secret_problems`, `Secret.toString_eq`; gate `Tests/Axioms/Outside.lean` | What the application does with `reveal` | proved |
+| `Environment.load` reads the process's environment as the model reads `Vars` | `Lanes/Outside/IO/Environment.lean` runs `Reader.runM`, the model's interpreter; `Tests/Environment.lean` | `IO.getEnv` gives the value the process started with | trusted, tested |
+| A draining server stops only when nothing is in flight or its deadline has passed, at the first look past the deadline, and once | `Http.Shutdown.step_stop`, `step_deadline`, `step_signal`, `step_stopping`, `Lanes/Web/Http/Shutdown.lean`; `Tests/Signal.lean` | `Server.stopOnSignal` performs what `step` says and looks every ten milliseconds | proved; the IO trusted |
+| At SIGTERM a server answers the request in flight, or `503` at the deadline, and exits 0; a runtime alone stops with every input it took taken | `Tests/Ops.lean` (a child process), `Tests/Signal.lean` (the test process sends itself SIGTERM) | `Std.Async`'s signal waiters | tested |
+
+### Limits
+
+- Lean cannot list the environment, so a reader names its variables; one that a reader builds
+  from another's value (`{NAME}_CLIENT_ID`) is asked as it is built, and `describe` lists it only
+  under the values it was given.
+- The model of the environment allows every list of variables: it says nothing a real one could
+  break, so there is nothing to record against it.
+- Signals other than SIGTERM and SIGINT keep their default actions; SIGHUP does not reload the
+  configuration, which is read once.
 
 ## S3 and Signature Version 4
 
@@ -1296,7 +1372,7 @@ key-value store with front ends, whose read cache breaks refinement (`examples/k
 service from an outbox (`examples/payments`, `Shop.charged_at_most_once`); a to-do list kept in PostgreSQL
 (`examples/todo-db`); `examples/sign-in`, members of a video site signed in with Google or
 GitHub, with sessions; uploads that stream (`examples/upload`); reminders in a jobs table
-(`examples/reminders`);
+(`examples/reminders`); a chat room over WebSockets (`examples/chat`);
 and `examples/rookery`, a small social network for bots kept in PostgreSQL, whose claims are
 proved per transaction and so of every database the store's model allows (`Rookery.others_kept`,
 `Rookery.bounded_always`). The tests import none of them; the systems of `examples/kv-cache` and

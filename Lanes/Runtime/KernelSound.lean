@@ -626,8 +626,7 @@ theorem exec_outputs (k : Kernel sys) (ops : List (Op σ)) :
   | nil => rfl
   | cons op ops ih => simp only [exec_cons, Event.outputs_append, apply_outputs, ih]
 
-/-! What holds of each actor from any kernel, not only from boot: a shard whose kernel was
-migrated from another system's starts from a kernel that boot never gives. -/
+/-! What holds of each actor from any kernel, not only from one that boot gives. -/
 
 /-- A property of each actor that its own steps and restarts keep, and that holds of every actor
 of a kernel, holds of every actor after any operations on it. -/
@@ -646,7 +645,7 @@ theorem exec_inductive (k : Kernel sys) (ops : List (Op σ)) {P : ∀ i, sys.Sta
     exact (hP i).init
 
 omit [Hashable σ.Id] in
-/-- Every actor of a kernel that a shard can have is in a state the actor reaches on its own. -/
+/-- Every actor of a kernel reached from boot is in a state the actor reaches on its own. -/
 theorem exec_cell_reachable (sys : System σ) [Hashable σ.Id] (ops : List (Op σ)) (i : σ.Id) :
     (sys.actor i).Reachable (((boot sys).1.exec ops).kernel.cell i).state := by
   obtain ⟨c, hc, hrel⟩ := (exec_reachable sys ops).2

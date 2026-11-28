@@ -428,7 +428,7 @@ def holding (reply : ByteArray) : Async (TCP.Socket.Server × UInt16) := do
 /-- One fetch to each port, all at once. Answers what came back and after how many
 milliseconds the last of it did; an answer that takes longer than `patience_ms` is missing.
 The wait is on `result?`: `await` on a promise dropped unresolved blocks the thread that drops
-it, here the shard as it stops. -/
+it, here the runtime as it stops. -/
 def fetchAll (config : Client.Config) (ports : List UInt16) (patience_ms : Nat) :
     Async (List (Nat × Option Nat) × Nat) := do
   let reported ← IO.mkRef #[]
