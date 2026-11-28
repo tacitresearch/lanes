@@ -47,6 +47,9 @@ proved function tells it to.
 | The checker | `Lanes/Check/`, `Lanes/Semantics/{Monitor,MonitorSound}.lean` | `Check.search_sound`, `Check.system_sound_of_respects`, `Check.refines_traces` |
 | The proof layer | `Lanes/Semantics/` | refinement, specs, fairness, leads-to |
 | Data and the standard library | `Lanes/Data/`, `Lanes/Lib/` | `Json.Fields.readObject_object`, `Json.Codec.ofAlts`, `Bytes.same_iff`, `Json.parse_iff`, `Url.parse_print` |
+| Structured logs | `Lanes/Lib/{Log,LogSound}.lean`, `Lanes/Runtime/IO/Log.lean` | `Log.render_oneLine`, `Log.parse_render`; writing a line is trusted |
+| Forms and uploads | `Lanes/Lib/Mime/{Multipart,MultipartSound}.lean`, `Lanes/Web/Http/Basic.lean` | `Multipart.parse_write`, `Multipart.parse_tooLarge`, `Multipart.length_le_of_parse`, `Multipart.headers_le_of_parse`, `Multipart.filename?_file`; compared with Go's `mime/multipart` |
+| Compression | `Lanes/Lib/Compress/{Checksum,Inflate,Deflate,Gzip}.lean`, `Lanes/Web/Http/Compress.lean` | `Inflate.size_le`, `Gzip.size_le`, `Zlib.size_le`; compared with Go's `compress/flate`, `gzip` and `zlib` |
 | Sign-in with OAuth 2.0 and OpenID Connect | `Lanes/Web/Auth/{Jose,IdToken,OAuth}.lean`, `Lanes/Web/IO/SignIn.lean`, the presets `Lanes/Services/Oidc/` | `OAuth.check_ok`, `OAuth.Used.accepted_once`, `OAuth.Used.length_claim`, `OAuth.IdToken.verify_accepted`, `Jose.verify_ok`, `OAuth.Keys.no_fetch_within`; the edge is trusted, tested end to end against a provider run in the test |
 | Bound C | `native/lanes.c`, `Lanes/Lib/Crypto/Native.lean`, `Lanes/Outside/IO/FileSystem.lean`; `native/verify.c`, `Lanes/Lib/Crypto/Verify.lean`; `native/sign.c`, `Lanes/Lib/Crypto/Sign.lean` | trusted; tested against the Lean references and published vectors |
 | TLS client | `native/tls.c`, `Lanes/Web/IO/Tls.lean` | trusted; tested against `openssl s_server` |
@@ -714,7 +717,9 @@ expire, and an answer within the deadline replaces them while they are still han
 timeouts. A task in `Lanes/Services/Aws/IO/Credentials.lean` only performs. SES's `SendEmail` is a JSON document
 proved to read back with exactly its recipients (`Ses.toAddresses_json`), its answers read as
 the email model's (`Ses.Answer.modelled`), and runs against a fake SES and against moto's SES
-are ones the model allows; SES takes no key, so each send is a request without one. SQS's
+are ones the model allows; SES takes no key, so each send is a request without one. An email
+that must be sent once goes through an outbox: a job with one attempt is sent at most once
+(`Lanes/Services/Aws/README.md`). SQS's
 calls (`Aws.Sqs`: create a queue, send, receive, delete) are data, with no handler.
 CloudFront's signed URLs and cookies (`Aws.CloudFront`) are pure: a canned policy is the
 document AWS gives for the URL and the time (`CloudFront.cannedPolicy_eq`), CloudFront's base64
@@ -736,6 +741,7 @@ Where: `Lanes/Services/Aws/`, its tests in `Tests/Aws/`.
 | A link or a form signed with credentials that expire ends no later than they do, and no later than asked | `S3.expiryWithin_le`, `Lanes/Services/S3/Basic.lean`; gate `Tests/Axioms/Services.lean`; `Tests/Aws/Imds.lean` against a fake metadata service and the fake S3 | The source gives the true expiry (`Refresh.currentHeld_creds`); the wall clock is right | proved; the IO trusted |
 | A message sent through SES carries exactly the recipients given | `Aws.Ses.toAddresses_json`, `Aws.Ses.json_parse`, `Lanes/Services/Aws/SesSound.lean`; a fake SES that reads them from the JSON | That SES reads the document as `Json.parse` does | proved; tested against a fake |
 | SES does only what the email model allows | A run through `Ses.handler` against a fake SES checked with `Outside.allows`, `Tests/Aws/Ses.lean`; and against moto's SES, a sender refused then verified, a send timed out, `oracles/moto/ses.jsonl` | That moto answers as SES does; not run against SES | trusted; tested against moto's SES, nightly |
+| An email sent from an outbox whose jobs have one attempt is sent at most once; with two, it may be sent twice | `Tests/Worker.lean`: the worker beside the store's model and SES's (`Aws.Ses.outside` through `Aws.Ses.jobPort`), with a crash, a restart, lost answers and lost commits that take effect late; at most once rests on `Jobs.Config.claimed` and `Queue.claim_attempts` | `attempts_max := 1` and no period; `Ses.perform` makes one call for each attempt (TRUSTED); an attempt whose answer is lost leaves its job failed, sent or not | checked |
 | A CloudFront canned policy is byte for byte the document AWS gives for the URL and the time | `Aws.CloudFront.cannedPolicy_eq`, `Lanes/Services/Aws/CloudFrontSound.lean`; gate `Tests/Axioms/Services.lean` | That AWS's document is botocore 1.44.12's and AWS's SDKs' (`docs/decisions/D82-cloudfront-signed-urls.md`); not run against CloudFront | proved |
 | CloudFront's base64 reads back, and every parameter and cookie of a signed link needs no escaping, so every cookie is set, for a path and a domain that need no escaping | `Aws.CloudFront.decode_encode`, `Aws.CloudFront.fields_safe`, `Aws.CloudFront.cookies_valid`; gate `Tests/Axioms/Services.lean` | None | proved |
 | A CloudFront signed URL is the one botocore writes, signature included | `Tests/Aws/CloudFront.lean` against botocore 1.44.12's `CloudFrontSigner` with `cryptography`'s signatures on generated links, canned and custom, RSA and P-256, SHA-1 and SHA-256; every difference a resource ours refuses | That botocore and AWS's SDKs write what CloudFront takes; not run against CloudFront | tested |
@@ -906,6 +912,7 @@ Where: `Lanes/Db/{Jobs,JobsSound,Worker,WorkerSound,Once,OnceSound}.lean`,
 | Behind a service that honours keys, every effect the service may have had is under the key of a job, and of its work, in every database the store may hold | `Worker.slots_held`; gate `Tests/Axioms/Db.lean` | As for `Worker.committed_only` | proved |
 | An application's transaction that only adds jobs (`Queue.Adds`) keeps the table, is on it, and keeps any property of each job it adds that no claim or finish changes | `Queue.keeps_of_adds`, `Queue.onTable_of_adds`, `Queue.fixed_of_adds`, `Queue.handler_fixed`, `Queue.enqueue_adds`; gate `Tests/Axioms/Db.lean` | None | proved |
 | A job done had an attempt the service took | `Tests/Worker.lean`: beside the store's model and an idempotent service, with crashes and lost answers | | checked |
+| With one attempt per job (`attempts_max := 1`, no period), each job is attempted at most once, so a service that takes no key has each effect at most once | `Tests/Worker.lean`: beside the store's model and SES's, with a crash, a restart and lost answers; from `Jobs.Config.claimed` and `Queue.claim_attempts` | An attempt not answered leaves its job failed, the effect had or not | checked |
 | The worker on PostgreSQL: three effects, one written twice under one key, one refused once; each attempt under its job's id, every job done | `Tests/Worker.lean`, when `LANES_POSTGRES` names a server | | tested against PostgreSQL 16; CI runs none |
 
 ### Limits
@@ -1105,6 +1112,9 @@ Also:
 - SHA-256, HMAC-SHA-256, the comparison of byte strings, and Argon2id from OpenSSL's libcrypto (`Native`, bound from `native/lanes.c`), random bytes from its `RAND_bytes` (`Lanes.randomBytes`), with SHA-256, HMAC-SHA-256 and the comparison also in pure Lean as references, both tested against the NIST and RFC 4231 vectors and compared on thousands of random inputs (`Bytes.same_iff`, `Bytes.unhex?_hex` proved).
 - The token bucket of x/time/rate with exact arithmetic (`RateLimit.allowed_le`: at most `burst + rate · w` in a window of `w`; `RateLimit.allow_after_reserve`), compared with Go's on generated cases.
 - URI references (RFC 3986: `Url.parse_print`, resolution as §5.2 with §5.4's examples evaluated and no dot segment left, `Url.dotFree_resolve`, idempotent normalization, `Url.normalize_normalize`), compared with Go's standard library on generated cases.
+- Structured logs (`Lanes/Lib/Log.lean`): a record of a time, a level, a message, attributes and a request id, rendered as one line of JSON in the field order of Go's `slog`, with no control character whatever it holds (`Log.render_oneLine`) and read back by the JSON parser as the record (`Log.parse_render`); a `Log.Logger` writes records at or above its level to standard error or a function (`Lanes/Runtime/IO/Log.lean`). The runtime's own faults and the server's access log are written through it. The logger and what it renders with are in the lowest package (`docs/decisions/D120-stdlib-wave-1.md`).
+- `multipart/form-data` (RFC 7578, RFC 2046 §5.1): `Multipart.parse` within limits on the body's size, the parts and each part's header lines, refusing what is over them (`Multipart.parse_tooLarge`, `Multipart.length_le_of_parse`, `Multipart.headers_le_of_parse`), and `Multipart.write`, read back by `parse` for parts that are `valid` and `clear` of the delimiter (`Multipart.parse_write`); a field's name and a file's name read back (`Multipart.name?_field`, `Multipart.filename?_file`). Compared with Go's `mime/multipart` on generated and edited bodies, where Go is laxer (`oracles/README.md`). `Request.form` reads a multipart body's text fields and `Request.file?` its files; `Loopback.postParts` posts one in a test.
+- DEFLATE, gzip and zlib's format (RFC 1951, 1952, 1950) in pure Lean (`Lanes/Lib/Compress/`): `Inflate` decodes every block type, bounded by its `max`, which no output passes (`Inflate.size_le`, `Gzip.size_le`, `Zlib.size_le`), and is compared with Go's on streams our encoder writes, on dynamic blocks with codes made at random, and on those edited; `Deflate` writes the fixed code with matches, or stored blocks. CRC-32 is compared with its bitwise definition. The server compresses responses with gzip for clients that take it when `ServerConfig.compression` is set, and the client asks for gzip and decodes gzip and `deflate` within `maxResponseBytes` (`Lanes/Web/Http/Compress.lean`, tested over a socket in `Tests/Compress.lean`).
 - `lanes_data` (a structure or an inductive type declared once, deriving JSON, a table, `Enum` and a field-by-field `LawfulBEq` from the declaration's text, without linking `Lean`).
 
 ### Limits
@@ -1114,6 +1124,9 @@ Also:
 - A table's columns are 64-bit: `Int` and `Nat` have no column, since a value that does not fit would not read back.
 - `Path.under` reads text, not the file system: a symbolic link below the root can lead outside it.
 - IPv6 zones (`fe80::1%eth0`) are refused, also in URLs, and a leap second (`23:59:60`) is not a time.
+- `Deflate` has no code of its own per block, so it compresses text less than zlib does; that `Inflate` reads back what `Deflate` writes is tested and compared with Go, not proved.
+- A multipart body is read whole, as the server reads every body: a large upload is bounded by `ServerConfig.maxBodyBytes`, or streams in pieces (`ServerConfig.streams`) and is then not parsed as a form. Header lines of a part are read as RFC 5322 has them now: no folding, names that are tokens, values in UTF-8.
+- The server compresses on the connection's thread and only whole responses, not streamed ones; it does not compress by default, since a compressed page that holds a secret and text an attacker chose leaks the secret through its size (BREACH).
 
 ## Bound C
 

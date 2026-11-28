@@ -31,7 +31,7 @@ every module a row names exists, and so does every path it cites.
 
 | Folder | Reference | Version | Pinned in | The reference for |
 | --- | --- | --- | --- | --- |
-| `oracles/go` | Go's standard library, `golang.org/x/time` and Prometheus's `expfmt` | Go 1.24.7, x/time 0.11.0, prometheus/common 0.67.5 | `oracles/go/go.mod`, `oracles/go/go.sum` | Base64, CSV, paths and globs, HTML's character references, IP addresses, times, JSON, media types, rate limits, URLs, XML, mail addresses, the metrics page; and, with Node and h11 (`oracles/go/requests/requests.py`, by hand), the request reader |
+| `oracles/go` | Go's standard library, `golang.org/x/time` and Prometheus's `expfmt` | Go 1.24.7, x/time 0.11.0, prometheus/common 0.67.5 | `oracles/go/go.mod`, `oracles/go/go.sum` | Base64, CSV, paths and globs, HTML's character references, IP addresses, times, JSON, media types, rate limits, URLs, XML, mail addresses, the metrics page, multipart bodies, DEFLATE, gzip and zlib; and, with Node and h11 (`oracles/go/requests/requests.py`, by hand), the request reader |
 | `oracles/cbor2` | cbor2 | 6.3.0 | `oracles/cbor2/requirements.txt` | CBOR: what the decoder reads, and the deterministic encoding against cbor2's canonical one |
 | `oracles/botocore` | botocore, and `cryptography` for the signatures it is given | 1.44.12, cryptography 50.0.2 | `oracles/botocore/requirements.txt` | Signature Version 4; CloudFront's signed URLs (`oracles/botocore/cloudfront.jsonl`), signed with the published test keys of `oracles/botocore/keys/` |
 | `oracles/jwcrypto` | jwcrypto | 1.6.2 | `oracles/jwcrypto/requirements.txt` | JWS in compact form and JWK Sets |
@@ -45,6 +45,10 @@ every module a row names exists, and so does every path it cites.
 
 | Module | Oracle | Or why not |
 | --- | --- | --- |
+| `Lanes/Lib/Compress/Checksum.lean` | `oracles/go/flate` | Through gzip's and zlib's checks; CRC-32 also against its bitwise definition and the published check values (`Tests/Compress.lean`) |
+| `Lanes/Lib/Compress/Deflate.lean` | `oracles/go/flate` | What it writes, read by Go in the oracle's cases |
+| `Lanes/Lib/Compress/Gzip.lean` | `oracles/go/flate` | Known: a header with a reserved flag, which RFC 1952 has a decoder refuse and Go reads |
+| `Lanes/Lib/Compress/Inflate.lean` | `oracles/go/flate` | |
 | `Lanes/Lib/Crypto/Certificate.lean` | `Tests/PostgresTls.lean` | The hash for channel binding of certificates `openssl` made, against `openssl dgst`, and accepted by PostgreSQL 16 |
 | `Lanes/Lib/Crypto/Hmac.lean` | | Not a format: RFC 4231's vectors, and OpenSSL on thousands of inputs (`Tests/Crypto.lean`) |
 | `Lanes/Lib/Crypto/Md5.lean` | | Not a format: RFC 1321's examples, and the digests psql sent in the recorded sessions (`Tests/Postgres.lean`) |
@@ -75,8 +79,10 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Lib/Encoding/Json/Parser.lean` | `oracles/go/json` | |
 | `Lanes/Lib/Encoding/Json/Printer.lean` | `oracles/go/json` | Go parses what the printer writes in the parser's cases; proved to read back (`Json.parse_compress`) |
 | `Lanes/Lib/Glob.lean` | `oracles/go/path` | Known: `**` as a whole name of a pattern matches across `/`, where Go reads it as `*` |
+| `Lanes/Lib/Log.lean` | | Proved one line of JSON text that the parser reads back as the record (`Log.render_oneLine`, `Log.parse_render`); its fields in `slog`'s order checked by hand (`Tests/Log.lean`) |
 | `Lanes/Lib/Metrics.lean` | `oracles/go/expfmt` | |
 | `Lanes/Lib/Mime/MediaType.lean` | `oracles/go/mime` | |
+| `Lanes/Lib/Mime/Multipart.lean` | `oracles/go/multipart` | Go's `Reader` is laxer, each a `known` difference in `Tests/Oracle/Multipart.lean`: it reads a body with no delimiter as no parts, takes a bare line feed for CR LF, a delimiter not on a line of its own as text, header names that are no tokens, folded header lines, headers that are not UTF-8, and a body that ends after a delimiter with no last delimiter; ours refuses them. Proved to read back what it writes (`Multipart.parse_write`) |
 | `Lanes/Lib/Net/Ip.lean` | `oracles/go/netip` | |
 | `Lanes/Lib/Net/Percent.lean` | `oracles/go/url` | Through the URL's cases, which decode and encode with it (`Tests/Oracle/Url.lean`) |
 | `Lanes/Lib/Net/Url.lean` | `oracles/go/url` | |
@@ -98,6 +104,7 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Web/Html/Syntax.lean` | | The template syntax, elaborated to `Html.Basic`'s values |
 | `Lanes/Web/Html/Unescape.lean` | `oracles/go/html` | Known: Go reads `&#x;` as U+FFFD and keeps a decimal reference of one digit without `;`, where the WHATWG standard keeps the first as written and reads the second |
 | `Lanes/Web/Http/Basic.lean` | | HTTP as data, not text |
+| `Lanes/Web/Http/Compress.lean` | | Decisions on a response and its codings, not a format: tested in `Tests/Compress.lean`; its bytes are `Gzip`'s |
 | `Lanes/Web/Http/Conn.lean` | | A connection's decisions, proved (`Lanes/Web/Http/ConnSound.lean`); its bytes are `Wire`'s and `ReadRequest`'s |
 | `Lanes/Web/Http/Cookie.lean` | | Proved to read back what it writes (`Lanes/Web/Http/CookieSound.lean`); Go's `http.ParseCookie` is owed |
 | `Lanes/Web/Http/Front.lean` | | Decisions, not a format |

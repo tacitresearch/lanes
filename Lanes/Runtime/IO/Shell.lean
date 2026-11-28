@@ -10,6 +10,7 @@ public import Std.Time
 public import Lanes.Runtime.Peek
 public import Lanes.Runtime.Sched
 public import Lanes.Runtime.IO.Park
+public import Lanes.Runtime.IO.Log
 
 /-!
 The runtime runs a system's actors free, on worker threads, as Go and Tokio run theirs. Each
@@ -85,6 +86,9 @@ structure Runtime.Config where
   stepLimitMs : Nat := 30000
   /-- What the watchdog does with a step that has run longer than `stepLimitMs`. -/
   onStuck : Runtime.Stuck → IO Unit := Runtime.Stuck.restart
+  /-- Where the shard reports what goes wrong outside the system: an output handler that failed,
+  a worker stopped on an error. -/
+  log : Log.Logger := {}
 
 namespace Runtime
 
@@ -223,11 +227,12 @@ private def home (rt : Runtime sys) : BaseIO Nat :=
 private def ledgerDo {α : Type} (rt : Runtime sys) (f : Ledger → α × Ledger) : BaseIO α :=
   rt.ledger.modifyGet f
 
-private def handOver (onOutput : σ.Out → Async Unit) (outputs : List σ.Out) : BaseIO Unit := do
+private def handOver (log : Log.Logger) (onOutput : σ.Out → Async Unit) (outputs : List σ.Out) :
+    BaseIO Unit := do
   for out in outputs do
     match ← Parker.wait (← (onOutput out).toBaseIO) with
     | .ok () => pure ()
-    | .error e => discard (IO.eprintln s!"lanes: output handler failed: {e}").toBaseIO
+    | .error e => log.error "output handler failed" [("error", .str (toString e))]
 
 private def arm (rt : Runtime sys) (i : σ.Id) (armed : List (σ.Msg i × Kernel.Due)) :
     BaseIO Unit := do
@@ -321,7 +326,7 @@ private def step (rt : Runtime sys) (w : Nat) (onOutput : σ.Out → Async Unit)
     if stops then rt.sending.unlockWrite
     else if sends then rt.sending.unlockRead
     rt.arm i c.armed
-    handOver onOutput c.outputs
+    handOver rt.config.log onOutput c.outputs
     return some (some state,
       { gone := (if j.work.consumes then 1 else 0) + c.dropped, before, after })
 
@@ -401,7 +406,7 @@ private def boot (rt : Runtime sys) (onOutput : σ.Out → Async Unit) : BaseIO 
     rt.ledgerDo fun l => ((), l.pushed c.sends.length)
     for e in c.sends do rt.pushTo 0 e.dst (.msg (some i) e.msg)
     rt.arm i c.armed
-    handOver onOutput c.outputs
+    handOver rt.config.log onOutput c.outputs
     rt.ledgerDo fun l => ((), { l with timers := l.timers + after })
 
 /-- The watchdog's thread: every quarter of `stepLimitMs`, a step that has run longer than it is
@@ -436,7 +441,7 @@ private def run (rt : Runtime sys) (onOutput : σ.Out → Async Unit) : IO Unit 
   rt.timer.unpark
   discard <| IO.wait timer
   if let some e := error then
-    discard (IO.eprintln s!"lanes: a worker stopped on an error: {e}").toBaseIO
+    rt.config.log.error "a worker stopped on an error" [("error", .str (toString e))]
   let (room, idle) ← rt.ledgerDo Sched.Ledger.close
   for p in room do p.resolve ()
   for p in idle do p.resolve false
