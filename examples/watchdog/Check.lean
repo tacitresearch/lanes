@@ -1,5 +1,6 @@
 import Lanes
 import Watchdog
+import Lanes.Testing
 
 /-!
 The watchdog under the fair scheduler, run by `lake test`. The fair scheduler takes the event
@@ -42,8 +43,5 @@ def tests : List (String × Bool) :=
     ("checker: with timers in any order the dog may bark while the keeper pings",
       checked.witnesses.length == 1) ]
 
-def main : IO UInt32 := do
-  let failed := tests.filter (!·.2)
-  for (name, ok) in tests do
-    IO.println s!"{if ok then "ok  " else "FAIL"} {name}"
-  return if failed.isEmpty then 0 else 1
+def main (args : List String) : IO UInt32 :=
+  Lanes.Testing.report args (Lanes.Testing.Result.tests tests .check)

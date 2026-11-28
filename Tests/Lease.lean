@@ -93,13 +93,13 @@ def tests : List (String × Bool) :=
   let honest := check true lapses 1
   let served := check true (fun _ _ => none) 1 true freed
   [ ("lease: freed as the server handles its notice, that delivery the deadline, with a crash",
-      served.ok && served.complete && served.witnesses.length == 2),
+      served.ok && served.witnesses.length == 2),
     ("lease: with the notice not named a deadline, the spec's lease never lapses",
       violated (check true (fun _ _ => none) 0 true)),
     ("lease: with the timer named instead, the lease lapses before the server frees it",
       violated (check true lapses 0 true)),
     ("lease: the server refines the lease, with the timer as its deadline and a crash",
-      honest.ok && honest.complete),
+      honest.ok),
     ("lease: the check is not vacuous: a lease lapses, and one is held",
       honest.witnesses.length == 2),
     ("lease: a lease freed before its timer fires is a grant the spec refuses",

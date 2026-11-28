@@ -1,5 +1,7 @@
 # D38. Types are declared inside a command that derives what Lean's handlers cannot
 
+Status: Accepted
+
 Around Raft's one actor stood a codec for each of its eight types, written field by field
 beside the declaration, and a `BEq` with its law written by hand for the node, whose machine
 may be a function. Lean derives instances with handlers that run in the elaborator, and an

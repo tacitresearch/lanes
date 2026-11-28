@@ -136,13 +136,57 @@ structure Report (S L : Type) where
   collide are taken as one, and a pass, even complete, is not exhaustive. -/
   fingerprinted : Bool := false
 
+/-- What a search's result says. Only `complete` is what the soundness theorems cover
+(`Check.search_sound`, `Check.system_sound_of_respects`). -/
+inductive Verdict where
+  /-- No property failed, and every reachable state within the constraint was explored. -/
+  | complete
+  /-- No property failed in the part explored, but a bound cut the search short, or states were
+  told apart by their hash alone: the rest of the instance is not covered. -/
+  | bounded
+  | failed
+  deriving DecidableEq, Repr
+
+namespace Verdict
+
+/-- The exit code of a program that reports this verdict: a bounded pass is not a complete one,
+so it does not exit 0. -/
+def exitCode : Verdict → UInt32
+  | .complete => 0
+  | .failed => 1
+  | .bounded => 2
+
+end Verdict
+
 namespace Report
 
 variable {S L : Type}
 
-/-- No property failed. Only with `complete` is that a statement about the whole instance. -/
+def verdict (r : Report S L) : Verdict :=
+  if r.failure.isSome then .failed
+  else if r.complete && !r.fingerprinted then .complete
+  else .bounded
+
+/-- A complete pass: no property failed and every reachable state was explored. -/
 def ok (r : Report S L) : Bool :=
+  r.verdict == .complete
+
+/-- No property failed in the part explored. A bounded search passes this way. -/
+def passed (r : Report S L) : Bool :=
   r.failure.isNone
+
+theorem ok_iff (r : Report S L) :
+    r.ok = true ↔ r.failure = none ∧ r.complete = true ∧ r.fingerprinted = false := by
+  unfold ok verdict
+  cases r.failure <;> cases r.complete <;> cases r.fingerprinted <;> simp
+
+theorem passed_iff (r : Report S L) : r.passed = true ↔ r.failure = none := by
+  unfold passed
+  cases r.failure <;> simp
+
+theorem exitCode_eq_zero_iff (r : Report S L) : r.verdict.exitCode = 0 ↔ r.ok = true := by
+  unfold ok
+  cases r.verdict <;> simp [Verdict.exitCode]
 
 end Report
 

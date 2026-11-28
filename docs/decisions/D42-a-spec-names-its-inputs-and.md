@@ -1,6 +1,8 @@
 # D42. A spec names its inputs and outputs, and time passes in it as deadlines the system's timers are
 
-The ledger (`systems/ledger/README.md`, friction log) found two limits of `Service`.
+Status: Accepted
+
+The ledger (`examples/ledger/README.md`, friction log) found two limits of `Service`.
 
 *A spec of inputs and outputs.* `Service In Out S` replaces `Service σ S`: a spec reads only
 the inputs and outputs, so it is written before the actors exist, and the system-level notions
@@ -9,7 +11,7 @@ monitor is `Check.Monitor In Out S`, and `Visible In Out` is what the outside wo
 statement is the old one with `σ` read as `σ.In` and `σ.Out`. One thing is lost at call sites: a
 spec no longer fixes the signature, so where nothing else in the arguments does before a
 hypothesis about a check is unified, the signature is named (`Check.refines_sound (σ := sig K V
-F) spec ...` in `Tests/SystemSound.lean` and `systems/raft-kv/RaftKVProofs/Checked.lean`);
+F) spec ...` in `Tests/SystemSound.lean` and `examples/raft-kv/RaftKVProofs/Checked.lean`);
 without it the elaborator unfolds the check itself and runs out of time.
 
 *Time.* The semantics has no clock: an armed timer may fire at any moment, in any order with the
@@ -26,7 +28,7 @@ firing. Three ways of giving a spec time were weighed.
   variables compared with it, and a step that advances time is a step like any other. It needs
   the system's timers to fire at the time they were armed for, which the semantics does not
   model, and every proof about timers would change. It is the right model for a system that
-  reads the time (`Lanes/Env/Clock.lean`): there the time is an input, and a `Service` already
+  reads the time (`Lanes/Outside/IO/Clock.lean`): there the time is an input, and a `Service` already
   sees it.
 - *Deadlines passing, visible, matched to the system's timers.* In timed I/O automata (Lynch and
   Vaandrager, *Forward and backward simulations, part II: timing-based systems*, 1996; Kaynar,
@@ -78,11 +80,11 @@ Limits:
   serves it at another, as the ledger does (the user checks the session, the ledger serves),
   refines a spec without deadlines, but not one whose deadline is seen at the deciding actor:
   a request decided before the deadline and served after it can see a request that arrived
-  after the deadline (`systems/ledger`, found in 43 steps). The cure is to let the deadline pass
+  after the deadline (`examples/ledger`, found in 43 steps). The cure is to let the deadline pass
   where requests are served, by naming the delivery of a notice as the deadline; `Deadlines`
   names timers only, and extending it to deliveries is the next step.
 
-Used: the ledger's spec (`systems/ledger/Ledger/Spec.lean`) has a lock lifting and a session
+Used: the ledger's spec (`examples/ledger/Ledger/Spec.lean`) has a lock lifting and a session
 ending as deadlines, and its system is checked against them with its timers firing at any
 moment (12,577 states, pass); a lockout that does not lock is found in 26 steps. A lease in
 `Tests/Lease.lean` refines its spec with its timer named the lapse, and does not when the timer

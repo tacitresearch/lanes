@@ -1,5 +1,7 @@
 # D93. Each generated line is about one item, and unreleased changes are fragments
 
+Status: Partly superseded by D100-each-doc-has-one-job.md (the status fragments)
+
 The first recommendation of the structure proposal (pull request #83). Pull requests were taken
 off the merge queue for conflicts almost every time another one landed: 19 dequeues in 20 pull
 requests, and 48 of 135 commits only wrote the generated files again. GitHub's merge ignores
@@ -9,7 +11,7 @@ few lines:
 - the last row of the inventory's summary, `| All | … |`, which every new definition changed;
 - the counts in the inventory's evidence ("and 22 more"), which every new test of a definition
   changed;
-- the rows of `docs/STATUS.md`, consecutive lines of one table, and the known limits of all
+- the rows of `docs/STATUS.md` (removed), consecutive lines of one table, and the known limits of all
   areas, one run of lines: git calls changes to neighbouring lines a conflict;
 - the end of the decisions' index, where every new decision was appended;
 - the README's total of trusted lines;
@@ -22,10 +24,10 @@ current. What it holds changes: each line is about one item, and no committed li
 the whole repository. Two pull requests then conflict only when they change the same item, or
 two items whose lines are neighbours.
 
-- `docs/INVENTORY.md` has no summary. An evidence cell names at most three items, in order, and
+- `docs/INVENTORY.md` (removed) has no summary. An evidence cell names at most three items, in order, and
   then "and others", with no count.
-- `docs/STATUS.md` has one section per area and per app, each from its fragment in
-  `docs/status/`, with a heading between neighbours. A fragment has one item per line, in sorted
+- `docs/STATUS.md` (removed) has one section per area and per app, each from its fragment in
+  `docs/status/` (removed), with a heading between neighbours. A fragment has one item per line, in sorted
   lists, which `lanes lint --fix` sorts; a new item lands at its own place, not at the end.
 - The decisions' index is sorted by slug, not by number.
 - The README names no total. `lake exe lanes stats` prints the totals, and CI writes them to the

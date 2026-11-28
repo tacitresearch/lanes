@@ -1,5 +1,7 @@
 # D61. Models of external systems: classes in Lanes, vendors in integrations
 
+Status: Accepted
+
 A system talks to things it does not contain through outputs and inputs (D26), and what such a
 thing may do is an `Outside` (`Lanes/Outside/Basic.lean`): the checker explores the system
 against it, and a recorded run of the real thing is tested against it with `Outside.allows`.

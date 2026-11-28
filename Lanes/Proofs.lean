@@ -33,6 +33,7 @@ public import Lanes.Runtime.ShardsSound
 public import Lanes.Web.Auth.TokenSound
 public import Lanes.Web.Html.BasicSound
 public import Lanes.Web.Html.HtmxSound
+public import Lanes.Web.Http.AdmitSound
 public import Lanes.Web.Http.ConnSound
 public import Lanes.Web.Http.CookieSound
 public import Lanes.Web.Http.FrontSound

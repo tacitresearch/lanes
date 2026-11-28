@@ -85,7 +85,7 @@ binary). For example `bench/profile.sh syscalls lanes 16 5`.
 Through GitHub: **Actions → Bench → Run workflow** (`.github/workflows/bench.yml`), or
 `gh workflow run bench.yml -f seconds=10 -f runs=3`. Inputs: `seconds`, `runs`, `servers` (all
 when empty), `require-idle` (on), `idle-wait-minutes` (30), `lean-threads` (the server's CPUs when empty) and `hosted`. It runs where the
-mutation gate runs (`docs/RUNNERS.md`): with the AWS variables set, on the warm machine, which
+mutation gate runs (`infra/README.md`): with the AWS variables set, on the warm machine, which
 it starts and, when no other run needs it, stops. The report is in the run's summary and in the
 artifact `bench-<run>-<attempt>`.
 

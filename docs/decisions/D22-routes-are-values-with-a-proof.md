@@ -1,6 +1,8 @@
 # D22. Routes are values with a proof; htmx attributes come from them
 
-`Lanes/Http/Route.lean`, `Lanes/Html/Htmx.lean`. A `Path α` is a printer and a parser with a
+Status: Accepted
+
+`Lanes/Web/Http/Route.lean`, `Lanes/Web/Html/Htmx.lean`. A `Path α` is a printer and a parser with a
 proof that parsing what was printed gives the value back. `Route.match?_link` follows for every
 route. Views take URLs and htmx attributes from routes (`Hx.request route value`), and a
 request is decoded with `Http.dispatch` over the same routes.

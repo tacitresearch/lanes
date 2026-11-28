@@ -86,7 +86,7 @@ def refused (dir : System.FilePath) (args : Array String) : IO Bool := do
 
 def live : IO (List (String × Bool)) := do
   unless ← Tests.Tls.hasOpenssl do
-    IO.println "sign: skipped the comparison with openssl, there is no openssl command"
+    IO.eprintln "sign: skipped the comparison with openssl, there is no openssl command"
     return []
   let (some rsa, some p256) := (rsa, p256) | return [("sign: the test keys are read", false)]
   let dir : System.FilePath := s!"{(← IO.getEnv "TMPDIR").getD "/tmp"}/lanes-sign-{← IO.monoNanosNow}"

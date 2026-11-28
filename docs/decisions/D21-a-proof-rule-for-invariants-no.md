@@ -1,6 +1,8 @@
 # D21. A proof rule for invariants no fault can break
 
-`Lanes/Actors/Monotone.lean`. `System.Inductive.of_monotone` proves an invariant under every
+Status: Accepted
+
+`Lanes/Proof/Monotone.lean`. `System.Inductive.of_monotone` proves an invariant under every
 environment model from five cases: the blank state, an input, an actor's step, an actor's
 recovery, and that removing messages, timers and outputs keeps it.
 

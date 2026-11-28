@@ -254,10 +254,10 @@ def tests : List (String × Bool) :=
   let (released, releasedZeros) := churned true strangers
   let again := (released.exec [.input (5, .set 3), .input (5, .ping), .input (5, .set 0),
     .input (5, .ping), .input (6, .ping), .batch 20]).outputs
-  [ ("release: side by side with a kernel that keeps every actor, nothing tells them apart",
-      r.ok && r.witnesses.length == 5),
-    ("release: whatever the shell does, the releasing kernel is the semantics with actors released",
-      f.ok && f.witnesses.length == 2),
+  [ ("release: side by side with a kernel that keeps every actor, nothing tells them apart, to depth 4",
+      r.passed && r.witnesses.length == 5),
+    ("release: whatever the shell does, the releasing kernel is the semantics with actors released, to depth 4",
+      f.passed && f.witnesses.length == 2),
     ("release: the kernel that keeps them grows with every identity touched",
       kept.cells.size == 2000 && keptZeros == 2000),
     ("release: a hundred thousand identities touched, and the kernel holds none of them",
@@ -268,7 +268,7 @@ def tests : List (String × Bool) :=
 def liveTests : Async (List (String × Bool)) := do
   let (saved, count, after) ← live true strangers
   let (keptSaved, _, _) ← live false (strangers / 5)
-  IO.println s!"release: {strangers} identities touched; {saved.size} images saved hold at most {saved.foldl max 0} actors, {keptSaved.foldl max 0} of {strangers / 5} without release"
+  IO.eprintln s!"release: {strangers} identities touched; {saved.size} images saved hold at most {saved.foldl max 0} actors, {keptSaved.foldl max 0} of {strangers / 5} without release"
   return [("release: a live shard touched by a hundred thousand identities stays small",
       count == strangers && saved.size ≥ 5 && saved.all (· ≤ 1)
         && keptSaved.foldl max 0 ≥ strangers / 10),

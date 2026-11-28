@@ -3,6 +3,7 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Google
+import Lanes.Testing
 
 /-!
 The preset against what Google published, as fetched on 2026-11-27 and kept in `recorded/`: its
@@ -43,8 +44,5 @@ def tests : List (String × Bool) :=
           && (url.splitOn "nonce=").length == 2 && (url.splitOn "code_challenge_method=S256").length == 2) ]
   | _, _ => [("google: the discovery document is read", false)]
 
-def main : IO UInt32 := do
-  let failed := tests.filter (!·.2)
-  for (name, _) in failed do IO.println s!"FAIL {name}"
-  IO.println s!"{tests.length - failed.length} passed, {failed.length} failed"
-  return if failed.isEmpty then 0 else 1
+def main (args : List String) : IO UInt32 :=
+  Lanes.Testing.report args (Lanes.Testing.Result.tests tests .test)

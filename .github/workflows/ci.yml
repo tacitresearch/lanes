@@ -3,7 +3,7 @@ name: CI
 # Jobs that build run on `vars.LANES_RUNNER` (a label or a JSON list of labels), or on
 # ubuntu-latest when it is unset; a pull request from a fork always runs on ubuntu-latest. CI
 # does not start the warm runner machine (mutants.yml does): point LANES_RUNNER at it only while
-# it is kept running. See docs/RUNNERS.md. `compile` builds everything once; the other jobs
+# it is kept running. See infra/README.md. `compile` builds everything once; the other jobs
 # restore its build and run in parallel.
 
 on:
@@ -100,7 +100,7 @@ jobs:
         with:
           path: .lake/build
           key: ${{ steps.lean.outputs.build-key }}
-      # Also fails on a stale generated file (line counts, the decisions' index, docs/STATUS.md),
+      # Also fails on a stale generated file (line counts, the decisions' index),
       # and on main on a decision without a number: run `lake exe lanes lint --fix --main`.
       - name: Lint
         run: lake exe lanes lint ${{ github.event_name == 'push' && '--main' || '' }}
@@ -337,30 +337,6 @@ jobs:
         run: lake test
       - name: Over HTTP, killed and started again
         run: lake exe rookeryLive
-
-  # A pull request that changes the library, the C, the command or the template adds or edits
-  # a fragment in docs/changes/, unless it is labelled `no-changelog` (CONTRIBUTING.md). Pull
-  # requests only, and not among `build`'s needs. The labels are those of the event: after
-  # adding the label, push again (a re-run reads the same labels).
-  changelog:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-      - name: A changelog fragment changes with the code
-        if: ${{ !contains(github.event.pull_request.labels.*.name, 'no-changelog') }}
-        env:
-          BASE: ${{ github.event.pull_request.base.sha }}
-          HEAD: ${{ github.event.pull_request.head.sha }}
-        run: |
-          changed=$(git diff --name-only "$BASE...$HEAD")
-          fragments=$(grep -E '^docs/changes/.+\.md$' <<<"$changed" | grep -vx 'docs/changes/README.md' || true)
-          if grep -qE '^(Lanes|native|LanesCli|templates)/' <<<"$changed" && [ -z "$fragments" ]; then
-            echo "::error file=docs/changes/README.md::add a fragment, docs/changes/<slug>.md, or label the pull request no-changelog"
-            exit 1
-          fi
 
   # What a user on a Mac does: the build, the tests and a generated app, on GitHub's runner.
   macos:

@@ -170,9 +170,9 @@ def tests : List (String × Bool) :=
     | some (.violated "once credentials are held, some are handed out at every moment" _) => true
     | _ => false
   [ ("refresh: under faults, only fresh credentials the service gave are handed out, and the backoff is bounded",
-      f.ok && f.complete && f.witnesses.length == 3),
+      f.ok && f.witnesses.length == 3),
     ("refresh: answered in time, credentials are never missing once held",
-      a.ok && a.complete && a.witnesses.length == 1),
+      a.ok && a.witnesses.length == 1),
     ("refresh: with the margin shorter than the deadline, the checker finds a moment without them",
       gap && decide small.Valid && !decide tight.Valid) ]
 

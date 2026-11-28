@@ -114,6 +114,7 @@ public import Lanes.Runtime.Kernel
 public import Lanes.Runtime.Pace
 public import Lanes.Runtime.Shard
 public import Lanes.Runtime.Wave
+public import Lanes.Runtime.WavePlan
 public import Lanes.Web.Auth.IdToken
 public import Lanes.Web.Auth.Jose
 public import Lanes.Web.Auth.Login
@@ -123,6 +124,7 @@ public import Lanes.Web.Auth.Token
 public import Lanes.Web.Html.Basic
 public import Lanes.Web.Html.Htmx
 public import Lanes.Web.Html.Syntax
+public import Lanes.Web.Http.Admit
 public import Lanes.Web.Http.Basic
 public import Lanes.Web.Http.Conn
 public import Lanes.Web.Http.Cookie

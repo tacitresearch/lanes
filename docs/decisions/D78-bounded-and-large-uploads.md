@@ -1,5 +1,7 @@
 # D78. Uploads bounded by a signed policy, and large ones in parts
 
+Status: Accepted
+
 D71 gave the browser presigned links to put and get an object. A presigned `PUT` signs the
 method, the key and the headers named, never the length, so whoever holds a link may put up to
 5 GB with it: the video site (`examples/videos`) handed every member a link to store as much as

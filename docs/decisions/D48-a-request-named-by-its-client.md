@@ -1,7 +1,9 @@
 # D48. A request named by its client takes effect once, and its answer may be handed over again
 
-`Lanes/Behaviours/Once.lean`, `Lanes/Semantics/Once.lean`, `Lanes/Check/Once.lean`,
-`Examples/{KV,KVProofs}.lean`. Every refinement theorem so far assumed that some link does not
+Status: Accepted
+
+`Lanes/Behaviours/Once/Basic.lean`, `Lanes/Semantics/Once.lean`, `Lanes/Behaviours/Once/Check.lean`,
+`Examples/{KV,KVProofs}.lean` (removed). Every refinement theorem so far assumed that some link does not
 duplicate: `Examples.KV.implements` that no link does, `RaftKV.implementsMachine` that no
 client's link to a node does, the gate's at-most-once that the link from outside does not. A
 client retries, and a retry is a duplicate. The answer of Raft's client sessions and of Stripe's

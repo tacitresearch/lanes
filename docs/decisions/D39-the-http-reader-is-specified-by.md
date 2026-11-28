@@ -1,9 +1,11 @@
 # D39. The HTTP reader is specified by writers, and its limit is on the response
 
+Status: Accepted
+
 `Response.read` was tested, not proved, and a statement of what it must do needed something to
-say "a response a server sends". `Lanes/Http/WireSpec.lean` now has writers of responses
+say "a response a server sends". `Lanes/Web/Http/WireSpec.lean` now has writers of responses
 (`Response.wire`, `wireChunked`, `wireToEnd`, `wireAfter`), in the library rather than the
-tests because they are the specification the theorems in `Lanes/Http/WireSound.lean` are stated
+tests because they are the specification the theorems in `Lanes/Web/Http/WireSound.lean` are stated
 against, and in a file of their own because no adapter runs them, so they are not trusted: the reader reads back what they write, at the last byte and not before. They write one
 form of each framing; the other forms a server may use (a reason phrase, leading zeros, chunk
 extensions, trailers) stay tested only, in `TRUSTED.md`.

@@ -20,7 +20,8 @@ globs = ["{{Name}}.+"]
 name = "{{name}}"
 root = "Main"
 
-# Model checks, run by `lake test`. Check before you prove (Lanes rule 5.1).
+# `lake test`: the model checks, then the proofs built with warnings as errors. Check before you
+# prove (Lanes rule 5.1).
 [[lean_exe]]
 name = "check"
 root = "Check"

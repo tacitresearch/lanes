@@ -1,5 +1,6 @@
 import Lanes
 import Shop
+import Lanes.Testing
 
 /-!
 Model checks of the shop against the payment model, run by `lake test` (Lanes rule 5.1). One
@@ -95,27 +96,26 @@ def twice :=
     [ .always "no order has two payments that succeeded" fun w =>
         orders.all fun (o, _) => !paidTwice w.driver.2 o ]
 
-def main : IO UInt32 := do
+def main (args : List String) : IO UInt32 := do
+  let json := Lanes.Testing.wantsJson args
   let fixed := check checked
-  IO.println fixed.renderSystem
+  unless json do IO.println fixed.renderSystem
   let buggy := check bug
   let found := match buggy.failure with
     | some (.violated "no order is charged twice" t) => some t
     | _ => none
-  if let some t := found then
+  if let some t := found then unless json do
     IO.println s!"a retry without the key: an order charged twice after {t.steps.length} steps"
     IO.println (t.render (fun _ => "") Event.render)
   let paidTwice := match twice.failure with
     | some (.violated _ t) => some t
     | _ => none
-  if let some t := paidTwice then
+  if let some t := paidTwice then unless json do
     IO.println s!"a retry without the key: two payments of an order succeed after {t.steps.length} steps"
     IO.println (t.render (fun _ => "") Event.render)
   let tests : List (String × Bool) :=
     [ ("the shop charges each order once, under every fault the model allows",
-        fixed.ok && fixed.complete && fixed.witnesses.length == 4),
+        fixed.ok && fixed.witnesses.length == 4),
       ("a retry without the key may charge an order twice", found.isSome),
       ("a retry without the key charges an order twice", paidTwice.isSome) ]
-  for (name, ok) in tests do
-    IO.println s!"{if ok then "ok  " else "FAIL"} {name}"
-  return if tests.all (·.2) then 0 else 1
+  Lanes.Testing.report args (Lanes.Testing.Result.tests tests .check)

@@ -1,7 +1,9 @@
 # D6. One executable definition of the semantics
 
+Status: Accepted
+
 `SysState.step : EnvModel σ → SysState sys → Event σ → Option (SysState sys)` in
-`Lanes/Actors/World.lean` is the meaning of a system. The scheduler, the model checker and trace
+`Lanes/Core/World.lean` is the meaning of a system. The scheduler, the model checker and trace
 replay call it; `Lanes.Semantics` wraps it as a CSLib `LTS`. It imports only `Std`.
 
 Why: no second model to keep in sync, and the checker is sound by construction
