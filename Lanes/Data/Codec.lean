@@ -20,6 +20,11 @@ written are not yet derived from them.
 
 Records are whole byte strings. Where one ends and the next begins is not a codec's concern:
 `Lanes.Frame` settles that, with its own proofs.
+
+Every reader is bounded by its input (rule 2.6), since the records may come from a damaged file
+or a peer. A list is the one reader that repeats, and it repeats as often as its count says, so
+it refuses a count larger than the records left. Each element takes at least one record for
+that: an element written as none, such as `()`, is written as one empty record instead.
 -/
 
 @[expose] public section
@@ -30,6 +35,10 @@ structure Codec (α : Type) extends Schema.Of α where
   write : α → List ByteArray
   read : List ByteArray → Option (α × List ByteArray)
   sound : ∀ a rest, read (write a ++ rest) = some (a, rest)
+  /-- Whether every value is written as at least one record. Only a list reads this: it pads
+  the elements of a codec without it. `false` is always safe. -/
+  consumes : Bool := false
+  consumes_write : consumes = true → ∀ a, write a ≠ [] := by simp
 
 namespace Codec
 
@@ -45,6 +54,8 @@ def bytes : Codec ByteArray where
     | b :: rest => some (b, rest)
     | [] => none
   sound _ _ := rfl
+  consumes := true
+  consumes_write _ _ := by simp
 
 def unit : Codec Unit where
   toOf := .unit
@@ -62,6 +73,8 @@ def string : Codec String where
     show (String.fromUTF8? s.toUTF8).map (·, rest) = _
     rw [fromUTF8?_toUTF8]
     rfl
+  consumes := true
+  consumes_write _ _ := by simp
 
 def nat : Codec Nat where
   toOf := .nat
@@ -73,6 +86,8 @@ def nat : Codec Nat where
     show ((String.fromUTF8? (toString n).toUTF8).bind String.toNat?).map (·, rest) = _
     rw [fromUTF8?_toUTF8]
     simp
+  consumes := true
+  consumes_write _ _ := by simp
 
 /-- One after the other. -/
 def pair (a : Codec α) (b : Codec β) : Codec (α × β) where
@@ -83,6 +98,11 @@ def pair (a : Codec α) (b : Codec β) : Codec (α × β) where
     let (y, rest) ← b.read rest
     return ((x, y), rest)
   sound x rest := by simp [List.append_assoc, a.sound, b.sound]
+  consumes := a.consumes || b.consumes
+  consumes_write h x := by
+    rcases Bool.or_eq_true_iff.mp h with h | h
+    · exact fun e => a.consumes_write h x.1 (List.append_eq_nil_iff.mp e).1
+    · exact fun e => b.consumes_write h x.2 (List.append_eq_nil_iff.mp e).2
 
 /-- A type written as another. `back` may refuse what `to` never produces. -/
 def map (c : Codec β) (to : α → β) (back : β → Option α) (h : ∀ a, back (to a) = some a) :
@@ -94,6 +114,8 @@ def map (c : Codec β) (to : α → β) (back : β → Option α) (h : ∀ a, ba
     let a ← back b
     return (a, rest)
   sound a rest := by simp [c.sound, h]
+  consumes := c.consumes
+  consumes_write hc a := c.consumes_write hc (to a)
 
 /-- A pair whose second part's type, and so its codec, depends on the first. -/
 def sigma {ι : Type} {β : ι → Type} (a : Codec ι) (b : ∀ i, Codec (β i)) :
@@ -105,6 +127,8 @@ def sigma {ι : Type} {β : ι → Type} (a : Codec ι) (b : ∀ i, Codec (β i)
     let (v, rest) ← (b i).read rest
     return (⟨i, v⟩, rest)
   sound x rest := by simp [List.append_assoc, a.sound, (b x.1).sound]
+  consumes := a.consumes
+  consumes_write h x e := a.consumes_write h x.1 (List.append_eq_nil_iff.mp e).1
 
 /-- Written as the value; read back only with the property. -/
 def subtype {p : α → Prop} [DecidablePred p] (c : Codec α) : Codec {a // p a} :=
@@ -140,11 +164,69 @@ def sum (a : Codec α) (b : Codec β) : Codec (α ⊕ β) where
     | _ => none
   sound x rest := by
     cases x <;> simp [List.append_assoc, nat.sound, a.sound, b.sound]
+  consumes := true
+  consumes_write _ x := by cases x <;> simp [nat]
 
 def option (c : Codec α) : Codec (Option α) :=
   ((sum unit c).map (fun | none => .inl () | some a => .inr a)
     (fun | .inl () => some none | .inr a => some (some a)) (by intro a; cases a <;> rfl)).withSchema
     (.option c.toOf)
+
+/-- `c`, with a value written as no records written as one empty record instead, so that it
+always consumes. -/
+def padded (c : Codec α) : Codec α where
+  toOf := c.toOf
+  write a := if c.consumes then c.write a else match c.write a with
+    | [] => [.empty]
+    | records => records
+  read records :=
+    if c.consumes then c.read records else do
+      let (a, rest) ← c.read records
+      if c.write a = [] then
+        match rest with
+        | pad :: rest => if pad.size = 0 then some (a, rest) else none
+        | [] => none
+      else some (a, rest)
+  sound a rest := by
+    by_cases hc : c.consumes
+    · simp [hc, c.sound]
+    · simp only [hc, Bool.false_eq_true, ↓reduceIte]
+      cases hw : c.write a with
+      | nil =>
+        have := c.sound a (.empty :: rest)
+        simp only [hw, List.nil_append] at this
+        simp [this, hw]
+      | cons r rs =>
+        have := c.sound a rest
+        simp only [hw, List.cons_append] at this
+        simp [this, hw]
+  consumes := true
+  consumes_write _ a := by
+    by_cases hc : c.consumes
+    · simpa [hc] using c.consumes_write hc a
+    · simp only [hc, Bool.false_eq_true, ↓reduceIte]
+      split <;> simp_all
+
+/-- Whether `records` has at least `n` records, looking at no more than `n`. -/
+def hasAtLeast : Nat → List ByteArray → Bool
+  | 0, _ => true
+  | _ + 1, [] => false
+  | n + 1, _ :: rest => hasAtLeast n rest
+
+theorem hasAtLeast_iff {n : Nat} {records : List ByteArray} :
+    hasAtLeast n records = true ↔ n ≤ records.length := by
+  induction n generalizing records with
+  | zero => simp [hasAtLeast]
+  | succ n ih => cases records <;> simp [hasAtLeast, ih]
+
+theorem length_le_flatMap (c : Codec α) (h : c.consumes = true) (as : List α) :
+    as.length ≤ (as.flatMap c.write).length := by
+  induction as with
+  | nil => simp
+  | cons a as ih =>
+    have : 0 < (c.write a).length := List.length_pos_iff.mpr (c.consumes_write h a)
+    simp only [List.length_cons, List.flatMap_cons, List.length_append]
+    omega
 
 def readMany (c : Codec α) : Nat → List ByteArray → Option (List α × List ByteArray)
   | 0, records => some ([], records)
@@ -159,14 +241,23 @@ theorem readMany_write (c : Codec α) (as : List α) (rest : List ByteArray) :
   | nil => rfl
   | cons a as ih => simp [readMany, List.append_assoc, c.sound, ih]
 
-/-- How many, then each. -/
+/-- How many, then each. Every element takes at least one record (`padded`), so a count larger
+than the records left is refused before any is read, and a list is never read longer than its
+records. -/
 def list (c : Codec α) : Codec (List α) where
   toOf := .list c.toOf
-  write as := nat.write as.length ++ as.flatMap c.write
+  write as := nat.write as.length ++ as.flatMap c.padded.write
   read records := do
     let (n, rest) ← nat.read records
-    readMany c n rest
-  sound as rest := by simp [List.append_assoc, nat.sound, readMany_write]
+    if hasAtLeast n rest then readMany c.padded n rest else none
+  sound as rest := by
+    have hlen : as.length ≤ (as.flatMap c.padded.write ++ rest).length := by
+      have := length_le_flatMap c.padded rfl as
+      simp only [List.length_append]
+      omega
+    simp [List.append_assoc, nat.sound, hasAtLeast_iff.mpr hlen, readMany_write]
+  consumes := true
+  consumes_write _ _ := by simp [nat]
 
 theorem extTreeMap_ofList_toList {κ : Type} {cmp : κ → κ → Ordering} [Std.TransCmp cmp]
     [Std.LawfulEqCmp cmp] (t : Std.ExtTreeMap κ α cmp) : .ofList t.toList cmp = t := by
