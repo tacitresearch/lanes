@@ -212,6 +212,32 @@ def pooled (port : UInt16) (trust : Tls.Trust) : Async (List (String × Bool)) :
     ("postgres pool: a connection handed back broken is replaced by a new one, to the name resolved again",
       replaced) ]
 
+/-- A URI with `sslmode=verify-full` and `sslrootcert`, read by `Settings.read`, opens over TLS;
+with the system's authorities, which do not hold the test's, it is refused; with
+`sslrootcert` under `~/.postgresql/root.crt`, the default, it opens. -/
+def fromSettings (port : UInt16) (certs : String) : Async (List (String × Bool)) := do
+  let home : System.FilePath := s!"{(← IO.getEnv "TMPDIR").getD "/tmp"}/lanes-home-{← IO.monoNanosNow}"
+  IO.FS.createDirAll (home / ".postgresql")
+  IO.FS.writeFile (home / ".postgresql" / "root.crt") (← IO.FS.readFile s!"{certs}/ca.pem")
+  let vars := [("HOME", home.toString), ("USER", "nobody")]
+  let env : Env IO := { Env.io with var := fun name => pure (vars.lookup name) }
+  let uri (query : String) :=
+    s!"postgresql://lanes_scram:scram-pw@localhost:{port}/lanes_test?{query}"
+  let open_ (conninfo : String) : Async (Option String) := do
+    match ← (Settings.read env conninfo).run with
+    | .ok s => opensWith (.ofSettings s) "SELECT ssl::text FROM pg_stat_ssl WHERE pid = pg_backend_pid()"
+    | .error _ => return none
+  let named ← open_ (uri s!"sslmode=verify-full&sslrootcert={certs}/ca.pem&channel_binding=require")
+  let system ← open_ (uri "sslrootcert=system")
+  let byDefault ← open_ (uri "sslmode=verify-full")
+  IO.FS.removeDirAll home
+  return [
+    ("postgres tls live: a URI with verify-full and sslrootcert opens over TLS, bound",
+      named == some "true"),
+    ("postgres tls live: with the system's authorities the test's certificate is refused", system.isNone),
+    ("postgres tls live: ~/.postgresql/root.crt is the authorities by default, as libpq's",
+      byDefault == some "true") ]
+
 def live : Async (List (String × Bool)) := do
   let openssl ← hasOpenssl
   let fromOpenssl ← if openssl then offline else
@@ -259,5 +285,6 @@ def live : Async (List (String × Bool)) := do
       relayedUnbound == some "1"),
     ("postgres tls live: libpq agrees: it binds directly, is refused through the relay, and is not when it does not bind",
       libpqDirect && !libpqRelayed && libpqRelayedUnbound) ] ++ (← pooled port trust)
+    ++ (← fromSettings port certs)
 
 end Tests.PostgresTls
