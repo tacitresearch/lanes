@@ -48,14 +48,15 @@ target sign pkg : FilePath := do
 @[default_target]
 lean_lib Lanes where
   -- The services and the optional parts of the standard library (CBOR, CSV, paths and globs,
-  -- the HTML sanitizer, WebSockets) are roots of their own, not imported by `Lanes`: a program
+  -- the HTML sanitizer, WebSockets, mail) are roots of their own, not imported by `Lanes`: a program
   -- that does not import one does not build it or link it.
   roots := #[`Lanes, `Lanes.Proofs, `Lanes.Semantics, `Lanes.Testing, `Lanes.Services,
     `Lanes.Services.S3.Testing, `Lanes.Lib.Encoding.Cbor, `Lanes.Lib.Encoding.Cbor.Sound,
     `Lanes.Lib.Encoding.Csv, `Lanes.Lib.Encoding.CsvSound, `Lanes.Lib.Path, `Lanes.Lib.PathSound,
     `Lanes.Lib.Glob, `Lanes.Web.Html.Sanitize, `Lanes.Web.Html.SanitizeSound,
     `Lanes.Web.Http.WebSocket, `Lanes.Web.Http.WebSocketSound,
-    `Lanes.Web.Http.WebSocketSession, `Lanes.Web.Http.WebSocketSessionSound]
+    `Lanes.Web.Http.WebSocketSession, `Lanes.Web.Http.WebSocketSessionSound,
+    `Lanes.Lib.Mail, `Lanes.Lib.Mail.Sound]
   moreLinkObjs := #[native, tls, verify, sign]
 
 /-! Files that modules embed with `include_str`, which Lake does not track. A library that `needs`

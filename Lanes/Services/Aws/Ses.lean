@@ -5,6 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Lanes
+public import Lanes.Lib.Mail.Basic
 
 /-!
 # Sending email with Amazon SES
@@ -13,8 +14,8 @@ SES API v2's `SendEmail`: `POST /v2/email/outbound-emails` on `email.<region>.am
 JSON document signed with Signature Version 4 for the service `ses`, answered with a
 `MessageId` or an error. A message here is a simple one: a sender, up to 50 recipients, a subject
 and a text body, an HTML body or both. Addresses are checked before anything is sent
-(`Address.of?`), and the document is proved to be JSON that reads back with exactly the
-recipients given (`toAddresses_json`).
+(`Mail.Address.of?`, shared with SMTP in `Lanes/Lib/Mail/Basic.lean`), and the document is
+proved to be JSON that reads back with exactly the recipients given (`toAddresses_json`).
 
 What the answer means is said in the terms of `Lanes.Email`, the model of an email API
 (`Answer.modelled`): a `MessageId` is a message accepted; a `4xx` is one rejected, which SES did
@@ -29,52 +30,13 @@ attempt (`jobPort`).
 
 namespace Aws.Ses
 
-open Lanes Lanes.Http
-
-/-! ## Addresses -/
-
-/-- What may stand in a dot-atom of RFC 5322, besides letters and digits. -/
-def atextSpecials : String := "!#$%&'*+/=?^_`{|}~-"
-
-def atext (c : Char) : Bool := (c.isAlphanum && c.toNat < 128) || atextSpecials.contains c
-
-/-- A local part as a dot-atom: atoms of `atext` between single dots, up to 64 characters. -/
-def localPart (s : String) : Bool :=
-  0 < s.length && s.length ≤ 64 && (s.splitOn ".").all fun atom => !atom.isEmpty && atom.all atext
-
-/-- A label of a host name: letters, digits and hyphens, not at either end, up to 63. -/
-def label (s : String) : Bool :=
-  let ok (c : Char) := (c.isAlphanum && c.toNat < 128) || c == '-'
-  0 < s.length && s.length ≤ 63 && s.all ok && !s.startsWith "-" && !s.endsWith "-"
-
-/-- A domain of two labels or more, up to 253 characters. Internationalized names go as
-punycode, as SES wants them. -/
-def domain (s : String) : Bool :=
-  s.length ≤ 253 && (s.splitOn ".").length ≥ 2 && (s.splitOn ".").all label
-
-/-- `local@domain` with no display name, no comment and no quoted local part: what this adapter
-sends, up to 254 characters. -/
-def Address.valid (s : String) : Bool :=
-  s.length ≤ 254 && match s.splitOn "@" with
-    | [l, d] => localPart l && domain d
-    | _ => false
-
-abbrev Address := {s : String // Address.valid s = true}
-
-def Address.of? (s : String) : Option Address :=
-  if h : Address.valid s = true then some ⟨s, h⟩ else none
+open Lanes Lanes.Http Lanes.Mail
 
 /-- At most 50 recipients, as SES allows for one message. -/
 abbrev Recipients := {l : List Address // 0 < l.length ∧ l.length ≤ 50}
 
 /-- A subject: a line, without a line break that could start a header. -/
 abbrev Subject := {s : String // s.all (fun c => c != '\r' && c != '\n') = true}
-
-inductive Body where
-  | text (text : String)
-  | html (html : String)
-  | both (text html : String)
-  deriving DecidableEq, Repr, Hashable
 
 structure Message where
   source : Address
@@ -101,7 +63,7 @@ def Message.of? (source : String) (to : List String) (subject : String) (body : 
 
 def content (data : String) : Json := .obj #[("Data", .str data), ("Charset", .str "UTF-8")]
 
-def Body.fields : Body → Array (String × Json)
+def bodyFields : Body → Array (String × Json)
   | .text t => #[("Text", content t)]
   | .html h => #[("Html", content h)]
   | .both t h => #[("Text", content t), ("Html", content h)]
@@ -112,7 +74,7 @@ def destination (to : Recipients) : Json :=
 def document (m : Message) : Json :=
   .obj #[("FromEmailAddress", .str m.source.val), ("Destination", destination m.to),
     ("Content", .obj #[("Simple", .obj #[("Subject", content m.subject.val),
-      ("Body", .obj m.body.fields)])])]
+      ("Body", .obj (bodyFields m.body))])])]
 
 /-- The body of the request, as sent and as signed. -/
 def json (m : Message) : String := Json.compress (document m)

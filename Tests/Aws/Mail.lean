@@ -2,11 +2,11 @@
 Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Lanes.Services.Aws
+import Lanes.Lib.Mail.Basic
 import Tests.Oracle.Basic
 
 /-!
-SES's address check, `Aws.Ses.Address.of?`, against Go's `net/mail.ParseAddress`
+The address check of mail, `Mail.Address.of?`, which SES and SMTP share, against Go's `net/mail.ParseAddress`
 (`oracles/go/mail`). Ours takes a bare addr-spec of ASCII, a subset of RFC 5322's addresses that
 SES takes and that cannot carry a header; so every address ours takes must be one Go reads as
 itself, with no display name, and every one Go reads that ours does not is a known difference.
@@ -15,7 +15,7 @@ itself, with no display name, and every one Go reads that ours does not is a kno
 namespace Checks.Mail
 
 open Lanes Tests.Oracle
-open Aws.Ses (Address label)
+open Lanes.Mail (Address label)
 
 def answer (c : Case) : Answer := do
   let s ← String.fromUTF8? c.input

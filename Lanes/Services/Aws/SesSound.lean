@@ -34,11 +34,11 @@ theorem digits_strs (l : List String) :
 
 theorem depth_document (m : Message) : (document m).depth ≤ 128 := by
   cases hb : m.body <;>
-    simp [document, destination, content, Body.fields, hb, Json.depth, depth_strs]
+    simp [document, destination, content, bodyFields, hb, Json.depth, depth_strs]
 
 theorem digits_document (m : Message) : (document m).digits ≤ 1000 := by
   cases hb : m.body <;>
-    simp [document, destination, content, Body.fields, hb, Json.digits, digits_strs]
+    simp [document, destination, content, bodyFields, hb, Json.digits, digits_strs]
 
 /-- The body sent is JSON, which reads back as the document. -/
 theorem json_parse (m : Message) : Json.parse (json m) = .ok (document m).normalize :=

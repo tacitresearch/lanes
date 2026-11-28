@@ -16,7 +16,7 @@ through `Ses.handler` records a run, which the email model allows (`Outside.allo
 
 namespace Checks.Ses
 
-open Lanes Lanes.Http Aws Aws.Ses Std Std.Async
+open Lanes Lanes.Http Lanes.Mail Aws Aws.Ses Std Std.Async
 
 def msg? (to : List String) (body : Body := .text "Hello") : Option Message :=
   (Message.of? "noreply@videos.example" to "A comment on your video" body).toOption
