@@ -36,7 +36,9 @@ here perform the model's transitions (`TRUSTED.md`, which says how each is atomi
 - Timers are kept on an agenda by a thread of their own, which pushes each to its actor when it
   is due. One that was cancelled or armed again is dropped when its actor takes it.
 - The inbox is bounded: at most `inboxCapacity` inputs wait for their actor (`Sched.Ledger`),
-  and `input` waits for room while `tryInput` refuses (rule 3.8).
+  and `input` waits for room while `tryInput` refuses (rule 3.8). Neither takes an input while
+  `mailHighWater` messages between actors wait; past `mailCapacity`, `onOverflow` ends the process
+  (`docs/decisions/new-runtime-limits.md`).
 - Each step is told the moment (D101): the time, the wall clock read at the start plus the
   monotonic time since, and a seed from its worker's generator, seeded from the operating
   system. The record has the moment as a tick before the step, so a replay gives each step what
@@ -68,11 +70,35 @@ def Runtime.Stuck.restart (stuck : Runtime.Stuck) : IO Unit := do
     {stuck.elapsed_ms} ms on worker {stuck.worker}; restarting the process, which drops it"
   IO.Process.exit 75
 
+/-- A step whose sends left more than `Runtime.Config.mailCapacity` messages between actors
+waiting: which worker, the hash of the actor that sent, and how many wait. -/
+structure Runtime.Overflow where
+  worker : Nat
+  actor : UInt64
+  mail : Nat
+
+/-- What the runtime does by default when the mail between actors passes its capacity: report it
+on standard error and end the process with status 75, for its supervisor to start it again. This
+is the semantics' restart (`Sched.Step.restart`): the mail is dropped with everything else in
+memory, and no message is lost on its own. -/
+def Runtime.Overflow.restart (overflow : Runtime.Overflow) : IO Unit := do
+  IO.eprintln s!"lanes: {overflow.mail} messages between actors wait, past the runtime's \
+    capacity, after a step of the actor with hash {overflow.actor} on worker {overflow.worker}; \
+    restarting the process, which drops them"
+  IO.Process.exit 75
+
 /-- How a runtime runs: its bounds and its threads. Every field has a default. -/
 structure Runtime.Config where
   /-- Inputs accepted that their actor has not taken. When there are this many, `tryInput`
   refuses. At least one. -/
   inboxCapacity : Nat := 1024
+  /-- Messages between actors (and timers gone off) waiting, at or past which no input is taken:
+  `tryInput` refuses and `input` waits until they fall below. At least one. -/
+  mailHighWater : Nat := 65536
+  /-- Messages between actors waiting past which `onOverflow` is told, after the step that sent
+  them. Inputs cannot pass it on their own unless a step sends many messages; a system whose
+  actors send each other more than they take can. -/
+  mailCapacity : Nat := 1048576
   /-- Items a worker handles for one actor before it lets go of it, so that a busy actor does
   not keep others waiting. At least one. -/
   budget : Nat := 64
@@ -86,9 +112,13 @@ structure Runtime.Config where
   stepLimitMs : Nat := 30000
   /-- What the watchdog does with a step that has run longer than `stepLimitMs`. -/
   onStuck : Runtime.Stuck → IO Unit := Runtime.Stuck.restart
-  /-- Where the shard reports what goes wrong outside the system: an output handler that failed,
+  /-- Where the runtime reports what goes wrong outside the system: an output handler that failed,
   a worker stopped on an error. -/
   log : Log.Logger := {}
+  /-- What to do when a step leaves more than `mailCapacity` messages between actors waiting. A
+  handler that returns lets the runtime go on, its messages pushed: the bound is then only
+  reported. -/
+  onOverflow : Runtime.Overflow → IO Unit := Runtime.Overflow.restart
 
 namespace Runtime
 
@@ -272,6 +302,9 @@ private def ending (rt : Runtime sys) : BaseIO Bool := do
   if ← rt.stopping.get then return (← rt.ledger.get).inputs == 0
   return false
 
+private def highWater (rt : Runtime sys) : Nat :=
+  max 1 rt.config.mailHighWater
+
 /-- What the steps of a turn did to the ledger's counts, given to it once at the turn's end: the
 items taken off or dropped, and the pending timers before and after. -/
 private structure Tally where
@@ -321,12 +354,14 @@ private def step (rt : Runtime sys) (w : Nat) (onOutput : σ.Out → Async Unit)
       rt.record (.tick t :: j.work.event :: c.outputs.map .output)
       rt.recording.unlock
     let freed := (if j.work.input then 1 else 0) + c.droppedInputs
-    let room ← if freed == 0 && c.sends.isEmpty then pure [] else
-      rt.ledgerDo fun l => (l.pushed c.sends.length).free freed
+    let (room, over) ← if freed == 0 && c.sends.isEmpty then pure ([], none) else
+      rt.ledgerDo (Sched.Ledger.sent c.sends.length freed rt.config.mailCapacity)
     for p in room do p.resolve ()
     for e in c.sends do rt.pushTo w e.dst (.msg (some i) e.msg)
     if stops then rt.sending.unlockWrite
     else if sends then rt.sending.unlockRead
+    if let some mail := over then
+      discard (rt.config.onOverflow { worker := w, actor := hash i, mail }).toBaseIO
     rt.arm i c.armed
     handOver rt.config.log onOutput c.outputs
     return some (some state,
@@ -363,7 +398,9 @@ private def serve (rt : Runtime sys) (w : Nat) (onOutput : σ.Out → Async Unit
   if retired then (rt.shardOf i).modify (·.erase i)
   if again then rt.enqueue w i
   if tally.gone != 0 || tally.before != tally.after then
-    let idle ← rt.ledgerDo (Sched.Ledger.done tally.gone tally.before tally.after)
+    let (room, idle) ← rt.ledgerDo
+      (Sched.Ledger.done rt.highWater tally.gone tally.before tally.after)
+    for p in room do p.resolve ()
     for p in idle do p.resolve true
 
 /-- The next actor for worker `w`: the first on its run queue, or one stolen from another's. -/
@@ -530,7 +567,7 @@ private def deliver (rt : Runtime sys) (x : σ.In) : BaseIO Unit := do
 
 private def offer (rt : Runtime sys) (x : σ.In) : BaseIO Bool := do
   let offered : Sched.Ledger.Offered (IO.Promise Unit) ←
-    rt.ledgerDo (Sched.Ledger.offer rt.capacity)
+    rt.ledgerDo (Sched.Ledger.offer rt.capacity rt.highWater)
   match offered with
   | .taken =>
     rt.deliver x
@@ -544,7 +581,7 @@ def input (rt : Runtime sys) (x : σ.In) : Async Unit := do
     let room : IO.Promise Unit ← IO.Promise.new
     let offered : Sched.Ledger.Offered (IO.Promise Unit) ←
       rt.ledgerDo (α := Sched.Ledger.Offered (IO.Promise Unit))
-        (Sched.Ledger.offerOrWait rt.capacity room)
+        (Sched.Ledger.offerOrWait rt.capacity rt.highWater room)
     match offered with
     | .taken =>
       rt.deliver x
@@ -645,6 +682,10 @@ def hasRecovered (rt : Runtime sys) : BaseIO Bool :=
 /-- The inputs accepted that their actor has not taken. -/
 def depth (rt : Runtime sys) : BaseIO Nat :=
   return (← rt.ledger.get).inputs
+
+/-- The messages between actors, and timers gone off, that wait (`Sched.Ledger.mail`). -/
+def mail (rt : Runtime sys) : BaseIO Nat :=
+  return (← rt.ledger.get).mail
 
 /-- Wait until the runtime has ended, and say whether an error ended it. Whoever owns the
 runtime should then end the process, so that it is started again. -/

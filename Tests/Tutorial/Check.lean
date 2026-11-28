@@ -15,33 +15,60 @@ namespace Tests.Tutorial
 open Lanes Tut
 
 instance : sig.Inspect := {}
-instance (svc : Service sig.In sig.Out Nat) : (Server.system svc).Inspect := {}
+instance : system.Inspect := {}
 
-def requests : List Request :=
-  [.increment 1, .increment 2, .increment 3, .decrement 4]
+/-- The browser: the requests still to send, and what the front answered. -/
+structure Browser where
+  toSend : List (Nat × Request)
+  answered : List (Nat × Response) := []
+  deriving DecidableEq, Hashable
+
+instance : BEq Browser := instBEqOfDecidableEq
+
+def browser (requests : List (Nat × Request)) : Outside sig Browser where
+  init := { toSend := requests }
+  allow d
+    | .request n r => if (n, r) ∈ d.toSend then some { d with toSend := d.toSend.erase (n, r) } else none
+    | .store _ => none
+  observe d
+    | .answered n r => { d with answered := d.answered ++ [(n, r)] }
+    | _ => d
+
+def config : Config := { limit := 2 }
+
+abbrev D := Browser × Db.State Request Response
+
+def countsOf (db : Db.Db) : List Count := (db.rows counts.table.name).filterMap counts.ofRow
+
+def requests : List (Nat × Request) := [(1, .increment), (2, .increment), (3, .decrement)]
 
 /-- The bug the tutorial seeds: a decrement at one is refused. -/
-def buggy (config : Config) : Service sig.In sig.Out Nat where
-  init := 0
-  step count
-    | .decrement req =>
-      if 1 < count then (count - 1, [⟨req, count - 1, true⟩])
-      else (count, [⟨req, count, false⟩])
-    | r => (service config).step count r
+def buggy (config : Config) : Db.Handler Request Response
+  | .decrement => do
+    let c ← current
+    if 1 < c.value.toInt.toNat then
+      let c := { c with value := Int64.ofNat (c.value.toInt.toNat - 1) }
+      let _ ← counts.upsert c
+      return ⟨c.value, true⟩
+    else return ⟨c.value, false⟩
+  | r => handler config r
 
-def report (service : Config → Service sig.In sig.Out Nat) :=
-  Check.system (Server.system (service { limit := 2 }))
-    { driver := (service { limit := 2 }).monitored (Driver.anyOrder requests)
-      env := { mayCrash := fun _ => true }
-      maxCrashes := 1 }
-    [ Check.refines "every response is allowed by the spec",
-      .always "the counter never exceeds its limit" fun w => w.state.state () ≤ 2,
-      .sometimes "the counter reaches its limit" fun w => w.state.state () == 2,
-      .sometimes "an increment is refused" fun w =>
-        w.state.outbox.any fun r => !r.applied && r.value == 2,
+def report (handler : Config → Db.Handler Request Response) :=
+  let world := fun (requests : List (Nat × Request)) =>
+    (browser requests).both (Db.outside {} (handler config) (Db.Db.empty schema) port)
+      fun x => x matches .request ..
+  let samples := fun (d : D) =>
+    d.1.toSend.map (fun (n, r) => In.request n r) ++ Db.samples (handler config) port true true d.2
+  Check.system system
+    { env := { mayRestart := true }, driver := (world requests).driver samples, maxRestarts := 1 }
+    [ .always "the count never passes its limit, in any database the store may hold" fun w =>
+        w.driver.2.worlds.all fun world => (countsOf world.db).all (·.value.toInt ≤ config.limit),
+      .sometimes "the count reaches its limit" fun w =>
+        w.driver.2.worlds.any fun world => (countsOf world.db).any (·.value.toInt == config.limit),
       .always "a request is refused only at zero or at the limit" fun w =>
-        w.state.outbox.all fun r => r.applied || r.value == 0 || r.value == 2,
+        w.driver.1.answered.all fun (_, r) => r.applied || r.value == 0 || r.value == 2,
       .sometimes "a decrement is refused" fun w =>
-        w.state.outbox.any fun r => !r.applied && r.value == 0 ]
+        w.driver.1.answered.any fun (_, r) => !r.applied && r.value == 0 ]
+    {}
 
 end Tests.Tutorial

@@ -23,7 +23,7 @@ operators' (`route?_default`), and a request is one only at a path configured fo
 (`route?_some`). The metrics page is answered only to a peer `OpsConfig.metricsAccess` allows, by
 default one on a loopback address, however the client wrote its path (`route?_metrics`), and to
 any other as if there were none (`route?_hidden`); liveness and readiness answer every peer
-alike (`route?_peer`). Readiness answers `200` exactly when the shard has recovered and the server is
+alike (`route?_peer`). Readiness answers `200` exactly when the runtime has booted and the server is
 not stopping (`answer_ready`). A request id taken from a client is bounded and has only letters,
 digits and `-._` (`RequestId.accept?_eq_some`), and so does one made (`RequestId.accept?_ofBytes`);
 a response carries exactly one (`header_tag`). A line of the access log is a log record
@@ -58,7 +58,7 @@ structure OpsConfig where
   metricsAccess : MetricsAccess := .loopback
   /-- `200` while the server answers at all. -/
   livenessPath : Option String := none
-  /-- `200` once the shard has booted, and `503` from `Server.drain` or `stop`. -/
+  /-- `200` once the runtime has booted, and `503` from `Server.drain` or `stop`. -/
   readinessPath : Option String := none
   accessLog : Log.Sink := .off
   /-- Answer every request with an `X-Request-Id`: the client's if it is well formed, else a
@@ -213,7 +213,7 @@ theorem route?_peer {c : OpsConfig} {peer : Option Ip.Addr} {r : Request} {e : E
       exact h
 
 structure Health where
-  /-- The shard has booted and handed over what booting put out. -/
+  /-- The runtime has booted and handed over what booting put out. -/
   recovered : Bool
   /-- The server is draining or stopping. -/
   stopping : Bool
@@ -228,7 +228,7 @@ def answer (e : Endpoint) (health : Health) (metrics : String) : Response :=
   | .live => .text "ok\n"
   | .ready => if health.ready then .text "ready\n" else .text "not ready\n" 503
 
-/-- Readiness answers `200` exactly when the shard has recovered and the server is not stopping;
+/-- Readiness answers `200` exactly when the runtime has booted and the server is not stopping;
 otherwise `503`. -/
 theorem answer_ready (health : Health) (metrics : String) :
     ((answer .ready health metrics).status = 200 ↔
@@ -305,13 +305,13 @@ def families {bounds : List Nat} (s : Stats bounds) (g : Gauges) : List Metrics.
     { name := "lanes_http_request_duration_seconds"
       help := "From a request read to its answer handed to its connection.", scale := 6
       series := .histogram bounds [([], s.latency)] },
-    { name := "lanes_http_requests_in_flight", help := "Requests the shard has taken and not answered."
+    { name := "lanes_http_requests_in_flight", help := "Requests the runtime has taken and not answered."
       series := .gauge [([], g.inflight)] },
     { name := "lanes_http_connections", help := "Connections open."
       series := .gauge [([], g.connections)] },
     { name := "lanes_http_connections_refused_total", help := "Connections closed at connections_max."
       series := .counter [([], s.refused)] },
-    { name := "lanes_runtime_inbox_depth", help := "Commands waiting in the shard's inbox."
+    { name := "lanes_runtime_inbox_depth", help := "Inputs accepted that their actor has not taken."
       series := .gauge [([], g.inbox)] },
     { name := "lanes_ready", help := "1 when readiness answers 200."
       series := .gauge [([], if g.ready then 1 else 0)] } ]

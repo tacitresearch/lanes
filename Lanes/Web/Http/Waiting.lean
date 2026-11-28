@@ -12,7 +12,7 @@ request gets, and who waits on which id. The server (`Lanes.Http.serveOn`) keeps
 and resolves the waiters it is handed. `R` is whatever a waiter is: a promise in the server.
 
 Of every sequence of operations from a start (`exec`): ids are handed out in order from the
-start, so never twice, and the id of a request the shard refused goes to the next request
+start, so never twice, and the id of a request the runtime refused goes to the next request
 (`exec_handed`); a waiter waits on an id handed out to it, until it is answered (`exec_waiting`);
 each id is answered at most once, and to the waiter it was handed out to (`exec_answered`); after
 a drain nobody waits and everyone handed an id has been answered (`exec_drain`).
@@ -40,7 +40,7 @@ def wait (waiter : R) : Waiting R → Nat × Waiting R
 def releases (id : Nat) (w : Waiting R) : Bool :=
   id + 1 == w.next && w.waiters.contains id
 
-/-- The request just given an id was refused by the shard: its id goes to the next request. -/
+/-- The request just given an id was refused by the runtime: its id goes to the next request. -/
 def release (id : Nat) (w : Waiting R) : Waiting R :=
   if w.releases id then
     match w with

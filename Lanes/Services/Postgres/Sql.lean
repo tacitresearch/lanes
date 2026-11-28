@@ -207,14 +207,36 @@ def expectedKeys (schema : Schema) : List (List (Option String)) :=
   ((schema.map (·.name)).mergeSort (fun a b => decide (a ≤ b))).flatMap fun name =>
     ((schema.find? (·.name == name)).map fun t => (t.columns.take t.key).map fun c => [some name, some c.name]).getD []
 
+/-- The table in which `Postgres.Typed.migrateOnce` records the migrations it ran. It belongs to
+no schema, and `catalogDiff` leaves it out. -/
+def migrationsTable : String := "lanes_migrations"
+
+/-- The table of the migrations run, made if it is not there. -/
+def migrationsCreate : String :=
+  s!"CREATE TABLE IF NOT EXISTS {migrationsTable} (name text COLLATE \"C\" NOT NULL PRIMARY KEY)"
+
+/-- The migrations, each a name and a text, that `applied` does not name, in the order of their
+names. -/
+def pending (applied : List String) (files : List (String × String)) : List (String × String) :=
+  (files.mergeSort fun a b => decide (a.1 ≤ b.1)).filter (!applied.contains ·.1)
+
 /-- How the catalog's answers differ from the schema's: rows the schema has and the database
-not, and rows the database has and the schema not. Empty when they agree. -/
+not, and rows the database has and the schema not. Empty when they agree. The table of the
+migrations run (`migrationsTable`) is left out. -/
 def catalogDiff (schema : Schema) (columns keys : List (List (Option String))) : List String :=
   let render := fun (r : List (Option String)) => ", ".intercalate (r.map fun v => v.getD "NULL")
+  let ours := fun (rows : List (List (Option String))) => rows.filter (·.head? != some (some migrationsTable))
   let diff := fun (what : String) (want got : List (List (Option String))) =>
     (want.filter (!got.contains ·)).map (s!"{what} missing: " ++ render ·)
       ++ (got.filter (!want.contains ·)).map (s!"{what} not declared: " ++ render ·)
-  diff "column" (expectedColumns schema) columns ++ diff "key" (expectedKeys schema) keys
+  diff "column" (expectedColumns schema) (ours columns) ++ diff "key" (expectedKeys schema) (ours keys)
+
+/-- `catalogDiff` of the schema's own tables: a table of the database that the schema does not
+name is left out, as another application's may share the database. -/
+def tablesDiff (schema : Schema) (columns keys : List (List (Option String))) : List String :=
+  let declared := fun (rows : List (List (Option String))) =>
+    rows.filter fun r => schema.any fun t => r.head? == some (some t.name)
+  catalogDiff schema (declared columns) (declared keys)
 
 /-! ## Replies -/
 

@@ -2,7 +2,7 @@ name: Services
 
 # The service oracles (oracles/README.md): the S3 client, its POST forms and multipart uploads,
 # the SES adapter and SQS's calls against moto, and
-# the store's adapter against PostgreSQL 16, each run checked against our model of the service.
+# the store's adapter against PostgreSQL (the distribution's version), each run checked against our model of the service.
 # They start services and take longer than a pull request should wait, so they run nightly on
 # the default branch and by hand; the pure oracles run in ci.yml. Each run's records are kept as
 # the workflow's artifact: copy them over oracles/moto/*.jsonl and oracles/postgres/*.jsonl to
@@ -43,17 +43,17 @@ jobs:
         with:
           clean: false
       - uses: ./.github/actions/lean
-      - name: PostgreSQL 16, and Python's venv for moto
+      - name: PostgreSQL, and Python's venv for moto
         run: |
-          if ! ls /usr/lib/postgresql/16/bin/initdb >/dev/null 2>&1; then
-            sudo apt-get update -q && sudo apt-get install -yq postgresql-16
+          if ! ls /usr/lib/postgresql/*/bin/initdb >/dev/null 2>&1; then
+            sudo apt-get update -q && sudo apt-get install -yq postgresql
           fi
           if ! python3 -m venv --help >/dev/null 2>&1; then
             sudo apt-get update -q && sudo apt-get install -yq python3-venv
           fi
       - name: Build
         run: lake build lanesServiceOracle
-      - name: The store model against PostgreSQL 16
+      - name: The store model against PostgreSQL
         run: oracles/postgres/run.sh --record
       - name: The object store, multipart, email and queue models against moto
         run: oracles/moto/run.sh --record

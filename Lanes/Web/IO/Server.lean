@@ -8,6 +8,7 @@ public import Std.Async
 public import Lanes.Web.Http.Admit
 public import Lanes.Web.Http.Compress
 public import Lanes.Web.Http.Conn
+public import Lanes.Web.Http.Upgrade
 public import Lanes.Web.Http.View
 public import Lanes.Web.Http.Waiting
 public import Lanes.Web.IO.Ops
@@ -15,7 +16,7 @@ public import Lanes.Web.IO.Ops
 /-!
 The HTTP server adapter: the IO around the gate and the connections. It accepts connections on
 `Std.Net`, tells each one's `Conn` what happened and does what it answers: it reads the socket
-when the connection wants bytes, puts each request it reads before the gate, hands the shard
+when the connection wants bytes, puts each request it reads before the gate, hands the runtime
 what the gate admits, writes the responses it is given and closes. A request is prepared as the
 bridge says (`Bridge.prepare`) and given an id no other request has before the gate sees it;
 before that, work it needs in IO is done by `arrive`, if it is given, on a task of its own.
@@ -24,9 +25,9 @@ when a client has taken too long and when to close are `Conn.step`'s decisions; 
 are waiting, when one times out and when the system is too busy are the gate's (`Gate.step`).
 Neither is this file's.
 
-The gate is not an actor of the shard (`docs/decisions/D96-runtime-contract.md`): its decisions
+The gate is not an actor of the system (`docs/decisions/D96-runtime-contract.md`): its decisions
 are made here, under the lock of the table of waiting requests, on the thread of the request,
-the shard's answer or the ticker. The shard runs `admitted sys` (`serve`, `serveWith`) or
+the runtime's answer or the ticker. The runtime runs `admitted sys` (`serve`, `serveWith`) or
 `admittedFronted sys`, which also takes inputs that are no request and puts out what is no
 response (`serveFronted`); both are `sys` with no actor that every request goes through. What
 is trusted is that this file does what `Gate.step` returns, as `Lanes/Web/Http/AdmitSound.lean`
@@ -38,7 +39,15 @@ the actors it reads, each between two of its steps (`Runtime.tryPeek`), and is a
 their states off the workers' threads, or `504` at its deadline. It takes an id from the same
 table as every request.
 
-One refusal is made here: `503` when the shard's inbox is full. TLS is not handled: terminate it
+A connection whose request switches protocols (`Http.Upgrade`) is run by the same loop once
+`Conn` hands it over: the loop tells the protocol's machine what happened and does what it
+answers, as it does for `Conn`, but reads while it writes. Its requests go through the gate as
+pieces do. An output of the system that answers the id the head entered with, once the gate has
+answered that id `101`, goes to the connection instead of the gate (`Gate.receive_absent`): it
+is registered under that id when the gate hands the `101` to the connection, on the runtime's
+thread, so every later output finds it.
+
+One refusal is made here: `503` when the runtime's inbox is full. TLS is not handled: terminate it
 in a reverse proxy.
 -/
 
@@ -95,7 +104,7 @@ structure ServerConfig where
   /-- The gate's bounds. -/
   gate : GateConfig := {}
   /-- The bounds of the reads, the requests a view answers from the state: how long one waits for
-  the shard's peek before it is answered `504`, and how many may wait at once. -/
+  the runtime's peek before it is answered `504`, and how many may wait at once. -/
   reads : GateConfig := {}
   /-- Metrics, health and the access log, answered and written by the server: all off by
   default (`Lanes/Web/IO/Ops.lean`). -/
@@ -104,7 +113,8 @@ structure ServerConfig where
   (`Lanes/Web/Http/Compress.lean`). Off by default: see BREACH there. -/
   compression : Option Compression := none
 
-private def ServerConfig.conn (config : ServerConfig) : Conn.Config where
+private def ServerConfig.conn (config : ServerConfig) (upgrades : Option (Request → Bool)) :
+    Conn.Config where
   limits := { config.limits with body_max := config.maxBodyBytes }
   inflight_max := config.inflight_max
   idle_ms := config.idle_ms
@@ -116,6 +126,7 @@ private def ServerConfig.conn (config : ServerConfig) : Conn.Config where
   part_max := config.part_max
   poll_ms := config.poll_ms
   heartbeat_ms := config.heartbeat_ms
+  upgrades
 
 /-- What a connection's loop is told. -/
 private inductive Ev where
@@ -128,6 +139,8 @@ private inductive Ev where
   | alarm
   /-- The write the loop waited for to tell the connection it was sent has ended. -/
   | sent
+  /-- For the protocol the connection switched to. -/
+  | proto (e : Upgrade.Event)
   /-- The answer to a request, to be compressed as its `Accept-Encoding` allows before the
   connection is told it. -/
   | answer (seq : Nat) (acceptEncoding : Option String) (r : Response)
@@ -145,7 +158,7 @@ private abbrev ReadEnd := IO.Promise (Except IO.Error (Option ByteArray))
 private abbrev WriteEnd := IO.Promise (Except IO.Error Unit)
 
 /-- What only the running loop touches. -/
-private structure Loop where
+private structure Loop (up : Upgrade) where
   conn : Conn
   /-- The read started that has not ended. One at a time. -/
   reading : Option ReadEnd := none
@@ -158,6 +171,14 @@ private structure Loop where
   /-- The connection will be told `sent` when the last write ends. -/
   sentSet : Bool := false
   left : Bool := false
+  /-- The protocol the connection switches to, from the system's `101`, and the id its head
+  entered with. -/
+  proto : Option up.State := none
+  protoId : Option ReqId := none
+  /-- `Conn` has handed the connection over to `proto`. -/
+  switched : Bool := false
+  /-- The connection closed before it was handed over, and `proto` has been told. -/
+  abandoned : Bool := false
 
 /-- A thread of the server's own that runs the loops of the connections dealt to it, one after
 another, and parks when none has anything to do. -/
@@ -180,17 +201,18 @@ private def Lane.run (lane : Lane) : BaseIO Unit := do
     else
       for job in jobs do job
 
-private structure Line where
+private structure Line (up : Upgrade) where
   socket : TCP.Socket.Client
   box : Mutex Box
-  loop : IO.Ref Loop
+  loop : IO.Ref (Loop up)
   ended : IO.Promise Unit
   /-- The thread this connection's loop runs on, if the server has threads of its own. -/
   lane : Option Lane := none
 
 /-- What the server keeps of a connection. -/
 private structure Open where
-  line : Line
+  box : Mutex Box
+  ended : IO.Promise Unit
   tell : Ev → BaseIO Unit
 
 private structure Connections where
@@ -255,33 +277,48 @@ private def hangUp (socket : TCP.Socket.Client) (reading : Option ReadEnd) (ling
     socket.close
 
 /-- How a connection's loop reaches the rest of the server. -/
-private structure Ctx where
+private structure Ctx (up : Upgrade) where
   config : ServerConfig
+  conn : Conn.Config
   /-- Hand a request to the system, with whom to tell its answer. -/
   submit : Request → (Response → BaseIO Unit) → BaseIO Unit
-  /-- Hand a request that streams, or a piece or a pull of one, to the system, with whom to tell
-  its answer; the id it entered with, unless the system was too busy to take it. These pass by
-  the operations front (`Ops.front`), whose answers are whole. -/
-  submitStream : Request → (Response → BaseIO Unit) → BaseIO (Option ReqId)
+  /-- Hand a request that streams, or a piece or a pull of one, or a request of a protocol
+  switched to, to the system, with whom to tell its answer and the id it entered with; that id,
+  unless the system was too busy to take it. These pass by the operations front (`Ops.front`),
+  whose answers are whole. -/
+  submitStream : Request → (ReqId → Response → BaseIO Unit) → BaseIO (Option ReqId)
+  /-- Send the outputs that answer this id, from now on, to the connection that switched. -/
+  route : ReqId → (Response → BaseIO Unit) → BaseIO Unit
+  unroute : ReqId → BaseIO Unit
   /-- Forget the connection, which has closed. -/
   leave : BaseIO Unit
 
 /-- Whether the last write has failed. One still going on has not. -/
-private def failedWrite (loop : Loop) : BaseIO Bool := do
+private def failedWrite {up : Upgrade} (loop : Loop up) : BaseIO Bool := do
   let some (w, _) := loop.writing | return false
   if !(← IO.hasFinished w.result?) then return false
   return !(w.result?.get matches some (.ok ()))
 
 /-- When the last write is to have ended, while it has not. -/
-private def writeBy (write_ms : Nat) (loop : Loop) : BaseIO (Option Nat) := do
+private def writeBy {up : Upgrade} (write_ms : Nat) (loop : Loop up) : BaseIO (Option Nat) := do
   let some (w, start) := loop.writing | return none
   return if ← IO.hasFinished w.result? then none else some (start + write_ms)
+
+/-- Write `bytes`, unless the last write failed; `none` if it could not be. -/
+private def write {up : Upgrade} (line : Line up) (loop : Loop up) (bytes : ByteArray) :
+    BaseIO (Option (Loop up)) := do
+  let failed ← failedWrite loop
+  let sent ← (line.socket.native.send #[bytes]).toBaseIO
+  match failed, sent with
+  | false, .ok w => return some { loop with writing := some (w, ← IO.monoMsNow) }
+  | _, _ => return none
 
 mutual
 
 /-- Tell the connection's loop `ev`. If the loop is not running it runs now: on its lane if it
 has one, else on this thread when `here`, else on a task of its own. -/
-private partial def tell (ctx : Ctx) (line : Line) (here : Bool) (ev : Ev) : BaseIO Unit := do
+private partial def tell {up : Upgrade} (ctx : Ctx up) (line : Line up) (here : Bool) (ev : Ev) :
+    BaseIO Unit := do
   let start ← line.box.atomically do
     modifyGet fun b => (!b.running, { b with events := ev :: b.events, running := true })
   if start then
@@ -291,11 +328,10 @@ private partial def tell (ctx : Ctx) (line : Line) (here : Bool) (ev : Ev) : Bas
 
 /-- Do what the connection asks after `event`. When a write fails, what the connection asks
 after `broken` is done in place of the rest. -/
-private partial def react (ctx : Ctx) (line : Line) (loop : Loop) (event : Conn.Event) :
-    BaseIO Loop := do
-  let config := ctx.config
+private partial def react {up : Upgrade} (ctx : Ctx up) (line : Line up) (loop : Loop up)
+    (event : Conn.Event) : BaseIO (Loop up) := do
   let event := if ← failedWrite loop then .broken else event
-  let (conn, actions) := loop.conn.step config.conn (← IO.monoMsNow) event
+  let (conn, actions) := loop.conn.step ctx.conn (← IO.monoMsNow) event
   let mut loop := { loop with conn }
   let mut todo := actions
   repeat
@@ -308,42 +344,108 @@ private partial def react (ctx : Ctx) (line : Line) (loop : Loop) (event : Conn.
         let accept := request.header? "accept-encoding"
         ctx.submit request fun r => tell ctx line false (.answer seq accept r)
       | .begin seq request =>
-        let id ← ctx.submitStream request fun r => tell ctx line false (.conn (.responded seq r))
+        let id ← ctx.submitStream request fun id r => do
+          if r.status == 101 && up.wants request then
+            ctx.route id fun r => tell ctx line false (.proto (.pushed r))
+          tell ctx line false (.conn (.responded seq r))
         let heads := loop.heads.filter (·.1 ≥ loop.conn.written)
         loop := { loop with heads := match id with
           | some id => (seq, id) :: heads
           | none => heads }
       | .piece seq index request =>
-        let reply := fun r => tell ctx line false (.conn (.took seq index r))
+        let reply := fun (_ : ReqId) r => tell ctx line false (.conn (.took seq index r))
         match loop.heads.lookup seq with
         | some id => discard <| ctx.submitStream (Stream.tag request id) reply
-        | none => reply (.text "the request is not with the system\n" 400)
+        | none => reply 0 (.text "the request is not with the system\n" 400)
       | .pull seq index request =>
-        let reply := fun r => tell ctx line false (.conn (.pulled seq index r))
+        let reply := fun (_ : ReqId) r => tell ctx line false (.conn (.pulled seq index r))
         match loop.heads.lookup seq with
         | some id => discard <| ctx.submitStream (Stream.tag request id) reply
-        | none => reply (.text "the request is not with the system\n" 400)
+        | none => reply 0 (.text "the request is not with the system\n" 400)
       | .interim _ bytes | .write _ bytes | .part _ bytes =>
-        let failed ← failedWrite loop
-        let sent ← (line.socket.native.send #[bytes]).toBaseIO
-        match failed, sent with
-        | false, .ok w => loop := { loop with writing := some (w, ← IO.monoMsNow) }
-        | _, _ =>
-          let (broken, actions) := loop.conn.step config.conn (← IO.monoMsNow) .broken
+        match ← write line loop bytes with
+        | some l => loop := l
+        | none =>
+          let (broken, actions) := loop.conn.step ctx.conn (← IO.monoMsNow) .broken
           loop := { loop with conn := broken }
           todo := actions
-      | .close => hangUp line.socket loop.reading config.linger_ms
+      | .switch _ _ _ rest =>
+        if loop.proto.isSome then
+          loop ← reactProto ctx line { loop with switched := true } (.attached rest)
+        else hangUp line.socket loop.reading ctx.config.linger_ms
+      | .close => hangUp line.socket loop.reading ctx.config.linger_ms
   return loop
 
-private partial def handle (ctx : Ctx) (line : Line) (loop : Loop) : Ev → BaseIO Loop
-  | .conn e => react ctx line loop e
+/-- Do what the protocol the connection switched to asks after `event`. When a write fails, what
+it asks after `broken` is done in place of the rest. -/
+private partial def reactProto {up : Upgrade} (ctx : Ctx up) (line : Line up) (loop : Loop up)
+    (event : Upgrade.Event) : BaseIO (Loop up) := do
+  let some state := loop.proto | return loop
+  let event := if loop.switched && (← failedWrite loop) then .broken else event
+  let (state, actions) := up.step (← IO.monoMsNow) state event
+  let mut loop := { loop with proto := some state }
+  let mut todo := actions
+  repeat
+    match todo with
+    | [] => break
+    | action :: rest =>
+      todo := rest
+      match action with
+      | .write bytes =>
+        match ← write line loop bytes with
+        | some l => loop := l
+        | none =>
+          let some state := loop.proto | break
+          let (state, actions) := up.step (← IO.monoMsNow) state .broken
+          loop := { loop with proto := some state }
+          todo := actions
+      | .submit index request =>
+        let reply := fun (_ : ReqId) r => tell ctx line false (.proto (.answered index r))
+        match loop.protoId with
+        | some id => discard <| ctx.submitStream (Stream.tag request id) reply
+        | none => reply 0 (.text "the request is not with the system\n" 400)
+      | .close => hangUp line.socket loop.reading ctx.config.linger_ms
+  return loop
+
+/-- What the connection is told goes to `Conn` until it is handed over, then to the protocol.
+A `101` to the request numbered `seq`, if that request may switch, starts the protocol, which
+from then on is told when the server stops. -/
+private partial def handleConn {up : Upgrade} (ctx : Ctx up) (line : Line up) (loop : Loop up)
+    (e : Conn.Event) : BaseIO (Loop up) := do
+  if loop.switched then
+    return ← match e with
+      | .stop => reactProto ctx line loop .stop
+      | _ => pure loop
+  let mut loop := loop
+  match e with
+  | .responded seq r =>
+    if r.status == 101 then
+      if let (some head, some id) := (loop.conn.upgrading? seq, loop.heads.lookup seq) then
+        loop := { loop with proto := some (up.start (← IO.monoMsNow) head r), protoId := some id }
+  | .stop => loop ← reactProto ctx line loop .stop
+  | _ => pure ()
+  react ctx line loop e
+
+private partial def handle {up : Upgrade} (ctx : Ctx up) (line : Line up) (loop : Loop up) :
+    Ev → BaseIO (Loop up)
+  | .conn e => handleConn ctx line loop e
+  | .proto e => reactProto ctx line loop e
   | .read r =>
-    react ctx line { loop with reading := none } <| match r with
-      | some (.ok (some bytes)) => .received bytes
-      | some (.ok none) => .ended
-      | _ => .broken
+    let loop := { loop with reading := none }
+    if loop.switched then
+      reactProto ctx line loop <| match r with
+        | some (.ok (some bytes)) => .received bytes
+        | some (.ok none) => .ended
+        | _ => .broken
+    else
+      react ctx line loop <| match r with
+        | some (.ok (some bytes)) => .received bytes
+        | some (.ok none) => .ended
+        | _ => .broken
   | .resume => return { loop with resumeSet := false }
-  | .sent => react ctx line { loop with sentSet := false } .sent
+  | .sent =>
+    let loop := { loop with sentSet := false }
+    if loop.switched then reactProto ctx line loop .sent else react ctx line loop .sent
   | .answer seq accept r =>
     react ctx line loop (.answered seq (match ctx.config.compression with
       | some c => c.respond accept r
@@ -351,49 +453,80 @@ private partial def handle (ctx : Ctx) (line : Line) (loop : Loop) : Ev → Base
   | .alarm => do
     let now ← IO.monoMsNow
     let late := (← writeBy ctx.config.write_ms loop).any (· ≤ now)
-    react ctx line loop (if late then .broken else .tick)
+    if loop.switched then reactProto ctx line loop (if late then .broken else .tick)
+    else
+      let loop ← if loop.conn.closed then reactProto ctx line loop .tick else pure loop
+      react ctx line loop (if late then .broken else .tick)
+
+/-- Tell the connection `sent` once the last write has ended. -/
+private partial def awaitSent {up : Upgrade} (ctx : Ctx up) (line : Line up) (loop : Loop up)
+    (writing : Option Nat) : BaseIO (Loop up) := do
+  match loop.writing, writing with
+  | some (w, _), some _ =>
+    discard <| BaseIO.mapTask (t := w.result?) (sync := line.lane.isSome) fun _ =>
+      tell ctx line true .sent
+  | _, _ => tell ctx line true .sent
+  return { loop with sentSet := true }
+
+/-- Start a read of at most `size` bytes. -/
+private partial def startRead {up : Upgrade} (ctx : Ctx up) (line : Line up) (loop : Loop up)
+    (size : Nat) : BaseIO (Loop up) := do
+  match ← (line.socket.native.recv? (min size 65536).toUInt64).toBaseIO with
+  | .ok r =>
+    discard <| BaseIO.mapTask (t := r.result?) (sync := line.lane.isSome) fun res =>
+      tell ctx line true (.read res)
+    return { loop with reading := some r }
+  | .error e =>
+    tell ctx line true (.read (some (.error e)))
+    return loop
 
 /-- After the events: read if the connection wants bytes and the last write has ended, say when
-to be told `alarm`, and once it has closed, leave. -/
-private partial def settle (ctx : Ctx) (line : Line) (loop : Loop) : BaseIO Loop := do
-  let config := ctx.config
+to be told `alarm`, and once it has closed, leave. A connection handed over reads while it
+writes, as its protocol asks. One that closed before it was handed over tells its protocol it
+is broken, and leaves once the protocol is done. -/
+private partial def settle {up : Upgrade} (ctx : Ctx up) (line : Line up) (loop : Loop up) :
+    BaseIO (Loop up) := do
+  let mut loop := loop
+  if loop.conn.closed && !loop.switched && !loop.abandoned && loop.proto.isSome then
+    loop ← reactProto ctx line { loop with abandoned := true } .broken
   let conn := loop.conn
-  if conn.closed then
+  if conn.closed && loop.proto.all up.closed then
     unless loop.left do
+      for (_, id) in loop.heads do ctx.unroute id
       ctx.leave
       line.ended.resolve ()
     line.box.atomically (modify fun b => { b with alarm_ms := none })
     return { loop with left := true }
-  let mut loop := loop
-  let writing ← writeBy config.write_ms loop
-  if conn.wantsInput config.conn && loop.reading.isNone then
+  let writing ← writeBy ctx.config.write_ms loop
+  if let (true, some state) := (loop.switched, loop.proto) then
+    if up.wantsInput state && loop.reading.isNone then
+      loop ← startRead ctx line loop (up.room state)
+    if up.unsent state && !loop.sentSet then
+      loop ← awaitSent ctx line loop writing
+    let alarm_ms := Conn.earlier (up.wakeAt state) writing
+    line.box.atomically (modify fun b => { b with alarm_ms })
+    return loop
+  if conn.closed then
+    let alarm_ms := loop.proto.bind up.wakeAt
+    line.box.atomically (modify fun b => { b with alarm_ms })
+    return loop
+  if conn.wantsInput ctx.conn && loop.reading.isNone then
     if writing.isNone then
-      let size := (min (conn.room config.conn) 65536).toUInt64
-      match ← (line.socket.native.recv? size).toBaseIO with
-      | .ok r =>
-        loop := { loop with reading := some r }
-        discard <| BaseIO.mapTask (t := r.result?) (sync := line.lane.isSome) fun res =>
-          tell ctx line true (.read res)
-      | .error e => tell ctx line true (.read (some (.error e)))
+      loop ← startRead ctx line loop (conn.room ctx.conn)
     else if !loop.resumeSet then
       if let some (w, _) := loop.writing then
         loop := { loop with resumeSet := true }
         discard <| BaseIO.mapTask (t := w.result?) (sync := line.lane.isSome) fun _ =>
           tell ctx line true .resume
   if conn.unsent && !loop.sentSet then
-    loop := { loop with sentSet := true }
-    match loop.writing, writing with
-    | some (w, _), some _ =>
-      discard <| BaseIO.mapTask (t := w.result?) (sync := line.lane.isSome) fun _ =>
-        tell ctx line true .sent
-    | _, _ => tell ctx line true .sent
-  let alarm_ms := Conn.earlier (Conn.earlier (conn.deadline config.conn) writing)
-    (conn.wakeAt config.conn)
+    loop ← awaitSent ctx line loop writing
+  let alarm_ms := Conn.earlier (Conn.earlier (conn.deadline ctx.conn) writing)
+    (Conn.earlier (conn.wakeAt ctx.conn) (loop.proto.bind up.wakeAt))
   line.box.atomically (modify fun b => { b with alarm_ms })
   return loop
 
 /-- Handle what the connection has been told, oldest first, until nothing more is. -/
-private partial def run (ctx : Ctx) (line : Line) : BaseIO Unit := do
+private partial def run {up : Upgrade} (ctx : Ctx up) (line : Line up) : BaseIO Unit := do
   repeat
     let taken ← line.box.atomically do
       modifyGet fun b =>
@@ -424,7 +557,7 @@ private def shutDown {system : System τ} [Hashable τ.Id] (server : Server syst
 private def awaitConnections {system : System τ} [Hashable τ.Id] (server : Server system) :
     Async Unit := do
   for (_, c) in ← server.connections.atomically (return (← get).alive.toList) do
-    discard <| await c.line.ended.result?
+    discard <| await c.ended.result?
 
 /-- The address a connection comes from, if the socket tells it. -/
 private def peerOf (socket : TCP.Socket.Client) : BaseIO (Option Ip.Addr) := do
@@ -443,13 +576,13 @@ private def ticker {system : System τ} [Hashable τ.Id] (server : Server system
     let now ← IO.monoMsNow
     expire now
     for (_, c) in ← server.connections.atomically (return (← get).alive.toList) do
-      if let some t ← c.line.box.atomically (return (← get).alarm_ms) then
+      if let some t ← c.box.atomically (return (← get).alarm_ms) then
         if t ≤ now then c.tell .alarm
 
 /--
-The server's loop, for any shard behind the gate: `enter` is how a request the gate admitted
+The server's loop, for any runtime behind the gate: `enter` is how a request the gate admitted
 enters `system`, and `onOutput` says of each output whether it is a response, which the gate
-reads (`Gate.step`'s `answer`), or something else to do. A shard that ends on an error takes
+reads (`Gate.step`'s `answer`), or something else to do. A runtime that ends on an error takes
 the server down with it: requests in flight are answered `503`, and `Server.wait` throws.
 
 Which id a request gets, who waits on it and who is answered is `Waiting`, pure and proved: ids
@@ -457,11 +590,11 @@ are handed out in order from 0, never twice in one process. A restart starts the
 too, so no id it holds is from before.
 
 An arrival takes the table's lock once: it is given its id, decoded, and the gate decides
-(`Gate.admit`); an admitted request is handed to the shard under the same lock, so that a refusal
-by the shard's inbox (`503`) leaves the gate's state as it was. `decode` runs under the lock, as
-it ran on the shard's one thread when the gate was an actor; taking it out would cost a second
-lock an arrival. An answer is encoded on the shard's thread and read by the gate
-under the lock (`Gate.receive`); deadlines are looked at by the ticker.
+(`Gate.admit`); an admitted request is handed to the runtime under the same lock, so that a
+refusal by the runtime's inbox (`503`) leaves the gate's state as it was. `decode` runs under the
+lock too, since taking it out would cost an arrival a second lock. An answer is encoded on the
+worker whose step put it out, and read by the gate under the lock (`Gate.receive`); deadlines are
+looked at by the ticker.
 
 A read takes the lock as an arrival does, and its gate admits it (`Gate.admit` over `readSig`);
 the peek is asked under the lock, so that a refusal by the inbox leaves that gate as it was. The
@@ -473,10 +606,14 @@ private def serveOn (system : System τ) [Hashable τ.Id] (bridge : Bridge σ) (
     (enter : ReqId × Request → τ.In) (output : τ.Out → σ.Out)
     (other : σ.Out → Async Unit)
     (arrive : Option (Request → IO (Except Response Request)))
-    (view : Request → Option (View system)) :
+    (view : Request → Option (View system)) (upgrade : Option Upgrade) :
     Async (Server system) := do
   let some addr := Std.Net.IPv4Addr.ofString config.host
     | throw (IO.userError s!"lanes: {config.host} is not an IPv4 address")
+  let up := upgrade.getD .none
+  let connConfig := config.conn (upgrade.map (·.wants))
+  /- The connections that switched protocols, by the id their head entered with. -/
+  let routes ← Mutex.new ({} : Std.HashMap ReqId (Response → BaseIO Unit))
   let ops ← Ops.new config.ops
   let gate := config.gate
   let desk ← Mutex.new ({ waiting := Waiting.start 0 } : Desk)
@@ -498,7 +635,11 @@ private def serveOn (system : System τ) [Hashable τ.Id] (bridge : Bridge σ) (
   let runtime ← Runtime.startWith system runtimeConfig fun _ out => do
     let out := output out
     match bridge.encode out with
-    | some answer => decide (← IO.monoMsNow) (Gate.receive Gate.acts ·.pending answer)
+    | some answer =>
+      if upgrade.isSome then
+        if let some push ← routes.atomically (return (← get)[answer.1]?) then
+          return ← push answer.2
+      decide (← IO.monoMsNow) (Gate.receive Gate.acts ·.pending answer)
     | none => other out
   let listener ← try
       let listener ← TCP.Socket.Server.mk
@@ -517,11 +658,11 @@ private def serveOn (system : System τ) [Hashable τ.Id] (bridge : Bridge σ) (
   let server : Server system := {
     runtime, listener, desk, connections := ← Mutex.new {}, down
     localPort := (← listener.getSockName).port, lanes, ops }
-  let read (v : View system) (answer : Response → BaseIO Unit) : BaseIO Unit := do
+  let read (v : View system) (answer : ReqId → Response → BaseIO Unit) : BaseIO Unit := do
     let now ← IO.monoMsNow
     let calls ← desk.atomically do
       let d ← modifyGet fun d => (d, Desk.hole)
-      let (id, waiting) := d.waiting.wait answer
+      let (id, waiting) := d.waiting.wait (answer d.waiting.next)
       let d := { d with waiting }
       let (reads, acts) := Gate.admit (σ := readSig) config.reads Gate.acts d.reads id (.ok id)
       if acts.any (· matches .forward _) then
@@ -538,7 +679,8 @@ private def serveOn (system : System τ) [Hashable τ.Id] (bridge : Bridge σ) (
       set d'
       return calls
     for call in calls do call
-  let hand (request : Request) (answer : Response → BaseIO Unit) : BaseIO (Option ReqId) := do
+  let hand (request : Request) (answer : ReqId → Response → BaseIO Unit) :
+      BaseIO (Option ReqId) := do
     let request := bridge.prepare request
     if let some v := view request then
       read v answer
@@ -547,7 +689,7 @@ private def serveOn (system : System τ) [Hashable τ.Id] (bridge : Bridge σ) (
     let (id, taken, calls) ← desk.atomically do
       -- Taken out of the lock's cell while it is held, so that its tables are updated in place.
       let d ← modifyGet fun d => (d, Desk.hole)
-      let (id, waiting) := d.waiting.wait answer
+      let (id, waiting) := d.waiting.wait (answer d.waiting.next)
       let d := { d with waiting }
       let (pending, acts) := Gate.admit gate Gate.acts d.pending id (bridge.decode id request)
       if acts.any (· matches .forward _) then
@@ -563,7 +705,7 @@ private def serveOn (system : System τ) [Hashable τ.Id] (bridge : Bridge σ) (
   let arriving ← IO.mkRef (0 : Nat)
   let arrived (request : Request) (answer : Response → BaseIO Unit) : BaseIO Unit :=
     match arrive with
-    | none => discard <| hand request answer
+    | none => discard <| hand request fun _ => answer
     | some work => do
       let taken ← arriving.modifyGet fun n =>
         if n < config.arriving_max then (true, n + 1) else (false, n)
@@ -572,7 +714,7 @@ private def serveOn (system : System τ) [Hashable τ.Id] (bridge : Bridge σ) (
         let done ← (work request).toBaseIO
         arriving.modify (· - 1)
         match done with
-        | .ok (.ok request) => discard <| hand request answer
+        | .ok (.ok request) => discard <| hand request fun _ => answer
         | .ok (.error response) => answer response
         | .error _ => answer (.text "the request could not be prepared\n" 500)
   let probe : BaseIO Ops.Probe := do
@@ -584,7 +726,7 @@ private def serveOn (system : System τ) [Hashable τ.Id] (bridge : Bridge σ) (
     try socket.noDelay catch _ => pure ()
     let front := ops.front probe (← if config.ops.active then peerOf socket else pure none) arrived
     let next ← server.connections.atomically (return (← get).next)
-    let line : Line := {
+    let line : Line up := {
       socket, box := ← Mutex.new {}, loop := ← IO.mkRef { conn := { since_ms := ← IO.monoMsNow } }
       ended := ← IO.Promise.new, lane := server.lanes[next % max 1 server.lanes.size]? }
     let admitted ← server.connections.atomically do
@@ -592,11 +734,14 @@ private def serveOn (system : System τ) [Hashable τ.Id] (bridge : Bridge σ) (
       let (admitted, count) := c.count.admit config.connections_max
       if !admitted then return none
       let id := c.next
-      let ctx : Ctx := {
-        config, submit := front, submitStream := hand
+      let ctx : Ctx up := {
+        config, conn := connConfig, submit := front, submitStream := hand
+        route id push := routes.atomically (modify (·.insert id push))
+        unroute id := if upgrade.isSome then routes.atomically (modify (·.erase id)) else pure ()
         leave := server.connections.atomically do
           modify fun c => { c with count := c.count.leave, alive := c.alive.erase id } }
-      set { c with count, alive := c.alive.insert id { line, tell := tell ctx line false },
+      set { c with count, alive := c.alive.insert id
+                     { box := line.box, ended := line.ended, tell := tell ctx line false },
                    next := c.next + 1 }
       return some ctx
     match admitted with
@@ -639,27 +784,28 @@ def serveFronted (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config
     (runtimeConfig : Runtime.Config := {})
     (onOutput : σ.Out → Async Unit := fun _ => pure ())
     (arrive : Option (Request → IO (Except Response Request)) := none)
-    (view : Request → Option (View sys) := fun _ => none) :
+    (view : Request → Option (View sys) := fun _ => none) (upgrade : Option Upgrade := none) :
     Async (Server (admittedFronted sys bridge)) :=
   serveOn (admittedFronted sys bridge) bridge config runtimeConfig .inl id onOutput arrive
-    fun request => (view request).map View.fronted
+    (fun request => (view request).map View.fronted) upgrade
 
-/-- Serve `sys` over HTTP: the gate stands before the shard, `bridge` turns requests into
-inputs and outputs into responses, and `sys` runs on one shard (`Runtime`) as `admitted sys`.
+/-- Serve `sys` over HTTP: the gate stands before the runtime, `bridge` turns requests into
+inputs and outputs into responses, and the runtime (`Runtime`) runs `sys` as `admitted sys`.
 Returns once the server is listening. Each request is answered exactly once by the gate.
 `arrive` is work a request needs in IO before it is prepared, done on a task of its own: what it
 returns enters as the request, or is the answer and nothing enters. The sign-in (`SignIn.arrive`) is such work.
 Requests of one connection may then enter in another order than they were read; their answers
 are still written in that order. A request `view` names, once prepared, is a read: it is
 answered from the states of the actors it reads and never enters the system (`View`); with none,
-every request enters. -/
+every request enters. A request `upgrade` wants may switch to its protocol when the system
+answers it `101` (`Http.Upgrade`, WebSockets' `WebSocket.Server.upgrade`); with none, none does. -/
 def serve (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : ServerConfig := {})
     (runtimeConfig : Runtime.Config := {})
     (arrive : Option (Request → IO (Except Response Request)) := none)
-    (view : Request → Option (View sys) := fun _ => none) :
+    (view : Request → Option (View sys) := fun _ => none) (upgrade : Option Upgrade := none) :
     Async (Server (admitted sys bridge)) :=
   serveOn (admitted sys bridge) bridge config runtimeConfig id id (fun _ => pure ()) arrive
-    fun request => (view request).map View.admitted
+    (fun request => (view request).map View.admitted) upgrade
 
 namespace Server
 
@@ -669,7 +815,7 @@ variable {system : System τ} [Hashable τ.Id]
 def port (server : Server system) : Option UInt16 :=
   some server.localPort
 
-/-- Stop accepting connections and stop the shard; requests in flight are answered `503`.
+/-- Stop accepting connections and stop the runtime; requests in flight are answered `503`.
 Returns once every connection has written what it owes and closed. -/
 def stop (server : Server system) : Async Unit := do
   shutDown server
@@ -685,7 +831,7 @@ balancer stops sending it requests before `stop`. -/
 def drain (server : Server system) : BaseIO Unit :=
   server.ops.drain
 
-/-- The requests the shard has taken and the server has not yet answered. -/
+/-- The requests the runtime has taken and the server has not yet answered. -/
 def inFlight (server : Server system) : BaseIO Nat :=
   server.desk.atomically (return (← get).waiting.waiters.size)
 
@@ -693,14 +839,14 @@ def inFlight (server : Server system) : BaseIO Nat :=
 def trace (server : Server system) : BaseIO (Array (Event τ)) :=
   server.runtime.trace
 
-/-- Returns when the server has shut down, and throws if the shard ended on an error, so that a
+/-- Returns when the server has shut down, and throws if the runtime ended on an error, so that a
 `main` that waits here exits with a failure and can be started again. -/
 def wait (server : Server system) : Async Unit := do
   discard <| await server.down.result?
   if let some e ← server.runtime.ended then throw e
 
 /-- Wait as `wait` does, and on SIGTERM or SIGINT stop without dropping the requests in flight:
-readiness answers `503` (`drain`) while the shard's answers to the requests it has taken go out,
+readiness answers `503` (`drain`) while the runtime's answers to the requests it has taken go out,
 for at most `drain_ms`, then `stop`. Returns then, so a `main` that ends here exits with status
 0. A second signal ends the process at once, as the first would without this. `listening` runs
 once the signals are caught. -/
@@ -727,7 +873,7 @@ def stopOnSignal (server : Server system) (drain_ms : Nat) (listening : IO Unit 
   server.stop
 
 /-- Hand the system behind the gate an input that is not a request, such as an adapter's answer.
-`false` if the shard's inbox is full. A request cannot be handed in this way,
+`false` if the runtime's inbox is full. A request cannot be handed in this way,
 so request ids stay the server's. -/
 def tryInput {sys : System σ} [Hashable σ.Id] {bridge : Bridge σ}
     (server : Server (admittedFronted sys bridge)) (x : σ.In) : Async Bool :=

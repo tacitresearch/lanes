@@ -43,27 +43,27 @@ abbrev alarms : System sig where
   accept x := ⟨x.1, x.2⟩
   boot := [false]
 
-abbrev Shard := Kernel alarms
+abbrev AlarmKernel := Kernel alarms
 
 def ids : List Bool := [false, true]
 
-def pending (k : Shard) : List (Bool × Msg × Kernel.Due) :=
+def pending (k : AlarmKernel) : List (Bool × Msg × Kernel.Due) :=
   ids.flatMap fun i => (k.cell i).timers.map fun (msg, due) => (i, msg, due)
 
-def scheduled (k : Shard) : List (Bool × Msg × Kernel.Due) :=
+def scheduled (k : AlarmKernel) : List (Bool × Msg × Kernel.Due) :=
   k.agenda.toList.map fun (due, ⟨i, msg⟩) => (i, msg, due)
 
-def view (k : Shard) :=
+def view (k : AlarmKernel) :=
   ((pending k).map fun (i, msg, due) => (i, msg, due.deadline_ms, due.token),
     (scheduled k).map fun (i, msg, due) => (i, msg, due.deadline_ms, due.token),
     ids.map fun i => (k.cell i).up,
     k.queue.toList.map fun e => (e.src, e.dst, (e.msg : Msg)),
     k.nextToken, k.clock_ms, k.timerTurn)
 
-instance : BEq Shard := ⟨fun a b => view a == view b⟩
-instance : Hashable Shard := ⟨fun k => hash (view k)⟩
+instance : BEq AlarmKernel := ⟨fun a b => view a == view b⟩
+instance : Hashable AlarmKernel := ⟨fun k => hash (view k)⟩
 
-def ops (k : Shard) : List (Kernel.Op sig) :=
+def ops (k : AlarmKernel) : List (Kernel.Op sig) :=
   let inputs := ids.flatMap fun i =>
     [.arm false 0, .arm false 2, .arm true 1, .disarm false, .halt].map fun msg =>
       Kernel.Op.input (i, msg)
@@ -72,42 +72,42 @@ def ops (k : Shard) : List (Kernel.Op sig) :=
       Kernel.Op.fire (σ := sig) i (Msg.ring alarm) due
   inputs ++ [.advance (k.clock_ms + 1), .advance (k.clock_ms + 2), .step, .batch 2] ++ fires
 
-def shell : Model Shard (Kernel.Op sig) where
+def shell : Model AlarmKernel (Kernel.Op sig) where
   init := [(Kernel.boot alarms).1]
   next k := (ops k).map fun op => (op, (k.apply op).kernel)
 
-def firesTimer (k : Shard) : Bool :=
+def firesTimer (k : AlarmKernel) : Bool :=
   match k.step.events with
   | .timeout _ _ :: _ => true
   | _ => false
 
-def isDue (k : Shard) (t : Bool × Msg × Kernel.Due) : Bool :=
+def isDue (k : AlarmKernel) (t : Bool × Msg × Kernel.Due) : Bool :=
   t.2.2.deadline_ms ≤ k.clock_ms
 
-def serves (k : Shard) (e : Envelope sig) : Bool :=
+def serves (k : AlarmKernel) (e : Envelope sig) : Bool :=
   match k.step.events with
   | .deliver e' :: _ => e' == e
   | .start i :: _ => i == e.dst
   | _ => false
 
-def firesBy (k : Shard) (due : Kernel.Due) : Bool :=
+def firesBy (k : AlarmKernel) (due : Kernel.Due) : Bool :=
   match k.step.events with
   | .timeout i msg :: _ =>
     (k.cell i).timers.any fun (m, first) => m == msg && first.deadline_ms ≤ due.deadline_ms
   | _ => false
 
-def stopsByTimer (k : Shard) (i : Bool) : Bool :=
+def stopsByTimer (k : AlarmKernel) (i : Bool) : Bool :=
   match k.step.events with
   | .timeout j _ :: _ => i == j && !(k.step.kernel.cell i).up
   | _ => false
 
-def oldest (k : Shard) (p : Envelope sig → Bool) : Bool :=
+def oldest (k : AlarmKernel) (p : Envelope sig → Bool) : Bool :=
   k.queue.toList.head?.all p
 
-def due (k : Shard) (p : Bool × Msg × Kernel.Due → Bool) : Bool :=
+def due (k : AlarmKernel) (p : Bool × Msg × Kernel.Due → Bool) : Bool :=
   (pending k).all fun t => !isDue k t || p t
 
-def properties : List (Property Shard) :=
+def properties : List (Property AlarmKernel) :=
   [ .always "every pending timer is on the agenda" fun k =>
       (pending k).all (scheduled k).contains,
     .always "every agenda entry is a pending timer" fun k =>

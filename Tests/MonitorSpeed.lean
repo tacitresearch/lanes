@@ -5,7 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import Lanes
 
 /-!
-The spec monitor's cost (`Lanes/Check/Monitor.lean`) on the shelf of `docs/TUTORIAL-WEB.md`: a
+The spec monitor's cost (`Lanes/Check/Monitor.lean`) on a shelf of files kept by one actor: a
 copy of its service, checked against itself with `Check.refines` and without it, with no crash
 and with one. Run by `lake exe lanesCheck`, which prints the times.
 -/

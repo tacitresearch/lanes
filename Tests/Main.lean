@@ -14,6 +14,7 @@ import Tests.Gate
 import Tests.Fronted
 import Tests.Kernel
 import Tests.Web
+import Tests.WebSocket
 import Tests.Join
 import Tests.Clock
 import Tests.HttpClient
@@ -91,7 +92,7 @@ def failures (json : Bool) (results : List (String × Bool)) : IO Unit := do
 `args`, every result is printed as JSON (`Testing.report`). -/
 def report (args : List String) (results : List (String × Bool)) (shown : Nat := 0) :
     IO UInt32 := do
-  let results := results ++ [("no shard is left running when the tests end",
+  let results := results ++ [("no runtime is left running when the tests end",
     (← Lanes.Runtime.running) == 0)]
   let code ← Lanes.Testing.report args (Lanes.Testing.Result.tests results)
     (if Lanes.Testing.wantsJson args then 0 else shown) (passes := false)
@@ -114,6 +115,7 @@ def live : IO (List (String × Bool)) := do
     ++ (← safely "postgres tls" Tests.PostgresTls.live)
     ++ (← safely "s3" Tests.S3.live) ++ (← safely "s3 uploads" Tests.S3Upload.live)
     ++ (← safely "reads" Tests.Reads.live)
+    ++ (← safely "websocket" Tests.WebSocket.live)
     ++ (← safely "test kit" Tests.Testing.live)
     ++ (← safely "tutorial web" Tests.TutorialWeb.live)
     ++ (← Checks.live)
@@ -129,7 +131,7 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.Crypto.tests ++ Tests.FileSystem.tests ++ Tests.Auth.tests ++ Tests.Clients.tests ++ Tests.Lease.tests
     ++ Tests.Log.tests ++ Tests.FormData.tests ++ Tests.Compress.tests
     ++ Tests.Release.tests ++ Tests.ReadRequest.tests ++ Tests.Oracle.unitTests
-    ++ Tests.HttpConn.tests ++ Tests.Loopback.tests
+    ++ Tests.HttpConn.tests ++ Tests.Loopback.tests ++ Tests.WebSocket.tests
     ++ Tests.Worker.tests ++ Tests.Outside.tests ++ Tests.Postgres.vectorTests
     ++ Tests.Postgres.downgradeTests ++ Tests.Postgres.tlsTests ++ Tests.Postgres.endPointTests
     ++ Tests.PostgresSettings.tests ++ Tests.Db.tests

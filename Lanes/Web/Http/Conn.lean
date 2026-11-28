@@ -19,6 +19,11 @@ A request that streams (`Config.streams`) is handed on by its head; its body fol
 one with the system at a time, and the system's answer may open a response whose parts the
 connection asks for one at a time, once what it wrote before has been sent (`Lanes.Web.Http.Stream`).
 
+A request that may switch protocols (`Config.upgrades`) is handed on by its head too, and
+nothing more is read. An answer of `101` is not written here: once every earlier response is,
+the connection is handed over (`Action.switch`) to the protocol (`Lanes.Web.Http.Upgrade`),
+which writes it. Any other answer is written, and the connection closes.
+
 What it promises is proved of it for every configuration and every sequence of events
 (`Lanes/Web/Http/ConnSound.lean`), and the model checker runs it against a client that sends bytes
 in any pieces, pipelines and leaves (`Tests/HttpConn.lean`).
@@ -57,6 +62,10 @@ structure Config where
   poll_ms : Nat := 1000
   /-- How long a stream of events may write nothing before a comment keeps it open. -/
   heartbeat_ms : Nat := 15000
+  /-- Which requests may switch protocols, by their head (`Lanes.Web.Http.Upgrade`): one without
+  a body is handed on, nothing more is read, and an answer of `101` hands the connection over.
+  `none`: none may. -/
+  upgrades : Option (Request → Bool) := none
 
 inductive Stage where
   | idle
@@ -102,6 +111,10 @@ inductive Slot where
   /-- A request that streams, handed to the system, which has not answered yet. -/
   | opened (head : Request) (headOnly close : Bool)
   | stream (o : Outflow)
+  /-- A request to switch protocols, handed to the system, which has not answered yet. -/
+  | upgrading (head : Request)
+  /-- Answered `101`: the connection is handed over once every earlier response is written. -/
+  | switched (head : Request) (response : Response)
   deriving DecidableEq, Repr, Hashable
 
 /-- Where the body of a request that streams is: so many bytes left of a body framed by its
@@ -167,6 +180,9 @@ inductive Action where
   | write (seq : Nat) (bytes : ByteArray)
   /-- Write bytes of the streamed response to `seq`, which is not over. -/
   | part (seq : Nat) (bytes : ByteArray)
+  /-- Hand the connection over to the protocol the request numbered `seq` switched to, with the
+  bytes read after its head; the connection does nothing more. -/
+  | switch (seq : Nat) (head : Request) (response : Response) (rest : ByteArray)
   | close
   deriving DecidableEq, Repr
 
@@ -291,6 +307,18 @@ def streamHead? (c : Conn) : Option (Request.Head × Nat) :=
     | .done head start => if streams (head.incoming .empty).request then some (head, start) else none
     | _ => none
 
+/-- The head at `pos`, whole, of a request that may switch protocols: one without a body. -/
+def upgradeHead? (c : Conn) : Option (Request.Head × Nat) :=
+  match cfg.upgrades with
+  | none => none
+  | some wants =>
+    match Request.readHead cfg.limits c.buffer c.pos with
+    | .done head start =>
+      if head.framing == .length 0 && !head.headOnly && wants (head.incoming .empty).request then
+        some (head, start)
+      else none
+    | _ => none
+
 def Inflow.start (seq : Nat) (head : Request.Head) : Inflow where
   seq
   head := (head.incoming .empty).request
@@ -310,6 +338,12 @@ def begin (now_ms : Nat) (c : Conn) (head : Request.Head) (start : Nat) : Conn :
            stage := if body then .body else .idle, since_ms := now_ms
            inflow := if body then some (Inflow.start (next c) head) else none }
 
+/-- The request that may switch protocols whose head ends at `start` is handed on, and nothing
+more is read. -/
+def beginUpgrade (now_ms : Nat) (c : Conn) (head : Request.Head) (start : Nat) : Conn :=
+  { c with pos := start, need := 0, slots := c.slots ++ [.upgrading (head.incoming .empty).request]
+           reading := false, continued := false, stage := .idle, since_ms := now_ms }
+
 /-- Read the requests that are whole, while there is room for them in flight. -/
 def take (now_ms : Nat) : Nat → Conn → Conn × List Action
   | 0, c => (c, [])
@@ -318,6 +352,9 @@ def take (now_ms : Nat) : Nat → Conn → Conn × List Action
     else if cfg.inflight_max ≤ c.slots.length then (settle now_ms c .full, [])
     else if c.buffer.size - c.pos < c.need then (c, [])
     else
+      match upgradeHead? cfg c with
+      | some (head, start) => (beginUpgrade now_ms c head start, [.begin (next c) (head.incoming .empty).request])
+      | none =>
       match streamHead? cfg c with
       | some (head, start) =>
         let (c', actions) := take now_ms fuel (begin now_ms c head start)
@@ -473,8 +510,19 @@ def respond (seq : Nat) (r : Response) (c : Conn) : Conn :=
           else .ready (encode headOnly close r)
         | none => .ready (encode headOnly close r)
       { c with slots := c.slots.set (seq - c.written) slot }
+    | some (.upgrading head) =>
+      let slot := if r.status == 101 then .switched head r else .ready (encode false true r)
+      { c with slots := c.slots.set (seq - c.written) slot }
     | _ => c
   else c
+
+/-- The head of the request numbered `seq`, if it asks to switch protocols and is not answered. -/
+def upgrading? (seq : Nat) (c : Conn) : Option Request :=
+  if c.written ≤ seq then
+    match c.slots[seq - c.written]? with
+    | some (.upgrading head) => some head
+    | _ => none
+  else none
 
 /-- A part that has come: its chunk is to be written; of events, not one with the id of the last
 written, which the client has. -/
@@ -552,12 +600,23 @@ def wakeAt (c : Conn) : Option Nat :=
       | _ => none
     earlier inflow outflow
 
-/-- The ready responses at the front, then the streamed one, then those behind it if it ended. -/
+/-- The connection is handed over once the request that switched is at the front. -/
+def flushSwitch (c : Conn) : Conn × List Action :=
+  if c.closed then (c, [])
+  else
+    match c.slots with
+    | .switched head r :: _ =>
+      ({ c with closed := true }, [.switch c.written head r (c.buffer.extract c.pos c.buffer.size)])
+    | _ => (c, [])
+
+/-- The ready responses at the front, then the streamed one, then those behind it if it ended,
+then the switch if one is at the front. -/
 def drain (now_ms : Nat) (c : Conn) : Conn × List Action :=
   let (c, before) := flush now_ms c
   let (c, parts) := flushStream cfg now_ms c
   let (c, after) := flush now_ms c
-  (c, before ++ parts ++ after)
+  let (c, switch) := flushSwitch c
+  (c, before ++ parts ++ after ++ switch)
 
 def advance (now_ms : Nat) (c : Conn) : Conn × List Action :=
   let (c, early) := drain cfg now_ms c
@@ -568,10 +627,13 @@ def advance (now_ms : Nat) (c : Conn) : Conn × List Action :=
   (c, early ++ taken ++ pumped ++ writes ++ closing)
 
 /-- A stream still going when nothing more is read ends: one of events with its last chunk, one
-of bytes cut short. -/
+of bytes cut short. A request to switch protocols does not switch: its answer is written as
+any other, and a `101` is not writable, so it is a `500`. -/
 def Slot.stop : Slot → Slot
   | .stream o =>
     .stream (if o.state == .going then { o with state := if o.events then .ended else .cut } else o)
+  | .upgrading head => .opened head false true
+  | .switched _ r => .ready (encode false true r)
   | s => s
 
 /-- Nothing more is read, a body that streams is no longer handed on, and streams end. -/

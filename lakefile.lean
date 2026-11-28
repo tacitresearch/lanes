@@ -54,7 +54,8 @@ lean_lib Lanes where
     `Lanes.Services.S3.Testing, `Lanes.Lib.Encoding.Cbor, `Lanes.Lib.Encoding.Cbor.Sound,
     `Lanes.Lib.Encoding.Csv, `Lanes.Lib.Encoding.CsvSound, `Lanes.Lib.Path, `Lanes.Lib.PathSound,
     `Lanes.Lib.Glob, `Lanes.Web.Html.Sanitize, `Lanes.Web.Html.SanitizeSound,
-    `Lanes.Web.Http.WebSocket, `Lanes.Web.Http.WebSocketSound]
+    `Lanes.Web.Http.WebSocket, `Lanes.Web.Http.WebSocketSound,
+    `Lanes.Web.Http.WebSocketSession, `Lanes.Web.Http.WebSocketSessionSound]
   moreLinkObjs := #[native, tls, verify, sign]
 
 /-! Files that modules embed with `include_str`, which Lake does not track. A library that `needs`

@@ -30,6 +30,9 @@ lake exe lanes stats       # the totals no file holds: trusted lines, decisions
   `examples/rookery` runs as a job of its own. A pull
   request that changes only documentation is built and linted, and the other jobs are skipped
   (the `changes` job of `.github/workflows/ci.yml` says which files count).
+- A test that needs PostgreSQL runs when `LANES_POSTGRES=host:port` names one, and says it is
+  skipped otherwise. `scripts/postgres-test-server` makes one; `scripts/with-postgres lake test`
+  makes one for the run, runs the tests beside it, and removes it.
 - Lake's artifact cache is on for Lanes, the examples and generated apps
   (`enableArtifactCache` and `restoreAllArtifacts` in each lakefile; D99, section 6). Lake keeps
   each build output once, named by a hash of its content, in the toolchain's cache,
@@ -229,12 +232,20 @@ still sees one message at a time, and each step is one event of the semantics
 (`Sched.Step.sound`).
 
 3.8 **Back-pressure, not unbounded inboxes.** The inbox is bounded (`inboxCapacity`); when it is
-full the sender is refused (`tryInput`, the server's `503`). The mailboxes between actors have
-no bound yet (`TRUSTED.md`).
+full the sender is refused (`tryInput`, the server's `503`). So is an input while
+`mailHighWater` messages between actors wait; past `mailCapacity` the process restarts
+(`docs/decisions/D123-runtime-limits.md`).
 
 3.9 **An adapter decides nothing in IO.** It is a pure function or a system that decides, a model
 of the outside it talks to (`Outside`), and a handler that only performs (D26, D40). *Why:* every
 defect four reviews found was a decision made in IO code.
+
+3.10 **An actor's state is a cache of its process.** Whatever must outlive the process, or that
+several instances must agree on, lives in the database, and a request does what it does to it in
+one pure transaction (`Handler`, D110, D111); an effect it causes is a row of an outbox written in
+that transaction (D114). An application refuses to start on tables other than the ones it
+declares (`Postgres.Typed.prepare`). *Why:* a restart resets every actor, and instances behind a
+load balancer share nothing else; `docs/DEPLOY.md`.
 
 ## Code
 

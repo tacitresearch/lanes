@@ -6,6 +6,7 @@ module
 
 public import Lanes.Testing.Http
 public import Lanes.Testing.Browser
+public import Lanes.Testing.Db
 public import Lanes.Testing.OAuth
 public import Lanes.Testing.Run
 

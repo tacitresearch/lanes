@@ -69,7 +69,7 @@ theorem mem_seen_grow_of_mem {j : σ.Id} {p : sys.State j} (h : p ∈ c.seen j) 
     exact List.mem_cons_of_mem _ h
   · rwa [seen_grow_of_ne hj]
 
-/-- Where every actor has states of one type, as the nodes of a cluster do: after a step or a
+/-- Where every actor has states of one type, as the actors of one kind do: after a step or a
 recovery of actor `i`, an actor has been in the states it had been in, and `i` in the new one. -/
 theorem mem_seen_grow {S : Type} {actor : (i : σ.Id) → σ.Actor i S}
     {accept : σ.In → (i : σ.Id) × σ.Msg i} {boot : List σ.Id}

@@ -9,7 +9,7 @@ import Tests.Live
 
 /-!
 Metrics, health and the access log. The rendering against text checked by hand; who may read the
-metrics page; then a server with all of it on: readiness once the shard has booted, and while
+metrics page; then a server with all of it on: readiness once the runtime has booted, and while
 draining; a scrape of the metrics page, with its path written as itself and
 percent-encoded, and the page hidden from a peer elsewhere; request ids; access-log lines read
 back as JSON; a connection refused at the bound, counted; and the same inputs entering the system
@@ -196,7 +196,7 @@ def readyTest : Async (List (String × Bool)) := do
   server.stop
   let logged ← lines.get
   return [
-    ("ops: alive, and ready once the shard has booted",
+    ("ops: alive, and ready once the runtime has booted",
       status alive == "200" && status ready == "200"),
     ("ops: the metrics page is served in the text format, to a peer on the loopback address",
       status page == "200" && page.contains ("content-type: " ++ Metrics.contentType)),
@@ -294,7 +294,7 @@ def refusedTest : Async (List (String × Bool)) := do
       refused.isEmpty && valueOf page "lanes_http_connections_refused_total" == some (1 + more)) ]
 
 /-- The same requests, with all of it off and with all of it on and probed between them: the
-same inputs enter the system, the four the gate admits (`/bad` it refuses before the shard). -/
+same inputs enter the system, the four the gate admits (`/bad` it refuses before the runtime). -/
 def inputsTest : Async (List (String × Bool)) := do
   let run := fun (ops : OpsConfig) (probe : Bool) => do
     let server ← serve (Server.system Tests.Gate.echo) Tests.Gate.bridge

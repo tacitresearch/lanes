@@ -75,14 +75,14 @@ abbrev L := Ledger Nat Nat
 
 def ledgerTests : List (String × Bool) :=
   let l : L := {}
-  let (a, l) := l.offer 2
-  let (b, l) := l.offer 2
-  let (c, l) := l.offerOrWait 2 70
+  let (a, l) := l.offer 2 100
+  let (b, l) := l.offer 2 100
+  let (c, l) := l.offerOrWait 2 100 70
   let (quiet, l) := l.idle false 50
   let (room, l) := l.free 1
-  let (idle, l) := l.done 1 0 0
+  let ((_, idle), l) := l.done 100 1 0 0
   let (room', l) := l.free 1
-  let (idle', l) := l.done 1 0 0
+  let ((_, idle'), l) := l.done 100 1 0 0
   let (now, l) := l.idle false 51
   let ((told, idlers), l) := ({ l with idlers := [(true, 60)] } : L).close
   [ ("ledger: the inbox takes up to its capacity, then a sender waits",
@@ -91,9 +91,29 @@ def ledgerTests : List (String × Bool) :=
       room == [70] && idle.isEmpty),
     ("ledger: the last item done answers who waited for idle", room'.isEmpty && idle' == [50] && now),
     ("ledger: closing tells every waiter, and then nothing is taken",
-      told.isEmpty && idlers == [60] && (l.offer 2).1 matches .closed) ]
+      told.isEmpty && idlers == [60] && (l.offer 2 100).1 matches .closed) ]
+
+/-- The mail between actors: an input that sends three messages, behind a high-water mark of
+two and a capacity of four. -/
+def mailTests : List (String × Bool) :=
+  let l : L := {}
+  let (a, l) := l.offer 10 2
+  let ((_, over), l) := l.sent 3 1 4
+  let (b, l) := l.offerOrWait 10 2 70
+  let ((room, _), l) := l.done 2 1 0 0
+  let ((room', _), l) := l.done 2 2 0 0
+  let (c, l) := l.offer 10 2
+  let ((_, over'), l) := l.sent 2 1 4
+  let ((_, over''), l) := l.sent 2 0 4
+  [ ("ledger: an input is taken while the mail is below the high-water mark",
+      (a matches .taken) && over.isNone),
+    ("ledger: no input is taken while the mail is at the mark, and the sender waits",
+      (b matches .full)),
+    ("ledger: the sender is woken when the mail falls below the mark, once",
+      room.isEmpty && room' == [70] && (c matches .taken)),
+    ("ledger: mail past the capacity is reported", over'.isNone && over'' == some 6 && l.mail == 6) ]
 
 def tests : List (String × Bool) :=
-  slotTests ++ timerTests ++ stopTests ++ ledgerTests
+  slotTests ++ timerTests ++ stopTests ++ ledgerTests ++ mailTests
 
 end Tests.Sched
