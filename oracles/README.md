@@ -52,7 +52,7 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Lib/Crypto/Verify.lean` | `Tests/Signature.lean` | A binding: OpenSSL's check against `Rsa.verifyReference` and keys `openssl` made |
 | `Lanes/Lib/Encoding/Base64.lean` | `oracles/go/base64` | |
 | `Lanes/Lib/Encoding/Digits.lean` | | Numbers in a base, read back as written (`Lanes/Lib/Encoding/Digits.lean`'s theorems); compared through every format that uses them |
-| `Lanes/Lib/File.lean` | | Not a format: a binding of `fsync`, and a file replaced whole (`Tests/Crypto.lean`) |
+| `Lanes/Lib/File.lean` | | Not a format: a file replaced whole by the proved plan (`Tests/FileSystem.lean`, `Tests/Crypto.lean`) |
 | `Lanes/Lib/Encoding/Json.lean` | | Imports the modules below |
 | `Lanes/Lib/Encoding/Json/Basic.lean` | | Values, not a format |
 | `Lanes/Lib/Encoding/Json/Classes.lean` | | Typed values to and from `Json`, not text |
@@ -122,6 +122,10 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Outside/Effects/Email.lean` | `oracles/moto/ses.jsonl` | |
 | `Lanes/Outside/Effects/Payments.lean` | | Owed: Stripe's test mode needs a key, and stripe-mock keeps no state; runs written by hand (`Tests/Outside.lean`) |
 | `Lanes/Outside/Events.lean` | | Owed, with Payments: webhooks need a service that sends them; runs written by hand (`Tests/Outside.lean`) |
+| `Lanes/Outside/FileSystem.lean` | `Tests/FileSystem.lean` | The model below as an outside; runs written by hand, with `io` errors and a power loss |
+| `Lanes/Outside/FileSystem/Basic.lean` | `Tests/FileSystem.lean` | Run live, not recorded: every `lake test` makes a script of calls in a temporary directory and checks each answer, errors included, against the model's. A loss of power cannot be run: what it leaves is the model's assumption, trusted (`TRUSTED.md`) |
+| `Lanes/Outside/FileSystem/Log.lean` | | A pattern proved on the model, not a service; checked at every crash point in `Tests/FileSystem.lean` |
+| `Lanes/Outside/FileSystem/Replace.lean` | | A pattern proved on the model, not a service; checked at every crash point in `Tests/FileSystem.lean`, and run by `File.replace` |
 | `Lanes/Outside/Idempotent.lean` | | Owed, with Payments: SES and S3 take no idempotency key; runs written by hand (`Tests/Outside.lean`) |
 | `Lanes/Outside/Multipart.lean` | `oracles/moto/s3-multipart.jsonl` | Parts by their size and digests, not their bytes |
 | `Lanes/Outside/ObjectStore.lean` | `oracles/moto/s3.jsonl`, `oracles/moto/s3-post.jsonl` | `POST` uploads as writes granted to a browser |
