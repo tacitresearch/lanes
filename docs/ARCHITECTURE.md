@@ -120,7 +120,7 @@ Also:
 ## The kernel and the runtime
 
 A system runs in one process, its actors free on worker threads as in Go, Tokio or Erlang
-(`docs/decisions/new-free-running.md`). Its state lives as long as the process: every start is a
+(`docs/decisions/D116-free-running.md`). Its state lives as long as the process: every start is a
 boot, with every actor in its initial state. State that must outlive the process lives in a
 service outside, reached through a modelled adapter (`Lanes/Outside/`, `Lanes/Db/`).
 
@@ -189,7 +189,7 @@ Also:
   table, as the kernel releases it (`Kernel.exec_visible`); a hundred thousand identities touched
   leave none behind (`Tests/Release.lean`).
 - On mixed step costs, free-running gave several times lower p50 and more answers a second than
-  one worker (`bench/Mixed.lean`, `docs/decisions/new-free-running.md`, which has the numbers).
+  one worker (`bench/Mixed.lean`, `docs/decisions/D116-free-running.md`, which has the numbers).
 
 ### Limits
 

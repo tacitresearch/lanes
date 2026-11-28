@@ -1,6 +1,6 @@
 # D64. Actors step in parallel within a wave, and connections run on threads of the server's own
 
-Status: Partly superseded by D73 (`Runtime.Config.workers` turning parallel steps on, off by default), D110-volatile-actors.md (waves: steps committed in a journal's order) and new-free-running.md (actors stepping in parallel within a wave)
+Status: Partly superseded by D73 (`Runtime.Config.workers` turning parallel steps on, off by default), D110-volatile-actors.md (waves: steps committed in a journal's order) and D116-free-running.md (actors stepping in parallel within a wave)
 
 One actor on one shard ran on one thread, and so did the kernel around it; the HTTP server ran
 each connection's loop on whichever of Lean's task threads told it something. On the warm machine

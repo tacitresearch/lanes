@@ -1,6 +1,6 @@
 # D32. The inbox is a batch, and waiting for room is the rare path
 
-Status: Superseded by D110-volatile-actors.md (one write to the journal for a batch) and by new-free-running.md (the inbox taken at once)
+Status: Superseded by D110-volatile-actors.md (one write to the journal for a batch) and by D116-free-running.md (the inbox taken at once)
 
 `Lanes/Runtime/Mailbox.lean`, `Lanes/Runtime/IO/Shell.lean`. Measured on one shard, for the first
 time: the kernel does over two million turns a second, and a shard took fifteen thousand

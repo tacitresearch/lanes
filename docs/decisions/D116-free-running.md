@@ -1,4 +1,4 @@
-# D?. Actors run free on worker threads, proved to refine the interleaving semantics
+# D116. Actors run free on worker threads, proved to refine the interleaving semantics
 
 Status: Accepted
 

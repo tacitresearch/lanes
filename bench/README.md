@@ -173,7 +173,7 @@ request and `lanes-heavy-par` raises the rate past `lanes-heavy`, whose shard th
 limit (about 20 µs of step and 11 of kernel and gate a request, so about 30,000 a second).
 
 Those rows measured waves, which the free-running scheduler replaced
-(`docs/decisions/new-free-running.md`); the `-par` servers now run their actors free on `WORKERS`
+(`docs/decisions/D116-free-running.md`); the `-par` servers now run their actors free on `WORKERS`
 workers.
 
 ## Mixed step costs
