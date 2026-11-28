@@ -2,6 +2,10 @@ name = "google"
 version = "0.1.0"
 defaultTargets = ["Google", "check"]
 testDriver = "check"
+# Lake's artifact cache: each output is stored once per toolchain, by its content, shared by
+# every project on this machine, and hard-linked into `.lake/build`.
+enableArtifactCache = true
+restoreAllArtifacts = true
 
 [[require]]
 name = "lanes"
@@ -14,3 +18,10 @@ name = "Google"
 [[lean_exe]]
 name = "check"
 root = "Check"
+needs = ["@/recorded"]
+
+# What `Check` embeds with `include_str`, which Lake does not track: the executable needs it, so
+# its hashes are in the trace of `Check`.
+[[input_dir]]
+name = "recorded"
+text = true
