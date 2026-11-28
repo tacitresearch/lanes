@@ -325,8 +325,11 @@ independent changes disjoint files; keep it that way.
 - A new claim goes in its area's table in `docs/ARCHITECTURE.md`, with its evidence, premises and
   status. A limit that can be fixed is an issue labelled `known-limit`; one the design accepts
   goes in its area's Limits there.
-- A change a user would notice gets a changelog fragment of its own,
-  `docs/changes/<slug>.md`, never a line in `CHANGELOG.md` (`CONTRIBUTING.md`, "The changelog").
+- No changelog entry: the changelog is written when a release is cut (`CONTRIBUTING.md`).
+- Decide what is small or reversible yourself, and say what you chose in the pull request.
+  Escalate to the owner only what changes direction, costs money, needs the owner's accounts, or
+  cannot be undone, each with the choice you would make. A question already answered is a
+  decision: record it, never ask it again.
 - An axiom gate goes in `Tests/Axioms/<Area>.lean`, under the line naming its module; a lemma
   about lists at the end of its topic's file in `Lanes/Proof/List/`.
 - Never type a count: the line counts in `TRUSTED.md` and the decisions' index are written by

@@ -1,8 +1,7 @@
 # Releasing
 
-How Lanes is versioned and released. `CHANGELOG.md` holds what each release changed. Until a
-release, each change is a fragment of its own in `docs/changes/` (`CONTRIBUTING.md`), and `lake
-exe lanes changelog` prints them as the Unreleased section.
+How Lanes is versioned and released. `CHANGELOG.md` holds what each release changed, for users:
+the net change since the last release, written when the release is cut, not entry by entry.
 
 ## Versions
 
@@ -42,11 +41,12 @@ module without that line is stable. `lanes lint` does not check this yet.
 
 ## Checklist
 
-1. Run `lake exe lanes changelog --release X.Y.Z YYYY-MM-DD`. It gathers the fragments of
-   `docs/changes/` into a section `## [X.Y.Z] - YYYY-MM-DD` of `CHANGELOG.md`, below the
-   Unreleased heading, each section's entries in the order of the fragments' names, and removes
-   the fragments. Read the section and edit it as one text: put the entries in an order a user
-   reads, and add the toolchain line. Then update the compare links at the bottom.
+1. Write the release's section of `CHANGELOG.md`, `## [X.Y.Z] - YYYY-MM-DD`: the net change since
+   the last tag, from `git log vPREV..HEAD`, the decisions accepted since and, before the first
+   release, the files in `docs/changes/` (`lake exe lanes changelog --release X.Y.Z YYYY-MM-DD`
+   gathers them). Something added and taken out again between releases is not in it. Keep it
+   short: one line per change a user notices, breaking changes first, and the toolchain line.
+   Then update the compare links at the bottom.
 2. Set `version` in `lakefile.lean` to `X.Y.Z`, in the same pull request.
 3. Run the benchmark on the runner machine (`.github/workflows/bench.yml`, `bench/README.md`) and
    compare it with the last release; say a regression in the CHANGELOG section.
