@@ -273,14 +273,14 @@ def tests : List (String × Bool) :=
     (maxDepth := some 8)
   [ ("fronted: each request is answered exactly once, whatever the timers do, and its memo "
         ++ "passes the gate by",
-      two.ok && two.complete && two.witnesses.length == 5),
+      two.ok && two.witnesses.length == 5),
     ("fronted: an input that is no request reaches the system behind the gate",
-      noted.ok && noted.complete
+      noted.ok
         && noted.witnesses.any fun (name, _) => name == "a memo passes the gate by"),
     ("fronted: a request the bridge refuses is answered without entering the system",
-      refused.ok && refused.complete),
+      refused.ok),
     ("fronted: beyond maxPending a request gets 503 and is still answered exactly once",
-      full.ok && full.complete),
+      full.ok),
     ("fronted: a request id used twice is answered twice, and the check says so",
       match reused.failure with
       | some (.violated "no request is answered twice" _) => true
@@ -291,17 +291,17 @@ def tests : List (String × Bool) :=
       | _ => false),
     ("fronted: no id is answered more often than it arrived and pending deadlines stay armed, "
         ++ "though actors crash and links lose and reorder",
-      lossy.ok && lossy.complete && lossy.witnesses.length == 2),
+      lossy.ok && lossy.witnesses.length == 2),
     ("fronted: the same when every link but the one from outside to the gate duplicates, "
         ++ "to depth 10",
-      duplicating.ok && duplicating.witnesses.length == 2),
+      duplicating.passed && duplicating.witnesses.length == 2),
     ("fronted: at most once per arrival needs the link from outside to the gate not to duplicate",
       match duplicatedOutside.failure with
       | some (.violated "no request is answered more often than it arrived" _) => true
       | _ => false),
     ("gate alone: no id is answered more often than it arrived, whatever arrives on its two "
         ++ "inputs, though it crashes and its links lose and reorder",
-      alone.ok && alone.complete),
+      alone.ok),
     ("gate alone: on the link a join gives it from outside, which duplicates, one arrival is "
         ++ "answered twice",
       match aloneInJoin.failure with
@@ -309,7 +309,7 @@ def tests : List (String × Bool) :=
       | _ => false),
     ("gate alone, on that link: a pending request's deadline stays armed, can fire and is "
         ++ "armed again by no step, and a gate that cannot crash stays up, to depth 9",
-      liveInJoin.ok && liveInJoin.witnesses.length == 1),
+      liveInJoin.passed && liveInJoin.witnesses.length == 1),
     ("gate alone: a request leaves the pending list only in a step that emits its answer",
       gateLeavingIsAnswered) ]
 

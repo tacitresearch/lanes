@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
 import TodoDb
+import Lanes.Testing
 
 /-!
 The to-do list against a user who adds to-dos and the store model (`Lanes/Outside/Store/Basic.lean`)
@@ -75,7 +76,7 @@ def check (cfg : Config) (isolation : Store.Isolation) (todos : List (Nat × Str
 
 def report (r : Check.Report (W cfg) (Event sig)) : String :=
   match r.failure with
-  | none => s!"PASS ({r.states} states{if r.complete then "" else ", bounded"})"
+  | none => s!"PASS ({if r.ok then "complete" else "bounded"}, {r.states} states)"
   | some (.violated p t) =>
     s!"FAIL: \"{p}\" after {t.steps.length} steps:\n" ++ "\n".intercalate (t.steps.map fun (e, _) => "  " ++ (Event.render e))
   | some (.unreached ps) => s!"FAIL: never reached {ps}"
@@ -88,27 +89,26 @@ def duplicate (r : Check.Report (W cfg) (Event sig)) : Bool :=
 
 def todos : List (Nat × String) := [(1, "milk")]
 
-def tests : IO (List (String × Bool)) := do
+def tests (json : Bool) : IO (List (String × Bool)) := do
   let buggyRc := check { keyed := false } .readCommitted todos false
   let buggySer := check { keyed := false } .serializable todos false
   let fixedRc := check { keyed := true } .readCommitted todos true
   let fixedSer := check { keyed := true } .serializable todos true
   let fixedTwo := check { keyed := true } .readCommitted [(1, "milk"), (2, "eggs")] false
-  IO.println s!"appended, read committed: {report buggyRc}"
-  IO.println s!"appended, serializable: {report buggySer}"
-  IO.println s!"keyed, read committed, with failures: {report fixedRc}"
-  IO.println s!"keyed, serializable, with failures: {report fixedSer}"
-  IO.println s!"keyed, two to-dos: {report fixedTwo}"
+  unless json do
+    IO.println s!"appended, read committed: {report buggyRc}"
+    IO.println s!"appended, serializable: {report buggySer}"
+    IO.println s!"keyed, read committed, with failures: {report fixedRc}"
+    IO.println s!"keyed, serializable, with failures: {report fixedSer}"
+    IO.println s!"keyed, two to-dos: {report fixedTwo}"
   return [
     ("appending and retrying a lost COMMIT stores a to-do twice, at read committed", duplicate buggyRc),
     ("and at serializable", duplicate buggySer),
     ("the keyed insert never stores a to-do twice, at read committed, with failures",
-      fixedRc.ok && fixedRc.complete),
-    ("and at serializable", fixedSer.ok && fixedSer.complete),
-    ("and with two to-dos", fixedTwo.ok && fixedTwo.complete) ]
+      fixedRc.ok),
+    ("and at serializable", fixedSer.ok),
+    ("and with two to-dos", fixedTwo.ok) ]
 
-def main : IO UInt32 := do
-  let results ← tests
-  for (name, ok) in results do
-    IO.println s!"{if ok then "ok  " else "FAIL"} {name}"
-  return if results.all (·.2) then 0 else 1
+def main (args : List String) : IO UInt32 := do
+  let results ← tests (Lanes.Testing.wantsJson args)
+  Lanes.Testing.report args (Lanes.Testing.Result.tests results .check)

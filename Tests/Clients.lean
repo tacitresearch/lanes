@@ -25,7 +25,7 @@ def tests : List (String × Bool) :=
   let plain := check false
   let cached := check true
   [ ("clients: requests that wait for answers refine the map spec without a cache",
-      plain.ok && plain.complete),
+      plain.ok),
     ("clients: and a cache serves the stale read after the write was answered",
       match cached.failure with
       | some (.violated _ t) => t.labels.getLast? == some (.output ⟨3, .value none⟩)

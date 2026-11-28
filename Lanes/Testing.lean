@@ -9,10 +9,12 @@ public import Lanes.Testing.Browser
 public import Lanes.Testing.S3
 public import Lanes.Testing.OAuth
 public import Lanes.Testing.Transcode
+public import Lanes.Testing.Run
 
 /-!
 The test kit: what an application's tests run against, imported as `Lanes.Testing` beside
 `Lanes`, and never by `import Lanes`, so no deployed binary links it
 (`docs/decisions/D77-a-test-kit.md`). A fake S3 that checks signatures, a fake identity
-provider, a scripted browser, and helpers for HTTP.
+provider, a scripted browser, helpers for HTTP, and the runner of a test program
+(`Testing.report`).
 -/

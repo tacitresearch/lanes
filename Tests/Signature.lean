@@ -198,7 +198,7 @@ def raw (der : ByteArray) : Option ByteArray := do
 
 def live : IO (List (String × Bool)) := do
   unless ← Tests.Tls.hasOpenssl do
-    IO.println "signature: skipped the keys made by openssl, there is no openssl command"
+    IO.eprintln "signature: skipped the keys made by openssl, there is no openssl command"
     return []
   let dir : System.FilePath :=
     s!"{(← IO.getEnv "TMPDIR").getD "/tmp"}/lanes-signature-{← IO.monoNanosNow}"

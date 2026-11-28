@@ -188,7 +188,7 @@ def checks : IO (List (String × Bool)) := do
       | some (.violated "a read begun after the update gives the new value" _) => true
       | _ => false),
     (s!"cache model: with a lease the late fill is refused, whatever is evicted ({fixed.states} states)",
-      fixed.ok && fixed.complete),
+      fixed.ok),
     (s!"cache model: a cache that may answer stale values serves the old one even so "
         ++ s!"({steps failover.failure} steps)",
       match failover.failure with

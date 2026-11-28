@@ -53,6 +53,7 @@ different lines. The numbers give the order in which they were taken.
 - [D63. The fixtures hold what the tests use, the examples the proofs](D63-fixtures-hold-what-tests-use.md)
 - [D93. Each generated line is about one item, and unreleased changes are fragments](D93-generated-lines-are-local.md)
 - [D20. History variables are ghosts with an erasure theorem](D20-history-variables-are-ghosts-with-an.md)
+- [D104. Honest results: a bounded pass exits 2, each failure has a kind, a binding is proved of its reference](D104-honest-results.md)
 - [D2. Identities name actors that always exist (virtual actors)](D2-identities-name-actors-that-always-exist.md)
 - [D55. Work outside a step is a job: an actor with an outbox, a deadline per attempt and a bound](D55-jobs.md)
 - [D94. A served journal is versioned by the application's name; the gate's settings are read from it](D94-journal-version.md)

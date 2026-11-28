@@ -319,9 +319,9 @@ def checks : IO (List (String × Bool)) := do
   let b := browserCheck
   return [
     ("multipart flow: against the model, every Complete lists the plan's parts in order, done and failed only when true",
-      f.ok && f.complete && f.witnesses.length == 5),
+      f.ok && f.witnesses.length == 5),
     ("multipart browser: parts put at once, lost and put again, completed twice: the object is the parts in order",
-      b.ok && b.complete && b.witnesses.length == 3) ]
+      b.ok && b.witnesses.length == 3) ]
 
 def tests : List (String × Bool) := modelTests
 

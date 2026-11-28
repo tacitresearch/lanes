@@ -1,4 +1,5 @@
 import Upload.Web
+import Lanes.Testing
 
 /-!
 Run by `lake test`. The service model-checked against itself as the spec, on pieces in any order
@@ -18,7 +19,7 @@ def requests : List Request :=
   [.start 1, .piece 2 1 0 (bytes "ab") false, .piece 3 1 1 (bytes "c") true,
     .piece 4 9 0 (bytes "x") true, .start 5]
 
-def check : IO Bool := do
+def check : Lanes.Testing.Result :=
   let report := Check.system (system { uploads_max := 1 })
     { driver := (service { uploads_max := 1 }).monitored (Driver.anyOrder requests) }
     [ Check.refines "every answer is allowed by the spec",
@@ -34,8 +35,8 @@ def check : IO Bool := do
         w.state.outbox.any fun r => r.answer matches .outOfOrder,
       .sometimes "an upload beyond the bound is refused" fun w =>
         w.state.outbox.any fun r => r.answer matches .busy ]
-  IO.println report.renderSystem
-  return report.ok
+  .check "upload: the service refines itself as the spec, on pieces in any order" report
+    report.renderSystem
 
 def body (n : Nat) : ByteArray :=
   ByteArray.mk ((Array.range n).map fun k => (k * 7 + k / 251).toUInt8)
@@ -73,8 +74,5 @@ def front : List (String × Bool) :=
     ("an upload with no body is answered at once", answer empty == s!"200 0 bytes, Adler-32 1\n"),
     ("a chunk without its CRLF refuses the body with 400", (text refused).startsWith "400") ]
 
-def main : IO UInt32 := do
-  let ok ← check
-  for (name, passed) in front do
-    IO.println s!"{if passed then "ok  " else "FAIL"} {name}"
-  return if ok && front.all (·.2) then 0 else 1
+def main (args : List String) : IO UInt32 :=
+  Lanes.Testing.report args (check :: Lanes.Testing.Result.tests front)

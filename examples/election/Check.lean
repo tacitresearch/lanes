@@ -1,5 +1,6 @@
 import Lanes
 import Election
+import Lanes.Testing
 
 /-!
 Model checks of leader election, run by `lake test` (Lanes rule 5.1). Three nodes with terms
@@ -47,7 +48,7 @@ def tests : List (String × Bool) :=
   let fuzzed := fuzz5 {}
   let fuzzedBuggy := fuzz5 { votesOncePerTerm := false }
   [ ("three nodes: at most one leader per term, with reordering",
-      safe.ok && safe.complete),
+      safe.ok),
     ("three nodes: a leader is elected and terms advance", safe.witnesses.length == 2),
     ("three nodes: timeouts were explored",
       safe.coverage.any fun (name, count) => name == "timeout" && count > 0),
@@ -66,8 +67,5 @@ def tests : List (String × Bool) :=
         | none => false
       | none => false) ]
 
-def main : IO UInt32 := do
-  let failed := tests.filter (!·.2)
-  for (name, ok) in tests do
-    IO.println s!"{if ok then "ok  " else "FAIL"} {name}"
-  return if failed.isEmpty then 0 else 1
+def main (args : List String) : IO UInt32 :=
+  Lanes.Testing.report args (Lanes.Testing.Result.tests tests .check)

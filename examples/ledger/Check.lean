@@ -1,4 +1,5 @@
 import Ledger
+import Lanes.Testing
 
 /-!
 # Model checks
@@ -339,101 +340,106 @@ def checkLeaky :=
         (delivered .atLedger) }
     [Check.refines "every response is one the spec allows"]
 
-def timed {sys : System (sig N C)} [sys.Inspect] {D : Type} (name : String)
+/-- A check, printed as it ends unless the output is JSON, and its result. -/
+def timed {sys : System (sig N C)} [sys.Inspect] {D : Type} (json : Bool) (name : String)
     (ok : Check.Report (World sys D) (Event (sig N C)) → Bool)
-    (report : Unit → Check.Report (World sys D) (Event (sig N C))) : IO Bool := do
+    (report : Unit → Check.Report (World sys D) (Event (sig N C))) : IO Testing.Result := do
   let start ← IO.monoMsNow
   let r := report ()
   let passed := ok r
   let ms := (← IO.monoMsNow) - start
-  IO.println s!"== {name}: {if passed then "as expected" else "NOT AS EXPECTED"} ({ms} ms)"
-  IO.println r.renderSystem
-  (← IO.getStdout).flush
-  return passed
+  unless json do
+    IO.println s!"== {name}: {if passed then "as expected" else "NOT AS EXPECTED"} ({ms} ms)"
+    IO.println r.renderSystem
+    (← IO.getStdout).flush
+  return .ofBool .check name passed r.renderSystem
 
 def main (args : List String) : IO UInt32 := do
+  let json := Testing.wantsJson args
+  let args := args.filter (· != "--json")
   let all := args.isEmpty
-  let mut results := #[]
+  let mut results : Array Testing.Result := #[]
   if all || args.contains "race" then
-    results := results.push (← timed "a log-out racing a transfer" (fun r => r.ok && r.complete)
+    results := results.push (← timed json "a log-out racing a transfer" (fun r => r.ok)
       fun _ => check untimed .viaLedger logOutRace (raceWitnesses .viaLedger))
-    results := results.push (← timed "the same, answered by the user: the checker finds the stale view"
+    results := results.push (← timed json "the same, answered by the user: the checker finds the stale view"
       (fun r => match r.failure with
         | some (.violated "every response is one the spec allows" _) => true
         | _ => false)
       fun _ => check untimed .fromUser logOutRace (raceWitnesses .fromUser))
   if all || args.contains "abuse" then
-    results := results.push (← timed "locks, evictions and refusals" (fun r => r.ok && r.complete)
+    results := results.push (← timed json "locks, evictions and refusals" (fun r => r.ok)
       fun _ => check untimed .viaLedger abuse abuseWitnesses)
-    results := results.push (← timed "with timers: a lock lifts and a session ends at any moment"
-      (fun r => r.ok && r.complete)
+    results := results.push (← timed json "with timers: a lock lifts and a session ends at any moment"
+      (fun r => r.ok)
       fun _ => check timed' .viaLedger lockRace lockWitnesses)
-    results := results.push (← timed "the same, with a lockout that does not lock"
+    results := results.push (← timed json "the same, with a lockout that does not lock"
       (fun r => match r.failure with
         | some (.violated "every response is one the spec allows" _) => true
         | _ => false)
       fun _ => checkLeaky)
-    results := results.push (← timed
+    results := results.push (← timed json
       "a session ending while a view is on its way, the end served by the ledger"
-      (fun r => r.ok && r.complete)
+      (fun r => r.ok)
       fun _ => check timed' .viaLedger expiryRace expiryWitnesses)
-    results := results.push (← timed
+    results := results.push (← timed json
       "the same with the end at the user: the view sees a payment asked after the end"
       (fun r => match r.failure with
         | some (.violated "every response is one the spec allows" _) => true
         | _ => false)
       fun _ => checkEnding .atUser timed' .viaLedger expiryRace [])
-    results := results.push (← timed
+    results := results.push (← timed json
       "the same with the end served by the ledger and a user crashing"
-      (fun r => r.ok && r.complete)
+      (fun r => r.ok)
       fun _ => check timed' .viaLedger expiryRace [] usersCrashing 1)
-    results := results.push (← timed
+    results := results.push (← timed json
       "the same with the ledger crashing: a session's end lost with what was in flight"
       (fun r => match r.failure with
         | some (.violated "every response is one the spec allows" _) => true
         | _ => false)
       fun _ => check timed' .viaLedger expiryRace [] ledgerCrashing 1)
-    results := results.push (← timed
+    results := results.push (← timed json
       "the same with links to the ledger that lose: a session's end lost on the way"
       (fun r => match r.failure with
         | some (.violated "every response is one the spec allows" _) => true
         | _ => false)
       fun _ => check timed' .viaLedger expiryRace [] lossyToLedger)
   if args.contains "timed" then
-    results := results.push (← timed "locks, evictions and refusals, with timers firing at any moment"
-      (fun r => r.ok && r.complete)
+    results := results.push (← timed json "locks, evictions and refusals, with timers firing at any moment"
+      (fun r => r.ok)
       fun _ => check timed' .viaLedger abuse timedWitnesses)
-    results := results.push (← timed "the same with a user crashing anywhere"
-      (fun r => r.ok && r.complete)
+    results := results.push (← timed json "the same with a user crashing anywhere"
+      (fun r => r.ok)
       fun _ => check timed' .viaLedger abuse [] usersCrashing 1)
   if all || args.contains "faults" then
-    results := results.push (← timed "a log-out racing a transfer, with links that reorder"
+    results := results.push (← timed json "a log-out racing a transfer, with links that reorder"
       (fun r => match r.failure with
         | some (.violated "every response is one the spec allows" _) => true
         | _ => false)
       fun _ => check untimed .viaLedger logOutRace (raceWitnesses .viaLedger) reordering)
-    results := results.push (← timed "a log-out racing a transfer, with a crash anywhere"
-      (fun r => r.ok && r.complete)
+    results := results.push (← timed json "a log-out racing a transfer, with a crash anywhere"
+      (fun r => r.ok)
       fun _ => check untimed .viaLedger logOutRace [] crashing 1)
-    results := results.push (← timed
+    results := results.push (← timed json
       "a log-out racing a transfer, with requests lost and reordered and a crash anywhere"
-      (fun r => r.ok && r.complete)
+      (fun r => r.ok)
       fun _ => check untimed .viaLedger logOutRace (raceWitnesses .viaLedger) lossyIn 1)
-    results := results.push (← timed
+    results := results.push (← timed json
       "transfers between two users, with links to the ledger that lose"
-      (fun r => r.ok && r.complete)
+      (fun r => r.ok)
       fun _ => check untimed .viaLedger transfers [] lossyToLedger)
   if all || args.contains "bridge" then
     for (name, ok) in Bridge.tests do
-      IO.println s!"== {name}: {if ok then "as expected" else "NOT AS EXPECTED"}"
-      results := results.push ok
+      unless json do IO.println s!"== {name}: {if ok then "as expected" else "NOT AS EXPECTED"}"
+      results := results.push (.ofBool .test name ok)
   if all || args.contains "transfers" then
-    results := results.push (← timed "transfers between two users" (fun r => r.ok && r.complete)
+    results := results.push (← timed json "transfers between two users" (fun r => r.ok)
       fun _ => check untimed .viaLedger transfers transfersWitnesses)
-    results := results.push (← timed "transfers between two users, with a crash anywhere"
-      (fun r => r.ok && r.complete)
+    results := results.push (← timed json "transfers between two users, with a crash anywhere"
+      (fun r => r.ok)
       fun _ => check untimed .viaLedger transfers [] crashing 1)
-  return if results.all id then 0 else 1
+  Testing.report (if json then ["--json"] else []) results.toList
+    (shown := if json then 0 else results.size)
 
 end Ledger.Check
 

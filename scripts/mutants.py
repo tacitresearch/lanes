@@ -34,6 +34,7 @@ the tests cover: each row of TRUSTED.md says what its tests check and what they 
 import json
 import os
 import pathlib
+import re
 import signal
 import subprocess
 import sys
@@ -389,7 +390,9 @@ def verdict(check):
         errors = [line.strip() for line in out.splitlines() if "error:" in line]
         return "nobuild", f"does not build ({errors[0] if errors else 'no error reported'})"
     code, out = sh(check["run"], check["cwd"], check["limit_s"])
-    failed = [line[5:] for line in out.splitlines() if line.startswith("FAIL ")]
+    # `FAIL (test) name`, as `Testing.report` prints it, or `FAIL name`.
+    failed = [re.sub(r"^\(\w+\) ", "", line[5:]) for line in out.splitlines()
+              if line.startswith("FAIL ")]
     asserted = [name for name in failed if ": threw " not in name]
     if asserted:
         more = f", and {len(failed) - 1} more" if len(failed) > 1 else ""
