@@ -37,7 +37,6 @@ REQUIRES, PACKAGES = read_layers()
 # prefix wins; a path that no prefix names keeps its path.
 MOVES = [
     ("Lanes/Outside/IO/Clock.lean", "Lanes/Runtime/IO/Clock.lean"),
-    ("Lanes/Behaviours/Jobs/IO/Pool.lean", "Lanes/Runtime/IO/Jobs.lean"),
     ("Lanes/Lib/Net/", "Lanes/Net/"),
     ("Lanes/Web/IO/Tls.lean", "Lanes/Net/IO/Tls.lean"),
     ("Lanes/Lib/Mime/", "Lanes/Http/"),

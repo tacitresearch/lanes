@@ -18,6 +18,10 @@ duplicate suppression is the endpoint's).
 
 `Lanes.Semantics.Once` has the spec this implements, `Service.once`, and the proof for a
 `Server` behind it.
+
+The memo is volatile: it lives in the actor, and a restart forgets it, so a repeat after a
+restart acts again. What must be acted on once across restarts is acted on in a transaction
+under an idempotency key stored with it (`Lanes.Db.Keys.once`).
 -/
 
 @[expose] public section
@@ -65,8 +69,7 @@ def Memo.seen (memo : Memo C E) (c : C) (n : Nat) : Seen E :=
   | none => .fresh
 
 /-- `a`, acting once on each request `key` names. A message `key` reads as `none` is not a
-request and is handled as `a` handles it. The memo is durable: a restart that forgot it would
-act on a repeat. -/
+request and is handled as `a` handles it. A restart that forgets the memo acts on a repeat. -/
 def actor {S Msg : Type} (a : Actor S Msg E) (key : Msg → Option (C × Nat)) :
     Actor (S × Memo C E) Msg E where
   init := (a.init, {})

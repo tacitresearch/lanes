@@ -5,13 +5,14 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Lanes
-public import Lanes.Behaviours.Jobs.Sound
-public import Lanes.Behaviours.Schedule.Sound
 public import Lanes.Check.FingerprintSound
 public import Lanes.Check.ReduceSound
 public import Lanes.Check.SearchSound
 public import Lanes.Check.SystemSound
 public import Lanes.Db.Sound
+public import Lanes.Db.JobsSound
+public import Lanes.Db.OnceSound
+public import Lanes.Db.WorkerSound
 public import Lanes.Lib.Encoding.Json.BasicSound
 public import Lanes.Lib.Encoding.Json.ParserSound
 public import Lanes.Lib.Encoding.Json.PrinterSound

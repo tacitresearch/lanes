@@ -9,14 +9,11 @@ The axiom gate (Lanes rule 5.5): each headline theorem depends only on Lean's th
 axioms. If a `sorry` or a new axiom reaches one, this file stops compiling.
 -/
 
-/-- info: 'Reminders.bounded' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Reminders.bounded
+/-- info: 'Reminders.keeps' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Reminders.keeps
 
-/-- info: 'Reminders.jobs_bounded' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Reminders.jobs_bounded
+/-- info: 'Reminders.delivered_committed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Reminders.delivered_committed
 
-/-- info: 'Reminders.delivery_ends' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Reminders.delivery_ends
-
-/-- info: 'Reminders.delivery_answered' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Reminders.delivery_answered
+/-- info: 'Reminders.delivered_once' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Reminders.delivered_once
