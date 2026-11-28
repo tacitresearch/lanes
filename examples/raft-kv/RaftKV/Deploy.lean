@@ -48,6 +48,8 @@ structure NodeConfig (n : Nat) where
   journal : Option System.FilePath := none
   /-- Whether a journal that is not there is begun: at a node's first start, and at no other. -/
   create : Bool := false
+  /-- The key the nodes share, which their handshake checks. -/
+  key : ByteArray
 
 def message (n : Nat) (_ : Fin n) : Codec (Msg (Fin n) Command) := Codec.of _
 
@@ -75,6 +77,13 @@ def journalName (n : Nat) (self : Fin n) (config : Config) : String :=
 
 /-- Start node `self`. Commands go in with `Runtime.input (.inl request)`, and the answers to
 those this node took come to `onAnswer`. -/
+/-- The system the nodes' handshake names. -/
+def peerSystem (n : Nat) : String := s!"raft-kv of {n} nodes"
+
+/-- What the nodes' messages are, which their handshake compares: it changes with `Msg`,
+`Command` and their codecs. -/
+def peerSchema (n : Nat) : String := s!"RaftKV.Msg (Fin {n}) RaftKV.Command by lanes_data, 1"
+
 def startNode {n : Nat} (config : NodeConfig n) (runtime : Runtime.Config := {})
     (onAnswer : Response Answer → Async Unit := fun _ => pure ()) :
     Async (Runtime (TextShard n config.raft config.self) × Peers (sig (Fin n) Command Answer)) := do
@@ -83,7 +92,8 @@ def startNode {n : Nat} (config : NodeConfig n) (runtime : Runtime.Config := {})
       { path, system := journalName n config.self config.raft, input := shardInput n
         actors := some (shardActors n config.raft config.self), create := config.create }
   Peers.shard (TextCluster n config.raft) (· == config.self)
-    { listen := config.listen, home := config.home, id := Codec.fin, msg := message n }
+    { listen := config.listen, home := config.home, id := Codec.fin, msg := message n
+      system := peerSystem n, schema := peerSchema n, key := config.key }
     runtime onAnswer log
 
 end RaftKV

@@ -59,6 +59,10 @@ structure Limits where
   maxParcelBytes : Nat := 16777216
   /-- How long to leave a process alone after failing to reach it. -/
   retry_ms : Nat := 100
+  /-- How long the handshake that opens a connection may take (`Lanes.Peers.Handshake`). -/
+  handshake_ms : Nat := 5000
+  /-- The most bytes the other side's hello may take. -/
+  helloBytes : Nat := 4096
 
 structure Courier where
   wires : Std.HashMap Address Wire := {}

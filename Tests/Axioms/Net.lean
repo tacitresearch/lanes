@@ -36,3 +36,14 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Peers.Courier.written_sublist_sent' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Peers.Courier.written_sublist_sent
+
+-- Lanes.Net.HandshakeSound
+
+/-- info: 'Lanes.Peers.Handshake.Hello.read_write_append' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Peers.Handshake.Hello.read_write_append
+
+/-- info: 'Lanes.Peers.Handshake.Reachable.ready_proved' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Peers.Handshake.Reachable.ready_proved
+
+/-- info: 'Lanes.Peers.Handshake.hear_differs' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Peers.Handshake.hear_differs
