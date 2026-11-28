@@ -2,8 +2,10 @@
 
 Applications built on Lanes, each a Lake package of its own that depends on the framework in
 this repository by path, as an application of yours would depend on it by git. They are written
-to be read: copy one to start. The tests do not use them (they use copies in `Tests/Fixtures/`),
-so an example can change for its reader alone. The large ones are also here to find out what the
+to be read: copy one to start. The tests do not import them, but three of their systems are
+copied into `Tests/Fixtures/` and must stay the same as the copies (`Tests/Copies.lean`): those
+of `examples/kv-cache`, `examples/election` and `examples/watchdog`. `examples/counter` is what
+`lanes new` writes (`Tests/New.lean`). The large ones are also here to find out what the
 framework is missing: anything one of them has to work around is a defect of Lanes, and is fixed
 there.
 

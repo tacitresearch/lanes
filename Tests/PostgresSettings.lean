@@ -44,6 +44,11 @@ def defaultTests : List (String × Bool) :=
         && Address.of "10.0.0.5" == .ip (.v4 ⟨10 * 2 ^ 24 + 5, by decide⟩)
         && Address.of "db.example.com" == .name "db.example.com"
         && Address.of "::1" == .ip (.v6 ⟨1, by decide⟩)),
+    ("postgres settings: a name goes to its first IPv4 address, or its first IPv6 one if it has none",
+      let v4 (s : String) := s.contains '.'
+      Address.preferred v4 ["::1", "10.0.0.5", "10.0.0.6"] == some "10.0.0.5"
+        && Address.preferred v4 ["2001:db8::1", "2001:db8::2"] == some "2001:db8::1"
+        && Address.preferred v4 [] == none),
     ("postgres settings: a client's configuration takes the default for its host, and channel binding where offered",
       ({ host := "127.0.0.1", conn } : Client.Config).sslmode == .disable
         && ({ host := "db.example.com", conn } : Client.Config).sslmode == .verifyFull

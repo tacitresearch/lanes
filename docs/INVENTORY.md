@@ -78,15 +78,16 @@ them by area.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Check.insertNew` | checked | `Tests/KV.lean` |
-| `Check.sameSet` | checked | `Tests/KV.lean` |
+| `Check.sameSet` | proved | through `Check.OnceState.equiv`: `Check.OnceMonitor.withinFrom_eq` |
 | `Check.setHash` | checked | `Tests/KV.lean` |
-| `Check.OnceState.equiv` | checked | `Tests/KV.lean` |
+| `Check.OnceState.equiv` | proved | `Check.OnceMonitor.withinFrom_eq` |
 | `Check.OnceState.take` | checked | `Tests/KV.lean` |
 | `Check.OnceState.hash` | checked | `Tests/KV.lean` |
 | `Check.OnceMonitor.insertAll` | checked | `Tests/KV.lean` |
 | `Check.OnceMonitor.expand` | checked | `Tests/KV.lean` |
 | `Check.OnceMonitor.close` | checked | `Tests/KV.lean` |
 | `Check.OnceMonitor.ok` | checked | `Tests/KV.lean` |
+| `Check.OnceMonitor.withinFrom` | proved | `Check.OnceMonitor.withinFrom_eq` |
 | `Check.OnceMonitor.instBEq` | checked | `Tests/KV.lean` |
 | `Check.OnceMonitor.instHashable` | checked | `Tests/KV.lean` |
 | `Check.OnceMonitor.start` | checked | `Tests/KV.lean` |
@@ -1524,6 +1525,7 @@ them by area.
 | --- | --- | --- |
 | `Postgres.Address.localhost` | proved | through `Postgres.SslMode.defaultFor`: `Postgres.Client.Config.sslmode_default`, `Postgres.SslMode.defaultFor_disable` and others |
 | `Postgres.Address.of` | proved | `Postgres.SslMode.defaultFor_disable`, `Postgres.SslMode.defaultFor_loopback`, `Postgres.SslMode.defaultFor_remote` |
+| `Postgres.Address.preferred` | proved | `Postgres.Address.preferred_isSome`, `Postgres.Address.preferred_spec` |
 | `Postgres.Address.loopback` | proved | `Postgres.Address.name_remote`, `Postgres.SslMode.defaultFor_disable`, `Postgres.SslMode.defaultFor_loopback` and others |
 | `Postgres.SslMode.defaultFor` | proved | `Postgres.Client.Config.sslmode_default`, `Postgres.SslMode.defaultFor_disable`, `Postgres.SslMode.defaultFor_loopback` and others |
 | `Postgres.SslMode.ofLibpq` | tested | `Tests/PostgresLive.lean`, `Tests/PostgresSettings.lean` |
@@ -2530,23 +2532,24 @@ them by area.
 | --- | --- | --- |
 | `Testing.S3.raw?` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
 | `Testing.S3.answer` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
-| `Testing.S3.failure` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
+| `Testing.S3.failure` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
 | `Testing.S3.time?` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
 | `Testing.S3.decodePair` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
 | `Testing.S3.splitTarget` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
-| `Testing.S3.authField` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `Testing.S3.verified` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
+| `Testing.S3.authField` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
+| `Testing.S3.verified` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
 | `Testing.S3.escapeKey` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
 | `Testing.S3.listXml` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
 | `Testing.S3.range?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
 | `Testing.S3.serve` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `Testing.S3.find?` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
-| `Testing.S3.split` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
-| `Testing.S3.quoted` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
-| `Testing.S3.formParts` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
+| `Testing.S3.find?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
+| `Testing.S3.split` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
+| `Testing.S3.quoted` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
+| `Testing.S3.formParts` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
 | `Testing.S3.formBody` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3Upload.lean` and others |
-| `Testing.S3.etag` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
-| `Testing.S3.servePost` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
+| `Testing.S3.etag` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
+| `Testing.S3.uploaded` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
+| `Testing.S3.servePost` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
 | `Testing.S3.unquote` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
 | `Testing.S3.multipartEtag` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
 | `Testing.S3.xmlAnswer` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
@@ -3376,6 +3379,7 @@ them by area.
 | `Tls.Trust.path` | trusted | TRUSTED.md: The TLS client |
 | `Tls.SessionImpl` | trusted | TRUSTED.md: The TLS client |
 | `Tls.alpnWire` | trusted | TRUSTED.md: The TLS client |
+| `Tls.isAddress` | trusted | TRUSTED.md: The TLS client |
 | `Tls.Session.start` | trusted | TRUSTED.md: The TLS client |
 | `Tls.Session.startChain` | trusted | TRUSTED.md: The TLS client |
 | `Tls.Session.peer` | trusted | TRUSTED.md: The TLS client |
@@ -3469,9 +3473,10 @@ them by area.
 | `S3.Post.KeyRule.condition` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
 | `S3.Post.KeyRule.field` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
 | `S3.Post.maxObject_bytes` | proved | through `S3.Post.Length.max`, `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
+| `S3.Post.SuccessStatus.code` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
 | `S3.Post.expiration` | proved | `S3.Post.expiration_parse` |
 | `S3.Post.credential` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
-| `S3.Post.typed` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
+| `S3.Post.chosen` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
 | `S3.Post.signer` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
 | `S3.Post.eqs` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
 | `S3.Post.conditions` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
@@ -3711,6 +3716,7 @@ them by area.
 | `Cli.New.Source.toToml` | tested | `Tests/New.lean` |
 | `Cli.New.repository` | tested | `Tests/New.lean` |
 | `Cli.New.pinned` | tested | `Tests/New.lean` |
+| `Cli.New.warnings` | tested | `Tests/New.lean` |
 | `Cli.New.ofCheckout` | none |  |
 | `Cli.New.moduleName` | tested | `Tests/New.lean` |
 | `Cli.New.validName` | none |  |

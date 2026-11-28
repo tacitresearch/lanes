@@ -43,8 +43,11 @@ namespace OnceState
 
 variable [BEq S] [DecidableEq K] [DecidableEq In] [DecidableEq Out]
 
+/-- The lengths are compared first, which only makes it fail sooner: `take` keeps both lists
+without repeats (`insertNew`), so two of different lengths are different sets. -/
 def equiv (a b : OnceState In Out S K) : Bool :=
-  a.value == b.value && sameSet a.taken b.taken && sameSet a.answered b.answered
+  a.taken.length == b.taken.length && a.answered.length == b.answered.length
+    && a.value == b.value && sameSet a.taken b.taken && sameSet a.answered b.answered
 
 def take (svc : Service In Out S) (key : In → K) (a : OnceState In Out S K) (x : In) :
     OnceState In Out S K :=
@@ -80,9 +83,34 @@ def close (svc : Service In Out S) (key : In → K) (arrived : List In)
 def ok (m : OnceMonitor In Out S K) : Bool :=
   !m.candidates.isEmpty
 
+/-- Whether each state of the second list is `equiv` to one of `all`, trying first the state at
+the same place in the third, as `Monitor.withinFrom` does. -/
+def withinFrom (all : List (OnceState In Out S K)) :
+    List (OnceState In Out S K) → List (OnceState In Out S K) → Bool
+  | [], _ => true
+  | s :: rest, t :: others => (s.equiv t || all.any (s.equiv ·)) && withinFrom all rest others
+  | s :: rest, [] => all.any (s.equiv ·) && withinFrom all rest []
+
+omit [DecidableEq In] in
+theorem withinFrom_eq (all : List (OnceState In Out S K)) :
+    ∀ (a others : List (OnceState In Out S K)), (∀ t ∈ others, t ∈ all) →
+      withinFrom all a others = a.all fun s => all.any (s.equiv ·)
+  | [], _, _ => rfl
+  | s :: rest, t :: others, h => by
+    have ht : (s.equiv t || all.any (s.equiv ·)) = all.any (s.equiv ·) := by
+      cases hst : s.equiv t
+      · rfl
+      · exact (List.any_eq_true.mpr ⟨t, h t (.head _), hst⟩).symm
+    rw [withinFrom, ht, withinFrom_eq all rest others fun u hu => h u (.tail _ hu), List.all_cons]
+  | s :: rest, [], _ => by
+    rw [withinFrom, withinFrom_eq all rest [] (fun _ hu => by cases hu), List.all_cons]
+
+/-- Monitors reached by the same observations hold their candidates in the same order, so each
+candidate is looked for first at its own place: comparing two such monitors is linear in their
+candidates instead of quadratic (`withinFrom_eq`: the same answer). -/
 instance : BEq (OnceMonitor In Out S K) where
   beq a b := sameSet a.arrived b.arrived && a.candidates.length == b.candidates.length
-    && a.candidates.all fun s => b.candidates.any (s.equiv ·)
+    && withinFrom b.candidates a.candidates b.candidates
 
 instance [Hashable S] [Hashable K] [Hashable In] [Hashable Out] :
     Hashable (OnceMonitor In Out S K) where

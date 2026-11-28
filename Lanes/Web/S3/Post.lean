@@ -12,7 +12,8 @@ public import Lanes.Lib.Encoding.Base64
 A browser's upload by `POST`, under a policy: the form a page carries for S3 to take one file,
 whose policy, a JSON document in base64 signed with Signature Version 4, says what the upload may
 be. Unlike a presigned `PUT`, it bounds the file's size (`content-length-range`), and it may let
-the browser choose the key under a prefix.
+the browser choose the key under a prefix. It may say where S3 sends the browser once it has
+the file, or the status it answers, as fields its policy names.
 
 `form` writes the policy and the fields; `check` is what S3 does with a form it receives, apart
 from the signature: the policy unexpired, each condition met, and each field named by one. Proved
@@ -168,11 +169,31 @@ structure Length where
   bounded : max ≤ maxObject_bytes
   deriving DecidableEq, Repr
 
+/-- What S3 answers an upload it took when the form names no redirect: `success_action_status`. -/
+inductive SuccessStatus where
+  /-- `200`, with no body. -/
+  | ok
+  /-- `201`, with an XML document that names the bucket, the key, the ETag and where the object
+  is. -/
+  | created
+  /-- `204`, with no body: what S3 answers when the form does not say. -/
+  | noContent
+  deriving DecidableEq, Repr
+
+def SuccessStatus.code : SuccessStatus → Nat
+  | .ok => 200
+  | .created => 201
+  | .noContent => 204
+
 structure Policy where
   key : KeyRule
   length : Length
   /-- The `Content-Type` the browser must send, which S3 stores with the object. -/
   contentType : Option String := none
+  /-- Where S3 sends the browser once it has taken the file, with the bucket, the key and the
+  ETag added to the query: `success_action_redirect`. -/
+  successActionRedirect : Option String := none
+  successActionStatus : Option SuccessStatus := none
   expiry : Expiry
   deriving DecidableEq, Repr
 
@@ -183,7 +204,11 @@ def expiration (t : Civil.DateTime) (expiry : Expiry) : String :=
 def credential (b : Bucket) (creds : Credentials) (t : Civil.DateTime) : String :=
   creds.accessKeyId ++ "/" ++ credentialScope t b.scope
 
-def typed (p : Policy) : List (String × String) := (p.contentType.map ("Content-Type", ·)).toList
+/-- The fields besides the key and the signer's that the policy names exactly. -/
+def chosen (p : Policy) : List (String × String) :=
+  (p.contentType.map ("Content-Type", ·)).toList
+    ++ (p.successActionRedirect.map ("success_action_redirect", ·)).toList
+    ++ (p.successActionStatus.map fun s => ("success_action_status", toString s.code)).toList
 
 /-- The fields that say who signed and when, which the policy names exactly. -/
 def signer (b : Bucket) (creds : Credentials) (t : Civil.DateTime) : List (String × String) :=
@@ -195,7 +220,7 @@ def eqs (fields : List (String × String)) : List Condition := fields.map fun (n
 /-- In the order botocore writes them. -/
 def conditions (b : Bucket) (creds : Credentials) (t : Civil.DateTime) (p : Policy) :
     List Condition :=
-  .length p.length.min p.length.max :: eqs (typed p)
+  .length p.length.min p.length.max :: eqs (chosen p)
     ++ [.eq "bucket" b.name, p.key.condition] ++ eqs (signer b creds t)
 
 def document (b : Bucket) (creds : Credentials) (t : Civil.DateTime) (p : Policy) : Document :=
@@ -227,6 +252,6 @@ def _root_.Lanes.S3.Bucket.url (b : Bucket) : String :=
 def form (b : Bucket) (creds : Credentials) (t : Civil.DateTime) (p : Policy) : Form :=
   let policy := (document b creds t p).encode
   { url := b.url, policy, signature := signature creds.secretAccessKey t b.scope policy
-    named := typed p ++ ("key", p.key.field) :: signer b creds t }
+    named := chosen p ++ ("key", p.key.field) :: signer b creds t }
 
 end Lanes.S3.Post

@@ -41,6 +41,7 @@ import Tests.Clients
 import Tests.Lease
 import Tests.Lint
 import Tests.New
+import Tests.Copies
 import Tests.Tutorial
 import Tests.TutorialWeb
 import Tests.Release
@@ -136,21 +137,18 @@ def main (args : List String) : IO UInt32 := do
   match args with
   | [] =>
     let pure := pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.Lint.tests)
-      ++ (← Tests.New.tests) ++ (← Tests.Tutorial.tests) ++ (← Tests.TutorialWeb.tests) ++ (← Tests.Oracle.replayAll) ++ (← Tests.Oracle.Service.replayAll)
+      ++ (← Tests.New.tests) ++ (← Tests.Copies.tests) ++ (← Tests.Tutorial.tests) ++ (← Tests.TutorialWeb.tests) ++ (← Tests.Oracle.replayAll) ++ (← Tests.Oracle.Service.replayAll)
       ++ (← Tests.Json.suite) ++ (← Tests.HttpConn.checks) ++ (← Tests.Postgres.psqlTests) ++ (← Tests.PostgresConn.checks) ++ (← Tests.PostgresPool.checks) ++ (← Tests.StoreModel.checks)
       ++ (← Tests.MultipartModel.checks)
     failures pure
     report (pure ++ (← live)) pure.length
   | ["fast"] => report (pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.Lint.tests)
-      ++ (← Tests.New.tests) ++ (← Tests.Tutorial.tests) ++ (← Tests.TutorialWeb.tests) ++ (← Tests.Oracle.replayAll) ++ (← Tests.Oracle.Service.replayAll)
+      ++ (← Tests.New.tests) ++ (← Tests.Copies.tests) ++ (← Tests.Tutorial.tests) ++ (← Tests.TutorialWeb.tests) ++ (← Tests.Oracle.replayAll) ++ (← Tests.Oracle.Service.replayAll)
       ++ (← Tests.Json.suite) ++ (← Tests.HttpConn.checks) ++ (← Tests.Postgres.psqlTests) ++ (← Tests.PostgresConn.checks) ++ (← Tests.PostgresPool.checks) ++ (← Tests.StoreModel.checks)
       ++ (← Tests.MultipartModel.checks))
   | ["live"] => report (← live)
   | ["journal-child", path] =>
     Tests.Durable.child path
-    return 0
-  | ["stop-child", drain_ms] =>
-    Tests.Ops.stopChild drain_ms.toNat!
     return 0
   | ["tape-child", path, round] =>
     Tests.Durable.tapeChild path round.toNat!

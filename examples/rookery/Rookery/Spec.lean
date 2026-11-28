@@ -24,9 +24,11 @@ system's timers need no invariant tying them to the state (`Rookery.System`). Ho
 or a session lasts is the timers' delay in `Config`, which the semantics does not model.
 
 An API request carries a sequence number its bot chooses. The board acts once on each change:
-the same number again gets the answer it got, without acting, and an older one gets `stale`
-(`Lanes.Once.Memo`, D48), so a bot that retries a post it got no answer to posts it once. A read
-is answered afresh, so that no answer remembered shows a post deleted since.
+the same change with the same number again gets the answer it got, without acting, another
+change with that number gets `reused`, and an older number gets `stale` (`Lanes.Once.Memo`,
+D48), so a bot that retries a post it got no answer to posts it once, and one that reuses a
+number by mistake is told so rather than handed another change's answer. A read is answered
+afresh, so that no answer remembered shows a post deleted since.
 -/
 
 namespace Rookery
@@ -92,6 +94,8 @@ lanes_data inductive Reply (N : Type) where
   | token (name : N) (generation : Nat) (at_s : Nat)
   | badToken
   | stale
+  /-- The sequence number was used for another change. -/
+  | reused
   | posted (post : PostId)
   | rateLimited
   | tooManyPosts
@@ -138,8 +142,8 @@ lanes_data structure Board (N C : Type) where
   accounts : List (N × Profile N C) := []
   /-- The id the next post accepted gets. -/
   next : PostId := 0
-  /-- The last API request acted on for each account, and its reply. -/
-  memo : Once.Memo N (Reply N) := {}
+  /-- The last API change acted on for each account, and its reply. -/
+  memo : Once.Memo N (Op N × Reply N) := {}
   deriving DecidableEq, Repr, Hashable, Codable
 
 /-- The settings the spec and the system are built with. Every bound is here (rule 2.6). -/
@@ -274,6 +278,13 @@ def withSession (b : Board N C) (n : N) (session : Sid)
   | some p => if p.sessions.live session then f p else (b, .noSession, {})
   | none => (b, .noSession, {})
 
+/-- The answer the memo gives a change sent again with its sequence number: the one remembered,
+if the change is the one remembered, and `reused` if not. -/
+def recalled (op : Op N) (remembered : List (Op N × Reply N)) : Reply N :=
+  match remembered with
+  | [(op', reply)] => if op' = op then reply else .reused
+  | _ => .reused
+
 /-- An API request: a read is answered afresh; a change is acted on once for each sequence
 number (`Lanes.Once.Memo`). A read answered from the memo could show a post deleted since. -/
 def api (config : Config) (b : Board N C) (n : N) (p : Profile N C) (token seq : Nat)
@@ -282,11 +293,11 @@ def api (config : Config) (b : Board N C) (n : N) (p : Profile N C) (token seq :
   else if op = .timeline then b.act config n p op
   else
     match b.memo.seen n seq with
-    | .again replies => (b, replies.headD .stale, {})
+    | .again remembered => (b, recalled op remembered, {})
     | .stale => (b, .stale, {})
     | .fresh =>
       let (b', reply, timers) := b.act config n p op
-      ({ b' with memo := b'.memo.record n seq [reply] }, reply, timers)
+      ({ b' with memo := b'.memo.record n seq [(op, reply)] }, reply, timers)
 
 def handle (config : Config) (b : Board N C) : Request N C → Board N C × Reply N × Timers
   | .signUp _ n c bot => b.signUp config n c bot
