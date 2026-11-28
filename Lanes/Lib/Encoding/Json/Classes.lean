@@ -200,6 +200,12 @@ theorem fromJson?_toJson_string (s : String) : fromJson? (toJson s) = .ok s := f
 theorem fromJson?_toJson_fin {n : Nat} (i : Fin n) : fromJson? (toJson i) = .ok i :=
   fromJson?_toJson i
 
+theorem fromJson?_toJson_int64 (i : Int64) : fromJson? (toJson i) = .ok i := fromJson?_toJson i
+
+theorem fromJson?_toJson_subtype {α : Type u} {p : α → Prop} [DecidablePred p] [ToJson α]
+    [FromJson α] [LawfulJson α] (a : {a // p a}) : fromJson? (toJson a) = .ok a :=
+  fromJson?_toJson a
+
 theorem fromJson?_toJson_array {α : Type u} [ToJson α] [FromJson α] [LawfulJson α]
     (a : Array α) : fromJson? (toJson a) = .ok a := fromJson?_toJson a
 
@@ -226,6 +232,9 @@ theorem fromJson?_toJson_some {α : Type u} [ToJson α] [FromJson α] [LawfulJso
 instance {α : Type u} [ToJson α] [FromJson α] [LawfulJson α] [NonNullJson α] :
     LawfulJson (Option α) :=
   ⟨fun | none => rfl | some a => fromJson?_toJson_some (toJson_ne_null a)⟩
+
+theorem fromJson?_toJson_option {α : Type u} [ToJson α] [FromJson α] [LawfulJson α]
+    [NonNullJson α] (a : Option α) : fromJson? (toJson a) = .ok a := fromJson?_toJson a
 
 namespace Json
 

@@ -38,13 +38,13 @@ proved function tells it to.
 | Models of external services | `Lanes/Outside/{Rpc,Idempotent,Events,ObjectStore,Multipart,Queue,Cache,Clock,Throttle}.lean`, `Lanes/Outside/Effects/`, `Lanes/Web/Http/SharedCache.lean`, `Lanes/Proof/Outputs.lean` | `Idempotent.at_most_once`, `Rpc.answered_le_called`, `Events.deliveries_le`, `ObjectStore.read_sent`, `ObjectStore.held_sent`, `Multipart.read_listed`, `Queue.received_le`, `Cache.read_sent`, `Clock.wall_back_le`, `Throttle.wait_le`, `SharedCache.serve_storable`, `SharedCache.serve_of_leaks`, `System.Emits.outputs`; that a real service conforms is trusted |
 | Signature Version 4 and the S3 client | `Lanes/Web/Http/{SigV4,SigV4Sound}.lean`, `Lanes/Web/S3/{Basic,Xml,Post,PostSound,Multipart}.lean`, `Lanes/Web/IO/S3.lean` | `SigV4.target_sign`, `SigV4.sortQuery_sorted`, `SigV4.canonicalHeaders_sorted`, `SigV4.encode_chunks`, `S3.Post.form_policy`, `S3.Post.admitted_bounded`, `S3.Multipart.Plan.count_le`, `S3.Multipart.Plan.range_full`; signatures tested against AWS's vectors and botocore, the client against a fake S3, the multipart flow model-checked; its IO trusted |
 | PostgreSQL and the store model | `Lanes/Lib/Postgres/{Bytes,Message,MessageSound,Scram,Conn,ConnSound,Pool,Settings,Table}.lean`, `Lanes/Lib/Postgres/IO/{Client,Pool}.lean`, `Lanes/Lib/Crypto/Certificate.lean`, `Lanes/Outside/Store/{Basic,Sound}.lean` | `Backend.read_encode`, `Frontend.decode_encode`, `Conn.run_fifo`, `Conn.step_committed`, `Conn.step_query`, `Conn.tls_first`, `Conn.run_bound`, `Conn.onMessage_binds`, `Pool.run_size`, `Pool.never_again`, `SslMode.defaultFor_disable`, `Store.write_skew`, `Store.lost_commit_either`; the IO is trusted, and that the server behaves like the model is a premise |
-| The typed store | `Lanes/Db/{Basic,Query,Txn,Retry,Model,Sound}.lean`, `Lanes/Lib/Postgres/Sql.lean`, `Lanes/Lib/Postgres/IO/Db.lean` | `Db.invariant`, `Retry.loop_committed`, `Txn.interp_apply`, `Postgres.Sql.decode_param`; the driver is trusted, and that PostgreSQL at `SERIALIZABLE` behaves like the model is a premise |
+| The typed store | `Lanes/Db/{Basic,Columns,Query,Txn,Retry,Model,Sound}.lean`, `Lanes/Lib/Postgres/Sql.lean`, `Lanes/Lib/Postgres/IO/Db.lean` | `Db.invariant`, `Retry.loop_committed`, `Txn.interp_apply`, `Postgres.Sql.decode_param`; the driver is trusted, and that PostgreSQL at `SERIALIZABLE` behaves like the model is a premise |
 | Jobs: work outside a step | `Lanes/Behaviours/Jobs/{Basic,Sound}.lean`, `Lanes/Semantics/Jobs.lean`, `Lanes/Behaviours/Jobs/IO/Pool.lean` | `Jobs.answered_le_handled`, `Jobs.retry_same`, `Jobs.submitted_answered`; the pool is trusted |
 | Schedule: work that is due later | `Lanes/Behaviours/Schedule/{Basic,Sound}.lean`, `Lanes/Semantics/Schedule.lean` | `Schedule.dispatch_due`, `Schedule.calls_le_scheduled`, `Schedule.attempt_ends`, `Schedule.held_ends`; that the time it knows is not ahead of the clock is a premise |
 | Web | `Lanes/Web/Http/{Basic,Route,RouteSound,Cookie,CookieSound}.lean`, `Lanes/Web/Html/`, `Lanes/Web/Auth/` | `Html.lex_render`, `Html.safeUrl_scheme`, `Http.dispatch_link`, `Http.parseForm_encodeForm`, `Http.readSetCookie_header`, `Auth.verify_eq_some`, `Auth.checkForm_other` |
 | The checker | `Lanes/Check/`, `Lanes/Semantics/{Monitor,MonitorSound}.lean` | `Check.search_sound`, `Check.system_sound_of_respects`, `Check.refines_traces` |
 | The proof layer | `Lanes/Semantics/` | refinement, specs, fairness, leads-to |
-| Data and the standard library | `Lanes/Data/`, `Lanes/Lib/` | codec laws, `Bytes.same_iff`, `Json.parse_iff`, `Url.parse_print` |
+| Data and the standard library | `Lanes/Data/`, `Lanes/Lib/` | `Json.Fields.readObject_object`, `Json.Codec.ofAlts`, `Bytes.same_iff`, `Json.parse_iff`, `Url.parse_print` |
 | Sign-in with OAuth 2.0 and OpenID Connect | `Lanes/Web/Auth/{Jose,IdToken,OAuth}.lean`, `Lanes/Web/IO/SignIn.lean` | `OAuth.check_ok`, `OAuth.Used.accepted_once`, `OAuth.Used.length_claim`, `OAuth.IdToken.verify_accepted`, `Jose.verify_ok`, `OAuth.Keys.no_fetch_within`; the edge is trusted, tested end to end against a provider run in the test |
 | Bound C | `native/lanes.c`, `Lanes/Lib/Crypto/Native.lean`, `Lanes/Lib/File.lean`; `native/verify.c`, `Lanes/Lib/Crypto/Verify.lean`; `native/sign.c`, `Lanes/Lib/Crypto/Sign.lean` | trusted; tested against the Lean references and published vectors |
 | TLS client | `native/tls.c`, `Lanes/Web/IO/Tls.lean` | trusted; tested against `openssl s_server` |
@@ -700,7 +700,8 @@ take a key or a unique value already taken does nothing and answers `false`.
 
 A request handler is `Q → Txn A` (`Lanes/Db/Txn.lean`): a free monad over the operations, so
 that an operation may depend on what earlier ones answered, with no IO and room for one
-transaction only. `Txn.run` is what it means; `TableOf α` puts a Lean type on a table. The
+transaction only. `Txn.run` is what it means; `TableOf α` puts a Lean type on a table, and
+`lanes_data`'s `table` line derives one from a structure (`Lanes/Db/Columns.lean`). The
 driver (`Lanes/Lib/Postgres/IO/Db.lean`) runs it at `SERIALIZABLE`, one statement per operation
 (`Lanes/Lib/Postgres/Sql.lean`, pure), and tries again after a serialization failure, a deadlock,
 a unique violation or a connection lost before `COMMIT`, up to `attempts_max` attempts, as
@@ -717,6 +718,7 @@ Where: `Lanes/Db/`, `Lanes/Lib/Postgres/Sql.lean`, `Lanes/Lib/Postgres/IO/Db.lea
 | An invariant of the database that every transaction of a handler keeps holds in every database the model allows after every run, with lost `COMMIT`s, failures and calls taking effect late | `Db.invariant`, `Lanes/Db/Sound.lean`; gate `Tests/Axioms/Db.lean` | The start satisfies it; PostgreSQL behaves like the model | proved |
 | A call that committed after retries answers what one run of its transaction answers on the state it committed against, and leaves that run's state | `Retry.loop_committed`; gate `Tests/Axioms/Db.lean` | Failed attempts were rolled back; the driver follows `Retry.next` (trusted) | proved |
 | A transaction answered operation by operation with their meanings is its meaning | `Txn.interp_apply`; gate `Tests/Axioms/Db.lean` | The driver feeds each answer to the next step (trusted) | proved |
+| A derived table reads a value back from its row, and a row that reads back is the row of what it read | `TableOf.ofRow_toRow` of the table `Columns.table` builds, `Columns.toRow_of_ofRow`; gate `Tests/Axioms/Db.lean` | None | proved |
 | A value reads back from the text the driver sends it as | `Postgres.Sql.decode_param`, `Postgres.Sql.decodeRow_param`; gate `Tests/Axioms/Lib.lean` | Values of their columns' types | proved |
 | PostgreSQL answers every operation of the subset as its meaning says, and behaves like the model at `SERIALIZABLE` | `Tests/Oracle/Service/Db.lean` against PostgreSQL 16: generated transactions one at a time, every answer compared with `Txn.run`, and three at once, checked with `Db.State.run`; nightly, recorded in `oracles/postgres/db.jsonl` and checked again by `lake test` | Every theorem proved against the model rests on it | trusted, tested against PostgreSQL 16 |
 | The meaning, the SQL, the replies, the retry decision and the model's litmus runs | `Tests/Db.lean`, in `lake test` | | tested |
@@ -921,9 +923,11 @@ Also:
 
 ## Data and the standard library
 
-What every layer uses is in `Lanes/Data/`: `Enum`, codecs and `lanes_data`, and the queue. A
-codec writes a value as records and reads it back, with its law as a field; the journal and the
-peers that used to write with codecs are no longer on main, and serialization is to be reworked.
+What every layer uses is in `Lanes/Data/`: `Enum`, `lanes_data`, and the queue. A type has two
+mappings out of the process, both derived by `lanes_data` from its declaration with their laws
+(`docs/decisions/new-serialization.md`): JSON for HTTP (`deriving ToJson, FromJson`, through
+`Lanes/Lib/Encoding/Json/Derive.lean`) and rows for the typed store (a `table` line, through
+`Lanes/Db/Columns.lean`). There is no binary format: nothing writes values to a file or a peer.
 The standard library is in `Lanes/Lib/`: encodings, addresses and URLs, time, media types,
 metrics, rate limits, the PostgreSQL protocol (below) and cryptography, with the C it binds
 (Bound C). All of it is total and `Std`-only. A parser or encoder is proved against its
@@ -937,7 +941,8 @@ Where: `Lanes/Data/`, `Lanes/Lib/`, `Lanes/Lib/Net/Percent.lean`, `native/`, `or
 
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
-| A codec reads back what it writes | The law is a field of `Codec` (`Lanes/Data/Codec.lean`), so every codec, those `lanes_data` derives among them, carries its proof | None | proved (by its type) |
+| A type `lanes_data` derives JSON for reads back what it writes, and is never `null` | `LawfulJson` and `NonNullJson`, from the laws of `Json.Fields` and `Json.Alts`, which each piece carries (`Json.Fields.readObject_object`, `Json.Codec.ofAlts`); gate `Tests/Axioms/Lib.lean` | None | proved (by construction) |
+| The shapes of derived JSON: a structure an object of its fields, `null` fields left out; a constructor its name, or an object of its name holding its arguments; what Lean's own derived encoders write reads | `Tests/Derive.lean`, in `lake test` | | tested |
 
 Also:
 
@@ -951,11 +956,12 @@ Also:
 - SHA-256, HMAC-SHA-256, the comparison of byte strings, and Argon2id from OpenSSL's libcrypto (`Native`, bound from `native/lanes.c`), random bytes from its `RAND_bytes` (`Lanes.randomBytes`), with SHA-256, HMAC-SHA-256 and the comparison also in pure Lean as references, both tested against the NIST and RFC 4231 vectors and compared on thousands of random inputs (`Bytes.same_iff`, `Bytes.unhex?_hex` proved).
 - The token bucket of x/time/rate with exact arithmetic (`RateLimit.allowed_le`: at most `burst + rate · w` in a window of `w`; `RateLimit.allow_after_reserve`), compared with Go's on generated cases.
 - URI references (RFC 3986: `Url.parse_print`, resolution as §5.2 with §5.4's examples evaluated and no dot segment left, `Url.dotFree_resolve`, idempotent normalization, `Url.normalize_normalize`), compared with Go's standard library on generated cases.
-- `lanes_data` (a structure or an inductive type declared once, deriving `Codable`, `Enum` and a field-by-field `LawfulBEq` from the declaration's text, without linking `Lean`).
+- `lanes_data` (a structure or an inductive type declared once, deriving JSON, a table, `Enum` and a field-by-field `LawfulBEq` from the declaration's text, without linking `Lean`).
 
 ### Limits
 
-- A recursive type has no codec: a codec is a value, and neither `lanes_data` nor `Codec.struct%` and `Codec.sum%` can define one that refers to itself.
+- A recursive type has no derived JSON: a `Json.Codec` is a value, and `lanes_data` cannot define one that refers to itself.
+- A table's columns are 64-bit: `Int` and `Nat` have no column, since a value that does not fit would not read back.
 - IPv6 zones (`fe80::1%eth0`) are refused, also in URLs, and a leap second (`23:59:60`) is not a time.
 
 ## Bound C
