@@ -1,8 +1,8 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
   One Lanes application on AWS: an HTTPS load balancer in front of one EC2 instance that holds
-  the application's shard, its journal on an EBS volume of its own with daily snapshots, a media
-  bucket for uploads straight from the browser, logs and metrics in CloudWatch, deploys through
+  the application's shard, its journal on an EBS volume of its own with daily snapshots and its
+  segments shipped to a backup bucket, a media bucket for uploads straight from the browser, logs and metrics in CloudWatch, deploys through
   GitHub's OIDC provider and Systems Manager, and optionally PostgreSQL. See docs/DEPLOY.md.
 
 Metadata:
@@ -17,7 +17,7 @@ Metadata:
       - Label: { default: Releases and deploys }
         Parameters: [ReleaseBucket, ReleasePrefix, GitHubRepository, GitHubOwnerId, GitHubRepositoryId, DeployBranch, DeployWorkflow, ExistingOidcProviderArn, ScriptRepository, ScriptRef, ScriptSha256]
       - Label: { default: "Backups, logs and alarms" }
-        Parameters: [SnapshotIntervalHours, SnapshotRetainCount, JournalSnapshotId, LogRetentionDays, AlarmEmail]
+        Parameters: [SnapshotIntervalHours, SnapshotRetainCount, JournalSnapshotId, BackupVersionDays, LogRetentionDays, AlarmEmail]
       - Label: { default: Media and the database }
         Parameters: [MediaUser, MailIdentity, DatabaseEngine, DatabaseInstanceClass, DatabaseStorage, DatabaseEngineVersion, DatabaseCaBundleSha256]
 
@@ -205,6 +205,14 @@ Parameters:
     MinValue: 1
     MaxValue: 1000
     Description: How many snapshots are kept; the oldest goes when a new one is made.
+  BackupVersionDays:
+    Type: Number
+    Default: 30
+    MinValue: 1
+    MaxValue: 3650
+    Description: >-
+      How long the backup bucket keeps an object's older version after it is overwritten or
+      deleted. The shipper only creates objects; a version exists only after another writer.
   JournalSnapshotId:
     Type: String
     Default: ""
@@ -494,6 +502,55 @@ Resources:
             Condition:
               Bool: { aws:SecureTransport: "false" }
 
+  # The journal's segments and snapshots, shipped by the application as it writes them
+  # (Journal.Store.ship, S3.backup): backups/<journal id>/segment/... and .../snapshot/...,
+  # each put once with If-None-Match. Versioned, so an object overwritten or deleted by
+  # anything else can be got back; never public; kept when the stack is deleted.
+  BackupBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      VersioningConfiguration: { Status: Enabled }
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-older-versions
+            Status: Enabled
+            NoncurrentVersionExpiration: { NoncurrentDays: !Ref BackupVersionDays }
+          - Id: abort-incomplete-uploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload: { DaysAfterInitiation: 1 }
+      Tags:
+        - { Key: lanes-app, Value: !Ref AppName }
+
+  BackupBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref BackupBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: TlsOnly
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt BackupBucket.Arn
+              - !Sub "${BackupBucket.Arn}/*"
+            Condition:
+              Bool: { aws:SecureTransport: "false" }
+
   # Media: uploaded by the browser with a presigned PUT and read with a presigned GET, never
   # public. Kept when the stack is deleted.
   MediaBucket:
@@ -607,6 +664,7 @@ Resources:
           DB_CA_SHA256=${DbCaSha256}
           MAIL_IDENTITY=${MailIdentity}
           MEDIA_BUCKET=${MediaBucket}
+          BACKUP_BUCKET=${BackupBucket}
         - Bucket: !If [CreateReleaseBucket, !Ref ReleaseStore, !Ref ReleaseBucket]
           Prefix: !If [DefaultPrefix, !Ref AppName, !Ref ReleasePrefix]
           DbHost: !If [HasDatabase, !GetAtt Database.Endpoint.Address, ""]
@@ -633,6 +691,7 @@ Resources:
       RetentionInDays: 7
 
   # What the instance may do, and nothing else: read its releases, read and write the media,
+  # create and read its backups (no delete),
   # write its logs and metrics, attach its own journal volume to itself, be reached by Systems
   # Manager, read the database's password, and send email from its SES identity. The
   # application takes these credentials from the metadata service (IMDSv2) and refreshes them.
@@ -671,6 +730,19 @@ Resources:
                     s3:prefix: !Sub
                       - "${Prefix}/*"
                       - Prefix: !If [DefaultPrefix, !Ref AppName, !Ref ReleasePrefix]
+        - PolicyName: ship-the-journal
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [s3:PutObject, s3:GetObject]
+                Resource: !Sub "${BackupBucket.Arn}/backups/*"
+              - Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt BackupBucket.Arn
+                Condition:
+                  StringLike:
+                    s3:prefix: "backups/*"
         - PolicyName: logs-and-metrics
           PolicyDocument:
             Version: "2012-10-17"
@@ -1157,6 +1229,9 @@ Outputs:
   MediaBucketName:
     Description: The media bucket.
     Value: !Ref MediaBucket
+  BackupBucketName:
+    Description: The bucket the journal is shipped to, under backups/.
+    Value: !Ref BackupBucket
   MediaUserName:
     Condition: CreateMediaUser
     Description: The IAM user whose access key the S3 client reads from the environment.

@@ -244,6 +244,19 @@ every state the new shard reaches (`Migration.inv_exec`, `Kernel.exec_inductive`
 later start (`Journal.Upgrade.inv_load`). An invariant proved only from boot, and refinement,
 do not carry over.
 
+A journal may also be shipped to an object store as it is written (`Journal.Store.ship`), after
+Litestream: what is written is sealed into segments, by size, by age and at each save, and each
+segment and snapshot is put once, with a conditional write, under a key that names the journal,
+its positions and its SHA-256. Nothing the shard does waits for it. What to seal, what to put
+next, the backoff and what is dropped at the bound are pure (`Lanes/Durable/Ship.lean`), and
+every segment put holds the history's entries at the positions its key names
+(`Journal.Ship.Holds.put`). A restore (`Lanes/Durable/Restore.lean`, `Journal.Store.restore`)
+picks a point, the newest snapshot before it and the segments after it, checks that they join,
+and writes a journal that ends with a `handed` mark and has no id: its start gives the kernel the
+local journal had after that many entries and hands nothing over
+(`Journal.Restore.journal_restores`, from `Journal.resumeIds_eq_recoverIds`), a restored copy
+under D105. The thread that puts is `Lanes/Durable/IO/Ship.lean`, trusted (`TRUSTED.md`).
+
 Where: `Lanes/Durable/`, `Lanes/Durable/IO/Journal.lean`, `examples/migration`.
 
 ### Claims
@@ -259,6 +272,7 @@ Where: `Lanes/Durable/`, `Lanes/Durable/IO/Journal.lean`, `examples/migration`.
 | Across a migration, an invariant of each new actor that its own steps keep, and that every state an old actor reaches migrates into, holds of every actor in every state the new shard reaches and at every later start | `Migration.inv_exec`, `Kernel.exec_inductive`, `Journal.Upgrade.inv_load`; gate `Tests/Axioms/Durable.lean`, `Tests/Axioms/Runtime.lean`; `Quota.within_quota`, `Quota.within_quota_at_start`, gate `examples/migration/Quota/Axioms.lean` | The application proves `Migration.keeps` and `Migration.lands`; for `inv_load`, the old shard started at boot. Invariants proved only from boot and refinement to the spec are not carried | proved |
 | Every existing journal reads as before: an unversioned header is version 0 | `Journal.label_zero`; `ledgerLive`, `rookeryLive`, `raftLive`, `raftProcs` replay their journals (CI) | None | proved; tested |
 | Every journal append is synced before the next, so a loss of power leaves what a death would | `Lanes/Durable/IO/Journal.lean` (`append` flushes and calls `fsync`, `native/lanes.c`) | `fsync` and the disk do what they promise | trusted |
+| Every segment the shipper puts holds the history's entries at the positions its key names; a restore at a point starts with the kernel the local journal had after that many entries, and hands nothing over | `Journal.Ship.Holds.put`, `Journal.Restore.journal_restores`, `Lanes/Durable/{Ship,Restore}.lean`; gate `Tests/Axioms/Durable.lean`; `Tests/Ship.lean`, against the fake S3; through `S3.backup` against moto, `oracles/moto/s3-backup.jsonl` | The object store keeps what it answered put; the thread that puts performs what `Ship` decides (`Lanes/Durable/IO/Ship.lean`, TRUSTED) | proved; the IO trusted, tested |
 
 Also:
 

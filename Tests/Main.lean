@@ -69,6 +69,7 @@ import Tests.SigV4
 import Tests.S3
 import Tests.Multipart
 import Tests.S3Upload
+import Tests.Ship
 import Tests.Testing
 
 /-!
@@ -112,6 +113,7 @@ def live : IO (List (String × Bool)) := do
     ++ (← safely "postgres" Tests.PostgresLive.live)
     ++ (← safely "postgres tls" Tests.PostgresTls.live)
     ++ (← safely "s3" Tests.S3.live) ++ (← safely "s3 uploads" Tests.S3Upload.live)
+    ++ (← safely "ship" Tests.Ship.live)
     ++ (← safely "test kit" Tests.Testing.live)
     ++ (← safely "test kit worker" Tests.Testing.workerLive)
     ++ (← safely "tutorial web" Tests.TutorialWeb.live)
@@ -132,6 +134,7 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.PostgresSettings.tests
     ++ Tests.Ops.tests
     ++ Tests.SigV4.tests ++ Tests.S3.tests ++ Tests.MultipartModel.tests ++ Tests.S3Upload.tests
+    ++ Tests.Ship.tests
     ++ Tests.Testing.tests
     ++ Tests.Queue.tests ++ Tests.Reduce.tests ++ Tests.Cache.tests ++ Tests.WallClock.tests ++ Tests.Throttle.tests
     ++ Tests.SharedCache.tests
