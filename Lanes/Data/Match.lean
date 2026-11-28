@@ -81,9 +81,10 @@ def unambiguous (step : String → Error.Step) (names : List String)
   | some (name, k) => within (step name) (fail 0 (.ambiguous (names[k]?.getD "")))
 
 /-- The plan of the writer's constructor `k`, from what the reader's constructors take. -/
-def pick (found : List (Option (Nat × Ctor Plan))) (k : Nat) (name : String) : Ctor Plan :=
-  (found.findSome? fun x => x.bind fun (k', c) => if k' == k then some c else none).getD
-    (.absent name)
+def pick : List (Option (Nat × Ctor Plan)) → Nat → String → Ctor Plan
+  | [], _, name => .absent name
+  | none :: found, k, name => pick found k name
+  | some (k', c) :: found, k, name => if k' = k then c else pick found k name
 
 variable (ms : List Migration)
 
