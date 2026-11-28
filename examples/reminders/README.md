@@ -4,15 +4,15 @@ A reminder is a text and a time. At its time it is posted to a notification serv
 again with a backoff until the service takes it (`2xx`), its attempts run out, or it is
 cancelled. It is the smallest application of the scheduler, `Lanes.Schedule`
 (`Lanes/Behaviours/Schedule/Basic.lean`): the reminders hold the list; the scheduler beside them
-holds the jobs, runs each at its time, retries it, gives up on it, and keeps them across a
-restart, since its state is the journal's.
+holds the jobs, runs each at its time, retries it and gives up on it. Both live as long as the
+process: a restart starts with no reminders.
 
 ```bash
 cd examples/reminders
 mkdir -p .lake && ln -s ../../../.lake/packages .lake/packages   # share the fetched dependencies
 lake build            # the application, the proofs and the tests
 lake test             # the model check, then the application over HTTP through a restart
-NOTIFY_URL=http://127.0.0.1:9090 NOTIFY_PATH=/notify lake exe reminders 8080 reminders.journal
+NOTIFY_URL=http://127.0.0.1:9090 NOTIFY_PATH=/notify lake exe reminders 8080
 ```
 
 ## How it works
@@ -28,8 +28,8 @@ NOTIFY_URL=http://127.0.0.1:9090 NOTIFY_PATH=/notify lake exe reminders 8080 rem
 - `Reminders/Serve.lean` performs the scheduler's calls with the HTTP client, the reminder's id
   in `Idempotency-Key` on every attempt, cut off at the attempt's deadline, and hands the answer,
   or `unknown`, back as an input. It decides nothing.
-- The time a request arrived is written into it before it is journalled (`Web.stamp`), so a
-  replay sees the same time; the scheduler learns the time from it and from its own timers.
+- The time a request arrived is written into it before it enters the system (`Web.stamp`), so
+  `step` stays pure; the scheduler learns the time from it and from its own timers.
 
 ## The claims
 
@@ -47,12 +47,12 @@ a reminder the list calls sent was taken by the service, none is delivered more 
 attempts allow, the sweep is one job; a retry that succeeds, a reminder given up on, one
 cancelled while its delivery is out and the sweep emptying the list are each reached (22,709
 states). Over HTTP (`Test.lean`): a service that refuses the first two deliveries takes the third,
-under one key; a restart on the journal keeps what was sent and what waits; a reminder that
-waits is cancelled.
+under one key; a reminder that waits is cancelled; after a restart the list is empty.
 
 ## Limits
 
 - The sweep is scheduled at time 0, and its run time moves on from the time the scheduler knew
   when it last ran; after a start it runs at once.
 - A request carries no form token: anyone who can reach the server can schedule and cancel.
-- The texts are journalled: do not remind yourself of a password.
+- The reminders are lost with the process. Keeping them across a restart is a service's job,
+  such as PostgreSQL's (`examples/todo-db`).

@@ -36,7 +36,7 @@ outputs the front has not yet taken. So every theorem about the runs of `served 
 the server (`Front.World.answered_le_arrived`).
 
 `Front.servedEnv` is the kernel's environment but for one thing: the gate takes the system's
-answers in any order, as the front takes the shard's outputs. The journal is the shard's
+answers in any order, as the front takes the shard's outputs. The entries are the shard's
 inputs: the requests the gate admitted, in the order it admitted them.
 -/
 
@@ -323,7 +323,7 @@ inductive World.Event (σ : Signature) where
 namespace World
 
 /-- Do one act of the gate. What it passes on is `entry`, the arrival it decided on, which
-enters the shard as the journal records it. -/
+enters the shard as an entry. -/
 def act (entry : Option (ReqId × Request)) (w : World sys bridge) : Gate.Act σ → World sys bridge
   | .respond id response => { w with answers := w.answers ++ [(id, response)] }
   | .forward _ =>

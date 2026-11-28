@@ -177,7 +177,7 @@ jobs:
           lake test
 
   # The integrations and the small examples, each a package of its own: built with their proofs,
-  # and their checks run, in three groups at once. Their builds are kept in the Actions cache,
+  # and their checks run, in two groups at once. Their builds are kept in the Actions cache,
   # keyed on the toolchain, the manifests and the sources, so a run rebuilds only what changed;
   # the cache is saved once they are built, before their checks run.
   examples:
@@ -192,13 +192,11 @@ jobs:
           - group: small
             packages: >-
               integrations/google integrations/github integrations/aws examples/counter
-              examples/bank examples/bank-web examples/kv-cache examples/election examples/watchdog
+              examples/bank examples/bank-web examples/kv-cache examples/watchdog
           - group: web
             packages: >-
-              examples/payments examples/migration examples/todo-db examples/sign-in
-              examples/upload examples/reminders
-          - group: videos
-            packages: examples/videos
+              examples/payments examples/todo-db examples/sign-in examples/upload
+              examples/reminders
     name: examples (${{ matrix.group }})
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -242,8 +240,6 @@ jobs:
             examples/*/.lake/build
             integrations/*/.lake/build
           key: ${{ steps.keys.outputs.key }}
-      # A package that pins the schemas of its files (`schemas/`) is linted too: lint `schema`
-      # reads its build and the corpus its pinned files name.
       - name: Check each package
         env:
           PACKAGES: ${{ matrix.packages }}
@@ -251,67 +247,8 @@ jobs:
           for package in $PACKAGES; do
             echo "::group::$package"
             (cd "$package" && time lake test)
-            if [ -d "$package/schemas" ]; then (cd "$package" && lake exe lanes lint); fi
             echo "::endgroup::"
           done
-
-  raft-kv:
-    needs: [runner, changes, compile]
-    if: needs.changes.outputs.code == 'true'
-    runs-on: ${{ fromJSON(needs.runner.outputs.label) }}
-    timeout-minutes: 90
-    defaults:
-      run:
-        working-directory: examples/raft-kv
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          clean: false
-      - id: lean
-        uses: ./.github/actions/lean
-        with:
-          system: raft-kv
-      - name: Build
-        run: lake build
-      - if: steps.lean.outputs.warm != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: examples/raft-kv/.lake/build
-          key: ${{ steps.lean.outputs.system-key }}
-      - name: Model checks
-        run: lake test
-      - name: Three nodes over TCP
-        run: lake exe raftLive
-      - name: Three node processes, killed and started again
-        run: lake exe raftProcs
-
-  ledger:
-    needs: [runner, changes, compile]
-    if: needs.changes.outputs.code == 'true'
-    runs-on: ${{ fromJSON(needs.runner.outputs.label) }}
-    timeout-minutes: 90
-    defaults:
-      run:
-        working-directory: examples/ledger
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          clean: false
-      - id: lean
-        uses: ./.github/actions/lean
-        with:
-          system: ledger
-      - name: Build
-        run: lake build
-      - if: steps.lean.outputs.warm != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: examples/ledger/.lake/build
-          key: ${{ steps.lean.outputs.system-key }}
-      - name: Model checks
-        run: lake test
-      - name: Over HTTP, killed and started again
-        run: lake exe ledgerLive
 
   rookery:
     needs: [runner, changes, compile]
@@ -381,7 +318,7 @@ jobs:
   # succeeded or was skipped: skipped because only documentation changed, since a job whose
   # needs failed is skipped too, but then a job it needs has failed.
   build:
-    needs: [runner, changes, compile, check, oracle, test, examples, raft-kv, ledger, rookery, macos]
+    needs: [runner, changes, compile, check, oracle, test, examples, rookery, macos]
     if: always()
     runs-on: ubuntu-latest
     steps:

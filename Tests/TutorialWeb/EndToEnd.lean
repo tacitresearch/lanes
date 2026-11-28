@@ -6,8 +6,8 @@ import Lanes.Testing
 import Tests.TutorialWeb.Web
 
 /-!
-Step 4 of `docs/TUTORIAL-WEB.md`: the shelf over HTTP, on a journal, against the test kit's fake
-identity provider and fake S3, driven by its browser, then started again on its journal.
+Step 4 of `docs/TUTORIAL-WEB.md`: the shelf over HTTP, against the test kit's fake identity
+provider and fake S3, driven by its browser, then started again.
 -/
 
 namespace Shelf.EndToEnd
@@ -34,16 +34,16 @@ def firstLink (page : Option Http.Response) : String :=
   (between page "<li><a href=\"" "\"").getD ""
 
 def deployment (store : Testing.S3.Fake) (creds : SigV4.Credentials)
-    (provider : Testing.OAuth.Fake) (journal : System.FilePath) : Deployment :=
+    (provider : Testing.OAuth.Fake) : Deployment :=
   { settings := { keys := .of (.of "the key of the test".toUTF8), origin, bucket := store.bucket, creds
                   providers := ["id"], length := ⟨1, 1024, by decide, by decide⟩ }
-    server := { port := 0, journal := some journal, system := "shelf 1" }
+    server := { port := 0 }
     signIn := { providers := [(provider.oidc "id", provider.client origin "id")], secure := false
                 http := { timeout_ms := 5000 } } }
 
-def flow (store : Testing.S3.Fake) (creds : SigV4.Credentials) (provider : Testing.OAuth.Fake)
-    (journal : System.FilePath) : Async (List (String × Bool)) := do
-  let d := deployment store creds provider journal
+def flow (store : Testing.S3.Fake) (creds : SigV4.Credentials) (provider : Testing.OAuth.Fake) :
+    Async (List (String × Bool)) := do
+  let d := deployment store creds provider
   let server ← start d
   let a ← Browser.new (server.port.getD 0) origin
   let b ← Browser.new (server.port.getD 0) origin
@@ -64,12 +64,12 @@ def flow (store : Testing.S3.Fake) (creds : SigV4.Credentials) (provider : Testi
   let bigChecked ← a.submit big ["files", "1", "uploaded"]
   let forged ← a.post ["files", "1", "uploaded"] [("csrf", (field big "csrf").getD "")]
     (headers := [(storedHeader, "2048")])
+  let deleted ← a.submit (← a.get []) ["files", "0", "delete"]
+  let gone ← a.get []
   server.stop
   let again ← start d
   let a := a.at (again.port.getD 0)
   let afterRestart ← a.get []
-  let deleted ← a.submit afterRestart ["files", "0", "delete"]
-  let gone ← a.get []
   again.stop
   return [
     ("tutorial web: signed out, the shelf offers the sign-in", shows signedOut "Sign in with id"),
@@ -84,9 +84,9 @@ def flow (store : Testing.S3.Fake) (creds : SigV4.Credentials) (provider : Testi
       Testing.S3.code tooLarge == "EntityTooLarge"),
     ("tutorial web: a file the store does not hold is not listed, whatever the browser says",
       status bigChecked == 409 && status forged == 409),
-    ("tutorial web: after a restart on the journal the file is still listed",
-      shows afterRestart "File 0" && !shows afterRestart "File 1"),
-    ("tutorial web: its uploader deletes it", status deleted == 303 && !shows gone "File 0") ]
+    ("tutorial web: its uploader deletes it", status deleted == 303 && !shows gone "File 0"),
+    ("tutorial web: the shelf lives as long as its process: a restart starts it empty",
+      shows afterRestart "Upload a file" && !shows afterRestart "File 1") ]
 
 def live : Async (List (String × Bool)) := do
   unless ← Testing.OAuth.hasOpenssl do
@@ -95,13 +95,10 @@ def live : Async (List (String × Bool)) := do
   let creds : SigV4.Credentials := { accessKeyId := "AKIDTUTORIAL", secretAccessKey := ⟨"secret"⟩ }
   let store ← Testing.S3.Fake.start creds
   let provider ← Testing.OAuth.Fake.start
-  let dir := System.FilePath.mk s!"{(← IO.getEnv "TMPDIR").getD "/tmp"}/lanes-shelf-{← IO.monoNanosNow}"
-  IO.FS.createDirAll dir
-  let results ← try flow store creds provider (dir / "shelf.journal")
+  let results ← try flow store creds provider
     finally
       store.stop
       provider.stop
-      IO.FS.removeDirAll dir
   return results
 
 end Shelf.EndToEnd

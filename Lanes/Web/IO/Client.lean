@@ -216,15 +216,18 @@ def Call.keyed (key : String) (call : Call) : Call :=
   else { call with request := { call.request with
     headers := call.request.headers ++ [("idempotency-key", key)] } }
 
-/-- `handler`, with each output's id as the call's idempotency key (`Call.keyed`). An output
-handed over again after a restart has the same id (`Journal.recoverIds_suffix`), so its call
-carries the key it carried the first time, and a service that takes keys, as Stripe does, has
-its effect once. -/
-def handlerKeyed {sys : System σ} [Hashable σ.Id] (port : Port σ) (config : Config := {})
-    (rt : Runtime sys) (outputId : Journal.OutputId) (out : σ.Out) : Async Unit := do
+/-- `handler`, with the idempotency key the application gives for each output (`Call.keyed`):
+a key it chose from its own data, such as the id of the payment, so that a call made again, by
+the application or after a restart, carries the key it carried the first time, and a service
+that takes keys, as Stripe does, has its effect once. With no key, the call is made as it is. -/
+def handlerKeyed {sys : System σ} [Hashable σ.Id] (port : Port σ) (key : σ.Out → Option String)
+    (config : Config := {}) (rt : Runtime sys) (out : σ.Out) : Async Unit := do
   if let some (id, call) := port.called out then
+    let call := match key out with
+      | some k => call.keyed k
+      | none => call
     background do
-      let answer ← try exchange (call.keyed outputId.key) config catch _ => pure none
+      let answer ← try exchange call config catch _ => pure none
       discard <| rt.tryInput (port.reply id answer)
 
 end Lanes.Http.Client

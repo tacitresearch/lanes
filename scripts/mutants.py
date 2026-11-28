@@ -8,7 +8,7 @@ takes a minute or two per mutant, so it is run by hand and nightly, not on every
 
     python3 scripts/mutants.py            # those checked by lanesTest
     python3 scripts/mutants.py --all      # also those checked by something slower
-    python3 scripts/mutants.py journal    # those whose name contains "journal"
+    python3 scripts/mutants.py tls        # those whose name contains "tls"
     python3 scripts/mutants.py --list     # print every mutant and run nothing
 
 CI runs the list in pieces on several machines and then puts the verdicts together:
@@ -41,20 +41,10 @@ import sys
 import tempfile
 
 MUTANTS = [
-    ("runtime: nothing handed over again after a restart", "Lanes/Runtime/IO/Shell.lean",
+    ("runtime: what booting puts out is not handed over", "Lanes/Runtime/IO/Shell.lean",
      "  handOver outputs\n  rt.recovered.set true", "  rt.recovered.set true"),
-    ("runtime: the outputs an older version had not handed over are dropped at a migration",
-     "Lanes/Runtime/IO/Shell.lean", "    deliver log.pending\n", ""),
-    ("journal: a migration is not written", "Lanes/Durable/IO/Journal.lean",
-     "      migrate := upgraded.writes.forM (perform store.path handle true)\n", ""),
     ("runtime: commands left in the inbox when the shard ends", "Lanes/Runtime/IO/Shell.lean",
      "  discard <| rt.inbox.modifyGet Mailbox.take\n", ""),
-    ("runtime: a snapshot is not taken", "Lanes/Runtime/IO/Shell.lean",
-     "  let snapshotEvery := save.map fun _ => rt.config.snapshotEvery",
-     "  let snapshotEvery : Option Nat := none"),
-    ("runtime: a save the batch asks for is not performed", "Lanes/Runtime/IO/Shell.lean",
-     "      | .save image => if let some save := save then save image",
-     "      | .save _ => pure ()"),
     ("runtime release: an actor is never released", "Lanes/Runtime/Kernel.lean",
      "    { k with cells := k.cells.erase i }\n  else k", "    k\n  else k"),
     ("runtime release: an actor with a timer pending is released", "Lanes/Runtime/Kernel.lean",
@@ -77,41 +67,14 @@ MUTANTS = [
     ("runtime: a handler that throws ends the shard", "Lanes/Runtime/IO/Shell.lean",
      "    try onOutput out\n    catch e => IO.eprintln s!\"lanes: output handler failed: {e}\"",
      "    onOutput out"),
-    ("runtime: the journal is closed before the inbox", "Lanes/Runtime/IO/Shell.lean",
-     """  for w in ← rt.inbox.modifyGet Mailbox.close do rt.wake w
-  discard <| rt.inbox.modifyGet Mailbox.take
-  if let some log := journal then discard log.close.toBaseIO
-""",
-     """  if let some log := journal then discard log.close.toBaseIO
-  for w in ← rt.inbox.modifyGet Mailbox.close do rt.wake w
-  discard <| rt.inbox.modifyGet Mailbox.take
-"""),
     ("runtime: the shard sleeps past its next timer", "Lanes/Runtime/IO/Shell.lean",
      "    | .for_ms ms => rt.parker.parkAtMost ms", "    | .for_ms ms => rt.parker.parkAtMost (ms + 3000)"),
     ("runtime: an inbox of no capacity takes nothing", "Lanes/Runtime/IO/Shell.lean",
      "  max 1 rt.config.inboxCapacity", "  rt.config.inboxCapacity"),
-    ("courier: no rest after a process could not be reached", "Lanes/Net/Courier.lean",
-     "{ line := .resting (now_ms + limits.retry_ms) }", "{ line := .idle }"),
-    ("journal: no lock", "Lanes/Durable/IO/Journal.lean",
-     "  unless ← lock.tryLock do", "  unless (← lock.tryLock) || true do"),
-    ("journal: appended entries not flushed", "Lanes/Durable/IO/Journal.lean",
-     "      append := write true", "      append := write false"),
-    ("disk: a save replaces the journal before the snapshot is in place",
-     "Lanes/Durable/Disk.lean",
-     """[.putSnapshot (saved c system index image),
-    .putJournal (file input system [.snapshot index])]""",
-     """[.putJournal (file input system [.snapshot index]),
-    .putSnapshot (saved c system index image)]"""),
-    ("http: request ids start at zero after a restart", "Lanes/Web/IO/Server.lean",
-     "Mutex.new (Waiting.start ((log.map (·.index)).getD 0))", "Mutex.new (Waiting.start 0)"),
     ("http: a shard that ends on an error is not noticed", "Lanes/Web/IO/Server.lean",
      "    if (← runtime.ended).isSome then", "    if false then"),
     ("http: the runtime is left running when the port is taken", "Lanes/Web/IO/Server.lean",
      "      runtime.stop\n      throw e", "      throw e"),
-    ("http: a request is journalled as it came, not as the bridge prepared it",
-     "Lanes/Web/IO/Server.lean", "    let request := prepare request\n", ""),
-    ("http: serve names its journal by the application alone, so an old gate's is read",
-     "Lanes/Web/IO/Server.lean", "system := config.journalName", "system := config.system"),
     ("http: a connection's deadline is never acted on", "Lanes/Web/IO/Server.lean",
      "        if t ≤ now then c.tell .alarm", "        if t ≤ now && false then c.tell .alarm"),
     ("http: every answer goes to the first request of its connection", "Lanes/Web/IO/Server.lean",
@@ -171,90 +134,6 @@ MUTANTS = [
      "fun _ _ job => Http.Client.exchange job config"),
     ("jobs: an attempt is performed on the shard's thread", "Lanes/Behaviours/Jobs/IO/Pool.lean",
      "    background (prio := prio) do\n", "    discard <| pure prio\n    id do\n"),
-    ("courier: stop leaves accepted connections open", "Lanes/Net/Courier.lean",
-     "(c.dialed.keys ++ c.inbound.keys).map .close", "c.dialed.keys.map .close"),
-    ("courier: a second write is started while one is under way", "Lanes/Net/Courier.lean",
-     "(c.setWire to { w with line := .up conn true }, [.write conn bytes])",
-     "(c, [.write conn bytes])"),
-    ("courier: the queue has no limit", "Lanes/Net/Courier.lean",
-     "  if w.waiting.length < limits.queue then c.setWire",
-     "  if w.waiting.length < limits.queue + 9 then c.setWire"),
-    ("runtime: the entries of earlier runs do not count towards the next save",
-     "Lanes/Runtime/IO/Shell.lean",
-     "  let mut written := (journal.map (·.past.length)).getD 0", "  let mut written := 0"),
-    ("journal: what is cut off is not kept", "Lanes/Durable/IO/Journal.lean",
-     """        IO.FS.writeBinFile (store.path.addExtension "cut")
-          (disk.journal.extract found.size disk.journal.size)
-""",
-     "        pure ()\n"),
-    ("journal: the mark of a save is not counted", "Lanes/Durable/IO/Journal.lean",
-     "        (perform store.path handle true)\n      count.modify (· + 1)",
-     "        (perform store.path handle true)"),
-    ("node: peers are left listening when the server cannot start", "Lanes/Net/IO/Node.lean",
-     "      peers.stop\n      throw e", "      throw e"),
-    ("node: an output that is neither a response nor a parcel is dropped",
-     "Lanes/Net/IO/Node.lean",
-     "        | .inl out => onOutput out", "        | .inl _ => pure ()"),
-    ("peers: the end of an accepted connection is not reported", "Lanes/Net/IO/Peers.lean",
-     """          background (listen events conn socket fun bytes =>
-            discard <| post events (.received conn bytes))
-""",
-     """          background do
-            try
-              repeat
-                let some bytes ← socket.recv? 65536 | break
-                discard <| post events (.received conn bytes)
-            catch _ => pure ()
-"""),
-    ("peers: a connection that cannot be made is not reported", "Lanes/Net/IO/Peers.lean",
-     """              listen events conn socket fun _ => pure ()
-            catch _ => discard <| post events (.broken conn (← IO.monoMsNow))
-""",
-     """              listen events conn socket fun _ => pure ()
-            catch _ => pure ()
-"""),
-    ("peers: a connection this side made is not read", "Lanes/Net/IO/Peers.lean",
-     """              discard <| post events (.connected conn)
-              listen events conn socket fun _ => pure ()
-""",
-     "              discard <| post events (.connected conn)\n"),
-    ("peers: a parcel over the limit is sent", "Lanes/Net/IO/Peers.lean",
-     "\n      && bytes.size ≤ peers.config.limits.maxParcelBytes then", " then"),
-    ("peers: what the courier asks for at once is done last first", "Lanes/Net/IO/Peers.lean",
-     "    for action in actions do", "    for action in actions.reverse do"),
-    ("peers: a shard with peers does not use its journal", "Lanes/Net/IO/Peers.lean",
-     "runtimeConfig (journal := journal) fun", "runtimeConfig (journal := none) fun"),
-    ("node: the journal is not used", "Lanes/Net/IO/Node.lean",
-     "config runtimeConfig (log := log) fun", "config runtimeConfig (log := none) fun"),
-    ("node: a parcel the shard puts out is not sent", "Lanes/Net/IO/Node.lean",
-     "        | .inr parcel => peers.send parcel", "        | .inr _ => pure ()"),
-    ("node: a parcel that arrives is not handed to the shard", "Lanes/Net/IO/Node.lean",
-     "  ready.resolve fun parcel => discard <| server.tryInput (.inr parcel)",
-     "  ready.resolve fun _ => pure ()"),
-    ("journal: after a save, entries are appended to the file the save replaced",
-     "Lanes/Durable/IO/Journal.lean",
-     "    replace path bytes\n    handle.set (← IO.FS.Handle.mk path .append)",
-     "    replace path bytes"),
-    ("node: a parcel that arrives is not handed to the shard, in three processes",
-     "Lanes/Net/IO/Node.lean",
-     "  ready.resolve fun parcel => discard <| server.tryInput (.inr parcel)",
-     "  ready.resolve fun _ => pure ()", "raftProcs"),
-    ("peers: a connection that cannot be made is not reported, between three raft nodes",
-     "Lanes/Net/IO/Peers.lean",
-     """              listen events conn socket fun _ => pure ()
-            catch _ => discard <| post events (.broken conn (← IO.monoMsNow))
-""",
-     """              listen events conn socket fun _ => pure ()
-            catch _ => pure ()
-""", "raftLive"),
-    ("courier: the parcel that makes it dial waits in a queue of no room",
-     "Lanes/Net/Courier.lean",
-     "waiting := if limits.queue = 0 then {} else Fifo.push {} bytes }",
-     "waiting := Fifo.push {} bytes }"),
-    ("courier: bytes on a connection it dialed close it, and it goes on writing there",
-     "Lanes/Net/Courier.lean",
-     "    | none => if c.dialed.contains conn then (c, []) else (c, [.close conn])",
-     "    | none => (c, [.close conn])"),
     ("tls: the certificate is not verified", "native/tls.c",
      "SSL_set_verify(ssl, SSL_VERIFY_PEER, NULL);", "SSL_set_verify(ssl, 0, NULL);"),
     ("tls: the name the certificate is for is not checked", "native/tls.c",
@@ -350,10 +229,6 @@ MUTANTS = [
 CHECKS = {
     "lanesTest": dict(cwd=".", build="lake build lanesTest",
                       run="./.lake/build/bin/lanesTest", limit_s=120),
-    "raftProcs": dict(cwd="examples/raft-kv", build="lake build raftNode raftProcs",
-                      run="./.lake/build/bin/raftProcs", limit_s=300),
-    "raftLive": dict(cwd="examples/raft-kv", build="lake build raftLive",
-                     run="./.lake/build/bin/raftLive", limit_s=300),
 }
 
 WORDS = {

@@ -5,10 +5,10 @@ import Rookery.System
 
 Server-rendered pages with htmx for people, and JSON for bots. The bridge is where a request
 becomes an input, and its `prepare` the only place that sees a password, a cookie or a token.
-The server runs it on the request's own task before the request enters the system or its
-journal (`Http.Bridge.prepare`, D44):
+The server runs it on the request's own task before the request enters the system
+(`Http.Bridge.prepare`, D44):
 
-- a password becomes its digest (`Auth.Password.digest`), so the journal holds no password;
+- a password becomes its digest (`Auth.Password.digest`), so the system holds no password;
 - a session cookie is a signed token of the session's id and the account's name, and an API
   token a signed token of its generation and the account's name (`Auth.sign`); `prepare` puts
   what one that verifies carried in its place, so nothing in a request's body names an account,
@@ -484,15 +484,5 @@ def bridge (s : Settings) : Bridge (sig Name Digest) where
   decode := decode s
   encode out := some (out.req, if out.json then encodeJson out.reply else encodeHtml s out.reply)
   prepare := prepare s
-
-/-! ## Saving -/
-
-def actors (config : Config) : Kernel.Image.Codecs (Sys config) where
-  id := Codec.of Unit
-  state _ := Codec.of (Board Name Digest)
-  msg _ := Codec.of (Msg Name Digest)
-
-def saving (config : Config) : Http.Saving (Sys config) :=
-  { actors := actors config }
 
 end Rookery.Web

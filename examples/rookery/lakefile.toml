@@ -22,7 +22,7 @@ roots = ["Rookery", "Rookery.Proofs"]
 name = "rookeryCheck"
 root = "Check"
 
-# The web application: `rookery [port] [journal] [secrets] [memory_kib]`.
+# The web application: `rookery [port] [secrets] [memory_kib] [maxPerWindow]`.
 [[lean_exe]]
 name = "rookery"
 root = "Main"

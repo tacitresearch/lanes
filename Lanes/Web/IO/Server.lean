@@ -5,10 +5,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Std.Async
-public import Lanes.Durable.IO.Journal
 public import Lanes.Web.Http.Admit
 public import Lanes.Web.Http.Conn
-public import Lanes.Web.Http.JournalName
 public import Lanes.Web.Http.View
 public import Lanes.Web.Http.Waiting
 public import Lanes.Web.IO.Ops
@@ -37,7 +35,7 @@ A request the application's `view` names is a read (`Http.View`): it never enter
 It waits behind a gate of its own (`readBridge`, bounded by `ServerConfig.reads`) for a peek of
 the actors it reads, at the end of the shard's next batch (`Runtime.tryPeek`), and is answered
 from their states off the shard's thread, or `504` at its deadline. It takes an id from the same
-table as every request, and leaves no entry in the journal.
+table as every request.
 
 One refusal is made here: `503` when the shard's inbox is full. TLS is not handled: terminate it
 in a reverse proxy.
@@ -93,25 +91,11 @@ structure ServerConfig where
   whichever of Lean's task threads tells it something. Four by default: on the warm machine they
   serve 21–30% more requests a second than `0` for a quarter less CPU (`bench/README.md`). -/
   ioThreads : Nat := 4
-  /-- The gate's bounds. A journal holds only the requests the gate admitted, so it does not
-  depend on them. -/
+  /-- The gate's bounds. -/
   gate : GateConfig := {}
   /-- The bounds of the reads, the requests a view answers from the state: how long one waits for
   the shard's peek before it is answered `504`, and how many may wait at once. -/
   reads : GateConfig := {}
-  /-- Where to keep a journal. With one, the system behind the server survives the process:
-  it starts in the state it was in (`docs/decisions/` D24). -/
-  journal : Option System.FilePath := none
-  /-- The journal is a copy restored from elsewhere, production into staging: the first start
-  of the copy hands over nothing the journal owes (`Journal.Store.restored`). -/
-  restored : Bool := false
-  /-- Where to ship the journal's segments and snapshots (`Journal.Store.ship`), such as
-  `S3.backup`; `restoreJournal` restores from them. -/
-  ship : Option Journal.Ship.Target := none
-  /-- The application's name for the system and the version of its step functions. A journal
-  written under another name is refused: replayed through other step functions it would give
-  another state. -/
-  system : String := ""
   /-- Metrics, health and the access log, answered and written by the server: all off by
   default (`Lanes/Web/IO/Ops.lean`). -/
   ops : OpsConfig := {}
@@ -457,11 +441,8 @@ reads (`Gate.step`'s `answer`), or something else to do. A shard that ends on an
 the server down with it: requests in flight are answered `503`, and `Server.wait` throws.
 
 Which id a request gets, who waits on it and who is answered is `Waiting`, pure and proved: ids
-are handed out in order from the start it is given, never twice. Here the start is the number of
-entries in the shard's history. Every request the gate admits has an entry of its own, so the
-history at the next start is longer than the id of any request that left a trace in the system,
-and ids stay fresh across restarts and after the journal is cut. A request the gate refused left
-none, and its id may be given again after a restart.
+are handed out in order from 0, never twice in one process. A restart starts the system afresh
+too, so no id it holds is from before.
 
 An arrival takes the table's lock once: it is given its id, decoded, and the gate decides
 (`Gate.admit`); an admitted request is handed to the shard under the same lock, so that a refusal
@@ -476,18 +457,17 @@ view's response is made on the task the peek's answer runs on, and read by the g
 (`Gate.receive`).
 -/
 private def serveOn (system : System τ) [Hashable τ.Id] (bridge : Bridge σ) (config : ServerConfig)
-    (runtimeConfig : Runtime.Config) (log : Option (Journal.Log system))
+    (runtimeConfig : Runtime.Config)
     (enter : ReqId × Request → τ.In) (output : τ.Out → σ.Out)
-    (other : Journal.OutputId → σ.Out → Async Unit)
+    (other : σ.Out → Async Unit)
     (arrive : Option (Request → IO (Except Response Request)))
     (view : Request → Option (View system)) :
     Async (Server system) := do
   let some addr := Std.Net.IPv4Addr.ofString config.host
     | throw (IO.userError s!"lanes: {config.host} is not an IPv4 address")
   let ops ← Ops.new config.ops
-  let log := log.map ops.journal
   let gate := config.gate
-  let desk ← Mutex.new ({ waiting := Waiting.start ((log.map (·.index)).getD 0) } : Desk)
+  let desk ← Mutex.new ({ waiting := Waiting.start 0 } : Desk)
   /- Do what the gate decides on `msg`, but pass nothing on; answer whom it answers. -/
   let decide (now : Nat) (msg : Desk → List ReqId × List (Gate.Act σ)) : BaseIO Unit := do
     let calls ← desk.atomically (modifyGet fun d =>
@@ -503,11 +483,11 @@ private def serveOn (system : System τ) [Hashable τ.Id] (bridge : Bridge σ) (
       let (d, calls) := Desk.apply { d with reads } (now + config.reads.requestTimeout_ms) acts
       (calls, d))
     for call in calls do call
-  let runtime ← Runtime.startWith system runtimeConfig (journal := log) fun _ id out => do
+  let runtime ← Runtime.startWith system runtimeConfig fun _ out => do
     let out := output out
     match bridge.encode out with
     | some answer => decide (← IO.monoMsNow) (Gate.receive Gate.acts ·.pending answer)
-    | none => other id out
+    | none => other out
   let listener ← try
       let listener ← TCP.Socket.Server.mk
       listener.bind (.v4 ⟨addr, config.port⟩)
@@ -640,100 +620,34 @@ private def serveOn (system : System τ) [Hashable τ.Id] (bridge : Bridge σ) (
       server.finish
   return server
 
-/-- `serve` on a journal that is already open. -/
-def serveWith (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : ServerConfig := {})
-    (runtimeConfig : Runtime.Config := {})
-    (log : Option (Journal.Log (admitted sys bridge)))
-    (arrive : Option (Request → IO (Except Response Request)) := none)
-    (view : Request → Option (View sys) := fun _ => none) :
-    Async (Server (admitted sys bridge)) :=
-  serveOn (admitted sys bridge) bridge config runtimeConfig log id id (fun _ _ => pure ()) arrive
-    fun request => (view request).map View.admitted
-
 /-- Serve `sys` behind a gate it shares the process with other things: an output of `sys` that
-the bridge does not read as a response comes to `onOutput` with its id, which a driver passes on
-as the idempotency key (`Journal.OutputId`), and `Server.tryInput` hands `sys` an input that is
-no request. `config.journal` is not used: open `log` yourself. -/
+the bridge does not read as a response comes to `onOutput`, and `Server.tryInput` hands `sys` an
+input that is no request. -/
 def serveFronted (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : ServerConfig := {})
     (runtimeConfig : Runtime.Config := {})
-    (onOutput : Journal.OutputId → σ.Out → Async Unit := fun _ _ => pure ())
-    (log : Option (Journal.Log (admittedFronted sys bridge)) := none)
+    (onOutput : σ.Out → Async Unit := fun _ => pure ())
     (arrive : Option (Request → IO (Except Response Request)) := none)
     (view : Request → Option (View sys) := fun _ => none) :
     Async (Server (admittedFronted sys bridge)) :=
-  serveOn (admittedFronted sys bridge) bridge config runtimeConfig log .inl id onOutput arrive
+  serveOn (admittedFronted sys bridge) bridge config runtimeConfig .inl id onOutput arrive
     fun request => (view request).map View.fronted
-
-/-- What `serve` needs to save the kernel and cut the journal: how the system's actors are
-written. -/
-structure Saving (sys : System σ) where
-  actors : Kernel.Image.Codecs sys
-
-/-- The name `serve` writes in its journal (`admittedName`). The gate's settings are not in it,
-since the journal holds only what the gate admitted. -/
-def ServerConfig.journalName (config : ServerConfig) : String :=
-  admittedName config.system
-
-/-- The name in the manifest of the journal at `path`, if there is one.
-The start reads the files again, under the lock, and decides on what it finds there. -/
-private def journalHeader (path : System.FilePath) : IO (Option String) := do
-  let some bytes ← (try some <$> IO.FS.withFile path .read (·.read 65536) catch _ => pure none)
-    | return none
-  return Journal.named? bytes
-
-private def gated (path : System.FilePath) (old : GateConfig) : IO.Error :=
-  IO.userError s!"lanes: the journal {path} was written with the gate as an actor of the \
-    system, behind a gate of {old.requestTimeout_ms} ms and {old.maxPending} requests. Its \
-    requests are replayed through the gate's decisions, which this server makes before the \
-    shard: start the version that wrote it, or move the journal and its snapshot aside to begin \
-    anew"
 
 /-- Serve `sys` over HTTP: the gate stands before the shard, `bridge` turns requests into
 inputs and outputs into responses, and `sys` runs on one shard (`Runtime`) as `admitted sys`.
 Returns once the server is listening. Each request is answered exactly once by the gate.
-With a journal and `saving`, the kernel is saved from time to time and the journal cut
-(`Runtime.Config.snapshotEvery`); with a journal alone, the journal only grows. `arrive` is work
-a request needs in IO before it is prepared, done on a task of its own: what it returns enters as
-the request, or is the answer and nothing enters. The sign-in (`SignIn.arrive`) is such work.
+`arrive` is work a request needs in IO before it is prepared, done on a task of its own: what it
+returns enters as the request, or is the answer and nothing enters. The sign-in (`SignIn.arrive`) is such work.
 Requests of one connection may then enter in another order than they were read; their answers
 are still written in that order. A request `view` names, once prepared, is a read: it is
 answered from the states of the actors it reads and never enters the system (`View`); with none,
 every request enters. -/
 def serve (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : ServerConfig := {})
-    (runtimeConfig : Runtime.Config := {}) (saving : Option (Saving sys) := none)
+    (runtimeConfig : Runtime.Config := {})
     (arrive : Option (Request → IO (Except Response Request)) := none)
     (view : Request → Option (View sys) := fun _ => none) :
-    Async (Server (admitted sys bridge)) := do
-  let log ← config.journal.mapM fun path => do
-    let name ← journalHeader path
-    if let some old := name.bind (gateOf config.system) then throw (gated path old)
-    let store : Journal.Store (admitted sys bridge) :=
-      { path, input := Codec.pair Codec.nat Request.codec, system := config.journalName
-        actors := saving.map fun s => admittedActors s.actors bridge
-        restored := config.restored, ship := config.ship }
-    try store.open
-    catch e =>
-      if name.any (· != config.journalName) then
-        throw (IO.userError s!"{e}. `ServerConfig.system` names the step functions a journal \
-          is replayed through: start the version that wrote it, or move the journal and its \
-          snapshot aside to begin anew")
-      throw e
-  try serveWith sys bridge config runtimeConfig log arrive view
-  catch e =>
-    if let some log := log then discard log.close.toBaseIO
-    throw e
-
-/-- Write the journal of a server with `config` from what `target` holds, at `point`, as
-`Journal.Store.restore` does: its first start hands nothing over and takes a new id. Run it
-before `serve`, with no journal at `config.journal`. -/
-def restoreJournal (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : ServerConfig)
-    (target : Journal.Ship.Target) (point : Journal.Restore.Point := .latest)
-    (journal : Option String := none) : IO Journal.Restored := do
-  let some path := config.journal
-    | throw (IO.userError "lanes: a restore needs `ServerConfig.journal`")
-  let store : Journal.Store (admitted sys bridge) :=
-    { path, input := Codec.pair Codec.nat Request.codec, system := config.journalName }
-  store.restore target point journal
+    Async (Server (admitted sys bridge)) :=
+  serveOn (admitted sys bridge) bridge config runtimeConfig id id (fun _ => pure ()) arrive
+    fun request => (view request).map View.admitted
 
 namespace Server
 
@@ -800,8 +714,8 @@ def stopOnSignal (server : Server system) (drain_ms : Nat) (listening : IO Unit 
     Async.sleep 10
   server.stop
 
-/-- Hand the system behind the gate an input that is not a request, such as a parcel from
-another process. `false` if the shard's inbox is full. A request cannot be handed in this way,
+/-- Hand the system behind the gate an input that is not a request, such as an adapter's answer.
+`false` if the shard's inbox is full. A request cannot be handed in this way,
 so request ids stay the server's. -/
 def tryInput {sys : System σ} [Hashable σ.Id] {bridge : Bridge σ}
     (server : Server (admittedFronted sys bridge)) (x : σ.In) : Async Bool :=

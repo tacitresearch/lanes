@@ -5,14 +5,15 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import Lanes
 import Tests.Web
 import Tests.Fronted
+import Tests.Live
 
 /-!
 Metrics, health and the access log. The rendering against text checked by hand; who may read the
-metrics page; then a server with all of it on: readiness before the shard has recovered, after,
-and while draining; a scrape of the metrics page, with its path written as itself and
+metrics page; then a server with all of it on: readiness once the shard has booted, and while
+draining; a scrape of the metrics page, with its path written as itself and
 percent-encoded, and the page hidden from a peer elsewhere; request ids; access-log lines read
-back as JSON; a connection refused at the bound, counted; and the same journal with all of it on
-as with all of it off. Last, a process stopped by SIGTERM with a request in flight
+back as JSON; a connection refused at the bound, counted; and the same inputs entering the system
+with all of it on as with all of it off. Last, a process stopped by SIGTERM with a request in flight
 (`Server.stopOnSignal`).
 -/
 
@@ -81,7 +82,7 @@ def health : OpsConfig :=
 
 def stats : Ops.Stats [1000] :=
   (({} : Ops.Stats [1000]).answered .get 200 500 |>.answered .get 204 2000
-    |>.answered .post 503 10 |>.refuse |>.appended 3 |>.saved)
+    |>.answered .post 503 10 |>.refuse)
 
 def tests : List (String × Bool) :=
   let page := Metrics.render (Ops.families stats
@@ -98,8 +99,6 @@ def tests : List (String × Bool) :=
         && page.contains "lanes_http_request_duration_seconds_count 3\n"
         && page.contains "lanes_http_request_duration_seconds_sum 0.00251\n"
         && page.contains "lanes_http_connections_refused_total 1\n"
-        && page.contains "lanes_journal_entries_total 3\n"
-        && page.contains "lanes_journal_saves_total 1\n"
         && page.contains "lanes_http_connections 2\n" && page.contains "lanes_ready 1\n"),
     ("ops: an access line is the record's fields, in order",
       access.line == "{\"time\":\"2023-11-14T22:13:20.123Z\",\"method\":\"GET\","
@@ -172,27 +171,13 @@ def valueOf (page name : String) : Option Nat :=
 def status (response : String) : String :=
   ((response.drop 9).take 3).toString
 
-/-- A journal held in memory, which records what is appended to it. -/
-def memory {σ : Signature} (sys : System σ) (past : List (Journal.Entry σ)) :
-    IO (Journal.Log sys × IO.Ref (Array (Journal.Entry σ))) := do
-  let written ← IO.mkRef #[]
-  return ({ past, append := fun es => written.modify (· ++ es.toArray), note := fun _ => pure ()
-            close := pure () }, written)
-
-/-- The desk starts on a journal that owes a memo, and the handler holds the memo, so the shard
-has not recovered until it is let go. -/
+/-- Readiness, metrics and the access log of a server with all of it on. -/
 def readyTest : Async (List (String × Bool)) := do
   let lines ← IO.mkRef #[]
-  let release : IO.Promise Unit ← IO.Promise.new
-  let (log, _) ← memory (admittedFronted (Server.system Tests.Fronted.desk) Tests.Fronted.bridge) [.advance 0, .input (.inr (.note 7)), .batch 64]
   let server ← serveFronted (Server.system Tests.Fronted.desk) Tests.Fronted.bridge
-    { port := 0, ops := opsConfig lines } {}
-    (fun _ out => match out with | .memo _ => discard <| await release.result? | .reply _ => pure ())
-    (log := some log)
+    { port := 0, ops := opsConfig lines }
   let some port := server.port | return [("ops: the server reports its port", false)]
-  let early ← Tests.Web.fetch port "/readyz"
   let alive ← Tests.Web.fetch port "/healthz"
-  release.resolve ()
   let mut polls := 0
   let mut ready := ""
   for _ in [0:200] do
@@ -210,24 +195,22 @@ def readyTest : Async (List (String × Bool)) := do
   server.stop
   let logged ← lines.get
   return [
-    ("ops: not ready before the shard has recovered, and alive",
-      status early == "503" && status alive == "200"),
-    ("ops: ready once it has", status ready == "200"),
+    ("ops: alive, and ready once the shard has booted",
+      status alive == "200" && status ready == "200"),
     ("ops: the metrics page is served in the text format, to a peer on the loopback address",
       status page == "200" && page.contains ("content-type: " ++ Metrics.contentType)),
     ("ops: its path is matched once decoded",
       status encoded == "200" && encoded.contains "lanes_ready 1"),
     ("ops: it counts what was answered, by method and status class",
       valueOf page "lanes_http_requests_total{method=\"GET\",status_class=\"2xx\"}" == some 5
-        && valueOf page "lanes_http_requests_total{method=\"GET\",status_class=\"5xx\"}"
-          == some polls
-        && valueOf page "lanes_http_request_duration_seconds_count" == some (polls + 5)
-        && valueOf page "lanes_ready" == some 1 && valueOf page "lanes_http_connections" == some 1
-        && (valueOf page "lanes_journal_appends_total").any (· > 0)),
+        && ((valueOf page "lanes_http_requests_total{method=\"GET\",status_class=\"5xx\"}").getD 0)
+          + 1 == polls
+        && valueOf page "lanes_http_request_duration_seconds_count" == some (polls + 4)
+        && valueOf page "lanes_ready" == some 1 && valueOf page "lanes_http_connections" == some 1),
     ("ops: draining is not ready, still alive, and still serves",
       status draining == "503" && status stillAlive == "200" && status served == "200"),
     ("ops: every answer has its line in the access log, and each line is JSON",
-      logged.size == polls + 10 && logged.all fun l => (Json.parse l).toOption.isSome) ]
+      logged.size == polls + 9 && logged.all fun l => (Json.parse l).toOption.isSome) ]
 
 /-- `Ops.front` for a connection from elsewhere: the metrics page, however its path was written,
 is answered `404` and never handed on; liveness is answered. -/
@@ -310,12 +293,11 @@ def refusedTest : Async (List (String × Bool)) := do
       refused.isEmpty && valueOf page "lanes_http_connections_refused_total" == some (1 + more)) ]
 
 /-- The same requests, with all of it off and with all of it on and probed between them: the
-journals hold the same inputs, the four the gate admits (`/bad` it refuses before the shard). -/
-def journalTest : Async (List (String × Bool)) := do
+same inputs enter the system, the four the gate admits (`/bad` it refuses before the shard). -/
+def inputsTest : Async (List (String × Bool)) := do
   let run := fun (ops : OpsConfig) (probe : Bool) => do
-    let (log, written) ← memory (admitted (Server.system Tests.Gate.echo) Tests.Gate.bridge) []
-    let server ← serveWith (Server.system Tests.Gate.echo) Tests.Gate.bridge
-      { port := 0, ops } {} (some log)
+    let server ← serve (Server.system Tests.Gate.echo) Tests.Gate.bridge
+      { port := 0, ops } { record := true }
     let port := server.port.getD 0
     let mut page := ""
     for path in ["/a", "/b?q=1", "/bad", "/c", "/"] do
@@ -325,7 +307,7 @@ def journalTest : Async (List (String × Bool)) := do
         discard <| Tests.Web.fetch port "/readyz"
         page ← Tests.Web.fetch port "/metrics"
     server.stop
-    let inputs := (← written.get).toList.filterMap fun
+    let inputs := (← server.trace).toList.filterMap fun
       | .input x => some x
       | _ => none
     return (inputs, page)
@@ -333,10 +315,8 @@ def journalTest : Async (List (String × Bool)) := do
   let (off, _) ← run {} false
   let (on, page) ← run (opsConfig lines) true
   return [
-    ("ops: with metrics, health and logs on, the journal holds the same inputs as with them off",
-      off.length == 4 && off == on),
-    ("ops: and the journal's appends were counted",
-      (valueOf page "lanes_journal_entries_total").any (· > 0)) ]
+    ("ops: with metrics, health and logs on, the same inputs enter the system as with them off",
+      off.length == 4 && off == on && status page == "200") ]
 
 /-! ## A stop -/
 
@@ -344,14 +324,14 @@ def journalTest : Async (List (String × Bool)) := do
 def exitWithin {cfg : IO.Process.StdioConfig} (child : IO.Process.Child cfg) (ms : Nat) :
     Async (Option UInt32) := do
   let waited ← IO.asTask (prio := .dedicated) child.wait
-  let code ← Tests.Durable.within ms (await waited)
+  let code ← Tests.Live.within ms (await waited)
   if code.isNone then child.kill
   return code.bind (·.toOption)
 
 /-- The next line of `out`, waited for at most `ms`. -/
 def lineWithin (out : IO.FS.Handle) (ms : Nat) : Async String := do
   let line ← IO.asTask (prio := .dedicated) out.getLine
-  return (((← Tests.Durable.within ms (await line)).bind (·.toOption)).getD "").trimAscii.toString
+  return (((← Tests.Live.within ms (await line)).bind (·.toOption)).getD "").trimAscii.toString
 
 /-- Poll readiness until it answers `want`, at most 500 times. -/
 def readiness (port : UInt16) (want : String) : Async Bool := do
@@ -382,7 +362,7 @@ def stopRun (drain_ms : Nat) (finish : Bool) : Async (Option (String × Bool × 
   if finish then
     stdin.putStrLn "done"
     stdin.flush
-  let response ← Tests.Durable.within 10000 (await request)
+  let response ← Tests.Live.within 10000 (await request)
   let code ← exitWithin child 10000
   return some ((response.getD "").take 12 |>.toString, ready && started && draining, code)
 
@@ -398,7 +378,7 @@ def stopTest : Async (List (String × Bool)) := do
       cut == some ("HTTP/1.1 503", true, some 0)) ]
 
 def live : Async (List (String × Bool)) := do
-  return (← readyTest) ++ (← hiddenTest) ++ (← logTest) ++ (← refusedTest) ++ (← journalTest)
+  return (← readyTest) ++ (← hiddenTest) ++ (← logTest) ++ (← refusedTest) ++ (← inputsTest)
     ++ (← stopTest)
 
 end Tests.Ops

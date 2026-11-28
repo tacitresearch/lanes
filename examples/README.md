@@ -2,12 +2,14 @@
 
 Applications built on Lanes, each a Lake package of its own that depends on the framework in
 this repository by path, as an application of yours would depend on it by git. They are written
-to be read: copy one to start. The tests do not import them, but three of their systems are
+to be read: copy one to start. The tests do not import them, but two of their systems are
 copied into `Tests/Fixtures/` and must stay the same as the copies (`Tests/Copies.lean`): those
-of `examples/kv-cache`, `examples/election` and `examples/watchdog`. `examples/counter` is what
+of `examples/kv-cache` and `examples/watchdog`. `examples/counter` is what
 `lanes new` writes (`Tests/New.lean`). The large ones are also here to find out what the
 framework is missing: anything one of them has to work around is a defect of Lanes, and is fixed
-there.
+there. Actor state lives as long as the process, as in Go, Tokio or Erlang: every start is a
+boot. State that must outlive the process lives in a service outside, reached through a modelled
+adapter, as `todo-db` keeps its to-dos in PostgreSQL.
 
 ## In what order to read them
 
@@ -20,93 +22,69 @@ there.
    (`balance_nonneg`), one of the whole system (`money_conserved`), and the checker finding the
    credit a lossy link drops.
 3. `bank-web`: the bank behind a server-rendered page: typed routes, a bridge from requests to
-   inputs, templates, and a journal with snapshots that survives `kill -9`.
+   inputs and templates.
 4. `kv-cache`: a key-value store with front ends, checked against a five-line spec with no
    refinement mapping. A read cache breaks it, and the checker and the proof both show the stale
    read; behind the `Once` memo it takes each request once under every fault.
-5. `election`: leader election with timers, crashes and restarts, at most one leader per term,
-   proved with a ghost history and `Monotone`; random runs for five nodes.
-6. `watchdog`: what fairness says about a keep-alive: a fair run in which the dog never barks.
-7. `payments`: a shop that charges each order through a model of a payment service, whose
+5. `watchdog`: what fairness says about a keep-alive: a fair run in which the dog never barks.
+6. `payments`: a shop that charges each order through a model of a payment service, whose
    answers may be late, lost or `unknown` and whose webhooks come late, twice and out of order.
    A retry without the idempotency key charges an order twice, and the checker finds it; with
    the key, an order is charged at most once in every run, and an order the shop calls paid has
    a payment that succeeded, both proved.
-8. `migration`: a deploy that changes the state type. Version 1 of a quota service runs on a
-   journal; version 2 adds a quota to each user, reads version 1's files through an upgrade,
-   and carries its invariant across with the migration's proof.
-9. `todo-db`: a to-do list kept in PostgreSQL through the typed store: one pure transaction per
+7. `todo-db`: a to-do list kept in PostgreSQL through the typed store: one pure transaction per
    request, at `SERIALIZABLE`. A user's to-dos are unique by title, proved per transaction and so
    in every database the store model allows; adding without looking first, and retrying a lost
    answer, stores a title twice, and the checker finds it. `lake exe todoLive` runs it on a real
    server.
-10. `sign-in`: the start of a video site whose members sign in with Google or GitHub. The
-    sign-in is Lanes' and runs before the system, which gets only the identity it verified and
-    gives the member a session.
-11. `videos`: a video site whose members sign in with Google or GitHub and upload straight to
-    S3 from the browser, with presigned links, then watch, like, comment and delete. Checked
-    beside the object store's model, with its timeouts and crashes, where taking the browser's
-    word for an upload is found; private videos, deletes, confirmed uploads and likes proved.
-    Its checks, the last check of an upload never confirmed and the deletes of objects are jobs
-    of the scheduler, retried with a backoff; every job proved to end in a fair run. Tested over
-    HTTP against a fake S3 that refuses a call once, through a restart. Lanes' V1 acceptance
-    application.
-12. `upload`: uploads of any size, handed to the system in pieces and answered with their size
-    and checksum: a request that streams, through the gate a piece at a time.
-13. `reminders`: reminders over HTTP, each a job of the scheduler (`Lanes.Schedule`) that posts
+8. `sign-in`: the start of a video site whose members sign in with Google or GitHub. The
+   sign-in is Lanes' and runs before the system, which gets only the identity it verified and
+   gives the member a session.
+9. `upload`: uploads of any size, handed to the system in pieces and answered with their size
+   and checksum: a request that streams, through the gate a piece at a time.
+10. `reminders`: reminders over HTTP, each a job of the scheduler (`Lanes.Schedule`) that posts
     its text to a notification service at its time and retries it with a backoff until it is
     taken, gives up or is cancelled; a periodic sweep held as one job however often it is
-    scheduled; through a restart on the journal.
-14. `raft-kv`, `ledger`, `rookery`: the serious systems below.
+    scheduled.
+11. `rookery`: the serious system below.
 
 | Feature | Where to see it |
 | --- | --- |
 | A spec as a `Service`, run by `Server` | `counter` |
-| A spec as a `Service`, implemented by actors | `kv-cache`, `ledger`, `raft-kv`, `rookery` |
-| `lanes_data` and codecs | `counter`, `bank`, `ledger`, `raft-kv`, `rookery` |
-| Per-actor invariants (`actor_invariant`, `System.invariant_of_actor`) | `counter`, `bank`, `ledger`, `raft-kv`, `rookery` |
-| Invariants under every fault (`Monotone`), ghosts | `election`, `ledger`, `raft-kv` |
-| Refinement to a spec (`System.Implements`, `System.Refines`) | `counter`, `kv-cache`, `ledger`, `raft-kv`, `rookery` |
-| A request takes effect once (`Once.actor`, `Service.once`) | `kv-cache`, `raft-kv` |
-| Fairness and liveness | `watchdog`, `reminders`, `videos` |
-| Work due later, retried with a backoff, periodic sweeps (`Schedule.attach`) | `reminders`, `videos` |
-| A model of an external service: timeouts with unknown outcome, idempotency keys, webhooks (`Lanes/Outside/`) | `payments`, `videos` |
-| Files in S3: presigned uploads and downloads, `HEAD` and delete, the object store's model | `videos` |
+| A spec as a `Service`, implemented by actors | `kv-cache`, `rookery` |
+| `lanes_data` and codecs | `counter`, `bank`, `rookery` |
+| Per-actor invariants (`actor_invariant`, `System.invariant_of_actor`) | `counter`, `bank`, `rookery` |
+| Refinement to a spec (`System.Implements`, `System.Refines`) | `counter`, `kv-cache`, `rookery` |
+| A request takes effect once (`Once.actor`, `Service.once`) | `kv-cache` |
+| Fairness and liveness | `watchdog`, `reminders` |
+| Work due later, retried with a backoff, periodic sweeps (`Schedule.attach`) | `reminders` |
+| A model of an external service: timeouts with unknown outcome, idempotency keys, webhooks (`Lanes/Outside/`) | `payments` |
 | A database: typed tables, pure transactions, an invariant per transaction, PostgreSQL | `todo-db` |
-| Model checks, a bug found, random runs | `bank`, `kv-cache`, `election`, `payments`, `todo-db`, `videos` |
-| HTTP, routes, htmx, templates | `counter`, `bank-web`, `ledger`, `rookery` |
-| A journal and snapshots across `kill -9` | `bank-web`, `ledger`, `raft-kv`, `rookery` |
-| A changed state type: an upgrade, a migration and its proof (`Migration`, `Journal.Upgrade`) | `migration` |
-| Sessions, log-in, cookies, tokens | `ledger`, `rookery` |
-| Sign-in with Google or GitHub (OAuth 2.0, OpenID Connect) | `sign-in`, `videos` |
+| Model checks, a bug found, random runs | `bank`, `kv-cache`, `payments`, `todo-db` |
+| HTTP, routes, htmx, templates | `counter`, `bank-web`, `rookery` |
+| Sessions, log-in, cookies, tokens | `rookery` |
+| Sign-in with Google or GitHub (OAuth 2.0, OpenID Connect) | `sign-in` |
 | A JSON API and rate limits | `rookery` |
 | Request bodies in pieces, responses in parts, Server-Sent Events | `upload`, `rookery` |
-| Shards in several processes, joined by TCP | `raft-kv` |
 
 ## The serious systems
 
 | System | What it is | State |
 | --- | --- | --- |
-| `raft-kv` | A replicated key-value store: Raft, generic over the machine it replicates | Protocol written and model-checked against its spec and its invariants; the invariants of Raft's safety argument, leader completeness among them, and refinement to the spec, proved for every cluster and fault, given that no request is handed to a node twice, and, with the machine behind a memo, with no premise (the processes run the plain map); runs as three processes with an HTTP front each, joined by TCP, that save their state and cut their journals, through every node killed with SIGKILL and started again, and through a minute of nodes killed and paused at random with every acknowledged write kept (`raftChaos`); a node is not started without its journal unless it is new |
-| `ledger` | A multi-user double-entry ledger as a web application: sign-up, log-in, sessions, transfers between users, an audit | Spec and safety properties first; users as actors, the book as one actor; refinement and every property model-checked on two users with two accounts each, with crashes and timers; conservation, no overdraft, paired entries, visibility and the bounds on sessions and failed log-ins proved for every run and fault; refinement to its spec proved where the links from the users to the book are ordered and do not duplicate, and with timers where they also lose nothing and the book does not crash; served over HTTP with a journal and snapshots, tested through SIGKILL and a restart. Its friction log (`ledger/README.md`) is what it is for |
-| `rookery` | A small social network for bots and their owners: sign-up, sessions, API tokens, posts, follows, timelines, deletes, rate limits, as a web application with a JSON API | The flagship. Spec first and checked alone; one actor that runs it; every claim proved of the spec for every configuration (posts never lost and deleted only by their author, a deleted post in no read, timelines exactly the newest posts followed, the rate limit, API changes acted on once per `seq`, no other account's secrets, the bounds) and the system proved to implement its spec with deadlines, under lost and reordered requests and crashes, where the link from outside does not duplicate; the two are not yet joined into statements about the running system, and the gate in front is not covered; served over HTTP with a journal and snapshots, tested through SIGKILL and a restart. Its README lists each claim with its theorem, what remains, and its friction log |
+| `rookery` | A small social network for bots and their owners: sign-up, sessions, API tokens, posts, follows, timelines, deletes, rate limits, as a web application with a JSON API | The flagship. Spec first and checked alone; one actor that runs it; every claim proved of the spec for every configuration (posts never lost and deleted only by their author, a deleted post in no read, timelines exactly the newest posts followed, the rate limit, API changes acted on once per `seq`, no other account's secrets, the bounds) and the system proved to implement its spec with deadlines, under lost and reordered requests and crashes, where the link from outside does not duplicate; the two are not yet joined into statements about the running system, and the gate in front is not covered; served over HTTP, tested through SIGKILL and a restart. Its README lists each claim with its theorem, what remains, and its friction log |
 
 ## Building one
 
 ```bash
-cd examples/raft-kv
+cd examples/rookery
 mkdir -p .lake && ln -s ../../../.lake/packages .lake/packages   # share the fetched dependencies
 lake build
 lake test
-lake exe raftLive     # three nodes in one process
-lake exe raftProcs    # three processes, killed and started again
-lake exe raftChaos    # a minute of random faults; not part of the tests
+lake exe rookeryLive  # a person and a bot over HTTP
 ```
 
-and in the same way, in `examples/ledger`, `lake build`, `lake test` and `lake exe ledgerLive`;
-in `examples/rookery`, `lake build`, `lake test` and `lake exe rookeryLive`; and in each small
-one, `lake build` and `lake test` (`bank-web` needs `bank` beside it, which it requires by path,
-and `sign-in` and `videos` the presets in `integrations/`).;
+and in each small one, `lake build` and `lake test` (`bank-web` needs `bank` beside it, which it
+requires by path, and `sign-in` the presets in `integrations/`;
 `upload`'s test drives its front end with no socket, and `lake exe upload 8080` serves it:
 `curl -T file http://127.0.0.1:8080/upload`).
 
@@ -130,6 +108,5 @@ let (_, balance) := lb.get ["accounts", "1"]
 ```
 
 `bank-web`'s `Check.lean` does this. A live test of a process uses `Http.Client.fetch port
-request`, one request on a connection of its own, as `ledger/Live.lean` and
-`rookery/Live.lean` do.
+request`, one request on a connection of its own, as `rookery/Live.lean` does.
 

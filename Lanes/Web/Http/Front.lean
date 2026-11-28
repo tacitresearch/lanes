@@ -6,8 +6,6 @@ module
 
 public import Lanes.Core.Join
 public import Lanes.Outside.Basic
-public import Lanes.Runtime.Shard
-public import Lanes.Durable.Snapshot
 public import Lanes.Web.Http.Gate
 
 /-!
@@ -20,8 +18,7 @@ is behind it; its outputs are responses and the inputs it passes on. Its decisio
 `fronted sys bridge` is `gateSystem` joined to `sys` with `System.join`: an input the gate
 passes on is an input of `sys`, and an output of `sys` that the bridge reads as a response goes
 to the gate. Every other output of `sys` is an output of `fronted sys`, and `sys` still takes
-inputs that do not come through the gate. So a shard of a system spread over processes can sit
-behind a gate: its parcels pass the gate by, both ways. `served sys bridge` is `fronted sys` with
+inputs that do not come through the gate. `served sys bridge` is `fronted sys` with
 requests in, responses out, and nothing else in or out: what `Http.serve` does, which runs the
 gate before the shard (`Lanes.Web.Http.Admit`) and is proved to be this
 (`Lanes.Web.Http.AdmitSound`).
@@ -143,13 +140,5 @@ and `instance : (fronted sys bridge).Inspect := .fronted`. -/
     {bridge : Bridge σ} {config : GateConfig} : (served sys bridge config).Inspect :=
   letI : (fronted sys bridge config).Inspect := .fronted
   .filterMapIO
-
-/-- A bridge for a shard: requests enter as inputs from outside, and a parcel is no response. -/
-def Bridge.shard (bridge : Bridge σ) : Bridge (shardSig σ) where
-  decode id request := (bridge.decode id request).map .inl
-  encode
-    | .inl out => bridge.encode out
-    | .inr _ => none
-  prepare := bridge.prepare
 
 end Lanes.Http
