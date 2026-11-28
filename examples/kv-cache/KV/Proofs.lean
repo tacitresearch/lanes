@@ -100,11 +100,11 @@ abbrev OnceAbs (K V F : Type) [DecidableEq K] [DecidableEq V] [DecidableEq F] :=
 /-- What `e` is on its way to do is accounted for: its request has arrived, its answer is
 given. -/
 def Covered (t : OnceAbs K V F) (e : Envelope (sig K V F)) : Prop :=
-  (∀ x ∈ pend e, x ∈ t.arrived) ∧ ∀ o ∈ owed e, o ∈ t.answered
+  (∀ x ∈ pend e, t.arrived x) ∧ ∀ o ∈ owed e, t.answered o
 
 def EffCovered (t : OnceAbs K V F) {i : Id F} : Effect (sig K V F) i → Prop
   | .send dst msg => Covered t ⟨some i, dst, msg⟩
-  | .emit out => out ∈ t.answered
+  | .emit out => t.answered out
   | .after .. => False
   | _ => True
 
@@ -126,7 +126,7 @@ accounted for, no timer is armed, and the memo agrees with the keys taken. -/
 structure OnceSim (c : SysState (onceSystem K V F)) (t : OnceAbs K V F) : Prop where
   value : t.value = (c.state .store).1
   net : ∀ e ∈ c.net, Covered t e
-  outbox : ∀ o ∈ c.outbox, o ∈ t.answered
+  outbox : ∀ o ∈ c.outbox, t.answered o
   timers : ∀ i (m : Msg K V F i), m ∉ c.timers i
   memo : (c.state .store).2.Agrees t.taken (EffCovered t)
 
@@ -135,7 +135,7 @@ theorem store_step (data : K → Option V) {src : Option (Id F)} {msg : StoreMsg
     {x : Request K V F} (hx : pend ⟨src, .store, msg⟩ = some x) :
     storeKey msg = some (requestKey x) ∧
       (store.step data msg).1 = ((spec K V F).step data x).1 ∧
-      ∀ t : OnceAbs K V F, (∀ o ∈ ((spec K V F).step data x).2, o ∈ t.answered) →
+      ∀ t : OnceAbs K V F, (∀ o ∈ ((spec K V F).step data x).2, t.answered o) →
         ∀ eff ∈ (store.step data msg).2, EffCovered t eff := by
   cases msg <;> simp only [pend, Option.some.injEq] at hx <;> subst hx <;>
     simp [storeKey, requestKey, store, spec, EffCovered, Covered, pend, owed]
@@ -192,12 +192,12 @@ theorem onStore (h : OnceSim c t) {net : List (Envelope (sig K V F))} (hnet : ne
       ((Once.actor store storeKey).step (c.state .store) msg)) t' := by
   obtain ⟨src, hmem⟩ := hmem
   obtain ⟨x, hx⟩ : ∃ x, pend ⟨src, .store, msg⟩ = some x := by cases msg <;> exact ⟨_, rfl⟩
-  have harrived : x ∈ t.arrived := (h.net _ hmem).1 x hx
+  have harrived : t.arrived x := (h.net _ hmem).1 x hx
   obtain ⟨hkey, hvalue, hcovers⟩ := store_step (c.state .store).1 hx
   have hval := h.value
   have hmemo := h.memo
-  rw [← Prod.mk.eta (p := c.state .store)]
-  rw [← Prod.mk.eta (p := c.state .store)] at hval hmemo
+  rw [← Prod.eta (c.state .store)]
+  rw [← Prod.eta (c.state .store)] at hval hmemo
   generalize (c.state .store).1 = data at hval hmemo hvalue hcovers ⊢
   generalize (c.state .store).2 = memo at hval hmemo ⊢
   cases hs : memo.seen x.via x.req with
@@ -233,19 +233,19 @@ answer may be handed over more than once.
 theorem implements_once (env : EnvModel (sig K V F)) (hrestart : env.mayRestart = false) :
     (onceSystem K V F).ImplementsOnce env (spec K V F) requestKey := by
   refine System.Refines.of_handles (inv := fun _ => True) (fun _ _ => trivial) OnceSim
-    ⟨⟨fun _ => none, ∅, ∅, ∅⟩, rfl, ⟨rfl, by simp [SysState.init, SysState.blank],
+    ⟨⟨fun _ => none, fun _ => False, fun _ => False, fun _ => False⟩, rfl, ⟨rfl, by simp [SysState.init, SysState.blank],
       by simp [SysState.init, SysState.blank], by simp [SysState.init, SysState.blank],
       Once.Memo.Agrees.empty⟩⟩
     (fun _ _ _ h hl => h.loses hl) ?_ ?_ ?_ ?_ (fun h => absurd h (by simp [hrestart]))
   · intro c t x _ h
-    have hg : t.Grows { t with arrived := insert x t.arrived } :=
-      ⟨Set.subset_insert _ _, subset_rfl, subset_rfl⟩
+    have hg : t.Grows { t with arrived := fun y => y = x ∨ t.arrived y } :=
+      ⟨fun _ h => .inr h, fun _ h => h, fun _ h => h⟩
     refine ⟨_, .single rfl, h.value, fun e he => ?_, h.outbox, h.timers,
       h.memo.mono fun _ he => he.mono hg⟩
     rcases List.mem_append.mp he with he | he
     · exact (h.net e he).mono hg
     · obtain rfl := List.mem_singleton.mp he
-      exact ⟨fun y hy => by simp [pend] at hy; subst hy; exact Set.mem_insert _ _,
+      exact ⟨fun y hy => by simp [pend] at hy; subst hy; exact .inl rfl,
         fun o ho => by simp [owed] at ho⟩
   · intro c t out _ h hmem
     exact ⟨t, .single ⟨h.outbox out hmem, rfl⟩, h.value, h.net,
@@ -312,7 +312,7 @@ theorem stale_not_trace {a : Abs K V F} :
     simpa using h.2.2 _ hmem rfl
   refine hseen.sTr hseen ?_ h₄ ?_
   · rintro a b ⟨hpending, hvalue, houtbox⟩ rfl
-    exact ⟨fun x hx => (Multiset.mem_cons.mp hx).elim .inr (hpending x), hvalue, houtbox⟩
+    exact ⟨fun x hx => (Bag.mem_cons.mp hx).elim .inr (hpending x), hvalue, houtbox⟩
   refine hwritten.sTr hseen ?_ h₃ ?_
   · rintro a b ⟨⟨hpending, -, houtbox⟩, -, htook⟩ ⟨hmem, rfl⟩
     obtain ⟨hgone, hvalue⟩ := htook _ hmem rfl
@@ -320,14 +320,14 @@ theorem stale_not_trace {a : Abs K V F} :
     · rcases hpending x hx with rfl | rfl
       · exact .inl rfl
       · exact absurd hx hgone
-    · rcases houtbox o (Multiset.mem_of_mem_erase ho) with h | h <;> simp [hreq] at h
+    · rcases houtbox o (Bag.mem_of_mem_erase ho) with h | h <;> simp [hreq] at h
   refine hread.sTr hwritten ?_ h₂ ?_
   · rintro a b ⟨hpending, -, houtbox⟩ rfl
     have hnot : (⟨2, f, .put k v⟩ : Request K V F) ∉ a.pending := fun h => by
       simpa using hpending _ h
     refine ⟨⟨fun x hx => ?_, trivial, fun o ho => .inl (houtbox o ho)⟩,
-      by simp [Multiset.count_eq_zero_of_notMem hnot], fun o ho hreq => ?_⟩
-    · rcases Multiset.mem_cons.mp hx with rfl | hx
+      by simp [Bag.count_eq_zero_of_notMem hnot], fun o ho hreq => ?_⟩
+    · rcases Bag.mem_cons.mp hx with rfl | hx
       · exact .inr rfl
       · exact .inl (hpending x hx)
     · simp [houtbox o ho] at hreq

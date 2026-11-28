@@ -32,6 +32,60 @@ namespace Rookery
 
 open Lanes
 
+/-- The largest `k ≤ n` with `P k`, or `0` if there is none. -/
+def findGreatest (P : Nat → Prop) [DecidablePred P] : Nat → Nat
+  | 0 => 0
+  | n + 1 => if P (n + 1) then n + 1 else findGreatest P n
+
+section FindGreatest
+
+variable {P : Nat → Prop} [DecidablePred P]
+
+theorem findGreatest_le : ∀ n, findGreatest P n ≤ n
+  | 0 => Nat.le_refl 0
+  | n + 1 => by
+    simp only [findGreatest]
+    split
+    · exact Nat.le_refl _
+    · exact Nat.le_succ_of_le (findGreatest_le n)
+
+theorem le_findGreatest : ∀ {m n}, m ≤ n → P m → m ≤ findGreatest P n
+  | m, 0, hmn, _ => hmn
+  | m, n + 1, hmn, hm => by
+    simp only [findGreatest]
+    split
+    · exact hmn
+    · rcases Nat.lt_or_ge m (n + 1) with h | h
+      · exact le_findGreatest (Nat.le_of_lt_succ h) hm
+      · obtain rfl : m = n + 1 := Nat.le_antisymm hmn h
+        contradiction
+
+theorem findGreatest_spec : ∀ {m n}, m ≤ n → P m → P (findGreatest P n)
+  | m, 0, hmn, hm => by
+    obtain rfl : m = 0 := Nat.le_zero.mp hmn
+    exact hm
+  | m, n + 1, hmn, hm => by
+    simp only [findGreatest]
+    split
+    · assumption
+    · rcases Nat.lt_or_ge m (n + 1) with h | h
+      · exact findGreatest_spec (Nat.le_of_lt_succ h) hm
+      · obtain rfl : m = n + 1 := Nat.le_antisymm hmn h
+        contradiction
+
+theorem findGreatest_is_greatest : ∀ {k n}, findGreatest P n < k → k ≤ n → ¬P k
+  | k, 0, h, hk, _ => by simp [findGreatest] at h; omega
+  | k, n + 1, h, hk, hp => by
+    simp only [findGreatest] at h
+    split at h
+    · omega
+    · rcases Nat.lt_or_ge k (n + 1) with h' | h'
+      · exact findGreatest_is_greatest h (Nat.le_of_lt_succ h') hp
+      · obtain rfl : k = n + 1 := Nat.le_antisymm hk h'
+        contradiction
+
+end FindGreatest
+
 variable {N C : Type} [DecidableEq N] [DecidableEq C] (config : Config)
 
 /-! ## The memo of API changes -/
@@ -230,21 +284,21 @@ end Board
 section History
 
 variable {evs : List (Lanes.Event (sig N C))} {acts : List (Service.Act (Request N C) (Deadline N))}
-  {cut : ℕ → ℕ}
+  {cut : Nat → Nat}
   (hex : System.Implements.Explains (spec N C config) deadlines (fun _ _ => none) evs acts cut)
-  (hdistinct : ∀ (p p' : ℕ) (r r' : Request N C), evs[p]? = some (Lanes.Event.input r) →
+  (hdistinct : ∀ (p p' : Nat) (r r' : Request N C), evs[p]? = some (Lanes.Event.input r) →
     evs[p']? = some (Lanes.Event.input r') → r.req = r'.req → p = p')
 
 include hex
 
 /-- The board after the first `k` acts of the history. -/
-abbrev boardAt (acts : List (Service.Act (Request N C) (Deadline N))) (k : ℕ) : Board N C :=
+abbrev boardAt (acts : List (Service.Act (Request N C) (Deadline N))) (k : Nat) : Board N C :=
   (spec N C config).play {} (acts.take k)
 
 include hdistinct in
 /-- A response handed over is that of an act of the history taking the request that arrived
 with its id, before the next position and after the request arrived. -/
-theorem take_of_output {i : ℕ} {o : Response N} (hi : evs[i]? = some (.output o)) {p : ℕ}
+theorem take_of_output {i : Nat} {o : Response N} (hi : evs[i]? = some (.output o)) {p : Nat}
     {r : Request N C} (hp : evs[p]? = some (.input r)) (hreq : o.req = r.req) :
     ∃ k < cut (i + 1), cut p ≤ k ∧ acts[k]? = some (.take r) ∧
       o = ⟨r.req, ((boardAt config acts k).handle config r).2.1, r.json⟩ := by
@@ -258,14 +312,14 @@ theorem take_of_output {i : ℕ} {o : Response N} (hi : evs[i]? = some (.output 
   exact ⟨k, hk, hcq, ha, rfl⟩
 
 omit hex in
-theorem boardAt_succ {k : ℕ} {r : Request N C} (ha : acts[k]? = some (.take r)) :
+theorem boardAt_succ {k : Nat} {r : Request N C} (ha : acts[k]? = some (.take r)) :
     boardAt config acts (k + 1) = ((boardAt config acts k).handle config r).1 := by
   rw [boardAt, List.take_add_one, ha, Option.toList_some, Service.play_concat]
   rfl
 
 omit hex in
 /-- The board after more acts of the history is the board before them run through them. -/
-theorem boardAt_le {k k' : ℕ} (hk : k ≤ k') :
+theorem boardAt_le {k k' : Nat} (hk : k ≤ k') :
     boardAt config acts k' =
       Board.run config (boardAt config acts k) (((acts.drop k).take (k' - k)).map toEvent) := by
   rw [boardAt, show k' = k + (k' - k) by omega, List.take_add, Service.play_append,
@@ -273,10 +327,10 @@ theorem boardAt_le {k k' : ℕ} (hk : k ≤ k') :
   simp
 
 /-- An input that takes effect before an output's act did arrived before that output. -/
-theorem arrived_before {l : ℕ} {o : Response N} (hl : evs[l]? = some (.output o)) {k : ℕ}
-    (hk : k < cut (l + 1)) {p : ℕ} {x : Request N C} (hp : evs[p]? = some (.input x))
+theorem arrived_before {l : Nat} {o : Response N} (hl : evs[l]? = some (.output o)) {k : Nat}
+    (hk : k < cut (l + 1)) {p : Nat} {x : Request N C} (hp : evs[p]? = some (.input x))
     (hcp : cut p ≤ k) : p < l := by
-  by_contra hpl
+  refine Classical.byContradiction fun hpl => ?_
   have hne : p ≠ l := by
     rintro rfl
     rw [hl] at hp
@@ -285,7 +339,7 @@ theorem arrived_before {l : ℕ} {o : Response N} (hl : evs[l]? = some (.output 
   omega
 
 /-- An event of the history between two of its positions is an act there. -/
-theorem mem_segment {k k' : ℕ} {e : Board.Event N C}
+theorem mem_segment {k k' : Nat} {e : Board.Event N C}
     (he : e ∈ ((acts.drop k).take (k' - k)).map toEvent) :
     ∃ j, k ≤ j ∧ j < k' ∧ ∃ a, acts[j]? = some a ∧ toEvent a = e := by
   obtain ⟨a, ha, rfl⟩ := List.mem_map.mp he
@@ -294,8 +348,8 @@ theorem mem_segment {k k' : ℕ} {e : Board.Event N C}
 
 /-- A post on its author's account in the board after `k₀` acts is there after `k` acts, if no
 request made as its author to delete it arrives before the output at `l` whose act is the `k`th. -/
-theorem kept_until {k₀ k : ℕ} (hk : k₀ ≤ k) {a : N} {q : Post}
-    (hq : q ∈ (boardAt config acts k₀).postsOf a) {l : ℕ} {o : Response N}
+theorem kept_until {k₀ k : Nat} (hk : k₀ ≤ k) {a : N} {q : Post}
+    (hq : q ∈ (boardAt config acts k₀).postsOf a) {l : Nat} {o : Response N}
     (hl : evs[l]? = some (.output o)) (hkl : k < cut (l + 1))
     (hkept : ∀ p r, evs[p]? = some (.input r) → p < l → r.name = a → r.deletes ≠ some q.id) :
     q ∈ (boardAt config acts k).postsOf a := by
@@ -409,7 +463,7 @@ section History
 
 variable {evs : List (Lanes.Event (sig N C))} {acts : List (Service.Act (Request N C) (Deadline N))}
 
-theorem window_passes {p : ℕ} {n : N}
+theorem window_passes {p : Nat} {n : N}
     (h : (evs[p]?).bind (Lanes.Event.timed deadlines (fun _ _ => none)) =
       some (.fire (.window n))) :
     evs[p]? = some (.timeout () (.deadline (.window n))) := by
@@ -427,7 +481,7 @@ theorem window_passes {p : ℕ} {n : N}
       | request r => simp [Lanes.Event.timed, deadlines] at h
     | _ => simp [Lanes.Event.timed] at h
 
-theorem boardAt_succ_fire {k : ℕ} {d : Deadline N} (ha : acts[k]? = some (.fire d)) :
+theorem boardAt_succ_fire {k : Nat} {d : Deadline N} (ha : acts[k]? = some (.fire d)) :
     boardAt config acts (k + 1) = (boardAt config acts k).fire d := by
   rw [boardAt, List.take_add_one, ha, Option.toList_some, Service.play_concat]
   rfl
@@ -440,16 +494,16 @@ variable {env : EnvModel (sig N C)} (henv : (env.link none ()).duplicating = fal
   (hrestart : env.mayRestart = false)
   {evs : List (Lanes.Event (sig N C))} {c : SysState (system N C config)}
   (hrun : (SysState.init (system N C config) env).run env evs = some c)
-  (hdistinct : ∀ (p p' : ℕ) (r r' : Request N C), evs[p]? = some (Lanes.Event.input r) →
+  (hdistinct : ∀ (p p' : Nat) (r r' : Request N C), evs[p]? = some (Lanes.Event.input r) →
     evs[p']? = some (Lanes.Event.input r') → r.req = r'.req → p = p')
 
 include henv hrestart hrun hdistinct
 
 /-- The board of a read, given the post on its author's account before it: from the act of
 the read on, it is a read of a board the spec reaches that holds the post. -/
-theorem read_holds {acts : List (Service.Act (Request N C) (Deadline N))} {cut : ℕ → ℕ}
+theorem read_holds {acts : List (Service.Act (Request N C) (Deadline N))} {cut : Nat → Nat}
     (hex : System.Implements.Explains (spec N C config) deadlines (fun _ _ => none) evs acts cut)
-    {k₀ : ℕ} {a : N} {q : Post} (hq : q ∈ (boardAt config acts k₀).postsOf a) {p₂ l : ℕ}
+    {k₀ : Nat} {a : N} {q : Post} (hq : q ∈ (boardAt config acts k₀).postsOf a) {p₂ l : Nat}
     {r₂ : Request N C} {list : List (N × Post)} {json : Bool} (hread : evs[p₂]? = some (.input r₂))
     (hshown : evs[l]? = some (.output ⟨r₂.req, .feed list, json⟩)) (hk₀ : k₀ ≤ cut p₂)
     (hkept : ∀ p r, evs[p]? = some (.input r) → p < l → r.name = a → r.deletes ≠ some q.id) :
@@ -465,7 +519,7 @@ theorem read_holds {acts : List (Service.Act (Request N C) (Deadline N))} {cut :
 /-- A post the system answered `posted` to a web post is on its author's account in the board
 of every read whose request arrives after that answer, until a request made as its author to
 delete it arrives: that read is a read of a board the spec reaches that holds the post. -/
-theorem posted_kept {p₁ i p₂ l : ℕ} {req : ReqId} {a : N} {s : Sid}
+theorem posted_kept {p₁ i p₂ l : Nat} {req : ReqId} {a : N} {s : Sid}
     {body : {s : String // Body.valid s}} {id : PostId} {json json' : Bool} {r₂ : Request N C}
     {list : List (N × Post)}
     (hpost : evs[p₁]? = some (.input (.web req a s (.post body))))
@@ -487,7 +541,7 @@ theorem posted_kept {p₁ i p₂ l : ℕ} {req : ReqId} {a : N} {s : Sid}
 /-- A post the system showed in a read is on its author's account in the board of every read
 whose request arrives after it was shown, until a request made as its author to delete it
 arrives: that read is a read of a board the spec reaches that holds the post. -/
-theorem shown_kept {i p₂ l : ℕ} {req : ReqId} {a : N} {q : Post} {json json' : Bool}
+theorem shown_kept {i p₂ l : Nat} {req : ReqId} {a : N} {q : Post} {json json' : Bool}
     {list₁ list : List (N × Post)} {r₂ : Request N C}
     (hshow : evs[i]? = some (.output ⟨req, .feed list₁, json⟩)) (hx : (a, q) ∈ list₁)
     (hread : evs[p₂]? = some (.input r₂)) (hafter : i < p₂)
@@ -508,7 +562,7 @@ theorem shown_kept {i p₂ l : ℕ} {req : ReqId} {a : N} {q : Post} {json json'
 /-- The board acts on one API change of an account for each sequence number: every two replies
 the system hands over to API changes made as one account with one sequence number are the same,
 and so are the changes, unless one reply is `stale`, `badToken` or `reused`. -/
-theorem api_once {i j p₁ p₂ : ℕ} {o₁ o₂ : Response N} {req₁ req₂ token₁ token₂ s : ℕ} {n : N}
+theorem api_once {i j p₁ p₂ : Nat} {o₁ o₂ : Response N} {req₁ req₂ token₁ token₂ s : Nat} {n : N}
     {op₁ op₂ : Op N} (hi : evs[i]? = some (.output o₁)) (hj : evs[j]? = some (.output o₂))
     (hp₁ : evs[p₁]? = some (.input (.api req₁ n token₁ s op₁)))
     (hp₂ : evs[p₂]? = some (.input (.api req₂ n token₂ s op₂)))
@@ -519,7 +573,7 @@ theorem api_once {i j p₁ p₂ : ℕ} {o₁ o₂ : Response N} {req₁ req₂ t
   obtain ⟨acts, cut, hex⟩ := (implements config env henv hrestart).history hrun
   obtain ⟨k₁, -, -, ha₁, rfl⟩ := take_of_output config hex hdistinct hi hp₁ h₁
   obtain ⟨k₂, -, -, ha₂, rfl⟩ := take_of_output config hex hdistinct hj hp₂ h₂
-  have hlt : ∀ {k k' : ℕ} {req req' token token' : ℕ} {op op' : Op N}, k < k' →
+  have hlt : ∀ {k k' : Nat} {req req' token token' : Nat} {op op' : Op N}, k < k' →
       acts[k]? = some (.take (.api req n token s op)) → op ≠ .timeline → op' ≠ .timeline →
       ((boardAt config acts k).handle config (.api req n token s op)).2.1 ≠ .stale →
       ((boardAt config acts k).handle config (.api req n token s op)).2.1 ≠ .badToken →
@@ -552,7 +606,7 @@ open Classical in
 /-- The rate limit, of every run: after a position at which `n`'s window passes, and before any
 later one, the web posts made as `n` whose requests arrive after it are answered `posted` with
 at most `maxPerWindow` distinct ids. -/
-theorem rate_limit_run {w₁ w₂ : ℕ} {n : N}
+theorem rate_limit_run {w₁ w₂ : Nat} {n : N}
     (hw₁ : evs[w₁]? = some (.timeout () (.deadline (.window n))))
     (hnone : ∀ w, w₁ < w → w < w₂ → evs[w]? ≠ some (.timeout () (.deadline (.window n))))
     {ids : List PostId} (hids : ids.Nodup)
@@ -562,11 +616,11 @@ theorem rate_limit_run {w₁ w₂ : ℕ} {n : N}
     ids.length ≤ config.maxPerWindow := by
   obtain ⟨acts, cut, hex⟩ := (implements config env henv hrestart).history hrun
   obtain ⟨kf, hkf, hckf, hkf₁⟩ := hex.fires w₁ (.window n) (by simp [hw₁, deadlines])
-  let P : ℕ → Prop := fun k => acts[k]? = some (.fire (.window n))
-  let K₀ := Nat.findGreatest P (cut (w₁ + 1) - 1)
-  have hK₀ : P K₀ := Nat.findGreatest_spec (P := P) (by omega) hkf
-  have hkfK₀ : kf ≤ K₀ := Nat.le_findGreatest (P := P) (by omega) hkf
-  have hK₀le : K₀ ≤ cut (w₁ + 1) - 1 := Nat.findGreatest_le _
+  let P : Nat → Prop := fun k => acts[k]? = some (.fire (.window n))
+  let K₀ := findGreatest P (cut (w₁ + 1) - 1)
+  have hK₀ : P K₀ := findGreatest_spec (P := P) (by omega) hkf
+  have hkfK₀ : kf ≤ K₀ := le_findGreatest (P := P) (by omega) hkf
+  have hK₀le : K₀ ≤ cut (w₁ + 1) - 1 := findGreatest_le _
   let K := K₀ + 1
   let M := max (cut w₂) K
   let seg := ((acts.drop K).take (M - K)).map toEvent
@@ -587,7 +641,7 @@ theorem rate_limit_run {w₁ w₂ : ℕ} {n : N}
       rcases Nat.lt_trichotomy p w₁ with hpl | rfl | hpg
       · have := hex.mono (p + 1) w₁ hpl
         omega
-      · exact Nat.findGreatest_is_greatest (P := P) (show K₀ < j by omega)
+      · exact findGreatest_is_greatest (P := P) (show K₀ < j by omega)
           (show j ≤ cut (p + 1) - 1 by omega) hj
       · by_cases hpw₂ : p < w₂
         · exact hnone p hpg hpw₂ hpw
@@ -617,6 +671,6 @@ theorem rate_limit_run {w₁ w₂ : ℕ} {n : N}
     refine Board.mem_acceptedIds config _ _ _ rfl ?_
     rw [← hb]
     exact hacc'
-  exact (hids.length_le_of_subset hsub).trans (by rw [Board.length_acceptedIds]; omega)
+  exact Nat.le_trans (hids.length_le_of_subset hsub) (by rw [Board.length_acceptedIds]; omega)
 
 end Rookery

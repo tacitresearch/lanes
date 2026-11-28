@@ -10,7 +10,7 @@ public import Lanes.Semantics.Refinement
 /-!
 # The semantics of a system as a transition system
 
-`System.sem sys env` presents `SysState.step` as a `Spec`, and so as a CSLib `LTS`: states are
+`System.sem sys env` presents `SysState.step` as a `Spec`, and so as an `LTS`: states are
 `SysState sys`, labels are `Event σ`, and there is a transition exactly when the step function
 returns the target state. Nothing is redefined here. Proofs are about the function that the
 scheduler and the model checker run.
@@ -30,8 +30,6 @@ scheduler and the model checker run.
 @[expose] public section
 
 namespace Lanes
-
-open Cslib
 
 variable {σ : Signature}
 

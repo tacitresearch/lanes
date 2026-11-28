@@ -158,12 +158,12 @@ def requests (net : List (Envelope (sig N C))) : List (Request N C) :=
 response waiting. -/
 def Rel (c : SysState (system N C config))
     (t : Service.Abs (Request N C) (Response N) (Board N C)) : Prop :=
-  t.value = c.state () ∧ (↑(requests c.net) : Multiset (Request N C)) ≤ t.pending ∧
-    (↑c.outbox : Multiset (Response N)) ≤ t.outbox
+  t.value = c.state () ∧ (↑(requests c.net) : Bag (Request N C)) ≤ t.pending ∧
+    (↑c.outbox : Bag (Response N)) ≤ t.outbox
 
 theorem requests_le_of_sublist {l l' : List (Envelope (sig N C))} (h : l'.Sublist l) :
-    (↑(requests l') : Multiset (Request N C)) ≤ ↑(requests l) :=
-  Multiset.coe_le.mpr (h.filterMap _).subperm
+    (↑(requests l') : Bag (Request N C)) ≤ ↑(requests l) :=
+  Bag.coe_le_coe_of_sublist (h.filterMap _)
 
 /-- The system implements its spec, deadlines and all, in every environment whose link from the
 outside to the board does not duplicate and where the process does not restart. -/
@@ -178,41 +178,41 @@ theorem implements (env : EnvModel (sig N C)) (henv : (env.link none ()).duplica
   case input =>
     rintro c t x - ⟨hv, hp, ho⟩
     refine ⟨{ t with pending := x ::ₘ t.pending }, .single rfl, hv, ?_, ho⟩
-    simp only [requests, filterMap_concat, Option.toList_some, ← Multiset.coe_add]
-    rw [add_comm, Multiset.coe_singleton, Multiset.singleton_add]
-    exact Multiset.cons_le_cons x hp
+    simp only [requests, filterMap_concat, Option.toList_some, ← Bag.coe_add]
+    rw [Bag.add_comm, Bag.coe_singleton, Bag.singleton_add]
+    exact Bag.cons_le_cons x hp
   case output =>
     rintro c t out - ⟨hv, hp, ho⟩ hmem
-    have hin : out ∈ (↑c.outbox : Multiset (Response N)) := Multiset.mem_coe.mpr hmem
-    refine ⟨{ t with outbox := t.outbox.erase out }, .single ⟨Multiset.mem_of_le ho hin, rfl⟩,
+    have hin : out ∈ (↑c.outbox : Bag (Response N)) := Bag.mem_coe.mpr hmem
+    refine ⟨{ t with outbox := t.outbox.erase out }, .single ⟨Bag.mem_of_le ho hin, rfl⟩,
       hv, hp, ?_⟩
-    rw [← Multiset.coe_erase]
-    exact Multiset.erase_le_erase out ho
+    rw [← Bag.coe_erase]
+    exact Bag.erase_le_erase out ho
   case deliver =>
     rintro c t e hc ⟨hv, hp, ho⟩ hd
     have he := SysState.mem_of_deliverable hd
     obtain ⟨r, rfl⟩ := sent_request config (hc.net _ he)
     have hpend : r ∈ t.pending := by
-      refine Multiset.mem_of_le hp (Multiset.mem_coe.mpr ?_)
+      refine Bag.mem_of_le hp (Bag.mem_coe.mpr ?_)
       exact List.mem_filterMap.mpr ⟨_, he, rfl⟩
     refine ⟨_, .single ⟨r, hpend, rfl⟩, ?_, ?_, ?_⟩
     · simp [SysState.grow, hv, spec, system, board]
     · have hs := (step_request config (c.state ()) r).1
       simp only [SysState.grow, system] at hs ⊢
       rw [hs, List.append_nil]
-      have hperm := Multiset.coe_eq_coe.mpr
+      have hperm := Bag.coe_eq_coe.mpr
         (filterMap_perm_erase (f := fun e : Envelope (sig N C) => match e.msg with
           | .request r => some r
           | .deadline _ => none) he)
-      have : (↑(requests c.net) : Multiset (Request N C)) = r ::ₘ ↑(requests (c.net.erase ⟨none, (), .request r⟩)) := by
+      have : (↑(requests c.net) : Bag (Request N C)) = r ::ₘ ↑(requests (c.net.erase ⟨none, (), .request r⟩)) := by
         simpa [requests] using hperm
       rw [this] at hp
-      have := Multiset.erase_le_erase r hp
+      have := Bag.erase_le_erase r hp
       simpa using this
     · have hs := (step_request config (c.state ()) r).2
       simp only [SysState.grow, system] at hs ⊢
-      rw [hs, ← Multiset.coe_add, hv]
-      exact add_le_add ho (le_of_eq rfl)
+      rw [hs, ← Bag.coe_add, hv]
+      exact Bag.add_le_add ho (Bag.le_of_eq rfl)
   case duplicate =>
     rintro c t e hc - hd hdup
     obtain ⟨r, rfl⟩ := sent_request config (hc.net _ (SysState.mem_of_deliverable hd))

@@ -107,7 +107,6 @@ def run (name : String) (dir : System.FilePath) (source : Source) : IO UInt32 :=
     IO.FS.writeFile target (fill name source contents)
   IO.println s!"Created {dir}. Next:"
   IO.println s!"  cd {dir}"
-  IO.println "  lake exe cache get"
   IO.println "  lake test"
   IO.println s!"  lake exe {name}"
   return 0

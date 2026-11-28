@@ -50,8 +50,6 @@ reasoning is used in proofs only.
 
 namespace Lanes
 
-open Cslib
-
 variable {σ : Signature} {sys : System σ} {env : EnvModel σ}
 
 namespace SysState
@@ -218,7 +216,7 @@ theorem init_complete (sys : System σ) (env : EnvModel σ) : (init sys env).Com
   intro ev howed
   refine mem_requeue howed (.inr (SysState.mem_maybeOwed howed ?_))
   rintro i msg rfl
-  by_contra hi
+  refine Classical.byContradiction fun hi => ?_
   have htimers : (init sys env).state.timers i = [] := SysState.init_timers_of_not_mem_boot hi
   simp [SysState.owed, htimers] at howed
 
@@ -232,7 +230,7 @@ theorem Complete.take (hs : s.Complete env) (ev : Event σ) : (s.take env ev).Co
     refine mem_requeue howed ?_
     by_cases hactor : ∀ i msg, ev' = .timeout i msg → i ∈ touched sys ev
     · exact .inr (SysState.mem_maybeOwed howed hactor)
-    · simp only [not_forall] at hactor
+    · simp only [Classical.not_forall] at hactor
       obtain ⟨i, msg, rfl, hi⟩ := hactor
       by_cases hev : ev = .restart
       · subst hev
@@ -259,17 +257,17 @@ end FairScheduler
 
 namespace System
 
-variable {evs : List (Event σ)} {c : SysState sys} {k : ℕ}
+variable {evs : List (Event σ)} {c : SysState sys} {k : Nat}
 
 /-- The event tried at position `k` by the run that takes `evs` and then serves what is owed:
 the next of `evs`, and once they are taken the event owed longest. -/
-def fairChoice (env : EnvModel σ) (evs : List (Event σ)) (k : ℕ) (s : FairScheduler sys) :
+def fairChoice (env : EnvModel σ) (evs : List (Event σ)) (k : Nat) (s : FairScheduler sys) :
     Option (Event σ) :=
   evs[k]?.or (s.next env)
 
 /-- The scheduler at position `k` of the run that takes `evs` and then serves what is owed. -/
 def fairSchedule (sys : System σ) (env : EnvModel σ) (evs : List (Event σ)) :
-    ℕ → FairScheduler sys
+    Nat → FairScheduler sys
   | 0 => .init sys env
   | k + 1 =>
     match fairChoice env evs k (fairSchedule sys env evs k) with
@@ -279,12 +277,12 @@ def fairSchedule (sys : System σ) (env : EnvModel σ) (evs : List (Event σ)) :
 /-- The run that takes `evs`, as far as they are enabled, and then serves what is owed, the
 event owed longest first. It stutters where nothing is owed. -/
 def Run.fairAfter (sys : System σ) (env : EnvModel σ) (evs : List (Event σ)) : sys.Run env where
-  state := ⟨fun k => (fairSchedule sys env evs k).state⟩
-  event := ⟨fun k => (fairChoice env evs k (fairSchedule sys env evs k)).filter fun ev =>
-    ((fairSchedule sys env evs k).state.step env ev).isSome⟩
+  state k := (fairSchedule sys env evs k).state
+  event k := (fairChoice env evs k (fairSchedule sys env evs k)).filter fun ev =>
+    ((fairSchedule sys env evs k).state.step env ev).isSome
   init := rfl
   exec k := by
-    simp only [ωSequence.get_fun, fairSchedule]
+    simp only [fairSchedule]
     cases fairChoice env evs k (fairSchedule sys env evs k) with
     | none => rfl
     | some ev =>
@@ -294,7 +292,7 @@ def Run.fairAfter (sys : System σ) (env : EnvModel σ) (evs : List (Event σ)) 
 
 /-- The scheduler has every owed event in its queue at every position. -/
 theorem fairSchedule_complete (sys : System σ) (env : EnvModel σ) (evs : List (Event σ))
-    (k : ℕ) : (fairSchedule sys env evs k).Complete env := by
+    (k : Nat) : (fairSchedule sys env evs k).Complete env := by
   induction k with
   | zero => exact FairScheduler.init_complete sys env
   | succ k ih =>
@@ -345,13 +343,13 @@ theorem Run.fairAfter_event (hrun : (SysState.init sys env).run env evs = some c
 /-- Once the given events are taken, an event that is in the queue, stays owed and is not
 armed again is taken within as many steps as there are events ahead of it: at each step it is
 taken or moves forward. -/
-theorem Run.fairAfter_taken {e : Event σ} {m : ℕ} {pre post : List (Event σ)}
+theorem Run.fairAfter_taken {e : Event σ} {m : Nat} {pre post : List (Event σ)}
     (hm : evs.length ≤ m) (hqueue : (fairSchedule sys env evs m).queue = pre ++ e :: post)
     (howed : ∀ k, m ≤ k → (fairSchedule sys env evs k).state.owed env e = true)
     (hquiet : ∀ k p, m ≤ k → (Run.fairAfter sys env evs).event k = some p →
       e ∉ (fairSchedule sys env evs k).state.arms p) :
     ∃ k, m ≤ k ∧ k ≤ m + pre.length ∧ (Run.fairAfter sys env evs).event k = some e := by
-  induction hlen : pre.length using Nat.strong_induction_on generalizing m pre post with
+  induction hlen : pre.length using Nat.strongRecOn generalizing m pre post with
   | _ len ih =>
     have hchoice : fairChoice env evs m (fairSchedule sys env evs m)
         = (pre.find? ((fairSchedule sys env evs m).state.owed env)).or (some e) := by
@@ -381,10 +379,10 @@ fair. -/
 theorem Run.fairAfter_fair (sys : System σ) (env : EnvModel σ) (evs : List (Event σ)) :
     (Run.fairAfter sys env evs).Fair := by
   refine Run.fair_iff.mpr fun ob n hdue => ?_
-  have howed (k : ℕ) (hk : max n evs.length ≤ k) :
+  have howed (k : Nat) (hk : max n evs.length ≤ k) :
       (fairSchedule sys env evs k).state.owed env ob.event = true :=
     Obligation.due_iff_owed.mp (hdue k (by omega)).1
-  have hquiet (k : ℕ) (p : Event σ) (hk : max n evs.length ≤ k)
+  have hquiet (k : Nat) (p : Event σ) (hk : max n evs.length ≤ k)
       (hev : (Run.fairAfter sys env evs).event k = some p) :
       ob.event ∉ (fairSchedule sys env evs k).state.arms p :=
     fun harms => (hdue k (by omega)).2 ⟨p, hev, Obligation.restarted_iff_mem_arms.mpr harms⟩

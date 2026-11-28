@@ -124,7 +124,7 @@ theorem delivery_answered (config : Config)
     (hcrash : env.mayCrash (.inl ()) = false) (hcrashes : env.mayCrash (.inr ()) = false)
     (hrestart : env.mayRestart = false)
     (hlossless : (env.link (some (.inl ())) (.inr ())).lossy = false) (id : Nat)
-    {r : (system config).Run env} (hfair : r.Fair) {n : ℕ}
+    {r : (system config).Run env} (hfair : r.Fair) {n : Nat}
     (hup : (r.state n).up (.inl ()) = true) {j : Schedule.Job Key Task}
     (hj : Schedule.entry ((r.state n).state (.inl ()) : Schedule.State Key Task).jobs
       (.reminder id) = some j) {retry : Schedule.Retry} (hwork : j.work = .call retry) :
