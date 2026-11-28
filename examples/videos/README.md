@@ -66,7 +66,7 @@ lake exe videosWaves           # how wide the waves of the journal are, as it ru
   logged (`Out.orphan`).
 - **Reads.** The feed, a watch page and a channel page change nothing (`Web.read?`). `Web.view`
   answers them from the site's state, read at the end of a batch of the shard
-  (`Lanes.Http.View`, `docs/decisions/new-reads-from-state.md`): they take no entry in the journal
+  (`Lanes.Http.View`, `docs/decisions/D108-reads-from-state.md`): they take no entry in the journal
   and no step, and wait at most `ServerConfig.reads`' deadline for the read, then get `504`.
 - **Pages** are server-rendered with Lanes' templates. Every form that changes something carries
   a token bound to the session (`Auth.formToken`) and must come from the site's origin; the style
