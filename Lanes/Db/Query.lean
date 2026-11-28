@@ -13,7 +13,7 @@ The operations a transaction may ask (`Op`): a row by primary key; a scan on the
 a secondary index, with equality on its first columns and a range on the next, ordered either
 way, with a limit (a lookup by an index is a scan with equality on all its columns); and an
 insert, update, upsert or delete of one row by primary key. Each means a pure function of the
-database (`Op.apply`), which `Lanes/Services/Postgres/Db.lean` compiles to SQL and
+database (`Op.apply`), which `Lanes/Services/Postgres/Sql.lean` compiles to SQL and
 `Tests/Oracle/Service/Db.lean` compares with PostgreSQL.
 
 A write that would give two rows the same values of a unique index does nothing and answers

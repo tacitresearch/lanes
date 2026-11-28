@@ -1,7 +1,7 @@
 # Contributing to Lanes
 
 Lanes is a framework for verified software in Lean 4: actors with pure step functions, one
-semantics, a proved runtime kernel, a model checker, proofs, and adapters.
+semantics, a proved runtime, a model checker, proofs, and adapters.
 
 ## Build and check
 
@@ -20,7 +20,7 @@ the repository. Read it first; this file does not repeat it. A clone needs elan 
   with no issue gets one first.
 - A pull request merges through the merge queue once the `build` check passes. `build` passes
   only when every CI job before it passed: the build with warnings as errors, lint, the tests,
-  the model checks, the differential tests against Go, and the applications' jobs.
+  the model checks, the oracles (`oracles/README.md`), and the applications' jobs.
 - Before asking for review, merge `main` into the branch and run the checks again (`AGENTS.md`,
   "Parallel branches").
 - A design that is settled or changed gets a decision file in `docs/decisions/`, written as

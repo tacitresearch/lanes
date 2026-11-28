@@ -5,7 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import Lanes
 
 /-!
-The start of a video site: its members sign in with Google or GitHub and get a session. The
+A site whose members sign in with Google or GitHub and get a session. The
 sign-in itself is Lanes' (`Lanes/Web/IO/SignIn.lean`), done where a request arrives: what reaches
 this system is the identity it verified, never a code or a token. A member is an identity's
 issuer and subject, which do not change, so the same person signing in again is the same member

@@ -50,9 +50,11 @@ FAIL: "money is conserved" is violated after 4 steps
 Every claim, with its theorem, check or test, its premises and its status, is in
 `docs/ARCHITECTURE.md`, area by area, with the limits of each. In short:
 
-- **Proved** (Lean theorems, each with an axiom gate in `Tests/Axioms/`): the runtime kernel
-  follows the semantics whatever the shell asks of it; a complete PASS of the model checker
-  means the property holds in every reachable state of the instance; the HTTP gate
+- **Proved** (Lean theorems, each with an axiom gate in `Tests/Axioms/`): every run of the
+  runtime's scheduler, its actors free on worker threads, is a run of the semantics (the threads
+  are trusted to perform its transitions), and so is every run of the one-threaded kernel that
+  the tests and `Http.Loopback` run; a complete PASS of the model checker means the property
+  holds in every reachable state of the instance; the HTTP gate
   answers no request more often than it arrived and, in a fair run in which it does not crash,
   answers every request it admits; a sign-in accepts no state more often than it was issued, and
   an ID token only when signed for an allowed algorithm with every claim passing; and the
@@ -66,7 +68,7 @@ Every claim, with its theorem, check or test, its premises and its status, is in
   PostgreSQL (`oracles/README.md`), the bound C against its Lean references.
 - **Trusted**: the trusted code, listed with each file's size in `TRUSTED.md`: the
   IO shells, the HTTP wire format where its proof does not reach, the C that binds OpenSSL's
-  hashes, comparison and Argon2id, `fsync`, a timed wait, OpenSSL's TLS client, its signature check and its signing, the sign-in's IO, the AWS integration's IO, and the template macro, with the assumptions the runtime makes. `lake exe lanes stats` prints the total. `lanes lint` fails if a trusted file changes without the
+  hashes, comparison and Argon2id, `fsync`, a timed wait, OpenSSL's TLS client, its signature check and its signing, the sign-in's IO, the AWS service's IO, and the template macro, with the assumptions the runtime makes. `lake exe lanes stats` prints the total. `lanes lint` fails if a trusted file changes without the
   list, and `scripts/mutants.py` holds known ways of breaking that code, each of which must
   fail a test.
 
@@ -99,8 +101,9 @@ Hello world over HTTP/1.1 with keep-alive, requests a second, on a c7a.16xlarge,
 | Lanes | 11,395 | 34,516 | 37,098 | 3.2 cores, 85–101 µs a request |
 
 Lanes is about 4× behind Go at 64 connections at that commit. The benchmark's application is one
-actor, and the runtime ran its steps on one thread, so its logic used one core. The IO path and
-running actors in parallel are the next steps. The method and settings are in `bench/README.md`.
+actor, and the runtime then ran its steps on one thread, so its logic used one core; actors have
+since run free on worker threads (`docs/decisions/D116-free-running.md`), and this table was
+measured before that. The method and settings are in `bench/README.md`.
 
 ## Quick start
 
@@ -164,10 +167,12 @@ To build Lanes itself:
 
 ```bash
 lake build
-lake test            # a few seconds
-lake exe lanesCheck  # the larger model checks, about 20 s
+lake test            # the tests
+lake exe lanesCheck  # the larger model checks
 lake exe lanes lint
 ```
+
+`AGENTS.md` ("Build and checks") says what each runs and how long it takes.
 
 ## License
 

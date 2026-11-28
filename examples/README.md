@@ -43,7 +43,7 @@ beside a PostgreSQL made for the run).
    in every database the store model allows; adding without looking first, and retrying a lost
    answer, stores a title twice, and the checker finds it. `lake exe todoLive` runs it on a real
    server.
-8. `sign-in`: the start of a video site whose members sign in with Google or GitHub. The
+8. `sign-in`: a site whose members sign in with Google or GitHub. The
    sign-in is Lanes' and runs before the system, which gets only the identity it verified and
    gives the member a session.
 9. `upload`: uploads of any size, handed to the system in pieces and answered with their size

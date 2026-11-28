@@ -147,7 +147,7 @@ modelled is `served sys` (`Http.Front.World.refines`).
   `Http.fronted_deadlines_armed`, `Http.fronted_pending_leaves`, `Http.fronted_pending_answered`)
   carried through the hidden inputs and outputs, so the same holds of `serveFronted`, with the
   same assumptions.
-- **Volatile state.** The kernel keeps actor state in memory, and it is lost with the process:
+- **Volatile state.** The runtime keeps actor state in memory, and it is lost with the process:
   every start is a boot, with every actor in its initial state. State that must outlive the
   process belongs in a service outside, reached through an adapter whose model says what the
   service keeps. An output counts as handed over when its handler was called: a handler that
@@ -156,8 +156,10 @@ modelled is `served sys` (`Http.Front.World.refines`).
   which attempts a job under its id (`Lanes/Db/Worker.lean`).
 - **Environment model.** One process stays within an environment whose links are reliable and
   ordered (`Sched.Reliable`, which `Kernel.env` is), with no crashes other than an actor stopping
-  itself. Properties proved under a stronger model than
-  that do not apply to a running system.
+  itself and the process restarting (`Sched.Step.restart`): the watchdog, the mail's bound and the
+  supervisor end and start it, and an application's proofs cover that only if its environment
+  allows restarts (`EnvModel.mayRestart`). Properties proved under a stronger model than that do
+  not apply to a running system.
 - **Bounded mail.** No mailbox has a bound of its own; the mail between actors is bounded as a
   whole. The inbox limits the inputs waiting for their actor, no input is taken while
   `mailHighWater` messages between actors wait, and past `mailCapacity` the process restarts by

@@ -9,13 +9,13 @@ public import Std.Data.String
 /-!
 # Typed tables, as values
 
-The data of the typed store (`docs/decisions/new-typed-store.md`): a table has typed columns,
+The data of the typed store (`docs/decisions/D111-typed-store.md`): a table has typed columns,
 of 64-bit integers, bytes, text and booleans, each nullable or not; its primary key is its first
 `key` columns; it declares secondary indexes, unique or not. A row is a list of values, and a
 database (`Db`) the rows of each table, sorted by primary key.
 
 The order of values is the one PostgreSQL gives the column types the driver creates
-(`Lanes/Services/Postgres/Db.lean`): integers by value, bytes and text byte by byte (text is created
+(`Lanes/Services/Postgres/Sql.lean`): integers by value, bytes and text byte by byte (text is created
 `COLLATE "C"`), `false` before `true`. Key and index columns are never `NULL` (`Table.valid`),
 so that `NULL`'s place in an order and its equality never matter. PostgreSQL's text cannot hold
 the character `NUL`, so a text value that does is not admitted.

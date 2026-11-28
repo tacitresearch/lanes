@@ -505,7 +505,7 @@ def watchdogTest : Async (List (String × Bool)) := do
     ("watchdog: a step that runs past the limit is reported once, as a delivery",
       reports.size == 1 && reports.all fun s => s.kind == "deliver" && s.elapsed_ms > 20) ]
 
-/-! The mail between actors (`docs/decisions/new-runtime-limits.md`). A hub fans each input out
+/-! The mail between actors (`docs/decisions/D123-runtime-limits.md`). A hub fans each input out
 to a sink, whose first output the handler holds until released: while it is held, the sink's
 mail cannot drain, so what the runtime does at the high-water mark is not a matter of timing. -/
 

@@ -70,7 +70,8 @@ lanes_data structure Account where
 
 variable {A : Type} [DecidableEq A]
 
-/-- Its state is durable: a restart resumes from the balance it had. -/
+/-- A crash of the actor keeps its balance (`recover`); a restart of the process starts it from
+the opening balance. -/
 def account (opening : Nat) (self : A) : (sig A).Actor self Account where
   init := { balance := opening }
   step s

@@ -1,7 +1,7 @@
 # Working on Lanes
 
 Lanes is a runtime and library for building software in Lean 4: actors with pure step
-functions, one semantics, a proved runtime kernel, a model checker, proofs, models of what a
+functions, one semantics, a proved runtime, a model checker, proofs, models of what a
 program talks to, and the library applications need. This file is the rules,
 for agents and for people. `README.md` is the front door; `docs/ARCHITECTURE.md` says how the
 pieces fit and, area by area, what is claimed with its evidence and the limits of the design;
@@ -445,7 +445,7 @@ one job no other doc does:
   (the decisions' index, the trusted sizes, every cited path, the oracles' list).
 - Write so it will not go stale: name files and theorems, and avoid counts, dates and
   "currently" unless the number is the point.
-- Work and status live in GitHub issues, not in docs: the direction is issue #93, a fixable
+- Work and status live in GitHub issues, not in docs: the direction is issue #239, a fixable
   limit is an issue labelled `known-limit`, and `docs/ROADMAP.md` only points there.
 
 So:
