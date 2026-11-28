@@ -34,7 +34,7 @@ two new decisions land at different lines. The numbers give the order in which t
 - [D77. A test kit, `Lanes.Testing`, beside `Lanes` and not in it](D77-a-test-kit.md)
 - [D67. A TLS client, from the OpenSSL Lean's toolchain ships](D67-a-tls-client-from-the-openssl-lean-ships.md)
 - [D7. `Actor` takes its effect type as a parameter](D7-actor-takes-its-effect-type-as.md)
-- [D64. Actors step in parallel within a wave, and connections run on threads of the server's own](D64-actors-run-in-parallel.md): partly superseded by D73 (`Runtime.Config.workers` turning parallel steps on, off by default) and by D110-volatile-actors.md (waves: steps committed in a journal's order)
+- [D64. Actors step in parallel within a wave, and connections run on threads of the server's own](D64-actors-run-in-parallel.md): partly superseded by D73 (`Runtime.Config.workers` turning parallel steps on, off by default), D110-volatile-actors.md (waves: steps committed in a journal's order) and D116-free-running.md (actors stepping in parallel within a wave)
 - [D26. An adapter is a model of the outside and a handler, tested against each other](D26-an-adapter-is-a-model-of.md)
 - [D74. AWS as an integration: a role's credentials refreshed by a proved policy, and SES as the email model](D74-aws-integration.md): partly superseded by D110-volatile-actors.md (AWS as a Lake package under `integrations/`: it is `Services/Aws`)
 - [D46. Bind what touches physics](D46-bind-what-touches-physics.md): partly superseded by D95-one-crypto-library.md (libsodium)
@@ -48,13 +48,14 @@ two new decisions land at different lines. The numbers give the order in which t
 - [D3. `Effect` is `send | emit | after | cancel | stop`; no `io`, no `reply`](D3-effect-is-send-emit-after-cancel.md)
 - [D45. Everything is proved; the checker finds bugs, a proof is the evidence](D45-everything-is-proved.md): partly superseded by D110-volatile-actors.md (the generated inventory of every public definition)
 - [D60. Examples are for reading, fixtures are for the tests](D60-examples-are-for-reading.md): partly superseded by D63 (the examples' proofs copied into the fixtures)
+- [D117. A file system that may lose power, as a platform model](D117-file-system-model.md)
 - [D63. The fixtures hold what the tests use, the examples the proofs](D63-fixtures-hold-what-tests-use.md)
+- [D116. Actors run free on worker threads, proved to refine the interleaving semantics](D116-free-running.md)
 - [D106. The gate before the shard](D106-gate-before-shard.md): partly superseded by D110-volatile-actors.md (its reasons of waves and a runtime of objects, and the section on the journal)
 - [D93. Each generated line is about one item, and unreleased changes are fragments](D93-generated-lines-are-local.md): partly superseded by D100-each-doc-has-one-job.md (the status fragments) and by D110-volatile-actors.md (the changelog fragments)
 - [D20. History variables are ghosts with an erasure theorem](D20-history-variables-are-ghosts-with-an.md)
 - [D104. Honest results: a bounded pass exits 2, each failure has a kind, a binding is proved of its reference](D104-honest-results.md)
 - [D2. Identities name actors that always exist (virtual actors)](D2-identities-name-actors-that-always-exist.md)
-- [D55. Work outside a step is a job: an actor with an outbox, a deadline per attempt and a bound](D55-jobs.md): partly superseded by D110-volatile-actors.md (jobs that survive a restart through the journal: they are rows in the database)
 - [D15. JSON is a `Std`-only port of `Lean.Data.Json`](D15-json-is-a-std-only-port.md)
 - [D53. A JSON key given twice keeps its last value](D53-json-repeated-keys.md)
 - [D99. Layered packages in one repository, one version, prebuilt builds (proposal)](D99-layered-packages.md): partly superseded by D110-volatile-actors.md (the durable layer, the courier, and services as packages of their own: they live in one area of the same package); its section 3, Mathlib and CSLib removed, is done (D112-proof-libraries.md)
@@ -69,18 +70,20 @@ two new decisions land at different lines. The numbers give the order in which t
 - [D6. One executable definition of the semantics](D6-one-executable-definition-of-the-semantics.md)
 - [D43. One gate: `serve` runs the gate joined in front](D43-one-gate.md)
 - [D80. Every parser has an oracle and every model a recorded run, in one place, and lint keeps the list](D80-oracles.md)
+- [D114. The outbox and jobs are rows, performed by a worker under the row's id as the key](D114-outbox-jobs.md)
 - [D83. PostgreSQL over TLS, with channel binding, and a pool of connections](D83-postgres-over-tls.md)
 - [D68. PostgreSQL is spoken in Lean, and a transactional store is a model](D68-postgres-protocol-in-lean.md): partly superseded by D111-typed-store.md (the store model: typed tables, keys and scans replace the key-value model for new code)
 - [D112. Mathlib and CSLib in the proof layer, measured](D112-proof-libraries.md)
 - [D98. A small proof surface, and each property written once](D98-proof-surface.md)
 - [D14. Proofs of system invariants go through per-event lemmas](D14-proofs-of-system-invariants-go-through.md)
-- [D108. Reads from the state](D108-reads-from-state.md): partly superseded by D110-volatile-actors.md (its reasons: a read no longer skips a journal's sync, and waves are gone)
+- [D108. Reads from the state](D108-reads-from-state.md): partly superseded by D110-volatile-actors.md (its reasons: a read no longer skips a journal's sync, and waves are gone) and by D116-free-running.md (the actors of a peek read at one boundary)
 - [D51. An actor at rest is released, and the kernel's theorems hold up to the starts that bring it back](D51-release-actors-at-rest.md)
 - [D44. A request is prepared before it is journalled](D44-request-prepared-before-journal.md): partly superseded by D110-volatile-actors.md (the journal that preparing kept secrets out of)
 - [D22. Routes are values with a proof; htmx attributes come from them](D22-routes-are-values-with-a-proof.md)
 - [D96. One model with proofs, and runtimes proved against it](D96-runtime-contract.md): partly superseded by D110-volatile-actors.md (the default runtime, and the contract's clauses that rest on a journal: one order, output ids, no acknowledged input lost across a restart)
 - [D71. S3 and Signature Version 4, in Lanes as the protocol of a class of object stores](D71-s3-and-signature-version-4.md)
 - [D115. `lanes_data` derives JSON and rows, each with its round trip; the binary codec goes](D115-serialization.md)
+- [D113. A vendor service gets a model only when a proof depends on it](D113-service-models.md)
 - [D72. Sign-in with OAuth 2.0 and OpenID Connect, done where a request arrives](D72-sign-in-with-oauth.md): partly superseded by D110-volatile-actors.md (each provider a Lake package of its own: Google and GitHub are presets of `Services/Oidc`)
 - [D52. A service behind actors is proved with one simulation, and an application gives only its steps](D52-standard-simulation.md)
 - [D5. Start is recovery](D5-start-is-recovery.md)
@@ -91,7 +94,6 @@ two new decisions land at different lines. The numbers give the order in which t
 - [D31. The gate is a system, joined in front; what a join keeps of a run is its deeds](D31-the-gate-is-a-system.md)
 - [D19. The HTTP adapter's logic is a gate actor](D19-the-http-adapter-s-logic-is.md): partly superseded by D31 and D43 (the gate is a system joined in front, not `gated`)
 - [D39. The HTTP reader is specified by writers, and its limit is on the response](D39-the-http-reader-is-specified-by.md)
-- [D32. The inbox is a batch, and waiting for room is the rare path](D32-the-inbox-is-a-batch.md): partly superseded by D110-volatile-actors.md (one write to the journal for a batch)
 - [D84. The kernel takes an actor's state out of its cell before the step](D84-the-kernel-takes-the-state-out-before-the-step.md)
 - [D62. The layout is by concern, and `import Lanes` is the API](D62-the-layout-is-by-concern.md)
 - [D8. The model checker stores full states](D8-the-model-checker-stores-full-states.md)
@@ -121,6 +123,7 @@ two new decisions land at different lines. The numbers give the order in which t
 - [D35. An append carries a batch, and only news brings the next](D35-an-append-carries-a-batch.md): superseded by D110-volatile-actors.md
 - [D97. A data format that outlives its version: one schema per file, values read by name](D97-data-format.md): superseded by D110-volatile-actors.md
 - [D24. Durability is a journal of what the kernel was asked, replayed](D24-durability-is-a-journal-of-what.md): superseded by D110-volatile-actors.md
+- [D55. Work outside a step is a job: an actor with an outbox, a deadline per attempt and a bound](D55-jobs.md): superseded by D114-outbox-jobs.md
 - [D94. A served journal is versioned by the application's name; the gate's settings are read from it](D94-journal-version.md): superseded by D110-volatile-actors.md
 - [D103. Former names and defaults in `lanes_data`: `(was old)` and `:= value`](D103-lanes-data-aliases.md): superseded by D110-volatile-actors.md
 - [D37. No router between shards in one process](D37-no-router-between-shards-in-one.md): superseded by D110-volatile-actors.md
@@ -129,6 +132,7 @@ two new decisions land at different lines. The numbers give the order in which t
 - [D102. Peers open every connection with a versioned handshake and a shared key](D102-peer-handshake.md): superseded by D110-volatile-actors.md
 - [D54. Raft acts once on a command its client names, and an answer it no longer keeps is not handed over](D54-raft-acts-once.md): superseded by D110-volatile-actors.md
 - [D30. Shards in different processes are joined by a link that promises little](D30-shards-in-different-processes-are-joined.md): superseded by D110-volatile-actors.md
+- [D32. The inbox is a batch, and waiting for room is the rare path](D32-the-inbox-is-a-batch.md): superseded by D110-volatile-actors.md (one write to the journal for a batch) and by D116-free-running.md (the inbox taken at once)
 - [D47. The inventory is computed from the built library](D47-the-inventory-is-computed.md): superseded by D110-volatile-actors.md
 - [D13. The runtime orders steps with one logical clock](D13-the-runtime-orders-steps-with-one.md): superseded by D18
 - [D91. A video is ready only after a transcode worker outside the site says so, signed](D91-the-video-pipeline.md): superseded by D110-volatile-actors.md

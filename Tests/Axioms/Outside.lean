@@ -36,13 +36,6 @@ import Lanes.Semantics
 /-- info: 'Lanes.Idempotent.answer_repeat' depends on axioms: [propext, Classical.choice] -/
 #guard_msgs in #print axioms Lanes.Idempotent.answer_repeat
 
--- Lanes.Outside.Multipart
-/-- info: 'Lanes.Multipart.read_listed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Multipart.read_listed
-
-/-- info: 'Lanes.Multipart.completed_sent' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Multipart.completed_sent
-
 -- Lanes.Outside.ObjectStore
 /-- info: 'Lanes.ObjectStore.read_sent' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.ObjectStore.read_sent
@@ -81,13 +74,6 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Effects.observe_routes' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Effects.observe_routes
-
--- Lanes.Outside.Effects.Payments
-/-- info: 'Lanes.Payments.final' depends on axioms: [propext, Classical.choice] -/
-#guard_msgs in #print axioms Lanes.Payments.final
-
-/-- info: 'Lanes.Payments.succeeded_terminal' depends on axioms: [propext, Classical.choice] -/
-#guard_msgs in #print axioms Lanes.Payments.succeeded_terminal
 
 -- Lanes.Outside.Effects.Email
 /-- info: 'Lanes.Email.final' depends on axioms: [propext, Classical.choice] -/
@@ -154,3 +140,28 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Throttle.wait_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Throttle.wait_le
+
+-- Lanes.Outside.FileSystem.Basic
+/-- info: 'Lanes.FileSystem.Fs.crash_mem_crashes' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.FileSystem.Fs.crash_mem_crashes
+
+-- Lanes.Outside.FileSystem.Replace
+/-- info: 'Lanes.FileSystem.Replace.crash' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.FileSystem.Replace.crash
+
+/-- info: 'Lanes.FileSystem.Replace.failed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.FileSystem.Replace.failed
+
+/-- info: 'Lanes.FileSystem.Replace.done' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.FileSystem.Replace.done
+
+-- Lanes.Outside.FileSystem.Log
+/-- info: 'Lanes.FileSystem.Log.crash' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.FileSystem.Log.crash
+
+/-- info: 'Lanes.FileSystem.Log.failed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.FileSystem.Log.failed
+
+-- Lanes.Outside.FileSystem
+/-- info: 'Lanes.FileSystem.server_same' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.FileSystem.server_same

@@ -47,10 +47,10 @@ target sign pkg : FilePath := do
 
 @[default_target]
 lean_lib Lanes where
-  -- CBOR is a root of its own, not imported by `Lanes`: a program that does not import it does
-  -- not build it or link it.
-  roots := #[`Lanes, `Lanes.Proofs, `Lanes.Semantics, `Lanes.Testing, `Lanes.Lib.Encoding.Cbor,
-    `Lanes.Lib.Encoding.Cbor.Sound]
+  -- The services and CBOR are roots of their own, not imported by `Lanes`: a program that does
+  -- not import one does not build it or link it.
+  roots := #[`Lanes, `Lanes.Proofs, `Lanes.Semantics, `Lanes.Testing, `Lanes.Services,
+    `Lanes.Services.S3.Testing, `Lanes.Lib.Encoding.Cbor, `Lanes.Lib.Encoding.Cbor.Sound]
   moreLinkObjs := #[native, tls, verify, sign]
 
 /-! Files that modules embed with `include_str`, which Lake does not track. A library that `needs`
@@ -66,15 +66,20 @@ input_file leanToolchain where
   path := "lean-toolchain"
   text := true
 
-/-- The test keys `Tests.Sign` embeds. -/
+/-- The test keys `Tests.Sign` and `Tests.Aws.CloudFront` embed. -/
 input_dir botocoreKeys where
   path := "oracles/botocore/keys"
+  text := true
+
+/-- Google's discovery document and keys as recorded, which `Tests.Oidc.Google` embeds. -/
+input_dir googleRecorded where
+  path := "oracles/google"
   text := true
 
 @[default_target]
 lean_lib Tests where
   globs := #[.submodules `Tests]
-  needs := #[`@/templates, `@/botocoreKeys]
+  needs := #[`@/templates, `@/botocoreKeys, `@/googleRecorded]
 
 @[default_target]
 lean_exe lanesTest where

@@ -8,14 +8,14 @@ import Reminders.App
 /-!
 # The reminders over HTTP
 
-Three routes: the list, a form that schedules a reminder, and a cancel. The time a request
-arrived is written into it by the server's `arrive` (`Reminders.stamp`), so that `step` stays
-pure; the scheduler learns the time from it.
+Three routes: the list, a form that asks for a reminder, and a cancel. The time a request
+arrived is written into it by the server's `arrive` (`Reminders.Web.stamp`): a reminder is due
+that long after it.
 -/
 
 namespace Reminders.Web
 
-open Lanes Lanes.Http
+open Lanes Lanes.Http Lanes.Db.Jobs
 open scoped Lanes.Html
 
 namespace Routes
@@ -32,23 +32,23 @@ def arrivedHeader : String := "x-reminders-arrived-ms"
 def stamp (now_ms : Nat) (r : Request) : Request :=
   { r with headers := r.headers.filter (·.1 != arrivedHeader) ++ [(arrivedHeader, toString now_ms)] }
 
-def stageText : Stage → String
-  | .waiting => "waiting"
-  | .sent => "sent"
+def statusText : Status → String
+  | .pending => "waiting"
+  | .done => "sent"
   | .failed => "failed"
   | .cancelled => "cancelled"
 
-def Row (r : Reminder) : Html :=
+def Row (j : Job String) : Html :=
   <li>
-    {s!"#{r.id} at {r.at_ms} ms: {r.text} ({stageText r.stage})"}
-    {if r.stage = .waiting then
-      <form method="post" action={Routes.cancel.link r.id} style="display:inline">
+    {s!"#{j.id} at {j.due_ms} ms: {j.work} ({statusText j.status})"}
+    {if j.status = .pending then
+      <form method="post" action={Routes.cancel.link j.id.toInt.toNat} style="display:inline">
         <button type="submit">"Cancel"</button>
       </form>
       else Html.empty}
   </li>
 
-def Page (reminders : List Reminder) (notice : String) : Html :=
+def Page (reminders : List (Job String)) (notice : String) : Html :=
   <html lang="en">
     <head>
       <meta charset="utf-8"/>
@@ -66,24 +66,25 @@ def Page (reminders : List Reminder) (notice : String) : Html :=
     </body>
   </html>
 
-def remindIn (id : ReqId) (r : Request) : Except Response (SchedIn ⊕ In) := do
+def remindIn (id : ReqId) (r : Request) : Except Response In := do
   let some now_ms := (r.header? arrivedHeader).bind String.toNat?
     | .error (.text "no arrival time\n" 500)
   let some text := r.field? "text" | .error (.text "a reminder needs a text\n" 400)
   let some in_s := (r.field? "in").bind String.toNat? | .error (.text "in how many seconds?\n" 400)
-  return .inr (.remind id now_ms text in_s)
+  return .request id (.remind text (Int64.ofNat (now_ms + in_s * 1000)))
 
-def decode (id : ReqId) (r : Request) : Except Response (SchedIn ⊕ In) :=
+def decode (id : ReqId) (r : Request) : Except Response In :=
   (dispatch [
-    Routes.home.handle fun () _ => .ok (.inr (.list id)),
+    Routes.home.handle fun () _ => .ok (.request id .list),
     Routes.remind.handle fun () r => remindIn id r,
-    Routes.cancel.handle fun n _ => .ok (.inr (.cancel id n))
+    Routes.cancel.handle fun n _ => .ok (.request id (.cancel (Int64.ofNat n)))
   ] r).getD (.error (.text "not found\n" 404))
 
-def bridge : Bridge (joinSig (Schedule.sig Key Task Answer) sig) where
+def bridge : Bridge sig where
   decode := decode
   encode
-    | .inr (.reply req reminders notice) => some (req, .html (Page reminders notice).document)
-    | _ => none
+    | .answered n a => some (n, .html (Page a.reminders a.notice).document)
+    | .failed n => some (n, .text "The reminders are not available; try again.\n" 503)
+    | .call _ => none
 
 end Reminders.Web

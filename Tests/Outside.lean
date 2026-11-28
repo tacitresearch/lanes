@@ -3,6 +3,7 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
+import Lanes.Services.Stripe
 
 /-!
 The models of external systems (`Lanes/Outside/`), checked beside a payer that pays each order

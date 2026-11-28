@@ -25,6 +25,9 @@ as one throttled for the load of others may.
 Proved: a throttled answer leaves the inner service as it was (`Throttle.throttled_inner`), and
 the service never asks for a wait of more than `maxRetryAfter` ticks from now
 (`Throttle.wait_le`), in every run the model allows.
+
+Not yet checked against a real service: no run recorded from one that answers `429`
+(`oracles/README.md`).
 -/
 
 @[expose] public section

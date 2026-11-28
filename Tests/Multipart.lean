@@ -3,9 +3,10 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
+import Lanes.Services.S3
 
 /-!
-The multipart upload's model (`Lanes/Outside/Multipart.lean`) on runs written out, and two
+The multipart upload's model (`Lanes/Services/S3/MultipartModel.lean`) on runs written out, and two
 model checks against it (rule 5.1).
 
 - The server's flow (`S3.Multipart.Flow`), the code `S3.upload` runs, as an actor: the store

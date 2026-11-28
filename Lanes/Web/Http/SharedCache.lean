@@ -28,6 +28,9 @@ stored one's (`SharedCache.serve_reuses`). The check apps use is `leaks`: of exc
 origin, the pairs where the cache may give the second request the first's response and the
 origin gave it another. If there are none, whatever the cache keeps of those exchanges, it
 gives each of their requests what the origin gave it (`SharedCache.serve_of_leaks`).
+
+Not yet checked against a real service: no run recorded through a CDN or Varnish
+(`oracles/README.md`).
 -/
 
 @[expose] public section

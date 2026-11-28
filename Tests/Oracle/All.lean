@@ -14,14 +14,17 @@ import Tests.Oracle.SigV4
 import Tests.Oracle.Time
 import Tests.Oracle.Url
 import Tests.Oracle.Xml
+import Tests.Aws.Mail
+import Tests.Aws.CloudFront
 
 /-! The packages compared with Go, and the replay of their recorded answers for `lake test`. -/
 
 namespace Tests.Oracle
 
 def packages : List Package :=
-  [Base64.package, Cbor.package, Ip.package, Time.package, Json.package, MediaType.package, RateLimit.package,
-    Url.package, Xml.package, Metrics.package, SigV4.package, Jose.package]
+  [Base64.package, Cbor.package, Ip.package, Time.package, Json.package, MediaType.package,
+    RateLimit.package, Url.package, Xml.package, Metrics.package, SigV4.package, Jose.package,
+    Checks.Mail.package, Checks.CloudFront.package]
 
 def unitTests : List (String × Bool) := Base64.tests ++ Ip.tests ++ Jose.tests ++ MediaType.tests ++ RateLimit.tests ++ Time.tests ++ Url.tests
 

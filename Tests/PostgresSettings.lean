@@ -2,11 +2,11 @@
 Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Lanes.Lib.Postgres.IO.Client
+import Lanes.Services.Postgres.IO.Client
 
 /-!
 Where the PostgreSQL client connects, and how, from its host and its environment
-(`Lanes/Lib/Postgres/Settings.lean`): no TLS to this machine and full verification elsewhere
+(`Lanes/Services/Postgres/Settings.lean`): no TLS to this machine and full verification elsewhere
 unless asked otherwise; libpq's variables before a deploy's; a password file read as libpq reads
 it; and what the client cannot do refused with a reason.
 -/
