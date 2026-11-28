@@ -7,6 +7,7 @@ module
 public import Lanes.Runtime.IO.Shell
 public import Lanes.Durable.Upgrade
 public import Lanes.Durable.Reading
+public import Lanes.Durable.IO.Ship
 
 /-!
 The files of a journal. What they mean, which are refused, what a shard writes to them and in
@@ -60,6 +61,9 @@ structure Store (sys : System σ) where
   Jobs the copy holds in flight are attempted again when their deadlines pass, by the copy's
   own workers and under new ids. -/
   restored : Bool := false
+  /-- Where to ship the journal's segments and snapshots, for backups and restores to a point
+  (`Lanes.Journal.Ship`, `Store.restore`). Nothing the shard does waits for it. -/
+  ship : Option Ship.Target := none
 
 /-- A label as a person reads it: the name, then the version if there is one. -/
 private def shown (label : String) : String :=
@@ -180,28 +184,98 @@ def Store.open {sys : System σ} [Hashable σ.Id] (store : Store sys) : IO (Log 
       migrate := upgraded.writes.forM (perform store.path handle true)
     let found := begun.toFound
     let count ← IO.mkRef found.index
+    let shipper ← store.ship.mapM fun target => do
+      fsync store.path.toString
+      let snapshot := match begun with
+        | .found _ => disk.snapshot
+        | .upgraded up => (Ship.snapshotOf? up.writes).or disk.snapshot
+      let initial := Ship.start (found.index - found.past.length) found.past
+        (found.saved.bind fun (index, _) => snapshot.map (index, ·)) (← IO.monoMsNow)
+      Ship.Shipper.start target store.input system id initial
+    let tell := fun (e : Ship.Event σ) => (shipper.forM (·.tell e) : IO Unit)
     let write := fun (flush : Bool) (entries : List (Entry σ)) => do
       unless entries.all (Entry.fits store.input) do
         throw (IO.userError "lanes: an input is too large to journal")
       (appendWrites store.input entries).forM (perform store.path handle flush)
       count.modify (· + entries.length)
+      tell (.wrote entries flush)
     let save := fun (actors : Kernel.Image.Codecs sys) (image : Kernel.Image sys) => do
       let index ← count.get
       unless (savedRecords actors system index image).all Frame.fits
           && Entry.fits store.input (.snapshot index) do
         throw (IO.userError "lanes: an actor is too large to save")
-      (saveWrites store.input actors system index image).forM
-        (perform store.path handle true)
+      let writes := saveWrites store.input actors system index image
+      writes.forM (perform store.path handle true)
       count.modify (· + 1)
+      tell (.wrote [.snapshot index] true)
+      if let some bytes := Ship.snapshotOf? writes then tell (.saved index bytes)
     return {
       past := found.past, saved := found.saved, index := found.index, pending, migrate, id
       restored := store.restored
       append := write true
       note := write false
       save := store.actors.map save
-      close := do (← handle.get).flush; lock.unlock }
+      close := do
+        if let some s := shipper then s.close
+        (← handle.get).flush
+        lock.unlock }
   catch e =>
     lock.unlock
     throw e
+
+/-- What a restore wrote. -/
+structure Restored where
+  journal : String
+  /-- The position of the mark of the snapshot it started from. -/
+  snapshot : Option Nat
+  segments : Nat
+  /-- How many entries of the history it holds. -/
+  point : Nat
+  deriving Repr
+
+/--
+Write the store's files from what `target` holds: the journal `journal`, or the one written last,
+at `point` (`Restore.plan`). The objects are checked against the SHA-256 their names carry, and
+the segments must be journals of this store's system that join (`Restore.journal`). The journal
+written ends with a `handed` mark and the restore leaves no `.id`, so the first start of the
+files hands nothing over and takes a new id: a restore is a copy with no effects
+(`docs/decisions/D105-output-ids.md`). A journal or a snapshot already at the store's path is
+never overwritten: the restore is refused.
+-/
+def Store.restore {sys : System σ} (store : Store sys) (target : Ship.Target)
+    (point : Restore.Point := .latest) (journal : Option String := none) : IO Restored := do
+  let system := label store.system store.version
+  let refuse := fun {α : Type} (why : String) =>
+    (throw (IO.userError s!"lanes: no restore to {store.path}: {why}") : IO α)
+  for path in [store.path, store.path.addExtension "snapshot"] do
+    if ← path.pathExists then refuse s!"{path} is there; move it aside first"
+  let some keys ← target.remote.list target.keyPrefix | refuse "the store's listing failed"
+  let objects := keys.filterMap fun (key, modified) => Restore.listed? target.keyPrefix key modified
+  let some journal := journal.or (Restore.newest objects)
+    | refuse s!"there is no journal under \"{target.keyPrefix}\""
+  let some plan := Restore.plan objects journal point
+    | refuse s!"the objects of the journal {journal} do not reach that point"
+  let base := target.keyPrefix ++ journal ++ "/"
+  let fetch := fun (name : String) => do
+    let some bytes ← target.remote.get (base ++ name) | refuse s!"{base ++ name} cannot be read"
+    let sum := match Restore.Object.parse? name with
+      | some (.segment _ _ sum) | some (.snapshot _ sum) => sum
+      | none => ""
+    unless Ship.sum bytes == sum do
+      refuse s!"{base ++ name} does not have the SHA-256 its name gives"
+    return bytes
+  let snapshot ← plan.snapshot.mapM fun (_, name) => fetch name
+  let mut pieces := #[]
+  for (name, first, stop) in plan.segments do
+    let some piece := Restore.piece? store.input system first (stop - first) (← fetch name)
+      | refuse s!"{base ++ name} is not a journal of \"{system}\" with the entries its name gives"
+    pieces := pieces.push piece
+  let some entries := Restore.journal (plan.snapshot.map (·.1)) plan.point pieces.toList
+    | refuse s!"the segments of the journal {journal} do not join"
+  if let some bytes := snapshot then replace (store.path.addExtension "snapshot") bytes
+  try IO.FS.removeFile (store.path.addExtension "id") catch _ => pure ()
+  replace store.path (file store.input system entries)
+  return { journal, snapshot := plan.snapshot.map (·.1), segments := plan.segments.length
+           point := plan.point }
 
 end Lanes.Journal
