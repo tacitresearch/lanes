@@ -118,5 +118,6 @@ different lines. The numbers give the order in which they were taken.
 - [D58. URLs, media types and rate limits against Go, and where they depart from it](D58-urls-media-types-rate-limits-against-go.md)
 - [D87. The video site's calls to the store are jobs of the scheduler, named by what they are for](D87-videos-on-the-scheduler.md)
 - [D88. Steps worked out on the pool update their states in place](D88-waves-in-place.md)
+- [D107. The waves' premise, measured on the video site: the work spreads once reads leave the journal](D107-waves-premise.md)
 - [D36. What a durable system has to say for itself: a map with a codec, a journal begun on purpose, a name that covers the replay](D36-what-a-durable-system-has-to.md)
 - [D79. Work that is due later is a job of the scheduler: held by its id, run by its own timer, retried until it ends](D79-work-that-is-due-later-is-a-job-of-the-scheduler.md)
