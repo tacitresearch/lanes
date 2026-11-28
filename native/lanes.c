@@ -3,10 +3,10 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 
 What Lean cannot express or check, bound from C: OpenSSL's libcrypto for cryptography whose time
-must not depend on secrets and for random bytes, fsync for durability, and a timed wait for a
-thread. Each function
-is declared in `Lanes/Lib/Crypto/Native.lean`, `Lanes/Lib/File.lean` or
-`Lanes/Runtime/IO/Park.lean`; arguments are borrowed.
+must not depend on secrets and for random bytes, the file calls Lean's `IO.FS` lacks (fsync, a
+write at an offset or at the end of a file that is there, a truncation), and a timed wait for a
+thread. Each function is declared in `Lanes/Lib/Crypto/Native.lean`,
+`Lanes/Outside/IO/FileSystem.lean` or `Lanes/Runtime/IO/Park.lean`; arguments are borrowed.
 
 The OpenSSL is the one Lean's toolchain ships, as for `native/tls.c`: the functions below are
 declared as OpenSSL 3 and 4 declare them (`scripts/tls-declarations.py` checks it). Argon2id
@@ -124,6 +124,32 @@ LEAN_EXPORT lean_obj_res lanes_fsync(b_lean_obj_arg path) {
     int failed = fsync(fd) == 0 ? 0 : errno;
     close(fd);
     if (failed) return lean_io_result_mk_error(lean_decode_io_error(failed, path));
+    return lean_io_result_mk_ok(lean_box(0));
+}
+
+/* Never creates the file. Every byte is written, or the error is returned: some may be written. */
+LEAN_EXPORT lean_obj_res lanes_write_at(b_lean_obj_arg path, uint8_t append, uint64_t offset,
+                                        b_lean_obj_arg bytes) {
+    int fd = open(lean_string_cstr(path), O_WRONLY | O_CLOEXEC | (append ? O_APPEND : 0));
+    if (fd < 0) return lean_io_result_mk_error(lean_decode_io_error(errno, path));
+    const uint8_t *data = lean_sarray_cptr(bytes);
+    size_t size = lean_sarray_size(bytes), done = 0;
+    int failed = 0;
+    while (done < size && !failed) {
+        ssize_t n = append ? write(fd, data + done, size - done)
+                           : pwrite(fd, data + done, size - done, (off_t)(offset + done));
+        if (n > 0) done += (size_t)n;
+        else if (n == 0) failed = EIO;
+        else if (errno != EINTR) failed = errno;
+    }
+    close(fd);
+    if (failed) return lean_io_result_mk_error(lean_decode_io_error(failed, path));
+    return lean_io_result_mk_ok(lean_box(0));
+}
+
+LEAN_EXPORT lean_obj_res lanes_truncate(b_lean_obj_arg path, uint64_t size) {
+    if (truncate(lean_string_cstr(path), (off_t)size) != 0)
+        return lean_io_result_mk_error(lean_decode_io_error(errno, path));
     return lean_io_result_mk_ok(lean_box(0));
 }
 

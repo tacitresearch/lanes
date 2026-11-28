@@ -1,6 +1,6 @@
 # D55. Work outside a step is a job: an actor with an outbox, a deadline per attempt and a bound
 
-Status: Partly superseded by D110-volatile-actors.md (jobs that survive a restart through the journal: they are rows in the database)
+Status: Superseded by D114-outbox-jobs.md
 
 `Lanes/Behaviours/Jobs/Basic.lean`, `Lanes/Behaviours/Jobs/Sound.lean`, `Lanes/Semantics/Jobs.lean`, `Lanes/Behaviours/Jobs/IO/Pool.lean`,
 `Tests/Jobs.lean`. An application needs work that is not a function of one request and must not

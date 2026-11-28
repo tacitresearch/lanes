@@ -42,10 +42,10 @@ adapter, as `todo-db` keeps its to-dos in PostgreSQL.
    gives the member a session.
 9. `upload`: uploads of any size, handed to the system in pieces and answered with their size
    and checksum: a request that streams, through the gate a piece at a time.
-10. `reminders`: reminders over HTTP, each a job of the scheduler (`Lanes.Schedule`) that posts
-    its text to a notification service at its time and retries it with a backoff until it is
-    taken, gives up or is cancelled; a periodic sweep held as one job however often it is
-    scheduled.
+10. `reminders`: reminders over HTTP, each a job of a jobs table in PostgreSQL
+    (`Lanes.Db.Jobs`), posted by the worker to a notification service at its time, under the
+    job's id as the idempotency key, and again with a backoff until it is taken, refused, out of
+    attempts or cancelled.
 11. `rookery`: the serious system below.
 
 | Feature | Where to see it |
@@ -56,8 +56,8 @@ adapter, as `todo-db` keeps its to-dos in PostgreSQL.
 | Per-actor invariants (`actor_invariant`, `System.invariant_of_actor`) | `counter`, `bank`, `rookery` |
 | Refinement to a spec (`System.Implements`, `System.Refines`) | `counter`, `kv-cache`, `rookery` |
 | A request takes effect once (`Once.actor`, `Service.once`) | `kv-cache` |
-| Fairness and liveness | `watchdog`, `reminders` |
-| Work due later, retried with a backoff, periodic sweeps (`Schedule.attach`) | `reminders` |
+| Fairness and liveness | `watchdog` |
+| Work due later, an outbox, retried with a backoff, under an idempotency key (`Lanes.Db.Jobs`, `Lanes.Db.Worker`) | `reminders` |
 | A model of an external service: timeouts with unknown outcome, idempotency keys, webhooks (`Lanes/Outside/`) | `payments` |
 | A database: typed tables, pure transactions, an invariant per transaction, PostgreSQL | `todo-db` |
 | Model checks, a bug found, random runs | `bank`, `kv-cache`, `payments`, `todo-db` |

@@ -25,11 +25,11 @@ import Tests.ReadRequest
 import Tests.Derive
 import Tests.HttpConn
 import Tests.Loopback
-import Tests.Mailbox
 import Tests.Batch
-import Tests.Pace
+import Tests.Sched
 import Tests.Reads
 import Tests.Crypto
+import Tests.FileSystem
 import Tests.Auth
 import Tests.Clients
 import Tests.Lease
@@ -41,8 +41,7 @@ import Tests.TutorialWeb
 import Tests.Release
 import Tests.Oracle.All
 import Tests.Oracle.Service.All
-import Tests.Jobs
-import Tests.Schedule
+import Tests.Worker
 import Tests.Outside
 import Tests.Queue
 import Tests.Restart
@@ -103,8 +102,9 @@ def live : IO (List (String × Bool)) := do
     ++ (← safely "signature" (liftM Tests.Signature.live)) ++ (← safely "sign" (liftM Tests.Sign.live))
     ++ (← safely "oauth" Tests.OAuth.live)
     ++ (← safely "full inbox" Tests.Fronted.busyTest) ++ (← safely "memos" Tests.Fronted.memoTest)
-    ++ (← safely "release" Tests.Release.liveTests) ++ (← safely "jobs" Tests.Jobs.live)
+    ++ (← safely "release" Tests.Release.liveTests) ++ (← safely "jobs worker" Tests.Worker.live)
     ++ (← safely "ops" Tests.Ops.live) ++ (← Tests.Crypto.live)
+    ++ (← safely "file system" Tests.FileSystem.live)
     ++ (← safely "postgres" Tests.PostgresLive.live)
     ++ (← safely "postgres tls" Tests.PostgresTls.live)
     ++ (← safely "s3" Tests.S3.live) ++ (← safely "s3 uploads" Tests.S3Upload.live)
@@ -119,12 +119,12 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.Kernel.tests ++ Tests.Clock.tests ++ Tests.HttpClient.tests ++ Tests.Tls.tests
     ++ Tests.Signature.tests ++ Tests.Sign.tests ++ Tests.OAuth.tests
     ++ Tests.Fair.tests ++ Tests.Derive.tests
-    ++ Tests.Mailbox.tests ++ Tests.Batch.tests
-    ++ Tests.Pace.tests ++ Tests.Reads.tests
-    ++ Tests.Crypto.tests ++ Tests.Auth.tests ++ Tests.Clients.tests ++ Tests.Lease.tests
+    ++ Tests.Sched.tests ++ Tests.Batch.tests
+    ++ Tests.Reads.tests
+    ++ Tests.Crypto.tests ++ Tests.FileSystem.tests ++ Tests.Auth.tests ++ Tests.Clients.tests ++ Tests.Lease.tests
     ++ Tests.Release.tests ++ Tests.ReadRequest.tests ++ Tests.Oracle.unitTests
     ++ Tests.HttpConn.tests ++ Tests.Loopback.tests
-    ++ Tests.Jobs.tests ++ Tests.Schedule.tests ++ Tests.Outside.tests ++ Tests.Postgres.vectorTests
+    ++ Tests.Worker.tests ++ Tests.Outside.tests ++ Tests.Postgres.vectorTests
     ++ Tests.Postgres.downgradeTests ++ Tests.Postgres.tlsTests ++ Tests.Postgres.endPointTests
     ++ Tests.PostgresSettings.tests ++ Tests.Db.tests
     ++ Tests.Ops.tests

@@ -55,7 +55,7 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Lib/Crypto/Verify.lean` | `Tests/Signature.lean` | A binding: OpenSSL's check against `Rsa.verifyReference` and keys `openssl` made |
 | `Lanes/Lib/Encoding/Base64.lean` | `oracles/go/base64` | |
 | `Lanes/Lib/Encoding/Digits.lean` | | Numbers in a base, read back as written (`Lanes/Lib/Encoding/Digits.lean`'s theorems); compared through every format that uses them |
-| `Lanes/Lib/File.lean` | | Not a format: a binding of `fsync`, and a file replaced whole (`Tests/Crypto.lean`) |
+| `Lanes/Lib/File.lean` | | Not a format: a file replaced whole by the proved plan (`Tests/FileSystem.lean`, `Tests/Crypto.lean`) |
 | `Lanes/Lib/Encoding/Json.lean` | | Imports the modules below |
 | `Lanes/Lib/Encoding/Json/Basic.lean` | | Values, not a format |
 | `Lanes/Lib/Encoding/Json/Classes.lean` | | Typed values to and from `Json`, not text |
@@ -110,6 +110,10 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Outside/Effects/Basic.lean` | | The class of services with a lifecycle; its instances are below |
 | `Lanes/Outside/Effects/Email.lean` | `oracles/moto/ses.jsonl` | |
 | `Lanes/Outside/Events.lean` | | Owed, with Payments: webhooks need a service that sends them; runs written by hand (`Tests/Outside.lean`) |
+| `Lanes/Outside/FileSystem.lean` | `Tests/FileSystem.lean` | The model below as an outside; runs written by hand, with `io` errors and a power loss |
+| `Lanes/Outside/FileSystem/Basic.lean` | `Tests/FileSystem.lean` | Run live, not recorded: every `lake test` makes a script of calls in a temporary directory and checks each answer, errors included, against the model's. A loss of power cannot be run: what it leaves is the model's assumption, trusted (`TRUSTED.md`) |
+| `Lanes/Outside/FileSystem/Log.lean` | | A pattern proved on the model, not a service; checked at every crash point in `Tests/FileSystem.lean` |
+| `Lanes/Outside/FileSystem/Replace.lean` | | A pattern proved on the model, not a service; checked at every crash point in `Tests/FileSystem.lean`, and run by `File.replace` |
 | `Lanes/Outside/Idempotent.lean` | | Owed, with Payments: SES and S3 take no idempotency key; runs written by hand (`Tests/Outside.lean`) |
 | `Lanes/Outside/ObjectStore.lean` | `oracles/moto/s3.jsonl`, `oracles/moto/s3-post.jsonl` | `POST` uploads as writes granted to a browser |
 | `Lanes/Outside/Queue.lean` | `oracles/moto/sqs.jsonl` | A standard queue with a dead-letter queue, and a FIFO queue, through `Aws.Sqs`. Known: moto 5.2.6 deletes a message with any receipt it was given, where SQS may keep it after a delete with a stale one; the model allows both |

@@ -11,9 +11,12 @@ makes every step copy the actor table, and a kernel that steps a state its table
 makes every step copy the state. No functional test notices either: it only shows as time. So
 these measure time, with a wide margin.
 
-Steps worked out on the pool copy each state once a wave, since Lean never updates in place an
-object another thread has seen: with `parallel := .on` a write costs a share of a copy, and
-those tests bound it by half a copy.
+On the runtime, a state crosses threads: between two turns of its actor it lives in the actor's
+slot, which every worker can reach, and Lean never updates in place an object another thread may
+see. A worker keeps the state in its own hands while it steps the actor, so the steps of one turn
+update it in place, and the first step of a turn copies it. These tests send one message at a
+time, so each is a turn and each write a copy and the walk that shares it again; the bound is a
+few copies, so that a copy at every step of a turn would be caught.
 -/
 
 namespace Tests.Scale
@@ -63,7 +66,7 @@ def kernelAlone (turns : Nat) : IO Nat := do
   let t0 ← IO.monoNanosNow
   let mut k := (Kernel.boot counters).1
   for i in [0:turns] do
-    match Batch.turn k i (some 0) 64 with
+    match k.exec [.advance i, .input 0, .batch 64] with
     | { kernel, .. } => k := kernel
   let elapsed := (← IO.monoNanosNow) - t0
   return if (k.cell 0).state == turns then turns * 1000000000 / max 1 elapsed else 0
@@ -88,11 +91,11 @@ a thousand seconds. -/
 def kernelWrites (size : Nat) : IO Nat := do
   let sys := array (Array.replicate size 0)
   let mut k := (Kernel.boot sys).1
-  match Batch.turn k 0 (some 0) 64 with
+  match k.exec [.input 0, .batch 64] with
   | { kernel, .. } => k := kernel
   let t0 ← IO.monoNanosNow
   for n in [1:writes + 1] do
-    match Batch.turn k 0 (some n) 64 with
+    match k.exec [.input n, .batch 64] with
     | { kernel, .. } => k := kernel
   let elapsed := (← IO.monoNanosNow) - t0
   return if (k.cell ()).state[writes % size]! == writes then elapsed else 1000000000000
@@ -123,9 +126,9 @@ abbrev pair (initial : Array Nat) : System pairSig where
     { init := initial, step := fun s n => (s.set! (n % s.size) n, []), recover := fun s => (s, []) }
   accept n := ⟨Fin.ofNat 2 n, n⟩
 
-/-- `shardWrites` with the writes shared by two busy actors, on four workers as `parallel` says. -/
-def pairWrites (parallel : Runtime.Parallel) (size : Nat) : IO Nat := (do
-  let rt ← Runtime.start (pair (Array.replicate size 0)) { parallel, workers := 4 }
+/-- `shardWrites` with the writes shared by two busy actors, on four workers. -/
+def pairWrites (size : Nat) : IO Nat := (do
+  let rt ← Runtime.start (pair (Array.replicate size 0)) { workers := 4 }
   rt.input 0
   rt.input 1
   rt.idle
@@ -159,21 +162,18 @@ def tests : IO (List (String × Bool)) := do
   let shardSmall ← fastest (shardWrites 10000)
   let shardLarge ← fastest (shardWrites 1000000)
   let us (ns : Nat) := s!"{ns / writes / 1000}.{ns / writes / 100 % 10} µs"
-  IO.eprintln s!"in place: a write to a state of 10^4 numbers takes {us aloneSmall} in the kernel and {us shardSmall} on a shard, to one of 10^6 {us aloneLarge} and {us shardLarge}"
-  let autoSmall ← fastest (pairWrites .auto 10000)
-  let autoLarge ← fastest (pairWrites .auto 1000000)
-  let onSmall ← fastest (pairWrites .on 10000)
-  let onLarge ← fastest (pairWrites .on 1000000)
+  IO.eprintln s!"in place: a write to a state of 10^4 numbers takes {us aloneSmall} in the kernel and {us shardSmall} on the runtime, to one of 10^6 {us aloneLarge} and {us shardLarge}"
+  let pairSmall ← fastest (pairWrites 10000)
+  let pairLarge ← fastest (pairWrites 1000000)
   let copy ← fastest (copyNs 1000000)
-  IO.eprintln s!"in place on two busy actors: a write to a state of 10^4 numbers takes {us autoSmall} with parallel auto and {us onSmall} on, to one of 10^6 {us autoLarge} and {us onLarge}; a copy of 10^6 numbers takes {copy / 1000} µs"
+  IO.eprintln s!"two busy actors on four workers: a write to a state of 10^4 numbers takes {us pairSmall}, to one of 10^6 {us pairLarge}; a copy of 10^6 numbers takes {copy / 1000} µs"
   return [("scale: a message costs the same whatever the number of actors",
       large ≤ 4 * small + 50),
     ("scale: a step updates its actor's state in place, whatever its size, in the kernel",
       aloneLarge ≤ 10 * aloneSmall + 50000000),
-    ("scale: and on a shard", shardLarge ≤ 10 * shardSmall + 50000000),
-    ("scale: and on a shard of two busy actors, with parallel auto",
-      autoLarge ≤ 10 * autoSmall + 50000000),
-    ("scale: with parallel on, a write costs less than half a copy of the state",
-      2 * onLarge ≤ writes * copy && onSmall < 1000000000000)]
+    ("scale: on the runtime, a write costs at most a few copies of the state",
+      shardLarge ≤ 6 * writes * copy + 50000000 && shardSmall < 1000000000000),
+    ("scale: and on two busy actors on four workers",
+      pairLarge ≤ 6 * writes * copy + 50000000 && pairSmall < 1000000000000)]
 
 end Tests.Scale

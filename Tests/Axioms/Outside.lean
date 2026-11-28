@@ -140,3 +140,28 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Throttle.wait_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Throttle.wait_le
+
+-- Lanes.Outside.FileSystem.Basic
+/-- info: 'Lanes.FileSystem.Fs.crash_mem_crashes' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.FileSystem.Fs.crash_mem_crashes
+
+-- Lanes.Outside.FileSystem.Replace
+/-- info: 'Lanes.FileSystem.Replace.crash' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.FileSystem.Replace.crash
+
+/-- info: 'Lanes.FileSystem.Replace.failed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.FileSystem.Replace.failed
+
+/-- info: 'Lanes.FileSystem.Replace.done' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.FileSystem.Replace.done
+
+-- Lanes.Outside.FileSystem.Log
+/-- info: 'Lanes.FileSystem.Log.crash' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.FileSystem.Log.crash
+
+/-- info: 'Lanes.FileSystem.Log.failed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.FileSystem.Log.failed
+
+-- Lanes.Outside.FileSystem
+/-- info: 'Lanes.FileSystem.server_same' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.FileSystem.server_same
