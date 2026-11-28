@@ -126,11 +126,8 @@ jobs:
         with:
           go-version-file: bench/go/go.mod
           cache: false
-      - name: The repository's packages for bench/
-        run: |
-          mkdir -p bench/.lake
-          ln -sfn "$GITHUB_WORKSPACE/.lake/packages" bench/.lake/packages
-          rm -rf bench/results
+      - name: No results of an earlier run
+        run: rm -rf bench/results
       - name: The machine
         run: |
           echo "nproc $(nproc); $(grep -m1 'model name' /proc/cpuinfo)"

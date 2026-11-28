@@ -11,7 +11,7 @@ module
 identities, and the model checker uses it to run actors that are generic over keys, values and
 node identities on small instances (2 keys, 3 nodes).
 
-It is defined here, not taken from Mathlib's `Fintype`, because runtime modules import only `Std`.
+`Enum.sum` (`Lanes.Semantics.Sums`) adds a quantity over every value.
 -/
 
 @[expose] public section

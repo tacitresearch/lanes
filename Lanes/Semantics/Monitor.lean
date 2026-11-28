@@ -6,6 +6,7 @@ module
 
 public import Lanes.Check.Monitor
 public import Lanes.Semantics.Service
+public import Lanes.Proof.List.Basic
 
 /-!
 # The spec monitor is exact
@@ -35,8 +36,6 @@ duplicates. Completeness needs `LawfulBEq`: a duplicate must really be the same 
 
 namespace Lanes
 
-open Cslib
-
 variable {In Out S T : Type} [DecidableEq In] [DecidableEq Out]
 
 /-- The mathematical state a checker-side state stands for. -/
@@ -49,8 +48,8 @@ omit [DecidableEq In] [DecidableEq Out] in
 /-- An arriving input is the spec's input step. -/
 theorem State.toAbs_call (st : State In Out S) (x : In) :
     (st.call x).toAbs = { st.toAbs with pending := x ::ₘ st.toAbs.pending } := by
-  have h : ((st.pending ++ [x] : List In) : Multiset In) = x ::ₘ ↑st.pending :=
-    Multiset.coe_eq_coe.mpr (List.perm_append_singleton x st.pending)
+  have h : ((st.pending ++ [x] : List In) : Bag In) = x ::ₘ ↑st.pending :=
+    Bag.coe_eq_coe.mpr (List.perm_append_singleton x st.pending)
   simp only [State.toAbs, State.call, h]
 
 omit [DecidableEq Out] in
@@ -103,19 +102,19 @@ theorem State.toAbs_eq_of_equiv [BEq S] [LawfulBEq S] {a b : State In Out S}
     (h : a.equiv b = true) : a.toAbs = b.toAbs := by
   obtain ⟨hvalue, hpending, houtbox⟩ := State.equiv_iff.mp h
   rw [beq_iff_eq] at hvalue
-  simp [State.toAbs, hvalue, Multiset.coe_eq_coe.mpr hpending, Multiset.coe_eq_coe.mpr houtbox]
+  simp [State.toAbs, hvalue, Bag.coe_eq_coe.mpr hpending, Bag.coe_eq_coe.mpr houtbox]
 
 /-- A pending input taking effect is an internal step of the spec. -/
 theorem spec_tr_apply (svc : Service In Out S T) (st : State In Out S) {x : In}
     (hx : x ∈ st.pending) :
     svc.spec.lts.Tr st.toAbs none (svc.apply st x).toAbs :=
-  ⟨x, Multiset.mem_coe.mpr hx, toAbs_apply svc st x⟩
+  ⟨x, Bag.mem_coe.mpr hx, toAbs_apply svc st x⟩
 
 /-- Every internal step of the spec is a pending input taking effect. -/
 theorem exists_apply_of_spec_tr {svc : Service In Out S T} {st : State In Out S} {a : Abs In Out S}
     (h : svc.spec.lts.Tr st.toAbs none a) : ∃ x ∈ st.pending, (svc.apply st x).toAbs = a := by
   obtain ⟨x, hx, rfl⟩ := h
-  exact ⟨x, Multiset.mem_coe.mp hx, toAbs_apply svc st x⟩
+  exact ⟨x, Bag.mem_coe.mp hx, toAbs_apply svc st x⟩
 
 /-- With nothing pending the spec has no internal step. -/
 theorem not_spec_tr_of_pending_eq_zero {svc : Service In Out S T} {a b : Abs In Out S}
@@ -126,7 +125,7 @@ theorem not_spec_tr_of_pending_eq_zero {svc : Service In Out S T} {a b : Abs In 
 /-- With nothing pending the spec stays where it is until the next visible step. -/
 theorem eq_of_τSTr_of_pending_eq_zero {svc : Service In Out S T} {a b : Abs In Out S}
     (hpending : a.pending = 0) (h : svc.spec.lts.τSTr a b) : b = a := by
-  cases h using Relation.ReflTransGen.head_induction_on with
+  cases h using ReflTransGen.head_induction_on with
   | refl => rfl
   | head htr _ => exact absurd htr (not_spec_tr_of_pending_eq_zero hpending)
 
@@ -147,14 +146,14 @@ theorem τSTr_erase_outbox {svc : Service In Out S T} {a b : Abs In Out S} {out 
     obtain ⟨x, hx, rfl⟩ := htr
     refine ⟨⟨(svc.step a'.value x).1, a'.pending.erase x,
       a'.outbox + (svc.step a'.value x).2⟩, ha'.tail ⟨x, hx, rfl⟩,
-      Multiset.mem_add.mpr (.inl hmem'), ?_⟩
-    simp [Multiset.erase_add_left_pos _ hmem']
+      Bag.mem_add.mpr (.inl hmem'), ?_⟩
+    simp [Bag.erase_add_left_pos _ hmem']
 
 end Service
 
 /-- A saturated run ending in a visible label is a saturated run, then that step, then internal
 steps. -/
-theorem sMTr_concat_some {State α : Type*} {lts : LTS State (Option α)} {s s' : State}
+theorem sMTr_concat_some {State α : Type _} {lts : LTS State (Option α)} {s s' : State}
     {μs : List (Option α)} {e : α} :
     lts.SMTr s (μs ++ [some e]) s' ↔
       ∃ s₁ s₂, lts.SMTr s μs s₁ ∧ lts.Tr s₁ (some e) s₂ ∧ lts.τSTr s₂ s' := by
@@ -423,7 +422,7 @@ theorem after_concat (svc : Service In Out S T) (obs : List (Visible In Out T))
 theorem sound (svc : Service In Out S T) {obs : List (Visible In Out T)} {st : State In Out S}
     (h : st ∈ (after svc obs).candidates) :
     svc.spec.lts.SMTr ⟨svc.init, 0, 0⟩ (obs.map some) st.toAbs := by
-  induction obs using List.reverseRecOn generalizing st with
+  induction obs using reverse_induction generalizing st with
   | nil =>
     obtain rfl : st = svc.start := by simpa [after, start] using h
     exact LTS.SMTr.refl _ _
@@ -447,7 +446,7 @@ theorem sound (svc : Service In Out S T) {obs : List (Visible In Out T)} {st : S
 theorem complete [LawfulBEq S] (svc : Service In Out S T) {obs : List (Visible In Out T)}
     {a : Abs In Out S} (h : svc.spec.lts.SMTr ⟨svc.init, 0, 0⟩ (obs.map some) a) :
     ∃ st ∈ (after svc obs).candidates, st.toAbs = a := by
-  induction obs using List.reverseRecOn generalizing a with
+  induction obs using reverse_induction generalizing a with
   | nil =>
     obtain rfl := eq_of_τSTr_of_pending_eq_zero rfl (LTS.sMTr_τSTr_iff.mpr h)
     exact ⟨svc.start, by simp [after, start], rfl⟩

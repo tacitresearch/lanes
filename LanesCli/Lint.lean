@@ -18,7 +18,8 @@ Source-level checks of the rules in `AGENTS.md` that can be decided from the tex
   lines, so trusted code cannot grow without the list changing; `--fix` rewrites the counts.
 - `decisions`: the index of `docs/decisions/` agrees with the decisions, and each decision has
   its number and its status line (`LanesCli/Generated.lean`).
-- `layering` (rule 1.6): files that import Mathlib, CSLib or a proof module (`Lanes.Semantics`,
+- `layering` (rule 1.6): files that import Mathlib or CSLib (which an application may use for
+  its own proofs, and Lanes does not) or a proof module (`Lanes.Semantics`,
   `App.Proofs`) live in a proof directory, one named `…Proofs` included, or are named
   `…Proofs.lean`, so executable code never links them. In Lanes itself, also: each module of
   `Lanes/` imports modules of Lanes only from its own package and the packages it requires
@@ -152,7 +153,7 @@ def checkFile (root file : System.FilePath) (trusted : String) : IO (List Findin
             "Mathlib and CSLib may only be imported from proof files (rule 1.6)"⟩ :: findings
         else if importsProofModule t then
           findings := ⟨relative, line, "layering",
-            "a proof module imported from executable code links Mathlib into the binary "
+            "a proof module imported from executable code links the proofs into the binary "
               ++ "(rule 1.6)"⟩ :: findings
   return findings.reverse
 

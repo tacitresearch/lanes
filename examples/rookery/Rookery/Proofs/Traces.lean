@@ -70,7 +70,7 @@ include henv hrestart hrun
 
 /-- A response carries the secrets of no account but the one its request, which arrived before
 it, was made as, and a read of an account's posts carries none. -/
-theorem output_secret {i : ℕ} {o : Response N} (hi : evs[i]? = some (.output o)) {m : N}
+theorem output_secret {i : Nat} {o : Response N} (hi : evs[i]? = some (.output o)) {m : N}
     (hm : o.reply.secretOf = some m) :
     ∃ p < i, ∃ r, evs[p]? = some (.input r) ∧ o.req = r.req ∧ m = r.name ∧
       ∀ q n j, r ≠ .profile q n j := by
@@ -82,7 +82,7 @@ theorem output_secret {i : ℕ} {o : Response N} (hi : evs[i]? = some (.output o
 
 /-- A list of posts handed over is a read, for the request it answers, which arrived before it,
 of a board the spec's functions reach. -/
-theorem output_read {i : ℕ} {o : Response N} (hi : evs[i]? = some (.output o))
+theorem output_read {i : Nat} {o : Response N} (hi : evs[i]? = some (.output o))
     {list : List (N × Post)} (hfeed : o.reply = .feed list) :
     ∃ p < i, ∃ r, evs[p]? = some (.input r) ∧ o.req = r.req ∧
       ∃ es, (Board.run config {} es).ReadOf config r list := by
@@ -120,9 +120,9 @@ theorem Board.handle_delete_gone {b : Board N C} (hb : b.Fresh) {req : ReqId} {a
 /-- Once the system has handed over `deleted` for a delete made through the web, no read whose
 request arrives afterwards shows that post, when the requests that arrive have distinct ids. -/
 theorem deleted_unread
-    (hdistinct : ∀ (p p' : ℕ) (r r' : Request N C), evs[p]? = some (Lanes.Event.input r) →
+    (hdistinct : ∀ (p p' : Nat) (r r' : Request N C), evs[p]? = some (Lanes.Event.input r) →
       evs[p']? = some (Lanes.Event.input r') → r.req = r'.req → p = p')
-    {p₁ i p₂ l : ℕ} {req : ReqId} {a : N} {s : Sid} {id : PostId} {json json' : Bool}
+    {p₁ i p₂ l : Nat} {req : ReqId} {a : N} {s : Sid} {id : PostId} {json json' : Bool}
     {r₂ : Request N C} {list : List (N × Post)}
     (hdel : evs[p₁]? = some (.input (.web req a s (.delete id))))
     (hconfirm : evs[i]? = some (.output ⟨req, .deleted, json⟩))

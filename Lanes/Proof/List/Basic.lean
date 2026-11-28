@@ -273,4 +273,24 @@ theorem filter_key_eq_singleton {γ : Type} [BEq γ] [LawfulBEq γ] {f : α → 
         exact h.1 (e ▸ List.mem_map_of_mem hp)
       rw [List.filter_cons_of_neg (by simp [hne]), filter_key_eq_singleton h.2 hp]
 
+/-- A list of one element, filtered. -/
+theorem filter_singleton {p : α → Bool} {a : α} : [a].filter p = bif p a then [a] else [] := by
+  cases h : p a <;> simp [h]
+
+/-- Keeping nothing of a list leaves nothing. -/
+@[simp] theorem filterMap_const_none (l : List α) : l.filterMap (fun _ => (none : Option β)) = [] :=
+  List.filterMap_eq_nil_iff.mpr fun _ _ => rfl
+
+/-- Induction on a list from its last element: `P` holds of `[]`, and of `l ++ [a]` if of `l`.
+Use it as `induction l using reverse_induction with | nil => _ | append_singleton l a ih => _`. -/
+@[elab_as_elim]
+theorem reverse_induction {motive : List α → Prop} (l : List α) (nil : motive [])
+    (append_singleton : ∀ (l : List α) (a : α), motive l → motive (l ++ [a])) : motive l := by
+  have h : ∀ l : List α, motive l.reverse := by
+    intro l
+    induction l with
+    | nil => exact nil
+    | cons a l ih => rw [List.reverse_cons]; exact append_singleton _ a ih
+  simpa using h l.reverse
+
 end Lanes

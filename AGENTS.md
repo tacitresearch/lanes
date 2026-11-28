@@ -1,11 +1,12 @@
 # Working on Lanes
 
-Lanes is a framework for verified software in Lean 4: actors with pure step functions, one
-semantics, a proved runtime kernel, a model checker, proofs, and adapters. This file is the rules,
+Lanes is a runtime and library for building software in Lean 4: actors with pure step
+functions, one semantics, a proved runtime kernel, a model checker, proofs, models of what a
+program talks to, and the library applications need. This file is the rules,
 for agents and for people. `README.md` is the front door; `docs/ARCHITECTURE.md` says how the
 pieces fit and, area by area, what is claimed with its evidence and the limits of the design;
 `docs/decisions/` says why, and `TRUSTED.md` what is trusted. The work, and what is known to be
-missing, are GitHub issues (the direction is issue #93; fixable limits are labelled
+missing, are GitHub issues (the direction is D110 and issue #239; fixable limits are labelled
 `known-limit`).
 
 Rules carry numbers (rule 2.6) because code, decisions and reviews cite them. Never renumber; a
@@ -15,7 +16,6 @@ a choice. Each rule says why, so a case it does not cover can be judged.
 ## Build and checks
 
 ```bash
-lake exe cache get         # once, in a fresh clone: prebuilt Mathlib; never build Mathlib from source
 lake build --wfail         # the library, warnings as errors (as CI builds it)
 lake test                  # pure tests and live runtime tests, about two minutes
 lake exe lanesCheck        # larger model checks, random runs and the scale benchmark, about 20 s: run once, never in a loop
@@ -37,11 +37,9 @@ lake exe lanes stats       # the totals no file holds: trusted lines, decisions
   `LAKE_CACHE_DIR` moves it), with a record of which outputs each module's inputs gave. A build
   whose inputs are recorded there makes hard links in `.lake/build` instead of building. So the
   worktrees and apps of a machine share one copy: a new worktree builds only what no checkout
-  built before, and its `.lake/build` takes almost no disk of its own. Start a worktree with only
-  `.lake/packages` (a link to the shared one); copying a warm `.lake/build` gains nothing. The
-  dependencies, Mathlib among them, are linked into the cache too, and their files become
-  read-only. Never write into a file of `.lake/build` or `.lake/packages` in place: it is also
-  the cache's file, and the read-only bit does not stop root. Lake deletes an output before
+  built before, and its `.lake/build` takes almost no disk of its own. Copying a warm
+  `.lake/build` gains nothing. Never write into a file of `.lake/build` in place: it is also
+  the cache's file (read-only, which does not stop root). Lake deletes an output before
   building it again, and several worktrees can build at once: an output is stored once under its
   hash and never rewritten, and two builds of a module give the same bytes. An entry is found
   only by the hash of everything a module's build reads, so it is as good as a build, provided
@@ -104,8 +102,8 @@ lake exe lanes stats       # the totals no file holds: trusted lines, decisions
   nightly (`.github/workflows/services.yml`). The request reader's verdicts on
   `Tests/ReadRequest.corpus` are compared with Go's, Node's and h11's servers by
   `oracles/go/requests/requests.py`, run by hand.
-- The toolchain is pinned in `lean-toolchain` and follows CSLib's. Dependencies are pinned in
-  `lake-manifest.json`; upgrade them deliberately, CSLib first.
+- The toolchain is pinned in `lean-toolchain` and moved deliberately, in a pull request of its
+  own. Lanes requires no other package: its `lake-manifest.json` lists none.
 - A test of an application's front end drives it with `Http.Loopback` (pure, no socket: the
   connection, the gate and the system, as the server runs them), and a live test of a process
   with `Http.Client.fetch` (`examples/README.md`, "Testing a front end"). Do not write HTTP by
@@ -144,18 +142,33 @@ interleaved cannot be proved one at a time.
 endpoints (request ids, the spec's operation); transport retries are an optimisation, never the
 argument.
 
-1.6 **Layers run one way.** Runtime modules import `Std` only; Mathlib, CSLib and proof modules
-(`Lanes.Semantics`, `…Proofs`) are imported only by proof files (lint `layering`). No cycles.
+1.6 **Layers run one way.** Runtime modules import `Std` only; proof modules (`Lanes.Semantics`,
+`…Proofs`) are imported only by proof files (lint `layering`). No cycles. The library uses no
+Mathlib or CSLib; an application may use them for its own proofs (#130), from its proof files
+only (lint `layering`).
 Each module of `Lanes/` is in one package of `docs/decisions/D99-layered-packages.md`, and imports modules of Lanes only from its
 package and those below it: the semantics and the checker; actors, and the standard library
 beside them; the runtime; the web and PostgreSQL; the umbrella `Lanes`
 (`LanesCli/Layers.lean` gives each file's package, lint `layering`). A definition that a lower
 layer needs moves down, or the lower layer takes it as a parameter. *Why:* executable code
-that imports the proof layer links all of Mathlib (over 150 MB), and a layer that imports one
-above it cannot be used, or built, without it.
+that imports the proof layer links proofs it never runs (and all of Mathlib, over 150 MB, in an
+application whose proofs use it), a layer that imports one above it cannot be used, or built,
+without it, and a library that needs Mathlib ties every application to Mathlib's toolchain and
+size.
 
 1.7 **One concept, one name**, in code, specs and docs; names state units and bounds
 (`timeout_ms`, `maxBatch`).
+
+1.8 **Decide what belongs from first principles, not from our examples.** Lanes is a runtime and
+library people use to build software in Lean, so a piece is judged by what it gives them, not by
+whether our own examples happen to use it. For any piece, whether added, kept or removed, weigh:
+reach (would people building software in Lean want it, and what could they build with it that
+they cannot today?), cost (code, proofs, trusted lines, and concepts a newcomer must learn) and
+coupling (does it stand alone as a library piece, or does it force a design choice on the core?).
+A general piece whose reach is worth its cost stays even if no example uses it; a piece that pulls
+its design into everything else goes even if it works. Say how you weighed these in the PR when you
+add or remove something. *Why:* a library is used for things its authors did not build, and the
+journal showed that a feature can be finished, proved and still not worth its cost (D110).
 
 2.1 **Make illegal states unrepresentable.** A role is a sum type that carries its own data, not
 flags in a record; bounds are subtypes and `Fin`. *Why:* a state the type rules out is an
@@ -237,17 +250,15 @@ defect four reviews found was a decision made in IO code.
 
 Conventions:
 
-- Library files use the module system: `module`, `public import`, then `@[expose] public section`
-  (as CSLib does). A definition whose body uses private helpers is `@[no_expose]`.
+- Library files use the module system: `module`, `public import`, then `@[expose] public section`. A definition whose body uses private helpers is `@[no_expose]`.
 - Write almost no comments. A comment or docstring is for a *why* that a name, a type or a theorem
   cannot carry; never restate the code or narrate a change. Each file keeps a short `/-! -/`
   header. A public declaration gets a docstring only when its name and type do not say what it
-  is. Do not copy the docstring density of older files. `Lanes/Semantics/` documents every
-  declaration, because CSLib's linter requires it.
+  is. Do not copy the docstring density of older files.
 - Define a concrete system with `abbrev`, so instance resolution can see its `State`.
 - Template syntax is scoped: a view file starts with `open scoped Lanes.Html`; a tag follows `<`
   with no space (`<div>`), and `a < b` with a space is a comparison. Keep views and `main` on
-  `import Lanes`: Mathlib's `<i` token breaks `<input>`.
+  `import Lanes`: another library's tokens, such as Mathlib's `<i`, can break `<input>`.
 - In `do` blocks, `(← action)` inside `a || b` or `a && b` runs whether or not the other side
   decides. Bind it first when it must be conditional.
 - Lean never updates an object in place once another thread may see it, and state held across an

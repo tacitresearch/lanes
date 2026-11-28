@@ -14,7 +14,7 @@ This file defines the meaning of a Lanes system once, as a pure function
 
 Everything else is built on that one function. The deterministic scheduler picks events with a
 seeded generator and applies it. The model checker applies it to every enabled event. Trace
-checking replays a runtime trace through it. `Lanes.Semantics` wraps it as a CSLib `LTS` for
+checking replays a runtime trace through it. `Lanes.Semantics` wraps it as an `LTS` for
 proofs. There is no second model to keep in sync.
 
 Concurrency is absent here by construction: an `Event` handles one message for one actor

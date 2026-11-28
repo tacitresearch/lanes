@@ -4,8 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Cslib.Foundations.Semantics.LTS.Simulation
-public import Cslib.Computability.Automata.EpsilonNA.Basic
+public import Lanes.Semantics.Lts
 
 /-!
 # Specs and refinement
@@ -18,9 +17,9 @@ the `spec` label `f μ`. It is a weak forward simulation: every step of `impl` i
 same visible step of `spec`, surrounded by any number of internal (`τ`) steps of `spec`, and a
 step that `f` maps to `τ` may be matched by no step at all. That last case is stuttering.
 
-CSLib provides the transition systems (`LTS`), internal steps (`HasTau`), saturated transitions
-(`LTS.STr`) and strong simulation. It has weak bisimulation but no one-directional weak
-simulation and no refinement with a label map, so those are defined here on top of `LTS.STr`.
+`Lanes.Semantics.Lts` provides the transition systems (`LTS`), internal steps (`HasTau`) and
+saturated transitions (`LTS.STr`). The one-directional weak simulation with a label map is
+defined here on top of `LTS.STr`.
 
 ## Main definitions
 
@@ -38,9 +37,7 @@ simulation and no refinement with a label map, so those are defined here on top 
 
 namespace Lanes
 
-open Cslib
-
-universe u v w
+universe u v w u₁ u₂ u₃
 
 /-- A labelled transition system with initial states. -/
 structure Spec (State : Type u) (Label : Type v) where
@@ -53,7 +50,7 @@ namespace Spec
 
 variable {State : Type u} {Label : Type v}
 
-/-- The underlying CSLib transition system. -/
+/-- The underlying transition system. -/
 def lts (spec : Spec State Label) : LTS State Label where
   Tr := spec.Tr
 
@@ -87,7 +84,7 @@ theorem invariant_of_inductive {spec : Spec State Label} {P : State → Prop}
 
 end Spec
 
-variable {S₁ : Type u} {S₂ : Type v} {S₃ : Type w} {L₁ L₂ L₃ : Type*}
+variable {S₁ : Type u} {S₂ : Type v} {S₃ : Type w} {L₁ : Type u₁} {L₂ : Type u₂} {L₃ : Type u₃}
 
 /--
 `impl` refines `spec` along the label map `f`: there is a relation between their states that
@@ -144,7 +141,7 @@ private theorem follow_τ [HasTau L₂] [HasTau L₃] {mid : Spec S₂ L₂} {sp
     obtain ⟨t₁, ht₁, hrel₁⟩ := ih
     obtain ⟨t₂, ht₂, hrel₂⟩ := hstep _ _ hrel₁ _ _ htr
     rw [hg, LTS.sTr_τSTr_iff] at ht₂
-    exact ⟨t₂, Relation.ReflTransGen.trans ht₁ ht₂, hrel₂⟩
+    exact ⟨t₂, ReflTransGen.trans ht₁ ht₂, hrel₂⟩
 
 /-- Saturated steps of the middle system are answered by saturated steps of the spec. -/
 private theorem follow_sTr [HasTau L₂] [HasTau L₃] {mid : Spec S₂ L₂} {spec : Spec S₃ L₃}

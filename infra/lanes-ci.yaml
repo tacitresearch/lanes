@@ -67,7 +67,7 @@ Parameters:
     Default: 200
     MinValue: 100
     MaxValue: 2000
-    Description: GiB of gp3 disk. The toolchain, Mathlib and a build per runner take about 40.
+    Description: GiB of gp3 disk, for the toolchain and a build per runner.
   RunnerCount:
     Type: Number
     Default: 0

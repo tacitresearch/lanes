@@ -150,7 +150,7 @@ private theorem answered_of_handle {c : SysState (gateSystem bridge config)} {id
       · next hpending =>
         simp only [hpending, ↓reduceIte] at hout
         have hid : id' = id := by
-          by_contra hne
+          refine Classical.byContradiction fun hne => ?_
           exact hout ((List.mem_erase_of_ne (Ne.symm hne)).mpr hin)
         exact ⟨response, by simp [SysState.settle, SysState.perform, Effect.isStop, hid]⟩
       · next hpending => simp [hpending, hin] at hout
@@ -162,7 +162,7 @@ private theorem answered_of_handle {c : SysState (gateSystem bridge config)} {id
     · next hpending =>
       simp only [hpending, ↓reduceIte] at hout
       have hid : id' = id := by
-        by_contra hne
+        refine Classical.byContradiction fun hne => ?_
         exact hout ((List.mem_erase_of_ne (Ne.symm hne)).mpr hin)
       exact ⟨timedOut, by simp [SysState.settle, SysState.perform, Effect.isStop, hid]⟩
     · next hpending => simp [hpending, hin] at hout
@@ -206,14 +206,14 @@ theorem answered_of_leaves (hrestart : env.mayRestart = false)
 the process does not restart, a request waiting while it is up has an answer handed over at a later position. -/
 theorem pending_answered (hcrash : env.mayCrash () = false)
     (hrestart : env.mayRestart = false) (id : ReqId)
-    {r : (gateSystem bridge config).Run env} (hfair : r.Fair) {n : ℕ}
+    {r : (gateSystem bridge config).Run env} (hfair : r.Fair) {n : Nat}
     (hup : (r.state n).up () = true) (hid : id ∈ ((r.state n).state () : List ReqId)) :
     ∃ m, n ≤ m ∧ ∃ response, r.event m = some (.output (.inl (id, response))) := by
   obtain ⟨m, hm, hgone⟩ := System.LeadsTo.iff.mp (pending_leaves bridge config hcrash hrestart id)
     r hfair n ⟨hup, hid⟩
   have hleaves : ∃ k, n ≤ k ∧ id ∈ ((r.state k).state () : List ReqId) ∧
       id ∉ ((r.state (k + 1)).state () : List ReqId) := by
-    induction m, hm using Nat.le_induction with
+    induction m, hm using le_induction with
     | base => exact absurd hid hgone
     | succ m hm ih =>
       by_cases hin : id ∈ ((r.state m).state () : List ReqId)
@@ -268,7 +268,7 @@ run, in any environment that does not crash the gate or restart the process, a r
 has an answer handed to the outside world at a later position. -/
 theorem fronted_pending_answered (hcrash : env.mayCrash (.inl ()) = false)
     (hrestart : env.mayRestart = false) (id : ReqId)
-    {r : (fronted sys bridge config).Run env} (hfair : r.Fair) {n : ℕ}
+    {r : (fronted sys bridge config).Run env} (hfair : r.Fair) {n : Nat}
     (hup : (r.state n).up (.inl ()) = true)
     (hid : id ∈ ((r.state n).state (.inl ()) : List ReqId)) :
     ∃ m, n ≤ m ∧ ∃ response, r.event m = some (.output (.inl (id, response))) := by
@@ -323,7 +323,7 @@ the outside world at a later position. -/
 theorem served_pending_answered {env : EnvModel (servedSig σ)}
     (hcrash : env.mayCrash (.inl ()) = false)
     (hrestart : env.mayRestart = false) (id : ReqId)
-    {r : (served sys bridge config).Run env} (hfair : r.Fair) {n : ℕ}
+    {r : (served sys bridge config).Run env} (hfair : r.Fair) {n : Nat}
     (hup : (r.state n).up (.inl ()) = true)
     (hid : id ∈ ((r.state n).state (.inl ()) : List ReqId)) :
     ∃ m, n ≤ m ∧ ∃ response, r.event m = some (.output (id, response)) := by
@@ -420,10 +420,10 @@ outside to the gate loses nothing, an arrival is followed by a response to its i
 theorem fronted_arrival_answered {env : EnvModel (frontedSig σ)}
     (hcrash : env.mayCrash (.inl ()) = false) (hrestart : env.mayRestart = false)
     (hlossless : (env.link none (.inl ())).lossy = false)
-    {r : (fronted sys bridge config).Run env} (hfair : r.Fair) {n : ℕ} {id : ReqId}
+    {r : (fronted sys bridge config).Run env} (hfair : r.Fair) {n : Nat} {id : ReqId}
     {request : Request} (hin : r.event n = some (.input (.inl (id, request)))) :
     ∃ m, n ≤ m ∧ ∃ response, r.event m = some (.output (.inl (id, response))) := by
-  have hup (m : ℕ) : (r.state m).up (.inl ()) = true := fronted_gate_up hcrash _ (r.reachable m)
+  have hup (m : Nat) : (r.state m).up (.inl ()) = true := fronted_gate_up hcrash _ (r.reachable m)
   let e : Envelope (frontedSig σ) := ⟨none, .inl (), .arrive id request⟩
   have he : e ∈ (r.state (n + 1)).net := by
     rw [SysState.step_input.mp (System.Run.step_some hin)]
@@ -450,10 +450,10 @@ is answered exactly once. -/
 theorem served_arrival_answered {env : EnvModel (servedSig σ)}
     (hcrash : env.mayCrash (.inl ()) = false) (hrestart : env.mayRestart = false)
     (hlossless : (env.link none (.inl ())).lossy = false)
-    {r : (served sys bridge config).Run env} (hfair : r.Fair) {n : ℕ} {id : ReqId}
+    {r : (served sys bridge config).Run env} (hfair : r.Fair) {n : Nat} {id : ReqId}
     {request : Request} (hin : r.event n = some (.input (id, request))) :
     ∃ m, n ≤ m ∧ ∃ response, r.event m = some (.output (id, response)) := by
-  have hup (m : ℕ) : (r.state m).up (.inl ()) = true := served_gate_up hcrash _ (r.reachable m)
+  have hup (m : Nat) : (r.state m).up (.inl ()) = true := served_gate_up hcrash _ (r.reachable m)
   let e : Envelope (servedSig σ) := ⟨none, .inl (), .arrive id request⟩
   have he : e ∈ (r.state (n + 1)).net := by
     rw [SysState.step_input.mp (System.Run.step_some hin)]

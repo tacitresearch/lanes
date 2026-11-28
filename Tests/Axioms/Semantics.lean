@@ -179,7 +179,7 @@ import Lanes.Semantics
 /-- info: 'Lanes.System.LeadsTo.ensures_of_invariant' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.LeadsTo.ensures_of_invariant
 
-/-- info: 'Lanes.System.LeadsTo.trans' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+/-- info: 'Lanes.System.LeadsTo.trans' depends on axioms: [propext, Classical.choice] -/
 #guard_msgs in #print axioms Lanes.System.LeadsTo.trans
 
 /-- info: 'Lanes.System.Run.Fair.output_taken' depends on axioms: [propext, Classical.choice, Quot.sound] -/
@@ -194,10 +194,10 @@ import Lanes.Semantics
 /-- info: 'Lanes.System.Run.Impatient.fair' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Run.Impatient.fair
 
-/-- info: 'Lanes.System.LeadsTo.induction' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+/-- info: 'Lanes.System.LeadsTo.induction' depends on axioms: [propext, Classical.choice] -/
 #guard_msgs in #print axioms Lanes.System.LeadsTo.induction
 
-/-- info: 'Lanes.System.LeadsTo.exists_left' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+/-- info: 'Lanes.System.LeadsTo.exists_left' depends on axioms: [propext, Classical.choice] -/
 #guard_msgs in #print axioms Lanes.System.LeadsTo.exists_left
 
 -- Lanes.Semantics.Monitor
@@ -244,7 +244,7 @@ import Lanes.Semantics
 /-- info: 'Lanes.Refines.trans' depends on axioms: [propext] -/
 #guard_msgs in #print axioms Lanes.Refines.trans
 
-/-- info: 'Lanes.Refines.traces' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+/-- info: 'Lanes.Refines.traces' depends on axioms: [propext, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Refines.traces
 
 -- Lanes.Semantics.Restart

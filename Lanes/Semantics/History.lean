@@ -41,8 +41,6 @@ between the positions at which they pass.
 
 namespace Lanes
 
-open Cslib
-
 variable {In Out S T : Type}
 
 namespace Service
@@ -64,7 +62,7 @@ def play (svc : Service In Out S T) (v : S) (acts : List (Act In T)) : S :=
   acts.foldl (fun v a => (svc.act v a).1) v
 
 /-- `o` is an output of the act at position `k` of `acts`, played from `init`. -/
-def Produces (svc : Service In Out S T) (acts : List (Act In T)) (k : ℕ) (o : Out) : Prop :=
+def Produces (svc : Service In Out S T) (acts : List (Act In T)) (k : Nat) (o : Out) : Prop :=
   ∃ a, acts[k]? = some a ∧ o ∈ (svc.act (svc.play svc.init (acts.take k)) a).2
 
 variable {svc : Service In Out S T}
@@ -80,7 +78,7 @@ theorem play_append (v : S) (acts more : List (Act In T)) :
   simp [play, List.foldl_append]
 
 /-- What an act of a history produces, it produces in any longer history. -/
-theorem Produces.append {acts : List (Act In T)} {k : ℕ} {o : Out} (h : svc.Produces acts k o)
+theorem Produces.append {acts : List (Act In T)} {k : Nat} {o : Out} (h : svc.Produces acts k o)
     (more : List (Act In T)) : svc.Produces (acts ++ more) k o := by
   obtain ⟨a, ha, ho⟩ := h
   have hk : k < acts.length := (List.getElem?_eq_some_iff.mp ha).1
@@ -121,10 +119,10 @@ theorem mono (h : svc.Follows A acts a) {A' : In → Prop} (hA : ∀ x, A x → 
 theorem take [DecidableEq In] (h : svc.Follows A acts a) {x : In} (_ : x ∈ a.pending) :
     svc.Follows A (acts ++ [.take x])
       ⟨(svc.step a.value x).1, a.pending.erase x, a.outbox + (svc.step a.value x).2⟩ := by
-  refine ⟨?_, fun y hy => h.pending y (Multiset.mem_of_mem_erase hy), fun o ho => ?_⟩
+  refine ⟨?_, fun y hy => h.pending y (Bag.mem_of_mem_erase hy), fun o ho => ?_⟩
   · rw [play_concat, ← h.value]
     rfl
-  · rcases Multiset.mem_add.mp ho with ho | ho
+  · rcases Bag.mem_add.mp ho with ho | ho
     · obtain ⟨k, hk⟩ := h.outbox o ho
       exact ⟨k, hk.append _⟩
     · refine ⟨acts.length, produces_last ?_⟩
@@ -138,7 +136,7 @@ theorem fire (h : svc.Follows A acts a) (t : T) :
   refine ⟨?_, h.pending, fun o ho => ?_⟩
   · rw [play_concat, ← h.value]
     rfl
-  · rcases Multiset.mem_add.mp ho with ho | ho
+  · rcases Bag.mem_add.mp ho with ho | ho
     · obtain ⟨k, hk⟩ := h.outbox o ho
       exact ⟨k, hk.append _⟩
     · refine ⟨acts.length, produces_last ?_⟩
@@ -182,13 +180,13 @@ theorem tr (h : svc.Follows A acts a) {μ : Option (Visible In Out T)}
     subst hb
     refine ⟨[], by simp, ⟨by simpa using h.value, fun y hy => ?_, by simpa using h.outbox⟩,
       by simp, by simp⟩
-    rcases Multiset.mem_cons.mp hy with rfl | hy
+    rcases Bag.mem_cons.mp hy with rfl | hy
     · exact .inr rfl
     · exact .inl (h.pending y hy)
   · obtain ⟨ho, hb⟩ : o ∈ a.outbox ∧ b = { a with outbox := a.outbox.erase o } := htr
     subst hb
     refine ⟨[], by simp, ⟨by simpa using h.value, fun y hy => .inl (h.pending y hy),
-      fun o' ho' => by simpa using h.outbox o' (Multiset.mem_of_mem_erase ho')⟩, ?_, by simp⟩
+      fun o' ho' => by simpa using h.outbox o' (Bag.mem_of_mem_erase ho')⟩, ?_, by simp⟩
     rintro o' ⟨⟩
     simpa using h.outbox o ho
   · obtain ⟨-, hb⟩ : svc.armed a.value t = true ∧
@@ -238,7 +236,7 @@ at position `i` comes from an act before `cut (i + 1)`, and a deadline passes in
 exactly where it passes in the run: in the block `cut p` to `cut (p + 1)` of the position `p`
 where `deadlines` or `delivered` shows it. -/
 structure Explains (svc : Service σ.In σ.Out S T) (deadlines delivered : Deadlines σ T)
-    (pre : List (Event σ)) (acts : List (Service.Act σ.In T)) (cut : ℕ → ℕ) : Prop where
+    (pre : List (Event σ)) (acts : List (Service.Act σ.In T)) (cut : Nat → Nat) : Prop where
   /-- `cut` is monotone. -/
   mono : ∀ i j, i ≤ j → cut i ≤ cut j
   /-- Every input takes effect after it arrives. -/
@@ -260,8 +258,8 @@ private theorem explain {rel : SysState sys → Service.Abs σ.In σ.Out S → P
     (hstep : ∀ c t, rel c t → ∀ ev c', (sys.sem env).Tr c ev c' →
       ∃ t', svc.spec.lts.STr t (ev.timed deadlines delivered) t' ∧ rel c' t') :
     ∀ (evs pre : List (Event σ)) (c c' : SysState sys) (t : Service.Abs σ.In σ.Out S)
-      (acts : List (Service.Act σ.In T)) (cut : ℕ → ℕ),
-      rel c t → svc.Follows (fun (x : σ.In) => ∃ p : ℕ, pre[p]? = some (Event.input x)) acts t →
+      (acts : List (Service.Act σ.In T)) (cut : Nat → Nat),
+      rel c t → svc.Follows (fun (x : σ.In) => ∃ p : Nat, pre[p]? = some (Event.input x)) acts t →
       Explains svc deadlines delivered pre acts cut → (∀ i, pre.length ≤ i → cut i = acts.length) →
       c.run env evs = some c' →
       ∃ acts' cut', Explains svc deadlines delivered (pre ++ evs) acts' cut'
@@ -276,18 +274,18 @@ private theorem explain {rel : SysState sys → Service.Abs σ.In σ.Out S → P
       obtain ⟨E, hE, hf₁, ho, hF⟩ := hf.sTr ht₁
       let pre₁ := pre ++ [ev]
       let acts₁ := acts ++ E
-      let cut₁ : ℕ → ℕ := fun i => if i ≤ pre.length then cut i else acts₁.length
-      have hpre (p : ℕ) (x : σ.In) (hp : pre[p]? = some (.input x)) : pre₁[p]? = some (.input x) := by
+      let cut₁ : Nat → Nat := fun i => if i ≤ pre.length then cut i else acts₁.length
+      have hpre (p : Nat) (x : σ.In) (hp : pre[p]? = some (.input x)) : pre₁[p]? = some (.input x) := by
         rw [List.getElem?_append_left (List.getElem?_eq_some_iff.mp hp).1, hp]
       have hinput (x : σ.In) (hx : ev.timed deadlines delivered = some (.input x)) : ev = .input x := by
         cases ev <;> simp_all [Event.timed]
-      have harrived (x : σ.In) (hx : (∃ p : ℕ, pre[p]? = some (Event.input x)) ∨
+      have harrived (x : σ.In) (hx : (∃ p : Nat, pre[p]? = some (Event.input x)) ∨
           ev.timed deadlines delivered = some (.input x)) :
-          ∃ p : ℕ, pre₁[p]? = some (Event.input x) ∧ p ≤ pre.length := by
+          ∃ p : Nat, pre₁[p]? = some (Event.input x) ∧ p ≤ pre.length := by
         rcases hx with ⟨p, hp⟩ | hx
         · exact ⟨p, hpre p x hp, Nat.le_of_lt (List.getElem?_eq_some_iff.mp hp).1⟩
         · exact ⟨pre.length, by simp [pre₁, hinput x hx], Nat.le_refl _⟩
-      have hcutle (p : ℕ) (hp : p ≤ pre.length) : cut₁ p ≤ acts.length := by
+      have hcutle (p : Nat) (hp : p ≤ pre.length) : cut₁ p ≤ acts.length := by
         simp only [cut₁, hp, ↓reduceIte]
         rw [← hcut pre.length (Nat.le_refl _)]
         exact hex.mono p _ hp
@@ -327,7 +325,7 @@ private theorem explain {rel : SysState sys → Service.Abs σ.In σ.Out S → P
             have hlt : k < acts₁.length := by
               obtain ⟨a, ha, -⟩ := hk
               exact (List.getElem?_eq_some_iff.mp ha).1
-            exact ⟨k, by simpa [cut₁] using hlt, hk⟩
+            exact ⟨k, by simpa [cut₁, Nat.add_one_le_iff] using hlt, hk⟩
         · have hk₁ : k < acts₁.length := (List.getElem?_eq_some_iff.mp hk).1
           by_cases hkl : k < acts.length
           · rw [List.getElem?_append_left hkl] at hk
@@ -341,7 +339,7 @@ private theorem explain {rel : SysState sys → Service.Abs σ.In σ.Out S → P
             · simpa [cut₁, Nat.succ_le_of_lt hpl] using hkp
           · rw [List.getElem?_append_right (by omega)] at hk
             have hμ := (hF t).mp (List.mem_of_getElem? hk)
-            refine ⟨pre.length, ?_, ?_, by simpa [cut₁] using hk₁⟩
+            refine ⟨pre.length, ?_, ?_, by simpa [cut₁, Nat.add_one_le_iff] using hk₁⟩
             · simp only [pre₁, List.getElem?_concat_length, Option.bind_some]
               exact hμ
             simp only [cut₁, Nat.le_refl, ↓reduceIte]
@@ -374,11 +372,11 @@ private theorem explain {rel : SysState sys → Service.Abs σ.In σ.Out S → P
             · simp only [cut₁, Nat.le_refl, ↓reduceIte]
               rw [hcut pre.length (Nat.le_refl _)]
               omega
-            · simp [cut₁, acts₁]
+            · simp [cut₁, acts₁, Nat.add_one_le_iff]
               omega
-      have hf₂ : svc.Follows (fun (x : σ.In) => ∃ p : ℕ, pre₁[p]? = some (Event.input x)) acts₁ t₁ :=
+      have hf₂ : svc.Follows (fun (x : σ.In) => ∃ p : Nat, pre₁[p]? = some (Event.input x)) acts₁ t₁ :=
         hf₁.mono fun x hx => (harrived x hx).elim fun p ⟨hp, _⟩ => ⟨p, hp⟩
-      have hcut₁ (i : ℕ) (hi : pre₁.length ≤ i) : cut₁ i = acts₁.length := by
+      have hcut₁ (i : Nat) (hi : pre₁.length ≤ i) : cut₁ i = acts₁.length := by
         have : ¬ i ≤ pre.length := by simp [pre₁] at hi; omega
         simp [cut₁, this]
       obtain ⟨acts', cut', hex'⟩ := explain hstep evs pre₁ c₁ c' t₁ acts₁ cut₁ hrel₁ hf₂ hex₁ hcut₁ hrun
@@ -390,7 +388,7 @@ that explains it in real-time order: every input of the history arrived at a pos
 before `cut (i + 1)`, with `cut` monotone. -/
 theorem history (h : sys.Implements env svc deadlines delivered) {evs : List (Event σ)}
     {c : SysState sys} (hrun : (SysState.init sys env).run env evs = some c) :
-    ∃ (acts : List (Service.Act σ.In T)) (cut : ℕ → ℕ),
+    ∃ (acts : List (Service.Act σ.In T)) (cut : Nat → Nat),
       Explains svc deadlines delivered evs acts cut := by
   obtain ⟨rel, hinit, hstep⟩ := h
   obtain ⟨t, rfl, hrel⟩ := hinit _ rfl
@@ -401,7 +399,7 @@ theorem history (h : sys.Implements env svc deadlines delivered) {evs : List (Ev
 that arrived before it, or of a deadline, from a value that a sequence of the service's acts
 reaches. -/
 theorem produced (h : sys.Implements env svc deadlines delivered) {evs : List (Event σ)}
-    {c : SysState sys} (hrun : (SysState.init sys env).run env evs = some c) {i : ℕ} {o : σ.Out}
+    {c : SysState sys} (hrun : (SysState.init sys env).run env evs = some c) {i : Nat} {o : σ.Out}
     (hi : evs[i]? = some (.output o)) :
     ∃ acts a, o ∈ (svc.act (svc.play svc.init acts) a).2 ∧
       ∀ x, a = .take x → ∃ p < i, evs[p]? = some (.input x) := by
