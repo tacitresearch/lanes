@@ -8,8 +8,9 @@ that is not here, or whose evidence does not say what its sentence says, is a de
 one the design accepts; a limit that can be fixed is an issue labelled `known-limit`.
 
 This page names the headline theorems. `import Lanes` gives the API; the soundness theorems
-named here are in `Lanes.Proofs` (`Lanes/Proofs.lean`), which `Lanes.Semantics` imports. Those
-are gated in `Tests/Axioms/`, which stops compiling if a `sorry` or a new axiom reaches them.
+named here are in `Lanes.Proofs` (`Lanes/Proofs.lean`), which `Lanes.Semantics` imports, and the
+services' in `Lanes.Services` (`Lanes/Services.lean`). Those are gated in `Tests/Axioms/`, which
+stops compiling if a `sorry` or a new axiom reaches them.
 
 The status of a claim is one of:
 
@@ -29,24 +30,25 @@ proved function tells it to.
 | --- | --- | --- |
 | Actors and systems | `Lanes/Core/{Actor,System,World,Step,Run}.lean` | the definition everything else is about |
 | Proof tools for systems | `Lanes/Proof/{Lift,Ghost,Monotone,Equiv,Deed}.lean` | `System.invariant_of_actor`, `Inductive.of_monotone`, `System.Invariant.of_ghost` |
-| The kernel | `Lanes/Runtime/{Kernel,KernelSound,KernelTimers,Wave}.lean` | `Kernel.exec_reachable`, `Kernel.exec_outputs`, `Kernel.exec_wellFormed`, `Kernel.runWaves_eq` |
-| The shell | `Lanes/Runtime/IO/Shell.lean`, `Lanes/Runtime/{Batch,PeekSound,Mailbox,MailboxSound,Pace}.lean` | `Batch.run_kernel`, `Batch.run_sound`, `Batch.run_spread`, `Batch.run_erase_peeks`, `Batch.chain_peek_after`, `Mailbox.batch_since_take`; the shell itself is trusted |
+| The kernel | `Lanes/Runtime/{Kernel,KernelSound,KernelTimers}.lean` | `Kernel.exec_reachable`, `Kernel.exec_outputs`, `Kernel.exec_wellFormed` |
+| The runtime | `Lanes/Runtime/IO/Shell.lean`, `Lanes/Runtime/{Sched,SchedSound,Peek}.lean` | `Sched.Run.reachable`, `Sched.Step.sound`, `Sched.Step.inv`, `Sched.Slot.take_push`, `Sched.Slot.put_push`; the threads are trusted |
 | Joins | `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`, `Lanes/Semantics/FairJoin.lean` | `System.Reachable.left`, `SysState.run_left`, `System.Run.Fair.left`, `System.Run.Fair.right` |
 | The gate and the HTTP server | `Lanes/Web/Http/{Gate,Front,FrontSound,Admit,AdmitSound,View,Waiting,Conn,ConnSound,Stream,Sse,SseSound,Loopback}.lean`, `Lanes/Semantics/Front.lean`, `Lanes/Web/IO/Server.lean` | `Http.served_answered_le_arrived`, `Http.served_pending_answered`, `Http.Front.World.refines`, `Http.Front.pending_answered`, `Http.Waiting.exec_answered`, `Http.Conn.run_writes`, `Http.Conn.read_streamed`, `Http.Sse.parse_written` |
 | Metrics, health and the access log | `Lanes/Lib/Metrics.lean`, `Lanes/Web/Http/{Ops,OpsSound}.lean`, `Lanes/Web/IO/Ops.lean` | `Metrics.Histogram.observeAll_eq`, `Metrics.readLabelValue_escapeLabel`, `Http.Ops.route?_default`, `Http.Ops.route?_metrics`, `Http.Ops.answer_ready`, `Http.Ops.Access.parse_line`; that none of it reaches a system is trusted and tested |
 | Other adapters | `Lanes/Outside/Basic.lean`, `Lanes/Outside/{Clock,IO/Clock}.lean`, `Lanes/Web/IO/Client.lean`, `Lanes/Web/Http/{Grammar,Wire,WireSound}.lean` | `Response.read_wire`, `Request.fields_framing`; conformance tests |
 | The platform: the file system | `Lanes/Outside/FileSystem/{Basic,Replace,Log}.lean`, `Lanes/Outside/FileSystem.lean`, `Lanes/Outside/IO/FileSystem.lean`, `Lanes/Lib/File.lean` | `Replace.crash`, `Replace.failed`, `Replace.done`, `Log.crash`, `Log.failed`, `Fs.crash_mem_crashes`; the crash rules and the binding are trusted |
-| Models of external services | `Lanes/Outside/{Rpc,Idempotent,Events,ObjectStore,Multipart,Queue,Cache,Clock,Throttle}.lean`, `Lanes/Outside/Effects/`, `Lanes/Web/Http/SharedCache.lean`, `Lanes/Proof/Outputs.lean` | `Idempotent.at_most_once`, `Rpc.answered_le_called`, `Events.deliveries_le`, `ObjectStore.read_sent`, `ObjectStore.held_sent`, `Multipart.read_listed`, `Queue.received_le`, `Cache.read_sent`, `Clock.wall_back_le`, `Throttle.wait_le`, `SharedCache.serve_storable`, `SharedCache.serve_of_leaks`, `System.Emits.outputs`; that a real service conforms is trusted |
-| Signature Version 4 and the S3 client | `Lanes/Web/Http/{SigV4,SigV4Sound}.lean`, `Lanes/Web/S3/{Basic,Xml,Post,PostSound,Multipart}.lean`, `Lanes/Web/IO/S3.lean` | `SigV4.target_sign`, `SigV4.sortQuery_sorted`, `SigV4.canonicalHeaders_sorted`, `SigV4.encode_chunks`, `S3.Post.form_policy`, `S3.Post.admitted_bounded`, `S3.Multipart.Plan.count_le`, `S3.Multipart.Plan.range_full`; signatures tested against AWS's vectors and botocore, the client against a fake S3, the multipart flow model-checked; its IO trusted |
-| PostgreSQL and the store model | `Lanes/Lib/Postgres/{Bytes,Message,MessageSound,Scram,Conn,ConnSound,Pool,Settings,Table}.lean`, `Lanes/Lib/Postgres/IO/{Client,Pool}.lean`, `Lanes/Lib/Crypto/Certificate.lean`, `Lanes/Outside/Store/{Basic,Sound}.lean` | `Backend.read_encode`, `Frontend.decode_encode`, `Conn.run_fifo`, `Conn.step_committed`, `Conn.step_query`, `Conn.tls_first`, `Conn.run_bound`, `Conn.onMessage_binds`, `Pool.run_size`, `Pool.never_again`, `SslMode.defaultFor_disable`, `Store.write_skew`, `Store.lost_commit_either`; the IO is trusted, and that the server behaves like the model is a premise |
-| The typed store | `Lanes/Db/{Basic,Columns,Query,Txn,Retry,Model,Sound}.lean`, `Lanes/Lib/Postgres/Sql.lean`, `Lanes/Lib/Postgres/IO/Db.lean` | `Db.invariant`, `Retry.loop_committed`, `Txn.interp_apply`, `Postgres.Sql.decode_param`; the driver is trusted, and that PostgreSQL at `SERIALIZABLE` behaves like the model is a premise |
+| Models of external services | `Lanes/Outside/{Rpc,Idempotent,Events,ObjectStore,Queue,Cache,Clock,Throttle}.lean`, `Lanes/Services/S3/MultipartModel.lean`, `Lanes/Services/Stripe/Payments.lean`, `Lanes/Outside/Effects/`, `Lanes/Web/Http/SharedCache.lean`, `Lanes/Proof/Outputs.lean` | `Idempotent.at_most_once`, `Rpc.answered_le_called`, `Events.deliveries_le`, `ObjectStore.read_sent`, `ObjectStore.held_sent`, `Multipart.read_listed`, `Queue.received_le`, `Cache.read_sent`, `Clock.wall_back_le`, `Throttle.wait_le`, `SharedCache.serve_storable`, `SharedCache.serve_of_leaks`, `System.Emits.outputs`; that a real service conforms is trusted |
+| Signature Version 4 and the S3 client | `Lanes/Web/Http/{SigV4,SigV4Sound}.lean`, `Lanes/Services/S3/{Basic,Xml,Post,PostSound,Multipart}.lean`, `Lanes/Services/S3/IO/Client.lean` | `SigV4.target_sign`, `SigV4.sortQuery_sorted`, `SigV4.canonicalHeaders_sorted`, `SigV4.encode_chunks`, `S3.Post.form_policy`, `S3.Post.admitted_bounded`, `S3.Multipart.Plan.count_le`, `S3.Multipart.Plan.range_full`; signatures tested against AWS's vectors and botocore, the client against a fake S3, the multipart flow model-checked; its IO trusted |
+| AWS | `Lanes/Services/Aws/{Refresh,Imds,Ses,SesSound,Sqs,CloudFront,CloudFrontSound}.lean`, `Lanes/Services/Aws/IO/{Credentials,Ses}.lean` | `Aws.Refresh.current_fresh`, `Aws.Refresh.refresh_in_time`, `Aws.Ses.toAddresses_json`, `Aws.CloudFront.cannedPolicy_eq`; the IO is trusted |
+| PostgreSQL and the store model | `Lanes/Services/Postgres/{Bytes,Message,MessageSound,Scram,Conn,ConnSound,Pool,Settings,Table}.lean`, `Lanes/Services/Postgres/IO/{Client,Pool}.lean`, `Lanes/Lib/Crypto/Certificate.lean`, `Lanes/Outside/Store/{Basic,Sound}.lean` | `Backend.read_encode`, `Frontend.decode_encode`, `Conn.run_fifo`, `Conn.step_committed`, `Conn.step_query`, `Conn.tls_first`, `Conn.run_bound`, `Conn.onMessage_binds`, `Pool.run_size`, `Pool.never_again`, `SslMode.defaultFor_disable`, `Store.write_skew`, `Store.lost_commit_either`; the IO is trusted, and that the server behaves like the model is a premise |
+| The typed store | `Lanes/Db/{Basic,Columns,Query,Txn,Retry,Model,Sound}.lean`, `Lanes/Services/Postgres/Sql.lean`, `Lanes/Services/Postgres/IO/Db.lean` | `Db.invariant`, `Retry.loop_committed`, `Txn.interp_apply`, `Postgres.Sql.decode_param`; the driver is trusted, and that PostgreSQL at `SERIALIZABLE` behaves like the model is a premise |
 | Jobs: work outside a step | `Lanes/Behaviours/Jobs/{Basic,Sound}.lean`, `Lanes/Semantics/Jobs.lean`, `Lanes/Behaviours/Jobs/IO/Pool.lean` | `Jobs.answered_le_handled`, `Jobs.retry_same`, `Jobs.submitted_answered`; the pool is trusted |
 | Schedule: work that is due later | `Lanes/Behaviours/Schedule/{Basic,Sound}.lean`, `Lanes/Semantics/Schedule.lean` | `Schedule.dispatch_due`, `Schedule.calls_le_scheduled`, `Schedule.attempt_ends`, `Schedule.held_ends`; that the time it knows is not ahead of the clock is a premise |
 | Web | `Lanes/Web/Http/{Basic,Route,RouteSound,Cookie,CookieSound}.lean`, `Lanes/Web/Html/`, `Lanes/Web/Auth/` | `Html.lex_render`, `Html.safeUrl_scheme`, `Http.dispatch_link`, `Http.parseForm_encodeForm`, `Http.readSetCookie_header`, `Auth.verify_eq_some`, `Auth.checkForm_other` |
 | The checker | `Lanes/Check/`, `Lanes/Semantics/{Monitor,MonitorSound}.lean` | `Check.search_sound`, `Check.system_sound_of_respects`, `Check.refines_traces` |
 | The proof layer | `Lanes/Semantics/` | refinement, specs, fairness, leads-to |
 | Data and the standard library | `Lanes/Data/`, `Lanes/Lib/` | `Json.Fields.readObject_object`, `Json.Codec.ofAlts`, `Bytes.same_iff`, `Json.parse_iff`, `Url.parse_print` |
-| Sign-in with OAuth 2.0 and OpenID Connect | `Lanes/Web/Auth/{Jose,IdToken,OAuth}.lean`, `Lanes/Web/IO/SignIn.lean` | `OAuth.check_ok`, `OAuth.Used.accepted_once`, `OAuth.Used.length_claim`, `OAuth.IdToken.verify_accepted`, `Jose.verify_ok`, `OAuth.Keys.no_fetch_within`; the edge is trusted, tested end to end against a provider run in the test |
+| Sign-in with OAuth 2.0 and OpenID Connect | `Lanes/Web/Auth/{Jose,IdToken,OAuth}.lean`, `Lanes/Web/IO/SignIn.lean`, the presets `Lanes/Services/Oidc/` | `OAuth.check_ok`, `OAuth.Used.accepted_once`, `OAuth.Used.length_claim`, `OAuth.IdToken.verify_accepted`, `Jose.verify_ok`, `OAuth.Keys.no_fetch_within`; the edge is trusted, tested end to end against a provider run in the test |
 | Bound C | `native/lanes.c`, `Lanes/Lib/Crypto/Native.lean`, `Lanes/Outside/IO/FileSystem.lean`; `native/verify.c`, `Lanes/Lib/Crypto/Verify.lean`; `native/sign.c`, `Lanes/Lib/Crypto/Sign.lean` | trusted; tested against the Lean references and published vectors |
 | TLS client | `native/tls.c`, `Lanes/Web/IO/Tls.lean` | trusted; tested against `openssl s_server` |
 
@@ -118,69 +120,59 @@ Also:
   outside world; `FairScheduler` takes the event the system has owed longest, counting a timer
   that is armed again as owed from then, and its run is a fair run of the proof layer.
 
-## The kernel and the shell
+## The kernel and the runtime
 
-The runtime of one shard is a pure kernel inside a thin shell (D18, D23, D40). Its state lives as
-long as the process: every start is a boot, with every actor in its initial state, as in Go,
-Tokio or Erlang. State that must outlive the process lives in a service outside, reached through
-a modelled adapter (`Lanes/Outside/`, PostgreSQL's store model).
+A system runs in one process, its actors free on worker threads as in Go, Tokio or Erlang
+(`docs/decisions/D116-free-running.md`). Its state lives as long as the process: every start is a
+boot, with every actor in its initial state. State that must outlive the process lives in a
+service outside, reached through a modelled adapter (`Lanes/Outside/`, `Lanes/Db/`).
 
-The kernel (`Lanes/Runtime/Kernel.lean`) is every runtime decision as pure functions over a hash
-map of actors, a queue of messages and an agenda of timers: accept an input, deliver the oldest
-message (starting its receiver if it is down), fire a due timer, say how long nothing will
-happen. Time is data: the shell says what the clock reads. Whatever sequence of operations the
-shell asks for, in any order and with any clock readings, the kernel stays in a state the
-semantics reaches and the events it reports are a run reaching it (`Kernel.exec_reachable`),
-and its outputs are exactly that run's (`Kernel.exec_outputs`). Its agenda holds exactly the
-pending timers (`Kernel.exec_wellFormed`), it never sleeps past one, and neither due timers nor
-queued messages starve the other (`Kernel.WellFormed.step_of_queued`, `step_of_due`).
-Before a step the kernel takes the actor's state out of its cell (`Kernel.takeState`), so the step
-holds the only reference and updates the state in place; that changes no value
-(`Kernel.handle_eq`), and `Tests/Scale.lean` measures that a step costs the same whatever the
-state's size (`docs/decisions/D84-the-kernel-takes-the-state-out-before-the-step.md`).
+The runtime (`Lanes/Runtime/IO/Shell.lean`) keeps each actor in a slot of its own
+(`Lanes/Runtime/Sched.lean`): its state, its mailbox, and whether it is idle, on a run queue or
+running. Each worker has a run queue of actors with mail. It takes the first, or steals one from
+another worker's queue when its own is empty, steps it on up to `Runtime.Config.budget` items of
+its mailbox, and lets it go, back on its queue if mail is waiting. An actor runs on one worker at
+a time, and handles its messages in the order they reached it. A step takes the next item and
+the state out of the slot (`Slot.take`), runs the step function outside any lock, and writes the
+result back (`Slot.put`); the messages it sent are pushed to their receivers' mailboxes
+(`Slot.push`) before the actor is let go of (`Slot.release`), so a link's messages arrive in
+order. Timers are on an agenda kept by a thread of its own, which pushes each to its actor when
+it is due; one cancelled or armed again is dropped when its actor takes it. Inputs go straight
+to their actor's mailbox; at most `inboxCapacity` wait for their actor (`Sched.Ledger`), and
+`tryInput` refuses beyond (rule 3.8).
 
-The shell (`Lanes/Runtime/IO/Shell.lean`) is one thread per shard. Senders put commands in a
-bounded inbox (`Lanes/Runtime/Mailbox.lean`, pure: who is refused, who waits, who is woken). The
-shell takes everything that has arrived at once and calls `Batch.run` (`Lanes/Runtime/Batch.lean`),
-a pure function that returns the kernel after the batch and a list of acts: record these events,
-hand over these outputs, answer this peek, and the requests the kernel was asked (`work`), for
-which the shell does nothing. The shell performs the acts in order and decides nothing. Proved:
-the kernel after a batch is the one its requests lead to (`Batch.run_kernel`), so by
-`Kernel.exec_reachable` a run of the semantics; every output they produced is handed over, in
-order (`Batch.run_handed`, `Batch.run_sound`); a peek, which reads the states of a
-list of actors and of every actor started that a predicate holds of (an actor not started has
-its initial state: `Batch.Peek.init_of_not_others`), is answered at the end of its batch after
-every other act, with the states of the kernel the batch's requests lead to
-(`Batch.run_peeks`), and a batch with its peeks taken
-out is the same batch (`Batch.run_erase_peeks`), so reads change nothing else; over
-the whole history, a peek asked after an output was handed over sees a world the semantics
-reaches by a run that put that output out first (`Batch.chain_peek_after`,
-`Lanes/Runtime/PeekSound.lean`); a take returns exactly what went in
-since the last, in order, and the inbox never holds more than its capacity
-(`Mailbox.batch_since_take`, `Mailbox.Reachable.bounded`). Trusted: that the shell performs the
-acts as given (`TRUSTED.md`, the first row).
+What the runtime decides is those pure functions; the threads only move data. The scheduler's
+model (`Lanes/Runtime/SchedSound.lean`) is its whole state as one value: every slot, each
+worker's run queue and the actor it holds, the messages a step sent and has not pushed yet, and
+two ghosts, the messages in flight in the order the semantics sent them and the outputs not yet
+handed over. Each of its transitions, the threads' operations, is zero or one event of
+`SysState.step` (`Sched.Step.sound`), under any environment whose links are reliable, so every
+run of the model from its start is a run of the semantics, with its outputs
+(`Sched.Run.reachable`). It keeps an invariant (`Sched.Step.inv`): the mailboxes and the
+messages not yet pushed hold the messages in flight link by link in order, so a message at the
+head of a mailbox is the oldest on its link and may be delivered; an actor runs on at most one
+worker, and is running exactly when one holds it; an idle actor has no mail and a queued one is
+on a run queue, so no mail waits for a worker that will never come (`Sched.Model.Placed`). Pushes
+by other threads to a slot a worker holds commute with its `take` and `put`
+(`Sched.Slot.take_push`, `Sched.Slot.put_push`), which is why the step function can run outside
+the lock. Trusted: that the threads perform the model's transitions (`TRUSTED.md`, the first
+row, says how each is atomic).
 
-Unless `Runtime.Config.parallel` is `off` or there is one worker, the inputs that arrive together
-are one turn (`Batch.turnAll`), a group of at most `batch`, and its work is
-done a wave at a time (`Lanes/Runtime/Wave.lean`): the steps of the actors with mail in the wave
-are worked out on Lean's task pool, each actor's in the order of its messages, and the kernel then
-does the wave as `runBatch` does, taking each step from that plan. A plan keeps each actor's last
-state only, so its steps update the state in place; the kernel writes it at the actor's last
-step, or works out the state the steps taken leave where they stop early (`Kernel.Plan.real`).
-Handling one actor's message neither reads nor writes another actor's cell
-(`Kernel.handle_setState`), and writes to cells already in the table commute
-(`DHashMap.insert_comm_of_contains`), so the result is `runBatch`'s, value for value, however the
-wave is spread over threads (`Kernel.runWaves_eq`), and everything proved of the
-kernel is unchanged (`docs/decisions/D64-actors-run-in-parallel.md`,
-`docs/decisions/D88-waves-in-place.md`).
+A peek (`Runtime.tryPeek`, D108) reads each actor it names between two of its steps: an actor no
+worker holds at once, a held one when its worker lets go of it. It sees every message that actor
+took before and none after. The states of different actors are not read at one moment: a read of
+several actors beside work in flight is not a consistent cut, and one read after a response sees
+the actor that gave it as it was then, not the actors it has sent messages to since.
 
-Steps cheaper than a few microseconds cost more to hand to another thread than they save, and
-whether costlier ones gain depends on the cores free. With `parallel` `auto`, the default, the
-shell times each batch and `Pace` (`Lanes/Runtime/Pace.lean`, pure) chooses from those times
-whether the next runs on the shard's thread or on the pool: cheap work never goes to the pool,
-costlier work goes the way that has been faster, and the other is measured again now and then.
-A batch is the same whatever the choice (`Batch.run_spread`), so the timing and the choice are
-trusted only for speed (`docs/decisions/D73-adaptive-waves.md`).
+The kernel (`Lanes/Runtime/Kernel.lean`) is the runtime's decisions on one thread, as pure
+functions over a hash map of actors, a queue of messages and an agenda of timers. `Http.Loopback`
+and the tests run it. Whatever sequence of operations is asked of it, the kernel stays in a
+state the semantics reaches and the events it reports are a run reaching it
+(`Kernel.exec_reachable`), and its outputs are exactly that run's (`Kernel.exec_outputs`). Its
+agenda holds exactly the pending timers (`Kernel.exec_wellFormed`), and neither due timers nor
+queued messages starve the other (`Kernel.WellFormed.step_of_queued`, `step_of_due`). Before a
+step it takes the actor's state out of its cell (`Kernel.takeState`), so the step updates the
+state in place (`docs/decisions/D84-the-kernel-takes-the-state-out-before-the-step.md`).
 
 Where: `Lanes/Runtime/`, `Lanes/Proof/Lossy.lean`.
 
@@ -188,31 +180,32 @@ Where: `Lanes/Runtime/`, `Lanes/Proof/Lossy.lean`.
 
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
-| The kernel stays in a state the semantics reaches, and its events are a run reaching it, for any sequence of operations, inputs and clock readings | `Kernel.exec_reachable`, `Kernel.exec_outputs`, `Lanes/Runtime/KernelSound.lean`; gate `Tests/Axioms/Runtime.lean` | The shell hands inputs and outputs on unchanged (TRUSTED, "Assumptions the runtime makes") | proved |
-| A batch is a run of the kernel: the kernel after it is the one its requests lead to, and every output they produced is handed over, in order | `Batch.run_kernel`, `Batch.run_handed`, `Batch.run_sound`, `Lanes/Runtime/Batch.lean`; gate `Tests/Axioms/Runtime.lean` | The shell performs the acts in order (`Lanes/Runtime/IO/Shell.lean`) | proved; the shell trusted |
-| One shard takes about 1.8 million inputs a second from one sender; a message costs the same at 1,000 and 100,000 actors | The scale benchmark in `lake exe lanesCheck` (`Tests/Scale.lean`) | A four-core machine | tested |
+| Every run of the free-running scheduler is a run of the semantics, interleaving per-actor steps, and its outputs are that run's | `Sched.Run.reachable`, `Sched.Step.sound`, `Sched.Step.inv`, `Lanes/Runtime/SchedSound.lean`; gate `Tests/Axioms/Runtime.lean` | The runtime's threads perform the model's transitions (TRUSTED, the first row); links reliable | proved; the threads trusted |
+| An actor runs on at most one worker; no mail waits for a worker that will never come | `Sched.Model.Placed`, kept by `Sched.Step.inv` | as above | proved of the model |
+| Recorded runs replay through the semantics, on one worker and on several, with actors that stop and timers | `Tests/Runtime.lean` | | tested |
+| The kernel stays in a state the semantics reaches, and its events are a run reaching it, for any sequence of operations, inputs and clock readings | `Kernel.exec_reachable`, `Kernel.exec_outputs`, `Lanes/Runtime/KernelSound.lean`; gate `Tests/Axioms/Runtime.lean` | | proved |
+| A message costs the same at 1,000 and 100,000 actors | The scale benchmark in `lake exe lanesCheck` (`Tests/Scale.lean`) | A four-core machine | tested |
 
 Also:
 
-- The kernel releases an actor that is back where a start puts it with no timers, proved to
-  change nothing anyone can see by it (`Kernel.exec_visible`; a hundred thousand identities
-  touched leave none in the kernel).
-- The shard chooses from its own timing whether the actors of a wave step in parallel on Lean's
-  task pool (`Runtime.Config.parallel := .auto`), proved to change nothing the kernel does
-  whatever is chosen (`Kernel.runWaves_eq`, `Batch.run_spread`).
-- No sleeper or waiting sender of the inbox is forgotten (`Mailbox.woken_after_rest`,
-  `Mailbox.wake_since_take`): proved for every capacity and every sequence of operations.
-- Waves are as wide as an application spreads its work over actors
-  (`docs/decisions/D107-waves-premise.md`).
+- An actor let go of at rest (up, no timers, no mail, in a state a start gives it) leaves the
+  table, as the kernel releases it (`Kernel.exec_visible`); a hundred thousand identities touched
+  leave none behind (`Tests/Release.lean`).
+- On mixed step costs, free-running gave several times lower p50 and more answers a second than
+  one worker (`bench/Mixed.lean`, `docs/decisions/D116-free-running.md`, which has the numbers).
 
 ### Limits
 
-- Actor state, timers included, is lost with the process: a restart is a boot. The semantics has no restart event yet, so no theorem relates a run before a restart to one after it.
-- Actors step in parallel only with `Runtime.Config.workers` above one, and then only within a wave, their steps committed in queue order by one thread; the gate of an HTTP server is one actor. A step handed to another thread costs a microsecond or two more, in Lean's reference counts of objects threads share, so cheap steps run slower that way (`docs/decisions/D64-actors-run-in-parallel.md`).
-- Lean never updates in place an object another thread has seen, so each actor the pool steps has its state copied once a wave, in its task, and once more by its next step on the shard's thread. With `parallel := .on`, a write to one of two busy actors whose states hold a million numbers costs about a tenth of a millisecond, where it costs a microsecond on the shard's thread. `.auto` keeps such steps on the shard's thread (`docs/decisions/D88-waves-in-place.md`).
-- One shard takes about 1.8 million inputs a second from one sender and about a million from four that contend for its inbox, on a four-core machine; its kernel alone does between two and three million turns a second. A shard with nothing to do sleeps, and waking it costs tens of microseconds.
-- That a pending timer fires in time is proved as far as the kernel goes: its agenda holds exactly the pending timers, it never tells the shell to sleep past one, and it fires one that is due on its next step or, when a message is waiting too, the step after (`Kernel.exec_wellFormed`, `Kernel.WellFormed.wait_of_due`, `step_of_due`, `wait_for_ms`). That the clock advances and the shell's sleep ends is assumed (see `TRUSTED.md`).
-- The events a releasing kernel reports are a run of the semantics but for the starts that bring released actors back, so a replay through `SysState.run` must skip a start of an actor that is up.
+- Actor state, timers included, is lost with the process: a restart is a boot.
+- A state crosses threads between two turns of its actor, and Lean never updates in place an
+  object another thread may see: the first step of a turn copies the state it updates, and the
+  write-back walks it. The steps of one turn update it in place. A write to a state of a million
+  numbers costs about two copies when each message is a turn of its own (`Tests/Scale.lean`).
+- A peek of several actors is not a consistent cut (above).
+- Every turn updates one shared ledger (inputs waiting, items in mailboxes) and every push may
+  look up a shared table of slots; on many cores these are points of contention.
+- That a queued actor is eventually stepped and a due timer pushed rests on the workers and the
+  agenda's thread running (`TRUSTED.md`, "Progress"). No bound is proved.
 
 ## Composition: joins
 
@@ -242,7 +235,7 @@ Where: `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`,
 ### Limits
 
 - `System.join` leaves the inputs it wires open to the outside until `mapIO` or `filterMapIO` hides them, and keeps the outputs it wires in its signature though none is put out; `Http.fronted` hides both. A fair run of a join is a fair run of each side (`System.Run.Fair.left`, `System.Run.Fair.right`).
-- A system runs on one shard, in one process. Clustering across processes is not on main (it is kept on the branch `claude/archive-journal-runtime`).
+- A system runs in one process. Clustering across processes is not on main (it is kept on the branch `claude/archive-journal-runtime`).
 
 ## The gate and the HTTP server
 
@@ -273,11 +266,11 @@ request it names, the actors it reads, a predicate for the actors of which it re
 started (`View.every`), and its response from their
 states. Such a read never
 enters the system. It waits behind a gate of its own, `Gate.step` over `readSig`
-(`ServerConfig.reads`: its own deadline and bound), for a peek of those actors at the end of the
-shard's next batch (`Runtime.tryPeek`), and is answered from their states off the shard's thread,
-or `504` at its deadline. So it reads every actor it names at one boundary between batches, sees
-every request asked of the kernel before it and none after (`Batch.run_peeks`), and leaves the
-work and the outputs as they would be without it (`Batch.run_erase_peeks`). That a view answers
+(`ServerConfig.reads`: its own deadline and bound), for a peek of those actors
+(`Runtime.tryPeek`), and is answered from their states off the workers' threads, or `504` at its
+deadline. It reads each actor it names between two of that actor's steps, and changes nothing
+the actors do; the states of several actors are not read at one moment (the runtime, above).
+That a view answers
 what the request would if it entered is the application's claim. `Http.Front.World` does not model reads: that
 the server does what the gate of reads decides is trusted, as for the gate.
 
@@ -407,7 +400,7 @@ algorithm and `kid` checks it, and every claim passes (`OAuth.IdToken.verify_acc
 (`OAuth.identity?_strip`), read back as written (`OAuth.identity?_withIdentity`). Its name, the
 provider's `name` or GitHub's `login`, is a `DisplayName`: at most 64 characters, none of them a
 control or reordering mark, by its type (`OAuth.DisplayName.length_le`), and text a page shows
-escaped. Vendors' presets are packages under `integrations/` (D61).
+escaped. Vendors' presets are services, in `Lanes/Services/Oidc/`: Google's and GitHub's.
 
 The sign-in's IO (`Lanes/Web/IO/SignIn.lean`) holds the random values of a beginning and the key of the
 tickets, the states used and each provider's keys held in references, and the calls to the token endpoint,
@@ -485,7 +478,7 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   order, each sent as that part with the tag listed (`Multipart.read_listed`,
   `Multipart.completed_sent`). `Effects` is the class of services that hold things with a lifecycle,
   made under a key and reported by webhooks, with two instances: payments, with the statuses
-  Stripe documents for a PaymentIntent (`Lanes/Outside/Effects/Payments.lean`), and email
+  Stripe documents for a PaymentIntent (`Lanes/Services/Stripe/Payments.lean`), and email
   (`Lanes/Outside/Effects/Email.lean`). A system's part of a proof is a fact about what its steps
   emit, lifted to every run by `System.Emits.outputs`; `examples/payments` proves a shop charges
   each order at most once that way (`Shop.charged_at_most_once`). That a real service does only
@@ -495,7 +488,7 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   in `Tests/` whose seeded bug the checker finds: a queue as SQS gives one, received at least once,
   again at any moment until deleted with its latest receipt, in any order or by FIFO group, at most
   `maxReceives` times a copy (`Lanes/Outside/Queue.lean`, `Queue.received_le`), and a run of
-  moto's SQS through `integrations/aws`'s calls (`Aws.Sqs`) that the model allows; a cache in front
+  moto's SQS through the AWS service's calls (`Aws.Sqs`) that the model allows; a cache in front
   of a store, evicting at any moment, with leases and, optionally, stale reads
   (`Lanes/Outside/Cache.lean`, `Cache.read_sent`, `Cache.fill_unleased`); a service that throttles
   with `429` and `Retry-After`, a combinator over `Rpc.Server` (`Lanes/Outside/Throttle.lean`,
@@ -542,6 +535,38 @@ Also:
   are trusted and tested against `openssl s_server`, not proved.
 - The cache, the queue, the throttling service, the shared cache (`SharedCache.leaks`) and the
   wall clock are each model-checked with a seeded bug and its fix.
+
+### Limits
+
+- The shapes are kept whole in the core, as library pieces, whether or not a service of
+  `Lanes/Services/` uses them. Those with no run recorded from a real system are not yet checked
+  against a real service: the cache (`Lanes/Outside/Cache.lean`), the throttling service
+  (`Lanes/Outside/Throttle.lean`), webhooks (`Lanes/Outside/Events.lean`), idempotency keys
+  (`Lanes/Outside/Idempotent.lean`), the shared cache (`Lanes/Web/Http/SharedCache.lean`) and the
+  wall clock (`Lanes/Outside/Clock.lean`, a platform model). Each says so in its header, and
+  `oracles/README.md` says why.
+
+## The core and the services
+
+The core is everything `import Lanes` gives: the semantics, the runtime, HTTP, the standard
+library, the platform models and the shapes of outside services (`Lanes/Outside/`). A service is
+a vendor's: its client, and, when it is checked, its model, built from a shape, and its oracle,
+each in `Lanes/Services/<Name>/` with a README that says which and whether it is checked (model
+plus oracle) or a client only (`Lanes/Services/README.md`, D110). A service imports the core and the core never
+imports a service: lint `layering` fails otherwise (`LanesCli/Layers.lean`). An application
+imports the services it calls (`import Lanes.Services.Postgres`), and Lake builds only those.
+HTTP, Signature Version 4, OAuth and OpenID Connect are protocols, not services, and stay in the
+core. A service gets a model and an oracle of its own only when an application's proof depends
+on how it behaves (`docs/decisions/D113-service-models.md`): Postgres, S3, SES and payments are
+checked, a model plus an oracle; the sign-in presets, AWS's role credentials, CloudFront and SQS
+are clients only, with tests, and SQS's calls are paired with the queue shape when an
+application needs it.
+
+The platform models in the core are the clock, monotonic (`Clock.outside`) and the wall clock
+(`Clock.wall`) in `Lanes/Outside/Clock.lean`, and the file system with crash semantics
+(`Lanes/Outside/FileSystem/`, below). Randomness, environment variables and configuration, the
+network and DNS, signals and shutdown, and standard input and output have no model yet, only
+bindings (`Lanes/Lib/Crypto/Native.lean`) or none: each is a checklist line of issue #245.
 
 ## The platform: the file system
 
@@ -593,27 +618,27 @@ Where: `Lanes/Outside/FileSystem/`, `Lanes/Outside/FileSystem.lean`,
 
 ## S3 and Signature Version 4
 
-S3 (`Lanes/Web/IO/S3.lean`, `docs/decisions/D71-s3-and-signature-version-4.md`): put,
+S3 (`Lanes/Services/S3/IO/Client.lean`, `docs/decisions/D71-s3-and-signature-version-4.md`): put,
 get with a range, head, delete and ListObjectsV2 on a bucket, named virtual-hosted or by path
 at any endpoint (AWS, MinIO, LocalStack), and links a browser follows to get or put an object.
 Pure: each operation as a call signed with Signature Version 4 (`Lanes/Web/Http/SigV4.lean`),
 whose target is the canonical path and query that were signed (`SigV4.target_sign`), with the
 query and the signed headers in order (`SigV4.sortQuery_sorted`, `canonicalHeaders_sorted`);
 what an answer means (`S3.interpret`), and a reader of the XML S3 writes, which refuses a
-document type and every entity it does not know (`Lanes/Web/S3/Xml.lean`), tested against Go's
+document type and every entity it does not know (`Lanes/Services/S3/Xml.lean`), tested against Go's
 `encoding/xml`. The signatures are tested against AWS's test suite, S3's documented examples and
 botocore on generated requests, the client against a fake S3 that checks every signature from
 the bytes it receives, and against moto's S3, whose run the object store's model allows
 (`oracles/README.md`). Bodies are whole, in memory. The
 credentials are read at each call from a `SigV4.Source`: fixed, or kept fresh by something
-else. A browser uploads with a form under a policy (`Lanes/Web/S3/Post.lean`), which bounds
+else. A browser uploads with a form under a policy (`Lanes/Services/S3/Post.lean`), which bounds
 the size a presigned put cannot: the policy a form carries reads back, as S3 reads it, as
 exactly the conditions and the expiry given (`S3.Post.form_policy`, `S3.Post.expiration_parse`),
 and a file S3 admits under it is within its size range and before its expiry
 (`S3.Post.admitted_bounded`); tested against AWS's documented example and botocore, and its
 forms posted to moto, which reads them but checks no policy. A form may also name where S3
 sends the browser after the upload, or the status it answers, both signed in its policy. Large
-objects go in parts (`Lanes/Web/S3/Multipart.lean`): a plan proved to cut a body into at most
+objects go in parts (`Lanes/Services/S3/Multipart.lean`): a plan proved to cut a body into at most
 10,000 parts, each but the last of at least 5 MiB, together the body in order
 (`Plan.count_le`, `Plan.range_full`, `Plan.range_next`, `Plan.range_last`); links for a
 browser's parts with their length signed (`S3.presignPart`); and a server's upload as a pure
@@ -622,8 +647,8 @@ whose answer was lost, which `S3.upload` performs, model-checked against the mul
 below (`docs/decisions/D78-bounded-and-large-uploads.md`), and run against moto's S3, with
 calls by hand, in a run the model allows.
 
-Where: `Lanes/Web/Http/{SigV4,SigV4Sound}.lean`, `Lanes/Web/S3/`, `Lanes/Web/IO/S3.lean`,
-`Lanes/Outside/{ObjectStore,Multipart}.lean`.
+Where: `Lanes/Web/Http/{SigV4,SigV4Sound}.lean`, `Lanes/Services/S3/`, `Lanes/Services/S3/IO/Client.lean`,
+`Lanes/Outside/ObjectStore.lean`, `Lanes/Services/S3/MultipartModel.lean`.
 
 ### Claims
 
@@ -632,12 +657,12 @@ Where: `Lanes/Web/Http/{SigV4,SigV4Sound}.lean`, `Lanes/Web/S3/`, `Lanes/Web/IO/
 | A real object store does only what its model allows: a read sees the last write answered, unless a write that timed out, was refused or overlapped it came after | S3's documented read-after-write consistency; the S3 client against a fake S3, `Tests/S3.lean`; a run through `S3.handler` against moto's S3, with puts in flight together and one timed out, checked with `Outside.allows`, `oracles/moto/s3.jsonl` | A store that is only eventually consistent breaks it; that moto answers as S3 does | trusted; tested against moto's S3, nightly, not against AWS |
 | A request signed by `SigV4.sign` sends the target that was signed: the canonical path and query, the query sorted by escaped name and value, the signed headers in lowercase, strictly in order | `SigV4.target_sign`, `SigV4.sortQuery_sorted`, `SigV4.sortQuery_perm`, `SigV4.canonicalHeaders_sorted`, `SigV4.canonicalHeaders_lower`, `SigV4.mem_canonicalHeaders`, `SigV4.encode_chunks`, `SigV4.decodePath_canonicalPath`, `Lanes/Web/Http/SigV4Sound.lean`; gate `Tests/Axioms/Web.lean` | None | proved |
 | The signature is the one AWS computes | AWS's Signature Version 4 test suite and S3's documented examples, `Tests/SigV4.lean`; botocore 1.44.12 on generated requests, every difference decided (`oracles/botocore`, `Tests/Oracle/SigV4.lean`) | That the vectors written from memory are AWS's (`docs/decisions/D71-s3-and-signature-version-4.md`); botocore signs as AWS checks | tested against botocore |
-| The S3 client's calls are accepted by a store that checks signatures as S3 does, and its answers read | The test kit's fake S3, which checks each signature from the bytes it received (`Lanes/Testing/S3.lean`), `Tests/S3.lean`; moto's S3 answers each call and the client reads each answer (`oracles/moto`) | That the fake checks as S3 does; moto does not check signatures; not run against AWS | tested |
-| The policy of an upload form reads back, as S3 reads it, as exactly the conditions and the expiry given, in well-formed base64 of JSON within the reader's limits | `S3.Post.form_policy`, `S3.Post.decode?_encode`, `S3.Post.expiration_parse`, `Lanes/Web/S3/PostSound.lean`; gate `Tests/Axioms/Web.lean` | That S3 reads the policy as `Post.decode?` does: tested on AWS's documented example and botocore's | proved |
+| The S3 client's calls are accepted by a store that checks signatures as S3 does, and its answers read | The test kit's fake S3, which checks each signature from the bytes it received (`Lanes/Services/S3/Testing.lean`), `Tests/S3.lean`; moto's S3 answers each call and the client reads each answer (`oracles/moto`) | That the fake checks as S3 does; moto does not check signatures; not run against AWS | tested |
+| The policy of an upload form reads back, as S3 reads it, as exactly the conditions and the expiry given, in well-formed base64 of JSON within the reader's limits | `S3.Post.form_policy`, `S3.Post.decode?_encode`, `S3.Post.expiration_parse`, `Lanes/Services/S3/PostSound.lean`; gate `Tests/Axioms/Web.lean` | That S3 reads the policy as `Post.decode?` does: tested on AWS's documented example and botocore's | proved |
 | A file S3 admits under a form's policy is within the policy's size range and posted before its expiry, at most seven days after signing | `S3.Post.admitted_bounded`, `S3.Post.check_holds`; gate `Tests/Axioms/Web.lean` | That S3 checks a form as `Post.check` does (conditions met, every field named, unexpired): tested against AWS's example and a fake S3, not against S3; moto, which reads the forms (`oracles/moto/s3-post.jsonl`), checks no policy | proved |
 | A policy is signed as AWS signs it | AWS's documented example (`8afdbf40…`) and botocore 1.44's `generate_presigned_post`, `Tests/S3Upload.lean` | That the example remembered is AWS's: its signature, computed, matches | tested |
-| A multipart plan has at most 10,000 parts, each but the last of the part size and at least 5 MiB, together the body in order | `S3.Multipart.Plan.count_le`, `Plan.range_full`, `Plan.range_next`, `Plan.range_last`, `Lanes/Web/S3/Multipart.lean`; gate `Tests/Axioms/Web.lean` | None | proved |
-| In the multipart model an object a read sees consists exactly of the parts a Complete of its key listed, in order, each sent as that part with the tag listed, whatever was lost, retried, out of order or completed twice | `Multipart.read_listed`, `Multipart.completed_sent`, `Lanes/Outside/Multipart.lean`; gate `Tests/Axioms/Outside.lean` | None | proved |
+| A multipart plan has at most 10,000 parts, each but the last of the part size and at least 5 MiB, together the body in order | `S3.Multipart.Plan.count_le`, `Plan.range_full`, `Plan.range_next`, `Plan.range_last`, `Lanes/Services/S3/Multipart.lean`; gate `Tests/Axioms/Web.lean` | None | proved |
+| In the multipart model an object a read sees consists exactly of the parts a Complete of its key listed, in order, each sent as that part with the tag listed, whatever was lost, retried, out of order or completed twice | `Multipart.read_listed`, `Multipart.completed_sent`, `Lanes/Services/S3/MultipartModel.lean`; gate `Tests/Axioms/Outside.lean` | None | proved |
 | A real store's multipart uploads do only what the model allows | S3's documentation; the client's run against a fake S3 checked with the model, `Tests/S3Upload.lean`; and against moto's S3, `oracles/moto/s3-multipart.jsonl`, replayed by `lake test` | ETags name a part's content; a Complete sent again with its listing is answered as the first | trusted; tested against moto, not S3 |
 | The server's multipart flow lists exactly the plan's parts in order, is done only when the store may hold that object and failed only when no Complete was answered | `Tests/Multipart.lean`: the flow against the model, 20,610 states, and a browser's parts at once, 4,434 states | The small instance: three parts, two attempts | checked |
 
@@ -648,7 +673,7 @@ Also:
 
 ## AWS
 
-AWS (`integrations/aws`, `docs/decisions/D74-aws-integration.md`): a role's credentials
+AWS (`Lanes/Services/Aws/`, `docs/decisions/D74-aws-integration.md`): a role's credentials
 from an instance's metadata service (IMDSv2) or a container's endpoint, and email through SES.
 When to fetch and what may be handed out is a pure machine, `Aws.Refresh.step`: nothing is
 handed out within `skew_ms` of its expiry, and only what an answer gave (`Refresh.current_fresh`,
@@ -656,7 +681,7 @@ handed out within `skew_ms` of its expiry, and only what an answer gave (`Refres
 expire, and an answer within the deadline replaces them while they are still handed out
 (`Refresh.refresh_in_time`); the wait after failures is bounded (`Refresh.backoff_le`,
 `Refresh.retry_within`); model-checked first against a model of the metadata service with
-timeouts. A task in `Aws/IO/Credentials.lean` only performs. SES's `SendEmail` is a JSON document
+timeouts. A task in `Lanes/Services/Aws/IO/Credentials.lean` only performs. SES's `SendEmail` is a JSON document
 proved to read back with exactly its recipients (`Ses.toAddresses_json`), its answers read as
 the email model's (`Ses.Answer.modelled`), and runs against a fake SES and against moto's SES
 are ones the model allows; SES takes no key, so each send is a request without one. SQS's
@@ -668,20 +693,20 @@ that need no escaping (`CloudFront.cookies_valid`); a domain lets a distribution
 host of the site's get them. The policy and the link, signature included, are botocore's on
 generated links.
 
-Where: `integrations/aws/`.
+Where: `Lanes/Services/Aws/`, its tests in `Tests/Aws/`.
 
 ### Claims
 
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
-| The AWS integration never hands out credentials within `skew_ms` of their expiry, nor any that no answer gave | `Aws.Refresh.current_fresh`, `Aws.Refresh.current_answered`, `integrations/aws/Aws/Refresh.lean`; gate `integrations/aws/Aws/Axioms.lean`; model-checked, `integrations/aws/Checks/Refresh.lean` | The wall clock is right to within `skew_ms`; the edge reads the state it keeps (TRUSTED, "The AWS credentials' IO") | proved |
-| Credentials held are fetched again at the margin before they expire, and an answer within the deadline replaces them while they are still handed out | `Aws.Refresh.refresh_in_time`, `Aws.Refresh.accept_due`; gate `integrations/aws/Aws/Axioms.lean`; model-checked against a service that answers in time | `Config.Valid`; the edge ticks when the machine asks; the service answers within the deadline with credentials of more than the margin | proved; the edge trusted, tested against a fake metadata service |
-| The wait between failed fetches of credentials stays within `maxBackoff_ms`, and a failed fetch is tried again within it | `Aws.Refresh.backoff_le`, `Aws.Refresh.retry_within`; gate `integrations/aws/Aws/Axioms.lean` | `Config.Valid` for the retry | proved |
-| A message sent through SES carries exactly the recipients given | `Aws.Ses.toAddresses_json`, `Aws.Ses.json_parse`, `integrations/aws/Aws/SesSound.lean`; a fake SES that reads them from the JSON | That SES reads the document as `Json.parse` does | proved; tested against a fake |
-| SES does only what the email model allows | A run through `Ses.handler` against a fake SES checked with `Outside.allows`, `integrations/aws/Checks/Ses.lean`; and against moto's SES, a sender refused then verified, a send timed out, `oracles/moto/ses.jsonl` | That moto answers as SES does; not run against SES | trusted; tested against moto's SES, nightly |
-| A CloudFront canned policy is byte for byte the document AWS gives for the URL and the time | `Aws.CloudFront.cannedPolicy_eq`, `integrations/aws/Aws/CloudFrontSound.lean`; gate `integrations/aws/Aws/Axioms.lean` | That AWS's document is botocore 1.44.12's and AWS's SDKs' (`docs/decisions/D82-cloudfront-signed-urls.md`); not run against CloudFront | proved |
-| CloudFront's base64 reads back, and every parameter and cookie of a signed link needs no escaping, so every cookie is set, for a path and a domain that need no escaping | `Aws.CloudFront.decode_encode`, `Aws.CloudFront.fields_safe`, `Aws.CloudFront.cookies_valid`; gate `integrations/aws/Aws/Axioms.lean` | None | proved |
-| A CloudFront signed URL is the one botocore writes, signature included | `integrations/aws/Checks/CloudFront.lean` against botocore 1.44.12's `CloudFrontSigner` with `cryptography`'s signatures on generated links, canned and custom, RSA and P-256, SHA-1 and SHA-256; every difference a resource ours refuses | That botocore and AWS's SDKs write what CloudFront takes; not run against CloudFront | tested |
+| The AWS integration never hands out credentials within `skew_ms` of their expiry, nor any that no answer gave | `Aws.Refresh.current_fresh`, `Aws.Refresh.current_answered`, `Lanes/Services/Aws/Refresh.lean`; gate `Tests/Axioms/Services.lean`; model-checked, `Tests/Aws/Refresh.lean` | The wall clock is right to within `skew_ms`; the edge reads the state it keeps (TRUSTED, "The AWS credentials' IO") | proved |
+| Credentials held are fetched again at the margin before they expire, and an answer within the deadline replaces them while they are still handed out | `Aws.Refresh.refresh_in_time`, `Aws.Refresh.accept_due`; gate `Tests/Axioms/Services.lean`; model-checked against a service that answers in time | `Config.Valid`; the edge ticks when the machine asks; the service answers within the deadline with credentials of more than the margin | proved; the edge trusted, tested against a fake metadata service |
+| The wait between failed fetches of credentials stays within `maxBackoff_ms`, and a failed fetch is tried again within it | `Aws.Refresh.backoff_le`, `Aws.Refresh.retry_within`; gate `Tests/Axioms/Services.lean` | `Config.Valid` for the retry | proved |
+| A message sent through SES carries exactly the recipients given | `Aws.Ses.toAddresses_json`, `Aws.Ses.json_parse`, `Lanes/Services/Aws/SesSound.lean`; a fake SES that reads them from the JSON | That SES reads the document as `Json.parse` does | proved; tested against a fake |
+| SES does only what the email model allows | A run through `Ses.handler` against a fake SES checked with `Outside.allows`, `Tests/Aws/Ses.lean`; and against moto's SES, a sender refused then verified, a send timed out, `oracles/moto/ses.jsonl` | That moto answers as SES does; not run against SES | trusted; tested against moto's SES, nightly |
+| A CloudFront canned policy is byte for byte the document AWS gives for the URL and the time | `Aws.CloudFront.cannedPolicy_eq`, `Lanes/Services/Aws/CloudFrontSound.lean`; gate `Tests/Axioms/Services.lean` | That AWS's document is botocore 1.44.12's and AWS's SDKs' (`docs/decisions/D82-cloudfront-signed-urls.md`); not run against CloudFront | proved |
+| CloudFront's base64 reads back, and every parameter and cookie of a signed link needs no escaping, so every cookie is set, for a path and a domain that need no escaping | `Aws.CloudFront.decode_encode`, `Aws.CloudFront.fields_safe`, `Aws.CloudFront.cookies_valid`; gate `Tests/Axioms/Services.lean` | None | proved |
+| A CloudFront signed URL is the one botocore writes, signature included | `Tests/Aws/CloudFront.lean` against botocore 1.44.12's `CloudFrontSigner` with `cryptography`'s signatures on generated links, canned and custom, RSA and P-256, SHA-1 and SHA-256; every difference a resource ours refuses | That botocore and AWS's SDKs write what CloudFront takes; not run against CloudFront | tested |
 
 Also:
 
@@ -690,12 +715,12 @@ Also:
 
 ## PostgreSQL and the store model
 
-PostgreSQL (`Lanes/Lib/Postgres/`): the frontend/backend protocol 3.0 in Lean, not libpq
+PostgreSQL (`Lanes/Services/Postgres/`): the frontend/backend protocol 3.0 in Lean, not libpq
 (`docs/decisions/D68-postgres-protocol-in-lean.md`): start-up with trust, cleartext (only when
 allowed), MD5 or SCRAM-SHA-256; the extended query protocol with parameters, text both ways;
 errors; transactions; plain TCP or TLS. The messages are proved to read back as written
 (`Backend.read_encode`, `Frontend.decode_encode`) and tested against recorded sessions of
-`psql` and of this client. A connection is a pure `Postgres.Conn.step` (`Lanes/Lib/Postgres/Conn.lean`), as
+`psql` and of this client. A connection is a pure `Postgres.Conn.step` (`Lanes/Services/Postgres/Conn.lean`), as
 the HTTP server's is: replies answer requests in the order sent (`Conn.run_fifo`), a request is
 sent only to an open connection and is read by the server as sent (`Conn.step_query`,
 `Conn.valid_decode`), `committed` is answered only for a `COMMIT` the server committed from a
@@ -708,40 +733,40 @@ answers every request in flight `unknown` (`Conn.step_lost`); model-checked firs
 of the server's certificate (`SCRAM-SHA-256-PLUS`), the one the handshake gave
 (`Conn.run_bound`, `Conn.onMessage_binds`), which `Certificate.endPoint` chooses by the
 certificate's signature algorithm, tested against `openssl dgst` and a real server. The IO
-(`Lanes/Lib/Postgres/IO/Client.lean`) only performs, the TLS handshake through `Tls.Session`
+(`Lanes/Services/Postgres/IO/Client.lean`) only performs, the TLS handshake through `Tls.Session`
 included, and resolves the host's name at each connect. Unless asked otherwise, a host on
 this machine gets no TLS and any other full verification, and the default goes without TLS
 only to a loopback address (`SslMode.defaultFor_disable`); `Postgres.Client.fromEnv` reads
 libpq's variables and a deploy's through `Settings.read`, pure and tested
-(`Lanes/Lib/Postgres/Settings.lean`). A pool (`Postgres.Pool`) is a pure policy proved to keep at most `max` connections
+(`Lanes/Services/Postgres/Settings.lean`). A pool (`Postgres.Pool`) is a pure policy proved to keep at most `max` connections
 open and never to hand out again one handed back broken (`Pool.run_size`, `Pool.never_again`),
-and an IO file that performs it (`Lanes/Lib/Postgres/IO/Pool.lean`).
+and an IO file that performs it (`Lanes/Services/Postgres/IO/Pool.lean`).
 
 A transactional store (`Lanes/Outside/Store/Basic.lean`): what a store may answer at read
 committed or serializable, as an `Outside` that keeps every database the answers are consistent
 with, so that a `COMMIT` whose answer is lost has both outcomes, and its effect may appear
 later. Its litmus runs are theorems (`Lanes/Outside/Store/Sound.lean`: `Store.write_skew`,
 `Store.lost_update`, `Store.lost_commit_either`, `Store.lost_commit_later`). A table of
-PostgreSQL runs it (`Lanes/Lib/Postgres/Table.lean`, `Postgres.Store.handler`); that the server
+PostgreSQL runs it (`Lanes/Services/Postgres/Table.lean`, `Postgres.Store.handler`); that the server
 behaves like the model at the level chosen is the premise of a theorem proved against it,
 tested on runs recorded from PostgreSQL 16, some interleaved at random
 (`oracles/postgres/store.jsonl`). The typed store (below) is the API applications use.
 
-Where: `Lanes/Lib/Postgres/`, `Lanes/Lib/Crypto/{Certificate,Sha512}.lean`, `Lanes/Outside/Store/`.
+Where: `Lanes/Services/Postgres/`, `Lanes/Lib/Crypto/{Certificate,Sha512}.lean`, `Lanes/Outside/Store/`.
 
 ### Claims
 
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
-| PostgreSQL's messages read back as written: every backend message in a frame wherever it starts and whatever follows, and every frontend message | `Backend.read_encode`, `Frontend.decode_encode`, `Lanes/Lib/Postgres/MessageSound.lean`; gate `Tests/Axioms/Lib.lean` | Messages within their bounds (`Backend.Ok`, `Frontend.Ok`) | proved |
+| PostgreSQL's messages read back as written: every backend message in a frame wherever it starts and whatever follows, and every frontend message | `Backend.read_encode`, `Frontend.decode_encode`, `Lanes/Services/Postgres/MessageSound.lean`; gate `Tests/Axioms/Lib.lean` | Messages within their bounds (`Backend.Ok`, `Frontend.Ok`) | proved |
 | The decoders read what PostgreSQL 16 and libpq 16 send, and the encoders write the same bytes again | `Tests/Postgres.lean`, recorded sessions in `Tests/Postgres/` | The sessions recorded: trust, cleartext, MD5, SCRAM, a wrong password, simple and extended queries, errors, transactions | tested |
-| A PostgreSQL connection answers requests in the order sent, sends one only when open and as submitted, and never reports a failed transaction committed | `Conn.run_fifo`, `Conn.step_query`, `Conn.valid_decode`, `Conn.step_committed`, `Conn.outcome_committed`, `Lanes/Lib/Postgres/ConnSound.lean`; gate `Tests/Axioms/Lib.lean`; model-checked in `Tests/PostgresConn.lean` | The IO tells `Conn.step` what happened and performs what it answers (`Lanes/Lib/Postgres/IO/Client.lean`, trusted); the server reports the transaction's state in `ReadyForQuery` truly | proved; the IO trusted |
+| A PostgreSQL connection answers requests in the order sent, sends one only when open and as submitted, and never reports a failed transaction committed | `Conn.run_fifo`, `Conn.step_query`, `Conn.valid_decode`, `Conn.step_committed`, `Conn.outcome_committed`, `Lanes/Services/Postgres/ConnSound.lean`; gate `Tests/Axioms/Lib.lean`; model-checked in `Tests/PostgresConn.lean` | The IO tells `Conn.step` what happened and performs what it answers (`Lanes/Services/Postgres/IO/Client.lean`, trusted); the server reports the transaction's state in `ReadyForQuery` truly | proved; the IO trusted |
 | With a password, the client trusts the server only once it proved by SCRAM that it knows the password: an `AuthenticationOk` before that, MD5 and cleartext close the connection unless `requireScram` is turned off | `Conn.onMessage_requireScram`, `Conn.onMessage_saslFinal`, `Conn.onMessage_sasl_authOk`; gate `Tests/Axioms/Lib.lean`; SCRAM's computation tested against RFC 7677 and libpq; model-checked in `Tests/PostgresConn.lean` against a server that skips SCRAM | That the computation is SCRAM-SHA-256 is tested, not proved; without channel binding (the next rows), SCRAM shows the server knows the password, not that it is the server meant | proved for the state machine |
-| With TLS, the PostgreSQL client sends nothing but `SSLRequest` before the handshake is done, closes on `N`, starts the handshake only on an `S` alone and sends the start-up after it only with the ALPN protocol allowed | `Conn.tls_first`, `Conn.run_beforeTls`, `Conn.step_refusedTls`, `Conn.step_startTls`, `Conn.step_secured`, `Lanes/Lib/Postgres/ConnSound.lean`; gate `Tests/Axioms/Lib.lean`; model-checked in `Tests/PostgresConn.lean` against a server that refuses TLS | The IO says `secured` only once the handshake is done and from then on sends and receives through the session (`Lanes/Lib/Postgres/IO/Client.lean`, trusted); OpenSSL's TLS (`native/tls.c`, trusted) | proved for the state machine; the IO trusted |
+| With TLS, the PostgreSQL client sends nothing but `SSLRequest` before the handshake is done, closes on `N`, starts the handshake only on an `S` alone and sends the start-up after it only with the ALPN protocol allowed | `Conn.tls_first`, `Conn.run_beforeTls`, `Conn.step_refusedTls`, `Conn.step_startTls`, `Conn.step_secured`, `Lanes/Services/Postgres/ConnSound.lean`; gate `Tests/Axioms/Lib.lean`; model-checked in `Tests/PostgresConn.lean` against a server that refuses TLS | The IO says `secured` only once the handshake is done and from then on sends and receives through the session (`Lanes/Services/Postgres/IO/Client.lean`, trusted); OpenSSL's TLS (`native/tls.c`, trusted) | proved for the state machine; the IO trusted |
 | SCRAM over TLS binds the hash of the certificate the handshake gave (`SCRAM-SHA-256-PLUS`, `tls-server-end-point`), always with `channelBinding := .require`: the client's last message carries `c=` the GS2 header and that hash in base 64 | `Conn.run_bound`, `Conn.onMessage_binds`, `Conn.choose_endPoint`, `Conn.choose_require`, `Scram.respond_binds`, `Scram.Binding.data_endPoint`; gate `Tests/Axioms/Lib.lean`; model-checked in `Tests/PostgresConn.lean` against a relay with another certificate and one that hides the offer | That the hash is RFC 5929's for the certificate is tested (`Tests/PostgresTls.lean`: `openssl dgst`, and PostgreSQL 16 accepting it for a certificate signed with SHA-384), not proved; the DER is OpenSSL's (`native/tls.c`, trusted) | proved for the state machine; the hash tested |
 | A PostgreSQL server reached through a relay that holds another valid certificate refuses a client that binds, as it refuses libpq | `Tests/PostgresTls.lean`, against PostgreSQL 16 with TLS and `Tests/Postgres/relay.py`, run by hand on 2026-11-27 (`LANES_POSTGRES_TLS` set), beside `psql` with `channel_binding=require` | A local server; no CI job | tested by hand |
-| The PostgreSQL pool never has more than `max` connections open or being opened, nor more than `waiting_max` clients waiting, and never hands out again a connection handed back broken | `Pool.run_size`, `Pool.run_waiting`, `Pool.never_again`, `Lanes/Lib/Postgres/Pool.lean`; gate `Tests/Axioms/Lib.lean`; model-checked in `Tests/PostgresPool.lean`; live in `Tests/PostgresTls.lean` | The IO never reports a connection opened under a number used before, and tells the policy what happened (`Lanes/Lib/Postgres/IO/Pool.lean`, trusted); a connection is reusable as `Conn.reusable` says | proved for the policy; the IO trusted |
-| Unless asked otherwise, the PostgreSQL client uses no TLS to this machine and full verification to any other host, and goes without TLS only to a loopback address | `SslMode.defaultFor_disable`, `SslMode.defaultFor_loopback`, `SslMode.defaultFor_remote`, `Lanes/Lib/Postgres/Settings.lean`; gate `Tests/Axioms/Lib.lean`; `Tests/PostgresSettings.lean` | That `localhost` is `127.0.0.1` (RFC 6761) and that the IO connects where `Address.of` says (`TRUSTED.md`) | proved |
+| The PostgreSQL pool never has more than `max` connections open or being opened, nor more than `waiting_max` clients waiting, and never hands out again a connection handed back broken | `Pool.run_size`, `Pool.run_waiting`, `Pool.never_again`, `Lanes/Services/Postgres/Pool.lean`; gate `Tests/Axioms/Lib.lean`; model-checked in `Tests/PostgresPool.lean`; live in `Tests/PostgresTls.lean` | The IO never reports a connection opened under a number used before, and tells the policy what happened (`Lanes/Services/Postgres/IO/Pool.lean`, trusted); a connection is reusable as `Conn.reusable` says | proved for the policy; the IO trusted |
+| Unless asked otherwise, the PostgreSQL client uses no TLS to this machine and full verification to any other host, and goes without TLS only to a loopback address | `SslMode.defaultFor_disable`, `SslMode.defaultFor_loopback`, `SslMode.defaultFor_remote`, `Lanes/Services/Postgres/Settings.lean`; gate `Tests/Axioms/Lib.lean`; `Tests/PostgresSettings.lean` | That `localhost` is `127.0.0.1` (RFC 6761) and that the IO connects where `Address.of` says (`TRUSTED.md`) | proved |
 | The client works against a real PostgreSQL | `Tests/PostgresLive.lean`, against PostgreSQL 16 (`LANES_POSTGRES` set); `oracles/postgres/run.sh`, nightly in the Services workflow | A local server | tested against PostgreSQL 16, nightly |
 | The store model allows write skew and lost updates at read committed and refuses them at serializable; a lost `COMMIT` may or may not have taken effect, and later | `Store.write_skew`, `Store.lost_update`, `Store.lost_commit_either`, `Store.lost_commit_later`, `Lanes/Outside/Store/Sound.lean`; gate `Tests/Axioms/Outside.lean` | The runs stated | proved |
 | PostgreSQL behaves like the store model at the isolation level chosen | Runs against PostgreSQL 16 at both levels, recorded and checked with `Store.State.run`, nightly, and the record again in `lake test`: write skew, a lost `COMMIT` and 50 runs of transactions interleaved at random (`oracles/postgres/store.jsonl`, `Tests/Oracle/Service/Postgres.lean`) | Every theorem proved against the store model rests on it; no two transactions open at once write one key, so no request waits on a lock | trusted, tested against PostgreSQL 16 |
@@ -769,14 +794,14 @@ A request handler is `Q → Txn A` (`Lanes/Db/Txn.lean`): a free monad over the 
 that an operation may depend on what earlier ones answered, with no IO and room for one
 transaction only. `Txn.run` is what it means; `TableOf α` puts a Lean type on a table, and
 `lanes_data`'s `table` line derives one from a structure (`Lanes/Db/Columns.lean`). The
-driver (`Lanes/Lib/Postgres/IO/Db.lean`) runs it at `SERIALIZABLE`, one statement per operation
-(`Lanes/Lib/Postgres/Sql.lean`, pure), and tries again after a serialization failure, a deadlock,
+driver (`Lanes/Services/Postgres/IO/Db.lean`) runs it at `SERIALIZABLE`, one statement per operation
+(`Lanes/Services/Postgres/Sql.lean`, pure), and tries again after a serialization failure, a deadlock,
 a unique violation or a connection lost before `COMMIT`, up to `attempts_max` attempts, as
 `Retry.next` says (`Lanes/Db/Retry.lean`). The model (`Lanes/Db/Model.lean`) is an `Outside`: a
 call takes effect at one moment between its request and its reply, as one run of its handler; a
 failed call never did; a call answered unknown may have taken effect, or may later, or never.
 
-Where: `Lanes/Db/`, `Lanes/Lib/Postgres/Sql.lean`, `Lanes/Lib/Postgres/IO/Db.lean`.
+Where: `Lanes/Db/`, `Lanes/Services/Postgres/Sql.lean`, `Lanes/Services/Postgres/IO/Db.lean`.
 
 ### Claims
 

@@ -3,6 +3,7 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Tests.Oracle.Basic
+import Lanes.Services.S3
 
 /-! `Lanes.S3.Xml.parse` against Go's `encoding/xml`: what each accepts, and the tree. -/
 

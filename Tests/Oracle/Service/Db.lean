@@ -4,12 +4,12 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Tests.Oracle.Service.Basic
 import Tests.PostgresLive
-import Lanes.Lib.Postgres.IO.Db
+import Lanes.Services.Postgres.IO.Db
 
 /-!
 The typed store against a real PostgreSQL (`oracles/postgres`): transactions generated at random
 over two tables that use every column type, nullable columns, a composite primary key, and a
-unique and a non-unique index, run through the driver (`Lanes/Lib/Postgres/IO/Db.lean`).
+unique and a non-unique index, run through the driver (`Lanes/Services/Postgres/IO/Db.lean`).
 
 - **One call at a time**, every answer is compared with the Lean meaning (`Txn.run`) on the
   database the earlier calls left, and a last call reads every row of both tables, so the two

@@ -2,8 +2,8 @@
 Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Lanes.Lib.Postgres.Conn
-import Lanes.Lib.Postgres.Table
+import Lanes.Services.Postgres.Conn
+import Lanes.Services.Postgres.Table
 import Lanes.Lib.Crypto.Certificate
 
 /-!

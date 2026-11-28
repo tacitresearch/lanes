@@ -3,6 +3,7 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
+import Lanes.Services.Postgres
 
 /-!
 A connection to PostgreSQL against a server that does what it may. The server is a model written
@@ -18,7 +19,7 @@ What it writes reaches the client in pieces of one, seven or all the bytes, only
 connection takes them; the server may leave at any moment, losing what it has not delivered; the
 client submits its requests whenever it is open, pipelining up to the bound, and may stop. The
 search explores every order of these and checks what the connection promises (rule 5.1),
-before and beside the proofs of `Lanes/Lib/Postgres/ConnSound.lean`.
+before and beside the proofs of `Lanes/Services/Postgres/ConnSound.lean`.
 -/
 
 namespace Tests.PostgresConn
