@@ -228,25 +228,26 @@ def Sent.step (acc : Sent × List Journal.OutputId) (id : Journal.OutputId) :
     Sent × List Journal.OutputId :=
   if acc.1.admits id then (acc.1.record id, id :: acc.2) else acc
 
+private theorem lookup_filter (l : Sent) {a j : String} (h : j ≠ a) :
+    (l.filter (·.1 != a)).lookup j = l.lookup j := by
+  induction l with
+  | nil => rfl
+  | cons e rest ih =>
+    obtain ⟨k, o⟩ := e
+    by_cases hk : k = a
+    · subst hk
+      have hjk : (j == k) = false := by simpa using h
+      simp [List.lookup_cons, hjk, ih]
+    · have hk' : (k != a) = true := by simpa using hk
+      simp only [List.filter_cons, hk', ite_true, List.lookup_cons, ih]
+
 theorem Sent.lookup_record (sent : Sent) (id : Journal.OutputId) (j : String) :
     (sent.record id).lookup j = if j = id.journal then some id.origin else sent.lookup j := by
-  simp only [record, List.lookup_cons]
   by_cases h : j = id.journal
-  · simp [h]
-  · have : (j == id.journal) = false := by simpa using h
-    rw [this]
-    simp only [h, if_false]
-    induction sent with
-    | nil => rfl
-    | cons e rest ih =>
-      obtain ⟨k, o⟩ := e
-      by_cases hk : k = id.journal
-      · subst hk
-        have : (j == k) = false := by simpa using h
-        simp [List.filter_cons, List.lookup_cons, this, ih]
-      · have hk' : (k != id.journal) = true := by simpa using hk
-        simp only [List.filter_cons, hk', if_true, List.lookup_cons]
-        split <;> simp_all
+  · simp [record, h]
+  · have hj : (j == id.journal) = false := by simpa using h
+    simp only [record, List.lookup_cons, hj, h, ite_false]
+    exact lookup_filter sent h
 
 private theorem before_trans {a b c : Journal.Origin} (h1 : a.before b = true)
     (h2 : b.before c = true) : a.before c = true := by
@@ -284,7 +285,9 @@ private theorem Sent.step_covers {acc : Sent × List Journal.OutputId} (h : Sent
         · exact ⟨last, by simp [hj, hlast], hle⟩
     · intro hmem
       obtain ⟨last, hlast, hle⟩ := h id hmem
+      simp only at hlast
       rw [hlast] at hadmit
+      simp only at hadmit
       rcases hle with heq | hlt
       · rw [heq, Journal.Origin.before_irrefl] at hadmit; exact absurd hadmit (by simp)
       · have := before_trans hlt hadmit
