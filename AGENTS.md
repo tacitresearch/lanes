@@ -19,6 +19,8 @@ lake test                  # pure tests and live runtime tests, a few seconds
 lake exe lanesCheck        # larger model checks, random runs and the scale benchmark, about 20 s: run once, never in a loop
 lake exe lanes lint        # the checks below, and that generated files are up to date
 lake exe lanes lint --fix  # rewrite the generated files: line counts, decisions' index, STATUS, INVENTORY
+lake exe lanes stats       # the totals no file holds: trusted lines, decisions, the inventory by area
+lake exe lanes changelog   # the Unreleased section, gathered from `docs/changes/`
 lake exe lanes inventory --list none  # the definitions of Lanes/ without evidence
 lake exe lanes docstrings  # how many public declarations of `import Lanes` have a docstring
 ```
@@ -31,7 +33,7 @@ lake exe lanes docstrings  # how many public declarations of `import Lanes` have
   (`partial`, `unsafe`, `axiom`, `panic!`, `implemented_by`, `extern` and C only in files
   `TRUSTED.md` names), `trusted-size` (each trusted file has the line count `TRUSTED.md` gives),
   `layering` (rule 1.6), `decisions` and `status` (the generated files agree with their sources),
-  `inventory` and `inventory-none` (below), `links` (every repository path in backquotes in
+  `changelog` (each fragment in `docs/changes/` reads), `inventory` and `inventory-none` (below), `links` (every repository path in backquotes in
   `*.md` and `docs/*.md` exists) and `oracles` (`oracles/README.md` names an oracle, or why there
   is none, for every protocol module and model, and every path it names exists). It does not check `no-io-in-step`, `bounded`, `field-leak` or
   `fn-length`: those need the elaborator. The inventory's checks read the built modules: run
@@ -227,7 +229,7 @@ that performs IO is in an `IO/` directory of its area and named in `TRUSTED.md`.
 | `Lanes/Testing/` | The test kit, for tests and never in `import Lanes`: a fake S3 that checks signatures, a fake identity provider, a scripted browser, a server of a handler and readers of a response (`docs/decisions/D77-a-test-kit.md`) | `Std` only |
 | `Lanes/Semantics/` | The semantics as a CSLib `LTS`, refinement, specs, fairness and leads-to, and the liveness of the gate, of jobs and of the scheduler | CSLib, Mathlib |
 | `native/` | The C that binds OpenSSL's hashes, comparison and Argon2id, `fsync`, a timed wait, OpenSSL's TLS client, its signature check and its signing, all of it trusted | OpenSSL, libc |
-| `LanesCli/` | The `lanes` command: `new`, `lint`, `check`, `inventory`, `docstrings` | `Std` only; `Lean` in `Inventory` and `Docstrings`, which only `lanesInventory` links |
+| `LanesCli/` | The `lanes` command: `new`, `lint`, `check`, `changelog`, `stats`, `inventory`, `docstrings` | `Std` only; `Lean` in `Inventory` and `Docstrings`, which only `lanesInventory` links |
 | `templates/app/` | The application `lanes new` creates, which is `examples/counter` | |
 | `examples/` | Applications to read, each its own Lake package (`examples/README.md`) | anything |
 | `integrations/` | A vendor's preset or client, each its own Lake package (D61): `google` and `github` for sign-in, `aws` for a role's credentials, SES and SQS's calls, and CloudFront's signed URLs | Lanes |
@@ -342,12 +344,17 @@ independent changes disjoint files; keep it that way.
   against the current main, which numbers it; CI on main refuses an unnumbered decision. If another
   open pull request took the same number, renumber the later one.
 - A change of status goes in its fragment, `docs/status/areas/<area>.md` or
-  `docs/status/apps/<app>.md` (the row on the first line, the known limits after it).
+  `docs/status/apps/<app>.md`: its heading on the first line, then each item on one line, in
+  sorted lists (`lanes lint --fix` sorts them).
+- A change a user would notice gets a changelog fragment of its own,
+  `docs/changes/<slug>.md`, never a line in `CHANGELOG.md` (`CONTRIBUTING.md`, "The changelog").
 - An axiom gate goes in `Tests/Axioms/<Area>.lean`, under the line naming its module; a lemma
   about lists at the end of its topic's file in `Lanes/Proof/List/`.
-- Never type a count: line counts in `TRUSTED.md` and `README.md`, the decisions' index,
-  `docs/STATUS.md` and `docs/INVENTORY.md` are written by `lake exe lanes lint --fix`. A conflict in a generated file is
-  resolved by taking either side and running it.
+- Never type a count: line counts in `TRUSTED.md`, the decisions' index, `docs/STATUS.md` and
+  `docs/INVENTORY.md` are written by `lake exe lanes lint --fix`. Each generated line is about one
+  item, and no committed file holds a total over the repository (`lake exe lanes stats` prints
+  them), so two branches that change different items merge without a conflict. A conflict in a
+  generated file is resolved by taking either side and running it.
 
 ## Docs
 

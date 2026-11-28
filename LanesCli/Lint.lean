@@ -2,7 +2,7 @@
 Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import LanesCli.Generated
+import LanesCli.Changelog
 
 /-!
 # `lanes lint`
@@ -15,7 +15,10 @@ Source-level checks of the rules in `AGENTS.md` that can be decided from the tex
   which is trusted.
 - `trusted-size` (rule 5.5): a file that `TRUSTED.md` lists as `` `path`, N lines `` has `N`
   lines, so trusted code cannot grow without the list changing; `--fix` rewrites the counts.
-- `decisions`, `status`: the files `LanesCli/Generated.lean` derives agree with their sources.
+- `decisions`, `status`: the files `LanesCli/Generated.lean` derives agree with their sources,
+  and each status fragment has its heading and one item per line, sorted.
+- `changelog`, where there is a `docs/changes/`: each fragment reads as sections and entries,
+  and `CHANGELOG.md`'s Unreleased section has none of its own (`LanesCli/Changelog.lean`).
 - `layering` (rule 1.6): files that import Mathlib, CSLib or a proof module (`Lanes.Semantics`,
   `App.Proofs`) live in a proof directory, one named `…Proofs` included, or are named
   `…Proofs.lean`, so executable code never links them.
@@ -381,7 +384,8 @@ def lint (root : System.FilePath) (options : Options := {}) : IO Report := do
   let fixed ← if options.fix then Generated.fix root options.main else pure []
   let plan ← Generated.plan root options.main
   let mut findings : List Finding :=
-    plan.problems.map (fun (file, line, rule, message) => ⟨file, line, rule, message⟩)
+    (plan.problems ++ (← Changelog.check root)).map
+      (fun (file, line, rule, message) => ⟨file, line, rule, message⟩)
       ++ plan.edits.map fun e => ⟨e.path, 1, e.rule, e.message⟩
   let trustedFile := root / "TRUSTED.md"
   let trusted ← if ← trustedFile.pathExists then IO.FS.readFile trustedFile else pure ""

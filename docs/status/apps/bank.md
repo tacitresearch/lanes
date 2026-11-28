@@ -1,1 +1,14 @@
-| Bank (`examples/bank/Bank.lean`) | Conservation on 2 accounts; lost-credit bug found under lossy links; runs on the runtime and over HTTP | Balance never negative (all environments); money conserved for any number of accounts in a faultless environment |
+### Bank
+
+Where: `examples/bank/Bank.lean`.
+
+Checked:
+
+- A lost-credit bug found under lossy links.
+- Conservation on 2 accounts.
+- Runs on the runtime and over HTTP.
+
+Proved:
+
+- Balance never negative (all environments).
+- Money conserved for any number of accounts in a faultless environment.

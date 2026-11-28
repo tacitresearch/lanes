@@ -1,3 +1,18 @@
-| Payments (`examples/payments/Shop.lean`) | A shop that charges each order through the payment model, retrying calls that time out under the order's key | Charged at most once per order in every run, under every environment and whatever the model allows, counting payments the service may have made without saying so (`Shop.charged_at_most_once`); every order the shop holds or reports as paid has a payment for it that succeeded, in every run and with or without the key (`Shop.paid_succeeded`); model-checked on one order with crashes, where a retry without the key charges the order twice |
+### Payments
+
+Where: `examples/payments/Shop.lean`.
+
+A shop that charges each order through the payment model, retrying calls that time out under the order's key.
+
+Checked:
+
+- Model-checked on one order with crashes, where a retry without the key charges the order twice.
+
+Proved:
+
+- Charged at most once per order in every run, under every environment and whatever the model allows, counting payments the service may have made without saying so (`Shop.charged_at_most_once`).
+- Every order the shop holds or reports as paid has a payment for it that succeeded, in every run and with or without the key (`Shop.paid_succeeded`).
+
+Known limits:
 
 - No adapter: the shop runs only in the checker and the proof.
