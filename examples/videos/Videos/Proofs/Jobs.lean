@@ -9,13 +9,15 @@ import Videos.System
 /-!
 # The site's jobs
 
-The site's work that is due later is the scheduler's (`Lanes.Schedule`): a check, the last
-check of an upload never confirmed, the delete of a deleted video's object. What the scheduler
-proves holds of them here, since its steps are its own steps beside the site:
+The site's work that is due later is the schedulers' (`Lanes.Schedule`, one for each member,
+`Schedule.attachBy`): a check, the last check of an upload never confirmed, the delete of a
+deleted video's object. Each job is held by the scheduler of the owner of the video its key
+names (`Key.owner`): `Schedule.systemBy` sends each scheduling to it. What a scheduler proves
+holds of each of them here, since their steps are their own steps beside the members:
 
-- the scheduler holds at most `maxJobs` jobs and no key twice (`jobs_bounded`), so one delete
+- each scheduler holds at most `maxJobs` jobs and no key twice (`jobs_bounded`), so one delete
   of each object at a time, and one check for each request;
-- in a fair run in which the scheduler does not crash, every job it holds ends, whatever the
+- in a fair run in which a scheduler does not crash, every job it holds ends, whatever the
   store does: answers late, wrongly, `unknown` or never (`job_ends`).
 
 Of the site: a delete answered schedules the delete of the object (`Site.delete_schedules`), and
@@ -35,23 +37,23 @@ namespace Videos
 
 open Lanes
 
-/-- The scheduler beside the site holds no more than `maxJobs` jobs, and no key twice, in every
-run under every environment model. -/
-theorem jobs_bounded (config : Config) (env : EnvModel fullSig) :
+/-- Each member's scheduler holds no more than `maxJobs` jobs, and no key twice, in every run
+under every environment model. -/
+theorem jobs_bounded (config : Config) (env : EnvModel fullSig) (m : Member) :
     (system config).Invariant env fun c =>
-      (c.state (.inl ()) : Schedule.State Key Unit).jobs.length ≤ config.maxJobs ∧
-        (Schedule.keys (c.state (.inl ()) : Schedule.State Key Unit).jobs).Nodup :=
-  Schedule.attach_within (alone config) config.scheduler use env
+      (c.state (.inl m) : Schedule.State Key Unit).jobs.length ≤ config.maxJobs ∧
+        (Schedule.keys (c.state (.inl m) : Schedule.State Key Unit).jobs).Nodup :=
+  fun c hc => Schedule.attachBy_within (members config) config.scheduler use Key.owner env c hc m
 
-/-- Every job of the site ends: in a fair run in which the scheduler does not crash, a job it
-holds while it is up stops being held, whatever the store answers, and whenever. -/
-theorem job_ends (config : Config) {env : EnvModel fullSig}
-    (hcrash : env.mayCrash (.inl ()) = false) (key : Key) :
+/-- Every job of the site ends: in a fair run in which a member's scheduler does not crash, a
+job it holds while it is up stops being held, whatever the store answers, and whenever. -/
+theorem job_ends (config : Config) {env : EnvModel fullSig} {m : Member}
+    (hcrash : env.mayCrash (.inl m) = false) (key : Key) :
     (system config).LeadsTo env
-      (fun c => c.up (.inl ()) = true ∧ ∃ j, Schedule.entry
-        (c.state (.inl ()) : Schedule.State Key Unit).jobs key = some j ∧ j.work.periodic = false)
-      (fun c => key ∉ Schedule.keys (c.state (.inl ()) : Schedule.State Key Unit).jobs) :=
-  Schedule.attach_held_leaves (alone config) config.scheduler use hcrash key
+      (fun c => c.up (.inl m) = true ∧ ∃ j, Schedule.entry
+        (c.state (.inl m) : Schedule.State Key Unit).jobs key = some j ∧ j.work.periodic = false)
+      (fun c => key ∉ Schedule.keys (c.state (.inl m) : Schedule.State Key Unit).jobs) :=
+  Schedule.attachBy_held_leaves (members config) config.scheduler use Key.owner hcrash key
 
 namespace Site
 

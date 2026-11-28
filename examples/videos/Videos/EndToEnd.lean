@@ -37,6 +37,32 @@ def bob : Testing.OAuth.User :=
   { subject := "2", login := "bob", name := some "Bob \"<b>\" & co", email := some "bob@example.com" }
 def carol : Testing.OAuth.User := { subject := "3", login := "carol", email := some "carol@example.com" }
 
+/-- A member of the test's provider, by the subject it gives. -/
+def member (subject : String) : Who :=
+  if h : Name.valid GitHub.issuer = true ∧ Name.valid subject = true then ⟨⟨_, h.1⟩, ⟨_, h.2⟩⟩
+  else ⟨⟨"none", by simp [Name.valid]⟩, ⟨"none", by simp [Name.valid]⟩⟩
+
+def aliceId : Who := member alice.subject
+def bobId : Who := member bob.subject
+
+/-- Alice's `n`th video. -/
+def vid (n : Nat) : VideoId := ⟨aliceId, n⟩
+
+/-- The path of Alice's `n`th video's page, and what follows it. -/
+def vPath (n : Nat) (rest : List String := []) : List String := "v" :: videoPath.print (vid n) ++ rest
+
+def videosPath (n : Nat) (rest : List String) : List String :=
+  "videos" :: videoPath.print (vid n) ++ rest
+
+def cPath (w : Who) : List String := "c" :: whoPath.print w
+
+/-- The query of the feed's link to older videos. -/
+def olderOf (page : Option Http.Response) : List (String × String) :=
+  ((between page "href=\"/?" "\"").getD "").splitOn "&" |>.filterMap fun part =>
+    match part.splitOn "=" with
+    | [k, v] => some (k, (percentDecode v).getD v)
+    | _ => none
+
 /-- The form token of the session a browser holds, as a page of the site carries it. -/
 def csrf (b : Browser) : Async String := do
   return (field (← b.get ["new"]) "csrf").getD ""
@@ -149,82 +175,83 @@ def flow (d : Deployment) (provider : Testing.OAuth.Fake) (worker : Testing.Tran
   let metrics ← anon.get ["metrics"]
   let (made, put) ← create aliceB "Cats" "public"
   let uploaded ← upload put
-  let confirmed ← post aliceB ["videos", "0", "uploaded"]
-  let preparing ← aliceB.get ["v", "0"]
-  let notYet ← bobB.get ["v", "0"]
+  let confirmed ← post aliceB (videosPath 0 ["uploaded"])
+  let preparing ← aliceB.get (vPath 0)
+  let notYet ← bobB.get (vPath 0)
   let feedPreparing ← anon.get []
-  let renditionEarly ← held (d.settings.renditionKey 0)
+  let renditionEarly ← held (d.settings.renditionKey (vid 0))
   let jobs ← eventually do return !(← worker.taken).isEmpty
   let transcoded ← transcode worker
-  let watched ← bobB.get ["v", "0"]
+  let watched ← bobB.get (vPath 0)
   let bytes ← fetchVideo watched
   let poster ← fetchPoster watched
-  let liked ← post bobB ["v", "0", "like"]
-  let _ ← post bobB ["v", "0", "like"]
-  let _ ← post aliceB ["v", "0", "like"]
-  let commented ← post bobB ["v", "0", "comment"] [("body", "Nice cats")]
-  let _ ← post carolB ["v", "0", "comment"] [("body", "Buy pills")]
-  let afterLikes ← anon.get ["v", "0"]
-  let forged ← bobB.post ["v", "0", "like"] [("csrf", "forged")]
-  let notTheirs ← post bobB ["v", "0", "delete"]
+  let liked ← post bobB (vPath 0 ["like"])
+  let _ ← post bobB (vPath 0 ["like"])
+  let _ ← post aliceB (vPath 0 ["like"])
+  let commented ← post bobB (vPath 0 ["comment"]) [("body", "Nice cats")]
+  let _ ← post carolB (vPath 0 ["comment"]) [("body", "Buy pills")]
+  let afterLikes ← anon.get (vPath 0)
+  let forged ← bobB.post (vPath 0 ["like"]) [("csrf", "forged")]
+  let notTheirs ← post bobB (vPath 0 ["delete"])
   let (_, secretPut) ← create aliceB "Diary" "private"
   let _ ← upload secretPut
   refuse
-  let retried ← post aliceB ["videos", "1", "uploaded"]
+  let retried ← post aliceB (videosPath 1 ["uploaded"])
   let checkRefused ← refused
   let _ ← eventually do return (← worker.taken).length == 2
   let _ ← transcode worker
-  let secretToBob ← bobB.get ["v", "1"]
-  let secretToAnon ← anon.get ["v", "1"]
-  let secretToAlice ← aliceB.get ["v", "1"]
-  let channelToBob ← bobB.get ["c", "0"]
-  let channelToAlice ← aliceB.get ["c", "0"]
-  let bobsChannel ← anon.get ["c", "1"]
+  let secretToBob ← bobB.get (vPath 1)
+  let secretToAnon ← anon.get (vPath 1)
+  let secretToAlice ← aliceB.get (vPath 1)
+  let channelToBob ← bobB.get (cPath aliceId)
+  let channelToAlice ← aliceB.get (cPath aliceId)
+  let bobsChannel ← anon.get (cPath bobId)
   let (_, ghostPut) ← create aliceB "Ghost" "public"
   let tooLarge ← upload ghostPut (ByteArray.mk (Array.replicate (maxUpload_bytes + 1) 0))
-  let early ← post aliceB ["videos", "2", "uploaded"]
-  let ghostEarly ← bobB.get ["v", "2"]
-  let ghostToOwner ← aliceB.get ["v", "2"]
+  let early ← post aliceB (videosPath 2 ["uploaded"])
+  let ghostEarly ← bobB.get (vPath 2)
+  let ghostToOwner ← aliceB.get (vPath 2)
   let feedEarly ← anon.get []
-  let waiting ← aliceB.get ["c", "0"]
+  let waiting ← aliceB.get (cPath aliceId)
   server.stop
   let server ← start d
   let port := server.port.getD 0
   worker.reportTo port
   let (anon, aliceB, bobB, carolB) := (anon.at port, aliceB.at port, bobB.at port, carolB.at port)
   let _ ← upload ghostPut
-  let late ← post aliceB ["videos", "2", "uploaded"]
+  let late ← post aliceB (videosPath 2 ["uploaded"])
   let _ ← eventually do return (← worker.taken).length == 3
-  let forgedReport ← worker.forge d.settings.callback (.done "2.0" [d.settings.renditionKey 2, d.settings.thumbnailKey 2])
-  let ghostForged ← anon.get ["v", "2"]
+  let forgedReport ← worker.forge d.settings.callback
+    (.done (Round.id ⟨vid 2, 0⟩) [d.settings.renditionKey (vid 2), d.settings.thumbnailKey (vid 2)])
+  let ghostForged ← anon.get (vPath 2)
   worker.fail 1
   let _ ← transcode worker
-  let ghostFailed ← aliceB.get ["v", "2"]
-  let ghostToBob ← bobB.get ["v", "2"]
-  let tryAgain ← post aliceB ["videos", "2", "retry"]
+  let ghostFailed ← aliceB.get (vPath 2)
+  let ghostToBob ← bobB.get (vPath 2)
+  let tryAgain ← post aliceB (videosPath 2 ["retry"])
   let _ ← eventually do return (← worker.taken).length == 4
   let ghostRetried ← transcode worker
-  let kept ← anon.get ["v", "0"]
+  let kept ← anon.get (vPath 0)
   let feed ← anon.get []
-  let older ← anon.get [] [("before", "2")]
-  let uncommentedByCarol ← post carolB ["v", "0", "comments", "0", "delete"]
-  let uncommented ← post bobB ["v", "0", "comments", "0", "delete"]
-  let uncommentedByOwner ← post aliceB ["v", "0", "comments", "1", "delete"]
-  let afterUncomment ← anon.get ["v", "0"]
+  let older ← anon.get [] (olderOf feed)
+  let uncommentedByCarol ← post carolB (vPath 0 ["comments", "0", "delete"])
+  let uncommented ← post bobB (vPath 0 ["comments", "0", "delete"])
+  let uncommentedByOwner ← post aliceB (vPath 0 ["comments", "1", "delete"])
+  let afterUncomment ← anon.get (vPath 0)
   refuse
-  let deleted ← post aliceB ["v", "0", "delete"]
-  let gone ← bobB.get ["v", "0"]
-  let feedAfter ← anon.get [] [("before", "2")]
+  let deleted ← post aliceB (vPath 0 ["delete"])
+  let gone ← bobB.get (vPath 0)
+  let feedAfter ← anon.get [] (olderOf feed)
   let objectGone ← eventually do
-    return !(← held (d.settings.objectKey 0)) && !(← held (d.settings.renditionKey 0))
-      && !(← held (d.settings.thumbnailKey 0))
+    return !(← held (d.settings.objectKey (vid 0))) && !(← held (d.settings.renditionKey (vid 0)))
+      && !(← held (d.settings.thumbnailKey (vid 0)))
   let deleteRefused ← refused
   let token ← csrf bobB
   let signedOut ← bobB.post ["sign-out"] [("csrf", token)]
   let cleared ← bobB.cookie sessionCookie
   -- The browser forgot the cookie; the old one, sent again, must name no session.
   bobB.keep { name := sessionCookie, value := bobSession.getD "" }
-  let stillOut ← bobB.post ["v", "2", "like"] [("csrf", token)]
+  let stillOut ← bobB.post (vPath 2 ["like"]) [("csrf", token)]
   server.stop
   return [
     ("videos: ops pages answer", status healthz == 200 && status readyz == 200 && status metrics == 200),
@@ -232,10 +259,10 @@ def flow (d : Deployment) (provider : Testing.OAuth.Fake) (worker : Testing.Tran
       aliceSession.isSome && bobSession.isSome && aliceSession != bobSession),
     ("videos: making a video gives a page with a form whose policy is for its object, its type and the size allowed",
       status made == 200 && put.url == d.settings.bucket.url
-        && put.fields.lookup "key" == some (d.settings.objectKey 0)
+        && put.fields.lookup "key" == some (d.settings.objectKey (vid 0))
         && (match (put.fields.lookup "policy").bind S3.Post.decode? with
           | some doc => doc.conditions.contains (.length 1 maxUpload_bytes)
-              && doc.conditions.contains (.eq "key" (d.settings.objectKey 0))
+              && doc.conditions.contains (.eq "key" (d.settings.objectKey (vid 0)))
               && doc.conditions.contains (.eq "Content-Type" "video/mp4")
           | none => false)),
     ("videos: the browser posts the file to the store with the form",
@@ -244,7 +271,7 @@ def flow (d : Deployment) (provider : Testing.OAuth.Fake) (worker : Testing.Tran
       status tooLarge == 400 && Testing.S3.code tooLarge == "EntityTooLarge"),
     ("videos: asked to check, the site asks the store, and the video is being prepared, to its "
       ++ "owner alone, and not listed",
-      status confirmed == 303 && location confirmed == "/v/0" && status preparing == 200
+      status confirmed == 303 && location confirmed == Routes.watch.link (vid 0) && status preparing == 200
         && shows preparing "being prepared" && status notYet == 404 && !shows feedPreparing "Cats"),
     ("videos: a confirmed upload is given to the worker, which writes nothing before it works",
       jobs && !renditionEarly),
@@ -257,7 +284,7 @@ def flow (d : Deployment) (provider : Testing.OAuth.Fake) (worker : Testing.Tran
       forgedReport == 403 && status ghostForged == 404),
     ("videos: a transcode that failed is shown to its owner with a retry, and the retry makes it ready",
       status ghostFailed == 200 && shows ghostFailed "could not be prepared"
-        && shows ghostFailed "/videos/2/retry" && status ghostToBob == 404
+        && shows ghostFailed (Routes.retry.link (vid 2, ())) && status ghostToBob == 404
         && status tryAgain == 303 && ghostRetried),
     ("videos: a like counts each member once",
       status liked == 303 && shows afterLikes "2 likes"),
@@ -281,13 +308,13 @@ def flow (d : Deployment) (provider : Testing.OAuth.Fake) (worker : Testing.Tran
     ("videos: after a restart, an upload begun before is checked and listed",
       status late == 303 && shows feed "Ghost" && !shows feed "Diary"),
     ("videos: the feed comes a page at a time, newest first",
-      shows feed "?before=2" && !shows feed "Cats" && shows older "Cats"),
+      shows feed "?t=" && !shows feed "Cats" && shows older "Cats"),
     ("videos: only its author, or the video's owner, deletes a comment",
       status uncommentedByCarol == 404 && status uncommented == 303
         && status uncommentedByOwner == 303 && !shows afterUncomment "Nice cats"
         && !shows afterUncomment "Buy pills"),
     ("videos: a check the store refuses once is tried again, and the video is ready",
-      checkRefused && status retried == 303 && location retried == "/v/1"),
+      checkRefused && status retried == 303 && location retried == Routes.watch.link (vid 1)),
     ("videos: a deleted video is not served, and its upload, rendition and thumbnail are deleted "
       ++ "in the store, though the store refused the first delete",
       status deleted == 303 && status gone == 404 && !shows feedAfter "Cats" && objectGone
@@ -320,24 +347,30 @@ def decoded (r : Http.Request) : Option Input :=
 def withCookie (value : String) (r : Http.Request) : Http.Request :=
   { r with headers := r.headers ++ [("cookie", s!"{settings.cookieName}={value}")] }
 
+def readOf (r : Http.Request) : Option Read := read? ((bridge settings).prepare r)
+
 def bridgeTests : List (String × Bool) :=
-  let watch : Http.Request := { method := .get, path := ["v", "3"] }
-  let token := sessionToken settings 0 7 0
+  let watch : Http.Request := { method := .get, path := vPath 3 }
+  let token := sessionToken settings aliceId 7 0
   let like (csrf : String) (headers : List (String × String) := []) : Http.Request :=
-    withCookie token { method := .post, path := ["v", "3", "like"], headers
+    withCookie token { method := .post, path := vPath 3 ["like"], headers
                        body := s!"csrf={csrf}".toUTF8 }
-  let good := Auth.formToken settings.keys (sessionOf 0 7)
+  let good := Auth.formToken settings.keys (sessionOf aliceId 7)
+  let forgedPayload := sessionOf aliceId 7
   [ ("bridge: a verified cookie names its member and session, and is dropped",
-      decoded (withCookie token watch) == some (.request (.watch 0 (some (0, 7)) 3) 0)
+      readOf (withCookie token watch) == some (.watch (some (aliceId, 7)) (vid 3))
         && ((bridge settings).prepare (withCookie token watch)).headers.all (·.1 != "cookie")),
     ("bridge: a cookie whose payload is changed, and a session header a client sends, name no one",
-      decoded (withCookie "0.7" watch) == some (.request (.watch 0 none 3) 0)
-        && decoded { watch with headers := [(sessionHeader, "0.7")] } == some (.request (.watch 0 none 3) 0)),
+      readOf (withCookie forgedPayload watch) == some (.watch none (vid 3))
+        && readOf { watch with headers := [(sessionHeader, forgedPayload)] } == some (.watch none (vid 3))),
+    ("bridge: a read is never an input",
+      decoded (withCookie token watch) == none && decoded { method := .get, path := [] } == none),
     ("bridge: the time a request arrived is the server's, not the client's",
-      decoded (stamp 99 { watch with headers := [(arrivedHeader, "5")] })
-        == some (.request (.watch 0 none 3) 99)),
+      decoded (stamp 99 (like good [(arrivedHeader, "5")]))
+        == some (.request (.like 0 aliceId 7 (vid 3) true) 99)),
     ("bridge: a change needs the session's form token, from this origin",
-      decoded (like good) == some (.request (.like 0 0 7 3 true) 0) && decoded (like "forged") == none
+      decoded (like good) == some (.request (.like 0 aliceId 7 (vid 3) true) 0)
+        && decoded (like "forged") == none
         && decoded (like good [("origin", "https://evil.example")]) == none),
     ("bridge: a title too long, or no format, is refused before the system",
       let make (title media : String) : Http.Request := withCookie token {
@@ -348,20 +381,23 @@ def bridgeTests : List (String × Bool) :=
         && decoded (make "ok" "avi") == none),
     ("bridge: a store call is the head of the upload, or the deletes of the upload, the rendition "
       ++ "and the thumbnail, and only those",
-      (match exchangeOf settings workerKey (Key.check 4 0).op, exchangeOf settings workerKey (Key.expire 4).op,
-          exchangeOf settings workerKey (Key.delete 4).op with
+      let key := settings.objectKey (vid 4)
+      (match exchangeOf settings workerKey (Key.check (vid 4) 0).op,
+          exchangeOf settings workerKey (Key.expire (vid 4)).op,
+          exchangeOf settings workerKey (Key.delete (vid 4)).op with
         | some (.store [.head a]), some (.store [.head b]), some (.store [.delete c, .delete d, .delete e]) =>
-          a.val == "videos/4" && b.val == "videos/4" && c.val == "videos/4" && d.val == "videos/4.mp4"
-            && e.val == "videos/4.jpg"
+          a.val == key && b.val == key && c.val == key && d.val == key ++ ".mp4"
+            && e.val == key ++ ".jpg" && key == "videos/https%3A%2F%2Fgithub.com/1/4"
         | _, _, _ => false)
         && storeReply none == .unknown && storeReply (some (.refused 500 "")) == .answer .failed
         && storeReplies [some .deleted, some .deleted, some .deleted] == .answer .deleted
         && storeReplies [some .deleted, none, some .deleted] == .unknown),
     ("bridge: a transcode is the round's job posted to the worker, signed, and taken with a 2xx",
-      (match exchangeOf settings workerKey (Key.transcode ⟨4, 1⟩).op with
+      let key := settings.objectKey (vid 4)
+      (match exchangeOf settings workerKey (Key.transcode ⟨vid 4, 1⟩).op with
         | some (.worker r) =>
           Transcode.readJob? ((String.fromUTF8? r.body).getD "")
-              == some (⟨"4.1", "videos/4", ["videos/4.mp4", "videos/4.jpg"]⟩, s!"{origin}/transcoded")
+              == some (⟨Round.id ⟨vid 4, 1⟩, key, [key ++ ".mp4", key ++ ".jpg"]⟩, s!"{origin}/transcoded")
             && r.header? Transcode.signatureHeader
               == some (Transcode.jobSignature workerKey ((String.fromUTF8? r.body).getD ""))
         | _ => false)
@@ -372,30 +408,35 @@ def bridgeTests : List (String × Bool) :=
       let hook (job : String) (sig : String) : Http.Request :=
         { Transcode.reportRequest workerKey ["transcoded"] (.done job []) with
           headers := [(Transcode.signatureHeader, sig)] }
-      decoded (hook "4.1" "anything") == some (.request (.report 0 (.done ⟨4, 1⟩) "anything") 0)
-        && decoded (hook "4.01" "anything") == none && decoded (hook "4" "anything") == none) ]
+      decoded (hook (Round.id ⟨vid 4, 1⟩) "anything")
+          == some (.request (.report 0 (.done ⟨vid 4, 1⟩) "anything") 0)
+        && decoded (hook ((vid 4).code ++ "/01") "anything") == none
+        && decoded (hook (vid 4).code "anything") == none
+        && Round.ofId? (Round.id ⟨⟨bobId, 12⟩, 3⟩) == some ⟨⟨bobId, 12⟩, 3⟩) ]
 
 /-- What a shared cache in front may keep (`Http.SharedCache.leaks`): every reply and every
 answer the bridge gives without the system, as each of three viewers would get it. None is kept
 and given to another viewer. -/
 def sharedCacheTests : List (String × Bool) :=
-  let viewers : List Viewer := [none, some (0, 7), some (1, 8)]
+  let viewers : List Viewer := [none, some (aliceId, 7), some (bobId, 8)]
   let asking (viewer : Viewer) (r : Http.Request) : Http.Request :=
     match viewer with
     | some (m, session) => withCookie (sessionToken settings m session 0) r
     | none => r
-  let card : Card := ⟨1, 0, "a", "t", .public, 2⟩
-  let view : View := ⟨card, "about", .mp4, false, [⟨0, 1, "b", "hi"⟩]⟩
+  let card : Card := ⟨vid 1, aliceId, "a", "t", .public, 2⟩
+  let view : View := ⟨card, "about", .mp4, false, [⟨0, bobId, "b", "hi"⟩]⟩
   let replies : List Reply :=
-    [.signedIn 0 7 100, .full, .signedOut, .noSession, .created 1 .mp4 100, .tooMany, .confirmed 1,
-      .notUploaded 1, .unconfirmed 1, .watch view 100, .notFound, .liked 1 2 true, .commented 1,
-      .tooManyComments 1, .uncommented 1, .deleted 1, .feed [card] none,
-      .channel 0 "a" [card] [(2, "x", .transcoding), (3, "y", .failed)],
-      .preparing 2 "x" .upload, .preparing 3 "y" .failed, .retrying 3, .reported, .forged]
+    [.signedIn aliceId 7 100, .signedOut, .noSession, .created (vid 1) .mp4 100, .tooMany,
+      .confirmed (vid 1), .notUploaded (vid 1), .unconfirmed (vid 1), .watch view 100, .notFound,
+      .liked (vid 1) 2 true, .commented (vid 1), .tooManyComments (vid 1), .uncommented (vid 1),
+      .deleted (vid 1), .feed [card] (some ⟨5, vid 1⟩),
+      .channel aliceId "a" [card] [(vid 2, "x", .transcoding), (vid 3, "y", .failed)],
+      .preparing (vid 2) "x" .upload, .preparing (vid 3) "y" .failed, .retrying (vid 3), .reported,
+      .forged]
   let encoded := replies.zipIdx.flatMap fun (r, n) => viewers.map fun viewer =>
     (asking viewer { method := .get, path := ["reply", toString n] }, encodeReply settings viewer r)
   let paths : List (List String) :=
-    [[], ["style.css"], ["upload.js"], ["new"], ["v", "3"], ["c", "0"], ["nope"],
+    [[], ["style.css"], ["upload.js"], ["new"], vPath 3, cPath aliceId, ["nope"],
       ["sign-in", "github", "callback"]]
   let direct := paths.flatMap fun path => viewers.filterMap fun viewer =>
     let r := asking viewer { method := .get, path }

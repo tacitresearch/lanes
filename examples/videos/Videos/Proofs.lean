@@ -10,6 +10,7 @@ import Videos.Proofs.Likes
 import Videos.Proofs.Private
 import Videos.Proofs.Jobs
 import Videos.Proofs.Ready
+import Videos.Proofs.Members
 import Videos.Proofs.Reads
 import Videos.Proofs.Axioms
 

@@ -59,10 +59,10 @@ theorem run_concat (s : Site) (es : List Turn) (e : Turn) :
 
 /-! ## Ids -/
 
-/-- The next id has not shrunk, and every video is one there before, under its id, or the new
-one with the id `next` had. -/
+/-- The next number has not shrunk, and every video is one there before, under its id, or the
+new one with the number `next` had. -/
 def Grows (s s' : Site) : Prop :=
-  s.next ≤ s'.next ∧ ∀ w ∈ s'.videos, (∃ w' ∈ s.videos, w'.id = w.id) ∨ (w.id = s.next ∧ s.next < s'.next)
+  s.next ≤ s'.next ∧ ∀ w ∈ s'.videos, (∃ w' ∈ s.videos, w'.id = w.id) ∨ (w.id.n = s.next ∧ s.next < s'.next)
 
 theorem grows_refl (s : Site) : Grows s s :=
   ⟨Nat.le_refl _, fun w hw => .inl ⟨w, hw, rfl⟩⟩
@@ -171,15 +171,7 @@ theorem channel_fst (s : Site) (req : ReqId) (viewer : Viewer) (whose : Member) 
 theorem grows_request (s : Site) (c : Command) (at_s : Nat) :
     Grows s (s.request config c at_s).1 := by
   cases c with
-  | signIn req issuer subject name =>
-    show Grows s (s.signIn config req issuer subject name at_s).1
-    unfold signIn
-    dsimp only
-    split
-    · exact grows_videos rfl rfl
-    · split
-      · exact grows_refl s
-      · exact grows_videos rfl rfl
+  | signIn req who name => exact grows_videos rfl rfl
   | signOut req m session =>
     show Grows s (s.withSession config.lifetime at_s req m session _).1
     exact grows_withSession fun _ => grows_videos rfl rfl
@@ -198,34 +190,11 @@ theorem grows_request (s : Site) (c : Command) (at_s : Nat) :
     split
     · exact grows_check config s req _ at_s hw
     · exact grows_refl s
-  | watch req viewer v =>
-    show Grows s (s.watch req _ v at_s).1
-    rw [watch_fst]
-    exact grows_refl s
-  | like req m session v on =>
-    exact grows_withSession fun _ => grows_seen fun w hw => grows_setVideo ⟨w, hw, rfl⟩
-  | comment req m session v body =>
-    refine grows_withSession fun _ => grows_seen fun w hw => ?_
-    unfold comment
-    split
-    · exact grows_refl s
-    · have h := grows_setVideo (s := s)
-        (x := { w with comments := w.comments ++ [{ id := s.nextComment, author := m, body }] })
-        ⟨w, hw, rfl⟩
-      exact ⟨h.1, h.2⟩
-  | uncomment req m session v c =>
-    refine grows_withSession fun _ => grows_seen fun w hw => ?_
-    unfold uncomment
-    split
-    · exact grows_setVideo ⟨w, hw, rfl⟩
-    · exact grows_refl s
+  | like req m session v on => exact grows_withSession fun _ => grows_refl s
+  | comment req m session v body => exact grows_withSession fun _ => grows_refl s
+  | uncomment req m session v c => exact grows_withSession fun _ => grows_refl s
   | delete req m session v =>
     exact grows_withSession fun _ => grows_owned fun w _ => grows_filter s (·.id != w.id)
-  | feed => exact grows_refl s
-  | channel req viewer whose =>
-    show Grows s (s.channel req _ whose).1
-    rw [channel_fst]
-    exact grows_refl s
   | retry req m session v =>
     exact grows_withSession fun _ => grows_owned fun w hw => grows_retry config s req _ hw
   | report req r signature => exact grows_report config s req r signature
@@ -283,11 +252,32 @@ theorem grows_job (s : Site) (key : Key) (o : Outcome) : Grows s (s.job config k
     · exact grows_refl s
   | delete v => exact grows_refl s
 
+theorem grows_visit (s : Site) (v : Visit) : Grows s (s.visit config v).1 := by
+  cases v with
+  | like req viewer m v on =>
+    exact grows_seen fun w hw => grows_setVideo ⟨w, hw, rfl⟩
+  | comment req viewer m name v body =>
+    refine grows_seen fun w hw => ?_
+    unfold comment
+    split
+    · exact grows_refl s
+    · have h := grows_setVideo (s := s)
+        (x := { w with comments := w.comments ++ [{ id := s.nextComment, author := m, name, body }] })
+        ⟨w, hw, rfl⟩
+      exact ⟨h.1, h.2⟩
+  | uncomment req viewer m v c =>
+    refine grows_seen fun w hw => ?_
+    unfold uncomment
+    split
+    · exact grows_setVideo ⟨w, hw, rfl⟩
+    · exact grows_refl s
+
 theorem grows_handle (s : Site) (i : Input) : Grows s (s.handle config i).1 := by
   cases i with
   | request c at_s => exact grows_request config s c at_s
   | job key o => exact grows_job config s key o
   | noticed _ => exact grows_refl s
+  | visit v => exact grows_visit config s v
 
 theorem grows_recover (s : Site) : Grows s s.recover.1 := by
   refine ⟨Nat.le_refl _, fun w hw => ?_⟩
@@ -300,8 +290,8 @@ theorem grows_step (s : Site) (e : Turn) : Grows s (s.step config e).1 := by
   | inl i => exact grows_handle config s i
   | inr _ => exact grows_recover s
 
-/-- Every video's id is below the next one, so no video made later has it. -/
-def Fresh (s : Site) : Prop := ∀ w ∈ s.videos, w.id < s.next
+/-- Every video's number is below the next one, so no video made later has its id. -/
+def Fresh (s : Site) : Prop := ∀ w ∈ s.videos, w.id.n < s.next
 
 theorem fresh_init : Fresh {} := by simp [Fresh]
 

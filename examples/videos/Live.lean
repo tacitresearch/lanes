@@ -40,7 +40,7 @@ def main : IO UInt32 := do
           let some k := S3.Key.of? key | return false
           return (← S3.exchange b creds (.head k)) matches some (.found _)
         let results ← flow d provider worker held
-        for v in [0, 1, 2] do
+        for v in [vid 0, vid 1, vid 2] do
           for key in [d.settings.objectKey v, d.settings.renditionKey v, d.settings.thumbnailKey v] do
             if let some k := S3.Key.of? key then
               discard <| S3.exchange b creds (.delete k)
