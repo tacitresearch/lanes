@@ -18,6 +18,7 @@ public import Lanes.Semantics.MonitorSound
 public import Lanes.Semantics.Once
 public import Lanes.Semantics.Projection
 public import Lanes.Semantics.Refinement
+public import Lanes.Semantics.Restart
 public import Lanes.Semantics.Schedule
 public import Lanes.Semantics.Seq
 public import Lanes.Semantics.Sent

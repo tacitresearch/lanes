@@ -106,6 +106,10 @@ theorem erase_startActor (env : EnvModel σ) (c : SysState (sys.withGhost g)) (i
     (c.startActor env i).erase = c.erase.startActor env i :=
   erase_settle env { c with up := update c.up i true } i _
 
+theorem erase_init (sys : System σ) (g : Ghost sys) (env : EnvModel σ) :
+    (SysState.init (sys.withGhost g) env).erase = SysState.init sys env :=
+  (List.foldl_hom erase fun c i => (erase_startActor env c i).symm).symm
+
 private theorem map_ite {α β : Type} (f : α → β) (b : Bool) (x : α) :
     Option.map f (if b then some x else none) = if b then some (f x) else none := by
   cases b <;> rfl
@@ -129,6 +133,8 @@ theorem erase_step (env : EnvModel σ) (c : SysState (sys.withGhost g)) (ev : Ev
   | start i =>
     exact (map_ite erase (!c.up i && (c.hasMail i || env.restarts i)) _).trans
       (by rw [erase_startActor]; rfl)
+  | restart =>
+    exact (map_ite erase env.mayRestart _).trans (by rw [erase_init]; rfl)
 
 theorem erase_run (env : EnvModel σ) (c : SysState (sys.withGhost g)) (evs : List (Event σ)) :
     (c.run env evs).map erase = c.erase.run env evs := by
@@ -139,10 +145,6 @@ theorem erase_run (env : EnvModel σ) (c : SysState (sys.withGhost g)) (evs : Li
     cases c.step env ev with
     | none => rfl
     | some c' => exact ih c'
-
-theorem erase_init (sys : System σ) (g : Ghost sys) (env : EnvModel σ) :
-    (SysState.init (sys.withGhost g) env).erase = SysState.init sys env :=
-  (List.foldl_hom erase fun c i => (erase_startActor env c i).symm).symm
 
 end SysState
 

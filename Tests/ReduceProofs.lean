@@ -57,7 +57,7 @@ theorem reduced_pass
     {w : World echo D} (hw : scenario.Reachable echo (fun _ => true) w) :
     w.driver.2.all (inputs.contains ·) = true :=
   Check.systemReduced_sound scenario (.of_lawful _) canon props {} reduction
-    (fun a b h => ⟨h.state, by simp [canon, eq_of_beq h.driver], h.crashes⟩)
+    (fun a b h => ⟨h.state, by simp [canon, eq_of_beq h.driver], h.crashes, h.restarts⟩)
     (fun p hp a b h => by
       have hd := eq_of_beq h.driver
       simp only [props, List.mem_cons, List.not_mem_nil, or_false] at hp

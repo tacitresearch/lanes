@@ -153,7 +153,7 @@ reached "the counter reaches its limit" in 5 steps
 reached "an increment is refused" in 7 steps
 reached "a decrement is refused" in 3 steps
 states: 5696, transitions: 14066, depth: 15
-coverage: output 7387, input 2339, deliver 1860, crash 1315, start 1165, drop 0 (never fired), duplicate 0 (never fired), timeout 0 (never fired)
+coverage: output 7387, input 2339, deliver 1860, crash 1315, start 1165, drop 0 (never fired), duplicate 0 (never fired), restart 0 (never fired), timeout 0 (never fired)
 ```
 
 Now seed a bug. In `service`, write `1 <` for `0 <`, so that a decrement at one is refused:
@@ -179,7 +179,7 @@ FAIL: "a request is refused only at zero or at the limit" is violated after 5 st
 reached "the counter reaches its limit" in 5 steps
 reached "a decrement is refused" in 3 steps
 states: 167, transitions: 223, depth: 5
-coverage: input 134, start 40, crash 23, deliver 19, output 7, drop 0 (never fired), duplicate 0 (never fired), timeout 0 (never fired)
+coverage: input 134, start 40, crash 23, deliver 19, output 7, drop 0 (never fired), duplicate 0 (never fired), restart 0 (never fired), timeout 0 (never fired)
 ```
 
 Read it as a story. A client sends `increment 1`. The actor starts (every start, the first

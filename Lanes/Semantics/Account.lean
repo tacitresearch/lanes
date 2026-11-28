@@ -400,7 +400,8 @@ theorem implements_timed {svc : Service σ.In σ.Out S T} (a : Account sys S W)
     (down : ∀ c i, env.mayCrash i = true ∨ sys.Stops i → a.Moves svc c (c.down env i))
     (timeout : ∀ c i msg, inv c → sys.Armed i msg → msg ∈ c.timers i →
       a.Passes svc (deadlines i msg) c (c.grow i ((sys.actor i).step (c.state i) msg)))
-    (recover : ∀ c i, inv c → a.Moves svc c (c.grow i ((sys.actor i).recover (c.state i)))) :
+    (recover : ∀ c i, inv c → a.Moves svc c (c.grow i ((sys.actor i).recover (c.state i))))
+    (restart : env.mayRestart = true → ∀ c, inv c → a.Moves svc c (SysState.init sys env)) :
     sys.Implements env svc deadlines delivered := by
   have hsent := fun c e (hc : inv c ∧ sys.Traced c) he => hc.2.net e he
   refine System.Refines.of_timed_events (fun c hc => ⟨hinv c hc, System.traced sys env c hc⟩)
@@ -414,6 +415,7 @@ theorem implements_timed {svc : Service σ.In σ.Out S T} (a : Account sys S W)
     (fun c t i msg hc ⟨_, h⟩ hmem =>
       h.passes (timeout c i msg hc.1 (hc.2.timers i msg hmem) hmem))
     (fun c t i hc ⟨_, h⟩ => h.moves (recover c i hc.1))
+    (fun hmay c t hc ⟨_, h⟩ => h.moves (restart hmay c hc.1))
   · rintro c t x ⟨hc, -⟩ ⟨w, h⟩
     obtain ⟨hpend, howe⟩ := accept x
     refine ⟨{ t with pending := x ::ₘ t.pending }, .single rfl, w, input c w _ x hc h.value, ?_, ?_⟩
@@ -436,7 +438,8 @@ A system implements its service when every step of an actor `Moves`: an applicat
 account, that it holds initially, that an input is what its message to the system carries, and
 the steps. A value that reads the messages in flight must also survive an input arriving, and
 losses must keep the account; `Moves.of_loses` does that for a value that does not read what
-is lost.
+is lost. A restart must `Move` too, where the environment allows one: a service whose value
+the system forgets on a restart is not implemented under restarts.
 -/
 theorem implements {svc : Service σ.In σ.Out S T} (a : Account sys S W)
     (hinv : sys.Invariant env inv)
@@ -455,10 +458,11 @@ theorem implements {svc : Service σ.In σ.Out S T} (a : Account sys S W)
     (down : ∀ c i, env.mayCrash i = true ∨ sys.Stops i → a.Moves svc c (c.down env i))
     (timeout : ∀ c i msg, inv c → sys.Armed i msg → msg ∈ c.timers i →
       a.Moves svc c (c.grow i ((sys.actor i).step (c.state i) msg)))
-    (recover : ∀ c i, inv c → a.Moves svc c (c.grow i ((sys.actor i).recover (c.state i)))) :
+    (recover : ∀ c i, inv c → a.Moves svc c (c.grow i ((sys.actor i).recover (c.state i))))
+    (restart : env.mayRestart = true → ∀ c, inv c → a.Moves svc c (SysState.init sys env)) :
     sys.Implements env svc :=
   a.implements_timed (deadlines := fun _ _ => none) (delivered := fun _ _ => none) hinv init
-    accept input deliver duplicate drop down timeout recover
+    accept input deliver duplicate drop down timeout recover restart
 
 end Account
 

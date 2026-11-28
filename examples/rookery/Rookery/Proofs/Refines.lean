@@ -11,9 +11,11 @@ What is proved of `Board.handle` and `Board.fire` is proved of what runs:
   environment model, is within the bounds of `Config`, has fresh ids, and its memo remembers no
   read and no secret;
 - `implements`: the system implements its spec with deadlines, for every configuration and every
-  environment in which the link from the outside to the board does not hand a request over twice:
-  requests may be lost and reordered, the board may crash any number of times, and its timers
-  are the spec's deadlines passing.
+  environment in which the link from the outside to the board does not hand a request over twice
+  and the process does not restart: requests may be lost and reordered, the board may crash any
+  number of times, and its timers are the spec's deadlines passing. A restart puts the board back
+  at its initial state while the spec keeps its value, so it is not allowed; the bounds of
+  `board_invariant` hold across restarts all the same.
 
 The relation is the plainest there is: the spec's value is the board's state, the spec still has
 pending every request on its way to the board, and still owes every response not yet handed
@@ -164,11 +166,13 @@ theorem requests_le_of_sublist {l l' : List (Envelope (sig N C))} (h : l'.Sublis
   Bag.coe_le_coe_of_sublist (h.filterMap _)
 
 /-- The system implements its spec, deadlines and all, in every environment whose link from the
-outside to the board does not duplicate. -/
-theorem implements (env : EnvModel (sig N C)) (henv : (env.link none ()).duplicating = false) :
+outside to the board does not duplicate and where the process does not restart. -/
+theorem implements (env : EnvModel (sig N C)) (henv : (env.link none ()).duplicating = false)
+    (hrestart : env.mayRestart = false) :
     (system N C config).Implements env (spec N C config) deadlines := by
   refine System.Refines.of_events (System.traced _ env) (Rel config) ⟨_, rfl, ?_⟩
     (fun c t _ _ h _ => h) ?input ?output ?deliver ?duplicate ?drop ?down ?timeout ?recover
+    (fun h => absurd h (by simp [hrestart]))
   · exact ⟨rfl, by simp [requests, SysState.init, SysState.blank],
       by simp [SysState.init, SysState.blank]⟩
   case input =>

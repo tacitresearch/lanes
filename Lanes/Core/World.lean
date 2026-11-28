@@ -89,8 +89,9 @@ theorem SysState.ext' {sys : System σ} {a b : SysState sys} (hstate : a.state =
     (houtbox : a.outbox = b.outbox) : a = b := by
   cases a; cases b; simp_all
 
-/-- One thing that can happen to a system. Inputs come from outside; drops, duplicates and
-crashes are what the environment model allows; the rest follow from what the actors did.
+/-- One thing that can happen to a system. Inputs come from outside; drops, duplicates,
+crashes and restarts are what the environment model allows; the rest follow from what the
+actors did.
 `SysState.step` says when each is enabled. -/
 inductive Event (σ : Signature) : Type where
   | input (x : σ.In)
@@ -103,6 +104,9 @@ inductive Event (σ : Signature) : Type where
   | output (out : σ.Out)
   | crash (i : σ.Id)
   | start (i : σ.Id)
+  /-- The process restarts: every actor is back at its initial state, as at `SysState.init`,
+  and messages in flight, timers and outputs not yet handed over are lost (D110). -/
+  | restart
 
 /-- What the outside world sees: inputs, outputs, and a spec's deadlines passing. -/
 inductive Visible (In Out : Type) (T : Type := Empty) : Type where
@@ -178,6 +182,10 @@ def handle (env : EnvModel σ) (c : SysState sys) (i : σ.Id) (msg : σ.Msg i) :
 def startActor (env : EnvModel σ) (c : SysState sys) (i : σ.Id) : SysState sys :=
   ({ c with up := update c.up i true }).settle env i ((sys.actor i).recover (c.state i))
 
+/-- The state at the start: no actor up, then each actor of `sys.boot` started in order. -/
+def init (sys : System σ) (env : EnvModel σ) : SysState sys :=
+  sys.boot.foldl (fun c i => c.startActor env i) (blank sys)
+
 /-- Whether `e` may be delivered now: it is in flight, and if its link is ordered it is the
 oldest message on that link. -/
 def deliverable (env : EnvModel σ) (c : SysState sys) (e : Envelope σ) : Bool :=
@@ -210,10 +218,7 @@ def step (env : EnvModel σ) (c : SysState sys) : Event σ → Option (SysState 
     if c.up i && env.mayCrash i then some (c.down env i) else none
   | .start i =>
     if !c.up i && (c.hasMail i || env.restarts i) then some (c.startActor env i) else none
-
-/-- The state at the start: no actor up, then each actor of `sys.boot` started in order. -/
-def init (sys : System σ) (env : EnvModel σ) : SysState sys :=
-  sys.boot.foldl (fun c i => c.startActor env i) (blank sys)
+  | .restart => if env.mayRestart then some (init sys env) else none
 
 /-- The state after the events, in order, or `none` if one of them is not enabled. A
 counterexample of the checker, and a run of the scheduler, replay through it. -/

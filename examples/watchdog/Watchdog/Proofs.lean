@@ -133,7 +133,7 @@ theorem silence_due_of_step {c c' : SysState (system config)} {ev : Event sig}
     (hdue : silence.Due {} c) (hstep : c.step {} ev = some c') (hev : ev ≠ bark) :
     silence.Due {} c' := by
   obtain ⟨hup, hmem⟩ := hdue
-  refine ⟨SysState.up_of_step rfl (fun _ msg => by cases msg <;> rfl) hup hstep, ?_⟩
+  refine ⟨SysState.up_of_step rfl rfl (fun _ msg => by cases msg <;> rfl) hup hstep, ?_⟩
   have hdog (c : SysState (system config)) (msg : DogMsg) (h : DogMsg.silence ∈ c.timers .dog) :
       DogMsg.silence ∈ (c.handle {} .dog msg).timers .dog := by
     cases msg <;>
@@ -182,6 +182,9 @@ theorem silence_due_of_step {c c' : SysState (system config)} {ev : Event sig}
     cases i with
     | keeper => exact hkeeper _ _ hmem
     | dog => simp [hup] at hdown
+  | restart =>
+    obtain ⟨hmay, -⟩ := SysState.step_restart.mp hstep
+    cases hmay
 
 /-- A run that fires every timer that stays pending has the dog bark, however the keeper
 pings: there the timer of a keep-alive fires though it is kept alive. -/

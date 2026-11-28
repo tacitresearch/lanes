@@ -61,18 +61,23 @@ def anyOrder (xs : List σ.In) : Driver σ (List σ.In) where
 end Driver
 
 /-- What the scheduler and the checker step: the system, the driver's state, and the crashes
-so far, which `Scenario.maxCrashes` bounds. Properties are stated over it. -/
+and restarts so far, which `Scenario.maxCrashes` and `Scenario.maxRestarts` bound. Properties
+are stated over it. A restart does not touch the driver: the outside keeps what it sent and
+saw. -/
 structure World (sys : System σ) (D : Type) where
   state : SysState sys
   driver : D
   crashes : Nat := 0
+  restarts : Nat := 0
 
 /-- One instance to run or check: the environment model, the driver of the inputs, and how
-many crashes a run may take. -/
+many crashes and process restarts a run may take. A restart is explored only where `env`
+allows it (`EnvModel.mayRestart`), as a crash is only where `env.mayCrash` does. -/
 structure Scenario (σ : Signature) (D : Type) where
   env : EnvModel σ := {}
   driver : Driver σ D
   maxCrashes : Nat := 0
+  maxRestarts : Nat := 0
 
 namespace World
 
@@ -84,7 +89,7 @@ def init (sys : System σ) (sc : Scenario σ D) : World sys D where
   driver := sc.driver.init
 
 /-- Every event enabled in `w`, with the world it leads to: each event the environment model
-allows, a crash only within the budget, and each input the driver may send. The checker
+allows, a crash or a restart only within its budget, and each input the driver may send. The checker
 explores all of them; `simulate` and `fuzz` pick one. -/
 def next [Enum σ.Id] (sc : Scenario σ D) (w : World sys D) : List (Event σ × World sys D) :=
   let internal := (w.state.successors sc.env).filterMap fun (ev, c) =>
@@ -96,6 +101,10 @@ def next [Enum σ.Id] (sc : Scenario σ D) (w : World sys D) : List (Event σ ×
     | .crash _ =>
       if w.crashes < sc.maxCrashes then
         some (ev, { w with state := c, crashes := w.crashes + 1 })
+      else none
+    | .restart =>
+      if w.restarts < sc.maxRestarts then
+        some (ev, { w with state := c, restarts := w.restarts + 1 })
       else none
     | _ => some (ev, { w with state := c })
   let inputs := (sc.driver.inputs w.driver).filterMap fun (x, d) =>

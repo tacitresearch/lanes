@@ -168,7 +168,9 @@ or recovers is `grow`, with nothing lost; the delivery case knows the message is
 so on an ordered link it is the oldest. Each case is answered by a step of the spec with the
 event's label: an input and an output by the same visible step, a timer that `deadlines` names
 and a message handed over that `delivered` names by its deadline passing, and the rest by
-internal steps.
+internal steps. A restart, where the environment allows one, is answered by internal steps of
+the spec to a state related to the start: a spec that remembers what the system forgets on a
+restart is not refined, and an environment without restarts discharges the case at once.
 -/
 theorem Refines.of_timed_events {T : Type} {spec : Spec S (Option (Visible σ.In σ.Out T))}
     {deadlines delivered : Deadlines σ T} {inv : SysState sys → Prop}
@@ -198,7 +200,9 @@ theorem Refines.of_timed_events {T : Type} {spec : Spec S (Option (Visible σ.In
       ∃ t', spec.lts.STr t ((deadlines i msg).map Visible.fire) t' ∧
         rel (c.grow i ((sys.actor i).step (c.state i) msg)) t')
     (recover : ∀ c t i, inv c → rel c t → ∃ t', spec.lts.τSTr t t' ∧
-      rel (c.grow i ((sys.actor i).recover (c.state i))) t') :
+      rel (c.grow i ((sys.actor i).recover (c.state i))) t')
+    (restart : env.mayRestart = true → ∀ c t, inv c → rel c t →
+      ∃ t', spec.lts.τSTr t t' ∧ rel (SysState.init sys env) t') :
     sys.Refines env spec deadlines delivered := by
   refine Lanes.Refines.of_invariant (invariant_iff.mp hinv) rel ?_ ?_
   · rintro _ rfl
@@ -258,6 +262,10 @@ theorem Refines.of_timed_events {T : Type} {spec : Spec S (Option (Visible σ.In
     obtain ⟨t', ht', hrel'⟩ := recover c t i hc hrel
     exact settle _ c i _ _ t' rfl rfl rfl (fun _ _ h => h) (fun h => ⟨c.state i, .inl h⟩)
       (internal ht') hrel'
+  | restart =>
+    obtain ⟨hmay, rfl⟩ := SysState.step_restart.mp hstep
+    obtain ⟨t', ht', hrel'⟩ := restart hmay c t hc hrel
+    exact ⟨t', internal ht', hrel'⟩
 
 /-- `of_timed_events` with no message handed over passing a deadline: each delivery and
 duplicate is answered by internal steps of the spec. -/
@@ -286,7 +294,9 @@ theorem Refines.of_events {T : Type} {spec : Spec S (Option (Visible σ.In σ.Ou
       ∃ t', spec.lts.STr t ((deadlines i msg).map Visible.fire) t' ∧
         rel (c.grow i ((sys.actor i).step (c.state i) msg)) t')
     (recover : ∀ c t i, inv c → rel c t → ∃ t', spec.lts.τSTr t t' ∧
-      rel (c.grow i ((sys.actor i).recover (c.state i))) t') :
+      rel (c.grow i ((sys.actor i).recover (c.state i))) t')
+    (restart : env.mayRestart = true → ∀ c t, inv c → rel c t →
+      ∃ t', spec.lts.τSTr t t' ∧ rel (SysState.init sys env) t') :
     sys.Refines env spec deadlines :=
   Refines.of_timed_events (delivered := fun _ _ => none) hinv rel init frame input output
     (fun c t e hc h hd => by
@@ -295,7 +305,7 @@ theorem Refines.of_events {T : Type} {spec : Spec S (Option (Visible σ.In σ.Ou
     (fun c t e hc h hd hdup => by
       obtain ⟨t', ht', h'⟩ := duplicate c t e hc h hd hdup
       exact ⟨t', (LTS.sTr_τSTr_iff spec.lts).mpr ht', h'⟩)
-    drop down timeout recover
+    drop down timeout recover restart
 
 /--
 Refinement of a system, for a relation that losing messages and timers cannot break (`loses`).
@@ -325,7 +335,9 @@ theorem Refines.of_steps {inv : SysState sys → Prop} (hinv : sys.Invariant env
     (timeout : ∀ c t i msg, inv c → rel c t → msg ∈ c.timers i → ∃ t', spec.lts.τSTr t t' ∧
       rel (c.grow i ((sys.actor i).step (c.state i) msg)) t')
     (recover : ∀ c t i, inv c → rel c t → ∃ t', spec.lts.τSTr t t' ∧
-      rel (c.grow i ((sys.actor i).recover (c.state i))) t') :
+      rel (c.grow i ((sys.actor i).recover (c.state i))) t')
+    (restart : env.mayRestart = true → ∀ c t, inv c → rel c t →
+      ∃ t', spec.lts.τSTr t t' ∧ rel (SysState.init sys env) t') :
     sys.Refines env spec :=
   Refines.of_events hinv rel init
     (fun c t _ _ h htimers => loses c _ t h ⟨rfl, List.Sublist.refl _, htimers, rfl⟩) input output
@@ -335,7 +347,7 @@ theorem Refines.of_steps {inv : SysState sys → Prop} (hinv : sys.Invariant env
     (fun c t i h _ => ⟨t, .refl, loses c _ t h (SysState.Loses.down env c i)⟩)
     (fun c t i msg hc h hmem => by
       obtain ⟨t', ht', h'⟩ := timeout c t i msg hc h hmem
-      exact ⟨t', (LTS.sTr_τSTr_iff spec.lts).mpr ht', h'⟩) recover
+      exact ⟨t', (LTS.sTr_τSTr_iff spec.lts).mpr ht', h'⟩) recover restart
 
 /--
 `of_steps` with a delivery, a duplicate and a timeout as one case: an actor handles a message in
@@ -357,13 +369,15 @@ theorem Refines.of_handles {inv : SysState sys → Prop} (hinv : sys.Invariant e
       ∃ t', spec.lts.τSTr t t' ∧
         rel (({ c with net }).grow i ((sys.actor i).step (c.state i) msg)) t')
     (recover : ∀ c t i, inv c → rel c t → ∃ t', spec.lts.τSTr t t' ∧
-      rel (c.grow i ((sys.actor i).recover (c.state i))) t') :
+      rel (c.grow i ((sys.actor i).recover (c.state i))) t')
+    (restart : env.mayRestart = true → ∀ c t, inv c → rel c t →
+      ∃ t', spec.lts.τSTr t t' ∧ rel (SysState.init sys env) t') :
     sys.Refines env spec :=
   Refines.of_steps hinv rel init loses input output
     (fun c t e hc h he => handle c t _ e.dst e.msg hc h List.erase_sublist (.inl ⟨e.src, he⟩))
     (fun c t e hc h he _ => handle c t c.net e.dst e.msg hc h (.refl _) (.inl ⟨e.src, he⟩))
     (fun c t i msg hc h hm => handle c t c.net i msg hc h (.refl _) (.inr hm))
-    recover
+    recover restart
 
 end System
 

@@ -26,8 +26,9 @@ The run is fair and not impatient: a timer that keeps being armed again while it
 does not fire.
 
 What makes this work without listing all actors is that an event changes the timers of one
-actor at most (`SysState.step_of_ne_actor`): the newly owed events are found among the messages
-in flight, the outbox and that actor's timers. The schedule is a computable function. Classical
+actor at most (`SysState.step_of_ne_actor`), and a restart those of the boot actors only: the
+newly owed events are found among the messages in flight, the outbox and those actors'
+timers. The schedule is a computable function. Classical
 reasoning is used in proofs only.
 
 ## Main definitions
@@ -55,10 +56,10 @@ namespace SysState
 
 variable {c c' : SysState sys} {ev : Event σ}
 
-/-- An event changes whether an actor is up, and which of its timers are armed, only for the
-actor that takes the step. -/
-theorem step_of_ne_actor {i : σ.Id} (hstep : c.step env ev = some c') (hi : ev.actor? ≠ some i) :
-    c'.up i = c.up i ∧ c'.timers i = c.timers i := by
+/-- An event other than a restart changes whether an actor is up, and which of its timers are
+armed, only for the actor that takes the step. -/
+theorem step_of_ne_actor {i : σ.Id} (hstep : c.step env ev = some c') (hi : ev.actor? ≠ some i)
+    (hev : ev ≠ .restart) : c'.up i = c.up i ∧ c'.timers i = c.timers i := by
   cases ev with
   | input x =>
     obtain rfl := step_input.mp hstep
@@ -92,6 +93,7 @@ theorem step_of_ne_actor {i : σ.Id} (hstep : c.step env ev = some c') (hi : ev.
     have hne : i ≠ j := by rintro rfl; exact hi rfl
     rw [startActor, settle_up_of_ne _ hne, settle_timers_of_ne _ hne]
     exact ⟨update_of_ne _ _ hne, rfl⟩
+  | restart => exact absurd rfl hev
 
 /-- An actor that is not started with the system has no timer armed when the system starts. -/
 theorem init_timers_of_not_mem_boot {i : σ.Id} (hi : i ∉ sys.boot) :
@@ -120,7 +122,7 @@ theorem step_of_owed (howed : c.owed env ev = true) : ∃ c', c.step env ev = so
   | output out =>
     simp only [owed, List.contains_iff_mem] at howed
     exact ⟨_, step_output.mpr ⟨howed, rfl⟩⟩
-  | input _ | duplicate _ | drop _ | crash _ => simp [owed] at howed
+  | input _ | duplicate _ | drop _ | crash _ | restart => simp [owed] at howed
 
 /-- An owed event is listed by `maybeOwed`, if it is not a timer of an actor outside
 `actors`. -/
@@ -143,7 +145,7 @@ theorem mem_maybeOwed {actors : List σ.Id} (howed : c.owed env ev = true)
   | output out =>
     simp only [owed, List.contains_iff_mem] at howed
     simp [howed]
-  | input _ | duplicate _ | drop _ | crash _ => simp [owed] at howed
+  | input _ | duplicate _ | drop _ | crash _ | restart => simp [owed] at howed
 
 end SysState
 
@@ -194,7 +196,7 @@ theorem take_queue {c' : SysState sys} (hqueue : s.queue = pre ++ e :: post) (hp
     ∃ pre' post', (s.take env p).queue = pre' ++ e :: post' ∧ pre'.length < pre.length := by
   let waits (e : Event σ) : Bool := !(s.state.arms p).contains e
   obtain ⟨pre', post', hrequeue, hlen⟩ := requeue_append_cons (env := env)
-    (actors := p.actor?.toList) (pre := (pre.erase p).filter waits)
+    (actors := touched sys p) (pre := (pre.erase p).filter waits)
     (post := post.filter waits ++ [p]) howed
   refine ⟨pre', post', ?_, ?_⟩
   · have hwaits : waits e = true := by simpa [waits] using hquiet
@@ -226,11 +228,19 @@ theorem Complete.take (hs : s.Complete env) (ev : Event σ) : (s.take env ev).Co
   · next c hstep =>
     intro ev' howed
     refine mem_requeue howed ?_
-    by_cases hactor : ∀ i msg, ev' = .timeout i msg → i ∈ ev.actor?.toList
+    by_cases hactor : ∀ i msg, ev' = .timeout i msg → i ∈ touched sys ev
     · exact .inr (SysState.mem_maybeOwed howed hactor)
     · simp only [Classical.not_forall] at hactor
       obtain ⟨i, msg, rfl, hi⟩ := hactor
-      obtain ⟨hup, htimers⟩ := SysState.step_of_ne_actor hstep (i := i) (by simpa using hi)
+      by_cases hev : ev = .restart
+      · subst hev
+        obtain ⟨-, rfl⟩ := SysState.step_restart.mp hstep
+        have htimers : (SysState.init sys env).timers i = [] :=
+          SysState.init_timers_of_not_mem_boot (by simpa [touched] using hi)
+        simp [SysState.owed, htimers] at howed
+      have hi : i ∉ ev.actor?.toList := by
+        cases ev <;> first | exact absurd rfl hev | simpa [touched] using hi
+      obtain ⟨hup, htimers⟩ := SysState.step_of_ne_actor hstep (i := i) (by simpa using hi) hev
       have hbefore : Event.timeout i msg ∈ s.queue :=
         hs _ (by simpa [SysState.owed, hup, htimers] using howed)
       have hwaits : Event.timeout i msg ∉ s.state.arms ev := by

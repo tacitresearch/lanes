@@ -34,7 +34,7 @@ def Event.deed : Event σ → Option (Deed σ)
   | .deliver e | .duplicate e => some (.handle e.dst e.msg)
   | .timeout i msg => some (.handle i msg)
   | .output out => some (.output out)
-  | .input _ | .drop _ | .crash _ | .start _ => none
+  | .input _ | .drop _ | .crash _ | .start _ | .restart => none
 
 def deeds (events : List (Event σ)) : List (Deed σ) :=
   events.filterMap Event.deed
@@ -175,8 +175,8 @@ private theorem put_snoc (p : Kind σ) (events : List (Event σ)) (ev : Event σ
   split <;> simp_all
 
 /-- A kind of message that only the outside sends is handled no more often than it is put in,
-when the links it arrives on do not duplicate. Actors may crash, restart and stop, and every
-link may lose and reorder. -/
+when the links it arrives on do not duplicate. Actors may crash, restart and stop, the process
+may restart, and every link may lose and reorder. -/
 theorem System.handled_le_put (honly : sys.OnlyPut p)
     (hlink : ∀ i msg, p i msg = true → (env.link none i).duplicating = false)
     {events : List (Event σ)} {c : SysState sys}
@@ -185,12 +185,13 @@ theorem System.handled_le_put (honly : sys.OnlyPut p)
   suffices h : ∃ n, handled p events + n ≤ put sys p events ∧ Unsent p n c by
     obtain ⟨n, hle, -⟩ := h
     omega
-  refine System.Reachable.run_induction
-    (P := fun events c => ∃ n, handled p events + n ≤ put sys p events ∧ Unsent p n c)
-    .init hrun ⟨0, by simp [handled, deeds, put], ?_⟩ ?_
-  · exact SysState.init_induction
+  have hinit : Unsent p 0 (SysState.init sys env) :=
+    SysState.init_induction
       ⟨by simp [SysState.blank], by simp [SysState.blank], by simp [SysState.blank]⟩
       fun c i h => h.start honly i
+  refine System.Reachable.run_induction
+    (P := fun events c => ∃ n, handled p events + n ≤ put sys p events ∧ Unsent p n c)
+    .init hrun ⟨0, by simp [handled, deeds, put], hinit⟩ ?_
   rintro evs c₁ ev c₂ - ⟨n, hle, hunsent⟩ hstep
   rw [handled_snoc, put_snoc]
   cases ev with
@@ -242,5 +243,8 @@ theorem System.handled_le_put (honly : sys.OnlyPut p)
   | start i =>
     obtain ⟨_, _, rfl⟩ := SysState.step_start.mp hstep
     exact ⟨n, by simpa [Event.deed] using hle, hunsent.start honly i⟩
+  | restart =>
+    obtain ⟨_, rfl⟩ := SysState.step_restart.mp hstep
+    exact ⟨0, by simp only [Event.deed]; omega, hinit⟩
 
 end Lanes
