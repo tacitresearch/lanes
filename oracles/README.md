@@ -30,7 +30,7 @@ every module a row names exists, and so does every path it cites.
 
 | Folder | Reference | Version | Pinned in | The reference for |
 | --- | --- | --- | --- | --- |
-| `oracles/go` | Go's standard library, `golang.org/x/time` and Prometheus's `expfmt` | Go 1.24.7, x/time 0.11.0, prometheus/common 0.67.5 | `oracles/go/go.mod`, `oracles/go/go.sum` | Base64, IP addresses, times, JSON, media types, rate limits, URLs, XML, mail addresses, the metrics page, multipart bodies; and, with Node and h11 (`oracles/go/requests/requests.py`, by hand), the request reader |
+| `oracles/go` | Go's standard library, `golang.org/x/time` and Prometheus's `expfmt` | Go 1.24.7, x/time 0.11.0, prometheus/common 0.67.5 | `oracles/go/go.mod`, `oracles/go/go.sum` | Base64, IP addresses, times, JSON, media types, rate limits, URLs, XML, mail addresses, the metrics page, multipart bodies, DEFLATE, gzip and zlib; and, with Node and h11 (`oracles/go/requests/requests.py`, by hand), the request reader |
 | `oracles/botocore` | botocore, and `cryptography` for the signatures it is given | 1.44.12, cryptography 50.0.2 | `oracles/botocore/requirements.txt` | Signature Version 4; CloudFront's signed URLs (`oracles/botocore/cloudfront.jsonl`), signed with the published test keys of `oracles/botocore/keys/` |
 | `oracles/jwcrypto` | jwcrypto | 1.6.2 | `oracles/jwcrypto/requirements.txt` | JWS in compact form and JWK Sets |
 | `oracles/moto` | moto's server, S3, SES API v2 and SQS | 5.2.6 | `oracles/moto/requirements.txt` | the recorded runs of the object store, multipart, email and queue models, and of `POST` forms |
@@ -40,6 +40,10 @@ every module a row names exists, and so does every path it cites.
 
 | Module | Oracle | Or why not |
 | --- | --- | --- |
+| `Lanes/Lib/Compress/Checksum.lean` | `oracles/go/flate` | Through gzip's and zlib's checks; CRC-32 also against its bitwise definition and the published check values (`Tests/Compress.lean`) |
+| `Lanes/Lib/Compress/Deflate.lean` | `oracles/go/flate` | What it writes, read by Go in the oracle's cases |
+| `Lanes/Lib/Compress/Gzip.lean` | `oracles/go/flate` | Known: a header with a reserved flag, which RFC 1952 has a decoder refuse and Go reads |
+| `Lanes/Lib/Compress/Inflate.lean` | `oracles/go/flate` | |
 | `Lanes/Lib/Crypto/Certificate.lean` | `Tests/PostgresTls.lean` | The hash for channel binding of certificates `openssl` made, against `openssl dgst`, and accepted by PostgreSQL 16 |
 | `Lanes/Lib/Crypto/Hmac.lean` | | Not a format: RFC 4231's vectors, and OpenSSL on thousands of inputs (`Tests/Crypto.lean`) |
 | `Lanes/Lib/Crypto/Md5.lean` | | Not a format: RFC 1321's examples, and the digests psql sent in the recorded sessions (`Tests/Postgres.lean`) |
@@ -87,6 +91,7 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Web/Html/Htmx.lean` | | Attributes from routes, not a format of its own |
 | `Lanes/Web/Html/Syntax.lean` | | The template syntax, elaborated to `Html.Basic`'s values |
 | `Lanes/Web/Http/Basic.lean` | | HTTP as data, not text |
+| `Lanes/Web/Http/Compress.lean` | | Decisions on a response and its codings, not a format: tested in `Tests/Compress.lean`; its bytes are `Gzip`'s |
 | `Lanes/Web/Http/Conn.lean` | | A connection's decisions, proved (`Lanes/Web/Http/ConnSound.lean`); its bytes are `Wire`'s and `ReadRequest`'s |
 | `Lanes/Web/Http/Cookie.lean` | | Proved to read back what it writes (`Lanes/Web/Http/CookieSound.lean`); Go's `http.ParseCookie` is owed |
 | `Lanes/Web/Http/Front.lean` | | Decisions, not a format |

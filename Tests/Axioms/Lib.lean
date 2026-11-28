@@ -6,6 +6,16 @@ import Lanes.Semantics
 
 /-! The axiom gate (rule 5.5, see `Tests/Axioms.lean`) for the theorems of `Lanes/Lib/`. -/
 
+-- Lanes.Lib.Compress
+/-- info: 'Lanes.Inflate.size_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Inflate.size_le
+
+/-- info: 'Lanes.Gzip.size_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Gzip.size_le
+
+/-- info: 'Lanes.Zlib.size_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Zlib.size_le
+
 -- Lanes.Lib.Crypto.Hmac
 /-- info: 'Lanes.Bytes.unhex?_hex' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Bytes.unhex?_hex

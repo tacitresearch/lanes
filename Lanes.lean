@@ -37,6 +37,10 @@ public import Lanes.Data.Codec
 public import Lanes.Data.Declare
 public import Lanes.Data.Enum
 public import Lanes.Data.Fifo
+public import Lanes.Lib.Compress.Checksum
+public import Lanes.Lib.Compress.Deflate
+public import Lanes.Lib.Compress.Gzip
+public import Lanes.Lib.Compress.Inflate
 public import Lanes.Lib.Crypto.Certificate
 public import Lanes.Lib.Crypto.Hmac
 public import Lanes.Lib.Crypto.Md5
@@ -116,6 +120,7 @@ public import Lanes.Web.Html.Htmx
 public import Lanes.Web.Html.Syntax
 public import Lanes.Web.Http.Admit
 public import Lanes.Web.Http.Basic
+public import Lanes.Web.Http.Compress
 public import Lanes.Web.Http.Conn
 public import Lanes.Web.Http.Cookie
 public import Lanes.Web.Http.Front

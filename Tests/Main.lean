@@ -54,6 +54,7 @@ import Tests.WallClock
 import Tests.Ops
 import Tests.Log
 import Tests.FormData
+import Tests.Compress
 import Tests.Postgres
 import Tests.PostgresConn
 import Tests.PostgresPool
@@ -103,7 +104,7 @@ def live : IO (List (String × Bool)) := do
     ++ (← safely "oauth" Tests.OAuth.live)
     ++ (← safely "full inbox" Tests.Fronted.busyTest) ++ (← safely "memos" Tests.Fronted.memoTest)
     ++ (← safely "release" Tests.Release.liveTests) ++ (← safely "jobs" Tests.Jobs.live)
-    ++ (← safely "ops" Tests.Ops.live) ++ (← safely "log" Tests.Log.live) ++ (← Tests.Crypto.live)
+    ++ (← safely "ops" Tests.Ops.live) ++ (← safely "log" Tests.Log.live) ++ (← safely "compress" Tests.Compress.live) ++ (← Tests.Crypto.live)
     ++ (← safely "postgres" Tests.PostgresLive.live)
     ++ (← safely "postgres tls" Tests.PostgresTls.live)
     ++ (← safely "s3" Tests.S3.live) ++ (← safely "s3 uploads" Tests.S3Upload.live)
@@ -116,7 +117,7 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.KV.tests ++ Tests.Gate.tests ++ Tests.Fronted.tests ++ Tests.Join.tests
     ++ Tests.Kernel.tests ++ Tests.Clock.tests ++ Tests.HttpClient.tests ++ Tests.Tls.tests
     ++ Tests.Signature.tests ++ Tests.Sign.tests ++ Tests.OAuth.tests
-    ++ Tests.Fair.tests ++ Tests.Codec.tests ++ Tests.Log.tests ++ Tests.FormData.tests
+    ++ Tests.Fair.tests ++ Tests.Codec.tests ++ Tests.Log.tests ++ Tests.FormData.tests ++ Tests.Compress.tests
     ++ Tests.Mailbox.tests ++ Tests.Batch.tests
     ++ Tests.Pace.tests ++ Tests.Reads.tests
     ++ Tests.Crypto.tests ++ Tests.Auth.tests ++ Tests.Clients.tests ++ Tests.Lease.tests
