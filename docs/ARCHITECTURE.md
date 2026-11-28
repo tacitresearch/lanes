@@ -120,6 +120,12 @@ costlier work goes the way that has been faster, and the other is measured again
 A batch is the same whatever the choice (`Batch.run_spread`), so the timing and the choice are
 trusted only for speed (`docs/decisions/D73-adaptive-waves.md`).
 
+Waves are as wide as an application spreads its work over actors. `Lanes/Runtime/WavePlan.lean`
+splits a batch of journal entries, each touching several actors, into waves whose entries share
+no actor, each actor's entries in the journal's order (`WavePlan.levels_lt`), and
+`examples/videos` measures its journal with it (`lake exe videosWaves`,
+`docs/decisions/new-waves-premise.md`).
+
 ## Journal, snapshots and the disk model
 
 Durability is a journal of what the kernel was asked, not of actor states (D24): replaying it

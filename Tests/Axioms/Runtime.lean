@@ -272,3 +272,13 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Kernel.exec_inputs' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Kernel.exec_inputs
+
+-- Lanes.Runtime.WavePlan
+/-- info: 'Lanes.WavePlan.levels_lt' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.WavePlan.levels_lt
+
+/-- info: 'Lanes.WavePlan.disjoint_of_level' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.WavePlan.disjoint_of_level
+
+/-- info: 'Lanes.WavePlan.disjoint_of_split' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.WavePlan.disjoint_of_split

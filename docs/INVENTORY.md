@@ -2317,6 +2317,15 @@ them by area.
 | `Kernel.runWaves` | proved | `Kernel.runWaves_eq` |
 | `Kernel.acceptAll` | proved | `Kernel.exec_inputs` |
 
+## `Lanes/Runtime/WavePlan.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `WavePlan.first` | spec | used only in statements |
+| `WavePlan.levelsFrom` | spec | used only in statements |
+| `WavePlan.levels` | spec | used only in statements |
+| `WavePlan.split` | spec | used only in statements |
+
 ## `Lanes/Semantics/Account.lean`
 
 | Definition | Status | Evidence |
