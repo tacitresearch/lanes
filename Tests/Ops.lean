@@ -339,54 +339,6 @@ def journalTest : Async (List (String × Bool)) := do
 
 /-! ## A stop -/
 
-inductive Job where
-  | ask (id : ReqId)
-  | done (id : ReqId)
-  deriving DecidableEq, Repr, Hashable
-
-inductive Work where
-  | reply (id : ReqId)
-  | start (id : ReqId)
-  deriving DecidableEq, Repr, Hashable
-
-/-- Answers a request once the work it starts is reported done. -/
-def slow : Service Job Work Unit where
-  init := ()
-  step _
-    | .ask id => ((), [.start id])
-    | .done id => ((), [.reply id])
-
-def slowBridge : Bridge (Server.sig Job Work) where
-  decode id _ := .ok (.ask id)
-  encode
-    | .reply id => some (id, .text "done\n")
-    | .start _ => none
-
-abbrev Slow := fronted (Server.system slow) slowBridge {}
-
-/-- Run by `lanesTest stop-child drain_ms`: a server whose work is done when a line arrives on
-standard input, and never if it ends first, stopped by a signal. It says on standard output when it is listening and when
-work has started. -/
-def stopChild (drain_ms : Nat) : IO Unit := do
-  let out ← IO.getStdout
-  let say (line : String) : IO Unit := do
-    out.putStrLn line
-    out.flush
-  let held : IO.Ref (Option (Http.Server Slow)) ← IO.mkRef none
-  let onOutput : Work → Async Unit
-    | .start id => do
-      say "working"
-      discard <| IO.asTask (prio := .dedicated) do
-        let line ← (← IO.getStdin).getLine
-        if let (some server, false) := (← held.get, line.isEmpty) then
-          discard <| Lanes.block (server.tryInput (.done id))
-    | .reply _ => pure ()
-  Lanes.block do
-    let server ← serveFronted (Server.system slow) slowBridge
-      { port := 0, ops := { readinessPath := some "/readyz" } } {} onOutput
-    held.set (some server)
-    server.stopOnSignal drain_ms (listening := say s!"listening {server.port.getD 0}")
-
 /-- Wait for a child's exit, for at most `ms`; kill it if it has not. -/
 def exitWithin {cfg : IO.Process.StdioConfig} (child : IO.Process.Child cfg) (ms : Nat) :
     Async (Option UInt32) := do
@@ -412,7 +364,8 @@ the drain if `finish`. What the request was answered, whether each step was seen
 status. -/
 def stopRun (drain_ms : Nat) (finish : Bool) : Async (Option (String × Bool × Option UInt32)) := do
   let child ← IO.Process.spawn {
-    cmd := (← IO.appPath).toString, args := #["stop-child", toString drain_ms]
+    cmd := ((← IO.appPath).parent.getD "." / "lanesStopChild").toString
+    args := #[toString drain_ms]
     stdin := .piped, stdout := .piped }
   let some port := ((← lineWithin child.stdout 60000).dropPrefix? "listening ").bind
       (·.toString.toNat?) |
