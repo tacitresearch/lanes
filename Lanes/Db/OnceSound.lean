@@ -96,4 +96,23 @@ theorem once_again (key : String) (body body' : Txn A) {db : Db} {a : A} {db' : 
       rw [Txn.run_bind, hg]
       rfl
 
+/-- A transaction under a key asks what its body asks, and reads and writes the keys' table. -/
+theorem once_all {P : Op → Prop} (hP : ∀ o, o.table.name = k.name → P o) (key : String) {body : Txn A}
+    (hbody : body.All P) : (k.once key body).All P := by
+  refine Txn.All.bind (Txn.All.bind (Txn.All.single (hP _ rfl)) fun r => ?_) fun found => ?_
+  · cases r with
+    | some x =>
+      refine Txn.All.bind ?_ fun _ => .pure _
+      unfold TableOf.decode; split
+      · exact .pure _
+      · exact .abort _
+    | none => exact .pure _
+  · cases found with
+    | some p => exact .pure _
+    | none =>
+      refine Txn.All.bind hbody fun a => Txn.All.bind (Txn.All.single (hP _ rfl)) fun b => ?_
+      cases b
+      · exact .abort _
+      · exact .pure _
+
 end Lanes.Db.Keys

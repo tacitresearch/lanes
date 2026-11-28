@@ -897,6 +897,25 @@ theorem handler_fixed {P : Job W → Prop} (hs : Stable P) (cfg : Config) (r : R
           (finished_work cfg now j v).symm (hP j hj)
       · simp at h₂; exact h₂.2 ▸ hP
 
+theorem decode_any {α : Type} (t : TableOf α) (P : Op → Prop) (r : Row) : (t.decode r).All P := by
+  unfold TableOf.decode; split
+  · exact .pure _
+  · exact .abort _
+
+/-- The operations of another table leave the jobs table alone. -/
+theorem get_other {α : Type} (t : TableOf α) (hn : t.table.name ≠ q.name) (enq : Job W → Prop)
+    (key : Row) : (t.get key).All (q.Adds enq) :=
+  Txn.All.bind (Txn.All.single (.inl hn)) fun r => by
+    cases r with
+    | some x => exact Txn.All.bind (decode_any t _ x) fun _ => .pure _
+    | none => exact .pure _
+
+theorem insert_other {α : Type} (t : TableOf α) (hn : t.table.name ≠ q.name) (enq : Job W → Prop)
+    (a : α) : (t.insert a).All (q.Adds enq) := Txn.All.single (.inl hn)
+
+theorem update_other {α : Type} (t : TableOf α) (hn : t.table.name ≠ q.name) (enq : Job W → Prop)
+    (a : α) : (t.update a).All (q.Adds enq) := Txn.All.single (.inl hn)
+
 /-- `enqueue` adds the job it builds, whatever id it takes. -/
 theorem enqueue_adds {enq : Job W → Prop} (key : String) (work : W) (due every : Int64)
     (henq : ∀ id, enq { id, key, work, due_ms := due, status := .pending, attempts := 0, lease := 0, every_ms := every }) :

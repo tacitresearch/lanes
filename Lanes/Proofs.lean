@@ -27,6 +27,7 @@ public import Lanes.Runtime.KernelSound
 public import Lanes.Runtime.KernelTimers
 public import Lanes.Runtime.MailboxSound
 public import Lanes.Runtime.PeekSound
+public import Lanes.Web.Auth.RowsSound
 public import Lanes.Web.Auth.TokenSound
 public import Lanes.Web.Html.BasicSound
 public import Lanes.Web.Html.HtmxSound

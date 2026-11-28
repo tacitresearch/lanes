@@ -834,4 +834,64 @@ theorem Txn.All.unique {α : Type} {t : Txn α} (tbl : Table) {i : Index} (hi : 
     ∀ db a db', tbl.Unique i (db.rows tbl.name) → t.run db = .ok (a, db') → tbl.Unique i (db'.rows tbl.name) :=
   ht.keeps fun o ho _ _ _ hU ha => Op.unique_apply o ha tbl i hi hu ho hU
 
+/-! ## Every row of a table -/
+
+/-- The row a write asks to put in its table. -/
+def Op.written : Op → Option Row
+  | .insert _ r | .update _ r | .upsert _ r => some r
+  | _ => none
+
+/-- After an operation, every row of its table was there before, or is the one it wrote. -/
+theorem Op.onRows_sub (o : Op) (rows : List Row) :
+    ∀ x ∈ (o.onRows rows).2, x ∈ rows ∨ o.written = some x := by
+  intro x hx
+  cases o with
+  | get t k => exact .inl hx
+  | scan s => exact .inl hx
+  | insert t r =>
+    simp only [Op.onRows] at hx
+    split at hx
+    · exact .inl hx
+    · rcases (t.mem_insertSorted r rows x).mp hx with rfl | hx
+      · exact .inr rfl
+      · exact .inl hx
+  | update t r =>
+    simp only [Op.onRows] at hx
+    split at hx
+    · exact .inl hx
+    · obtain ⟨y, hy, rfl⟩ := List.mem_map.mp hx
+      split
+      · exact .inr rfl
+      · exact .inl hy
+  | upsert t r =>
+    simp only [Op.onRows] at hx
+    split at hx
+    · exact .inl hx
+    · rcases (t.mem_insertSorted r _ x).mp hx with rfl | hx
+      · exact .inr rfl
+      · exact .inl (List.mem_filter.mp hx).1
+  | delete t k => exact .inl (List.mem_filter.mp hx).1
+
+/-- Every row of the table that reads back is a value `P` admits. -/
+def TableOf.Every {α : Type} (t : TableOf α) (P : α → Prop) (db : Db) : Prop :=
+  ∀ x ∈ db.rows t.table.name, ∀ a, t.ofRow x = some a → P a
+
+/-- An operation on the table, or on another one, that writes only values `P` admits keeps every
+row of the table admitted. -/
+theorem TableOf.every_apply {α : Type} (t : TableOf α) {P : α → Prop} (o : Op)
+    (ht : o.table.name = t.table.name → o.table = t.table)
+    (hw : ∀ r, o.written = some r → ∀ a, t.ofRow r = some a → P a)
+    {db : Db} {r : o.Ret} {db' : Db} (h : o.apply db = .ok (r, db')) (hP : t.Every P db) :
+    t.Every P db' := by
+  intro x hx a ha
+  rw [Op.rows_apply o h] at hx
+  split at hx
+  · next hc =>
+    have := ht hc.2.symm
+    rw [← hc.2] at hx
+    rcases o.onRows_sub _ x hx with hx | hx
+    · exact hP x (hc.2 ▸ hx) a ha
+    · exact hw x hx a ha
+  · exact hP x hx a ha
+
 end Lanes.Db
