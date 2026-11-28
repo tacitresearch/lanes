@@ -39,6 +39,7 @@ def EnvModel.under (env : EnvModel (σ.withIO In Out)) : EnvModel σ where
   link := env.link
   mayCrash := env.mayCrash
   restarts := env.restarts
+  mayRestart := env.mayRestart
 
 def SysState.over {sys : System σ} (input : In → σ.In) (output : σ.Out → Option Out)
     (c : SysState sys) : SysState (sys.filterMapIO input output) where
@@ -60,6 +61,7 @@ def Event.Under (input : In → σ.In) (output : σ.Out → Option Out) :
   | .timeout i msg, ev' => ev' = .timeout i msg
   | .crash i, ev' => ev' = .crash i
   | .start i, ev' => ev' = .start i
+  | .restart, ev' => ev' = .restart
 
 def Event.AllUnder (input : In → σ.In) (output : σ.Out → Option Out) :
     List (Event (σ.withIO In Out)) → List (Event σ) → Prop
@@ -232,6 +234,9 @@ theorem step_under {c : SysState sys} {ev : Event (σ.withIO In Out)}
       rfl
     rw [hhasMail] at hmail
     exact ⟨_, _, rfl, step_start.mpr ⟨hup, hmail, rfl⟩, over_startActor c i⟩
+  | restart =>
+    obtain ⟨hmay, rfl⟩ := step_restart.mp h
+    exact ⟨_, _, rfl, step_restart.mpr ⟨hmay, rfl⟩, over_init⟩
 
 /-- Every run of `sys.filterMapIO input output` is a run of `sys`, event for event. -/
 theorem run_filterMapIO {events : List (Event (σ.withIO In Out))}
@@ -307,7 +312,7 @@ theorem arms_under {c : SysState sys} {ev : Event (σ.withIO In Out)} {ev' : Eve
   | start j =>
     cases hunder
     exact hflat _ h
-  | input _ | drop _ | output _ | crash _ => simp [arms] at h
+  | input _ | drop _ | output _ | crash _ | restart => simp [arms] at h
 
 end SysState
 

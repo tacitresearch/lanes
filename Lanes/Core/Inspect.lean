@@ -125,6 +125,7 @@ def Event.render : Event σ → String
   | .output out => s!"output {brief out}"
   | .crash i => s!"crash {brief i}"
   | .start i => s!"start {brief i}"
+  | .restart => "restart"
 
 def Event.kind : Event σ → String
   | .input _ => "input"
@@ -135,9 +136,10 @@ def Event.kind : Event σ → String
   | .output _ => "output"
   | .crash _ => "crash"
   | .start _ => "start"
+  | .restart => "restart"
 
 def Event.kinds : List String :=
-  ["input", "deliver", "duplicate", "drop", "timeout", "output", "crash", "start"]
+  ["input", "deliver", "duplicate", "drop", "timeout", "output", "crash", "start", "restart"]
 
 end Show
 
@@ -153,7 +155,7 @@ def candidates [Enum σ.Id] (c : SysState sys) : List (Event σ) :=
   envelopes.map .deliver ++ envelopes.map .duplicate ++ envelopes.map .drop
     ++ ids.flatMap (fun i => (c.timers i).map (.timeout i))
     ++ c.outbox.eraseDups.map .output
-    ++ ids.map .crash ++ ids.map .start
+    ++ ids.map .crash ++ ids.map .start ++ [.restart]
 
 def successors [Enum σ.Id] (env : EnvModel σ) (c : SysState sys) :
     List (Event σ × SysState sys) :=

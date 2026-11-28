@@ -191,7 +191,8 @@ open SysState
 The proof rule for a property that removing messages, timers and outputs cannot break
 (`below`). It is enough that it holds of the blank state and is kept by an input, by any actor
 handling a message that is in flight to it or armed as its timer, and by any actor recovering,
-all without anything being removed. It then holds under every environment model.
+all without anything being removed. It then holds under every environment model, restarts
+included.
 -/
 theorem Inductive.of_monotone {P : SysState sys → Prop} (env : EnvModel σ)
     (blank : P (SysState.blank sys))
@@ -245,6 +246,9 @@ theorem Inductive.of_monotone {P : SysState sys → Prop} (env : EnvModel σ)
     | start i =>
       obtain ⟨_, _, rfl⟩ := step_start.mp hstep
       exact below _ _ (recover c i hc) (Below.startActor c env i)
+    | restart =>
+      obtain ⟨_, rfl⟩ := step_restart.mp hstep
+      exact init_induction blank fun c i hc => below _ _ (recover c i hc) (Below.startActor c env i)
 
 /-- The five cases of `Inductive.of_monotone` as one value, so that proofs of them can be
 combined (`Monotone.and`) before an environment model is chosen. -/

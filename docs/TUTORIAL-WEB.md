@@ -318,7 +318,7 @@ reached "the shelf is full" in 5 steps
 reached "a file is listed" in 5 steps
 reached "a file is deleted" in 5 steps
 states: 12896, transitions: 40631, depth: 16
-coverage: output 16870, input 9831, deliver 6326, crash 4043, start 3561, drop 0 (never fired), duplicate 0 (never fired), timeout 0 (never fired)
+coverage: output 16870, input 9831, deliver 6326, crash 4043, start 3561, drop 0 (never fired), duplicate 0 (never fired), restart 0 (never fired), timeout 0 (never fired)
 ```
 
 Now seed the bug: a delete that does not ask whose file it is.
@@ -342,7 +342,7 @@ FAIL: "only its uploader deletes a file" is violated after 5 steps
 reached "a file is listed" in 5 steps
 reached "a file is deleted" in 5 steps
 states: 376, transitions: 487, depth: 5
-coverage: input 336, start 85, crash 32, deliver 27, output 7, drop 0 (never fired), duplicate 0 (never fired), timeout 0 (never fired)
+coverage: input 336, start 85, crash 32, deliver 27, output 7, drop 0 (never fired), duplicate 0 (never fired), restart 0 (never fired), timeout 0 (never fired)
 ```
 
 Alice begins file 0 and Bob deletes it, before she has even uploaded it. The counter's check had

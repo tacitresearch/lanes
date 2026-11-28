@@ -201,9 +201,20 @@ theorem step_start {i : σ.Id} :
     simp only [reduceCtorEq, false_iff, not_and]
     exact fun h₁ h₂ => absurd ⟨h₁, h₂⟩ h
 
-/-- An actor that never stops itself stays up for as long as the environment does not crash
-it. -/
+theorem step_restart :
+    c.step env .restart = some c' ↔ env.mayRestart = true ∧ c' = init sys env := by
+  simp only [step]
+  split
+  · next h => simp only [Option.some.injEq, h, true_and]; exact eq_comm
+  · next h => simp [h]
+
+theorem step_restart_of_noRestarts (h : env.mayRestart = false) : c.step env .restart = none := by
+  simp [step, h]
+
+/-- An actor that never stops itself stays up for as long as the environment neither crashes
+it nor restarts the process. -/
 theorem up_of_step {i : σ.Id} {ev : Event σ} (hcrash : env.mayCrash i = false)
+    (hrestart : env.mayRestart = false)
     (hruns : ∀ s msg, ((sys.actor i).step s msg).2.any Effect.isStop = false)
     (hup : c.up i = true) (hstep : c.step env ev = some c') : c'.up i = true := by
   have hhandle (c : SysState sys) (j : σ.Id) (msg : σ.Msg j) (hc : c.up i = true) :
@@ -246,10 +257,13 @@ theorem up_of_step {i : σ.Id} {ev : Event σ} (hcrash : env.mayCrash i = false)
       simp [hup] at hdown
     rw [startActor, settle_up_of_ne _ hj]
     simpa [hj] using hup
+  | restart => simp [step_restart_of_noRestarts hrestart] at hstep
 
-/-- An emitted output stays in the outbox until it is handed over. -/
+/-- An emitted output stays in the outbox until it is handed over, unless the process
+restarts. -/
 theorem mem_outbox_of_step {out : σ.Out} {ev : Event σ} (hout : out ∈ c.outbox)
-    (hstep : c.step env ev = some c') (hev : ev ≠ .output out) : out ∈ c'.outbox := by
+    (hrestart : env.mayRestart = false) (hstep : c.step env ev = some c')
+    (hev : ev ≠ .output out) : out ∈ c'.outbox := by
   have hsettle (c : SysState sys) (j : σ.Id) (r : sys.State j × List (Effect σ j))
       (hc : out ∈ c.outbox) : out ∈ (c.settle env j r).outbox := by
     refine settle_induction (P := fun c' => out ∈ c'.outbox) hc ?_ fun _ h => h
@@ -282,5 +296,91 @@ theorem mem_outbox_of_step {out : σ.Out} {ev : Event σ} (hout : out ∈ c.outb
   | start j =>
     obtain ⟨_, _, rfl⟩ := step_start.mp hstep
     exact hsettle _ _ _ hout
+  | restart => simp [step_restart_of_noRestarts hrestart] at hstep
 
 end Lanes.SysState
+
+/-! A restart leads to the initial state, which every run starts from, and every other event
+steps the same whether or not the environment allows restarts. So a system reaches the same
+states with restarts and without: an invariant proved where the process never restarts holds
+where it does (`System.Invariant.of_withoutRestarts`). What a restart breaks is what relates two
+moments, such as a liveness property or a count over a run. -/
+
+namespace Lanes
+
+variable {σ : Signature} {sys : System σ}
+
+/-- `env` with process restarts ruled out. -/
+@[expose] def EnvModel.withoutRestarts (env : EnvModel σ) : EnvModel σ :=
+  { env with mayRestart := false }
+
+@[simp] theorem EnvModel.withoutRestarts_mayRestart (env : EnvModel σ) :
+    env.withoutRestarts.mayRestart = false := rfl
+
+/-- Where the process may restart and nothing else fails, the same environment without
+restarts is faultless. -/
+theorem EnvModel.Restarts.withoutRestarts {env : EnvModel σ} (h : env.Restarts) :
+    env.withoutRestarts.Faultless :=
+  ⟨⟨h.lossless, h.noDuplicates, h.noCrashes⟩, rfl⟩
+
+namespace SysState
+
+variable {env : EnvModel σ}
+
+@[simp] theorem init_withoutRestarts : init sys env.withoutRestarts = init sys env := rfl
+
+/-- Every event but a restart steps the same whether or not the environment allows
+restarts. -/
+theorem step_withoutRestarts {c : SysState sys} {ev : Event σ} (hev : ev ≠ .restart) :
+    c.step env.withoutRestarts ev = c.step env ev := by
+  cases ev with
+  | restart => exact absurd rfl hev
+  | _ => rfl
+
+end SysState
+
+namespace System
+
+variable {env : EnvModel σ}
+
+/-- A system reaches the same states whether or not the process may restart: a restart only
+leads back to where every run starts. -/
+theorem reachable_withoutRestarts {c : SysState sys} :
+    sys.Reachable env.withoutRestarts c ↔ sys.Reachable env c := by
+  constructor
+  · intro h
+    induction h with
+    | init => exact .init
+    | @step c c' ev _ hstep ih =>
+      have hev : ev ≠ .restart := by
+        rintro rfl
+        simp [SysState.step] at hstep
+      exact .step ev ih (by rwa [SysState.step_withoutRestarts hev] at hstep)
+  · intro h
+    induction h with
+    | init => exact .init
+    | @step c c' ev _ hstep ih =>
+      by_cases hev : ev = .restart
+      · subst hev
+        obtain ⟨-, rfl⟩ := SysState.step_restart.mp hstep
+        exact .init
+      · exact .step ev ih (by rwa [SysState.step_withoutRestarts hev])
+
+/-- An invariant proved where the process never restarts holds where it may. -/
+theorem Invariant.of_withoutRestarts {P : SysState sys → Prop}
+    (h : sys.Invariant env.withoutRestarts P) : sys.Invariant env P :=
+  fun c hc => h c (reachable_withoutRestarts.mpr hc)
+
+theorem invariant_withoutRestarts {P : SysState sys → Prop} :
+    sys.Invariant env.withoutRestarts P ↔ sys.Invariant env P :=
+  ⟨Invariant.of_withoutRestarts, fun h c hc => h c (reachable_withoutRestarts.mp hc)⟩
+
+/-- An invariant proved for every faultless environment holds where the process may restart. -/
+theorem Invariant.restarts {P : SysState sys → Prop}
+    (h : ∀ env : EnvModel σ, env.Faultless → sys.Invariant env P) (henv : env.Restarts) :
+    sys.Invariant env P :=
+  (h _ henv.withoutRestarts).of_withoutRestarts
+
+end System
+
+end Lanes

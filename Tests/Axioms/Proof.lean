@@ -90,6 +90,12 @@ import Lanes.Semantics
 /-- info: 'Lanes.System.invariant_of_actor' depends on axioms: [propext, Classical.choice] -/
 #guard_msgs in #print axioms Lanes.System.invariant_of_actor
 
+/-- info: 'Lanes.SysState.init_reachable' depends on axioms: [propext, Classical.choice] -/
+#guard_msgs in #print axioms Lanes.SysState.init_reachable
+
+/-- info: 'Lanes.System.invariant_of_inductive' depends on axioms: [propext, Classical.choice] -/
+#guard_msgs in #print axioms Lanes.System.invariant_of_inductive
+
 -- Lanes.Proof.Loses
 /-- info: 'Lanes.SysState.Loses.settle' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.SysState.Loses.settle

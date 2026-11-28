@@ -45,6 +45,7 @@ import Tests.Jobs
 import Tests.Schedule
 import Tests.Outside
 import Tests.Queue
+import Tests.Restart
 import Tests.Reduce
 import Tests.SharedCache
 import Tests.Cache
@@ -132,6 +133,7 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.Queue.tests ++ Tests.Reduce.tests ++ Tests.Cache.tests ++ Tests.WallClock.tests ++ Tests.Throttle.tests
     ++ Tests.SharedCache.tests
     ++ Checks.tests ++ Checks.Google.tests ++ Checks.GitHub.tests
+    ++ Tests.Restart.tests
   let json := Lanes.Testing.wantsJson args
   match args.filter (· != "--json") with
   | [] =>

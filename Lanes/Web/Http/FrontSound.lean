@@ -206,8 +206,14 @@ private theorem quiet {ev : Event (gateSig σ)} (h : ev.deed = none) (id : ReqId
   rw [h]
   exact ⟨rfl, rfl⟩
 
+/-- What the gate owes at the start: nothing. -/
+private theorem owed_init (id : ReqId) :
+    owed id (SysState.init (gateSystem bridge config) env) = 0 :=
+  (owed_start (env := env) id (SysState.blank _) ()).trans
+    (by simp [owed, SysState.blank, gateActor])
+
 /-- One event: the answer it hands over and what the gate owes after it are covered by what
-the gate owed before and the arrival it handles. -/
+the gate owed before and the arrival it handles. A restart forgets what the gate owed. -/
 private theorem owed_event (id : ReqId) {c c' : SysState (gateSystem bridge config)}
     {ev : Event (gateSig σ)} (hstep : c.step env ev = some c') :
     (answered ev.deed.toList).count id + owed id c'
@@ -264,10 +270,15 @@ private theorem owed_event (id : ReqId) {c c' : SysState (gateSystem bridge conf
     have h := owed_start (env := env) id c i
     have := quiet (ev := .start i) rfl id
     omega
+  | restart =>
+    obtain ⟨_, rfl⟩ := SysState.step_restart.mp hstep
+    have := quiet (ev := (.restart : Event (gateSig σ))) rfl id
+    have h := owed_init (bridge := bridge) (config := config) (env := env) id
+    omega
 
 /-- The gate alone answers no request more often than it handles an arrival of it: in every
 environment, whatever arrives on its two inputs and however often. The gate may crash and
-restart, and its links may lose, reorder and duplicate. -/
+restart, the process may restart, and its links may lose, reorder and duplicate. -/
 theorem answered_le_handled (env : EnvModel (gateSig σ)) {events : List (Event (gateSig σ))}
     {c : SysState (gateSystem bridge config)}
     (hrun : (SysState.init (gateSystem bridge config) env).run env events = some c) (id : ReqId) :
@@ -277,10 +288,7 @@ theorem answered_le_handled (env : EnvModel (gateSig σ)) {events : List (Event 
   refine System.Reachable.run_induction
     (P := fun events c => (answered (deeds events)).count id + owed id c
       ≤ (handled (deeds events)).count id) .init hrun ?_ ?_
-  · have hinit : owed id (SysState.init (gateSystem bridge config) env) = 0 :=
-      (owed_start (env := env) id (SysState.blank _) ()).trans
-        (by simp [owed, SysState.blank, gateActor])
-    simp [hinit, answered, handled, deeds]
+  · simp [owed_init, answered, handled, deeds]
   rintro evs c₁ ev c₂ - hle hstep
   have h := owed_event (env := env) id hstep
   rw [handled_snoc, answered_snoc]
@@ -378,6 +386,9 @@ theorem deadlines_armed (bridge : Bridge σ) (config : GateConfig) (env : EnvMod
     | start i =>
       obtain ⟨_, _, rfl⟩ := SysState.step_start.mp hstep
       exact armed_start c
+    | restart =>
+      obtain ⟨_, rfl⟩ := SysState.step_restart.mp hstep
+      exact armed_start (env := env) (SysState.blank _)
 
 end Gate
 

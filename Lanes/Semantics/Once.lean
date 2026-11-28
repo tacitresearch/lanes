@@ -295,16 +295,20 @@ end Once.Server
 open Once.Server in
 /--
 A `Server` that acts once on each request its key names implements `once` of its service in
-every environment: links lose, reorder and hand over twice every message, and the server
-crashes. `Server.implements` needs an environment with no fault at all.
+every environment where the process does not restart: links lose, reorder and hand over twice
+every message, and the server crashes. `Server.implements` needs an environment with no fault
+at all. A restart is not allowed: it forgets the memo with the rest of the server's state, so a
+request repeated after it takes effect again.
 -/
 theorem Once.server_implements {In Out C : Type} [DecidableEq In] [DecidableEq Out]
     [DecidableEq C] (svc : Service In Out S) (key : In → C × Nat)
-    (env : EnvModel (Server.sig In Out)) : (server svc key).ImplementsOnce env svc key := by
+    (env : EnvModel (Server.sig In Out)) (hrestart : env.mayRestart = false) :
+    (server svc key).ImplementsOnce env svc key := by
   refine System.Refines.of_handles (inv := fun _ => True) (fun _ _ => trivial) Sim
     ⟨⟨svc.init, ∅, ∅, ∅⟩, rfl, rfl, by simp [SysState.init, SysState.blank],
       by simp [SysState.init, SysState.blank], by simp [SysState.init, SysState.blank],
       Memo.Agrees.empty⟩ (fun c c' t h hl => ?_) ?_ ?_ ?_ ?_
+    (fun h => absurd h (by simp [hrestart]))
   · exact ⟨by rw [hl.state]; exact h.value, fun e he => h.net e (hl.net.subset he),
       fun o ho => h.outbox o (hl.outbox ▸ ho), fun m hm => h.timers m (hl.timers () m hm),
       by rw [hl.state]; exact h.memo⟩
@@ -436,5 +440,6 @@ theorem System.Refines.filterMapIO {σ : Signature} {sys : System σ} {Out T : T
     | timeout i msg => subst hunder; exact hτ ht'
     | crash i => subst hunder; exact hτ ht'
     | start i => subst hunder; exact hτ ht'
+    | restart => subst hunder; exact hτ ht'
 
 end Lanes

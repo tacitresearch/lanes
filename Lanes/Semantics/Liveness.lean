@@ -25,8 +25,8 @@ anything it owes: an `Obligation` that is due at every position from some point 
 wait no step starts again, is taken. The obligations are the events the system itself makes
 happen: delivering a message to an actor that is up, firing an armed timer of an actor that is
 up, starting a stopped actor that has mail, and handing over an output. Inputs, drops,
-duplicates and crashes are the choice of the environment, are not obligations, and so no
-fairness can be assumed of them. Nor is restarting an actor that has no mail, even where the
+duplicates, crashes and restarts are the choice of the environment, are not obligations, and so
+no fairness can be assumed of them. Nor is restarting an actor that has no mail, even where the
 environment model says it may happen. Fairness is stated for each obligation on its own (this
 message, this timer). Fairness of all of them together would let one timer wait forever while
 others fire. Fairness rules out no finite run: `Lanes.Semantics.FairRuns` proves that each one
@@ -67,7 +67,8 @@ development is of processes in that algorithm), so those two are defined here.
 - `System.LeadsTo.trans`, `System.LeadsTo.mono`: leads-to is transitive and monotone.
 - `Obligation.Due.enabled`: an obligation that is due can be taken, so fairness never asks for
   a step the semantics does not have.
-- `System.Run.Fair.output_taken`: an emitted output is eventually handed over.
+- `System.Run.Fair.output_taken`: an emitted output is eventually handed over, where the process
+  does not restart.
 - `System.Run.Fair.delivered`: a message in flight on a link that loses nothing, to an actor
   that stays up, is eventually handed to it; the measure is what is ahead of it on its link.
 - `System.Run.Fair.handled`: the same when the receiver is not crashed and never stops, though
@@ -92,7 +93,7 @@ def Spec.stutter {State Label : Type*} (spec : Spec State Label) : LTS State (Op
     | some μ => spec.Tr s μ s'
 
 /-- What a system owes: the events it makes happen itself. The environment's events (inputs,
-drops, duplicates, crashes) have no obligation, so fairness cannot be assumed of them. -/
+drops, duplicates, crashes, restarts) have no obligation, so fairness cannot be assumed of them. -/
 inductive Obligation (σ : Signature) : Type where
   /-- Deliver a message in flight. -/
   | deliver (e : Envelope σ)
@@ -168,7 +169,7 @@ theorem SysState.actor?_of_mem_arms {sys : System σ} {c : SysState sys} {ev e :
   | deliver _ | duplicate _ | timeout _ _ | start _ =>
     obtain ⟨msg, rfl⟩ := Effect.eq_of_mem_timeouts h
     exact ⟨_, msg, rfl, rfl⟩
-  | input _ | drop _ | output _ | crash _ => exact absurd h List.not_mem_nil
+  | input _ | drop _ | output _ | crash _ | restart => exact absurd h List.not_mem_nil
 
 /-- A step restarts an obligation exactly when it arms the timer that the obligation fires. -/
 theorem Obligation.restarted_iff_mem_arms {sys : System σ} {c : SysState sys} {ev : Event σ}
@@ -272,8 +273,10 @@ def Impatient (r : sys.Run env) : Prop :=
 theorem Impatient.fair (h : r.Impatient) : r.Fair :=
   fair_iff.mpr fun ob n hdue => h ob n fun m hm => (hdue m hm).1
 
-/-- In a fair run, an emitted output is eventually handed over. -/
-theorem Fair.output_taken (hfair : r.Fair) {out : σ.Out} (hout : out ∈ (r.state n).outbox) :
+/-- In a fair run, an emitted output is eventually handed over, when the process does not
+restart: a restart loses it. -/
+theorem Fair.output_taken (hfair : r.Fair) (hrestart : env.mayRestart = false) {out : σ.Out}
+    (hout : out ∈ (r.state n).outbox) :
     ∃ m, n ≤ m ∧ r.event m = some (.output out) := by
   by_contra hnever
   refine hnever (hfair.taken (ob := .output out) (fun m hm => ?_) fun _ _ ⟨_, _, h⟩ => h)
@@ -283,15 +286,15 @@ theorem Fair.output_taken (hfair : r.Fair) {out : σ.Out} (hout : out ∈ (r.sta
     cases hev : r.event m with
     | none => exact step_none hev ▸ ih
     | some ev =>
-      refine SysState.mem_outbox_of_step ih (step_some hev) ?_
+      refine SysState.mem_outbox_of_step ih hrestart (step_some hev) ?_
       rintro rfl
       exact hnever ⟨m, hm, hev⟩
 
 /-- In a fair run, a message in flight on a link that does not lose it, to an actor that stays
-up, is handed to it: the message to deliver next on its link stays due while nothing ahead of it
-changes, and each delivery ahead of it brings it nearer. -/
+up, is handed to it, when the process does not restart: the message to deliver next on its link
+stays due while nothing ahead of it changes, and each delivery ahead of it brings it nearer. -/
 theorem Fair.delivered (hfair : r.Fair) {e : Envelope σ}
-    (hlossless : (env.link e.src e.dst).lossy = false)
+    (hlossless : (env.link e.src e.dst).lossy = false) (hrestart : env.mayRestart = false)
     (hup : ∀ m, n ≤ m → (r.state m).up e.dst = true) (he : e ∈ (r.state n).net) :
     ∃ m, n ≤ m ∧ (r.event m = some (.deliver e) ∨ r.event m = some (.duplicate e)) := by
   induction hk : (beforeFirst e (r.state n).net).length using Nat.strong_induction_on
@@ -309,7 +312,7 @@ theorem Fair.delivered (hfair : r.Fair) {e : Envelope σ}
       cases hev : r.event m with
       | none => exact step_none hev ▸ ih
       | some ev =>
-        obtain ⟨hmem, hsub⟩ := SysState.step_ahead (step_some hev) ih.1 hlossless
+        obtain ⟨hmem, hsub⟩ := SysState.step_ahead (step_some hev) ih.1 hlossless hrestart
           (hup (m + 1) (by omega)) (fun h => (hnot m hm).1 (h ▸ hev))
           (fun h => (hnot m hm).2 (h ▸ hev))
         exact ⟨hmem, hsub.trans ih.2⟩
@@ -317,7 +320,8 @@ theorem Fair.delivered (hfair : r.Fair) {e : Envelope σ}
     refine (hkeep m hm).2.eq_of_length ?_
     by_contra hlen
     have hlt := Nat.lt_of_le_of_ne (hkeep m hm).2.length_le hlen
-    obtain ⟨m', hm', h⟩ := ih _ (hk ▸ hlt) (fun m'' hm'' => hup m'' (by omega)) (hkeep m hm).1 rfl
+    obtain ⟨m', hm', h⟩ :=
+      ih _ (hk ▸ hlt) (fun m'' hm'' => hup m'' (by omega)) (hkeep m hm).1 rfl
     exact hnever ⟨m', by omega, h⟩
   have hnext (m : ℕ) (hm : n ≤ m) : (r.state m).nextOnLink env e = (r.state n).nextOnLink env e := by
     simp only [SysState.nextOnLink, hsame m hm]
@@ -341,10 +345,12 @@ theorem Fair.delivered (hfair : r.Fair) {e : Envelope σ}
     omega
 
 /-- In a fair run, a message in flight on a link that does not lose it is handed to its
-receiver, when the environment does not crash the receiver and the receiver never stops. A
-receiver that is down has mail, so fairness starts it, and then it stays up. -/
+receiver, when the environment neither crashes the receiver nor restarts the process and the
+receiver never stops. A receiver that is down has mail, so fairness starts it, and then it stays
+up. -/
 theorem Fair.handled (hfair : r.Fair) {e : Envelope σ}
     (hlossless : (env.link e.src e.dst).lossy = false) (hcrash : env.mayCrash e.dst = false)
+    (hrestart : env.mayRestart = false)
     (hruns : ∀ s msg, ((sys.actor e.dst).step s msg).2.any Effect.isStop = false)
     (hrecovers : ∀ s, ((sys.actor e.dst).recover s).2.any Effect.isStop = false)
     (he : e ∈ (r.state n).net) :
@@ -360,7 +366,7 @@ theorem Fair.handled (hfair : r.Fair) {e : Envelope σ}
       cases hev : r.event m with
       | none => exact step_none hev ▸ ih
       | some ev =>
-        exact SysState.mem_net_of_step ih (step_some hev) hlossless hcrash hruns hrecovers
+        exact SysState.mem_net_of_step ih (step_some hev) hlossless hcrash hrestart hruns hrecovers
           (fun h => (hnot m hm).1 (h ▸ hev)) (fun h => (hnot m hm).2 (h ▸ hev))
   have hstays (k : ℕ) (hk : (r.state k).up e.dst = true) (m : ℕ) (hm : k ≤ m) :
       (r.state m).up e.dst = true := by
@@ -369,10 +375,10 @@ theorem Fair.handled (hfair : r.Fair) {e : Envelope σ}
     | succ m hm ih =>
       cases hev : r.event m with
       | none => exact step_none hev ▸ ih
-      | some ev => exact SysState.up_of_step hcrash hruns ih (step_some hev)
+      | some ev => exact SysState.up_of_step hcrash hrestart hruns ih (step_some hev)
   by_cases hup : ∃ k, n ≤ k ∧ (r.state k).up e.dst = true
   · obtain ⟨k, hk, hupk⟩ := hup
-    obtain ⟨m, hm, h⟩ := hfair.delivered hlossless (hstays k hupk) (hkeep k hk)
+    obtain ⟨m, hm, h⟩ := hfair.delivered hlossless hrestart (hstays k hupk) (hkeep k hk)
     exact hnever ⟨m, by omega, h⟩
   · have hdown (m : ℕ) (hm : n ≤ m) : (r.state m).up e.dst = false := by
       simpa using fun h => hup ⟨m, hm, h⟩

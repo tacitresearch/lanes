@@ -166,6 +166,9 @@ structure EnvModel (σ : Signature) where
   mayCrash : σ.Id → Bool := fun _ => false
   /-- Which stopped actors start again on their own, without waiting for a message. -/
   restarts : σ.Id → Bool := fun _ => false
+  /-- Whether the process may restart: every actor goes back to its initial state, and what
+  was in flight, timers and outputs not yet handed over are lost (`Event.restart`, D110). -/
+  mayRestart : Bool := false
 
 namespace EnvModel
 
@@ -179,16 +182,37 @@ arrive reliably, and no actor crashes. -/
 def distributed : EnvModel σ where
   link src _ := if src.isSome then Link.network else Link.reliable
 
-/-- An environment that loses nothing, duplicates nothing and crashes nothing. Messages may
-still be reordered where a link is not ordered. This is the assumption of properties that hold
-inside one process. -/
-structure Faultless (env : EnvModel σ) : Prop where
+/-- One process that may restart (`mayRestart`), and does nothing else wrong: no link loses
+or duplicates, and no actor crashes on its own. Properties stated under it hold across
+restarts. -/
+structure Restarts (env : EnvModel σ) : Prop where
   lossless : ∀ src dst, (env.link src dst).lossy = false
   noDuplicates : ∀ src dst, (env.link src dst).duplicating = false
   noCrashes : ∀ i, env.mayCrash i = false
 
+/-- An environment that loses nothing, duplicates nothing, crashes nothing and never restarts.
+Messages may still be reordered where a link is not ordered. This is the assumption of
+properties that hold inside one process that never restarts. -/
+structure Faultless (env : EnvModel σ) : Prop extends env.Restarts where
+  noRestarts : env.mayRestart = false
+
 theorem reliable_faultless : (reliable : EnvModel σ).Faultless :=
+  ⟨⟨fun _ _ => rfl, fun _ _ => rfl, fun _ => rfl⟩, rfl⟩
+
+/-- Every link reliable and no actor crashing, but the process may restart. -/
+def restarting : EnvModel σ where
+  mayRestart := true
+
+theorem restarting_restarts : (restarting : EnvModel σ).Restarts :=
   ⟨fun _ _ => rfl, fun _ _ => rfl, fun _ => rfl⟩
+
+/-- `env` with process restarts allowed. -/
+def withRestarts (env : EnvModel σ) : EnvModel σ :=
+  { env with mayRestart := true }
+
+theorem Faultless.withRestarts {env : EnvModel σ} (h : env.Faultless) :
+    env.withRestarts.Restarts :=
+  ⟨h.lossless, h.noDuplicates, h.noCrashes⟩
 
 end EnvModel
 
