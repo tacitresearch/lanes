@@ -3,6 +3,7 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Tests.Oracle.Base64
+import Tests.Oracle.Cbor
 import Tests.Oracle.Ip
 import Tests.Oracle.Jose
 import Tests.Oracle.Libpq
@@ -22,8 +23,9 @@ import Tests.Aws.CloudFront
 namespace Tests.Oracle
 
 def packages : List Package :=
-  [Base64.package, Ip.package, Time.package, Json.package, MediaType.package, RateLimit.package,
-    Url.package, Xml.package, Metrics.package, SigV4.package, Jose.package, Libpq.package,
+  [Base64.package, Cbor.package, Ip.package, Time.package, Json.package, MediaType.package,
+    RateLimit.package, Url.package, Xml.package, Metrics.package, SigV4.package, Jose.package,
+    Libpq.package,
     Checks.Mail.package, Checks.CloudFront.package]
 
 def unitTests : List (String × Bool) := Base64.tests ++ Ip.tests ++ Jose.tests ++ MediaType.tests ++ RateLimit.tests ++ Time.tests ++ Url.tests

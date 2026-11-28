@@ -11,7 +11,10 @@ public import Lanes.Data.Enum
 text what Lean's own deriving handlers cannot give an application that imports only `Std`:
 
 - `ToJson` and `FromJson`, together, with `LawfulJson` and `NonNullJson`: a `Json.Codec` built
-  from the pieces of `Lanes/Lib/Encoding/Json/Derive.lean`, whose laws give the round trip;
+  from the pieces of `Lanes/Lib/Encoding/Fields.lean` and `Lanes/Lib/Encoding/Json/Derive.lean`,
+  whose laws give the round trip;
+- `ToCbor` and `FromCbor` in the same way, by the same code (`Declare.Format`), with the pieces of
+  `Lanes/Lib/Encoding/Cbor/Derive.lean`: so a type's CBOR has the shape of its JSON;
 - `Enum`;
 - `LawfulBEq`: a `BEq` field by field, with its law, for a structure holding a function on an
   `Enum` type;
@@ -19,8 +22,9 @@ text what Lean's own deriving handlers cannot give an application that imports o
   `Lanes/Db/Columns.lean`, whose laws give the round trip.
 
 Every other class in the `deriving` clause goes to Lean. The code a command writes names
-`Lanes.Json` and `Lanes.Db`, which this file does not import: a file that derives them imports
-them, as `import Lanes` does.
+`Lanes.Json`, `Lanes.Cbor` and `Lanes.Db`, which this file does not import: a file that derives
+them imports them, as `import Lanes` does for JSON and rows. CBOR is imported on its own
+(`import Lanes.Lib.Encoding.Cbor`).
 
 A deriving handler needs `Lean.Elab`, which an application must not link, and a macro sees only
 syntax: so the declaration is written inside the command, which reads the fields from it.
@@ -132,7 +136,8 @@ meta def splitDeriving (classes : Array Ident) : MacroM (Array Ident × Array Na
     | `TableOf => Macro.throwErrorAt c "lanes_data: a table is declared by a line after \
         `deriving`: `table todos key id`, then `index byOwner on owner` lines"
     | n =>
-      if [`ToJson, `FromJson, `Enum, `LawfulBEq].contains n then return (lean, ours.push n)
+      if [`ToJson, `FromJson, `ToCbor, `FromCbor, `Enum, `LawfulBEq].contains n then
+        return (lean, ours.push n)
       else return (lean.push c, ours)
 
 meta def leanDeriving (T : Ident) (classes : Array Ident) : MacroM (Array (TSyntax `command)) :=
@@ -141,13 +146,36 @@ meta def leanDeriving (T : Ident) (classes : Array Ident) : MacroM (Array (TSynt
       ⟨mkNode `Lean.Parser.Command.derivingClass #[mkNullNode, c]⟩
     return #[← `(deriving instance $[$classes],* for $T:ident)]
 
-/-- Whether to derive JSON: both classes, or neither. -/
-meta def wantsJson (ours : Array Name) : MacroM Bool := do
-  match ours.contains `ToJson, ours.contains `FromJson with
+/-- A format `lanes_data` derives an encoding to, with its laws: JSON or CBOR. Each has a
+`Codec` whose four fields are the two functions and the two laws, in that order, `Fields.field`,
+`Codec.object`, `Alts.ctor` and `Codec.ofAlts` in its namespace, and four classes; the rest of
+the pieces are `Lanes.Fields` and `Lanes.Alts`, which both share. -/
+structure Format where
+  name : String
+  ns : Name
+  toClass : Name
+  fromClass : Name
+  lawful : Name
+  nonNull : Name
+  codec : Name
+
+meta def Format.json : Format :=
+  { name := "JSON", ns := `Lanes.Json, toClass := `ToJson, fromClass := `FromJson,
+    lawful := `LawfulJson, nonNull := `NonNullJson, codec := `jsonCodec }
+
+meta def Format.cbor : Format :=
+  { name := "CBOR", ns := `Lanes.Cbor, toClass := `ToCbor, fromClass := `FromCbor,
+    lawful := `LawfulCbor, nonNull := `NonNullCbor, codec := `cborCodec }
+
+meta def Format.all : List Format := [.json, .cbor]
+
+/-- Whether to derive a format: both its classes, or neither. -/
+meta def wants (ours : Array Name) (f : Format) : MacroM Bool := do
+  match ours.contains f.toClass, ours.contains f.fromClass with
   | true, true => return true
   | false, false => return false
-  | _, _ => Macro.throwError "lanes_data: `ToJson` and `FromJson` are derived together, with \
-      the law that one reads back what the other writes"
+  | _, _ => Macro.throwError s!"lanes_data: `{f.toClass}` and `{f.fromClass}` are derived \
+      together, with the law that one reads back what the other writes"
 
 meta def strings (xs : Array String) : MacroM (TSyntax `term) := do
   let lits := xs.map Syntax.mkStrLit
@@ -162,60 +190,63 @@ meta def apart (xs ys : Array String) : MacroM (TSyntax `term) := do
   `((show (List.all $(← strings xs) fun t => !List.contains $(← strings ys) t) = true by decide))
 
 set_option hygiene false in
-/-- An object of the fields `(name, type)`, as `Json.Fields`. -/
-meta def jsonFields (fields : Array (Ident × TSyntax `term)) : MacroM (TSyntax `term) := do
+/-- An object of the fields `(name, type)`, as the format's `Fields`. -/
+meta def fieldsOf (f : Format) (fields : Array (Ident × TSyntax `term)) :
+    MacroM (TSyntax `term) := do
+  let field := mkIdent (f.ns ++ `Fields.field)
   let each ← fields.mapM fun (x, t) =>
-    `((Lanes.Json.Fields.field $(Syntax.mkStrLit (nameString x)) (β := $t)))
-  nest (fun f acc => `(Lanes.Json.Fields.pair $f $acc)) (← `(Lanes.Json.Fields.unit)) each
+    `(($field $(Syntax.mkStrLit (nameString x)) (β := $t)))
+  nest (fun f acc => `(Lanes.Fields.pair $f $acc)) (← `(Lanes.Fields.unit)) each
 
 set_option hygiene false in
-/-- `T.jsonCodec`, and the instances made from it. A type parameter needs the JSON classes, and
-`NonNullJson` if a field's type mentions `Option`. -/
-meta def json (T : Ident) (p : Params) (types : Array (TSyntax `term)) (codec : TSyntax `term) :
-    MacroM (Array (TSyntax `command)) := do
+/-- `T.jsonCodec` or `T.cborCodec`, and the instances made from it. A type parameter needs the
+format's classes, and its `NonNull` class if a field's type mentions `Option`. -/
+meta def instances (f : Format) (T : Ident) (p : Params) (types : Array (TSyntax `term))
+    (codec : TSyntax `term) : MacroM (Array (TSyntax `command)) := do
   let pargs := p.args
   let applied ← `($T $pargs*)
-  let name := mkIdentFrom T (T.getId ++ `jsonCodec)
+  let name := mkIdentFrom T (T.getId ++ f.codec)
+  let cls (n : Name) := mkIdent (`Lanes ++ n)
   let mentions (x : Ident) (t : TSyntax `term) : Bool :=
     (t.raw.find? (·.getId == x.getId)).isSome
   let optional := p.types.filter fun x =>
     types.any fun t => mentions x t && (t.raw.find? (·.getId == `Option)).isSome
-  let ctx := p.binders ++ (← classBinders `Lanes.ToJson p.types)
-    ++ (← classBinders `Lanes.FromJson p.types) ++ (← p.types.mapM fun x =>
-      `(bracketedBinder| [Lanes.LawfulJson $x]))
-    ++ (← optional.mapM fun x => `(bracketedBinder| [Lanes.NonNullJson $x]))
-  return #[← `(def $name $ctx:bracketedBinder* : Lanes.Json.Codec $applied := $codec),
-    ← `(instance $ctx:bracketedBinder* : Lanes.ToJson $applied := ⟨($name).toJson⟩),
-    ← `(instance $ctx:bracketedBinder* : Lanes.FromJson $applied := ⟨($name).fromJson?⟩),
-    ← `(instance $ctx:bracketedBinder* : Lanes.LawfulJson $applied :=
-        ⟨($name).fromJson?_toJson⟩),
-    ← `(instance $ctx:bracketedBinder* : Lanes.NonNullJson $applied :=
-        ⟨($name).toJson_ne_null⟩)]
+  let ctx := p.binders ++ (← classBinders (`Lanes ++ f.toClass) p.types)
+    ++ (← classBinders (`Lanes ++ f.fromClass) p.types) ++ (← p.types.mapM fun x =>
+      `(bracketedBinder| [$(cls f.lawful) $x]))
+    ++ (← optional.mapM fun x => `(bracketedBinder| [$(cls f.nonNull) $x]))
+  let codecType := mkIdent (f.ns ++ `Codec)
+  return #[← `(def $name $ctx:bracketedBinder* : $codecType $applied := $codec),
+    ← `(instance $ctx:bracketedBinder* : $(cls f.toClass) $applied := ⟨($name).1⟩),
+    ← `(instance $ctx:bracketedBinder* : $(cls f.fromClass) $applied := ⟨($name).2⟩),
+    ← `(instance $ctx:bracketedBinder* : $(cls f.lawful) $applied := ⟨($name).3⟩),
+    ← `(instance $ctx:bracketedBinder* : $(cls f.nonNull) $applied := ⟨($name).4⟩)]
 
 set_option hygiene false in
-meta def structJson (fields : Array (Ident × TSyntax `term)) : MacroM (TSyntax `term) := do
+meta def structCodec (f : Format) (fields : Array (Ident × TSyntax `term)) :
+    MacroM (TSyntax `term) := do
   let names := fields.map (·.1)
   let r := mkIdent (← Macro.addMacroScope `r)
   let x := mkIdent (← Macro.addMacroScope `x)
   let projections ← names.mapM fun f => `($r.$f:ident)
   let values ← parts x names.size
-  `(Lanes.Json.Codec.object
-      (Lanes.Json.Fields.map $(← jsonFields fields) (fun $r => $(← tuple projections))
+  `($(mkIdent (f.ns ++ `Codec.object))
+      (Lanes.Fields.map $(← fieldsOf f fields) (fun $r => $(← tuple projections))
         (fun $x => { $[$names:ident := $values],* }) (fun _ => rfl))
       $(← distinct (names.map nameString)))
 
 set_option hygiene false in
-meta def sumJson (T : Ident) (ctors : Array Ident) (fieldss : Array (Array (Ident × TSyntax `term))) :
-    MacroM (TSyntax `term) := do
+meta def sumCodec (f : Format) (T : Ident) (ctors : Array Ident)
+    (fieldss : Array (Array (Ident × TSyntax `term))) : MacroM (TSyntax `term) := do
   let n := ctors.size
-  if n == 0 then Macro.throwError "lanes_data: JSON needs at least one constructor"
+  if n == 0 then Macro.throwError s!"lanes_data: {f.name} needs at least one constructor"
   let alts ← (ctors.zip fieldss).mapM fun (ctor, fields) => do
-    `(Lanes.Json.Alts.ctor $(Syntax.mkStrLit (nameString ctor)) $(← jsonFields fields)
+    `($(mkIdent (f.ns ++ `Alts.ctor)) $(Syntax.mkStrLit (nameString ctor)) $(← fieldsOf f fields)
         $(← distinct (fields.map (nameString ·.1))))
   let tags := ctors.map nameString
   let mut sum := alts[n - 1]!
   for k in (List.range (n - 1)).reverse do
-    sum ← `(Lanes.Json.Alts.sum $(alts[k]!) $sum $(← apart #[tags[k]!] (tags.extract (k + 1) n)))
+    sum ← `(Lanes.Alts.sum $(alts[k]!) $sum $(← apart #[tags[k]!] (tags.extract (k + 1) n)))
   let mut cases : Array (TSyntax `term) := #[]
   let mut backs : Array (TSyntax `term) := #[]
   let t := mkIdent (← Macro.addMacroScope `t)
@@ -228,8 +259,8 @@ meta def sumJson (T : Ident) (ctors : Array Ident) (fieldss : Array (Array (Iden
     backs := backs.push (← `(fun $t => $ctor $values*))
   let back ← nest (fun f acc => `(Sum.elim $f $acc)) (← `(fun x => nomatch x)) backs
   let casesOn := mkIdent (T.getId ++ `casesOn)
-  `(Lanes.Json.Codec.ofAlts
-      (Lanes.Json.Alts.map $sum (fun x => $casesOn:ident (motive := fun _ => _) x $cases*) $back
+  `($(mkIdent (f.ns ++ `Codec.ofAlts))
+      (Lanes.Alts.map $sum (fun x => $casesOn:ident (motive := fun _ => _) x $cases*) $back
         (by intro x; cases x <;> rfl)))
 
 meta def conjunction (cs : Array (TSyntax `term)) : MacroM (TSyntax `term) :=
@@ -353,8 +384,9 @@ macro_rules
     let decl ← `(command| $[$doc:docComment]? structure $T:ident $bs:bracketedBinder* where
       $[$[$fdocs:docComment]? $fields:ident : $types $[:= $defaults]?]*)
     let mut cmds := #[decl] ++ (← leanDeriving T lean)
-    if ← wantsJson ours then
-      cmds := cmds ++ (← json T p types (← structJson (fields.zip types)))
+    for f in Format.all do
+      if ← wants ours f then
+        cmds := cmds ++ (← instances f T p types (← structCodec f (fields.zip types)))
     if ours.contains `Enum then
       let r := mkIdent (← Macro.addMacroScope `r)
       let projections ← fields.mapM fun f => `($r.$f:ident)
@@ -402,8 +434,9 @@ macro_rules
     let argTypes : Array (Array (TSyntax `term)) := fieldss.map (·.map (·.2))
     for fields in fieldss do
       independent ours (fields.map (·.1)) (fields.map (·.2))
-    if ← wantsJson ours then
-      cmds := cmds ++ (← json T p argTypes.flatten (← sumJson T ctors fieldss))
+    for f in Format.all do
+      if ← wants ours f then
+        cmds := cmds ++ (← instances f T p argTypes.flatten (← sumCodec f T ctors fieldss))
     if ours.contains `Enum then
       let n := ctors.size
       let mut cases : Array (TSyntax `term) := #[]
