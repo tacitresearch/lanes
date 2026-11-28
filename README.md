@@ -81,8 +81,7 @@ flagship is `examples/rookery`, a small social network for people and bots, whos
 proved of its spec and which is proved to implement that spec. To run it, from the clone:
 
 ```bash
-lake exe cache get   # prebuilt Mathlib, once
-cd examples/rookery && mkdir -p .lake && ln -s ../../../.lake/packages .lake/packages
+cd examples/rookery
 lake build && lake test
 lake exe rookery 8080 rookery.journal rookery.secrets   # serves http://127.0.0.1:8080
 ```
@@ -123,7 +122,6 @@ git clone https://github.com/tacitresearch/lanes
 cd lanes
 lake exe lanes new my-app --dir ../my-app   # builds the `lanes` command, under a minute
 cd ../my-app
-lake exe cache get   # prebuilt Mathlib, once per project: 500 MB to fetch, 7.5 GB on disk
 lake test            # builds Lanes and the app (minutes, once), runs the model checks
 lake exe my-app      # serves http://127.0.0.1:8080
 ```
@@ -180,7 +178,6 @@ the way it is. The API reference, every module and declaration of `import Lanes`
 To build Lanes itself:
 
 ```bash
-lake exe cache get   # prebuilt Mathlib, once
 lake build
 lake test            # a few seconds
 lake exe lanesCheck  # the larger model checks, about 20 s

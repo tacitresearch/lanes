@@ -10,8 +10,6 @@ package lanes where
   license := "Apache-2.0"
   testDriver := "lanesTest"
 
-require cslib from git "https://github.com/leanprover/cslib" @ "910210f7d155e22a2244591e394bd16fbb0ddbb3"
-
 /-- `native/lanes.c`: SHA-256, HMAC, a comparison and Argon2id from the OpenSSL that `native/tls.c`
 uses, declared in the same way, and `fsync` and a timed wait. -/
 target native pkg : FilePath := do

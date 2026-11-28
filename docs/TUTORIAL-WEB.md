@@ -14,7 +14,6 @@ the test of step 4. Imports there read `Tests.TutorialWeb.` where an app's read 
 ```bash
 lake exe lanes new shelf --dir ../shelf
 cd ../shelf
-lake exe cache get
 lake test
 lake exe shelf 8080 shelf.journal   # serves http://127.0.0.1:8080, keeps its state in shelf.journal
 ```

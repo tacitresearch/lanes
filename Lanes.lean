@@ -146,5 +146,5 @@ public import Lanes.Web.IO.Tls
 /-!
 The Lanes API: everything an application's executable code needs, and the tools its proofs use.
 It imports only `Std`, so binaries stay small. The framework's own soundness theorems are
-`Lanes.Proofs`, and the proof layer, built on CSLib and Mathlib, is `Lanes.Semantics`.
+`Lanes.Proofs`, and the proof layer is `Lanes.Semantics`.
 -/

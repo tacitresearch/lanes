@@ -3,7 +3,6 @@
 A [Lanes](https://github.com/tacitresearch/lanes) application. It needs elan and a C compiler, nothing else.
 
 ```bash
-lake exe cache get      # once: prebuilt Mathlib
 lake build
 lake test               # model checks
 lake exe counter 8080  # run
@@ -37,6 +36,6 @@ and Proofs. The ones every change here meets:
 - `Check.lean`: model checks on small instances, run by `lake test`.
 - `Main.lean`: the edge. HTTP, HTML views, `main`.
 
-Executable code imports `Lanes`. Proof files that need refinement or Mathlib import
-`Lanes.Semantics`; keep that import out of anything `Main.lean` depends on, or the binary grows
-by over 100 MB.
+Executable code imports `Lanes`. Proof files that need refinement import `Lanes.Semantics`;
+keep that import out of anything `Main.lean` depends on, so the binary links none of the
+proofs.

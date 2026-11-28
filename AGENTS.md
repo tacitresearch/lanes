@@ -13,7 +13,6 @@ a choice. Each rule says why, so a case it does not cover can be judged.
 ## Build and checks
 
 ```bash
-lake exe cache get         # once, in a fresh clone: prebuilt Mathlib; never build Mathlib from source
 lake build --wfail         # the library, warnings as errors (as CI builds it)
 lake test                  # pure tests and live runtime tests, a few seconds
 lake exe lanesCheck        # larger model checks, random runs and the scale benchmark, about 20 s: run once, never in a loop
@@ -64,8 +63,8 @@ lake exe lanes docstrings  # how many public declarations of `import Lanes` have
   nightly (`.github/workflows/services.yml`). The request reader's verdicts on
   `Tests/ReadRequest.corpus` are compared with Go's, Node's and h11's servers by
   `oracles/go/requests/requests.py`, run by hand.
-- The toolchain is pinned in `lean-toolchain` and follows CSLib's. Dependencies are pinned in
-  `lake-manifest.json`; upgrade them deliberately, CSLib first.
+- The toolchain is pinned in `lean-toolchain` and moved deliberately, in a pull request of its
+  own. Lanes requires no other package: `lake-manifest.json` is empty.
 - A test of an application's front end drives it with `Http.Loopback` (pure, no socket: the
   connection, the gate and the system, as the server runs them), and a live test of a process
   with `Http.Client.fetch` (`examples/README.md`, "Testing a front end"). Do not write HTTP by
@@ -104,9 +103,9 @@ interleaved cannot be proved one at a time.
 endpoints (request ids, the spec's operation); transport retries are an optimisation, never the
 argument.
 
-1.6 **Layers run one way.** Runtime modules import `Std` only; Mathlib, CSLib and proof modules
-(`Lanes.Semantics`, `…Proofs`) are imported only by proof files (lint `layering`). No cycles.
-*Why:* executable code that imports the proof layer links all of Mathlib (over 150 MB).
+1.6 **Layers run one way.** Runtime modules import `Std` only; proof modules (`Lanes.Semantics`,
+`…Proofs`) are imported only by proof files (lint `layering`). No cycles. *Why:* an executable
+then builds and links none of the proofs.
 
 1.7 **One concept, one name**, in code, specs and docs; names state units and bounds
 (`timeout_ms`, `maxBatch`).
@@ -186,17 +185,16 @@ defect four reviews found was a decision made in IO code.
 
 Conventions:
 
-- Library files use the module system: `module`, `public import`, then `@[expose] public section`
-  (as CSLib does). A definition whose body uses private helpers is `@[no_expose]`.
+- Library files use the module system: `module`, `public import`, then `@[expose] public section`.
+  A definition whose body uses private helpers is `@[no_expose]`.
 - Write almost no comments. A comment or docstring is for a *why* that a name, a type or a theorem
   cannot carry; never restate the code or narrate a change. Each file keeps a short `/-! -/`
   header. A public declaration gets a docstring only when its name and type do not say what it
-  is. Do not copy the docstring density of older files. `Lanes/Semantics/` documents every
-  declaration, because CSLib's linter requires it.
+  is. Do not copy the docstring density of older files.
 - Define a concrete system with `abbrev`, so instance resolution can see its `State`.
 - Template syntax is scoped: a view file starts with `open scoped Lanes.Html`; a tag follows `<`
   with no space (`<div>`), and `a < b` with a space is a comparison. Keep views and `main` on
-  `import Lanes`: Mathlib's `<i` token breaks `<input>`.
+  `import Lanes`: another library's tokens, such as `<i`, can break `<input>`.
 - In `do` blocks, `(← action)` inside `a || b` or `a && b` runs whether or not the other side
   decides. Bind it first when it must be conditional.
 - Lean never updates an object in place once another thread may see it, and state held across an
@@ -227,7 +225,7 @@ that performs IO is in an `IO/` directory of its area and named in `TRUSTED.md`.
 | `Lanes/Data/` | `Enum`, codecs and `lanes_data`, the queue, quorums | `Std` only |
 | `Lanes/Lib/` | The standard library: encodings (Base64, JSON), addresses and URLs, time, SHA-256, HMAC, MD5, PBKDF2 and `Native`, the PostgreSQL protocol (`Postgres/`), media types, rate limits (`docs/STDLIB.md`) | `Std` only |
 | `Lanes/Testing/` | The test kit, for tests and never in `import Lanes`: a fake S3 that checks signatures, a fake identity provider, a scripted browser, a server of a handler and readers of a response (`docs/decisions/D77-a-test-kit.md`) | `Std` only |
-| `Lanes/Semantics/` | The semantics as a CSLib `LTS`, refinement, specs, fairness and leads-to, and the liveness of the gate, of jobs and of the scheduler | CSLib, Mathlib |
+| `Lanes/Semantics/` | The semantics as an `LTS`, refinement, specs, fairness and leads-to, and the liveness of the gate, of jobs and of the scheduler; its own transition systems, sequences, bags and sums | `Lanes` and core |
 | `native/` | The C that binds OpenSSL's hashes, comparison and Argon2id, `fsync`, a timed wait, OpenSSL's TLS client, its signature check and its signing, all of it trusted | OpenSSL, libc |
 | `LanesCli/` | The `lanes` command: `new`, `lint`, `check`, `changelog`, `stats`, `inventory`, `docstrings` | `Std` only; `Lean` in `Inventory` and `Docstrings`, which only `lanesInventory` links |
 | `templates/app/` | The application `lanes new` creates, which is `examples/counter` | |

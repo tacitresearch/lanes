@@ -59,8 +59,8 @@ jobs:
           "$RUNNER_TEMP/elan-init" -y --no-modify-path --default-toolchain none
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
           "$HOME/.elan/bin/elan" toolchain install "$(cat "$APP_DIR/lean-toolchain")"
-      # The dependencies, Mathlib among them: Lake clones every package of the manifest, though
-      # the executable imports none of the proof layer and builds without Mathlib's files.
+      # The packages of the app's manifest, if it has any beside Lanes: Lake clones every one,
+      # though the executable may import none of them.
       - id: packages
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:

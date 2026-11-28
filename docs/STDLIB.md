@@ -17,10 +17,10 @@ is how a misread standard shows up.
 
 | Class | Meaning | Packages |
 | --- | --- | --- |
-| a | Lean core, `Std` or Batteries has it (module named) | 37 |
+| a | Lean core, `Std` or Batteries has it (module named) | 36 |
 | b | Pure and needed by applications: build in Lean and prove | 26 |
 | c | Touches the operating system or cryptography: bind (library named) | 11 |
-| d | Not needed for Lanes applications (reason given) | 79 |
+| d | Not needed for Lanes applications (reason given) | 80 |
 | e | Already in Lanes (module named) | 19 |
 
 Of the 19 `golang.org/x` packages listed at the end, 8 are (b), 3 are (c), 7 are (d) and 1 is (e).
@@ -32,9 +32,9 @@ sniffing and event streams in `net/http` (b, P1).
 Three qualifications apply to (a):
 
 - **Not linkable.** Runtime modules import `Std` only (design decision 5): `import Lean` takes a
-  binary from about 5 MB to about 137 MB (D15), and Batteries comes in only through Mathlib.
+  binary from about 5 MB to about 137 MB (D15), and Lanes requires no Batteries.
   Something that exists only in `Lean.*` (`Lean.Data.Json`, `Lean.Data.Markdown`,
-  `Lean.Data.Html`) or in Batteries is available to proofs and tests, and has to be ported, as
+  `Lean.Data.Html`) is available to proofs and tests, and has to be ported, as
   JSON was, before an application can run it. Such rows say so.
 - **Unproved.** Some `Std` code decides things and has no theorems: `Std.Http.Data.URI.Parser`
   and `Std.Time.Format.*` have none (counted on this toolchain, `v4.37.0-rc1`). Where an
@@ -177,9 +177,9 @@ and the RFCs' own.
 | `log/slog` | b | P1. The HTTP server's access log is JSON lines (`Lanes/Web/Http/Ops.lean`); there is no general logger |
 | `log/syslog` | d | logs go to standard error and the service manager collects them |
 | `expvar` | b | P1, built as a metrics page in the Prometheus text format rather than expvar's JSON: `Lanes/Lib/Metrics.lean`, served by the HTTP server (`ServerConfig.ops`) |
-| `flag` | d | an application takes a few arguments and the environment; the `Cli` package is in the manifest (through Mathlib) if a tool needs more |
+| `flag` | d | an application takes a few arguments and the environment; an application can require the `Cli` package if a tool needs more |
 | `testing` | e | `lake test`, the model checker (`Lanes.Check`), seeded random runs (`Lanes/Check/Fuzz.lean`), mutants (`scripts/mutants.py`) |
-| `testing/quick` | a | Plausible, pinned in `lake-manifest.json` through Mathlib |
+| `testing/quick` | d | seeded random runs (`Lanes/Check/Fuzz.lean`) do its work; an application can require Plausible |
 | `testing/fstest`, `testing/iotest`, `testing/slogtest` | d | fakes for Go interfaces |
 | `database/sql`, `database/sql/driver` | e | state is actor state with a journal by default; PostgreSQL's protocol is `Lanes/Lib/Postgres/` (a client, not a generic driver interface), and a transactional store is the model `Lanes/Outside/Store/Basic.lean` |
 | `syscall` | d | specific calls are bound one by one (`fsync`), not as a package |

@@ -506,9 +506,12 @@ is a pass of `Check.system` when the representative is a `World.Reduction`
 
 ## The proof layer
 
-`Lanes/Semantics/` imports CSLib and Mathlib; nothing executable imports it (D11, rule 1.6).
+`Lanes/Semantics/` imports `Lanes` and core Lean only; nothing executable imports it (rule
+1.6). It has its own transition systems (`Lanes.Semantics.Lts`), infinite sequences
+(`Lanes.Semantics.Seq`), bags (`Lanes.Semantics.Bag`) and sums over `Enum`
+(`Lanes.Semantics.Sums`).
 
-- `System.sem` presents `SysState.step` as a CSLib `LTS`, and `System.Refines` is weak
+- `System.sem` presents `SysState.step` as an `LTS`, and `System.Refines` is weak
   simulation to a spec (`Lanes/Semantics/System.lean`, `Lanes/Semantics/Refinement.lean`,
   `Lanes/Semantics/Simulation.lean`).
 - `Service.spec` turns a sequential `Service` into what a concurrent implementation must refine,

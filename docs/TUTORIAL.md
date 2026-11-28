@@ -14,7 +14,6 @@ git clone https://github.com/tacitresearch/lanes
 cd lanes
 lake exe lanes new tut --dir ../tut
 cd ../tut
-lake exe cache get   # prebuilt Mathlib, once: 500 MB to fetch, 7.5 GB on disk
 lake test            # the first time builds Lanes and the app (minutes), then runs the checks
 lake exe tut         # serves http://127.0.0.1:8080; Ctrl-C stops it
 ```
@@ -31,7 +30,7 @@ curl -X POST http://127.0.0.1:8080/increment
 ```
 
 The app is four files. `Tut/Counter.lean` is the logic, `Main.lean` the web page and the
-server, `Check.lean` the model checks, and `Tut/Proofs.lean` the proofs that need Mathlib.
+server, `Check.lean` the model checks, and `Tut/Proofs.lean` the proofs that need the proof layer.
 
 **A step is pure.** The counter's logic is `service` in `Tut/Counter.lean`: given the count and
 a request, it returns the new count and the responses. It cannot read a clock, a file or a

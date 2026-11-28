@@ -67,7 +67,7 @@ Parameters:
     Default: 200
     MinValue: 100
     MaxValue: 2000
-    Description: GiB of gp3 disk. The toolchain, Mathlib and a build per runner take about 40.
+    Description: GiB of gp3 disk. The toolchain and a build per runner take a few.
   RunnerCount:
     Type: Number
     Default: 0
@@ -192,7 +192,7 @@ Resources:
   RunnerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Lanes CI runners - no inbound, all outbound (GitHub, Mathlib cache, package mirrors)
+      GroupDescription: Lanes CI runners - no inbound, all outbound (GitHub, package mirrors)
       # No ingress rules; a new group allows all outbound by itself.
       VpcId: !If [HasVpc, !Ref VpcId, !Ref AWS::NoValue]
 

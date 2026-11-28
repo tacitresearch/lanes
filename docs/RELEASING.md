@@ -20,9 +20,8 @@ release, every new app is pinned to a commit, and its lakefile says so.
 ## Toolchain
 
 Each release names, in its `CHANGELOG.md` section, the Lean toolchain it targets (the contents
-of `lean-toolchain`) and the CSLib commit it pins; Mathlib is the one CSLib pins. A toolchain
-bump is a pull request of its own, after CSLib has made the same bump (`AGENTS.md`, "Build and
-checks"), with nothing else in it but what the bump needs.
+of `lean-toolchain`). Lanes requires no other package. A toolchain bump is a pull request of its
+own (`AGENTS.md`, "Build and checks"), with nothing else in it but what the bump needs.
 
 ## Deprecation
 

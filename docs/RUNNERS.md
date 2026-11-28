@@ -30,8 +30,8 @@ themselves, through GitHub's OIDC provider, with no AWS keys stored anywhere.
      idle hours).
 
    **Next**, **Next**, tick **I acknowledge that AWS CloudFormation might create IAM resources**,
-   **Submit**. It takes a few minutes. The machine then sets itself up and warms (the toolchain,
-   Mathlib, a first build: about half an hour), and stops itself two hours after its last job.
+   **Submit**. It takes a few minutes. The machine then sets itself up and warms (the toolchain and
+   a first build), and stops itself two hours after its last job.
    A new account's quota of on-demand vCPUs may be below 64: **Service Quotas → Amazon EC2 →
    Running On-Demand Standard (A, C, D, H, I, M, R, T, Z) instances**, request 64 or more.
 3. **The values for GitHub.** The stack's **Outputs** tab has three values. In the repository on
@@ -91,7 +91,7 @@ On the machine (`infra/ec2-runner.sh`):
   this repository, and only from its own branches and pull requests (the runner action never
   picks it for a fork).
 - **Warm state.** elan and the toolchain live in `/opt/lanes/elan`, shared, installed under a
-  lock. Mathlib and the other dependencies live once in `/opt/lanes/shared/<key>/packages`, where
+  lock. Packages, if the manifest has any, live once in `/opt/lanes/shared/<key>/packages`, where
   `<key>` hashes `lean-toolchain` and `lake-manifest.json`, and every job links its
   `.lake/packages` there (`.github/actions/lean`). The checkout keeps each work directory's
   `.lake/build` between jobs (`clean: false`), so a job rebuilds only what changed since that
@@ -159,7 +159,7 @@ at two hours.
 
 ## Other routes
 
-**A fresh machine for each run** (`fresh`; slower: each run fetches the toolchain and Mathlib
+**A fresh machine for each run** (`fresh`; slower: each run fetches the toolchain
 and builds Lanes before its first job). Set `LANES_AWS_INSTANCE_TYPE` (say `c7a.16xlarge`)
 instead of `LANES_AWS_INSTANCE_ID`, and optionally `LANES_AWS_SUBNET`,
 `LANES_AWS_SECURITY_GROUP` and `LANES_AWS_AMI` (Ubuntu 24.04 by default). `start` makes a

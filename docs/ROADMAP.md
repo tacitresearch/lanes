@@ -121,4 +121,4 @@ test of phase D and the measure of direction 1.
   one exists, and checks seed bugs and widen bounds one at a time.
 - **Model-checker state explosion.** Raft on three nodes with a crash is millions of states;
   larger instances wait for checker v2.
-- **Lean, Mathlib and CSLib churn.** The toolchain follows CSLib's and is upgraded deliberately.
+- **Lean churn.** The toolchain is upgraded deliberately, and Lanes requires no other package.

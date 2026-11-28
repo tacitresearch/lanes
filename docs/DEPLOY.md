@@ -193,9 +193,7 @@ names repositories by id (as `tacitresearch/lanes` does, `docs/RUNNERS.md`) give
    for `ready-seconds` (180); if it does not, it runs the document's `rollback` and fails;
 5. writes `<prefix>/current`, the commit and SHA-256, which a new instance starts by itself.
 
-The first build fetches Lanes's dependencies, Mathlib among them (Lake clones every package of
-the manifest, though the executable needs none of the proof layer), and keeps them in the
-Actions cache. Then `https://<DomainName>` is the site.
+The first build keeps its build of Lanes in the Actions cache. Then `https://<DomainName>` is the site.
 
 ## Later deploys
 

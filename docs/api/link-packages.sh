@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Gives docs/api the packages Lanes already has: each package of the root's lake-manifest.json
-# becomes a link, in docs/api/.lake/packages, to the root's .lake/packages, so neither Mathlib
-# nor anything else Lanes uses is fetched or built twice. Lake fetches doc-gen4 and its own
-# dependencies into real directories beside them, and `Cli` too: Lanes only checks it out,
-# doc-gen4 builds it, and a build here must not write into the root's packages.
+# becomes a link, in docs/api/.lake/packages, to the root's .lake/packages, so nothing Lanes
+# uses is fetched or built twice. Lake fetches doc-gen4 and its own dependencies into real
+# directories beside them, `Cli` always: doc-gen4 builds it, and a build here must not write
+# into the root's packages.
 #
 # Fails if this package's manifest pins a package of the root's at another revision or URL:
 # Lake would then check that revision out in the root's copy.
@@ -37,7 +37,7 @@ for name in $(python3 -I -c 'import json, sys; print(*(p["name"] for p in json.l
     continue
   fi
   if [ ! -e "$root/.lake/packages/$name" ]; then
-    echo "$root/.lake/packages/$name is missing: build Lanes first (lake exe cache get, lake build)" >&2
+    echo "$root/.lake/packages/$name is missing: build Lanes first (lake build)" >&2
     exit 1
   fi
   if [ -e "$link" ] && [ ! -L "$link" ]; then

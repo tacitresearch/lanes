@@ -28,7 +28,7 @@
 # for the next, and a machine kept warm is the point.
 #
 # Warming (WARM=1, the default, and `warm`) clones REPO into /opt/lanes/shared/src, installs the
-# toolchain of its lean-toolchain, fetches Mathlib's build into /opt/lanes/shared/<key>/packages,
+# toolchain of its lean-toolchain, fetches the manifest's packages into /opt/lanes/shared/<key>/packages,
 # where <key> is a hash of lean-toolchain and lake-manifest.json, and builds Lanes and what the
 # mutation gate runs of examples/raft-kv. Jobs link that `.lake/packages` and start from that
 # build (.github/actions/lean); a job whose key is not there yet makes it, under the same lock.
@@ -342,7 +342,6 @@ warm_as_runner() {
     rm -rf "$dir" .lake/packages
     mkdir -p "$dir/packages"
     ln -sfn "$dir/packages" .lake/packages
-    lake exe cache get
     lake build Lanes
     touch "$dir/ready"
   fi

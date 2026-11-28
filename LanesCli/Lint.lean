@@ -19,8 +19,8 @@ Source-level checks of the rules in `AGENTS.md` that can be decided from the tex
   and each status fragment has its heading and one item per line, sorted.
 - `changelog`, where there is a `docs/changes/`: each fragment reads as sections and entries,
   and `CHANGELOG.md`'s Unreleased section has none of its own (`LanesCli/Changelog.lean`).
-- `layering` (rule 1.6): files that import Mathlib, CSLib or a proof module (`Lanes.Semantics`,
-  `App.Proofs`) live in a proof directory, one named `…Proofs` included, or are named
+- `layering` (rule 1.6): files that import a proof module (`Lanes.Semantics`, `App.Proofs`)
+  live in a proof directory, one named `…Proofs` included, or are named
   `…Proofs.lean`, so executable code never links them.
 - `links`: every repository path that a Markdown file at the root or under `docs/` writes in
   backquotes exists (`a/{b,c}.lean` names two). `docs/history/` and `docs/decisions/` record
@@ -148,13 +148,9 @@ def checkFile (root file : System.FilePath) (trusted : String) : IO (List Findin
     if !isProofFile relative then
       let t := text.trimAscii.toString
       if t.startsWith "import " || t.startsWith "public import " then
-        if hasWord t "Mathlib" || hasWord t "Cslib" || (t.splitOn "import Mathlib.").length > 1
-            || (t.splitOn "import Cslib.").length > 1 then
+        if importsProofModule t then
           findings := ⟨relative, line, "layering",
-            "Mathlib and CSLib may only be imported from proof files (rule 1.6)"⟩ :: findings
-        else if importsProofModule t then
-          findings := ⟨relative, line, "layering",
-            "a proof module imported from executable code links Mathlib into the binary "
+            "a proof module imported from executable code links the proofs into the binary "
               ++ "(rule 1.6)"⟩ :: findings
   return findings.reverse
 

@@ -290,7 +290,7 @@ round of framework work is planned from this.
   because the server never reuses one), and a salt is derived from the name, because the
   digest has to be computed before the system sees the request.
 - **Conservation across actors would not cover real names.** The bank proves conservation
-  over a `Fintype` of accounts; `String` names are not one. With the book in one actor the
+  over accounts that an `Enum` lists; `String` names are not one. With the book in one actor the
   question did not arise, but sharding the book needs sums over the actors that have started.
 - **A user actor for every name ever tried.** A log-in for a name nobody has created the cell
   `user n`, and the runtime never released an actor, so a stranger could grow the kernel
