@@ -203,7 +203,15 @@ def stitchTests : List (String × Bool) :=
     ("restore: an S3 answer of 412 to a conditional put is an object already there",
       S3.shipped (some (.refused 412 "PreconditionFailed")) == .present
         && S3.shipped (some (.stored none)) == .stored
-        && S3.shipped (some (.refused 503 "SlowDown")) == .failed && S3.shipped none == .failed) ]
+        && S3.shipped (some (.refused 503 "SlowDown")) == .failed && S3.shipped none == .failed),
+    ("restore: a page of a listing is its keys, when they were written, and the next token",
+      S3.listedPage (some (.listed
+          ⟨[{ key := "a", size := 1, lastModified := "t" }], [], some "n"⟩))
+        == some ([("a", "t")], some "n")
+        && S3.listedPage (some .missing) == none),
+    ("ship: the snapshot uploaded is the one a save puts in place",
+      (Journal.Ship.snapshotOf? [.append "j".toUTF8, .putSnapshot "s".toUTF8,
+        .putJournal "k".toUTF8]).map (·.data) == some "s".toUTF8.data) ]
 
 def tests : List (String × Bool) := shipperTests ++ planTests ++ stitchTests
 

@@ -81,11 +81,6 @@ def Upload.object (input : Codec σ.In) (system : String) : Upload σ → String
     (s!"segment/{digits first}-{digits (first + entries.length)}-{sum body}", body)
   | .snapshot index bytes => (s!"snapshot/{digits index}-{sum bytes}", bytes)
 
-/-- The key of an upload: the prefix, the journal's id, then its name. -/
-def key (keyPrefix journal : String) (input : Codec σ.In) (system : String) (u : Upload σ) :
-    String :=
-  keyPrefix ++ journal ++ "/" ++ (u.object input system).1
-
 /-- The snapshot file among a journal's writes. -/
 def snapshotOf? : List Write → Option ByteArray
   | [] => none

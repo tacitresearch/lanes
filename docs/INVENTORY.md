@@ -675,6 +675,16 @@ them by area.
 | --- | --- | --- |
 | `Journal.fsync` | trusted | TRUSTED.md: The journal's files |
 | `Journal.Store.open` | trusted | TRUSTED.md: The journal's files |
+| `Journal.Store.restore` | trusted | TRUSTED.md: The journal's files |
+
+## `Lanes/Durable/IO/Ship.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Journal.Ship.Shipper.tell` | trusted | TRUSTED.md: The journal's shipper |
+| `Journal.Ship.Shipper.start` | trusted | TRUSTED.md: The journal's shipper |
+| `Journal.Ship.Shipper.close` | trusted | TRUSTED.md: The journal's shipper |
+| `Journal.Ship.Shipper.counts` | trusted | TRUSTED.md: The journal's shipper |
 
 ## `Lanes/Durable/Journal.lean`
 
@@ -738,6 +748,46 @@ them by area.
 | `Journal.Reading.OfJournal` | spec | a predicate |
 | `Journal.Reading.OfSnapshot` | spec | a predicate |
 | `Journal.Disk.ofReadings` | proved | `Journal.Disk.Torn.load_readings`, `Journal.Disk.ofReadings_eq` |
+
+## `Lanes/Durable/Restore.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Journal.Restore.Object.parse?` | tested | `Tests/Ship.lean` |
+| `Journal.Restore.listed?` | tested | `Tests/Ship.lean` |
+| `Journal.Restore.newest` | tested | `Tests/Ship.lean` |
+| `Journal.Restore.best` | tested | `Tests/Ship.lean` |
+| `Journal.Restore.chain` | tested | `Tests/Ship.lean` |
+| `Journal.Restore.plan` | tested | `Tests/Ship.lean` |
+| `Journal.Restore.piece?` | tested | `Tests/Ship.lean` |
+| `Journal.Restore.stitch` | tested | `Tests/Ship.lean` |
+| `Journal.Restore.journal` | tested | `Tests/Ship.lean` |
+| `Journal.Restore.saved` | spec | used only in statements |
+
+## `Lanes/Durable/Ship.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Journal.Ship.digits` | tested | `Tests/Ship.lean` |
+| `Journal.Ship.sum` | tested | `Tests/Ship.lean` |
+| `Journal.Ship.Upload.object` | tested | `Tests/Ship.lean` |
+| `Journal.Ship.key` | none |  |
+| `Journal.Ship.snapshotOf?` | none |  |
+| `Journal.Ship.start` | tested | `Tests/Ship.lean` |
+| `Journal.Ship.shed` | tested | `Tests/Ship.lean` |
+| `Journal.Ship.enqueue` | tested | `Tests/Ship.lean` |
+| `Journal.Ship.sealWaiting` | tested | `Tests/Ship.lean` |
+| `Journal.Ship.wrote` | tested | `Tests/Ship.lean` |
+| `Journal.Ship.backoff` | tested | `Tests/Ship.lean` |
+| `Journal.Ship.answer` | tested | `Tests/Ship.lean` |
+| `Journal.Ship.step` | tested | `Tests/Ship.lean` |
+| `Journal.Ship.soonest` | tested | `Tests/Ship.lean` |
+| `Journal.Ship.sealAt` | tested | `Tests/Ship.lean` |
+| `Journal.Ship.ripen` | tested | `Tests/Ship.lean` |
+| `Journal.Ship.choose` | tested | `Tests/Ship.lean` |
+| `Journal.Ship.take` | tested | `Tests/Ship.lean` |
+| `Journal.Ship.State.idle` | tested | `Tests/Ship.lean` |
+| `Journal.Ship.Slice` | spec | a predicate |
 
 ## `Lanes/Durable/Snapshot.lean`
 
@@ -2488,12 +2538,12 @@ them by area.
 | `Testing.S3.time?` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
 | `Testing.S3.decodePair` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
 | `Testing.S3.splitTarget` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
-| `Testing.S3.authField` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `Testing.S3.verified` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `Testing.S3.escapeKey` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `Testing.S3.listXml` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `Testing.S3.range?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `Testing.S3.serve` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
+| `Testing.S3.authField` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.verified` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.escapeKey` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.listXml` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.range?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.serve` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
 | `Testing.S3.find?` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
 | `Testing.S3.split` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
 | `Testing.S3.quoted` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
@@ -2501,22 +2551,22 @@ them by area.
 | `Testing.S3.formBody` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3Upload.lean` and others |
 | `Testing.S3.etag` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
 | `Testing.S3.servePost` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
-| `Testing.S3.unquote` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `Testing.S3.multipartEtag` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `Testing.S3.xmlAnswer` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `Testing.S3.listPartsXml` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `Testing.S3.completedXml` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `Testing.S3.manifest?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `Testing.S3.complete` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `Testing.S3.serveMultipart` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `Testing.S3.serveAll` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `Testing.S3.Fake.start` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
+| `Testing.S3.unquote` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.multipartEtag` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.xmlAnswer` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.listPartsXml` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.completedXml` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.manifest?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.complete` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.serveMultipart` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.serveAll` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.Fake.start` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
 | `Testing.S3.Fake.object?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
 | `Testing.S3.Fake.holds` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
-| `Testing.S3.Fake.keys` | tested | `Tests/S3.lean` |
-| `Testing.S3.Fake.refuse` | tested | `Tests/S3.lean` |
-| `Testing.S3.Fake.refusing` | tested | `Tests/S3.lean` |
-| `Testing.S3.Fake.stop` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
+| `Testing.S3.Fake.keys` | tested | `Tests/S3.lean`, `Tests/Ship.lean` |
+| `Testing.S3.Fake.refuse` | tested | `Tests/S3.lean`, `Tests/Ship.lean` |
+| `Testing.S3.Fake.refusing` | tested | `Tests/S3.lean`, `Tests/Ship.lean` |
+| `Testing.S3.Fake.stop` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
 | `Testing.S3.follow` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
 | `Testing.S3.code` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3Upload.lean` and others |
 | `Testing.S3.postForm` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3Upload.lean` and others |
@@ -3296,6 +3346,7 @@ them by area.
 | `S3.exchange` | trusted | TRUSTED.md: The S3 client's IO |
 | `S3.upload` | trusted | TRUSTED.md: The S3 client's IO |
 | `S3.handler` | trusted | TRUSTED.md: The S3 client's IO |
+| `S3.backup` | trusted | TRUSTED.md: The S3 client's IO |
 
 ## `Lanes/Web/IO/Server.lean`
 
@@ -3305,6 +3356,7 @@ them by area.
 | `Http.serveFronted` | trusted | TRUSTED.md: The HTTP adapter's IO |
 | `Http.ServerConfig.journalName` | trusted | TRUSTED.md: The HTTP adapter's IO |
 | `Http.serve` | trusted | TRUSTED.md: The HTTP adapter's IO |
+| `Http.restoreJournal` | trusted | TRUSTED.md: The HTTP adapter's IO |
 | `Http.Server.port` | trusted | TRUSTED.md: The HTTP adapter's IO |
 | `Http.Server.stop` | trusted | TRUSTED.md: The HTTP adapter's IO |
 | `Http.Server.drain` | trusted | TRUSTED.md: The HTTP adapter's IO |
@@ -3343,12 +3395,20 @@ them by area.
 | `Tls.Session.shutdown` | trusted | TRUSTED.md: The TLS client |
 | `Tls.Session.readAll` | trusted | TRUSTED.md: The TLS client |
 
+## `Lanes/Web/S3/Backup.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `S3.backupPut` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Backup.lean` |
+| `S3.shipped` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Backup.lean`, `Tests/Ship.lean` |
+| `S3.listedPage` | none |  |
+
 ## `Lanes/Web/S3/Basic.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `S3.Endpoint.aws` | tested | `Tests/S3.lean` |
-| `S3.Key.of?` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/Oracle/Service/S3Multipart.lean` and others |
+| `S3.Key.of?` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/Oracle/Service/S3Backup.lean` and others |
 | `S3.Range.header` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `S3.PartNumber.of?` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Multipart.lean`, `Tests/S3Upload.lean` |
 | `S3.Manifest.of?` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Multipart.lean`, `Tests/S3Upload.lean` |
@@ -3361,7 +3421,7 @@ them by area.
 | `S3.Op.body` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `S3.Bucket.host` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
 | `S3.Bucket.path` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `S3.Bucket.scope` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/Oracle/Service/S3Multipart.lean` and others |
+| `S3.Bucket.scope` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/Oracle/Service/S3Backup.lean` and others |
 | `S3.call` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `S3.unescapeKey` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `S3.entry?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
