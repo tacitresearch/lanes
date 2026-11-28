@@ -3,7 +3,7 @@
 A multi-user double-entry ledger as a web application: users sign up and log in, open accounts
 in a currency, move money between their own accounts and to other users' accounts, and see
 their own accounts and the transfers that touch them; an administrator issues money and reads
-the audit of every entry. It is phase D's stress test (`docs/ROADMAP.md`): its value is what it
+the audit of every entry. It is the stress test of the framework's batteries: its value is what it
 found missing or broken in Lanes, which is the friction log at the end.
 
 ```bash

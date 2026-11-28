@@ -79,7 +79,7 @@ The open items of the roadmap. The direction is issue #93 and `docs/ROADMAP.md`.
 
 ## Stdlib items
 
-What the triage of Go's standard library (the deleted `docs/STDLIB.md`) left to build or bind,
+What the triage of Go's standard library (the deleted STDLIB.md) left to build or bind,
 with its priority for web applications: P0 is needed by the flagship application, P1 is common,
 P2 rare. Pure code is built in Lean, proved, and compared with Go on generated inputs; what
 touches the operating system or cryptography is bound to OpenSSL (D46).
