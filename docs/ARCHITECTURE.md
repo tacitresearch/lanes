@@ -687,7 +687,9 @@ expire, and an answer within the deadline replaces them while they are still han
 timeouts. A task in `Lanes/Services/Aws/IO/Credentials.lean` only performs. SES's `SendEmail` is a JSON document
 proved to read back with exactly its recipients (`Ses.toAddresses_json`), its answers read as
 the email model's (`Ses.Answer.modelled`), and runs against a fake SES and against moto's SES
-are ones the model allows; SES takes no key, so each send is a request without one. SQS's
+are ones the model allows; SES takes no key, so each send is a request without one. An email
+that must be sent once goes through an outbox: a job with one attempt is sent at most once
+(`Lanes/Services/Aws/README.md`). SQS's
 calls (`Aws.Sqs`: create a queue, send, receive, delete) are data, with no handler.
 CloudFront's signed URLs and cookies (`Aws.CloudFront`) are pure: a canned policy is the
 document AWS gives for the URL and the time (`CloudFront.cannedPolicy_eq`), CloudFront's base64
@@ -707,6 +709,7 @@ Where: `Lanes/Services/Aws/`, its tests in `Tests/Aws/`.
 | The wait between failed fetches of credentials stays within `maxBackoff_ms`, and a failed fetch is tried again within it | `Aws.Refresh.backoff_le`, `Aws.Refresh.retry_within`; gate `Tests/Axioms/Services.lean` | `Config.Valid` for the retry | proved |
 | A message sent through SES carries exactly the recipients given | `Aws.Ses.toAddresses_json`, `Aws.Ses.json_parse`, `Lanes/Services/Aws/SesSound.lean`; a fake SES that reads them from the JSON | That SES reads the document as `Json.parse` does | proved; tested against a fake |
 | SES does only what the email model allows | A run through `Ses.handler` against a fake SES checked with `Outside.allows`, `Tests/Aws/Ses.lean`; and against moto's SES, a sender refused then verified, a send timed out, `oracles/moto/ses.jsonl` | That moto answers as SES does; not run against SES | trusted; tested against moto's SES, nightly |
+| An email sent from an outbox whose jobs have one attempt is sent at most once; with two, it may be sent twice | `Tests/Worker.lean`: the worker beside the store's model and SES's (`Aws.Ses.outside` through `Aws.Ses.jobPort`), with a crash, a restart, lost answers and lost commits that take effect late; at most once rests on `Jobs.Config.claimed` and `Queue.claim_attempts` | `attempts_max := 1` and no period; `Ses.perform` makes one call for each attempt (TRUSTED); an attempt whose answer is lost leaves its job failed, sent or not | checked |
 | A CloudFront canned policy is byte for byte the document AWS gives for the URL and the time | `Aws.CloudFront.cannedPolicy_eq`, `Lanes/Services/Aws/CloudFrontSound.lean`; gate `Tests/Axioms/Services.lean` | That AWS's document is botocore 1.44.12's and AWS's SDKs' (`docs/decisions/D82-cloudfront-signed-urls.md`); not run against CloudFront | proved |
 | CloudFront's base64 reads back, and every parameter and cookie of a signed link needs no escaping, so every cookie is set, for a path and a domain that need no escaping | `Aws.CloudFront.decode_encode`, `Aws.CloudFront.fields_safe`, `Aws.CloudFront.cookies_valid`; gate `Tests/Axioms/Services.lean` | None | proved |
 | A CloudFront signed URL is the one botocore writes, signature included | `Tests/Aws/CloudFront.lean` against botocore 1.44.12's `CloudFrontSigner` with `cryptography`'s signatures on generated links, canned and custom, RSA and P-256, SHA-1 and SHA-256; every difference a resource ours refuses | That botocore and AWS's SDKs write what CloudFront takes; not run against CloudFront | tested |
@@ -870,6 +873,7 @@ Where: `Lanes/Db/{Jobs,JobsSound,Worker,WorkerSound,Once,OnceSound}.lean`,
 | Behind a service that honours keys, every effect the service may have had is under the key of a job, and of its work, in every database the store may hold | `Worker.slots_held`; gate `Tests/Axioms/Db.lean` | As for `Worker.committed_only` | proved |
 | An application's transaction that only adds jobs (`Queue.Adds`) keeps the table, is on it, and keeps any property of each job it adds that no claim or finish changes | `Queue.keeps_of_adds`, `Queue.onTable_of_adds`, `Queue.fixed_of_adds`, `Queue.handler_fixed`, `Queue.enqueue_adds`; gate `Tests/Axioms/Db.lean` | None | proved |
 | A job done had an attempt the service took | `Tests/Worker.lean`: beside the store's model and an idempotent service, with crashes and lost answers | | checked |
+| With one attempt per job (`attempts_max := 1`, no period), each job is attempted at most once, so a service that takes no key has each effect at most once | `Tests/Worker.lean`: beside the store's model and SES's, with a crash, a restart and lost answers; from `Jobs.Config.claimed` and `Queue.claim_attempts` | An attempt not answered leaves its job failed, the effect had or not | checked |
 | The worker on PostgreSQL: three effects, one written twice under one key, one refused once; each attempt under its job's id, every job done | `Tests/Worker.lean`, when `LANES_POSTGRES` names a server | | tested against PostgreSQL 16; CI runs none |
 
 ### Limits
