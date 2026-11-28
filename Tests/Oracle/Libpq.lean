@@ -6,8 +6,8 @@ import Tests.Oracle.Basic
 import Lanes.Services.Postgres.ConnInfo
 
 /-!
-`Postgres.ConnInfo.parse` and `Postgres.ServiceFile.find` against libpq 16, the system's
-`libpq.so.5` (`oracles/libpq/main.py`). A `conninfo` case is a connection string, `keyword=value`
+`Postgres.ConnInfo.parse` and `Postgres.ServiceFile.find` against libpq 18, the one
+psycopg-binary's wheel ships, pinned (`oracles/libpq/main.py`, which refuses another major). A `conninfo` case is a connection string, `keyword=value`
 pairs or a URI, built of pieces that reach each rule of libpq's readers (spaces, quotes, `\`,
 `=`, percent escapes, IPv6 brackets, several hosts, a query) and then often changed by a
 character; the answer is every keyword set and its value. A `service` case is a service file and
@@ -77,7 +77,7 @@ def escape (s : String) : Gen String := do
     if (← chance 20) then return "%" ++ Bytes.hex c.toString.toUTF8 else return c.toString
   return String.join chars
 
-def uriChars : List Char := "ab1:@/?,[]%=&.é".toList
+def uriChars : List Char := "ab1:@/?,[]%=&.é \t".toList
 
 def hostPart : Gen String := do
   let host ← match ← below 5 with
@@ -135,7 +135,16 @@ def edges : List Case :=
     "a='x'host=y", "postgresql://", "postgres://me:pw@db:5432,[::1]:6000/shop?sslmode=require",
     "postgresql://h?ssl=true", "postgresql://h/%00", "postgresql://h/%zz", "postgresql://[::1",
     "postgresql://h?a=b=c", "postgresql://h?&", "postgresql://h?dbname=x&", "postgresql:///db",
-    "postgresql://a@b@c/d", "postgresql://h?sslnegotiation=direct", "sslnegotiation=direct"].map
+    "postgresql://a@b@c/d", "postgresql://h?sslnegotiation=direct", "sslnegotiation=direct",
+    "postgresql://h/my db", "postgresql://a b", "postgresql://h?application_name=a b",
+    "postgresql://h/a%20b", "postgresql://h/a\tb", "postgresql://h?a b=c", "servicefile=x",
+    "sslkeylogfile=x", "min_protocol_version=3.0", "max_protocol_version=latest",
+    "scram_client_key=x", "scram_server_key=x", "oauth_issuer=x", "oauth_client_id=x",
+    "oauth_client_secret=x", "oauth_scope=x", "requiressl=1", "requiressl=0", "requiressl=yes",
+    "requiressl=", "postgresql://a ", "postgresql://a  /d", "postgresql:// a", "postgresql://h/d ",
+    "postgresql://h/ d", "postgresql://h?application_name=web ", "postgresql://h?application_name= web",
+    "postgresql://me @h", "postgresql://me:pw @h", "postgresql://h:5432 /d", "postgresql://a ,b",
+    "postgresql://h?a =b", "postgresql://h/d\t", "postgresql://h/d%20", "postgresql:// "].map
     (text · "conninfo"))
   ++ ([("[app]\nhost=localhost\napplication_name=a=b\n", "app"), ("[app]\nhots=x", "app"),
        ("[app]\nservice=x", "app"), ("[other]\nhost=localhost", "app"),
@@ -144,20 +153,20 @@ def edges : List Case :=
 
 def notUtf8 : Json := .str "not UTF-8"
 
-/-- Whether a URI escapes a byte of 128 or more, which alone is not UTF-8. -/
-def escapesHigh (s : String) : Bool :=
-  let rec go : List Char → Bool
-    | '%' :: h :: _ :: rest => "89abcdefABCDEF".toList.contains h || go rest
-    | _ :: rest => go rest
-    | [] => false
-  s.startsWith "postgres" && go s.toList
+/-- Ours refused only because a part decodes to bytes that are not UTF-8. -/
+def refusedForUtf8 (c : Case) : Bool :=
+  match String.fromUTF8? c.input with
+  | some s =>
+    match ConnInfo.parse s with
+    | .error e => (e.splitOn "does not decode to UTF-8").length > 1
+    | .ok _ => false
+  | none => false
 
+/-- libpq answers `"not UTF-8"` when a value it keeps is not UTF-8; it accepts too when such a
+part is given again later, which replaces it. -/
 def known (c : Case) (go : Answer) : Option String :=
-  let input := (String.fromUTF8? c.input).getD ""
-  if answer c == none && (go == some notUtf8 || (go.isSome && escapesHigh input)) then
+  if refusedForUtf8 c && go.isSome then
     some "libpq keeps percent-decoded bytes that are not UTF-8, which a Lean string cannot hold"
-  else if (input.splitOn "sslnegotiation").length > 1 && go == none then
-    some "sslnegotiation is PostgreSQL 17's; the reference is libpq 16"
   else none
 
 def package : Package where

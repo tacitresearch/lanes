@@ -7,7 +7,7 @@ module
 public import Lanes.Lib.Net.Percent
 
 /-!
-libpq's connection strings and its service file, read as libpq 16 reads them: a string of
+libpq's connection strings and its service file, read as libpq 18 reads them: a string of
 `keyword=value` pairs, a value quoted with `'` or not and `\` taking the next character as it is
 (`ConnInfo.keywords`); a URI, `postgresql://user:password@host:port,host:port/dbname?k=v`, its
 parts percent-decoded (`ConnInfo.uri`); and the group of one service in a service file
@@ -36,16 +36,18 @@ def Options.settled (o : Options) : Options :=
 
 namespace ConnInfo
 
-/-- libpq 16's keywords, and `sslnegotiation`, PostgreSQL 17's. -/
+/-- libpq 18's keywords. -/
 def libpqKeywords : List String :=
-  ["service", "user", "password", "passfile", "channel_binding", "connect_timeout", "dbname",
-   "host", "hostaddr", "port", "client_encoding", "options", "application_name",
-   "fallback_application_name", "keepalives", "keepalives_idle", "keepalives_interval",
-   "keepalives_count", "tcp_user_timeout", "sslmode", "sslcompression", "sslcert", "sslkey",
-   "sslcertmode", "sslpassword", "sslrootcert", "sslcrl", "sslcrldir", "sslsni", "requirepeer",
-   "require_auth", "ssl_min_protocol_version", "ssl_max_protocol_version", "gssencmode",
-   "krbsrvname", "gsslib", "gssdelegation", "replication", "target_session_attrs",
-   "load_balance_hosts", "sslnegotiation"]
+  ["service", "user", "password", "passfile", "channel_binding",
+   "connect_timeout", "dbname", "host", "hostaddr", "port", "client_encoding", "options",
+   "application_name", "fallback_application_name", "keepalives", "keepalives_idle",
+   "keepalives_interval", "keepalives_count", "tcp_user_timeout", "sslmode", "sslnegotiation",
+   "sslcompression", "sslcert", "sslkey", "sslcertmode", "sslpassword", "sslrootcert", "sslcrl",
+   "sslcrldir", "sslsni", "sslkeylogfile", "requirepeer", "require_auth",
+   "ssl_min_protocol_version", "ssl_max_protocol_version", "min_protocol_version",
+   "max_protocol_version", "gssencmode", "krbsrvname", "gsslib", "gssdelegation",
+   "replication", "target_session_attrs", "load_balance_hosts", "scram_client_key",
+   "scram_server_key", "oauth_issuer", "oauth_client_id", "oauth_client_secret", "oauth_scope"]
 
 def known (keyword : String) : Bool := libpqKeywords.contains keyword
 
@@ -53,8 +55,12 @@ def known (keyword : String) : Bool := libpqKeywords.contains keyword
 def isSpace (c : Char) : Bool :=
   c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\x0b' || c == '\x0c'
 
+/-- `requiressl`, which libpq still takes: `sslmode=require` for a value that starts with `1`,
+`sslmode=prefer` (which `Settings.read` refuses) otherwise. -/
 def store (o : Options) (keyword value : String) : Except String Options :=
-  if known keyword then .ok (o ++ [(keyword, value)])
+  if keyword == "requiressl" then
+    .ok (o ++ [("sslmode", if value.startsWith "1" then "require" else "prefer")])
+  else if known keyword then .ok (o ++ [(keyword, value)])
   else .error s!"{keyword} is not an option libpq knows"
 
 /-- Where the reading of a string of pairs is. -/
@@ -105,10 +111,12 @@ def keywords (s : String) : Except String Options := do
   let (o, at_) ← s.toList.foldlM (fun (o, at_) c => next o at_ c) ([], At.between)
   finish o at_
 
-/-- A part of a URI, percent-decoded as libpq decodes it: `%` and two hex digits, `%00`
-refused, `+` left as it is; and UTF-8. -/
+/-- A part of a URI, percent-decoded as libpq decodes it: a space refused (libpq 18 asks for
+`%20`), `%` and two hex digits, `%00` refused, `+` left as it is; and UTF-8. -/
 def decode (s : String) : Except String String :=
-  match Http.percentDecodeBytes false s.toList with
+  let cs := ((s.toList.dropWhile (· == ' ')).reverse.dropWhile (· == ' ')).reverse
+  if cs.contains ' ' then .error s!"{s} has a space: write it %20" else
+  match Http.percentDecodeBytes false cs with
   | none => .error s!"{s} is not percent-encoded"
   | some bytes =>
     if bytes.contains 0 then .error s!"{s} decodes to a NUL"

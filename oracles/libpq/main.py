@@ -1,8 +1,10 @@
 """libpq's reading of connection strings and service files, for `Tests/Oracle/Libpq.lean`.
 
 Reads the cases `lanesOracle` writes, one JSON object per line ({"id", "op", "in": hex}), and
-answers one per line ({"id", "ok", "out"}). libpq is the system's `libpq.so.5`, loaded with
-ctypes, so nothing is installed.
+answers one per line ({"id", "ok", "out"}). libpq is the one psycopg-binary's wheel ships,
+pinned in `requirements.txt`, loaded with ctypes and never through psycopg. The system's libpq is
+whatever its packages give (PGDG's newest on GitHub's runners, Ubuntu's 16 elsewhere), so it is
+not used, and the program refuses a libpq of another major version than `MAJOR`.
 
 - conninfo: the input is a connection string, a URI or `keyword=value` pairs, read with
   `PQconninfoParse`. The answer is the object of every keyword it sets and its value; an error
@@ -19,6 +21,8 @@ ctypes, so nothing is installed.
 """
 
 import ctypes
+import glob
+import importlib.util
 import json
 import os
 import sys
@@ -32,7 +36,24 @@ class Option(ctypes.Structure):  # pylint: disable=too-few-public-methods
                 ("dispsize", ctypes.c_int)]
 
 
-LIB = ctypes.CDLL("libpq.so.5")
+MAJOR = 18
+
+
+def bundled():
+    spec = importlib.util.find_spec("psycopg_binary")
+    if spec is None or spec.origin is None:
+        raise SystemExit("psycopg-binary is not installed: pip install -r requirements.txt")
+    libs = os.path.join(os.path.dirname(os.path.dirname(spec.origin)), "psycopg_binary.libs")
+    found = sorted(glob.glob(os.path.join(libs, "libpq-*.so.5*")))
+    if not found:
+        raise SystemExit("no libpq in " + libs)
+    return found[0]
+
+
+LIB = ctypes.CDLL(bundled())
+LIB.PQlibVersion.restype = ctypes.c_int
+if LIB.PQlibVersion() // 10000 != MAJOR:
+    raise SystemExit(f"libpq {LIB.PQlibVersion()} is not libpq {MAJOR}")
 LIB.PQconninfoParse.restype = ctypes.POINTER(Option)
 LIB.PQconninfoParse.argtypes = [ctypes.c_char_p, ctypes.POINTER(ctypes.c_char_p)]
 LIB.PQconninfo.restype = ctypes.POINTER(Option)

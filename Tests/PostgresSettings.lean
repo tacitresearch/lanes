@@ -152,7 +152,12 @@ def connInfoTests : List (String × Bool) :=
         && (parse "postgresql://h?a").isNone && (parse "postgresql://h?sslmode=a=b").isNone
         && (parse "postgresql://h?hots=x").isNone && (parse "postgresql://[::1").isNone
         && (parse "postgresql://[]").isNone && (parse "postgresql://[::1]x").isNone
-        && (parse "postgresql://h?&").isNone) ]
+        && (parse "postgresql://h?&").isNone),
+    ("postgres conninfo: as libpq 18, a space inside a URI's part is refused and one at its ends dropped; requiressl is sslmode",
+      (parse "postgresql://h/my db").isNone && (parse "postgresql://a b").isNone
+        && parse "postgresql:// h /d " == some [("dbname", "d"), ("host", "h")]
+        && parse "requiressl=1" == some [("sslmode", "require")]
+        && parse "requiressl=0" == some [("sslmode", "prefer")]) ]
 
 def serviceFile : String :=
   "# services\n[other]\nhost=wrong\n\n  [app]  \n host=db.example \nport=6432\napplication_name=a=b\n"

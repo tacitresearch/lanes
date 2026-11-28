@@ -16,7 +16,7 @@ Status: **checked: model plus oracle**.
   and records them (`oracles/postgres/store.jsonl`, `oracles/postgres/db.jsonl`), which
   `lake test` checks again; CI runs it nightly. The messages and the connection are also tested
   against sessions recorded from PostgreSQL 16 and psql 16 (`Tests/Postgres.lean`). The
-  connection strings and service files are compared with libpq 16 on generated ones
+  connection strings and service files are compared with libpq 18 on generated ones
   (`oracles/libpq`, `Tests/Oracle/Libpq.lean`).
 
 ## Connecting

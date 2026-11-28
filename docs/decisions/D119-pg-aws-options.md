@@ -14,8 +14,10 @@ long-lived key. Issue #109 had put the password file's permissions, `PGSERVICE` 
 `postgresql://` URI or `keyword=value` pairs), else from the service that string or `PGSERVICE`
 names, else from libpq's variable, else from a deploy's (`LANES_DB_*`), else libpq's default.
 The service before the variables is libpq's order (`conninfo_add_defaults`). The readers of
-strings and service files follow libpq 16's code, and libpq itself is their oracle
-(`oracles/libpq`): agreement is measured, not argued.
+strings and service files follow libpq's code, and libpq 18 itself is their oracle
+(`oracles/libpq`, pinned through psycopg-binary's wheel, since a system's libpq is whatever
+version its packages give): agreement is measured, not argued. libpq 18 refuses a space inside
+a part of a URI and drops one at its ends; the client does the same.
 
 Where libpq warns and goes on, the client refuses, because it has no channel for a warning and
 a warning nobody reads is a silent fallback (rule 3.1):
