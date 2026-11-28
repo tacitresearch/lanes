@@ -3,6 +3,8 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
+import Lanes.Lib.Postgres.IO.Worker
+import Tests.PostgresLive
 
 /-!
 The jobs table and its worker (`Lanes/Db/Jobs.lean`, `Lanes/Db/Worker.lean`) without a server:
@@ -192,5 +194,70 @@ def report (name : String) (r : Check.Report W (Event wsig)) : String :=
       "\n".intercalate (t.steps.map fun (e, _) => "  " ++ Event.render e)
   | some (.unreached ps) => s!"{name}: FAIL never reached {ps}"
   | some (.deadlock _) => s!"{name}: FAIL deadlock"
+
+def tests : List (String × Bool) :=
+  let plain := check [0, 200] ["a"] false 1
+  let lost := check [0, 200] ["a"] true 0
+  transactionTests ++
+  [ (s!"worker: only jobs that committed are attempted, each under its key once at the service, "
+        ++ s!"a job done was taken; with crashes ({plain.states} states)",
+      plain.ok && plain.witnesses.length == 2),
+    (s!"worker: the same when the store loses answers and lost commits take effect late "
+        ++ s!"({lost.states} states)",
+      lost.ok && lost.witnesses.length == 2) ]
+
+/-! ## On PostgreSQL -/
+
+open Std.Async Lanes.Postgres
+
+def liveQueue : Queue String := { name := "lanes_outbox", payload }
+
+def liveConfig : Worker.Config Bool :=
+  { jobs := { batch_max := 4, attempts_max := 3, lease_ms := 2000, backoff_ms := 10 }
+    attempt_ms := 1000, claim_ms := 1000
+    classify := fun ok => if ok then .ok else .retry "refused" }
+
+/-- The worker on a real PostgreSQL, when `LANES_POSTGRES` names one: three effects written by
+the application, one of them twice under one key, and a service that refuses the first attempt
+at one of them. -/
+def live : IO (List (String × Bool)) := do
+  let some (host, port) ← Tests.PostgresLive.server
+    | return [("jobs worker on postgres: skipped, LANES_POSTGRES is not set", true)]
+  let cfg := Tests.PostgresLive.config host port "lanes_trust" none
+  let .ok s ← (connect cfg).block | return [("jobs worker on postgres: connects", false)]
+  discard <| (s.exec (.statement { sql := "DROP TABLE IF EXISTS lanes_outbox" })).block
+  let errors ← (Typed.create s [liveQueue.table]).block
+  (s.close).block
+  unless errors.isEmpty do return [(s!"jobs worker on postgres: the table is created: {errors}", false)]
+  let pool ← Pool.new cfg
+  let store : Typed.Store (String ⊕ Req) (Queue.Enqueued ⊕ Ans String) :=
+    { pool, handler := beside (fun key => liveQueue.enqueue key key 0) (liveQueue.handler liveConfig.jobs) }
+  let reader : Typed.Store Unit (List (Job String)) :=
+    { pool, handler := fun _ => liveQueue.rows.scan { table := liveQueue.table, limit := 100 } }
+  let mut enqueued := []
+  for key in ["a", "b", "flaky", "a"] do
+    enqueued := enqueued ++ [← (store.call (.inl key)).block]
+  let performed ← IO.mkRef ([] : List (Int64 × String))
+  let perform (id : Int64) (_ : Nat) (work : String) : Async (Option Bool) := do
+    let seen ← performed.modifyGet fun l => ((l.countP (·.2 == work)), l ++ [(id, work)])
+    return some (work != "flaky" || seen ≥ 1)
+  let worker ← (Typed.Worker.start liveConfig store perform (poll_ms := 50)).block
+  let mut jobs := []
+  for _ in [0:100] do
+    if let .committed js ← (reader.call ()).block then
+      jobs := js
+      if js.length == 3 && js.all (·.status == .done) then break
+    IO.sleep 50
+  (worker.stop).block
+  let seen ← performed.get
+  let idOf (key : String) : Option Int64 := (jobs.find? (·.key == key)).map (·.id)
+  return [
+    ("jobs worker on postgres: a key enqueued twice is one job",
+      enqueued.getLast? == some (.committed (.inl (.already 0))) && jobs.length == 3),
+    ("jobs worker on postgres: every job is done", jobs.all (·.status == .done)),
+    ("jobs worker on postgres: each attempt is under its job's id, with its work",
+      seen.all fun (id, work) => idOf work == some id),
+    ("jobs worker on postgres: a refused attempt is made again, under the same key",
+      seen.countP (·.2 == "flaky") == 2 && seen.length == 4) ]
 
 end Tests.Worker

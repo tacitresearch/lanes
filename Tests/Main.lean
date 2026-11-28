@@ -53,8 +53,7 @@ import Tests.TutorialWeb
 import Tests.Release
 import Tests.Oracle.All
 import Tests.Oracle.Service.All
-import Tests.Jobs
-import Tests.Schedule
+import Tests.Worker
 import Tests.Outside
 import Tests.Queue
 import Tests.Reduce
@@ -120,7 +119,7 @@ def live : IO (List (String × Bool)) := do
     ++ (← safely "full inbox" Tests.Fronted.busyTest) ++ (← safely "node" Tests.Fronted.nodeTest)
     ++ (← safely "node on a journal" Tests.Fronted.nodeDurable)
     ++ (← safely "fronted on a journal" Tests.Fronted.durable)
-    ++ (← safely "release" Tests.Release.liveTests) ++ (← safely "jobs" Tests.Jobs.live)
+    ++ (← safely "release" Tests.Release.liveTests) ++ (← safely "jobs worker" Tests.Worker.live)
     ++ (← safely "ops" Tests.Ops.live) ++ (← Tests.Crypto.live)
     ++ (← safely "postgres" Tests.PostgresLive.live)
     ++ (← safely "postgres tls" Tests.PostgresTls.live)
@@ -141,7 +140,7 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.Crypto.tests ++ Tests.Auth.tests ++ Tests.Clients.tests ++ Tests.Lease.tests
     ++ Tests.Release.tests ++ Tests.ReadRequest.tests ++ Tests.Oracle.unitTests
     ++ Tests.HttpConn.tests ++ Tests.Loopback.tests
-    ++ Tests.Jobs.tests ++ Tests.Schedule.tests ++ Tests.Outside.tests ++ Tests.Postgres.vectorTests
+    ++ Tests.Worker.tests ++ Tests.Outside.tests ++ Tests.Postgres.vectorTests
     ++ Tests.Postgres.downgradeTests ++ Tests.Postgres.tlsTests ++ Tests.Postgres.endPointTests
     ++ Tests.PostgresSettings.tests ++ Tests.Db.tests
     ++ Tests.Ops.tests

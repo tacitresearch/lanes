@@ -149,19 +149,6 @@ import Lanes.Semantics
 /-- info: 'Lanes.System.Implements.produced' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Implements.produced
 
--- Lanes.Semantics.Jobs
-/-- info: 'Lanes.Jobs.active_leaves' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Jobs.active_leaves
-
-/-- info: 'Lanes.Jobs.active_answered' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Jobs.active_answered
-
-/-- info: 'Lanes.Jobs.submitted_answered' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Jobs.submitted_answered
-
-/-- info: 'Lanes.Jobs.attach_active_leaves' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Jobs.attach_active_leaves
-
 -- Lanes.Semantics.Link
 /-- info: 'Lanes.linkMsgs_of_deliverable' depends on axioms: [propext] -/
 #guard_msgs in #print axioms Lanes.linkMsgs_of_deliverable
@@ -283,25 +270,3 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.System.Refines.traces_of_run' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Refines.traces_of_run
-
--- Lanes.Semantics.Schedule
-/-- info: 'Lanes.Schedule.held_leaves' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Schedule.held_leaves
-
-/-- info: 'Lanes.Schedule.held_ends' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Schedule.held_ends
-
-/-- info: 'Lanes.Schedule.every_noticed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Schedule.every_noticed
-
-/-- info: 'Lanes.Schedule.attach_held_leaves' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Schedule.attach_held_leaves
-
-/-- info: 'Lanes.Schedule.attachBy_held_leaves' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Schedule.attachBy_held_leaves
-
-/-- info: 'Lanes.Schedule.attach_end_handled' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Schedule.attach_end_handled
-
-/-- info: 'Lanes.Schedule.attach_answer_handled' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Schedule.attach_answer_handled

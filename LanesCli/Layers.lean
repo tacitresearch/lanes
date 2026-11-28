@@ -95,7 +95,6 @@ def homes : List (String × Package) := [
   ("Lanes/Runtime/", .runtime),
   ("Lanes/Net/", .runtime),
   ("Lanes/Outside/IO/Clock.lean", .runtime),
-  ("Lanes/Behaviours/Jobs/IO/Pool.lean", .runtime),
   ("Lanes/Semantics/FairRuns.lean", .runtime),
   ("Lanes/Durable/OutputId.lean", .runtime),
   ("Lanes/Durable/", .durable),

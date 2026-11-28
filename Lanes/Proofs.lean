@@ -5,8 +5,6 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Lanes
-public import Lanes.Behaviours.Jobs.Sound
-public import Lanes.Behaviours.Schedule.Sound
 public import Lanes.Check.FingerprintSound
 public import Lanes.Check.ReduceSound
 public import Lanes.Check.SearchSound

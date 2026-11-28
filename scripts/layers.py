@@ -40,7 +40,6 @@ MOVES = [
     ("Lanes/Durable/OutputId.lean", "Lanes/Runtime/OutputId.lean"),
     ("Lanes/Net/", "Lanes/Peers/"),
     ("Lanes/Outside/IO/Clock.lean", "Lanes/Runtime/IO/Clock.lean"),
-    ("Lanes/Behaviours/Jobs/IO/Pool.lean", "Lanes/Runtime/IO/Jobs.lean"),
     ("Lanes/Lib/Net/", "Lanes/Net/"),
     ("Lanes/Web/IO/Tls.lean", "Lanes/Net/IO/Tls.lean"),
     ("Lanes/Lib/Postgres/", "Lanes/Postgres/"),
