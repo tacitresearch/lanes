@@ -107,17 +107,81 @@ theorem sum_update {β : α → Type} (g : (i : α) → β i → Int) (f : (i : 
     nodup_values (mem_values i) fun j hj => by simp [update, hj]
   simpa using this
 
-/-- Summing a pointwise sum is adding the sums. -/
-theorem sum_add {g h : α → Int} : sum (fun a => g a + h a) = sum g + sum h := by
-  simp only [sum]
-  induction values α with
-  | nil => simp
-  | cons a l ih => simp [ih]; omega
-
 /-- Functions equal at every value have equal sums. -/
 theorem sum_congr {M : Type} [Add M] [Zero M] {g h : α → M} (hgh : ∀ a, g a = h a) :
     sum g = sum h := by
   simp only [sum, funext hgh]
+
+section Monoid
+
+/-! Sums in any commutative monoid: integers, bags. -/
+
+variable {M : Type} [Add M] [Zero M] [Std.Associative (α := M) (· + ·)]
+  [Std.Commutative (α := M) (· + ·)] [Std.LawfulIdentity (α := M) (· + ·) 0]
+
+omit [Std.Associative (α := M) (· + ·)] [Std.Commutative (α := M) (· + ·)] in
+private theorem zero_add' (x : M) : 0 + x = x := Std.LawfulLeftIdentity.left_id x
+omit [Std.Associative (α := M) (· + ·)] [Std.Commutative (α := M) (· + ·)] in
+private theorem add_zero' (x : M) : x + 0 = x := Std.LawfulRightIdentity.right_id x
+
+omit [Std.Associative (α := M) (· + ·)] [Std.Commutative (α := M) (· + ·)] in
+/-- Nothing summed is nothing. -/
+@[simp] theorem sum_zero : sum (fun _ : α => (0 : M)) = 0 := by
+  simp only [sum]
+  induction values α with
+  | nil => rfl
+  | cons a l ih => simp [ih, zero_add']
+
+/-- Summing a pointwise sum is adding the sums. -/
+theorem sum_add {g h : α → M} : sum (fun a => g a + h a) = sum g + sum h := by
+  simp only [sum]
+  induction values α with
+  | nil => simp [zero_add']
+  | cons a l ih => simp only [List.map_cons, List.sum_cons, ih]; ac_rfl
+
+omit [Enum α] [Std.Associative (α := M) (· + ·)] [Std.Commutative (α := M) (· + ·)] in
+private theorem sum_ite_list (i : α) (x : M) :
+    ∀ {l : List α}, l.Nodup →
+      (l.map fun a => if i = a then x else 0).sum = if i ∈ l then x else 0
+  | [], _ => by simp
+  | a :: l, hnd => by
+    obtain ⟨hal, hnd⟩ := List.nodup_cons.mp hnd
+    simp only [List.map_cons, List.sum_cons, sum_ite_list i x hnd, List.mem_cons]
+    by_cases hia : i = a
+    · subst hia; simp [hal, add_zero']
+    · simp [hia, zero_add']
+
+omit [Std.Associative (α := M) (· + ·)] [Std.Commutative (α := M) (· + ·)] in
+/-- A sum of what is nothing at every value but one. -/
+theorem sum_ite_eq (i : α) (x : M) : sum (fun a => if i = a then x else 0) = x := by
+  simp only [sum, sum_ite_list i x nodup_values, mem_values, ite_true]
+
+omit [Enum α] in
+private theorem sum_split_list (i : α) (g : α → M) :
+    ∀ {l : List α}, l.Nodup → i ∈ l →
+      (l.map g).sum = g i + (l.map fun a => if a = i then 0 else g a).sum
+  | [], _, hi => absurd hi List.not_mem_nil
+  | a :: l, hnd, hi => by
+    obtain ⟨hal, hnd⟩ := List.nodup_cons.mp hnd
+    by_cases hai : a = i
+    · subst hai
+      have : (l.map fun b => if b = a then 0 else g b) = l.map g :=
+        List.map_congr_left fun b hb => by
+          have hba : b ≠ a := fun e => hal (e ▸ hb)
+          simp [hba]
+      simp [this, zero_add']
+    · have hi' : i ∈ l := by
+        rcases List.mem_cons.mp hi with e | e
+        · exact absurd e.symm hai
+        · exact e
+      simp only [List.map_cons, List.sum_cons, sum_split_list i g hnd hi', hai, ite_false]
+      ac_rfl
+
+/-- A sum is its value at `i` and the sum of the others. -/
+theorem sum_split (i : α) (g : α → M) : sum g = g i + sum (fun a => if a = i then 0 else g a) :=
+  sum_split_list i g nodup_values (mem_values i)
+
+end Monoid
 
 end Enum
 

@@ -241,15 +241,15 @@ theorem Item.filter_regroup (w ys : List (Item N C)) (hys : ∀ p ∈ ys, p.name
 
 omit [DecidableEq C] in
 theorem Item.held_regroup (w ys : List (Item N C)) :
-    (↑((w.filter (·.name ≠ n) ++ ys).filterMap Item.request?) : Multiset (Request N C)) +
+    (↑((w.filter (·.name ≠ n) ++ ys).filterMap Item.request?) : Bag (Request N C)) +
         ↑((w.filter (·.name = n)).filterMap Item.request?) =
       ↑(w.filterMap Item.request?) + ↑(ys.filterMap Item.request?) := by
   have hw : (w.filter (·.name ≠ n) ++ w.filter (·.name = n)).Perm w := by
     simpa using List.perm_append_comm.trans
       (List.filter_append_perm (fun p : Item N C => decide (p.name = n)) w)
-  rw [← Multiset.coe_eq_coe.mpr (hw.filterMap Item.request?)]
-  simp only [List.filterMap_append, ← Multiset.coe_add]
-  abel
+  rw [← Bag.coe_eq_coe.mpr (hw.filterMap Item.request?)]
+  simp only [List.filterMap_append, ← Bag.coe_add]
+  ac_rfl
 
 variable {env : EnvModel (sig N C)}
 
@@ -268,12 +268,12 @@ theorem value_decide {state : (i : Id N) → (system N C config).State i}
   rw [linkMsgs_append, hnet]
   by_cases hk : k = it.name
   · subst hk
-    rw [List.filter_append, List.filter_singleton]
+    rw [List.filter_append, filter_singleton]
     simp only [decide_true, Bool.cond_true]
     rw [steps_concat, husers]
     simp only [update_self, List.append_cancel_left_eq, Prod.mk.injEq, true_and]
     exact (linkMsgs_map_self (C := C) _ _).symm
-  · rw [List.filter_append, List.filter_singleton]
+  · rw [List.filter_append, filter_singleton]
     have hk' : ¬it.name = k := Ne.symm hk
     simp only [hk', decide_false, Bool.cond_false, List.append_nil]
     rw [update_of_ne _ _ (by simpa using hk), husers, linkMsgs_sends_of_ne' hk, List.append_nil]
@@ -311,21 +311,22 @@ theorem moves_decide_timed {c : SysState (system N C config)} (x : Request N C)
   · show ↑((Effect.sends (σ := sig N C) (Id.user x.name)
         ((user config .viaLedger x.name).step (c.state (Id.user x.name))
           (UserMsg.ask x.req x.ask)).2).filterMap asked) +
-      (↑((w ++ [Item.ask x]).filterMap Item.request?) : Multiset (Request N C)) +
+      (↑((w ++ [Item.ask x]).filterMap Item.request?) : Bag (Request N C)) +
         ↑([] : List (Request N C)) ≤
       ↑(asked (⟨none, Id.user x.name, UserMsg.ask x.req x.ask⟩ : Envelope (sig N C))).toList +
         ↑(w.filterMap Item.request?)
     rw [hsends]
     simp only [asked, Request.ofAsk_eq, List.filterMap_append, List.filterMap_cons,
       List.filterMap_nil, Item.request?, List.filterMap_map, Function.comp_def]
-    simp [(List.perm_append_singleton _ _).subperm]
+    simp
+    exact Bag.le_of_eq (Bag.coe_eq_coe.mpr (List.perm_append_singleton _ _))
   · show ↑(Effect.emits (σ := sig N C)
         ((user config .viaLedger x.name).step (c.state (Id.user x.name))
           (UserMsg.ask x.req x.ask)).2) +
       ↑((Effect.sends (σ := sig N C) (Id.user x.name)
         ((user config .viaLedger x.name).step (c.state (Id.user x.name))
           (UserMsg.ask x.req x.ask)).2).filterMap fun _ => (none : Option (Response N))) +
-        (0 : Multiset (Response N)) ≤ _
+        (0 : Bag (Response N)) ≤ _
     rw [hemits]
     simp
 
@@ -352,17 +353,17 @@ theorem moves_timer (c : SysState (system N C config)) (d : Deadline N) :
   · show ↑((Effect.sends (σ := sig N C) (Id.user d.name)
         ((user config .viaLedger d.name).step (c.state (Id.user d.name)) d.timer).2).filterMap
           asked) +
-      (↑((w ++ [Item.pass d]).filterMap Item.request?) : Multiset (Request N C)) +
+      (↑((w ++ [Item.pass d]).filterMap Item.request?) : Bag (Request N C)) +
         ↑([] : List (Request N C)) ≤
       ↑(none : Option (Request N C)).toList + ↑(w.filterMap Item.request?)
     rw [hsends]
     simp [Item.request?, List.filterMap_map, asked_ledger, List.filterMap_append,
-      List.filterMap_cons]
+      List.filterMap_cons, Function.comp_def]
   · show ↑(Effect.emits (σ := sig N C)
         ((user config .viaLedger d.name).step (c.state (Id.user d.name)) d.timer).2) +
       ↑((Effect.sends (σ := sig N C) (Id.user d.name)
         ((user config .viaLedger d.name).step (c.state (Id.user d.name)) d.timer).2).filterMap
-          fun _ => (none : Option (Response N))) + (0 : Multiset (Response N)) ≤ _
+          fun _ => (none : Option (Response N))) + (0 : Bag (Response N)) ≤ _
     rw [hemits]
     simp
 
@@ -405,10 +406,10 @@ theorem moves_serve_timed (hord : (env.link (some (.user n)) .ledger).ordered = 
         x :: post.filterMap Item.request? := by
       simp [List.filterMap_append, held_pre hpre, Item.request?]
     have hheld := Item.held_regroup (n := x.name) w post
-    rw [hys, hsplit, ← Multiset.cons_coe, ← Multiset.singleton_add] at hheld
+    rw [hys, hsplit, ← Bag.cons_coe, ← Bag.singleton_add] at hheld
     have key : (↑((w.filter (·.name ≠ x.name) ++ post).filterMap Item.request?) :
-        Multiset (Request N C)) + {x} = ↑(w.filterMap Item.request?) :=
-      add_right_cancel (b := ↑(post.filterMap Item.request?)) (by rw [← hheld]; abel)
+        Bag (Request N C)) + {x} = ↑(w.filterMap Item.request?) :=
+      Bag.add_right_cancel (u := ↑(post.filterMap Item.request?)) (by rw [← hheld]; ac_rfl)
     refine ⟨w.filter (·.name ≠ x.name) ++ post, [x], ⟨?_, fun k => ?_⟩, ?_, ?_⟩
     · simp [Service.run_singleton, spec_step, step_eq, hbook]
     · rw [Item.filter_regroup w post (fun p hp => hname p (by simp [hp])) k]
@@ -424,9 +425,9 @@ theorem moves_serve_timed (hord : (env.link (some (.user n)) .ledger).ordered = 
         rw [update_of_ne _ _ hk, update_of_ne _ _ (by simp), linkMsgs_append, ledger_sends,
           linkMsgs_nil, List.append_nil, linkMsgs_erase_of_ne (by simpa using Ne.symm hk)]
         exact husers k
-    · simp only [timedAccount, ledger_sends, List.filterMap_nil, Multiset.coe_nil, zero_add,
-        asked_ledger, Option.toList_none, Multiset.coe_singleton]
-      exact le_of_eq key
+    · simp only [timedAccount, ledger_sends, List.filterMap_nil, Bag.coe_nil, Bag.zero_add,
+        asked_ledger, Option.toList_none, Bag.coe_singleton]
+      exact Bag.le_of_eq key
     · simp [timedAccount, ledger_sends, Service.run_singleton, spec_step, step_eq, hbook]
 
 /-- The ledger serves a notice on a user's link: the first item of the user's that told the
@@ -461,8 +462,8 @@ theorem fires_notice (hord : (env.link (some (.user n)) .ledger).ordered = true)
       have hheld := Item.held_regroup (n := d.name) w post
       rw [hys, hsplit] at hheld
       have key : (↑((w.filter (·.name ≠ d.name) ++ post).filterMap Item.request?) :
-          Multiset (Request N C)) = ↑(w.filterMap Item.request?) :=
-        add_right_cancel (b := ↑(post.filterMap Item.request?)) hheld
+          Bag (Request N C)) = ↑(w.filterMap Item.request?) :=
+        Bag.add_right_cancel (u := ↑(post.filterMap Item.request?)) hheld
       refine ⟨w.filter (·.name ≠ d.name) ++ post, [], ?_, ⟨?_, fun k => ?_⟩, ?_, ?_⟩
       · simpa [spec_armed] using harmed
       · simp [spec_fire, ledger_notice, hbook]
@@ -479,8 +480,8 @@ theorem fires_notice (hord : (env.link (some (.user n)) .ledger).ordered = true)
             linkMsgs_erase_of_ne (by simpa using Ne.symm hk)]
           simpa using husers k
       · simp only [timedAccount, ledger_notice, Effect.sends_nil, List.filterMap_nil,
-          Multiset.coe_nil, zero_add, add_zero, asked_ledger, Option.toList_none]
-        exact le_of_eq key
+          Bag.coe_nil, Bag.zero_add, Bag.add_zero, asked_ledger, Option.toList_none]
+        exact Bag.le_of_eq key
       · simp [timedAccount, ledger_notice, spec_fire]
     · cases hit
 

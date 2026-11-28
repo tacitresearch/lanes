@@ -31,7 +31,7 @@ allows. So no ghost has to count requests.
 
 namespace RaftKV
 
-open Lanes Cslib
+open Lanes
 
 variable {N C R M : Type} [DecidableEq N] [DecidableEq C] [DecidableEq R] [Enum N]
 variable {config : Config} {machine : Machine C R M}
@@ -50,10 +50,10 @@ section Owed
 /-- The answers nodes have yet to give for `log`: each node's, to its entries past what it has
 applied. -/
 def owed (machine : Machine C R M) (log : List (Entry N C)) (applied : N → Nat) :
-    Multiset (Response R) :=
-  ∑ a ∈ (Enum.all (α := N)).toFinset,
+    Bag (Response R) :=
+  Enum.sum fun a =>
     (↑(machine.replies a (machine.run machine.init (log.take (applied a)))
-      (log.drop (applied a))) : Multiset (Response R))
+      (log.drop (applied a))) : Bag (Response R))
 
 omit [DecidableEq C] [DecidableEq R] in
 theorem owed_nil (applied : N → Nat) : owed machine ([] : List (Entry N C)) applied = 0 := by
@@ -65,17 +65,15 @@ theorem owed_concat (log : List (Entry N C)) (entry : Entry N C) {applied : N �
     (h : ∀ a, applied a ≤ log.length) :
     owed machine (log ++ [entry]) applied = owed machine log applied + {machine.answer log entry} := by
   have hterm : ∀ a, (↑(machine.replies a (machine.run machine.init ((log ++ [entry]).take (applied a)))
-      ((log ++ [entry]).drop (applied a))) : Multiset (Response R)) =
+      ((log ++ [entry]).drop (applied a))) : Bag (Response R)) =
       ↑(machine.replies a (machine.run machine.init (log.take (applied a))) (log.drop (applied a)))
         + if entry.origin = a then {machine.answer log entry} else 0 := by
     intro a
     rw [List.take_append_of_le_length (h a), List.drop_append_of_le_length (h a),
-      Machine.replies_append, ← Machine.run_append, List.take_append_drop, ← Multiset.coe_add]
+      Machine.replies_append, ← Machine.run_append, List.take_append_drop, ← Bag.coe_add]
     congr 1
-    by_cases horigin : entry.origin = a <;> simp [Machine.replies, Machine.answer, horigin]
-  simp only [owed, hterm, Finset.sum_add_distrib]
-  rw [Finset.sum_ite_eq]
-  simp [Enum.complete]
+    by_cases horigin : entry.origin = a <;> simp [Machine.replies, Machine.answer, horigin, Bag.coe_singleton]
+  simp only [owed, hterm, Enum.sum_add, Enum.sum_ite_eq]
 
 omit [DecidableEq C] [DecidableEq R] in
 /-- A node that applies entries gives the answers it owed for them. -/
@@ -85,7 +83,6 @@ theorem owed_advance (log : List (Entry N C)) {applied applied' : N → Nat} {i 
     owed machine log applied =
       ↑(machine.replies i (machine.run machine.init (log.take (applied i)))
         ((log.take (applied' i)).drop (applied i))) + owed machine log applied' := by
-  have hi : i ∈ (Enum.all (α := N)).toFinset := by simp [Enum.complete]
   have hsplit : log.drop (applied i) =
       (log.take (applied' i)).drop (applied i) ++ log.drop (applied' i) := by
     rw [← List.drop_append_of_le_length (by rw [List.length_take]; omega),
@@ -95,12 +92,23 @@ theorem owed_advance (log : List (Entry N C)) {applied applied' : N → Nat} {i 
       machine.run machine.init (log.take (applied' i)) := by
     rw [← Machine.run_append]
     congr 1
-    conv_rhs => rw [← List.take_append_drop (applied i) (log.take (applied' i))]
+    conv => rhs; rw [← List.take_append_drop (applied i) (log.take (applied' i))]
     rw [List.take_take, Nat.min_eq_left hle]
-  rw [owed, owed, ← Finset.add_sum_erase _ _ hi, ← Finset.add_sum_erase _ _ hi, hsplit,
-    Machine.replies_append, hrun, ← Multiset.coe_add, add_assoc]
-  congr 2
-  exact Finset.sum_congr rfl fun a ha => by rw [hother a (Finset.ne_of_mem_erase ha)]
+  have hl := Enum.sum_split i fun a => (↑(machine.replies a
+    (machine.run machine.init (log.take (applied a))) (log.drop (applied a))) : Bag (Response R))
+  have hr := Enum.sum_split i fun a => (↑(machine.replies a
+    (machine.run machine.init (log.take (applied' a))) (log.drop (applied' a))) : Bag (Response R))
+  have hrest : (Enum.sum fun a => if a = i then 0 else (↑(machine.replies a
+      (machine.run machine.init (log.take (applied a))) (log.drop (applied a))) : Bag (Response R)))
+      = Enum.sum fun a => if a = i then 0 else (↑(machine.replies a
+      (machine.run machine.init (log.take (applied' a))) (log.drop (applied' a))) :
+        Bag (Response R)) :=
+    Enum.sum_congr fun a => by
+      by_cases ha : a = i
+      · simp [ha]
+      · simp [ha, hother a ha]
+  rw [owed, owed, hl, hr, hrest, hsplit, Machine.replies_append, hrun, ← Bag.coe_add,
+    Bag.add_assoc]
 
 end Owed
 
@@ -124,10 +132,10 @@ def Present (c : SysState (recording N config machine)) (k : Nat) (entry : Entry
 /-- `pending` has every request in flight to a node and, once for each place past the end of
 `log` and each entry present there, the request the entry was made of. -/
 def Accounts (c : SysState (recording N config machine)) (log : List (Entry N C))
-    (pending : Multiset (Request N C)) : Prop :=
-  ∃ live : Finset (Nat × Entry N C),
+    (pending : Bag (Request N C)) : Prop :=
+  ∃ live : List (Nat × Entry N C),
     (∀ k entry, Present c k entry → log.length ≤ k → (k, entry) ∈ live) ∧
-      (↑(inflight c.net) : Multiset (Request N C)) + live.val.map (fun p => p.2.request) ≤ pending
+      (↑(inflight c.net) : Bag (Request N C)) + ↑(live.map (fun p => p.2.request)) ≤ pending
 
 omit [Enum N] in
 theorem inflight_append (a b : List (Envelope (sig N C R))) :
@@ -136,28 +144,28 @@ theorem inflight_append (a b : List (Envelope (sig N C R))) :
 
 omit [Enum N] in
 theorem inflight_le {a b : List (Envelope (sig N C R))} (h : a.Sublist b) :
-    (↑(inflight a) : Multiset (Request N C)) ≤ ↑(inflight b) :=
-  Multiset.coe_le.mpr (h.filterMap _).subperm
+    (↑(inflight a) : Bag (Request N C)) ≤ ↑(inflight b) :=
+  Bag.coe_le_coe_of_sublist (h.filterMap _)
 
 omit [Enum N] in
 /-- A request that is delivered is no longer in flight. -/
 theorem inflight_erase {net : List (Envelope (sig N C R))} {src : Option N} {dst : N}
     {req : ReqId} {cmd : C} (h : (⟨src, dst, .propose req cmd⟩ : Envelope (sig N C R)) ∈ net) :
     ((⟨req, dst, cmd⟩ : Request N C) ::ₘ ↑(inflight (net.erase ⟨src, dst, .propose req cmd⟩)) :
-      Multiset (Request N C)) = ↑(inflight net) := by
+      Bag (Request N C)) = ↑(inflight net) := by
   have hperm : (inflight net).Perm
       (⟨req, dst, cmd⟩ :: inflight (net.erase ⟨src, dst, .propose req cmd⟩)) :=
     (List.perm_cons_erase h).filterMap _
-  exact (Multiset.coe_eq_coe.mpr hperm).symm
+  exact (Bag.coe_eq_coe.mpr hperm).symm
 
 variable {c : SysState (recording N config machine)} {log : List (Entry N C)}
-  {pending : Multiset (Request N C)}
+  {pending : Bag (Request N C)}
 
 theorem Accounts.loses {c' : SysState (recording N config machine)} (h : Accounts c log pending)
     (hl : c'.Loses c) : Accounts c' log pending := by
   obtain ⟨live, hcovers, hcount⟩ := h
   refine ⟨live, fun k entry hpresent => hcovers k entry ?_,
-    (add_le_add_left (inflight_le hl.net) _).trans hcount⟩
+    (Bag.add_le_add_right (inflight_le hl.net) _).trans hcount⟩
   rcases hpresent with ⟨a, ha⟩ | ⟨src, dst, term, leader, prev, prevTerm, entries, commit, hmem, h⟩
   · exact .inl ⟨a, by rwa [← hl.state]⟩
   · exact .inr ⟨src, dst, term, leader, prev, prevTerm, entries, commit, hl.net.subset hmem, h⟩
@@ -173,9 +181,9 @@ theorem Accounts.input (h : Accounts c log pending) (x : Request N C) :
       simpa using hmem
   · have hin : inflight (c.net ++ [(⟨none, x.via, .propose x.req x.cmd⟩ : Envelope (sig N C R))]) =
         inflight c.net ++ [x] := by simp [inflight]
-    simp only [hin, ← Multiset.coe_add, ← Multiset.singleton_add, Multiset.coe_singleton]
-    rw [add_comm (↑(inflight c.net) : Multiset (Request N C)), add_assoc]
-    exact add_le_add_right hcount _
+    simp only [hin, ← Bag.coe_add, ← Bag.singleton_add, Bag.coe_singleton]
+    rw [Bag.add_comm (↑(inflight c.net) : Bag (Request N C)), Bag.add_assoc]
+    exact Bag.add_le_add_left hcount _
 
 /-- An entry at the end of `log` is accounted for: its request is pending, and with the entry
 added to `log` it is no longer needed. -/
@@ -184,15 +192,16 @@ theorem Accounts.extend (h : Accounts c log pending) {entry : Entry N C}
     entry.request ∈ pending ∧ Accounts c (log ++ [entry]) (pending.erase entry.request) := by
   obtain ⟨live, hcovers, hcount⟩ := h
   have hmem := hcovers _ entry hpresent (Nat.le_refl _)
-  have hval : live.val = (log.length, entry) ::ₘ (live.erase (log.length, entry)).val := by
-    rw [Finset.erase_val, Multiset.cons_erase hmem]
-  rw [hval, Multiset.map_cons, Multiset.add_cons] at hcount
-  refine ⟨Multiset.mem_of_le hcount (Multiset.mem_cons_self _ _),
+  have hval : (↑live : Bag (Nat × Entry N C)) =
+      (log.length, entry) ::ₘ ↑(live.erase (log.length, entry)) := by
+    rw [← Bag.coe_erase, Bag.cons_erase (Bag.mem_coe.mpr hmem)]
+  rw [← Bag.map_coe, hval, Bag.map_cons, Bag.add_cons, Bag.map_coe] at hcount
+  refine ⟨Bag.mem_of_le hcount (Bag.mem_cons_self _ _),
     live.erase (log.length, entry), fun k e hp hk => ?_, ?_⟩
   · rw [List.length_append, List.length_singleton] at hk
-    exact Finset.mem_erase.mpr ⟨fun heq => by simp at heq; omega, hcovers k e hp (by omega)⟩
-  · have := Multiset.erase_le_erase entry.request hcount
-    rwa [Multiset.erase_cons_head] at this
+    exact (List.mem_erase_of_ne fun heq => by simp at heq; omega).mpr (hcovers k e hp (by omega))
+  · have := Bag.erase_le_erase entry.request hcount
+    rwa [Bag.erase_cons_head] at this
 
 variable {i : N} {msg : Option (Msg N C)} {s' : Node N C M} {effs : List (Effect (sig N C R) i)}
 
@@ -270,7 +279,7 @@ theorem Accounts.grow {net : List (Envelope (sig N C R))} (h : Accounts c log pe
     (hserves : Serves machine i (c.state i).1 msg s' effs) (hpending : Pending c i msg)
     (hsub : net.Sublist c.net)
     (htaken : ∀ req cmd, msg = some (.propose req cmd) →
-      ((⟨req, i, cmd⟩ : Request N C) ::ₘ ↑(inflight net) : Multiset (Request N C))
+      ((⟨req, i, cmd⟩ : Request N C) ::ₘ ↑(inflight net) : Bag (Request N C))
         ≤ ↑(inflight c.net)) :
     Accounts (({ c with net := net }).grow i ((s', c.seen i), effs)) log pending := by
   obtain ⟨live, hcovers, hcount⟩ := h
@@ -281,23 +290,22 @@ theorem Accounts.grow {net : List (Envelope (sig N C R))} (h : Accounts c log pe
   rw [Accounts, hnet]
   by_cases hp : ∃ req cmd, msg = some (.propose req cmd)
   · obtain ⟨req, cmd, rfl⟩ := hp
-    refine ⟨insert ((c.state i).1.log.length, ⟨(c.state i).1.term, i, req, cmd⟩) live,
+    refine ⟨((c.state i).1.log.length, ⟨(c.state i).1.term, i, req, cmd⟩) :: live,
       fun k entry hpresent hk => ?_, ?_⟩
     · rcases hpresent.of_grow hsub.subset hmoves hserves hpending with hold | ⟨rfl, _, _, hmsg, rfl⟩
-      · exact Finset.mem_insert_of_mem (hcovers k entry hold hk)
+      · exact List.mem_cons_of_mem _ (hcovers k entry hold hk)
       · obtain ⟨rfl, rfl⟩ := Msg.propose.inj (Option.some.inj hmsg)
-        exact Finset.mem_insert_self _ _
-    · have hinsert : (insert ((c.state i).1.log.length,
-          (⟨(c.state i).1.term, i, req, cmd⟩ : Entry N C)) live).val.map (fun p => p.2.request) ≤
-          (⟨req, i, cmd⟩ : Request N C) ::ₘ live.val.map (fun p => p.2.request) := by
-        rw [Finset.insert_val]
-        exact (Multiset.map_le_map (Multiset.ndinsert_le.mpr
-          ⟨Multiset.le_cons_self _ _, Multiset.mem_cons_self _ _⟩)).trans
-          (le_of_eq (Multiset.map_cons _ _ _))
-      refine (add_le_add_right hinsert _).trans ?_
-      rw [Multiset.add_cons, ← Multiset.cons_add]
-      exact (add_le_add_left (htaken req cmd rfl) _).trans hcount
-  · refine ⟨live, fun k entry hpresent hk => ?_, (add_le_add_left (inflight_le hsub) _).trans hcount⟩
+        exact List.mem_cons_self
+    · have hinsert : (↑((((c.state i).1.log.length,
+          (⟨(c.state i).1.term, i, req, cmd⟩ : Entry N C)) :: live).map (fun p => p.2.request)) :
+            Bag (Request N C)) ≤
+          (⟨req, i, cmd⟩ : Request N C) ::ₘ ↑(live.map (fun p => p.2.request)) :=
+        Bag.le_of_eq rfl
+      refine (Bag.add_le_add_left hinsert _).trans ?_
+      rw [Bag.add_cons, ← Bag.cons_add]
+      exact (Bag.add_le_add_right (htaken req cmd rfl) _).trans hcount
+  · refine ⟨live, fun k entry hpresent hk => ?_,
+      (Bag.add_le_add_right (inflight_le hsub) _).trans hcount⟩
     rcases hpresent.of_grow hsub.subset hmoves hserves hpending with hold | ⟨_, req, cmd, hmsg, _⟩
     · exact hcovers k entry hold hk
     · exact absurd ⟨req, cmd, hmsg⟩ hp
@@ -328,7 +336,7 @@ theorem blank : Sim (SysState.blank (recording N config machine)) ⟨machine.ini
   value := rfl
   outbox := by simp [owed_nil, SysState.blank]
   pending := by
-    refine ⟨∅, ?_, by simp [inflight, SysState.blank]⟩
+    refine ⟨[], ?_, by simp [inflight, SysState.blank]⟩
     rintro k entry (⟨a, ha⟩ | ⟨src, dst, term, leader, prev, prevTerm, entries, commit, hmem, _⟩)
     · simp [SysState.blank, recording, System.withPast, System.withGhost, node] at ha
     · simp [SysState.blank] at hmem
@@ -351,11 +359,11 @@ theorem input (h : Sim c t log) (x : Request N C) :
 theorem output (h : Sim c t log) {out : Response R} (hmem : out ∈ c.outbox) :
     out ∈ t.outbox ∧ Sim { c with outbox := c.outbox.erase out }
       { t with outbox := t.outbox.erase out } log := by
-  have hin : out ∈ (↑c.outbox : Multiset (Response R)) := Multiset.mem_coe.mpr hmem
-  refine ⟨h.outbox ▸ Multiset.mem_add.mpr (.inl hin), h.logged.of_state rfl, h.value, ?_,
+  have hin : out ∈ (↑c.outbox : Bag (Response R)) := Bag.mem_coe.mpr hmem
+  refine ⟨h.outbox ▸ Bag.mem_add.mpr (.inl hin), h.logged.of_state rfl, h.value, ?_,
     h.pending⟩
   show t.outbox.erase out = ↑(c.outbox.erase out) + _
-  rw [h.outbox, Multiset.erase_add_left_pos _ hin, Multiset.coe_erase]
+  rw [h.outbox, Bag.erase_add_left_pos _ hin, Bag.coe_erase]
 
 variable {i : N}
 
@@ -405,14 +413,15 @@ theorem extend {out : List (Response R)} {applied : N → Nat} (ext : List (Entr
       (t := ⟨machine.run machine.init (log ++ [entry]), t.pending.erase entry.request,
         t.outbox + {machine.answer log entry}⟩)
       (fun a => by simpa using Nat.le_succ_of_le (hbound a)) rfl
-      (by rw [owed_concat log entry hbound, houtbox, add_assoc]) hpending'
+      (by rw [owed_concat log entry hbound, houtbox, Bag.add_assoc]) hpending'
       (fun k e hk => by
         have := hpresent (k + 1) e (by simpa using hk)
         simpa [Nat.add_assoc, Nat.add_comm 1] using this)
     refine ⟨t', .head ?_ ht', by simpa using hvalue', by simpa using houtbox',
       by simpa using hrest⟩
     refine ⟨entry.request, hmem, ?_⟩
-    simp [spec, Entry.request, Machine.answer, Machine.run, hvalue, List.foldl_append]
+    simp [spec, Entry.request, Machine.answer, Machine.run, hvalue, List.foldl_append,
+      Bag.coe_singleton]
 
 variable {msg : Option (Msg N C)} {s' : Node N C M} {effs : List (Effect (sig N C R) i)}
 
@@ -424,7 +433,7 @@ theorem step {net : List (Envelope (sig N C R))} (h : Sim c t log) (hc : Commits
     (hserves : Serves machine i (c.state i).1 msg s' effs) (hpending : Pending c i msg)
     (hsub : net.Sublist c.net)
     (htaken : ∀ req cmd, msg = some (.propose req cmd) →
-      ((⟨req, i, cmd⟩ : Request N C) ::ₘ ↑(inflight net) : Multiset (Request N C))
+      ((⟨req, i, cmd⟩ : Request N C) ::ₘ ↑(inflight net) : Bag (Request N C))
         ≤ ↑(inflight c.net)) :
     ∃ t' log', (service N machine).lts.τSTr t t' ∧
       Sim (({ c with net := net }).grow i ((s', c.seen i), effs)) t' log' := by
@@ -472,7 +481,7 @@ theorem step {net : List (Envelope (sig N C R))} (h : Sim c t log) (hc : Commits
   simp only [SysState.grow_state_self] at hadvance
   rw [hmine, take_of_prefix (List.prefix_append log ext) (hbound i), ← h.logged.machine i,
     ← hemits] at hadvance
-  rw [houtbox', hadvance, ← add_assoc, Multiset.coe_add]
+  rw [houtbox', hadvance, ← Bag.add_assoc, Bag.coe_add]
   rfl
 
 end Sim
@@ -490,7 +499,7 @@ theorem Sim.handle {c : SysState (recording N config machine)} {t : Service.Abs 
     {net : List (Envelope (sig N C R))} (hsub : net.Sublist c.net)
     (hpending : (∃ src, (⟨src, i, m⟩ : Envelope (sig N C R)) ∈ c.net) ∨ m ∈ c.timers i)
     (htaken : ∀ req cmd, m = .propose req cmd →
-      ((⟨req, i, cmd⟩ : Request N C) ::ₘ ↑(inflight net) : Multiset (Request N C))
+      ((⟨req, i, cmd⟩ : Request N C) ::ₘ ↑(inflight net) : Bag (Request N C))
         ≤ ↑(inflight c.net)) :
     ∃ t', (service N machine).lts.τSTr t t' ∧ ∃ log', Sim (({ c with net := net }).grow i
       (((recording N config machine).actor i).step (c.state i) m)) t' log' := by
@@ -524,7 +533,7 @@ theorem recording_refines : (recording N config machine).Refines env (service N 
     exact h.handle hup hown hc (net := c.net.erase ⟨src, dst, m⟩) List.erase_sublist
       (.inl ⟨src, hmem⟩) fun req cmd hm => by
         subst hm
-        exact le_of_eq (inflight_erase hmem)
+        exact Bag.le_of_eq (inflight_erase hmem)
   · rintro c t ⟨src, dst, m⟩ ⟨hc, hclients⟩ ⟨log, h⟩ hmem hdup
     refine h.handle hup hown hc (net := c.net) (List.Sublist.refl _) (.inl ⟨src, hmem⟩)
       fun req cmd hm => ?_

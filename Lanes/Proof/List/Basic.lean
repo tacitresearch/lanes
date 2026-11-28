@@ -229,6 +229,10 @@ theorem getElem?_append_of_map {l m : List α} {g : α → β} {n : Nat} {b : β
     | some _ => exact (List.getElem?_eq_some_iff.mp hn).1
   exact List.getElem?_append_left this
 
+/-- A list of one element, filtered. -/
+theorem filter_singleton {p : α → Bool} {a : α} : [a].filter p = bif p a then [a] else [] := by
+  cases h : p a <;> simp [h]
+
 /-- Keeping nothing of a list leaves nothing. -/
 @[simp] theorem filterMap_const_none (l : List α) : l.filterMap (fun _ => (none : Option β)) = [] :=
   List.filterMap_eq_nil_iff.mpr fun _ _ => rfl

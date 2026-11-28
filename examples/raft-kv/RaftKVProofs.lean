@@ -18,7 +18,7 @@ The same with the machine behind its memo, once per command and with no assumpti
 environment, is `RaftKVProofs/Once.lean`. What a PASS of `Check.lean` means is
 `RaftKVProofs/Checked.lean`.
 
-This library needs `Lanes.Semantics`, and so Mathlib. Nothing executable imports it.
+This library needs `Lanes.Semantics`, the proof layer. Nothing executable imports it.
 -/
 
 namespace RaftKV

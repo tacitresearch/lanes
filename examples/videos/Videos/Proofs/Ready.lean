@@ -69,7 +69,7 @@ failed, whatever the store, the scheduler and the other inputs do. -/
 theorem report_settles (config : Config) {env : EnvModel fullSig}
     (hcrash : env.mayCrash (.inr ()) = false)
     (hlossless : (env.link none (.inr ())).lossy = false)
-    {r : (system config).Run env} (hfair : r.Fair) {m : ℕ} {req : ReqId} {rep : Report}
+    {r : (system config).Run env} (hfair : r.Fair) {m : Nat} {req : ReqId} {rep : Report}
     {signature : String} {at_s : Nat}
     (hsigned : rep.signed config.workerKey signature = true)
     (hinput : r.event m = some (.input (.inr (.request (.report req rep signature) at_s)))) :

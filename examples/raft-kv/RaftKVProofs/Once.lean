@@ -27,7 +27,7 @@ its key, which is when the memo finds it fresh.
 
 namespace RaftKV
 
-open Lanes Cslib
+open Lanes
 
 variable {N Cl C R M : Type} [DecidableEq N] [DecidableEq Cl] [DecidableEq C] [DecidableEq R]
   [Enum N] {config : Config} {machine : Machine C R M}
@@ -65,14 +65,14 @@ end Machine
 
 /-- Every answer the machine behind the memo gives along `log` is empty or is in `answered`. -/
 def Answered (machine : Machine C R M) (log : List (Entry N (Named Cl C)))
-    (answered : Set (Named Cl R)) : Prop :=
+    (answered : Named Cl R → Prop) : Prop :=
   ∀ pre entry a, pre ++ [entry] <+: log →
     ((machine.once Cl).apply ((machine.once Cl).run (machine.once Cl).init pre) entry.cmd).2 =
-      some a → a ∈ answered
+      some a → answered a
 
 namespace Answered
 
-variable {log : List (Entry N (Named Cl C))} {answered answered' : Set (Named Cl R)}
+variable {log : List (Entry N (Named Cl C))} {answered answered' : Named Cl R → Prop}
 
 omit [DecidableEq N] [DecidableEq C] [DecidableEq R] [Enum N] in
 theorem nil : Answered machine ([] : List (Entry N (Named Cl C))) answered := by
@@ -81,14 +81,14 @@ theorem nil : Answered machine ([] : List (Entry N (Named Cl C))) answered := by
   simp at this
 
 omit [DecidableEq N] [DecidableEq C] [DecidableEq R] [Enum N] in
-theorem mono (h : Answered machine log answered) (hg : answered ⊆ answered') :
+theorem mono (h : Answered machine log answered) (hg : ∀ ⦃a⦄, answered a → answered' a) :
     Answered machine log answered' :=
   fun pre entry a hp ha => hg (h pre entry a hp ha)
 
 omit [DecidableEq N] [DecidableEq C] [DecidableEq R] [Enum N] in
 theorem concat (h : Answered machine log answered) {entry : Entry N (Named Cl C)}
     (hentry : ∀ a, ((machine.once Cl).apply ((machine.once Cl).run (machine.once Cl).init log)
-      entry.cmd).2 = some a → a ∈ answered) :
+      entry.cmd).2 = some a → answered a) :
     Answered machine (log ++ [entry]) answered := by
   intro pre e a hp ha
   rcases List.prefix_concat_iff.mp hp with heq | hp
@@ -102,7 +102,7 @@ omit [DecidableEq C] [DecidableEq R] [Enum N] in
 theorem replies (h : Answered machine log answered) (i : N) :
     ∀ (seg pre : List (Entry N (Named Cl C))), pre ++ seg <+: log →
       ∀ r ∈ (machine.once Cl).replies i ((machine.once Cl).run (machine.once Cl).init pre) seg,
-        ∀ a, r.res = some a → a ∈ answered
+        ∀ a, r.res = some a → answered a
   | [], _, _, r, hr => by simp [Machine.replies] at hr
   | e :: seg, pre, hp, r, hr => by
     have hp' : (pre ++ [e]) ++ seg <+: log := by simpa using hp
@@ -126,15 +126,15 @@ structure OnceSim (c : SysState (recording N config (machine.once Cl))) (t : Onc
   /-- The spec's value is the machine run over `log`. -/
   value : ((machine.once Cl).run (machine.once Cl).init log).1 = t.value
   /-- The memo after `log` agrees with the keys taken. -/
-  memo : ((machine.once Cl).run (machine.once Cl).init log).2.Agrees t.taken (· ∈ t.answered)
+  memo : ((machine.once Cl).run (machine.once Cl).init log).2.Agrees t.taken t.answered
   /-- Every answer along `log` is empty or answered. -/
   answers : Answered machine log t.answered
   /-- Every answer waiting is empty or answered. -/
-  outbox : ∀ out ∈ c.outbox, ∀ a, out.res = some a → a ∈ t.answered
+  outbox : ∀ out ∈ c.outbox, ∀ a, out.res = some a → t.answered a
   /-- Every request in flight to a node has arrived. -/
-  requests : ∀ x ∈ inflight c.net, x ∈ t.arrived
+  requests : ∀ x ∈ inflight c.net, t.arrived x
   /-- The request of every entry in a log or in an `append` in flight has arrived. -/
-  entries : ∀ k entry, Present c k entry → entry.request ∈ t.arrived
+  entries : ∀ k entry, Present c k entry → t.arrived entry.request
 
 namespace OnceSim
 
@@ -142,7 +142,7 @@ variable {c : SysState (recording N config (machine.once Cl))} {t : OnceAbs N Cl
   {log : List (Entry N (Named Cl C))}
 
 theorem blank :
-    OnceSim (SysState.blank (recording N config (machine.once Cl))) ⟨machine.init, ∅, ∅, ∅⟩ [] where
+    OnceSim (SysState.blank (recording N config (machine.once Cl))) ⟨machine.init, fun _ => False, fun _ => False, fun _ => False⟩ [] where
   logged := .blank
   value := rfl
   memo := Once.Memo.Agrees.empty
@@ -170,7 +170,7 @@ theorem loses {c' : SysState (recording N config (machine.once Cl))} (h : OnceSi
 
 theorem input (h : OnceSim c t log) (x : Request N (Named Cl C)) :
     OnceSim { c with net := c.net ++ [⟨none, x.via, .propose x.req x.cmd⟩] }
-      { t with arrived := insert x t.arrived } log where
+      { t with arrived := fun y => y = x ∨ t.arrived y } log where
   logged := h.logged.of_state rfl
   value := h.value
   memo := h.memo
@@ -181,10 +181,10 @@ theorem input (h : OnceSim c t log) (x : Request N (Named Cl C)) :
         Envelope (sig N (Named Cl C) (Option (Named Cl R))))]) = inflight c.net ++ [x] := by
       simp [inflight]
     rcases List.mem_append.mp (hin ▸ hy) with hy | hy
-    · exact Set.mem_insert_of_mem _ (h.requests y hy)
-    · exact List.mem_singleton.mp hy ▸ Set.mem_insert _ _
+    · exact Or.inr (h.requests y hy)
+    · exact List.mem_singleton.mp hy ▸ Or.inl rfl
   entries k entry hp := by
-    refine Set.mem_insert_of_mem _ (h.entries k entry ?_)
+    refine Or.inr (h.entries k entry ?_)
     rcases hp with ha | ⟨src, dst, term, leader, prev, prevTerm, entries, commit, hmem, h⟩
     · exact .inl ha
     · refine .inr ⟨src, dst, term, leader, prev, prevTerm, entries, commit, ?_, h⟩
@@ -212,7 +212,7 @@ theorem present_grow {net : List (Envelope (sig N (Named Cl C) (Option (Named Cl
     (hmsg : ∀ req cmd, msg = some (.propose req cmd) →
       (⟨req, i, cmd⟩ : Request N (Named Cl C)) ∈ inflight c.net) :
     ∀ k entry, Present (({ c with net := net }).grow i ((s', c.seen i), effs)) k entry →
-      entry.request ∈ t.arrived := by
+      t.arrived entry.request := by
   intro k entry hp
   rcases hp.of_grow hsub.subset hmoves hserves hpending with hold | ⟨_, req, cmd, hm, rfl⟩
   · exact h.entries k entry hold
@@ -248,12 +248,12 @@ nothing otherwise. -/
 theorem extend_one {log : List (Entry N (Named Cl C))} {t : OnceAbs N Cl C R M}
     (entry : Entry N (Named Cl C))
     (hvalue : ((machine.once Cl).run (machine.once Cl).init log).1 = t.value)
-    (hmemo : ((machine.once Cl).run (machine.once Cl).init log).2.Agrees t.taken (· ∈ t.answered))
-    (hanswers : Answered machine log t.answered) (harrived : entry.request ∈ t.arrived) :
+    (hmemo : ((machine.once Cl).run (machine.once Cl).init log).2.Agrees t.taken t.answered)
+    (hanswers : Answered machine log t.answered) (harrived : t.arrived entry.request) :
     ∃ t', ((named N Cl machine).once Request.key).lts.τSTr t t' ∧ t.Grows t' ∧
       ((machine.once Cl).run (machine.once Cl).init (log ++ [entry])).1 = t'.value ∧
       ((machine.once Cl).run (machine.once Cl).init (log ++ [entry])).2.Agrees t'.taken
-        (· ∈ t'.answered) ∧
+        t'.answered ∧
       Answered machine (log ++ [entry]) t'.answered := by
   obtain ⟨term, origin, req, c, n, cmd⟩ := entry
   have hrun : (machine.once Cl).run (machine.once Cl).init
@@ -270,9 +270,9 @@ theorem extend_one {log : List (Entry N (Named Cl C))} {t : OnceAbs N Cl C R M}
     have hτ := Service.once_take (svc := named N Cl machine) (key := Request.key) harrived
       (hmemo.fresh hs)
     have hg := Service.once_grows_τSTr hτ
-    have hgiven : (⟨c, n, (machine.apply v cmd).2⟩ : Named Cl R) ∈
-        (t.take (named N Cl machine) Request.key
-          (Entry.request ⟨term, origin, req, ⟨c, n, cmd⟩⟩)).answered :=
+    have hgiven : (t.take (named N Cl machine) Request.key
+          (Entry.request ⟨term, origin, req, ⟨c, n, cmd⟩⟩)).answered
+        (⟨c, n, (machine.apply v cmd).2⟩ : Named Cl R) :=
       Or.inr (by simp [named, Entry.request, hvalue])
     refine ⟨_, hτ, hg, ?_, ?_, ?_⟩
     · rw [hrun, once_apply_fresh hs]
@@ -306,12 +306,12 @@ omit [DecidableEq C] [DecidableEq R] [Enum N] in
 theorem extend (ext : List (Entry N (Named Cl C))) :
     ∀ {log : List (Entry N (Named Cl C))} {t : OnceAbs N Cl C R M},
       ((machine.once Cl).run (machine.once Cl).init log).1 = t.value →
-      ((machine.once Cl).run (machine.once Cl).init log).2.Agrees t.taken (· ∈ t.answered) →
-      Answered machine log t.answered → (∀ entry ∈ ext, entry.request ∈ t.arrived) →
+      ((machine.once Cl).run (machine.once Cl).init log).2.Agrees t.taken t.answered →
+      Answered machine log t.answered → (∀ entry ∈ ext, t.arrived entry.request) →
       ∃ t', ((named N Cl machine).once Request.key).lts.τSTr t t' ∧ t.Grows t' ∧
         ((machine.once Cl).run (machine.once Cl).init (log ++ ext)).1 = t'.value ∧
         ((machine.once Cl).run (machine.once Cl).init (log ++ ext)).2.Agrees t'.taken
-          (· ∈ t'.answered) ∧
+          t'.answered ∧
         Answered machine (log ++ ext) t'.answered := by
   induction ext with
   | nil =>
@@ -344,7 +344,7 @@ theorem step {net : List (Envelope (sig N (Named Cl C) (Option (Named Cl R))))}
     hgrown.of_state rfl
   have hbound := h.logged.applied_le hc
   have hpresent := h.present_grow hsub hmoves hserves hpending hmsg
-  have harrived : ∀ entry ∈ ext, entry.request ∈ t.arrived := by
+  have harrived : ∀ entry ∈ ext, t.arrived entry.request := by
     intro entry he
     obtain ⟨k, hk⟩ := List.mem_iff_getElem?.mp he
     refine hpresent (log.length + k) entry ?_
@@ -409,11 +409,11 @@ theorem recording_refines_once (env : EnvModel (sig N (Named Cl C) (Option (Name
     (recording N config (machine.once Cl)).Refines env (onceService N Cl machine) := by
   refine System.Refines.of_handles ((committing_monotone hup hown).invariant env)
     (fun c t => ∃ log, OnceSim c t log)
-    ⟨⟨machine.init, ∅, ∅, ∅⟩, rfl, [], SysState.init_induction (env := env)
-      (P := fun c => OnceSim c ⟨machine.init, ∅, ∅, ∅⟩ []) .blank
+    ⟨⟨machine.init, fun _ => False, fun _ => False, fun _ => False⟩, rfl, [], SysState.init_induction (env := env)
+      (P := fun c => OnceSim c ⟨machine.init, fun _ => False, fun _ => False, fun _ => False⟩ []) .blank
       fun c i h => h.recover.loses (SysState.Loses.startActor c env i)⟩
     (fun c c' t ⟨log, h⟩ hl => ⟨log, h.loses hl⟩)
-    (fun c t x _ ⟨log, h⟩ => ⟨{ t with arrived := insert x t.arrived }, .single rfl, log, h.input x⟩)
+    (fun c t x _ ⟨log, h⟩ => ⟨{ t with arrived := fun y => y = x ∨ t.arrived y }, .single rfl, log, h.input x⟩)
     ?_ ?_ (fun c t i _ ⟨log, h⟩ => ⟨t, .refl, log, h.recover⟩)
   · intro c t out _ ⟨log, h⟩ hmem
     refine ⟨t, .single ?_, log, h.output out⟩

@@ -13,7 +13,7 @@ path = "../.."
 name = "RaftKV"
 roots = ["RaftKV", "RaftKV.Proofs"]
 
-# What needs `Lanes.Semantics`, and so Mathlib: nothing executable imports it. `Check` is a root
+# What needs `Lanes.Semantics`, the proof layer: nothing executable imports it. `Check` is a root
 # because `RaftKVProofs/Checked.lean` states what its checks mean.
 [[lean_lib]]
 name = "RaftKVProofs"

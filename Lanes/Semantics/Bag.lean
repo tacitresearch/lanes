@@ -240,11 +240,11 @@ instance : Std.IsPreorder (Bag α) where
   le_refl := le_refl
   le_trans _ _ _ := le_trans
 
-theorem zero_le (s : Bag α) : 0 ≤ s := ⟨s, (zero_add s).symm⟩
+@[simp] theorem zero_le (s : Bag α) : 0 ≤ s := ⟨s, (zero_add s).symm⟩
 
-theorem le_add_right (s t : Bag α) : s ≤ s + t := ⟨t, rfl⟩
+@[simp] theorem le_add_right (s t : Bag α) : s ≤ s + t := ⟨t, rfl⟩
 
-theorem le_add_left (s t : Bag α) : s ≤ t + s := ⟨t, add_comm _ _⟩
+@[simp] theorem le_add_left (s t : Bag α) : s ≤ t + s := ⟨t, add_comm _ _⟩
 
 theorem add_le_add (h₁ : s ≤ t) (h₂ : s' ≤ t') : s + s' ≤ t + t' := by
   obtain ⟨u, rfl⟩ := h₁
@@ -376,6 +376,19 @@ theorem count_pos : 0 < count a s ↔ a ∈ s := by
 theorem count_le_of_le (a : α) (h : s ≤ t) : count a s ≤ count a t := by
   obtain ⟨u, rfl⟩ := h
   simp
+
+/-- Bags are equal when every element occurs as often in each. -/
+theorem ext' {s t : Bag α} (h : ∀ a, count a s = count a t) : s = t := by
+  induction s using Bag.ind; induction t using Bag.ind
+  exact coe_eq_coe.mpr (List.perm_iff_count.mpr h)
+
+/-- What is added on the right can be taken away. -/
+theorem add_right_cancel (h : s + u = t + u) : s = t :=
+  ext' fun a => by have := congrArg (count a) h; simp at this; omega
+
+/-- What is added on the left can be taken away. -/
+theorem add_left_cancel (h : u + s = u + t) : s = t :=
+  add_right_cancel (u := u) (by rw [add_comm s u, add_comm t u]; exact h)
 
 /-- Bags are equal when every element occurs as often in each. -/
 theorem ext {s t : Bag α} (h : ∀ a, count a s = count a t) : s = t := by

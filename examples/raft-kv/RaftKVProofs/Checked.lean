@@ -24,8 +24,8 @@ namespace RaftKV
 
 open Lanes
 
-/- Mathlib decides equality of functions on a finite type its own way. The check compared the
-map with `Enum.funBEq`, so that is the instance these statements must be about. -/
+/- The check compared the map with `Enum.funBEq`, so that is the instance these statements must
+be about, whatever other equality of functions an importer brings. -/
 attribute [local instance high] Enum.funBEq
 
 instance (config : Config) : ∀ i, @LawfulBEq ((cluster N config (store K V)).State i)

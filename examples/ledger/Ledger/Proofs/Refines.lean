@@ -120,7 +120,9 @@ theorem decideAll_eq_cons {u : Option (Profile C)} {ys : List (Request N C × Bo
       simp only [decideAll, ↓reduceIte, List.singleton_append, Prod.mk.injEq, List.cons.injEq] at h
       exact ⟨[], x, ys, rfl, nofun, h.2.1, Prod.ext h.1 h.2.2⟩
     | false =>
-      obtain ⟨pre, x', post, rfl, hpre, hmsg, hpost⟩ := ih (by simpa [decideAll] using h)
+      obtain ⟨pre, x', post, rfl, hpre, hmsg, hpost⟩ :=
+        ih (u := (User.decide config n x.req u x.ask).1)
+          (by simp [decideAll] at h; exact Prod.ext h.1 h.2)
       exact ⟨(x, false) :: pre, x', post, rfl, by simpa using hpre, hmsg, hpost⟩
 
 /-- What a message in flight to a user asks. -/
@@ -204,14 +206,14 @@ theorem filter_regroup (w ys : List (Request N C × Bool)) (hys : ∀ p ∈ ys, 
 
 omit [DecidableEq C] in
 theorem held_regroup (w ys : List (Request N C × Bool)) :
-    (↑((w.filter (·.1.name ≠ n) ++ ys).map Prod.fst) : Multiset (Request N C)) +
+    (↑((w.filter (·.1.name ≠ n) ++ ys).map Prod.fst) : Bag (Request N C)) +
         ↑((w.filter (·.1.name = n)).map Prod.fst) = ↑(w.map Prod.fst) + ↑(ys.map Prod.fst) := by
   have hw : (w.filter (·.1.name ≠ n) ++ w.filter (·.1.name = n)).Perm w := by
     simpa using List.perm_append_comm.trans
       (List.filter_append_perm (fun p : Request N C × Bool => decide (p.1.name = n)) w)
-  rw [← Multiset.coe_eq_coe.mpr (hw.map Prod.fst)]
-  simp only [List.map_append, ← Multiset.coe_add]
-  abel
+  rw [← Bag.coe_eq_coe.mpr (hw.map Prod.fst)]
+  simp only [List.map_append, ← Bag.coe_add]
+  ac_rfl
 
 omit [DecidableEq N] in
 /-- A decision the book serves leaves the user's record as it was. -/
@@ -322,9 +324,9 @@ theorem moves_decide (hc : Untimed config) {c : SysState (system N C config)} (x
     · subst hk
       simp [decideAll_concat, husers]
     · simp [hk, Ne.symm hk, husers]
-  · refine le_of_eq ?_
-    simp [user_step hc, account, asked, Request.ofAsk_eq, add_comm,
-      ← Multiset.coe_add]
+  · refine Bag.le_of_eq ?_
+    simp [user_step hc, account, asked, Request.ofAsk_eq, Bag.add_comm, ← Bag.coe_add]
+    rfl
   · simp [user_step hc, account]
 
 /-- The ledger serves the oldest message on a user's link: the first request of the user's in
@@ -371,18 +373,18 @@ theorem moves_serve (hord : (env.link (some (.user n)) .ledger).ordered = true)
       simpa [hk, record] using husers k
   · have hreg := held_regroup (n := x.name) w post
     rw [hys] at hreg
-    have hsub := Multiset.coe_le.mpr
-      (answered_sublist (config := config) v.users (pre.map Prod.fst)).subperm
+    have hsub := Bag.coe_le_coe_of_sublist
+      (answered_sublist (config := config) v.users (pre.map Prod.fst))
     simp only [account, ledger_sends, List.filterMap_nil, asked_ledger, Option.toList_none,
-      Multiset.coe_nil, zero_add]
-    simp only [List.map_append, List.map_cons, ← Multiset.coe_add, ← Multiset.cons_coe,
-      ← Multiset.singleton_add, Multiset.coe_nil, add_zero] at hreg ⊢
-    refine (add_le_add le_rfl (add_le_add hsub le_rfl)).trans_eq
-      (add_right_cancel (b := ↑(post.map Prod.fst)) ?_)
+      Bag.coe_nil, Bag.zero_add]
+    simp only [List.map_append, List.map_cons, ← Bag.coe_add, ← Bag.cons_coe,
+      ← Bag.singleton_add, Bag.coe_nil, Bag.add_zero] at hreg ⊢
+    refine (Bag.add_le_add Bag.le_rfl (Bag.add_le_add hsub Bag.le_rfl)).trans_eq
+      (Bag.add_right_cancel (u := ↑(post.map Prod.fst)) ?_)
     rw [← hreg]
-    abel
+    ac_rfl
   · simp [account, ledger_sends, Service.run_append, spec_step, step_eq, husers', hfilter, hmsg,
-      hbook', hbook, ← Multiset.coe_add]
+      hbook', hbook, ← Bag.coe_add]
 
 /-- A message lost from a user's link unmarks the request it was for. -/
 theorem moves_drop {c : SysState (system N C config)} {m : LedgerMsg N} :
@@ -405,8 +407,8 @@ theorem moves_drop {c : SysState (system N C config)} {m : LedgerMsg N} :
       exact husers k
   · have hreg := held_regroup (n := n) w ys
     rw [hmap] at hreg
-    exact add_le_add (Multiset.coe_le.mpr (List.erase_sublist.filterMap _).subperm)
-      (le_of_eq (add_right_cancel hreg))
+    exact Bag.add_le_add (Bag.coe_le_coe_of_sublist (List.erase_sublist.filterMap _))
+      (Bag.le_of_eq (Bag.add_right_cancel hreg))
   · simp [Account.owed, account]
 
 /-- The ledger crashes: what is on a link that does not lose is gone, and its requests are
@@ -425,7 +427,7 @@ theorem moves_crash (c : SysState (system N C config)) :
     rw [hmap, decideAll_mark, husers k, linkMsgs_down]
     simp [SysState.down]
   · simp only [Account.pending, account, SysState.down, List.map_map, Function.comp_def]
-    exact add_le_add (Multiset.coe_le.mpr (List.filter_sublist.filterMap _).subperm) le_rfl
+    exact Bag.add_le_add (Bag.coe_le_coe_of_sublist (List.filter_sublist.filterMap _)) Bag.le_rfl
   · simp [Account.owed, account, SysState.down]
 
 /-- What is in flight is a request on its way to its user, or what a user tells the ledger. -/
