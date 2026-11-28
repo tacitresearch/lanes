@@ -38,7 +38,7 @@ proved function tells it to.
 | Migrations | `Lanes/Durable/{Migration,Upgrade}.lean` | `Migration.inv_exec`, `Journal.Upgrade.begin_crash`, `Journal.Upgrade.holds`, `Journal.Upgrade.inv_load` |
 | Joins | `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`, `Lanes/Semantics/FairJoin.lean` | `System.Reachable.left`, `SysState.run_left`, `System.Run.Fair.left`, `System.Run.Fair.right` |
 | Shards and the transport | `Lanes/Runtime/{Shard,ShardSound,ShardsSound}.lean`, `Lanes/Net/{Courier,CourierSound,Handshake,HandshakeSound}.lean`, `Lanes/Net/IO/{Peers,Node}.lean` | `System.ShardsReachable.unsharded`, `Peers.Courier.written_sublist_sent`, `Peers.Handshake.Reachable.ready_proved` |
-| The gate and the HTTP server | `Lanes/Web/Http/{Gate,Front,FrontSound,Waiting,Conn,ConnSound,Stream,Sse,SseSound,Loopback}.lean`, `Lanes/Semantics/Front.lean`, `Lanes/Web/IO/Server.lean` | `Http.served_answered_le_arrived`, `Http.served_pending_answered`, `Http.Waiting.exec_answered`, `Http.Conn.run_writes`, `Http.Conn.read_streamed`, `Http.Sse.parse_written` |
+| The gate and the HTTP server | `Lanes/Web/Http/{Gate,Front,FrontSound,Admit,AdmitSound,Waiting,Conn,ConnSound,Stream,Sse,SseSound,Loopback}.lean`, `Lanes/Semantics/Front.lean`, `Lanes/Web/IO/Server.lean` | `Http.served_answered_le_arrived`, `Http.served_pending_answered`, `Http.Front.World.refines`, `Http.Front.pending_answered`, `Http.Waiting.exec_answered`, `Http.Conn.run_writes`, `Http.Conn.read_streamed`, `Http.Sse.parse_written` |
 | Metrics, health and the access log | `Lanes/Lib/Metrics.lean`, `Lanes/Web/Http/{Ops,OpsSound}.lean`, `Lanes/Web/IO/Ops.lean` | `Metrics.Histogram.observeAll_eq`, `Metrics.readLabelValue_escapeLabel`, `Http.Ops.route?_default`, `Http.Ops.route?_metrics`, `Http.Ops.answer_ready`, `Http.Ops.Access.parse_line`; that none of it reaches a system is trusted and tested |
 | Other adapters | `Lanes/Outside/Basic.lean`, `Lanes/Outside/{Clock,IO/Clock}.lean`, `Lanes/Web/IO/Client.lean`, `Lanes/Web/Http/{Grammar,Wire,WireSound}.lean` | `Response.read_wire`, `Request.fields_framing`; conformance tests |
 | Models of external services | `Lanes/Outside/{Rpc,Idempotent,Events,ObjectStore,Multipart,Queue,Cache,Clock,Throttle}.lean`, `Lanes/Outside/Effects/`, `Lanes/Web/Http/SharedCache.lean`, `Lanes/Proof/Outputs.lean` | `Idempotent.at_most_once`, `Rpc.answered_le_called`, `Events.deliveries_le`, `ObjectStore.read_sent`, `ObjectStore.held_sent`, `Multipart.read_listed`, `Queue.received_le`, `Cache.read_sent`, `Clock.wall_back_le`, `Throttle.wait_le`, `SharedCache.serve_storable`, `SharedCache.serve_of_leaks`, `System.Emits.outputs`; that a real service conforms is trusted |
@@ -372,8 +372,21 @@ The HTTP server's logic is a system of its own, the gate (D19, D31, D43). `Gate.
 remembers which requests are waiting, arms a deadline for each, and answers with the system's
 response or with `504` when the deadline fires. `Http.gateSystem` is the gate as one actor;
 `Http.fronted sys` is the gate joined in front of `sys` (`Lanes/Web/Http/Front.lean`), and
-`Http.served sys` is `fronted sys` with requests its only inputs and responses its only outputs,
-which is what `Http.serve` runs.
+`Http.served sys` is `fronted sys` with requests its only inputs and responses its only outputs:
+the specification of what `Http.serve` does.
+
+`Http.serve` does not run the gate as an actor, which would make it a serial point for every
+request (`docs/decisions/D96-runtime-contract.md`). It makes the gate's decisions before the
+shard, under the lock of its table of waiting requests, and hands the shard only what the gate
+admitted; the shard runs `Http.admitted sys` (`Lanes/Web/Http/Admit.lean`), which is `sys` with
+no actor every request goes through. `Http.Front.World` models the server so: the front's state
+beside the shard's. Every run of it is a run of `served sys`, with the same requests arriving and
+the same answers handed over in the same order (`Http.Front.World.refines`,
+`Lanes/Web/Http/AdmitSound.lean`), so every theorem below holds of the server
+(`Http.Front.World.answered_le_arrived`). Of the front alone: it answers no request more often
+than it arrived (`Http.Front.run_answered_le`), its waiting list stays within `maxPending`
+(`Http.Front.run_bounded`), and every waiting request is answered if every deadline that stays
+armed is passed to it (`Http.Front.pending_answered`).
 
 Proved of `served sys` for every system, bridge and configuration: no request is answered more
 often than it arrived where the link from outside to the gate does not duplicate
@@ -391,11 +404,16 @@ The server (`Lanes/Web/IO/Server.lean`) reads a request, prepares it with `Bridg
 request's own task, so a password or a cookie the bridge turns into what the system needs never
 reaches the journal (D44), takes an id from `Http.Waiting` (pure: each id handed out once, each
 answered at most once and to its own waiter: `Http.Waiting.exec_handed_nodup`,
-`Http.Waiting.exec_answered`), and hands the input to the shard. It answers `503` itself when the
-inbox is full and `405` for a method an application cannot handle. With `ServerConfig.ioThreads`
+`Http.Waiting.exec_answered`), puts it before the gate and hands what the gate admits to the
+shard. The gate decides under the same lock that hands out the id (`Gate.admit`), so a `503`
+from a full inbox leaves the gate's state as it was; it reads the shard's outputs
+(`Gate.receive`), and the server's ticker hands it each deadline that passes, which it answers
+`504` (`docs/decisions/D106-gate-before-shard.md`). The journal holds only what the gate
+admitted, so a replay reads none of the gate's settings. It answers
+`503` itself when the inbox is full and `405` for a method an application cannot handle. With `ServerConfig.ioThreads`
 above zero (four by default), the connections run on that many threads of the server's own, each on one for its
 whole life; Lean has one libuv loop a process, which every read and write still goes through. `Http.serveFronted` serves
-`fronted sys`, whose other inputs and outputs pass the gate by, and `Http.serveShard`
+`admittedFronted sys`, whose other inputs and outputs pass the gate by, and `Http.serveShard`
 (`Lanes/Net/IO/Node.lean`) runs it with the transport: one process with an HTTP front and peers.
 
 A request may stream (`ServerConfig.streams`, the decision "Bodies and responses stream through
@@ -414,7 +432,8 @@ reader's body and the bytes of a whole stream are the parts given is model-check
 client's reader, a model of the WHATWG one, reads back the events written, in order, each once,
 comments between them ignored (`Http.Sse.parse_written`), and an event made from an answer is one
 it reads back as it is (`Http.Sse.Event.ofResponse_valid`). `Http.Loopback` runs a front end with
-no socket, for tests: the connection, the gate and the system on a kernel of its own.
+no socket, for tests: the connection, the gate as the server runs it, and `admitted sys` on a
+kernel of its own.
 
 The server tells its operators how it is, each part off by default (`ServerConfig.ops`,
 `docs/decisions/D69-observability.md`): a metrics page in the Prometheus text format, liveness,

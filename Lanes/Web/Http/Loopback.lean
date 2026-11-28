@@ -5,16 +5,17 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Lanes.Runtime.Kernel
+public import Lanes.Web.Http.Admit
 public import Lanes.Web.Http.Conn
-public import Lanes.Web.Http.Front
 
 /-!
 An application's front end with no socket, for tests: the bytes of a request go through the
 connection the server runs (`Conn.step`), the requests it hands on through the bridge's
-`prepare` into `served sys` on a kernel of its own, and the bytes written back are read by the
-client's reader (`Response.read`). What the server's loop does with these is IO; everything it
-decides is here, run as it runs there. Time passes only when nothing else can happen: then the
-kernel's next timer is due, so a request the system never answers gets the gate's `504`.
+`prepare` to the gate (`Gate.step`), what the gate admits into `admitted sys` on a kernel of its
+own, and the bytes written back are read by the client's reader (`Response.read`). What the
+server's loop does with these is IO; everything it decides is here, run as it runs there. Time
+passes only when nothing else can happen: then the next timer of the kernel or the next
+deadline of the gate is due, so a request the system never answers gets the gate's `504`.
 
 Each exchange is a connection of its own; the system's state carries over from one to the next.
 -/
@@ -26,7 +27,13 @@ namespace Lanes.Http
 variable {σ : Signature}
 
 structure Loopback (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (gate : GateConfig) where
-  kernel : Kernel (served sys bridge gate)
+  kernel : Kernel (admitted sys bridge)
+  /-- The gate's state: the requests waiting for the system. -/
+  pending : List ReqId := []
+  /-- When each waiting request is due. -/
+  deadlines : List (ReqId × Nat) := []
+  /-- The gate's answers not yet told to the connection, oldest first. -/
+  answers : List (ReqId × Response) := []
   conn : Conn.Config := {}
   nextId : ReqId := 0
   now_ms : Nat := 0
@@ -43,7 +50,34 @@ variable {sys : System σ} [Hashable σ.Id] {bridge : Bridge σ} {gate : GateCon
 
 def start (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (gate : GateConfig := {})
     (conn : Conn.Config := {}) : Loopback sys bridge gate :=
-  { kernel := (Kernel.boot (served sys bridge gate)).1, conn }
+  { kernel := (Kernel.boot (admitted sys bridge)).1, conn }
+
+/-- Do what the gate decided; what it passes on is `entry`, the arrival it decided on. -/
+def act (lb : Loopback sys bridge gate) (entry : Option (ReqId × Request)) :
+    List (Gate.Act σ) → Loopback sys bridge gate
+  | [] => lb
+  | a :: acts =>
+    let lb := match a, entry with
+      | .respond id response, _ => { lb with answers := lb.answers ++ [(id, response)] }
+      | .forward _, some entry => { lb with kernel := (lb.kernel.accept entry).kernel }
+      | .forward _, none => lb
+      | .arm id, _ =>
+        { lb with deadlines := lb.deadlines ++ [(id, lb.now_ms + gate.requestTimeout_ms)] }
+      | .disarm id, _ => { lb with deadlines := lb.deadlines.filter (·.1 != id) }
+    act lb entry acts
+
+/-- Let the gate decide on `msg`, as the server does. -/
+def decide (lb : Loopback sys bridge gate) (msg : GateMsg σ) : Loopback sys bridge gate :=
+  let (pending, acts) := Gate.step bridge gate Gate.acts lb.pending msg
+  let entry := match msg with
+    | .arrive id request => some (id, request)
+    | _ => none
+  { lb with pending }.act entry acts
+
+/-- Pass the deadlines due by `now_ms` to the gate. -/
+def expire (lb : Loopback sys bridge gate) (now_ms : Nat) : Loopback sys bridge gate :=
+  let (due, rest) := lb.deadlines.partition (·.2 ≤ now_ms)
+  due.foldl (fun lb (id, _) => lb.decide (.expire id)) { lb with deadlines := rest }
 
 /-- What a connection's loop would be told and what the client has received so far. -/
 structure Exchange where
@@ -57,13 +91,13 @@ structure Exchange where
   /-- Time does not pass beyond this. -/
   until_ms : Nat := 0
 
-/-- Hand the system a request, as the server does: prepared, under the next id. `reply` is
+/-- Put a request before the gate, as the server does: prepared, under the next id. `reply` is
 what the connection is told when the gate answers that id. -/
 def submit (lb : Loopback sys bridge gate) (x : Exchange) (request : Request)
     (reply : Response → Conn.Event) : Loopback sys bridge gate × Exchange :=
   let id := lb.nextId
-  let step := lb.kernel.accept (id, bridge.prepare request)
-  ({ lb with kernel := step.kernel, nextId := id + 1 },
+  let request := bridge.prepare request
+  ({ lb.decide (.arrive id request) with nextId := id + 1 },
     { x with asked := x.asked ++ [(id, reply)] })
 
 /-- The events an answer gives: the connection is told it under the number it was asked as. -/
@@ -103,14 +137,26 @@ def tell (lb : Loopback sys bridge gate) (x : Exchange) (e : Conn.Event) (fuel :
   | 0 => (lb, x)
   | fuel + 1 => if x.conn.unsent then tell lb x .sent fuel else (lb, x)
 
-/-- Let the kernel work and the connection hear the answers, until both are quiet: then, with
-`timers`, let time pass to the next timer of the kernel or the connection, and go on, until the
-connection closes or `fuel` runs out. -/
+/-- Tell the connection the gate's answers. -/
+def tellAnswers (lb : Loopback sys bridge gate) (x : Exchange) : Loopback sys bridge gate × Exchange :=
+  let answers := lb.answers
+  answers.foldl (init := ({ lb with answers := [] }, x)) fun (lb, x) out =>
+    match told x out with
+    | (x, some e) => tell lb x e
+    | (x, none) => (lb, x)
+
+/-- Let the kernel work, the gate read its outputs and the connection hear the answers, until
+all are quiet: then, with `timers`, let time pass to the next timer of the kernel, deadline of
+the gate or alarm of the connection, and go on, until the connection closes or `fuel` runs
+out. -/
 def settle (lb : Loopback sys bridge gate) (x : Exchange) (timers : Bool) :
     Nat → Loopback sys bridge gate × Exchange
   | 0 => (lb, x)
   | fuel + 1 =>
     if x.closed then (lb, x)
+    else if !lb.answers.isEmpty then
+      let (lb, x) := lb.tellAnswers x
+      settle lb x timers fuel
     else
       let step := lb.kernel.runBatch 64
       let lb := { lb with kernel := step.kernel }
@@ -118,19 +164,18 @@ def settle (lb : Loopback sys bridge gate) (x : Exchange) (timers : Bool) :
         let timer := match lb.kernel.wait with
           | .for_ms ms => some (lb.now_ms + ms)
           | _ => none
-        match Conn.earlier timer (x.conn.wakeAt lb.conn) with
+        let deadline := (lb.deadlines.map (·.2)).min?
+        match Conn.earlier (Conn.earlier timer deadline) (x.conn.wakeAt lb.conn) with
         | some at_ms =>
           if !timers || x.until_ms < at_ms then (lb, x)
           else
             let now_ms := max lb.now_ms at_ms
-            let (lb, x) := tell { lb with kernel := lb.kernel.advance now_ms, now_ms } x .tick
+            let lb := { lb with kernel := lb.kernel.advance now_ms, now_ms }.expire now_ms
+            let (lb, x) := tell lb x .tick
             settle lb x timers fuel
         | none => (lb, x)
       else
-        let (lb, x) := step.outputs.foldl (init := (lb, x)) fun (lb, x) out =>
-          match told x out with
-          | (x, some e) => tell lb x e
-          | (x, none) => (lb, x)
+        let lb := step.outputs.foldl (fun lb out => lb.decide (.answer out)) lb
         settle lb x timers fuel
 
 /-- Send `pieces` on a new connection, each as the server would receive it, then the end of

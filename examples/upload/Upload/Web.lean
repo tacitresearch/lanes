@@ -54,6 +54,5 @@ def serverConfig (port : UInt16) (journal : Option System.FilePath) : ServerConf
 
 def saving : Saving (system {}) where
   actors := { id := Codec.unit, state := fun _ => Codec.of State, msg := fun _ => Request.codec }
-  out := Response.codec
 
 end Upload.Web

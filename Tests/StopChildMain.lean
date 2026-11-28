@@ -37,7 +37,7 @@ def slowBridge : Bridge (Server.sig Job Work) where
     | .reply id => some (id, .text "done\n")
     | .start _ => none
 
-abbrev Slow := fronted (Server.system slow) slowBridge {}
+abbrev Slow := admittedFronted (Server.system slow) slowBridge
 
 /-- A server whose work is done when a line arrives on standard input, and never if it ends
 first, stopped by a signal. It says on standard output when it is listening and when work has

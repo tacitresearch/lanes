@@ -13,7 +13,7 @@ a session of its owner that let it in when it arrived, open and not past its lif
 (`Site.handle_private`); a start shows nothing. The site beside its scheduler emits only such
 outputs, so in every run of the two, under every environment model, every output that shows a
 private video is addressed to its owner (`private_to_owner`). The bridge sends an answer only to
-the connection that made the request (`Http.served`), and a request names a member only through
+the connection that made the request (the gate, `Gate.step`), and a request names a member only through
 a session cookie the bridge verified (tested, `Videos.EndToEnd`).
 -/
 
