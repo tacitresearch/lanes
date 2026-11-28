@@ -150,7 +150,7 @@ def prepare (s : Settings) (r : Http.Request) : Http.Request :=
       then (encodeForm (r.form.filter (·.1 != "password"))).toUTF8 else r.body }
 
 /-- The session `prepare` verified, as its form tokens are bound to, its name and its id. -/
-def verified? (s : Settings) (r : Http.Request) : Option (String × Name × Sid) := do
+def verified? (r : Http.Request) : Option (String × Name × Sid) := do
   let (sid, name) ← numbered? (← r.header? verifiedSession)
   return (sessionOf name sid, name, sid)
 
@@ -311,7 +311,7 @@ def credentials (s : Settings) (r : Http.Request) : Except Http.Response (Name �
 /-- A request whose cookie names a session, as an input; or how the bridge answers it. -/
 def signedIn (s : Settings) (r : Http.Request) (changes : Bool)
     (input : Name → Sid → Except Http.Response In) : Except Http.Response In :=
-  match verified? s r with
+  match verified? r with
   | none => .error notLoggedIn
   | some (session, name, sid) =>
     if changes && !(r.sameOrigin s.origin && (r.field? "csrf").any (Auth.checkForm s.keys session))
@@ -319,7 +319,7 @@ def signedIn (s : Settings) (r : Http.Request) (changes : Bool)
     else input name sid
 
 def shell (s : Settings) (r : Http.Request) : Except Http.Response In :=
-  match verified? s r with
+  match verified? r with
   | some (session, name, _) => .error (page (HomePage s session name))
   | none => .error (page (LoginPage))
 

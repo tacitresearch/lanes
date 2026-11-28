@@ -349,7 +349,7 @@ end Board
 
 /-- The account whose secrets a reply carries: a session or the generation of a token. -/
 def Reply.secretOf {N : Type} : Reply N → Option N
-  | .loggedIn n _ | .token n _ => some n
+  | .loggedIn n .. | .token n .. => some n
   | _ => none
 
 end Rookery
