@@ -8,221 +8,182 @@ import Lanes.Services.Stripe
 /-!
 # A shop that charges each order once
 
-The shop takes orders and charges each through a payment service (`Lanes.Payments`): a call
-that makes and confirms a payment under an idempotency key. The answer may come, come late,
-never come, or be `unknown` at the deadline, and a payment that took effect may be reported
-only by a webhook, late, twice or out of order. The shop retries a call that times out, up to
-`maxAttempts`, and marks an order paid when the answer or a webhook says its payment succeeded.
+The shop keeps its orders in PostgreSQL through the typed store (`Lanes/Db/`), and charges each
+through a payment service (`Lanes.Payments`) from an outbox (`Lanes/Db/Jobs.lean`):
 
-The key of every call for an order is the order itself, so a retry, a retry after a crash, and a
-late answer all name one payment at the service: an order is charged at most once
-(`Shop.charged_at_most_once`). The `keyedRetries` switch exists to seed the classic bug: with it
-off, a retry is sent without the key, and the checker finds the order charged twice
-(`Check.lean`).
+- **Placing an order** is one transaction under the customer's idempotency key
+  (`Keys.once`): it adds the order and, in the same transaction, a charge to the outbox, under
+  the key `charge-<order>`. A request that arrives twice, or whose `COMMIT` was lost and that
+  runs again, places the order once; an order placed twice under two keys is refused the second
+  time.
+- **The worker** (`Lanes/Db/Worker.lean`) makes each charge with the job's id as the payment's
+  idempotency key, again after a backoff while the service refuses or does not answer, and
+  again under the same key after a restart. Its attempt is named by the job and its lease, not
+  by a counter that a restart sets back.
+- **An order is paid** only by a webhook's transaction that says its payment succeeded; a
+  webhook that says it was declined declines an order not yet paid. The answer to a charge says
+  only that the payment exists.
+
+`Shop/Proofs.lean` proves that the service makes at most one payment for each order, in every
+run, with restarts (`Shop.charged_at_most_once`).
 -/
 
 namespace Shop
 
-open Lanes
+open Lanes Lanes.Db Lanes.Db.Jobs
 
 abbrev IntentId := Nat
 
-lanes_data structure Charge where
-  order : Nat
-  amount : Nat
+structure Charge where
+  order : Int64
+  amount : Int64
   deriving DecidableEq, Repr, Hashable
 
-/-- A key that is the order, and nothing else, is the same after a crash. -/
-abbrev Request := Idempotent.Keyed Nat Charge
+def chargePayload : Payload Charge :=
+  (Payload.pair Payload.int64 Payload.int64 Payload.int64_colon).iso (fun c => (c.order, c.amount))
+    (fun p => ⟨p.1, p.2⟩) (fun _ => rfl)
+
+/-- The outbox of charges. -/
+def charges : Queue Charge := { name := "charges", payload := chargePayload }
+
+/-- The key of an order's charge in the outbox: one charge for each order. -/
+def chargeKey (order : Int64) : String := s!"charge-{order.toInt}"
+
+inductive Status where
+  | placed
+  | paid
+  | declined
+  deriving DecidableEq, Repr, Hashable
+
+def Status.code : Status → Int64
+  | .placed => 0
+  | .paid => 1
+  | .declined => 2
+
+def Status.ofCode (i : Int64) : Option Status :=
+  if i = 0 then some .placed else if i = 1 then some .paid else if i = 2 then some .declined else none
+
+structure Order where
+  id : Int64
+  amount : Int64
+  status : Status
+  deriving DecidableEq, Repr, Hashable
+
+def orders : TableOf Order where
+  table := { name := "orders", key := 1,
+             columns := [{ name := "id", ty := .int }, { name := "amount", ty := .int }, { name := "status", ty := .int }] }
+  toRow o := [.int o.id, .int o.amount, .int o.status.code]
+  ofRow
+    | [.int id, .int amount, .int status] => (Status.ofCode status).map fun status => { id, amount, status }
+    | _ => none
+  ofRow_toRow o := by cases o with | mk id amount status => cases status <;> rfl
+
+def boolPayload : Payload Bool where
+  encode b := if b then "1" else "0"
+  decode s := if s = "1" then some true else if s = "0" then some false else none
+  decode_encode b := by cases b <;> rfl
+
+/-- The customers' idempotency keys, with whether the order was placed. -/
+def placed : Keys Bool := { name := "placed", payload := boolPayload }
+
+def schema : Schema := [orders.table, charges.table, placed.table]
 
 abbrev Answer := Payments.Answer IntentId
 
 abbrev Webhook := Payments.Webhook IntentId Charge
 
-lanes_data inductive In where
-  | order (order amount : Nat)
-  | reply (call : Nat) (reply : Rpc.Reply Answer)
-  | webhook (e : Webhook)
+inductive Action where
+  /-- Place an order, under the customer's idempotency key. -/
+  | place (key : String) (order amount : Int64)
+  | webhook (w : Webhook)
+  | status (order : Int64)
   deriving DecidableEq, Repr, Hashable
 
-lanes_data inductive Out where
-  | charge (call : Rpc.Call Request)
-  | paid (order : Nat)
-  | declined (order : Nat)
-  /-- The shop holds `maxOrders` orders and took no more. -/
-  | full (order : Nat)
+inductive Reply where
+  | placed
+  /-- The order was placed already, under another key. -/
+  | refused
+  | status (s : Option Status)
+  | noted
   deriving DecidableEq, Repr, Hashable
 
-lanes_data inductive Msg where
-  | order (order amount : Nat)
-  | reply (call : Nat) (reply : Rpc.Reply Answer)
-  | webhook (e : Webhook)
-  /-- The shop's own deadline for a call: the answer may never come. -/
-  | expire (call : Nat)
-  deriving DecidableEq, Repr, Hashable
+/-- Add the order and its charge, unless the order is there. -/
+def add (order amount : Int64) : Txn Bool := do
+  match ← orders.get [.int order] with
+  | some _ => pure false
+  | none =>
+    if ← orders.insert { id := order, amount, status := .placed } then
+      discard <| charges.enqueue (chargeKey order) { order, amount } 0
+      pure true
+    else pure false
 
-lanes_data inductive Status where
-  | charging (call attempt : Nat)
-  /-- No attempt left, or the payment is still being decided: a webhook will tell. -/
-  | waiting
-  | paid
-  | declined
-  deriving DecidableEq, Repr, Hashable
+def place (key : String) (order amount : Int64) : Txn Reply := do
+  if ← placed.once key (add order amount) then pure .placed else pure .refused
 
-lanes_data structure Order where
-  order : Nat
-  amount : Nat
-  status : Status
-  deriving DecidableEq, Repr, Hashable
+/-- What a webhook says of its order: paid once it succeeded, which nothing undoes; declined if
+not paid yet. -/
+def settle (o : Order) : Payments.Status → Option Order
+  | .succeeded => if o.status = .paid then none else some { o with status := .paid }
+  | .requiresPaymentMethod => if o.status = .placed then some { o with status := .declined } else none
+  | _ => none
 
-/-- Durable: a restart that forgot an order would charge it again under a key it no longer
-knew, or never tell its customer. -/
-lanes_data structure State where
-  orders : List Order
-  /-- Every call made, with its order. -/
-  calls : List (Nat × Nat)
-  nextCall : Nat
-  deriving DecidableEq, Repr, Hashable
+def webhook (w : Webhook) : Txn Reply := do
+  match ← orders.get [.int w.params.order] with
+  | some o =>
+    match settle o w.state with
+    | some o' => discard <| orders.update o'
+    | none => pure ()
+    pure .noted
+  | none => pure .noted
+
+def handler : Handler Action Reply
+  | .place key order amount => place key order amount
+  | .webhook w => webhook w
+  | .status order => do return .status ((← orders.get [.int order]).map (·.status))
+
+/-! ## The worker -/
+
+/-- A payment made, in whatever status, is the charge done: what it comes to, a webhook tells.
+A refusal is a repeat while the first is being handled: try again. -/
+def classify : Answer → Verdict
+  | .made _ _ => .ok
+  | .refused => .retry "refused for now"
 
 structure Config where
-  maxOrders : Nat := 100
-  /-- At least one. -/
-  maxAttempts : Nat := 3
-  deadline_ms : Nat := 10000
-  /-- Whether a retry carries the key. Turn off only to seed the bug. -/
-  keyedRetries : Bool := true
+  jobs : Jobs.Config := { attempts_max := 5, lease_ms := 30000, backoff_ms := 1000 }
+  attempt_ms : Nat := 10000
 
-abbrev sig : Signature where
-  Id := Unit
-  Msg _ := Msg
-  In := In
-  Out := Out
+def Config.worker (config : Config) : Worker.Config Answer :=
+  { jobs := config.jobs, attempt_ms := config.attempt_ms, claim_ms := config.attempt_ms, classify }
 
-abbrev Eff := Effect sig ()
+/-- The store's handler: the shop's transactions and the worker's. -/
+def store (config : Config) : Handler (Action ⊕ Req) (Reply ⊕ Ans Charge) :=
+  beside handler (charges.handler config.jobs)
 
-def Config.key (config : Config) (order attempt : Nat) : Option Nat :=
-  if attempt = 1 || config.keyedRetries then some order else none
+/-- The transactions that carry an event of the payment service: webhooks. -/
+def event : Action → Option Webhook
+  | .webhook w => some w
+  | _ => none
 
-def find (s : State) (order : Nat) : Option Order := s.orders.find? (·.order == order)
+abbrev sig := Worker.sig Action Reply Charge Answer
 
-def setStatus (s : State) (order : Nat) (status : Status) : State :=
-  { s with orders := s.orders.map fun o => if o.order = order then { o with status } else o }
+abbrev worker (config : Config) : System sig :=
+  Worker.system (Q := Action) (A := Reply) (W := Charge) config.worker
 
-/-- Attempt `attempt` of charging `o`, under a new call. -/
-def call (config : Config) (s : State) (o : Order) (attempt : Nat) : State × List Eff :=
-  let id := s.nextCall
-  ({ setStatus s o.order (.charging id attempt) with
-      calls := (id, o.order) :: s.calls, nextCall := id + 1 },
-    [.emit (.charge ⟨id, config.deadline_ms, ⟨config.key o.order attempt, ⟨o.order, o.amount⟩⟩⟩),
-      .after config.deadline_ms (.expire id)])
+/-- The payment service behind keys, each webhook delivered at most `maxDeliveries` times. -/
+def service (maxDeliveries : Nat) :
+    Rpc.Server (Effects.Model Int64 IntentId Payments.Status Charge) (Idempotent.Keyed Int64 Charge)
+      Answer Webhook :=
+  Effects.service Payments.lifecycle maxDeliveries
 
-/-- The call of attempt `attempt` brought no answer: another, or a wait for a webhook. -/
-def retry (config : Config) (s : State) (o : Order) (attempt : Nat) : State × List Eff :=
-  if attempt < config.maxAttempts then call config s o (attempt + 1)
-  else (setStatus s o.order .waiting, [])
+/-- The worker's outsides: any clients, the store with the shop's transactions, and the payment
+service, which sends the webhooks. -/
+def world {D : Type} (clients : Outside sig D) (dbcfg : Db.Config) (config : Config) (start : Db)
+    (maxDeliveries : Nat) :=
+  Worker.world clients dbcfg (store config) start (service maxDeliveries) event
 
-def stopWaiting (o : Order) : List Eff :=
-  match o.status with
-  | .charging call _ => [.cancel (.expire call)]
-  | _ => []
-
-/-- The service says the payment of `o` is in `st`. Paid is final; a decline may still be
-followed by a success, when the customer pays another way. -/
-def settle (s : State) (o : Order) (st : Payments.Status) : State × List Eff :=
-  match o.status, st with
-  | .paid, _ => (s, [])
-  | _, .succeeded => (setStatus s o.order .paid, stopWaiting o ++ [.emit (.paid o.order)])
-  | .declined, _ => (s, [])
-  | _, .requiresPaymentMethod =>
-    (setStatus s o.order .declined, stopWaiting o ++ [.emit (.declined o.order)])
-  | _, _ => (setStatus s o.order .waiting, stopWaiting o)
-
-def place (config : Config) (s : State) (order amount : Nat) : State × List Eff :=
-  if (find s order).isSome then (s, [])
-  else if config.maxOrders ≤ s.orders.length then (s, [.emit (.full order)])
-  else
-    let o : Order := ⟨order, amount, .waiting⟩
-    call config { s with orders := o :: s.orders } o 1
-
-/-- An answer to call `id`, which may be late: a call given up on still names its order. -/
-def replied (config : Config) (s : State) (id : Nat) (reply : Rpc.Reply Answer) :
-    State × List Eff :=
-  match (s.calls.lookup id).bind (find s) with
-  | none => (s, [])
-  | some o =>
-    match reply, o.status with
-    | .answer (.made _ st), _ => settle s o st
-    | _, .charging call attempt =>
-      if call = id then
-        let (s', effs) := retry config s o attempt
-        (s', .cancel (.expire call) :: effs)
-      else (s, [])
-    | _, _ => (s, [])
-
-def expired (config : Config) (s : State) (id : Nat) : State × List Eff :=
-  match (s.calls.lookup id).bind (find s) with
-  | some o =>
-    match o.status with
-    | .charging call attempt => if call = id then retry config s o attempt else (s, [])
-    | _ => (s, [])
-  | none => (s, [])
-
-def step (config : Config) (s : State) : Msg → State × List Eff
-  | .order order amount => place config s order amount
-  | .reply id reply => replied config s id reply
-  | .webhook e =>
-    match find s e.params.order with
-    | some o => settle s o e.state
-    | none => (s, [])
-  | .expire id => expired config s id
-
-def rearm (config : Config) (s : State) : List Eff :=
-  s.orders.filterMap fun o =>
-    match o.status with
-    | .charging call _ => some (.after config.deadline_ms (.expire call))
-    | _ => none
-
-abbrev shop (config : Config) : System sig where
-  State _ := State
-  actor _ :=
-    { init := ⟨[], [], 0⟩
-      step := step config
-      recover := fun s => (s, rearm config s) }
-  accept
-    | .order order amount => ⟨(), .order order amount⟩
-    | .reply id reply => ⟨(), .reply id reply⟩
-    | .webhook e => ⟨(), .webhook e⟩
-  boot := [()]
-
-/-- How the shop's outputs and inputs carry calls, answers and webhooks. -/
-def port : Rpc.Port sig Request Answer Webhook where
-  called
-    | .charge c => some c
-    | _ => none
-  replied
-    | .reply id r => some (id, r)
-    | _ => none
-  notified
-    | .webhook e => some e
-    | _ => none
-
-/-- What the payment service may do, each webhook delivered at most `maxDeliveries` times. -/
-def service (maxDeliveries : Nat) := Payments.outside port maxDeliveries
-
-/-- What the service holds for the shop. -/
-abbrev Held := Rpc.State (Effects.Model Nat IntentId Payments.Status Charge)
-
-def isOrder : In → Bool
-  | .order .. => true
-  | _ => false
-
-/-- The payments the service may have made for `order`, seen by the shop or not: each one a
-charge of the customer's card, or one that may yet be. -/
-def charges (held : Held) (order : Nat) : Nat :=
+/-- The payments the service may have made for `order`, seen by the shop or not. -/
+def chargesFor {S : Type} (held : Rpc.State (Idempotent.State Int64 Charge Answer S)) (order : Int64) : Nat :=
   (held.server.slots.filter (·.request.order == order)).length
-
-/-- No order is charged twice. -/
-def chargedAtMostOnce (held : Held) (orders : List Nat) : Bool :=
-  orders.all fun order => charges held order ≤ 1
 
 end Shop

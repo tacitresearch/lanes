@@ -110,11 +110,11 @@ Also:
 - What relates two moments does not survive a restart in general: a refinement of a spec whose
   value lives in actors, acting once on a memo, a count of what was answered against what is
   owed, liveness. Each theorem says which it is: one that holds under restarts is stated for every
-  environment or under `EnvModel.Restarts` (`Bank.money_conserved_restarts`, the gate's and the
-  behaviours' `answered_le_handled`, `calls_le_scheduled`, `System.handled_le_put`), and one that
-  does not takes `env.mayRestart = false` or `EnvModel.Faultless` (`Server.implements`,
-  `Once.server_implements`, `KV.implements_once`, `Rookery.implements`, `Shop.paid_succeeded`,
-  every leads-to).
+  environment or under `EnvModel.Restarts` (`Bank.money_conserved_restarts`, the gate's
+  `answered_le_handled`, `System.handled_le_put`, `Worker.committed_only`,
+  `Shop.charged_at_most_once`), and one that does not takes `env.mayRestart = false` or
+  `EnvModel.Faultless` (`Server.implements`, `Once.server_implements`, `KV.implements_once`,
+  `Rookery.implements`, every leads-to).
 - The deterministic scheduler gives seeded runs, replayable event lists and drivers for the
   outside world; `FairScheduler` takes the event the system has owed longest, counting a timer
   that is armed again as owed from then, and its run is a fair run of the proof layer.
@@ -384,7 +384,11 @@ checked under what they carry and asked to be hashed again at a new cost
 (`Auth.Password.verify_phc`); failed attempts that lock at their limit
 (`Auth.Attempts.locked_unlock_repeat`) and sessions that keep the newest (`Auth.Sessions.ids_starts`)
 and end after a lifetime, judged at the time a request arrived, so that one over is never let in
-again (`Auth.Sessions.accepts_iff`, `Auth.Sessions.Ended.run`).
+again (`Auth.Sessions.accepts_iff`, `Auth.Sessions.Ended.run`). Those two are an actor's state,
+lost at a restart; what must survive one is in rows (`Lanes/Web/Auth/Rows.lean`): failed log-ins,
+a row per user that each transaction updates with `Auth.Attempts.fail` and `succeed`, so a
+restart unlocks no account; and open sessions, a row each, which a log-out deletes, so that a
+session closed before its signed token expires stays closed.
 
 Sign-in with another service (`docs/decisions/D72-sign-in-with-oauth.md`) is OAuth 2.0's authorization
 code flow with PKCE and OpenID Connect on it, decided in `Lanes/Web/Auth/OAuth.lean` and done
@@ -416,6 +420,7 @@ Where: `Lanes/Web/Http/`, `Lanes/Web/Html/`, `Lanes/Web/Auth/`, `Lanes/Web/IO/Si
 | The template macro produces the element the template shows | `Tests/Html.lean` |  | trusted, tested |
 | A sign-in's callback is accepted only with its browser's ticket, for its state and its provider and not expired, and no state twice, among at most `maxUsed` states kept | `OAuth.check_ok`, `OAuth.Used.accepted_later`, `OAuth.Used.accepted_once`, `OAuth.Used.length_claim`, `Lanes/Web/Auth/OAuth.lean`; gate `Tests/Axioms/Web.lean`; model-checked against an attacker's browser across a restart and tested end to end (`Tests/OAuth.lean`) | The edge keeps the states used and performs what it decides (TRUSTED, "The sign-in's IO"); the key and the random source | proved; the edge trusted, tested |
 | An ID token is accepted only when its header names RS256 or ES256, a key of the provider's set of that algorithm and `kid` checks its signature, and every claim passes | `OAuth.IdToken.verify_accepted`, `OAuth.IdToken.check_ok_iff`, `Jose.verify_ok`; gate `Tests/Axioms/Web.lean`; refusals of `none`, HS256 keyed by the public key, an unknown `kid`, a changed payload and each claim tested end to end (`Tests/OAuth.lean`); `Jose.verify` against jwcrypto 1.6.2 on generated tokens, valid and tampered (`oracles/jwcrypto`) | The signature check (`native/verify.c`); the provider holds only its keys in its set (TRUSTED, "Identity providers"); the wall clock | proved of the decision; the signature trusted, tested |
+| Failed log-ins kept as rows stay within their limit, an account with that many locked, under every transaction of `Failures`; a closed session's id lets nobody in again | `Rows.Failures.bounded`, `Rows.Sessions.closed_refused`, `Lanes/Web/Auth/RowsSound.lean`; gate `Tests/Axioms/Web.lean`; `Tests/Auth.lean` | The limit is below `2 ^ 63`; with `Db.invariant`, PostgreSQL behaves like the store's model | proved |
 | No code, token or client secret of a sign-in reaches the system, and a client cannot send the identity headers | `OAuth.identity?_strip`, `OAuth.identity?_withIdentity`; `Tests/OAuth.lean` end to end | That the edge lets a callback in only through `withIdentity` (TRUSTED, "The sign-in's IO") | proved of the headers; trusted, tested |
 
 Also:
@@ -480,7 +485,7 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   Stripe documents for a PaymentIntent (`Lanes/Services/Stripe/Payments.lean`), and email
   (`Lanes/Outside/Effects/Email.lean`). A system's part of a proof is a fact about what its steps
   emit, lifted to every run by `System.Emits.outputs`; `examples/payments` proves a shop charges
-  each order at most once that way (`Shop.charged_at_most_once`). That a real service does only
+  each order at most once from an outbox (`Shop.charged_at_most_once`). That a real service does only
   what its model allows is trusted; the S3 client's runs against a fake are checked against the
   object store's, and no adapter talks to a real service yet.
 - **More outside systems** (the decision on models of more outside systems), each with a fixture
@@ -862,6 +867,8 @@ Where: `Lanes/Db/{Jobs,JobsSound,Worker,WorkerSound,Once,OnceSound}.lean`,
 | Every job due is taken: a claim whose scan finds no more jobs due than its limit leases every one whose attempts are not spent, and answers it for an attempt; the worker hands every job of a committed claim to its adapter in the step that reads it | `Queue.claim_takes`, `Worker.stored_runs`; gate `Tests/Axioms/Db.lean` | That this happens in every fair run is not one theorem: the store's model may fail every call | proved, per transaction and per step |
 | At most one job per key, and only the current attempt's answer counts | `Queue.one_per_key`, `Queue.finish_stale`, from `Op.unique_apply`; gate `Tests/Axioms/Db.lean` | The application's operations on a table of the jobs table's name are on that table | proved |
 | Acting once: a run under a key that committed makes every later run under it, of any body, a no-op that answers the same | `Keys.once_again`, `Lanes/Db/OnceSound.lean`; gate `Tests/Axioms/Db.lean` | None | proved |
+| Behind a service that honours keys, every effect the service may have had is under the key of a job, and of its work, in every database the store may hold | `Worker.slots_held`; gate `Tests/Axioms/Db.lean` | As for `Worker.committed_only` | proved |
+| An application's transaction that only adds jobs (`Queue.Adds`) keeps the table, is on it, and keeps any property of each job it adds that no claim or finish changes | `Queue.keeps_of_adds`, `Queue.onTable_of_adds`, `Queue.fixed_of_adds`, `Queue.handler_fixed`, `Queue.enqueue_adds`; gate `Tests/Axioms/Db.lean` | None | proved |
 | A job done had an attempt the service took | `Tests/Worker.lean`: beside the store's model and an idempotent service, with crashes and lost answers | | checked |
 | The worker on PostgreSQL: three effects, one written twice under one key, one refused once; each attempt under its job's id, every job done | `Tests/Worker.lean`, when `LANES_POSTGRES` names a server | | tested against PostgreSQL 16; CI runs none |
 
@@ -1163,7 +1170,7 @@ would, in the order `examples/README.md` reads them: the counter `lanes new` wri
 key-value store with front ends, whose read cache breaks refinement (`examples/kv-cache`,
 `KV.implements`, `KV.caching_not_implements`); a watchdog
 (`examples/watchdog`); a shop that charges each order at most once through a model of a payment
-service (`examples/payments`, `Shop.charged_at_most_once`); a to-do list kept in PostgreSQL
+service from an outbox (`examples/payments`, `Shop.charged_at_most_once`); a to-do list kept in PostgreSQL
 (`examples/todo-db`); `examples/sign-in`, members of a video site signed in with Google or
 GitHub, with sessions; uploads that stream (`examples/upload`); reminders in a jobs table
 (`examples/reminders`);
@@ -1237,7 +1244,7 @@ Also:
 
 ### Payments
 
-A shop that charges each order through the payment model, retrying calls that time out under the order's key.
+A shop whose orders are rows: placing one, under the customer's idempotency key (`Keys.once`), adds the order and its charge to an outbox under `charge-<order>`; the worker charges it through the payment model under the job's id; a webhook's transaction marks the order paid or declined.
 
 Where: `examples/payments/Shop.lean`.
 
@@ -1245,13 +1252,8 @@ Where: `examples/payments/Shop.lean`.
 
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
-| Payments: the shop charges each order at most once, in every run, under every fault the payment model allows | `Shop.charged_at_most_once`, `Shop.emits_keyed`, `examples/payments/Shop/Proofs.lean`; gate `examples/payments/Shop/Proofs/Axioms.lean` | Retries under the key (`keyedRetries`); the payment service behaves as `Payments.outside` (trusted, above); a charge counts from the moment it is sent | proved |
-| Payments: a retry without the key charges an order twice | `examples/payments/Check.lean`, run by its `lake test` | One order, one retry | checked |
-| Payments: an order the shop calls paid has a payment that succeeded | `Shop.paid_succeeded`, `examples/payments/Shop/Proofs/Paid.lean`, from `Effects.Sound.shows_reply` and `Effects.Sound.shows_report` (`Lanes/Outside/Effects/Basic.lean`) and `Outside.Beside` (`Lanes/Proof/Outputs.lean`); gate `examples/payments/Shop/Proofs/Axioms.lean`; model-checked, `examples/payments/Check.lean` | The payment service behaves as `Payments.outside` (trusted, above). "Calls paid" is an order in the state `paid` or a `paid` output handed over; the payment is one the model holds as `succeeded`, made by a request for that order. Every run and environment model without process restarts, every number of attempts, with or without keyed retries. Not under restarts: the shop forgets its calls and numbers them from zero again while the model keeps their routes, so an answer to an earlier call can mark another order paid | proved |
-
-Also:
-
-- Checked: model-checked on one order with crashes, where a retry without the key charges the order twice.
+| Payments: the service makes at most one payment for each order, in every run, under every fault the payment model allows, with retries, lost commits and process restarts | `Shop.charged_at_most_once`, from `Worker.slots_held`, `Queue.one_per_key`, `Idempotent.keys_nodup` and `Shop.shop_adds` (the shop only adds charges, each under its order's key), `examples/payments/Shop/Proofs.lean`; gate `examples/payments/Shop/Proofs/Axioms.lean` | The payment service behaves as `Payments.outside` (trusted, above); PostgreSQL behaves like the store's model; a payment counts from the moment it is asked for | proved |
+| Payments: an order paid has a payment that succeeded, made for it | `examples/payments/Check.lean`, run by its `lake test`: one order, webhooks in any order, a restart | One order | checked |
 
 ### Reminders
 
