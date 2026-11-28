@@ -5,29 +5,75 @@ import {{Name}}.Counter
 The theorems. Nothing executable imports this file, so the application binary stays small, and
 `Check.lean` does not, so a broken proof does not stop the checks: `lake test` runs the checks,
 then builds this file with warnings as errors, and a `sorry` fails it.
+
+The invariant is proved per transaction: each transaction keeps every count between zero and the
+limit (`preserves`). The store runs transactions at `SERIALIZABLE`, so the database is always
+what some order of them, one after another, would leave, and the invariant holds in every
+database the store's model allows (`within_always`): with lost `COMMIT`s, failures, retries and
+restarts.
 -/
 
 namespace {{Name}}
 
-open Lanes
+open Lanes Lanes.Db
 
-/-- The counter never exceeds its limit. -/
-theorem counter_le_limit (config : Config) :
-    (Server.actor (service config)).Invariant fun count => count ≤ config.limit := by
-  actor_invariant [Server.actor, service]
+/-- A count is between zero and the limit. -/
+def Count.Within (config : Config) (c : Count) : Prop :=
+  0 ≤ c.value.toInt ∧ c.value.toInt ≤ config.limit
 
-/-- In every reachable state of the system, under any environment model. -/
-theorem system_le_limit (config : Config) (env : EnvModel sig) :
-    (system config).Invariant env fun c => c.state () ≤ config.limit :=
-  System.invariant_of_actor (system config) () (counter_le_limit config) env
+/-- Every count of the table is between zero and the limit. -/
+def Within (config : Config) (db : Db) : Prop :=
+  counts.Every (Count.Within config) db
 
-/--
-The running system implements the spec: whatever concurrent clients observe is a behaviour of
-`service` with each request taking effect at one instant. It holds in any environment that
-loses, duplicates and crashes nothing, which is what the runtime provides inside one process.
--/
-theorem implements (config : Config) (env : EnvModel sig) (henv : env.Faultless) :
-    (system config).Implements env (service config) :=
-  Server.implements (service config) env henv
+/-- An operation of the handler: on `counts`, writing only counts within the limit. -/
+def Good (config : Config) (o : Op) : Prop :=
+  (o.table.name = counts.table.name → o.table = counts.table) ∧
+    ∀ r, o.written = some r → ∀ c, counts.ofRow r = some c → c.Within config
+
+theorem current_good (config : Config) : current.All (Good config) :=
+  Txn.All.bind (Txn.All.bind (Txn.All.single ⟨fun _ => rfl, fun _ h => by cases h⟩) fun r => by
+    cases r with
+    | some x =>
+      refine Txn.All.bind ?_ fun _ => .pure _
+      unfold TableOf.decode; split
+      · exact .pure _
+      · exact .abort _
+    | none => exact .pure _) fun _ => .pure _
+
+theorem handler_good (config : Config) (hlimit : config.limit < 2 ^ 63) (q : Request) :
+    (handler config q).All (Good config) := by
+  cases q with
+  | read => exact Txn.All.bind (current_good config) fun _ => .pure _
+  | increment =>
+    refine Txn.All.bind (current_good config) fun c => ?_
+    split
+    · next hlt =>
+      refine Txn.All.bind (Txn.All.single ⟨fun _ => rfl, fun r hr c' hc => ?_⟩) fun _ => .pure _
+      simp only [Op.written, Option.some.injEq] at hr
+      subst hr
+      rw [counts.ofRow_toRow] at hc
+      cases hc
+      have hlt' : c.value.toInt.toNat + 1 < 2 ^ 63 := by omega
+      simp only [Count.Within, Int64.toInt_ofNat_of_lt hlt']
+      omega
+    · exact .pure _
+
+/-- Every transaction keeps every count within the limit. -/
+theorem preserves (config : Config) (hlimit : config.limit < 2 ^ 63) :
+    Preserves (handler config) (Within config) := fun q =>
+  (handler_good config hlimit q).keeps fun o ho _ _ _ hP ha => counts.every_apply o ho.1 ho.2 ha hP
+
+theorem within_empty (config : Config) : Within config (Db.empty schema) := by
+  intro x hx
+  simp [Db.empty, Db.rows, schema] at hx
+
+/-- **The count never passes the limit**, in any database the store may hold after any run of
+the front beside the store's model: with lost `COMMIT`s, failures, calls taking effect late,
+restarts, and every call still outstanding taking effect. -/
+theorem within_always (config : Config) (hlimit : config.limit < 2 ^ 63) (cfg : Db.Config)
+    {events : List (Event sig)} {s : Db.State Request Response}
+    (hrun : (Db.outside cfg (handler config) (Db.empty schema) port).after events = some s) :
+    ∀ w ∈ s.worlds, ∀ w' ∈ w.expand (handler config) w.fuel, Within config w'.db :=
+  Db.invariant cfg port (within_empty config) (preserves config hlimit) hrun
 
 end {{Name}}

@@ -257,10 +257,13 @@ jobs:
         with:
           path: examples/rookery/.lake/build
           key: ${{ steps.lean.outputs.system-key }}
-      - name: Model checks
-        run: lake test
-      - name: Over HTTP, killed and started again
-        run: lake exe rookeryLive
+      - name: PostgreSQL 16
+        run: |
+          if ! ls /usr/lib/postgresql/16/bin/initdb >/dev/null 2>&1; then
+            sudo apt-get update -q && sudo apt-get install -yq postgresql-16
+          fi
+      - name: Model checks, and the application over HTTP on PostgreSQL, through a restart
+        run: ../../scripts/with-postgres lake test
 
   # What a user on a Mac does: the build, the tests and a generated app, on GitHub's runner.
   macos:
@@ -286,10 +289,8 @@ jobs:
           cd "$RUNNER_TEMP/demo-app"
           lake build
           lake test
-          .lake/build/bin/demo-app 8090 & pid=$!
-          for _ in $(seq 1 50); do curl -sf http://127.0.0.1:8090/count >/dev/null && break; sleep 0.2; done
-          curl -sf http://127.0.0.1:8090/count
-          kill "$pid"
+          # With no database to reach it says so and refuses to start.
+          if PGHOST=127.0.0.1 PGPORT=1 PGUSER=nobody .lake/build/bin/demo-app 8090; then exit 1; fi
 
   # The one check branch protection requires. A job that is skipped counts as passed there, so
   # this job always runs. It fails unless `changes` and `compile` succeeded and every other job

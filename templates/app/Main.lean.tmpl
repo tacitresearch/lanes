@@ -1,68 +1,28 @@
-import Lanes
-import {{Name}}.Counter
+import {{Name}}.Web
 
 /-!
-The edge of the application: HTTP in, HTML out. Everything here is an action; the logic it calls
-is in `{{Name}}.Counter`.
+`{{name}} [port]`. The process keeps nothing: the count is in PostgreSQL, so the process can be
+stopped, replaced or run as several instances behind a load balancer at any moment.
+
+Everything comes from the environment, so that a deployment sets it without a change here:
+
+- the database, as libpq's variables say (`PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`,
+  `PGDATABASE`, `PGSSLMODE`) or a deploy's (`LANES_DB_HOST`, `LANES_DB_PASSWORD_FILE`, …:
+  `Postgres.Client.fromEnv`);
+- the migrations, the `.sql` files of `LANES_MIGRATIONS` (`migrations` unless set), each run once,
+  in the order of their names, at the start;
+- `LANES_HOST`, the address (`127.0.0.1` unless set; `0.0.0.0` behind a load balancer),
+  `LANES_IDLE_MS`, how long an idle connection is kept, and `LANES_DRAIN_MS`, how long SIGTERM or
+  SIGINT waits for the requests in flight.
+
+It refuses to start when the database's tables differ from the ones `{{Name}}.schema` declares.
+The server answers `/readyz` and `/healthz`, which a load balancer asks, `/metrics` to this
+machine only, and writes an access log to stderr (`ServerConfig.ops`).
 -/
 
 open Lanes {{Name}}
-open scoped Lanes.Html
 
-/-! Links, htmx attributes and request matching all come from these routes. -/
-namespace Routes
-
-def home : Http.Route Unit := .get .root
-def count : Http.Route Unit := .get (.seg "count")
-def increment : Http.Route Unit := .post (.seg "increment")
-
-end Routes
-
-def CounterView (response : Response) : Html :=
-  <div id="counter">
-    <p>{s!"Count: {response.value}"}</p>
-    {if response.applied then Html.empty else <p class="error">"The counter is at its limit."</p>}
-    <button {Hx.request Routes.increment ()} {Hx.target "#counter"} {Hx.swap .outerHTML}>
-      "Add one"
-    </button>
-  </div>
-
-def Page : Html :=
-  <html lang="en">
-    <head>
-      <meta charset="utf-8"/>
-      <title>"{{name}}"</title>
-      <script src="https://unpkg.com/htmx.org@2.0.4"></script>
-    </head>
-    <body>
-      <h1>"{{name}}"</h1>
-      <div id="counter" {Hx.request Routes.count ()} {Hx.trigger [.load]} {Hx.swap .outerHTML}>
-      </div>
-    </body>
-  </html>
-
-/-- Requests are parsed here, once (rule 2.2). What a request holds that must not enter the
-system, a password or a session cookie, is taken out by a `prepare` field, which the server runs
-before the request enters it. -/
-def bridge : Http.Bridge sig where
-  decode id request :=
-    (Http.dispatch [
-      Routes.home.handle fun () _ => .error (.html Page.document),
-      Routes.count.handle fun () _ => .ok (.read id),
-      Routes.increment.handle fun () _ => .ok (.increment id)
-    ] request).getD (.error (.text "not found\n" 404))
-  encode response := some (response.req, .html (CounterView response).render)
-
-/-- `{{name}} [port]`. The counter lives as long as the process: a restart starts it at zero.
-State that must outlive the process belongs in a service outside, such as PostgreSQL, reached
-through an adapter. Where to
-listen and how to stop come from the environment, so that a deployment sets them without a
-change here: `LANES_HOST`, the address (`127.0.0.1` unless set; `0.0.0.0` behind a load
-balancer), `LANES_IDLE_MS`, how long an idle connection is kept, and `LANES_DRAIN_MS`, how long
-SIGTERM or SIGINT waits for the requests in flight. The server answers `/readyz` and `/healthz`,
-which a load balancer asks, `/metrics` to this machine only, and writes an access log to stderr
-(`ServerConfig.ops`). -/
-def main (args : List String) : IO Unit := do
+def main (args : List String) : IO UInt32 := do
   let port := (args.head? >>= String.toNat?).getD 8080
   let ms (name : String) (default : Nat) : IO Nat := do
     let some text ← IO.getEnv name | return default
@@ -75,7 +35,15 @@ def main (args : List String) : IO Unit := do
       ops := { readinessPath := some "/readyz", livenessPath := some "/healthz",
                metricsPath := some "/metrics", accessLog := .stderr, requestIds := true } }
   let drain_ms ← ms "LANES_DRAIN_MS" 10000
-  let server ← (Http.serve (system {}) bridge config).block
-  IO.println s!"{{name}} listening on http://{host}:{server.port.getD 0}"
-  (← IO.getStdout).flush
-  Lanes.block (server.stopOnSignal drain_ms)
+  let postgres ← Postgres.Client.fromEnv
+  let migrations ← Postgres.Typed.readMigrations ((← IO.getEnv "LANES_MIGRATIONS").getD "migrations")
+  match ← (Web.start postgres migrations config).block with
+  | .error problems =>
+    IO.eprintln "{{name}}: not started: the database is not ready, or not as declared:"
+    for p in problems do IO.eprintln s!"  {p}"
+    return 1
+  | .ok server =>
+    IO.println s!"{{name}} listening on http://{host}:{server.port.getD 0}"
+    (← IO.getStdout).flush
+    Lanes.block (server.stopOnSignal drain_ms)
+    return 0

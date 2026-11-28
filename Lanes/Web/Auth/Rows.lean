@@ -102,10 +102,14 @@ structure Config where
 
 variable (cfg : Config)
 
+/-- A user's sessions, so that an application can count and close them. -/
+def byUser : Index := { name := "by_user", columns := [1] }
+
 def table : TableOf SessionRow where
   table := { name := cfg.name, key := 1,
              columns := [{ name := "id", ty := .int }, { name := "user", ty := .text },
-                         { name := "started_s", ty := .int }, { name := "used_s", ty := .int }] }
+                         { name := "started_s", ty := .int }, { name := "used_s", ty := .int }],
+             indexes := [byUser] }
   toRow r := [.int r.id, .text r.user, .int r.started_s, .int r.used_s]
   ofRow
     | [.int id, .text user, .int started_s, .int used_s] => some { id, user, started_s, used_s }
@@ -131,6 +135,10 @@ def accepts (id : Int64) (now_s : Int64) : Txn (Option String) := do
 
 /-- Close a session: its token lets nobody in again. -/
 def close (id : Int64) : Txn Unit := discard <| (table cfg).delete [.int id]
+
+/-- A user's open sessions, at most `limit`, by id. -/
+def ofUser (user : String) (limit : Nat) : Txn (List SessionRow) :=
+  (table cfg).lookup byUser [.text user] limit
 
 end Sessions
 
