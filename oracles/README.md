@@ -124,12 +124,12 @@ Each service's protocol modules and models (`Lanes/Services/README.md`).
 | --- | --- | --- |
 | `Lanes/Services/Aws.lean` | | Imports the modules below |
 | `Lanes/Services/Aws/CloudFront.lean` | `oracles/botocore` | The policy and the whole link, signature included, against botocore's `CloudFrontSigner` |
-| `Lanes/Services/Aws/Imds.lean` | | Owed: fakes of the metadata service (IMDSv2) and of a container's endpoint, written from AWS's documentation, run in `Tests/Aws/Imds.lean`; no emulator of either runs in CI |
+| `Lanes/Services/Aws/Imds.lean` | | Client only (`docs/decisions/new-service-models.md`): tested against fakes of the metadata service (IMDSv2) and of a container's endpoint, written from AWS's documentation, run in `Tests/Aws/Imds.lean`; no emulator of either runs in CI |
 | `Lanes/Services/Aws/Refresh.lean` | | A policy, not a format: proved (`Aws.Refresh.current_fresh`, `Aws.Refresh.refresh_in_time`) and model-checked against a model of the metadata service (`Tests/Aws/Refresh.lean`) |
 | `Lanes/Services/Aws/Ses.lean` | `oracles/go/mail`, `oracles/moto` | The address check against `net/mail`; the calls against moto |
 | `Lanes/Services/Aws/Sqs.lean` | `oracles/moto/sqs.jsonl` | The calls against moto (`Tests/Aws/SqsMoto.lean`) |
 | `Lanes/Services/Oidc.lean` | | Imports the modules below |
-| `Lanes/Services/Oidc/GitHub.lean` | | Owed: GitHub's answers in the shapes its REST documentation gives, written by hand (`Tests/Oidc/GitHub.lean`); none is recorded from GitHub |
+| `Lanes/Services/Oidc/GitHub.lean` | | Client only (`docs/decisions/new-service-models.md`): GitHub's answers in the shapes its REST documentation gives, written by hand (`Tests/Oidc/GitHub.lean`); none is recorded from GitHub |
 | `Lanes/Services/Oidc/Google.lean` | `oracles/google` | The preset's endpoints, issuers and algorithms against Google's discovery document and JWK Set as recorded (`Tests/Oidc/Google.lean`) |
 | `Lanes/Services/Postgres.lean` | | Imports the modules below |
 | `Lanes/Services/Postgres/Bytes.lean` | `Tests/Postgres.lean`, `oracles/postgres` | The fields of the messages, in the sessions recorded from PostgreSQL 16 and psql 16 (`Tests/Postgres/`) |

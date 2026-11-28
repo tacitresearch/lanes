@@ -526,17 +526,31 @@ Also:
 - The cache, the queue, the throttling service, the shared cache (`SharedCache.leaks`) and the
   wall clock are each model-checked with a seeded bug and its fix.
 
+### Limits
+
+- The shapes are kept whole in the core, as library pieces, whether or not a service of
+  `Lanes/Services/` uses them. Those with no run recorded from a real system are not yet checked
+  against a real service: the cache (`Lanes/Outside/Cache.lean`), the throttling service
+  (`Lanes/Outside/Throttle.lean`), webhooks (`Lanes/Outside/Events.lean`), idempotency keys
+  (`Lanes/Outside/Idempotent.lean`), the shared cache (`Lanes/Web/Http/SharedCache.lean`) and the
+  wall clock (`Lanes/Outside/Clock.lean`, a platform model). Each says so in its header, and
+  `oracles/README.md` says why.
+
 ## The core and the services
 
 The core is everything `import Lanes` gives: the semantics, the runtime, HTTP, the standard
 library, the platform models and the shapes of outside services (`Lanes/Outside/`). A service is
-a vendor's: its client, its model, built from a shape, and its oracle, each in
-`Lanes/Services/<Name>/` with a README that says which and whether it is checked or
-experimental (`Lanes/Services/README.md`, D110). A service imports the core and the core never
+a vendor's: its client, and, when it is checked, its model, built from a shape, and its oracle,
+each in `Lanes/Services/<Name>/` with a README that says which and whether it is checked (model
+plus oracle) or a client only (`Lanes/Services/README.md`, D110). A service imports the core and the core never
 imports a service: lint `layering` fails otherwise (`LanesCli/Layers.lean`). An application
 imports the services it calls (`import Lanes.Services.Postgres`), and Lake builds only those.
 HTTP, Signature Version 4, OAuth and OpenID Connect are protocols, not services, and stay in the
-core.
+core. A service gets a model and an oracle of its own only when an application's proof depends
+on how it behaves (`docs/decisions/new-service-models.md`): Postgres, S3, SES and payments are
+checked, a model plus an oracle; the sign-in presets, AWS's role credentials, CloudFront and SQS
+are clients only, with tests, and SQS's calls are paired with the queue shape when an
+application needs it.
 
 The one platform model in the core is the clock: monotonic (`Clock.outside`) and the wall clock
 (`Clock.wall`), in `Lanes/Outside/Clock.lean`. Randomness, environment variables and

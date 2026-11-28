@@ -266,8 +266,10 @@ A module is in the directory of its concern (D62): `docs/ARCHITECTURE.md` names 
 each area. A file that performs IO is in an `IO/` directory of its area and named in
 `TRUSTED.md`. What is a vendor's (a client, a model of its service, its fake, a preset) is a
 service, in `Lanes/Services/<Name>/`, whose README names its client, its model, its oracle and
-whether it is checked or experimental (`Lanes/Services/README.md`); a protocol (HTTP, Signature
-Version 4, OAuth) and the shape of a service (`Lanes/Outside/`) are core. Code under `Lanes/` imports `Std` only, but for the proof layer (rule 1.6).
+whether it is checked (model plus oracle) or a client only (`Lanes/Services/README.md`,
+`docs/decisions/new-service-models.md`); a protocol (HTTP, Signature Version 4, OAuth) and the
+shape of a service (`Lanes/Outside/`) are core. Code under `Lanes/` imports `Std` only, but for
+the proof layer (rule 1.6).
 
 `import Lanes` is the API, executable code and the proof toolkit; `import Lanes.Proofs` adds the
 framework's soundness theorems (the `…Sound` modules), and `import Lanes.Semantics` the proof

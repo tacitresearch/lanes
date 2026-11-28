@@ -1,22 +1,24 @@
 # Services
 
-What a particular vendor needs: a client, a model of the service built from a shape of the core
-(`Lanes/Outside/`), and an oracle that checks the model against the real service or an emulator
-(`docs/decisions/D110-volatile-actors.md`, "The environment, in three layers"). Each service is a
-folder here, in the same Lake package as the core, with a README that names its client, its
-model, its oracle and its status:
+What a particular vendor needs (`docs/decisions/D110-volatile-actors.md`, "The environment, in
+three layers"). Each service is a folder here, in the same Lake package as the core, with a
+README that names its client, its model and its oracle, and says which of two it is
+(`docs/decisions/new-service-models.md`):
 
-- **checked**: it has all three, and the oracle runs, nightly or on every pull request
-  (`oracles/README.md`);
-- **experimental**: something is missing, most often the oracle; the README says what.
+- **checked: model plus oracle**: a client, a model of the service built from a shape of the
+  core (`Lanes/Outside/`), and an oracle that checks the model against the real service or an
+  emulator (`oracles/README.md`). A service is checked when an application's proof depends on
+  how it behaves.
+- **client only**: a client with tests, and no model of its own. It may still be paired with a
+  shape of the core when an application needs it.
 
 | Service | What it is | Status |
 | --- | --- | --- |
-| `Lanes/Services/Postgres/` | PostgreSQL's client, and the typed store's driver | checked |
-| `Lanes/Services/S3/` | S3, for any S3-compatible store: calls, multipart and browser uploads | checked |
-| `Lanes/Services/Aws/` | AWS: role credentials, SES, SQS's calls, CloudFront's signed links | checked, but the role credentials are experimental |
-| `Lanes/Services/Oidc/` | Sign-in presets: Google and GitHub | Google checked, GitHub experimental |
-| `Lanes/Services/Stripe/` | Payments in the shape of Stripe's PaymentIntent | experimental |
+| `Lanes/Services/Postgres/` | PostgreSQL's client, and the typed store's driver | checked: model plus oracle |
+| `Lanes/Services/S3/` | S3, for any S3-compatible store: calls, multipart and browser uploads | checked: model plus oracle |
+| `Lanes/Services/Aws/` | AWS: SES; role credentials, SQS's calls, CloudFront's signed links | SES checked: model plus oracle; the rest client only |
+| `Lanes/Services/Oidc/` | Sign-in presets: Google and GitHub | client only |
+| `Lanes/Services/Stripe/` | Payments in the shape of Stripe's PaymentIntent | checked: model plus oracle, with the client and the oracle still owed |
 
 The rules:
 

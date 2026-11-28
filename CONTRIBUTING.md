@@ -30,7 +30,7 @@ the repository. Read it first; this file does not repeat it. A clone needs elan 
   that can be fixed is an issue labelled `known-limit`. A change updates either in the same pull
   request.
 - A vendor's service (a client, its model, its oracle) goes in `Lanes/Services/<Name>/`, with a
-  README that names each and says whether it is checked or experimental
+  README that names each and says whether it is checked (model plus oracle) or a client only
   (`Lanes/Services/README.md`). It is a Lake package of its own only when it brings a heavy
   dependency or needs its own release cadence.
 - Cite the rules that shaped a choice in the pull request description, by number ("rule 2.6").

@@ -1,6 +1,8 @@
 # Stripe
 
-Status: **experimental**: a model with no client and no oracle.
+Status: **checked: model plus oracle**, because `examples/payments` proves a property against the
+model (`docs/decisions/new-service-models.md`); the client and the oracle are still owed, so the
+model is not yet checked against Stripe.
 
 - **Client**: none yet.
 - **Model**: `Payments.lean`, a payment with the statuses and webhooks Stripe documents for a

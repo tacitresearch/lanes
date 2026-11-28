@@ -22,6 +22,9 @@ whose answer was `unknown` may have had its effect, and a slot counts it.
 
 `at_most_once` is the guarantee: a request that is always sent under one key has its effect at
 most once, in every run the model allows, whatever was lost, repeated, late or timed out.
+
+Not yet checked against a real service: no run recorded from one that takes idempotency keys;
+the runs are written by hand (`oracles/README.md`).
 -/
 
 @[expose] public section

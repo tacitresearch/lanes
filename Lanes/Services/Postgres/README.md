@@ -1,6 +1,6 @@
 # PostgreSQL
 
-Status: **checked**.
+Status: **checked: model plus oracle**.
 
 - **Client**: the frontend/backend protocol 3.0 in Lean (`docs/decisions/D68-postgres-protocol-in-lean.md`).
   Pure: the messages (`Message.lean`, `Bytes.lean`), the connection (`Conn.lean`), SCRAM

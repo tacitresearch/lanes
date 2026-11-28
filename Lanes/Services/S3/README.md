@@ -1,6 +1,6 @@
 # S3
 
-Status: **checked**. For any S3-compatible store (AWS, MinIO), named virtual-hosted or by path.
+Status: **checked: model plus oracle**. For any S3-compatible store (AWS, MinIO), named virtual-hosted or by path.
 
 - **Client**: pure calls and the reading of answers (`Basic.lean`, `Xml.lean`), browser uploads
   by a form under a policy (`Post.lean`, proved in `PostSound.lean`) and multipart uploads
