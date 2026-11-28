@@ -466,7 +466,8 @@ def idsTest : Async (List (String × Bool)) := do
       restored == [] && (← restoredWritten.get).toList matches [.handed]),
     ("output ids: a journal keeps its id across starts; a restored copy, and a journal begun "
       ++ "afresh, take a new one",
-      first.length == 32 && same == first && copy != first && afterCopy == copy
+      Journal.journalId (ByteArray.mk #[0, 15, 255]) == "000fff"
+        && first.length == 32 && same == first && copy != first && afterCopy == copy
         && afresh != copy) ]
 
 /-- How often a shard saves when it is started on `past`, saves every `every` entries, and is
