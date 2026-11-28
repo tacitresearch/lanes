@@ -173,27 +173,78 @@ jobs:
           lake test
 
   # The integrations and the small examples, each a package of its own: built with their proofs,
-  # and their checks run.
+  # and their checks run, in three groups at once. Their builds are kept in the Actions cache,
+  # keyed on the toolchain, the manifests and the sources, so a run rebuilds only what changed;
+  # the cache is saved once they are built, before their checks run.
   examples:
     needs: [runner, changes, compile]
     if: needs.changes.outputs.code == 'true'
     runs-on: ${{ fromJSON(needs.runner.outputs.label) }}
-    timeout-minutes: 60
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: small
+            packages: >-
+              integrations/google integrations/github integrations/aws examples/counter
+              examples/bank examples/bank-web examples/kv-cache examples/election examples/watchdog
+          - group: web
+            packages: >-
+              examples/payments examples/migration examples/todo-db examples/sign-in
+              examples/upload examples/reminders
+          - group: videos
+            packages: examples/videos
+    name: examples (${{ matrix.group }})
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           clean: false
-      - uses: ./.github/actions/lean
-      - name: Build and check each small example
+      - id: lean
+        uses: ./.github/actions/lean
+      # On a machine of our own (`warm`) the work directory keeps the builds instead.
+      - id: keys
+        if: steps.lean.outputs.warm != 'true'
+        env:
+          ROOT: ${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('lean-toolchain', 'lake-manifest.json', 'examples/*/lake-manifest.json', 'integrations/*/lake-manifest.json') }}
+          SOURCES: ${{ hashFiles('lakefile.lean', 'Lanes/**', 'native/**', 'examples/**/*.lean', 'examples/**/lakefile.*', 'integrations/**/*.lean', 'integrations/**/lakefile.*', '!**/.lake/**') }}
         run: |
-          for package in integrations/google integrations/github integrations/aws examples/counter \
-              examples/bank examples/bank-web examples/kv-cache examples/election examples/watchdog \
-              examples/payments examples/migration examples/todo-db examples/sign-in \
-              examples/videos examples/upload examples/reminders; do
+          echo "prefix=lake-examples-${{ matrix.group }}-$ROOT-" >> "$GITHUB_OUTPUT"
+          echo "key=lake-examples-${{ matrix.group }}-$ROOT-$SOURCES" >> "$GITHUB_OUTPUT"
+      - id: built
+        if: steps.lean.outputs.warm != 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            examples/*/.lake/build
+            integrations/*/.lake/build
+          key: ${{ steps.keys.outputs.key }}
+          restore-keys: ${{ steps.keys.outputs.prefix }}
+      - name: Build each package
+        env:
+          PACKAGES: ${{ matrix.packages }}
+        run: |
+          for package in $PACKAGES; do
             echo "::group::$package"
             mkdir -p "$package/.lake"
             ln -sfn "$GITHUB_WORKSPACE/.lake/packages" "$package/.lake/packages"
-            (cd "$package" && lake build --wfail && lake test)
+            (cd "$package" && lake build --wfail)
+            echo "::endgroup::"
+          done
+      - if: steps.lean.outputs.warm != 'true' && steps.built.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            examples/*/.lake/build
+            integrations/*/.lake/build
+          key: ${{ steps.keys.outputs.key }}
+      - name: Check each package
+        env:
+          PACKAGES: ${{ matrix.packages }}
+        run: |
+          for package in $PACKAGES; do
+            echo "::group::$package"
+            (cd "$package" && time lake test)
             echo "::endgroup::"
           done
 
