@@ -10,6 +10,7 @@ public import Lanes.Runtime.Batch
 public import Lanes.Runtime.Mailbox
 public import Lanes.Runtime.Pace
 public import Lanes.Runtime.IO.Park
+public import Lanes.Runtime.IO.Log
 
 /-!
 The runtime is a shell around the kernel: one task that takes commands from an inbox, tells the
@@ -71,6 +72,9 @@ structure Runtime.Config where
   parallel : Runtime.Parallel := .auto
   /-- What `auto` counts as worth the pool. -/
   pace : Pace.Config := {}
+  /-- Where the shard reports what goes wrong outside the system: an output handler that failed,
+  the shard stopped on an error. -/
+  log : Log.Logger := {}
 
 private abbrev Cmd (sys : System σ) :=
   Batch.Command σ (fun ids => IO.Promise (Batch.Peek sys ids)) (IO.Promise Bool)
@@ -118,10 +122,11 @@ private def wake (rt : Runtime sys) : Wake → BaseIO Unit
 private def record (rt : Runtime sys) (events : List (Event σ)) : BaseIO Unit := do
   if rt.config.record then rt.log.modify (· ++ events.toArray)
 
-private def handOver (onOutput : σ.Out → Async Unit) (outputs : List σ.Out) : Async Unit := do
+private def handOver (log : Log.Logger) (onOutput : σ.Out → Async Unit) (outputs : List σ.Out) :
+    Async Unit := do
   for out in outputs do
     try onOutput out
-    catch e => IO.eprintln s!"lanes: output handler failed: {e}"
+    catch e => log.error "output handler failed" [("error", .str (toString e))]
 
 /-- Everything that has arrived, and whether the inbox is closed. If nothing has and the
 kernel has nothing to do, the calling thread, which is the shard's own, parks until something
@@ -157,7 +162,7 @@ private def loop (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
   let (start, outputs) := Kernel.boot sys
   rt.record (outputs.map .output)
   let handOver := fun (outputs : List σ.Out) => do
-    discard <| Parker.wait (← (handOver onOutput outputs).toBaseIO)
+    discard <| Parker.wait (← (handOver rt.config.log onOutput outputs).toBaseIO)
   handOver outputs
   rt.recovered.set true
   let since := start.clock_ms
@@ -216,7 +221,7 @@ private def run (rt : Runtime sys) (onOutput : σ.Out → Async Unit) : IO Unit 
   let waiting ← IO.mkRef #[]
   let error ← (rt.loop onOutput waiting).toBaseIO
   if let .error e := error then
-    discard (IO.eprintln s!"lanes: the shard stopped on an error: {e}").toBaseIO
+    rt.config.log.error "the shard stopped on an error" [("error", .str (toString e))]
   for w in ← rt.inbox.modifyGet Mailbox.close do rt.wake w
   discard <| rt.inbox.modifyGet Mailbox.take
   for (_, done) in ← waiting.get do done.resolve false

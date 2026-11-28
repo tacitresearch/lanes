@@ -51,6 +51,7 @@ public import Lanes.Lib.Encoding.Base64
 public import Lanes.Lib.Encoding.Digits
 public import Lanes.Lib.Encoding.Json
 public import Lanes.Lib.File
+public import Lanes.Lib.Log
 public import Lanes.Lib.Metrics
 public import Lanes.Lib.Mime.MediaType
 public import Lanes.Lib.Net.Ip
@@ -97,6 +98,7 @@ public import Lanes.Proof.Monotone
 public import Lanes.Proof.Outputs
 public import Lanes.Proof.Past
 public import Lanes.Runtime.Batch
+public import Lanes.Runtime.IO.Log
 public import Lanes.Runtime.IO.Park
 public import Lanes.Runtime.IO.Shell
 public import Lanes.Runtime.Kernel

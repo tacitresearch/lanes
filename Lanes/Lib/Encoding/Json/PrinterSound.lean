@@ -635,6 +635,189 @@ theorem text_pretty (j : Json) (indent : Nat) : Text j.depth j.digits (j.pretty 
   ⟨[], _, [], by simp [pretty], nofun, nofun,
     value_prettyTo indent j 0 (Nat.le_refl _) (Nat.le_refl _)⟩
 
+/-! ### No control characters -/
+
+/-- A character that is not a control character: what a line of text may hold. -/
+def Printable (c : Char) : Prop := 0x20 ≤ c.toNat
+
+instance (c : Char) : Decidable (Printable c) := inferInstanceAs (Decidable (_ ≤ _))
+
+theorem printable_of_le {c : Char} (h : ' ' ≤ c) : Printable c := by
+  have := Char.le_def.mp h
+  rw [UInt32.le_iff_toNat_le] at this
+  exact this
+
+theorem printable_digit {c : Char} (h : IsDigit c) : Printable c :=
+  printable_of_le (Char.le_trans (by decide) h.1)
+
+theorem printable_digitChar : ∀ k < 16, Printable (Nat.digitChar k) := by
+  intro k hk
+  have := hexDigit?_digitChar k hk
+  unfold Parser.hexDigit? at this
+  split at this
+  · exact printable_of_le (Char.le_trans (by decide) (by assumption : '0' ≤ _ ∧ _).1)
+  split at this
+  · exact printable_of_le (Char.le_trans (by decide) (by assumption : 'a' ≤ _ ∧ _).1)
+  split at this
+  · exact printable_of_le (Char.le_trans (by decide) (by assumption : 'A' ≤ _ ∧ _).1)
+  · cases this
+
+theorem mem_intercalate_of {α : Type} {d : α} {sep : List α} {xs : List (List α)}
+    (h : d ∈ sep.intercalate xs) : d ∈ sep ∨ ∃ x ∈ xs, d ∈ x := by
+  cases xs with
+  | nil => simp at h
+  | cons y ys =>
+    rw [intercalate_cons_eq] at h
+    simp only [List.mem_append, List.mem_flatten, List.mem_map] at h
+    rcases h with h | ⟨_, ⟨x, hx, rfl⟩, h⟩
+    · exact .inr ⟨y, by simp, h⟩
+    · rcases List.mem_append.mp h with h | h
+      · exact .inl h
+      · exact .inr ⟨x, by simp [hx], h⟩
+
+theorem printable_escapeChar (c : Char) : ∀ d ∈ (escapeChar "" c).toList, Printable d := by
+  unfold escapeChar
+  split
+  · intro d h; simp at h; rcases h with rfl | rfl <;> decide
+  split
+  · intro d h; simp at h; rcases h with rfl | rfl <;> decide
+  split
+  · intro d h; simp at h; rcases h with rfl | rfl <;> decide
+  split
+  · intro d h; simp at h; rcases h with rfl | rfl <;> decide
+  split
+  · intro d h; simp at h; rcases h with rfl | rfl <;> decide
+  split
+  · intro d h; simp at h; rcases h with rfl | rfl <;> decide
+  split
+  · intro d h; simp at h; rcases h with rfl | rfl <;> decide
+  split
+  · rename_i h8
+    have hc : c.toNat < 32 := UInt32.lt_iff_toNat_lt.mp h8
+    intro d h
+    have e : ("".toList ++ "\\u00".toList) = ['\\', 'u', '0', '0'] := rfl
+    rw [String.toList_push, String.toList_push, String.toList_append, e] at h
+    simp only [List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil, or_false] at h
+    rcases h with rfl | rfl | rfl | rfl | rfl | rfl
+    · decide
+    · decide
+    · decide
+    · decide
+    · exact printable_digitChar _ (by omega)
+    · exact printable_digitChar _ (Nat.mod_lt _ (by decide))
+  · rename_i h8
+    intro d h
+    rw [String.toList_push] at h
+    simp only [String.toList_empty, List.nil_append, List.mem_cons, List.not_mem_nil,
+      or_false] at h
+    subst h
+    have : ¬ d.val.toNat < 32 := by simpa [UInt32.lt_iff_toNat_lt] using h8
+    simp only [Printable, Char.toNat]
+    omega
+
+theorem printable_renderString (s : String) :
+    ∀ d ∈ (renderString s "").toList, Printable d := by
+  rw [renderString_toList]
+  intro d hd
+  simp only [String.toList_empty, List.nil_append, List.mem_append, List.mem_cons,
+    List.mem_flatMap, List.not_mem_nil, or_false] at hd
+  rcases hd with (rfl | ⟨c, -, h⟩) | rfl
+  · decide
+  · exact printable_escapeChar c d h
+  · decide
+
+theorem printable_toString_int (m : Int) : ∀ d ∈ (toString m).toList, Printable d := by
+  rw [toList_toString_int]
+  intro d hd
+  simp only [List.mem_append] at hd
+  rcases hd with h | h
+  · split at h <;> simp at h; subst h; decide
+  · exact printable_digit (isDigit_of_mem_toDigits h)
+
+theorem printable_number (n : JsonNumber) : ∀ d ∈ n.toString.toList, Printable d := by
+  have digits : ∀ k, ∀ d ∈ Nat.toDigits 10 k, Printable d :=
+    fun _ _ h => printable_digit (isDigit_of_mem_toDigits h)
+  have take : ∀ m k, ∀ d ∈ (Nat.toDigits 10 k).take m, Printable d :=
+    fun _ k d h => digits k d (List.mem_of_mem_take h)
+  have drop : ∀ m k, ∀ d ∈ (Nat.toDigits 10 k).drop m, Printable d :=
+    fun _ k d h => digits k d (List.mem_of_mem_drop h)
+  have sign : ∀ d ∈ (if n.mantissa < 0 then "-" else "").toList, Printable d := by
+    intro d hd; split at hd <;> simp at hd; subst hd; decide
+  have zeros : ∀ m, ∀ d ∈ List.replicate m '0', Printable d := by
+    intro m d h; rw [List.eq_of_mem_replicate h]; decide
+  unfold JsonNumber.toString
+  split
+  · exact printable_toString_int _
+  · dsimp only
+    split
+    · simp only [String.toList_append, String.toList_ofList, List.forall_mem_append,
+        List.forall_mem_cons]
+      exact ⟨sign, take _ _, by decide, drop _ _⟩
+    · split
+      · simp only [String.toList_append, String.toList_ofList, List.forall_mem_append,
+          List.forall_mem_cons]
+        exact ⟨sign, ⟨by decide, by decide, zeros _⟩, digits _⟩
+      · simp only [String.toList_append, String.toList_ofList, List.forall_mem_append]
+        refine ⟨⟨⟨sign, take _ _, ?_⟩, by simp; decide⟩, printable_toString_int _⟩
+        split
+        · simp
+        · simp only [List.forall_mem_cons]
+          exact ⟨by decide, drop _ _⟩
+
+/-- `compress` writes no control character: every one in a string is escaped, and it writes no
+whitespace between tokens. So a value's text is one line. -/
+theorem compress_printable : (j : Json) → ∀ d ∈ (compress j).toList, Printable d
+  | .null | .bool true => by
+    intro d hd
+    simp [compress, compressTo] at hd
+    rcases hd with rfl | rfl | rfl | rfl <;> decide
+  | .bool false => by
+    intro d hd
+    simp [compress, compressTo] at hd
+    rcases hd with rfl | rfl | rfl | rfl | rfl <;> decide
+  | .num n => by
+    intro d hd
+    simp only [compress, compressTo, String.empty_append] at hd
+    exact printable_number n d hd
+  | .str s => by
+    intro d hd
+    simp only [compress, compressTo] at hd
+    exact printable_renderString s d hd
+  | .arr elems => by
+    intro d hd
+    rw [compress_arr] at hd
+    simp only [List.mem_cons, List.mem_append, List.not_mem_nil, or_false] at hd
+    rcases hd with (rfl | h) | rfl
+    · decide
+    · rcases mem_intercalate_of h with h | ⟨_, h, hx⟩
+      · simp at h; subst h; decide
+      · simp only [List.mem_map] at h
+        obtain ⟨e, he, rfl⟩ := h
+        have := Array.sizeOf_lt_of_mem (Array.mem_toList_iff.mp he)
+        exact compress_printable e d hx
+    · decide
+  | .obj fields => by
+    intro d hd
+    rw [compress_obj] at hd
+    simp only [List.mem_cons, List.mem_append, List.not_mem_nil, or_false] at hd
+    rcases hd with (rfl | h) | rfl
+    · decide
+    · rcases mem_intercalate_of h with h | ⟨_, h, hx⟩
+      · simp at h; subst h; decide
+      · simp only [List.mem_map] at h
+        obtain ⟨f, hf, rfl⟩ := h
+        simp only [List.mem_append, List.mem_cons] at hx
+        rcases hx with h | rfl | h
+        · exact printable_renderString f.1 d h
+        · decide
+        · have := sizeOf_field_lt (Array.mem_toList_iff.mp hf)
+          exact compress_printable f.2 d h
+    · decide
+termination_by j => j
+decreasing_by
+  · simp only [arr.sizeOf_spec]; omega
+  · simp only [obj.sizeOf_spec]; omega
+
 /-- A `String` is valid UTF-8 by construction, so the printers' output is too, for every value. -/
 theorem fromUTF8?_compress (j : Json) :
     String.fromUTF8? (compress j).toByteArray = some (compress j) :=

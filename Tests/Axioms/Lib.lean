@@ -171,6 +171,19 @@ import Lanes.Semantics
 /-- info: 'Lanes.Json.ofScientific_mantissa' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Json.ofScientific_mantissa
 
+/-- info: 'Lanes.Json.compress_printable' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Json.compress_printable
+
+-- Lanes.Lib.LogSound
+/-- info: 'Lanes.Log.render_printable' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Log.render_printable
+
+/-- info: 'Lanes.Log.render_oneLine' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Log.render_oneLine
+
+/-- info: 'Lanes.Log.parse_render' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Log.parse_render
+
 -- Lanes.Lib.Metrics
 /-- info: 'Lanes.Metrics.Histogram.observeAll_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Metrics.Histogram.observeAll_eq

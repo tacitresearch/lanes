@@ -59,6 +59,7 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Lib/Encoding/Json/Grammar.lean` | | RFC 8259's grammar, the spec the parser and printers are proved against; JSONTestSuite (`Tests/Json.lean`) |
 | `Lanes/Lib/Encoding/Json/Parser.lean` | `oracles/go/json` | |
 | `Lanes/Lib/Encoding/Json/Printer.lean` | `oracles/go/json` | Go parses what the printer writes in the parser's cases; proved to read back (`Json.parse_compress`) |
+| `Lanes/Lib/Log.lean` | | Proved one line of JSON text that the parser reads back as the record (`Log.render_oneLine`, `Log.parse_render`); its fields in `slog`'s order checked by hand (`Tests/Log.lean`) |
 | `Lanes/Lib/Metrics.lean` | `oracles/go/expfmt` | |
 | `Lanes/Lib/Mime/MediaType.lean` | `oracles/go/mime` | |
 | `Lanes/Lib/Net/Ip.lean` | `oracles/go/netip` | |
