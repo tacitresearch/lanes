@@ -775,17 +775,17 @@ them by area.
 | `Journal.named?` | proved | `Journal.Disk.start_foreign` |
 | `Journal.file` | proved | `Journal.Disk.load_cut`, `Journal.open?_cut`, `Journal.open?_file` |
 | `Journal.open?` | proved | `Journal.Disk.open?_of_read`, `Journal.open?_cut`, `Journal.open?_file` |
-| `Journal.Entry.op?` | proved | through `Journal.ops`: `Journal.recover_handed`, `Journal.recover_kernel` and others |
-| `Journal.Entry.marks` | spec | used only in statements |
+| `Journal.Entry.op?` | proved | through `Batch.flush`, `Batch.grown` and others: `Batch.flush_save`, `Batch.grown_eq` and others |
+| `Journal.Entry.marks` | proved | `Journal.recoverIds_handed`, `Journal.recover_handed` |
 | `Journal.ops` | proved | `Journal.recover_handed`, `Journal.recover_kernel`, `Journal.recover_outputs` and others |
 | `Journal.replay1` | proved | through `Journal.Begun.toFound`, `Journal.recover` and others: `Journal.Begun.resume_upgraded`, `Journal.Disk.Holds.load_append_crash` and others |
 | `Journal.recover` | proved | `Journal.Disk.load_cut`, `Journal.Upgrade.begin_crash`, `Journal.Upgrade.begin_torn` and others |
 | `Journal.replay` | proved | `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save` and others |
 | `Journal.Entry.savedAt` | proved | `Journal.Disk.Holds.append`, `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash` and others |
 | `Journal.since` | proved | through `Journal.Begun.load`, `Journal.Begun.toFound` and others: `Journal.Begun.resume_upgraded`, `Journal.Upgrade.begin_crash` and others |
-| `Journal.resume` | proved | `Journal.Begun.resume_upgraded`, `Journal.resume_eq_recover`, `Journal.resume_eq_replay` |
-| `Journal.turn` | proved | through `Journal.turns`: `Journal.turns_kernel` |
-| `Journal.turnAll` | proved | `Journal.turnAll_eq_exec`, `Journal.turnAll_spread` |
+| `Journal.resume` | proved | `Journal.Begun.resume_upgraded`, `Journal.resumeIds_erase`, `Journal.resume_eq_recover` and others |
+| `Journal.turn` | proved | `Journal.turn_placed` |
+| `Journal.turnAll` | proved | `Journal.turnAll_eq_exec`, `Journal.turnAll_placed`, `Journal.turnAll_spread` |
 | `Journal.turns` | spec | used only in statements |
 
 ## `Lanes/Durable/Migration.lean`
@@ -796,6 +796,23 @@ them by area.
 | `Migration.envelope` | proved | through `Migration.kernel`: `Journal.Upgrade.begin_crash`, `Journal.Upgrade.inv_load` and others |
 | `Migration.image` | proved | through `Migration.kernel`: `Journal.Upgrade.begin_crash`, `Journal.Upgrade.inv_load` and others |
 | `Migration.kernel` | proved | `Journal.Upgrade.begin_crash`, `Journal.Upgrade.inv_load`, `Migration.cell_kernel` and others |
+
+## `Lanes/Durable/OutputId.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Journal.Origin.before` | spec | used only in statements |
+| `Journal.OutputId.key` | checked | `Tests/HttpClient.lean` |
+| `Journal.journalId` | tested | `Tests/Durable.lean` |
+| `Journal.tag` | proved | `Journal.turnAll_placed`, `Journal.turn_placed` |
+| `Journal.apply?` | proved | through `Journal.ids`, `Journal.placed` and others: `Batch.run_ids`, `Journal.ids_append` and others |
+| `Journal.steps` | spec | used only in statements |
+| `Journal.placed` | spec | used only in statements |
+| `Journal.replayIds1` | proved | through `Journal.recoverIds`, `Journal.resumeIds`: `Journal.recoverIds_erase`, `Journal.recoverIds_handed` and others |
+| `Journal.ids` | spec | used only in statements |
+| `Journal.recoverIds` | proved | `Journal.recoverIds_erase`, `Journal.recoverIds_handed`, `Journal.recoverIds_suffix` and others |
+| `Journal.resumeIds` | proved | `Journal.resumeIds_eq_recoverIds`, `Journal.resumeIds_erase` |
+| `Journal.erase` | spec | used only in statements |
 
 ## `Lanes/Durable/Reading.lean`
 
@@ -827,6 +844,8 @@ them by area.
 | `Journal.Upgrade.upgraded` | proved | `Journal.Upgrade.begin_crash`, `Journal.Upgrade.begin_torn`, `Journal.Upgrade.start_torn` |
 | `Journal.Upgrade.start` | proved | `Journal.Upgrade.start_torn` |
 | `Journal.Disk.begin` | proved | `Journal.Upgrade.begin_crash`, `Journal.Upgrade.begin_torn` |
+| `Journal.Upgrade.owed` | tested | `Tests/Durable.lean` |
+| `Journal.Upgrade.label` | proved | `Journal.Upgrade.label_snd` |
 | `Journal.Begun.load` | spec | used only in statements |
 | `Journal.Begun.toFound` | proved | `Journal.Begun.resume_upgraded` |
 | `Journal.Upgrade.past` | spec | used only in statements |
@@ -2083,20 +2102,26 @@ them by area.
 | --- | --- | --- |
 | `Batch.due` | proved | `Batch.due_iff`, `Batch.flush_save` |
 | `Batch.put` | proved | `Batch.flush_save` |
+| `Batch.Act.steps` | spec | used only in statements |
+| `Batch.history` | spec | used only in statements |
+| `Batch.Act.grows` | proved | through `Batch.flush`, `Batch.grown` and others: `Batch.flush_save`, `Batch.grown_eq` and others |
+| `Batch.grown` | proved | `Batch.grown_eq` |
 | `Batch.workWith` | proved | through `Batch.flush`, `Batch.run` and others: `Batch.flush_save`, `Batch.run_handed` and others |
-| `Batch.work` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_kernel` and others |
-| `Batch.workAll` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_kernel` and others |
+| `Batch.work` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_ids` and others |
+| `Batch.workAll` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_ids` and others |
 | `Batch.flush` | proved | `Batch.flush_save` |
-| `Batch.scan` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_kernel` and others |
-| `Batch.finish` | proved | through `Batch.run`: `Batch.run_handed`, `Batch.run_kernel` and others |
+| `Batch.scan` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_ids` and others |
+| `Batch.finish` | proved | through `Batch.run`: `Batch.run_handed`, `Batch.run_ids` and others |
 | `Batch.group` | proved | `Batch.group_ins` |
 | `Batch.Command.ins` | spec | used only in statements |
-| `Batch.run` | proved | `Batch.run_handed`, `Batch.run_kernel`, `Batch.run_peek` and others |
-| `Batch.Act.ops` | proved | through `Batch.journal`: `Batch.run_handed`, `Batch.run_kernel` and others |
-| `Batch.Act.outputs` | proved | through `Batch.handed`: `Batch.run_handed` |
+| `Batch.run` | proved | `Batch.run_handed`, `Batch.run_ids`, `Batch.run_ids_spread` and others |
+| `Batch.Act.ops` | proved | through `Batch.journal`: `Batch.history_ops`, `Batch.run_handed` and others |
+| `Batch.Act.outputs` | proved | through `Batch.handed`, `Batch.handedIds`: `Batch.run_handed`, `Batch.run_ids` and others |
+| `Batch.Act.placed` | spec | used only in statements |
 | `Batch.Act.events` | proved | through `Batch.recorded`: `Batch.run_handed` |
-| `Batch.journal` | proved | `Batch.run_handed`, `Batch.run_kernel`, `Batch.settle_kernel` |
+| `Batch.journal` | proved | `Batch.history_ops`, `Batch.run_handed`, `Batch.run_kernel` and others |
 | `Batch.handed` | proved | `Batch.run_handed` |
+| `Batch.handedIds` | spec | used only in statements |
 | `Batch.recorded` | proved | `Batch.run_handed` |
 | `Batch.Act.Sound` | spec | a predicate |
 | `Batch.Sound` | spec | a predicate |
@@ -2139,13 +2164,13 @@ them by area.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Kernel.cell` | proved | `Batch.run_peek`, `Journal.Upgrade.inv_load`, `Kernel.Plan.fixAll_local` and others |
-| `Kernel.setCell` | proved | through `Kernel.apply`, `Kernel.boot` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
+| `Kernel.setCell` | proved | through `Journal.ids`, `Kernel.apply` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
 | `Kernel.abs` | proved | `Kernel.WellFormed.quiet_iff`, `Kernel.WellFormed.wait_forever`, `Kernel.abs_boot` and others |
 | `Kernel.env` | proved | `Kernel.abs_boot`, `Kernel.accept_sound`, `Kernel.exec_reachable` and others |
-| `Kernel.unschedule` | proved | through `Kernel.apply`, `Kernel.boot` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
-| `Kernel.perform` | proved | through `Kernel.apply`, `Kernel.boot` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
-| `Kernel.performAll` | proved | through `Kernel.apply`, `Kernel.boot` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
-| `Kernel.down` | proved | through `Kernel.apply`, `Kernel.boot` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
+| `Kernel.unschedule` | proved | through `Journal.ids`, `Kernel.apply` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
+| `Kernel.perform` | proved | through `Journal.ids`, `Kernel.apply` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
+| `Kernel.performAll` | proved | through `Journal.ids`, `Kernel.apply` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
+| `Kernel.down` | proved | through `Journal.ids`, `Kernel.apply` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
 | `Kernel.settle` | proved | `Kernel.setState_settle` |
 | `Kernel.rest` | proved | through `Kernel.apply`, `Kernel.exec` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
 | `Kernel.takeState` | proved | through `Kernel.apply`, `Kernel.exec` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
@@ -3325,6 +3350,8 @@ them by area.
 | `Http.Client.fetch` | trusted | TRUSTED.md: The HTTP client adapter's handler |
 | `Http.Client.events` | trusted | TRUSTED.md: The HTTP client adapter's handler |
 | `Http.Client.handler` | trusted | TRUSTED.md: The HTTP client adapter's handler |
+| `Http.Client.Call.keyed` | trusted | TRUSTED.md: The HTTP client adapter's handler |
+| `Http.Client.handlerKeyed` | trusted | TRUSTED.md: The HTTP client adapter's handler |
 
 ## `Lanes/Web/IO/Ops.lean`
 
