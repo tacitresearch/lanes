@@ -500,7 +500,7 @@ a refinement check means every run's inputs and outputs are a trace of the spec
 (`Check.refines_sound`, `Check.refines_traces`). Under D45 a PASS finds bugs; the claim rests on a
 theorem.
 
-Two other searches reach further (`docs/decisions/new-checker-scale.md`). `Check.fingerprint`
+Two other searches reach further (`docs/decisions/D92-checker-scale.md`). `Check.fingerprint`
 (`Lanes/Check/Fingerprint.lean`) keeps a hash of each state instead of the state: what it reports
 replays and is checked again (`Check.fingerprint_violated`, `Check.systemFingerprinted_violated`),
 but a pass is not exhaustive, and the report says it was fingerprinted. `Check.systemReduced`

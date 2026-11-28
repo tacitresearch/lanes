@@ -153,7 +153,7 @@ API. P1 is common, P2 rare.
 | `crypto/fips140` | d | Go's FIPS mode |
 
 OpenSSL is the one library: Lean's toolchain ships it and links it into every executable, so an
-application installs nothing (`docs/decisions/new-one-crypto-library.md`). Bindings are tested against Project Wycheproof's vectors
+application installs nothing (`docs/decisions/D95-one-crypto-library.md`). Bindings are tested against Project Wycheproof's vectors
 and the RFCs' own.
 
 ## Operating system, time and runtime
