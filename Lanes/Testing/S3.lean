@@ -15,7 +15,8 @@ presigned link, with its expiry. A request not signed so is refused as S3 refuse
 SignatureDoesNotMatch`. It answers `PUT`, `GET` (with a range), `HEAD`, `DELETE` and
 ListObjectsV2. It takes a browser's `POST` form only with its policy's signature, before its
 expiry, with every condition met and every field named, and refuses as S3 does
-(`EntityTooLarge`, `EntityTooSmall`, `AccessDenied`). It takes multipart uploads with S3's part
+(`EntityTooLarge`, `EntityTooSmall`, `AccessDenied`), and answers one it takes with the redirect
+or the status the form names (`uploaded`). It takes multipart uploads with S3's part
 sizes, part order and ETags, and answers a Complete made twice the same. `Fake.refuse n` has it
 answer the next `n` signed requests `503 SlowDown`, as S3 does under load, so that a test can
 see a retry. `follow` fetches a link as a browser does, with no credentials, and `postForm`
@@ -248,6 +249,26 @@ def formBody (boundary : String) (fields : List (String × String)) (filename : 
 /-- An object's ETag, as S3 makes one put whole: the MD5 of its body. -/
 def etag (body : ByteArray) : String := "\"" ++ Bytes.hex (Md5.hash body) ++ "\""
 
+/-- What S3 answers an upload it took, as the form asks: a `303` to `success_action_redirect`
+with the bucket, the key and the ETag added to its query; else the status
+`success_action_status` names, `201` with a document that names the object, `200`, or `204`,
+which it answers to any other value or none. -/
+def uploaded (fields : List (String × String)) (bucket key etag : String) : ByteArray :=
+  let located := [("ETag", etag), ("Location", s!"/{bucket}/{key}")]
+  match Post.lookup fields "success_action_redirect" with
+  | some url =>
+    let query := Url.encodeQuery [("bucket", bucket), ("key", key), ("etag", etag)]
+    answer 303 [("Location", url ++ (if url.contains '?' then "&" else "?") ++ query)] .empty
+  | none =>
+    match Post.lookup fields "success_action_status" with
+    | some "200" => answer 200 located .empty
+    | some "201" =>
+      answer 201 (("Content-Type", "application/xml") :: located)
+        ("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<PostResponse><Location>/" ++ bucket ++ "/"
+          ++ Xml.escape key ++ "</Location><Bucket>" ++ bucket ++ "</Bucket><Key>"
+          ++ Xml.escape key ++ "</Key><ETag>" ++ Xml.escape etag ++ "</ETag></PostResponse>").toUTF8
+    | _ => answer 204 located .empty
+
 /-- What the fake answers a form posted to `bucket` at `now_s`, and the objects after. -/
 def servePost (creds : SigV4.Credentials) (bucket : String) (now_s : Int) (objects : Objects)
     (r : Raw) : ByteArray × Objects :=
@@ -277,7 +298,7 @@ def servePost (creds : SigV4.Credentials) (bucket : String) (now_s : Int) (objec
             match Post.check d bucket fields file.value.size now_s, Post.lookup fields "key" with
             | .ok (), some k =>
               let type := (Post.lookup fields "content-type").getD "binary/octet-stream"
-              (answer 204 [("ETag", etag file.value), ("Location", s!"/{bucket}/{k}")] .empty,
+              (uploaded fields bucket k (etag file.value),
                 (k, file.value, type) :: objects.filter (·.1 != k))
             | .error (.unmet (.length _ max)), _ =>
               if file.value.size > max then refuse 400 "EntityTooLarge" else refuse 400 "EntityTooSmall"

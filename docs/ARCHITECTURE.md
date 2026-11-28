@@ -336,7 +336,8 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   exactly the conditions and the expiry given (`S3.Post.form_policy`, `S3.Post.expiration_parse`),
   and a file S3 admits under it is within its size range and before its expiry
   (`S3.Post.admitted_bounded`); tested against AWS's documented example and botocore, and its
-  forms posted to moto, which reads them but checks no policy. Large
+  forms posted to moto, which reads them but checks no policy. A form may also name where S3
+  sends the browser after the upload, or the status it answers, both signed in its policy. Large
   objects go in parts (`Lanes/Web/S3/Multipart.lean`): a plan proved to cut a body into at most
   10,000 parts, each but the last of at least 5 MiB, together the body in order
   (`Plan.count_le`, `Plan.range_full`, `Plan.range_next`, `Plan.range_last`); links for a
