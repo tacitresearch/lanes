@@ -75,15 +75,30 @@ def right (w : Wiring σ τ) (a : System σ) {j : τ.Id} :
 
 end Wiring
 
+/-- The sender as one side of a join sees it: an actor of that side, or, for an actor of the
+other side, whose messages the wiring hands over as inputs, the outside. -/
+def Sender.left {α β : Type} : Sender (α ⊕ β) → Sender α
+  | .actor (.inl i) => .actor i
+  | .actor (.inr _) => .outside
+  | .outside => .outside
+  | .timer => .timer
+
+def Sender.right {α β : Type} : Sender (α ⊕ β) → Sender β
+  | .actor (.inr j) => .actor j
+  | .actor (.inl _) => .outside
+  | .outside => .outside
+  | .timer => .timer
+
 /-- `a` and `b` as one system. An output that `w` routes to the other side is delivered as a
 message to the actor that side's `accept` names; what a join preserves is proved in
-`Lanes/Proof/JoinSound.lean`. -/
+`Lanes/Proof/JoinSound.lean`. Each side's actors are told their senders as that side sees them
+(`Sender.left`, `Sender.right`). -/
 abbrev System.join (a : System σ) (b : System τ) (w : Wiring σ τ := {}) :
     System (joinSig σ τ) where
   State := JoinState a b
   actor
-    | .inl i => (a.actor i).mapEff fun eff => [w.left b eff]
-    | .inr j => (b.actor j).mapEff fun eff => [w.right a eff]
+    | .inl i => ((a.actor i).mapSrc Sender.left).mapEff fun eff => [w.left b eff]
+    | .inr j => ((b.actor j).mapSrc Sender.right).mapEff fun eff => [w.right a eff]
   accept
     | .inl x => ⟨.inl (a.accept x).1, (a.accept x).2⟩
     | .inr y => ⟨.inr (b.accept y).1, (b.accept y).2⟩

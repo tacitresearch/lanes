@@ -52,17 +52,19 @@ theorem World.Equiv.next [Enum σ.Id] [BEq D] {sc : Scenario σ D} (hresp : sc.d
     {a b a' : World sys D} {ev : Event σ} (h : World.Equiv sc.env a b)
     (hmem : (ev, a') ∈ a.next sc) : ∃ b', (ev, b') ∈ b.next sc ∧ World.Equiv sc.env a' b' := by
   obtain ⟨hstate, hdriver, hcrashes, hrestarts⟩ := h
-  simp only [World.next, List.mem_append, List.mem_filterMap] at hmem ⊢
-  rcases hmem with ⟨⟨ev₀, c⟩, hsucc, hsome⟩ | ⟨⟨x, d⟩, hinput, hsome⟩
-  · obtain ⟨hstep, hnotInput⟩ := SysState.mem_successors_iff.mp hsucc
+  simp only [World.next, List.mem_append, List.mem_filterMap, List.mem_map, List.mem_filter]
+    at hmem ⊢
+  rcases hmem with (⟨⟨ev₀, c⟩, hsucc, hsome⟩ | ⟨⟨x, d⟩, hinput, hsome⟩) | ⟨m, ⟨hm, hlater⟩, hsome⟩
+  · obtain ⟨hstep, hnotInput, hnotTick⟩ := SysState.mem_successors_iff.mp hsucc
     obtain ⟨c₂, hstep₂, hequiv⟩ := hstate.step hstep
-    have hsucc₂ := SysState.mem_successors_iff.mpr ⟨hstep₂, hnotInput⟩
+    have hsucc₂ := SysState.mem_successors_iff.mpr ⟨hstep₂, hnotInput, hnotTick⟩
     cases ev₀ with
     | input x => exact absurd rfl (hnotInput x)
+    | tick m => exact absurd rfl (hnotTick m)
     | output out =>
       simp only [Option.some.injEq, Prod.mk.injEq] at hsome
       obtain ⟨rfl, rfl⟩ := hsome
-      exact ⟨_, .inl ⟨(_, c₂), hsucc₂, rfl⟩, by simpa using hequiv,
+      exact ⟨_, .inl (.inl ⟨(_, c₂), hsucc₂, rfl⟩), by simpa using hequiv,
         hresp.observe _ _ out hdriver, hcrashes, hrestarts⟩
     | crash i =>
       simp only at hsome
@@ -70,7 +72,7 @@ theorem World.Equiv.next [Enum σ.Id] [BEq D] {sc : Scenario σ D} (hresp : sc.d
       · next hbudget =>
         simp only [Option.some.injEq, Prod.mk.injEq] at hsome
         obtain ⟨rfl, rfl⟩ := hsome
-        refine ⟨_, .inl ⟨(_, c₂), hsucc₂, by simp [← hcrashes, hbudget]; rfl⟩, ?_⟩
+        refine ⟨_, .inl (.inl ⟨(_, c₂), hsucc₂, by simp [← hcrashes, hbudget]; rfl⟩), ?_⟩
         exact ⟨by simpa using hequiv, hdriver, by simp [hcrashes], hrestarts⟩
       · exact absurd hsome (by simp)
     | restart =>
@@ -79,29 +81,34 @@ theorem World.Equiv.next [Enum σ.Id] [BEq D] {sc : Scenario σ D} (hresp : sc.d
       · next hbudget =>
         simp only [Option.some.injEq, Prod.mk.injEq] at hsome
         obtain ⟨rfl, rfl⟩ := hsome
-        refine ⟨_, .inl ⟨(_, c₂), hsucc₂, by simp [← hrestarts, hbudget]; rfl⟩, ?_⟩
+        refine ⟨_, .inl (.inl ⟨(_, c₂), hsucc₂, by simp [← hrestarts, hbudget]; rfl⟩), ?_⟩
         exact ⟨by simpa using hequiv, hdriver, hcrashes, by simp [hrestarts]⟩
       · exact absurd hsome (by simp)
     | timeout i msg =>
       simp only [Option.some.injEq, Prod.mk.injEq] at hsome
       obtain ⟨rfl, rfl⟩ := hsome
-      exact ⟨_, .inl ⟨(_, c₂), hsucc₂, rfl⟩, by simpa using hequiv,
+      exact ⟨_, .inl (.inl ⟨(_, c₂), hsucc₂, rfl⟩), by simpa using hequiv,
         hresp.timeout _ _ i msg hdriver, hcrashes, hrestarts⟩
     | deliver e | duplicate e =>
       simp only [Option.some.injEq, Prod.mk.injEq] at hsome
       obtain ⟨rfl, rfl⟩ := hsome
-      exact ⟨_, .inl ⟨(_, c₂), hsucc₂, rfl⟩, by simpa using hequiv,
+      exact ⟨_, .inl (.inl ⟨(_, c₂), hsucc₂, rfl⟩), by simpa using hequiv,
         hresp.deliver _ _ e.dst e.msg hdriver, hcrashes, hrestarts⟩
     | drop e | start i =>
       simp only [Option.some.injEq, Prod.mk.injEq] at hsome
       obtain ⟨rfl, rfl⟩ := hsome
-      exact ⟨_, .inl ⟨(_, c₂), hsucc₂, rfl⟩, by simpa using hequiv, hdriver, hcrashes,
+      exact ⟨_, .inl (.inl ⟨(_, c₂), hsucc₂, rfl⟩), by simpa using hequiv, hdriver, hcrashes,
         hrestarts⟩
   · simp only [Option.map_eq_some_iff, Prod.mk.injEq] at hsome
     obtain ⟨c, hstep, rfl, rfl⟩ := hsome
     obtain ⟨c₂, hstep₂, hequiv⟩ := hstate.step hstep
     obtain ⟨d₂, hinput₂, hd⟩ := hresp.inputs _ _ hdriver x d hinput
-    refine ⟨_, .inr ⟨(x, d₂), hinput₂, by simp [hstep₂]; rfl⟩, ?_⟩
+    refine ⟨_, .inl (.inr ⟨(x, d₂), hinput₂, by simp [hstep₂]; rfl⟩), ?_⟩
     exact ⟨by simpa using hequiv, hd, hcrashes, hrestarts⟩
+  · simp only [Prod.mk.injEq] at hsome
+    obtain ⟨rfl, rfl⟩ := hsome
+    refine ⟨_, .inr ⟨m, ⟨hm, by rw [← hstate.clock]; exact hlater⟩, rfl⟩, ?_⟩
+    exact ⟨⟨hstate.state, hstate.up, hstate.timers, hstate.net, hstate.outbox, rfl⟩, hdriver,
+      hcrashes, hrestarts⟩
 
 end Lanes

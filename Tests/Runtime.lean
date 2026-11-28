@@ -451,6 +451,158 @@ def fanTest : Async (List (String × Bool)) := do
     ("free: each actor's outputs are those of one worker, in order",
       out.size == 20 * 16 + 300 && (List.finRange 17).all fun i => byActor out i == byActor serialOut i) ]
 
+/-! The step context: each step is told the time, a seed and who sent its message, and the trace
+replays. -/
+
+abbrev ctxSig : Signature where
+  Id := Fin 2
+  Msg _ := Nat
+  In := Nat
+  Out := Nat × UInt64 × Bool
+
+/-- Actor 0 passes each input on to actor 1, which emits the time, the seed and whether the
+message is from actor 0. -/
+abbrev ctxSystem : System ctxSig where
+  State _ := Unit
+  actor i := {
+    init := ()
+    stepAt := fun ctx s n =>
+      if i = 0 then (s, [.send 1 n])
+      else (s, [.emit (ctx.now_ms, ctx.seed, ctx.src == .actor 0)]) }
+  accept x := ⟨0, x⟩
+
+def wallMs : IO Nat :=
+  return (← Std.Time.Timestamp.now).toMillisecondsSinceUnixEpoch.toInt.toNat
+
+def contextTest : Async (List (String × Bool)) := do
+  let outputs ← IO.mkRef #[]
+  let before ← wallMs
+  let rt ← Runtime.start ctxSystem { workers := 2, record := true }
+    (fun out => outputs.modify (·.push out))
+  for n in List.range 20 do rt.input n
+  rt.idle
+  let replayed := (← replay ctxSystem rt).isSome
+  rt.stop
+  let after ← wallMs
+  let outs ← outputs.get
+  return [
+    ("context: a step is told the wall clock's time",
+      outs.size == 20 && outs.all fun (now, _, _) => before ≤ now + 1000 && now ≤ after + 1000),
+    ("context: a step is told who sent its message", outs.all fun (_, _, fromActor) => fromActor),
+    ("context: the seeds differ", (outs.map (·.2.1)).toList.eraseDups.length > 1),
+    ("context: the trace, with a tick before each step, is a run of the semantics", replayed) ]
+
+/-- A step that runs past `stepLimitMs` is handed to `onStuck`, once, and the runtime goes on. -/
+def watchdogTest : Async (List (String × Bool)) := do
+  let stuck ← IO.mkRef #[]
+  let rt ← Runtime.start fan
+    { workers := 2, stepLimitMs := 20, onStuck := fun s => stuck.modify (·.push s) }
+  rt.input (1, 60000000)
+  rt.idle
+  rt.stop
+  let reports ← stuck.get
+  return [
+    ("watchdog: a step that runs past the limit is reported once, as a delivery",
+      reports.size == 1 && reports.all fun s => s.kind == "deliver" && s.elapsed_ms > 20) ]
+
+/-! The mail between actors (`docs/decisions/new-runtime-limits.md`). A hub fans each input out
+to a sink, whose first output the handler holds until released: while it is held, the sink's
+mail cannot drain, so what the runtime does at the high-water mark is not a matter of timing. -/
+
+abbrev spreadSig : Signature where
+  Id := Fin 2
+  Msg _ := Nat
+  In := Nat
+  Out := Nat
+
+/-- Actor 0 sends `n` messages to actor 1 on input `n`; actor 1 counts them and puts out the
+count on the first. -/
+abbrev spread : System spreadSig where
+  State _ := Nat
+  actor i := {
+    init := 0
+    step := fun s n =>
+      if i = 0 then (s, List.replicate n (.send 1 0))
+      else (s + 1, if s = 0 then [.emit 0] else []) }
+  accept n := ⟨0, n⟩
+
+/-- Poll `ready` every millisecond, for at most `ms` milliseconds. -/
+def waitFor (ms : Nat) (ready : BaseIO Bool) : IO Bool := do
+  for _ in [0:ms] do
+    if ← ready then return true
+    IO.sleep 1
+  ready
+
+def highWaterTest : Async (List (String × Bool)) := do
+  let entered ← IO.Promise.new
+  let release ← IO.Promise.new
+  let rt ← Runtime.start spread { workers := 2, mailHighWater := 100, record := true } fun _ => do
+    entered.resolve ()
+    await release
+  rt.input 1
+  await entered
+  rt.input 150
+  let high ← waitFor 5000 do return (← rt.mail) ≥ 150
+  let refused := !(← rt.tryInput 1)
+  let depth ← rt.depth
+  let waiter ← IO.Promise.new
+  background do
+    rt.input 2
+    waiter.resolve ()
+  IO.sleep 50
+  let waited := (← IO.getTaskState waiter.result?) != .finished
+  release.resolve ()
+  let woken := (← soon 10000 (await waiter)).isSome
+  rt.idle
+  let replayed ← replay spread rt
+  rt.stop
+  return [
+    ("mail: at the high-water mark, an inbox with room takes no input", high && refused && depth == 0),
+    ("mail: input waits while the mail is at the mark, and is taken once it falls below",
+      waited && woken),
+    ("mail: every message of the fan-out arrives, and the trace is a run of the semantics",
+      match replayed with
+      | some c => c.state 1 == 153
+      | none => false) ]
+
+def overflowTest : Async (List (String × Bool)) := do
+  let reports ← IO.mkRef #[]
+  let rt ← Runtime.start spread
+    { workers := 2, mailCapacity := 120, onOverflow := fun o => reports.modify (·.push o) }
+  rt.input 150
+  rt.idle
+  let delivered := (← rt.state 1) == 150
+  rt.stop
+  let reports ← reports.get
+  return [
+    ("mail: a step that sends past the capacity is reported, with the mail it left",
+      reports.size == 1 && reports.all fun o => o.mail ≥ 150),
+    ("mail: a handler that returns lets the runtime go on, and nothing is lost", delivered) ]
+
+abbrev runawaySig : Signature where
+  Id := Unit
+  Msg _ := Unit
+  In := Unit
+
+/-- Each message sends two more. -/
+abbrev runaway : System runawaySig where
+  State _ := Unit
+  actor _ := { init := (), step := fun s _ => (s, [.send () (), .send () ()]) }
+  accept _ := ⟨(), ()⟩
+
+def runawayTest : Async (List (String × Bool)) := do
+  let reports ← IO.mkRef #[]
+  let rt ← Runtime.start runaway
+    { workers := 2, mailHighWater := 500, mailCapacity := 1000
+      onOverflow := fun o => reports.modify (·.push o) }
+  rt.input ()
+  let reported ← waitFor 10000 do return !(← reports.get).isEmpty
+  let refused := !(← rt.tryInput ())
+  rt.stop
+  return [
+    ("mail: actors that send each other more than they take are reported past the capacity, and "
+      ++ "take no input", reported && refused) ]
+
 /-- A parker: an `unpark` before the `park` is kept, a timed park ends, a task and an `Async`
 are waited for on one. -/
 def parkerTest : IO (List (String × Bool)) := do
@@ -491,6 +643,7 @@ def tests : IO (List (String × Bool)) := do
   let w ← shaped "on 4 workers" { workers := 4 }
   let u ← shaped "on 2 workers, a budget of 1" { workers := 2, budget := 1 }
   return a ++ b ++ c ++ d ++ e ++ f ++ g ++ h ++ i ++ j ++ w ++ u ++ (← dutiesTest.block)
-    ++ (← fanTest.block) ++ (← parkerTest)
+    ++ (← fanTest.block) ++ (← contextTest.block) ++ (← watchdogTest.block) ++ (← parkerTest)
+    ++ (← highWaterTest.block) ++ (← overflowTest.block) ++ (← runawayTest.block)
 
 end Tests.Runtime

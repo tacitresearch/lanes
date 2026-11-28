@@ -86,6 +86,7 @@ structure Released (a b : SysState sys) : Prop where
   actor : ∀ i, Same a b i ∨ Asleep a b i
   net : b.net = a.net
   outbox : b.outbox = a.outbox
+  clock : b.clock = a.clock
 
 /-- Actor `i` down at its initial state, with no timers: as if nobody had written to it. -/
 def release (c : SysState sys) (i : σ.Id) : SysState sys :=
@@ -103,7 +104,7 @@ theorem perform_up (c : SysState sys) (i : σ.Id) (eff : Effect σ i) :
 
 namespace Released
 
-theorem refl (a : SysState sys) : Released a a := ⟨fun i => .inl (Same.refl a i), rfl, rfl⟩
+theorem refl (a : SysState sys) : Released a a := ⟨fun i => .inl (Same.refl a i), rfl, rfl, rfl⟩
 
 theorem same (h : Released a b) (hup : b.up i = a.up i) : Same a b i :=
   (h.actor i).elim id fun hi => by
@@ -118,7 +119,7 @@ theorem same_of_down (h : Released a b) (hdown : a.up i = false) : Same a b i :=
   (h.actor i).elim id fun hi => by rw [hi.up] at hdown; cases hdown
 
 theorem trans (h₁ : Released a b) (h₂ : Released b c) : Released a c := by
-  refine ⟨fun i => ?_, h₂.net.trans h₁.net, h₂.outbox.trans h₁.outbox⟩
+  refine ⟨fun i => ?_, h₂.net.trans h₁.net, h₂.outbox.trans h₁.outbox, h₂.clock.trans h₁.clock⟩
   rcases h₁.actor i with ⟨hs, hu, ht⟩ | h₁i <;> rcases h₂.actor i with h₂i | h₂i
   · exact .inl (Same.trans ⟨hs, hu, ht⟩ h₂i)
   · exact .inr ⟨hu.symm.trans h₂i.up, by rw [← hs]; exact h₂i.fresh, ht.symm.trans h₂i.timers,
@@ -133,7 +134,7 @@ theorem trans (h₁ : Released a b) (h₂ : Released b c) : Released a c := by
 /-- Releasing one more actor at rest. -/
 theorem release (h : Released a b) (hup : b.up i = true) (htimers : b.timers i = [])
     (hfresh : (sys.actor i).fresh (b.state i) = true) : Released a (b.release i) := by
-  refine h.trans ⟨fun j => ?_, rfl, rfl⟩
+  refine h.trans ⟨fun j => ?_, rfl, rfl, rfl⟩
   by_cases hj : j = i
   · subst hj
     exact .inr ⟨hup, hfresh, htimers, by simp [SysState.release], by simp [SysState.release],
@@ -144,8 +145,9 @@ theorem release (h : Released a b) (hup : b.up i = true) (htimers : b.timers i =
 /-- A change to actor `i`, the net and the outbox, the same on both sides. -/
 theorem modify (h : Released a b) (i : σ.Id) (hi : Same a' b' i)
     (ha : ∀ j, j ≠ i → Same a a' j) (hb : ∀ j, j ≠ i → Same b b' j)
-    (hnet : b'.net = a'.net) (hout : b'.outbox = a'.outbox) : Released a' b' := by
-  refine ⟨fun j => ?_, hnet, hout⟩
+    (hnet : b'.net = a'.net) (hout : b'.outbox = a'.outbox) (hclock : b'.clock = a'.clock) :
+    Released a' b' := by
+  refine ⟨fun j => ?_, hnet, hout, hclock⟩
   by_cases hj : j = i
   · subst hj
     exact .inl hi
@@ -160,12 +162,16 @@ theorem modify (h : Released a b) (i : σ.Id) (hi : Same a' b' i)
 theorem withNet (h : Released a b) (f : List (Envelope σ) → List (Envelope σ)) :
     Released { a with net := f a.net } { b with net := f b.net } :=
   ⟨fun i => (h.actor i).imp id fun hi => ⟨hi.1, hi.2, hi.3, hi.4, hi.5, hi.6⟩, congrArg f h.net,
-    h.outbox⟩
+    h.outbox, h.clock⟩
 
 theorem withOutbox (h : Released a b) (f : List σ.Out → List σ.Out) :
     Released { a with outbox := f a.outbox } { b with outbox := f b.outbox } :=
   ⟨fun i => (h.actor i).imp id fun hi => ⟨hi.1, hi.2, hi.3, hi.4, hi.5, hi.6⟩, h.net,
-    congrArg f h.outbox⟩
+    congrArg f h.outbox, h.clock⟩
+
+theorem withClock (h : Released a b) (m : Moment) :
+    Released { a with clock := m } { b with clock := m } :=
+  ⟨fun i => (h.actor i).imp id fun hi => ⟨hi.1, hi.2, hi.3, hi.4, hi.5, hi.6⟩, h.net, h.outbox, rfl⟩
 
 theorem deliverable (h : Released a b) (e : Envelope σ) :
     a.deliverable env e = b.deliverable env e := by
@@ -179,18 +185,18 @@ theorem hasMail (h : Released a b) (i : σ.Id) : a.hasMail i = b.hasMail i := by
 theorem setState (h : Released a b) (hi : Same a b i) (s : sys.State i) :
     Released { a with state := update a.state i s } { b with state := update b.state i s } :=
   h.modify i ⟨by simp, hi.2.1, hi.2.2⟩ (fun j hj => ⟨by simp [hj], rfl, rfl⟩)
-    (fun j hj => ⟨by simp [hj], rfl, rfl⟩) h.net h.outbox
+    (fun j hj => ⟨by simp [hj], rfl, rfl⟩) h.net h.outbox h.clock
 
 theorem setUp (h : Released a b) (hi : Same a b i) (up : Bool) :
     Released { a with up := update a.up i up } { b with up := update b.up i up } :=
   h.modify i ⟨hi.1, by simp, hi.2.2⟩ (fun j hj => ⟨rfl, by simp [hj], rfl⟩)
-    (fun j hj => ⟨rfl, by simp [hj], rfl⟩) h.net h.outbox
+    (fun j hj => ⟨rfl, by simp [hj], rfl⟩) h.net h.outbox h.clock
 
 theorem setTimers (h : Released a b) (hi : Same a b i) (timers : List (σ.Msg i)) :
     Released { a with timers := update a.timers i timers }
       { b with timers := update b.timers i timers } :=
   h.modify i ⟨hi.1, hi.2.1, by simp⟩ (fun j hj => ⟨rfl, rfl, by simp [hj]⟩)
-    (fun j hj => ⟨rfl, rfl, by simp [hj]⟩) h.net h.outbox
+    (fun j hj => ⟨rfl, rfl, by simp [hj]⟩) h.net h.outbox h.clock
 
 theorem perform (h : Released a b) (hi : Same a b i) (eff : Effect σ i) :
     Released (a.perform i eff) (b.perform i eff) := by
@@ -217,7 +223,7 @@ theorem down (h : Released a b) (hi : Same a b i) : Released (a.down env i) (b.d
   h.modify i ⟨hi.1, by simp [SysState.down], by simp [SysState.down]⟩
     (fun j hj => ⟨rfl, by simp [SysState.down, hj], by simp [SysState.down, hj]⟩)
     (fun j hj => ⟨rfl, by simp [SysState.down, hj], by simp [SysState.down, hj]⟩)
-    (by simp only [SysState.down, h.net]) h.outbox
+    (by simp only [SysState.down, h.net]) h.outbox h.clock
 
 theorem settle (h : Released a b) (hi : Same a b i) (r : sys.State i × List (Effect σ i)) :
     Released (a.settle env i r) (b.settle env i r) := by
@@ -232,24 +238,27 @@ theorem settle (h : Released a b) (hi : Same a b i) (r : sys.State i × List (Ef
       exact hi.2.1))
   · exact h₂
 
-theorem handle (h : Released a b) (hi : Same a b i) (msg : σ.Msg i) :
-    Released (a.handle env i msg) (b.handle env i msg) := by
+theorem handle (h : Released a b) (hi : Same a b i) (msg : σ.Msg i)
+    (src : Sender σ.Id) :
+    Released (a.handle env i msg src) (b.handle env i msg src) := by
   unfold SysState.handle
-  rw [hi.1]
+  rw [hi.1, h.clock]
   exact h.settle hi _
 
 theorem startActor (h : Released a b) (hi : Same a b i) :
     Released (a.startActor env i) (b.startActor env i) := by
+  have hr : (sys.actor i).recoverAt b.clock (b.state i)
+      = (sys.actor i).recoverAt a.clock (a.state i) := by rw [hi.1, h.clock]
   unfold SysState.startActor
-  rw [hi.1]
+  rw [hr]
   have h₁ := h.setUp hi true
   exact h₁.settle (h₁.same (i := i) (by simp)) _
 
 theorem startActor_asleep (hi : Asleep a b i) :
     b.startActor env i = { b with up := update b.up i true, state := update b.state i (a.state i) } := by
-  have hrecover : (sys.actor i).recover (b.state i) = (a.state i, []) := by
+  have hrecover : (sys.actor i).recoverAt b.clock (b.state i) = (a.state i, []) := by
     rw [hi.init]
-    exact (sys.actor i).fresh_recover _ hi.fresh
+    exact (sys.actor i).fresh_recover _ _ hi.fresh
   unfold SysState.startActor
   rw [hrecover, settle_nil]
 
@@ -260,7 +269,7 @@ theorem wake (h : Released a b) (hi : Asleep a b i) :
   have hsame : Same a { b with up := update b.up i true, state := update b.state i (a.state i) } i :=
     ⟨by simp, by simp [hi.up], by simp [hi.idle, hi.timers]⟩
   exact ⟨h.modify i hsame (fun j _ => Same.refl a j) (fun j hj => ⟨by simp [hj], by simp [hj], rfl⟩)
-    h.net h.outbox, hsame⟩
+    h.net h.outbox h.clock, hsame⟩
 
 /-- Every step of `b` is one of `a`, or a start that brings a released actor back. -/
 theorem step (h : Released a b) {ev : Event σ} (hstep : b.step env ev = some b') :
@@ -273,12 +282,12 @@ theorem step (h : Released a b) {ev : Event σ} (hstep : b.step env ev = some b'
     obtain ⟨hup, hdel, rfl⟩ := step_deliver.mp hstep
     have hi := h.same_of_up hup
     exact .inl ⟨_, step_deliver.mpr ⟨hi.2.1.symm.trans hup, (h.deliverable e).trans hdel, rfl⟩,
-      (h.withNet (·.erase e)).handle hi e.msg⟩
+      (h.withNet (·.erase e)).handle hi e.msg _⟩
   | duplicate e =>
     obtain ⟨hup, hdup, hdel, rfl⟩ := step_duplicate.mp hstep
     have hi := h.same_of_up hup
     exact .inl ⟨_, step_duplicate.mpr ⟨hi.2.1.symm.trans hup, hdup,
-      (h.deliverable e).trans hdel, rfl⟩, h.handle hi e.msg⟩
+      (h.deliverable e).trans hdel, rfl⟩, h.handle hi e.msg _⟩
   | drop e =>
     obtain ⟨hlossy, hmem, rfl⟩ := step_drop.mp hstep
     exact .inl ⟨_, step_drop.mpr ⟨hlossy, h.net ▸ hmem, rfl⟩, h.withNet (·.erase e)⟩
@@ -288,7 +297,7 @@ theorem step (h : Released a b) {ev : Event σ} (hstep : b.step env ev = some b'
     have h₁ := h.setTimers hi ((a.timers i).erase msg)
     refine .inl ⟨_, step_timeout.mpr ⟨hi.2.1.symm.trans hup, hi.2.2 ▸ hmem, rfl⟩, ?_⟩
     rw [hi.2.2]
-    exact h₁.handle (h₁.same hi.2.1) msg
+    exact h₁.handle (h₁.same hi.2.1) msg _
   | output out =>
     obtain ⟨hmem, rfl⟩ := step_output.mp hstep
     exact .inl ⟨_, step_output.mpr ⟨h.outbox ▸ hmem, rfl⟩, h.withOutbox (·.erase out)⟩
@@ -305,6 +314,9 @@ theorem step (h : Released a b) {ev : Event σ} (hstep : b.step env ev = some b'
   | restart =>
     obtain ⟨hmay, rfl⟩ := step_restart.mp hstep
     exact .inl ⟨_, step_restart.mpr ⟨hmay, rfl⟩, refl _⟩
+  | tick m =>
+    obtain rfl := step_tick.mp hstep
+    exact .inl ⟨_, step_tick.mpr rfl, h.withClock m⟩
 
 theorem run (h : Released a b) {events : List (Event σ)} (hrun : b.run env events = some b') :
     ∃ evs a', a.run env evs = some a' ∧ Event.awake evs = Event.awake events
@@ -359,13 +371,13 @@ theorem step_back (h : Released a b) (hcrash : ∀ i, env.mayCrash i = false) {e
     obtain ⟨pre, b₁, hpre, hawake, h₁, hs₁⟩ :=
       h.awaken (env := env) (hasMail_of_mem (mem_of_deliverable hdel))
     exact after pre b₁ _ hpre hawake (step_deliver.mpr ⟨hs₁.2.1.trans hup,
-      (h₁.deliverable e).symm.trans hdel, rfl⟩) ((h₁.withNet (·.erase e)).handle hs₁ e.msg)
+      (h₁.deliverable e).symm.trans hdel, rfl⟩) ((h₁.withNet (·.erase e)).handle hs₁ e.msg _)
   | duplicate e =>
     obtain ⟨hup, hdup, hdel, rfl⟩ := step_duplicate.mp hstep
     obtain ⟨pre, b₁, hpre, hawake, h₁, hs₁⟩ :=
       h.awaken (env := env) (hasMail_of_mem (mem_of_deliverable hdel))
     exact after pre b₁ _ hpre hawake (step_duplicate.mpr ⟨hs₁.2.1.trans hup, hdup,
-      (h₁.deliverable e).symm.trans hdel, rfl⟩) (h₁.handle hs₁ e.msg)
+      (h₁.deliverable e).symm.trans hdel, rfl⟩) (h₁.handle hs₁ e.msg _)
   | drop e =>
     obtain ⟨hlossy, hmem, rfl⟩ := step_drop.mp hstep
     exact after [] b _ rfl rfl (step_drop.mpr ⟨hlossy, h.net ▸ hmem, rfl⟩) (h.withNet (·.erase e))
@@ -375,7 +387,7 @@ theorem step_back (h : Released a b) (hcrash : ∀ i, env.mayCrash i = false) {e
     have h₁ := h.setTimers hi ((a.timers i).erase msg)
     refine after [] b _ rfl rfl (step_timeout.mpr ⟨hi.2.1.trans hup, hi.2.2 ▸ hmem, rfl⟩) ?_
     rw [hi.2.2]
-    exact h₁.handle (h₁.same hi.2.1) msg
+    exact h₁.handle (h₁.same hi.2.1) msg _
   | output out =>
     obtain ⟨hmem, rfl⟩ := step_output.mp hstep
     exact after [] b _ rfl rfl (step_output.mpr ⟨h.outbox ▸ hmem, rfl⟩) (h.withOutbox (·.erase out))
@@ -391,6 +403,9 @@ theorem step_back (h : Released a b) (hcrash : ∀ i, env.mayCrash i = false) {e
   | restart =>
     obtain ⟨hmay, rfl⟩ := step_restart.mp hstep
     exact after [] b _ rfl rfl (step_restart.mpr ⟨hmay, rfl⟩) (refl _)
+  | tick m =>
+    obtain rfl := step_tick.mp hstep
+    exact after [] b _ rfl rfl (step_tick.mpr rfl) (h.withClock m)
 
 theorem run_back (h : Released a b) (hcrash : ∀ i, env.mayCrash i = false)
     {events : List (Event σ)} (hrun : a.run env events = some a') :

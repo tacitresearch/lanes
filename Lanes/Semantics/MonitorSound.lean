@@ -221,6 +221,11 @@ theorem Monitor.eq_after_of_run [Enum σ.Id] {svc : Service σ.In σ.Out S T}
       rw [show List.filterMap (Event.timed deadlines delivered) [Event.restart] = [] from rfl,
         List.append_nil]
       exact ih
+    | tick m =>
+      obtain ⟨-, -, rfl⟩ := hw'
+      rw [show List.filterMap (Event.timed deadlines delivered) [Event.tick m] = [] from rfl,
+        List.append_nil]
+      exact ih
     | drop e | start i =>
       subst hw'
       rw [show List.filterMap (Event.timed deadlines delivered) [_] = [] from rfl,

@@ -6,6 +6,7 @@ module
 
 public import Std.Async
 public import Std.Sync
+public import Std.Time
 public import Lanes.Runtime.Peek
 public import Lanes.Runtime.Sched
 public import Lanes.Runtime.IO.Park
@@ -35,7 +36,13 @@ here perform the model's transitions (`TRUSTED.md`, which says how each is atomi
 - Timers are kept on an agenda by a thread of their own, which pushes each to its actor when it
   is due. One that was cancelled or armed again is dropped when its actor takes it.
 - The inbox is bounded: at most `inboxCapacity` inputs wait for their actor (`Sched.Ledger`),
-  and `input` waits for room while `tryInput` refuses (rule 3.8).
+  and `input` waits for room while `tryInput` refuses (rule 3.8). Neither takes an input while
+  `mailHighWater` messages between actors wait; past `mailCapacity`, `onOverflow` ends the process
+  (`docs/decisions/new-runtime-limits.md`).
+- Each step is told the moment (D101): the time, the wall clock read at the start plus the
+  monotonic time since, and a seed from its worker's generator, seeded from the operating
+  system. The record has the moment as a tick before the step, so a replay gives each step what
+  it was told (`Sched.Step.step`).
 -/
 
 public section
@@ -46,11 +53,52 @@ open Std Std.Async
 
 variable {σ : Signature}
 
+/-- A step that ran longer than `Runtime.Config.stepLimitMs`: which worker, the hash of the actor
+(`Hashable σ.Id`), the kind of step (`deliver`, `timeout` or `start`) and how long it has run. -/
+structure Runtime.Stuck where
+  worker : Nat
+  actor : UInt64
+  kind : String
+  elapsed_ms : Nat
+
+/-- What the watchdog does by default with a step that does not end: report it on standard error
+and end the process with status 75, for its supervisor to start it again. The actors are
+volatile (D110), so this is the semantics' restart (`Sched.Step.restart`), and the message the
+step was on is dropped with everything else in memory. -/
+def Runtime.Stuck.restart (stuck : Runtime.Stuck) : IO Unit := do
+  IO.eprintln s!"lanes: a step ({stuck.kind}) of the actor with hash {stuck.actor} has run \
+    {stuck.elapsed_ms} ms on worker {stuck.worker}; restarting the process, which drops it"
+  IO.Process.exit 75
+
+/-- A step whose sends left more than `Runtime.Config.mailCapacity` messages between actors
+waiting: which worker, the hash of the actor that sent, and how many wait. -/
+structure Runtime.Overflow where
+  worker : Nat
+  actor : UInt64
+  mail : Nat
+
+/-- What the runtime does by default when the mail between actors passes its capacity: report it
+on standard error and end the process with status 75, for its supervisor to start it again. This
+is the semantics' restart (`Sched.Step.restart`): the mail is dropped with everything else in
+memory, and no message is lost on its own. -/
+def Runtime.Overflow.restart (overflow : Runtime.Overflow) : IO Unit := do
+  IO.eprintln s!"lanes: {overflow.mail} messages between actors wait, past the runtime's \
+    capacity, after a step of the actor with hash {overflow.actor} on worker {overflow.worker}; \
+    restarting the process, which drops them"
+  IO.Process.exit 75
+
 /-- How a runtime runs: its bounds and its threads. Every field has a default. -/
 structure Runtime.Config where
   /-- Inputs accepted that their actor has not taken. When there are this many, `tryInput`
   refuses. At least one. -/
   inboxCapacity : Nat := 1024
+  /-- Messages between actors (and timers gone off) waiting, at or past which no input is taken:
+  `tryInput` refuses and `input` waits until they fall below. At least one. -/
+  mailHighWater : Nat := 65536
+  /-- Messages between actors waiting past which `onOverflow` is told, after the step that sent
+  them. Inputs cannot pass it on their own unless a step sends many messages; a system whose
+  actors send each other more than they take can. -/
+  mailCapacity : Nat := 1048576
   /-- Items a worker handles for one actor before it lets go of it, so that a busy actor does
   not keep others waiting. At least one. -/
   budget : Nat := 64
@@ -59,9 +107,18 @@ structure Runtime.Config where
   record : Bool := false
   /-- Worker threads; `0` is the machine's hardware threads. -/
   workers : Nat := 0
+  /-- How long a step may run before the watchdog acts on it (`onStuck`), in milliseconds; `0`
+  turns the watchdog off. A step cannot be interrupted, so its worker is lost either way. -/
+  stepLimitMs : Nat := 30000
+  /-- What the watchdog does with a step that has run longer than `stepLimitMs`. -/
+  onStuck : Runtime.Stuck → IO Unit := Runtime.Stuck.restart
   /-- Where the shard reports what goes wrong outside the system: an output handler that failed,
   a worker stopped on an error. -/
   log : Log.Logger := {}
+  /-- What to do when a step leaves more than `mailCapacity` messages between actors waiting. A
+  handler that returns lets the runtime go on, its messages pushed: the bound is then only
+  reported. -/
+  onOverflow : Runtime.Overflow → IO Unit := Runtime.Overflow.restart
 
 namespace Runtime
 
@@ -107,7 +164,15 @@ structure Runtime (sys : System σ) [Hashable σ.Id] where
   private stopping : IO.Ref Bool
   private finished : IO.Promise (Option IO.Error)
   private recovered : IO.Ref Bool
+  /-- The monotonic clock at the start. -/
   private epoch : Nat
+  /-- The wall clock at the start, in milliseconds since the Unix epoch. -/
+  private wall : Nat
+  /-- Each worker's generator of seeds. -/
+  private seeds : Array (IO.Ref UInt64)
+  /-- What each worker is stepping: since when on the monotonic clock, the actor's hash and the
+  kind of step, and whether the watchdog has reported it. -/
+  private busy : Array (IO.Ref (Option (Nat × UInt64 × String × Bool)))
   private nextHome : IO.Ref Nat
 
 private initialize live : IO.Ref Nat ← IO.mkRef 0
@@ -123,8 +188,25 @@ variable {sys : System σ} [Hashable σ.Id]
 
 private def stopped : IO.Error := IO.userError "lanes: the runtime has stopped"
 
+/-- The time, in milliseconds since the Unix epoch: the wall clock at the start, then the
+monotonic clock, so that setting the wall clock back while the runtime runs changes nothing. -/
 private def clock (rt : Runtime sys) : BaseIO Nat :=
-  return (← IO.monoMsNow) - rt.epoch
+  return rt.wall + ((← IO.monoMsNow) - rt.epoch)
+
+/-- SplitMix64 (Steele, Lea and Flood, 2014): the next state of a generator, and its output. -/
+private def splitMix (x : UInt64) : UInt64 × UInt64 :=
+  let x := x + 0x9E3779B97F4A7C15
+  let z := (x ^^^ (x >>> 30)) * 0xBF58476D1CE4E5B9
+  let z := (z ^^^ (z >>> 27)) * 0x94D049BB133111EB
+  (x, z ^^^ (z >>> 31))
+
+/-- The moment worker `w` tells its next step: the time and a seed from its own generator. -/
+private def moment (rt : Runtime sys) (w : Nat) : BaseIO Moment := do
+  let now_ms ← rt.clock
+  let seed ← match rt.seeds[w]? with
+    | some g => g.modifyGet fun x => match splitMix x with | (x, out) => (out, x)
+    | none => pure 0
+  return { now_ms, seed }
 
 private def record (rt : Runtime sys) (events : List (Event σ)) : BaseIO Unit := do
   if rt.config.record then rt.log.modify (· ++ events.toArray)
@@ -218,6 +300,9 @@ private def ending (rt : Runtime sys) : BaseIO Bool := do
   if ← rt.stopping.get then return (← rt.ledger.get).inputs == 0
   return false
 
+private def highWater (rt : Runtime sys) : Nat :=
+  max 1 rt.config.mailHighWater
+
 /-- What the steps of a turn did to the ledger's counts, given to it once at the turn's end: the
 items taken off or dropped, and the pending timers before and after. -/
 private structure Tally where
@@ -233,7 +318,8 @@ of the actor, which nothing can tell: no other thread reads the state of an acto
 private def step (rt : Runtime sys) (w : Nat) (onOutput : σ.Out → Async Unit) (i : σ.Id)
     (b : IO.Ref (Box sys i)) (held : Option (sys.State i)) :
     BaseIO (Option (Option (sys.State i) × Tally)) := do
-  let now ← rt.clock
+  let t ← rt.moment w
+  let now := t.now_ms
   let (taken, before) ← b.modifyGet fun bx =>
     let pending := bx.slot.pending
     match bx.slot.take with
@@ -243,7 +329,17 @@ private def step (rt : Runtime sys) (w : Nat) (onOutput : σ.Out → Async Unit)
   | .stale => return some (held, { gone := 1 })
   | .job j =>
     let j := match held with | some s => { j with state := s } | none => j
-    let (state, effects) := j.run
+    let busy := rt.busy[w]?
+    if rt.config.stepLimitMs != 0 then
+      if let some b := busy then
+        let kind := match j.work with
+          | .deliver .. => "deliver"
+          | .timeout _ => "timeout"
+          | .start => "start"
+        b.set (some (← IO.monoMsNow, hash i, kind, false))
+    let (state, effects) := j.run t
+    if rt.config.stepLimitMs != 0 then
+      if let some b := busy then b.set none
     let stops := effects.any Effect.isStop
     let sends := effects.any fun | .send .. => true | _ => false
     if stops then rt.sending.write
@@ -253,15 +349,17 @@ private def step (rt : Runtime sys) (w : Nat) (onOutput : σ.Out → Async Unit)
       match bx.slot.put now ((sys.actor i).init, effects) with
       | (s, c) => ((c, s.pending), { bx with slot := s })
     if rt.config.record then
-      rt.record (j.work.event :: c.outputs.map .output)
+      rt.record (.tick t :: j.work.event :: c.outputs.map .output)
       rt.recording.unlock
     let freed := (if j.work.input then 1 else 0) + c.droppedInputs
-    let room ← if freed == 0 && c.sends.isEmpty then pure [] else
-      rt.ledgerDo fun l => (l.pushed c.sends.length).free freed
+    let (room, over) ← if freed == 0 && c.sends.isEmpty then pure ([], none) else
+      rt.ledgerDo (Sched.Ledger.sent c.sends.length freed rt.config.mailCapacity)
     for p in room do p.resolve ()
     for e in c.sends do rt.pushTo w e.dst (.msg (some i) e.msg)
     if stops then rt.sending.unlockWrite
     else if sends then rt.sending.unlockRead
+    if let some mail := over then
+      discard (rt.config.onOverflow { worker := w, actor := hash i, mail }).toBaseIO
     rt.arm i c.armed
     handOver rt.config.log onOutput c.outputs
     return some (some state,
@@ -298,7 +396,9 @@ private def serve (rt : Runtime sys) (w : Nat) (onOutput : σ.Out → Async Unit
   if retired then (rt.shardOf i).modify (·.erase i)
   if again then rt.enqueue w i
   if tally.gone != 0 || tally.before != tally.after then
-    let idle ← rt.ledgerDo (Sched.Ledger.done tally.gone tally.before tally.after)
+    let (room, idle) ← rt.ledgerDo
+      (Sched.Ledger.done rt.highWater tally.gone tally.before tally.after)
+    for p in room do p.resolve ()
     for p in idle do p.resolve true
 
 /-- The next actor for worker `w`: the first on its run queue, or one stolen from another's. -/
@@ -337,7 +437,7 @@ private def boot (rt : Runtime sys) (onOutput : σ.Out → Async Unit) : BaseIO 
     let (c, after) ← b.modifyGet fun bx =>
       let s := bx.slot
       match ({ s with cell := { s.cell with up := true } } : Sched.Slot sys i).put 0
-          ((sys.actor i).recover s.cell.state) with
+          ((sys.actor i).recoverAt {} s.cell.state) with
       | (s, c) => ((c, s.pending), { bx with slot := s })
     rt.record (c.outputs.map .output)
     rt.ledgerDo fun l => ((), l.pushed c.sends.length)
@@ -346,11 +446,30 @@ private def boot (rt : Runtime sys) (onOutput : σ.Out → Async Unit) : BaseIO 
     handOver rt.config.log onOutput c.outputs
     rt.ledgerDo fun l => ((), { l with timers := l.timers + after })
 
+/-- The watchdog's thread: every quarter of `stepLimitMs`, a step that has run longer than it is
+handed to `onStuck`, once. -/
+private def watch (rt : Runtime sys) : IO Unit := do
+  let limit := rt.config.stepLimitMs
+  repeat
+    if ← rt.ending then break
+    IO.sleep (max 1 (limit / 4)).toUInt32
+    let now ← IO.monoMsNow
+    for w in [0:rt.busy.size] do
+      let some b := rt.busy[w]? | continue
+      let found ← b.modifyGet fun
+        | some (since, actor, kind, false) =>
+          if now - since > limit then (some (since, actor, kind), some (since, actor, kind, true))
+          else (none, some (since, actor, kind, false))
+        | other => (none, other)
+      if let some (since, actor, kind) := found then
+        rt.config.onStuck { worker := w, actor, kind, elapsed_ms := now - since }
+
 /-- However the runtime ends, nobody is left waiting on it. -/
 private def run (rt : Runtime sys) (onOutput : σ.Out → Async Unit) : IO Unit := do
   rt.boot onOutput
   rt.recovered.set true
   let timer ← IO.asTask (prio := .dedicated) rt.ring
+  if rt.config.stepLimitMs != 0 then discard <| IO.asTask (prio := .dedicated) rt.watch
   let threads ← (List.range rt.workers).mapM fun w =>
     IO.asTask (prio := .dedicated) (rt.worker w onOutput)
   let mut error : Option IO.Error := none
@@ -384,6 +503,11 @@ def startWith (sys : System σ) [Hashable σ.Id] (config : Runtime.Config := {})
   let workers := match config.workers with
     | 0 => max 1 (System.Platform.Internal.getHardwareConcurrency ()).toNat
     | n => n
+  let wall := (← Std.Time.Timestamp.now).toMillisecondsSinceUnixEpoch.toInt.toNat
+  let seeds ← (List.range workers).toArray.mapM fun _ => do
+    let bytes ← IO.getRandomBytes 8
+    IO.mkRef (bytes.foldl (fun (x : UInt64) b => (x <<< 8) ||| b.toUInt64) 0)
+  let busy ← (List.range workers).toArray.mapM fun _ => IO.mkRef none
   let first ← IO.mkRef ∅
   let rest ← (List.range (shards - 1)).toArray.mapM fun _ => IO.mkRef ∅
   let rt : Runtime sys := {
@@ -403,6 +527,7 @@ def startWith (sys : System σ) [Hashable σ.Id] (config : Runtime.Config := {})
     finished := ← IO.Promise.new
     recovered := ← IO.mkRef false
     epoch := ← IO.monoMsNow
+    wall, seeds, busy
     nextHome := ← IO.mkRef 0 }
   live.modify (· + 1)
   discard <| IO.asTask (prio := .dedicated) (rt.run (onOutput rt))
@@ -430,7 +555,7 @@ private def deliver (rt : Runtime sys) (x : σ.In) : BaseIO Unit := do
 
 private def offer (rt : Runtime sys) (x : σ.In) : BaseIO Bool := do
   let offered : Sched.Ledger.Offered (IO.Promise Unit) ←
-    rt.ledgerDo (Sched.Ledger.offer rt.capacity)
+    rt.ledgerDo (Sched.Ledger.offer rt.capacity rt.highWater)
   match offered with
   | .taken =>
     rt.deliver x
@@ -444,7 +569,7 @@ def input (rt : Runtime sys) (x : σ.In) : Async Unit := do
     let room : IO.Promise Unit ← IO.Promise.new
     let offered : Sched.Ledger.Offered (IO.Promise Unit) ←
       rt.ledgerDo (α := Sched.Ledger.Offered (IO.Promise Unit))
-        (Sched.Ledger.offerOrWait rt.capacity room)
+        (Sched.Ledger.offerOrWait rt.capacity rt.highWater room)
     match offered with
     | .taken =>
       rt.deliver x
@@ -544,6 +669,10 @@ def hasRecovered (rt : Runtime sys) : BaseIO Bool :=
 /-- The inputs accepted that their actor has not taken. -/
 def depth (rt : Runtime sys) : BaseIO Nat :=
   return (← rt.ledger.get).inputs
+
+/-- The messages between actors, and timers gone off, that wait (`Sched.Ledger.mail`). -/
+def mail (rt : Runtime sys) : BaseIO Nat :=
+  return (← rt.ledger.get).mail
 
 /-- Wait until the runtime has ended, and say whether an error ended it. Whoever owns the
 runtime should then end the process, so that it is started again. -/

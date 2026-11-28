@@ -37,6 +37,7 @@ def quiet (config : Config) : SysState (system config) where
     | .keeper => [.tick]
     | .dog => [.silence]
   outbox := []
+  clock := {}
 
 def pinged (config : Config) : SysState (system config) :=
   { quiet config with net := [ping] }
@@ -133,9 +134,10 @@ theorem silence_due_of_step {c c' : SysState (system config)} {ev : Event sig}
     (hdue : silence.Due {} c) (hstep : c.step {} ev = some c') (hev : ev ≠ bark) :
     silence.Due {} c' := by
   obtain ⟨hup, hmem⟩ := hdue
-  refine ⟨SysState.up_of_step rfl rfl (fun _ msg => by cases msg <;> rfl) hup hstep, ?_⟩
-  have hdog (c : SysState (system config)) (msg : DogMsg) (h : DogMsg.silence ∈ c.timers .dog) :
-      DogMsg.silence ∈ (c.handle {} .dog msg).timers .dog := by
+  refine ⟨SysState.up_of_step rfl rfl (fun _ _ msg => by cases msg <;> rfl) hup hstep, ?_⟩
+  have hdog (c : SysState (system config)) (msg : DogMsg) (src : Sender sig.Id)
+      (h : DogMsg.silence ∈ c.timers .dog) :
+      DogMsg.silence ∈ (c.handle {} .dog msg src).timers .dog := by
     cases msg <;>
       simp [SysState.handle, SysState.settle, SysState.performAll, SysState.perform, dog,
         Effect.isStop, h]
@@ -153,13 +155,13 @@ theorem silence_due_of_step {c c' : SysState (system config)} {ev : Event sig}
     obtain ⟨src, dst, msg⟩ := e
     cases dst with
     | keeper => exact hkeeper _ _ hmem
-    | dog => exact hdog _ msg hmem
+    | dog => exact hdog _ msg _ hmem
   | duplicate e =>
     obtain ⟨_, _, _, rfl⟩ := SysState.step_duplicate.mp hstep
     obtain ⟨src, dst, msg⟩ := e
     cases dst with
     | keeper => exact hkeeper _ _ hmem
-    | dog => exact hdog _ msg hmem
+    | dog => exact hdog _ msg _ hmem
   | drop e =>
     obtain ⟨_, _, rfl⟩ := SysState.step_drop.mp hstep
     exact hmem
@@ -170,7 +172,7 @@ theorem silence_due_of_step {c c' : SysState (system config)} {ev : Event sig}
     | dog =>
       cases msg with
       | silence => exact absurd rfl hev
-      | ping => exact hdog _ _ (by simpa [update] using hmem)
+      | ping => exact hdog _ _ _ (by simpa [update] using hmem)
   | output out =>
     obtain ⟨_, rfl⟩ := SysState.step_output.mp hstep
     exact hmem
@@ -185,6 +187,9 @@ theorem silence_due_of_step {c c' : SysState (system config)} {ev : Event sig}
   | restart =>
     obtain ⟨hmay, -⟩ := SysState.step_restart.mp hstep
     cases hmay
+  | tick m =>
+    obtain rfl := SysState.step_tick.mp hstep
+    exact hmem
 
 /-- A run that fires every timer that stays pending has the dog bark, however the keeper
 pings: there the timer of a keep-alive fires though it is kept alive. -/

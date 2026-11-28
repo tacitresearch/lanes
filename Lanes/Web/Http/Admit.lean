@@ -110,7 +110,7 @@ def sink : System sinkSig where
       step s _ := (s, [])
       recover s := (s, [])
       fresh _ := true
-      fresh_recover _ _ := rfl }
+      fresh_recover _ _ _ := rfl }
   accept _ := ⟨(), ()⟩
 
 /-- Where an input of the shard goes: a request to the actor `decode` names, or to the sink if

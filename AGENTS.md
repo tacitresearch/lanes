@@ -229,8 +229,9 @@ still sees one message at a time, and each step is one event of the semantics
 (`Sched.Step.sound`).
 
 3.8 **Back-pressure, not unbounded inboxes.** The inbox is bounded (`inboxCapacity`); when it is
-full the sender is refused (`tryInput`, the server's `503`). The mailboxes between actors have
-no bound yet (`TRUSTED.md`).
+full the sender is refused (`tryInput`, the server's `503`). So is an input while
+`mailHighWater` messages between actors wait; past `mailCapacity` the process restarts
+(`docs/decisions/D123-runtime-limits.md`).
 
 3.9 **An adapter decides nothing in IO.** It is a pure function or a system that decides, a model
 of the outside it talks to (`Outside`), and a handler that only performs (D26, D40). *Why:* every
@@ -380,7 +381,9 @@ spec reads the standard, or the service, as others do.
 Conventions:
 
 - Prove a per-actor invariant with `actor_invariant [myActor]`; it leaves the cases it cannot close
-  as goals. It lifts to every system under every fault model (`System.invariant_of_actor`).
+  as goals. It lifts to every system under every fault model (`System.invariant_of_actor`). The
+  goals quantify over the step's context (`ctx`, the moment `t` of a recovery): an actor that
+  ignores it reduces `stepAt ctx` to its `step` by unfolding.
 - A lemma that does not mention the system a proof is about does not stay in that proof's file.
   Lists: `Lanes/Proof/List/`, at the end of the file of its topic (`Erase`, `Prefix`, `Fold`, else
   `Basic`). Strings and byte arrays: `Lanes/Proof/Utf8.lean`, `Lanes/Proof/ByteArray.lean`.

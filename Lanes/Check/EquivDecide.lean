@@ -132,12 +132,12 @@ theorem SysState.equiv_iff [σ.Inspect] [sys.Inspect] [∀ i, LawfulBEq (sys.Sta
   simp only [SysState.equiv, Bool.and_eq_true, List.all_eq_true, beq_iff_eq, netEquiv_iff,
     List.isPerm_iff]
   constructor
-  · rintro ⟨⟨hall, hnet⟩, hout⟩
+  · rintro ⟨⟨⟨hall, hnet⟩, hout⟩, hclock⟩
     exact ⟨funext fun i => (hall i (Enum.complete i)).1.1,
       funext fun i => (hall i (Enum.complete i)).1.2,
-      funext fun i => (hall i (Enum.complete i)).2, hnet, hout⟩
+      funext fun i => (hall i (Enum.complete i)).2, hnet, hout, hclock⟩
   · intro h
-    exact ⟨⟨fun i _ => ⟨⟨congrFun h.state i, congrFun h.up i⟩, congrFun h.timers i⟩, h.net⟩,
-      h.outbox⟩
+    exact ⟨⟨⟨fun i _ => ⟨⟨congrFun h.state i, congrFun h.up i⟩, congrFun h.timers i⟩, h.net⟩,
+      h.outbox⟩, h.clock⟩
 
 end Lanes

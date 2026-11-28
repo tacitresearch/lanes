@@ -40,7 +40,7 @@ restart changes whether another actor is up, or another actor's timers. -/
 def Event.actor? : Event σ → Option σ.Id
   | .deliver e | .duplicate e => some e.dst
   | .timeout i _ | .crash i | .start i => some i
-  | .input _ | .drop _ | .output _ | .restart => none
+  | .input _ | .drop _ | .output _ | .restart | .tick _ => none
 
 /-- The timers that the effects of actor `i` arm, as the events that fire them. -/
 def Effect.timeouts (i : σ.Id) (effs : List (Effect σ i)) : List (Event σ) :=
@@ -56,10 +56,12 @@ variable {sys : System σ}
 a pending timer among them a new deadline, where the semantics leaves it as it is. -/
 def arms (c : SysState sys) : Event σ → List (Event σ)
   | .deliver e | .duplicate e =>
-    Effect.timeouts e.dst ((sys.actor e.dst).step (c.state e.dst) e.msg).2
-  | .timeout i msg => Effect.timeouts i ((sys.actor i).step (c.state i) msg).2
-  | .start i => Effect.timeouts i ((sys.actor i).recover (c.state i)).2
-  | .input _ | .drop _ | .output _ | .crash _ | .restart => []
+    Effect.timeouts e.dst
+      ((sys.actor e.dst).stepAt { toMoment := c.clock, src := .ofSrc e.src } (c.state e.dst) e.msg).2
+  | .timeout i msg =>
+    Effect.timeouts i ((sys.actor i).stepAt { toMoment := c.clock, src := .timer } (c.state i) msg).2
+  | .start i => Effect.timeouts i ((sys.actor i).recoverAt c.clock (c.state i)).2
+  | .input _ | .drop _ | .output _ | .crash _ | .restart | .tick _ => []
 
 /-- The environment's events (inputs, duplicates, drops, crashes, restarts) are never owed, and
 neither is starting an actor that has no mail. -/
@@ -68,7 +70,7 @@ def owed (env : EnvModel σ) (c : SysState sys) : Event σ → Bool
   | .timeout i msg => c.up i && (c.timers i).contains msg
   | .start i => !c.up i && c.hasMail i
   | .output out => c.outbox.contains out
-  | .input _ | .duplicate _ | .drop _ | .crash _ | .restart => false
+  | .input _ | .duplicate _ | .drop _ | .crash _ | .restart | .tick _ => false
 
 /-- Contains every owed event except the timers of actors outside `actors`. -/
 def maybeOwed (c : SysState sys) (actors : List σ.Id) : List (Event σ) :=

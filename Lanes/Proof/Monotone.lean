@@ -171,13 +171,14 @@ theorem Below.settle {c₀ c : SysState sys} (h : c₀.Below c) (env : EnvModel 
     · exact hout out ho
 
 theorem Below.handle {c₀ c : SysState sys} (h : c₀.Below c) (env : EnvModel σ) (i : σ.Id)
-    (msg : σ.Msg i) :
-    (c₀.handle env i msg).Below (c.grow i ((sys.actor i).step (c.state i) msg)) := by
+    (msg : σ.Msg i) (src : Sender σ.Id) :
+    (c₀.handle env i msg src).Below
+      (c.grow i ((sys.actor i).stepAt { toMoment := c₀.clock, src } (c.state i) msg)) := by
   rw [← congrFun h.state i]
   exact Below.settle h env i _
 
 theorem Below.startActor (c : SysState sys) (env : EnvModel σ) (i : σ.Id) :
-    (c.startActor env i).Below (c.grow i ((sys.actor i).recover (c.state i))) :=
+    (c.startActor env i).Below (c.grow i ((sys.actor i).recoverAt c.clock (c.state i))) :=
   Below.settle (c₀ := { c with up := update c.up i true }) (c := c)
     ⟨rfl, fun _ h => h, fun _ _ h => h, fun _ h => h⟩ env i _
 
@@ -200,11 +201,11 @@ theorem Inductive.of_monotone {P : SysState sys → Prop} (env : EnvModel σ)
     (input : ∀ c x, P c →
       P { c with net := c.net ++ [⟨none, (sys.accept x).1, (sys.accept x).2⟩] })
     (step : ∀ c i msg, P c → ((∃ src, ⟨src, i, msg⟩ ∈ c.net) ∨ msg ∈ c.timers i) →
-      P (c.grow i ((sys.actor i).step (c.state i) msg)))
-    (recover : ∀ c i, P c → P (c.grow i ((sys.actor i).recover (c.state i)))) :
+      ∀ ctx, P (c.grow i ((sys.actor i).stepAt ctx (c.state i) msg)))
+    (recover : ∀ c i, P c → ∀ t, P (c.grow i ((sys.actor i).recoverAt t (c.state i)))) :
     sys.Inductive env P where
   init := init_induction blank fun c i hc =>
-    below _ _ (recover c i hc) (Below.startActor c env i)
+    below _ _ (recover c i hc _) (Below.startActor c env i)
   step c ev c' hc hstep := by
     cases ev with
     | input x => obtain rfl := step_input.mp hstep; exact input c x hc
@@ -212,11 +213,11 @@ theorem Inductive.of_monotone {P : SysState sys → Prop} (env : EnvModel σ)
       obtain ⟨_, hdeliverable, rfl⟩ := step_deliver.mp hstep
       have hbelow : SysState.Below { c with net := c.net.erase e } c :=
         ⟨rfl, fun _ h => List.mem_of_mem_erase h, fun _ _ h => h, fun _ h => h⟩
-      exact below _ _ (step c e.dst e.msg hc (.inl ⟨e.src, mem_of_deliverable hdeliverable⟩))
+      exact below _ _ (step c e.dst e.msg hc (.inl ⟨e.src, mem_of_deliverable hdeliverable⟩) _)
         (Below.handle hbelow ..)
     | duplicate e =>
       obtain ⟨_, _, hdeliverable, rfl⟩ := step_duplicate.mp hstep
-      exact below _ _ (step c e.dst e.msg hc (.inl ⟨e.src, mem_of_deliverable hdeliverable⟩))
+      exact below _ _ (step c e.dst e.msg hc (.inl ⟨e.src, mem_of_deliverable hdeliverable⟩) _)
         (Below.handle (Below.refl c) ..)
     | drop e =>
       obtain ⟨_, _, rfl⟩ := step_drop.mp hstep
@@ -232,7 +233,7 @@ theorem Inductive.of_monotone {P : SysState sys → Prop} (env : EnvModel σ)
           simp only [update_self] at hm
           exact List.mem_of_mem_erase hm
         · simpa [hj] using hm
-      exact below _ _ (step c i msg hc (.inr hmem)) (Below.handle hbelow ..)
+      exact below _ _ (step c i msg hc (.inr hmem) _) (Below.handle hbelow ..)
     | output out =>
       obtain ⟨_, rfl⟩ := step_output.mp hstep
       exact below _ _ hc ⟨rfl, fun _ h => h, fun _ _ h => h, fun _ h => List.mem_of_mem_erase h⟩
@@ -245,10 +246,14 @@ theorem Inductive.of_monotone {P : SysState sys → Prop} (env : EnvModel σ)
       · simpa [down, hj] using hm
     | start i =>
       obtain ⟨_, _, rfl⟩ := step_start.mp hstep
-      exact below _ _ (recover c i hc) (Below.startActor c env i)
+      exact below _ _ (recover c i hc _) (Below.startActor c env i)
     | restart =>
       obtain ⟨_, rfl⟩ := step_restart.mp hstep
-      exact init_induction blank fun c i hc => below _ _ (recover c i hc) (Below.startActor c env i)
+      exact init_induction blank fun c i hc =>
+        below _ _ (recover c i hc _) (Below.startActor c env i)
+    | tick m =>
+      obtain rfl := step_tick.mp hstep
+      exact below _ _ hc ⟨rfl, fun _ h => h, fun _ _ h => h, fun _ h => h⟩
 
 /-- The five cases of `Inductive.of_monotone` as one value, so that proofs of them can be
 combined (`Monotone.and`) before an environment model is chosen. -/
@@ -258,8 +263,8 @@ structure Monotone (sys : System σ) (P : SysState sys → Prop) : Prop where
   input : ∀ c x, P c →
     P { c with net := c.net ++ [⟨none, (sys.accept x).1, (sys.accept x).2⟩] }
   step : ∀ c i msg, P c → ((∃ src, ⟨src, i, msg⟩ ∈ c.net) ∨ msg ∈ c.timers i) →
-    P (c.grow i ((sys.actor i).step (c.state i) msg))
-  recover : ∀ c i, P c → P (c.grow i ((sys.actor i).recover (c.state i)))
+    ∀ ctx, P (c.grow i ((sys.actor i).stepAt ctx (c.state i) msg))
+  recover : ∀ c i, P c → ∀ t, P (c.grow i ((sys.actor i).recoverAt t (c.state i)))
 
 namespace Monotone
 
@@ -277,52 +282,53 @@ theorem and (hP : sys.Monotone P) (blank : Q (SysState.blank sys))
     (below : ∀ c c', P c → Q c → c'.Below c → Q c')
     (input : ∀ c x, P c → Q c →
       Q { c with net := c.net ++ [⟨none, (sys.accept x).1, (sys.accept x).2⟩] })
-    (step : ∀ c i msg, P c → P (c.grow i ((sys.actor i).step (c.state i) msg)) → Q c →
+    (step : ∀ c i msg ctx, P c → P (c.grow i ((sys.actor i).stepAt ctx (c.state i) msg)) → Q c →
       ((∃ src, ⟨src, i, msg⟩ ∈ c.net) ∨ msg ∈ c.timers i) →
-        Q (c.grow i ((sys.actor i).step (c.state i) msg)))
-    (recover : ∀ c i, P c → P (c.grow i ((sys.actor i).recover (c.state i))) → Q c →
-      Q (c.grow i ((sys.actor i).recover (c.state i)))) :
+        Q (c.grow i ((sys.actor i).stepAt ctx (c.state i) msg)))
+    (recover : ∀ c i t, P c → P (c.grow i ((sys.actor i).recoverAt t (c.state i))) → Q c →
+      Q (c.grow i ((sys.actor i).recoverAt t (c.state i)))) :
     sys.Monotone fun c => P c ∧ Q c where
   blank := ⟨hP.blank, blank⟩
   below c c' h hbelow := ⟨hP.below c c' h.1 hbelow, below c c' h.1 h.2 hbelow⟩
   input c x h := ⟨hP.input c x h.1, input c x h.1 h.2⟩
-  step c i msg h hpending :=
-    ⟨hP.step c i msg h.1 hpending, step c i msg h.1 (hP.step c i msg h.1 hpending) h.2 hpending⟩
-  recover c i h := ⟨hP.recover c i h.1, recover c i h.1 (hP.recover c i h.1) h.2⟩
+  step c i msg h hpending ctx :=
+    ⟨hP.step c i msg h.1 hpending ctx,
+      step c i msg ctx h.1 (hP.step c i msg h.1 hpending ctx) h.2 hpending⟩
+  recover c i h t := ⟨hP.recover c i h.1 t, recover c i t h.1 (hP.recover c i h.1 t) h.2⟩
 
 /-- `Monotone.and` for a layer that reads the actors' states and asks something of each message
 in flight, which every input meets. `net` says so: `Q` survives any change of what is in flight
 that brings no message but inputs, and any change of timers, outputs and which actors are up.
 Nothing then has to be shown of removing messages or of an input. -/
 theorem and_net (hP : sys.Monotone P) (blank : Q (SysState.blank sys))
-    (net : ∀ c up net timers outbox, Q c →
+    (net : ∀ c up net timers outbox clock, Q c →
       (∀ e ∈ net, e ∈ c.net ∨ ∃ x, e = ⟨none, (sys.accept x).1, (sys.accept x).2⟩) →
-        Q { c with up, net, timers, outbox })
-    (step : ∀ c i msg, P c → P (c.grow i ((sys.actor i).step (c.state i) msg)) → Q c →
+        Q { c with up, net, timers, outbox, clock })
+    (step : ∀ c i msg ctx, P c → P (c.grow i ((sys.actor i).stepAt ctx (c.state i) msg)) → Q c →
       ((∃ src, ⟨src, i, msg⟩ ∈ c.net) ∨ msg ∈ c.timers i) →
-        Q (c.grow i ((sys.actor i).step (c.state i) msg)))
-    (recover : ∀ c i, P c → P (c.grow i ((sys.actor i).recover (c.state i))) → Q c →
-      Q (c.grow i ((sys.actor i).recover (c.state i)))) :
+        Q (c.grow i ((sys.actor i).stepAt ctx (c.state i) msg)))
+    (recover : ∀ c i t, P c → P (c.grow i ((sys.actor i).recoverAt t (c.state i))) → Q c →
+      Q (c.grow i ((sys.actor i).recoverAt t (c.state i)))) :
     sys.Monotone fun c => P c ∧ Q c :=
   hP.and blank
     (fun c c' _ hq hbelow =>
-      (congrArg Q (SysState.ext' hbelow.state rfl rfl rfl rfl : c' = { c with
-        up := c'.up, net := c'.net, timers := c'.timers, outbox := c'.outbox })).mpr
-        (net c _ _ _ _ hq fun e he => .inl (hbelow.net e he)))
-    (fun c x _ hq => net c c.up _ c.timers c.outbox hq fun _ he =>
+      (congrArg Q (SysState.ext' hbelow.state rfl rfl rfl rfl rfl : c' = { c with
+        up := c'.up, net := c'.net, timers := c'.timers, outbox := c'.outbox, clock := c'.clock })).mpr
+        (net c _ _ _ _ _ hq fun e he => .inl (hbelow.net e he)))
+    (fun c x _ hq => net c c.up _ c.timers c.outbox c.clock hq fun _ he =>
       (List.mem_append.mp he).imp_right fun he => ⟨x, List.mem_singleton.mp he⟩)
     step recover
 
 /-- `Monotone.and` for a layer that reads only the actors' states, which is what `state` says. -/
 theorem and_state (hP : sys.Monotone P) (blank : Q (SysState.blank sys))
-    (state : ∀ c up net timers outbox, Q c → Q { c with up, net, timers, outbox })
-    (step : ∀ c i msg, P c → P (c.grow i ((sys.actor i).step (c.state i) msg)) → Q c →
+    (state : ∀ c up net timers outbox clock, Q c → Q { c with up, net, timers, outbox, clock })
+    (step : ∀ c i msg ctx, P c → P (c.grow i ((sys.actor i).stepAt ctx (c.state i) msg)) → Q c →
       ((∃ src, ⟨src, i, msg⟩ ∈ c.net) ∨ msg ∈ c.timers i) →
-        Q (c.grow i ((sys.actor i).step (c.state i) msg)))
-    (recover : ∀ c i, P c → P (c.grow i ((sys.actor i).recover (c.state i))) → Q c →
-      Q (c.grow i ((sys.actor i).recover (c.state i)))) :
+        Q (c.grow i ((sys.actor i).stepAt ctx (c.state i) msg)))
+    (recover : ∀ c i t, P c → P (c.grow i ((sys.actor i).recoverAt t (c.state i))) → Q c →
+      Q (c.grow i ((sys.actor i).recoverAt t (c.state i)))) :
     sys.Monotone fun c => P c ∧ Q c :=
-  hP.and_net blank (fun c up net timers outbox hq _ => state c up net timers outbox hq) step
+  hP.and_net blank (fun c up net timers outbox clock hq _ => state c up net timers outbox clock hq) step
     recover
 
 /-- The same property under another name. Layers added with `and` nest, and a proof that uses
@@ -332,25 +338,26 @@ theorem of_iff (hP : sys.Monotone P) (h : ∀ c, Q c ↔ P c) : sys.Monotone Q w
   blank := (h _).mpr hP.blank
   below c c' hc hbelow := (h _).mpr (hP.below c c' ((h _).mp hc) hbelow)
   input c x hc := (h _).mpr (hP.input c x ((h _).mp hc))
-  step c i msg hc hpending := (h _).mpr (hP.step c i msg ((h _).mp hc) hpending)
-  recover c i hc := (h _).mpr (hP.recover c i ((h _).mp hc))
+  step c i msg hc hpending ctx := (h _).mpr (hP.step c i msg ((h _).mp hc) hpending ctx)
+  recover c i hc t := (h _).mpr (hP.recover c i ((h _).mp hc) t)
 
 /-- Timers carry only what actors arm: a message no actor arms never arrives as a timer. -/
 theorem timers (sys : System σ) {T : (i : σ.Id) → σ.Msg i → Prop}
-    (step : ∀ i s msg delay m, Effect.after delay m ∈ ((sys.actor i).step s msg).2 → T i m)
-    (recover : ∀ i s delay m, Effect.after delay m ∈ ((sys.actor i).recover s).2 → T i m) :
+    (step : ∀ i ctx s msg delay m, Effect.after delay m ∈ ((sys.actor i).stepAt ctx s msg).2 →
+      T i m)
+    (recover : ∀ i t s delay m, Effect.after delay m ∈ ((sys.actor i).recoverAt t s).2 → T i m) :
     sys.Monotone fun c => ∀ i m, m ∈ c.timers i → T i m where
   blank := fun _ _ h => nomatch h
   below _ _ h hbelow := fun i m hm => h i m (hbelow.timers i m hm)
   input _ _ h := h
-  step c i msg h _ := fun j m hm => by
+  step c i msg h _ ctx := fun j m hm => by
     rcases SysState.mem_grow_timers.mp hm with hold | ⟨rfl, delay, hnew⟩
     · exact h j m hold
-    · exact step j _ msg delay m hnew
-  recover c i h := fun j m hm => by
+    · exact step j ctx _ msg delay m hnew
+  recover c i h t := fun j m hm => by
     rcases SysState.mem_grow_timers.mp hm with hold | ⟨rfl, delay, hnew⟩
     · exact h j m hold
-    · exact recover j _ delay m hnew
+    · exact recover j t _ delay m hnew
 
 end Monotone
 
