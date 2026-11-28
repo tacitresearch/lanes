@@ -78,13 +78,15 @@ ByteArray.toList` of its call, and `Replace.plan_map` says the plan it runs is t
 error. Every `lake test` runs a script of calls, errors included, in a temporary directory and
 checks each answer against the model's.
 
-## Reach, cost and coupling
+## Reach against total cost (rule 1.8)
 
 Reach: files, configuration, logs and caches are in most programs, and the two patterns are what
-a journal, SQLite or Raft is built on. Cost: a pure model and its proofs, which a program that
-does not import them does not build; about forty lines of C and one binding file, both trusted
-and listed; `File.replace` now unlinks a temporary file first, one more system call. Coupling:
-the model forces nothing on the core; the binding decides nothing.
+a journal, SQLite or Raft is built on; today a program in Lean has no way to prove its files
+survive a crash. Its own cost: a pure model and its proofs; about forty lines of C and one
+binding file, both trusted and listed; the concepts a user meets are the calls, `fsync`, and
+"settled". Cost to non-users: none forced on the core; `import Lanes` builds the model once;
+`File.replace` now unlinks a temporary file first, one more system call; the C functions are
+linked into every executable, as the rest of `native/lanes.c` is.
 
 Not modelled: links, permissions, file times, a full disk, other file systems' crash rules (XFS
 may leave zeros where an append did not land; pages written in place may reach the disk in any
