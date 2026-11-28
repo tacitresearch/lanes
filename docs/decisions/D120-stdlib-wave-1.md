@@ -1,4 +1,4 @@
-# D?. Compression in pure Lean, logs in the lowest package, forms read strictly
+# D120. Compression in pure Lean, logs in the lowest package, forms read strictly
 
 Status: Accepted
 
