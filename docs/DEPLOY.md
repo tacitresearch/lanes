@@ -256,6 +256,13 @@ A stack in another zone or region from a snapshot is a new stack with `JournalSn
 the snapshot to that region first); it gets new buckets, so the media must be copied or pointed
 at. It has not been tried.
 
+A copy of production restored into staging must not act for production. Start it the first time
+with `Journal.Store.restored` set: the outputs the files owe are marked handed over and not
+handed over, and the journal takes a new id, so no output of the copy has the id of one of
+production's (`TRUSTED.md`, the journal's files). Jobs in flight in the copy are attempted again
+when their deadlines pass, by staging's workers and with staging's credentials. Leave it unset
+for the starts after: each start with it drops what the shard owes.
+
 ## Logs and metrics
 
 The application's stdout and stderr go to journald (`journalctl -u lanes-app`), and
@@ -360,6 +367,10 @@ adapter (`Aws.Ses`, SES API v2's `SendEmail`) sends a message with the same cred
   -- In the handler of the system's outputs:
   Aws.Ses.handler port mail creds.source {} rt out
 ```
+
+`Aws.Ses.handlerOnce` takes the output's id as well (`Runtime.startWith`, `Http.serveFronted`)
+and a state opened with `Aws.Ses.Once.open` on a file beside the journal: an output handed over
+again after a restart is then not sent again, and is answered `unknown`.
 
 Verify the identity first (**Amazon SES → Identities → Create identity**; a domain takes DNS
 records, which Route 53 can add). A new account is in SES's sandbox: it sends only to verified

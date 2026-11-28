@@ -28,6 +28,7 @@ public import Lanes.Core.Service
 public import Lanes.Core.Step
 public import Lanes.Core.System
 public import Lanes.Core.World
+public import Lanes.Data.Body
 public import Lanes.Data.Codec
 public import Lanes.Data.Declare
 public import Lanes.Data.Enum
@@ -39,6 +40,7 @@ public import Lanes.Durable.Frame
 public import Lanes.Durable.IO.Journal
 public import Lanes.Durable.Journal
 public import Lanes.Durable.Migration
+public import Lanes.Durable.OutputId
 public import Lanes.Durable.Reading
 public import Lanes.Durable.Snapshot
 public import Lanes.Durable.Upgrade

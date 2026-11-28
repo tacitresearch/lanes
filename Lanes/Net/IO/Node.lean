@@ -35,7 +35,8 @@ def serveShard (sys : System σ) [Hashable σ.Id] (hosts : σ.Id → Bool) (brid
   let peers ← Peers.start peers fun parcel => do
     if let some offer ← await ready.result? then offer parcel
   let server ← try
-      serveFronted (sys.shard hosts) bridge.shard config runtimeConfig (log := log) fun
+      serveFronted (sys.shard hosts) bridge.shard config runtimeConfig (log := log) fun _ out =>
+        match out with
         | .inl out => onOutput out
         | .inr parcel => peers.send parcel
     catch e =>

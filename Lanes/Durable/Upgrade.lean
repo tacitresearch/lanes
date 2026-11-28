@@ -6,6 +6,7 @@ module
 
 public import Lanes.Durable.Disk
 public import Lanes.Durable.Migration
+public import Lanes.Durable.OutputId
 
 /-!
 A start that finds the files of an older version of the system. It loads them as that version
@@ -114,6 +115,39 @@ def begin (input : Codec σ.In) (actors : Option (Image.Codecs sys)) (system : S
   | result => result.map .found
 
 end Disk
+
+namespace Upgrade
+
+variable {sys : System σ}
+
+/-- The origins, in the older history, of the outputs an older version's files owe: those that
+`start` migrates into `Upgraded.pending`, in order (`Journal.resumeIds`). The old history keeps
+its places, so an output it owed keeps its id across the migration. -/
+def owed (upgrades : List (Upgrade sys)) (disk : Disk) : List Origin :=
+  match (Frame.decode disk.journal).head?.bind fun first => upgrades.find? (·.reads first) with
+  | none => []
+  | some u =>
+    match disk.read u.input u.actors u.system with
+    | .error _ => []
+    | .ok found =>
+      match resumeIds u.old found.saved found.past with
+      | some (_, _, pending) => pending.map Prod.fst
+      | none => []
+
+/-- The migrated outputs with their origins. Should the two lists not match, which `owed` rules
+out, each output takes the place of the new journal's mark. -/
+def label {α : Type} (index : Nat) (origins : List Origin) (pending : List α) : List (Origin × α) :=
+  if origins.length = pending.length then origins.zip pending else tag (index + 1) pending
+
+/-- Labelling hands over every migrated output, in order. -/
+theorem label_snd {α : Type} (index : Nat) (origins : List Origin) (pending : List α) :
+    (label index origins pending).map Prod.snd = pending := by
+  unfold label
+  split
+  · next h => exact List.map_snd_zip (by omega)
+  · exact tag_snd _ _ _
+
+end Upgrade
 
 namespace Begun
 

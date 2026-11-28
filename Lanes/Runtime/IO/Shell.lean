@@ -94,12 +94,20 @@ structure Journal.Log (sys : System σ) where
   and cut it. `none` if this journal cannot save. -/
   save : Option (Kernel.Image sys → IO Unit) := none
   /-- Outputs of an older version of the system that it had not handed over, migrated
-  (`Journal.Upgrade`). They are handed over first, and then `migrate` writes the migration. -/
-  pending : List σ.Out := []
+  (`Journal.Upgrade`), each with its origin in the older history. They are handed over first,
+  and then `migrate` writes the migration. -/
+  pending : List (Journal.Origin × σ.Out) := []
   /-- Write the migration of an older version's files. Run once `pending` is handed over and
   before anything is appended, so that dying in between hands them over again. -/
   migrate : IO Unit := pure ()
   close : IO Unit
+  /-- The journal's own id, made at random when the journal was begun. With the origin of an
+  output it is the output's id (`Journal.OutputId`), so that two journals never give one id. -/
+  id : String := ""
+  /-- The files were restored from elsewhere, production into staging: the outputs they owe are
+  not handed over but marked handed, and the journal has a new id
+  (`Journal.Store.restored`). -/
+  restored : Bool := false
 
 private abbrev Cmd (sys : System σ) :=
   Batch.Command σ (fun i => IO.Promise (sys.State i)) (IO.Promise Bool)
@@ -143,9 +151,10 @@ private def wake (rt : Runtime sys) : Wake → BaseIO Unit
 private def record (rt : Runtime sys) (events : List (Event σ)) : BaseIO Unit := do
   if rt.config.record then rt.log.modify (· ++ events.toArray)
 
-private def handOver (onOutput : σ.Out → Async Unit) (outputs : List σ.Out) : Async Unit := do
-  for out in outputs do
-    try onOutput out
+private def handOver (onOutput : Journal.OutputId → σ.Out → Async Unit) (journal : String)
+    (outputs : List (Journal.Origin × σ.Out)) : Async Unit := do
+  for (origin, out) in outputs do
+    try onOutput ⟨journal, origin⟩ out
     catch e => IO.eprintln s!"lanes: output handler failed: {e}"
 
 /-- Everything that has arrived, and whether the inbox is closed. If nothing has and the
@@ -175,27 +184,38 @@ What to do with the commands taken at once is `Batch.run`, a pure function with 
 the turns it asks of the kernel, and the acts to perform for them, in order. This loop reads
 the clock, takes every command that has arrived, and performs the acts: one exchange with the
 other threads and one write to the journal for however many inputs arrived together. With a
-journal the kernel starts as the journal describes (`Journal.resume`).
+journal the kernel starts as the journal describes (`Journal.resumeIds`).
 -/
-private def loop (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
+private def loop (rt : Runtime sys) (onOutput : Journal.OutputId → σ.Out → Async Unit)
     (waiting : IO.Ref (Array (Bool × IO.Promise Bool))) (journal : Option (Journal.Log sys)) :
     IO Unit := do
   let (start, outputs) ← match journal with
     | some log =>
-      match Journal.resume sys log.saved log.past with
-      | some found => pure found
+      match Journal.resumeIds sys log.saved log.past with
+      | some (k, _, owed) => pure (k, owed)
       | none => throw (IO.userError "lanes: the journal does not continue its snapshot")
-    | none => pure (Kernel.boot sys)
-  if journal.isNone then rt.record (outputs.map .output)
-  let deliver := fun (outputs : List σ.Out) => do
-    discard <| Parker.wait (← (handOver onOutput outputs).toBaseIO)
-  let handOver := fun (outputs : List σ.Out) => do
+    | none =>
+      let (k, outputs) := Kernel.boot sys
+      pure (k, Journal.tag 0 outputs)
+  if journal.isNone then rt.record (outputs.map (.output ·.2))
+  let id ← match journal with
+    | some log => pure log.id
+    | none => pure (Journal.journalId (← IO.getRandomBytes 16))
+  let restored := journal.any (·.restored)
+  let deliver := fun (outputs : List (Journal.Origin × σ.Out)) => do
+    discard <| Parker.wait (← (handOver onOutput id outputs).toBaseIO)
+  let handOver := fun (outputs : List (Journal.Origin × σ.Out)) => do
     deliver outputs
     if let some log := journal then unless outputs.isEmpty do log.note [.handed]
+  -- The history's length, as the journal counts it: each act adds what `Batch.Act.grows` says.
+  let mut index := (journal.map (·.index)).getD 0
   if let some log := journal then
-    deliver log.pending
+    unless restored do deliver log.pending
     log.migrate
-  handOver outputs
+  if restored then
+    if let some log := journal then unless outputs.isEmpty do log.append [.handed]
+  else handOver outputs
+  unless outputs.isEmpty do index := index + 1
   rt.recovered.set true
   let since := start.clock_ms
   let epoch ← IO.monoMsNow
@@ -220,7 +240,7 @@ private def loop (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
       | .on => { workers }
       | .auto => pace.spread rt.config.pace workers
     let config : Batch.Config :=
-      { now_ms := ← clock, fuel := max 1 rt.config.batch, snapshotEvery, spread }
+      { now_ms := ← clock, index, fuel := max 1 rt.config.batch, snapshotEvery, spread }
     let held ← waiting.get
     let batch := if parallel == .off then batch
       else Batch.group (max 1 (min rt.config.batch rt.config.snapshotEvery)) batch
@@ -239,6 +259,7 @@ private def loop (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
         if 1 < spread.workers then { b with pool := b.pool + 1 }
         else { b with inline := b.inline + 1 }
     written := count
+    index := index + Batch.grown acts
     for act in acts do
       match act with
       | .append entries => if let some log := journal then log.append entries.toList
@@ -253,7 +274,7 @@ private def loop (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
 those whose commands it never took. Those are taken out of the inbox and dropped, and a caller
 waits on a promise that answers when it is dropped. The inbox is closed first, before the
 journal, which may take its time: nothing is accepted by a shard that has ended. -/
-private def run (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
+private def run (rt : Runtime sys) (onOutput : Journal.OutputId → σ.Out → Async Unit)
     (journal : Option (Journal.Log sys)) : IO Unit := do
   let waiting ← IO.mkRef #[]
   let error ← (rt.loop onOutput waiting journal).toBaseIO
@@ -267,7 +288,9 @@ private def run (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
   rt.finished.resolve (match error with | .error e => some e | .ok () => none)
 
 /-- Boot a system on one shard, which runs on a thread of its own until `stop`. The handler is
-given the runtime, so that an adapter can answer an output with an input (`tryInput`). A program whose
+given the runtime, so that an adapter can answer an output with an input (`tryInput`), and each
+output's id, the same each time the output is handed over, which a driver passes on as the
+idempotency key (`Journal.OutputId`). A program whose
 `main` returns without stopping its runtimes does not exit.
 
 Each output goes to `onOutput`, and the shard waits for it: a slow handler holds every actor up,
@@ -280,10 +303,10 @@ nothing may depend on a timer not firing early: the semantics lets one fire at a
 
 With a `journal` the shard is durable: it starts in the state the journal describes, and every
 input it accepts is in the journal before any output it causes is handed over. Outputs handed
-over shortly before the process died may be handed over again, so a handler that must not
-repeat itself has to tell. The kernel's clock stands still while the process is down. -/
+over shortly before the process died may be handed over again, with the same id, so a handler
+that must not repeat itself has to tell, by the id. The kernel's clock stands still while the process is down. -/
 def startWith (sys : System σ) [Hashable σ.Id] (config : Runtime.Config := {})
-    (onOutput : Runtime sys → σ.Out → Async Unit)
+    (onOutput : Runtime sys → Journal.OutputId → σ.Out → Async Unit)
     (journal : Option (Journal.Log sys) := none) : Async (Runtime sys) := do
   let rt : Runtime sys := {
     config
@@ -301,7 +324,7 @@ def startWith (sys : System σ) [Hashable σ.Id] (config : Runtime.Config := {})
 def start (sys : System σ) [Hashable σ.Id] (config : Runtime.Config := {})
     (onOutput : σ.Out → Async Unit := fun _ => pure ())
     (journal : Option (Journal.Log sys) := none) : Async (Runtime sys) :=
-  startWith sys config (fun _ => onOutput) journal
+  startWith sys config (fun _ _ => onOutput) journal
 
 private def capacity (rt : Runtime sys) : Nat :=
   max 1 rt.config.inboxCapacity
