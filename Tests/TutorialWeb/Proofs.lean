@@ -6,8 +6,8 @@ import Lanes.Semantics
 import Tests.TutorialWeb.Files
 
 /-!
-Proofs that need the proof layer (CSLib, Mathlib), and the axiom gates. Nothing executable
-imports this file.
+Proofs that need the proof layer (`Lanes.Semantics`), and the axiom gates. Nothing
+executable imports this file.
 -/
 
 namespace Shelf

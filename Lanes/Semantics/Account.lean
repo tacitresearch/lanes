@@ -44,8 +44,6 @@ outputs.
 
 namespace Lanes
 
-open Cslib
-
 namespace Service
 
 variable {In Out S T : Type}
@@ -77,20 +75,20 @@ variable [DecidableEq In] [DecidableEq Out]
 /-- Pending inputs take effect one after another, in as many internal steps of the spec as
 there are of them. -/
 theorem takes (svc : Service In Out S T) (xs : List In) :
-    ∀ (t : Abs In Out S) (rest : Multiset In), rest + ↑xs ≤ t.pending →
+    ∀ (t : Abs In Out S) (rest : Bag In), rest + ↑xs ≤ t.pending →
       ∃ t', svc.spec.lts.τSTr t t' ∧ t'.value = (svc.run t.value xs).1 ∧
         t'.outbox = t.outbox + ↑(svc.run t.value xs).2 ∧ rest ≤ t'.pending := by
   induction xs with
   | nil => exact fun t rest h => ⟨t, .refl, rfl, by simp, by simpa using h⟩
   | cons x xs ih =>
     intro t rest h
-    rw [← Multiset.cons_coe, Multiset.add_cons] at h
+    rw [← Bag.cons_coe, Bag.add_cons] at h
     obtain ⟨t', ht', hvalue, houtbox, hrest⟩ := ih
       ⟨(svc.step t.value x).1, t.pending.erase x, t.outbox + (svc.step t.value x).2⟩ rest
-      (by simpa using Multiset.erase_le_erase x h)
-    refine ⟨t', .head ⟨x, Multiset.mem_of_le h (Multiset.mem_cons_self _ _), rfl⟩ ht', hvalue, ?_,
+      (by simpa using Bag.erase_le_erase x h)
+    refine ⟨t', .head ⟨x, Bag.mem_of_le h (Bag.mem_cons_self _ _), rfl⟩ ht', hvalue, ?_,
       hrest⟩
-    rw [houtbox, run, ← Multiset.coe_add, add_assoc]
+    rw [houtbox, run, ← Bag.coe_add, Bag.add_assoc]
 
 end Service
 
@@ -109,9 +107,9 @@ structure Account (sys : System σ) (S W : Type) where
   /-- The output a message in flight carries that is still to be handed over. -/
   owe : Envelope σ → Option σ.Out := fun _ => none
   /-- Inputs still to take effect that the actors' states or the witness hold. -/
-  held : ((i : σ.Id) → sys.State i) → W → Multiset σ.In := fun _ _ => 0
+  held : ((i : σ.Id) → sys.State i) → W → Bag σ.In := fun _ _ => 0
   /-- Outputs still to be handed over that the actors' states or the witness hold. -/
-  owing : ((i : σ.Id) → sys.State i) → W → Multiset σ.Out := fun _ _ => 0
+  owing : ((i : σ.Id) → sys.State i) → W → Bag σ.Out := fun _ _ => 0
   /-- The values of the service that the actors' states and the messages in flight may be
   read as, with the witness. -/
   value : ((i : σ.Id) → sys.State i) → List (Envelope σ) → W → S → Prop
@@ -121,11 +119,11 @@ namespace Account
 variable (a : Account sys S W)
 
 /-- Every input a state holds that is still to take effect. -/
-def pending (c : SysState sys) (w : W) : Multiset σ.In :=
+def pending (c : SysState sys) (w : W) : Bag σ.In :=
   ↑(c.net.filterMap a.pend) + a.held c.state w
 
 /-- Every output a state has waiting or holds. -/
-def owed (c : SysState sys) (w : W) : Multiset σ.Out :=
+def owed (c : SysState sys) (w : W) : Bag σ.Out :=
   ↑c.outbox + ↑(c.net.filterMap a.owe) + a.owing c.state w
 
 /-- The spec's state `t` explains `c` with the witness `w`: its value is one the account allows,
@@ -163,7 +161,7 @@ theorem Holds.moves {w : W} {t : Service.Abs σ.In σ.Out S} (h : a.Holds c w t)
     Service.takes svc xs t (a.pending c' w') (hpending.trans h.pending)
   refine ⟨t', ht', w', hvalue' ▸ hvalue, hrest, howed.trans ?_⟩
   rw [houtbox']
-  exact add_le_add h.owed le_rfl
+  exact Bag.add_le_add h.owed Bag.le_rfl
 
 variable (a svc) in
 /--
@@ -194,7 +192,7 @@ theorem Holds.fires {w : W} {t₀ : Service.Abs σ.In σ.Out S} {t : T} (h : a.H
     .tr ht₁ ⟨by rwa [hvalue₁], rfl⟩ .refl, w', by rw [hvalue₁]; exact hvalue, hrest, ?_⟩
   refine howed.trans ?_
   rw [houtbox₁, hvalue₁]
-  exact add_le_add (add_le_add h.owed le_rfl) le_rfl
+  exact Bag.add_le_add (Bag.add_le_add h.owed Bag.le_rfl) Bag.le_rfl
 
 /-- A step that `Passes` the deadline `d` names is answered by a step of the spec with that
 label. -/
@@ -221,9 +219,9 @@ theorem Moves.of_loses (hl : c'.Loses c)
     (hv : ∀ w v, a.value c.state c.net w v → a.value c'.state c'.net w v) : a.Moves svc c c' := by
   refine Moves.of_le fun w v h => ⟨w, hv w v h, ?_, ?_⟩
   · simp only [pending, hl.state]
-    exact add_le_add (Multiset.coe_le.mpr (hl.net.filterMap _).subperm) le_rfl
+    exact Bag.add_le_add (Bag.coe_le_coe_of_sublist (hl.net.filterMap _)) Bag.le_rfl
   · simp only [owed, hl.state, hl.outbox]
-    exact add_le_add (add_le_add le_rfl (Multiset.coe_le.mpr (hl.net.filterMap _).subperm)) le_rfl
+    exact Bag.add_le_add (Bag.add_le_add Bag.le_rfl (Bag.coe_le_coe_of_sublist (hl.net.filterMap _))) Bag.le_rfl
 
 /-- An actor that moves and sends and outputs nothing, such as one that recovers, in a state
 the account reads no differently. -/
@@ -249,13 +247,13 @@ theorem Moves.forward (he : e ∈ c.net)
     (hheld : ∀ w, a.held (update c.state e.dst r.1) w = a.held c.state w := by intro; rfl)
     (howing : ∀ w, a.owing (update c.state e.dst r.1) w = a.owing c.state w := by intro; rfl) :
     a.Moves svc c (({ c with net := c.net.erase e }).grow e.dst r) := by
-  refine Moves.of_le fun w v h => ⟨w, hvalue w v h, le_of_eq ?_, le_of_eq ?_⟩
+  refine Moves.of_le fun w v h => ⟨w, hvalue w v h, Bag.le_of_eq ?_, Bag.le_of_eq ?_⟩
   · simp only [pending, SysState.grow, hheld, List.filterMap_append, hpend,
-      Multiset.coe_eq_coe.mpr (filterMap_perm_erase he), ← Multiset.coe_add]
-    abel
+      Bag.coe_eq_coe.mpr (filterMap_perm_erase he), ← Bag.coe_add]
+    ac_rfl
   · simp only [owed, SysState.grow, howing, List.filterMap_append, ← howe,
-      Multiset.coe_eq_coe.mpr (filterMap_perm_erase he), ← Multiset.coe_add]
-    abel
+      Bag.coe_eq_coe.mpr (filterMap_perm_erase he), ← Bag.coe_add]
+    ac_rfl
 
 /-- An actor handles `e`, and that is the input `x` that `e` carried taking effect: its sends
 carry no input, and its outputs and sends carry the outputs of `x`. -/
@@ -270,16 +268,16 @@ theorem Moves.take (he : e ∈ c.net) {x : σ.In} (hx : a.pend e = some x) (hnon
     (howing : ∀ w, a.owing (update c.state e.dst r.1) w = a.owing c.state w := by intro; rfl) :
     a.Moves svc c (({ c with net := c.net.erase e }).grow e.dst r) := by
   intro w v h
-  refine ⟨w, [x], by rw [Service.run_singleton]; exact hvalue w v h, le_of_eq ?_, le_of_eq ?_⟩
+  refine ⟨w, [x], by rw [Service.run_singleton]; exact hvalue w v h, Bag.le_of_eq ?_, Bag.le_of_eq ?_⟩
   · simp only [pending, SysState.grow, hheld, List.filterMap_append, hpend, List.append_nil,
-      Multiset.coe_eq_coe.mpr (filterMap_perm_erase he), hx, Option.toList_some,
-      ← Multiset.coe_add]
-    abel
+      Bag.coe_eq_coe.mpr (filterMap_perm_erase he), hx, Option.toList_some,
+      ← Bag.coe_add]
+    ac_rfl
   · rw [Service.run_singleton, ← howe w v h]
     simp only [owed, SysState.grow, howing, List.filterMap_append,
-      Multiset.coe_eq_coe.mpr (filterMap_perm_erase he), hnone, Option.toList_none,
-      List.nil_append, ← Multiset.coe_add]
-    abel
+      Bag.coe_eq_coe.mpr (filterMap_perm_erase he), hnone, Option.toList_none,
+      List.nil_append, ← Bag.coe_add]
+    ac_rfl
 
 /--
 Actor `i` moves from the states `state` to `r`, having been handed the input `x` and the output
@@ -305,14 +303,14 @@ theorem Moves.handle (he : e ∈ c.net)
   intro w v hv
   obtain ⟨w', xs, hv', hp, ho⟩ := h w v hv
   refine ⟨w', xs, hv', ?_, ?_⟩
-  · have := add_le_add_left hp ↑((c.net.erase e).filterMap a.pend)
+  · have := Bag.add_le_add_left hp ↑((c.net.erase e).filterMap a.pend)
     simp only [pending, SysState.grow, List.filterMap_append,
-      Multiset.coe_eq_coe.mpr (filterMap_perm_erase he), ← Multiset.coe_add]
-    convert this using 1 <;> abel
-  · have := add_le_add_left ho (↑c.outbox + ↑((c.net.erase e).filterMap a.owe))
+      Bag.coe_eq_coe.mpr (filterMap_perm_erase he), ← Bag.coe_add]
+    exact Bag.le_congr this (by ac_rfl) (by ac_rfl)
+  · have := Bag.add_le_add_left ho (↑c.outbox + ↑((c.net.erase e).filterMap a.owe))
     simp only [owed, SysState.grow, List.filterMap_append,
-      Multiset.coe_eq_coe.mpr (filterMap_perm_erase he), ← Multiset.coe_add]
-    convert this using 1 <;> abel
+      Bag.coe_eq_coe.mpr (filterMap_perm_erase he), ← Bag.coe_add]
+    exact Bag.le_congr this (by ac_rfl) (by ac_rfl)
 
 /-- An actor moves with no message taken off the network (a timer, a recovery, a message handed
 over a second time): `Handles` with nothing handed to it. -/
@@ -322,13 +320,13 @@ theorem Moves.grow {i : σ.Id} {r : sys.State i × List (Effect σ i)}
   intro w v hv
   obtain ⟨w', xs, hv', hp, ho⟩ := h w v hv
   refine ⟨w', xs, hv', ?_, ?_⟩
-  · have := add_le_add_left (hp.trans_eq (zero_add _)) ↑(c.net.filterMap a.pend)
-    simp only [pending, SysState.grow, List.filterMap_append, ← Multiset.coe_add]
-    convert this using 1 <;> abel
-  · have := add_le_add_left (ho.trans_eq (congrArg (· + _) (zero_add _)))
+  · have := Bag.add_le_add_left (hp.trans_eq (Bag.zero_add _)) ↑(c.net.filterMap a.pend)
+    simp only [pending, SysState.grow, List.filterMap_append, ← Bag.coe_add]
+    exact Bag.le_congr this (by ac_rfl) (by ac_rfl)
+  · have := Bag.add_le_add_left (ho.trans_eq (congrArg (· + _) (Bag.zero_add _)))
       (↑c.outbox + ↑(c.net.filterMap a.owe))
-    simp only [owed, SysState.grow, List.filterMap_append, ← Multiset.coe_add]
-    convert this using 1 <;> abel
+    simp only [owed, SysState.grow, List.filterMap_append, ← Bag.coe_add]
+    exact Bag.le_congr this (by ac_rfl) (by ac_rfl)
 
 /-- `Handles`, for a step that passes the deadline `t` after the inputs `xs` take effect: `t`
 is then armed, and the outputs of its passing may be owed too. -/
@@ -351,14 +349,14 @@ theorem Fires.handle {t : T} (he : e ∈ c.net)
   intro w v hv
   obtain ⟨w', xs, harmed, hv', hp, ho⟩ := h w v hv
   refine ⟨w', xs, harmed, hv', ?_, ?_⟩
-  · have := add_le_add_left hp ↑((c.net.erase e).filterMap a.pend)
+  · have := Bag.add_le_add_left hp ↑((c.net.erase e).filterMap a.pend)
     simp only [pending, SysState.grow, List.filterMap_append,
-      Multiset.coe_eq_coe.mpr (filterMap_perm_erase he), ← Multiset.coe_add]
-    convert this using 1 <;> abel
-  · have := add_le_add_left ho (↑c.outbox + ↑((c.net.erase e).filterMap a.owe))
+      Bag.coe_eq_coe.mpr (filterMap_perm_erase he), ← Bag.coe_add]
+    exact Bag.le_congr this (by ac_rfl) (by ac_rfl)
+  · have := Bag.add_le_add_left ho (↑c.outbox + ↑((c.net.erase e).filterMap a.owe))
     simp only [owed, SysState.grow, List.filterMap_append,
-      Multiset.coe_eq_coe.mpr (filterMap_perm_erase he), ← Multiset.coe_add]
-    convert this using 1 <;> abel
+      Bag.coe_eq_coe.mpr (filterMap_perm_erase he), ← Bag.coe_add]
+    exact Bag.le_congr this (by ac_rfl) (by ac_rfl)
 
 /-- An actor passes the deadline `t` with no message taken off the network (a timer, a message
 handed over a second time): `HandlesFire` with nothing handed to it. -/
@@ -368,13 +366,13 @@ theorem Fires.grow {i : σ.Id} {r : sys.State i × List (Effect σ i)} {t : T}
   intro w v hv
   obtain ⟨w', xs, harmed, hv', hp, ho⟩ := h w v hv
   refine ⟨w', xs, harmed, hv', ?_, ?_⟩
-  · have := add_le_add_left (hp.trans_eq (zero_add _)) ↑(c.net.filterMap a.pend)
-    simp only [pending, SysState.grow, List.filterMap_append, ← Multiset.coe_add]
-    convert this using 1 <;> abel
-  · have := add_le_add_left (ho.trans_eq (by rw [Option.toList_none, Multiset.coe_nil, zero_add]))
+  · have := Bag.add_le_add_left (hp.trans_eq (Bag.zero_add _)) ↑(c.net.filterMap a.pend)
+    simp only [pending, SysState.grow, List.filterMap_append, ← Bag.coe_add]
+    exact Bag.le_congr this (by ac_rfl) (by ac_rfl)
+  · have := Bag.add_le_add_left (ho.trans_eq (by rw [Option.toList_none, Bag.coe_nil, Bag.zero_add]))
       (↑c.outbox + ↑(c.net.filterMap a.owe))
-    simp only [owed, SysState.grow, List.filterMap_append, ← Multiset.coe_add]
-    convert this using 1 <;> abel
+    simp only [owed, SysState.grow, List.filterMap_append, ← Bag.coe_add]
+    exact Bag.le_congr this (by ac_rfl) (by ac_rfl)
 
 variable {env : EnvModel σ} {inv : SysState sys → Prop}
 
@@ -421,19 +419,19 @@ theorem implements_timed {svc : Service σ.In σ.Out S T} (a : Account sys S W)
   · rintro c t x ⟨hc, -⟩ ⟨w, h⟩
     obtain ⟨hpend, howe⟩ := accept x
     refine ⟨{ t with pending := x ::ₘ t.pending }, .single rfl, w, input c w _ x hc h.value, ?_, ?_⟩
-    · have := Multiset.cons_le_cons x h.pending
-      simp only [pending, filterMap_concat, hpend, Option.toList_some, ← Multiset.coe_add] at this ⊢
-      rw [add_comm (↑(c.net.filterMap a.pend) : Multiset σ.In), add_assoc]
-      simpa [Multiset.singleton_add] using this
+    · have := Bag.cons_le_cons x h.pending
+      simp only [pending, filterMap_concat, hpend, Option.toList_some, ← Bag.coe_add] at this ⊢
+      rw [Bag.add_comm (↑(c.net.filterMap a.pend) : Bag σ.In), Bag.add_assoc]
+      simpa using this
     · simpa [owed, filterMap_concat, howe] using h.owed
   · rintro c t out hc ⟨w, h⟩ hmem
-    have hin : out ∈ (↑c.outbox : Multiset σ.Out) := Multiset.mem_coe.mpr hmem
+    have hin : out ∈ (↑c.outbox : Bag σ.Out) := Bag.mem_coe.mpr hmem
     refine ⟨{ t with outbox := t.outbox.erase out },
-      .single ⟨Multiset.mem_of_le h.owed (Multiset.mem_add.mpr (.inl (Multiset.mem_add.mpr
+      .single ⟨Bag.mem_of_le h.owed (Bag.mem_add.mpr (.inl (Bag.mem_add.mpr
         (.inl hin)))), rfl⟩, w, h.value, h.pending, ?_⟩
-    have := Multiset.erase_le_erase out h.owed
-    rwa [owed, Multiset.erase_add_left_pos _ (Multiset.mem_add.mpr (.inl hin)),
-      Multiset.erase_add_left_pos _ hin, Multiset.coe_erase] at this
+    have := Bag.erase_le_erase out h.owed
+    rwa [owed, Bag.erase_add_left_pos _ (Bag.mem_add.mpr (.inl hin)),
+      Bag.erase_add_left_pos _ hin, Bag.coe_erase] at this
 
 /--
 A system implements its service when every step of an actor `Moves`: an application gives the

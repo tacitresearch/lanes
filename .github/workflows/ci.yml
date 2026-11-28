@@ -90,11 +90,6 @@ jobs:
       # and `lake cache put`. There is none yet.
       - name: native/tls.c declares OpenSSL as its headers do
         run: python3 scripts/tls-declarations.py
-      - if: steps.lean.outputs.packages-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: .lake/packages
-          key: ${{ steps.lean.outputs.packages-key }}
       - if: steps.lean.outputs.warm != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -165,7 +160,6 @@ jobs:
         run: |
           lake exe lanes new demo-app --dir "$RUNNER_TEMP/demo-app" --lanes-path "$GITHUB_WORKSPACE"
           cd "$RUNNER_TEMP/demo-app"
-          mkdir -p .lake && ln -sfn "$GITHUB_WORKSPACE/.lake/packages" .lake/packages
           lake build
           lake test
 
@@ -221,7 +215,6 @@ jobs:
           for package in $PACKAGES; do
             echo "::group::$package"
             mkdir -p "$package/.lake"
-            ln -sfn "$GITHUB_WORKSPACE/.lake/packages" "$package/.lake/packages"
             (cd "$package" && lake build --wfail)
             echo "::endgroup::"
           done
@@ -281,11 +274,6 @@ jobs:
         uses: ./.github/actions/lean
       - name: Build
         run: lake build --wfail
-      - if: steps.lean.outputs.packages-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: .lake/packages
-          key: ${{ steps.lean.outputs.packages-key }}
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .lake/build
@@ -296,7 +284,6 @@ jobs:
         run: |
           lake exe lanes new demo-app --dir "$RUNNER_TEMP/demo-app" --lanes-path "$GITHUB_WORKSPACE"
           cd "$RUNNER_TEMP/demo-app"
-          mkdir -p .lake && ln -sfn "$GITHUB_WORKSPACE/.lake/packages" .lake/packages
           lake build
           lake test
           .lake/build/bin/demo-app 8090 & pid=$!

@@ -70,8 +70,6 @@ and fairness delivers it as any other (`System.Run.Fair.routed_right`).
 
 namespace Lanes
 
-open Cslib
-
 variable {σ τ : Signature} {a : System σ} {b : System τ} {w : Wiring σ τ}
   {env : EnvModel (joinSig σ τ)}
 
@@ -174,7 +172,7 @@ theorem Wiring.leftView_projects (w : Wiring σ τ) (env : EnvModel (joinSig σ 
 run of that system alone, when its inputs may be lost, repeated and reordered: position `n` of
 the join is position `f n` alone, and up to there the two runs show the same deeds. -/
 theorem System.Run.Fair.left {r : (a.join b w).Run env} (hfair : r.Fair) :
-    ∃ (r' : a.Run env.left) (f : ℕ → ℕ), r'.Fair ∧ StrictMono f ∧
+    ∃ (r' : a.Run env.left) (f : Nat → Nat), r'.Fair ∧ StrictMono f ∧
       (∀ n, r'.state (f n) = (r.state n).thinLeft) ∧
       ∀ n, (r'.event.take (f n)).filterMap (·.bind w.shown)
         = (r.event.take n).filterMap (·.bind Event.leftDeed) := by
@@ -278,7 +276,7 @@ theorem Wiring.rightView_projects (w : Wiring σ τ) (env : EnvModel (joinSig σ
 fair run of that system alone, when its inputs may be lost, repeated and reordered: position `n`
 of the join is position `f n` alone, and up to there the two runs show the same deeds. -/
 theorem System.Run.Fair.right {r : (a.join b w).Run env} (hfair : r.Fair) :
-    ∃ (r' : b.Run env.right) (f : ℕ → ℕ), r'.Fair ∧ StrictMono f ∧
+    ∃ (r' : b.Run env.right) (f : Nat → Nat), r'.Fair ∧ StrictMono f ∧
       (∀ n, r'.state (f n) = (r.state n).thinRight) ∧
       ∀ n, (r'.event.take (f n)).filterMap (·.bind w.shownRight)
         = (r.event.take n).filterMap (·.bind Event.rightDeed) := by
@@ -466,7 +464,7 @@ theorem SysState.step_left_state {c c' : SysState (a.join b w)} {ev : Event (joi
 /-- In a fair run of a join, a message in flight to an actor of `b` is handled by it, on a link
 that does not lose it, when the environment neither crashes that actor nor restarts the process
 and it never stops. -/
-theorem System.Run.Fair.handled_right {r : (a.join b w).Run env} (hfair : r.Fair) {n : ℕ}
+theorem System.Run.Fair.handled_right {r : (a.join b w).Run env} (hfair : r.Fair) {n : Nat}
     {src : Option (σ.Id ⊕ τ.Id)} {j : τ.Id} {msg : τ.Msg j}
     (hlossless : (env.link src (.inr j)).lossy = false) (hcrash : env.mayCrash (.inr j) = false)
     (hrestart : env.mayRestart = false)
@@ -481,7 +479,7 @@ theorem System.Run.Fair.handled_right {r : (a.join b w).Run env} (hfair : r.Fair
 /-- In a fair run of a join, a message in flight to an actor of `a` is handled by it, on a link
 that does not lose it, when the environment neither crashes that actor nor restarts the process
 and it never stops. -/
-theorem System.Run.Fair.handled_left {r : (a.join b w).Run env} (hfair : r.Fair) {n : ℕ}
+theorem System.Run.Fair.handled_left {r : (a.join b w).Run env} (hfair : r.Fair) {n : Nat}
     {src : Option (σ.Id ⊕ τ.Id)} {i : σ.Id} {msg : σ.Msg i}
     (hlossless : (env.link src (.inl i)).lossy = false) (hcrash : env.mayCrash (.inl i) = false)
     (hrestart : env.mayRestart = false)
@@ -497,7 +495,7 @@ theorem System.Run.Fair.handled_left {r : (a.join b w).Run env} (hfair : r.Fair)
 that the wiring routes to `b`, is handled by the actor of `b` that takes it, at a later
 position: on a link that does not lose it, when the environment neither crashes that actor nor
 restarts the process and it never stops. -/
-theorem System.Run.Fair.routed_right {r : (a.join b w).Run env} (hfair : r.Fair) {n : ℕ}
+theorem System.Run.Fair.routed_right {r : (a.join b w).Run env} (hfair : r.Fair) {n : Nat}
     {ev : Event (joinSig σ τ)} {i : σ.Id} {msg : σ.Msg i} {out : σ.Out} {x : τ.In}
     (hev : r.event n = some ev) (hdeed : ev.leftDeed = some (.handle i msg))
     (hout : .emit out ∈ ((a.actor i).step ((r.state n).state (.inl i)) msg).2)
@@ -518,7 +516,7 @@ theorem System.Run.Fair.routed_right {r : (a.join b w).Run env} (hfair : r.Fair)
 that the wiring routes to `a`, is handled by the actor of `a` that takes it, at a later
 position: on a link that does not lose it, when the environment neither crashes that actor nor
 restarts the process and it never stops. -/
-theorem System.Run.Fair.routed_left {r : (a.join b w).Run env} (hfair : r.Fair) {n : ℕ}
+theorem System.Run.Fair.routed_left {r : (a.join b w).Run env} (hfair : r.Fair) {n : Nat}
     {ev : Event (joinSig σ τ)} {j : τ.Id} {msg : τ.Msg j} {out : τ.Out} {x : σ.In}
     (hev : r.event n = some ev) (hdeed : ev.rightDeed = some (.handle j msg))
     (hout : .emit out ∈ ((b.actor j).step ((r.state n).state (.inr j)) msg).2)

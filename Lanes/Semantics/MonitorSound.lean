@@ -39,8 +39,6 @@ monitored driver respects `==` (`Driver.Respects`) whenever the driver it wraps 
 
 namespace Lanes
 
-open Cslib
-
 variable {In Out S T : Type} [DecidableEq In] [DecidableEq Out] [BEq S] [LawfulBEq S]
 
 /-- The checker treats two states as the same exactly when they stand for the same mathematical
@@ -48,7 +46,7 @@ state. -/
 theorem Service.State.equiv_iff_toAbs_eq {a b : Service.State In Out S} :
     a.equiv b = true ↔ a.toAbs = b.toAbs := by
   refine ⟨State.toAbs_eq_of_equiv, fun h => ?_⟩
-  simp only [State.toAbs, Abs.mk.injEq, Multiset.coe_eq_coe] at h
+  simp only [State.toAbs, Abs.mk.injEq, Bag.coe_eq_coe] at h
   exact State.equiv_iff.mpr ⟨beq_iff_eq.mpr h.1, h.2.1, h.2.2⟩
 
 namespace Check.Monitor
@@ -56,31 +54,33 @@ namespace Check.Monitor
 open Service
 
 /-- The mathematical states a monitor holds as candidates. -/
-def abs (m : Monitor In Out S) : Set (Abs In Out S) :=
-  {a | ∃ s ∈ m.candidates, s.toAbs = a}
+def abs (m : Monitor In Out S) : Abs In Out S → Prop :=
+  fun a => ∃ s ∈ m.candidates, s.toAbs = a
 
 /-- Inclusion of candidates up to `State.equiv` is inclusion of the states held. -/
 theorem within_iff_abs_subset {m₁ m₂ : Monitor In Out S} :
-    Within m₁.candidates m₂.candidates ↔ m₁.abs ⊆ m₂.abs := by
+    Within m₁.candidates m₂.candidates ↔ ∀ a, m₁.abs a → m₂.abs a := by
   constructor
   · rintro h _ ⟨s, hs, rfl⟩
     obtain ⟨t, ht, hst⟩ := h s hs
     exact ⟨t, ht, (State.toAbs_eq_of_equiv hst).symm⟩
   · intro h s hs
-    obtain ⟨t, ht, hts⟩ := h ⟨s, hs, rfl⟩
+    obtain ⟨t, ht, hts⟩ := h _ ⟨s, hs, rfl⟩
     exact ⟨t, ht, State.equiv_iff_toAbs_eq.mpr hts.symm⟩
 
 /-- Two monitors are `==` exactly when they hold the same mathematical states. -/
 theorem beq_iff_abs_eq {m₁ m₂ : Monitor In Out S} : (m₁ == m₂) = true ↔ m₁.abs = m₂.abs := by
   rw [beq_iff, within_iff_abs_subset, within_iff_abs_subset]
-  exact Set.Subset.antisymm_iff.symm
+  exact ⟨fun ⟨h₁, h₂⟩ => funext fun a => propext ⟨h₁ a, h₂ a⟩,
+    fun h => h ▸ ⟨fun _ h => h, fun _ h => h⟩⟩
 
 /-- After an input the monitor holds every state reached, from a state it held, by the input
 arriving and then any number of pending inputs taking effect. -/
 theorem abs_input (svc : Service In Out S T) (m : Monitor In Out S) (x : In) :
     (m.input svc x).abs =
-      {a | ∃ b ∈ m.abs, svc.spec.lts.τSTr { b with pending := x ::ₘ b.pending } a} := by
-  ext a
+      fun a => ∃ b, m.abs b ∧ svc.spec.lts.τSTr { b with pending := x ::ₘ b.pending } a := by
+  funext a
+  apply propext
   constructor
   · rintro ⟨st, hst, rfl⟩
     obtain ⟨seed, hseed, hτ⟩ := close_sound svc hst
@@ -95,8 +95,9 @@ omit [LawfulBEq S] in
 output, with the output delivered. -/
 theorem abs_output (m : Monitor In Out S) (out : Out) :
     (m.output out).abs =
-      {a | ∃ b ∈ m.abs, out ∈ b.outbox ∧ a = { b with outbox := b.outbox.erase out }} := by
-  ext a
+      fun a => ∃ b, m.abs b ∧ out ∈ b.outbox ∧ a = { b with outbox := b.outbox.erase out } := by
+  funext a
+  apply propext
   constructor
   · rintro ⟨st, hst, rfl⟩
     obtain ⟨s, hs, hret⟩ := List.mem_filterMap.mp hst
@@ -109,8 +110,10 @@ theorem abs_output (m : Monitor In Out S) (out : Out) :
 the deadline is armed, by its passing and then any number of pending inputs taking effect. -/
 theorem abs_fire (svc : Service In Out S T) (m : Monitor In Out S) (t : T) :
     (m.fire svc t).abs =
-      {a | ∃ b ∈ m.abs, ∃ b', svc.spec.lts.Tr b (some (.fire t)) b' ∧ svc.spec.lts.τSTr b' a} := by
-  ext a
+      fun a => ∃ b, m.abs b ∧ ∃ b', svc.spec.lts.Tr b (some (.fire t)) b' ∧
+        svc.spec.lts.τSTr b' a := by
+  funext a
+  apply propext
   constructor
   · rintro ⟨st, hst, rfl⟩
     obtain ⟨seed, hseed, hτ⟩ := close_sound svc hst

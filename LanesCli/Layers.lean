@@ -77,6 +77,8 @@ def homes : List (String × Package) := [
   ("Lanes/Check/SearchSound.lean", .model),
   ("Lanes/Check/Fingerprint.lean", .model),
   ("Lanes/Semantics/Refinement.lean", .model),
+  ("Lanes/Semantics/Lts.lean", .model),
+  ("Lanes/Semantics/Seq.lean", .model),
   ("Lanes/Core/", .actors),
   ("Lanes/Proof/", .actors),
   ("Lanes/Check/", .actors),
