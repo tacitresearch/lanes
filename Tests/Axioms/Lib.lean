@@ -3,6 +3,8 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes.Semantics
+import Lanes.Lib.Encoding.CsvSound
+import Lanes.Lib.PathSound
 import Lanes.Lib.Encoding.Cbor
 import Lanes.Lib.Encoding.Cbor.Sound
 
@@ -90,6 +92,10 @@ import Lanes.Lib.Encoding.Cbor.Sound
 
 /-- info: 'Lanes.Cbor.size_of_decode' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Cbor.size_of_decode
+
+-- Lanes.Lib.Encoding.CsvSound
+/-- info: 'Lanes.Csv.parse_write' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Csv.parse_write
 
 -- Lanes.Lib.Encoding.Digits
 /-- info: 'Lanes.Digits.ofChars?_toChars' depends on axioms: [propext, Classical.choice, Quot.sound] -/
@@ -294,6 +300,12 @@ import Lanes.Lib.Encoding.Cbor.Sound
 
 /-- info: 'Lanes.Multipart.filename?_file' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Multipart.filename?_file
+-- Lanes.Lib.PathSound
+/-- info: 'Lanes.Path.clean_clean' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Path.clean_clean
+
+/-- info: 'Lanes.Path.under_names' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Path.under_names
 
 -- Lanes.Lib.Mime.MediaTypeSound
 /-- info: 'Lanes.MediaType.parse_format' depends on axioms: [propext, Classical.choice, Quot.sound] -/
