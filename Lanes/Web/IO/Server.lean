@@ -533,7 +533,7 @@ private def serveOn (system : System τ) [Hashable τ.Id] (bridge : Bridge σ) (
       let d := { d with waiting }
       let (reads, acts) := Gate.admit (σ := readSig) config.reads Gate.acts d.reads id (.ok id)
       if acts.any (· matches .forward _) then
-        let asked ← runtime.tryPeek v.reads fun peek => do
+        let asked ← runtime.tryPeek v.reads (every := v.every) fun peek => do
           let response := match peek with
             | some peek => v.respond peek
             | none => busy

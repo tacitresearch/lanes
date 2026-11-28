@@ -64,7 +64,7 @@ theorem view_answers (config : Config) (s : Settings) {r : Http.Request}
     ∃ x, (bridge s).decode id r = .ok (.inr x)
       ∧ ((state (.inr ())).handle config x).1 = state (.inr ())
       ∧ (((state (.inr ())).handle config x).2.filterMap fun o => (bridge s).encode (.inr o))
-        = [(id, v.answer fun i _ => state i)] := by
+        = [(id, v.answer (fun i _ => state i) [])] := by
   simp only [view] at h
   split at h
   · cases h

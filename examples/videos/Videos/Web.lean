@@ -546,7 +546,7 @@ def view (config : Config) (s : Settings) (r : Http.Request) : Option (Http.View
   if !r.bodyWithin s.maxBody_bytes then none
   else (read? r).map fun c =>
     { reads := [.inr ()]
-      answer := fun get =>
+      answer := fun get _ =>
         readResponse s (Site.handle config (get (.inr ()) List.mem_cons_self) (.request (c 0) (arrived r))).2 }
 
 /-! ## Saving -/
