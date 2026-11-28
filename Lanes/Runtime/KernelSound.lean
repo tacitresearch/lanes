@@ -177,9 +177,32 @@ theorem abs_perform (k : Kernel sys) (ob : List σ.Out) (i : σ.Id) (eff : Effec
 /-! The definitions take pairs apart by pattern, for the compiler's sake. These say the same
 with projections, which is easier to reason about. -/
 
+private theorem foldl_perform_rev (i : σ.Id) (effs : List (Effect σ i)) :
+    ∀ (k : Kernel sys) (outs : List σ.Out),
+      effs.foldl (fun acc eff => ((acc.1.perform i eff).1, (acc.1.perform i eff).2.reverse ++ acc.2))
+          (k, outs)
+        = ((effs.foldl (fun acc eff => ((acc.1.perform i eff).1, acc.2 ++ (acc.1.perform i eff).2))
+              (k, outs.reverse)).1,
+            (effs.foldl (fun acc eff => ((acc.1.perform i eff).1, acc.2 ++ (acc.1.perform i eff).2))
+              (k, outs.reverse)).2.reverse) := by
+  induction effs with
+  | nil => intro k outs; simp
+  | cons eff effs ih => intro k outs; simp [ih]
+
+/-- `performAll` gathers the outputs newest first and turns them round once: it is the fold that
+appends each effect's outputs, in time linear in their number. -/
 theorem performAll_eq (k : Kernel sys) (i : σ.Id) (effs : List (Effect σ i)) :
     k.performAll i effs = effs.foldl
-      (fun acc eff => ((acc.1.perform i eff).1, acc.2 ++ (acc.1.perform i eff).2)) (k, []) := rfl
+      (fun acc eff => ((acc.1.perform i eff).1, acc.2 ++ (acc.1.perform i eff).2)) (k, []) := by
+  have h := foldl_perform_rev i effs k []
+  simp only [List.reverse_nil] at h
+  unfold performAll
+  rw [show (effs.foldl (init := (k, ([] : List σ.Out))) fun (x : Kernel sys × List σ.Out) eff =>
+      match x with
+      | (k, outs) => match k.perform i eff with | (k, more) => (k, more.reverse ++ outs))
+      = effs.foldl (fun acc eff => ((acc.1.perform i eff).1, (acc.1.perform i eff).2.reverse ++ acc.2))
+          (k, []) from rfl, h]
+  simp
 
 theorem settle_eq (k : Kernel sys) (i : σ.Id) (r : sys.State i × List (Effect σ i)) :
     k.settle i r =

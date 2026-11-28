@@ -108,11 +108,14 @@ def perform (k : Kernel sys) (i : σ.Id) : Effect σ i → Kernel sys × List σ
 pair alive, the pair keeps the kernel alive, and a kernel with two owners is copied when it is
 updated. `Tests/Scale.lean` measures that this does not happen. -/
 
+/-- The outputs are gathered newest first and turned round once, so that a step's outputs cost
+time linear in their number (`Kernel.performAll_eq`). -/
 def performAll (k : Kernel sys) (i : σ.Id) (effs : List (Effect σ i)) :
     Kernel sys × List σ.Out :=
-  effs.foldl (init := (k, [])) fun (k, outs) eff =>
+  let (k, outs) := effs.foldl (init := (k, [])) fun (k, outs) eff =>
     let (k, more) := k.perform i eff
-    (k, outs ++ more)
+    (k, more.reverse ++ outs)
+  (k, outs.reverse)
 
 def down (k : Kernel sys) (i : σ.Id) : Kernel sys :=
   let c := k.cell i
