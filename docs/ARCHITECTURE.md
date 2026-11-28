@@ -1043,11 +1043,15 @@ Also:
 
 ## Data and the standard library
 
-What every layer uses is in `Lanes/Data/`: `Enum`, `lanes_data`, and the queue. A type has two
-mappings out of the process, both derived by `lanes_data` from its declaration with their laws
+What every layer uses is in `Lanes/Data/`: `Enum`, `lanes_data`, and the queue. A type has three
+mappings out of the process, each derived by `lanes_data` from its declaration with its laws
 (`docs/decisions/D115-serialization.md`): JSON for HTTP (`deriving ToJson, FromJson`, through
-`Lanes/Lib/Encoding/Json/Derive.lean`) and rows for the typed store (a `table` line, through
-`Lanes/Db/Columns.lean`). There is no binary format: nothing writes values to a file or a peer.
+`Lanes/Lib/Encoding/Json/Derive.lean`), rows for the typed store (a `table` line, through
+`Lanes/Db/Columns.lean`), and CBOR, the standard binary encoding, for messages, files and caches
+(`deriving ToCbor, FromCbor`, through `Lanes/Lib/Encoding/Cbor/Derive.lean`;
+`docs/decisions/D118-cbor.md`). JSON and CBOR are built by the same code from the same pieces
+(`Lanes/Lib/Encoding/Fields.lean`), so a type's CBOR has the shape of its JSON. CBOR is not in
+`import Lanes`: a program imports `Lanes.Lib.Encoding.Cbor` to build and link it.
 The standard library is in `Lanes/Lib/`: encodings, addresses and URLs, time, media types,
 metrics, rate limits, the PostgreSQL protocol (below) and cryptography, with the C it binds
 (Bound C). All of it is total and `Std`-only. A parser or encoder is proved against its
@@ -1063,10 +1067,16 @@ Where: `Lanes/Data/`, `Lanes/Lib/`, `Lanes/Lib/Net/Percent.lean`, `native/`, `or
 | --- | --- | --- | --- |
 | A type `lanes_data` derives JSON for reads back what it writes, and is never `null` | `LawfulJson` and `NonNullJson`, from the laws of `Json.Fields` and `Json.Alts`, which each piece carries (`Json.Fields.readObject_object`, `Json.Codec.ofAlts`); gate `Tests/Axioms/Lib.lean` | None | proved (by construction) |
 | The shapes of derived JSON: a structure an object of its fields, `null` fields left out; a constructor its name, or an object of its name holding its arguments; what Lean's own derived encoders write reads | `Tests/Derive.lean`, in `lake test` | | tested |
+| The CBOR decoder reads back what the encoder writes, for every value within its limits, in any mode | `Cbor.decode_encode`, `Lanes/Lib/Encoding/Cbor/Sound.lean`; gate `Tests/Axioms/Lib.lean` | None | proved |
+| The deterministic encoding is canonical: values equal but for the order of their maps' entries have the same bytes; the deterministic decoder takes each such encoding, and a strict decoder takes one encoding of each value | `Cbor.encodeDeterministic_eq_of_equiv`, `Cbor.decode_encodeDeterministic`, `Cbor.eq_of_decode_strict`; gate `Tests/Axioms/Lib.lean` | None | proved |
+| The CBOR decoder refuses an input over its size, and what it reads is within its depth and length | `Cbor.decode_tooLarge`, `Cbor.size_of_decode`, `Cbor.fits_of_decode`; gate `Tests/Axioms/Lib.lean` | None | proved |
+| A type `lanes_data` derives CBOR for reads back what it writes, and is never `null` | `LawfulCbor` and `NonNullCbor`, from the laws of `Lanes.Fields` and `Lanes.Alts` (`Cbor.Fields.readObject_object`, `Cbor.Codec.ofAlts`); gate `Tests/Axioms/Lib.lean` | None | proved (by construction) |
+| CBOR reads and writes as RFC 8949 and cbor2 do: Appendix A written and read, Appendix F refused, a type's CBOR in its JSON's shape | `Tests/Cbor.lean`, in `lake test`; `oracles/cbor2`, replayed in `lake test` | That cbor2 reads RFC 8949 rightly | tested |
 
 Also:
 
 - Base64 (RFC 4648, each byte string with exactly one spelling: `Base64.decode_eq_some_iff`), compared with Go's standard library on generated cases (`lake exe lanesOracle`).
+- CBOR (RFC 8949: the preferred and the deterministic encodings, a decoder with limits and three modes of strictness, `ToCbor`/`FromCbor` with bignums), compared with Python's cbor2 on generated cases.
 - Civil dates with day numbers and POSIX seconds (`Civil.ofDays_toDays`, `Civil.toDays_ofDays`).
 - IP addresses and CIDR prefixes (RFC 4291 text forms, RFC 5952 output, `Ip.parse_print`, `Ip.Prefix.parse_print`, `Ip.Prefix.contains_iff`), compared with Go's standard library on generated cases.
 - JSON (parser, printers, `ToJson`/`FromJson`; the parser accepts exactly RFC 8259's grammar within its limits, `Json.parse_iff`, and reads back what the printers write, `Json.parse_compress`; JSONTestSuite passes).
@@ -1080,7 +1090,8 @@ Also:
 
 ### Limits
 
-- A recursive type has no derived JSON: a `Json.Codec` is a value, and `lanes_data` cannot define one that refers to itself.
+- A recursive type has no derived JSON or CBOR: a codec is a value, and `lanes_data` cannot define one that refers to itself.
+- A CBOR value holds no float width (the data model has none): the encoder writes the shortest that holds the value. The decoder does not refuse a map with a key twice, nor check what a tag holds, and reads one item, not a sequence.
 - A table's columns are 64-bit: `Int` and `Nat` have no column, since a value that does not fit would not read back.
 - IPv6 zones (`fe80::1%eth0`) are refused, also in URLs, and a leap second (`23:59:60`) is not a time.
 

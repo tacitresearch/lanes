@@ -322,6 +322,10 @@ lanes_data inductive Id (F : Type) where
   constructor is its name, or an object of one field, its name, holding the object of its
   arguments. Every field's type needs the three classes, and `Option α` needs `NonNullJson α`; a
   type parameter is given them.
+- `ToCbor, FromCbor`, always together, give CBOR's instances and laws in the same way and the
+  same shape, a structure a map with a text key per field
+  (`Lanes/Lib/Encoding/Cbor/Derive.lean`). `import Lanes` does not import CBOR: a file that
+  derives it imports `Lanes.Lib.Encoding.Cbor`.
 - A `table` line declares a `TableOf` (`todos`) with its laws, and each index as
   `todos.byOwner`. The columns are the key's fields, then the others in order. Every field's type
   is a column (`Db.ColumnOf`, `Lanes/Db/Columns.lean`): `Int64`, `ByteArray`, `String`, `Bool`,
