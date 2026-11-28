@@ -38,14 +38,19 @@ lake exe lanes docstrings  # how many public declarations of `import Lanes` have
   `LAKE_CACHE_DIR` moves it), with a record of which outputs each module's inputs gave. A build
   whose inputs are recorded there makes hard links in `.lake/build` instead of building. So the
   worktrees and apps of a machine share one copy: a new worktree builds only what no checkout
-  built before, and its `.lake/build` takes almost no disk of its own. The dependencies,
-  Mathlib among them, are linked into the cache too, and their files become read-only. Builds in
-  several worktrees at once are safe: Lake writes each output to a new file, links it in, and
-  removes an output before building it again. An entry is found only by the hash of everything
-  a module's build reads, so it is as good as a build, provided each file read by `include_str`
-  is declared (below). The cache only grows; delete the directory to reclaim it, and set
-  `LAKE_CACHE_DIR=` (empty) to give a checkout a cache of its own, in `.lake/cache`. Nothing is
-  fetched from a remote cache yet (#98).
+  built before, and its `.lake/build` takes almost no disk of its own. Start a worktree with
+  only `.lake/packages` (a link to the shared one); copying a warm `.lake/build` gains nothing.
+  The dependencies, Mathlib among them, are linked into the cache too, and their files become
+  read-only. Never write into a file of `.lake/build` or `.lake/packages` in place: it is also
+  the cache's file, and the read-only bit does not stop root. Lake deletes an output before
+  building it again, and several worktrees can build at once: an output is stored once under
+  its hash and never rewritten, and two builds of a module give the same bytes. An entry is found only by the hash of everything a
+  module's build reads, so it is as good as a build, provided each file read by `include_str` is
+  declared (below). A checkout whose lakefile does not turn the cache on still reads it (Lake's
+  default) and adds nothing to it. The cache only grows; delete the directory to reclaim it. To
+  build from source, delete `.lake/build` and run `LAKE_CACHE_DIR= lake build`: set and empty,
+  it gives the checkout an empty cache of its own, in `.lake/cache` (`LAKE_NO_CACHE` stops
+  downloads only). Nothing is fetched from a remote cache yet (#98).
 - **Small bounds on every pull request, large bounds on a schedule.** A pull request's checks
   are fast and exhaustive at small bounds: each example's `lake test` takes under a minute, and
   a pull request's CI under ten minutes. A model-checking scenario has a small version, in `lake
@@ -71,12 +76,15 @@ lake exe lanes docstrings  # how many public declarations of `import Lanes` have
   one there gets evidence, take it off.
 - Lake hashes a module's source and imports, not the files it reads with `include_str`. So each
   embedded file is an `input_dir` or `input_file` target that the module's library or executable
-  `needs` (`templates/` in `lakefile.lean`; the integrations' lakefiles likewise), which puts the
-  files' hashes in the module's trace: an edit rebuilds it, and neither `.lake/build` nor the
-  artifact cache serves a copy built from the old files. A new `include_str` adds its file the
-  same way. After editing `templates/`, rebuild `lanes` and write `examples/counter` again (move
-  it aside, run `lake exe lanes new counter --dir examples/counter --lanes-path ../..`, put its
-  `lake-manifest.json` back): `lake test` fails while the two differ. Then build and test it.
+  `needs` (`templates/`, `lean-toolchain` and the test keys in `lakefile.lean`; the
+  integrations' lakefiles likewise), which puts the files' hashes in the trace of every module of
+  that library: an edit rebuilds them, and neither `.lake/build` nor the artifact cache serves a
+  copy built from the old files. A new `include_str` adds its file the same way. After editing
+  `templates/`, run `lake build lanes` (`LanesCli.New` is built again, not restored; nothing is
+  to be deleted) and write `examples/counter` again (move it aside, run `lake exe lanes new
+  counter --dir examples/counter --lanes-path ../..`, put its `lake-manifest.json` back): `lake
+  test` fails while the two differ, and rebuilds all of `Tests`, which needs the templates. Then
+  build and test `examples/counter`.
 - Oracles (rule 5.9, `docs/decisions/D80-oracles.md`) are in `oracles/`, one folder per
   reference implementation with its pin, and `oracles/README.md` lists every protocol module and
   every model against its oracle or the reason it has none (lint `oracles`). *Pure oracles*: a
