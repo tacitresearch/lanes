@@ -1041,6 +1041,7 @@ Where: `Lanes/Data/`, `Lanes/Lib/`, `Lanes/Lib/Net/Percent.lean`, `native/`, `or
 Also:
 
 - Base64 (RFC 4648, each byte string with exactly one spelling: `Base64.decode_eq_some_iff`), compared with Go's standard library on generated cases (`lake exe lanesOracle`).
+- CSV (RFC 4180 with a delimiter, a quote and LF or CRLF of one's choice; a reader fed in pieces, with limits), read back as written for every table of fields within the limits (`Csv.parse_write`), compared with Go's standard library on generated cases. Its own root: `import Lanes.Lib.Encoding.Csv`.
 - Civil dates with day numbers and POSIX seconds (`Civil.ofDays_toDays`, `Civil.toDays_ofDays`).
 - IP addresses and CIDR prefixes (RFC 4291 text forms, RFC 5952 output, `Ip.parse_print`, `Ip.Prefix.parse_print`, `Ip.Prefix.contains_iff`), compared with Go's standard library on generated cases.
 - JSON (parser, printers, `ToJson`/`FromJson`; the parser accepts exactly RFC 8259's grammar within its limits, `Json.parse_iff`, and reads back what the printers write, `Json.parse_compress`; JSONTestSuite passes).
