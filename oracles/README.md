@@ -31,10 +31,11 @@ every module a row names exists, and so does every path it cites.
 
 | Folder | Reference | Version | Pinned in | The reference for |
 | --- | --- | --- | --- | --- |
-| `oracles/go` | Go's standard library, `golang.org/x/time` and Prometheus's `expfmt` | Go 1.24.7, x/time 0.11.0, prometheus/common 0.67.5 | `oracles/go/go.mod`, `oracles/go/go.sum` | Base64, IP addresses, times, JSON, media types, rate limits, URLs, XML, mail addresses, the metrics page; and, with Node and h11 (`oracles/go/requests/requests.py`, by hand), the request reader |
+| `oracles/go` | Go's standard library, `golang.org/x/time` and Prometheus's `expfmt` | Go 1.24.7, x/time 0.11.0, prometheus/common 0.67.5 | `oracles/go/go.mod`, `oracles/go/go.sum` | Base64, CSV, paths and globs, HTML's character references, IP addresses, times, JSON, media types, rate limits, URLs, XML, mail addresses, the metrics page; and, with Node and h11 (`oracles/go/requests/requests.py`, by hand), the request reader |
 | `oracles/cbor2` | cbor2 | 6.3.0 | `oracles/cbor2/requirements.txt` | CBOR: what the decoder reads, and the deterministic encoding against cbor2's canonical one |
 | `oracles/botocore` | botocore, and `cryptography` for the signatures it is given | 1.44.12, cryptography 50.0.2 | `oracles/botocore/requirements.txt` | Signature Version 4; CloudFront's signed URLs (`oracles/botocore/cloudfront.jsonl`), signed with the published test keys of `oracles/botocore/keys/` |
 | `oracles/jwcrypto` | jwcrypto | 1.6.2 | `oracles/jwcrypto/requirements.txt` | JWS in compact form and JWK Sets |
+| `oracles/websockets` | websockets, its Sans-I/O protocol | 15.0.1 | `oracles/websockets/requirements.txt` | A WebSocket server's side of a connection: frames, fragments, control frames and close codes |
 | `oracles/moto` | moto's server, S3, SES API v2 and SQS | 5.2.6 | `oracles/moto/requirements.txt` | the recorded runs of the object store, multipart, email and queue models, and of `POST` forms |
 | `oracles/google` | Google's OpenID Connect provider: its discovery document and JWK Set | Fetched on 2026-11-27 | the files themselves | Google's sign-in preset (`Tests/Oidc/Google.lean`) |
 | `oracles/libpq` | libpq, the copy psycopg-binary's wheel ships, loaded with ctypes; the program refuses another major | 18, in psycopg-binary 3.3.9 | `oracles/libpq/requirements.txt` | PostgreSQL's connection strings, URIs and service file |
@@ -51,6 +52,7 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Lib/Crypto/Pbkdf2.lean` | | Not a format: through SCRAM, against RFC 7677 and libpq's recorded session (`Tests/Postgres.lean`) |
 | `Lanes/Lib/Crypto/PublicKey.lean` | `Tests/Signature.lean`, `Tests/Sign.lean` | The DER of keys and signatures against what the `openssl` command writes, and read back from OpenSSL's; a public key's PEM against `openssl pkey -pubout` |
 | `Lanes/Lib/Crypto/Sign.lean` | `Tests/Sign.lean`, `oracles/botocore` | A binding: RFC 6979's signatures, `openssl dgst -sign`, and `cryptography`'s signatures in the CloudFront oracle |
+| `Lanes/Lib/Crypto/Sha1.lean` | | Not a format: FIPS 180-4's examples, and through RFC 6455's handshake example (`Tests/Oracle/WebSocket.lean`) |
 | `Lanes/Lib/Crypto/Sha256.lean` | | Not a format: FIPS 180-4's examples, and OpenSSL on thousands of inputs (`Tests/Crypto.lean`) |
 | `Lanes/Lib/Crypto/Sha512.lean` | | Not a format: FIPS 180-4's examples, as `openssl dgst` computes them (`Tests/Crypto.lean`) |
 | `Lanes/Lib/Crypto/Verify.lean` | `Tests/Signature.lean` | A binding: OpenSSL's check against `Rsa.verifyReference` and keys `openssl` made |
@@ -61,6 +63,7 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Lib/Encoding/Cbor/Decode.lean` | `oracles/cbor2` | Also RFC 8949's examples of Appendix A and its malformed inputs of Appendix F (`Tests/Cbor.lean`); proved to read back what the encoder writes (`Cbor.decode_encode`). Known: cbor2 refuses a map with two keys Python counts equal, such as `true` and `1`, where Lanes reads both; cbor2 reads a NaN's payload only in part |
 | `Lanes/Lib/Encoding/Cbor/Derive.lean` | | Typed values to and from `Cbor`, not bytes; each reads back (`Cbor.Fields.readObject_object`, `Cbor.Codec.ofAlts`), and `Tests/Cbor.lean` pins the shapes against the JSON's |
 | `Lanes/Lib/Encoding/Cbor/Encode.lean` | `oracles/cbor2` | Also Appendix A (`Tests/Cbor.lean`). Known: cbor2's canonical order puts shorter keys first (RFC 7049), where RFC 8949 §4.2.1 sorts them bytewise; cbor2 writes every NaN as `f97e00` |
+| `Lanes/Lib/Encoding/Csv.lean` | `oracles/go/csv` | Known: Go reads CRLF inside a quoted field as LF, where we keep the field as written |
 | `Lanes/Lib/Encoding/Digits.lean` | | Numbers in a base, read back as written (`Lanes/Lib/Encoding/Digits.lean`'s theorems); compared through every format that uses them |
 | `Lanes/Lib/File.lean` | | Not a format: a file replaced whole by the proved plan (`Tests/FileSystem.lean`, `Tests/Crypto.lean`) |
 | `Lanes/Lib/Encoding/Fields.lean` | | Fields and constructors for any format of values, not a format; their laws are proved (`Lanes.Fields.pair`, `Lanes.Alts.sum`) |
@@ -71,11 +74,13 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Lib/Encoding/Json/Grammar.lean` | | RFC 8259's grammar, the spec the parser and printers are proved against; JSONTestSuite (`Tests/Json.lean`) |
 | `Lanes/Lib/Encoding/Json/Parser.lean` | `oracles/go/json` | |
 | `Lanes/Lib/Encoding/Json/Printer.lean` | `oracles/go/json` | Go parses what the printer writes in the parser's cases; proved to read back (`Json.parse_compress`) |
+| `Lanes/Lib/Glob.lean` | `oracles/go/path` | Known: `**` as a whole name of a pattern matches across `/`, where Go reads it as `*` |
 | `Lanes/Lib/Metrics.lean` | `oracles/go/expfmt` | |
 | `Lanes/Lib/Mime/MediaType.lean` | `oracles/go/mime` | |
 | `Lanes/Lib/Net/Ip.lean` | `oracles/go/netip` | |
 | `Lanes/Lib/Net/Percent.lean` | `oracles/go/url` | Through the URL's cases, which decode and encode with it (`Tests/Oracle/Url.lean`) |
 | `Lanes/Lib/Net/Url.lean` | `oracles/go/url` | |
+| `Lanes/Lib/Path.lean` | `oracles/go/path` | `clean` and `join` against `path.Clean` and `path.Join`; `under` has no counterpart in Go's `path` and is proved (`Path.under_names`) |
 | `Lanes/Lib/RateLimit.lean` | `oracles/go/rate` | |
 | `Lanes/Lib/Time/Civil.lean` | `oracles/go/time` | Through the formats, whose dates it computes |
 | `Lanes/Lib/Time/Format.lean` | `oracles/go/time` | |
@@ -87,8 +92,11 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Web/Auth/Rows.lean` | | Not a format: rows of the typed store, whose SQL is the driver's (`Tests/Oracle/Service/Db.lean`) |
 | `Lanes/Web/Auth/Token.lean` | | Tokens only Lanes writes and reads; proved to accept exactly what it signs, before it expires (`Auth.verify_eq_some`) |
 | `Lanes/Web/Html/Basic.lean` | | Proved against a model of the HTML tokenizer (`Html.lex_render`); not yet compared with html5lib or a browser |
+| `Lanes/Web/Html/Entities.lean` | `oracles/go/html` | The table: every name is asked of Go's `html.UnescapeString` (`Tests/Oracle/Html.lean`, replayed in `lake test`). Known: Go leaves out `&nLt;` and `&nGt;` |
 | `Lanes/Web/Html/Htmx.lean` | | Attributes from routes, not a format of its own |
+| `Lanes/Web/Html/Sanitize.lean` | | Its output is proved to hold only what the policy allows (`Html.sanitize_safe`), whatever its reader makes of the input; the reader is tested on attacks written by hand and on generated inputs, whose output it must read back as written (`Tests/Oracle/Html.lean`). A comparison with html5lib's tokenizer is owed |
 | `Lanes/Web/Html/Syntax.lean` | | The template syntax, elaborated to `Html.Basic`'s values |
+| `Lanes/Web/Html/Unescape.lean` | `oracles/go/html` | Known: Go reads `&#x;` as U+FFFD and keeps a decimal reference of one digit without `;`, where the WHATWG standard keeps the first as written and reads the second |
 | `Lanes/Web/Http/Basic.lean` | | HTTP as data, not text |
 | `Lanes/Web/Http/Conn.lean` | | A connection's decisions, proved (`Lanes/Web/Http/ConnSound.lean`); its bytes are `Wire`'s and `ReadRequest`'s |
 | `Lanes/Web/Http/Cookie.lean` | | Proved to read back what it writes (`Lanes/Web/Http/CookieSound.lean`); Go's `http.ParseCookie` is owed |
@@ -106,6 +114,7 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Web/Http/Stream.lean` | | Pieces and parts of a streamed body through the gate, not a format: the bytes are `Conn`'s and `Wire`'s |
 | `Lanes/Web/Http/View.lean` | | Reads answered from the state, not a format |
 | `Lanes/Web/Http/Waiting.lean` | | Request ids, not a format |
+| `Lanes/Web/Http/WebSocket.lean` | `oracles/websockets` | Its frames proved to read back (`WebSocket.decode_encode`); RFC 6455's examples (`Tests/Oracle/WebSocket.lean`). Known: websockets' Sans-I/O layer leaves a text's UTF-8 to the layer above, fails a close inside a fragmented message, and counts a control frame against a fragmented message's limit |
 | `Lanes/Web/Http/Wire.lean` | `oracles/go/requests` | The writer proved against the reader (`Lanes/Web/Http/WireSound.lean`); the responses it reads against `openssl s_server` (`Tests/Tls.lean`) and moto (`oracles/moto`) |
 | `Lanes/Web/Http/WireSpec.lean` | | The spec the wire format is proved against |
 
