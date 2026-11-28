@@ -392,7 +392,10 @@ repository:
 
 The shelf signs its upload forms and links in the bridge, a pure function given its credentials
 once at start, so `main` reads a key of a user that may use the media bucket from the
-environment, with `SHELF_OIDC_DISCOVERY`, the path of the provider's discovery document, and
+environment: a role's credentials would expire under it. An application that signs where IO
+runs, in an `arrive` or a handler, needs no such key on AWS: `Aws.Credentials.find` gives the
+instance's or the task's role, and `S3.presignNow` and `S3.Post.formNow` sign with it, session
+token included (`Lanes/Services/Aws/README.md`). The shelf reads, with the key, `SHELF_OIDC_DISCOVERY`, the path of the provider's discovery document, and
 `SHELF_OIDC_CLIENT_ID` and `SHELF_OIDC_CLIENT_SECRET`. The bucket allows a form's `POST` and a
 presigned `GET` from the site's origin. Register `<LANES_URL>/sign-in/oidc/callback` with the
 provider. The session key is made at the first start in `shelf.secrets`, or the path given

@@ -161,6 +161,60 @@ def byName (port : UInt16) : IO (List (String × Bool)) := do
     ("postgres live: libpq's variables and password file, as psql reads them",
       fromEnv && libpq && settings.toOption.map (·.sslmode) == some .disable) ]
 
+/-- One value the server gives a session opened with `cfg`. -/
+def ask (cfg : Client.Config) (sql : String) : IO (Option String) := do
+  match ← (connect cfg).block with
+  | .ok s =>
+    let reply ← (s.exec (.statement { sql })).block
+    (s.close).block
+    return match reply with
+      | .rows { rows := [[v]], .. } => v
+      | _ => none
+  | .error _ => return none
+
+/-- A service file and a connection string with libpq's options, through `Settings.read`; a host
+where nothing listens tried before the server; and the kind of server asked for. -/
+def options (port : UInt16) : IO (List (String × Bool)) := do
+  let dir : System.FilePath :=
+    s!"{(← IO.getEnv "TMPDIR").getD "/tmp"}/lanes-service-{← IO.monoNanosNow}"
+  IO.FS.createDirAll dir
+  let file := dir / "pg_service.conf"
+  IO.FS.writeFile file
+    s!"[lanes]\nhost=127.0.0.1\nport={port}\nuser=lanes_scram\npassword=scram-pw\ndbname=lanes_test\n"
+  let vars := [("PGSERVICEFILE", file.toString), ("USER", "nobody")]
+  let env : Env IO := { Env.io with var := fun name => pure (vars.lookup name) }
+  let read (conninfo : String) : IO (Option Client.Config) := do
+    return ((← (Settings.read env conninfo).run).toOption.map .ofSettings)
+  let given ← read "service=lanes application_name=lanes-live options='-c search_path=lanes_x'"
+  let appName ← match given with
+    | some cfg => ask cfg "SELECT current_setting('application_name')"
+    | none => pure none
+  let searchPath ← match given with
+    | some cfg => ask cfg "SHOW search_path"
+    | none => pure none
+  let closed := port + 1
+  let tried ← read s!"service=lanes host=127.0.0.1,localhost port={closed},{port} connect_timeout=2"
+  let second ← match tried with
+    | some cfg => ask cfg "SELECT current_user"
+    | none => pure none
+  let kind (attrs : String) : IO (Option String) := do
+    match ← read s!"service=lanes target_session_attrs={attrs}" with
+    | some cfg => ask cfg "SELECT 'here'"
+    | none => pure none
+  let readWrite ← kind "read-write"
+  let primary ← kind "primary"
+  let standby ← kind "standby"
+  let preferStandby ← kind "prefer-standby"
+  IO.FS.removeDirAll dir
+  return [
+    ("postgres live: a service file and a string's application_name and options reach the session",
+      appName == some "lanes-live" && searchPath == some "lanes_x"),
+    ("postgres live: a host where nothing listens is passed for the next",
+      second == some "lanes_scram"),
+    ("postgres live: a primary is taken as read-write and primary, refused as standby, taken by prefer-standby",
+      readWrite == some "here" && primary == some "here" && standby.isNone
+        && preferStandby == some "here") ]
+
 def live : IO (List (String × Bool)) := do
   let some (host, port) ← server | return [("postgres live: skipped, LANES_POSTGRES is not set", true)]
   let trust := config host port "lanes_trust" none
@@ -191,6 +245,7 @@ def live : IO (List (String × Bool)) := do
   let (lostRc, lostRcAllowed) ← lostCommit trust .readCommitted
   let (lostSer, lostSerAllowed) ← lostCommit trust .serializable
   let named ← byName port
+  let withOptions ← options port
   let zero := match boom with
     | .error fields => fields.any (·.value == "22012")
     | _ => false
@@ -209,6 +264,6 @@ def live : IO (List (String × Bool)) := do
       skewSerAllowed && skewRcAllowed),
     ("postgres live: a COMMIT whose reply is lost is answered unknown", lostRc && lostSer),
     ("postgres live: what is read after a lost COMMIT is what the store model allows",
-      lostRcAllowed && lostSerAllowed) ] ++ named
+      lostRcAllowed && lostSerAllowed) ] ++ named ++ withOptions
 
 end Tests.PostgresLive
