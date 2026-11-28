@@ -8,6 +8,7 @@ import Tests.Oracle.Ip
 import Tests.Oracle.Jose
 import Tests.Oracle.Json
 import Tests.Oracle.MediaType
+import Tests.Oracle.Path
 import Tests.Oracle.Metrics
 import Tests.Oracle.RateLimit
 import Tests.Oracle.SigV4
@@ -24,9 +25,9 @@ namespace Tests.Oracle
 def packages : List Package :=
   [Base64.package, Ip.package, Time.package, Json.package, MediaType.package, RateLimit.package,
     Url.package, Xml.package, Metrics.package, SigV4.package, Jose.package,
-    Checks.Mail.package, Checks.CloudFront.package, Csv.package]
+    Checks.Mail.package, Checks.CloudFront.package, Csv.package, Path.package]
 
-def unitTests : List (String × Bool) := Base64.tests ++ Csv.tests ++ Ip.tests ++ Jose.tests ++ MediaType.tests ++ RateLimit.tests ++ Time.tests ++ Url.tests
+def unitTests : List (String × Bool) := Base64.tests ++ Csv.tests ++ Path.tests ++ Ip.tests ++ Jose.tests ++ MediaType.tests ++ RateLimit.tests ++ Time.tests ++ Url.tests
 
 def replayAll : IO (List (String × Bool)) :=
   return (← packages.mapM Package.replay).flatten

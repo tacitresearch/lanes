@@ -1047,6 +1047,7 @@ Also:
 - JSON (parser, printers, `ToJson`/`FromJson`; the parser accepts exactly RFC 8259's grammar within its limits, `Json.parse_iff`, and reads back what the printers write, `Json.parse_compress`; JSONTestSuite passes).
 - Media types (RFC 9110 §8.3.1, `MediaType.parse_format`, case-insensitive by `MediaType.parse_format_eq`), compared with Go's standard library on generated cases.
 - Metrics in the Prometheus text format, whose histograms' buckets count the observations at or below their bounds (`Metrics.Histogram.observeAll_eq`) and whose label values and help text a reader reads back as written (`Metrics.readLabelValue_escapeLabel`, `Metrics.readHelp_escapeHelp`), tested against text checked by hand and against Prometheus's `expfmt`, which parses what it writes.
+- Paths of names separated by `/`: Go's `path.Clean`, idempotent (`Path.clean_clean`), and `path.Join`; `Path.under`, the file a request names below a root, refusing a `..` that would climb out of it, whose result is the root followed by names that are none of `.`, `..` or empty (`Path.under_names`); glob patterns as Go's `path.Match`, with `**` as a whole name matching across `/` (`Lanes/Lib/Glob.lean`, run as an automaton, no backtracking). Compared with Go's standard library on generated cases. Their own roots: `import Lanes.Lib.Path`, `import Lanes.Lib.Glob`.
 - RFC 3339 and HTTP dates (`TimeFormat.parseRfc3339_print`, `TimeFormat.parseHttpDate_print`), compared with Go's standard library on generated cases.
 - SHA-256, HMAC-SHA-256, the comparison of byte strings, and Argon2id from OpenSSL's libcrypto (`Native`, bound from `native/lanes.c`), random bytes from its `RAND_bytes` (`Lanes.randomBytes`), with SHA-256, HMAC-SHA-256 and the comparison also in pure Lean as references, both tested against the NIST and RFC 4231 vectors and compared on thousands of random inputs (`Bytes.same_iff`, `Bytes.unhex?_hex` proved).
 - The token bucket of x/time/rate with exact arithmetic (`RateLimit.allowed_le`: at most `burst + rate · w` in a window of `w`; `RateLimit.allow_after_reserve`), compared with Go's on generated cases.
@@ -1057,6 +1058,7 @@ Also:
 
 - A recursive type has no derived JSON: a `Json.Codec` is a value, and `lanes_data` cannot define one that refers to itself.
 - A table's columns are 64-bit: `Int` and `Nat` have no column, since a value that does not fit would not read back.
+- `Path.under` reads text, not the file system: a symbolic link below the root can lead outside it.
 - IPv6 zones (`fe80::1%eth0`) are refused, also in URLs, and a leap second (`23:59:60`) is not a time.
 
 ## Bound C

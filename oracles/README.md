@@ -31,7 +31,7 @@ every module a row names exists, and so does every path it cites.
 
 | Folder | Reference | Version | Pinned in | The reference for |
 | --- | --- | --- | --- | --- |
-| `oracles/go` | Go's standard library, `golang.org/x/time` and Prometheus's `expfmt` | Go 1.24.7, x/time 0.11.0, prometheus/common 0.67.5 | `oracles/go/go.mod`, `oracles/go/go.sum` | Base64, CSV, IP addresses, times, JSON, media types, rate limits, URLs, XML, mail addresses, the metrics page; and, with Node and h11 (`oracles/go/requests/requests.py`, by hand), the request reader |
+| `oracles/go` | Go's standard library, `golang.org/x/time` and Prometheus's `expfmt` | Go 1.24.7, x/time 0.11.0, prometheus/common 0.67.5 | `oracles/go/go.mod`, `oracles/go/go.sum` | Base64, CSV, paths and globs, IP addresses, times, JSON, media types, rate limits, URLs, XML, mail addresses, the metrics page; and, with Node and h11 (`oracles/go/requests/requests.py`, by hand), the request reader |
 | `oracles/botocore` | botocore, and `cryptography` for the signatures it is given | 1.44.12, cryptography 50.0.2 | `oracles/botocore/requirements.txt` | Signature Version 4; CloudFront's signed URLs (`oracles/botocore/cloudfront.jsonl`), signed with the published test keys of `oracles/botocore/keys/` |
 | `oracles/jwcrypto` | jwcrypto | 1.6.2 | `oracles/jwcrypto/requirements.txt` | JWS in compact form and JWK Sets |
 | `oracles/moto` | moto's server, S3, SES API v2 and SQS | 5.2.6 | `oracles/moto/requirements.txt` | the recorded runs of the object store, multipart, email and queue models, and of `POST` forms |
@@ -63,11 +63,13 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Lib/Encoding/Json/Grammar.lean` | | RFC 8259's grammar, the spec the parser and printers are proved against; JSONTestSuite (`Tests/Json.lean`) |
 | `Lanes/Lib/Encoding/Json/Parser.lean` | `oracles/go/json` | |
 | `Lanes/Lib/Encoding/Json/Printer.lean` | `oracles/go/json` | Go parses what the printer writes in the parser's cases; proved to read back (`Json.parse_compress`) |
+| `Lanes/Lib/Glob.lean` | `oracles/go/path` | Known: `**` as a whole name of a pattern matches across `/`, where Go reads it as `*` |
 | `Lanes/Lib/Metrics.lean` | `oracles/go/expfmt` | |
 | `Lanes/Lib/Mime/MediaType.lean` | `oracles/go/mime` | |
 | `Lanes/Lib/Net/Ip.lean` | `oracles/go/netip` | |
 | `Lanes/Lib/Net/Percent.lean` | `oracles/go/url` | Through the URL's cases, which decode and encode with it (`Tests/Oracle/Url.lean`) |
 | `Lanes/Lib/Net/Url.lean` | `oracles/go/url` | |
+| `Lanes/Lib/Path.lean` | `oracles/go/path` | `clean` and `join` against `path.Clean` and `path.Join`; `under` has no counterpart in Go's `path` and is proved (`Path.under_names`) |
 | `Lanes/Lib/RateLimit.lean` | `oracles/go/rate` | |
 | `Lanes/Lib/Time/Civil.lean` | `oracles/go/time` | Through the formats, whose dates it computes |
 | `Lanes/Lib/Time/Format.lean` | `oracles/go/time` | |

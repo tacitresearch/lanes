@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes.Semantics
 import Lanes.Lib.Encoding.CsvSound
+import Lanes.Lib.PathSound
 
 /-! The axiom gate (rule 5.5, see `Tests/Axioms.lean`) for the theorems of `Lanes/Lib/`. -/
 
@@ -219,6 +220,13 @@ import Lanes.Lib.Encoding.CsvSound
 
 /-- info: 'Lanes.Metrics.sanitize_of_valid' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Metrics.sanitize_of_valid
+
+-- Lanes.Lib.PathSound
+/-- info: 'Lanes.Path.clean_clean' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Path.clean_clean
+
+/-- info: 'Lanes.Path.under_names' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Path.under_names
 
 -- Lanes.Lib.Mime.MediaTypeSound
 /-- info: 'Lanes.MediaType.parse_format' depends on axioms: [propext, Classical.choice, Quot.sound] -/
