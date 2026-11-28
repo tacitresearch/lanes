@@ -172,7 +172,7 @@ workflow file of another name than `deploy.yml` is given as `DeployWorkflow`. AW
 GitHub's `job_workflow_ref` as a condition key only since 2026, and no real stack has checked it
 ("What has not been checked"): a role that refuses a run whose subject is right is the place to
 look. A repository whose OIDC subject
-names repositories by id (as `tacitresearch/lanes` does, `docs/RUNNERS.md`) gives
+names repositories by id (as `tacitresearch/lanes` does, `infra/README.md`) gives
 `GitHubOwnerId` and `GitHubRepositoryId`.
 
 ## 4. The first deploy

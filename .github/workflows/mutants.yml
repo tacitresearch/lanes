@@ -4,7 +4,7 @@ name: Mutants
 # nightly on the default branch, by hand, and on a pull request that carries the label
 # `mutants` (again on each push to it).
 #
-# Where it runs (docs/RUNNERS.md): with LANES_AWS_ROLE_ARN, LANES_AWS_REGION and
+# Where it runs (infra/README.md): with LANES_AWS_ROLE_ARN, LANES_AWS_REGION and
 # LANES_AWS_INSTANCE_ID set, on the warm runner machine of infra/lanes-ci.yaml, which `start`
 # starts and `stop` stops; with LANES_AWS_INSTANCE_TYPE instead of the instance id, on a machine
 # launched for the run and terminated after it (slower: it starts cold); with only LANES_RUNNER,
