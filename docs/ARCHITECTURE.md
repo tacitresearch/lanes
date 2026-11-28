@@ -443,7 +443,7 @@ from a full inbox leaves the gate's state as it was; it reads the shard's output
 (`Gate.receive`), and the server's ticker hands it each deadline that passes, which it answers
 `504` (`docs/decisions/D106-gate-before-shard.md`). The journal holds only what the gate
 admitted, so a replay reads none of the gate's settings. It answers
-`503` itself when the inbox is full and `405` for a method an application cannot handle. With `ServerConfig.ioThreads`
+`503` itself when the inbox is full and `501` for a method it does not know (#171). With `ServerConfig.ioThreads`
 above zero (four by default), the connections run on that many threads of the server's own, each on one for its
 whole life; Lean has one libuv loop a process, which every read and write still goes through. `Http.serveFronted` serves
 `admittedFronted sys`, whose other inputs and outputs pass the gate by, and `Http.serveShard`
