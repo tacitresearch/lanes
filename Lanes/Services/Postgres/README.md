@@ -13,7 +13,9 @@ Status: **checked: model plus oracle**.
   and `IO/Serve.lean`, which serves a system whose calls the driver runs.
 - **Model**: two shapes of the core. The key-value store, `Lanes/Outside/Store/Basic.lean`, for
   `Postgres.Store.handler`; and the typed store, `Lanes/Db/Model.lean`, for
-  `Postgres.Typed.handler`.
+  `Postgres.Typed.handler`. An application keeps its state in the typed store, one pure
+  transaction per request (`AGENTS.md`, rule 3.10); the key-value store's transactions span
+  several outputs of an actor, and it is kept as the shape's client and oracle.
 - **Oracle**: PostgreSQL itself. `oracles/postgres/run.sh` starts a PostgreSQL 16 of its own,
   runs the store's and the typed store's calls against it, checks the runs against the models
   and records them (`oracles/postgres/store.jsonl`, `oracles/postgres/db.jsonl`), which

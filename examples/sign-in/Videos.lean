@@ -10,7 +10,8 @@ sign-in itself is Lanes' (`Lanes/Web/IO/SignIn.lean`), done where a request arri
 this system is the identity it verified, never a code or a token. A member is an identity's
 issuer and subject, which do not change, so the same person signing in again is the same member
 (`register_again`); the address is shown, not trusted. A session is a signed cookie and an entry
-of the member's `Auth.Sessions`, which keeps the newest few.
+of the member's `Auth.Sessions`, which keeps the newest few. Members and sessions are the
+system's state, so a restart signs everyone out; `examples/rookery` keeps them as rows.
 -/
 
 namespace Videos

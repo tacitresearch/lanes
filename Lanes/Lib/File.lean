@@ -22,7 +22,8 @@ export Lanes.FileSystem.IO (fsync)
 /-- Replace the file at `path` with `text`: when this returns, the file holds `text`, and a death
 or a loss of power at any moment leaves it holding either `text` or what it held before
 (`Replace.crash`, `Replace.failed`). The new bytes are written to `path` with the extension
-`.tmp` first. -/
+`.tmp` first, so two calls on one path at once race on that file: a caller that may make them
+holds a lock around each. -/
 def replace (path : System.FilePath) (text : String) : IO Unit := do
   let some name := path.fileName | throw (IO.userError s!"{path} names no file")
   FileSystem.IO.replace (path.parent.getD ".") [] name (name ++ ".tmp") text.toUTF8

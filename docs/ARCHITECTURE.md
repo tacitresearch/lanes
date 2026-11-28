@@ -989,8 +989,10 @@ Where: `Lanes/Db/{Jobs,JobsSound,Worker,WorkerSound,Once,OnceSound}.lean`,
 
 `Server.system spec` runs a service's spec as one actor. `Once.actor` acts once on a request its
 client names by identity and sequence number, and answers a repeat with what it did, one entry
-per client. Its memo lives as long as the process: across a restart, acting once is an
-idempotency key stored in the transaction (`docs/decisions/D114-outbox-jobs.md`).
+per client. Its memo lives as long as the process, so it is for a request whose effect is on
+the actor's own state; one whose effect is in the database or outside, or that another instance
+may take again, is acted on under an idempotency key stored in the transaction (`Keys.once`,
+`docs/decisions/D114-outbox-jobs.md`).
 
 Where: `Lanes/Behaviours/Server.lean`, `Lanes/Behaviours/Once/`,
 `Lanes/Semantics/{Service,Once}.lean`.

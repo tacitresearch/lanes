@@ -20,8 +20,12 @@ duplicate suppression is the endpoint's).
 `Server` behind it.
 
 The memo is volatile: it lives in the actor, and a restart forgets it, so a repeat after a
-restart acts again. What must be acted on once across restarts is acted on in a transaction
-under an idempotency key stored with it (`Lanes.Db.Keys.once`).
+restart acts again. So use `Once.actor` when what a request changes is the actor's own state,
+which a restart forgets with the memo (`examples/kv-cache`), or in a model whose links hand a
+message over twice; in a running process links do not (`TRUSTED.md`, "Environment model"), so
+there it stops a client's retry that reaches the same process. When a request changes the
+database or a service outside, or another instance may take the retry, act on it in the
+transaction under an idempotency key stored with it (`Lanes.Db.Keys.once`).
 -/
 
 @[expose] public section

@@ -8,9 +8,14 @@ public import Lanes.Web.Auth.Password
 public import Lanes.Data.Declare
 
 /-!
-What an actor that lets users log in keeps, as pure data: the count of failed attempts that
-locks an account, and the bounded list of a user's sessions. A password's hash or digest is
+The policies of logging in, as pure data: the count of failed attempts that locks an account,
+and the bounded list of a user's sessions with their lifetimes. A password's hash or digest is
 `Lanes.Web.Auth.Password`'s.
+
+Kept in an actor, they last as long as the process and are known only to it: a restart signs
+everyone out and forgets failed attempts, and another instance knows none of them. An
+application that runs as more than one process, or must keep them across a restart, keeps them
+as rows (`Lanes/Web/Auth/Rows.lean`), which apply `Attempts` in each transaction.
 -/
 
 @[expose] public section

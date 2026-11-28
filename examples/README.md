@@ -62,7 +62,7 @@ beside a PostgreSQL made for the run).
 | Per-actor invariants (`actor_invariant`, `System.invariant_of_actor`) | `bank`, `upload` |
 | Refinement to a spec (`System.Implements`, `System.Refines`) | `kv-cache`, `upload` |
 | Invariants per transaction, in every database the store allows (`Db.invariant`, `Txn.All.others`) | `counter`, `todo-db`, `rookery` |
-| A request takes effect once (`Once.actor`, `Service.once`) | `kv-cache` |
+| A request takes effect once on an actor's own state (`Once.actor`, `Service.once`) | `kv-cache` |
 | Fairness and liveness | `watchdog` |
 | Work due later, an outbox, retried with a backoff, under an idempotency key (`Lanes.Db.Jobs`, `Lanes.Db.Worker`) | `reminders`, `payments` |
 | Acting once across restarts: a key stored in the transaction (`Lanes.Db.Keys`) | `payments`, `rookery` |
