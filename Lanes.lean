@@ -96,12 +96,11 @@ public import Lanes.Proof.Lossy
 public import Lanes.Proof.Monotone
 public import Lanes.Proof.Outputs
 public import Lanes.Proof.Past
-public import Lanes.Runtime.Batch
+public import Lanes.Runtime.Peek
 public import Lanes.Runtime.IO.Park
 public import Lanes.Runtime.IO.Shell
 public import Lanes.Runtime.Kernel
-public import Lanes.Runtime.Pace
-public import Lanes.Runtime.Wave
+public import Lanes.Runtime.Sched
 public import Lanes.Web.Auth.IdToken
 public import Lanes.Web.Auth.Jose
 public import Lanes.Web.Auth.Login

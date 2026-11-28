@@ -24,8 +24,7 @@ public import Lanes.Proof.JoinSound
 public import Lanes.Proof.MapIOSound
 public import Lanes.Runtime.KernelSound
 public import Lanes.Runtime.KernelTimers
-public import Lanes.Runtime.MailboxSound
-public import Lanes.Runtime.PeekSound
+public import Lanes.Runtime.SchedSound
 public import Lanes.Web.Auth.TokenSound
 public import Lanes.Web.Html.BasicSound
 public import Lanes.Web.Html.HtmxSound

@@ -4,16 +4,16 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Runtime.Batch
+public import Lanes.Runtime.Peek
 public import Lanes.Web.Http.Admit
 
 /-!
 Reads answered from the state (`docs/decisions/new-reads-from-state.md`). A request that changes
 nothing is declared by a `View` beside the bridge: the actors it reads, and its response from
-their states. The server answers it from a peek at the end of a batch (`Runtime.tryPeek`): it
-never enters the system, so it takes no step, and it reads the states of every actor it names at
-one boundary between batches (`Batch.run_peeks`). Leaving the reads out changes nothing else the
-shard does (`Batch.run_erase_peeks`).
+their states. The server answers it from a peek (`Runtime.tryPeek`): it never enters the
+system, so it takes no step and changes nothing the actors do. Each actor it names is read
+between two of its steps; the states of different actors are not read at one moment
+(`docs/decisions/new-free-running.md`).
 
 A read waits for its peek behind a gate of its own, with its own bounds (`ServerConfig.reads`):
 the gate's decisions (`Gate.step`) over `readSig`, where a read enters as its id and the peek's
@@ -32,7 +32,7 @@ variable {σ : Signature}
 /-- How a request that changes nothing is answered from the state: the actors it reads, those
 of every actor started that `every` holds of, and its response from their states. An actor
 `every` holds of that is not among them was never started: it has its initial state
-(`Batch.Peek.init_of_not_others`). -/
+(`Peek.init_of_not_others`). -/
 structure View (sys : System σ) where
   reads : List σ.Id
   every : σ.Id → Bool := fun _ => false
@@ -41,17 +41,17 @@ structure View (sys : System σ) where
 variable {sys : System σ}
 
 /-- The response to a view from the states a peek read. -/
-def View.respond (v : View sys) (peek : Batch.Peek sys v.reads) : Response :=
+def View.respond (v : View sys) (peek : Peek sys v.reads) : Response :=
   v.answer peek.get peek.others
 
 /-- A view answered from a peek of a kernel is its answer from that kernel's states. -/
 theorem View.respond_of [Hashable σ.Id] (v : View sys) (k : Kernel sys) :
-    v.respond (Batch.Peek.of k v.reads v.every)
-      = v.answer (fun i _ => (k.cell i).state) (Batch.Peek.of k v.reads v.every).others := by
+    v.respond (Peek.of k v.reads v.every)
+      = v.answer (fun i _ => (k.cell i).state) (Peek.of k v.reads v.every).others := by
   simp only [View.respond]
   congr
   funext i h
-  exact Batch.Peek.get_of k v.reads v.every i h
+  exact Peek.get_of k v.reads v.every i h
 
 /-- The states of the actors of `sys` among those of the shard behind the server. -/
 def unfront {α : Type} {S : α ⊕ σ.Id → Type} (others : List ((i : α ⊕ σ.Id) × S i)) :
@@ -80,16 +80,16 @@ def View.admitted {bridge : Bridge σ} (v : View sys) : View (admitted sys bridg
 states of `sys`'s actors in it. -/
 theorem View.fronted_respond [Hashable σ.Id] {bridge : Bridge σ} (v : View sys)
     (k : Kernel (Http.admittedFronted sys bridge)) :
-    (v.fronted (bridge := bridge)).respond (Batch.Peek.of k (v.reads.map .inr) (frontEvery v.every))
+    (v.fronted (bridge := bridge)).respond (Peek.of k (v.reads.map .inr) (frontEvery v.every))
       = v.answer (fun i _ => (k.cell (.inr i)).state)
-          (unfront (Batch.Peek.of k (v.reads.map .inr) (frontEvery v.every)).others) :=
+          (unfront (Peek.of k (v.reads.map .inr) (frontEvery v.every)).others) :=
   View.respond_of v.fronted k
 
 theorem View.admitted_respond [Hashable σ.Id] {bridge : Bridge σ} (v : View sys)
     (k : Kernel (Http.admitted sys bridge)) :
-    (v.admitted (bridge := bridge)).respond (Batch.Peek.of k (v.reads.map .inr) (frontEvery v.every))
+    (v.admitted (bridge := bridge)).respond (Peek.of k (v.reads.map .inr) (frontEvery v.every))
       = v.answer (fun i _ => (k.cell (.inr i)).state)
-          (unfront (Batch.Peek.of k (v.reads.map .inr) (frontEvery v.every)).others) :=
+          (unfront (Peek.of k (v.reads.map .inr) (frontEvery v.every)).others) :=
   View.respond_of v.admitted k
 
 /-- What the gate of reads sees: a read enters as its id, and the answer to it is its response. -/

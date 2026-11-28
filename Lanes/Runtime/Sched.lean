@@ -239,20 +239,18 @@ def idle (timers : Bool) (w : I) (l : Ledger W I) : Bool × Ledger W I :=
 def pushed (n : Nat) (l : Ledger W I) : Ledger W I :=
   { l with items := l.items + n }
 
-/-- A step is done: it pushed `sent` messages, took its item off the mailbox if `consumed`, which
-was an input if `input`, dropped `dropped` items of which `droppedInputs` inputs, and left
-`before` pending timers `after`. The senders waiting for room, if an input left, and the idle
-waiters now answered. -/
-def done (sent : Nat) (consumed input : Bool) (dropped droppedInputs before after : Nat)
-    (l : Ledger W I) : (List W × List I) × Ledger W I :=
-  let freed := (if input then 1 else 0) + droppedInputs
-  let l := { l with
-    items := l.items + sent - (if consumed then 1 else 0) - dropped
-    inputs := l.inputs - freed
-    timers := l.timers + after - before }
-  let (room, l) := if freed != 0 then (l.waiting, { l with waiting := [] }) else ([], l)
-  let (idle, l) := l.settle
-  ((room, idle), l)
+/-- `n` inputs left the mailboxes, taken or dropped: their room in the inbox is free. The senders
+that waited for room. -/
+def free (n : Nat) (l : Ledger W I) : List W × Ledger W I :=
+  if n == 0 then ([], l)
+  else (l.waiting, { l with inputs := l.inputs - n, waiting := [] })
+
+/-- A step is done: it took its item off the mailbox if `consumed`, dropped `dropped` items, and
+left `before` pending timers `after`. The idle waiters now answered. -/
+def done (consumed : Bool) (dropped before after : Nat) (l : Ledger W I) : List I × Ledger W I :=
+  { l with
+    items := l.items - (if consumed then 1 else 0) - dropped
+    timers := l.timers + after - before }.settle
 
 /-- Take no more inputs. Every sender waiting for room and every idle waiter is to be told. -/
 def close (l : Ledger W I) : (List W × List I) × Ledger W I :=

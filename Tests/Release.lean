@@ -268,7 +268,8 @@ def liveTests : Async (List (String × Bool)) := do
   return [("release: a live shard touched by a hundred thousand identities stays small",
       count == strangers && actors ≤ 1 && keptActors ≥ strangers / 10),
     ("release: on a live shard a released actor touched again is as new",
-      after == [(7, 5), (7, 0), (strangers + 1, 0)])]
+      after.filter (·.1 == 7) == [(7, 5), (7, 0)] && after.length == 3
+        && after.contains (strangers + 1, 0))]
 
 end Tests.Release
 

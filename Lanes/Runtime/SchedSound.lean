@@ -18,7 +18,8 @@ a timer goes off, a worker takes an actor off a run queue or steals one, steps i
 message it sent, lets it go, or hands an output over. The decisions are the functions of
 `Lanes.Runtime.Sched` that the shell calls.
 
-Each transition is zero or one event of `SysState.step` under `Kernel.env` (`Step.sound`), so
+Each transition is zero or one event of `SysState.step` under an environment whose links are
+reliable (`Reliable`, which `Kernel.env` is; `Step.sound`), so
 every run of the model is a run of the semantics, and its outputs are that run's
 (`Run.reachable`). The ghosts are never read by a decision, so the shell does without them.
 
@@ -42,7 +43,14 @@ alone (`TRUSTED.md`).
 
 namespace Lanes.Sched
 
-variable {σ : Signature} {sys : System σ}
+variable {σ : Signature} {sys : System σ} {env : EnvModel σ}
+
+/-- Every link of `env` is reliable: ordered, and losing and duplicating nothing, as inside one
+process. Whether actors crash, start on their own or the process restarts, it may say. -/
+def Reliable (env : EnvModel σ) : Prop :=
+  ∀ src dst, env.link src dst = Link.reliable
+
+theorem kernel_reliable : Reliable (Kernel.env : EnvModel σ) := fun _ _ => rfl
 
 /-- The scheduler's whole state. Workers are numbered; run queues and holdings are functions of
 the number, of which the shell uses the first `workers`. -/
@@ -265,8 +273,9 @@ theorem perform_fold (now_ms : Nat) (effs : List (Effect σ i)) :
       rfl
 
 theorem put_settle (now_ms : Nat) (r : sys.State i × List (Effect σ i)) (s : Slot sys i)
-    (c : SysState sys) (ht : c.timers i = s.cell.timers.map (·.1)) (hup : c.up i = s.cell.up) :
-    c.settle Kernel.env i r =
+    (c : SysState sys) (ht : c.timers i = s.cell.timers.map (·.1)) (hup : c.up i = s.cell.up)
+    (henv : Reliable env) :
+    c.settle env i r =
       { c with
         state := update c.state i (s.put now_ms r).1.cell.state
         up := update c.up i (s.put now_ms r).1.cell.up
@@ -296,7 +305,7 @@ theorem put_settle (now_ms : Nat) (r : sys.State i × List (Effect σ i)) (s : S
   · simp only [hstop, ite_true, down]
     refine ⟨?_, trivial, h5, trivial, fun e he => ?_⟩
     · rw [h1]
-      apply SysState.ext' <;> simp [SysState.down, c0, s0, h2, Kernel.env, Link.reliable,
+      apply SysState.ext' <;> simp [SysState.down, c0, s0, h2, show ∀ a b, env.link a b = Link.reliable from henv, Link.reliable,
         Model.keep_eq, List.filter_append, update_update]
     · simp only [List.mem_filter, decide_eq_true_eq] at he
       exact ⟨h6' e he.1, fun _ => he.2⟩
@@ -639,7 +648,7 @@ theorem coherent_commit {i : σ.Id} {j : Job sys i} {s : Slot sys i}
     (hstop : j.run.2.any Effect.isStop = true → ∀ k, ∀ e ∈ m.out k, e.dst ≠ i) :
     (m.commit i s j now_ms).Coherent := by
   obtain ⟨-, -, -, hmail', hsends⟩ :=
-    Slot.put_settle now_ms j.run s (m.setSlot i s).abs (by simp [abs]) (by simp [abs])
+    Slot.put_settle now_ms j.run s (m.setSlot i s).abs (by simp [abs]) (by simp [abs]) kernel_reliable
   have hpend : ∀ src, pend (m.commit i s j now_ms).out src
       = if src = some i then (s.put now_ms j.run).2.sends else pend m.out src := by
     intro src
@@ -847,9 +856,9 @@ theorem deliverable_head (h : m.Coherent) {i : σ.Id} {src : Option σ.Id} {msg 
   simp
 
 /-- One step of a worker is the semantics' event for it: a delivery, a start or a timer. -/
-theorem step_event (h : m.Coherent) {i : σ.Id} {j : Job sys i} {s : Slot sys i} (now_ms : Nat)
-    (htake : (m.slot i).take = (.job j, s)) :
-    m.abs.step Kernel.env j.work.event = some (m.commit i s j now_ms).abs := by
+theorem step_event (henv : Reliable env) (h : m.Coherent) {i : σ.Id} {j : Job sys i}
+    {s : Slot sys i} (now_ms : Nat) (htake : (m.slot i).take = (.job j, s)) :
+    m.abs.step env j.work.event = some (m.commit i s j now_ms).abs := by
   obtain ⟨hstate, -, hcase⟩ := Slot.take_eq_job htake
   rcases hcase with ⟨src, msg, rest, hw, hpop, hup, -, hup', htimers⟩
       | ⟨src, msg, rest, hw, hpop, hup, -, hup', htimers⟩
@@ -862,13 +871,13 @@ theorem step_event (h : m.Coherent) {i : σ.Id} {j : Job sys i} {s : Slot sys i}
         funext x
         simp only [Envelope.sameLink, onLink]
         congr 1 <;> exact decide_eq_decide.mpr eq_comm
-      simp [SysState.deliverable, Kernel.env, Link.reliable, abs, hlink, ← List.head?_filter,
+      simp [SysState.deliverable, show ∀ a b, env.link a b = Link.reliable from henv, Link.reliable, abs, hlink, ← List.head?_filter,
         hhead]
     · have hrun : (sys.actor i).step (m.abs.state i) msg = j.run := by
         simp [Job.run, hw, hstate, abs]
       rw [abs_commit, SysState.handle]
       obtain ⟨hset, -⟩ := Slot.put_settle now_ms j.run s { m.abs with net := m.abs.net.erase ⟨src, i, msg⟩ }
-        (by simp [abs, htimers]) (by simp [abs, hup, hup'])
+        (by simp [abs, htimers]) (by simp [abs, hup, hup']) henv
       simp only at hset ⊢
       rw [hrun, hset]
       simp [base, hw, abs]
@@ -885,7 +894,7 @@ theorem step_event (h : m.Coherent) {i : σ.Id} {j : Job sys i} {s : Slot sys i}
         simp [Job.run, hw, hstate, abs]
       rw [abs_commit, SysState.startActor]
       obtain ⟨hset, -⟩ := Slot.put_settle now_ms j.run s { m.abs with up := update m.abs.up i true }
-        (by simp [abs, htimers]) (by simp [abs, hup'])
+        (by simp [abs, htimers]) (by simp [abs, hup']) henv
       simp only at hset ⊢
       rw [hrun, hset]
       apply SysState.ext' <;> simp [base, hw, abs, update_update]
@@ -899,7 +908,7 @@ theorem step_event (h : m.Coherent) {i : σ.Id} {j : Job sys i} {s : Slot sys i}
       rw [abs_commit, SysState.handle]
       obtain ⟨hset, -⟩ := Slot.put_settle now_ms j.run s
         { m.abs with timers := update m.abs.timers i ((m.abs.timers i).erase msg) }
-        (by simp [abs, htimers, map_fst_eraseP]) (by simp [abs, hup, hup'])
+        (by simp [abs, htimers, map_fst_eraseP]) (by simp [abs, hup, hup']) henv
       simp only at hset ⊢
       rw [hrun, hset]
       apply SysState.ext' <;> simp [base, hw, abs, update_update]
@@ -908,8 +917,8 @@ end Model
 
 /-- Every transition of the scheduler is zero or one event of the semantics, from the state it
 stands for to the state it leads to. -/
-theorem Step.sound {m m' : Model sys} {ev : Option (Event σ)} (hinv : m.Inv)
-    (h : Step m ev m') : m.abs.run Kernel.env ev.toList = some m'.abs := by
+theorem Step.sound (henv : Reliable env) {m m' : Model sys} {ev : Option (Event σ)}
+    (hinv : m.Inv) (h : Step m ev m') : m.abs.run env ev.toList = some m'.abs := by
   cases h with
   | input x w =>
     simp only [Option.toList_some, SysState.run, SysState.step, Option.bind_some,
@@ -925,7 +934,7 @@ theorem Step.sound {m m' : Model sys} {ev : Option (Event σ)} (hinv : m.Inv)
   | steal w v i rest hq => rfl
   | step w i now_ms j s hhold hout htake hstop =>
     simp only [Option.toList_some, SysState.run]
-    rw [Model.step_event hinv.coherent now_ms htake]
+    rw [Model.step_event henv hinv.coherent now_ms htake]
     rfl
   | stale w i s hhold hout htake =>
     obtain ⟨-, -, -, hcell, -⟩ := Slot.take_eq_stale htake
@@ -1144,6 +1153,7 @@ theorem Step.inv {m m' : Model sys} {ev : Option (Event σ)} (hinv : m.Inv)
     obtain ⟨-, hst, -⟩ := Slot.take_eq_job htake
     obtain ⟨-, -, hst', -, hsends⟩ :=
       Slot.put_settle now_ms j.run s (m.setSlot i s).abs (by simp [Model.abs]) (by simp [Model.abs])
+        kernel_reliable
     have hrun := Model.running_of_holding hpl hhold
     refine ⟨Model.coherent_commit (hcoh.take htake) now_ms hout hstop, ?_, ?_⟩
     · intro k e he
@@ -1183,14 +1193,15 @@ theorem Step.inv {m m' : Model sys} {ev : Option (Event σ)} (hinv : m.Inv)
     exact ⟨hcoh.of_mail rfl rfl fun _ _ => rfl, hsrc, hpl.congr rfl rfl rfl⟩
 
 
-theorem Run.sound {m m' : Model sys} {evs : List (Event σ)} (hinv : m.Inv) (h : Run m evs m') :
-    m.abs.run Kernel.env evs = some m'.abs ∧ m'.Inv := by
+theorem Run.sound (henv : Reliable env) {m m' : Model sys} {evs : List (Event σ)}
+    (hinv : m.Inv) (h : Run m evs m') :
+    m.abs.run env evs = some m'.abs ∧ m'.Inv := by
   induction h with
   | refl => exact ⟨rfl, hinv⟩
   | step hstep _ ih =>
     obtain ⟨hrun, hinv'⟩ := ih (Step.inv hinv hstep)
     refine ⟨?_, hinv'⟩
-    rw [SysState.run_append, Step.sound hinv hstep]
+    rw [SysState.run_append, Step.sound henv hinv hstep]
     exact hrun
 
 /-! The start: every actor of `sys.boot` started in order, what each sent pushed at once. -/
@@ -1256,14 +1267,14 @@ theorem drain_inv (m : Model sys) (i : σ.Id) (n : Nat) (hc : m.Coherent) (hs : 
         rw [hout] at hlen
         simpa using hlen
 
-theorem abs_bootOne (m : Model sys) (i : σ.Id) :
-    (m.bootOne i).abs = m.abs.startActor Kernel.env i := by
+theorem abs_bootOne (henv : Reliable env) (m : Model sys) (i : σ.Id) :
+    (m.bootOne i).abs = m.abs.startActor env i := by
   unfold bootOne
   simp only [abs_drain]
   rw [abs_commit, SysState.startActor]
   obtain ⟨hset, -⟩ := Slot.put_settle 0 (⟨.start, (m.slot i).cell.state⟩ : Job sys i).run
     { (m.slot i) with cell := { (m.slot i).cell with up := true } }
-    { m.abs with up := update m.abs.up i true } (by simp [abs]) (by simp [abs])
+    { m.abs with up := update m.abs.up i true } (by simp [abs]) (by simp [abs]) henv
   have hrun : (sys.actor i).recover (m.abs.state i)
       = (⟨.start, (m.slot i).cell.state⟩ : Job sys i).run := rfl
   rw [hrun, hset]
@@ -1277,6 +1288,7 @@ theorem bootOne_inv (m : Model sys) (i : σ.Id) (hc : m.Coherent)
   let j : Job sys i := ⟨.start, (m.slot i).cell.state⟩
   obtain ⟨-, -, hst, hmail, hsends⟩ :=
     Slot.put_settle 0 j.run s (m.setSlot i s).abs (by simp [abs, s]) (by simp [abs, s])
+      kernel_reliable
   have hc1 : (m.commit i s j 0).Coherent := by
     refine coherent_commit ?_ 0 (hout i) (fun _ k e he => by simp [hout k] at he)
     exact (hc.setSlot (s := s) rfl).of_mail (by simp [base, j]) rfl fun _ _ => rfl
@@ -1303,11 +1315,11 @@ theorem bootOne_inv (m : Model sys) (i : σ.Id) (hc : m.Coherent)
   · subst hk; exact h5 (Nat.le_refl _)
   · rw [h4 k hk]; simp [commit, hk, hout k]
 
-theorem init_spec (sys : System σ) :
-    (init sys).abs = SysState.init sys Kernel.env ∧ (init sys).Inv := by
+theorem init_spec (sys : System σ) (henv : Reliable env) :
+    (init sys).abs = SysState.init sys env ∧ (init sys).Inv := by
   suffices h : ∀ (l : List σ.Id) (m : Model sys), m.Coherent → m.OutSrc → m.Placed →
       (∀ k, m.out k = []) →
-      (l.foldl bootOne m).abs = l.foldl (fun c i => c.startActor Kernel.env i) m.abs
+      (l.foldl bootOne m).abs = l.foldl (fun c i => c.startActor env i) m.abs
         ∧ (l.foldl bootOne m).Inv by
     obtain ⟨h1, h2⟩ := h sys.boot (blank sys)
       (fun src dst => by cases src <;> simp [blank, pend, Slot.fresh])
@@ -1325,21 +1337,22 @@ theorem init_spec (sys : System σ) :
     obtain ⟨h1, h2⟩ := ih (m.bootOne i) hc' hs' hp' hout'
     refine ⟨?_, h2⟩
     simp only [List.foldl_cons]
-    rw [h1, abs_bootOne]
+    rw [h1, abs_bootOne henv]
 
 end Model
 
 /--
-Every run of the scheduler from its start is a run of the semantics under `Kernel.env`: the
+Every run of the scheduler from its start is a run of the semantics under every environment
+whose links are reliable (`Kernel.env` among them): the
 events its transitions are, in order, lead from `SysState.init` to the state the scheduler
 stands for, which the semantics therefore reaches. The outputs it handed over are that run's
 outputs (`Event.outputs`), and the invariant holds all along.
 -/
-theorem Run.reachable {m : Model sys} {evs : List (Event σ)} (h : Run (Model.init sys) evs m) :
-    (SysState.init sys Kernel.env).run Kernel.env evs = some m.abs
-      ∧ sys.Reachable Kernel.env m.abs ∧ m.Inv := by
-  obtain ⟨habs, hinv⟩ := Model.init_spec sys
-  obtain ⟨hrun, hinv'⟩ := Run.sound hinv h
+theorem Run.reachable (henv : Reliable env) {m : Model sys} {evs : List (Event σ)} (h : Run (Model.init sys) evs m) :
+    (SysState.init sys env).run env evs = some m.abs
+      ∧ sys.Reachable env m.abs ∧ m.Inv := by
+  obtain ⟨habs, hinv⟩ := Model.init_spec sys henv
+  obtain ⟨hrun, hinv'⟩ := Run.sound henv hinv h
   rw [habs] at hrun
   exact ⟨hrun, System.Reachable.init.run hrun, hinv'⟩
 
