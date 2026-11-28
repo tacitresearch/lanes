@@ -1,6 +1,6 @@
 # D99. Layered packages in one repository, one version, prebuilt builds (proposal)
 
-Status: Partly superseded by D110-volatile-actors.md (the durable layer, the courier, and services as packages of their own: they live in one area of the same package); its section 3, Mathlib and CSLib removed, is done (D111-proof-libraries.md)
+Status: Partly superseded by D110-volatile-actors.md (the durable layer, the courier, and services as packages of their own: they live in one area of the same package); its section 3, Mathlib and CSLib removed, is done (D112-proof-libraries.md)
 
 This is the proposal of issue #101, item E of the design direction (#93). It is a proposal for
 the owner to accept or edit, part by part. No file moves in this change. It adds
