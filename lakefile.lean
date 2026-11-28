@@ -55,7 +55,7 @@ lean_exe lanesTest where
 /-- The process the stop test of `lanesTest` stops: a binary of its own, which imports `Lanes`
 alone, so that each start is not the initialisation of every test module. -/
 lean_exe lanesStopChild where
-  root := `Tests.StopChild
+  root := `Tests.StopChildMain
 
 @[default_target]
 lean_exe lanesCheck where
