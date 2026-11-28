@@ -13,7 +13,7 @@ advisory's thread; a fix is coordinated there and published with the advisory.
   processes, the journal's files and the adapters' IO among it.
 - The HTTP server and the parsers: the request reader, the response reader, the wire format,
   forms, cookies, routes, JSON, Base64, IP addresses, dates.
-- The cryptography bindings and what is built on them: libsodium through `native/lanes.c`,
+- The cryptography bindings and what is built on them: OpenSSL's libcrypto through `native/lanes.c`,
   the TLS client through `native/tls.c`, signed tokens, form tokens, sessions and password
   digests.
 - A theorem whose statement does not mean what its docs say: a headline theorem that is
@@ -22,7 +22,7 @@ advisory's thread; a fix is coordinated there and published with the advisory.
   this is a vulnerability, not a documentation bug.
 - The CI workflows and the runner machine (`docs/RUNNERS.md`).
 
-Out of scope: the Lean kernel, compiler and runtime, `Std`, libuv, libsodium and OpenSSL themselves, and the
+Out of scope: the Lean kernel, compiler and runtime, `Std`, libuv and OpenSSL themselves, and the
 operating system; report those to their projects. Applications built on Lanes are in scope only
 where the fault is in Lanes.
 

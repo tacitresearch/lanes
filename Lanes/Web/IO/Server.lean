@@ -8,6 +8,7 @@ public import Std.Async
 public import Lanes.Durable.IO.Journal
 public import Lanes.Web.Http.Conn
 public import Lanes.Web.Http.Front
+public import Lanes.Web.Http.JournalName
 public import Lanes.Web.Http.Waiting
 public import Lanes.Web.IO.Ops
 
@@ -87,7 +88,8 @@ structure ServerConfig where
   journal : Option System.FilePath := none
   /-- The application's name for the system and the version of its step functions. A journal
   written under another name is refused: replayed through other step functions it would give
-  another state. -/
+  another state. A journal written behind another `gate` is not: it is replayed behind the gate
+  that wrote it and carried across (`Lanes/Web/Http/JournalName.lean`). -/
   system : String := ""
   /-- Metrics, health and the access log, answered and written by the server: all off by
   default (`Lanes/Web/IO/Ops.lean`). -/
@@ -539,11 +541,23 @@ structure Saving (sys : System σ) where
   out : Codec σ.Out
 
 /-- The name `serve` writes in its journal: the application's, and the configuration the gate's
-step function reads. A journal of another gate, or of the gate `serve` ran when the gate was an
-actor of the system behind it, is refused. -/
+step function reads. -/
 def ServerConfig.journalName (config : ServerConfig) : String :=
-  s!"{config.system}, behind a gate of {config.gate.requestTimeout_ms} ms and "
-    ++ s!"{config.gate.maxPending} requests"
+  Lanes.Http.journalName config.system config.gate
+
+/-- The name in the header of the journal at `path`, if there is one: what its first frame says.
+The start reads the files again, under the lock, and decides on what it finds there. -/
+private def journalHeader (path : System.FilePath) : IO (Option String) := do
+  let some bytes ← (try some <$> IO.FS.withFile path .read (·.read 65536) catch _ => pure none)
+    | return none
+  return (Frame.decode bytes).head?.bind Journal.named?
+
+private def unsaved (path : System.FilePath) (old new : GateConfig) : IO.Error :=
+  IO.userError s!"lanes: the journal {path} was written behind a gate of \
+    {old.requestTimeout_ms} ms and {old.maxPending} requests, and this server's is of \
+    {new.requestTimeout_ms} ms and {new.maxPending} requests. It is replayed behind the gate \
+    that wrote it and its state carried across, which needs `serve` to be given its `saving`; \
+    or set `ServerConfig.gate` back"
 
 /-- Serve `sys` over HTTP: the gate (`served`) is joined in front of it, `bridge` turns requests
 into inputs and outputs into responses, and the whole runs on one shard (`Runtime`). Returns
@@ -558,10 +572,23 @@ def serve (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : Serv
     (runtimeConfig : Runtime.Config := {}) (saving : Option (Saving sys) := none)
     (arrive : Option (Request → IO (Except Response Request)) := none) :
     Async (Server (served sys bridge config.gate)) := do
-  let log ← config.journal.mapM fun path =>
-    Journal.Store.open (sys := served sys bridge config.gate)
-      { path, input := Codec.pair Codec.nat Request.codec, system := config.journalName
+  let log ← config.journal.mapM fun path => do
+    let name ← journalHeader path
+    let former := name.bind (formerGate config.system config.gate)
+    if let (some old, none) := (former, saving) then throw (unsaved path old config.gate)
+    let upgrades := match former, saving with
+      | some old, some s => [regateUpgrade sys bridge s.actors s.out config.system old config.gate]
+      | _, _ => []
+    let store : Journal.Store (served sys bridge config.gate) :=
+      { path, input := Codec.pair Codec.nat Request.codec, system := config.journalName, upgrades
         actors := saving.map fun s => servedActors s.actors s.out bridge config.gate }
+    try store.open
+    catch e =>
+      if name.any (· != config.journalName) && upgrades.isEmpty then
+        throw (IO.userError s!"{e}. `ServerConfig.system` names the step functions a journal \
+          is replayed through: start the version that wrote it, or move the journal and its \
+          snapshot aside to begin anew")
+      throw e
   try serveWith sys bridge config runtimeConfig log arrive
   catch e =>
     if let some log := log then discard log.close.toBaseIO

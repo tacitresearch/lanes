@@ -331,16 +331,18 @@ MUTANTS = [
     ("server: the work a request needs before it enters is not done", "Lanes/Web/IO/Server.lean",
      "        | .ok (.ok request) => discard <| hand request answer",
      "        | .ok (.ok _) => discard <| hand request answer"),
-    ("libsodium: the comparison reads only the first byte", "native/lanes.c",
-     "sodium_memcmp(lean_sarray_cptr(a), lean_sarray_cptr(b), size) == 0",
-     "sodium_memcmp(lean_sarray_cptr(a), lean_sarray_cptr(b), size != 0) == 0"),
-    ("libsodium: sha-256 of half the message", "native/lanes.c",
-     "crypto_hash_sha256(lean_sarray_cptr(out), lean_sarray_cptr(msg), lean_sarray_size(msg));",
-     "crypto_hash_sha256(lean_sarray_cptr(out), lean_sarray_cptr(msg), lean_sarray_size(msg) / 2);"),
-    ("libsodium: an hmac key cut to a block", "native/lanes.c",
-     "crypto_auth_hmacsha256_init(&state, lean_sarray_cptr(key), lean_sarray_size(key));",
-     "crypto_auth_hmacsha256_init(&state, lean_sarray_cptr(key),\n"
-     "        lean_sarray_size(key) > 64 ? 64 : lean_sarray_size(key));"),
+    ("crypto: the comparison reads only the first byte", "native/lanes.c",
+     "CRYPTO_memcmp(lean_sarray_cptr(a), lean_sarray_cptr(b), size) == 0",
+     "CRYPTO_memcmp(lean_sarray_cptr(a), lean_sarray_cptr(b), size != 0) == 0"),
+    ("crypto: sha-256 of half the message", "native/lanes.c",
+     "SHA256(lean_sarray_cptr(msg), lean_sarray_size(msg), lean_sarray_cptr(out))",
+     "SHA256(lean_sarray_cptr(msg), lean_sarray_size(msg) / 2, lean_sarray_cptr(out))"),
+    ("crypto: an hmac key cut to a block", "native/lanes.c",
+     "lean_sarray_cptr(key), (int)size,",
+     "lean_sarray_cptr(key), (int)(size > 64 ? 64 : size),"),
+    ("crypto: argon2id in one lane whatever is asked", "native/lanes.c",
+     'OSSL_PARAM_BLD_push_uint32(bld, "lanes", lanes)',
+     'OSSL_PARAM_BLD_push_uint32(bld, "lanes", 1)'),
 ]
 
 

@@ -379,21 +379,24 @@ bridge's, tested. The code of this step is `Tests/TutorialWeb/Check.lean`,
 
 `docs/DEPLOY.md` takes an app from `lanes new` to AWS. Do what it says, with these parameters:
 `AppName` and `BinaryName` `shelf`, `AppArguments` `{port} {journal} {data}/shelf.secrets`,
-`HealthCheckPath` `/readyz`, `DomainName` the site, and `MediaUser` `true`, since this `main`
-reads S3 keys from the environment. (The instance role needs no key: `integrations/aws`, in
-DEPLOY.md's "Media".)
+`HealthCheckPath` `/readyz`, `DomainName` the site, and `MediaUser` `true`. The shelf signs its
+upload forms and links in the bridge, a pure function given its credentials once at start, and
+the instance role's credentials expire within hours; so this `main` reads a key of the media
+user from the environment. An app that only calls S3 from IO uses the instance role and no key
+(DEPLOY.md's "Media").
 
 `infra/app/lanes-app.yaml` makes the load balancer with its certificate, one instance, the
 journal's volume with daily snapshots, and the media bucket: public access blocked, TLS only, a
 form's `POST` and a presigned `GET` allowed from `https://<DomainName>`. `infra/app/app-instance.sh`
 sets the machine up: the user `lanes`, the systemd unit with `LANES_HOST`, `LANES_IDLE_MS` and
-`LANES_DRAIN_MS`, and `/etc/lanes/app.env` with `LANES_MEDIA_BUCKET` and `AWS_REGION`.
+`LANES_DRAIN_MS`, and `/etc/lanes/app.env` with `LANES_URL` (`https://<DomainName>`),
+`LANES_MEDIA_BUCKET` and `AWS_REGION`.
 
 The rest of the configuration is read once, in `main` (rule 2.5). Nothing secret is in the code
 or the repository:
 
 ```lean
-  let origin := ((← IO.getEnv "SHELF_URL").filter (!·.isEmpty)).getD s!"http://localhost:{port}"
+  let origin := ((← IO.getEnv "LANES_URL").filter (!·.isEmpty)).getD s!"http://localhost:{port}"
   let region := ((← IO.getEnv "AWS_REGION").filter (!·.isEmpty)).getD "us-east-1"
   let bucket : S3.Bucket :=
     { name := ← need "LANES_MEDIA_BUCKET", region, endpoint := S3.Endpoint.aws region }
@@ -406,7 +409,6 @@ the secrets in `/etc/lanes/secrets.env`, which only root can read and systemd ha
 ```bash
 sudo install -m 600 /dev/null /etc/lanes/secrets.env
 sudo tee /etc/lanes/secrets.env >/dev/null <<'EOF'
-SHELF_URL=https://<DomainName>
 SHELF_OIDC_DISCOVERY=/etc/lanes/oidc.json
 SHELF_OIDC_CLIENT_ID=...
 SHELF_OIDC_CLIENT_SECRET=...

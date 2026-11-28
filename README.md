@@ -65,9 +65,9 @@ is in `docs/CLAIMS.md`. In short:
   reference implementations (Go's standard library, `expfmt`, botocore, jwcrypto), the models of
   S3, its multipart uploads, SES, SQS and PostgreSQL against runs recorded from moto and
   PostgreSQL (`oracles/README.md`), the bound C against its Lean references.
-- **Trusted**: About 4,200 lines of trusted code, listed with their sizes in `TRUSTED.md`: the
-  IO shells, the HTTP wire format where its proof does not reach, the C that binds libsodium,
-  `fsync`, a timed wait, OpenSSL's TLS client, its signature check and its signing, the sign-in's IO, the AWS integration's IO, and the template macro, with the assumptions the runtime makes. `lanes lint` fails if a trusted file changes without the
+- **Trusted**: About 4,350 lines of trusted code, listed with their sizes in `TRUSTED.md`: the
+  IO shells, the HTTP wire format where its proof does not reach, the C that binds OpenSSL's
+  hashes, comparison and Argon2id, `fsync`, a timed wait, OpenSSL's TLS client, its signature check and its signing, the sign-in's IO, the AWS integration's IO, and the template macro, with the assumptions the runtime makes. `lanes lint` fails if a trusted file changes without the
   list, and `scripts/mutants.py` holds known ways of breaking that code, each of which must
   fail a test.
 
@@ -108,14 +108,14 @@ actors in parallel are the next steps. The method and settings are in `bench/REA
 
 ## Quick start
 
-You need [elan](https://github.com/leanprover/elan), which installs Lean and Lake, a C
-compiler, and libsodium, which Lanes links, with pkg-config to find it (TLS comes from the
-OpenSSL in Lean's toolchain, so there is nothing to install for it):
+You need [elan](https://github.com/leanprover/elan), which installs Lean and Lake, and a C
+compiler. The cryptography and TLS come from the OpenSSL in Lean's toolchain, so there is no
+library to install:
 
 ```bash
 curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh
-sudo apt-get install build-essential libsodium-dev pkg-config   # Debian, Ubuntu
-brew install libsodium pkg-config                               # macOS, with xcode-select --install
+sudo apt-get install build-essential   # Debian, Ubuntu
+xcode-select --install                 # macOS
 ```
 
 ```bash
@@ -134,16 +134,19 @@ minutes.
 uploads to S3 under a size limit, a test of the whole site against the test kit's fakes, a
 property checked and proved, and what a deploy needs.
 `docs/DEPLOY.md` then puts it on AWS behind HTTPS: one instance with its journal on a disk of its
-own, backed up, deployed from GitHub.
+own, backed up, deployed from GitHub. That path is written and checked, and has not yet run on
+AWS.
 
-The app gets Lanes from GitHub (`rev = "main"` in its `lakefile.toml`), not from the clone,
-which it does not need once the app is made. Any Lake project can depend on Lanes the same way:
+The app gets Lanes from GitHub, not from the clone, which it does not need once the app is
+made. Its `lakefile.toml` requires the release tag the clone is at, or else the clone's commit
+(Lanes has no release yet), so a later `lake update` does not move it; `--rev` names another.
+Any Lake project can depend on Lanes the same way:
 
 ```toml
 [[require]]
 name = "lanes"
 git = "https://github.com/tacitresearch/lanes"
-rev = "main"
+rev = "<a release tag or a commit>"
 ```
 
 The generated app is a counter service: a spec-sized actor, its invariant proved in one line, a
@@ -154,12 +157,14 @@ model check with vacuity witnesses, and a server-rendered page.
 Early beta: the API will change. What works, area by area, and its known limits are in
 `docs/STATUS.md`. Not there yet:
 
-- TLS, a database, server push, and observability beyond the server's metrics, health checks
-  and access log;
-- migrations of a journal across changed step functions;
-- models of external systems other than an API with idempotency keys and webhooks (payments
-  and email are modelled, `Lanes/Outside/Effects/`), such as a database, which
-  `docs/decisions/D61-models-of-external-systems.md` describes, and adapters to real services;
+- a TLS server: the load balancer or a reverse proxy ends TLS in front (the HTTP client and the
+  PostgreSQL client speak TLS, `docs/decisions/D67-a-tls-client-from-the-openssl-lean-ships.md`);
+- observability beyond the server's metrics, health checks and access log;
+- for `Http.serve`, migrations of a journal across changed step functions: a shard of its own
+  migrates (`Journal.Upgrade`, `examples/migration`), but `serve` replays a journal only
+  through the step functions that wrote it;
+- a deploy to AWS that has been run: the stack and the workflow are written and checked, not run
+  (`docs/DEPLOY.md`);
 - liveness of the applications, and, for rookery, the theorem that joins its claims with its
   refinement into statements about the running system; the HTTP gate is proved for answers,
   not as a refinement.

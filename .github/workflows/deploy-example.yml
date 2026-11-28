@@ -46,12 +46,17 @@ jobs:
       AWS_REGION: ${{ fromJSON(vars.LANES_DEPLOY).region }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: libsodium, which Lanes links
-        run: sudo apt-get update -q && sudo apt-get install -yq libsodium-dev pkg-config
+      # elan's release and the SHA-256 of its archive, as infra/ec2-runner.sh pins them.
       - name: elan and the toolchain
+        env:
+          ELAN_VERSION: v4.4.0
+          ELAN_SHA256: 0e8250aa2be86c7af929ade68db617af9edc8b9ccf6eaf5ece228250d0d032e2
         run: |
-          curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
-            | sh -s -- -y --no-modify-path --default-toolchain none
+          curl -sSfL --retry 5 -o "$RUNNER_TEMP/elan.tar.gz" \
+            "https://github.com/leanprover/elan/releases/download/$ELAN_VERSION/elan-x86_64-unknown-linux-gnu.tar.gz"
+          echo "$ELAN_SHA256  $RUNNER_TEMP/elan.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/elan.tar.gz" -C "$RUNNER_TEMP"
+          "$RUNNER_TEMP/elan-init" -y --no-modify-path --default-toolchain none
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
           "$HOME/.elan/bin/elan" toolchain install "$(cat "$APP_DIR/lean-toolchain")"
       # The dependencies, Mathlib among them: Lake clones every package of the manifest, though
@@ -67,7 +72,7 @@ jobs:
           lake build "$BINARY"
           mkdir -p "$RUNNER_TEMP/release"
           strip -o "$RUNNER_TEMP/release/$BINARY" ".lake/build/bin/$BINARY"
-          # Lean links its runtime, and Lanes libsodium, into the executable: only the C library
+          # Lean links its runtime, OpenSSL included, into the executable: only the C library
           # and the loader are left for the instance to provide.
           ldd "$RUNNER_TEMP/release/$BINARY"
           if ldd "$RUNNER_TEMP/release/$BINARY" | grep -vE 'linux-vdso|ld-linux|lib(c|m|dl|rt|pthread)\.so'; then

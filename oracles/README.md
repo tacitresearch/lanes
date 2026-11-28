@@ -41,14 +41,15 @@ every module a row names exists, and so does every path it cites.
 | Module | Oracle | Or why not |
 | --- | --- | --- |
 | `Lanes/Lib/Crypto/Certificate.lean` | `Tests/PostgresTls.lean` | The hash for channel binding of certificates `openssl` made, against `openssl dgst`, and accepted by PostgreSQL 16 |
-| `Lanes/Lib/Crypto/Hmac.lean` | | Not a format: RFC 4231's vectors, and libsodium on thousands of inputs (`Tests/Crypto.lean`) |
+| `Lanes/Lib/Crypto/Hmac.lean` | | Not a format: RFC 4231's vectors, and OpenSSL on thousands of inputs (`Tests/Crypto.lean`) |
 | `Lanes/Lib/Crypto/Md5.lean` | | Not a format: RFC 1321's examples, and the digests psql sent in the recorded sessions (`Tests/Postgres.lean`) |
+| `Lanes/Lib/Crypto/Native.lean` | | A binding: OpenSSL against the Lean references, and Argon2id against RFC 9106 and the hashes and strings libsodium made (`Tests/Crypto.lean`) |
 | `Lanes/Lib/Crypto/Pbkdf2.lean` | | Not a format: through SCRAM, against RFC 7677 and libpq's recorded session (`Tests/Postgres.lean`) |
 | `Lanes/Lib/Crypto/PublicKey.lean` | `Tests/Signature.lean`, `Tests/Sign.lean` | The DER of keys and signatures against what the `openssl` command writes, and read back from OpenSSL's; a public key's PEM against `openssl pkey -pubout` |
 | `Lanes/Lib/Crypto/Sign.lean` | `Tests/Sign.lean`, `oracles/botocore` | A binding: RFC 6979's signatures, `openssl dgst -sign`, and `cryptography`'s signatures in the CloudFront oracle |
-| `Lanes/Lib/Crypto/Sha256.lean` | | Not a format: FIPS 180-4's examples, and libsodium on thousands of inputs (`Tests/Crypto.lean`) |
+| `Lanes/Lib/Crypto/Sha256.lean` | | Not a format: FIPS 180-4's examples, and OpenSSL on thousands of inputs (`Tests/Crypto.lean`) |
 | `Lanes/Lib/Crypto/Sha512.lean` | | Not a format: FIPS 180-4's examples, as `openssl dgst` computes them (`Tests/Crypto.lean`) |
-| `Lanes/Lib/Crypto/Sodium.lean` | | A binding: libsodium against the Lean references (`Tests/Crypto.lean`) |
+| `Lanes/Lib/Crypto/Sodium.lean` | | Deprecated: imports `Lanes/Lib/Crypto/Native.lean` and nothing else |
 | `Lanes/Lib/Crypto/Verify.lean` | `Tests/Signature.lean` | A binding: OpenSSL's check against `Rsa.verifyReference` and keys `openssl` made |
 | `Lanes/Lib/Encoding/Base64.lean` | `oracles/go/base64` | |
 | `Lanes/Lib/Encoding/Digits.lean` | | Numbers in a base, read back as written (`Lanes/Lib/Encoding/Digits.lean`'s theorems); compared through every format that uses them |
@@ -67,6 +68,7 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Lib/Postgres/Message.lean` | `Tests/Postgres.lean`, `oracles/postgres` | The messages, in the recorded sessions; written and read again against a live server |
 | `Lanes/Lib/Postgres/Pool.lean` | | Decisions, not a format: proved (`Pool.run_size`, `Pool.never_again`) and model-checked (`Tests/PostgresPool.lean`) |
 | `Lanes/Lib/Postgres/Scram.lean` | `Tests/Postgres.lean`, `Tests/PostgresTls.lean` | RFC 7677's example and libpq's recorded session; with channel binding, Python's `hashlib` and PostgreSQL 16 with TLS |
+| `Lanes/Lib/Postgres/Settings.lean` | `Tests/PostgresLive.lean` | libpq's variables and password file: `psql` connects with the same, against PostgreSQL 16 |
 | `Lanes/Lib/Postgres/Table.lean` | `oracles/postgres` | The SQL of the store's operations, against PostgreSQL itself |
 | `Lanes/Lib/RateLimit.lean` | `oracles/go/rate` | |
 | `Lanes/Lib/Time/Civil.lean` | `oracles/go/time` | Through the formats, whose dates it computes |
@@ -85,6 +87,7 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Web/Http/Front.lean` | | Decisions, not a format |
 | `Lanes/Web/Http/Gate.lean` | | Decisions, not a format |
 | `Lanes/Web/Http/Grammar.lean` | | RFC 9110's tokens and field values, used by the reader and the writer |
+| `Lanes/Web/Http/JournalName.lean` | | A journal's name, read back only as it is written, and a migration across gates; tested (`Tests/Web.lean`) |
 | `Lanes/Web/Http/Loopback.lean` | | A front end with no socket for tests, not a format: its bytes are `Conn`'s and `Wire`'s |
 | `Lanes/Web/Http/Ops.lean` | | Routes and access for the operators' endpoints; their page is `Metrics`' |
 | `Lanes/Web/Http/ReadRequest.lean` | `oracles/go/requests` | Go's, Node's and h11's servers on `Tests/ReadRequest.corpus`, by hand |

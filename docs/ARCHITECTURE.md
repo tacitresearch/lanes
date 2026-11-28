@@ -32,7 +32,7 @@ proved function tells it to.
 | Other adapters | `Lanes/Outside/Basic.lean`, `Lanes/Outside/{Clock,IO/Clock}.lean`, `Lanes/Web/IO/Client.lean`, `Lanes/Web/Http/{Grammar,Wire,WireSound}.lean` | `Response.read_wire`, `Request.fields_framing`; conformance tests |
 | Models of external services | `Lanes/Outside/{Rpc,Idempotent,Events,ObjectStore,Multipart,Queue,Cache,Clock,Throttle}.lean`, `Lanes/Outside/Effects/`, `Lanes/Web/Http/SharedCache.lean`, `Lanes/Proof/Outputs.lean` | `Idempotent.at_most_once`, `Rpc.answered_le_called`, `Events.deliveries_le`, `ObjectStore.read_sent`, `ObjectStore.held_sent`, `Multipart.read_listed`, `Queue.received_le`, `Cache.read_sent`, `Clock.wall_back_le`, `Throttle.wait_le`, `SharedCache.serve_storable`, `SharedCache.serve_of_leaks`, `System.Emits.outputs`; that a real service conforms is trusted |
 | Signature Version 4 and the S3 client | `Lanes/Web/Http/{SigV4,SigV4Sound}.lean`, `Lanes/Web/S3/{Basic,Xml,Post,PostSound,Multipart}.lean`, `Lanes/Web/IO/S3.lean` | `SigV4.target_sign`, `SigV4.sortQuery_sorted`, `SigV4.canonicalHeaders_sorted`, `SigV4.encode_chunks`, `S3.Post.form_policy`, `S3.Post.admitted_bounded`, `S3.Multipart.Plan.count_le`, `S3.Multipart.Plan.range_full`; signatures tested against AWS's vectors and botocore, the client against a fake S3, the multipart flow model-checked; its IO trusted |
-| PostgreSQL and the store model | `Lanes/Lib/Postgres/{Bytes,Message,MessageSound,Scram,Conn,ConnSound,Pool,Table}.lean`, `Lanes/Lib/Postgres/IO/{Client,Pool}.lean`, `Lanes/Lib/Crypto/Certificate.lean`, `Lanes/Outside/Store/{Basic,Sound}.lean` | `Backend.read_encode`, `Frontend.decode_encode`, `Conn.run_fifo`, `Conn.step_committed`, `Conn.step_query`, `Conn.tls_first`, `Conn.run_bound`, `Conn.onMessage_binds`, `Pool.run_size`, `Pool.never_again`, `Store.write_skew`, `Store.lost_commit_either`; the IO is trusted, and that the server behaves like the model is a premise |
+| PostgreSQL and the store model | `Lanes/Lib/Postgres/{Bytes,Message,MessageSound,Scram,Conn,ConnSound,Pool,Settings,Table}.lean`, `Lanes/Lib/Postgres/IO/{Client,Pool}.lean`, `Lanes/Lib/Crypto/Certificate.lean`, `Lanes/Outside/Store/{Basic,Sound}.lean` | `Backend.read_encode`, `Frontend.decode_encode`, `Conn.run_fifo`, `Conn.step_committed`, `Conn.step_query`, `Conn.tls_first`, `Conn.run_bound`, `Conn.onMessage_binds`, `Pool.run_size`, `Pool.never_again`, `SslMode.defaultFor_disable`, `Store.write_skew`, `Store.lost_commit_either`; the IO is trusted, and that the server behaves like the model is a premise |
 | Jobs: work outside a step | `Lanes/Behaviours/Jobs/{Basic,Sound}.lean`, `Lanes/Semantics/Jobs.lean`, `Lanes/Behaviours/Jobs/IO/Pool.lean` | `Jobs.answered_le_handled`, `Jobs.retry_same`, `Jobs.submitted_answered`; the pool is trusted |
 | Schedule: work that is due later | `Lanes/Behaviours/Schedule/{Basic,Sound}.lean`, `Lanes/Semantics/Schedule.lean` | `Schedule.dispatch_due`, `Schedule.calls_le_scheduled`, `Schedule.attempt_ends`, `Schedule.held_ends`; that the time it knows is not ahead of the clock is a premise |
 | Web | `Lanes/Web/Http/{Basic,Route,RouteSound,Cookie,CookieSound}.lean`, `Lanes/Web/Html/`, `Lanes/Web/Auth/` | `Html.lex_render`, `Html.safeUrl_scheme`, `Http.dispatch_link`, `Http.parseForm_encodeForm`, `Http.readSetCookie_header`, `Auth.verify_eq_some`, `Auth.checkForm_other` |
@@ -40,7 +40,7 @@ proved function tells it to.
 | The proof layer | `Lanes/Semantics/` | refinement, specs, fairness, leads-to |
 | Data and the standard library | `Lanes/Data/`, `Lanes/Lib/` | codec laws, `Quorum.majority_inter`, `Bytes.same_iff`, `Json.parse_iff`, `Url.parse_print` |
 | Sign-in with OAuth 2.0 and OpenID Connect | `Lanes/Web/Auth/{Jose,IdToken,OAuth}.lean`, `Lanes/Web/IO/SignIn.lean` | `OAuth.check_ok`, `OAuth.Used.accepted_once`, `OAuth.Used.length_claim`, `OAuth.IdToken.verify_accepted`, `Jose.verify_ok`, `OAuth.Keys.no_fetch_within`; the edge is trusted, tested end to end against a provider run in the test |
-| Bound C | `native/lanes.c`, `Lanes/Lib/Crypto/Sodium.lean`; `native/verify.c`, `Lanes/Lib/Crypto/Verify.lean`; `native/sign.c`, `Lanes/Lib/Crypto/Sign.lean` | trusted; tested against the Lean references and published vectors |
+| Bound C | `native/lanes.c`, `Lanes/Lib/Crypto/Native.lean`; `native/verify.c`, `Lanes/Lib/Crypto/Verify.lean`; `native/sign.c`, `Lanes/Lib/Crypto/Sign.lean` | trusted; tested against the Lean references and published vectors |
 | TLS client | `native/tls.c`, `Lanes/Web/IO/Tls.lean` | trusted; tested against `openssl s_server` |
 
 ## Actors and the semantics
@@ -423,7 +423,11 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   (`Conn.run_bound`, `Conn.onMessage_binds`), which `Certificate.endPoint` chooses by the
   certificate's signature algorithm, tested against `openssl dgst` and a real server. The IO
   (`Lanes/Lib/Postgres/IO/Client.lean`) only performs, the TLS handshake through `Tls.Session`
-  included. A pool (`Postgres.Pool`) is a pure policy proved to keep at most `max` connections
+  included, and resolves the host's name at each connect. Unless asked otherwise, a host on
+  this machine gets no TLS and any other full verification, and the default goes without TLS
+  only to a loopback address (`SslMode.defaultFor_disable`); `Postgres.Client.fromEnv` reads
+  libpq's variables and a deploy's through `Settings.read`, pure and tested
+  (`Lanes/Lib/Postgres/Settings.lean`). A pool (`Postgres.Pool`) is a pure policy proved to keep at most `max` connections
   open and never to hand out again one handed back broken (`Pool.run_size`, `Pool.never_again`),
   and an IO file that performs it (`Lanes/Lib/Postgres/IO/Pool.lean`).
 - **A transactional store** (`Lanes/Outside/Store/Basic.lean`): what a store may answer at read
@@ -492,6 +496,14 @@ a refinement check means every run's inputs and outputs are a trace of the spec
 (`Check.refines_sound`, `Check.refines_traces`). Under D45 a PASS finds bugs; the claim rests on a
 theorem.
 
+Two other searches reach further (`docs/decisions/new-checker-scale.md`). `Check.fingerprint`
+(`Lanes/Check/Fingerprint.lean`) keeps a hash of each state instead of the state: what it reports
+replays and is checked again (`Check.fingerprint_violated`, `Check.systemFingerprinted_violated`),
+but a pass is not exhaustive, and the report says it was fingerprinted. `Check.systemReduced`
+(`Lanes/Check/Reduce.lean`) searches the worlds through a representative of each: a complete pass
+is a pass of `Check.system` when the representative is a `World.Reduction`
+(`Check.systemReduced_sound`).
+
 ## The proof layer
 
 `Lanes/Semantics/` imports CSLib and Mathlib; nothing executable imports it (D11, rule 1.6).
@@ -527,8 +539,8 @@ theorem.
 ## Bound C
 
 What Lean cannot express or check is bound, as other languages bind it (D46): `fsync`, and from
-libsodium SHA-256, HMAC-SHA-256, constant-time comparison, secure random bytes and Argon2id
-(`native/lanes.c`, declared in `Lanes/Lib/Crypto/Sodium.lean` and `Lanes/Durable/IO/Journal.lean`). A bound
+OpenSSL's libcrypto SHA-256, HMAC-SHA-256, constant-time comparison and Argon2id
+(`native/lanes.c`, declared in `Lanes/Lib/Crypto/Native.lean` and `Lanes/Durable/IO/Journal.lean`). A bound
 function with a Lean reference (`Sha256.reference`, `Hmac.reference`, `Bytes.sameReference`) has
 that reference as its body, so its theorems (`Bytes.same_iff`) are about the reference, and what
 is trusted is that the C computes the same, which `Tests/Crypto.lean` tests.

@@ -259,8 +259,7 @@ jobs:
             exit 1
           fi
 
-  # What a user on a Mac does: Homebrew's libsodium (under /opt/homebrew on Apple silicon), the
-  # build, the tests and a generated app, on GitHub's runner.
+  # What a user on a Mac does: the build, the tests and a generated app, on GitHub's runner.
   macos:
     runs-on: macos-latest
     timeout-minutes: 120

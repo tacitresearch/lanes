@@ -3,8 +3,8 @@
 Lanes is a framework for verified software in Lean 4: actors with pure step functions, one
 semantics, a proved runtime kernel, a model checker, proofs, and adapters. This file is the rules,
 for agents and for people. `README.md` is the front door, `docs/ARCHITECTURE.md` says how the
-pieces fit and where each is proved, `docs/STATUS.md` what exists, `docs/PLAN.md` what is being
-done now, `docs/ROADMAP.md` the direction, `docs/decisions/` why, `TRUSTED.md` what is trusted.
+pieces fit and where each is proved, `docs/STATUS.md` what exists, `docs/ROADMAP.md` the direction
+and what is being done now, `docs/decisions/` why, `TRUSTED.md` what is trusted.
 
 Rules carry numbers (rule 2.6) because code, decisions and reviews cite them. Never renumber; a
 new rule takes the next free number in its group. Cite a rule in a PR description when it shaped
@@ -223,10 +223,10 @@ that performs IO is in an `IO/` directory of its area and named in `TRUSTED.md`.
 | `Lanes/Behaviours/` | Standard actors with their specs and proofs, by feature (`Server`, `Jobs/`, `Once/`, `Schedule/`) | `Std` only |
 | `Lanes/Check/` | Model checker | `Std` only |
 | `Lanes/Data/` | `Enum`, codecs and `lanes_data`, the queue, quorums | `Std` only |
-| `Lanes/Lib/` | The standard library: encodings (Base64, JSON), addresses and URLs, time, SHA-256, HMAC, MD5, PBKDF2 and `Sodium`, the PostgreSQL protocol (`Postgres/`), media types, rate limits (`docs/STDLIB.md`) | `Std` only |
+| `Lanes/Lib/` | The standard library: encodings (Base64, JSON), addresses and URLs, time, SHA-256, HMAC, MD5, PBKDF2 and `Native`, the PostgreSQL protocol (`Postgres/`), media types, rate limits (`docs/STDLIB.md`) | `Std` only |
 | `Lanes/Testing/` | The test kit, for tests and never in `import Lanes`: a fake S3 that checks signatures, a fake identity provider, a scripted browser, a server of a handler and readers of a response (`docs/decisions/D77-a-test-kit.md`) | `Std` only |
 | `Lanes/Semantics/` | The semantics as a CSLib `LTS`, refinement, specs, fairness and leads-to, and the liveness of the gate, of jobs and of the scheduler | CSLib, Mathlib |
-| `native/` | The C that binds libsodium, `fsync`, a timed wait, OpenSSL's TLS client, its signature check and its signing, all of it trusted | libsodium, OpenSSL, libc |
+| `native/` | The C that binds OpenSSL's hashes, comparison and Argon2id, `fsync`, a timed wait, OpenSSL's TLS client, its signature check and its signing, all of it trusted | OpenSSL, libc |
 | `LanesCli/` | The `lanes` command: `new`, `lint`, `check`, `inventory`, `docstrings` | `Std` only; `Lean` in `Inventory` and `Docstrings`, which only `lanesInventory` links |
 | `templates/app/` | The application `lanes new` creates, which is `examples/counter` | |
 | `examples/` | Applications to read, each its own Lake package (`examples/README.md`) | anything |
@@ -355,8 +355,8 @@ Agents do what the docs say, so a stale doc is worse than none. Keep each short 
 
 - Change a doc in the same commit as the code it describes. A doc says what is, not how it came
   to be: history is in git, in `docs/decisions/` and in `docs/history/`.
-- `docs/PLAN.md` holds only the work in progress and why; when a step is done, take it off.
-  `docs/ROADMAP.md` holds the direction, the phases and the standing risks.
+- `docs/ROADMAP.md` holds the direction, the work in progress and why, the phases and the
+  standing risks. When a step in progress is done, take it off.
 - `docs/ARCHITECTURE.md` names the theorem behind each claim; a claim without one says it is
   checked, tested or trusted.
 - Cite files by their repository path in backquotes; `lanes lint` fails on one that does not

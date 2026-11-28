@@ -5,7 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Lanes.Web.Http.Wire
-public import Lanes.Lib.Crypto.Sodium
+public import Lanes.Lib.Crypto.Native
 public import Lanes.Lib.Time.Format
 
 /-!
@@ -18,7 +18,7 @@ The canonical form is written from the same request the client sends, and what t
 writes as the target is the canonical path and query (`SigV4.target_sign`), so the bytes signed
 are the bytes sent. A path is signed as S3 signs it: each segment escaped once. Services that
 escape the path twice sign the same unless a segment needs escaping. HMAC-SHA-256 and SHA-256
-are libsodium's, with the Lean references as their bodies (`Lanes/Lib/Crypto/Sodium.lean`).
+are OpenSSL's, with the Lean references as their bodies (`Lanes/Lib/Crypto/Native.lean`).
 -/
 
 @[expose] public section

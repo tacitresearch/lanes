@@ -33,15 +33,9 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: libsodium, which Lanes links
-      shell: bash
-      run: |
-        if pkg-config --exists libsodium 2>/dev/null; then exit 0; fi
-        if [ "$RUNNER_OS" = macOS ]; then brew install libsodium pkg-config
-        else sudo apt-get update -q && sudo apt-get install -yq libsodium-dev pkg-config; fi
-    # TLS links the OpenSSL of Lean's toolchain, so nothing is installed to build. The tests make
+    # Lanes links the OpenSSL of Lean's toolchain, so nothing is installed to build. The tests make
     # certificates and run a server with the `openssl` command (macOS has LibreSSL's), and on
-    # Linux scripts/tls-declarations.py compiles native/tls.c against OpenSSL's headers.
+    # Linux scripts/tls-declarations.py compiles native/*.c against OpenSSL's headers.
     - name: The openssl command and OpenSSL's headers, for the tests
       shell: bash
       run: |
@@ -53,7 +47,7 @@ runs:
           echo "::warning::the openssl command or OpenSSL's headers are missing and cannot be installed here (no sudo): the TLS tests and scripts/tls-declarations.py need them"
           exit 0
         fi
-        sudo apt-get update -q && sudo apt-get install -yq openssl libssl-dev
+        sudo apt-get update -q && sudo apt-get install -yq openssl libssl-dev pkg-config
     - name: Install elan and the toolchain
       shell: bash
       run: |

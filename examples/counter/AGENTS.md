@@ -1,8 +1,6 @@
 # counter
 
-A [Lanes](https://github.com/tacitresearch/lanes) application. Lanes links libsodium: install
-it and pkg-config first (`apt-get install libsodium-dev pkg-config`, or
-`brew install libsodium pkg-config`).
+A [Lanes](https://github.com/tacitresearch/lanes) application. It needs elan and a C compiler, nothing else.
 
 ```bash
 lake exe cache get      # once: prebuilt Mathlib

@@ -49,7 +49,7 @@ say() { echo "app-instance: $*" >&2; }
 die() { say "$*"; exit 1; }
 
 # The keys the configuration may set, and nothing else.
-CONF_KEYS=(APP BINARY ARGS PORT READY_PATH METRICS_PATH DRAIN_SECONDS RELEASES LOG_GROUP
+CONF_KEYS=(APP BINARY SITE_URL ARGS PORT READY_PATH METRICS_PATH DRAIN_SECONDS RELEASES LOG_GROUP
   METRICS_LOG_GROUP METRICS_NAMESPACE SCRIPT_URL SCRIPT_SHA256 DB_HOST DB_PORT DB_NAME DB_SECRET
   DB_CA_URL DB_CA_SHA256 MAIL_IDENTITY MEDIA_BUCKET)
 
@@ -60,6 +60,7 @@ load_conf() {
   if [ -f "$CONF" ]; then . "$CONF"; fi
   APP=${APP:-}
   BINARY=${BINARY:-}
+  SITE_URL=${SITE_URL:-}
   ARGS=${ARGS-"{port} {journal}"}
   PORT=${PORT:-8080}
   READY_PATH=${READY_PATH:-/readyz}
@@ -87,6 +88,7 @@ load_conf() {
 check_conf() {
   [[ $APP =~ ^[a-z][a-z0-9-]{1,30}$ ]] || die "APP '$APP' is not a lowercase name"
   [[ $BINARY =~ ^[A-Za-z0-9_.-]{1,64}$ ]] || die "BINARY '$BINARY' is not a file name"
+  [[ $SITE_URL =~ ^(https://[a-z0-9.-]+)?$ ]] || die "SITE_URL '$SITE_URL' is not an https origin"
   [[ $ARGS =~ ^[A-Za-z0-9\ _./:{}=,+-]*$ ]] || die "ARGS has a character other than letters, digits and _./:{}=,+-"
   [[ $PORT =~ ^[0-9]{4,5}$ ]] || die "PORT '$PORT' is not a port"
   [[ $READY_PATH =~ ^/[A-Za-z0-9_./-]*$ ]] || die "READY_PATH '$READY_PATH' is not a path"
@@ -307,14 +309,17 @@ write_units() {
   copytruncate
 }
 EOF
-  # The region, for the role's credentials (which the application fetches from the metadata
+  # The site's origin, from which sign-in redirects and same-origin checks are made; the
+  # region, for the role's credentials (which the application fetches from the metadata
   # service itself), S3 and SES; the media bucket, and the database and the mail identity when
   # there are. secrets.env, read after, may set any of it again.
   {
+    if [ -n "$SITE_URL" ]; then printf '%s=%s\n' LANES_URL "$SITE_URL"; fi
     printf '%s=%s\n' AWS_REGION "$(region)"
     if [ -n "$MEDIA_BUCKET" ]; then printf '%s=%s\n' LANES_MEDIA_BUCKET "$MEDIA_BUCKET"; fi
     if [ -n "$DB_HOST" ]; then
-      printf '%s=%s\n' LANES_DB_HOST "$DB_HOST" LANES_DB_PORT "$DB_PORT" LANES_DB_NAME "$DB_NAME"
+      printf '%s=%s\n' LANES_DB_HOST "$DB_HOST" LANES_DB_PORT "$DB_PORT" LANES_DB_NAME "$DB_NAME" \
+        LANES_DB_USER lanes LANES_DB_PASSWORD_FILE /run/lanes-app/db-password
       if [ -n "$DB_CA_URL" ]; then printf '%s=%s\n' LANES_DB_CA "$DB_CA"; fi
     fi
     if [ -n "$MAIL_IDENTITY" ]; then printf '%s=%s\n' LANES_MAIL_IDENTITY "$MAIL_IDENTITY"; fi
@@ -489,19 +494,16 @@ volume() {
   if [ -n "$stopped" ]; then systemctl start lanes-app.service; fi
 }
 
-# Before each start, as root: the database's address (the Lanes client takes an IPv4 address)
-# and password, in files only the application reads.
+# Before each start, as root: the database's password, in a file only the application reads.
+# The client resolves the endpoint's name itself, at each connection.
 database() {
-  local dir=/run/lanes-app address
+  local dir=/run/lanes-app
   [ -n "$DB_HOST" ] || return 0
-  address=$(getent ahostsv4 "$DB_HOST" | awk 'NR == 1 { print $1 }')
-  [ -n "$address" ] || die "$DB_HOST has no IPv4 address"
-  echo "$address" >"$dir/db-address"
   aws_cli secretsmanager get-secret-value --region "$(region)" --secret-id "$DB_SECRET" \
     --query SecretString --output text \
     | python3 -c 'import json, sys; sys.stdout.write(json.load(sys.stdin)["password"])' >"$dir/db-password"
-  chown "$APP_USER:$APP_USER" "$dir/db-address" "$dir/db-password"
-  chmod 400 "$dir/db-address" "$dir/db-password"
+  chown "$APP_USER:$APP_USER" "$dir/db-password"
+  chmod 400 "$dir/db-password"
 }
 
 # Points link $1 at $2 by a rename, so that it is never missing.

@@ -5,7 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Lanes.Lib.Crypto.Sha512
-public import Lanes.Lib.Crypto.Sodium
+public import Lanes.Lib.Crypto.Native
 
 /-!
 What channel binding of type `tls-server-end-point` (RFC 5929 §4.1) binds to: the hash of the

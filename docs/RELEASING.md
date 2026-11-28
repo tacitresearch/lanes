@@ -11,7 +11,9 @@ breaks.
 
 A release is a tag `vX.Y.Z` on `main`, at a commit whose `version` in `lakefile.lean` is
 `X.Y.Z`. Reservoir, Lean's package index, reads the tags and the version from the repository.
-`lake exe lanes new` makes an app that requires `main` unless it is given `--rev vX.Y.Z`.
+`lake exe lanes new` makes an app that requires the release tag of the checkout it runs from,
+or that checkout's commit when no tag is at it, unless it is given `--rev`. Until the first
+release, every new app is pinned to a commit, and its lakefile says so.
 
 ## Toolchain
 
