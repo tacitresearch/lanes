@@ -1,0 +1,165 @@
+journal (frame at byte 0)
+manifest (frame at byte 36)
+  format 2
+  lanes 0.1.0
+  system "videos 4, admitted"
+  toolchain 4.37.0-rc1 0b77e12952ad39077d80d8bd6b66d601f225c321
+  runtime kernel, policy 1
+  schema frame SHA-256 9a61335d5eb530a6f2cd78ad7d77220007fcf3b80c2ddddefa3b9b12bf6f12e3
+schema (frame at byte 176)
+  Lanes.Journal.Entry (Sum (Prod Nat Lanes.Http.Request) (Sum (Lanes.Schedule.Input Videos.Key Unit Videos.Answer) Videos.Input))
+
+  inductive Lanes.Journal.Entry (Sum (Prod Nat Lanes.Http.Request) (Sum (Lanes.Schedule.Input Videos.Key Unit Videos.Answer) Videos.Input)) where
+    | input (x : Sum (Prod Nat Lanes.Http.Request) (Sum (Lanes.Schedule.Input Videos.Key Unit Videos.Answer) Videos.Input))
+    | advance (now_ms : Nat)
+    | batch (fuel : Nat)
+    | handed
+    | snapshot (index : Nat)
+
+  inductive Sum (Prod Nat Lanes.Http.Request) (Sum (Lanes.Schedule.Input Videos.Key Unit Videos.Answer) Videos.Input) where
+    | inl (val : Prod Nat Lanes.Http.Request)
+    | inr (val : Sum (Lanes.Schedule.Input Videos.Key Unit Videos.Answer) Videos.Input)
+
+  structure Prod Nat Lanes.Http.Request where
+    fst : Nat
+    snd : Lanes.Http.Request
+
+  structure Lanes.Http.Request where
+    method : Lanes.Http.Method
+    path : List String
+    query : List (Prod String String)
+    headers : List (Prod String String)
+    body : ByteArray
+
+  inductive Lanes.Http.Method where
+    | get
+    | post
+    | put
+    | patch
+    | delete
+
+  structure Prod String String where
+    fst : String
+    snd : String
+
+  inductive Sum (Lanes.Schedule.Input Videos.Key Unit Videos.Answer) Videos.Input where
+    | inl (val : Lanes.Schedule.Input Videos.Key Unit Videos.Answer)
+    | inr (val : Videos.Input)
+
+  inductive Lanes.Schedule.Input Videos.Key Unit Videos.Answer where
+    | schedule (now_ms : Nat) (spec : Lanes.Schedule.Spec Videos.Key Unit)
+    | cancel (key : Videos.Key)
+    | reply (key : Videos.Key) (attempt : Nat) (reply : Lanes.Rpc.Reply Videos.Answer)
+
+  inductive Videos.Key where
+    | check (video : Nat) (req : Nat)
+    | expire (video : Nat)
+    | transcode (round : Videos.Round)
+    | delete (video : Nat)
+
+  structure Videos.Round where
+    video : Nat
+    n : Nat
+
+  inductive Videos.Answer where
+    | found (size : Nat)
+    | missing
+    | deleted
+    | accepted
+    | failed
+
+  structure Lanes.Schedule.Spec Videos.Key Unit where
+    key : Videos.Key
+    payload : Unit
+    work : Lanes.Schedule.Work
+    at_ms : Nat
+
+  inductive Lanes.Schedule.Work where
+    | call (retry : Lanes.Schedule.Retry)
+    | once
+    | every (period_ms : Nat)
+
+  structure Lanes.Schedule.Retry where
+    maxAttempts : Nat := 5
+    deadline_ms : Nat := 10000
+    base_ms : Nat := 1000
+    cap_ms : Nat := 60000
+    jitter_ms : Nat := 0
+    until_ms : Option Nat := .none
+
+  inductive Option Nat where
+    | none
+    | some (val : Nat)
+
+  inductive Lanes.Rpc.Reply Videos.Answer where
+    | answer (a : Videos.Answer)
+    | unknown
+
+  inductive Videos.Input where
+    | request (c : Videos.Command) (at_s : Nat)
+    | job (key : Videos.Key) (outcome : Lanes.Schedule.Outcome Unit Videos.Answer)
+    | noticed (key : Videos.Key)
+
+  inductive Videos.Command where
+    | signIn (req : Nat) (issuer : String) (subject : String) (name : String)
+    | signOut (req : Nat) (member : Nat) (session : Nat)
+    | create (req : Nat) (member : Nat) (session : Nat) (title : String) (about : String) (visibility : Videos.Visibility) (media : Videos.Media)
+    | uploaded (req : Nat) (member : Nat) (session : Nat) (video : Nat)
+    | watch (req : Nat) (viewer : Option (Prod Nat Nat)) (video : Nat)
+    | like (req : Nat) (member : Nat) (session : Nat) (video : Nat) (on : Bool)
+    | comment (req : Nat) (member : Nat) (session : Nat) (video : Nat) (body : String)
+    | uncomment (req : Nat) (member : Nat) (session : Nat) (video : Nat) (comment : Nat)
+    | delete (req : Nat) (member : Nat) (session : Nat) (video : Nat)
+    | feed (req : Nat) (viewer : Option (Prod Nat Nat)) (before : Option Nat)
+    | channel (req : Nat) (viewer : Option (Prod Nat Nat)) (whose : Nat)
+    | retry (req : Nat) (member : Nat) (session : Nat) (video : Nat)
+    | report (req : Nat) (r : Videos.Report) (signature : String)
+
+  inductive Videos.Visibility where
+    | public
+    | unlisted
+    | private
+
+  inductive Videos.Media where
+    | mp4
+    | webm
+    | quicktime
+
+  inductive Option (Prod Nat Nat) where
+    | none
+    | some (val : Prod Nat Nat)
+
+  structure Prod Nat Nat where
+    fst : Nat
+    snd : Nat
+
+  inductive Bool where
+    | false
+    | true
+
+  inductive Videos.Report where
+    | done (round : Videos.Round)
+    | failed (round : Videos.Round)
+
+  inductive Lanes.Schedule.Outcome Unit Videos.Answer where
+    | scheduled
+    | already
+    | refused (why : Lanes.Schedule.Refusal)
+    | cancelled
+    | succeeded (answer : Videos.Answer)
+    | failed (payload : Unit) (attempts : Nat) (last : Option Videos.Answer)
+
+  inductive Lanes.Schedule.Refusal where
+    | full
+    | tooLarge
+
+  inductive Option Videos.Answer where
+    | none
+    | some (val : Videos.Answer)
+records: 5
+  0 at byte 47757, 3 bytes: .snapshot 252
+  1 at byte 47780, 3 bytes: .advance 551
+  2 at byte 47803, 275 bytes: .input (.inl { fst := 181, snd := { method := .post, path := ["v", "2", "like"], query := [], headers := [{ fst := "host", snd := "127.0.0.1:45859" }, { fst := "connection", snd := "close" }, { fst := "content-length", snd := "74" }, { fst := "content-type", snd := "application/x-www-form-urlencoded" }, { fst := "origin", snd := "http://videos.test" }, { fst := "videos-arrived", snd := "1795845765" }, { fst := "videos-verified-session", snd := "1.1" }], body := [99, 115, 114, 102, 61, 118, 49, 46, 48, 46, 50, 97, 48, 50, 99, 48, 53, 99, 57, 57, 55, 54, 52, 51, 55, 100, 54, 49, 57, 57, 51, 50, 101, 48, 48, 100, 56, 52, 48, 49, 55, 49, 98, 48, 53, 99, 53, 57, 51, 99, 48, 52, 100, 51, 56, 49, 55, 54, 97, 48, 100, 97, 50, 97, 102, 48, 101, 49, 57, 97, 51, 57, 57, 97] } })
+  3 at byte 48098, 2 bytes: .batch 64
+  4 at byte 48120, 1 bytes: .handed
+tail: the file ends after its last frame

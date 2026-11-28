@@ -18,7 +18,9 @@ Usage:
       Create a new application.
   lanes lint [--fix] [--main] [--json] [<path>]
       Check a project against the rules of Lanes (AGENTS.md), and the files derived from others.
-      --fix rewrites the derived files: the line counts of TRUSTED.md and the decisions' index.
+      --fix rewrites the derived files: the line counts of TRUSTED.md and the decisions' index,
+      and each pinned schema (a .schema file) after a change that the files it wrote still read.
+      The pinned schemas are read with the build: build first.
       --main numbers new decisions (with --fix) or reports them: use it on the main branch.
       --json prints the findings as JSON, each with its kind: proof for a `sorry`, else check.
   lanes check [--json]

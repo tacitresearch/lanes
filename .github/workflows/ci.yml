@@ -242,6 +242,8 @@ jobs:
             examples/*/.lake/build
             integrations/*/.lake/build
           key: ${{ steps.keys.outputs.key }}
+      # A package that pins the schemas of its files (`schemas/`) is linted too: lint `schema`
+      # reads its build and the corpus its pinned files name.
       - name: Check each package
         env:
           PACKAGES: ${{ matrix.packages }}
@@ -249,6 +251,7 @@ jobs:
           for package in $PACKAGES; do
             echo "::group::$package"
             (cd "$package" && time lake test)
+            if [ -d "$package/schemas" ]; then (cd "$package" && lake exe lanes lint); fi
             echo "::endgroup::"
           done
 

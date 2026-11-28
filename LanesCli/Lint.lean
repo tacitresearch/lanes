@@ -387,6 +387,8 @@ def inventory (root : System.FilePath) : IO (List Finding) := do
   return findings
 
 def lint (root : System.FilePath) (options : Options := {}) : IO Report := do
+  -- The inventory builds what it reads, which the pinned schemas' program imports too.
+  let inventoryFindings ← inventory root
   let fixed ← if options.fix then Generated.fix root options.main else pure []
   let plan ← Generated.plan root options.main
   let schemas ← Schemas.plan root
@@ -406,7 +408,7 @@ def lint (root : System.FilePath) (options : Options := {}) : IO Report := do
     findings := findings ++ (← checkFile root file trusted)
   findings := findings ++ (← checkLinks root)
   findings := findings ++ (← checkOracles root)
-  findings := findings ++ (← inventory root)
+  findings := findings ++ inventoryFindings
   return ⟨findings, fixed, files.size⟩
 
 /-- A JSON string: `s` quoted, with the characters JSON must escape escaped. -/

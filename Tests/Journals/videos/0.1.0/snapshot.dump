@@ -1,0 +1,65 @@
+snapshot (frame at byte 0)
+manifest (frame at byte 37)
+  format 2
+  lanes 0.1.0
+  system "videos 4, admitted"
+  toolchain 4.37.0-rc1 0b77e12952ad39077d80d8bd6b66d601f225c321
+  runtime kernel, policy 1
+  schema frame SHA-256 13e65f39cf4405ca81820d7cf9f013a2fe544fa813f02c04ec005c39ec88c556
+schema (frame at byte 177)
+  Prod Nat (Prod (List (Σ (Sum Unit (Sum Unit Unit)))) (Prod (List (Prod (Option (Sum Unit (Sum Unit Unit))) (Σ (Sum Unit (Sum Unit Unit))))) (Prod (List (Prod (Prod Nat Nat) (Σ (Sum Unit (Sum Unit Unit))))) (Prod Nat (Prod Nat Bool)))))
+
+  structure Prod Nat (Prod (List (Σ (Sum Unit (Sum Unit Unit)))) (Prod (List (Prod (Option (Sum Unit (Sum Unit Unit))) (Σ (Sum Unit (Sum Unit Unit))))) (Prod (List (Prod (Prod Nat Nat) (Σ (Sum Unit (Sum Unit Unit))))) (Prod Nat (Prod Nat Bool))))) where
+    fst : Nat
+    snd : Prod (List (Σ (Sum Unit (Sum Unit Unit)))) (Prod (List (Prod (Option (Sum Unit (Sum Unit Unit))) (Σ (Sum Unit (Sum Unit Unit))))) (Prod (List (Prod (Prod Nat Nat) (Σ (Sum Unit (Sum Unit Unit))))) (Prod Nat (Prod Nat Bool))))
+
+  structure Prod (List (Σ (Sum Unit (Sum Unit Unit)))) (Prod (List (Prod (Option (Sum Unit (Sum Unit Unit))) (Σ (Sum Unit (Sum Unit Unit))))) (Prod (List (Prod (Prod Nat Nat) (Σ (Sum Unit (Sum Unit Unit))))) (Prod Nat (Prod Nat Bool)))) where
+    fst : List (Σ (Sum Unit (Sum Unit Unit)))
+    snd : Prod (List (Prod (Option (Sum Unit (Sum Unit Unit))) (Σ (Sum Unit (Sum Unit Unit))))) (Prod (List (Prod (Prod Nat Nat) (Σ (Sum Unit (Sum Unit Unit))))) (Prod Nat (Prod Nat Bool)))
+
+  inductive Sum Unit (Sum Unit Unit) where
+    | inl (val : Unit)
+    | inr (val : Sum Unit Unit)
+
+  inductive Sum Unit Unit where
+    | inl (val : Unit)
+    | inr (val : Unit)
+
+  structure Prod (List (Prod (Option (Sum Unit (Sum Unit Unit))) (Σ (Sum Unit (Sum Unit Unit))))) (Prod (List (Prod (Prod Nat Nat) (Σ (Sum Unit (Sum Unit Unit))))) (Prod Nat (Prod Nat Bool))) where
+    fst : List (Prod (Option (Sum Unit (Sum Unit Unit))) (Σ (Sum Unit (Sum Unit Unit))))
+    snd : Prod (List (Prod (Prod Nat Nat) (Σ (Sum Unit (Sum Unit Unit))))) (Prod Nat (Prod Nat Bool))
+
+  structure Prod (Option (Sum Unit (Sum Unit Unit))) (Σ (Sum Unit (Sum Unit Unit))) where
+    fst : Option (Sum Unit (Sum Unit Unit))
+    snd : Σ (Sum Unit (Sum Unit Unit))
+
+  inductive Option (Sum Unit (Sum Unit Unit)) where
+    | none
+    | some (val : Sum Unit (Sum Unit Unit))
+
+  structure Prod (List (Prod (Prod Nat Nat) (Σ (Sum Unit (Sum Unit Unit))))) (Prod Nat (Prod Nat Bool)) where
+    fst : List (Prod (Prod Nat Nat) (Σ (Sum Unit (Sum Unit Unit))))
+    snd : Prod Nat (Prod Nat Bool)
+
+  structure Prod (Prod Nat Nat) (Σ (Sum Unit (Sum Unit Unit))) where
+    fst : Prod Nat Nat
+    snd : Σ (Sum Unit (Sum Unit Unit))
+
+  structure Prod Nat Nat where
+    fst : Nat
+    snd : Nat
+
+  structure Prod Nat (Prod Nat Bool) where
+    fst : Nat
+    snd : Prod Nat Bool
+
+  structure Prod Nat Bool where
+    fst : Nat
+    snd : Bool
+
+  inductive Bool where
+    | false
+    | true
+records: 1
+  0 at byte 27324, 334 bytes: { fst := 252, snd := { fst := [⟨.inr (.inl ()), #0(#0(1795845765050, []), #0(#1, []))⟩, ⟨.inr (.inr ()), #0(#0([#0(2, #0("https://github.com", "3", "carol", #0([#0(2, 1795845764, 1795845764)], 1795845764))), #0(1, #0("https://github.com", "2", "Bob \"<b>\" & co", #0([], 1795845764))), #0(0, #0("https://github.com", "1", "alice", #0([#0(0, 1795845764, 1795845764)], 1795845764)))], [#0(2, 0, "Ghost", "About Ghost.", #0, #0, #3(20), [], []), #0(1, 0, "Diary", "About Diary.", #2, #0, #3(20), [], [])], 3, 2), #0(#1, []))⟩], snd := { fst := [], snd := { fst := [], snd := { fst := 25, snd := { fst := 533, snd := .true } } } } } }
+tail: the file ends after its last frame

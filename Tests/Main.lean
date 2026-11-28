@@ -78,7 +78,8 @@ import Tests.Testing
 
 /-!
 The test driver behind `lake test`: the pure tests and the live runtime tests, well under a
-second together. `lanesTest live` runs only the live tier, the one worth repeating; `--json`
+second together. `lanesTest live` runs only the live tier, the one worth repeating; `lanesTest
+corpus` adds files to the corpus and rewrites none (`Tests/Corpus.lean`); `--json`
 prints the results as JSON (`lake test -- --json`). The larger
 model checks are a separate binary, `lanesCheck`, because their results are computed when the
 program starts.
