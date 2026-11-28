@@ -459,12 +459,22 @@ def reportInput (id : ReqId) (r : Http.Request) : Except Http.Response Input :=
     .ok (.request (.report id report ((r.header? Transcode.signatureHeader).getD "")) (arrived r))
   | none => bad "not a report"
 
+/-- The requests that change nothing: the feed, a watch page and a channel page, each under any
+id. They are answered from the site's state (`view`) and never journalled. -/
+def read? (r : Http.Request) : Option (ReqId → Command) :=
+  dispatch [
+    Routes.home.handle fun () r id => .feed id (session? r) ((r.param? "before").bind String.toNat?),
+    Routes.watch.handle fun v r id => .watch id (session? r) v,
+    Routes.channel.handle fun whom r id => .channel id (session? r) whom
+  ] r
+
 def decode (s : Settings) (id : ReqId) (r : Http.Request) : Except Http.Response Input :=
   let ask (c : Command) : Except Http.Response Input := .ok (.request c (arrived r))
   if !r.bodyWithin s.maxBody_bytes then .error (Http.Response.text "too large\n" 413)
-  else
+  else match read? r with
+  | some c => ask (c id)
+  | none =>
     (dispatch [
-      Routes.home.handle fun () r => ask (.feed id (session? r) ((r.param? "before").bind String.toNat?)),
       Routes.style.handle fun () _ => .error (Http.Response.ofText "text/css" style),
       Routes.script.handle fun () _ => .error (Http.Response.ofText "text/javascript" script),
       Routes.new.handle fun () r => match session? r with
@@ -473,7 +483,6 @@ def decode (s : Settings) (id : ReqId) (r : Http.Request) : Except Http.Response
       Routes.create.handle fun () r => signedIn s r (createInput id r),
       Routes.uploaded.handle fun (v, ()) r => signedIn s r fun m session =>
         ask (.uploaded id m session v),
-      Routes.watch.handle fun v r => ask (.watch id (session? r) v),
       Routes.like.handle fun (v, ()) r => signedIn s r fun m session => ask (.like id m session v true),
       Routes.unlike.handle fun (v, ()) r => signedIn s r fun m session =>
         ask (.like id m session v false),
@@ -481,7 +490,6 @@ def decode (s : Settings) (id : ReqId) (r : Http.Request) : Except Http.Response
       Routes.uncomment.handle fun (v, c, ()) r => signedIn s r fun m session =>
         ask (.uncomment id m session v c),
       Routes.delete.handle fun (v, ()) r => signedIn s r fun m session => ask (.delete id m session v),
-      Routes.channel.handle fun whom r => ask (.channel id (session? r) whom),
       Routes.signOut.handle fun () r => signedIn s r fun m session => ask (.signOut id m session),
       Routes.retry.handle fun (v, ()) r => signedIn s r fun m session => ask (.retry id m session v),
       Routes.transcoded.handle fun () r => reportInput id r,
@@ -525,6 +533,21 @@ def bridge (s : Settings) : Bridge fullSig where
     | .inr (.reply req viewer r) => some (req, encodeReply s viewer r)
     | _ => none
   prepare := prepare s
+
+/-- The response to the outputs of a read: its one reply's. -/
+def readResponse (s : Settings) : List Out → Http.Response
+  | [.reply _ viewer r] => encodeReply s viewer r
+  | _ => page (Message s none "Error" "This page could not be read.") 500
+
+/-- A read, answered from the site's state at a boundary between entries (`Http.View`): with
+the response the site gives the same request, which leaves it as it was
+(`Videos.Web.view_answers`). -/
+def view (config : Config) (s : Settings) (r : Http.Request) : Option (Http.View (system config)) :=
+  if !r.bodyWithin s.maxBody_bytes then none
+  else (read? r).map fun c =>
+    { reads := [.inr ()]
+      answer := fun get =>
+        readResponse s (Site.handle config (get (.inr ()) List.mem_cons_self) (.request (c 0) (arrived r))).2 }
 
 /-! ## Saving -/
 

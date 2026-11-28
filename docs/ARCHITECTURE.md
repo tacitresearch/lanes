@@ -33,12 +33,12 @@ proved function tells it to.
 | Actors and systems | `Lanes/Core/{Actor,System,World,Step,Run}.lean` | the definition everything else is about |
 | Proof tools for systems | `Lanes/Proof/{Lift,Ghost,Monotone,Equiv,Deed}.lean` | `System.invariant_of_actor`, `Inductive.of_monotone`, `System.Invariant.of_ghost` |
 | The kernel | `Lanes/Runtime/{Kernel,KernelSound,KernelTimers,Wave}.lean` | `Kernel.exec_reachable`, `Kernel.exec_outputs`, `Kernel.exec_wellFormed`, `Kernel.runWaves_eq` |
-| The shell | `Lanes/Runtime/IO/Shell.lean`, `Lanes/Runtime/{Batch,Mailbox,MailboxSound,Pace}.lean` | `Batch.run_kernel`, `Batch.run_sound`, `Batch.run_spread`, `Mailbox.batch_since_take`; the shell itself is trusted |
+| The shell | `Lanes/Runtime/IO/Shell.lean`, `Lanes/Runtime/{Batch,PeekSound,Mailbox,MailboxSound,Pace}.lean` | `Batch.run_kernel`, `Batch.run_sound`, `Batch.run_spread`, `Batch.run_erase_peeks`, `Batch.chain_peek_after`, `Mailbox.batch_since_take`; the shell itself is trusted |
 | Journal, snapshots, disk | `Lanes/Durable/{Journal,Snapshot,Disk,Frame,Reading}.lean`, `Lanes/Durable/IO/Journal.lean` | `Journal.open?_cut`, `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Journal.Disk.Holds.save_crash`, `Journal.Disk.Torn.load_readings` |
 | Migrations | `Lanes/Durable/{Migration,Upgrade}.lean` | `Migration.inv_exec`, `Journal.Upgrade.begin_crash`, `Journal.Upgrade.holds`, `Journal.Upgrade.inv_load` |
 | Joins | `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`, `Lanes/Semantics/FairJoin.lean` | `System.Reachable.left`, `SysState.run_left`, `System.Run.Fair.left`, `System.Run.Fair.right` |
 | Shards and the transport | `Lanes/Runtime/{Shard,ShardSound,ShardsSound}.lean`, `Lanes/Net/{Courier,CourierSound,Handshake,HandshakeSound}.lean`, `Lanes/Net/IO/{Peers,Node}.lean` | `System.ShardsReachable.unsharded`, `Peers.Courier.written_sublist_sent`, `Peers.Handshake.Reachable.ready_proved` |
-| The gate and the HTTP server | `Lanes/Web/Http/{Gate,Front,FrontSound,Admit,AdmitSound,Waiting,Conn,ConnSound,Stream,Sse,SseSound,Loopback}.lean`, `Lanes/Semantics/Front.lean`, `Lanes/Web/IO/Server.lean` | `Http.served_answered_le_arrived`, `Http.served_pending_answered`, `Http.Front.World.refines`, `Http.Front.pending_answered`, `Http.Waiting.exec_answered`, `Http.Conn.run_writes`, `Http.Conn.read_streamed`, `Http.Sse.parse_written` |
+| The gate and the HTTP server | `Lanes/Web/Http/{Gate,Front,FrontSound,Admit,AdmitSound,View,Waiting,Conn,ConnSound,Stream,Sse,SseSound,Loopback}.lean`, `Lanes/Semantics/Front.lean`, `Lanes/Web/IO/Server.lean` | `Http.served_answered_le_arrived`, `Http.served_pending_answered`, `Http.Front.World.refines`, `Http.Front.pending_answered`, `Http.Waiting.exec_answered`, `Http.Conn.run_writes`, `Http.Conn.read_streamed`, `Http.Sse.parse_written` |
 | Metrics, health and the access log | `Lanes/Lib/Metrics.lean`, `Lanes/Web/Http/{Ops,OpsSound}.lean`, `Lanes/Web/IO/Ops.lean` | `Metrics.Histogram.observeAll_eq`, `Metrics.readLabelValue_escapeLabel`, `Http.Ops.route?_default`, `Http.Ops.route?_metrics`, `Http.Ops.answer_ready`, `Http.Ops.Access.parse_line`; that none of it reaches a system is trusted and tested |
 | Other adapters | `Lanes/Outside/Basic.lean`, `Lanes/Outside/{Clock,IO/Clock}.lean`, `Lanes/Web/IO/Client.lean`, `Lanes/Web/Http/{Grammar,Wire,WireSound}.lean` | `Response.read_wire`, `Request.fields_framing`; conformance tests |
 | Models of external services | `Lanes/Outside/{Rpc,Idempotent,Events,ObjectStore,Multipart,Queue,Cache,Clock,Throttle}.lean`, `Lanes/Outside/Effects/`, `Lanes/Web/Http/SharedCache.lean`, `Lanes/Proof/Outputs.lean` | `Idempotent.at_most_once`, `Rpc.answered_le_called`, `Events.deliveries_le`, `ObjectStore.read_sent`, `ObjectStore.held_sent`, `Multipart.read_listed`, `Queue.received_le`, `Cache.read_sent`, `Clock.wall_back_le`, `Throttle.wait_le`, `SharedCache.serve_storable`, `SharedCache.serve_of_leaks`, `System.Emits.outputs`; that a real service conforms is trusted |
@@ -129,7 +129,13 @@ a pure function that returns the kernel after the batch and a list of acts: appe
 entries, hand over these outputs, save this image, answer this peek. The shell performs the acts
 in order and decides nothing. Proved: the journal describes the kernel (`Batch.run_kernel`); an
 output is handed over only after the entries that produce it are appended, and a save falls
-only where every output is handed over (`Batch.run_sound`); a take returns exactly what went in
+only where every output is handed over (`Batch.run_sound`); a peek, which reads the states of a
+list of actors, is answered at the end of its batch after every other act, with the states of
+the kernel the batch's journal describes (`Batch.run_peeks`), and a batch with its peeks taken
+out is the same batch (`Batch.run_erase_peeks`), so reads leave no trace in the journal; over
+the whole history, a peek asked after an output was handed over sees a world the semantics
+reaches by a run that put that output out first (`Batch.chain_peek_after`,
+`Lanes/Runtime/PeekSound.lean`); a take returns exactly what went in
 since the last, in order, and the inbox never holds more than its capacity
 (`Mailbox.batch_since_take`, `Mailbox.Reachable.bounded`). Trusted: that the shell performs the
 acts as given (`TRUSTED.md`, the first row).
@@ -387,6 +393,19 @@ the same answers handed over in the same order (`Http.Front.World.refines`,
 than it arrived (`Http.Front.run_answered_le`), its waiting list stays within `maxPending`
 (`Http.Front.run_bounded`), and every waiting request is answered if every deadline that stays
 armed is passed to it (`Http.Front.pending_answered`).
+
+A request that changes nothing can be answered from the state (`Lanes/Web/Http/View.lean`, the
+decision "Reads from the state"). The application gives `serve` a `view` beside its bridge: for a
+request it names, the actors it reads and its response from their states. Such a read never
+enters the system. It waits behind a gate of its own, `Gate.step` over `readSig`
+(`ServerConfig.reads`: its own deadline and bound), for a peek of those actors at the end of the
+shard's next batch (`Runtime.tryPeek`), and is answered from their states off the shard's thread,
+or `504` at its deadline. So it reads every actor it names at one boundary between entries, sees
+every entry before it and none after (`Batch.run_peeks`), and leaves the journal, the outputs and
+their ids as they would be without it (`Batch.run_erase_peeks`). That a view answers what the
+request would if it entered is the application's claim, proved of its views
+(`Videos.Web.view_answers` in `examples/videos`). `Http.Front.World` does not model reads: that
+the server does what the gate of reads decides is trusted, as for the gate.
 
 Proved of `served sys` for every system, bridge and configuration: no request is answered more
 often than it arrived where the link from outside to the gate does not duplicate
