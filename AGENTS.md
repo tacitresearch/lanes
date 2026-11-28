@@ -28,7 +28,9 @@ lake exe lanes docstrings  # how many public declarations of `import Lanes` have
 - Run `lake build --wfail`, `lake test`, `lake exe lanesCheck` and `lake exe lanes lint` before
   calling a task done. CI runs them in that order, then `lint --fix` must change nothing, then a
   generated app is built and tested, the small examples are built and checked, and
-  `examples/raft-kv`, `examples/ledger` and `examples/rookery` run as jobs of their own.
+  `examples/raft-kv`, `examples/ledger` and `examples/rookery` run as jobs of their own. A pull
+  request that changes only documentation is built and linted, and the other jobs are skipped
+  (the `changes` job of `.github/workflows/ci.yml` says which files count).
 - **Small bounds on every pull request, large bounds on a schedule.** A pull request's checks
   are fast and exhaustive at small bounds: each example's `lake test` takes under a minute, and
   a pull request's CI under ten minutes. A model-checking scenario has a small version, in `lake
