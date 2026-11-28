@@ -28,6 +28,7 @@ public import Lanes.Core.Service
 public import Lanes.Core.Step
 public import Lanes.Core.System
 public import Lanes.Core.World
+public import Lanes.Data.Body
 public import Lanes.Data.Codec
 public import Lanes.Data.Declare
 public import Lanes.Data.Enum

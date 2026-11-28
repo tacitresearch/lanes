@@ -17,9 +17,9 @@ Three more claims of the spec carried to every run of the system through
   `maxPerWindow` distinct ids. The history passes each deadline in the block of the position
   where its timer fires (`System.Implements.Explains.fired`, `fires`), so `Board.rate_limit`
   applies to the acts between;
-- `api_once`: of the API changes an account sends with one sequence number, every reply other
-  than `stale` and `badToken` is the same: the board acts on one of them, and answers each
-  other as it answered that one or refuses it.
+- `api_once`: of the API changes an account sends with one sequence number, every two replies
+  other than `stale`, `badToken` and `reused` are the same, to the same change: the board acts
+  on one of them, answers each repeat of that change as it answered it, and refuses the rest.
 
 An API post answered `posted` is not a trigger of `posted_kept`, nor counted by
 `rate_limit_run`: a repeat of its `seq` is answered `posted` from the memo, after the post was
@@ -38,10 +38,10 @@ variable {N C : Type} [DecidableEq N] [DecidableEq C] (config : Config)
 
 namespace Board
 
-/-- After an API change of `n` with sequence number `s` was answered `R`, the memo of `n` holds
-a later number, or `s` with `R` first. -/
-def MemoAfter (b : Board N C) (n : N) (s : Nat) (R : Reply N) : Prop :=
-  ∃ last rs, b.memo.find? n = some (last, rs) ∧ (s < last ∨ (s = last ∧ rs.headD .stale = R))
+/-- After an API change `op` of `n` with sequence number `s` was answered `R`, the memo of `n`
+holds a later number, or `s` with `op` and `R`. -/
+def MemoAfter (b : Board N C) (n : N) (s : Nat) (op : Op N) (R : Reply N) : Prop :=
+  ∃ last rs, b.memo.find? n = some (last, rs) ∧ (s < last ∨ (s = last ∧ rs = [(op, R)]))
 
 theorem fire_memo (b : Board N C) (d : Deadline N) : (b.fire d).memo = b.memo := by
   cases d <;> rfl
@@ -60,7 +60,7 @@ theorem withSession_memo {b : Board N C} {n : N} {session : Sid}
 theorem handle_memo (b : Board N C) (r : Request N C) :
     (b.handle config r).1.memo = b.memo ∨ ∃ req n token seq op p reply,
       r = .api req n token seq op ∧ b.memo.seen n seq = .fresh ∧
-        (b.handle config r).1.memo = b.memo.record n seq [reply] ∧ b.get? n = some p := by
+        (b.handle config r).1.memo = b.memo.record n seq [(op, reply)] ∧ b.get? n = some p := by
   cases r with
   | signUp req n c bot =>
     left
@@ -90,10 +90,10 @@ theorem handle_memo (b : Board N C) (r : Request N C) :
     · exact .inl rfl
   | profile req n json => exact .inl rfl
 
-theorem MemoAfter.handle {b : Board N C} {n : N} {s : Nat} {R : Reply N}
-    (h : b.MemoAfter n s R) (r : Request N C) : (b.handle config r).1.MemoAfter n s R := by
+theorem MemoAfter.handle {b : Board N C} {n : N} {s : Nat} {op : Op N} {R : Reply N}
+    (h : b.MemoAfter n s op R) (r : Request N C) : (b.handle config r).1.MemoAfter n s op R := by
   obtain ⟨last, rs, hfind, hlast⟩ := h
-  rcases handle_memo config b r with hsame | ⟨req, n', token, seq, op, p, reply, rfl, hfresh,
+  rcases handle_memo config b r with hsame | ⟨req, n', token, seq, op', p, reply, rfl, hfresh,
     hmemo, -⟩
   · exact ⟨last, rs, hsame ▸ hfind, hlast⟩
   · unfold MemoAfter
@@ -101,7 +101,7 @@ theorem MemoAfter.handle {b : Board N C} {n : N} {s : Nat} {R : Reply N}
     by_cases hn : n = n'
     · subst hn
       simp only [Once.Memo.seen, hfind] at hfresh
-      refine ⟨seq, [reply], by simp, .inl ?_⟩
+      refine ⟨seq, [(op', reply)], by simp, .inl ?_⟩
       split at hfresh
       · cases hfresh
       · split at hfresh
@@ -109,8 +109,9 @@ theorem MemoAfter.handle {b : Board N C} {n : N} {s : Nat} {R : Reply N}
         · omega
     · exact ⟨last, rs, by rw [Once.Memo.find?_record_of_ne _ _ _ hn]; exact hfind, hlast⟩
 
-theorem MemoAfter.run {b : Board N C} {n : N} {s : Nat} {R : Reply N} (h : b.MemoAfter n s R)
-    (es : List (Event N C)) : (Board.run config b es).MemoAfter n s R := by
+theorem MemoAfter.run {b : Board N C} {n : N} {s : Nat} {op : Op N} {R : Reply N}
+    (h : b.MemoAfter n s op R) (es : List (Event N C)) :
+    (Board.run config b es).MemoAfter n s op R := by
   induction es generalizing b with
   | nil => exact h
   | cons e es ih =>
@@ -120,7 +121,7 @@ theorem MemoAfter.run {b : Board N C} {n : N} {s : Nat} {R : Reply N} (h : b.Mem
       obtain ⟨last, rs, hfind, hlast⟩ := h
       exact ih (b := b.fire d) ⟨last, rs, by rw [fire_memo]; exact hfind, hlast⟩
 
-theorem seen_again {memo : Once.Memo N (Reply N)} {n : N} {s : Nat} {rs : List (Reply N)}
+theorem seen_again {E : Type} {memo : Once.Memo N E} {n : N} {s : Nat} {rs : List E}
     (h : memo.seen n s = .again rs) : memo.find? n = some (s, rs) := by
   unfold Once.Memo.seen at h
   cases hf : memo.find? n with
@@ -134,56 +135,63 @@ theorem seen_again {memo : Once.Memo N (Reply N)} {n : N} {s : Nat} {rs : List (
       rw [hs]
     · split at h <;> cases h
 
-/-- An API change answered with something other than `stale` and `badToken` leaves the memo
-of its account with its sequence number and that answer. -/
+/-- An API change answered with something other than `stale`, `badToken` and `reused` leaves
+the memo of its account with its sequence number, the change and that answer. -/
 theorem handle_api_memoAfter (b : Board N C) {req : ReqId} {n : N} {token s : Nat} {op : Op N}
     (hop : op ≠ .timeline) (hstale : (b.handle config (.api req n token s op)).2.1 ≠ .stale)
-    (hbad : (b.handle config (.api req n token s op)).2.1 ≠ .badToken) :
-    (b.handle config (.api req n token s op)).1.MemoAfter n s
+    (hbad : (b.handle config (.api req n token s op)).2.1 ≠ .badToken)
+    (hreused : (b.handle config (.api req n token s op)).2.1 ≠ .reused) :
+    (b.handle config (.api req n token s op)).1.MemoAfter n s op
       (b.handle config (.api req n token s op)).2.1 := by
-  simp only [handle] at hstale hbad ⊢
+  simp only [handle] at hstale hbad hreused ⊢
   split at hstale
   · next p hp =>
-    simp only [hp] at hbad ⊢
-    unfold api at hstale hbad ⊢
+    simp only [hp] at hbad hreused ⊢
+    unfold api at hstale hbad hreused ⊢
     split at hstale
     · next ht => simp [ht] at hbad
     · next ht =>
-      simp only [ht, hop, ↓reduceIte] at hstale hbad ⊢
+      simp only [ht, hop, ↓reduceIte] at hstale hbad hreused ⊢
       split at hstale
       · next rs hseen =>
-        exact ⟨s, rs, seen_again hseen, .inr ⟨rfl, rfl⟩⟩
+        simp only [hseen] at hreused ⊢
+        exact ⟨s, rs, seen_again hseen, .inr ⟨rfl, eq_of_recalled_ne hreused⟩⟩
       · next hseen => simp at hstale
       · next hseen =>
-        exact ⟨s, [(act config b n p op).2.1], by simp [act_memo], .inr ⟨rfl, rfl⟩⟩
+        exact ⟨s, [(op, (act config b n p op).2.1)], by simp [act_memo], .inr ⟨rfl, rfl⟩⟩
   · next hp => simp [hp] at hbad
 
-/-- Once the memo of `n` is past an answer `R` to sequence number `s`, an API change of `n` with
-`s` is answered `R`, `stale` or `badToken`. -/
-theorem MemoAfter.api {b : Board N C} {n : N} {s : Nat} {R : Reply N} (h : b.MemoAfter n s R)
-    {req : ReqId} {token : Nat} {op : Op N} (hop : op ≠ .timeline) :
-    (b.handle config (.api req n token s op)).2.1 = R ∨
-      (b.handle config (.api req n token s op)).2.1 = .stale ∨
-      (b.handle config (.api req n token s op)).2.1 = .badToken := by
+/-- Once the memo of `n` is past an answer `R` to the change `op` with sequence number `s`, an
+API change `op'` of `n` with `s` is answered `R` if it is `op`, and else `reused`, `stale` or
+`badToken`. -/
+theorem MemoAfter.api {b : Board N C} {n : N} {s : Nat} {op : Op N} {R : Reply N}
+    (h : b.MemoAfter n s op R) {req : ReqId} {token : Nat} {op' : Op N}
+    (hop' : op' ≠ .timeline) :
+    (op' = op ∧ (b.handle config (.api req n token s op')).2.1 = R) ∨
+      (b.handle config (.api req n token s op')).2.1 = .reused ∨
+      (b.handle config (.api req n token s op')).2.1 = .stale ∨
+      (b.handle config (.api req n token s op')).2.1 = .badToken := by
   obtain ⟨last, rs, hfind, hlast⟩ := h
   simp only [Board.handle]
   split
   · next p hp =>
     unfold Board.api
     split
-    · exact .inr (.inr rfl)
+    · exact .inr (.inr (.inr rfl))
     · have hseen : b.memo.seen n s = if s = last then .again rs else if s < last then .stale
           else .fresh := by
         simp [Once.Memo.seen, hfind]
       rw [hseen]
       by_cases hs : s = last
       · simp only [hs, ↓reduceIte]
-        rcases hlast with hlt | ⟨-, hR⟩
+        rcases hlast with hlt | ⟨-, rfl⟩
         · omega
-        · exact .inl hR
+        · by_cases ho : op = op'
+          · subst ho; simp [recalled]
+          · simp [recalled, ho]
       · have hlt : s < last := by omega
         simp [hs, hlt]
-  · exact .inr (.inr rfl)
+  · exact .inr (.inr (.inr rfl))
 
 /-- A web post answered `posted id` put the post with that id on its author's account. -/
 theorem handle_web_posted {b : Board N C} {req : ReqId} {a : N} {s : Sid}
@@ -498,15 +506,15 @@ theorem shown_kept {i p₂ l : ℕ} {req : ReqId} {a : N} {q : Post} {json json'
 
 /-- The board acts on one API change of an account for each sequence number: every two replies
 the system hands over to API changes made as one account with one sequence number are the same,
-unless one is `stale` or `badToken`. -/
+and so are the changes, unless one reply is `stale`, `badToken` or `reused`. -/
 theorem api_once {i j p₁ p₂ : ℕ} {o₁ o₂ : Response N} {req₁ req₂ token₁ token₂ s : ℕ} {n : N}
     {op₁ op₂ : Op N} (hi : evs[i]? = some (.output o₁)) (hj : evs[j]? = some (.output o₂))
     (hp₁ : evs[p₁]? = some (.input (.api req₁ n token₁ s op₁)))
     (hp₂ : evs[p₂]? = some (.input (.api req₂ n token₂ s op₂)))
     (h₁ : o₁.req = req₁) (h₂ : o₂.req = req₂) (hop₁ : op₁ ≠ .timeline) (hop₂ : op₂ ≠ .timeline)
-    (hr₁ : o₁.reply ≠ .stale ∧ o₁.reply ≠ .badToken)
-    (hr₂ : o₂.reply ≠ .stale ∧ o₂.reply ≠ .badToken) :
-    o₁.reply = o₂.reply := by
+    (hr₁ : o₁.reply ≠ .stale ∧ o₁.reply ≠ .badToken ∧ o₁.reply ≠ .reused)
+    (hr₂ : o₂.reply ≠ .stale ∧ o₂.reply ≠ .badToken ∧ o₂.reply ≠ .reused) :
+    op₁ = op₂ ∧ o₁.reply = o₂.reply := by
   obtain ⟨acts, cut, hex⟩ := (implements config env henv).history hrun
   obtain ⟨k₁, -, -, ha₁, rfl⟩ := take_of_output config hex hdistinct hi hp₁ h₁
   obtain ⟨k₂, -, -, ha₂, rfl⟩ := take_of_output config hex hdistinct hj hp₂ h₂
@@ -514,26 +522,30 @@ theorem api_once {i j p₁ p₂ : ℕ} {o₁ o₂ : Response N} {req₁ req₂ t
       acts[k]? = some (.take (.api req n token s op)) → op ≠ .timeline → op' ≠ .timeline →
       ((boardAt config acts k).handle config (.api req n token s op)).2.1 ≠ .stale →
       ((boardAt config acts k).handle config (.api req n token s op)).2.1 ≠ .badToken →
+      ((boardAt config acts k).handle config (.api req n token s op)).2.1 ≠ .reused →
       ((boardAt config acts k').handle config (.api req' n token' s op')).2.1 ≠ .stale →
       ((boardAt config acts k').handle config (.api req' n token' s op')).2.1 ≠ .badToken →
-      ((boardAt config acts k).handle config (.api req n token s op)).2.1 =
+      ((boardAt config acts k').handle config (.api req' n token' s op')).2.1 ≠ .reused →
+      op = op' ∧ ((boardAt config acts k).handle config (.api req n token s op)).2.1 =
         ((boardAt config acts k').handle config (.api req' n token' s op')).2.1 := by
-    intro k k' req req' token token' op op' hkk ha hop hop' hs hb hs' hb'
-    have hm := Board.handle_api_memoAfter config _ hop hs hb
+    intro k k' req req' token token' op op' hkk ha hop hop' hs hb hr hs' hb' hr'
+    have hm := Board.handle_api_memoAfter config _ hop hs hb hr
     rw [← boardAt_succ config ha] at hm
     have hm' := hm.run config (((acts.drop (k + 1)).take (k' - (k + 1))).map toEvent)
     rw [← boardAt_le config (by omega)] at hm'
-    rcases hm'.api config (req := req') (token := token') hop' with h | h | h
-    · exact h.symm
+    rcases hm'.api config (req := req') (token := token') hop' with ⟨rfl, h⟩ | h | h | h
+    · exact ⟨rfl, h.symm⟩
+    · exact absurd h hr'
     · exact absurd h hs'
     · exact absurd h hb'
   rcases Nat.lt_trichotomy k₁ k₂ with hk | rfl | hk
-  · exact hlt hk ha₁ hop₁ hop₂ hr₁.1 hr₁.2 hr₂.1 hr₂.2
+  · exact hlt hk ha₁ hop₁ hop₂ hr₁.1 hr₁.2.1 hr₁.2.2 hr₂.1 hr₂.2.1 hr₂.2.2
   · rw [ha₁] at ha₂
     simp only [Option.some.injEq, Service.Act.take.injEq, Request.api.injEq] at ha₂
     obtain ⟨rfl, -, rfl, -, rfl⟩ := ha₂
-    rfl
-  · exact (hlt hk ha₂ hop₂ hop₁ hr₂.1 hr₂.2 hr₁.1 hr₁.2).symm
+    exact ⟨rfl, rfl⟩
+  · obtain ⟨hop, hreply⟩ := hlt hk ha₂ hop₂ hop₁ hr₂.1 hr₂.2.1 hr₂.2.2 hr₁.1 hr₁.2.1 hr₁.2.2
+    exact ⟨hop.symm, hreply.symm⟩
 
 open Classical in
 /-- The rate limit, of every run: after a position at which `n`'s window passes, and before any

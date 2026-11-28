@@ -235,7 +235,7 @@ that performs IO is in an `IO/` directory of its area and named in `TRUSTED.md`.
 | `Lanes/Web/` | HTTP as data, its grammar, the gate, routes, cookies, the wire format, the server's connections and Signature Version 4 (`Http/`); HTML values and templates (`Html/`); tokens, password digests, failed attempts, sessions (`Auth/`); the S3 client's calls and answers (`S3/`); the server, the client and the S3 client in `IO/` | `Std` only |
 | `Lanes/Behaviours/` | Standard actors with their specs and proofs, by feature (`Server`, `Jobs/`, `Once/`, `Schedule/`) | `Std` only |
 | `Lanes/Check/` | Model checker | `Std` only |
-| `Lanes/Data/` | `Enum`, codecs and `lanes_data`, the queue, quorums | `Std` only |
+| `Lanes/Data/` | `Enum`, codecs and `lanes_data`, schemas and values, the body of a value (`Body`), the queue, quorums | `Std` only |
 | `Lanes/Lib/` | The standard library: encodings (Base64, JSON), addresses and URLs, time, SHA-256, HMAC, MD5, PBKDF2 and `Native`, the PostgreSQL protocol (`Postgres/`), media types, rate limits (`docs/STDLIB.md`) | `Std` only |
 | `Lanes/Testing/` | The test kit, for tests and never in `import Lanes`: a fake S3 that checks signatures, a fake identity provider, a scripted browser, a server of a handler and readers of a response (`docs/decisions/D77-a-test-kit.md`) | `Std` only |
 | `Lanes/Semantics/` | The semantics as a CSLib `LTS`, refinement, specs, fairness and leads-to, and the liveness of the gate, of jobs and of the scheduler | CSLib, Mathlib |
@@ -276,9 +276,13 @@ lanes_data inductive Id (F : Type) where
   `Codec.of T` is the instance's codec, and its law holds by construction. A codec also carries
   its type's `Schema` (the names of its fields and constructors, their defaults and former
   names) and a map each way to `Value`, with the law `ofValue (toValue a) = some a`
-  (`Lanes/Data/Schema.lean`); `lake exe lanes journal schema --type T` prints it. Every field's type
-  needs `Codable`: `Nat`, `Int`, `String`, `Bool`, `Unit`, `ByteArray`, `Fin n`, `Option`,
-  `List`, pairs, sums, sigma types, subtypes, `Std.ExtTreeMap`, and types declared this way.
+  (`Lanes/Data/Schema.lean`); `lake exe lanes journal schema --type T` prints it. `Body.write`
+  and `Body.read` turn a `Value` into bytes and back with its schema, under `Codec.Limits`, and
+  each value has one body (`Body.read_eq_ok_iff`); `Body.encode` and `Body.decode` do it for a
+  type, through its `Schema.Of` (`Body.decode_encode`). The files do not use it yet. Every
+  field's type needs `Codable`: `Nat`, `Int`, `String`, `Bool`, `Unit`, `ByteArray`, `Fin n`,
+  `Option`, `List`, pairs, sums, sigma types, subtypes, `Std.ExtTreeMap`, and types declared
+  this way.
 - `Enum` lists every value. `LawfulBEq` compares a structure field by field, for one that holds a
   function on an `Enum` type and so has no `DecidableEq`.
 - Arguments are `(x y : T)` or `(x : T := default)`, fields `x : T` or `x : T := default`,

@@ -185,6 +185,11 @@ def tests : List (String × Bool) :=
             && cs.all fun c => c.path == "/media" && c.secure && c.httpOnly
             && c.valid
         | _, _ => false),
+    ("cloudfront: cookies for a domain name it, so a distribution on another host gets them",
+      sample.any fun s => match s.cookies url (.canned 9) "/" (some "example.com") with
+        | .ok cs => cs.all fun c => c.domain == some "example.com" && c.valid
+            && c.header.endsWith "; Path=/; Domain=example.com; HttpOnly; Secure; SameSite=Lax"
+        | .error _ => false),
     ("cloudfront: custom cookies are CloudFront-Policy, -Signature, -Key-Pair-Id",
       sample.any fun s =>
         match s.cookies url (.custom directory) with

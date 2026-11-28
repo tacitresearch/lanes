@@ -30,6 +30,15 @@ def cookieTests : List (String × Bool) :=
         == [("set-cookie", "session=v; Path=/; Max-Age=60; HttpOnly; Secure; SameSite=Lax")]),
     ("cookie: a value that would add an attribute is not set",
       (Response.empty.setCookie { name := "session", value := "v; Domain=evil" }).headers == []),
+    ("cookie: a Domain is named after the Path, and one that would add an attribute is not set",
+      (Response.empty.setCookie { name := "grant", value := "v", domain := some "example.com" }).headers
+        == [("set-cookie", "grant=v; Path=/; Domain=example.com; HttpOnly; Secure; SameSite=Lax")]
+        && (Response.empty.setCookie
+          { name := "grant", value := "v", domain := some "example.com; Max-Age=9" }).headers == []),
+    ("cookie: a __Host- cookie with a Domain, which a browser would drop, is not set",
+      (Response.empty.setCookie
+        { name := hostCookie "session" true, value := "v", domain := some "example.com" }).headers
+        == []),
     ("cookie: a name that is not a token is not set",
       (Response.empty.setCookie { name := "a b", value := "v" }).headers == []),
     ("cookie: a Secure cookie is named __Host-, one over plain HTTP is not",

@@ -38,6 +38,11 @@ def tests : IO (List (String × Bool)) := do
         git = \"https://github.com/tacitresearch/lanes\"\nrev = \"0123abc\"\n\n"),
     ("lanes new: an app made between releases requires the commit",
       (untagged.splitOn "rev = \"0123abc\"").length == 2
-        && (untagged.splitOn "No release tag of Lanes is at the commit").length == 2) ]
+        && (untagged.splitOn "No release tag of Lanes is at the commit").length == 2),
+    ("lanes new: a commit on no remote, and changes not committed, are each warned of",
+      (warnings "0123abc" true false).isEmpty
+        && ((warnings "0123abc" false false).map (·.splitOn "0123abc" |>.length)) == [2]
+        && (warnings "0123abc" true true).length == 1
+        && (warnings "0123abc" false true).length == 2) ]
 
 end Tests.New

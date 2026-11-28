@@ -66,12 +66,17 @@ def alpnWire (protocols : List String) : Option ByteArray :=
     let bytes := p.toUTF8
     if bytes.size = 0 ∨ 255 < bytes.size then none else some (acc.push bytes.size.toUInt8 ++ bytes)
 
+/-- Whether `host` is an IPv4 or IPv6 address: its certificate is checked for the address, and it
+is sent as no SNI, which RFC 6066 allows only for a name. -/
+def isAddress (host : String) : Bool :=
+  (Ip.parse host).isSome
+
 @[no_expose]
 private def begin (trust : Trust) (host : String) (check : Bool) (alpn : List String) : IO Session := do
   let some protocols := alpnWire alpn | throw (.userError "tls: an ALPN protocol is empty or too long")
-  new (← trust.path).toString host (Ip.parse4 host.toList).isSome check protocols
+  new (← trust.path).toString host (isAddress host) check protocols
 
-/-- A session with the server `host`, a name or an IPv4 address, whose certificate must chain to
+/-- A session with the server `host`, a name or an IP address, whose certificate must chain to
 `trust` and be for `host`, offering the ALPN protocols `alpn`. A name is also sent as SNI. -/
 @[no_expose]
 def Session.start (trust : Trust) (host : String) (alpn : List String := []) : IO Session :=
