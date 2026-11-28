@@ -93,8 +93,8 @@ theorem step_bounded (config : Config) (members : State) (msg : Request)
 theorem bounded (config : Config) :
     (Server.actor (service config)).Invariant (Bounded config) :=
   Actor.Inductive.invariant
-    ⟨by simp [Server.actor, service, Bounded], fun s msg h => step_bounded config s msg h,
-      fun _ h => h⟩
+    ⟨by simp [Server.actor, service, Bounded], fun _ s msg h => step_bounded config s msg h,
+      fun _ _ h => h⟩
 
 /-- A line a member says is taken, and sent to every member, its sender included, each once,
 in the order they joined; nothing else is sent. -/
