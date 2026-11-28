@@ -502,6 +502,26 @@ theorem world_invariant {σ : Signature} (cfg : Config) (port : Port σ Q A) {st
     · exact hJ.observe cfg _ hd
     · exact hd
 
+/-- The model always keeps some world: an answer no world allows is refused. -/
+theorem worlds_ne_nil {σ : Signature} (cfg : Config) (port : Port σ Q A) {start : Db}
+    {events : List (Event σ)} {s : State Q A}
+    (hrun : (outside cfg h start port).after events = some s) : s.worlds ≠ [] := by
+  refine (outside cfg h start port).after_invariant (fun _ => True) (fun s => s.worlds ≠ []) ?_ ?_ ?_
+    (fun _ _ => trivial) hrun
+  · simp [outside]
+  · intro d x d' _ hx
+    simp only [outside, Option.bind_eq_some_iff] at hx
+    obtain ⟨r, -, hr⟩ := hx
+    simp only [State.allow] at hr
+    split at hr
+    · cases hr
+    · next hne => simp only [Option.some.injEq] at hr; subst hr; simpa using hne
+  · intro d out hd _
+    simp only [outside]
+    split
+    · simpa [State.observe] using hd
+    · exact hd
+
 /-- A world in which a committed answer comes had the call take effect with that answer, and
 has the same database. -/
 theorem World.answer_committed {w w' : World Q A} {id : Nat} {a : A}
@@ -778,6 +798,12 @@ theorem of_reads {α : Type} {t : Txn α} (ht : t.Reads) (hP : ∀ o, o.writes =
   | op o k hw _ ih => exact .op o k (hP o hw) ih
 
 theorem single {o : Op} (hp : P o) : (Txn.op o Txn.pure).All P := .op o _ hp fun r => .pure r
+
+theorem mono {α : Type} {t : Txn α} {Q : Op → Prop} (ht : t.All P) (h : ∀ o, P o → Q o) : t.All Q := by
+  induction ht with
+  | pure a => exact .pure a
+  | abort why => exact .abort why
+  | op o k hp _ ih => exact .op o k (h o hp) ih
 
 theorem mapM {α β : Type} (f : α → Txn β) (hf : ∀ a, (f a).All P) : ∀ xs : List α, (xs.mapM f).All P := by
   intro xs

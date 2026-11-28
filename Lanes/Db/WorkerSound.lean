@@ -79,11 +79,11 @@ of each job, in every run the model allows: an attempt made again, after an answ
 run out or a restart, has no second effect. -/
 theorem once_each {D S E : Type} (clients : Outside (sig Q A W R) D) (dbcfg : Db.Config)
     (h : Handler (Q ⊕ Req) (A ⊕ Ans W)) (start : Db) (inner : Rpc.Server S W R E)
-    (refusal : R → Bool) {events : List (Event (sig Q A W R))}
+    (refusal : R → Bool) (event : Q → Option E := fun _ => none) {events : List (Event (sig Q A W R))}
     {d : (D × Db.State (Q ⊕ Req) (A ⊕ Ans W)) × Rpc.State (Idempotent.State Int64 W R S)}
-    (hd : (world clients dbcfg h start (Idempotent.server inner refusal)).after events = some d)
+    (hd : (world clients dbcfg h start (Idempotent.server inner refusal) event).after events = some d)
     (id : Int64) : (d.2.server.slots.filter fun slot => slot.key == some id).length ≤ 1 :=
-  filter_key_le _ (Idempotent.keys_nodup runPort inner refusal
+  filter_key_le _ (Idempotent.keys_nodup (runPort event) inner refusal
     (Outside.after_both _ _ _ hd).2) id
 
 /-! ## Only what committed -/
@@ -214,7 +214,7 @@ theorem armed_nil {effs : List (Eff Q A W R)} (h : ∀ e ∈ effs, ∃ out, e = 
   cases ho
 
 variable {D S E : Type} {clients : Outside (sig Q A W R) D} {dbcfg : Db.Config} {start : Db}
-  {svc : Rpc.Server S (Idempotent.Keyed Int64 W) R E}
+  {svc : Rpc.Server S (Idempotent.Keyed Int64 W) R E} {event : Q → Option E}
 
 omit [DecidableEq R] in
 /-- A committed claim the store's model allows answers jobs every world's table holds. -/
@@ -243,7 +243,7 @@ theorem holding_of_allow (happ : ∀ x, q.Keeps (app x)) {s s' : Db.State (Q ⊕
 /-- What the worker's outsides allow keeps what the store holds in every world. -/
 theorem holds_allow {I : Db → Prop} (hI : Preserves (handler cfg q app) I)
     {d d' : (D × Db.State (Q ⊕ Req) (A ⊕ Ans W)) × Rpc.State S} {x : In Q A W R}
-    (hallow : (world clients dbcfg (handler cfg q app) start svc).allow d x = some d')
+    (hallow : (world clients dbcfg (handler cfg q app) start svc event).allow d x = some d')
     (hd : Db.Holds (handler cfg q app) I d.1.2) : Db.Holds (handler cfg q app) I d'.1.2 := by
   simp only [world, Outside.both] at hallow
   split at hallow
@@ -260,7 +260,7 @@ theorem holds_allow {I : Db → Prop} (hI : Preserves (handler cfg q app) I)
 
 /-- Which outside an input went to, and what it left the store's model. -/
 theorem allow_cases {d d' : (D × Db.State (Q ⊕ Req) (A ⊕ Ans W)) × Rpc.State S} {x : In Q A W R}
-    (hallow : (world clients dbcfg (handler cfg q app) start svc).allow d x = some d') :
+    (hallow : (world clients dbcfg (handler cfg q app) start svc event).allow d x = some d') :
     d'.1.2 = d.1.2 ∧ (∀ r, x ≠ .store r) ∨
       ∃ r, x = .store r ∧ d.1.2.allow (handler cfg q app) r = some d'.1.2 := by
   simp only [world, Outside.both] at hallow
@@ -287,7 +287,7 @@ theorem allow_cases {d d' : (D × Db.State (Q ⊕ Req) (A ⊕ Ans W)) × Rpc.Sta
 theorem holds_observe {I : Db → Prop} (hI : Preserves (handler cfg q app) I) (out : Out Q W)
     {d : (D × Db.State (Q ⊕ Req) (A ⊕ Ans W)) × Rpc.State S}
     (hd : Db.Holds (handler cfg q app) I d.1.2) :
-    Db.Holds (handler cfg q app) I ((world clients dbcfg (handler cfg q app) start svc).observe d out).1.2 := by
+    Db.Holds (handler cfg q app) I ((world clients dbcfg (handler cfg q app) start svc event).observe d out).1.2 := by
   simp only [world, Outside.both, Db.outside]
   split
   · exact observe_holds dbcfg hI _ hd
@@ -297,14 +297,14 @@ theorem worlds_observe (happ : ∀ x, q.Keeps (app x)) (out : Out Q W)
     {d : (D × Db.State (Q ⊕ Req) (A ⊕ Ans W)) × Rpc.State S}
     (hd : WorldHolds (handler cfg q app) (Claims q) d.1.2) :
     WorldHolds (handler cfg q app) (Claims q)
-      ((world clients dbcfg (handler cfg q app) start svc).observe d out).1.2 := by
+      ((world clients dbcfg (handler cfg q app) start svc event).observe d out).1.2 := by
   simp only [world, Outside.both, Db.outside]
   split
   · exact (claims_inv happ).observe dbcfg _ hd
   · exact hd
 
 theorem inv_beside (happ : ∀ x, q.Keeps (app x)) (hstart : q.Functional start) (env : EnvModel (sig Q A W R)) :
-    (world clients dbcfg (handler cfg q app) start svc).Beside (system cfg) env
+    (world clients dbcfg (handler cfg q app) start svc event).Beside (system cfg) env
       (Inv (cfg := cfg) (q := q) (app := app)) where
   blank := by
     refine ⟨?_, by simp [SysState.blank], by simp [SysState.blank], rfl⟩
@@ -378,11 +378,12 @@ theorem committed_only (happ : ∀ x, q.Keeps (app x)) (hstart : q.Functional st
     {c : SysState (system (Q := Q) (A := A) (W := W) cfg)}
     (hrun : (SysState.init (system cfg) env).run env events = some c)
     {d : (D × Db.State (Q ⊕ Req) (A ⊕ Ans W)) × Rpc.State S}
-    (hd : (world clients dbcfg (handler cfg q app) start svc).after events = some d) :
+    (hd : (world clients dbcfg (handler cfg q app) start svc event).after events = some d) :
     ∀ id lease dl w, Event.output (Out.run id lease dl w) ∈ events →
       Db.Holds (handler cfg q app) (Holding q id w) d.1.2 := by
-  have hb := inv_beside (clients := clients) (dbcfg := dbcfg) (svc := svc) (cfg := cfg) happ hstart env
-  refine ((world clients dbcfg (handler cfg q app) start svc).run_induction
+  have hb := inv_beside (clients := clients) (dbcfg := dbcfg) (svc := svc) (event := event) (cfg := cfg)
+    happ hstart env
+  refine ((world clients dbcfg (handler cfg q app) start svc event).run_induction
     (P := fun events c d => Inv (cfg := cfg) (q := q) (app := app) c d ∧
       ∀ id lease dl w, Event.output (Out.run id lease dl w) ∈ events →
         Db.Holds (handler cfg q app) (Holding q id w) d.1.2)
@@ -404,5 +405,31 @@ theorem committed_only (happ : ∀ x, q.Keeps (app x)) (hstart : q.Functional st
   · simp only [List.mem_singleton] at ho
     subst ho
     exact hkeep id w (hinv.outbox id lease dl w (SysState.step_output.mp hstep).1)
+
+/-- **What the service may have had, committed.** Behind a service that honours keys, every
+effect the service may have had is under the key of a job, and of that job's work, in every
+database the store may hold. -/
+theorem slots_held {S' : Type} (happ : ∀ x, q.Keeps (app x)) (hstart : q.Functional start)
+    (env : EnvModel (sig Q A W R)) {inner : Rpc.Server S' W R E} {refusal : R → Bool}
+    {events : List (Event (sig Q A W R))} {c : SysState (system (Q := Q) (A := A) (W := W) cfg)}
+    (hrun : (SysState.init (system cfg) env).run env events = some c)
+    {d : (D × Db.State (Q ⊕ Req) (A ⊕ Ans W)) × Rpc.State (Idempotent.State Int64 W R S')}
+    (hd : (world clients dbcfg (handler cfg q app) start (Idempotent.server inner refusal) event).after events = some d) :
+    ∀ slot ∈ d.2.server.slots, ∃ id, slot.key = some id ∧
+      Db.Holds (handler cfg q app) (Holding q id slot.request) d.1.2 := by
+  have hc := committed_only (cfg := cfg) happ hstart env hrun hd
+  have hh := Idempotent.holds (runPort event) inner refusal
+    (fun r => ∃ id, r.1 = some id ∧ Db.Holds (handler cfg q app) (Holding q id r.2) d.1.2)
+    (fun out hout call hcall => by
+      have hout := (List.mem_filter.mp hout).1
+      cases out with
+      | run id lease dl w =>
+        simp only [runPort, Option.some.injEq] at hcall
+        subst hcall
+        exact ⟨id, rfl, hc id lease dl w hout⟩
+      | store _ => simp [runPort] at hcall)
+    (Outside.after_both _ _ _ hd).2
+  intro slot hslot
+  exact hh.2 (slot.key, slot.request) (List.mem_map.mpr ⟨slot, hslot, rfl⟩)
 
 end Lanes.Db.Worker
