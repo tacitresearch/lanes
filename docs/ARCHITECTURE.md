@@ -54,7 +54,11 @@ proved function tells it to.
 ## Actors and the semantics
 
 An actor (`Actor`, `Lanes/Core/Actor.lean`) is `init`, `step` and `recover`: a pure, total function from
-a state and one message to a new state and a list of effects. A `Signature` names a system's
+a state and one message to a new state and a list of effects. A step is also told its context
+(`Ctx`, D101 and `docs/decisions/new-step-context.md`): the moment (`now_ms`, `seed`) and who sent
+the message (`Sender`: the outside, an actor, or one of its own timers); a recovery is told the
+moment. An actor that reads it gives `stepAt` and `recoverAt`; one that does not gives `step` and
+`recover`, which they default to. A `Signature` names a system's
 actors, each with its own message type, and its inputs and outputs; an identity is a typed
 reference, and identities may be infinite families, since every identity names an actor that
 always exists and starts on its first message (D2). The effects (`Effect`) are `send`, `emit` (an output),
@@ -63,8 +67,10 @@ which actors boot, and `accept`, which actor an input goes to (D4).
 
 The semantics is one function, `SysState.step` in `Lanes/Core/World.lean`: a state holds every
 actor's state, the messages in flight, the armed timers and the outputs not yet handed over; an
-`Event` is an input, a delivery, a duplicate, a drop, a timeout, an output, a crash, a start or
-a restart. What may go wrong is an `EnvModel`: each link may lose, reorder and duplicate
+`Event` is an input, a delivery, a duplicate, a drop, a timeout, an output, a crash, a start, a
+restart or a tick, which sets the clock that steps are told (`SysState.clock`). Ticks may move
+the clock either way, since concurrent workers read it in no global order; the checker ticks only
+forward, along the moments a scenario lists (`Scenario.moments`, none by default). What may go wrong is an `EnvModel`: each link may lose, reorder and duplicate
 (`Link.network` does all three), actors may crash, and the process may restart
 (`EnvModel.mayRestart`). A restart puts the whole system back at `SysState.init`, as after a
 process restart (D110): every actor at its initial state, and the messages in flight, the timers
@@ -140,12 +146,20 @@ it is due; one cancelled or armed again is dropped when its actor takes it. Inpu
 to their actor's mailbox; at most `inboxCapacity` wait for their actor (`Sched.Ledger`), and
 `tryInput` refuses beyond (rule 3.8).
 
+Each step is told the moment: the wall clock read at the start plus the monotonic time since, and
+a seed from its worker's generator, seeded from the operating system. With `record` on, the trace
+has a tick with that moment before each step, so it replays through `SysState.run`. A watchdog
+thread hands a step that has run longer than `Runtime.Config.stepLimitMs` (30 s) to `onStuck`,
+which by default reports it and ends the process with status 75 for its supervisor to start
+again: the semantics' restart, which drops the poisoned message with the rest of memory
+(`docs/decisions/new-step-context.md`).
+
 What the runtime decides is those pure functions; the threads only move data. The scheduler's
 model (`Lanes/Runtime/SchedSound.lean`) is its whole state as one value: every slot, each
 worker's run queue and the actor it holds, the messages a step sent and has not pushed yet, and
 two ghosts, the messages in flight in the order the semantics sent them and the outputs not yet
-handed over. Each of its transitions, the threads' operations, is zero or one event of
-`SysState.step` (`Sched.Step.sound`), under any environment whose links are reliable, so every
+handed over. Each of its transitions, the threads' operations, is no event of `SysState.step`,
+one, or for a step a tick with the moment it is told and the step (`Sched.Step.sound`), under any environment whose links are reliable, so every
 run of the model from its start is a run of the semantics, with its outputs
 (`Sched.Run.reachable`). It keeps an invariant (`Sched.Step.inv`): the mailboxes and the
 messages not yet pushed hold the messages in flight link by link in order, so a message at the
@@ -205,6 +219,11 @@ Also:
   look up a shared table of slots; on many cores these are points of contention.
 - That a queued actor is eventually stepped and a due timer pushed rests on the workers and the
   agenda's thread running (`TRUSTED.md`, "Progress"). No bound is proved.
+- A step that never ends restarts the process (the watchdog, above), losing every actor's state;
+  a client that sends the poisoned request again kills it again. A step that overflows the stack
+  or runs out of memory aborts the process, unreported by the runtime. A panic returns `default`
+  and the step goes on.
+- The boot's recoveries are told the moment `{}`: no tick comes before `SysState.init`.
 
 ## Composition: joins
 

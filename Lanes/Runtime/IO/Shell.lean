@@ -50,6 +50,23 @@ open Std Std.Async
 
 variable {σ : Signature}
 
+/-- A step that ran longer than `Runtime.Config.stepLimitMs`: which worker, the hash of the actor
+(`Hashable σ.Id`), the kind of step (`deliver`, `timeout` or `start`) and how long it has run. -/
+structure Runtime.Stuck where
+  worker : Nat
+  actor : UInt64
+  kind : String
+  elapsed_ms : Nat
+
+/-- What the watchdog does by default with a step that does not end: report it on standard error
+and end the process with status 75, for its supervisor to start it again. The actors are
+volatile (D110), so this is the semantics' restart (`Sched.Step.restart`), and the message the
+step was on is dropped with everything else in memory. -/
+def Runtime.Stuck.restart (stuck : Runtime.Stuck) : IO Unit := do
+  IO.eprintln s!"lanes: a step ({stuck.kind}) of the actor with hash {stuck.actor} has run \
+    {stuck.elapsed_ms} ms on worker {stuck.worker}; restarting the process, which drops it"
+  IO.Process.exit 75
+
 /-- How a runtime runs: its bounds and its threads. Every field has a default. -/
 structure Runtime.Config where
   /-- Inputs accepted that their actor has not taken. When there are this many, `tryInput`
@@ -63,6 +80,11 @@ structure Runtime.Config where
   record : Bool := false
   /-- Worker threads; `0` is the machine's hardware threads. -/
   workers : Nat := 0
+  /-- How long a step may run before the watchdog acts on it (`onStuck`), in milliseconds; `0`
+  turns the watchdog off. A step cannot be interrupted, so its worker is lost either way. -/
+  stepLimitMs : Nat := 30000
+  /-- What the watchdog does with a step that has run longer than `stepLimitMs`. -/
+  onStuck : Runtime.Stuck → IO Unit := Runtime.Stuck.restart
 
 namespace Runtime
 
@@ -114,6 +136,9 @@ structure Runtime (sys : System σ) [Hashable σ.Id] where
   private wall : Nat
   /-- Each worker's generator of seeds. -/
   private seeds : Array (IO.Ref UInt64)
+  /-- What each worker is stepping: since when on the monotonic clock, the actor's hash and the
+  kind of step, and whether the watchdog has reported it. -/
+  private busy : Array (IO.Ref (Option (Nat × UInt64 × String × Bool)))
   private nextHome : IO.Ref Nat
 
 private initialize live : IO.Ref Nat ← IO.mkRef 0
@@ -266,7 +291,17 @@ private def step (rt : Runtime sys) (w : Nat) (onOutput : σ.Out → Async Unit)
   | .stale => return some (held, { gone := 1 })
   | .job j =>
     let j := match held with | some s => { j with state := s } | none => j
+    let busy := rt.busy[w]?
+    if rt.config.stepLimitMs != 0 then
+      if let some b := busy then
+        let kind := match j.work with
+          | .deliver .. => "deliver"
+          | .timeout _ => "timeout"
+          | .start => "start"
+        b.set (some (← IO.monoMsNow, hash i, kind, false))
     let (state, effects) := j.run t
+    if rt.config.stepLimitMs != 0 then
+      if let some b := busy then b.set none
     let stops := effects.any Effect.isStop
     let sends := effects.any fun | .send .. => true | _ => false
     if stops then rt.sending.write
@@ -369,11 +404,30 @@ private def boot (rt : Runtime sys) (onOutput : σ.Out → Async Unit) : BaseIO 
     handOver onOutput c.outputs
     rt.ledgerDo fun l => ((), { l with timers := l.timers + after })
 
+/-- The watchdog's thread: every quarter of `stepLimitMs`, a step that has run longer than it is
+handed to `onStuck`, once. -/
+private def watch (rt : Runtime sys) : IO Unit := do
+  let limit := rt.config.stepLimitMs
+  repeat
+    if ← rt.ending then break
+    IO.sleep (max 1 (limit / 4)).toUInt32
+    let now ← IO.monoMsNow
+    for w in [0:rt.busy.size] do
+      let some b := rt.busy[w]? | continue
+      let found ← b.modifyGet fun
+        | some (since, actor, kind, false) =>
+          if now - since > limit then (some (since, actor, kind), some (since, actor, kind, true))
+          else (none, some (since, actor, kind, false))
+        | other => (none, other)
+      if let some (since, actor, kind) := found then
+        rt.config.onStuck { worker := w, actor, kind, elapsed_ms := now - since }
+
 /-- However the runtime ends, nobody is left waiting on it. -/
 private def run (rt : Runtime sys) (onOutput : σ.Out → Async Unit) : IO Unit := do
   rt.boot onOutput
   rt.recovered.set true
   let timer ← IO.asTask (prio := .dedicated) rt.ring
+  if rt.config.stepLimitMs != 0 then discard <| IO.asTask (prio := .dedicated) rt.watch
   let threads ← (List.range rt.workers).mapM fun w =>
     IO.asTask (prio := .dedicated) (rt.worker w onOutput)
   let mut error : Option IO.Error := none
@@ -411,6 +465,7 @@ def startWith (sys : System σ) [Hashable σ.Id] (config : Runtime.Config := {})
   let seeds ← (List.range workers).toArray.mapM fun _ => do
     let bytes ← IO.getRandomBytes 8
     IO.mkRef (bytes.foldl (fun (x : UInt64) b => (x <<< 8) ||| b.toUInt64) 0)
+  let busy ← (List.range workers).toArray.mapM fun _ => IO.mkRef none
   let first ← IO.mkRef ∅
   let rest ← (List.range (shards - 1)).toArray.mapM fun _ => IO.mkRef ∅
   let rt : Runtime sys := {
@@ -430,7 +485,7 @@ def startWith (sys : System σ) [Hashable σ.Id] (config : Runtime.Config := {})
     finished := ← IO.Promise.new
     recovered := ← IO.mkRef false
     epoch := ← IO.monoMsNow
-    wall, seeds
+    wall, seeds, busy
     nextHome := ← IO.mkRef 0 }
   live.modify (· + 1)
   discard <| IO.asTask (prio := .dedicated) (rt.run (onOutput rt))
