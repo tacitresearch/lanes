@@ -1099,4 +1099,179 @@ theorem attach_within {τ : Signature} (sys : System τ) (config : Config K P A)
     (Q := fun s : (_ : Unit) → State K P => (s ()).Within config)
     fun env => within config env
 
+/-- Each scheduler of `systemBy` holds no more jobs than `maxJobs`, and no id twice, in every
+environment: each runs the scheduler's own steps. -/
+theorem withinBy {E : Type} [DecidableEq E] (config : Config K P A) (owner : K → E)
+    (env : EnvModel (sigBy E K P A)) (e : E) :
+    (systemBy config owner).Invariant env fun c => (c.state e : State K P).Within config :=
+  System.invariant_of_actor _ e (Actor.Invariant.mapEff _ (actor_within config)) env
+
+/-- Beside any system, each scheduler of `attachBy` holds no more jobs than `maxJobs`, and no
+id twice. -/
+theorem attachBy_within {τ : Signature} {E : Type} [DecidableEq E] (sys : System τ)
+    (config : Config K P A) (use : Use τ K P A) (owner : K → E)
+    (env : EnvModel (joinSig (sigBy E K P A) τ)) :
+    (attachBy sys config use owner).Invariant env
+      fun c => ∀ e, (c.state (.inl e) : State K P).Within config :=
+  System.Invariant.join_left_state (a := systemBy config owner) (b := sys) (w := use.wiringBy E)
+    (Q := fun s : (_ : E) → State K P => ∀ e, (s e).Within config)
+    fun env c hc e => withinBy config owner env e c hc
+
+/-! ### A scheduler for each entity, as a system -/
+
+section By
+
+variable {E : Type} [DecidableEq E]
+
+/-- The scheduler's effects as those of the scheduler of `e`. -/
+abbrev Eff.allAt (e : E) (effs : List (Eff K P A)) : List (Effect (sigBy E K P A) e) :=
+  effs.flatMap fun eff => [Eff.at e eff]
+
+theorem retime_at (e : E) (effs : List (Eff K P A)) (timers : List (Schedule.Msg K P A)) :
+    Effect.retime (Eff.allAt e effs) timers = Effect.retime effs timers := by
+  induction effs generalizing timers with
+  | nil => rfl
+  | cons eff effs ih =>
+    simp only [Eff.allAt, List.flatMap_cons, List.singleton_append, Effect.retime,
+      List.foldl_cons] at ih ⊢
+    cases eff <;> exact ih _
+
+theorem isStop_at (e : E) (effs : List (Eff K P A)) :
+    (Eff.allAt e effs).any Effect.isStop = effs.any Effect.isStop := by
+  induction effs with
+  | nil => rfl
+  | cons eff effs ih =>
+    simp only [Eff.allAt, List.flatMap_cons, List.singleton_append, List.any_cons] at ih ⊢
+    rw [ih]
+    cases eff <;> rfl
+
+theorem after_mem_at {e : E} {effs : List (Eff K P A)} {d : Nat} {msg : Schedule.Msg K P A} :
+    (.after d msg : Effect (sigBy E K P A) e) ∈ Eff.allAt e effs ↔ (.after d msg : Eff K P A) ∈ effs := by
+  simp only [Eff.allAt, List.mem_flatMap, List.mem_singleton]
+  constructor
+  · rintro ⟨eff, heff, h⟩
+    cases eff <;> simp only [Eff.at, reduceCtorEq, Effect.after.injEq] at h
+    obtain ⟨rfl, rfl⟩ := h
+    exact heff
+  · exact fun h => ⟨_, h, rfl⟩
+
+variable {config : Config K P A} {owner : K → E} {env : EnvModel (sigBy E K P A)}
+
+theorem handleBy_eq (c : SysState (systemBy config owner)) (e : E) (msg : Schedule.Msg K P A) :
+    c.handle env e msg = { c with
+      state := update c.state e (step config (c.state e) msg).1
+      net := c.net ++ Effect.sends e (Eff.allAt e (step config (c.state e) msg).2)
+      timers := update c.timers e (Effect.retime (Eff.allAt e (step config (c.state e) msg).2)
+        (c.timers e))
+      outbox := c.outbox ++ Effect.emits (Eff.allAt e (step config (c.state e) msg).2) } := by
+  have hr : (Eff.allAt e (step config (c.state e) msg).2).any Effect.isStop = false := by
+    rw [isStop_at]; exact step_runs config (c.state e) msg
+  simp only [SysState.handle, SysState.settle_eq]
+  simp only [Actor.mapEff, actor] at hr ⊢
+  simp only [hr, Bool.false_eq_true, ↓reduceIte]
+
+theorem startActorBy_eq (c : SysState (systemBy config owner)) (e : E) :
+    c.startActor env e = { c with
+      up := update c.up e true
+      net := c.net ++ Effect.sends e (Eff.allAt e ((c.state e).jobs.map (rearm (A := A) (c.state e))))
+      timers := update c.timers e
+        (Effect.retime (Eff.allAt e ((c.state e).jobs.map (rearm (A := A) (c.state e)))) (c.timers e))
+      outbox := c.outbox ++ Effect.emits (Eff.allAt e ((c.state e).jobs.map (rearm (A := A) (c.state e)))) } := by
+  have hr : (Eff.allAt e ((c.state e).jobs.map (rearm (A := A) (c.state e)))).any Effect.isStop
+      = false := by
+    rw [isStop_at]; exact recover_runs (K := K) (P := P) config (c.state e)
+  simp only [SysState.startActor, SysState.settle_eq]
+  simp only [Actor.mapEff, actor] at hr ⊢
+  simp only [hr, Bool.false_eq_true, ↓reduceIte]
+  simp only [SysState.mk.injEq, and_true]
+  funext i
+  by_cases h : i = e
+  · subst h; simp
+  · simp [update_of_ne _ _ h]
+
+/-- While a scheduler of `systemBy` is up, the timer each job it holds waits on is armed. -/
+def ArmedBy (c : SysState (systemBy config owner)) : Prop :=
+  ∀ e, c.up e = true → ∀ j ∈ (c.state e : State K P).jobs, timer j ∈ c.timers e
+
+private theorem armedBy_handle {c : SysState (systemBy config owner)} {e : E}
+    (h : ∀ e', e' ≠ e → c.up e' = true → ∀ j ∈ (c.state e' : State K P).jobs, timer j ∈ c.timers e')
+    (msg : Schedule.Msg K P A)
+    (he : ∀ j ∈ (c.state e : State K P).jobs, timer j ≠ msg → timer j ∈ c.timers e) :
+    ArmedBy (c.handle env e msg) := by
+  intro e' hup j hj
+  rw [handleBy_eq] at hup hj ⊢
+  by_cases h' : e' = e
+  · subst h'
+    simp only [update_self] at hj ⊢
+    rw [retime_at]
+    exact armed_step config msg he j hj
+  · simp only [update_of_ne _ _ h'] at hup hj ⊢
+    exact h e' h' hup j hj
+
+private theorem armedBy_start {c : SysState (systemBy config owner)} (h : ArmedBy c) (e : E) :
+    ArmedBy (c.startActor env e) := by
+  intro e' hup j hj
+  rw [startActorBy_eq] at hup hj ⊢
+  by_cases h' : e' = e
+  · subst h'
+    simp only [update_self] at hj ⊢
+    rw [retime_at]
+    refine Effect.mem_retime_of_after (List.mem_map.mpr ⟨j, hj, rfl⟩) ?_
+    intro hc
+    obtain ⟨b, -, hb⟩ := List.mem_map.mp hc
+    simp [rearm] at hb
+  · simp only [update_of_ne _ _ h'] at hup hj ⊢
+    exact h e' hup j hj
+
+/-- No scheduler of `systemBy` forgets a job, in any environment: while it is up, the timer
+each job it holds waits on is armed. -/
+theorem armedBy (config : Config K P A) (owner : K → E) (env : EnvModel (sigBy E K P A)) :
+    (systemBy config owner).Invariant env ArmedBy := by
+  intro c hc
+  induction hc with
+  | init => intro e _ j hj; simp [SysState.init, SysState.blank, Actor.mapEff, actor] at hj
+  | @step c c' ev hc hstep ih =>
+    cases ev with
+    | input x =>
+      obtain rfl := SysState.step_input.mp hstep
+      exact ih
+    | deliver e =>
+      obtain ⟨hup, _, rfl⟩ := SysState.step_deliver.mp hstep
+      exact armedBy_handle (c := { c with net := c.net.erase e }) (fun e' _ => ih e') e.msg
+        fun j hj _ => ih e.dst hup j hj
+    | duplicate e =>
+      obtain ⟨hup, _, _, rfl⟩ := SysState.step_duplicate.mp hstep
+      exact armedBy_handle (fun e' _ => ih e') e.msg fun j hj _ => ih e.dst hup j hj
+    | drop e =>
+      obtain ⟨_, _, rfl⟩ := SysState.step_drop.mp hstep
+      exact ih
+    | timeout i msg =>
+      obtain ⟨hup, _, rfl⟩ := SysState.step_timeout.mp hstep
+      refine armedBy_handle (c := { c with timers := update c.timers i ((c.timers i).erase msg) })
+        ?_ msg fun j hj hne => ?_
+      · intro e' h' hup' j hj
+        simp only [update_of_ne _ _ h']
+        exact ih e' hup' j hj
+      · simpa using (List.mem_erase_of_ne hne).mpr (ih i hup j hj)
+    | output out =>
+      obtain ⟨_, rfl⟩ := SysState.step_output.mp hstep
+      exact ih
+    | crash i =>
+      obtain ⟨_, _, rfl⟩ := SysState.step_crash.mp hstep
+      intro e' hup j hj
+      by_cases h' : e' = i
+      · subst h'; simp [SysState.down] at hup
+      · simp only [SysState.down, update_of_ne _ _ h'] at hup ⊢
+        exact ih e' hup j hj
+    | start i =>
+      obtain ⟨_, _, rfl⟩ := SysState.step_start.mp hstep
+      exact armedBy_start ih i
+
+/-- Every job each scheduler of `systemBy` holds is within its attempts, in every environment. -/
+theorem attemptsBy (config : Config K P A) (owner : K → E) (env : EnvModel (sigBy E K P A))
+    (e : E) : (systemBy config owner).Invariant env fun c => (c.state e : State K P).Attempts config :=
+  System.invariant_of_actor _ e (Actor.Invariant.mapEff _ (actor_attempts config)) env
+
+end By
+
 end Lanes.Schedule
