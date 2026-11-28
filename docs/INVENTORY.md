@@ -799,7 +799,7 @@ them by area.
 | `hmac` | trusted | TRUSTED.md: The C |
 | `Bytes.same` | trusted | TRUSTED.md: The C |
 | `randomBytes` | trusted | TRUSTED.md: The C |
-| `Argon2id.derive` | trusted | TRUSTED.md: The C |
+| `Argon2id.derive` | proved | `Auth.Password.verify_phc` |
 | `Argon2id.hash` | trusted | TRUSTED.md: The C |
 
 ## `Lanes/Lib/Crypto/Pbkdf2.lean`
@@ -901,7 +901,7 @@ them by area.
 | `Base64.Alphabet.valueOf` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and others |
 | `Base64.Alphabet.value?` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and others |
 | `Base64.Encoding.std` | proved | `Postgres.Conn.onMessage_binds`, `Postgres.Scram.respond_binds` |
-| `Base64.Encoding.rawStd` | tested | `Tests/Crypto.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
+| `Base64.Encoding.rawStd` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
 | `Base64.Encoding.url` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
 | `Base64.Encoding.rawUrl` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean`, `Tests/Oracle/Jose.lean` and others |
 | `Base64.sextet` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and others |
@@ -2552,15 +2552,6 @@ them by area.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Auth.instDecidableEqDigest` | proved | its type, `Decidable` |
-| `Auth.instHashableDigest` | tested | `Tests/Auth.lean` |
-| `Auth.instReprDigest` | tested | `Tests/Auth.lean` |
-| `Auth.Digest.codec` | proved | its type, `Codec` |
-| `Auth.instCodableDigest` | proved | its type, `Codable` |
-| `Auth.Digest.hex` | tested | `Tests/Auth.lean`, `Tests/Crypto.lean` |
-| `Auth.Digest.ofHex?` | tested | `Tests/Auth.lean` |
-| `Auth.Password.salt` | tested | `Tests/Auth.lean`, `Tests/Crypto.lean` |
-| `Auth.Password.digest` | tested | `Tests/Auth.lean`, `Tests/Crypto.lean` |
 | `Auth.Attempts.codec` | proved | its type, `Codec` |
 | `Auth.instCodableAttempts` | proved | its type, `Codable` |
 | `Auth.Attempts.fail` | proved | `Auth.Attempts.bounded_fail`, `Auth.Attempts.fail_repeat`, `Auth.Attempts.locked_stays` and others |
@@ -2627,17 +2618,57 @@ them by area.
 | `OAuth.refusedResponse` | checked | `Tests/OAuth.lean` |
 | `OAuth.Endpoint.parse` | tested | `Tests/OAuth.lean` |
 
+## `Lanes/Web/Auth/Password.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Auth.instDecidableEqDigest` | proved | its type, `Decidable` |
+| `Auth.instHashableDigest` | tested | `Tests/Auth.lean` |
+| `Auth.instReprDigest` | tested | `Tests/Auth.lean` |
+| `Auth.Digest.codec` | proved | its type, `Codec` |
+| `Auth.instCodableDigest` | proved | its type, `Codable` |
+| `Auth.Digest.hex` | proved | through `Auth.Password.verify`, `Auth.Stored.text`: `Auth.Password.verify_hash`, `Auth.Password.verify_phc` and others |
+| `Auth.Digest.ofHex?` | proved | through `Auth.Stored.read?`: `Auth.Stored.read?_text` |
+| `Auth.Phc.cut` | proved | through `Auth.Phc.parse?`, `Auth.Stored.read?`: `Auth.Phc.parse?_encode`, `Auth.Stored.read?_text` |
+| `Auth.Phc.after` | proved | through `Auth.Phc.parse?`, `Auth.Stored.read?`: `Auth.Phc.parse?_encode`, `Auth.Stored.read?_text` |
+| `Auth.Phc.number?` | proved | through `Auth.Phc.parse?`, `Auth.Stored.read?`: `Auth.Phc.parse?_encode`, `Auth.Stored.read?_text` |
+| `Auth.Phc.encode` | proved | `Auth.Phc.parse?_encode` |
+| `Auth.Phc.parse?` | proved | `Auth.Phc.parse?_encode` |
+| `Auth.Phc.check` | proved | through `Auth.Password.verify`: `Auth.Password.verify_hash`, `Auth.Password.verify_phc` and others |
+| `Auth.Phc.instDecidableEq` | proved | its type, `Decidable` |
+| `Auth.Phc.instRepr` | tested | `Tests/Auth.lean` |
+| `Auth.Stored.text` | proved | `Auth.Stored.read?_text` |
+| `Auth.Stored.read?` | proved | `Auth.Stored.read?_text` |
+| `Auth.Stored.codec` | proved | its type, `Codec` |
+| `Auth.Stored.instCodable` | proved | its type, `Codable` |
+| `Auth.Password.salt` | proved | through `Auth.Password.verify`: `Auth.Password.verify_hash`, `Auth.Password.verify_phc` and others |
+| `Auth.Password.digest` | proved | through `Auth.Password.verify`: `Auth.Password.verify_hash`, `Auth.Password.verify_phc` and others |
+| `Auth.Password.hash` | proved | `Auth.Password.verify_hash` |
+| `Auth.Password.current` | proved | through `Auth.Password.verify`: `Auth.Password.verify_hash`, `Auth.Password.verify_phc` and others |
+| `Auth.Password.verify` | proved | `Auth.Password.verify_hash`, `Auth.Password.verify_phc`, `Auth.Password.verify_raw` |
+
 ## `Lanes/Web/Auth/Token.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Hmac.Key.of` | checked | `Tests/OAuth.lean` |
 | `Hmac.Key.mac` | proved | `Auth.checkForm_other`, `Auth.verify_sign_other` |
+| `Auth.Keys.of` | tested | `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
+| `Auth.Keys.find?` | proved | `Auth.checkForm_iff`, `Auth.checkForm_other`, `Auth.verify_eq_some` and others |
+| `Auth.Keys.rotate` | proved | `Auth.verify_rotate` |
 | `Auth.message` | proved | `Auth.checkForm_other`, `Auth.message_inj`, `Auth.verify_sign_other` |
-| `Auth.tag` | proved | through `Auth.checkForm`, `Auth.sign`: `Auth.checkForm_formToken`, `Auth.checkForm_iff` and others |
-| `Auth.sign` | proved | `Auth.verify_eq_some`, `Auth.verify_sign`, `Auth.verify_sign_other` |
-| `Auth.verify` | proved | `Auth.verify_eq_some`, `Auth.verify_sign`, `Auth.verify_sign_other` |
-| `Auth.formToken` | proved | `Auth.checkForm_formToken`, `Auth.checkForm_iff`, `Auth.checkForm_other` |
+| `Auth.tag` | proved | through `Auth.checkForm`, `Auth.sign` and others: `Auth.checkForm_formToken`, `Auth.checkForm_iff` and others |
+| `Auth.decimal` | proved | through `Auth.checkForm`, `Auth.sign` and others: `Auth.checkForm_formToken`, `Auth.checkForm_iff` and others |
+| `Auth.head` | proved | `Auth.verify_sign_other` |
+| `Auth.signWith` | proved | `Auth.verify_eq_some`, `Auth.verify_expired`, `Auth.verify_sign_other` |
+| `Auth.sign` | proved | `Auth.verify_rotate`, `Auth.verify_sign` |
+| `Auth.splitDot` | proved | through `Auth.checkForm`, `Auth.verify`: `Auth.checkForm_formToken`, `Auth.checkForm_iff` and others |
+| `Auth.fields` | proved | through `Auth.checkForm`, `Auth.verify`: `Auth.checkForm_formToken`, `Auth.checkForm_iff` and others |
+| `Auth.verify` | proved | `Auth.verify_eq_some`, `Auth.verify_expired`, `Auth.verify_rotate` and others |
+| `Auth.formHead` | proved | `Auth.checkForm_other` |
+| `Auth.formTokenWith` | proved | `Auth.checkForm_iff`, `Auth.checkForm_other` |
+| `Auth.formToken` | proved | `Auth.checkForm_formToken` |
+| `Auth.formId` | proved | through `Auth.checkForm`: `Auth.checkForm_formToken`, `Auth.checkForm_iff` and others |
 | `Auth.checkForm` | proved | `Auth.checkForm_formToken`, `Auth.checkForm_iff`, `Auth.checkForm_other` |
 
 ## `Lanes/Web/Html/Basic.lean`

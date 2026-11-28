@@ -112,6 +112,7 @@ public import Lanes.Web.Auth.IdToken
 public import Lanes.Web.Auth.Jose
 public import Lanes.Web.Auth.Login
 public import Lanes.Web.Auth.OAuth
+public import Lanes.Web.Auth.Password
 public import Lanes.Web.Auth.Token
 public import Lanes.Web.Html.Basic
 public import Lanes.Web.Html.Htmx

@@ -68,8 +68,8 @@ theorem handle_memo (b : Board N C) (r : Request N C) :
     split
     · rfl
     · split <;> rfl
-  | logIn req n c => left; simp only [handle]; split <;> rfl
-  | logOut req n session | newToken req n session => exact .inl (withSession_memo fun _ => rfl)
+  | logIn req n c at_s => left; simp only [handle]; split <;> rfl
+  | logOut req n session | newToken req n session at_s => exact .inl (withSession_memo fun _ => rfl)
   | web req n session op => exact .inl (withSession_memo fun p => act_memo config b n p op)
   | api req n token seq op =>
     simp only [handle]

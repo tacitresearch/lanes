@@ -53,7 +53,7 @@ def main (args : List String) : IO Unit := do
   let some creds ← S3.credentialsFromEnv
     | throw (IO.userError "shelf: AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are not set")
   let host := (← IO.getEnv "LANES_HOST").getD "127.0.0.1"
-  let settings : Settings := { key := .of key, origin, bucket, creds, providers := ["oidc"] }
+  let settings : Settings := { keys := .of (.of key), origin, bucket, creds, providers := ["oidc"] }
   let server ← (start {
     settings
     server := { host, port := port.toUInt16, journal, system := "shelf 1"
