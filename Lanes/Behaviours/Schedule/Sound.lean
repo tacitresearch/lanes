@@ -892,6 +892,9 @@ theorem armed (config : Config K P A) (env : EnvModel (sig K P A)) :
     | start i =>
       obtain ⟨_, _, rfl⟩ := SysState.step_start.mp hstep
       exact armed_start c
+    | restart =>
+      obtain ⟨_, rfl⟩ := SysState.step_restart.mp hstep
+      exact armed_start (env := env) (SysState.blank _)
 
 /-! ### No more calls than attempts allowed -/
 
@@ -1005,8 +1008,14 @@ private theorem calls_output (out : Output K P A) (key : K) :
     calls key [Deed.output (σ := sig K P A) out] = (isCall key out).toNat := by
   cases out <;> simp [calls, isCall, Bool.toNat]
 
+/-- What is owed at the start: nothing. -/
+private theorem owed_init (key : K) :
+    owed key (SysState.init (system (K := K) (P := P) config) env) = 0 :=
+  (owed_start (env := env) key (SysState.blank _)).trans
+    (by simp [owed, rest, SysState.blank, actor, entry])
+
 /-- One event: the attempts it hands over and what is owed after it are covered by what was owed
-before and the scheduling it handles. -/
+before and the scheduling it handles. A restart forgets what was owed. -/
 private theorem owed_event (key : K) {c c' : SysState (system (K := K) (P := P) config)}
     (hc : (system (K := K) (P := P) config).Reachable env c) {ev : Event (sig K P A)}
     (hstep : c.step env ev = some c') :
@@ -1067,10 +1076,14 @@ private theorem owed_event (key : K) {c c' : SysState (system (K := K) (P := P) 
     obtain ⟨_, _, rfl⟩ := SysState.step_start.mp hstep
     have h := owed_start (env := env) key c
     simp [h, Event.deed, calls, schedulings]
+  | restart =>
+    obtain ⟨_, rfl⟩ := SysState.step_restart.mp hstep
+    simp [owed_init, Event.deed, calls, schedulings]
 
 /-- The scheduler calls no key more often than `max 1 maxAttempts` times for each scheduling of
 it that it handled, in every environment: whatever arrives and however often, and whatever the
-service answers. It may crash and restart, and its links may lose, reorder and duplicate. -/
+service answers. It may crash and restart, the process may restart, and its links may lose,
+reorder and duplicate. -/
 theorem calls_le_scheduled (env : EnvModel (sig K P A)) {events : List (Event (sig K P A))}
     {c : SysState (system (K := K) (P := P) config)}
     (hrun : (SysState.init (system config) env).run env events = some c) (key : K) :
@@ -1081,10 +1094,7 @@ theorem calls_le_scheduled (env : EnvModel (sig K P A)) {events : List (Event (s
   refine System.Reachable.run_induction
     (P := fun events c => calls key (deeds events) + owed key c
       ≤ max 1 config.maxAttempts * schedulings key (deeds events)) .init hrun ?_ ?_
-  · have hinit : owed key (SysState.init (system (K := K) (P := P) config) env) = 0 :=
-      (owed_start (env := env) key (SysState.blank _)).trans
-        (by simp [owed, rest, SysState.blank, actor, entry])
-    simp [hinit, calls, schedulings, deeds]
+  · simp [owed_init, calls, schedulings, deeds]
   rintro evs c₁ ev c₂ hc hle hstep
   have h := owed_event (env := env) key hc hstep
   rw [calls_snoc, schedulings_snoc, Nat.mul_add]
@@ -1266,6 +1276,10 @@ theorem armedBy (config : Config K P A) (owner : K → E) (env : EnvModel (sigBy
     | start i =>
       obtain ⟨_, _, rfl⟩ := SysState.step_start.mp hstep
       exact armedBy_start ih i
+    | restart =>
+      obtain ⟨_, rfl⟩ := SysState.step_restart.mp hstep
+      intro e _ j hj
+      simp [SysState.init, SysState.blank, Actor.mapEff, actor] at hj
 
 /-- Every job each scheduler of `systemBy` holds is within its attempts, in every environment. -/
 theorem attemptsBy (config : Config K P A) (owner : K → E) (env : EnvModel (sigBy E K P A))

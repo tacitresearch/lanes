@@ -6,6 +6,7 @@ module
 
 public import Lanes.Web.Http.FrontSound
 public import Lanes.Semantics.FairJoin
+public import Lanes.Semantics.Restart
 
 /-!
 # A fronted system answers every request its gate admits
@@ -34,7 +35,12 @@ The gate must not crash. Without that the statement is false: the gate crashes a
 a request, nothing obliges anyone to start an actor that has no mail, and the request waits in
 its state forever. A gate that restarts arms the deadlines again, so the statement could be
 recovered from an assumption that a crashed gate is restarted; no such assumption can be stated
-yet.
+yet. The process must not restart either: a restart forgets every waiting request, which is
+then never answered, and the outside is left with an unknown answer. So none of the liveness
+statements here holds under restarts as stated; each holds from any position after which the
+process does not restart (`System.LeadsTo.unlessRestart`, `Gate.pending_leaves_unlessRestart`). What does is safety: the gate answers no request more
+often than it arrived (`Gate.answered_le_handled`), its invariants hold in every environment,
+and a gate that is not crashed is up in every state, restarts included (`Gate.always_up`).
 
 ## Main statements
 
@@ -62,11 +68,12 @@ theorem never_stops (pending : List ReqId) (msg : GateMsg σ) :
   cases msg <;> simp only [gateActor, Gate.step] <;> repeat' split
   all_goals simp [Effect.isStop]
 
-/-- A gate that the environment does not crash stays up. -/
-theorem stays_up (hcrash : env.mayCrash () = false) {c c' : SysState (gateSystem bridge config)}
+/-- A gate that the environment neither crashes nor restarts stays up. -/
+theorem stays_up (hcrash : env.mayCrash () = false) (hrestart : env.mayRestart = false)
+    {c c' : SysState (gateSystem bridge config)}
     {ev : Event (gateSig σ)} (hup : c.up () = true) (hstep : c.step env ev = some c') :
     c'.up () = true :=
-  SysState.up_of_step hcrash (fun pending msg => never_stops pending msg) hup hstep
+  SysState.up_of_step hcrash hrestart (fun pending msg => never_stops pending msg) hup hstep
 
 /-- No step starts the deadline of a waiting request again: the gate arms a deadline when it
 admits a request, which was not waiting, and when it starts, which it cannot do while it is
@@ -89,12 +96,13 @@ theorem deadline_not_restarted {c c' : SysState (gateSystem bridge config)}
   | start i =>
     obtain ⟨hdown, -⟩ := SysState.step_start.mp hstep
     simp [hup] at hdown
-  | input _ | drop _ | output _ | crash _ => exact List.not_mem_nil
+  | input _ | drop _ | output _ | crash _ | restart => exact List.not_mem_nil
 
 /-- A request waiting in the gate alone is eventually no longer waiting, whatever arrives on its
-two inputs, in any environment that does not crash it. -/
+two inputs, in any environment that does not crash it or restart the process. -/
 theorem pending_leaves (bridge : Bridge σ) (config : GateConfig)
-    (hcrash : env.mayCrash () = false) (id : ReqId) :
+    (hcrash : env.mayCrash () = false)
+    (hrestart : env.mayRestart = false) (id : ReqId) :
     (gateSystem bridge config).LeadsTo env
       (fun c => c.up () = true ∧ id ∈ (c.state () : List ReqId))
       (fun c => id ∉ (c.state () : List ReqId)) := by
@@ -104,7 +112,7 @@ theorem pending_leaves (bridge : Bridge σ) (config : GateConfig)
       (System.invariant_of_actor _ () (gateActor_bounded bridge config) env c hc).2⟩
   · intro c ev c' _ ⟨hup, _⟩ _ hstep
     by_cases hid : id ∈ (c'.state () : List ReqId)
-    · exact .inl ⟨stays_up hcrash hup hstep, hid⟩
+    · exact .inl ⟨stays_up hcrash hrestart hup hstep, hid⟩
     · exact .inr hid
   · exact fun c ⟨harmed, _⟩ ⟨hup, hid⟩ _ => ⟨hup, harmed hup id hid⟩
   · intro c c' ⟨_, hnodup⟩ ⟨_, hid⟩ _ hstep
@@ -112,6 +120,15 @@ theorem pending_leaves (bridge : Bridge σ) (config : GateConfig)
     simp [gateActor, Gate.step, hid, hnodup.mem_erase_iff]
   · exact fun c ev c' _ ⟨hup, hid⟩ _ hstep hrestarted =>
       absurd hrestarted (deadline_not_restarted hup hid hstep)
+
+/-- Where the process may restart, a request waiting in the gate alone stops waiting, if the
+process does not restart from then on. -/
+theorem pending_leaves_unlessRestart (bridge : Bridge σ) (config : GateConfig)
+    (hcrash : env.mayCrash () = false) (id : ReqId) :
+    (gateSystem bridge config).LeadsToUnlessRestart env
+      (fun c => c.up () = true ∧ id ∈ (c.state () : List ReqId))
+      (fun c => id ∉ (c.state () : List ReqId)) :=
+  (pending_leaves bridge config (env := env.withoutRestarts) hcrash rfl id).unlessRestart
 
 /-- A step of the gate in which `id` stops waiting emits an answer to `id`. -/
 private theorem answered_of_handle {c : SysState (gateSystem bridge config)} {id : ReqId}
@@ -150,9 +167,11 @@ private theorem answered_of_handle {c : SysState (gateSystem bridge config)} {id
       exact ⟨timedOut, by simp [SysState.settle, SysState.perform, Effect.isStop, hid]⟩
     · next hpending => simp [hpending, hin] at hout
 
-/-- A request leaves the gate only by being answered: the step in which `id` stops waiting
-emits an output for `id`, the system's response or the gate's `504`. -/
-theorem answered_of_leaves {c c' : SysState (gateSystem bridge config)} {ev : Event (gateSig σ)}
+/-- A request leaves the gate only by being answered, where the process does not restart: the
+step in which `id` stops waiting emits an output for `id`, the system's response or the gate's
+`504`. A restart drops it unanswered. -/
+theorem answered_of_leaves (hrestart : env.mayRestart = false)
+    {c c' : SysState (gateSystem bridge config)} {ev : Event (gateSig σ)}
     {id : ReqId} (hstep : c.step env ev = some c') (hin : id ∈ (c.state () : List ReqId))
     (hout : id ∉ (c'.state () : List ReqId)) :
     ∃ response, c'.outbox = c.outbox ++ [.inl (id, response)] := by
@@ -181,14 +200,16 @@ theorem answered_of_leaves {c c' : SysState (gateSystem bridge config)} {ev : Ev
   | start i =>
     obtain ⟨_, _, rfl⟩ := SysState.step_start.mp hstep
     simp [gateActor, hin] at hout
+  | restart => simp [SysState.step_restart_of_noRestarts hrestart] at hstep
 
-/-- The gate alone answers every request it admits: in a fair run in which it is not crashed, a
-request waiting while it is up has an answer handed over at a later position. -/
-theorem pending_answered (hcrash : env.mayCrash () = false) (id : ReqId)
+/-- The gate alone answers every request it admits: in a fair run in which it is not crashed and
+the process does not restart, a request waiting while it is up has an answer handed over at a later position. -/
+theorem pending_answered (hcrash : env.mayCrash () = false)
+    (hrestart : env.mayRestart = false) (id : ReqId)
     {r : (gateSystem bridge config).Run env} (hfair : r.Fair) {n : ℕ}
     (hup : (r.state n).up () = true) (hid : id ∈ ((r.state n).state () : List ReqId)) :
     ∃ m, n ≤ m ∧ ∃ response, r.event m = some (.output (.inl (id, response))) := by
-  obtain ⟨m, hm, hgone⟩ := System.LeadsTo.iff.mp (pending_leaves bridge config hcrash id)
+  obtain ⟨m, hm, hgone⟩ := System.LeadsTo.iff.mp (pending_leaves bridge config hcrash hrestart id)
     r hfair n ⟨hup, hid⟩
   have hleaves : ∃ k, n ≤ k ∧ id ∈ ((r.state k).state () : List ReqId) ∧
       id ∉ ((r.state (k + 1)).state () : List ReqId) := by
@@ -202,8 +223,8 @@ theorem pending_answered (hcrash : env.mayCrash () = false) (id : ReqId)
   cases hev : r.event k with
   | none => exact absurd (System.Run.step_none hev ▸ hin) hout
   | some ev =>
-    obtain ⟨response, hemitted⟩ := answered_of_leaves (System.Run.step_some hev) hin hout
-    obtain ⟨m', hm', htaken⟩ := hfair.output_taken (n := k + 1) (out := .inl (id, response))
+    obtain ⟨response, hemitted⟩ := answered_of_leaves hrestart (System.Run.step_some hev) hin hout
+    obtain ⟨m', hm', htaken⟩ := hfair.output_taken hrestart (n := k + 1) (out := .inl (id, response))
       (by simp [hemitted])
     exact ⟨m', by omega, response, htaken⟩
 
@@ -220,10 +241,12 @@ theorem frontedOutput_inj {o₁ o₂ : (joinSig (gateSig σ) σ).Out} {x : (ReqI
 variable {sys : System σ} {env : EnvModel (frontedSig σ)}
 
 /-- A request waiting in the gate of `fronted sys` is eventually no longer waiting, whatever
-`sys` is, in any environment that does not crash the gate: what the gate alone does, it does in
+`sys` is, in any environment that does not crash the gate or restart the process: what the gate
+alone does, it does in
 front of `sys`. -/
 theorem fronted_pending_leaves (sys : System σ) (bridge : Bridge σ) (config : GateConfig)
-    (hcrash : env.mayCrash (.inl ()) = false) (id : ReqId) :
+    (hcrash : env.mayCrash (.inl ()) = false)
+    (hrestart : env.mayRestart = false) (id : ReqId) :
     (fronted sys bridge config).LeadsTo env
       (fun c => c.up (.inl ()) = true ∧ id ∈ (c.state (.inl ()) : List ReqId))
       (fun c => id ∉ (c.state (.inl ()) : List ReqId)) := by
@@ -234,16 +257,17 @@ theorem fronted_pending_leaves (sys : System σ) (bridge : Bridge σ) (config : 
       (P := fun c : SysState (gateSystem bridge config) =>
         c.up () = true ∧ id ∈ (c.state () : List ReqId))
       (Q := fun s _ => id ∉ (s () : List ReqId))
-      (Gate.pending_leaves bridge config (env := env.under.left) hcrash id)
+      (Gate.pending_leaves bridge config (env := env.under.left) hcrash hrestart id)
   exact System.LeadsTo.filterMapIO (sys := (gateSystem bridge config).join sys (frontWiring bridge))
     (input := frontedInput) (output := frontedOutput) (fun _ _ _ h₁ h₂ => frontedOutput_inj h₁ h₂)
     (P := fun s u => u (.inl ()) = true ∧ id ∈ (s (.inl ()) : List ReqId))
     (Q := fun s _ => id ∉ (s (.inl ()) : List ReqId)) hjoin
 
 /-- Every request the gate of `fronted sys` admits is answered, whatever `sys` is: in a fair
-run, in any environment that does not crash the gate, a request waiting while the gate is up
+run, in any environment that does not crash the gate or restart the process, a request waiting while the gate is up
 has an answer handed to the outside world at a later position. -/
-theorem fronted_pending_answered (hcrash : env.mayCrash (.inl ()) = false) (id : ReqId)
+theorem fronted_pending_answered (hcrash : env.mayCrash (.inl ()) = false)
+    (hrestart : env.mayRestart = false) (id : ReqId)
     {r : (fronted sys bridge config).Run env} (hfair : r.Fair) {n : ℕ}
     (hup : (r.state n).up (.inl ()) = true)
     (hid : id ∈ ((r.state n).state (.inl ()) : List ReqId)) :
@@ -261,7 +285,7 @@ theorem fronted_pending_answered (hcrash : env.mayCrash (.inl ()) = false) (id :
   have hid₂ : id ∈ ((r₂.state (g (f n))).state () : List ReqId) := by
     rw [hrel]
     exact hid
-  obtain ⟨m, hm, response, hev⟩ := Gate.pending_answered hcrash id hfair₂ hup₂ hid₂
+  obtain ⟨m, hm, response, hev⟩ := Gate.pending_answered hcrash hrestart id hfair₂ hup₂ hid₂
   obtain ⟨N, hN, ev, hev₁, hdeed⟩ := hsees₂.shown_after hm hev rfl
   obtain rfl := Event.leftDeed_eq_output hdeed
   obtain ⟨M, hM, ev', hev', hshows⟩ := hsees₁.shown_after hN hev₁ rfl
@@ -282,7 +306,8 @@ theorem servedOutput_inj {o₁ o₂ : (frontedSig σ).Out} {x : ReqId × Respons
 /-- A request waiting in the gate of `served sys` is eventually no longer waiting, under the
 assumption of `fronted_pending_leaves`. -/
 theorem served_pending_leaves (sys : System σ) (bridge : Bridge σ) (config : GateConfig)
-    {env : EnvModel (servedSig σ)} (hcrash : env.mayCrash (.inl ()) = false) (id : ReqId) :
+    {env : EnvModel (servedSig σ)} (hcrash : env.mayCrash (.inl ()) = false)
+    (hrestart : env.mayRestart = false) (id : ReqId) :
     (served sys bridge config).LeadsTo env
       (fun c => c.up (.inl ()) = true ∧ id ∈ (c.state (.inl ()) : List ReqId))
       (fun c => id ∉ (c.state (.inl ()) : List ReqId)) :=
@@ -290,13 +315,14 @@ theorem served_pending_leaves (sys : System σ) (bridge : Bridge σ) (config : G
     (output := Sum.getLeft?) (fun _ _ _ h₁ h₂ => servedOutput_inj h₁ h₂)
     (P := fun s u => u (.inl ()) = true ∧ id ∈ (s (.inl ()) : List ReqId))
     (Q := fun s _ => id ∉ (s (.inl ()) : List ReqId))
-    (fronted_pending_leaves sys bridge config (env := env.under) hcrash id)
+    (fronted_pending_leaves sys bridge config (env := env.under) hcrash hrestart id)
 
 /-- Every request the gate of `served sys` admits is answered: in a fair run, in any environment
-that does not crash the gate, a request waiting while the gate is up has a response handed to
+that does not crash the gate or restart the process, a request waiting while the gate is up has a response handed to
 the outside world at a later position. -/
 theorem served_pending_answered {env : EnvModel (servedSig σ)}
-    (hcrash : env.mayCrash (.inl ()) = false) (id : ReqId)
+    (hcrash : env.mayCrash (.inl ()) = false)
+    (hrestart : env.mayRestart = false) (id : ReqId)
     {r : (served sys bridge config).Run env} (hfair : r.Fair) {n : ℕ}
     (hup : (r.state n).up (.inl ()) = true)
     (hid : id ∈ ((r.state n).state (.inl ()) : List ReqId)) :
@@ -305,7 +331,7 @@ theorem served_pending_answered {env : EnvModel (servedSig σ)}
     (System.underView_projects (fun _ _ _ h₁ h₂ => servedOutput_inj h₁ h₂) env).fair_run hfair
   obtain ⟨hover, -⟩ := hsees₁.rel n
   rw [← hover] at hup hid
-  obtain ⟨m, hm, response, hev⟩ := fronted_pending_answered hcrash id hfair₁ hup hid
+  obtain ⟨m, hm, response, hev⟩ := fronted_pending_answered hcrash hrestart id hfair₁ hup hid
   obtain ⟨M, hM, ev, hev', hshows⟩ := hsees₁.shown_after hm hev rfl
   refine ⟨M, hM, response, ?_⟩
   rw [hev']
@@ -323,20 +349,24 @@ in that step or admits it (`Gate.step_arrive`); an answer is handed over, and an
 is answered (`served_pending_answered`). No premise on ids is needed: an arrival whose id is
 waiting already is answered with it. -/
 
-/-- A gate that the environment does not crash is up in every state. -/
+/-- A gate that the environment does not crash is up in every state, restarts included: a
+restart starts it again with the system. -/
 theorem Gate.always_up {env : EnvModel (gateSig σ)} (hcrash : env.mayCrash () = false) :
     (gateSystem bridge config).Invariant env fun c => c.up () = true := by
-  refine System.Inductive.invariant ⟨?_, fun c ev c' hup hstep => Gate.stays_up hcrash hup hstep⟩
+  refine System.Invariant.of_withoutRestarts (System.Inductive.invariant
+    ⟨?_, fun c ev c' hup hstep => Gate.stays_up (env := env.withoutRestarts) hcrash rfl hup hstep⟩)
   show (SysState.blank (gateSystem bridge config) |>.startActor env ()).up () = true
   rw [SysState.startActor, SysState.settle_up_of_running (by simp [gateActor, Effect.isStop])]
   simp
 
-/-- The gate of `fronted sys` is up in every state, in an environment that does not crash it. -/
+/-- The gate of `fronted sys` is up in every state, in an environment that does not crash it,
+restarts included. -/
 theorem fronted_gate_up {env : EnvModel (frontedSig σ)} (hcrash : env.mayCrash (.inl ()) = false) :
     (fronted sys bridge config).Invariant env fun c => c.up (.inl ()) = true :=
   System.Invariant.filterMapIO (Gate.always_up (env := env.under.left) hcrash).join_left
 
-/-- The gate of `served sys` is up in every state, in an environment that does not crash it. -/
+/-- The gate of `served sys` is up in every state, in an environment that does not crash it,
+restarts included. -/
 theorem served_gate_up {env : EnvModel (servedSig σ)} (hcrash : env.mayCrash (.inl ()) = false) :
     (served sys bridge config).Invariant env fun c => c.up (.inl ()) = true :=
   System.Invariant.filterMapIO (fronted_gate_up (env := env.under) hcrash)
@@ -385,10 +415,10 @@ theorem served_handle_arrive {env : EnvModel (servedSig σ)}
       (List.mem_flatMap.mpr ⟨_, fronted_respond (sys := sys) h, List.mem_singleton_self _⟩))
 
 /-- Every request that arrives at `fronted sys` is answered, whatever `sys` is: in a fair run, in
-any environment that does not crash the gate and whose link from outside to the gate loses
-nothing, an arrival is followed by a response to its id handed to the outside world. -/
+any environment that does not crash the gate or restart the process and whose link from
+outside to the gate loses nothing, an arrival is followed by a response to its id handed to the outside world. -/
 theorem fronted_arrival_answered {env : EnvModel (frontedSig σ)}
-    (hcrash : env.mayCrash (.inl ()) = false)
+    (hcrash : env.mayCrash (.inl ()) = false) (hrestart : env.mayRestart = false)
     (hlossless : (env.link none (.inl ())).lossy = false)
     {r : (fronted sys bridge config).Run env} (hfair : r.Fair) {n : ℕ} {id : ReqId}
     {request : Request} (hin : r.event n = some (.input (.inl (id, request)))) :
@@ -398,7 +428,7 @@ theorem fronted_arrival_answered {env : EnvModel (frontedSig σ)}
   have he : e ∈ (r.state (n + 1)).net := by
     rw [SysState.step_input.mp (System.Run.step_some hin)]
     exact List.mem_append_right _ (List.mem_singleton_self _)
-  obtain ⟨m, hm, hev⟩ := hfair.delivered hlossless (fun m _ => hup m) he
+  obtain ⟨m, hm, hev⟩ := hfair.delivered hlossless hrestart (fun m _ => hup m) he
   have hQ : id ∈ ((r.state (m + 1)).state (.inl ()) : List ReqId) ∨
       ∃ response, .inl (id, response) ∈ (r.state (m + 1)).outbox := by
     rcases hev with hev | hev
@@ -409,16 +439,16 @@ theorem fronted_arrival_answered {env : EnvModel (frontedSig σ)}
       rw [hc]
       exact fronted_handle_arrive _ id request
   rcases hQ with hid | ⟨response, hout⟩
-  · obtain ⟨m', hm', response, hev'⟩ := fronted_pending_answered hcrash id hfair (hup (m + 1)) hid
+  · obtain ⟨m', hm', response, hev'⟩ := fronted_pending_answered hcrash hrestart id hfair (hup (m + 1)) hid
     exact ⟨m', by omega, response, hev'⟩
-  · obtain ⟨m', hm', hev'⟩ := hfair.output_taken hout
+  · obtain ⟨m', hm', hev'⟩ := hfair.output_taken hrestart hout
     exact ⟨m', by omega, response, hev'⟩
 
 /-- Every request that arrives at `served sys` is answered, under the assumptions of
 `fronted_arrival_answered`. With `served_answered_le_arrived`, a request whose id is used once
 is answered exactly once. -/
 theorem served_arrival_answered {env : EnvModel (servedSig σ)}
-    (hcrash : env.mayCrash (.inl ()) = false)
+    (hcrash : env.mayCrash (.inl ()) = false) (hrestart : env.mayRestart = false)
     (hlossless : (env.link none (.inl ())).lossy = false)
     {r : (served sys bridge config).Run env} (hfair : r.Fair) {n : ℕ} {id : ReqId}
     {request : Request} (hin : r.event n = some (.input (id, request))) :
@@ -428,7 +458,7 @@ theorem served_arrival_answered {env : EnvModel (servedSig σ)}
   have he : e ∈ (r.state (n + 1)).net := by
     rw [SysState.step_input.mp (System.Run.step_some hin)]
     exact List.mem_append_right _ (List.mem_singleton_self _)
-  obtain ⟨m, hm, hev⟩ := hfair.delivered hlossless (fun m _ => hup m) he
+  obtain ⟨m, hm, hev⟩ := hfair.delivered hlossless hrestart (fun m _ => hup m) he
   have hQ : id ∈ ((r.state (m + 1)).state (.inl ()) : List ReqId) ∨
       ∃ response, (id, response) ∈ (r.state (m + 1)).outbox := by
     rcases hev with hev | hev
@@ -439,9 +469,9 @@ theorem served_arrival_answered {env : EnvModel (servedSig σ)}
       rw [hc]
       exact served_handle_arrive _ id request
   rcases hQ with hid | ⟨response, hout⟩
-  · obtain ⟨m', hm', response, hev'⟩ := served_pending_answered hcrash id hfair (hup (m + 1)) hid
+  · obtain ⟨m', hm', response, hev'⟩ := served_pending_answered hcrash hrestart id hfair (hup (m + 1)) hid
     exact ⟨m', by omega, response, hev'⟩
-  · obtain ⟨m', hm', hev'⟩ := hfair.output_taken hout
+  · obtain ⟨m', hm', hev'⟩ := hfair.output_taken hrestart hout
     exact ⟨m', by omega, response, hev'⟩
 
 end Lanes.Http

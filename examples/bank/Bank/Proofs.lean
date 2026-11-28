@@ -11,7 +11,10 @@ import Bank
 `Tests/Bank.lean` checks conservation on two accounts and three transfers. Here it is proved for
 any finite set of accounts, any opening balance and any run, under any environment model that
 does not lose or duplicate messages and does not crash accounts. The model checker shows the
-assumption is needed: with lossy links it finds a lost credit in four steps.
+assumption is needed: with lossy links it finds a lost credit in four steps. A process restart
+does not break it (`money_conserved_restarts`): a restart puts every account back at the
+opening balance and drops the credits in flight, which conserves money too. The money a client
+saw moved is not kept, which is why a bank keeps its accounts in a database.
 
 The invariant counts the money in the accounts and the money in flight:
 
@@ -103,5 +106,14 @@ theorem money_conserved (env : EnvModel (sig A)) (henv : env.Faultless) :
       · simpa [SysState.startActor, SysState.settle, Effect.isStop, bank, account,
           sum_update (fun _ (s : Account) => s.balance)] using hsum
       · simpa [SysState.startActor, SysState.settle, Effect.isStop, bank, account] using htimers
+    | restart =>
+      obtain ⟨hmay, -⟩ := SysState.step_restart.mp hstep
+      simp [henv.noRestarts] at hmay
+
+/-- Money is conserved where the process may restart as well: a system reaches the same states
+with restarts as without (`System.Invariant.restarts`). -/
+theorem money_conserved_restarts (env : EnvModel (sig A)) (henv : env.Restarts) :
+    (bank A opening).Invariant env Conserved :=
+  System.Invariant.restarts (fun env h => money_conserved env h) henv
 
 end Bank

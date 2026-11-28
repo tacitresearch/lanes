@@ -84,40 +84,6 @@ theorem settle_lossy (c : SysState sys) (i : σ.Id) (r : sys.State i × List (Ef
   · exact down_lossy _ i
   · exact ⟨[], rfl⟩
 
-/-- One event without the extra loss is the same event with it, then drops. -/
-theorem step_lossy {c c' : SysState sys} {ev : Event σ} (h : c.step env ev = some c') :
-    ∃ drops : List (Envelope σ), c.run env.lossy (ev :: drops.map .drop) = some c' := by
-  have after : ∀ {x x' : SysState sys}, c.step env.lossy ev = some x →
-      (∃ drops : List (Envelope σ), x.run env.lossy (drops.map .drop) = some x') →
-      ∃ drops : List (Envelope σ), c.run env.lossy (ev :: drops.map .drop) = some x' := by
-    rintro x x' hx ⟨drops, hrun⟩
-    exact ⟨drops, by simp [run, hx, hrun]⟩
-  cases ev with
-  | input x =>
-    obtain rfl := step_input.mp h
-    exact after (step_input.mpr rfl) ⟨[], rfl⟩
-  | deliver e =>
-    obtain ⟨hup, hdel, rfl⟩ := step_deliver.mp h
-    exact after (step_deliver.mpr ⟨hup, hdel, rfl⟩) (settle_lossy _ _ _)
-  | duplicate e =>
-    obtain ⟨hup, hdup, hdel, rfl⟩ := step_duplicate.mp h
-    exact after (step_duplicate.mpr ⟨hup, hdup, hdel, rfl⟩) (settle_lossy _ _ _)
-  | drop e =>
-    obtain ⟨_, hmem, rfl⟩ := step_drop.mp h
-    exact after (step_drop.mpr ⟨rfl, hmem, rfl⟩) ⟨[], rfl⟩
-  | timeout i msg =>
-    obtain ⟨hup, hmem, rfl⟩ := step_timeout.mp h
-    exact after (step_timeout.mpr ⟨hup, hmem, rfl⟩) (settle_lossy _ _ _)
-  | output out =>
-    obtain ⟨hmem, rfl⟩ := step_output.mp h
-    exact after (step_output.mpr ⟨hmem, rfl⟩) ⟨[], rfl⟩
-  | crash i =>
-    obtain ⟨hup, hcrash, rfl⟩ := step_crash.mp h
-    exact after (step_crash.mpr ⟨hup, hcrash, rfl⟩) (down_lossy c i)
-  | start i =>
-    obtain ⟨hup, hmail, rfl⟩ := step_start.mp h
-    exact after (step_start.mpr ⟨hup, hmail, rfl⟩) (settle_lossy _ _ _)
-
 /-- An actor's start does not look at the messages in flight: those dropped after it could as
 well be dropped before. -/
 private theorem startActor_drops (i : σ.Id) :
@@ -160,6 +126,43 @@ theorem init_lossy (sys : System σ) (env : EnvModel σ) :
     exact ih _ _ (drops ++ more) (by
       rw [List.map_append, run_append, startActor_drops i drops h]
       exact hmore)
+
+/-- One event without the extra loss is the same event with it, then drops. -/
+theorem step_lossy {c c' : SysState sys} {ev : Event σ} (h : c.step env ev = some c') :
+    ∃ drops : List (Envelope σ), c.run env.lossy (ev :: drops.map .drop) = some c' := by
+  have after : ∀ {x x' : SysState sys}, c.step env.lossy ev = some x →
+      (∃ drops : List (Envelope σ), x.run env.lossy (drops.map .drop) = some x') →
+      ∃ drops : List (Envelope σ), c.run env.lossy (ev :: drops.map .drop) = some x' := by
+    rintro x x' hx ⟨drops, hrun⟩
+    exact ⟨drops, by simp [run, hx, hrun]⟩
+  cases ev with
+  | input x =>
+    obtain rfl := step_input.mp h
+    exact after (step_input.mpr rfl) ⟨[], rfl⟩
+  | deliver e =>
+    obtain ⟨hup, hdel, rfl⟩ := step_deliver.mp h
+    exact after (step_deliver.mpr ⟨hup, hdel, rfl⟩) (settle_lossy _ _ _)
+  | duplicate e =>
+    obtain ⟨hup, hdup, hdel, rfl⟩ := step_duplicate.mp h
+    exact after (step_duplicate.mpr ⟨hup, hdup, hdel, rfl⟩) (settle_lossy _ _ _)
+  | drop e =>
+    obtain ⟨_, hmem, rfl⟩ := step_drop.mp h
+    exact after (step_drop.mpr ⟨rfl, hmem, rfl⟩) ⟨[], rfl⟩
+  | timeout i msg =>
+    obtain ⟨hup, hmem, rfl⟩ := step_timeout.mp h
+    exact after (step_timeout.mpr ⟨hup, hmem, rfl⟩) (settle_lossy _ _ _)
+  | output out =>
+    obtain ⟨hmem, rfl⟩ := step_output.mp h
+    exact after (step_output.mpr ⟨hmem, rfl⟩) ⟨[], rfl⟩
+  | crash i =>
+    obtain ⟨hup, hcrash, rfl⟩ := step_crash.mp h
+    exact after (step_crash.mpr ⟨hup, hcrash, rfl⟩) (down_lossy c i)
+  | start i =>
+    obtain ⟨hup, hmail, rfl⟩ := step_start.mp h
+    exact after (step_start.mpr ⟨hup, hmail, rfl⟩) (settle_lossy _ _ _)
+  | restart =>
+    obtain ⟨hmay, rfl⟩ := step_restart.mp h
+    exact after (step_restart.mpr ⟨hmay, rfl⟩) (init_lossy sys env)
 
 end SysState
 

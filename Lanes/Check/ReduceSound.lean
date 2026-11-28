@@ -232,13 +232,13 @@ structure _root_.Lanes.Driver.Simulation (driver : Driver σ D) (R : D → D →
 
 /-- Worlds that differ only in the driver's state, by a relation the driver cannot see. -/
 def World.SameUpTo (R : D → D → Prop) (a b : World sys D) : Prop :=
-  a.state = b.state ∧ R a.driver b.driver ∧ a.crashes = b.crashes
+  a.state = b.state ∧ R a.driver b.driver ∧ a.crashes = b.crashes ∧ a.restarts = b.restarts
 
 theorem World.SameUpTo.next [Enum σ.Id] {sc : Scenario σ D} {R : D → D → Prop}
     (hsim : sc.driver.Simulation R) {a b a' : World sys D} {ev : Event σ}
     (h : World.SameUpTo R a b) (hmem : (ev, a') ∈ a.next sc) :
     ∃ b', (ev, b') ∈ b.next sc ∧ World.SameUpTo R a' b' := by
-  obtain ⟨hstate, hdriver, hcrashes⟩ := h
+  obtain ⟨hstate, hdriver, hcrashes, hrestarts⟩ := h
   obtain ⟨c, hstep, hw'⟩ := World.mem_next_iff.mp hmem
   rw [hstate] at hstep
   cases ev with
@@ -246,29 +246,34 @@ theorem World.SameUpTo.next [Enum σ.Id] {sc : Scenario σ D} {R : D → D → P
     obtain ⟨d, hinput, rfl⟩ := hw'
     obtain ⟨d', hinput', hd⟩ := hsim.inputs _ _ hdriver x d hinput
     exact ⟨{ b with state := c, driver := d' }, World.mem_next_iff.mpr ⟨c, hstep, d', hinput', rfl⟩,
-      rfl, hd, hcrashes⟩
+      rfl, hd, hcrashes, hrestarts⟩
   | output out =>
     subst hw'
-    exact ⟨_, World.mem_next_iff.mpr ⟨c, hstep, rfl⟩, rfl, hsim.observe _ _ out hdriver, hcrashes⟩
+    exact ⟨_, World.mem_next_iff.mpr ⟨c, hstep, rfl⟩, rfl, hsim.observe _ _ out hdriver, hcrashes,
+      hrestarts⟩
   | timeout i msg =>
     subst hw'
     exact ⟨_, World.mem_next_iff.mpr ⟨c, hstep, rfl⟩, rfl, hsim.timeout _ _ i msg hdriver,
-      hcrashes⟩
+      hcrashes, hrestarts⟩
   | deliver e =>
     subst hw'
     exact ⟨_, World.mem_next_iff.mpr ⟨c, hstep, rfl⟩, rfl,
-      hsim.deliver _ _ e.dst e.msg hdriver, hcrashes⟩
+      hsim.deliver _ _ e.dst e.msg hdriver, hcrashes, hrestarts⟩
   | duplicate e =>
     subst hw'
     exact ⟨_, World.mem_next_iff.mpr ⟨c, hstep, rfl⟩, rfl,
-      hsim.deliver _ _ e.dst e.msg hdriver, hcrashes⟩
+      hsim.deliver _ _ e.dst e.msg hdriver, hcrashes, hrestarts⟩
   | crash i =>
     obtain ⟨hbudget, rfl⟩ := hw'
     exact ⟨_, World.mem_next_iff.mpr ⟨c, hstep, hcrashes ▸ hbudget, rfl⟩, rfl, hdriver,
-      by simp [hcrashes]⟩
+      by simp [hcrashes], hrestarts⟩
+  | restart =>
+    obtain ⟨hbudget, rfl⟩ := hw'
+    exact ⟨_, World.mem_next_iff.mpr ⟨c, hstep, hrestarts ▸ hbudget, rfl⟩, rfl, hdriver,
+      hcrashes, by simp [hrestarts]⟩
   | drop e | start i =>
     subst hw'
-    exact ⟨_, World.mem_next_iff.mpr ⟨c, hstep, rfl⟩, rfl, hdriver, hcrashes⟩
+    exact ⟨_, World.mem_next_iff.mpr ⟨c, hstep, rfl⟩, rfl, hdriver, hcrashes, hrestarts⟩
 
 /-- Putting the driver's state in a canonical form is a reduction, when the form is related to
 the state by an equivalence the driver, the constraint and the properties cannot see. A list
@@ -281,9 +286,10 @@ theorem World.Reduction.ofDriver [Enum σ.Id] {sc : Scenario σ D}
     (hprops : ∀ p ∈ props, ∀ {a b}, World.SameUpTo R a b → p.holds a = p.holds b) :
     World.Reduction sc constraint props (fun w => { w with driver := canon w.driver })
       (World.SameUpTo R) where
-  canon w := ⟨rfl, hcanon w.driver, rfl⟩
-  symm h := ⟨h.1.symm, hsymm h.2.1, h.2.2.symm⟩
-  trans h h' := ⟨h.1.trans h'.1, htrans h.2.1 h'.2.1, h.2.2.trans h'.2.2⟩
+  canon w := ⟨rfl, hcanon w.driver, rfl, rfl⟩
+  symm h := ⟨h.1.symm, hsymm h.2.1, h.2.2.1.symm, h.2.2.2.symm⟩
+  trans h h' := ⟨h.1.trans h'.1, htrans h.2.1 h'.2.1, h.2.2.1.trans h'.2.2.1,
+    h.2.2.2.trans h'.2.2.2⟩
   next h ev _ hmem := by
     obtain ⟨b', hb', hrel⟩ := h.next hsim hmem
     exact ⟨ev, b', hb', hrel⟩

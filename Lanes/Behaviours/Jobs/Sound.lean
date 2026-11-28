@@ -584,6 +584,9 @@ theorem armed (config : Config R) (env : EnvModel (sig K J R)) :
     | start i =>
       obtain ⟨_, _, rfl⟩ := SysState.step_start.mp hstep
       exact armed_start c
+    | restart =>
+      obtain ⟨_, rfl⟩ := SysState.step_restart.mp hstep
+      exact armed_start (env := env) (SysState.blank _)
 
 /-! ### No key is answered more often than it is submitted -/
 
@@ -747,8 +750,13 @@ private theorem answered_output (out : Output K J R) (key : K) :
     (answered [Deed.output (σ := sig K J R) out]).count key = (answers key out).toNat := by
   cases out <;> simp [answered, answers, Bool.toNat, List.count_cons]
 
+/-- What the jobs actor owes at the start: nothing. -/
+private theorem owed_init (key : K) :
+    owed key (SysState.init (system (K := K) (J := J) config) env) = 0 :=
+  (owed_start (env := env) key (SysState.blank _)).trans (by simp [owed, SysState.blank, actor])
+
 /-- One event: the answer it hands over and what the jobs actor owes after it are covered by
-what it owed before and the submission it handles. -/
+what it owed before and the submission it handles. A restart forgets what it owed. -/
 private theorem owed_event (key : K) {c c' : SysState (system (K := K) (J := J) config)}
     {ev : Event (sig K J R)} (hstep : c.step env ev = some c') :
     (answered ev.deed.toList).count key + owed key c'
@@ -798,10 +806,13 @@ private theorem owed_event (key : K) {c c' : SysState (system (K := K) (J := J) 
     obtain ⟨_, _, rfl⟩ := SysState.step_start.mp hstep
     have h := owed_start (env := env) key c
     simp [h, Event.deed, answered, handled]
+  | restart =>
+    obtain ⟨_, rfl⟩ := SysState.step_restart.mp hstep
+    simp [owed_init, Event.deed, answered, handled]
 
 /-- The jobs actor answers no key more often than it handles a submission of it: in every
-environment, whatever arrives and however often. It may crash and restart, and its links may
-lose, reorder and duplicate. -/
+environment, whatever arrives and however often. It may crash and restart, the process may
+restart, and its links may lose, reorder and duplicate. -/
 theorem answered_le_handled (env : EnvModel (sig K J R)) {events : List (Event (sig K J R))}
     {c : SysState (system (K := K) (J := J) config)}
     (hrun : (SysState.init (system config) env).run env events = some c) (key : K) :
@@ -811,10 +822,7 @@ theorem answered_le_handled (env : EnvModel (sig K J R)) {events : List (Event (
   refine System.Reachable.run_induction
     (P := fun events c => (answered (deeds events)).count key + owed key c
       ≤ (handled (deeds events)).count key) .init hrun ?_ ?_
-  · have hinit : owed key (SysState.init (system (K := K) (J := J) config) env) = 0 :=
-      (owed_start (env := env) key (SysState.blank _)).trans
-        (by simp [owed, SysState.blank, actor])
-    simp [hinit, answered, handled, deeds]
+  · simp [owed_init, answered, handled, deeds]
   rintro evs c₁ ev c₂ - hle hstep
   have h := owed_event (env := env) key hstep
   rw [handled_snoc, answered_snoc]
