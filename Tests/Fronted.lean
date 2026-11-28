@@ -314,9 +314,9 @@ open Std Std.Async
 
 /-! The desk behind a front, over a socket. -/
 
-/-- The handler of the desk's memos holds the shard, so a request waits in the inbox, which has
-room for one, and the next finds it full. The first request's answer is handed over before its
-memo, so it is answered before the shard is held. -/
+/-- The handler of the desk's memos holds up the worker that stepped the desk, and so the desk,
+so a request waits in the inbox, which has room for one, and the next finds it full. The first
+request's answer is handed over before its memo, so it is answered before the desk is held up. -/
 def busyTest : Async (List (String × Bool)) := do
   let entered : IO.Promise Unit ← IO.Promise.new
   let release : IO.Promise Unit ← IO.Promise.new
@@ -344,7 +344,7 @@ def busyTest : Async (List (String × Bool)) := do
   return [
     ("fronted: a request that finds the inbox full is answered 503 at once",
       held == 1 && third.startsWith "HTTP/1.1 503"),
-    ("fronted: it is not in flight, and the one that was is answered when the shard goes on",
+    ("fronted: it is not in flight, and the one that was is answered when the desk goes on",
       during == 1 && answers.all (·.startsWith "HTTP/1.1 200") && after == 0) ]
 
 /-- An output of the desk that is no response, a memo, comes to the caller. -/

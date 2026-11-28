@@ -38,7 +38,7 @@ inductive Role (N : Type) where
   | leader
   deriving DecidableEq, Repr, Hashable
 
-/-- Term and vote are durable; the role is not. -/
+/-- Term and vote are kept across a crash of the node; the role is not. -/
 structure Node (N : Type) where
   term : Nat
   /-- The node this node voted for in `term`, if any. -/
