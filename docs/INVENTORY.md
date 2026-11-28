@@ -1549,6 +1549,35 @@ them by area.
 | `Peers.Action.parcel?` | spec | used only in statements |
 | `Peers.Courier.leftover` | spec | used only in statements |
 
+## `Lanes/Net/Handshake.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Peers.Handshake.magic` | proved | through `Peers.Handshake.Hello.read`, `Peers.Handshake.Hello.write` and others: `Peers.Handshake.Hello.read_write_append`, `Peers.Handshake.Reachable.ready_proved` and others |
+| `Peers.Handshake.version` | proved | `Peers.Handshake.Hello.read_write_append` |
+| `Peers.Handshake.proofSize` | proved | `Peers.Handshake.Reachable.ready_proved` |
+| `Peers.Handshake.Hello.records` | proved | `Peers.Handshake.Hello.read_write_append` |
+| `Peers.Handshake.Hello.write` | proved | `Peers.Handshake.Hello.read_write_append` |
+| `Peers.Handshake.Hello.read` | proved | `Peers.Handshake.Hello.read_write_append`, `Peers.Handshake.Reachable.ready_proved`, `Peers.Handshake.hear_differs` |
+| `Peers.Handshake.Role.other` | proved | `Peers.Handshake.Reachable.ready_proved` |
+| `Peers.Handshake.Role.label` | proved | through `Peers.Handshake.hear`, `Peers.Handshake.step`: `Peers.Handshake.Reachable.ready_proved`, `Peers.Handshake.hear_differs` |
+| `Peers.Handshake.Refusal.message` | tested | `Tests/Fronted.lean`, `Tests/Peers.lean` |
+| `Peers.Handshake.Refusal.quiet` | tested | `Tests/Fronted.lean`, `Tests/Peers.lean` |
+| `Peers.Handshake.transcript` | proved | `Peers.Handshake.Reachable.ready_proved` |
+| `Peers.Handshake.proofOf` | proved | `Peers.Handshake.Reachable.ready_proved` |
+| `Peers.Handshake.differs` | proved | `Peers.Handshake.Reachable.ready_proved`, `Peers.Handshake.hear_differs` |
+| `Peers.Handshake.refuse` | proved | through `Peers.Handshake.hear`, `Peers.Handshake.step`: `Peers.Handshake.Reachable.ready_proved`, `Peers.Handshake.hear_differs` |
+| `Peers.Handshake.check` | proved | through `Peers.Handshake.hear`, `Peers.Handshake.step`: `Peers.Handshake.Reachable.ready_proved`, `Peers.Handshake.hear_differs` |
+| `Peers.Handshake.hear` | proved | `Peers.Handshake.hear_differs` |
+| `Peers.Handshake.start` | tested | `Tests/Peers.lean` |
+| `Peers.Handshake.step` | proved | `Peers.Handshake.Reachable.ready_proved` |
+
+## `Lanes/Net/HandshakeSound.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Peers.Handshake.Heard` | spec | a predicate |
+
 ## `Lanes/Net/IO/Node.lean`
 
 | Definition | Status | Evidence |
@@ -1559,6 +1588,7 @@ them by area.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
+| `Peers.Config.minKeyBytes` | trusted | TRUSTED.md: The transport between processes |
 | `Peers.start` | trusted | TRUSTED.md: The transport between processes |
 | `Peers.send` | trusted | TRUSTED.md: The transport between processes |
 | `Peers.stop` | trusted | TRUSTED.md: The transport between processes |
