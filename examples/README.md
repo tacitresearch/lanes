@@ -32,10 +32,11 @@ adapter, as `todo-db` keeps its to-dos in PostgreSQL.
    A retry without the idempotency key charges an order twice, and the checker finds it; with
    the key, an order is charged at most once in every run, and an order the shop calls paid has
    a payment that succeeded, both proved.
-7. `todo-db`: a to-do list kept in PostgreSQL, checked against the transactional store model with
-   lost `COMMIT` answers. Appending and retrying a lost commit stores a to-do twice, and the
-   checker finds it; the fix inserts under the user's key after reading it, and is proved to send
-   nothing else. `lake exe todoLive` runs it on a real server.
+7. `todo-db`: a to-do list kept in PostgreSQL through the typed store: one pure transaction per
+   request, at `SERIALIZABLE`. A user's to-dos are unique by title, proved per transaction and so
+   in every database the store model allows; adding without looking first, and retrying a lost
+   answer, stores a title twice, and the checker finds it. `lake exe todoLive` runs it on a real
+   server.
 8. `sign-in`: the start of a video site whose members sign in with Google or GitHub. The
    sign-in is Lanes' and runs before the system, which gets only the identity it verified and
    gives the member a session.
@@ -58,7 +59,7 @@ adapter, as `todo-db` keeps its to-dos in PostgreSQL.
 | Fairness and liveness | `watchdog`, `reminders` |
 | Work due later, retried with a backoff, periodic sweeps (`Schedule.attach`) | `reminders` |
 | A model of an external service: timeouts with unknown outcome, idempotency keys, webhooks (`Lanes/Outside/`) | `payments` |
-| A database: the store model, lost commits, PostgreSQL | `todo-db` |
+| A database: typed tables, pure transactions, an invariant per transaction, PostgreSQL | `todo-db` |
 | Model checks, a bug found, random runs | `bank`, `kv-cache`, `payments`, `todo-db` |
 | HTTP, routes, htmx, templates | `counter`, `bank-web`, `rookery` |
 | Sessions, log-in, cookies, tokens | `rookery` |

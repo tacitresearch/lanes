@@ -11,6 +11,7 @@ public import Lanes.Check.FingerprintSound
 public import Lanes.Check.ReduceSound
 public import Lanes.Check.SearchSound
 public import Lanes.Check.SystemSound
+public import Lanes.Db.Sound
 public import Lanes.Lib.Encoding.Json.BasicSound
 public import Lanes.Lib.Encoding.Json.ParserSound
 public import Lanes.Lib.Encoding.Json.PrinterSound

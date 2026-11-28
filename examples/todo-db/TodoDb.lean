@@ -7,24 +7,116 @@ import Lanes
 /-!
 # todo-db
 
-A to-do list kept in PostgreSQL. One actor takes `add key title` from its users and stores each
-to-do in a transaction of the store (`Lanes/Outside/Store/Basic.lean`): `begin`, the insert,
-`commit`. When an answer does not come, or says the transaction failed, it tries again in a new
-transaction, up to `attempts_max` times.
+A to-do list kept in PostgreSQL through the typed store (`Lanes/Db/`). Each request is handled by
+one pure transaction (`handler`): add a to-do, complete one, remove one, list a user's. A to-do's
+id is chosen in Lean, one more than the largest; the database assigns nothing.
 
-The classic bug is there to be found (`Config.keyed := false`): the to-do is appended, under a key
-the database chooses, and a `COMMIT` whose answer is lost is retried. If the lost commit had
-taken effect, or takes effect later, the list now has the to-do twice. `Check.lean` runs the
-checker against the store model, which keeps both outcomes of a lost commit, and it finds the
-duplicate. The fix (`keyed := true`) stores the to-do under the key its user gave it, which
-identifies the request: a retry first reads that key, and inserts only if it is not there; the
-key is the table's primary key, so a second insert of it fails rather than adding a row. The
-checker finds no duplicate, and `TodoDb/Proofs.lean` proves what the fix rests on.
+A user's to-dos are unique by title. No constraint says so: `add` first looks the title up by the
+index `by_title`, and inserts only if it is not there. `TodoDb/Proofs.lean` proves that every
+transaction keeps the invariant (`Unique`), and so, through `Db.invariant`, that every database
+the store may hold satisfies it, with lost `COMMIT`s, failures and calls taking effect late.
 
-`Live.lean` runs the system on a real PostgreSQL through `Postgres.Store.handler`.
+The actor (`app`) takes requests from users and sends each to the store as a call. A call
+answered unknown, or failed, is sent again, up to `attempts_max` times. That is safe because each
+request is idempotent: a second `add` of a title finds it. The unchecked handler
+(`Config.checked := false`) inserts without looking, and `Check.lean` finds the duplicate a lost
+`COMMIT` and a retry make; the checked one keeps every database unique.
+
+`Live.lean` runs the system on a real PostgreSQL through `Postgres.Typed.handler`.
 -/
 
 namespace TodoDb
+
+open Lanes.Db
+
+/-! ## The table -/
+
+structure Todo where
+  id : Int64
+  owner : Int64
+  title : String
+  done : Bool := false
+  deriving DecidableEq, Repr, Hashable
+
+/-- `(owner, title)`, not unique: uniqueness is the invariant, proved per transaction. -/
+def byTitle : Index := { name := "by_title", columns := [1, 2] }
+
+def todos : TableOf Todo where
+  table := { name := "todos", key := 1, indexes := [byTitle],
+             columns := [{ name := "id", ty := .int }, { name := "owner", ty := .int },
+                         { name := "title", ty := .text }, { name := "done", ty := .bool }] }
+  toRow t := [.int t.id, .int t.owner, .text t.title, .bool t.done]
+  ofRow
+    | [.int id, .int owner, .text title, .bool done] => some { id, owner, title, done }
+    | _ => none
+  ofRow_toRow _ := rfl
+
+def schema : Schema := [todos.table]
+
+/-! ## Requests and their transactions -/
+
+inductive Request where
+  | add (owner : Int64) (title : String)
+  | complete (owner id : Int64)
+  | remove (owner id : Int64)
+  | list (owner : Int64)
+  deriving DecidableEq, Repr, Hashable
+
+inductive Answer where
+  | added (id : Int64)
+  /-- The user has a to-do with this title already. -/
+  | existing (id : Int64)
+  | done
+  | missing
+  | list (todos : List Todo)
+  deriving DecidableEq, Repr, Hashable
+
+/-- The most to-dos a list returns (rule 2.6). -/
+def list_max : Nat := 100
+
+/-- The next id: one more than the largest, or 0. -/
+def nextId : Txn Int64 := do
+  match ← todos.scan { table := todos.table, order := .desc, limit := 1 } with
+  | t :: _ => pure (t.id + 1)
+  | [] => pure 0
+
+def insertNew (owner : Int64) (title : String) : Txn Answer := do
+  let id ← nextId
+  if ← todos.insert { id, owner, title } then pure (.added id) else .abort "the next id is taken"
+
+/-- `checked`: look the title up first. -/
+def add (checked : Bool) (owner : Int64) (title : String) : Txn Answer :=
+  if checked then do
+    match ← todos.lookup byTitle [.int owner, .text title] 1 with
+    | t :: _ => pure (.existing t.id)
+    | [] => insertNew owner title
+  else insertNew owner title
+
+def complete (owner id : Int64) : Txn Answer := do
+  match ← todos.get [.int id] with
+  | some t =>
+    if t.owner = owner then do
+      let _ ← todos.update { t with done := true }
+      pure .done
+    else pure .missing
+  | none => pure .missing
+
+def remove (owner id : Int64) : Txn Answer := do
+  match ← todos.get [.int id] with
+  | some t =>
+    if t.owner = owner then do
+      let _ ← todos.delete [.int id]
+      pure .done
+    else pure .missing
+  | none => pure .missing
+
+def handler (checked : Bool) : Handler Request Answer
+  | .add owner title => add checked owner title
+  | .complete owner id => complete owner id
+  | .remove owner id => remove owner id
+  | .list owner => .list <$> todos.scan { table := todos.table, index := some byTitle, eq := [.int owner], limit := list_max }
+
+/-! ## The actor -/
 
 open Lanes
 
@@ -32,22 +124,17 @@ lanes_data inductive Id where
   | app
   deriving DecidableEq, Repr, Hashable, Enum
 
-abbrev Request := Store.Request Nat String
-
-abbrev Reply := Store.Reply Nat String
-
 inductive In where
-  /-- A user adds a to-do; `key` is chosen by the user's client and identifies the request. -/
-  | add (key : Nat) (title : String)
-  | store (reply : Reply)
+  /-- A user's request, numbered by the user's client. -/
+  | request (n : Nat) (r : Request)
+  | store (reply : Db.Reply Answer)
   deriving DecidableEq, Repr, Hashable
 
 inductive Out where
-  | store (request : Request)
-  /-- The to-do is stored. -/
-  | added (key : Nat)
-  /-- It could not be stored: the queue was full or every attempt failed. -/
-  | gaveUp (key : Nat)
+  | call (c : Db.Call Request)
+  | answered (n : Nat) (a : Answer)
+  /-- Every attempt failed, or the queue was full. -/
+  | gaveUp (n : Nat)
   deriving DecidableEq, Repr, Hashable
 
 abbrev Msg : Id → Type
@@ -63,88 +150,42 @@ abbrev sig : Signature where
 
 /-- Every limit is explicit (rule 2.6). -/
 structure Config where
-  /-- The fix: store a to-do under its user's key, read that key first, insert only if it is free. -/
-  keyed : Bool
+  checked : Bool := true
   attempts_max : Nat := 2
-  queue_max : Nat := 4
+  inflight_max : Nat := 4
 
-inductive Stage where
-  | begin
-  /-- Reading the key, before inserting (the fix only). -/
-  | check
-  | insert
-  | commit
-  deriving DecidableEq, Repr, Hashable
-
-/-- The to-do being stored, the transaction it is tried in, and the request waited for. -/
-structure Attempt where
-  key : Nat
-  title : String
-  txn : Nat
-  stage : Stage
-  /-- The number of the request whose answer the attempt waits for. -/
-  request : Nat
+/-- A request sent as the call `call`, after `tries` earlier calls. -/
+structure Pending where
+  n : Nat
+  request : Request
+  call : Nat
   tries : Nat
   deriving DecidableEq, Repr, Hashable
 
 structure State where
-  waiting : List (Nat × String) := []
-  current : Option Attempt := none
-  nextTxn : Nat := 0
-  nextRequest : Nat := 0
+  pending : List Pending := []
+  nextCall : Nat := 0
   deriving DecidableEq, Repr, Hashable
 
 variable (cfg : Config)
 
-/-- Send an operation of the attempt's transaction, and wait for its answer. -/
-def ask (s : State) (a : Attempt) (stage : Stage) (op : Store.Op Nat String) :
-    State × List (Effect sig .app) :=
-  ({ s with current := some { a with stage, request := s.nextRequest }, nextRequest := s.nextRequest + 1 },
-    [.emit (.store { id := s.nextRequest, txn := a.txn, op })])
+def send (s : State) (n : Nat) (r : Request) (tries : Nat) : State × List (Effect sig .app) :=
+  ({ pending := s.pending ++ [{ n, request := r, call := s.nextCall, tries }], nextCall := s.nextCall + 1 },
+    [.emit (.call { id := s.nextCall, request := r })])
 
-/-- Begin a new transaction for the to-do `key`, `title`, after `tries` tries. -/
-def attempt (s : State) (key : Nat) (title : String) (tries : Nat) : State × List (Effect sig .app) :=
-  ask { s with nextTxn := s.nextTxn + 1 }
-    { key, title, txn := s.nextTxn, stage := .begin, request := 0, tries } .begin .begin
-
-/-- Take the next to-do waiting, if nothing is being stored. -/
-def next (s : State) : State × List (Effect sig .app) :=
-  match s.current, s.waiting with
-  | none, (key, title) :: rest => attempt { s with waiting := rest } key title 0
-  | _, _ => (s, [])
-
-def finish (s : State) (out : Out) : State × List (Effect sig .app) :=
-  let (s, effects) := next { s with current := none }
-  (s, .emit out :: effects)
-
-/-- The attempt failed: try again in a new transaction, or give up. -/
-def retry (s : State) (a : Attempt) : State × List (Effect sig .app) :=
-  if a.tries + 1 < cfg.attempts_max then attempt s a.key a.title (a.tries + 1)
-  else finish s (.gaveUp a.key)
-
-/-- The answer to the request the attempt waits for. -/
-def answered (s : State) (a : Attempt) : Store.Answer Nat String → State × List (Effect sig .app)
-  | .failed | .unknown => retry cfg s a
-  | answer =>
-    match a.stage, answer with
-    | .begin, _ =>
-      if cfg.keyed then ask s a .check (.read a.key) else ask s a .insert (.append a.title)
-    | .check, .value (some _) =>
-      let (s', effects) := finish { s with nextRequest := s.nextRequest + 1 } (.added a.key)
-      (s', .emit (.store { id := s.nextRequest, txn := a.txn, op := .rollback }) :: effects)
-    | .check, .value none => ask s a .insert (.insert a.key a.title)
-    | .check, _ => retry cfg s a
-    | .insert, _ => ask s a .commit .commit
-    | .commit, .committed => finish s (.added a.key)
-    | .commit, _ => retry cfg s a
+def replied (s : State) (p : Pending) : Db.Result Answer → State × List (Effect sig .app)
+  | .committed a => ({ s with pending := s.pending.erase p }, [.emit (.answered p.n a)])
+  | _ =>
+    let s := { s with pending := s.pending.erase p }
+    if p.tries + 1 < cfg.attempts_max then send s p.n p.request (p.tries + 1)
+    else (s, [.emit (.gaveUp p.n)])
 
 def step (s : State) : In → State × List (Effect sig .app)
-  | .add key title =>
-    if cfg.queue_max ≤ s.waiting.length then (s, [.emit (.gaveUp key)])
-    else next { s with waiting := s.waiting ++ [(key, title)] }
+  | .request n r =>
+    if cfg.inflight_max ≤ s.pending.length then (s, [.emit (.gaveUp n)]) else send s n r 0
   | .store reply =>
-    match s.current with
-    | some a => if reply.id == a.request then answered cfg s a reply.answer else (s, [])
+    match s.pending.find? (·.call == reply.id) with
+    | some p => replied cfg s p reply.result
     | none => (s, [])
 
 def app : sig.Actor .app State where
@@ -157,10 +198,10 @@ abbrev system : System sig where
     | .app => app cfg
   accept x := ⟨.app, x⟩
 
-/-- How the store sees the system: its requests and the inputs that answer them. -/
-def port : Store.Port sig Nat String where
-  request
-    | .store r => some r
+/-- How the store sees the system: its calls and the inputs that answer them. -/
+def port : Db.Port sig Request Answer where
+  call
+    | .call c => some c
     | _ => none
   reply r := .store r
   replied

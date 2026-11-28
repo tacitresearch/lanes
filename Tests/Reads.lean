@@ -36,8 +36,8 @@ def view (r : Request) : Option (View bankSys) :=
   (dispatch [Routes.account.handle fun n _ => (toAcct n).map balanceView,
     total.handle fun () _ => some totalView] r).join
 
-/-- A balance read from the state is what the journalled query answers from the same state,
-which the query leaves as it was. -/
+/-- A balance read from the state is what the query that enters the system answers from the same
+state, which the query leaves as it was. -/
 theorem balanceView_answers (id : Http.ReqId) (a : Acct) (s : Account) :
     (bankSys.actor a).step s (.query id) = (s, [.emit ⟨id, .balance s.balance⟩])
       ∧ bridge.encode ⟨id, .balance s.balance⟩ = some (id, (balanceView a).answer (fun _ _ => s) []) :=

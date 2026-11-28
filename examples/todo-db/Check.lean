@@ -7,71 +7,63 @@ import TodoDb
 import Lanes.Testing
 
 /-!
-The to-do list against a user who adds to-dos and the store model (`Lanes/Outside/Store/Basic.lean`)
-at each isolation level, run by `lake test`. The store answers each request with what it may,
-fails it, or loses the answer; a lost `COMMIT` may have taken effect, or may take effect at any
-later moment, or never, and the model keeps every database consistent with what the system has
-seen. Check before you prove (Lanes rule 5.1).
+The to-do list against a user and the typed store's model (`Lanes/Db/Model.lean`), run by `lake
+test`. The store answers each call with what one run of the handler gives, fails it, or loses
+the answer; a lost `COMMIT` may have taken effect, or may take effect at any later moment, or
+never, and the model keeps every database consistent with what the system has seen. Check
+before you prove (Lanes rule 5.1).
 
-With `keyed := false` the checker finds the duplicate: the `COMMIT`'s answer is lost, the to-do
-is appended again in a new transaction, and in a database the answers allow it is there twice.
-With `keyed := true` no database the store may be in has a to-do twice, and a to-do reported
-added is in every one.
+With the unchecked handler the checker finds a duplicate: the answer to an `add` is lost, the
+actor sends it again, and in a database the answers allow the title is there twice. With the
+checked handler no database the store may be in has a title twice for one user, which
+`TodoDb.unique_always` proves for every run.
 -/
 
 open Lanes TodoDb
 
 instance : sig.Inspect := by instance_by_cases
-instance (cfg : Config) : (system cfg).Inspect := by instance_by_cases
+instance (cfg : TodoDb.Config) : (system cfg).Inspect := by instance_by_cases
 
-/-- The user: the to-dos still to add, and what the system said about each. -/
+/-- The user: the requests still to send, and what the system answered. -/
 structure User where
-  toAdd : List (Nat × String)
-  added : List Nat := []
+  toSend : List (Nat × Request)
+  answered : List (Nat × Answer) := []
   gaveUp : List Nat := []
   deriving DecidableEq, Hashable
 
 instance : BEq User := instBEqOfDecidableEq
 
-def user (todos : List (Nat × String)) : Outside sig User where
-  init := { toAdd := todos }
+def user (requests : List (Nat × Request)) : Outside sig User where
+  init := { toSend := requests }
   allow d
-    | .add key title => if (key, title) ∈ d.toAdd then some { d with toAdd := d.toAdd.erase (key, title) } else none
+    | .request n r => if (n, r) ∈ d.toSend then some { d with toSend := d.toSend.erase (n, r) } else none
     | .store _ => none
   observe d
-    | .added key => { d with added := d.added ++ [key] }
-    | .gaveUp key => { d with gaveUp := d.gaveUp ++ [key] }
-    | .store _ => d
+    | .answered n a => { d with answered := d.answered ++ [(n, a)] }
+    | .gaveUp n => { d with gaveUp := d.gaveUp ++ [n] }
+    | .call _ => d
 
-def storeConfig (isolation : Store.Isolation) : Store.Config Nat :=
-  { isolation, nextKey := fun keys => keys.foldl max 0 + 1 }
+abbrev D := User × Db.State Request Answer
 
-def world (isolation : Store.Isolation) (todos : List (Nat × String)) :=
-  (user todos).both (Store.outside (storeConfig isolation) port) fun x => x matches .add ..
+def world (cfg : TodoDb.Config) (requests : List (Nat × Request)) :=
+  (user requests).both (Db.outside {} (handler cfg.checked) (Db.Db.empty schema) port) fun x => x matches .request ..
 
-abbrev W (cfg : Config) := World (system cfg) (User × Store.State Nat String)
+abbrev W (cfg : TodoDb.Config) := World (system cfg) D
 
-def samples (isolation : Store.Isolation) (failures : Bool) (d : User × Store.State Nat String) : List In :=
-  d.1.toAdd.map (fun (key, title) => .add key title)
-    ++ Store.samples (storeConfig isolation) port failures true d.2
+def samples (cfg : TodoDb.Config) (failures : Bool) (d : D) : List In :=
+  d.1.toSend.map (fun (n, r) => .request n r) ++ Db.samples (handler cfg.checked) port failures true d.2
 
-/-- No database the store may be in holds a to-do twice. -/
-def noDuplicate (w : W cfg) : Bool :=
+/-- No user has two to-dos with one title, in any database the store may be in. -/
+def unique (w : W cfg) : Bool :=
   w.driver.2.worlds.all fun db =>
-    let titles := db.db.map (·.2)
+    let titles := (db.db.rows todos.table.name).map byTitle.project
     titles.eraseDups.length == titles.length
 
-/-- With the fix, a to-do reported added is in every database the store may be in, under its key. -/
-def addedStored (w : W cfg) : Bool :=
-  !cfg.keyed || w.driver.1.added.all fun key => w.driver.2.worlds.all fun db => db.db.any (·.1 == key)
-
-def check (cfg : Config) (isolation : Store.Isolation) (todos : List (Nat × String)) (failures : Bool) :=
-  Check.system (system cfg) { driver := (world isolation todos).driver (samples isolation failures) }
-    [ .always "no database the store may be in has a to-do twice" noDuplicate,
-      .always "a to-do reported added is in every database the store may be in" addedStored,
-      .sometimes "a to-do is added" fun w => !w.driver.1.added.isEmpty,
-      .sometimes "a commit's answer is lost" fun w =>
-        w.driver.2.worlds.any fun db => db.commits.any (·.request.isNone) ]
+def check (cfg : TodoDb.Config) (requests : List (Nat × Request)) (failures : Bool) :=
+  Check.system (system cfg) { driver := (world cfg requests).driver (samples cfg failures) }
+    [ .always "no user has two to-dos with one title" unique,
+      .sometimes "a to-do is added" fun w => w.driver.1.answered.any fun | (_, .added _) => true | _ => false,
+      .sometimes "an answer is lost" fun w => w.driver.2.worlds.any fun db => !db.lost.isEmpty ]
     {}
 
 def report (r : Check.Report (W cfg) (Event sig)) : String :=
@@ -84,30 +76,26 @@ def report (r : Check.Report (W cfg) (Event sig)) : String :=
 
 def duplicate (r : Check.Report (W cfg) (Event sig)) : Bool :=
   match r.failure with
-  | some (.violated p _) => p == "no database the store may be in has a to-do twice"
+  | some (.violated p _) => p == "no user has two to-dos with one title"
   | _ => false
 
-def todos : List (Nat × String) := [(1, "milk")]
+def milk : List (Nat × Request) := [(1, .add 7 "milk")]
 
 def tests (json : Bool) : IO (List (String × Bool)) := do
-  let buggyRc := check { keyed := false } .readCommitted todos false
-  let buggySer := check { keyed := false } .serializable todos false
-  let fixedRc := check { keyed := true } .readCommitted todos true
-  let fixedSer := check { keyed := true } .serializable todos true
-  let fixedTwo := check { keyed := true } .readCommitted [(1, "milk"), (2, "eggs")] false
+  let unchecked := check { checked := false } milk false
+  let checked := check {} milk true
+  let two := check {} [(1, .add 7 "milk"), (2, .add 7 "milk")] false
+  let mixed := check { attempts_max := 1 } [(1, .add 7 "milk"), (2, .complete 7 0), (3, .remove 7 0)] false
   unless json do
-    IO.println s!"appended, read committed: {report buggyRc}"
-    IO.println s!"appended, serializable: {report buggySer}"
-    IO.println s!"keyed, read committed, with failures: {report fixedRc}"
-    IO.println s!"keyed, serializable, with failures: {report fixedSer}"
-    IO.println s!"keyed, two to-dos: {report fixedTwo}"
+    IO.println s!"unchecked, a lost answer and a retry: {report unchecked}"
+    IO.println s!"checked, with failures: {report checked}"
+    IO.println s!"checked, the same title twice: {report two}"
+    IO.println s!"checked, add, complete and remove: {report mixed}"
   return [
-    ("appending and retrying a lost COMMIT stores a to-do twice, at read committed", duplicate buggyRc),
-    ("and at serializable", duplicate buggySer),
-    ("the keyed insert never stores a to-do twice, at read committed, with failures",
-      fixedRc.ok),
-    ("and at serializable", fixedSer.ok),
-    ("and with two to-dos", fixedTwo.ok) ]
+    ("adding without looking, and retrying a lost answer, stores a title twice", duplicate unchecked),
+    ("the checked add never stores a title twice, with failures", checked.ok),
+    ("nor when a user adds the same title twice", two.ok),
+    ("nor with add, complete and remove at once", mixed.ok) ]
 
 def main (args : List String) : IO UInt32 := do
   let results ← tests (Lanes.Testing.wantsJson args)
