@@ -1,4 +1,4 @@
-# D?. A served journal is versioned by the application's name; the gate's settings are read from it
+# D94. A served journal is versioned by the application's name; the gate's settings are read from it
 
 A review found that `Http.serve` refused its own journal when a gate setting changed:
 `ServerConfig.journalName` adds the gate's `requestTimeout_ms` and `maxPending` to the
