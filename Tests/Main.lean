@@ -25,9 +25,8 @@ import Tests.ReadRequest
 import Tests.Derive
 import Tests.HttpConn
 import Tests.Loopback
-import Tests.Mailbox
 import Tests.Batch
-import Tests.Pace
+import Tests.Sched
 import Tests.Reads
 import Tests.Crypto
 import Tests.Auth
@@ -119,8 +118,8 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.Kernel.tests ++ Tests.Clock.tests ++ Tests.HttpClient.tests ++ Tests.Tls.tests
     ++ Tests.Signature.tests ++ Tests.Sign.tests ++ Tests.OAuth.tests
     ++ Tests.Fair.tests ++ Tests.Derive.tests
-    ++ Tests.Mailbox.tests ++ Tests.Batch.tests
-    ++ Tests.Pace.tests ++ Tests.Reads.tests
+    ++ Tests.Sched.tests ++ Tests.Batch.tests
+    ++ Tests.Reads.tests
     ++ Tests.Crypto.tests ++ Tests.Auth.tests ++ Tests.Clients.tests ++ Tests.Lease.tests
     ++ Tests.Release.tests ++ Tests.ReadRequest.tests ++ Tests.Oracle.unitTests
     ++ Tests.HttpConn.tests ++ Tests.Loopback.tests

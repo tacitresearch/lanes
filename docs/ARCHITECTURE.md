@@ -30,8 +30,8 @@ proved function tells it to.
 | --- | --- | --- |
 | Actors and systems | `Lanes/Core/{Actor,System,World,Step,Run}.lean` | the definition everything else is about |
 | Proof tools for systems | `Lanes/Proof/{Lift,Ghost,Monotone,Equiv,Deed}.lean` | `System.invariant_of_actor`, `Inductive.of_monotone`, `System.Invariant.of_ghost` |
-| The kernel | `Lanes/Runtime/{Kernel,KernelSound,KernelTimers,Wave}.lean` | `Kernel.exec_reachable`, `Kernel.exec_outputs`, `Kernel.exec_wellFormed`, `Kernel.runWaves_eq` |
-| The shell | `Lanes/Runtime/IO/Shell.lean`, `Lanes/Runtime/{Batch,PeekSound,Mailbox,MailboxSound,Pace}.lean` | `Batch.run_kernel`, `Batch.run_sound`, `Batch.run_spread`, `Batch.run_erase_peeks`, `Batch.chain_peek_after`, `Mailbox.batch_since_take`; the shell itself is trusted |
+| The kernel | `Lanes/Runtime/{Kernel,KernelSound,KernelTimers}.lean` | `Kernel.exec_reachable`, `Kernel.exec_outputs`, `Kernel.exec_wellFormed` |
+| The runtime | `Lanes/Runtime/IO/Shell.lean`, `Lanes/Runtime/{Sched,SchedSound,Peek}.lean` | `Sched.Run.reachable`, `Sched.Step.sound`, `Sched.Step.inv`, `Sched.Slot.take_push`, `Sched.Slot.put_push`; the threads are trusted |
 | Joins | `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`, `Lanes/Semantics/FairJoin.lean` | `System.Reachable.left`, `SysState.run_left`, `System.Run.Fair.left`, `System.Run.Fair.right` |
 | The gate and the HTTP server | `Lanes/Web/Http/{Gate,Front,FrontSound,Admit,AdmitSound,View,Waiting,Conn,ConnSound,Stream,Sse,SseSound,Loopback}.lean`, `Lanes/Semantics/Front.lean`, `Lanes/Web/IO/Server.lean` | `Http.served_answered_le_arrived`, `Http.served_pending_answered`, `Http.Front.World.refines`, `Http.Front.pending_answered`, `Http.Waiting.exec_answered`, `Http.Conn.run_writes`, `Http.Conn.read_streamed`, `Http.Sse.parse_written` |
 | Metrics, health and the access log | `Lanes/Lib/Metrics.lean`, `Lanes/Web/Http/{Ops,OpsSound}.lean`, `Lanes/Web/IO/Ops.lean` | `Metrics.Histogram.observeAll_eq`, `Metrics.readLabelValue_escapeLabel`, `Http.Ops.route?_default`, `Http.Ops.route?_metrics`, `Http.Ops.answer_ready`, `Http.Ops.Access.parse_line`; that none of it reaches a system is trusted and tested |
@@ -119,69 +119,59 @@ Also:
   outside world; `FairScheduler` takes the event the system has owed longest, counting a timer
   that is armed again as owed from then, and its run is a fair run of the proof layer.
 
-## The kernel and the shell
+## The kernel and the runtime
 
-The runtime of one shard is a pure kernel inside a thin shell (D18, D23, D40). Its state lives as
-long as the process: every start is a boot, with every actor in its initial state, as in Go,
-Tokio or Erlang. State that must outlive the process lives in a service outside, reached through
-a modelled adapter (`Lanes/Outside/`, PostgreSQL's store model).
+A system runs in one process, its actors free on worker threads as in Go, Tokio or Erlang
+(`docs/decisions/D116-free-running.md`). Its state lives as long as the process: every start is a
+boot, with every actor in its initial state. State that must outlive the process lives in a
+service outside, reached through a modelled adapter (`Lanes/Outside/`, `Lanes/Db/`).
 
-The kernel (`Lanes/Runtime/Kernel.lean`) is every runtime decision as pure functions over a hash
-map of actors, a queue of messages and an agenda of timers: accept an input, deliver the oldest
-message (starting its receiver if it is down), fire a due timer, say how long nothing will
-happen. Time is data: the shell says what the clock reads. Whatever sequence of operations the
-shell asks for, in any order and with any clock readings, the kernel stays in a state the
-semantics reaches and the events it reports are a run reaching it (`Kernel.exec_reachable`),
-and its outputs are exactly that run's (`Kernel.exec_outputs`). Its agenda holds exactly the
-pending timers (`Kernel.exec_wellFormed`), it never sleeps past one, and neither due timers nor
-queued messages starve the other (`Kernel.WellFormed.step_of_queued`, `step_of_due`).
-Before a step the kernel takes the actor's state out of its cell (`Kernel.takeState`), so the step
-holds the only reference and updates the state in place; that changes no value
-(`Kernel.handle_eq`), and `Tests/Scale.lean` measures that a step costs the same whatever the
-state's size (`docs/decisions/D84-the-kernel-takes-the-state-out-before-the-step.md`).
+The runtime (`Lanes/Runtime/IO/Shell.lean`) keeps each actor in a slot of its own
+(`Lanes/Runtime/Sched.lean`): its state, its mailbox, and whether it is idle, on a run queue or
+running. Each worker has a run queue of actors with mail. It takes the first, or steals one from
+another worker's queue when its own is empty, steps it on up to `Runtime.Config.budget` items of
+its mailbox, and lets it go, back on its queue if mail is waiting. An actor runs on one worker at
+a time, and handles its messages in the order they reached it. A step takes the next item and
+the state out of the slot (`Slot.take`), runs the step function outside any lock, and writes the
+result back (`Slot.put`); the messages it sent are pushed to their receivers' mailboxes
+(`Slot.push`) before the actor is let go of (`Slot.release`), so a link's messages arrive in
+order. Timers are on an agenda kept by a thread of its own, which pushes each to its actor when
+it is due; one cancelled or armed again is dropped when its actor takes it. Inputs go straight
+to their actor's mailbox; at most `inboxCapacity` wait for their actor (`Sched.Ledger`), and
+`tryInput` refuses beyond (rule 3.8).
 
-The shell (`Lanes/Runtime/IO/Shell.lean`) is one thread per shard. Senders put commands in a
-bounded inbox (`Lanes/Runtime/Mailbox.lean`, pure: who is refused, who waits, who is woken). The
-shell takes everything that has arrived at once and calls `Batch.run` (`Lanes/Runtime/Batch.lean`),
-a pure function that returns the kernel after the batch and a list of acts: record these events,
-hand over these outputs, answer this peek, and the requests the kernel was asked (`work`), for
-which the shell does nothing. The shell performs the acts in order and decides nothing. Proved:
-the kernel after a batch is the one its requests lead to (`Batch.run_kernel`), so by
-`Kernel.exec_reachable` a run of the semantics; every output they produced is handed over, in
-order (`Batch.run_handed`, `Batch.run_sound`); a peek, which reads the states of a
-list of actors and of every actor started that a predicate holds of (an actor not started has
-its initial state: `Batch.Peek.init_of_not_others`), is answered at the end of its batch after
-every other act, with the states of the kernel the batch's requests lead to
-(`Batch.run_peeks`), and a batch with its peeks taken
-out is the same batch (`Batch.run_erase_peeks`), so reads change nothing else; over
-the whole history, a peek asked after an output was handed over sees a world the semantics
-reaches by a run that put that output out first (`Batch.chain_peek_after`,
-`Lanes/Runtime/PeekSound.lean`); a take returns exactly what went in
-since the last, in order, and the inbox never holds more than its capacity
-(`Mailbox.batch_since_take`, `Mailbox.Reachable.bounded`). Trusted: that the shell performs the
-acts as given (`TRUSTED.md`, the first row).
+What the runtime decides is those pure functions; the threads only move data. The scheduler's
+model (`Lanes/Runtime/SchedSound.lean`) is its whole state as one value: every slot, each
+worker's run queue and the actor it holds, the messages a step sent and has not pushed yet, and
+two ghosts, the messages in flight in the order the semantics sent them and the outputs not yet
+handed over. Each of its transitions, the threads' operations, is zero or one event of
+`SysState.step` (`Sched.Step.sound`), under any environment whose links are reliable, so every
+run of the model from its start is a run of the semantics, with its outputs
+(`Sched.Run.reachable`). It keeps an invariant (`Sched.Step.inv`): the mailboxes and the
+messages not yet pushed hold the messages in flight link by link in order, so a message at the
+head of a mailbox is the oldest on its link and may be delivered; an actor runs on at most one
+worker, and is running exactly when one holds it; an idle actor has no mail and a queued one is
+on a run queue, so no mail waits for a worker that will never come (`Sched.Model.Placed`). Pushes
+by other threads to a slot a worker holds commute with its `take` and `put`
+(`Sched.Slot.take_push`, `Sched.Slot.put_push`), which is why the step function can run outside
+the lock. Trusted: that the threads perform the model's transitions (`TRUSTED.md`, the first
+row, says how each is atomic).
 
-Unless `Runtime.Config.parallel` is `off` or there is one worker, the inputs that arrive together
-are one turn (`Batch.turnAll`), a group of at most `batch`, and its work is
-done a wave at a time (`Lanes/Runtime/Wave.lean`): the steps of the actors with mail in the wave
-are worked out on Lean's task pool, each actor's in the order of its messages, and the kernel then
-does the wave as `runBatch` does, taking each step from that plan. A plan keeps each actor's last
-state only, so its steps update the state in place; the kernel writes it at the actor's last
-step, or works out the state the steps taken leave where they stop early (`Kernel.Plan.real`).
-Handling one actor's message neither reads nor writes another actor's cell
-(`Kernel.handle_setState`), and writes to cells already in the table commute
-(`DHashMap.insert_comm_of_contains`), so the result is `runBatch`'s, value for value, however the
-wave is spread over threads (`Kernel.runWaves_eq`), and everything proved of the
-kernel is unchanged (`docs/decisions/D64-actors-run-in-parallel.md`,
-`docs/decisions/D88-waves-in-place.md`).
+A peek (`Runtime.tryPeek`, D108) reads each actor it names between two of its steps: an actor no
+worker holds at once, a held one when its worker lets go of it. It sees every message that actor
+took before and none after. The states of different actors are not read at one moment: a read of
+several actors beside work in flight is not a consistent cut, and one read after a response sees
+the actor that gave it as it was then, not the actors it has sent messages to since.
 
-Steps cheaper than a few microseconds cost more to hand to another thread than they save, and
-whether costlier ones gain depends on the cores free. With `parallel` `auto`, the default, the
-shell times each batch and `Pace` (`Lanes/Runtime/Pace.lean`, pure) chooses from those times
-whether the next runs on the shard's thread or on the pool: cheap work never goes to the pool,
-costlier work goes the way that has been faster, and the other is measured again now and then.
-A batch is the same whatever the choice (`Batch.run_spread`), so the timing and the choice are
-trusted only for speed (`docs/decisions/D73-adaptive-waves.md`).
+The kernel (`Lanes/Runtime/Kernel.lean`) is the runtime's decisions on one thread, as pure
+functions over a hash map of actors, a queue of messages and an agenda of timers. `Http.Loopback`
+and the tests run it. Whatever sequence of operations is asked of it, the kernel stays in a
+state the semantics reaches and the events it reports are a run reaching it
+(`Kernel.exec_reachable`), and its outputs are exactly that run's (`Kernel.exec_outputs`). Its
+agenda holds exactly the pending timers (`Kernel.exec_wellFormed`), and neither due timers nor
+queued messages starve the other (`Kernel.WellFormed.step_of_queued`, `step_of_due`). Before a
+step it takes the actor's state out of its cell (`Kernel.takeState`), so the step updates the
+state in place (`docs/decisions/D84-the-kernel-takes-the-state-out-before-the-step.md`).
 
 Where: `Lanes/Runtime/`, `Lanes/Proof/Lossy.lean`.
 
@@ -189,31 +179,32 @@ Where: `Lanes/Runtime/`, `Lanes/Proof/Lossy.lean`.
 
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
-| The kernel stays in a state the semantics reaches, and its events are a run reaching it, for any sequence of operations, inputs and clock readings | `Kernel.exec_reachable`, `Kernel.exec_outputs`, `Lanes/Runtime/KernelSound.lean`; gate `Tests/Axioms/Runtime.lean` | The shell hands inputs and outputs on unchanged (TRUSTED, "Assumptions the runtime makes") | proved |
-| A batch is a run of the kernel: the kernel after it is the one its requests lead to, and every output they produced is handed over, in order | `Batch.run_kernel`, `Batch.run_handed`, `Batch.run_sound`, `Lanes/Runtime/Batch.lean`; gate `Tests/Axioms/Runtime.lean` | The shell performs the acts in order (`Lanes/Runtime/IO/Shell.lean`) | proved; the shell trusted |
-| One shard takes about 1.8 million inputs a second from one sender; a message costs the same at 1,000 and 100,000 actors | The scale benchmark in `lake exe lanesCheck` (`Tests/Scale.lean`) | A four-core machine | tested |
+| Every run of the free-running scheduler is a run of the semantics, interleaving per-actor steps, and its outputs are that run's | `Sched.Run.reachable`, `Sched.Step.sound`, `Sched.Step.inv`, `Lanes/Runtime/SchedSound.lean`; gate `Tests/Axioms/Runtime.lean` | The runtime's threads perform the model's transitions (TRUSTED, the first row); links reliable | proved; the threads trusted |
+| An actor runs on at most one worker; no mail waits for a worker that will never come | `Sched.Model.Placed`, kept by `Sched.Step.inv` | as above | proved of the model |
+| Recorded runs replay through the semantics, on one worker and on several, with actors that stop and timers | `Tests/Runtime.lean` | | tested |
+| The kernel stays in a state the semantics reaches, and its events are a run reaching it, for any sequence of operations, inputs and clock readings | `Kernel.exec_reachable`, `Kernel.exec_outputs`, `Lanes/Runtime/KernelSound.lean`; gate `Tests/Axioms/Runtime.lean` | | proved |
+| A message costs the same at 1,000 and 100,000 actors | The scale benchmark in `lake exe lanesCheck` (`Tests/Scale.lean`) | A four-core machine | tested |
 
 Also:
 
-- The kernel releases an actor that is back where a start puts it with no timers, proved to
-  change nothing anyone can see by it (`Kernel.exec_visible`; a hundred thousand identities
-  touched leave none in the kernel).
-- The shard chooses from its own timing whether the actors of a wave step in parallel on Lean's
-  task pool (`Runtime.Config.parallel := .auto`), proved to change nothing the kernel does
-  whatever is chosen (`Kernel.runWaves_eq`, `Batch.run_spread`).
-- No sleeper or waiting sender of the inbox is forgotten (`Mailbox.woken_after_rest`,
-  `Mailbox.wake_since_take`): proved for every capacity and every sequence of operations.
-- Waves are as wide as an application spreads its work over actors
-  (`docs/decisions/D107-waves-premise.md`).
+- An actor let go of at rest (up, no timers, no mail, in a state a start gives it) leaves the
+  table, as the kernel releases it (`Kernel.exec_visible`); a hundred thousand identities touched
+  leave none behind (`Tests/Release.lean`).
+- On mixed step costs, free-running gave several times lower p50 and more answers a second than
+  one worker (`bench/Mixed.lean`, `docs/decisions/D116-free-running.md`, which has the numbers).
 
 ### Limits
 
-- Actor state, timers included, is lost with the process: a restart is a boot. The semantics has no restart event yet, so no theorem relates a run before a restart to one after it.
-- Actors step in parallel only with `Runtime.Config.workers` above one, and then only within a wave, their steps committed in queue order by one thread; the gate of an HTTP server is one actor. A step handed to another thread costs a microsecond or two more, in Lean's reference counts of objects threads share, so cheap steps run slower that way (`docs/decisions/D64-actors-run-in-parallel.md`).
-- Lean never updates in place an object another thread has seen, so each actor the pool steps has its state copied once a wave, in its task, and once more by its next step on the shard's thread. With `parallel := .on`, a write to one of two busy actors whose states hold a million numbers costs about a tenth of a millisecond, where it costs a microsecond on the shard's thread. `.auto` keeps such steps on the shard's thread (`docs/decisions/D88-waves-in-place.md`).
-- One shard takes about 1.8 million inputs a second from one sender and about a million from four that contend for its inbox, on a four-core machine; its kernel alone does between two and three million turns a second. A shard with nothing to do sleeps, and waking it costs tens of microseconds.
-- That a pending timer fires in time is proved as far as the kernel goes: its agenda holds exactly the pending timers, it never tells the shell to sleep past one, and it fires one that is due on its next step or, when a message is waiting too, the step after (`Kernel.exec_wellFormed`, `Kernel.WellFormed.wait_of_due`, `step_of_due`, `wait_for_ms`). That the clock advances and the shell's sleep ends is assumed (see `TRUSTED.md`).
-- The events a releasing kernel reports are a run of the semantics but for the starts that bring released actors back, so a replay through `SysState.run` must skip a start of an actor that is up.
+- Actor state, timers included, is lost with the process: a restart is a boot.
+- A state crosses threads between two turns of its actor, and Lean never updates in place an
+  object another thread may see: the first step of a turn copies the state it updates, and the
+  write-back walks it. The steps of one turn update it in place. A write to a state of a million
+  numbers costs about two copies when each message is a turn of its own (`Tests/Scale.lean`).
+- A peek of several actors is not a consistent cut (above).
+- Every turn updates one shared ledger (inputs waiting, items in mailboxes) and every push may
+  look up a shared table of slots; on many cores these are points of contention.
+- That a queued actor is eventually stepped and a due timer pushed rests on the workers and the
+  agenda's thread running (`TRUSTED.md`, "Progress"). No bound is proved.
 
 ## Composition: joins
 
@@ -243,7 +234,7 @@ Where: `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`,
 ### Limits
 
 - `System.join` leaves the inputs it wires open to the outside until `mapIO` or `filterMapIO` hides them, and keeps the outputs it wires in its signature though none is put out; `Http.fronted` hides both. A fair run of a join is a fair run of each side (`System.Run.Fair.left`, `System.Run.Fair.right`).
-- A system runs on one shard, in one process. Clustering across processes is not on main (it is kept on the branch `claude/archive-journal-runtime`).
+- A system runs in one process. Clustering across processes is not on main (it is kept on the branch `claude/archive-journal-runtime`).
 
 ## The gate and the HTTP server
 
@@ -274,11 +265,11 @@ request it names, the actors it reads, a predicate for the actors of which it re
 started (`View.every`), and its response from their
 states. Such a read never
 enters the system. It waits behind a gate of its own, `Gate.step` over `readSig`
-(`ServerConfig.reads`: its own deadline and bound), for a peek of those actors at the end of the
-shard's next batch (`Runtime.tryPeek`), and is answered from their states off the shard's thread,
-or `504` at its deadline. So it reads every actor it names at one boundary between batches, sees
-every request asked of the kernel before it and none after (`Batch.run_peeks`), and leaves the
-work and the outputs as they would be without it (`Batch.run_erase_peeks`). That a view answers
+(`ServerConfig.reads`: its own deadline and bound), for a peek of those actors
+(`Runtime.tryPeek`), and is answered from their states off the workers' threads, or `504` at its
+deadline. It reads each actor it names between two of that actor's steps, and changes nothing
+the actors do; the states of several actors are not read at one moment (the runtime, above).
+That a view answers
 what the request would if it entered is the application's claim. `Http.Front.World` does not model reads: that
 the server does what the gate of reads decides is trusted, as for the gate.
 

@@ -187,43 +187,6 @@ def worked (k : Kernel busy) : Nat :=
 def ticks (events : List (Event beatSig)) : Nat :=
   events.countP (· matches .timeout ..)
 
-/-! Waves: three counters that are up, with mail for each, and one stopping on its second
-message, which drops the mail still queued for it. The steps of a wave are worked out ahead for
-every actor with mail, and the batch is `runBatch`'s (`Kernel.runWaves_eq` proves it; this shows
-the plan is used). -/
-
-abbrev countSig : Signature where
-  Id := Fin 3
-  Msg _ := Nat
-  In := Fin 3 × Nat
-  Out := Nat
-
-abbrev counters : System countSig where
-  State _ := Nat
-  actor i := {
-    init := 0
-    step := fun s n => (s + n, .emit (s + n) :: if i = 2 && n = 0 then [.stop] else [])
-    recover := fun s => (s, []) }
-  accept x := ⟨x.1, x.2⟩
-  boot := [0, 1, 2]
-
-def countInputs : List countSig.In :=
-  [(0, 1), (1, 2), (2, 3), (0, 4), (2, 0), (1, 5), (2, 6), (0, 7)]
-
-def waveTests : List (String × Bool) :=
-  let k := ((Kernel.boot counters).1.acceptAll countInputs)
-  let planned := k.plan { workers := 4 } (k.queue.toList.take 8)
-  let waves := k.runWaves { workers := 4 } 64
-  let batch := k.runBatch 64
-  [ ("kernel waves: the steps of every actor with mail are worked out ahead, up to a stop",
-      planned.steps.size == 3 && (planned.steps.get? 2).map (·.steps.length) == some 2
-        && (planned.steps.get? 0).map (·.steps.length) == some 3),
-    ("kernel waves: the batch's outputs and states are runBatch's, a stop included",
-      waves.outputs == batch.outputs && batch.outputs.length == 7
-        && (List.finRange 3).all fun i =>
-          (waves.kernel.cell i).state == (batch.kernel.cell i).state
-            && (waves.kernel.cell i).up == (batch.kernel.cell i).up) ]
-
 def tests : List (String × Bool) :=
   let r := search shell properties { maxDepth := some 4, constraint := fun k => k.nextToken ≤ 3 }
   let lost := ((Kernel.boot alarms).1.exec misfire).kernel
@@ -237,6 +200,6 @@ def tests : List (String × Bool) :=
     ("kernel fairness: a timer that is always due does not starve a message",
       worked queued == 0 && worked queued.step.kernel.step.kernel == 1),
     ("kernel fairness: a timer that is always due and a queue that is not empty take turns",
-      worked shared.kernel == 3 && ticks shared.events == 3) ] ++ waveTests
+      worked shared.kernel == 3 && ticks shared.events == 3) ]
 
 end Tests.Kernel
