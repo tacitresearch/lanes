@@ -121,6 +121,37 @@ import Lanes.Semantics
 /-- info: 'Lanes.Migration.inv_exec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Migration.inv_exec
 
+-- Lanes.Durable.OutputId
+/-- info: 'Lanes.Journal.placed_append' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.placed_append
+
+/-- info: 'Lanes.Journal.placed_snd' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.placed_snd
+
+/-- info: 'Lanes.Journal.turn_placed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.turn_placed
+
+/-- info: 'Lanes.Journal.turnAll_placed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.turnAll_placed
+
+/-- info: 'Lanes.Journal.recoverIds_erase' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.recoverIds_erase
+
+/-- info: 'Lanes.Journal.resumeIds_erase' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.resumeIds_erase
+
+/-- info: 'Lanes.Journal.recoverIds_suffix' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.recoverIds_suffix
+
+/-- info: 'Lanes.Journal.ids_append' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.ids_append
+
+/-- info: 'Lanes.Journal.recoverIds_handed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.recoverIds_handed
+
+/-- info: 'Lanes.Journal.resumeIds_eq_recoverIds' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.resumeIds_eq_recoverIds
+
 -- Lanes.Durable.Snapshot
 /-- info: 'Lanes.Journal.savedHeader_inj' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Journal.savedHeader_inj
@@ -162,9 +193,41 @@ import Lanes.Semantics
 /-- info: 'Lanes.Journal.Upgrade.inv_load' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Journal.Upgrade.inv_load
 
+/-- info: 'Lanes.Journal.Upgrade.label_snd' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Upgrade.label_snd
+
 -- Lanes.Durable.Reading
 /-- info: 'Lanes.Journal.Disk.ofReadings_eq' depends on axioms: [propext, Classical.choice] -/
 #guard_msgs in #print axioms Lanes.Journal.Disk.ofReadings_eq
 
 /-- info: 'Lanes.Journal.Disk.Torn.load_readings' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Journal.Disk.Torn.load_readings
+
+-- Lanes.Durable.Ship
+/-- info: 'Lanes.Journal.Ship.Holds.start' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Ship.Holds.start
+
+/-- info: 'Lanes.Journal.Ship.Holds.step' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Ship.Holds.step
+
+/-- info: 'Lanes.Journal.Ship.Holds.take' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Ship.Holds.take
+
+/-- info: 'Lanes.Journal.Ship.Holds.put' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Ship.Holds.put
+
+/-- info: 'Lanes.Journal.Ship.snapshotOf?_saveWrites' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Ship.snapshotOf?_saveWrites
+
+-- Lanes.Durable.Restore
+/-- info: 'Lanes.Journal.Restore.piece?_file' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Restore.piece?_file
+
+/-- info: 'Lanes.Journal.Restore.stitch_slice' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Restore.stitch_slice
+
+/-- info: 'Lanes.Journal.Restore.journal_resumeIds' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Restore.journal_resumeIds
+
+/-- info: 'Lanes.Journal.Restore.journal_restores' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Restore.journal_restores

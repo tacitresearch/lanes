@@ -116,16 +116,22 @@ private theorem split_header (part : String) (parts : List String)
       · exact ne_of_bare (h s (by simp [hs]) ';' hmem) rfl
   · simp
 
-private theorem attributes_bare (c : Cookie) (hpath : c.path.toList.all cookieOctet) :
+private theorem attributes_bare (c : Cookie) (hpath : c.path.toList.all cookieOctet)
+    (hdomain : c.domain.all (·.toList.all cookieOctet)) :
     ∀ s ∈ c.attributes, ∀ d ∈ s.toList, bare d := by
   intro s hs d hd
   simp only [Cookie.attributes, List.mem_append, List.mem_singleton, Option.mem_toList,
     Option.map_eq_some_iff] at hs
-  rcases hs with (((rfl | ⟨n, -, rfl⟩) | hs) | hs) | rfl
+  rcases hs with ((((rfl | ⟨e, he, rfl⟩) | ⟨n, -, rfl⟩) | hs) | hs) | rfl
   · simp only [String.toList_append, List.mem_append] at hd
     rcases hd with hd | hd
     · revert d; decide
     · exact bare_of_octet (List.all_eq_true.mp hpath d hd)
+  · simp only [he, Option.all_some] at hdomain
+    simp only [String.toList_append, List.mem_append] at hd
+    rcases hd with hd | hd
+    · revert d; decide
+    · exact bare_of_octet (List.all_eq_true.mp hdomain d hd)
   · simp only [String.toList_append, List.mem_append] at hd
     rcases hd with hd | hd
     · revert d; decide
@@ -147,11 +153,11 @@ private theorem attributes_bare (c : Cookie) (hpath : c.path.toList.all cookieOc
 theorem readSetCookie_header {c : Cookie} (h : c.valid) :
     readSetCookie c.header = some (c.name, c.value, c.attributes) := by
   simp only [Cookie.valid, token, Bool.and_eq_true, bne_iff_ne, ne_eq] at h
-  obtain ⟨⟨⟨hname, hnameChars⟩, hvalue⟩, hpath⟩ := h
+  obtain ⟨⟨⟨⟨⟨hname, hnameChars⟩, hvalue⟩, hpath⟩, hdomain⟩, -⟩ := h
   have hn : ∀ d ∈ c.name.toList, bare d ∧ d ≠ '=' :=
     fun d hd => bare_of_token (List.all_eq_true.mp hnameChars d hd)
   have hv : ∀ d ∈ c.value.toList, bare d := fun d hd => bare_of_octet (List.all_eq_true.mp hvalue d hd)
-  have hattrs := attributes_bare c hpath
+  have hattrs := attributes_bare c hpath hdomain
   have hpair : ∀ d ∈ (c.name ++ "=" ++ c.value).toList, bare d := by
     intro d hd
     simp only [String.toList_append, List.mem_append] at hd

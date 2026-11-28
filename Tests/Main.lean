@@ -26,6 +26,8 @@ import Tests.OAuth
 import Tests.ReadRequest
 import Tests.Codec
 import Tests.Schema
+import Tests.Body
+import Tests.Match
 import Tests.Peers
 import Tests.Courier
 import Tests.HttpConn
@@ -40,6 +42,7 @@ import Tests.Clients
 import Tests.Lease
 import Tests.Lint
 import Tests.New
+import Tests.Copies
 import Tests.Tutorial
 import Tests.TutorialWeb
 import Tests.Release
@@ -66,6 +69,7 @@ import Tests.SigV4
 import Tests.S3
 import Tests.Multipart
 import Tests.S3Upload
+import Tests.Ship
 import Tests.Testing
 
 /-!
@@ -112,6 +116,7 @@ def live : IO (List (String × Bool)) := do
     ++ (← safely "postgres" Tests.PostgresLive.live)
     ++ (← safely "postgres tls" Tests.PostgresTls.live)
     ++ (← safely "s3" Tests.S3.live) ++ (← safely "s3 uploads" Tests.S3Upload.live)
+    ++ (← safely "ship" Tests.Ship.live)
     ++ (← safely "test kit" Tests.Testing.live)
     ++ (← safely "test kit worker" Tests.Testing.workerLive)
     ++ (← safely "tutorial web" Tests.TutorialWeb.live)
@@ -121,7 +126,7 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.KV.tests ++ Tests.Gate.tests ++ Tests.Fronted.tests ++ Tests.Join.tests
     ++ Tests.Kernel.tests ++ Tests.Frame.tests ++ Tests.Clock.tests ++ Tests.HttpClient.tests ++ Tests.Tls.tests
     ++ Tests.Signature.tests ++ Tests.Sign.tests ++ Tests.OAuth.tests
-    ++ Tests.Fair.tests ++ Tests.Codec.tests ++ Tests.Schema.tests ++ Tests.Durable.fileTests ++ Tests.Split.tests
+    ++ Tests.Fair.tests ++ Tests.Codec.tests ++ Tests.Schema.tests ++ Tests.Body.tests ++ Tests.Match.tests ++ Tests.Durable.fileTests ++ Tests.Split.tests
     ++ Tests.Peers.tests ++ Tests.Courier.tests ++ Tests.Mailbox.tests ++ Tests.Batch.tests
     ++ Tests.Pace.tests
     ++ Tests.Crypto.tests ++ Tests.Auth.tests ++ Tests.Clients.tests ++ Tests.Lease.tests
@@ -132,6 +137,7 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.PostgresSettings.tests
     ++ Tests.Ops.tests
     ++ Tests.SigV4.tests ++ Tests.S3.tests ++ Tests.MultipartModel.tests ++ Tests.S3Upload.tests
+    ++ Tests.Ship.tests
     ++ Tests.Testing.tests
     ++ Tests.Queue.tests ++ Tests.Reduce.tests ++ Tests.Cache.tests ++ Tests.WallClock.tests ++ Tests.Throttle.tests
     ++ Tests.SharedCache.tests
@@ -139,21 +145,18 @@ def main (args : List String) : IO UInt32 := do
   match args.filter (· != "--json") with
   | [] =>
     let pure := pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.Lint.tests)
-      ++ (← Tests.New.tests) ++ (← Tests.Tutorial.tests) ++ (← Tests.TutorialWeb.tests) ++ (← Tests.Oracle.replayAll) ++ (← Tests.Oracle.Service.replayAll)
+      ++ (← Tests.New.tests) ++ (← Tests.Copies.tests) ++ (← Tests.Tutorial.tests) ++ (← Tests.TutorialWeb.tests) ++ (← Tests.Oracle.replayAll) ++ (← Tests.Oracle.Service.replayAll)
       ++ (← Tests.Json.suite) ++ (← Tests.HttpConn.checks) ++ (← Tests.Postgres.psqlTests) ++ (← Tests.PostgresConn.checks) ++ (← Tests.PostgresPool.checks) ++ (← Tests.StoreModel.checks)
       ++ (← Tests.MultipartModel.checks) ++ (← Tests.Testing.runnerTests)
     failures json pure
     report args (pure ++ (← live)) pure.length
   | ["fast"] => report args (pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.Lint.tests)
-      ++ (← Tests.New.tests) ++ (← Tests.Tutorial.tests) ++ (← Tests.TutorialWeb.tests) ++ (← Tests.Oracle.replayAll) ++ (← Tests.Oracle.Service.replayAll)
+      ++ (← Tests.New.tests) ++ (← Tests.Copies.tests) ++ (← Tests.Tutorial.tests) ++ (← Tests.TutorialWeb.tests) ++ (← Tests.Oracle.replayAll) ++ (← Tests.Oracle.Service.replayAll)
       ++ (← Tests.Json.suite) ++ (← Tests.HttpConn.checks) ++ (← Tests.Postgres.psqlTests) ++ (← Tests.PostgresConn.checks) ++ (← Tests.PostgresPool.checks) ++ (← Tests.StoreModel.checks)
       ++ (← Tests.MultipartModel.checks))
   | ["live"] => report args (← live)
   | ["journal-child", path] =>
     Tests.Durable.child path
-    return 0
-  | ["stop-child", drain_ms] =>
-    Tests.Ops.stopChild drain_ms.toNat!
     return 0
   | ["tape-child", path, round] =>
     Tests.Durable.tapeChild path round.toNat!

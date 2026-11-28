@@ -7,6 +7,8 @@ import Lanes
 /-!
 # Reference app: a watchdog
 
+The system of `examples/watchdog/Watchdog.lean`, copied (`Tests/Copies.lean`).
+
 A dog barks when it has heard nothing from its keeper for a while. Every `ping` arms its
 `silence` timer again, which starts the delay again, so the dog stays quiet for as long as pings
 keep arriving. The keeper pings on a timer of its own until it is told to `rest`.

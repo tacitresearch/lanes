@@ -5,6 +5,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Lanes.Web.S3.Multipart
+public import Lanes.Web.S3.Backup
+public import Lanes.Durable.IO.Ship
 public import Std.Time
 
 /-!
@@ -85,5 +87,34 @@ def handler {σ : Signature} {sys : System σ} [Hashable σ.Id] (port : Port σ)
       discard <| rt.tryInput (port.reply call.id (match answer with
         | some a => .answer a
         | none => .unknown))
+
+/-- Where to ship a journal in `b`: under `keyPrefix`, each upload a conditional put
+(`backupPut`), each listing read page by page, at most 100,000 pages. Each call is made on the
+thread that asks, which waits for it (the shipper's own, or a restore's). -/
+def backup (b : Bucket) (creds : SigV4.Source) (keyPrefix : String := "")
+    (config : Journal.Ship.Config := {}) (client : Client.Config := {}) : Journal.Ship.Target where
+  keyPrefix
+  config
+  remote := {
+    put := fun key bytes => do
+      let some k := Key.of? key | return .failed
+      let answer ← try Lanes.block (exchange b creds (backupPut k bytes) client) catch _ => pure none
+      return shipped answer
+    list := fun keyPrefix => do
+      let mut keys := #[]
+      let mut token : Option String := none
+      for _ in [0:100000] do
+        let answer ← try Lanes.block (exchange b creds (.list keyPrefix none token) client)
+          catch _ => pure none
+        let some (page, next) := listedPage answer | return none
+        keys := keys ++ page.toArray
+        let some t := next | return some keys.toList
+        token := some t
+      return none
+    get := fun key => do
+      let some k := Key.of? key | return none
+      match ← try Lanes.block (exchange b creds (.get k) client) catch _ => pure none with
+      | some (.object _ body) => return some body
+      | _ => return none }
 
 end Lanes.S3

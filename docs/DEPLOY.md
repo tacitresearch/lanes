@@ -14,7 +14,7 @@ None of this has run on AWS yet: what has been checked, and what has not, is at 
 browser ──HTTPS──▶ load balancer ──HTTP──▶ one EC2 instance ──▶ /srv/lanes: the journal (EBS)
    │               (ACM certificate,        (systemd: the app,       │
    │                /readyz checks,          as user `lanes`)        └─ snapshots (DLM)
-   │                /metrics refused)              │
+   │                /metrics refused)              ├──▶ backup bucket: the journal's segments
    └──signed POST, PUT, GET──▶ media bucket ◀──────┘──▶ CloudWatch: logs, metrics, alarms
                                                     └──▶ PostgreSQL (RDS), optional
 ```
@@ -22,7 +22,8 @@ browser ──HTTPS──▶ load balancer ──HTTP──▶ one EC2 instance 
 - **One instance holds the shard.** The application is a Lanes process: its state is a journal
   and a snapshot on local disk, replayed at every start (`docs/ARCHITECTURE.md`, "Journal,
   snapshots and the disk model"). The disk is an EBS volume of its own, mounted at `/srv/lanes`,
-  that outlives the instance and is snapshotted every day.
+  that outlives the instance and is snapshotted every day, and the journal is shipped to a
+  backup bucket as it is written ("The journal shipped to S3").
 - **The load balancer** ends TLS (Lanes has no TLS server), redirects HTTP to HTTPS, sends
   traffic to the instance only once its readiness page answers 200, and answers 404 for the
   metrics page, which the application itself answers only to the machine it runs on.
@@ -129,6 +130,7 @@ and name the stack after the application. The parameters:
 | `ScriptRef`, `ScriptSha256` | | The commit of that script and its SHA-256, both required (below) |
 | `SnapshotIntervalHours`, `SnapshotRetainCount` | 24, 7 | Snapshots of the journal's volume |
 | `JournalSnapshotId` | empty | A snapshot to restore (see "Restore") |
+| `BackupVersionDays` | 30 | How long the backup bucket keeps an older version of an object overwritten or deleted (see "The journal shipped to S3") |
 | `LogRetentionDays` | 30 | How long log lines are kept |
 | `AlarmEmail` | empty | Who is told when the site has no healthy target, the disk fills or the host fails |
 | `MediaUser` | `false` | `true` for an IAM user, for an S3 client that reads a key from the environment (see "Media") |
@@ -256,6 +258,74 @@ A stack in another zone or region from a snapshot is a new stack with `JournalSn
 the snapshot to that region first); it gets new buckets, so the media must be copied or pointed
 at. It has not been tried.
 
+A copy of production restored into staging must not act for production. Start it the first time
+with `Journal.Store.restored` set: the outputs the files owe are marked handed over and not
+handed over, and the journal takes a new id, so no output of the copy has the id of one of
+production's (`TRUSTED.md`, the journal's files). Jobs in flight in the copy are attempted again
+when their deadlines pass, by staging's workers and with staging's credentials. Leave it unset
+for the starts after: each start with it drops what the shard owes.
+
+### The journal shipped to S3
+
+The volume's snapshots are a day apart, so a lost volume or zone loses up to a day. Shipping the
+journal makes that seconds. The stack makes a backup bucket (output `BackupBucketName`), and the
+unit names it to the application as `LANES_BACKUP_BUCKET`. The application ships its journal
+there as it writes it (`Journal.Store.ship`, `Lanes/Durable/Ship.lean`), after Litestream:
+
+- The journal is written and synced on the volume as before, and no request waits for S3.
+- What is written is sealed into segments: when 4096 entries wait, when the first of them has
+  waited 10 seconds, and at each save, when the segment ends with the save's mark and the
+  snapshot is shipped after it. Each object is put once, under
+  `backups/<journal id>/segment/<first>-<stop>-<SHA-256>` or
+  `backups/<journal id>/snapshot/<mark>-<SHA-256>`, with `If-None-Match: *`, so it is never
+  written twice. The journal's id is in its `.id` file (`docs/decisions/D105-output-ids.md`).
+- A put that fails is tried again, after 200 ms, doubling to a minute. At most 256 uploads wait;
+  one more drops the oldest that is not being put, a new snapshot replaces one still waiting,
+  and the process logs each failure.
+- A restart ships what the journal file holds and the shipper had not yet stored (the file
+  `.shipped` beside the journal says how far it got), and the snapshot again, which S3 refuses as
+  there already. A stop waits up to 5 seconds for what is pending (`Ship.Config.close_ms`).
+
+So a lost volume loses what was written in the last 10 seconds or so, and more while S3 is
+unreachable. What S3 has is what the journal had: every segment holds the entries at the
+positions its name gives (`Journal.Ship.Holds.put`). All of these are fields of
+`Journal.Ship.Config`.
+
+In `main`, with the role's credentials as in "Media", the stack's region (`us-east-2` here) and
+the bucket from the environment:
+
+```lean
+  let creds ← Aws.Credentials.start (← Aws.Credentials.detect)
+  let backups : S3.Bucket :=
+    { name := "<LANES_BACKUP_BUCKET>", region := "us-east-2",
+      endpoint := S3.Endpoint.aws "us-east-2" }
+  let ship := S3.backup backups creds.source "backups/"
+  let config : Http.ServerConfig := { journal, system := "my-app 1", ship := some ship }
+```
+
+The instance role may put and get objects under `backups/` and list them; it may not delete
+them. The bucket is versioned, so an object overwritten or deleted by anything else is kept for
+`BackupVersionDays`. Nothing expires the current objects: a restore needs the newest snapshot,
+which a quiet application may not have replaced for a long time.
+
+**Restore to a point** on a new volume, or anywhere: start the application's executable once
+with no journal at its path and call, before `serve`,
+
+```lean
+  let restored ← Http.restoreJournal (system {}) bridge config ship .latest
+```
+
+with `.position n` (the history's first `n` entries) or `.time t` (what S3 had stored by `t`,
+in nanoseconds from the epoch) for an earlier point, and the journal's id as the last argument
+when the bucket holds several (by default, the one written last). It lists the journal's
+objects, picks the newest snapshot at or before the point with an unbroken run of segments after
+it, checks each object against the SHA-256 in its name, and writes the journal and the snapshot.
+It refuses to write over a journal or a snapshot that is there. A start from the files it
+writes has the state the journal had at that point (`Journal.Restore.journal_restores`). The
+copy is a restore under D105: its journal ends with a `handed` mark and it has no `.id`, so its
+first start hands nothing over and takes a new id, and it ships under that id. A point in a gap
+that a dropped upload left is refused; `.latest` gives the furthest that can be reached.
+
 ## Logs and metrics
 
 The application's stdout and stderr go to journald (`journalctl -u lanes-app`), and
@@ -361,6 +431,10 @@ adapter (`Aws.Ses`, SES API v2's `SendEmail`) sends a message with the same cred
   Aws.Ses.handler port mail creds.source {} rt out
 ```
 
+`Aws.Ses.handlerOnce` takes the output's id as well (`Runtime.startWith`, `Http.serveFronted`)
+and a state opened with `Aws.Ses.Once.open` on a file beside the journal: an output handed over
+again after a restart is then not sent again, and is answered `unknown`.
+
 Verify the identity first (**Amazon SES → Identities → Create identity**; a domain takes DNS
 records, which Route 53 can add). A new account is in SES's sandbox: it sends only to verified
 addresses, at most 200 messages a day, until you ask AWS for production access (**Amazon SES →
@@ -460,9 +534,10 @@ There is one instance, so there is one copy of the running application.
   boots, waits until the old one has let go of the volume, attaches it and starts the current
   release. A few minutes without the site.
 - **The zone fails.** The volume is in one zone; the site is down until the zone comes back, or
-  until you restore the last snapshot into a new stack elsewhere (losing what came after it).
+  until you restore into a new stack elsewhere: from the backup bucket, losing the last seconds,
+  or from the last snapshot, losing what came after it.
 - **The volume fails.** EBS volumes are replicated within their zone; a lost volume is restored
-  from the last snapshot.
+  from the backup bucket, or from the last snapshot.
 
 ## Choosing the instance
 
@@ -546,4 +621,6 @@ Lifecycle Manager policy and restore, the instance attaching its own volume (the
 Prometheus support on EC2 and the metrics it sends; the Systems Manager document, the
 `ssm:resourceTag` condition on the deploy role, and the workflow as a whole; the systemd
 sandboxing with a Lanes executable (`MemoryDenyWriteExecute`, `RestrictAddressFamilies` and the
-rest, run as `lanes`); RDS with the Lanes PostgreSQL client; and the prices.
+rest, run as `lanes`); RDS with the Lanes PostgreSQL client; shipping the journal to a real S3, and the backup
+bucket's policy (the shipper and restores are checked against the test kit's fake S3 and
+against moto: `Tests/Ship.lean`, `Tests/Oracle/Service/S3Backup.lean`); and the prices.

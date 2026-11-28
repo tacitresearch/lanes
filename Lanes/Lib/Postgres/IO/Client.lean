@@ -42,8 +42,8 @@ namespace Lanes.Postgres
 open Std Std.Async
 
 structure Client.Config where
-  /-- An IPv4 or IPv6 address, or a name, resolved at each connect to its first IPv4 address
-  (`Address.of`). -/
+  /-- An IPv4 or IPv6 address, or a name, resolved at each connect to its first IPv4 address,
+  or its first IPv6 address if it has none (`Address.of`, `Address.preferred`). -/
   host : String
   port : UInt16 := 5432
   conn : Conn.Config
@@ -53,7 +53,8 @@ structure Client.Config where
   sslmode : SslMode := SslMode.defaultFor host
   /-- The authorities the server's certificate must chain to: for RDS, its bundle. -/
   trust : Tls.Trust := .system
-  /-- The name the certificate must be for, and the one sent as SNI: `host` if none. -/
+  /-- The name the certificate must be for, and the one sent as SNI: `host` if none. An IP
+  address is checked as an address, and sent as no SNI, which RFC 6066 leaves to names. -/
   serverName : Option String := none
   /-- PostgreSQL 17's direct TLS: the handshake at once, with ALPN, without `SSLRequest`. -/
   direct : Bool := false
@@ -214,16 +215,16 @@ def socketAddress (a : Ip.Addr) (port : UInt16) : Option Std.Net.SocketAddress :
     | [a, b, c, d, e, f, g, h] => some (.v6 ⟨.ofParts a b c d e f g h, port⟩)
     | _ => none
 
-/-- Where `host` is now: a name is resolved at each call, to its first IPv4 address, so that a
-new connection follows it to a new address. -/
+/-- Where `host` is now: a name is resolved at each call, to the address `Address.preferred`
+picks, so that a new connection follows it to a new address. -/
 def resolve (host : String) (port : UInt16) : Async (Option Std.Net.SocketAddress) := do
   match Address.of host with
   | .ip a => return socketAddress a port
   | .name name =>
-    let found ← DNS.getAddrInfo name "" (some .ipv4)
-    return found.toList.findSome? fun
-      | .v4 addr => some (.v4 ⟨addr, port⟩)
-      | .v6 _ => none
+    let found ← DNS.getAddrInfo name ""
+    return (Address.preferred (· matches .v4 _) found.toList).map fun
+      | .v4 addr => .v4 ⟨addr, port⟩
+      | .v6 addr => .v6 ⟨addr, port⟩
 
 /-- Connect and authenticate: a session open for requests, or why it closed. The host is
 resolved again at each call. -/

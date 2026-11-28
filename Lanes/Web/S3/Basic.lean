@@ -93,7 +93,11 @@ def Manifest.xml (m : Manifest) : String :=
     ++ "</CompleteMultipartUpload>"
 
 inductive Op where
+  /-- With `ifAbsent`, a conditional write (`If-None-Match: *`): S3 writes only if no object is
+  at `key`, and otherwise refuses with `412`, writing nothing. A put that may be handed over
+  again after a restart, and must not overwrite what came after it, is made so. -/
   | put (key : Key) (body : ByteArray) (contentType : Option String := none)
+    (ifAbsent : Bool := false)
   | get (key : Key) (range : Option Range := none)
   | head (key : Key)
   | delete (key : Key)
@@ -142,14 +146,16 @@ def query : Op → List (String × String)
   | _ => []
 
 def headers : Op → List (String × String)
-  | .put _ _ (some contentType) | .createUpload _ (some contentType) =>
-    [("content-type", contentType)]
+  | .put _ _ contentType ifAbsent =>
+    (contentType.map (("content-type", ·))).toList
+      ++ if ifAbsent then [("if-none-match", "*")] else []
+  | .createUpload _ (some contentType) => [("content-type", contentType)]
   | .get _ (some range) => [("range", range.header)]
   | .completeUpload .. => [("content-type", "application/xml")]
   | _ => []
 
 def body : Op → ByteArray
-  | .put _ body _ | .uploadPart _ _ _ body => body
+  | .put _ body .. | .uploadPart _ _ _ body => body
   | .completeUpload _ _ parts => parts.xml.toUTF8
   | _ => .empty
 
@@ -327,7 +333,7 @@ def interpret (op : Op) (r : Response) : Answer :=
 /-- The request `op` is in `Lanes.Outside.ObjectStore`'s model, for the operations it has: a
 ranged get and a listing are not in it. -/
 def Op.modelled : Op → Option (ObjectStore.Request String ByteArray)
-  | .put key body _ => some (.put key.val body)
+  | .put key body .. => some (.put key.val body)
   | .get key none => some (.get key.val)
   | .head key => some (.head key.val)
   | .delete key => some (.delete key.val)

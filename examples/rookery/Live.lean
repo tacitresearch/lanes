@@ -138,6 +138,7 @@ def run (dir : System.FilePath) : IO (List Bool) := do
   let annStill ← get bob "/timeline"
   let more ← api .post "/api/post" token "{\"text\": \"boop\", \"seq\": 3}"
   let limited ← api .post "/api/post" token "{\"text\": \"one too many\", \"seq\": 4}"
+  let reused ← api .post "/api/post" token "{\"text\": \"another\", \"seq\": 4}"
   let stale ← api .post "/api/post" token "{\"text\": \"old\", \"seq\": 2}"
   let forged ← api .get "/api/timeline" (String.ofList (token.toList.set 0
     (if token.front == 'f' then 'e' else 'f')))
@@ -176,6 +177,7 @@ def run (dir : System.FilePath) : IO (List Bool) := do
     check "bob cannot delete ann's post" (notHers.status == 404 && ids annStill == [2, 1]),
     check "the rate limit holds: two posts a window, the third refused"
       (more.status == 201 && limited.status == 429),
+    check "a seq used for another post is refused" (reused.status == 422),
     check "an older seq is stale" (stale.status == 409),
     check "a token that does not verify is refused" (forged.status == 401),
     check "a form without its token is refused" (noToken.status == 403),

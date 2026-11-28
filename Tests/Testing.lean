@@ -88,7 +88,20 @@ def formTests : List (String × Bool) :=
       (posted (formRaw (set "key" "up/b") clip)).2.1 == "AccessDenied"
         && (posted (formRaw (set "Content-Type" "text/html") clip)).2.1 == "AccessDenied"
         && (posted (formRaw (("acl", "public-read") :: form.fields) clip)).2.1 == "AccessDenied"
-        && (posted (formRaw form.fields clip) (at_.toUnix + 600)).2.1 == "AccessDenied") ]
+        && (posted (formRaw form.fields clip) (at_.toUnix + 600)).2.1 == "AccessDenied"),
+    ("kit s3: a form's success_action_redirect and success_action_status are signed and obeyed",
+      let reply (p : S3.Post.Policy) :=
+        (String.fromUTF8? (S3.serveAll creds "test" "us-east-1" (at_.toUnix + 1) {}
+          (formRaw (S3.Post.form bucket creds at_ p).fields clip)).1).getD ""
+      let sent := reply { policy with successActionRedirect := some "https://app.example/done?x=1"
+                                      successActionStatus := some .created }
+      let created := reply { policy with successActionStatus := some .created }
+      sent.startsWith "HTTP/1.1 303 S3\r\nLocation: https://app.example/done?x=1&bucket=test&key=up%2Fa&etag="
+        && created.startsWith "HTTP/1.1 201 S3"
+        && (created.splitOn "<Key>up/a</Key>").length == 2
+        && (reply { policy with successActionStatus := some .ok }).startsWith "HTTP/1.1 200 S3"
+        && (posted (formRaw (("success_action_status", "201") :: form.fields) clip)).2.1
+          == "AccessDenied") ]
 
 def browserTests : List (String × Bool) :=
   [ ("kit browser: a set-cookie keeps its name, value and path, and Max-Age=0 clears",

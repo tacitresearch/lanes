@@ -229,7 +229,10 @@ def origin (url : String) : Option (Client.Scheme × String × UInt16) :=
   (Client.Call.at url { method := .get, path := [] }).map fun c => (c.scheme, c.host, c.port)
 
 def tests : List (String × Bool) :=
-  [ ("tls: an https origin is called on 443, an http one on 80, unless a port is given",
+  [ ("tls: an IPv4 or IPv6 address is checked as one and sent as no SNI, a name is sent",
+      ["127.0.0.1", "10.0.0.5", "::1", "2001:db8::5", "::ffff:10.0.0.5"].all Tls.isAddress
+        && !(["db.example.com", "localhost", "10.0.0", "[::1]", ""].any Tls.isAddress)),
+    ("tls: an https origin is called on 443, an http one on 80, unless a port is given",
       origin "https://api.example.com" == some (.https, "api.example.com", 443)
         && origin "https://api.example.com/" == some (.https, "api.example.com", 443)
         && origin "http://10.0.0.1" == some (.http, "10.0.0.1", 80)

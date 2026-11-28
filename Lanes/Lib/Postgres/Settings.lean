@@ -54,6 +54,31 @@ def of (host : String) : Address :=
     if host.toLower == "localhost" || host.toLower == "localhost." then .ip localhost
     else .name host
 
+/-- Which of the addresses DNS gives a name, in its order, a connection goes to: the first IPv4
+one, or the first IPv6 one when the name has none. `isV4` says which is which. -/
+def preferred {α : Type} (isV4 : α → Bool) (found : List α) : Option α :=
+  found.find? isV4 <|> found.head?
+
+theorem preferred_spec {α : Type} {isV4 : α → Bool} {found : List α} {a : α}
+    (h : preferred isV4 found = some a) :
+    a ∈ found ∧ (isV4 a = true ∨ ∀ b ∈ found, isV4 b = false) := by
+  unfold preferred at h
+  cases hf : found.find? isV4 with
+  | some b =>
+    rw [hf] at h
+    cases h
+    exact ⟨List.mem_of_find?_eq_some hf, .inl (List.find?_some hf)⟩
+  | none =>
+    rw [hf] at h
+    refine ⟨List.mem_of_head? h, .inr fun b hb => ?_⟩
+    simpa using List.find?_eq_none.mp hf b hb
+
+theorem preferred_isSome {α : Type} (isV4 : α → Bool) {found : List α} (h : found ≠ []) :
+    (preferred isV4 found).isSome := by
+  cases found with
+  | nil => exact absurd rfl h
+  | cons a rest => cases hf : (a :: rest).find? isV4 <;> simp [preferred, hf]
+
 /-- An address on this machine (`Ip.Addr.isLoopback`). A name never is. -/
 def loopback : Address → Bool
   | .ip a => a.isLoopback

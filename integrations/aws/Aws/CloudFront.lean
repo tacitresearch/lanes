@@ -133,10 +133,13 @@ def link (url : Resource) (fields : List (String × String)) : String :=
   url.val ++ (if url.val.contains '?' then "&" else "?")
     ++ "&".intercalate (fields.map fun (k, v) => k ++ "=" ++ v)
 
-/-- The cookies of `fields`, for `path`. They are sent only to the host that set them, since a
-`Cookie` has no `Domain`: the site and CloudFront must be one host, the site behind CloudFront. -/
-def cookies (fields : List (String × String)) (path : String := "/") : List Cookie :=
-  fields.map fun (k, v) => { name := "CloudFront-" ++ k, value := v, path }
+/-- The cookies of `fields`, for `path`. Without a `domain` they are sent only to the host that
+set them, so the site and CloudFront must be one host, the site behind CloudFront; with one, to
+every host under it, so a site on `www.example.com` can set them for `example.com` and a
+distribution on `cdn.example.com`. -/
+def cookies (fields : List (String × String)) (path : String := "/")
+    (domain : Option String := none) : List Cookie :=
+  fields.map fun (k, v) => { name := "CloudFront-" ++ k, value := v, path, domain }
 
 /-- A private key, the ID of its public half in CloudFront, and the hash to sign over. -/
 structure Signer where
@@ -168,8 +171,8 @@ def Signer.url (s : Signer) (url : Resource) (g : Grant) : Except String String 
   return link url (← s.fields url g)
 
 /-- The cookies that grant `g`, for `url` if it is canned. -/
-def Signer.cookies (s : Signer) (url : Resource) (g : Grant) (path : String := "/") :
-    Except String (List Cookie) :=
-  return CloudFront.cookies (← s.fields url g) path
+def Signer.cookies (s : Signer) (url : Resource) (g : Grant) (path : String := "/")
+    (domain : Option String := none) : Except String (List Cookie) :=
+  return CloudFront.cookies (← s.fields url g) path domain
 
 end Aws.CloudFront

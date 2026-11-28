@@ -46,15 +46,28 @@ private def runGit (dir : System.FilePath) (args : List String) : IO (Option Str
   let text := out.stdout.trimAscii.toString
   return if text.isEmpty then none else some text
 
+/-- What to warn of when the pinned commit is on no branch of a remote, or the checkout has
+changes not committed: an app made so may not build anywhere else, or may build against other
+code than this `lanes` was built from. -/
+def warnings (commit : String) (onRemote dirty : Bool) : List String :=
+  (if onRemote then [] else
+    [s!"the commit pinned, {commit}, is on no branch of a remote, so the app builds only where \
+      that commit is; push it, or give --rev"])
+  ++ (if dirty then
+    ["the checkout of Lanes has changes not committed, which the app does not get: it builds \
+      against the commit pinned"] else [])
+
 /-- What `pinned` gives for the checkout this executable was built in
-(`<checkout>/.lake/build/bin/lanes`), or `none` if git cannot say. -/
-def ofCheckout : IO (Option Source) := do
+(`<checkout>/.lake/build/bin/lanes`), and what to warn of, or `none` if git cannot say. -/
+def ofCheckout : IO (Option (Source × List String)) := do
   let some dir := (← IO.appPath).parent >>= (·.parent) >>= (·.parent) >>= (·.parent)
     | return none
   let some commit ← runGit dir ["rev-parse", "HEAD"] | return none
   let tag? ← runGit dir ["describe", "--tags", "--exact-match", "--match", "v*", "HEAD"]
   let released := (← runGit dir ["tag", "--list", "v*"]).isSome
-  return some (pinned tag? commit released)
+  let onRemote := (← runGit dir ["branch", "--remotes", "--contains", "HEAD"]).isSome
+  let dirty := (← runGit dir ["status", "--porcelain", "--untracked-files=no"]).isSome
+  return some (pinned tag? commit released, warnings commit onRemote dirty)
 
 /-- `my-app` becomes `MyApp`: the Lean module name of an application. -/
 def moduleName (name : String) : String :=

@@ -38,7 +38,7 @@ proved function tells it to.
 | Web | `Lanes/Web/Http/{Basic,Route,RouteSound,Cookie,CookieSound}.lean`, `Lanes/Web/Html/`, `Lanes/Web/Auth/` | `Html.lex_render`, `Html.safeUrl_scheme`, `Http.dispatch_link`, `Http.parseForm_encodeForm`, `Http.readSetCookie_header`, `Auth.verify_eq_some`, `Auth.checkForm_other` |
 | The checker | `Lanes/Check/`, `Lanes/Semantics/{Monitor,MonitorSound}.lean` | `Check.search_sound`, `Check.system_sound_of_respects`, `Check.refines_traces` |
 | The proof layer | `Lanes/Semantics/` | refinement, specs, fairness, leads-to |
-| Data and the standard library | `Lanes/Data/`, `Lanes/Lib/` | codec laws, `Quorum.majority_inter`, `Bytes.same_iff`, `Json.parse_iff`, `Url.parse_print` |
+| Data and the standard library | `Lanes/Data/`, `Lanes/Lib/` | codec laws, the body of a value read back as written and written one way (`Body.read_eq_ok_iff`), old data read by name, with defaults and former names (`Schema.Plan.of_insertIdx`, `Schema.Plan.of_rename`), `Quorum.majority_inter`, `Bytes.same_iff`, `Json.parse_iff`, `Url.parse_print` |
 | Sign-in with OAuth 2.0 and OpenID Connect | `Lanes/Web/Auth/{Jose,IdToken,OAuth}.lean`, `Lanes/Web/IO/SignIn.lean` | `OAuth.check_ok`, `OAuth.Used.accepted_once`, `OAuth.Used.length_claim`, `OAuth.IdToken.verify_accepted`, `Jose.verify_ok`, `OAuth.Keys.no_fetch_within`; the edge is trusted, tested end to end against a provider run in the test |
 | Bound C | `native/lanes.c`, `Lanes/Lib/Crypto/Native.lean`; `native/verify.c`, `Lanes/Lib/Crypto/Verify.lean`; `native/sign.c`, `Lanes/Lib/Crypto/Sign.lean` | trusted; tested against the Lean references and published vectors |
 | TLS client | `native/tls.c`, `Lanes/Web/IO/Tls.lean` | trusted; tested against `openssl s_server` |
@@ -165,6 +165,19 @@ proof that every state an old actor reaches migrates into it; it then holds of e
 every state the new shard reaches (`Migration.inv_exec`, `Kernel.exec_inductive`) and at every
 later start (`Journal.Upgrade.inv_load`). An invariant proved only from boot, and refinement,
 do not carry over.
+
+A journal may also be shipped to an object store as it is written (`Journal.Store.ship`), after
+Litestream: what is written is sealed into segments, by size, by age and at each save, and each
+segment and snapshot is put once, with a conditional write, under a key that names the journal,
+its positions and its SHA-256. Nothing the shard does waits for it. What to seal, what to put
+next, the backoff and what is dropped at the bound are pure (`Lanes/Durable/Ship.lean`), and
+every segment put holds the history's entries at the positions its key names
+(`Journal.Ship.Holds.put`). A restore (`Lanes/Durable/Restore.lean`, `Journal.Store.restore`)
+picks a point, the newest snapshot before it and the segments after it, checks that they join,
+and writes a journal that ends with a `handed` mark and has no id: its start gives the kernel the
+local journal had after that many entries and hands nothing over
+(`Journal.Restore.journal_restores`, from `Journal.resumeIds_eq_recoverIds`), a restored copy
+under D105. The thread that puts is `Lanes/Durable/IO/Ship.lean`, trusted (`TRUSTED.md`).
 
 ## Composition: joins, shards and the transport
 
@@ -347,7 +360,8 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   exactly the conditions and the expiry given (`S3.Post.form_policy`, `S3.Post.expiration_parse`),
   and a file S3 admits under it is within its size range and before its expiry
   (`S3.Post.admitted_bounded`); tested against AWS's documented example and botocore, and its
-  forms posted to moto, which reads them but checks no policy. Large
+  forms posted to moto, which reads them but checks no policy. A form may also name where S3
+  sends the browser after the upload, or the status it answers, both signed in its policy. Large
   objects go in parts (`Lanes/Web/S3/Multipart.lean`): a plan proved to cut a body into at most
   10,000 parts, each but the last of at least 5 MiB, together the body in order
   (`Plan.count_le`, `Plan.range_full`, `Plan.range_next`, `Plan.range_last`); links for a
@@ -371,8 +385,10 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   calls (`Aws.Sqs`: create a queue, send, receive, delete) are data, with no handler.
   CloudFront's signed URLs and cookies (`Aws.CloudFront`) are pure: a canned policy is the
   document AWS gives for the URL and the time (`CloudFront.cannedPolicy_eq`), CloudFront's base64
-  reads back (`CloudFront.decode_encode`) and every cookie is valid (`CloudFront.cookies_valid`);
-  the policy and the link, signature included, are botocore's on generated links.
+  reads back (`CloudFront.decode_encode`) and every cookie is valid, for a path and a domain
+  that need no escaping (`CloudFront.cookies_valid`); a domain lets a distribution on another
+  host of the site's get them. The policy and the link, signature included, are botocore's on
+  generated links.
 - **Sign-in** (`Lanes/Web/IO/SignIn.lean`): the random values of a beginning and the key of the
   tickets, the states used and each provider's keys held in references, and the calls to the token endpoint,
   the JWK Set and a user API; every decision is `Lanes/Web/Auth/OAuth.lean`'s (above).
@@ -599,7 +615,17 @@ One process running `Http.serve` on a journal:
 
 After `kill -9`, a start reads the snapshot and the journal (`Journal.Disk.start`), mends a torn
 last write, and replays what came after the snapshot's mark through the same kernel; outputs that
-were produced and not yet handed over are handed over again (`Journal.recover_handed`). With
+were produced and not yet handed over are handed over again (`Journal.recover_handed`). Each
+output carries an id: its journal's, made at random when the journal is begun, and its origin,
+the place in the history of the entry that produced it and its place among that entry's outputs.
+A batch hands an output over with the origin its history gives it (`Batch.run_ids`), however its
+waves are spread (`Batch.run_ids_spread`), and a restart hands it over again with the same one
+(`Journal.recoverIds_suffix`, `Journal.recoverIds_handed`, from a snapshot
+`Journal.resumeIds_eq_recoverIds`), so a driver passes the id on as the idempotency key: in
+`Idempotency-Key` (`Http.Client.handlerKeyed`), as a conditional write to S3 (`S3.Op.put` with
+`ifAbsent`), or as SES's adapter's own record of what it sent (`Aws.Ses.handlerOnce`). A copy of
+the files restored elsewhere, production into staging, starts with `Journal.Store.restored`: it
+hands over nothing it owes and takes a new journal id. With
 peers (`Http.serveShard`), a message to an actor on another shard leaves as a parcel through the
 courier and enters the other process's inbox as an input.
 
