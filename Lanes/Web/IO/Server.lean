@@ -15,7 +15,7 @@ public import Lanes.Web.IO.Ops
 /-!
 The HTTP server adapter: the IO around the gate and the connections. It accepts connections on
 `Std.Net`, tells each one's `Conn` what happened and does what it answers: it reads the socket
-when the connection wants bytes, puts each request it reads before the gate, hands the shard
+when the connection wants bytes, puts each request it reads before the gate, hands the runtime
 what the gate admits, writes the responses it is given and closes. A request is prepared as the
 bridge says (`Bridge.prepare`) and given an id no other request has before the gate sees it;
 before that, work it needs in IO is done by `arrive`, if it is given, on a task of its own.
@@ -24,9 +24,9 @@ when a client has taken too long and when to close are `Conn.step`'s decisions; 
 are waiting, when one times out and when the system is too busy are the gate's (`Gate.step`).
 Neither is this file's.
 
-The gate is not an actor of the shard (`docs/decisions/D96-runtime-contract.md`): its decisions
+The gate is not an actor of the system (`docs/decisions/D96-runtime-contract.md`): its decisions
 are made here, under the lock of the table of waiting requests, on the thread of the request,
-the shard's answer or the ticker. The shard runs `admitted sys` (`serve`, `serveWith`) or
+the runtime's answer or the ticker. The runtime runs `admitted sys` (`serve`, `serveWith`) or
 `admittedFronted sys`, which also takes inputs that are no request and puts out what is no
 response (`serveFronted`); both are `sys` with no actor that every request goes through. What
 is trusted is that this file does what `Gate.step` returns, as `Lanes/Web/Http/AdmitSound.lean`
@@ -38,7 +38,7 @@ the actors it reads, each between two of its steps (`Runtime.tryPeek`), and is a
 their states off the workers' threads, or `504` at its deadline. It takes an id from the same
 table as every request.
 
-One refusal is made here: `503` when the shard's inbox is full. TLS is not handled: terminate it
+One refusal is made here: `503` when the runtime's inbox is full. TLS is not handled: terminate it
 in a reverse proxy.
 -/
 
@@ -95,7 +95,7 @@ structure ServerConfig where
   /-- The gate's bounds. -/
   gate : GateConfig := {}
   /-- The bounds of the reads, the requests a view answers from the state: how long one waits for
-  the shard's peek before it is answered `504`, and how many may wait at once. -/
+  the runtime's peek before it is answered `504`, and how many may wait at once. -/
   reads : GateConfig := {}
   /-- Metrics, health and the access log, answered and written by the server: all off by
   default (`Lanes/Web/IO/Ops.lean`). -/
@@ -447,9 +447,9 @@ private def ticker {system : System τ} [Hashable τ.Id] (server : Server system
         if t ≤ now then c.tell .alarm
 
 /--
-The server's loop, for any shard behind the gate: `enter` is how a request the gate admitted
+The server's loop, for any runtime behind the gate: `enter` is how a request the gate admitted
 enters `system`, and `onOutput` says of each output whether it is a response, which the gate
-reads (`Gate.step`'s `answer`), or something else to do. A shard that ends on an error takes
+reads (`Gate.step`'s `answer`), or something else to do. A runtime that ends on an error takes
 the server down with it: requests in flight are answered `503`, and `Server.wait` throws.
 
 Which id a request gets, who waits on it and who is answered is `Waiting`, pure and proved: ids
@@ -457,11 +457,11 @@ are handed out in order from 0, never twice in one process. A restart starts the
 too, so no id it holds is from before.
 
 An arrival takes the table's lock once: it is given its id, decoded, and the gate decides
-(`Gate.admit`); an admitted request is handed to the shard under the same lock, so that a refusal
-by the shard's inbox (`503`) leaves the gate's state as it was. `decode` runs under the lock, as
-it ran on the shard's one thread when the gate was an actor; taking it out would cost a second
-lock an arrival. An answer is encoded on the shard's thread and read by the gate
-under the lock (`Gate.receive`); deadlines are looked at by the ticker.
+(`Gate.admit`); an admitted request is handed to the runtime under the same lock, so that a
+refusal by the runtime's inbox (`503`) leaves the gate's state as it was. `decode` runs under the
+lock too, since taking it out would cost an arrival a second lock. An answer is encoded on the
+worker whose step put it out, and read by the gate under the lock (`Gate.receive`); deadlines are
+looked at by the ticker.
 
 A read takes the lock as an arrival does, and its gate admits it (`Gate.admit` over `readSig`);
 the peek is asked under the lock, so that a refusal by the inbox leaves that gate as it was. The
@@ -644,8 +644,8 @@ def serveFronted (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config
   serveOn (admittedFronted sys bridge) bridge config runtimeConfig .inl id onOutput arrive
     fun request => (view request).map View.fronted
 
-/-- Serve `sys` over HTTP: the gate stands before the shard, `bridge` turns requests into
-inputs and outputs into responses, and `sys` runs on one shard (`Runtime`) as `admitted sys`.
+/-- Serve `sys` over HTTP: the gate stands before the runtime, `bridge` turns requests into
+inputs and outputs into responses, and the runtime (`Runtime`) runs `sys` as `admitted sys`.
 Returns once the server is listening. Each request is answered exactly once by the gate.
 `arrive` is work a request needs in IO before it is prepared, done on a task of its own: what it
 returns enters as the request, or is the answer and nothing enters. The sign-in (`SignIn.arrive`) is such work.
@@ -669,7 +669,7 @@ variable {system : System τ} [Hashable τ.Id]
 def port (server : Server system) : Option UInt16 :=
   some server.localPort
 
-/-- Stop accepting connections and stop the shard; requests in flight are answered `503`.
+/-- Stop accepting connections and stop the runtime; requests in flight are answered `503`.
 Returns once every connection has written what it owes and closed. -/
 def stop (server : Server system) : Async Unit := do
   shutDown server
@@ -685,7 +685,7 @@ balancer stops sending it requests before `stop`. -/
 def drain (server : Server system) : BaseIO Unit :=
   server.ops.drain
 
-/-- The requests the shard has taken and the server has not yet answered. -/
+/-- The requests the runtime has taken and the server has not yet answered. -/
 def inFlight (server : Server system) : BaseIO Nat :=
   server.desk.atomically (return (← get).waiting.waiters.size)
 
@@ -693,14 +693,14 @@ def inFlight (server : Server system) : BaseIO Nat :=
 def trace (server : Server system) : BaseIO (Array (Event τ)) :=
   server.runtime.trace
 
-/-- Returns when the server has shut down, and throws if the shard ended on an error, so that a
+/-- Returns when the server has shut down, and throws if the runtime ended on an error, so that a
 `main` that waits here exits with a failure and can be started again. -/
 def wait (server : Server system) : Async Unit := do
   discard <| await server.down.result?
   if let some e ← server.runtime.ended then throw e
 
 /-- Wait as `wait` does, and on SIGTERM or SIGINT stop without dropping the requests in flight:
-readiness answers `503` (`drain`) while the shard's answers to the requests it has taken go out,
+readiness answers `503` (`drain`) while the runtime's answers to the requests it has taken go out,
 for at most `drain_ms`, then `stop`. Returns then, so a `main` that ends here exits with status
 0. A second signal ends the process at once, as the first would without this. `listening` runs
 once the signals are caught. -/
@@ -727,7 +727,7 @@ def stopOnSignal (server : Server system) (drain_ms : Nat) (listening : IO Unit 
   server.stop
 
 /-- Hand the system behind the gate an input that is not a request, such as an adapter's answer.
-`false` if the shard's inbox is full. A request cannot be handed in this way,
+`false` if the runtime's inbox is full. A request cannot be handed in this way,
 so request ids stay the server's. -/
 def tryInput {sys : System σ} [Hashable σ.Id] {bridge : Bridge σ}
     (server : Server (admittedFronted sys bridge)) (x : σ.In) : Async Bool :=

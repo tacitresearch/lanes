@@ -326,10 +326,10 @@ the specification of what `Http.serve` does.
 
 `Http.serve` does not run the gate as an actor, which would make it a serial point for every
 request (`docs/decisions/D96-runtime-contract.md`). It makes the gate's decisions before the
-shard, under the lock of its table of waiting requests, and hands the shard only what the gate
-admitted; the shard runs `Http.admitted sys` (`Lanes/Web/Http/Admit.lean`), which is `sys` with
+runtime, under the lock of its table of waiting requests, and hands the runtime only what the gate
+admitted; the runtime runs `Http.admitted sys` (`Lanes/Web/Http/Admit.lean`), which is `sys` with
 no actor every request goes through. `Http.Front.World` models the server so: the front's state
-beside the shard's. Every run of it is a run of `served sys`, with the same requests arriving and
+beside the runtime's. Every run of it is a run of `served sys`, with the same requests arriving and
 the same answers handed over in the same order (`Http.Front.World.refines`,
 `Lanes/Web/Http/AdmitSound.lean`), so every theorem below holds of the server
 (`Http.Front.World.answered_le_arrived`). Of the front alone: it answers no request more often
@@ -368,8 +368,8 @@ request's own task, so a password or a cookie the bridge turns into what the sys
 reaches the system (D44), takes an id from `Http.Waiting` (pure: each id handed out once, each
 answered at most once and to its own waiter: `Http.Waiting.exec_handed_nodup`,
 `Http.Waiting.exec_answered`), puts it before the gate and hands what the gate admits to the
-shard. The gate decides under the same lock that hands out the id (`Gate.admit`), so a `503`
-from a full inbox leaves the gate's state as it was; it reads the shard's outputs
+runtime. The gate decides under the same lock that hands out the id (`Gate.admit`), so a `503`
+from a full inbox leaves the gate's state as it was; it reads the runtime's outputs
 (`Gate.receive`), and the server's ticker hands it each deadline that passes, which it answers
 `504` (`docs/decisions/D106-gate-before-shard.md`). It answers
 `503` itself when the inbox is full and `501` for a method it does not know (#171). With `ServerConfig.ioThreads`
@@ -406,14 +406,14 @@ operators', none with nothing configured (`Http.Ops.route?_default`), that the m
 answered only to a peer on a loopback address unless the configuration lets others in, however
 its path is written (`Http.Ops.route?_metrics`), while liveness and readiness answer every peer
 (`Http.Ops.route?_peer`), that readiness answers
-`200` exactly when the shard has booted and the server is not stopping or draining
+`200` exactly when the runtime has booted and the server is not stopping or draining
 (`Http.Ops.answer_ready`), and what a log line holds, the JSON text of its record
 (`Http.Ops.Access.parse_line`). `Lanes/Web/IO/Ops.lean` answers an operator's request before it
-is prepared or has an id, so it never reaches the shard, and passes every other request on as it
+is prepared or has an id, so it never reaches the runtime, and passes every other request on as it
 came. So the same inputs enter the system with all of it on as off, which is trusted and tested
 (`Tests/Ops.lean`). `Server.stopOnSignal`
 is a stop that drops nothing in flight: at SIGTERM or SIGINT readiness answers `503`, the
-requests the shard has taken are answered until none is left or a deadline passes, and then the
+requests the runtime has taken are answered until none is left or a deadline passes, and then the
 server stops; trusted and tested with a child process.
 
 Where: `Lanes/Web/` (`Http/`, `IO/Server.lean`), `Lanes/Semantics/Front.lean`.
@@ -437,8 +437,8 @@ Also:
 
 - Proved of `fronted sys` by projection from the gate alone, for every `sys`: at most once per arrival where the link from outside to the gate does not duplicate (`Http.fronted_answered_le_arrived`, from `Http.Gate.answered_le_handled`) and deadlines stay armed (`Http.fronted_deadlines_armed`); and in every fair run in which the gate does not crash a request the gate has admitted is answered (`Http.fronted_pending_leaves`, `Http.fronted_pending_answered`, from `Http.Gate.pending_leaves` and `Http.Gate.pending_answered` of the gate alone, through the hidden inputs and outputs and the join); model-checked with the properties checked of `served`, and the premises of the leads-to rule on the gate alone with the link a join gives it from outside.
 - Proved of `served sys` for every system, bridge and configuration: an arrival is answered at most once in any environment whose link from outside to the gate does not duplicate (`Http.served_answered_le_arrived`, `Http.kernel_served_answered_le_arrived`, with crashes, loss, reordering and duplication elsewhere allowed), a waiting request keeps its deadline armed (`Http.served_deadlines_armed`), and in every fair run in which the gate does not crash a request the gate has admitted is answered, by the system or with `504` (`Http.served_pending_leaves`, `Http.served_pending_answered`). These are the theorems of `fronted sys` carried through its hidden inputs and outputs.
-- The server prepares each request as its bridge says (`Bridge.prepare`, pure) on the request's own task before it enters the shard, so a password or a cookie a bridge takes out never enters the system and slow work is not done on the shard's thread (`docs/decisions/D44-request-prepared-before-journal.md`).
-- For its operators, each off by default (`ServerConfig.ops`, `docs/decisions/D69-observability.md`): a metrics page in the Prometheus text format (requests by method and status class, latency, connections open and refused, requests in flight, the inbox), liveness, readiness that answers `200` exactly when the shard has booted and the server is not stopping or draining (`Http.Ops.answer_ready`, `Server.drain`), request ids taken from a client only when bounded and plain (`Http.Ops.RequestId.accept?_eq_some`), and a JSON access log whose lines are the JSON text of their records (`Http.Ops.Access.parse_line`) and hold no query, header or body; none of it reaches a system, which is trusted and tested: the same inputs enter the system with all of it on as off.
+- The server prepares each request as its bridge says (`Bridge.prepare`, pure) on the request's own task before it enters the runtime, so a password or a cookie a bridge takes out never enters the system and slow work is not done in a step (`docs/decisions/D44-request-prepared-before-journal.md`).
+- For its operators, each off by default (`ServerConfig.ops`, `docs/decisions/D69-observability.md`): a metrics page in the Prometheus text format (requests by method and status class, latency, connections open and refused, requests in flight, the inbox), liveness, readiness that answers `200` exactly when the runtime has booted and the server is not stopping or draining (`Http.Ops.answer_ready`, `Server.drain`), request ids taken from a client only when bounded and plain (`Http.Ops.RequestId.accept?_eq_some`), and a JSON access log whose lines are the JSON text of their records (`Http.Ops.Access.parse_line`) and hold no query, header or body; none of it reaches a system, which is trusted and tested: the same inputs enter the system with all of it on as off.
 - The server reads and writes HTTP/1.1 itself on `Std.Net`, with no `Std.Http`: each connection is `Http.Conn.step`, pure, model-checked against a client that sends in any pieces, pipelines and leaves, and proved to write responses in the order requests were read, each once (`Http.Conn.run_writes`), to hand on only requests the strict reader reads (`Http.Conn.step_submit_read`), to keep its buffer within `message_max` and its requests in flight within `inflight_max` (`Http.Conn.run_buffer`, `run_slots`), to take nothing once closed or no longer reading (`Http.Conn.step_closed`, `step_notReading`, `step_reading`), to stop reading at a deadline (`Http.Conn.step_tick`) and to write what the client's reader reads back (`Http.Conn.read_encode`), with `100 Continue`, keep-alive, pipelining, deadlines for a slow head or body and a bound on connections (`docs/decisions/D57-the-server-runs-its-own-connections.md`).
 - The strict reader of requests (`Http.Request.read`, `docs/decisions/D49-the-server-reads-requests-by-a-strict-profile.md`) is proved final once it answers (`Http.Request.read_append`), to wait only within its limits and answer within them (`Http.Request.read_more`, `read_done`), to read back what `Request.wire` writes wherever it starts and whatever follows, at its last byte and not before (`read_wire`, `read_wire_extract`), and to refuse a length beside a coding, two lengths, a blank before a colon, obs-fold, a bare CR or LF and a malformed chunk size for every head of those shapes (`read_lengthAndCoding`, `read_twoLengths`, `read_blankInName`, `read_fold`, `read_bareCR`, `read_bareLF`, `read_badChunkSize`); its other refusals, and its verdicts against Go's, Node's and h11's parsers on a corpus, are tested (`oracles/go/requests/requests.py`: stricter or alike on every case).
 - The HTTP server passes against the gate's assumption.

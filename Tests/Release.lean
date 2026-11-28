@@ -11,7 +11,7 @@ kernel that releases them is driven side by side with one that keeps every actor
 through every sequence of operations up to a bound: both hand over the same outputs, report the
 same events but for starts, and hold the same actors in the same states. Under a shell that does
 anything, the releasing kernel is checked against the semantics instead. Then at scale, on the
-kernel alone and on a live shard: a hundred thousand identities are touched and the kernel stays
+kernel alone and on a live runtime: a hundred thousand identities are touched and the kernel stays
 small.
 -/
 
@@ -212,16 +212,16 @@ def churned (release : Bool) (count : Nat) : Kernel (churn Nat release) × Nat :
     let (k, outs) := touch k n
     (k, zeros + outs.countP (· == (n, 0)))
 
-/-- How many actors a live shard holds: those a peek at every actor finds started. -/
+/-- How many actors a live runtime holds: those a peek at every actor finds started. -/
 def held {release : Bool} (rt : Runtime (churn Nat release)) : Async Nat := do
   let reply : IO.Promise (Option Nat) ← IO.Promise.new
   discard <| rt.tryPeek [] (fun p => reply.resolve (p.map (·.others.length))) (every := fun _ => true)
   return ((← await reply.result?).join).getD 0
 
-/-- A live shard on which `touched` identities are touched once each: how many actors it holds
+/-- A live runtime on which `touched` identities are touched once each: how many actors it holds
 then, how many outputs said zero, and what was handed over afterwards, when an identity touched
 before is touched again and one never touched is touched. The handler counts rather than keeps:
-it runs on the shard's thread, and an array two threads can see is copied on every push. -/
+it runs on the workers' threads, and an array two threads can see is copied on every push. -/
 def live (release : Bool) (touched : Nat) : Async (Nat × Nat × List (Nat × Nat)) := do
   let zeros ← IO.mkRef 0
   let after ← IO.mkRef false
@@ -264,10 +264,10 @@ def tests : List (String × Bool) :=
 def liveTests : Async (List (String × Bool)) := do
   let (actors, count, after) ← live true strangers
   let (keptActors, _, _) ← live false (strangers / 5)
-  IO.eprintln s!"release: {strangers} identities touched; the shard holds {actors} actors, {keptActors} of {strangers / 5} without release"
-  return [("release: a live shard touched by a hundred thousand identities stays small",
+  IO.eprintln s!"release: {strangers} identities touched; the runtime holds {actors} actors, {keptActors} of {strangers / 5} without release"
+  return [("release: a live runtime touched by a hundred thousand identities stays small",
       count == strangers && actors ≤ 1 && keptActors ≥ strangers / 10),
-    ("release: on a live shard a released actor touched again is as new",
+    ("release: on a live runtime a released actor touched again is as new",
       after.filter (·.1 == 7) == [(7, 5), (7, 0)] && after.length == 3
         && after.contains (strangers + 1, 0))]
 

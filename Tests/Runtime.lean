@@ -267,7 +267,7 @@ def timerTest : Async (List (String × Bool)) := do
   rt.stop
   return results
 
-/-- The shard is held inside the output handler, so what the inbox does is not a matter of
+/-- The actor is held inside the output handler, so what the inbox does is not a matter of
 timing: it takes `inboxCapacity` inputs and refuses the next. -/
 def backPressureTest : Async (List (String × Bool)) := do
   let entered ← IO.Promise.new
@@ -337,7 +337,7 @@ def outputsTest : Async (List (String × Bool)) := do
   return [("outputs: every output is handed over once, in order, boot's included",
     (← outputs.get) == #[99, 10, 11, 12, 20, 21, 22])]
 
-/-! A shard that always has work must still stop. -/
+/-! A runtime that always has work must still stop. -/
 
 abbrev pingSig : Signature where
   Id := Bool
@@ -355,14 +355,14 @@ def busyStopTest : Async (List (String × Bool)) := do
   rt.input ()
   Async.sleep 20
   rt.stop
-  return [("stop: a shard that never runs out of work still ends",
+  return [("stop: a runtime that never runs out of work still ends",
     (← throws (rt.input ())) && !(← rt.tryInput ()))]
 
 def soon {α : Type} (ms : Nat) (action : Async α) : Async (Option α) :=
   Async.race (some <$> action) (do Async.sleep (.ofNat ms); return none)
 
 /-- Commands handed over before `stop` are finished by it, an inbox configured with no room
-still takes one input at a time, and a handler that throws does not end the shard. -/
+still takes one input at a time, and a handler that throws does not end the runtime. -/
 def dutiesTest : Async (List (String × Bool)) := do
   let entered ← IO.Promise.new
   let release ← IO.Promise.new
@@ -400,7 +400,7 @@ def dutiesTest : Async (List (String × Bool)) := do
     ("stop: commands handed over before it are finished", ended.isSome
       && (← outputs.get) == #[0, 1, 2, 3, 4, 5]),
     ("inbox: a capacity of zero still takes an input", taken.isSome),
-    ("outputs: a handler that throws does not end the shard, and is not called again for that "
+    ("outputs: a handler that throws does not end the runtime, and is not called again for that "
       ++ "output", alive == some true && (← seen.get) == #[1, 3]) ]
 
 /-! A hub fans each input out to some of 16 actors, whose steps cost a number of rounds of

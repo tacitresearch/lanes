@@ -177,11 +177,6 @@ variable {σ : Signature}
 /-- Every link reliable and no actor crashing: one process that does not fail. -/
 def reliable : EnvModel σ := {}
 
-/-- Messages between actors may be lost, reordered and duplicated (`Link.network`); inputs
-arrive reliably, and no actor crashes. -/
-def distributed : EnvModel σ where
-  link src _ := if src.isSome then Link.network else Link.reliable
-
 /-- One process that may restart (`mayRestart`), and does nothing else wrong: no link loses
 or duplicates, and no actor crashes on its own. Properties stated under it hold across
 restarts. -/

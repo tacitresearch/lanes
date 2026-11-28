@@ -91,7 +91,7 @@ def failures (json : Bool) (results : List (String × Bool)) : IO Unit := do
 `args`, every result is printed as JSON (`Testing.report`). -/
 def report (args : List String) (results : List (String × Bool)) (shown : Nat := 0) :
     IO UInt32 := do
-  let results := results ++ [("no shard is left running when the tests end",
+  let results := results ++ [("no runtime is left running when the tests end",
     (← Lanes.Runtime.running) == 0)]
   let code ← Lanes.Testing.report args (Lanes.Testing.Result.tests results)
     (if Lanes.Testing.wantsJson args then 0 else shown) (passes := false)

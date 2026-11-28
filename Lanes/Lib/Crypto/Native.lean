@@ -69,7 +69,7 @@ def Argon2id.derive (cost : Argon2id) (lanes : UInt32) (password salt secret ad 
 
 /-- The 32-byte Argon2id hash of `password` with a 16-byte salt, in one lane and with no secret,
 as libsodium's `crypto_pwhash` computes it. It is slow by design: run it where a request
-arrives, not in a shard. The process ends if the memory cannot be had. -/
+arrives, not in a step. The process ends if the memory cannot be had. -/
 def Argon2id.hash (cost : Argon2id) (password salt : ByteArray) (h : salt.size = 16) : ByteArray :=
   cost.derive 1 password salt .empty .empty (by omega) cost.oneLane
 

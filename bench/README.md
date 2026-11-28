@@ -113,8 +113,8 @@ reasons, two of them in Lean's runtime.
 
 1. **A thread waiting on a task wakes whenever any task ends.** The task manager ends each task
    with `notify_all` on one condition (`task_manager::resolve_core`), on which every thread in
-   `IO.wait`, `Task.get` or `Async.block` sleeps. A `main` in `server.wait.block`, the shard
-   waiting for input, and the shard handing outputs over (`.block`, which also starts a task)
+   `IO.wait`, `Task.get` or `Async.block` sleeps. A `main` in `server.wait.block`, the runtime
+   waiting for input, and the runtime handing outputs over (`.block`, which also starts a task)
    were such threads. They now park on a condition of their own (`Lanes/Runtime/IO/Park.lean`,
    `Lanes.block` for a `main`). Alone it is `tcp` against `tcp-park`: 97 → 75 µs a request at
    one connection, 2.9 → 1.7 context switches at 16; for `lanes` at 64 connections it took 321
@@ -133,16 +133,16 @@ reasons, two of them in Lean's runtime.
 
 After, at 16 connections, `perf` puts about 40% of the server's CPU in the kernel (a third of
 it switching threads, the rest the loopback TCP), 20% in allocating and freeing, 20% in the
-shard (`Batch.run` and the kernel, about 11 µs a request), 11% in reading the request
+runtime (`Batch.run` and the kernel, about 11 µs a request), 11% in reading the request
 (`Request.read`) and the rest in libuv's calls. `lanes` is now where `tcp` is at 32 workers;
 causes 2 and 3 cannot be removed from our side.
 
 A loop of our own in C would: epoll on each core, non-blocking sockets, `Conn.step` called
-through `@[export]`, answers from the shard through an eventfd. That is about 500 lines of
+through `@[export]`, answers from the runtime through an eventfd. That is about 500 lines of
 trusted C and 60 of bindings in place of `Lanes/Web/IO/Server.lean`'s 470, and it would take away the
-handshakes and the hop on each read, leaving a read, a write and a wakeup of the shard a
+handshakes and the hop on each read, leaving a read, a write and a wakeup of the runtime a
 request. What it can save here is the scheduling and libuv's share, perhaps half the CPU; the
-allocation, the parsing and the shard stay. It is not written: the evidence is that Lean's own
+allocation, the parsing and the runtime stay. It is not written: the evidence is that Lean's own
 work is now as large as the cost of crossing threads.
 
 ## Parallel actors and IO threads
@@ -164,12 +164,12 @@ the other 2, `IO_THREADS=2 WORKERS=2`, three runs of 5 s, other agents building 
 | `lanes-heavy` | 1 / 16 / 64 | 5,449 / 21,159 / 23,734 | 167 / 75 / 66 |
 | `lanes-heavy-par` | 1 / 16 / 64 | 5,466 / 15,509 / 18,150 | 170 / 102 / 88 |
 
-On two server CPUs both switches cost CPU and gain nothing: libuv's thread, the shard's and the
+On two server CPUs both switches cost CPU and gain nothing: libuv's thread, the runtime's and the
 connections already fill the two cores (1.3 to 1.6 cores used), so there is no idle core for a
 lane or a worker, and the load generator on two cores is the limit. With the server on three
 CPUs and the load on one, the load generator is the limit (about 1.6 cores of the server used).
 What the warm machine has to show is whether, with cores to spare, `lanes-io` lowers the CPU a
-request and `lanes-heavy-par` raises the rate past `lanes-heavy`, whose shard thread is then the
+request and `lanes-heavy-par` raises the rate past `lanes-heavy`, whose runtime thread is then the
 limit (about 20 µs of step and 11 of kernel and gate a request, so about 30,000 a second).
 
 Those rows measured waves, which the free-running scheduler replaced
@@ -210,9 +210,10 @@ Requests a second:
 | `go` (Go `net/http`) | 29,870 | 125,809 | 137,938 | up to 12.8 cores |
 | `lanes` | 11,395 | 34,516 | 37,098 | 3.2 cores, 85–101 µs a request |
 
-At 64 connections Lanes answers about a quarter of what Go does (3.7×). `lanes` is one actor on
-one shard, and a shard is one thread, so the application's logic uses one core whatever the
-number of connections; the IO path and running actors in parallel are the next steps.
+At 64 connections Lanes answers about a quarter of what Go does (3.7×). `lanes` is one actor,
+and an actor runs on one thread at a time, so the application's logic uses one core whatever the
+number of connections. The run is from before the free-running scheduler
+(`docs/decisions/D116-free-running.md`).
 
 ### Parallel actors and IO threads on the warm machine (2026-11-27, commit baec29b81c11)
 
@@ -232,5 +233,5 @@ CPUs). Requests a second at 1 / 16 / 64 connections, CPU µs a request at 64.
 | `lanes-heavy-par` | 7,351 / 28,670 / 31,921 | 147 |
 
 IO threads gain 21–30% and cut CPU a request by a quarter. Parallel actors gain 40–56% when each
-step does real work (`heavy`) and cost about 10% when steps are trivial (`many`), so `workers`
-stays 1 by default until the shell chooses it from its own timing.
+step does real work (`heavy`) and cost about 10% when steps are trivial (`many`). These were waves too; the free-running scheduler
+runs on the machine's hardware threads by default (`Runtime.Config.workers`).
