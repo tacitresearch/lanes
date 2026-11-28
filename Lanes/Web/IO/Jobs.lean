@@ -4,22 +4,20 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Behaviours.Jobs.IO.Pool
 public import Lanes.Web.IO.Client
 
 /-!
-A worker of the jobs pool (`Lanes/Behaviours/Jobs/IO/Pool.lean`) that calls another service
-through the HTTP client (`Jobs.call`). It sends the job's key with every attempt, so the service
-can tell a retry from a new request.
+An attempt of a job whose work is a call to another service, through the HTTP client, for the
+worker of a jobs table (`Postgres.Typed.Worker.start`): the job's id goes in the header `header`,
+the same for every attempt of the job, so that the service can tell a repeat from a new request
+and take it once.
 -/
 
 public section
 
-namespace Lanes.Jobs
+namespace Lanes.Db.Jobs
 
 open Std Std.Async
-
-variable {K : Type}
 
 /-- The call with `name: value` among its headers, in place of any header of that name. -/
 def withHeader (name value : String) (call : Http.Client.Call) : Http.Client.Call :=
@@ -27,11 +25,11 @@ def withHeader (name value : String) (call : Http.Client.Call) : Http.Client.Cal
       headers := (name, value) :: call.request.headers.filter
         fun (n, _) => n.toLower != name.toLower } }
 
-/-- A worker that makes the call through the HTTP client, with the job's key in the header
-`header`, the same for every attempt of the job. -/
-def call (config : Http.Client.Config) (keyText : K → String)
-    (header : String := "Idempotency-Key") : K → Nat → Http.Client.Call →
-      Async (Option Http.Response) :=
-  fun key _ job => Http.Client.exchange (withHeader header (keyText key) job) config
+/-- Make the call under the job's id, cut off at the attempt's deadline: the response, or `none`
+when there is none. `keyPrefix` makes the key unique beyond the table (the table's name, say). -/
+def http (config : Http.Client.Config) (keyPrefix : String) (header : String := "Idempotency-Key") :
+    Int64 → Nat → Http.Client.Call → Async (Option Http.Response) :=
+  fun id deadline_ms call =>
+    Http.Client.exchange (withHeader header s!"{keyPrefix}{id}" call) { config with timeout_ms := deadline_ms }
 
-end Lanes.Jobs
+end Lanes.Db.Jobs

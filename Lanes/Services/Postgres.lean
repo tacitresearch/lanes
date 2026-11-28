@@ -9,6 +9,7 @@ public import Lanes.Services.Postgres.Conn
 public import Lanes.Services.Postgres.IO.Client
 public import Lanes.Services.Postgres.IO.Db
 public import Lanes.Services.Postgres.IO.Pool
+public import Lanes.Services.Postgres.IO.Worker
 public import Lanes.Services.Postgres.Message
 public import Lanes.Services.Postgres.Pool
 public import Lanes.Services.Postgres.Scram

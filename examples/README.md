@@ -27,11 +27,11 @@ adapter, as `todo-db` keeps its to-dos in PostgreSQL.
    refinement mapping. A read cache breaks it, and the checker and the proof both show the stale
    read; behind the `Once` memo it takes each request once under every fault.
 5. `watchdog`: what fairness says about a keep-alive: a fair run in which the dog never barks.
-6. `payments`: a shop that charges each order through a model of a payment service, whose
-   answers may be late, lost or `unknown` and whose webhooks come late, twice and out of order.
-   A retry without the idempotency key charges an order twice, and the checker finds it; with
-   the key, an order is charged at most once in every run, and an order the shop calls paid has
-   a payment that succeeded, both proved.
+6. `payments`: a shop whose orders are rows, each placed under the customer's idempotency key
+   with its charge in an outbox, charged by the worker through a model of a payment service
+   whose answers may be late, lost or `unknown` and whose webhooks come late and out of order.
+   An order is charged at most once in every run, restarts included (proved), and an order
+   paid has a payment that succeeded (checked).
 7. `todo-db`: a to-do list kept in PostgreSQL through the typed store: one pure transaction per
    request, at `SERIALIZABLE`. A user's to-dos are unique by title, proved per transaction and so
    in every database the store model allows; adding without looking first, and retrying a lost
@@ -42,10 +42,10 @@ adapter, as `todo-db` keeps its to-dos in PostgreSQL.
    gives the member a session.
 9. `upload`: uploads of any size, handed to the system in pieces and answered with their size
    and checksum: a request that streams, through the gate a piece at a time.
-10. `reminders`: reminders over HTTP, each a job of the scheduler (`Lanes.Schedule`) that posts
-    its text to a notification service at its time and retries it with a backoff until it is
-    taken, gives up or is cancelled; a periodic sweep held as one job however often it is
-    scheduled.
+10. `reminders`: reminders over HTTP, each a job of a jobs table in PostgreSQL
+    (`Lanes.Db.Jobs`), posted by the worker to a notification service at its time, under the
+    job's id as the idempotency key, and again with a backoff until it is taken, refused, out of
+    attempts or cancelled.
 11. `rookery`: the serious system below.
 
 | Feature | Where to see it |
@@ -56,11 +56,12 @@ adapter, as `todo-db` keeps its to-dos in PostgreSQL.
 | Per-actor invariants (`actor_invariant`, `System.invariant_of_actor`) | `counter`, `bank`, `rookery` |
 | Refinement to a spec (`System.Implements`, `System.Refines`) | `counter`, `kv-cache`, `rookery` |
 | A request takes effect once (`Once.actor`, `Service.once`) | `kv-cache` |
-| Fairness and liveness | `watchdog`, `reminders` |
-| Work due later, retried with a backoff, periodic sweeps (`Schedule.attach`) | `reminders` |
+| Fairness and liveness | `watchdog` |
+| Work due later, an outbox, retried with a backoff, under an idempotency key (`Lanes.Db.Jobs`, `Lanes.Db.Worker`) | `reminders`, `payments` |
+| Acting once across restarts: a key stored in the transaction (`Lanes.Db.Keys`) | `payments` |
 | A model of an external service: timeouts with unknown outcome, idempotency keys, webhooks (`Lanes/Outside/`) | `payments` |
 | A database: typed tables, pure transactions, an invariant per transaction, PostgreSQL | `todo-db` |
-| Model checks, a bug found, random runs | `bank`, `kv-cache`, `payments`, `todo-db` |
+| Model checks, a bug found, random runs | `bank`, `kv-cache`, `todo-db` |
 | HTTP, routes, htmx, templates | `counter`, `bank-web`, `rookery` |
 | Sessions, log-in, cookies, tokens | `rookery` |
 | Sign-in with Google or GitHub (OAuth 2.0, OpenID Connect) | `sign-in` |
