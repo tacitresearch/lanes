@@ -7,6 +7,8 @@ import Lanes
 /-!
 # Reference app: leader election
 
+The system of `examples/election/Election.lean`, copied (`Tests/Copies.lean`).
+
 The election half of Raft. A node whose election timer fires starts a new term, votes for
 itself and asks the others for their vote. A node grants at most one vote per term. A candidate
 that collects votes from a majority becomes leader of that term.
