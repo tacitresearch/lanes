@@ -39,8 +39,7 @@ proved function tells it to.
 | Signature Version 4 and the S3 client | `Lanes/Web/Http/{SigV4,SigV4Sound}.lean`, `Lanes/Web/S3/{Basic,Xml,Post,PostSound,Multipart}.lean`, `Lanes/Web/IO/S3.lean` | `SigV4.target_sign`, `SigV4.sortQuery_sorted`, `SigV4.canonicalHeaders_sorted`, `SigV4.encode_chunks`, `S3.Post.form_policy`, `S3.Post.admitted_bounded`, `S3.Multipart.Plan.count_le`, `S3.Multipart.Plan.range_full`; signatures tested against AWS's vectors and botocore, the client against a fake S3, the multipart flow model-checked; its IO trusted |
 | PostgreSQL and the store model | `Lanes/Lib/Postgres/{Bytes,Message,MessageSound,Scram,Conn,ConnSound,Pool,Settings,Table}.lean`, `Lanes/Lib/Postgres/IO/{Client,Pool}.lean`, `Lanes/Lib/Crypto/Certificate.lean`, `Lanes/Outside/Store/{Basic,Sound}.lean` | `Backend.read_encode`, `Frontend.decode_encode`, `Conn.run_fifo`, `Conn.step_committed`, `Conn.step_query`, `Conn.tls_first`, `Conn.run_bound`, `Conn.onMessage_binds`, `Pool.run_size`, `Pool.never_again`, `SslMode.defaultFor_disable`, `Store.write_skew`, `Store.lost_commit_either`; the IO is trusted, and that the server behaves like the model is a premise |
 | The typed store | `Lanes/Db/{Basic,Query,Txn,Retry,Model,Sound}.lean`, `Lanes/Lib/Postgres/Sql.lean`, `Lanes/Lib/Postgres/IO/Db.lean` | `Db.invariant`, `Retry.loop_committed`, `Txn.interp_apply`, `Postgres.Sql.decode_param`; the driver is trusted, and that PostgreSQL at `SERIALIZABLE` behaves like the model is a premise |
-| Jobs: work outside a step | `Lanes/Behaviours/Jobs/{Basic,Sound}.lean`, `Lanes/Semantics/Jobs.lean`, `Lanes/Behaviours/Jobs/IO/Pool.lean` | `Jobs.answered_le_handled`, `Jobs.retry_same`, `Jobs.submitted_answered`; the pool is trusted |
-| Schedule: work that is due later | `Lanes/Behaviours/Schedule/{Basic,Sound}.lean`, `Lanes/Semantics/Schedule.lean` | `Schedule.dispatch_due`, `Schedule.calls_le_scheduled`, `Schedule.attempt_ends`, `Schedule.held_ends`; that the time it knows is not ahead of the clock is a premise |
+| Jobs, the outbox and acting once | `Lanes/Db/{Jobs,JobsSound,Worker,WorkerSound,Once,OnceSound}.lean`, `Lanes/Lib/Postgres/IO/Worker.lean`, `Lanes/Web/IO/Jobs.lean` | `Worker.committed_only`, `Worker.once_each`, `Queue.claim_takes`, `Queue.claim_attempts`, `Queue.one_per_key`, `Queue.finish_stale`, `Keys.once_again`; the worker's IO is trusted |
 | Web | `Lanes/Web/Http/{Basic,Route,RouteSound,Cookie,CookieSound}.lean`, `Lanes/Web/Html/`, `Lanes/Web/Auth/` | `Html.lex_render`, `Html.safeUrl_scheme`, `Http.dispatch_link`, `Http.parseForm_encodeForm`, `Http.readSetCookie_header`, `Auth.verify_eq_some`, `Auth.checkForm_other` |
 | The checker | `Lanes/Check/`, `Lanes/Semantics/{Monitor,MonitorSound}.lean` | `Check.search_sound`, `Check.system_sound_of_respects`, `Check.refines_traces` |
 | The proof layer | `Lanes/Semantics/` | refinement, specs, fairness, leads-to |
@@ -513,8 +512,7 @@ Where: `Lanes/Outside/`, `Lanes/Outside/{Rpc,Idempotent,Events,Queue,Cache,Clock
 
 Also:
 
-- The clock adapter, the HTTP client and the pool of the jobs actor each have a model, a
-  handler and a conformance test; the clock gives wall time that never goes back, nor before the
+- The clock adapter and the HTTP client each have a model, a handler and a conformance test; the clock gives wall time that never goes back, nor before the
   floor it was started with.
 - The HTTP client's reader reads back a response framed by its length, in chunks, by the end of
   the connection, or after interim responses, as soon as its last byte is there and not before
@@ -732,80 +730,78 @@ Where: `Lanes/Db/`, `Lanes/Lib/Postgres/Sql.lean`, `Lanes/Lib/Postgres/IO/Db.lea
 - A lost `COMMIT` is not in the recorded runs of the typed store; the key-value store's runs
   record one at the protocol.
 
-## Behaviours: servers, jobs and the scheduler
+## Jobs, the outbox and acting once
 
-`Jobs` (`Lanes/Behaviours/Jobs/Basic.lean`): work that must not run in a
-step, an outbound call or slow pure work, is submitted to the jobs actor under a key the
-requester chooses, beside the system that submits it (`Jobs.attach`). The actor dispatches
-each attempt as an output carrying the key, gives each a deadline, retries after a backoff,
-keeps at most `maxInFlight` jobs active and refuses beyond, and answers each key once; its
-pool (`Lanes/Behaviours/Jobs/IO/Pool.lean`) performs attempts on tasks of their own, as a pure function or
-an HTTP call with the key in `Idempotency-Key`, and hands results back as inputs. Proved: no
-key is answered more often than it is submitted, in every environment
-(`Jobs.answered_le_handled`); a retry carries its job's key and work (`Jobs.retry_same`);
-in a fair run without crashes every job is answered, whatever the workers do
-(`Jobs.submitted_answered`, by `System.LeadsTo.induction` on attempts left).
+Work that must outlive the process is a row (`docs/decisions/new-outbox-jobs.md`). A jobs table
+(`Lanes/Db/Jobs.lean`) holds jobs, each with its work, the time it is due, a key its requester
+chose (unique: a second `enqueue` under it is a no-op), its attempts and its lease. The outbox is
+a jobs table whose jobs are effects (an HTTP call, an email, a payment, an object to put),
+written in the transaction that causes them, due at once. A schedule is a job that runs again
+`every_ms` after each success. Each decision is a pure function of a job (`Config.claimed`,
+`Config.finished`); the transactions (`enqueue`, `claim`, `finish`, `cancel`) only read and
+write rows.
 
-`Schedule` (`Lanes/Behaviours/Schedule/Basic.lean`): work that is due later. The scheduler
-holds jobs under ids the requester chooses, beside the system that schedules them
-(`Schedule.attach`): a call of the outside retried with an exponential backoff, capped and with
-a deterministic jitter, until it is accepted, its attempts or its time run out (the dead
-letter) or it is cancelled; a notice at a time; or a notice every period, the sweep that expires
-what is over. An id held is one job however often it is scheduled (`already`); beyond `maxJobs`
-or `maxPayload` a scheduling is refused at once. Its state lives as long as the process, and each
-job waits on one timer. The semantics has no clock, so the scheduler keeps
-the latest time it was told or its timers were armed for, and an attempt carries that time.
-Proved, in every environment: an attempt starts only by its job's timer, for a job due by the
-time known (`Schedule.dispatch_due`), the next only the backoff after a failure
-(`Schedule.retry_waits`); no id is called more often than its attempts for each scheduling
-(`Schedule.calls_le_scheduled`); an attempt out ends only with its answer or abandoned at the
-end of its wait (`Schedule.attempt_ends`); a job succeeds with an answer only in the step that
-takes that answer to its attempt out (`Schedule.succeeded_replied`). In a fair run in which it
-does not crash, every job
-ends and its end is handed over (`Schedule.held_ends`); beside a system, the end is handled by
-it, when the links to it lose nothing and its actors neither crash nor stop
-(`Schedule.attach_end_handled`). The step in which a job leaves tells its requester once: one
-answer that ends it, `succeeded`, `failed` or `cancelled`, or the notice of a job that runs
-once (`Schedule.told_of_leaves`); so a call job's end, beside a system, is such an answer
-(`Schedule.attach_answer_handled`). A periodic job is noticed again and again
-(`Schedule.every_noticed`). That the times it is told are not ahead of the clock, and
-that the runtime fires a timer no earlier than its delay, are premises (`TRUSTED.md`;
-`docs/decisions/D79-work-that-is-due-later-is-a-job-of-the-scheduler.md`).
+The worker (`Lanes/Db/Worker.lean`) is an actor whose step is pure. At each tick it claims the
+jobs due, which leases each for one more attempt; it hands each to the job's adapter as an
+attempt under the job's id as the idempotency key (`Worker.runPort`); it records the answer with
+`finish`, which counts only for the current lease. A claim, an attempt or a `finish` lost, or a
+restart, leaves the job leased: it is due again when the lease runs out. So a job is attempted
+until it is done, refused for good or out of attempts, and the key makes a repeat take no
+effect. `Lanes/Lib/Postgres/IO/Worker.lean` runs it on PostgreSQL and only performs;
+`Lanes/Web/IO/Jobs.lean` makes an attempt an HTTP call with the key in a header.
 
-Where: `Lanes/Behaviours/Server.lean`, `Lanes/Behaviours/Once/`, `Lanes/Behaviours/Jobs/`,
-`Lanes/Web/IO/Jobs.lean`, `Lanes/Behaviours/Schedule/`,
-`Lanes/Semantics/{Service,Once,Jobs,Schedule}.lean`.
+Acting once is an idempotency key stored in the transaction (`Lanes/Db/Once.lean`):
+`Keys.once key body` runs `body` and stores the key with its answer; a later run under the key
+runs nothing and answers the same. The key is the table's primary key, so two runs at once
+conflict, and the one retried finds the key.
+
+Where: `Lanes/Db/{Jobs,JobsSound,Worker,WorkerSound,Once,OnceSound}.lean`,
+`Lanes/Lib/Postgres/IO/Worker.lean`, `Lanes/Web/IO/Jobs.lean`; `examples/reminders`.
+
+### Claims
+
+| Claim | Evidence | Premises | Status |
+| --- | --- | --- | --- |
+| No effect is sent for a transaction that did not commit: every attempt the worker hands over is of a job, with its work, in every database the store's model may hold, once any call outstanding or lost takes effect too | `Worker.committed_only`, `Lanes/Db/WorkerSound.lean`; gate `Tests/Axioms/Db.lean`; `Tests/Worker.lean` checks it beside the models, with crashes and lost answers | The application's transactions keep the table (`Queue.Keeps`: they add jobs and leave those there alone), as `enqueue` does (`Queue.enqueue_keeps`); every environment model, crashes included; PostgreSQL behaves like the model | proved |
+| With a receiver that honours idempotency keys, each job takes effect at most once, however often it is attempted | `Worker.once_each`, from `Idempotent.keys_nodup`; gate `Tests/Axioms/Db.lean` | The receiver behaves as `Idempotent.server`; the adapter sends the job's id as the key (trusted) | proved |
+| A claim answers jobs of the table, at most its limit and `batch_max`; each for one more attempt of a job whose attempts were not spent | `Queue.claimed_has`, `Queue.claim_length`, `Queue.claim_attempts`, `Lanes/Db/JobsSound.lean`; gate `Tests/Axioms/Db.lean` | None | proved |
+| Every job due is taken: a claim whose scan finds no more jobs due than its limit leases every one whose attempts are not spent, and answers it for an attempt; the worker hands every job of a committed claim to its adapter in the step that reads it | `Queue.claim_takes`, `Worker.stored_runs`; gate `Tests/Axioms/Db.lean` | That this happens in every fair run is not one theorem: the store's model may fail every call | proved, per transaction and per step |
+| At most one job per key, and only the current attempt's answer counts | `Queue.one_per_key`, `Queue.finish_stale`, from `Op.unique_apply`; gate `Tests/Axioms/Db.lean` | The application's operations on a table of the jobs table's name are on that table | proved |
+| Acting once: a run under a key that committed makes every later run under it, of any body, a no-op that answers the same | `Keys.once_again`, `Lanes/Db/OnceSound.lean`; gate `Tests/Axioms/Db.lean` | None | proved |
+| A job done had an attempt the service took | `Tests/Worker.lean`: beside the store's model and an idempotent service, with crashes and lost answers | | checked |
+| The worker on PostgreSQL: three effects, one written twice under one key, one refused once; each attempt under its job's id, every job done | `Tests/Worker.lean`, when `LANES_POSTGRES` names a server | | tested against PostgreSQL 16; CI runs none |
+
+### Limits
+
+- A lease (`lease_ms`) must outlast an attempt (`attempt_ms`) on the worker's clock, or a job
+  may be attempted twice at once; the key makes the second take no effect (`TRUSTED.md`).
+- An attempt counts at its claim: a worker that dies between a claim and the attempt spends one.
+- Ids are one more than the largest: a table whose newest rows are deleted gives their ids again,
+  and with them their idempotency keys. Jobs that are over are kept.
+- That a job is attempted until it is done or given up, in every fair run, is not proved as one
+  theorem; its ingredients are (`Queue.claim_takes`, `Queue.claim_attempts`, `Worker.stored_runs`).
+
+## Behaviours: servers and acting once
+
+`Server.system spec` runs a service's spec as one actor. `Once.actor` acts once on a request its
+client names by identity and sequence number, and answers a repeat with what it did, one entry
+per client. Its memo lives as long as the process: across a restart, acting once is an
+idempotency key stored in the transaction (`docs/decisions/new-outbox-jobs.md`).
+
+Where: `Lanes/Behaviours/Server.lean`, `Lanes/Behaviours/Once/`,
+`Lanes/Semantics/{Service,Once}.lean`.
 
 ### Claims
 
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
 | `Server.system spec` implements its spec | `Server.implements`, `Lanes/Semantics/Service.lean`; gate `Tests/Axioms/Semantics.lean` | An environment that loses, duplicates and crashes nothing (`EnvModel.Faultless`) | proved |
-| Jobs: no key answered more often than submitted; every job answered in a fair run without crashes | `Jobs.answered_le_handled`, `Jobs.submitted_answered`; gates `Tests/Axioms/Behaviours.lean`, `Tests/Axioms/Semantics.lean` | For the second: a fair run and no crashes | proved; the pool trusted |
-| Schedule: no attempt starts before its job's run time, and the next not before the backoff after a failure | `Schedule.dispatch_due`, `Schedule.retry_waits`, `Schedule.now_le_step`; gate `Tests/Axioms/Behaviours.lean`; `Tests/Schedule.lean` checks the stamps the requester sees | The times the scheduler is told are not ahead of the clock, and the runtime fires a timer no earlier than its delay (TRUSTED, "Assumptions the runtime makes") | proved, of the time the scheduler knows; the premises trusted |
-| Schedule: no id is called more than `maxAttempts` times for each scheduling of it | `Schedule.calls_le_scheduled`, `Schedule.attempts`; gate `Tests/Axioms/Behaviours.lean` | None: every environment, crashes included | proved |
-| Schedule: at most one attempt of an id is out at once | `Schedule.within`, `Schedule.dispatch_due`, `Schedule.attempt_ends`; gate `Tests/Axioms/Behaviours.lean`; `Tests/Schedule.lean` counts the attempts out at the service, and finds two with a start that dispatches again | An attempt abandoned at the end of its wait is over at the service: the adapter cuts it off, or the service deduplicates by the id | proved of the scheduler; checked at the service |
-| Schedule: every job ends, and its end is handed over; a periodic job is noticed again and again | `Schedule.held_leaves`, `Schedule.held_ends`, `Schedule.every_noticed`, `Schedule.attach_held_leaves`; gate `Tests/Axioms/Semantics.lean` | A fair run (`System.Run.Fair`) in which the scheduler does not crash; whatever the service does | proved |
-| Schedule: beside a system, the end of every job held that is not periodic is handled by that system: an answer that ends it (`succeeded`, `failed` or `cancelled`), or the notice of a job that runs once; a call job's end is such an answer | `Schedule.attach_end_handled`, `Schedule.attach_answer_handled`, `Lanes/Semantics/Schedule.lean`; gate `Tests/Axioms/Semantics.lean` | A fair run in which the scheduler does not crash; the links from the scheduler to the system lose nothing; no actor of the system is crashed or stops; whatever the service does | proved |
-| Schedule: a job leaves only in a step that tells its requester once and no more: one answer that ends it, or the notice of a job that runs once | `Schedule.told_of_leaves`, `Schedule.leaves_answered`; gate `Tests/Axioms/Behaviours.lean` | None: every step | proved |
-| Schedule: an id held is one job however often it is scheduled; beyond `maxJobs` or `maxPayload` a scheduling is refused | `Schedule.within`; `Tests/Schedule.lean` | None | proved (the bound); checked (the answers) |
-| Schedule: a scheduler for each entity (`Schedule.attachBy`), the job of a key held by the scheduler of the entity its key names: each holds at most `maxJobs` jobs and no id twice, and each job it holds that is not periodic ends | `Schedule.attachBy_within`, `Schedule.attachBy_held_leaves`, `Schedule.armedBy`; gates `Tests/Axioms/Behaviours.lean`, `Tests/Axioms/Semantics.lean` | For the second: a fair run in which that scheduler does not crash; whatever the service does | proved |
-
-Also:
-
-- `Once.actor`, which acts once on a request its client names by identity and sequence number and answers a repeat with what it did, one entry per client, with `Once.server_implements`: a server behind it implements `once` of its service in every environment, links duplicating included (`docs/decisions/D48-a-request-named-by-its-client.md`).
-- Proved of `Jobs` beside a system: within the slots, and every job leaving (`Jobs.attach_within`, `Jobs.attach_active_leaves`).
-- Proved of `Jobs` for every configuration: within the slots (`Jobs.within`), timers armed (`Jobs.armed`), no key answered more often than a submission of it is handled, in every environment (`Jobs.answered_le_handled`), a retry carries its job's key and work (`Jobs.retry_same`), and in a fair run without crashes every job admitted and every submission handled is answered, whatever the workers do (`Jobs.active_answered`, `Jobs.submitted_answered`).
-- `Jobs`, work outside a step: a requester's job, named by its key, dispatched as attempts that carry the key, retried after a backoff, each attempt with a deadline, at most `maxInFlight` at once and refused beyond, answered `done`, `failed`, `timedOut` or `refused`, and joined beside a system with `Jobs.attach`.
-- A pool of workers behind the jobs actor (`Jobs.handler`), each attempt on a task of its own, a pure function (`Jobs.compute`) or an HTTP call with the job's key in `Idempotency-Key` (`Jobs.call`), with its model (`Jobs.pool`) and a conformance test against a local service that fails twice, a closed port and a service that never answers.
+| A server behind `Once.actor` implements `once` of its service in every environment, links duplicating included | `Once.server_implements`; gate `Tests/Axioms/Semantics.lean` | The memo is kept: no restart between a request and its repeat (`docs/decisions/D48-a-request-named-by-its-client.md`) | proved |
 
 ### Limits
 
-- A job submitted when `maxInFlight` jobs are active is refused, not queued.
-- A scheduling when `maxJobs` jobs are held is refused, not queued.
-- An attempt whose deadline passes keeps running in its worker; a pure worker cannot be cut off, so the work done at once can exceed `maxInFlight`.
-- The scheduler's time is what it was told and what its timers were armed for: after a long time without input, or after a start, a job may be late by that much; that it is never early rests on the times it is told and on the runtime's timers (`TRUSTED.md`).
-- Work outside a step goes through the jobs actor (`Lanes.Jobs`). Jobs, and scheduled work, live as long as the process: a job under way when it dies is not attempted again, and a far side that must not act twice still deduplicates by the job's key.
+- `Once.actor`'s memo is lost at a restart, as every actor's state is
+  (`docs/decisions/D110-volatile-actors.md`).
 
 ## The checker
 
@@ -1064,7 +1060,7 @@ key-value store with front ends, whose read cache breaks refinement (`examples/k
 (`examples/watchdog`); a shop that charges each order at most once through a model of a payment
 service (`examples/payments`, `Shop.charged_at_most_once`); a to-do list kept in PostgreSQL
 (`examples/todo-db`); `examples/sign-in`, members of a video site signed in with Google or
-GitHub, with sessions; uploads that stream (`examples/upload`); reminders on the scheduler
+GitHub, with sessions; uploads that stream (`examples/upload`); reminders in a jobs table
 (`examples/reminders`);
 and `examples/rookery`, a small social network for bots whose claims are proved of its spec,
 which it is proved to implement with deadlines (`Rookery.implements`); the theorem that joins the
@@ -1154,7 +1150,7 @@ Also:
 
 ### Reminders
 
-Reminders over HTTP, each a job of the scheduler that posts its text to a notification service at its time and retries until it is taken, gives up or is cancelled; a periodic sweep, scheduled at every start and held as one job; they live as long as the process.
+Reminders over HTTP, each a job of a jobs table in PostgreSQL, posted by the worker to a notification service at its time and again until it is taken, refused, out of attempts or cancelled; a restart loses none and delivers none again that was taken.
 
 Where: `examples/reminders/Reminders/App.lean`.
 
@@ -1162,10 +1158,10 @@ Where: `examples/reminders/Reminders/App.lean`.
 
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
-| Reminders: the reminders and the scheduler's jobs stay within their bounds | `Reminders.bounded`, `Reminders.jobs_bounded`, `examples/reminders/Reminders/Proofs.lean`; gate `examples/reminders/Reminders/Proofs/Axioms.lean` | None | proved |
-| Reminders: every reminder's delivery ends, sent, given up on or cancelled | `Reminders.delivery_ends`; same gate | A fair run in which the scheduler does not crash | proved |
-| Reminders: every reminder's delivery is answered to the reminders, sent, given up on or cancelled | `Reminders.delivery_answered`; same gate | A fair run in which neither the scheduler nor the reminders crash and the link from the scheduler to the reminders loses nothing; the reminder's job is a call | proved |
-| Reminders: a reminder refused twice is sent on its third attempt, under one key; one that waits is cancelled; after a restart the list is empty | `examples/reminders/Test.lean`, run by its `lake test` | A local notification service | tested |
+| Reminders: every transaction keeps the table | `Reminders.keeps`, `examples/reminders/Reminders/Proofs.lean`; gate `examples/reminders/Reminders/Proofs/Axioms.lean` | None | proved |
+| Reminders: a reminder is delivered only once every database the store may hold has it; at a service that honours keys, none takes effect twice | `Reminders.delivered_committed`, `Reminders.delivered_once`; same gate | Every environment model; PostgreSQL behaves like the model; the service as `Idempotent.server` | proved |
+| Reminders: no more than `maxReminders` wait; a reminder sent was taken | `examples/reminders/Reminders/Check.lean`, run by its `lake test` | One reminder and a cancel, lost answers | checked |
+| Reminders: a reminder refused twice is sent on its third attempt, under one key; one that waits is cancelled; after a restart on the same database the reminders are as they were and none is delivered again | `examples/reminders/Test.lean`, when `LANES_POSTGRES` names a server | A local notification service | tested |
 
 Also:
 

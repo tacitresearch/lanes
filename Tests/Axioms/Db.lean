@@ -65,6 +65,10 @@ import Lanes.Semantics
 /-- info: 'Lanes.Db.Jobs.Queue.one_per_key' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Db.Jobs.Queue.one_per_key
 
+-- Lanes.Db.OnceSound
+/-- info: 'Lanes.Db.Keys.once_again' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Db.Keys.once_again
+
 -- Lanes.Db.WorkerSound
 /-- info: 'Lanes.Db.Worker.committed_only' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Db.Worker.committed_only

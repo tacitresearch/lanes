@@ -29,6 +29,11 @@ def jobsOf (db : Db) : List (Job String) := (db.rows queue.name).filterMap queue
 
 /-! ## The transactions -/
 
+def natPayload : Payload Nat where
+  encode n := toString n
+  decode s := s.toNat?
+  decode_encode n := by simp
+
 def transactionTests : List (String × Bool) :=
   let cfg : Jobs.Config := { batch_max := 2, attempts_max := 2, lease_ms := 100 }
   let enqueued := (do
@@ -64,7 +69,16 @@ def transactionTests : List (String × Bool) :=
     let late ← queue.finish cfg 0 1 5 .ok
     let next ← queue.claim cfg 10000 10
     pure (first.length, c, late, next.length)).run start
-  [ ("jobs: a key already held makes an enqueue a no-op",
+  let keys : Keys Nat := { name := "done_keys", payload := natPayload }
+  let once := (do
+    let first ← keys.once "charge-1" (do discard <| queue.enqueue "charge-1" "charge" 0; pure 7)
+    let again ← keys.once "charge-1" (do discard <| queue.enqueue "charge-1b" "charge" 0; pure 8)
+    pure (first, again)).run (Db.empty [queue.table, keys.table])
+  [ ("acts once: a second run under a key answers the first's and runs nothing",
+      match once with
+      | .ok ((7, 7), db) => (jobsOf db).length == 1
+      | _ => false),
+    ("jobs: a key already held makes an enqueue a no-op",
       match enqueued with
       | .ok (r, db) => r == [.added 0, .added 1, .already 0] && (jobsOf db).length == 2
       | .error _ => false),

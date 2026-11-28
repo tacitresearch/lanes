@@ -11,6 +11,7 @@ public import Lanes.Check.SearchSound
 public import Lanes.Check.SystemSound
 public import Lanes.Db.Sound
 public import Lanes.Db.JobsSound
+public import Lanes.Db.OnceSound
 public import Lanes.Db.WorkerSound
 public import Lanes.Lib.Encoding.Json.BasicSound
 public import Lanes.Lib.Encoding.Json.ParserSound

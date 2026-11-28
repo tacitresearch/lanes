@@ -28,6 +28,7 @@ public import Lanes.Core.World
 public import Lanes.Db.Basic
 public import Lanes.Db.Jobs
 public import Lanes.Db.Model
+public import Lanes.Db.Once
 public import Lanes.Db.Query
 public import Lanes.Db.Retry
 public import Lanes.Db.Txn

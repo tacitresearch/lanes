@@ -621,6 +621,19 @@ theorem Op.update_rows (t : Table) (row : Row) (rows : List Row) :
   · exact .inl rfl
   · exact .inr rfl
 
+/-- An insert that answered `true` added the row to rows none of which has its key. -/
+theorem Op.insert_onRows (t : Table) (row : Row) (rows : List Row)
+    (h : ((Op.insert t row).onRows rows).1 = true) :
+    ((Op.insert t row).onRows rows).2 = t.insertSorted row rows ∧ ∀ x ∈ rows, t.keyOf x ≠ t.keyOf row := by
+  simp only [Op.onRows] at h ⊢
+  split
+  · next hc => simp [hc] at h
+  · next hc =>
+    simp only [Bool.or_eq_true, not_or, Bool.not_eq_true, List.any_eq_false] at hc
+    refine ⟨rfl, fun x hx heq => ?_⟩
+    have := hc.1 x hx
+    simp [Table.hasKey, heq] at this
+
 theorem Op.delete_rows (t : Table) (key : Row) (rows : List Row) :
     ((Op.delete t key).onRows rows).2 = rows.filter (!t.hasKey key ·) := rfl
 
