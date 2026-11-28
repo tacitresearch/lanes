@@ -8,19 +8,25 @@ of `examples/kv-cache` and `examples/watchdog`. `examples/counter` is what
 `lanes new` writes (`Tests/New.lean`). The large ones are also here to find out what the
 framework is missing: anything one of them has to work around is a defect of Lanes, and is fixed
 there. Actor state lives as long as the process, as in Go, Tokio or Erlang: every start is a
-boot. State that must outlive the process lives in a service outside, reached through a modelled
-adapter, as `todo-db` keeps its to-dos in PostgreSQL.
+boot. State that must outlive the process, or that several instances must agree on, lives in
+PostgreSQL, one pure transaction per request, as `counter`, `todo-db`, `payments`, `reminders`
+and `rookery` keep theirs. `bank`, `bank-web`, `kv-cache` and `watchdog` keep their state in
+actors on purpose, to show what actors are for; it lasts until a restart. An example whose tests
+need PostgreSQL skips them without `LANES_POSTGRES` (`scripts/with-postgres lake test` runs them
+beside a PostgreSQL made for the run).
 
 ## In what order to read them
 
 `docs/TUTORIAL.md` comes first: it changes the counter, checks it and proves it.
 
-1. `counter`: exactly what `lake exe lanes new counter` writes. A spec as a `Service`, run as an
-   actor by the `Server` behaviour, an invariant, refinement to the spec, model checks, and a
-   web page with htmx. `lake test` fails if it and the template differ.
+1. `counter`: exactly what `lake exe lanes new counter` writes. A stateless app with a store: a
+   typed table, a migration, one pure transaction per request, a front that keeps nothing, an
+   invariant proved per transaction and model-checked beside the store's model, and a web page
+   with htmx. At the start it runs its migrations and refuses to start on tables other than the
+   declared ones. `lake test` fails if it and the template differ.
 2. `bank`: accounts as actors that send each other credits. An invariant of every actor
    (`balance_nonneg`), one of the whole system (`money_conserved`), and the checker finding the
-   credit a lossy link drops.
+   credit a lossy link drops. Its balances last until a restart, on purpose (its README).
 3. `bank-web`: the bank behind a server-rendered page: typed routes, a bridge from requests to
    inputs and templates.
 4. `kv-cache`: a key-value store with front ends, checked against a five-line spec with no
@@ -50,20 +56,21 @@ adapter, as `todo-db` keeps its to-dos in PostgreSQL.
 
 | Feature | Where to see it |
 | --- | --- |
-| A spec as a `Service`, run by `Server` | `counter` |
-| A spec as a `Service`, implemented by actors | `kv-cache`, `rookery` |
-| `lanes_data`, with JSON (`ToJson, FromJson`) and a table (`table`) | `rookery`, `todo-db` |
-| Per-actor invariants (`actor_invariant`, `System.invariant_of_actor`) | `counter`, `bank`, `rookery` |
-| Refinement to a spec (`System.Implements`, `System.Refines`) | `counter`, `kv-cache`, `rookery` |
+| A stateless app with a store: a table, a migration, transactions, a check of the schema at start | `counter`, `rookery` |
+| A spec as a `Service`, implemented by actors | `kv-cache` |
+| `lanes_data`, with JSON (`ToJson, FromJson`) and a table (`table`) | `counter`, `rookery`, `todo-db` |
+| Per-actor invariants (`actor_invariant`, `System.invariant_of_actor`) | `bank`, `upload` |
+| Refinement to a spec (`System.Implements`, `System.Refines`) | `kv-cache`, `upload` |
+| Invariants per transaction, in every database the store allows (`Db.invariant`, `Txn.All.others`) | `counter`, `todo-db`, `rookery` |
 | A request takes effect once (`Once.actor`, `Service.once`) | `kv-cache` |
 | Fairness and liveness | `watchdog` |
 | Work due later, an outbox, retried with a backoff, under an idempotency key (`Lanes.Db.Jobs`, `Lanes.Db.Worker`) | `reminders`, `payments` |
-| Acting once across restarts: a key stored in the transaction (`Lanes.Db.Keys`) | `payments` |
+| Acting once across restarts: a key stored in the transaction (`Lanes.Db.Keys`) | `payments`, `rookery` |
 | A model of an external service: timeouts with unknown outcome, idempotency keys, webhooks (`Lanes/Outside/`) | `payments` |
 | A database: typed tables, pure transactions, an invariant per transaction, PostgreSQL | `todo-db` |
 | Model checks, a bug found, random runs | `bank`, `kv-cache`, `todo-db` |
 | HTTP, routes, htmx, templates | `counter`, `bank-web`, `rookery` |
-| Sessions, log-in, cookies, tokens | `rookery` |
+| Sessions and failed log-ins as rows, passwords checked against a stored hash, cookies, tokens | `rookery` |
 | Sign-in with Google or GitHub (OAuth 2.0, OpenID Connect) | `sign-in` |
 | A JSON API and rate limits | `rookery` |
 | Request bodies in pieces, responses in parts, Server-Sent Events | `upload`, `rookery` |
@@ -72,7 +79,7 @@ adapter, as `todo-db` keeps its to-dos in PostgreSQL.
 
 | System | What it is | State |
 | --- | --- | --- |
-| `rookery` | A small social network for bots and their owners: sign-up, sessions, API tokens, posts, follows, timelines, deletes, rate limits, as a web application with a JSON API | The flagship. Spec first and checked alone; one actor that runs it; every claim proved of the spec for every configuration (posts never lost and deleted only by their author, a deleted post in no read, timelines exactly the newest posts followed, the rate limit, API changes acted on once per `seq`, no other account's secrets, the bounds) and the system proved to implement its spec with deadlines, under lost and reordered requests and crashes, where the link from outside does not duplicate; the two are not yet joined into statements about the running system, and the gate in front is not covered; served over HTTP, tested through SIGKILL and a restart. Its README lists each claim with its theorem, what remains, and its friction log |
+| `rookery` | A small social network for bots and their owners: sign-up, sessions, API tokens, posts, follows, timelines, deletes, rate limits, as a web application with a JSON API | The flagship. Stateless: its data is in PostgreSQL, each request one pure transaction. Proved per transaction, and so of every database the store's model allows: a request changes only the rows of the account it is made as, the windows and failed log-ins stay within their bounds, a response names the account asked as, a change retried with its `seq` writes nothing. Checked beside the store's model, with lost answers and restarts; tested over HTTP on PostgreSQL through SIGKILL and a restart. Its README says what moved from proved to checked, and its friction log |
 
 ## Building one
 
@@ -80,8 +87,8 @@ adapter, as `todo-db` keeps its to-dos in PostgreSQL.
 cd examples/rookery
 mkdir -p .lake && ln -s ../../../.lake/packages .lake/packages   # share the fetched dependencies
 lake build
-lake test
-lake exe rookeryLive  # a person and a bot over HTTP
+lake test                               # the model checks and the bridge's tests
+../../scripts/with-postgres lake test   # and a person and a bot over HTTP on PostgreSQL
 ```
 
 and in each small one, `lake build` and `lake test` (`bank-web` needs `bank` beside it, which it
@@ -109,5 +116,5 @@ let (_, balance) := lb.get ["accounts", "1"]
 ```
 
 `bank-web`'s `Check.lean` does this. A live test of a process uses `Http.Client.fetch port
-request`, one request on a connection of its own, as `rookery/Live.lean` does.
+request`, one request on a connection of its own, as `rookery/Rookery/Live.lean` does.
 

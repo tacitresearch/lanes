@@ -25,6 +25,8 @@ structure Deployment where
   runtime : Runtime.Config := {}
   /-- The database. -/
   postgres : Postgres.Client.Config
+  /-- Each a file's name and its text. -/
+  migrations : List (String × String)
   /-- The notification service: where a reminder is posted. -/
   notify : Client.Call
   http : Client.Config := {}
@@ -52,7 +54,11 @@ def Running.stop {d : Deployment} (r : Running d) : Async Unit := do
   r.worker.stop
   r.server.stop
 
+/-- Run the migrations not yet run, check the table, and serve; or throw the problems that stop
+it. -/
 def start (d : Deployment) : Async (Running d) := do
+  let problems ← Postgres.Typed.prepare d.postgres schema d.migrations
+  unless problems.isEmpty do throw (IO.userError s!"reminders: not started: {problems}")
   let store : Postgres.Typed.Store (Action ⊕ Jobs.Req) (Answer ⊕ Jobs.Ans String) :=
     { pool := ← Postgres.Pool.new d.postgres, handler := Reminders.store d.config }
   let arrive (r : Http.Request) : IO (Except Http.Response Http.Request) :=

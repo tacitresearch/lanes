@@ -1,354 +1,212 @@
 import Rookery
+import Rookery.Live
 import Lanes.Testing
 
 /-!
-# Model checks
+# Model checks, the bridge, and rookery on PostgreSQL
 
-Two accounts, `0` and `1`, with a right credential and a wrong one, and bounds small enough to
-reach: one session, two failures, two posts kept, one follow, two posts a window, timelines of
-two.
+The front beside the store's model (`Lanes/Db/Model.lean`), with rookery's own transactions:
+every order of a script's requests, each sent once those it waits for are answered, and in the
+last scenario answers lost, a lost `COMMIT` taking effect late or never, and the process
+restarting. Each claim is judged in every database the store may hold. Bounds are small enough
+to reach: two accounts, one session, two failures, three posts kept, one follow, two posts a
+window, timelines of two. Every `always` has `sometimes` witnesses beside it (rule 5.3).
 
-First the spec alone (rule 1.2): every order of a script's requests, each sent once those it
-waits for are answered, and every deadline passing between them, checked against each claim
-with a history kept beside the board. Then the system: the same scripts through `board`, its
-timers firing at any moment, every response and every deadline checked against the spec by the
-monitor, under crashes and links that lose and reorder requests. Then three seeded bugs, each
-of which a check must catch.
-
-`rookeryCheck` prints each report and fails if one is not as expected.
+Then the bridge, without a socket. Then, with `LANES_POSTGRES` set, rookery over HTTP on a real
+PostgreSQL, killed and started again (`Rookery.Live`).
 -/
 
 namespace Rookery.Check
 
-open Lanes
+open Lanes Lanes.Db
 
-abbrev N := Fin 2
-abbrev C := Fin 2
-
-def right : C := 0
-def wrong : C := 1
+instance : sig.Inspect := {}
+instance : system.Inspect := {}
 
 def config : Config :=
   { maxAccounts := 2, maxSessions := 1, maxFailures := 2, maxPosts := 3, maxFollows := 1,
-    maxPerWindow := 2, timelineMax := 2, window_ms := 1000, session_ms := some 1000,
-    lockout_ms := some 1000 }
+    maxPerWindow := 2, timelineMax := 2, window_s := 10, lockout_s := 10 }
 
+def ann : Name := ⟨"ann", rfl⟩
+def bob : Name := ⟨"bob", rfl⟩
 def hi : Body := ⟨"hi", rfl⟩
 def yo : Body := ⟨"yo", rfl⟩
 
-/-- A request and the requests whose answers it waits for. -/
-abbrev Script := List (Request N C × List ReqId)
+/-- A request, numbered, and the requests whose answers it waits for. -/
+abbrev Script := List (Nat × Ask × List Nat)
 
-def signUp (req : ReqId) (n : N) (bot := false) : Request N C := .signUp req n right bot
-def logIn (req : ReqId) (n : N) (c : C := right) : Request N C := .logIn req n c 0
-def web (req : ReqId) (n : N) (session : Sid) (op : Op N) : Request N C := .web req n session op
-def api (req : ReqId) (n : N) (seq : Nat) (op : Op N) (token := 1) : Request N C :=
-  .api req n token seq op
+def at0 (r : Request) : Ask := { at_s := 0, request := r }
 
-/-- Both sign up and log in, `1` as a bot; `1` follows `0`. -/
-def setup : Script :=
-  [ (signUp 1 0, []), (signUp 2 1 true, []), (logIn 3 0, [1]), (logIn 4 1, [2]),
-    (web 5 1 4 (.follow 0), [3, 4]) ]
+/-- The browser and the bot: the requests still to send, and what came back. -/
+structure Client where
+  toSend : Script
+  answered : List (Nat × Response) := []
+  failed : List Nat := []
+  deriving DecidableEq, Hashable
 
-/-- `0` posts twice and deletes its first post; `1` reads its timeline as the posts land and
-after the delete is answered, and anyone reads `0`'s posts. -/
+instance : BEq Client := instBEqOfDecidableEq
+
+def Client.ready (d : Client) (waits : List Nat) : Bool :=
+  waits.all fun w => d.answered.any (·.1 == w) || d.failed.contains w
+
+def client (script : Script) : Outside sig Client where
+  init := { toSend := script }
+  allow d
+    | .request n a =>
+      match d.toSend.find? (·.1 == n) with
+      | some (_, a', waits) =>
+        if a' == a && d.ready waits then some { d with toSend := d.toSend.filter (·.1 != n) } else none
+      | none => none
+    | .store _ => none
+  observe d
+    | .answered n r => { d with answered := d.answered ++ [(n, r)] }
+    | .failed n => { d with failed := d.failed ++ [n] }
+    | .call _ => d
+
+abbrev D := Client × Db.State Ask Response
+
+def world (script : Script) :=
+  (client script).both (Db.outside {} (handler config) (Db.Db.empty (schema config)) port)
+    fun x => x matches .request ..
+
+def samples (losses : Bool) (d : D) : List In :=
+  d.1.toSend.map (fun (n, a, _) => .request n a) ++ Db.samples (handler config) port losses losses d.2
+
+abbrev W := World system D
+
+/-! ## The claims, in every database the store may hold -/
+
+def rowsOf {α : Type} (t : TableOf α) (db : Db.Db) : List α := (db.rows t.table.name).filterMap t.ofRow
+
+def everyDb (w : W) (p : Db.Db → Bool) : Bool := w.driver.2.worlds.all fun world => p world.db
+
+def someDb (w : W) (p : Db.Db → Bool) : Bool := w.driver.2.worlds.any fun world => p world.db
+
+/-- Every bound of `Config` holds. -/
+def bounded (db : Db.Db) : Bool :=
+  let ms := rowsOf members db
+  let sessions := rowsOf (Auth.Rows.Sessions.table config.sessions) db
+  let attempts := rowsOf (Auth.Rows.Failures.table config.failures) db
+  ms.length ≤ config.maxAccounts && ms.all fun m =>
+    ((rowsOf posts db).filter (·.author == m.name)).length ≤ config.maxPosts
+      && ((rowsOf follows db).filter (·.follower == m.name)).length ≤ config.maxFollows
+      && (rowsOf windows db).all (·.count.toInt ≤ config.maxPerWindow)
+      && (sessions.filter (·.user == m.name)).length ≤ config.maxSessions
+      && attempts.all (·.failures.toInt ≤ config.maxFailures)
+
+/-- No two posts have one id, and every id is below the next one: an id is never given twice. -/
+def freshIds (db : Db.Db) : Bool :=
+  let ids := (rowsOf posts db).map (·.id)
+  let next := ((rowsOf counters db).find? (·.name == "post")).map (·.next) |>.getD 0
+  ids.eraseDups.length == ids.length && ids.all (· < next)
+
+/-- A member's posts are only ever its own: each post's author is a member. -/
+def authored (db : Db.Db) : Bool :=
+  (rowsOf posts db).all fun p => (rowsOf members db).any (·.name == p.author)
+
+/-- A member has at most one API change remembered. -/
+def oneKey (db : Db.Db) : Bool :=
+  (rowsOf members db).all fun m =>
+    ((rowsOf keys.rows db).filter fun (k, _) => k.startsWith (m.name ++ "/")).length ≤ 1
+
+def answers (w : W) : List (Nat × Response) := w.driver.1.answered
+
+def replyOf (w : W) (n : Nat) : Option Reply := ((answers w).find? (·.1 == n)).map (·.2.reply)
+
+def always : List (Check.Property W) :=
+  [ .always "every bound of Config holds, in every database the store may hold" (everyDb · bounded),
+    .always "no two posts have one id, and every id is below the next" (everyDb · freshIds),
+    .always "every post's author is a member" (everyDb · authored),
+    .always "a member has at most one API change remembered" (everyDb · oneKey) ]
+
+def check (script : Script) (claims : List (Check.Property W)) (losses := false) (restarts := 0) :=
+  Check.system system
+    { env := { mayRestart := restarts > 0 }, driver := (world script).driver (samples losses),
+      maxRestarts := restarts }
+    (always ++ claims) {}
+
+/-! ## Scripts -/
+
+def signUp (n : Name) (bot := false) : Ask := at0 (.signUp n "hash" bot)
+def logIn (n : Name) (checked : Checked := .right none) (at_s : Int64 := 0) : Ask :=
+  { at_s, request := .logIn n checked }
+def web (n : Name) (session : Int64) (op : Action) (at_s : Int64 := 0) : Ask :=
+  { at_s, request := .web n session op }
+def api (n : Name) (seq : Int64) (op : Action) (token : Int64 := 1) : Ask :=
+  at0 (.api n token seq op)
+
+/-- Both sign up and log in (sessions 0 and 1); `bob` follows `ann`; `ann` posts twice, deletes
+her first post; `bob` reads his timeline after the delete, and `ann`'s posts are read; `bob`
+tries to delete `ann`'s second post. -/
 def social : Script :=
-  setup ++
-  [ (web 6 0 3 (.post hi), [5]), (web 7 0 3 (.post yo), [6]),
-    (web 8 1 4 .timeline, [6]), (web 9 0 3 (.delete 0), [7, 8]),
-    (web 10 1 4 .timeline, [9]), (.profile 11 0 false, [10]), (web 12 1 4 (.delete 1), [10]) ]
+  [ (1, signUp ann, []), (2, signUp bob, [1]), (3, logIn ann, [2]), (4, logIn bob, [3]),
+    (5, web bob 1 (.follow ann), [4]), (6, web ann 0 (.post hi), [5]), (7, web ann 0 (.post yo), [6]),
+    (8, web ann 0 (.delete 0), [7]), (9, web bob 1 .timeline, [8]), (10, at0 (.profile ann false), [8]),
+    (11, web bob 1 (.delete 1), [8]) ]
 
-/-- `1` gets a token and posts through the API: a post sent twice with one sequence number, as a
-bot that retries; an older number; two more posts, the window full; a token of the wrong
-generation; a read, a delete, and the read again with its `seq`, as a bot that retries it; a
-post with the delete's `seq`. -/
+def feedIds (r : Option Reply) : List Int64 :=
+  match r with
+  | some (.feed ps) => ps.map (·.id)
+  | _ => []
+
+def socialClaims : List (Check.Property W) :=
+  [ .always "a post deleted is in no read asked for after its delete was answered" fun w =>
+      replyOf w 8 != some .deleted || (!(feedIds (replyOf w 9)).contains 0 && !(feedIds (replyOf w 10)).contains 0),
+    .always "a member cannot delete another's post" fun w => replyOf w 11 != some .deleted,
+    .sometimes "a timeline shows a post of another account" fun w => feedIds (replyOf w 9) == [1],
+    .sometimes "a post is deleted" fun w => replyOf w 8 == some .deleted ]
+
+/-- `bob`, a bot, gets a token and posts: once with `seq` 1, again with it, as a bot that retries;
+an older `seq`; two more, the window full; another change with a used `seq`. -/
 def bots : Script :=
-  [ (signUp 2 1 true, []), (logIn 4 1, [2]), (.newToken 5 1 4 0, [4]),
-    (api 6 1 1 (.post hi), [5]), (api 7 1 1 (.post hi), [5]),
-    (api 8 1 0 (.post yo), [6, 7]), (api 9 1 2 (.post yo), [6, 7]),
-    (api 10 1 3 (.post yo), [9]), (api 11 1 4 .timeline (token := 2), [9]),
-    (api 12 1 5 .timeline, [10]), (api 13 1 6 (.delete 0), [12]), (api 14 1 5 .timeline, [13]),
-    (api 15 1 6 (.post hi), [14]) ]
+  [ (1, signUp bob true, []), (2, logIn bob, [1]), (3, at0 (.newToken bob 0), [2]),
+    (4, api bob 1 (.post hi), [3]), (5, api bob 1 (.post hi), [3]), (6, api bob 0 (.post yo), [4, 5]),
+    (7, api bob 2 (.post yo), [4, 5]), (8, api bob 3 (.post yo), [7]), (9, api bob 3 (.follow ann), [8]),
+    (10, api bob 4 .timeline (token := 2), [8]) ]
 
-/-- Two wrong credentials lock `0`; a second log-in of `1` closes its first session; a session
-is no key to another account; a log-out ends a session. -/
+def botClaims : List (Check.Property W) :=
+  [ .always "a change sent twice with one seq is acted on once" fun w =>
+      everyDb w fun db => ((rowsOf posts db).filter (·.body == "hi")).length ≤ 1,
+    .always "both are answered as the first was" fun w =>
+      match replyOf w 4, replyOf w 5 with
+      | some a, some b => a == b
+      | _, _ => true,
+    .always "an older seq is stale" fun w => (replyOf w 6).all (· == .stale),
+    .always "another change with a used seq is refused" fun w => (replyOf w 9).all (· == .reused),
+    .always "a token of another generation is refused" fun w => (replyOf w 10).all (· == .badToken),
+    .sometimes "the window is full" fun w => replyOf w 8 == some .rateLimited,
+    .sometimes "a retry is answered as the first" fun w =>
+      (replyOf w 4).isSome && replyOf w 4 == replyOf w 5 ]
+
+/-- Two wrong passwords lock `ann`; the right one is refused while locked, and let in once the
+lock's time has passed; a second log-in of `bob` closes his first session; a session is no key
+to another account; a log-out ends a session. -/
 def abuse : Script :=
-  [ (signUp 1 0, []), (signUp 2 1, [1]), (logIn 3 0 wrong, [2]), (logIn 4 0 wrong, [3]),
-    (logIn 5 0, [4]), (logIn 6 1, [5]), (logIn 7 1, [6]), (web 8 1 6 .timeline, [7]),
-    (web 9 0 7 (.post hi), [7]), (.logOut 10 1 7, [8, 9]), (web 11 1 7 .timeline, [10]),
-    (signUp 12 0, [11]) ]
+  [ (1, signUp ann, []), (2, signUp bob, [1]), (3, logIn ann .wrong, [2]), (4, logIn ann .wrong, [3]),
+    (5, logIn ann, [4]), (6, logIn ann (at_s := 20), [5]), (7, logIn bob, [6]), (8, logIn bob, [7]),
+    (9, web bob 1 .timeline, [8]), (10, web ann 2 (.post hi), [8]), (11, web bob 2 .timeline, [9, 10]),
+    (12, at0 (.logOut bob 2), [11]), (13, web bob 2 .timeline, [12]) ]
 
-/-! ## The spec alone -/
+def abuseClaims : List (Check.Property W) :=
+  [ .always "a locked account is refused, even the right password" fun w =>
+      (replyOf w 5).all (· == .locked),
+    .always "a log-in past maxSessions closes the oldest session" fun w =>
+      replyOf w 8 == none || (replyOf w 9).all (· == .noSession),
+    .always "a session is no key to another account" fun w => (replyOf w 10).all (· == .noSession),
+    .always "a session closed is closed" fun w => (replyOf w 13).all (· == .noSession),
+    .sometimes "a lock lifts after its time" fun w => replyOf w 6 == some (.loggedIn 0 20),
+    .sometimes "a session is let in" fun w => (replyOf w 11).any fun | .feed _ => true | _ => false ]
 
-/-- A history kept beside the board, so that claims about runs are claims about states. -/
-structure History where
-  /-- Ids whose delete was answered. -/
-  deleted : List PostId := []
-  /-- Posts accepted for each account since its window last ended. -/
-  inWindow : List (N × Nat) := []
-  /-- Whatever a claim saw go wrong. -/
-  broken : List String := []
-  deriving BEq, Hashable, Repr
+/-- A post, its answer lost, sent again with its `seq`, while the process restarts. -/
+def lost : Script :=
+  [ (1, signUp bob true, []), (2, logIn bob, [1]), (3, at0 (.newToken bob 0), [2]),
+    (4, api bob 1 (.post hi), [3]), (5, api bob 1 (.post hi), [4]) ]
 
-structure SpecWorld where
-  board : Board N C
-  todo : Script
-  answered : List (Response N)
-  history : History
-  deriving BEq, Hashable
-
-def count (h : History) (n : N) : Nat := ((h.inWindow.find? (·.1 == n)).map (·.2)).getD 0
-
-def setCount (h : History) (n : N) (k : Nat) : History :=
-  { h with inWindow := (n, k) :: h.inWindow.filter (·.1 != n) }
-
-/-- The posts of the accounts `n` follows and its own, newest first, computed another way than
-`Board.feed`: from every post on the board, by insertion. -/
-def reference (b : Board N C) (n : N) : List (N × Post) :=
-  let following := ((b.get? n).map (·.following)).getD []
-  let all := b.accounts.flatMap fun (a, p) => p.posts.map (a, ·)
-  let mine := all.filter fun (a, _) => a == n || following.contains a
-  (mine.foldr (fun (x : N × Post) acc =>
-      acc.filter (fun (y : N × Post) => y.2.id > x.2.id) ++ [x] ++ acc.filter (·.2.id < x.2.id))
-    []).take config.timelineMax
-
-def account (r : Request N C) : Option N :=
-  match r with
-  | .profile .. => none
-  | r => some r.name
-
-/-- What each claim says of one request taking effect, from `b` to `b'` with `reply`. -/
-def judge (h : History) (b b' : Board N C) (r : Request N C) (reply : Reply N) : History :=
-  let gone := b.accounts.flatMap fun (a, p) =>
-    (p.posts.filter fun q => !(b'.postsOf a).contains q).map (a, ·.id)
-  let byAuthor := gone.all fun (a, id) => match r with
-    | .web _ n _ (.delete d) | .api _ n _ _ (.delete d) => a == n && id == d
-    | _ => false
-  let shown := match reply with
-    | .feed list => list.map fun (x : N × Post) => x.2.id
-    | _ => []
-  let timelineOk := match r, reply with
-    | .web _ n _ .timeline, .feed list | .api _ n _ _ .timeline, .feed list =>
-      list == reference b n
-    | _, _ => true
-  let secretOk := match reply.secretOf with
-    | some m => account r == some m
-    | none => true
-  let accepted := b'.ids.filter (!b.ids.contains ·)
-  let h := if accepted.isEmpty then h else setCount h r.name (count h r.name + accepted.length)
-  let h := match r, reply with
-    | .web _ _ _ (.delete d), .deleted | .api _ _ _ _ (.delete d), .deleted =>
-      { h with deleted := d :: h.deleted }
-    | _, _ => h
-  let fail := [("a post is gone that its author did not delete", byAuthor),
-      ("a read shows a post whose delete was answered", shown.all (!h.deleted.contains ·)),
-      ("a timeline is not the newest posts of the accounts followed", timelineOk),
-      ("a reply carries another account's secrets", secretOk)].filterMap fun (name, ok) =>
-    if ok then none else some name
-  { h with broken := h.broken ++ fail }
-
-def specStep (handle : Board N C → Request N C → Board N C × Reply N × Timers)
-    (w : SpecWorld) (k : Nat) : Option SpecWorld := do
-  let (r, after) ← w.todo[k]?
-  if !after.all fun id => w.answered.any (·.req == id) then none
-  let (b', reply, _) := handle w.board r
-  some { board := b', todo := w.todo.eraseIdx k, answered := ⟨r.req, reply, r.json⟩ :: w.answered
-         history := judge w.history w.board b' r reply }
-
-def armed (b : Board N C) : List (Deadline N) :=
-  b.accounts.flatMap fun (n, p) =>
-    (if p.window != 0 then [.window n] else []) ++ (if p.attempts.locked then [.unlock n] else [])
-      ++ p.sessions.ids.map (.expire n)
-
-def fireStep (w : SpecWorld) (d : Deadline N) : SpecWorld :=
-  let history := match d with
-    | .window n => setCount w.history n 0
-    | _ => w.history
-  { w with board := w.board.fire d, history }
-
-def specModel (script : Script)
-    (handle : Board N C → Request N C → Board N C × Reply N × Timers := (·.handle config)) :
-    Check.Model SpecWorld String where
-  init := [{ board := {}, todo := script, answered := [], history := {} }]
-  next w :=
-    ((List.range w.todo.length).filterMap fun k =>
-      (specStep handle w k).map fun w' => ("request", w')) ++
-    (armed w.board).map fun d => ("deadline", fireStep w d)
-
-def specClaims : List (Check.Property SpecWorld) :=
-  [ .always "every bound of the configuration holds" fun w => w.board.bounded config,
-    .always "every post's id is below the next" fun w => w.board.fresh,
-    .always "no account has more than maxPerWindow posts accepted in a window" fun w =>
-      w.history.inWindow.all (·.2 ≤ config.maxPerWindow),
-    .always "each claim holds of every request" fun w => w.history.broken.isEmpty ]
-
-def replied (answered : List (Response N)) (req : ReqId) (reply : Reply N) : Bool :=
-  answered.any fun r => r.req == req && r.reply == reply
-
-def feedOf (answered : List (Response N)) (req : ReqId) : Option (List PostId) :=
-  answered.findSome? fun r => if r.req == req then
-    match r.reply with
-    | .feed list => some (list.map fun (x : N × Post) => x.2.id)
-    | _ => none
-  else none
-
-def socialWitnesses (answered : SpecWorld → List (Response N)) :
-    List (Check.Property SpecWorld) :=
-  [ .sometimes "a timeline shows both posts, newest first" fun w =>
-      feedOf (answered w) 8 == some [1, 0],
-    .sometimes "a timeline read as the second post lands may show the first alone" fun w =>
-      feedOf (answered w) 8 == some [0],
-    .sometimes "after the delete the timeline shows only the other post" fun w =>
-      feedOf (answered w) 10 == some [1],
-    .sometimes "anyone reads an account's posts" fun w => feedOf (answered w) 11 == some [1],
-    .sometimes "another account cannot delete a post" fun w => replied (answered w) 12 .notYours ]
-
-def botWitnesses : List (Check.Property SpecWorld) :=
-  [ .sometimes "a post retried is posted once, and both get its id" fun w =>
-      replied w.answered 6 (.posted 0) && replied w.answered 7 (.posted 0),
-    .sometimes "an older sequence number is stale" fun w => replied w.answered 8 .stale,
-    .sometimes "a sequence number used for another change is refused" fun w =>
-      replied w.answered 15 .reused,
-    .sometimes "the window is full" fun w => replied w.answered 10 .rateLimited,
-    .sometimes "a post is accepted again once the window ends" fun w =>
-      replied w.answered 10 (.posted 2),
-    .sometimes "a token of another generation is refused" fun w =>
-      replied w.answered 11 .badToken,
-    .sometimes "a read retried after a delete is answered afresh" fun w =>
-      replied w.answered 13 .deleted && (feedOf w.answered 14).any (!·.contains 0) ]
-
-def abuseWitnesses (answered : SpecWorld → List (Response N)) :
-    List (Check.Property SpecWorld) :=
-  [ .sometimes "two wrong credentials lock the account" fun w => replied (answered w) 5 .locked,
-    .sometimes "the lock lifts" fun w => replied (answered w) 5 (.loggedIn 0 5 0),
-    .sometimes "a second log-in closes the first session" fun w =>
-      replied (answered w) 8 .noSession,
-    .sometimes "a session is no key to another account" fun w =>
-      replied (answered w) 9 .noSession,
-    .sometimes "after a log-out the session opens nothing" fun w =>
-      replied (answered w) 11 .noSession,
-    .sometimes "a session ends on its own" fun w =>
-      replied (answered w) 10 .noSession,
-    .sometimes "a name is taken once" fun w => replied (answered w) 12 .nameTaken ]
-
-def checkSpec (script : Script) (witnesses : List (Check.Property SpecWorld)) :=
-  Check.search (specModel script) (specClaims ++ witnesses) {} id
-
-/-! ## The system -/
-
-instance : (sig N C).Inspect := {}
-instance (cfg : Config) : (system N C cfg).Inspect := {}
-
-/-- Without session and lock timers, for the scenarios that do not need them. -/
-def quiet : Config := { config with session_ms := none, lockout_ms := none }
-
-def clients (script : Script) : Driver (sig N C) (Waiting (Request N C)) :=
-  Driver.after (fun out => some out.req) script
-
-abbrev World' (sys : System (sig N C)) :=
-  World sys (Waiting (Request N C) × Check.Monitor (Request N C) (Response N) (Board N C))
-
-def outbox {sys : System (sig N C)} (w : World' sys) : List (Response N) := w.state.outbox
-
-def boardOf {cfg : Config} (w : World' (system N C cfg)) : Board N C := w.state.state ()
-
-def systemClaims (cfg : Config) : List (Check.Property (World' (system N C cfg))) :=
-  [ Check.refines "every response and every deadline is one the spec allows",
-    .always "every bound of the configuration holds" fun w => (boardOf w).bounded config,
-    .always "every post's id is below the next" fun w => (boardOf w).fresh ]
-
-def check {sys : System (sig N C)} [sys.Inspect] (script : Script)
-    (props : List (Check.Property (World' sys))) (env : EnvModel (sig N C) := {})
-    (maxCrashes : Nat := 0) :=
-  Check.system sys
-    { env, maxCrashes, driver := (spec N C config).monitored (clients script) deadlines } props
-
-/-- The board may crash; it comes back with its state, as the semantics models a crash. -/
-def crashing : EnvModel (sig N C) where
-  mayCrash _ := true
-
-/-- Requests lost and reordered on their way in, and the board crashing. -/
-def lossyIn : EnvModel (sig N C) where
-  link _ _ := { ordered := false, lossy := true }
-  mayCrash _ := true
-
-def systemWitnesses (cfg : Config) (witnesses : (SpecWorld → List (Response N)) → List (Check.Property SpecWorld)) :
-    List (Check.Property (World' (system N C cfg))) :=
-  (witnesses fun w => w.answered).map fun
-    | .sometimes name p => .sometimes name fun w =>
-      p { board := boardOf w, todo := [], answered := outbox w, history := {} }
-    | .always name p => .always name fun w =>
-      p { board := boardOf w, todo := [], answered := outbox w, history := {} }
-
-/-! ## Seeded bugs -/
-
-/-- A board like the real one, with `handle` replaced. -/
-def boardWith {S : Type} (init : S)
-    (handle : S → Request N C → S × Reply N × Timers) (fire : S → Deadline N → S) :
-    (sig N C).Actor () S where
-  init := init
-  step s
-    | .request r =>
-      let (s', reply, timers) := handle s r
-      (s', .emit ⟨r.req, reply, r.json⟩ :: timerEffects quiet r.name timers)
-    | .deadline d => (fire s d, [])
-  recover s := (s, [])
-
-/-- Fan-out on write without the delete: each post accepted is also put in a list every
-timeline reads, and a delete takes it out of its author's posts but not out of that list. -/
-def keepsDeleted (s : Board N C × List (N × Post)) (r : Request N C) :
-    (Board N C × List (N × Post)) × Reply N × Timers :=
-  let (b, recent) := s
-  match r with
-  | .web _ n session .timeline =>
-    let (b', reply, timers) := b.withSession n session fun p =>
-      (b, .feed ((recent.filter fun (a, _) => a == n || p.following.contains a).take
-        config.timelineMax), {})
-    ((b', recent), reply, timers)
-  | r =>
-    let (b', reply, timers) := b.handle config r
-    let new := ((b'.postsOf r.name).filter fun q => reply == .posted q.id).map (r.name, ·)
-    ((b', new ++ recent), reply, timers)
-
-abbrev keepsDeletedSystem : System (sig N C) where
-  State _ := Board N C × List (N × Post)
-  actor _ := boardWith ({}, []) keepsDeleted fun (b, recent) d => (b.fire d, recent)
-  accept r := ⟨(), .request r⟩
-
-/-- A delete that finds the post wherever it is, not only among the poster's own. -/
-def anyoneDeletes (b : Board N C) : Request N C → Board N C × Reply N × Timers
-  | .web _ n session (.delete id) => b.withSession n session fun _ =>
-    match b.accounts.find? fun (_, p) => p.posts.any (·.id == id) with
-    | some (a, p) => (b.set a { p with posts := p.posts.filter (·.id != id) }, .deleted, {})
-    | none => (b, .notYours, {})
-  | r => b.handle config r
-
-abbrev anyoneDeletesSystem : System (sig N C) where
-  State _ := Board N C
-  actor _ := boardWith {} anyoneDeletes Board.fire
-  accept r := ⟨(), .request r⟩
-
-/-- A rate limit off by one: the window is full only past `maxPerWindow`. -/
-def offByOne (b : Board N C) : Request N C → Board N C × Reply N × Timers
-  | .api _ n token seq (.post body) =>
-    match b.get? n with
-    | some p =>
-      if config.maxPerWindow < p.window then (b, .rateLimited, {})
-      else b.api { config with maxPerWindow := config.maxPerWindow + 1 } n p token seq (.post body)
-    | none => (b, .badToken, {})
-  | r => b.handle config r
-
-abbrev offByOneSystem : System (sig N C) where
-  State _ := Board N C
-  actor _ := boardWith {} offByOne Board.fire
-  accept r := ⟨(), .request r⟩
-
-instance : keepsDeletedSystem.Inspect := {}
-instance : anyoneDeletesSystem.Inspect := {}
-instance : offByOneSystem.Inspect := {}
-
-def matchesSpec {sys : System (sig N C)} : Check.Property (World' sys) :=
-  Check.refines "every response and every deadline is one the spec allows"
+def lostClaims : List (Check.Property W) :=
+  [ .always "a change sent twice with one seq is acted on once, with lost answers and restarts" fun w =>
+      everyDb w fun db => ((rowsOf posts db).filter (·.body == "hi")).length ≤ 1,
+    .sometimes "an answer is lost" fun w => w.driver.2.worlds.any fun world => !world.lost.isEmpty,
+    .sometimes "the retry is answered as a post" fun w => (replyOf w 5).any fun | .posted _ => true | _ => false ]
 
 /-! ## The bridge, without a socket -/
 
@@ -361,10 +219,7 @@ def settings : Settings :=
     password := { cost := { ops := 1, mem_kib := 8 }, pepper := "pepper".toUTF8 }
     origin := "http://127.0.0.1:8080", secure := false }
 
-def ann : Name := ⟨"ann", rfl⟩
-def bob : Name := ⟨"bob", rfl⟩
-
-def cookieOf (name : Name) (session : Sid) : String := sessionToken settings name session 1000
+def cookieOf (name : Name) (session : Int64) : String := sessionToken settings name session 1000
 
 def request (method : Method) (path : List String) (headers : List (String × String))
     (body : String) : Http.Request :=
@@ -378,148 +233,115 @@ def webPost (path : String) (fields : List (String × String)) (cookie : Option 
 def apiPost (path : String) (body : String) (token : String) : Http.Request :=
   request .post ["api", path] [("authorization", s!"Bearer {token}")] body
 
-def decoded (r : Http.Request) : Except Http.Response In :=
-  decode settings 9 (prepare settings r)
+def salt : ByteArray := ByteArray.mk (Array.replicate 16 7)
 
-def same : Except Http.Response In → Except Http.Response In → Bool
+/-- As the server takes a request: `arrive`, then `prepare`, then `decode`. -/
+def decoded (r : Http.Request) (stored : Option String := none) : Except Http.Response Rookery.In :=
+  decode settings 9 (prepare settings (arrive settings 0 salt stored r))
+
+def asked (r : Http.Request) (stored : Option String := none) : Except Http.Response Request :=
+  (decoded r stored).map fun | .request _ a => a.request | _ => .profile ⟨"x", rfl⟩ false
+
+def same : Except Http.Response Request → Except Http.Response Request → Bool
   | .ok a, .ok b => a == b
   | .error a, .error b => a == b
   | _, _ => false
 
-def status : Except Http.Response In → Nat
+def status : Except Http.Response Request → Nat
   | .ok _ => 0
   | .error r => r.status
 
 def contains (bytes : ByteArray) (text : String) : Bool :=
   (((String.fromUTF8? bytes).getD "").splitOn text).length > 1
 
+/-- The hash stored at a cost, and the same password stored at another. -/
+def stored : String := (settings.password.hash salt rfl "longenough").encode
+def storedOther : String :=
+  ({ settings.password with cost := { ops := 1, mem_kib := 16 } }.hash salt rfl "longenough").encode
+
 def tests : List (String × Bool) :=
   let csrf := Auth.formToken settings.keys (sessionOf ann 7)
   let hello : Body := ⟨"hello", rfl⟩
   [ ("bridge: a session's cookie makes a request of its account, whatever the form says",
-      same (decoded (webPost "post" [("body", "hello"), ("csrf", csrf), ("name", "bob")]
+      same (asked (webPost "post" [("body", "hello"), ("csrf", csrf), ("name", "bob")]
           (some (cookieOf ann 7))))
-        (.ok (.web 9 ann 7 (.post hello)))),
+        (.ok (.web ann 7 (.post hello)))),
     ("bridge: a cookie whose payload names another account does not verify",
       let forged := (cookieOf ann 7).replace ".7.ann" ".7.bob"
-      same (decoded (webPost "post" [("body", "hello"), ("csrf", csrf)] (some forged)))
+      same (asked (webPost "post" [("body", "hello"), ("csrf", csrf)] (some forged)))
         (.error notLoggedIn)),
     ("bridge: a form token of another session is refused",
-      status (decoded (webPost "post" [("body", "hello"),
+      status (asked (webPost "post" [("body", "hello"),
         ("csrf", Auth.formToken settings.keys (sessionOf ann 8))] (some (cookieOf ann 7)))) == 403),
     ("bridge: an API token makes a request of its account and generation",
-      same (decoded (apiPost "post" "{\"text\": \"hello\", \"seq\": 4}" (apiToken settings bob 2 0)))
-        (.ok (.api 9 bob 2 4 (.post hello)))),
-    ("bridge: an API token is refused from its expiry on",
-      status (decoded (stamp settings.apiToken_s
-        (apiPost "post" "{\"text\": \"hello\", \"seq\": 4}" (apiToken settings bob 2 0)))) == 401),
+      same (asked (apiPost "post" "{\"text\": \"hello\", \"seq\": 4}" (apiToken settings bob 2 0)))
+        (.ok (.api bob 2 4 (.post hello)))),
     ("bridge: an API token that does not verify is refused",
-      status (decoded (apiPost "post" "{\"text\": \"hello\", \"seq\": 4}"
+      status (asked (apiPost "post" "{\"text\": \"hello\", \"seq\": 4}"
         ((apiToken settings ann 2 0).replace ".2.ann" ".2.bob"))) == 401),
     ("bridge: a session cookie is no API token",
-      status (decoded (apiPost "post" "{\"text\": \"hello\", \"seq\": 4}" (cookieOf bob 2)))
-        == 401),
+      status (asked (apiPost "post" "{\"text\": \"hello\", \"seq\": 4}" (cookieOf bob 2))) == 401),
     ("bridge: a change through the API carries its seq",
-      status (decoded (apiPost "post" "{\"text\": \"hello\"}" (apiToken settings bob 2 0))) == 400),
-    ("bridge: a password enters the system only as its digest",
-      same (decoded (webPost "login" [("name", "ann"), ("password", "longenough")] none))
-        (.ok (.logIn 9 ann (settings.password.digest "ann" "longenough") 0))),
+      status (asked (apiPost "post" "{\"text\": \"hello\"}" (apiToken settings bob 2 0))) == 400),
+    ("bridge: a sign-up's password enters the system only as its hash, with a random salt",
+      same (asked (webPost "signup" [("name", "ann"), ("password", "longenough")] none))
+        (.ok (.signUp ann stored false))),
+    ("bridge: a log-in's password is checked against the stored hash",
+      same (asked (webPost "login" [("name", "ann"), ("password", "longenough")] none) (some stored))
+          (.ok (.logIn ann (.right none)))
+        && same (asked (webPost "login" [("name", "ann"), ("password", "wrong one")] none) (some stored))
+          (.ok (.logIn ann .wrong))
+        && same (asked (webPost "login" [("name", "ann"), ("password", "longenough")] none) none)
+          (.ok (.logIn ann .wrong))),
+    ("bridge: a hash stored at another cost verifies, and is made again at the deployment's",
+      same (asked (webPost "login" [("name", "ann"), ("password", "longenough")] none) (some storedOther))
+        (.ok (.logIn ann (.right (some stored))))),
     ("bridge: what enters the system holds no password, no cookie and no token",
-      let prepared := prepare settings (webPost "login"
-        [("name", "ann"), ("password", "longenough")] (some (cookieOf ann 7)))
+      let prepared := prepare settings (arrive settings 0 salt (some stored) (webPost "login"
+        [("name", "ann"), ("password", "longenough")] (some (cookieOf ann 7))))
       let api := prepare settings (apiPost "post" "{}" (apiToken settings bob 2 0))
       !contains prepared.body "longenough" && !(prepared.headers.any (·.1 == "cookie"))
         && !(api.headers.any (·.1 == "authorization"))),
-    ("bridge: a verified header a client sends itself is dropped",
+    ("bridge: a header the server writes that a client sends itself is dropped",
       let claimed := request .post ["api", "post"] [(verifiedToken, "2.bob")]
         "{\"text\": \"hello\", \"seq\": 4}"
-      status (decoded claimed) == 401),
+      let checked := request .post ["login"] [(passwordChecked, "right")] "name=ann"
+      status (asked claimed) == 401 && status (asked checked) == 500),
     ("bridge: a post too long is refused before it reaches the system",
-      status (decoded (webPost "post" [("body", String.ofList (List.replicate 281 'a')),
+      status (asked (webPost "post" [("body", String.ofList (List.replicate 281 'a')),
         ("csrf", csrf)] (some (cookieOf ann 7)))) == 200) ]
 
 end Bridge
 
 /-! ## Running them -/
 
-/-- A check, printed as it ends unless the output is JSON, and its result. -/
-def timed {S L : Type} (json : Bool) (name : String) (ok : Check.Report S L → Bool)
-    (render : Check.Report S L → String) (report : Unit → Check.Report S L) :
-    IO Testing.Result := do
-  let start ← IO.monoMsNow
-  let r := report ()
-  let passed := ok r
-  let ms := (← IO.monoMsNow) - start
-  unless json do
-    IO.println s!"== {name}: {if passed then "as expected" else "NOT AS EXPECTED"} ({ms} ms)"
-    IO.println (render r)
-    (← IO.getStdout).flush
-  return .ofBool .check name passed (render r)
-
-def passes {S L : Type} (r : Check.Report S L) : Bool := r.ok
-
-def violates {S L : Type} (property : String) (r : Check.Report S L) : Bool :=
-  match r.failure with
-  | some (.violated p _) => p == property
-  | _ => false
-
-def renderSpec (r : Check.Report SpecWorld String) : String :=
-  r.render (fun w => reprStr w.board ++ "\n" ++ reprStr w.history) id
-
-def renderSystem {sys : System (sig N C)} [sys.Inspect] (r : Check.Report (World' sys) (Event (sig N C))) :
-    String :=
-  r.renderSystem
+def live : IO (List (String × Bool)) := do
+  let some spec ← IO.getEnv "LANES_POSTGRES"
+    | return [("rookery on PostgreSQL: skipped, LANES_POSTGRES is not set", true)]
+  let [host, portText] := spec.splitOn ":" | return [("LANES_POSTGRES is host:port", false)]
+  let pg : Postgres.Client.Config :=
+    { host, port := (portText.toNat?.getD 5432).toUInt16, sslmode := .disable,
+      conn := { user := "lanes_trust", database := "lanes_test" } }
+  let dir : System.FilePath := ".lake/live"
+  if ← dir.pathExists then IO.FS.removeDirAll dir
+  IO.FS.createDirAll dir
+  Rookery.Live.run dir pg
 
 def main (args : List String) : IO UInt32 := do
   let json := Testing.wantsJson args
-  let args := args.filter (· != "--json")
-  let all := args.isEmpty
-  let mut results : Array Testing.Result := #[]
-  if all || args.contains "spec" then
-    results := results.push (← timed json "the spec: posts, follows, timelines and a delete" passes
-      renderSpec fun _ => checkSpec social (socialWitnesses (·.answered)))
-    results := results.push (← timed json "the spec: bots, retries, tokens and the rate limit" passes
-      renderSpec fun _ => checkSpec bots botWitnesses)
-    results := results.push (← timed json "the spec: locks, sessions and refusals" passes
-      renderSpec fun _ => checkSpec abuse (abuseWitnesses (·.answered)))
-  if all || args.contains "system" then
-    results := results.push (← timed json "the system: posts, follows, timelines and a delete"
-      passes renderSystem fun _ =>
-        check social (systemClaims quiet ++ systemWitnesses quiet socialWitnesses))
-    results := results.push (← timed json "the system: bots, retries, tokens and the rate limit"
-      passes renderSystem fun _ => check bots (systemClaims quiet))
-    results := results.push (← timed json "the system: locks, sessions and refusals, timers at any moment"
-      passes renderSystem fun _ =>
-        check abuse (systemClaims config ++ systemWitnesses config abuseWitnesses))
-  if all || args.contains "faults" then
-    results := results.push (← timed json "the system with a crash anywhere: a delete and timelines"
-      passes renderSystem fun _ => check social (systemClaims quiet) crashing 1)
-    results := results.push (← timed json "the system with a crash anywhere: bots and retries"
-      passes renderSystem fun _ => check bots (systemClaims quiet) crashing 1)
-    results := results.push (← timed json
-      "the system with requests lost and reordered and a crash anywhere: a delete and timelines"
-      passes renderSystem fun _ => check social (systemClaims quiet) lossyIn 1)
-  if all || args.contains "bridge" then
-    for (name, ok) in Bridge.tests do
-      unless json do IO.println s!"== {name}: {if ok then "as expected" else "NOT AS EXPECTED"}"
-      results := results.push (.ofBool .test name ok)
-  if all || args.contains "bugs" then
-    let spec := "every response and every deadline is one the spec allows"
-    results := results.push (← timed json "seeded: a timeline that keeps a deleted post"
-      (violates spec) renderSystem fun _ => check (sys := keepsDeletedSystem) social [matchesSpec])
-    results := results.push (← timed json "seeded: a delete by another account"
-      (violates spec) renderSystem fun _ => check (sys := anyoneDeletesSystem) social [matchesSpec])
-    results := results.push (← timed json "seeded: a rate limit off by one"
-      (violates spec) renderSystem fun _ => check (sys := offByOneSystem) bots [matchesSpec])
-    let claims := "each claim holds of every request"
-    results := results.push (← timed json "seeded, in the spec alone: a delete by another account"
-      (violates claims) renderSpec fun _ =>
-        Check.search (specModel social anyoneDeletes) specClaims {} id)
-    results := results.push (← timed json "seeded, in the spec alone: a rate limit off by one"
-      (violates "no account has more than maxPerWindow posts accepted in a window") renderSpec
-      fun _ => Check.search (specModel bots offByOne) (specClaims.drop 1) {} id)
-  Testing.report (if json then ["--json"] else []) results.toList
-    (shown := if json then 0 else results.size)
+  let results : List (String × Check.Report W (Event sig)) :=
+    [ ("posts, a follow, a timeline after a delete, a delete by another", check social socialClaims),
+      ("a bot's token, a post retried with its seq, an older seq, the window full, a seq reused",
+        check bots botClaims),
+      ("a lock and its lifting, a session closed by another log-in, a session of another account",
+        check abuse abuseClaims),
+      ("a post retried with its seq, answers lost and the process restarting",
+        check lost lostClaims (losses := true) (restarts := 1)) ]
+  let checks := results.map fun (name, r) =>
+    Testing.Result.check s!"rookery beside the store's model: {name}" r r.renderSystem
+  unless json do
+    for (name, r) in results do IO.println s!"== {name}\n{r.renderSystem}"
+  Testing.report args (checks ++ Testing.Result.tests Bridge.tests ++ Testing.Result.tests (← live))
 
 end Rookery.Check
 

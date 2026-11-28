@@ -1,0 +1,6 @@
+-- The counters, as `Counter.schema` declares them. Run once, at the start, by
+-- `Postgres.Typed.prepare`, which then refuses to start if the table is not the declared one.
+CREATE TABLE counts (
+  name text COLLATE "C" NOT NULL PRIMARY KEY,
+  value bigint NOT NULL
+);

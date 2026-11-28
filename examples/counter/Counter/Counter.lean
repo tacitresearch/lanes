@@ -1,54 +1,115 @@
 import Lanes
 
 /-!
-# A counter service
+# A counter, kept in PostgreSQL
 
-The spec and the actor. This file is logic only: no IO (Lanes rule 2.4), and no theorems, so
-that `Check.lean` and `Main.lean`, which import it, build while a proof is broken. The theorems
-are in `Counter/Proofs.lean`.
+The logic: the table, one transaction per request, and the front that sends each request to the
+store. This file has no IO (Lanes rule 2.4) and no theorems, so that `Check.lean` and
+`Main.lean`, which import it, build while a proof is broken. The theorems are in
+`Counter/Proofs.lean`.
+
+The process keeps nothing: the count is a row of the table `counts`, so a restart loses nothing
+and several instances behind a load balancer share one count. A request is one transaction, run
+by the store at `SERIALIZABLE` and tried again on a conflict, which is safe because the
+transaction is pure: it is all the request does.
 -/
 
 namespace Counter
 
-open Lanes
+open Lanes Lanes.Db
 
-/-- Identifies a client request, so its response can be matched to it. -/
-abbrev ReqId := Nat
+/-- A counter, by name. `lanes_data` declares its table with the `table` line: `counts`, keyed
+by `name`. `migrations/0001_counts.sql` creates it, and the server refuses to start when the
+database's table differs from this one (`Postgres.Typed.prepare`). -/
+lanes_data structure Count where
+  name : String
+  value : Int64
+  deriving DecidableEq, Repr, Hashable
+  table counts key name
 
-/-- Declared with `lanes_data`, whose `deriving` also takes `ToJson, FromJson`, with their
-round-trip law, and whose `table` line maps a structure to rows of the typed store. -/
+def schema : Schema := [counts.table]
+
 lanes_data inductive Request where
-  | increment (req : ReqId)
-  | read (req : ReqId)
+  | increment
+  | read
   deriving DecidableEq, Repr, Hashable
 
 lanes_data structure Response where
-  req : ReqId
-  value : Nat
+  value : Int64
   /-- Whether the request was applied. An increment at the limit is refused. -/
   applied : Bool
   deriving DecidableEq, Repr, Hashable
 
 /-- Explicit configuration (rule 2.5). -/
 structure Config where
-  /-- The counter never exceeds this (rule 2.6: bounded everything). -/
+  /-- The count never exceeds this (rule 2.6: bound everything). Below `2 ^ 63`. -/
   limit : Nat := 1000
 
-abbrev sig : Signature := Server.sig Request Response
+/-- The one counter of the page. -/
+def counterName : String := "main"
 
-/--
-The spec: what each request does, as if requests were handled one at a time. This is the part
-to review. It is also the implementation, because the `Server` behaviour runs it as an actor.
--/
-def service (config : Config) : Service sig.In sig.Out Nat where
-  init := 0
-  step count
-    | .increment req =>
-      if count < config.limit then (count + 1, [⟨req, count + 1, true⟩])
-      else (count, [⟨req, count, false⟩])
-    | .read req => (count, [⟨req, count, true⟩])
+/-- The count: none if the row is not there yet. -/
+def current : Txn Count := do
+  return (← counts.get [.text counterName]).getD { name := counterName, value := 0 }
 
-abbrev system (config : Config) : System sig :=
-  Server.system (service config)
+/-- The transactions. This is the part to review: each is pure, and what it reads and writes is
+all a request does. -/
+def handler (config : Config) : Handler Request Response
+  | .increment => do
+    let c ← current
+    if c.value.toInt.toNat < config.limit then
+      let c := { c with value := Int64.ofNat (c.value.toInt.toNat + 1) }
+      let _ ← counts.upsert c
+      return ⟨c.value, true⟩
+    else return ⟨c.value, false⟩
+  | .read => do return ⟨(← current).value, true⟩
+
+/-! ## The front
+
+One actor that keeps nothing: it sends each request to the store as a call under the request's
+own id, and answers with what the store answered. -/
+
+inductive In where
+  /-- A request, numbered by the server. -/
+  | request (id : Nat) (r : Request)
+  | store (reply : Db.Reply Response)
+  deriving DecidableEq, Repr, Hashable
+
+inductive Out where
+  | call (c : Db.Call Request)
+  | answered (id : Nat) (r : Response)
+  /-- The store failed the request, or its answer is not known. -/
+  | failed (id : Nat)
+  deriving DecidableEq, Repr, Hashable
+
+abbrev sig : Signature where
+  Id := Unit
+  Msg _ := In
+  In := In
+  Out := Out
+
+def step : In → List (Effect sig ())
+  | .request id r => [.emit (.call ⟨id, r⟩)]
+  | .store ⟨id, .committed r⟩ => [.emit (.answered id r)]
+  | .store ⟨id, _⟩ => [.emit (.failed id)]
+
+def front : sig.Actor () Unit where
+  init := ()
+  step _ x := ((), step x)
+
+abbrev system : System sig where
+  State _ := Unit
+  actor _ := front
+  accept x := ⟨(), x⟩
+
+/-- How the store sees the front: its calls, and the inputs that answer them. -/
+def port : Db.Port sig Request Response where
+  call
+    | .call c => some c
+    | _ => none
+  reply r := .store r
+  replied
+    | .store r => some r
+    | _ => none
 
 end Counter
