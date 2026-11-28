@@ -152,18 +152,4 @@ def Bridge.shard (bridge : Bridge σ) : Bridge (shardSig σ) where
     | .inr _ => none
   prepare := bridge.prepare
 
-/-- What the gate assumes of whoever sends it requests: an id is used once. Other inputs are
-not its concern. -/
-def frontedOutside (σ : Signature) : Outside (frontedSig σ) (List ReqId) where
-  init := []
-  allow used
-    | .inl (id, _) => if id ∈ used then none else some (id :: used)
-    | .inr _ => some used
-
-/-- What the gate assumes of whoever sends `served sys` requests: an id is used once. The
-server allocates ids from `Http.Waiting`, which hands each out once. -/
-def servedOutside (σ : Signature) : Outside (servedSig σ) (List ReqId) where
-  init := []
-  allow used x := if x.1 ∈ used then none else some (x.1 :: used)
-
 end Lanes.Http

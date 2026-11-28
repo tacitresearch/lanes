@@ -54,10 +54,6 @@ def Act.answers (id : ReqId) : Gate.Act σ → Bool
   | .respond i _ => i == id
   | _ => false
 
-def Act.passes : Gate.Act σ → Bool
-  | .forward _ => true
-  | _ => false
-
 end Gate
 
 def GateMsg.arrives (id : ReqId) : GateMsg σ → Bool

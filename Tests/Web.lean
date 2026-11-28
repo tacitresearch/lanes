@@ -140,7 +140,9 @@ def durableTest : Async (List (String × Bool)) := do
   let free ← (Journal.Store.open
     (sys := admitted (Tests.Fixtures.Bank.bank Tests.Fixtures.BankWeb.Acct 100) Tests.Fixtures.BankWeb.bridge)
     { path := journal.addExtension "other", input := Codec.pair Codec.nat Request.codec
-      system := ServerConfig.journalName {} }).toBaseIO
+      system := ServerConfig.journalName {}
+      actors := some (admittedActors (Tests.Fixtures.Bank.actors Codec.fin 100)
+        Tests.Fixtures.BankWeb.bridge) }).toBaseIO
   if let .ok log := free then log.close
   server.stop
   let ids := (← server.trace).toList.filterMap fun
@@ -201,7 +203,8 @@ def gateNameTests : List (String × Bool) :=
     ("web: the name of a journal now is the same behind every gate, and no gate's",
       ServerConfig.journalName { system := "bank 1", gate }
           == ServerConfig.journalName { system := "bank 1" }
-        && (gateOf "bank 1" (ServerConfig.journalName { system := "bank 1" })).isNone) ]
+        && (gateOf "bank 1" (ServerConfig.journalName { system := "bank 1" })).isNone
+        && admittedName "bank 1" == "bank 1, admitted") ]
 
 /-- The bank's journal, written behind one gate, is read behind another as it is: the journal
 holds what the gate admitted, so a replay reads none of its settings. A journal written while the

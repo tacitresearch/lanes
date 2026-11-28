@@ -66,10 +66,11 @@ def main (args : List String) : IO UInt32 := do
       | some path, _ => pure (.path path)
       | none, some rev => pure (.git New.repository rev)
       | none, none => do
-        let some source ← New.ofCheckout | do
+        let some (source, warnings) ← New.ofCheckout | do
           IO.eprintln "lanes new: git cannot say which commit this checkout of Lanes is at, so \
             the app requires `main`; give `--rev` to pin it"
           pure (.git New.repository "main")
+        for warning in warnings do IO.eprintln s!"lanes new: warning: {warning}"
         pure source
     New.run name dir source
   | "lint" :: rest =>

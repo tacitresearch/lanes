@@ -119,13 +119,22 @@ theorem fields_safe (keyId : KeyId) (hash : HashAlgorithm) (g : Grant) (signatur
 
 /-- Every cookie of a grant is valid, so `Response.setCookie` sets each one. -/
 theorem cookies_valid (keyId : KeyId) (hash : HashAlgorithm) (g : Grant) (signature : ByteArray)
-    {path : String} (hpath : path.toList.all Http.cookieOctet = true) :
-    ∀ c ∈ cookies (fields keyId hash g signature) path, c.valid = true := by
+    {path : String} (hpath : path.toList.all Http.cookieOctet = true) {domain : Option String}
+    (hdomain : domain.all (·.toList.all Http.cookieOctet) = true) :
+    ∀ c ∈ cookies (fields keyId hash g signature) path domain, c.valid = true := by
   intro c hc
   simp only [cookies, List.mem_map] at hc
   obtain ⟨kv, hkv, rfl⟩ := hc
   obtain ⟨hname, hvalue⟩ := fields_safe keyId hash g signature kv hkv
-  simp only [Http.Cookie.valid, hname, hpath, Bool.true_and, Bool.and_true]
+  have hhost : ("CloudFront-" ++ kv.1).startsWith "__Host-" = false := by
+    rw [String.startsWith_string_eq_false_iff, String.toList_append]
+    rintro ⟨t, ht⟩
+    have h₁ : "__Host-".toList = '_' :: "_Host-".toList := by decide
+    have h₂ : "CloudFront-".toList = 'C' :: "loudFront-".toList := by decide
+    rw [h₁, h₂] at ht
+    simp at ht
+  simp only [Http.Cookie.valid, hname, hpath, hdomain, hhost, Bool.true_and, Bool.and_true,
+    Bool.not_false, Bool.or_true]
   exact List.all_eq_true.mpr fun c hc => cookieOctet_of_urlSafe (List.all_eq_true.mp hvalue c hc)
 
 end Aws.CloudFront

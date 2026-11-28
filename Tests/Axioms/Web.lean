@@ -201,10 +201,31 @@ import Lanes.Semantics
 
 -- Lanes.Web.Http.Admit
 
+/-- info: 'Lanes.Http.Gate.step_arrive_eq' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Gate.step_arrive_eq
+
+/-- info: 'Lanes.Http.Gate.step_answer_eq' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Gate.step_answer_eq
+
 /-- info: 'Lanes.Http.Gate.admit_refused' depends on axioms: [propext, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.Gate.admit_refused
 
 -- Lanes.Web.Http.AdmitSound
+
+/-- info: 'Lanes.Http.Front.swap_inj' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Lanes.Http.Front.swap_inj
+
+/-- info: 'Lanes.Http.Front.conv_inj' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Front.conv_inj
+
+/-- info: 'Lanes.Http.Front.toSys_conv' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Front.toSys_conv
+
+/-- info: 'Lanes.Http.Front.toGate_answer' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Front.toGate_answer
+
+/-- info: 'Lanes.Http.Front.rel_emit' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Front.rel_emit
 
 /-- info: 'Lanes.Http.Front.World.refines' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.Front.World.refines

@@ -421,6 +421,12 @@ import Lanes.Semantics
 #guard_msgs in #print axioms Lanes.Postgres.Scram.Binding.data_endPoint
 
 -- Lanes.Lib.Postgres.Settings
+/-- info: 'Lanes.Postgres.Address.preferred_spec' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.Address.preferred_spec
+
+/-- info: 'Lanes.Postgres.Address.preferred_isSome' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Lanes.Postgres.Address.preferred_isSome
+
 /-- info: 'Lanes.Postgres.SslMode.defaultFor_loopback' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Postgres.SslMode.defaultFor_loopback
 

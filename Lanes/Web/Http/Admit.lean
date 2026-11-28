@@ -152,39 +152,4 @@ def admittedActors {sys : System σ} (actors : Kernel.Image.Codecs sys) (bridge 
   let fronted := admittedFrontedActors actors bridge
   { id := fronted.id, state := fronted.state, msg := fronted.msg }
 
-/-! What the checker needs of the shard's system is what it needs of `sys`. -/
-
-@[instance_reducible] def _root_.Lanes.Signature.Inspect.sink : sinkSig.Inspect where
-  reprIn := inferInstanceAs (Repr Unit)
-  hashIn := inferInstanceAs (Hashable Unit)
-  reprOut := ⟨fun e _ => e.elim⟩
-  hashOut := ⟨fun e => e.elim⟩
-
-@[instance_reducible] def _root_.Lanes.System.Inspect.sink : sink.Inspect where
-  beqState _ := inferInstanceAs (BEq Unit)
-  reprState _ := inferInstanceAs (Repr Unit)
-  hashState _ := inferInstanceAs (Hashable Unit)
-
-@[instance_reducible] def _root_.Lanes.Signature.Inspect.admittedFronted [σ.Inspect] :
-    (admittedFrontedSig σ).Inspect :=
-  letI : sinkSig.Inspect := .sink
-  letI : (joinSig sinkSig σ).Inspect := .join
-  .withIO
-
-@[instance_reducible] def _root_.Lanes.System.Inspect.admittedFronted {sys : System σ}
-    [sys.Inspect] {bridge : Bridge σ} : (admittedFronted sys bridge).Inspect :=
-  letI : sink.Inspect := .sink
-  letI : (sink.join sys).Inspect := .join
-  .filterMapIO
-
-@[instance_reducible] def _root_.Lanes.Signature.Inspect.admitted [σ.Inspect] :
-    (admittedSig σ).Inspect :=
-  letI : (admittedFrontedSig σ).Inspect := .admittedFronted
-  .withIO
-
-@[instance_reducible] def _root_.Lanes.System.Inspect.admitted {sys : System σ} [sys.Inspect]
-    {bridge : Bridge σ} : (admitted sys bridge).Inspect :=
-  letI : (admittedFronted sys bridge).Inspect := .admittedFronted
-  .filterMapIO
-
 end Lanes.Http
