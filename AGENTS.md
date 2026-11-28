@@ -64,6 +64,12 @@ lake exe lanes docstrings  # how many public declarations of `import Lanes` have
   by exploring nothing. Both are exact: the fingerprinted mode is not a pull request's check. A
   check over its budget is made smaller, never moved to the schedule alone. *Why:* iteration
   speed; a check that takes ten minutes is run less, and bugs wait for it.
+- `lake test`, `lake exe lanesCheck` and the examples' check programs print through
+  `Lanes.Testing.report` (`Lanes/Testing/Run.lean`): each result has a kind, build, proof, check
+  or test, and the program exits 1 when one failed and 2 when a model check passed but hit a
+  bound, which is not a pass. `--json` (`lake test -- --json`, `lanes check --json`, `lanes lint
+  --json`) prints one JSON object instead. `Report.ok` is a complete pass; `Report.passed`, no
+  failure in the part explored, is for a check bounded on purpose, which says so in its name.
 - `lanes lint` checks the text of a project: `no-sorry` (no `sorry` or `admit`), `trusted-listed`
   (`partial`, `unsafe`, `axiom`, `panic!`, `implemented_by`, `extern` and C only in files
   `TRUSTED.md` names), `trusted-size` (each trusted file has the line count `TRUSTED.md` gives),

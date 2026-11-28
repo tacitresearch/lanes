@@ -214,7 +214,7 @@ def pooled (port : UInt16) (trust : Tls.Trust) : Async (List (String × Bool)) :
 def live : Async (List (String × Bool)) := do
   let openssl ← hasOpenssl
   let fromOpenssl ← if openssl then offline else
-    IO.println "postgres tls: skipped openssl s_server, there is no openssl command"
+    IO.eprintln "postgres tls: skipped openssl s_server, there is no openssl command"
     pure []
   let some (port, certs) ← server
     | return fromOpenssl ++ [("postgres tls live: skipped, LANES_POSTGRES_TLS and LANES_POSTGRES_CERTS are not set", true)]

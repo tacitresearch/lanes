@@ -57,7 +57,7 @@ def tests : List (String × Bool) :=
   let plain := Check.system echo scenario props
   let reduced := Check.systemReduced echo scenario canon props
   [ ("reduce: the check passes with and without the reduction, and the reduction stores fewer",
-      plain.ok && plain.complete && reduced.ok && reduced.complete
+      plain.ok && reduced.ok
         && reduced.witnesses.length == 1 && reduced.states < plain.states) ]
 
 end Tests.Reduce

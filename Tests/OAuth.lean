@@ -396,7 +396,7 @@ end Model
 def modelTests : List (String × Bool) :=
   let r := Model.check 1
   [ ("oauth model: no replay and no state from another browser, under every order and a restart",
-      r.ok && r.complete),
+      r.ok),
     ("oauth model: the check is not vacuous: a sign-in, a replay refused, the attacker refused",
       r.witnesses.length == 3) ]
 
@@ -444,7 +444,7 @@ def refused (r : Option Response) (why : String) : Bool :=
 
 def live : Async (List (String × Bool)) := do
   unless ← Testing.OAuth.hasOpenssl do
-    IO.println "oauth: skipped the flow end to end, there is no openssl command"
+    IO.eprintln "oauth: skipped the flow end to end, there is no openssl command"
     return []
   let p ← Fake.start
   try

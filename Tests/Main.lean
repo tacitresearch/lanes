@@ -74,25 +74,28 @@ import Tests.Testing
 
 /-!
 The test driver behind `lake test`: the pure tests and the live runtime tests, well under a
-second together. `lanesTest live` runs only the live tier, the one worth repeating. The larger
+second together. `lanesTest live` runs only the live tier, the one worth repeating; `--json`
+prints the results as JSON (`lake test -- --json`). The larger
 model checks are a separate binary, `lanesCheck`, because their results are computed when the
 program starts.
 -/
 
-def failures (results : List (String × Bool)) : IO Unit := do
-  for (name, ok) in results do
-    if !ok then IO.println s!"FAIL {name}"
+/-- Print the failures of the pure tests before the live ones start, unless the output is JSON. -/
+def failures (json : Bool) (results : List (String × Bool)) : IO Unit := do
+  if json then return
+  for line in (Lanes.Testing.Result.tests results).filterMap (Lanes.Testing.line ·) do
+    IO.println line
   (← IO.getStdout).flush
 
-/-- `shown` results at the start have had their failures printed already. -/
-def report (results : List (String × Bool)) (shown : Nat := 0) : IO UInt32 := do
+/-- `shown` results at the start have had their failures printed already. With `--json` in
+`args`, every result is printed as JSON (`Testing.report`). -/
+def report (args : List String) (results : List (String × Bool)) (shown : Nat := 0) :
+    IO UInt32 := do
   let results := results ++ [("no shard is left running when the tests end",
     (← Lanes.Runtime.running) == 0)]
-  failures (results.drop shown)
-  let failed := results.countP (!·.2)
-  IO.println s!"{results.length - failed} passed, {failed} failed"
-  (← IO.getStdout).flush
-  IO.Process.exit (if failed == 0 then 0 else 1)
+  let code ← Lanes.Testing.report args (Lanes.Testing.Result.tests results)
+    (if Lanes.Testing.wantsJson args then 0 else shown) (passes := false)
+  IO.Process.exit code.toUInt8
 
 open Tests.Durable (safely) in
 def live : IO (List (String × Bool)) := do
@@ -138,19 +141,20 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.Testing.tests
     ++ Tests.Queue.tests ++ Tests.Reduce.tests ++ Tests.Cache.tests ++ Tests.WallClock.tests ++ Tests.Throttle.tests
     ++ Tests.SharedCache.tests
-  match args with
+  let json := Lanes.Testing.wantsJson args
+  match args.filter (· != "--json") with
   | [] =>
     let pure := pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.Lint.tests)
       ++ (← Tests.New.tests) ++ (← Tests.Copies.tests) ++ (← Tests.Tutorial.tests) ++ (← Tests.TutorialWeb.tests) ++ (← Tests.Oracle.replayAll) ++ (← Tests.Oracle.Service.replayAll)
       ++ (← Tests.Json.suite) ++ (← Tests.HttpConn.checks) ++ (← Tests.Postgres.psqlTests) ++ (← Tests.PostgresConn.checks) ++ (← Tests.PostgresPool.checks) ++ (← Tests.StoreModel.checks)
-      ++ (← Tests.MultipartModel.checks)
-    failures pure
-    report (pure ++ (← live)) pure.length
-  | ["fast"] => report (pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.Lint.tests)
+      ++ (← Tests.MultipartModel.checks) ++ (← Tests.Testing.runnerTests)
+    failures json pure
+    report args (pure ++ (← live)) pure.length
+  | ["fast"] => report args (pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.Lint.tests)
       ++ (← Tests.New.tests) ++ (← Tests.Copies.tests) ++ (← Tests.Tutorial.tests) ++ (← Tests.TutorialWeb.tests) ++ (← Tests.Oracle.replayAll) ++ (← Tests.Oracle.Service.replayAll)
       ++ (← Tests.Json.suite) ++ (← Tests.HttpConn.checks) ++ (← Tests.Postgres.psqlTests) ++ (← Tests.PostgresConn.checks) ++ (← Tests.PostgresPool.checks) ++ (← Tests.StoreModel.checks)
       ++ (← Tests.MultipartModel.checks))
-  | ["live"] => report (← live)
+  | ["live"] => report args (← live)
   | ["journal-child", path] =>
     Tests.Durable.child path
     return 0
@@ -158,5 +162,5 @@ def main (args : List String) : IO UInt32 := do
     Tests.Durable.tapeChild path round.toNat!
     return 0
   | _ =>
-    IO.eprintln "usage: lanesTest [fast|live]"
+    IO.eprintln "usage: lanesTest [fast|live] [--json]"
     return 2

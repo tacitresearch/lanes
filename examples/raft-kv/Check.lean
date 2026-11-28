@@ -3,6 +3,7 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import RaftKV
+import Lanes.Testing
 
 /-!
 Model checks of Raft on three nodes, one key and two values, run by `lake test`. Every check
@@ -232,9 +233,11 @@ def namedWriteThenRead : List (Request N NC) :=
 def retriedElsewhere : List (Request N NC) :=
   [⟨1, 0, ⟨0, 1, .put 0 1⟩⟩, ⟨1, 1, ⟨0, 1, .put 0 1⟩⟩, ⟨2, 0, ⟨0, 2, .get 0⟩⟩]
 
+/-- A check, passed when it finds the failure `expect` names or, with none, when it passes
+complete. Its detail is the counts and, if it did not pass, the report. -/
 def run {σ : Signature} [σ.Inspect] {sys : System σ} [sys.Inspect] {D : Type} (name : String)
     (check : Unit → Check.Report (World sys D) (Event σ)) (expect : Option String := none) :
-    IO Bool := do
+    IO Testing.Result := do
   let t0 ← IO.monoMsNow
   let report := check ()
   let found := match report.failure with
@@ -242,13 +245,12 @@ def run {σ : Signature} [σ.Inspect] {sys : System σ} [sys.Inspect] {D : Type}
     | some (.violated property _) => some property
     | some (.deadlock _) => some "deadlock"
     | some (.unreached names) => some s!"never reached: {names}"
-  let ok := found == expect && (expect.isSome || report.complete)
-  IO.println s!"{if ok then "ok  " else "FAIL"} {name}: {report.states} states, depth {report.depth}, {(← IO.monoMsNow) - t0} ms{match found with | some f => s!", found: {f}" | none => ""}"
-  if !ok then IO.println report.renderSystem
-  return ok
+  let ok := found == expect && (expect.isSome || report.ok)
+  let counts := s!"{report.states} states, depth {report.depth}, {(← IO.monoMsNow) - t0} ms{match found with | some f => s!", found: {f}" | none => ""}"
+  return .ofBool .check name ok (if ok then counts else counts ++ "\n" ++ report.renderSystem)
 
 /-- Checks that finish in seconds: run by `lake test`. -/
-def quick : List (String × IO Bool) :=
+def quick : List (String × IO Testing.Result) :=
   [ ("reliable links, one term", run "reliable links, one term" fun _ =>
       check {} reliable writeThenRead { maxTerm := 1, maxNet := 3 }),
     ("what the proofs use, one term", run "what the proofs use, one term" fun _ =>
@@ -282,7 +284,7 @@ def quick : List (String × IO Bool) :=
         checkPlain retryingClients namedWriteThenRead { maxTerm := 1, maxNet := 3 }) ]
 
 /-- Checks that take minutes: `lake exe raftCheck deep`. -/
-def deep : List (String × IO Bool) :=
+def deep : List (String × IO Testing.Result) :=
   [ ("reliable links, two terms", run "reliable links, two terms" fun _ =>
       check {} reliable writeThenRead { maxTerm := 2 }),
     ("unordered links, one term", run "unordered links, one term" fun _ =>
@@ -346,13 +348,18 @@ def deep : List (String × IO Bool) :=
         check { commitsOwnTermOnly := false } reliable twoWrites
           { maxTerm := 4, maxLog := 1, maxNet := 5 }) ]
 
+/-- Each check's line is printed as it ends; with `--json`, only the results, as JSON. -/
 def main (args : List String) : IO UInt32 := do
-  let chosen := match args with
+  let json := Testing.wantsJson args
+  let chosen := match args.filter (· != "--json") with
     | ["deep"] => deep
     | [name] => (quick ++ deep).filter (·.1 == name)
     | _ => quick
-  let mut failed := 0
+  let mut results := []
   for (_, check) in chosen do
-    unless ← check do failed := failed + 1
-  IO.println s!"{chosen.length - failed} passed, {failed} failed"
-  return if failed == 0 then 0 else 1
+    let r ← check
+    unless json do
+      IO.println s!"{if r.status == .passed then "ok  " else "FAIL"} {r.name}: {r.detail}"
+      (← IO.getStdout).flush
+    results := results ++ [r]
+  Testing.report args results (shown := if json then 0 else results.length)

@@ -83,7 +83,7 @@ def check (ahead : Bool) :=
 
 def tests : List (String × Bool) :=
   [ ("clock: no stamp is ahead of the clock, against everything a clock may do",
-      (check false).ok && (check false).complete),
+      (check false).ok),
     ("clock: a stamper that runs ahead of the clock is caught",
       match (check true).failure with
       | some (.violated "no stamp is ahead of the clock" _) => true
