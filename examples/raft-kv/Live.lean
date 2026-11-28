@@ -28,7 +28,8 @@ def start (dir : System.FilePath) (ports : IO.Ref (Array UInt16))
   let (rt, peers) ← startNode (n := 3)
     { self := k, raft := raftConfig k, listen
       home := fun i => return (← ports.get)[i.val]?.map fun port => { port }
-      journal := some (dir / s!"node{k}.journal"), create }
+      journal := some (dir / s!"node{k}.journal"), create
+      key := "the key of the live test's nodes".toUTF8 }
     { snapshotEvery := 16 } fun answer => answers.modify (·.push answer)
   if (← ports.get).size ≤ k.val then ports.modify (·.push peers.port)
   return {

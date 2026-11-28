@@ -26,7 +26,7 @@ proved function tells it to.
 | Journal, snapshots, disk | `Lanes/Durable/{Journal,Snapshot,Disk,Frame,Reading}.lean`, `Lanes/Durable/IO/Journal.lean` | `Journal.open?_cut`, `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Journal.Disk.Holds.save_crash`, `Journal.Disk.Torn.load_readings` |
 | Migrations | `Lanes/Durable/{Migration,Upgrade}.lean` | `Migration.inv_exec`, `Journal.Upgrade.begin_crash`, `Journal.Upgrade.holds`, `Journal.Upgrade.inv_load` |
 | Joins | `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`, `Lanes/Semantics/FairJoin.lean` | `System.Reachable.left`, `SysState.run_left`, `System.Run.Fair.left`, `System.Run.Fair.right` |
-| Shards and the transport | `Lanes/Runtime/{Shard,ShardSound,ShardsSound}.lean`, `Lanes/Net/{Courier,CourierSound}.lean`, `Lanes/Net/IO/{Peers,Node}.lean` | `System.ShardsReachable.unsharded`, `Peers.Courier.written_sublist_sent` |
+| Shards and the transport | `Lanes/Runtime/{Shard,ShardSound,ShardsSound}.lean`, `Lanes/Net/{Courier,CourierSound,Handshake,HandshakeSound}.lean`, `Lanes/Net/IO/{Peers,Node}.lean` | `System.ShardsReachable.unsharded`, `Peers.Courier.written_sublist_sent`, `Peers.Handshake.Reachable.ready_proved` |
 | The gate and the HTTP server | `Lanes/Web/Http/{Gate,Front,FrontSound,Waiting,Conn,ConnSound,Stream,Sse,SseSound,Loopback}.lean`, `Lanes/Semantics/Front.lean`, `Lanes/Web/IO/Server.lean` | `Http.served_answered_le_arrived`, `Http.served_pending_answered`, `Http.Waiting.exec_answered`, `Http.Conn.run_writes`, `Http.Conn.read_streamed`, `Http.Sse.parse_written` |
 | Metrics, health and the access log | `Lanes/Lib/Metrics.lean`, `Lanes/Web/Http/{Ops,OpsSound}.lean`, `Lanes/Web/IO/Ops.lean` | `Metrics.Histogram.observeAll_eq`, `Metrics.readLabelValue_escapeLabel`, `Http.Ops.route?_default`, `Http.Ops.route?_metrics`, `Http.Ops.answer_ready`, `Http.Ops.Access.parse_line`; that none of it reaches a system is trusted and tested |
 | Other adapters | `Lanes/Outside/Basic.lean`, `Lanes/Outside/{Clock,IO/Clock}.lean`, `Lanes/Web/IO/Client.lean`, `Lanes/Web/Http/{Grammar,Wire,WireSound}.lean` | `Response.read_wire`, `Request.fields_framing`; conformance tests |
@@ -197,8 +197,15 @@ events (`Lanes/Net/CourierSound.lean`): one write at a time on a connection, wri
 it dialed and only what it was sent, in order and at most once
 (`Peers.Courier.written_sublist_sent`), a bounded queue, everything closed at `stop`
 (`Peers.Courier.stop_closes`), and what it delivers is what its reader makes of the bytes
-(`Peers.Courier.delivered_read`). `Lanes/Net/IO/Peers.lean` only performs. That the running
-processes implement `System.shards` is trusted.
+(`Peers.Courier.delivered_read`). Every connection opens with a handshake,
+`Peers.Handshake.step` (`Lanes/Net/Handshake.lean`), also pure: each side sends the magic, the
+handshake's version, the system's name, the SHA-256 of `Peers.Config.schema` and a fresh nonce,
+refuses a hello that differs (`Peers.Handshake.hear_differs`), and is connected only once the
+other side has sent the HMAC-SHA-256, under the shared `Peers.Config.key`, of its role and of
+both hellos, its own nonce included (`Peers.Handshake.Reachable.ready_proved`), so a replayed
+handshake does not check. The parcels after it are neither signed nor encrypted.
+`Lanes/Net/IO/Peers.lean` only performs. That the running processes implement `System.shards`
+is trusted.
 
 ## The gate and the HTTP server
 

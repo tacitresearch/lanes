@@ -84,7 +84,12 @@ and `startNode`.
 `raftNode` is one node as a process, with an HTTP front. Its first start is `new`; no later
 one is:
 
+The nodes share a key, of at least 16 bytes, in `RAFT_KV_KEY`; a connection between them opens
+with a handshake that checks it, and with the system's name and what its messages are
+(`peerSystem`, `peerSchema`), and refuses a process that differs.
+
 ```bash
+export RAFT_KV_KEY="$(head -c 24 /dev/urandom | base64)"
 lake exe raftNode new 0 8800 node0.journal 7810 7811 7812 &
 lake exe raftNode new 1 8801 node1.journal 7810 7811 7812 &
 lake exe raftNode new 2 8802 node2.journal 7810 7811 7812 &
