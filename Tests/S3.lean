@@ -334,6 +334,9 @@ def endToEnd : Async (List (String × Bool)) := do
   let _ ← exchange b creds (.put (key "clips/b.mp4") (bytes "b")) config .unsigned
   let _ ← ex (.put (key "clips/c.mp4") (bytes "cc"))
   let _ ← ex (.put (key "thumbs/a.png") (bytes "png"))
+  let once ← ex (.put (key "once/a") (bytes "first") (ifAbsent := true))
+  let again ← ex (.put (key "once/a") (bytes "again") (ifAbsent := true))
+  let onceKept ← ex (.get (key "once/a"))
   let rolled ← ex (.list "clips/" (some "/"))
   let first ← ex (.list "clips/" none none ⟨1, by decide⟩)
   let next := match first with | some (.listed p) => p.next | _ => none
@@ -382,6 +385,9 @@ def endToEnd : Async (List (String × Bool)) := do
             && p.next.isSome && q.entries.map (·.key) == ["clips/b.mp4"]
         | _, _ => false)),
     ("s3 fake: a body sent unsigned is accepted", kept.contains "clips/b.mp4"),
+    ("s3 fake: a conditional put writes once, and its repeat is refused and writes nothing",
+      once.any (· matches .stored _) && again == some (.refused 412 "PreconditionFailed")
+        && (match onceKept with | some (.object _ body) => body == bytes "first" | _ => false)),
     ("s3 fake: a request signed with another secret is refused as S3 refuses it",
       forged == some (.refused 403 "SignatureDoesNotMatch")),
     ("s3 fake: a session token is sent and signed, and one missing refused",
@@ -402,7 +408,7 @@ def conformance : Async (List (String × Bool)) := do
   let done ← IO.mkRef 0
   let all ← IO.Promise.new
   let calls := 7
-  let rt ← Runtime.startWith caller { record := true } fun rt out => do
+  let rt ← Runtime.startWith caller { record := true } fun rt _ out => do
     S3.handler s3Port b creds config rt out
     if let .done .. := out then
       if (← done.modifyGet fun n => (n + 1, n + 1)) == calls then all.resolve ()
