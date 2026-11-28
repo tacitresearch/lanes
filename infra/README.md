@@ -81,8 +81,8 @@ its jobs waiting for runners; the idle shutdown does not help there, re-running 
 
 `ci.yml` reads only `LANES_RUNNER` and does not start the machine: it stays on GitHub's runners
 unless you point `LANES_RUNNER` at runners that are up. Its jobs build once (`compile`) and then run
-lint and tests (`test`), the model checks (`check`), `examples/raft-kv` and `examples/ledger` in
-parallel, each restoring the build from the Actions cache. The benchmark workflow (`bench.yml`) uses the box
+in parallel, each restoring the build from the Actions cache (`.github/workflows/ci.yml` names the
+jobs and what each runs). The benchmark workflow (`bench.yml`) uses the box
 the same way as `mutants.yml`: its `start` and `stop` jobs are `.github/actions/box`.
 
 On the machine (`infra/ec2-runner.sh`):
@@ -122,7 +122,7 @@ Lean elaborates a file on one thread, and Lake builds files in parallel; the mut
 16 shards in parallel, each rebuilding a few files and running tests. So both single-core speed
 and cores count, and a runner should get 4 real cores.
 
-| Type | vCPUs | Cores | RAM | On-demand, us-east-1 | Runners | Notes |
+| Type | vCPUs | Cores | RAM | On-demand, us-east-2 | Runners | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
 | c7a.8xlarge | 32 | 32 | 64 GiB | about $1.64/h | 8 | AMD Genoa, 3.7 GHz, one core per vCPU |
 | **c7a.16xlarge** | 64 | 64 | 128 GiB | about $3.28/h | 16 | **the default**: one shard per runner |

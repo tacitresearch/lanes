@@ -16,9 +16,9 @@ the modules of its own package and of the packages it requires, directly or belo
 (`Package.requires`). `lanes lint` reports any other import of a module of Lanes (rule
 `layering`, rule 1.6 of `AGENTS.md`): it would make the lower package fail to build alone.
 
-A file sits under the directory of its concern today, and `homes` names, by its path, each file
-whose package is not its directory's. They move into their packages' directories later, with no
-change to this table's packages. `scripts/layers.py` reads this file to plan those moves.
+A file sits under the directory of its concern (D62), and `homes` names, by its path, each file
+whose package is not its directory's. `scripts/layers.py` reads this file to count each package's
+files, lines and imports.
 
 -/
 
