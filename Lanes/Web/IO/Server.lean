@@ -11,6 +11,8 @@ public import Lanes.Web.Http.Conn
 public import Lanes.Web.Http.View
 public import Lanes.Web.Http.Waiting
 public import Lanes.Web.IO.Ops
+public import Lanes.Web.Http.Shutdown
+public import Lanes.Runtime.IO.Signal
 
 /-!
 The HTTP server adapter: the IO around the gate and the connections. It accepts connections on
@@ -699,32 +701,27 @@ def wait (server : Server system) : Async Unit := do
   discard <| await server.down.result?
   if let some e ← server.runtime.ended then throw e
 
-/-- Wait as `wait` does, and on SIGTERM or SIGINT stop without dropping the requests in flight:
-readiness answers `503` (`drain`) while the shard's answers to the requests it has taken go out,
-for at most `drain_ms`, then `stop`. Returns then, so a `main` that ends here exits with status
-0. A second signal ends the process at once, as the first would without this. `listening` runs
-once the signals are caught. -/
+/-- Wait as `wait` does, and on SIGTERM or SIGINT stop without dropping the requests in flight,
+as `Http.Shutdown.step` decides: readiness answers `503` (`drain`) while the shard's answers to
+the requests it has taken go out, until none is in flight or `drain_ms` has passed, then `stop`.
+Returns then, so a `main` that ends here exits with status 0. A second signal ends the process at
+once (`awaitStopSignal`). `listening` runs once the signals are caught. -/
 def stopOnSignal (server : Server system) (drain_ms : Nat) (listening : IO Unit := pure ()) :
     Async Unit := do
-  let signals ← [Signal.sigterm, .sigint].mapM fun s => Signal.Waiter.mk s false
-  let woken : IO.Promise Bool ← IO.Promise.new
-  for signal in signals do
-    discard <| BaseIO.mapTask (t := ← signal.wait) fun
-      | .ok _ => woken.resolve true
-      | .error _ => pure ()
-  discard <| BaseIO.mapTask (t := server.down.result?) fun _ => woken.resolve false
-  listening
-  let signalled ← await woken.result?
-  for signal in signals do signal.stop
-  unless signalled == some true do return ← server.wait
-  server.drain
-  let deadline := (← IO.monoMsNow) + drain_ms
+  if (← awaitStopSignal (discard <| await server.down.result?) listening).isSome then
+    return ← server.wait
+  let mut phase := Shutdown.Phase.serving
+  let mut event := Shutdown.Event.signal (← IO.monoMsNow)
   repeat
-    let inFlight ← server.inFlight
-    let now ← IO.monoMsNow
-    if inFlight == 0 || deadline ≤ now then break
+    let (next, actions) := Shutdown.step drain_ms phase event
+    phase := next
+    for a in actions do
+      match a with
+      | .drain => server.drain
+      | .stop => server.stop
+    if phase == .stopping then break
     Async.sleep 10
-  server.stop
+    event := .tick (← IO.monoMsNow) (← server.inFlight)
 
 /-- Hand the system behind the gate an input that is not a request, such as an adapter's answer.
 `false` if the shard's inbox is full. A request cannot be handed in this way,

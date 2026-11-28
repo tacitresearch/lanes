@@ -115,6 +115,7 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Web/Http/Ops.lean` | | Routes and access for the operators' endpoints; their page is `Metrics`' |
 | `Lanes/Web/Http/ReadRequest.lean` | `oracles/go/requests` | Go's, Node's and h11's servers on `Tests/ReadRequest.corpus`, by hand |
 | `Lanes/Web/Http/Route.lean` | | Routes as values, proved (`Lanes/Web/Http/RouteSound.lean`) |
+| `Lanes/Web/Http/Shutdown.lean` | | When a draining server stops, not a format or a service: proved (`Shutdown.step_stop`), and run with a real SIGTERM in `Tests/Ops.lean` |
 | `Lanes/Web/Http/SigV4.lean` | `oracles/botocore` | |
 | `Lanes/Web/Http/SharedCache.lean` | | RFC 9111's rules for a shared cache, as decisions on a response, not a format; checked against a seeded bug in `Tests/SharedCache.lean`. A run through a real CDN or Varnish is owed |
 | `Lanes/Web/Http/Sse.lean` | | Proved to read what it writes against a model of the WHATWG reader (`Lanes/Web/Http/SseSound.lean`); a comparison with another reader, a browser's, is owed |

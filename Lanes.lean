@@ -99,6 +99,7 @@ public import Lanes.Runtime.IO.Log
 public import Lanes.Runtime.Peek
 public import Lanes.Runtime.IO.Park
 public import Lanes.Runtime.IO.Shell
+public import Lanes.Runtime.IO.Signal
 public import Lanes.Runtime.Kernel
 public import Lanes.Runtime.Sched
 public import Lanes.Web.Auth.IdToken
@@ -123,6 +124,7 @@ public import Lanes.Web.Http.Ops
 public import Lanes.Web.Http.ReadRequest
 public import Lanes.Web.Http.Route
 public import Lanes.Web.Http.SharedCache
+public import Lanes.Web.Http.Shutdown
 public import Lanes.Web.Http.SigV4
 public import Lanes.Web.Http.Sse
 public import Lanes.Web.Http.Stream

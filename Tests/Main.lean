@@ -32,6 +32,7 @@ import Tests.Reads
 import Tests.Crypto
 import Tests.FileSystem
 import Tests.Environment
+import Tests.Signal
 import Tests.Auth
 import Tests.Clients
 import Tests.Lease
@@ -110,6 +111,7 @@ def live : IO (List (String × Bool)) := do
     ++ (← safely "release" Tests.Release.liveTests) ++ (← safely "jobs worker" Tests.Worker.live)
     ++ (← safely "ops" Tests.Ops.live) ++ (← Tests.Crypto.live)
     ++ (← safely "file system" Tests.FileSystem.live) ++ (← safely "environment" Tests.Environment.live)
+    ++ (← safely "signal" Tests.Signal.live)
     ++ (← safely "log" Tests.Log.live) ++ (← safely "compress" Tests.Compress.live)
     ++ (← safely "postgres" Tests.PostgresLive.live)
     ++ (← safely "postgres tls" Tests.PostgresTls.live)
@@ -127,7 +129,7 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.Fair.tests ++ Tests.Derive.tests ++ Tests.Cbor.tests
     ++ Tests.Sched.tests ++ Tests.Batch.tests
     ++ Tests.Reads.tests
-    ++ Tests.Crypto.tests ++ Tests.FileSystem.tests ++ Tests.Environment.tests ++ Tests.Auth.tests ++ Tests.Clients.tests ++ Tests.Lease.tests
+    ++ Tests.Crypto.tests ++ Tests.FileSystem.tests ++ Tests.Environment.tests ++ Tests.Signal.tests ++ Tests.Auth.tests ++ Tests.Clients.tests ++ Tests.Lease.tests
     ++ Tests.Log.tests ++ Tests.FormData.tests ++ Tests.Compress.tests
     ++ Tests.Release.tests ++ Tests.ReadRequest.tests ++ Tests.Oracle.unitTests
     ++ Tests.HttpConn.tests ++ Tests.Loopback.tests
