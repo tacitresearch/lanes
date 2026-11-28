@@ -134,6 +134,18 @@ def step (s : State C) : Msg C → State C × Option (Rpc.Call Unit)
 def current (s : State C) (now : Nat) : Option C :=
   s.held.bind fun h => if now + cfg.skew_ms < h.expires_ms then some h.creds else none
 
+/-- The credentials to sign with at `now` and when they expire, so that what is signed with
+them can end no later (`S3.expiryWithin`). -/
+def currentHeld (s : State C) (now : Nat) : Option (Held C) :=
+  s.held.filter fun h => now + cfg.skew_ms < h.expires_ms
+
+theorem currentHeld_creds (s : State C) (now : Nat) :
+    (currentHeld cfg s now).map (·.creds) = current cfg s now := by
+  unfold currentHeld current
+  cases s.held with
+  | none => rfl
+  | some h => by_cases hf : now + cfg.skew_ms < h.expires_ms <;> simp [Option.filter, hf]
+
 /-- When the machine wants its next tick. -/
 def State.wake (s : State C) : Nat :=
   match s.phase with
