@@ -266,6 +266,9 @@ theorem keeper_note_first {c : SysState keeper} (h : keeper.Reachable keeperEnv 
       obtain ⟨hdown, _, _⟩ := SysState.step_start.mp hstep
       rw [ih.1] at hdown
       cases hdown
+    | restart =>
+      obtain ⟨hmay, _⟩ := SysState.step_restart.mp hstep
+      exact absurd hmay (by simp [keeperEnv, EnvModel.right])
 
 /-- So the join's first state, seen from the keeper, is no state of the keeper alone: there
 the herald's input is ahead of the note. -/

@@ -437,12 +437,13 @@ end History
 /-! ## Of every run -/
 
 variable {env : EnvModel (sig N C)} (henv : (env.link none ()).duplicating = false)
+  (hrestart : env.mayRestart = false)
   {evs : List (Lanes.Event (sig N C))} {c : SysState (system N C config)}
   (hrun : (SysState.init (system N C config) env).run env evs = some c)
   (hdistinct : ∀ (p p' : ℕ) (r r' : Request N C), evs[p]? = some (Lanes.Event.input r) →
     evs[p']? = some (Lanes.Event.input r') → r.req = r'.req → p = p')
 
-include henv hrun hdistinct
+include henv hrestart hrun hdistinct
 
 /-- The board of a read, given the post on its author's account before it: from the act of
 the read on, it is a read of a board the spec reaches that holds the post. -/
@@ -474,13 +475,13 @@ theorem posted_kept {p₁ i p₂ l : ℕ} {req : ReqId} {a : N} {s : Sid}
     (hkept : ∀ p r, evs[p]? = some (.input r) → p < l → r.name = a → r.deletes ≠ some id) :
     ∃ es, (Board.run config {} es).ReadOf config r₂ list ∧
       ⟨id, body⟩ ∈ (Board.run config {} es).postsOf a := by
-  obtain ⟨acts, cut, hex⟩ := (implements config env henv).history hrun
+  obtain ⟨acts, cut, hex⟩ := (implements config env henv hrestart).history hrun
   obtain ⟨k₁, hk₁, -, ha₁, ho₁⟩ := take_of_output config hex hdistinct hposted hpost rfl
   simp only [Response.mk.injEq] at ho₁
   have hq : ⟨id, body⟩ ∈ (boardAt config acts (k₁ + 1)).postsOf a := by
     rw [boardAt_succ config ha₁]
     exact Board.handle_web_posted config ho₁.2.1.symm
-  exact read_holds config henv hrun hdistinct hex hq hread hshown
+  exact read_holds config henv hrestart hrun hdistinct hex hq hread hshown
     (by have := hex.mono (i + 1) p₂ hafter; omega) hkept
 
 /-- A post the system showed in a read is on its author's account in the board of every read
@@ -494,14 +495,14 @@ theorem shown_kept {i p₂ l : ℕ} {req : ReqId} {a : N} {q : Post} {json json'
     (hkept : ∀ p r, evs[p]? = some (.input r) → p < l → r.name = a → r.deletes ≠ some q.id) :
     ∃ es, (Board.run config {} es).ReadOf config r₂ list ∧
       q ∈ (Board.run config {} es).postsOf a := by
-  obtain ⟨acts, cut, hex⟩ := (implements config env henv).history hrun
+  obtain ⟨acts, cut, hex⟩ := (implements config env henv hrestart).history hrun
   obtain ⟨k₁, hk₁, a₁, ha₁, ho₁⟩ := hex.shown i _ hshow
   obtain ⟨r₁, rfl, heq⟩ := act_output config ho₁
   simp only [Response.mk.injEq] at heq
   have hq : q ∈ (boardAt config acts k₁).postsOf a :=
     Board.ReadOf.mem_postsOf config
       (Board.handle_feed config (sound_play config (acts.take k₁)).2.2 heq.2.1.symm) hx
-  exact read_holds config henv hrun hdistinct hex hq hread hshown
+  exact read_holds config henv hrestart hrun hdistinct hex hq hread hshown
     (by have := hex.mono (i + 1) p₂ hafter; omega) hkept
 
 /-- The board acts on one API change of an account for each sequence number: every two replies
@@ -515,7 +516,7 @@ theorem api_once {i j p₁ p₂ : ℕ} {o₁ o₂ : Response N} {req₁ req₂ t
     (hr₁ : o₁.reply ≠ .stale ∧ o₁.reply ≠ .badToken ∧ o₁.reply ≠ .reused)
     (hr₂ : o₂.reply ≠ .stale ∧ o₂.reply ≠ .badToken ∧ o₂.reply ≠ .reused) :
     op₁ = op₂ ∧ o₁.reply = o₂.reply := by
-  obtain ⟨acts, cut, hex⟩ := (implements config env henv).history hrun
+  obtain ⟨acts, cut, hex⟩ := (implements config env henv hrestart).history hrun
   obtain ⟨k₁, -, -, ha₁, rfl⟩ := take_of_output config hex hdistinct hi hp₁ h₁
   obtain ⟨k₂, -, -, ha₂, rfl⟩ := take_of_output config hex hdistinct hj hp₂ h₂
   have hlt : ∀ {k k' : ℕ} {req req' token token' : ℕ} {op op' : Op N}, k < k' →
@@ -559,7 +560,7 @@ theorem rate_limit_run {w₁ w₂ : ℕ} {n : N}
       evs[p]? = some (.input (.web req n s (.post body))) ∧
       evs[l]? = some (.output ⟨req, .posted id, json⟩)) :
     ids.length ≤ config.maxPerWindow := by
-  obtain ⟨acts, cut, hex⟩ := (implements config env henv).history hrun
+  obtain ⟨acts, cut, hex⟩ := (implements config env henv hrestart).history hrun
   obtain ⟨kf, hkf, hckf, hkf₁⟩ := hex.fires w₁ (.window n) (by simp [hw₁, deadlines])
   let P : ℕ → Prop := fun k => acts[k]? = some (.fire (.window n))
   let K₀ := Nat.findGreatest P (cut (w₁ + 1) - 1)

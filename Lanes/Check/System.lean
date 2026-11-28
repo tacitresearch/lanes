@@ -12,8 +12,8 @@ public import Lanes.Check.Fingerprint
 # Model checking actor systems
 
 `Check.system` explores every interleaving of a small instance of a system: every order of
-deliveries and timeouts, every input the driver may send, and every loss, duplication and crash
-the environment model allows. It runs the actors' own `step` functions through `SysState.step`,
+deliveries and timeouts, every input the driver may send, and every loss, duplication, crash and
+restart the environment model allows. It runs the actors' own `step` functions through `SysState.step`,
 so what is checked is the code that runs.
 
 A counterexample is a list of events. It replays through `SysState.run` and in the deterministic
@@ -56,7 +56,8 @@ def Node.of [Enum σ.Id] {env : EnvModel σ} (world : World sys D) : Node sys en
 /-- The driver is compared last: a monitor's comparison costs the most, and worlds whose hashes
 agree often differ only in the order of the messages in flight. -/
 instance [σ.Inspect] [sys.Inspect] [BEq D] {env : EnvModel σ} : BEq (Node sys env D) where
-  beq a b := a.world.crashes == b.world.crashes && Slot.allSame a.slots b.slots
+  beq a b := a.world.crashes == b.world.crashes && a.world.restarts == b.world.restarts
+    && Slot.allSame a.slots b.slots
     && SysState.netEquiv env a.world.state.net b.world.state.net
     && a.world.state.outbox.isPerm b.world.state.outbox
     && a.world.driver == b.world.driver
@@ -83,7 +84,7 @@ def Node.trafficHash [σ.Inspect] (env : EnvModel σ) (c : SysState sys) : UInt6
 instance [σ.Inspect] [sys.Inspect] [Hashable D] {env : EnvModel σ} :
     Hashable (Node sys env D) where
   hash a := mixHash (mixHash (a.slots.foldl Slot.hash 7) (Node.trafficHash env a.world.state))
-    (mixHash (hash a.world.driver) (hash a.world.crashes))
+    (mixHash (hash a.world.driver) (mixHash (hash a.world.crashes) (hash a.world.restarts)))
 
 def Trace.map {S S' L : Type} (f : S → S') (t : Trace S L) : Trace S' L where
   init := f t.init
@@ -105,7 +106,7 @@ def model [Enum σ.Id] (sys : System σ) {D : Type} (sc : Scenario σ D) :
 
 /--
 Properties are stated over the `World`: the system state and the driver's state. The result
-covers exactly the instance given: this driver, this crash budget, these bounds.
+covers exactly the instance given: this driver, these crash and restart budgets, these bounds.
 -/
 def system [σ.Inspect] (sys : System σ) [sys.Inspect] {D : Type} [BEq D] [Hashable D]
     (sc : Scenario σ D) (props : List (Property (World sys D)))

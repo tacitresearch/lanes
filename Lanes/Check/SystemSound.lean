@@ -13,7 +13,8 @@ public import Lanes.Check.WorldEquiv
 # A PASS from `Check.system` is sound
 
 `Scenario.Reachable` says which worlds a check covers, in terms of `SysState.step` alone: the
-semantics, with inputs chosen by the driver, crashes within the budget and every world within
+semantics, with inputs chosen by the driver, crashes and restarts within their budgets and every
+world within
 the constraint. `Check.system_sound` says that a complete PASS means every `always` property
 holds in all of them.
 
@@ -33,15 +34,15 @@ namespace Lanes
 
 variable {σ : Signature} {sys : System σ} {D : Type}
 
-/-- The events that involve neither the driver nor the crash budget. -/
+/-- The events that involve neither the driver nor a budget. -/
 def Event.isInternal : Event σ → Bool
   | .drop _ | .start _ => true
-  | .input _ | .output _ | .timeout .. | .deliver _ | .duplicate _ | .crash _ => false
+  | .input _ | .output _ | .timeout .. | .deliver _ | .duplicate _ | .crash _ | .restart => false
 
 /--
 The instance a check covers: the worlds the semantics reaches when the driver chooses the
-inputs and sees the outputs, at most `maxCrashes` crashes happen and no world violates the
-constraint.
+inputs and sees the outputs, at most `maxCrashes` crashes and `maxRestarts` restarts happen
+and no world violates the constraint.
 -/
 inductive Scenario.Reachable (sys : System σ) (sc : Scenario σ D)
     (constraint : World sys D → Bool) : World sys D → Prop
@@ -71,6 +72,11 @@ inductive Scenario.Reachable (sys : System σ) (sc : Scenario σ D)
     w.state.step sc.env (.crash i) = some c →
     constraint { w with state := c, crashes := w.crashes + 1 } = true →
     Reachable sys sc constraint { w with state := c, crashes := w.crashes + 1 }
+  | restart {w : World sys D} {c : SysState sys} :
+    Reachable sys sc constraint w → w.restarts < sc.maxRestarts →
+    w.state.step sc.env .restart = some c →
+    constraint { w with state := c, restarts := w.restarts + 1 } = true →
+    Reachable sys sc constraint { w with state := c, restarts := w.restarts + 1 }
   | internal {w : World sys D} {ev : Event σ} {c : SysState sys} :
     Reachable sys sc constraint w → ev.isInternal = true → w.state.step sc.env ev = some c →
     constraint { w with state := c } = true → Reachable sys sc constraint { w with state := c }
@@ -80,7 +86,7 @@ theorem Scenario.Reachable.system {sc : Scenario σ D} {constraint : World sys D
   induction h with
   | init => exact .init
   | input _ _ hstep _ ih | output _ hstep _ ih | timeout _ hstep _ ih | deliver _ _ hstep _ ih
-  | crash _ _ hstep _ ih | internal _ _ hstep _ ih =>
+  | crash _ _ hstep _ ih | restart _ _ hstep _ ih | internal _ _ hstep _ ih =>
     exact .step _ ih hstep
 
 theorem World.mem_next_iff [Enum σ.Id] {sc : Scenario σ D} {w w' : World sys D} {ev : Event σ} :
@@ -94,6 +100,8 @@ theorem World.mem_next_iff [Enum σ.Id] {sc : Scenario σ D} {w w' : World sys D
         w' = { w with state := c, driver := sc.driver.deliver w.driver e.dst e.msg }
       | .crash _ =>
         w.crashes < sc.maxCrashes ∧ w' = { w with state := c, crashes := w.crashes + 1 }
+      | .restart =>
+        w.restarts < sc.maxRestarts ∧ w' = { w with state := c, restarts := w.restarts + 1 }
       | _ => w' = { w with state := c } := by
   simp only [World.next, List.mem_append, List.mem_filterMap]
   constructor
@@ -103,6 +111,12 @@ theorem World.mem_next_iff [Enum σ.Id] {sc : Scenario σ D} {w w' : World sys D
       | input x => exact absurd rfl (hnotInput x)
       | crash i =>
         by_cases hbudget : w.crashes < sc.maxCrashes
+        · simp only [hbudget, ite_true, Option.some.injEq, Prod.mk.injEq] at hsome
+          obtain ⟨rfl, rfl⟩ := hsome
+          exact ⟨c, hstep, hbudget, rfl⟩
+        · simp [hbudget] at hsome
+      | restart =>
+        by_cases hbudget : w.restarts < sc.maxRestarts
         · simp only [hbudget, ite_true, Option.some.injEq, Prod.mk.injEq] at hsome
           obtain ⟨rfl, rfl⟩ := hsome
           exact ⟨c, hstep, hbudget, rfl⟩
@@ -120,6 +134,9 @@ theorem World.mem_next_iff [Enum σ.Id] {sc : Scenario σ D} {w w' : World sys D
       obtain ⟨d, hinput, rfl⟩ := hw'
       exact .inr ⟨(x, d), hinput, by simp [hstep]⟩
     | crash i =>
+      obtain ⟨hbudget, rfl⟩ := hw'
+      exact .inl ⟨(_, c), SysState.mem_successors_iff.mpr ⟨hstep, by simp⟩, by simp [hbudget]⟩
+    | restart =>
       obtain ⟨hbudget, rfl⟩ := hw'
       exact .inl ⟨(_, c), SysState.mem_successors_iff.mpr ⟨hstep, by simp⟩, by simp [hbudget]⟩
     | output out | deliver e | duplicate e | drop e | timeout i msg | start i =>
@@ -181,6 +198,8 @@ theorem Scenario.Reachable.model [Enum σ.Id] {sc : Scenario σ D}
     · exact model_step ih ((World.mem_next_iff (ev := .duplicate e)).mpr ⟨_, hstep, rfl⟩) hc
   | @crash _ i _ _ hbudget hstep hc ih =>
     exact model_step ih ((World.mem_next_iff (ev := .crash i)).mpr ⟨_, hstep, hbudget, rfl⟩) hc
+  | @restart _ _ _ hbudget hstep hc ih =>
+    exact model_step ih ((World.mem_next_iff (ev := .restart)).mpr ⟨_, hstep, hbudget, rfl⟩) hc
   | @internal _ ev _ _ hev hstep hc ih =>
     exact model_step ih ((World.mem_next_iff (ev := ev)).mpr ⟨_, hstep, by
       cases ev <;> first | rfl | exact absurd hev (by simp [Event.isInternal])⟩) hc
@@ -210,6 +229,10 @@ theorem Scenario.Reachable.of_model [Enum σ.Id] {sc : Scenario σ D}
       obtain ⟨hbudget, hw'⟩ := hw'
       simp only [hw'] at hc ⊢
       exact .crash ih hbudget hstep hc
+    | restart =>
+      obtain ⟨hbudget, hw'⟩ := hw'
+      simp only [hw'] at hc ⊢
+      exact .restart ih hbudget hstep hc
     | deliver e =>
       simp only [hw'] at hc ⊢
       exact .deliver ih (.inl rfl) hstep hc
@@ -330,11 +353,11 @@ theorem congr {p : World sys D → α}
     (h : World.Equiv env a b) : p a = p b := by
   have hb : b = { a with state := { a.state with net := b.state.net, outbox := b.state.outbox },
                          driver := b.driver } := by
-    obtain ⟨⟨hstate, hup, htimers, _, _⟩, _, hcrashes⟩ := h
-    obtain ⟨⟨_, _, _, _, _⟩, _, _⟩ := a
-    obtain ⟨⟨_, _, _, _, _⟩, _, _⟩ := b
-    simp only at hstate hup htimers hcrashes
-    simp [hstate, hup, htimers, hcrashes]
+    obtain ⟨⟨hstate, hup, htimers, _, _⟩, _, hcrashes, hrestarts⟩ := h
+    obtain ⟨⟨_, _, _, _, _⟩, _, _, _⟩ := a
+    obtain ⟨⟨_, _, _, _, _⟩, _, _, _⟩ := b
+    simp only at hstate hup htimers hcrashes hrestarts
+    simp [hstate, hup, htimers, hcrashes, hrestarts]
   rw [hb]
   exact hp a _ _ _ h.net_perm h.state.outbox h.driver
 
@@ -349,13 +372,14 @@ theorem eq_of_perm [LawfulBEq D] {p : World sys D → α}
     eq_of_beq hdriver ▸ hp w net outbox hnet houtbox
 
 /-- A property that ignores messages in flight and pending outputs cannot tell merged worlds
-apart. For a property of actor states, timers, the driver and the crash count, `hp` is
+apart. For a property of actor states, timers, the driver and the counts of crashes and
+restarts, `hp` is
 `fun _ => rfl`. -/
 theorem eq_of_quiet [LawfulBEq D] {p : World sys D → α} (hp : ∀ w, p w = p w.quiet)
     (h : World.Equiv env a b) : p a = p b := by
   have hquiet : a.quiet = b.quiet := by
     simp only [World.quiet, h.state.state, h.state.up, h.state.timers, eq_of_beq h.driver,
-      h.crashes]
+      h.crashes, h.restarts]
   rw [hp a, hp b, hquiet]
 
 end World.Equiv
@@ -382,9 +406,11 @@ theorem Slot.allSame_iff [∀ i, LawfulBEq (sys.State i)] (a b : SysState sys) (
   | cons i l ih => simp [Slot.allSame, Slot.same_of, ih, and_assoc]
 
 theorem Node.beq_iff [BEq D] [∀ i, LawfulBEq (sys.State i)] {a b : Node sys env D} :
-    (a == b) = true ↔ a.world.crashes = b.world.crashes ∧ (a.world.driver == b.world.driver) = true
+    (a == b) = true ↔ a.world.crashes = b.world.crashes ∧ a.world.restarts = b.world.restarts
+      ∧ (a.world.driver == b.world.driver) = true
       ∧ SysState.Equiv env a.world.state b.world.state := by
-  change (a.world.crashes == b.world.crashes && Slot.allSame a.slots b.slots
+  change (a.world.crashes == b.world.crashes && a.world.restarts == b.world.restarts
+    && Slot.allSame a.slots b.slots
     && SysState.netEquiv env a.world.state.net b.world.state.net
     && a.world.state.outbox.isPerm b.world.state.outbox
     && a.world.driver == b.world.driver) = true ↔ _
@@ -392,41 +418,41 @@ theorem Node.beq_iff [BEq D] [∀ i, LawfulBEq (sys.State i)] {a b : Node sys en
   simp only [Bool.and_eq_true, beq_iff_eq, Slot.allSame_iff, netEquiv_iff, List.isPerm_iff,
     and_assoc]
   constructor
-  · rintro ⟨hc, hall, hnet, hout, hd⟩
-    exact ⟨hc, hd, funext fun i => (hall i (Enum.complete i)).1,
+  · rintro ⟨hc, hr, hall, hnet, hout, hd⟩
+    exact ⟨hc, hr, hd, funext fun i => (hall i (Enum.complete i)).1,
       funext fun i => (hall i (Enum.complete i)).2.1,
       funext fun i => (hall i (Enum.complete i)).2.2, hnet, hout⟩
-  · rintro ⟨hc, hd, h⟩
-    exact ⟨hc, fun i _ => ⟨congrFun h.state i, congrFun h.up i, congrFun h.timers i⟩,
+  · rintro ⟨hc, hr, hd, h⟩
+    exact ⟨hc, hr, fun i _ => ⟨congrFun h.state i, congrFun h.up i, congrFun h.timers i⟩,
       h.net, h.outbox, hd⟩
 
 theorem Node.beq_iff_equiv [BEq D] [∀ i, LawfulBEq (sys.State i)] {a b : Node sys env D} :
     (a == b) = true ↔ World.Equiv env a.world b.world := by
   rw [Node.beq_iff]
-  exact ⟨fun ⟨hc, hd, hs⟩ => ⟨hs, hd, hc⟩, fun ⟨hs, hd, hc⟩ => ⟨hc, hd, hs⟩⟩
+  exact ⟨fun ⟨hc, hr, hd, hs⟩ => ⟨hs, hd, hc, hr⟩, fun ⟨hs, hd, hc, hr⟩ => ⟨hc, hr, hd, hs⟩⟩
 
 instance [BEq D] [EquivBEq D] [∀ i, LawfulBEq (sys.State i)] : EquivBEq (Node sys env D) where
-  rfl := Node.beq_iff.mpr ⟨rfl, BEq.rfl, .refl env _⟩
+  rfl := Node.beq_iff.mpr ⟨rfl, rfl, BEq.rfl, .refl env _⟩
   symm h :=
-    have ⟨hc, hd, hs⟩ := Node.beq_iff.mp h
-    Node.beq_iff.mpr ⟨hc.symm, BEq.symm hd, hs.symm⟩
+    have ⟨hc, hr, hd, hs⟩ := Node.beq_iff.mp h
+    Node.beq_iff.mpr ⟨hc.symm, hr.symm, BEq.symm hd, hs.symm⟩
   trans h₁ h₂ :=
-    have ⟨hc₁, hd₁, hs₁⟩ := Node.beq_iff.mp h₁
-    have ⟨hc₂, hd₂, hs₂⟩ := Node.beq_iff.mp h₂
-    Node.beq_iff.mpr ⟨hc₁.trans hc₂, BEq.trans hd₁ hd₂, hs₁.trans hs₂⟩
+    have ⟨hc₁, hr₁, hd₁, hs₁⟩ := Node.beq_iff.mp h₁
+    have ⟨hc₂, hr₂, hd₂, hs₂⟩ := Node.beq_iff.mp h₂
+    Node.beq_iff.mpr ⟨hc₁.trans hc₂, hr₁.trans hr₂, BEq.trans hd₁ hd₂, hs₁.trans hs₂⟩
 
 /-- Nodes the checker merges have the same hash, so each is stored once and the count of
 states is the count of worlds up to `World.Equiv`. Soundness does not need this. -/
 instance [BEq D] [Hashable D] [LawfulHashable D] [∀ i, LawfulBEq (sys.State i)] :
     LawfulHashable (Node sys env D) where
   hash_eq a b h := by
-    obtain ⟨hc, hd, hs⟩ := Node.beq_iff.mp h
+    obtain ⟨hc, hr, hd, hs⟩ := Node.beq_iff.mp h
     have hslots : a.slots = b.slots := by
       rw [a.slots_eq, b.slots_eq]
       congr 1
       funext i
       simp only [Slot.of, hs.state, hs.up, hs.timers]
-    simp only [hash, hslots, Node.trafficHash_eq hs, hc, LawfulHashable.hash_eq _ _ hd]
+    simp only [hash, hslots, Node.trafficHash_eq hs, hc, hr, LawfulHashable.hash_eq _ _ hd]
 
 variable [BEq D] [Hashable D] [∀ i, LawfulBEq (sys.State i)]
 
@@ -492,6 +518,7 @@ theorem World.step_of_mem_next [Enum σ.Id] {sc : Scenario σ D} {w w' : World s
   cases ev with
   | input x => obtain ⟨d, _, rfl⟩ := hw; rfl
   | crash i => obtain ⟨_, rfl⟩ := hw; rfl
+  | restart => obtain ⟨_, rfl⟩ := hw; rfl
   | output out | deliver e | duplicate e | drop e | timeout i msg | start i => subst hw; rfl
 
 namespace Check

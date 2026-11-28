@@ -483,9 +483,11 @@ theorem Inv.recover {c : SysState (shop config)} {held : Held} (h : Inv config c
     cases h
     exact ⟨id, rfl⟩
 
-/-- The invariant beside any customers and the service's model, under every environment. -/
+/-- The invariant beside any customers and the service's model, under every environment where
+the process does not restart. A restart breaks it: the shop forgets its calls while the
+service's model keeps their routes, and its call ids start again from zero. -/
 theorem beside {D : Type} (customers : Outside sig D) (config : Config) (maxDeliveries : Nat)
-    (env : EnvModel sig) :
+    (env : EnvModel sig) (hrestart : env.mayRestart = false) :
     (customers.both (service maxDeliveries) isOrder).Beside (shop config) env
       fun c d => Inv config c d.2 where
   blank := inv_blank maxDeliveries
@@ -505,6 +507,7 @@ theorem beside {D : Type} (customers : Outside sig D) (config : Config) (maxDeli
   recover _ _ i h := by
     cases i
     exact h.recover
+  restart h := absurd h (by simp [hrestart])
 
 theorem keeps_see {D : Type} {customers : Outside sig D} {maxDeliveries : Nat}
     {c : SysState (shop config)} {d d' : D × Held} (h : Inv config c d.2) {ev : Event sig}
@@ -528,17 +531,17 @@ theorem keeps_see {D : Type} {customers : Outside sig D} {maxDeliveries : Nat}
     exact fun t ht _ => ht
 
 /-- An order the shop calls paid has a payment that succeeded: in every run of the shop under
-every environment model, beside any customers and the payment service's model, every order the
+every environment model where the process does not restart, beside any customers and the payment service's model, every order the
 shop holds as paid, and every order it has told its customer is paid, has a payment at the
 service that succeeded, made for that order. -/
 theorem paid_succeeded {D : Type} (customers : Outside sig D) (config : Config)
-    (maxDeliveries : Nat) (env : EnvModel sig) {events : List (Event sig)}
-    {c : SysState (shop config)}
+    (maxDeliveries : Nat) (env : EnvModel sig) (hrestart : env.mayRestart = false)
+    {events : List (Event sig)} {c : SysState (shop config)}
     (hrun : (SysState.init (shop config) env).run env events = some c)
     {d : D × Held} (hd : (customers.both (service maxDeliveries) isOrder).after events = some d) :
     (∀ o ∈ (c.state ()).orders, o.status = .paid → Succeeded d.2 o.order) ∧
       ∀ order, Event.output (Out.paid order) ∈ events → Succeeded d.2 order := by
-  have hb := beside customers config maxDeliveries env
+  have hb := beside customers config maxDeliveries env hrestart
   refine (customers.both (service maxDeliveries) isOrder).run_induction
     (P := fun events c d => Inv config c d.2 ∧
       ∀ order, Event.output (Out.paid order) ∈ events → Succeeded d.2 order)

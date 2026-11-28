@@ -103,5 +103,8 @@ theorem money_conserved (env : EnvModel (sig A)) (henv : env.Faultless) :
       · simpa [SysState.startActor, SysState.settle, Effect.isStop, bank, account,
           sum_update (fun _ (s : Account) => s.balance)] using hsum
       · simpa [SysState.startActor, SysState.settle, Effect.isStop, bank, account] using htimers
+    | restart =>
+      obtain ⟨hmay, -⟩ := SysState.step_restart.mp hstep
+      simp [henv.noRestarts] at hmay
 
 end Tests.Fixtures.Bank

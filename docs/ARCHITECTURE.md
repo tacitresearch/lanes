@@ -61,14 +61,23 @@ which actors boot, and `accept`, which actor an input goes to (D4).
 
 The semantics is one function, `SysState.step` in `Lanes/Core/World.lean`: a state holds every
 actor's state, the messages in flight, the armed timers and the outputs not yet handed over; an
-`Event` is an input, a delivery, a duplicate, a drop, a timeout, an output, a crash or a start.
-What may go wrong is an `EnvModel`: each link may lose, reorder and duplicate (`Link.network`
-does all three), and actors may crash. Starting runs `recover`, every time (D5). The scheduler,
+`Event` is an input, a delivery, a duplicate, a drop, a timeout, an output, a crash, a start or
+a restart. What may go wrong is an `EnvModel`: each link may lose, reorder and duplicate
+(`Link.network` does all three), actors may crash, and the process may restart
+(`EnvModel.mayRestart`). A restart puts the whole system back at `SysState.init`, as after a
+process restart (D110): every actor at its initial state, and the messages in flight, the timers
+and the outputs not yet handed over lost; the outside keeps what it sent and saw, so an answer
+it waits for may never come. Restarts are a fault the environment model permits, off unless a
+model says so: `EnvModel.Faultless` rules them out, and `EnvModel.Restarts` is one process that
+may restart and does nothing else wrong. Starting runs `recover`, every time (D5). The scheduler,
 the checker, the kernel's proofs and `Lanes/Semantics/` all use this one function, so there is
 no second model (D6).
 
-Proof tools over it: a per-actor invariant lifts to every system under every fault model
-(`System.invariant_of_actor`, with the tactic `actor_invariant`); invariants about states and
+Proof tools over it: a per-actor invariant lifts to every system under every fault model,
+restarts included (`System.invariant_of_actor`, `System.invariant_of_inductive`, with the tactic
+`actor_invariant`); a system reaches the same states with restarts as without, so every
+invariant proved without them holds with them (`System.Invariant.of_withoutRestarts`,
+`System.Invariant.restarts`); invariants about states and
 messages that hold under every fault take five cases and are built in layers
 (`Inductive.of_monotone`, `Monotone.and_net`, D21); history variables are ghosts that cost
 nothing at run time (`System.Invariant.of_ghost`, D20); the order of messages on different
@@ -82,7 +91,8 @@ Where: `Lanes/Core/{Actor,System,Join}.lean`, `Lanes/Core/{World,Step,Run}.lean`
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
 | The step function that runs is the one the checker explores and the proofs are about | One semantics, `SysState.step` (`Lanes/Core/World.lean`); `Check.system` runs actors through it (`Lanes/Check/System.lean`); the kernel is proved against it (`Kernel.exec_reachable`) | The shell is trusted to run the kernel as written | proved for the kernel; the rest by construction |
-| A per-actor invariant holds in every reachable state of every system, under every fault model | `System.invariant_of_actor`, `Lanes/Proof/Lift.lean`; gate `Tests/Axioms/Proof.lean` | None | proved |
+| A per-actor invariant holds in every reachable state of every system, under every fault model, restarts included | `System.invariant_of_actor`, `System.invariant_of_inductive`, `Lanes/Proof/Lift.lean`; gate `Tests/Axioms/Proof.lean` | None | proved |
+| A system reaches the same states with process restarts as without, so an invariant proved without restarts holds with them | `System.reachable_withoutRestarts`, `System.Invariant.of_withoutRestarts`, `System.Invariant.restarts`, `Lanes/Core/Step.lean`; gate `Tests/Axioms/Core.lean` | None | proved |
 | History variables (ghosts) erase: an invariant proved with them holds without them | `System.Invariant.of_ghost`, `Lanes/Proof/Ghost.lean`; gate `Tests/Axioms/Proof.lean` | None | proved |
 | Invariants about states and messages take five cases, not eight, and hold under loss, duplication, reordering and crashes | `System.Inductive.of_monotone`, `System.Monotone.and_net`, `Lanes/Proof/Monotone.lean`; gate `Tests/Axioms/Proof.lean` | None | proved |
 
@@ -95,6 +105,14 @@ Also:
 - A system behind hidden inputs and outputs (`System.filterMapIO`, or `System.mapIO`, which
   hides none) does what it does in the open, event for event (`SysState.run_filterMapIO`,
   `System.Invariant.filterMapIO`): proved.
+- What relates two moments does not survive a restart in general: a refinement of a spec whose
+  value lives in actors, acting once on a memo, a count of what was answered against what is
+  owed, liveness. Each theorem says which it is: one that holds under restarts is stated for every
+  environment or under `EnvModel.Restarts` (`Bank.money_conserved_restarts`, the gate's and the
+  behaviours' `answered_le_handled`, `calls_le_scheduled`, `System.handled_le_put`), and one that
+  does not takes `env.mayRestart = false` or `EnvModel.Faultless` (`Server.implements`,
+  `Once.server_implements`, `KV.implements_once`, `Rookery.implements`, `Shop.paid_succeeded`,
+  every leads-to).
 - The deterministic scheduler gives seeded runs, replayable event lists and drivers for the
   outside world; `FairScheduler` takes the event the system has owed longest, counting a timer
   that is armed again as owed from then, and its run is a fair run of the proof layer.
@@ -771,7 +789,7 @@ Where: `Lanes/Behaviours/Server.lean`, `Lanes/Behaviours/Once/`, `Lanes/Behaviou
 
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
-| `Server.system spec` implements its spec | `Server.implements`, `Lanes/Semantics/Service.lean`; gate `Tests/Axioms/Semantics.lean` | An environment that loses, duplicates and crashes nothing (`EnvModel.Faultless`) | proved |
+| `Server.system spec` implements its spec | `Server.implements`, `Lanes/Semantics/Service.lean`; gate `Tests/Axioms/Semantics.lean` | An environment that loses, duplicates, crashes and restarts nothing (`EnvModel.Faultless`) | proved |
 | Jobs: no key answered more often than submitted; every job answered in a fair run without crashes | `Jobs.answered_le_handled`, `Jobs.submitted_answered`; gates `Tests/Axioms/Behaviours.lean`, `Tests/Axioms/Semantics.lean` | For the second: a fair run and no crashes | proved; the pool trusted |
 | Schedule: no attempt starts before its job's run time, and the next not before the backoff after a failure | `Schedule.dispatch_due`, `Schedule.retry_waits`, `Schedule.now_le_step`; gate `Tests/Axioms/Behaviours.lean`; `Tests/Schedule.lean` checks the stamps the requester sees | The times the scheduler is told are not ahead of the clock, and the runtime fires a timer no earlier than its delay (TRUSTED, "Assumptions the runtime makes") | proved, of the time the scheduler knows; the premises trusted |
 | Schedule: no id is called more than `maxAttempts` times for each scheduling of it | `Schedule.calls_le_scheduled`, `Schedule.attempts`; gate `Tests/Axioms/Behaviours.lean` | None: every environment, crashes included | proved |
@@ -850,6 +868,10 @@ Also:
 - Proved of the checker: it lists exactly the enabled events of a state, merging states is safe, a complete PASS means every `always` property holds in every world of the instance (`Check.system_sound_of_respects`; `==` must be equality on actor states, and on the driver's state an equivalence that the driver respects, `Driver.Respects`; the hash only decides how many states are stored; `Check.system_sound` is the case where it is equality), the spec monitor accepts exactly what the spec allows, deadlines included (`Check.Monitor.ok_iff`), a monitor never holds a candidate twice (in its type), so monitors compare and hash as sets and a monitored driver respects `==` (`Service.monitored_respects`), a complete PASS of a refinement check means the monitor has a candidate in every world (`Check.refines_sound`) and the inputs, outputs and deadlines passing of every run of the instance are a trace of the spec (`Check.refines_traces`; the spec's state must have `==` as equality), and a reported violation is a real run of the semantics (`Check.system_violated`).
 - Reductions (`Model.reduce`, `Check.systemReduced`): a complete pass of a model reduced by a `Model.Reduction` is a pass of the model, for invariants, refinement checks and deadlocks (`Check.search_reduce_sound`, `Check.systemReduced_sound`, `Check.search_reduce_deadlock_free`), with a driver's state kept in a canonical form as the instance proved in general (`Check.World.Reduction.ofDriver`).
 - Refinement to a `Service` without a mapping, with the spec's deadlines passing as the system's timers named for them fire, or as the messages named for them are delivered (`Service.monitored svc driver deadlines delivered`, which sees deliveries through `Driver.deliver`; `docs/decisions/D42-a-spec-names-its-inputs-and.md`, `docs/decisions/D56-a-deadline-passes-where-it-is-served.md`), and to `once` of one (`Service.onceMonitored`, not yet proved sound).
+- Restarts are explored as crashes are: where the environment model allows them
+  (`EnvModel.mayRestart`) and at most `Scenario.maxRestarts` times in a run, and a complete pass
+  covers them (`Check.system_sound_of_respects`); `Tests/Restart.lean` finds a counter falling
+  below a count the outside saw, after a restart.
 - `Options.tasks` computes successors in tasks; the search is the same function with or without them (`Check.Search.explore_eq`), so the report does not depend on timing, but on four shared cores the tasks are slower and they are off by default.
 
 ## The proof layer
@@ -889,8 +911,9 @@ Where: `Lanes/Semantics/`.
 
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
-| A request named by its client takes effect at most once, under every fault | `KV.implements_once` (`examples/kv-cache`); gate in its example | The memo (`Once.actor`, `Machine.once`) is in the system | proved |
+| A request named by its client takes effect at most once, under every fault but a process restart | `KV.implements_once` (`examples/kv-cache`); gate in its example | The memo (`Once.actor`) is in the system; the process does not restart, since a restart forgets the memo | proved |
 | `System.Implements` is linearizability | Its definition: weak simulation to `Service.spec` (`Lanes/Semantics/Service.lean`, D42) |  | a definition; not proved equal to Herlihy and Wing's |
+| A leads-to proved where the process never restarts holds where it may, from any position after which it does not restart | `System.LeadsTo.unlessRestart`, `Lanes/Semantics/Restart.lean`; gate `Tests/Axioms/Semantics.lean` | A fair run with no restart from the position of `P` on | proved |
 | A system that implements a service has, for every run, a sequential history of the service that produces each output, takes each input after it arrives, and orders an output handed over before an input arrives before that input's effect | `System.Implements.history`, `System.Implements.produced`, `Lanes/Semantics/History.lean`; gate `Tests/Axioms/Semantics.lean` | `System.Implements` | proved |
 
 Also:
@@ -909,6 +932,7 @@ Also:
 ### Limits
 
 - Liveness theorems are about fair runs of the semantics. That the runtime's runs are fair is not proved, and "eventually" carries no bound.
+- No liveness holds across a process restart: a restart loses what was owed. A leads-to holds only from a position after which the process does not restart (`System.LeadsTo.unlessRestart`), and nothing obliges a run to stop restarting.
 
 ## Data and the standard library
 
@@ -1082,7 +1106,7 @@ Where: `examples/bank/Bank.lean`.
 | --- | --- | --- | --- |
 | Under lossy links the checker finds the credit the bank loses | `examples/bank/Check.lean` ("lossy links"), run by `lake test`; the trace in `README.md` reproduced on 2026-11-27 | None | checked |
 | Bank: no balance is ever negative | `Bank.balance_nonneg`, `examples/bank/Bank.lean`; gate `examples/bank/Bank/Proofs/Axioms.lean` | None | proved |
-| Bank: money is conserved, for any number of accounts | `Bank.money_conserved`, `examples/bank/Bank/Proofs.lean`; same gate | A faultless environment | proved |
+| Bank: money is conserved, for any number of accounts | `Bank.money_conserved`, `Bank.money_conserved_restarts`, `examples/bank/Bank/Proofs.lean`; same gate | An environment that loses, duplicates and crashes nothing; the process may restart (back to the opening balances) | proved |
 
 Also:
 
@@ -1098,7 +1122,7 @@ Where: `examples/kv-cache/KV.lean`.
 
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
-| Key-value store: implements the map spec; with a read cache it does not | `KV.implements`, `KV.caching_not_implements`, `examples/kv-cache/KV/Proofs.lean`; gate `examples/kv-cache/KV/Proofs/Axioms.lean` | `KV.implements`: links that do not duplicate | proved |
+| Key-value store: implements the map spec; with a read cache it does not | `KV.implements`, `KV.caching_not_implements`, `examples/kv-cache/KV/Proofs.lean`; gate `examples/kv-cache/KV/Proofs/Axioms.lean` | `KV.implements`: links that do not duplicate, and no process restart | proved |
 
 Also:
 
@@ -1108,7 +1132,7 @@ Also:
 - Proved: with caching it does not implement the map spec, in any environment, for any instance
   with a key, a value and a front end: the checker's run replays in every one (by the standard
   simulation `Lanes.Account`).
-- Proved: without caching it implements the map spec for all keys, values and front ends in every environment whose links do not duplicate.
+- Proved: without caching it implements the map spec for all keys, values and front ends in every environment whose links do not duplicate and where the process does not restart.
 
 ### Watchdog
 
@@ -1137,7 +1161,7 @@ Where: `examples/payments/Shop.lean`.
 | --- | --- | --- | --- |
 | Payments: the shop charges each order at most once, in every run, under every fault the payment model allows | `Shop.charged_at_most_once`, `Shop.emits_keyed`, `examples/payments/Shop/Proofs.lean`; gate `examples/payments/Shop/Proofs/Axioms.lean` | Retries under the key (`keyedRetries`); the payment service behaves as `Payments.outside` (trusted, above); a charge counts from the moment it is sent | proved |
 | Payments: a retry without the key charges an order twice | `examples/payments/Check.lean`, run by its `lake test` | One order, one retry | checked |
-| Payments: an order the shop calls paid has a payment that succeeded | `Shop.paid_succeeded`, `examples/payments/Shop/Proofs/Paid.lean`, from `Effects.Sound.shows_reply` and `Effects.Sound.shows_report` (`Lanes/Outside/Effects/Basic.lean`) and `Outside.Beside` (`Lanes/Proof/Outputs.lean`); gate `examples/payments/Shop/Proofs/Axioms.lean`; model-checked, `examples/payments/Check.lean` | The payment service behaves as `Payments.outside` (trusted, above). "Calls paid" is an order in the state `paid` or a `paid` output handed over; the payment is one the model holds as `succeeded`, made by a request for that order. Every run and environment model, every number of attempts, with or without keyed retries | proved |
+| Payments: an order the shop calls paid has a payment that succeeded | `Shop.paid_succeeded`, `examples/payments/Shop/Proofs/Paid.lean`, from `Effects.Sound.shows_reply` and `Effects.Sound.shows_report` (`Lanes/Outside/Effects/Basic.lean`) and `Outside.Beside` (`Lanes/Proof/Outputs.lean`); gate `examples/payments/Shop/Proofs/Axioms.lean`; model-checked, `examples/payments/Check.lean` | The payment service behaves as `Payments.outside` (trusted, above). "Calls paid" is an order in the state `paid` or a `paid` output handed over; the payment is one the model holds as `succeeded`, made by a request for that order. Every run and environment model without process restarts, every number of attempts, with or without keyed retries. Not under restarts: the shop forgets its calls and numbers them from zero again while the model keeps their routes, so an answer to an earlier call can mark another order paid | proved |
 
 Also:
 
@@ -1154,8 +1178,8 @@ Where: `examples/reminders/Reminders/App.lean`.
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
 | Reminders: the reminders and the scheduler's jobs stay within their bounds | `Reminders.bounded`, `Reminders.jobs_bounded`, `examples/reminders/Reminders/Proofs.lean`; gate `examples/reminders/Reminders/Proofs/Axioms.lean` | None | proved |
-| Reminders: every reminder's delivery ends, sent, given up on or cancelled | `Reminders.delivery_ends`; same gate | A fair run in which the scheduler does not crash | proved |
-| Reminders: every reminder's delivery is answered to the reminders, sent, given up on or cancelled | `Reminders.delivery_answered`; same gate | A fair run in which neither the scheduler nor the reminders crash and the link from the scheduler to the reminders loses nothing; the reminder's job is a call | proved |
+| Reminders: every reminder's delivery ends, sent, given up on or cancelled | `Reminders.delivery_ends`; same gate | A fair run in which the scheduler does not crash and the process does not restart | proved |
+| Reminders: every reminder's delivery is answered to the reminders, sent, given up on or cancelled | `Reminders.delivery_answered`; same gate | A fair run in which neither the scheduler nor the reminders crash, the process does not restart, and the link from the scheduler to the reminders loses nothing; the reminder's job is a call | proved |
 | Reminders: a reminder refused twice is sent on its third attempt, under one key; one that waits is cancelled; after a restart the list is empty | `examples/reminders/Test.lean`, run by its `lake test` | A local notification service | tested |
 
 Also:
@@ -1225,9 +1249,9 @@ Where: `examples/rookery`, a package of its own.
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
 | Rookery: posts never lost and deleted only by their author, a deleted post in no read, timelines exactly the newest posts followed, the rate limit, API changes acted on once per `seq` and another change with a `seq` used refused, no other account's secrets, every bound | `examples/rookery/Rookery/Proofs/` (`Board.run_keeps`, `Board.Gone.run`, `Board.timeline_complete`, `Board.rate_limit`, `Board.handle_api_again`, `Board.handle_api_reused`, `Board.handle_secret`, `Board.Bounded.handle` and the rest); gate `examples/rookery/Rookery/Proofs/Axioms.lean` | Statements about the spec's functions (`Board.handle`, `Board.fire`) and every sequence of them, for every configuration | proved, of the spec |
-| Rookery: the system implements its spec with deadlines | `Rookery.implements`, `examples/rookery/Rookery/Proofs/Refines.lean`; same gate | The link from outside to the board does not duplicate; requests may be lost and reordered and the board may crash | proved |
-| Rookery, of every run of the system: a response carries the secrets of no account but the one its request, which arrived before it, was made as; every list of posts handed over is a read of a board the spec's functions reach (so the timeline claims above apply to it); once a delete made through the web is answered `deleted`, no read whose request arrives afterwards shows the post | `Rookery.output_secret`, `Rookery.output_read`, `Rookery.deleted_unread`, `examples/rookery/Rookery/Proofs/Traces.lean`, from `Rookery.implements` and `System.Implements.history`; same gate | The link from outside to the board does not duplicate; for the third, requests have distinct ids. Of `system`, not of `Http.served system` (the gate's refinement is not proved) | proved |
-| Rookery, of every run of the system: a post answered `posted` to a web post, or shown in a read, is on its author's account in the board of every read whose request arrives later, until a request made as its author to delete it arrives (the read lists at most `timelineMax` posts, so it is the board that holds the post, and the timeline claims say which the read shows); after a position where an account's window passes and before the next, the web posts it makes that arrive after it are answered `posted` with at most `maxPerWindow` distinct ids; of the API changes one account sends with one `seq`, every two replies but `stale`, `badToken` and `reused` are the same, to the same change | `Rookery.posted_kept`, `Rookery.shown_kept`, `Rookery.rate_limit_run`, `Rookery.api_once`, `examples/rookery/Rookery/Proofs/Runs.lean`, from `Rookery.implements` and `System.Implements.history` (which passes each deadline where the run shows it, `System.Implements.Explains.fired`, `fires`); same gate | The link from outside to the board does not duplicate; requests have distinct ids. Of `system`, not of `Http.served system`. The rate limit counts web posts only, and `posted_kept` starts from a web post or a read: an API post's repeated `seq` is answered `posted` from the memo, after the post was deleted or in a later window | proved |
+| Rookery: the system implements its spec with deadlines | `Rookery.implements`, `examples/rookery/Rookery/Proofs/Refines.lean`; same gate | The link from outside to the board does not duplicate and the process does not restart; requests may be lost and reordered and the board may crash | proved |
+| Rookery, of every run of the system: a response carries the secrets of no account but the one its request, which arrived before it, was made as; every list of posts handed over is a read of a board the spec's functions reach (so the timeline claims above apply to it); once a delete made through the web is answered `deleted`, no read whose request arrives afterwards shows the post | `Rookery.output_secret`, `Rookery.output_read`, `Rookery.deleted_unread`, `examples/rookery/Rookery/Proofs/Traces.lean`, from `Rookery.implements` and `System.Implements.history`; same gate | The link from outside to the board does not duplicate and the process does not restart; for the third, requests have distinct ids. Of `system`, not of `Http.served system` (the gate's refinement is not proved) | proved |
+| Rookery, of every run of the system: a post answered `posted` to a web post, or shown in a read, is on its author's account in the board of every read whose request arrives later, until a request made as its author to delete it arrives (the read lists at most `timelineMax` posts, so it is the board that holds the post, and the timeline claims say which the read shows); after a position where an account's window passes and before the next, the web posts it makes that arrive after it are answered `posted` with at most `maxPerWindow` distinct ids; of the API changes one account sends with one `seq`, every two replies but `stale`, `badToken` and `reused` are the same, to the same change | `Rookery.posted_kept`, `Rookery.shown_kept`, `Rookery.rate_limit_run`, `Rookery.api_once`, `examples/rookery/Rookery/Proofs/Runs.lean`, from `Rookery.implements` and `System.Implements.history` (which passes each deadline where the run shows it, `System.Implements.Explains.fired`, `fires`); same gate | The link from outside to the board does not duplicate and the process does not restart; requests have distinct ids. Of `system`, not of `Http.served system`. The rate limit counts web posts only, and `posted_kept` starts from a web post or a read: an API post's repeated `seq` is answered `posted` from the memo, after the post was deleted or in a later window | proved |
 | Rookery: a request is made as the account its cookie or token verifies; no secret reaches the system | `examples/rookery/Check.lean` (`bridge`), `lake exe rookeryLive` (CI) | HMAC is a pseudorandom function | tested |
 
 Also:
