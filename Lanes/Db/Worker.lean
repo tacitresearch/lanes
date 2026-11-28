@@ -104,12 +104,15 @@ def expire (s : State) (now_ms : Int64) : List Attempt :=
 
 def free (s : State) : Nat := cfg.jobs.batch_max - s.running.length
 
+/-- Whether a claim is out, sent less than `claim_ms` ago. -/
+def waiting (s : State) (now_ms : Int64) : Bool :=
+  match s.claim with
+  | some (_, sent) => now_ms < sent + Int64.ofNat cfg.claim_ms
+  | none => false
+
 def tick (s : State) (now_ms : Int64) : State × List (Eff Q A W R) :=
   let s := { s with now_ms, running := expire cfg s now_ms }
-  let waiting := match s.claim with
-    | some (_, sent) => now_ms < sent + Int64.ofNat cfg.claim_ms
-    | none => false
-  if waiting || free cfg s = 0 then (s, [])
+  if waiting cfg s now_ms || free cfg s = 0 then (s, [])
   else
     let (s', e) := call s (.inr (.claim now_ms (free cfg s)))
     ({ s' with claim := some (s.nextCall, now_ms) }, [e])

@@ -428,6 +428,118 @@ theorem invariant {σ : Signature} (cfg : Config) (port : Port σ Q A) {start : 
     · exact observe_holds cfg hI _ hd
     · exact hd
 
+/-! ## Properties of worlds
+
+A property of a world may speak of its calls as well as its database: of the answer a call that
+took effect will be given (`World.done`). `WorldInv` is what keeps one in every world the model
+holds, also once any call still outstanding or lost takes effect (`world_invariant`). -/
+
+/-- A property of worlds that every call taking effect, every answer and every call sent keeps. -/
+structure WorldInv (h : Handler Q A) (J : World Q A → Prop) : Prop where
+  effects : ∀ w, J w → ∀ w' ∈ w.effects h, J w'
+  answer : ∀ w r, J w → ∀ w' ∈ w.answer r, J w'
+  send : ∀ (cfg : Config) w c, J w → J (w.send cfg c)
+
+/-- `J` holds of every world of the model, with every call that may still take effect applied. -/
+def WorldHolds (h : Handler Q A) (J : World Q A → Prop) (s : State Q A) : Prop :=
+  ∀ w ∈ s.worlds, ∀ w' ∈ w.expand h w.fuel, J w'
+
+variable {J : World Q A → Prop}
+
+theorem WorldInv.expand (hJ : WorldInv h J) :
+    ∀ (fuel : Nat) (w : World Q A), J w → ∀ w' ∈ w.expand h fuel, J w' := by
+  intro fuel
+  induction fuel with
+  | zero => intro w hw w' hw'; simp only [World.expand, List.mem_singleton] at hw'; exact hw' ▸ hw
+  | succ fuel ih =>
+    intro w hw w' hw'
+    simp only [World.expand, List.mem_cons, List.mem_flatMap] at hw'
+    rcases hw' with rfl | ⟨v, hv, hw'⟩
+    · exact hw
+    · exact ih v (hJ.effects w hw v hv) w' hw'
+
+theorem WorldInv.allow (hJ : WorldInv h J) {s s' : State Q A} {r : Reply A}
+    (hs : WorldHolds h J s) (ha : s.allow h r = some s') : WorldHolds h J s' := by
+  simp only [State.allow] at ha
+  split at ha
+  · cases ha
+  · simp only [Option.some.injEq] at ha
+    subst ha
+    intro w hw w' hw'
+    have hw := mem_dedup hw
+    simp only [List.mem_flatMap] at hw
+    obtain ⟨v, hv, u, hu, hw⟩ := hw
+    exact hJ.expand _ w (hJ.answer u r (hs v hv u hu) w hw) w' hw'
+
+theorem WorldInv.observe (cfg : Config) (hJ : WorldInv h J) {s : State Q A} (c : Call Q)
+    (hs : WorldHolds h J s) : WorldHolds h J (s.observe cfg c) := by
+  intro w hw w' hw'
+  simp only [State.observe, List.mem_map] at hw
+  obtain ⟨v, hv, rfl⟩ := hw
+  exact hJ.expand _ _ (hJ.send cfg v c (hs v hv v (expand_self v _))) w' hw'
+
+/-- **Properties of worlds.** If the start's world satisfies `J`, and every call taking effect,
+every answer and every call sent keeps it, it holds of every world the model allows after every
+run, also once any call still outstanding or lost takes effect. -/
+theorem world_invariant {σ : Signature} (cfg : Config) (port : Port σ Q A) {start : Db}
+    (hJ : WorldInv h J) (hstart : J { db := start }) {events : List (Event σ)} {s : State Q A}
+    (hrun : (outside cfg h start port).after events = some s) : WorldHolds h J s := by
+  refine (outside cfg h start port).after_invariant (fun _ => True) (WorldHolds h J) ?_ ?_ ?_
+    (fun _ _ => trivial) hrun
+  · intro w hw w' hw'
+    simp only [outside, List.mem_singleton] at hw
+    subst hw
+    exact hJ.expand _ _ hstart w' hw'
+  · intro d x d' hd hx
+    simp only [outside, Option.bind_eq_some_iff] at hx
+    obtain ⟨r, -, hr⟩ := hx
+    exact hJ.allow hd hr
+  · intro d out hd _
+    simp only [outside]
+    split
+    · exact hJ.observe cfg _ hd
+    · exact hd
+
+/-- A world in which a committed answer comes had the call take effect with that answer, and
+has the same database. -/
+theorem World.answer_committed {w w' : World Q A} {id : Nat} {a : A}
+    (h : w' ∈ w.answer ⟨id, .committed a⟩) : (id, a) ∈ w.done ∧ w'.db = w.db := by
+  simp only [World.answer] at h
+  split at h
+  · next hc => simp at h; exact ⟨List.contains_iff_mem.mp hc, by rw [h]⟩
+  · simp at h
+
+theorem World.answer_done {w w' : World Q A} {r : Reply A} (h : w' ∈ w.answer r) :
+    ∀ p ∈ w'.done, p ∈ w.done := by
+  simp only [World.answer] at h
+  split at h <;> (try split at h) <;> (try split at h) <;> simp at h <;> subst h <;>
+    first | exact fun p hp => List.mem_of_mem_erase hp | exact fun p hp => hp
+
+omit [DecidableEq Q] [DecidableEq A] in
+theorem World.send_done (cfg : Config) (w : World Q A) (c : Call Q) :
+    (w.send cfg c).db = w.db ∧ (w.send cfg c).done = w.done := by
+  unfold World.send; split <;> exact ⟨rfl, rfl⟩
+
+omit [DecidableEq A] in
+/-- A world after a call takes effect: its database is one run of a call's transaction on the
+world's, and its answers to come are those it had, with the answer of that call if it was
+pending. -/
+theorem World.mem_effects {w w' : World Q A} (hw : w' ∈ w.effects h) :
+    (∃ c ∈ w.pending, ∃ a, (h c.request).run w.db = .ok (a, w'.db) ∧ w'.done = w.done ++ [(c.id, a)])
+      ∨ ∃ q ∈ w.lost, ∃ a, (h q).run w.db = .ok (a, w'.db) ∧ w'.done = w.done := by
+  simp only [World.effects, List.mem_append, List.mem_filterMap, Option.map_eq_some_iff] at hw
+  rcases hw with ⟨c, hc, ⟨a, db⟩, hrun, rfl⟩ | ⟨q, hq, ⟨a, db⟩, hrun, rfl⟩
+  · left
+    refine ⟨c, hc, a, ?_, rfl⟩
+    cases hr : (h c.request).run w.db with
+    | error e => simp [hr, Except.toOption] at hrun
+    | ok p => simp only [hr, Except.toOption, Option.some.injEq] at hrun; rw [hrun]
+  · right
+    refine ⟨q, hq, a, ?_, rfl⟩
+    cases hr : (h q).run w.db with
+    | error e => simp [hr, Except.toOption] at hrun
+    | ok p => simp only [hr, Except.toOption, Option.some.injEq] at hrun; rw [hrun]
+
 end Model
 
 /-! ## Rows: what a proof of `Preserves` reads off an operation -/
