@@ -1,6 +1,6 @@
 # D68. PostgreSQL is spoken in Lean, and a transactional store is a model
 
-Status: Accepted
+Status: Partly superseded by D111-typed-store.md (the store model: typed tables, keys and scans replace the key-value model for new code)
 
 Applications keep their state as actor state with a journal, and that stays the default. Some
 must share a database with other programs, or want SQL and its indexes. This decision is how a

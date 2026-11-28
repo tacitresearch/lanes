@@ -6,8 +6,8 @@ import Lanes
 import TodoDb
 
 /-!
-The fixed to-do list on a real PostgreSQL, through the client's store adapter
-(`Postgres.Store.handler`), connected as libpq's variables say (`Postgres.Client.fromEnv`). For
+The to-do list on a real PostgreSQL, through the typed store's driver
+(`Postgres.Typed.handler`), connected as libpq's variables say (`Postgres.Client.fromEnv`). For
 a server set up by `scripts/postgres-test-server` on port 5433:
 
 ```bash
@@ -15,50 +15,48 @@ PGHOST=localhost PGPORT=5433 PGUSER=lanes_scram PGPASSWORD=scram-pw PGDATABASE=l
   lake exe todoLive
 ```
 
-The to-dos go in the table `todo_db`. It adds three to-dos, one of them twice under the same
-key, and prints the rows. Without `PGHOST` it says so and exits.
+It drops the table `todos`, runs the migrations of `migrations/`, checks that the table they
+made is the one `TodoDb.schema` declares (`Postgres.Sql.catalogDiff`), adds three to-dos, one of
+them twice, completes one and lists the user's. Without `PGHOST` it says so and exits.
 -/
 
 open Lanes TodoDb Std.Async
-
-def table : Postgres.Table := { name := "todo_db" }
 
 def main : IO UInt32 := do
   if (← IO.getEnv "PGHOST").isNone then
     IO.println "PGHOST is not set: no server to run against"; return 0
   let cfg ← Postgres.Client.fromEnv
-  let setup ← (do
-    let .ok s ← Postgres.connect cfg | throw (IO.userError "cannot connect")
-    discard <| s.exec (.statement table.create)
-    discard <| s.exec (.statement { sql := s!"DELETE FROM {table.name}" })
-    s.close : Async Unit).block
-  discard <| pure setup
-  let sessions ← IO.mkRef []
+  let .ok s ← (Postgres.connect cfg).block | throw (IO.userError "cannot connect")
+  discard <| (s.exec (.statement { sql := "DROP TABLE IF EXISTS todos" })).block
+  let errors ← (Postgres.Typed.migrate s [← IO.FS.readFile "migrations/0001_todos.sql"]).block
+  let ours := fun (rows : List (List (Option String))) => rows.filter (·.head? == some (some "todos"))
+  let diff ← match ← (s.exec (.statement Postgres.Sql.columnsQuery)).block,
+      ← (s.exec (.statement Postgres.Sql.keysQuery)).block with
+    | .rows cols, .rows keys => pure (Postgres.Sql.catalogDiff schema (ours cols.rows) (ours keys.rows))
+    | _, _ => pure ["the catalog could not be read"]
+  (s.close).block
+  unless (errors ++ diff).isEmpty do IO.println s!"{errors ++ diff}"; return 1
+  let store : Postgres.Typed.Store Request Answer := { pool := ← Postgres.Pool.new cfg, handler := handler true }
   let outs ← IO.mkRef ([] : List Out)
-  let run : Async (List (Nat × String)) := do
-    let rt ← Runtime.startWith (system { keyed := true }) {} fun rt _ out => do
+  let requests := [Request.add 7 "milk", .add 7 "eggs", .add 7 "milk", .add 8 "milk", .complete 7 1, .list 7]
+  let run : Async Unit := do
+    let rt ← Runtime.startWith (system {}) {} fun rt out => do
       outs.modify (· ++ [out])
-      Postgres.Store.handler port cfg table .serializable sessions rt out
-    for (key, title) in [(1, "milk"), (2, "eggs"), (1, "milk"), (3, "bread")] do
-      rt.input (.add key title)
-    for _ in List.range 100 do
-      let done := (← outs.get).countP fun | .added _ | .gaveUp _ => true | _ => false
-      if done ≥ 4 then break
-      Std.Async.sleep (.ofNat 50)
+      Postgres.Typed.handler port store rt out
+    for (r, n) in requests.zip (List.range requests.length) do
+      rt.input (.request n r)
+      -- One at a time, so that the answers are in order.
+      for _ in List.range 100 do
+        let done := (← outs.get).countP fun | .answered .. | .gaveUp _ => true | _ => false
+        if done > n then break
+        Std.Async.sleep (.ofNat 20)
     rt.stop
-    let .ok s ← Postgres.connect cfg | throw (IO.userError "cannot connect")
-    let rows ← s.exec (.statement { sql := s!"SELECT key, value FROM {table.name} ORDER BY key" })
-    s.close
-    match rows with
-    | .rows r => return r.rows.filterMap fun
-        | [some k, some v] => k.toNat?.map (·, v)
-        | _ => none
-    | _ => return []
-  let rows ← run.block
-  for (k, v) in rows do IO.println s!"{k} {v}"
-  let outcomes := (← outs.get).filterMap fun
-    | .added k => some s!"added {k}"
-    | .gaveUp k => some s!"gave up {k}"
+  run.block
+  let answers := (← outs.get).filterMap fun
+    | .answered n a => some (n, a)
     | _ => none
-  IO.println s!"{", ".intercalate outcomes}"
-  return if rows == [(1, "milk"), (2, "eggs"), (3, "bread")] then 0 else 1
+  for (n, a) in answers do IO.println s!"{n}: {repr a}"
+  let expected : List (Nat × Answer) :=
+    [(0, .added 0), (1, .added 1), (2, .existing 0), (3, .added 2), (4, .done),
+     (5, .list [{ id := 1, owner := 7, title := "eggs", done := true }, { id := 0, owner := 7, title := "milk" }])]
+  return if answers == expected then 0 else 1

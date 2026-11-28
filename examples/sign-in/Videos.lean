@@ -124,7 +124,7 @@ def service (s : Settings) : Service (ReqId × Command) (ReqId × Response) Stat
        [(id, (Response.redirect "/").clearCookie (cookie s ""))])
 
 /-- The header `prepare` writes with the member and session a cookie it verified names. One a
-client sends is dropped, and so are the cookies, which are never journalled. -/
+client sends is dropped, and so are the cookies, which never enter the system. -/
 def sessionHeader : String := "videos-session"
 
 /-- The header `stamp` writes the time a request arrived in, which a client's is dropped. -/

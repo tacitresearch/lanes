@@ -14,7 +14,7 @@ the key that tags the browsers' tickets, keeps the states used and the providers
 the token endpoint, the JWK Set and the user API through the HTTP client. A request to begin is answered here with the redirect; a
 callback enters the system with the identity verified in its headers (`OAuth.identity?`) and
 without its code, or is answered here with the refusal. So no code, token or secret reaches the
-system or its journal, and nothing here is printed.
+system, and nothing here is printed.
 
 A sign-in begun is kept by the browser, in its cookie. The key and the states used live in
 memory: after a restart the callbacks of sign-ins begun before are refused, as tagged by another

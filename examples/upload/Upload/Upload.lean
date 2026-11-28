@@ -6,7 +6,7 @@ import Lanes
 The spec, the actor and its proofs. A client sends a body as large as it likes; the server hands
 it to the system in pieces (`Http.Stream`), each a request of its own through the gate, and the
 system keeps, for each upload, how many bytes it has taken and their checksum, never the bytes.
-The bytes are in the journal, as every input is. The answer to the upload is the size and the
+The answer to the upload is the size and the
 checksum of its pieces, in the order of their index.
 -/
 

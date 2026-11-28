@@ -250,7 +250,21 @@ def live : IO (List (String × Bool)) := do
   let a ← Lanes.randomBytes 32
   let b ← Lanes.randomBytes 32
   let none ← Lanes.randomBytes 0
+  let dir := (← IO.getEnv "TMPDIR").getD "/tmp"
+  let path : System.FilePath := s!"{dir}/lanes-fsync-{← IO.monoNanosNow}"
+  Lanes.File.replace path "first"
+  Lanes.File.replace path "second"
+  let text ← IO.FS.readFile path
+  Lanes.File.fsync path.toString
+  Lanes.File.fsync dir
+  let missing ← (Lanes.File.fsync (path.toString ++ ".missing")).toBaseIO
+  let scratch ← (path.addExtension "tmp").pathExists
+  IO.FS.removeFile path
   return [("random bytes: as many as asked, and two draws differ",
-    a.size == 32 && b.size == 32 && a != b && none.size == 0)]
+    a.size == 32 && b.size == 32 && a != b && none.size == 0),
+    ("fsync: a file and its directory are synced, and a path that is not there is an error",
+      missing matches .error _),
+    ("File.replace: the file holds what was written last, and nothing is left beside it",
+      text == "second" && !scratch)]
 
 end Tests.Crypto

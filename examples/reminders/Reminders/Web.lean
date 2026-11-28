@@ -9,8 +9,8 @@ import Reminders.App
 # The reminders over HTTP
 
 Three routes: the list, a form that schedules a reminder, and a cancel. The time a request
-arrived is written into it by the server's `arrive` (`Reminders.stamp`), so that it is in the
-journal and the same on replay; the scheduler learns the time from it.
+arrived is written into it by the server's `arrive` (`Reminders.stamp`), so that `step` stays
+pure; the scheduler learns the time from it.
 -/
 
 namespace Reminders.Web
@@ -85,16 +85,5 @@ def bridge : Bridge (joinSig (Schedule.sig Key Task Answer) sig) where
   encode
     | .inr (.reply req reminders notice) => some (req, .html (Page reminders notice).document)
     | _ => none
-
-/-! ## Saving -/
-
-def actors (config : Config) : Kernel.Image.Codecs (system config) where
-  id := Codec.of (Unit ⊕ Unit)
-  state
-    | .inl () => Codec.of (Schedule.State Key Task)
-    | .inr () => Codec.of State
-  msg
-    | .inl () => Codec.of (Schedule.Msg Key Task Answer)
-    | .inr () => Codec.of In
 
 end Reminders.Web

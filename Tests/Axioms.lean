@@ -6,9 +6,8 @@ import Tests.Axioms.Behaviours
 import Tests.Axioms.Check
 import Tests.Axioms.Core
 import Tests.Axioms.Data
-import Tests.Axioms.Durable
+import Tests.Axioms.Db
 import Tests.Axioms.Lib
-import Tests.Axioms.Net
 import Tests.Axioms.Outside
 import Tests.Axioms.Proof
 import Tests.Axioms.Runtime

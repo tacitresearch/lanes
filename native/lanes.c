@@ -5,7 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 What Lean cannot express or check, bound from C: OpenSSL's libcrypto for cryptography whose time
 must not depend on secrets and for random bytes, fsync for durability, and a timed wait for a
 thread. Each function
-is declared in `Lanes/Lib/Crypto/Native.lean`, `Lanes/Durable/IO/Journal.lean` or
+is declared in `Lanes/Lib/Crypto/Native.lean`, `Lanes/Lib/File.lean` or
 `Lanes/Runtime/IO/Park.lean`; arguments are borrowed.
 
 The OpenSSL is the one Lean's toolchain ships, as for `native/tls.c`: the functions below are

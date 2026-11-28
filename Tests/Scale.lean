@@ -63,7 +63,7 @@ def kernelAlone (turns : Nat) : IO Nat := do
   let t0 ← IO.monoNanosNow
   let mut k := (Kernel.boot counters).1
   for i in [0:turns] do
-    match Journal.turn k i (some 0) 64 with
+    match Batch.turn k i (some 0) 64 with
     | { kernel, .. } => k := kernel
   let elapsed := (← IO.monoNanosNow) - t0
   return if (k.cell 0).state == turns then turns * 1000000000 / max 1 elapsed else 0
@@ -88,11 +88,11 @@ a thousand seconds. -/
 def kernelWrites (size : Nat) : IO Nat := do
   let sys := array (Array.replicate size 0)
   let mut k := (Kernel.boot sys).1
-  match Journal.turn k 0 (some 0) 64 with
+  match Batch.turn k 0 (some 0) 64 with
   | { kernel, .. } => k := kernel
   let t0 ← IO.monoNanosNow
   for n in [1:writes + 1] do
-    match Journal.turn k 0 (some n) 64 with
+    match Batch.turn k 0 (some n) 64 with
     | { kernel, .. } => k := kernel
   let elapsed := (← IO.monoNanosNow) - t0
   return if (k.cell ()).state[writes % size]! == writes then elapsed else 1000000000000

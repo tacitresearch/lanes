@@ -52,8 +52,7 @@ structure Runtime.Batches where
   pool : Nat := 0
   deriving Repr
 
-/-- How a shard runs: its bounds, its threads and how often it saves. Every field has a
-default. -/
+/-- How a shard runs: its bounds and its threads. Every field has a default. -/
 structure Runtime.Config where
   /-- Inputs wait here for the shard. When it is full, `tryInput` refuses. At least one. -/
   inboxCapacity : Nat := 1024
@@ -63,51 +62,15 @@ structure Runtime.Config where
   /-- Keep the events performed, for tests. By `Kernel.exec_reachable` they are a run of the
   semantics, but for the starts that bring released actors back. -/
   record : Bool := false
-  /-- With a journal that can save the kernel: how many entries to write between two saves.
-  After a save the journal is cut, so this bounds how much a restart replays. -/
-  snapshotEvery : Nat := 65536
   /-- The most threads that work out the steps of different actors at once (`Kernel.runWaves`);
   `0` is the machine's hardware threads. With one, or with `parallel` off, each input is a turn
   of its own, as the kernel was always run; otherwise the inputs that arrive together are one
-  turn, at most `min batch snapshotEvery` to a turn, and the actors they reach may step in
+  turn, at most `batch` to a turn, and the actors they reach may step in
   parallel. -/
   workers : Nat := 0
   parallel : Runtime.Parallel := .auto
   /-- What `auto` counts as worth the pool. -/
   pace : Pace.Config := {}
-
-/-- What a durable shard needs of its journal's storage. `Lanes.Journal.Store.open` gives one
-backed by a file. -/
-structure Journal.Log (sys : System σ) where
-  /-- The entries in the journal at this start. -/
-  past : List (Journal.Entry σ)
-  /-- The kernel last saved, with the index of its mark in the journal. -/
-  saved : Option (Nat × Kernel.Image sys) := none
-  /-- How many entries the shard's history has at this start, counting those a cut journal no
-  longer holds. It never goes down, and goes up with every entry written. -/
-  index : Nat := past.length
-  /-- Returns once the entries will survive the process. -/
-  append : List (Journal.Entry σ) → IO Unit
-  /-- Writes entries that may be lost with the process. -/
-  note : List (Journal.Entry σ) → IO Unit
-  /-- Save this image of the kernel as it is after everything appended so far, mark the journal
-  and cut it. `none` if this journal cannot save. -/
-  save : Option (Kernel.Image sys → IO Unit) := none
-  /-- Outputs of an older version of the system that it had not handed over, migrated
-  (`Journal.Upgrade`), each with its origin in the older history. They are handed over first,
-  and then `migrate` writes the migration. -/
-  pending : List (Journal.Origin × σ.Out) := []
-  /-- Write the migration of an older version's files. Run once `pending` is handed over and
-  before anything is appended, so that dying in between hands them over again. -/
-  migrate : IO Unit := pure ()
-  close : IO Unit
-  /-- The journal's own id, made at random when the journal was begun. With the origin of an
-  output it is the output's id (`Journal.OutputId`), so that two journals never give one id. -/
-  id : String := ""
-  /-- The files were restored from elsewhere, production into staging: the outputs they owe are
-  not handed over but marked handed, and the journal has a new id
-  (`Journal.Store.restored`). -/
-  restored : Bool := false
 
 private abbrev Cmd (sys : System σ) :=
   Batch.Command σ (fun ids => IO.Promise (Batch.Peek sys ids)) (IO.Promise Bool)
@@ -155,10 +118,9 @@ private def wake (rt : Runtime sys) : Wake → BaseIO Unit
 private def record (rt : Runtime sys) (events : List (Event σ)) : BaseIO Unit := do
   if rt.config.record then rt.log.modify (· ++ events.toArray)
 
-private def handOver (onOutput : Journal.OutputId → σ.Out → Async Unit) (journal : String)
-    (outputs : List (Journal.Origin × σ.Out)) : Async Unit := do
-  for (origin, out) in outputs do
-    try onOutput ⟨journal, origin⟩ out
+private def handOver (onOutput : σ.Out → Async Unit) (outputs : List σ.Out) : Async Unit := do
+  for out in outputs do
+    try onOutput out
     catch e => IO.eprintln s!"lanes: output handler failed: {e}"
 
 /-- Everything that has arrived, and whether the inbox is closed. If nothing has and the
@@ -187,47 +149,21 @@ never leaves it; only commands, events and outputs cross.
 What to do with the commands taken at once is `Batch.run`, a pure function with its theorems:
 the turns it asks of the kernel, and the acts to perform for them, in order. This loop reads
 the clock, takes every command that has arrived, and performs the acts: one exchange with the
-other threads and one write to the journal for however many inputs arrived together. With a
-journal the kernel starts as the journal describes (`Journal.resumeIds`).
+other threads for however many inputs arrived together. The kernel starts at boot: a shard's
+state lives as long as its process.
 -/
-private def loop (rt : Runtime sys) (onOutput : Journal.OutputId → σ.Out → Async Unit)
-    (waiting : IO.Ref (Array (Bool × IO.Promise Bool))) (journal : Option (Journal.Log sys)) :
-    IO Unit := do
-  let (start, outputs) ← match journal with
-    | some log =>
-      match Journal.resumeIds sys log.saved log.past with
-      | some (k, _, owed) => pure (k, owed)
-      | none => throw (IO.userError "lanes: the journal does not continue its snapshot")
-    | none =>
-      let (k, outputs) := Kernel.boot sys
-      pure (k, Journal.tag 0 outputs)
-  if journal.isNone then rt.record (outputs.map (.output ·.2))
-  let id ← match journal with
-    | some log => pure log.id
-    | none => pure (Journal.journalId (← IO.getRandomBytes 16))
-  let restored := journal.any (·.restored)
-  let deliver := fun (outputs : List (Journal.Origin × σ.Out)) => do
-    discard <| Parker.wait (← (handOver onOutput id outputs).toBaseIO)
-  let handOver := fun (outputs : List (Journal.Origin × σ.Out)) => do
-    deliver outputs
-    if let some log := journal then unless outputs.isEmpty do log.note [.handed]
-  -- The history's length, as the journal counts it: each act adds what `Batch.Act.grows` says.
-  let mut index := (journal.map (·.index)).getD 0
-  if let some log := journal then
-    unless restored do deliver log.pending
-    log.migrate
-  if restored then
-    if let some log := journal then unless outputs.isEmpty do log.append [.handed]
-  else handOver outputs
-  unless outputs.isEmpty do index := index + 1
+private def loop (rt : Runtime sys) (onOutput : σ.Out → Async Unit)
+    (waiting : IO.Ref (Array (Bool × IO.Promise Bool))) : IO Unit := do
+  let (start, outputs) := Kernel.boot sys
+  rt.record (outputs.map .output)
+  let handOver := fun (outputs : List σ.Out) => do
+    discard <| Parker.wait (← (handOver onOutput outputs).toBaseIO)
+  handOver outputs
   rt.recovered.set true
   let since := start.clock_ms
   let epoch ← IO.monoMsNow
   let clock : BaseIO Nat := return since + ((← IO.monoMsNow) - epoch)
   let kernel ← IO.mkRef start
-  let save := journal.bind (·.save)
-  let snapshotEvery := save.map fun _ => rt.config.snapshotEvery
-  let mut written := (journal.map (·.past.length)).getD 0
   let workers := match rt.config.workers with
     | 0 => (System.Platform.Internal.getHardwareConcurrency ()).toNat
     | n => n
@@ -243,18 +179,16 @@ private def loop (rt : Runtime sys) (onOutput : Journal.OutputId → σ.Out → 
       | .off => {}
       | .on => { workers }
       | .auto => pace.spread rt.config.pace workers
-    let config : Batch.Config :=
-      { now_ms := ← clock, index, fuel := max 1 rt.config.batch, snapshotEvery, spread }
+    let config : Batch.Config := { now_ms := ← clock, fuel := max 1 rt.config.batch, spread }
     let held ← waiting.get
     -- Peeks are answered at the end of the batch wherever they fall (`Batch.run_erase_peeks`), so
     -- they are put last, where they do not part inputs that are accepted together.
     let batch := if parallel == .off then batch
-      else Batch.group (max 1 (min rt.config.batch rt.config.snapshotEvery))
-          (batch.filter (!·.isPeek)) ++ batch.filter (·.isPeek)
+      else Batch.group (max 1 rt.config.batch) (batch.filter (!·.isPeek)) ++ batch.filter (·.isPeek)
     let start_ns ← IO.monoNanosNow
-    let (acts, resolved, still, count) ← kernel.modifyGet fun k =>
-      match Batch.run config k written held batch with
-      | { kernel, written, acts, resolved, waiting } => ((acts, resolved, waiting, written), kernel)
+    let (acts, resolved, still) ← kernel.modifyGet fun k =>
+      match Batch.run config k held batch with
+      | { kernel, acts, resolved, waiting } => ((acts, resolved, waiting), kernel)
     let units := Pace.work acts
     if units != 0 then
       if parallel == .auto then
@@ -265,40 +199,33 @@ private def loop (rt : Runtime sys) (onOutput : Journal.OutputId → σ.Out → 
       rt.ran.modify fun b =>
         if 1 < spread.workers then { b with pool := b.pool + 1 }
         else { b with inline := b.inline + 1 }
-    written := count
-    index := index + Batch.grown acts
     for act in acts do
       match act with
-      | .append entries => if let some log := journal then log.append entries.toList
+      | .work _ => pure ()
       | .record events => rt.record events.toList
       | .handOver outputs => handOver outputs.toList
-      | .save image => if let some save := save then save image
       | .answer _ reply peek => reply.resolve peek
     for heard in resolved do heard.resolve true
     waiting.set still
 
 /-- However the loop ends, nobody is left waiting on it: not those it had heard from, and not
 those whose commands it never took. Those are taken out of the inbox and dropped, and a caller
-waits on a promise that answers when it is dropped. The inbox is closed first, before the
-journal, which may take its time: nothing is accepted by a shard that has ended. -/
-private def run (rt : Runtime sys) (onOutput : Journal.OutputId → σ.Out → Async Unit)
-    (journal : Option (Journal.Log sys)) : IO Unit := do
+waits on a promise that answers when it is dropped. The inbox is closed first: nothing is
+accepted by a shard that has ended. -/
+private def run (rt : Runtime sys) (onOutput : σ.Out → Async Unit) : IO Unit := do
   let waiting ← IO.mkRef #[]
-  let error ← (rt.loop onOutput waiting journal).toBaseIO
+  let error ← (rt.loop onOutput waiting).toBaseIO
   if let .error e := error then
     discard (IO.eprintln s!"lanes: the shard stopped on an error: {e}").toBaseIO
   for w in ← rt.inbox.modifyGet Mailbox.close do rt.wake w
   discard <| rt.inbox.modifyGet Mailbox.take
-  if let some log := journal then discard log.close.toBaseIO
   for (_, done) in ← waiting.get do done.resolve false
   live.modify (· - 1)
   rt.finished.resolve (match error with | .error e => some e | .ok () => none)
 
 /-- Boot a system on one shard, which runs on a thread of its own until `stop`. The handler is
-given the runtime, so that an adapter can answer an output with an input (`tryInput`), and each
-output's id, the same each time the output is handed over, which a driver passes on as the
-idempotency key (`Journal.OutputId`). A program whose
-`main` returns without stopping its runtimes does not exit.
+given the runtime, so that an adapter can answer an output with an input (`tryInput`). A
+program whose `main` returns without stopping its runtimes does not exit.
 
 Each output goes to `onOutput`, and the shard waits for it: a slow handler holds every actor up,
 and a handler must not call `input`, `idle`, `state` or `stop`, which wait for the shard.
@@ -308,13 +235,11 @@ A timer counts from the clock reading at the start of the batch of work that arm
 can fire early by as long as that batch took. Steps are pure and short, so this is small, but
 nothing may depend on a timer not firing early: the semantics lets one fire at any moment.
 
-With a `journal` the shard is durable: it starts in the state the journal describes, and every
-input it accepts is in the journal before any output it causes is handed over. Outputs handed
-over shortly before the process died may be handed over again, with the same id, so a handler
-that must not repeat itself has to tell, by the id. The kernel's clock stands still while the process is down. -/
+The shard's state lives as long as its process: every start is a boot, with every actor in its
+initial state. State that must outlive the process belongs in a service outside, reached
+through an adapter. -/
 def startWith (sys : System σ) [Hashable σ.Id] (config : Runtime.Config := {})
-    (onOutput : Runtime sys → Journal.OutputId → σ.Out → Async Unit)
-    (journal : Option (Journal.Log sys) := none) : Async (Runtime sys) := do
+    (onOutput : Runtime sys → σ.Out → Async Unit) : Async (Runtime sys) := do
   let rt : Runtime sys := {
     config
     inbox := ← IO.mkRef {}
@@ -324,14 +249,13 @@ def startWith (sys : System σ) [Hashable σ.Id] (config : Runtime.Config := {})
     finished := ← IO.Promise.new
     recovered := ← IO.mkRef false }
   live.modify (· + 1)
-  discard <| IO.asTask (prio := .dedicated) (rt.run (onOutput rt) journal)
+  discard <| IO.asTask (prio := .dedicated) (rt.run (onOutput rt))
   return rt
 
 /-- `startWith` for a handler that only consumes outputs. -/
 def start (sys : System σ) [Hashable σ.Id] (config : Runtime.Config := {})
-    (onOutput : σ.Out → Async Unit := fun _ => pure ())
-    (journal : Option (Journal.Log sys) := none) : Async (Runtime sys) :=
-  startWith sys config (fun _ _ => onOutput) journal
+    (onOutput : σ.Out → Async Unit := fun _ => pure ()) : Async (Runtime sys) :=
+  startWith sys config (fun _ => onOutput)
 
 private def capacity (rt : Runtime sys) : Nat :=
   max 1 rt.config.inboxCapacity
@@ -390,8 +314,8 @@ def state (rt : Runtime sys) (i : σ.Id) : Async (sys.State i) := do
 
 /-- Ask for the states of the actors `ids` if the inbox has room, without waiting. They are read
 at the end of the batch that takes the peek, once everything that batch and those before it
-wrote is appended and handed over (`Batch.run_sound`), with every entry before that boundary
-and none after it (`Batch.run_peeks`), and nothing is journalled (`Batch.run_erase_peeks`).
+produced is handed over (`Batch.run_sound`), with every request before that boundary and none
+after it (`Batch.run_peeks`), and nothing else the batch does changes (`Batch.run_erase_peeks`).
 With `every`, the states of every actor started that it holds of are read too
 (`Batch.Peek.others`). `reply` is given them on a task of its own, or `none` if the shard stops
 first. `false` means nothing was asked: the shard is busy or has stopped.
@@ -412,7 +336,7 @@ def stop (rt : Runtime sys) : Async Unit := do
   for w in ← rt.inbox.modifyGet Mailbox.close do rt.wake w
   discard <| await rt.finished.result?
 
-/-- Whether the shard has started: replayed its journal and handed over what it owed. -/
+/-- Whether the shard has started: booted and handed over what booting put out. -/
 def hasRecovered (rt : Runtime sys) : BaseIO Bool :=
   rt.recovered.get
 
@@ -420,9 +344,8 @@ def hasRecovered (rt : Runtime sys) : BaseIO Bool :=
 def depth (rt : Runtime sys) : BaseIO Nat :=
   rt.inbox.modifyGet fun m => (m.count, m)
 
-/-- Wait until the shard has ended, and say whether an error ended it. A shard ends on an error
-when its journal cannot be written: it must not hand over outputs it could not make durable.
-Whoever owns the shard should then end the process, so that it is started again. -/
+/-- Wait until the shard has ended, and say whether an error ended it. Whoever owns the shard
+should then end the process, so that it is started again. -/
 def ended (rt : Runtime sys) : Async (Option IO.Error) := do
   return (← await rt.finished.result?).join
 

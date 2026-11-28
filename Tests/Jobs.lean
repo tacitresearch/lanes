@@ -254,7 +254,7 @@ def runCalls (config : Config (Option Response)) (client : Client.Config)
   let answers ← IO.mkRef #[]
   let all ← IO.Promise.new
   let rt ← Runtime.startWith (system (K := Nat) (J := Client.Call) config) { record := true }
-    fun rt _ out => do
+    fun rt out => do
       handler Port.alone (call client toString) (rt.tryInput ·) out
       if let .answer key outcome := out then
         if (← answers.modifyGet fun a => ((a.push (key, outcome)).size, a.push (key, outcome)))
@@ -295,7 +295,7 @@ def live : Async (List (String × Bool)) := do
   silent.close
   let sums ← IO.mkRef #[]
   let done ← IO.Promise.new
-  let rt ← Runtime.startWith (system (K := Nat) (J := Nat) (R := Nat) {}) {} fun rt _ out => do
+  let rt ← Runtime.startWith (system (K := Nat) (J := Nat) (R := Nat) {}) {} fun rt out => do
     handler Port.alone (compute fun n => (List.range n).foldl (· + ·) 0) (rt.tryInput ·) out
       (prio := .dedicated)
     if let .answer key (.done r) := out then

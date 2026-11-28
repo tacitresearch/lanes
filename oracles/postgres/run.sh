@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# The service oracle of the store model against a PostgreSQL made for the run:
+# The service oracles of the store models against a PostgreSQL made for the run: the key-value
+# store (`store`) and the typed store (`db`):
 #
 #   oracles/postgres/run.sh [--record]
 #
 # It makes a cluster with scripts/postgres-test-server in a new directory, on a free port, runs
-# `lake exe lanesServiceOracle store` against it, then stops the cluster with pg_ctl and removes
+# `lake exe lanesServiceOracle store db` against it, then stops the cluster with pg_ctl and removes
 # it. PostgreSQL's binaries must be on PATH or in /usr/lib/postgresql/<version>/bin; run as root,
 # the cluster is made and run by the user postgres. Without PostgreSQL it says it is skipped.
 set -euo pipefail
@@ -33,4 +34,4 @@ trap stop EXIT
 "${as[@]}" env PATH="$PATH" bash "$root/scripts/postgres-test-server" "$dir" "$port"
 initdb --version
 cd "$root"
-LANES_POSTGRES="127.0.0.1:$port" lake exe lanesServiceOracle store "$@"
+LANES_POSTGRES="127.0.0.1:$port" lake exe lanesServiceOracle store db "$@"

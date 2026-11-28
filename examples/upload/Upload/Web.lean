@@ -49,10 +49,7 @@ def bridge : Bridge sig where
   encode out := some (out.req, encode out)
 
 /-- The server's configuration: uploads stream, in pieces of 64 KiB, up to 1 TiB. -/
-def serverConfig (port : UInt16) (journal : Option System.FilePath) : ServerConfig :=
-  { port, journal, system := "upload 1", streams := some uploading, piece_max := 65536 }
-
-def saving : Saving (system {}) where
-  actors := { id := Codec.unit, state := fun _ => Codec.of State, msg := fun _ => Request.codec }
+def serverConfig (port : UInt16) : ServerConfig :=
+  { port, streams := some uploading, piece_max := 65536 }
 
 end Upload.Web

@@ -9,7 +9,7 @@ import Checks.Mail
 import Checks.CloudFront
 import Checks.SesMoto
 import Checks.SqsMoto
-import Tests.Durable
+import Tests.Live
 import Lanes.Testing
 
 /-!
@@ -21,7 +21,7 @@ moto's SES and SQS, `oracles/moto/ses.jsonl` and `oracles/moto/sqs.jsonl`, check
 email and queue models. Nothing calls AWS.
 -/
 
-open Tests.Durable (safely)
+open Tests.Live (safely)
 
 def main (args : List String) : IO UInt32 := do
   unless Lanes.Testing.wantsJson args do IO.println Checks.Refresh.report

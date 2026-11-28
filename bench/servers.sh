@@ -2,7 +2,7 @@
 # shellcheck shell=bash
 
 # Every server, in the order run.sh runs them.
-ALL_SERVERS=(go1 go tcp tcp-park std std-unlimited lanes lanes-journal lanes-snapshot
+ALL_SERVERS=(go1 go tcp tcp-park std std-unlimited lanes
   lanes-io lanes-par lanes-io-par lanes-many lanes-many-par lanes-many-auto lanes-heavy
   lanes-heavy-par lanes-heavy-auto)
 
@@ -14,7 +14,7 @@ K=${K:-64}
 SPIN=${SPIN:-20000}
 quarter_cpus() { local n=$(( ${LEAN_NUM_THREADS:-4} / 4 )); echo $(( n > 0 ? n : 1 )); }
 
-# Sets SERVER to the command that runs server <name> on <port>, keeping any journal in <dir>.
+# Sets SERVER to the command that runs server <name> on <port>, with <dir> for its scratch files.
 # shellcheck disable=SC2034
 server_argv() {
   local name=$1 port=$2 dir=$3 bin=.lake/build/bin
@@ -27,8 +27,6 @@ server_argv() {
     std) SERVER=("$bin/benchStd" "$port") ;;
     std-unlimited) SERVER=("$bin/benchStd" "$port" 1000000000) ;;
     lanes) SERVER=("$bin/benchLanes" "$port") ;;
-    lanes-journal) SERVER=("$bin/benchLanes" "$port" "$dir/j") ;;
-    lanes-snapshot) SERVER=("$bin/benchLanes" "$port" "$dir/j" 1024) ;;
     lanes-io) SERVER=("$bin/benchLanes" "$port" "io=$io") ;;
     lanes-par) SERVER=("$bin/benchLanes" "$port" "workers=$workers") ;;
     lanes-io-par) SERVER=("$bin/benchLanes" "$port" "io=$io" "workers=$workers") ;;

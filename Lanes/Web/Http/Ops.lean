@@ -67,7 +67,7 @@ structure OpsConfig where
   metricsAccess : MetricsAccess := .loopback
   /-- `200` while the server answers at all. -/
   livenessPath : Option String := none
-  /-- `200` once the shard has recovered its journal, and `503` from `Server.drain` or `stop`. -/
+  /-- `200` once the shard has booted, and `503` from `Server.drain` or `stop`. -/
   readinessPath : Option String := none
   accessLog : LogSink := .off
   /-- Answer every request with an `X-Request-Id`: the client's if it is well formed, else a
@@ -222,7 +222,7 @@ theorem route?_peer {c : OpsConfig} {peer : Option Ip.Addr} {r : Request} {e : E
       exact h
 
 structure Health where
-  /-- The shard has replayed its journal and handed over what it owed. -/
+  /-- The shard has booted and handed over what booting put out. -/
   recovered : Bool
   /-- The server is draining or stopping. -/
   stopping : Bool
@@ -287,9 +287,6 @@ structure Stats (bounds : List Nat) where
   latency : Metrics.Histogram bounds := {}
   /-- Connections closed on accepting them, at `connections_max`. -/
   refused : Nat := 0
-  appends : Nat := 0
-  entries : Nat := 0
-  saves : Nat := 0
 
 namespace Stats
 
@@ -301,12 +298,6 @@ def answered (method : Method) (status duration_us : Nat) (s : Stats bounds) : S
 
 def refuse (s : Stats bounds) : Stats bounds :=
   { s with refused := s.refused + 1 }
-
-def appended (entries : Nat) (s : Stats bounds) : Stats bounds :=
-  { s with appends := s.appends + 1, entries := s.entries + entries }
-
-def saved (s : Stats bounds) : Stats bounds :=
-  { s with saves := s.saves + 1 }
 
 end Stats
 
@@ -331,12 +322,6 @@ def families {bounds : List Nat} (s : Stats bounds) (g : Gauges) : List Metrics.
       series := .counter [([], s.refused)] },
     { name := "lanes_runtime_inbox_depth", help := "Commands waiting in the shard's inbox."
       series := .gauge [([], g.inbox)] },
-    { name := "lanes_journal_appends_total", help := "Synced appends to the journal."
-      series := .counter [([], s.appends)] },
-    { name := "lanes_journal_entries_total", help := "Entries appended to the journal."
-      series := .counter [([], s.entries)] },
-    { name := "lanes_journal_saves_total", help := "Snapshots saved."
-      series := .counter [([], s.saves)] },
     { name := "lanes_ready", help := "1 when readiness answers 200."
       series := .gauge [([], if g.ready then 1 else 0)] } ]
 

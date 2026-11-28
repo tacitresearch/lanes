@@ -49,29 +49,6 @@ private theorem getElem?_of_minEntry? {α β : Type} {cmp : α → α → Orderi
   rw [minEntry?_eq_head?_toList] at h
   exact Std.TreeMap.mem_toList_iff_getElem?_eq_some.mp (List.mem_of_head? h)
 
-private theorem getElem?_ofList_toList {α β : Type} {cmp : α → α → Ordering}
-    [Std.TransCmp cmp] [Std.LawfulEqCmp cmp] (t : Std.TreeMap α β cmp) (a : α) :
-    (Std.TreeMap.ofList t.toList cmp)[a]? = t[a]? := by
-  cases h : t[a]? with
-  | some b =>
-    exact Std.TreeMap.getElem?_ofList_of_mem (k := a) Std.ReflCmp.compare_self
-      Std.TreeMap.distinct_keys_toList (Std.TreeMap.mem_toList_iff_getElem?_eq_some.mpr h)
-  | none =>
-    cases h' : (Std.TreeMap.ofList t.toList cmp)[a]? with
-    | none => rfl
-    | some b =>
-      have hmem : a ∈ Std.TreeMap.ofList t.toList cmp :=
-        Std.TreeMap.mem_iff_isSome_getElem?.mpr (by simp [h'])
-      have : a ∈ t := by
-        letI : BEq α := ⟨fun x y => cmp x y == .eq⟩
-        haveI : Std.LawfulBEqCmp cmp :=
-          ⟨fun {x y} => (beq_iff_eq (a := cmp x y) (b := .eq)).symm⟩
-        rw [Std.TreeMap.mem_ofList, Std.TreeMap.map_fst_toList_eq_keys,
-          Std.TreeMap.contains_keys] at hmem
-        exact Std.TreeMap.contains_iff_mem.mp hmem
-      rw [Std.TreeMap.mem_iff_isSome_getElem?, h] at this
-      cases this
-
 /-! Lists of pairs with no first component twice, as a cell's timers are. -/
 
 private theorem snd_eq_of_nodup_fst {α β : Type} {l : List (α × β)}
@@ -411,18 +388,6 @@ theorem congr (h : k.WellFormed) (hcell : k'.cell = k.cell) (hagenda : k'.agenda
   distinct := by rw [hcell]; exact h.distinct
   idle := by rw [hcell]; exact h.idle
 
-theorem agenda_image_kernel (k : Kernel sys) (due : Due) :
-    k.image.kernel.agenda[due]? = k.agenda[due]? :=
-  getElem?_ofList_toList k.agenda due
-
-/-- A kernel restored from its image has the timers on its agenda that the original had. -/
-theorem image (h : k.WellFormed) : k.image.kernel.WellFormed where
-  scheduled := by simpa only [cell_image_kernel, agenda_image_kernel] using h.scheduled
-  pending := by simpa only [cell_image_kernel, agenda_image_kernel] using h.pending
-  fresh due entry hd := h.fresh due entry (by rwa [agenda_image_kernel] at hd)
-  distinct := by simpa only [cell_image_kernel] using h.distinct
-  idle := by simpa only [cell_image_kernel] using h.idle
-
 /-- A `Due` names one timer. -/
 theorem same (h : k.WellFormed) {i j : σ.Id} {m : σ.Msg i} {m' : σ.Msg j} {d : Due}
     (hi : (m, d) ∈ (k.cell i).timers) (hj : (m', d) ∈ (k.cell j).timers) :
@@ -661,7 +626,6 @@ theorem apply (h : k.WellFormed) (op : Op σ) : (k.apply op).kernel.WellFormed :
   | step => exact h.step
   | batch fuel => exact h.runBatch fuel
   | fire i msg due => exact h.fire i msg due
-  | snapshot => exact h.image
 
 theorem exec (h : k.WellFormed) (ops : List (Op σ)) : (k.exec ops).kernel.WellFormed := by
   induction ops generalizing k with

@@ -281,17 +281,17 @@ The code of this step is `Tests/Tutorial/Proofs.lean`: the theorems and the gate
 ## 5. Where next
 
 `docs/TUTORIAL-WEB.md` is the sequel: a web app with sign-in, uploads to S3, a test of the
-whole site, and a deploy.
+whole site, and how to run it.
 
 Then read the examples in the order `examples/README.md` gives:
 
 1. `examples/counter`: what `lanes new` wrote, which you now know.
 2. `examples/bank`: actors that send each other messages, an invariant of the whole system,
    and the checker finding the credit a lossy link drops.
-3. `examples/bank-web`: the bank behind a web page, with a journal that survives `kill -9`.
+3. `examples/bank-web`: the bank behind a web page.
 4. `examples/kv-cache`: a store checked against a five-line spec, and a cache that breaks it.
-5. `examples/election`: timers, crashes and an invariant under every fault.
-6. `examples/watchdog`: what fairness says.
-7. `examples/raft-kv`, `examples/ledger`, `examples/rookery`: the serious systems.
+5. `examples/watchdog`: what fairness says.
+6. `examples/todo-db`: state that outlives the process, in PostgreSQL.
+7. `examples/rookery`: the serious system.
 
 The rules your app's `AGENTS.md` points to are in `AGENTS.md`, sections Design, Code and Proofs.

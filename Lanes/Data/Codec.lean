@@ -6,23 +6,18 @@ module
 
 public import Std
 public import Std.Data.String.ToNat
-public import Lanes.Data.Schema
 
 /-!
 A `Codec` writes a value as a run of records and reads it back, with the law that reading what
 was written gives the value and leaves what followed. The law is a field, so a codec without it
 cannot be built, and codecs for pairs, sums, lists and mapped types keep it by construction.
 
-A codec also carries its type's `Schema.Of`: the schema, and the map each way to `Value`. The
-combinators give the schemas of Lean's own types (`Prod`, `Sum`, `Option`), and `Codec.struct%`
-and `Codec.sum%` a record or a sum with the names of the fields and constructors. The records
-written are not yet derived from them.
+The combinators give the codecs of Lean's own types (`Prod`, `Sum`, `Option`), and
+`Codec.struct%` and `Codec.sum%` those of a structure and an inductive type, one line each.
 
-Records are whole byte strings. Where one ends and the next begins is not a codec's concern:
-`Lanes.Frame` settles that, with its own proofs.
+Records are whole byte strings. Where one ends and the next begins is not a codec's concern.
 
-Every reader is bounded by its input (rule 2.6), since the records may come from a damaged file
-or a peer. A list is the one reader that repeats, and it repeats as often as its count says, so
+Every reader is bounded by its input (rule 2.6), since the records may come from outside. A list is the one reader that repeats, and it repeats as often as its count says, so
 it refuses a count larger than the records left. Each element takes at least one record for
 that: an element written as none, such as `()`, is written as one empty record instead.
 -/
@@ -31,7 +26,7 @@ that: an element written as none, such as `()`, is written as one empty record i
 
 namespace Lanes
 
-structure Codec (α : Type) extends Schema.Of α where
+structure Codec (α : Type) where
   write : α → List ByteArray
   read : List ByteArray → Option (α × List ByteArray)
   sound : ∀ a rest, read (write a ++ rest) = some (a, rest)
@@ -48,7 +43,6 @@ theorem fromUTF8?_toUTF8 (s : String) : String.fromUTF8? s.toUTF8 = some s := by
   simp [String.fromUTF8?, String.fromUTF8, s.isValidUTF8]
 
 def bytes : Codec ByteArray where
-  toOf := .bytes
   write b := [b]
   read
     | b :: rest => some (b, rest)
@@ -58,13 +52,11 @@ def bytes : Codec ByteArray where
   consumes_write _ _ := by simp
 
 def unit : Codec Unit where
-  toOf := .unit
   write _ := []
   read rest := some ((), rest)
   sound _ _ := rfl
 
 def string : Codec String where
-  toOf := .string
   write s := [s.toUTF8]
   read
     | b :: rest => (String.fromUTF8? b).map (·, rest)
@@ -77,7 +69,6 @@ def string : Codec String where
   consumes_write _ _ := by simp
 
 def nat : Codec Nat where
-  toOf := .nat
   write n := [(toString n).toUTF8]
   read
     | b :: rest => ((String.fromUTF8? b).bind String.toNat?).map (·, rest)
@@ -91,7 +82,6 @@ def nat : Codec Nat where
 
 /-- One after the other. -/
 def pair (a : Codec α) (b : Codec β) : Codec (α × β) where
-  toOf := .pair a.toOf b.toOf
   write x := a.write x.1 ++ b.write x.2
   read records := do
     let (x, rest) ← a.read records
@@ -107,7 +97,6 @@ def pair (a : Codec α) (b : Codec β) : Codec (α × β) where
 /-- A type written as another. `back` may refuse what `to` never produces. -/
 def map (c : Codec β) (to : α → β) (back : β → Option α) (h : ∀ a, back (to a) = some a) :
     Codec α where
-  toOf := c.toOf.map to back h
   write a := c.write (to a)
   read records := do
     let (b, rest) ← c.read records
@@ -120,7 +109,6 @@ def map (c : Codec β) (to : α → β) (back : β → Option α) (h : ∀ a, ba
 /-- A pair whose second part's type, and so its codec, depends on the first. -/
 def sigma {ι : Type} {β : ι → Type} (a : Codec ι) (b : ∀ i, Codec (β i)) :
     Codec ((i : ι) × β i) where
-  toOf := .sigma a.toOf fun i => (b i).toOf
   write x := a.write x.1 ++ (b x.1).write x.2
   read records := do
     let (i, rest) ← a.read records
@@ -134,13 +122,10 @@ def sigma {ι : Type} {β : ι → Type} (a : Codec ι) (b : ∀ i, Codec (β i)
 def subtype {p : α → Prop} [DecidablePred p] (c : Codec α) : Codec {a // p a} :=
   c.map (·.val) (fun a => if h : p a then some ⟨a, h⟩ else none) fun a => by simp [a.property]
 
-/-- Replaces a codec's schema and values, leaving its records. -/
-def withSchema (c : Codec α) (s : Schema.Of α) : Codec α := { c with toOf := s }
-
 def bool : Codec Bool :=
   (nat.map (fun b => if b then 1 else 0)
     (fun n => if n = 0 then some false else if n = 1 then some true else none)
-    (by intro b; cases b <;> rfl)).withSchema .bool
+    (by intro b; cases b <;> rfl))
 
 def fin {n : Nat} : Codec (Fin n) :=
   nat.map (·.val) (fun k => if h : k < n then some ⟨k, h⟩ else none) (by intro a; simp)
@@ -148,11 +133,10 @@ def fin {n : Nat} : Codec (Fin n) :=
 def int : Codec Int :=
   ((pair bool nat).map (fun i => (decide (i < 0), i.natAbs))
     (fun (negative, size) => some (if negative then -(size : Int) else size))
-    (by intro i; by_cases h : i < 0 <;> simp [h] <;> omega)).withSchema .int
+    (by intro i; by_cases h : i < 0 <;> simp [h] <;> omega))
 
 /-- A tag, then the value. -/
 def sum (a : Codec α) (b : Codec β) : Codec (α ⊕ β) where
-  toOf := .sum a.toOf b.toOf
   write
     | .inl x => nat.write 0 ++ a.write x
     | .inr y => nat.write 1 ++ b.write y
@@ -169,13 +153,11 @@ def sum (a : Codec α) (b : Codec β) : Codec (α ⊕ β) where
 
 def option (c : Codec α) : Codec (Option α) :=
   ((sum unit c).map (fun | none => .inl () | some a => .inr a)
-    (fun | .inl () => some none | .inr a => some (some a)) (by intro a; cases a <;> rfl)).withSchema
-    (.option c.toOf)
+    (fun | .inl () => some none | .inr a => some (some a)) (by intro a; cases a <;> rfl))
 
 /-- `c`, with a value written as no records written as one empty record instead, so that it
 always consumes. -/
 def padded (c : Codec α) : Codec α where
-  toOf := c.toOf
   write a := if c.consumes then c.write a else match c.write a with
     | [] => [.empty]
     | records => records
@@ -245,7 +227,6 @@ theorem readMany_write (c : Codec α) (as : List α) (rest : List ByteArray) :
 than the records left is refused before any is read, and a list is never read longer than its
 records. -/
 def list (c : Codec α) : Codec (List α) where
-  toOf := .list c.toOf
   write as := nat.write as.length ++ as.flatMap c.padded.write
   read records := do
     let (n, rest) ← nat.read records
@@ -282,9 +263,8 @@ is another value, so neither has a codec. -/
 def extTreeMap {κ : Type} (key : Codec κ) (value : Codec α)
     (cmp : κ → κ → Ordering := by exact compare) [Std.TransCmp cmp] [Std.LawfulEqCmp cmp] :
     Codec (Std.ExtTreeMap κ α cmp) :=
-  let c := (list (pair key value)).map (·.toList) (fun entries => some (.ofList entries cmp))
+  (list (pair key value)).map (·.toList) (fun entries => some (.ofList entries cmp))
     (fun t => congrArg some (extTreeMap_ofList_toList t))
-  { c with schema := Schema.map key.schema value.schema }
 
 end Codec
 
@@ -341,11 +321,11 @@ namespace Codec
 
 open Lean
 
-/-- A field as the macros take it: its name, its codec, its former names and its default. -/
-abbrev FieldSpec := Ident × TSyntax `term × Array Ident × Option (TSyntax `term)
+/-- A field as the macros take it: its name and its codec. -/
+abbrev FieldSpec := Ident × TSyntax `term
 
-/-- A constructor as the macros take it: its name, its former names and its fields. -/
-abbrev CtorSpec := Ident × Array Ident × Array FieldSpec
+/-- A constructor as the macros take it: its name and its fields. -/
+abbrev CtorSpec := Ident × Array FieldSpec
 
 /-- Variables for the values of `xs`, named apart from every constant: a value bound to a name
 that is also a constructor's would be read as the constructor in a pattern. -/
@@ -358,10 +338,6 @@ meta def tuple (xs : Array (TSyntax `term)) : MacroM (TSyntax `term) :=
   | [] => `(())
   | last :: rest => rest.foldlM (fun acc x => `(($x, $acc))) last
 
-/-- `(a, b, c, ())`: nested pairs that end in `()`, as `Schema.Fields` takes them. -/
-meta def fieldTuple (xs : Array (TSyntax `term)) : MacroM (TSyntax `term) := do
-  xs.foldrM (fun x acc => `(($x, $acc))) (← `(()))
-
 meta def product (codecs : Array (TSyntax `term)) : MacroM (TSyntax `term) :=
   match codecs.toList.reverse with
   | [] => `(Lanes.Codec.unit)
@@ -372,56 +348,27 @@ meta def inject (k n : Nat) (x : TSyntax `term) : MacroM (TSyntax `term) := do
   let inner ← if k + 1 == n then pure x else `(Sum.inl $x)
   (List.range k).foldlM (fun acc _ => `(Sum.inr $acc)) inner
 
-/-- The `k`th alternative of nested sums that end in `Empty`, as `Schema.Ctors` takes them. -/
-meta def injectCtor (k : Nat) (x : TSyntax `term) : MacroM (TSyntax `term) := do
-  (List.range k).foldlM (fun acc _ => `(Sum.inr $acc)) (← `(Sum.inl $x))
-
-/-- A name as a string literal, as Lean writes it in a declaration but without `«»`. -/
-meta def nameLit (x : Ident) : TSyntax `term :=
-  ⟨Syntax.mkStrLit (x.getId.eraseMacroScopes.toString (escape := false))⟩
-
-/-- The full name of the type `T`, resolved where the term is elaborated. -/
-meta def typeName (T : Ident) : MacroM (TSyntax `term) := do
-  let quoted : TSyntax `term :=
-    ⟨mkNode `Lean.Parser.Term.doubleQuotedName #[mkAtom "`", mkAtom "`", T]⟩
-  `(Lean.Name.toString $quoted)
-
-/-- `Schema.Fields.cons` for each field, then `Schema.Fields.nil`. -/
-meta def fieldsTerm (fields : Array FieldSpec) : MacroM (TSyntax `term) := do
-  fields.foldrM (init := ← `(Lanes.Schema.Fields.nil)) fun (name, codec, aliases, default) acc => do
-    let aliases := aliases.map nameLit
-    let default ← match default with
-      | some d => `(some $d)
-      | none => `(none)
-    `(Lanes.Schema.Fields.cons $(nameLit name) [$aliases,*] (Lanes.Codec.toOf $codec) $default
-        $acc)
-
-/-- The codec of structure `T`, whose type parameters have the types `args`. -/
-meta def structTerm (T : Ident) (args : Array (TSyntax `term)) (fields : Array FieldSpec) :
-    MacroM (TSyntax `term) := do
+/-- The codec of a structure: the product of its fields' codecs. -/
+meta def structTerm (fields : Array FieldSpec) : MacroM (TSyntax `term) := do
   let names := fields.map (·.1)
   let r := mkIdent (← Macro.addMacroScope `r)
   let projections ← names.mapM fun f => `($r.$f:ident)
   let values ← fresh names
-  let bytes ← `(Lanes.Codec.map $(← product (fields.map (·.2.1))) (fun $r => $(← tuple projections))
+  `(Lanes.Codec.map $(← product (fields.map (·.2))) (fun $r => $(← tuple projections))
       (fun $(← tuple values) => some { $[$names:ident := $values],* }) (by intro r; rfl))
-  `(Lanes.Codec.withSchema $bytes
-      (Lanes.Schema.Of.map
-        (Lanes.Schema.Of.record $(← typeName T) [$args,*] $(← fieldsTerm fields))
-        (fun $r => $(← fieldTuple projections))
-        (fun $(← fieldTuple values) => some { $[$names:ident := $values],* }) (by intro r; rfl)))
 
-/-- The records of inductive type `T`: nested sums of the constructors' products. -/
-meta def sumBytes (T : Ident) (ctors : Array CtorSpec) : MacroM (TSyntax `term) := do
+/-- The codec of inductive type `T`: nested sums of the constructors' products. -/
+meta def sumTerm (T : Ident) (ctors : Array CtorSpec) : MacroM (TSyntax `term) := do
+  if ctors.isEmpty then Macro.throwError "Codec.sum% needs at least one constructor"
   let n := ctors.size
-  let products ← ctors.mapM fun (_, _, fields) => product (fields.map (·.2.1))
+  let products ← ctors.mapM fun (_, fields) => product (fields.map (·.2))
   let sum ← match products.toList.reverse with
     | [] => `(Lanes.Codec.unit)
     | last :: rest => rest.foldlM (fun acc c => `(Lanes.Codec.sum $c $acc)) last
   let mut cases : Array (TSyntax `term) := #[]
   let mut backs : Array (TSyntax `term) := #[]
   for h : k in [0:n] do
-    let (ctor, _, fields) := ctors[k]
+    let (ctor, fields) := ctors[k]
     let ctor := mkIdent (T.getId ++ ctor.getId)
     let vars ← fresh (fields.map (·.1))
     let injected ← inject k n (← tuple vars)
@@ -434,41 +381,17 @@ meta def sumBytes (T : Ident) (ctors : Array CtorSpec) : MacroM (TSyntax `term) 
   `(Lanes.Codec.map $sum (fun x => $casesOn:ident (motive := fun _ => _) x $cases*) $back
       (by intro x; cases x <;> rfl))
 
-/-- The codec of inductive type `T`, whose type parameters have the types `args`. -/
-meta def sumTerm (T : Ident) (args : Array (TSyntax `term)) (ctors : Array CtorSpec) :
-    MacroM (TSyntax `term) := do
-  if ctors.isEmpty then Macro.throwError "Codec.sum% needs at least one constructor"
-  let mut cases : Array (TSyntax `term) := #[]
-  let mut backs : Array (TSyntax `term) := #[]
-  for h : k in [0:ctors.size] do
-    let (ctor, _, fields) := ctors[k]
-    let ctor := mkIdent (T.getId ++ ctor.getId)
-    let vars ← fresh (fields.map (·.1))
-    let injected ← injectCtor k (← fieldTuple vars)
-    cases := cases.push (← if vars.isEmpty then pure injected else `(fun $vars* => $injected))
-    backs := backs.push (← `(fun $(← fieldTuple vars) => some ($ctor $vars*)))
-  let back ← backs.foldrM (fun f acc => `(Sum.elim $f $acc)) (← `(fun e => nomatch e))
-  let schemas ← ctors.foldrM (init := ← `(Lanes.Schema.Ctors.nil))
-    fun (ctor, aliases, fields) acc => do
-      `(Lanes.Schema.Ctors.cons $(nameLit ctor) [$(aliases.map nameLit),*] $(← fieldsTerm fields)
-          $acc)
-  let casesOn := mkIdent (T.getId ++ `casesOn)
-  `(Lanes.Codec.withSchema $(← sumBytes T ctors)
-      (Lanes.Schema.Of.map (Lanes.Schema.Of.variants $(← typeName T) [$args,*] $schemas)
-        (fun x => $casesOn:ident (motive := fun _ => _) x $cases*) $back
-        (by intro x; cases x <;> rfl)))
-
 end Codec
 
 open Lean Codec in
 macro_rules
-  | `(Codec.struct% $T { $[$fields := $codecs],* }) =>
-    structTerm T #[] (fields.zip codecs |>.map fun (f, c) => (f, c, #[], none))
+  | `(Codec.struct% $_T { $[$fields := $codecs],* }) =>
+    structTerm (fields.zip codecs)
 
 open Lean Codec in
 macro_rules
   | `(Codec.sum% $T { $[$ctors $[($args := $codecs)]*],* }) =>
-    sumTerm T #[] ((ctors.zip (args.zip codecs)).map fun (ctor, args, codecs) =>
-      (ctor, #[], (args.zip codecs).map fun (a, c) => (a, c, #[], none)))
+    sumTerm T ((ctors.zip (args.zip codecs)).map fun (ctor, args, codecs) =>
+      (ctor, args.zip codecs))
 
 end Lanes

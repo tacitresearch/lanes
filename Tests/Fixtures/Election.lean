@@ -7,7 +7,8 @@ import Lanes
 /-!
 # Reference app: leader election
 
-The system of `examples/election/Election.lean`, copied (`Tests/Copies.lean`).
+A fixture of the checker's tests (`Tests/Election.lean`, `Tests/Fair.lean`,
+`Tests/SystemSound.lean`).
 
 The election half of Raft. A node whose election timer fires starts a new term, votes for
 itself and asks the others for their vote. A node grants at most one vote per term. A candidate
@@ -25,6 +26,10 @@ Following Ongaro's Raft (the election rules of `raft.tla`), without logs.
 namespace Tests.Fixtures.Election
 
 open Lanes
+
+/-- Whether more than half of `nodes` are in `votes`. Repeated votes count once. -/
+def isMajority {α : Type} [DecidableEq α] (nodes votes : List α) : Bool :=
+  2 * nodes.countP (· ∈ votes) > nodes.length
 
 /-- A candidate carries the votes it has collected (rule 2.1). -/
 inductive Role (N : Type) where
@@ -83,7 +88,7 @@ def node (config : Config) (nodes : List N) (self : N) :
       | .candidate votes =>
         if term == s.term then
           let votes := voter :: votes
-          if Quorum.isMajority nodes votes then ({ s with role := .leader }, [.cancel .electionTimeout])
+          if isMajority nodes votes then ({ s with role := .leader }, [.cancel .electionTimeout])
           else ({ s with role := .candidate votes }, [])
         else (s, [])
       | _ => (s, [])

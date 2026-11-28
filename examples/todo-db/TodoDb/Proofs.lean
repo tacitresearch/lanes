@@ -3,160 +3,226 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import TodoDb
+import Lanes.Proofs
 
 /-!
-What the fix rests on, proved of the actor for every state and every message (`keyed := true`):
-every request it sends is a `begin`, a read, a `commit` or a `rollback`, or an insert of the to-do
-being stored, under the key its user gave it, in the transaction that has just read that key and
-found it free (`keyed_requests`). It never asks the store to choose a key, to replace a row or to
-delete one (`keyed_no_unkeyed`), and so no output of any run of the system, under any environment,
-does (`outputs_noUnkeyed`, through `System.Emits.outputs`).
-
-So a retry after a lost `COMMIT` cannot add a second row: it reads the key first, and if the lost
-commit takes effect later, one of the two inserts of the key fails, as the table's primary key
-makes it (the premise that the database behaves like the store model). `Check.lean` checks the
-whole: no database the store model may be in holds a to-do twice, with lost answers and failures.
+The invariant of the to-do list, proved per transaction: a user's to-dos are unique by title, and
+to-dos by id (`Unique`). Each transaction of the checked handler keeps it (`preserves`): `add`
+inserts only after a lookup by `by_title` found nothing, `complete` replaces a to-do by one with
+its owner and title, `remove` deletes, `list` only reads. So every database the store model allows
+after every run satisfies it (`unique_always`, through `Db.invariant`): with lost `COMMIT`s, calls
+taking effect late, and the actor's retries.
 -/
 
 namespace TodoDb
 
-open Lanes
+open Lanes.Db
 
-variable {cfg : Config}
+/-- A user's to-dos are unique by title, and to-dos by id. -/
+def Unique (db : Db) : Prop :=
+  ((db.rows todos.table.name).map byTitle.project).Nodup
+    ∧ ((db.rows todos.table.name).map todos.table.keyOf).Nodup
 
-/-- What an effect asks the store, if it asks it something. -/
-def asked : Effect sig .app → Option Request
-  | .emit (.store r) => some r
-  | _ => none
+theorem nodup_map_inj {α β : Type} {f : α → β} :
+    ∀ {l : List α}, (l.map f).Nodup → ∀ {x y : α}, x ∈ l → y ∈ l → f x = f y → x = y
+  | [], _, _, _, hx, _, _ => by simp at hx
+  | a :: l, h, x, y, hx, hy, hf => by
+    rw [List.map_cons, List.nodup_cons] at h
+    rcases List.mem_cons.mp hx with hx | hx <;> rcases List.mem_cons.mp hy with hy | hy
+    · rw [hx, hy]
+    · exact absurd (List.mem_map.mpr ⟨y, hy, by rw [← hf, hx]⟩) h.1
+    · exact absurd (List.mem_map.mpr ⟨x, hx, by rw [hf, hy]⟩) h.1
+    · exact nodup_map_inj h.2 hx hy hf
 
-/-- The requests among some effects. -/
-def requests (effects : List (Effect sig .app)) : List Request := effects.filterMap asked
+theorem ofRow_eq {r : Row} {t : Todo} (h : todos.ofRow r = some t) : r = todos.toRow t := by
+  dsimp only [todos] at h ⊢
+  split at h
+  · simp only [Option.some.injEq] at h
+    subst h
+    rfl
+  · cases h
 
-/-- What a request of the fixed actor may be, in state `s` on message `m`: no operation that
-adds a row under a key the store chooses, replaces one or deletes one, and an insert only of the
-to-do being stored, under its key, on the answer that the key is free. -/
-def Keyed (s : State) (m : In) (r : Request) : Prop :=
-  match r.op with
-  | .append _ | .write .. | .delete _ => False
-  | .insert k t => ∃ a, s.current = some a ∧ a.stage = .check ∧ a.key = k ∧ a.title = t
-      ∧ r.txn = a.txn ∧ m = .store { id := a.request, answer := .value none }
-  | _ => True
+theorem unique_of_reads {α : Type} {t : Txn α} (hr : t.Reads) {db : Db} {a : α} {db' : Db}
+    (h : t.run db = .ok (a, db')) (hu : Unique db) : Unique db' := by
+  rw [hr.run h]
+  exact hu
 
-/-- Only `begin` is asked. -/
-def OnlyBegin (effects : List (Effect sig .app)) : Prop := ∀ r ∈ requests effects, r.op = .begin
+/-- The rows of the table after a write to it. -/
+theorem rows_after {o : Op} {db : Db} {r : o.Ret} {db' : Db} (h : o.apply db = .ok (r, db'))
+    (hw : o.writes = true) (ht : o.table = todos.table) :
+    db'.rows todos.table.name = (o.onRows (db.rows todos.table.name)).2 := by
+  rw [Op.rows_apply o h, ht]
+  simp [hw]
 
-theorem attempt_onlyBegin (s : State) (key : Nat) (title : String) (tries : Nat) :
-    OnlyBegin (attempt s key title tries).2 := by
-  intro r h
-  simp [requests, attempt, ask, asked] at h
-  subst h
-  rfl
+theorem insert_preserves (owner : Int64) (title : String) {db : Db}
+    (hfree : ∀ r ∈ db.rows todos.table.name, byTitle.project r ≠ [.int owner, .text title])
+    (hu : Unique db) {a : Answer} {db' : Db} (h : (insertNew owner title).run db = .ok (a, db')) :
+    Unique db' := by
+  unfold insertNew at h
+  simp only [Txn.bind_eq] at h
+  obtain ⟨id, db₁, hid, h⟩ := Txn.run_bind_ok_inv h
+  have hdb₁ : db₁ = db := (TableOf.scan_reads _ _ |>.bind fun _ => by split <;> exact .pure _).run hid
+  rw [hdb₁] at h
+  obtain ⟨b, db₂, hins, h⟩ := Txn.run_bind_ok_inv h
+  have hdb' : db' = db₂ := by
+    split at h
+    · simp at h; exact h.2.symm
+    · simp at h
+  rw [hdb']
+  have happ := Txn.run_single hins
+  unfold Unique
+  rw [rows_after happ rfl rfl]
+  rcases Op.insert_rows todos.table (todos.toRow { id, owner, title }) (db.rows todos.table.name)
+    with heq | ⟨hperm, hkeys⟩
+  · rw [heq]; exact hu
+  · refine ⟨(hperm.map _).nodup_iff.mpr ?_, (hperm.map _).nodup_iff.mpr ?_⟩
+    · rw [List.map_cons, List.nodup_cons]
+      refine ⟨fun hm => ?_, hu.1⟩
+      obtain ⟨x, hx, hpx⟩ := List.mem_map.mp hm
+      exact hfree x hx (hpx.trans rfl)
+    · rw [List.map_cons, List.nodup_cons]
+      refine ⟨fun hm => ?_, hu.2⟩
+      obtain ⟨x, hx, hkx⟩ := List.mem_map.mp hm
+      exact hkeys x hx hkx
 
-theorem next_onlyBegin (s : State) : OnlyBegin (next s).2 := by
-  unfold next
-  split
-  · exact attempt_onlyBegin _ _ _ _
-  · intro r h
-    simp [requests] at h
+theorem add_preserves (owner : Int64) (title : String) {db : Db} (hu : Unique db) {a : Answer}
+    {db' : Db} (h : (add true owner title).run db = .ok (a, db')) : Unique db' := by
+  simp only [add, ↓reduceIte, Txn.bind_eq] at h
+  obtain ⟨ts, db₁, hl, h⟩ := Txn.run_bind_ok_inv h
+  have hdb₁ : db₁ = db := (TableOf.lookup_reads _ _ _ _).run hl
+  rw [hdb₁] at h
+  cases ts with
+  | cons t _ => simp at h; rw [← h.2]; exact hu
+  | nil =>
+    refine insert_preserves owner title (fun r hr hp => ?_) hu h
+    simp only [TableOf.lookup, Txn.bind_eq] at hl
+    obtain ⟨found, db₂, hscan, hmap⟩ := Txn.run_bind_ok_inv hl
+    have hlen := Txn.run_mapM_length _ found hmap
+    have happ := Txn.run_single hscan
+    have hrun := (Op.apply_ok _ happ).2
+    have hnil : found = [] := List.eq_nil_of_length_eq_zero (by simpa using hlen.symm)
+    rw [hnil] at hrun
+    have := Scan.run_eq_nil _ hrun.symm Nat.one_pos r hr
+    rw [← Bool.not_eq_true, Scan.matches_lookup _ _ _ _ rfl] at this
+    exact this hp
 
-theorem finish_onlyBegin (s : State) (key : Nat) (added : Bool) :
-    OnlyBegin (finish s (if added then .added key else .gaveUp key)).2 := by
-  intro r h
-  unfold finish at h
-  cases added <;> simpa [requests, asked] using next_onlyBegin _ r (by simpa [requests, asked] using h)
+/-- What `todos.get` found: a row of the key, which decodes to the to-do. -/
+theorem get_found {db : Db} {key : Row} {t : Todo} {db' : Db}
+    (h : (todos.get key).run db = .ok (some t, db')) :
+    db' = db ∧ ∃ r ∈ db.rows todos.table.name, todos.table.keyOf r = key ∧ r = todos.toRow t := by
+  refine ⟨(TableOf.get_reads _ _).run h, ?_⟩
+  simp only [TableOf.get, Txn.bind_eq] at h
+  obtain ⟨found, db₁, hget, h⟩ := Txn.run_bind_ok_inv h
+  have happ := Txn.run_single hget
+  have hdb := Op.apply_read _ rfl happ
+  have hfind := (Op.apply_ok _ happ).2
+  rw [hdb] at h
+  cases found with
+  | none => simp at h
+  | some r =>
+    simp only [Functor.map] at h
+    obtain ⟨t', db₃, hdec, h⟩ := Txn.run_bind_ok_inv h
+    simp only [Function.comp, Txn.run_pure, Except.ok.injEq, Prod.mk.injEq,
+      Option.some.injEq] at h
+    rw [h.1] at hdec
+    have hfind : (db.rows todos.table.name).find? (todos.table.hasKey key) = some r := hfind.symm
+    refine ⟨r, List.mem_of_find?_eq_some hfind, ?_, ofRow_eq (TableOf.run_decode _ hdec)⟩
+    simpa [Table.hasKey] using List.find?_some hfind
 
-theorem retry_onlyBegin (s : State) (a : Attempt) : OnlyBegin (retry cfg s a).2 := by
-  unfold retry
-  split
-  · exact attempt_onlyBegin _ _ _ _
-  · exact finish_onlyBegin s a.key false
+/-- A to-do replaced by one of the same id, owner and title keeps the invariant. -/
+theorem update_preserves {db : Db} (hu : Unique db) {t t' : Todo} (hid : t'.id = t.id)
+    (howner : t'.owner = t.owner) (htitle : t'.title = t.title)
+    (hmem : todos.toRow t ∈ db.rows todos.table.name) {r : Bool} {db' : Db}
+    (h : (todos.update t').run db = .ok (r, db')) : Unique db' := by
+  have happ := Txn.run_single h
+  unfold Unique
+  rw [rows_after happ rfl rfl]
+  rcases Op.update_rows todos.table (todos.toRow t') (db.rows todos.table.name) with heq | heq
+  · rw [heq]; exact hu
+  · rw [heq, List.map_map, List.map_map]
+    have same : ∀ x ∈ db.rows todos.table.name,
+        todos.table.hasKey (todos.table.keyOf (todos.toRow t')) x = true → x = todos.toRow t := by
+      intro x hx hk
+      refine nodup_map_inj hu.2 hx hmem ?_
+      simpa [Table.hasKey, todos, Table.keyOf, hid] using hk
+    constructor
+    · rw [List.map_congr_left (l := db.rows todos.table.name) (g := byTitle.project) fun x hx => by
+        by_cases hk : todos.table.hasKey (todos.table.keyOf (todos.toRow t')) x = true
+        · simp only [Function.comp_apply, hk, ↓reduceIte]
+          rw [same x hx hk]
+          simp [todos, Index.project, byTitle, howner, htitle]
+        · simp [hk]]
+      exact hu.1
+    · rw [List.map_congr_left (l := db.rows todos.table.name) (g := todos.table.keyOf) fun x hx => by
+        by_cases hk : todos.table.hasKey (todos.table.keyOf (todos.toRow t')) x = true
+        · simp only [Function.comp_apply, hk, ↓reduceIte]
+          rw [same x hx hk]
+          simp [todos, Table.keyOf, hid]
+        · simp [hk]]
+      exact hu.2
 
-theorem keyed_of_onlyBegin {s : State} {m : In} {effects : List (Effect sig .app)}
-    (h : OnlyBegin effects) : ∀ r ∈ requests effects, Keyed s m r := by
-  intro r hr
-  simp [Keyed, h r hr]
+theorem complete_preserves (owner id : Int64) {db : Db} (hu : Unique db) {a : Answer} {db' : Db}
+    (h : (complete owner id).run db = .ok (a, db')) : Unique db' := by
+  simp only [complete, Txn.bind_eq] at h
+  obtain ⟨found, db₁, hget, h⟩ := Txn.run_bind_ok_inv h
+  cases found with
+  | none => rw [(TableOf.get_reads _ _).run hget] at h; simp at h; rw [← h.2]; exact hu
+  | some t =>
+    obtain ⟨hdb, r₀, hr₀, -, hrt⟩ := get_found hget
+    rw [hdb] at h
+    rw [hrt] at hr₀
+    simp only at h
+    split at h
+    · obtain ⟨b, db₂, hupd, h⟩ := Txn.run_bind_ok_inv h
+      have hu₂ := update_preserves (t := t) (t' := { t with done := true }) hu rfl rfl rfl hr₀ hupd
+      simp at h
+      rw [← h.2]
+      exact hu₂
+    · simp at h; rw [← h.2]; exact hu
 
-theorem ask_requests (s : State) (a : Attempt) (stage : Stage) (op : Store.Op Nat String) :
-    requests (ask s a stage op).2 = [{ id := s.nextRequest, txn := a.txn, op }] := by
-  simp [requests, ask, asked]
+theorem remove_preserves (owner id : Int64) {db : Db} (hu : Unique db) {a : Answer} {db' : Db}
+    (h : (remove owner id).run db = .ok (a, db')) : Unique db' := by
+  simp only [remove, Txn.bind_eq] at h
+  obtain ⟨found, db₁, hget, h⟩ := Txn.run_bind_ok_inv h
+  rw [(TableOf.get_reads _ _).run hget] at h
+  cases found with
+  | none => simp at h; rw [← h.2]; exact hu
+  | some t =>
+    simp only at h
+    split at h
+    · obtain ⟨b, db₂, hdel, h⟩ := Txn.run_bind_ok_inv h
+      have happ := Txn.run_single hdel
+      simp at h
+      rw [← h.2]
+      unfold Unique
+      rw [rows_after happ rfl rfl, Op.delete_rows]
+      exact ⟨hu.1.sublist (List.filter_sublist.map _), hu.2.sublist (List.filter_sublist.map _)⟩
+    · simp at h; rw [← h.2]; exact hu
 
-/-- Every request the fixed actor sends is `Keyed`. -/
-theorem keyed_requests (hk : cfg.keyed = true) (s : State) (m : In) :
-    ∀ r ∈ requests (step cfg s m).2, Keyed s m r := by
-  cases m with
-  | add key title =>
-    simp only [step]
-    split
-    · intro r hr
-      simp [requests, asked] at hr
-    · exact keyed_of_onlyBegin (next_onlyBegin _)
-  | store reply =>
-    simp only [step]
-    split
-    · rename_i a hcur
-      split
-      · rename_i hid
-        unfold answered
-        split
-        · exact keyed_of_onlyBegin (retry_onlyBegin _ _)
-        · exact keyed_of_onlyBegin (retry_onlyBegin _ _)
-        · split
-          · simp only [hk, ↓reduceIte]
-            intro r hr
-            rw [ask_requests] at hr
-            simp only [List.mem_singleton] at hr
-            subst hr
-            simp [Keyed]
-          · intro r hr
-            simp only [requests, List.filterMap_cons, asked, List.mem_cons] at hr
-            rcases hr with rfl | hr
-            · simp [Keyed]
-            · exact keyed_of_onlyBegin (finish_onlyBegin _ a.key true) r hr
-          · intro r hr
-            rw [ask_requests] at hr
-            simp only [List.mem_singleton] at hr
-            subst hr
-            refine ⟨a, hcur, by assumption, rfl, rfl, rfl, ?_⟩
-            cases reply
-            simp_all
-          · exact keyed_of_onlyBegin (retry_onlyBegin _ _)
-          · intro r hr
-            rw [ask_requests] at hr
-            simp only [List.mem_singleton] at hr
-            subst hr
-            simp [Keyed]
-          · exact keyed_of_onlyBegin (finish_onlyBegin _ a.key true)
-          · exact keyed_of_onlyBegin (retry_onlyBegin _ _)
-      · intro r hr
-        simp [requests] at hr
-    · intro r hr
-      simp [requests] at hr
+/-- Every transaction of the checked handler keeps the invariant. -/
+theorem preserves : Preserves (handler true) Unique := by
+  intro q db a db' hu h
+  cases q with
+  | add owner title => exact add_preserves owner title hu h
+  | complete owner id => exact complete_preserves owner id hu h
+  | remove owner id => exact remove_preserves owner id hu h
+  | list owner =>
+    simp only [handler, Functor.map] at h
+    obtain ⟨ts, db₁, hs, h⟩ := Txn.run_bind_ok_inv h
+    simp at h
+    rw [← h.2, (TableOf.scan_reads _ _).run hs]
+    exact hu
 
-/-- The fixed actor never asks the store to append, to replace or to delete. -/
-theorem keyed_no_unkeyed (hk : cfg.keyed = true) (s : State) (m : In) (r : Request)
-    (h : r ∈ requests (step cfg s m).2) :
-    (∀ v, r.op ≠ .append v) ∧ (∀ k v, r.op ≠ .write k v) ∧ (∀ k, r.op ≠ .delete k) := by
-  have := keyed_requests hk s m r h
-  refine ⟨fun v hv => ?_, fun k v hv => ?_, fun k hv => ?_⟩ <;> simp [Keyed, hv] at this
+theorem unique_empty : Unique (Db.empty schema) := by
+  simp [Unique, Db.empty, Db.rows, schema]
 
-/-- An output that adds a row under a key the store chooses, replaces one or deletes one. -/
-def NoUnkeyed (out : Out) : Prop :=
-  ∀ r, out = .store r → (∀ v, r.op ≠ .append v) ∧ (∀ k v, r.op ≠ .write k v) ∧ (∀ k, r.op ≠ .delete k)
-
-theorem emits_noUnkeyed (hk : cfg.keyed = true) : (system cfg).Emits NoUnkeyed := by
-  refine ⟨fun i s msg out h => ?_, fun i s out h => ?_⟩
-  · cases i
-    intro r hr
-    subst hr
-    exact keyed_no_unkeyed hk s msg r (List.mem_filterMap.mpr ⟨_, h, rfl⟩)
-  · cases i
-    simp [system, app] at h
-
-/-- In every run of the fixed system, under every environment, no request it sends appends,
-replaces or deletes a row. -/
-theorem outputs_noUnkeyed (hk : cfg.keyed = true) {env : EnvModel sig} {events : List (Event sig)}
-    {c : SysState (system cfg)} (hrun : (SysState.init (system cfg) env).run env events = some c) :
-    ∀ out, Event.output out ∈ events → NoUnkeyed out :=
-  (emits_noUnkeyed hk).outputs hrun
+/-- **A user's to-dos are unique by title in every database the store may hold**, after every
+run the store model allows at `SERIALIZABLE` with the checked handler: lost `COMMIT`s, failures,
+calls taking effect late, and every call still outstanding taking effect. -/
+theorem unique_always {σ : Lanes.Signature} (cfg : Lanes.Db.Config) (port : Port σ Request Answer)
+    {events : List (Lanes.Event σ)} {s : Lanes.Db.State Request Answer}
+    (hrun : (outside cfg (handler true) (Db.empty schema) port).after events = some s) :
+    ∀ w ∈ s.worlds, ∀ w' ∈ w.expand (handler true) w.fuel, Unique w'.db :=
+  invariant cfg port unique_empty preserves hrun
 
 end TodoDb

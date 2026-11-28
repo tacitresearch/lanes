@@ -52,9 +52,9 @@ def Page : Html :=
     </body>
   </html>
 
-/-- Requests are parsed here, once (rule 2.2). What a request holds that must not be journalled,
-a password or a session cookie, is taken out by a `prepare` field, which the server runs before
-the request enters the system. -/
+/-- Requests are parsed here, once (rule 2.2). What a request holds that must not enter the
+system, a password or a session cookie, is taken out by a `prepare` field, which the server runs
+before the request enters it. -/
 def bridge : Http.Bridge sig where
   decode id request :=
     (Http.dispatch [
@@ -65,20 +65,11 @@ def bridge : Http.Bridge sig where
     ] request).getD (.error (.text "not found\n" 404))
   encode response := some (response.req, .html (CounterView response).render)
 
-/-- How the system is written to a snapshot, so that its journal can be cut: an identity, each
-actor's state and each actor's messages. -/
-def saving : Http.Saving (system {}) where
-  actors := { id := Codec.unit, state := fun _ => Codec.nat, msg := fun _ => Request.codec }
-
-/-- `tut [port] [journal]`. With a journal file the counter survives the process: it is
-replayed through `step` at start, and cut each time the state is saved. Change the number in
-`system` whenever a change to a step function should not be applied to what is already in the
-journal. -/
+/-- `tut [port]`. The counter lives as long as the process: a restart starts it at zero. -/
 def main (args : List String) : IO Unit := do
   let port := (args.head? >>= String.toNat?).getD 8080
-  let journal := args[1]?.map System.FilePath.mk
-  let config : Http.ServerConfig := { port := port.toUInt16, journal, system := "tut 1" }
-  let server ← (Http.serve (system {}) bridge config {} saving).block
+  let config : Http.ServerConfig := { port := port.toUInt16 }
+  let server ← (Http.serve (system {}) bridge config).block
   IO.println s!"tut listening on http://127.0.0.1:{server.port.getD 0}"
   (← IO.getStdout).flush
   Lanes.block server.wait

@@ -8,7 +8,6 @@ public import Lanes.Testing.Http
 public import Lanes.Testing.Browser
 public import Lanes.Testing.S3
 public import Lanes.Testing.OAuth
-public import Lanes.Testing.Transcode
 public import Lanes.Testing.Run
 
 /-!
