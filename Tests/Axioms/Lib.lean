@@ -243,6 +243,13 @@ import Lanes.Semantics
 /-- info: 'Lanes.Ip.Prefix.contains_masked' depends on axioms: [propext] -/
 #guard_msgs in #print axioms Lanes.Ip.Prefix.contains_masked
 
+-- Lanes.Lib.Net.Percent
+/-- info: 'Lanes.Http.percentDecode_percentEncode' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.percentDecode_percentEncode
+
+/-- info: 'Lanes.Http.percentEncode_plain' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.percentEncode_plain
+
 -- Lanes.Lib.Net.UrlSound
 /-- info: 'Lanes.Url.parse_print' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Url.parse_print
