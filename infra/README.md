@@ -5,6 +5,9 @@ of `scripts/mutants.py`, each a rebuild and a test run) — need more cores than
 give. The recommended way is one warm EC2 machine of runners that the workflows start and stop
 themselves, through GitHub's OIDC provider, with no AWS keys stored anywhere.
 
+This project's AWS account works in **us-east-2**: the CI machine (`lanes-ci`), deploys and the
+build cache. Workflows read the region from `LANES_AWS_REGION`; nothing assumes us-east-1.
+
 ## Set up (once)
 
 1. **A GitHub token for the machine.** On GitHub: your picture, **Settings → Developer settings →
