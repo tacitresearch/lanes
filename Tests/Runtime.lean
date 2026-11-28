@@ -603,6 +603,49 @@ def runawayTest : Async (List (String × Bool)) := do
     ("mail: actors that send each other more than they take are reported past the capacity, and "
       ++ "take no input", reported && refused) ]
 
+/-! Timers counted across workers. Each round, every actor arms a timer due at once; the tick
+often reaches the actor while its worker still holds it, after its last step, so another worker
+steps the tick while the first is letting go. `idle (timers := true)` must neither wait for a
+timer already handled nor return while one is pending. -/
+
+inductive TickMsg where
+  | arm
+  | tick
+  deriving DecidableEq, Repr, Hashable
+
+abbrev tickSig : Signature where
+  Id := Fin 8
+  Msg _ := TickMsg
+  In := Fin 8
+
+/-- The state counts the ticks. -/
+abbrev tickers : System tickSig where
+  State _ := Nat
+  actor _ := {
+    init := 0
+    step := fun s m => match m with
+      | .arm => (s, [.after 0 .tick])
+      | .tick => (s + 1, []) }
+  accept i := ⟨i, .arm⟩
+
+def timerCountTest : Async (List (String × Bool)) := do
+  let rt ← Runtime.start tickers { workers := 4 }
+  let mut late := 0
+  let mut early := 0
+  for round in [1:301] do
+    for i in List.finRange 8 do rt.input i
+    match ← soon 5000 (rt.idle (timers := true)) with
+    | none => late := late + 1; break
+    | some () =>
+      let ticks ← (List.finRange 8).mapM fun i => rt.state i
+      unless ticks.all (· == round) do early := early + 1; break
+  rt.stop
+  return [
+    ("timers: on four workers, waiting for the timers ends once each has gone off",
+      late == 0),
+    ("timers: on four workers, waiting for the timers does not end before each has gone off",
+      early == 0) ]
+
 /-- `stop` wakes the watchdog and waits for it to end, so a runtime stopped with the watchdog
 on leaves no thread asleep behind it. -/
 def watchdogStopTest : Async (List (String × Bool)) := do
@@ -657,5 +700,6 @@ def tests : IO (List (String × Bool)) := do
     ++ (← fanTest.block) ++ (← contextTest.block) ++ (← watchdogTest.block)
     ++ (← watchdogStopTest.block) ++ (← parkerTest)
     ++ (← highWaterTest.block) ++ (← overflowTest.block) ++ (← runawayTest.block)
+    ++ (← timerCountTest.block)
 
 end Tests.Runtime
