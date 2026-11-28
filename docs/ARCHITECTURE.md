@@ -278,10 +278,14 @@ from, so text stays text (`Html.lex_render`, against a model of the HTML tokeniz
 attributes limited to `Html.allowedSchemes` (`Html.safeUrl_scheme`), and a template macro
 (`Lanes/Web/Html/Syntax.lean`, trusted); htmx attributes taken from routes (`Hx.request_match?`);
 cookies a browser stores with exactly the attributes they name (`Http.readSetCookie_header`,
-against RFC 6265's algorithm); and `Lanes/Web/Auth/`: signed tokens and form tokens that accept
-exactly what was signed for their purpose and session (`Auth.verify_eq_some`,
-`Auth.checkForm_iff`) and another's only through an HMAC collision (`Auth.verify_sign_other`,
-`Auth.checkForm_other`), Argon2id password digests, failed attempts that lock at their limit
+against RFC 6265's algorithm); and `Lanes/Web/Auth/`: signed tokens and form tokens that name
+the key they are checked with, so keys rotate (`Auth.verify_rotate`), and accept exactly what
+was signed for their purpose and session, a token before its expiry (`Auth.verify_eq_some`,
+`Auth.verify_expired`, `Auth.checkForm_iff`), and another's only through an HMAC collision
+(`Auth.verify_sign_other`, `Auth.checkForm_other`); Argon2id password hashes stored as PHC
+strings, which carry their cost and salt and read back as written (`Auth.Phc.parse?_encode`),
+checked under what they carry and asked to be hashed again at a new cost
+(`Auth.Password.verify_phc`); failed attempts that lock at their limit
 (`Auth.Attempts.locked_unlock_repeat`) and sessions that keep the newest (`Auth.Sessions.ids_starts`)
 and end after a lifetime, judged at the time a request arrived, so that one over is never let in
 again (`Auth.Sessions.accepts_iff`, `Auth.Sessions.Ended.run`).

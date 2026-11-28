@@ -35,7 +35,7 @@ def firstLink (page : Option Http.Response) : String :=
 
 def deployment (store : Testing.S3.Fake) (creds : SigV4.Credentials)
     (provider : Testing.OAuth.Fake) (journal : System.FilePath) : Deployment :=
-  { settings := { key := .of "the key of the test".toUTF8, origin, bucket := store.bucket, creds
+  { settings := { keys := .of (.of "the key of the test".toUTF8), origin, bucket := store.bucket, creds
                   providers := ["id"], length := ⟨1, 1024, by decide, by decide⟩ }
     server := { port := 0, journal := some journal, system := "shelf 1" }
     signIn := { providers := [(provider.oidc "id", provider.client origin "id")], secure := false

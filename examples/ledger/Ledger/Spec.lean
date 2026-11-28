@@ -32,13 +32,14 @@ lanes_data structure Profile (C : Type) where
 /-- What a request asks of the user it names. -/
 lanes_data inductive Ask (C : Type) where
   | signUp (credential : C)
-  | logIn (credential : C)
+  /-- `at_s` is when the request arrived, in seconds: the session's cookie is signed then. -/
+  | logIn (credential : C) (at_s : Nat)
   | act (session : Sid) (op : Op)
   deriving DecidableEq, Repr, Hashable, Codable
 
 lanes_data inductive Request (N C : Type) where
   | signUp (req : ReqId) (name : N) (credential : C)
-  | logIn (req : ReqId) (name : N) (credential : C)
+  | logIn (req : ReqId) (name : N) (credential : C) (at_s : Nat)
   /-- `name` and `session` are what the request's session cookie carried, verified by the
   bridge; nothing in the request's body names a user. -/
   | act (req : ReqId) (name : N) (session : Sid) (op : Op)
@@ -52,11 +53,11 @@ def req : Request N C → ReqId
   | .signUp req .. | .logIn req .. | .act req .. => req
 
 def name : Request N C → N
-  | .signUp _ name _ | .logIn _ name _ | .act _ name .. => name
+  | .signUp _ name _ | .logIn _ name .. | .act _ name .. => name
 
 def ask : Request N C → Ask C
   | .signUp _ _ c => .signUp c
-  | .logIn _ _ c => .logIn c
+  | .logIn _ _ c at_s => .logIn c at_s
   | .act _ _ session op => .act session op
 
 end Request
@@ -77,12 +78,12 @@ namespace User
 
 variable {N C : Type} [DecidableEq C]
 
-def logIn (config : Config N) (self : N) (req : ReqId) (p : Profile C) (c : C) :
+def logIn (config : Config N) (self : N) (req : ReqId) (p : Profile C) (c : C) (at_s : Nat) :
     Profile C × Reply N × Timers :=
   if p.attempts.locked then (p, .locked, {})
   else if c = p.credential then
     let (sessions, closed) := p.sessions.start config.maxSessions req
-    ({ p with attempts := p.attempts.succeed, sessions }, .loggedIn self req,
+    ({ p with attempts := p.attempts.succeed, sessions }, .loggedIn self req at_s,
       { opened := some req, closed })
   else
     let attempts := p.attempts.fail config.maxFailures
@@ -97,9 +98,9 @@ def decide (config : Config N) (self : N) (req : ReqId) :
     Option (Profile C) → Ask C → Option (Profile C) × Verdict N × Timers
   | none, .signUp c => (some { credential := c }, .reply .signedUp, {})
   | some p, .signUp _ => (some p, .reply .nameTaken, {})
-  | none, .logIn _ => (none, .reply .refused, {})
-  | some p, .logIn c =>
-    let (p, r, timers) := logIn config self req p c
+  | none, .logIn .. => (none, .reply .refused, {})
+  | some p, .logIn c at_s =>
+    let (p, r, timers) := logIn config self req p c at_s
     (some p, .reply r, timers)
   | none, .act .. => (none, .reply .noSession, {})
   | some p, .act session op =>

@@ -97,7 +97,7 @@ def main (args : List String) : IO UInt32 := do
     if let some c ← client origin p.name then providers := providers ++ [(p, c)]
   let secure := origin.startsWith "https:"
   let settings : Web.Settings :=
-    { key := .of key, origin, secure, bucket := b, creds, providers := providers.map (·.1.name)
+    { keys := .of (.of key), origin, secure, bucket := b, creds, providers := providers.map (·.1.name)
       maxUpload_bytes, worker, callback }
   let server ← (Web.start {
     config := { workerKey := .of secret.toUTF8 }, settings, journal
