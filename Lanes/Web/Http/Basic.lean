@@ -6,6 +6,7 @@ module
 
 public import Lanes.Data.Codec
 public import Lanes.Lib.Net.Percent
+public import Lanes.Lib.Mime.Multipart
 
 /-!
 # HTTP requests and responses as data
@@ -134,10 +135,36 @@ def header? (r : Request) (name : String) : Option String :=
 def text? (r : Request) : Option String :=
   String.fromUTF8? r.body
 
+/-- The boundary of a `multipart/form-data` body. -/
+def boundary? (r : Request) : Option String := do
+  let m ← (r.header? "content-type").bind MediaType.parse
+  if m.type == "multipart" && m.subtype == "form-data" then m.params.lookup "boundary" else none
+
+/-- The parts of a `multipart/form-data` body, within `limits`. -/
+def parts (r : Request) (limits : Multipart.Limits := {}) :
+    Except Multipart.Error (List Multipart.Part) :=
+  match r.boundary? with
+  | some b => Multipart.parse limits b r.body
+  | none => .error .malformed
+
+/-- The text fields of a form: of a `multipart/form-data` body, its parts that are no file
+(`Multipart.fields`); of any other, `application/x-www-form-urlencoded` (`parseForm`). -/
 def form (r : Request) : List (String × String) :=
-  match r.text? with
-  | some s => parseForm s
-  | none => []
+  match r.boundary? with
+  | some _ =>
+    match r.parts with
+    | .ok parts => Multipart.fields parts
+    | .error _ => []
+  | none =>
+    match r.text? with
+    | some s => parseForm s
+    | none => []
+
+/-- The file a `multipart/form-data` form sent under `name`. -/
+def file? (r : Request) (name : String) : Option Multipart.Part :=
+  match r.parts with
+  | .ok parts => Multipart.file? parts name
+  | .error _ => none
 
 def field? (r : Request) (key : String) : Option String :=
   (r.form.find? (·.1 == key)).map (·.2)
@@ -164,10 +191,11 @@ theorem header?_eq_lookup (r : Request) (name : String) : r.header? name = r.hea
 theorem field?_eq_lookup (r : Request) (key : String) : r.field? key = r.form.lookup key :=
   find?_lookup ..
 
-/-- A request whose body is a form `encodeForm` wrote carries its fields. -/
+/-- A request whose body is a form `encodeForm` wrote, and which is not multipart, carries its
+fields. -/
 theorem form_encodeForm {r : Request} {fields : List (String × String)}
-    (h : r.body = (encodeForm fields).toUTF8) : r.form = fields := by
-  simp only [form, text?, h, String.toUTF8_eq_toByteArray, String.fromUTF8?,
+    (h : r.body = (encodeForm fields).toUTF8) (hb : r.boundary? = none) : r.form = fields := by
+  simp only [form, hb, text?, h, String.toUTF8_eq_toByteArray, String.fromUTF8?,
     (encodeForm fields).isValidUTF8, String.fromUTF8, dite_true]
   exact parseForm_encodeForm fields
 

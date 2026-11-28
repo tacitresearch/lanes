@@ -54,6 +54,7 @@ public import Lanes.Lib.File
 public import Lanes.Lib.Log
 public import Lanes.Lib.Metrics
 public import Lanes.Lib.Mime.MediaType
+public import Lanes.Lib.Mime.Multipart
 public import Lanes.Lib.Net.Ip
 public import Lanes.Lib.Net.Percent
 public import Lanes.Lib.Net.Url

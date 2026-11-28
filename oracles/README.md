@@ -30,7 +30,7 @@ every module a row names exists, and so does every path it cites.
 
 | Folder | Reference | Version | Pinned in | The reference for |
 | --- | --- | --- | --- | --- |
-| `oracles/go` | Go's standard library, `golang.org/x/time` and Prometheus's `expfmt` | Go 1.24.7, x/time 0.11.0, prometheus/common 0.67.5 | `oracles/go/go.mod`, `oracles/go/go.sum` | Base64, IP addresses, times, JSON, media types, rate limits, URLs, XML, mail addresses, the metrics page; and, with Node and h11 (`oracles/go/requests/requests.py`, by hand), the request reader |
+| `oracles/go` | Go's standard library, `golang.org/x/time` and Prometheus's `expfmt` | Go 1.24.7, x/time 0.11.0, prometheus/common 0.67.5 | `oracles/go/go.mod`, `oracles/go/go.sum` | Base64, IP addresses, times, JSON, media types, rate limits, URLs, XML, mail addresses, the metrics page, multipart bodies; and, with Node and h11 (`oracles/go/requests/requests.py`, by hand), the request reader |
 | `oracles/botocore` | botocore, and `cryptography` for the signatures it is given | 1.44.12, cryptography 50.0.2 | `oracles/botocore/requirements.txt` | Signature Version 4; CloudFront's signed URLs (`oracles/botocore/cloudfront.jsonl`), signed with the published test keys of `oracles/botocore/keys/` |
 | `oracles/jwcrypto` | jwcrypto | 1.6.2 | `oracles/jwcrypto/requirements.txt` | JWS in compact form and JWK Sets |
 | `oracles/moto` | moto's server, S3, SES API v2 and SQS | 5.2.6 | `oracles/moto/requirements.txt` | the recorded runs of the object store, multipart, email and queue models, and of `POST` forms |
@@ -62,6 +62,7 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Lib/Log.lean` | | Proved one line of JSON text that the parser reads back as the record (`Log.render_oneLine`, `Log.parse_render`); its fields in `slog`'s order checked by hand (`Tests/Log.lean`) |
 | `Lanes/Lib/Metrics.lean` | `oracles/go/expfmt` | |
 | `Lanes/Lib/Mime/MediaType.lean` | `oracles/go/mime` | |
+| `Lanes/Lib/Mime/Multipart.lean` | `oracles/go/multipart` | Go's `Reader` is laxer, each a `known` difference in `Tests/Oracle/Multipart.lean`: it reads a body with no delimiter as no parts, takes a bare line feed for CR LF, a delimiter not on a line of its own as text, header names that are no tokens, folded header lines and headers that are not UTF-8; ours refuses them. Proved to read back what it writes (`Multipart.parse_write`) |
 | `Lanes/Lib/Net/Ip.lean` | `oracles/go/netip` | |
 | `Lanes/Lib/Net/Percent.lean` | `oracles/go/url` | Through the URL's cases, which decode and encode with it (`Tests/Oracle/Url.lean`) |
 | `Lanes/Lib/Net/Url.lean` | `oracles/go/url` | |

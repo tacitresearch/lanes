@@ -17,6 +17,7 @@ public import Lanes.Lib.Encoding.Json.ParserSound
 public import Lanes.Lib.Encoding.Json.PrinterSound
 public import Lanes.Lib.LogSound
 public import Lanes.Lib.Mime.MediaTypeSound
+public import Lanes.Lib.Mime.MultipartSound
 public import Lanes.Lib.Net.UrlSound
 public import Lanes.Lib.Postgres.ConnSound
 public import Lanes.Lib.Postgres.MessageSound

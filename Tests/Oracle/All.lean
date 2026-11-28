@@ -8,6 +8,7 @@ import Tests.Oracle.Jose
 import Tests.Oracle.Json
 import Tests.Oracle.MediaType
 import Tests.Oracle.Metrics
+import Tests.Oracle.Multipart
 import Tests.Oracle.RateLimit
 import Tests.Oracle.SigV4
 import Tests.Oracle.Time
@@ -20,7 +21,8 @@ namespace Tests.Oracle
 
 def packages : List Package :=
   [Base64.package, Ip.package, Time.package, Json.package, MediaType.package, RateLimit.package,
-    Url.package, Xml.package, Metrics.package, SigV4.package, Jose.package]
+    Url.package, Xml.package, Metrics.package, SigV4.package, Jose.package,
+    Multipart.package]
 
 def unitTests : List (String × Bool) := Base64.tests ++ Ip.tests ++ Jose.tests ++ MediaType.tests ++ RateLimit.tests ++ Time.tests ++ Url.tests
 

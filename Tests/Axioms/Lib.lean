@@ -212,6 +212,25 @@ import Lanes.Semantics
 /-- info: 'Lanes.Metrics.sanitize_of_valid' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Metrics.sanitize_of_valid
 
+-- Lanes.Lib.Mime.MultipartSound
+/-- info: 'Lanes.Multipart.parse_write' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Multipart.parse_write
+
+/-- info: 'Lanes.Multipart.parse_tooLarge' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Multipart.parse_tooLarge
+
+/-- info: 'Lanes.Multipart.length_le_of_parse' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Multipart.length_le_of_parse
+
+/-- info: 'Lanes.Multipart.headers_le_of_parse' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Multipart.headers_le_of_parse
+
+/-- info: 'Lanes.Multipart.name?_field' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Multipart.name?_field
+
+/-- info: 'Lanes.Multipart.filename?_file' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Multipart.filename?_file
+
 -- Lanes.Lib.Mime.MediaTypeSound
 /-- info: 'Lanes.MediaType.parse_format' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.MediaType.parse_format
