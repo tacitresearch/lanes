@@ -40,7 +40,8 @@ structure Config where
   was written before it is gone. -/
   segmentAge_ms : Nat := 10000
   /-- Uploads sealed and not yet stored, segments and snapshots, at least two. Sealing one
-  more drops the oldest that is not being put. -/
+  more drops the oldest that is not being put; a snapshot replaces the snapshots pending before
+  it (`supersede`). -/
   maxPending : Nat := 256
   /-- The wait after a put that failed; it doubles with each failure of the same upload, up to
   `retryMax_ms`. -/
@@ -166,6 +167,24 @@ def enqueue (cfg : Config) (st : State σ) (u : Upload σ) : State σ :=
               failures := if st.busy then st.failures else 0
               retryAt_ms := if st.busy then st.retryAt_ms else 0 }
 
+def Upload.isSnapshot : Upload σ → Bool
+  | .snapshot .. => true
+  | .segment .. => false
+
+/-- The pending snapshots not being put taken out: a new one stands for them, and the segments
+after them chain from an older snapshot already stored, so at most two snapshots are held. -/
+def supersede (st : State σ) : State σ :=
+  match st.busy, st.pending with
+  | true, head :: rest =>
+    let kept := rest.filter (!·.isSnapshot)
+    { st with pending := head :: kept, dropped := st.dropped + (rest.length - kept.length) }
+  | _, pending =>
+    let kept := pending.filter (!·.isSnapshot)
+    let headKept := pending.head?.all (!·.isSnapshot)
+    { st with pending := kept, dropped := st.dropped + (pending.length - kept.length)
+              failures := if headKept then st.failures else 0
+              retryAt_ms := if headKept then st.retryAt_ms else 0 }
+
 /-- Seal the waiting entries into a segment. -/
 def sealWaiting (cfg : Config) (st : State σ) : State σ :=
   if st.count = 0 then st
@@ -205,7 +224,7 @@ def answer (cfg : Config) (now_ms : Nat) (outcome : Outcome) (st : State σ) : S
 
 def step (cfg : Config) (now_ms : Nat) (st : State σ) : Event σ → State σ
   | .wrote entries durable => wrote cfg now_ms entries durable st
-  | .saved index bytes => enqueue cfg (sealWaiting cfg st) (.snapshot index bytes)
+  | .saved index bytes => enqueue cfg (supersede (sealWaiting cfg st)) (.snapshot index bytes)
   | .put outcome => answer cfg now_ms outcome st
   | .closing => sealWaiting cfg st
 
@@ -304,6 +323,18 @@ theorem Holds.enqueue {history : List (Entry σ)} {st : State σ} (h : Holds his
   · exact h.slices first entries hmem
   · exact hu first entries rfl
 
+theorem Holds.supersede {history : List (Entry σ)} {st : State σ} (h : Holds history st) :
+    Holds history (supersede st) := by
+  unfold Ship.supersede
+  split
+  · refine ⟨h.next_le, h.tail, h.count, fun first entries hm => h.slices first entries ?_⟩
+    next head rest _ hp =>
+    rw [hp]
+    simp only [List.mem_cons, List.mem_filter] at hm ⊢
+    exact hm.imp_right (·.1)
+  · exact ⟨h.next_le, h.tail, h.count, fun first entries hm =>
+      h.slices first entries (List.mem_filter.mp hm).1⟩
+
 theorem Holds.sealWaiting {history : List (Entry σ)} {st : State σ} (h : Holds history st)
     (cfg : Config) : Holds history (sealWaiting cfg st) := by
   unfold Ship.sealWaiting
@@ -381,7 +412,7 @@ theorem Holds.step {history : List (Entry σ)} {st : State σ} (h : Holds histor
       (step cfg now_ms st e) := by
   cases e with
   | wrote entries durable => exact h.wrote cfg now_ms entries durable
-  | saved index bytes => exact (h.sealWaiting cfg).enqueue cfg (by intro _ _ hu; cases hu)
+  | saved index bytes => exact (h.sealWaiting cfg).supersede.enqueue cfg (by intro _ _ hu; cases hu)
   | put outcome => exact h.answer cfg now_ms outcome
   | closing => exact h.sealWaiting cfg
 

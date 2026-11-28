@@ -280,7 +280,8 @@ there as it writes it (`Journal.Store.ship`, `Lanes/Durable/Ship.lean`), after L
   `backups/<journal id>/snapshot/<mark>-<SHA-256>`, with `If-None-Match: *`, so it is never
   written twice. The journal's id is in its `.id` file (`docs/decisions/D105-output-ids.md`).
 - A put that fails is tried again, after 200 ms, doubling to a minute. At most 256 uploads wait;
-  one more drops the oldest that is not being put, and the process logs each failure.
+  one more drops the oldest that is not being put, a new snapshot replaces one still waiting,
+  and the process logs each failure.
 - A restart ships what the journal file holds and the shipper had not yet stored (the file
   `.shipped` beside the journal says how far it got), and the snapshot again, which S3 refuses as
   there already. A stop waits up to 5 seconds for what is pending (`Ship.Config.close_ms`).

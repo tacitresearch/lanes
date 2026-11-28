@@ -93,6 +93,7 @@ def shipperTests : List (String × Bool) :=
   let busyFull := (List.range 9).foldl (fun st (n : Nat) =>
     Journal.Ship.step cfg 0 st (.wrote [tx (n + 3)] true)) busy
   let saved := feed blank [(0, .wrote [tx 0, .snapshot 1] true), (0, .saved 1 "s".toUTF8)]
+  let twice := feed saved [(0, .wrote [tx 2, .snapshot 3] true), (0, .saved 3 "t".toUTF8)]
   let (stored, put) := drain three 0 [.failed]
   [ ("ship: entries wait until a segment's worth has come", shape two == []),
     ("ship: then they are sealed into a segment from their position", shape three == [(0, 3)]
@@ -111,6 +112,8 @@ def shipperTests : List (String × Bool) :=
       shape busyFull == [(0, 3), (6, 3), (9, 3)] && busyFull.busy && busyFull.dropped == 1),
     ("ship: a save seals the segment that ends with its mark, then its snapshot",
       shape saved == [(0, 2), (1, 0)]),
+    ("ship: a new snapshot replaces the one still pending, and the segments stay",
+      shape twice == [(0, 2), (2, 2), (3, 0)] && twice.dropped == 1),
     ("ship: a failed put is retried and the queue empties",
       stored.idle && put.length == 2 && stored.stored == 1 && stored.storedTo == 3),
     ("ship: a start skips what was stored before, and uploads the snapshot again",

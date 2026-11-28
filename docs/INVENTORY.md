@@ -78,15 +78,16 @@ them by area.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Check.insertNew` | checked | `Tests/KV.lean` |
-| `Check.sameSet` | checked | `Tests/KV.lean` |
+| `Check.sameSet` | proved | through `Check.OnceState.equiv`: `Check.OnceMonitor.withinFrom_eq` |
 | `Check.setHash` | checked | `Tests/KV.lean` |
-| `Check.OnceState.equiv` | checked | `Tests/KV.lean` |
+| `Check.OnceState.equiv` | proved | `Check.OnceMonitor.withinFrom_eq` |
 | `Check.OnceState.take` | checked | `Tests/KV.lean` |
 | `Check.OnceState.hash` | checked | `Tests/KV.lean` |
 | `Check.OnceMonitor.insertAll` | checked | `Tests/KV.lean` |
 | `Check.OnceMonitor.expand` | checked | `Tests/KV.lean` |
 | `Check.OnceMonitor.close` | checked | `Tests/KV.lean` |
 | `Check.OnceMonitor.ok` | checked | `Tests/KV.lean` |
+| `Check.OnceMonitor.withinFrom` | proved | `Check.OnceMonitor.withinFrom_eq` |
 | `Check.OnceMonitor.instBEq` | checked | `Tests/KV.lean` |
 | `Check.OnceMonitor.instHashable` | checked | `Tests/KV.lean` |
 | `Check.OnceMonitor.start` | checked | `Tests/KV.lean` |
@@ -492,6 +493,52 @@ them by area.
 | `SysState.run` | proved | `Check.systemFingerprinted_violated`, `Check.system_violated`, `Http.Gate.answered_le_handled` and others |
 | `System.Invariant` | spec | a predicate |
 
+## `Lanes/Data/Body.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Codec.Error.Step.text` | tested | `Tests/Body.lean` |
+| `Codec.Error.Problem.text` | tested | `Tests/Body.lean` |
+| `Codec.Error.pathText` | tested | `Tests/Body.lean` |
+| `Codec.Error.instToString` | tested | `Tests/Body.lean` |
+| `Body.fail` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.within` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.writeNat` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.natBytes` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.zigzag` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.unzigzag` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.writeNum` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.writeBlob` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.writeCount` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.readNatFrom` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.readNat` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.readBlob` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.readCount` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.consumes` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.consumesFields` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.Tag.nat` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.Tag.int` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.Tag.string` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.Tag.bytes` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.Tag.list` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.Tag.ctor` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.writeAt` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.writeFields` | spec | used only in statements |
+| `Body.writeItems` | spec | used only in statements |
+| `Body.writeEntries` | spec | used only in statements |
+| `Body.writeTagged` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.writeTaggedItems` | spec | used only in statements |
+| `Body.readAt` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.readFields` | spec | used only in statements |
+| `Body.readItems` | spec | used only in statements |
+| `Body.readEntries` | spec | used only in statements |
+| `Body.readTagged` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.readTaggedItems` | spec | used only in statements |
+| `Body.write` | proved | `Body.encode_decode`, `Body.read_eq_ok_iff` |
+| `Body.read` | proved | `Body.read_eq_ok_iff` |
+| `Body.encode` | proved | `Body.decode_encode` |
+| `Body.decode` | proved | `Body.decode_encode`, `Body.encode_decode` |
+
 ## `Lanes/Data/Codec.lean`
 
 | Definition | Status | Evidence |
@@ -511,8 +558,8 @@ them by area.
 | `Codec.sum` | proved | its type, `Codec` |
 | `Codec.option` | proved | its type, `Codec` |
 | `Codec.padded` | proved | its type, `Codec` |
-| `Codec.hasAtLeast` | tested | `Tests/Codec.lean`, `Tests/Durable.lean`, `Tests/MonitorSpeed.lean` and others |
-| `Codec.readMany` | tested | `Tests/Codec.lean`, `Tests/Durable.lean`, `Tests/MonitorSpeed.lean` and others |
+| `Codec.hasAtLeast` | tested | `Tests/Body.lean`, `Tests/Codec.lean`, `Tests/Durable.lean` and others |
+| `Codec.readMany` | tested | `Tests/Body.lean`, `Tests/Codec.lean`, `Tests/Durable.lean` and others |
 | `Codec.list` | proved | its type, `Codec` |
 | `Codec.extTreeMap` | proved | its type, `Codec` |
 | `Codable.instByteArray` | proved | its type, `Codable` |
@@ -775,6 +822,8 @@ them by area.
 | `Journal.Ship.start` | proved | `Journal.Ship.Holds.start` |
 | `Journal.Ship.shed` | proved | through `Journal.Ship.step`, `Journal.Ship.take`: `Journal.Ship.Holds.put`, `Journal.Ship.Holds.step` and others |
 | `Journal.Ship.enqueue` | proved | through `Journal.Ship.step`, `Journal.Ship.take`: `Journal.Ship.Holds.put`, `Journal.Ship.Holds.step` and others |
+| `Journal.Ship.Upload.isSnapshot` | proved | through `Journal.Ship.step`: `Journal.Ship.Holds.step` |
+| `Journal.Ship.supersede` | proved | through `Journal.Ship.step`: `Journal.Ship.Holds.step` |
 | `Journal.Ship.sealWaiting` | proved | through `Journal.Ship.step`, `Journal.Ship.take`: `Journal.Ship.Holds.put`, `Journal.Ship.Holds.step` and others |
 | `Journal.Ship.wrote` | proved | through `Journal.Ship.step`: `Journal.Ship.Holds.step` |
 | `Journal.Ship.backoff` | proved | through `Journal.Ship.step`: `Journal.Ship.Holds.step` |
@@ -1527,6 +1576,7 @@ them by area.
 | --- | --- | --- |
 | `Postgres.Address.localhost` | proved | through `Postgres.SslMode.defaultFor`: `Postgres.Client.Config.sslmode_default`, `Postgres.SslMode.defaultFor_disable` and others |
 | `Postgres.Address.of` | proved | `Postgres.SslMode.defaultFor_disable`, `Postgres.SslMode.defaultFor_loopback`, `Postgres.SslMode.defaultFor_remote` |
+| `Postgres.Address.preferred` | proved | `Postgres.Address.preferred_isSome`, `Postgres.Address.preferred_spec` |
 | `Postgres.Address.loopback` | proved | `Postgres.Address.name_remote`, `Postgres.SslMode.defaultFor_disable`, `Postgres.SslMode.defaultFor_loopback` and others |
 | `Postgres.SslMode.defaultFor` | proved | `Postgres.Client.Config.sslmode_default`, `Postgres.SslMode.defaultFor_disable`, `Postgres.SslMode.defaultFor_loopback` and others |
 | `Postgres.SslMode.ofLibpq` | tested | `Tests/PostgresLive.lean`, `Tests/PostgresSettings.lean` |
@@ -2533,23 +2583,24 @@ them by area.
 | --- | --- | --- |
 | `Testing.S3.raw?` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
 | `Testing.S3.answer` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
-| `Testing.S3.failure` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
+| `Testing.S3.failure` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
 | `Testing.S3.time?` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
 | `Testing.S3.decodePair` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
 | `Testing.S3.splitTarget` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
-| `Testing.S3.authField` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
-| `Testing.S3.verified` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.authField` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
+| `Testing.S3.verified` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
 | `Testing.S3.escapeKey` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
 | `Testing.S3.listXml` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
 | `Testing.S3.range?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
 | `Testing.S3.serve` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
-| `Testing.S3.find?` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
-| `Testing.S3.split` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
-| `Testing.S3.quoted` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
-| `Testing.S3.formParts` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
+| `Testing.S3.find?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.split` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.quoted` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.formParts` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
 | `Testing.S3.formBody` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3Upload.lean` and others |
-| `Testing.S3.etag` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
-| `Testing.S3.servePost` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
+| `Testing.S3.etag` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.uploaded` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
+| `Testing.S3.servePost` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
 | `Testing.S3.unquote` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
 | `Testing.S3.multipartEtag` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
 | `Testing.S3.xmlAnswer` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
@@ -3381,6 +3432,7 @@ them by area.
 | `Tls.Trust.path` | trusted | TRUSTED.md: The TLS client |
 | `Tls.SessionImpl` | trusted | TRUSTED.md: The TLS client |
 | `Tls.alpnWire` | trusted | TRUSTED.md: The TLS client |
+| `Tls.isAddress` | trusted | TRUSTED.md: The TLS client |
 | `Tls.Session.start` | trusted | TRUSTED.md: The TLS client |
 | `Tls.Session.startChain` | trusted | TRUSTED.md: The TLS client |
 | `Tls.Session.peer` | trusted | TRUSTED.md: The TLS client |
@@ -3482,9 +3534,10 @@ them by area.
 | `S3.Post.KeyRule.condition` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
 | `S3.Post.KeyRule.field` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
 | `S3.Post.maxObject_bytes` | proved | through `S3.Post.Length.max`, `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
+| `S3.Post.SuccessStatus.code` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
 | `S3.Post.expiration` | proved | `S3.Post.expiration_parse` |
 | `S3.Post.credential` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
-| `S3.Post.typed` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
+| `S3.Post.chosen` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
 | `S3.Post.signer` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
 | `S3.Post.eqs` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
 | `S3.Post.conditions` | proved | through `S3.Post.form`: `S3.Post.admitted_bounded`, `S3.Post.form_policy` |
@@ -3724,6 +3777,7 @@ them by area.
 | `Cli.New.Source.toToml` | tested | `Tests/New.lean` |
 | `Cli.New.repository` | tested | `Tests/New.lean` |
 | `Cli.New.pinned` | tested | `Tests/New.lean` |
+| `Cli.New.warnings` | tested | `Tests/New.lean` |
 | `Cli.New.ofCheckout` | none |  |
 | `Cli.New.moduleName` | tested | `Tests/New.lean` |
 | `Cli.New.validName` | none |  |
