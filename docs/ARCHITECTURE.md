@@ -131,6 +131,16 @@ entries wholly written before the cut, and anything else wrong with it is refuse
 (`Journal.recover_kernel`), and hands over again exactly what was produced after the last mark
 (`Journal.recover_handed`).
 
+The files are in format 2 (`Lanes/Durable/Format.lean`, D97): each begins with a header, a
+manifest (the format, the Lanes and Lean that wrote it, the application's label, the runtime and
+its policy, the digest of the schema) and the schema of what follows, then holds one body per entry
+in a frame whose checksum is the first 128 bits of SHA-256. A reader matches the file's schema with
+its own by name (`Schema.Plan.of`), so a journal written with an older schema of the inputs opens,
+and a start writes it again with its own (`Disk.mend`). A prelude written for a system and a schema
+is accepted by a reader of the same with no plan (`Journal.Prelude.check_frames`); a file of
+format 1 is refused as such (`Refusal.format`), and no cut of a format-2 file looks like one
+(`Journal.Kind.formerly_cut`).
+
 A snapshot is the kernel's image (`Lanes/Durable/Snapshot.lean`), saved with codecs the
 application gives for its actors; a shard that saves goes on with the restored kernel, so a
 snapshot is a restart without the crash (D29). Starting from a snapshot gives what replaying the

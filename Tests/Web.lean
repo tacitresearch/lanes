@@ -230,8 +230,8 @@ def regateTest : Async (List (String × Bool)) := do
   let some port := server.port | return [("web: the server reports its port", false)]
   let after ← fetch port "/accounts/1"
   server.stop
-  let renamed := (Frame.decode (← IO.FS.readBinFile journal)).head? ==
-    some (Journal.header (journalName "bank 1" longer))
+  let renamed := Journal.named? (← IO.FS.readBinFile journal) ==
+    some (journalName "bank 1" longer)
   let server ← start longer (some saving)
   let some port := server.port | return [("web: the server reports its port", false)]
   let again ← fetch port "/accounts/1"

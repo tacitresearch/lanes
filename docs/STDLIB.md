@@ -20,8 +20,8 @@ is how a misread standard shows up.
 | a | Lean core, `Std` or Batteries has it (module named) | 36 |
 | b | Pure and needed by applications: build in Lean and prove | 26 |
 | c | Touches the operating system or cryptography: bind (library named) | 12 |
-| d | Not needed for Lanes applications (reason given) | 79 |
-| e | Already in Lanes (module named) | 19 |
+| d | Not needed for Lanes applications (reason given) | 80 |
+| e | Already in Lanes (module named) | 18 |
 
 Of the 19 `golang.org/x` packages listed at the end, 8 are (b), 3 are (c), 7 are (d) and 1 is (e).
 
@@ -63,7 +63,7 @@ API. P1 is common, P2 rare.
 | `container/list` | a | `List`; a queue is `Lanes.Fifo` (`Lanes/Data/Fifo.lean`) |
 | `container/ring` | d | `Lanes.Fifo` covers bounded queues |
 | `hash`, `hash/maphash` | a | `Hashable`, `LawfulHashable`, `hash64` |
-| `hash/fnv` | e | FNV-1a in `Lanes/Durable/Frame.lean`, the journal's checksum |
+| `hash/fnv` | d | the journal's checksum is the first 16 bytes of SHA-256 (`Lanes/Durable/Frame.lean`) |
 | `hash/crc32`, `hash/adler32` | b | the checksums of gzip and zlib; built with `compress/*` (P2) |
 | `hash/crc64` | d | no format an application reads uses it |
 | `math` | a | `Float` (C doubles and libm), with the logical model `Float.Model` (IEEE binary64, `Init.Data.Float.Model`) to state what an operation does |

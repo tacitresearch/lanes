@@ -34,7 +34,7 @@ def frameOf (i : Nat) : Nat :=
   ((List.range 3).filter fun k => (Frame.encode (three.take (k + 1))).size ≤ i).length
 
 def payloadByte (i : Nat) : Bool :=
-  8 ≤ i - (Frame.encode (three.take (frameOf i))).size
+  20 ≤ i - (Frame.encode (three.take (frameOf i))).size
 
 def stopsAtDamagedFrame (i : Nat) : Bool :=
   Frame.decode (flip (Frame.encode three) i) == three.take (frameOf i)
@@ -44,20 +44,22 @@ def positions : List Nat :=
 
 def junk : List ByteArray :=
   [ bytes [0], bytes [0, 0, 0, 0, 0, 0, 0], bytes [0, 0, 0, 0, 0, 0, 0, 0],
-    bytes [255, 255, 255, 255, 255, 255, 255, 255, 255],
+    bytes (List.replicate 20 0), bytes (List.replicate 21 255),
     (Frame.one everyByte).extract 0 200, (Frame.one everyByte).extract 1 264, everyByte ]
 
 def many : List ByteArray :=
   (List.range 20000).map fun i => bytes ((List.range 100).map (· + i))
 
 def tests : List (String × Bool) := [
-  ("frame: the checksum is FNV-1a on its test vectors",
-    Frame.checksum .empty == 0x811c9dc5 && Frame.checksum "a".toUTF8 == 0xe40c292c
-      && Frame.checksum "foobar".toUTF8 == 0xbf9cf968),
+  ("frame: the checksum is the first 16 bytes of SHA-256, on its test vectors",
+    Bytes.hex (Frame.checksum .empty) == "e3b0c44298fc1c149afbf4c8996fb924"
+      && Bytes.hex (Frame.checksum "abc".toUTF8) == "ba7816bf8f01cfea414140de5dae2223"
+      && Frame.checksum everyByte == (Sha256.reference everyByte).extract 0 16),
   ("frame: a frame is length, checksum, payload",
-    Frame.one "a".toUTF8 == bytes [0, 0, 0, 1, 0xe4, 0x0c, 0x29, 0x2c, 0x61]
-      && Frame.one .empty == bytes [0, 0, 0, 0, 0x81, 0x1c, 0x9d, 0xc5]
-      && (Frame.one everyByte).extract 0 4 == bytes [0, 0, 1, 0]),
+    Frame.one "a".toUTF8 == bytes [0, 0, 0, 1] ++ Frame.checksum "a".toUTF8 ++ bytes [0x61]
+      && Frame.one .empty == bytes [0, 0, 0, 0] ++ Frame.checksum .empty
+      && (Frame.one everyByte).extract 0 4 == bytes [0, 0, 1, 0]
+      && (Frame.one everyByte).size == 20 + 256),
   ("frame: payloads round trip, empty and every byte value included",
     Frame.decode (Frame.encode payloads) == payloads && Frame.decode (Frame.encode []) == []
       && Frame.decode (Frame.one .empty) == [.empty]),
@@ -76,10 +78,10 @@ def tests : List (String × Bool) := [
     (positions.filter payloadByte).length == 264
       && (positions.filter payloadByte).all stopsAtDamagedFrame),
   ("frame: a flipped length or checksum byte stops decoding at that frame",
-    (positions.filter (!payloadByte ·)).length == 24
+    (positions.filter (!payloadByte ·)).length == 60
       && (positions.filter (!payloadByte ·)).all stopsAtDamagedFrame),
   ("frame: a frame with another checksum is not decoded, nor what follows it",
-    Frame.decode (Frame.encode payloads ++ Frame.stamped 0 everyByte ++ Frame.encode three)
+    Frame.decode (Frame.encode payloads ++ Frame.stamped (bytes (List.replicate 16 0)) everyByte ++ Frame.encode three)
       == payloads),
   ("frame: bytes after good frames leave them as they are",
     junk.all fun rest => payloads.isPrefixOf (Frame.decode (Frame.encode payloads ++ rest))),

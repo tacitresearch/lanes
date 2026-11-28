@@ -7,10 +7,12 @@ module
 public import Lanes.Durable.Journal
 
 /-!
-A snapshot file: a kernel's image and the index of its mark in the journal, as bytes. The
-codec is built from the application's codecs for an identity, a state and a message, so its
-round-trip law comes with it. A snapshot is written whole and renamed into place, so nothing is
-repaired when one is read: a file that does not read back entirely is refused.
+A snapshot file: a kernel's image and the index of its mark in the journal, as bytes, in format 2
+(`Lanes/Durable/Format.lean`): the prelude, then the two as one body. The schema is built from the
+application's codecs for an identity, a state and a message, so its law comes with it, and an
+image written under an older schema is read by name. A snapshot is written whole and renamed into
+place, so nothing is repaired when one is read: a file that does not read back entirely is
+refused.
 -/
 
 @[expose] public section
@@ -65,52 +67,97 @@ open Kernel (Image)
 
 variable {sys : System σ}
 
-def savedHeader (system : String) : ByteArray :=
-  ("lanes snapshot 1\n" ++ system).toUTF8
+/-- What a snapshot file holds: the index of the mark and the image. -/
+def savedOf (c : Image.Codecs sys) : Schema.Of (Nat × Image sys) :=
+  (Codec.pair .nat c.image).toOf
 
-theorem savedHeader_inj {a b : String} (h : savedHeader a = savedHeader b) : a = b := by
-  have := congrArg String.fromUTF8? h
-  rw [savedHeader, savedHeader, Codec.fromUTF8?_toUTF8, Codec.fromUTF8?_toUTF8] at this
-  simpa using this
+def savedBody (c : Image.Codecs sys) (index : Nat) (image : Image sys) :
+    Except Codec.Error ByteArray :=
+  Body.encode Kind.snapshot.limits (savedOf c) (index, image)
 
+/-- The frames of a snapshot file: the prelude, then the index of the mark and the image as one
+body. -/
 def savedRecords (c : Image.Codecs sys) (system : String) (index : Nat) (image : Image sys) :
     List ByteArray :=
-  savedHeader system :: (Codec.pair .nat c.image).write (index, image)
+  Prelude.frames .snapshot system (savedOf c).schema ++ [okBytes (savedBody c index image)]
 
-/-- A snapshot file: the header, the index of the mark, the image, a frame per record. -/
+/-- Whether the snapshot can be written: its prelude, and its body within the bounds of a
+snapshot and of a frame. -/
+def savedFits (c : Image.Codecs sys) (system : String) (index : Nat) (image : Image sys) : Bool :=
+  Prelude.fits .snapshot system (savedOf c).schema
+    && match savedBody c index image with
+      | .ok bytes => Frame.fits bytes
+      | .error _ => false
+
 def saved (c : Image.Codecs sys) (system : String) (index : Nat) (image : Image sys) :
     ByteArray :=
   Frame.encode (savedRecords c system index image)
 
+/-- What a snapshot file holds, or why it is refused. A snapshot is written whole and renamed
+into place, so it is exactly four frames and nothing after; a body that does not read through
+the plan is refused with the error that names where. -/
+def savedOpen? (c : Image.Codecs sys) (system : String) (bytes : ByteArray) :
+    Except Refusal (Nat × Image sys) :=
+  match Frame.decode bytes with
+  | [first, manifest, schema, body] =>
+    if Frame.span [first, manifest, schema, body] = bytes.size then
+      match Prelude.check .snapshot system (savedOf c).schema first manifest schema with
+      | .error (.foreign _) => .error .snapshot
+      | .error refusal => .error refusal
+      | .ok (writer, plan) =>
+        match Body.decodeWith Kind.snapshot.limits writer plan (savedOf c) body with
+        | .ok found => .ok found
+        | .error e => .error (.schema e)
+    else .error .snapshot
+  | _ => if Kind.snapshot.formerly bytes then .error (.format 1) else .error .snapshot
+
 def saved? (c : Image.Codecs sys) (system : String) (bytes : ByteArray) :
     Option (Nat × Image sys) :=
-  match Frame.decode bytes with
-  | first :: records =>
-    if first = savedHeader system ∧ Frame.span (first :: records) = bytes.size then
-      match (Codec.pair .nat c.image).read records with
-      | some (found, []) => some found
-      | _ => none
-    else none
-  | [] => none
+  (savedOpen? c system bytes).toOption
+
+private theorem savedBody_ok {c : Image.Codecs sys} {system : String} {index : Nat}
+    {image : Image sys} (h : savedFits c system index image = true) :
+    Prelude.fits .snapshot system (savedOf c).schema = true
+      ∧ savedBody c index image = .ok (okBytes (savedBody c index image))
+      ∧ Frame.fits (okBytes (savedBody c index image)) = true := by
+  simp only [savedFits, Bool.and_eq_true] at h
+  obtain ⟨hp, hb⟩ := h
+  split at hb
+  · next bytes hbody => exact ⟨hp, by rw [hbody]; rfl, by rw [hbody]; exact hb⟩
+  · cases hb
+
+private theorem decode_saved {c : Image.Codecs sys} {system : String} {index : Nat}
+    {image : Image sys} (h : savedFits c system index image = true) :
+    Frame.decode (saved c system index image) = savedRecords c system index image := by
+  obtain ⟨hp, -, hb⟩ := savedBody_ok h
+  refine Frame.decode_encode fun p hp' => ?_
+  rcases List.mem_append.mp hp' with hp' | hp'
+  · exact Prelude.fits_frames hp p hp'
+  · rw [List.mem_singleton.mp hp']
+    exact Frame.fits_iff.mp hb
 
 /-- A snapshot of another system, or of another version of this one, is refused. -/
-theorem saved?_other {τ : Signature} {other : System τ} (c₀ : Image.Codecs other) (c : Image.Codecs sys)
-    {named system : String} (hne : named ≠ system) (index : Nat) (image : Image other)
-    (h : (savedRecords c₀ named index image).all Frame.fits = true) :
+theorem saved?_other {τ : Signature} {other : System τ} (c₀ : Image.Codecs other)
+    (c : Image.Codecs sys) {named system : String} (hne : named ≠ system) (index : Nat)
+    (image : Image other) (h : savedFits c₀ named index image = true) :
     saved? c system (saved c₀ named index image) = none := by
-  simp only [saved?, saved, savedRecords] at h ⊢
-  rw [Frame.decode_encode (Frame.all_fits_iff.mp h)]
-  have : savedHeader named ≠ savedHeader system := fun heq => hne (savedHeader_inj heq)
-  simp [this]
+  obtain ⟨hp, -, -⟩ := savedBody_ok h
+  simp only [saved?, savedOpen?, decode_saved h]
+  simp [savedRecords, Prelude.frames, saved, Frame.span, Prelude.check_other hp hne,
+    Except.toOption]
+
+theorem savedOpen?_saved (c : Image.Codecs sys) (system : String) (index : Nat)
+    (image : Image sys) (h : savedFits c system index image = true) :
+    savedOpen? c system (saved c system index image) = .ok (index, image) := by
+  obtain ⟨hp, hbody, -⟩ := savedBody_ok h
+  simp only [savedOpen?, decode_saved h]
+  simp [savedRecords, Prelude.frames, saved, Frame.span, Prelude.check_frames hp,
+    Body.decodeWith_same, Body.decode_encode hbody]
 
 theorem saved?_saved (c : Image.Codecs sys) (system : String) (index : Nat) (image : Image sys)
-    (h : (savedRecords c system index image).all Frame.fits = true) :
+    (h : savedFits c system index image = true) :
     saved? c system (saved c system index image) = some (index, image) := by
-  have hsound := (Codec.pair .nat c.image).sound (index, image) []
-  rw [List.append_nil] at hsound
-  simp only [saved?, saved, savedRecords] at h ⊢
-  rw [Frame.decode_encode (Frame.all_fits_iff.mp h)]
-  simp only [Frame.size_encode, hsound, and_self, ↓reduceIte]
+  simp [saved?, savedOpen?_saved c system index image h, Except.toOption]
 
 end Journal
 

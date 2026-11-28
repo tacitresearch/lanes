@@ -259,7 +259,7 @@ that performs IO is in an `IO/` directory of its area and named in `TRUSTED.md`.
 | `Lanes/Core/` | `Actor`, `Signature`, `Effect`, `System`, the semantics' step (`World`), each event and run in closed form (`Step`, `Run`), joins, `Service`, `Inspect`, the deterministic and fair schedulers | `Std` only |
 | `Lanes/Proof/` | The proof toolkit: lifting per-actor invariants, `Monotone`, ghosts and `Past`, `SysState.Equiv`, deeds, loss; what survives a join (`JoinSound`, `MapIOSound`); lemmas about lists (`List/`), strings (`Utf8`) and byte arrays (`ByteArray`) | `Std` only |
 | `Lanes/Runtime/` | The kernel and its proofs, batches, the inbox, shards; the shell and the parker in `IO/` | `Std` only |
-| `Lanes/Durable/` | The journal, snapshots, the disk model, the framing of a file; the journal's files in `IO/` | `Std` only |
+| `Lanes/Durable/` | The journal, snapshots, the disk model, the format of the files and their framing; the journal's files in `IO/` | `Std` only |
 | `Lanes/Net/` | The courier, every decision of the transport, and its proofs; the transport and a process with an HTTP front in `IO/` | `Std` only |
 | `Lanes/Outside/` | What the outside may do (`Outside`), the home of models of external systems (calls, idempotency keys, webhooks, payments, email, an object store, and transactional stores in `Store/`); the clock in `IO/` | `Std` only |
 | `Lanes/Web/` | HTTP as data, its grammar, the gate, routes, cookies, the wire format, the server's connections and Signature Version 4 (`Http/`); HTML values and templates (`Html/`); tokens, password digests, failed attempts, sessions (`Auth/`); the S3 client's calls and answers (`S3/`); the server, the client and the S3 client in `IO/` | `Std` only |
@@ -313,7 +313,9 @@ lanes_data inductive Id (F : Type) where
   read by name: `Schema.Plan.of` matches the writer's schema with the reader's once, refusing
   what cannot be read with a `Codec.Error` that names it, and `Body.decodeWith` reads each value
   through the plan (`Lanes/Data/Match.lean`; `Schema.Plan.of_insertIdx`,
-  `Schema.Plan.of_rename`). The files do not use it yet. Every
+  `Schema.Plan.of_rename`). The journal and the snapshot are written so, in format 2 of the
+  files (`Lanes/Durable/Format.lean`): a header, a manifest and the schema, then one body per
+  entry, read through the plan from the file's schema. Every
   field's type needs `Codable`: `Nat`, `Int`, `String`, `Bool`, `Unit`, `ByteArray`, `Fin n`,
   `Option`, `List`, pairs, sums, sigma types, subtypes, `Std.ExtTreeMap`, and types declared
   this way.

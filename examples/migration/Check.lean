@@ -104,15 +104,15 @@ def states (rt : Runtime V2.system) : Async (List V2.Usage) :=
 def migrated : List V2.Usage :=
   [{ used := 150, quota := 150 }, { used := 30, quota := 100 }, { used := 0, quota := 100 }]
 
-def header (path : System.FilePath) : IO ByteArray := do
-  return (Frame.decode (← IO.FS.readBinFile path)).head?.getD .empty
+def header (path : System.FilePath) : IO (Option String) := do
+  return Journal.named? (← IO.FS.readBinFile path)
 
 def deploy : Async (List (String × Bool)) := do
   let path ← scratch "deploy"
   runV1 path
   let v1Header ← header path
   let saved ← (path.addExtension "snapshot").pathExists
-  let tail := (Frame.decode (← IO.FS.readBinFile path)).length
+  let tail := (Frame.decode (← IO.FS.readBinFile path)).length - 2
   let replies ← IO.mkRef #[]
   let rt ← startV2 path replies
   let first ← states rt
@@ -132,7 +132,7 @@ def deploy : Async (List (String × Bool)) := do
   return [
     ("deploy: version 1's files carry its name and version, and are a snapshot and a journal "
       ++ "that goes on after its mark",
-      v1Header == Journal.header (Journal.label "quota" 1) && saved && tail > 2),
+      v1Header == some (Journal.label "quota" 1) && saved && tail > 2),
     ("deploy: version 2 finds every user as version 1 left it, with a quota added",
       first == migrated),
     ("deploy: every user is within its quota after the migration",
@@ -141,7 +141,7 @@ def deploy : Async (List (String × Bool)) := do
       answered.toList == [.refused 5 100, .granted 6 150, .used 7 110]
         && later[1]? == some { used := 110, quota := 150 }),
     ("deploy: version 2 starts again from its own files, which carry its version",
-      restarted == later && v2Header == Journal.header (Journal.label "quota" 2)),
+      restarted == later && v2Header == some (Journal.label "quota" 2)),
     ("deploy: version 1 refuses the files of version 2, saying whose they are",
       match rollback with
       | .error e => (toString e).endsWith
@@ -170,7 +170,7 @@ def interrupted : Async (List (String × Bool)) := do
   let v2Header ← header path
   remove path
   return [("interrupted: a migration cut off after its first write is finished by the next start",
-    found == migrated && v2Header == Journal.header (Journal.label "quota" 2))]
+    found == migrated && v2Header == some (Journal.label "quota" 2))]
 
 def main : IO UInt32 := do
   let live ← (do return (← deploy) ++ (← interrupted) : Async _).block

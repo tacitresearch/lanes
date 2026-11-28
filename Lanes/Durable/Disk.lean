@@ -65,6 +65,9 @@ structure Found (sys : System σ) where
   /-- The bytes of the journal that hold `past`. What comes after them is a write that did not
   finish. -/
   size : Nat
+  /-- Whether the journal begins with the prelude this binary writes, so that it may append to
+  it. One written with an older schema, or by another Lanes, is written again (`mend`). -/
+  current : Bool := true
 
 /-- How many entries the shard's history has. A journal that was cut starts with the mark of
 the save that cut it, and the mark carries its place in the history. -/
@@ -75,16 +78,17 @@ def Found.index (found : Found sys) : Nat :=
 
 def read (input : Codec σ.In) (actors : Option (Image.Codecs sys)) (system : String)
     (disk : Disk) : Except Refusal (Found sys) :=
-  if Frame.fits (header system) then
+  if preludeFits input system then
     match open? input system disk.journal with
     | .error refusal => .error refusal
     | .ok (past, size) =>
+      let current := size == 0 || (Frame.decode disk.journal).take 3 == prelude input system
       match actors, disk.snapshot with
       | some c, some bytes =>
-        match saved? c system bytes with
-        | some saved => .ok { past, saved, size }
-        | none => .error .snapshot
-      | _, _ => .ok { past, saved := none, size }
+        match savedOpen? c system bytes with
+        | .ok saved => .ok { past, saved, size, current }
+        | .error refusal => .error refusal
+      | _, _ => .ok { past, saved := none, size, current }
   else .error .name
 
 /-- What a start goes on with. A journal that is not there, or has not its header, is the
@@ -112,11 +116,14 @@ theorem read_of_start {input : Codec σ.In} {actors : Option (Image.Codecs sys)}
     · cases h
       exact hread
 
-/-- A journal with nothing in it gets its header, and a write that did not finish is cut off,
-since an entry appended after it could never be read. `size` is what `read` found. -/
-def mend (system : String) (disk : Disk) (size : Nat) : List Write :=
-  if size = 0 then [.putJournal (Frame.one (header system))]
-  else if size < disk.journal.size then [.putJournal (disk.journal.extract 0 size)]
+/-- A journal with nothing in it gets its prelude; one with the prelude of another schema or
+another Lanes is written again with this binary's, since what this binary appends is written with
+its own schema; and a write that did not finish is cut off, since an entry appended after it
+could never be read. `found` is what `read` found. -/
+def mend (input : Codec σ.In) (system : String) (disk : Disk) (found : Found sys) : List Write :=
+  if found.size = 0 then [.putJournal (Frame.encode (prelude input system))]
+  else if !found.current then [.putJournal (file input system found.past)]
+  else if found.size < disk.journal.size then [.putJournal (disk.journal.extract 0 found.size)]
   else []
 
 variable [Hashable σ.Id]
@@ -165,14 +172,14 @@ theorem turn_unmarked (k : Kernel sys) (now_ms : Nat) (x : Option σ.In) (fuel :
 
 /-- A store without codecs never saves, so its journal holds its whole history and no mark.
 Cut at any byte, it loads as the kernel that the entries wholly written lead to. -/
-theorem Disk.load_cut {entries : List (Entry σ)} (hsystem : Frame.fits (header system) = true)
+theorem Disk.load_cut {entries : List (Entry σ)} (hsystem : preludeFits input system = true)
     (hfits : ∀ entry ∈ entries, Entry.fits input entry = true)
     (hunmarked : ∀ entry ∈ entries, entry.savedAt = none) (n : Nat)
     (snapshot : Option ByteArray) :
     Disk.load sys input none system
         { journal := (file input system entries).extract 0 n, snapshot }
       = .ok (recover sys
-          (entries.take (Frame.whole (header system :: write input entries) n - 1))) := by
+          (entries.take (Frame.whole (frames input system entries) n - 3))) := by
   simp only [Disk.load, Disk.read, hsystem, ↓reduceIte, open?_cut input hsystem hfits n]
   generalize hpast : entries.take _ = past
   have hpast : ∀ entry ∈ past, entry.savedAt = none :=
@@ -192,7 +199,7 @@ taken at `mark`, enough to rebuild the kernel. -/
 structure Kept (input : Codec σ.In) (c : Image.Codecs sys) (system : String)
     (history : List (Entry σ)) (lost : Nat) (mark : Option Nat) (start : Kernel sys × List σ.Out) :
     Prop where
-  header : Frame.fits (header system) = true
+  prelude : preludeFits input system = true
   entries : ∀ entry ∈ history, Entry.fits input entry = true
   /-- A mark carries its place in the history, so no two are alike. -/
   placed : ∀ i index, history[i]? = some (Entry.snapshot index) → index = i
@@ -201,7 +208,7 @@ structure Kept (input : Codec σ.In) (c : Image.Codecs sys) (system : String)
   /-- The mark of the snapshot is in the journal. -/
   marked : ∀ index, mark = some index →
     history[index]? = some (Entry.snapshot index) ∧ lost ≤ index
-      ∧ (savedRecords c system index (replay start (history.take index)).1.image).all Frame.fits
+      ∧ savedFits c system index (replay start (history.take index)).1.image
         = true
   /-- A journal that was cut, or a history that does not start at boot, has its snapshot. -/
   saved : mark = none → lost = 0 ∧ start = Kernel.boot sys
@@ -225,7 +232,7 @@ def Torn (sys : System σ) [Hashable σ.Id] (input : Codec σ.In) (c : Image.Cod
   ∃ lost mark more n, Kept (start := start) input c system history lost mark
     ∧ (∀ entry ∈ more, Entry.fits input entry = true)
     ∧ (history.drop lost ++ more).take
-        (Frame.whole (header system :: write input (history.drop lost ++ more)) n - 1)
+        (Frame.whole (frames input system (history.drop lost ++ more)) n - 3)
       = history.drop lost
     ∧ disk.journal = (file input system (history.drop lost ++ more)).extract 0 n
     ∧ disk.snapshot = memo (start := start) c system history mark
@@ -317,7 +324,7 @@ theorem extend (h : Kept (start := start) input c system history lost mark) {ent
     (hfits : ∀ entry ∈ entries, Entry.fits input entry = true)
     (hplaced : ∀ i index, entries[i]? = some (.snapshot index) → index = history.length + i) :
     Kept (start := start) input c system (history ++ entries) lost mark where
-  header := h.header
+  prelude := h.prelude
   entries entry hentry := (List.mem_append.mp hentry).elim (h.entries entry) (hfits entry)
   placed i index hi := by
     rw [List.getElem?_append] at hi
@@ -351,7 +358,7 @@ private theorem placed_mark (i index : Nat)
 /-- The kernel is saved at the end of the history, and the journal is not cut yet. -/
 private theorem save (h : Kept (start := start) input c system history lost mark)
     (hmark : Entry.fits input (.snapshot history.length) = true)
-    (hsaved : (savedRecords c system history.length (replay start history).1.image).all Frame.fits
+    (hsaved : savedFits c system history.length (replay start history).1.image
       = true) :
     Kept (start := start) input c system (history ++ [.snapshot history.length]) lost (some history.length) :=
   { h.extend (by simpa using hmark) placed_mark with
@@ -363,7 +370,7 @@ private theorem save (h : Kept (start := start) input c system history lost mark
 /-- The journal is cut at the mark of the save. -/
 private theorem saveCut (h : Kept (start := start) input c system history lost mark)
     (hmark : Entry.fits input (.snapshot history.length) = true)
-    (hsaved : (savedRecords c system history.length (replay start history).1.image).all Frame.fits
+    (hsaved : savedFits c system history.length (replay start history).1.image
       = true) :
     Kept (start := start) input c system (history ++ [.snapshot history.length]) history.length
       (some history.length) :=
@@ -393,42 +400,68 @@ theorem crash_of_length_le (disk : Disk) {writes : List Write} {done : Nat}
 theorem Holds.torn (h : Holds sys (start := start) input c system history disk) :
     Torn sys (start := start) input c system history disk := by
   obtain ⟨lost, mark, hkept, hjournal, hsnapshot⟩ := h
+  have hlen : (frames input system (history.drop lost)).length = (history.drop lost).length + 3 := by
+    simp [frames, prelude, Prelude.frames, write]
   refine ⟨lost, mark, [], (file input system (history.drop lost)).size, hkept, nofun, ?_, ?_,
     hsnapshot⟩
   · rw [List.append_nil]
     exact List.take_of_length_le (by
-      have := (Frame.le_whole_iff (payloads := header system :: write input (history.drop lost))
-        (k := (history.drop lost).length + 1) (file input system (history.drop lost)).size
-        (by simp [write])).mpr
-          (Nat.le_of_eq (by rw [List.take_of_length_le (by simp [write])]; rfl))
+      have := (Frame.le_whole_iff (payloads := frames input system (history.drop lost))
+        (k := (history.drop lost).length + 3) (file input system (history.drop lost)).size
+        (by omega)).mpr
+          (Nat.le_of_eq (by rw [List.take_of_length_le (by omega)]; rfl))
       omega)
   · rw [List.append_nil, hjournal, ByteArray.extract_zero_size]
 
 /-- A new shard has no files. -/
-theorem torn_nil (h : Frame.fits (header system) = true) : Torn sys input c system [] {} :=
+theorem torn_nil (h : preludeFits input system = true) : Torn sys input c system [] {} :=
   ⟨0, none, [], 0, ⟨h, nofun, nofun, .inl rfl, nofun, fun _ => ⟨rfl, rfl⟩⟩, nofun, rfl,
     by simp [ByteArray.extract_same], rfl⟩
+
+/-- The bytes a start keeps of a journal cut where its first `whole` frames end. -/
+def keptOf (frames : List ByteArray) (whole : Nat) : Nat :=
+  if whole < 3 then 0 else Frame.span (frames.take whole)
+
+omit [Hashable σ.Id] in
+private theorem current_cut {entries : List (Entry σ)}
+    (hfit : ∀ p ∈ frames input system entries, p.size < 2 ^ 32) (n : Nat) :
+    (keptOf (frames input system entries) (Frame.whole (frames input system entries) n) == 0
+      || (Frame.decode ((file input system entries).extract 0 n)).take 3
+        == prelude input system) = true := by
+  rw [file, Frame.decode_take_eq hfit n, List.take_take]
+  unfold keptOf
+  generalize Frame.whole (frames input system entries) n = w
+  by_cases hw : w < 3
+  · simp [hw]
+  · have : min 3 w = 3 := by omega
+    simp [this, frames, prelude, Prelude.frames]
 
 private theorem read_torn (h : Kept (start := start) input c system history lost mark) {more : List (Entry σ)}
     {n : Nat} (hmore : ∀ entry ∈ more, Entry.fits input entry = true)
     (hcut : (history.drop lost ++ more).take
-        (Frame.whole (header system :: write input (history.drop lost ++ more)) n - 1)
+        (Frame.whole (frames input system (history.drop lost ++ more)) n - 3)
       = history.drop lost)
     (hjournal : disk.journal = (file input system (history.drop lost ++ more)).extract 0 n)
     (hsnapshot : disk.snapshot = memo (start := start) c system history mark) :
     disk.read input (some c) system = .ok {
       past := history.drop lost
       saved := mark.map fun index => (index, (replay start (history.take index)).1.image)
-      size := Frame.span ((header system :: write input (history.drop lost ++ more)).take
-        (Frame.whole (header system :: write input (history.drop lost ++ more)) n)) } := by
+      size := keptOf (frames input system (history.drop lost ++ more))
+        (Frame.whole (frames input system (history.drop lost ++ more)) n) } := by
   have hfits : ∀ entry ∈ history.drop lost ++ more, Entry.fits input entry = true :=
     fun entry hentry => (List.mem_append.mp hentry).elim
       (fun hkept => h.entries entry (List.mem_of_mem_drop hkept)) (hmore entry)
-  simp only [read, h.header, ↓reduceIte, hjournal, open?_cut input h.header hfits n, hcut,
+  have hcurrent := current_cut (input := input) (system := system)
+    (Journal.frames_fit input h.prelude hfits) n
+  rw [← hjournal] at hcurrent
+  simp only [read, h.prelude, ↓reduceIte, hjournal, open?_cut input h.prelude hfits n, hcut,
     hsnapshot]
+  rw [← hjournal]
+  unfold keptOf at hcurrent
+  simp only [hcurrent]
   cases mark with
   | none => rfl
-  | some index => simp [memo, saved?_saved c system index _ (h.marked index rfl).2.2]
+  | some index => simp [memo, keptOf, savedOpen?_saved c system index _ (h.marked index rfl).2.2]
 
 /-- Whatever the death of the process leaves loads, and gives the kernel the shard had and the
 outputs it had not marked as handed over: never a refusal, never another kernel. -/
@@ -449,56 +482,68 @@ theorem Torn.read (h : Torn sys (start := start) input c system history disk) :
 same history. -/
 theorem Torn.mend (h : Torn sys (start := start) input c system history disk) {found : Found sys}
     (hread : disk.read input (some c) system = .ok found) :
-    Holds sys (start := start) input c system history ((disk.mend system found.size).foldl apply disk) := by
+    Holds sys (start := start) input c system history
+      ((disk.mend input system found).foldl apply disk) := by
   obtain ⟨lost, mark, more, n, hkept, hmore, hcut, hjournal, hsnapshot⟩ := h
   obtain rfl := Except.ok.inj ((read_torn hkept hmore hcut hjournal hsnapshot).symm.trans hread)
   have hmended : disk.journal.extract 0 (Frame.span
-        ((header system :: write input (history.drop lost ++ more)).take
-          (Frame.whole (header system :: write input (history.drop lost ++ more)) n)))
-      = Frame.encode ((header system :: write input (history.drop lost ++ more)).take
-          (Frame.whole (header system :: write input (history.drop lost ++ more)) n)) := by
+        ((frames input system (history.drop lost ++ more)).take
+          (Frame.whole (frames input system (history.drop lost ++ more)) n)))
+      = Frame.encode ((frames input system (history.drop lost ++ more)).take
+          (Frame.whole (frames input system (history.drop lost ++ more)) n)) := by
     rw [hjournal]
     exact Frame.extract_take_whole _ n
-  generalize Frame.whole (header system :: write input (history.drop lost ++ more)) n = whole
+  simp only [Disk.mend, keptOf]
+  generalize Frame.whole (frames input system (history.drop lost ++ more)) n = whole
     at hcut hmended ⊢
-  cases whole with
-  | zero =>
-    have hnone : history.drop lost = [] := by simpa using hcut.symm
-    exact ⟨lost, mark, hkept,
-      by simp [Disk.mend, Frame.span, apply, hnone, file_eq, encode, write], hsnapshot⟩
-  | succ kept =>
-    have htake : (header system :: write input (history.drop lost ++ more)).take (kept + 1)
-        = header system :: write input (history.drop lost) := by
-      rw [List.take_succ_cons, write, ← List.map_take]
-      exact congrArg (header system :: write input ·) hcut
-    rw [htake] at hmended ⊢
-    have hsize : Frame.span (header system :: write input (history.drop lost)) ≠ 0 := by
-      simp [Frame.span]
-    simp only [Disk.mend, hsize, ↓reduceIte]
+  by_cases hw : whole < 3
+  · have hnone : history.drop lost = [] := by
+      rw [show whole - 3 = 0 by omega] at hcut
+      simpa using hcut.symm
+    simp only [hw, ↓reduceIte, List.foldl_cons, List.foldl_nil]
+    exact ⟨lost, mark, hkept, by simp [apply, hnone, file_eq, encode, write],
+      by simpa [apply] using hsnapshot⟩
+  · obtain ⟨kept, rfl⟩ : ∃ kept, whole = kept + 3 := ⟨whole - 3, by omega⟩
+    have htake : (frames input system (history.drop lost ++ more)).take (kept + 3)
+        = frames input system (history.drop lost) := by
+      simp only [frames, prelude, Prelude.frames, List.cons_append, List.nil_append,
+        List.take_succ_cons, write, ← List.map_take]
+      rw [Nat.add_sub_cancel] at hcut
+      rw [hcut]
+    simp only [htake] at hmended ⊢
+    have hsize : Frame.span (frames input system (history.drop lost)) ≠ 0 := by
+      simp [Frame.span, frames, prelude, Prelude.frames]
+    simp only [hw, hsize, ↓reduceIte, Bool.not_true, Bool.false_eq_true]
     split
     · exact ⟨lost, mark, hkept, hmended, hsnapshot⟩
     · rename_i hwhole
       exact ⟨lost, mark, hkept,
         (Frame.extract_of_size_le (Nat.le_of_not_lt hwhole)).symm.trans hmended, hsnapshot⟩
 
-theorem length_mend_le (system : String) (disk : Disk) (size : Nat) :
-    (disk.mend system size).length ≤ 1 := by
+omit [Hashable σ.Id] in
+theorem length_mend_le (input : Codec σ.In) (system : String) (disk : Disk) (found : Found sys) :
+    (disk.mend input system found).length ≤ 1 := by
   unfold Disk.mend
   split
   · simp
-  · split <;> simp
+  · split
+    · simp
+    · split <;> simp
 
 /-- And dying while mending leaves what was there or what mending gives. -/
 theorem Torn.mend_crash (h : Torn sys (start := start) input c system history disk) {found : Found sys}
     (hread : disk.read input (some c) system = .ok found) (done part : Nat) :
-    Torn sys (start := start) input c system history (disk.crash (disk.mend system found.size) done part) := by
+    Torn sys (start := start) input c system history
+      (disk.crash (disk.mend input system found) done part) := by
   cases done with
   | zero =>
-    have hsame : disk.crash (disk.mend system found.size) 0 part = disk := by
+    have hsame : disk.crash (disk.mend input system found) 0 part = disk := by
       unfold Disk.mend
       split
       · rfl
-      · split <;> rfl
+      · split
+        · rfl
+        · split <;> rfl
     rw [hsame]
     exact h
   | succ done =>
@@ -537,13 +582,14 @@ private theorem torn_append (hkept : Kept (start := start) input c system histor
   have hall : history.drop lost ++ entries.take w ++ entries.drop w
       = history.drop lost ++ entries := by
     rw [List.append_assoc, List.take_append_drop]
-  have hwhole : Frame.whole (header system :: write input (history.drop lost ++ entries))
+  have hwhole : Frame.whole (frames input system (history.drop lost ++ entries))
       ((file input system (history.drop lost)).size + part)
-        = (history.drop lost).length + 1 + w := by
-    have hwrite : write input (history.drop lost ++ entries)
-        = write input (history.drop lost) ++ write input entries := List.map_append
-    rw [hwrite, ← List.cons_append, file, Frame.size_encode, Frame.whole_append, hw]
-    simp [write]
+        = (history.drop lost).length + 3 + w := by
+    have hframes : frames input system (history.drop lost ++ entries)
+        = frames input system (history.drop lost) ++ write input entries := by
+      simp [frames, write, List.append_assoc]
+    rw [hframes, file, Frame.size_encode, Frame.whole_append, hw]
+    simp [frames, prelude, Prelude.frames, write]
   refine ⟨lost, mark, entries.drop w, (file input system (history.drop lost)).size + part,
     hkept.extend (fun entry hentry => hfits entry (List.mem_of_mem_take hentry)) ?_,
     fun entry hentry => hfits entry (List.mem_of_mem_drop hentry), ?_, ?_,
@@ -572,7 +618,7 @@ private theorem torn_mark (hkept : Kept (start := start) input c system history 
       (disk.apply (.append ((encode input [.snapshot history.length]).extract 0 part))) := by
   have htorn := torn_append hkept hjournal hsnapshot hfits Kept.placed_mark part
   have hsize : (encode input [.snapshot history.length]).size
-      = 8 + (Entry.bytes input (.snapshot history.length)).size := by
+      = 20 + (Entry.bytes input (.snapshot history.length)).size := by
     simp [encode, write]
   by_cases hpart : part < (encode input [.snapshot history.length]).size
   · have hnone : Frame.whole (write input [.snapshot history.length]) part = 0 := by
@@ -614,7 +660,7 @@ theorem Holds.append_crash (h : Holds sys (start := start) input c system histor
 its kernel is then the one the saved image restores (`recover_snapshot`). -/
 theorem Holds.save (h : Holds sys (start := start) input c system history disk)
     (hmark : Entry.fits input (.snapshot history.length) = true)
-    (hsaved : (savedRecords c system history.length (replay start history).1.image).all Frame.fits
+    (hsaved : savedFits c system history.length (replay start history).1.image
       = true) :
     Holds sys (start := start) input c system (history ++ [.snapshot history.length])
       ((saveWrites input c system history.length (replay start history).1.image).foldl apply
@@ -628,7 +674,7 @@ writes, the history is what it was, or, once the mark is wholly written, what it
 mark. -/
 theorem Holds.save_crash (h : Holds sys (start := start) input c system history disk)
     (hmark : Entry.fits input (.snapshot history.length) = true)
-    (hsaved : (savedRecords c system history.length (replay start history).1.image).all Frame.fits
+    (hsaved : savedFits c system history.length (replay start history).1.image
       = true) (done part : Nat) :
     Torn sys (start := start) input c system
       (history ++ if done = 0 ∧ part < (encode input [.snapshot history.length]).size then []
@@ -669,7 +715,7 @@ is wholly written, with the kernel the saved image restores (`recover_snapshot`)
 refusal, never another kernel. -/
 theorem Holds.load_save_crash (h : Holds sys (start := start) input c system history disk)
     (hmark : Entry.fits input (.snapshot history.length) = true)
-    (hsaved : (savedRecords c system history.length (replay start history).1.image).all Frame.fits
+    (hsaved : savedFits c system history.length (replay start history).1.image
       = true) (done part : Nat) :
     (disk.crash (saveWrites input c system history.length (replay start history).1.image) done
         part).load sys input (some c) system
