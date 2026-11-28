@@ -16,18 +16,16 @@ machine through the workflow.
 | `tcp-park` | `tcp` with its main thread asleep rather than waiting on a task (below) | `TcpHello.lean` |
 | `std` | `Std.Http.Server` with its default configuration, which Lanes ran before its own server (D57); it closes a connection after 100 requests | `StdHello.lean` |
 | `std-unlimited` | `std` with no limit of requests per connection | `StdHello.lean` |
-| `lanes` | `Lanes.Http.serve` with one actor (`Server.system`) that answers each request; one worker, so `Runtime.Config.parallel` is off | `LanesHello.lean` |
+| `lanes` | `Lanes.Http.serve` with one actor (`Server.system`) that answers each request, on one worker | `LanesHello.lean` |
 | `lanes-io` | `lanes` with its connections on `IO_THREADS` threads of the server's own (`ServerConfig.ioThreads`) | `LanesHello.lean` |
-| `lanes-par` | `lanes` with `WORKERS` threads to work out actors' steps on every wave (`Runtime.Config.workers`, `parallel := .on`): one actor, so this measures what grouping inputs and planning waves cost | `LanesHello.lean` |
+| `lanes-par` | `lanes` on `WORKERS` workers (`Runtime.Config.workers`): one actor, so this measures what running on several threads costs | `LanesHello.lean` |
 | `lanes-io-par` | both | `LanesHello.lean` |
 | `lanes-many` | `K` (64) counters, request `n` to counter `n % K` | `LanesMany.lean` |
-| `lanes-many-par` | `lanes-many` with `WORKERS`, `parallel := .on` | `LanesMany.lean` |
-| `lanes-many-auto` | `lanes-many` with `WORKERS`, `parallel := .auto`: the shard chooses each batch from its timing | `LanesMany.lean` |
+| `lanes-many-par` | `lanes-many` on `WORKERS` workers | `LanesMany.lean` |
 | `lanes-heavy` | `lanes-many` with `SPIN` (20,000) rounds of hashing in each step, about 20 µs | `LanesMany.lean` |
-| `lanes-heavy-par` | `lanes-heavy` with `WORKERS`, `parallel := .on` | `LanesMany.lean` |
-| `lanes-heavy-auto` | `lanes-heavy` with `WORKERS`, `parallel := .auto` | `LanesMany.lean` |
+| `lanes-heavy-par` | `lanes-heavy` on `WORKERS` workers | `LanesMany.lean` |
 
-`IO_THREADS` and `WORKERS` are a quarter of the server's CPUs each by default (8 and 8 on the warm machine), `K` and `SPIN` as above; all four are read from the environment by `servers.sh`. `benchWaves` (`Waves.lean`) is the kernel alone, without IO: `benchWaves K spin workers inputs rounds`. `benchAuto` (`Auto.lean`) is the shard without IO in its three modes: `benchAuto [workers] [runs] [scale] [workload…]`.
+`IO_THREADS` and `WORKERS` are a quarter of the server's CPUs each by default (8 and 8 on the warm machine), `K` and `SPIN` as above; all four are read from the environment by `servers.sh`. `benchMixed` (`Mixed.lean`) is the runtime without IO on mixed step costs, below.
 
 `lanes*` run whatever `Lanes.Http.serve` is on the commit measured: a new HTTP server under
 that name is measured by the same rows. `servers.sh` holds the commands.
@@ -174,80 +172,25 @@ What the warm machine has to show is whether, with cores to spare, `lanes-io` lo
 request and `lanes-heavy-par` raises the rate past `lanes-heavy`, whose shard thread is then the
 limit (about 20 µs of step and 11 of kernel and gate a request, so about 30,000 a second).
 
-The kernel alone (`benchWaves`, no IO, 64 counters, 256 messages a round, `LEAN_NUM_THREADS=4`,
-the same container):
+Those rows measured waves, which the free-running scheduler replaced
+(`docs/decisions/new-free-running.md`); the `-par` servers now run their actors free on `WORKERS`
+workers.
 
-| step | 1 worker | 2 workers | 4 workers |
-| --- | ---: | ---: | ---: |
-| `spin 20000` (about 30 µs) | 31 µs a message | 17 | 9 |
-| `spin 2000` (about 3 µs) | 3.7 µs | | 3.0 |
-| `spin 0` | 0.32–0.45 µs | 1.27 | 1.5–1.7 |
-| `spin 20000`, 4 messages a round | 30 µs | | 35 |
+## Mixed step costs
 
-So the waves scale with workers where steps are costly and a wave is large, and cost about a
-microsecond a message where steps are cheap: `perf` puts most of that in `lean_dec_ref_cold`,
-freeing objects a task has made, which Lean counts atomically. A wave of a few messages costs
-the hand-off to another thread and back. `lanes-heavy-par` sees both: the shard takes a few inputs
-at a time from 64 connections, so its waves are small.
-
-### Choosing from the shard's timing
-
-`docs/decisions/D73-adaptive-waves.md`: with `parallel := .auto` the shard times its batches and
-runs each on its own thread or on the pool (`Lanes/Runtime/Pace.lean`). `benchAuto` runs the shard
-without IO adapters, its inbox holding 64 inputs, on seven workloads; each is run in each mode in
-turn, `runs` times, a fresh shard each time, and the table gives the median µs a message and the
-spread, (highest − lowest) / median. It takes about 30 s:
+`bench/mixed.sh` runs `benchMixed` (`Mixed.lean`): 64 clients each keep one request outstanding
+to one of 64 counters, closed loop, each step costing what the workload draws (all 2 µs; 1 in 50
+at 500 µs; 1 in 5 at 50 µs; all 50 µs). It compares the runtime on one worker (`serial`) with it
+on `WORKERS` (`free`), and two prototypes with no runtime around them as bounds, taking turns,
+`RUNS` times, and prints the median p50, p99, p99 of the cheap steps and answers a second, each
+with its spread. It writes `results/<date>-<commit>-mixed.md`.
 
 ```bash
-cd bench && lake build benchAuto && LEAN_NUM_THREADS=4 .lake/build/bin/benchAuto 4 7 1
+cd bench && RUNS=5 REQUESTS=32000 CPUS=0-3 WORKERS=4 ./mixed.sh
 ```
 
-In the shared four-core container, four workers, seven runs each, three sessions a few minutes
-apart (load average 4 to 6, other agents building); µs a message, off / on / auto, the spread of
-auto's seven runs in brackets:
-
-| workload | session 1 | session 2 | session 3 | auto on the pool |
-| --- | --- | --- | --- | ---: |
-| trivial, 64 actors | 1.2 / 3.6 / 1.3 (72%) | 1.5 / 4.0 / 1.4 (42%) | 2.0 / 4.7 / 1.7 (42%) | 0% |
-| trivial, 1 actor | 1.5 / 1.4 / 1.4 (62%) | 1.8 / 1.7 / 1.7 (16%) | 1.7 / 1.8 / 1.6 (44%) | 0% |
-| `spin 2000` (about 3 µs), 64 actors | 4.5 / 6.7 / 4.5 (25%) | 5.0 / 7.1 / 5.0 (17%) | 5.0 / 6.6 / 6.2 (38%) | 2–9% |
-| `spin 20000` (about 30 µs), 64 actors | 34.5 / 35.1 / 34.4 (31%) | 37.1 / 22.5 / 24.8 (21%) | 36.6 / 36.3 / 40.5 (33%) | 21–89% |
-| `spin 20000`, 2 actors | 35.7 / 21.6 / 25.0 (45%) | 33.8 / 22.4 / 22.7 (85%) | 34.2 / 33.2 / 32.8 (46%) | 68–90% |
-| every other step `spin 20000` | 18.0 / 17.0 / 17.3 (12%) | 20.1 / 19.2 / 18.3 (28%) | 19.3 / 19.5 / 21.1 (32%) | 6–57% |
-| phases of heavy and trivial | 3.5 / 5.3 / 3.0 (41%) | 3.5 / 5.6 / 3.2 (15%) | 3.5 / 5.2 / 3.4 (26%) | 2–3% |
-
-The spread of a mode within a session was 9% to 202%, so differences under about a third are
-noise. Within that, auto was as fast as the faster of off and on in every row of every session:
-at worst 24% slower, in a row whose spread was 38%. On the workload the other suits, `on` was up
-to 2.8 times slower than auto (trivial steps on 64 actors) and `off` up to 1.5 times (heavy
-steps).
-Whether the pool paid changed from one session to the next: heavy steps on 64 actors were 35 µs
-a message on the pool in sessions 1 and 3 and 22 in session 2, and auto ran 42%, 89% and 21% of
-its batches there. Trivial steps never went to the pool. "Phases" is three rounds of 3,000 heavy
-inputs and 50,000 trivial ones, so that auto has to follow a change twice a round.
-
-A group of inputs costs more a message the larger it is: `Batch.run` alone on 1,024 trivial
-inputs, as one group, took 1.3–1.4 µs a message against 0.55 for the same inputs as separate
-turns; as groups of 64, 0.565 against 0.61. So a group holds at most `batch`
-inputs.
-
-Over HTTP, the server on two CPUs and the load on the other two, `WORKERS=2`, four rounds of one
-run of 3 s per server, the servers taking turns within a round; requests a second, the median of
-four and the spread, and CPU µs a request (most runs disturbed by other jobs):
-
-| server | 16 conns | 64 conns | CPU µs/req at 16 / 64 |
-| --- | ---: | ---: | ---: |
-| `lanes-many` (off) | 22,311 (57%) | 27,228 (59%) | 67 / 46 |
-| `lanes-many-par` | 22,180 (29%) | 20,938 (27%) | 59 / 55 |
-| `lanes-many-auto` | 20,979 (32%) | 23,824 (17%) | 55 / 58 |
-| `lanes-heavy` (off) | 14,208 (39%) | 17,374 (29%) | 87 / 84 |
-| `lanes-heavy-par` | 11,762 (57%) | 14,199 (33%) | 92 / 99 |
-| `lanes-heavy-auto` | 15,019 (30%) | 13,302 (38%) | 88 / 85 |
-
-Two CPUs are already full with libuv's thread, the shard and the connections (D64), so no mode
-gains, and the differences are inside the noise. `lanes-heavy-auto` used the CPU a request of
-`lanes-heavy`, not that of `lanes-heavy-par`: it kept to the shard's thread. The warm machine,
-with cores to spare, is where `lanes-heavy-auto` should come out near `lanes-heavy-par`.
+The numbers of the decision were taken on the shared container; the warm runner is the machine
+to quote.
 
 ## Results
 

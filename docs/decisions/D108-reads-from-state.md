@@ -1,6 +1,6 @@
 # D108. Reads from the state
 
-Status: Partly superseded by D110-volatile-actors.md (its reasons: a read no longer skips a journal's sync, and waves are gone)
+Status: Partly superseded by D110-volatile-actors.md (its reasons: a read no longer skips a journal's sync, and waves are gone) and by new-free-running.md (the actors of a peek read at one boundary)
 
 `Lanes/Runtime/Batch.lean`, `Lanes/Runtime/PeekSound.lean`, `Lanes/Runtime/IO/Shell.lean`,
 `Lanes/Web/Http/View.lean`, `Lanes/Web/IO/Server.lean`, `Lanes/Web/Http/Loopback.lean`,

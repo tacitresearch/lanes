@@ -137,6 +137,23 @@ def sendOne (m : Model sys) (i : σ.Id) (e : Envelope σ) (rest : List (Envelope
     Model sys :=
   { m with out := update m.out i rest }.pushTo e.dst (.msg (some i) e.msg) w
 
+/-- Push every message `i`'s last step sent, as worker 0. -/
+def drain (m : Model sys) (i : σ.Id) : Nat → Model sys
+  | 0 => m
+  | n + 1 =>
+    match m.out i with
+    | [] => m
+    | e :: rest => (m.sendOne i e rest 0).drain i n
+
+/-- Start `i`, as `SysState.init` does, and push what it sent. -/
+def bootOne (m : Model sys) (i : σ.Id) : Model sys :=
+  let m' := m.commit i { (m.slot i) with cell := { (m.slot i).cell with up := true } }
+    ⟨.start, (m.slot i).cell.state⟩ 0
+  m'.drain i (m'.out i).length
+
+def init (sys : System σ) : Model sys :=
+  sys.boot.foldl bootOne (blank sys)
+
 end Model
 
 /-- One transition of the scheduler, and the event of the semantics it is, if any. -/
@@ -182,6 +199,9 @@ inductive Step : Model sys → Option (Event σ) → Model sys → Prop
   /-- An output put out is handed over, in any order. -/
   | handOver (m : Model sys) (out : σ.Out) (h : out ∈ m.outbox) :
     Step m (some (.output out)) { m with outbox := m.outbox.erase out }
+  /-- The process restarts: the next process's scheduler starts afresh, every actor booted again
+  and everything else lost. -/
+  | restart (m : Model sys) : Step m (some .restart) (Model.init sys)
 
 /-- Transitions one after another, and the events they are. -/
 inductive Run : Model sys → List (Event σ) → Model sys → Prop
@@ -915,45 +935,6 @@ theorem step_event (henv : Reliable env) (h : m.Coherent) {i : σ.Id} {j : Job s
 
 end Model
 
-/-- Every transition of the scheduler is zero or one event of the semantics, from the state it
-stands for to the state it leads to. -/
-theorem Step.sound (henv : Reliable env) {m m' : Model sys} {ev : Option (Event σ)}
-    (hinv : m.Inv) (h : Step m ev m') : m.abs.run env ev.toList = some m'.abs := by
-  cases h with
-  | input x w =>
-    simp only [Option.toList_some, SysState.run, SysState.step, Option.bind_some,
-      Model.abs_input]
-  | ring i msg due w => simp [SysState.run]
-  | begin w i rest hhold hq =>
-    simp only [Option.toList_none, SysState.run, Option.some.injEq, Model.beginAt]
-    rcases hb : (m.slot i).begin with ⟨b, s⟩
-    have hcell : s.cell = (m.slot i).cell := by simpa [hb] using Slot.begin_cell (m.slot i)
-    cases b
-    · rfl
-    · exact (Model.abs_setSlot hcell).symm
-  | steal w v i rest hq => rfl
-  | step w i now_ms j s hhold hout htake hstop =>
-    simp only [Option.toList_some, SysState.run]
-    rw [Model.step_event henv hinv.coherent now_ms htake]
-    rfl
-  | stale w i s hhold hout htake =>
-    obtain ⟨-, -, -, hcell, -⟩ := Slot.take_eq_stale htake
-    simp only [Option.toList_none, SysState.run, Option.some.injEq]
-    exact (Model.abs_setSlot hcell).symm
-  | send w i e rest hhold hout =>
-    simp only [Option.toList_none, SysState.run, Option.some.injEq, Model.sendOne,
-      Model.abs_pushTo]
-    rfl
-  | release w i hhold hout =>
-    simp only [Option.toList_none, SysState.run, Option.some.injEq]
-    rcases hr : (m.slot i).release with ⟨b, s⟩
-    have hcell : s.cell = (m.slot i).cell := by simpa [hr] using Slot.release_cell (m.slot i)
-    simp only [Model.abs_enqueue]
-    exact (Model.abs_setSlot hcell).symm
-  | handOver out hmem =>
-    simp [SysState.run, SysState.step, Model.abs, hmem]
-
-
 namespace Model
 
 variable {m : Model sys}
@@ -1123,107 +1104,10 @@ theorem Placed.release (h : m.Placed) {w : Nat} {i : σ.Id} (hhold : m.holding w
 
 end Model
 
-/-- Every transition keeps the invariant. -/
-theorem Step.inv {m m' : Model sys} {ev : Option (Event σ)} (hinv : m.Inv)
-    (h : Step m ev m') : m'.Inv := by
-  obtain ⟨hcoh, hsrc, hpl⟩ := hinv
-  cases h with
-  | input x w =>
-    refine ⟨hcoh.input x w, ?_, ?_⟩
-    · unfold Model.input; split; intro j e he; exact hsrc j e (by simpa using he)
-    · unfold Model.input; split
-      exact (hpl.pushTo _ _ w).congr rfl rfl rfl
-  | ring i msg due w =>
-    exact ⟨hcoh.pushTimer i msg due w, fun j e he => hsrc j e (by simpa using he),
-      hpl.pushTo i _ w⟩
-  | begin w i rest hhold hq =>
-    refine ⟨?_, ?_, hpl.begin hhold hq⟩
-    · unfold Model.beginAt
-      rcases hb : (m.slot i).begin with ⟨b, s⟩
-      cases b
-      · exact hcoh.of_mail rfl rfl fun _ _ => rfl
-      · have hmail : s.mail = (m.slot i).mail := by simpa [hb] using Slot.begin_mail (m.slot i)
-        exact (hcoh.setSlot (by rw [hmail])).of_mail rfl rfl fun _ _ => rfl
-    · unfold Model.beginAt
-      rcases (m.slot i).begin with ⟨b, s⟩
-      cases b <;> exact hsrc
-  | steal w v i rest hq =>
-    exact ⟨hcoh.of_mail rfl rfl fun _ _ => rfl, hsrc, hpl.steal hq⟩
-  | step w i now_ms j s hhold hout htake hstop =>
-    obtain ⟨-, hst, -⟩ := Slot.take_eq_job htake
-    obtain ⟨-, -, hst', -, hsends⟩ :=
-      Slot.put_settle now_ms j.run s (m.setSlot i s).abs (by simp [Model.abs]) (by simp [Model.abs])
-        kernel_reliable
-    have hrun := Model.running_of_holding hpl hhold
-    refine ⟨Model.coherent_commit (hcoh.take htake) now_ms hout hstop, ?_, ?_⟩
-    · intro k e he
-      by_cases hk : k = i
-      · subst hk; exact (hsends e (by simpa [Model.commit] using he)).1
-      · exact hsrc k e (by simpa [Model.commit, hk] using he)
-    · refine hpl.of_status rfl rfl (fun k => ?_) (fun k hk => ?_)
-      · by_cases hk : k = i
-        · subst hk; simp [Model.commit, hst', hst]
-        · simp [Model.commit, hk]
-      · have hki : k ≠ i := fun hki => by subst hki; simp_all
-        simp [Model.commit, hki]
-  | stale w i s hhold hout htake =>
-    obtain ⟨-, -, -, -, hst⟩ := Slot.take_eq_stale htake
-    have hrun := Model.running_of_holding hpl hhold
-    refine ⟨hcoh.stale htake, hsrc, hpl.of_status rfl rfl (fun k => ?_) (fun k hk => ?_)⟩
-    · by_cases hk : k = i
-      · subst hk; simp [hst]
-      · simp [hk]
-    · have hki : k ≠ i := fun hki => by subst hki; simp_all
-      simp [hki]
-  | send w i e rest hhold hout =>
-    refine ⟨hcoh.sendOne hsrc hout w, fun k e' he' => ?_, ?_⟩
-    · simp only [Model.sendOne, Model.pushTo_out] at he'
-      by_cases hk : k = i
-      · subst hk; exact hsrc k e' (by simp [hout, by simpa using he'])
-      · exact hsrc k e' (by simpa [hk] using he')
-    · exact (hpl.congr (m' := { m with out := update m.out i rest }) rfl rfl rfl).pushTo _ _ w
-  | release w i hhold hout =>
-    refine ⟨?_, ?_, hpl.release hhold⟩
-    · rcases hr : (m.slot i).release with ⟨b, s⟩
-      have hmail : s.mail = (m.slot i).mail := by simpa [hr] using Slot.release_mail (m.slot i)
-      exact (hcoh.setSlot (by rw [hmail])).of_mail (by simp) (by simp) fun _ _ => by simp
-    · rcases (m.slot i).release with ⟨b, s⟩
-      exact fun j e he => hsrc j e (by simpa using he)
-  | handOver out hmem =>
-    exact ⟨hcoh.of_mail rfl rfl fun _ _ => rfl, hsrc, hpl.congr rfl rfl rfl⟩
-
-
-theorem Run.sound (henv : Reliable env) {m m' : Model sys} {evs : List (Event σ)}
-    (hinv : m.Inv) (h : Run m evs m') :
-    m.abs.run env evs = some m'.abs ∧ m'.Inv := by
-  induction h with
-  | refl => exact ⟨rfl, hinv⟩
-  | step hstep _ ih =>
-    obtain ⟨hrun, hinv'⟩ := ih (Step.inv hinv hstep)
-    refine ⟨?_, hinv'⟩
-    rw [SysState.run_append, Step.sound henv hinv hstep]
-    exact hrun
-
 /-! The start: every actor of `sys.boot` started in order, what each sent pushed at once. -/
 
 namespace Model
 
-/-- Push every message `i`'s last step sent, as worker 0. -/
-def drain (m : Model sys) (i : σ.Id) : Nat → Model sys
-  | 0 => m
-  | n + 1 =>
-    match m.out i with
-    | [] => m
-    | e :: rest => (m.sendOne i e rest 0).drain i n
-
-/-- Start `i`, as `SysState.init` does, and push what it sent. -/
-def bootOne (m : Model sys) (i : σ.Id) : Model sys :=
-  let m' := m.commit i { (m.slot i) with cell := { (m.slot i).cell with up := true } }
-    ⟨.start, (m.slot i).cell.state⟩ 0
-  m'.drain i (m'.out i).length
-
-def init (sys : System σ) : Model sys :=
-  sys.boot.foldl bootOne (blank sys)
 
 theorem abs_blank (sys : System σ) : (blank sys).abs = SysState.blank sys := rfl
 
@@ -1341,18 +1225,143 @@ theorem init_spec (sys : System σ) (henv : Reliable env) :
 
 end Model
 
+/-- Every transition of the scheduler is zero or one event of the semantics, from the state it
+stands for to the state it leads to. -/
+theorem Step.sound (henv : Reliable env) {m m' : Model sys} {ev : Option (Event σ)}
+    (hr : ev = some .restart → env.mayRestart = true)
+    (hinv : m.Inv) (h : Step m ev m') : m.abs.run env ev.toList = some m'.abs := by
+  cases h with
+  | input x w =>
+    simp only [Option.toList_some, SysState.run, SysState.step, Option.bind_some,
+      Model.abs_input]
+  | ring i msg due w => simp [SysState.run]
+  | begin w i rest hhold hq =>
+    simp only [Option.toList_none, SysState.run, Option.some.injEq, Model.beginAt]
+    rcases hb : (m.slot i).begin with ⟨b, s⟩
+    have hcell : s.cell = (m.slot i).cell := by simpa [hb] using Slot.begin_cell (m.slot i)
+    cases b
+    · rfl
+    · exact (Model.abs_setSlot hcell).symm
+  | steal w v i rest hq => rfl
+  | step w i now_ms j s hhold hout htake hstop =>
+    simp only [Option.toList_some, SysState.run]
+    rw [Model.step_event henv hinv.coherent now_ms htake]
+    rfl
+  | stale w i s hhold hout htake =>
+    obtain ⟨-, -, -, hcell, -⟩ := Slot.take_eq_stale htake
+    simp only [Option.toList_none, SysState.run, Option.some.injEq]
+    exact (Model.abs_setSlot hcell).symm
+  | send w i e rest hhold hout =>
+    simp only [Option.toList_none, SysState.run, Option.some.injEq, Model.sendOne,
+      Model.abs_pushTo]
+    rfl
+  | release w i hhold hout =>
+    simp only [Option.toList_none, SysState.run, Option.some.injEq]
+    rcases hr : (m.slot i).release with ⟨b, s⟩
+    have hcell : s.cell = (m.slot i).cell := by simpa [hr] using Slot.release_cell (m.slot i)
+    simp only [Model.abs_enqueue]
+    exact (Model.abs_setSlot hcell).symm
+  | handOver out hmem =>
+    simp [SysState.run, SysState.step, Model.abs, hmem]
+  | restart =>
+    simp [SysState.run, SysState.step, hr rfl, (Model.init_spec sys henv).1]
+
+
+/-- Every transition keeps the invariant. -/
+theorem Step.inv {m m' : Model sys} {ev : Option (Event σ)} (hinv : m.Inv)
+    (h : Step m ev m') : m'.Inv := by
+  obtain ⟨hcoh, hsrc, hpl⟩ := hinv
+  cases h with
+  | input x w =>
+    refine ⟨hcoh.input x w, ?_, ?_⟩
+    · unfold Model.input; split; intro j e he; exact hsrc j e (by simpa using he)
+    · unfold Model.input; split
+      exact (hpl.pushTo _ _ w).congr rfl rfl rfl
+  | ring i msg due w =>
+    exact ⟨hcoh.pushTimer i msg due w, fun j e he => hsrc j e (by simpa using he),
+      hpl.pushTo i _ w⟩
+  | begin w i rest hhold hq =>
+    refine ⟨?_, ?_, hpl.begin hhold hq⟩
+    · unfold Model.beginAt
+      rcases hb : (m.slot i).begin with ⟨b, s⟩
+      cases b
+      · exact hcoh.of_mail rfl rfl fun _ _ => rfl
+      · have hmail : s.mail = (m.slot i).mail := by simpa [hb] using Slot.begin_mail (m.slot i)
+        exact (hcoh.setSlot (by rw [hmail])).of_mail rfl rfl fun _ _ => rfl
+    · unfold Model.beginAt
+      rcases (m.slot i).begin with ⟨b, s⟩
+      cases b <;> exact hsrc
+  | steal w v i rest hq =>
+    exact ⟨hcoh.of_mail rfl rfl fun _ _ => rfl, hsrc, hpl.steal hq⟩
+  | step w i now_ms j s hhold hout htake hstop =>
+    obtain ⟨-, hst, -⟩ := Slot.take_eq_job htake
+    obtain ⟨-, -, hst', -, hsends⟩ :=
+      Slot.put_settle now_ms j.run s (m.setSlot i s).abs (by simp [Model.abs]) (by simp [Model.abs])
+        kernel_reliable
+    have hrun := Model.running_of_holding hpl hhold
+    refine ⟨Model.coherent_commit (hcoh.take htake) now_ms hout hstop, ?_, ?_⟩
+    · intro k e he
+      by_cases hk : k = i
+      · subst hk; exact (hsends e (by simpa [Model.commit] using he)).1
+      · exact hsrc k e (by simpa [Model.commit, hk] using he)
+    · refine hpl.of_status rfl rfl (fun k => ?_) (fun k hk => ?_)
+      · by_cases hk : k = i
+        · subst hk; simp [Model.commit, hst', hst]
+        · simp [Model.commit, hk]
+      · have hki : k ≠ i := fun hki => by subst hki; simp_all
+        simp [Model.commit, hki]
+  | stale w i s hhold hout htake =>
+    obtain ⟨-, -, -, -, hst⟩ := Slot.take_eq_stale htake
+    have hrun := Model.running_of_holding hpl hhold
+    refine ⟨hcoh.stale htake, hsrc, hpl.of_status rfl rfl (fun k => ?_) (fun k hk => ?_)⟩
+    · by_cases hk : k = i
+      · subst hk; simp [hst]
+      · simp [hk]
+    · have hki : k ≠ i := fun hki => by subst hki; simp_all
+      simp [hki]
+  | send w i e rest hhold hout =>
+    refine ⟨hcoh.sendOne hsrc hout w, fun k e' he' => ?_, ?_⟩
+    · simp only [Model.sendOne, Model.pushTo_out] at he'
+      by_cases hk : k = i
+      · subst hk; exact hsrc k e' (by simp [hout, by simpa using he'])
+      · exact hsrc k e' (by simpa [hk] using he')
+    · exact (hpl.congr (m' := { m with out := update m.out i rest }) rfl rfl rfl).pushTo _ _ w
+  | release w i hhold hout =>
+    refine ⟨?_, ?_, hpl.release hhold⟩
+    · rcases hr : (m.slot i).release with ⟨b, s⟩
+      have hmail : s.mail = (m.slot i).mail := by simpa [hr] using Slot.release_mail (m.slot i)
+      exact (hcoh.setSlot (by rw [hmail])).of_mail (by simp) (by simp) fun _ _ => by simp
+    · rcases (m.slot i).release with ⟨b, s⟩
+      exact fun j e he => hsrc j e (by simpa using he)
+  | handOver out hmem =>
+    exact ⟨hcoh.of_mail rfl rfl fun _ _ => rfl, hsrc, hpl.congr rfl rfl rfl⟩
+  | restart => exact (Model.init_spec sys (env := Kernel.env) kernel_reliable).2
+
+
+theorem Run.sound (henv : Reliable env) {m m' : Model sys} {evs : List (Event σ)}
+    (hr : .restart ∈ evs → env.mayRestart = true) (hinv : m.Inv) (h : Run m evs m') :
+    m.abs.run env evs = some m'.abs ∧ m'.Inv := by
+  induction h with
+  | refl => exact ⟨rfl, hinv⟩
+  | @step m₁ m₂ m₃ ev evs hstep _ ih =>
+    obtain ⟨hrun, hinv'⟩ := ih (fun h => hr (List.mem_append_right _ h)) (Step.inv hinv hstep)
+    refine ⟨?_, hinv'⟩
+    rw [SysState.run_append, Step.sound henv (fun h => hr (by simp [h])) hinv hstep]
+    exact hrun
+
 /--
 Every run of the scheduler from its start is a run of the semantics under every environment
-whose links are reliable (`Kernel.env` among them): the
-events its transitions are, in order, lead from `SysState.init` to the state the scheduler
-stands for, which the semantics therefore reaches. The outputs it handed over are that run's
-outputs (`Event.outputs`), and the invariant holds all along.
+whose links are reliable (`Kernel.env` among them) and which allows process restarts if the run
+has one: the events its transitions are, in order, lead from `SysState.init` to the state the
+scheduler stands for, which the semantics therefore reaches. The outputs it handed over are that
+run's outputs (`Event.outputs`), and the invariant holds all along.
 -/
-theorem Run.reachable (henv : Reliable env) {m : Model sys} {evs : List (Event σ)} (h : Run (Model.init sys) evs m) :
+theorem Run.reachable (henv : Reliable env) {m : Model sys} {evs : List (Event σ)}
+    (hr : .restart ∈ evs → env.mayRestart = true) (h : Run (Model.init sys) evs m) :
     (SysState.init sys env).run env evs = some m.abs
       ∧ sys.Reachable env m.abs ∧ m.Inv := by
   obtain ⟨habs, hinv⟩ := Model.init_spec sys henv
-  obtain ⟨hrun, hinv'⟩ := Run.sound henv hinv h
+  obtain ⟨hrun, hinv'⟩ := Run.sound henv hr hinv h
   rw [habs] at hrun
   exact ⟨hrun, System.Reachable.init.run hrun, hinv'⟩
 
