@@ -211,16 +211,35 @@ def runTests : List (String × Bool) :=
         && exitCode (results ++ Result.tests [("t", false)]) == 1
         && complete.verdict.exitCode == 0 && bounded.verdict.exitCode == 2
         && failed.verdict.exitCode == 1),
-    ("kit runner: the text gives each detail, a line for each result that did not pass, and the counts",
+    ("kit runner: the text gives each detail, a line for each result, or each that did not pass, and the counts",
       render (results ++ Result.tests [("t", false)])
-        == "the report\nBOUNDED (check) cut\nFAIL (test) t\n1 passed, 1 bounded, 1 failed"
-      && render results 2 == "1 passed, 1 bounded, 0 failed"),
+        == "ok (check) all\nthe report\nBOUNDED (check) cut\nFAIL (test) t\n1 passed, 1 bounded, 1 failed"
+      && render results 2 == "1 passed, 1 bounded, 0 failed"
+      && render results (passes := false) == "the report\nBOUNDED (check) cut\n1 passed, 1 bounded, 0 failed"),
     ("kit runner: the JSON gives the counts and each result with its kind and status",
       (toJson [Result.check "cut" bounded "the report", .ofBool .proof "proofs" false]).compress
         == "{\"passed\":0,\"bounded\":1,\"failed\":1,\"results\":[{\"name\":\"cut\",\"kind\":\"check\",\"status\":\"bounded\",\"detail\":\"the report\"},{\"name\":\"proofs\",\"kind\":\"proof\",\"status\":\"failed\",\"detail\":\"\"}]}"),
     ("kit runner: `--json` asks for JSON, and Lake's trace lines are left out of a build's messages",
       wantsJson ["fast", "--json"] && !wantsJson ["fast"]
         && messages "trace: .> lean A.lean\nerror: A.lean:1:0: unknown\n" == "error: A.lean:1:0: unknown") ]
+
+/-- `report` as a test program calls it, and `build` of a module that does not exist. -/
+def runnerTests : IO (List (String × Bool)) := do
+  let printed ← IO.mkRef ""
+  let print := fun s => printed.set s
+  let complete := Check.search counting [.always "below four" fun n => n < 4]
+  let code ← report ["--json"] [Result.check "all" complete] (print := print)
+  let json ← printed.get
+  let bounded ← report [] [Result.check "cut" (Check.search counting [] { maxDepth := some 1 })]
+    (print := print)
+  let text ← printed.get
+  let missing ← build "missing" ["Tests.NoSuchModule"]
+  return [
+    ("kit runner: a test program prints the results as asked and exits as `exitCode` says",
+      code == 0 && json.startsWith "{\"passed\":1," && bounded == 2
+        && text == "BOUNDED (check) cut\n0 passed, 1 bounded, 0 failed"),
+    ("kit runner: a proof module that does not build is a failure of kind proof, with Lake's message",
+      missing.kind == .proof && missing.status == .failed && !missing.detail.isEmpty) ]
 
 def tests : List (String × Bool) :=
   s3Tests ++ formTests ++ browserTests ++ httpTests ++ pageFormTests ++ providerTests ++ workerTests

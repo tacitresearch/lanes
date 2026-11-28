@@ -17,4 +17,4 @@ def main (args : List String) : IO UInt32 := do
   let results := Tests.Election.tests ++ Tests.Election.fuzzTests ++ (← Tests.Election.speed)
     ++ (← Tests.Election.tasksTests) ++ (← Tests.Election.fingerprintTests) ++ (← Tests.Scale.tests) ++ (← Tests.HttpStream.checks)
     ++ (← Tests.Cache.checks) ++ (← Tests.MonitorSpeed.checks)
-  Lanes.Testing.report args (Lanes.Testing.Result.tests results .check)
+  Lanes.Testing.report args (Lanes.Testing.Result.tests results .check) (passes := false)

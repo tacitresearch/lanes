@@ -206,12 +206,12 @@ def online (host : String := "example.com") : Async (List (String × Bool)) := d
     return up
   let patience := (fun _ => false) <$> Async.sleep 3000
   unless ← (try Async.race reached patience catch _ => pure false) do
-    IO.println s!"tls: skipped the call to {host}, which the network does not reach"
+    IO.eprintln s!"tls: skipped the call to {host}, which the network does not reach"
     return []
   let some call := Client.Call.at s!"https://{host}" { method := .get, path := [] }
     | return [("tls: an https origin is a call", false)]
   let answer ← Client.exchangeExplained call { timeout_ms := 10000 }
-  if let .error why := answer then IO.println s!"tls: {host}: {why}"
+  if let .error why := answer then IO.eprintln s!"tls: {host}: {why}"
   return [(s!"tls: {host} is answered over TLS, checked against the system's trust store",
     match answer with | .ok response => response.status == 200 | .error _ => false)]
 
@@ -221,7 +221,7 @@ def hasOpenssl : IO Bool := do
 
 def live : Async (List (String × Bool)) := do
   unless ← hasOpenssl do
-    IO.println "tls: skipped the local servers, there is no openssl command"
+    IO.eprintln "tls: skipped the local servers, there is no openssl command"
     return ← online
   return (← offline) ++ (← online)
 

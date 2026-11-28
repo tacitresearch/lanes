@@ -239,7 +239,17 @@ def tests : IO (List (String × Bool)) := do
           == ["b", "- c", "- d", "a", "- e", "- f"]),
       ("countless: an entry whose count a merge dropped is found, prose after a comma is not",
         Generated.countless "| a | `A/B.lean`,  lines  It | `C.c`, 12 lines | `T.lean`, against x |"
-          == ["A/B.lean"])]
+          == ["A/B.lean"]),
+      ("--json: a string is quoted with JSON's escapes",
+        jsonString "a \"b\"\\\n\x01" == "\"a \\\"b\\\"\\\\\\n\\u0001\""),
+      ("--json: a `sorry` is a proof's failure, a failed inventory a build's, the rest checks",
+        (Finding.mk "A.lean" 3 "no-sorry" "x").kind == "proof"
+          && (Finding.mk "docs/INVENTORY.md" 1 "inventory" "`lake exe lanesInventory` failed: y").kind
+            == "build"
+          && (Finding.mk "B.md" 1 "links" "z").kind == "check"),
+      ("--json: the report gives the files, what was fixed, and each finding with its place",
+        (Report.mk [⟨"A.lean", 3, "no-sorry", "no"⟩] [] 2).json
+          == "{\"files\":2,\"fixed\":[],\"failed\":1,\"results\":[{\"name\":\"no-sorry\",\"kind\":\"proof\",\"status\":\"failed\",\"path\":\"A.lean\",\"line\":3,\"detail\":\"no\"}]}")]
   finally
     for dir in [root, other, third, fourth, fifth] do
       if ← dir.pathExists then IO.FS.removeDirAll dir

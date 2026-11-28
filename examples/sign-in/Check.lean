@@ -3,6 +3,7 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Videos
+import Lanes.Testing
 
 /-!
 What the bridge makes of requests and what the site answers, run by `lake test`. That the
@@ -74,8 +75,5 @@ def tests : List (String × Bool) :=
         && decoded (post "forged") == none
         && decoded (post good [("origin", "https://evil.example")]) == none) ]
 
-def main : IO UInt32 := do
-  let failed := tests.filter (!·.2)
-  for (name, _) in failed do IO.println s!"FAIL {name}"
-  IO.println s!"{tests.length - failed.length} passed, {failed.length} failed"
-  return if failed.isEmpty then 0 else 1
+def main (args : List String) : IO UInt32 :=
+  Lanes.Testing.report args (Lanes.Testing.Result.tests tests .test)

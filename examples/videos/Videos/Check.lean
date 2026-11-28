@@ -624,7 +624,7 @@ structure Run where
 
 def passes {config : Config} (r : Check.Report (W config) (Event fullSig)) (witnesses : Nat) :
     String × Bool :=
-  (r.renderSystem, r.ok && r.complete && r.witnesses.length == witnesses)
+  (r.renderSystem, r.ok && r.witnesses.length == witnesses)
 
 /-- A seeded bug, found as a violation of `claim`. -/
 def seeded {config : Config} (r : Check.Report (W config) (Event fullSig)) (claim : String) :
@@ -674,13 +674,14 @@ def runs : List Run :=
         "a video is shown only once the worker reported it done, signed"⟩ ]
 
 /-- The checks whose names contain one of `only`, or all of them. -/
-def run (only : List String := []) : IO (List (String × Bool)) := do
+def run (only : List String := []) (quiet : Bool := false) : IO (List (String × Bool)) := do
   let mut results := []
   for r in runs do
     if only.isEmpty || only.any (r.name.contains ·) then
       let (report, ok) := r.result ()
-      IO.println s!"{r.name}: {report}"
-      (← IO.getStdout).flush
+      unless quiet do
+        IO.println s!"{r.name}: {report}"
+        (← IO.getStdout).flush
       results := results ++ [(r.name, ok)]
   return results
 

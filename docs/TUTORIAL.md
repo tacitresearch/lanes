@@ -145,7 +145,8 @@ its own witness, since a refused decrement now meets the old `!·.applied` too:
 
 Each property is a function of a state of the search, `w`. `w.state.state ()` is the count
 held by the one actor, whose name is `()`, and `w.state.outbox` the responses not yet sent.
-`lake test` prints the checker's report, then `2 passed, 0 bounded, 0 failed`:
+`lake test` prints the checker's report, then a line for the check and one for the proofs,
+`ok (check) …` and `ok (proof) the proofs`, and `2 passed, 0 bounded, 0 failed`. The report:
 
 ```text
 PASS (complete): every reachable state explored

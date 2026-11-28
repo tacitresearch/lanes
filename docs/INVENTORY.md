@@ -277,7 +277,10 @@ them by area.
 | `Check.Property.holds` | proved | `Check.World.Reduction.ofDriver`, `Check.refines_sound`, `Check.refines_traces` and others |
 | `Check.Trace.last` | proved | `Check.fingerprint_deadlock`, `Check.fingerprint_violated`, `Check.fingerprint_witness` and others |
 | `Check.Trace.labels` | proved | `Check.systemFingerprinted_violated`, `Check.system_violated` |
+| `Check.Verdict.exitCode` | checked | `Tests/Testing.lean` |
+| `Check.Report.verdict` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Cache.lean` and others |
 | `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Cache.lean` and others |
+| `Check.Report.passed` | checked | `Tests/Election.lean`, `Tests/Engine.lean`, `Tests/Fronted.lean` and others |
 | `Check.Path.last` | proved | through `Check.Search.run`, `Check.Search.runBatches` and others: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and others |
 | `Check.Path.toTraceAux` | proved | through `Check.Search.run`, `Check.Search.runBatches` and others: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and others |
 | `Check.Path.toTrace` | proved | through `Check.Search.run`, `Check.Search.runBatches` and others: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and others |
@@ -744,7 +747,7 @@ them by area.
 | --- | --- | --- |
 | `Sha256.hash` | trusted | TRUSTED.md: The C |
 | `hmac` | trusted | TRUSTED.md: The C |
-| `Bytes.same` | trusted | TRUSTED.md: The C |
+| `Bytes.same` | proved of its reference, C trusted | `Bytes.same_iff`; the C: TRUSTED.md: The C |
 | `randomBytes` | trusted | TRUSTED.md: The C |
 | `Argon2id.derive` | trusted | TRUSTED.md: The C |
 | `Argon2id.hash` | trusted | TRUSTED.md: The C |
@@ -2370,6 +2373,27 @@ them by area.
 | `Testing.OAuth.Fake.approve` | tested | `Tests/OAuth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
 | `Testing.OAuth.signIn` | tested | `Tests/OAuth.lean`, `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
 
+## `Lanes/Testing/Run.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Testing.Kind.label` | checked | `Tests/Testing.lean` |
+| `Testing.Status.label` | checked | `Tests/Testing.lean` |
+| `Testing.Status.ofVerdict` | checked | `Tests/Testing.lean` |
+| `Testing.Result.ofBool` | checked | `Tests/Testing.lean` |
+| `Testing.Result.tests` | checked | `Tests/Testing.lean` |
+| `Testing.Result.check` | checked | `Tests/Testing.lean` |
+| `Testing.Result.toJson` | checked | `Tests/Testing.lean` |
+| `Testing.count` | checked | `Tests/Testing.lean` |
+| `Testing.exitCode` | checked | `Tests/Testing.lean` |
+| `Testing.toJson` | checked | `Tests/Testing.lean` |
+| `Testing.line` | checked | `Tests/Testing.lean` |
+| `Testing.render` | checked | `Tests/Testing.lean` |
+| `Testing.wantsJson` | checked | `Tests/Testing.lean` |
+| `Testing.report` | checked | `Tests/Testing.lean` |
+| `Testing.messages` | checked | `Tests/Testing.lean` |
+| `Testing.build` | checked | `Tests/Testing.lean` |
+
 ## `Lanes/Testing/S3.lean`
 
 | Definition | Status | Evidence |
@@ -3444,6 +3468,7 @@ them by area.
 | `Cli.Inventory.ranges` | tested | `Tests/Inventory.lean` |
 | `Cli.Inventory.inDeriving` | tested | `Tests/Inventory.lean` |
 | `Cli.Inventory.generatedParsers` | tested | `Tests/Inventory.lean` |
+| `Cli.Inventory.isBound` | none |  |
 | `Cli.Inventory.ofTheorem` | tested | `Tests/Inventory.lean` |
 | `Cli.Inventory.readFacts` | tested | `Tests/Inventory.lean` |
 | `Cli.Inventory.isProp` | tested | `Tests/Inventory.lean` |
@@ -3497,6 +3522,10 @@ them by area.
 | `Cli.Lint.parseFinding` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.inventory` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.lint` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.jsonString` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.Finding.kind` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.Finding.json` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.Report.json` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.run` | none |  |
 
 ## `LanesCli/Main.lean`
@@ -3506,6 +3535,7 @@ them by area.
 | `usage` | none |  |
 | `flag?` | none |  |
 | `stats` | none |  |
+| `checkJson` | none |  |
 | `main` | none |  |
 
 ## `LanesCli/New.lean`

@@ -309,10 +309,10 @@ def checks : IO (List (String × Bool)) := do
   let evs := report events [1000] eventProperties
   for (name, r) in [("length", length), ("chunked", chunked), ("download", down), ("events", evs)] do
     match r.failure with
-    | some (.violated p t) => IO.println s!"http stream {name}: {p}: {t.labels}"
-    | some (.unreached ps) => IO.println s!"http stream {name}: unreached {ps}"
-    | some (.deadlock t) => IO.println s!"http stream {name}: deadlock {t.labels}"
-    | none => unless r.complete do IO.println s!"http stream {name}: incomplete at {r.states}"
+    | some (.violated p t) => IO.eprintln s!"http stream {name}: {p}: {t.labels}"
+    | some (.unreached ps) => IO.eprintln s!"http stream {name}: unreached {ps}"
+    | some (.deadlock t) => IO.eprintln s!"http stream {name}: deadlock {t.labels}"
+    | none => unless r.complete do IO.eprintln s!"http stream {name}: incomplete at {r.states}"
   return [
     ("http stream: a body framed by its length is handed on in pieces that make it up, one at a "
       ++ "time, and the request behind it read", length.ok),

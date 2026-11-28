@@ -443,7 +443,7 @@ def refused (r : Option Response) (why : String) : Bool :=
 
 def live : Async (List (String × Bool)) := do
   unless ← Testing.OAuth.hasOpenssl do
-    IO.println "oauth: skipped the flow end to end, there is no openssl command"
+    IO.eprintln "oauth: skipped the flow end to end, there is no openssl command"
     return []
   let p ← Fake.start
   try

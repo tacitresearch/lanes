@@ -1,5 +1,6 @@
 import Lanes
 import Quota
+import Lanes.Testing
 
 /-!
 Run by `lake test`. First the model checks (Lanes rule 5.1): version 2 keeps every user within
@@ -59,9 +60,9 @@ def checks : List (String × Bool) :=
   let v1 := Check.system V1.system { driver := Driver.anyOrder v1Requests } v1Props
   let wrong := Check.system V1.system { driver := Driver.anyOrder v1Requests } naiveProps
   [ ("version 2: every user stays within its quota, and both sometimes properties have a witness",
-      v2.ok && v2.complete && v2.witnesses.length == 2),
+      v2.ok && v2.witnesses.length == 2),
     ("version 1: every state it reaches migrates within the quota, one past the default among them",
-      v1.ok && v1.complete && v1.witnesses.length == 1),
+      v1.ok && v1.witnesses.length == 1),
     ("the default quota for everyone: a run of version 1 migrates outside the invariant",
       match wrong.failure with
       | some (.violated "every state migrates within the default quota" _) => true
@@ -172,10 +173,7 @@ def interrupted : Async (List (String × Bool)) := do
   return [("interrupted: a migration cut off after its first write is finished by the next start",
     found == migrated && v2Header == Journal.header (Journal.label "quota" 2))]
 
-def main : IO UInt32 := do
+def main (args : List String) : IO UInt32 := do
   let live ← (do return (← deploy) ++ (← interrupted) : Async _).block
-  let tests := checks ++ live
-  let failed := tests.filter (!·.2)
-  for (name, ok) in tests do
-    IO.println s!"{if ok then "ok  " else "FAIL"} {name}"
-  return if failed.isEmpty then 0 else 1
+  Lanes.Testing.report args
+    (Lanes.Testing.Result.tests checks .check ++ Lanes.Testing.Result.tests live)

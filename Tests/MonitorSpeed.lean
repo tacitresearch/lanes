@@ -104,7 +104,7 @@ def timed (name : String) (report : Unit → Check.Report S L) : IO (Check.Repor
   let t0 ← IO.monoMsNow
   let r := report ()
   let states := r.states
-  IO.println s!"monitor speed: {name}: {states} states, {r.transitions} transitions in \
+  IO.eprintln s!"monitor speed: {name}: {states} states, {r.transitions} transitions in \
     {(← IO.monoMsNow) - t0} ms"
   return r
 

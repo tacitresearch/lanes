@@ -89,13 +89,13 @@ def speed : IO (List (String × Bool)) := do
   let report := check {} crashes
   let states := report.states
   let elapsed := (← IO.monoMsNow) - t0
-  IO.println s!"check: {states} states and {report.transitions} transitions in {elapsed} ms, \
+  IO.eprintln s!"check: {states} states and {report.transitions} transitions in {elapsed} ms, \
     {states * 1000 / max elapsed 1} states per second"
   let t1 ← IO.monoMsNow
   let printed := check {} crashes (fingerprinted := true)
   let fstates := printed.states
   let felapsed := (← IO.monoMsNow) - t1
-  IO.println s!"check, fingerprinted: {fstates} states in {felapsed} ms, \
+  IO.eprintln s!"check, fingerprinted: {fstates} states in {felapsed} ms, \
     {fstates * 1000 / max felapsed 1} states per second"
   return [("election: the check with one crash explores 164,847 states", states == 164847),
     ("election: the fingerprinted check with one crash explores 164,847 states", fstates == 164847)]

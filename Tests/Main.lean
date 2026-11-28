@@ -78,7 +78,7 @@ program starts.
 /-- Print the failures of the pure tests before the live ones start, unless the output is JSON. -/
 def failures (json : Bool) (results : List (String × Bool)) : IO Unit := do
   if json then return
-  for line in (Lanes.Testing.Result.tests results).filterMap Lanes.Testing.line do
+  for line in (Lanes.Testing.Result.tests results).filterMap (Lanes.Testing.line ·) do
     IO.println line
   (← IO.getStdout).flush
 
@@ -89,7 +89,7 @@ def report (args : List String) (results : List (String × Bool)) (shown : Nat :
   let results := results ++ [("no shard is left running when the tests end",
     (← Lanes.Runtime.running) == 0)]
   let code ← Lanes.Testing.report args (Lanes.Testing.Result.tests results)
-    (if Lanes.Testing.wantsJson args then 0 else shown)
+    (if Lanes.Testing.wantsJson args then 0 else shown) (passes := false)
   IO.Process.exit code.toUInt8
 
 open Tests.Durable (safely) in
@@ -140,7 +140,7 @@ def main (args : List String) : IO UInt32 := do
     let pure := pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.Lint.tests)
       ++ (← Tests.New.tests) ++ (← Tests.Tutorial.tests) ++ (← Tests.TutorialWeb.tests) ++ (← Tests.Oracle.replayAll) ++ (← Tests.Oracle.Service.replayAll)
       ++ (← Tests.Json.suite) ++ (← Tests.HttpConn.checks) ++ (← Tests.Postgres.psqlTests) ++ (← Tests.PostgresConn.checks) ++ (← Tests.PostgresPool.checks) ++ (← Tests.StoreModel.checks)
-      ++ (← Tests.MultipartModel.checks)
+      ++ (← Tests.MultipartModel.checks) ++ (← Tests.Testing.runnerTests)
     failures json pure
     report args (pure ++ (← live)) pure.length
   | ["fast"] => report args (pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.Lint.tests)

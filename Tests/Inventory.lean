@@ -3,6 +3,7 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import LanesCli.Inventory
+import Lanes.Lib.Crypto.Native
 
 /-! The inventory's rules, checked when this file is built: on facts written by hand, and on a
 theorem of this file. -/
@@ -53,7 +54,10 @@ theorem byCases (n : Nat) : n + 0 = n := by
       && !credited env `B.viaWrap `C.other),
     ("a theorem's matcher is part of its proof",
       !matchers.isEmpty && matchers.all fun n => ofTheorem env (owner n)),
-    ("a definition is not a theorem", !ofTheorem env ``facts)]
+    ("a definition is not a theorem", !ofTheorem env ``facts),
+    ("an `@[extern]` with a Lean body is bound; its reference, and an `opaque` binding, are not",
+      isBound env ``Lanes.Bytes.same && isBound env ``Lanes.Sha256.hash
+        && !isBound env ``Lanes.Sha256.reference && !isBound env ``Lanes.randomBytes)]
   for (name, ok) in checks do
     unless ok do throwError "inventory: {name}"
 

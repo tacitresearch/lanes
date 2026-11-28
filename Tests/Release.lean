@@ -268,7 +268,7 @@ def tests : List (String × Bool) :=
 def liveTests : Async (List (String × Bool)) := do
   let (saved, count, after) ← live true strangers
   let (keptSaved, _, _) ← live false (strangers / 5)
-  IO.println s!"release: {strangers} identities touched; {saved.size} images saved hold at most {saved.foldl max 0} actors, {keptSaved.foldl max 0} of {strangers / 5} without release"
+  IO.eprintln s!"release: {strangers} identities touched; {saved.size} images saved hold at most {saved.foldl max 0} actors, {keptSaved.foldl max 0} of {strangers / 5} without release"
   return [("release: a live shard touched by a hundred thousand identities stays small",
       count == strangers && saved.size ≥ 5 && saved.all (· ≤ 1)
         && keptSaved.foldl max 0 ≥ strangers / 10),

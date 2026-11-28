@@ -84,18 +84,19 @@ def toJson (results : List Result) : Json :=
   .obj #[("passed", .num (count results .passed)), ("bounded", .num (count results .bounded)),
     ("failed", .num (count results .failed)), ("results", .arr (results.map (·.toJson)).toArray)]
 
-/-- The line for a result that did not pass; none for one that did. -/
-def line (r : Result) : Option String :=
+/-- The line naming a result; for one that passed, only if `passes`. -/
+def line (r : Result) (passes : Bool := false) : Option String :=
   match r.status with
-  | .passed => none
+  | .passed => if passes then some s!"ok ({r.kind.label}) {r.name}" else none
   | .bounded => some s!"BOUNDED ({r.kind.label}) {r.name}"
   | .failed => some s!"FAIL ({r.kind.label}) {r.name}"
 
-/-- What the runner prints as text: each result's detail and, for one that did not pass, a line
-naming it, then the counts. The first `shown` results were printed already. -/
-def render (results : List Result) (shown : Nat := 0) : String :=
+/-- What the runner prints as text: each result's detail and a line naming it, then the counts.
+A result that passed gets its line only if `passes`, for a long list. The first `shown`
+results were printed already. -/
+def render (results : List Result) (shown : Nat := 0) (passes : Bool := true) : String :=
   let each := (results.drop shown).flatMap fun r =>
-    (if r.detail.isEmpty then [] else [r.detail]) ++ (line r).toList
+    (if r.detail.isEmpty then [] else [r.detail]) ++ (line r passes).toList
   let counts := s!"{count results .passed} passed, {count results .bounded} bounded, \
     {count results .failed} failed"
   "\n".intercalate (each ++ [counts])
@@ -103,10 +104,11 @@ def render (results : List Result) (shown : Nat := 0) : String :=
 def wantsJson (args : List String) : Bool :=
   args.contains "--json"
 
-/-- Print the results, as JSON if `args` holds `--json` and as text otherwise, and return the
-exit code. -/
-def report (args : List String) (results : List Result) (shown : Nat := 0) : IO UInt32 := do
-  IO.println (if wantsJson args then (toJson results).compress else render results shown)
+/-- Print the results with `print`, as JSON if `args` holds `--json` and as text otherwise
+(`render`), and return the exit code. -/
+def report (args : List String) (results : List Result) (shown : Nat := 0)
+    (passes : Bool := true) (print : String → IO Unit := IO.println) : IO UInt32 := do
+  print (if wantsJson args then (toJson results).compress else render results shown passes)
   (← IO.getStdout).flush
   return exitCode results
 

@@ -491,7 +491,9 @@ replays any run.
 What a result means is proved: the checker lists exactly the enabled events
 (`SysState.mem_successors_iff`); a complete PASS means each `always` property holds in every
 reachable world of the instance (`Check.search_sound`, `Check.system_sound_of_respects`, under
-lawful `==`); a reported violation is a real run (`Check.system_violated`); and a complete PASS of
+lawful `==` and `Model.Respects`: properties and a constraint that give one verdict on the worlds
+the checker merges); a bounded pass is not a complete one: it prints `PASS (bounded)` and the
+runner exits 2 (`Check.Report.verdict`); a reported violation is a real run (`Check.system_violated`); and a complete PASS of
 a refinement check means every run's inputs and outputs are a trace of the spec
 (`Check.refines_sound`, `Check.refines_traces`). Under D45 a PASS finds bugs; the claim rests on a
 theorem.

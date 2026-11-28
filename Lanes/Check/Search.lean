@@ -156,11 +156,6 @@ def exitCode : Verdict → UInt32
   | .failed => 1
   | .bounded => 2
 
-def label : Verdict → String
-  | .complete => "complete"
-  | .bounded => "bounded"
-  | .failed => "failed"
-
 end Verdict
 
 namespace Report
