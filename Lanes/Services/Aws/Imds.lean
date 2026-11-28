@@ -44,13 +44,13 @@ inductive Source where
   /-- An instance's metadata service. `host` and `port` are for a test. -/
   | instance (tokenTtl_s : Nat := 21600) (host : String := "169.254.169.254") (port : UInt16 := 80)
   /-- A container's credentials endpoint: where, and the authorization token it wants. -/
-  | container (endpoint : Client.Call) (authorization : Option SigV4.Secret)
+  | container (endpoint : Client.Call) (authorization : Option Secret)
 
 /-- How far a fetch has got. -/
 inductive Flow where
   | start
-  | token (token : SigV4.Secret)
-  | role (token : SigV4.Secret) (role : String)
+  | token (token : Secret)
+  | role (token : Secret) (role : String)
   | done (result : Except String (Refresh.Held SigV4.Credentials))
 
 def tokenHeader : String := "x-aws-ec2-metadata-token"
