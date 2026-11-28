@@ -33,6 +33,9 @@ axioms. If a `sorry` or a new axiom reaches one, this file stops compiling.
 /-- info: 'Aws.Ses.toAddresses_json' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Aws.Ses.toAddresses_json
 
+/-- info: 'Aws.Ses.Sent.admitted_nodup' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Aws.Ses.Sent.admitted_nodup
+
 /-- info: 'Aws.CloudFront.cannedPolicy_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Aws.CloudFront.cannedPolicy_eq
 

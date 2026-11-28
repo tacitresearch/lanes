@@ -209,4 +209,22 @@ def handler {sys : System σ} [Hashable σ.Id] (port : Port σ) (config : Config
       let answer ← try exchange call config catch _ => pure none
       discard <| rt.tryInput (port.reply id answer)
 
+/-- The call with `key` in `Idempotency-Key`, the header Stripe reads, unless it has one: a key
+the application chose, which its own retries keep, comes first. -/
+def Call.keyed (key : String) (call : Call) : Call :=
+  if call.request.headers.any (·.1.toLower == "idempotency-key") then call
+  else { call with request := { call.request with
+    headers := call.request.headers ++ [("idempotency-key", key)] } }
+
+/-- `handler`, with each output's id as the call's idempotency key (`Call.keyed`). An output
+handed over again after a restart has the same id (`Journal.recoverIds_suffix`), so its call
+carries the key it carried the first time, and a service that takes keys, as Stripe does, has
+its effect once. -/
+def handlerKeyed {sys : System σ} [Hashable σ.Id] (port : Port σ) (config : Config := {})
+    (rt : Runtime sys) (outputId : Journal.OutputId) (out : σ.Out) : Async Unit := do
+  if let some (id, call) := port.called out then
+    background do
+      let answer ← try exchange (call.keyed outputId.key) config catch _ => pure none
+      discard <| rt.tryInput (port.reply id answer)
+
 end Lanes.Http.Client

@@ -200,6 +200,126 @@ def outside {σ : Signature} (port : Port σ) :
     Outside σ (Rpc.State (Effects.Model Empty Ref Email.Status Message)) :=
   Email.outside (modelPort port) 0
 
+/-! ## Each output sent once
+
+SES takes no idempotency key, so the adapter keeps its own: what it sent, by output id
+(`Journal.OutputId`). A shard hands its outputs over in the order of their origins, and an
+output handed over again after a restart comes again in that order (`Journal.recoverIds_suffix`),
+so it is enough to remember, for each journal, the origin of the last output sent: one at or
+before it is a repeat, and is not sent again (`Sent.admitted_nodup`). The service the system then
+sees is SES behind keys, as `Idempotent.server` models one, where `Idempotent.at_most_once`
+holds. -/
+
+/-- For each journal, the origin of the last output sent. -/
+abbrev Sent := List (String × Journal.Origin)
+
+/-- Whether the output `id` is new: after the last sent of its journal. -/
+def Sent.admits (sent : Sent) (id : Journal.OutputId) : Bool :=
+  match sent.lookup id.journal with
+  | none => true
+  | some last => last.before id.origin
+
+def Sent.record (sent : Sent) (id : Journal.OutputId) : Sent :=
+  (id.journal, id.origin) :: sent.filter (·.1 != id.journal)
+
+/-- One output handed over: sent and remembered if it is new. Those sent so far are listed last
+first. -/
+def Sent.step (acc : Sent × List Journal.OutputId) (id : Journal.OutputId) :
+    Sent × List Journal.OutputId :=
+  if acc.1.admits id then (acc.1.record id, id :: acc.2) else acc
+
+private theorem lookup_filter (l : Sent) {a j : String} (h : j ≠ a) :
+    (l.filter (·.1 != a)).lookup j = l.lookup j := by
+  induction l with
+  | nil => rfl
+  | cons e rest ih =>
+    obtain ⟨k, o⟩ := e
+    by_cases hk : k = a
+    · subst hk
+      have hjk : (j == k) = false := by simpa using h
+      simp [List.lookup_cons, hjk, ih]
+    · have hk' : (k != a) = true := by simpa using hk
+      simp only [List.filter_cons, hk', ite_true, List.lookup_cons, ih]
+
+theorem Sent.lookup_record (sent : Sent) (id : Journal.OutputId) (j : String) :
+    (sent.record id).lookup j = if j = id.journal then some id.origin else sent.lookup j := by
+  by_cases h : j = id.journal
+  · simp [record, h]
+  · have hj : (j == id.journal) = false := by simpa using h
+    simp only [record, List.lookup_cons, hj, h, ite_false]
+    exact lookup_filter sent h
+
+private theorem before_trans {a b c : Journal.Origin} (h1 : a.before b = true)
+    (h2 : b.before c = true) : a.before c = true := by
+  simp only [Journal.Origin.before, Bool.or_eq_true, decide_eq_true_eq, Bool.and_eq_true,
+    beq_iff_eq] at *
+  omega
+
+/-- What the adapter's state says of every output it sent: its origin is at or before the last
+sent of its journal. -/
+private def Sent.Covers (acc : Sent × List Journal.OutputId) : Prop :=
+  ∀ x ∈ acc.2, ∃ last, acc.1.lookup x.journal = some last
+    ∧ (x.origin = last ∨ x.origin.before last = true)
+
+private theorem Sent.step_covers {acc : Sent × List Journal.OutputId} (h : Sent.Covers acc)
+    (hn : acc.2.Nodup) (id : Journal.OutputId) :
+    Sent.Covers (Sent.step acc id) ∧ (Sent.step acc id).2.Nodup := by
+  obtain ⟨sent, done⟩ := acc
+  unfold Sent.step
+  split
+  · next hadmit =>
+    simp only [Sent.admits] at hadmit
+    refine ⟨?_, List.nodup_cons.mpr ⟨?_, hn⟩⟩
+    · intro x hx
+      simp only [Sent.lookup_record]
+      rcases List.mem_cons.mp hx with rfl | hx
+      · exact ⟨x.origin, by simp, Or.inl rfl⟩
+      · obtain ⟨last, hlast, hle⟩ := h x hx
+        by_cases hj : x.journal = id.journal
+        · refine ⟨id.origin, by simp [hj], Or.inr ?_⟩
+          rw [hj] at hlast
+          rw [hlast] at hadmit
+          rcases hle with heq | hlt
+          · rw [heq]; exact hadmit
+          · exact before_trans hlt hadmit
+        · exact ⟨last, by simp [hj, hlast], hle⟩
+    · intro hmem
+      obtain ⟨last, hlast, hle⟩ := h id hmem
+      simp only at hlast
+      rw [hlast] at hadmit
+      simp only at hadmit
+      rcases hle with heq | hlt
+      · rw [heq, Journal.Origin.before_irrefl] at hadmit; exact absurd hadmit (by simp)
+      · have := before_trans hlt hadmit
+        rw [Journal.Origin.before_irrefl] at this; exact absurd this (by simp)
+  · exact ⟨h, hn⟩
+
+/-- However often outputs are handed over again, none is sent twice: the outputs sent are
+distinct. -/
+theorem Sent.admitted_nodup (ids : List Journal.OutputId) :
+    (ids.foldl Sent.step ([], [])).2.Nodup := by
+  suffices ∀ (ids : List Journal.OutputId) acc, Sent.Covers acc → acc.2.Nodup →
+      (ids.foldl Sent.step acc).2.Nodup from this ids _ (fun _ h => by simp at h) List.nodup_nil
+  intro ids
+  induction ids with
+  | nil => exact fun _ _ hn => hn
+  | cons id rest ih =>
+    intro acc h hn
+    obtain ⟨h', hn'⟩ := Sent.step_covers h hn id
+    exact ih _ h' hn'
+
+/-- The state as a file: a line for each journal, its id and the last origin sent. -/
+def Sent.write (sent : Sent) : String :=
+  String.join (sent.map fun (j, o) => j ++ " " ++ toString o.position ++ " " ++ toString o.place ++ "\n")
+
+/-- The state a file holds. A line that does not read is a file not written by `write`, and the
+whole is refused. -/
+def Sent.read? (text : String) : Option Sent :=
+  ((text.splitOn "\n").filter (· != "")).mapM fun line =>
+    match line.splitOn " " with
+    | [j, p, q] => do pure (j, ⟨← p.toNat?, ← q.toNat?⟩)
+    | _ => none
+
 /-- What the document says the recipients are. -/
 def toAddresses (j : Json) : Except String (List String) := do
   let d ← j.getObjVal? "Destination"

@@ -97,7 +97,7 @@ def live : Async (List (String × Bool)) := do
   let all ← IO.Promise.new
   let past : List (Journal.Entry stampSig) := [.input (.time 0 5), .input (.time 1 future), .handed]
   let clock ← Lanes.Clock.Wall.start (Lanes.Clock.latest port past)
-  let rt ← Runtime.startWith stamper { record := true } fun rt out => do
+  let rt ← Runtime.startWith stamper { record := true } fun rt _ out => do
     Lanes.Clock.handler clock port rt out
     if out matches .stamped .. then
       if (← given.modifyGet fun n => (n + 1, n + 1)) == 20 then all.resolve ()
