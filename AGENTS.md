@@ -276,7 +276,7 @@ lanes_data inductive Id (F : Type) where
   each with an optional docstring; a constructor may be a keyword (`| open`). A default names
   no other field. A renamed field, argument or constructor keeps its former names after its
   name, `height (was y) : Int`, `| path (was line)`, `(closed (was shut) : Bool)`, so that data
-  written under them can be read by name (`docs/decisions/new-lanes-data-aliases.md`). A value with a property is a subtype,
+  written under them can be read by name (`docs/decisions/D103-lanes-data-aliases.md`). A value with a property is a subtype,
   read back only if the property holds. A field whose type names an earlier field is refused.
   `extends`, indices and recursive types are not accepted: write those with `structure` or
   `inductive` and the codec with `Codec.struct%` or `Codec.sum%`.

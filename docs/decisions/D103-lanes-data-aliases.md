@@ -1,4 +1,4 @@
-# D?. Former names and defaults in `lanes_data`: `(was old)` and `:= value`
+# D103. Former names and defaults in `lanes_data`: `(was old)` and `:= value`
 
 Status: Accepted. The data-format decision ("A data format that outlives its version: one schema
 per file, values read by name") left this syntax to its first implementation (its detail 3).
