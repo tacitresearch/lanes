@@ -1,6 +1,8 @@
 # D30. Shards in different processes are joined by a link that promises little
 
-`Lanes/Env/Peers.lean`, `Lanes/Actors/Shard.lean` (`Parcel`). A process runs `System.shard` on
+Status: Accepted
+
+`Lanes/Net/IO/Peers.lean`, `Lanes/Runtime/Shard.lean` (`Parcel`). A process runs `System.shard` on
 the ordinary runtime. A parcel its shard puts out is framed and sent over TCP to the process
 that hosts the receiver; a parcel that arrives is an input.
 
@@ -12,7 +14,7 @@ that hosts the receiver; a parcel that arrives is an input.
   any system that runs on several machines has to survive loss and duplication anyway, since a
   machine can fail. So the adapter stays small, and the system's checks and proofs are the
   place where loss is dealt with: they assume `Link.network` between shards.
-- *The decisions are a pure function, the courier* (`Lanes/Actors/Courier.lean`). The first
+- *The decisions are a pure function, the courier* (`Lanes/Net/Courier.lean`). The first
   version kept its queues, its reconnecting and its idea of `stop` in IO, and the first system
   run on it found the bug there: a stopped shard kept its accepted connections, so the others
   went on sending to nobody. The transport is now `Courier.step`: the handler reports events

@@ -1,5 +1,7 @@
 # D66. A migration carries the old kernel across a deploy, once, with a proof
 
+Status: Accepted
+
 *Supersedes the part of D24 and D36 that has a changed system refuse its old files.*
 
 A real application changes its state and message types between deploys. Until now the files of

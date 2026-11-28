@@ -1,5 +1,7 @@
 # D53. A JSON key given twice keeps its last value
 
+Status: Accepted
+
 The parser refused an object that gave a key twice. RFC 8259 allows such a text (its names
 "SHOULD be unique"), JSONTestSuite counts `{"a":"b","a":"c"}` as valid (`y_object_duplicated_key`),
 and Go's `encoding/json` and JavaScript's `JSON.parse` keep the last value. The parser now builds
@@ -10,7 +12,7 @@ meaning, and `Json.parse_iff` states exactly what it accepts.
 The parser has no mode that refuses them. That matters where a second reader of the same text
 keeps the first value instead; `Json.mkObj?` still refuses a repeated key when a value is built.
 
-**Against Go** (`Tests/Oracle/Json.lean`, `oracle/json/`, D50), on 100,000 cases at seed 0:
+**Against Go** (`Tests/Oracle/Json.lean`, `oracles/go/json/`, D50), on 100,000 cases at seed 0:
 94,608 agree, 5,392 known, none other. Values are compared, not spellings: a number as its
 value in lowest terms, so `1.50` and `15e-1` agree. Where we depart from Go:
 

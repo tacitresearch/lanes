@@ -1,7 +1,9 @@
 # D54. Raft acts once on a command its client names, and an answer it no longer keeps is not handed over
 
-`systems/raft-kv/RaftKV/Once.lean`, `systems/raft-kv/RaftKVProofs/Once.lean`,
-`systems/raft-kv/RaftKVProofs.lean`, `systems/raft-kv/Check.lean`, `Lanes/Semantics/Once.lean`.
+Status: Accepted
+
+`examples/raft-kv/RaftKV/Once.lean`, `examples/raft-kv/RaftKVProofs/Once.lean`,
+`examples/raft-kv/RaftKVProofs.lean`, `examples/raft-kv/Check.lean`, `Lanes/Semantics/Once.lean`.
 `RaftKV.implementsMachine` holds in every environment whose links from clients do not hand a
 request to a node twice. A client retries, and a retry is that. D48 gave the answer for the
 key-value store, `Service.once`, and named the place for Raft: the replicated machine. This

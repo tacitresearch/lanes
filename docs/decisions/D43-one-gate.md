@@ -1,6 +1,8 @@
 # D43. One gate: `serve` runs the gate joined in front
 
-`Lanes/Http/{Gate,Front,FrontSound}.lean`, `Lanes/Semantics/FrontLive.lean`, `Lanes/Env/Http.lean`.
+Status: Accepted
+
+`Lanes/Web/Http/Gate.lean`, `Lanes/Web/Http/Front.lean`, `Lanes/Web/Http/FrontSound.lean`, `Lanes/Semantics/Front.lean`, `Lanes/Web/IO/Server.lean`.
 D41 ended with a plan to retire the hand-built `gated`; this is it.
 
 - *What `serve` runs.* `served sys bridge config` is

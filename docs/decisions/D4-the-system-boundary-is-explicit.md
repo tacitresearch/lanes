@@ -1,5 +1,7 @@
 # D4. The system boundary is explicit: `In`, `Out`, `accept`
 
+Status: Accepted
+
 A signature declares external inputs `In` and outputs `Out`. `System.accept : In → (i : Id) × Msg i`
 routes an input to an actor. Internal messages cannot be injected from outside.
 

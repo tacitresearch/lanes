@@ -1,5 +1,7 @@
 # D84. The kernel takes an actor's state out of its cell before the step
 
+Status: Accepted
+
 `Lanes/Runtime/Kernel.lean`, `Lanes/Runtime/KernelSound.lean`, `Lanes/Proof/HashMap.lean`,
 `Tests/Scale.lean`. A write to an actor whose state held a million numbers took about a
 millisecond, ten thousand numbers about seven microseconds: every step copied the whole state.

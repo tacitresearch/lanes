@@ -1,5 +1,7 @@
 # D7. `Actor` takes its effect type as a parameter
 
+Status: Accepted
+
 `Actor S Msg Eff`. Actors in a system use `Eff = Effect σ i` (`σ.Actor i S`). Library actors
 keep `Eff` abstract and are placed in a system with `Actor.mapEff`.
 

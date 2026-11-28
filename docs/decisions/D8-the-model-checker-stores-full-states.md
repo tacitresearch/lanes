@@ -1,5 +1,7 @@
 # D8. The model checker stores full states
 
+Status: Accepted
+
 `Check.search` keeps every state and compares exactly, where Veil stores 63-bit fingerprints.
 
 Why: state counts are then exact and comparable with TLC, and a hash collision cannot silently

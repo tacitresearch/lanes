@@ -1,5 +1,7 @@
 # D13. The runtime orders steps with one logical clock
 
+Status: Superseded by D18
+
 Every step takes a number from a global counter and each message carries its sender's number.
 When an actor stops, messages numbered at or before the stopping step are dropped with the
 mailbox and later ones are carried into the next mailbox.

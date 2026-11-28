@@ -1,5 +1,7 @@
 # D16. An actor never waits inside a step
 
+Status: Superseded by D18
+
 A send whose receiver's mailbox is full goes to the sender's outbox, and a separate task delivers
 the outbox in order. Inputs from outside are where back-pressure applies: `Runtime.input` waits
 and `Runtime.tryInput` refuses, which the HTTP adapter turns into `503`.

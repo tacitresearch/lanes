@@ -1,11 +1,13 @@
 # D52. A service behind actors is proved with one simulation, and an application gives only its steps
 
+Status: Accepted
+
 `Lanes/Semantics/Account.lean`, `Lanes/Semantics/Sent.lean`, `Lanes/Semantics/Link.lean`,
-`Lanes/Semantics/Simulation.lean`, `Lanes/Semantics/Service.lean`, `Lanes/Actors/Run.lean`,
-`Examples/KVProofs.lean`, `Tests/BatchProofs.lean`, `systems/ledger/Ledger/Proofs/Refines.lean`.
+`Lanes/Semantics/Simulation.lean`, `Lanes/Semantics/Service.lean`, `Lanes/Core/Run.lean`,
+`Examples/KVProofs.lean` (removed), `Tests/BatchProofs.lean`, `examples/ledger/Ledger/Proofs/Refines.lean`.
 The project proves every application refines its spec, so a refinement proof has to be routine.
 Three were written by hand: the batch server, the key-value store behind front ends and Raft
-(`systems/raft-kv/RaftKVProofs/Refines.lean`). Each defined the same relation with
+(`examples/raft-kv/RaftKVProofs/Refines.lean`). Each defined the same relation with
 `System.Refines.of_steps` (D34) and proved the same lemmas about it.
 
 *What repeats.* Each relation has three parts: the spec's value is read from the actors' states
@@ -49,7 +51,7 @@ reachable one), which has been enough: the store, the batch server and the ledge
 `simp` lemmas on a concrete one. The cause is in the discrimination tree: an implicit argument
 that is a type is a key, so `List.map` at `σ.Out` (`Effect.emits_map_emit`) is keyed on
 `Signature.Out _`, while a concrete signature is an `abbrev` that reduces to its fields, and the
-key there is the field's type itself. So `Lanes/Actors/Run.lean` now has `@[simp]` lemmas whose
+key there is the field's type itself. So `Lanes/Core/Run.lean` now has `@[simp]` lemmas whose
 left sides have no such argument: `sends`, `emits` and `armed` of `[]`, of each constructor
 consed, of `++` and of a `map` (over a free type, the result a `filterMap` that `simp` reduces
 for a concrete function). `simp [system, actor]` then computes a step's sends, outputs and

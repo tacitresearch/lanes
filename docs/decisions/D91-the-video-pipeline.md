@@ -1,5 +1,7 @@
 # D91. A video is ready only after a transcode worker outside the site says so, signed
 
+Status: Accepted
+
 `Lanes/Outside/Transcode.lean`, `Lanes/Web/Transcode.lean`, `Lanes/Testing/Transcode.lean`,
 `examples/videos`. The owner approved a video pipeline: an external transcode and thumbnail
 worker, modelled as an outside service, so that a video is ready only after its transcode. Until

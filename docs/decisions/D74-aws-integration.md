@@ -1,5 +1,7 @@
 # D74. AWS as an integration: a role's credentials refreshed by a proved policy, and SES as the email model
 
+Status: Accepted
+
 The reference deployment runs the application on one EC2 instance with a role
 (`docs/decisions/D70-one-instance-one-volume.md`), but the S3 client read keys only from the
 `AWS_*` variables, once, at start (`docs/decisions/D71-s3-and-signature-version-4.md`), so the
