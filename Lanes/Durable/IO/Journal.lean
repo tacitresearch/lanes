@@ -7,6 +7,7 @@ module
 public import Lanes.Runtime.IO.Shell
 public import Lanes.Durable.Upgrade
 public import Lanes.Durable.Reading
+public import Lanes.Durable.IO.Ship
 
 /-!
 The files of a journal. What they mean, which are refused, what a shard writes to them and in
@@ -32,7 +33,8 @@ variable {σ : Signature}
 /-- Where a shard keeps its journal and how its inputs are written. -/
 structure Store (sys : System σ) where
   /-- The journal's file. Its snapshot, its lock, its id and a write that did not finish are kept
-  beside it, with the extensions `.snapshot`, `.lock`, `.id` and `.cut`. -/
+  beside it, with the extensions `.snapshot`, `.lock`, `.id` and `.cut`, and how far it was
+  shipped, when it is, with `.shipped`. -/
   path : System.FilePath
   /-- How the journal writes inputs. A start replays them through the step functions, from
   the last snapshot if there is one. -/
@@ -60,6 +62,9 @@ structure Store (sys : System σ) where
   Jobs the copy holds in flight are attempted again when their deadlines pass, by the copy's
   own workers and under new ids. -/
   restored : Bool := false
+  /-- Where to ship the journal's segments and snapshots, for backups and restores to a point
+  (`Lanes.Journal.Ship`, `Store.restore`). Nothing the shard does waits for it. -/
+  ship : Option Ship.Target := none
 
 /-- A label as a person reads it: the name, then the version if there is one. -/
 private def shown (label : String) : String :=
@@ -121,6 +126,17 @@ private def journalIdAt (path : System.FilePath) (fresh : Bool) : IO String := d
   let id := journalId (← IO.getRandomBytes 16)
   replace path (id ++ "\n").toUTF8
   return id
+
+/-- How far the segments of the journal `id` that were stored reach, as the file `.shipped`
+beside it says. It is a hint, written without a sync: one that is not there, is torn, or names
+another journal is `0`, and everything the files hold is shipped again. -/
+private def shippedTo (path : System.FilePath) (id : String) : IO Nat := do
+  match ← reading path with
+  | .bytes bytes =>
+    match ((String.fromUTF8? bytes).map (·.trimAscii.toString.splitOn " ")) with
+    | some [named, reached] => return if named == id then reached.toNat?.getD 0 else 0
+    | _ => return 0
+  | _ => return 0
 
 /-- One write, done as `Disk.apply` says. Without `flush` an append may be lost with the
 process, and comes before whatever is appended after it. -/
@@ -195,28 +211,105 @@ def Store.open {sys : System σ} [Hashable σ.Id] (store : Store sys) : IO (Log 
       migrate := upgraded.writes.forM (perform store.path handle true)
     let found := begun.toFound
     let count ← IO.mkRef found.index
+    let shipper ← store.ship.mapM fun target => do
+      fsync store.path.toString
+      let snapshot := match begun with
+        | .found _ => disk.snapshot
+        | .upgraded up => (Ship.snapshotOf? up.writes).or disk.snapshot
+      let hint := store.path.addExtension "shipped"
+      let initial := Ship.start (found.index - found.past.length) found.past
+        (found.saved.bind fun (index, _) => snapshot.map (index, ·)) (← IO.monoMsNow)
+        (← shippedTo hint id)
+      Ship.Shipper.start target store.input system id initial fun reached =>
+        IO.FS.writeFile hint s!"{id} {reached}\n"
+    let tell := fun (e : Ship.Event σ) => (shipper.forM (·.tell e) : IO Unit)
     let write := fun (flush : Bool) (entries : List (Entry σ)) => do
       unless entries.all (Entry.fits store.input) do
         throw (IO.userError "lanes: an input is too large to journal")
       (appendWrites store.input entries).forM (perform store.path handle flush)
       count.modify (· + entries.length)
+      tell (.wrote entries flush)
     let save := fun (actors : Kernel.Image.Codecs sys) (image : Kernel.Image sys) => do
       let index ← count.get
       unless savedFits actors system index image
           && Entry.fits store.input (.snapshot index) do
         throw (IO.userError "lanes: an actor is too large to save")
-      (saveWrites store.input actors system index image).forM
-        (perform store.path handle true)
+      let writes := saveWrites store.input actors system index image
+      writes.forM (perform store.path handle true)
       count.modify (· + 1)
+      tell (.wrote [.snapshot index] true)
+      if let some bytes := Ship.snapshotOf? writes then tell (.saved index bytes)
     return {
       past := found.past, saved := found.saved, index := found.index, pending, migrate, id
       restored := store.restored
       append := write true
       note := write false
       save := store.actors.map save
-      close := do (← handle.get).flush; lock.unlock }
+      close := do
+        (← handle.get).flush
+        if let some s := shipper then
+          fsync store.path.toString
+          s.tell (.wrote [] true)
+          s.close
+        lock.unlock }
   catch e =>
     lock.unlock
     throw e
+
+/-- What a restore wrote. -/
+structure Restored where
+  journal : String
+  /-- The position of the mark of the snapshot it started from. -/
+  snapshot : Option Nat
+  segments : Nat
+  /-- How many entries of the history it holds. -/
+  point : Nat
+  deriving Repr
+
+/--
+Write the store's files from what `target` holds: the journal `journal`, or the one written last,
+at `point` (`Restore.plan`). The objects are checked against the SHA-256 their names carry, and
+the segments must be journals of this store's system that join (`Restore.journal`). The journal
+written ends with a `handed` mark and the restore leaves no `.id`, so the first start of the
+files hands nothing over and takes a new id: a restore is a copy with no effects
+(`docs/decisions/D105-output-ids.md`). A journal or a snapshot already at the store's path is
+never overwritten: the restore is refused.
+-/
+def Store.restore {sys : System σ} (store : Store sys) (target : Ship.Target)
+    (point : Restore.Point := .latest) (journal : Option String := none) : IO Restored := do
+  let system := label store.system store.version
+  let refuse := fun {α : Type} (why : String) =>
+    (throw (IO.userError s!"lanes: no restore to {store.path}: {why}") : IO α)
+  for path in [store.path, store.path.addExtension "snapshot"] do
+    if ← path.pathExists then refuse s!"{path} is there; move it aside first"
+  let some keys ← target.remote.list target.keyPrefix | refuse "the store's listing failed"
+  let objects := keys.filterMap fun (key, modified) => Restore.listed? target.keyPrefix key modified
+  let some journal := journal.or (Restore.newest objects)
+    | refuse s!"there is no journal under \"{target.keyPrefix}\""
+  let some plan := Restore.plan objects journal point
+    | refuse s!"the objects of the journal {journal} do not reach that point"
+  let base := target.keyPrefix ++ journal ++ "/"
+  let fetch := fun (name : String) => do
+    let some bytes ← target.remote.get (base ++ name) | refuse s!"{base ++ name} cannot be read"
+    let sum := match Restore.Object.parse? name with
+      | some (.segment _ _ sum) | some (.snapshot _ sum) => sum
+      | none => ""
+    unless Ship.sum bytes == sum do
+      refuse s!"{base ++ name} does not have the SHA-256 its name gives"
+    return bytes
+  let snapshot ← plan.snapshot.mapM fun (_, name) => fetch name
+  let mut pieces := #[]
+  for (name, first, stop) in plan.segments do
+    let some piece := Restore.piece? store.input system first (stop - first) (← fetch name)
+      | refuse s!"{base ++ name} is not a journal of \"{system}\" with the entries its name gives"
+    pieces := pieces.push piece
+  let some entries := Restore.journal (plan.snapshot.map (·.1)) plan.point pieces.toList
+    | refuse s!"the segments of the journal {journal} do not join"
+  if let some bytes := snapshot then replace (store.path.addExtension "snapshot") bytes
+  for stale in ["id", "shipped"] do
+    try IO.FS.removeFile (store.path.addExtension stale) catch _ => pure ()
+  replace store.path (file store.input system entries)
+  return { journal, snapshot := plan.snapshot.map (·.1), segments := plan.segments.length
+           point := plan.point }
 
 end Lanes.Journal

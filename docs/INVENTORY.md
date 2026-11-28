@@ -747,7 +747,7 @@ them by area.
 | `Journal.Disk.mend` | proved | `Journal.Disk.Torn.mend`, `Journal.Disk.Torn.mend_crash` |
 | `Journal.Disk.load` | proved | `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Torn.load` and others |
 | `Journal.appendWrites` | proved | `Journal.Disk.Holds.append`, `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash` |
-| `Journal.saveWrites` | proved | `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save`, `Journal.Disk.Holds.save_crash` |
+| `Journal.saveWrites` | proved | `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save`, `Journal.Disk.Holds.save_crash` and others |
 | `Journal.memo` | spec | used only in statements |
 | `Journal.Disk.Holds` | spec | a predicate |
 | `Journal.Disk.Torn` | spec | a predicate |
@@ -798,6 +798,16 @@ them by area.
 | --- | --- | --- |
 | `Journal.fsync` | trusted | TRUSTED.md: The journal's files |
 | `Journal.Store.open` | trusted | TRUSTED.md: The journal's files |
+| `Journal.Store.restore` | trusted | TRUSTED.md: The journal's files |
+
+## `Lanes/Durable/IO/Ship.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Journal.Ship.Shipper.tell` | trusted | TRUSTED.md: The journal's shipper |
+| `Journal.Ship.Shipper.start` | trusted | TRUSTED.md: The journal's shipper |
+| `Journal.Ship.Shipper.close` | trusted | TRUSTED.md: The journal's shipper |
+| `Journal.Ship.Shipper.counts` | trusted | TRUSTED.md: The journal's shipper |
 
 ## `Lanes/Durable/Journal.lean`
 
@@ -816,15 +826,15 @@ them by area.
 | `Journal.prelude` | proved | `Journal.Upgrade.decode_torn` |
 | `Journal.preludeFits` | proved | `Journal.Disk.load_cut`, `Journal.Disk.start_foreign`, `Journal.Disk.torn_nil` and others |
 | `Journal.frames` | proved | `Journal.Disk.load_cut`, `Journal.open?_cut` |
-| `Journal.file` | proved | `Journal.Disk.load_cut`, `Journal.open?_cut`, `Journal.open?_file` |
+| `Journal.file` | proved | `Journal.Disk.load_cut`, `Journal.Restore.piece?_file`, `Journal.open?_cut` and others |
 | `Journal.named?` | proved | through `Journal.Begun.load`, `Journal.Begun.toFound` and others: `Journal.Begun.resume_upgraded`, `Journal.Disk.open?_of_read` and others |
 | `Journal.manifest?` | tested | `Tests/Format.lean` |
 | `Journal.open?` | proved | `Journal.Disk.open?_of_read`, `Journal.open?_cut`, `Journal.open?_file` |
 | `Journal.Entry.op?` | proved | through `Batch.flush`, `Batch.grown` and others: `Batch.flush_save`, `Batch.grown_eq` and others |
 | `Journal.Entry.marks` | proved | `Journal.recoverIds_handed`, `Journal.recover_handed` |
 | `Journal.ops` | proved | `Journal.recover_handed`, `Journal.recover_kernel`, `Journal.recover_outputs` and others |
-| `Journal.replay1` | proved | through `Journal.Begun.toFound`, `Journal.recover` and others: `Journal.Begun.resume_upgraded`, `Journal.Disk.Holds.load_append_crash` and others |
-| `Journal.recover` | proved | `Journal.Disk.load_cut`, `Journal.Upgrade.begin_crash`, `Journal.Upgrade.begin_torn` and others |
+| `Journal.replay1` | proved | through `Journal.Begun.toFound`, `Journal.Restore.saved` and others: `Journal.Begun.resume_upgraded`, `Journal.Disk.Holds.load_append_crash` and others |
+| `Journal.recover` | proved | `Journal.Disk.load_cut`, `Journal.Restore.journal_restores`, `Journal.Upgrade.begin_crash` and others |
 | `Journal.replay` | proved | `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save` and others |
 | `Journal.Entry.savedAt` | proved | `Journal.Disk.Holds.append`, `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash` and others |
 | `Journal.since` | proved | through `Journal.Begun.load`, `Journal.Begun.toFound` and others: `Journal.Begun.resume_upgraded`, `Journal.Upgrade.begin_crash` and others |
@@ -850,13 +860,13 @@ them by area.
 | `Journal.OutputId.key` | checked | `Tests/HttpClient.lean` |
 | `Journal.journalId` | tested | `Tests/Durable.lean` |
 | `Journal.tag` | proved | `Journal.turnAll_placed`, `Journal.turn_placed` |
-| `Journal.apply?` | proved | through `Journal.ids`, `Journal.placed` and others: `Batch.run_ids`, `Journal.ids_append` and others |
+| `Journal.apply?` | proved | through `Journal.ids`, `Journal.placed` and others: `Batch.run_ids`, `Journal.Restore.journal_restores` and others |
 | `Journal.steps` | spec | used only in statements |
 | `Journal.placed` | spec | used only in statements |
-| `Journal.replayIds1` | proved | through `Journal.recoverIds`, `Journal.resumeIds`: `Journal.recoverIds_erase`, `Journal.recoverIds_handed` and others |
+| `Journal.replayIds1` | proved | through `Journal.recoverIds`, `Journal.resumeIds`: `Journal.Restore.journal_restores`, `Journal.Restore.journal_resumeIds` and others |
 | `Journal.ids` | spec | used only in statements |
-| `Journal.recoverIds` | proved | `Journal.recoverIds_erase`, `Journal.recoverIds_handed`, `Journal.recoverIds_suffix` and others |
-| `Journal.resumeIds` | proved | `Journal.resumeIds_eq_recoverIds`, `Journal.resumeIds_erase` |
+| `Journal.recoverIds` | proved | `Journal.Restore.journal_resumeIds`, `Journal.recoverIds_erase`, `Journal.recoverIds_handed` and others |
+| `Journal.resumeIds` | proved | `Journal.Restore.journal_restores`, `Journal.Restore.journal_resumeIds`, `Journal.resumeIds_eq_recoverIds` and others |
 | `Journal.erase` | spec | used only in statements |
 
 ## `Lanes/Durable/Reading.lean`
@@ -867,6 +877,47 @@ them by area.
 | `Journal.Reading.OfSnapshot` | spec | a predicate |
 | `Journal.Disk.ofReadings` | proved | `Journal.Disk.Torn.load_readings`, `Journal.Disk.ofReadings_eq` |
 
+## `Lanes/Durable/Restore.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Journal.Restore.Object.parse?` | tested | `Tests/Ship.lean` |
+| `Journal.Restore.listed?` | tested | `Tests/Ship.lean` |
+| `Journal.Restore.newest` | tested | `Tests/Ship.lean` |
+| `Journal.Restore.best` | tested | `Tests/Ship.lean` |
+| `Journal.Restore.chain` | tested | `Tests/Ship.lean` |
+| `Journal.Restore.plan` | tested | `Tests/Ship.lean` |
+| `Journal.Restore.piece?` | proved | `Journal.Restore.piece?_file` |
+| `Journal.Restore.stitch` | proved | `Journal.Restore.stitch_slice` |
+| `Journal.Restore.journal` | proved | `Journal.Restore.journal_restores`, `Journal.Restore.journal_resumeIds` |
+| `Journal.Restore.saved` | spec | used only in statements |
+
+## `Lanes/Durable/Ship.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Journal.Ship.digits` | tested | `Tests/Ship.lean` |
+| `Journal.Ship.sum` | tested | `Tests/Ship.lean` |
+| `Journal.Ship.Upload.object` | tested | `Tests/Ship.lean` |
+| `Journal.Ship.snapshotOf?` | proved | `Journal.Ship.snapshotOf?_saveWrites` |
+| `Journal.Ship.start` | proved | `Journal.Ship.Holds.start` |
+| `Journal.Ship.shed` | proved | through `Journal.Ship.step`, `Journal.Ship.take`: `Journal.Ship.Holds.put`, `Journal.Ship.Holds.step` and others |
+| `Journal.Ship.enqueue` | proved | through `Journal.Ship.step`, `Journal.Ship.take`: `Journal.Ship.Holds.put`, `Journal.Ship.Holds.step` and others |
+| `Journal.Ship.Upload.isSnapshot` | proved | through `Journal.Ship.step`: `Journal.Ship.Holds.step` |
+| `Journal.Ship.supersede` | proved | through `Journal.Ship.step`: `Journal.Ship.Holds.step` |
+| `Journal.Ship.sealWaiting` | proved | through `Journal.Ship.step`, `Journal.Ship.take`: `Journal.Ship.Holds.put`, `Journal.Ship.Holds.step` and others |
+| `Journal.Ship.wrote` | proved | through `Journal.Ship.step`: `Journal.Ship.Holds.step` |
+| `Journal.Ship.backoff` | proved | through `Journal.Ship.step`: `Journal.Ship.Holds.step` |
+| `Journal.Ship.answer` | proved | through `Journal.Ship.step`: `Journal.Ship.Holds.step` |
+| `Journal.Ship.step` | proved | `Journal.Ship.Holds.step` |
+| `Journal.Ship.soonest` | proved | through `Journal.Ship.take`: `Journal.Ship.Holds.put`, `Journal.Ship.Holds.take` |
+| `Journal.Ship.sealAt` | proved | through `Journal.Ship.take`: `Journal.Ship.Holds.put`, `Journal.Ship.Holds.take` |
+| `Journal.Ship.ripen` | proved | through `Journal.Ship.take`: `Journal.Ship.Holds.put`, `Journal.Ship.Holds.take` |
+| `Journal.Ship.choose` | proved | through `Journal.Ship.take`: `Journal.Ship.Holds.put`, `Journal.Ship.Holds.take` |
+| `Journal.Ship.take` | proved | `Journal.Ship.Holds.put`, `Journal.Ship.Holds.take` |
+| `Journal.Ship.State.idle` | tested | `Tests/Ship.lean` |
+| `Journal.Ship.Slice` | spec | a predicate |
+
 ## `Lanes/Durable/Snapshot.lean`
 
 | Definition | Status | Evidence |
@@ -876,10 +927,10 @@ them by area.
 | `Kernel.Image.Codecs.envelope` | proved | its type, `Codec` |
 | `Kernel.Image.Codecs.image` | proved | its type, `Codec` |
 | `Journal.savedOf` | proved | its type, `Schema.Of` |
-| `Journal.savedBody` | proved | through `Journal.savedFits`: `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save` and others |
-| `Journal.savedRecords` | proved | through `Journal.saved`: `Journal.saved?_other`, `Journal.saved?_saved` and others |
+| `Journal.savedBody` | proved | through `Journal.saved`, `Journal.savedFits`: `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save` and others |
+| `Journal.savedRecords` | proved | through `Journal.saved`: `Journal.Ship.snapshotOf?_saveWrites`, `Journal.saved?_other` and others |
 | `Journal.savedFits` | proved | `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save`, `Journal.Disk.Holds.save_crash` and others |
-| `Journal.saved` | proved | `Journal.saved?_other`, `Journal.saved?_saved`, `Journal.savedOpen?_saved` |
+| `Journal.saved` | proved | `Journal.Ship.snapshotOf?_saveWrites`, `Journal.saved?_other`, `Journal.saved?_saved` and others |
 | `Journal.savedOpen?` | proved | `Journal.savedOpen?_saved` |
 | `Journal.saved?` | proved | `Journal.saved?_other`, `Journal.saved?_saved` |
 
@@ -2616,40 +2667,40 @@ them by area.
 | --- | --- | --- |
 | `Testing.S3.raw?` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
 | `Testing.S3.answer` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
-| `Testing.S3.failure` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
+| `Testing.S3.failure` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
 | `Testing.S3.time?` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
 | `Testing.S3.decodePair` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
 | `Testing.S3.splitTarget` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
 | `Testing.S3.authField` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
 | `Testing.S3.verified` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
-| `Testing.S3.escapeKey` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `Testing.S3.listXml` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `Testing.S3.range?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `Testing.S3.serve` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `Testing.S3.find?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `Testing.S3.split` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `Testing.S3.quoted` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `Testing.S3.formParts` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
+| `Testing.S3.escapeKey` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.listXml` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.range?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.serve` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.find?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.split` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.quoted` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.formParts` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
 | `Testing.S3.formBody` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3Upload.lean` and others |
-| `Testing.S3.etag` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
+| `Testing.S3.etag` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
 | `Testing.S3.uploaded` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
-| `Testing.S3.servePost` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `Testing.S3.unquote` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `Testing.S3.multipartEtag` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `Testing.S3.xmlAnswer` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `Testing.S3.listPartsXml` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `Testing.S3.completedXml` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `Testing.S3.manifest?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `Testing.S3.complete` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `Testing.S3.serveMultipart` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `Testing.S3.serveAll` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `Testing.S3.Fake.start` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
+| `Testing.S3.servePost` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.unquote` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.multipartEtag` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.xmlAnswer` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.listPartsXml` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.completedXml` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.manifest?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.complete` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.serveMultipart` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.serveAll` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
+| `Testing.S3.Fake.start` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
 | `Testing.S3.Fake.object?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
 | `Testing.S3.Fake.holds` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` |
-| `Testing.S3.Fake.keys` | tested | `Tests/S3.lean` |
-| `Testing.S3.Fake.refuse` | tested | `Tests/S3.lean` |
-| `Testing.S3.Fake.refusing` | tested | `Tests/S3.lean` |
-| `Testing.S3.Fake.stop` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
+| `Testing.S3.Fake.keys` | tested | `Tests/S3.lean`, `Tests/Ship.lean` |
+| `Testing.S3.Fake.refuse` | tested | `Tests/S3.lean`, `Tests/Ship.lean` |
+| `Testing.S3.Fake.refusing` | tested | `Tests/S3.lean`, `Tests/Ship.lean` |
+| `Testing.S3.Fake.stop` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Ship.lean` and others |
 | `Testing.S3.follow` | tested | `Tests/OAuth.lean`, `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean` and others |
 | `Testing.S3.code` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3Upload.lean` and others |
 | `Testing.S3.postForm` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Post.lean`, `Tests/S3Upload.lean` and others |
@@ -3429,6 +3480,7 @@ them by area.
 | `S3.exchange` | trusted | TRUSTED.md: The S3 client's IO |
 | `S3.upload` | trusted | TRUSTED.md: The S3 client's IO |
 | `S3.handler` | trusted | TRUSTED.md: The S3 client's IO |
+| `S3.backup` | trusted | TRUSTED.md: The S3 client's IO |
 
 ## `Lanes/Web/IO/Server.lean`
 
@@ -3438,6 +3490,7 @@ them by area.
 | `Http.serveFronted` | trusted | TRUSTED.md: The HTTP adapter's IO |
 | `Http.ServerConfig.journalName` | trusted | TRUSTED.md: The HTTP adapter's IO |
 | `Http.serve` | trusted | TRUSTED.md: The HTTP adapter's IO |
+| `Http.restoreJournal` | trusted | TRUSTED.md: The HTTP adapter's IO |
 | `Http.Server.port` | trusted | TRUSTED.md: The HTTP adapter's IO |
 | `Http.Server.stop` | trusted | TRUSTED.md: The HTTP adapter's IO |
 | `Http.Server.drain` | trusted | TRUSTED.md: The HTTP adapter's IO |
@@ -3477,12 +3530,20 @@ them by area.
 | `Tls.Session.shutdown` | trusted | TRUSTED.md: The TLS client |
 | `Tls.Session.readAll` | trusted | TRUSTED.md: The TLS client |
 
+## `Lanes/Web/S3/Backup.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `S3.backupPut` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Backup.lean` |
+| `S3.shipped` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Backup.lean`, `Tests/Ship.lean` |
+| `S3.listedPage` | tested | `Tests/Ship.lean` |
+
 ## `Lanes/Web/S3/Basic.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `S3.Endpoint.aws` | tested | `Tests/S3.lean` |
-| `S3.Key.of?` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/Oracle/Service/S3Multipart.lean` and others |
+| `S3.Key.of?` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/Oracle/Service/S3Backup.lean` and others |
 | `S3.Range.header` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `S3.PartNumber.of?` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Multipart.lean`, `Tests/S3Upload.lean` |
 | `S3.Manifest.of?` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Multipart.lean`, `Tests/S3Upload.lean` |
@@ -3495,7 +3556,7 @@ them by area.
 | `S3.Op.body` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `S3.Bucket.host` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
 | `S3.Bucket.path` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean`, `Tests/Testing.lean` and others |
-| `S3.Bucket.scope` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/Oracle/Service/S3Multipart.lean` and others |
+| `S3.Bucket.scope` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3.lean`, `Tests/Oracle/Service/S3Backup.lean` and others |
 | `S3.call` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `S3.unescapeKey` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
 | `S3.entry?` | tested | `Tests/S3.lean`, `Tests/S3Upload.lean` |
