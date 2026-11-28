@@ -29,9 +29,8 @@ job's end, and by `System.LeadsTo.induction` the job ends.
 
 The premise that the scheduler does not crash is the gate's and the jobs actor's
 (`Lanes.Semantics.Front`, `Lanes.Semantics.Jobs`): a crash loses its timers, and a stopped actor
-with no mail is not obliged to start again. A shard restarts its actors from the journal, and
-the start arms every job's timer again (`Schedule.armed`); what is not proved is that a start
-comes.
+with no mail is not obliged to start again. A start of the scheduler arms every job's timer
+again (`Schedule.armed`); what is not proved is that a start comes.
 
 Beside a system (`Schedule.attach`) the end is a message to it, and fairness delivers it
 (`System.Run.Fair.routed_right`) when the links to it lose nothing and its actors are not

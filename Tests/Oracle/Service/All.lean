@@ -6,13 +6,14 @@ import Tests.Oracle.Service.S3
 import Tests.Oracle.Service.S3Post
 import Tests.Oracle.Service.S3Multipart
 import Tests.Oracle.Service.Postgres
+import Tests.Oracle.Service.Db
 
 /-! The service oracles of Lanes, and the check of their records for `lake test`. -/
 
 namespace Tests.Oracle.Service
 
 def oracles : List Oracle :=
-  [S3.oracle, S3Post.oracle, S3Multipart.oracle, Postgres.oracle]
+  [S3.oracle, S3Post.oracle, S3Multipart.oracle, Postgres.oracle, Typed.oracle]
 
 def replayAll : IO (List (String × Bool)) :=
   return (← oracles.mapM (·.replayFile)).flatten

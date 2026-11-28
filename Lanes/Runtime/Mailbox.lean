@@ -9,7 +9,7 @@ public import Std
 /-!
 A shard's inbox, as data. Senders on any thread put commands in; the shard takes everything
 that has arrived at once. Taking a batch is what makes an input cheap: one exchange with the
-other threads for many inputs, and one write to the journal.
+other threads for many inputs.
 
 The functions here decide who is refused, who waits and who is woken; the shell
 (`Lanes.Runtime`) keeps a `Mailbox` in a reference and resolves the promises it is handed. The

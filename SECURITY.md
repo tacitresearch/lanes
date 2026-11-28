@@ -9,8 +9,8 @@ advisory's thread; a fix is coordinated there and published with the advisory.
 
 ## In scope
 
-- The trusted code: everything `TRUSTED.md` lists, the runtime shell, the transport between
-  processes, the journal's files and the adapters' IO among it.
+- The trusted code: everything `TRUSTED.md` lists, the runtime shell and the adapters' IO among
+  it.
 - The HTTP server and the parsers: the request reader, the response reader, the wire format,
   forms, cookies, routes, JSON, Base64, IP addresses, dates.
 - The cryptography bindings and what is built on them: OpenSSL's libcrypto through `native/lanes.c`,
