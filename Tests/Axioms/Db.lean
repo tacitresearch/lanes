@@ -37,6 +37,12 @@ import Lanes.Semantics
 /-- info: 'Lanes.Db.world_invariant' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Db.world_invariant
 
+/-- info: 'Lanes.Db.worlds_ne_nil' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Db.worlds_ne_nil
+
+/-- info: 'Lanes.Db.TableOf.every_apply' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Db.TableOf.every_apply
+
 /-- info: 'Lanes.Db.Op.unique_apply' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Db.Op.unique_apply
 
@@ -65,6 +71,18 @@ import Lanes.Semantics
 /-- info: 'Lanes.Db.Jobs.Queue.one_per_key' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Db.Jobs.Queue.one_per_key
 
+/-- info: 'Lanes.Db.Jobs.Queue.keeps_of_adds' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Db.Jobs.Queue.keeps_of_adds
+
+/-- info: 'Lanes.Db.Jobs.Queue.fixed_of_adds' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Db.Jobs.Queue.fixed_of_adds
+
+/-- info: 'Lanes.Db.Jobs.Queue.handler_fixed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Db.Jobs.Queue.handler_fixed
+
+/-- info: 'Lanes.Db.Jobs.Queue.enqueue_adds' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Db.Jobs.Queue.enqueue_adds
+
 -- Lanes.Db.OnceSound
 /-- info: 'Lanes.Db.Keys.once_again' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Db.Keys.once_again
@@ -75,3 +93,6 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Db.Worker.once_each' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Db.Worker.once_each
+
+/-- info: 'Lanes.Db.Worker.slots_held' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Db.Worker.slots_held

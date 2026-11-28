@@ -79,7 +79,7 @@ of each job, in every run the model allows: an attempt made again, after an answ
 run out or a restart, has no second effect. -/
 theorem once_each {D S E : Type} (clients : Outside (sig Q A W R) D) (dbcfg : Db.Config)
     (h : Handler (Q ⊕ Req) (A ⊕ Ans W)) (start : Db) (inner : Rpc.Server S W R E)
-    (refusal : R → Bool) (event : Q → Option E := fun _ => none) {events : List (Event (sig Q A W R))}
+    (refusal : R → Bool) {event : Q → Option E} {events : List (Event (sig Q A W R))}
     {d : (D × Db.State (Q ⊕ Req) (A ⊕ Ans W)) × Rpc.State (Idempotent.State Int64 W R S)}
     (hd : (world clients dbcfg h start (Idempotent.server inner refusal) event).after events = some d)
     (id : Int64) : (d.2.server.slots.filter fun slot => slot.key == some id).length ≤ 1 :=
