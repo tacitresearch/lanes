@@ -380,7 +380,7 @@ def busyTest : Async (List (String × Bool)) := do
   let entered : IO.Promise Unit ← IO.Promise.new
   let release : IO.Promise Unit ← IO.Promise.new
   let server ← serveFronted (Server.system desk) bridge { port := 0 } { inboxCapacity := 1 }
-    fun _ => do
+    fun _ _ => do
       entered.resolve ()
       discard <| await release.result?
   let some port := server.port | return [("fronted: the server reports its port", false)]

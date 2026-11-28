@@ -586,7 +586,17 @@ One process running `Http.serve` on a journal:
 
 After `kill -9`, a start reads the snapshot and the journal (`Journal.Disk.start`), mends a torn
 last write, and replays what came after the snapshot's mark through the same kernel; outputs that
-were produced and not yet handed over are handed over again (`Journal.recover_handed`). With
+were produced and not yet handed over are handed over again (`Journal.recover_handed`). Each
+output carries an id: its journal's, made at random when the journal is begun, and its origin,
+the place in the history of the entry that produced it and its place among that entry's outputs.
+A batch hands an output over with the origin its history gives it (`Batch.run_ids`), however its
+waves are spread (`Batch.run_ids_spread`), and a restart hands it over again with the same one
+(`Journal.recoverIds_suffix`, `Journal.recoverIds_handed`, from a snapshot
+`Journal.resumeIds_eq_recoverIds`), so a driver passes the id on as the idempotency key: in
+`Idempotency-Key` (`Http.Client.handlerKeyed`), as a conditional write to S3 (`S3.Op.put` with
+`ifAbsent`), or as SES's adapter's own record of what it sent (`Aws.Ses.handlerOnce`). A copy of
+the files restored elsewhere, production into staging, starts with `Journal.Store.restored`: it
+hands over nothing it owes and takes a new journal id. With
 peers (`Http.serveShard`), a message to an actor on another shard leaves as a parcel through the
 courier and enters the other process's inbox as an input.
 

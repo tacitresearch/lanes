@@ -26,7 +26,7 @@ def scratch (name : String) : IO System.FilePath := do
 
 def remove (path : System.FilePath) : IO Unit := do
   for file in [path, path.addExtension "lock", path.addExtension "cut",
-      path.addExtension "snapshot"] do
+      path.addExtension "snapshot", path.addExtension "id"] do
     if ← file.pathExists then IO.FS.removeFile file
 
 /-! `Journal.open?` on the compiled code: every cut, and every flipped bit, of a small journal. -/
@@ -415,6 +415,60 @@ def rehandTest : Async (List (String × Bool)) := do
       (← run past) == #[8]),
     ("durable: and those that were marked are not", (← run (past ++ [.handed])) == #[]) ]
 
+/-- A log in memory that keeps every entry written to it. -/
+def keeping (past : List (Journal.Entry (sig (Fin 3)))) (written : IO.Ref (Array (Journal.Entry (sig (Fin 3)))))
+    (restored : Bool := false) : Journal.Log Bank3 :=
+  { past, id := "j", restored
+    append := fun entries => written.modify (· ++ entries.toArray)
+    note := fun entries => written.modify (· ++ entries.toArray)
+    close := pure () }
+
+/-- Each output handed over, with its id, on `log`, given `inputs` one at a time. -/
+def handedWith (log : Journal.Log Bank3) (inputs : List Nat) :
+    Async (List (Journal.OutputId × Nat)) := do
+  let seen ← IO.mkRef #[]
+  let rt ← Runtime.startWith Bank3 {} (journal := some log) fun _ id out =>
+    seen.modify (·.push (id, out.req))
+  rt.idle
+  for n in inputs do
+    rt.input (.transfer ⟨n, 0, 1, 3⟩)
+    rt.idle
+  rt.stop
+  return (← seen.get).toList
+
+def idsTest : Async (List (String × Bool)) := do
+  let written ← IO.mkRef #[]
+  let live ← handedWith (keeping [] written) [7, 8]
+  let history := (← written.get).toList
+  let unmarked := history.dropLast
+  let again ← handedWith (keeping unmarked (← IO.mkRef #[])) []
+  let restoredWritten ← IO.mkRef #[]
+  let restored ← handedWith (keeping unmarked restoredWritten (restored := true)) []
+  let path ← scratch "ids"
+  let idOf : Journal.Store Bank3 → IO String := fun s => do
+    let log ← s.open
+    log.close
+    return log.id
+  let first ← idOf (store path)
+  let same ← idOf (store path)
+  let copy ← idOf { store path with restored := true }
+  let afterCopy ← idOf (store path)
+  IO.FS.removeFile path
+  let afresh ← idOf (store path)
+  remove path
+  return [
+    ("output ids: each output handed over has an id of its own, its journal's and its place",
+      live.map (·.1.origin) == [⟨3, 0⟩, ⟨7, 0⟩] && live.all (·.1.journal == "j")
+        && history.getLast? matches some .handed),
+    ("output ids: an output handed over again after a restart has the id it had",
+      again == live.filter (·.2 == 8)),
+    ("output ids: a restored start hands over nothing it owes, and marks it handed",
+      restored == [] && (← restoredWritten.get).toList matches [.handed]),
+    ("output ids: a journal keeps its id across starts; a restored copy, and a journal begun "
+      ++ "afresh, take a new one",
+      first.length == 32 && same == first && copy != first && afterCopy == copy
+        && afresh != copy) ]
+
 /-- How often a shard saves when it is started on `past`, saves every `every` entries, and is
 given nothing to do. -/
 def savesAtStart (past : List (Journal.Entry (sig (Fin 3)))) (every : Nat) : Async Nat := do
@@ -720,9 +774,13 @@ def upgradeTest : Async (List (String × Bool)) := do
       migration := sameBank }
   let v2 : Journal.Store Bank3 :=
     { saving path with system := "bank", version := 2, upgrades := [upgrade] }
+  let owed := Journal.Upgrade.owed [upgrade] { journal := ← IO.FS.readBinFile path }
+  let origins ← IO.mkRef #[]
   let run : Async (Array Nat × List Int) := do
     let seen ← IO.mkRef #[]
-    let rt ← Runtime.start Bank3 {} (fun out => seen.modify (·.push out.req)) (some (← v2.open))
+    let rt ← Runtime.startWith Bank3 {} (journal := some (← v2.open)) fun _ id out => do
+      seen.modify (·.push out.req)
+      origins.modify (·.push id.origin)
     rt.idle
     let balances ← (List.finRange 3).mapM fun a => do return (← rt.state a).balance
     rt.stop
@@ -735,6 +793,8 @@ def upgradeTest : Async (List (String × Bool)) := do
   return [
     ("upgrade: a start on version 1's files hands over the output version 1 had not",
       first == #[8] && before == [94, 106, 100]),
+    ("upgrade: with the id version 1's history gave it",
+      owed == [⟨7, 0⟩] && (← origins.get) == #[⟨7, 0⟩]),
     ("upgrade: and writes the migration, so the next start reads version 2's files and hands "
       ++ "nothing over again",
       second == #[] && after == before
@@ -752,7 +812,7 @@ def tests : IO (List (String × Bool)) := do
     ++ (← safely "refusal" refusalTest) ++ (← safely "missing" missingTest)
     ++ (← safely "unreadable" unreadableTest)
     ++ (← safely "order" orderTest)
-    ++ (← safely "rehand" rehandTest) ++ (← safely "overdue" overdueTest)
+    ++ (← safely "rehand" rehandTest) ++ (← safely "ids" idsTest) ++ (← safely "overdue" overdueTest)
     ++ (← safely "fail" failTest) ++ (← safely "cut" cutTest) ++ (← safely "count" countTest)
     ++ (← safely "snapshot" snapshotTest) ++ (← safely "windows" windowsTest)
     ++ (← safely "kill" killTest) ++ (← safely "kill while saving" killSavingTest)
