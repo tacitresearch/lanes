@@ -45,6 +45,7 @@ structure Shipper (σ : Signature) where
   private parker : Parker
   private closing : IO.Ref Bool
   private done : IO.Promise Unit
+  private reached : Nat → IO Unit
 
 namespace Shipper
 
@@ -77,16 +78,22 @@ private def loop (s : Shipper σ) (input : Codec σ.In) (system journal : String
       if outcome == .failed then
         discard (IO.eprintln s!"lanes: shipping {name} of the journal {journal} failed; it is tried again").toBaseIO
       let now ← IO.monoMsNow
-      s.state.modify (answer cfg now outcome)
+      let (before, after) ← s.state.modifyGet fun st =>
+        let next := answer cfg now outcome st
+        ((st.storedTo, next.storedTo), next)
+      if before != after then
+        try s.reached after
+        catch e => discard (IO.eprintln s!"lanes: shipping the journal {journal}: {e}").toBaseIO
     | .wait ms => s.parker.parkAtMost (min (ms.getD 1000) 1000)
   s.done.resolve ()
 
-/-- Start shipping the journal `journal` of `system`, from `initial` (`Ship.start`). -/
-def start (target : Target) (input : Codec σ.In) (system journal : String) (initial : State σ) :
-    IO (Shipper σ) := do
+/-- Start shipping the journal `journal` of `system`, from `initial` (`Ship.start`). `reached`
+is told each time the stored segments reach further (`State.storedTo`). -/
+def start (target : Target) (input : Codec σ.In) (system journal : String) (initial : State σ)
+    (reached : Nat → IO Unit := fun _ => pure ()) : IO (Shipper σ) := do
   let s : Shipper σ := {
     target, state := ← IO.mkRef initial, parker := ← Parker.new, closing := ← IO.mkRef false
-    done := ← IO.Promise.new }
+    done := ← IO.Promise.new, reached }
   discard <| IO.asTask (prio := .dedicated) do
     try s.loop input system journal
     catch e =>

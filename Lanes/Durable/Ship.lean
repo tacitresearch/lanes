@@ -118,19 +118,26 @@ structure State (σ : Signature) where
   failures : Nat := 0
   /-- The first pending upload is not tried again before this. -/
   retryAt_ms : Nat := 0
+  /-- Every entry before this position is in a segment stored. -/
+  storedTo : Nat := 0
   sealed : Nat := 0
   stored : Nat := 0
   /-- Uploads dropped at the bound. -/
   dropped : Nat := 0
 
 /-- The shipper of a journal at a start: `past` is what the journal file holds, from position
-`next`, and `snapshot` the snapshot file with the position of its mark. Both are uploaded
-again: a put of what is there already changes nothing. -/
+`next`, `snapshot` the snapshot file with the position of its mark, and `shipped` how far the
+segments stored before reached, as far as this process was told (`storedTo`), or `0`. The
+snapshot is uploaded again, which changes nothing if it is there, and the entries from
+`shipped` on. -/
 def start (next : Nat) (past : List (Entry σ)) (snapshot : Option (Nat × ByteArray))
-    (now_ms : Nat) : State σ :=
-  { next, waitingRev := past.reverse, count := past.length
-    since_ms := if past.isEmpty then none else some now_ms
-    pending := snapshot.toList.map fun (index, bytes) => .snapshot index bytes }
+    (now_ms : Nat) (shipped : Nat := 0) : State σ :=
+  let skip := min (shipped - next) past.length
+  let rest := past.drop skip
+  { next := next + skip, waitingRev := rest.reverse, count := rest.length
+    since_ms := if rest.isEmpty then none else some now_ms
+    pending := snapshot.toList.map fun (index, bytes) => .snapshot index bytes
+    storedTo := next + skip }
 
 /-- What happens to a journal: entries written, flushed and synced when `durable`, which makes
 those written before durable too; a save, whose mark has just been written; a put ended. -/
@@ -191,7 +198,12 @@ def answer (cfg : Config) (now_ms : Nat) (outcome : Outcome) (st : State σ) : S
   else match outcome with
     | .stored | .present =>
       { st with pending := st.pending.tail, busy := false, failures := 0, retryAt_ms := 0
-                stored := st.stored + 1 }
+                stored := st.stored + 1
+                storedTo := match st.pending with
+                  | .segment first entries :: _ =>
+                    if first ≤ st.storedTo then max st.storedTo (first + entries.length)
+                    else st.storedTo
+                  | _ => st.storedTo }
     | .failed =>
       { st with busy := false, failures := st.failures + 1
                 retryAt_ms := now_ms + backoff cfg (st.failures + 1) }
@@ -260,9 +272,14 @@ structure Holds (history : List (Entry σ)) (st : State σ) : Prop where
   slices : ∀ first entries, .segment first entries ∈ st.pending → Slice history first entries
 
 theorem Holds.start {before past : List (Entry σ)} (snapshot : Option (Nat × ByteArray))
-    (now_ms : Nat) : Holds (before ++ past) (start before.length past snapshot now_ms) where
-  next_le := by simp [Ship.start]
-  tail := by simp [Ship.start]
+    (now_ms shipped : Nat) :
+    Holds (before ++ past) (start before.length past snapshot now_ms shipped) where
+  next_le := by simp [Ship.start]; omega
+  tail := by
+    show (past.drop _).reverse.reverse ++ [] = _
+    rw [List.reverse_reverse, List.append_nil, List.drop_append,
+      List.drop_eq_nil_of_le (as := before) (by simp [Ship.start]), List.nil_append]
+    simp [Ship.start]
   count := by simp [Ship.start]
   slices := by
     intro first entries h

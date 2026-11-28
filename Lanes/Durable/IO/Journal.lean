@@ -33,7 +33,8 @@ variable {σ : Signature}
 /-- Where a shard keeps its journal and how its inputs are written. -/
 structure Store (sys : System σ) where
   /-- The journal's file. Its snapshot, its lock, its id and a write that did not finish are kept
-  beside it, with the extensions `.snapshot`, `.lock`, `.id` and `.cut`. -/
+  beside it, with the extensions `.snapshot`, `.lock`, `.id` and `.cut`, and how far it was
+  shipped, when it is, with `.shipped`. -/
   path : System.FilePath
   /-- How the journal writes inputs. A start replays them through the step functions, from
   the last snapshot if there is one. -/
@@ -119,6 +120,17 @@ private def journalIdAt (path : System.FilePath) (fresh : Bool) : IO String := d
   replace path (id ++ "\n").toUTF8
   return id
 
+/-- How far the segments of the journal `id` that were stored reach, as the file `.shipped`
+beside it says. It is a hint, written without a sync: one that is not there, is torn, or names
+another journal is `0`, and everything the files hold is shipped again. -/
+private def shippedTo (path : System.FilePath) (id : String) : IO Nat := do
+  match ← reading path with
+  | .bytes bytes =>
+    match ((String.fromUTF8? bytes).map (·.trimAscii.toString.splitOn " ")) with
+    | some [named, reached] => return if named == id then reached.toNat?.getD 0 else 0
+    | _ => return 0
+  | _ => return 0
+
 /-- One write, done as `Disk.apply` says. Without `flush` an append may be lost with the
 process, and comes before whatever is appended after it. -/
 private def perform (path : System.FilePath) (handle : IO.Ref IO.FS.Handle) (flush : Bool) :
@@ -189,9 +201,12 @@ def Store.open {sys : System σ} [Hashable σ.Id] (store : Store sys) : IO (Log 
       let snapshot := match begun with
         | .found _ => disk.snapshot
         | .upgraded up => (Ship.snapshotOf? up.writes).or disk.snapshot
+      let hint := store.path.addExtension "shipped"
       let initial := Ship.start (found.index - found.past.length) found.past
         (found.saved.bind fun (index, _) => snapshot.map (index, ·)) (← IO.monoMsNow)
-      Ship.Shipper.start target store.input system id initial
+        (← shippedTo hint id)
+      Ship.Shipper.start target store.input system id initial fun reached =>
+        IO.FS.writeFile hint s!"{id} {reached}\n"
     let tell := fun (e : Ship.Event σ) => (shipper.forM (·.tell e) : IO Unit)
     let write := fun (flush : Bool) (entries : List (Entry σ)) => do
       unless entries.all (Entry.fits store.input) do
@@ -216,8 +231,11 @@ def Store.open {sys : System σ} [Hashable σ.Id] (store : Store sys) : IO (Log 
       note := write false
       save := store.actors.map save
       close := do
-        if let some s := shipper then s.close
         (← handle.get).flush
+        if let some s := shipper then
+          fsync store.path.toString
+          s.tell (.wrote [] true)
+          s.close
         lock.unlock }
   catch e =>
     lock.unlock
@@ -273,7 +291,8 @@ def Store.restore {sys : System σ} (store : Store sys) (target : Ship.Target)
   let some entries := Restore.journal (plan.snapshot.map (·.1)) plan.point pieces.toList
     | refuse s!"the segments of the journal {journal} do not join"
   if let some bytes := snapshot then replace (store.path.addExtension "snapshot") bytes
-  try IO.FS.removeFile (store.path.addExtension "id") catch _ => pure ()
+  for stale in ["id", "shipped"] do
+    try IO.FS.removeFile (store.path.addExtension stale) catch _ => pure ()
   replace store.path (file store.input system entries)
   return { journal, snapshot := plan.snapshot.map (·.1), segments := plan.segments.length
            point := plan.point }
