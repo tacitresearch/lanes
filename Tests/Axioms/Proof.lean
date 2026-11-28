@@ -28,15 +28,6 @@ import Lanes.Semantics
 /-- info: 'Lanes.DHashMap.insert_insert_of_contains' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.DHashMap.insert_insert_of_contains
 
-/-- info: 'Lanes.DHashMap.insert_comm_of_contains' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.DHashMap.insert_comm_of_contains
-
-/-- info: 'Lanes.DHashMap.erase_insert_comm_of_contains' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.DHashMap.erase_insert_comm_of_contains
-
-/-- info: 'Lanes.DHashMap.erase_insert_of_contains' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.DHashMap.erase_insert_of_contains
-
 -- Lanes.Proof.JoinSound
 /-- info: 'Lanes.SysState.exists_block' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.SysState.exists_block
