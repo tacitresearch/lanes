@@ -505,6 +505,17 @@ def watchdogTest : Async (List (String × Bool)) := do
     ("watchdog: a step that runs past the limit is reported once, as a delivery",
       reports.size == 1 && reports.all fun s => s.kind == "deliver" && s.elapsed_ms > 20) ]
 
+/-- `stop` wakes the watchdog and waits for it to end, so a runtime stopped with the watchdog
+on leaves no thread asleep behind it. -/
+def watchdogStopTest : Async (List (String × Bool)) := do
+  let rt ← Runtime.start clockSystem { stepLimitMs := 30000 }
+  rt.input (.echo 1)
+  rt.idle
+  let t0 ← IO.monoMsNow
+  rt.stop
+  let elapsed := (← IO.monoMsNow) - t0
+  return [("watchdog: stop returns within 200 ms, the watchdog ended", elapsed < 200)]
+
 /-! The mail between actors (`docs/decisions/new-runtime-limits.md`). A hub fans each input out
 to a sink, whose first output the handler holds until released: while it is held, the sink's
 mail cannot drain, so what the runtime does at the high-water mark is not a matter of timing. -/
@@ -646,17 +657,6 @@ def timerCountTest : Async (List (String × Bool)) := do
     ("timers: on four workers, waiting for the timers does not end before each has gone off",
       early == 0) ]
 
-/-- `stop` wakes the watchdog and waits for it to end, so a runtime stopped with the watchdog
-on leaves no thread asleep behind it. -/
-def watchdogStopTest : Async (List (String × Bool)) := do
-  let rt ← Runtime.start clockSystem { stepLimitMs := 30000 }
-  rt.input (.echo 1)
-  rt.idle
-  let t0 ← IO.monoMsNow
-  rt.stop
-  let elapsed := (← IO.monoMsNow) - t0
-  return [("watchdog: stop returns within 200 ms, the watchdog ended", elapsed < 200)]
-
 /-- A parker: an `unpark` before the `park` is kept, a timed park ends, a task and an `Async`
 are waited for on one. -/
 def parkerTest : IO (List (String × Bool)) := do
@@ -697,8 +697,7 @@ def tests : IO (List (String × Bool)) := do
   let w ← shaped "on 4 workers" { workers := 4 }
   let u ← shaped "on 2 workers, a budget of 1" { workers := 2, budget := 1 }
   return a ++ b ++ c ++ d ++ e ++ f ++ g ++ h ++ i ++ j ++ w ++ u ++ (← dutiesTest.block)
-    ++ (← fanTest.block) ++ (← contextTest.block) ++ (← watchdogTest.block)
-    ++ (← watchdogStopTest.block) ++ (← parkerTest)
+    ++ (← fanTest.block) ++ (← contextTest.block) ++ (← watchdogTest.block) ++ (← watchdogStopTest.block) ++ (← parkerTest)
     ++ (← highWaterTest.block) ++ (← overflowTest.block) ++ (← runawayTest.block)
     ++ (← timerCountTest.block)
 

@@ -115,6 +115,7 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Web/Http/Ops.lean` | | Routes and access for the operators' endpoints; their page is `Metrics`' |
 | `Lanes/Web/Http/ReadRequest.lean` | `oracles/go/requests` | Go's, Node's and h11's servers on `Tests/ReadRequest.corpus`, by hand |
 | `Lanes/Web/Http/Route.lean` | | Routes as values, proved (`Lanes/Web/Http/RouteSound.lean`) |
+| `Lanes/Web/Http/Shutdown.lean` | | When a draining server stops, not a format or a service: proved (`Shutdown.step_stop`), and run with a real SIGTERM in `Tests/Ops.lean` |
 | `Lanes/Web/Http/SigV4.lean` | `oracles/botocore` | |
 | `Lanes/Web/Http/SharedCache.lean` | | RFC 9111's rules for a shared cache, as decisions on a response, not a format; checked against a seeded bug in `Tests/SharedCache.lean`. A run through a real CDN or Varnish is owed |
 | `Lanes/Web/Http/Sse.lean` | | Proved to read what it writes against a model of the WHATWG reader (`Lanes/Web/Http/SseSound.lean`); a comparison with another reader, a browser's, is owed |
@@ -136,6 +137,7 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Outside/Clock.lean` | | A clock is not a service to record: its jumps and skew are what NTP and the kernel document; checked against a seeded bug in `Tests/WallClock.lean` |
 | `Lanes/Outside/Effects/Basic.lean` | | The class of services with a lifecycle; its instances are below |
 | `Lanes/Outside/Effects/Email.lean` | `oracles/moto/ses.jsonl` | |
+| `Lanes/Outside/Environment.lean` | `Tests/Environment.lean` | Not a service: the model is any list of variables, so there is nothing a real environment could do that it does not allow. Run live: a reader on the process's environment reads what `IO.getEnv` reads. Its parsers of values are Lean's `String.toNat?` and `String.toInt?` and a fixed list of words, with no standard to read differently |
 | `Lanes/Outside/Events.lean` | | Owed, with Payments: webhooks need a service that sends them; runs written by hand (`Tests/Outside.lean`) |
 | `Lanes/Outside/FileSystem.lean` | `Tests/FileSystem.lean` | The model below as an outside; runs written by hand, with `io` errors and a power loss |
 | `Lanes/Outside/FileSystem/Basic.lean` | `Tests/FileSystem.lean` | Run live, not recorded: every `lake test` makes a script of calls in a temporary directory and checks each answer, errors included, against the model's. A loss of power cannot be run: what it leaves is the model's assumption, trusted (`TRUSTED.md`) |

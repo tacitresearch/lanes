@@ -703,3 +703,10 @@ import Lanes.Web.Http.WebSocketSessionSound
 -- Lanes.Web.Http.WebSocketSound
 /-- info: 'Lanes.WebSocket.decode_encode' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.WebSocket.decode_encode
+
+-- Lanes.Web.Http.Shutdown
+/-- info: 'Lanes.Http.Shutdown.step_stop' depends on axioms: [propext, Classical.choice] -/
+#guard_msgs in #print axioms Lanes.Http.Shutdown.step_stop
+
+/-- info: 'Lanes.Http.Shutdown.step_deadline' depends on axioms: [propext, Classical.choice] -/
+#guard_msgs in #print axioms Lanes.Http.Shutdown.step_deadline
