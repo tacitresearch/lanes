@@ -148,13 +148,6 @@ jobs:
         run: lake exe lanesOracle --cases 20000
       - name: The references, a new seed each run
         run: lake exe lanesOracle --cases 20000 --seed ${{ github.run_id }}
-      - name: SES's address check against net/mail
-        run: |
-          mkdir -p integrations/aws/.lake
-          ln -sfn "$GITHUB_WORKSPACE/.lake/packages" integrations/aws/.lake/packages
-          cd integrations/aws
-          lake exe oracle --cases 20000
-          lake exe oracle --cases 20000 --seed ${{ github.run_id }}
 
   test:
     needs: [runner, changes, compile]
@@ -176,7 +169,7 @@ jobs:
           lake build
           lake test
 
-  # The integrations and the small examples, each a package of its own: built with their proofs,
+  # The small examples, each a package of its own: built with their proofs,
   # and their checks run, in two groups at once. Their builds are kept in the Actions cache,
   # keyed on the toolchain, the manifests and the sources, so a run rebuilds only what changed;
   # the cache is saved once they are built, before their checks run.
@@ -191,7 +184,7 @@ jobs:
         include:
           - group: small
             packages: >-
-              integrations/google integrations/github integrations/aws examples/counter
+              examples/counter
               examples/bank examples/bank-web examples/kv-cache examples/watchdog
           - group: web
             packages: >-
@@ -208,8 +201,8 @@ jobs:
       - id: keys
         if: steps.lean.outputs.warm != 'true'
         env:
-          ROOT: ${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('lean-toolchain', 'lake-manifest.json', 'examples/*/lake-manifest.json', 'integrations/*/lake-manifest.json') }}
-          SOURCES: ${{ hashFiles('lakefile.lean', 'Lanes/**', 'native/**', 'examples/**/*.lean', 'examples/**/lakefile.*', 'integrations/**/*.lean', 'integrations/**/lakefile.*', '!**/.lake/**') }}
+          ROOT: ${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('lean-toolchain', 'lake-manifest.json', 'examples/*/lake-manifest.json') }}
+          SOURCES: ${{ hashFiles('lakefile.lean', 'Lanes/**', 'native/**', 'examples/**/*.lean', 'examples/**/lakefile.*', '!**/.lake/**') }}
         run: |
           echo "prefix=lake-examples-${{ matrix.group }}-$ROOT-" >> "$GITHUB_OUTPUT"
           echo "key=lake-examples-${{ matrix.group }}-$ROOT-$SOURCES" >> "$GITHUB_OUTPUT"
@@ -219,7 +212,6 @@ jobs:
         with:
           path: |
             examples/*/.lake/build
-            integrations/*/.lake/build
           key: ${{ steps.keys.outputs.key }}
           restore-keys: ${{ steps.keys.outputs.prefix }}
       - name: Build each package
@@ -238,7 +230,6 @@ jobs:
         with:
           path: |
             examples/*/.lake/build
-            integrations/*/.lake/build
           key: ${{ steps.keys.outputs.key }}
       - name: Check each package
         env:

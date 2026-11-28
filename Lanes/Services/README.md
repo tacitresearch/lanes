@@ -1,14 +1,35 @@
-# Integrations
+# Services
 
-What a particular vendor needs, kept out of `Lanes/` (`docs/decisions/D61-models-of-external-systems.md`):
-each is a Lake package of its own that requires Lanes by path and is checked against what the
-vendor publishes, recorded or written from its documentation, never against the vendor live.
+What a particular vendor needs: a client, a model of the service built from a shape of the core
+(`Lanes/Outside/`), and an oracle that checks the model against the real service or an emulator
+(`docs/decisions/D110-volatile-actors.md`, "The environment, in three layers"). Each service is a
+folder here, in the same Lake package as the core, with a README that names its client, its
+model, its oracle and its status:
 
-| Package | What it is | Checked against |
+- **checked**: it has all three, and the oracle runs, nightly or on every pull request
+  (`oracles/README.md`);
+- **experimental**: something is missing, most often the oracle; the README says what.
+
+| Service | What it is | Status |
 | --- | --- | --- |
-| `google` | Sign-in with Google: its OpenID Connect provider | Its discovery document and JWK Set as recorded in `google/recorded/` |
-| `github` | Sign-in with GitHub: its OAuth app, and an identity read from its user API | Answers in the shapes GitHub's documentation gives, written by hand |
-| `aws` | An instance's or a container's role credentials, fetched from the metadata service (IMDSv2) or the container's endpoint and refreshed before they expire by a proved policy; email through SES; CloudFront's signed URLs and cookies | The refresh policy model-checked against a model of the metadata service; fakes of the metadata service, of a container's endpoint and of SES, written from AWS's documentation, run in the test; a run through SES checked against the email model; CloudFront's links, signatures included, against botocore's `CloudFrontSigner` |
+| `Lanes/Services/Postgres/` | PostgreSQL's client, and the typed store's driver | checked |
+| `Lanes/Services/S3/` | S3, for any S3-compatible store: calls, multipart and browser uploads | checked |
+| `Lanes/Services/Aws/` | AWS: role credentials, SES, SQS's calls, CloudFront's signed links | checked, but the role credentials are experimental |
+| `Lanes/Services/Oidc/` | Sign-in presets: Google and GitHub | Google checked, GitHub experimental |
+| `Lanes/Services/Stripe/` | Payments in the shape of Stripe's PaymentIntent | experimental |
 
-Build and check one as an example is (`examples/README.md`): link the repository's packages into
-its `.lake`, then `lake build` and `lake test`.
+The rules:
+
+- A service imports the core; the core never imports a service (lint `layering`,
+  `LanesCli/Layers.lean`).
+- `import Lanes` leaves the services out. A program imports the services it calls
+  (`import Lanes.Services.Postgres`), and Lake builds only the modules a program imports, so a
+  service it does not use costs it nothing. `import Lanes.Services` imports every service with
+  its soundness theorems.
+- A protocol (HTTP, Signature Version 4, OAuth and OpenID Connect) and a shape (a store, a queue,
+  a lifecycle) are core. What only one vendor does (S3's multipart uploads, Stripe's statuses) is
+  the vendor's service.
+- A service's fake for tests is in its folder (`Lanes/Services/S3/Testing.lean`), and its tests
+  are in `Tests/` (`Tests/Aws/`, `Tests/Oidc/`, `Tests/S3.lean`).
+- A service becomes a Lake package of its own only when it brings a heavy dependency (a new C
+  library, a large package) or needs its own release cadence.

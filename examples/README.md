@@ -84,7 +84,7 @@ lake exe rookeryLive  # a person and a bot over HTTP
 ```
 
 and in each small one, `lake build` and `lake test` (`bank-web` needs `bank` beside it, which it
-requires by path, and `sign-in` the presets in `integrations/`;
+requires by path;
 `upload`'s test drives its front end with no socket, and `lake exe upload 8080` serves it:
 `curl -T file http://127.0.0.1:8080/upload`).
 

@@ -301,8 +301,8 @@ def tests : List (String × Bool) :=
 
 open Lanes.Testing.S3 (Fake follow)
 
-/-! The fake's parts under the names `integrations/aws` uses for its fakes of the metadata
-service and of SES, from before the fake moved to the test kit. -/
+/-! The fake's parts under the names the AWS service's tests (`Tests/Aws/`) use for their fakes
+of the metadata service and of SES. -/
 
 export Lanes.Testing.S3 (Raw raw? answer)
 
