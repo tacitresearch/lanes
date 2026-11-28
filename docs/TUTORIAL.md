@@ -49,7 +49,7 @@ lanes_data inductive Request where
   | increment (req : ReqId)
   | decrement (req : ReqId)
   | read (req : ReqId)
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 ```
 
 and what it does, in `service`, after the `increment` case. It is refused at zero, as an

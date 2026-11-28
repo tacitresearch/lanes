@@ -56,7 +56,7 @@ def samples (cfg : TodoDb.Config) (failures : Bool) (d : D) : List In :=
 /-- No user has two to-dos with one title, in any database the store may be in. -/
 def unique (w : W cfg) : Bool :=
   w.driver.2.worlds.all fun db =>
-    let titles := (db.db.rows todos.table.name).map byTitle.project
+    let titles := (db.db.rows todos.table.name).map todos.byTitle.project
     titles.eraseDups.length == titles.length
 
 def check (cfg : TodoDb.Config) (requests : List (Nat × Request)) (failures : Bool) :=

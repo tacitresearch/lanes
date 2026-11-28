@@ -257,4 +257,20 @@ theorem filterMap_eq_range {f : α → Option Nat} {l : List α}
     exact h j (by simpa using h1)
   simpa [List.filterMap_map] using congrArg (List.filterMap id) hm
 
+/-- In a list whose keys are distinct, the elements with an element's key are that element. -/
+theorem filter_key_eq_singleton {γ : Type} [BEq γ] [LawfulBEq γ] {f : α → γ} :
+    ∀ {l : List α}, (l.map f).Nodup → ∀ {p : α}, p ∈ l → l.filter (fun q => f q == f p) = [p]
+  | [], _, _, hp => by simp at hp
+  | a :: l, h, p, hp => by
+    rw [List.map_cons, List.nodup_cons] at h
+    rcases List.mem_cons.mp hp with rfl | hp
+    · rw [List.filter_cons_of_pos (by simp), List.filter_eq_nil_iff.mpr]
+      intro q hq hfq
+      exact h.1 (List.mem_map.mpr ⟨q, hq, by simpa using hfq⟩)
+    · have hne : (f a == f p) = false := by
+        rw [beq_eq_false_iff_ne]
+        intro e
+        exact h.1 (e ▸ List.mem_map_of_mem hp)
+      rw [List.filter_cons_of_neg (by simp [hne]), filter_key_eq_singleton h.2 hp]
+
 end Lanes

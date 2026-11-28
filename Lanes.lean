@@ -29,11 +29,11 @@ public import Lanes.Core.Step
 public import Lanes.Core.System
 public import Lanes.Core.World
 public import Lanes.Db.Basic
+public import Lanes.Db.Columns
 public import Lanes.Db.Model
 public import Lanes.Db.Query
 public import Lanes.Db.Retry
 public import Lanes.Db.Txn
-public import Lanes.Data.Codec
 public import Lanes.Data.Declare
 public import Lanes.Data.Enum
 public import Lanes.Data.Fifo

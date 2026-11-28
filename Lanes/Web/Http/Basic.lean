@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Data.Codec
+public import Std
 public import Lanes.Lib.Net.Percent
 
 /-!
@@ -45,15 +45,6 @@ structure Request where
   headers : List (String × String) := []
   body : ByteArray := .empty
   deriving DecidableEq, Repr, Hashable
-
-def Method.codec : Codec Method :=
-  Codec.sum% Method { get, post, put, patch, delete }
-
-/-- How a request is written as records. -/
-def Request.codec : Codec Request :=
-  let fields := Codec.list (Codec.pair Codec.string Codec.string)
-  Codec.struct% Request { method := Method.codec, path := Codec.list Codec.string,
-    query := fields, headers := fields, body := Codec.bytes }
 
 /-- A response as data, which the server writes. -/
 structure Response where
