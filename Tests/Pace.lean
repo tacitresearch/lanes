@@ -54,8 +54,8 @@ abbrev counters : System sig where
   accept x := ⟨x.1, x.2⟩
 
 def acts : Array (Batch.Act counters fun _ => Unit) :=
-  #[.append #[], .record #[.input (0, 1), .deliver ⟨none, 0, 1⟩, .output 1, .start 1,
-    .timeout 2 0], .handOver #[(⟨1, 0⟩, 1)], .record #[.deliver ⟨none, 2, 3⟩]]
+  #[.work #[], .record #[.input (0, 1), .deliver ⟨none, 0, 1⟩, .output 1, .start 1,
+    .timeout 2 0], .handOver #[1], .record #[.deliver ⟨none, 2, 3⟩]]
 
 def tests : List (String × Bool) :=
   let (_, cheap) := simulate {} 500 2500 500

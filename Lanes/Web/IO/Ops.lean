@@ -50,18 +50,6 @@ def new (config : OpsConfig) : BaseIO Ops :=
 def drain (ops : Ops) : BaseIO Unit :=
   ops.draining.set true
 
-/-- The journal's storage, counting appends and saves when the server counts. -/
-def journal {σ : Signature} {sys : System σ} (ops : Ops) (log : Journal.Log sys) :
-    Journal.Log sys :=
-  if !ops.config.counting then log
-  else { log with
-    append := fun entries => do
-      log.append entries
-      ops.stats.modify (·.appended entries.length)
-    save := log.save.map fun save image => do
-      save image
-      ops.stats.modify (·.saved) }
-
 /-- A connection was closed at `connections_max`. -/
 def refused (ops : Ops) : BaseIO Unit := do
   if ops.config.counting then ops.stats.modify (·.refuse)

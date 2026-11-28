@@ -4,8 +4,6 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
 import Lanes.Proofs
-import Tests.Durable
-import Tests.Peers
 import Tests.Web
 import Tests.Fixtures.BankWeb
 
@@ -15,8 +13,7 @@ also puts out what is no answer (a `memo`) and takes an input that is no request
 The properties are those `Tests/Gate.lean` checks of `served`, the system `serve` runs, with an
 echo behind its gate. Then the gate alone, with the link from outside that a join gives it.
 
-Then two processes' worth in one: the bank on two shards joined by TCP, each shard behind its
-own HTTP front. And the bank behind a front on a journal.
+Then the desk behind a front, over a socket.
 -/
 
 namespace Tests.Fronted
@@ -313,70 +310,7 @@ def tests : List (String × Bool) :=
     ("gate alone: a request leaves the pending list only in a step that emits its answer",
       gateLeavingIsAnswered) ]
 
-/-! The bank on two shards, accounts 0 and 2 on the first and account 1 on the second. -/
-
-open Std Std.Async Tests.Fixtures.Bank Tests.Fixtures.BankWeb
-
-structure Node where
-  port : UInt16
-  stop : Async Unit
-  trace : BaseIO (List (Event (admittedFrontedSig (shardSig (sig Acct)))))
-
-def live : Async (List (String × Bool)) := do
-  let shardOf (account : Acct) : Nat := account.val % 2
-  let peerPorts ← IO.mkRef (#[] : Array UInt16)
-  let mut nodes : Array Node := #[]
-  for k in [0:2] do
-    let peers : Peers.Config (sig Acct) := {
-      listen := { port := 0 }
-      home := fun account => return (← peerPorts.get)[shardOf account]?.map fun port => { port }
-      id := Codec.fin, msg := (actors Codec.fin 100).msg, system := "the bank on two shards"
-      schema := "Tests.Fixtures.Bank", key := Tests.Peers.key }
-    let (server, peers) ← serveShard (bank Acct 100) (shardOf · == k) Tests.Fixtures.BankWeb.bridge
-      peers { port := 0, gate := { requestTimeout_ms := 300 } } { record := true }
-    peerPorts.modify (·.push peers.port)
-    nodes := nodes.push {
-      port := server.port.getD 0
-      stop := do peers.stop; server.stop
-      trace := return (← server.trace).toList }
-  let (some first, some second) := (nodes[0]?, nodes[1]?)
-    | return [("fronted: two shards start", false)]
-  let settles (node : Node) (path balance : String) : Async Bool := do
-    for _ in [0:100] do
-      if (← Tests.Web.fetch node.port path).endsWith s!"<span>{balance}</span>" then return true
-      Async.sleep 20
-    return false
-  let moved ← Tests.Web.fetch first.port "/transfer" (method := "POST")
-    (body := "src=0&dst=1&amount=30")
-  let credited ← settles second "/accounts/1" "130"
-  let debited ← Tests.Web.fetch first.port "/accounts/0"
-  let back ← Tests.Web.fetch second.port "/transfer" (method := "POST")
-    (body := "src=1&dst=2&amount=5")
-  let returned ← settles first "/accounts/2" "105"
-  let elsewhere ← Tests.Web.fetch second.port "/accounts/0"
-  for node in nodes do node.stop
-  let traces ← nodes.toList.mapM (·.trace)
-  let fresh : Outside (admittedFrontedSig (shardSig (sig Acct))) (List Http.ReqId) :=
-    { init := [], allow := fun used x => match x with
-        | .inl (id, _) => if id ∈ used then none else some (id :: used)
-        | .inr _ => some used }
-  let creditsIn (events : List (Event (admittedFrontedSig (shardSig (sig Acct))))) : Nat :=
-    events.countP fun
-      | .input (.inr (.inr ⟨_, .credit _⟩)) => true
-      | _ => false
-  return [
-    ("fronted: a transfer posted to one front between accounts on different shards is answered",
-      moved.startsWith "HTTP/1.1 200"),
-    ("fronted: and the credit shows in the balance read through the other front",
-      credited && debited.endsWith "<span>70</span>"),
-    ("fronted: the same the other way", back.startsWith "HTTP/1.1 200" && returned),
-    ("fronted: each credit entered the other shard as a parcel, past its gate",
-      traces.map creditsIn == [1, 1]),
-    ("fronted: each shard is handed each request its gate admits once, under an id of its own",
-      traces.all fresh.allows),
-    ("fronted: a known limit, a response put out on another shard does not come back to the "
-        ++ "front that took the request, which answers 504",
-      elsewhere.startsWith "HTTP/1.1 504") ]
+open Std Std.Async
 
 /-! The desk behind a front, over a socket. -/
 
@@ -387,7 +321,7 @@ def busyTest : Async (List (String × Bool)) := do
   let entered : IO.Promise Unit ← IO.Promise.new
   let release : IO.Promise Unit ← IO.Promise.new
   let server ← serveFronted (Server.system desk) bridge { port := 0 } { inboxCapacity := 1 }
-    fun _ _ => do
+    fun _ => do
       entered.resolve ()
       discard <| await release.result?
   let some port := server.port | return [("fronted: the server reports its port", false)]
@@ -413,105 +347,22 @@ def busyTest : Async (List (String × Bool)) := do
     ("fronted: it is not in flight, and the one that was is answered when the shard goes on",
       during == 1 && answers.all (·.startsWith "HTTP/1.1 200") && after == 0) ]
 
-def deskPeers (port : UInt16) : Peers.Config deskSig :=
-  { listen := { port }, home := fun _ => pure none, id := Codec.unit, msg := fun _ => Ask.codec
-    system := "the desk", schema := "Tests.Fronted.Ask", key := Tests.Peers.key }
-
-/-- One process of the desk. Its memos are neither responses nor parcels. And a second process
-that wants the first one's HTTP port does not start. -/
-def nodeTest : Async (List (String × Bool)) := do
+/-- An output of the desk that is no response, a memo, comes to the caller. -/
+def memoTest : Async (List (String × Bool)) := do
   let memos ← IO.mkRef #[]
-  let (server, peers) ← serveShard (Server.system desk) (fun _ => true) bridge (deskPeers 0)
-    { port := 0 } {} fun
+  let server ← serveFronted (Server.system desk) bridge { port := 0 } {} fun
       | .memo n => memos.modify (·.push n)
       | .reply _ => pure ()
   let some port := server.port | return [("fronted: the server reports its port", false)]
   let answer ← Tests.Web.fetch port "/"
-  let probe ← Peers.start (deskPeers 0) fun _ => pure ()
-  probe.stop
-  let failed ← try
-      discard <| serveShard (Server.system desk) (fun _ => true) bridge (deskPeers probe.port)
-        { port }
-      pure false
-    catch _ => pure true
-  let free ← try
-      (← Peers.start (deskPeers probe.port) fun _ => pure ()).stop
-      pure true
-    catch _ => pure false
-  peers.stop
+  let mut seen := #[]
+  for _ in [0:200] do
+    seen ← memos.get
+    if !seen.isEmpty then break
+    Async.sleep 10
   server.stop
   return [
-    ("fronted: an output of a shard that is neither a response nor a parcel comes to the caller",
-      answer.startsWith "HTTP/1.1 200" && (← memos.get) == #[0]),
-    ("fronted: a process whose server cannot start stops listening for parcels too",
-      failed && free) ]
-
-/-- One process of the bank, with a front and peers, on a journal, stopped and started again. -/
-def nodeDurable : Async (List (String × Bool)) := do
-  let path ← Tests.Durable.scratch "node"
-  let here (_ : Acct) : Bool := true
-  let msg := (actors (Codec.fin (n := 3)) 100).msg
-  let fetched (method path' body : String) : Async String := do
-    try
-      let log ← Journal.Store.open
-        (sys := admittedFronted ((bank Acct 100).shard here) Tests.Fixtures.BankWeb.bridge.shard)
-        { path
-          input := Codec.sum (Codec.pair Codec.nat Request.codec)
-            (Codec.sum (Tests.Fixtures.Bank.Request.codec Codec.fin) (Codec.sigma Codec.fin msg)) }
-      let (server, peers) ← serveShard (bank Acct 100) here Tests.Fixtures.BankWeb.bridge
-        { listen := { port := 0 }, home := fun _ => pure none, id := Codec.fin, msg
-          system := "the bank", schema := "Tests.Fixtures.Bank", key := Tests.Peers.key }
-        { port := 0 } (log := some log)
-      let answer ← Tests.Web.fetch (server.port.getD 0) path' (method := method) (body := body)
-      peers.stop
-      server.stop
-      return answer
-    catch e => return toString e
-  let moved ← fetched "POST" "/transfer" "src=0&dst=1&amount=30"
-  let after ← fetched "GET" "/accounts/1" ""
-  Tests.Durable.remove path
-  return [("fronted: a process with a front and peers on a journal comes back in the state it "
-    ++ "was in", moved.startsWith "HTTP/1.1 200" && after.endsWith "<span>130</span>")]
-
-/-! A fronted system on a journal: stop the server, start another on the same journal. -/
-
-def durable : Async (List (String × Bool)) := do
-  let dir := (← IO.getEnv "TMPDIR").getD "/tmp"
-  let journal : System.FilePath := s!"{dir}/lanes-fronted-{← IO.monoNanosNow}.journal"
-  let start := do
-    let log ← Journal.Store.open
-      (sys := admittedFronted (bank Acct 100) Tests.Fixtures.BankWeb.bridge)
-      { path := journal
-        input := Codec.sum (Codec.pair Codec.nat Request.codec)
-          (Tests.Fixtures.Bank.Request.codec Codec.fin)
-        actors := some (admittedFrontedActors (actors Codec.fin 100)
-          Tests.Fixtures.BankWeb.bridge) }
-    serveFronted (bank Acct 100) Tests.Fixtures.BankWeb.bridge { port := 0 }
-      { record := true, snapshotEvery := 4 } (log := some log)
-  let server ← start
-  let moved ← Tests.Web.fetch (server.port.getD 0) "/transfer" (method := "POST")
-    (body := "src=0&dst=1&amount=30")
-  let before ← Tests.Web.fetch (server.port.getD 0) "/accounts/1"
-  server.stop
-  let server ← start
-  let after ← Tests.Web.fetch (server.port.getD 0) "/accounts/1"
-  let again ← Tests.Web.fetch (server.port.getD 0) "/transfer" (method := "POST")
-    (body := "src=1&dst=2&amount=130")
-  let last ← Tests.Web.fetch (server.port.getD 0) "/accounts/2"
-  server.stop
-  let ids := (← server.trace).toList.filterMap fun
-    | .input (.inl (id, _)) => some id
-    | _ => none
-  let cut ← (journal.addExtension "snapshot").pathExists
-  for file in [journal, journal.addExtension "lock", journal.addExtension "snapshot"] do
-    if ← file.pathExists then IO.FS.removeFile file
-  return [
-    ("fronted: behind a journal the bank keeps its balances across a restart and goes on",
-      moved.startsWith "HTTP/1.1 200" && before.endsWith "<span>130</span>"
-        && after.endsWith "<span>130</span>" && again.startsWith "HTTP/1.1 200"
-        && last.endsWith "<span>230</span>"),
-    ("fronted: request ids used before the restart are not used again, though the journal "
-        ++ "was cut",
-      cut && ids.length == 3 && ids.all (2 ≤ ·)) ]
+    ("fronted: an output that is no response comes to the caller",
+      answer.startsWith "HTTP/1.1 200" && seen == #[0]) ]
 
 end Tests.Fronted

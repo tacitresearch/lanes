@@ -10,8 +10,8 @@ public import Lanes.Outside.Clock
 
 /-!
 The clock as an adapter, and the shape every adapter has. A system asks the time with an output
-and is told with an input, so `step` stays pure and the answer is in the journal when the shard
-is replayed. The adapter is two things that must agree: `Clock.outside`, what a clock may do
+and is told with an input, so `step` stays pure and the checker can give it any time the model
+allows. The adapter is two things that must agree: `Clock.outside`, what a clock may do
 (`Lanes/Outside/Clock.lean`), which the checker explores; and `Clock.handler`, what this clock
 does, in IO. A test records a real run and checks it against the model (`Outside.allows`).
 -/
@@ -23,14 +23,6 @@ namespace Lanes.Clock
 open Std.Async
 
 variable {σ : Signature}
-
-/-- The latest time a journal says the clock gave. A clock that starts on a journal starts no
-earlier, so that the times in a replayed run and those given after it are still in order. -/
-def latest (port : Port σ) (past : List (Journal.Entry σ)) : Nat :=
-  past.foldl (init := 0) fun latest entry =>
-    match entry with
-    | .input x => (port.told x).elim latest fun (_, time_ms) => max latest time_ms
-    | _ => latest
 
 /-- Remembers the last time given: the wall clock may be set back, and this clock may not go
 back. -/

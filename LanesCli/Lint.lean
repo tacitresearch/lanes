@@ -4,7 +4,6 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import LanesCli.Changelog
 import LanesCli.Layers
-import LanesCli.Schemas
 
 /-!
 # `lanes lint`
@@ -33,11 +32,6 @@ Source-level checks of the rules in `AGENTS.md` that can be decided from the tex
   of `oracles/`, and an oracle, or why there is none, for each module of `Lanes/Lib/` and
   `Lanes/Web/` and each model of `Lanes/Outside/` that is not a proof or IO; every module and
   path they name exists (`docs/decisions/D80-oracles.md`).
-- `schema`: every pinned schema (a `.schema` file, `Lanes/Durable/Pin.lean`) against the schema
-  the build derives, and every file of the corpus it names read with the build's schema. A
-  change that old files read is reported, and `--fix` pins it; one that opening would refuse,
-  or a corpus file the build does not read, is a finding that names the field or the
-  constructor (`LanesCli/Schemas.lean`). This reads the built modules: build first.
 - `inventory`, `inventory-none`, in Lanes itself: the inventory can be computed, and every
   definition of `Lanes/` without evidence is on `docs/inventory-none.md`. These read the built
   modules, so `lanesInventory`, which links `Lean`, does them.
@@ -418,19 +412,14 @@ def inventory (root : System.FilePath) : IO (List Finding) := do
   return findings
 
 def lint (root : System.FilePath) (options : Options := {}) : IO Report := do
-  -- The inventory builds what it reads, which the pinned schemas' program imports too.
+  -- The inventory builds what it reads.
   let inventoryFindings ← inventory root
   let fixed ← if options.fix then Generated.fix root options.main else pure []
   let plan ← Generated.plan root options.main
-  let schemas ← Schemas.plan root
-  if options.fix then
-    for e in schemas.edits do Generated.apply root e
-  let fixed := fixed ++ if options.fix then schemas.edits else []
   let mut findings : List Finding :=
-    (plan.problems ++ schemas.problems ++ (← Changelog.check root)).map
+    (plan.problems ++ (← Changelog.check root)).map
       (fun (file, line, rule, message) => ⟨file, line, rule, message⟩)
-      ++ (plan.edits ++ if options.fix then [] else schemas.edits).map
-        fun e => ⟨e.path, 1, e.rule, e.message⟩
+      ++ plan.edits.map fun e => ⟨e.path, 1, e.rule, e.message⟩
   let trustedFile := root / "TRUSTED.md"
   let trusted ← if ← trustedFile.pathExists then IO.FS.readFile trustedFile else pure ""
   let files ← sourceFiles root

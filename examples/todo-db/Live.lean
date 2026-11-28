@@ -36,7 +36,7 @@ def main : IO UInt32 := do
   let sessions ← IO.mkRef []
   let outs ← IO.mkRef ([] : List Out)
   let run : Async (List (Nat × String)) := do
-    let rt ← Runtime.startWith (system { keyed := true }) {} fun rt _ out => do
+    let rt ← Runtime.startWith (system { keyed := true }) {} fun rt out => do
       outs.modify (· ++ [out])
       Postgres.Store.handler port cfg table .serializable sessions rt out
     for (key, title) in [(1, "milk"), (2, "eggs"), (1, "milk"), (3, "bread")] do

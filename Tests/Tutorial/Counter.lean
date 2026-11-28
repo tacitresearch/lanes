@@ -19,8 +19,8 @@ open Lanes
 /-- Identifies a client request, so its response can be matched to it. -/
 abbrev ReqId := Nat
 
-/-- `lanes_data` derives the codec that writes requests and responses to the journal, with its
-round-trip law, from the declaration. -/
+/-- `lanes_data` derives a codec for requests and responses, with its round-trip law, from the
+declaration. -/
 lanes_data inductive Request where
   | increment (req : ReqId)
   | decrement (req : ReqId)

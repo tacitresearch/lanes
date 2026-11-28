@@ -198,7 +198,7 @@ def properties (stream : ByteArray) : List (Property World) :=
       (writes w).any fun (seq, _) => !(w.submitted.any (·.1 == seq)) ]
 
 /-- Not a constant, so that the search runs when the tests do, not whenever the test binary
-starts, as it does for each child process of `Tests.Durable`. -/
+starts, as it does for each child process. -/
 @[never_extract] def report (stream : ByteArray) := search (model stream) (properties stream) {} id
 
 def checks : IO (List (String × Bool)) := do

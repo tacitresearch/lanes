@@ -125,7 +125,7 @@ def msg (to : List String) (deadline : Nat := 3000) (id : Nat) : Option (Rpc.Cal
 
 def exercise (e : Endpoint) : Async (List (String × Bool) × List Json) := do
   let answered ← IO.mkRef 0
-  let rt ← Runtime.startWith mailer { record := true } fun rt _ out => do
+  let rt ← Runtime.startWith mailer { record := true } fun rt out => do
     match out with
     | .send _ => Ses.handler port e creds {} rt out
     | .done .. => answered.modify (· + 1)

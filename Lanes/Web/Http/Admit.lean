@@ -17,10 +17,9 @@ its own memory, and hands the shard only what the gate admitted. The shard then 
 decisions. `Gate.admit` and `Gate.receive` are `Gate.step` on an arrival and on an answer with
 `decode` and `encode` taken out, so that the server runs those outside its lock.
 
-A request the gate admitted reaches the shard as `(id, request)`, the entry the journal has always
-held, and the shard decodes it again: the journal has no codec for `σ.In` yet
-(`docs/decisions/D97-data-format.md`, 3.4). A request that no longer decodes, at a replay
-through a newer `decode`, goes to `.inl ()`, an actor that does nothing.
+A request the gate admitted reaches the shard as `(id, request)`, and the shard decodes it again.
+A request that does not decode there goes to `.inl ()`, an actor that does nothing; the gate
+admits only requests that decode, so none does.
 
 `Lanes.Web.Http.AdmitSound` proves that a run of the server's front with the shard is a run of
 `served sys`, with the same answers, and that the gate's theorems hold of the front.
@@ -135,21 +134,5 @@ abbrev admittedSig (σ : Signature) : Signature :=
 /-- What the shard runs behind the server's front, for `Http.serve`: only requests come in. -/
 abbrev admitted (sys : System σ) (bridge : Bridge σ) : System (admittedSig σ) :=
   (admittedFronted sys bridge).filterMapIO .inl some
-
-/-- How the actors of the shard are written to a snapshot, given how the system's own are. -/
-def admittedFrontedActors {sys : System σ} (actors : Kernel.Image.Codecs sys) (bridge : Bridge σ) :
-    Kernel.Image.Codecs (admittedFronted sys bridge) where
-  id := Codec.sum Codec.unit actors.id
-  state
-    | .inl _ => Codec.unit
-    | .inr i => actors.state i
-  msg
-    | .inl _ => Codec.unit
-    | .inr i => actors.msg i
-
-def admittedActors {sys : System σ} (actors : Kernel.Image.Codecs sys) (bridge : Bridge σ) :
-    Kernel.Image.Codecs (admitted sys bridge) :=
-  let fronted := admittedFrontedActors actors bridge
-  { id := fronted.id, state := fronted.state, msg := fronted.msg }
 
 end Lanes.Http

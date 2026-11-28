@@ -8,8 +8,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 
 Lanes is built in layers, each of which works without the ones above it
 (`docs/decisions/D99-layered-packages.md`): the semantics and the checker (`model`); actors
-(`actors`), with the standard library beside them (`std`); a runtime; durability; the web and
-PostgreSQL; and the umbrella `Lanes`, which imports them all. Each module of `Lanes/` belongs to
+(`actors`), with the standard library beside them (`std`); a runtime; the web and PostgreSQL; and the umbrella `Lanes`, which imports them all. Each module of `Lanes/` belongs to
 one of these packages, read from `homes` by the longest prefix of its path, and may import only
 the modules of its own package and of the packages it requires, directly or below
 (`Package.requires`). `lanes lint` reports any other import of a module of Lanes (rule
@@ -19,27 +18,22 @@ A file sits under the directory of its concern today, and `homes` names, by its 
 whose package is not its directory's. They move into their packages' directories later, with no
 change to this table's packages. `scripts/layers.py` reads this file to plan those moves.
 
-The runtime requires the standard library because the courier authenticates every connection
-with HMAC-SHA-256 (`Lanes/Net/Handshake.lean`). The framing of a file and a link
-(`Lanes/Durable/Frame.lean`) is in the standard library, not the model as D99 has it, because
-its checksum is SHA-256 (`Lanes/Lib/Crypto/Native.lean`).
 -/
 
 namespace Lanes.Cli.Layers
 
 inductive Package where
-  | model | actors | std | runtime | durable | web | postgres | umbrella
+  | model | actors | std | runtime | web | postgres | umbrella
   deriving DecidableEq, Repr, Inhabited
 
 def Package.all : List Package :=
-  [.model, .actors, .std, .runtime, .durable, .web, .postgres, .umbrella]
+  [.model, .actors, .std, .runtime, .web, .postgres, .umbrella]
 
 def Package.name : Package → String
   | .model => "model"
   | .actors => "actors"
   | .std => "std"
   | .runtime => "runtime"
-  | .durable => "durable"
   | .web => "web"
   | .postgres => "postgres"
   | .umbrella => "umbrella"
@@ -49,9 +43,8 @@ def Package.requires : Package → List Package
   | .model => []
   | .actors => [.model]
   | .std => [.model]
-  | .runtime => [.actors, .std]
-  | .durable => [.runtime]
-  | .web => [.durable, .std]
+  | .runtime => [.actors]
+  | .web => [.runtime, .std]
   | .postgres => [.runtime, .std]
   | .umbrella => [.web, .postgres]
 
@@ -89,18 +82,13 @@ def homes : List (String × Package) := [
   ("Lanes/Outside/", .actors),
   ("Lanes/Semantics/", .actors),
   ("Lanes/Lib/", .std),
-  ("Lanes/Durable/Frame.lean", .std),
   ("Lanes/Web/IO/Tls.lean", .std),
   ("Lanes/Runtime/", .runtime),
-  ("Lanes/Net/", .runtime),
   ("Lanes/Outside/IO/Clock.lean", .runtime),
   ("Lanes/Behaviours/Jobs/IO/Pool.lean", .runtime),
   ("Lanes/Semantics/FairRuns.lean", .runtime),
-  ("Lanes/Durable/OutputId.lean", .runtime),
-  ("Lanes/Durable/", .durable),
   ("Lanes/Web/", .web),
   ("Lanes/Lib/Mime/", .web),
-  ("Lanes/Net/IO/Node.lean", .web),
   ("Lanes/Semantics/Front.lean", .web),
   ("Lanes/Testing/", .web),
   ("Lanes/Testing.lean", .web),

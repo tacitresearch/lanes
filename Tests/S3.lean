@@ -408,7 +408,7 @@ def conformance : Async (List (String × Bool)) := do
   let done ← IO.mkRef 0
   let all ← IO.Promise.new
   let calls := 7
-  let rt ← Runtime.startWith caller { record := true } fun rt _ out => do
+  let rt ← Runtime.startWith caller { record := true } fun rt out => do
     S3.handler s3Port b creds config rt out
     if let .done .. := out then
       if (← done.modifyGet fun n => (n + 1, n + 1)) == calls then all.resolve ()

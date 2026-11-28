@@ -162,8 +162,8 @@ def layerTests (root : System.FilePath) : IO (List (String × Bool)) := do
   write root "Lanes.lean" "import Lanes.Runtime.A\n"
   write root "LanesCli/Layers.lean" ""
   write root "Lanes/Runtime/A.lean"
-    "module\n\npublic import Std\npublic import Lanes.Data.C\nimport all Lanes.Durable.B\n"
-  write root "Lanes/Durable/B.lean" "module\n\n/- import Lanes.Web.D -/\npublic import Lanes.Runtime.A\n"
+    "module\n\npublic import Std\npublic import Lanes.Data.C\nimport all Lanes.Web.B\n"
+  write root "Lanes/Web/B.lean" "module\n\n/- import Lanes.Web.D -/\npublic import Lanes.Runtime.A\n"
   write root "Lanes/Data/C.lean" "module\n"
   write root "Lanes/Stray.lean" "module\n"
   let report ← lint root
@@ -174,11 +174,11 @@ def layerTests (root : System.FilePath) : IO (List (String × Bool)) := do
       found == [("Lanes/Runtime/A.lean", 5), ("Lanes/Stray.lean", 1)]),
     ("Layers: what each package requires, below too",
       Layers.Package.runtime.mayImport .model && Layers.Package.web.mayImport .std
-        && !Layers.Package.std.mayImport .actors && !Layers.Package.runtime.mayImport .durable
+        && !Layers.Package.std.mayImport .actors && !Layers.Package.runtime.mayImport .web
         && Layers.Package.all.all fun p => p.mayImport p),
     ("Layers.home?: the longest prefix wins",
-      Layers.home? "Lanes/Durable/Frame.lean" == some .std
-        && Layers.home? "Lanes/Durable/Journal.lean" == some .durable
+      Layers.home? "Lanes/Web/IO/Tls.lean" == some .std
+        && Layers.home? "Lanes/Web/Http/Basic.lean" == some .web
         && Layers.home? "Lanes/Lib/Postgres/Conn.lean" == some .postgres
         && Layers.home? "Tests/Main.lean" == none),
     ("Layers.imported?: the module of an import line, with its modifiers",
@@ -221,24 +221,6 @@ def changelogTests (root : System.FilePath) : IO (List (String × Bool)) := do
         == some ("# Changelog\n\nIntro.\n\n## [Unreleased]\n\nNote.\n\n## [0.2.0] - 2026-02-01\n\n"
           ++ "### Added\n\n- New.\n\n## [0.1.0] - 2026-01-01\n\nOld.\n"))]
 
-/-- Lint `schema` finds the project's pinned files, not another package's, and reads what the
-program printed. -/
-def schemaTests (root : System.FilePath) : IO (List (String × Bool)) := do
-  for path in ["a.schema", "sub/b.schema", ".hidden/c.schema", "docs/d.schema"] do
-    write root path "kind: journal\n"
-  write root "sub/lakefile.toml" "name = \"sub\"\n"
-  let found ← Schemas.files root
-  let s : Lanes.Schema := ⟨[], .nat⟩
-  let t : Lanes.Schema := ⟨[], .list .string⟩
-  let text := Lanes.Journal.schemaText
-  let out := "\n".intercalate ["noise", s!"lanes-pin 0 {text s}", s!"lanes-pin 1 {text t}",
-    s!"lanes-migration 1 {text s} {text t}"]
-  return [
-    ("lint schema: the pinned files are the project's, not another package's nor a hidden one's",
-      found == ["a.schema", "docs/d.schema"]),
-    ("lint schema: each pinned file's schema and migrations are read from what Lean printed",
-      Schemas.readOutput 3 out == [(some s, []), (some t, [some (s, t)]), (none, [])]) ]
-
 def tests : IO (List (String × Bool)) := do
   let root ← scratch
   let other ← scratch
@@ -246,11 +228,9 @@ def tests : IO (List (String × Bool)) := do
   let fourth ← scratch
   let fifth ← scratch
   let sixth ← scratch
-  let seventh ← scratch
   try
     let results := (← fixTests root) ++ (← problemTests other) ++ (← linkTests third)
       ++ (← oracleTests fourth) ++ (← changelogTests fifth) ++ (← layerTests sixth)
-      ++ (← schemaTests seventh)
     return results ++ [
       ("withCommas", Generated.withCommas 1587 == "1,587" && Generated.withCommas 50 == "50"
         && Generated.withCommas 1000000 == "1,000,000"),
@@ -277,7 +257,7 @@ def tests : IO (List (String × Bool)) := do
         (Report.mk [⟨"A.lean", 3, "no-sorry", "no"⟩] [] 2).json
           == "{\"files\":2,\"fixed\":[],\"failed\":1,\"results\":[{\"name\":\"no-sorry\",\"kind\":\"proof\",\"status\":\"failed\",\"path\":\"A.lean\",\"line\":3,\"detail\":\"no\"}]}")]
   finally
-    for dir in [root, other, third, fourth, fifth, sixth, seventh] do
+    for dir in [root, other, third, fourth, fifth, sixth] do
       if ← dir.pathExists then IO.FS.removeDirAll dir
 
 end Tests.Lint

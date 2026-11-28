@@ -183,7 +183,7 @@ def conformance : Async (List (String × Bool)) := do
   let seen ← IO.mkRef []
   let (server, port_) ← Fake.serve (handle Tests.S3.creds seen)
   let done ← IO.mkRef 0
-  let rt ← Runtime.startWith mailer { record := true } fun rt _ out => do
+  let rt ← Runtime.startWith mailer { record := true } fun rt out => do
     Ses.handler port (endpointAt port_) Tests.S3.creds config rt out
     if let .done .. := out then done.modify (· + 1)
   let asks := [["ann@b.co"], ["rejected@b.co"], ["flaky@b.co"], ["slow@b.co"], ["bo@c.co", "cy@d.co"]]
