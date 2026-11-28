@@ -11,7 +11,8 @@ public import Lanes.Semantics.Liveness
 /-!
 # Every job the scheduler holds comes to an end
 
-In a fair run in which the scheduler does not crash, every job it holds that is not periodic
+In a fair run in which the scheduler does not crash and the process does not restart, every
+job it holds that is not periodic
 leaves it (`Schedule.held_leaves`), and the step in which it leaves emits its end: a success, a
 dead letter, a cancellation or its notice (`Schedule.ends_of_leaves`), which is then handed over
 (`Schedule.held_ends`). That step tells the requester once: one answer that ends the job, or the
@@ -29,9 +30,10 @@ job's end, and by `System.LeadsTo.induction` the job ends.
 
 The premise that the scheduler does not crash is the gate's and the jobs actor's
 (`Lanes.Semantics.Front`, `Lanes.Semantics.Jobs`): a crash loses its timers, and a stopped actor
-with no mail is not obliged to start again. A shard restarts its actors from the journal, and
-the start arms every job's timer again (`Schedule.armed`); what is not proved is that a start
-comes.
+with no mail is not obliged to start again. A process restart forgets every job held, with no
+end and no word to the requester, so none of these statements holds under restarts; the bound
+on calls (`Schedule.calls_le_scheduled`) and the invariants of `Lanes.Behaviours.Schedule.Sound`
+do, in every environment.
 
 Beside a system (`Schedule.attach`) the end is a message to it, and fairness delivers it
 (`System.Run.Fair.routed_right`) when the links to it lose nothing and its actors are not
@@ -138,15 +140,18 @@ theorem ends_of_leaves {s : State K P} {key : K} {j : Job K P} (hj : entry s.job
 
 /-- A scheduler that the environment does not crash stays up. -/
 theorem stays_up (hcrash : env.mayCrash () = false)
+    (hrestart : env.mayRestart = false)
     {c c' : SysState (system (K := K) (P := P) config)} {ev : Event (sig K P A)}
     (hup : c.up () = true) (hstep : c.step env ev = some c') : c'.up () = true :=
-  SysState.up_of_step hcrash (fun s msg => step_runs config s msg) hup hstep
+  SysState.up_of_step hcrash hrestart (fun s msg => step_runs config s msg) hup hstep
 
-/-- A step leaves the scheduler's state as it is, or takes it by one step of the actor. -/
-theorem state_step {c c' : SysState (system (K := K) (P := P) config)} {ev : Event (sig K P A)}
+/-- A step leaves the scheduler's state as it is, or takes it by one step of the actor, where the
+process does not restart. -/
+theorem state_step (hrestart : env.mayRestart = false)
+    {c c' : SysState (system (K := K) (P := P) config)} {ev : Event (sig K P A)}
     (hstep : c.step env ev = some c') :
     c'.state () = c.state () ∨ ∃ msg, c'.state () = (step config (c.state ()) msg).1 := by
-  rcases SysState.step_state hstep with h | ⟨i, msg, h⟩ | ⟨i, h⟩
+  rcases SysState.step_state_of_noRestarts hstep hrestart with h | ⟨i, msg, h⟩ | ⟨i, h⟩
   · exact .inl (by rw [h])
   · exact .inr ⟨msg, by rw [h]; rfl⟩
   · exact .inl (by rw [h]; rfl)
@@ -165,7 +170,8 @@ private theorem moved_nearer {c : SysState (system (K := K) (P := P) config)} {k
   · exact .inr ⟨hup, j', h, hlt, hsame j' h⟩
 
 /-- A job held that is not periodic is, in a fair run, no longer held or nearer its end. -/
-theorem entry_leads (config : Config K P A) (hcrash : env.mayCrash () = false) (key : K)
+theorem entry_leads (config : Config K P A) (hcrash : env.mayCrash () = false)
+    (hrestart : env.mayRestart = false) (key : K)
     (j : Job K P) (hp : j.work.periodic = false) :
     (system (K := K) (P := P) config).LeadsTo env
       (fun c => c.up () = true ∧ entry (c.state ()).jobs key = some j)
@@ -174,15 +180,15 @@ theorem entry_leads (config : Config K P A) (hcrash : env.mayCrash () = false) (
     (I := fun c => Armed c ∧ (c.state ()).Attempts config) ?_ (.timeout () (timer j)) ?_ ?_ ?_ ?_
   · exact fun c hc => ⟨armed config env c hc, attempts config env c hc⟩
   · intro c ev c' ⟨_, hatt⟩ ⟨hup, hj⟩ _ hstep
-    have hup' := stays_up hcrash hup hstep
-    rcases state_step hstep with hs | ⟨msg, hs⟩
+    have hup' := stays_up hcrash hrestart hup hstep
+    rcases state_step hrestart hstep with hs | ⟨msg, hs⟩
     · exact .inl ⟨hup', hs ▸ hj⟩
     · rcases entry_step hatt hj hp msg with he | hmoved
       · exact .inl ⟨hup', hs ▸ he⟩
       · exact .inr (moved_nearer hup' (hs ▸ hmoved) fun j' h => entry_step_same hj (hs ▸ h))
   · exact fun c ⟨harmed, _⟩ ⟨hup, hj⟩ _ => ⟨hup, harmed hup j (entry_some hj).1⟩
   · intro c c' ⟨_, hatt⟩ ⟨hup, hj⟩ _ hstep
-    have hup' := stays_up hcrash hup hstep
+    have hup' := stays_up hcrash hrestart hup hstep
     obtain ⟨_, _, rfl⟩ := SysState.step_timeout.mp hstep
     refine moved_nearer hup' ?_ fun j' h => ?_
     · rw [handle_eq]
@@ -206,11 +212,12 @@ theorem entry_leads (config : Config K P A) (hcrash : env.mayCrash () = false) (
     | start i =>
       obtain ⟨hdown, -⟩ := SysState.step_start.mp hstep
       simp [hup] at hdown
-    | input _ | drop _ | output _ | crash _ => exact List.not_mem_nil hrestarted
+    | input _ | drop _ | output _ | crash _ | restart => exact List.not_mem_nil hrestarted
 
 /-- A job held that is not periodic stops being held, whatever the service does, in any
 environment that does not crash the scheduler. -/
-theorem held_leaves (config : Config K P A) (hcrash : env.mayCrash () = false) (key : K) :
+theorem held_leaves (config : Config K P A) (hcrash : env.mayCrash () = false)
+    (hrestart : env.mayRestart = false) (key : K) :
     (system (K := K) (P := P) config).LeadsTo env
       (fun c => c.up () = true ∧ ∃ j, entry (c.state ()).jobs key = some j ∧
         j.work.periodic = false)
@@ -229,7 +236,7 @@ theorem held_leaves (config : Config K P A) (hcrash : env.mayCrash () = false) (
   by_cases hp : j.work.periodic = false
   · by_cases hn : left config j = n
     · refine System.LeadsTo.mono (fun c h => h.1.1) (fun c hQ => ?_)
-        (entry_leads config hcrash key j hp)
+        (entry_leads config hcrash hrestart key j hp)
       rcases hQ with hgone | ⟨hup, j', hj', hlt, hsame⟩
       · exact .inl hgone
       · refine .inr ⟨⟨hup, j', hj', hsame.2.1 ▸ hp⟩, ?_⟩
@@ -238,8 +245,10 @@ theorem held_leaves (config : Config K P A) (hcrash : env.mayCrash () = false) (
     · exact System.LeadsTo.of_imp fun c h => absurd h.2 hn
   · exact System.LeadsTo.of_imp fun c h => absurd h.1.2 hp
 
-/-- A job stops being held only in a step that emits its end. -/
-theorem ends_of_step {c c' : SysState (system (K := K) (P := P) config)}
+/-- A job stops being held only in a step that emits its end, where the process does not
+restart: a restart drops it with no end. -/
+theorem ends_of_step (hrestart : env.mayRestart = false)
+    {c c' : SysState (system (K := K) (P := P) config)}
     {ev : Event (sig K P A)} (hstep : c.step env ev = some c') {key : K} {j : Job K P}
     (hj : entry (c.state ()).jobs key = some j) (hout : key ∉ keys (c'.state ()).jobs) :
     (∃ o, Output.answer key o ∈ c'.outbox) ∨ ∃ n, Output.notice key j.payload n ∈ c'.outbox := by
@@ -284,17 +293,19 @@ theorem ends_of_step {c c' : SysState (system (K := K) (P := P) config)}
     obtain ⟨_, _, rfl⟩ := SysState.step_start.mp hstep
     rw [startActor_eq] at hout
     exact absurd hin hout
+  | restart => simp [SysState.step_restart_of_noRestarts hrestart] at hstep
 
 /-- Every job the scheduler holds that is not periodic comes to an end: in a fair run in which
 the scheduler is not crashed, a job held while it is up has its end handed over at a later
 position, as an answer to its id (a success, a dead letter, a cancellation) or as its notice. -/
-theorem held_ends (config : Config K P A) (hcrash : env.mayCrash () = false) (key : K)
+theorem held_ends (config : Config K P A) (hcrash : env.mayCrash () = false)
+    (hrestart : env.mayRestart = false) (key : K)
     {r : (system (K := K) (P := P) config).Run env} (hfair : r.Fair) {n : ℕ}
     (hup : (r.state n).up () = true) {j : Job K P}
     (hj : entry ((r.state n).state ()).jobs key = some j) (hp : j.work.periodic = false) :
     ∃ m, n ≤ m ∧ ((∃ o, r.event m = some (.output (.answer key o))) ∨
       ∃ p n, r.event m = some (.output (.notice key p n))) := by
-  obtain ⟨m, hm, hgone⟩ := System.LeadsTo.iff.mp (held_leaves config hcrash key)
+  obtain ⟨m, hm, hgone⟩ := System.LeadsTo.iff.mp (held_leaves config hcrash hrestart key)
     r hfair n ⟨hup, j, hj, hp⟩
   have hin : key ∈ keys ((r.state n).state ()).jobs :=
     mem_keys.mpr ⟨j, (entry_some hj).1, (entry_some hj).2⟩
@@ -311,11 +322,11 @@ theorem held_ends (config : Config K P A) (hcrash : env.mayCrash () = false) (ke
   cases hev : r.event k with
   | none => exact absurd (System.Run.step_none hev ▸ hin') hout
   | some ev =>
-    rcases ends_of_step (System.Run.step_some hev) hj' hout with ⟨o, ho⟩ | ho
-    · obtain ⟨m', hm', htaken⟩ := hfair.output_taken (n := k + 1) ho
+    rcases ends_of_step hrestart (System.Run.step_some hev) hj' hout with ⟨o, ho⟩ | ho
+    · obtain ⟨m', hm', htaken⟩ := hfair.output_taken hrestart (n := k + 1) ho
       exact ⟨m', by omega, .inl ⟨o, htaken⟩⟩
     · obtain ⟨t, ho⟩ := ho
-      obtain ⟨m', hm', htaken⟩ := hfair.output_taken (n := k + 1) ho
+      obtain ⟨m', hm', htaken⟩ := hfair.output_taken hrestart (n := k + 1) ho
       exact ⟨m', by omega, .inr ⟨_, _, htaken⟩⟩
 
 /-- A step leaves a periodic job waiting as it was, without arming its timer again, or ends it,
@@ -364,7 +375,8 @@ theorem every_step {s : State K P} {key : K} {j : Job K P} (hj : entry s.jobs ke
 
 /-- A step from a state in which a periodic job waits keeps it so, ends it or emits its notice;
 and one that arms its timer again does one of the last two. -/
-private theorem every_event {c c' : SysState (system (K := K) (P := P) config)}
+private theorem every_event (hrestart : env.mayRestart = false)
+    {c c' : SysState (system (K := K) (P := P) config)}
     {ev : Event (sig K P A)} (hstep : c.step env ev = some c') (hup : c.up () = true)
     {key : K} {j : Job K P} (hj : entry (c.state ()).jobs key = some j) {period_ms : Nat}
     (hwork : j.work = .every period_ms) (hwait : j.phase = .waiting) :
@@ -412,11 +424,13 @@ private theorem every_event {c c' : SysState (system (K := K) (P := P) config)}
   | start i =>
     obtain ⟨hdown, -⟩ := SysState.step_start.mp hstep
     simp [hup] at hdown
+  | restart => simp [SysState.step_restart_of_noRestarts hrestart] at hstep
 
 /-- A periodic job held is, in a fair run in which the scheduler is not crashed, noticed, or no
 longer held. Each notice it gives is handed over in turn (`System.Run.Fair.output_taken`), so
 while it is held it is noticed again and again. -/
-theorem every_noticed (config : Config K P A) (hcrash : env.mayCrash () = false) (key : K)
+theorem every_noticed (config : Config K P A) (hcrash : env.mayCrash () = false)
+    (hrestart : env.mayRestart = false) (key : K)
     (j : Job K P) {period_ms : Nat} (hwork : j.work = .every period_ms)
     (hwait : j.phase = .waiting) :
     (system (K := K) (P := P) config).LeadsTo env
@@ -426,9 +440,9 @@ theorem every_noticed (config : Config K P A) (hcrash : env.mayCrash () = false)
     (.timeout () (timer j)) ?_ ?_ ?_ ?_
   · exact fun c hc => armed config env c hc
   · intro c ev c' _ ⟨hup, hj⟩ _ hstep
-    rcases every_event hstep hup hj hwork hwait with hQ | ⟨he, -⟩
+    rcases every_event hrestart hstep hup hj hwork hwait with hQ | ⟨he, -⟩
     · exact .inr hQ
-    · exact .inl ⟨stays_up hcrash hup hstep, he⟩
+    · exact .inl ⟨stays_up hcrash hrestart hup hstep, he⟩
   · exact fun c harmed ⟨hup, hj⟩ _ => ⟨hup, harmed hup j (entry_some hj).1⟩
   · intro c c' _ ⟨hup, hj⟩ _ hstep
     obtain ⟨_, _, rfl⟩ := SysState.step_timeout.mp hstep
@@ -438,7 +452,7 @@ theorem every_noticed (config : Config K P A) (hcrash : env.mayCrash () = false)
     obtain ⟨-, rfl⟩ := entry_some hj
     simp [timer, hwait, step, touch_some _ hj, onJob, run, hwork]
   · intro c ev c' _ ⟨hup, hj⟩ _ hstep hrestarted
-    rcases every_event hstep hup hj hwork hwait with hQ | ⟨-, hnot⟩
+    rcases every_event hrestart hstep hup hj hwork hwait with hQ | ⟨-, hnot⟩
     · exact hQ
     · exact absurd hrestarted hnot
 
@@ -446,7 +460,8 @@ theorem every_noticed (config : Config K P A) (hcrash : env.mayCrash () = false)
 that does not crash the scheduler: what it does alone, it does in `attach sys`. -/
 theorem attach_held_leaves {τ : Signature} (sys : System τ) (config : Config K P A)
     (use : Use τ K P A) {env : EnvModel (joinSig (sig K P A) τ)}
-    (hcrash : env.mayCrash (.inl ()) = false) (key : K) :
+    (hcrash : env.mayCrash (.inl ()) = false)
+    (hrestart : env.mayRestart = false) (key : K) :
     (attach sys config use).LeadsTo env
       (fun c => c.up (.inl ()) = true ∧ ∃ j, entry (c.state (.inl ()) : State K P).jobs key = some j ∧
         j.work.periodic = false)
@@ -454,12 +469,13 @@ theorem attach_held_leaves {τ : Signature} (sys : System τ) (config : Config K
   System.LeadsTo.join_left
     (P := fun c : SysState (system (K := K) (P := P) config) =>
       c.up () = true ∧ ∃ j, entry (c.state ()).jobs key = some j ∧ j.work.periodic = false)
-    (Q := fun s _ => key ∉ keys (s ()).jobs) (held_leaves config (env := env.left) hcrash key)
+    (Q := fun s _ => key ∉ keys (s ()).jobs) (held_leaves config (env := env.left) hcrash hrestart key)
 
 /-- Beside any system, the job held under `key` at position `n` is the same job at `k`: the
 same work and payload. Or it left at a position between, where it was still that job. -/
 theorem attach_held_same {τ : Signature} {sys : System τ} {use : Use τ K P A}
-    {env : EnvModel (joinSig (sig K P A) τ)} {r : (attach sys config use).Run env} {n : ℕ}
+    {env : EnvModel (joinSig (sig K P A) τ)} (hrestart : env.mayRestart = false)
+    {r : (attach sys config use).Run env} {n : ℕ}
     {key : K} {j : Job K P} (hj : entry ((r.state n).state (.inl ()) : State K P).jobs key = some j)
     (k : ℕ) (hk : n ≤ k) :
     (∃ j', entry ((r.state k).state (.inl ()) : State K P).jobs key = some j' ∧ Same j j') ∨
@@ -475,7 +491,7 @@ theorem attach_held_same {τ : Signature} {sys : System τ} {use : Use τ K P A}
         cases hev : r.event k with
         | none => exact .inl (by rw [System.Run.step_none hev])
         | some ev =>
-          rcases SysState.step_left_state (System.Run.step_some hev) () with
+          rcases SysState.step_left_state hrestart (System.Run.step_some hev) () with
             hs | ⟨msg, -, hs⟩ | ⟨-, hs⟩
           · exact .inl hs
           · exact .inr ⟨msg, hs⟩
@@ -502,6 +518,7 @@ crashed and never stop: a loss, a crash or a stop can take the end out of flight
 theorem attach_end_handled {τ : Signature} (sys : System τ) (config : Config K P A)
     (use : Use τ K P A) {env : EnvModel (joinSig (sig K P A) τ)}
     (hcrash : env.mayCrash (.inl ()) = false)
+    (hrestart : env.mayRestart = false)
     (hlossless : ∀ j, (env.link (some (.inl ())) (.inr j)).lossy = false)
     (hcrashes : ∀ j, env.mayCrash (.inr j) = false)
     (hruns : ∀ j s msg, ((sys.actor j).step s msg).2.any Effect.isStop = false)
@@ -516,16 +533,16 @@ theorem attach_end_handled {τ : Signature} (sys : System τ) (config : Config K
       (r.event m = some (.deliver ⟨some (.inl ()), .inr (sys.accept x).1, (sys.accept x).2⟩) ∨
         r.event m =
           some (.duplicate ⟨some (.inl ()), .inr (sys.accept x).1, (sys.accept x).2⟩)) := by
-  obtain ⟨m, hm, hgone⟩ := System.LeadsTo.iff.mp (attach_held_leaves sys config use hcrash key)
+  obtain ⟨m, hm, hgone⟩ := System.LeadsTo.iff.mp (attach_held_leaves sys config use hcrash hrestart key)
     r hfair n ⟨hup, j, hj, hp⟩
-  rcases attach_held_same hj m hm with ⟨j', hj', -⟩ | ⟨k, j', hk, -, hj', hsame, hout⟩
+  rcases attach_held_same hrestart hj m hm with ⟨j', hj', -⟩ | ⟨k, j', hk, -, hj', hsame, hout⟩
   · exact absurd (mem_keys.mpr ⟨j', (entry_some hj').1, (entry_some hj').2⟩) hgone
   have hin' : key ∈ keys ((r.state k).state (.inl ()) : State K P).jobs :=
     mem_keys.mpr ⟨j', (entry_some hj').1, (entry_some hj').2⟩
   cases hev : r.event k with
   | none => exact absurd (System.Run.step_none hev ▸ hin') hout
   | some ev =>
-    rcases SysState.step_left_state (System.Run.step_some hev) () with
+    rcases SysState.step_left_state hrestart (System.Run.step_some hev) () with
       hs | ⟨msg, hdeed, hs⟩ | ⟨-, hs⟩
     · exact absurd (hs ▸ hin') hout
     · have hmem {out : Output K P A}
@@ -541,7 +558,7 @@ theorem attach_end_handled {τ : Signature} (sys : System τ) (config : Config K
           ⟨o, hend, ho⟩ | ⟨honce, t, ho⟩
         · exact ⟨_, _, hmem ho, rfl, .inl ⟨o, hend, rfl⟩⟩
         · exact ⟨_, _, hmem ho, rfl, .inr ⟨hsame.2.1.symm.trans honce, t, by rw [hsame.2.2]⟩⟩
-      obtain ⟨m, hm, h⟩ := hfair.routed_right hev hdeed hemit hx (hlossless _) (hcrashes _)
+      obtain ⟨m, hm, h⟩ := hfair.routed_right hev hdeed hemit hx (hlossless _) (hcrashes _) hrestart
         (hruns _) (hrecovers _)
       exact ⟨m, x, by omega, hend, h⟩
     · exact absurd (hs ▸ hin') hout
@@ -553,6 +570,7 @@ are those of `attach_end_handled`. -/
 theorem attach_answer_handled {τ : Signature} (sys : System τ) (config : Config K P A)
     (use : Use τ K P A) {env : EnvModel (joinSig (sig K P A) τ)}
     (hcrash : env.mayCrash (.inl ()) = false)
+    (hrestart : env.mayRestart = false)
     (hlossless : ∀ j, (env.link (some (.inl ())) (.inr j)).lossy = false)
     (hcrashes : ∀ j, env.mayCrash (.inr j) = false)
     (hruns : ∀ j s msg, ((sys.actor j).step s msg).2.any Effect.isStop = false)
@@ -567,7 +585,7 @@ theorem attach_answer_handled {τ : Signature} (sys : System τ) (config : Confi
         r.event m = some (.duplicate ⟨some (.inl ()), .inr (sys.accept (use.answer key o)).1,
           (sys.accept (use.answer key o)).2⟩)) := by
   obtain ⟨m, x, hm, ⟨o, hend, rfl⟩ | ⟨honce, -⟩, h⟩ :=
-    attach_end_handled sys config use hcrash hlossless hcrashes hruns hrecovers key hfair hup hj
+    attach_end_handled sys config use hcrash hrestart hlossless hcrashes hruns hrecovers key hfair hup hj
       (by simp [hwork, Work.periodic])
   · exact ⟨m, o, hm, hend, h⟩
   · rw [hwork] at honce
@@ -585,17 +603,20 @@ variable {E : Type} [DecidableEq E] {owner : K → E} {envBy : EnvModel (sigBy E
 
 /-- A scheduler of `systemBy` that the environment does not crash stays up. -/
 theorem stays_upBy {e : E} (hcrash : envBy.mayCrash e = false)
+    (hrestart : envBy.mayRestart = false)
     {c c' : SysState (systemBy config owner)} {ev : Event (sigBy E K P A)}
     (hup : c.up e = true) (hstep : c.step envBy ev = some c') : c'.up e = true :=
-  SysState.up_of_step hcrash (fun s msg => by
+  SysState.up_of_step hcrash hrestart (fun s msg => by
     show (Eff.allAt e (step config s msg).2).any Effect.isStop = false
     rw [isStop_at]; exact step_runs config s msg) hup hstep
 
-/-- A step leaves the state of the scheduler of `e` as it is, or takes it by one of its steps. -/
-theorem state_stepBy {e : E} {c c' : SysState (systemBy config owner)} {ev : Event (sigBy E K P A)}
+/-- A step leaves the state of the scheduler of `e` as it is, or takes it by one of its steps,
+where the process does not restart. -/
+theorem state_stepBy {e : E} (hrestart : envBy.mayRestart = false)
+    {c c' : SysState (systemBy config owner)} {ev : Event (sigBy E K P A)}
     (hstep : c.step envBy ev = some c') :
     c'.state e = c.state e ∨ ∃ msg, c'.state e = (step config (c.state e) msg).1 := by
-  rcases SysState.step_state hstep with h | ⟨i, msg, h⟩ | ⟨i, h⟩
+  rcases SysState.step_state_of_noRestarts hstep hrestart with h | ⟨i, msg, h⟩ | ⟨i, h⟩
   · exact .inl (by rw [h])
   · by_cases hi : e = i
     · subst hi
@@ -625,7 +646,8 @@ private theorem moved_nearerBy {e : E} {c : SysState (systemBy config owner)} {k
 /-- A job a scheduler of `systemBy` holds that is not periodic is, in a fair run, no longer held
 or nearer its end. -/
 theorem entry_leadsBy (config : Config K P A) (owner : K → E) {e : E}
-    (hcrash : envBy.mayCrash e = false) (key : K) (j : Job K P) (hp : j.work.periodic = false) :
+    (hcrash : envBy.mayCrash e = false)
+    (hrestart : envBy.mayRestart = false) (key : K) (j : Job K P) (hp : j.work.periodic = false) :
     (systemBy config owner).LeadsTo envBy
       (fun c => c.up e = true ∧ entry (c.state e : State K P).jobs key = some j)
       (NearerBy config owner e key j) := by
@@ -634,15 +656,15 @@ theorem entry_leadsBy (config : Config K P A) (owner : K → E) {e : E}
     (.timeout e (timer j)) ?_ ?_ ?_ ?_
   · exact fun c hc => ⟨armedBy config owner envBy c hc, attemptsBy config owner envBy e c hc⟩
   · intro c ev c' ⟨_, hatt⟩ ⟨hup, hj⟩ _ hstep
-    have hup' := stays_upBy hcrash hup hstep
-    rcases state_stepBy (e := e) hstep with hs | ⟨msg, hs⟩
+    have hup' := stays_upBy hcrash hrestart hup hstep
+    rcases state_stepBy (e := e) hrestart hstep with hs | ⟨msg, hs⟩
     · exact .inl ⟨hup', hs ▸ hj⟩
     · rcases entry_step hatt hj hp msg with he | hmoved
       · exact .inl ⟨hup', hs ▸ he⟩
       · exact .inr (moved_nearerBy hup' (hs ▸ hmoved) fun j' h => entry_step_same hj (hs ▸ h))
   · exact fun c ⟨harmed, _⟩ ⟨hup, hj⟩ _ => ⟨hup, harmed e hup j (entry_some hj).1⟩
   · intro c c' ⟨_, hatt⟩ ⟨hup, hj⟩ _ hstep
-    have hup' := stays_upBy hcrash hup hstep
+    have hup' := stays_upBy hcrash hrestart hup hstep
     obtain ⟨_, _, rfl⟩ := SysState.step_timeout.mp hstep
     refine moved_nearerBy hup' ?_ fun j' h => ?_
     · rw [handleBy_eq]
@@ -680,12 +702,13 @@ theorem entry_leadsBy (config : Config K P A) (owner : K → E) {e : E}
         obtain ⟨eff, -, h⟩ := hrestarted
         cases eff <;> simp only [reduceCtorEq, Option.some.injEq, Event.timeout.injEq] at h
         exact hi h.1
-    | input _ | drop _ | output _ | crash _ => exact List.not_mem_nil hrestarted
+    | input _ | drop _ | output _ | crash _ | restart => exact List.not_mem_nil hrestarted
 
 /-- A job a scheduler of `systemBy` holds that is not periodic stops being held, in any
 environment that does not crash that scheduler. -/
 theorem held_leavesBy (config : Config K P A) (owner : K → E) {e : E}
-    (hcrash : envBy.mayCrash e = false) (key : K) :
+    (hcrash : envBy.mayCrash e = false)
+    (hrestart : envBy.mayRestart = false) (key : K) :
     (systemBy config owner).LeadsTo envBy
       (fun c => c.up e = true ∧ ∃ j, entry (c.state e : State K P).jobs key = some j ∧
         j.work.periodic = false)
@@ -705,7 +728,7 @@ theorem held_leavesBy (config : Config K P A) (owner : K → E) {e : E}
   by_cases hp : j.work.periodic = false
   · by_cases hn : left config j = n
     · refine System.LeadsTo.mono (fun c h => h.1.1) (fun c hQ => ?_)
-        (entry_leadsBy config owner hcrash key j hp)
+        (entry_leadsBy config owner hcrash hrestart key j hp)
       rcases hQ with hgone | ⟨hup, j', hj', hlt, hsame⟩
       · exact .inl hgone
       · refine .inr ⟨⟨hup, j', hj', hsame.2.1 ▸ hp⟩, ?_⟩
@@ -718,7 +741,8 @@ theorem held_leavesBy (config : Config K P A) (owner : K → E) {e : E}
 being held by it, in any environment that does not crash that scheduler. -/
 theorem attachBy_held_leaves {τ : Signature} (sys : System τ) (config : Config K P A)
     (use : Use τ K P A) (owner : K → E) {env : EnvModel (joinSig (sigBy E K P A) τ)} {e : E}
-    (hcrash : env.mayCrash (.inl e) = false) (key : K) :
+    (hcrash : env.mayCrash (.inl e) = false)
+    (hrestart : env.mayRestart = false) (key : K) :
     (attachBy sys config use owner).LeadsTo env
       (fun c => c.up (.inl e) = true ∧ ∃ j, entry (c.state (.inl e) : State K P).jobs key = some j ∧
         j.work.periodic = false)
@@ -727,7 +751,7 @@ theorem attachBy_held_leaves {τ : Signature} (sys : System τ) (config : Config
     (P := fun c : SysState (systemBy config owner) =>
       c.up e = true ∧ ∃ j, entry (c.state e : State K P).jobs key = some j ∧ j.work.periodic = false)
     (Q := fun s _ => key ∉ keys (s e : State K P).jobs)
-    (held_leavesBy config owner (envBy := env.left) hcrash key)
+    (held_leavesBy config owner (envBy := env.left) hcrash hrestart key)
 
 end By
 

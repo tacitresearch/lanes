@@ -1030,6 +1030,11 @@ theorem sim_shard {w w' : World sys bridge} {c : SysState (served sys bridge con
     obtain ⟨s, hs, -⟩ := hstep
     obtain ⟨-, hcrash, -⟩ := SysState.step_crash.mp hs
     simp [EnvModel.reliable] at hcrash
+  | restart =>
+    simp only [World.step, Option.map_eq_some_iff] at hstep
+    obtain ⟨s, hs, -⟩ := hstep
+    obtain ⟨hmay, -⟩ := SysState.step_restart.mp hs
+    simp [EnvModel.reliable] at hmay
   | timeout i m =>
     simp only [World.step, Option.map_eq_some_iff] at hstep
     obtain ⟨s, hs, rfl⟩ := hstep

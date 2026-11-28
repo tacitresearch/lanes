@@ -365,7 +365,7 @@ theorem SysState.mem_net_of_leftDeed {c c' : SysState (a.join b w)} {ev : Event 
       exact SysState.mem_net_settle_of_sends he hne
     · simp [Event.leftDeed] at hdeed
   | output o => rcases o with o | o <;> simp [Event.leftDeed] at hdeed
-  | input _ | drop _ | crash _ | start _ => simp [Event.leftDeed] at hdeed
+  | input _ | drop _ | crash _ | start _ | restart => simp [Event.leftDeed] at hdeed
 
 /-- A step of the join in which an actor of `b` handles a message puts in flight what that
 actor sends to the other actors. -/
@@ -401,12 +401,12 @@ theorem SysState.mem_net_of_rightDeed {c c' : SysState (a.join b w)} {ev : Event
       obtain ⟨-, -, rfl⟩ := SysState.step_timeout.mp hstep
       exact SysState.mem_net_settle_of_sends he hne
   | output o => rcases o with o | o <;> simp [Event.rightDeed] at hdeed
-  | input _ | drop _ | crash _ | start _ => simp [Event.rightDeed] at hdeed
+  | input _ | drop _ | crash _ | start _ | restart => simp [Event.rightDeed] at hdeed
 
 /-- A step of the join leaves an actor of `a` as it was, or is that actor handling a message, or
-starting. -/
+starting, where the process does not restart. -/
 theorem SysState.step_left_state {c c' : SysState (a.join b w)} {ev : Event (joinSig σ τ)}
-    (hstep : c.step env ev = some c') (i : σ.Id) :
+    (hrestart : env.mayRestart = false) (hstep : c.step env ev = some c') (i : σ.Id) :
     c'.state (.inl i) = c.state (.inl i) ∨
       (∃ msg, ev.leftDeed = some (.handle i msg) ∧
         c'.state (.inl i) = ((a.actor i).step (c.state (.inl i)) msg).1) ∨
@@ -461,44 +461,49 @@ theorem SysState.step_left_state {c c' : SysState (a.join b w)} {ev : Event (joi
         exact .inr (.inr ⟨rfl, by simp [Actor.mapEff]⟩)
       · exact .inl (update_of_ne _ _ (by simpa using Ne.symm h))
     · exact .inl (update_of_ne _ _ (by simp))
+  | restart => simp [SysState.step_restart_of_noRestarts hrestart] at hstep
 
 /-- In a fair run of a join, a message in flight to an actor of `b` is handled by it, on a link
-that does not lose it, when the environment does not crash that actor and it never stops. -/
+that does not lose it, when the environment neither crashes that actor nor restarts the process
+and it never stops. -/
 theorem System.Run.Fair.handled_right {r : (a.join b w).Run env} (hfair : r.Fair) {n : ℕ}
     {src : Option (σ.Id ⊕ τ.Id)} {j : τ.Id} {msg : τ.Msg j}
     (hlossless : (env.link src (.inr j)).lossy = false) (hcrash : env.mayCrash (.inr j) = false)
+    (hrestart : env.mayRestart = false)
     (hruns : ∀ s m, ((b.actor j).step s m).2.any Effect.isStop = false)
     (hrecovers : ∀ s, ((b.actor j).recover s).2.any Effect.isStop = false)
     (he : (⟨src, .inr j, msg⟩ : Envelope (joinSig σ τ)) ∈ (r.state n).net) :
     ∃ m, n ≤ m ∧ (r.event m = some (.deliver ⟨src, .inr j, msg⟩) ∨
       r.event m = some (.duplicate ⟨src, .inr j, msg⟩)) :=
-  hfair.handled hlossless hcrash (fun s m => (w.isStop_right _).trans (hruns s m))
+  hfair.handled hlossless hcrash hrestart (fun s m => (w.isStop_right _).trans (hruns s m))
     (fun s => (w.isStop_right _).trans (hrecovers s)) he
 
 /-- In a fair run of a join, a message in flight to an actor of `a` is handled by it, on a link
-that does not lose it, when the environment does not crash that actor and it never stops. -/
+that does not lose it, when the environment neither crashes that actor nor restarts the process
+and it never stops. -/
 theorem System.Run.Fair.handled_left {r : (a.join b w).Run env} (hfair : r.Fair) {n : ℕ}
     {src : Option (σ.Id ⊕ τ.Id)} {i : σ.Id} {msg : σ.Msg i}
     (hlossless : (env.link src (.inl i)).lossy = false) (hcrash : env.mayCrash (.inl i) = false)
+    (hrestart : env.mayRestart = false)
     (hruns : ∀ s m, ((a.actor i).step s m).2.any Effect.isStop = false)
     (hrecovers : ∀ s, ((a.actor i).recover s).2.any Effect.isStop = false)
     (he : (⟨src, .inl i, msg⟩ : Envelope (joinSig σ τ)) ∈ (r.state n).net) :
     ∃ m, n ≤ m ∧ (r.event m = some (.deliver ⟨src, .inl i, msg⟩) ∨
       r.event m = some (.duplicate ⟨src, .inl i, msg⟩)) :=
-  hfair.handled hlossless hcrash (fun s m => (w.isStop_left _).trans (hruns s m))
+  hfair.handled hlossless hcrash hrestart (fun s m => (w.isStop_left _).trans (hruns s m))
     (fun s => (w.isStop_left _).trans (hrecovers s)) he
 
 /-- In a fair run of a join, an output that an actor of `a` emits as it handles a message, and
 that the wiring routes to `b`, is handled by the actor of `b` that takes it, at a later
-position: on a link that does not lose it, when the environment does not crash that actor and
-it never stops. -/
+position: on a link that does not lose it, when the environment neither crashes that actor nor
+restarts the process and it never stops. -/
 theorem System.Run.Fair.routed_right {r : (a.join b w).Run env} (hfair : r.Fair) {n : ℕ}
     {ev : Event (joinSig σ τ)} {i : σ.Id} {msg : σ.Msg i} {out : σ.Out} {x : τ.In}
     (hev : r.event n = some ev) (hdeed : ev.leftDeed = some (.handle i msg))
     (hout : .emit out ∈ ((a.actor i).step ((r.state n).state (.inl i)) msg).2)
     (hx : w.toRight out = some x)
     (hlossless : (env.link (some (.inl i)) (.inr (b.accept x).1)).lossy = false)
-    (hcrash : env.mayCrash (.inr (b.accept x).1) = false)
+    (hcrash : env.mayCrash (.inr (b.accept x).1) = false) (hrestart : env.mayRestart = false)
     (hruns : ∀ s m, ((b.actor (b.accept x).1).step s m).2.any Effect.isStop = false)
     (hrecovers : ∀ s, ((b.actor (b.accept x).1).recover s).2.any Effect.isStop = false) :
     ∃ m, n < m ∧
@@ -506,20 +511,20 @@ theorem System.Run.Fair.routed_right {r : (a.join b w).Run env} (hfair : r.Fair)
         r.event m = some (.duplicate ⟨some (.inl i), .inr (b.accept x).1, (b.accept x).2⟩)) := by
   have he := SysState.mem_net_of_leftDeed (System.Run.step_some hev) hdeed
     (w.mem_sends_left hout hx) (by simp)
-  obtain ⟨m, hm, h⟩ := hfair.handled_right hlossless hcrash hruns hrecovers he
+  obtain ⟨m, hm, h⟩ := hfair.handled_right hlossless hcrash hrestart hruns hrecovers he
   exact ⟨m, by omega, h⟩
 
 /-- In a fair run of a join, an output that an actor of `b` emits as it handles a message, and
 that the wiring routes to `a`, is handled by the actor of `a` that takes it, at a later
-position: on a link that does not lose it, when the environment does not crash that actor and
-it never stops. -/
+position: on a link that does not lose it, when the environment neither crashes that actor nor
+restarts the process and it never stops. -/
 theorem System.Run.Fair.routed_left {r : (a.join b w).Run env} (hfair : r.Fair) {n : ℕ}
     {ev : Event (joinSig σ τ)} {j : τ.Id} {msg : τ.Msg j} {out : τ.Out} {x : σ.In}
     (hev : r.event n = some ev) (hdeed : ev.rightDeed = some (.handle j msg))
     (hout : .emit out ∈ ((b.actor j).step ((r.state n).state (.inr j)) msg).2)
     (hx : w.toLeft out = some x)
     (hlossless : (env.link (some (.inr j)) (.inl (a.accept x).1)).lossy = false)
-    (hcrash : env.mayCrash (.inl (a.accept x).1) = false)
+    (hcrash : env.mayCrash (.inl (a.accept x).1) = false) (hrestart : env.mayRestart = false)
     (hruns : ∀ s m, ((a.actor (a.accept x).1).step s m).2.any Effect.isStop = false)
     (hrecovers : ∀ s, ((a.actor (a.accept x).1).recover s).2.any Effect.isStop = false) :
     ∃ m, n < m ∧
@@ -527,7 +532,7 @@ theorem System.Run.Fair.routed_left {r : (a.join b w).Run env} (hfair : r.Fair) 
         r.event m = some (.duplicate ⟨some (.inr j), .inl (a.accept x).1, (a.accept x).2⟩)) := by
   have he := SysState.mem_net_of_rightDeed (System.Run.step_some hev) hdeed
     (w.mem_sends_right hout hx) (by simp)
-  obtain ⟨m, hm, h⟩ := hfair.handled_left hlossless hcrash hruns hrecovers he
+  obtain ⟨m, hm, h⟩ := hfair.handled_left hlossless hcrash hrestart hruns hrecovers he
   exact ⟨m, by omega, h⟩
 
 /-! ### Behind other inputs and outputs

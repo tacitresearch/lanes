@@ -21,7 +21,10 @@ nearer its answer (`Jobs.entry_step_timer`); no other step takes it further away
 to a smaller one or to the job's answer, and by `System.LeadsTo.induction` the job is answered.
 
 The actor must not crash, for the reason the gate must not (`Lanes.Semantics.Front`): a
-crashed actor with no mail need never start again.
+crashed actor with no mail need never start again. The process must not restart either: a
+restart forgets every active job, unanswered, so none of these statements holds under restarts.
+What does is the bound on what is answered (`Jobs.answered_le_handled`) and the invariants of
+`Lanes.Behaviours.Jobs.Sound`, which hold in every environment.
 
 ## Main statements
 
@@ -39,17 +42,19 @@ namespace Lanes.Jobs
 variable {K J R : Type} [DecidableEq K] [DecidableEq J] [DecidableEq R] {config : Config R}
   {env : EnvModel (sig K J R)}
 
-/-- A jobs actor that the environment does not crash stays up. -/
-theorem stays_up (hcrash : env.mayCrash () = false)
+/-- A jobs actor that the environment neither crashes nor restarts stays up. -/
+theorem stays_up (hcrash : env.mayCrash () = false) (hrestart : env.mayRestart = false)
     {c c' : SysState (system (K := K) (J := J) config)} {ev : Event (sig K J R)}
     (hup : c.up () = true) (hstep : c.step env ev = some c') : c'.up () = true :=
-  SysState.up_of_step hcrash (fun s msg => step_runs config s msg) hup hstep
+  SysState.up_of_step hcrash hrestart (fun s msg => step_runs config s msg) hup hstep
 
-/-- A step leaves the active jobs as they are, or takes them by one step of the actor. -/
-theorem state_step {c c' : SysState (system (K := K) (J := J) config)} {ev : Event (sig K J R)}
+/-- A step leaves the active jobs as they are, or takes them by one step of the actor, where
+the process does not restart. -/
+theorem state_step (hrestart : env.mayRestart = false)
+    {c c' : SysState (system (K := K) (J := J) config)} {ev : Event (sig K J R)}
     (hstep : c.step env ev = some c') :
     c'.state () = c.state () ∨ ∃ msg, c'.state () = (step config (c.state ()) msg).1 := by
-  rcases SysState.step_state hstep with h | ⟨i, msg, h⟩ | ⟨i, h⟩
+  rcases SysState.step_state_of_noRestarts hstep hrestart with h | ⟨i, msg, h⟩ | ⟨i, h⟩
   · exact .inl (by rw [h])
   · exact .inr ⟨msg, by rw [h]; rfl⟩
   · exact .inl (by rw [h]; rfl)
@@ -63,7 +68,8 @@ private theorem moved_leads {c : SysState (system (K := K) (J := J) config)} {ke
   · exact .inr ⟨hup, a', h, hlt⟩
 
 /-- An active job is, in a fair run, no longer active or nearer its answer. -/
-theorem entry_leads (config : Config R) (hcrash : env.mayCrash () = false) (key : K)
+theorem entry_leads (config : Config R) (hcrash : env.mayCrash () = false)
+    (hrestart : env.mayRestart = false) (key : K)
     (a : Active K J) :
     (system (K := K) (J := J) config).LeadsTo env
       (fun c => c.up () = true ∧ entry (c.state ()) key = some a)
@@ -73,15 +79,15 @@ theorem entry_leads (config : Config R) (hcrash : env.mayCrash () = false) (key 
     (I := fun c => Armed c ∧ Attempts config (c.state ())) ?_ (.timeout () (timer a)) ?_ ?_ ?_ ?_
   · exact fun c hc => ⟨armed config env c hc, attempts config env c hc⟩
   · intro c ev c' ⟨_, hatt⟩ ⟨hup, ha⟩ _ hstep
-    have hup' := stays_up hcrash hup hstep
-    rcases state_step hstep with hs | ⟨msg, hs⟩
+    have hup' := stays_up hcrash hrestart hup hstep
+    rcases state_step hrestart hstep with hs | ⟨msg, hs⟩
     · exact .inl ⟨hup', hs ▸ ha⟩
     · rcases entry_step config hatt ha msg with he | hmoved
       · exact .inl ⟨hup', hs ▸ he⟩
       · exact .inr (moved_leads hup' (hs ▸ hmoved))
   · exact fun c ⟨harmed, _⟩ ⟨hup, ha⟩ _ => ⟨hup, harmed hup a (entry_some ha).1⟩
   · intro c c' ⟨_, hatt⟩ ⟨hup, ha⟩ _ hstep
-    have hup' := stays_up hcrash hup hstep
+    have hup' := stays_up hcrash hrestart hup hstep
     obtain ⟨_, _, rfl⟩ := SysState.step_timeout.mp hstep
     refine moved_leads hup' ?_
     rw [handle_eq]
@@ -101,11 +107,12 @@ theorem entry_leads (config : Config R) (hcrash : env.mayCrash () = false) (key 
     | start i =>
       obtain ⟨hdown, -⟩ := SysState.step_start.mp hstep
       simp [hup] at hdown
-    | input _ | drop _ | output _ | crash _ => exact List.not_mem_nil hrestarted
+    | input _ | drop _ | output _ | crash _ | restart => exact List.not_mem_nil hrestarted
 
 /-- An active job stops being active, whatever the workers do, in any environment that does not
-crash the jobs actor. -/
-theorem active_leaves (config : Config R) (hcrash : env.mayCrash () = false) (key : K) :
+crash the jobs actor or restart the process. -/
+theorem active_leaves (config : Config R) (hcrash : env.mayCrash () = false)
+    (hrestart : env.mayRestart = false) (key : K) :
     (system (K := K) (J := J) config).LeadsTo env
       (fun c => c.up () = true ∧ key ∈ keys (c.state ()))
       (fun c => key ∉ keys (c.state ())) := by
@@ -123,7 +130,7 @@ theorem active_leaves (config : Config R) (hcrash : env.mayCrash () = false) (ke
     simpa [f, ha] using hf
   refine System.LeadsTo.exists_left fun a => ?_
   by_cases hn : left config a = n
-  · refine System.LeadsTo.mono (fun c h => h.1) (fun c hQ => ?_) (entry_leads config hcrash key a)
+  · refine System.LeadsTo.mono (fun c h => h.1) (fun c hQ => ?_) (entry_leads config hcrash hrestart key a)
     rcases hQ with hgone | ⟨hup, a', ha', hlt⟩
     · exact .inl hgone
     · refine .inr ⟨⟨hup, mem_keys.mpr ⟨a', (entry_some ha').1, (entry_some ha').2⟩⟩, ?_⟩
@@ -131,8 +138,10 @@ theorem active_leaves (config : Config R) (hcrash : env.mayCrash () = false) (ke
       omega
   · exact System.LeadsTo.of_imp fun c h => absurd h.2 hn
 
-/-- A job stops being active only in a step that emits its answer. -/
-theorem answered_of_leaves {c c' : SysState (system (K := K) (J := J) config)}
+/-- A job stops being active only in a step that emits its answer, where the process does not
+restart: a restart drops it unanswered. -/
+theorem answered_of_leaves (hrestart : env.mayRestart = false)
+    {c c' : SysState (system (K := K) (J := J) config)}
     {ev : Event (sig K J R)} (hstep : c.step env ev = some c') {key : K}
     (hin : key ∈ keys (c.state ())) (hout : key ∉ keys (c'.state ())) :
     ∃ outcome, Output.answer key outcome ∈ c'.outbox := by
@@ -172,14 +181,17 @@ theorem answered_of_leaves {c c' : SysState (system (K := K) (J := J) config)}
     obtain ⟨_, _, rfl⟩ := SysState.step_start.mp hstep
     rw [startActor_eq] at hout
     exact absurd hin hout
+  | restart => simp [SysState.step_restart_of_noRestarts hrestart] at hstep
 
-/-- The jobs actor answers every job it admits: in a fair run in which it is not crashed, a job
-active while it is up has an answer handed over at a later position. -/
-theorem active_answered (config : Config R) (hcrash : env.mayCrash () = false) (key : K)
+/-- The jobs actor answers every job it admits: in a fair run in which it is not crashed and the
+process does not restart, a job active while it is up has an answer handed over at a later
+position. -/
+theorem active_answered (config : Config R) (hcrash : env.mayCrash () = false)
+    (hrestart : env.mayRestart = false) (key : K)
     {r : (system (K := K) (J := J) config).Run env} (hfair : r.Fair) {n : ℕ}
     (hup : (r.state n).up () = true) (hkey : key ∈ keys ((r.state n).state ())) :
     ∃ m, n ≤ m ∧ ∃ outcome, r.event m = some (.output (.answer key outcome)) := by
-  obtain ⟨m, hm, hgone⟩ := System.LeadsTo.iff.mp (active_leaves config hcrash key)
+  obtain ⟨m, hm, hgone⟩ := System.LeadsTo.iff.mp (active_leaves config hcrash hrestart key)
     r hfair n ⟨hup, hkey⟩
   have hleaves : ∃ k, n ≤ k ∧ key ∈ keys ((r.state k).state ()) ∧
       key ∉ keys ((r.state (k + 1)).state ()) := by
@@ -193,15 +205,16 @@ theorem active_answered (config : Config R) (hcrash : env.mayCrash () = false) (
   cases hev : r.event k with
   | none => exact absurd (System.Run.step_none hev ▸ hin) hout
   | some ev =>
-    obtain ⟨outcome, hemitted⟩ := answered_of_leaves (System.Run.step_some hev) hin hout
-    obtain ⟨m', hm', htaken⟩ := hfair.output_taken (n := k + 1) hemitted
+    obtain ⟨outcome, hemitted⟩ := answered_of_leaves hrestart (System.Run.step_some hev) hin hout
+    obtain ⟨m', hm', htaken⟩ := hfair.output_taken hrestart (n := k + 1) hemitted
     exact ⟨m', by omega, outcome, htaken⟩
 
 /-- Every submission the jobs actor handles is answered: in a fair run in which it is not
-crashed, a step that delivers a submission, or a duplicate of one, is followed by a hand-over of
+crashed and the process does not restart, a step that delivers a submission, or a duplicate of one, is followed by a hand-over of
 an answer to its key. The answer may be to an earlier submission of the same key that is still
 active, which this one then joins. -/
 theorem submitted_answered (config : Config R) (hcrash : env.mayCrash () = false)
+    (hrestart : env.mayRestart = false)
     {r : (system (K := K) (J := J) config).Run env} (hfair : r.Fair) {n : ℕ}
     {e : Envelope (sig K J R)} {key : K} {job : J}
     (hev : r.event n = some (.deliver e) ∨ r.event n = some (.duplicate e))
@@ -217,34 +230,34 @@ theorem submitted_answered (config : Config R) (hcrash : env.mayCrash () = false
       exact ⟨hup, _, rfl, rfl, h⟩
   obtain ⟨hup, c₀, hs, ho, hnext⟩ := hafter
   have hup' : (r.state (n + 1)).up () = true := by
-    rcases hev with hev | hev <;> exact stays_up hcrash hup (System.Run.step_some hev)
+    rcases hev with hev | hev <;> exact stays_up hcrash hrestart hup (System.Run.step_some hev)
   have hsubmit := submit_step config ((r.state n).state ()) key job
   rw [← hmsg] at hsubmit
   have hstate : (r.state (n + 1)).state () = (step config ((r.state n).state ()) e.msg).1 := by
     rw [hnext, handle_eq]
     simp [hs]
   rcases hsubmit with hkey | ⟨outcome, houtcome⟩
-  · obtain ⟨m, hm, h⟩ := active_answered config hcrash key hfair hup' (hstate ▸ hkey)
+  · obtain ⟨m, hm, h⟩ := active_answered config hcrash hrestart key hfair hup' (hstate ▸ hkey)
     exact ⟨m, by omega, h⟩
   · have hout : Output.answer key outcome ∈ (r.state (n + 1)).outbox := by
       rw [hnext, handle_eq, ho, hs]
       exact List.mem_append_right _ (Effect.mem_emits.mpr houtcome)
-    obtain ⟨m, hm, h⟩ := hfair.output_taken hout
+    obtain ⟨m, hm, h⟩ := hfair.output_taken hrestart hout
     exact ⟨m, by omega, outcome, h⟩
 
 /-- Beside any system, every active job stops being active, in any environment that does not
-crash the jobs actor: what the actor alone does, it does in `attach sys`. The step in which a
+crash the jobs actor or restart the process: what the actor alone does, it does in `attach sys`. The step in which a
 job stops being active emits its answer (`Jobs.answered_of_leaves`), which the wiring hands to
 `sys`. -/
 theorem attach_active_leaves {τ : Signature} (sys : System τ) (config : Config R)
     (use : Use τ K J R) {env : EnvModel (joinSig (sig K J R) τ)}
-    (hcrash : env.mayCrash (.inl ()) = false) (key : K) :
+    (hcrash : env.mayCrash (.inl ()) = false) (hrestart : env.mayRestart = false) (key : K) :
     (attach sys config use).LeadsTo env
       (fun c => c.up (.inl ()) = true ∧ key ∈ keys (c.state (.inl ()) : List (Active K J)))
       (fun c => key ∉ keys (c.state (.inl ()) : List (Active K J))) :=
   System.LeadsTo.join_left
     (P := fun c : SysState (system (K := K) (J := J) config) =>
       c.up () = true ∧ key ∈ keys (c.state ()))
-    (Q := fun s _ => key ∉ keys (s ())) (active_leaves config (env := env.left) hcrash key)
+    (Q := fun s _ => key ∉ keys (s ())) (active_leaves config (env := env.left) hcrash hrestart key)
 
 end Lanes.Jobs

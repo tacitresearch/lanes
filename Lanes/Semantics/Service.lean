@@ -177,7 +177,8 @@ theorem handle_eq (svc : Service In Out S) (env : EnvModel (sig In Out))
 /--
 A server implements the service it runs. Concurrent clients of `Server.system svc` observe
 exactly the behaviours of `svc` applied one request at a time, in any environment that loses,
-duplicates and crashes nothing.
+duplicates, crashes and restarts nothing. A restart would not: the server's state goes back to
+`svc.init` while the spec's does not.
 -/
 theorem implements (svc : Service In Out S) (env : EnvModel (sig In Out))
     (henv : env.Faultless) : (system svc).Implements env svc := by
@@ -209,6 +210,9 @@ theorem implements (svc : Service In Out S) (env : EnvModel (sig In Out))
     | start i =>
       obtain ⟨_, _, rfl⟩ := SysState.step_start.mp hstep
       simpa [SysState.startActor, SysState.settle, actor] using hinv
+    | restart =>
+      obtain ⟨hmay, -⟩ := SysState.step_restart.mp hstep
+      simp [henv.noRestarts] at hmay
   · intro c ev c' hinv hstep
     cases ev with
     | input x =>
@@ -246,6 +250,9 @@ theorem implements (svc : Service In Out S) (env : EnvModel (sig In Out))
       obtain ⟨_, _, rfl⟩ := SysState.step_start.mp hstep
       refine .inl ⟨rfl, ?_⟩
       simp [abs, SysState.startActor, SysState.settle, actor]
+    | restart =>
+      obtain ⟨hmay, -⟩ := SysState.step_restart.mp hstep
+      simp [henv.noRestarts] at hmay
 
 end Server
 

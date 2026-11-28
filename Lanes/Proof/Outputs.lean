@@ -67,7 +67,8 @@ variable {σ : Signature} {sys : System σ}
 memory of an outside beside it: it holds of the blank state and the outside's start, removing
 messages, timers and outputs cannot break it, and it is kept by each input the outside allows,
 by each output it sees, by any actor handling a message in flight to it or armed as its timer
-in a reachable state, and by any actor recovering. It then holds after every run the outside
+in a reachable state, by any actor recovering, and by a restart, which puts the system back at
+its start while the outside remembers what it saw. It then holds after every run the outside
 allows (`Outside.Beside.holds`). -/
 structure Outside.Beside {D : Type} (outside : Outside σ D) (sys : System σ) (env : EnvModel σ)
     (P : SysState sys → D → Prop) : Prop where
@@ -81,6 +82,8 @@ structure Outside.Beside {D : Type} (outside : Outside σ D) (sys : System σ) (
     ((∃ src, ⟨src, i, msg⟩ ∈ c.net) ∨ msg ∈ c.timers i) →
       P (c.grow i ((sys.actor i).step (c.state i) msg)) d
   recover : ∀ c d i, P c d → P (c.grow i ((sys.actor i).recover (c.state i))) d
+  restart : env.mayRestart = true → ∀ c d, sys.Reachable env c → P c d →
+    P (SysState.init sys env) d
 
 namespace Outside.Beside
 
@@ -146,6 +149,10 @@ theorem keeps (h : outside.Beside sys env P) {c c' : SysState sys} {d d' : D} {e
     obtain ⟨_, _, rfl⟩ := step_start.mp hstep
     obtain rfl := Option.some.inj hsee
     exact h.below _ _ _ (h.recover c d i hP) (Below.startActor c env i)
+  | restart =>
+    obtain ⟨hmay, rfl⟩ := step_restart.mp hstep
+    obtain rfl := Option.some.inj hsee
+    exact h.restart hmay c d hc hP
 
 /-- The property holds after every run that the outside allows. -/
 theorem holds (h : outside.Beside sys env P) {events : List (Event σ)} {c : SysState sys} {d : D}
