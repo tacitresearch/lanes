@@ -58,6 +58,7 @@ different lines. The numbers give the order in which they were taken.
 - [D94. A served journal is versioned by the application's name; the gate's settings are read from it](D94-journal-version.md)
 - [D15. JSON is a `Std`-only port of `Lean.Data.Json`](D15-json-is-a-std-only-port.md)
 - [D53. A JSON key given twice keeps its last value](D53-json-repeated-keys.md)
+- [D103. Former names and defaults in `lanes_data`: `(was old)` and `:= value`](D103-lanes-data-aliases.md)
 - [D99. Layered packages in one repository, one version, prebuilt builds (proposal)](D99-layered-packages.md)
 - [D9. Library files use Lean's module system](D9-library-files-use-lean-s-module.md)
 - [D27. Liveness: infinite runs, weak fairness per obligation, leads-to](D27-liveness.md)

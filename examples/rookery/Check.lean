@@ -39,7 +39,7 @@ def yo : Body := ⟨"yo", rfl⟩
 abbrev Script := List (Request N C × List ReqId)
 
 def signUp (req : ReqId) (n : N) (bot := false) : Request N C := .signUp req n right bot
-def logIn (req : ReqId) (n : N) (c : C := right) : Request N C := .logIn req n c
+def logIn (req : ReqId) (n : N) (c : C := right) : Request N C := .logIn req n c 0
 def web (req : ReqId) (n : N) (session : Sid) (op : Op N) : Request N C := .web req n session op
 def api (req : ReqId) (n : N) (seq : Nat) (op : Op N) (token := 1) : Request N C :=
   .api req n token seq op
@@ -61,7 +61,7 @@ def social : Script :=
 bot that retries; an older number; two more posts, the window full; a token of the wrong
 generation; a read, a delete, and the read again with its `seq`, as a bot that retries it. -/
 def bots : Script :=
-  [ (signUp 2 1 true, []), (logIn 4 1, [2]), (.newToken 5 1 4, [4]),
+  [ (signUp 2 1 true, []), (logIn 4 1, [2]), (.newToken 5 1 4 0, [4]),
     (api 6 1 1 (.post hi), [5]), (api 7 1 1 (.post hi), [5]),
     (api 8 1 0 (.post yo), [6, 7]), (api 9 1 2 (.post yo), [6, 7]),
     (api 10 1 3 (.post yo), [9]), (api 11 1 4 .timeline (token := 2), [9]),
@@ -215,7 +215,7 @@ def botWitnesses : List (Check.Property SpecWorld) :=
 def abuseWitnesses (answered : SpecWorld → List (Response N)) :
     List (Check.Property SpecWorld) :=
   [ .sometimes "two wrong credentials lock the account" fun w => replied (answered w) 5 .locked,
-    .sometimes "the lock lifts" fun w => replied (answered w) 5 (.loggedIn 0 5),
+    .sometimes "the lock lifts" fun w => replied (answered w) 5 (.loggedIn 0 5 0),
     .sometimes "a second log-in closes the first session" fun w =>
       replied (answered w) 8 .noSession,
     .sometimes "a session is no key to another account" fun w =>
@@ -352,14 +352,14 @@ namespace Bridge
 open Rookery.Web Lanes.Http
 
 def settings : Settings :=
-  { key := .of "test key".toUTF8
+  { keys := .of (.of "test key".toUTF8)
     password := { cost := { ops := 1, mem_kib := 8 }, pepper := "pepper".toUTF8 }
     origin := "http://127.0.0.1:8080", secure := false }
 
 def ann : Name := ⟨"ann", rfl⟩
 def bob : Name := ⟨"bob", rfl⟩
 
-def cookieOf (name : Name) (session : Sid) : String := sessionToken settings name session
+def cookieOf (name : Name) (session : Sid) : String := sessionToken settings name session 1000
 
 def request (method : Method) (path : List String) (headers : List (String × String))
     (body : String) : Http.Request :=
@@ -389,37 +389,40 @@ def contains (bytes : ByteArray) (text : String) : Bool :=
   (((String.fromUTF8? bytes).getD "").splitOn text).length > 1
 
 def tests : List (String × Bool) :=
-  let csrf := Auth.formToken settings.key (cookieOf ann 7)
+  let csrf := Auth.formToken settings.keys (sessionOf ann 7)
   let hello : Body := ⟨"hello", rfl⟩
   [ ("bridge: a session's cookie makes a request of its account, whatever the form says",
       same (decoded (webPost "post" [("body", "hello"), ("csrf", csrf), ("name", "bob")]
           (some (cookieOf ann 7))))
         (.ok (.web 9 ann 7 (.post hello)))),
     ("bridge: a cookie whose payload names another account does not verify",
-      let forged := Auth.tag settings.key "session" "7.ann" ++ ".7.bob"
+      let forged := (cookieOf ann 7).replace ".7.ann" ".7.bob"
       same (decoded (webPost "post" [("body", "hello"), ("csrf", csrf)] (some forged)))
         (.error notLoggedIn)),
     ("bridge: a form token of another session is refused",
       status (decoded (webPost "post" [("body", "hello"),
-        ("csrf", Auth.formToken settings.key (cookieOf ann 8))] (some (cookieOf ann 7)))) == 403),
+        ("csrf", Auth.formToken settings.keys (sessionOf ann 8))] (some (cookieOf ann 7)))) == 403),
     ("bridge: an API token makes a request of its account and generation",
-      same (decoded (apiPost "post" "{\"text\": \"hello\", \"seq\": 4}" (apiToken settings bob 2)))
+      same (decoded (apiPost "post" "{\"text\": \"hello\", \"seq\": 4}" (apiToken settings bob 2 0)))
         (.ok (.api 9 bob 2 4 (.post hello)))),
+    ("bridge: an API token is refused from its expiry on",
+      status (decoded (stamp settings.apiToken_s
+        (apiPost "post" "{\"text\": \"hello\", \"seq\": 4}" (apiToken settings bob 2 0)))) == 401),
     ("bridge: an API token that does not verify is refused",
       status (decoded (apiPost "post" "{\"text\": \"hello\", \"seq\": 4}"
-        (Auth.tag settings.key "api" "2.ann" ++ ".2.bob"))) == 401),
+        ((apiToken settings ann 2 0).replace ".2.ann" ".2.bob"))) == 401),
     ("bridge: a session cookie is no API token",
       status (decoded (apiPost "post" "{\"text\": \"hello\", \"seq\": 4}" (cookieOf bob 2)))
         == 401),
     ("bridge: a change through the API carries its seq",
-      status (decoded (apiPost "post" "{\"text\": \"hello\"}" (apiToken settings bob 2))) == 400),
+      status (decoded (apiPost "post" "{\"text\": \"hello\"}" (apiToken settings bob 2 0))) == 400),
     ("bridge: a password enters the system only as its digest",
       same (decoded (webPost "login" [("name", "ann"), ("password", "longenough")] none))
-        (.ok (.logIn 9 ann (settings.password.digest "ann" "longenough")))),
+        (.ok (.logIn 9 ann (settings.password.digest "ann" "longenough") 0))),
     ("bridge: what enters the system holds no password, no cookie and no token",
       let prepared := prepare settings (webPost "login"
         [("name", "ann"), ("password", "longenough")] (some (cookieOf ann 7)))
-      let api := prepare settings (apiPost "post" "{}" (apiToken settings bob 2))
+      let api := prepare settings (apiPost "post" "{}" (apiToken settings bob 2 0))
       !contains prepared.body "longenough" && !(prepared.headers.any (·.1 == "cookie"))
         && !(api.headers.any (·.1 == "authorization"))),
     ("bridge: a verified header a client sends itself is dropped",
