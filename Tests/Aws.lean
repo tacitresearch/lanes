@@ -21,7 +21,7 @@ namespace Checks
 open Tests.Live (safely)
 
 def tests : List (String × Bool) :=
-  Refresh.tests ++ Imds.unitTests ++ Ses.tests ++ CloudFront.tests ++ SqsMoto.unitTests
+  Refresh.tests ++ Imds.unitTests ++ Imds.chainTests ++ Ses.tests ++ CloudFront.tests ++ SqsMoto.unitTests
 
 def live : IO (List (String × Bool)) :=
   return (← safely "credentials" Imds.live) ++ (← safely "ses" Ses.live)
