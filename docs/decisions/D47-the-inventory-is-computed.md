@@ -1,6 +1,6 @@
 # D47. The inventory is computed from the built library
 
-Status: Superseded by new-volatile-actors.md
+Status: Superseded by D110-volatile-actors.md
 
 D45 asks that every public definition Lanes ships have one status, stated by the code and
 generated. `lake exe lanes inventory` writes it to

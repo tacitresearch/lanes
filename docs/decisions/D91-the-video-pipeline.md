@@ -1,6 +1,6 @@
 # D91. A video is ready only after a transcode worker outside the site says so, signed
 
-Status: Superseded by new-volatile-actors.md
+Status: Superseded by D110-volatile-actors.md
 
 `Lanes/Outside/Transcode.lean`, `Lanes/Web/Transcode.lean`, `Lanes/Testing/Transcode.lean`,
 `examples/videos`. The owner approved a video pipeline: an external transcode and thumbnail

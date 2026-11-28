@@ -1,6 +1,6 @@
 # D107. The waves' premise, measured on the video site: the work spreads once reads leave the journal
 
-Status: Partly superseded by new-volatile-actors.md (waves as the default: it stands as a measurement)
+Status: Partly superseded by D110-volatile-actors.md (waves as the default: it stands as a measurement)
 
 `Lanes/Runtime/WavePlan.lean`, `examples/videos/Videos/Waves.lean`, `examples/videos/Waves.lean`.
 D96 makes waves the default runtime only if real applications spread their work over many

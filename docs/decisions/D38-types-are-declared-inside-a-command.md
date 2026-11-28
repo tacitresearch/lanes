@@ -1,6 +1,6 @@
 # D38. Types are declared inside a command that derives what Lean's handlers cannot
 
-Status: Partly superseded by new-volatile-actors.md (the binary codec `Codable`: `lanes_data` derives JSON and database rows)
+Status: Partly superseded by D110-volatile-actors.md (the binary codec `Codable`: `lanes_data` derives JSON and database rows)
 
 Around Raft's one actor stood a codec for each of its eight types, written field by field
 beside the declaration, and a `BEq` with its law written by hand for the node, whose machine

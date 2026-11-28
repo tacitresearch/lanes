@@ -1,6 +1,6 @@
 # D11. Two import roots: `Lanes` and `Lanes.Semantics`
 
-Status: Superseded by D99-layered-packages.md and new-volatile-actors.md
+Status: Superseded by D99-layered-packages.md and D110-volatile-actors.md
 
 `import Lanes` is the runtime layer (Std only). `import Lanes.Semantics` adds the proof layer
 (CSLib, Mathlib). Executable code imports the first; proof files import the second.

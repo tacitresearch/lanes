@@ -1,6 +1,6 @@
 # D103. Former names and defaults in `lanes_data`: `(was old)` and `:= value`
 
-Status: Superseded by new-volatile-actors.md
+Status: Superseded by D110-volatile-actors.md
 
 The data-format decision ("A data format that outlives its version: one schema
 per file, values read by name") left this syntax to its first implementation (its detail 3).

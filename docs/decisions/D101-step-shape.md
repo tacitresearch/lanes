@@ -1,6 +1,6 @@
 # D101. The step's final shape: a context, quarantine, restarts and totality
 
-Status: Partly superseded by new-volatile-actors.md (`now` and `seed` taken from the journal, and quarantine through the journal)
+Status: Partly superseded by D110-volatile-actors.md (`now` and `seed` taken from the journal, and quarantine through the journal)
 
 *A proposal for tacitresearch/lanes#99, items 8 and 9 of the design direction (#93). It moves no
 code. Every fact below about the code was checked on `main`; the experiments were run on Lean

@@ -1,6 +1,6 @@
 # D96. One model with proofs, and runtimes proved against it
 
-Status: Partly superseded by new-volatile-actors.md (the default runtime, and the contract's clauses that rest on a journal: one order, output ids, no acknowledged input lost across a restart)
+Status: Partly superseded by D110-volatile-actors.md (the default runtime, and the contract's clauses that rest on a journal: one order, output ids, no acknowledged input lost across a restart)
 
 *Status: Accepted. The contract below is experimental until the multi-core runtime implements
 it: until then its statement may still change.*

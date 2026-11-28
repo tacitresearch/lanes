@@ -1,6 +1,6 @@
 # D109. The video site split into an actor per member, and a scheduler per entity
 
-Status: Partly superseded by new-volatile-actors.md (the video site, which leaves the main branch, and the waves it was split for)
+Status: Partly superseded by D110-volatile-actors.md (the video site, which leaves the main branch, and the waves it was split for)
 
 `Lanes/Behaviours/Schedule/Basic.lean`, `Lanes/Behaviours/Schedule/Sound.lean`,
 `Lanes/Semantics/Schedule.lean`, `Lanes/Runtime/Batch.lean`, `Lanes/Web/Http/View.lean`,

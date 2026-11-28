@@ -1,6 +1,6 @@
 # D35. An append carries a batch, and only news brings the next
 
-Status: Superseded by new-volatile-actors.md
+Status: Superseded by D110-volatile-actors.md
 
 `examples/raft-kv/RaftKV/Protocol.lean`. The first protocol sent a follower everything after
 what it was known to hold, in one message. A review ran it as processes: a log over the

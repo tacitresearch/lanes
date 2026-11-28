@@ -1,6 +1,6 @@
 # D36. What a durable system has to say for itself: a map with a codec, a journal begun on purpose, a name that covers the replay
 
-Status: Superseded by new-volatile-actors.md
+Status: Superseded by D110-volatile-actors.md
 
 The fifth review ran `raftNode` as three processes and found three things the framework had
 left for the application to get right, and the application had not.

@@ -1,6 +1,6 @@
 # D79. Work that is due later is a job of the scheduler: held by its id, run by its own timer, retried until it ends
 
-Status: Superseded by new-volatile-actors.md
+Status: Superseded by D110-volatile-actors.md
 
 `Lanes/Behaviours/Schedule/{Basic,Sound}.lean`, `Lanes/Semantics/Schedule.lean`,
 `Tests/Schedule.lean`, `examples/reminders`. Every application wants work done later: a reminder,

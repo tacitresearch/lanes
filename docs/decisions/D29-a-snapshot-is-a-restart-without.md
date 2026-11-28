@@ -1,6 +1,6 @@
 # D29. A snapshot is a restart without the crash
 
-Status: Superseded by new-volatile-actors.md
+Status: Superseded by D110-volatile-actors.md
 
 `Lanes/Runtime/Kernel.lean`, `Lanes/Durable/Journal.lean`, `Lanes/Durable/Snapshot.lean`, `Lanes/Durable/Disk.lean`, `Lanes/Durable/IO/Journal.lean`. A journal that only
 grows makes a restart take as long as the shard has lived. A snapshot saves the kernel, and the

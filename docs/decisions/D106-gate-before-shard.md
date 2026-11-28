@@ -1,6 +1,6 @@
 # D106. The gate before the shard
 
-Status: Partly superseded by new-volatile-actors.md (its reasons of waves and a runtime of objects, and the section on the journal)
+Status: Partly superseded by D110-volatile-actors.md (its reasons of waves and a runtime of objects, and the section on the journal)
 
 `Lanes/Web/Http/Admit.lean`, `Lanes/Web/Http/AdmitSound.lean`, `Lanes/Web/IO/Server.lean`,
 `Lanes/Web/Http/Loopback.lean`, `Lanes/Web/Http/JournalName.lean`. This carries out clause 2 of
