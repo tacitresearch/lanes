@@ -22,7 +22,9 @@ to a smaller one or to the job's answer, and by `System.LeadsTo.induction` the j
 
 The actor must not crash, for the reason the gate must not (`Lanes.Semantics.Front`): a
 crashed actor with no mail need never start again. The process must not restart either: a
-restart forgets every active job, unanswered, so none of these statements holds under restarts.
+restart forgets every active job, unanswered, so none of these statements holds under restarts
+as stated; each leads-to holds from any position after which the process does not restart
+(`System.LeadsTo.unlessRestart`).
 What does is the bound on what is answered (`Jobs.answered_le_handled`) and the invariants of
 `Lanes.Behaviours.Jobs.Sound`, which hold in every environment.
 

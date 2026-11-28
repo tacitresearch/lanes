@@ -6,6 +6,7 @@ module
 
 public import Lanes.Web.Http.FrontSound
 public import Lanes.Semantics.FairJoin
+public import Lanes.Semantics.Restart
 
 /-!
 # A fronted system answers every request its gate admits
@@ -36,7 +37,8 @@ its state forever. A gate that restarts arms the deadlines again, so the stateme
 recovered from an assumption that a crashed gate is restarted; no such assumption can be stated
 yet. The process must not restart either: a restart forgets every waiting request, which is
 then never answered, and the outside is left with an unknown answer. So none of the liveness
-statements here holds under restarts. What does is safety: the gate answers no request more
+statements here holds under restarts as stated; each holds from any position after which the
+process does not restart (`System.LeadsTo.unlessRestart`, `Gate.pending_leaves_unlessRestart`). What does is safety: the gate answers no request more
 often than it arrived (`Gate.answered_le_handled`), its invariants hold in every environment,
 and a gate that is not crashed is up in every state, restarts included (`Gate.always_up`).
 
@@ -118,6 +120,15 @@ theorem pending_leaves (bridge : Bridge σ) (config : GateConfig)
     simp [gateActor, Gate.step, hid, hnodup.mem_erase_iff]
   · exact fun c ev c' _ ⟨hup, hid⟩ _ hstep hrestarted =>
       absurd hrestarted (deadline_not_restarted hup hid hstep)
+
+/-- Where the process may restart, a request waiting in the gate alone stops waiting, if the
+process does not restart from then on. -/
+theorem pending_leaves_unlessRestart (bridge : Bridge σ) (config : GateConfig)
+    (hcrash : env.mayCrash () = false) (id : ReqId) :
+    (gateSystem bridge config).LeadsToUnlessRestart env
+      (fun c => c.up () = true ∧ id ∈ (c.state () : List ReqId))
+      (fun c => id ∉ (c.state () : List ReqId)) :=
+  (pending_leaves bridge config (env := env.withoutRestarts) hcrash rfl id).unlessRestart
 
 /-- A step of the gate in which `id` stops waiting emits an answer to `id`. -/
 private theorem answered_of_handle {c : SysState (gateSystem bridge config)} {id : ReqId}

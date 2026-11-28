@@ -31,7 +31,9 @@ job's end, and by `System.LeadsTo.induction` the job ends.
 The premise that the scheduler does not crash is the gate's and the jobs actor's
 (`Lanes.Semantics.Front`, `Lanes.Semantics.Jobs`): a crash loses its timers, and a stopped actor
 with no mail is not obliged to start again. A process restart forgets every job held, with no
-end and no word to the requester, so none of these statements holds under restarts; the bound
+end and no word to the requester, so none of these statements holds under restarts as stated;
+each leads-to holds from any position after which the process does not restart
+(`System.LeadsTo.unlessRestart`). The bound
 on calls (`Schedule.calls_le_scheduled`) and the invariants of `Lanes.Behaviours.Schedule.Sound`
 do, in every environment.
 

@@ -9,8 +9,9 @@ import KV
 # The store behind its front ends is a map
 
 Without caching, for all keys, values and front ends, the system implements its five-line spec
-in every environment whose links do not hand a message over twice (`implements`): messages may
-be lost and reordered and actors may crash. `Tests/KV.lean` checks that each link the system
+in every environment whose links do not hand a message over twice and where the process does not
+restart (`implements`): messages may be lost and reordered and actors may crash. A restart puts
+the store back to empty while the spec keeps its map, so it is not allowed. `Tests/KV.lean` checks that each link the system
 uses must not duplicate: every handling of a message answers a client or sends on.
 
 The simulation is the standard one (`Lanes.Account`): the store's data is the spec's value, a
@@ -20,7 +21,8 @@ end passes on what it was handed (`Moves.forward`); a request takes effect when 
 handles it (`Moves.take`).
 
 Behind `Once.actor` (`onceSystem`) the store implements `once` of the spec in every
-environment, links duplicating included (`implements_once`). Its simulation (`OnceSim`) reads
+environment without restarts, links duplicating included (`implements_once`). A restart forgets
+the memo, so a request repeated after it takes effect again. Its simulation (`OnceSim`) reads
 the network as a set: every request in flight has arrived, every answer owed has been given.
 
 With caching the system does not implement the spec in any environment, for any instance with a
@@ -58,7 +60,8 @@ def account : Account (system K V F false) (K → Option V) Unit where
   value state _ _ v := v = state .store
 
 theorem implements (env : EnvModel (sig K V F))
-    (henv : ∀ src dst, (env.link src dst).duplicating = false) :
+    (henv : ∀ src dst, (env.link src dst).duplicating = false)
+    (hrestart : env.mayRestart = false) :
     (system K V F false).Implements env (spec K V F) := by
   refine account.implements (inv := fun _ => True) (fun _ _ => trivial)
     ⟨(), rfl, by simp [Account.pending, SysState.init, SysState.blank, account],
@@ -68,6 +71,7 @@ theorem implements (env : EnvModel (sig K V F))
     (fun c i _ => .of_loses (SysState.Loses.down env c i) fun _ _ h => h)
     (fun _ _ _ _ h _ => (unarmed h).elim)
     (fun _ i _ => by cases i <;> exact .quiet (fun _ _ h => by simpa [account] using h) rfl rfl)
+    (fun h => absurd h (by simp [hrestart]))
   rintro c ⟨src, dst, msg⟩ _ _ hd
   have hmem := SysState.mem_of_deliverable hd
   cases dst with
@@ -226,13 +230,13 @@ links may lose, reorder and hand over twice every message, and every actor may c
 takes effect at most once per front end and number, between its arrival and its answer, and its
 answer may be handed over more than once.
 -/
-theorem implements_once (env : EnvModel (sig K V F)) :
+theorem implements_once (env : EnvModel (sig K V F)) (hrestart : env.mayRestart = false) :
     (onceSystem K V F).ImplementsOnce env (spec K V F) requestKey := by
   refine System.Refines.of_handles (inv := fun _ => True) (fun _ _ => trivial) OnceSim
     ⟨⟨fun _ => none, ∅, ∅, ∅⟩, rfl, ⟨rfl, by simp [SysState.init, SysState.blank],
       by simp [SysState.init, SysState.blank], by simp [SysState.init, SysState.blank],
       Once.Memo.Agrees.empty⟩⟩
-    (fun _ _ _ h hl => h.loses hl) ?_ ?_ ?_ ?_
+    (fun _ _ _ h hl => h.loses hl) ?_ ?_ ?_ ?_ (fun h => absurd h (by simp [hrestart]))
   · intro c t x _ h
     have hg : t.Grows { t with arrived := insert x t.arrived } :=
       ⟨Set.subset_insert _ _, subset_rfl, subset_rfl⟩
