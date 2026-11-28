@@ -9,6 +9,7 @@ public import Lanes.Web.Auth.Token
 public import Lanes.Proof.List.Fold
 public import Lanes.Web.Http.Cookie
 public import Lanes.Lib.Net.Url
+public import Lanes.Data.Secret
 
 /-!
 Sign-in with another service: OAuth 2.0's authorization code flow with PKCE (RFC 6749 §4.1,
@@ -33,16 +34,6 @@ explicitly, as a discovery document gives them: none is fetched.
 namespace Lanes.OAuth
 
 open Http
-
-/-- A value never to be printed or logged: a client secret, a code, a token, a PKCE verifier.
-`Repr` and `ToString` say only that it is one. -/
-structure Secret where
-  value : String
-  deriving DecidableEq, Hashable
-
-instance : Repr Secret := ⟨fun _ _ => "<secret>"⟩
-
-instance : ToString Secret := ⟨fun _ => "<secret>"⟩
 
 /-- How a provider says who signed in. -/
 inductive Source where
@@ -391,7 +382,7 @@ def authorizeUrl (provider : Provider) (client : Client) (state : String) (g : G
     | .userApi .. => []
   let params := [("response_type", "code"), ("client_id", client.id),
     ("redirect_uri", client.redirect), ("scope", " ".intercalate provider.scopes),
-    ("state", state), ("code_challenge", challenge g.verifier.value),
+    ("state", state), ("code_challenge", challenge g.verifier.reveal),
     ("code_challenge_method", "S256")] ++ nonce ++ provider.extra
   provider.authorize ++ (if provider.authorize.contains '?' then "&" else "?") ++ encodeForm params
 
@@ -463,9 +454,9 @@ def Answer.read (query : List (String × String)) : Answer :=
 /-- The form posted to the token endpoint (RFC 6749 §4.1.3, RFC 7636 §4.5), the client
 authenticated by its secret in the body (`client_secret_post`). -/
 def tokenForm (client : Client) (code verifier : Secret) : List (String × String) :=
-  [("grant_type", "authorization_code"), ("code", code.value), ("redirect_uri", client.redirect),
-    ("client_id", client.id), ("client_secret", client.secret.value),
-    ("code_verifier", verifier.value)]
+  [("grant_type", "authorization_code"), ("code", code.reveal), ("redirect_uri", client.redirect),
+    ("client_id", client.id), ("client_secret", client.secret.reveal),
+    ("code_verifier", verifier.reveal)]
 
 structure Tokens where
   access : Secret

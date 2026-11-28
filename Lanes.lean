@@ -28,6 +28,7 @@ public import Lanes.Core.World
 public import Lanes.Data.Declare
 public import Lanes.Data.Enum
 public import Lanes.Data.Fifo
+public import Lanes.Data.Secret
 public import Lanes.Lib.Compress.Checksum
 public import Lanes.Lib.Compress.Deflate
 public import Lanes.Lib.Compress.Gzip
@@ -70,10 +71,12 @@ public import Lanes.Outside.Cache
 public import Lanes.Outside.Clock
 public import Lanes.Outside.Effects.Basic
 public import Lanes.Outside.Effects.Email
+public import Lanes.Outside.Environment
 public import Lanes.Outside.Events
 public import Lanes.Outside.FileSystem
 public import Lanes.Outside.FileSystem.Log
 public import Lanes.Outside.IO.Clock
+public import Lanes.Outside.IO.Environment
 public import Lanes.Outside.IO.FileSystem
 public import Lanes.Outside.Idempotent
 public import Lanes.Outside.ObjectStore

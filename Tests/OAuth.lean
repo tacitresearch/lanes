@@ -74,7 +74,7 @@ def flowTests : List (String × Bool) :=
   let state := (get q "state").getD ""
   let t := ticketOf 0 1000
   let g := t.grant key
-  let verifier := g.verifier.value
+  let verifier := g.verifier.reveal
   let accepts (r : Except OAuth.Refusal Ticket) := r.toOption == some t
   [ ("oauth: the S256 challenge of RFC 7636 appendix B",
       challenge "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
@@ -298,7 +298,7 @@ def edgeTests : List (String × Bool) :=
         && ((toString (repr client)).splitOn "s3cret").length == 1
         && ((toString (repr ({ access := ⟨"tok"⟩, idToken := some ⟨"idt"⟩ } : Tokens))).splitOn "tok").length == 1
         && ((toString (repr ((ticketOf 0 0).grant key))).splitOn
-          ((ticketOf 0 0).grant key).verifier.value).length == 1),
+          ((ticketOf 0 0).grant key).verifier.reveal).length == 1),
     ("oauth edge: endpoints are parsed into calls",
       Endpoint.parse "https://oauth2.googleapis.com/token"
           == some { https := true, host := "oauth2.googleapis.com", port := 443, path := ["token"],

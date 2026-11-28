@@ -7,6 +7,7 @@ module
 public import Lanes.Web.Http.Wire
 public import Lanes.Lib.Crypto.Native
 public import Lanes.Lib.Time.Format
+public import Lanes.Data.Secret
 
 /-!
 Signature Version 4: how a request to an AWS API, or to a store that speaks the S3 API, says who
@@ -26,16 +27,6 @@ are OpenSSL's, with the Lean references as their bodies (`Lanes/Lib/Crypto/Nativ
 namespace Lanes.SigV4
 
 open Http
-
-/-- A secret, such as an access key or a session token. Printed, it shows nothing of itself, so
-a value that holds one may derive `Repr`. -/
-structure Secret where
-  /-- Read only to sign with it or to send it where it belongs. -/
-  reveal : String
-
-instance : Repr Secret := ⟨fun _ _ => "<secret>"⟩
-
-instance : ToString Secret := ⟨fun _ => "<secret>"⟩
 
 structure Credentials where
   accessKeyId : String
