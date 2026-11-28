@@ -51,8 +51,7 @@ jobs:
       - id: lean
         uses: ./.github/actions/lean
       # The docs package's own `.lake`: doc-gen4 and its dependencies, built, and the database of
-      # what each module documents, so that a run redoes only the modules that changed. The
-      # packages Lanes has are links to the root's, which the cache keeps as links. On a warm
+      # what each module documents, so that a run redoes only the modules that changed. On a warm
       # runner the work directory keeps it instead.
       - id: keys
         if: steps.lean.outputs.warm != 'true'
@@ -68,8 +67,6 @@ jobs:
           path: docs/api/.lake
           key: ${{ steps.keys.outputs.key }}
           restore-keys: ${{ steps.keys.outputs.prefix }}
-      - name: Link the packages Lanes has
-        run: docs/api/link-packages.sh
       - name: Build the API docs
         working-directory: docs/api
         run: lake build +Lanes.Proofs:docs

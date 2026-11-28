@@ -36,8 +36,6 @@ are fair together, since fairness only looks at what happens from some position 
 
 namespace Lanes
 
-open Cslib
-
 variable {σ : Signature} {sys : System σ} {env : EnvModel σ}
 
 namespace System
@@ -51,19 +49,18 @@ def LeadsToUnlessRestart (sys : System σ) (env : EnvModel σ) (P Q : SysState s
 
 namespace Run
 
-variable {r : sys.Run env} {n : ℕ} {evs : List (Event σ)}
+variable {r : sys.Run env} {n : Nat} {evs : List (Event σ)}
 
 /-- The run without restarts that takes `evs` to the state of `r` at `n`, and then the steps of
 `r` from `n` on. -/
-def splice (r : sys.Run env) (n : ℕ) (evs : List (Event σ))
+def splice (r : sys.Run env) (n : Nat) (evs : List (Event σ))
     (hrun : (SysState.init sys env.withoutRestarts).run env.withoutRestarts evs = some (r.state n))
     (hno : ∀ m, n ≤ m → r.event m ≠ some .restart) : sys.Run env.withoutRestarts where
-  state := ⟨fun k => if k < evs.length then (Run.fairAfter sys env.withoutRestarts evs).state k
-    else r.state (n + (k - evs.length))⟩
-  event := ⟨fun k => if k < evs.length then (Run.fairAfter sys env.withoutRestarts evs).event k
-    else r.event (n + (k - evs.length))⟩
+  state k := if k < evs.length then (Run.fairAfter sys env.withoutRestarts evs).state k
+    else r.state (n + (k - evs.length))
+  event k := if k < evs.length then (Run.fairAfter sys env.withoutRestarts evs).event k
+    else r.event (n + (k - evs.length))
   init := by
-    simp only [ωSequence.get_fun]
     split
     · exact (Run.fairAfter sys env.withoutRestarts evs).init
     · next h =>
@@ -71,7 +68,6 @@ def splice (r : sys.Run env) (n : ℕ) (evs : List (Event σ))
       simpa [SysState.run] using hrun.symm
   exec k := by
     have hfa := (Run.fairAfter sys env.withoutRestarts evs).exec k
-    simp only [ωSequence.get_fun]
     by_cases hk : k + 1 < evs.length
     · simpa [hk, show k < evs.length by omega] using hfa
     · by_cases hk' : k < evs.length
@@ -91,18 +87,18 @@ def splice (r : sys.Run env) (n : ℕ) (evs : List (Event σ))
 variable {hrun : (SysState.init sys env.withoutRestarts).run env.withoutRestarts evs = some (r.state n)}
   {hno : ∀ m, n ≤ m → r.event m ≠ some .restart}
 
-theorem splice_state {k : ℕ} (hk : evs.length ≤ k) :
+theorem splice_state {k : Nat} (hk : evs.length ≤ k) :
     (r.splice n evs hrun hno).state k = r.state (n + (k - evs.length)) := by
-  simp [splice, ωSequence.get_fun, show ¬k < evs.length by omega]
+  simp [splice, show ¬k < evs.length by omega]
 
-theorem splice_event {k : ℕ} (hk : evs.length ≤ k) :
+theorem splice_event {k : Nat} (hk : evs.length ≤ k) :
     (r.splice n evs hrun hno).event k = r.event (n + (k - evs.length)) := by
-  simp [splice, ωSequence.get_fun, show ¬k < evs.length by omega]
+  simp [splice, show ¬k < evs.length by omega]
 
 /-- The splice of a fair run is fair: from its junction on it is the run it splices. -/
 theorem splice_fair (hfair : r.Fair) : (r.splice n evs hrun hno).Fair := by
   refine fair_iff.mpr fun ob k hdue => ?_
-  have hpos (m : ℕ) (hm : n + (k - evs.length) ≤ m) :
+  have hpos (m : Nat) (hm : n + (k - evs.length) ≤ m) :
       (r.splice n evs hrun hno).state (evs.length + (m - n)) = r.state m ∧
         (r.splice n evs hrun hno).event (evs.length + (m - n)) = r.event m := by
     rw [splice_state (by omega), splice_event (by omega),

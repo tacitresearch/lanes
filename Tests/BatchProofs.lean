@@ -18,7 +18,7 @@ server with its history and back. Built by `lake build`, not linked into the tes
 
 namespace Tests.Batch
 
-open Lanes Cslib
+open Lanes
 
 variable {In Out S : Type} [DecidableEq In] [DecidableEq Out]
 
@@ -46,7 +46,7 @@ theorem handles {svc : Service In Out S} (state : (i : Unit) → S × List In)
   rintro _ _ rfl
   cases m with
   | request x =>
-    exact ⟨(), [], rfl, le_of_eq (by simp [account, actor, add_comm, ← Multiset.coe_add]), by simp [account, actor]⟩
+    exact ⟨(), [], rfl, Bag.le_of_eq (by simp [account, actor, Bag.add_comm, ← Bag.coe_add]), by simp [account, actor]⟩
   | flush =>
     exact ⟨(), (state ()).2, by simp [account, actor, serve_eq_run], by simp [account, actor],
       by simp [account, actor, serve_eq_run]⟩
