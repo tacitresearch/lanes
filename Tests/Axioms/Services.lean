@@ -41,6 +41,23 @@ import Lanes.Services
 /-- info: 'Aws.Refresh.refresh_in_time' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Aws.Refresh.refresh_in_time
 
+/-- info: 'Aws.Refresh.currentHeld_creds' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Aws.Refresh.currentHeld_creds
+
+-- Lanes.Services.Aws.Imds
+
+/-- info: 'Aws.Imds.containerSource?_container' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Aws.Imds.containerSource?_container
+
+/-- info: 'Aws.Imds.chain_keys' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Aws.Imds.chain_keys
+
+/-- info: 'Aws.Imds.chain_container' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Aws.Imds.chain_container
+
+/-- info: 'Aws.Imds.chain_instance' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Aws.Imds.chain_instance
+
 -- Lanes.Services.Aws.Ses
 
 /-- info: 'Aws.Ses.Sent.admitted_nodup' depends on axioms: [propext, Classical.choice, Quot.sound] -/
@@ -226,12 +243,37 @@ import Lanes.Services
 /-- info: 'Lanes.Postgres.Address.name_remote' does not depend on any axioms -/
 #guard_msgs in #print axioms Lanes.Postgres.Address.name_remote
 
+/-- info: 'Lanes.Postgres.SslMode.defaultForAll_disable' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.SslMode.defaultForAll_disable
+
+/-- info: 'Lanes.Postgres.SslMode.defaultForAll_single' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.SslMode.defaultForAll_single
+
+/-- info: 'Lanes.Postgres.TargetSessionAttrs.accepts_readWrite' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Lanes.Postgres.TargetSessionAttrs.accepts_readWrite
+
+/-- info: 'Lanes.Postgres.TargetSessionAttrs.accepts_primary' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Lanes.Postgres.TargetSessionAttrs.accepts_primary
+
+/-- info: 'Lanes.Postgres.TargetSessionAttrs.passes_last' depends on axioms: [propext, Classical.choice] -/
+#guard_msgs in #print axioms Lanes.Postgres.TargetSessionAttrs.passes_last
+
+/-- info: 'Lanes.Postgres.PassFile.ownerOnly_bits' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Postgres.PassFile.ownerOnly_bits
+
 -- Lanes.Services.Postgres.Sql
 /-- info: 'Lanes.Postgres.Sql.decode_param' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Postgres.Sql.decode_param
 
 /-- info: 'Lanes.Postgres.Sql.decodeRow_param' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Postgres.Sql.decodeRow_param
+
+-- Lanes.Services.S3.Basic
+/-- info: 'Lanes.S3.expiryWithin_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.S3.expiryWithin_le
+
+/-- info: 'Lanes.S3.expiryWithin_none' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Lanes.S3.expiryWithin_none
 
 -- Lanes.Services.S3.Multipart
 /-- info: 'Lanes.S3.Multipart.Plan.count_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/

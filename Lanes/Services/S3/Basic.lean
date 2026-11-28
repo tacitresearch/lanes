@@ -380,4 +380,47 @@ def presignPart (b : Bucket) (creds : Credentials) (t : Civil.DateTime) (key : K
   let scheme := match b.endpoint.scheme with | .http => "http" | .https => "https"
   scheme ++ "://" ++ call.authority ++ ({ method := .put, path, query } : Request).target
 
+/-! ## Credentials that expire -/
+
+/-- `expiry`, shortened so that a link or a form signed at `now_ms` ends no later than the
+credentials it is signed with, which expire at `until_ms` if they do: S3 refuses it once they
+have expired. `none` when less than a second of them is left. -/
+def expiryWithin (expiry : Expiry) (now_ms : Nat) : Option Nat → Option Expiry
+  | none => some expiry
+  | some until_ms =>
+    let left_s := (until_ms - now_ms) / 1000
+    if h : 0 < left_s then
+      some ⟨min expiry.val left_s, Nat.lt_min.mpr ⟨expiry.property.1, h⟩,
+        Nat.le_trans (Nat.min_le_left _ _) expiry.property.2⟩
+    else none
+
+/-- What is signed for `e` from `now_ms` ends by `until_ms`, and is no longer than asked. -/
+theorem expiryWithin_le {expiry e : Expiry} {now_ms until_ms : Nat}
+    (h : expiryWithin expiry now_ms (some until_ms) = some e) :
+    e.val ≤ expiry.val ∧ now_ms + e.val * 1000 ≤ until_ms := by
+  simp only [expiryWithin] at h
+  split at h
+  · cases h
+    refine ⟨Nat.min_le_left _ _, ?_⟩
+    have hmin : min expiry.val ((until_ms - now_ms) / 1000) * 1000 ≤ until_ms - now_ms :=
+      Nat.le_trans (Nat.mul_le_mul_right 1000 (Nat.min_le_right _ _)) (Nat.div_mul_le_self _ _)
+    have hpos : 0 < (until_ms - now_ms) / 1000 := by assumption
+    have : 0 < until_ms - now_ms := Nat.lt_of_lt_of_le hpos (Nat.div_le_self _ _)
+    show now_ms + min expiry.val ((until_ms - now_ms) / 1000) * 1000 ≤ until_ms
+    omega
+  · cases h
+
+/-- Credentials of credentials that never expire are signed for all that is asked. -/
+theorem expiryWithin_none (expiry : Expiry) (now_ms : Nat) :
+    expiryWithin expiry now_ms none = some expiry := rfl
+
+/-- Keys from `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and, for a role's,
+`AWS_SESSION_TOKEN`, as `get` gives the variables: `none` unless the first two are set and not
+empty. -/
+def credentialsOf? (get : String → Option String) : Option Credentials := do
+  let id ← (get "AWS_ACCESS_KEY_ID").filter (!·.isEmpty)
+  let secret ← (get "AWS_SECRET_ACCESS_KEY").filter (!·.isEmpty)
+  let token := (get "AWS_SESSION_TOKEN").filter (!·.isEmpty)
+  return { accessKeyId := id, secretAccessKey := ⟨secret⟩, sessionToken := token.map (⟨·⟩) }
+
 end Lanes.S3
