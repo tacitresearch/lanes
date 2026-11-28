@@ -166,6 +166,19 @@ every state the new shard reaches (`Migration.inv_exec`, `Kernel.exec_inductive`
 later start (`Journal.Upgrade.inv_load`). An invariant proved only from boot, and refinement,
 do not carry over.
 
+A journal may also be shipped to an object store as it is written (`Journal.Store.ship`), after
+Litestream: what is written is sealed into segments, by size, by age and at each save, and each
+segment and snapshot is put once, with a conditional write, under a key that names the journal,
+its positions and its SHA-256. Nothing the shard does waits for it. What to seal, what to put
+next, the backoff and what is dropped at the bound are pure (`Lanes/Durable/Ship.lean`), and
+every segment put holds the history's entries at the positions its key names
+(`Journal.Ship.Holds.put`). A restore (`Lanes/Durable/Restore.lean`, `Journal.Store.restore`)
+picks a point, the newest snapshot before it and the segments after it, checks that they join,
+and writes a journal that ends with a `handed` mark and has no id: its start gives the kernel the
+local journal had after that many entries and hands nothing over
+(`Journal.Restore.journal_restores`, from `Journal.resumeIds_eq_recoverIds`), a restored copy
+under D105. The thread that puts is `Lanes/Durable/IO/Ship.lean`, trusted (`TRUSTED.md`).
+
 ## Composition: joins, shards and the transport
 
 `System.join a b wiring` (`Lanes/Core/Join.lean`) is two systems as one: an output of one that
