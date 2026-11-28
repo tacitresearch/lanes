@@ -1,5 +1,7 @@
 # D87. The video site's calls to the store are jobs of the scheduler, named by what they are for
 
+Status: Accepted
+
 `examples/videos`, `Lanes/Behaviours/Schedule/Sound.lean` (`Schedule.succeeded_replied`),
 `Lanes/Testing/S3.lean` (`Fake.refuse`). D79 left the video site to move onto the scheduler: a
 delete the store did not answer was sent again at once a few times, then logged; an upload never

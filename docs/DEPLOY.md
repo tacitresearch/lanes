@@ -70,8 +70,9 @@ than `Server.wait`:
 
 Keep the `system` name your `main` has: it is the version of the step functions, and a journal
 written under another name is refused. The gate's settings (`ServerConfig.gate`) are not part of
-it: a journal written behind another gate is replayed behind that gate and carried across, if
-`serve` is given its `saving` (`Lanes/Web/Http/JournalName.lean`).
+it: the journal holds only the requests the gate admitted, so it is read behind any gate. A
+journal written while the gate was an actor of the system is refused, saying why
+(`Lanes/Web/Http/JournalName.lean`).
 
 The instance's security group admits that port from the load balancer only.
 
@@ -174,7 +175,7 @@ workflow file of another name than `deploy.yml` is given as `DeployWorkflow`. AW
 GitHub's `job_workflow_ref` as a condition key only since 2026, and no real stack has checked it
 ("What has not been checked"): a role that refuses a run whose subject is right is the place to
 look. A repository whose OIDC subject
-names repositories by id (as `tacitresearch/lanes` does, `docs/RUNNERS.md`) gives
+names repositories by id (as `tacitresearch/lanes` does, `infra/README.md`) gives
 `GitHubOwnerId` and `GitHubRepositoryId`.
 
 ## 4. The first deploy

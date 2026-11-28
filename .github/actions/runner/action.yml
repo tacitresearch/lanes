@@ -1,6 +1,6 @@
 name: Runner
 description: >
-  Where the jobs that build run, from repository variables (docs/RUNNERS.md). `route` is
+  Where the jobs that build run, from repository variables (infra/README.md). `route` is
   `box` when an AWS role and the instance id of the warm runner machine are given (the workflow
   starts and stops it; its runners carry the label `lanes`), `fresh` when an AWS role and an
   instance type are given instead (the workflow launches a machine for this run and terminates

@@ -109,7 +109,8 @@ lean_lib LanesCli where
 lean_exe lanes where
   root := `LanesCli.Main
 
-/-- `docs/INVENTORY.md`. It links `Lean` and reads the built modules, so it builds them first. -/
+/-- The inventory and the docstring coverage. It links `Lean` and reads the built modules, so it
+builds them first. -/
 @[default_target]
 lean_exe lanesInventory where
   root := `LanesCli.InventoryMain

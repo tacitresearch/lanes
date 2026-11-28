@@ -67,7 +67,7 @@ structure Deployment where
   signIn : SignIn.Config
   http : Client.Config := {}
 
-abbrev Site' (d : Deployment) := fronted (system d.config) (bridge d.settings) d.server.gate
+abbrev Site' (d : Deployment) := admittedFronted (system d.config) (bridge d.settings)
 
 def nowSeconds : IO Nat :=
   return (← Std.Time.Timestamp.now).toMillisecondsSinceUnixEpoch.toInt.toNat / 1000
@@ -76,8 +76,7 @@ def openLog (d : Deployment) (path : System.FilePath) : IO (Journal.Log (Site' d
   Journal.Store.open (sys := Site' d)
     { path, system := d.server.journalName
       input := Codec.sum (Codec.pair Codec.nat Http.Request.codec) (Codec.of (SchedIn ⊕ Input))
-      actors := some (frontedActors (actors d.config) (Codec.of (SchedOut ⊕ Out)) (bridge d.settings)
-        d.server.gate) }
+      actors := some (admittedFrontedActors (actors d.config) (bridge d.settings)) }
 
 def start (d : Deployment) : Async (Server (Site' d)) := do
   let signIn ← SignIn.start d.signIn

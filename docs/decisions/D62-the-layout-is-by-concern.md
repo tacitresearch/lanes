@@ -1,10 +1,12 @@
 # D62. The layout is by concern, and `import Lanes` is the API
 
+Status: Accepted
+
 Before 0.1.0, when module paths become what users copy, the repository was laid out as it grew:
-`Lanes/Actors/` held 39 files and 16,000 lines of five concerns (the actor model, its proof
+`Lanes/Actors/` (removed) held 39 files and 16,000 lines of five concerns (the actor model, its proof
 toolkit, the runtime, durability and the transport), the standard library sat in `Lanes/Data/`
-and `Lanes/Http/` beside framework internals, a behaviour's parts were in four directories, and
-IO files were in `Lanes/Env/`, apart from what they serve. This decision is the layout that
+and `Lanes/Http/` (removed) beside framework internals, a behaviour's parts were in four directories, and
+IO files were in `Lanes/Env/` (removed), apart from what they serve. This decision is the layout that
 replaces it. It moves files and rewrites imports only: no definition, statement or proof
 changed, except one HTTP grammar (below).
 
@@ -26,7 +28,7 @@ its area, which `TRUSTED.md` names file by file:
   models and counting, not transport, so they are here and not in `Lanes/Net/`.
 - `Lanes/Runtime/`: the kernel and its proofs, `Release`, batches, the inbox and its proofs
   (the shell's, not the network's), shards; the shell (`IO/Shell.lean`, which was
-  `Lanes/Actors/Runtime.lean`) and the parker in `IO/`.
+  `Lanes/Actors/Runtime.lean` (removed)) and the parker in `IO/`.
 - `Lanes/Durable/`: the journal, snapshots, the model of the two files, the framing of a file
   (`Frame`, used only by them); the journal's files in `IO/`. `Codec` and `lanes_data` stay in
   `Lanes/Data/`: every system's messages are declared with them, and the transport and the

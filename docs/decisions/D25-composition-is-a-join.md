@@ -1,6 +1,8 @@
 # D25. Composition is a join, and what survives it is projection
 
-`Lanes/Actors/Join.lean`, `Lanes/Actors/JoinSound.lean`. `System.join a b wiring` is one
+Status: Accepted
+
+`Lanes/Core/Join.lean`, `Lanes/Proof/JoinSound.lean`. `System.join a b wiring` is one
 `System` whose actors are those of both; an output of one that the wiring routes to the other
 is a message to the actor the other's `accept` names. `System.Reachable.left` proves that a
 reachable state of the join, seen from `a`, is a reachable state of `a` alone under
@@ -39,5 +41,5 @@ Consequences:
   the other and one to the outside would need two outside links to keep each one's model.
 - `SysState.step_swap` (private for now) is the symmetry of `join`: the join with its sides
   exchanged takes the same steps. The right-hand theorems are the left-hand ones through it.
-- `SysState.Equiv` started in the checker; it is in the core now (`Lanes/Actors/Equiv.lean`),
+- `SysState.Equiv` started in the checker; it is in the core now (`Lanes/Proof/Equiv.lean`),
   since theorems about systems put together are stated up to it.

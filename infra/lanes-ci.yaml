@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
   Lanes CI: one warm EC2 machine of GitHub Actions runners (label `lanes`), which the workflows
   start and stop through GitHub's OIDC provider, with no AWS keys stored anywhere. See
-  docs/RUNNERS.md.
+  infra/README.md.
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -61,7 +61,7 @@ Parameters:
       - c7i.12xlarge
       - c7i.16xlarge
       - c7i.24xlarge
-    Description: c7a.16xlarge has 64 cores (no SMT) and 128 GiB, for 16 runners. See docs/RUNNERS.md.
+    Description: c7a.16xlarge has 64 cores (no SMT) and 128 GiB, for 16 runners. See infra/README.md.
   VolumeSize:
     Type: Number
     Default: 200

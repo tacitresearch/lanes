@@ -1,6 +1,8 @@
 # D44. A request is prepared before it is journalled
 
-`Lanes/Http/Gate.lean` (`Bridge.prepare`), `Lanes/Env/Http.lean`, `systems/ledger/Ledger/Web.lean`.
+Status: Accepted
+
+`Lanes/Web/Http/Gate.lean` (`Bridge.prepare`), `Lanes/Web/IO/Server.lean`, `examples/ledger/Ledger/Web.lean`.
 The ledger found that `serve` journalled the request as it came: every log-in's password and
 every session cookie was on disk in plain text until a snapshot cut the journal. A lawful codec
 cannot scrub them, since what it reads back must be what was written. The bridge's PBKDF2 also
@@ -20,7 +22,7 @@ served), and again for every log-in at a replay.
   finds wrong it writes down, and `decode` answers (the ledger writes `short` for a password
   too short to digest).
 - *What is trusted.* That the server applies `prepare` to every request before it journals it is
-  part of the trusted IO of `Lanes/Env/Http.lean` (`TRUSTED.md`), tested over a socket in
+  part of the trusted IO of `Lanes/Web/IO/Server.lean` (`TRUSTED.md`), tested over a socket in
   `Tests/Web.lean`. That a given `prepare` removes what it should is the application's, and is
   pure: the ledger tests it without a socket and checks the journal of a live run.
 - *A prepared request must not be forgeable.* What `prepare` writes, a client could send. The

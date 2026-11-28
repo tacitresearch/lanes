@@ -1,5 +1,7 @@
 # D17. URL attributes are rendered through `Html.safeUrl`
 
+Status: Accepted
+
 `href`, `src`, `action`, `formaction` and `xlink:href` keep relative URLs and the schemes
 `http`, `https`, `mailto` and `tel`. Anything else renders as `about:invalid#blocked`. The check
 is in `Attr.render`, so it covers values built without the template macro too. `<script>` and

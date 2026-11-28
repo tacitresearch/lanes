@@ -1,6 +1,8 @@
 # D35. An append carries a batch, and only news brings the next
 
-`systems/raft-kv/RaftKV/Protocol.lean`. The first protocol sent a follower everything after
+Status: Accepted
+
+`examples/raft-kv/RaftKV/Protocol.lean`. The first protocol sent a follower everything after
 what it was known to hold, in one message. A review ran it as processes: a log over the
 transport's 16 MiB could not be sent, so after a change of leader nothing committed again;
 with a node down, every proposal and every heartbeat sent that node the whole log.

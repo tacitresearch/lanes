@@ -1,5 +1,7 @@
 # D40. The runtime shell and the HTTP server only perform
 
+Status: Accepted
+
 The rule of the fourth review (`ROADMAP.md`: a pure function that decides, a model of what it
 talks to, IO that only performs) was applied to the two trusted files that still decided in IO.
 

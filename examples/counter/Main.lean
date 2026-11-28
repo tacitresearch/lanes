@@ -54,10 +54,9 @@ def bridge : Http.Bridge sig where
   encode response := some (response.req, .html (CounterView response).render)
 
 /-- How the system is written to a snapshot, so that its journal can be cut: an identity, each
-actor's state, each actor's messages, and its outputs. -/
+actor's state and each actor's messages. -/
 def saving : Http.Saving (system {}) where
   actors := { id := Codec.unit, state := fun _ => Codec.nat, msg := fun _ => Request.codec }
-  out := Response.codec
 
 /-- `counter [port] [journal]`. With a journal file the counter survives the process: it is
 replayed through `step` at start, and cut each time the state is saved. `system` is the version

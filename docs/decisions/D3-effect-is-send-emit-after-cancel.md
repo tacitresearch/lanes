@@ -1,5 +1,7 @@
 # D3. `Effect` is `send | emit | after | cancel | stop`; no `io`, no `reply`
 
+Status: Accepted
+
 *Departs from the DESIGN sketch of `Effect`.*
 
 - `io (req) (onDone : ExtResponse → Msg)` is gone. An external system is an actor identity whose

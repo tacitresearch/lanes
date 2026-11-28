@@ -1,5 +1,7 @@
 # D71. S3 and Signature Version 4, in Lanes as the protocol of a class of object stores
 
+Status: Accepted
+
 The first application Lanes is for, a video site on AWS, keeps its videos and thumbnails in S3.
 Browsers upload and download them directly, with presigned links, and the server makes ordinary
 calls: put, get, head, delete and list. This adds what that needs: requests signed with AWS's

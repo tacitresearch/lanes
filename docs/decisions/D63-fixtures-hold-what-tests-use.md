@@ -1,5 +1,7 @@
 # D63. The fixtures hold what the tests use, the examples the proofs
 
+Status: Accepted
+
 D60 put copies of the small applications in `Tests/Fixtures/`, their proofs included, so that
 the axiom gate and the inventory could cite them. That kept about 900 lines of proofs twice, each
 copy compiled, and the copies in the fixtures were read by nothing but the gate.

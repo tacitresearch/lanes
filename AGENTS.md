@@ -2,9 +2,11 @@
 
 Lanes is a framework for verified software in Lean 4: actors with pure step functions, one
 semantics, a proved runtime kernel, a model checker, proofs, and adapters. This file is the rules,
-for agents and for people. `README.md` is the front door, `docs/ARCHITECTURE.md` says how the
-pieces fit and where each is proved, `docs/STATUS.md` what exists, `docs/ROADMAP.md` the direction
-and what is being done now, `docs/decisions/` why, `TRUSTED.md` what is trusted.
+for agents and for people. `README.md` is the front door; `docs/ARCHITECTURE.md` says how the
+pieces fit and, area by area, what is claimed with its evidence and the limits of the design;
+`docs/decisions/` says why, and `TRUSTED.md` what is trusted. The work, and what is known to be
+missing, are GitHub issues (the direction is issue #93; fixable limits are labelled
+`known-limit`).
 
 Rules carry numbers (rule 2.6) because code, decisions and reviews cite them. Never renumber; a
 new rule takes the next free number in its group. Cite a rule in a PR description when it shaped
@@ -18,10 +20,10 @@ lake build --wfail         # the library, warnings as errors (as CI builds it)
 lake test                  # pure tests and live runtime tests, about two minutes
 lake exe lanesCheck        # larger model checks, random runs and the scale benchmark, about 20 s: run once, never in a loop
 lake exe lanes lint        # the checks below, and that generated files are up to date
-lake exe lanes lint --fix  # rewrite the generated files: line counts, decisions' index, STATUS, INVENTORY
+lake exe lanes lint --fix  # rewrite the generated files: TRUSTED.md's line counts, the decisions' index
 lake exe lanes stats       # the totals no file holds: trusted lines, decisions, the inventory by area
 lake exe lanes changelog   # the Unreleased section, gathered from `docs/changes/`
-lake exe lanes inventory --list none  # the definitions of Lanes/ without evidence
+lake exe lanes inventory  # every public definition with its status; --list none: those without evidence
 lake exe lanes docstrings  # how many public declarations of `import Lanes` have a docstring
 ```
 
@@ -73,14 +75,15 @@ lake exe lanes docstrings  # how many public declarations of `import Lanes` have
 - `lanes lint` checks the text of a project: `no-sorry` (no `sorry` or `admit`), `trusted-listed`
   (`partial`, `unsafe`, `axiom`, `panic!`, `implemented_by`, `extern` and C only in files
   `TRUSTED.md` names), `trusted-size` (each trusted file has the line count `TRUSTED.md` gives),
-  `layering` (rule 1.6), `decisions` and `status` (the generated files agree with their sources),
+  `layering` (rule 1.6), `decisions` (the index agrees with the decisions, and each has its
+  number and status line),
   `changelog` (each fragment in `docs/changes/` reads), `inventory` and `inventory-none` (below), `links` (every repository path in backquotes in
   `*.md` and `docs/*.md` exists) and `oracles` (`oracles/README.md` names an oracle, or why there
   is none, for every protocol module and model, and every path it names exists). It does not check `no-io-in-step`, `bounded`, `field-leak` or
   `fn-length`: those need the elaborator. The inventory's checks read the built modules: run
   `lake build lanesInventory` before `lake exe lanes lint --fix`.
-- `docs/INVENTORY.md` gives every public definition a status, read from the built modules
-  (`docs/decisions/D47-the-inventory-is-computed.md`). A theorem makes what it states proved when
+- `lake exe lanes inventory` prints every public definition with a status, read from the built
+  modules (`docs/decisions/D47-the-inventory-is-computed.md`); no committed file holds it. A theorem makes what it states proved when
   it has an axiom gate. A new definition of `Lanes/` with no theorem, test or row of `TRUSTED.md`
   fails `lanes lint` unless it is on `docs/inventory-none.md` under a heading that says why; when
   one there gets evidence, take it off.
@@ -257,33 +260,9 @@ Conventions:
 - A family of instances by cases on an identity (`∀ i, DecidableEq (Msg i)`, the `Inspect` of a
   system whose actors differ) is `by instance_by_cases`.
 
-Layout, and what each part may import. A module is in the directory of its concern; a file
-that performs IO is in an `IO/` directory of its area and named in `TRUSTED.md`.
-
-| Path | Contents | May import |
-| --- | --- | --- |
-| `Lanes/Core/` | `Actor`, `Signature`, `Effect`, `System`, the semantics' step (`World`), each event and run in closed form (`Step`, `Run`), joins, `Service`, `Inspect`, the deterministic and fair schedulers | `Std` only |
-| `Lanes/Proof/` | The proof toolkit: lifting per-actor invariants, `Monotone`, ghosts and `Past`, `SysState.Equiv`, deeds, loss; what survives a join (`JoinSound`, `MapIOSound`); lemmas about lists (`List/`), strings (`Utf8`) and byte arrays (`ByteArray`) | `Std` only |
-| `Lanes/Runtime/` | The kernel and its proofs, batches, the inbox, shards; the shell and the parker in `IO/` | `Std` only |
-| `Lanes/Durable/` | The journal, snapshots, the disk model, the format of the files and their framing; the journal's files in `IO/` | `Std` only |
-| `Lanes/Net/` | The courier, every decision of the transport, and its proofs; the transport and a process with an HTTP front in `IO/` | `Std` only |
-| `Lanes/Outside/` | What the outside may do (`Outside`), the home of models of external systems (calls, idempotency keys, webhooks, payments, email, an object store, and transactional stores in `Store/`); the clock in `IO/` | `Std` only |
-| `Lanes/Web/` | HTTP as data, its grammar, the gate, routes, cookies, the wire format, the server's connections and Signature Version 4 (`Http/`); HTML values and templates (`Html/`); tokens, password digests, failed attempts, sessions (`Auth/`); the S3 client's calls and answers (`S3/`); the server, the client and the S3 client in `IO/` | `Std` only |
-| `Lanes/Behaviours/` | Standard actors with their specs and proofs, by feature (`Server`, `Jobs/`, `Once/`, `Schedule/`) | `Std` only |
-| `Lanes/Check/` | Model checker | `Std` only |
-| `Lanes/Data/` | `Enum`, codecs and `lanes_data`, schemas and values, the body of a value (`Body`), matching by name (`Match`), the queue, quorums | `Std` only |
-| `Lanes/Lib/` | The standard library: encodings (Base64, JSON), addresses and URLs, time, SHA-256, HMAC, MD5, PBKDF2 and `Native`, the PostgreSQL protocol (`Postgres/`), media types, rate limits (`docs/STDLIB.md`) | `Std` only |
-| `Lanes/Testing/` | The test kit, for tests and never in `import Lanes`: a fake S3 that checks signatures, a fake identity provider, a scripted browser, a server of a handler and readers of a response (`docs/decisions/D77-a-test-kit.md`) | `Std` only |
-| `Lanes/Semantics/` | The semantics as a CSLib `LTS`, refinement, specs, fairness and leads-to, and the liveness of the gate, of jobs and of the scheduler | CSLib, Mathlib |
-| `native/` | The C that binds OpenSSL's hashes, comparison and Argon2id, `fsync`, a timed wait, OpenSSL's TLS client, its signature check and its signing, all of it trusted | OpenSSL, libc |
-| `LanesCli/` | The `lanes` command: `new`, `lint`, `check`, `changelog`, `stats`, `inventory`, `docstrings`, `journal` | `Std` only; `Lean` in `Inventory` and `Docstrings`, which only `lanesInventory` links |
-| `templates/app/` | The application `lanes new` creates, which is `examples/counter` | |
-| `examples/` | Applications to read, each its own Lake package (`examples/README.md`) | anything |
-| `integrations/` | A vendor's preset or client, each its own Lake package (D61): `google` and `github` for sign-in, `aws` for a role's credentials, SES and SQS's calls, and CloudFront's signed URLs | Lanes |
-| `Tests/` | Regression tests run by `lake test` and `lanesCheck`; the apps they use in `Fixtures/` | anything |
-| `docs/api/` | The API reference, built with doc-gen4: a Lake package of its own (`docs/api/README.md`) | Lanes, doc-gen4 |
-| `oracles/` | The references the oracles compare with, one folder each, with their pins, programs and records (`oracles/README.md`) | |
-| `infra/` | The CI machine: its stack and its set-up script (`docs/RUNNERS.md`); in `app/`, the stack, set-up script and smoke check of an application on AWS (`docs/DEPLOY.md`) | |
+A module is in the directory of its concern (D62): `docs/ARCHITECTURE.md` names the directory of
+each area. A file that performs IO is in an `IO/` directory of its area and named in
+`TRUSTED.md`. Code under `Lanes/` imports `Std` only, but for the proof layer (rule 1.6).
 
 `import Lanes` is the API, executable code and the proof toolkit; `import Lanes.Proofs` adds the
 framework's soundness theorems (the `…Sound` modules), and `import Lanes.Semantics` the proof
@@ -401,41 +380,55 @@ Several agents work at once, each on a branch merged into the main branch. The l
 independent changes disjoint files; keep it that way.
 
 - Commit after every step that builds. Before reporting, merge the main branch and run the checks
-  again. Generated files (`docs/STATUS.md`, `docs/INVENTORY.md`, the decisions index) never need
-  resolving: run `git config merge.generated.driver true` once (`.gitattributes` names them),
-  and after a merge run `lake exe lanes lint --fix`, which writes them again.
+  again. The decisions' index, which is generated, never needs resolving: run `git config
+  merge.generated.driver true` once (`.gitattributes` names it), and after a merge run `lake exe
+  lanes lint --fix`, which writes it again.
 - A new decision is a new file `docs/decisions/new-<slug>.md` whose first line is `# D?. Title`.
   Do not choose its number: whoever opens the pull request runs `lake exe lanes lint --fix --main`
   against the current main, which numbers it; CI on main refuses an unnumbered decision. If another
   open pull request took the same number, renumber the later one.
-- A change of status goes in its fragment, `docs/status/areas/<area>.md` or
-  `docs/status/apps/<app>.md`: its heading on the first line, then each item on one line, in
-  sorted lists (`lanes lint --fix` sorts them).
-- A change a user would notice gets a changelog fragment of its own,
-  `docs/changes/<slug>.md`, never a line in `CHANGELOG.md` (`CONTRIBUTING.md`, "The changelog").
+- A new claim goes in its area's table in `docs/ARCHITECTURE.md`, with its evidence, premises and
+  status. A limit that can be fixed is an issue labelled `known-limit`; one the design accepts
+  goes in its area's Limits there.
+- No changelog entry: the changelog is written when a release is cut (`CONTRIBUTING.md`).
+- Decide what is small or reversible yourself, and say what you chose in the pull request.
+  Escalate to the owner only what changes direction, costs money, needs the owner's accounts, or
+  cannot be undone, each with the choice you would make. A question already answered is a
+  decision: record it, never ask it again.
 - An axiom gate goes in `Tests/Axioms/<Area>.lean`, under the line naming its module; a lemma
   about lists at the end of its topic's file in `Lanes/Proof/List/`.
-- Never type a count: line counts in `TRUSTED.md`, the decisions' index, `docs/STATUS.md` and
-  `docs/INVENTORY.md` are written by `lake exe lanes lint --fix`. Each generated line is about one
+- Never type a count: the line counts in `TRUSTED.md` and the decisions' index are written by
+  `lake exe lanes lint --fix`. Each generated line is about one
   item, and no committed file holds a total over the repository (`lake exe lanes stats` prints
   them), so two branches that change different items merge without a conflict. A conflict in a
   generated file is resolved by taking either side and running it.
 
 ## Docs
 
-Agents do what the docs say, so a stale doc is worse than none. Keep each short and current.
+Agents do what the docs say, so a stale doc is worse than none. The rule is that each doc has
+one job no other doc does:
+
+- Each fact lives in one place. Elsewhere, point to it.
+- A doc states rules and reasons, or it is generated or tested. `lanes lint` checks what it can
+  (the decisions' index, the trusted sizes, every cited path, the oracles' list).
+- Write so it will not go stale: name files and theorems, and avoid counts, dates and
+  "currently" unless the number is the point.
+- Work and status live in GitHub issues, not in docs: the direction is issue #93, a fixable
+  limit is an issue labelled `known-limit`, and `docs/ROADMAP.md` only points there.
+
+So:
 
 - Change a doc in the same commit as the code it describes. A doc says what is, not how it came
-  to be: history is in git, in `docs/decisions/` and in `docs/history/`.
-- `docs/ROADMAP.md` holds the direction, the work in progress and why, the phases and the
-  standing risks. When a step in progress is done, take it off.
-- `docs/ARCHITECTURE.md` names the theorem behind each claim; a claim without one says it is
-  checked, tested or trusted.
+  to be: history is in git and in `docs/decisions/`.
+- `docs/ARCHITECTURE.md` has a section per area and per application: what it does, its claims
+  with the theorem behind each (a claim without one says it is checked, tested or trusted), and
+  the limits the design accepts.
 - Cite files by their repository path in backquotes; `lanes lint` fails on one that does not
-  exist (`docs/history/` and `docs/decisions/` are exempt: they record the past). Name a module
-  that is not written yet by its module name (`Lanes.Lib.Encoding.Base32`), not its path.
-- `docs/decisions/` is the record of why: never rewrite a decision, write a new one that
-  supersedes it.
+  exist (`docs/decisions/` is exempt: it records the past). Name a module that is not written
+  yet by its module name (`Lanes.Lib.Encoding.Base32`), not its path.
+- `docs/decisions/` is the record of why. Never rewrite a decision but for its status line: a
+  new decision supersedes it, and changes the old one's line to `Status: Superseded by Dn` or
+  `Status: Partly superseded by Dn (the part)`.
 - Write plainly: short sentences, one name per concept, no marketing.
 
 The design rules adapt TigerStyle, Ousterhout's deep modules, Erlang/OTP, crash-only software,

@@ -1,7 +1,9 @@
 # D34. A replicated system refines its service by a relation, not a mapping
 
-`Lanes/Semantics/Simulation.lean`, `Lanes/Actors/Loses.lean`,
-`systems/raft-kv/RaftKVProofs/Refines.lean`. Rule 5.4 asks for a refinement map that is a short
+Status: Accepted
+
+`Lanes/Semantics/Simulation.lean`, `Lanes/Proof/Loses.lean`,
+`examples/raft-kv/RaftKVProofs/Refines.lean`. Rule 5.4 asks for a refinement map that is a short
 projection, with history added to the implementation where the map needs it. For the Raft
 cluster that was the first plan: a ghost for the commands that have taken effect and a ghost
 that counts requests, so that the service's `pending` is a function of the state. It was not
@@ -39,7 +41,7 @@ taken.
   free type, does. The proof reads the invariant of `Commit.lean` (`Committed`, its
   `comparable` and `grow`, `Commits.nodes`), not the headline theorems, because a step needs
   the invariant before and after with the history between them.
-- *The second user.* The key-value store with front ends (`Examples/KVProofs.lean`) took
+- *The second user.* The key-value store with front ends (`Examples/KVProofs.lean` (removed)) took
   `of_steps` with no ghost and a relation of three bounds, each a `filterMap` over the messages
   in flight, so losing a message was two lines and the eight deliveries closed by `rfl` once
   two lemmas (a front end passes a request on; the store makes one take effect) took the new

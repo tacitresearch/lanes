@@ -3,7 +3,7 @@ name: Bench
 # The HTTP benchmark of bench/run.sh (bench/README.md): Go's net/http, Std.Http and Lanes'
 # servers under one load generator. By hand only, and required by nothing.
 #
-# Where it runs is mutants.yml's route (docs/RUNNERS.md): the warm runner machine, started by
+# Where it runs is mutants.yml's route (infra/README.md): the warm runner machine, started by
 # `start` and stopped by `stop`, when LANES_AWS_ROLE_ARN, LANES_AWS_REGION and
 # LANES_AWS_INSTANCE_ID are set; a machine launched for the run with LANES_AWS_INSTANCE_TYPE
 # instead; LANES_RUNNER's runners; else ubuntu-latest, whose 4 vCPUs give numbers that are no

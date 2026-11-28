@@ -1,6 +1,8 @@
 # D28. A shard is a system, and a cluster is runtimes with a router
 
-`Lanes/Actors/Shard.lean`; the in-process router of this section is gone (D37). `System.shard sys hosts` is `sys` as a
+Status: Partly superseded by D37 (the router between shards in one process)
+
+`Lanes/Runtime/Shard.lean`; the in-process router of this section is gone (D37). `System.shard sys hosts` is `sys` as a
 shard that hosts some of its actors sees it: a message to an actor hosted elsewhere leaves as
 an output (a parcel), a parcel arriving is an input, and an actor not hosted only forwards. A
 cluster starts one ordinary runtime per shard and routes parcels between them, on a lane that is
@@ -20,7 +22,7 @@ Consequences:
 - Back-pressure is at each shard's outside inbox. Between shards nothing is refused, so a
   shard that falls behind is noticed only by its queue.
 
-The theorem (`Lanes/Actors/ShardSound.lean`, `Lanes/Actors/Lossy.lean`). `System.split sys
+The theorem (`Lanes/Runtime/ShardSound.lean`, `Lanes/Proof/Lossy.lean`). `System.split sys
 hosts` is two shards joined, each parcel one emits an input of the other; a wired emit is a
 direct send in a join, so a message between shards is one message in flight, as in `sys`.
 `System.SplitReachable.merged`: in a run where every input from outside goes to the shard that
@@ -49,7 +51,7 @@ in flight to or from a copy that only forwards. Why it is not simpler:
   for an arbitrary environment of the split would treat their starts and crashes as steps that
   change nothing.
 
-Any number of shards (`Lanes/Actors/ShardsSound.lean`). `System.shards sys hosts`, with
+Any number of shards (`Lanes/Runtime/ShardsSound.lean`). `System.shards sys hosts`, with
 `hosts : σ.Id → Fin n`, is `System.joinAll` of the `n` shards `sys.shard (hosts · == k)`, a
 family join whose wiring sends each parcel to the shard `hosts` names for its receiver; the
 copies are named `(shard, actor)`. This is what `Peers` runs, with `home i` the address of

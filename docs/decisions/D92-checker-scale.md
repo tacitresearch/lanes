@@ -1,5 +1,7 @@
 # D92. The checker at scale: a hash that sees order, a fingerprinted mode, reductions
 
+Status: Accepted
+
 `Lanes/Check/{System,SystemSound,Fingerprint,FingerprintSound,Reduce,ReduceSound}.lean`. The
 videos example reached the 3,000,000 states its checks allow, and its scenarios were cut down: a
 quiet worker where the worker's faults were not the point, only the site crashing where the

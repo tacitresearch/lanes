@@ -14,44 +14,50 @@ path, and regenerates the index below; `lanes lint` fails on two decisions with 
 a stale index, and with `--main` (as CI runs it on the main branch) on a decision without a
 number.
 
-The index is sorted by the files' slugs, not by number, so that two new decisions land at
-different lines. The numbers give the order in which they were taken.
+The line under a decision's title is its status: `Status: Accepted`, `Status: Superseded by
+Dn`, or `Status: Partly superseded by Dn (the part)`. A decision is never rewritten but for that
+line, which the decision that supersedes it changes. The index lists the current decisions
+first, then those superseded. Each list is sorted by the files' slugs, not by number, so that
+two new decisions land at different lines. The numbers give the order in which they were taken.
 
 ## Index
 
+### Current
+
 - [D56. A deadline may pass where a message is served](D56-a-deadline-passes-where-it-is-served.md)
-- [D41. A fair run of a join is a fair run of its left side, seen without the messages from outside](D41-a-fair-run-of-a-join.md)
+- [D41. A fair run of a join is a fair run of its left side, seen without the messages from outside](D41-a-fair-run-of-a-join.md): partly superseded by D86 (the right side of a join)
 - [D86. A fair run of a join is a fair run of its right side too, by the join with its sides exchanged](D86-a-fair-run-of-a-join-is-one-of-its-right-side.md)
 - [D66. A migration carries the old kernel across a deploy, once, with a proof](D66-a-migration-carries-the-kernel-across.md)
 - [D21. A proof rule for invariants no fault can break](D21-a-proof-rule-for-invariants-no.md)
 - [D34. A replicated system refines its service by a relation, not a mapping](D34-a-replicated-system-refines-its-service.md)
 - [D48. A request named by its client takes effect once, and its answer may be handed over again](D48-a-request-named-by-its-client.md)
-- [D28. A shard is a system, and a cluster is runtimes with a router](D28-a-shard-is-a-system.md)
+- [D28. A shard is a system, and a cluster is runtimes with a router](D28-a-shard-is-a-system.md): partly superseded by D37 (the router between shards in one process)
 - [D29. A snapshot is a restart without the crash](D29-a-snapshot-is-a-restart-without.md)
 - [D42. A spec names its inputs and outputs, and time passes in it as deadlines the system's timers are](D42-a-spec-names-its-inputs-and.md)
 - [D77. A test kit, `Lanes.Testing`, beside `Lanes` and not in it](D77-a-test-kit.md)
 - [D67. A TLS client, from the OpenSSL Lean's toolchain ships](D67-a-tls-client-from-the-openssl-lean-ships.md)
 - [D7. `Actor` takes its effect type as a parameter](D7-actor-takes-its-effect-type-as.md)
-- [D64. Actors step in parallel within a wave, and connections run on threads of the server's own](D64-actors-run-in-parallel.md)
+- [D64. Actors step in parallel within a wave, and connections run on threads of the server's own](D64-actors-run-in-parallel.md): partly superseded by D73 (`Runtime.Config.workers` turning parallel steps on, off by default)
 - [D73. The shard chooses from its own timing whether a batch's steps are worked out in parallel](D73-adaptive-waves.md)
-- [D16. An actor never waits inside a step](D16-an-actor-never-waits-inside-a.md)
 - [D26. An adapter is a model of the outside and a handler, tested against each other](D26-an-adapter-is-a-model-of.md)
 - [D35. An append carries a batch, and only news brings the next](D35-an-append-carries-a-batch.md)
 - [D74. AWS as an integration: a role's credentials refreshed by a proved policy, and SES as the email model](D74-aws-integration.md)
-- [D46. Bind what touches physics](D46-bind-what-touches-physics.md)
+- [D46. Bind what touches physics](D46-bind-what-touches-physics.md): partly superseded by D95-one-crypto-library.md (libsodium)
 - [D78. Uploads bounded by a signed policy, and large ones in parts](D78-bounded-and-large-uploads.md)
 - [D92. The checker at scale: a hash that sees order, a fingerprinted mode, reductions](D92-checker-scale.md)
 - [D82. CloudFront signed URLs and cookies, and signatures made with a private key](D82-cloudfront-signed-urls.md)
 - [D25. Composition is a join, and what survives it is projection](D25-composition-is-a-join.md)
-- [D97. A data format that outlives its version: one schema per file, values read by name](D97-data-format.md)
+- [D97. A data format that outlives its version: one schema per file, values read by name](D97-data-format.md): accepted. The owner set the direction; the details of section 8 are settled as stated
 - [D89. What one side of a join sends the other is handled there, in every fair run](D89-deliveries-across-a-join.md)
 - [D50. A parser is proved against its RFC and tested against Go, and every difference is decided](D50-differential-tests-against-go.md)
-- [D24. Durability is a journal of what the kernel was asked, replayed](D24-durability-is-a-journal-of-what.md)
+- [D24. Durability is a journal of what the kernel was asked, replayed](D24-durability-is-a-journal-of-what.md): partly superseded by D66 (a changed system refusing its old files)
+- [D100. Each doc has one job, and is generated or tested where it can be](D100-each-doc-has-one-job.md)
 - [D3. `Effect` is `send | emit | after | cancel | stop`; no `io`, no `reply`](D3-effect-is-send-emit-after-cancel.md)
 - [D45. Everything is proved; the checker finds bugs, a proof is the evidence](D45-everything-is-proved.md)
-- [D60. Examples are for reading, fixtures are for the tests](D60-examples-are-for-reading.md)
+- [D60. Examples are for reading, fixtures are for the tests](D60-examples-are-for-reading.md): partly superseded by D63 (the examples' proofs copied into the fixtures)
 - [D63. The fixtures hold what the tests use, the examples the proofs](D63-fixtures-hold-what-tests-use.md)
-- [D93. Each generated line is about one item, and unreleased changes are fragments](D93-generated-lines-are-local.md)
+- [D106. The gate before the shard](D106-gate-before-shard.md)
+- [D93. Each generated line is about one item, and unreleased changes are fragments](D93-generated-lines-are-local.md): partly superseded by D100-each-doc-has-one-job.md (the status fragments)
 - [D20. History variables are ghosts with an erasure theorem](D20-history-variables-are-ghosts-with-an.md)
 - [D104. Honest results: a bounded pass exits 2, each failure has a kind, a binding is proved of its reference](D104-honest-results.md)
 - [D2. Identities name actors that always exist (virtual actors)](D2-identities-name-actors-that-always-exist.md)
@@ -59,7 +65,7 @@ different lines. The numbers give the order in which they were taken.
 - [D94. A served journal is versioned by the application's name; the gate's settings are read from it](D94-journal-version.md)
 - [D15. JSON is a `Std`-only port of `Lean.Data.Json`](D15-json-is-a-std-only-port.md)
 - [D53. A JSON key given twice keeps its last value](D53-json-repeated-keys.md)
-- [D103. Former names and defaults in `lanes_data`: `(was old)` and `:= value`](D103-lanes-data-aliases.md)
+- [D103. Former names and defaults in `lanes_data`: `(was old)` and `:= value`](D103-lanes-data-aliases.md): accepted. The data-format decision ("A data format that outlives its version: one schema
 - [D99. Layered packages in one repository, one version, prebuilt builds (proposal)](D99-layered-packages.md)
 - [D9. Library files use Lean's module system](D9-library-files-use-lean-s-module.md)
 - [D27. Liveness: infinite runs, weak fairness per obligation, leads-to](D27-liveness.md)
@@ -95,15 +101,14 @@ different lines. The numbers give the order in which they were taken.
 - [D12. Template tags have no space after `<`](D12-template-tags-have-no-space-after.md)
 - [D33. The checker: measure, then normalise once per state](D33-the-checker.md)
 - [D31. The gate is a system, joined in front; what a join keeps of a run is its deeds](D31-the-gate-is-a-system.md)
-- [D19. The HTTP adapter's logic is a gate actor](D19-the-http-adapter-s-logic-is.md)
+- [D19. The HTTP adapter's logic is a gate actor](D19-the-http-adapter-s-logic-is.md): partly superseded by D31 and D43 (the gate is a system joined in front, not `gated`)
 - [D39. The HTTP reader is specified by writers, and its limit is on the response](D39-the-http-reader-is-specified-by.md)
 - [D32. The inbox is a batch, and waiting for room is the rare path](D32-the-inbox-is-a-batch.md)
-- [D47. The inventory is computed from the built library](D47-the-inventory-is-computed.md)
+- [D47. The inventory is computed from the built library](D47-the-inventory-is-computed.md): partly superseded by D100-each-doc-has-one-job.md (the committed inventory file)
 - [D84. The kernel takes an actor's state out of its cell before the step](D84-the-kernel-takes-the-state-out-before-the-step.md)
 - [D62. The layout is by concern, and `import Lanes` is the API](D62-the-layout-is-by-concern.md)
 - [D8. The model checker stores full states](D8-the-model-checker-stores-full-states.md)
 - [D18. The runtime is a proved kernel inside a thin shell](D18-the-runtime-is-a-proved-kernel.md)
-- [D13. The runtime orders steps with one logical clock](D13-the-runtime-orders-steps-with-one.md)
 - [D40. The runtime shell and the HTTP server only perform](D40-the-runtime-shell-and-the-http.md)
 - [D49. The server reads requests by a strict profile, and every refusal closes the connection](D49-the-server-reads-requests-by-a-strict-profile.md)
 - [D57. The server runs its own connections, and a pure function decides for each](D57-the-server-runs-its-own-connections.md)
@@ -118,5 +123,11 @@ different lines. The numbers give the order in which they were taken.
 - [D58. URLs, media types and rate limits against Go, and where they depart from it](D58-urls-media-types-rate-limits-against-go.md)
 - [D87. The video site's calls to the store are jobs of the scheduler, named by what they are for](D87-videos-on-the-scheduler.md)
 - [D88. Steps worked out on the pool update their states in place](D88-waves-in-place.md)
-- [D36. What a durable system has to say for itself: a map with a codec, a journal begun on purpose, a name that covers the replay](D36-what-a-durable-system-has-to.md)
+- [D107. The waves' premise, measured on the video site: the work spreads once reads leave the journal](D107-waves-premise.md)
+- [D36. What a durable system has to say for itself: a map with a codec, a journal begun on purpose, a name that covers the replay](D36-what-a-durable-system-has-to.md): partly superseded by D66 (a changed system refusing its old files)
 - [D79. Work that is due later is a job of the scheduler: held by its id, run by its own timer, retried until it ends](D79-work-that-is-due-later-is-a-job-of-the-scheduler.md)
+
+### Superseded
+
+- [D16. An actor never waits inside a step](D16-an-actor-never-waits-inside-a.md): superseded by D18
+- [D13. The runtime orders steps with one logical clock](D13-the-runtime-orders-steps-with-one.md): superseded by D18

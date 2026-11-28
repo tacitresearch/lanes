@@ -1,8 +1,8 @@
 # Definitions without evidence
 
-The definitions of `Lanes/` whose status in `docs/INVENTORY.md` is none. `lanes lint` fails on
-one that is not here, and on an entry here that has evidence now or no longer exists, so the list
-only shrinks. Each entry is under a heading that says why it is here; a new one needs a heading
+The definitions of `Lanes/` whose status in the inventory (`lake exe lanes inventory`) is none.
+`lanes lint` fails on one that is not here, and on an entry here that has evidence now or no
+longer exists, so the list only shrinks. Each entry is under a heading that says why it is here; a new one needs a heading
 of its own. The rules are in `docs/decisions/D47-the-inventory-is-computed.md`.
 
 ## Helpers of `lanes_data` and of the codec macros, run by the compiler: a test uses the command, not them
@@ -115,10 +115,6 @@ Each is to be proved, tested, made private or removed.
 ### `Lanes/Lib/Encoding/Json/Printer.lean`
 
 - `Json.instToString`
-
-### `Lanes/Web/Http/Front.lean`
-
-- `Http.servedActors`
 
 ### `Lanes/Web/Http/Gate.lean`
 

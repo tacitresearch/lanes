@@ -1,5 +1,7 @@
 # D65. Models of external services: calls that may not answer, keys, webhooks, and things with a lifecycle
 
+Status: Accepted
+
 D61 planned the models of external systems as classes built from combinators on `Outside`. This
 is the first of them: the combinators, the class of services that hold things which change on
 their own (`Effects`), and two instances, payments and email. It builds part of D61 and changes
