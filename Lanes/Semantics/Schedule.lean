@@ -573,4 +573,162 @@ theorem attach_answer_handled {τ : Signature} (sys : System τ) (config : Confi
   · rw [hwork] at honce
     cases honce
 
+/-! ### A scheduler for each entity
+
+What one scheduler does alone, each scheduler of `systemBy` does beside the others, and so
+beside any system (`attachBy_held_leaves`): its steps are the scheduler's own, no other actor
+touches its state, and its timers are its own. -/
+
+section By
+
+variable {E : Type} [DecidableEq E] {owner : K → E} {envBy : EnvModel (sigBy E K P A)}
+
+/-- A scheduler of `systemBy` that the environment does not crash stays up. -/
+theorem stays_upBy {e : E} (hcrash : envBy.mayCrash e = false)
+    {c c' : SysState (systemBy config owner)} {ev : Event (sigBy E K P A)}
+    (hup : c.up e = true) (hstep : c.step envBy ev = some c') : c'.up e = true :=
+  SysState.up_of_step hcrash (fun s msg => by
+    show (Eff.allAt e (step config s msg).2).any Effect.isStop = false
+    rw [isStop_at]; exact step_runs config s msg) hup hstep
+
+/-- A step leaves the state of the scheduler of `e` as it is, or takes it by one of its steps. -/
+theorem state_stepBy {e : E} {c c' : SysState (systemBy config owner)} {ev : Event (sigBy E K P A)}
+    (hstep : c.step envBy ev = some c') :
+    c'.state e = c.state e ∨ ∃ msg, c'.state e = (step config (c.state e) msg).1 := by
+  rcases SysState.step_state hstep with h | ⟨i, msg, h⟩ | ⟨i, h⟩
+  · exact .inl (by rw [h])
+  · by_cases hi : e = i
+    · subst hi
+      exact .inr ⟨msg, by rw [h]; simp [Actor.mapEff, actor]⟩
+    · exact .inl (by rw [h, update_of_ne _ _ hi])
+  · by_cases hi : e = i
+    · subst hi
+      exact .inl (by rw [h]; simp [Actor.mapEff, actor])
+    · exact .inl (by rw [h, update_of_ne _ _ hi])
+
+/-- The job under `key` of the scheduler of `e` is gone, or is the same job as `j`, nearer its
+end. -/
+def NearerBy (config : Config K P A) (owner : K → E) (e : E) (key : K) (j : Job K P)
+    (c : SysState (systemBy config owner)) : Prop :=
+  key ∉ keys (c.state e : State K P).jobs ∨ (c.up e = true ∧
+    ∃ j', entry (c.state e : State K P).jobs key = some j' ∧ left config j' < left config j ∧
+      Same j j')
+
+private theorem moved_nearerBy {e : E} {c : SysState (systemBy config owner)} {key : K}
+    {j : Job K P} (hup : c.up e = true) (h : Moved config j (entry (c.state e : State K P).jobs key))
+    (hsame : ∀ j', entry (c.state e : State K P).jobs key = some j' → Same j j') :
+    NearerBy config owner e key j c := by
+  rcases h with h | ⟨j', h, hlt⟩
+  · exact .inl (entry_eq_none.mp h)
+  · exact .inr ⟨hup, j', h, hlt, hsame j' h⟩
+
+/-- A job a scheduler of `systemBy` holds that is not periodic is, in a fair run, no longer held
+or nearer its end. -/
+theorem entry_leadsBy (config : Config K P A) (owner : K → E) {e : E}
+    (hcrash : envBy.mayCrash e = false) (key : K) (j : Job K P) (hp : j.work.periodic = false) :
+    (systemBy config owner).LeadsTo envBy
+      (fun c => c.up e = true ∧ entry (c.state e : State K P).jobs key = some j)
+      (NearerBy config owner e key j) := by
+  refine System.LeadsTo.ensures_of_invariant
+    (I := fun c => ArmedBy c ∧ (c.state e : State K P).Attempts config) ?_
+    (.timeout e (timer j)) ?_ ?_ ?_ ?_
+  · exact fun c hc => ⟨armedBy config owner envBy c hc, attemptsBy config owner envBy e c hc⟩
+  · intro c ev c' ⟨_, hatt⟩ ⟨hup, hj⟩ _ hstep
+    have hup' := stays_upBy hcrash hup hstep
+    rcases state_stepBy (e := e) hstep with hs | ⟨msg, hs⟩
+    · exact .inl ⟨hup', hs ▸ hj⟩
+    · rcases entry_step hatt hj hp msg with he | hmoved
+      · exact .inl ⟨hup', hs ▸ he⟩
+      · exact .inr (moved_nearerBy hup' (hs ▸ hmoved) fun j' h => entry_step_same hj (hs ▸ h))
+  · exact fun c ⟨harmed, _⟩ ⟨hup, hj⟩ _ => ⟨hup, harmed e hup j (entry_some hj).1⟩
+  · intro c c' ⟨_, hatt⟩ ⟨hup, hj⟩ _ hstep
+    have hup' := stays_upBy hcrash hup hstep
+    obtain ⟨_, _, rfl⟩ := SysState.step_timeout.mp hstep
+    refine moved_nearerBy hup' ?_ fun j' h => ?_
+    · rw [handleBy_eq]
+      simp only [update_self]
+      exact entry_step_timer hatt hj hp
+    · rw [handleBy_eq] at h
+      simp only [update_self] at h
+      exact entry_step_same hj h
+  · intro c ev c' _ ⟨hup, hj⟩ _ hstep hrestarted
+    exfalso
+    obtain ⟨-, rfl⟩ := entry_some hj
+    have hnot (i : E) (msg : Schedule.Msg K P A) :
+        Event.timeout (σ := sigBy E K P A) e (timer j) ∉
+          Effect.timeouts i (Eff.allAt i (step config (c.state i) msg).2) := fun h => by
+      simp only [Effect.timeouts, List.mem_filterMap] at h
+      obtain ⟨eff, heff, h⟩ := h
+      cases eff with
+      | after d m =>
+        simp only [Option.some.injEq, Event.timeout.injEq] at h
+        obtain ⟨rfl, h⟩ := h
+        have h := eq_of_heq h
+        subst h
+        exact not_arms hj hp msg d (after_mem_at.mp heff)
+      | _ => simp at h
+    cases ev with
+    | deliver e' | duplicate e' => exact hnot e'.dst e'.msg hrestarted
+    | timeout i msg => exact hnot i msg hrestarted
+    | start i =>
+      by_cases hi : i = e
+      · subst hi
+        obtain ⟨hdown, -⟩ := SysState.step_start.mp hstep
+        simp [hup] at hdown
+      · change Event.timeout e (timer j) ∈ Effect.timeouts i _ at hrestarted
+        simp only [Effect.timeouts, List.mem_filterMap] at hrestarted
+        obtain ⟨eff, -, h⟩ := hrestarted
+        cases eff <;> simp only [reduceCtorEq, Option.some.injEq, Event.timeout.injEq] at h
+        exact hi h.1
+    | input _ | drop _ | output _ | crash _ => exact List.not_mem_nil hrestarted
+
+/-- A job a scheduler of `systemBy` holds that is not periodic stops being held, in any
+environment that does not crash that scheduler. -/
+theorem held_leavesBy (config : Config K P A) (owner : K → E) {e : E}
+    (hcrash : envBy.mayCrash e = false) (key : K) :
+    (systemBy config owner).LeadsTo envBy
+      (fun c => c.up e = true ∧ ∃ j, entry (c.state e : State K P).jobs key = some j ∧
+        j.work.periodic = false)
+      (fun c => key ∉ keys (c.state e : State K P).jobs) := by
+  let f (c : SysState (systemBy config owner)) : Nat :=
+    match entry (c.state e : State K P).jobs key with
+    | some j => left config j
+    | none => 0
+  refine System.LeadsTo.induction f fun n => ?_
+  refine System.LeadsTo.mono
+    (P := fun (c : SysState (systemBy config owner)) => ∃ j : Job K P,
+      ((c.up e = true ∧ entry (c.state e : State K P).jobs key = some j) ∧ j.work.periodic = false)
+        ∧ left config j = n) ?_ (fun _ h => h) ?_
+  · intro c ⟨⟨hup, j, hj, hp⟩, hf⟩
+    exact ⟨j, ⟨⟨hup, hj⟩, hp⟩, by simpa [f, hj] using hf⟩
+  refine System.LeadsTo.exists_left fun j => ?_
+  by_cases hp : j.work.periodic = false
+  · by_cases hn : left config j = n
+    · refine System.LeadsTo.mono (fun c h => h.1.1) (fun c hQ => ?_)
+        (entry_leadsBy config owner hcrash key j hp)
+      rcases hQ with hgone | ⟨hup, j', hj', hlt, hsame⟩
+      · exact .inl hgone
+      · refine .inr ⟨⟨hup, j', hj', hsame.2.1 ▸ hp⟩, ?_⟩
+        simp only [f, hj']
+        omega
+    · exact System.LeadsTo.of_imp fun c h => absurd h.2 hn
+  · exact System.LeadsTo.of_imp fun c h => absurd h.1.2 hp
+
+/-- Beside any system, every job a scheduler of `attachBy` holds that is not periodic stops
+being held by it, in any environment that does not crash that scheduler. -/
+theorem attachBy_held_leaves {τ : Signature} (sys : System τ) (config : Config K P A)
+    (use : Use τ K P A) (owner : K → E) {env : EnvModel (joinSig (sigBy E K P A) τ)} {e : E}
+    (hcrash : env.mayCrash (.inl e) = false) (key : K) :
+    (attachBy sys config use owner).LeadsTo env
+      (fun c => c.up (.inl e) = true ∧ ∃ j, entry (c.state (.inl e) : State K P).jobs key = some j ∧
+        j.work.periodic = false)
+      (fun c => key ∉ keys (c.state (.inl e) : State K P).jobs) :=
+  System.LeadsTo.join_left
+    (P := fun c : SysState (systemBy config owner) =>
+      c.up e = true ∧ ∃ j, entry (c.state e : State K P).jobs key = some j ∧ j.work.periodic = false)
+    (Q := fun s _ => key ∉ keys (s e : State K P).jobs)
+    (held_leavesBy config owner (envBy := env.left) hcrash key)
+
+end By
+
 end Lanes.Schedule
