@@ -207,12 +207,14 @@ def parseHeading (line : String) : Option (Option Nat × String) := do
   return (some (String.ofList digits).toNat!, String.ofList (rest.drop 2))
 
 /-- The text after `Status: ` on the first line of the body that is not blank: `Accepted`,
-`Superseded by D18`, or `Partly superseded by D37 (the router)`. -/
+`Proposed` (for the owner to decide), `Superseded by D18`, or `Partly superseded by D37 (the
+router)`. -/
 def Decision.status? (d : Decision) : Option String := do
   let line ← (d.body.splitOn "\n").find? fun l => !l.trimAscii.isEmpty
   guard (line.startsWith "Status: ")
   let status := charsFrom line 8
-  guard (["Accepted", "Superseded by ", "Partly superseded by "].any fun p => status.startsWith p)
+  guard (["Accepted", "Proposed", "Superseded by ", "Partly superseded by "].any fun p =>
+    status.startsWith p)
   return status
 
 /-- Current unless wholly superseded. -/
@@ -237,7 +239,8 @@ def readDecisions (root : System.FilePath) : IO (List Decision × List Problem) 
       let d : Decision := ⟨name, number, slug, title, body⟩
       if d.status?.isNone then
         problems := (path, 3, "decisions", "the line after the title is `Status: Accepted`, "
-          ++ "`Status: Superseded by Dn` or `Status: Partly superseded by Dn (the part)`") :: problems
+          ++ "`Status: Proposed`, `Status: Superseded by Dn` or "
+          ++ "`Status: Partly superseded by Dn (the part)`") :: problems
       decisions := d :: decisions
     | none, _ =>
       problems := (path, 1, "decisions", "a decision is `Dn-<slug>.md`, or `new-<slug>.md` "

@@ -14,8 +14,9 @@ path, and regenerates the index below; `lanes lint` fails on two decisions with 
 a stale index, and with `--main` (as CI runs it on the main branch) on a decision without a
 number.
 
-The line under a decision's title is its status: `Status: Accepted`, `Status: Superseded by
-Dn`, or `Status: Partly superseded by Dn (the part)`. A decision is never rewritten but for that
+The line under a decision's title is its status: `Status: Accepted`, `Status: Proposed` (a
+proposal for the owner to decide, accepted or dropped before it lands for good), `Status:
+Superseded by Dn`, or `Status: Partly superseded by Dn (the part)`. A decision is never rewritten but for that
 line, which the decision that supersedes it changes. The index lists the current decisions
 first, then those superseded. Each list is sorted by the files' slugs, not by number, so that
 two new decisions land at different lines. The numbers give the order in which they were taken.
