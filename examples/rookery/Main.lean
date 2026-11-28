@@ -36,7 +36,7 @@ def main (args : List String) : IO UInt32 := do
   let config : Config := { maxPerWindow }
   let server ← (Http.serve (Sys config) (bridge settings)
     { port := port.toUInt16, streams := some streams, poll_ms := 500 } {}
-    (arrive := some fun r => do return .ok (stamp ((← Http.Ops.wallMs) / 1000) r))).block
+    (arrive := some fun r => do return .ok (stamp ((← Log.wallMs) / 1000) r))).block
   IO.println s!"rookery listening on http://127.0.0.1:{server.port.getD 0}"
   (← IO.getStdout).flush
   Lanes.block (server.stopOnSignal 10000)

@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Std.Time
+public import Lanes.Runtime.IO.Log
 public import Lanes.Runtime.IO.Shell
 public import Lanes.Web.Http.Ops
 
@@ -53,17 +53,6 @@ def drain (ops : Ops) : BaseIO Unit :=
 def refused (ops : Ops) : BaseIO Unit := do
   if ops.config.counting then ops.stats.modify (·.refuse)
 
-def write (sink : LogSink) (line : String) : BaseIO Unit :=
-  match sink with
-  | .off => pure ()
-  | .stderr =>
-    let put : IO Unit := do
-      let err ← IO.getStderr
-      err.putStr (line ++ "\n")
-      err.flush
-    discard put.toBaseIO
-  | .call f => discard (f line).toBaseIO
-
 def health (ops : Ops) (probe : Probe) : BaseIO Health :=
   return { recovered := probe.recovered, stopping := probe.stopping || (← ops.draining.get) }
 
@@ -79,11 +68,6 @@ def freshId : BaseIO String := do
   match ← (IO.getRandomBytes 8).toBaseIO with
   | .ok bytes => return RequestId.ofBytes bytes.data.toList
   | .error _ => return toString (← IO.monoNanosNow)
-
-def wallMs : BaseIO Nat := do
-  match ← Std.Time.Timestamp.now.toBaseIO with
-  | .ok t => return t.toMillisecondsSinceUnixEpoch.toInt.toNat
-  | .error _ => return 0
 
 /--
 `submit` with the operators' part around it, for a connection from `peer`: an operator's request
@@ -107,8 +91,8 @@ def front (ops : Ops) (probe : BaseIO Probe) (peer : Option Ip.Addr)
       if config.counting then
         ops.stats.modify (·.answered request.method response.status duration_us)
       if config.accessLog.isOn then
-        write config.accessLog <| Access.line {
-          time_ms := ← wallMs, method := request.method, path := request.path
+        config.accessLog.write <| Access.line {
+          time_ms := ← Log.wallMs, method := request.method, path := request.path
           status := response.status, duration_us, bytes := response.body.size, requestId := id }
       answer (if config.requestIds then RequestId.tag id response else response)
     match route? config peer request with

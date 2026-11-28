@@ -89,6 +89,7 @@ two new decisions land at different lines. The numbers give the order in which t
 - [D72. Sign-in with OAuth 2.0 and OpenID Connect, done where a request arrives](D72-sign-in-with-oauth.md): partly superseded by D110-volatile-actors.md (each provider a Lake package of its own: Google and GitHub are presets of `Services/Oidc`)
 - [D52. A service behind actors is proved with one simulation, and an application gives only its steps](D52-standard-simulation.md)
 - [D5. Start is recovery](D5-start-is-recovery.md)
+- [D120. Compression in pure Lean, logs in the lowest package, forms read strictly](D120-stdlib-wave-1.md)
 - [D122. CSV, paths, an HTML sanitizer and WebSockets in the standard library](D122-stdlib-wave-2.md)
 - [D101. The step's final shape: a context, quarantine, restarts and totality](D101-step-shape.md): partly superseded by D110-volatile-actors.md (`now` and `seed` taken from the journal, and quarantine through the journal)
 - [D76. Bodies and responses stream through the gate, in pieces and parts, one at a time](D76-streams-through-the-gate.md)

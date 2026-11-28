@@ -101,7 +101,8 @@ def tests : List (String × Bool) :=
         && page.contains "lanes_http_connections_refused_total 1\n"
         && page.contains "lanes_http_connections 2\n" && page.contains "lanes_ready 1\n"),
     ("ops: an access line is the record's fields, in order",
-      access.line == "{\"time\":\"2023-11-14T22:13:20.123Z\",\"method\":\"GET\","
+      access.line == "{\"time\":\"2023-11-14T22:13:20.123Z\",\"level\":\"INFO\","
+        ++ "\"msg\":\"request\",\"method\":\"GET\","
         ++ "\"path\":\"/videos/42\",\"status\":200,\"duration_ms\":1.5,\"bytes\":12,"
         ++ "\"request_id\":\"abc\"}"),
     ("ops: an awkward path stays on its line and reads back",

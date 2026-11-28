@@ -10,6 +10,16 @@ import Lanes.Lib.Encoding.Cbor.Sound
 
 /-! The axiom gate (rule 5.5, see `Tests/Axioms.lean`) for the theorems of `Lanes/Lib/`. -/
 
+-- Lanes.Lib.Compress
+/-- info: 'Lanes.Inflate.size_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Inflate.size_le
+
+/-- info: 'Lanes.Gzip.size_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Gzip.size_le
+
+/-- info: 'Lanes.Zlib.size_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Zlib.size_le
+
 -- Lanes.Lib.Crypto.Hmac
 /-- info: 'Lanes.Bytes.unhex?_hex' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Bytes.unhex?_hex
@@ -231,6 +241,19 @@ import Lanes.Lib.Encoding.Cbor.Sound
 /-- info: 'Lanes.Json.ofScientific_mantissa' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Json.ofScientific_mantissa
 
+/-- info: 'Lanes.Json.compress_printable' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Json.compress_printable
+
+-- Lanes.Lib.LogSound
+/-- info: 'Lanes.Log.render_printable' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Log.render_printable
+
+/-- info: 'Lanes.Log.render_oneLine' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Log.render_oneLine
+
+/-- info: 'Lanes.Log.parse_render' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Log.parse_render
+
 -- Lanes.Lib.Metrics
 /-- info: 'Lanes.Metrics.Histogram.observeAll_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Metrics.Histogram.observeAll_eq
@@ -259,6 +282,24 @@ import Lanes.Lib.Encoding.Cbor.Sound
 /-- info: 'Lanes.Metrics.sanitize_of_valid' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Metrics.sanitize_of_valid
 
+-- Lanes.Lib.Mime.MultipartSound
+/-- info: 'Lanes.Multipart.parse_write' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Multipart.parse_write
+
+/-- info: 'Lanes.Multipart.parse_tooLarge' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Multipart.parse_tooLarge
+
+/-- info: 'Lanes.Multipart.length_le_of_parse' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Multipart.length_le_of_parse
+
+/-- info: 'Lanes.Multipart.headers_le_of_parse' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Multipart.headers_le_of_parse
+
+/-- info: 'Lanes.Multipart.name?_field' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Multipart.name?_field
+
+/-- info: 'Lanes.Multipart.filename?_file' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Multipart.filename?_file
 -- Lanes.Lib.PathSound
 /-- info: 'Lanes.Path.clean_clean' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Path.clean_clean

@@ -6,6 +6,7 @@ module
 
 public import Std.Async
 public import Lanes.Web.Http.Admit
+public import Lanes.Web.Http.Compress
 public import Lanes.Web.Http.Conn
 public import Lanes.Web.Http.View
 public import Lanes.Web.Http.Waiting
@@ -99,6 +100,9 @@ structure ServerConfig where
   /-- Metrics, health and the access log, answered and written by the server: all off by
   default (`Lanes/Web/IO/Ops.lean`). -/
   ops : OpsConfig := {}
+  /-- Responses compressed with gzip for clients that take it, on the connection's thread
+  (`Lanes/Web/Http/Compress.lean`). Off by default: see BREACH there. -/
+  compression : Option Compression := none
 
 private def ServerConfig.conn (config : ServerConfig) : Conn.Config where
   limits := { config.limits with body_max := config.maxBodyBytes }
@@ -124,6 +128,9 @@ private inductive Ev where
   | alarm
   /-- The write the loop waited for to tell the connection it was sent has ended. -/
   | sent
+  /-- The answer to a request, to be compressed as its `Accept-Encoding` allows before the
+  connection is told it. -/
+  | answer (seq : Nat) (acceptEncoding : Option String) (r : Response)
 
 /-- What the loop of a connection and those who tell it something share. The loop runs on the
 thread that tells it something while it is not running, and never waits. -/
@@ -298,7 +305,8 @@ private partial def react (ctx : Ctx) (line : Line) (loop : Loop) (event : Conn.
       todo := rest
       match action with
       | .submit seq request =>
-        ctx.submit request fun r => tell ctx line false (.conn (.answered seq r))
+        let accept := request.header? "accept-encoding"
+        ctx.submit request fun r => tell ctx line false (.answer seq accept r)
       | .begin seq request =>
         let id ← ctx.submitStream request fun r => tell ctx line false (.conn (.responded seq r))
         let heads := loop.heads.filter (·.1 ≥ loop.conn.written)
@@ -336,6 +344,10 @@ private partial def handle (ctx : Ctx) (line : Line) (loop : Loop) : Ev → Base
       | _ => .broken
   | .resume => return { loop with resumeSet := false }
   | .sent => react ctx line { loop with sentSet := false } .sent
+  | .answer seq accept r =>
+    react ctx line loop (.answered seq (match ctx.config.compression with
+      | some c => c.respond accept r
+      | none => r))
   | .alarm => do
     let now ← IO.monoMsNow
     let late := (← writeBy ctx.config.write_ms loop).any (· ≤ now)
