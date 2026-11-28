@@ -34,12 +34,12 @@ lanes_data structure Upload where
   owner : Member
   /-- The size the store gave when it was asked; `none` until it held the file. -/
   size : Option Nat
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data structure State where
   next : FileId := 0
   uploads : List Upload := []
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data inductive Request where
   | list (req : ReqId) (who : Member) (at_s : Nat)
@@ -48,7 +48,7 @@ lanes_data inductive Request where
   /-- The browser says it posted the file; `size` is what the store answered when asked. -/
   | seen (req : ReqId) (who : Member) (file : FileId) (size : Option Nat)
   | delete (req : ReqId) (who : Member) (file : FileId)
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 ```
 
 What each request does, one at a time. The shelf holds at most `maxFiles` uploads (rule 2.6), so

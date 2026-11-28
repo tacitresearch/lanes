@@ -52,7 +52,7 @@ adapter, as `todo-db` keeps its to-dos in PostgreSQL.
 | --- | --- |
 | A spec as a `Service`, run by `Server` | `counter` |
 | A spec as a `Service`, implemented by actors | `kv-cache`, `rookery` |
-| `lanes_data` and codecs | `counter`, `bank`, `rookery` |
+| `lanes_data`, with JSON (`ToJson, FromJson`) and a table (`table`) | `rookery`, `todo-db` |
 | Per-actor invariants (`actor_invariant`, `System.invariant_of_actor`) | `counter`, `bank`, `rookery` |
 | Refinement to a spec (`System.Implements`, `System.Refines`) | `counter`, `kv-cache`, `rookery` |
 | A request takes effect once (`Once.actor`, `Service.once`) | `kv-cache` |

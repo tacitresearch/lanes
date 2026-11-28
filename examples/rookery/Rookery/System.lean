@@ -21,7 +21,7 @@ open Lanes
 lanes_data inductive Msg (N C : Type) where
   | request (r : Request N C)
   | deadline (d : Deadline N)
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 abbrev sig (N C : Type) [DecidableEq N] [DecidableEq C] : Signature where
   Id := Unit

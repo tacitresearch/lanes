@@ -23,7 +23,7 @@ open Lanes Lanes.Http
 lanes_data inductive Ask where
   | ask (id : ReqId)
   | note (n : Nat)
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 inductive Told where
   | reply (id : ReqId)

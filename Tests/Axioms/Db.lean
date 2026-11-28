@@ -6,6 +6,13 @@ import Lanes.Semantics
 
 /-! The axiom gate (rule 5.5, see `Tests/Axioms.lean`) for the theorems of `Lanes/Db/`. -/
 
+-- Lanes.Db.Columns
+/-- info: 'Lanes.Db.Columns.toRow_of_ofRow' depends on axioms: [propext, Classical.choice] -/
+#guard_msgs in #print axioms Lanes.Db.Columns.toRow_of_ofRow
+
+/-- info: 'Lanes.Db.Columns.table' depends on axioms: [propext, Classical.choice] -/
+#guard_msgs in #print axioms Lanes.Db.Columns.table
+
 -- Lanes.Db.Sound
 /-- info: 'Lanes.Db.invariant' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Db.invariant
