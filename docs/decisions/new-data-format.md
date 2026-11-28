@@ -1,7 +1,7 @@
 # D?. A data format that outlives its version: one schema per file, values read by name
 
-*A proposal. It moves no code and changes no format. The owner agreed to the direction; the
-parts below are for the owner to edit and decide.*
+Status: Accepted. The owner set the direction; the details of section 8 are settled as stated
+there. This decision moves no code; the order of work (section 7) does.
 
 What Lanes writes to disk and sends between processes is the most expensive thing to change
 later. Code can be rewritten in an afternoon. A file written by version 1 must be read by every
@@ -591,28 +591,22 @@ Each step is a pull request of its own, and each builds and passes the checks.
 
 Steps 2 to 7 come before 0.1.0. The corpus is frozen at 0.1.0.
 
-## 8. Open questions for the owner
+## 8. Details settled
 
-1. **Names.** Keep `Codec` and `Codable`, adding `Schema` and `Value`, or rename the library now
-   that it is general (rule 1.7)?
-2. **The checksum.** The first 16 bytes of SHA-256 (no new C), CRC32C (Kafka's and RocksDB's,
-   but new C or slow Lean), or either with a chain of frames, which complicates cutting a journal
-   at a save?
-3. **How an alias and a default are written** in `lanes_data`: a clause after `deriving`
-   (`renamed px := x`), or beside the field?
-4. **Zero values.** Should an added `Option` field default to `none` without a declaration, as
-   `gob` defaults to zero? This proposal says no: every default is declared.
-5. **Tails written by another version.** Keep D66's old system in the binary, add the old
-   release's "replay, save and exit" start, or both?
-6. **The default check on a manifest.** Refuse a tail whenever the application's version
-   differs (as now), or also whenever Lanes' version differs, until the corpus has shown that a
-   release replays the same?
-7. **Decoded inputs (3.4).** Does this supersede D44's choice of one `Request` type in the
-   journal, as the evidence of 1.3 suggests, and does it land with the gate off the hot path or
-   before it?
-8. **A journal in the model's terms** (the model's events, one entry per step), so that any
-   runtime can replay any tail: later, or never?
-9. **Format 1 files.** Refuse with a message, as proposed, or write a converter?
-10. **Personal data in identities.** A lint, a doc, or nothing?
-11. **Deadlines in the image.** The neutral image carries timer deadlines as data the model
-    ignores. Should the model get a clock instead (the Layer 1 review's finding about time)?
+1. **Names.** Keep `Codec` and `Codable`, adding `Schema` and `Value`.
+2. **The checksum.** The first 16 bytes of SHA-256, through the binding already trusted; no chain
+   of frames, so a journal can still be cut at a save.
+3. **Aliases and defaults** in `lanes_data`: the first implementation PR proposes the syntax.
+4. **Zero values.** None: an added `Option` field needs a declared default, as every added field
+   does.
+5. **Tails written by another version.** D66's old system stays in the binary; no "replay, save
+   and exit" start for now.
+6. **The default check on a manifest.** Refuse a tail when the application's version differs;
+   when only Lanes' version differs, warn, and the application may make that strict.
+7. **Decoded inputs (3.4)** supersede D44's one `Request` type in the journal, and land before the
+   gate leaves the hot path.
+8. **A journal in the model's terms.** Not now.
+9. **Format 1 files** are refused with a message that names the format.
+10. **Personal data in identities.** A note in the docs; no lint.
+11. **Deadlines in the image** are data the model ignores, until the step context gives the model
+    a clock (the decision on the step's shape).
