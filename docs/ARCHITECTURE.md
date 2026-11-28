@@ -55,7 +55,7 @@ proved function tells it to.
 
 An actor (`Actor`, `Lanes/Core/Actor.lean`) is `init`, `step` and `recover`: a pure, total function from
 a state and one message to a new state and a list of effects. A step is also told its context
-(`Ctx`, D101 and `docs/decisions/new-step-context.md`): the moment (`now_ms`, `seed`) and who sent
+(`Ctx`, D101 and `docs/decisions/D121-step-context.md`): the moment (`now_ms`, `seed`) and who sent
 the message (`Sender`: the outside, an actor, or one of its own timers); a recovery is told the
 moment. An actor that reads it gives `stepAt` and `recoverAt`; one that does not gives `step` and
 `recover`, which they default to. A `Signature` names a system's
@@ -152,7 +152,7 @@ has a tick with that moment before each step, so it replays through `SysState.ru
 thread hands a step that has run longer than `Runtime.Config.stepLimitMs` (30 s) to `onStuck`,
 which by default reports it and ends the process with status 75 for its supervisor to start
 again: the semantics' restart, which drops the poisoned message with the rest of memory
-(`docs/decisions/new-step-context.md`).
+(`docs/decisions/D121-step-context.md`).
 
 What the runtime decides is those pure functions; the threads only move data. The scheduler's
 model (`Lanes/Runtime/SchedSound.lean`) is its whole state as one value: every slot, each
