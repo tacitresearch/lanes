@@ -1,4 +1,4 @@
-# D?. A step's effects in linear time, and a bound on the mail between actors
+# D123. A step's effects in linear time, and a bound on the mail between actors
 
 Status: Accepted
 

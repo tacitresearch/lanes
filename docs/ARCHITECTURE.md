@@ -148,7 +148,7 @@ order. Timers are on an agenda kept by a thread of its own, which pushes each to
 it is due; one cancelled or armed again is dropped when its actor takes it. Inputs go straight
 to their actor's mailbox; at most `inboxCapacity` wait for their actor (`Sched.Ledger`), and
 `tryInput` refuses beyond (rule 3.8). The messages between actors are bounded together
-(`docs/decisions/new-runtime-limits.md`): while `Runtime.Config.mailHighWater` of them wait, no
+(`docs/decisions/D123-runtime-limits.md`): while `Runtime.Config.mailHighWater` of them wait, no
 input is taken, and a step that leaves more than `mailCapacity` waiting is handed to `onOverflow`,
 which by default reports it and ends the process with status 75, the semantics' restart. A step's
 sends, outputs and timers are gathered newest first and turned round once, so a step costs time
@@ -228,7 +228,7 @@ Also:
 - The mail between actors is bounded as a whole: an actor far behind holds up every input, not
   only those to it. Past `mailCapacity` the process restarts, losing every actor's state; an
   application whose proofs assume no restarts has no guarantee there
-  (`docs/decisions/new-runtime-limits.md`).
+  (`docs/decisions/D123-runtime-limits.md`).
 - Arming a timer looks through the actor's pending timers, so a step that arms `n` different
   timers takes time quadratic in `n`: messages have only `DecidableEq`.
 - Every turn updates one shared ledger (inputs waiting, items in mailboxes) and every push may
