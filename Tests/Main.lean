@@ -36,6 +36,7 @@ import Tests.Mailbox
 import Tests.Split
 import Tests.Batch
 import Tests.Pace
+import Tests.Reads
 import Tests.Crypto
 import Tests.Auth
 import Tests.Clients
@@ -113,7 +114,7 @@ def live : IO (List (String × Bool)) := do
     ++ (← safely "postgres" Tests.PostgresLive.live)
     ++ (← safely "postgres tls" Tests.PostgresTls.live)
     ++ (← safely "s3" Tests.S3.live) ++ (← safely "s3 uploads" Tests.S3Upload.live)
-    ++ (← safely "ship" Tests.Ship.live)
+    ++ (← safely "ship" Tests.Ship.live) ++ (← safely "reads" Tests.Reads.live)
     ++ (← safely "test kit" Tests.Testing.live)
     ++ (← safely "test kit worker" Tests.Testing.workerLive)
     ++ (← safely "tutorial web" Tests.TutorialWeb.live)
@@ -125,7 +126,7 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.Signature.tests ++ Tests.Sign.tests ++ Tests.OAuth.tests
     ++ Tests.Fair.tests ++ Tests.Codec.tests ++ Tests.Schema.tests ++ Tests.Body.tests ++ Tests.Match.tests ++ Tests.Durable.fileTests ++ Tests.Split.tests
     ++ Tests.Peers.tests ++ Tests.Courier.tests ++ Tests.Mailbox.tests ++ Tests.Batch.tests
-    ++ Tests.Pace.tests
+    ++ Tests.Pace.tests ++ Tests.Reads.tests
     ++ Tests.Crypto.tests ++ Tests.Auth.tests ++ Tests.Clients.tests ++ Tests.Lease.tests
     ++ Tests.Release.tests ++ Tests.ReadRequest.tests ++ Tests.Oracle.unitTests
     ++ Tests.HttpConn.tests ++ Tests.Loopback.tests
