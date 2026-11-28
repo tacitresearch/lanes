@@ -1,4 +1,4 @@
-# D?. Connecting to managed PostgreSQL as libpq does, and signing with a role's credentials
+# D119. Connecting to managed PostgreSQL as libpq does, and signing with a role's credentials
 
 Status: Accepted
 
