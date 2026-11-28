@@ -502,6 +502,26 @@ theorem world_invariant {σ : Signature} (cfg : Config) (port : Port σ Q A) {st
     · exact hJ.observe cfg _ hd
     · exact hd
 
+/-- The model always keeps some world: an answer no world allows is refused. -/
+theorem worlds_ne_nil {σ : Signature} (cfg : Config) (port : Port σ Q A) {start : Db}
+    {events : List (Event σ)} {s : State Q A}
+    (hrun : (outside cfg h start port).after events = some s) : s.worlds ≠ [] := by
+  refine (outside cfg h start port).after_invariant (fun _ => True) (fun s => s.worlds ≠ []) ?_ ?_ ?_
+    (fun _ _ => trivial) hrun
+  · simp [outside]
+  · intro d x d' _ hx
+    simp only [outside, Option.bind_eq_some_iff] at hx
+    obtain ⟨r, -, hr⟩ := hx
+    simp only [State.allow] at hr
+    split at hr
+    · cases hr
+    · next hne => simp only [Option.some.injEq] at hr; subst hr; simpa using hne
+  · intro d out hd _
+    simp only [outside]
+    split
+    · simpa [State.observe] using hd
+    · exact hd
+
 /-- A world in which a committed answer comes had the call take effect with that answer, and
 has the same database. -/
 theorem World.answer_committed {w w' : World Q A} {id : Nat} {a : A}
@@ -779,6 +799,12 @@ theorem of_reads {α : Type} {t : Txn α} (ht : t.Reads) (hP : ∀ o, o.writes =
 
 theorem single {o : Op} (hp : P o) : (Txn.op o Txn.pure).All P := .op o _ hp fun r => .pure r
 
+theorem mono {α : Type} {t : Txn α} {Q : Op → Prop} (ht : t.All P) (h : ∀ o, P o → Q o) : t.All Q := by
+  induction ht with
+  | pure a => exact .pure a
+  | abort why => exact .abort why
+  | op o k hp _ ih => exact .op o k (h o hp) ih
+
 theorem mapM {α β : Type} (f : α → Txn β) (hf : ∀ a, (f a).All P) : ∀ xs : List α, (xs.mapM f).All P := by
   intro xs
   induction xs with
@@ -807,5 +833,65 @@ theorem Txn.All.unique {α : Type} {t : Txn α} (tbl : Table) {i : Index} (hi : 
     (hu : i.unique = true) (ht : t.All fun o => o.table.name = tbl.name → o.table = tbl) :
     ∀ db a db', tbl.Unique i (db.rows tbl.name) → t.run db = .ok (a, db') → tbl.Unique i (db'.rows tbl.name) :=
   ht.keeps fun o ho _ _ _ hU ha => Op.unique_apply o ha tbl i hi hu ho hU
+
+/-! ## Every row of a table -/
+
+/-- The row a write asks to put in its table. -/
+def Op.written : Op → Option Row
+  | .insert _ r | .update _ r | .upsert _ r => some r
+  | _ => none
+
+/-- After an operation, every row of its table was there before, or is the one it wrote. -/
+theorem Op.onRows_sub (o : Op) (rows : List Row) :
+    ∀ x ∈ (o.onRows rows).2, x ∈ rows ∨ o.written = some x := by
+  intro x hx
+  cases o with
+  | get t k => exact .inl hx
+  | scan s => exact .inl hx
+  | insert t r =>
+    simp only [Op.onRows] at hx
+    split at hx
+    · exact .inl hx
+    · rcases (t.mem_insertSorted r rows x).mp hx with rfl | hx
+      · exact .inr rfl
+      · exact .inl hx
+  | update t r =>
+    simp only [Op.onRows] at hx
+    split at hx
+    · exact .inl hx
+    · obtain ⟨y, hy, rfl⟩ := List.mem_map.mp hx
+      split
+      · exact .inr rfl
+      · exact .inl hy
+  | upsert t r =>
+    simp only [Op.onRows] at hx
+    split at hx
+    · exact .inl hx
+    · rcases (t.mem_insertSorted r _ x).mp hx with rfl | hx
+      · exact .inr rfl
+      · exact .inl (List.mem_filter.mp hx).1
+  | delete t k => exact .inl (List.mem_filter.mp hx).1
+
+/-- Every row of the table that reads back is a value `P` admits. -/
+def TableOf.Every {α : Type} (t : TableOf α) (P : α → Prop) (db : Db) : Prop :=
+  ∀ x ∈ db.rows t.table.name, ∀ a, t.ofRow x = some a → P a
+
+/-- An operation on the table, or on another one, that writes only values `P` admits keeps every
+row of the table admitted. -/
+theorem TableOf.every_apply {α : Type} (t : TableOf α) {P : α → Prop} (o : Op)
+    (ht : o.table.name = t.table.name → o.table = t.table)
+    (hw : ∀ r, o.written = some r → ∀ a, t.ofRow r = some a → P a)
+    {db : Db} {r : o.Ret} {db' : Db} (h : o.apply db = .ok (r, db')) (hP : t.Every P db) :
+    t.Every P db' := by
+  intro x hx a ha
+  rw [Op.rows_apply o h] at hx
+  split at hx
+  · next hc =>
+    have := ht hc.2.symm
+    rw [← hc.2] at hx
+    rcases o.onRows_sub _ x hx with hx | hx
+    · exact hP x (hc.2 ▸ hx) a ha
+    · exact hw x hx a ha
+  · exact hP x hx a ha
 
 end Lanes.Db

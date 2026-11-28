@@ -63,6 +63,59 @@ structure Payload (W : Type) where
   decode : String → Option W
   decode_encode : ∀ w, decode (encode w) = some w
 
+namespace Payload
+
+def text : Payload String := { encode := id, decode := some, decode_encode := fun _ => rfl }
+
+def int64 : Payload Int64 where
+  encode i := toString i.toInt
+  decode s := s.toInt?.map Int64.ofInt
+  decode_encode i := by simp only [Int.toString_eq_repr, Int.toInt?_repr, Option.map_some, Int64.ofInt_toInt]
+
+/-- Another type, through a map each way that gets each value back. -/
+def iso {A B : Type} (p : Payload A) (to : B → A) (of : A → B) (h : ∀ b, of (to b) = b) : Payload B where
+  encode b := p.encode (to b)
+  decode s := (p.decode s).map of
+  decode_encode b := by simp [p.decode_encode, h]
+
+/-- Two values, the first written without `:`, then `:`, then the second. -/
+def pair {A B : Type} (p : Payload A) (q : Payload B) (hp : ∀ a, ∀ c ∈ (p.encode a).toList, c ≠ ':') :
+    Payload (A × B) where
+  encode ab := p.encode ab.1 ++ ":" ++ q.encode ab.2
+  decode s :=
+    match s.toList.dropWhile (· != ':') with
+    | ':' :: rest => do
+      let a ← p.decode (String.ofList (s.toList.takeWhile (· != ':')))
+      let b ← q.decode (String.ofList rest)
+      pure (a, b)
+    | _ => none
+  decode_encode ab := by
+    obtain ⟨a, b⟩ := ab
+    have hl : (p.encode a ++ ":" ++ q.encode b).toList = (p.encode a).toList ++ ':' :: (q.encode b).toList := by
+      simp
+    have hpos : ∀ c ∈ (p.encode a).toList, (c != ':') = true := fun c hc => by simpa using hp a c hc
+    simp only [hl, List.dropWhile_append_of_pos hpos, List.takeWhile_append_of_pos hpos]
+    simp [List.dropWhile, List.takeWhile, String.ofList_toList, p.decode_encode, q.decode_encode]
+
+theorem nat_colon (n : Nat) : ∀ c ∈ n.repr.toList, c ≠ ':' := by
+  intro c hc heq
+  subst heq
+  rw [Nat.toList_repr] at hc
+  have := Nat.isDigit_of_mem_toDigits (b := 10) (by decide) (by decide) hc
+  revert this; decide
+
+theorem int64_colon (i : Int64) : ∀ c ∈ (int64.encode i).toList, c ≠ ':' := by
+  intro c hc
+  simp only [int64, Int.toString_eq_repr, Int.repr_eq_ite] at hc
+  split at hc
+  · exact nat_colon _ c hc
+  · simp only [String.toList_append, List.mem_append] at hc
+    rcases hc with hc | hc
+    · simp at hc; subst hc; decide
+    · exact nat_colon _ c hc
+
+end Payload
+
 structure Job (W : Type) where
   id : Int64
   /-- The requester's name for the job, unique in its table. -/

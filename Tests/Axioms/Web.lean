@@ -131,6 +131,13 @@ import Lanes.Semantics
 /-- info: 'Lanes.Auth.Password.verify_raw' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Auth.Password.verify_raw
 
+-- Lanes.Web.Auth.RowsSound
+/-- info: 'Lanes.Auth.Rows.Failures.bounded' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Auth.Rows.Failures.bounded
+
+/-- info: 'Lanes.Auth.Rows.Sessions.closed_refused' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Auth.Rows.Sessions.closed_refused
+
 -- Lanes.Web.Auth.Token
 /-- info: 'Lanes.Auth.verify_sign' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Auth.verify_sign
