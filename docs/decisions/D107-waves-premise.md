@@ -1,4 +1,4 @@
-# D?. The waves' premise, measured on the video site: the work spreads once reads leave the journal
+# D107. The waves' premise, measured on the video site: the work spreads once reads leave the journal
 
 Status: Accepted
 

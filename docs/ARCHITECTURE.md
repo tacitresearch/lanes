@@ -124,7 +124,7 @@ Waves are as wide as an application spreads its work over actors. `Lanes/Runtime
 splits a batch of journal entries, each touching several actors, into waves whose entries share
 no actor, each actor's entries in the journal's order (`WavePlan.levels_lt`), and
 `examples/videos` measures its journal with it (`lake exe videosWaves`,
-`docs/decisions/new-waves-premise.md`).
+`docs/decisions/D107-waves-premise.md`).
 
 ## Journal, snapshots and the disk model
 
