@@ -74,8 +74,9 @@ theorem apply_update {ι : Type} [DecidableEq ι] {β γ : ι → Type} (f : (j 
 variable {σ : Signature}
 
 /-- A whole system at one moment: each actor's state and whether it is up, the messages in
-flight, each actor's pending timers, and the outputs not yet handed to the outside. The
-semantics is `SysState.step`, one function on it. -/
+flight, each actor's pending timers, the outputs not yet handed to the outside, and the moment
+the environment last gave (`Event.tick`), which every step is told. The semantics is
+`SysState.step`, one function on it. -/
 structure SysState (sys : System σ) where
   state : (i : σ.Id) → sys.State i
   up : σ.Id → Bool
@@ -83,10 +84,11 @@ structure SysState (sys : System σ) where
   net : List (Envelope σ)
   timers : (i : σ.Id) → List (σ.Msg i)
   outbox : List σ.Out
+  clock : Moment
 
 theorem SysState.ext' {sys : System σ} {a b : SysState sys} (hstate : a.state = b.state)
     (hup : a.up = b.up) (hnet : a.net = b.net) (htimers : a.timers = b.timers)
-    (houtbox : a.outbox = b.outbox) : a = b := by
+    (houtbox : a.outbox = b.outbox) (hclock : a.clock = b.clock := by simp_all) : a = b := by
   cases a; cases b; simp_all
 
 /-- One thing that can happen to a system. Inputs come from outside; drops, duplicates,
@@ -107,6 +109,10 @@ inductive Event (σ : Signature) : Type where
   /-- The process restarts: every actor is back at its initial state, as at `SysState.init`,
   and messages in flight, timers and outputs not yet handed over are lost (D110). -/
   | restart
+  /-- The environment gives the moment the steps after it are told: the time and a seed. It
+  may give any, earlier times included: actors stepped on different threads read the clock in
+  an order the semantics does not see. -/
+  | tick (m : Moment)
 
 /-- What the outside world sees: inputs, outputs, and a spec's deadlines passing. -/
 inductive Visible (In Out : Type) (T : Type := Empty) : Type where
@@ -143,6 +149,7 @@ def blank (sys : System σ) : SysState sys where
   net := []
   timers _ := []
   outbox := []
+  clock := {}
 
 def hasMail (c : SysState sys) (i : σ.Id) : Bool :=
   c.net.any fun e => decide (e.dst = i)
@@ -176,11 +183,13 @@ def settle (env : EnvModel σ) (c : SysState sys) (i : σ.Id)
   let c := ({ c with state := update c.state i r.1 }).performAll i r.2
   if r.2.any Effect.isStop then c.down env i else c
 
-def handle (env : EnvModel σ) (c : SysState sys) (i : σ.Id) (msg : σ.Msg i) : SysState sys :=
-  c.settle env i ((sys.actor i).step (c.state i) msg)
+/-- Actor `i` handles `msg` from `src`, told the moment of the state. -/
+def handle (env : EnvModel σ) (c : SysState sys) (i : σ.Id) (msg : σ.Msg i)
+    (src : Sender σ.Id := .outside) : SysState sys :=
+  c.settle env i ((sys.actor i).stepAt { toMoment := c.clock, src := src } (c.state i) msg)
 
 def startActor (env : EnvModel σ) (c : SysState sys) (i : σ.Id) : SysState sys :=
-  ({ c with up := update c.up i true }).settle env i ((sys.actor i).recover (c.state i))
+  ({ c with up := update c.up i true }).settle env i ((sys.actor i).recoverAt c.clock (c.state i))
 
 /-- The state at the start: no actor up, then each actor of `sys.boot` started in order. -/
 def init (sys : System σ) (env : EnvModel σ) : SysState sys :=
@@ -198,11 +207,11 @@ def step (env : EnvModel σ) (c : SysState sys) : Event σ → Option (SysState 
     some { c with net := c.net ++ [⟨none, i, msg⟩] }
   | .deliver e =>
     if c.up e.dst && c.deliverable env e then
-      some (({ c with net := c.net.erase e }).handle env e.dst e.msg)
+      some (({ c with net := c.net.erase e }).handle env e.dst e.msg (.ofSrc e.src))
     else none
   | .duplicate e =>
     if c.up e.dst && (env.link e.src e.dst).duplicating && c.deliverable env e then
-      some (c.handle env e.dst e.msg)
+      some (c.handle env e.dst e.msg (.ofSrc e.src))
     else none
   | .drop e =>
     if (env.link e.src e.dst).lossy && c.net.contains e then
@@ -210,7 +219,8 @@ def step (env : EnvModel σ) (c : SysState sys) : Event σ → Option (SysState 
     else none
   | .timeout i msg =>
     if c.up i && (c.timers i).contains msg then
-      some (({ c with timers := update c.timers i ((c.timers i).erase msg) }).handle env i msg)
+      some (({ c with timers := update c.timers i ((c.timers i).erase msg) }).handle env i msg
+        .timer)
     else none
   | .output out =>
     if c.outbox.contains out then some { c with outbox := c.outbox.erase out } else none
@@ -219,6 +229,7 @@ def step (env : EnvModel σ) (c : SysState sys) : Event σ → Option (SysState 
   | .start i =>
     if !c.up i && (c.hasMail i || env.restarts i) then some (c.startActor env i) else none
   | .restart => if env.mayRestart then some (init sys env) else none
+  | .tick m => some { c with clock := m }
 
 /-- The state after the events, in order, or `none` if one of them is not enabled. A
 counterexample of the checker, and a run of the scheduler, replay through it. -/

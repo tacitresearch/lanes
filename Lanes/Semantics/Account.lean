@@ -391,21 +391,22 @@ theorem implements_timed {svc : Service σ.In σ.Out S T} (a : Account sys S W)
       a.value c.state (c.net ++ [⟨none, (sys.accept x).1, (sys.accept x).2⟩]) w v)
     (deliver : ∀ c e, inv c → sys.Sent e → c.deliverable env e = true →
       a.Passes svc (delivered e.dst e.msg) c (({ c with net := c.net.erase e }).grow e.dst
-        ((sys.actor e.dst).step (c.state e.dst) e.msg)))
+        ((sys.actor e.dst).stepAt ⟨c.clock, .ofSrc e.src⟩ (c.state e.dst) e.msg)))
     (duplicate : ∀ c e, inv c → sys.Sent e → c.deliverable env e = true →
       (env.link e.src e.dst).duplicating = true → a.Passes svc (delivered e.dst e.msg) c
-        (c.grow e.dst ((sys.actor e.dst).step (c.state e.dst) e.msg)))
+        (c.grow e.dst ((sys.actor e.dst).stepAt ⟨c.clock, .ofSrc e.src⟩ (c.state e.dst) e.msg)))
     (drop : ∀ c e, inv c → sys.Sent e → e ∈ c.net → (env.link e.src e.dst).lossy = true →
       a.Moves svc c { c with net := c.net.erase e })
     (down : ∀ c i, env.mayCrash i = true ∨ sys.Stops i → a.Moves svc c (c.down env i))
     (timeout : ∀ c i msg, inv c → sys.Armed i msg → msg ∈ c.timers i →
-      a.Passes svc (deadlines i msg) c (c.grow i ((sys.actor i).step (c.state i) msg)))
-    (recover : ∀ c i, inv c → a.Moves svc c (c.grow i ((sys.actor i).recover (c.state i))))
+      a.Passes svc (deadlines i msg) c (c.grow i ((sys.actor i).stepAt ⟨c.clock, .timer⟩ (c.state i)
+        msg)))
+    (recover : ∀ c i, inv c → a.Moves svc c (c.grow i ((sys.actor i).recoverAt c.clock (c.state i))))
     (restart : env.mayRestart = true → ∀ c, inv c → a.Moves svc c (SysState.init sys env)) :
     sys.Implements env svc deadlines delivered := by
   have hsent := fun c e (hc : inv c ∧ sys.Traced c) he => hc.2.net e he
   refine System.Refines.of_timed_events (fun c hc => ⟨hinv c hc, System.traced sys env c hc⟩)
-    a.Sim ⟨_, rfl, init⟩ (fun c t up timers ⟨w, h⟩ _ => ⟨w, h.value, h.pending, h.owed⟩) ?_ ?_
+    a.Sim ⟨_, rfl, init⟩ (fun c t up timers _ ⟨w, h⟩ _ => ⟨w, h.value, h.pending, h.owed⟩) ?_ ?_
     (fun c t e hc ⟨_, h⟩ hd =>
       h.passes (deliver c e hc.1 (hsent c e hc (SysState.mem_of_deliverable hd)) hd))
     (fun c t e hc ⟨_, h⟩ hd hdup =>
@@ -449,16 +450,18 @@ theorem implements {svc : Service σ.In σ.Out S T} (a : Account sys S W)
     (input : ∀ c w v x, inv c → a.value c.state c.net w v →
       a.value c.state (c.net ++ [⟨none, (sys.accept x).1, (sys.accept x).2⟩]) w v)
     (deliver : ∀ c e, inv c → sys.Sent e → c.deliverable env e = true → a.Moves svc c
-      (({ c with net := c.net.erase e }).grow e.dst ((sys.actor e.dst).step (c.state e.dst) e.msg)))
+      (({ c with net := c.net.erase e }).grow e.dst
+        ((sys.actor e.dst).stepAt ⟨c.clock, .ofSrc e.src⟩ (c.state e.dst) e.msg)))
     (duplicate : ∀ c e, inv c → sys.Sent e → c.deliverable env e = true →
       (env.link e.src e.dst).duplicating = true →
-        a.Moves svc c (c.grow e.dst ((sys.actor e.dst).step (c.state e.dst) e.msg)))
+        a.Moves svc c (c.grow e.dst
+          ((sys.actor e.dst).stepAt ⟨c.clock, .ofSrc e.src⟩ (c.state e.dst) e.msg)))
     (drop : ∀ c e, inv c → sys.Sent e → e ∈ c.net → (env.link e.src e.dst).lossy = true →
       a.Moves svc c { c with net := c.net.erase e })
     (down : ∀ c i, env.mayCrash i = true ∨ sys.Stops i → a.Moves svc c (c.down env i))
     (timeout : ∀ c i msg, inv c → sys.Armed i msg → msg ∈ c.timers i →
-      a.Moves svc c (c.grow i ((sys.actor i).step (c.state i) msg)))
-    (recover : ∀ c i, inv c → a.Moves svc c (c.grow i ((sys.actor i).recover (c.state i))))
+      a.Moves svc c (c.grow i ((sys.actor i).stepAt ⟨c.clock, .timer⟩ (c.state i) msg)))
+    (recover : ∀ c i, inv c → a.Moves svc c (c.grow i ((sys.actor i).recoverAt c.clock (c.state i))))
     (restart : env.mayRestart = true → ∀ c, inv c → a.Moves svc c (SysState.init sys env)) :
     sys.Implements env svc :=
   a.implements_timed (deadlines := fun _ _ => none) (delivered := fun _ _ => none) hinv init

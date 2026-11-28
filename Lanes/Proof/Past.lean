@@ -89,7 +89,7 @@ theorem mem_seen_step {env : EnvModel σ} (hrestart : env.mayRestart = false)
     {c c' : SysState sys.withPast} {ev : Event σ}
     (h : c.step env ev = some c') {i : σ.Id} {p : sys.State i} (hp : p ∈ c.seen i) :
     p ∈ c'.seen i := by
-  rcases step_state_of_noRestarts h hrestart with hs | ⟨k, msg, hs⟩ | ⟨k, hs⟩ <;>
+  rcases step_state_of_noRestarts h hrestart with hs | ⟨k, _, msg, hs⟩ | ⟨k, _, hs⟩ <;>
     simp only [seen, hs]
   · exact hp
   · by_cases hik : i = k

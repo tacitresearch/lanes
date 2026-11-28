@@ -91,6 +91,7 @@ two new decisions land at different lines. The numbers give the order in which t
 - [D5. Start is recovery](D5-start-is-recovery.md)
 - [D120. Compression in pure Lean, logs in the lowest package, forms read strictly](D120-stdlib-wave-1.md)
 - [D122. CSV, paths, an HTML sanitizer and WebSockets in the standard library](D122-stdlib-wave-2.md)
+- [D121. The step context as built, and poison messages](D121-step-context.md)
 - [D101. The step's final shape: a context, quarantine, restarts and totality](D101-step-shape.md): partly superseded by D110-volatile-actors.md (`now` and `seed` taken from the journal, and quarantine through the journal)
 - [D76. Bodies and responses stream through the gate, in pieces and parts, one at a time](D76-streams-through-the-gate.md)
 - [D12. Template tags have no space after `<`](D12-template-tags-have-no-space-after.md)

@@ -271,6 +271,10 @@ theorem World.SameUpTo.next [Enum σ.Id] {sc : Scenario σ D} {R : D → D → P
     obtain ⟨hbudget, rfl⟩ := hw'
     exact ⟨_, World.mem_next_iff.mpr ⟨c, hstep, hrestarts ▸ hbudget, rfl⟩, rfl, hdriver,
       hcrashes, by simp [hrestarts]⟩
+  | tick m =>
+    obtain ⟨hm, hlater, rfl⟩ := hw'
+    exact ⟨_, World.mem_next_iff.mpr ⟨c, hstep, hm, hstate ▸ hlater, rfl⟩, rfl, hdriver, hcrashes,
+      hrestarts⟩
   | drop e | start i =>
     subst hw'
     exact ⟨_, World.mem_next_iff.mpr ⟨c, hstep, rfl⟩, rfl, hdriver, hcrashes, hrestarts⟩

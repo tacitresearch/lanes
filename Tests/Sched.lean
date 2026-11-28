@@ -38,9 +38,9 @@ def slotTests : List (String × Bool) :=
   let (again, s) := push s (.msg none 3)
   let (began, s) := s.begin
   let (started, s) := s.take
-  let (s, _) := s.put 0 (match started with | .job j => j.run | _ => ((0 : Nat), []))
+  let (s, _) := s.put 0 (match started with | .job j => j.run {} | _ => ((0 : Nat), []))
   let (delivered, s) := s.take
-  let r := match delivered with | .job j => j.run | _ => ((0 : Nat), [])
+  let r := match delivered with | .job j => j.run {} | _ => ((0 : Nat), [])
   let (s, c) := s.put 0 r
   [ ("sched: an idle actor that gets mail is queued once", queued && !again),
     ("sched: a message to an actor down starts it and stays queued; then it is delivered",

@@ -165,11 +165,11 @@ theorem front_resultAnswered (env : EnvModel frontSig) : front.Invariant env res
     rw [hbelow.state]
     exact hc n (hbelow.outbox _ h)
   · exact fun c x hc => hc
-  · intro c i msg hc _ n h
+  · intro c i msg hc _ _ n h
     cases msg with
     | ask m => exact hc n (by simpa [SysState.grow, Effect.emits] using h)
     | reply m => simp [SysState.grow]
-  · intro c i hc n h
+  · intro c i hc _ n h
     simpa [SysState.grow] using hc n (by simpa [SysState.grow, Effect.emits] using h)
 
 /-- The same holds of the front inside the join, whatever the back does. -/
@@ -269,6 +269,9 @@ theorem keeper_note_first {c : SysState keeper} (h : keeper.Reachable keeperEnv 
     | restart =>
       obtain ⟨hmay, _⟩ := SysState.step_restart.mp hstep
       exact absurd hmay (by simp [keeperEnv, EnvModel.right])
+    | tick m =>
+      obtain rfl := SysState.step_tick.mp hstep
+      exact ih
 
 /-- So the join's first state, seen from the keeper, is no state of the keeper alone: there
 the herald's input is ahead of the note. -/

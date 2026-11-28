@@ -34,7 +34,7 @@ def Event.deed : Event σ → Option (Deed σ)
   | .deliver e | .duplicate e => some (.handle e.dst e.msg)
   | .timeout i msg => some (.handle i msg)
   | .output out => some (.output out)
-  | .input _ | .drop _ | .crash _ | .start _ | .restart => none
+  | .input _ | .drop _ | .crash _ | .start _ | .restart | .tick _ => none
 
 def deeds (events : List (Event σ)) : List (Deed σ) :=
   events.filterMap Event.deed
@@ -63,8 +63,8 @@ def Effect.Avoids (p : Kind σ) {i : σ.Id} (effs : List (Effect σ i)) : Prop :
 
 /-- No actor of `sys` ever sends or arms a message of the kind `p`. -/
 structure System.OnlyPut (sys : System σ) (p : Kind σ) : Prop where
-  step : ∀ i s msg, Effect.Avoids p ((sys.actor i).step s msg).2
-  recover : ∀ i s, Effect.Avoids p ((sys.actor i).recover s).2
+  step : ∀ i ctx s msg, Effect.Avoids p ((sys.actor i).stepAt ctx s msg).2
+  recover : ∀ i t s, Effect.Avoids p ((sys.actor i).recoverAt t s).2
 
 end Lanes
 
@@ -146,7 +146,7 @@ private theorem settle (h : Unsent p n c) (i : σ.Id) {r : sys.State i × List (
 private theorem start (h : Unsent p n c) (honly : sys.OnlyPut p) (i : σ.Id) :
     Unsent p n (c.startActor env i) :=
   settle (c := { c with up := update c.up i true })
-    (h.of_le (List.Sublist.refl _) fun _ _ hm => hm) i (honly.recover i _)
+    (h.of_le (List.Sublist.refl _) fun _ _ hm => hm) i (honly.recover i _ _)
 
 private theorem erase (h : Unsent p n c) {e : Envelope σ} (he : e ∈ c.net) :
     ∃ m, m + (p e.dst e.msg).toNat = n ∧ Unsent p m { c with net := c.net.erase e } := by
@@ -246,5 +246,9 @@ theorem System.handled_le_put (honly : sys.OnlyPut p)
   | restart =>
     obtain ⟨_, rfl⟩ := SysState.step_restart.mp hstep
     exact ⟨0, by simp only [Event.deed]; omega, hinit⟩
+  | tick m =>
+    obtain rfl := SysState.step_tick.mp hstep
+    exact ⟨n, by simpa [Event.deed] using hle,
+      hunsent.of_le (List.Sublist.refl _) fun _ _ hm => hm⟩
 
 end Lanes

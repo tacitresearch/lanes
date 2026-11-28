@@ -56,7 +56,7 @@ theorem gateActor_bounded (bridge : Bridge σ) (config : GateConfig) :
     (gateActor bridge config).Invariant fun pending =>
       pending.length ≤ config.maxPending ∧ pending.Nodup :=
   Actor.Inductive.invariant
-    ⟨by simp [gateActor], fun _ msg h => Gate.step_bounded bridge config _ msg h, fun _ h => h⟩
+    ⟨by simp [gateActor], fun _ _ msg h => Gate.step_bounded bridge config _ msg h, fun _ _ h => h⟩
 
 /-- The gate as a system of one actor, whose state is the requests waiting for the system.
 On a restart it arms their deadlines again. -/

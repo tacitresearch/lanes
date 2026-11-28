@@ -48,6 +48,7 @@ def SysState.over {sys : System σ} (input : In → σ.In) (output : σ.Out → 
   net := c.net.map Envelope.over
   timers := c.timers
   outbox := c.outbox.filterMap output
+  clock := c.clock
 
 /-- `ev'` is an event of `sys` that the event `ev` of `sys.filterMapIO input output` stands
 for. -/
@@ -62,6 +63,7 @@ def Event.Under (input : In → σ.In) (output : σ.Out → Option Out) :
   | .crash i, ev' => ev' = .crash i
   | .start i, ev' => ev' = .start i
   | .restart, ev' => ev' = .restart
+  | .tick m, ev' => ev' = .tick m
 
 def Event.AllUnder (input : In → σ.In) (output : σ.Out → Option Out) :
     List (Event (σ.withIO In Out)) → List (Event σ) → Prop
@@ -152,8 +154,8 @@ private theorem over_settle (c : SysState sys) (i : σ.Id) (r : sys.State i × L
   · rw [over_performAll]
     rfl
 
-private theorem over_handle (c : SysState sys) (i : σ.Id) (msg : σ.Msg i) :
-    (c.handle env.under i msg).over input output = (c.over input output).handle env i msg :=
+private theorem over_handle (c : SysState sys) (i : σ.Id) (msg : σ.Msg i) (src : Sender σ.Id) :
+    (c.handle env.under i msg src).over input output = (c.over input output).handle env i msg src :=
   over_settle c i _
 
 private theorem over_startActor (c : SysState sys) (i : σ.Id) :
@@ -205,12 +207,12 @@ theorem step_under {c : SysState sys} {ev : Event (σ.withIO In Out)}
     obtain ⟨hup, hdeliverable, rfl⟩ := step_deliver.mp h
     rw [over_deliverable] at hdeliverable
     exact ⟨_, _, rfl, step_deliver.mpr ⟨hup, hdeliverable, rfl⟩,
-      (over_handle _ _ _).trans (congrArg (·.handle env e.dst e.msg) (herase e))⟩
+      (over_handle _ _ _ _).trans (congrArg (·.handle env e.dst e.msg (.ofSrc e.src)) (herase e))⟩
   | duplicate e =>
     obtain ⟨hup, hduplicating, hdeliverable, rfl⟩ := step_duplicate.mp h
     rw [over_deliverable] at hdeliverable
     exact ⟨_, _, rfl, step_duplicate.mpr ⟨hup, hduplicating, hdeliverable, rfl⟩,
-      over_handle _ _ _⟩
+      over_handle _ _ _ _⟩
   | drop e =>
     obtain ⟨hlossy, hmem, rfl⟩ := step_drop.mp h
     obtain ⟨y, hy, hye⟩ := List.mem_map.mp hmem
@@ -218,7 +220,7 @@ theorem step_under {c : SysState sys} {ev : Event (σ.withIO In Out)}
     exact ⟨_, _, rfl, step_drop.mpr ⟨hlossy, hunder, rfl⟩, herase e⟩
   | timeout i msg =>
     obtain ⟨hup, hmem, rfl⟩ := step_timeout.mp h
-    exact ⟨_, _, rfl, step_timeout.mpr ⟨hup, hmem, rfl⟩, over_handle _ _ _⟩
+    exact ⟨_, _, rfl, step_timeout.mpr ⟨hup, hmem, rfl⟩, over_handle _ _ _ _⟩
   | output out =>
     obtain ⟨hmem, rfl⟩ := step_output.mp h
     obtain ⟨out', hout', hshown, heq⟩ := exists_filterMap_erase c.outbox hmem
@@ -237,6 +239,9 @@ theorem step_under {c : SysState sys} {ev : Event (σ.withIO In Out)}
   | restart =>
     obtain ⟨hmay, rfl⟩ := step_restart.mp h
     exact ⟨_, _, rfl, step_restart.mpr ⟨hmay, rfl⟩, over_init⟩
+  | tick m =>
+    obtain rfl := step_tick.mp h
+    exact ⟨_, _, rfl, step_tick.mpr rfl, rfl⟩
 
 /-- Every run of `sys.filterMapIO input output` is a run of `sys`, event for event. -/
 theorem run_filterMapIO {events : List (Event (σ.withIO In Out))}
@@ -312,7 +317,7 @@ theorem arms_under {c : SysState sys} {ev : Event (σ.withIO In Out)} {ev' : Eve
   | start j =>
     cases hunder
     exact hflat _ h
-  | input _ | drop _ | output _ | crash _ | restart => simp [arms] at h
+  | input _ | drop _ | output _ | crash _ | restart | tick _ => simp [arms] at h
 
 end SysState
 

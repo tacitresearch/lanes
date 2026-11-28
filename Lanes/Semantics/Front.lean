@@ -73,7 +73,7 @@ theorem stays_up (hcrash : env.mayCrash () = false) (hrestart : env.mayRestart =
     {c c' : SysState (gateSystem bridge config)}
     {ev : Event (gateSig σ)} (hup : c.up () = true) (hstep : c.step env ev = some c') :
     c'.up () = true :=
-  SysState.up_of_step hcrash hrestart (fun pending msg => never_stops pending msg) hup hstep
+  SysState.up_of_step hcrash hrestart (fun _ pending msg => never_stops pending msg) hup hstep
 
 /-- No step starts the deadline of a waiting request again: the gate arms a deadline when it
 admits a request, which was not waiting, and when it starts, which it cannot do while it is
@@ -96,7 +96,7 @@ theorem deadline_not_restarted {c c' : SysState (gateSystem bridge config)}
   | start i =>
     obtain ⟨hdown, -⟩ := SysState.step_start.mp hstep
     simp [hup] at hdown
-  | input _ | drop _ | output _ | crash _ | restart => exact List.not_mem_nil
+  | input _ | drop _ | output _ | crash _ | restart | tick _ => exact List.not_mem_nil
 
 /-- A request waiting in the gate alone is eventually no longer waiting, whatever arrives on its
 two inputs, in any environment that does not crash it or restart the process. -/
@@ -132,9 +132,9 @@ theorem pending_leaves_unlessRestart (bridge : Bridge σ) (config : GateConfig)
 
 /-- A step of the gate in which `id` stops waiting emits an answer to `id`. -/
 private theorem answered_of_handle {c : SysState (gateSystem bridge config)} {id : ReqId}
-    (msg : GateMsg σ) (hin : id ∈ (c.state () : List ReqId))
-    (hout : id ∉ ((c.handle env () msg).state () : List ReqId)) :
-    ∃ response, (c.handle env () msg).outbox = c.outbox ++ [.inl (id, response)] := by
+    {src : Sender Unit} (msg : GateMsg σ) (hin : id ∈ (c.state () : List ReqId))
+    (hout : id ∉ ((c.handle env () msg src).state () : List ReqId)) :
+    ∃ response, (c.handle env () msg src).outbox = c.outbox ++ [.inl (id, response)] := by
   cases msg with
   | arrive id' request =>
     simp only [SysState.handle_state, update_self, gateActor, Gate.step] at hout
@@ -201,6 +201,9 @@ theorem answered_of_leaves (hrestart : env.mayRestart = false)
     obtain ⟨_, _, rfl⟩ := SysState.step_start.mp hstep
     simp [gateActor, hin] at hout
   | restart => simp [SysState.step_restart_of_noRestarts hrestart] at hstep
+  | tick m =>
+    obtain rfl := SysState.step_tick.mp hstep
+    exact absurd hin hout
 
 /-- The gate alone answers every request it admits: in a fair run in which it is not crashed and
 the process does not restart, a request waiting while it is up has an answer handed over at a later position. -/

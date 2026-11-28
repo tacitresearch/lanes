@@ -66,6 +66,8 @@ structure Model (sys : System σ) where
   net : List (Envelope σ)
   /-- Ghost: the outputs put out and not yet handed over. -/
   outbox : List σ.Out
+  /-- The moment the last step was told. -/
+  clock : Moment
 
 namespace Model
 
@@ -76,6 +78,7 @@ def blank (sys : System σ) : Model sys where
   holding _ := none
   net := []
   outbox := []
+  clock := {}
 
 /-- The system state the scheduler stands for. -/
 def abs (m : Model sys) : SysState sys where
@@ -84,6 +87,7 @@ def abs (m : Model sys) : SysState sys where
   net := m.net
   timers i := (m.slot i).cell.timers.map (·.1)
   outbox := m.outbox
+  clock := m.clock
 
 def setSlot (m : Model sys) (i : σ.Id) (s : Slot sys i) : Model sys :=
   { m with slot := update m.slot i s }
@@ -120,11 +124,11 @@ at `now_ms`: the result written back, its messages left to push, and the ghosts 
 def commit (m : Model sys) (i : σ.Id) (s : Slot sys i) (j : Job sys i) (now_ms : Nat) :
     Model sys :=
   { m with
-    slot := update m.slot i (s.put now_ms j.run).1
-    out := update m.out i (s.put now_ms j.run).2.sends
-    net := (if j.run.2.any Effect.isStop then (m.base i j.work).filter (keep i)
-      else m.base i j.work) ++ (s.put now_ms j.run).2.sends
-    outbox := m.outbox ++ (s.put now_ms j.run).2.outputs }
+    slot := update m.slot i (s.put now_ms (j.run m.clock)).1
+    out := update m.out i (s.put now_ms (j.run m.clock)).2.sends
+    net := (if (j.run m.clock).2.any Effect.isStop then (m.base i j.work).filter (keep i)
+      else m.base i j.work) ++ (s.put now_ms (j.run m.clock)).2.sends
+    outbox := m.outbox ++ (s.put now_ms (j.run m.clock)).2.outputs }
 
 /-- Worker `w` takes `i` off the front of its run queue, leaving `rest`, and holds it if it was
 queued. -/
@@ -158,58 +162,59 @@ def init (sys : System σ) : Model sys :=
 
 end Model
 
-/-- One transition of the scheduler, and the event of the semantics it is, if any. -/
-inductive Step : Model sys → Option (Event σ) → Model sys → Prop
+/-- One transition of the scheduler, and the events of the semantics it is: none, one, or for a
+step the moment it is told and the step. -/
+inductive Step : Model sys → List (Event σ) → Model sys → Prop
   /-- An input arrives; whoever hands it over puts its actor on worker `w`'s run queue if it
   was idle. -/
-  | input (m : Model sys) (x : σ.In) (w : Nat) : Step m (some (.input x)) (m.input x w)
+  | input (m : Model sys) (x : σ.In) (w : Nat) : Step m [.input x] (m.input x w)
   /-- A timer goes off, whenever the shell's clock says, or not at all: what it pushes is
   checked against the actor's pending timers when it is taken. -/
   | ring (m : Model sys) (i : σ.Id) (msg : σ.Msg i) (due : Kernel.Due) (w : Nat) :
-    Step m none (m.pushTo i (.timer msg due) w)
+    Step m [] (m.pushTo i (.timer msg due) w)
   /-- Worker `w`, holding nothing, takes the first actor off its run queue, and holds it if it
   was queued. -/
   | begin (m : Model sys) (w : Nat) (i : σ.Id) (rest : List σ.Id) (hhold : m.holding w = none)
     (hq : m.queue w = i :: rest) :
-    Step m none (m.beginAt w i rest)
+    Step m [] (m.beginAt w i rest)
   /-- Worker `w` takes the first actor off worker `v`'s run queue onto the back of its own. -/
   | steal (m : Model sys) (w v : Nat) (i : σ.Id) (rest : List σ.Id) (hq : m.queue v = i :: rest) :
-    Step m none
+    Step m []
       { m with queue := update (update m.queue v rest) w (update m.queue v rest w ++ [i]) }
   /-- Worker `w`, holding `i` with every message of its last step pushed, steps it on the next
-  item of its mailbox at `now_ms`. If the step stops `i`, no message to `i` is waiting to be
-  pushed. -/
-  | step (m : Model sys) (w : Nat) (i : σ.Id) (now_ms : Nat) (j : Job sys i) (s : Slot sys i)
+  item of its mailbox, told the moment `t` (`now_ms` is `t`'s time, which arms its timers). If
+  the step stops `i`, no message to `i` is waiting to be pushed. -/
+  | step (m : Model sys) (w : Nat) (i : σ.Id) (t : Moment) (j : Job sys i) (s : Slot sys i)
     (hhold : m.holding w = some i) (hout : m.out i = []) (htake : (m.slot i).take = (.job j, s))
-    (hstop : j.run.2.any Effect.isStop = true → ∀ k, ∀ e ∈ m.out k, e.dst ≠ i) :
-    Step m (some j.work.event) (m.commit i s j now_ms)
+    (hstop : (j.run t).2.any Effect.isStop = true → ∀ k, ∀ e ∈ m.out k, e.dst ≠ i) :
+    Step m [.tick t, j.work.event] (({ m with clock := t } : Model sys).commit i s j t.now_ms)
   /-- The next item is a timer no longer pending: it is dropped. -/
   | stale (m : Model sys) (w : Nat) (i : σ.Id) (s : Slot sys i) (hhold : m.holding w = some i)
     (hout : m.out i = []) (htake : (m.slot i).take = (.stale, s)) :
-    Step m none (m.setSlot i s)
+    Step m [] (m.setSlot i s)
   /-- Worker `w`, holding `i`, pushes the first message `i`'s step sent. -/
   | send (m : Model sys) (w : Nat) (i : σ.Id) (e : Envelope σ) (rest : List (Envelope σ))
     (hhold : m.holding w = some i) (hout : m.out i = e :: rest) :
-    Step m none (m.sendOne i e rest w)
+    Step m [] (m.sendOne i e rest w)
   /-- Worker `w` lets go of `i` once every message it sent is pushed, and puts it back on its
   run queue if mail is waiting. -/
   | release (m : Model sys) (w : Nat) (i : σ.Id) (hhold : m.holding w = some i)
     (hout : m.out i = []) :
-    Step m none
+    Step m []
       (match (m.slot i).release with
        | (b, s) => ({ m.setSlot i s with holding := update m.holding w none }).enqueue w i b)
   /-- An output put out is handed over, in any order. -/
   | handOver (m : Model sys) (out : σ.Out) (h : out ∈ m.outbox) :
-    Step m (some (.output out)) { m with outbox := m.outbox.erase out }
+    Step m [.output out] { m with outbox := m.outbox.erase out }
   /-- The process restarts: the next process's scheduler starts afresh, every actor booted again
   and everything else lost. -/
-  | restart (m : Model sys) : Step m (some .restart) (Model.init sys)
+  | restart (m : Model sys) : Step m [.restart] (Model.init sys)
 
 /-- Transitions one after another, and the events they are. -/
 inductive Run : Model sys → List (Event σ) → Model sys → Prop
   | refl (m : Model sys) : Run m [] m
-  | step {m m' m'' : Model sys} {ev : Option (Event σ)} {evs : List (Event σ)} :
-    Step m ev m' → Run m' evs m'' → Run m (ev.toList ++ evs) m''
+  | step {m m' m'' : Model sys} {ev evs : List (Event σ)} :
+    Step m ev m' → Run m' evs m'' → Run m (ev ++ evs) m''
 
 
 /-! What a slot's step does, as the semantics' `settle` does it. -/
@@ -484,6 +489,13 @@ variable {m : Model sys}
     (m.enqueue w i b).net = m.net := by unfold enqueue; split <;> rfl
 @[simp] theorem enqueue_outbox (m : Model sys) (w : Nat) (i : σ.Id) (b : Bool) :
     (m.enqueue w i b).outbox = m.outbox := by unfold enqueue; split <;> rfl
+@[simp] theorem enqueue_clock (m : Model sys) (w : Nat) (i : σ.Id) (b : Bool) :
+    (m.enqueue w i b).clock = m.clock := by unfold enqueue; split <;> rfl
+@[simp] theorem pushTo_clock (m : Model sys) (i : σ.Id) (x : Item σ i) (w : Nat) :
+    (m.pushTo i x w).clock = m.clock := by simp [pushTo]; rfl
+@[simp] theorem abs_clock (m : Model sys) : m.abs.clock = m.clock := rfl
+@[simp] theorem commit_clock (m : Model sys) (i : σ.Id) (s : Slot sys i) (j : Job sys i) (n : Nat) :
+    (m.commit i s j n).clock = m.clock := rfl
 @[simp] theorem enqueue_holding (m : Model sys) (w : Nat) (i : σ.Id) (b : Bool) :
     (m.enqueue w i b).holding = m.holding := by unfold enqueue; split <;> rfl
 theorem enqueue_queue (m : Model sys) (w : Nat) (i : σ.Id) (b : Bool) :
@@ -513,6 +525,8 @@ theorem pushTo_queue (m : Model sys) (i : σ.Id) (x : Item σ i) (w : Nat) :
     (m.setSlot i s).net = m.net := rfl
 @[simp] theorem setSlot_outbox (m : Model sys) (i : σ.Id) (s : Slot sys i) :
     (m.setSlot i s).outbox = m.outbox := rfl
+@[simp] theorem setSlot_clock (m : Model sys) (i : σ.Id) (s : Slot sys i) :
+    (m.setSlot i s).clock = m.clock := rfl
 @[simp] theorem setSlot_holding (m : Model sys) (i : σ.Id) (s : Slot sys i) :
     (m.setSlot i s).holding = m.holding := rfl
 @[simp] theorem setSlot_queue (m : Model sys) (i : σ.Id) (s : Slot sys i) :
@@ -667,12 +681,12 @@ and if it stopped the actor, nothing in flight is for it any more. -/
 theorem coherent_commit {i : σ.Id} {j : Job sys i} {s : Slot sys i}
     (h1 : ({ m.setSlot i s with net := m.base i j.work } : Model sys).Coherent)
     (now_ms : Nat) (hout : m.out i = [])
-    (hstop : j.run.2.any Effect.isStop = true → ∀ k, ∀ e ∈ m.out k, e.dst ≠ i) :
+    (hstop : (j.run m.clock).2.any Effect.isStop = true → ∀ k, ∀ e ∈ m.out k, e.dst ≠ i) :
     (m.commit i s j now_ms).Coherent := by
   obtain ⟨-, -, -, hmail', hsends⟩ :=
-    Slot.put_settle now_ms j.run s (m.setSlot i s).abs (by simp [abs]) (by simp [abs]) kernel_reliable
+    Slot.put_settle now_ms (j.run m.clock) s (m.setSlot i s).abs (by simp [abs]) (by simp [abs]) kernel_reliable
   have hpend : ∀ src, pend (m.commit i s j now_ms).out src
-      = if src = some i then (s.put now_ms j.run).2.sends else pend m.out src := by
+      = if src = some i then (s.put now_ms (j.run m.clock)).2.sends else pend m.out src := by
     intro src
     cases src with
     | none => simp [pend]
@@ -681,18 +695,18 @@ theorem coherent_commit {i : σ.Id} {j : Job sys i} {s : Slot sys i}
       · subst hk; simp [pend, Model.commit]
       · simp [pend, Model.commit, hk]
   have hnil : ∀ src dst, src ≠ some i →
-      (s.put now_ms j.run).2.sends.filter (onLink src dst) = [] := fun src dst hs =>
+      (s.put now_ms (j.run m.clock)).2.sends.filter (onLink src dst) = [] := fun src dst hs =>
     filter_onLink_eq_nil fun e he => .inl ((hsends e he).1 ▸ fun h' => hs h'.symm)
   intro src dst
   have h1' := h1 src dst
   simp only [setSlot_slot, setSlot_out] at h1'
   rw [hpend]
   simp only [Model.commit, List.filter_append]
-  by_cases hstop' : j.run.2.any Effect.isStop = true
+  by_cases hstop' : (j.run m.clock).2.any Effect.isStop = true
   · simp only [hstop', ite_true, filter_keep_onLink] at hmail' ⊢
     by_cases hd : dst = i
     · subst hd
-      have hsnil : (s.put now_ms j.run).2.sends.filter (onLink src dst) = [] :=
+      have hsnil : (s.put now_ms (j.run m.clock)).2.sends.filter (onLink src dst) = [] :=
         filter_onLink_eq_nil fun e he => .inr ((hsends e he).2 hstop')
       simp only [ite_true, List.nil_append, hsnil, update_self, hmail', Fifo.toList_empty,
         mailEnvs_nil]
@@ -708,7 +722,7 @@ theorem coherent_commit {i : σ.Id} {j : Job sys i} {s : Slot sys i}
       · next hs => simp [hnil src dst hs]
   · simp only [hstop', Bool.false_eq_true, ite_false] at hmail' ⊢
     rw [h1']
-    have hm : mailEnvs dst src (update m.slot i (s.put now_ms j.run).1 dst).mail.toList
+    have hm : mailEnvs dst src (update m.slot i (s.put now_ms (j.run m.clock)).1 dst).mail.toList
         = mailEnvs dst src (update m.slot i s dst).mail.toList := by
       by_cases hd : dst = i
       · subst hd; simp [hmail']
@@ -807,7 +821,7 @@ variable {m : Model sys}
 
 @[simp] theorem abs_pushTo (m : Model sys) (i : σ.Id) (x : Item σ i) (w : Nat) :
     (m.pushTo i x w).abs = m.abs := by
-  apply SysState.ext'
+  refine SysState.ext' ?_ ?_ ?_ ?_ ?_
   · funext k; by_cases hk : k = i
     · subst hk; simp [abs]
     · simp [abs, hk]
@@ -827,7 +841,7 @@ theorem abs_input (m : Model sys) (x : σ.In) (w : Nat) :
   rcases hx : sys.accept x with ⟨i, msg⟩
   have hp := abs_pushTo m i (.msg none msg) w
   dsimp only
-  apply SysState.ext'
+  refine SysState.ext' ?_ ?_ ?_ ?_ ?_
   · have := congrArg SysState.state hp; exact this
   · have := congrArg SysState.up hp; exact this
   · simp [abs]
@@ -836,7 +850,7 @@ theorem abs_input (m : Model sys) (x : σ.In) (w : Nat) :
 
 theorem abs_setSlot {i : σ.Id} {s : Slot sys i} (h : s.cell = (m.slot i).cell) :
     (m.setSlot i s).abs = m.abs := by
-  apply SysState.ext'
+  refine SysState.ext' ?_ ?_ ?_ ?_ ?_
   · funext k; by_cases hk : k = i
     · subst hk; simp [abs, h]
     · simp [abs, hk]
@@ -856,13 +870,13 @@ theorem abs_setSlot {i : σ.Id} {s : Slot sys i} (h : s.cell = (m.slot i).cell) 
 theorem abs_commit (m : Model sys) (i : σ.Id) (s : Slot sys i) (j : Job sys i) (now_ms : Nat) :
     (m.commit i s j now_ms).abs =
       { m.abs with
-        state := update m.abs.state i (s.put now_ms j.run).1.cell.state
-        up := update m.abs.up i (s.put now_ms j.run).1.cell.up
-        timers := update m.abs.timers i ((s.put now_ms j.run).1.cell.timers.map (·.1))
-        net := (if j.run.2.any Effect.isStop then (m.base i j.work).filter (keep i)
-          else m.base i j.work) ++ (s.put now_ms j.run).2.sends
-        outbox := m.abs.outbox ++ (s.put now_ms j.run).2.outputs } := by
-  apply SysState.ext'
+        state := update m.abs.state i (s.put now_ms (j.run m.clock)).1.cell.state
+        up := update m.abs.up i (s.put now_ms (j.run m.clock)).1.cell.up
+        timers := update m.abs.timers i ((s.put now_ms (j.run m.clock)).1.cell.timers.map (·.1))
+        net := (if (j.run m.clock).2.any Effect.isStop then (m.base i j.work).filter (keep i)
+          else m.base i j.work) ++ (s.put now_ms (j.run m.clock)).2.sends
+        outbox := m.abs.outbox ++ (s.put now_ms (j.run m.clock)).2.outputs } := by
+  refine SysState.ext' ?_ ?_ ?_ ?_ ?_
   · exact apply_update (fun _ (c : Slot sys _) => c.cell.state) m.slot i _
   · exact apply_update (fun _ (c : Slot sys _) => c.cell.up) m.slot i _
   · rfl
@@ -895,10 +909,11 @@ theorem step_event (henv : Reliable env) (h : m.Coherent) {i : σ.Id} {j : Job s
         congr 1 <;> exact decide_eq_decide.mpr eq_comm
       simp [SysState.deliverable, show ∀ a b, env.link a b = Link.reliable from henv, Link.reliable, abs, hlink, ← List.head?_filter,
         hhead]
-    · have hrun : (sys.actor i).step (m.abs.state i) msg = j.run := by
+    · have hrun : (sys.actor i).stepAt { toMoment := m.abs.clock, src := .ofSrc src }
+          (m.abs.state i) msg = (j.run m.clock) := by
         simp [Job.run, hw, hstate, abs]
       rw [abs_commit, SysState.handle]
-      obtain ⟨hset, -⟩ := Slot.put_settle now_ms j.run s { m.abs with net := m.abs.net.erase ⟨src, i, msg⟩ }
+      obtain ⟨hset, -⟩ := Slot.put_settle now_ms (j.run m.clock) s { m.abs with net := m.abs.net.erase ⟨src, i, msg⟩ }
         (by simp [abs, htimers]) (by simp [abs, hup, hup']) henv
       simp only at hset ⊢
       rw [hrun, hset]
@@ -912,10 +927,10 @@ theorem step_event (henv : Reliable env) (h : m.Coherent) {i : σ.Id} {j : Job s
         exact (List.mem_filter.mp this).1
       simp only [SysState.hasMail, abs, List.any_eq_true, decide_eq_true_eq]
       exact ⟨_, hmem, rfl⟩
-    · have hrun : (sys.actor i).recover (m.abs.state i) = j.run := by
+    · have hrun : (sys.actor i).recoverAt m.abs.clock (m.abs.state i) = (j.run m.clock) := by
         simp [Job.run, hw, hstate, abs]
       rw [abs_commit, SysState.startActor]
-      obtain ⟨hset, -⟩ := Slot.put_settle now_ms j.run s { m.abs with up := update m.abs.up i true }
+      obtain ⟨hset, -⟩ := Slot.put_settle now_ms (j.run m.clock) s { m.abs with up := update m.abs.up i true }
         (by simp [abs, htimers]) (by simp [abs, hup']) henv
       simp only at hset ⊢
       rw [hrun, hset]
@@ -925,10 +940,11 @@ theorem step_event (henv : Reliable env) (h : m.Coherent) {i : σ.Id} {j : Job s
     refine ⟨by simpa [abs] using hup, ?_, ?_⟩
     · simp only [abs, List.mem_map]
       exact ⟨(msg, due), hmem, rfl⟩
-    · have hrun : (sys.actor i).step (m.abs.state i) msg = j.run := by
+    · have hrun : (sys.actor i).stepAt { toMoment := m.abs.clock, src := .timer }
+          (m.abs.state i) msg = (j.run m.clock) := by
         simp [Job.run, hw, hstate, abs]
       rw [abs_commit, SysState.handle]
-      obtain ⟨hset, -⟩ := Slot.put_settle now_ms j.run s
+      obtain ⟨hset, -⟩ := Slot.put_settle now_ms (j.run m.clock) s
         { m.abs with timers := update m.abs.timers i ((m.abs.timers i).erase msg) }
         (by simp [abs, htimers, map_fst_eraseP]) (by simp [abs, hup, hup']) henv
       simp only at hset ⊢
@@ -1158,11 +1174,11 @@ theorem abs_bootOne (henv : Reliable env) (m : Model sys) (i : σ.Id) :
   unfold bootOne
   simp only [abs_drain]
   rw [abs_commit, SysState.startActor]
-  obtain ⟨hset, -⟩ := Slot.put_settle 0 (⟨.start, (m.slot i).cell.state⟩ : Job sys i).run
+  obtain ⟨hset, -⟩ := Slot.put_settle 0 ((⟨.start, (m.slot i).cell.state⟩ : Job sys i).run m.clock)
     { (m.slot i) with cell := { (m.slot i).cell with up := true } }
     { m.abs with up := update m.abs.up i true } (by simp [abs]) (by simp [abs]) henv
-  have hrun : (sys.actor i).recover (m.abs.state i)
-      = (⟨.start, (m.slot i).cell.state⟩ : Job sys i).run := rfl
+  have hrun : (sys.actor i).recoverAt m.abs.clock (m.abs.state i)
+      = (⟨.start, (m.slot i).cell.state⟩ : Job sys i).run m.clock := rfl
   rw [hrun, hset]
   apply SysState.ext' <;> simp [base, abs, update_update]
 
@@ -1173,7 +1189,7 @@ theorem bootOne_inv (m : Model sys) (i : σ.Id) (hc : m.Coherent)
   let s : Slot sys i := { (m.slot i) with cell := { (m.slot i).cell with up := true } }
   let j : Job sys i := ⟨.start, (m.slot i).cell.state⟩
   obtain ⟨-, -, hst, hmail, hsends⟩ :=
-    Slot.put_settle 0 j.run s (m.setSlot i s).abs (by simp [abs, s]) (by simp [abs, s])
+    Slot.put_settle 0 (j.run m.clock) s (m.setSlot i s).abs (by simp [abs, s]) (by simp [abs, s])
       kernel_reliable
   have hc1 : (m.commit i s j 0).Coherent := by
     refine coherent_commit ?_ 0 (hout i) (fun _ k e he => by simp [hout k] at he)
@@ -1227,38 +1243,37 @@ theorem init_spec (sys : System σ) (henv : Reliable env) :
 
 end Model
 
-/-- Every transition of the scheduler is zero or one event of the semantics, from the state it
-stands for to the state it leads to. -/
-theorem Step.sound (henv : Reliable env) {m m' : Model sys} {ev : Option (Event σ)}
-    (hr : ev = some .restart → env.mayRestart = true)
-    (hinv : m.Inv) (h : Step m ev m') : m.abs.run env ev.toList = some m'.abs := by
+/-- Every transition of the scheduler is no event of the semantics, one, or for a step the
+moment it is told and the step, from the state it stands for to the state it leads to. -/
+theorem Step.sound (henv : Reliable env) {m m' : Model sys} {ev : List (Event σ)}
+    (hr : .restart ∈ ev → env.mayRestart = true)
+    (hinv : m.Inv) (h : Step m ev m') : m.abs.run env ev = some m'.abs := by
   cases h with
   | input x w =>
-    simp only [Option.toList_some, SysState.run, SysState.step, Option.bind_some,
-      Model.abs_input]
+    simp only [SysState.run, SysState.step, Option.bind_some, Model.abs_input]
   | ring i msg due w => simp [SysState.run]
   | begin w i rest hhold hq =>
-    simp only [Option.toList_none, SysState.run, Option.some.injEq, Model.beginAt]
+    simp only [SysState.run, Option.some.injEq, Model.beginAt]
     rcases hb : (m.slot i).begin with ⟨b, s⟩
     have hcell : s.cell = (m.slot i).cell := by simpa [hb] using Slot.begin_cell (m.slot i)
     cases b
     · rfl
     · exact (Model.abs_setSlot hcell).symm
   | steal w v i rest hq => rfl
-  | step w i now_ms j s hhold hout htake hstop =>
-    simp only [Option.toList_some, SysState.run]
-    rw [Model.step_event henv hinv.coherent now_ms htake]
-    rfl
+  | step w i t j s hhold hout htake hstop =>
+    have hc : ({ m with clock := t } : Model sys).Coherent := hinv.coherent
+    have hstep := Model.step_event henv hc t.now_ms (m := { m with clock := t }) htake
+    simp only [SysState.run, SysState.step, Option.bind_some]
+    exact (congrArg (·.bind fun c => c.run env []) hstep).trans rfl
   | stale w i s hhold hout htake =>
     obtain ⟨-, -, -, hcell, -⟩ := Slot.take_eq_stale htake
-    simp only [Option.toList_none, SysState.run, Option.some.injEq]
+    simp only [SysState.run, Option.some.injEq]
     exact (Model.abs_setSlot hcell).symm
   | send w i e rest hhold hout =>
-    simp only [Option.toList_none, SysState.run, Option.some.injEq, Model.sendOne,
-      Model.abs_pushTo]
+    simp only [SysState.run, Option.some.injEq, Model.sendOne, Model.abs_pushTo]
     rfl
   | release w i hhold hout =>
-    simp only [Option.toList_none, SysState.run, Option.some.injEq]
+    simp only [SysState.run, Option.some.injEq]
     rcases hr : (m.slot i).release with ⟨b, s⟩
     have hcell : s.cell = (m.slot i).cell := by simpa [hr] using Slot.release_cell (m.slot i)
     simp only [Model.abs_enqueue]
@@ -1266,11 +1281,11 @@ theorem Step.sound (henv : Reliable env) {m m' : Model sys} {ev : Option (Event 
   | handOver out hmem =>
     simp [SysState.run, SysState.step, Model.abs, hmem]
   | restart =>
-    simp [SysState.run, SysState.step, hr rfl, (Model.init_spec sys henv).1]
+    simp [SysState.run, SysState.step, hr (by simp), (Model.init_spec sys henv).1]
 
 
 /-- Every transition keeps the invariant. -/
-theorem Step.inv {m m' : Model sys} {ev : Option (Event σ)} (hinv : m.Inv)
+theorem Step.inv {m m' : Model sys} {ev : List (Event σ)} (hinv : m.Inv)
     (h : Step m ev m') : m'.Inv := by
   obtain ⟨hcoh, hsrc, hpl⟩ := hinv
   cases h with
@@ -1295,13 +1310,15 @@ theorem Step.inv {m m' : Model sys} {ev : Option (Event σ)} (hinv : m.Inv)
       cases b <;> exact hsrc
   | steal w v i rest hq =>
     exact ⟨hcoh.of_mail rfl rfl fun _ _ => rfl, hsrc, hpl.steal hq⟩
-  | step w i now_ms j s hhold hout htake hstop =>
+  | step w i t j s hhold hout htake hstop =>
     obtain ⟨-, hst, -⟩ := Slot.take_eq_job htake
     obtain ⟨-, -, hst', -, hsends⟩ :=
-      Slot.put_settle now_ms j.run s (m.setSlot i s).abs (by simp [Model.abs]) (by simp [Model.abs])
-        kernel_reliable
+      Slot.put_settle t.now_ms (j.run t) s (m.setSlot i s).abs (by simp [Model.abs])
+        (by simp [Model.abs]) kernel_reliable
     have hrun := Model.running_of_holding hpl hhold
-    refine ⟨Model.coherent_commit (hcoh.take htake) now_ms hout hstop, ?_, ?_⟩
+    have hc : ({ m with clock := t } : Model sys).Coherent := hcoh
+    refine ⟨Model.coherent_commit (m := { m with clock := t }) (hc.take htake) t.now_ms hout hstop,
+      ?_, ?_⟩
     · intro k e he
       by_cases hk : k = i
       · subst hk; exact (hsends e (by simpa [Model.commit] using he)).1
@@ -1348,7 +1365,7 @@ theorem Run.sound (henv : Reliable env) {m m' : Model sys} {evs : List (Event σ
   | @step m₁ m₂ m₃ ev evs hstep _ ih =>
     obtain ⟨hrun, hinv'⟩ := ih (fun h => hr (List.mem_append_right _ h)) (Step.inv hinv hstep)
     refine ⟨?_, hinv'⟩
-    rw [SysState.run_append, Step.sound henv (fun h => hr (by simp [h])) hinv hstep]
+    rw [SysState.run_append, Step.sound henv (fun h => hr (List.mem_append_left _ h)) hinv hstep]
     exact hrun
 
 /--

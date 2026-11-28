@@ -166,7 +166,7 @@ theorem SysState.actor?_of_mem_arms {sys : System σ} {c : SysState sys} {ev e :
   | deliver _ | duplicate _ | timeout _ _ | start _ =>
     obtain ⟨msg, rfl⟩ := Effect.eq_of_mem_timeouts h
     exact ⟨_, msg, rfl, rfl⟩
-  | input _ | drop _ | output _ | crash _ | restart => exact absurd h List.not_mem_nil
+  | input _ | drop _ | output _ | crash _ | restart | tick _ => exact absurd h List.not_mem_nil
 
 /-- A step restarts an obligation exactly when it arms the timer that the obligation fires. -/
 theorem Obligation.restarted_iff_mem_arms {sys : System σ} {c : SysState sys} {ev : Event σ}
@@ -348,8 +348,8 @@ up. -/
 theorem Fair.handled (hfair : r.Fair) {e : Envelope σ}
     (hlossless : (env.link e.src e.dst).lossy = false) (hcrash : env.mayCrash e.dst = false)
     (hrestart : env.mayRestart = false)
-    (hruns : ∀ s msg, ((sys.actor e.dst).step s msg).2.any Effect.isStop = false)
-    (hrecovers : ∀ s, ((sys.actor e.dst).recover s).2.any Effect.isStop = false)
+    (hruns : ∀ ctx s msg, ((sys.actor e.dst).stepAt ctx s msg).2.any Effect.isStop = false)
+    (hrecovers : ∀ t s, ((sys.actor e.dst).recoverAt t s).2.any Effect.isStop = false)
     (he : e ∈ (r.state n).net) :
     ∃ m, n ≤ m ∧ (r.event m = some (.deliver e) ∨ r.event m = some (.duplicate e)) := by
   refine Classical.byContradiction fun hnever => ?_
@@ -384,7 +384,7 @@ theorem Fair.handled (hfair : r.Fair) {e : Envelope σ}
       (fun _ _ ⟨_, _, h⟩ => h)
     obtain ⟨-, -, hc'⟩ := SysState.step_start.mp (step_some hev)
     have hup' : (r.state (m + 1)).up e.dst = true := by
-      rw [hc', SysState.startActor, SysState.settle_up_of_running (hrecovers _)]
+      rw [hc', SysState.startActor, SysState.settle_up_of_running (hrecovers _ _)]
       simp
     simp [hdown (m + 1) (by omega)] at hup'
 

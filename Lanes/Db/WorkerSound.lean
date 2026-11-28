@@ -344,9 +344,9 @@ theorem inv_beside (happ : ∀ x, q.Keeps (app x)) (hstart : q.Functional start)
       holds_observe (holding_preserves happ _ _) out (h.replies e he r js hm hres j hj),
       fun id lease dl w ho => holds_observe (holding_preserves happ _ _) out
         (h.outbox id lease dl w (List.mem_of_mem_erase ho)), h.timers⟩
-  step c d i msg _ h hpending := by
+  step c d i msg _ h hpending ctx := by
     cases i
-    have heffs : ∀ e ∈ ((actor (Q := Q) (A := A) (W := W) cfg).step (c.state ()) msg).2,
+    have heffs : ∀ e ∈ ((actor (Q := Q) (A := A) (W := W) cfg).stepAt ctx (c.state ()) msg).2,
         ∃ out, e = .emit out := step_effects (cfg := cfg) (c.state ()) msg
     simp only [SysState.grow]
     rw [sends_nil heffs, armed_nil heffs]
@@ -357,9 +357,9 @@ theorem inv_beside (happ : ∀ x, q.Keeps (app x)) (hstart : q.Functional start)
       rcases hpending with ⟨src, he⟩ | hm
       · exact h.replies _ he r js rfl hres j hj
       · rw [h.timers] at hm; cases hm
-  recover c d i h := by
+  recover c d i h t := by
     cases i
-    have : (actor (Q := Q) (A := A) (W := W) cfg).recover (c.state ()) = ({}, []) := rfl
+    have : (actor (Q := Q) (A := A) (W := W) cfg).recoverAt t (c.state ()) = ({}, []) := rfl
     simp only [SysState.grow, this, Effect.sends, Effect.armed, Effect.emits, List.filterMap_nil,
       List.append_nil]
     exact ⟨h.worlds, h.replies, h.outbox, by simp [h.timers]⟩

@@ -113,37 +113,39 @@ end NetEquiv
 
 variable {sys : System σ}
 
-/-- States the checker may merge: the same actors, timers and outputs, and the same traffic. -/
+/-- States the checker may merge: the same actors, timers, outputs and moment, and the same
+traffic. -/
 structure SysState.Equiv (env : EnvModel σ) (a b : SysState sys) : Prop where
   state : a.state = b.state
   up : a.up = b.up
   timers : a.timers = b.timers
   net : NetEquiv env a.net b.net
   outbox : a.outbox.Perm b.outbox
+  clock : a.clock = b.clock
 
 namespace SysState.Equiv
 
 variable {env : EnvModel σ} {a b : SysState sys}
 
 theorem refl (env : EnvModel σ) (a : SysState sys) : Equiv env a a :=
-  ⟨rfl, rfl, rfl, .refl env _, .refl _⟩
+  ⟨rfl, rfl, rfl, .refl env _, .refl _, rfl⟩
 
 theorem symm (h : Equiv env a b) : Equiv env b a :=
-  ⟨h.state.symm, h.up.symm, h.timers.symm, h.net.symm, h.outbox.symm⟩
+  ⟨h.state.symm, h.up.symm, h.timers.symm, h.net.symm, h.outbox.symm, h.clock.symm⟩
 
 theorem trans {c : SysState sys} (h₁ : Equiv env a b) (h₂ : Equiv env b c) : Equiv env a c :=
   ⟨h₁.state.trans h₂.state, h₁.up.trans h₂.up, h₁.timers.trans h₂.timers, h₁.net.trans h₂.net,
-    h₁.outbox.trans h₂.outbox⟩
+    h₁.outbox.trans h₂.outbox, h₁.clock.trans h₂.clock⟩
 
 theorem perform (h : Equiv env a b) (i : σ.Id) (eff : Effect σ i) :
     Equiv env (a.perform i eff) (b.perform i eff) := by
-  obtain ⟨hs, hu, ht, hn, ho⟩ := h
+  obtain ⟨hs, hu, ht, hn, ho, hc⟩ := h
   cases eff with
-  | send to msg => exact ⟨hs, hu, ht, hn.append _, ho⟩
-  | emit out => exact ⟨hs, hu, ht, hn, ho.append_right _⟩
-  | after delay_ms msg => exact ⟨hs, hu, by simp only [SysState.perform, ht], hn, ho⟩
-  | cancel msg => exact ⟨hs, hu, by simp only [SysState.perform, ht], hn, ho⟩
-  | stop => exact ⟨hs, hu, ht, hn, ho⟩
+  | send to msg => exact ⟨hs, hu, ht, hn.append _, ho, hc⟩
+  | emit out => exact ⟨hs, hu, ht, hn, ho.append_right _, hc⟩
+  | after delay_ms msg => exact ⟨hs, hu, by simp only [SysState.perform, ht], hn, ho, hc⟩
+  | cancel msg => exact ⟨hs, hu, by simp only [SysState.perform, ht], hn, ho, hc⟩
+  | stop => exact ⟨hs, hu, ht, hn, ho, hc⟩
 
 theorem performAll (h : Equiv env a b) (i : σ.Id) (effs : List (Effect σ i)) :
     Equiv env (a.performAll i effs) (b.performAll i effs) := by
@@ -153,13 +155,13 @@ theorem performAll (h : Equiv env a b) (i : σ.Id) (effs : List (Effect σ i)) :
 
 theorem down (h : Equiv env a b) (i : σ.Id) : Equiv env (a.down env i) (b.down env i) :=
   ⟨h.state, by simp only [SysState.down, h.up], by simp only [SysState.down, h.timers],
-    h.net.filter _, h.outbox⟩
+    h.net.filter _, h.outbox, h.clock⟩
 
 theorem settle (h : Equiv env a b) (i : σ.Id) (r : sys.State i × List (Effect σ i)) :
     Equiv env (a.settle env i r) (b.settle env i r) := by
   have hset : Equiv env { a with state := update a.state i r.1 }
       { b with state := update b.state i r.1 } :=
-    ⟨by simp only [h.state], h.up, h.timers, h.net, h.outbox⟩
+    ⟨by simp only [h.state], h.up, h.timers, h.net, h.outbox, h.clock⟩
   unfold SysState.settle
   by_cases hstop : r.2.any Effect.isStop = true
   · simp only [hstop, ite_true]
@@ -167,18 +169,19 @@ theorem settle (h : Equiv env a b) (i : σ.Id) (r : sys.State i × List (Effect 
   · simp only [hstop, ite_false, Bool.false_eq_true]
     exact hset.performAll i r.2
 
-theorem handle (h : Equiv env a b) (i : σ.Id) (msg : σ.Msg i) :
-    Equiv env (a.handle env i msg) (b.handle env i msg) := by
+theorem handle (h : Equiv env a b) (i : σ.Id) (msg : σ.Msg i) (src : Sender σ.Id) :
+    Equiv env (a.handle env i msg src) (b.handle env i msg src) := by
   have hi : b.state i = a.state i := by rw [h.state]
   unfold SysState.handle
-  rw [hi]
+  rw [hi, h.clock]
   exact h.settle i _
 
 theorem startActor (h : Equiv env a b) (i : σ.Id) :
     Equiv env (a.startActor env i) (b.startActor env i) := by
   have hup : Equiv env { a with up := update a.up i true } { b with up := update b.up i true } :=
-    ⟨h.state, by simp only [h.up], h.timers, h.net, h.outbox⟩
-  have hi : b.state i = a.state i := by rw [h.state]
+    ⟨h.state, by simp only [h.up], h.timers, h.net, h.outbox, h.clock⟩
+  have hi : (sys.actor i).recoverAt b.clock (b.state i)
+      = (sys.actor i).recoverAt a.clock (a.state i) := by rw [h.state, h.clock]
   unfold SysState.startActor
   rw [hi]
   exact hup.settle i _
@@ -210,30 +213,31 @@ theorem step (h : Equiv env a b) {ev : Event σ} {a' : SysState sys}
   cases ev with
   | input x =>
     obtain rfl := step_input.mp hstep
-    exact ⟨_, step_input.mpr rfl, h.state, h.up, h.timers, h.net.append _, h.outbox⟩
+    exact ⟨_, step_input.mpr rfl, h.state, h.up, h.timers, h.net.append _, h.outbox, h.clock⟩
   | deliver e =>
     obtain ⟨hup, hdel, rfl⟩ := step_deliver.mp hstep
     have hmid : Equiv env { a with net := a.net.erase e } { b with net := b.net.erase e } :=
-      ⟨h.state, h.up, h.timers, h.net.erase e, h.outbox⟩
-    exact ⟨_, step_deliver.mpr ⟨h.up ▸ hup, h.deliverable e ▸ hdel, rfl⟩, hmid.handle e.dst e.msg⟩
+      ⟨h.state, h.up, h.timers, h.net.erase e, h.outbox, h.clock⟩
+    exact ⟨_, step_deliver.mpr ⟨h.up ▸ hup, h.deliverable e ▸ hdel, rfl⟩,
+      hmid.handle e.dst e.msg _⟩
   | duplicate e =>
     obtain ⟨hup, hdup, hdel, rfl⟩ := step_duplicate.mp hstep
     exact ⟨_, step_duplicate.mpr ⟨h.up ▸ hup, hdup, h.deliverable e ▸ hdel, rfl⟩,
-      h.handle e.dst e.msg⟩
+      h.handle e.dst e.msg _⟩
   | drop e =>
     obtain ⟨hlossy, hmem, rfl⟩ := step_drop.mp hstep
     exact ⟨_, step_drop.mpr ⟨hlossy, (h.net.mem_iff e).mp hmem, rfl⟩,
-      h.state, h.up, h.timers, h.net.erase e, h.outbox⟩
+      h.state, h.up, h.timers, h.net.erase e, h.outbox, h.clock⟩
   | timeout i msg =>
     obtain ⟨hup, hmem, rfl⟩ := step_timeout.mp hstep
     have hmid : Equiv env { a with timers := update a.timers i ((a.timers i).erase msg) }
         { b with timers := update b.timers i ((b.timers i).erase msg) } :=
-      ⟨h.state, h.up, by simp only [h.timers], h.net, h.outbox⟩
-    exact ⟨_, step_timeout.mpr ⟨h.up ▸ hup, h.timers ▸ hmem, rfl⟩, hmid.handle i msg⟩
+      ⟨h.state, h.up, by simp only [h.timers], h.net, h.outbox, h.clock⟩
+    exact ⟨_, step_timeout.mpr ⟨h.up ▸ hup, h.timers ▸ hmem, rfl⟩, hmid.handle i msg _⟩
   | output out =>
     obtain ⟨hmem, rfl⟩ := step_output.mp hstep
     exact ⟨_, step_output.mpr ⟨h.outbox.mem_iff.mp hmem, rfl⟩,
-      h.state, h.up, h.timers, h.net, h.outbox.erase out⟩
+      h.state, h.up, h.timers, h.net, h.outbox.erase out, h.clock⟩
   | crash i =>
     obtain ⟨hup, hcrash, rfl⟩ := step_crash.mp hstep
     exact ⟨_, step_crash.mpr ⟨h.up ▸ hup, hcrash, rfl⟩, h.down i⟩
@@ -243,6 +247,9 @@ theorem step (h : Equiv env a b) {ev : Event σ} {a' : SysState sys}
   | restart =>
     obtain ⟨hmay, rfl⟩ := step_restart.mp hstep
     exact ⟨_, step_restart.mpr ⟨hmay, rfl⟩, refl env _⟩
+  | tick m =>
+    obtain rfl := step_tick.mp hstep
+    exact ⟨_, step_tick.mpr rfl, h.state, h.up, h.timers, h.net, h.outbox, rfl⟩
 
 end SysState.Equiv
 
