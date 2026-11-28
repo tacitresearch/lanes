@@ -240,6 +240,9 @@ theorem step (h : Equiv env a b) {ev : Event σ} {a' : SysState sys}
   | start i =>
     obtain ⟨hup, hmail, rfl⟩ := step_start.mp hstep
     exact ⟨_, step_start.mpr ⟨h.up ▸ hup, h.hasMail i ▸ hmail, rfl⟩, h.startActor i⟩
+  | restart =>
+    obtain ⟨hmay, rfl⟩ := step_restart.mp hstep
+    exact ⟨_, step_restart.mpr ⟨hmay, rfl⟩, refl env _⟩
 
 end SysState.Equiv
 

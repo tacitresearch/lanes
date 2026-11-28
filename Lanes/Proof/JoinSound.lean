@@ -75,6 +75,7 @@ def left (env : EnvModel (joinSig σ τ)) : EnvModel σ where
     | none, _ => Link.network
   mayCrash i := env.mayCrash (.inl i)
   restarts i := env.restarts (.inl i)
+  mayRestart := env.mayRestart
 
 def right (env : EnvModel (joinSig σ τ)) : EnvModel τ where
   link
@@ -82,6 +83,7 @@ def right (env : EnvModel (joinSig σ τ)) : EnvModel τ where
     | none, _ => Link.network
   mayCrash j := env.mayCrash (.inr j)
   restarts j := env.restarts (.inr j)
+  mayRestart := env.mayRestart
 
 end EnvModel
 
@@ -990,19 +992,6 @@ private theorem step_start {c c' : SysState (a.join b w)} {i : σ.Id ⊕ τ.Id}
       · simp at hdst
   | inr j => exact start_inr hc j
 
-private theorem step {c c' : SysState (a.join b w)} {ev : Event (joinSig σ τ)}
-    (hc : Seen env w R t c.left) (hstep : c.step env ev = some c') :
-    Seen env w R (t ++ ev.leftDeed.toList) c'.left := by
-  cases ev with
-  | input x => exact (hc.step_input hstep).still
-  | deliver e => exact hc.step_deliver hstep
-  | duplicate e => exact hc.step_duplicate hstep
-  | drop e => exact (hc.step_drop hstep).still
-  | timeout i msg => exact hc.step_timeout hstep
-  | output out => exact hc.step_output hstep
-  | crash i => exact (hc.step_crash hstep).still
-  | start i => exact (hc.step_start hstep).still
-
 /-- Booting the actors of `a` in the join is booting `a` alone, with the outputs wired to `b`
 still waiting. -/
 private theorem boot (l : List σ.Id) :
@@ -1046,10 +1035,14 @@ private theorem boot (l : List σ.Id) :
     rw [hleft] at h₂
     exact h₂
 
-/-- Booting `a` in a join in which nothing has reached `a` yet. -/
-private theorem init_from (c₀ : SysState (a.join b w)) (hc₀ : c₀.left = SysState.blank a) :
-    Seen env w (Shows a env.left w) []
-      (a.boot.foldl (fun c i => c.startActor env (.inl i)) c₀).left := by
+/-- Booting `a` in a join in which nothing has reached `a` yet, where `a` alone reaches its
+initial state showing `t`: at the start, or after a restart. -/
+private theorem init_from
+    (closed : ∀ {t : List (Deed σ)} {x x' : SysState a} (ev : Event σ), R t x →
+      x.step env.left ev = some x' → R (t ++ (w.shown ev).toList) x')
+    (hinit : R t (SysState.init a env.left))
+    (c₀ : SysState (a.join b w)) (hc₀ : c₀.left = SysState.blank a) :
+    Seen env w R t (a.boot.foldl (fun c i => c.startActor env (.inl i)) c₀).left := by
   have hboot : ∀ n', Thin n' (a.boot.foldl (fun c i => c.startActor env (.inl i)) c₀).left.net →
       ∃ outbox', outbox'.filter (fun out => (w.toRight out).isNone)
           = (a.boot.foldl (fun c i => c.startActor env (.inl i)) c₀).left.outbox ∧
@@ -1062,35 +1055,63 @@ private theorem init_from (c₀ : SysState (a.join b w)) (hc₀ : c₀.left = Sy
       cases hn
       rfl
     exact h [] rfl
-  refine ⟨fun ev h hstep => h.step ev hstep, fun n' hn' => ?_, fun out hout => ?_⟩
+  refine ⟨closed, fun n' hn' => ?_, fun out hout => ?_⟩
   · obtain ⟨outbox', ho', heq⟩ := hboot n' hn'
     have hrun := SysState.run_outputs_filter env.left
       ({ (a.boot.foldl (fun c i => c.startActor env (.inl i)) c₀).left with net := n' } :
         SysState a)
       (fun out => (w.toRight out).isNone) [] outbox' (by simp)
     simp only [List.nil_append, ho'] at hrun
-    have hinit : Shows a env.left w [] (SysState.init a env.left) := ⟨[], rfl, rfl⟩
-    exact run_closed (fun ev h hstep => h.step ev hstep) (shown_wired outbox') (heq ▸ hinit) hrun
+    exact run_closed closed (shown_wired outbox') (heq ▸ hinit) hrun
   · obtain ⟨outbox', ho', -⟩ := hboot _ (Thin.refl _)
     rw [← ho'] at hout
     simpa using (List.mem_filter.mp hout).2
 
-private theorem init (env : EnvModel (joinSig σ τ)) :
-    Seen env w (Shows a env.left w) [] (SysState.init (a.join b w) env).left := by
+private theorem init_with
+    (closed : ∀ {t : List (Deed σ)} {x x' : SysState a} (ev : Event σ), R t x →
+      x.step env.left ev = some x' → R (t ++ (w.shown ev).toList) x')
+    (hinit : R t (SysState.init a env.left)) :
+    Seen env w R t (SysState.init (a.join b w) env).left := by
   have hfold : SysState.init (a.join b w) env
       = b.boot.foldl (fun c j => c.startActor env (.inr j))
         (a.boot.foldl (fun c i => c.startActor env (.inl i)) (SysState.blank (a.join b w))) := by
     simp [SysState.init, List.foldl_append, List.foldl_map]
-  have hright : ∀ (l : List τ.Id) (c : SysState (a.join b w)),
-      Seen env w (Shows a env.left w) [] c.left →
-      Seen env w (Shows a env.left w) []
-        (l.foldl (fun c j => c.startActor env (.inr j)) c).left := by
+  have hright : ∀ (l : List τ.Id) (c : SysState (a.join b w)), Seen env w R t c.left →
+      Seen env w R t (l.foldl (fun c j => c.startActor env (.inr j)) c).left := by
     intro l
     induction l with
     | nil => exact fun _ h => h
     | cons j l ih => exact fun c hc => ih _ (start_inr hc j)
   rw [hfold]
-  exact hright _ _ (init_from _ rfl)
+  exact hright _ _ (init_from closed hinit _ rfl)
+
+private theorem init (env : EnvModel (joinSig σ τ)) :
+    Seen env w (Shows a env.left w) [] (SysState.init (a.join b w) env).left :=
+  init_with (fun ev h hstep => h.step ev hstep) ⟨[], rfl, rfl⟩
+
+/-- A restart of the join is a restart of `a` alone, which shows nothing. -/
+private theorem step_restart {c c' : SysState (a.join b w)} (hc : Seen env w R t c.left)
+    (hstep : c.step env .restart = some c') : Seen env w R t c'.left := by
+  obtain ⟨hmay, rfl⟩ := SysState.step_restart.mp hstep
+  have hx : R t c.left := by simpa using hc.reach c.left.net (Thin.refl _)
+  have h := hc.closed .restart hx (SysState.step_restart.mpr ⟨hmay, rfl⟩)
+  simp only [Wiring.shown, Event.deed, Option.filter_none, Option.toList_none,
+    List.append_nil] at h
+  exact init_with hc.closed h
+
+private theorem step {c c' : SysState (a.join b w)} {ev : Event (joinSig σ τ)}
+    (hc : Seen env w R t c.left) (hstep : c.step env ev = some c') :
+    Seen env w R (t ++ ev.leftDeed.toList) c'.left := by
+  cases ev with
+  | input x => exact (hc.step_input hstep).still
+  | deliver e => exact hc.step_deliver hstep
+  | duplicate e => exact hc.step_duplicate hstep
+  | drop e => exact (hc.step_drop hstep).still
+  | timeout i msg => exact hc.step_timeout hstep
+  | output out => exact hc.step_output hstep
+  | crash i => exact (hc.step_crash hstep).still
+  | start i => exact (hc.step_start hstep).still
+  | restart => exact (hc.step_restart hstep).still
 
 end Seen
 
@@ -1168,6 +1189,7 @@ private def EnvModel.swap (env : EnvModel (joinSig σ τ)) : EnvModel (joinSig �
   link src dst := env.link (src.map Sum.swap) dst.swap
   mayCrash x := env.mayCrash x.swap
   restarts x := env.restarts x.swap
+  mayRestart := env.mayRestart
 
 private def Event.swap : Event (joinSig σ τ) → Event (joinSig τ σ)
   | .input x => .input x.swap
@@ -1179,6 +1201,7 @@ private def Event.swap : Event (joinSig σ τ) → Event (joinSig τ σ)
   | .output out => .output out.swap
   | .crash x => .crash x.swap
   | .start x => .start x.swap
+  | .restart => .restart
 
 namespace Envelope
 
@@ -1446,9 +1469,11 @@ private theorem hasMail_swap (c : SysState (a.join b w)) (x : σ.Id ⊕ τ.Id) :
   funext e
   simp [Envelope.swap_dst, Lanes.swap_inj]
 
-/-- A join and the join with its sides exchanged take the same steps. -/
+/-- A join and the join with its sides exchanged take the same steps, but for a restart: the
+two boot their sides in different orders. -/
 private theorem step_swap {c c' : SysState (a.join b w)} {ev : Event (joinSig σ τ)}
-    (h : c.step env ev = some c') : c.swap.step env.swap ev.swap = some c'.swap := by
+    (h : c.step env ev = some c') (hev : ev ≠ .restart) :
+    c.swap.step env.swap ev.swap = some c'.swap := by
   have herase : ∀ e : Envelope (joinSig σ τ),
       ({ c with net := c.net.erase e } : SysState (a.join b w)).swap
         = { c.swap with net := c.swap.net.erase e.swap } := fun e =>
@@ -1501,6 +1526,7 @@ private theorem step_swap {c c' : SysState (a.join b w)} {ev : Event (joinSig σ
     exact step_start.mpr ⟨by simpa [swap] using hup,
       hmail.imp (fun h => (hasMail_swap c x).trans h) (fun h => by simpa [EnvModel.swap] using h),
       startActor_swap c x⟩
+  | restart => exact absurd rfl hev
 
 private theorem blank_swap :
     (SysState.blank (a.join b w)).swap = SysState.blank (b.join a w.swap) :=
@@ -1540,7 +1566,7 @@ end SysState
 
 private theorem EnvModel.swap_left (env : EnvModel (joinSig σ τ)) : env.swap.left = env.right := by
   simp only [EnvModel.left, EnvModel.right, EnvModel.swap, EnvModel.mk.injEq]
-  refine ⟨?_, rfl, rfl⟩
+  refine ⟨?_, rfl, rfl, trivial⟩
   funext src dst
   cases src <;> rfl
 
@@ -1701,7 +1727,13 @@ private theorem System.Reachable.seen_swap (h : (a.join b w).Reachable env c) :
   | init =>
     rw [SysState.init_swap]
     exact ⟨_, Seen.init_late env.swap⟩
-  | step ev _ hstep ih => exact ih.elim fun t h => ⟨_, h.step (SysState.step_swap hstep)⟩
+  | step ev _ hstep ih =>
+    by_cases hev : ev = .restart
+    · subst hev
+      obtain ⟨-, rfl⟩ := SysState.step_restart.mp hstep
+      rw [SysState.init_swap]
+      exact ⟨_, Seen.init_late env.swap⟩
+    · exact ih.elim fun t h => ⟨_, h.step (SysState.step_swap hstep hev)⟩
 
 theorem System.Reachable.right (h : (a.join b w).Reachable env c) :
     ∃ c', b.Reachable env.right c' ∧ SysState.Equiv env.right c' c.right := by
@@ -1745,11 +1777,19 @@ theorem System.Reachable.right_of_quiet_boot
       rw [List.foldl_cons, ih _ fun k hk => hl k (List.mem_cons_of_mem _ hk), hstart, hnone, hleft]
       simp
   have hseen : ∃ t, Seen env.swap w.swap (Shows b env.swap.left w.swap) t c.swap.left := by
-    induction h with
-    | init =>
+    have hinit : Seen env.swap w.swap (Shows b env.swap.left w.swap) []
+        (SysState.init (a.join b w) env).swap.left := by
       rw [SysState.init_swap]
-      exact ⟨_, Seen.init_from _ (hblank a.boot _ fun _ h => h)⟩
-    | step ev _ hstep ih => exact ih.elim fun t h => ⟨_, h.step (SysState.step_swap hstep)⟩
+      exact Seen.init_from (fun ev h hstep => h.step ev hstep) ⟨[], rfl, rfl⟩ _
+        (hblank a.boot _ fun _ h => h)
+    induction h with
+    | init => exact ⟨_, hinit⟩
+    | step ev _ hstep ih =>
+      by_cases hev : ev = .restart
+      · subst hev
+        obtain ⟨-, rfl⟩ := SysState.step_restart.mp hstep
+        exact ⟨_, hinit⟩
+      · exact ih.elim fun t h => ⟨_, h.step (SysState.step_swap hstep hev)⟩
   obtain ⟨t, hseen⟩ := hseen
   obtain ⟨evs, hrun, -⟩ := hseen.reach _ (Thin.refl _)
   have hreach : b.Reachable env.swap.left c.swap.left := System.Reachable.init.run hrun
@@ -2370,27 +2410,6 @@ private theorem block_start (hc : Tidy w c) {i : σ.Id ⊕ τ.Id}
   | inr j =>
     exact ⟨[], .nil (thinLeft_start_inr c j) rfl rfl fun i' m => not_mem_timeouts_inr _⟩
 
-private theorem exists_block_of (hc : Tidy w c) {ev : Event (joinSig σ τ)}
-    (hstep : c.step env ev = some c') : ∃ evs, Wiring.Block w env c c' ev evs := by
-  cases ev with
-  | input x =>
-    obtain rfl := step_input.mp hstep
-    refine ⟨[], .nil ?_ rfl rfl fun _ _ h => by simp [arms] at h⟩
-    cases x <;> exact thinLeft_append_outside _ _ (by simp [Envelope.left?])
-  | deliver e => exact block_deliver hc hstep
-  | duplicate e => exact block_duplicate hc hstep
-  | drop e => exact block_drop hstep
-  | timeout i msg => exact block_timeout hc hstep
-  | output out => exact block_output hc hstep
-  | crash i => exact block_crash hstep
-  | start i => exact block_start hc hstep
-
-/-- Every step of the join from a reachable state is a run of `a` alone between the views
-without the messages from outside. -/
-theorem exists_block (hc : (a.join b w).Reachable env c) {ev : Event (joinSig σ τ)}
-    (hstep : c.step env ev = some c') : ∃ evs, Wiring.Block w env c c' ev evs :=
-  exists_block_of (Tidy.of_reachable hc) hstep
-
 /-- The join starts, seen from `a` without the messages from outside, where `a` alone starts
 once it has handed over the outputs the wiring routes to `b`. -/
 theorem init_thinLeft (env : EnvModel (joinSig σ τ)) :
@@ -2429,6 +2448,51 @@ theorem init_thinLeft (env : EnvModel (joinSig σ τ)) :
     rfl
   · obtain ⟨out, hout, rfl⟩ := List.mem_map.mp hev
     exact ⟨rfl, shown_wired outbox' _ hev⟩
+
+/-- A restart of the join is, seen from `a` without the messages from outside, a restart of `a`
+alone and then the hand-over of the outputs its boot routes to `b`. -/
+private theorem block_restart (hstep : c.step env .restart = some c') :
+    ∃ evs, Wiring.Block w env c c' .restart evs := by
+  obtain ⟨hmay, rfl⟩ := step_restart.mp hstep
+  obtain ⟨evs, hrun, hquiet⟩ := init_thinLeft (a := a) (b := b) (w := w) env
+  have hfirst : c.thinLeft.step env.left .restart = some (SysState.init a env.left) :=
+    step_restart.mpr ⟨hmay, rfl⟩
+  have hend := run_quiet (fun ev h => (hquiet ev h).1) hrun
+  refine ⟨.restart :: evs, ⟨by simp [SysState.run, hfirst, hrun], ?_, fun e h => by
+    simp [Event.left?] at h, fun i msg h => by simp [arms] at h, fun j d h => ?_⟩⟩
+  · simp only [List.filterMap_cons, Wiring.shown, Event.deed, Option.filter_none,
+      Event.leftDeed, Option.toList_none]
+    exact List.filterMap_eq_nil_iff.mpr fun ev h => (hquiet ev h).2
+  · cases j with
+    | zero =>
+      simp only [List.take_zero, SysState.run, Option.some.injEq] at h
+      exact .inl (h ▸ ⟨rfl, rfl⟩)
+    | succ j =>
+      simp only [List.take_succ_cons, SysState.run, hfirst, Option.bind_some] at h
+      have hd := run_quiet (fun ev h => (hquiet ev (List.mem_of_mem_take h)).1) h
+      exact .inr ⟨hd.1.trans hend.1.symm, hd.2.1.trans hend.2.1.symm⟩
+
+private theorem exists_block_of (hc : Tidy w c) {ev : Event (joinSig σ τ)}
+    (hstep : c.step env ev = some c') : ∃ evs, Wiring.Block w env c c' ev evs := by
+  cases ev with
+  | input x =>
+    obtain rfl := step_input.mp hstep
+    refine ⟨[], .nil ?_ rfl rfl fun _ _ h => by simp [arms] at h⟩
+    cases x <;> exact thinLeft_append_outside _ _ (by simp [Envelope.left?])
+  | deliver e => exact block_deliver hc hstep
+  | duplicate e => exact block_duplicate hc hstep
+  | drop e => exact block_drop hstep
+  | timeout i msg => exact block_timeout hc hstep
+  | output out => exact block_output hc hstep
+  | crash i => exact block_crash hstep
+  | start i => exact block_start hc hstep
+  | restart => exact block_restart hstep
+
+/-- Every step of the join from a reachable state is a run of `a` alone between the views
+without the messages from outside. -/
+theorem exists_block (hc : (a.join b w).Reachable env c) {ev : Event (joinSig σ τ)}
+    (hstep : c.step env ev = some c') : ∃ evs, Wiring.Block w env c c' ev evs :=
+  exists_block_of (Tidy.of_reachable hc) hstep
 
 end SysState
 
@@ -2553,22 +2617,6 @@ structure Wiring.BlockRight (w : Wiring σ τ) (env : EnvModel (joinSig σ τ))
 
 namespace SysState
 
-/-- Every step of the join from a reachable state is a run of `b` alone between the views
-without the messages from outside. -/
-theorem exists_blockRight (hc : (a.join b w).Reachable env c) {ev : Event (joinSig σ τ)}
-    (hstep : c.step env ev = some c') : ∃ evs, Wiring.BlockRight w env c c' ev evs := by
-  obtain ⟨evs, hb⟩ := exists_block_of (Tidy.swap hc) (step_swap hstep)
-  have hrun := hb.run
-  have hshown := hb.shown
-  rw [swap_thinLeft, swap_thinLeft, EnvModel.swap_left] at hrun
-  rw [Wiring.swap_shown, Event.leftDeed_swap] at hshown
-  refine ⟨evs, hrun, hshown, fun e he => hb.taken e ((Event.left?_swap ev).trans he),
-    fun j msg h => ?_, fun k d h => ?_⟩
-  · have harms := hb.arms j msg (by rw [arms_swap]; exact List.mem_map_of_mem h)
-    rwa [swap_thinLeft, EnvModel.swap_left] at harms
-  · have hnear := hb.near k d (by rwa [swap_thinLeft, EnvModel.swap_left])
-    rwa [swap_left, swap_left] at hnear
-
 /-- Booting the actors of `a` in a join where nothing but messages from outside has reached
 them is, seen without those messages, booting `a` alone and handing over the outputs the wiring
 routes to `b`. -/
@@ -2640,6 +2688,48 @@ theorem init_thinRight (env : EnvModel (joinSig σ τ)) :
   rw [← init_swap, swap_thinLeft, EnvModel.swap_left] at hrun
   rw [Wiring.swap_shown] at hquiet
   exact ⟨evs, hrun, hquiet⟩
+
+/-- A restart of the join is, seen from `b` without the messages from outside, a restart of `b`
+alone and then the hand-over of the outputs its boot routes to `a`. -/
+private theorem block_restartRight (hstep : c.step env .restart = some c') :
+    ∃ evs, Wiring.BlockRight w env c c' .restart evs := by
+  obtain ⟨hmay, rfl⟩ := step_restart.mp hstep
+  obtain ⟨evs, hrun, hquiet⟩ := init_thinRight (a := a) (b := b) (w := w) env
+  have hfirst : c.thinRight.step env.right .restart = some (SysState.init b env.right) :=
+    step_restart.mpr ⟨hmay, rfl⟩
+  have hend := run_quiet (fun ev h => (hquiet ev h).1) hrun
+  refine ⟨.restart :: evs, ⟨by simp [SysState.run, hfirst, hrun], ?_, fun e h => by
+    simp [Event.right?] at h, fun i msg h => by simp [arms] at h, fun j d h => ?_⟩⟩
+  · simp only [List.filterMap_cons, Wiring.shownRight, Event.deed, Option.filter_none,
+      Event.rightDeed, Option.toList_none]
+    exact List.filterMap_eq_nil_iff.mpr fun ev h => (hquiet ev h).2
+  · cases j with
+    | zero =>
+      simp only [List.take_zero, SysState.run, Option.some.injEq] at h
+      exact .inl (h ▸ ⟨rfl, rfl⟩)
+    | succ j =>
+      simp only [List.take_succ_cons, SysState.run, hfirst, Option.bind_some] at h
+      have hd := run_quiet (fun ev h => (hquiet ev (List.mem_of_mem_take h)).1) h
+      exact .inr ⟨hd.1.trans hend.1.symm, hd.2.1.trans hend.2.1.symm⟩
+
+/-- Every step of the join from a reachable state is a run of `b` alone between the views
+without the messages from outside. -/
+theorem exists_blockRight (hc : (a.join b w).Reachable env c) {ev : Event (joinSig σ τ)}
+    (hstep : c.step env ev = some c') : ∃ evs, Wiring.BlockRight w env c c' ev evs := by
+  by_cases hev : ev = .restart
+  · subst hev
+    exact block_restartRight hstep
+  obtain ⟨evs, hb⟩ := exists_block_of (Tidy.swap hc) (step_swap hstep hev)
+  have hrun := hb.run
+  have hshown := hb.shown
+  rw [swap_thinLeft, swap_thinLeft, EnvModel.swap_left] at hrun
+  rw [Wiring.swap_shown, Event.leftDeed_swap] at hshown
+  refine ⟨evs, hrun, hshown, fun e he => hb.taken e ((Event.left?_swap ev).trans he),
+    fun j msg h => ?_, fun k d h => ?_⟩
+  · have harms := hb.arms j msg (by rw [arms_swap]; exact List.mem_map_of_mem h)
+    rwa [swap_thinLeft, EnvModel.swap_left] at harms
+  · have hnear := hb.near k d (by rwa [swap_thinLeft, EnvModel.swap_left])
+    rwa [swap_left, swap_left] at hnear
 
 end SysState
 

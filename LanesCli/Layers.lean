@@ -88,6 +88,7 @@ def homes : List (String × Package) := [
   ("Lanes/Outside/IO/Clock.lean", .runtime),
   ("Lanes/Behaviours/Jobs/IO/Pool.lean", .runtime),
   ("Lanes/Semantics/FairRuns.lean", .runtime),
+  ("Lanes/Semantics/Restart.lean", .runtime),
   ("Lanes/Web/", .web),
   ("Lanes/Lib/Mime/", .web),
   ("Lanes/Semantics/Front.lean", .web),

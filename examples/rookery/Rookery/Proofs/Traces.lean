@@ -8,7 +8,7 @@ import Rookery.Proofs.Refines
 `System.Implements.history` reads that run as a sequence of `Board.handle` and `Board.fire`
 calls, in real-time order. So the statements about the spec's functions become statements about
 what the system hands over, in every environment whose link from the outside does not
-duplicate:
+duplicate and where the process does not restart (as `Rookery.implements` needs):
 
 - `output_secret`: a response carries the secrets of no account but the one its request, which
   arrived before it, was made as, and a read of an account's posts carries none;
@@ -62,10 +62,11 @@ theorem act_output {b : Board N C} {a : Service.Act (Request N C) (Deadline N)} 
   | fire d => simp [Service.act, spec] at h
 
 variable {env : EnvModel (sig N C)} (henv : (env.link none ()).duplicating = false)
+  (hrestart : env.mayRestart = false)
   {evs : List (Lanes.Event (sig N C))} {c : SysState (system N C config)}
   (hrun : (SysState.init (system N C config) env).run env evs = some c)
 
-include henv hrun
+include henv hrestart hrun
 
 /-- A response carries the secrets of no account but the one its request, which arrived before
 it, was made as, and a read of an account's posts carries none. -/
@@ -73,7 +74,7 @@ theorem output_secret {i : ℕ} {o : Response N} (hi : evs[i]? = some (.output o
     (hm : o.reply.secretOf = some m) :
     ∃ p < i, ∃ r, evs[p]? = some (.input r) ∧ o.req = r.req ∧ m = r.name ∧
       ∀ q n j, r ≠ .profile q n j := by
-  obtain ⟨acts, a, ho, harr⟩ := (implements config env henv).produced hrun hi
+  obtain ⟨acts, a, ho, harr⟩ := (implements config env henv hrestart).produced hrun hi
   obtain ⟨r, rfl, rfl⟩ := act_output config ho
   obtain ⟨hname, hprof⟩ := Board.handle_secret config (sound_play config acts).2.2 hm
   obtain ⟨p, hp, hin⟩ := harr r rfl
@@ -85,14 +86,14 @@ theorem output_read {i : ℕ} {o : Response N} (hi : evs[i]? = some (.output o))
     {list : List (N × Post)} (hfeed : o.reply = .feed list) :
     ∃ p < i, ∃ r, evs[p]? = some (.input r) ∧ o.req = r.req ∧
       ∃ es, (Board.run config {} es).ReadOf config r list := by
-  obtain ⟨acts, a, ho, harr⟩ := (implements config env henv).produced hrun hi
+  obtain ⟨acts, a, ho, harr⟩ := (implements config env henv hrestart).produced hrun hi
   obtain ⟨r, rfl, rfl⟩ := act_output config ho
   obtain ⟨p, hp, hin⟩ := harr r rfl
   refine ⟨p, hp, r, hin, rfl, acts.map toEvent, ?_⟩
   rw [← play_eq]
   exact Board.handle_feed config (sound_play config acts).2.2 hfeed
 
-omit henv hrun in
+omit henv hrestart hrun in
 /-- A delete made through the web and answered `deleted` leaves its post gone. -/
 theorem Board.handle_delete_gone {b : Board N C} (hb : b.Fresh) {req : ReqId} {a : N} {s : Sid}
     {id : PostId} (h : (b.handle config (.web req a s (.delete id))).2.1 = .deleted) :
@@ -128,7 +129,7 @@ theorem deleted_unread
     (hread : evs[p₂]? = some (.input r₂)) (hafter : i < p₂)
     (hshown : evs[l]? = some (.output ⟨r₂.req, .feed list, json'⟩)) :
     ∀ x ∈ list, ¬ (x.1 = a ∧ x.2.id = id) := by
-  obtain ⟨acts, cut, hex⟩ := (implements config env henv).history hrun
+  obtain ⟨acts, cut, hex⟩ := (implements config env henv hrestart).history hrun
   obtain ⟨k₁, hk₁, a₁, ha₁, ho₁⟩ := hex.shown i _ hconfirm
   obtain ⟨r₁, rfl, heq₁⟩ := act_output config ho₁
   obtain ⟨q₁, hq₁, hcq₁⟩ := hex.taken k₁ r₁ ha₁

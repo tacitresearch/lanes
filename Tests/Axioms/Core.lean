@@ -19,3 +19,16 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.SysState.mem_net_of_step' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.SysState.mem_net_of_step
+
+-- Lanes.Core.Step
+/-- info: 'Lanes.SysState.step_restart' depends on axioms: [propext, Classical.choice] -/
+#guard_msgs in #print axioms Lanes.SysState.step_restart
+
+/-- info: 'Lanes.System.reachable_withoutRestarts' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.reachable_withoutRestarts
+
+/-- info: 'Lanes.System.Invariant.of_withoutRestarts' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Invariant.of_withoutRestarts
+
+/-- info: 'Lanes.System.Invariant.restarts' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.Invariant.restarts
