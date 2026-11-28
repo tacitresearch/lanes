@@ -58,6 +58,20 @@ def View.admitted {bridge : Bridge σ} (v : View sys) : View (admitted sys bridg
   reads := v.reads.map .inr
   answer get := v.answer fun i h => get (.inr i) (List.mem_map_of_mem h)
 
+/-- A view of `sys` behind the front answers from a kernel of the shard as it does from the
+states of `sys`'s actors in it. -/
+theorem View.fronted_respond [Hashable σ.Id] {bridge : Bridge σ} (v : View sys)
+    (k : Kernel (Http.admittedFronted sys bridge)) :
+    (v.fronted (bridge := bridge)).respond (Batch.Peek.of k (v.reads.map .inr))
+      = v.answer fun i _ => (k.cell (.inr i)).state :=
+  View.respond_of v.fronted k
+
+theorem View.admitted_respond [Hashable σ.Id] {bridge : Bridge σ} (v : View sys)
+    (k : Kernel (Http.admitted sys bridge)) :
+    (v.admitted (bridge := bridge)).respond (Batch.Peek.of k (v.reads.map .inr))
+      = v.answer fun i _ => (k.cell (.inr i)).state :=
+  View.respond_of v.admitted k
+
 /-- What the gate of reads sees: a read enters as its id, and the answer to it is its response. -/
 abbrev readSig : Signature where
   Id := Empty

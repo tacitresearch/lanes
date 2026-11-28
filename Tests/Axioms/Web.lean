@@ -560,6 +560,12 @@ import Lanes.Semantics
 /-- info: 'Lanes.Http.View.respond_of' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.View.respond_of
 
+/-- info: 'Lanes.Http.View.fronted_respond' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.View.fronted_respond
+
+/-- info: 'Lanes.Http.View.admitted_respond' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.View.admitted_respond
+
 /-- info: 'Lanes.Http.readBridge_arrive' depends on axioms: [propext, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.readBridge_arrive
 

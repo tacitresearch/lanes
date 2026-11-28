@@ -417,7 +417,7 @@ them by area.
 | `Effect.filterMapOut` | proved | through `SysState.over`, `System.filterMapIO` and others: `SysState.run_filterMapIO`, `System.Invariant.filterMapIO` and others |
 | `System.filterMapIO` | proved | `SysState.run_filterMapIO`, `System.Invariant.filterMapIO`, `System.LeadsTo.filterMapIO` and others |
 | `System.mapIO` | checked | `Tests/Join.lean` |
-| `instHashableSum_lanes` | checked | `Tests/Fronted.lean`, `Tests/Jobs.lean`, `Tests/Join.lean` |
+| `instHashableSum_lanes` | proved | `Http.View.admitted_respond`, `Http.View.fronted_respond` |
 | `Signature.Inspect.join` | checked | `Tests/Jobs.lean`, `Tests/Join.lean` |
 | `System.Inspect.join` | checked | `Tests/Jobs.lean`, `Tests/Join.lean` |
 | `Signature.Inspect.withIO` | checked | `Tests/Join.lean` |
@@ -489,7 +489,7 @@ them by area.
 | `SysState.startActor` | proved | through `Http.Front.World.init`, `SysState.init` and others: `Account.implements`, `Account.implements_timed` and others |
 | `SysState.deliverable` | proved | `Account.implements`, `Account.implements_timed`, `SysState.deliverable_of_thinRight` and others |
 | `SysState.step` | proved | `Http.Gate.answered_of_leaves`, `Http.Gate.deadline_not_restarted`, `Outside.Beside.keeps` and others |
-| `SysState.init` | proved | `Account.implements`, `Account.implements_timed`, `Check.systemFingerprinted_violated` and others |
+| `SysState.init` | proved | `Account.implements`, `Account.implements_timed`, `Batch.chain_peek_after` and others |
 | `SysState.run` | proved | `Check.systemFingerprinted_violated`, `Check.system_violated`, `Http.Front.World.refines` and others |
 | `System.Invariant` | spec | a predicate |
 
@@ -786,7 +786,7 @@ them by area.
 | `Journal.named?` | proved | `Journal.Disk.start_foreign` |
 | `Journal.file` | proved | `Journal.Disk.load_cut`, `Journal.Restore.piece?_file`, `Journal.open?_cut` and others |
 | `Journal.open?` | proved | `Journal.Disk.open?_of_read`, `Journal.open?_cut`, `Journal.open?_file` |
-| `Journal.Entry.op?` | proved | through `Batch.flush`, `Batch.grown` and others: `Batch.flush_save`, `Batch.grown_eq` and others |
+| `Journal.Entry.op?` | proved | through `Journal.ops`: `Journal.recover_handed`, `Journal.recover_kernel` and others |
 | `Journal.Entry.marks` | proved | `Journal.recoverIds_handed`, `Journal.recover_handed` |
 | `Journal.ops` | proved | `Journal.recover_handed`, `Journal.recover_kernel`, `Journal.recover_outputs` and others |
 | `Journal.replay1` | proved | through `Journal.Begun.toFound`, `Journal.Restore.saved` and others: `Journal.Begun.resume_upgraded`, `Journal.Disk.Holds.load_append_crash` and others |
@@ -817,7 +817,7 @@ them by area.
 | `Journal.journalId` | tested | `Tests/Durable.lean` |
 | `Journal.tag` | proved | `Journal.turnAll_placed`, `Journal.turn_placed` |
 | `Journal.apply?` | proved | through `Journal.ids`, `Journal.placed` and others: `Batch.run_ids`, `Journal.Restore.journal_restores` and others |
-| `Journal.steps` | spec | used only in statements |
+| `Journal.steps` | proved | `Journal.ids_append`, `Journal.recoverIds_handed`, `Journal.turnAll_placed` and others |
 | `Journal.placed` | spec | used only in statements |
 | `Journal.replayIds1` | proved | through `Journal.recoverIds`, `Journal.resumeIds`: `Journal.Restore.journal_restores`, `Journal.Restore.journal_resumeIds` and others |
 | `Journal.ids` | spec | used only in statements |
@@ -2153,33 +2153,38 @@ them by area.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
+| `Batch.Peek.find` | proved | through `Batch.Peek.get`: `Batch.Peek.get_of`, `Batch.chain_peek_after` |
+| `Batch.Peek.get` | proved | `Batch.Peek.get_of`, `Batch.chain_peek_after` |
+| `Batch.Command.isPeek` | proved | `Batch.run_erase_peeks`, `Batch.run_peeks` |
+| `Batch.Command.peek?` | proved | `Batch.run_erase_peeks`, `Batch.run_peeks` |
 | `Batch.due` | proved | `Batch.due_iff`, `Batch.flush_save` |
 | `Batch.put` | proved | `Batch.flush_save` |
-| `Batch.Act.steps` | spec | used only in statements |
-| `Batch.history` | spec | used only in statements |
-| `Batch.Act.grows` | proved | through `Batch.flush`, `Batch.grown` and others: `Batch.flush_save`, `Batch.grown_eq` and others |
+| `Batch.Act.steps` | proved | through `Batch.chain`, `Batch.flush` and others: `Batch.chain_peek`, `Batch.chain_peek_after` and others |
+| `Batch.history` | proved | `Batch.grown_eq`, `Batch.history_ops`, `Batch.run_ids` |
+| `Batch.Act.grows` | proved | through `Batch.chain`, `Batch.flush` and others: `Batch.chain_peek`, `Batch.chain_peek_after` and others |
 | `Batch.grown` | proved | `Batch.grown_eq` |
-| `Batch.workWith` | proved | through `Batch.flush`, `Batch.run` and others: `Batch.flush_save`, `Batch.run_handed` and others |
-| `Batch.work` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_ids` and others |
-| `Batch.workAll` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_ids` and others |
+| `Batch.Peek.of` | proved | `Batch.Peek.get_of`, `Batch.chain_peek`, `Http.View.admitted_respond` and others |
+| `Batch.workWith` | proved | through `Batch.chain`, `Batch.flush` and others: `Batch.chain_peek`, `Batch.chain_peek_after` and others |
+| `Batch.work` | proved | through `Batch.chain`, `Batch.run`: `Batch.chain_peek`, `Batch.chain_peek_after` and others |
+| `Batch.workAll` | proved | through `Batch.chain`, `Batch.run`: `Batch.chain_peek`, `Batch.chain_peek_after` and others |
 | `Batch.flush` | proved | `Batch.flush_save` |
-| `Batch.scan` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_ids` and others |
-| `Batch.finish` | proved | through `Batch.run`: `Batch.run_handed`, `Batch.run_ids` and others |
+| `Batch.scan` | proved | through `Batch.chain`, `Batch.run`: `Batch.chain_peek`, `Batch.chain_peek_after` and others |
+| `Batch.answers` | proved | `Batch.run_erase_peeks`, `Batch.run_peeks` |
+| `Batch.finish` | proved | through `Batch.chain`, `Batch.run`: `Batch.chain_peek`, `Batch.chain_peek_after` and others |
 | `Batch.group` | proved | `Batch.group_ins` |
 | `Batch.Command.ins` | spec | used only in statements |
-| `Batch.run` | proved | `Batch.run_handed`, `Batch.run_ids`, `Batch.run_ids_spread` and others |
-| `Batch.Act.ops` | proved | through `Batch.journal`: `Batch.history_ops`, `Batch.run_handed` and others |
-| `Batch.Act.outputs` | proved | through `Batch.handed`, `Batch.handedIds`: `Batch.run_handed`, `Batch.run_ids` and others |
+| `Batch.run` | proved | `Batch.run_erase_peeks`, `Batch.run_handed`, `Batch.run_ids` and others |
+| `Batch.Act.ops` | proved | through `Batch.journal`: `Batch.Sound.handed_prefix`, `Batch.chain_peek` and others |
+| `Batch.Act.outputs` | proved | through `Batch.handed`, `Batch.handedIds`: `Batch.Sound.handed_prefix`, `Batch.chain_peek` and others |
 | `Batch.Act.placed` | spec | used only in statements |
-| `Batch.Act.events` | proved | through `Batch.recorded`: `Batch.run_handed` |
-| `Batch.journal` | proved | `Batch.history_ops`, `Batch.run_handed`, `Batch.run_kernel` and others |
-| `Batch.handed` | proved | `Batch.run_handed` |
+| `Batch.Act.events` | proved | through `Batch.recorded`: `Batch.chain_sound`, `Batch.run_handed` |
+| `Batch.journal` | proved | `Batch.Sound.handed_prefix`, `Batch.chain_peek`, `Batch.chain_sound` and others |
+| `Batch.handed` | proved | `Batch.Sound.handed_prefix`, `Batch.chain_peek`, `Batch.chain_peek_after` and others |
 | `Batch.handedIds` | spec | used only in statements |
-| `Batch.recorded` | proved | `Batch.run_handed` |
+| `Batch.recorded` | proved | `Batch.chain_sound`, `Batch.run_handed` |
 | `Batch.Act.Sound` | spec | a predicate |
 | `Batch.Sound` | spec | a predicate |
 | `Batch.Command.idle?` | spec | used only in statements |
-| `Batch.settle` | spec | used only in statements |
 
 ## `Lanes/Runtime/IO/Park.lean`
 
@@ -2207,6 +2212,7 @@ them by area.
 | `Runtime.batches` | trusted | TRUSTED.md: The runtime shell |
 | `Runtime.trace` | trusted | TRUSTED.md: The runtime shell |
 | `Runtime.state` | trusted | TRUSTED.md: The runtime shell |
+| `Runtime.tryPeek` | trusted | TRUSTED.md: The runtime shell |
 | `Runtime.stop` | trusted | TRUSTED.md: The runtime shell |
 | `Runtime.hasRecovered` | trusted | TRUSTED.md: The runtime shell |
 | `Runtime.depth` | trusted | TRUSTED.md: The runtime shell |
@@ -2216,25 +2222,25 @@ them by area.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Kernel.cell` | proved | `Batch.run_peek`, `Journal.Upgrade.inv_load`, `Kernel.Plan.fixAll_local` and others |
-| `Kernel.setCell` | proved | through `Journal.ids`, `Kernel.apply` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
+| `Kernel.cell` | proved | `Batch.Peek.get_of`, `Http.View.admitted_respond`, `Http.View.fronted_respond` and others |
+| `Kernel.setCell` | proved | through `Journal.ids`, `Kernel.apply` and others: `Batch.Sound.handed_prefix`, `Batch.chain_peek` and others |
 | `Kernel.abs` | proved | `Kernel.WellFormed.quiet_iff`, `Kernel.WellFormed.wait_forever`, `Kernel.abs_boot` and others |
-| `Kernel.env` | proved | `Kernel.abs_boot`, `Kernel.accept_sound`, `Kernel.exec_reachable` and others |
-| `Kernel.unschedule` | proved | through `Journal.ids`, `Kernel.apply` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
-| `Kernel.perform` | proved | through `Journal.ids`, `Kernel.apply` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
-| `Kernel.performAll` | proved | through `Journal.ids`, `Kernel.apply` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
-| `Kernel.down` | proved | through `Journal.ids`, `Kernel.apply` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
+| `Kernel.env` | proved | `Batch.chain_peek_after`, `Kernel.abs_boot`, `Kernel.accept_sound` and others |
+| `Kernel.unschedule` | proved | through `Journal.ids`, `Kernel.apply` and others: `Batch.Sound.handed_prefix`, `Batch.chain_peek` and others |
+| `Kernel.perform` | proved | through `Journal.ids`, `Kernel.apply` and others: `Batch.Sound.handed_prefix`, `Batch.chain_peek` and others |
+| `Kernel.performAll` | proved | through `Journal.ids`, `Kernel.apply` and others: `Batch.Sound.handed_prefix`, `Batch.chain_peek` and others |
+| `Kernel.down` | proved | through `Journal.ids`, `Kernel.apply` and others: `Batch.Sound.handed_prefix`, `Batch.chain_peek` and others |
 | `Kernel.settle` | proved | `Kernel.setState_settle` |
-| `Kernel.rest` | proved | through `Kernel.apply`, `Kernel.exec` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
-| `Kernel.takeState` | proved | through `Kernel.apply`, `Kernel.exec` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
+| `Kernel.rest` | proved | through `Kernel.apply`, `Kernel.exec` and others: `Batch.Sound.handed_prefix`, `Batch.chain_peek` and others |
+| `Kernel.takeState` | proved | through `Kernel.apply`, `Kernel.exec` and others: `Batch.Sound.handed_prefix`, `Batch.chain_peek` and others |
 | `Kernel.handle` | proved | `Kernel.frame_handle`, `Kernel.handleAhead_eq`, `Kernel.handle_setState` |
 | `Kernel.startActor` | proved | `Kernel.frame_startActor` |
-| `Kernel.boot` | proved | `Http.kernel_fronted_answered_le_arrived`, `Http.kernel_served_answered_le_arrived`, `Journal.Disk.torn_nil` and others |
+| `Kernel.boot` | proved | `Batch.chain_peek_after`, `Http.kernel_fronted_answered_le_arrived`, `Http.kernel_served_answered_le_arrived` and others |
 | `Kernel.accept` | proved | `Kernel.accept_sound` |
 | `Kernel.run1` | proved | `Kernel.run1Ahead_eq`, `Kernel.run1_sound` |
 | `Kernel.fire` | proved | `Kernel.fire_sound`, `Kernel.frame_fire` |
-| `Kernel.advance` | proved | through `Kernel.apply`, `Kernel.exec`: `Batch.run_handed`, `Batch.run_kernel` and others |
-| `Kernel.timerNext` | proved | through `Kernel.apply`, `Kernel.exec` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
+| `Kernel.advance` | proved | through `Kernel.apply`, `Kernel.exec`: `Batch.Sound.handed_prefix`, `Batch.chain_peek` and others |
+| `Kernel.timerNext` | proved | through `Kernel.apply`, `Kernel.exec` and others: `Batch.Sound.handed_prefix`, `Batch.chain_peek` and others |
 | `Kernel.step` | proved | `Kernel.WellFormed.runBatch_of_due`, `Kernel.WellFormed.step_events_ne_nil`, `Kernel.WellFormed.step_of_due` and others |
 | `Kernel.wait` | proved | `Kernel.WellFormed.step_events_ne_nil`, `Kernel.WellFormed.wait_for_ms`, `Kernel.WellFormed.wait_forever` and others |
 | `Kernel.runBatch` | proved | `Kernel.WellFormed.runBatch`, `Kernel.WellFormed.runBatch_of_due`, `Kernel.runBatchAhead_eq` and others |
@@ -2242,7 +2248,7 @@ them by area.
 | `Kernel.image` | proved | `Batch.flush_save`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save` and others |
 | `Kernel.Image.kernel` | proved | `Batch.flush_save`, `Journal.Begun.resume_upgraded`, `Journal.Upgrade.begin_crash` and others |
 | `Kernel.apply` | proved | `Kernel.WellFormed.apply` |
-| `Kernel.exec` | proved | `Batch.run_handed`, `Batch.run_kernel`, `Batch.settle_kernel` and others |
+| `Kernel.exec` | proved | `Batch.Sound.handed_prefix`, `Batch.chain_peek`, `Batch.chain_peek_after` and others |
 
 ## `Lanes/Runtime/KernelSound.lean`
 
@@ -2300,6 +2306,12 @@ them by area.
 | `Pace.record` | tested | `Tests/Pace.lean` |
 | `Pace.observe` | tested | `Tests/Pace.lean` |
 | `Pace.work` | tested | `Tests/Pace.lean` |
+
+## `Lanes/Runtime/PeekSound.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Batch.chain` | spec | used only in statements |
 
 ## `Lanes/Runtime/Release.lean`
 
@@ -2912,16 +2924,16 @@ them by area.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Http.Gate.acts` | proved | `Http.Gate.admit_refused` |
-| `Http.Gate.admit` | proved | `Http.Gate.admit_refused`, `Http.Gate.step_arrive_eq` |
-| `Http.Gate.receive` | proved | `Http.Gate.step_answer_eq` |
-| `Http.sinkSig` | proved | through `Http.Front.World.init`, `Http.admittedSig`: `Http.Front.World.answered_le_arrived`, `Http.Front.World.refines` and others |
-| `Http.sink` | proved | through `Http.Front.World.init`, `Http.admitted`: `Http.Front.World.answered_le_arrived`, `Http.Front.World.refines` and others |
-| `Http.admitInput` | proved | through `Http.Front.World.init`, `Http.admitted`: `Http.Front.World.answered_le_arrived`, `Http.Front.World.refines` and others |
-| `Http.admitOutput` | proved | through `Http.Front.World.init`, `Http.admitted`: `Http.Front.World.answered_le_arrived`, `Http.Front.World.refines` and others |
-| `Http.admittedFrontedSig` | proved | through `Http.Front.World.init`, `Http.admittedSig`: `Http.Front.World.answered_le_arrived`, `Http.Front.World.refines` and others |
-| `Http.admittedFronted` | proved | through `Http.Front.World.init`, `Http.admitted`: `Http.Front.World.answered_le_arrived`, `Http.Front.World.refines` and others |
-| `Http.admittedSig` | proved | `Http.Front.conv_inj`, `Http.Front.rel_emit`, `Http.Front.toSys_conv` |
-| `Http.admitted` | proved | `Http.Front.rel_emit` |
+| `Http.Gate.admit` | proved | `Http.Gate.admit_refused`, `Http.Gate.step_arrive_eq`, `Http.readBridge_arrive` |
+| `Http.Gate.receive` | proved | `Http.Gate.step_answer_eq`, `Http.readBridge_answer` |
+| `Http.sinkSig` | proved | `Http.View.admitted_respond`, `Http.View.fronted_respond` |
+| `Http.sink` | proved | through `Http.Front.World.init`, `Http.admitted` and others: `Http.Front.World.answered_le_arrived`, `Http.Front.World.refines` and others |
+| `Http.admitInput` | proved | through `Http.Front.World.init`, `Http.admitted` and others: `Http.Front.World.answered_le_arrived`, `Http.Front.World.refines` and others |
+| `Http.admitOutput` | proved | through `Http.Front.World.init`, `Http.admitted` and others: `Http.Front.World.answered_le_arrived`, `Http.Front.World.refines` and others |
+| `Http.admittedFrontedSig` | proved | `Http.View.fronted_respond` |
+| `Http.admittedFronted` | proved | `Http.View.fronted_respond` |
+| `Http.admittedSig` | proved | `Http.Front.conv_inj`, `Http.Front.rel_emit`, `Http.Front.toSys_conv` and others |
+| `Http.admitted` | proved | `Http.Front.rel_emit`, `Http.View.admitted_respond` |
 | `Http.admittedFrontedActors` | tested | `Tests/Fronted.lean`, `Tests/Web.lean` |
 | `Http.admittedActors` | tested | `Tests/Web.lean` |
 
@@ -3151,20 +3163,22 @@ them by area.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Http.Loopback.start` | tested | `Tests/Loopback.lean` |
-| `Http.Loopback.act` | tested | `Tests/Loopback.lean` |
-| `Http.Loopback.decide` | tested | `Tests/Loopback.lean` |
-| `Http.Loopback.expire` | tested | `Tests/Loopback.lean` |
-| `Http.Loopback.submit` | tested | `Tests/Loopback.lean` |
-| `Http.Loopback.told` | tested | `Tests/Loopback.lean` |
-| `Http.Loopback.perform` | tested | `Tests/Loopback.lean` |
-| `Http.Loopback.tell` | tested | `Tests/Loopback.lean` |
-| `Http.Loopback.tellAnswers` | tested | `Tests/Loopback.lean` |
-| `Http.Loopback.settle` | tested | `Tests/Loopback.lean` |
-| `Http.Loopback.converse` | tested | `Tests/Loopback.lean` |
-| `Http.Loopback.send` | tested | `Tests/Loopback.lean` |
-| `Http.Loopback.get` | tested | `Tests/Loopback.lean` |
-| `Http.Loopback.post` | tested | `Tests/Loopback.lean` |
+| `Http.Loopback.start` | tested | `Tests/Loopback.lean`, `Tests/Reads.lean` |
+| `Http.Loopback.act` | tested | `Tests/Loopback.lean`, `Tests/Reads.lean` |
+| `Http.Loopback.decide` | tested | `Tests/Loopback.lean`, `Tests/Reads.lean` |
+| `Http.Loopback.decideRead` | tested | `Tests/Loopback.lean`, `Tests/Reads.lean` |
+| `Http.Loopback.answerPeeks` | tested | `Tests/Loopback.lean`, `Tests/Reads.lean` |
+| `Http.Loopback.expire` | tested | `Tests/Loopback.lean`, `Tests/Reads.lean` |
+| `Http.Loopback.submit` | tested | `Tests/Loopback.lean`, `Tests/Reads.lean` |
+| `Http.Loopback.told` | tested | `Tests/Loopback.lean`, `Tests/Reads.lean` |
+| `Http.Loopback.perform` | tested | `Tests/Loopback.lean`, `Tests/Reads.lean` |
+| `Http.Loopback.tell` | tested | `Tests/Loopback.lean`, `Tests/Reads.lean` |
+| `Http.Loopback.tellAnswers` | tested | `Tests/Loopback.lean`, `Tests/Reads.lean` |
+| `Http.Loopback.settle` | tested | `Tests/Loopback.lean`, `Tests/Reads.lean` |
+| `Http.Loopback.converse` | tested | `Tests/Loopback.lean`, `Tests/Reads.lean` |
+| `Http.Loopback.send` | tested | `Tests/Loopback.lean`, `Tests/Reads.lean` |
+| `Http.Loopback.get` | tested | `Tests/Loopback.lean`, `Tests/Reads.lean` |
+| `Http.Loopback.post` | tested | `Tests/Loopback.lean`, `Tests/Reads.lean` |
 
 ## `Lanes/Web/Http/Ops.lean`
 
@@ -3374,6 +3388,16 @@ them by area.
 | `Http.Response.nothing` | checked | `Tests/HttpStream.lean` |
 | `Http.Response.finished` | checked | `Tests/HttpStream.lean` |
 | `Http.Response.taken` | checked | `Tests/HttpStream.lean` |
+
+## `Lanes/Web/Http/View.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Http.View.respond` | proved | `Http.View.admitted_respond`, `Http.View.fronted_respond`, `Http.View.respond_of` |
+| `Http.View.fronted` | proved | `Http.View.fronted_respond` |
+| `Http.View.admitted` | proved | `Http.View.admitted_respond` |
+| `Http.readSig` | proved | `Http.readBridge_answer`, `Http.readBridge_arrive` |
+| `Http.readBridge` | proved | `Http.readBridge_answer`, `Http.readBridge_arrive` |
 
 ## `Lanes/Web/Http/Waiting.lean`
 
