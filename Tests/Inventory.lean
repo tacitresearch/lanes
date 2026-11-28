@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import LanesCli.Inventory
 import Lanes.Lib.Crypto.Native
+import Lanes.Runtime.IO.Park
 
 /-! The inventory's rules, checked when this file is built: on facts written by hand, and on a
 theorem of this file. -/
@@ -57,7 +58,7 @@ theorem byCases (n : Nat) : n + 0 = n := by
     ("a definition is not a theorem", !ofTheorem env ``facts),
     ("an `@[extern]` with a Lean body is bound; its reference, and an `opaque` binding, are not",
       isBound env ``Lanes.Bytes.same && isBound env ``Lanes.Sha256.hash
-        && !isBound env ``Lanes.Sha256.reference && !isBound env ``Lanes.randomBytes)]
+        && !isBound env ``Lanes.Sha256.reference && !isBound env ``Lanes.Parker.new)]
   for (name, ok) in checks do
     unless ok do throwError "inventory: {name}"
 
