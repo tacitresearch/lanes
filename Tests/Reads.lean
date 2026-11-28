@@ -26,8 +26,11 @@ def balanceView (a : Acct) : View bankSys where
   reads := [a]
   answer get _ := Response.html (OutcomeView (.balance (get a List.mem_cons_self).balance)).render
 
-/-- The total of every account. On the runtime each account is read between its own steps, so
-beside transfers in flight the total may miss what is on its way (`docs/decisions/new-free-running.md`). -/
+/-- The total of every account. On the runtime each account is read between its own steps, at its
+own moment, so beside transfers in flight the total is no consistent cut
+(`docs/decisions/D116-free-running.md`): a transfer whose source was read after its debit and whose
+destination before its credit is missed, and one whose source was read before its debit and whose
+destination after its credit is counted twice. -/
 def totalView : View bankSys where
   reads := List.finRange 3
   answer get _ := .text s!"{((List.finRange 3).attach.map fun ⟨a, h⟩ => (get a h).balance).sum}"
@@ -117,13 +120,16 @@ def socketTest : Async (List (String × Bool)) := do
   let totals := (mixed.toList.zipIdx.filter (·.2 % 4 != 0)).map (body ·.1)
   server.stop
   let inputs := (← server.trace).toList.countP (· matches .input _)
+  -- Ten transfers of 1 run beside the totals: each may be missed or counted twice, no more.
+  let within := totals.length == 30 && totals.all fun t => t.toNat?.any fun n => 290 ≤ n && n ≤ 310
+  unless within do IO.eprintln s!"reads: the totals read beside the transfers: {totals}"
   return [
     ("reads: over a socket a balance is read from the state, and the account that answered a "
         ++ "transfer has it",
       body before == "<span>100</span>" && moved.startsWith "HTTP/1.1 200"
         && body after == "<span>70</span>"),
-    ("reads: a total read beside concurrent transfers misses at most the transfers in flight",
-      totals.length == 30 && totals.all fun t => t.toNat?.any fun n => 290 ≤ n && n ≤ 300),
+    ("reads: a total read beside concurrent transfers is off by at most the transfers under way",
+      within),
     ("reads: only the transfers enter the system", inputs == 11) ]
 
 /-! A read's deadline and bound, beside a shard held up by its output handler. -/
