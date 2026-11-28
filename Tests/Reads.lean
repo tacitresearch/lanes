@@ -27,7 +27,7 @@ def balanceView (a : Acct) : View bankSys where
   answer get _ := Response.html (OutcomeView (.balance (get a List.mem_cons_self).balance)).render
 
 /-- The total of every account. On the runtime each account is read between its own steps, so
-beside transfers in flight the total may miss what is on its way (`docs/decisions/new-free-running.md`). -/
+beside transfers in flight the total may miss what is on its way (`docs/decisions/D116-free-running.md`). -/
 def totalView : View bankSys where
   reads := List.finRange 3
   answer get _ := .text s!"{((List.finRange 3).attach.map fun ⟨a, h⟩ => (get a h).balance).sum}"

@@ -8,12 +8,12 @@ public import Lanes.Runtime.Peek
 public import Lanes.Web.Http.Admit
 
 /-!
-Reads answered from the state (`docs/decisions/new-reads-from-state.md`). A request that changes
+Reads answered from the state (`docs/decisions/D108-reads-from-state.md`). A request that changes
 nothing is declared by a `View` beside the bridge: the actors it reads, and its response from
 their states. The server answers it from a peek (`Runtime.tryPeek`): it never enters the
 system, so it takes no step and changes nothing the actors do. Each actor it names is read
 between two of its steps; the states of different actors are not read at one moment
-(`docs/decisions/new-free-running.md`).
+(`docs/decisions/D116-free-running.md`).
 
 A read waits for its peek behind a gate of its own, with its own bounds (`ServerConfig.reads`):
 the gate's decisions (`Gate.step`) over `readSig`, where a read enters as its id and the peek's

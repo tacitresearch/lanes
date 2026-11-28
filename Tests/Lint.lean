@@ -111,12 +111,30 @@ def linkTests (root : System.FilePath) : IO (List (String × Bool)) := do
   write root "docs/GUIDE.md" "Cites `Lanes/Nowhere.lean`.\n"
   write root "docs/area/notes.md" "- `Lanes/Away.lean`.\n"
   write root "docs/decisions/D3-past.md" "# D3. Past\n\nStatus: Accepted\n\nWas `Lanes/Past.lean`.\n"
+  write root "Lanes/C.lean" ("/-! Beside `Lanes/A.lean`. -/\n/-- Not `Lanes/Ghost.lean`. -/\n"
+    ++ "def c := \"`Lanes/InAString.lean`\"\n-- `Lanes/Line.lean`\n")
+  write root "infra/README.md" "`Lanes/Gone.lean`\n"
+  write root "infra/notes.md" "`Lanes/Unread.lean`\n"
+  write root "examples/app/lakefile.toml" ""
+  write root "examples/app/App/Main.lean" "-- `App/Main.lean`, `App/Lost.lean`, `Lanes/A.lean`\n"
+  write root "examples/app/README.md" "`App/Main.lean`, `examples/app/App/Main.lean`, `App/Gone.lean`\n"
   let report ← lint root { fix := true }
   let links := report.findings.filter (·.rule == "links")
   let found := links.map fun f => (f.file.toString, f.line, f.message)
+  let lean := found.filter fun (file, _, _) => file.endsWith ".lean"
+  let nested := found.filter fun (file, _, _) => file.startsWith "infra/" || file.startsWith "examples/"
   return [
+    ("lint links: a path in a Lean comment is checked, and one in a string literal is not",
+      lean == [("Lanes/C.lean", 2, "`Lanes/Ghost.lean` does not exist"),
+        ("Lanes/C.lean", 4, "`Lanes/Line.lean` does not exist"),
+        ("examples/app/App/Main.lean", 1, "`App/Lost.lean` does not exist")]),
+    ("lint links: every README is checked, and an example's may name its package's files",
+      nested.filter (·.1.endsWith ".md")
+        == [("examples/app/README.md", 1, "`App/Gone.lean` does not exist"),
+          ("infra/README.md", 1, "`Lanes/Gone.lean` does not exist")]),
     ("lint links: a missing path is reported, at its file and line, and one in braces by name",
-      found == [("README.md", 3, "`Lanes/Gone.lean` does not exist"),
+      found.filter (fun (file, _, _) => file.endsWith ".md"
+        && (!file.contains '/' || file.startsWith "docs/")) == [("README.md", 3, "`Lanes/Gone.lean` does not exist"),
         ("README.md", 3, "`Lanes/Lost.lean` does not exist"),
         ("README.md", 9, "`Lanes/Missing/` does not exist"),
         ("docs/GUIDE.md", 1, "`Lanes/Nowhere.lean` does not exist"),
