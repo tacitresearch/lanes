@@ -504,6 +504,7 @@ them by area.
 | `Codec.map` | proved | its type, `Codec` |
 | `Codec.sigma` | proved | its type, `Codec` |
 | `Codec.subtype` | proved | its type, `Codec` |
+| `Codec.withSchema` | proved | its type, `Codec` |
 | `Codec.bool` | proved | its type, `Codec` |
 | `Codec.fin` | proved | its type, `Codec` |
 | `Codec.int` | proved | its type, `Codec` |
@@ -531,8 +532,16 @@ them by area.
 | `Codec.of` | proved | its type, `Codec` |
 | `Codec.fresh` | none |  |
 | `Codec.tuple` | none |  |
+| `Codec.fieldTuple` | none |  |
 | `Codec.product` | none |  |
 | `Codec.inject` | none |  |
+| `Codec.injectCtor` | none |  |
+| `Codec.nameLit` | none |  |
+| `Codec.typeName` | none |  |
+| `Codec.fieldsTerm` | none |  |
+| `Codec.structTerm` | none |  |
+| `Codec.sumBytes` | none |  |
+| `Codec.sumTerm` | none |  |
 
 ## `Lanes/Data/Declare.lean`
 
@@ -553,6 +562,9 @@ them by area.
 | `Declare.independent` | none |  |
 | `Declare.migrate` | none |  |
 | `Declare.enum` | none |  |
+| `Declare.constantDefaults` | none |  |
+| `Declare.ctorArgs` | none |  |
+| `Declare.ctorBinder` | none |  |
 
 ## `Lanes/Data/Enum.lean`
 
@@ -586,6 +598,45 @@ them by area.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Quorum.isMajority` | proved | `Quorum.majority_inter` |
+
+## `Lanes/Data/Schema.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Schema.Fields.nil` | proved | its type, `Schema.Fields` |
+| `Schema.Fields.cons` | proved | its type, `Schema.Fields` |
+| `Schema.Ctors.nil` | proved | its type, `Schema.Ctors` |
+| `Schema.Ctors.cons` | proved | its type, `Schema.Ctors` |
+| `Schema.Of.nat` | proved | its type, `Schema.Of` |
+| `Schema.Of.int` | proved | its type, `Schema.Of` |
+| `Schema.Of.string` | proved | its type, `Schema.Of` |
+| `Schema.Of.bytes` | proved | its type, `Schema.Of` |
+| `Schema.Of.unit` | proved | its type, `Schema.Of` |
+| `Schema.Of.map` | proved | its type, `Schema.Of` |
+| `Schema.Of.record` | proved | its type, `Schema.Of` |
+| `Schema.Of.variants` | proved | its type, `Schema.Of` |
+| `Schema.Of.list` | proved | its type, `Schema.Of` |
+| `Schema.Of.bool` | proved | its type, `Schema.Of` |
+| `Schema.Of.pair` | proved | its type, `Schema.Of` |
+| `Schema.Of.sum` | proved | its type, `Schema.Of` |
+| `Schema.Of.option` | proved | its type, `Schema.Of` |
+| `Schema.Of.sigma` | proved | its type, `Schema.Of` |
+| `Schema.paren` | tested | `Tests/Schema.lean` |
+| `Schema.name` | tested | `Tests/Schema.lean` |
+| `Schema.names` | tested | `Tests/Schema.lean` |
+| `Schema.named` | tested | `Tests/Schema.lean` |
+| `Schema.namedAll` | tested | `Tests/Schema.lean` |
+| `Schema.namedFields` | tested | `Tests/Schema.lean` |
+| `Schema.namedCtors` | tested | `Tests/Schema.lean` |
+| `Schema.argument` | tested | `Tests/Schema.lean` |
+| `Schema.display` | tested | `Tests/Schema.lean` |
+| `Schema.displayFields` | tested | `Tests/Schema.lean` |
+| `Schema.displayArgs` | tested | `Tests/Schema.lean` |
+| `Schema.displayCtor` | tested | `Tests/Schema.lean` |
+| `Schema.was` | tested | `Tests/Schema.lean` |
+| `Schema.Field.text` | tested | `Tests/Schema.lean` |
+| `Schema.declaration` | tested | `Tests/Schema.lean` |
+| `Schema.text` | tested | `Tests/Schema.lean` |
 
 ## `Lanes/Durable/Disk.lean`
 
@@ -3500,6 +3551,15 @@ them by area.
 | `Cli.Inventory.load` | none |  |
 | `Cli.Inventory.counts` | none |  |
 | `Cli.Inventory.run` | none |  |
+
+## `LanesCli/Journal.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Cli.Journal.values` | none |  |
+| `Cli.Journal.schemaProgram` | none |  |
+| `Cli.Journal.usage` | none |  |
+| `Cli.Journal.run` | none |  |
 
 ## `LanesCli/Lint.lean`
 
