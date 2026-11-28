@@ -13,7 +13,7 @@ package lanes where
   -- its content, and shared by every checkout and application on the machine (AGENTS.md, "Build
   -- and checks"). A dependency that sets neither option takes the workspace root's.
   enableArtifactCache := true
-  -- The outputs are also hard-linked into `.lake/build`, where `lake exe`, `lanesInventory`,
+  -- The outputs are also hard-linked into `.lake/build`, where `lake exe`, `lanes lint`,
   -- `docs/api`, CI's caches and the scripts read them.
   restoreAllArtifacts := true
   -- No remote cache yet (#98). It goes here: `downloadCacheService := "<name>"`, with a
@@ -108,10 +108,3 @@ lean_lib LanesCli where
 @[default_target]
 lean_exe lanes where
   root := `LanesCli.Main
-
-/-- The inventory and the docstring coverage. It links `Lean` and reads the built modules, so it
-builds them first. -/
-@[default_target]
-lean_exe lanesInventory where
-  root := `LanesCli.InventoryMain
-  needs := #[`@/Lanes, `@/Tests, `+LanesCli.Main]

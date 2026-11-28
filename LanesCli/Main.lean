@@ -20,24 +20,18 @@ Usage:
       Check a project against the rules of Lanes (AGENTS.md), and the files derived from others.
       --fix rewrites the derived files: the line counts of TRUSTED.md and the decisions' index,
       and each pinned schema (a .schema file) after a change that the files it wrote still read.
-      The pinned schemas are read with the build: build first.
+      The pinned schemas are read with the build: lint builds the modules they name first.
       --main numbers new decisions (with --fix) or reports them: use it on the main branch.
-      --json prints the findings as JSON, each with its kind: proof for a `sorry`, else check.
+      --json prints the findings as JSON, each with its kind: proof for a `sorry`, build for
+      a build that failed, else check.
   lanes check [--json]
       Run the project's checks and tests (`lake test`). It exits 0 when everything passed and
       every model check explored its whole instance, 1 when something failed, and 2 when a
       model check passed but hit a bound. --json prints the results as JSON, each with its
       kind (build, proof, check or test): the test driver's (`lake test -- --json`), or the
       build's failure when the driver did not build.
-  lanes changelog [--release <version> <date>]
-      Print the Unreleased section of the changelog, gathered from docs/changes/; or write it
-      into CHANGELOG.md as the release <version> of <date> and remove the fragments.
   lanes stats
-      Print the totals no committed file holds: trusted lines, decisions, unreleased changes,
-      and in Lanes itself the inventory's statuses by area (`lake exe lanesInventory --summary`).
-  lanes inventory [--list <status>]
-      In Lanes itself: print every public definition with its status and its evidence, or list
-      the library's definitions of one status (`lake exe lanesInventory`).
+      Print the totals no committed file holds: trusted lines and decisions.
   lanes journal schema (--type <type> | --codec <term>) [--import <module>]...
       Print the schema of a type's codec, or of a codec, as the build derives it: the type,
       then each named type in it. The modules default to `Lanes`; build them first.
@@ -48,9 +42,6 @@ Usage:
       [--import <module>]...]
       Check every frame, the prelude and every record, and tell a torn tail from damage; given
       the reader's types, check that they read the file as opening would. Exits 0 or 1.
-  lanes docstrings [--list]
-      In Lanes itself: how many public declarations of `import Lanes` have a docstring, by
-      module, or list those that have none. It reports and fails nothing.
 "
 
 def flag? (args : List String) (name : String) : Option String :=
@@ -64,12 +55,7 @@ def stats (root : System.FilePath) : IO UInt32 := do
   IO.println s!"- Trusted code (TRUSTED.md): {Generated.withCommas lines} lines in {files} files"
   let (decisions, _) ← Generated.readDecisions root
   IO.println s!"- Decisions: {decisions.length}"
-  IO.println s!"- Changelog fragments in docs/changes/: {(← Changelog.files root).length}"
-  if !(← (root / "LanesCli" / "Inventory.lean").pathExists) then return 0
-  IO.println "\nThe inventory (`lanes inventory`), definitions by status:\n"
-  let child ← IO.Process.spawn
-    { cmd := "lake", args := #["exe", "lanesInventory", "--summary"], cwd := some root }
-  child.wait
+  return 0
 
 /-- `lake test -- --json`, whose driver prints the results as JSON, on its last line that starts
 with `{`; what else it printed is left out. If it printed none, the
@@ -112,20 +98,12 @@ def main (args : List String) : IO UInt32 := do
     let options :=
       { fix := rest.contains "--fix", main := rest.contains "--main", json := rest.contains "--json" }
     return if (← Lint.run (paths.headD ".") options) == 0 then 0 else 1
-  | "changelog" :: rest => Changelog.run "." rest
   | ["stats"] => stats "."
   | ["check"] =>
     let child ← IO.Process.spawn { cmd := "lake", args := #["test"] }
     return (← child.wait)
   | ["check", "--json"] => checkJson
   | "journal" :: rest => Journal.run rest
-  | "docstrings" :: rest =>
-    let child ← IO.Process.spawn
-      { cmd := "lake", args := #["exe", "lanesInventory", "--docstrings"] ++ rest }
-    return (← child.wait)
-  | "inventory" :: rest =>
-    let child ← IO.Process.spawn { cmd := "lake", args := #["exe", "lanesInventory"] ++ rest }
-    return (← child.wait)
   | _ =>
     IO.print usage
     return if args.isEmpty || args == ["--help"] || args == ["help"] then 0 else 1

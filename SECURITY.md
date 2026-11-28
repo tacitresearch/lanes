@@ -17,8 +17,8 @@ advisory's thread; a fix is coordinated there and published with the advisory.
   the TLS client through `native/tls.c`, signed tokens, form tokens, sessions and password
   digests.
 - A theorem whose statement does not mean what its docs say: a headline theorem that is
-  vacuous, has a premise its docs leave out, or states less than `README.md`,
-  `docs/ARCHITECTURE.md` or the inventory (`lake exe lanes inventory`) claims. Lanes' claims
+  vacuous, has a premise its docs leave out, or states less than `README.md` or
+  `docs/ARCHITECTURE.md` claims. Lanes' claims
   rest on its theorems, so this is a vulnerability, not a documentation bug.
 - The CI workflows and the runner machine (`infra/README.md`).
 

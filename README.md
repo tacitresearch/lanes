@@ -71,9 +71,6 @@ Every claim, with its theorem, check or test, its premises and its status, is in
   list, and `scripts/mutants.py` holds known ways of breaking that code, each of which must
   fail a test.
 
-`lake exe lanes inventory` prints every public definition with its status, computed from the
-built library, and `docs/inventory-none.md` lists those with no evidence yet.
-
 ## Examples
 
 `examples/README.md` says what each example shows and in what order to read them. The

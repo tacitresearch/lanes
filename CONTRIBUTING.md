@@ -47,8 +47,7 @@ tests, which CI runs; a reviewer reads those for what they claim, not line by li
 No pull request writes a changelog entry. `CHANGELOG.md` says what changed between two releases,
 for someone who uses Lanes: the net change, a short list, not the history (git and
 `docs/decisions/` hold that). It is written when a release is cut (`docs/RELEASING.md`), from the
-git log since the last tag and the decisions accepted since. The files left in `docs/changes/`
-are raw material for the first release's notes.
+pull requests merged since the last tag and the decisions accepted since.
 
 ## Agents
 

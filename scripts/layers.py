@@ -116,8 +116,8 @@ def report_moves(mods):
 
 TEXT = (".lean", ".md", ".py", ".yml", ".yaml", ".toml", ".sh", ".tmpl", ".json")
 SKIP = ("./.lake", "./.git", "./docs/decisions")
-# Written by `lanes lint --fix`, or a record of the past, or this table.
-GENERATED = {"docs/changes/before-fragments.md", "CHANGELOG.md", "scripts/layers.py"}
+# A record of the past, or this table.
+GENERATED = {"CHANGELOG.md", "scripts/layers.py"}
 
 
 def report_cost(mods):
